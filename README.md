@@ -4,6 +4,8 @@ Standalone fashion B2B operating platform for brands, retailers, distributors an
 
 Syntha V2 combines and extends the strongest operating patterns of JOOR, NuORDER, Brandboom, Centra and adjacent platforms without copying proprietary implementations.
 
+The legacy `PetrFedin/syntha` repository remains unchanged; this repository is the independent home of all further Syntha V2 development.
+
 ## Executable core
 
 `Campaign → Collection → Showroom → Selection → Order Builder → Order → Confirmation → DealSpace`

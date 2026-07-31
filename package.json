@@ -1,0 +1,24 @@
+{
+  "name": "@syntha/platform-v2",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "node --watch --env-file=.env src/server.mjs",
+    "start": "node --env-file=.env src/server.mjs",
+    "db:migrate": "node --env-file=.env scripts/migrate.mjs",
+    "bootstrap:owner": "node --env-file=.env scripts/bootstrap-owner.mjs",
+    "test": "node --test --test-concurrency=1 tests/*.test.mjs",
+    "validate:architecture": "node scripts/validate-architecture.mjs",
+    "validate:postgres": "node scripts/validate-postgres-contract.mjs",
+    "validate:isolation": "node scripts/validate-isolation.mjs",
+    "validate:ui": "node scripts/validate-ui.mjs",
+    "verify": "npm run validate:isolation && npm run validate:architecture && npm run validate:postgres && npm run validate:ui && npm test"
+  },
+  "dependencies": {
+    "pg": "^8.13.1"
+  }
+}

@@ -1,0 +1,24 @@
+function entity(title, status, metadata, actions) {
+  const box = el('article', { className: 'entity' }); const head = el('div', { className: 'entity-head' });
+  head.append(el('div', { className: 'entity-title', text: title || '\u0411\u0435\u0437 \u043d\u0430\u0437\u0432\u0430\u043d\u0438\u044f' }), statusBadge(status)); box.append(head);
+  const meta = el('div', { className: 'meta' }); metadata.filter(Boolean).forEach(value => meta.append(el('span', { text: String(value) }))); box.append(meta);
+  if (actions.length) { const row = el('div', { className: 'row' }); actions.forEach(action => row.append(action)); box.append(row); }
+  return box;
+}
+function sectionCard(title, children, buttonLabel, onButton) { const card = el('section', { className: 'card section' }); const tools = el('div', { className: 'toolbar' }); tools.append(el('h3',{text:title})); if(buttonLabel){const b=el('button',{className:'button small',text:buttonLabel});b.addEventListener('click',onButton);tools.append(b);} const stack=el('div',{className:'stack'}); children.forEach(child=>stack.append(child)); card.append(tools,stack); return card; }
+function toolbar(title, buttonLabel, action) { const bar=el('div',{className:'toolbar'});bar.append(el('p',{className:'muted',text:title}));const b=el('button',{className:'button primary',text:buttonLabel});b.addEventListener('click',action);bar.append(b);return bar; }
+function kpi(label,value){const card=el('article',{className:'card kpi'});card.append(el('span',{className:'muted',text:label}),el('strong',{text:String(value)}));return card;}
+function actionButton(label, fn, variant=''){const b=el('button',{className:`button small ${variant}`,text:label});b.addEventListener('click',()=>runAction(async()=>{await fn();await reload();renderApp();toast('\u041e\u043f\u0435\u0440\u0430\u0446\u0438\u044f \u0432\u044b\u043f\u043e\u043b\u043d\u0435\u043d\u0430','success');},b));return b;}
+function statusBadge(status){return el('span',{className:`badge ${String(status).toLowerCase()}`,text:statusLabel(status)});}
+function notice(text,type=''){return el('div',{className:`notice ${type}`,text});}
+function empty(text){return el('div',{className:'empty',text});}
+function dialogHost(){return el('dialog',{id:'form-dialog'});}
+function brandBlock(){const b=el('div',{className:'brand'});b.append(el('div',{className:'brand-mark',text:'S2'}));const t=el('div');t.append(el('h1',{text:'SYNTHA V2'}),el('small',{text:'Wholesale OS'}));b.append(t);return b;}
+function clear(node){while(node.firstChild)node.firstChild.remove();}
+function el(tag, props={}){const node=document.createElement(tag);for(const [key,value] of Object.entries(props)){if(key==='text')node.textContent=value;else if(key==='className')node.className=value;else if(key==='ariaLabel')node.setAttribute('aria-label',value);else if(value!==undefined&&value!==null)node.setAttribute(key,String(value));}return node;}
+function inputField(labelText,type,attrs={}){const label=el('label');label.append(el('span',{text:labelText}));const control=el('input',{type,...attrs});label.append(control);return{label,control};}
+function buildField(field){if(field.kind==='select'){const label=el('label');label.append(el('span',{text:field.label}));const control=el('select',{name:field.name,required:true});field.options.forEach(option=>{const value=typeof option==='string'?option:option.id;const text=field.format?field.format(option):(typeof option==='string'?option:(option.name||option.id));control.append(el('option',{value,text}));});label.append(control);return{label,control};}return inputField(field.label,field.kind==='number'?'number':field.kind, {name:field.name,required:true,value:field.value??'',step:field.kind==='number'?(field.integer?'1':'0.01'):undefined,min:field.kind==='number'?'0':undefined});}
+function textDef(name,label,value=''){return{name,label,kind:'text',value};} function dateDef(name,label){return{name,label,kind:'date'};} function dateTimeDef(name,label){return{name,label,kind:'datetime-local'};} function numberDef(name,label,value,integer){return{name,label,kind:'number',value,integer};} function selectDef(name,label,options,format){return{name,label,kind:'select',options,format};}
+function showInlineError(form,message){form.querySelector('.notice.error')?.remove();form.prepend(notice(message,'error'));}
+function setButtonBusy(button,busy,text){button.disabled=busy;button.textContent=text;}
+async function runAction(action,button){if(state.busy)return;state.busy=true;const old=button.textContent;setButtonBusy(button,true,'\u0412\u044b\u043f\u043e\u043b\u043d\u044f\u0435\u0442\u0441\u044f\u2026');try{await action();}catch(error){toast(error.message,'error');if(!state.token)renderLogin('\u0421\u0435\u0441\u0441\u0438\u044f \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u0430.');}finally{state.busy=false;if(button.isConnected)setButtonBusy(button,false,old);}}

@@ -61,7 +61,7 @@ test('confirmation atomically opens DealSpace and shared milestones', async () =
   const context = await fixture();
   const cycle = await moveToOrder(context);
   await context.platform.attachOrder('cmd-attach-order', 'buyer-1', cycle.id, {
-    id: 'order-1', currency: 'EUR', totalAmount: 600,
+    id: 'order-1', status: 'attached', currency: 'EUR', totalAmount: 600,
     lines: [{ sku: 'JACKET-01', quantity: 2, unitPrice: 200 }, { sku: 'SHIRT-01', quantity: 2, unitPrice: 100 }],
   });
   const result = await context.platform.confirmAndOpenDeal('cmd-confirm', 'buyer-1', cycle.id);

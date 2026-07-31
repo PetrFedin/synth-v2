@@ -1,0 +1,39 @@
+name: Syntha V2 CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, 'agent/**']
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: syntha
+          POSTGRES_PASSWORD: syntha_test
+          POSTGRES_DB: syntha_v2_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U syntha -d syntha_v2_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Verify Syntha V2 with PostgreSQL
+        run: npm run verify
+        env:
+          POSTGRES_TEST_URL: postgresql://syntha:syntha_test@127.0.0.1:5432/syntha_v2_test

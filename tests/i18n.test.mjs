@@ -78,8 +78,8 @@ test('localization diagnostics contain only complete RU EN pairs', () => {
   const harness = createHarness('en-GB');
   vm.runInContext(source, harness.context);
   const diagnostics = harness.window.SynthaI18n.diagnostics();
-  assert.deepEqual(diagnostics.locales, ['ru', 'en']);
-  assert.deepEqual(diagnostics.invalidMessageKeys, []);
+  assert.deepEqual(Array.from(diagnostics.locales), ['ru', 'en']);
+  assert.deepEqual(Array.from(diagnostics.invalidMessageKeys), []);
   assert.equal(diagnostics.invalidPhraseCount, 0);
   assert.ok(diagnostics.messageCount >= 40);
   assert.ok(diagnostics.phraseCount >= 60);

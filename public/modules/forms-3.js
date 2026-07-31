@@ -3,18 +3,29 @@ function invitationForm(showroom) {
   openForm('\u041f\u0440\u0438\u0433\u043b\u0430\u0441\u0438\u0442\u044c \u043c\u0430\u0433\u0430\u0437\u0438\u043d', [selectDef('shopId','\u041c\u0430\u0433\u0430\u0437\u0438\u043d',activeShops), dateTimeDef('expiresAt','\u0414\u0435\u0439\u0441\u0442\u0432\u0443\u0435\u0442 \u0434\u043e')], values => mutate(`/v2/showrooms/${encodeURIComponent(showroom.id)}/invitations`, { ...values, expiresAt: toIso(values.expiresAt) }));
 }
 function cycleForm() {
-  const active = state.workspace.relationships.filter(x => x.status === 'active');
-  const campaigns = state.workspace.campaigns.filter(x => x.status === 'open');
-  const collections = state.workspace.collections.filter(x => x.status === 'published');
-  openForm('\u041d\u0430\u0447\u0430\u0442\u044c \u043a\u043e\u043c\u043c\u0435\u0440\u0447\u0435\u0441\u043a\u0438\u0439 \u0446\u0438\u043a\u043b', [selectDef('relationship','\u0421\u0432\u044f\u0437\u044c',active, x => `${orgName(x.brandId)} \u2192 ${orgName(x.shopId)}`), selectDef('campaignId','\u041a\u0430\u043c\u043f\u0430\u043d\u0438\u044f',campaigns), selectDef('collectionId','\u041a\u043e\u043b\u043b\u0435\u043a\u0446\u0438\u044f',collections)], values => {
-    const rel = active.find(x => x.id === values.relationship);
-    return mutate('/v2/cycles', { brandId: rel.brandId, shopId: rel.shopId, campaignId: values.campaignId, collectionId: values.collectionId });
+  const contexts = window.SynthaWorkflowContexts.buildCycleContexts(state.workspace, ownIds());
+  openForm('\u041d\u0430\u0447\u0430\u0442\u044c \u043a\u043e\u043c\u043c\u0435\u0440\u0447\u0435\u0441\u043a\u0438\u0439 \u0446\u0438\u043a\u043b', [
+    selectDef('contextId','\u0421\u0432\u044f\u0437\u044c',contexts, context => `${orgName(context.brandId)} \u2192 ${orgName(context.shopId)} / ${nameById('campaigns', context.campaignId)} / ${nameById('collections', context.collectionId)}`),
+  ], values => {
+    const context = contexts.find(item => item.id === values.contextId);
+    if (!context) throw new Error(I18N.t('common.requestError'));
+    return mutate('/v2/cycles', {
+      brandId: context.brandId,
+      shopId: context.shopId,
+      campaignId: context.campaignId,
+      collectionId: context.collectionId,
+    });
   });
 }
 function selectionForm() {
-  const cycles = state.workspace.cycles.filter(x => x.stage === 'showroom' && ownIds().includes(x.shopId));
-  const showrooms = state.workspace.showrooms.filter(x => x.status === 'open');
-  openForm('\u0421\u043e\u0437\u0434\u0430\u0442\u044c Selection', [selectDef('cycleId','\u0426\u0438\u043a\u043b',cycles, x => `${orgName(x.brandId)} \u2192 ${orgName(x.shopId)} / ${x.id}`), selectDef('showroomId','\u0428\u043e\u0443\u0440\u0443\u043c',showrooms)], values => mutate('/v2/selections', values));
+  const contexts = window.SynthaWorkflowContexts.buildSelectionContexts(state.workspace, ownIds(), new Date().toISOString());
+  openForm('\u0421\u043e\u0437\u0434\u0430\u0442\u044c Selection', [
+    selectDef('contextId','\u0426\u0438\u043a\u043b',contexts, context => `${orgName(context.brandId)} \u2192 ${orgName(context.shopId)} / ${nameById('showrooms', context.showroomId)} / ${nameById('collections', context.collectionId)}`),
+  ], values => {
+    const context = contexts.find(item => item.id === values.contextId);
+    if (!context) throw new Error(I18N.t('common.requestError'));
+    return mutate('/v2/selections', { cycleId: context.cycleId, showroomId: context.showroomId });
+  });
 }
 function selectionLineForm(selection) {
   const skus = (state.workspace.catalogSkus || []).filter(x => x.status === 'published' && x.collectionId === selection.collectionId);

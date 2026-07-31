@@ -25,6 +25,7 @@ const ASSETS = Object.freeze({
   '/ui/collection-form.js': ['modules/collection-form.js', JS, CACHE],
   '/ui/catalog-form.js': ['modules/catalog-form.js', JS, CACHE],
   '/ui/showroom-form.js': ['modules/showroom-form.js', JS, CACHE],
+  '/ui/workflow-contexts.js': ['modules/workflow-contexts.js', JS, CACHE],
   '/ui/forms-3.js': ['modules/forms-3.js', JS, CACHE],
   '/ui/open-form.js': ['modules/open-form.js', JS, CACHE],
   '/ui/api.js': ['modules/api.js', JS, CACHE],

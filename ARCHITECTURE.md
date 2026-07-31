@@ -1,6 +1,6 @@
 # Syntha V2 Architecture
 
-Syntha V2 is an autonomous fashion B2B operating platform owning its backend, web workspace, PostgreSQL schema, authentication, APIs, workflows and tests. It does not depend on the legacy Syntha repository or Firebase.
+Syntha V2 is an autonomous fashion B2B operating platform owning its backend, web workspace, PostgreSQL schema, authentication, APIs, workflows and tests. It does not depend on the legacy Syntha repository or an external identity provider.
 
 ## Commercial route
 

@@ -21,6 +21,6 @@ test('order total must reconcile with order lines', () => {
   let cycle = createCommercialCycle({ id: 'c1', brandId: 'b1', shopId: 's1', campaign, collection, createdAt: now });
   for (const stage of ['collection', 'showroom', 'selection', 'order-builder', 'order']) cycle = advanceCommercialCycle(cycle, stage, now);
   assert.throws(() => attachOrder(cycle, {
-    id: 'o1', currency: 'EUR', totalAmount: 500, lines: [{ sku: 'SKU-1', quantity: 2, unitPrice: 100 }],
+    id: 'o1', status: 'attached', currency: 'EUR', totalAmount: 500, lines: [{ sku: 'SKU-1', quantity: 2, unitPrice: 100 }],
   }, now), (error) => error.code === 'ORDER_TOTAL_MISMATCH');
 });

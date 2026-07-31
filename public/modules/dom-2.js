@@ -7,4 +7,16 @@ function formatDate(value){return I18N.formatDate(value);} function money(value)
 function statusLabel(value){const key=`status.${value}`;const translated=I18N.t(key);return translated===key?stageLabel(value):translated;}
 function stageLabel(value){const key=`stage.${value}`;const translated=I18N.t(key);return translated===key?String(value||'\u2014'):translated;}
 function viewTitle(view){const item=NAV.find(([id])=>id===view);return item?I18N.t(item[1]):I18N.t('nav.overview');}
+function translateDataText(value){
+  const text=String(value);
+  const target=I18N.getLocale()==='en'?1:0;
+  const prefixes=[
+    ['\u0417\u0430\u043f\u0440\u043e\u0441: ','Requested by: '],['\u0428\u043e\u0443\u0440\u0443\u043c: ','Showroom: '],['\u0414\u043e: ','Until: '],
+    ['\u041a\u0430\u043c\u043f\u0430\u043d\u0438\u044f: ','Campaign: '],['\u041a\u043e\u043b\u043b\u0435\u043a\u0446\u0438\u044f: ','Collection: '],['\u041f\u0435\u0440\u0435\u0439\u0442\u0438: ','Move to: '],
+    ['\u0421\u043e\u0433\u043b\u0430\u0441\u043e\u0432\u0430\u0442\u044c: ','Approve: '],['\u0421\u043e\u0433\u043b\u0430\u0441\u043e\u0432\u0430\u043d\u043e: ','Approved by: '],['\u041f\u0440\u0438\u0447\u0438\u043d\u0430: ','Reason: '],
+    ['\u041e\u0442\u043c\u0435\u043d\u0451\u043d: ','Cancelled at: '],['\u0417\u0430\u043a\u0430\u0437: ','Order: '],['\u041e\u0440\u0433\u0430\u043d\u0438\u0437\u0430\u0446\u0438\u044f: ','Organisation: '],
+  ];
+  for(const pair of prefixes){const source=text.startsWith(pair[0])?0:text.startsWith(pair[1])?1:-1;if(source>=0)return pair[target]+text.slice(pair[source].length);}
+  return text==='\u043d\u0435\u0442'||text==='none'?I18N.translate(text):text;
+}
 function emptyWorkspace(){return{memberships:[],organisations:[],relationships:[],invitations:[],campaigns:[],collections:[],catalogSkus:[],showrooms:[],cycles:[],selections:[],orders:[],deals:[],calendar:[]};}

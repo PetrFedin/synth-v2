@@ -4,7 +4,7 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const workflow = path.resolve(root, '.github', 'workflows', 'import-syntha-v2.yml');
+const workflow = path.resolve(root, '.github', 'workflows', 'ci.yml');
 const forbidden = [
   new RegExp(['fire', 'base'].join(''), 'i'),
   new RegExp(['_ai-share', 'synth-1-full'].join('/'), 'i'),

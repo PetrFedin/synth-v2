@@ -27,3 +27,11 @@ function orderForm() {
   const selections = state.workspace.selections.filter(x => x.status === 'submitted' && !state.workspace.orders.some(o => o.selectionId === x.id));
   openForm('\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u0437\u0430\u043a\u0430\u0437', [selectDef('selectionId','Selection',selections), selectDef('incoterm','Incoterm',['EXW','FCA','FOB','CIF','DAP','DDP']), numberDef('paymentDays','\u041e\u0442\u0441\u0440\u043e\u0447\u043a\u0430, \u0434\u043d\u0435\u0439',30,true), numberDef('prepaymentPercent','\u041f\u0440\u0435\u0434\u043e\u043f\u043b\u0430\u0442\u0430, %',20,false), dateDef('deliveryStart','\u041d\u0430\u0447\u0430\u043b\u043e \u043f\u043e\u0441\u0442\u0430\u0432\u043a\u0438'), dateDef('deliveryEnd','\u041a\u043e\u043d\u0435\u0446 \u043f\u043e\u0441\u0442\u0430\u0432\u043a\u0438')], values => mutate('/v2/orders', { selectionId: values.selectionId, terms: { incoterm: values.incoterm, paymentDays: values.paymentDays, prepaymentPercent: values.prepaymentPercent, deliveryStart: values.deliveryStart, deliveryEnd: values.deliveryEnd } }));
 }
+function orderCancellationForm(order) {
+  openForm(I18N.t('form.cancelOrder'), [
+    textDef('reason', I18N.t('form.cancellationReason')),
+  ], values => mutate(`/v2/orders/${encodeURIComponent(order.id)}/cancel`, {
+    orderId: order.id,
+    reason: values.reason.trim(),
+  }));
+}

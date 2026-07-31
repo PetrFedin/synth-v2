@@ -2,7 +2,7 @@
 
 - This repository is the only active Syntha V2 codebase.
 - Never modify or import code from frozen legacy Syntha applications.
-- Do not introduce Firebase or another external identity provider.
+- Do not introduce an external identity provider; authentication belongs to Syntha V2.
 - Cross-module imports go only through `public.mjs`.
 - Business mutations require durable command IDs and transactional outbox events.
 - Applied SQL migrations are immutable.

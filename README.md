@@ -10,7 +10,13 @@ The legacy `PetrFedin/syntha` repository remains unchanged; this repository is t
 
 `Campaign → Collection → Showroom → Selection → Order Builder → Order → Confirmation → DealSpace`
 
-The current system includes PostgreSQL-owned authentication, organisation RBAC, partner access, digital showrooms, server-authoritative catalog pricing, MOQ and ATS controls, atomic inventory reservations, bilateral confirmation, DealSpace, calendar milestones, notifications, OpenAPI and a standalone web workspace.
+The current system includes PostgreSQL-owned authentication, organisation RBAC, partner access, digital showrooms, server-authoritative catalog pricing, MOQ and ATS controls, atomic inventory reservations, bilateral confirmation, order cancellation with inventory release, DealSpace, calendar milestones, notifications, OpenAPI and a standalone web workspace.
+
+## Interface languages
+
+The web workspace supports Russian and English. The `RU / EN` switch is available before authentication and inside the workspace. The selected locale is persisted in the browser and controls navigation, forms, statuses, dates, numbers and fallback UI messages without reloading the application.
+
+All new user-facing text must be routed through `public/modules/i18n-runtime.js`. `npm run validate:i18n` verifies dictionary integrity, browser execution order, locale persistence, static delivery and critical UI action wiring.
 
 ## Product direction
 

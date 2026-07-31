@@ -1,0 +1,134 @@
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import process from 'node:process';
+import vm from 'node:vm';
+import { fileURLToPath } from 'node:url';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const publicDir = path.join(root, 'public');
+const index = await readFile(path.join(publicDir, 'index.html'), 'utf8');
+const sources = [...index.matchAll(/<script defer src="([^"]+)"/g)].map(match => match[1]);
+const expectedFoundation = [
+  '/ui/i18n-runtime.js',
+  '/ui/dom-2.js',
+  '/ui/dom-1.js',
+  '/ui/api.js',
+  '/ui/app-core.js',
+];
+
+assert(sources.filter(source => source === '/ui/i18n-runtime.js').length === 1, 'The localization runtime must be loaded exactly once.');
+assert(!sources.includes('/ui/i18n.js'), 'The superseded localization runtime must not be loaded.');
+assert(sources.at(-1) === '/ui/app-start.js', 'The application startup module must be loaded last.');
+for (const [index, source] of expectedFoundation.entries()) {
+  assert(sources[index] === source, `UI foundation order is invalid at position ${index + 1}: expected ${source}, received ${sources[index]}.`);
+}
+
+const runtimePath = path.join(publicDir, 'modules', 'i18n-runtime.js');
+const runtimeSource = await readFile(runtimePath, 'utf8');
+assertAscii(runtimeSource, runtimePath);
+new vm.Script(runtimeSource, { filename: runtimePath });
+
+const runtimeHarness = createHarness('ru-RU');
+vm.runInContext(runtimeSource, runtimeHarness.context, { filename: runtimePath });
+const i18n = runtimeHarness.window.SynthaI18n;
+assert(i18n, 'Localization runtime did not expose SynthaI18n.');
+assert(i18n.getLocale() === 'ru', 'Russian must be selected for a Russian browser when no preference is stored.');
+assert(i18n.t('nav.overview') === '\u041e\u0431\u0437\u043e\u0440', 'Russian navigation dictionary is invalid.');
+assert(i18n.translate('Create order') === '\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u0437\u0430\u043a\u0430\u0437', 'English-to-Russian compatibility translation is invalid.');
+i18n.setLocale('en');
+assert(i18n.getLocale() === 'en', 'English locale was not selected.');
+assert(runtimeHarness.storage.get('syntha-v2-locale') === 'en', 'Locale preference was not persisted.');
+assert(runtimeHarness.document.documentElement.lang === 'en', 'Document language was not synchronized.');
+assert(i18n.t('nav.overview') === 'Overview', 'English navigation dictionary is invalid.');
+assert(i18n.translate('\u041a\u043e\u043b\u043b\u0435\u043a\u0446\u0438\u044f: Core') === 'Collection: Core', 'Dynamic prefix translation is invalid.');
+assert(runtimeHarness.events.length === 1 && runtimeHarness.events[0].type === 'syntha:locale-changed', 'Locale change event was not dispatched exactly once.');
+const diagnostics = i18n.diagnostics();
+assert(JSON.stringify(diagnostics.locales) === JSON.stringify(['ru', 'en']), 'Supported locale list is invalid.');
+assert(diagnostics.invalidMessageKeys.length === 0, 'Localization dictionary contains invalid message pairs.');
+assert(diagnostics.invalidPhraseCount === 0, 'Localization dictionary contains invalid phrase pairs.');
+assert(diagnostics.messageCount >= 40, 'Localization dictionary is unexpectedly incomplete.');
+assert(diagnostics.phraseCount >= 60, 'Compatibility translation dictionary is unexpectedly incomplete.');
+
+const executionHarness = createHarness('en-GB');
+for (const source of sources.slice(0, -1)) {
+  const modulePath = path.join(publicDir, 'modules', path.basename(source));
+  const moduleSource = await readFile(modulePath, 'utf8');
+  assertAscii(moduleSource, modulePath);
+  vm.runInContext(moduleSource, executionHarness.context, { filename: modulePath });
+}
+
+const formsSource = await readFile(path.join(publicDir, 'modules', 'forms-3.js'), 'utf8');
+const viewsSource = await readFile(path.join(publicDir, 'modules', 'views-4.js'), 'utf8');
+const routesSource = await readFile(path.join(root, 'src', 'http', 'routes.mjs'), 'utf8');
+assert(/function orderCancellationForm\(order\)/.test(formsSource), 'Order cancellation button has no form handler.');
+assert(/orderCancellationForm\(item\)/.test(viewsSource), 'Attached orders do not expose the cancellation form.');
+assert(/\/orders\\\/\(\[\^\/\]\+\)\\\/cancel/.test(routesSource) || routesSource.includes("/^\\/v2\\/orders\\/([^/]+)\\/cancel$/"), 'Order cancellation API route is missing.');
+assert(formsSource.includes('orderId: order.id') && formsSource.includes('reason: values.reason.trim()'), 'Order cancellation payload is incomplete.');
+
+console.log(`Localization and UI runtime contract OK (${sources.length} scripts, ${diagnostics.messageCount} keyed messages, ${diagnostics.phraseCount} compatibility phrases).`);
+
+function createHarness(browserLanguage) {
+  const storage = new Map();
+  const events = [];
+  const document = {
+    documentElement: { lang: '' },
+    title: '',
+    querySelector: () => ({ firstChild: null }),
+    createElement: tag => ({ tagName: String(tag).toUpperCase() }),
+  };
+  const sessionStorage = {
+    getItem: key => storage.get(`session:${key}`) ?? null,
+    setItem: (key, value) => storage.set(`session:${key}`, String(value)),
+    removeItem: key => storage.delete(`session:${key}`),
+  };
+  const localStorage = {
+    getItem: key => storage.get(key) ?? null,
+    setItem: (key, value) => storage.set(key, String(value)),
+    removeItem: key => storage.delete(key),
+  };
+  class CustomEvent {
+    constructor(type, options = {}) { this.type = type; this.detail = options.detail; }
+  }
+  const listeners = new Map();
+  const window = {
+    document,
+    navigator: { language: browserLanguage },
+    localStorage,
+    sessionStorage,
+    CustomEvent,
+    addEventListener(type, listener) { listeners.set(type, listener); },
+    dispatchEvent(event) { events.push(event); listeners.get(event.type)?.(event); return true; },
+  };
+  window.window = window;
+  const context = vm.createContext({
+    window,
+    document,
+    navigator: window.navigator,
+    localStorage,
+    sessionStorage,
+    CustomEvent,
+    console,
+    Intl,
+    Date,
+    URL,
+    setTimeout: () => 0,
+    clearTimeout: () => {},
+    crypto: { randomUUID: () => '00000000-0000-4000-8000-000000000000' },
+    fetch: async () => ({ ok: true, status: 200, json: async () => ({ data: {} }) }),
+  });
+  return { context, window, document, storage, events };
+}
+
+function assert(condition, message) {
+  if (!condition) {
+    console.error(message);
+    process.exit(1);
+  }
+}
+
+function assertAscii(text, file) {
+  if ([...Buffer.from(text)].some(byte => byte > 127)) {
+    console.error(`Non-ASCII source detected: ${path.relative(root, file)}`);
+    process.exit(1);
+  }
+}

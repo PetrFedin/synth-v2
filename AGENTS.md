@@ -7,5 +7,8 @@
 - Business mutations require durable command IDs and transactional outbox events.
 - Applied SQL migrations are immutable.
 - Preserve organisation isolation, server-authoritative pricing and atomic inventory guarantees.
+- Russian and English are mandatory interface languages; all new user-facing UI text must use the localization runtime.
+- Do not add a visible button or status action without an implemented handler, route and automated contract check.
+- Preserve the browser dependency order: localization and shared helpers load before `app-core.js`; `app-start.js` loads last.
 - Run `npm run verify` before publishing.
-- Priority: fashion catalog/planning, PLM/BOM/samples, production, QC, logistics, landed cost, analytics and integrations.
+- Priority: stabilize existing commercial workflows before expanding fashion catalog/planning, PLM/BOM/samples, production, QC, logistics, landed cost, analytics and integrations.

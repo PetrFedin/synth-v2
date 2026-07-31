@@ -2,9 +2,8 @@ name: Import Syntha V2
 
 on:
   push:
-    branches: [main]
-    paths:
-      - '.github/workflows/import-syntha-v2.yml'
+    branches: ['agent/import-syntha-v2']
+    paths: ['.github/workflows/import-syntha-v2.yml']
   workflow_dispatch:
 
 permissions:
@@ -15,29 +14,19 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Checkout target repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Checkout Syntha V2 source
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           repository: PetrFedin/syntha
           ref: agent/v2-foundation-priority-contract
           path: _source
-
-      - name: Build standalone repository snapshot
+      - name: Build standalone Syntha V2 snapshot
         shell: bash
         run: |
           set -euo pipefail
-          git checkout -B agent/import-syntha-v2
-
-          find . -mindepth 1 -maxdepth 1 \
-            ! -name '.git' \
-            ! -name '_source' \
-            -exec rm -rf {} +
-
+          find . -mindepth 1 -maxdepth 1 ! -name '.git' ! -name '_source' -exec rm -rf {} +
           cp -a _source/apps/syntha-wholesale-v2/. .
           rm -rf _source
           mkdir -p .github/workflows
@@ -46,17 +35,9 @@ jobs:
           from pathlib import Path
           import json
 
-          launch = Path('.vscode/launch.json')
-          launch.write_text(
-              launch.read_text().replace('${workspaceFolder}/apps/syntha-wholesale-v2', '${workspaceFolder}'),
-              encoding='utf-8',
-          )
-
-          tasks = Path('.vscode/tasks.json')
-          tasks.write_text(
-              tasks.read_text().replace('${workspaceFolder}/apps/syntha-wholesale-v2', '${workspaceFolder}'),
-              encoding='utf-8',
-          )
+          for filename in ('.vscode/launch.json', '.vscode/tasks.json'):
+              path = Path(filename)
+              path.write_text(path.read_text().replace('${workspaceFolder}/apps/syntha-wholesale-v2', '${workspaceFolder}'), encoding='utf-8')
 
           package_path = Path('package.json')
           package = json.loads(package_path.read_text())
@@ -65,40 +46,36 @@ jobs:
           package_path.write_text(json.dumps(package, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
 
           validator = Path('scripts/validate-isolation.mjs')
-          text = validator.read_text()
-          text = text.replace(
+          validator.write_text(validator.read_text().replace(
               "const workflow = path.resolve(root, '..', '..', '.github', 'workflows', 'syntha-wholesale-v2.yml');",
-              "const workflow = path.resolve(root, '.github', 'workflows', 'ci.yml');",
-          )
-          validator.write_text(text, encoding='utf-8')
+              "const workflow = path.resolve(root, '.github', 'workflows', 'ci.yml');"
+          ), encoding='utf-8')
+
+          cursor = Path('CURSOR_START_HERE.md')
+          cursor.write_text(cursor.read_text().replace(
+              'Рабочий проект находится только в `apps/syntha-wholesale-v2` и запускается автономно.',
+              'Репозиторий является самостоятельным проектом Syntha V2.'
+          ).replace('cd apps/syntha-wholesale-v2\n', ''), encoding='utf-8')
           PY
 
           cat > README.md <<'EOF'
           # Syntha V2
 
-          Syntha V2 is a standalone fashion B2B operating platform for brands, retailers, distributors and production partners.
+          Standalone fashion B2B operating platform for brands, retailers, distributors and production partners.
 
-          The product combines and extends the strongest operating patterns of JOOR, NuORDER, Brandboom, Centra and adjacent platforms without copying their proprietary implementations.
+          Syntha V2 combines and extends the strongest operating patterns of JOOR, NuORDER, Brandboom, Centra and adjacent platforms without copying proprietary implementations.
 
-          ## Current executable core
+          ## Executable core
 
           `Campaign → Collection → Showroom → Selection → Order Builder → Order → Confirmation → DealSpace`
 
-          The current platform includes organisation-scoped RBAC, PostgreSQL-owned authentication, server-authoritative catalog pricing, MOQ and available-to-sell controls, atomic inventory reservations, bilateral order confirmation, DealSpace, calendar milestones, notifications, OpenAPI, standalone UI and migration/readiness controls.
+          The current system includes PostgreSQL-owned authentication, organisation RBAC, partner access, digital showrooms, server-authoritative catalog pricing, MOQ and ATS controls, atomic inventory reservations, bilateral confirmation, DealSpace, calendar milestones, notifications, OpenAPI and a standalone web workspace.
 
           ## Product direction
 
-          The repository will evolve as one connected fashion operating system:
+          Digital linesheets and buyer collaboration; assortment planning, budgets, doors and size curves; wholesale CRM and payments; style/color/size catalog; PLM, BOM and samples; production, QC, logistics and landed cost; analytics and integration APIs.
 
-          - digital showrooms, linesheets and buyer collaboration;
-          - assortment planning, budgets, size curves and door allocation;
-          - wholesale CRM, commercial terms, payments and documents;
-          - style/color/size catalog and omnichannel availability;
-          - PLM, materials, BOM, samples and approvals;
-          - production, QC, logistics and landed cost;
-          - analytics, recommendations and integration APIs.
-
-          ## Local start
+          ## Start
 
           ```bash
           cp .env.example .env
@@ -108,98 +85,49 @@ jobs:
           npm run dev
           ```
 
-          Open `http://127.0.0.1:4100`.
-
-          ## Verification
-
-          ```bash
-          npm run verify
-          ```
-
-          PostgreSQL 17 is used by the specialised GitHub Actions workflow.
+          Run `npm run verify` before publishing changes.
           EOF
 
           cat > AGENTS.md <<'EOF'
           # Syntha V2 agent rules
 
           - This repository is the only active Syntha V2 codebase.
-          - Do not modify or depend on the frozen legacy `PetrFedin/syntha` applications.
+          - Never modify or import code from frozen legacy Syntha applications.
           - Do not introduce Firebase or another external identity provider.
           - Cross-module imports go only through `public.mjs`.
           - Business mutations require durable command IDs and transactional outbox events.
-          - Applied SQL migrations are immutable; schema changes use a new numbered migration.
-          - Preserve organisation isolation, server-authoritative pricing and transactional inventory guarantees.
-          - Run `npm run verify` before publishing changes.
-          - Product priority: fashion catalog and planning, PLM/BOM/samples, production, QC, logistics, landed cost, analytics and integrations.
+          - Applied SQL migrations are immutable.
+          - Preserve organisation isolation, server-authoritative pricing and atomic inventory guarantees.
+          - Run `npm run verify` before publishing.
+          - Priority: fashion catalog/planning, PLM/BOM/samples, production, QC, logistics, landed cost, analytics and integrations.
           EOF
 
           cat > ARCHITECTURE.md <<'EOF'
           # Syntha V2 Architecture
 
-          ## Product boundary
+          Syntha V2 is an autonomous fashion B2B operating platform owning its backend, web workspace, PostgreSQL schema, authentication, APIs, workflows and tests. It does not depend on the legacy Syntha repository or Firebase.
 
-          Syntha V2 is an autonomous fashion B2B operating platform. The repository owns its backend, web workspace, PostgreSQL schema, authentication, APIs, workflows and tests. It does not import code from the legacy Syntha repository and does not use Firebase.
-
-          ## Executable commercial route
+          ## Commercial route
 
           `Campaign → Collection → Showroom → Selection → Order Builder → Order → Confirmation → DealSpace`
 
-          ## Platform domains
+          ## Domains
 
-          1. Identity, organisations, memberships and RBAC.
-          2. Partner CRM, invitations and commercial access.
-          3. Campaigns, collections, showrooms and digital linesheets.
-          4. Style/color/size catalog, pricing, MOQ, ATS and reservations.
-          5. Selection, assortment planning, order building and confirmation.
-          6. DealSpace, documents, payments, calendar and notifications.
-          7. PLM, materials, BOM, samples and approvals.
-          8. Production, quality control, logistics and landed cost.
-          9. Analytics, recommendations, integration and audit services.
+          Identity and RBAC; partner CRM; campaigns, collections and showrooms; style/color/size catalog and availability; selection and assortment planning; orders and commercial terms; DealSpace, documents, payments, calendar and notifications; PLM/BOM/samples; production/QC/logistics/landed cost; analytics and integrations.
 
-          ## Technical layers
+          ## Guarantees
 
-          - `src/core` — errors and immutable event envelopes;
-          - `src/auth` — password cryptography;
-          - `src/modules/*/public.mjs` — domain contracts;
-          - `src/application` — use cases and transactional boundaries;
-          - `src/infrastructure` — PostgreSQL and memory adapters, migration and readiness;
-          - `src/http` — Node and Fetch transport adapters;
-          - `src/runtime` — composition root;
-          - `src/web` and `public` — same-origin workspace;
-          - `db/migrations` — ordered PostgreSQL migrations;
-          - `tests` — domain, application, transport, UI and real PostgreSQL tests.
-
-          ## Non-negotiable guarantees
-
-          - actor identity is derived from the server session;
-          - access is organisation-scoped;
-          - catalog price, currency and version are server-authoritative;
-          - order totals are derived from trusted snapshots;
-          - stock reservation and release are atomic in PostgreSQL;
-          - commands are idempotent and events use a transactional outbox;
-          - migration checksums and readiness prevent schema drift.
+          Actor identity is server-derived; access is organisation-scoped; catalog price and currency are server-authoritative; order totals use trusted snapshots; reservations and releases are atomic in PostgreSQL; commands are idempotent; events use a transactional outbox; migration checksums and readiness prevent schema drift.
           EOF
-
-          python <<'PY'
-          from pathlib import Path
-          path = Path('CURSOR_START_HERE.md')
-          text = path.read_text()
-          text = text.replace('Рабочий проект находится только в `apps/syntha-wholesale-v2` и запускается автономно.\n', 'Репозиторий является самостоятельным проектом Syntha V2.\n')
-          text = text.replace('cd apps/syntha-wholesale-v2\n', '')
-          path.write_text(text, encoding='utf-8')
-          PY
 
           cat > .github/workflows/ci.yml <<'EOF'
           name: Syntha V2 CI
-
           on:
             pull_request:
             push:
               branches: [main, 'agent/**']
-
           permissions:
             contents: read
-
           jobs:
             verify:
               runs-on: ubuntu-latest
@@ -211,8 +139,7 @@ jobs:
                     POSTGRES_USER: syntha
                     POSTGRES_PASSWORD: syntha_test
                     POSTGRES_DB: syntha_v2_test
-                  ports:
-                    - 5432:5432
+                  ports: ['5432:5432']
                   options: >-
                     --health-cmd "pg_isready -U syntha -d syntha_v2_test"
                     --health-interval 5s
@@ -223,10 +150,8 @@ jobs:
                 - uses: actions/setup-node@v4
                   with:
                     node-version: '22'
-                - name: Install dependencies
-                  run: npm install --no-audit --no-fund
-                - name: Verify Syntha V2 with PostgreSQL
-                  run: npm run verify
+                - run: npm install --no-audit --no-fund
+                - run: npm run verify
                   env:
                     POSTGRES_TEST_URL: postgresql://syntha:syntha_test@127.0.0.1:5432/syntha_v2_test
           EOF
@@ -236,5 +161,3 @@ jobs:
           git config user.email 'actions@users.noreply.github.com'
           git commit -m 'feat: import standalone Syntha V2 platform'
           git push --force origin agent/import-syntha-v2
-
-# trigger: 2026-07-31

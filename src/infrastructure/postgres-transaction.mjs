@@ -22,6 +22,7 @@ export async function withPostgresTransaction(pool, work, {
 
   const client = await pool.connect();
   let primaryError;
+  let hasPrimaryError = false;
 
   try {
     await client.query(begin);
@@ -30,6 +31,7 @@ export async function withPostgresTransaction(pool, work, {
     return result;
   } catch (error) {
     primaryError = error;
+    hasPrimaryError = true;
     try {
       await client.query('ROLLBACK');
     } catch (rollbackError) {
@@ -38,9 +40,9 @@ export async function withPostgresTransaction(pool, work, {
     throw error;
   } finally {
     try {
-      client.release();
+      await client.release();
     } catch (releaseError) {
-      if (primaryError !== undefined) {
+      if (hasPrimaryError) {
         attachSecondaryError(primaryError, SECONDARY_ERROR_FIELDS.release, releaseError);
       } else {
         throw releaseError;

@@ -1,4 +1,5 @@
 import { invariant } from '../core/errors.mjs';
+import { getRegisteredCommand, insertRegisteredCommand } from './postgres-command-registry.mjs';
 import { withPostgresTransaction } from './postgres-transaction.mjs';
 
 const MAX_BATCH_LIMIT = 1000;
@@ -262,29 +263,8 @@ function transactionView(client) {
     async deleteProjectionClaim(eventId) {
       await client.query('DELETE FROM notification_projection_claims WHERE event_id = $1', [eventId]);
     },
-    async getCommand(id) {
-      await client.query(
-        'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
-        [`notification-command:${id}`],
-      );
-      const result = await client.query(
-        'SELECT id, fingerprint, actor_id, result, completed_at FROM notification_commands WHERE id = $1',
-        [id],
-      );
-      return commandFromRow(result.rows[0]);
-    },
-    async insertCommand(command) {
-      try {
-        await client.query(
-          `INSERT INTO notification_commands (id, fingerprint, actor_id, result, completed_at)
-           VALUES ($1, $2, $3, $4::jsonb, $5)`,
-          [command.id, command.fingerprint, command.actorId, JSON.stringify(command.result), command.completedAt],
-        );
-      } catch (error) {
-        if (error?.code === '23505') invariant(false, 'COMMAND_ALREADY_EXISTS', 'Command already exists', { commandId: command.id });
-        throw error;
-      }
-    },
+    getCommand: (id) => getRegisteredCommand(client, 'notification', id),
+    insertCommand: (command) => insertRegisteredCommand(client, 'notification', command),
   });
 }
 

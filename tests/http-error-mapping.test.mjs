@@ -11,6 +11,21 @@ for (const code of ['NOTIFICATION_PAGE_LIMIT_INVALID', 'NOTIFICATION_CURSOR_INVA
   });
 }
 
+test('global idempotency scope conflicts are exposed as HTTP 409', () => {
+  const normalized = normalizeHttpError(new DomainError(
+    'COMMAND_SCOPE_CONFLICT',
+    'Idempotency key is already assigned to another command scope',
+    { commandId: 'command-1', requestedScope: 'catalog', registeredScope: 'wholesale' },
+  ));
+  assert.equal(normalized.status, 409);
+  assert.equal(normalized.code, 'COMMAND_SCOPE_CONFLICT');
+  assert.deepEqual(normalized.details, {
+    commandId: 'command-1',
+    requestedScope: 'catalog',
+    registeredScope: 'wholesale',
+  });
+});
+
 test('unclassified domain validation errors remain unprocessable entities', () => {
   const normalized = normalizeHttpError(new DomainError('CATALOG_PRICE_INVALID', 'Invalid catalog price'));
   assert.equal(normalized.status, 422);

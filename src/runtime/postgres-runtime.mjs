@@ -8,11 +8,13 @@ import { createShowroomSelectionService } from '../application/showroom-selectio
 import { createOrderBuilderService } from '../application/order-builder-service.mjs';
 import { createNotificationService } from '../application/notification-service.mjs';
 import { createWorkspaceQueryService } from '../application/workspace-query-service.mjs';
+import { createCollaborationCalendarService } from '../application/collaboration-calendar-service.mjs';
 import { createPostgresAuthStore } from '../infrastructure/postgres-auth-store.mjs';
 import { createPostgresCatalogStore } from '../infrastructure/postgres-catalog-store.mjs';
 import { createPostgresWholesaleStore } from '../infrastructure/postgres-store.mjs';
 import { createPostgresNotificationProjectionStore } from '../infrastructure/postgres-notification-projection-store.mjs';
 import { createPostgresWorkspaceReader } from '../infrastructure/postgres-workspace-reader.mjs';
+import { createPostgresCollaborationCalendarStore } from '../infrastructure/postgres-collaboration-calendar-store.mjs';
 import { createWholesaleHttpHandler } from '../http/api.mjs';
 import { createWholesaleFetchHandler } from '../http/fetch-api.mjs';
 
@@ -51,9 +53,16 @@ export function createPostgresWholesaleRuntime({
   const orders = createOrderBuilderService(options);
   const projectionStore = createPostgresNotificationProjectionStore({ pool });
   const notifications = createNotificationService({ sourceStore: store, projectionStore, ...(clock ? { clock } : {}), ...(nextId ? { nextId } : {}) });
-  const workspace = createWorkspaceQueryService({ reader: createPostgresWorkspaceReader({ pool }) });
-  const transport = { authenticate: auth.authenticate, auth, readiness, platform, catalog, partners, collaboration, orders, notifications, workspace };
+  const workspaceReader = createPostgresWorkspaceReader({ pool });
+  const workspace = createWorkspaceQueryService({ reader: workspaceReader });
+  const collaborationCalendar = createCollaborationCalendarService({
+    store: createPostgresCollaborationCalendarStore({ pool }),
+    membershipReader: store,
+    ...(clock ? { clock } : {}),
+    ...(nextId ? { nextId } : {}),
+  });
+  const transport = { authenticate: auth.authenticate, auth, readiness, platform, catalog, partners, collaboration, orders, notifications, workspace, collaborationCalendar };
   const handler = createWholesaleHttpHandler(transport);
   const fetchHandler = createWholesaleFetchHandler(transport);
-  return Object.freeze({ auth, readiness, store, catalogStore, platform, catalog, partners, collaboration, orders, notifications, workspace, handler, fetchHandler });
+  return Object.freeze({ auth, readiness, store, catalogStore, platform, catalog, partners, collaboration, orders, notifications, workspace, collaborationCalendar, handler, fetchHandler });
 }

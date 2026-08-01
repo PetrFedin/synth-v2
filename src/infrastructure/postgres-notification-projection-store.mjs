@@ -4,6 +4,7 @@ import { withPostgresTransaction } from './postgres-transaction.mjs';
 const MAX_BATCH_LIMIT = 1000;
 const DEFAULT_LIST_LIMIT = 100;
 const MAX_LIST_LIMIT = 500;
+const MAX_PAGE_LIMIT = 200;
 
 export function createPostgresNotificationProjectionStore({ pool }) {
   invariant(pool && typeof pool.connect === 'function' && typeof pool.query === 'function', 'POSTGRES_POOL_REQUIRED', 'PostgreSQL pool is required');
@@ -97,19 +98,56 @@ export function createPostgresNotificationProjectionStore({ pool }) {
         `Notification limit must be an integer from 1 to ${MAX_LIST_LIMIT}`,
         { min: 1, max: MAX_LIST_LIMIT },
       );
-      const ids = [...new Set(organisationIds.filter((id) => typeof id === 'string' && id.length > 0))];
+      const ids = normalizeOrganisationIds(organisationIds);
       if (!ids.length) return Object.freeze([]);
       const result = await pool.query(
         `SELECT payload
            FROM notifications
           WHERE recipient_organisation_id = ANY($1::text[])
           ORDER BY (status = 'unread') DESC,
-                   payload->>'createdAt' DESC,
+                   created_at DESC,
                    id DESC
           LIMIT $2`,
         [ids, limit],
       );
       return Object.freeze(result.rows.map((row) => row.payload));
+    },
+    async pageForOrganisations(organisationIds, { limit, after } = {}) {
+      invariant(Array.isArray(organisationIds), 'NOTIFICATION_ORGANISATIONS_INVALID', 'Notification organisation ids must be an array');
+      invariant(
+        Number.isSafeInteger(limit) && limit >= 1 && limit <= MAX_PAGE_LIMIT,
+        'NOTIFICATION_PAGE_LIMIT_INVALID',
+        `Notification page limit must be an integer from 1 to ${MAX_PAGE_LIMIT}`,
+        { min: 1, max: MAX_PAGE_LIMIT },
+      );
+      validatePagePosition(after);
+      const ids = normalizeOrganisationIds(organisationIds);
+      if (!ids.length) return emptyPage();
+      const fetchLimit = limit + 1;
+      const result = after
+        ? await pool.query(
+            `SELECT payload, created_at, id
+               FROM notifications
+              WHERE recipient_organisation_id = ANY($1::text[])
+                AND (created_at, id) < ($2::timestamptz, $3::text)
+              ORDER BY created_at DESC, id DESC
+              LIMIT $4`,
+            [ids, after.createdAt, after.id, fetchLimit],
+          )
+        : await pool.query(
+            `SELECT payload, created_at, id
+               FROM notifications
+              WHERE recipient_organisation_id = ANY($1::text[])
+              ORDER BY created_at DESC, id DESC
+              LIMIT $2`,
+            [ids, fetchLimit],
+          );
+      const hasMore = result.rows.length > limit;
+      const rows = hasMore ? result.rows.slice(0, limit) : result.rows;
+      return Object.freeze({
+        items: Object.freeze(rows.map((row) => row.payload)),
+        hasMore,
+      });
     },
     recordProjectionFailure({ event, errorCode, failedAt, attemptCount = 1 }) {
       invariant(event?.id && event?.type, 'NOTIFICATION_EVENT_INVALID', 'Projection failure requires an event');
@@ -169,8 +207,8 @@ function transactionView(client) {
       try {
         await client.query(
           `INSERT INTO notifications
-            (id, dedupe_key, source_event_id, recipient_organisation_id, type, status, version, payload)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)`,
+            (id, dedupe_key, source_event_id, recipient_organisation_id, type, status, version, created_at, payload)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)`,
           [
             notification.id,
             notification.dedupeKey,
@@ -179,6 +217,7 @@ function transactionView(client) {
             notification.type,
             notification.status,
             notification.version,
+            notification.createdAt,
             JSON.stringify(notification),
           ],
         );
@@ -263,6 +302,29 @@ function validateBatchLimit(limit) {
     'NOTIFICATION_BATCH_LIMIT_INVALID',
     `Notification batch limit must be an integer from 1 to ${MAX_BATCH_LIMIT}`,
   );
+}
+
+function validatePagePosition(after) {
+  invariant(
+    after === undefined || after === null || (
+      typeof after === 'object'
+      && typeof after.createdAt === 'string'
+      && Number.isFinite(Date.parse(after.createdAt))
+      && typeof after.id === 'string'
+      && after.id.length >= 1
+      && after.id.length <= 160
+    ),
+    'NOTIFICATION_CURSOR_INVALID',
+    'Notification page position is invalid',
+  );
+}
+
+function normalizeOrganisationIds(organisationIds) {
+  return [...new Set(organisationIds.filter((id) => typeof id === 'string' && id.length > 0))];
+}
+
+function emptyPage() {
+  return Object.freeze({ items: Object.freeze([]), hasMore: false });
 }
 
 function outboxRecordFromRow(row) {

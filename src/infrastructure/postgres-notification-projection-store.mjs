@@ -1,6 +1,8 @@
 import { invariant } from '../core/errors.mjs';
 
 const MAX_BATCH_LIMIT = 1000;
+const DEFAULT_LIST_LIMIT = 100;
+const MAX_LIST_LIMIT = 500;
 
 export function createPostgresNotificationProjectionStore({ pool }) {
   invariant(pool && typeof pool.connect === 'function' && typeof pool.query === 'function', 'POSTGRES_POOL_REQUIRED', 'PostgreSQL pool is required');
@@ -46,8 +48,14 @@ export function createPostgresNotificationProjectionStore({ pool }) {
         publishedAt: row.published_at?.toISOString?.() ?? row.published_at ?? null,
       }));
     },
-    async listForOrganisations(organisationIds) {
+    async listForOrganisations(organisationIds, { limit = DEFAULT_LIST_LIMIT } = {}) {
       invariant(Array.isArray(organisationIds), 'NOTIFICATION_ORGANISATIONS_INVALID', 'Notification organisation ids must be an array');
+      invariant(
+        Number.isSafeInteger(limit) && limit >= 1 && limit <= MAX_LIST_LIMIT,
+        'NOTIFICATION_LIMIT_INVALID',
+        `Notification limit must be an integer from 1 to ${MAX_LIST_LIMIT}`,
+        { min: 1, max: MAX_LIST_LIMIT },
+      );
       const ids = [...new Set(organisationIds.filter((id) => typeof id === 'string' && id.length > 0))];
       if (!ids.length) return Object.freeze([]);
       const result = await pool.query(
@@ -56,8 +64,9 @@ export function createPostgresNotificationProjectionStore({ pool }) {
           WHERE recipient_organisation_id = ANY($1::text[])
           ORDER BY (status = 'unread') DESC,
                    payload->>'createdAt' DESC,
-                   id DESC`,
-        [ids],
+                   id DESC
+          LIMIT $2`,
+        [ids, limit],
       );
       return Object.freeze(result.rows.map((row) => row.payload));
     },

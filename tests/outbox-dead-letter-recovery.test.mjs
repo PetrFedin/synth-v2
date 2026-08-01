@@ -120,6 +120,36 @@ test('terminal publication writes current dead-letter state and append-only audi
   assert.match(queries[1].sql, /'dead-lettered'/);
 });
 
+test('audit reader preserves PostgreSQL bigint identifiers exactly', async () => {
+  const store = createPostgresOutboxPublicationStore({
+    pool: {
+      async connect() { throw new Error('connect not expected'); },
+      async query(sql, params) {
+        assert.match(sql, /FROM outbox_dead_letter_audit/);
+        assert.deepEqual(params, ['event-1', 10]);
+        return {
+          rows: [{
+            id: '9007199254740993',
+            event_id: 'event-1',
+            action: 'requeued',
+            attempt_count: 10,
+            error_code: 'UPSTREAM_FAILED',
+            actor_id: 'operator-1',
+            reason: 'Retry after fix',
+            occurred_at: new Date('2026-08-02T12:00:00.000Z'),
+            event,
+          }],
+        };
+      },
+    },
+  });
+
+  const [audit] = await store.listDeadLetterAudit({ eventId: 'event-1', limit: 10 });
+  assert.equal(audit.id, '9007199254740993');
+  assert.equal(typeof audit.id, 'string');
+  assert.equal(audit.occurredAt, '2026-08-02T12:00:00.000Z');
+});
+
 test('recovery input is validated before a database connection is checked out', async () => {
   let connects = 0;
   const store = createPostgresOutboxPublicationStore({

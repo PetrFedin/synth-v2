@@ -47,6 +47,16 @@ function view(client) {
       const result = await client.query('SELECT * FROM auth_sessions WHERE token_hash = $1', [tokenHash]);
       return sessionFromRow(result.rows[0]);
     },
+    async revokeSessionByTokenHash(tokenHash, revokedAt) {
+      const result = await client.query(
+        `UPDATE auth_sessions
+            SET status = 'revoked', revoked_at = $2
+          WHERE token_hash = $1
+            AND status = 'active'`,
+        [tokenHash, revokedAt],
+      );
+      return result.rowCount === 1;
+    },
     async insertSession(session) {
       try {
         await client.query(

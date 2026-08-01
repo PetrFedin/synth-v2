@@ -1,19 +1,20 @@
 import { invariant } from '../../core/errors.mjs';
+import { chronologicalRange, requiredText } from '../../core/validation.mjs';
 
 export function createShowroom({ id, collection, brandId, name, opensAt, closesAt, createdAt }) {
   invariant(id && collection?.id, 'SHOWROOM_IDENTITY_REQUIRED', 'Showroom id and collection are required');
   invariant(collection.brandId === brandId, 'SHOWROOM_BRAND_MISMATCH', 'Showroom brand must match collection brand');
   invariant(collection.status === 'published', 'COLLECTION_NOT_PUBLISHED', 'Showroom requires a published collection');
-  invariant(typeof name === 'string' && name.trim().length > 1, 'SHOWROOM_NAME_REQUIRED', 'Showroom name is required');
-  invariant(Date.parse(opensAt) < Date.parse(closesAt), 'SHOWROOM_DATES_INVALID', 'Showroom open date must be before close date');
+  const normalizedName = requiredText(name, { code: 'SHOWROOM_NAME_REQUIRED', label: 'Showroom name', max: 160 });
+  const dates = chronologicalRange(opensAt, closesAt, { code: 'SHOWROOM_DATES_INVALID', startLabel: 'Showroom open date', endLabel: 'showroom close date' });
   return Object.freeze({
     id,
     collectionId: collection.id,
     campaignId: collection.campaignId,
     brandId,
-    name: name.trim(),
-    opensAt,
-    closesAt,
+    name: normalizedName,
+    opensAt: dates.start,
+    closesAt: dates.end,
     status: 'draft',
     version: 1,
     createdAt,

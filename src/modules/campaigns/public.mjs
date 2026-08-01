@@ -1,19 +1,20 @@
 import { invariant } from '../../core/errors.mjs';
+import { chronologicalRange, requiredText } from '../../core/validation.mjs';
 
 const CAMPAIGN_STATUSES = Object.freeze(['draft', 'open', 'closed']);
 
 export function createCampaign({ id, brandId, name, season, startsAt, endsAt, createdAt }) {
   invariant(id && brandId, 'CAMPAIGN_IDENTITY_REQUIRED', 'Campaign id and brand are required');
-  invariant(typeof name === 'string' && name.trim().length > 1, 'CAMPAIGN_NAME_REQUIRED', 'Campaign name is required');
-  invariant(typeof season === 'string' && season.trim().length > 1, 'CAMPAIGN_SEASON_REQUIRED', 'Campaign season is required');
-  invariant(Date.parse(startsAt) < Date.parse(endsAt), 'CAMPAIGN_DATES_INVALID', 'Campaign start must be before end');
+  const normalizedName = requiredText(name, { code: 'CAMPAIGN_NAME_REQUIRED', label: 'Campaign name', max: 160 });
+  const normalizedSeason = requiredText(season, { code: 'CAMPAIGN_SEASON_REQUIRED', label: 'Campaign season', max: 40 });
+  const dates = chronologicalRange(startsAt, endsAt, { code: 'CAMPAIGN_DATES_INVALID', startLabel: 'Campaign start', endLabel: 'campaign end' });
   return Object.freeze({
     id,
     brandId,
-    name: name.trim(),
-    season: season.trim(),
-    startsAt,
-    endsAt,
+    name: normalizedName,
+    season: normalizedSeason,
+    startsAt: dates.start,
+    endsAt: dates.end,
     status: 'draft',
     version: 1,
     createdAt,

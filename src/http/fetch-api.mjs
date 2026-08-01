@@ -1,14 +1,24 @@
 import { randomUUID } from 'node:crypto';
-import { DomainError, invariant } from '../core/errors.mjs';
+import { invariant } from '../core/errors.mjs';
 import { normalizeHttpError } from './api.mjs';
 import { wholesaleV2OpenApi } from './openapi.mjs';
 import { createWholesaleRoutes, matchWholesaleRoute } from './routes.mjs';
+import {
+  apiResponseHeaders,
+  decodeJsonObject,
+  queryParameters,
+  requireIdempotencyKey,
+  resolveRequestId,
+  validateContentLength,
+} from './transport-contract.mjs';
 
 export function createWholesaleFetchHandler({ authenticate, auth, readiness, maxBodyBytes = 256 * 1024, nextRequestId = randomUUID, ...services } = {}) {
   invariant(typeof authenticate === 'function', 'HTTP_AUTHENTICATOR_REQUIRED', 'HTTP authenticator is required');
+  invariant(Number.isSafeInteger(maxBodyBytes) && maxBodyBytes > 0, 'HTTP_BODY_LIMIT_INVALID', 'HTTP body limit must be a positive integer');
+  invariant(typeof nextRequestId === 'function', 'HTTP_REQUEST_ID_FACTORY_REQUIRED', 'Request id factory is required');
   const routes = createWholesaleRoutes(services);
   return async function handleWholesaleFetchRequest(request) {
-    const requestId = request.headers.get('x-request-id') || nextRequestId();
+    const requestId = resolveRequestId(request.headers.get('x-request-id'), nextRequestId);
     try {
       const url = new URL(request.url);
       if (request.method === 'GET' && url.pathname === '/health') return json(200, { status: 'ok', service: 'syntha-wholesale-v2', requestId }, requestId);
@@ -31,9 +41,15 @@ export function createWholesaleFetchHandler({ authenticate, auth, readiness, max
       }
       const route = matchWholesaleRoute(routes, request.method, url.pathname);
       invariant(route, 'HTTP_ROUTE_NOT_FOUND', 'Route not found', { method: request.method, path: url.pathname });
+      const commandId = route.mutation ? requireIdempotencyKey(request.headers.get('idempotency-key')) : undefined;
       const body = route.mutation ? await readJson(request, maxBodyBytes) : {};
-      const commandId = route.mutation ? requireIdempotencyKey(request) : undefined;
-      const data = await route.execute({ actorId: identity.actor.actorId, commandId, body, params: route.params });
+      const data = await route.execute({
+        actorId: identity.actor.actorId,
+        commandId,
+        body,
+        params: route.params,
+        query: queryParameters(url),
+      });
       return json(200, { data, requestId }, requestId);
     } catch (error) {
       const normalized = normalizeHttpError(error);
@@ -47,24 +63,19 @@ async function authenticateBearer(request, authenticate) {
   const authorization = request.headers.get('authorization');
   invariant(authorization?.startsWith('Bearer '), 'HTTP_AUTH_REQUIRED', 'Bearer authentication is required');
   const token = authorization.slice(7).trim();
+  invariant(token, 'HTTP_AUTH_REQUIRED', 'Bearer authentication is required');
   const actor = await authenticate(token);
   invariant(actor?.actorId, 'HTTP_AUTH_INVALID', 'Authentication token is invalid');
   return Object.freeze({ token, actor });
 }
-function requireIdempotencyKey(request) {
-  const value = request.headers.get('idempotency-key')?.trim();
-  invariant(value, 'HTTP_IDEMPOTENCY_KEY_REQUIRED', 'Idempotency-Key header is required for mutations');
-  return value;
-}
+
 async function readJson(request, limit) {
-  const contentLength = Number(request.headers.get('content-length') ?? 0);
-  invariant(!Number.isFinite(contentLength) || contentLength <= limit, 'HTTP_BODY_TOO_LARGE', 'Request body exceeds configured limit', { maxBodyBytes: limit });
+  validateContentLength(request.headers.get('content-length'), limit);
   const buffer = await request.arrayBuffer();
   invariant(buffer.byteLength <= limit, 'HTTP_BODY_TOO_LARGE', 'Request body exceeds configured limit', { maxBodyBytes: limit });
-  if (!buffer.byteLength) return {};
-  try { return JSON.parse(Buffer.from(buffer).toString('utf8')); }
-  catch { throw new DomainError('HTTP_JSON_INVALID', 'Request body must be valid JSON'); }
+  return decodeJsonObject(new Uint8Array(buffer), request.headers.get('content-type'));
 }
+
 function readinessUnavailable() {
   return Object.freeze({
     status: 'not-ready', service: 'syntha-wholesale-v2', checkedAt: new Date().toISOString(), reason: 'readiness-not-configured',
@@ -74,5 +85,5 @@ function readinessUnavailable() {
 }
 function publicIdentity(actor) { return Object.freeze({ actorId: actor.actorId, email: actor.email ?? null, displayName: actor.displayName ?? '' }); }
 function json(status, payload, requestId, extraHeaders = {}) {
-  return Response.json(payload, { status, headers: { 'x-request-id': requestId, ...extraHeaders } });
+  return Response.json(payload, { status, headers: apiResponseHeaders(requestId, extraHeaders) });
 }

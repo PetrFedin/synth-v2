@@ -24,6 +24,7 @@ function acquiredFixture({ failOn } = {}) {
       if (/^DELETE FROM commands/.test(sql)) return { rowCount: 2, rows: [] };
       if (/^DELETE FROM catalog_commands/.test(sql)) return { rowCount: 1, rows: [] };
       if (/^DELETE FROM notification_commands/.test(sql)) return { rowCount: 4, rows: [] };
+      if (/DELETE FROM command_registry/.test(sql)) return { rowCount: 10, rows: [] };
       if (/^DELETE FROM auth_login_audit/.test(sql)) return { rowCount: 5, rows: [] };
       if (/DELETE FROM auth_login_throttles/.test(sql)) return { rowCount: 6, rows: [] };
       if (/DELETE FROM auth_sessions/.test(sql)) return { rowCount: 7, rows: [] };
@@ -48,6 +49,7 @@ test('maintenance cleanup is advisory-locked transactional and returns deletion 
     commands: 2,
     catalogCommands: 1,
     notificationCommands: 4,
+    commandRegistry: 10,
     authAudit: 5,
     loginThrottles: 6,
     authSessions: 7,
@@ -63,6 +65,23 @@ test('maintenance cleanup is advisory-locked transactional and returns deletion 
   assert.equal(fixture.queries.at(-1).sql, 'COMMIT');
   assert.equal(fixture.released, 1);
   assert.equal(Object.isFrozen(result.counts), true);
+});
+
+test('command retention deletes scoped results before unreferenced global keys', async () => {
+  const fixture = acquiredFixture();
+  await createPostgresMaintenanceStore({ pool: fixture.pool }).cleanup(cutoffs);
+  const commandsIndex = fixture.queries.findIndex((item) => /^DELETE FROM commands/.test(item.sql));
+  const catalogIndex = fixture.queries.findIndex((item) => /^DELETE FROM catalog_commands/.test(item.sql));
+  const notificationIndex = fixture.queries.findIndex((item) => /^DELETE FROM notification_commands/.test(item.sql));
+  const registryIndex = fixture.queries.findIndex((item) => /DELETE FROM command_registry/.test(item.sql));
+  assert.ok(registryIndex > commandsIndex);
+  assert.ok(registryIndex > catalogIndex);
+  assert.ok(registryIndex > notificationIndex);
+  const registry = fixture.queries[registryIndex];
+  assert.match(registry.sql, /NOT EXISTS \(SELECT 1 FROM commands/);
+  assert.match(registry.sql, /NOT EXISTS \(SELECT 1 FROM catalog_commands/);
+  assert.match(registry.sql, /NOT EXISTS \(SELECT 1 FROM notification_commands/);
+  assert.deepEqual(registry.params, [cutoffs.commandsBefore]);
 });
 
 test('outbox cleanup deletes only eligible published or terminal events and retains audit by policy', async () => {

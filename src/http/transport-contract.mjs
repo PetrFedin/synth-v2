@@ -5,6 +5,7 @@ import { DomainError, invariant } from '../core/errors.mjs';
 const SAFE_REQUEST_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const SAFE_IDEMPOTENCY_KEY = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const JSON_CONTENT_TYPE = /^application\/(?:[a-z0-9.+-]+\+)?json(?:\s*;|$)/i;
+const UNSAFE_PATH_CHARACTERS = /[\u0000-\u001f\u007f/\\]/u;
 const UTF8_DECODER = new TextDecoder('utf-8', { fatal: true });
 
 export function resolveRequestId(candidate, nextRequestId = randomUUID) {
@@ -46,6 +47,16 @@ export function decodeJsonObject(bytes, contentType) {
   catch { throw new DomainError('HTTP_JSON_INVALID', 'Request body must be valid JSON'); }
   invariant(value !== null && typeof value === 'object' && !Array.isArray(value), 'HTTP_JSON_OBJECT_REQUIRED', 'Request body must be a JSON object');
   return value;
+}
+
+export function decodePathParameter(value) {
+  invariant(typeof value === 'string' && value.length > 0 && value.length <= 768, 'HTTP_PATH_PARAMETER_INVALID', 'Path parameter is invalid');
+  let decoded;
+  try { decoded = decodeURIComponent(value); }
+  catch { throw new DomainError('HTTP_PATH_PARAMETER_INVALID', 'Path parameter contains invalid percent encoding'); }
+  invariant(decoded.length >= 1 && decoded.length <= 160, 'HTTP_PATH_PARAMETER_INVALID', 'Path parameter must contain 1 to 160 characters');
+  invariant(!UNSAFE_PATH_CHARACTERS.test(decoded), 'HTTP_PATH_PARAMETER_INVALID', 'Path parameter contains unsafe characters');
+  return decoded;
 }
 
 export function apiResponseHeaders(requestId, extra = {}) {

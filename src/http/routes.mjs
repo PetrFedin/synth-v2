@@ -1,106 +1,116 @@
 import { invariant } from '../core/errors.mjs';
-import { asArray, asObject, query } from './request-contract.mjs';
+import { assertBodyContract, assertQueryContract, bodyContract } from './request-contract.mjs';
+import { decodePathParameter } from './transport-contract.mjs';
 
-const ROUTES = Object.freeze([
-  post('/v2/auth/register', body(['email', 'password', 'displayName']), ({ auth }, _, body) => auth.register(body)),
-  post('/v2/auth/login', body(['email', 'password']), ({ auth }, _, body) => auth.login(body)),
-  get('/v2/auth/me', empty(), ({ auth }, context) => auth.me(context.actorId)),
-  post('/v2/auth/logout', empty(), ({ auth }, context) => auth.logout(context.token)),
-  post('/v2/organisations', body(['id', 'type', 'name', 'createdAt']), ({ platform }, context, body) => platform.registerOrganisation(context.commandId, context.actorId, body)),
-  post('/v2/memberships', body(['id', 'organisationId', 'userId', 'organisationType', 'role', 'status']), ({ platform }, context, body) => platform.grantMembership(context.commandId, context.actorId, body)),
-  post('/v2/campaigns', body(['brandId', 'name', 'season', 'salesWindow']), ({ platform }, context, body) => platform.createCampaign(context.commandId, context.actorId, body)),
-  post(/^\/v2\/campaigns\/([^/]+)\/open$/, empty(), ({ platform }, context, _, campaignId) => platform.openCampaign(context.commandId, context.actorId, campaignId)),
-  post('/v2/collections', body(['campaignId', 'name', 'currency']), ({ platform }, context, body) => platform.createCollection(context.commandId, context.actorId, body)),
-  post(/^\/v2\/collections\/([^/]+)\/publish$/, empty(), ({ platform }, context, _, collectionId) => platform.publishCollection(context.commandId, context.actorId, collectionId)),
-  post('/v2/cycles', body(['brandId', 'shopId', 'campaignId', 'collectionId']), ({ platform }, context, body) => platform.startCycle(context.commandId, context.actorId, body)),
-  post(/^\/v2\/cycles\/([^/]+)\/advance$/, body(['targetStage']), ({ platform }, context, body, cycleId) => platform.advanceCycle(context.commandId, context.actorId, cycleId, body.targetStage)),
-  post(/^\/v2\/cycles\/([^/]+)\/order$/, body(['order']), ({ platform }, context, body, cycleId) => platform.attachOrder(context.commandId, context.actorId, cycleId, asObject(body.order))),
-  post(/^\/v2\/cycles\/([^/]+)\/confirm$/, empty(), ({ platform }, context, _, cycleId) => platform.confirmAndOpenDeal(context.commandId, context.actorId, cycleId)),
-  post('/v2/relationships', body(['brandId', 'shopId']), ({ partners }, context, body) => partners.requestRelationship(context.commandId, context.actorId, body)),
-  post(/^\/v2\/relationships\/([^/]+)\/accept$/, empty(), ({ partners }, context, _, id) => partners.acceptRelationship(context.commandId, context.actorId, id)),
-  post(/^\/v2\/relationships\/([^/]+)\/reject$/, empty(), ({ partners }, context, _, id) => partners.rejectRelationship(context.commandId, context.actorId, id)),
-  post(/^\/v2\/relationships\/([^/]+)\/revoke$/, empty(), ({ partners }, context, _, id) => partners.revokeRelationship(context.commandId, context.actorId, id)),
-  post('/v2/catalog/skus', body(['sku', 'collectionId', 'name', 'currency', 'wholesalePrice', 'minimumOrderQuantity', 'availableQuantity']), ({ catalog }, context, body) => catalog.createSku(context.commandId, context.actorId, body)),
-  post(/^\/v2\/catalog\/skus\/([^/]+)\/publish$/, empty(), ({ catalog }, context, _, sku) => catalog.publishSku(context.commandId, context.actorId, sku)),
-  post('/v2/showrooms', body(['collectionId', 'name']), ({ collaboration }, context, body) => collaboration.createShowroom(context.commandId, context.actorId, body)),
-  post(/^\/v2\/showrooms\/([^/]+)\/open$/, empty(), ({ collaboration }, context, _, id) => collaboration.openShowroom(context.commandId, context.actorId, id)),
-  post(/^\/v2\/showrooms\/([^/]+)\/invitations$/, body(['shopId', 'expiresAt']), ({ partners }, context, body, showroomId) => partners.inviteShopToShowroom(context.commandId, context.actorId, { showroomId, ...body })),
-  post(/^\/v2\/showroom-invitations\/([^/]+)\/accept$/, empty(), ({ partners }, context, _, id) => partners.acceptShowroomInvitation(context.commandId, context.actorId, id)),
-  post(/^\/v2\/showroom-invitations\/([^/]+)\/decline$/, empty(), ({ partners }, context, _, id) => partners.declineShowroomInvitation(context.commandId, context.actorId, id)),
-  post(/^\/v2\/showroom-invitations\/([^/]+)\/revoke$/, empty(), ({ partners }, context, _, id) => partners.revokeShowroomInvitation(context.commandId, context.actorId, id)),
-  post('/v2/selections', body(['cycleId', 'showroomId']), ({ collaboration }, context, body) => collaboration.createSelection(context.commandId, context.actorId, body)),
-  put(/^\/v2\/selections\/([^/]+)\/lines$/, body(['line']), ({ collaboration }, context, body, id) => collaboration.upsertSelectionLine(context.commandId, context.actorId, id, asObject(body.line))),
-  post(/^\/v2\/selections\/([^/]+)\/submit$/, empty(), ({ collaboration }, context, _, id) => collaboration.submitSelection(context.commandId, context.actorId, id)),
-  post('/v2/orders', body(['selectionId', 'terms']), ({ orders }, context, body) => orders.createOrderDraft(context.commandId, context.actorId, { selectionId: body.selectionId, terms: asObject(body.terms) })),
-  post(/^\/v2\/orders\/([^/]+)\/accept-terms$/, body(['organisationId']), ({ orders }, context, body, orderId) => orders.acceptTerms(context.commandId, context.actorId, { orderId, organisationId: body.organisationId })),
-  post(/^\/v2\/orders\/([^/]+)\/attach$/, empty(), ({ orders }, context, _, orderId) => orders.attachOrderToCycle(context.commandId, context.actorId, orderId)),
-  post(/^\/v2\/orders\/([^/]+)\/cancel$/, body(['reason']), ({ orders }, context, body, orderId) => orders.cancelOrder(context.commandId, context.actorId, { orderId, reason: body.reason })),
-  get('/v2/notifications/page', query(['limit', 'cursor']), ({ notifications }, context, body) => notifications.pageForActor(context.actorId, { limit: body.limit, cursor: body.cursor })),
-  get('/v2/notifications', query(['limit']), ({ notifications }, context, body) => notifications.listForActor(context.actorId, { limit: body.limit })),
-  post(/^\/v2\/notifications\/([^/]+)\/read$/, empty(), ({ notifications }, context, _, notificationId) => notifications.markRead(context.commandId, context.actorId, notificationId)),
-  get('/v2/workspace', empty(), ({ workspace }, context) => workspace.loadForActor(context.actorId)),
-  get('/v2/snapshot', empty(), ({ platform }, context) => platform.snapshot(context.actorId)),
-]);
+const EMPTY_BODY = bodyContract();
+const CAMPAIGN_BODY = bodyContract(['brandId', 'name', 'season', 'startsAt', 'endsAt']);
+const COLLECTION_BODY = bodyContract(['campaignId', 'brandId', 'name', 'currency']);
+const CATALOG_SKU_BODY = bodyContract(['sku', 'collectionId', 'brandId', 'name', 'wholesalePrice', 'currency', 'minimumOrderQuantity', 'availableQuantity']);
+const SHOWROOM_BODY = bodyContract(['collectionId', 'brandId', 'name', 'opensAt', 'closesAt']);
+const RELATIONSHIP_BODY = bodyContract(['brandId', 'shopId']);
+const INVITATION_BODY = bodyContract(['showroomId', 'shopId', 'expiresAt']);
+const CYCLE_BODY = bodyContract(['brandId', 'shopId', 'campaignId', 'collectionId']);
+const CYCLE_ADVANCE_BODY = bodyContract(['cycleId', 'targetStage']);
+const SELECTION_BODY = bodyContract(['cycleId', 'showroomId']);
+const SELECTION_LINE_BODY = bodyContract(['selectionId', 'sku', 'quantity', 'note', 'unitPrice', 'currency', 'catalogVersion']);
+const ORDER_BODY = bodyContract(['selectionId', 'terms'], {
+  terms: ['incoterm', 'paymentDays', 'prepaymentPercent', 'deliveryStart', 'deliveryEnd'],
+});
+const ORDER_ACCEPT_BODY = bodyContract(['orderId', 'organisationId']);
+const ORDER_CANCEL_BODY = bodyContract(['orderId', 'reason']);
 
-export function matchRoute(method, pathname) {
-  for (const route of ROUTES) {
+export function createWholesaleRoutes({ platform, catalog, partners, collaboration, orders, notifications, workspace }) {
+  invariant(platform && partners && collaboration && orders && notifications && workspace, 'HTTP_SERVICES_REQUIRED', 'All V2 application services are required');
+  const catalogService = catalog ?? unavailableCatalog();
+  return [
+    mutate('POST', /^\/v2\/campaigns$/, CAMPAIGN_BODY, ({ commandId, actorId, body }) => platform.createCampaign(commandId, actorId, body)),
+    mutate('POST', /^\/v2\/campaigns\/([^/]+)\/open$/, EMPTY_BODY, ({ commandId, actorId, params }) => platform.openCampaign(commandId, actorId, params[0])),
+    mutate('POST', /^\/v2\/collections$/, COLLECTION_BODY, ({ commandId, actorId, body }) => platform.createCollection(commandId, actorId, body)),
+    mutate('POST', /^\/v2\/collections\/([^/]+)\/publish$/, EMPTY_BODY, ({ commandId, actorId, params }) => platform.publishCollection(commandId, actorId, params[0])),
+    mutate('POST', /^\/v2\/catalog\/skus$/, CATALOG_SKU_BODY, ({ commandId, actorId, body }) => catalogService.createSku(commandId, actorId, body)),
+    mutate('POST', /^\/v2\/catalog\/skus\/([^/]+)\/publish$/, EMPTY_BODY, ({ commandId, actorId, params }) => catalogService.publishSku(commandId, actorId, params[0])),
+    mutate('POST', /^\/v2\/showrooms$/, SHOWROOM_BODY, ({ commandId, actorId, body }) => collaboration.createShowroom(commandId, actorId, body)),
+    mutate('POST', /^\/v2\/showrooms\/([^/]+)\/open$/, EMPTY_BODY, ({ commandId, actorId, params }) => collaboration.openShowroom(commandId, actorId, params[0])),
+    mutate('POST', /^\/v2\/relationships$/, RELATIONSHIP_BODY, ({ commandId, actorId, body }) => partners.requestRelationship(commandId, actorId, body)),
+    mutate('POST', /^\/v2\/relationships\/([^/]+)\/accept$/, EMPTY_BODY, ({ commandId, actorId, params }) => partners.acceptRelationship(commandId, actorId, params[0])),
+    mutate('POST', /^\/v2\/relationships\/([^/]+)\/reject$/, EMPTY_BODY, ({ commandId, actorId, params }) => partners.rejectRelationship(commandId, actorId, params[0])),
+    mutate('POST', /^\/v2\/relationships\/([^/]+)\/revoke$/, EMPTY_BODY, ({ commandId, actorId, params }) => partners.revokeRelationship(commandId, actorId, params[0])),
+    mutate('POST', /^\/v2\/showrooms\/([^/]+)\/invitations$/, INVITATION_BODY, ({ commandId, actorId, params, body }) => {
+      sameId(body.showroomId, params[0], 'showroomId');
+      return partners.inviteShopToShowroom(commandId, actorId, { ...body, showroomId: params[0] });
+    }),
+    mutate('POST', /^\/v2\/invitations\/([^/]+)\/accept$/, EMPTY_BODY, ({ commandId, actorId, params }) => partners.acceptShowroomInvitation(commandId, actorId, params[0])),
+    mutate('POST', /^\/v2\/invitations\/([^/]+)\/decline$/, EMPTY_BODY, ({ commandId, actorId, params }) => partners.declineShowroomInvitation(commandId, actorId, params[0])),
+    mutate('POST', /^\/v2\/invitations\/([^/]+)\/revoke$/, EMPTY_BODY, ({ commandId, actorId, params }) => partners.revokeShowroomInvitation(commandId, actorId, params[0])),
+    mutate('POST', /^\/v2\/cycles$/, CYCLE_BODY, ({ commandId, actorId, body }) => platform.startCycle(commandId, actorId, body)),
+    mutate('POST', /^\/v2\/cycles\/([^/]+)\/advance$/, CYCLE_ADVANCE_BODY, ({ commandId, actorId, params, body }) => {
+      sameId(body.cycleId, params[0], 'cycleId');
+      return platform.advanceCycle(commandId, actorId, params[0], body.targetStage);
+    }),
+    mutate('POST', /^\/v2\/cycles\/([^/]+)\/confirm$/, EMPTY_BODY, ({ commandId, actorId, params }) => platform.confirmAndOpenDeal(commandId, actorId, params[0])),
+    mutate('POST', /^\/v2\/selections$/, SELECTION_BODY, ({ commandId, actorId, body }) => collaboration.createSelection(commandId, actorId, body)),
+    mutate('PUT', /^\/v2\/selections\/([^/]+)\/lines\/([^/]+)$/, SELECTION_LINE_BODY, ({ commandId, actorId, params, body }) => {
+      const sku = params[1];
+      sameId(body.selectionId, params[0], 'selectionId');
+      sameId(body.sku, sku, 'sku');
+      return collaboration.upsertSelectionLine(commandId, actorId, params[0], { ...body, sku });
+    }),
+    mutate('POST', /^\/v2\/selections\/([^/]+)\/submit$/, EMPTY_BODY, ({ commandId, actorId, params }) => collaboration.submitSelection(commandId, actorId, params[0])),
+    mutate('POST', /^\/v2\/orders$/, ORDER_BODY, ({ commandId, actorId, body }) => orders.createOrderDraft(commandId, actorId, body)),
+    mutate('POST', /^\/v2\/orders\/([^/]+)\/accept$/, ORDER_ACCEPT_BODY, ({ commandId, actorId, params, body }) => {
+      sameId(body.orderId, params[0], 'orderId');
+      return orders.acceptTerms(commandId, actorId, { ...body, orderId: params[0] });
+    }),
+    mutate('POST', /^\/v2\/orders\/([^/]+)\/attach$/, EMPTY_BODY, ({ commandId, actorId, params }) => orders.attachOrderToCycle(commandId, actorId, params[0])),
+    mutate('POST', /^\/v2\/orders\/([^/]+)\/cancel$/, ORDER_CANCEL_BODY, ({ commandId, actorId, params, body }) => {
+      sameId(body.orderId, params[0], 'orderId');
+      return orders.cancelOrder(commandId, actorId, { orderId: params[0], reason: body.reason });
+    }),
+    read('GET', /^\/v2\/workspace$/, [], ({ actorId }) => workspace.loadForActor(actorId)),
+    read('GET', /^\/v2\/notifications\/page$/, ['limit', 'cursor'], ({ actorId, query }) => notifications.pageForActor(actorId, { limit: query.limit, cursor: query.cursor })),
+    read('GET', /^\/v2\/notifications$/, ['limit'], ({ actorId, query }) => notifications.listForActor(actorId, { limit: query.limit })),
+    mutate('POST', /^\/v2\/notifications\/([^/]+)\/read$/, EMPTY_BODY, ({ commandId, actorId, params }) => notifications.markRead(commandId, actorId, params[0])),
+  ];
+}
+
+export function matchWholesaleRoute(routes, method, pathname) {
+  for (const route of routes) {
     if (route.method !== method) continue;
-    if (typeof route.matcher === 'string') {
-      if (route.matcher === pathname) return Object.freeze({ route, params: Object.freeze([]) });
-      continue;
-    }
-    const match = pathname.match(route.matcher);
-    if (match) return Object.freeze({ route, params: Object.freeze(match.slice(1).map(decodePathParameter)) });
+    const match = pathname.match(route.pattern);
+    if (match) return { ...route, params: match.slice(1).map(decodePathParameter) };
   }
-  return undefined;
+  return null;
 }
 
-export function validateRouteInput(route, { body: rawBody, url }) {
-  invariant(route?.contract, 'ROUTE_CONTRACT_REQUIRED', 'Route contract is required');
-  if (route.contract.source === 'query') return queryFields(url, route.contract.fields);
-  const bodyValue = rawBody === undefined || rawBody === null ? {} : asObject(rawBody);
-  return exactFields(bodyValue, route.contract.fields, 'body');
+function mutate(method, pattern, contract, execute) {
+  return {
+    method,
+    pattern,
+    mutation: true,
+    execute(context) {
+      assertQueryContract(context.query ?? {}, []);
+      assertBodyContract(context.body, contract);
+      return execute(context);
+    },
+  };
 }
 
-function get(matcher, contract, run) { return route('GET', matcher, contract, run); }
-function post(matcher, contract, run) { return route('POST', matcher, contract, run); }
-function put(matcher, contract, run) { return route('PUT', matcher, contract, run); }
-function route(method, matcher, contract, run) { return Object.freeze({ method, matcher, contract, run }); }
-function body(fields) { return Object.freeze({ source: 'body', fields: Object.freeze(fields) }); }
-function query(fields) { return Object.freeze({ source: 'query', fields: Object.freeze(fields) }); }
-function empty() { return body([]); }
-
-function exactFields(value, allowedFields, location) {
-  const allowed = new Set(allowedFields);
-  const unknown = Object.keys(value).filter((field) => !allowed.has(field));
-  invariant(unknown.length === 0, 'REQUEST_FIELD_UNKNOWN', `Unknown ${location} field`, { location, fields: unknown.sort() });
-  return value;
+function read(method, pattern, queryFields, execute) {
+  return {
+    method,
+    pattern,
+    mutation: false,
+    execute(context) {
+      assertQueryContract(context.query ?? {}, queryFields);
+      return execute(context);
+    },
+  };
 }
 
-function queryFields(url, fields) {
-  const allowed = new Set(fields);
-  const unknown = [...new Set([...url.searchParams.keys()].filter((field) => !allowed.has(field)))];
-  invariant(unknown.length === 0, 'REQUEST_FIELD_UNKNOWN', 'Unknown query field', { location: 'query', fields: unknown.sort() });
-  const result = {};
-  for (const field of fields) {
-    const values = url.searchParams.getAll(field);
-    invariant(values.length <= 1, 'REQUEST_QUERY_FIELD_DUPLICATE', 'Query field must not be repeated', {
-      location: 'query',
-      field,
-      count: values.length,
-    });
-    if (values.length === 1) result[field] = values[0];
-  }
-  return Object.freeze(result);
+function sameId(bodyValue, routeValue, field) {
+  invariant(bodyValue === undefined || bodyValue === routeValue, 'HTTP_IDENTIFIER_MISMATCH', 'Body identifier does not match route identifier', { field, routeValue, bodyValue });
 }
-
-function decodePathParameter(value) {
-  try {
-    const decoded = decodeURIComponent(value);
-    invariant(decoded.length > 0 && !decoded.includes('/') && !decoded.includes('\\'), 'PATH_PARAMETER_INVALID', 'Path parameter is invalid');
-    return decoded;
-  } catch (error) {
-    if (error?.code === 'PATH_PARAMETER_INVALID') throw error;
-    invariant(false, 'PATH_PARAMETER_INVALID', 'Path parameter encoding is invalid');
-  }
+function unavailableCatalog() {
+  const fail = () => invariant(false, 'CATALOG_SERVICE_REQUIRED', 'Catalog service is required');
+  return Object.freeze({ createSku: fail, publishSku: fail });
 }

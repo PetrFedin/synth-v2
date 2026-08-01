@@ -147,7 +147,10 @@ export function createPostgresNotificationProjectionStore({ pool }) {
 
 function transactionView(client) {
   return Object.freeze({
-    getNotification: (id) => getPayload(client, 'notifications', 'id', id),
+    async getNotification(id) {
+      const result = await client.query('SELECT payload FROM notifications WHERE id = $1 FOR UPDATE', [id]);
+      return result.rows[0]?.payload;
+    },
     getNotificationByDedupeKey: (dedupeKey) => getPayload(client, 'notifications', 'dedupe_key', dedupeKey),
     async getActiveMembership(organisationId, actorId) {
       const result = await client.query(
@@ -156,7 +159,8 @@ function transactionView(client) {
           WHERE organisation_id = $1
             AND user_id = $2
             AND status = 'active'
-          LIMIT 1`,
+          LIMIT 1
+          FOR SHARE`,
         [organisationId, actorId],
       );
       return result.rows[0]?.payload;

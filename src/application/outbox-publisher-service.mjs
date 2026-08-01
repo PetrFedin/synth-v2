@@ -68,66 +68,90 @@ export function createOutboxPublisherService({
 
     try {
       await publish(event);
-      const publishedAt = now();
-      const acknowledged = await store.acknowledgePublished({ ...ownership, publishedAt });
-      if (!acknowledged) {
-        return Object.freeze({
-          eventId: event.id,
-          eventType: event.type,
-          aggregateId: event.aggregateId ?? null,
-          attemptCount: record.attemptCount,
-          status: 'lease-lost',
-          delivered: true,
-          retryable: true,
-          errorCode: 'OUTBOX_ACKNOWLEDGEMENT_LOST',
-        });
-      }
+    } catch (error) {
+      return publicationFailure(record, ownership, error);
+    }
+
+    const publishedAt = now();
+    let acknowledged;
+    try {
+      acknowledged = await store.acknowledgePublished({ ...ownership, publishedAt });
+    } catch (error) {
       return Object.freeze({
         eventId: event.id,
         eventType: event.type,
         aggregateId: event.aggregateId ?? null,
         attemptCount: record.attemptCount,
-        status: 'published',
+        status: 'acknowledgement-failed',
         delivered: true,
-        retryable: false,
+        retryable: true,
+        errorCode: publicationErrorCode(error, 'OUTBOX_ACKNOWLEDGEMENT_FAILED'),
         publishedAt,
       });
-    } catch (error) {
-      const errorCode = publicationErrorCode(error);
-      const terminal = error?.retryable === false || record.attemptCount >= maxAttempts;
-      if (terminal) {
-        const failedAt = now();
-        const checkpointed = await store.deadLetter({ ...ownership, errorCode, failedAt });
-        return Object.freeze({
-          eventId: event.id,
-          eventType: event.type,
-          aggregateId: event.aggregateId ?? null,
-          attemptCount: record.attemptCount,
-          status: checkpointed ? 'dead-letter' : 'lease-lost',
-          delivered: false,
-          retryable: !checkpointed,
-          checkpointed,
-          errorCode,
-          failedAt,
-        });
-      }
+    }
 
-      const failedAt = now();
-      const retryAt = addMilliseconds(failedAt, retryDelay(record.attemptCount));
-      const rescheduled = await store.reschedule({ ...ownership, errorCode, retryAt });
+    if (!acknowledged) {
       return Object.freeze({
         eventId: event.id,
         eventType: event.type,
         aggregateId: event.aggregateId ?? null,
         attemptCount: record.attemptCount,
-        status: rescheduled ? 'failed' : 'lease-lost',
-        delivered: false,
+        status: 'lease-lost',
+        delivered: true,
         retryable: true,
-        rescheduled,
-        errorCode,
-        retryAt,
+        errorCode: 'OUTBOX_ACKNOWLEDGEMENT_LOST',
+        publishedAt,
       });
     }
+
+    return Object.freeze({
+      eventId: event.id,
+      eventType: event.type,
+      aggregateId: event.aggregateId ?? null,
+      attemptCount: record.attemptCount,
+      status: 'published',
+      delivered: true,
+      retryable: false,
+      publishedAt,
+    });
+  }
+
+  async function publicationFailure(record, ownership, error) {
+    const event = record.event;
+    const errorCode = publicationErrorCode(error);
+    const terminal = error?.retryable === false || record.attemptCount >= maxAttempts;
+    if (terminal) {
+      const failedAt = now();
+      const checkpointed = await store.deadLetter({ ...ownership, errorCode, failedAt });
+      return Object.freeze({
+        eventId: event.id,
+        eventType: event.type,
+        aggregateId: event.aggregateId ?? null,
+        attemptCount: record.attemptCount,
+        status: checkpointed ? 'dead-letter' : 'lease-lost',
+        delivered: false,
+        retryable: !checkpointed,
+        checkpointed,
+        errorCode,
+        failedAt,
+      });
+    }
+
+    const failedAt = now();
+    const retryAt = addMilliseconds(failedAt, retryDelay(record.attemptCount));
+    const rescheduled = await store.reschedule({ ...ownership, errorCode, retryAt });
+    return Object.freeze({
+      eventId: event.id,
+      eventType: event.type,
+      aggregateId: event.aggregateId ?? null,
+      attemptCount: record.attemptCount,
+      status: rescheduled ? 'failed' : 'lease-lost',
+      delivered: false,
+      retryable: true,
+      rescheduled,
+      errorCode,
+      retryAt,
+    });
   }
 
   function retryDelay(attemptCount) {
@@ -181,9 +205,9 @@ function validateBatch({ limit, parallelism }) {
   invariant(Number.isSafeInteger(parallelism) && parallelism >= 1 && parallelism <= MAX_PARALLELISM, 'OUTBOX_PARALLELISM_INVALID', `Outbox parallelism must be an integer from 1 to ${MAX_PARALLELISM}`);
 }
 
-function publicationErrorCode(error) {
+function publicationErrorCode(error, fallback = 'OUTBOX_PUBLISH_FAILED') {
   const candidate = typeof error?.code === 'string' ? error.code.trim() : '';
-  return candidate.length >= 1 && candidate.length <= 160 ? candidate : 'OUTBOX_PUBLISH_FAILED';
+  return candidate.length >= 1 && candidate.length <= 160 ? candidate : fallback;
 }
 
 function addMilliseconds(timestamp, milliseconds) {

@@ -20,7 +20,7 @@ export const CAPABILITIES = Object.freeze({
 
 const ALL_CAPABILITIES = Object.freeze(Object.values(CAPABILITIES));
 
-const ROLE_CAPABILITIES = Object.freeze({
+export const ROLE_CAPABILITIES = Object.freeze({
   owner: ALL_CAPABILITIES,
   admin: ALL_CAPABILITIES,
   sales: Object.freeze([
@@ -59,7 +59,7 @@ const ROLE_CAPABILITIES = Object.freeze({
   ]),
 });
 
-const ALLOWED_ROLES = Object.freeze({
+export const ALLOWED_ROLES = Object.freeze({
   brand: Object.freeze(['owner', 'admin', 'sales', 'finance', 'viewer']),
   shop: Object.freeze(['owner', 'admin', 'buyer', 'finance', 'viewer']),
 });
@@ -74,9 +74,17 @@ export function createMembership({ id, organisationId, organisationType, userId,
 
 export function membershipKey(organisationId, userId) { return `${organisationId}:${userId}`; }
 
+export function capabilitiesForRole(role) {
+  return ROLE_CAPABILITIES[role] ?? Object.freeze([]);
+}
+
+export function roleHasCapability(role, capability) {
+  return capabilitiesForRole(role).includes(capability);
+}
+
 export function assertCapability(membership, capability) {
   invariant(membership?.status === 'active', 'ACTIVE_MEMBERSHIP_REQUIRED', 'Active organisation membership is required', { capability });
-  invariant(ROLE_CAPABILITIES[membership.role]?.includes(capability), 'CAPABILITY_DENIED', 'Role does not grant required capability', { role: membership.role, capability, organisationId: membership.organisationId });
+  invariant(roleHasCapability(membership.role, capability), 'CAPABILITY_DENIED', 'Role does not grant required capability', { role: membership.role, capability, organisationId: membership.organisationId });
 }
 
 export function assertTradeCapability({ memberships, actorId, brandId, shopId, capability }) {

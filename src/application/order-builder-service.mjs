@@ -1,5 +1,6 @@
 import { domainEvent } from '../core/events.mjs';
 import { DomainError, invariant } from '../core/errors.mjs';
+import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
 import { assertWholesaleStore } from './store-contract.mjs';
 import { CAPABILITIES, assertCapability, assertTradeCapability } from '../modules/access-control/public.mjs';
 import { createOrderDraft, acceptOrderTerms, attachReadyOrder, cancelAttachedOrder } from '../modules/orders/public.mjs';
@@ -26,7 +27,7 @@ export function createOrderBuilderService({
     return store.transaction(async (tx) => {
       const previous = await tx.getCommand(commandId);
       if (previous) {
-        invariant(previous.fingerprint === fingerprint, 'COMMAND_ID_CONFLICT', 'commandId was already used by another mutation', { commandId });
+        invariant(fingerprintsMatch(previous.fingerprint, fingerprint), 'COMMAND_ID_CONFLICT', 'commandId was already used by another mutation', { commandId });
         return previous.result;
       }
       const result = await action(tx);
@@ -43,7 +44,7 @@ export function createOrderBuilderService({
 
   return Object.freeze({
     createOrderDraft(commandId, actorId, { selectionId, terms }) {
-      return execute(commandId, `createOrderDraft:${actorId}:${selectionId}:${JSON.stringify(terms)}`, actorId, async (tx) => {
+      return execute(commandId, `createOrderDraft:${actorId}:${selectionId}:${canonicalJson(terms)}`, actorId, async (tx) => {
         const selection = requireEntity(await tx.getSelection(selectionId), 'SELECTION_NOT_FOUND', { selectionId });
         const cycle = requireEntity(await tx.getCycle(selection.cycleId), 'CYCLE_NOT_FOUND', { cycleId: selection.cycleId });
         const collection = requireEntity(await tx.getCollection(selection.collectionId), 'COLLECTION_NOT_FOUND', { collectionId: selection.collectionId });

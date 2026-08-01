@@ -14,12 +14,67 @@ export function createPostgresNotificationProjectionStore({ pool }) {
 
   return Object.freeze({
     transaction,
-    async readUnprojectedOutbox(limit) {
-      invariant(
-        Number.isSafeInteger(limit) && limit >= 1 && limit <= MAX_BATCH_LIMIT,
-        'NOTIFICATION_BATCH_LIMIT_INVALID',
-        `Notification batch limit must be an integer from 1 to ${MAX_BATCH_LIMIT}`,
+    async claimUnprojectedOutbox({ workerId, claimedAt, leaseExpiresAt, limit }) {
+      validateClaim({ workerId, claimedAt, leaseExpiresAt, limit });
+      return withPostgresTransaction(pool, async (client) => {
+        const result = await client.query(
+          `WITH candidates AS MATERIALIZED (
+             SELECT source.id
+               FROM outbox_events AS source
+              WHERE NOT EXISTS (
+                      SELECT 1
+                        FROM notification_projections AS projected
+                       WHERE projected.event_id = source.id
+                    )
+                AND NOT EXISTS (
+                      SELECT 1
+                        FROM notification_projection_claims AS active_claim
+                       WHERE active_claim.event_id = source.id
+                         AND active_claim.lease_expires_at > $2
+                    )
+              ORDER BY source.event->>'occurredAt', source.id
+              LIMIT $4
+              FOR UPDATE OF source SKIP LOCKED
+           ), claimed AS (
+             INSERT INTO notification_projection_claims
+               (event_id, worker_id, claimed_at, lease_expires_at, attempt_count, last_error_code)
+             SELECT candidate.id, $1, $2, $3, 1, NULL
+               FROM candidates AS candidate
+             ON CONFLICT (event_id) DO UPDATE SET
+               worker_id = EXCLUDED.worker_id,
+               claimed_at = EXCLUDED.claimed_at,
+               lease_expires_at = EXCLUDED.lease_expires_at,
+               attempt_count = notification_projection_claims.attempt_count + 1,
+               last_error_code = NULL
+             WHERE notification_projection_claims.lease_expires_at <= $2
+             RETURNING event_id, attempt_count
+           )
+           SELECT source.event, source.status, source.published_at, claimed.attempt_count
+             FROM claimed
+             JOIN outbox_events AS source ON source.id = claimed.event_id
+            ORDER BY source.event->>'occurredAt', source.id`,
+          [workerId, claimedAt, leaseExpiresAt, limit],
+        );
+        return Object.freeze(result.rows.map(outboxRecordFromRow));
+      });
+    },
+    async failProjectionClaim({ eventId, workerId, errorCode, retryAt }) {
+      invariant(typeof eventId === 'string' && eventId.length > 0, 'NOTIFICATION_EVENT_INVALID', 'Projection claim requires an event id');
+      invariant(typeof workerId === 'string' && workerId.length > 0, 'NOTIFICATION_WORKER_ID_INVALID', 'Projection worker id is required');
+      invariant(typeof errorCode === 'string' && errorCode.length > 0, 'NOTIFICATION_FAILURE_CODE_INVALID', 'Projection failure code is required');
+      invariant(isTimestamp(retryAt), 'NOTIFICATION_RETRY_AT_INVALID', 'Projection retry timestamp is invalid');
+      const result = await pool.query(
+        `UPDATE notification_projection_claims
+            SET lease_expires_at = $4,
+                last_error_code = $3
+          WHERE event_id = $1
+            AND worker_id = $2`,
+        [eventId, workerId, errorCode, retryAt],
       );
+      return result.rowCount === 1;
+    },
+    async readUnprojectedOutbox(limit) {
+      validateBatchLimit(limit);
       const result = await pool.query(
         `SELECT source.event, source.status, source.published_at
            FROM outbox_events AS source
@@ -32,11 +87,7 @@ export function createPostgresNotificationProjectionStore({ pool }) {
           LIMIT $1`,
         [limit],
       );
-      return result.rows.map((row) => Object.freeze({
-        event: row.event,
-        status: row.status,
-        publishedAt: row.published_at?.toISOString?.() ?? row.published_at ?? null,
-      }));
+      return result.rows.map((row) => outboxRecordFromRow({ ...row, attempt_count: 1 }));
     },
     async listForOrganisations(organisationIds, { limit = DEFAULT_LIST_LIMIT } = {}) {
       invariant(Array.isArray(organisationIds), 'NOTIFICATION_ORGANISATIONS_INVALID', 'Notification organisation ids must be an array');
@@ -60,19 +111,26 @@ export function createPostgresNotificationProjectionStore({ pool }) {
       );
       return Object.freeze(result.rows.map((row) => row.payload));
     },
-    recordProjectionFailure({ event, errorCode, failedAt }) {
+    recordProjectionFailure({ event, errorCode, failedAt, attemptCount = 1 }) {
       invariant(event?.id && event?.type, 'NOTIFICATION_EVENT_INVALID', 'Projection failure requires an event');
       invariant(typeof errorCode === 'string' && errorCode.length > 0, 'NOTIFICATION_FAILURE_CODE_INVALID', 'Projection failure code is required');
+      invariant(isTimestamp(failedAt), 'NOTIFICATION_FAILED_AT_INVALID', 'Projection failure timestamp is invalid');
+      invariant(Number.isSafeInteger(attemptCount) && attemptCount >= 1, 'NOTIFICATION_ATTEMPT_COUNT_INVALID', 'Projection attempt count must be positive');
       return transaction(async (tx) => {
-        if (await tx.hasProjection(event.id)) return false;
+        if (await tx.hasProjection(event.id)) {
+          await tx.deleteProjectionClaim(event.id);
+          return false;
+        }
         await tx.insertProjection(Object.freeze({
           eventId: event.id,
           eventType: event.type,
           status: 'failed',
           errorCode,
+          attemptCount,
           notificationIds: Object.freeze([]),
           projectedAt: failedAt,
         }));
+        await tx.deleteProjectionClaim(event.id);
         return true;
       });
     },
@@ -139,7 +197,10 @@ function transactionView(client) {
       });
     },
     async hasProjection(eventId) {
-      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [eventId]);
+      await client.query(
+        'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+        [`notification-projection:${eventId}`],
+      );
       const result = await client.query('SELECT 1 FROM notification_projections WHERE event_id = $1', [eventId]);
       return result.rowCount > 0;
     },
@@ -154,6 +215,9 @@ function transactionView(client) {
         if (error?.code === '23505') invariant(false, 'NOTIFICATION_PROJECTION_EXISTS', 'Event is already projected', { eventId: projection.eventId });
         throw error;
       }
+    },
+    async deleteProjectionClaim(eventId) {
+      await client.query('DELETE FROM notification_projection_claims WHERE event_id = $1', [eventId]);
     },
     async getCommand(id) {
       await client.query(
@@ -179,6 +243,35 @@ function transactionView(client) {
       }
     },
   });
+}
+
+function validateClaim({ workerId, claimedAt, leaseExpiresAt, limit }) {
+  invariant(typeof workerId === 'string' && workerId.length > 0, 'NOTIFICATION_WORKER_ID_INVALID', 'Projection worker id is required');
+  invariant(isTimestamp(claimedAt), 'NOTIFICATION_CLAIMED_AT_INVALID', 'Projection claim timestamp is invalid');
+  invariant(isTimestamp(leaseExpiresAt), 'NOTIFICATION_LEASE_EXPIRES_AT_INVALID', 'Projection lease timestamp is invalid');
+  invariant(Date.parse(leaseExpiresAt) > Date.parse(claimedAt), 'NOTIFICATION_LEASE_INVALID', 'Projection lease must expire after it is claimed');
+  validateBatchLimit(limit);
+}
+
+function validateBatchLimit(limit) {
+  invariant(
+    Number.isSafeInteger(limit) && limit >= 1 && limit <= MAX_BATCH_LIMIT,
+    'NOTIFICATION_BATCH_LIMIT_INVALID',
+    `Notification batch limit must be an integer from 1 to ${MAX_BATCH_LIMIT}`,
+  );
+}
+
+function outboxRecordFromRow(row) {
+  return Object.freeze({
+    event: row.event,
+    status: row.status,
+    publishedAt: row.published_at?.toISOString?.() ?? row.published_at ?? null,
+    attemptCount: Number(row.attempt_count ?? 1),
+  });
+}
+
+function isTimestamp(value) {
+  return typeof value === 'string' && Number.isFinite(Date.parse(value));
 }
 
 async function getPayload(queryable, table, column, value) {

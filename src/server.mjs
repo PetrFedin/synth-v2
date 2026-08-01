@@ -6,12 +6,14 @@ import pg from 'pg';
 import { migratePostgres, waitForPostgres } from './infrastructure/postgres-migrator.mjs';
 import { createPostgresWholesaleRuntime } from './runtime/postgres-runtime.mjs';
 import { createBackgroundWorker } from './runtime/background-worker.mjs';
+import { createHealthRegistry } from './runtime/health-registry.mjs';
 import { configureHttpServer, createShutdownCoordinator, listen, readIntegerSetting } from './runtime/server-lifecycle.mjs';
 import { createStandaloneHandler } from './web/static-handler.mjs';
 
 const databaseUrl = process.env.SYNTHA_V2_DATABASE_URL ?? process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error('SYNTHA_V2_DATABASE_URL is required');
 
+const notificationProjectionIntervalMs = integerSetting('SYNTHA_NOTIFICATION_PROJECTION_INTERVAL_MS', 1_000, 100, 60_000);
 const settings = Object.freeze({
   port: integerSetting('PORT', 4100, 1, 65_535),
   host: process.env.HOST?.trim() || '127.0.0.1',
@@ -25,8 +27,10 @@ const settings = Object.freeze({
   loginWindowMs: integerSetting('SYNTHA_AUTH_WINDOW_MS', 900_000, 60_000, 86_400_000),
   loginBlockMs: integerSetting('SYNTHA_AUTH_BLOCK_MS', 900_000, 60_000, 86_400_000),
   revokedSessionRetentionMs: integerSetting('SYNTHA_REVOKED_SESSION_RETENTION_MS', 604_800_000, 60_000, 31_536_000_000),
-  notificationProjectionIntervalMs: integerSetting('SYNTHA_NOTIFICATION_PROJECTION_INTERVAL_MS', 1_000, 100, 60_000),
+  notificationProjectionIntervalMs,
   notificationProjectionBatchSize: integerSetting('SYNTHA_NOTIFICATION_PROJECTION_BATCH_SIZE', 100, 1, 1_000),
+  notificationProjectionStaleMs: integerSetting('SYNTHA_NOTIFICATION_PROJECTION_STALE_MS', notificationProjectionIntervalMs * 5, notificationProjectionIntervalMs, 300_000),
+  notificationProjectionFailureThreshold: integerSetting('SYNTHA_NOTIFICATION_PROJECTION_FAILURE_THRESHOLD', 3, 1, 100),
   requestTimeoutMs: integerSetting('SYNTHA_HTTP_REQUEST_TIMEOUT_MS', 30_000, 1_000, 300_000),
   headersTimeoutMs: integerSetting('SYNTHA_HTTP_HEADERS_TIMEOUT_MS', 15_000, 1_000, 300_000),
   keepAliveTimeoutMs: integerSetting('SYNTHA_HTTP_KEEP_ALIVE_TIMEOUT_MS', 5_000, 100, 120_000),
@@ -43,8 +47,10 @@ const pool = new pg.Pool({
 });
 pool.on('error', (error) => console.error('Unexpected idle PostgreSQL client error', error));
 
+const healthRegistry = createHealthRegistry();
 let server;
 let notificationWorker;
+let unregisterNotificationHealth;
 try {
   const migrationsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'db', 'migrations');
   await waitForPostgres({ pool, attempts: settings.dbReadyAttempts, delayMs: settings.dbReadyDelayMs });
@@ -59,28 +65,37 @@ try {
     loginWindowMs: settings.loginWindowMs,
     loginBlockMs: settings.loginBlockMs,
     revokedSessionRetentionMs: settings.revokedSessionRetentionMs,
+    operationalReadiness: () => healthRegistry.check(),
   });
   const handler = createStandaloneHandler({ apiHandler: runtime.handler });
   server = configureHttpServer(createServer(handler), settings);
-  await listen(server, { port: settings.port, host: settings.host });
-
   notificationWorker = createBackgroundWorker({
     name: 'notification-projection',
     intervalMs: settings.notificationProjectionIntervalMs,
     task: async () => {
       const results = await runtime.notifications.projectPending({ limit: settings.notificationProjectionBatchSize });
-      const failures = results.filter((result) => result.status === 'failed');
-      if (failures.length) {
-        const error = new Error(`Notification projection failed for ${failures.length} event(s)`);
-        error.failures = failures;
+      const terminalFailures = results.filter((result) => result.status === 'failed' && !result.retryable);
+      if (terminalFailures.length) console.warn(`Notification projection checkpointed ${terminalFailures.length} terminal event failure(s)`);
+      const retryableFailures = results.filter((result) => result.status === 'failed' && result.retryable);
+      if (retryableFailures.length) {
+        const error = new Error(`Notification projection failed for ${retryableFailures.length} retryable event(s)`);
+        error.code = 'NOTIFICATION_PROJECTION_RETRYABLE_FAILURE';
+        error.failures = retryableFailures;
         throw error;
       }
     },
   });
+  unregisterNotificationHealth = healthRegistry.register('notification-projection', () => notificationWorker.health({
+    maxStalenessMs: settings.notificationProjectionStaleMs,
+    maxConsecutiveFailures: settings.notificationProjectionFailureThreshold,
+  }));
+
+  await listen(server, { port: settings.port, host: settings.host });
   notificationWorker.start();
   console.log(`Syntha V2 listening on http://${settings.host}:${settings.port}`);
 } catch (error) {
   console.error('Syntha V2 failed to start', error);
+  unregisterNotificationHealth?.();
   await notificationWorker?.stop().catch((workerError) => console.error('Failed to stop notification worker after startup error', workerError));
   server?.closeAllConnections?.();
   server = undefined;

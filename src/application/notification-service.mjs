@@ -6,6 +6,9 @@ import {
   notificationDedupeKey,
 } from '../modules/notifications/public.mjs';
 
+const DEFAULT_BATCH_LIMIT = 100;
+const MAX_BATCH_LIMIT = 1000;
+
 export function createNotificationService({
   sourceStore,
   projectionStore,
@@ -16,10 +19,27 @@ export function createNotificationService({
   invariant(projectionStore && typeof projectionStore.transaction === 'function' && typeof projectionStore.snapshot === 'function', 'NOTIFICATION_PROJECTION_STORE_INVALID', 'Notification projection store is required');
 
   return Object.freeze({
-    async projectPending() {
-      const records = await sourceStore.readOutbox('pending');
+    async projectPending({ limit = DEFAULT_BATCH_LIMIT } = {}) {
+      invariant(
+        Number.isSafeInteger(limit) && limit >= 1 && limit <= MAX_BATCH_LIMIT,
+        'NOTIFICATION_BATCH_LIMIT_INVALID',
+        `Notification batch limit must be an integer from 1 to ${MAX_BATCH_LIMIT}`,
+      );
+      const records = await pendingRecords(limit);
+      if (!records.length) return Object.freeze([]);
+      const source = await sourceStore.snapshot();
       const results = [];
-      for (const record of records) results.push(await projectRecord(record));
+      for (const record of records) {
+        try {
+          results.push(await projectRecord(record, source));
+        } catch (error) {
+          results.push(Object.freeze({
+            eventId: record?.event?.id ?? null,
+            status: 'failed',
+            errorCode: typeof error?.code === 'string' ? error.code : 'INTERNAL_ERROR',
+          }));
+        }
+      }
       return Object.freeze(results);
     },
 
@@ -60,9 +80,20 @@ export function createNotificationService({
     },
   });
 
-  async function projectRecord(record) {
+  async function pendingRecords(limit) {
+    if (typeof projectionStore.readUnprojectedOutbox === 'function') {
+      return projectionStore.readUnprojectedOutbox(limit);
+    }
+    const [records, projection] = await Promise.all([
+      sourceStore.readOutbox('pending'),
+      projectionStore.snapshot(),
+    ]);
+    const projected = new Set(projection.projections.map((item) => item.eventId));
+    return records.filter((record) => !projected.has(record.event.id)).slice(0, limit);
+  }
+
+  async function projectRecord(record, source) {
     const event = record.event;
-    const source = await sourceStore.snapshot();
     return projectionStore.transaction(async (tx) => {
       if (await tx.hasProjection(event.id)) {
         return Object.freeze({ eventId: event.id, status: 'already-projected', notificationIds: Object.freeze([]) });

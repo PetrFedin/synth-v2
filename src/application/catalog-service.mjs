@@ -1,5 +1,6 @@
 import { domainEvent } from '../core/events.mjs';
 import { invariant } from '../core/errors.mjs';
+import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
 import { createCatalogSku, publishCatalogSku } from '../modules/catalog/public.mjs';
 
@@ -21,7 +22,7 @@ export function createCatalogService({ wholesaleStore, catalogStore, clock = () 
     return catalogStore.transaction(async (tx) => {
       const previous = await tx.getCommand(commandId);
       if (previous) {
-        invariant(previous.fingerprint === fingerprint, 'COMMAND_ID_CONFLICT', 'commandId was already used by another mutation', { commandId });
+        invariant(fingerprintsMatch(previous.fingerprint, fingerprint), 'COMMAND_ID_CONFLICT', 'commandId was already used by another mutation', { commandId });
         return previous.result;
       }
       const result = await action(tx);
@@ -45,7 +46,7 @@ export function createCatalogService({ wholesaleStore, catalogStore, clock = () 
   return Object.freeze({
     async createSku(commandId, actorId, input) {
       const collection = await context(input.collectionId, actorId);
-      const result = await execute(commandId, `createCatalogSku:${actorId}:${JSON.stringify(input)}`, actorId, async (tx) => {
+      const result = await execute(commandId, `createCatalogSku:${actorId}:${canonicalJson(input)}`, actorId, async (tx) => {
         invariant(!await tx.getSku(input.sku), 'CATALOG_SKU_ALREADY_EXISTS', 'Catalog SKU already exists', { sku: input.sku });
         const sku = createCatalogSku({ ...input, collection, createdAt: clock() });
         await tx.insertSku(sku);

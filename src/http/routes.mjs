@@ -83,8 +83,13 @@ function queryFields(url, fields) {
   invariant(unknown.length === 0, 'REQUEST_FIELD_UNKNOWN', 'Unknown query field', { location: 'query', fields: unknown.sort() });
   const result = {};
   for (const field of fields) {
-    const value = url.searchParams.get(field);
-    if (value !== null) result[field] = value;
+    const values = url.searchParams.getAll(field);
+    invariant(values.length <= 1, 'REQUEST_QUERY_FIELD_DUPLICATE', 'Query field must not be repeated', {
+      location: 'query',
+      field,
+      count: values.length,
+    });
+    if (values.length === 1) result[field] = values[0];
   }
   return Object.freeze(result);
 }

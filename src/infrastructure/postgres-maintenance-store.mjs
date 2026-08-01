@@ -1,4 +1,5 @@
 import { invariant } from '../core/errors.mjs';
+import { withPostgresTransaction } from './postgres-transaction.mjs';
 
 const LOCK_NAME = 'syntha-v2-retention-maintenance';
 
@@ -8,15 +9,12 @@ export function createPostgresMaintenanceStore({ pool } = {}) {
   return Object.freeze({
     async cleanup(cutoffs) {
       validateCutoffs(cutoffs);
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
+      return withPostgresTransaction(pool, async (client) => {
         const lock = await client.query(
           'SELECT pg_try_advisory_xact_lock(hashtextextended($1, 0)) AS acquired',
           [LOCK_NAME],
         );
         if (!lock.rows[0]?.acquired) {
-          await client.query('COMMIT');
           return Object.freeze({ acquired: false, counts: Object.freeze({}) });
         }
 
@@ -79,14 +77,8 @@ export function createPostgresMaintenanceStore({ pool } = {}) {
           [cutoffs.outboxBefore],
         );
 
-        await client.query('COMMIT');
         return Object.freeze({ acquired: true, counts: Object.freeze(counts) });
-      } catch (error) {
-        await client.query('ROLLBACK').catch(() => undefined);
-        throw error;
-      } finally {
-        client.release();
-      }
+      });
     },
   });
 }

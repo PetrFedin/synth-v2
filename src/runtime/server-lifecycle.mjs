@@ -24,16 +24,19 @@ export function configureHttpServer(server, {
   return server;
 }
 
-export function createShutdownCoordinator({ server, pool, graceMs = 10_000, logger = console } = {}) {
+export function createShutdownCoordinator({ server, pool, graceMs = 10_000, logger = console, stoppers = [] } = {}) {
   if (!server || typeof server.close !== 'function') throw new Error('HTTP server with close() is required');
   if (!pool || typeof pool.end !== 'function') throw new Error('Database pool with end() is required');
+  if (!Array.isArray(stoppers) || stoppers.some((stop) => typeof stop !== 'function')) {
+    throw new Error('Shutdown stoppers must be functions');
+  }
   let shutdownPromise;
 
   return function shutdown(reason = 'shutdown') {
     if (shutdownPromise) return shutdownPromise;
     shutdownPromise = (async () => {
       logger.log?.(`Received ${reason}; shutting down`);
-      const closing = closeServer(server);
+      const operations = [closeServer(server), ...stoppers.map((stop) => Promise.resolve().then(stop))];
       server.closeIdleConnections?.();
 
       let forced = false;
@@ -43,12 +46,15 @@ export function createShutdownCoordinator({ server, pool, graceMs = 10_000, logg
         server.closeAllConnections?.();
       }, graceMs);
 
+      let failure;
       try {
-        await closing;
+        const results = await Promise.allSettled(operations);
+        failure = results.find((result) => result.status === 'rejected');
       } finally {
         clearTimeout(timer);
         await pool.end();
       }
+      if (failure) throw failure.reason;
       return Object.freeze({ forced });
     })();
     return shutdownPromise;

@@ -81,7 +81,10 @@ export function createNotificationService({
       invariant(commandId, 'COMMAND_ID_REQUIRED', 'Every mutation requires commandId');
       const fingerprint = `markNotificationRead:${actorId}:${notificationId}`;
       let fallbackSource;
-      const membershipFor = async (organisationId) => {
+      const membershipFor = async (tx, organisationId) => {
+        if (typeof tx.getActiveMembership === 'function') {
+          return tx.getActiveMembership(organisationId, actorId);
+        }
         if (typeof reader?.getActiveMembership === 'function') {
           return reader.getActiveMembership(organisationId, actorId);
         }
@@ -99,7 +102,7 @@ export function createNotificationService({
           return previous.result;
         }
         const current = requireEntity(await tx.getNotification(notificationId), 'NOTIFICATION_NOT_FOUND', { notificationId });
-        const membership = await membershipFor(current.recipientOrganisationId);
+        const membership = await membershipFor(tx, current.recipientOrganisationId);
         assertCapability(membership, CAPABILITIES.CALENDAR_READ);
         const updated = markNotificationRead(current, actorId, clock());
         if (updated !== current) await tx.saveNotification(updated, current.version);

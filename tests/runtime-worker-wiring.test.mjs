@@ -49,13 +49,23 @@ test('server registers notification health before listen but starts work only af
   assert.match(source, /stoppers: notificationWorker \? \[\(\) => notificationWorker\.stop\(\)\] : \[\]/);
   assert.match(source, /SYNTHA_NOTIFICATION_PROJECTION_INTERVAL_MS/);
   assert.match(source, /SYNTHA_NOTIFICATION_PROJECTION_BATCH_SIZE/);
+  assert.match(source, /SYNTHA_NOTIFICATION_PROJECTION_LEASE_MS/);
+  assert.match(source, /SYNTHA_NOTIFICATION_PROJECTION_RETRY_DELAY_MS/);
+  assert.match(source, /SYNTHA_NOTIFICATION_PROJECTION_MAX_ATTEMPTS/);
+  assert.match(source, /notificationProjectionLeaseMs: settings\.notificationProjectionLeaseMs/);
+  assert.match(source, /notificationProjectionRetryDelayMs: settings\.notificationProjectionRetryDelayMs/);
+  assert.match(source, /notificationProjectionMaxAttempts: settings\.notificationProjectionMaxAttempts/);
   assert.match(source, /operationalReadiness: \(\) => healthRegistry\.check\(\)/);
 });
 
-test('PostgreSQL notification batches exclude projected events and use a 64-bit advisory lock', async () => {
+test('PostgreSQL notification batches use expiring claims and a 64-bit advisory lock', async () => {
   const source = await readFile(path.join(root, 'src', 'infrastructure', 'postgres-notification-projection-store.mjs'), 'utf8');
   assert.match(source, /NOT EXISTS[\s\S]*notification_projections/);
-  assert.match(source, /LIMIT \$1/);
+  assert.match(source, /notification_projection_claims/);
+  assert.match(source, /lease_expires_at > \$2/);
+  assert.match(source, /LIMIT \$4[\s\S]*FOR UPDATE OF source SKIP LOCKED/);
+  assert.match(source, /ON CONFLICT \(event_id\) DO UPDATE/);
+  assert.match(source, /attempt_count = notification_projection_claims\.attempt_count \+ 1/);
   assert.match(source, /pg_advisory_xact_lock\(hashtextextended\(\$1, 0\)\)/);
   assert.doesNotMatch(source, /pg_advisory_xact_lock\(hashtext\(\$1\)\)/);
   assert.doesNotMatch(source, /source\.status\s*=\s*'pending'/);

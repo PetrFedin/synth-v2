@@ -13,15 +13,19 @@ export function fingerprintsMatch(stored, current) {
 }
 
 function normalizeLegacyFingerprint(value) {
-  const starts = [value.indexOf('{'), value.indexOf('[')].filter((index) => index >= 0);
-  if (!starts.length) return value;
-  const start = Math.min(...starts);
-  const prefix = value.slice(0, start);
-  try {
-    return `${prefix}${canonicalJson(JSON.parse(value.slice(start)))}`;
-  } catch {
-    return value;
+  const starts = [];
+  for (let index = 0; index < value.length; index += 1) {
+    if (value[index] === '{' || value[index] === '[') starts.push(index);
   }
+  for (let position = starts.length - 1; position >= 0; position -= 1) {
+    const start = starts[position];
+    try {
+      return `${value.slice(0, start)}${canonicalJson(JSON.parse(value.slice(start)))}`;
+    } catch {
+      // Continue until the complete legacy JSON suffix is found.
+    }
+  }
+  return value;
 }
 
 function serialize(value, seen, arrayItem) {

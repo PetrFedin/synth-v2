@@ -18,7 +18,9 @@ const requiredTables = [
 const requiredFragments = [
   'UNIQUE (brand_id, shop_id)', 'UNIQUE (showroom_id, shop_id)', 'cycle_id text NOT NULL UNIQUE',
   "status text NOT NULL CHECK (status IN ('pending', 'published'))", 'outbox_status_idx',
-  'notifications_recipient_status_idx', 'version integer NOT NULL CHECK (version > 0)',
+  'notifications_recipient_status_idx', 'notifications_recipient_created_idx',
+  'ADD COLUMN IF NOT EXISTS created_at timestamptz', 'ALTER COLUMN created_at SET NOT NULL',
+  'version integer NOT NULL CHECK (version > 0)',
   'notification_projection_claims_lease_idx', 'lease_expires_at timestamptz NOT NULL',
   'attempt_count integer NOT NULL DEFAULT 1 CHECK (attempt_count > 0)',
   'email_normalized text NOT NULL UNIQUE', 'token_hash char(64) NOT NULL UNIQUE', 'auth_sessions_expiry_idx',

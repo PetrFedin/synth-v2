@@ -29,8 +29,10 @@ export function createPostgresWholesaleRuntime({
   loginWindowMs,
   loginBlockMs,
   revokedSessionRetentionMs,
+  operationalReadiness,
 } = {}) {
   invariant(pool, 'POSTGRES_POOL_REQUIRED', 'PostgreSQL pool is required');
+  invariant(operationalReadiness === undefined || typeof operationalReadiness === 'function', 'READINESS_OPERATIONAL_CHECK_INVALID', 'Operational readiness check must be a function');
   const runtimeNextId = resolveRuntimeIdGenerator(nextId);
   const store = createPostgresWholesaleStore({ pool });
   const catalogStore = createPostgresCatalogStore({ pool });
@@ -46,7 +48,12 @@ export function createPostgresWholesaleRuntime({
     ...(loginBlockMs ? { loginBlockMs } : {}),
     ...(revokedSessionRetentionMs ? { revokedSessionRetentionMs } : {}),
   });
-  const readiness = migrationsDir ? createPostgresReadinessService({ pool, migrationsDir, ...(clock ? { clock } : {}) }) : undefined;
+  const readiness = migrationsDir ? createPostgresReadinessService({
+    pool,
+    migrationsDir,
+    ...(clock ? { clock } : {}),
+    ...(operationalReadiness ? { operationalCheck: operationalReadiness } : {}),
+  }) : undefined;
   const platform = createWholesalePlatform(options);
   const catalog = createCatalogService({ wholesaleStore: store, catalogStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) });
   const partners = createPartnerAccessService(options);

@@ -25,6 +25,7 @@ test('PostgreSQL migration ledger serializes runners and rejects changed history
     '008_notification_pagination.sql',
     '009_outbox_publication_claims.sql',
     '010_outbox_dead_letter_recovery.sql',
+    '011_global_command_registry.sql',
   ];
   try {
     await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
@@ -49,7 +50,8 @@ test('PostgreSQL migration ledger serializes runners and rejects changed history
               to_regclass('public.notification_projection_claims') AS notification_projection_claims,
               to_regclass('public.outbox_publication_claims') AS outbox_publication_claims,
               to_regclass('public.outbox_dead_letters') AS outbox_dead_letters,
-              to_regclass('public.outbox_dead_letter_audit') AS outbox_dead_letter_audit`,
+              to_regclass('public.outbox_dead_letter_audit') AS outbox_dead_letter_audit,
+              to_regclass('public.command_registry') AS command_registry`,
     );
     assert.equal(tables.rows[0].organisations, 'organisations');
     assert.equal(tables.rows[0].auth_users, 'auth_users');
@@ -60,6 +62,33 @@ test('PostgreSQL migration ledger serializes runners and rejects changed history
     assert.equal(tables.rows[0].outbox_publication_claims, 'outbox_publication_claims');
     assert.equal(tables.rows[0].outbox_dead_letters, 'outbox_dead_letters');
     assert.equal(tables.rows[0].outbox_dead_letter_audit, 'outbox_dead_letter_audit');
+    assert.equal(tables.rows[0].command_registry, 'command_registry');
+
+    const commandForeignKeys = await pool.query(
+      `SELECT conrelid::regclass::text AS table_name, confrelid::regclass::text AS parent_table
+         FROM pg_constraint
+        WHERE conname IN (
+          'commands_command_registry_fk',
+          'catalog_commands_command_registry_fk',
+          'notification_commands_command_registry_fk'
+        )
+        ORDER BY conrelid::regclass::text`,
+    );
+    assert.deepEqual(commandForeignKeys.rows, [
+      { table_name: 'catalog_commands', parent_table: 'command_registry' },
+      { table_name: 'commands', parent_table: 'command_registry' },
+      { table_name: 'notification_commands', parent_table: 'command_registry' },
+    ]);
+
+    const commandScopeConstraint = await pool.query(
+      `SELECT pg_get_constraintdef(oid) AS definition
+         FROM pg_constraint
+        WHERE conrelid = 'public.command_registry'::regclass
+          AND contype = 'c'`,
+    );
+    assert.match(commandScopeConstraint.rows.map((row) => row.definition).join('\n'), /wholesale/);
+    assert.match(commandScopeConstraint.rows.map((row) => row.definition).join('\n'), /catalog/);
+    assert.match(commandScopeConstraint.rows.map((row) => row.definition).join('\n'), /notification/);
 
     const outboxStatusConstraint = await pool.query(
       `SELECT pg_get_constraintdef(oid) AS definition

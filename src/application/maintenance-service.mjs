@@ -30,21 +30,21 @@ export function createMaintenanceService({
 
   return Object.freeze({
     async runIfDue() {
-      const nowMs = currentTime(clock);
       if (activeRun) return activeRun;
+      const nowMs = currentTime(clock);
       if (nowMs < nextRunAtMs) return notDue(nextRunAtMs);
       activeRun = execute(nowMs).finally(() => { activeRun = undefined; });
       return activeRun;
     },
 
     async runNow() {
-      const nowMs = currentTime(clock);
       if (activeRun) return activeRun;
+      const nowMs = currentTime(clock);
       activeRun = execute(nowMs).finally(() => { activeRun = undefined; });
       return activeRun;
     },
 
-    get nextRunAt() { return iso(nextRunAtMs); },
+    get nextRunAt() { return nextRunAtMs > 0 ? iso(nextRunAtMs) : null; },
   });
 
   async function execute(nowMs) {

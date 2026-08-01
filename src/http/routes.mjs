@@ -14,11 +14,15 @@ export function createWholesaleRoutes({ platform, catalog, partners, collaborati
     mutate('POST', /^\/v2\/showrooms\/([^/]+)\/open$/, ({ commandId, actorId, params }) => collaboration.openShowroom(commandId, actorId, params[0])),
     mutate('POST', /^\/v2\/relationships$/, ({ commandId, actorId, body }) => partners.requestRelationship(commandId, actorId, body)),
     mutate('POST', /^\/v2\/relationships\/([^/]+)\/accept$/, ({ commandId, actorId, params }) => partners.acceptRelationship(commandId, actorId, params[0])),
+    mutate('POST', /^\/v2\/relationships\/([^/]+)\/reject$/, ({ commandId, actorId, params }) => partners.rejectRelationship(commandId, actorId, params[0])),
+    mutate('POST', /^\/v2\/relationships\/([^/]+)\/revoke$/, ({ commandId, actorId, params }) => partners.revokeRelationship(commandId, actorId, params[0])),
     mutate('POST', /^\/v2\/showrooms\/([^/]+)\/invitations$/, ({ commandId, actorId, params, body }) => {
       sameId(body.showroomId, params[0], 'showroomId');
       return partners.inviteShopToShowroom(commandId, actorId, { ...body, showroomId: params[0] });
     }),
     mutate('POST', /^\/v2\/invitations\/([^/]+)\/accept$/, ({ commandId, actorId, params }) => partners.acceptShowroomInvitation(commandId, actorId, params[0])),
+    mutate('POST', /^\/v2\/invitations\/([^/]+)\/decline$/, ({ commandId, actorId, params }) => partners.declineShowroomInvitation(commandId, actorId, params[0])),
+    mutate('POST', /^\/v2\/invitations\/([^/]+)\/revoke$/, ({ commandId, actorId, params }) => partners.revokeShowroomInvitation(commandId, actorId, params[0])),
     mutate('POST', /^\/v2\/cycles$/, ({ commandId, actorId, body }) => platform.startCycle(commandId, actorId, body)),
     mutate('POST', /^\/v2\/cycles\/([^/]+)\/advance$/, ({ commandId, actorId, params, body }) => {
       sameId(body.cycleId, params[0], 'cycleId');

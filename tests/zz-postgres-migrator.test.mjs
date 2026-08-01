@@ -22,6 +22,7 @@ test('PostgreSQL migration ledger serializes runners and rejects changed history
     '005_catalog_availability.sql',
     '006_order_cancellation.sql',
     '007_notification_projection_claims.sql',
+    '008_notification_pagination.sql',
   ];
   try {
     await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
@@ -51,6 +52,17 @@ test('PostgreSQL migration ledger serializes runners and rejects changed history
     assert.equal(tables.rows[0].catalog_skus, 'catalog_skus');
     assert.equal(tables.rows[0].order_inventory_reservations, 'order_inventory_reservations');
     assert.equal(tables.rows[0].notification_projection_claims, 'notification_projection_claims');
+
+    const notificationPagination = await pool.query(
+      `SELECT is_nullable, data_type
+         FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'notifications'
+          AND column_name = 'created_at'`,
+    );
+    assert.deepEqual(notificationPagination.rows, [{ is_nullable: 'NO', data_type: 'timestamp with time zone' }]);
+    const notificationIndex = await pool.query("SELECT to_regclass('public.notifications_recipient_created_idx') AS index_name");
+    assert.equal(notificationIndex.rows[0].index_name, 'notifications_recipient_created_idx');
 
     for (const file of migrationFiles) await copyFile(path.join(migrationsDir, file), path.join(tempDir, file));
     await appendFile(path.join(tempDir, '005_catalog_availability.sql'), '\n-- changed history must fail\n');

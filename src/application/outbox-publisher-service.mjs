@@ -9,6 +9,7 @@ const DEFAULT_LEASE_MS = 300_000;
 const DEFAULT_RETRY_DELAY_MS = 5_000;
 const DEFAULT_MAX_RETRY_DELAY_MS = 300_000;
 const DEFAULT_MAX_ATTEMPTS = 10;
+const LEASE_SAFETY_MARGIN_MS = 1_000;
 
 export function createOutboxPublisherService({
   store,
@@ -25,6 +26,7 @@ export function createOutboxPublisherService({
   invariant(typeof store.acknowledgePublished === 'function', 'OUTBOX_STORE_INVALID', 'Outbox store must acknowledge publication');
   invariant(typeof store.reschedule === 'function', 'OUTBOX_STORE_INVALID', 'Outbox store must reschedule failed publication');
   invariant(typeof store.deadLetter === 'function', 'OUTBOX_STORE_INVALID', 'Outbox store must dead-letter exhausted publication');
+  const publisherTimeoutMs = publicationTimeout(publisher);
   const publish = resolvePublisher(publisher);
   invariant(typeof clock === 'function', 'OUTBOX_CLOCK_INVALID', 'Outbox clock is required');
   invariant(typeof workerId === 'string' && workerId.length >= 1 && workerId.length <= 160, 'OUTBOX_WORKER_ID_INVALID', 'Outbox worker id is invalid');
@@ -37,6 +39,15 @@ export function createOutboxPublisherService({
   return Object.freeze({
     async publishPending({ limit = DEFAULT_BATCH_LIMIT, parallelism = DEFAULT_PARALLELISM } = {}) {
       validateBatch({ limit, parallelism });
+      if (publisherTimeoutMs !== undefined) {
+        const requiredLeaseMs = (publisherTimeoutMs * limit) + LEASE_SAFETY_MARGIN_MS;
+        invariant(
+          Number.isSafeInteger(requiredLeaseMs) && leaseMs > requiredLeaseMs,
+          'OUTBOX_LEASE_CAPACITY_INVALID',
+          'Outbox lease must exceed the worst-case serial publication time for one aggregate',
+          { leaseMs, publisherTimeoutMs, limit, requiredLeaseMs },
+        );
+      }
       const claimedAt = now();
       const claimToken = String(nextClaimToken()).trim();
       invariant(claimToken.length >= 1 && claimToken.length <= 160, 'OUTBOX_CLAIM_TOKEN_INVALID', 'Outbox claim token is invalid');
@@ -165,6 +176,13 @@ export function createOutboxPublisherService({
     invariant(Number.isFinite(timestamp), 'OUTBOX_CLOCK_INVALID', 'Outbox clock returned an invalid timestamp');
     return new Date(timestamp).toISOString();
   }
+}
+
+function publicationTimeout(publisher) {
+  const value = publisher && typeof publisher === 'object' ? publisher.timeoutMs : undefined;
+  if (value === undefined) return undefined;
+  invariant(Number.isSafeInteger(value) && value >= 1, 'OUTBOX_PUBLISHER_TIMEOUT_INVALID', 'Outbox publisher timeout metadata is invalid');
+  return value;
 }
 
 function resolvePublisher(publisher) {

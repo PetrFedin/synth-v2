@@ -22,15 +22,16 @@ export function createOrderBuilderService({
 } = {}) {
   assertWholesaleStore(store);
 
-  function execute(commandId, fingerprint, actorId, action) {
+  function execute(commandId, fingerprint, actorId, authorize, action) {
     invariant(commandId, 'COMMAND_ID_REQUIRED', 'Every mutation requires commandId');
     return store.transaction(async (tx) => {
       const previous = await tx.getCommand(commandId);
+      const context = await authorize(tx);
       if (previous) {
         invariant(fingerprintsMatch(previous.fingerprint, fingerprint), 'COMMAND_ID_CONFLICT', 'commandId was already used by another mutation', { commandId });
         return previous.result;
       }
-      const result = await action(tx);
+      const result = await action(tx, context);
       await tx.insertCommand(Object.freeze({ id: commandId, fingerprint, actorId, result, completedAt: clock() }));
       return result;
     });
@@ -44,66 +45,98 @@ export function createOrderBuilderService({
 
   return Object.freeze({
     createOrderDraft(commandId, actorId, { selectionId, terms }) {
-      return execute(commandId, `createOrderDraft:${actorId}:${selectionId}:${canonicalJson(terms)}`, actorId, async (tx) => {
-        const selection = requireEntity(await tx.getSelection(selectionId), 'SELECTION_NOT_FOUND', { selectionId });
-        const cycle = requireEntity(await tx.getCycle(selection.cycleId), 'CYCLE_NOT_FOUND', { cycleId: selection.cycleId });
-        const collection = requireEntity(await tx.getCollection(selection.collectionId), 'COLLECTION_NOT_FOUND', { collectionId: selection.collectionId });
-        invariant(cycle.stage === 'order-builder', 'ORDER_BUILDER_STAGE_REQUIRED', 'Cycle must be at order-builder stage', { stage: cycle.stage });
-        invariant(!await tx.getOrderByCycle(cycle.id), 'ORDER_FOR_CYCLE_EXISTS', 'Cycle already has an order draft', { cycleId: cycle.id });
-        await assertOrganisationActor(tx, selection.shopId, actorId, CAPABILITIES.ORDER_WRITE);
-        const order = createOrderDraft({ id: nextId('order'), selection, currency: collection.currency, terms, createdAt: clock() });
-        await tx.insertOrder(order);
-        await append(tx, 'order.draft-created', order.id, { selectionId, totalAmount: order.totalAmount, currency: order.currency }, commandId, actorId);
-        return order;
-      });
+      return execute(
+        commandId,
+        `createOrderDraft:${actorId}:${selectionId}:${canonicalJson(terms)}`,
+        actorId,
+        async (tx) => {
+          const selection = requireEntity(await tx.getSelection(selectionId), 'SELECTION_NOT_FOUND', { selectionId });
+          await assertOrganisationActor(tx, selection.shopId, actorId, CAPABILITIES.ORDER_WRITE);
+          return selection;
+        },
+        async (tx, selection) => {
+          const cycle = requireEntity(await tx.getCycle(selection.cycleId), 'CYCLE_NOT_FOUND', { cycleId: selection.cycleId });
+          const collection = requireEntity(await tx.getCollection(selection.collectionId), 'COLLECTION_NOT_FOUND', { collectionId: selection.collectionId });
+          invariant(cycle.stage === 'order-builder', 'ORDER_BUILDER_STAGE_REQUIRED', 'Cycle must be at order-builder stage', { stage: cycle.stage });
+          invariant(!await tx.getOrderByCycle(cycle.id), 'ORDER_FOR_CYCLE_EXISTS', 'Cycle already has an order draft', { cycleId: cycle.id });
+          const order = createOrderDraft({ id: nextId('order'), selection, currency: collection.currency, terms, createdAt: clock() });
+          await tx.insertOrder(order);
+          await append(tx, 'order.draft-created', order.id, { selectionId, totalAmount: order.totalAmount, currency: order.currency }, commandId, actorId);
+          return order;
+        },
+      );
     },
 
     acceptTerms(commandId, actorId, { orderId, organisationId }) {
-      return execute(commandId, `acceptOrderTerms:${actorId}:${orderId}:${organisationId}`, actorId, async (tx) => {
-        const current = requireEntity(await tx.getOrder(orderId), 'ORDER_NOT_FOUND', { orderId });
-        invariant(organisationId === current.brandId || organisationId === current.shopId, 'ORDER_PARTY_INVALID', 'Organisation is not an order party', { organisationId });
-        await assertOrganisationActor(tx, organisationId, actorId, CAPABILITIES.ORDER_CONFIRM);
-        const updated = acceptOrderTerms(current, organisationId, clock());
-        await tx.saveOrder(updated, current.version);
-        await append(tx, 'order.terms-accepted', orderId, { organisationId, status: updated.status }, commandId, actorId);
-        return updated;
-      });
+      return execute(
+        commandId,
+        `acceptOrderTerms:${actorId}:${orderId}:${organisationId}`,
+        actorId,
+        async (tx) => {
+          const current = requireEntity(await tx.getOrder(orderId), 'ORDER_NOT_FOUND', { orderId });
+          invariant(organisationId === current.brandId || organisationId === current.shopId, 'ORDER_PARTY_INVALID', 'Organisation is not an order party', { organisationId });
+          await assertOrganisationActor(tx, organisationId, actorId, CAPABILITIES.ORDER_CONFIRM);
+          return current;
+        },
+        async (tx, current) => {
+          const updated = acceptOrderTerms(current, organisationId, clock());
+          await tx.saveOrder(updated, current.version);
+          await append(tx, 'order.terms-accepted', orderId, { organisationId, status: updated.status }, commandId, actorId);
+          return updated;
+        },
+      );
     },
 
     attachOrderToCycle(commandId, actorId, orderId) {
-      return execute(commandId, `attachOrderToCycle:${actorId}:${orderId}`, actorId, async (tx) => {
-        const current = requireEntity(await tx.getOrder(orderId), 'ORDER_NOT_FOUND', { orderId });
-        const cycle = requireEntity(await tx.getCycle(current.cycleId), 'CYCLE_NOT_FOUND', { cycleId: current.cycleId });
-        authorizeOrderMutation(await tx.listMembershipsForTrade(cycle.brandId, cycle.shopId), actorId, cycle);
-        invariant(cycle.stage === 'order-builder', 'ORDER_BUILDER_STAGE_REQUIRED', 'Cycle must be at order-builder stage', { stage: cycle.stage });
-        const readyOrder = attachReadyOrder(current, clock());
-        const orderStage = advanceCommercialCycle(cycle, 'order', clock());
-        await tx.saveCycle(orderStage, cycle.version);
-        const cycleWithOrder = attachOrder(orderStage, readyOrder, clock());
-        await tx.saveCycle(cycleWithOrder, orderStage.version);
-        await tx.saveOrder(readyOrder, current.version);
-        await append(tx, 'order.attached', orderId, { cycleId: cycle.id, totalAmount: readyOrder.totalAmount }, commandId, actorId);
-        await append(tx, 'commercial-cycle.advanced', cycle.id, { from: cycle.stage, to: orderStage.stage, version: orderStage.version }, commandId, actorId);
-        return Object.freeze({ order: readyOrder, cycle: cycleWithOrder });
-      }).catch(translateInventoryError);
+      return execute(
+        commandId,
+        `attachOrderToCycle:${actorId}:${orderId}`,
+        actorId,
+        async (tx) => {
+          const current = requireEntity(await tx.getOrder(orderId), 'ORDER_NOT_FOUND', { orderId });
+          const cycle = requireEntity(await tx.getCycle(current.cycleId), 'CYCLE_NOT_FOUND', { cycleId: current.cycleId });
+          authorizeOrderMutation(await tx.listMembershipsForTrade(cycle.brandId, cycle.shopId), actorId, cycle);
+          return Object.freeze({ current, cycle });
+        },
+        async (tx, { current, cycle }) => {
+          invariant(cycle.stage === 'order-builder', 'ORDER_BUILDER_STAGE_REQUIRED', 'Cycle must be at order-builder stage', { stage: cycle.stage });
+          const readyOrder = attachReadyOrder(current, clock());
+          const orderStage = advanceCommercialCycle(cycle, 'order', clock());
+          await tx.saveCycle(orderStage, cycle.version);
+          const cycleWithOrder = attachOrder(orderStage, readyOrder, clock());
+          await tx.saveCycle(cycleWithOrder, orderStage.version);
+          await tx.saveOrder(readyOrder, current.version);
+          await append(tx, 'order.attached', orderId, { cycleId: cycle.id, totalAmount: readyOrder.totalAmount }, commandId, actorId);
+          await append(tx, 'commercial-cycle.advanced', cycle.id, { from: cycle.stage, to: orderStage.stage, version: orderStage.version }, commandId, actorId);
+          return Object.freeze({ order: readyOrder, cycle: cycleWithOrder });
+        },
+      ).catch(translateInventoryError);
     },
 
     cancelOrder(commandId, actorId, { orderId, reason }) {
-      return execute(commandId, `cancelOrder:${actorId}:${orderId}:${reason}`, actorId, async (tx) => {
-        const current = requireEntity(await tx.getOrder(orderId), 'ORDER_NOT_FOUND', { orderId });
-        const cycle = requireEntity(await tx.getCycle(current.cycleId), 'CYCLE_NOT_FOUND', { cycleId: current.cycleId });
-        authorizeOrderMutation(await tx.listMembershipsForTrade(cycle.brandId, cycle.shopId), actorId, cycle);
-        const cancelled = cancelAttachedOrder(current, reason, clock());
-        const cancelledCycle = cancelCommercialCycleOrder(cycle, cancelled, clock());
-        await tx.saveCycle(cancelledCycle, cycle.version);
-        await tx.saveOrder(cancelled, current.version);
-        await append(tx, 'order.cancelled', orderId, {
-          cycleId: cycle.id,
-          reason: cancelled.cancellationReason,
-          releasedLines: cancelled.lines.map((line) => ({ sku: line.sku, quantity: line.quantity })),
-        }, commandId, actorId);
-        return Object.freeze({ order: cancelled, cycle: cancelledCycle });
-      }).catch(translateInventoryError);
+      return execute(
+        commandId,
+        `cancelOrder:${actorId}:${orderId}:${reason}`,
+        actorId,
+        async (tx) => {
+          const current = requireEntity(await tx.getOrder(orderId), 'ORDER_NOT_FOUND', { orderId });
+          const cycle = requireEntity(await tx.getCycle(current.cycleId), 'CYCLE_NOT_FOUND', { cycleId: current.cycleId });
+          authorizeOrderMutation(await tx.listMembershipsForTrade(cycle.brandId, cycle.shopId), actorId, cycle);
+          return Object.freeze({ current, cycle });
+        },
+        async (tx, { current, cycle }) => {
+          const cancelled = cancelAttachedOrder(current, reason, clock());
+          const cancelledCycle = cancelCommercialCycleOrder(cycle, cancelled, clock());
+          await tx.saveCycle(cancelledCycle, cycle.version);
+          await tx.saveOrder(cancelled, current.version);
+          await append(tx, 'order.cancelled', orderId, {
+            cycleId: cycle.id,
+            reason: cancelled.cancellationReason,
+            releasedLines: cancelled.lines.map((line) => ({ sku: line.sku, quantity: line.quantity })),
+          }, commandId, actorId);
+          return Object.freeze({ order: cancelled, cycle: cancelledCycle });
+        },
+      ).catch(translateInventoryError);
     },
   });
 }

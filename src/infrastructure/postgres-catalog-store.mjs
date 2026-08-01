@@ -1,20 +1,10 @@
 import { invariant } from '../core/errors.mjs';
+import { withPostgresTransaction } from './postgres-transaction.mjs';
 
 export function createPostgresCatalogStore({ pool } = {}) {
   invariant(pool && typeof pool.connect === 'function' && typeof pool.query === 'function', 'POSTGRES_POOL_REQUIRED', 'PostgreSQL pool is required');
   return Object.freeze({
-    async transaction(work) {
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
-        const result = await work(view(client));
-        await client.query('COMMIT');
-        return result;
-      } catch (error) {
-        await client.query('ROLLBACK');
-        throw error;
-      } finally { client.release(); }
-    },
+    transaction: (work) => withPostgresTransaction(pool, work, { createView: view }),
     async getSku(sku) {
       const result = await pool.query('SELECT payload FROM catalog_skus WHERE sku = $1', [sku]);
       return result.rows[0]?.payload;

@@ -1,12 +1,13 @@
 import { invariant } from '../../core/errors.mjs';
+import { requiredText } from '../../core/validation.mjs';
 
 const ORGANISATION_TYPES = Object.freeze(['brand', 'shop']);
 
 export function createOrganisation({ id, type, name }) {
-  invariant(typeof id === 'string' && id.length > 0, 'ORG_ID_REQUIRED', 'Organisation id is required');
+  invariant(typeof id === 'string' && id.length > 0 && id.length <= 160, 'ORG_ID_REQUIRED', 'Organisation id must contain 1 to 160 characters');
   invariant(ORGANISATION_TYPES.includes(type), 'ORG_TYPE_INVALID', 'Organisation type must be brand or shop', { type });
-  invariant(typeof name === 'string' && name.trim().length > 1, 'ORG_NAME_REQUIRED', 'Organisation name is required');
-  return Object.freeze({ id, type, name: name.trim() });
+  const normalizedName = requiredText(name, { code: 'ORG_NAME_REQUIRED', label: 'Organisation name', max: 160 });
+  return Object.freeze({ id, type, name: normalizedName });
 }
 
 export function assertTradePair({ brand, shop }) {

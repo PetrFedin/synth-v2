@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import { migratePostgres, waitForPostgres } from './infrastructure/postgres-migrator.mjs';
 import { createPostgresWholesaleRuntime } from './runtime/postgres-runtime.mjs';
+import { createBackgroundWorker } from './runtime/background-worker.mjs';
 import { configureHttpServer, createShutdownCoordinator, listen, readIntegerSetting } from './runtime/server-lifecycle.mjs';
 import { createStandaloneHandler } from './web/static-handler.mjs';
 
@@ -24,6 +25,8 @@ const settings = Object.freeze({
   loginWindowMs: integerSetting('SYNTHA_AUTH_WINDOW_MS', 900_000, 60_000, 86_400_000),
   loginBlockMs: integerSetting('SYNTHA_AUTH_BLOCK_MS', 900_000, 60_000, 86_400_000),
   revokedSessionRetentionMs: integerSetting('SYNTHA_REVOKED_SESSION_RETENTION_MS', 604_800_000, 60_000, 31_536_000_000),
+  notificationProjectionIntervalMs: integerSetting('SYNTHA_NOTIFICATION_PROJECTION_INTERVAL_MS', 1_000, 100, 60_000),
+  notificationProjectionBatchSize: integerSetting('SYNTHA_NOTIFICATION_PROJECTION_BATCH_SIZE', 100, 1, 1_000),
   requestTimeoutMs: integerSetting('SYNTHA_HTTP_REQUEST_TIMEOUT_MS', 30_000, 1_000, 300_000),
   headersTimeoutMs: integerSetting('SYNTHA_HTTP_HEADERS_TIMEOUT_MS', 15_000, 1_000, 300_000),
   keepAliveTimeoutMs: integerSetting('SYNTHA_HTTP_KEEP_ALIVE_TIMEOUT_MS', 5_000, 100, 120_000),
@@ -41,6 +44,7 @@ const pool = new pg.Pool({
 pool.on('error', (error) => console.error('Unexpected idle PostgreSQL client error', error));
 
 let server;
+let notificationWorker;
 try {
   const migrationsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'db', 'migrations');
   await waitForPostgres({ pool, attempts: settings.dbReadyAttempts, delayMs: settings.dbReadyDelayMs });
@@ -59,9 +63,25 @@ try {
   const handler = createStandaloneHandler({ apiHandler: runtime.handler });
   server = configureHttpServer(createServer(handler), settings);
   await listen(server, { port: settings.port, host: settings.host });
+
+  notificationWorker = createBackgroundWorker({
+    name: 'notification-projection',
+    intervalMs: settings.notificationProjectionIntervalMs,
+    task: async () => {
+      const results = await runtime.notifications.projectPending({ limit: settings.notificationProjectionBatchSize });
+      const failures = results.filter((result) => result.status === 'failed');
+      if (failures.length) {
+        const error = new Error(`Notification projection failed for ${failures.length} event(s)`);
+        error.failures = failures;
+        throw error;
+      }
+    },
+  });
+  notificationWorker.start();
   console.log(`Syntha V2 listening on http://${settings.host}:${settings.port}`);
 } catch (error) {
   console.error('Syntha V2 failed to start', error);
+  await notificationWorker?.stop().catch((workerError) => console.error('Failed to stop notification worker after startup error', workerError));
   server?.closeAllConnections?.();
   server = undefined;
   await pool.end().catch((poolError) => console.error('Failed to close PostgreSQL pool after startup error', poolError));
@@ -69,7 +89,12 @@ try {
 }
 
 if (server) {
-  const shutdown = createShutdownCoordinator({ server, pool, graceMs: settings.shutdownGraceMs });
+  const shutdown = createShutdownCoordinator({
+    server,
+    pool,
+    graceMs: settings.shutdownGraceMs,
+    stoppers: notificationWorker ? [() => notificationWorker.stop()] : [],
+  });
   const beginShutdown = (reason, error) => {
     if (error) console.error(`Fatal ${reason}`, error);
     process.exitCode = error ? 1 : (process.exitCode ?? 0);

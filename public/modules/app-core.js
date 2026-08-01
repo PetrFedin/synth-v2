@@ -109,7 +109,10 @@ function renderApp() {
     clearSession();
     renderLogin();
   }, logout));
-  const collapse = sidebarButton(state.sidebarCollapsed ? 'expand' : 'collapse', localText('\u0420\u0430\u0437\u0432\u0435\u0440\u043d\u0443\u0442\u044c \u043c\u0435\u043d\u044e','Expand menu') : localText('\u0421\u0432\u0435\u0440\u043d\u0443\u0442\u044c \u043c\u0435\u043d\u044e','Collapse menu'));
+  const collapseLabel = state.sidebarCollapsed
+    ? localText('\u0420\u0430\u0437\u0432\u0435\u0440\u043d\u0443\u0442\u044c \u043c\u0435\u043d\u044e','Expand menu')
+    : localText('\u0421\u0432\u0435\u0440\u043d\u0443\u0442\u044c \u043c\u0435\u043d\u044e','Collapse menu');
+  const collapse = sidebarButton(state.sidebarCollapsed ? 'expand' : 'collapse', collapseLabel);
   collapse.addEventListener('click', () => {
     state.sidebarCollapsed = !state.sidebarCollapsed;
     localStorage.setItem(SIDEBAR_KEY, String(state.sidebarCollapsed));

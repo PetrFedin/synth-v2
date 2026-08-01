@@ -95,6 +95,11 @@ export function createPostgresMaintenanceStore({ pool } = {}) {
         );
         counts.deadLetterNotificationProjections = integer(terminalOutbox.rows[0]?.projections);
         counts.deadLetterOutboxEvents = integer(terminalOutbox.rows[0]?.outbox);
+        counts.outboxDeadLetterAudit = await deleteCount(
+          client,
+          'DELETE FROM outbox_dead_letter_audit WHERE occurred_at < $1',
+          [cutoffs.outboxBefore],
+        );
 
         counts.catalogOutboxEvents = await deleteCount(
           client,

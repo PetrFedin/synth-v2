@@ -8,6 +8,8 @@ import {
 
 const DEFAULT_BATCH_LIMIT = 100;
 const MAX_BATCH_LIMIT = 1000;
+const DEFAULT_LIST_LIMIT = 100;
+const MAX_LIST_LIMIT = 500;
 
 export function createNotificationService({
   sourceStore,
@@ -61,19 +63,23 @@ export function createNotificationService({
       return Object.freeze(results);
     },
 
-    async listForActor(actorId) {
+    async listForActor(actorId, { limit = DEFAULT_LIST_LIMIT } = {}) {
+      const normalizedLimit = notificationListLimit(limit);
       const memberships = typeof reader?.listActiveMembershipsForActor === 'function'
         ? await reader.listActiveMembershipsForActor(actorId)
         : (await sourceStore.snapshot()).memberships.filter((membership) => membership.userId === actorId && membership.status === 'active');
       const organisationIds = [...new Set(memberships.map((membership) => membership.organisationId).filter(Boolean))];
       if (!organisationIds.length) return Object.freeze([]);
       if (typeof projectionStore.listForOrganisations === 'function') {
-        return projectionStore.listForOrganisations(organisationIds);
+        return projectionStore.listForOrganisations(organisationIds, { limit: normalizedLimit });
       }
       const projection = await projectionStore.snapshot();
       const visible = new Set(organisationIds);
       return Object.freeze(
-        projection.notifications.filter((notification) => visible.has(notification.recipientOrganisationId)),
+        projection.notifications
+          .filter((notification) => visible.has(notification.recipientOrganisationId))
+          .sort(compareNotifications)
+          .slice(0, normalizedLimit),
       );
     },
 
@@ -197,6 +203,27 @@ function notificationCandidates(source, event) {
     }));
   }
   return [];
+}
+
+function notificationListLimit(value) {
+  const parsed = typeof value === 'number'
+    ? value
+    : typeof value === 'string' && /^[0-9]+$/.test(value) ? Number(value) : Number.NaN;
+  invariant(
+    Number.isSafeInteger(parsed) && parsed >= 1 && parsed <= MAX_LIST_LIMIT,
+    'NOTIFICATION_LIMIT_INVALID',
+    `Notification limit must be an integer from 1 to ${MAX_LIST_LIMIT}`,
+    { min: 1, max: MAX_LIST_LIMIT },
+  );
+  return parsed;
+}
+
+function compareNotifications(left, right) {
+  const unread = Number(right?.status === 'unread') - Number(left?.status === 'unread');
+  if (unread) return unread;
+  const time = String(right?.createdAt ?? '').localeCompare(String(left?.createdAt ?? ''));
+  if (time) return time;
+  return String(right?.id ?? '').localeCompare(String(left?.id ?? ''), 'en', { numeric: true });
 }
 
 function compareOutboxRecords(left, right) {

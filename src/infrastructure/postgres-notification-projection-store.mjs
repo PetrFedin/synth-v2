@@ -31,8 +31,7 @@ export function createPostgresNotificationProjectionStore({ pool }) {
       const result = await pool.query(
         `SELECT source.event, source.status, source.published_at
            FROM outbox_events AS source
-          WHERE source.status = 'pending'
-            AND NOT EXISTS (
+          WHERE NOT EXISTS (
               SELECT 1
                 FROM notification_projections AS projected
                WHERE projected.event_id = source.id

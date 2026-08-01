@@ -214,3 +214,23 @@ test('acknowledgement failures retain delivered=true and never enter publication
   assert.equal(store.calls.retries.length, 0);
   assert.equal(store.calls.deadLetters.length, 0);
 });
+
+test('publisher rejects leases that cannot cover a worst-case serial aggregate batch', async () => {
+  const store = serviceStore([]);
+  const service = createOutboxPublisherService({
+    store,
+    publisher: Object.freeze({ timeoutMs: 10_000, publish: async () => undefined }),
+    leaseMs: 30_000,
+    workerId: 'worker-1',
+    nextClaimToken: () => 'claim-1',
+    clock: () => '2026-08-02T00:00:00.000Z',
+  });
+
+  await assert.rejects(
+    () => service.publishPending({ limit: 3, parallelism: 3 }),
+    (error) => error.code === 'OUTBOX_LEASE_CAPACITY_INVALID'
+      && error.details.leaseMs === 30_000
+      && error.details.requiredLeaseMs === 31_000,
+  );
+  assert.equal(store.calls.claims.length, 0);
+});

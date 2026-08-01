@@ -126,6 +126,8 @@ export function normalizeHttpError(error) {
     'HTTP_QUERY_FIELD_UNKNOWN',
     'HTTP_QUERY_INVALID',
     'NOTIFICATION_LIMIT_INVALID',
+    'NOTIFICATION_PAGE_LIMIT_INVALID',
+    'NOTIFICATION_CURSOR_INVALID',
     'AUTH_EMAIL_INVALID',
     'AUTH_PASSWORD_INVALID',
   ].includes(code)) status = 400;

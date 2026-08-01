@@ -47,6 +47,37 @@ export function createPostgresNotificationProjectionStore({ pool }) {
         publishedAt: row.published_at?.toISOString?.() ?? row.published_at ?? null,
       }));
     },
+    async listForOrganisations(organisationIds) {
+      invariant(Array.isArray(organisationIds), 'NOTIFICATION_ORGANISATIONS_INVALID', 'Notification organisation ids must be an array');
+      const ids = [...new Set(organisationIds.filter((id) => typeof id === 'string' && id.length > 0))];
+      if (!ids.length) return Object.freeze([]);
+      const result = await pool.query(
+        `SELECT payload
+           FROM notifications
+          WHERE recipient_organisation_id = ANY($1::text[])
+          ORDER BY (status = 'unread') DESC,
+                   payload->>'createdAt' DESC,
+                   id DESC`,
+        [ids],
+      );
+      return Object.freeze(result.rows.map((row) => row.payload));
+    },
+    recordProjectionFailure({ event, errorCode, failedAt }) {
+      invariant(event?.id && event?.type, 'NOTIFICATION_EVENT_INVALID', 'Projection failure requires an event');
+      invariant(typeof errorCode === 'string' && errorCode.length > 0, 'NOTIFICATION_FAILURE_CODE_INVALID', 'Projection failure code is required');
+      return transaction(async (tx) => {
+        if (await tx.hasProjection(event.id)) return false;
+        await tx.insertProjection(Object.freeze({
+          eventId: event.id,
+          eventType: event.type,
+          status: 'failed',
+          errorCode,
+          notificationIds: Object.freeze([]),
+          projectedAt: failedAt,
+        }));
+        return true;
+      });
+    },
     async snapshot() {
       const [notifications, projections, commands] = await Promise.all([
         payloadRows(pool, 'notifications'),

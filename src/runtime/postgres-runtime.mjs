@@ -2,6 +2,7 @@ import { invariant } from '../core/errors.mjs';
 import { createAuthService } from '../application/auth-service.mjs';
 import { createCatalogService } from '../application/catalog-service.mjs';
 import { createMaintenanceService } from '../application/maintenance-service.mjs';
+import { createOutboxPublisherService } from '../application/outbox-publisher-service.mjs';
 import { createPostgresReadinessService } from '../application/readiness-service.mjs';
 import { createWholesalePlatform } from '../application/platform.mjs';
 import { createPartnerAccessService } from '../application/partner-access-service.mjs';
@@ -12,6 +13,7 @@ import { createWorkspaceQueryService } from '../application/workspace-query-serv
 import { createPostgresAuthStore } from '../infrastructure/postgres-auth-store.mjs';
 import { createPostgresCatalogStore } from '../infrastructure/postgres-catalog-store.mjs';
 import { createPostgresMaintenanceStore } from '../infrastructure/postgres-maintenance-store.mjs';
+import { createPostgresOutboxPublicationStore } from '../infrastructure/postgres-outbox-publication-store.mjs';
 import { createPostgresWholesaleStore } from '../infrastructure/postgres-store.mjs';
 import { createPostgresNotificationProjectionStore } from '../infrastructure/postgres-notification-projection-store.mjs';
 import { createPostgresNotificationReader } from '../infrastructure/postgres-notification-reader.mjs';
@@ -35,6 +37,12 @@ export function createPostgresWholesaleRuntime({
   notificationProjectionLeaseMs,
   notificationProjectionRetryDelayMs,
   notificationProjectionMaxAttempts,
+  outboxPublisher,
+  outboxPublicationWorkerId,
+  outboxPublicationLeaseMs,
+  outboxPublicationRetryDelayMs,
+  outboxPublicationMaxRetryDelayMs,
+  outboxPublicationMaxAttempts,
   maintenanceIntervalMs,
   maintenanceRetryDelayMs,
   commandRetentionMs,
@@ -83,6 +91,16 @@ export function createPostgresWholesaleRuntime({
     ...(notificationProjectionRetryDelayMs !== undefined ? { projectionRetryDelayMs: notificationProjectionRetryDelayMs } : {}),
     ...(notificationProjectionMaxAttempts !== undefined ? { maxProjectionAttempts: notificationProjectionMaxAttempts } : {}),
   });
+  const outboxPublication = outboxPublisher ? createOutboxPublisherService({
+    store: createPostgresOutboxPublicationStore({ pool }),
+    publisher: outboxPublisher,
+    ...(clock ? { clock } : {}),
+    ...(outboxPublicationWorkerId ? { workerId: outboxPublicationWorkerId } : {}),
+    ...(outboxPublicationLeaseMs !== undefined ? { leaseMs: outboxPublicationLeaseMs } : {}),
+    ...(outboxPublicationRetryDelayMs !== undefined ? { retryDelayMs: outboxPublicationRetryDelayMs } : {}),
+    ...(outboxPublicationMaxRetryDelayMs !== undefined ? { maxRetryDelayMs: outboxPublicationMaxRetryDelayMs } : {}),
+    ...(outboxPublicationMaxAttempts !== undefined ? { maxAttempts: outboxPublicationMaxAttempts } : {}),
+  }) : undefined;
   const maintenance = createMaintenanceService({
     store: createPostgresMaintenanceStore({ pool }),
     ...(clock ? { clock } : {}),
@@ -98,5 +116,5 @@ export function createPostgresWholesaleRuntime({
   const transport = { authenticate: auth.authenticate, auth, readiness, platform, catalog, partners, collaboration, orders, notifications, workspace };
   const handler = createWholesaleHttpHandler(transport);
   const fetchHandler = createWholesaleFetchHandler(transport);
-  return Object.freeze({ auth, readiness, maintenance, store, catalogStore, platform, catalog, partners, collaboration, orders, notifications, workspace, handler, fetchHandler });
+  return Object.freeze({ auth, readiness, maintenance, outboxPublication, store, catalogStore, platform, catalog, partners, collaboration, orders, notifications, workspace, handler, fetchHandler });
 }

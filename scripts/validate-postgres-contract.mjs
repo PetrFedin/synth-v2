@@ -11,6 +11,7 @@ const requiredTables = [
   'organisations', 'memberships', 'counterparty_relationships', 'campaigns', 'collections', 'showrooms',
   'showroom_invitations', 'commercial_cycles', 'selections', 'orders', 'deals', 'calendar_milestones',
   'commands', 'outbox_events', 'notifications', 'notification_projections', 'notification_commands',
+  'notification_projection_claims',
   'auth_users', 'auth_sessions', 'auth_login_throttles', 'auth_login_audit',
   'catalog_skus', 'catalog_commands', 'catalog_outbox_events', 'order_inventory_reservations',
 ];
@@ -18,6 +19,8 @@ const requiredFragments = [
   'UNIQUE (brand_id, shop_id)', 'UNIQUE (showroom_id, shop_id)', 'cycle_id text NOT NULL UNIQUE',
   "status text NOT NULL CHECK (status IN ('pending', 'published'))", 'outbox_status_idx',
   'notifications_recipient_status_idx', 'version integer NOT NULL CHECK (version > 0)',
+  'notification_projection_claims_lease_idx', 'lease_expires_at timestamptz NOT NULL',
+  'attempt_count integer NOT NULL DEFAULT 1 CHECK (attempt_count > 0)',
   'email_normalized text NOT NULL UNIQUE', 'token_hash char(64) NOT NULL UNIQUE', 'auth_sessions_expiry_idx',
   "outcome text NOT NULL CHECK (outcome IN ('succeeded', 'failed', 'blocked'))", 'auth_login_throttles_blocked_idx',
   'auth_login_audit_key_time_idx', "status text NOT NULL CHECK (status IN ('draft', 'published'))",

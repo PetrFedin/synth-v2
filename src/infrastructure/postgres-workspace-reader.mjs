@@ -1,4 +1,7 @@
 import { invariant } from '../core/errors.mjs';
+import { withPostgresTransaction } from './postgres-transaction.mjs';
+
+const SNAPSHOT_BEGIN = 'BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY';
 
 export function createPostgresWorkspaceReader({ pool }) {
   invariant(pool && typeof pool.connect === 'function', 'POSTGRES_POOL_REQUIRED', 'PostgreSQL pool is required');
@@ -37,19 +40,8 @@ export function createPostgresWorkspaceReader({ pool }) {
   });
 }
 
-async function readSnapshot(pool, work) {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
-    const result = await work(client);
-    await client.query('COMMIT');
-    return result;
-  } catch (error) {
-    await client.query('ROLLBACK').catch(() => undefined);
-    throw error;
-  } finally {
-    client.release();
-  }
+function readSnapshot(pool, work) {
+  return withPostgresTransaction(pool, work, { begin: SNAPSHOT_BEGIN });
 }
 
 async function payloadWhere(queryable, table, where, params) {
@@ -83,5 +75,5 @@ async function visibleCatalogSkus(queryable, brandIds, collectionIds) {
 }
 function unique(values) { return [...new Set(values.filter(Boolean))]; }
 function emptyWorkspace() {
-  return { memberships: [], organisations: [], relationships: [], invitations: [], campaigns: [], collections: [], catalogSkus: [], showrooms: [], cycles: [], selections: [], orders: [], deals: [], calendar: [] };
+  return { memberships: [], organisations: [], relationships: [], invitations: [], campaigns: [], collections: [], catalogSkus: [], showrooms: [], cycles: [], selections: [], orders: [], deals, calendar: [] };
 }

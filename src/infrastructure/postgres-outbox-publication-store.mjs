@@ -3,6 +3,7 @@ import { withPostgresTransaction } from './postgres-transaction.mjs';
 
 const MAX_BATCH_LIMIT = 1_000;
 const MAX_DEAD_LETTER_LIMIT = 1_000;
+const MAX_RECOVERY_REASON_LENGTH = 500;
 
 export function createPostgresOutboxPublicationStore({ pool } = {}) {
   invariant(pool && typeof pool.connect === 'function' && typeof pool.query === 'function', 'POSTGRES_POOL_REQUIRED', 'PostgreSQL pool is required');
@@ -127,21 +128,96 @@ export function createPostgresOutboxPublicationStore({ pool } = {}) {
                         source.aggregate_id,
                         source.event,
                         owned.attempt_count
+           ), recorded AS (
+             INSERT INTO outbox_dead_letters
+               (event_id, event_type, aggregate_id, attempt_count, error_code, failed_at, event)
+             SELECT id, event_type, aggregate_id, attempt_count, $4, $5, event
+               FROM updated
+             ON CONFLICT (event_id) DO UPDATE SET
+               event_type = EXCLUDED.event_type,
+               aggregate_id = EXCLUDED.aggregate_id,
+               attempt_count = EXCLUDED.attempt_count,
+               error_code = EXCLUDED.error_code,
+               failed_at = EXCLUDED.failed_at,
+               event = EXCLUDED.event
+             RETURNING event_id, attempt_count, error_code, failed_at, event
+           ), audited AS (
+             INSERT INTO outbox_dead_letter_audit
+               (event_id, action, attempt_count, error_code, actor_id, reason, occurred_at, event)
+             SELECT event_id, 'dead-lettered', attempt_count, error_code, NULL, NULL, failed_at, event
+               FROM recorded
+             RETURNING event_id
            )
-           INSERT INTO outbox_dead_letters
-             (event_id, event_type, aggregate_id, attempt_count, error_code, failed_at, event)
-           SELECT id, event_type, aggregate_id, attempt_count, $4, $5, event
-             FROM updated
-           ON CONFLICT (event_id) DO NOTHING
-           RETURNING event_id`,
+           SELECT event_id FROM audited`,
           [eventId, workerId, claimToken, errorCode, failedAt],
         );
         return result.rowCount === 1;
       });
     },
 
+    async requeueDeadLetter({ eventId, actorId, reason, requeuedAt }) {
+      const recovery = validateRecovery({ eventId, actorId, reason, requeuedAt });
+      return withPostgresTransaction(pool, async (client) => {
+        const selected = await client.query(
+          `SELECT dead_letter.event_id,
+                  dead_letter.attempt_count,
+                  dead_letter.error_code,
+                  dead_letter.event
+             FROM outbox_dead_letters AS dead_letter
+             JOIN outbox_events AS source ON source.id = dead_letter.event_id
+            WHERE dead_letter.event_id = $1
+              AND source.status = 'dead-letter'
+            FOR UPDATE OF dead_letter, source`,
+          [recovery.eventId],
+        );
+        const current = selected.rows[0];
+        if (!current) {
+          return Object.freeze({ requeued: false, eventId: recovery.eventId });
+        }
+
+        await client.query('DELETE FROM outbox_publication_claims WHERE event_id = $1', [recovery.eventId]);
+        const updated = await client.query(
+          `UPDATE outbox_events
+              SET status = 'pending',
+                  published_at = NULL
+            WHERE id = $1
+              AND status = 'dead-letter'`,
+          [recovery.eventId],
+        );
+        invariant(updated.rowCount === 1, 'OUTBOX_DEAD_LETTER_STATE_CONFLICT', 'Dead-letter event changed during recovery', { eventId: recovery.eventId });
+
+        const removed = await client.query('DELETE FROM outbox_dead_letters WHERE event_id = $1', [recovery.eventId]);
+        invariant(removed.rowCount === 1, 'OUTBOX_DEAD_LETTER_STATE_CONFLICT', 'Dead-letter record changed during recovery', { eventId: recovery.eventId });
+
+        await client.query(
+          `INSERT INTO outbox_dead_letter_audit
+             (event_id, action, attempt_count, error_code, actor_id, reason, occurred_at, event)
+           VALUES ($1, 'requeued', $2, $3, $4, $5, $6, $7)`,
+          [
+            recovery.eventId,
+            Number(current.attempt_count),
+            current.error_code,
+            recovery.actorId,
+            recovery.reason,
+            recovery.requeuedAt,
+            current.event,
+          ],
+        );
+
+        return Object.freeze({
+          requeued: true,
+          eventId: recovery.eventId,
+          actorId: recovery.actorId,
+          reason: recovery.reason,
+          requeuedAt: recovery.requeuedAt,
+          previousAttemptCount: Number(current.attempt_count),
+          previousErrorCode: current.error_code,
+        });
+      });
+    },
+
     async listDeadLetters({ limit = 100 } = {}) {
-      invariant(Number.isSafeInteger(limit) && limit >= 1 && limit <= MAX_DEAD_LETTER_LIMIT, 'OUTBOX_DEAD_LETTER_LIMIT_INVALID', `Dead-letter limit must be an integer from 1 to ${MAX_DEAD_LETTER_LIMIT}`);
+      validateListLimit(limit);
       const result = await pool.query(
         `SELECT event_id, event_type, aggregate_id, attempt_count, error_code, failed_at, event
            FROM outbox_dead_letters
@@ -150,6 +226,20 @@ export function createPostgresOutboxPublicationStore({ pool } = {}) {
         [limit],
       );
       return Object.freeze(result.rows.map(deadLetterFromRow));
+    },
+
+    async listDeadLetterAudit({ eventId, limit = 100 } = {}) {
+      validateListLimit(limit);
+      if (eventId !== undefined) validateEventId(eventId);
+      const result = await pool.query(
+        `SELECT id, event_id, action, attempt_count, error_code, actor_id, reason, occurred_at, event
+           FROM outbox_dead_letter_audit
+          WHERE ($1::text IS NULL OR event_id = $1)
+          ORDER BY occurred_at DESC, id DESC
+          LIMIT $2`,
+        [eventId ?? null, limit],
+      );
+      return Object.freeze(result.rows.map(deadLetterAuditFromRow));
     },
   });
 }
@@ -164,9 +254,26 @@ function validateClaim({ workerId, claimToken, claimedAt, leaseExpiresAt, limit 
 }
 
 function validateOwnership({ eventId, workerId, claimToken }) {
-  invariant(typeof eventId === 'string' && eventId.length >= 1 && eventId.length <= 160, 'OUTBOX_EVENT_ID_INVALID', 'Outbox event id is invalid');
+  validateEventId(eventId);
   invariant(typeof workerId === 'string' && workerId.length >= 1 && workerId.length <= 160, 'OUTBOX_WORKER_ID_INVALID', 'Outbox worker id is invalid');
   invariant(typeof claimToken === 'string' && claimToken.length >= 1 && claimToken.length <= 160, 'OUTBOX_CLAIM_TOKEN_INVALID', 'Outbox claim token is invalid');
+}
+
+function validateRecovery({ eventId, actorId, reason, requeuedAt }) {
+  validateEventId(eventId);
+  invariant(typeof actorId === 'string' && actorId === actorId.trim() && actorId.length >= 1 && actorId.length <= 160, 'OUTBOX_RECOVERY_ACTOR_INVALID', 'Outbox recovery actor id is invalid');
+  const normalizedReason = typeof reason === 'string' ? reason.trim() : '';
+  invariant(normalizedReason.length >= 1 && normalizedReason.length <= MAX_RECOVERY_REASON_LENGTH, 'OUTBOX_RECOVERY_REASON_INVALID', `Outbox recovery reason must contain from 1 to ${MAX_RECOVERY_REASON_LENGTH} characters`);
+  invariant(isTimestamp(requeuedAt), 'OUTBOX_REQUEUED_AT_INVALID', 'Outbox recovery timestamp is invalid');
+  return Object.freeze({ eventId, actorId, reason: normalizedReason, requeuedAt: new Date(Date.parse(requeuedAt)).toISOString() });
+}
+
+function validateEventId(eventId) {
+  invariant(typeof eventId === 'string' && eventId === eventId.trim() && eventId.length >= 1 && eventId.length <= 160, 'OUTBOX_EVENT_ID_INVALID', 'Outbox event id is invalid');
+}
+
+function validateListLimit(limit) {
+  invariant(Number.isSafeInteger(limit) && limit >= 1 && limit <= MAX_DEAD_LETTER_LIMIT, 'OUTBOX_DEAD_LETTER_LIMIT_INVALID', `Dead-letter limit must be an integer from 1 to ${MAX_DEAD_LETTER_LIMIT}`);
 }
 
 function publicationRecordFromRow(row) {
@@ -188,6 +295,20 @@ function deadLetterFromRow(row) {
     attemptCount: Number(row.attempt_count),
     errorCode: row.error_code,
     failedAt: row.failed_at?.toISOString?.() ?? row.failed_at,
+    event: row.event,
+  });
+}
+
+function deadLetterAuditFromRow(row) {
+  return Object.freeze({
+    id: Number(row.id),
+    eventId: row.event_id,
+    action: row.action,
+    attemptCount: Number(row.attempt_count),
+    errorCode: row.error_code,
+    actorId: row.actor_id ?? null,
+    reason: row.reason ?? null,
+    occurredAt: row.occurred_at?.toISOString?.() ?? row.occurred_at,
     event: row.event,
   });
 }

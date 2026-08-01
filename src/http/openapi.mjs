@@ -181,7 +181,17 @@ export const wholesaleV2OpenApi = Object.freeze({
     '/orders/{orderId}/attach': { post: operation('attachOrderToCycle', ['orderId']) },
     '/orders/{orderId}/cancel': { post: operation('cancelOrder', ['orderId'], '#/components/schemas/OrderCancel') },
     '/workspace': { get: readOperation('loadWorkspace', { 200: 'Actor workspace', 401: 'Authentication required' }) },
-    '/notifications': { get: readOperation('listNotifications', { 200: 'Notifications', 401: 'Authentication required' }) },
+    '/notifications': {
+      get: {
+        ...readOperation('listNotifications', { 200: 'Notifications', 400: 'Invalid notification limit', 401: 'Authentication required' }),
+        parameters: [{
+          name: 'limit',
+          in: 'query',
+          required: false,
+          schema: { type: 'integer', minimum: 1, maximum: 500, default: 100 },
+        }],
+      },
+    },
     '/notifications/{notificationId}/read': { post: operation('markNotificationRead', ['notificationId']) },
   },
 });

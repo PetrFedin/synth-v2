@@ -31,6 +31,10 @@ export function createPostgresWholesaleRuntime({
   loginWindowMs,
   loginBlockMs,
   revokedSessionRetentionMs,
+  notificationProjectionWorkerId,
+  notificationProjectionLeaseMs,
+  notificationProjectionRetryDelayMs,
+  notificationProjectionMaxAttempts,
   maintenanceIntervalMs,
   maintenanceRetryDelayMs,
   commandRetentionMs,
@@ -74,6 +78,10 @@ export function createPostgresWholesaleRuntime({
     reader: createPostgresNotificationReader({ pool }),
     nextId: runtimeNextId,
     ...(clock ? { clock } : {}),
+    ...(notificationProjectionWorkerId ? { projectionWorkerId: notificationProjectionWorkerId } : {}),
+    ...(notificationProjectionLeaseMs !== undefined ? { projectionLeaseMs: notificationProjectionLeaseMs } : {}),
+    ...(notificationProjectionRetryDelayMs !== undefined ? { projectionRetryDelayMs: notificationProjectionRetryDelayMs } : {}),
+    ...(notificationProjectionMaxAttempts !== undefined ? { maxProjectionAttempts: notificationProjectionMaxAttempts } : {}),
   });
   const maintenance = createMaintenanceService({
     store: createPostgresMaintenanceStore({ pool }),

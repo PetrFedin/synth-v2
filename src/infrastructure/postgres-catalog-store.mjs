@@ -69,6 +69,7 @@ function view(client) {
       invariant(result.rowCount === 1, 'CATALOG_SKU_CONCURRENCY_CONFLICT', 'Catalog SKU concurrency conflict', { sku: value.sku, expectedVersion });
     },
     async getCommand(id) {
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`catalog-command:${id}`]);
       const result = await client.query('SELECT id, fingerprint, actor_id, result, completed_at FROM catalog_commands WHERE id = $1', [id]);
       const row = result.rows[0];
       return row ? Object.freeze({ id: row.id, fingerprint: row.fingerprint, actorId: row.actor_id, result: row.result, completedAt: row.completed_at.toISOString?.() ?? row.completed_at }) : undefined;

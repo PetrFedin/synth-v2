@@ -11,7 +11,7 @@ const INVITATION_BODY = bodyContract(['showroomId', 'shopId', 'expiresAt']);
 const CYCLE_BODY = bodyContract(['brandId', 'shopId', 'campaignId', 'collectionId']);
 const CYCLE_ADVANCE_BODY = bodyContract(['cycleId', 'targetStage']);
 const SELECTION_BODY = bodyContract(['cycleId', 'showroomId']);
-const SELECTION_LINE_BODY = bodyContract(['selectionId', 'sku', 'quantity', 'note']);
+const SELECTION_LINE_BODY = bodyContract(['selectionId', 'sku', 'quantity', 'note', 'unitPrice', 'currency', 'catalogVersion']);
 const ORDER_BODY = bodyContract(['selectionId', 'terms'], {
   terms: ['incoterm', 'paymentDays', 'prepaymentPercent', 'deliveryStart', 'deliveryEnd'],
 });

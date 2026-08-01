@@ -154,7 +154,7 @@ function buildField(field) {
     field.options.forEach(option => {
       const value = typeof option === 'string' ? option : option.id;
       const text = field.format ? field.format(option) : (typeof option === 'string' ? option : (option.name || option.id));
-      control.append(el('option', { value, rawText: text }));
+      control.append(el('option',{value,rawText:text}));
     });
     label.append(control);
     return { label, control };

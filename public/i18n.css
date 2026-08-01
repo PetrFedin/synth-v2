@@ -1,37 +1,48 @@
 .language-switcher {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: #0d1115;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--sidebar-line);
+  border-radius: 5px;
+  background: rgba(255,255,255,.035);
 }
 .language-option {
   flex: 1;
-  min-width: 44px;
+  min-width: 30px;
+  height: 25px;
   border: 0;
-  border-radius: 7px;
-  padding: 6px 9px;
+  border-radius: 3px;
+  padding: 0 6px;
   background: transparent;
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: .08em;
+  color: #8f9bb1;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .06em;
 }
 .language-option:hover,
 .language-option.active {
-  background: var(--panel-2);
-  color: var(--text);
+  background: rgba(255,255,255,.095);
+  color: #fff;
 }
 .language-option:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid #9c7af0;
   outline-offset: 1px;
 }
 .login > .language-switcher {
   justify-self: end;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
+  border-color: var(--line);
+  background: var(--surface-muted);
 }
-.sidebar-footer .language-switcher {
-  grid-column: 1 / -1;
+.login > .language-switcher .language-option { color: var(--muted); }
+.login > .language-switcher .language-option:hover,
+.login > .language-switcher .language-option.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.sidebar-footer .language-switcher { width: 100%; }
+.sidebar-collapsed .sidebar-footer .language-switcher { display: none; }
+@media (max-width: 700px) {
+  .sidebar-footer .language-switcher { display: none; }
 }

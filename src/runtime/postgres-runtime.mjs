@@ -12,6 +12,7 @@ import { createPostgresAuthStore } from '../infrastructure/postgres-auth-store.m
 import { createPostgresCatalogStore } from '../infrastructure/postgres-catalog-store.mjs';
 import { createPostgresWholesaleStore } from '../infrastructure/postgres-store.mjs';
 import { createPostgresNotificationProjectionStore } from '../infrastructure/postgres-notification-projection-store.mjs';
+import { createPostgresNotificationReader } from '../infrastructure/postgres-notification-reader.mjs';
 import { createPostgresWorkspaceReader } from '../infrastructure/postgres-workspace-reader.mjs';
 import { createWholesaleHttpHandler } from '../http/api.mjs';
 import { createWholesaleFetchHandler } from '../http/fetch-api.mjs';
@@ -52,7 +53,13 @@ export function createPostgresWholesaleRuntime({
   const collaboration = createShowroomSelectionService({ ...options, catalogReader: catalog });
   const orders = createOrderBuilderService(options);
   const projectionStore = createPostgresNotificationProjectionStore({ pool });
-  const notifications = createNotificationService({ sourceStore: store, projectionStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) });
+  const notifications = createNotificationService({
+    sourceStore: store,
+    projectionStore,
+    reader: createPostgresNotificationReader({ pool }),
+    nextId: runtimeNextId,
+    ...(clock ? { clock } : {}),
+  });
   const workspace = createWorkspaceQueryService({ reader: createPostgresWorkspaceReader({ pool }) });
   const transport = { authenticate: auth.authenticate, auth, readiness, platform, catalog, partners, collaboration, orders, notifications, workspace };
   const handler = createWholesaleHttpHandler(transport);

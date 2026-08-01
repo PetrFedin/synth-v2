@@ -13,6 +13,8 @@ const expectedFoundation = [
   '/ui/dom-2.js',
   '/ui/dom-1.js',
   '/ui/api.js',
+  '/ui/ui-capabilities.js',
+  '/ui/ui-validation.js',
   '/ui/app-core.js',
 ];
 
@@ -62,8 +64,10 @@ const viewsSource = await readFile(path.join(publicDir, 'modules', 'views-4.js')
 const routesSource = await readFile(path.join(root, 'src', 'http', 'routes.mjs'), 'utf8');
 assert(/function orderCancellationForm\(order\)/.test(formsSource), 'Order cancellation button has no form handler.');
 assert(/orderCancellationForm\(item\)/.test(viewsSource), 'Attached orders do not expose the cancellation form.');
-assert(/\/orders\\\/\(\[\^\/\]\+\)\\\/cancel/.test(routesSource) || routesSource.includes("/^\\/v2\\/orders\\/([^/]+)\\/cancel$/"), 'Order cancellation API route is missing.');
-assert(formsSource.includes('orderId: order.id') && formsSource.includes('reason: values.reason.trim()'), 'Order cancellation payload is incomplete.');
+assert(routesSource.includes("/^\\/v2\\/orders\\/([^/]+)\\/cancel$/"), 'Order cancellation API route is missing.');
+assert(formsSource.includes('orderId: order.id') && formsSource.includes("validation.requiredText(values.reason"), 'Order cancellation payload validation is incomplete.');
+assert(executionHarness.window.SynthaUiCapabilities, 'UI capability matrix was not loaded.');
+assert(executionHarness.window.SynthaUiValidation, 'UI validation runtime was not loaded.');
 
 console.log(`Localization and UI runtime contract OK (${sources.length} scripts, ${diagnostics.messageCount} keyed messages, ${diagnostics.phraseCount} compatibility phrases).`);
 
@@ -89,6 +93,10 @@ function createHarness(browserLanguage) {
   class CustomEvent {
     constructor(type, options = {}) { this.type = type; this.detail = options.detail; }
   }
+  class AbortController {
+    constructor() { this.signal = {}; }
+    abort() { this.signal.aborted = true; }
+  }
   const listeners = new Map();
   const window = {
     document,
@@ -96,6 +104,7 @@ function createHarness(browserLanguage) {
     localStorage,
     sessionStorage,
     CustomEvent,
+    confirm: () => true,
     addEventListener(type, listener) { listeners.set(type, listener); },
     dispatchEvent(event) { events.push(event); listeners.get(event.type)?.(event); return true; },
   };
@@ -107,6 +116,8 @@ function createHarness(browserLanguage) {
     localStorage,
     sessionStorage,
     CustomEvent,
+    AbortController,
+    TypeError,
     console,
     Intl,
     Date,

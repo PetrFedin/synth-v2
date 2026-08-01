@@ -93,6 +93,18 @@ function transactionView(client) {
   return Object.freeze({
     getNotification: (id) => getPayload(client, 'notifications', 'id', id),
     getNotificationByDedupeKey: (dedupeKey) => getPayload(client, 'notifications', 'dedupe_key', dedupeKey),
+    async getActiveMembership(organisationId, actorId) {
+      const result = await client.query(
+        `SELECT payload
+           FROM memberships
+          WHERE organisation_id = $1
+            AND user_id = $2
+            AND status = 'active'
+          LIMIT 1`,
+        [organisationId, actorId],
+      );
+      return result.rows[0]?.payload;
+    },
     async insertNotification(notification) {
       try {
         await client.query(

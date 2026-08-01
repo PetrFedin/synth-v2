@@ -22,15 +22,17 @@ test('serves standalone workspace and every ordered script with security headers
     assert.match(response.headers.get('content-security-policy'), /default-src 'self'/);
     const html = await response.text();
     const sources = [...html.matchAll(/<script defer src="([^"]+)"/g)].map((match) => match[1]);
-    assert.deepEqual(sources.slice(0, 5), [
+    assert.deepEqual(sources.slice(0, 7), [
       '/ui/i18n-runtime.js',
       '/ui/dom-2.js',
       '/ui/dom-1.js',
       '/ui/api.js',
+      '/ui/ui-capabilities.js',
+      '/ui/ui-validation.js',
       '/ui/app-core.js',
     ]);
     assert.equal(sources.at(-1), '/ui/app-start.js');
-    assert.ok(sources.length >= 10);
+    assert.ok(sources.length >= 20);
     for (const source of sources) {
       const script = await fetch(`${base}${source}`);
       assert.equal(script.status, 200, source);
@@ -47,9 +49,9 @@ test('serves standalone workspace and every ordered script with security headers
   });
 });
 
-test('supports HEAD for localization assets without sending a body', async () => {
+test('supports HEAD for runtime assets without sending a body', async () => {
   await withServer(createStandaloneHandler({ publicDir, apiHandler: (_request, response) => { response.statusCode = 404; response.end(); } }), async (base) => {
-    for (const asset of ['/ui/i18n-runtime.js', '/i18n.css']) {
+    for (const asset of ['/ui/i18n-runtime.js', '/ui/ui-capabilities.js', '/ui/ui-validation.js', '/i18n.css']) {
       const response = await fetch(`${base}${asset}`, { method: 'HEAD' });
       assert.equal(response.status, 200, asset);
       assert.equal(await response.text(), '');

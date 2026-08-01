@@ -149,7 +149,10 @@ export function createOutboxPublisherService({
     }
 
     const failedAt = now();
-    const retryAt = addMilliseconds(failedAt, retryDelay(record.attemptCount));
+    const backoffDelayMs = retryDelay(record.attemptCount);
+    const serverDelayMs = retryAfterDelay(error?.retryAfter, failedAt, maxRetryDelayMs);
+    const effectiveDelayMs = Math.max(backoffDelayMs, serverDelayMs);
+    const retryAt = addMilliseconds(failedAt, effectiveDelayMs);
     const rescheduled = await store.reschedule({ ...ownership, errorCode, retryAt });
     return Object.freeze({
       eventId: event.id,
@@ -162,6 +165,8 @@ export function createOutboxPublisherService({
       rescheduled,
       errorCode,
       retryAt,
+      retryDelayMs: effectiveDelayMs,
+      retryAfterApplied: serverDelayMs > backoffDelayMs,
     });
   }
 
@@ -221,6 +226,23 @@ async function processInAggregateOrder(records, parallelism, processRecord) {
 function validateBatch({ limit, parallelism }) {
   invariant(Number.isSafeInteger(limit) && limit >= 1 && limit <= MAX_BATCH_LIMIT, 'OUTBOX_BATCH_LIMIT_INVALID', `Outbox batch limit must be an integer from 1 to ${MAX_BATCH_LIMIT}`);
   invariant(Number.isSafeInteger(parallelism) && parallelism >= 1 && parallelism <= MAX_PARALLELISM, 'OUTBOX_PARALLELISM_INVALID', `Outbox parallelism must be an integer from 1 to ${MAX_PARALLELISM}`);
+}
+
+function retryAfterDelay(value, failedAt, maxDelayMs) {
+  if (typeof value !== 'string') return 0;
+  const normalized = value.trim();
+  if (!normalized) return 0;
+  let delayMs;
+  if (/^\d{1,10}$/.test(normalized)) {
+    const seconds = Number(normalized);
+    delayMs = Number.isSafeInteger(seconds) ? seconds * 1_000 : NaN;
+  } else {
+    const target = Date.parse(normalized);
+    const origin = Date.parse(failedAt);
+    delayMs = target - origin;
+  }
+  if (!Number.isSafeInteger(delayMs) || delayMs <= 0) return 0;
+  return Math.min(maxDelayMs, delayMs);
 }
 
 function publicationErrorCode(error, fallback = 'OUTBOX_PUBLISH_FAILED') {

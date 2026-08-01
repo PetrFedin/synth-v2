@@ -26,11 +26,11 @@ export function createOrderBuilderService({
     invariant(commandId, 'COMMAND_ID_REQUIRED', 'Every mutation requires commandId');
     return store.transaction(async (tx) => {
       const previous = await tx.getCommand(commandId);
-      const context = await authorize(tx);
       if (previous) {
         invariant(fingerprintsMatch(previous.fingerprint, fingerprint), 'COMMAND_ID_CONFLICT', 'commandId was already used by another mutation', { commandId });
-        return previous.result;
       }
+      const context = await authorize(tx);
+      if (previous) return previous.result;
       const result = await action(tx, context);
       await tx.insertCommand(Object.freeze({ id: commandId, fingerprint, actorId, result, completedAt: clock() }));
       return result;

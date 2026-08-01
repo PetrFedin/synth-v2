@@ -12,9 +12,11 @@ function projectionStore() {
   }];
   const projections = new Set();
   const failures = [];
+  let transactionMembershipReads = 0;
   return {
     failures,
     listCalls: [],
+    get transactionMembershipReads() { return transactionMembershipReads; },
     async readUnprojectedOutbox() {
       return [{ event: { id: 'event-1', type: 'selection.submitted', aggregateId: 'missing-selection', payload: {} } }];
     },
@@ -36,6 +38,10 @@ function projectionStore() {
         insertProjection: (projection) => projections.add(projection.eventId),
         getCommand: () => undefined,
         getNotification: (id) => notifications.find((item) => item.id === id),
+        getActiveMembership() {
+          transactionMembershipReads += 1;
+          return { organisationId: 'brand-1', userId: 'user-1', status: 'active', role: 'owner' };
+        },
         saveNotification(updated) {
           const index = notifications.findIndex((item) => item.id === updated.id);
           notifications[index] = updated;
@@ -59,7 +65,7 @@ test('scoped reader removes full source snapshots from projection and list paths
       return [{ organisationId: 'brand-1', userId: 'user-1', status: 'active' }];
     },
     async getActiveMembership() {
-      return { organisationId: 'brand-1', userId: 'user-1', status: 'active', role: 'owner' };
+      throw new Error('mark-read must use the active projection transaction');
     },
   };
   const service = createNotificationService({
@@ -78,7 +84,9 @@ test('scoped reader removes full source snapshots from projection and list paths
   assert.equal(listed.length, 1);
   assert.deepEqual(projection.listCalls, [['brand-1']]);
 
-  await service.markRead('command-1', 'user-1', 'notification-1');
+  const read = await service.markRead('command-1', 'user-1', 'notification-1');
+  assert.equal(read.status, 'read');
+  assert.equal(projection.transactionMembershipReads, 1);
   assert.equal(sourceSnapshots, 0);
 });
 
@@ -119,4 +127,39 @@ test('PostgreSQL membership reads are actor and organisation scoped', async () =
   assert.deepEqual(calls[0].params, ['user-1', 'active']);
   assert.match(calls[1].sql, /organisation_id = \$1[\s\S]*user_id = \$2[\s\S]*status = 'active'/);
   assert.deepEqual(calls[1].params, ['brand-1', 'user-1']);
+});
+
+test('PostgreSQL transaction view checks membership without a second pool checkout', async () => {
+  const source = await import('../src/infrastructure/postgres-notification-projection-store.mjs');
+  const queries = [];
+  const client = {
+    async query(sql, params) {
+      queries.push({ sql, params });
+      if (/FROM notification_commands/.test(sql)) return { rows: [] };
+      if (/FROM notifications WHERE id/.test(sql)) {
+        return { rows: [{ payload: { id: 'notification-1', recipientOrganisationId: 'brand-1', status: 'unread', version: 1 } }] };
+      }
+      if (/FROM memberships/.test(sql)) {
+        return { rows: [{ payload: { organisationId: 'brand-1', userId: 'user-1', status: 'active', role: 'owner' } }] };
+      }
+      if (/UPDATE notifications/.test(sql)) return { rowCount: 1, rows: [] };
+      return { rowCount: 1, rows: [] };
+    },
+    release() {},
+  };
+  let connects = 0;
+  const pool = {
+    async connect() { connects += 1; return client; },
+    async query() { throw new Error('pool.query must not run inside mark-read'); },
+  };
+  const projection = source.createPostgresNotificationProjectionStore({ pool });
+  const service = createNotificationService({
+    sourceStore: { readOutbox: async () => [], snapshot: async () => { throw new Error('snapshot must not run'); } },
+    projectionStore: projection,
+    clock: () => '2026-08-02T00:00:00.000Z',
+  });
+  const result = await service.markRead('command-1', 'user-1', 'notification-1');
+  assert.equal(result.status, 'read');
+  assert.equal(connects, 1);
+  assert.equal(queries.filter((item) => /FROM memberships/.test(item.sql)).length, 1);
 });

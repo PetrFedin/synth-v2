@@ -6,10 +6,12 @@ export function createPostgresReadinessService({
   migrationsDir,
   clock = () => new Date().toISOString(),
   operationalCheck,
+  migrationInspector = inspectPostgresMigrations,
 } = {}) {
   invariant(pool && typeof pool.query === 'function', 'POSTGRES_POOL_REQUIRED', 'PostgreSQL pool is required');
   invariant(migrationsDir, 'MIGRATIONS_DIR_REQUIRED', 'Migrations directory is required');
   invariant(operationalCheck === undefined || typeof operationalCheck === 'function', 'READINESS_OPERATIONAL_CHECK_INVALID', 'Operational readiness check must be a function');
+  invariant(typeof migrationInspector === 'function', 'READINESS_MIGRATION_INSPECTOR_INVALID', 'Migration inspector must be a function');
   return Object.freeze({
     async check() {
       const checkedAt = clock();
@@ -19,7 +21,7 @@ export function createPostgresReadinessService({
         return notReady({ checkedAt, database: 'unavailable', migrationStatus: 'unknown', reason: 'database-unavailable' });
       }
       try {
-        const inspection = await inspectPostgresMigrations({ pool, migrationsDir });
+        const inspection = await migrationInspector({ pool, migrationsDir });
         const migrationsReady = inspection.pending.length === 0 && inspection.mismatched.length === 0 && inspection.unknown.length === 0;
         if (!migrationsReady) {
           return Object.freeze({

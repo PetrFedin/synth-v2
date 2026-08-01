@@ -4,6 +4,8 @@ import { invariant } from '../core/errors.mjs';
 const MIN_SECRET_BYTES = 32;
 const MAX_EVENT_ID_LENGTH = 160;
 const MAX_EVENT_TYPE_LENGTH = 160;
+const TIMESTAMP_PATTERN = /^\d{10,11}$/;
+const SIGNATURE_PATTERN = /^v1=[0-9a-f]{64}$/;
 
 export function createHttpOutboxPublisher({
   endpoint,
@@ -71,17 +73,18 @@ export function createHttpOutboxPublisher({
 
 export function verifyOutboxSignature({ secret, timestamp, body, signature, toleranceSeconds = 300, now = Date.now() } = {}) {
   if (typeof secret !== 'string' || Buffer.byteLength(secret, 'utf8') < MIN_SECRET_BYTES) return false;
-  if (typeof timestamp !== 'string' || !/^\d{10,13}$/.test(timestamp)) return false;
-  if (typeof body !== 'string' || typeof signature !== 'string') return false;
+  if (typeof timestamp !== 'string' || !TIMESTAMP_PATTERN.test(timestamp)) return false;
+  if (typeof body !== 'string' || typeof signature !== 'string' || !SIGNATURE_PATTERN.test(signature)) return false;
   if (!Number.isSafeInteger(toleranceSeconds) || toleranceSeconds < 0) return false;
-  const timestampMs = Number(timestamp) * 1_000;
+  const timestampSeconds = Number(timestamp);
   const nowMs = now instanceof Date ? now.getTime() : Number(now);
-  if (!Number.isFinite(timestampMs) || !Number.isFinite(nowMs)) return false;
+  if (!Number.isSafeInteger(timestampSeconds) || !Number.isFinite(nowMs)) return false;
+  const timestampMs = timestampSeconds * 1_000;
+  if (!Number.isSafeInteger(timestampMs)) return false;
   if (Math.abs(nowMs - timestampMs) > toleranceSeconds * 1_000) return false;
-  const expected = signPayload({ secret, timestamp, body });
-  const expectedBytes = Buffer.from(expected, 'utf8');
+  const expectedBytes = Buffer.from(signPayload({ secret, timestamp, body }), 'utf8');
   const actualBytes = Buffer.from(signature, 'utf8');
-  return expectedBytes.length === actualBytes.length && timingSafeEqual(expectedBytes, actualBytes);
+  return timingSafeEqual(expectedBytes, actualBytes);
 }
 
 function validateEndpoint(endpoint, allowInsecureLocalhost) {

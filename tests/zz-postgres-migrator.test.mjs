@@ -24,6 +24,7 @@ test('PostgreSQL migration ledger serializes runners and rejects changed history
     '007_notification_projection_claims.sql',
     '008_notification_pagination.sql',
     '009_outbox_publication_claims.sql',
+    '010_outbox_dead_letter_recovery.sql',
   ];
   try {
     await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
@@ -47,7 +48,8 @@ test('PostgreSQL migration ledger serializes runners and rejects changed history
               to_regclass('public.order_inventory_reservations') AS order_inventory_reservations,
               to_regclass('public.notification_projection_claims') AS notification_projection_claims,
               to_regclass('public.outbox_publication_claims') AS outbox_publication_claims,
-              to_regclass('public.outbox_dead_letters') AS outbox_dead_letters`,
+              to_regclass('public.outbox_dead_letters') AS outbox_dead_letters,
+              to_regclass('public.outbox_dead_letter_audit') AS outbox_dead_letter_audit`,
     );
     assert.equal(tables.rows[0].organisations, 'organisations');
     assert.equal(tables.rows[0].auth_users, 'auth_users');
@@ -57,6 +59,7 @@ test('PostgreSQL migration ledger serializes runners and rejects changed history
     assert.equal(tables.rows[0].notification_projection_claims, 'notification_projection_claims');
     assert.equal(tables.rows[0].outbox_publication_claims, 'outbox_publication_claims');
     assert.equal(tables.rows[0].outbox_dead_letters, 'outbox_dead_letters');
+    assert.equal(tables.rows[0].outbox_dead_letter_audit, 'outbox_dead_letter_audit');
 
     const outboxStatusConstraint = await pool.query(
       `SELECT pg_get_constraintdef(oid) AS definition
@@ -65,6 +68,16 @@ test('PostgreSQL migration ledger serializes runners and rejects changed history
           AND conname = 'outbox_events_status_check'`,
     );
     assert.match(outboxStatusConstraint.rows[0].definition, /dead-letter/);
+
+    const recoveryConstraint = await pool.query(
+      `SELECT pg_get_constraintdef(oid) AS definition
+         FROM pg_constraint
+        WHERE conrelid = 'public.outbox_dead_letter_audit'::regclass
+          AND contype = 'c'
+        ORDER BY conname`,
+    );
+    assert.match(recoveryConstraint.rows.map((row) => row.definition).join('\n'), /dead-lettered/);
+    assert.match(recoveryConstraint.rows.map((row) => row.definition).join('\n'), /requeued/);
 
     const notificationPagination = await pool.query(
       `SELECT is_nullable, data_type

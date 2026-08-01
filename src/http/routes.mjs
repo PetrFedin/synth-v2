@@ -1,5 +1,6 @@
 import { invariant } from '../core/errors.mjs';
 import { assertBodyContract, assertQueryContract, bodyContract } from './request-contract.mjs';
+import { decodePathParameter } from './transport-contract.mjs';
 
 const EMPTY_BODY = bodyContract();
 const CAMPAIGN_BODY = bodyContract(['brandId', 'name', 'season', 'startsAt', 'endsAt']);
@@ -27,7 +28,7 @@ export function createWholesaleRoutes({ platform, catalog, partners, collaborati
     mutate('POST', /^\/v2\/collections$/, COLLECTION_BODY, ({ commandId, actorId, body }) => platform.createCollection(commandId, actorId, body)),
     mutate('POST', /^\/v2\/collections\/([^/]+)\/publish$/, EMPTY_BODY, ({ commandId, actorId, params }) => platform.publishCollection(commandId, actorId, params[0])),
     mutate('POST', /^\/v2\/catalog\/skus$/, CATALOG_SKU_BODY, ({ commandId, actorId, body }) => catalogService.createSku(commandId, actorId, body)),
-    mutate('POST', /^\/v2\/catalog\/skus\/([^/]+)\/publish$/, EMPTY_BODY, ({ commandId, actorId, params }) => catalogService.publishSku(commandId, actorId, decodeURIComponent(params[0]))),
+    mutate('POST', /^\/v2\/catalog\/skus\/([^/]+)\/publish$/, EMPTY_BODY, ({ commandId, actorId, params }) => catalogService.publishSku(commandId, actorId, params[0])),
     mutate('POST', /^\/v2\/showrooms$/, SHOWROOM_BODY, ({ commandId, actorId, body }) => collaboration.createShowroom(commandId, actorId, body)),
     mutate('POST', /^\/v2\/showrooms\/([^/]+)\/open$/, EMPTY_BODY, ({ commandId, actorId, params }) => collaboration.openShowroom(commandId, actorId, params[0])),
     mutate('POST', /^\/v2\/relationships$/, RELATIONSHIP_BODY, ({ commandId, actorId, body }) => partners.requestRelationship(commandId, actorId, body)),
@@ -49,7 +50,7 @@ export function createWholesaleRoutes({ platform, catalog, partners, collaborati
     mutate('POST', /^\/v2\/cycles\/([^/]+)\/confirm$/, EMPTY_BODY, ({ commandId, actorId, params }) => platform.confirmAndOpenDeal(commandId, actorId, params[0])),
     mutate('POST', /^\/v2\/selections$/, SELECTION_BODY, ({ commandId, actorId, body }) => collaboration.createSelection(commandId, actorId, body)),
     mutate('PUT', /^\/v2\/selections\/([^/]+)\/lines\/([^/]+)$/, SELECTION_LINE_BODY, ({ commandId, actorId, params, body }) => {
-      const sku = decodeURIComponent(params[1]);
+      const sku = params[1];
       sameId(body.selectionId, params[0], 'selectionId');
       sameId(body.sku, sku, 'sku');
       return collaboration.upsertSelectionLine(commandId, actorId, params[0], { ...body, sku });
@@ -75,7 +76,7 @@ export function matchWholesaleRoute(routes, method, pathname) {
   for (const route of routes) {
     if (route.method !== method) continue;
     const match = pathname.match(route.pattern);
-    if (match) return { ...route, params: match.slice(1) };
+    if (match) return { ...route, params: match.slice(1).map(decodePathParameter) };
   }
   return null;
 }

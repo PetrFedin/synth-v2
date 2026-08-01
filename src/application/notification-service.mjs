@@ -116,12 +116,18 @@ export function createNotificationService({
     if (typeof projectionStore.readUnprojectedOutbox === 'function') {
       return projectionStore.readUnprojectedOutbox(limit);
     }
-    const [records, projection] = await Promise.all([
+    const [pending, published, projection] = await Promise.all([
       sourceStore.readOutbox('pending'),
+      sourceStore.readOutbox('published'),
       projectionStore.snapshot(),
     ]);
     const projected = new Set(projection.projections.map((item) => item.eventId));
-    return records.filter((record) => !projected.has(record.event.id)).slice(0, limit);
+    const uniqueRecords = new Map();
+    for (const record of [...pending, ...published]) uniqueRecords.set(record.event.id, record);
+    return [...uniqueRecords.values()]
+      .filter((record) => !projected.has(record.event.id))
+      .sort(compareOutboxRecords)
+      .slice(0, limit);
   }
 
   async function projectRecord(record, source) {
@@ -191,6 +197,12 @@ function notificationCandidates(source, event) {
     }));
   }
   return [];
+}
+
+function compareOutboxRecords(left, right) {
+  const leftKey = `${left.event.occurredAt ?? ''}\u0000${left.event.id ?? ''}`;
+  const rightKey = `${right.event.occurredAt ?? ''}\u0000${right.event.id ?? ''}`;
+  return leftKey.localeCompare(rightKey);
 }
 
 function requireEntity(entity, code, details) {

@@ -75,5 +75,5 @@ async function visibleCatalogSkus(queryable, brandIds, collectionIds) {
 }
 function unique(values) { return [...new Set(values.filter(Boolean))]; }
 function emptyWorkspace() {
-  return { memberships: [], organisations: [], relationships: [], invitations: [], campaigns: [], collections: [], catalogSkus: [], showrooms: [], cycles: [], selections: [], orders: [], deals, calendar: [] };
+  return { memberships: [], organisations: [], relationships: [], invitations: [], campaigns: [], collections: [], catalogSkus: [], showrooms: [], cycles: [], selections: [], orders: [], deals: [], calendar: [] };
 }

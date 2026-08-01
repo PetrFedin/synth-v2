@@ -10,6 +10,7 @@ import { createHealthRegistry } from './runtime/health-registry.mjs';
 import { configureHttpServer, createShutdownCoordinator, listen, readIntegerSetting } from './runtime/server-lifecycle.mjs';
 import { createStandaloneHandler } from './web/static-handler.mjs';
 
+const DAY_MS = 24 * 60 * 60 * 1000;
 const databaseUrl = process.env.SYNTHA_V2_DATABASE_URL ?? process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error('SYNTHA_V2_DATABASE_URL is required');
 
@@ -26,11 +27,17 @@ const settings = Object.freeze({
   maxLoginFailures: integerSetting('SYNTHA_AUTH_MAX_FAILURES', 5, 2, 100),
   loginWindowMs: integerSetting('SYNTHA_AUTH_WINDOW_MS', 900_000, 60_000, 86_400_000),
   loginBlockMs: integerSetting('SYNTHA_AUTH_BLOCK_MS', 900_000, 60_000, 86_400_000),
-  revokedSessionRetentionMs: integerSetting('SYNTHA_REVOKED_SESSION_RETENTION_MS', 604_800_000, 60_000, 31_536_000_000),
+  revokedSessionRetentionMs: integerSetting('SYNTHA_REVOKED_SESSION_RETENTION_MS', 7 * DAY_MS, DAY_MS, 31_536_000_000),
   notificationProjectionIntervalMs,
   notificationProjectionBatchSize: integerSetting('SYNTHA_NOTIFICATION_PROJECTION_BATCH_SIZE', 100, 1, 1_000),
   notificationProjectionStaleMs: integerSetting('SYNTHA_NOTIFICATION_PROJECTION_STALE_MS', notificationProjectionIntervalMs * 5, notificationProjectionIntervalMs, 300_000),
   notificationProjectionFailureThreshold: integerSetting('SYNTHA_NOTIFICATION_PROJECTION_FAILURE_THRESHOLD', 3, 1, 100),
+  maintenanceIntervalMs: integerSetting('SYNTHA_MAINTENANCE_INTERVAL_MS', 6 * 60 * 60 * 1000, 60_000, 31_536_000_000),
+  maintenanceRetryDelayMs: integerSetting('SYNTHA_MAINTENANCE_RETRY_DELAY_MS', 5 * 60 * 1000, 1_000, 3_600_000),
+  commandRetentionMs: integerSetting('SYNTHA_COMMAND_RETENTION_MS', 30 * DAY_MS, DAY_MS, 31_536_000_000),
+  authAuditRetentionMs: integerSetting('SYNTHA_AUTH_AUDIT_RETENTION_MS', 90 * DAY_MS, DAY_MS, 31_536_000_000),
+  throttleRetentionMs: integerSetting('SYNTHA_AUTH_THROTTLE_RETENTION_MS', 7 * DAY_MS, DAY_MS, 31_536_000_000),
+  outboxRetentionMs: integerSetting('SYNTHA_OUTBOX_RETENTION_MS', 30 * DAY_MS, DAY_MS, 31_536_000_000),
   requestTimeoutMs: integerSetting('SYNTHA_HTTP_REQUEST_TIMEOUT_MS', 30_000, 1_000, 300_000),
   headersTimeoutMs: integerSetting('SYNTHA_HTTP_HEADERS_TIMEOUT_MS', 15_000, 1_000, 300_000),
   keepAliveTimeoutMs: integerSetting('SYNTHA_HTTP_KEEP_ALIVE_TIMEOUT_MS', 5_000, 100, 120_000),
@@ -65,6 +72,12 @@ try {
     loginWindowMs: settings.loginWindowMs,
     loginBlockMs: settings.loginBlockMs,
     revokedSessionRetentionMs: settings.revokedSessionRetentionMs,
+    maintenanceIntervalMs: settings.maintenanceIntervalMs,
+    maintenanceRetryDelayMs: settings.maintenanceRetryDelayMs,
+    commandRetentionMs: settings.commandRetentionMs,
+    authAuditRetentionMs: settings.authAuditRetentionMs,
+    throttleRetentionMs: settings.throttleRetentionMs,
+    outboxRetentionMs: settings.outboxRetentionMs,
     operationalReadiness: () => healthRegistry.check(),
   });
   const handler = createStandaloneHandler({ apiHandler: runtime.handler });
@@ -76,6 +89,13 @@ try {
       const results = await runtime.notifications.projectPending({ limit: settings.notificationProjectionBatchSize });
       const terminalFailures = results.filter((result) => result.status === 'failed' && !result.retryable);
       if (terminalFailures.length) console.warn(`Notification projection checkpointed ${terminalFailures.length} terminal event failure(s)`);
+
+      const maintenance = await runtime.maintenance.runIfDue();
+      if (maintenance.status === 'completed') {
+        const deleted = Object.values(maintenance.counts).reduce((sum, value) => sum + Number(value || 0), 0);
+        if (deleted > 0) console.log(`Syntha V2 maintenance removed ${deleted} expired record(s)`);
+      }
+
       const retryableFailures = results.filter((result) => result.status === 'failed' && result.retryable);
       if (retryableFailures.length) {
         const error = new Error(`Notification projection failed for ${retryableFailures.length} retryable event(s)`);

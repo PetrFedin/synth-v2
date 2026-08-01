@@ -1,4 +1,5 @@
 import { invariant } from '../core/errors.mjs';
+import { getRegisteredCommand, insertRegisteredCommand } from './postgres-command-registry.mjs';
 import { withPostgresTransaction } from './postgres-transaction.mjs';
 
 export function createPostgresWholesaleStore({ pool }) {
@@ -189,12 +190,8 @@ function transactionView(client) {
       'CALENDAR_MILESTONE_ALREADY_EXISTS',
     ),
 
-    getCommand: async (id) => {
-      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`wholesale-command:${id}`]);
-      const result = await client.query('SELECT id, fingerprint, actor_id, result, completed_at FROM commands WHERE id = $1', [id]);
-      return commandFromRow(result.rows[0]);
-    },
-    insertCommand: (value) => insertCommand(client, value),
+    getCommand: (id) => getRegisteredCommand(client, 'wholesale', id),
+    insertCommand: (value) => insertRegisteredCommand(client, 'wholesale', value),
     appendOutbox: (event) => insert(
       client,
       'outbox_events',
@@ -276,18 +273,6 @@ function commandFromRow(row) {
     result: row.result,
     completedAt: row.completed_at.toISOString?.() ?? row.completed_at,
   });
-}
-
-async function insertCommand(client, value) {
-  try {
-    await client.query(
-      'INSERT INTO commands (id, fingerprint, actor_id, result, completed_at) VALUES ($1, $2, $3, $4::jsonb, $5)',
-      [value.id, value.fingerprint, value.actorId, JSON.stringify(value.result), value.completedAt],
-    );
-  } catch (error) {
-    if (error?.code === '23505') invariant(false, 'COMMAND_ALREADY_EXISTS', 'Command already exists', { commandId: value.id });
-    throw error;
-  }
 }
 
 async function readOutbox(queryable, status) {

@@ -301,7 +301,7 @@ function deadLetterFromRow(row) {
 
 function deadLetterAuditFromRow(row) {
   return Object.freeze({
-    id: Number(row.id),
+    id: String(row.id),
     eventId: row.event_id,
     action: row.action,
     attemptCount: Number(row.attempt_count),

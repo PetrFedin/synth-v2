@@ -65,6 +65,33 @@ test('signature verification rejects stale replay attempts', () => {
   });
 });
 
+test('signature verification rejects malformed, oversized and millisecond inputs before comparison', async () => {
+  let request;
+  const publisher = createHttpOutboxPublisher({
+    endpoint: 'https://events.example.test/syntha',
+    secret,
+    clock: () => now,
+    fetchImpl: async (_url, init) => {
+      request = init;
+      return new Response(null, { status: 204 });
+    },
+  });
+  await publisher.publish(event);
+  const valid = {
+    secret,
+    timestamp: request.headers['x-syntha-timestamp'],
+    body: request.body,
+    signature: request.headers['x-syntha-signature'],
+    now,
+  };
+
+  assert.equal(verifyOutboxSignature({ ...valid, timestamp: String(now) }), false);
+  assert.equal(verifyOutboxSignature({ ...valid, signature: 'v1=not-hex' }), false);
+  assert.equal(verifyOutboxSignature({ ...valid, signature: `v1=${'a'.repeat(65)}` }), false);
+  assert.equal(verifyOutboxSignature({ ...valid, signature: `V1=${'a'.repeat(64)}` }), false);
+  assert.equal(verifyOutboxSignature({ ...valid, toleranceSeconds: -1 }), false);
+});
+
 test('HTTP status determines retryability without exposing response content', async () => {
   for (const [status, retryable] of [[400, false], [429, true], [503, true]]) {
     const publisher = createHttpOutboxPublisher({

@@ -1,5 +1,7 @@
 import { invariant } from '../core/errors.mjs';
 
+const MAX_BATCH_LIMIT = 1000;
+
 export function createPostgresNotificationProjectionStore({ pool }) {
   invariant(pool && typeof pool.connect === 'function' && typeof pool.query === 'function', 'POSTGRES_POOL_REQUIRED', 'PostgreSQL pool is required');
 
@@ -20,6 +22,31 @@ export function createPostgresNotificationProjectionStore({ pool }) {
 
   return Object.freeze({
     transaction,
+    async readUnprojectedOutbox(limit) {
+      invariant(
+        Number.isSafeInteger(limit) && limit >= 1 && limit <= MAX_BATCH_LIMIT,
+        'NOTIFICATION_BATCH_LIMIT_INVALID',
+        `Notification batch limit must be an integer from 1 to ${MAX_BATCH_LIMIT}`,
+      );
+      const result = await pool.query(
+        `SELECT source.event, source.status, source.published_at
+           FROM outbox_events AS source
+          WHERE source.status = 'pending'
+            AND NOT EXISTS (
+              SELECT 1
+                FROM notification_projections AS projected
+               WHERE projected.event_id = source.id
+            )
+          ORDER BY source.event->>'occurredAt', source.id
+          LIMIT $1`,
+        [limit],
+      );
+      return result.rows.map((row) => Object.freeze({
+        event: row.event,
+        status: row.status,
+        publishedAt: row.published_at?.toISOString?.() ?? row.published_at ?? null,
+      }));
+    },
     async snapshot() {
       const [notifications, projections, commands] = await Promise.all([
         payloadRows(pool, 'notifications'),
@@ -71,7 +98,7 @@ function transactionView(client) {
       });
     },
     async hasProjection(eventId) {
-      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [eventId]);
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [eventId]);
       const result = await client.query('SELECT 1 FROM notification_projections WHERE event_id = $1', [eventId]);
       return result.rowCount > 0;
     },

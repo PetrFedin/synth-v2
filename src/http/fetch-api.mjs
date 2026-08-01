@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { invariant } from '../core/errors.mjs';
 import { normalizeHttpError } from './api.mjs';
 import { wholesaleV2OpenApi } from './openapi.mjs';
+import { assertBodyContract, bodyContract } from './request-contract.mjs';
 import { createWholesaleRoutes, matchWholesaleRoute } from './routes.mjs';
 import {
   apiResponseHeaders,
@@ -11,6 +12,8 @@ import {
   resolveRequestId,
   validateContentLength,
 } from './transport-contract.mjs';
+
+const LOGIN_BODY = bodyContract(['email', 'password']);
 
 export function createWholesaleFetchHandler({ authenticate, auth, readiness, maxBodyBytes = 256 * 1024, nextRequestId = randomUUID, ...services } = {}) {
   invariant(typeof authenticate === 'function', 'HTTP_AUTHENTICATOR_REQUIRED', 'HTTP authenticator is required');
@@ -29,7 +32,8 @@ export function createWholesaleFetchHandler({ authenticate, auth, readiness, max
       if (request.method === 'GET' && url.pathname === '/openapi.json') return json(200, wholesaleV2OpenApi, requestId);
       if (request.method === 'POST' && url.pathname === '/v2/auth/login') {
         invariant(auth?.login, 'AUTH_SERVICE_REQUIRED', 'Authentication service is required');
-        const data = await auth.login(await readJson(request, maxBodyBytes));
+        const body = assertBodyContract(await readJson(request, maxBodyBytes), LOGIN_BODY);
+        const data = await auth.login(body);
         return json(200, { data, requestId }, requestId);
       }
       invariant(url.pathname.startsWith('/v2/'), 'HTTP_ROUTE_NOT_FOUND', 'Route not found', { method: request.method, path: url.pathname });

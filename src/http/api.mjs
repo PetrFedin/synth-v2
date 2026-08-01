@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { DomainError, invariant } from '../core/errors.mjs';
 import { wholesaleV2OpenApi } from './openapi.mjs';
-import { assertBodyContract, bodyContract } from './request-contract.mjs';
+import { assertBodyContract, assertQueryContract, bodyContract } from './request-contract.mjs';
 import { createWholesaleRoutes, matchWholesaleRoute } from './routes.mjs';
 import {
   apiResponseHeaders,
@@ -13,6 +13,7 @@ import {
   validateContentLength,
 } from './transport-contract.mjs';
 
+const EMPTY_BODY = bodyContract();
 const LOGIN_BODY = bodyContract(['email', 'password']);
 
 export function createWholesaleHttpHandler({ authenticate, auth, readiness, maxBodyBytes = 256 * 1024, nextRequestId = randomUUID, ...services } = {}) {
@@ -25,13 +26,21 @@ export function createWholesaleHttpHandler({ authenticate, auth, readiness, maxB
     applyApiHeaders(response, requestId);
     try {
       const url = new URL(request.url ?? '/', 'http://syntha.local');
-      if (request.method === 'GET' && url.pathname === '/health') return send(response, 200, { status: 'ok', service: 'syntha-wholesale-v2', requestId });
+      if (request.method === 'GET' && url.pathname === '/health') {
+        assertEmptyQuery(url);
+        return send(response, 200, { status: 'ok', service: 'syntha-wholesale-v2', requestId });
+      }
       if (request.method === 'GET' && url.pathname === '/ready') {
+        assertEmptyQuery(url);
         const result = readiness?.check ? await readiness.check() : readinessUnavailable();
         return send(response, result.status === 'ready' ? 200 : 503, { ...result, requestId });
       }
-      if (request.method === 'GET' && url.pathname === '/openapi.json') return send(response, 200, wholesaleV2OpenApi);
+      if (request.method === 'GET' && url.pathname === '/openapi.json') {
+        assertEmptyQuery(url);
+        return send(response, 200, wholesaleV2OpenApi);
+      }
       if (request.method === 'POST' && url.pathname === '/v2/auth/login') {
+        assertEmptyQuery(url);
         invariant(auth?.login, 'AUTH_SERVICE_REQUIRED', 'Authentication service is required');
         const body = assertBodyContract(await readJson(request, maxBodyBytes), LOGIN_BODY);
         const data = await auth.login(body);
@@ -39,9 +48,14 @@ export function createWholesaleHttpHandler({ authenticate, auth, readiness, maxB
       }
       invariant(url.pathname.startsWith('/v2/'), 'HTTP_ROUTE_NOT_FOUND', 'Route not found', routeDetails(request, url));
       const identity = await authenticateRequest(request, authenticate);
-      if (request.method === 'GET' && url.pathname === '/v2/auth/me') return send(response, 200, { data: publicIdentity(identity.actor), requestId });
+      if (request.method === 'GET' && url.pathname === '/v2/auth/me') {
+        assertEmptyQuery(url);
+        return send(response, 200, { data: publicIdentity(identity.actor), requestId });
+      }
       if (request.method === 'POST' && url.pathname === '/v2/auth/logout') {
+        assertEmptyQuery(url);
         invariant(auth?.logout, 'AUTH_SERVICE_REQUIRED', 'Authentication service is required');
+        assertBodyContract(await readJson(request, maxBodyBytes), EMPTY_BODY);
         const revoked = await auth.logout(identity.token);
         return send(response, 200, { data: { revoked }, requestId });
       }
@@ -121,6 +135,7 @@ export function normalizeHttpError(error) {
   return { status, code, message: error.message, details: error.details ?? {}, retryAfterSeconds };
 }
 
+function assertEmptyQuery(url) { return assertQueryContract(queryParameters(url), []); }
 function applyApiHeaders(response, requestId) {
   for (const [name, value] of Object.entries(apiResponseHeaders(requestId))) response.setHeader(name, value);
 }

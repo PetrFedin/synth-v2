@@ -1,6 +1,8 @@
 import { invariant } from '../../core/errors.mjs';
+import { calculateMoneyTotal, normalizeMoney } from '../../core/money.mjs';
 
 const INCOTERMS = Object.freeze(['EXW', 'FCA', 'FOB', 'CIF', 'DAP', 'DDP']);
+const CANCELLATION_REASON_MAX_LENGTH = 1_000;
 
 export function createOrderDraft({ id, selection, currency, terms, createdAt }) {
   invariant(id && selection?.id, 'ORDER_DRAFT_IDENTITY_REQUIRED', 'Order id and selection are required');
@@ -10,10 +12,21 @@ export function createOrderDraft({ id, selection, currency, terms, createdAt }) 
   const lines = Object.freeze(selection.lines.map((line) => Object.freeze({
     sku: line.sku,
     quantity: line.quantity,
-    unitPrice: line.unitPrice,
+    unitPrice: normalizeMoney(line.unitPrice, {
+      invalidCode: 'ORDER_LINE_PRICE_INVALID',
+      scaleCode: 'ORDER_LINE_PRICE_SCALE_INVALID',
+      overflowCode: 'ORDER_LINE_PRICE_TOO_LARGE',
+      label: 'Order line unit price',
+    }),
   })));
-  const totalAmount = lines.reduce((sum, line) => sum + line.quantity * line.unitPrice, 0);
-  invariant(totalAmount > 0, 'ORDER_TOTAL_INVALID', 'Order total must be positive');
+  const totalAmount = calculateMoneyTotal(lines, {
+    priceInvalidCode: 'ORDER_LINE_PRICE_INVALID',
+    priceScaleCode: 'ORDER_LINE_PRICE_SCALE_INVALID',
+    priceOverflowCode: 'ORDER_LINE_PRICE_TOO_LARGE',
+    quantityCode: 'ORDER_LINE_QUANTITY_INVALID',
+    totalCode: 'ORDER_TOTAL_INVALID',
+    totalOverflowCode: 'ORDER_TOTAL_TOO_LARGE',
+  });
   return Object.freeze({
     id,
     selectionId: selection.id,
@@ -57,11 +70,12 @@ export function attachReadyOrder(order, updatedAt) {
 
 export function cancelAttachedOrder(order, reason, cancelledAt) {
   invariant(order.status === 'attached', 'ORDER_NOT_ATTACHED', 'Only an attached order can be cancelled');
-  invariant(typeof reason === 'string' && reason.trim().length >= 3, 'ORDER_CANCELLATION_REASON_REQUIRED', 'Cancellation reason must contain at least three characters');
+  const normalizedReason = typeof reason === 'string' ? reason.trim() : '';
+  invariant(normalizedReason.length >= 3 && normalizedReason.length <= CANCELLATION_REASON_MAX_LENGTH, 'ORDER_CANCELLATION_REASON_REQUIRED', `Cancellation reason must contain 3 to ${CANCELLATION_REASON_MAX_LENGTH} characters`);
   return Object.freeze({
     ...order,
     status: 'cancelled',
-    cancellationReason: reason.trim(),
+    cancellationReason: normalizedReason,
     cancelledAt,
     version: order.version + 1,
     updatedAt: cancelledAt,
@@ -72,12 +86,14 @@ function validateTerms(terms) {
   invariant(terms && INCOTERMS.includes(terms.incoterm), 'ORDER_INCOTERM_INVALID', 'Unsupported Incoterm', { incoterm: terms?.incoterm });
   invariant(Number.isInteger(terms.paymentDays) && terms.paymentDays >= 0 && terms.paymentDays <= 365, 'ORDER_PAYMENT_DAYS_INVALID', 'Payment days must be an integer from 0 to 365');
   invariant(Number.isFinite(terms.prepaymentPercent) && terms.prepaymentPercent >= 0 && terms.prepaymentPercent <= 100, 'ORDER_PREPAYMENT_INVALID', 'Prepayment percent must be from 0 to 100');
-  invariant(Date.parse(terms.deliveryStart) <= Date.parse(terms.deliveryEnd), 'ORDER_DELIVERY_WINDOW_INVALID', 'Delivery start must not be after delivery end');
+  const deliveryStart = Date.parse(terms.deliveryStart);
+  const deliveryEnd = Date.parse(terms.deliveryEnd);
+  invariant(Number.isFinite(deliveryStart) && Number.isFinite(deliveryEnd) && deliveryStart <= deliveryEnd, 'ORDER_DELIVERY_WINDOW_INVALID', 'Delivery start and end must be valid and ordered');
   return Object.freeze({
     incoterm: terms.incoterm,
     paymentDays: terms.paymentDays,
     prepaymentPercent: terms.prepaymentPercent,
-    deliveryStart: terms.deliveryStart,
-    deliveryEnd: terms.deliveryEnd,
+    deliveryStart: new Date(deliveryStart).toISOString(),
+    deliveryEnd: new Date(deliveryEnd).toISOString(),
   });
 }

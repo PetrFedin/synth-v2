@@ -10,6 +10,9 @@ const DEFAULT_BATCH_LIMIT = 100;
 const MAX_BATCH_LIMIT = 1000;
 const DEFAULT_LIST_LIMIT = 100;
 const MAX_LIST_LIMIT = 500;
+const DEFAULT_PROJECTION_LEASE_MS = 30_000;
+const DEFAULT_PROJECTION_RETRY_DELAY_MS = 5_000;
+const DEFAULT_MAX_PROJECTION_ATTEMPTS = 5;
 
 export function createNotificationService({
   sourceStore,
@@ -17,9 +20,17 @@ export function createNotificationService({
   reader,
   clock = () => new Date().toISOString(),
   nextId = defaultIdGenerator(),
+  projectionWorkerId = defaultWorkerId(),
+  projectionLeaseMs = DEFAULT_PROJECTION_LEASE_MS,
+  projectionRetryDelayMs = DEFAULT_PROJECTION_RETRY_DELAY_MS,
+  maxProjectionAttempts = DEFAULT_MAX_PROJECTION_ATTEMPTS,
 } = {}) {
   invariant(sourceStore && typeof sourceStore.readOutbox === 'function' && typeof sourceStore.snapshot === 'function', 'NOTIFICATION_SOURCE_STORE_INVALID', 'Notification source store must expose outbox and snapshot');
   invariant(projectionStore && typeof projectionStore.transaction === 'function' && typeof projectionStore.snapshot === 'function', 'NOTIFICATION_PROJECTION_STORE_INVALID', 'Notification projection store is required');
+  invariant(typeof projectionWorkerId === 'string' && projectionWorkerId.length > 0, 'NOTIFICATION_WORKER_ID_INVALID', 'Projection worker id is required');
+  invariant(Number.isSafeInteger(projectionLeaseMs) && projectionLeaseMs >= 1_000, 'NOTIFICATION_LEASE_MS_INVALID', 'Projection lease must be at least one second');
+  invariant(Number.isSafeInteger(projectionRetryDelayMs) && projectionRetryDelayMs >= 100, 'NOTIFICATION_RETRY_DELAY_INVALID', 'Projection retry delay must be at least 100ms');
+  invariant(Number.isSafeInteger(maxProjectionAttempts) && maxProjectionAttempts >= 1, 'NOTIFICATION_MAX_ATTEMPTS_INVALID', 'Projection max attempts must be positive');
 
   return Object.freeze({
     async projectPending({ limit = DEFAULT_BATCH_LIMIT } = {}) {
@@ -38,26 +49,7 @@ export function createNotificationService({
         try {
           results.push(await projectRecord(record, source));
         } catch (error) {
-          const errorCode = typeof error?.code === 'string' ? error.code : 'INTERNAL_ERROR';
-          let checkpointed = false;
-          if (error instanceof DomainError && typeof projectionStore.recordProjectionFailure === 'function') {
-            try {
-              checkpointed = await projectionStore.recordProjectionFailure({
-                event: record.event,
-                errorCode,
-                failedAt: clock(),
-              });
-            } catch {
-              checkpointed = false;
-            }
-          }
-          results.push(Object.freeze({
-            eventId: record?.event?.id ?? null,
-            status: 'failed',
-            errorCode,
-            checkpointed,
-            retryable: !checkpointed,
-          }));
+          results.push(await projectionFailure(record, error));
         }
       }
       return Object.freeze(results);
@@ -119,6 +111,15 @@ export function createNotificationService({
   });
 
   async function pendingRecords(limit) {
+    if (typeof projectionStore.claimUnprojectedOutbox === 'function') {
+      const claimedAt = validClockTimestamp(clock());
+      return projectionStore.claimUnprojectedOutbox({
+        workerId: projectionWorkerId,
+        claimedAt,
+        leaseExpiresAt: addMilliseconds(claimedAt, projectionLeaseMs),
+        limit,
+      });
+    }
     if (typeof projectionStore.readUnprojectedOutbox === 'function') {
       return projectionStore.readUnprojectedOutbox(limit);
     }
@@ -136,10 +137,55 @@ export function createNotificationService({
       .slice(0, limit);
   }
 
+  async function projectionFailure(record, error) {
+    const errorCode = typeof error?.code === 'string' ? error.code : 'INTERNAL_ERROR';
+    const attemptCount = Number.isSafeInteger(record?.attemptCount) && record.attemptCount >= 1 ? record.attemptCount : 1;
+    const terminal = error instanceof DomainError || attemptCount >= maxProjectionAttempts;
+    let checkpointed = false;
+    if (terminal && typeof projectionStore.recordProjectionFailure === 'function') {
+      try {
+        checkpointed = await projectionStore.recordProjectionFailure({
+          event: record.event,
+          errorCode,
+          attemptCount,
+          failedAt: validClockTimestamp(clock()),
+        });
+      } catch {
+        checkpointed = false;
+      }
+    }
+
+    let rescheduled = false;
+    if (!checkpointed && typeof projectionStore.failProjectionClaim === 'function') {
+      try {
+        const failedAt = validClockTimestamp(clock());
+        rescheduled = await projectionStore.failProjectionClaim({
+          eventId: record.event.id,
+          workerId: projectionWorkerId,
+          errorCode,
+          retryAt: addMilliseconds(failedAt, projectionRetryDelayMs),
+        });
+      } catch {
+        rescheduled = false;
+      }
+    }
+
+    return Object.freeze({
+      eventId: record?.event?.id ?? null,
+      status: 'failed',
+      errorCode,
+      attemptCount,
+      checkpointed,
+      rescheduled,
+      retryable: !checkpointed,
+    });
+  }
+
   async function projectRecord(record, source) {
     const event = record.event;
     return projectionStore.transaction(async (tx) => {
       if (await tx.hasProjection(event.id)) {
+        await tx.deleteProjectionClaim?.(event.id);
         return Object.freeze({ eventId: event.id, status: 'already-projected', notificationIds: Object.freeze([]) });
       }
       const candidates = notificationCandidates(source, event);
@@ -164,9 +210,11 @@ export function createNotificationService({
         eventId: event.id,
         eventType: event.type,
         status: 'projected',
+        attemptCount: record.attemptCount ?? 1,
         notificationIds: Object.freeze(notificationIds),
         projectedAt: clock(),
       }));
+      await tx.deleteProjectionClaim?.(event.id);
       return Object.freeze({ eventId: event.id, status: 'projected', notificationIds: Object.freeze(notificationIds) });
     });
   }
@@ -218,6 +266,15 @@ function notificationListLimit(value) {
   return parsed;
 }
 
+function validClockTimestamp(value) {
+  invariant(typeof value === 'string' && Number.isFinite(Date.parse(value)), 'NOTIFICATION_CLOCK_INVALID', 'Notification clock returned an invalid timestamp');
+  return value;
+}
+
+function addMilliseconds(timestamp, milliseconds) {
+  return new Date(Date.parse(timestamp) + milliseconds).toISOString();
+}
+
 function compareNotifications(left, right) {
   const unread = Number(right?.status === 'unread') - Number(left?.status === 'unread');
   if (unread) return unread;
@@ -235,6 +292,11 @@ function compareOutboxRecords(left, right) {
 function requireEntity(entity, code, details) {
   invariant(entity, code, 'Entity not found', details);
   return entity;
+}
+
+function defaultWorkerId() {
+  const random = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `notification-worker:${random}`;
 }
 
 function defaultIdGenerator() {

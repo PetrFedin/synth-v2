@@ -1,4 +1,5 @@
 import { DomainError, invariant } from '../core/errors.mjs';
+import { fingerprintsMatch } from '../core/fingerprints.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
 import {
   createNotification,
@@ -95,13 +96,13 @@ export function createNotificationService({
       };
       return projectionStore.transaction(async (tx) => {
         const previous = await tx.getCommand(commandId);
+        if (previous) {
+          invariant(fingerprintsMatch(previous.fingerprint, fingerprint), 'COMMAND_ID_CONFLICT', 'commandId was already used by another mutation', { commandId });
+        }
         const current = requireEntity(await tx.getNotification(notificationId), 'NOTIFICATION_NOT_FOUND', { notificationId });
         const membership = await membershipFor(tx, current.recipientOrganisationId);
         assertCapability(membership, CAPABILITIES.CALENDAR_READ);
-        if (previous) {
-          invariant(previous.fingerprint === fingerprint, 'COMMAND_ID_CONFLICT', 'commandId was already used by another mutation', { commandId });
-          return previous.result;
-        }
+        if (previous) return previous.result;
         const updated = markNotificationRead(current, actorId, clock());
         if (updated !== current) await tx.saveNotification(updated, current.version);
         await tx.insertCommand(Object.freeze({ id: commandId, fingerprint, actorId, result: updated, completedAt: clock() }));

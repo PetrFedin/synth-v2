@@ -197,6 +197,7 @@ function transactionView(client) {
     ),
 
     getCommand: async (id) => {
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`wholesale-command:${id}`]);
       const result = await client.query('SELECT id, fingerprint, actor_id, result, completed_at FROM commands WHERE id = $1', [id]);
       return commandFromRow(result.rows[0]);
     },

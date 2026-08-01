@@ -1,22 +1,23 @@
 import process from 'node:process';
 import pg from 'pg';
 import { createPostgresOutboxPublicationStore } from '../src/infrastructure/postgres-outbox-publication-store.mjs';
+import {
+  outboxRecoveryExitCode,
+  parseOutboxRecoveryArguments,
+  resolveOutboxDatabaseUrl,
+} from '../src/runtime/outbox-recovery-command.mjs';
 
-const databaseUrl = process.env.SYNTHA_V2_DATABASE_URL ?? process.env.DATABASE_URL;
-const [eventId, actorId, ...reasonParts] = process.argv.slice(2);
-const reason = reasonParts.join(' ').trim();
-
-if (!databaseUrl) failUsage('SYNTHA_V2_DATABASE_URL is required');
-if (!eventId || !actorId || !reason) failUsage('Usage: npm run outbox:requeue -- <event-id> <actor-id> <reason>');
-
-const pool = new pg.Pool({
-  connectionString: databaseUrl,
-  max: 1,
-  connectionTimeoutMillis: 5_000,
-  idleTimeoutMillis: 5_000,
-});
-
+let pool;
 try {
+  const databaseUrl = resolveOutboxDatabaseUrl(process.env);
+  const { eventId, actorId, reason } = parseOutboxRecoveryArguments(process.argv.slice(2));
+  pool = new pg.Pool({
+    connectionString: databaseUrl,
+    max: 1,
+    connectionTimeoutMillis: 5_000,
+    idleTimeoutMillis: 5_000,
+  });
+
   const store = createPostgresOutboxPublicationStore({ pool });
   const result = await store.requeueDeadLetter({
     eventId,
@@ -26,7 +27,12 @@ try {
   });
 
   if (!result.requeued) {
-    console.error(`Outbox event ${eventId} is not an active dead-letter record`);
+    console.error(JSON.stringify({
+      requeued: false,
+      code: 'OUTBOX_DEAD_LETTER_NOT_FOUND',
+      eventId,
+      message: 'Event is not an active dead-letter record',
+    }));
     process.exitCode = 2;
   } else {
     console.log(JSON.stringify({
@@ -44,15 +50,16 @@ try {
     code: typeof error?.code === 'string' ? error.code : 'OUTBOX_RECOVERY_FAILED',
     message: error instanceof Error ? error.message : String(error),
   }));
-  process.exitCode = 1;
+  process.exitCode = outboxRecoveryExitCode(error);
 } finally {
-  await pool.end().catch((error) => {
-    console.error(`Failed to close PostgreSQL pool: ${error instanceof Error ? error.message : String(error)}`);
-    process.exitCode = 1;
-  });
-}
-
-function failUsage(message) {
-  console.error(message);
-  process.exit(64);
+  if (pool) {
+    await pool.end().catch((error) => {
+      console.error(JSON.stringify({
+        requeued: false,
+        code: 'OUTBOX_RECOVERY_POOL_CLOSE_FAILED',
+        message: error instanceof Error ? error.message : String(error),
+      }));
+      process.exitCode = 1;
+    });
+  }
 }

@@ -22,6 +22,15 @@ export function createPostgresMaintenanceStore({ pool } = {}) {
         counts.commands = await deleteCount(client, 'DELETE FROM commands WHERE completed_at < $1', [cutoffs.commandsBefore]);
         counts.catalogCommands = await deleteCount(client, 'DELETE FROM catalog_commands WHERE completed_at < $1', [cutoffs.commandsBefore]);
         counts.notificationCommands = await deleteCount(client, 'DELETE FROM notification_commands WHERE completed_at < $1', [cutoffs.commandsBefore]);
+        counts.commandRegistry = await deleteCount(
+          client,
+          `DELETE FROM command_registry AS registry
+            WHERE registry.completed_at < $1
+              AND NOT EXISTS (SELECT 1 FROM commands AS command WHERE command.id = registry.id)
+              AND NOT EXISTS (SELECT 1 FROM catalog_commands AS command WHERE command.id = registry.id)
+              AND NOT EXISTS (SELECT 1 FROM notification_commands AS command WHERE command.id = registry.id)`,
+          [cutoffs.commandsBefore],
+        );
         counts.authAudit = await deleteCount(client, 'DELETE FROM auth_login_audit WHERE occurred_at < $1', [cutoffs.authAuditBefore]);
         counts.loginThrottles = await deleteCount(
           client,

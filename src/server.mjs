@@ -3,6 +3,7 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
+import { createHttpOutboxPublisher } from './infrastructure/http-outbox-publisher.mjs';
 import { migratePostgres, waitForPostgres } from './infrastructure/postgres-migrator.mjs';
 import { createPostgresWholesaleRuntime } from './runtime/postgres-runtime.mjs';
 import { createBackgroundWorker } from './runtime/background-worker.mjs';
@@ -14,7 +15,14 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const databaseUrl = process.env.SYNTHA_V2_DATABASE_URL ?? process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error('SYNTHA_V2_DATABASE_URL is required');
 
+const outboxWebhookUrl = process.env.SYNTHA_OUTBOX_WEBHOOK_URL?.trim() || undefined;
+const outboxWebhookSecret = process.env.SYNTHA_OUTBOX_WEBHOOK_SECRET?.trim() || undefined;
+if (Boolean(outboxWebhookUrl) !== Boolean(outboxWebhookSecret)) {
+  throw new Error('SYNTHA_OUTBOX_WEBHOOK_URL and SYNTHA_OUTBOX_WEBHOOK_SECRET must be configured together');
+}
+
 const notificationProjectionIntervalMs = integerSetting('SYNTHA_NOTIFICATION_PROJECTION_INTERVAL_MS', 1_000, 100, 60_000);
+const outboxPublicationIntervalMs = integerSetting('SYNTHA_OUTBOX_PUBLICATION_INTERVAL_MS', 1_000, 100, 60_000);
 const settings = Object.freeze({
   port: integerSetting('PORT', 4100, 1, 65_535),
   host: process.env.HOST?.trim() || '127.0.0.1',
@@ -36,6 +44,20 @@ const settings = Object.freeze({
   notificationProjectionMaxAttempts: integerSetting('SYNTHA_NOTIFICATION_PROJECTION_MAX_ATTEMPTS', 5, 1, 100),
   notificationProjectionStaleMs: integerSetting('SYNTHA_NOTIFICATION_PROJECTION_STALE_MS', notificationProjectionIntervalMs * 5, notificationProjectionIntervalMs, 300_000),
   notificationProjectionFailureThreshold: integerSetting('SYNTHA_NOTIFICATION_PROJECTION_FAILURE_THRESHOLD', 3, 1, 100),
+  outboxWebhookUrl,
+  outboxWebhookSecret,
+  outboxWebhookTimeoutMs: integerSetting('SYNTHA_OUTBOX_WEBHOOK_TIMEOUT_MS', 10_000, 100, 120_000),
+  outboxAllowInsecureLocalhost: booleanSetting('SYNTHA_OUTBOX_ALLOW_INSECURE_LOCALHOST', false),
+  outboxPublicationIntervalMs,
+  outboxPublicationBatchSize: integerSetting('SYNTHA_OUTBOX_PUBLICATION_BATCH_SIZE', 25, 1, 100),
+  outboxPublicationParallelism: integerSetting('SYNTHA_OUTBOX_PUBLICATION_PARALLELISM', 4, 1, 16),
+  outboxPublicationWorkerId: process.env.SYNTHA_OUTBOX_PUBLICATION_WORKER_ID?.trim() || undefined,
+  outboxPublicationLeaseMs: integerSetting('SYNTHA_OUTBOX_PUBLICATION_LEASE_MS', 300_000, 30_000, 3_600_000),
+  outboxPublicationRetryDelayMs: integerSetting('SYNTHA_OUTBOX_PUBLICATION_RETRY_DELAY_MS', 5_000, 100, 3_600_000),
+  outboxPublicationMaxRetryDelayMs: integerSetting('SYNTHA_OUTBOX_PUBLICATION_MAX_RETRY_DELAY_MS', 300_000, 100, 86_400_000),
+  outboxPublicationMaxAttempts: integerSetting('SYNTHA_OUTBOX_PUBLICATION_MAX_ATTEMPTS', 10, 1, 100),
+  outboxPublicationStaleMs: integerSetting('SYNTHA_OUTBOX_PUBLICATION_STALE_MS', outboxPublicationIntervalMs * 5, outboxPublicationIntervalMs, 3_600_000),
+  outboxPublicationFailureThreshold: integerSetting('SYNTHA_OUTBOX_PUBLICATION_FAILURE_THRESHOLD', 3, 1, 100),
   maintenanceIntervalMs: integerSetting('SYNTHA_MAINTENANCE_INTERVAL_MS', 6 * 60 * 60 * 1000, 60_000, 31_536_000_000),
   maintenanceRetryDelayMs: integerSetting('SYNTHA_MAINTENANCE_RETRY_DELAY_MS', 5 * 60 * 1000, 1_000, 3_600_000),
   commandRetentionMs: integerSetting('SYNTHA_COMMAND_RETENTION_MS', 30 * DAY_MS, DAY_MS, 31_536_000_000),
@@ -49,6 +71,12 @@ const settings = Object.freeze({
   maxHeadersCount: integerSetting('SYNTHA_HTTP_MAX_HEADERS_COUNT', 100, 16, 1_000),
   shutdownGraceMs: integerSetting('SYNTHA_SHUTDOWN_GRACE_MS', 10_000, 1_000, 120_000),
 });
+if (settings.outboxWebhookUrl && settings.outboxPublicationLeaseMs <= settings.outboxWebhookTimeoutMs) {
+  throw new Error('SYNTHA_OUTBOX_PUBLICATION_LEASE_MS must exceed SYNTHA_OUTBOX_WEBHOOK_TIMEOUT_MS');
+}
+if (settings.outboxPublicationMaxRetryDelayMs < settings.outboxPublicationRetryDelayMs) {
+  throw new Error('SYNTHA_OUTBOX_PUBLICATION_MAX_RETRY_DELAY_MS must be at least SYNTHA_OUTBOX_PUBLICATION_RETRY_DELAY_MS');
+}
 
 const pool = new pg.Pool({
   connectionString: databaseUrl,
@@ -61,13 +89,21 @@ pool.on('error', (error) => console.error('Unexpected idle PostgreSQL client err
 const healthRegistry = createHealthRegistry();
 let server;
 let notificationWorker;
+let outboxWorker;
 let unregisterNotificationHealth;
+let unregisterOutboxHealth;
 try {
   const migrationsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'db', 'migrations');
   await waitForPostgres({ pool, attempts: settings.dbReadyAttempts, delayMs: settings.dbReadyDelayMs });
   const migrationResult = await migratePostgres({ pool, migrationsDir });
   console.log(`Syntha V2 migrations: applied=${migrationResult.applied.length}, skipped=${migrationResult.skipped.length}`);
 
+  const outboxPublisher = settings.outboxWebhookUrl ? createHttpOutboxPublisher({
+    endpoint: settings.outboxWebhookUrl,
+    secret: settings.outboxWebhookSecret,
+    timeoutMs: settings.outboxWebhookTimeoutMs,
+    allowInsecureLocalhost: settings.outboxAllowInsecureLocalhost,
+  }) : undefined;
   const runtime = createPostgresWholesaleRuntime({
     pool,
     migrationsDir,
@@ -80,6 +116,12 @@ try {
     notificationProjectionLeaseMs: settings.notificationProjectionLeaseMs,
     notificationProjectionRetryDelayMs: settings.notificationProjectionRetryDelayMs,
     notificationProjectionMaxAttempts: settings.notificationProjectionMaxAttempts,
+    outboxPublisher,
+    outboxPublicationWorkerId: settings.outboxPublicationWorkerId,
+    outboxPublicationLeaseMs: settings.outboxPublicationLeaseMs,
+    outboxPublicationRetryDelayMs: settings.outboxPublicationRetryDelayMs,
+    outboxPublicationMaxRetryDelayMs: settings.outboxPublicationMaxRetryDelayMs,
+    outboxPublicationMaxAttempts: settings.outboxPublicationMaxAttempts,
     maintenanceIntervalMs: settings.maintenanceIntervalMs,
     maintenanceRetryDelayMs: settings.maintenanceRetryDelayMs,
     commandRetentionMs: settings.commandRetentionMs,
@@ -118,12 +160,41 @@ try {
     maxConsecutiveFailures: settings.notificationProjectionFailureThreshold,
   }));
 
+  if (runtime.outboxPublication) {
+    outboxWorker = createBackgroundWorker({
+      name: 'outbox-publication',
+      intervalMs: settings.outboxPublicationIntervalMs,
+      task: async () => {
+        const results = await runtime.outboxPublication.publishPending({
+          limit: settings.outboxPublicationBatchSize,
+          parallelism: settings.outboxPublicationParallelism,
+        });
+        const deadLetters = results.filter((result) => result.status === 'dead-letter');
+        if (deadLetters.length) console.warn(`Outbox publication dead-lettered ${deadLetters.length} event(s)`);
+        const retryableFailures = results.filter((result) => result.retryable);
+        if (retryableFailures.length) {
+          const error = new Error(`Outbox publication requires retry for ${retryableFailures.length} event(s)`);
+          error.code = 'OUTBOX_PUBLICATION_RETRYABLE_FAILURE';
+          error.failures = retryableFailures;
+          throw error;
+        }
+      },
+    });
+    unregisterOutboxHealth = healthRegistry.register('outbox-publication', () => outboxWorker.health({
+      maxStalenessMs: settings.outboxPublicationStaleMs,
+      maxConsecutiveFailures: settings.outboxPublicationFailureThreshold,
+    }));
+  }
+
   await listen(server, { port: settings.port, host: settings.host });
   notificationWorker.start();
+  outboxWorker?.start();
   console.log(`Syntha V2 listening on http://${settings.host}:${settings.port}`);
 } catch (error) {
   console.error('Syntha V2 failed to start', error);
+  unregisterOutboxHealth?.();
   unregisterNotificationHealth?.();
+  await outboxWorker?.stop().catch((workerError) => console.error('Failed to stop outbox worker after startup error', workerError));
   await notificationWorker?.stop().catch((workerError) => console.error('Failed to stop notification worker after startup error', workerError));
   server?.closeAllConnections?.();
   server = undefined;
@@ -132,11 +203,12 @@ try {
 }
 
 if (server) {
+  const stoppers = [notificationWorker, outboxWorker].filter(Boolean).map((worker) => () => worker.stop());
   const shutdown = createShutdownCoordinator({
     server,
     pool,
     graceMs: settings.shutdownGraceMs,
-    stoppers: notificationWorker ? [() => notificationWorker.stop()] : [],
+    stoppers,
   });
   const beginShutdown = (reason, error) => {
     if (error) console.error(`Fatal ${reason}`, error);
@@ -157,4 +229,13 @@ if (server) {
 
 function integerSetting(name, defaultValue, min, max) {
   return readIntegerSetting(process.env[name], { name, defaultValue, min, max });
+}
+
+function booleanSetting(name, defaultValue) {
+  const raw = process.env[name];
+  if (raw === undefined || raw === '') return defaultValue;
+  const normalized = raw.trim().toLowerCase();
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
+  if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+  throw new Error(`${name} must be a boolean value`);
 }

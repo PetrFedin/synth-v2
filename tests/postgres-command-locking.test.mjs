@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPostgresCatalogStore } from '../src/infrastructure/postgres-catalog-store.mjs';
+import { createPostgresNotificationProjectionStore } from '../src/infrastructure/postgres-notification-projection-store.mjs';
 import { createPostgresWholesaleStore } from '../src/infrastructure/postgres-store.mjs';
 
 function fixture(commandTable, result = undefined) {
@@ -51,6 +52,14 @@ test('catalog command lookup uses an independent lock namespace', async () => {
   assert.equal(result, undefined);
   assert.deepEqual(fixtureValue.queries[1].params, ['catalog-command:command-1']);
   assert.match(fixtureValue.queries[2].sql, /FROM catalog_commands WHERE id = \$1/);
+});
+
+test('notification command lookup uses an independent lock namespace', async () => {
+  const fixtureValue = fixture('notification_commands');
+  const result = await readCommand(createPostgresNotificationProjectionStore({ pool: fixtureValue.pool }), 'command-1');
+  assert.equal(result, undefined);
+  assert.deepEqual(fixtureValue.queries[1].params, ['notification-command:command-1']);
+  assert.match(fixtureValue.queries[2].sql, /FROM notification_commands WHERE id = \$1/);
 });
 
 test('command locks remain inside the transaction and rollback on later failure', async () => {

@@ -18,6 +18,17 @@ export function createPostgresCatalogStore({ pool } = {}) {
 
 function view(client) {
   return Object.freeze({
+    async getCollection(id) {
+      const result = await client.query('SELECT payload FROM collections WHERE id = $1 FOR SHARE', [id]);
+      return result.rows[0]?.payload;
+    },
+    async getMembership(organisationId, userId) {
+      const result = await client.query(
+        'SELECT payload FROM memberships WHERE organisation_id = $1 AND user_id = $2 FOR SHARE',
+        [organisationId, userId],
+      );
+      return result.rows[0]?.payload;
+    },
     async getSku(sku) {
       const result = await client.query('SELECT payload FROM catalog_skus WHERE sku = $1 FOR UPDATE', [sku]);
       return result.rows[0]?.payload;

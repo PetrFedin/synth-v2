@@ -1,5 +1,6 @@
 import { domainEvent } from '../core/events.mjs';
 import { invariant } from '../core/errors.mjs';
+import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
 import { assertWholesaleStore } from './store-contract.mjs';
 import { assertTradePair } from '../modules/organisations/public.mjs';
 import { CAPABILITIES, assertCapability, assertTradeCapability } from '../modules/access-control/public.mjs';
@@ -23,7 +24,7 @@ export function createWholesalePlatform({
     return store.transaction(async (tx) => {
       const previous = await tx.getCommand(commandId);
       if (previous) {
-        invariant(previous.fingerprint === fingerprint, 'COMMAND_ID_CONFLICT', 'commandId was already used by another mutation', { commandId });
+        invariant(fingerprintsMatch(previous.fingerprint, fingerprint), 'COMMAND_ID_CONFLICT', 'commandId was already used by another mutation', { commandId });
         return previous.result;
       }
       const result = await action(tx);
@@ -53,7 +54,7 @@ export function createWholesalePlatform({
 
   return Object.freeze({
     registerOrganisation(commandId, actorId, organisation) {
-      return execute(commandId, `registerOrganisation:${actorId}:${JSON.stringify(organisation)}`, actorId, async (tx) => {
+      return execute(commandId, `registerOrganisation:${actorId}:${canonicalJson(organisation)}`, actorId, async (tx) => {
         invariant(actorId === systemActorId, 'SYSTEM_ACTOR_REQUIRED', 'Only the system actor can register organisations');
         await tx.insertOrganisation(organisation);
         await append(tx, 'organisation.registered', organisation.id, { type: organisation.type }, commandId, actorId);
@@ -62,7 +63,7 @@ export function createWholesalePlatform({
     },
 
     grantMembership(commandId, actorId, membership) {
-      return execute(commandId, `grantMembership:${actorId}:${JSON.stringify(membership)}`, actorId, async (tx) => {
+      return execute(commandId, `grantMembership:${actorId}:${canonicalJson(membership)}`, actorId, async (tx) => {
         const organisation = await tx.getOrganisation(membership.organisationId);
         invariant(organisation, 'ORG_NOT_FOUND', 'Membership organisation not found', { organisationId: membership.organisationId });
         invariant(organisation.type === membership.organisationType, 'MEMBERSHIP_ORG_TYPE_MISMATCH', 'Membership organisation type does not match organisation');
@@ -80,7 +81,7 @@ export function createWholesalePlatform({
     },
 
     createCampaign(commandId, actorId, input) {
-      return execute(commandId, `createCampaign:${actorId}:${JSON.stringify(input)}`, actorId, async (tx) => {
+      return execute(commandId, `createCampaign:${actorId}:${canonicalJson(input)}`, actorId, async (tx) => {
         const brand = await tx.getOrganisation(input.brandId);
         invariant(brand?.type === 'brand', 'BRAND_REQUIRED', 'Campaign owner must be a brand');
         await assertOrganisationActor(tx, brand.id, actorId, CAPABILITIES.CAMPAIGN_MANAGE);
@@ -103,7 +104,7 @@ export function createWholesalePlatform({
     },
 
     createCollection(commandId, actorId, input) {
-      return execute(commandId, `createCollection:${actorId}:${JSON.stringify(input)}`, actorId, async (tx) => {
+      return execute(commandId, `createCollection:${actorId}:${canonicalJson(input)}`, actorId, async (tx) => {
         const campaign = requireEntity(await tx.getCampaign(input.campaignId), 'CAMPAIGN_NOT_FOUND', { campaignId: input.campaignId });
         await assertOrganisationActor(tx, campaign.brandId, actorId, CAPABILITIES.COLLECTION_MANAGE);
         const collection = createCollection({ id: nextId('collection'), campaign, ...input, createdAt: clock() });
@@ -127,7 +128,7 @@ export function createWholesalePlatform({
 
     startCycle(commandId, actorId, { brandId, shopId, campaignId, collectionId }) {
       const input = { brandId, shopId, campaignId, collectionId };
-      return execute(commandId, `startCycle:${actorId}:${JSON.stringify(input)}`, actorId, async (tx) => {
+      return execute(commandId, `startCycle:${actorId}:${canonicalJson(input)}`, actorId, async (tx) => {
         const brand = await tx.getOrganisation(brandId);
         const shop = await tx.getOrganisation(shopId);
         assertTradePair({ brand, shop });
@@ -158,7 +159,7 @@ export function createWholesalePlatform({
     },
 
     attachOrder(commandId, actorId, cycleId, order) {
-      return execute(commandId, `attachOrder:${actorId}:${cycleId}:${JSON.stringify(order)}`, actorId, async (tx) => {
+      return execute(commandId, `attachOrder:${actorId}:${cycleId}:${canonicalJson(order)}`, actorId, async (tx) => {
         const current = requireEntity(await tx.getCycle(cycleId), 'CYCLE_NOT_FOUND', { cycleId });
         await authorizeTrade(tx, actorId, current, CAPABILITIES.ORDER_WRITE);
         const collection = requireEntity(await tx.getCollection(current.collectionId), 'COLLECTION_NOT_FOUND', { collectionId: current.collectionId });

@@ -67,7 +67,7 @@ export function createOutboxPublisherService({
     };
 
     try {
-      await publish(event);
+      await publish(event, { attemptCount: record.attemptCount });
     } catch (error) {
       return publicationFailure(record, ownership, error);
     }

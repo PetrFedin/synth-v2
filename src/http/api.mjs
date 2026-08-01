@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { DomainError, invariant } from '../core/errors.mjs';
 import { wholesaleV2OpenApi } from './openapi.mjs';
+import { assertBodyContract, bodyContract } from './request-contract.mjs';
 import { createWholesaleRoutes, matchWholesaleRoute } from './routes.mjs';
 import {
   apiResponseHeaders,
@@ -11,6 +12,8 @@ import {
   resolveRequestId,
   validateContentLength,
 } from './transport-contract.mjs';
+
+const LOGIN_BODY = bodyContract(['email', 'password']);
 
 export function createWholesaleHttpHandler({ authenticate, auth, readiness, maxBodyBytes = 256 * 1024, nextRequestId = randomUUID, ...services } = {}) {
   invariant(typeof authenticate === 'function', 'HTTP_AUTHENTICATOR_REQUIRED', 'HTTP authenticator is required');
@@ -30,7 +33,8 @@ export function createWholesaleHttpHandler({ authenticate, auth, readiness, maxB
       if (request.method === 'GET' && url.pathname === '/openapi.json') return send(response, 200, wholesaleV2OpenApi);
       if (request.method === 'POST' && url.pathname === '/v2/auth/login') {
         invariant(auth?.login, 'AUTH_SERVICE_REQUIRED', 'Authentication service is required');
-        const data = await auth.login(await readJson(request, maxBodyBytes));
+        const body = assertBodyContract(await readJson(request, maxBodyBytes), LOGIN_BODY);
+        const data = await auth.login(body);
         return send(response, 200, { data, requestId });
       }
       invariant(url.pathname.startsWith('/v2/'), 'HTTP_ROUTE_NOT_FOUND', 'Route not found', routeDetails(request, url));
@@ -94,7 +98,22 @@ export function normalizeHttpError(error) {
   else if (code === 'AUTH_RATE_LIMITED') status = 429;
   else if (code === 'CAPABILITY_DENIED' || code.includes('MEMBERSHIP_REQUIRED')) status = 403;
   else if (code === 'HTTP_CONTENT_TYPE_UNSUPPORTED') status = 415;
-  else if (['HTTP_JSON_INVALID', 'HTTP_JSON_OBJECT_REQUIRED', 'HTTP_CONTENT_LENGTH_INVALID', 'HTTP_IDEMPOTENCY_KEY_REQUIRED', 'HTTP_IDEMPOTENCY_KEY_INVALID', 'HTTP_IDENTIFIER_MISMATCH', 'HTTP_QUERY_DUPLICATE', 'NOTIFICATION_LIMIT_INVALID', 'AUTH_EMAIL_INVALID', 'AUTH_PASSWORD_INVALID'].includes(code)) status = 400;
+  else if ([
+    'HTTP_JSON_INVALID',
+    'HTTP_JSON_OBJECT_REQUIRED',
+    'HTTP_CONTENT_LENGTH_INVALID',
+    'HTTP_IDEMPOTENCY_KEY_REQUIRED',
+    'HTTP_IDEMPOTENCY_KEY_INVALID',
+    'HTTP_IDENTIFIER_MISMATCH',
+    'HTTP_BODY_FIELD_UNKNOWN',
+    'HTTP_BODY_FIELD_INVALID',
+    'HTTP_QUERY_DUPLICATE',
+    'HTTP_QUERY_FIELD_UNKNOWN',
+    'HTTP_QUERY_INVALID',
+    'NOTIFICATION_LIMIT_INVALID',
+    'AUTH_EMAIL_INVALID',
+    'AUTH_PASSWORD_INVALID',
+  ].includes(code)) status = 400;
   else if (code === 'HTTP_BODY_TOO_LARGE') status = 413;
   else if (code.includes('CONFLICT') || code.includes('ALREADY_EXISTS')) status = 409;
   const retryAfterSeconds = code === 'AUTH_RATE_LIMITED' ? Math.max(1, Math.ceil(Number(error.details?.retryAfterSeconds) || 1)) : undefined;

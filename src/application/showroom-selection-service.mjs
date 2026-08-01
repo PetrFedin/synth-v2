@@ -1,5 +1,6 @@
 import { domainEvent } from '../core/events.mjs';
 import { invariant } from '../core/errors.mjs';
+import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
 import { assertWholesaleStore } from './store-contract.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
 import { assertCatalogQuantity, assertPublishedCatalogSku } from '../modules/catalog/public.mjs';
@@ -25,7 +26,7 @@ export function createShowroomSelectionService({
     return store.transaction(async (tx) => {
       const previous = await tx.getCommand(commandId);
       if (previous) {
-        invariant(previous.fingerprint === fingerprint, 'COMMAND_ID_CONFLICT', 'commandId was already used by another mutation', { commandId });
+        invariant(fingerprintsMatch(previous.fingerprint, fingerprint), 'COMMAND_ID_CONFLICT', 'commandId was already used by another mutation', { commandId });
         return previous.result;
       }
       const result = await action(tx);
@@ -46,7 +47,7 @@ export function createShowroomSelectionService({
 
   return Object.freeze({
     createShowroom(commandId, actorId, input) {
-      return execute(commandId, `createShowroom:${actorId}:${JSON.stringify(input)}`, actorId, async (tx) => {
+      return execute(commandId, `createShowroom:${actorId}:${canonicalJson(input)}`, actorId, async (tx) => {
         const collection = requireEntity(await tx.getCollection(input.collectionId), 'COLLECTION_NOT_FOUND', { collectionId: input.collectionId });
         await assertOrganisationActor(tx, collection.brandId, actorId, CAPABILITIES.SHOWROOM_MANAGE);
         const showroom = createShowroom({ id: nextId('showroom'), collection, ...input, createdAt: clock() });
@@ -90,7 +91,7 @@ export function createShowroomSelectionService({
 
     upsertSelectionLine(commandId, actorId, selectionId, line) {
       invariant(line?.unitPrice === undefined && line?.currency === undefined && line?.catalogVersion === undefined, 'SELECTION_CLIENT_PRICE_FORBIDDEN', 'Selection price and currency are controlled by the catalog');
-      return execute(commandId, `upsertSelectionLine:${actorId}:${selectionId}:${JSON.stringify(line)}`, actorId, async (tx) => {
+      return execute(commandId, `upsertSelectionLine:${actorId}:${selectionId}:${canonicalJson(line)}`, actorId, async (tx) => {
         const current = requireEntity(await tx.getSelection(selectionId), 'SELECTION_NOT_FOUND', { selectionId });
         await assertOrganisationActor(tx, current.shopId, actorId, CAPABILITIES.SELECTION_WRITE);
         const publishedSku = assertPublishedCatalogSku(await trustedCatalogReader.getSku(line.sku), { collectionId: current.collectionId, brandId: current.brandId });

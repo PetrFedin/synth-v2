@@ -61,10 +61,13 @@ function transactionView(client) {
     getOrganisation: (id) => getPayload(client, 'organisations', 'id', id),
     insertOrganisation: (value) => insert(client, 'organisations', ['id', 'type', 'payload'], [value.id, value.type, value], 'ORG_ALREADY_EXISTS'),
 
-    getMembership: (organisationId, userId) => getPayloadBy(client, 'memberships', ['organisation_id', 'user_id'], [organisationId, userId]),
-    listMembershipsByOrganisation: (organisationId) => listPayloadBy(client, 'memberships', 'organisation_id', organisationId),
+    getMembership: (organisationId, userId) => getPayloadBy(client, 'memberships', ['organisation_id', 'user_id'], [organisationId, userId], 'FOR SHARE'),
+    listMembershipsByOrganisation: (organisationId) => listPayloadBy(client, 'memberships', 'organisation_id', organisationId, 'FOR SHARE'),
     listMembershipsForTrade: async (brandId, shopId) => {
-      const result = await client.query('SELECT payload FROM memberships WHERE organisation_id = ANY($1::text[])', [[brandId, shopId]]);
+      const result = await client.query(
+        'SELECT payload FROM memberships WHERE organisation_id = ANY($1::text[]) FOR SHARE',
+        [[brandId, shopId]],
+      );
       return result.rows.map((row) => row.payload);
     },
     insertMembership: (value) => insert(
@@ -241,14 +244,16 @@ async function getPayload(client, table, column, value) {
   return result.rows[0]?.payload;
 }
 
-async function getPayloadBy(client, table, columns, values) {
+async function getPayloadBy(client, table, columns, values, lockClause = '') {
   const where = columns.map((column, index) => `${column} = $${index + 1}`).join(' AND ');
-  const result = await client.query(`SELECT payload FROM ${table} WHERE ${where}`, values);
+  const suffix = lockClause ? ` ${lockClause}` : '';
+  const result = await client.query(`SELECT payload FROM ${table} WHERE ${where}${suffix}`, values);
   return result.rows[0]?.payload;
 }
 
-async function listPayloadBy(client, table, column, value) {
-  const result = await client.query(`SELECT payload FROM ${table} WHERE ${column} = $1`, [value]);
+async function listPayloadBy(client, table, column, value, lockClause = '') {
+  const suffix = lockClause ? ` ${lockClause}` : '';
+  const result = await client.query(`SELECT payload FROM ${table} WHERE ${column} = $1${suffix}`, [value]);
   return result.rows.map((row) => row.payload);
 }
 

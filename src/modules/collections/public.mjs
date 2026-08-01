@@ -1,16 +1,17 @@
 import { invariant } from '../../core/errors.mjs';
+import { requiredText } from '../../core/validation.mjs';
 
 export function createCollection({ id, campaign, brandId, name, currency, createdAt }) {
   invariant(id && campaign?.id, 'COLLECTION_IDENTITY_REQUIRED', 'Collection id and campaign are required');
   invariant(campaign.brandId === brandId, 'COLLECTION_BRAND_MISMATCH', 'Collection brand must match campaign brand');
   invariant(campaign.status !== 'closed', 'CAMPAIGN_CLOSED', 'Cannot add collection to a closed campaign');
-  invariant(typeof name === 'string' && name.trim().length > 1, 'COLLECTION_NAME_REQUIRED', 'Collection name is required');
+  const normalizedName = requiredText(name, { code: 'COLLECTION_NAME_REQUIRED', label: 'Collection name', max: 160 });
   invariant(/^[A-Z]{3}$/.test(currency), 'COLLECTION_CURRENCY_INVALID', 'Collection currency must be an ISO-4217 code');
   return Object.freeze({
     id,
     campaignId: campaign.id,
     brandId,
-    name: name.trim(),
+    name: normalizedName,
     currency,
     status: 'draft',
     version: 1,

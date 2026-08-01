@@ -1,4 +1,7 @@
 import { invariant } from '../../core/errors.mjs';
+import { assertPostgresInteger, normalizeMoney } from '../../core/money.mjs';
+
+const NOTE_MAX_LENGTH = 2_000;
 
 export function createSelection({ id, cycle, showroom, createdAt }) {
   invariant(id && cycle?.id && showroom?.id, 'SELECTION_IDENTITY_REQUIRED', 'Selection, cycle and showroom are required');
@@ -24,17 +27,24 @@ export function createSelection({ id, cycle, showroom, createdAt }) {
 export function upsertSelectionLine(selection, line, actorId, updatedAt) {
   invariant(selection.status === 'draft', 'SELECTION_NOT_DRAFT', 'Only a draft selection can be edited');
   invariant(typeof line.sku === 'string' && line.sku.length > 0, 'SELECTION_LINE_SKU_REQUIRED', 'Selection line SKU is required');
-  invariant(Number.isInteger(line.quantity) && line.quantity > 0, 'SELECTION_LINE_QUANTITY_INVALID', 'Selection quantity must be a positive integer');
-  invariant(Number.isFinite(line.unitPrice) && line.unitPrice > 0, 'SELECTION_LINE_PRICE_INVALID', 'Selection unit price must be positive');
+  const quantity = assertPostgresInteger(line.quantity, { code: 'SELECTION_LINE_QUANTITY_INVALID', label: 'Selection quantity', min: 1 });
+  const unitPrice = normalizeMoney(line.unitPrice, {
+    invalidCode: 'SELECTION_LINE_PRICE_INVALID',
+    scaleCode: 'SELECTION_LINE_PRICE_SCALE_INVALID',
+    overflowCode: 'SELECTION_LINE_PRICE_TOO_LARGE',
+    label: 'Selection unit price',
+  });
   invariant(/^[A-Z]{3}$/.test(line.currency ?? ''), 'SELECTION_LINE_CURRENCY_INVALID', 'Selection line currency must be an ISO-4217 code');
   invariant(Number.isInteger(line.catalogVersion) && line.catalogVersion > 0, 'SELECTION_CATALOG_VERSION_INVALID', 'Catalog version must be a positive integer');
+  const note = typeof line.note === 'string' ? line.note.trim() : '';
+  invariant(note.length <= NOTE_MAX_LENGTH, 'SELECTION_LINE_NOTE_TOO_LONG', `Selection note must not exceed ${NOTE_MAX_LENGTH} characters`);
   const nextLine = Object.freeze({
     sku: line.sku,
-    quantity: line.quantity,
-    unitPrice: line.unitPrice,
+    quantity,
+    unitPrice,
     currency: line.currency,
     catalogVersion: line.catalogVersion,
-    note: typeof line.note === 'string' ? line.note.trim() : '',
+    note,
     updatedBy: actorId,
     updatedAt,
   });

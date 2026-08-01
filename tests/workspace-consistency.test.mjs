@@ -73,6 +73,41 @@ test('workspace reader uses one repeatable read-only transaction', async () => {
   assert.equal(workspace.memberships.length, 1);
 });
 
+test('workspace reader returns the complete empty shape for actors without memberships', async () => {
+  const queries = [];
+  const client = {
+    async query(sql, params) {
+      queries.push({ sql, params });
+      return { rows: [] };
+    },
+    release() { queries.push({ sql: 'RELEASE' }); },
+  };
+  const workspace = await createPostgresWorkspaceReader({
+    pool: { async connect() { return client; } },
+  }).readForActor('user-without-membership');
+
+  assert.deepEqual(workspace, {
+    memberships: [],
+    organisations: [],
+    relationships: [],
+    invitations: [],
+    campaigns: [],
+    collections: [],
+    catalogSkus: [],
+    showrooms: [],
+    cycles: [],
+    selections: [],
+    orders: [],
+    deals: [],
+    calendar: [],
+  });
+  assert.equal(queries.filter((item) => /^SELECT/.test(item.sql)).length, 1);
+  assert.match(queries[1].sql, /FROM memberships/);
+  assert.deepEqual(queries[1].params, ['user-without-membership', 'active']);
+  assert.equal(queries.at(-2).sql, 'COMMIT');
+  assert.equal(queries.at(-1).sql, 'RELEASE');
+});
+
 test('workspace reader rolls back and releases its connection after a query failure', async () => {
   const queries = [];
   const failure = new Error('database read failed');

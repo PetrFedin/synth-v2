@@ -20,6 +20,7 @@ function acquiredFixture({ failOn } = {}) {
       if (failOn && sql.includes(failOn)) throw new Error('database failure');
       if (/pg_try_advisory_xact_lock/.test(sql)) return { rows: [{ acquired: true }], rowCount: 1 };
       if (/WITH eligible AS MATERIALIZED/.test(sql)) return { rows: [{ projections: 3, outbox: 3 }], rowCount: 1 };
+      if (/WITH terminal AS MATERIALIZED/.test(sql)) return { rows: [{ projections: 2, outbox: 2 }], rowCount: 1 };
       if (/^DELETE FROM commands/.test(sql)) return { rowCount: 2, rows: [] };
       if (/^DELETE FROM catalog_commands/.test(sql)) return { rowCount: 1, rows: [] };
       if (/^DELETE FROM notification_commands/.test(sql)) return { rowCount: 4, rows: [] };
@@ -51,6 +52,8 @@ test('maintenance cleanup is advisory-locked transactional and returns deletion 
     authSessions: 7,
     notificationProjections: 3,
     outboxEvents: 3,
+    deadLetterNotificationProjections: 2,
+    deadLetterOutboxEvents: 2,
     catalogOutboxEvents: 8,
   });
   assert.equal(fixture.queries[0].sql, 'BEGIN');
@@ -60,7 +63,7 @@ test('maintenance cleanup is advisory-locked transactional and returns deletion 
   assert.equal(Object.isFrozen(result.counts), true);
 });
 
-test('outbox cleanup deletes only old published projected events and never user notifications', async () => {
+test('outbox cleanup deletes only eligible published or terminal events and never pending events or user notifications', async () => {
   const fixture = acquiredFixture();
   await createPostgresMaintenanceStore({ pool: fixture.pool }).cleanup(cutoffs);
   const sql = fixture.queries.map((item) => item.sql).join('\n');
@@ -68,12 +71,17 @@ test('outbox cleanup deletes only old published projected events and never user 
   assert.match(sql, /source\.published_at IS NOT NULL/);
   assert.match(sql, /source\.published_at < \$1/);
   assert.match(sql, /EXISTS[\s\S]*notification_projections/);
+  assert.match(sql, /source\.status = 'dead-letter'/);
+  assert.match(sql, /JOIN outbox_dead_letters/);
+  assert.match(sql, /dead_letter\.failed_at < \$1/);
   assert.match(sql, /DELETE FROM notification_projections/);
   assert.match(sql, /DELETE FROM outbox_events/);
   assert.doesNotMatch(sql, /DELETE FROM notifications(?:\s|$)/);
-  assert.doesNotMatch(sql, /DELETE FROM outbox_events[\s\S]*status = 'pending'/);
-  const outboxQuery = fixture.queries.find((item) => /WITH eligible AS MATERIALIZED/.test(item.sql));
-  assert.deepEqual(outboxQuery.params, [cutoffs.outboxBefore]);
+  assert.doesNotMatch(sql, /status = 'pending'/);
+  const publishedQuery = fixture.queries.find((item) => /WITH eligible AS MATERIALIZED/.test(item.sql));
+  const terminalQuery = fixture.queries.find((item) => /WITH terminal AS MATERIALIZED/.test(item.sql));
+  assert.deepEqual(publishedQuery.params, [cutoffs.outboxBefore]);
+  assert.deepEqual(terminalQuery.params, [cutoffs.outboxBefore]);
 });
 
 test('lock contention commits without executing retention deletes', async () => {

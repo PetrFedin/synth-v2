@@ -1,5 +1,6 @@
 import { DomainError, invariant } from '../core/errors.mjs';
 import { fingerprintsMatch } from '../core/fingerprints.mjs';
+import { decodeNotificationCursor, encodeNotificationCursor } from '../core/notification-cursor.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
 import {
   createNotification,
@@ -11,6 +12,8 @@ const DEFAULT_BATCH_LIMIT = 100;
 const MAX_BATCH_LIMIT = 1000;
 const DEFAULT_LIST_LIMIT = 100;
 const MAX_LIST_LIMIT = 500;
+const DEFAULT_PAGE_LIMIT = 50;
+const MAX_PAGE_LIMIT = 200;
 const DEFAULT_PROJECTION_LEASE_MS = 30_000;
 const DEFAULT_PROJECTION_RETRY_DELAY_MS = 5_000;
 const DEFAULT_MAX_PROJECTION_ATTEMPTS = 5;
@@ -58,10 +61,7 @@ export function createNotificationService({
 
     async listForActor(actorId, { limit = DEFAULT_LIST_LIMIT } = {}) {
       const normalizedLimit = notificationListLimit(limit);
-      const memberships = typeof reader?.listActiveMembershipsForActor === 'function'
-        ? await reader.listActiveMembershipsForActor(actorId)
-        : (await sourceStore.snapshot()).memberships.filter((membership) => membership.userId === actorId && membership.status === 'active');
-      const organisationIds = [...new Set(memberships.map((membership) => membership.organisationId).filter(Boolean))];
+      const organisationIds = await activeOrganisationIds(actorId);
       if (!organisationIds.length) return Object.freeze([]);
       if (typeof projectionStore.listForOrganisations === 'function') {
         return projectionStore.listForOrganisations(organisationIds, { limit: normalizedLimit });
@@ -74,6 +74,37 @@ export function createNotificationService({
           .sort(compareNotifications)
           .slice(0, normalizedLimit),
       );
+    },
+
+    async pageForActor(actorId, { limit = DEFAULT_PAGE_LIMIT, cursor } = {}) {
+      const normalizedLimit = notificationPageLimit(limit);
+      const after = cursor === undefined || cursor === null || cursor === ''
+        ? undefined
+        : decodeNotificationCursor(cursor);
+      const organisationIds = await activeOrganisationIds(actorId);
+      if (!organisationIds.length) return emptyNotificationPage();
+
+      let page;
+      if (typeof projectionStore.pageForOrganisations === 'function') {
+        page = await projectionStore.pageForOrganisations(organisationIds, { limit: normalizedLimit, after });
+      } else {
+        const projection = await projectionStore.snapshot();
+        const visible = new Set(organisationIds);
+        const ordered = projection.notifications
+          .filter((notification) => visible.has(notification.recipientOrganisationId))
+          .sort(compareNotificationPageOrder)
+          .filter((notification) => isAfterPosition(notification, after));
+        const rows = ordered.slice(0, normalizedLimit + 1);
+        page = Object.freeze({
+          items: Object.freeze(rows.slice(0, normalizedLimit)),
+          hasMore: rows.length > normalizedLimit,
+        });
+      }
+
+      const nextCursor = page.hasMore && page.items.length
+        ? encodeNotificationCursor(page.items.at(-1))
+        : null;
+      return Object.freeze({ items: page.items, nextCursor });
     },
 
     async markRead(commandId, actorId, notificationId) {
@@ -110,6 +141,13 @@ export function createNotificationService({
       });
     },
   });
+
+  async function activeOrganisationIds(actorId) {
+    const memberships = typeof reader?.listActiveMembershipsForActor === 'function'
+      ? await reader.listActiveMembershipsForActor(actorId)
+      : (await sourceStore.snapshot()).memberships.filter((membership) => membership.userId === actorId && membership.status === 'active');
+    return [...new Set(memberships.map((membership) => membership.organisationId).filter(Boolean))];
+  }
 
   async function pendingRecords(limit) {
     if (typeof projectionStore.claimUnprojectedOutbox === 'function') {
@@ -255,14 +293,23 @@ function notificationCandidates(source, event) {
 }
 
 function notificationListLimit(value) {
-  const parsed = typeof value === 'number'
-    ? value
-    : typeof value === 'string' && /^[0-9]+$/.test(value) ? Number(value) : Number.NaN;
+  return parseLimit(value, DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT, 'NOTIFICATION_LIMIT_INVALID', 'Notification limit');
+}
+
+function notificationPageLimit(value) {
+  return parseLimit(value, DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT, 'NOTIFICATION_PAGE_LIMIT_INVALID', 'Notification page limit');
+}
+
+function parseLimit(value, defaultValue, max, code, label) {
+  const candidate = value === undefined || value === null || value === '' ? defaultValue : value;
+  const parsed = typeof candidate === 'number'
+    ? candidate
+    : typeof candidate === 'string' && /^[0-9]+$/.test(candidate) ? Number(candidate) : Number.NaN;
   invariant(
-    Number.isSafeInteger(parsed) && parsed >= 1 && parsed <= MAX_LIST_LIMIT,
-    'NOTIFICATION_LIMIT_INVALID',
-    `Notification limit must be an integer from 1 to ${MAX_LIST_LIMIT}`,
-    { min: 1, max: MAX_LIST_LIMIT },
+    Number.isSafeInteger(parsed) && parsed >= 1 && parsed <= max,
+    code,
+    `${label} must be an integer from 1 to ${max}`,
+    { min: 1, max },
   );
   return parsed;
 }
@@ -279,9 +326,24 @@ function addMilliseconds(timestamp, milliseconds) {
 function compareNotifications(left, right) {
   const unread = Number(right?.status === 'unread') - Number(left?.status === 'unread');
   if (unread) return unread;
+  return compareNotificationPageOrder(left, right);
+}
+
+function compareNotificationPageOrder(left, right) {
   const time = String(right?.createdAt ?? '').localeCompare(String(left?.createdAt ?? ''));
   if (time) return time;
-  return String(right?.id ?? '').localeCompare(String(left?.id ?? ''), 'en', { numeric: true });
+  return String(right?.id ?? '').localeCompare(String(left?.id ?? ''));
+}
+
+function isAfterPosition(notification, after) {
+  if (!after) return true;
+  const createdAt = String(notification?.createdAt ?? '');
+  if (createdAt < after.createdAt) return true;
+  return createdAt === after.createdAt && String(notification?.id ?? '') < after.id;
+}
+
+function emptyNotificationPage() {
+  return Object.freeze({ items: Object.freeze([]), nextCursor: null });
 }
 
 function compareOutboxRecords(left, right) {

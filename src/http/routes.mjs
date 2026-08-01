@@ -48,7 +48,7 @@ export function createWholesaleRoutes({ platform, catalog, partners, collaborati
       return orders.cancelOrder(commandId, actorId, { orderId: params[0], reason: body.reason });
     }),
     read('GET', /^\/v2\/workspace$/, ({ actorId }) => workspace.loadForActor(actorId)),
-    read('GET', /^\/v2\/notifications$/, ({ actorId }) => notifications.listForActor(actorId)),
+    read('GET', /^\/v2\/notifications$/, ({ actorId, query }) => notifications.listForActor(actorId, { limit: query?.limit })),
     mutate('POST', /^\/v2\/notifications\/([^/]+)\/read$/, ({ commandId, actorId, params }) => notifications.markRead(commandId, actorId, params[0])),
   ];
 }

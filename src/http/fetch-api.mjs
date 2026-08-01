@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { invariant } from '../core/errors.mjs';
 import { normalizeHttpError } from './api.mjs';
 import { wholesaleV2OpenApi } from './openapi.mjs';
-import { assertBodyContract, bodyContract } from './request-contract.mjs';
+import { assertBodyContract, assertQueryContract, bodyContract } from './request-contract.mjs';
 import { createWholesaleRoutes, matchWholesaleRoute } from './routes.mjs';
 import {
   apiResponseHeaders,
@@ -13,6 +13,7 @@ import {
   validateContentLength,
 } from './transport-contract.mjs';
 
+const EMPTY_BODY = bodyContract();
 const LOGIN_BODY = bodyContract(['email', 'password']);
 
 export function createWholesaleFetchHandler({ authenticate, auth, readiness, maxBodyBytes = 256 * 1024, nextRequestId = randomUUID, ...services } = {}) {
@@ -24,13 +25,21 @@ export function createWholesaleFetchHandler({ authenticate, auth, readiness, max
     const requestId = resolveRequestId(request.headers.get('x-request-id'), nextRequestId);
     try {
       const url = new URL(request.url);
-      if (request.method === 'GET' && url.pathname === '/health') return json(200, { status: 'ok', service: 'syntha-wholesale-v2', requestId }, requestId);
+      if (request.method === 'GET' && url.pathname === '/health') {
+        assertEmptyQuery(url);
+        return json(200, { status: 'ok', service: 'syntha-wholesale-v2', requestId }, requestId);
+      }
       if (request.method === 'GET' && url.pathname === '/ready') {
+        assertEmptyQuery(url);
         const result = readiness?.check ? await readiness.check() : readinessUnavailable();
         return json(result.status === 'ready' ? 200 : 503, { ...result, requestId }, requestId);
       }
-      if (request.method === 'GET' && url.pathname === '/openapi.json') return json(200, wholesaleV2OpenApi, requestId);
+      if (request.method === 'GET' && url.pathname === '/openapi.json') {
+        assertEmptyQuery(url);
+        return json(200, wholesaleV2OpenApi, requestId);
+      }
       if (request.method === 'POST' && url.pathname === '/v2/auth/login') {
+        assertEmptyQuery(url);
         invariant(auth?.login, 'AUTH_SERVICE_REQUIRED', 'Authentication service is required');
         const body = assertBodyContract(await readJson(request, maxBodyBytes), LOGIN_BODY);
         const data = await auth.login(body);
@@ -38,9 +47,14 @@ export function createWholesaleFetchHandler({ authenticate, auth, readiness, max
       }
       invariant(url.pathname.startsWith('/v2/'), 'HTTP_ROUTE_NOT_FOUND', 'Route not found', { method: request.method, path: url.pathname });
       const identity = await authenticateBearer(request, authenticate);
-      if (request.method === 'GET' && url.pathname === '/v2/auth/me') return json(200, { data: publicIdentity(identity.actor), requestId }, requestId);
+      if (request.method === 'GET' && url.pathname === '/v2/auth/me') {
+        assertEmptyQuery(url);
+        return json(200, { data: publicIdentity(identity.actor), requestId }, requestId);
+      }
       if (request.method === 'POST' && url.pathname === '/v2/auth/logout') {
+        assertEmptyQuery(url);
         invariant(auth?.logout, 'AUTH_SERVICE_REQUIRED', 'Authentication service is required');
+        assertBodyContract(await readJson(request, maxBodyBytes), EMPTY_BODY);
         return json(200, { data: { revoked: await auth.logout(identity.token) }, requestId }, requestId);
       }
       const route = matchWholesaleRoute(routes, request.method, url.pathname);
@@ -80,6 +94,7 @@ async function readJson(request, limit) {
   return decodeJsonObject(new Uint8Array(buffer), request.headers.get('content-type'));
 }
 
+function assertEmptyQuery(url) { return assertQueryContract(queryParameters(url), []); }
 function readinessUnavailable() {
   return Object.freeze({
     status: 'not-ready', service: 'syntha-wholesale-v2', checkedAt: new Date().toISOString(), reason: 'readiness-not-configured',

@@ -12,11 +12,12 @@ import { configureHttpServer, createShutdownCoordinator, listen, readIntegerSett
 import { createStandaloneHandler } from './web/static-handler.mjs';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const OUTBOX_LEASE_SAFETY_MARGIN_MS = 1_000;
 const databaseUrl = process.env.SYNTHA_V2_DATABASE_URL ?? process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error('SYNTHA_V2_DATABASE_URL is required');
 
 const outboxWebhookUrl = process.env.SYNTHA_OUTBOX_WEBHOOK_URL?.trim() || undefined;
-const outboxWebhookSecret = process.env.SYNTHA_OUTBOX_WEBHOOK_SECRET?.trim() || undefined;
+const outboxWebhookSecret = secretSetting('SYNTHA_OUTBOX_WEBHOOK_SECRET');
 if (Boolean(outboxWebhookUrl) !== Boolean(outboxWebhookSecret)) {
   throw new Error('SYNTHA_OUTBOX_WEBHOOK_URL and SYNTHA_OUTBOX_WEBHOOK_SECRET must be configured together');
 }
@@ -71,8 +72,9 @@ const settings = Object.freeze({
   maxHeadersCount: integerSetting('SYNTHA_HTTP_MAX_HEADERS_COUNT', 100, 16, 1_000),
   shutdownGraceMs: integerSetting('SYNTHA_SHUTDOWN_GRACE_MS', 10_000, 1_000, 120_000),
 });
-if (settings.outboxWebhookUrl && settings.outboxPublicationLeaseMs <= settings.outboxWebhookTimeoutMs) {
-  throw new Error('SYNTHA_OUTBOX_PUBLICATION_LEASE_MS must exceed SYNTHA_OUTBOX_WEBHOOK_TIMEOUT_MS');
+const requiredOutboxLeaseMs = (settings.outboxWebhookTimeoutMs * settings.outboxPublicationBatchSize) + OUTBOX_LEASE_SAFETY_MARGIN_MS;
+if (settings.outboxWebhookUrl && (!Number.isSafeInteger(requiredOutboxLeaseMs) || settings.outboxPublicationLeaseMs <= requiredOutboxLeaseMs)) {
+  throw new Error(`SYNTHA_OUTBOX_PUBLICATION_LEASE_MS must exceed ${requiredOutboxLeaseMs}ms for the configured webhook timeout and batch size`);
 }
 if (settings.outboxPublicationMaxRetryDelayMs < settings.outboxPublicationRetryDelayMs) {
   throw new Error('SYNTHA_OUTBOX_PUBLICATION_MAX_RETRY_DELAY_MS must be at least SYNTHA_OUTBOX_PUBLICATION_RETRY_DELAY_MS');
@@ -229,6 +231,11 @@ if (server) {
 
 function integerSetting(name, defaultValue, min, max) {
   return readIntegerSetting(process.env[name], { name, defaultValue, min, max });
+}
+
+function secretSetting(name) {
+  const raw = process.env[name];
+  return raw === undefined || raw.length === 0 ? undefined : raw;
 }
 
 function booleanSetting(name, defaultValue) {

@@ -68,6 +68,34 @@ export function createPostgresMaintenanceStore({ pool } = {}) {
         );
         counts.notificationProjections = integer(wholesaleOutbox.rows[0]?.projections);
         counts.outboxEvents = integer(wholesaleOutbox.rows[0]?.outbox);
+
+        const terminalOutbox = await client.query(
+          `WITH terminal AS MATERIALIZED (
+             SELECT source.id
+               FROM outbox_events AS source
+               JOIN outbox_dead_letters AS dead_letter ON dead_letter.event_id = source.id
+              WHERE source.status = 'dead-letter'
+                AND source.published_at IS NULL
+                AND dead_letter.failed_at < $1
+           ), deleted_projections AS (
+             DELETE FROM notification_projections AS projected
+              USING terminal
+              WHERE projected.event_id = terminal.id
+              RETURNING projected.event_id
+           ), deleted_outbox AS (
+             DELETE FROM outbox_events AS source
+              USING terminal
+              WHERE source.id = terminal.id
+              RETURNING source.id
+           )
+           SELECT
+             (SELECT count(*)::integer FROM deleted_projections) AS projections,
+             (SELECT count(*)::integer FROM deleted_outbox) AS outbox`,
+          [cutoffs.outboxBefore],
+        );
+        counts.deadLetterNotificationProjections = integer(terminalOutbox.rows[0]?.projections);
+        counts.deadLetterOutboxEvents = integer(terminalOutbox.rows[0]?.outbox);
+
         counts.catalogOutboxEvents = await deleteCount(
           client,
           `DELETE FROM catalog_outbox_events

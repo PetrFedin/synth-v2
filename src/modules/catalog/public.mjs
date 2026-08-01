@@ -1,4 +1,5 @@
 import { invariant } from '../../core/errors.mjs';
+import { assertPostgresInteger, normalizeMoney } from '../../core/money.mjs';
 
 const SKU_PATTERN = /^[A-Z0-9][A-Z0-9._-]{1,63}$/;
 
@@ -16,21 +17,26 @@ export function createCatalogSku({
   invariant(SKU_PATTERN.test(sku ?? ''), 'CATALOG_SKU_INVALID', 'SKU must contain 2-64 uppercase letters, numbers, dots, underscores or dashes');
   invariant(collection?.id, 'CATALOG_COLLECTION_REQUIRED', 'Catalog SKU collection is required');
   invariant(collection.brandId === brandId, 'CATALOG_BRAND_MISMATCH', 'Catalog SKU brand must match collection brand');
-  invariant(typeof name === 'string' && name.trim().length > 1, 'CATALOG_NAME_REQUIRED', 'Catalog SKU name is required');
-  invariant(Number.isFinite(wholesalePrice) && wholesalePrice > 0, 'CATALOG_PRICE_INVALID', 'Wholesale price must be positive');
+  invariant(typeof name === 'string' && name.trim().length > 1 && name.trim().length <= 160, 'CATALOG_NAME_REQUIRED', 'Catalog SKU name must contain 2 to 160 characters');
+  const normalizedPrice = normalizeMoney(wholesalePrice, {
+    invalidCode: 'CATALOG_PRICE_INVALID',
+    scaleCode: 'CATALOG_PRICE_SCALE_INVALID',
+    overflowCode: 'CATALOG_PRICE_TOO_LARGE',
+    label: 'Wholesale price',
+  });
   invariant(currency === collection.currency, 'CATALOG_CURRENCY_MISMATCH', 'Catalog currency must match collection currency');
-  invariant(Number.isInteger(minimumOrderQuantity) && minimumOrderQuantity > 0, 'CATALOG_MOQ_INVALID', 'Minimum order quantity must be a positive integer');
-  invariant(Number.isInteger(availableQuantity) && availableQuantity >= 0, 'CATALOG_AVAILABLE_QUANTITY_INVALID', 'Available quantity must be a non-negative integer');
+  const normalizedMoq = assertPostgresInteger(minimumOrderQuantity, { code: 'CATALOG_MOQ_INVALID', label: 'Minimum order quantity', min: 1 });
+  const normalizedAvailable = assertPostgresInteger(availableQuantity, { code: 'CATALOG_AVAILABLE_QUANTITY_INVALID', label: 'Available quantity', min: 0 });
   return freezeAvailability({
     id: sku,
     sku,
     collectionId: collection.id,
     brandId,
     name: name.trim(),
-    wholesalePrice,
+    wholesalePrice: normalizedPrice,
     currency,
-    minimumOrderQuantity,
-    availableQuantity,
+    minimumOrderQuantity: normalizedMoq,
+    availableQuantity: normalizedAvailable,
     reservedQuantity: 0,
     status: 'draft',
     version: 1,
@@ -58,7 +64,7 @@ export function assertPublishedCatalogSku(catalogSku, { collectionId, brandId } 
 
 export function assertCatalogQuantity(catalogSku, quantity) {
   const normalized = normalizeAvailability(catalogSku);
-  invariant(Number.isInteger(quantity) && quantity > 0, 'SELECTION_LINE_QUANTITY_INVALID', 'Selection quantity must be a positive integer');
+  assertPostgresInteger(quantity, { code: 'SELECTION_LINE_QUANTITY_INVALID', label: 'Selection quantity', min: 1 });
   invariant(quantity >= normalized.minimumOrderQuantity, 'CATALOG_MOQ_NOT_MET', 'Selection quantity is below minimum order quantity', {
     sku: normalized.sku,
     quantity,
@@ -83,7 +89,7 @@ export function reserveCatalogQuantity(catalogSku, quantity, updatedAt) {
 
 export function releaseCatalogQuantity(catalogSku, quantity, updatedAt) {
   const normalized = normalizeAvailability(catalogSku);
-  invariant(Number.isInteger(quantity) && quantity > 0, 'CATALOG_RELEASE_QUANTITY_INVALID', 'Release quantity must be a positive integer');
+  assertPostgresInteger(quantity, { code: 'CATALOG_RELEASE_QUANTITY_INVALID', label: 'Release quantity', min: 1 });
   invariant(quantity <= normalized.reservedQuantity, 'CATALOG_RELEASE_EXCEEDS_RESERVED', 'Release quantity exceeds reserved quantity', {
     sku: normalized.sku,
     quantity,
@@ -96,7 +102,16 @@ export function normalizeAvailability(catalogSku) {
   const minimumOrderQuantity = Number.isInteger(catalogSku.minimumOrderQuantity) ? catalogSku.minimumOrderQuantity : 1;
   const availableQuantity = Number.isInteger(catalogSku.availableQuantity) ? catalogSku.availableQuantity : 0;
   const reservedQuantity = Number.isInteger(catalogSku.reservedQuantity) ? catalogSku.reservedQuantity : 0;
-  return freezeAvailability({ ...catalogSku, minimumOrderQuantity, availableQuantity, reservedQuantity });
+  assertPostgresInteger(minimumOrderQuantity, { code: 'CATALOG_MOQ_INVALID', label: 'Minimum order quantity', min: 1 });
+  assertPostgresInteger(availableQuantity, { code: 'CATALOG_AVAILABLE_QUANTITY_INVALID', label: 'Available quantity', min: 0 });
+  assertPostgresInteger(reservedQuantity, { code: 'CATALOG_RESERVED_QUANTITY_INVALID', label: 'Reserved quantity', min: 0 });
+  const wholesalePrice = normalizeMoney(catalogSku.wholesalePrice, {
+    invalidCode: 'CATALOG_PRICE_INVALID',
+    scaleCode: 'CATALOG_PRICE_SCALE_INVALID',
+    overflowCode: 'CATALOG_PRICE_TOO_LARGE',
+    label: 'Wholesale price',
+  });
+  return freezeAvailability({ ...catalogSku, wholesalePrice, minimumOrderQuantity, availableQuantity, reservedQuantity });
 }
 
 function freezeAvailability(value) {

@@ -11,7 +11,7 @@ const requiredTables = [
   'organisations', 'memberships', 'counterparty_relationships', 'campaigns', 'collections', 'showrooms',
   'showroom_invitations', 'commercial_cycles', 'selections', 'orders', 'deals', 'calendar_milestones',
   'commands', 'outbox_events', 'notifications', 'notification_projections', 'notification_commands',
-  'notification_projection_claims', 'outbox_publication_claims', 'outbox_dead_letters',
+  'notification_projection_claims', 'outbox_publication_claims', 'outbox_dead_letters', 'outbox_dead_letter_audit',
   'auth_users', 'auth_sessions', 'auth_login_throttles', 'auth_login_audit',
   'catalog_skus', 'catalog_commands', 'catalog_outbox_events', 'order_inventory_reservations',
 ];
@@ -22,6 +22,9 @@ const requiredFragments = [
   'outbox_publication_claims_token_idx', 'outbox_publication_claims_schedule_idx',
   'claim_token text NOT NULL', 'next_attempt_at timestamptz NOT NULL',
   'outbox_dead_letters_failed_at_idx',
+  "action text NOT NULL CHECK (action IN ('dead-lettered', 'requeued'))",
+  'outbox_dead_letter_audit_event_idx', 'outbox_dead_letter_audit_time_idx',
+  "action = 'requeued' AND actor_id IS NOT NULL AND reason IS NOT NULL",
   'notifications_recipient_status_idx', 'notifications_recipient_created_idx',
   'ADD COLUMN IF NOT EXISTS created_at timestamptz', 'ALTER COLUMN created_at SET NOT NULL',
   'version integer NOT NULL CHECK (version > 0)',

@@ -13,6 +13,7 @@ const ASSETS = Object.freeze({
   '/i18n.css': ['i18n.css', 'text/css; charset=utf-8', CACHE],
   '/ui/i18n-runtime.js': ['modules/i18n-runtime.js', JS, CACHE],
   '/ui/ui-capabilities.js': ['modules/ui-capabilities.js', JS, CACHE],
+  '/ui/ui-validation.js': ['modules/ui-validation.js', JS, CACHE],
   '/ui/app-core.js': ['modules/app-core.js', JS, CACHE],
   '/ui/overview.js': ['modules/overview.js', JS, CACHE],
   '/ui/partners.js': ['modules/partners.js', JS, CACHE],

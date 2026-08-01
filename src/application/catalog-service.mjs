@@ -31,11 +31,11 @@ export function createCatalogService({ wholesaleStore, catalogStore, clock = () 
     invariant(commandId, 'COMMAND_ID_REQUIRED', 'Every mutation requires commandId');
     return catalogStore.transaction(async (tx) => {
       const previous = await tx.getCommand(commandId);
-      const prepared = await prepare(tx);
       if (previous) {
         invariant(fingerprintsMatch(previous.fingerprint, fingerprint), 'COMMAND_ID_CONFLICT', 'commandId was already used by another mutation', { commandId });
-        return previous.result;
       }
+      const prepared = await prepare(tx);
+      if (previous) return previous.result;
       const result = await action(tx, prepared);
       await tx.insertCommand(Object.freeze({ id: commandId, fingerprint, actorId, result, completedAt: clock() }));
       return result;

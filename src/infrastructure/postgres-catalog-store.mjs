@@ -1,4 +1,5 @@
 import { invariant } from '../core/errors.mjs';
+import { getRegisteredCommand, insertRegisteredCommand } from './postgres-command-registry.mjs';
 import { withPostgresTransaction } from './postgres-transaction.mjs';
 
 export function createPostgresCatalogStore({ pool } = {}) {
@@ -69,23 +70,8 @@ function view(client) {
       );
       invariant(result.rowCount === 1, 'CATALOG_SKU_CONCURRENCY_CONFLICT', 'Catalog SKU concurrency conflict', { sku: value.sku, expectedVersion });
     },
-    async getCommand(id) {
-      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`catalog-command:${id}`]);
-      const result = await client.query('SELECT id, fingerprint, actor_id, result, completed_at FROM catalog_commands WHERE id = $1', [id]);
-      const row = result.rows[0];
-      return row ? Object.freeze({ id: row.id, fingerprint: row.fingerprint, actorId: row.actor_id, result: row.result, completedAt: row.completed_at.toISOString?.() ?? row.completed_at }) : undefined;
-    },
-    async insertCommand(value) {
-      try {
-        await client.query(
-          'INSERT INTO catalog_commands (id, fingerprint, actor_id, result, completed_at) VALUES ($1, $2, $3, $4::jsonb, $5)',
-          [value.id, value.fingerprint, value.actorId, JSON.stringify(value.result), value.completedAt],
-        );
-      } catch (error) {
-        if (error?.code === '23505') invariant(false, 'COMMAND_ALREADY_EXISTS', 'Command already exists', { commandId: value.id });
-        throw error;
-      }
-    },
+    getCommand: (id) => getRegisteredCommand(client, 'catalog', id),
+    insertCommand: (value) => insertRegisteredCommand(client, 'catalog', value),
     async appendOutbox(event) {
       try {
         await client.query(

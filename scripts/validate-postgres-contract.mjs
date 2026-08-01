@@ -13,6 +13,8 @@ const requiredTables = [
   'commands', 'outbox_events', 'notifications', 'notification_projections', 'notification_commands',
   'auth_users', 'auth_sessions', 'auth_login_throttles', 'auth_login_audit',
   'catalog_skus', 'catalog_commands', 'catalog_outbox_events', 'order_inventory_reservations',
+  'collaboration_threads', 'collaboration_messages', 'calendar_events', 'calendar_event_participants',
+  'calendar_event_reminders', 'collaboration_commands',
 ];
 const requiredFragments = [
   'UNIQUE (brand_id, shop_id)', 'UNIQUE (showroom_id, shop_id)', 'cycle_id text NOT NULL UNIQUE',
@@ -26,6 +28,10 @@ const requiredFragments = [
   'available_quantity integer NOT NULL DEFAULT 0', 'reserved_quantity integer NOT NULL DEFAULT 0',
   'catalog_skus_reserved_not_above_available', 'order_inventory_reservations_sku_idx',
   'reserve_inventory_on_order_attach', 'orders_reserve_inventory_on_attach', 'FOR UPDATE',
+  'collaboration_threads_owner_subject_idx', 'collaboration_messages_thread_created_idx',
+  'calendar_events_owner_time_idx', 'calendar_events_subject_idx',
+  "visibility text NOT NULL CHECK (visibility IN ('private','organisation','trade'))",
+  'CHECK (ends_at > starts_at)', 'UNIQUE (event_id, recipient_user_id, minutes_before, channel)',
 ];
 const missing = [];
 for (const table of requiredTables) if (!new RegExp(`CREATE TABLE IF NOT EXISTS\\s+${table}\\s*\\(`, 'i').test(sql)) missing.push(`table:${table}`);

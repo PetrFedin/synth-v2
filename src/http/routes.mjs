@@ -1,7 +1,7 @@
 import { invariant } from '../core/errors.mjs';
 
-export function createWholesaleRoutes({ platform, catalog, partners, collaboration, orders, notifications, workspace }) {
-  invariant(platform && partners && collaboration && orders && notifications && workspace, 'HTTP_SERVICES_REQUIRED', 'All V2 application services are required');
+export function createWholesaleRoutes({ platform, catalog, partners, collaboration, orders, notifications, workspace, collaborationCalendar }) {
+  invariant(platform && partners && collaboration && orders && notifications && workspace && collaborationCalendar, 'HTTP_SERVICES_REQUIRED', 'All V2 application services are required');
   const catalogService = catalog ?? unavailableCatalog();
   return [
     mutate('POST', /^\/v2\/campaigns$/, ({ commandId, actorId, body }) => platform.createCampaign(commandId, actorId, body)),
@@ -47,6 +47,11 @@ export function createWholesaleRoutes({ platform, catalog, partners, collaborati
       sameId(body.orderId, params[0], 'orderId');
       return orders.cancelOrder(commandId, actorId, { orderId: params[0], reason: body.reason });
     }),
+    mutate('POST', /^\/v2\/collaboration\/threads$/, ({ commandId, actorId, body }) => collaborationCalendar.createThread(commandId, actorId, body)),
+    mutate('POST', /^\/v2\/collaboration\/threads\/([^/]+)\/messages$/, ({ commandId, actorId, params, body }) => collaborationCalendar.postMessage(commandId, actorId, params[0], body)),
+    mutate('POST', /^\/v2\/collaboration\/threads\/([^/]+)\/archive$/, ({ commandId, actorId, params }) => collaborationCalendar.archiveThread(commandId, actorId, params[0])),
+    mutate('POST', /^\/v2\/calendar\/events$/, ({ commandId, actorId, body }) => collaborationCalendar.createEvent(commandId, actorId, body)),
+    mutate('POST', /^\/v2\/calendar\/events\/([^/]+)\/status$/, ({ commandId, actorId, params, body }) => collaborationCalendar.updateEventStatus(commandId, actorId, params[0], body.status)),
     read('GET', /^\/v2\/workspace$/, ({ actorId }) => workspace.loadForActor(actorId)),
     read('GET', /^\/v2\/notifications$/, ({ actorId }) => notifications.listForActor(actorId)),
     mutate('POST', /^\/v2\/notifications\/([^/]+)\/read$/, ({ commandId, actorId, params }) => notifications.markRead(commandId, actorId, params[0])),

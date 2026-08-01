@@ -38,16 +38,18 @@ test('shutdown waits for background workers before closing the database pool', a
   assert.ok(order.indexOf('worker-stop-end') < order.indexOf('pool-end'));
 });
 
-test('server starts notification projection only after successful listen and registers its stopper', async () => {
+test('server registers notification health before listen but starts work only after successful bind', async () => {
   const source = await readFile(path.join(root, 'src', 'server.mjs'), 'utf8');
-  const listenIndex = source.indexOf('await listen(server');
   const workerIndex = source.indexOf('notificationWorker = createBackgroundWorker');
+  const healthIndex = source.indexOf("healthRegistry.register('notification-projection'");
+  const listenIndex = source.indexOf('await listen(server');
   const startIndex = source.indexOf('notificationWorker.start()');
-  assert.ok(listenIndex >= 0 && workerIndex > listenIndex && startIndex > workerIndex);
+  assert.ok(workerIndex >= 0 && healthIndex > workerIndex && listenIndex > healthIndex && startIndex > listenIndex);
   assert.match(source, /projectPending\(\{ limit: settings\.notificationProjectionBatchSize \}\)/);
   assert.match(source, /stoppers: notificationWorker \? \[\(\) => notificationWorker\.stop\(\)\] : \[\]/);
   assert.match(source, /SYNTHA_NOTIFICATION_PROJECTION_INTERVAL_MS/);
   assert.match(source, /SYNTHA_NOTIFICATION_PROJECTION_BATCH_SIZE/);
+  assert.match(source, /operationalReadiness: \(\) => healthRegistry\.check\(\)/);
 });
 
 test('PostgreSQL notification batches exclude projected events and use a 64-bit advisory lock', async () => {
@@ -56,6 +58,7 @@ test('PostgreSQL notification batches exclude projected events and use a 64-bit 
   assert.match(source, /LIMIT \$1/);
   assert.match(source, /pg_advisory_xact_lock\(hashtextextended\(\$1, 0\)\)/);
   assert.doesNotMatch(source, /pg_advisory_xact_lock\(hashtext\(\$1\)\)/);
+  assert.doesNotMatch(source, /source\.status\s*=\s*'pending'/);
 });
 
 test('shutdown validates stopper contracts', () => {

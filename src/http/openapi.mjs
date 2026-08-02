@@ -3,28 +3,36 @@ const mutationHeaders = [{
   name: 'Idempotency-Key',
   in: 'header',
   required: true,
+  description: 'Globally unique command key across every authenticated mutation. Reusing a key for another command returns HTTP 409.',
   schema: { type: 'string', minLength: 1, maxLength: 128, pattern: SAFE_ID_PATTERN },
 }];
 const auth = [{ bearerAuth: [] }];
 const identifier = { type: 'string', minLength: 1, maxLength: 160 };
+const nullableIdentifier = { oneOf: [identifier, { type: 'null' }] };
 const dateOrDateTime = { oneOf: [{ type: 'string', format: 'date' }, { type: 'string', format: 'date-time' }] };
+const nullableDateTime = { oneOf: [{ type: 'string', format: 'date-time' }, { type: 'null' }] };
 const currency = { type: 'string', pattern: '^[A-Z]{3}$' };
 const postgresIntegerMaximum = 2_147_483_647;
 const moneyMaximum = 900_719_925_474.0991;
 
 export const wholesaleV2OpenApi = Object.freeze({
   openapi: '3.1.0',
-  info: { title: 'Syntha Wholesale V2 API', version: '1.0.0' },
-  servers: [{ url: '/v2' }],
-  'x-operational-endpoints': Object.freeze({ liveness: '/health', readiness: '/ready', specification: '/openapi.json' }),
+  info: { title: 'Syntha Wholesale V2 API', version: '1.1.0' },
+  servers: [{ url: '/v2', description: 'Authenticated Syntha V2 API prefix' }],
+  'x-operational-endpoints': Object.freeze({
+    liveness: '/health',
+    readiness: '/ready',
+    specification: '/openapi.json',
+    metrics: '/metrics',
+  }),
   components: {
     securitySchemes: { bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'Opaque Syntha V2 session token' } },
     schemas: {
       Error: {
-        type: 'object', required: ['error', 'requestId'],
+        type: 'object', required: ['error', 'requestId'], additionalProperties: false,
         properties: {
           error: {
-            type: 'object', required: ['code', 'message', 'details'],
+            type: 'object', required: ['code', 'message', 'details'], additionalProperties: false,
             properties: { code: { type: 'string' }, message: { type: 'string' }, details: { type: 'object' } },
           },
           requestId: { type: 'string', minLength: 1, maxLength: 128, pattern: SAFE_ID_PATTERN },
@@ -49,12 +57,7 @@ export const wholesaleV2OpenApi = Object.freeze({
       },
       CollectionCreate: {
         type: 'object', required: ['campaignId', 'brandId', 'name', 'currency'], additionalProperties: false,
-        properties: {
-          campaignId: identifier,
-          brandId: identifier,
-          name: { type: 'string', minLength: 2, maxLength: 160 },
-          currency,
-        },
+        properties: { campaignId: identifier, brandId: identifier, name: { type: 'string', minLength: 2, maxLength: 160 }, currency },
       },
       CatalogSkuCreate: {
         type: 'object',
@@ -73,13 +76,7 @@ export const wholesaleV2OpenApi = Object.freeze({
       },
       ShowroomCreate: {
         type: 'object', required: ['collectionId', 'brandId', 'name', 'opensAt', 'closesAt'], additionalProperties: false,
-        properties: {
-          collectionId: identifier,
-          brandId: identifier,
-          name: { type: 'string', minLength: 2, maxLength: 160 },
-          opensAt: dateOrDateTime,
-          closesAt: dateOrDateTime,
-        },
+        properties: { collectionId: identifier, brandId: identifier, name: { type: 'string', minLength: 2, maxLength: 160 }, opensAt: dateOrDateTime, closesAt: dateOrDateTime },
       },
       RelationshipCreate: {
         type: 'object', required: ['brandId', 'shopId'], additionalProperties: false,
@@ -111,6 +108,9 @@ export const wholesaleV2OpenApi = Object.freeze({
           sku: { type: 'string', pattern: '^[A-Z0-9][A-Z0-9._-]{1,63}$' },
           quantity: { type: 'integer', minimum: 1, maximum: postgresIntegerMaximum },
           note: { type: 'string', maxLength: 2000 },
+          unitPrice: { type: 'number', exclusiveMinimum: 0, maximum: moneyMaximum, multipleOf: 0.0001 },
+          currency,
+          catalogVersion: { type: 'integer', minimum: 1, maximum: postgresIntegerMaximum },
         },
       },
       OrderTerms: {
@@ -134,6 +134,65 @@ export const wholesaleV2OpenApi = Object.freeze({
       OrderCancel: {
         type: 'object', required: ['reason'], additionalProperties: false,
         properties: { orderId: identifier, reason: { type: 'string', minLength: 3, maxLength: 1000 } },
+      },
+      Notification: {
+        type: 'object',
+        required: ['id', 'sourceEventId', 'recipientOrganisationId', 'type', 'title', 'body', 'status', 'version', 'createdAt', 'updatedAt'],
+        additionalProperties: false,
+        properties: {
+          id: identifier,
+          dedupeKey: { type: 'string', minLength: 3, maxLength: 512 },
+          sourceEventId: identifier,
+          recipientOrganisationId: identifier,
+          type: { type: 'string', enum: ['selection-submitted', 'order-terms-accepted', 'deal-opened'] },
+          title: { type: 'string', minLength: 2, maxLength: 500 },
+          body: { type: 'string', minLength: 2, maxLength: 5000 },
+          status: { type: 'string', enum: ['unread', 'read'] },
+          version: { type: 'integer', minimum: 1, maximum: postgresIntegerMaximum },
+          createdAt: { type: 'string', format: 'date-time' },
+          readAt: nullableDateTime,
+          readBy: nullableIdentifier,
+          updatedAt: { type: 'string', format: 'date-time' },
+        },
+      },
+      NotificationPage: {
+        type: 'object', required: ['items', 'nextCursor'], additionalProperties: false,
+        properties: {
+          items: { type: 'array', maxItems: 200, items: { $ref: '#/components/schemas/Notification' } },
+          nextCursor: { oneOf: [{ type: 'string', minLength: 1, maxLength: 1024 }, { type: 'null' }] },
+        },
+      },
+      WorkspacePageInfo: {
+        type: 'object', required: ['limit', 'hasMore', 'truncatedSections'], additionalProperties: false,
+        properties: {
+          limit: { type: 'integer', minimum: 1, maximum: 500 },
+          hasMore: { type: 'boolean' },
+          truncatedSections: {
+            type: 'array', uniqueItems: true,
+            items: { type: 'string', enum: ['memberships', 'organisations', 'relationships', 'invitations', 'campaigns', 'collections', 'catalogSkus', 'showrooms', 'cycles', 'selections', 'orders', 'deals', 'calendar'] },
+          },
+        },
+      },
+      Workspace: {
+        type: 'object',
+        required: ['memberships', 'organisations', 'relationships', 'invitations', 'campaigns', 'collections', 'catalogSkus', 'showrooms', 'cycles', 'selections', 'orders', 'deals', 'calendar', 'pageInfo'],
+        additionalProperties: false,
+        properties: {
+          memberships: { type: 'array', items: { type: 'object' } },
+          organisations: { type: 'array', items: { type: 'object' } },
+          relationships: { type: 'array', items: { type: 'object' } },
+          invitations: { type: 'array', items: { type: 'object' } },
+          campaigns: { type: 'array', items: { type: 'object' } },
+          collections: { type: 'array', items: { type: 'object' } },
+          catalogSkus: { type: 'array', items: { type: 'object' } },
+          showrooms: { type: 'array', items: { type: 'object' } },
+          cycles: { type: 'array', items: { type: 'object' } },
+          selections: { type: 'array', items: { type: 'object' } },
+          orders: { type: 'array', items: { type: 'object' } },
+          deals: { type: 'array', items: { type: 'object' } },
+          calendar: { type: 'array', items: { type: 'object' } },
+          pageInfo: { $ref: '#/components/schemas/WorkspacePageInfo' },
+        },
       },
     },
   },
@@ -180,35 +239,42 @@ export const wholesaleV2OpenApi = Object.freeze({
     '/orders/{orderId}/accept': { post: operation('acceptOrderTerms', ['orderId'], '#/components/schemas/OrderAccept') },
     '/orders/{orderId}/attach': { post: operation('attachOrderToCycle', ['orderId']) },
     '/orders/{orderId}/cancel': { post: operation('cancelOrder', ['orderId'], '#/components/schemas/OrderCancel') },
-    '/workspace': { get: readOperation('loadWorkspace', { 200: 'Actor workspace', 401: 'Authentication required' }) },
+    '/workspace': {
+      get: {
+        ...readOperation('loadWorkspace', { 200: 'Bounded actor workspace', 400: 'Invalid workspace limit', 401: 'Authentication required' }),
+        description: 'Returns one repeatable-read workspace bootstrap snapshot. Every collection is capped by limit; pageInfo.hasMore and pageInfo.truncatedSections report omitted records.',
+        parameters: [{
+          name: 'limit',
+          in: 'query',
+          required: false,
+          description: 'Maximum records returned for each workspace collection. Use pageInfo.truncatedSections to identify collections requiring a dedicated follow-up read.',
+          schema: { type: 'integer', minimum: 1, maximum: 500, default: 200 },
+        }],
+        responses: responseContent(
+          readOperation('loadWorkspace', { 200: 'Bounded actor workspace', 400: 'Invalid workspace limit', 401: 'Authentication required' }).responses,
+          200,
+          '#/components/schemas/Workspace',
+        ),
+      },
+    },
     '/notifications/page': {
       get: {
         ...readOperation('pageNotifications', { 200: 'Stable notification page', 400: 'Invalid limit or cursor', 401: 'Authentication required' }),
         parameters: [
-          {
-            name: 'limit',
-            in: 'query',
-            required: false,
-            schema: { type: 'integer', minimum: 1, maximum: 200, default: 50 },
-          },
-          {
-            name: 'cursor',
-            in: 'query',
-            required: false,
-            schema: { type: 'string', minLength: 1, maxLength: 1024 },
-          },
+          { name: 'limit', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 200, default: 50 } },
+          { name: 'cursor', in: 'query', required: false, schema: { type: 'string', minLength: 1, maxLength: 1024 } },
         ],
+        responses: responseContent(
+          readOperation('pageNotifications', { 200: 'Stable notification page', 400: 'Invalid limit or cursor', 401: 'Authentication required' }).responses,
+          200,
+          '#/components/schemas/NotificationPage',
+        ),
       },
     },
     '/notifications': {
       get: {
         ...readOperation('listNotifications', { 200: 'Notifications', 400: 'Invalid notification limit', 401: 'Authentication required' }),
-        parameters: [{
-          name: 'limit',
-          in: 'query',
-          required: false,
-          schema: { type: 'integer', minimum: 1, maximum: 500, default: 100 },
-        }],
+        parameters: [{ name: 'limit', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 500, default: 100 } }],
       },
     },
     '/notifications/{notificationId}/read': { post: operation('markNotificationRead', ['notificationId']) },
@@ -242,6 +308,13 @@ function requestBody(schemaRef) {
   return { required: true, content: { 'application/json': media, 'application/*+json': media } };
 }
 
+function responseContent(responses, status, schemaRef) {
+  return {
+    ...responses,
+    [status]: { ...responses[status], content: { 'application/json': { schema: { $ref: schemaRef } } } },
+  };
+}
+
 function standardResponses() {
   return {
     200: { description: 'Success' },
@@ -249,7 +322,7 @@ function standardResponses() {
     401: { description: 'Authentication required' },
     403: { description: 'Capability denied' },
     404: { description: 'Resource or route not found' },
-    409: { description: 'Conflict' },
+    409: { description: 'Conflict, including global idempotency-key reuse' },
     413: { description: 'Request body too large' },
     415: { description: 'Unsupported content type' },
     422: { description: 'Domain validation failed, including MOQ or availability failures' },

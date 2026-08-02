@@ -213,7 +213,7 @@ function classifyRoute(pathname) {
   if (typeof pathname !== 'string') return 'unknown';
   if (['/health', '/ready', '/metrics', '/openapi.json'].includes(pathname)) return 'operational';
   if (pathname.startsWith('/v2/auth/')) return 'auth';
-  if (pathname === '/v2/workspace') return 'workspace';
+  if (pathname === '/v2/workspace' || pathname.startsWith('/v2/workspace/')) return 'workspace';
   if (pathname.startsWith('/v2/notifications')) return 'notifications';
   if (pathname.startsWith('/v2/catalog')) return 'catalog';
   if (pathname.startsWith('/v2/orders')) return 'orders';

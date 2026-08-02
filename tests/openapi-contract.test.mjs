@@ -16,11 +16,13 @@ test('OpenAPI includes every mutation route added to the HTTP router', () => {
   }
 });
 
-test('mutation keys use the same safe 128-character contract as HTTP', () => {
+test('mutation keys use the same safe global 128-character contract as HTTP', () => {
   const parameter = wholesaleV2OpenApi.paths['/campaigns'].post.parameters.find((item) => item.name === 'Idempotency-Key');
   assert.equal(parameter.required, true);
   assert.equal(parameter.schema.maxLength, 128);
   assert.equal(parameter.schema.pattern, '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$');
+  assert.match(parameter.description, /Globally unique/);
+  assert.match(parameter.description, /HTTP 409/);
 });
 
 test('documented catalog and selection limits match domain and PostgreSQL contracts', () => {

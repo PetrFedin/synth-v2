@@ -11,8 +11,8 @@ function operation(path, method) {
 test('all domain mutations document one global Idempotency-Key namespace', () => {
   const mutations = Object.entries(wholesaleV2OpenApi.paths)
     .flatMap(([path, methods]) => Object.entries(methods).map(([method, value]) => ({ path, method, value })))
-    .filter(({ path, method }) => path.startsWith('/v2/') && ['post', 'put', 'patch', 'delete'].includes(method))
-    .filter(({ path }) => !['/v2/auth/login', '/v2/auth/logout'].includes(path));
+    .filter(({ method }) => ['post', 'put', 'patch', 'delete'].includes(method))
+    .filter(({ path }) => !['/auth/login', '/auth/logout'].includes(path));
 
   assert.ok(mutations.length > 0);
   for (const { path, method, value } of mutations) {
@@ -28,7 +28,7 @@ test('all domain mutations document one global Idempotency-Key namespace', () =>
 });
 
 test('workspace bootstrap documents per-section bounds and truncation metadata', () => {
-  const workspace = operation('/v2/workspace', 'get');
+  const workspace = operation('/workspace', 'get');
   const limit = workspace.parameters?.find((parameter) => parameter.in === 'query' && parameter.name === 'limit');
   assert.ok(limit);
   assert.deepEqual(limit.schema, {
@@ -42,4 +42,15 @@ test('workspace bootstrap documents per-section bounds and truncation metadata',
   assert.match(workspace.description, /repeatable-read/i);
   assert.match(workspace.description, /pageInfo\.hasMore/);
   assert.ok(workspace.responses['400']);
+  assert.equal(workspace.responses['200'].content['application/json'].schema.$ref, '#/components/schemas/Workspace');
+});
+
+test('operational endpoints remain outside the authenticated /v2 server prefix', () => {
+  assert.deepEqual(wholesaleV2OpenApi.servers, [{ url: '/v2', description: 'Authenticated Syntha V2 API prefix' }]);
+  assert.deepEqual(wholesaleV2OpenApi['x-operational-endpoints'], {
+    liveness: '/health',
+    readiness: '/ready',
+    specification: '/openapi.json',
+    metrics: '/metrics',
+  });
 });

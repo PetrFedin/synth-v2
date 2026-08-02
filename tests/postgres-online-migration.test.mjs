@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import os from 'node:os';
@@ -11,14 +12,17 @@ async function migrationDir(name, sql) {
   return directory;
 }
 
-function fakePool({ indexes = {}, failLedgerOnce = false } = {}) {
+function fakePool({ indexes = {}, failLedgerOnce = false, appliedChecksums = {} } = {}) {
   const queries = [];
   let ledgerFailurePending = failLedgerOnce;
   const state = new Map(Object.entries(indexes));
   const client = {
     async query(sql, params = []) {
       queries.push({ sql, params });
-      if (sql === 'SELECT checksum FROM schema_migrations WHERE version = $1') return { rowCount: 0, rows: [] };
+      if (sql === 'SELECT checksum FROM schema_migrations WHERE version = $1') {
+        const checksum = appliedChecksums[params[0]];
+        return checksum ? { rowCount: 1, rows: [{ checksum }] } : { rowCount: 0, rows: [] };
+      }
       if (sql.includes('FROM pg_class AS index_class')) {
         const value = state.get(params[0]);
         return value === undefined ? { rowCount: 0, rows: [] } : { rowCount: 1, rows: [{ valid: value }] };
@@ -64,6 +68,8 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS workspace_page_orders_shop_idx ON orders
   assert.equal(sql.includes('COMMIT'), false);
   assert.equal(fixture.state.get('workspace_page_orders_brand_idx'), true);
   assert.equal(fixture.state.get('workspace_page_orders_shop_idx'), true);
+  const ledger = fixture.queries.find((query) => query.sql.startsWith('INSERT INTO schema_migrations'));
+  assert.deepEqual(ledger.params[0], '012_online.sql');
 });
 
 test('online migration retries safely after indexes succeeded but ledger write failed', async () => {
@@ -80,6 +86,43 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS workspace_page_catalog_brand_idx ON cata
   assert.equal(drops.length, 0, 'valid indexes must survive a ledger-only retry');
 });
 
+test('applied online migrations self-heal missing and invalid indexes without rewriting the ledger', async () => {
+  const sql = `-- syntha:migration-mode=online
+CREATE INDEX CONCURRENTLY IF NOT EXISTS workspace_page_orders_valid_idx ON orders (id);
+-- syntha:statement
+CREATE INDEX CONCURRENTLY IF NOT EXISTS workspace_page_orders_invalid_idx ON orders (brand_id, id);
+-- syntha:statement
+CREATE INDEX CONCURRENTLY IF NOT EXISTS workspace_page_orders_missing_idx ON orders (shop_id, id);
+`;
+  const version = '012_online.sql';
+  const directory = await migrationDir(version, sql);
+  const fixture = fakePool({
+    indexes: {
+      workspace_page_orders_valid_idx: true,
+      workspace_page_orders_invalid_idx: false,
+    },
+    appliedChecksums: {
+      [version]: createHash('sha256').update(sql).digest('hex'),
+    },
+  });
+
+  const result = await migratePostgres({ pool: fixture.pool, migrationsDir: directory });
+  assert.deepEqual(result, { applied: [], skipped: [version] });
+  assert.equal(fixture.state.get('workspace_page_orders_valid_idx'), true);
+  assert.equal(fixture.state.get('workspace_page_orders_invalid_idx'), true);
+  assert.equal(fixture.state.get('workspace_page_orders_missing_idx'), true);
+  const creates = fixture.queries.filter((query) => /^CREATE INDEX CONCURRENTLY/i.test(query.sql));
+  assert.equal(creates.length, 2, 'valid indexes must be skipped while invalid and missing indexes are rebuilt');
+  assert.equal(fixture.queries.some((query) => query.sql.startsWith('INSERT INTO schema_migrations')), false);
+
+  await migratePostgres({ pool: fixture.pool, migrationsDir: directory });
+  assert.equal(
+    fixture.queries.filter((query) => /^CREATE INDEX CONCURRENTLY/i.test(query.sql)).length,
+    2,
+    'a subsequent startup must not rebuild healthy indexes',
+  );
+});
+
 test('transactional migrations retain atomic BEGIN and COMMIT behavior', async () => {
   const directory = await migrationDir('001_base.sql', 'CREATE TABLE example (id text PRIMARY KEY);');
   const fixture = fakePool();
@@ -89,6 +132,7 @@ test('transactional migrations retain atomic BEGIN and COMMIT behavior', async (
   assert.ok(sql.includes('BEGIN'));
   assert.ok(sql.includes('CREATE TABLE example (id text PRIMARY KEY);'));
   assert.ok(sql.includes('COMMIT'));
+  assert.equal(sql.some((value) => /^CREATE INDEX CONCURRENTLY/i.test(value)), false);
 });
 
 test('online migration rejects unsafe or multi-statement SQL before execution', async () => {

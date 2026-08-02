@@ -4,15 +4,18 @@ import process from 'node:process';
 const PROMETHEUS_CONTENT_TYPE = 'text/plain; version=0.0.4; charset=utf-8';
 const HTTP_BUCKETS_MS = Object.freeze([5, 10, 25, 50, 100, 250, 500, 1_000, 2_500, 5_000, 10_000, 30_000]);
 const WORKER_NAME = /^[a-z][a-z0-9-]{0,63}$/;
-const ROUTE_GROUPS = new Set(['operational', 'auth', 'workspace', 'notifications', 'catalog', 'orders', 'commerce', 'other-v2', 'unknown']);
 const WORKER_OUTCOMES = new Set(['published', 'failed', 'dead-letter', 'lease-lost', 'acknowledgement-failed', 'projected', 'skipped', 'other']);
+const MAINTENANCE_STATUSES = new Set(['completed', 'skipped-lock', 'not-due', 'failed', 'unknown']);
 
-export function createOperationalMetrics({ pool, token, clock = () => Date.now(), processRef = process } = {}) {
+export function createOperationalMetrics({ pool, token, clock = () => Date.now(), processRef = process, cacheTtlMs = 5_000 } = {}) {
   if (pool !== undefined && (!pool || typeof pool.query !== 'function')) throw new Error('Metrics PostgreSQL pool must expose query(sql)');
   if (token !== undefined && (typeof token !== 'string' || token.length < 32 || token.length > 512)) {
     throw new Error('Metrics token must contain from 32 to 512 characters');
   }
   if (typeof clock !== 'function') throw new Error('Metrics clock is required');
+  if (!Number.isSafeInteger(cacheTtlMs) || cacheTtlMs < 100 || cacheTtlMs > 60_000) {
+    throw new Error('Metrics cache TTL must be an integer from 100 to 60000ms');
+  }
 
   const startedAtMs = nowMs(clock);
   const httpRequests = new Map();
@@ -23,8 +26,10 @@ export function createOperationalMetrics({ pool, token, clock = () => Date.now()
   let maintenanceDeleted = 0;
   let maintenanceLastCompletedAt = 0;
   let collectionErrors = 0;
+  let postgresCache = Object.freeze({ expiresAtMs: 0, up: 0, stale: 0, snapshot: undefined });
+  let postgresCollection;
 
-  return Object.freeze({
+  const metrics = {
     enabled: Boolean(token),
     contentType: PROMETHEUS_CONTENT_TYPE,
 
@@ -37,13 +42,10 @@ export function createOperationalMetrics({ pool, token, clock = () => Date.now()
     },
 
     recordHttp({ method, pathname, status, durationMs }) {
-      const normalizedMethod = normalizeMethod(method);
-      const routeGroup = classifyRoute(pathname);
-      const normalizedStatus = normalizeStatus(status);
       const duration = Number(durationMs);
       if (!Number.isFinite(duration) || duration < 0) return false;
-      increment(httpRequests, labelKey([normalizedMethod, routeGroup, normalizedStatus]));
-      observe(httpDurations, labelKey([normalizedMethod, routeGroup]), duration);
+      increment(httpRequests, labelKey([normalizeMethod(method), classifyRoute(pathname), normalizeStatus(status)]));
+      observe(httpDurations, labelKey([normalizeMethod(method), classifyRoute(pathname)]), duration);
       return true;
     },
 
@@ -52,8 +54,7 @@ export function createOperationalMetrics({ pool, token, clock = () => Date.now()
       if (!Array.isArray(results)) throw new Error('Worker batch results must be an array');
       for (const result of results) {
         const candidate = typeof result?.status === 'string' ? result.status : 'other';
-        const outcome = WORKER_OUTCOMES.has(candidate) ? candidate : 'other';
-        increment(workerResults, labelKey([worker, outcome]));
+        increment(workerResults, labelKey([worker, WORKER_OUTCOMES.has(candidate) ? candidate : 'other']));
       }
     },
 
@@ -71,71 +72,108 @@ export function createOperationalMetrics({ pool, token, clock = () => Date.now()
     },
 
     recordMaintenance(result) {
-      const status = typeof result?.status === 'string' && result.status.length <= 64 ? result.status : 'unknown';
+      const candidate = typeof result?.status === 'string' ? result.status : 'unknown';
+      const status = MAINTENANCE_STATUSES.has(candidate) ? candidate : 'unknown';
       increment(maintenanceRuns, status);
-      if (status === 'completed') {
-        maintenanceLastCompletedAt = Date.parse(result?.nextRunAt) - 1 || nowMs(clock);
-        const deleted = Object.values(result?.counts ?? {}).reduce((sum, value) => {
-          const number = Number(value);
-          return Number.isSafeInteger(number) && number > 0 ? sum + number : sum;
-        }, 0);
-        maintenanceDeleted += deleted;
-      }
+      if (status !== 'completed') return;
+      maintenanceLastCompletedAt = nowMs(clock);
+      maintenanceDeleted += Object.values(result?.counts ?? {}).reduce((sum, value) => {
+        const number = Number(value);
+        return Number.isSafeInteger(number) && number > 0 ? sum + number : sum;
+      }, 0);
     },
 
     async render() {
       const lines = [];
       const now = nowMs(clock);
+      const memory = typeof processRef?.memoryUsage === 'function' ? processRef.memoryUsage() : {};
+      const postgres = await readPostgresMetrics();
+      const workerSamples = { ready: [], active: [], runs: [], failures: [], consecutiveFailures: [] };
+
+      for (const [worker, provider] of workers) {
+        try {
+          const health = await provider();
+          workerSamples.ready.push([[worker], health?.status === 'ready' ? 1 : 0]);
+          workerSamples.active.push([[worker], health?.active ? 1 : 0]);
+          workerSamples.runs.push([[worker], finite(health?.runCount)]);
+          workerSamples.failures.push([[worker], finite(health?.failureCount)]);
+          workerSamples.consecutiveFailures.push([[worker], finite(health?.consecutiveFailures)]);
+        } catch {
+          collectionErrors += 1;
+          workerSamples.ready.push([[worker], 0]);
+          workerSamples.active.push([[worker], 0]);
+        }
+      }
+
       metric(lines, 'syntha_process_uptime_seconds', 'Process uptime in seconds.', 'gauge', [], [[[], Math.max(0, (now - startedAtMs) / 1_000)]]);
-      metric(lines, 'syntha_process_resident_memory_bytes', 'Resident process memory in bytes.', 'gauge', [], [[[], finite(processRef.memoryUsage?.().rss)]]);
-      metric(lines, 'syntha_process_heap_used_bytes', 'Used JavaScript heap in bytes.', 'gauge', [], [[[], finite(processRef.memoryUsage?.().heapUsed)]]);
+      metric(lines, 'syntha_process_resident_memory_bytes', 'Resident process memory in bytes.', 'gauge', [], [[[], finite(memory.rss)]]);
+      metric(lines, 'syntha_process_heap_used_bytes', 'Used JavaScript heap in bytes.', 'gauge', [], [[[], finite(memory.heapUsed)]]);
       metric(lines, 'syntha_postgres_pool_connections', 'PostgreSQL pool connections by state.', 'gauge', ['state'], [
         [['total'], finite(pool?.totalCount)],
         [['idle'], finite(pool?.idleCount)],
         [['waiting'], finite(pool?.waitingCount)],
       ]);
+      metric(lines, 'syntha_metrics_collector_up', 'Whether an operational metrics collector succeeded.', 'gauge', ['collector'], [[['postgres'], postgres.up]]);
+      metric(lines, 'syntha_metrics_collector_stale', 'Whether a collector is serving its last successful snapshot.', 'gauge', ['collector'], [[['postgres'], postgres.stale]]);
 
-      if (pool) {
-        try {
-          const snapshot = await collectPostgres(pool);
-          metric(lines, 'syntha_queue_records', 'Operational queue records by queue and state.', 'gauge', ['queue', 'state'], [
-            [['outbox', 'pending'], snapshot.outboxPending],
-            [['outbox', 'dead-letter'], snapshot.outboxDeadLetter],
-            [['catalog-outbox', 'pending'], snapshot.catalogOutboxPending],
-            [['outbox-publication', 'claimed'], snapshot.outboxClaims],
-            [['notification-projection', 'claimed'], snapshot.notificationClaims],
-            [['notifications', 'unread'], snapshot.notificationsUnread],
-            [['auth-sessions', 'active'], snapshot.activeSessions],
-          ]);
-        } catch {
-          collectionErrors += 1;
-        }
+      if (postgres.snapshot) {
+        metric(lines, 'syntha_queue_records', 'Operational queue records by queue and state.', 'gauge', ['queue', 'state'], [
+          [['outbox', 'pending'], postgres.snapshot.outboxPending],
+          [['outbox', 'dead-letter'], postgres.snapshot.outboxDeadLetter],
+          [['catalog-outbox', 'pending'], postgres.snapshot.catalogOutboxPending],
+          [['outbox-publication', 'active'], postgres.snapshot.outboxClaimsActive],
+          [['outbox-publication', 'scheduled'], postgres.snapshot.outboxClaimsScheduled],
+          [['outbox-publication', 'expired'], postgres.snapshot.outboxClaimsExpired],
+          [['notification-projection', 'backlog'], postgres.snapshot.notificationBacklog],
+          [['notification-projection', 'active'], postgres.snapshot.notificationClaimsActive],
+          [['notification-projection', 'expired'], postgres.snapshot.notificationClaimsExpired],
+          [['notifications', 'unread'], postgres.snapshot.notificationsUnread],
+          [['auth-sessions', 'active'], postgres.snapshot.activeSessions],
+        ]);
       }
 
-      metric(lines, 'syntha_metrics_collection_errors_total', 'Metrics collector failures.', 'counter', [], [[[], collectionErrors]]);
       mapMetric(lines, 'syntha_http_requests_total', 'HTTP requests by method, bounded route group and status.', 'counter', ['method', 'route_group', 'status'], httpRequests);
       histogramMetric(lines, 'syntha_http_request_duration_milliseconds', 'HTTP request duration in milliseconds.', ['method', 'route_group'], httpDurations);
       mapMetric(lines, 'syntha_worker_results_total', 'Background worker result records by bounded outcome.', 'counter', ['worker', 'outcome'], workerResults);
+      metric(lines, 'syntha_worker_ready', 'Whether a background worker is ready.', 'gauge', ['worker'], workerSamples.ready);
+      metric(lines, 'syntha_worker_active', 'Whether a background worker is currently active.', 'gauge', ['worker'], workerSamples.active);
+      metric(lines, 'syntha_worker_runs_total', 'Background worker runs.', 'counter', ['worker'], workerSamples.runs);
+      metric(lines, 'syntha_worker_failures_total', 'Background worker failures.', 'counter', ['worker'], workerSamples.failures);
+      metric(lines, 'syntha_worker_consecutive_failures', 'Current consecutive worker failures.', 'gauge', ['worker'], workerSamples.consecutiveFailures);
       mapMetric(lines, 'syntha_maintenance_runs_total', 'Retention maintenance runs by status.', 'counter', ['status'], maintenanceRuns);
       metric(lines, 'syntha_maintenance_deleted_records_total', 'Records deleted by retention maintenance.', 'counter', [], [[[], maintenanceDeleted]]);
       metric(lines, 'syntha_maintenance_last_completed_timestamp_seconds', 'Unix timestamp of the last completed maintenance run.', 'gauge', [], [[[], maintenanceLastCompletedAt > 0 ? maintenanceLastCompletedAt / 1_000 : 0]]);
-
-      for (const [worker, provider] of workers) {
-        try {
-          const health = await provider();
-          metric(lines, 'syntha_worker_ready', 'Whether a background worker is ready.', 'gauge', ['worker'], [[[worker], health?.status === 'ready' ? 1 : 0]], false);
-          metric(lines, 'syntha_worker_active', 'Whether a background worker is currently active.', 'gauge', ['worker'], [[[worker], health?.active ? 1 : 0]], false);
-          metric(lines, 'syntha_worker_runs_total', 'Background worker runs.', 'counter', ['worker'], [[[worker], finite(health?.runCount)]], false);
-          metric(lines, 'syntha_worker_failures_total', 'Background worker failures.', 'counter', ['worker'], [[[worker], finite(health?.failureCount)]], false);
-          metric(lines, 'syntha_worker_consecutive_failures', 'Current consecutive worker failures.', 'gauge', ['worker'], [[[worker], finite(health?.consecutiveFailures)]], false);
-        } catch {
-          collectionErrors += 1;
-        }
-      }
-
+      metric(lines, 'syntha_metrics_collection_errors_total', 'Metrics collector failures.', 'counter', [], [[[], collectionErrors]]);
       return `${lines.join('\n')}\n`;
     },
-  });
+  };
+
+  return Object.freeze(metrics);
+
+  async function readPostgresMetrics() {
+    if (!pool) return Object.freeze({ up: 0, stale: 0, snapshot: undefined });
+    const now = nowMs(clock);
+    if (now < postgresCache.expiresAtMs) return postgresCache;
+    if (postgresCollection) return postgresCollection;
+    postgresCollection = (async () => {
+      try {
+        const snapshot = await collectPostgres(pool);
+        postgresCache = Object.freeze({ up: 1, stale: 0, snapshot, expiresAtMs: now + cacheTtlMs });
+      } catch {
+        collectionErrors += 1;
+        postgresCache = Object.freeze({
+          up: 0,
+          stale: postgresCache.snapshot ? 1 : 0,
+          snapshot: postgresCache.snapshot,
+          expiresAtMs: now + cacheTtlMs,
+        });
+      } finally {
+        postgresCollection = undefined;
+      }
+      return postgresCache;
+    })();
+    return postgresCollection;
+  }
 }
 
 async function collectPostgres(pool) {
@@ -144,8 +182,14 @@ async function collectPostgres(pool) {
        (SELECT count(*)::bigint FROM outbox_events WHERE status = 'pending') AS outbox_pending,
        (SELECT count(*)::bigint FROM outbox_events WHERE status = 'dead-letter') AS outbox_dead_letter,
        (SELECT count(*)::bigint FROM catalog_outbox_events WHERE status = 'pending') AS catalog_outbox_pending,
-       (SELECT count(*)::bigint FROM outbox_publication_claims WHERE lease_expires_at > now()) AS outbox_claims,
-       (SELECT count(*)::bigint FROM notification_projection_claims WHERE lease_expires_at > now()) AS notification_claims,
+       (SELECT count(*)::bigint FROM outbox_publication_claims WHERE lease_expires_at > now() AND next_attempt_at <= now()) AS outbox_claims_active,
+       (SELECT count(*)::bigint FROM outbox_publication_claims WHERE next_attempt_at > now()) AS outbox_claims_scheduled,
+       (SELECT count(*)::bigint FROM outbox_publication_claims WHERE lease_expires_at <= now() AND next_attempt_at <= now()) AS outbox_claims_expired,
+       (SELECT count(*)::bigint
+          FROM outbox_events AS source
+         WHERE NOT EXISTS (SELECT 1 FROM notification_projections AS projected WHERE projected.event_id = source.id)) AS notification_backlog,
+       (SELECT count(*)::bigint FROM notification_projection_claims WHERE lease_expires_at > now()) AS notification_claims_active,
+       (SELECT count(*)::bigint FROM notification_projection_claims WHERE lease_expires_at <= now()) AS notification_claims_expired,
        (SELECT count(*)::bigint FROM notifications WHERE status = 'unread') AS notifications_unread,
        (SELECT count(*)::bigint FROM auth_sessions WHERE status = 'active' AND expires_at > now()) AS active_sessions`,
   );
@@ -154,8 +198,12 @@ async function collectPostgres(pool) {
     outboxPending: count(row.outbox_pending),
     outboxDeadLetter: count(row.outbox_dead_letter),
     catalogOutboxPending: count(row.catalog_outbox_pending),
-    outboxClaims: count(row.outbox_claims),
-    notificationClaims: count(row.notification_claims),
+    outboxClaimsActive: count(row.outbox_claims_active),
+    outboxClaimsScheduled: count(row.outbox_claims_scheduled),
+    outboxClaimsExpired: count(row.outbox_claims_expired),
+    notificationBacklog: count(row.notification_backlog),
+    notificationClaimsActive: count(row.notification_claims_active),
+    notificationClaimsExpired: count(row.notification_claims_expired),
     notificationsUnread: count(row.notifications_unread),
     activeSessions: count(row.active_sessions),
   });
@@ -197,8 +245,7 @@ function observe(map, key, value) {
   HTTP_BUCKETS_MS.forEach((boundary, index) => { if (value <= boundary) state.buckets[index] += 1; });
 }
 function mapMetric(lines, name, help, type, labelNames, values) {
-  const samples = [...values.entries()].map(([key, value]) => [JSON.parse(key), value]);
-  metric(lines, name, help, type, labelNames, samples);
+  metric(lines, name, help, type, labelNames, [...values.entries()].map(([key, value]) => [JSON.parse(key), value]));
 }
 function histogramMetric(lines, name, help, labelNames, values) {
   lines.push(`# HELP ${name} ${help}`);
@@ -213,11 +260,9 @@ function histogramMetric(lines, name, help, labelNames, values) {
     lines.push(`${name}_count${formatLabels(labelNames, labels)} ${state.count}`);
   }
 }
-function metric(lines, name, help, type, labelNames, samples, metadata = true) {
-  if (metadata) {
-    lines.push(`# HELP ${name} ${help}`);
-    lines.push(`# TYPE ${name} ${type}`);
-  }
+function metric(lines, name, help, type, labelNames, samples) {
+  lines.push(`# HELP ${name} ${help}`);
+  lines.push(`# TYPE ${name} ${type}`);
   for (const [labels, value] of samples) lines.push(`${name}${formatLabels(labelNames, labels)} ${number(value)}`);
 }
 function formatLabels(names, values) {

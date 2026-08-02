@@ -42,13 +42,14 @@ export async function migratePostgres({ pool, migrationsDir, clock = () => new D
     )`);
     const manifest = await loadMigrationManifest(migrationsDir);
     for (const migration of manifest) {
+      const parsed = parseMigration(migration.sql, migration.version);
       const existing = await client.query('SELECT checksum FROM schema_migrations WHERE version = $1', [migration.version]);
       if (existing.rowCount) {
         invariant(existing.rows[0].checksum.trim() === migration.checksum, 'MIGRATION_CHECKSUM_MISMATCH', 'Applied migration checksum does not match repository', { file: migration.version });
+        if (parsed.mode === 'online') await ensureOnlineIndexes(client, migration, parsed);
         skipped.push(migration.version);
         continue;
       }
-      const parsed = parseMigration(migration.sql, migration.version);
       if (parsed.mode === 'online') {
         await applyOnlineMigration(client, migration, parsed, clock);
       } else {
@@ -67,6 +68,7 @@ export async function inspectPostgresMigrations({ pool, migrationsDir } = {}) {
   invariant(pool && typeof pool.query === 'function', 'POSTGRES_POOL_REQUIRED', 'PostgreSQL pool is required');
   invariant(migrationsDir, 'MIGRATIONS_DIR_REQUIRED', 'Migrations directory is required');
   const manifest = await loadMigrationManifest(migrationsDir);
+  const requiredIndexes = onlineIndexNames(manifest);
   const tableResult = await pool.query("SELECT to_regclass('public.schema_migrations') AS table_name");
   if (!tableResult.rows[0]?.table_name) {
     return freezeInspection({
@@ -75,6 +77,7 @@ export async function inspectPostgresMigrations({ pool, migrationsDir } = {}) {
       pending: manifest.map((item) => item.version),
       mismatched: [],
       unknown: [],
+      ...(requiredIndexes.length ? { missingIndexes: requiredIndexes, invalidIndexes: [] } : {}),
     });
   }
   const appliedResult = await pool.query('SELECT version, checksum FROM schema_migrations ORDER BY version');
@@ -85,12 +88,40 @@ export async function inspectPostgresMigrations({ pool, migrationsDir } = {}) {
     .filter((item) => appliedByVersion.has(item.version) && appliedByVersion.get(item.version) !== item.checksum)
     .map((item) => item.version);
   const unknown = [...appliedByVersion.keys()].filter((version) => !repositoryByVersion.has(version)).sort();
+  const indexInspection = requiredIndexes.length ? await inspectRequiredIndexes(pool, requiredIndexes) : undefined;
   return freezeInspection({
     totalCount: manifest.length,
     appliedCount: appliedResult.rowCount,
     pending,
     mismatched,
     unknown,
+    ...(indexInspection ? { missingIndexes: indexInspection.missing, invalidIndexes: indexInspection.invalid } : {}),
+  });
+}
+
+async function inspectRequiredIndexes(pool, indexNames) {
+  if (!indexNames.length) return Object.freeze({ missing: Object.freeze([]), invalid: Object.freeze([]) });
+  const result = await pool.query(
+    `SELECT required.index_name,
+            index_state.indisvalid IS NOT NULL AS exists,
+            COALESCE(index_state.indisvalid, false) AS valid
+       FROM unnest($1::text[]) AS required(index_name)
+       LEFT JOIN LATERAL (
+         SELECT state.indisvalid
+           FROM pg_class AS index_class
+           JOIN pg_namespace AS index_namespace ON index_namespace.oid = index_class.relnamespace
+           JOIN pg_index AS state ON state.indexrelid = index_class.oid
+          WHERE index_namespace.nspname = current_schema()
+            AND index_class.relkind = 'i'
+            AND index_class.relname = required.index_name
+          LIMIT 1
+       ) AS index_state ON true
+      ORDER BY required.index_name`,
+    [indexNames],
+  );
+  return Object.freeze({
+    missing: Object.freeze(result.rows.filter((row) => !truthy(row.exists)).map((row) => row.index_name)),
+    invalid: Object.freeze(result.rows.filter((row) => truthy(row.exists) && !truthy(row.valid)).map((row) => row.index_name)),
   });
 }
 
@@ -107,8 +138,15 @@ async function applyTransactionalMigration(client, migration, sql, clock) {
 }
 
 async function applyOnlineMigration(client, migration, parsed, clock) {
+  await ensureOnlineIndexes(client, migration, parsed);
+  await recordMigration(client, migration, clock);
+}
+
+async function ensureOnlineIndexes(client, migration, parsed) {
   for (const statement of parsed.statements) {
-    await repairInvalidIndex(client, statement.indexName);
+    const existing = await readIndexState(client, statement.indexName);
+    if (existing.exists && existing.valid) continue;
+    if (existing.exists) await repairInvalidIndex(client, statement.indexName);
     await client.query(statement.sql);
     const state = await readIndexState(client, statement.indexName);
     invariant(
@@ -118,7 +156,6 @@ async function applyOnlineMigration(client, migration, parsed, clock) {
       { file: migration.version, index: statement.indexName },
     );
   }
-  await recordMigration(client, migration, clock);
 }
 
 async function recordMigration(client, migration, clock) {
@@ -149,6 +186,13 @@ async function readIndexState(client, indexName) {
   if (!result.rowCount) return Object.freeze({ exists: false, valid: false });
   const value = result.rows[0].valid;
   return Object.freeze({ exists: true, valid: value === true || value === 't' });
+}
+
+function onlineIndexNames(manifest) {
+  return Object.freeze(manifest.flatMap((migration) => {
+    const parsed = parseMigration(migration.sql, migration.version);
+    return parsed.mode === 'online' ? parsed.statements.map((statement) => statement.indexName) : [];
+  }).sort());
 }
 
 async function loadMigrationManifest(migrationsDir) {
@@ -184,12 +228,19 @@ function parseOnlineStatement(sql, file) {
 }
 
 function freezeInspection(value) {
+  const indexes = value.missingIndexes === undefined && value.invalidIndexes === undefined
+    ? {}
+    : {
+      missingIndexes: Object.freeze([...(value.missingIndexes ?? [])]),
+      invalidIndexes: Object.freeze([...(value.invalidIndexes ?? [])]),
+    };
   return Object.freeze({
     totalCount: value.totalCount,
     appliedCount: value.appliedCount,
     pending: Object.freeze([...value.pending]),
     mismatched: Object.freeze([...value.mismatched]),
     unknown: Object.freeze([...value.unknown]),
+    ...indexes,
   });
 }
 function unwrapLegacyTransaction(sql, file) {
@@ -199,4 +250,5 @@ function unwrapLegacyTransaction(sql, file) {
   invariant(begins === commits, 'MIGRATION_TRANSACTION_INVALID', 'Migration transaction wrapper is incomplete', { file });
   return begins ? trimmed.replace(/^BEGIN\s*;/i, '').replace(/COMMIT\s*;$/i, '').trim() : trimmed;
 }
+function truthy(value) { return value === true || value === 't'; }
 function defaultSleep(delayMs) { return new Promise((resolve) => setTimeout(resolve, delayMs)); }

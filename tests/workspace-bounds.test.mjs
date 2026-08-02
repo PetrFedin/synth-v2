@@ -53,7 +53,21 @@ test('reader fetches limit plus one and reports truncated sections without retur
     async query(sql, params = []) {
       queries.push({ sql, params });
       if (sql.startsWith('BEGIN') || sql === 'COMMIT') return { rows: [] };
-      if (sql.includes('FROM memberships')) return { rows: membershipRows };
+      if (sql.includes('SELECT organisation_id')) {
+        return {
+          rows: [
+            { organisation_id: 'brand-1', organisation_type: 'brand' },
+            { organisation_id: 'shop-1', organisation_type: 'shop' },
+            { organisation_id: 'shop-2', organisation_type: 'shop' },
+          ],
+        };
+      }
+      if (sql.includes('SELECT brand_id, shop_id')) return { rows: [] };
+      if (sql.includes('SELECT campaign_id, collection_id')) return { rows: [] };
+      if (sql.includes('SELECT showroom_id FROM showroom_invitations')) return { rows: [] };
+      if (sql.includes('SELECT showroom_id FROM selections')) return { rows: [] };
+      if (sql.includes('SELECT id, collection_id FROM showrooms')) return { rows: [] };
+      if (sql.includes('SELECT payload FROM memberships')) return { rows: membershipRows };
       return { rows: [] };
     },
     release() {},
@@ -67,8 +81,9 @@ test('reader fetches limit plus one and reports truncated sections without retur
     hasMore: true,
     truncatedSections: ['memberships'],
   });
-  assert.equal(queries[1].params.at(-1), 3);
-  assert.equal(queries.some((query) => query.params.at(-1) === 3), true);
+  const membershipQuery = queries.find((query) => query.sql.includes('SELECT payload FROM memberships'));
+  assert.equal(membershipQuery.params.at(-1), 3);
+  assert.match(membershipQuery.sql, /NULLS LAST/);
 });
 
 test('reader rejects unsafe direct limits before checking out a connection', async () => {

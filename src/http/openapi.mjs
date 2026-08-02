@@ -14,10 +14,25 @@ const nullableDateTime = { oneOf: [{ type: 'string', format: 'date-time' }, { ty
 const currency = { type: 'string', pattern: '^[A-Z]{3}$' };
 const postgresIntegerMaximum = 2_147_483_647;
 const moneyMaximum = 900_719_925_474.0991;
+const workspaceSections = Object.freeze([
+  'memberships',
+  'organisations',
+  'relationships',
+  'invitations',
+  'campaigns',
+  'collections',
+  'catalogSkus',
+  'showrooms',
+  'cycles',
+  'selections',
+  'orders',
+  'deals',
+  'calendar',
+]);
 
 export const wholesaleV2OpenApi = Object.freeze({
   openapi: '3.1.0',
-  info: { title: 'Syntha Wholesale V2 API', version: '1.1.0' },
+  info: { title: 'Syntha Wholesale V2 API', version: '1.2.0' },
   servers: [{ url: '/v2', description: 'Authenticated Syntha V2 API prefix' }],
   'x-operational-endpoints': Object.freeze({
     liveness: '/health',
@@ -169,7 +184,7 @@ export const wholesaleV2OpenApi = Object.freeze({
           hasMore: { type: 'boolean' },
           truncatedSections: {
             type: 'array', uniqueItems: true,
-            items: { type: 'string', enum: ['memberships', 'organisations', 'relationships', 'invitations', 'campaigns', 'collections', 'catalogSkus', 'showrooms', 'cycles', 'selections', 'orders', 'deals', 'calendar'] },
+            items: { type: 'string', enum: workspaceSections },
           },
         },
       },
@@ -192,6 +207,13 @@ export const wholesaleV2OpenApi = Object.freeze({
           deals: { type: 'array', items: { type: 'object' } },
           calendar: { type: 'array', items: { type: 'object' } },
           pageInfo: { $ref: '#/components/schemas/WorkspacePageInfo' },
+        },
+      },
+      WorkspaceSectionPage: {
+        type: 'object', required: ['items', 'nextCursor'], additionalProperties: false,
+        properties: {
+          items: { type: 'array', maxItems: 200, items: { type: 'object' } },
+          nextCursor: { oneOf: [{ type: 'string', minLength: 1, maxLength: 2048 }, { type: 'null' }] },
         },
       },
     },
@@ -247,13 +269,45 @@ export const wholesaleV2OpenApi = Object.freeze({
           name: 'limit',
           in: 'query',
           required: false,
-          description: 'Maximum records returned for each workspace collection. Use pageInfo.truncatedSections to identify collections requiring a dedicated follow-up read.',
+          description: 'Maximum records returned for each workspace collection. Continue every name reported by pageInfo.truncatedSections through /workspace/{section}/page.',
           schema: { type: 'integer', minimum: 1, maximum: 500, default: 200 },
         }],
         responses: responseContent(
           readOperation('loadWorkspace', { 200: 'Bounded actor workspace', 400: 'Invalid workspace limit', 401: 'Authentication required' }).responses,
           200,
           '#/components/schemas/Workspace',
+        ),
+      },
+    },
+    '/workspace/{section}/page': {
+      get: {
+        ...readOperation('pageWorkspaceSection', { 200: 'Stable workspace section page', 400: 'Invalid section, limit or cursor', 401: 'Authentication required' }),
+        description: 'Returns a keyset-paginated page for one visible workspace section. Cursors are versioned, section-bound and must be treated as opaque.',
+        parameters: [
+          {
+            name: 'section',
+            in: 'path',
+            required: true,
+            schema: { type: 'string', enum: workspaceSections },
+          },
+          {
+            name: 'limit',
+            in: 'query',
+            required: false,
+            schema: { type: 'integer', minimum: 1, maximum: 200, default: 50 },
+          },
+          {
+            name: 'cursor',
+            in: 'query',
+            required: false,
+            description: 'Opaque continuation cursor returned by the same section endpoint.',
+            schema: { type: 'string', minLength: 1, maxLength: 2048 },
+          },
+        ],
+        responses: responseContent(
+          readOperation('pageWorkspaceSection', { 200: 'Stable workspace section page', 400: 'Invalid section, limit or cursor', 401: 'Authentication required' }).responses,
+          200,
+          '#/components/schemas/WorkspaceSectionPage',
         ),
       },
     },

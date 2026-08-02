@@ -33,3 +33,7 @@ npm run dev
 ```
 
 Run `npm run verify` before publishing changes.
+
+## Operations
+
+Production metrics, scrape security, cardinality rules and incident response are documented in [`docs/observability.md`](docs/observability.md). Initial Prometheus alerts are provided in [`ops/prometheus/syntha-v2-alerts.yml`](ops/prometheus/syntha-v2-alerts.yml).

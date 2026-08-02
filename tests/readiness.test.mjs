@@ -63,3 +63,27 @@ test('database failures are reported without leaking the original error', async 
   assert.equal(result.reason, 'database-unavailable');
   assert.equal(JSON.stringify(result).includes('secret-password'), false);
 });
+
+test('readiness rejects applied migrations with missing or invalid required indexes', async () => {
+  const readiness = createPostgresReadinessService({
+    pool: { async query() { return { rows: [] }; } },
+    migrationsDir: '/tmp/migrations',
+    migrationInspector: async () => ({
+      totalCount: 12,
+      appliedCount: 12,
+      pending: [],
+      mismatched: [],
+      unknown: [],
+      missingIndexes: ['workspace_page_orders_brand_idx'],
+      invalidIndexes: ['workspace_page_orders_shop_idx'],
+    }),
+    clock: () => '2026-08-03T00:00:00.000Z',
+  });
+
+  const result = await readiness.check();
+  assert.equal(result.status, 'not-ready');
+  assert.equal(result.reason, 'migration-drift');
+  assert.equal(result.migrations.status, 'drift');
+  assert.deepEqual(result.migrations.missingIndexes, ['workspace_page_orders_brand_idx']);
+  assert.deepEqual(result.migrations.invalidIndexes, ['workspace_page_orders_shop_idx']);
+});

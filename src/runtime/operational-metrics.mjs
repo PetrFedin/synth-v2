@@ -4,7 +4,7 @@ import process from 'node:process';
 const PROMETHEUS_CONTENT_TYPE = 'text/plain; version=0.0.4; charset=utf-8';
 const HTTP_BUCKETS_MS = Object.freeze([5, 10, 25, 50, 100, 250, 500, 1_000, 2_500, 5_000, 10_000, 30_000]);
 const WORKER_NAME = /^[a-z][a-z0-9-]{0,63}$/;
-const WORKER_OUTCOMES = new Set(['published', 'failed', 'dead-letter', 'lease-lost', 'acknowledgement-failed', 'projected', 'skipped', 'other']);
+const WORKER_OUTCOMES = new Set(['published', 'failed', 'dead-letter', 'lease-lost', 'acknowledgement-failed', 'projected', 'already-projected', 'skipped', 'other']);
 const MAINTENANCE_STATUSES = new Set(['completed', 'skipped-lock', 'not-due', 'failed', 'unknown']);
 
 export function createOperationalMetrics({ pool, token, clock = () => Date.now(), processRef = process, cacheTtlMs = 5_000 } = {}) {
@@ -74,7 +74,7 @@ export function createOperationalMetrics({ pool, token, clock = () => Date.now()
     recordMaintenance(result) {
       const candidate = typeof result?.status === 'string' ? result.status : 'unknown';
       const status = MAINTENANCE_STATUSES.has(candidate) ? candidate : 'unknown';
-      increment(maintenanceRuns, status);
+      increment(maintenanceRuns, labelKey([status]));
       if (status !== 'completed') return;
       maintenanceLastCompletedAt = nowMs(clock);
       maintenanceDeleted += Object.values(result?.counts ?? {}).reduce((sum, value) => {

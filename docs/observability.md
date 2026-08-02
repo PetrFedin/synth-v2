@@ -61,6 +61,29 @@ When PostgreSQL collection fails after at least one successful scrape, Syntha se
 
 This keeps dashboards useful during a transient outage while making stale data explicit. Readiness remains authoritative for traffic routing; metrics collection does not mask a failed `/ready` check.
 
+## Online index migrations and readiness
+
+Large workspace paging indexes are installed with `CREATE INDEX CONCURRENTLY` through migrations marked `-- syntha:migration-mode=online`. Every statement is executed outside a transaction while the global migration advisory lock remains held.
+
+At every startup, already-recorded online migrations are reconciled with the actual PostgreSQL catalog:
+
+- a valid index is left untouched;
+- a missing index is rebuilt concurrently;
+- an invalid remnant from an interrupted build is dropped concurrently and rebuilt;
+- the migration ledger is written only after every new index is verified with `pg_index.indisvalid`;
+- a retry after a ledger-only failure does not rebuild healthy indexes.
+
+The `/ready` endpoint independently inspects every required online index. Applied migration checksums are not sufficient: a missing or invalid required index returns `503`, `reason: migration-drift`, and includes `missingIndexes` or `invalidIndexes` in the migration state.
+
+Operational rules:
+
+1. do not edit or delete rows in `schema_migrations` manually;
+2. do not create replacement indexes under different names;
+3. after an interrupted deployment, restart the same application version and allow the migrator to reconcile the index state;
+4. keep the instance out of traffic until `/ready` returns `ready`;
+5. investigate repeated rebuild failures for locks, disk capacity, permissions, statement timeouts and PostgreSQL health;
+6. never run multiple independent migration tools against the same schema outside the Syntha advisory-lock protocol.
+
 ## Initial alerts
 
 The repository contains `ops/prometheus/syntha-v2-alerts.yml`. Tune queue thresholds only after observing normal production volume, but do not remove alerts for collector failure, worker readiness, dead letters or PostgreSQL waiters.
@@ -68,7 +91,7 @@ The repository contains `ops/prometheus/syntha-v2-alerts.yml`. Tune queue thresh
 Recommended response order:
 
 1. confirm `/ready` and `syntha_metrics_collector_up`;
-2. inspect PostgreSQL saturation and migration state;
+2. inspect PostgreSQL saturation, migration checksums and required index state;
 3. inspect worker readiness and consecutive failures;
 4. inspect dead letters, expired claims and backlog growth;
 5. use application logs and audited dead-letter records for root-cause analysis;

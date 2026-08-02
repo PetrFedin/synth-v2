@@ -22,7 +22,11 @@ export function createPostgresReadinessService({
       }
       try {
         const inspection = await migrationInspector({ pool, migrationsDir });
-        const migrationsReady = inspection.pending.length === 0 && inspection.mismatched.length === 0 && inspection.unknown.length === 0;
+        const migrationsReady = inspection.pending.length === 0
+          && inspection.mismatched.length === 0
+          && inspection.unknown.length === 0
+          && (inspection.missingIndexes?.length ?? 0) === 0
+          && (inspection.invalidIndexes?.length ?? 0) === 0;
         if (!migrationsReady) {
           return Object.freeze({
             status: 'not-ready',
@@ -84,7 +88,7 @@ function notReady({ checkedAt, database, migrationStatus, reason }) {
 function freezeCopy(value) {
   if (Array.isArray(value)) return Object.freeze(value.map(freezeCopy));
   if (value && typeof value === 'object') {
-    return Object.freeze(Object.fromEntries(Object.entries(value).map(([key, nested]) => [key, freezeCopy(nested)])));
+    return Object.freeze(Object.fromEntries(Object.entries(value).map(([key, nested]) => [key, freezeCopy(nested)]));
   }
   return value;
 }

@@ -4,19 +4,19 @@ import { withPostgresTransaction } from './postgres-transaction.mjs';
 const SNAPSHOT_BEGIN = 'BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY';
 const MAX_WORKSPACE_LIMIT = 500;
 const ORDER_BY = Object.freeze({
-  memberships: "payload->>'organisationId' ASC, payload->>'userId' ASC, id ASC",
-  organisations: "payload->>'type' ASC, payload->>'name' ASC, id ASC",
-  counterparty_relationships: "payload->>'updatedAt' DESC, payload->>'createdAt' DESC, id ASC",
-  showroom_invitations: "payload->>'updatedAt' DESC, payload->>'createdAt' DESC, id ASC",
-  campaigns: "payload->>'startsAt' DESC, payload->>'name' ASC, id ASC",
-  collections: "payload->>'name' ASC, id ASC",
+  memberships: "payload->>'organisationId' ASC NULLS LAST, payload->>'userId' ASC NULLS LAST, id ASC",
+  organisations: "payload->>'type' ASC NULLS LAST, payload->>'name' ASC NULLS LAST, id ASC",
+  counterparty_relationships: "payload->>'updatedAt' DESC NULLS LAST, payload->>'createdAt' DESC NULLS LAST, id ASC",
+  showroom_invitations: "payload->>'updatedAt' DESC NULLS LAST, payload->>'createdAt' DESC NULLS LAST, id ASC",
+  campaigns: "payload->>'startsAt' DESC NULLS LAST, payload->>'name' ASC NULLS LAST, id ASC",
+  collections: "payload->>'name' ASC NULLS LAST, id ASC",
   catalog_skus: 'sku ASC',
-  showrooms: "payload->>'opensAt' DESC, payload->>'name' ASC, id ASC",
-  commercial_cycles: "payload->>'updatedAt' DESC, payload->>'createdAt' DESC, id ASC",
-  selections: "payload->>'updatedAt' DESC, payload->>'createdAt' DESC, id ASC",
-  orders: "payload->>'updatedAt' DESC, payload->>'createdAt' DESC, id ASC",
-  deals: "payload->>'updatedAt' DESC, payload->>'createdAt' DESC, id ASC",
-  calendar_milestones: "payload->>'startsAt' ASC, id ASC",
+  showrooms: "payload->>'opensAt' DESC NULLS LAST, payload->>'name' ASC NULLS LAST, id ASC",
+  commercial_cycles: "payload->>'updatedAt' DESC NULLS LAST, payload->>'createdAt' DESC NULLS LAST, id ASC",
+  selections: "payload->>'updatedAt' DESC NULLS LAST, payload->>'createdAt' DESC NULLS LAST, id ASC",
+  orders: "payload->>'updatedAt' DESC NULLS LAST, payload->>'createdAt' DESC NULLS LAST, id ASC",
+  deals: "payload->>'updatedAt' DESC NULLS LAST, payload->>'createdAt' DESC NULLS LAST, id ASC",
+  calendar_milestones: "payload->>'startsAt' ASC NULLS LAST, id ASC",
 });
 
 export function createPostgresWorkspaceReader({ pool }) {
@@ -27,6 +27,7 @@ export function createPostgresWorkspaceReader({ pool }) {
       validateLimit(limit);
       const fetchLimit = limit + 1;
       return readSnapshot(pool, async (queryable) => {
+        const scope = await loadVisibilityScope(queryable, actorId);
         const truncatedSections = [];
         const memberships = bounded(
           'memberships',
@@ -34,65 +35,39 @@ export function createPostgresWorkspaceReader({ pool }) {
           limit,
           truncatedSections,
         );
-        const ownIds = memberships.map((item) => item.organisationId);
-        if (!ownIds.length) return emptyWorkspace({ memberships, limit, truncatedSections });
+        if (!scope.ownIds.length) return emptyWorkspace({ memberships, truncatedSections });
 
-        const relationships = bounded(
-          'relationships',
-          await tradePayloads(queryable, 'counterparty_relationships', ownIds, fetchLimit),
-          limit,
-          truncatedSections,
-        );
-        const visibleOrgIds = unique([...ownIds, ...relationships.flatMap((item) => [item.brandId, item.shopId])]);
-        const [organisationRows, invitationRows, cycleRows, selectionRows, orderRows, dealRows, calendarRows] = await Promise.all([
-          payloadAny(queryable, 'organisations', 'id', visibleOrgIds, fetchLimit),
-          tradePayloads(queryable, 'showroom_invitations', ownIds, fetchLimit),
-          tradePayloads(queryable, 'commercial_cycles', ownIds, fetchLimit),
-          tradePayloads(queryable, 'selections', ownIds, fetchLimit),
-          tradePayloads(queryable, 'orders', ownIds, fetchLimit),
-          tradePayloads(queryable, 'deals', ownIds, fetchLimit),
-          payloadAny(queryable, 'calendar_milestones', 'owner_organisation_id', ownIds, fetchLimit),
+        const [relationshipRows, organisationRows, invitationRows, cycleRows, selectionRows, orderRows, dealRows, calendarRows] = await Promise.all([
+          tradePayloads(queryable, 'counterparty_relationships', scope.ownIds, fetchLimit),
+          payloadAny(queryable, 'organisations', 'id', scope.visibleOrganisationIds, fetchLimit),
+          tradePayloads(queryable, 'showroom_invitations', scope.ownIds, fetchLimit),
+          tradePayloads(queryable, 'commercial_cycles', scope.ownIds, fetchLimit),
+          tradePayloads(queryable, 'selections', scope.ownIds, fetchLimit),
+          tradePayloads(queryable, 'orders', scope.ownIds, fetchLimit),
+          tradePayloads(queryable, 'deals', scope.ownIds, fetchLimit),
+          payloadAny(queryable, 'calendar_milestones', 'owner_organisation_id', scope.ownIds, fetchLimit),
         ]);
-        const organisations = bounded('organisations', organisationRows, limit, truncatedSections);
-        const invitations = bounded('invitations', invitationRows, limit, truncatedSections);
-        const cycles = bounded('cycles', cycleRows, limit, truncatedSections);
-        const selections = bounded('selections', selectionRows, limit, truncatedSections);
-        const orders = bounded('orders', orderRows, limit, truncatedSections);
-        const deals = bounded('deals', dealRows, limit, truncatedSections);
-        const calendar = bounded('calendar', calendarRows, limit, truncatedSections);
-        const campaignIds = unique(cycles.map((item) => item.campaignId));
-        const cycleCollectionIds = unique(cycles.map((item) => item.collectionId));
-        const showroomIds = unique([...invitations.map((item) => item.showroomId), ...selections.map((item) => item.showroomId)]);
-        const brandIds = memberships.filter((item) => item.organisationType === 'brand').map((item) => item.organisationId);
-        const [campaignRows, collectionRows, showroomRows] = await Promise.all([
-          payloadByIdsOrOwner(queryable, 'campaigns', campaignIds, 'brand_id', brandIds, fetchLimit),
-          payloadByIdsOrOwner(queryable, 'collections', cycleCollectionIds, 'brand_id', brandIds, fetchLimit),
-          payloadByIdsOrOwner(queryable, 'showrooms', showroomIds, 'brand_id', brandIds, fetchLimit),
+        const [campaignRows, collectionRows, showroomRows, catalogRows] = await Promise.all([
+          payloadByIdsOrOwner(queryable, 'campaigns', scope.campaignIds, 'brand_id', scope.brandIds, fetchLimit),
+          payloadByIdsOrOwner(queryable, 'collections', scope.collectionIds, 'brand_id', scope.brandIds, fetchLimit),
+          payloadByIdsOrOwner(queryable, 'showrooms', scope.showroomIds, 'brand_id', scope.brandIds, fetchLimit),
+          visibleCatalogSkus(queryable, scope.brandIds, scope.visibleCollectionIds, fetchLimit),
         ]);
-        const campaigns = bounded('campaigns', campaignRows, limit, truncatedSections);
-        const collections = bounded('collections', collectionRows, limit, truncatedSections);
-        const showrooms = bounded('showrooms', showroomRows, limit, truncatedSections);
-        const visibleCollectionIds = unique([...cycleCollectionIds, ...showrooms.map((item) => item.collectionId)]);
-        const catalogSkus = bounded(
-          'catalogSkus',
-          await visibleCatalogSkus(queryable, brandIds, visibleCollectionIds, fetchLimit),
-          limit,
-          truncatedSections,
-        );
+
         return {
           memberships,
-          organisations,
-          relationships,
-          invitations,
-          campaigns,
-          collections,
-          catalogSkus,
-          showrooms,
-          cycles,
-          selections,
-          orders,
-          deals,
-          calendar,
+          organisations: bounded('organisations', organisationRows, limit, truncatedSections),
+          relationships: bounded('relationships', relationshipRows, limit, truncatedSections),
+          invitations: bounded('invitations', invitationRows, limit, truncatedSections),
+          campaigns: bounded('campaigns', campaignRows, limit, truncatedSections),
+          collections: bounded('collections', collectionRows, limit, truncatedSections),
+          catalogSkus: bounded('catalogSkus', catalogRows, limit, truncatedSections),
+          showrooms: bounded('showrooms', showroomRows, limit, truncatedSections),
+          cycles: bounded('cycles', cycleRows, limit, truncatedSections),
+          selections: bounded('selections', selectionRows, limit, truncatedSections),
+          orders: bounded('orders', orderRows, limit, truncatedSections),
+          deals: bounded('deals', dealRows, limit, truncatedSections),
+          calendar: bounded('calendar', calendarRows, limit, truncatedSections),
           pageInfo: { truncatedSections },
         };
       });
@@ -102,6 +77,62 @@ export function createPostgresWorkspaceReader({ pool }) {
 
 function readSnapshot(pool, work) {
   return withPostgresTransaction(pool, work, { begin: SNAPSHOT_BEGIN });
+}
+
+async function loadVisibilityScope(queryable, actorId) {
+  const membershipResult = await queryable.query(
+    `SELECT organisation_id, payload->>'organisationType' AS organisation_type
+       FROM memberships
+      WHERE user_id = $1 AND status = $2
+      ORDER BY organisation_id ASC`,
+    [actorId, 'active'],
+  );
+  const ownIds = unique(membershipResult.rows.map((row) => row.organisation_id));
+  const brandIds = unique(membershipResult.rows.filter((row) => row.organisation_type === 'brand').map((row) => row.organisation_id));
+  if (!ownIds.length) return emptyVisibilityScope();
+
+  const [relationshipResult, cycleResult, invitationResult, selectionResult] = await Promise.all([
+    queryable.query(
+      'SELECT brand_id, shop_id FROM counterparty_relationships WHERE brand_id = ANY($1::text[]) OR shop_id = ANY($1::text[])',
+      [ownIds],
+    ),
+    queryable.query(
+      'SELECT campaign_id, collection_id FROM commercial_cycles WHERE brand_id = ANY($1::text[]) OR shop_id = ANY($1::text[])',
+      [ownIds],
+    ),
+    queryable.query(
+      'SELECT showroom_id FROM showroom_invitations WHERE brand_id = ANY($1::text[]) OR shop_id = ANY($1::text[])',
+      [ownIds],
+    ),
+    queryable.query(
+      'SELECT showroom_id FROM selections WHERE brand_id = ANY($1::text[]) OR shop_id = ANY($1::text[])',
+      [ownIds],
+    ),
+  ]);
+  const relationshipOrganisationIds = relationshipResult.rows.flatMap((row) => [row.brand_id, row.shop_id]);
+  const campaignIds = unique(cycleResult.rows.map((row) => row.campaign_id));
+  const collectionIds = unique(cycleResult.rows.map((row) => row.collection_id));
+  const linkedShowroomIds = unique([
+    ...invitationResult.rows.map((row) => row.showroom_id),
+    ...selectionResult.rows.map((row) => row.showroom_id),
+  ]);
+  const showroomResult = linkedShowroomIds.length || brandIds.length
+    ? await queryable.query(
+      'SELECT id, collection_id FROM showrooms WHERE id = ANY($1::text[]) OR brand_id = ANY($2::text[])',
+      [linkedShowroomIds, brandIds],
+    )
+    : { rows: [] };
+  const showroomIds = unique([...linkedShowroomIds, ...showroomResult.rows.map((row) => row.id)]);
+  const visibleCollectionIds = unique([...collectionIds, ...showroomResult.rows.map((row) => row.collection_id)]);
+  return Object.freeze({
+    ownIds: Object.freeze(ownIds),
+    brandIds: Object.freeze(brandIds),
+    visibleOrganisationIds: Object.freeze(unique([...ownIds, ...relationshipOrganisationIds])),
+    campaignIds: Object.freeze(campaignIds),
+    collectionIds: Object.freeze(collectionIds),
+    showroomIds: Object.freeze(showroomIds),
+    visibleCollectionIds: Object.freeze(visibleCollectionIds),
+  });
 }
 
 async function payloadWhere(queryable, table, where, params, fetchLimit) {
@@ -122,13 +153,7 @@ async function tradePayloads(queryable, table, ids, fetchLimit) {
 }
 async function payloadByIdsOrOwner(queryable, table, ids, ownerColumn, ownerIds, fetchLimit) {
   if (!ids.length && !ownerIds.length) return [];
-  return payloadWhere(
-    queryable,
-    table,
-    `id = ANY($1::text[]) OR ${ownerColumn} = ANY($2::text[])`,
-    [ids, ownerIds],
-    fetchLimit,
-  );
+  return payloadWhere(queryable, table, `id = ANY($1::text[]) OR ${ownerColumn} = ANY($2::text[])`, [ids, ownerIds], fetchLimit);
 }
 async function visibleCatalogSkus(queryable, brandIds, collectionIds, fetchLimit) {
   if (!brandIds.length && !collectionIds.length) return [];
@@ -153,7 +178,18 @@ function validateLimit(limit) {
   );
 }
 function unique(values) { return [...new Set(values.filter(Boolean))]; }
-function emptyWorkspace({ memberships = [], limit, truncatedSections = [] } = {}) {
+function emptyVisibilityScope() {
+  return Object.freeze({
+    ownIds: Object.freeze([]),
+    brandIds: Object.freeze([]),
+    visibleOrganisationIds: Object.freeze([]),
+    campaignIds: Object.freeze([]),
+    collectionIds: Object.freeze([]),
+    showroomIds: Object.freeze([]),
+    visibleCollectionIds: Object.freeze([]),
+  });
+}
+function emptyWorkspace({ memberships = [], truncatedSections = [] } = {}) {
   return {
     memberships,
     organisations: [],
@@ -168,6 +204,6 @@ function emptyWorkspace({ memberships = [], limit, truncatedSections = [] } = {}
     orders: [],
     deals: [],
     calendar: [],
-    pageInfo: { limit, truncatedSections },
+    pageInfo: { truncatedSections },
   };
 }

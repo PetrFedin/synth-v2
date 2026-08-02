@@ -22,7 +22,7 @@ const ORDER_BY = Object.freeze({
 export function createPostgresWorkspaceReader({ pool }) {
   invariant(pool && typeof pool.connect === 'function', 'POSTGRES_POOL_REQUIRED', 'PostgreSQL pool is required');
   return Object.freeze({
-    readForActor(actorId, { limit } = {}) {
+    async readForActor(actorId, { limit } = {}) {
       invariant(typeof actorId === 'string' && actorId.length > 0, 'WORKSPACE_ACTOR_REQUIRED', 'Workspace actor is required');
       validateLimit(limit);
       const fetchLimit = limit + 1;

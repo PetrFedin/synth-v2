@@ -41,6 +41,7 @@ const contracts = [
   ['POST', '/v2/orders/order-1/attach', '/orders/{orderId}/attach'],
   ['POST', '/v2/orders/order-1/cancel', '/orders/{orderId}/cancel'],
   ['GET', '/v2/workspace', '/workspace'],
+  ['GET', '/v2/workspace/orders/page', '/workspace/{section}/page'],
   ['GET', '/v2/notifications/page', '/notifications/page'],
   ['GET', '/v2/notifications', '/notifications'],
   ['POST', '/v2/notifications/notification-1/read', '/notifications/{notificationId}/read'],
@@ -77,11 +78,19 @@ test('drifted routes from the retired router contract stay absent', () => {
   ]) assert.equal(wholesaleV2OpenApi.paths[path], undefined, `retired path remains documented: ${path}`);
 });
 
-test('notification page response references the typed page schema', () => {
-  const response = wholesaleV2OpenApi.paths['/notifications/page'].get.responses[200];
-  assert.equal(response.content['application/json'].schema.$ref, '#/components/schemas/NotificationPage');
-  const page = wholesaleV2OpenApi.components.schemas.NotificationPage;
-  assert.deepEqual(page.required, ['items', 'nextCursor']);
-  assert.equal(page.additionalProperties, false);
-  assert.equal(page.properties.items.maxItems, 200);
+test('cursor page responses reference bounded typed page schemas', () => {
+  const notificationResponse = wholesaleV2OpenApi.paths['/notifications/page'].get.responses[200];
+  assert.equal(notificationResponse.content['application/json'].schema.$ref, '#/components/schemas/NotificationPage');
+  const notificationPage = wholesaleV2OpenApi.components.schemas.NotificationPage;
+  assert.deepEqual(notificationPage.required, ['items', 'nextCursor']);
+  assert.equal(notificationPage.additionalProperties, false);
+  assert.equal(notificationPage.properties.items.maxItems, 200);
+
+  const workspaceResponse = wholesaleV2OpenApi.paths['/workspace/{section}/page'].get.responses[200];
+  assert.equal(workspaceResponse.content['application/json'].schema.$ref, '#/components/schemas/WorkspaceSectionPage');
+  const workspacePage = wholesaleV2OpenApi.components.schemas.WorkspaceSectionPage;
+  assert.deepEqual(workspacePage.required, ['items', 'nextCursor']);
+  assert.equal(workspacePage.additionalProperties, false);
+  assert.equal(workspacePage.properties.items.maxItems, 200);
+  assert.equal(workspacePage.properties.nextCursor.oneOf[0].maxLength, 2048);
 });

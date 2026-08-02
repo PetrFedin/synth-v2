@@ -42,6 +42,18 @@ const requiredFragments = [
   'available_quantity integer NOT NULL DEFAULT 0', 'reserved_quantity integer NOT NULL DEFAULT 0',
   'catalog_skus_reserved_not_above_available', 'order_inventory_reservations_sku_idx',
   'reserve_inventory_on_order_attach', 'orders_reserve_inventory_on_attach', 'FOR UPDATE',
+  '-- syntha:migration-mode=online',
+  'workspace_page_memberships_idx', 'workspace_page_organisations_idx',
+  'workspace_page_relationships_brand_idx', 'workspace_page_relationships_shop_idx',
+  'workspace_page_invitations_brand_idx', 'workspace_page_invitations_shop_idx',
+  'workspace_page_campaigns_brand_idx', 'workspace_page_collections_brand_idx',
+  'workspace_page_catalog_brand_idx', 'workspace_page_catalog_collection_idx',
+  'workspace_page_showrooms_brand_idx',
+  'workspace_page_cycles_brand_idx', 'workspace_page_cycles_shop_idx',
+  'workspace_page_selections_brand_idx', 'workspace_page_selections_shop_idx',
+  'workspace_page_orders_brand_idx', 'workspace_page_orders_shop_idx',
+  'workspace_page_deals_brand_idx', 'workspace_page_deals_shop_idx',
+  'workspace_page_calendar_owner_idx',
 ];
 const missing = [];
 for (const table of requiredTables) if (!new RegExp(`CREATE TABLE IF NOT EXISTS\\s+${table}\\s*\\(`, 'i').test(sql)) missing.push(`table:${table}`);

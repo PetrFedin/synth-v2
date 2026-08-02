@@ -88,7 +88,7 @@ function notReady({ checkedAt, database, migrationStatus, reason }) {
 function freezeCopy(value) {
   if (Array.isArray(value)) return Object.freeze(value.map(freezeCopy));
   if (value && typeof value === 'object') {
-    return Object.freeze(Object.fromEntries(Object.entries(value).map(([key, nested]) => [key, freezeCopy(nested)]));
+    return Object.freeze(Object.fromEntries(Object.entries(value).map(([key, nested]) => [key, freezeCopy(nested)])));
   }
   return value;
 }

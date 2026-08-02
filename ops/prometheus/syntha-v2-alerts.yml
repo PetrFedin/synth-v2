@@ -1,0 +1,124 @@
+groups:
+  - name: syntha-v2-availability
+    rules:
+      - alert: SynthaMetricsPostgresCollectorDown
+        expr: syntha_metrics_collector_up{collector="postgres"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Syntha V2 PostgreSQL metrics collector is unavailable
+          description: The PostgreSQL operational snapshot has failed for at least five minutes. Check readiness, connectivity and database saturation.
+
+      - alert: SynthaMetricsPostgresSnapshotStale
+        expr: syntha_metrics_collector_stale{collector="postgres"} == 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Syntha V2 is serving a stale PostgreSQL metrics snapshot
+          description: Dashboards are using the last successful queue snapshot. Treat queue values as stale until the collector recovers.
+
+      - alert: SynthaBackgroundWorkerNotReady
+        expr: syntha_worker_ready == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Syntha V2 background worker is not ready
+          description: Worker {{ $labels.worker }} has failed readiness for at least five minutes.
+
+      - alert: SynthaBackgroundWorkerRepeatedFailures
+        expr: syntha_worker_consecutive_failures >= 3
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Syntha V2 background worker is repeatedly failing
+          description: Worker {{ $labels.worker }} has at least three consecutive failed runs.
+
+  - name: syntha-v2-queues
+    rules:
+      - alert: SynthaOutboxDeadLettersPresent
+        expr: syntha_queue_records{queue="outbox",state="dead-letter"} > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Syntha V2 has dead-letter outbox events
+          description: At least one external event exhausted publication retries. Fix the root cause before audited requeue.
+
+      - alert: SynthaOutboxExpiredClaims
+        expr: syntha_queue_records{queue="outbox-publication",state="expired"} > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Syntha V2 has expired outbox publication claims
+          description: Publication claims are not being completed within their lease. Inspect publisher latency and worker health.
+
+      - alert: SynthaNotificationProjectionExpiredClaims
+        expr: syntha_queue_records{queue="notification-projection",state="expired"} > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Syntha V2 has expired notification projection claims
+          description: Notification projection claims are not completing within their lease.
+
+      - alert: SynthaNotificationProjectionBacklogHigh
+        expr: syntha_queue_records{queue="notification-projection",state="backlog"} > 500
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Syntha V2 notification projection backlog is high
+          description: More than 500 events have remained unprojected for at least fifteen minutes.
+
+      - alert: SynthaOutboxBacklogHigh
+        expr: syntha_queue_records{queue="outbox",state="pending"} > 1000
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Syntha V2 outbox backlog is high
+          description: More than 1000 external events have remained pending for at least fifteen minutes.
+
+  - name: syntha-v2-http-and-database
+    rules:
+      - alert: SynthaPostgresPoolWaiters
+        expr: syntha_postgres_pool_connections{state="waiting"} > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Syntha V2 PostgreSQL pool has waiting requests
+          description: Database work has waited for a pooled connection for at least five minutes.
+
+      - alert: SynthaHttpServerErrorRateHigh
+        expr: |
+          sum(rate(syntha_http_requests_total{status=~"5.."}[5m]))
+          /
+          clamp_min(sum(rate(syntha_http_requests_total[5m])), 1)
+          > 0.05
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: Syntha V2 HTTP 5xx rate is high
+          description: More than five percent of measured HTTP requests have returned 5xx for ten minutes.
+
+      - alert: SynthaHttpP95LatencyHigh
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le, route_group) (
+              rate(syntha_http_request_duration_milliseconds_bucket[5m])
+            )
+          ) > 1000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Syntha V2 HTTP p95 latency is high
+          description: Route group {{ $labels.route_group }} has exceeded one second p95 latency for ten minutes.

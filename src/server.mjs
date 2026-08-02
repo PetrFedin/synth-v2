@@ -5,9 +5,11 @@ import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import { createHttpOutboxPublisher } from './infrastructure/http-outbox-publisher.mjs';
 import { migratePostgres, waitForPostgres } from './infrastructure/postgres-migrator.mjs';
+import { createOperationalMetricsHandler } from './http/operational-metrics-handler.mjs';
 import { createPostgresWholesaleRuntime } from './runtime/postgres-runtime.mjs';
 import { createBackgroundWorker } from './runtime/background-worker.mjs';
 import { createHealthRegistry } from './runtime/health-registry.mjs';
+import { createOperationalMetrics } from './runtime/operational-metrics.mjs';
 import { configureHttpServer, createShutdownCoordinator, listen, readIntegerSetting } from './runtime/server-lifecycle.mjs';
 import { createStandaloneHandler } from './web/static-handler.mjs';
 
@@ -21,6 +23,10 @@ const outboxWebhookSecret = secretSetting('SYNTHA_OUTBOX_WEBHOOK_SECRET');
 if (Boolean(outboxWebhookUrl) !== Boolean(outboxWebhookSecret)) {
   throw new Error('SYNTHA_OUTBOX_WEBHOOK_URL and SYNTHA_OUTBOX_WEBHOOK_SECRET must be configured together');
 }
+
+const metricsEnabled = booleanSetting('SYNTHA_METRICS_ENABLED', false);
+const metricsToken = secretSetting('SYNTHA_METRICS_TOKEN');
+if (metricsEnabled && !metricsToken) throw new Error('SYNTHA_METRICS_TOKEN is required when SYNTHA_METRICS_ENABLED is true');
 
 const notificationProjectionIntervalMs = integerSetting('SYNTHA_NOTIFICATION_PROJECTION_INTERVAL_MS', 1_000, 100, 60_000);
 const outboxPublicationIntervalMs = integerSetting('SYNTHA_OUTBOX_PUBLICATION_INTERVAL_MS', 1_000, 100, 60_000);
@@ -65,6 +71,9 @@ const settings = Object.freeze({
   authAuditRetentionMs: integerSetting('SYNTHA_AUTH_AUDIT_RETENTION_MS', 90 * DAY_MS, DAY_MS, 31_536_000_000),
   throttleRetentionMs: integerSetting('SYNTHA_AUTH_THROTTLE_RETENTION_MS', 7 * DAY_MS, DAY_MS, 31_536_000_000),
   outboxRetentionMs: integerSetting('SYNTHA_OUTBOX_RETENTION_MS', 30 * DAY_MS, DAY_MS, 31_536_000_000),
+  metricsEnabled,
+  metricsToken: metricsEnabled ? metricsToken : undefined,
+  metricsCacheTtlMs: integerSetting('SYNTHA_METRICS_CACHE_TTL_MS', 5_000, 100, 60_000),
   requestTimeoutMs: integerSetting('SYNTHA_HTTP_REQUEST_TIMEOUT_MS', 30_000, 1_000, 300_000),
   headersTimeoutMs: integerSetting('SYNTHA_HTTP_HEADERS_TIMEOUT_MS', 15_000, 1_000, 300_000),
   keepAliveTimeoutMs: integerSetting('SYNTHA_HTTP_KEEP_ALIVE_TIMEOUT_MS', 5_000, 100, 120_000),
@@ -89,11 +98,18 @@ const pool = new pg.Pool({
 pool.on('error', (error) => console.error('Unexpected idle PostgreSQL client error', error));
 
 const healthRegistry = createHealthRegistry();
+const operationalMetrics = createOperationalMetrics({
+  pool,
+  token: settings.metricsToken,
+  cacheTtlMs: settings.metricsCacheTtlMs,
+});
 let server;
 let notificationWorker;
 let outboxWorker;
 let unregisterNotificationHealth;
 let unregisterOutboxHealth;
+let unregisterNotificationMetrics;
+let unregisterOutboxMetrics;
 try {
   const migrationsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'db', 'migrations');
   await waitForPostgres({ pool, attempts: settings.dbReadyAttempts, delayMs: settings.dbReadyDelayMs });
@@ -132,17 +148,26 @@ try {
     outboxRetentionMs: settings.outboxRetentionMs,
     operationalReadiness: () => healthRegistry.check(),
   });
-  const handler = createStandaloneHandler({ apiHandler: runtime.handler });
+  const applicationHandler = createStandaloneHandler({ apiHandler: runtime.handler });
+  const handler = createOperationalMetricsHandler({ next: applicationHandler, metrics: operationalMetrics });
   server = configureHttpServer(createServer(handler), settings);
   notificationWorker = createBackgroundWorker({
     name: 'notification-projection',
     intervalMs: settings.notificationProjectionIntervalMs,
     task: async () => {
       const results = await runtime.notifications.projectPending({ limit: settings.notificationProjectionBatchSize });
+      operationalMetrics.recordWorkerBatch('notification-projection', results);
       const terminalFailures = results.filter((result) => result.status === 'failed' && !result.retryable);
       if (terminalFailures.length) console.warn(`Notification projection checkpointed ${terminalFailures.length} terminal event failure(s)`);
 
-      const maintenance = await runtime.maintenance.runIfDue();
+      let maintenance;
+      try {
+        maintenance = await runtime.maintenance.runIfDue();
+        operationalMetrics.recordMaintenance(maintenance);
+      } catch (error) {
+        operationalMetrics.recordMaintenance({ status: 'failed' });
+        throw error;
+      }
       if (maintenance.status === 'completed') {
         const deleted = Object.values(maintenance.counts).reduce((sum, value) => sum + Number(value || 0), 0);
         if (deleted > 0) console.log(`Syntha V2 maintenance removed ${deleted} expired record(s)`);
@@ -157,10 +182,12 @@ try {
       }
     },
   });
-  unregisterNotificationHealth = healthRegistry.register('notification-projection', () => notificationWorker.health({
+  const notificationHealth = () => notificationWorker.health({
     maxStalenessMs: settings.notificationProjectionStaleMs,
     maxConsecutiveFailures: settings.notificationProjectionFailureThreshold,
-  }));
+  });
+  unregisterNotificationHealth = healthRegistry.register('notification-projection', notificationHealth);
+  unregisterNotificationMetrics = operationalMetrics.registerWorker('notification-projection', notificationHealth);
 
   if (runtime.outboxPublication) {
     outboxWorker = createBackgroundWorker({
@@ -171,6 +198,7 @@ try {
           limit: settings.outboxPublicationBatchSize,
           parallelism: settings.outboxPublicationParallelism,
         });
+        operationalMetrics.recordWorkerBatch('outbox-publication', results);
         const deadLetters = results.filter((result) => result.status === 'dead-letter');
         if (deadLetters.length) console.warn(`Outbox publication dead-lettered ${deadLetters.length} event(s)`);
         const retryableFailures = results.filter((result) => result.retryable);
@@ -182,10 +210,12 @@ try {
         }
       },
     });
-    unregisterOutboxHealth = healthRegistry.register('outbox-publication', () => outboxWorker.health({
+    const outboxHealth = () => outboxWorker.health({
       maxStalenessMs: settings.outboxPublicationStaleMs,
       maxConsecutiveFailures: settings.outboxPublicationFailureThreshold,
-    }));
+    });
+    unregisterOutboxHealth = healthRegistry.register('outbox-publication', outboxHealth);
+    unregisterOutboxMetrics = operationalMetrics.registerWorker('outbox-publication', outboxHealth);
   }
 
   await listen(server, { port: settings.port, host: settings.host });
@@ -194,6 +224,8 @@ try {
   console.log(`Syntha V2 listening on http://${settings.host}:${settings.port}`);
 } catch (error) {
   console.error('Syntha V2 failed to start', error);
+  unregisterOutboxMetrics?.();
+  unregisterNotificationMetrics?.();
   unregisterOutboxHealth?.();
   unregisterNotificationHealth?.();
   await outboxWorker?.stop().catch((workerError) => console.error('Failed to stop outbox worker after startup error', workerError));

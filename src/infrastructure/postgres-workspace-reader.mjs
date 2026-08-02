@@ -1,8 +1,26 @@
 import { invariant } from '../core/errors.mjs';
+import { WORKSPACE_CURSOR_POSITION_LENGTHS, WORKSPACE_SECTION_NAMES } from '../core/workspace-cursor.mjs';
 import { withPostgresTransaction } from './postgres-transaction.mjs';
 
 const SNAPSHOT_BEGIN = 'BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY';
 const MAX_WORKSPACE_LIMIT = 500;
+const MAX_WORKSPACE_PAGE_LIMIT = 200;
+const MAX_CURSOR_VALUE_LENGTH = 512;
+const PAGE_SORT = Object.freeze({
+  memberships: Object.freeze([{ expression: "payload->>'organisationId'", direction: 'ASC' }, { expression: "payload->>'userId'", direction: 'ASC' }, { expression: 'id', direction: 'ASC' }]),
+  organisations: Object.freeze([{ expression: "payload->>'type'", direction: 'ASC' }, { expression: "payload->>'name'", direction: 'ASC' }, { expression: 'id', direction: 'ASC' }]),
+  relationships: Object.freeze([{ expression: "payload->>'updatedAt'", direction: 'DESC' }, { expression: "payload->>'createdAt'", direction: 'DESC' }, { expression: 'id', direction: 'ASC' }]),
+  invitations: Object.freeze([{ expression: "payload->>'updatedAt'", direction: 'DESC' }, { expression: "payload->>'createdAt'", direction: 'DESC' }, { expression: 'id', direction: 'ASC' }]),
+  campaigns: Object.freeze([{ expression: "payload->>'startsAt'", direction: 'DESC' }, { expression: "payload->>'name'", direction: 'ASC' }, { expression: 'id', direction: 'ASC' }]),
+  collections: Object.freeze([{ expression: "payload->>'name'", direction: 'ASC' }, { expression: 'id', direction: 'ASC' }]),
+  catalogSkus: Object.freeze([{ expression: 'sku', direction: 'ASC' }]),
+  showrooms: Object.freeze([{ expression: "payload->>'opensAt'", direction: 'DESC' }, { expression: "payload->>'name'", direction: 'ASC' }, { expression: 'id', direction: 'ASC' }]),
+  cycles: Object.freeze([{ expression: "payload->>'updatedAt'", direction: 'DESC' }, { expression: "payload->>'createdAt'", direction: 'DESC' }, { expression: 'id', direction: 'ASC' }]),
+  selections: Object.freeze([{ expression: "payload->>'updatedAt'", direction: 'DESC' }, { expression: "payload->>'createdAt'", direction: 'DESC' }, { expression: 'id', direction: 'ASC' }]),
+  orders: Object.freeze([{ expression: "payload->>'updatedAt'", direction: 'DESC' }, { expression: "payload->>'createdAt'", direction: 'DESC' }, { expression: 'id', direction: 'ASC' }]),
+  deals: Object.freeze([{ expression: "payload->>'updatedAt'", direction: 'DESC' }, { expression: "payload->>'createdAt'", direction: 'DESC' }, { expression: 'id', direction: 'ASC' }]),
+  calendar: Object.freeze([{ expression: "payload->>'startsAt'", direction: 'ASC' }, { expression: 'id', direction: 'ASC' }]),
+});
 const ORDER_BY = Object.freeze({
   memberships: "payload->>'organisationId' ASC NULLS LAST, payload->>'userId' ASC NULLS LAST, id ASC",
   organisations: "payload->>'type' ASC NULLS LAST, payload->>'name' ASC NULLS LAST, id ASC",
@@ -72,6 +90,17 @@ export function createPostgresWorkspaceReader({ pool }) {
         };
       });
     },
+
+    async pageForActor(actorId, { section, limit, after } = {}) {
+      invariant(typeof actorId === 'string' && actorId.length > 0, 'WORKSPACE_ACTOR_REQUIRED', 'Workspace actor is required');
+      validatePageRequest({ section, limit, after });
+      return readSnapshot(pool, async (queryable) => {
+        const scope = await loadVisibilityScope(queryable, actorId);
+        const specification = pageSpecification(section, scope, actorId);
+        if (!specification) return emptyPage();
+        return readSectionPage(queryable, { section, limit, after, ...specification });
+      });
+    },
   });
 }
 
@@ -133,6 +162,145 @@ async function loadVisibilityScope(queryable, actorId) {
     showroomIds: Object.freeze(showroomIds),
     visibleCollectionIds: Object.freeze(visibleCollectionIds),
   });
+}
+
+function pageSpecification(section, scope, actorId) {
+  switch (section) {
+    case 'memberships':
+      return { table: 'memberships', where: 'user_id = $1 AND status = $2', params: [actorId, 'active'] };
+    case 'organisations':
+      return scope.visibleOrganisationIds.length
+        ? { table: 'organisations', where: 'id = ANY($1::text[])', params: [scope.visibleOrganisationIds] }
+        : undefined;
+    case 'relationships':
+      return tradePage('counterparty_relationships', scope.ownIds);
+    case 'invitations':
+      return tradePage('showroom_invitations', scope.ownIds);
+    case 'campaigns':
+      return idsOrOwnerPage('campaigns', scope.campaignIds, 'brand_id', scope.brandIds);
+    case 'collections':
+      return idsOrOwnerPage('collections', scope.collectionIds, 'brand_id', scope.brandIds);
+    case 'catalogSkus':
+      return scope.brandIds.length || scope.visibleCollectionIds.length
+        ? {
+          table: 'catalog_skus',
+          where: "brand_id = ANY($1::text[]) OR (collection_id = ANY($2::text[]) AND status = 'published')",
+          params: [scope.brandIds, scope.visibleCollectionIds],
+        }
+        : undefined;
+    case 'showrooms':
+      return idsOrOwnerPage('showrooms', scope.showroomIds, 'brand_id', scope.brandIds);
+    case 'cycles':
+      return tradePage('commercial_cycles', scope.ownIds);
+    case 'selections':
+      return tradePage('selections', scope.ownIds);
+    case 'orders':
+      return tradePage('orders', scope.ownIds);
+    case 'deals':
+      return tradePage('deals', scope.ownIds);
+    case 'calendar':
+      return scope.ownIds.length
+        ? { table: 'calendar_milestones', where: 'owner_organisation_id = ANY($1::text[])', params: [scope.ownIds] }
+        : undefined;
+    default:
+      return undefined;
+  }
+}
+
+function tradePage(table, organisationIds) {
+  return organisationIds.length
+    ? { table, where: 'brand_id = ANY($1::text[]) OR shop_id = ANY($1::text[])', params: [organisationIds] }
+    : undefined;
+}
+
+function idsOrOwnerPage(table, ids, ownerColumn, ownerIds) {
+  return ids.length || ownerIds.length
+    ? { table, where: `id = ANY($1::text[]) OR ${ownerColumn} = ANY($2::text[])`, params: [ids, ownerIds] }
+    : undefined;
+}
+
+async function readSectionPage(queryable, { section, table, where, params: visibilityParams, limit, after }) {
+  const sort = PAGE_SORT[section];
+  const params = [...visibilityParams];
+  const clauses = [`(${where})`];
+  if (after) clauses.push(keysetClause(sort, after, params));
+  const fetchLimit = limit + 1;
+  const limitParameter = params.push(fetchLimit);
+  const cursorColumns = sort.map(({ expression }, index) => `${expression} AS cursor_${index}`).join(', ');
+  const orderBy = sort.map(({ expression, direction }) => `${expression} ${direction} NULLS LAST`).join(', ');
+  const result = await queryable.query(
+    `SELECT payload, ${cursorColumns} FROM ${table} WHERE ${clauses.join(' AND ')} ORDER BY ${orderBy} LIMIT $${limitParameter}`,
+    params,
+  );
+  const rows = result.rows.slice(0, limit);
+  const hasMore = result.rows.length > limit;
+  return Object.freeze({
+    items: Object.freeze(rows.map((row) => row.payload)),
+    hasMore,
+    ...(hasMore ? { nextPosition: Object.freeze(sort.map((_, index) => cursorValue(rows.at(-1)?.[`cursor_${index}`]))) } : {}),
+  });
+}
+
+function keysetClause(sort, after, params) {
+  const parameterIndexes = after.map((value) => value === null ? null : params.push(value));
+  const alternatives = [];
+  for (let index = 0; index < sort.length; index += 1) {
+    const prefix = [];
+    for (let prefixIndex = 0; prefixIndex < index; prefixIndex += 1) {
+      const expression = sort[prefixIndex].expression;
+      const parameter = parameterIndexes[prefixIndex];
+      prefix.push(parameter === null ? `${expression} IS NULL` : `${expression} = $${parameter}`);
+    }
+    const parameter = parameterIndexes[index];
+    if (parameter === null) continue;
+    const { expression, direction } = sort[index];
+    const comparison = direction === 'DESC' ? '<' : '>';
+    alternatives.push(`(${[...prefix, `(${expression} ${comparison} $${parameter} OR ${expression} IS NULL)`].join(' AND ')})`);
+  }
+  invariant(alternatives.length > 0, 'WORKSPACE_CURSOR_INVALID', 'Workspace cursor cannot advance');
+  return `(${alternatives.join(' OR ')})`;
+}
+
+function validatePageRequest({ section, limit, after }) {
+  invariant(
+    typeof section === 'string' && WORKSPACE_SECTION_NAMES.includes(section),
+    'WORKSPACE_SECTION_INVALID',
+    'Workspace section is invalid',
+    { allowed: WORKSPACE_SECTION_NAMES },
+  );
+  invariant(
+    Number.isSafeInteger(limit) && limit >= 1 && limit <= MAX_WORKSPACE_PAGE_LIMIT,
+    'WORKSPACE_PAGE_LIMIT_INVALID',
+    `Workspace page limit must be an integer from 1 to ${MAX_WORKSPACE_PAGE_LIMIT}`,
+    { min: 1, max: MAX_WORKSPACE_PAGE_LIMIT },
+  );
+  if (after === undefined) return;
+  invariant(
+    Array.isArray(after) && after.length === WORKSPACE_CURSOR_POSITION_LENGTHS[section],
+    'WORKSPACE_CURSOR_INVALID',
+    'Workspace cursor position shape is invalid',
+  );
+  for (const [index, value] of after.entries()) {
+    invariant(
+      value === null || (typeof value === 'string' && value.length <= MAX_CURSOR_VALUE_LENGTH),
+      'WORKSPACE_CURSOR_INVALID',
+      'Workspace cursor position value is invalid',
+      { section, index },
+    );
+  }
+  invariant(
+    typeof after.at(-1) === 'string' && after.at(-1).length > 0,
+    'WORKSPACE_CURSOR_INVALID',
+    'Workspace cursor tie-breaker is invalid',
+  );
+}
+
+function cursorValue(value) {
+  return value === null || value === undefined ? null : String(value);
+}
+
+function emptyPage() {
+  return Object.freeze({ items: Object.freeze([]), hasMore: false });
 }
 
 async function payloadWhere(queryable, table, where, params, fetchLimit) {

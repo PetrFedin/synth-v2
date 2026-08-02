@@ -39,10 +39,33 @@ test('workspace bootstrap documents per-section bounds and truncation metadata',
   });
   assert.match(limit.description, /each workspace collection/i);
   assert.match(limit.description, /truncatedSections/);
+  assert.match(limit.description, /workspace\/\{section\}\/page/);
   assert.match(workspace.description, /repeatable-read/i);
   assert.match(workspace.description, /pageInfo\.hasMore/);
   assert.ok(workspace.responses['400']);
   assert.equal(workspace.responses['200'].content['application/json'].schema.$ref, '#/components/schemas/Workspace');
+});
+
+test('workspace section pages document bounded opaque keyset cursors', () => {
+  const page = operation('/workspace/{section}/page', 'get');
+  const section = page.parameters.find((parameter) => parameter.name === 'section');
+  const limit = page.parameters.find((parameter) => parameter.name === 'limit');
+  const cursor = page.parameters.find((parameter) => parameter.name === 'cursor');
+
+  assert.equal(section.in, 'path');
+  assert.equal(section.required, true);
+  assert.deepEqual(section.schema.enum, [
+    'memberships', 'organisations', 'relationships', 'invitations', 'campaigns', 'collections',
+    'catalogSkus', 'showrooms', 'cycles', 'selections', 'orders', 'deals', 'calendar',
+  ]);
+  assert.deepEqual(limit.schema, { type: 'integer', minimum: 1, maximum: 200, default: 50 });
+  assert.equal(cursor.schema.maxLength, 2048);
+  assert.match(cursor.description, /Opaque continuation cursor/i);
+  assert.match(page.description, /keyset-paginated/i);
+  assert.match(page.description, /section-bound/i);
+  assert.equal(page.responses[200].content['application/json'].schema.$ref, '#/components/schemas/WorkspaceSectionPage');
+  assert.ok(page.responses[400]);
+  assert.ok(page.responses[401]);
 });
 
 test('operational endpoints remain outside the authenticated /v2 server prefix', () => {

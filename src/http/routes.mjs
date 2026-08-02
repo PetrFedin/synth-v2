@@ -100,7 +100,7 @@ function read(method, pattern, queryFields, execute) {
     method,
     pattern,
     mutation: false,
-    execute(context) {
+    async execute(context) {
       assertQueryContract(context.query ?? {}, queryFields);
       return execute(context);
     },

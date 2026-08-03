@@ -33,7 +33,7 @@ const workspaceSections = Object.freeze([
 
 export const wholesaleV2OpenApi = Object.freeze({
   openapi: '3.1.0',
-  info: { title: 'Syntha Wholesale V2 API', version: '1.5.0' },
+  info: { title: 'Syntha Wholesale V2 API', version: '1.6.0' },
   servers: [{ url: '/v2', description: 'Authenticated Syntha V2 API prefix' }],
   'x-operational-endpoints': Object.freeze({
     liveness: '/health',
@@ -89,6 +89,22 @@ export const wholesaleV2OpenApi = Object.freeze({
           minimumOrderQuantity: { type: 'integer', minimum: 1, maximum: postgresIntegerMaximum },
           availableQuantity: { type: 'integer', minimum: 0, maximum: postgresIntegerMaximum },
         },
+      },
+      CatalogSkuUpdate: {
+        type: 'object',
+        required: ['expectedVersion', 'name', 'wholesalePrice', 'minimumOrderQuantity', 'availableQuantity'],
+        additionalProperties: false,
+        properties: {
+          expectedVersion: { type: 'integer', minimum: 1, maximum: postgresIntegerMaximum },
+          name: { type: 'string', minLength: 2, maxLength: 160 },
+          wholesalePrice: { type: 'number', exclusiveMinimum: 0, maximum: moneyMaximum, multipleOf: 0.0001 },
+          minimumOrderQuantity: { type: 'integer', minimum: 1, maximum: postgresIntegerMaximum },
+          availableQuantity: { type: 'integer', minimum: 0, maximum: postgresIntegerMaximum },
+        },
+      },
+      CatalogSkuVersionExpectation: {
+        type: 'object', required: ['expectedVersion'], additionalProperties: false,
+        properties: { expectedVersion: { type: 'integer', minimum: 1, maximum: postgresIntegerMaximum } },
       },
       CatalogSku: {
         type: 'object',
@@ -312,8 +328,9 @@ export const wholesaleV2OpenApi = Object.freeze({
           '#/components/schemas/CatalogSku',
         ),
       },
+      patch: operation('updateCatalogSku', ['sku'], '#/components/schemas/CatalogSkuUpdate'),
     },
-    '/catalog/skus/{sku}/publish': { post: operation('publishCatalogSku', ['sku']) },
+    '/catalog/skus/{sku}/publish': { post: operation('publishCatalogSku', ['sku'], '#/components/schemas/CatalogSkuVersionExpectation') },
     '/showrooms': { post: operation('createShowroom', [], '#/components/schemas/ShowroomCreate') },
     '/showrooms/{showroomId}/open': { post: operation('openShowroom', ['showroomId']) },
     '/relationships': { post: operation('requestRelationship', [], '#/components/schemas/RelationshipCreate') },

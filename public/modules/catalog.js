@@ -37,9 +37,16 @@ function renderCatalog() {
 function catalogSkuEntity(item) {
   const caps = window.SynthaUiCapabilities;
   const collection = state.workspace.collections.find(candidate => candidate.id === item.collectionId);
-  const actions = item.status === 'draft' && collection?.status === 'published' && caps.hasForOrganisation(state.workspace, item.brandId, caps.CAPABILITIES.CATALOG_MANAGE)
-    ? [actionButton('\u041e\u043f\u0443\u0431\u043b\u0438\u043a\u043e\u0432\u0430\u0442\u044c', () => mutate(`/v2/catalog/skus/${encodeURIComponent(item.sku)}/publish`, {}), 'primary')]
-    : [];
+  const canManageDraft = item.status === 'draft'
+    && caps.hasForOrganisation(state.workspace, item.brandId, caps.CAPABILITIES.CATALOG_MANAGE);
+  const actions = [];
+  if (canManageDraft) actions.push(catalogEditActionButton(item));
+  if (canManageDraft && collection?.status === 'published') {
+    actions.push(actionButton('\u041e\u043f\u0443\u0431\u043b\u0438\u043a\u043e\u0432\u0430\u0442\u044c', () => mutate(
+      `/v2/catalog/skus/${encodeURIComponent(item.sku)}/publish`,
+      { expectedVersion: item.version },
+    ), 'primary'));
+  }
   const ats = Number.isInteger(item.availableToSell)
     ? item.availableToSell
     : Math.max(0, Number(item.availableQuantity || 0) - Number(item.reservedQuantity || 0));
@@ -51,4 +58,11 @@ function catalogSkuEntity(item) {
     `\u041a\u043e\u043b\u043b\u0435\u043a\u0446\u0438\u044f: ${nameById('collections', item.collectionId)}`,
     `v${item.version}`,
   ], actions);
+}
+
+
+function catalogEditActionButton(item) {
+  const button = el('button', { className: 'button small', text: '\u0420\u0435\u0434\u0430\u043a\u0442\u0438\u0440\u043e\u0432\u0430\u0442\u044c', type: 'button' });
+  button.addEventListener('click', () => runAction(() => catalogSkuEditForm(item), button));
+  return button;
 }

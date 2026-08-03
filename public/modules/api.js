@@ -23,6 +23,7 @@ async function api(path, { method = 'GET', body, anonymous = false, signal } = {
         const error = new Error(`${code}: ${message}`);
         error.code = code;
         error.status = response.status;
+        error.details = payload.error?.details || {};
         throw error;
       }
       return payload.data;

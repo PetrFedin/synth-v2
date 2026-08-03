@@ -17,7 +17,7 @@ function services(calls = []) {
       advanceCycle: call('advanceCycle'),
       confirmAndOpenDeal: call('confirmAndOpenDeal'),
     },
-    catalog: { createSku: call('createSku'), publishSku: call('publishSku') },
+    catalog: { createSku: call('createSku'), updateSku: call('updateSku'), publishSku: call('publishSku') },
     partners: {
       requestRelationship: call('requestRelationship'),
       acceptRelationship: call('acceptRelationship'),

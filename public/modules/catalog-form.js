@@ -24,3 +24,25 @@ function catalogSkuForm() {
     });
   });
 }
+
+async function catalogSkuEditForm(item) {
+  const validation = window.SynthaUiValidation;
+  const latest = await api(`/v2/catalog/skus/${encodeURIComponent(item.sku)}`);
+  if (latest.status !== 'draft') {
+    const error = new Error('CATALOG_SKU_NOT_DRAFT: Only a draft SKU can be edited');
+    error.code = 'CATALOG_SKU_NOT_DRAFT';
+    throw error;
+  }
+  openForm('\u0420\u0435\u0434\u0430\u043a\u0442\u0438\u0440\u043e\u0432\u0430\u0442\u044c SKU', [
+    textDef('name', '\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435', latest.name, 160),
+    numberDef('wholesalePrice', 'Wholesale price', latest.wholesalePrice, false, 0.01),
+    numberDef('minimumOrderQuantity', 'MOQ', latest.minimumOrderQuantity, true, 1),
+    numberDef('availableQuantity', 'Sellable quantity', latest.availableQuantity, true, latest.reservedQuantity || 0),
+  ], values => mutate(`/v2/catalog/skus/${encodeURIComponent(latest.sku)}`, {
+    expectedVersion: latest.version,
+    name: validation.requiredText(values.name, 'SKU name'),
+    wholesalePrice: validation.number(values.wholesalePrice, 'Wholesale price', { min: 0.01 }),
+    minimumOrderQuantity: validation.number(values.minimumOrderQuantity, 'MOQ', { integer: true, min: 1 }),
+    availableQuantity: validation.number(values.availableQuantity, 'Available quantity', { integer: true, min: latest.reservedQuantity || 0 }),
+  }, 'PATCH'));
+}

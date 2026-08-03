@@ -14,7 +14,7 @@ function services(calls) {
       createCampaign: record('createCampaign'), openCampaign: record('openCampaign'), createCollection: record('createCollection'),
       publishCollection: record('publishCollection'), startCycle: record('startCycle'), advanceCycle: record('advanceCycle'), confirmAndOpenDeal: record('confirmAndOpenDeal'),
     },
-    catalog: { createSku: record('createSku'), publishSku: record('publishSku') },
+    catalog: { createSku: record('createSku'), updateSku: record('updateSku'), publishSku: record('publishSku') },
     partners: {
       requestRelationship: record('requestRelationship'), acceptRelationship: record('acceptRelationship'), rejectRelationship: record('rejectRelationship'), revokeRelationship: record('revokeRelationship'),
       inviteShopToShowroom: record('inviteShopToShowroom'), acceptShowroomInvitation: record('acceptShowroomInvitation'), declineShowroomInvitation: record('declineShowroomInvitation'), revokeShowroomInvitation: record('revokeShowroomInvitation'),

@@ -17,7 +17,7 @@ function options(calls = []) {
       publishCollection: service('publishCollection'), startCycle: service('startCycle'), advanceCycle: service('advanceCycle'),
       confirmAndOpenDeal: service('confirmAndOpenDeal'),
     },
-    catalog: { createSku: service('createSku'), publishSku: service('publishSku') },
+    catalog: { createSku: service('createSku'), updateSku: service('updateSku'), publishSku: service('publishSku') },
     partners: {
       requestRelationship: service('requestRelationship'), acceptRelationship: service('acceptRelationship'),
       rejectRelationship: service('rejectRelationship'), revokeRelationship: service('revokeRelationship'),
@@ -96,17 +96,17 @@ test('catalog SKU parameters are not decoded twice', async () => {
   const fetchCalls = [];
   const fetchHandler = createWholesaleFetchHandler(options(fetchCalls));
   const fetchResponse = await fetchHandler(new Request('https://syntha.test/v2/catalog/skus/SKU%252F1/publish', {
-    method: 'POST', headers: mutationHeaders, body: '{}',
+    method: 'POST', headers: mutationHeaders, body: '{"expectedVersion":1}',
   }));
   assert.equal(fetchResponse.status, 200);
-  assert.deepEqual(fetchCalls.at(-1), ['publishSku', 'command-1', 'user-1', 'SKU%2F1']);
+  assert.deepEqual(fetchCalls.at(-1), ['publishSku', 'command-1', 'user-1', 'SKU%2F1', { expectedVersion: 1 }]);
 
   const nodeCalls = [];
   await withNode(options(nodeCalls), async (base) => {
     const response = await fetch(`${base}/v2/catalog/skus/SKU%252F1/publish`, {
-      method: 'POST', headers: mutationHeaders, body: '{}',
+      method: 'POST', headers: mutationHeaders, body: '{"expectedVersion":1}',
     });
     assert.equal(response.status, 200);
   });
-  assert.deepEqual(nodeCalls.at(-1), ['publishSku', 'command-1', 'user-1', 'SKU%2F1']);
+  assert.deepEqual(nodeCalls.at(-1), ['publishSku', 'command-1', 'user-1', 'SKU%2F1', { expectedVersion: 1 }]);
 });

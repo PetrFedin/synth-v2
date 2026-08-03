@@ -53,7 +53,7 @@ function view(client) {
     async appendOutbox(event) {
       try {
         await client.query(
-          `INSERT INTO catalog_outbox_events (id, event_type, aggregate_id, status, event, published_at)
+          `INSERT INTO outbox_events (id, event_type, aggregate_id, status, event, published_at)
            VALUES ($1, $2, $3, 'pending', $4::jsonb, NULL)`,
           [event.id, event.type, event.aggregateId, JSON.stringify(event)],
         );

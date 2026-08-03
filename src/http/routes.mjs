@@ -27,6 +27,8 @@ export function createWholesaleRoutes({ platform, catalog, partners, collaborati
     mutate('POST', /^\/v2\/campaigns\/([^/]+)\/open$/, EMPTY_BODY, ({ commandId, actorId, params }) => platform.openCampaign(commandId, actorId, params[0])),
     mutate('POST', /^\/v2\/collections$/, COLLECTION_BODY, ({ commandId, actorId, body }) => platform.createCollection(commandId, actorId, body)),
     mutate('POST', /^\/v2\/collections\/([^/]+)\/publish$/, EMPTY_BODY, ({ commandId, actorId, params }) => platform.publishCollection(commandId, actorId, params[0])),
+    read('GET', /^\/v2\/catalog\/skus$/, ['limit', 'cursor', 'q', 'status', 'brandId', 'collectionId'], ({ actorId, query }) => catalogService.pageForActor(actorId, query)),
+    read('GET', /^\/v2\/catalog\/skus\/([^/]+)$/, [], ({ actorId, params }) => catalogService.getForActor(actorId, params[0])),
     mutate('POST', /^\/v2\/catalog\/skus$/, CATALOG_SKU_BODY, ({ commandId, actorId, body }) => catalogService.createSku(commandId, actorId, body)),
     mutate('POST', /^\/v2\/catalog\/skus\/([^/]+)\/publish$/, EMPTY_BODY, ({ commandId, actorId, params }) => catalogService.publishSku(commandId, actorId, params[0])),
     mutate('POST', /^\/v2\/showrooms$/, SHOWROOM_BODY, ({ commandId, actorId, body }) => collaboration.createShowroom(commandId, actorId, body)),
@@ -117,5 +119,5 @@ function sameId(bodyValue, routeValue, field) {
 }
 function unavailableCatalog() {
   const fail = () => invariant(false, 'CATALOG_SERVICE_REQUIRED', 'Catalog service is required');
-  return Object.freeze({ createSku: fail, publishSku: fail });
+  return Object.freeze({ createSku: fail, publishSku: fail, pageForActor: fail, getForActor: fail });
 }

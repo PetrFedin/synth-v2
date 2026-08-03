@@ -1,6 +1,7 @@
 import { invariant } from '../core/errors.mjs';
 import { createAuthService } from '../application/auth-service.mjs';
 import { createCatalogService } from '../application/catalog-service.mjs';
+import { createCatalogQueryService } from '../application/catalog-query-service.mjs';
 import { createMaintenanceService } from '../application/maintenance-service.mjs';
 import { withNotificationPageMetadata } from '../application/notification-page-service.mjs';
 import { createOutboxPublisherService } from '../application/outbox-publisher-service.mjs';
@@ -13,6 +14,7 @@ import { createNotificationService } from '../application/notification-service.m
 import { createWorkspaceQueryService } from '../application/workspace-query-service.mjs';
 import { createPostgresAuthStore } from '../infrastructure/postgres-auth-store.mjs';
 import { createPostgresCatalogStore } from '../infrastructure/postgres-catalog-store.mjs';
+import { createPostgresCatalogReader } from '../infrastructure/postgres-catalog-reader.mjs';
 import { createPostgresMaintenanceStore } from '../infrastructure/postgres-maintenance-store.mjs';
 import { createPostgresOutboxPublicationStore } from '../infrastructure/postgres-outbox-publication-store.mjs';
 import { createPostgresWholesaleStore } from '../infrastructure/postgres-store.mjs';
@@ -76,7 +78,9 @@ export function createPostgresWholesaleRuntime({
     ...(operationalReadiness ? { operationalCheck: operationalReadiness } : {}),
   }) : undefined;
   const platform = createWholesalePlatform(options);
-  const catalog = createCatalogService({ wholesaleStore: store, catalogStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) });
+  const catalogCommands = createCatalogService({ wholesaleStore: store, catalogStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) });
+  const catalogQueries = createCatalogQueryService({ reader: createPostgresCatalogReader({ pool }) });
+  const catalog = Object.freeze({ ...catalogCommands, ...catalogQueries });
   const partners = createPartnerAccessService(options);
   const collaboration = createShowroomSelectionService({ ...options, catalogReader: catalog });
   const orders = createOrderBuilderService(options);

@@ -33,7 +33,7 @@ const workspaceSections = Object.freeze([
 
 export const wholesaleV2OpenApi = Object.freeze({
   openapi: '3.1.0',
-  info: { title: 'Syntha Wholesale V2 API', version: '1.4.0' },
+  info: { title: 'Syntha Wholesale V2 API', version: '1.5.0' },
   servers: [{ url: '/v2', description: 'Authenticated Syntha V2 API prefix' }],
   'x-operational-endpoints': Object.freeze({
     liveness: '/health',
@@ -88,6 +88,36 @@ export const wholesaleV2OpenApi = Object.freeze({
           currency,
           minimumOrderQuantity: { type: 'integer', minimum: 1, maximum: postgresIntegerMaximum },
           availableQuantity: { type: 'integer', minimum: 0, maximum: postgresIntegerMaximum },
+        },
+      },
+      CatalogSku: {
+        type: 'object',
+        required: ['id', 'sku', 'collectionId', 'brandId', 'name', 'wholesalePrice', 'currency', 'minimumOrderQuantity', 'availableQuantity', 'reservedQuantity', 'availableToSell', 'status', 'version', 'publishedAt', 'createdAt', 'updatedAt'],
+        additionalProperties: false,
+        properties: {
+          id: identifier,
+          sku: { type: 'string', pattern: '^[A-Z0-9][A-Z0-9._-]{1,63}$' },
+          collectionId: identifier,
+          brandId: identifier,
+          name: { type: 'string', minLength: 2, maxLength: 160 },
+          wholesalePrice: { type: 'number', exclusiveMinimum: 0, maximum: moneyMaximum, multipleOf: 0.0001 },
+          currency,
+          minimumOrderQuantity: { type: 'integer', minimum: 1, maximum: postgresIntegerMaximum },
+          availableQuantity: { type: 'integer', minimum: 0, maximum: postgresIntegerMaximum },
+          reservedQuantity: { type: 'integer', minimum: 0, maximum: postgresIntegerMaximum },
+          availableToSell: { type: 'integer', minimum: 0, maximum: postgresIntegerMaximum },
+          status: { type: 'string', enum: ['draft', 'published'] },
+          version: { type: 'integer', minimum: 1, maximum: postgresIntegerMaximum },
+          publishedAt: nullableDateTime,
+          createdAt: { type: 'string', format: 'date-time' },
+          updatedAt: { type: 'string', format: 'date-time' },
+        },
+      },
+      CatalogSkuPage: {
+        type: 'object', required: ['items', 'nextCursor'], additionalProperties: false,
+        properties: {
+          items: { type: 'array', maxItems: 200, items: { $ref: '#/components/schemas/CatalogSku' } },
+          nextCursor: { oneOf: [{ type: 'string', minLength: 1, maxLength: 2048 }, { type: 'null' }] },
         },
       },
       ShowroomCreate: {
@@ -252,7 +282,37 @@ export const wholesaleV2OpenApi = Object.freeze({
     '/campaigns/{campaignId}/open': { post: operation('openCampaign', ['campaignId']) },
     '/collections': { post: operation('createCollection', [], '#/components/schemas/CollectionCreate') },
     '/collections/{collectionId}/publish': { post: operation('publishCollection', ['collectionId']) },
-    '/catalog/skus': { post: operation('createCatalogSku', [], '#/components/schemas/CatalogSkuCreate') },
+    '/catalog/skus': {
+      get: {
+        ...readOperation('pageCatalogSkus', { 200: 'Stable actor-scoped catalog page', 400: 'Invalid catalog filters, limit or cursor', 401: 'Authentication required' }),
+        description: 'Returns a keyset-paginated catalog page. Brand members can read their own draft and published SKU; counterparties can read only published SKU from collections visible through their commercial workspace.',
+        parameters: [
+          { name: 'limit', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 200, default: 50 } },
+          { name: 'cursor', in: 'query', required: false, description: 'Opaque continuation cursor bound to the exact filter set.', schema: { type: 'string', minLength: 1, maxLength: 2048 } },
+          { name: 'q', in: 'query', required: false, description: 'Case-insensitive SKU or product-name prefix.', schema: { type: 'string', minLength: 1, maxLength: 80 } },
+          { name: 'status', in: 'query', required: false, schema: { type: 'string', enum: ['draft', 'published'] } },
+          { name: 'brandId', in: 'query', required: false, schema: identifier },
+          { name: 'collectionId', in: 'query', required: false, schema: identifier },
+        ],
+        responses: responseContent(
+          readOperation('pageCatalogSkus', { 200: 'Stable actor-scoped catalog page', 400: 'Invalid catalog filters, limit or cursor', 401: 'Authentication required' }).responses,
+          200,
+          '#/components/schemas/CatalogSkuPage',
+        ),
+      },
+      post: operation('createCatalogSku', [], '#/components/schemas/CatalogSkuCreate'),
+    },
+    '/catalog/skus/{sku}': {
+      get: {
+        ...readOperation('getCatalogSku', { 200: 'Actor-scoped catalog SKU', 400: 'Invalid SKU', 401: 'Authentication required', 404: 'SKU is absent or not visible' }),
+        parameters: [pathParameter('sku')],
+        responses: responseContent(
+          readOperation('getCatalogSku', { 200: 'Actor-scoped catalog SKU', 400: 'Invalid SKU', 401: 'Authentication required', 404: 'SKU is absent or not visible' }).responses,
+          200,
+          '#/components/schemas/CatalogSku',
+        ),
+      },
+    },
     '/catalog/skus/{sku}/publish': { post: operation('publishCatalogSku', ['sku']) },
     '/showrooms': { post: operation('createShowroom', [], '#/components/schemas/ShowroomCreate') },
     '/showrooms/{showroomId}/open': { post: operation('openShowroom', ['showroomId']) },

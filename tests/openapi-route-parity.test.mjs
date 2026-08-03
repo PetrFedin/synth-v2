@@ -18,6 +18,8 @@ const contracts = [
   ['POST', '/v2/campaigns/campaign-1/open', '/campaigns/{campaignId}/open'],
   ['POST', '/v2/collections', '/collections'],
   ['POST', '/v2/collections/collection-1/publish', '/collections/{collectionId}/publish'],
+  ['GET', '/v2/catalog/skus', '/catalog/skus'],
+  ['GET', '/v2/catalog/skus/SKU-1', '/catalog/skus/{sku}'],
   ['POST', '/v2/catalog/skus', '/catalog/skus'],
   ['POST', '/v2/catalog/skus/SKU-1/publish', '/catalog/skus/{sku}/publish'],
   ['POST', '/v2/showrooms', '/showrooms'],
@@ -79,6 +81,15 @@ test('drifted routes from the retired router contract stay absent', () => {
 });
 
 test('cursor page responses reference bounded typed page schemas', () => {
+  const catalogResponse = wholesaleV2OpenApi.paths['/catalog/skus'].get.responses[200];
+  assert.equal(catalogResponse.content['application/json'].schema.$ref, '#/components/schemas/CatalogSkuPage');
+  const catalogPage = wholesaleV2OpenApi.components.schemas.CatalogSkuPage;
+  assert.deepEqual(catalogPage.required, ['items', 'nextCursor']);
+  assert.equal(catalogPage.additionalProperties, false);
+  assert.equal(catalogPage.properties.items.maxItems, 200);
+  assert.equal(catalogPage.properties.items.items.$ref, '#/components/schemas/CatalogSku');
+  assert.equal(catalogPage.properties.nextCursor.oneOf[0].maxLength, 2048);
+
   const notificationResponse = wholesaleV2OpenApi.paths['/notifications/page'].get.responses[200];
   assert.equal(notificationResponse.content['application/json'].schema.$ref, '#/components/schemas/NotificationPage');
   const notificationPage = wholesaleV2OpenApi.components.schemas.NotificationPage;

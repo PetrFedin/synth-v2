@@ -1,10 +1,15 @@
 import { invariant } from '../core/errors.mjs';
 
-export function bodyContract(allowedFields = [], nested = {}) {
-  return Object.freeze({
+export function bodyContract(allowedFields = [], nested = {}, arrays = {}) {
+  const contract = {
     allowedFields: Object.freeze([...allowedFields]),
     nested: Object.freeze(Object.fromEntries(Object.entries(nested).map(([key, fields]) => [key, Object.freeze([...fields])]))),
-  });
+  };
+  const arrayEntries = Object.entries(arrays);
+  if (arrayEntries.length) {
+    contract.arrays = Object.freeze(Object.fromEntries(arrayEntries.map(([key, fields]) => [key, Object.freeze([...fields])])));
+  }
+  return Object.freeze(contract);
 }
 
 export function assertBodyContract(body, contract = bodyContract()) {
@@ -14,6 +19,14 @@ export function assertBodyContract(body, contract = bodyContract()) {
     if (body[field] === undefined) continue;
     assertObject(body[field], 'HTTP_BODY_FIELD_INVALID', `${field} must be a JSON object`, { field });
     assertAllowedFields(body[field], allowedFields, 'HTTP_BODY_FIELD_UNKNOWN', field, { field });
+  }
+  for (const [field, allowedFields] of Object.entries(contract.arrays ?? {})) {
+    if (body[field] === undefined) continue;
+    invariant(Array.isArray(body[field]), 'HTTP_BODY_FIELD_INVALID', `${field} must be a JSON array`, { field });
+    body[field].forEach((item, index) => {
+      assertObject(item, 'HTTP_BODY_FIELD_INVALID', `${field}[${index}] must be a JSON object`, { field, index });
+      assertAllowedFields(item, allowedFields, 'HTTP_BODY_FIELD_UNKNOWN', `${field}[${index}]`, { field, index });
+    });
   }
   return body;
 }

@@ -23,7 +23,8 @@ test('PostgreSQL BOM lifecycle preserves snapshots, security, versions and event
   const pool = createPostgresTestPool({ connectionString: databaseUrl, max: 6 });
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
   let id = 0; let tick = 0;
-  const clock = () => `2026-08-03T14:00:${String(tick++).padStart(2, '0')}.000Z`;
+  const baseTime = Date.parse('2026-08-03T14:00:00.000Z');
+  const clock = () => new Date(baseTime + tick++ * 1000).toISOString();
   const nextId = (prefix) => `${prefix}_${++id}`;
   try {
     await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
@@ -35,29 +36,12 @@ test('PostgreSQL BOM lifecycle preserves snapshots, security, versions and event
     const platform = createWholesalePlatform({ store: wholesaleStore, clock, nextId });
     const catalog = createCatalogService({ wholesaleStore, catalogStore, clock, nextId });
     const materials = createMaterialService({ materialStore, clock, nextId });
-    const boms = Object.freeze({
-      ...createBomService({ bomStore, clock, nextId }),
-      ...createBomQueryService({ reader: createPostgresBomReader({ pool }) }),
-    });
+    const boms = Object.freeze({ ...createBomService({ bomStore, clock, nextId }), ...createBomQueryService({ reader: createPostgresBomReader({ pool }) }) });
 
     await platform.registerOrganisation('org-create', 'system', createOrganisation({ id: 'brand-bom', type: 'brand', name: 'BOM Brand' }));
-    await platform.grantMembership('member-owner', 'system', createMembership({
-      id: 'membership-owner',
-      organisationId: 'brand-bom',
-      organisationType: 'brand',
-      userId: 'product-owner',
-      role: 'owner',
-      createdAt: clock(),
-    }));
+    await platform.grantMembership('member-owner', 'system', createMembership({ id: 'membership-owner', organisationId: 'brand-bom', organisationType: 'brand', userId: 'product-owner', role: 'owner', createdAt: clock() }));
     for (const [role, userId] of [['finance', 'finance-user'], ['sales', 'sales-user']]) {
-      await platform.grantMembership(`member-${role}`, 'product-owner', createMembership({
-        id: `membership-${role}`,
-        organisationId: 'brand-bom',
-        organisationType: 'brand',
-        userId,
-        role,
-        createdAt: clock(),
-      }));
+      await platform.grantMembership(`member-${role}`, 'product-owner', createMembership({ id: `membership-${role}`, organisationId: 'brand-bom', organisationType: 'brand', userId, role, createdAt: clock() }));
     }
     const campaign = await platform.createCampaign('campaign-create', 'product-owner', { brandId: 'brand-bom', name: 'FW Costing', season: 'FW27', startsAt: '2027-01-01T00:00:00.000Z', endsAt: '2027-02-01T00:00:00.000Z' });
     await platform.openCampaign('campaign-open', 'product-owner', campaign.id);
@@ -80,23 +64,19 @@ test('PostgreSQL BOM lifecycle preserves snapshots, security, versions and event
     assert.equal(updated.materialCost, 33);
     assert.equal(updated.totalCost, 41);
     await assert.rejects(() => boms.updateBom('bom-stale', 'product-owner', sku.sku, editable), { code: 'BOM_CONCURRENCY_CONFLICT' });
-
     assert.equal((await boms.getForActor('finance-user', sku.sku)).sku, sku.sku);
     await assert.rejects(() => boms.getForActor('sales-user', sku.sku), { code: 'BOM_NOT_FOUND' });
-    const financePage = await boms.pageForActor('finance-user', { limit: 10, status: 'draft', brandId: 'brand-bom' });
-    assert.equal(financePage.items.length, 1);
+    assert.equal((await boms.pageForActor('finance-user', { limit: 10, status: 'draft', brandId: 'brand-bom' })).items.length, 1);
     assert.equal((await boms.pageForActor('sales-user', { limit: 10 })).items.length, 0);
 
     const published = await boms.publishBom('bom-publish', 'product-owner', sku.sku, { expectedVersion: updated.version });
     assert.equal(published.status, 'published');
     assert.equal(published.version, 3);
-    const aggregate = (await pool.query(`SELECT material_cost::text AS material_cost, total_cost::text AS total_cost, version, payload FROM boms WHERE sku = $1`, [sku.sku])).rows[0];
+    const aggregate = (await pool.query('SELECT material_cost::text AS material_cost, total_cost::text AS total_cost, version, payload FROM boms WHERE sku = $1', [sku.sku])).rows[0];
     assert.deepEqual({ material_cost: aggregate.material_cost, total_cost: aggregate.total_cost, version: aggregate.version }, { material_cost: '33.0000', total_cost: '41.0000', version: 3 });
     assert.equal(aggregate.payload.lines[0].materialVersion, material.version);
-    const lines = await pool.query(`SELECT line_id, material_code, material_version, quantity::text AS quantity, gross_quantity::text AS gross_quantity, unit_cost_snapshot::text AS unit_cost_snapshot, line_cost::text AS line_cost FROM bom_lines WHERE bom_id = $1`, [published.id]);
+    const lines = await pool.query('SELECT line_id, material_code, material_version, quantity::text AS quantity, gross_quantity::text AS gross_quantity, unit_cost_snapshot::text AS unit_cost_snapshot, line_cost::text AS line_cost FROM bom_lines WHERE bom_id = $1', [published.id]);
     assert.deepEqual(lines.rows, [{ line_id: 'SHELL', material_code: material.code, material_version: material.version, quantity: '3.0000', gross_quantity: '3.3000', unit_cost_snapshot: '10.0000', line_cost: '33.0000' }]);
     assert.deepEqual((await pool.query("SELECT event_type FROM outbox_events WHERE event_type LIKE 'bom.%' ORDER BY event_type")).rows.map((row) => row.event_type), ['bom.created', 'bom.published', 'bom.updated']);
-  } finally {
-    await pool.end();
-  }
+  } finally { await pool.end(); }
 });

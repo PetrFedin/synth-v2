@@ -60,6 +60,7 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
 
       - name: Verify repository
+        shell: bash --noprofile --norc -e -o pipefail {0}
         run: npm run verify 2>&1 | tee order-lifecycle-verify.log
 
       - name: Package verified files

@@ -14,15 +14,19 @@ const html = index.toString('ascii');
 
 assertDocumentContract(html);
 
-const stylesheets = [...html.matchAll(/<link\s+[^>]*rel="stylesheet"[^>]*href="([^"]+)"[^>]*>/g)].map((match) => match[1]);
+const stylesheetUrls = [...html.matchAll(/<link\s+[^>]*rel="stylesheet"[^>]*href="([^"]+)"[^>]*>/g)].map((match) => match[1]);
+const stylesheets = stylesheetUrls.map(assetPathname);
 assertUnique(stylesheets, 'stylesheet');
-for (const stylesheet of stylesheets) {
-  assertPublicAssetPath(stylesheet, 'stylesheet');
-  await assertFileExists(path.join(publicDir, stylesheet.slice(1)), stylesheet);
+for (let index = 0; index < stylesheetUrls.length; index += 1) {
+  const stylesheetUrl = stylesheetUrls[index];
+  const stylesheet = stylesheets[index];
+  assertPublicAssetPath(stylesheetUrl, 'stylesheet');
+  await assertFileExists(path.join(publicDir, stylesheet.slice(1)), stylesheetUrl);
 }
 
 const scriptTags = [...html.matchAll(/<script\s+([^>]*)src="([^"]+)"([^>]*)><\/script>/g)];
-const sources = scriptTags.map((match) => match[2]);
+const sourceUrls = scriptTags.map((match) => match[2]);
+const sources = sourceUrls.map(assetPathname);
 if (sources.length < 10 || sources.at(-1) !== '/ui/app-start.js' || sources.includes('/app.js')) {
   fail('Standalone UI script order is invalid.');
 }
@@ -39,9 +43,11 @@ assertRequiredOrder(sources, [
   '/ui/app-start.js',
 ]);
 
-for (const [, before, source, after] of scriptTags) {
-  if (!/\bdefer\b/.test(`${before} ${after}`)) fail(`UI script must use defer: ${source}`);
-  if (!source.startsWith('/ui/')) fail(`Unexpected script path: ${source}`);
+for (const [, before, sourceUrl, after] of scriptTags) {
+  if (!/\bdefer\b/.test(`${before} ${after}`)) fail(`UI script must use defer: ${sourceUrl}`);
+  const source = assetPathname(sourceUrl);
+  assertPublicAssetPath(sourceUrl, 'script');
+  if (!source.startsWith('/ui/')) fail(`Unexpected script path: ${sourceUrl}`);
   const file = path.join(modulesDir, path.basename(source));
   const bytes = await readFile(file);
   assertAscii(bytes, file);
@@ -81,8 +87,17 @@ function assertUnique(values, label) {
   if (duplicates.length) fail(`Duplicate ${label} entries: ${[...new Set(duplicates)].join(', ')}`);
 }
 
+function assetPathname(asset) {
+  try {
+    return new URL(asset, 'http://syntha.local').pathname;
+  } catch {
+    fail(`Invalid public asset URL: ${asset}`);
+  }
+}
+
 function assertPublicAssetPath(asset, label) {
-  if (!asset.startsWith('/') || asset.includes('..') || asset.includes('\\')) {
+  const pathname = assetPathname(asset);
+  if (!asset.startsWith('/') || !pathname.startsWith('/') || pathname.includes('..') || pathname.includes('\\')) {
     fail(`Invalid ${label} path: ${asset}`);
   }
 }

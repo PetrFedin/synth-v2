@@ -33,6 +33,7 @@ if (sources.length < 10 || sources.at(-1) !== '/ui/app-start.js' || sources.incl
 assertUnique(sources, 'script');
 assertRequiredOrder(sources, [
   '/ui/i18n-runtime.js',
+  '/ui/i18n-v7.js',
   '/ui/api.js',
   '/ui/workspace-pagination.js',
   '/ui/notification-pagination.js',
@@ -45,13 +46,16 @@ assertRequiredOrder(sources, [
   '/ui/materials-core.js',
   '/ui/bom-core.js',
   '/ui/omnidata-workspace.js',
-  '/ui/omnidata-v4.js',
+  '/ui/omnidata-polish.js',
+  '/ui/omnidata-fidelity.js',
   '/ui/omnidata-v5.js',
-  '/ui/omnidata-v6.js',
   '/ui/planning.js',
   '/ui/styles.js',
   '/ui/materials.js',
   '/ui/bom.js',
+  '/ui/omnidata-v7.js',
+  '/ui/omnidata-v7-installed.js',
+  '/ui/omnidata-v7-language-audit.js',
   '/ui/app-start.js',
 ]);
 
@@ -64,6 +68,10 @@ for (const [, before, sourceUrl, after] of scriptTags) {
   const bytes = await readFile(file);
   const sourceText = decodeUtf8(bytes, file);
   new vm.Script(sourceText, { filename: file });
+}
+
+for (const retired of ['/ui/omnidata-v4.js', '/ui/omnidata-v6.js']) {
+  if (sources.includes(retired)) fail(`Retired visual layer must not be loaded: ${retired}`);
 }
 
 console.log(`Standalone UI contract OK (${sources.length} scripts, ${stylesheets.length} stylesheets checked).`);

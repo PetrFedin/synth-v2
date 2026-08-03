@@ -128,6 +128,11 @@ test('PostgreSQL migration ledger serializes runners and rejects changed history
     const mirrored = await pool.query('SELECT event_type, aggregate_id, status, event FROM outbox_events WHERE id = $1', [legacyEvent.id]);
     assert.deepEqual(mirrored.rows, [{ event_type: legacyEvent.type, aggregate_id: legacyEvent.aggregateId, status: 'pending', event: legacyEvent }]);
 
+    await pool.query("UPDATE outbox_events SET status = 'published', published_at = '2026-08-03T13:00:00.000Z' WHERE id = $1", [legacyEvent.id]);
+    await pool.query("UPDATE catalog_outbox_events SET status = 'pending', published_at = NULL WHERE id = $1", [legacyEvent.id]);
+    const nonRegressed = await pool.query('SELECT status FROM outbox_events WHERE id = $1', [legacyEvent.id]);
+    assert.deepEqual(nonRegressed.rows, [{ status: 'published' }]);
+
     const recoveryConstraint = await pool.query(
       `SELECT pg_get_constraintdef(oid) AS definition
          FROM pg_constraint

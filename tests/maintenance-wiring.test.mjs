@@ -18,7 +18,7 @@ test('PostgreSQL runtime creates and exposes maintenance and optional outbox pub
   assert.match(runtime, /createOutboxPublisherService/);
   assert.match(runtime, /createPostgresOutboxPublicationStore/);
   assert.match(runtime, /const outboxPublication = outboxPublisher \? createOutboxPublisherService\(\{/);
-  assert.match(runtime, /return Object\.freeze\(\{ auth, readiness, maintenance, outboxPublication,/);
+  assert.match(runtime, /return Object\.freeze\(\{\s*auth, readiness, maintenance, outboxPublication,/);
   assert.match(runtime, /commandRetentionMs/);
   assert.match(runtime, /outboxRetentionMs/);
 });

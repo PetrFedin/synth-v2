@@ -22,6 +22,7 @@ const ASSETS = Object.freeze({
   '/omnidata-v5-responsive.css': ['omnidata-v5-responsive.css', 'text/css; charset=utf-8', VISUAL_CACHE],
   '/omnidata-v6.css': ['omnidata-v6.css', 'text/css; charset=utf-8', VISUAL_CACHE],
   '/industrial-product.css': ['industrial-product.css', 'text/css; charset=utf-8', VISUAL_CACHE],
+  '/bom.css': ['bom.css', 'text/css; charset=utf-8', VISUAL_CACHE],
   '/ui/i18n-runtime.js': ['modules/i18n-runtime.js', JS, CACHE],
   '/ui/ui-capabilities.js': ['modules/ui-capabilities.js', JS, CACHE],
   '/ui/ui-validation.js': ['modules/ui-validation.js', JS, CACHE],
@@ -49,6 +50,7 @@ const ASSETS = Object.freeze({
   '/ui/planning-core.js': ['modules/planning-core.js', JS, VISUAL_CACHE],
   '/ui/styles-core.js': ['modules/styles-core.js', JS, VISUAL_CACHE],
   '/ui/materials-core.js': ['modules/materials-core.js', JS, VISUAL_CACHE],
+  '/ui/bom-core.js': ['modules/bom-core.js', JS, VISUAL_CACHE],
   '/ui/omnidata-workspace.js': ['modules/omnidata-workspace.js', JS, VISUAL_CACHE],
   '/ui/order-lifecycle-actions.js': ['modules/order-lifecycle-actions.js', JS, CACHE],
   '/ui/omnidata-polish.js': ['modules/omnidata-polish.js', JS, VISUAL_CACHE],
@@ -59,6 +61,7 @@ const ASSETS = Object.freeze({
   '/ui/planning.js': ['modules/planning.js', JS, VISUAL_CACHE],
   '/ui/styles.js': ['modules/styles.js', JS, VISUAL_CACHE],
   '/ui/materials.js': ['modules/materials.js', JS, VISUAL_CACHE],
+  '/ui/bom.js': ['modules/bom.js', JS, VISUAL_CACHE],
   '/ui/app-start.js': ['modules/app-start.js', JS, CACHE],
 });
 

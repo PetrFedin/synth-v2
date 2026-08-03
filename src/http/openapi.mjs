@@ -32,7 +32,7 @@ const workspaceSections = Object.freeze([
 
 export const wholesaleV2OpenApi = Object.freeze({
   openapi: '3.1.0',
-  info: { title: 'Syntha Wholesale V2 API', version: '1.2.0' },
+  info: { title: 'Syntha Wholesale V2 API', version: '1.3.0' },
   servers: [{ url: '/v2', description: 'Authenticated Syntha V2 API prefix' }],
   'x-operational-endpoints': Object.freeze({
     liveness: '/health',
@@ -178,13 +178,19 @@ export const wholesaleV2OpenApi = Object.freeze({
         },
       },
       WorkspacePageInfo: {
-        type: 'object', required: ['limit', 'hasMore', 'truncatedSections'], additionalProperties: false,
+        type: 'object', required: ['limit', 'hasMore', 'truncatedSections', 'nextCursors'], additionalProperties: false,
         properties: {
           limit: { type: 'integer', minimum: 1, maximum: 500 },
           hasMore: { type: 'boolean' },
           truncatedSections: {
             type: 'array', uniqueItems: true,
             items: { type: 'string', enum: workspaceSections },
+          },
+          nextCursors: {
+            type: 'object',
+            description: 'Opaque continuation cursor for every truncated section. Property names are workspace section names.',
+            propertyNames: { enum: workspaceSections },
+            additionalProperties: { type: 'string', minLength: 1, maxLength: 2048 },
           },
         },
       },
@@ -264,12 +270,12 @@ export const wholesaleV2OpenApi = Object.freeze({
     '/workspace': {
       get: {
         ...readOperation('loadWorkspace', { 200: 'Bounded actor workspace', 400: 'Invalid workspace limit', 401: 'Authentication required' }),
-        description: 'Returns one repeatable-read workspace bootstrap snapshot. Every collection is capped by limit; pageInfo.hasMore and pageInfo.truncatedSections report omitted records.',
+        description: 'Returns one repeatable-read workspace bootstrap snapshot. Every collection is capped by limit; pageInfo.truncatedSections and pageInfo.nextCursors expose exact continuations for omitted records.',
         parameters: [{
           name: 'limit',
           in: 'query',
           required: false,
-          description: 'Maximum records returned for each workspace collection. Continue every name reported by pageInfo.truncatedSections through /workspace/{section}/page.',
+          description: 'Maximum records returned for each workspace collection. Continue every name reported by pageInfo.truncatedSections using its pageInfo.nextCursors entry and /workspace/{section}/page.',
           schema: { type: 'integer', minimum: 1, maximum: 500, default: 200 },
         }],
         responses: responseContent(

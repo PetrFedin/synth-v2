@@ -27,25 +27,25 @@ const createBody = {
 test('material routes expose bounded reads and all governed mutations', async () => {
   const { routes, calls } = fixture();
   const page = matchWholesaleRoute(routes, 'GET', '/v2/materials');
-  await page.execute({ actorId: 'user-1', query: { limit: '50', type: 'fabric' } });
+  await page.execute({ actorId: 'user-1', query: { limit: '50', type: 'fabric' }, params: page.params });
   const detail = matchWholesaleRoute(routes, 'GET', '/v2/materials/FAB-001');
-  await detail.execute({ actorId: 'user-1', query: {} });
+  await detail.execute({ actorId: 'user-1', query: {}, params: detail.params });
   const create = matchWholesaleRoute(routes, 'POST', '/v2/materials');
-  await create.execute({ actorId: 'user-1', commandId: 'cmd-1', body: createBody, query: {} });
+  await create.execute({ actorId: 'user-1', commandId: 'cmd-1', body: createBody, query: {}, params: create.params });
   const update = matchWholesaleRoute(routes, 'PATCH', '/v2/materials/FAB-001');
-  await update.execute({ actorId: 'user-1', commandId: 'cmd-2', body: { expectedVersion: 1, ...Object.fromEntries(Object.entries(createBody).filter(([key]) => !['code', 'brandId'].includes(key))) }, query: {} });
+  await update.execute({ actorId: 'user-1', commandId: 'cmd-2', body: { expectedVersion: 1, ...Object.fromEntries(Object.entries(createBody).filter(([key]) => !['code', 'brandId'].includes(key))) }, query: {}, params: update.params });
   const publish = matchWholesaleRoute(routes, 'POST', '/v2/materials/FAB-001/publish');
-  await publish.execute({ actorId: 'user-1', commandId: 'cmd-3', body: { expectedVersion: 2 }, query: {} });
+  await publish.execute({ actorId: 'user-1', commandId: 'cmd-3', body: { expectedVersion: 2 }, query: {}, params: publish.params });
   assert.deepEqual(calls.map((call) => call[0]), ['page', 'get', 'create', 'update', 'publish']);
   assert.equal(create.mutation, true);
   assert.equal(page.mutation, false);
 });
 
-test('material route contracts reject unsupported query and body fields before services', async () => {
+test('material route contracts reject unsupported query and body fields before services', () => {
   const { routes, calls } = fixture();
   const page = matchWholesaleRoute(routes, 'GET', '/v2/materials');
-  await assert.rejects(() => page.execute({ actorId: 'user-1', query: { supplierId: 'hidden' } }), { code: 'HTTP_QUERY_FIELD_UNKNOWN' });
+  assert.throws(() => page.execute({ actorId: 'user-1', query: { supplierId: 'hidden' }, params: page.params }), { code: 'HTTP_QUERY_FIELD_UNKNOWN' });
   const create = matchWholesaleRoute(routes, 'POST', '/v2/materials');
-  await assert.rejects(() => create.execute({ actorId: 'user-1', commandId: 'cmd-1', body: { ...createBody, reservedQuantity: 10 }, query: {} }), { code: 'HTTP_BODY_FIELD_UNKNOWN' });
+  assert.throws(() => create.execute({ actorId: 'user-1', commandId: 'cmd-1', body: { ...createBody, reservedQuantity: 10 }, query: {}, params: create.params }), { code: 'HTTP_BODY_FIELD_UNKNOWN' });
   assert.equal(calls.length, 0);
 });

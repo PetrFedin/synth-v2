@@ -201,8 +201,23 @@
   }
 
   async function fetchPublishedMaterials() {
-    const page = await api('/v2/materials?limit=200&status=published');
-    return page.items || [];
+    const materials = new Map();
+    const seenCursors = new Set();
+    let cursor = null;
+    let pageCount = 0;
+    do {
+      pageCount += 1;
+      if (pageCount > 500) throw new Error(text('Справочник материалов превысил безопасный предел загрузки.', 'Material Master exceeded the safe page limit.'));
+      const query = new URLSearchParams({ limit: '200', status: 'published' });
+      if (cursor) query.set('cursor', cursor);
+      const page = await api(`/v2/materials?${query.toString()}`);
+      for (const item of page.items || []) materials.set(item.code, item);
+      const nextCursor = page.nextCursor || null;
+      if (nextCursor && seenCursors.has(nextCursor)) throw new Error(text('Справочник материалов вернул циклический курсор.', 'Material Master returned a cyclic cursor.'));
+      if (nextCursor) seenCursors.add(nextCursor);
+      cursor = nextCursor;
+    } while (cursor);
+    return [...materials.values()];
   }
   async function openEditor(existing) {
     const materials = await fetchPublishedMaterials();

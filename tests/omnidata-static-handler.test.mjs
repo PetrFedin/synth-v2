@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { createStandaloneHandler } from '../src/web/static-handler.mjs';
 
 const publicDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
-const build = 'visual-20260803-5';
+const build = 'visual-20260803-6';
 
 async function withServer(handler, work) {
   const server = createServer(handler);
@@ -21,7 +21,7 @@ async function withServer(handler, work) {
   }
 }
 
-test('standalone workspace serves the complete Syntha Omnidata V5 visual stack', async () => {
+test('standalone workspace serves the complete Syntha Omnidata V6 visual stack', async () => {
   const handler = createStandaloneHandler({
     publicDir,
     apiHandler: (_request, response) => {
@@ -42,8 +42,9 @@ test('standalone workspace serves the complete Syntha Omnidata V5 visual stack',
       'omnidata-v5.css',
       'omnidata-v5-workspace.css',
       'omnidata-v5-responsive.css',
+      'omnidata-v6.css',
     ]) assert.match(html, new RegExp(`\\/${asset.replaceAll('.', '\\.')}\\?v=${build}`));
-    for (const asset of ['omnidata-workspace.js', 'omnidata-v4.js', 'omnidata-v5.js']) {
+    for (const asset of ['omnidata-workspace.js', 'omnidata-v4.js', 'omnidata-v5.js', 'omnidata-v6.js']) {
       assert.match(html, new RegExp(`\\/ui\\/${asset.replaceAll('.', '\\.')}\\?v=${build}`));
     }
 
@@ -55,6 +56,7 @@ test('standalone workspace serves the complete Syntha Omnidata V5 visual stack',
       ['/omnidata-v5.css', /--v5-sidebar:\s*#111a2d/],
       ['/omnidata-v5-workspace.css', /minmax\(420px, 460px\)/],
       ['/omnidata-v5-responsive.css', /@media \(max-width: 980px\)/],
+      ['/omnidata-v6.css', /--od6-sidebar-width:\s*200px/],
     ]) {
       const cssResponse = await fetch(`${base}${asset}`);
       assert.equal(cssResponse.status, 200, asset);
@@ -67,6 +69,7 @@ test('standalone workspace serves the complete Syntha Omnidata V5 visual stack',
       ['/ui/omnidata-workspace.js', /function renderCatalog\(/],
       ['/ui/omnidata-v4.js', /function odV4Navigation\(/],
       ['/ui/omnidata-v5.js', /function odV5Navigation\(/],
+      ['/ui/omnidata-v6.js', /function applyOmnidataV6\(/],
     ]) {
       const moduleResponse = await fetch(`${base}${asset}`);
       assert.equal(moduleResponse.status, 200, asset);

@@ -5,11 +5,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createPostgresAuthStore } from '../src/infrastructure/postgres-auth-store.mjs';
 import { createAuthService } from '../src/application/auth-service.mjs';
+import { createPostgresTestPool } from './postgres-test-pool.mjs';
 
 const url = process.env.POSTGRES_TEST_URL;
 test('PostgreSQL auth persists users and revocable sessions', { skip: !url }, async () => {
-  const { Pool } = await import('pg');
-  const pool = new Pool({ connectionString: url });
+  const pool = createPostgresTestPool({ connectionString: url });
   try {
     const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
     await pool.query(await readFile(path.join(root, 'db/migrations/002_auth.sql'), 'utf8'));

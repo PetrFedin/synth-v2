@@ -1,11 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { DomainError } from '../src/core/errors.mjs';
 import { normalizeHttpError } from '../src/http/api.mjs';
 import { wholesaleV2OpenApi } from '../src/http/openapi.mjs';
 
 test('order version validation and concurrency have stable HTTP statuses', () => {
-  assert.equal(normalizeHttpError({ code: 'ORDER_EXPECTED_VERSION_INVALID', message: 'invalid', details: {} }).status, 400);
-  assert.equal(normalizeHttpError({ code: 'ORDER_CONCURRENCY_CONFLICT', message: 'stale', details: {} }).status, 409);
+  assert.equal(normalizeHttpError(new DomainError('ORDER_EXPECTED_VERSION_INVALID', 'invalid')).status, 400);
+  assert.equal(normalizeHttpError(new DomainError('ORDER_CONCURRENCY_CONFLICT', 'stale')).status, 409);
 });
 
 test('OpenAPI versions every order lifecycle mutation', () => {

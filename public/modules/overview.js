@@ -3,10 +3,10 @@ function renderOverview() {
   const w = state.workspace;
   const kpis = el('section', { className: 'grid kpis' });
   [
-    ['\u0410\u043a\u0442\u0438\u0432\u043d\u044b\u0435 \u0441\u0432\u044f\u0437\u0438', w.relationships.filter(x => x.status === 'active').length],
-    ['\u041e\u0442\u043a\u0440\u044b\u0442\u044b\u0435 \u0446\u0438\u043a\u043b\u044b', w.cycles.filter(x => x.stage !== 'deal-space').length],
-    ['\u0417\u0430\u043a\u0430\u0437\u044b', w.orders.length],
-    ['DealSpace', w.deals.length],
+    ['\u0410\u043a\u0442\u0438\u0432\u043d\u044b\u0435 \u0441\u0432\u044f\u0437\u0438', workspaceMetric('relationships', x => x.status === 'active')],
+    ['\u041e\u0442\u043a\u0440\u044b\u0442\u044b\u0435 \u0446\u0438\u043a\u043b\u044b', workspaceMetric('cycles', x => x.stage !== 'deal-space')],
+    ['\u0417\u0430\u043a\u0430\u0437\u044b', workspaceMetric('orders')],
+    ['DealSpace', workspaceMetric('deals')],
   ].forEach(([label, value]) => kpis.append(kpi(label, value)));
   box.append(kpis);
   const activeCycles = [...w.cycles].sort((a,b) => String(b.updatedAt).localeCompare(String(a.updatedAt))).slice(0,5);
@@ -17,3 +17,8 @@ function renderOverview() {
   return box;
 }
 
+function workspaceMetric(section, predicate = () => true) {
+  const count = (state.workspace[section] || []).filter(predicate).length;
+  const truncated = state.workspace.pageInfo?.truncatedSections?.includes(section);
+  return truncated ? `${count}+` : count;
+}

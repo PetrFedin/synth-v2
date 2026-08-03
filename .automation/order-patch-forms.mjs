@@ -18,7 +18,7 @@ await edit('public/modules/dom-1.js', source => {
 `    field.options.forEach(option => {
       const value = typeof option === 'string' ? option : option.id;
       const text = field.format ? field.format(option) : (typeof option === 'string' ? option : (option.name || option.id));
-      const optionNode = el('option', { value, rawText: text });
+      const optionNode = el('option',{value,rawText:text});
       if (field.value !== undefined && String(field.value) === String(value)) optionNode.selected = true;
       control.append(optionNode);
     });`,

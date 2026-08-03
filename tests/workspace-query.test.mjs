@@ -29,6 +29,7 @@ const catalogSource = {
     { sku: 'OTHER-1', brandId: 'brand-2', collectionId: 'collection-2', status: 'published', wholesalePrice: 90 },
   ],
 };
+const workspaceCollections = ['memberships','organisations','relationships','invitations','campaigns','collections','catalogSkus','showrooms','cycles','selections','orders','deals','calendar'];
 
 function service() {
   return createWorkspaceQueryService({ reader: createMemoryWorkspaceReader({ store: store(source), catalogStore: store(catalogSource) }) });
@@ -52,5 +53,6 @@ test('brand workspace includes draft and published own catalog SKUs', async () =
 
 test('actor without active membership receives an empty workspace', async () => {
   const workspace = await service().loadForActor('unknown');
-  assert.ok(Object.values(workspace).every((items) => items.length === 0));
+  for (const key of workspaceCollections) assert.deepEqual(workspace[key], []);
+  assert.deepEqual(workspace.pageInfo, { limit: 200, hasMore: false, truncatedSections: [], nextCursors: {} });
 });

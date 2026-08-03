@@ -133,6 +133,7 @@
     if (nextCursor !== null && (typeof nextCursor !== 'string' || nextCursor.length < 1 || nextCursor.length > 2048)) {
       throw pagingError('WORKSPACE_PAGE_INVALID', 'Workspace page cursor is invalid');
     }
+    if (nextCursor && page.items.length === 0) throw pagingError('WORKSPACE_PAGE_INVALID', 'Workspace page cannot continue without records');
     if (nextCursor === currentCursor) throw pagingError('WORKSPACE_CURSOR_LOOP', 'Workspace page cursor did not advance');
     const seen = new Set();
     const items = page.items.map(item => {

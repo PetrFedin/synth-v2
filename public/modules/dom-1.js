@@ -62,9 +62,11 @@ function sectionCard(title, children, buttonLabel, onButton, pagingSection) {
   if (pagingSection && paging?.hasMore(pagingSection)) {
     const status = paging.status(pagingSection);
     const label = status.state === 'loading'
-      ? I18N.t('common.loadingMore')
-      : status.state === 'error' ? I18N.t('common.retry') : I18N.t('common.loadMore');
-    const button = el('button', { className: 'button small', text: label, type: 'button' });
+      ? localText('\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430\u2026', 'Loading\u2026')
+      : status.state === 'error'
+        ? localText('\u041f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u044c', 'Retry')
+        : localText('\u0417\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c \u0435\u0449\u0451', 'Load more');
+    const button = el('button', { className: 'button small', rawText: label, type: 'button' });
     button.disabled = status.state === 'loading';
     button.addEventListener('click', () => { void paging.loadNext(pagingSection); });
     tools.append(button);

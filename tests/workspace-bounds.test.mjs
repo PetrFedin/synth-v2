@@ -80,6 +80,9 @@ test('reader fetches limit plus one and reports truncated sections without retur
     limit: 2,
     hasMore: true,
     truncatedSections: ['memberships'],
+    nextCursors: {
+      memberships: 'WzEsIm1lbWJlcnNoaXBzIixbInNob3AtMSIsImFjdG9yLTEiLCJtZW1iZXJzaGlwLTIiXV0',
+    },
   });
   const membershipQuery = queries.find((query) => query.sql.includes('SELECT payload FROM memberships'));
   assert.equal(membershipQuery.params.at(-1), 3);

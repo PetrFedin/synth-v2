@@ -112,6 +112,6 @@ test('workspace identity comes only from authenticated actor', async () => {
   await withServer(context, async (base) => {
     const response = await fetch(`${base}/v2/workspace`, { headers: { authorization: 'Bearer valid-token' } });
     assert.equal(response.status, 200);
-    assert.deepEqual(context.calls[0], ['loadForActor', 'user-1']);
+    assert.deepEqual(context.calls[0], ['loadForActor', 'user-1', { limit: undefined }]);
   });
 });

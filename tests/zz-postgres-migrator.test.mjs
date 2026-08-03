@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { appendFile, copyFile, mkdtemp, rm } from 'node:fs/promises';
+import { copyFile, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -26,6 +26,7 @@ test('PostgreSQL migration ledger serializes runners and rejects changed history
     '009_outbox_publication_claims.sql',
     '010_outbox_dead_letter_recovery.sql',
     '011_global_command_registry.sql',
+    '012_workspace_paging_indexes.sql',
   ];
   try {
     await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
@@ -120,7 +121,11 @@ test('PostgreSQL migration ledger serializes runners and rejects changed history
     assert.equal(notificationIndex.rows[0].index_name, 'notifications_recipient_created_idx');
 
     for (const file of migrationFiles) await copyFile(path.join(migrationsDir, file), path.join(tempDir, file));
-    await appendFile(path.join(tempDir, '005_catalog_availability.sql'), '\n-- changed history must fail\n');
+    const changedMigrationPath = path.join(tempDir, '005_catalog_availability.sql');
+    const originalMigrationSql = await readFile(changedMigrationPath, 'utf8');
+    const changedMigrationSql = originalMigrationSql.replace(/COMMIT;\s*$/i, '-- changed history must fail\nCOMMIT;\n');
+    assert.notEqual(changedMigrationSql, originalMigrationSql, 'test fixture must preserve the wrapper while changing checksum input');
+    await writeFile(changedMigrationPath, changedMigrationSql, 'utf8');
     await assert.rejects(
       () => migratePostgres({ pool, migrationsDir: tempDir, clock }),
       (error) => error?.code === 'MIGRATION_CHECKSUM_MISMATCH' && error.details?.file === '005_catalog_availability.sql',

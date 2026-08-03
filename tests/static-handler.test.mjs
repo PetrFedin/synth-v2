@@ -22,11 +22,13 @@ test('serves standalone workspace and every ordered script with security headers
     assert.match(response.headers.get('content-security-policy'), /default-src 'self'/);
     const html = await response.text();
     const sources = [...html.matchAll(/<script defer src="([^"]+)"/g)].map((match) => match[1]);
-    assert.deepEqual(sources.slice(0, 7), [
+    assert.deepEqual(sources.slice(0, 9), [
       '/ui/i18n-runtime.js',
       '/ui/dom-2.js',
       '/ui/dom-1.js',
       '/ui/api.js',
+      '/ui/workspace-pagination.js',
+      '/ui/notification-pagination.js',
       '/ui/ui-capabilities.js',
       '/ui/ui-validation.js',
       '/ui/app-core.js',

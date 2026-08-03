@@ -148,6 +148,7 @@ export function createPostgresNotificationProjectionStore({ pool }) {
       return Object.freeze({
         items: Object.freeze(rows.map((row) => row.payload)),
         hasMore,
+        ...(hasMore ? { nextPosition: notificationPagePosition(rows.at(-1)) } : {}),
       });
     },
     recordProjectionFailure({ event, errorCode, failedAt, attemptCount = 1 }) {
@@ -266,6 +267,17 @@ function transactionView(client) {
     getCommand: (id) => getRegisteredCommand(client, 'notification', id),
     insertCommand: (command) => insertRegisteredCommand(client, 'notification', command),
   });
+}
+
+function notificationPagePosition(row) {
+  const createdAt = row?.created_at?.toISOString?.() ?? row?.created_at;
+  invariant(
+    typeof createdAt === 'string' && Number.isFinite(Date.parse(createdAt))
+      && typeof row?.id === 'string' && row.id.length >= 1 && row.id.length <= 160,
+    'NOTIFICATION_PAGE_POSITION_INVALID',
+    'Notification database page position is invalid',
+  );
+  return Object.freeze({ createdAt: new Date(createdAt).toISOString(), id: row.id });
 }
 
 function validateClaim({ workerId, claimedAt, leaseExpiresAt, limit }) {

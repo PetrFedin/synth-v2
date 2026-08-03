@@ -52,5 +52,14 @@ test('brand workspace includes draft and published own catalog SKUs', async () =
 
 test('actor without active membership receives an empty workspace', async () => {
   const workspace = await service().loadForActor('unknown');
-  assert.ok(Object.values(workspace).every((items) => items.length === 0));
+  for (const [key, value] of Object.entries(workspace)) {
+    if (key === 'pageInfo') continue;
+    assert.deepEqual(value, [], key);
+  }
+  assert.deepEqual(workspace.pageInfo, {
+    limit: 200,
+    hasMore: false,
+    truncatedSections: [],
+    nextCursors: {},
+  });
 });

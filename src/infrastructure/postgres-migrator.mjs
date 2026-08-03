@@ -4,6 +4,8 @@ import path from 'node:path';
 import { invariant } from '../core/errors.mjs';
 
 const MIGRATION_LOCK_KEY = 824226214;
+const DEFAULT_MIGRATION_LOCK_ATTEMPTS = 1_200;
+const DEFAULT_MIGRATION_LOCK_DELAY_MS = 50;
 const ONLINE_MODE_DIRECTIVE = /^--\s*syntha:migration-mode=online\s*(?:\r?\n|$)/i;
 const ONLINE_STATEMENT_SEPARATOR = /^\s*--\s*syntha:statement\s*$/gim;
 const ONLINE_INDEX_STATEMENT = /^CREATE\s+(?:UNIQUE\s+)?INDEX\s+CONCURRENTLY\s+IF\s+NOT\s+EXISTS\s+([a-z][a-z0-9_]*)\s+ON\s+/i;
@@ -25,15 +27,25 @@ export async function waitForPostgres({ pool, attempts = 30, delayMs = 1_000, sl
   throw lastError;
 }
 
-export async function migratePostgres({ pool, migrationsDir, clock = () => new Date().toISOString() } = {}) {
+export async function migratePostgres({
+  pool,
+  migrationsDir,
+  clock = () => new Date().toISOString(),
+  lockAttempts = DEFAULT_MIGRATION_LOCK_ATTEMPTS,
+  lockDelayMs = DEFAULT_MIGRATION_LOCK_DELAY_MS,
+  sleep = defaultSleep,
+} = {}) {
   invariant(pool && typeof pool.connect === 'function', 'POSTGRES_POOL_REQUIRED', 'PostgreSQL pool is required');
   invariant(migrationsDir, 'MIGRATIONS_DIR_REQUIRED', 'Migrations directory is required');
+  invariant(Number.isInteger(lockAttempts) && lockAttempts > 0, 'MIGRATION_LOCK_ATTEMPTS_INVALID', 'Migration lock attempts must be a positive integer');
+  invariant(Number.isInteger(lockDelayMs) && lockDelayMs >= 0, 'MIGRATION_LOCK_DELAY_INVALID', 'Migration lock delay must be a non-negative integer');
+  invariant(typeof sleep === 'function', 'MIGRATION_LOCK_SLEEP_INVALID', 'Migration lock sleep must be a function');
   const client = await pool.connect();
   const applied = [];
   const skipped = [];
   let locked = false;
   try {
-    await client.query('SELECT pg_advisory_lock($1)', [MIGRATION_LOCK_KEY]);
+    await acquireMigrationLock(client, { attempts: lockAttempts, delayMs: lockDelayMs, sleep });
     locked = true;
     await client.query(`CREATE TABLE IF NOT EXISTS schema_migrations (
       version text PRIMARY KEY,
@@ -62,6 +74,25 @@ export async function migratePostgres({ pool, migrationsDir, clock = () => new D
     if (locked) await client.query('SELECT pg_advisory_unlock($1)', [MIGRATION_LOCK_KEY]).catch(() => undefined);
     client.release();
   }
+}
+
+async function acquireMigrationLock(client, { attempts, delayMs, sleep }) {
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const result = await client.query('SELECT pg_try_advisory_lock($1) AS locked', [MIGRATION_LOCK_KEY]);
+    invariant(
+      result?.rowCount === 1 && result.rows?.length === 1 && result.rows[0]?.locked !== undefined,
+      'MIGRATION_LOCK_RESULT_INVALID',
+      'PostgreSQL returned an invalid migration lock result',
+    );
+    if (truthy(result.rows[0].locked)) return Object.freeze({ attempt });
+    if (attempt < attempts) await sleep(delayMs);
+  }
+  invariant(
+    false,
+    'MIGRATION_LOCK_TIMEOUT',
+    'Timed out waiting for the PostgreSQL migration lock',
+    { attempts, delayMs },
+  );
 }
 
 export async function inspectPostgresMigrations({ pool, migrationsDir } = {}) {

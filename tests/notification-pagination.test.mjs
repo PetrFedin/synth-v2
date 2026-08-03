@@ -4,7 +4,7 @@ import { createNotificationService } from '../src/application/notification-servi
 import { decodeNotificationCursor, encodeNotificationCursor } from '../src/core/notification-cursor.mjs';
 import { createPostgresNotificationProjectionStore } from '../src/infrastructure/postgres-notification-projection-store.mjs';
 import { wholesaleV2OpenApi } from '../src/http/openapi.mjs';
-import { matchRoute, validateRouteInput } from '../src/http/routes.mjs';
+import { createWholesaleRoutes, matchWholesaleRoute } from '../src/http/routes.mjs';
 
 function notification(id, createdAt, status = 'unread') {
   return Object.freeze({
@@ -178,13 +178,32 @@ test('PostgreSQL notification insert persists the immutable pagination timestamp
   assert.equal(queries.at(-1).sql, 'RELEASE');
 });
 
-test('notification page route and OpenAPI expose only limit and cursor query parameters', () => {
-  const match = matchRoute('GET', '/v2/notifications/page');
-  assert.ok(match);
-  const input = validateRouteInput(match.route, {
-    url: new URL('https://syntha.test/v2/notifications/page?limit=25&cursor=abc'),
+test('notification page route and OpenAPI expose only limit and cursor query parameters', async () => {
+  const calls = [];
+  const routes = createWholesaleRoutes({
+    platform: {},
+    catalog: {},
+    partners: {},
+    collaboration: {},
+    orders: {},
+    workspace: {},
+    notifications: {
+      async pageForActor(actorId, options) { calls.push({ actorId, options }); return { items: [], nextCursor: null }; },
+    },
   });
-  assert.deepEqual(input, { limit: '25', cursor: 'abc' });
+  const match = matchWholesaleRoute(routes, 'GET', '/v2/notifications/page');
+  assert.ok(match);
+  await match.execute({
+    actorId: 'user-1',
+    query: { limit: '25', cursor: 'abc' },
+    body: {},
+    params: match.params,
+  });
+  assert.deepEqual(calls, [{ actorId: 'user-1', options: { limit: '25', cursor: 'abc' } }]);
+  await assert.rejects(
+    () => match.execute({ actorId: 'user-1', query: { debug: '1' }, body: {}, params: match.params }),
+    (error) => error.code === 'HTTP_QUERY_FIELD_UNKNOWN',
+  );
 
   const operation = wholesaleV2OpenApi.paths['/notifications/page'].get;
   assert.equal(operation.operationId, 'pageNotifications');

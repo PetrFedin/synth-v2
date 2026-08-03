@@ -25,7 +25,7 @@ test('Fetch API adapter supports Next-compatible Request and Response', async ()
   const response = await context.handle(new Request('https://syntha.test/v2/workspace', { headers: { authorization: 'Bearer valid' } }));
   assert.equal(response.status, 200);
   assert.equal(response.headers.get('x-request-id'), 'fetch-request-1');
-  assert.deepEqual(context.calls[0], ['loadForActor', 'uid-1']);
+  assert.deepEqual(context.calls[0], ['loadForActor', 'uid-1', { limit: undefined }]);
 });
 
 test('Fetch API adapter enforces auth and mutation idempotency', async () => {

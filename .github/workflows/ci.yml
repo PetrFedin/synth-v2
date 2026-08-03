@@ -3,15 +3,26 @@ name: Syntha V2 CI
 on:
   pull_request:
   push:
-    branches: [main, 'agent/**']
+    branches:
+      - main
 
 permissions:
   contents: read
 
+concurrency:
+  group: postgres-verify-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
+    name: Node 22 PostgreSQL verification
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+    env:
+      CI: true
+      NPM_CONFIG_AUDIT: "false"
+      NPM_CONFIG_FUND: "false"
+      NPM_CONFIG_IGNORE_SCRIPTS: "true"
     services:
       postgres:
         image: postgres:17
@@ -27,13 +38,39 @@ jobs:
           --health-timeout 5s
           --health-retries 12
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          node-version: '22'
-      - name: Install dependencies
-        run: npm install --no-audit --no-fund
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
       - name: Verify Syntha V2 with PostgreSQL
-        run: npm run verify
+        shell: bash
         env:
           POSTGRES_TEST_URL: postgresql://syntha:syntha_test@127.0.0.1:5432/syntha_v2_test
+        run: |
+          set +e
+          npm run verify 2>&1 | tee postgres-verify.log
+          status=${PIPESTATUS[0]}
+          echo "$status" > postgres-verify-status.txt
+          exit "$status"
+
+      - name: Upload PostgreSQL verification diagnostics
+        if: always()
+        uses: actions/upload-artifact@615b319bd27bb32c3d64dca6b6ed6974d5fbe653 # v6.0.0
+        with:
+          name: syntha-postgres-verify
+          path: |
+            postgres-verify.log
+            postgres-verify-status.txt
+          if-no-files-found: error
+          retention-days: 1

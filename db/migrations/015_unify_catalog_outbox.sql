@@ -45,10 +45,18 @@ BEGIN
         USING ERRCODE = '23505';
     END IF;
 
-    UPDATE outbox_events
-       SET status = NEW.status,
-           published_at = NEW.published_at
-     WHERE id = NEW.id;
+    UPDATE outbox_events AS unified
+       SET status = CASE
+                      WHEN unified.status = 'dead-letter' THEN 'dead-letter'
+                      WHEN unified.status = 'published' OR NEW.status = 'published' THEN 'published'
+                      ELSE 'pending'
+                    END,
+           published_at = CASE
+                            WHEN unified.status IN ('dead-letter', 'published') THEN unified.published_at
+                            WHEN NEW.status = 'published' THEN NEW.published_at
+                            ELSE NULL
+                          END
+     WHERE unified.id = NEW.id;
   ELSE
     INSERT INTO outbox_events (id, event_type, aggregate_id, status, event, published_at)
     VALUES (NEW.id, NEW.event_type, NEW.aggregate_id, NEW.status, NEW.event, NEW.published_at);

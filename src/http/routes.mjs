@@ -8,6 +8,10 @@ const COLLECTION_BODY = bodyContract(['campaignId', 'brandId', 'name', 'currency
 const CATALOG_SKU_BODY = bodyContract(['sku', 'collectionId', 'brandId', 'name', 'wholesalePrice', 'currency', 'minimumOrderQuantity', 'availableQuantity']);
 const CATALOG_SKU_UPDATE_BODY = bodyContract(['expectedVersion', 'name', 'wholesalePrice', 'minimumOrderQuantity', 'availableQuantity']);
 const CATALOG_SKU_PUBLISH_BODY = bodyContract(['expectedVersion']);
+const MATERIAL_FIELDS = ['name', 'type', 'unit', 'supplierName', 'supplierReference', 'composition', 'color', 'currency', 'unitCost', 'minimumOrderQuantity', 'availableQuantity'];
+const MATERIAL_BODY = bodyContract(['code', 'brandId', ...MATERIAL_FIELDS]);
+const MATERIAL_UPDATE_BODY = bodyContract(['expectedVersion', ...MATERIAL_FIELDS]);
+const MATERIAL_PUBLISH_BODY = bodyContract(['expectedVersion']);
 const SHOWROOM_BODY = bodyContract(['collectionId', 'brandId', 'name', 'opensAt', 'closesAt']);
 const RELATIONSHIP_BODY = bodyContract(['brandId', 'shopId']);
 const INVITATION_BODY = bodyContract(['showroomId', 'shopId', 'expiresAt']);
@@ -22,9 +26,10 @@ const ORDER_ACCEPT_BODY = bodyContract(['orderId', 'organisationId', 'expectedVe
 const ORDER_VERSION_BODY = bodyContract(['expectedVersion']);
 const ORDER_CANCEL_BODY = bodyContract(['orderId', 'reason', 'expectedVersion']);
 
-export function createWholesaleRoutes({ platform, catalog, partners, collaboration, orders, notifications, workspace }) {
+export function createWholesaleRoutes({ platform, catalog, materials, partners, collaboration, orders, notifications, workspace }) {
   invariant(platform && partners && collaboration && orders && notifications && workspace, 'HTTP_SERVICES_REQUIRED', 'All V2 application services are required');
   const catalogService = catalog ?? unavailableCatalog();
+  const materialService = materials ?? unavailableMaterials();
   return [
     mutate('POST', /^\/v2\/campaigns$/, CAMPAIGN_BODY, ({ commandId, actorId, body }) => platform.createCampaign(commandId, actorId, body)),
     mutate('POST', /^\/v2\/campaigns\/([^/]+)\/open$/, EMPTY_BODY, ({ commandId, actorId, params }) => platform.openCampaign(commandId, actorId, params[0])),
@@ -35,6 +40,11 @@ export function createWholesaleRoutes({ platform, catalog, partners, collaborati
     mutate('POST', /^\/v2\/catalog\/skus$/, CATALOG_SKU_BODY, ({ commandId, actorId, body }) => catalogService.createSku(commandId, actorId, body)),
     mutate('PATCH', /^\/v2\/catalog\/skus\/([^/]+)$/, CATALOG_SKU_UPDATE_BODY, ({ commandId, actorId, params, body }) => catalogService.updateSku(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/catalog\/skus\/([^/]+)\/publish$/, CATALOG_SKU_PUBLISH_BODY, ({ commandId, actorId, params, body }) => catalogService.publishSku(commandId, actorId, params[0], body)),
+    read('GET', /^\/v2\/materials$/, ['limit', 'cursor', 'q', 'status', 'type', 'brandId'], ({ actorId, query }) => materialService.pageForActor(actorId, query)),
+    read('GET', /^\/v2\/materials\/([^/]+)$/, [], ({ actorId, params }) => materialService.getForActor(actorId, params[0])),
+    mutate('POST', /^\/v2\/materials$/, MATERIAL_BODY, ({ commandId, actorId, body }) => materialService.createMaterial(commandId, actorId, body)),
+    mutate('PATCH', /^\/v2\/materials\/([^/]+)$/, MATERIAL_UPDATE_BODY, ({ commandId, actorId, params, body }) => materialService.updateMaterial(commandId, actorId, params[0], body)),
+    mutate('POST', /^\/v2\/materials\/([^/]+)\/publish$/, MATERIAL_PUBLISH_BODY, ({ commandId, actorId, params, body }) => materialService.publishMaterial(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/showrooms$/, SHOWROOM_BODY, ({ commandId, actorId, body }) => collaboration.createShowroom(commandId, actorId, body)),
     mutate('POST', /^\/v2\/showrooms\/([^/]+)\/open$/, EMPTY_BODY, ({ commandId, actorId, params }) => collaboration.openShowroom(commandId, actorId, params[0])),
     mutate('POST', /^\/v2\/relationships$/, RELATIONSHIP_BODY, ({ commandId, actorId, body }) => partners.requestRelationship(commandId, actorId, body)),
@@ -64,27 +74,18 @@ export function createWholesaleRoutes({ platform, catalog, partners, collaborati
     mutate('POST', /^\/v2\/selections\/([^/]+)\/submit$/, EMPTY_BODY, ({ commandId, actorId, params }) => collaboration.submitSelection(commandId, actorId, params[0])),
     mutate('POST', /^\/v2\/orders$/, ORDER_BODY, ({ commandId, actorId, body }) => orders.createOrderDraft(commandId, actorId, body)),
     mutate('PATCH', /^\/v2\/orders\/([^/]+)\/terms$/, ORDER_TERMS_UPDATE_BODY, ({ commandId, actorId, params, body }) => orders.reviseTerms(commandId, actorId, {
-      orderId: params[0],
-      expectedVersion: body.expectedVersion,
-      terms: body.terms,
+      orderId: params[0], expectedVersion: body.expectedVersion, terms: body.terms,
     })),
     mutate('POST', /^\/v2\/orders\/([^/]+)\/accept$/, ORDER_ACCEPT_BODY, ({ commandId, actorId, params, body }) => {
       sameId(body.orderId, params[0], 'orderId');
       return orders.acceptTerms(commandId, actorId, { ...body, orderId: params[0] });
     }),
-    mutate('POST', /^\/v2\/orders\/([^/]+)\/attach$/, ORDER_VERSION_BODY, ({ commandId, actorId, params, body }) => orders.attachOrderToCycle(commandId, actorId, {
-      orderId: params[0],
-      expectedVersion: body.expectedVersion,
-    })),
+    mutate('POST', /^\/v2\/orders\/([^/]+)\/attach$/, ORDER_VERSION_BODY, ({ commandId, actorId, params, body }) => orders.attachOrderToCycle(commandId, actorId, { orderId: params[0], expectedVersion: body.expectedVersion })),
     mutate('POST', /^\/v2\/orders\/([^/]+)\/cancel$/, ORDER_CANCEL_BODY, ({ commandId, actorId, params, body }) => {
       sameId(body.orderId, params[0], 'orderId');
       return orders.cancelOrder(commandId, actorId, { orderId: params[0], reason: body.reason, expectedVersion: body.expectedVersion });
     }),
-    read('GET', /^\/v2\/workspace\/([^/]+)\/page$/, ['limit', 'cursor'], ({ actorId, params, query }) => workspace.pageForActor(actorId, {
-      section: params[0],
-      limit: query.limit,
-      cursor: query.cursor,
-    })),
+    read('GET', /^\/v2\/workspace\/([^/]+)\/page$/, ['limit', 'cursor'], ({ actorId, params, query }) => workspace.pageForActor(actorId, { section: params[0], limit: query.limit, cursor: query.cursor })),
     read('GET', /^\/v2\/workspace$/, ['limit'], ({ actorId, query }) => workspace.loadForActor(actorId, { limit: query.limit })),
     read('GET', /^\/v2\/notifications\/page$/, ['limit', 'cursor'], ({ actorId, query }) => notifications.pageForActor(actorId, { limit: query.limit, cursor: query.cursor })),
     read('GET', /^\/v2\/notifications$/, ['limit'], ({ actorId, query }) => notifications.listForActor(actorId, { limit: query.limit })),
@@ -102,28 +103,18 @@ export function matchWholesaleRoute(routes, method, pathname) {
 }
 
 function mutate(method, pattern, contract, execute) {
-  return {
-    method,
-    pattern,
-    mutation: true,
-    execute(context) {
-      assertQueryContract(context.query ?? {}, []);
-      assertBodyContract(context.body, contract);
-      return execute(context);
-    },
-  };
+  return { method, pattern, mutation: true, execute(context) {
+    assertQueryContract(context.query ?? {}, []);
+    assertBodyContract(context.body, contract);
+    return execute(context);
+  } };
 }
 
 function read(method, pattern, queryFields, execute) {
-  return {
-    method,
-    pattern,
-    mutation: false,
-    async execute(context) {
-      assertQueryContract(context.query ?? {}, queryFields);
-      return execute(context);
-    },
-  };
+  return { method, pattern, mutation: false, async execute(context) {
+    assertQueryContract(context.query ?? {}, queryFields);
+    return execute(context);
+  } };
 }
 
 function sameId(bodyValue, routeValue, field) {
@@ -132,4 +123,8 @@ function sameId(bodyValue, routeValue, field) {
 function unavailableCatalog() {
   const fail = () => invariant(false, 'CATALOG_SERVICE_REQUIRED', 'Catalog service is required');
   return Object.freeze({ createSku: fail, updateSku: fail, publishSku: fail, pageForActor: fail, getForActor: fail });
+}
+function unavailableMaterials() {
+  const fail = () => invariant(false, 'MATERIAL_SERVICE_REQUIRED', 'Material service is required');
+  return Object.freeze({ createMaterial: fail, updateMaterial: fail, publishMaterial: fail, pageForActor: fail, getForActor: fail });
 }

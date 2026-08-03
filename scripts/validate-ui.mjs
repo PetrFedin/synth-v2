@@ -40,6 +40,16 @@ assertRequiredOrder(sources, [
   '/ui/ui-validation.js',
   '/ui/app-core.js',
   '/ui/open-form.js',
+  '/ui/planning-core.js',
+  '/ui/styles-core.js',
+  '/ui/materials-core.js',
+  '/ui/omnidata-workspace.js',
+  '/ui/omnidata-v4.js',
+  '/ui/omnidata-v5.js',
+  '/ui/omnidata-v6.js',
+  '/ui/planning.js',
+  '/ui/styles.js',
+  '/ui/materials.js',
   '/ui/app-start.js',
 ]);
 
@@ -59,15 +69,10 @@ console.log(`Standalone UI contract OK (${sources.length} scripts, ${stylesheets
 function assertDocumentContract(document) {
   if (!/^<!doctype html>/i.test(document.trimStart())) fail('Missing HTML doctype.');
   if (!/<html\s+lang="(?:ru|en)"/.test(document)) fail('Document language is missing or unsupported.');
-  if (!/<meta\s+name="viewport"\s+content="[^"]*width=device-width/.test(document)) {
-    fail('Responsive viewport metadata is missing.');
-  }
+  if (!/<meta\s+name="viewport"\s+content="[^"]*width=device-width/.test(document)) fail('Responsive viewport metadata is missing.');
   const appRoots = [...document.matchAll(/\bid="app"/g)];
   if (appRoots.length !== 1) fail(`Expected exactly one #app root, found ${appRoots.length}.`);
-  if (/<(?:script|style)[^>]*\son[a-z]+\s*=/i.test(document) || /\son(?:click|change|submit|input|load|error)\s*=/i.test(document)) {
-    fail('Inline event handlers are not allowed in the standalone UI.');
-  }
-
+  if (/<(?:script|style)[^>]*\son[a-z]+\s*=/i.test(document) || /\son(?:click|change|submit|input|load|error)\s*=/i.test(document)) fail('Inline event handlers are not allowed in the standalone UI.');
   const ids = [...document.matchAll(/\bid="([^"]+)"/g)].map((match) => match[1]);
   assertUnique(ids, 'HTML id');
 }
@@ -81,42 +86,23 @@ function assertRequiredOrder(actual, required) {
     previous = index;
   }
 }
-
 function assertUnique(values, label) {
   const duplicates = values.filter((value, index) => values.indexOf(value) !== index);
   if (duplicates.length) fail(`Duplicate ${label} entries: ${[...new Set(duplicates)].join(', ')}`);
 }
-
 function assetPathname(asset) {
-  try {
-    return new URL(asset, 'http://syntha.local').pathname;
-  } catch {
-    fail(`Invalid public asset URL: ${asset}`);
-  }
+  try { return new URL(asset, 'http://syntha.local').pathname; }
+  catch { fail(`Invalid public asset URL: ${asset}`); }
 }
-
 function assertPublicAssetPath(asset, label) {
   const pathname = assetPathname(asset);
-  if (!asset.startsWith('/') || !pathname.startsWith('/') || pathname.includes('..') || pathname.includes('\\')) {
-    fail(`Invalid ${label} path: ${asset}`);
-  }
+  if (!asset.startsWith('/') || !pathname.startsWith('/') || pathname.includes('..') || pathname.includes('\\')) fail(`Invalid ${label} path: ${asset}`);
 }
-
 async function assertFileExists(file, publicPath) {
-  try {
-    await access(file);
-  } catch {
-    fail(`Referenced public asset does not exist: ${publicPath}`);
-  }
+  try { await access(file); }
+  catch { fail(`Referenced public asset does not exist: ${publicPath}`); }
 }
-
 function assertAscii(buffer, file) {
-  if ([...buffer].some((byte) => byte > 127)) {
-    fail(`Non-ASCII source detected: ${path.relative(root, file)}`);
-  }
+  if ([...buffer].some((byte) => byte > 127)) fail(`Non-ASCII source detected: ${path.relative(root, file)}`);
 }
-
-function fail(message) {
-  console.error(message);
-  process.exit(1);
-}
+function fail(message) { console.error(message); process.exit(1); }

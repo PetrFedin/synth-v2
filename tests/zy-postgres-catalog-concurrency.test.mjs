@@ -71,9 +71,10 @@ test('PostgreSQL serializes competing catalog edits and rejects stale publicatio
 
     assert.equal((await pool.query('SELECT count(*)::int AS count FROM catalog_commands')).rows[0].count, 3);
     assert.deepEqual(
-      (await pool.query('SELECT event_type FROM catalog_outbox_events ORDER BY event_type')).rows.map((row) => row.event_type),
+      (await pool.query("SELECT event_type FROM outbox_events WHERE event_type LIKE 'catalog-sku.%' ORDER BY event_type")).rows.map((row) => row.event_type),
       ['catalog-sku.created', 'catalog-sku.published', 'catalog-sku.updated'],
     );
+    assert.equal((await pool.query('SELECT count(*)::int AS count FROM catalog_outbox_events')).rows[0].count, 0);
   } finally {
     await pool.end();
   }

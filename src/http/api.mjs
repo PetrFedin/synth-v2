@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { DomainError, invariant } from '../core/errors.mjs';
+import { withMaterialOpenApi } from './material-openapi.mjs';
 import { wholesaleV2OpenApi } from './openapi.mjs';
 import { assertBodyContract, assertQueryContract, bodyContract } from './request-contract.mjs';
 import { createWholesaleRoutes, matchWholesaleRoute } from './routes.mjs';
@@ -15,11 +16,12 @@ import {
 
 const EMPTY_BODY = bodyContract();
 const LOGIN_BODY = bodyContract(['email', 'password']);
+const OPEN_API = withMaterialOpenApi(wholesaleV2OpenApi);
 
 export function createWholesaleHttpHandler({ authenticate, auth, readiness, maxBodyBytes = 256 * 1024, nextRequestId = randomUUID, ...services } = {}) {
   invariant(typeof authenticate === 'function', 'HTTP_AUTHENTICATOR_REQUIRED', 'HTTP authenticator is required');
   invariant(Number.isSafeInteger(maxBodyBytes) && maxBodyBytes > 0, 'HTTP_BODY_LIMIT_INVALID', 'HTTP body limit must be a positive integer');
-  invariant(typeof nextRequestId === 'function', 'HTTP_REQUEST_ID_FACTORY_REQUIRED', 'Request id factory is required');
+  invariant(typeof nextRequestId === 'function', 'HTTP_REQUEST_ID_FACTORY_REQUIRED', 'HTTP request id factory is required');
   const routes = createWholesaleRoutes(services);
   return async (request, response) => {
     const requestId = resolveRequestId(header(request, 'x-request-id'), nextRequestId);
@@ -37,7 +39,7 @@ export function createWholesaleHttpHandler({ authenticate, auth, readiness, maxB
       }
       if (request.method === 'GET' && url.pathname === '/openapi.json') {
         assertEmptyQuery(url);
-        return send(response, 200, wholesaleV2OpenApi);
+        return send(response, 200, OPEN_API);
       }
       if (request.method === 'POST' && url.pathname === '/v2/auth/login') {
         assertEmptyQuery(url);
@@ -63,13 +65,7 @@ export function createWholesaleHttpHandler({ authenticate, auth, readiness, maxB
       invariant(route, 'HTTP_ROUTE_NOT_FOUND', 'Route not found', routeDetails(request, url));
       const commandId = route.mutation ? requireIdempotencyKey(header(request, 'idempotency-key')) : undefined;
       const body = route.mutation ? await readJson(request, maxBodyBytes) : {};
-      const data = await route.execute({
-        actorId: identity.actor.actorId,
-        commandId,
-        body,
-        params: route.params,
-        query: queryParameters(url),
-      });
+      const data = await route.execute({ actorId: identity.actor.actorId, commandId, body, params: route.params, query: queryParameters(url) });
       return send(response, 200, { data, requestId });
     } catch (error) {
       const normalized = normalizeHttpError(error);
@@ -113,59 +109,27 @@ export function normalizeHttpError(error) {
   else if (code === 'CAPABILITY_DENIED' || code.includes('MEMBERSHIP_REQUIRED')) status = 403;
   else if (code === 'HTTP_CONTENT_TYPE_UNSUPPORTED') status = 415;
   else if ([
-    'HTTP_JSON_INVALID',
-    'HTTP_JSON_OBJECT_REQUIRED',
-    'HTTP_CONTENT_LENGTH_INVALID',
-    'HTTP_IDEMPOTENCY_KEY_REQUIRED',
-    'HTTP_IDEMPOTENCY_KEY_INVALID',
-    'HTTP_IDENTIFIER_MISMATCH',
-    'HTTP_PATH_PARAMETER_INVALID',
-    'HTTP_BODY_FIELD_UNKNOWN',
-    'HTTP_BODY_FIELD_INVALID',
-    'HTTP_QUERY_DUPLICATE',
-    'HTTP_QUERY_FIELD_UNKNOWN',
-    'HTTP_QUERY_INVALID',
-    'WORKSPACE_LIMIT_INVALID',
-    'WORKSPACE_SECTION_INVALID',
-    'WORKSPACE_PAGE_LIMIT_INVALID',
-    'WORKSPACE_CURSOR_INVALID',
-    'NOTIFICATION_LIMIT_INVALID',
-    'NOTIFICATION_PAGE_LIMIT_INVALID',
-    'NOTIFICATION_CURSOR_INVALID',
-    'CATALOG_ACTOR_INVALID',
-    'CATALOG_PAGE_LIMIT_INVALID',
-    'CATALOG_CURSOR_INVALID',
-    'CATALOG_SEARCH_INVALID',
-    'CATALOG_STATUS_FILTER_INVALID',
-    'CATALOG_BRAND_FILTER_INVALID',
-    'CATALOG_COLLECTION_FILTER_INVALID',
-    'CATALOG_EXPECTED_VERSION_INVALID',
-    'CATALOG_UPDATE_INVALID',
-    'CATALOG_PUBLISH_INVALID',
-    'ORDER_EXPECTED_VERSION_INVALID',
-    'AUTH_EMAIL_INVALID',
-    'AUTH_PASSWORD_INVALID',
+    'HTTP_JSON_INVALID', 'HTTP_JSON_OBJECT_REQUIRED', 'HTTP_CONTENT_LENGTH_INVALID', 'HTTP_IDEMPOTENCY_KEY_REQUIRED', 'HTTP_IDEMPOTENCY_KEY_INVALID',
+    'HTTP_IDENTIFIER_MISMATCH', 'HTTP_PATH_PARAMETER_INVALID', 'HTTP_BODY_FIELD_UNKNOWN', 'HTTP_BODY_FIELD_INVALID', 'HTTP_QUERY_DUPLICATE',
+    'HTTP_QUERY_FIELD_UNKNOWN', 'HTTP_QUERY_INVALID', 'WORKSPACE_LIMIT_INVALID', 'WORKSPACE_SECTION_INVALID', 'WORKSPACE_PAGE_LIMIT_INVALID',
+    'WORKSPACE_CURSOR_INVALID', 'NOTIFICATION_LIMIT_INVALID', 'NOTIFICATION_PAGE_LIMIT_INVALID', 'NOTIFICATION_CURSOR_INVALID',
+    'CATALOG_ACTOR_INVALID', 'CATALOG_PAGE_LIMIT_INVALID', 'CATALOG_CURSOR_INVALID', 'CATALOG_SEARCH_INVALID', 'CATALOG_STATUS_FILTER_INVALID',
+    'CATALOG_BRAND_FILTER_INVALID', 'CATALOG_COLLECTION_FILTER_INVALID', 'CATALOG_EXPECTED_VERSION_INVALID', 'CATALOG_UPDATE_INVALID',
+    'CATALOG_PUBLISH_INVALID', 'MATERIAL_ACTOR_INVALID', 'MATERIAL_PAGE_LIMIT_INVALID', 'MATERIAL_CURSOR_INVALID', 'MATERIAL_SEARCH_INVALID',
+    'MATERIAL_STATUS_FILTER_INVALID', 'MATERIAL_TYPE_FILTER_INVALID', 'MATERIAL_BRAND_FILTER_INVALID', 'MATERIAL_CODE_INVALID',
+    'MATERIAL_EXPECTED_VERSION_INVALID', 'MATERIAL_UPDATE_INVALID', 'MATERIAL_PUBLISH_INVALID', 'ORDER_EXPECTED_VERSION_INVALID',
+    'AUTH_EMAIL_INVALID', 'AUTH_PASSWORD_INVALID',
   ].includes(code)) status = 400;
   else if (code === 'HTTP_BODY_TOO_LARGE') status = 413;
-  else if (code.includes('CONFLICT') || code.includes('ALREADY_EXISTS')) status = 409;
+  else if (code.includes('CONFLICT') || code.includes('ALREADY_EXISTS') || code === 'MATERIAL_NOT_DRAFT') status = 409;
   const retryAfterSeconds = code === 'AUTH_RATE_LIMITED' ? Math.max(1, Math.ceil(Number(error.details?.retryAfterSeconds) || 1)) : undefined;
   return { status, code, message: error.message, details: error.details ?? {}, retryAfterSeconds };
 }
 
 function assertEmptyQuery(url) { return assertQueryContract(queryParameters(url), []); }
-function applyApiHeaders(response, requestId) {
-  for (const [name, value] of Object.entries(apiResponseHeaders(requestId))) response.setHeader(name, value);
-}
-
+function applyApiHeaders(response, requestId) { for (const [name, value] of Object.entries(apiResponseHeaders(requestId))) response.setHeader(name, value); }
 function readinessUnavailable() {
-  return Object.freeze({
-    status: 'not-ready',
-    service: 'syntha-wholesale-v2',
-    checkedAt: new Date().toISOString(),
-    reason: 'readiness-not-configured',
-    database: Object.freeze({ status: 'unknown' }),
-    migrations: Object.freeze({ status: 'unknown', totalCount: 0, appliedCount: 0, pending: Object.freeze([]), mismatched: Object.freeze([]), unknown: Object.freeze([]) }),
-  });
+  return Object.freeze({ status: 'not-ready', service: 'syntha-wholesale-v2', checkedAt: new Date().toISOString(), reason: 'readiness-not-configured', database: Object.freeze({ status: 'unknown' }), migrations: Object.freeze({ status: 'unknown', totalCount: 0, appliedCount: 0, pending: Object.freeze([]), mismatched: Object.freeze([]), unknown: Object.freeze([]) }) });
 }
 function publicIdentity(actor) { return Object.freeze({ actorId: actor.actorId, email: actor.email ?? null, displayName: actor.displayName ?? '' }); }
 function header(request, name) { const value = request.headers[name]; return Array.isArray(value) ? value[0] : value; }

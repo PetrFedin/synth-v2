@@ -2,6 +2,8 @@ import { invariant } from '../core/errors.mjs';
 import { createAuthService } from '../application/auth-service.mjs';
 import { createCatalogService } from '../application/catalog-service.mjs';
 import { createCatalogQueryService } from '../application/catalog-query-service.mjs';
+import { createMaterialService } from '../application/material-service.mjs';
+import { createMaterialQueryService } from '../application/material-query-service.mjs';
 import { createMaintenanceService } from '../application/maintenance-service.mjs';
 import { withNotificationPageMetadata } from '../application/notification-page-service.mjs';
 import { createOutboxPublisherService } from '../application/outbox-publisher-service.mjs';
@@ -15,6 +17,8 @@ import { createWorkspaceQueryService } from '../application/workspace-query-serv
 import { createPostgresAuthStore } from '../infrastructure/postgres-auth-store.mjs';
 import { createPostgresCatalogStore } from '../infrastructure/postgres-catalog-store.mjs';
 import { createPostgresCatalogReader } from '../infrastructure/postgres-catalog-reader.mjs';
+import { createPostgresMaterialStore } from '../infrastructure/postgres-material-store.mjs';
+import { createPostgresMaterialReader } from '../infrastructure/postgres-material-reader.mjs';
 import { createPostgresMaintenanceStore } from '../infrastructure/postgres-maintenance-store.mjs';
 import { createPostgresOutboxPublicationStore } from '../infrastructure/postgres-outbox-publication-store.mjs';
 import { createPostgresWholesaleStore } from '../infrastructure/postgres-store.mjs';
@@ -59,6 +63,7 @@ export function createPostgresWholesaleRuntime({
   const runtimeNextId = resolveRuntimeIdGenerator(nextId);
   const store = createPostgresWholesaleStore({ pool });
   const catalogStore = createPostgresCatalogStore({ pool });
+  const materialStore = createPostgresMaterialStore({ pool });
   const options = { store, nextId: runtimeNextId, ...(clock ? { clock } : {}) };
   const auth = createAuthService({
     store: createPostgresAuthStore({ pool }),
@@ -81,6 +86,9 @@ export function createPostgresWholesaleRuntime({
   const catalogCommands = createCatalogService({ wholesaleStore: store, catalogStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) });
   const catalogQueries = createCatalogQueryService({ reader: createPostgresCatalogReader({ pool }) });
   const catalog = Object.freeze({ ...catalogCommands, ...catalogQueries });
+  const materialCommands = createMaterialService({ materialStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) });
+  const materialQueries = createMaterialQueryService({ reader: createPostgresMaterialReader({ pool }) });
+  const materials = Object.freeze({ ...materialCommands, ...materialQueries });
   const partners = createPartnerAccessService(options);
   const collaboration = createShowroomSelectionService({ ...options, catalogReader: catalog });
   const orders = createOrderBuilderService(options);
@@ -120,8 +128,8 @@ export function createPostgresWholesaleRuntime({
     ...(outboxRetentionMs !== undefined ? { outboxRetentionMs } : {}),
   });
   const workspace = createWorkspaceQueryService({ reader: createPostgresWorkspaceReader({ pool }) });
-  const transport = { authenticate: auth.authenticate, auth, readiness, platform, catalog, partners, collaboration, orders, notifications, workspace };
+  const transport = { authenticate: auth.authenticate, auth, readiness, platform, catalog, materials, partners, collaboration, orders, notifications, workspace };
   const handler = createWholesaleHttpHandler(transport);
   const fetchHandler = createWholesaleFetchHandler(transport);
-  return Object.freeze({ auth, readiness, maintenance, outboxPublication, store, catalogStore, platform, catalog, partners, collaboration, orders, notifications, workspace, handler, fetchHandler });
+  return Object.freeze({ auth, readiness, maintenance, outboxPublication, store, catalogStore, materialStore, platform, catalog, materials, partners, collaboration, orders, notifications, workspace, handler, fetchHandler });
 }

@@ -109,10 +109,25 @@ function freezeWorkspace(workspace, limit) {
       ? workspace.pageInfo.truncatedSections.filter((section) => COLLECTIONS.includes(section))
       : [],
   )].sort();
+  const nextCursors = {};
+  for (const section of truncatedSections) {
+    const last = result[section].at(-1);
+    invariant(
+      last,
+      'WORKSPACE_PAGE_RESULT_INVALID',
+      'Truncated workspace section must contain a continuation item',
+      { section },
+    );
+    nextCursors[section] = encodeWorkspaceCursor({
+      section,
+      position: cursorPosition(section, last),
+    });
+  }
   result.pageInfo = Object.freeze({
     limit,
     hasMore: truncatedSections.length > 0,
     truncatedSections: Object.freeze(truncatedSections),
+    nextCursors: Object.freeze(nextCursors),
   });
   return Object.freeze(result);
 }
@@ -127,6 +142,13 @@ function freezePage(page, { section, limit }) {
     ? encodeWorkspaceCursor({ section, position: page.nextPosition })
     : null;
   return Object.freeze({ items, nextCursor });
+}
+
+function cursorPosition(section, item) {
+  return Object.freeze(SORT_FIELDS[section].map(([field]) => {
+    const value = item?.[field];
+    return value === undefined || value === null ? null : String(value);
+  }));
 }
 
 function compareBy(fields) {

@@ -3,6 +3,7 @@ import { calculateMoneyTotal, normalizeMoney } from '../../core/money.mjs';
 
 const INCOTERMS = Object.freeze(['EXW', 'FCA', 'FOB', 'CIF', 'DAP', 'DDP']);
 const CANCELLATION_REASON_MAX_LENGTH = 1_000;
+const POSTGRES_INTEGER_MAXIMUM = 2_147_483_647;
 
 export function createOrderDraft({ id, selection, currency, terms, createdAt }) {
   invariant(id && selection?.id, 'ORDER_DRAFT_IDENTITY_REQUIRED', 'Order id and selection are required');
@@ -47,10 +48,27 @@ export function createOrderDraft({ id, selection, currency, terms, createdAt }) 
   });
 }
 
-export function acceptOrderTerms(order, organisationId, updatedAt) {
+export function reviseOrderTerms(order, terms, updatedAt, expectedVersion = order?.version) {
+  assertExpectedVersion(order, expectedVersion);
+  invariant(order.status === 'draft' || order.status === 'ready', 'ORDER_TERMS_NOT_EDITABLE', 'Order terms can no longer be edited');
+  const normalizedTerms = validateTerms(terms);
+  if (termsEqual(order.terms, normalizedTerms)) return order;
+  return Object.freeze({
+    ...order,
+    terms: normalizedTerms,
+    acceptedOrganisationIds: Object.freeze([]),
+    status: 'draft',
+    version: order.version + 1,
+    updatedAt,
+  });
+}
+
+export function acceptOrderTerms(order, organisationId, updatedAt, expectedVersion = order?.version) {
+  assertExpectedVersion(order, expectedVersion);
   invariant(order.status === 'draft' || order.status === 'ready', 'ORDER_TERMS_NOT_ACCEPTABLE', 'Order terms can no longer be accepted');
   invariant(organisationId === order.brandId || organisationId === order.shopId, 'ORDER_PARTY_INVALID', 'Only order parties can accept terms', { organisationId });
   const accepted = new Set(order.acceptedOrganisationIds);
+  if (accepted.has(organisationId)) return order;
   accepted.add(organisationId);
   const acceptedOrganisationIds = Object.freeze([...accepted].sort());
   const status = accepted.has(order.brandId) && accepted.has(order.shopId) ? 'ready' : 'draft';
@@ -63,12 +81,14 @@ export function acceptOrderTerms(order, organisationId, updatedAt) {
   });
 }
 
-export function attachReadyOrder(order, updatedAt) {
+export function attachReadyOrder(order, updatedAt, expectedVersion = order?.version) {
+  assertExpectedVersion(order, expectedVersion);
   invariant(order.status === 'ready', 'ORDER_NOT_READY', 'Both Brand and Shop must accept order terms');
   return Object.freeze({ ...order, status: 'attached', version: order.version + 1, updatedAt });
 }
 
-export function cancelAttachedOrder(order, reason, cancelledAt) {
+export function cancelAttachedOrder(order, reason, cancelledAt, expectedVersion = order?.version) {
+  assertExpectedVersion(order, expectedVersion);
   invariant(order.status === 'attached', 'ORDER_NOT_ATTACHED', 'Only an attached order can be cancelled');
   const normalizedReason = typeof reason === 'string' ? reason.trim() : '';
   invariant(normalizedReason.length >= 3 && normalizedReason.length <= CANCELLATION_REASON_MAX_LENGTH, 'ORDER_CANCELLATION_REASON_REQUIRED', `Cancellation reason must contain 3 to ${CANCELLATION_REASON_MAX_LENGTH} characters`);
@@ -80,6 +100,30 @@ export function cancelAttachedOrder(order, reason, cancelledAt) {
     version: order.version + 1,
     updatedAt: cancelledAt,
   });
+}
+
+function assertExpectedVersion(order, expectedVersion) {
+  invariant(
+    Number.isInteger(expectedVersion) && expectedVersion >= 1 && expectedVersion <= POSTGRES_INTEGER_MAXIMUM,
+    'ORDER_EXPECTED_VERSION_INVALID',
+    'Order expectedVersion must be a positive PostgreSQL integer',
+    { expectedVersion },
+  );
+  invariant(
+    order && Number.isInteger(order.version) && order.version === expectedVersion,
+    'ORDER_CONCURRENCY_CONFLICT',
+    'Order was changed by another operation',
+    { id: order?.id, expectedVersion, actualVersion: order?.version },
+  );
+}
+
+function termsEqual(left, right) {
+  return Boolean(left)
+    && left.incoterm === right.incoterm
+    && left.paymentDays === right.paymentDays
+    && left.prepaymentPercent === right.prepaymentPercent
+    && left.deliveryStart === right.deliveryStart
+    && left.deliveryEnd === right.deliveryEnd;
 }
 
 function validateTerms(terms) {

@@ -13,6 +13,8 @@ const expectedFoundation = [
   '/ui/dom-2.js',
   '/ui/dom-1.js',
   '/ui/api.js',
+  '/ui/workspace-pagination.js',
+  '/ui/notification-pagination.js',
   '/ui/ui-capabilities.js',
   '/ui/ui-validation.js',
   '/ui/app-core.js',
@@ -68,6 +70,8 @@ assert(routesSource.includes("/^\\/v2\\/orders\\/([^/]+)\\/cancel$/"), 'Order ca
 assert(formsSource.includes('orderId: order.id') && formsSource.includes("validation.requiredText(values.reason"), 'Order cancellation payload validation is incomplete.');
 assert(executionHarness.window.SynthaUiCapabilities, 'UI capability matrix was not loaded.');
 assert(executionHarness.window.SynthaUiValidation, 'UI validation runtime was not loaded.');
+assert(executionHarness.window.SynthaWorkspacePaging, 'Workspace pagination runtime was not loaded.');
+assert(executionHarness.window.SynthaNotificationPaging, 'Notification pagination runtime was not loaded.');
 
 console.log(`Localization and UI runtime contract OK (${sources.length} scripts, ${diagnostics.messageCount} keyed messages, ${diagnostics.phraseCount} compatibility phrases).`);
 
@@ -94,8 +98,20 @@ function createHarness(browserLanguage) {
     constructor(type, options = {}) { this.type = type; this.detail = options.detail; }
   }
   class AbortController {
-    constructor() { this.signal = {}; }
-    abort() { this.signal.aborted = true; }
+    constructor() {
+      const listeners = new Set();
+      this.signal = {
+        aborted: false,
+        addEventListener(type, listener) { if (type === 'abort') listeners.add(listener); },
+        removeEventListener(type, listener) { if (type === 'abort') listeners.delete(listener); },
+        dispatchAbort() { for (const listener of [...listeners]) listener(); },
+      };
+    }
+    abort() {
+      if (this.signal.aborted) return;
+      this.signal.aborted = true;
+      this.signal.dispatchAbort();
+    }
   }
   const listeners = new Map();
   const window = {
@@ -118,10 +134,19 @@ function createHarness(browserLanguage) {
     CustomEvent,
     AbortController,
     TypeError,
+    Error,
+    Map,
+    Set,
+    Promise,
+    Number,
+    Math,
+    Object,
+    Array,
     console,
     Intl,
     Date,
     URL,
+    encodeURIComponent,
     setTimeout: () => 0,
     clearTimeout: () => {},
     crypto: { randomUUID: () => '00000000-0000-4000-8000-000000000000' },

@@ -3,9 +3,9 @@ function invitationForm(showroom) {
   const caps = window.SynthaUiCapabilities;
   if (!caps.hasForOrganisation(state.workspace, showroom.brandId, caps.CAPABILITIES.SHOWROOM_INVITATION_MANAGE)) throw new Error('CAPABILITY_DENIED');
   const activeShops = state.workspace.relationships.filter(x => x.status === 'active' && x.brandId === showroom.brandId).map(x => state.workspace.organisations.find(o => o.id === x.shopId)).filter(Boolean);
-  openForm('Пригласить магазин', [
-    selectDef('shopId','Магазин',activeShops),
-    dateTimeDef('expiresAt','Действует до'),
+  openForm('\u041f\u0440\u0438\u0433\u043b\u0430\u0441\u0438\u0442\u044c \u043c\u0430\u0433\u0430\u0437\u0438\u043d', [
+    selectDef('shopId','\u041c\u0430\u0433\u0430\u0437\u0438\u043d',activeShops),
+    dateTimeDef('expiresAt','\u0414\u0435\u0439\u0441\u0442\u0432\u0443\u0435\u0442 \u0434\u043e'),
   ], values => {
     validation.futureDate(values.expiresAt, new Date().toISOString(), 'Invitation expiry');
     return mutate(`/v2/showrooms/${encodeURIComponent(showroom.id)}/invitations`, { shopId: values.shopId, expiresAt: toIso(values.expiresAt) });
@@ -14,8 +14,8 @@ function invitationForm(showroom) {
 function cycleForm() {
   const caps = window.SynthaUiCapabilities;
   const contexts = window.SynthaWorkflowContexts.buildCycleContexts(state.workspace, ownIds()).filter(context => caps.hasForTrade(state.workspace, context.brandId, context.shopId, caps.CAPABILITIES.COMMERCIAL_CYCLE_CREATE));
-  openForm('Начать коммерческий цикл', [
-    selectDef('contextId','Связь',contexts, context => `${orgName(context.brandId)} → ${orgName(context.shopId)} / ${nameById('campaigns', context.campaignId)} / ${nameById('collections', context.collectionId)}`),
+  openForm('\u041d\u0430\u0447\u0430\u0442\u044c \u043a\u043e\u043c\u043c\u0435\u0440\u0447\u0435\u0441\u043a\u0438\u0439 \u0446\u0438\u043a\u043b', [
+    selectDef('contextId','\u0421\u0432\u044f\u0437\u044c',contexts, context => `${orgName(context.brandId)} \u2192 ${orgName(context.shopId)} / ${nameById('campaigns', context.campaignId)} / ${nameById('collections', context.collectionId)}`),
   ], values => {
     const context = contexts.find(item => item.id === values.contextId);
     if (!context) throw new Error(I18N.t('common.requestError'));
@@ -25,8 +25,8 @@ function cycleForm() {
 function selectionForm() {
   const caps = window.SynthaUiCapabilities;
   const contexts = window.SynthaWorkflowContexts.buildSelectionContexts(state.workspace, ownIds(), new Date().toISOString()).filter(context => caps.hasForOrganisation(state.workspace, context.shopId, caps.CAPABILITIES.SELECTION_WRITE));
-  openForm('Создать Selection', [
-    selectDef('contextId','Цикл',contexts, context => `${orgName(context.brandId)} → ${orgName(context.shopId)} / ${nameById('showrooms', context.showroomId)} / ${nameById('collections', context.collectionId)}`),
+  openForm('\u0421\u043e\u0437\u0434\u0430\u0442\u044c Selection', [
+    selectDef('contextId','\u0426\u0438\u043a\u043b',contexts, context => `${orgName(context.brandId)} \u2192 ${orgName(context.shopId)} / ${nameById('showrooms', context.showroomId)} / ${nameById('collections', context.collectionId)}`),
   ], values => {
     const context = contexts.find(item => item.id === values.contextId);
     if (!context) throw new Error(I18N.t('common.requestError'));
@@ -38,9 +38,9 @@ function selectionLineForm(selection) {
   const caps = window.SynthaUiCapabilities;
   if (!caps.hasForOrganisation(state.workspace, selection.shopId, caps.CAPABILITIES.SELECTION_WRITE)) throw new Error('CAPABILITY_DENIED');
   const skus = (state.workspace.catalogSkus || []).filter(x => x.status === 'published' && x.collectionId === selection.collectionId && Number(x.availableToSell ?? x.availableQuantity ?? 0) >= Number(x.minimumOrderQuantity || 1));
-  openForm('Добавить или обновить SKU', [
-    selectDef('sku','SKU',skus,x => `${x.sku} · ${x.name} · ${money(x.wholesalePrice)} ${x.currency} · MOQ ${x.minimumOrderQuantity || 1} · ATS ${x.availableToSell ?? x.availableQuantity ?? 0}`),
-    numberDef('quantity','Количество',1,true,1),
+  openForm('\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c \u0438\u043b\u0438 \u043e\u0431\u043d\u043e\u0432\u0438\u0442\u044c SKU', [
+    selectDef('sku','SKU',skus,x => `${x.sku} \u00b7 ${x.name} \u00b7 ${money(x.wholesalePrice)} ${x.currency} \u00b7 MOQ ${x.minimumOrderQuantity || 1} \u00b7 ATS ${x.availableToSell ?? x.availableQuantity ?? 0}`),
+    numberDef('quantity','\u041a\u043e\u043b\u0438\u0447\u0435\u0441\u0442\u0432\u043e',1,true,1),
   ], values => {
     const sku = skus.find(item => item.sku === values.sku || item.id === values.sku);
     if (!sku) throw new Error('CATALOG_SKU_NOT_AVAILABLE');
@@ -52,13 +52,13 @@ function orderForm() {
   const validation = window.SynthaUiValidation;
   const caps = window.SynthaUiCapabilities;
   const selections = state.workspace.selections.filter(x => x.status === 'submitted' && caps.hasForOrganisation(state.workspace, x.shopId, caps.CAPABILITIES.ORDER_WRITE) && !state.workspace.orders.some(o => o.selectionId === x.id));
-  openForm('Создать заказ', [
+  openForm('\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u0437\u0430\u043a\u0430\u0437', [
     selectDef('selectionId','Selection',selections),
     selectDef('incoterm','Incoterm',['EXW','FCA','FOB','CIF','DAP','DDP']),
-    numberDef('paymentDays','Отсрочка, дней',30,true,0),
-    numberDef('prepaymentPercent','Предоплата, %',20,false,0),
-    dateDef('deliveryStart','Начало поставки'),
-    dateDef('deliveryEnd','Конец поставки'),
+    numberDef('paymentDays','\u041e\u0442\u0441\u0440\u043e\u0447\u043a\u0430, \u0434\u043d\u0435\u0439',30,true,0),
+    numberDef('prepaymentPercent','\u041f\u0440\u0435\u0434\u043e\u043f\u043b\u0430\u0442\u0430, %',20,false,0),
+    dateDef('deliveryStart','\u041d\u0430\u0447\u0430\u043b\u043e \u043f\u043e\u0441\u0442\u0430\u0432\u043a\u0438'),
+    dateDef('deliveryEnd','\u041a\u043e\u043d\u0435\u0446 \u043f\u043e\u0441\u0442\u0430\u0432\u043a\u0438'),
   ], values => {
     validation.dateRange(values.deliveryStart, values.deliveryEnd, 'Delivery dates');
     const paymentDays = validation.number(values.paymentDays, 'Payment days', { integer: true, min: 0, max: 3650 });
@@ -72,99 +72,4 @@ function orderCancellationForm(order) {
     orderId: order.id,
     reason: validation.requiredText(values.reason, 'Cancellation reason', { minLength: 2, maxLength: 500 }),
   }));
-}
-
-function collaborationThreadForm() {
-  const validation = window.SynthaUiValidation;
-  const caps = window.SynthaUiCapabilities;
-  const owners = ownOrganisations().filter(item => caps.hasForOrganisation(state.workspace, item.id, caps.CAPABILITIES.COLLABORATION_WRITE));
-  const subjects = collaborationSubjectOptions();
-  openForm(localText('Новая рабочая тема','New collaboration thread'), [
-    selectDef('ownerOrganisationId',localText('Организация','Organisation'),owners,item => item.name),
-    selectDef('subjectKey',localText('Связанный объект','Linked subject'),subjects,item => item.label),
-    textDef('title',localText('Название темы','Thread title'),'',160),
-  ], values => {
-    const subject = subjects.find(item => item.id === values.subjectKey);
-    if (!subject) throw new Error(I18N.t('common.requestError'));
-    return mutate('/v2/collaboration/threads', {
-      ownerOrganisationId: values.ownerOrganisationId,
-      subjectType: subject.subjectType,
-      subjectId: subject.subjectId,
-      title: validation.requiredText(values.title, 'Thread title', { minLength: 2, maxLength: 160 }),
-    });
-  });
-}
-
-function collaborationMessageForm(thread) {
-  const validation = window.SynthaUiValidation;
-  openForm(localText('Новое сообщение','New message'), [
-    textDef('body',localText('Сообщение','Message'),'',5000),
-  ], values => mutate(`/v2/collaboration/threads/${encodeURIComponent(thread.id)}/messages`, {
-    body: validation.requiredText(values.body, 'Message', { minLength: 1, maxLength: 5000 }),
-  }));
-}
-
-function calendarEventForm() {
-  const validation = window.SynthaUiValidation;
-  const caps = window.SynthaUiCapabilities;
-  const owners = ownOrganisations().filter(item => caps.hasForOrganisation(state.workspace, item.id, caps.CAPABILITIES.CALENDAR_WRITE));
-  const subjects = collaborationSubjectOptions();
-  openForm(localText('Добавить событие','Add calendar event'), [
-    selectDef('ownerOrganisationId',localText('Организация','Organisation'),owners,item => item.name),
-    selectDef('subjectKey',localText('Связанный объект','Linked subject'),subjects,item => item.label),
-    selectDef('eventType',localText('Тип события','Event type'),['meeting','shipment','deadline','sample','quality','production','purchase','marketing','other'],calendarEventTypeLabel),
-    selectDef('visibility',localText('Видимость','Visibility'),['organisation','trade','private'],value => ({organisation:localText('Организация','Organisation'),trade:localText('Участники сделки','Trade participants'),private:localText('Личное','Private')})[value]),
-    textDef('title',localText('Название','Title'),'',200),
-    dateTimeDef('startsAt',localText('Начало','Starts at')),
-    dateTimeDef('endsAt',localText('Окончание','Ends at')),
-    textDef('location',localText('Место или ссылка','Location or link'),localText('Онлайн','Online'),300),
-  ], values => {
-    validation.dateRange(values.startsAt, values.endsAt, 'Event dates');
-    const subject = subjects.find(item => item.id === values.subjectKey);
-    if (!subject) throw new Error(I18N.t('common.requestError'));
-    const participants = calendarParticipantsForSubject(values.ownerOrganisationId, subject);
-    return mutate('/v2/calendar/events', {
-      ownerOrganisationId: values.ownerOrganisationId,
-      subjectType: subject.subjectType,
-      subjectId: subject.subjectId,
-      eventType: values.eventType,
-      visibility: values.visibility,
-      title: validation.requiredText(values.title, 'Event title', { minLength: 2, maxLength: 200 }),
-      description: '',
-      startsAt: toIso(values.startsAt),
-      endsAt: toIso(values.endsAt),
-      allDay: false,
-      location: validation.requiredText(values.location, 'Location', { minLength: 1, maxLength: 300 }),
-      participantOrganisationIds: participants,
-      reminders: [{ minutesBefore: 1440, channel: 'in_app' }],
-    });
-  });
-}
-
-function collaborationSubjectOptions() {
-  const options = [];
-  const append = (subjectType, items, label) => items.forEach(item => options.push({
-    id: `${subjectType}:${item.id}`,
-    subjectType,
-    subjectId: item.id,
-    item,
-    label: `${label}: ${item.name || item.title || item.id}`,
-  }));
-  append('order', state.workspace.orders || [], localText('Заказ','Order'));
-  append('deal', state.workspace.deals || [], 'DealSpace');
-  append('selection', state.workspace.selections || [], 'Selection');
-  append('showroom', state.workspace.showrooms || [], localText('Шоурум','Showroom'));
-  append('collection', state.workspace.collections || [], localText('Коллекция','Collection'));
-  append('campaign', state.workspace.campaigns || [], localText('Кампания','Campaign'));
-  append('organisation', state.workspace.organisations || [], localText('Организация','Organisation'));
-  return options;
-}
-
-function calendarParticipantsForSubject(ownerOrganisationId, subject) {
-  const values = new Set([ownerOrganisationId]);
-  const item = subject.item || {};
-  if (item.brandId) values.add(item.brandId);
-  if (item.shopId) values.add(item.shopId);
-  if (subject.subjectType === 'organisation') values.add(subject.subjectId);
-  return [...values];
 }

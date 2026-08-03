@@ -63,11 +63,12 @@ export function createBomService({ bomStore, clock = () => new Date().toISOStrin
         async (tx) => {
           const catalogSku = await authorisedSku(tx, input?.sku, actorId);
           const materials = await materialsForLines(tx, input?.lines);
-          invariant(!await tx.getBomBySku(catalogSku.sku), 'BOM_ALREADY_EXISTS', 'BOM already exists for SKU', { sku: catalogSku.sku });
-          return Object.freeze({ catalogSku, materials });
+          const existingBom = await tx.getBomBySku(catalogSku.sku);
+          return Object.freeze({ catalogSku, materials, existingBom });
         },
         async (tx, context) => {
-          const bom = createBom({ id: nextId('bom'), ...context, input, createdAt: clock() });
+          invariant(!context.existingBom, 'BOM_ALREADY_EXISTS', 'BOM already exists for SKU', { sku: context.catalogSku.sku });
+          const bom = createBom({ id: nextId('bom'), catalogSku: context.catalogSku, materials: context.materials, input, createdAt: clock() });
           await tx.insertBom(bom);
           await append(tx, 'bom.created', bom, commandId, actorId);
           return bom;
@@ -77,7 +78,7 @@ export function createBomService({ bomStore, clock = () => new Date().toISOStrin
 
     async updateBom(commandId, actorId, skuCode, input) {
       invariant(input && typeof input === 'object' && !Array.isArray(input), 'BOM_UPDATE_INVALID', 'BOM update is invalid');
-      assertAllowedFields(input, BOM_UPDATE_FIELDS);
+      assertAllowedFields(input, BOM_UPDATE_FIELDS, 'BOM_UPDATE_FIELD_FORBIDDEN');
       const expectedVersion = assertPostgresInteger(input.expectedVersion, { code: 'BOM_EXPECTED_VERSION_INVALID', label: 'Expected BOM version', min: 1 });
       const editable = Object.freeze(Object.fromEntries(Object.entries(input).filter(([key]) => key !== 'expectedVersion')));
       return execute(
@@ -103,7 +104,7 @@ export function createBomService({ bomStore, clock = () => new Date().toISOStrin
 
     async publishBom(commandId, actorId, skuCode, input) {
       invariant(input && typeof input === 'object' && !Array.isArray(input), 'BOM_PUBLISH_INVALID', 'BOM publication request is invalid');
-      assertAllowedFields(input, BOM_PUBLISH_FIELDS);
+      assertAllowedFields(input, BOM_PUBLISH_FIELDS, 'BOM_PUBLISH_FIELD_FORBIDDEN');
       const expectedVersion = assertPostgresInteger(input.expectedVersion, { code: 'BOM_EXPECTED_VERSION_INVALID', label: 'Expected BOM version', min: 1 });
       return execute(
         commandId,
@@ -130,9 +131,9 @@ export function createBomService({ bomStore, clock = () => new Date().toISOStrin
 const BOM_UPDATE_FIELDS = Object.freeze(new Set(['expectedVersion', 'currency', 'lines', 'laborCost', 'overheadCost', 'logisticsCost', 'otherCost', 'notes']));
 const BOM_PUBLISH_FIELDS = Object.freeze(new Set(['expectedVersion']));
 
-function assertAllowedFields(input, allowed) {
+function assertAllowedFields(input, allowed, errorCode) {
   const forbidden = Object.keys(input).filter((field) => !allowed.has(field)).sort();
-  invariant(forbidden.length === 0, 'BOM_UPDATE_FIELD_FORBIDDEN', 'BOM request contains a forbidden field', { fields: forbidden });
+  invariant(forbidden.length === 0, errorCode, 'BOM request contains a forbidden field', { fields: forbidden });
 }
 
 function assertExpectedVersion(bom, expectedVersion) {

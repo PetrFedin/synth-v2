@@ -63,7 +63,11 @@ test('PostgreSQL catalog persists immutable published SKU snapshots and availabi
     assert.equal(rows.rows[0].payload.wholesalePrice, 125.5);
     assert.equal(rows.rows[0].payload.availableToSell, 30);
     assert.equal((await pool.query('SELECT count(*)::int AS count FROM catalog_commands')).rows[0].count, 2);
-    assert.deepEqual((await pool.query('SELECT event_type FROM catalog_outbox_events ORDER BY id')).rows.map((row) => row.event_type).sort(), ['catalog-sku.created', 'catalog-sku.published']);
+    assert.deepEqual(
+      (await pool.query("SELECT event_type FROM outbox_events WHERE event_type LIKE 'catalog-sku.%' ORDER BY event_type")).rows.map((row) => row.event_type),
+      ['catalog-sku.created', 'catalog-sku.published'],
+    );
+    assert.equal((await pool.query('SELECT count(*)::int AS count FROM catalog_outbox_events')).rows[0].count, 0);
 
     const replay = await catalog.publishSku('catalog-publish', 'sales-pg', draft.sku, { expectedVersion: draft.version });
     assert.deepEqual(replay, published);

@@ -112,11 +112,12 @@ test('reset aborts stale pages and prevents stale state writes', async () => {
   assert.equal(JSON.stringify(state.orders.map(item => item.id)), JSON.stringify(['fresh']));
 });
 
-test('cursor loops and malformed identities fail without losing continuation', async () => {
+test('invalid pages fail without losing continuation', async () => {
   const api = await runtime();
   for (const page of [
     { items: [{ id: 'order-2' }], nextCursor: 'cursor-1' },
     { items: [{}], nextCursor: null },
+    { items: [], nextCursor: 'cursor-2' },
   ]) {
     let state = workspace();
     const errors = [];

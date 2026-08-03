@@ -23,6 +23,8 @@ async function runtime() {
 
 function workspace(overrides = {}) {
   return {
+    memberships: [],
+    organisations: [],
     orders: [],
     catalogSkus: [],
     pageInfo: {
@@ -134,4 +136,62 @@ test('invalid pages fail without losing continuation', async () => {
     assert.equal(controller.status('orders').state, 'error');
     assert.equal(errors.length, 1);
   }
+});
+
+test('drains a foundation section through every cursor page', async () => {
+  const api = await runtime();
+  let state = workspace({
+    memberships: [{ id: 'membership-1' }],
+    pageInfo: {
+      limit: 1,
+      hasMore: true,
+      truncatedSections: ['memberships'],
+      nextCursors: { memberships: 'membership-cursor-1' },
+    },
+  });
+  const pages = [
+    { items: [{ id: 'membership-2' }], nextCursor: 'membership-cursor-2' },
+    { items: [{ id: 'membership-3' }], nextCursor: null },
+  ];
+  const controller = api.create({
+    request: async () => pages.shift(),
+    getWorkspace: () => state,
+    setWorkspace: value => { state = value; },
+  });
+
+  controller.reset(state);
+  assert.equal(await controller.drain('memberships'), true);
+  assert.equal(JSON.stringify(state.memberships.map(item => item.id)), JSON.stringify(['membership-1', 'membership-2', 'membership-3']));
+  assert.equal(controller.hasMore('memberships'), false);
+});
+
+test('drain stops at its page budget and keeps the continuation for recovery', async () => {
+  const api = await runtime();
+  let state = workspace({
+    organisations: [{ id: 'organisation-1' }],
+    pageInfo: {
+      limit: 1,
+      hasMore: true,
+      truncatedSections: ['organisations'],
+      nextCursors: { organisations: 'organisation-cursor-1' },
+    },
+  });
+  const errors = [];
+  let requests = 0;
+  const controller = api.create({
+    request: async () => {
+      requests += 1;
+      return { items: [{ id: `organisation-${requests + 1}` }], nextCursor: `organisation-cursor-${requests + 1}` };
+    },
+    getWorkspace: () => state,
+    setWorkspace: value => { state = value; },
+    onError: error => errors.push(error),
+  });
+
+  controller.reset(state);
+  assert.equal(await controller.drain('organisations', { maxPages: 1 }), false);
+  assert.equal(requests, 1);
+  assert.equal(controller.hasMore('organisations'), true);
+  assert.equal(controller.status('organisations').error.code, 'WORKSPACE_PAGE_BUDGET_EXCEEDED');
+  assert.equal(errors.at(-1).code, 'WORKSPACE_PAGE_BUDGET_EXCEEDED');
 });

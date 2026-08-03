@@ -33,7 +33,7 @@ const workspaceSections = Object.freeze([
 
 export const wholesaleV2OpenApi = Object.freeze({
   openapi: '3.1.0',
-  info: { title: 'Syntha Wholesale V2 API', version: '1.6.0' },
+  info: { title: 'Syntha Wholesale V2 API', version: '1.7.0' },
   servers: [{ url: '/v2', description: 'Authenticated Syntha V2 API prefix' }],
   'x-operational-endpoints': Object.freeze({
     liveness: '/health',
@@ -106,6 +106,39 @@ export const wholesaleV2OpenApi = Object.freeze({
         type: 'object', required: ['expectedVersion'], additionalProperties: false,
         properties: { expectedVersion: { type: 'integer', minimum: 1, maximum: postgresIntegerMaximum } },
       },
+      CatalogSkuBulkUpdate: {
+        type: 'object',
+        required: ['type', 'sku', 'expectedVersion', 'name', 'wholesalePrice', 'minimumOrderQuantity', 'availableQuantity'],
+        additionalProperties: false,
+        properties: {
+          type: { const: 'update' },
+          sku: { type: 'string', pattern: '^[A-Z0-9][A-Z0-9._-]{1,63}$' },
+          expectedVersion: { type: 'integer', minimum: 1, maximum: postgresIntegerMaximum },
+          name: { type: 'string', minLength: 2, maxLength: 160 },
+          wholesalePrice: { type: 'number', exclusiveMinimum: 0, maximum: moneyMaximum, multipleOf: 0.0001 },
+          minimumOrderQuantity: { type: 'integer', minimum: 1, maximum: postgresIntegerMaximum },
+          availableQuantity: { type: 'integer', minimum: 0, maximum: postgresIntegerMaximum },
+        },
+      },
+      CatalogSkuBulkPublish: {
+        type: 'object',
+        required: ['type', 'sku', 'expectedVersion'],
+        additionalProperties: false,
+        properties: {
+          type: { const: 'publish' },
+          sku: { type: 'string', pattern: '^[A-Z0-9][A-Z0-9._-]{1,63}$' },
+          expectedVersion: { type: 'integer', minimum: 1, maximum: postgresIntegerMaximum },
+        },
+      },
+      CatalogSkuBulkRequest: {
+        type: 'object', required: ['operations'], additionalProperties: false,
+        properties: {
+          operations: {
+            type: 'array', minItems: 1, maxItems: 100,
+            items: { oneOf: [{ $ref: '#/components/schemas/CatalogSkuBulkUpdate' }, { $ref: '#/components/schemas/CatalogSkuBulkPublish' }] },
+          },
+        },
+      },
       CatalogSku: {
         type: 'object',
         required: ['id', 'sku', 'collectionId', 'brandId', 'name', 'wholesalePrice', 'currency', 'minimumOrderQuantity', 'availableQuantity', 'reservedQuantity', 'availableToSell', 'status', 'version', 'publishedAt', 'createdAt', 'updatedAt'],
@@ -134,6 +167,22 @@ export const wholesaleV2OpenApi = Object.freeze({
         properties: {
           items: { type: 'array', maxItems: 200, items: { $ref: '#/components/schemas/CatalogSku' } },
           nextCursor: { oneOf: [{ type: 'string', minLength: 1, maxLength: 2048 }, { type: 'null' }] },
+        },
+      },
+      CatalogSkuBulkResult: {
+        type: 'object', required: ['items', 'summary'], additionalProperties: false,
+        properties: {
+          items: { type: 'array', minItems: 1, maxItems: 100, items: { $ref: '#/components/schemas/CatalogSku' } },
+          summary: {
+            type: 'object', required: ['requested', 'changed', 'unchanged', 'updated', 'published'], additionalProperties: false,
+            properties: {
+              requested: { type: 'integer', minimum: 1, maximum: 100 },
+              changed: { type: 'integer', minimum: 0, maximum: 100 },
+              unchanged: { type: 'integer', minimum: 0, maximum: 100 },
+              updated: { type: 'integer', minimum: 0, maximum: 100 },
+              published: { type: 'integer', minimum: 0, maximum: 100 },
+            },
+          },
         },
       },
       ShowroomCreate: {
@@ -329,6 +378,17 @@ export const wholesaleV2OpenApi = Object.freeze({
         ),
       },
       patch: operation('updateCatalogSku', ['sku'], '#/components/schemas/CatalogSkuUpdate'),
+    },
+    '/catalog/skus/bulk': {
+      post: {
+        ...operation('bulkMutateCatalogSkus', [], '#/components/schemas/CatalogSkuBulkRequest'),
+        description: 'Applies 1-100 unique SKU updates or publications atomically. Every operation carries its own expectedVersion; any stale, invalid or unauthorized item rolls back the entire batch.',
+        responses: responseContent(
+          operation('bulkMutateCatalogSkus', [], '#/components/schemas/CatalogSkuBulkRequest').responses,
+          200,
+          '#/components/schemas/CatalogSkuBulkResult',
+        ),
+      },
     },
     '/catalog/skus/{sku}/publish': { post: operation('publishCatalogSku', ['sku'], '#/components/schemas/CatalogSkuVersionExpectation') },
     '/showrooms': { post: operation('createShowroom', [], '#/components/schemas/ShowroomCreate') },

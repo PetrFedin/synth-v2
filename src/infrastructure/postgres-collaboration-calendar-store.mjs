@@ -1,5 +1,4 @@
 import { invariant } from '../core/errors.mjs';
-import { getRegisteredCommand, insertRegisteredCommand } from './postgres-command-registry.mjs';
 import { withPostgresTransaction } from './postgres-transaction.mjs';
 
 export function createPostgresCollaborationCalendarStore({ pool }) {
@@ -24,7 +23,7 @@ function view(client) {
     async saveThread(thread, expectedVersion) {
       invariant(thread.version === expectedVersion + 1, 'VERSION_INCREMENT_INVALID', 'Version must increment exactly once');
       const result = await client.query(
-        `UPDATE collaboration_threads SET status=$1, version=$2, payload=$3::jsonb, updated_at=$4 WHERE id=$5 AND version=$6`,
+        'UPDATE collaboration_threads SET status=$1, version=$2, payload=$3::jsonb, updated_at=$4 WHERE id=$5 AND version=$6',
         [thread.status, thread.version, JSON.stringify(thread), thread.updatedAt, thread.id, expectedVersion],
       );
       invariant(result.rowCount === 1, 'COLLABORATION_THREAD_CONCURRENCY_CONFLICT', 'Thread version conflict');
@@ -57,7 +56,7 @@ function view(client) {
     async saveEvent(event, expectedVersion) {
       invariant(event.version === expectedVersion + 1, 'VERSION_INCREMENT_INVALID', 'Version must increment exactly once');
       const result = await client.query(
-        `UPDATE calendar_events SET status=$1, version=$2, payload=$3::jsonb, updated_at=$4 WHERE id=$5 AND version=$6`,
+        'UPDATE calendar_events SET status=$1, version=$2, payload=$3::jsonb, updated_at=$4 WHERE id=$5 AND version=$6',
         [event.status, event.version, JSON.stringify(event), event.updatedAt, event.id, expectedVersion],
       );
       invariant(result.rowCount === 1, 'CALENDAR_EVENT_CONCURRENCY_CONFLICT', 'Calendar event version conflict');
@@ -77,12 +76,57 @@ function view(client) {
         [reminder.id, reminder.eventId, reminder.recipientUserId, reminder.minutesBefore, reminder.channel, reminder.status, JSON.stringify(reminder)],
       );
     },
-    getCommand: (id) => getRegisteredCommand(client, 'collaboration', id),
-    insertCommand: (command) => insertRegisteredCommand(client, 'collaboration', command),
+    getCommand: (id) => getCollaborationCommand(client, id),
+    insertCommand: (command) => insertCollaborationCommand(client, command),
   });
 }
 
 async function getPayload(client, table, id) {
   const result = await client.query(`SELECT payload FROM ${table} WHERE id=$1 FOR UPDATE`, [id]);
   return result.rows[0]?.payload;
+}
+
+async function getCollaborationCommand(client, id) {
+  await lockCommand(client, id);
+  const registry = await client.query('SELECT scope FROM command_registry WHERE id = $1', [id]);
+  if (!registry.rowCount) return undefined;
+  invariant(registry.rows[0].scope === 'collaboration', 'COMMAND_SCOPE_CONFLICT', 'Idempotency key is already assigned to another command scope', {
+    commandId: id,
+    requestedScope: 'collaboration',
+    registeredScope: registry.rows[0].scope,
+  });
+  const result = await client.query('SELECT id, fingerprint, actor_id, result, completed_at FROM collaboration_commands WHERE id = $1', [id]);
+  invariant(result.rowCount === 1, 'COMMAND_LEDGER_INCONSISTENT', 'Global command registry entry has no matching collaboration command', { commandId: id });
+  const row = result.rows[0];
+  return Object.freeze({
+    id: row.id,
+    fingerprint: row.fingerprint,
+    actorId: row.actor_id,
+    result: row.result,
+    completedAt: row.completed_at?.toISOString?.() ?? row.completed_at,
+  });
+}
+
+async function insertCollaborationCommand(client, value) {
+  await lockCommand(client, value.id);
+  const existing = await client.query('SELECT scope FROM command_registry WHERE id = $1', [value.id]);
+  invariant(!existing.rowCount, 'COMMAND_ALREADY_EXISTS', 'Command already exists', {
+    commandId: value.id,
+    registeredScope: existing.rows[0]?.scope ?? null,
+  });
+  await client.query(
+    `INSERT INTO command_registry (id, scope, fingerprint, actor_id, completed_at)
+     VALUES ($1, 'collaboration', $2, $3, $4)`,
+    [value.id, value.fingerprint, value.actorId, value.completedAt],
+  );
+  await client.query(
+    `INSERT INTO collaboration_commands (id, fingerprint, actor_id, result, completed_at)
+     VALUES ($1, $2, $3, $4::jsonb, $5)`,
+    [value.id, value.fingerprint, value.actorId, JSON.stringify(value.result), value.completedAt],
+  );
+}
+
+async function lockCommand(client, id) {
+  invariant(typeof id === 'string' && id.length > 0, 'COMMAND_ID_INVALID', 'Command id is invalid');
+  await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`command:${id}`]);
 }

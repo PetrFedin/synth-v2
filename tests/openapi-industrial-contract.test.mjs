@@ -86,3 +86,28 @@ test('operational endpoints remain outside the authenticated /v2 server prefix',
     metrics: '/metrics',
   });
 });
+
+test('catalog bulk contract is bounded, typed and explicitly atomic', () => {
+  const bulk = operation('/catalog/skus/bulk', 'post');
+  assert.equal(bulk.requestBody.content['application/json'].schema.$ref, '#/components/schemas/CatalogSkuBulkRequest');
+  assert.match(bulk.description, /atomically/i);
+  assert.match(bulk.description, /rolls back the entire batch/i);
+  assert.equal(bulk.responses[200].content['application/json'].schema.$ref, '#/components/schemas/CatalogSkuBulkResult');
+  assert.ok(bulk.responses[400]);
+  assert.ok(bulk.responses[409]);
+
+  const request = wholesaleV2OpenApi.components.schemas.CatalogSkuBulkRequest;
+  assert.equal(request.additionalProperties, false);
+  assert.equal(request.properties.operations.minItems, 1);
+  assert.equal(request.properties.operations.maxItems, 100);
+  assert.deepEqual(
+    request.properties.operations.items.oneOf.map((item) => item.$ref),
+    ['#/components/schemas/CatalogSkuBulkUpdate', '#/components/schemas/CatalogSkuBulkPublish'],
+  );
+  const update = wholesaleV2OpenApi.components.schemas.CatalogSkuBulkUpdate;
+  const publish = wholesaleV2OpenApi.components.schemas.CatalogSkuBulkPublish;
+  assert.equal(update.additionalProperties, false);
+  assert.equal(publish.additionalProperties, false);
+  assert.ok(update.required.includes('expectedVersion'));
+  assert.ok(publish.required.includes('expectedVersion'));
+});

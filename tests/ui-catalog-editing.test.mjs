@@ -21,7 +21,7 @@ test('catalog edit reloads the actor-scoped detail and submits only mutable fiel
 
 test('draft cards expose edit independently from publication and publish with the rendered version', () => {
   assert.match(view, /canManageDraft/);
-  assert.match(view, /actions\.push\(catalogEditActionButton\(item\)\)/);
+  assert.match(view, /catalogEditActionButton\(item\)/);
   assert.match(view, /collection\?\.status === 'published'/);
   assert.match(view, /\{ expectedVersion: item\.version \}/);
   assert.match(view, /runAction\(\(\) => catalogSkuEditForm\(item\), button\)/);

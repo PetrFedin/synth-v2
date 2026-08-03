@@ -1,5 +1,6 @@
 const OD_V4 = window.SynthaOmnidataV4 || (window.SynthaOmnidataV4 = {
   applied: 0,
+  activeNav: '',
 });
 
 const OD_V4_GROUPS = Object.freeze([
@@ -62,6 +63,10 @@ function odV4Text(item) {
   return localText(item.ru, item.en);
 }
 
+function odV4ItemKey(group, item) {
+  return `${group.label?.[1] || 'ROOT'}:${item.en}`;
+}
+
 function odV4PlannedNotice(item) {
   toast(localText(
     `\u0420\u0430\u0437\u0434\u0435\u043b \u00ab${item.ru}\u00bb \u0432\u043a\u043b\u044e\u0447\u0435\u043d \u0432 \u0446\u0435\u043b\u0435\u0432\u0443\u044e \u0430\u0440\u0445\u0438\u0442\u0435\u043a\u0442\u0443\u0440\u0443 Syntha.`,
@@ -75,6 +80,11 @@ function odV4Navigation() {
   clear(nav);
   nav.classList.add('od-v4-nav');
 
+  const selected = OD_V4_GROUPS.flatMap((group) => group.items.map((item) => ({ group, item })))
+    .find(({ group, item }) => odV4ItemKey(group, item) === OD_V4.activeNav);
+  if (!selected || selected.item.id !== state.view) OD_V4.activeNav = '';
+
+  let matchedDefault = false;
   for (const group of OD_V4_GROUPS) {
     if (group.label) nav.append(el('div', {
       className: 'nav-group-label',
@@ -82,7 +92,10 @@ function odV4Navigation() {
     }));
 
     for (const item of group.items) {
-      const active = Boolean(item.id && state.view === item.id && !item.planned);
+      const key = odV4ItemKey(group, item);
+      const eligible = Boolean(item.id && state.view === item.id && !item.planned);
+      const active = eligible && (OD_V4.activeNav ? OD_V4.activeNav === key : !matchedDefault);
+      if (active) matchedDefault = true;
       const button = el('button', {
         className: `nav-item ${active ? 'active' : ''} ${item.planned ? 'planned' : ''}`.trim(),
         type: 'button',
@@ -93,6 +106,7 @@ function odV4Navigation() {
       if (item.planned) button.append(el('span', { className: 'nav-plan-dot', ariaHidden: 'true' }));
       button.addEventListener('click', () => {
         if (item.planned || !item.id) return odV4PlannedNotice(item);
+        OD_V4.activeNav = key;
         state.view = item.id;
         renderApp();
       });

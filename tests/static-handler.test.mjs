@@ -23,8 +23,9 @@ test('serves standalone workspace and every ordered asset with security headers'
     const html = await response.text();
     const sources = [...html.matchAll(/<script defer src="([^"]+)"/g)].map((match) => match[1]);
     const sourcePaths = sources.map((source) => new URL(source, base).pathname);
-    assert.deepEqual(sourcePaths.slice(0, 9), [
+    assert.deepEqual(sourcePaths.slice(0, 10), [
       '/ui/i18n-runtime.js',
+      '/ui/i18n-v7.js',
       '/ui/dom-2.js',
       '/ui/dom-1.js',
       '/ui/api.js',
@@ -36,8 +37,10 @@ test('serves standalone workspace and every ordered asset with security headers'
     ]);
     assert.ok(sourcePaths.indexOf('/ui/bom-core.js') > sourcePaths.indexOf('/ui/materials-core.js'));
     assert.ok(sourcePaths.indexOf('/ui/bom.js') > sourcePaths.indexOf('/ui/materials.js'));
+    assert.ok(sourcePaths.indexOf('/ui/omnidata-v7.js') > sourcePaths.indexOf('/ui/bom.js'));
+    assert.ok(sourcePaths.indexOf('/ui/omnidata-v7-language-audit.js') > sourcePaths.indexOf('/ui/omnidata-v7-installed.js'));
     assert.equal(sourcePaths.at(-1), '/ui/app-start.js');
-    assert.ok(sourcePaths.length >= 20);
+    assert.ok(sourcePaths.length >= 30);
     for (const source of sources) {
       const script = await fetch(new URL(source, base));
       assert.equal(script.status, 200, source);
@@ -46,7 +49,12 @@ test('serves standalone workspace and every ordered asset with security headers'
     }
 
     const stylesheets = [...html.matchAll(/<link\s+[^>]*rel="stylesheet"[^>]*href="([^"]+)"/g)].map((match) => match[1]);
-    assert.ok(stylesheets.some((source) => new URL(source, base).pathname === '/bom.css'));
+    const stylesheetPaths = stylesheets.map((source) => new URL(source, base).pathname);
+    assert.ok(stylesheetPaths.includes('/bom.css'));
+    assert.ok(stylesheetPaths.includes('/omnidata-v7.css'));
+    assert.ok(stylesheetPaths.includes('/omnidata-v7-bom.css'));
+    assert.ok(!stylesheetPaths.includes('/omnidata-fidelity.css'));
+    assert.ok(!stylesheetPaths.includes('/omnidata-v6.css'));
     for (const stylesheet of stylesheets) {
       const css = await fetch(new URL(stylesheet, base));
       assert.equal(css.status, 200, stylesheet);
@@ -58,7 +66,7 @@ test('serves standalone workspace and every ordered asset with security headers'
 
 test('supports HEAD for runtime assets without sending a body', async () => {
   await withServer(createStandaloneHandler({ publicDir, apiHandler: (_request, response) => { response.statusCode = 404; response.end(); } }), async (base) => {
-    for (const asset of ['/ui/i18n-runtime.js', '/ui/ui-capabilities.js', '/ui/ui-validation.js', '/ui/bom-core.js', '/ui/bom.js', '/i18n.css', '/bom.css']) {
+    for (const asset of ['/ui/i18n-runtime.js', '/ui/i18n-v7.js', '/ui/ui-capabilities.js', '/ui/ui-validation.js', '/ui/bom-core.js', '/ui/bom.js', '/ui/omnidata-v7.js', '/i18n.css', '/bom.css', '/omnidata-v7.css']) {
       const response = await fetch(`${base}${asset}`, { method: 'HEAD' });
       assert.equal(response.status, 200, asset);
       assert.equal(await response.text(), '');

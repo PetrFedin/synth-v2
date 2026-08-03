@@ -8,6 +8,16 @@ on:
       - '.automation/order-patch-*.mjs'
       - '.github/workflows/verify-order-lifecycle.yml'
       - 'tests/order-*.test.mjs'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.automation/order-patch-*.mjs'
+      - '.github/workflows/verify-order-lifecycle.yml'
+      - 'src/application/order-builder-service.mjs'
+      - 'src/http/routes.mjs'
+      - 'src/modules/orders/public.mjs'
+      - 'tests/order-*.test.mjs'
   workflow_dispatch:
 
 permissions:

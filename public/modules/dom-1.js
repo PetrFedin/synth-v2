@@ -46,15 +46,27 @@ function entity(title, status, metadata, actions) {
   return box;
 }
 
-function sectionCard(title, children, buttonLabel, onButton) {
+function sectionCard(title, children, buttonLabel, onButton, pagingSection) {
   const card = el('section', { className: 'card section' });
   const tools = el('div', { className: 'toolbar section-toolbar' });
   const heading = el('div', { className: 'section-heading' });
-  heading.append(el('h3', { text: title }), el('span', { className: 'section-count', rawText: String(children.length) }));
+  const count = children.filter(child => !child.classList?.contains('empty')).length;
+  heading.append(el('h3', { text: title }), el('span', { className: 'section-count', rawText: String(count) }));
   tools.append(heading);
   if (buttonLabel && typeof onButton === 'function') {
     const button = el('button', { className: 'button small', text: buttonLabel, type: 'button' });
     button.addEventListener('click', onButton);
+    tools.append(button);
+  }
+  const paging = window.SynthaWorkspaceController;
+  if (pagingSection && paging?.hasMore(pagingSection)) {
+    const status = paging.status(pagingSection);
+    const label = status.state === 'loading'
+      ? I18N.t('common.loadingMore')
+      : status.state === 'error' ? I18N.t('common.retry') : I18N.t('common.loadMore');
+    const button = el('button', { className: 'button small', text: label, type: 'button' });
+    button.disabled = status.state === 'loading';
+    button.addEventListener('click', () => { void paging.loadNext(pagingSection); });
     tools.append(button);
   }
   const stack = el('div', { className: 'stack' });

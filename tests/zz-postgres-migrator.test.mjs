@@ -29,6 +29,7 @@ test('PostgreSQL migration ledger serializes runners and rejects changed history
     '012_workspace_paging_indexes.sql',
     '013_catalog_search_indexes.sql',
     '014_material_master.sql',
+    '015_unify_catalog_outbox.sql',
   ];
   try {
     await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
@@ -102,6 +103,30 @@ test('PostgreSQL migration ledger serializes runners and rejects changed history
           AND conname = 'outbox_events_status_check'`,
     );
     assert.match(outboxStatusConstraint.rows[0].definition, /dead-letter/);
+
+    const outboxMirrorTrigger = await pool.query(
+      `SELECT trigger.tgname
+         FROM pg_trigger AS trigger
+        WHERE trigger.tgrelid = 'public.catalog_outbox_events'::regclass
+          AND NOT trigger.tgisinternal`,
+    );
+    assert.deepEqual(outboxMirrorTrigger.rows, [{ tgname: 'catalog_outbox_unified_mirror' }]);
+
+    const legacyEvent = {
+      id: 'legacy-catalog-event-1',
+      type: 'catalog-sku.created',
+      aggregateId: 'SKU-LEGACY',
+      occurredAt: '2026-08-03T12:00:00.000Z',
+      payload: { brandId: 'brand-1' },
+      metadata: { commandId: 'legacy-command-1', actorId: 'user-1' },
+    };
+    await pool.query(
+      `INSERT INTO catalog_outbox_events (id, event_type, aggregate_id, status, event, published_at)
+       VALUES ($1, $2, $3, 'pending', $4::jsonb, NULL)`,
+      [legacyEvent.id, legacyEvent.type, legacyEvent.aggregateId, JSON.stringify(legacyEvent)],
+    );
+    const mirrored = await pool.query('SELECT event_type, aggregate_id, status, event FROM outbox_events WHERE id = $1', [legacyEvent.id]);
+    assert.deepEqual(mirrored.rows, [{ event_type: legacyEvent.type, aggregate_id: legacyEvent.aggregateId, status: 'pending', event: legacyEvent }]);
 
     const recoveryConstraint = await pool.query(
       `SELECT pg_get_constraintdef(oid) AS definition

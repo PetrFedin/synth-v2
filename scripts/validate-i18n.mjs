@@ -7,7 +7,8 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const publicDir = path.join(root, 'public');
 const index = await readFile(path.join(publicDir, 'index.html'), 'utf8');
-const sources = [...index.matchAll(/<script defer src="([^"]+)"/g)].map(match => match[1]);
+const sourceUrls = [...index.matchAll(/<script defer src="([^"]+)"/g)].map(match => match[1]);
+const sources = sourceUrls.map(assetPathname);
 const expectedFoundation = [
   '/ui/i18n-runtime.js',
   '/ui/dom-2.js',
@@ -74,6 +75,14 @@ assert(executionHarness.window.SynthaWorkspacePaging, 'Workspace pagination runt
 assert(executionHarness.window.SynthaNotificationPaging, 'Notification pagination runtime was not loaded.');
 
 console.log(`Localization and UI runtime contract OK (${sources.length} scripts, ${diagnostics.messageCount} keyed messages, ${diagnostics.phraseCount} compatibility phrases).`);
+
+function assetPathname(asset) {
+  try {
+    return new URL(asset, 'http://syntha.local').pathname;
+  } catch {
+    assert(false, `Invalid UI asset URL: ${asset}`);
+  }
+}
 
 function createHarness(browserLanguage) {
   const storage = new Map();

@@ -1,0 +1,17 @@
+:root {
+  --v5-canvas: #f3f4f7;
+  --v5-surface: #ffffff;
+  --v5-surface-subtle: #f8f9fb;
+  --v5-surface-hover: #f7f5ff;
+  --v5-surface-selected: #f1edff;
+  --v5-sidebar: #111a2d;
+  --v5-sidebar-deep: #0c1424;
+  --v5-sidebar-line: rgba(255,255,255,.075);
+  --v5-sidebar-text: #d9deea;
+  --v5-sidebar-muted: #8994aa;
+  --v5-text: #222838;
+  --v5-text-soft: #5f6778;
+  --v5-muted: #858d9d;
+  --v5-line: #e2e5eb;
+  --v5-line-strong: #d5d9e2;
+ 

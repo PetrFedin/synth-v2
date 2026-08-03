@@ -1,0 +1,310 @@
+--- a/src/infrastructure/postgres-notification-projection-store.mjs
++++ b/src/infrastructure/postgres-notification-projection-store.mjs
+@@ -148,6 +148,7 @@
+       return Object.freeze({
+         items: Object.freeze(rows.map((row) => row.payload)),
+         hasMore,
++        ...(hasMore ? { nextPosition: notificationPagePosition(rows.at(-1)) } : {}),
+       });
+     },
+     recordProjectionFailure({ event, errorCode, failedAt, attemptCount = 1 }) {
+@@ -268,6 +269,17 @@
+   });
+ }
+ 
++function notificationPagePosition(row) {
++  const createdAt = row?.created_at?.toISOString?.() ?? row?.created_at;
++  invariant(
++    typeof createdAt === 'string' && Number.isFinite(Date.parse(createdAt))
++      && typeof row?.id === 'string' && row.id.length >= 1 && row.id.length <= 160,
++    'NOTIFICATION_PAGE_POSITION_INVALID',
++    'Notification database page position is invalid',
++  );
++  return Object.freeze({ createdAt: new Date(createdAt).toISOString(), id: row.id });
++}
++
+ function validateClaim({ workerId, claimedAt, leaseExpiresAt, limit }) {
+   invariant(typeof workerId === 'string' && workerId.length > 0, 'NOTIFICATION_WORKER_ID_INVALID', 'Projection worker id is required');
+   invariant(isTimestamp(claimedAt), 'NOTIFICATION_CLAIMED_AT_INVALID', 'Projection claim timestamp is invalid');
+--- a/src/application/notification-service.mjs
++++ b/src/application/notification-service.mjs
+@@ -95,14 +95,17 @@
+           .sort(compareNotificationPageOrder)
+           .filter((notification) => isAfterPosition(notification, after));
+         const rows = ordered.slice(0, normalizedLimit + 1);
++        const items = Object.freeze(rows.slice(0, normalizedLimit));
++        const hasMore = rows.length > normalizedLimit;
+         page = Object.freeze({
+-          items: Object.freeze(rows.slice(0, normalizedLimit)),
+-          hasMore: rows.length > normalizedLimit,
++          items,
++          hasMore,
++          ...(hasMore ? { nextPosition: notificationPagePosition(items.at(-1)) } : {}),
+         });
+       }
+ 
+       const nextCursor = page.hasMore && page.items.length
+-        ? encodeNotificationCursor(page.items.at(-1))
++        ? encodeNotificationCursor(page.nextPosition ?? notificationPagePosition(page.items.at(-1)))
+         : null;
+       return Object.freeze({ items: page.items, nextCursor });
+     },
+@@ -292,6 +295,16 @@
+   return [];
+ }
+ 
++function notificationPagePosition(notification) {
++  invariant(
++    notification && typeof notification.createdAt === 'string' && Number.isFinite(Date.parse(notification.createdAt))
++      && typeof notification.id === 'string' && notification.id.length >= 1 && notification.id.length <= 160,
++    'NOTIFICATION_PAGE_RESULT_INVALID',
++    'Notification page position is invalid',
++  );
++  return Object.freeze({ createdAt: new Date(notification.createdAt).toISOString(), id: notification.id });
++}
++
+ function notificationListLimit(value) {
+   return parseLimit(value, DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT, 'NOTIFICATION_LIMIT_INVALID', 'Notification limit');
+ }
+--- a/tests/static-handler.test.mjs
++++ b/tests/static-handler.test.mjs
+@@ -22,11 +22,13 @@
+     assert.match(response.headers.get('content-security-policy'), /default-src 'self'/);
+     const html = await response.text();
+     const sources = [...html.matchAll(/<script defer src="([^"]+)"/g)].map((match) => match[1]);
+-    assert.deepEqual(sources.slice(0, 7), [
++    assert.deepEqual(sources.slice(0, 9), [
+       '/ui/i18n-runtime.js',
+       '/ui/dom-2.js',
+       '/ui/dom-1.js',
+       '/ui/api.js',
++      '/ui/workspace-pagination.js',
++      '/ui/notification-pagination.js',
+       '/ui/ui-capabilities.js',
+       '/ui/ui-validation.js',
+       '/ui/app-core.js',
+--- a/tests/workspace-bounds.test.mjs
++++ b/tests/workspace-bounds.test.mjs
+@@ -80,6 +80,9 @@
+     limit: 2,
+     hasMore: true,
+     truncatedSections: ['memberships'],
++    nextCursors: {
++      memberships: 'WzEsIm1lbWJlcnNoaXBzIixbInNob3AtMSIsImFjdG9yLTEiLCJtZW1iZXJzaGlwLTIiXV0',
++    },
+   });
+   const membershipQuery = queries.find((query) => query.sql.includes('SELECT payload FROM memberships'));
+   assert.equal(membershipQuery.params.at(-1), 3);
+--- a/tests/workspace-consistency.test.mjs
++++ b/tests/workspace-consistency.test.mjs
+@@ -65,7 +65,7 @@
+     async connect() { connects += 1; return client; },
+     async query() { throw new Error('workspace must not use pool.query'); },
+   };
+-  const workspace = await createPostgresWorkspaceReader({ pool }).readForActor('user-1');
++  const workspace = await createPostgresWorkspaceReader({ pool }).readForActor('user-1', { limit: 200 });
+   assert.equal(connects, 1);
+   assert.equal(queries[0].sql, 'BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
+   assert.equal(queries.at(-2).sql, 'COMMIT');
+@@ -84,7 +84,7 @@
+   };
+   const workspace = await createPostgresWorkspaceReader({
+     pool: { async connect() { return client; } },
+-  }).readForActor('user-without-membership');
++  }).readForActor('user-without-membership', { limit: 200 });
+ 
+   assert.deepEqual(workspace, {
+     memberships: [],
+@@ -100,10 +100,14 @@
+     orders: [],
+     deals: [],
+     calendar: [],
++    pageInfo: { truncatedSections: [] },
+   });
+-  assert.equal(queries.filter((item) => /^SELECT/.test(item.sql)).length, 1);
+-  assert.match(queries[1].sql, /FROM memberships/);
+-  assert.deepEqual(queries[1].params, ['user-without-membership', 'active']);
++  const selects = queries.filter((item) => /^SELECT/.test(item.sql));
++  assert.equal(selects.length, 2);
++  assert.match(selects[0].sql, /FROM memberships/);
++  assert.deepEqual(selects[0].params, ['user-without-membership', 'active']);
++  assert.match(selects[1].sql, /FROM memberships/);
++  assert.deepEqual(selects[1].params, ['user-without-membership', 'active', 201]);
+   assert.equal(queries.at(-2).sql, 'COMMIT');
+   assert.equal(queries.at(-1).sql, 'RELEASE');
+ });
+@@ -121,7 +125,7 @@
+   };
+   const pool = { async connect() { return client; } };
+   await assert.rejects(
+-    () => createPostgresWorkspaceReader({ pool }).readForActor('user-1'),
++    () => createPostgresWorkspaceReader({ pool }).readForActor('user-1', { limit: 200 }),
+     (error) => error === failure,
+   );
+   assert.deepEqual(queries.slice(-2), ['ROLLBACK', 'RELEASE']);
+--- a/tests/workspace-query.test.mjs
++++ b/tests/workspace-query.test.mjs
+@@ -52,5 +52,14 @@
+ 
+ test('actor without active membership receives an empty workspace', async () => {
+   const workspace = await service().loadForActor('unknown');
+-  assert.ok(Object.values(workspace).every((items) => items.length === 0));
++  for (const [key, value] of Object.entries(workspace)) {
++    if (key === 'pageInfo') continue;
++    assert.deepEqual(value, [], key);
++  }
++  assert.deepEqual(workspace.pageInfo, {
++    limit: 200,
++    hasMore: false,
++    truncatedSections: [],
++    nextCursors: {},
++  });
+ });
+--- a/tests/fetch-api.test.mjs
++++ b/tests/fetch-api.test.mjs
+@@ -25,7 +25,7 @@
+   const response = await context.handle(new Request('https://syntha.test/v2/workspace', { headers: { authorization: 'Bearer valid' } }));
+   assert.equal(response.status, 200);
+   assert.equal(response.headers.get('x-request-id'), 'fetch-request-1');
+-  assert.deepEqual(context.calls[0], ['loadForActor', 'uid-1']);
++  assert.deepEqual(context.calls[0], ['loadForActor', 'uid-1', { limit: undefined }]);
+ });
+ 
+ test('Fetch API adapter enforces auth and mutation idempotency', async () => {
+--- a/tests/http-api.test.mjs
++++ b/tests/http-api.test.mjs
+@@ -112,6 +112,6 @@
+   await withServer(context, async (base) => {
+     const response = await fetch(`${base}/v2/workspace`, { headers: { authorization: 'Bearer valid-token' } });
+     assert.equal(response.status, 200);
+-    assert.deepEqual(context.calls[0], ['loadForActor', 'user-1']);
++    assert.deepEqual(context.calls[0], ['loadForActor', 'user-1', { limit: undefined }]);
+   });
+ });
+--- a/tests/http-query-duplicates.test.mjs
++++ b/tests/http-query-duplicates.test.mjs
+@@ -2,14 +2,14 @@
+ import assert from 'node:assert/strict';
+ import { createWholesaleFetchHandler } from '../src/http/fetch-api.mjs';
+ import { createWholesaleHttpHandler } from '../src/http/api.mjs';
+-import { matchRoute, validateRouteInput } from '../src/http/routes.mjs';
++import { queryParameters } from '../src/http/transport-contract.mjs';
+ 
+ function runtimeFixture() {
+   let calls = 0;
+   return {
+     get calls() { return calls; },
+     runtime: {
+-      authenticate: async () => ({ id: 'user-1' }),
++      authenticate: async () => ({ actorId: 'user-1' }),
+       auth: {},
+       readiness: {},
+       platform: {},
+@@ -51,16 +51,11 @@
+   };
+ }
+ 
+-test('route validation rejects repeated known query parameters', () => {
+-  const match = matchRoute('GET', '/v2/notifications/page');
+-  assert.ok(match);
++test('transport query parsing rejects repeated known query parameters', () => {
+   assert.throws(
+-    () => validateRouteInput(match.route, {
+-      url: new URL('https://syntha.test/v2/notifications/page?limit=10&limit=20'),
+-    }),
+-    (error) => error.code === 'REQUEST_QUERY_FIELD_DUPLICATE'
+-      && error.details.field === 'limit'
+-      && error.details.count === 2,
++    () => queryParameters(new URL('https://syntha.test/v2/notifications/page?limit=10&limit=20')),
++    (error) => error.code === 'HTTP_QUERY_DUPLICATE'
++      && error.details.parameter === 'limit',
+   );
+ });
+ 
+@@ -82,8 +77,8 @@
+ 
+   assert.equal(nodeResponse.status, 400);
+   assert.equal(fetchResponse.status, 400);
+-  assert.equal(nodeResponse.body.error.code, 'REQUEST_QUERY_FIELD_DUPLICATE');
+-  assert.equal(fetchBody.error.code, 'REQUEST_QUERY_FIELD_DUPLICATE');
++  assert.equal(nodeResponse.body.error.code, 'HTTP_QUERY_DUPLICATE');
++  assert.equal(fetchBody.error.code, 'HTTP_QUERY_DUPLICATE');
+   assert.equal(nodeFixture.calls, 0);
+   assert.equal(fetchFixture.calls, 0);
+ });
+--- a/tests/http-router-compatibility.test.mjs
++++ b/tests/http-router-compatibility.test.mjs
+@@ -77,10 +77,10 @@
+   assert.equal(calls[1][0], 'createCampaign');
+ });
+ 
+-test('router retains strict request contracts and safe decoded parameters', () => {
++test('router retains strict request contracts and safe decoded parameters', async () => {
+   const routes = createWholesaleRoutes(services());
+   const page = matchWholesaleRoute(routes, 'GET', '/v2/notifications/page');
+-  assert.throws(
++  await assert.rejects(
+     () => page.execute({ actorId: 'actor-1', query: { debug: '1' }, body: {}, params: page.params }),
+     (error) => error.code === 'HTTP_QUERY_FIELD_UNKNOWN',
+   );
+--- a/tests/runtime-worker-wiring.test.mjs
++++ b/tests/runtime-worker-wiring.test.mjs
+@@ -46,7 +46,8 @@
+   const startIndex = source.indexOf('notificationWorker.start()');
+   assert.ok(workerIndex >= 0 && healthIndex > workerIndex && listenIndex > healthIndex && startIndex > listenIndex);
+   assert.match(source, /projectPending\(\{ limit: settings\.notificationProjectionBatchSize \}\)/);
+-  assert.match(source, /stoppers: notificationWorker \? \[\(\) => notificationWorker\.stop\(\)\] : \[\]/);
++  assert.match(source, /const stoppers = \[notificationWorker, outboxWorker\]\.filter\(Boolean\)\.map\(\(worker\) => \(\) => worker\.stop\(\)\)/);
++  assert.match(source, /stoppers,/);
+   assert.match(source, /SYNTHA_NOTIFICATION_PROJECTION_INTERVAL_MS/);
+   assert.match(source, /SYNTHA_NOTIFICATION_PROJECTION_BATCH_SIZE/);
+   assert.match(source, /SYNTHA_NOTIFICATION_PROJECTION_LEASE_MS/);
+--- a/tests/notification-pagination.test.mjs
++++ b/tests/notification-pagination.test.mjs
+@@ -4,7 +4,7 @@
+ import { decodeNotificationCursor, encodeNotificationCursor } from '../src/core/notification-cursor.mjs';
+ import { createPostgresNotificationProjectionStore } from '../src/infrastructure/postgres-notification-projection-store.mjs';
+ import { wholesaleV2OpenApi } from '../src/http/openapi.mjs';
+-import { matchRoute, validateRouteInput } from '../src/http/routes.mjs';
++import { createWholesaleRoutes, matchWholesaleRoute } from '../src/http/routes.mjs';
+ 
+ function notification(id, createdAt, status = 'unread') {
+   return Object.freeze({
+@@ -178,13 +178,32 @@
+   assert.equal(queries.at(-1).sql, 'RELEASE');
+ });
+ 
+-test('notification page route and OpenAPI expose only limit and cursor query parameters', () => {
+-  const match = matchRoute('GET', '/v2/notifications/page');
++test('notification page route and OpenAPI expose only limit and cursor query parameters', async () => {
++  const calls = [];
++  const routes = createWholesaleRoutes({
++    platform: {},
++    catalog: {},
++    partners: {},
++    collaboration: {},
++    orders: {},
++    workspace: {},
++    notifications: {
++      async pageForActor(actorId, options) { calls.push({ actorId, options }); return { items: [], nextCursor: null }; },
++    },
++  });
++  const match = matchWholesaleRoute(routes, 'GET', '/v2/notifications/page');
+   assert.ok(match);
+-  const input = validateRouteInput(match.route, {
+-    url: new URL('https://syntha.test/v2/notifications/page?limit=25&cursor=abc'),
++  await match.execute({
++    actorId: 'user-1',
++    query: { limit: '25', cursor: 'abc' },
++    body: {},
++    params: match.params,
+   });
+-  assert.deepEqual(input, { limit: '25', cursor: 'abc' });
++  assert.deepEqual(calls, [{ actorId: 'user-1', options: { limit: '25', cursor: 'abc' } }]);
++  await assert.rejects(
++    () => match.execute({ actorId: 'user-1', query: { debug: '1' }, body: {}, params: match.params }),
++    (error) => error.code === 'HTTP_QUERY_FIELD_UNKNOWN',
++  );
+ 
+   const operation = wholesaleV2OpenApi.paths['/notifications/page'].get;
+   assert.equal(operation.operationId, 'pageNotifications');

@@ -49,27 +49,55 @@ function selectionLineForm(selection) {
   });
 }
 function orderForm() {
-  const validation = window.SynthaUiValidation;
   const caps = window.SynthaUiCapabilities;
   const selections = state.workspace.selections.filter(x => x.status === 'submitted' && caps.hasForOrganisation(state.workspace, x.shopId, caps.CAPABILITIES.ORDER_WRITE) && !state.workspace.orders.some(o => o.selectionId === x.id));
   openForm('\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u0437\u0430\u043a\u0430\u0437', [
-    selectDef('selectionId','Selection',selections),
-    selectDef('incoterm','Incoterm',['EXW','FCA','FOB','CIF','DAP','DDP']),
-    numberDef('paymentDays','\u041e\u0442\u0441\u0440\u043e\u0447\u043a\u0430, \u0434\u043d\u0435\u0439',30,true,0),
-    numberDef('prepaymentPercent','\u041f\u0440\u0435\u0434\u043e\u043f\u043b\u0430\u0442\u0430, %',20,false,0),
-    dateDef('deliveryStart','\u041d\u0430\u0447\u0430\u043b\u043e \u043f\u043e\u0441\u0442\u0430\u0432\u043a\u0438'),
-    dateDef('deliveryEnd','\u041a\u043e\u043d\u0435\u0446 \u043f\u043e\u0441\u0442\u0430\u0432\u043a\u0438'),
-  ], values => {
-    validation.dateRange(values.deliveryStart, values.deliveryEnd, 'Delivery dates');
-    const paymentDays = validation.number(values.paymentDays, 'Payment days', { integer: true, min: 0, max: 3650 });
-    const prepaymentPercent = validation.number(values.prepaymentPercent, 'Prepayment', { min: 0, max: 100 });
-    return mutate('/v2/orders', { selectionId: values.selectionId, terms: { incoterm: values.incoterm, paymentDays, prepaymentPercent, deliveryStart: values.deliveryStart, deliveryEnd: values.deliveryEnd } });
-  });
+    selectDef('selectionId', 'Selection', selections),
+    ...orderTermsFields(),
+  ], values => mutate('/v2/orders', { selectionId: values.selectionId, terms: validatedOrderTerms(values) }));
 }
+
+function orderTermsEditForm(order) {
+  openForm(I18N.t('form.editOrderTerms'), orderTermsFields(order.terms), values => mutate(
+    `/v2/orders/${encodeURIComponent(order.id)}/terms`,
+    { expectedVersion: order.version, terms: validatedOrderTerms(values) },
+    'PATCH',
+  ));
+}
+
+function orderTermsFields(terms = {}) {
+  return [
+    selectDef('incoterm', 'Incoterm', ['EXW', 'FCA', 'FOB', 'CIF', 'DAP', 'DDP'], undefined, terms.incoterm || 'EXW'),
+    numberDef('paymentDays', '\u041e\u0442\u0441\u0440\u043e\u0447\u043a\u0430, \u0434\u043d\u0435\u0439', terms.paymentDays ?? 30, true, 0),
+    numberDef('prepaymentPercent', '\u041f\u0440\u0435\u0434\u043e\u043f\u043b\u0430\u0442\u0430, %', terms.prepaymentPercent ?? 20, false, 0),
+    dateDef('deliveryStart', '\u041d\u0430\u0447\u0430\u043b\u043e \u043f\u043e\u0441\u0442\u0430\u0432\u043a\u0438', orderDateValue(terms.deliveryStart)),
+    dateDef('deliveryEnd', '\u041a\u043e\u043d\u0435\u0446 \u043f\u043e\u0441\u0442\u0430\u0432\u043a\u0438', orderDateValue(terms.deliveryEnd)),
+  ];
+}
+
+function validatedOrderTerms(values) {
+  const validation = window.SynthaUiValidation;
+  validation.dateRange(values.deliveryStart, values.deliveryEnd, 'Delivery dates');
+  return {
+    incoterm: values.incoterm,
+    paymentDays: validation.number(values.paymentDays, 'Payment days', { integer: true, min: 0, max: 365 }),
+    prepaymentPercent: validation.number(values.prepaymentPercent, 'Prepayment', { min: 0, max: 100 }),
+    deliveryStart: values.deliveryStart,
+    deliveryEnd: values.deliveryEnd,
+  };
+}
+
+function orderDateValue(value) {
+  if (!value) return '';
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString().slice(0, 10) : String(value).slice(0, 10);
+}
+
 function orderCancellationForm(order) {
   const validation = window.SynthaUiValidation;
-  openForm(I18N.t('form.cancelOrder'), [textDef('reason', I18N.t('form.cancellationReason'),'',500)], values => mutate(`/v2/orders/${encodeURIComponent(order.id)}/cancel`, {
+  openForm(I18N.t('form.cancelOrder'), [textDef('reason', I18N.t('form.cancellationReason'), '', 1000)], values => mutate(`/v2/orders/${encodeURIComponent(order.id)}/cancel`, {
     orderId: order.id,
-    reason: validation.requiredText(values.reason, 'Cancellation reason', { minLength: 2, maxLength: 500 }),
+    expectedVersion: order.version,
+    reason: validation.requiredText(values.reason, 'Cancellation reason', { minLength: 3, maxLength: 1000 }),
   }));
 }

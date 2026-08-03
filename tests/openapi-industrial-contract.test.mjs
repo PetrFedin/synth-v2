@@ -27,7 +27,7 @@ test('all domain mutations document one global Idempotency-Key namespace', () =>
   }
 });
 
-test('workspace bootstrap documents per-section bounds and truncation metadata', () => {
+test('workspace bootstrap documents per-section bounds and exact continuations', () => {
   const workspace = operation('/workspace', 'get');
   const limit = workspace.parameters?.find((parameter) => parameter.in === 'query' && parameter.name === 'limit');
   assert.ok(limit);
@@ -39,11 +39,20 @@ test('workspace bootstrap documents per-section bounds and truncation metadata',
   });
   assert.match(limit.description, /each workspace collection/i);
   assert.match(limit.description, /truncatedSections/);
+  assert.match(limit.description, /nextCursors/);
   assert.match(limit.description, /workspace\/\{section\}\/page/);
   assert.match(workspace.description, /repeatable-read/i);
-  assert.match(workspace.description, /pageInfo\.hasMore/);
+  assert.match(workspace.description, /pageInfo\.truncatedSections/);
+  assert.match(workspace.description, /pageInfo\.nextCursors/);
   assert.ok(workspace.responses['400']);
   assert.equal(workspace.responses['200'].content['application/json'].schema.$ref, '#/components/schemas/Workspace');
+
+  const pageInfo = wholesaleV2OpenApi.components.schemas.WorkspacePageInfo;
+  assert.deepEqual(pageInfo.required, ['limit', 'hasMore', 'truncatedSections', 'nextCursors']);
+  assert.deepEqual(pageInfo.properties.nextCursors.propertyNames.enum, pageInfo.properties.truncatedSections.items.enum);
+  assert.deepEqual(pageInfo.properties.nextCursors.additionalProperties, {
+    type: 'string', minLength: 1, maxLength: 2048,
+  });
 });
 
 test('workspace section pages document bounded opaque keyset cursors', () => {

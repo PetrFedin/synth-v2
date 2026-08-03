@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { createStandaloneHandler } from '../src/web/static-handler.mjs';
 
 const publicDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
-const build = 'visual-20260803-5';
+const build = 'visual-20260803-6';
 
 async function withServer(handler, work) {
   const server = createServer(handler);
@@ -22,7 +22,7 @@ async function withServer(handler, work) {
   }
 }
 
-test('the shell versions every Syntha Omnidata V5 visual asset', async () => {
+test('the shell versions every Syntha Omnidata V6 visual asset', async () => {
   const html = await readFile(path.join(publicDir, 'index.html'), 'utf8');
   assert.match(html, new RegExp(`meta name="syntha-build" content="${build}"`));
   for (const asset of [
@@ -33,11 +33,13 @@ test('the shell versions every Syntha Omnidata V5 visual asset', async () => {
     'omnidata-v5.css',
     'omnidata-v5-workspace.css',
     'omnidata-v5-responsive.css',
+    'omnidata-v6.css',
     'omnidata-workspace.js',
     'omnidata-polish.js',
     'omnidata-fidelity.js',
     'omnidata-v4.js',
     'omnidata-v5.js',
+    'omnidata-v6.js',
   ]) assert.match(html, new RegExp(`${asset.replaceAll('.', '\\.')}\\?v=${build}`));
 });
 
@@ -59,11 +61,13 @@ test('the standalone server prevents stale caching of every visual asset', async
       `/omnidata-v5.css?v=${build}`,
       `/omnidata-v5-workspace.css?v=${build}`,
       `/omnidata-v5-responsive.css?v=${build}`,
+      `/omnidata-v6.css?v=${build}`,
       `/ui/omnidata-workspace.js?v=${build}`,
       `/ui/omnidata-polish.js?v=${build}`,
       `/ui/omnidata-fidelity.js?v=${build}`,
       `/ui/omnidata-v4.js?v=${build}`,
       `/ui/omnidata-v5.js?v=${build}`,
+      `/ui/omnidata-v6.js?v=${build}`,
     ]) {
       const response = await fetch(`${base}${asset}`);
       assert.equal(response.status, 200, asset);

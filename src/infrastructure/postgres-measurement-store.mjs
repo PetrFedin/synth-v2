@@ -33,7 +33,7 @@ function view(client) {
           `INSERT INTO measurement_charts
              (id, sku, brand_id, sku_version, status, unit, base_size_code, version, payload, created_at, updated_at, published_at)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::timestamptz, $11::timestamptz, $12::timestamptz)`,
-          measurementParameters(chart),
+          measurementInsertParameters(chart),
         );
         await insertMatrix(client, chart);
       } catch (error) {
@@ -46,10 +46,10 @@ function view(client) {
       const result = await client.query(
         `UPDATE measurement_charts
             SET sku_version = $4, status = $5, unit = $6, base_size_code = $7,
-                version = $8, payload = $9::jsonb, updated_at = $11::timestamptz,
-                published_at = $12::timestamptz
-          WHERE id = $1 AND sku = $2 AND brand_id = $3 AND version = $13`,
-        [...measurementParameters(chart), expectedVersion],
+                version = $8, payload = $9::jsonb, updated_at = $10::timestamptz,
+                published_at = $11::timestamptz
+          WHERE id = $1 AND sku = $2 AND brand_id = $3 AND version = $12`,
+        measurementUpdateParameters(chart, expectedVersion),
       );
       invariant(result.rowCount === 1, 'MEASUREMENT_CONCURRENCY_CONFLICT', 'Measurement chart concurrency conflict', { sku: chart.sku, expectedVersion });
       await client.query('DELETE FROM measurement_values WHERE chart_id = $1', [chart.id]);
@@ -74,7 +74,7 @@ function view(client) {
   });
 }
 
-function measurementParameters(chart) {
+function measurementInsertParameters(chart) {
   return [
     chart.id,
     chart.sku,
@@ -88,6 +88,23 @@ function measurementParameters(chart) {
     chart.createdAt,
     chart.updatedAt,
     chart.publishedAt,
+  ];
+}
+
+function measurementUpdateParameters(chart, expectedVersion) {
+  return [
+    chart.id,
+    chart.sku,
+    chart.brandId,
+    chart.skuVersion,
+    chart.status,
+    chart.unit,
+    chart.baseSizeCode,
+    chart.version,
+    JSON.stringify(chart),
+    chart.updatedAt,
+    chart.publishedAt,
+    expectedVersion,
   ];
 }
 

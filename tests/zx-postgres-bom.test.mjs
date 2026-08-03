@@ -23,7 +23,8 @@ test('PostgreSQL BOM lifecycle preserves snapshots, security, versions and event
   const pool = createPostgresTestPool({ connectionString: databaseUrl, max: 6 });
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
   let id = 0; let tick = 0;
-  const clock = () => `2026-08-03T14:00:${String(tick++).padStart(2, '0')}.000Z`;
+  const baseTime = Date.parse('2026-08-03T14:00:00.000Z');
+  const clock = () => new Date(baseTime + tick++ * 1000).toISOString();
   const nextId = (prefix) => `${prefix}_${++id}`;
   try {
     await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');

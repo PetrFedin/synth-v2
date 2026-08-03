@@ -36,22 +36,26 @@ test('notification metadata decorates a validated page with an exact unread coun
   assert.equal(typeof service.markRead, 'function');
 });
 
-test('invalid page requests fail before the unread count query', async () => {
-  let counts = 0;
-  const service = withNotificationPageMetadata({
-    service: {
-      async pageForActor() { throw new DomainError('NOTIFICATION_CURSOR_INVALID', 'Invalid cursor'); },
-    },
-    reader: {
-      async countUnreadForActor() { counts += 1; return 0; },
-    },
-  });
+test('invalid requests and malformed pages fail before the unread count query', async () => {
+  for (const page of [
+    () => { throw new DomainError('NOTIFICATION_CURSOR_INVALID', 'Invalid cursor'); },
+    () => ({ items: 'not-an-array', nextCursor: null }),
+    () => ({ items: [], nextCursor: 42 }),
+  ]) {
+    let counts = 0;
+    const service = withNotificationPageMetadata({
+      service: { async pageForActor() { return page(); } },
+      reader: {
+        async countUnreadForActor() { counts += 1; return 0; },
+      },
+    });
 
-  await assert.rejects(
-    () => service.pageForActor('actor-1', { cursor: 'invalid' }),
-    error => error.code === 'NOTIFICATION_CURSOR_INVALID',
-  );
-  assert.equal(counts, 0);
+    await assert.rejects(
+      () => service.pageForActor('actor-1', { cursor: 'invalid' }),
+      error => ['NOTIFICATION_CURSOR_INVALID', 'NOTIFICATION_PAGE_RESULT_INVALID'].includes(error.code),
+    );
+    assert.equal(counts, 0);
+  }
 });
 
 test('PostgreSQL unread count is actor-scoped and validates bigint conversion', async () => {

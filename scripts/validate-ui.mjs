@@ -31,6 +31,7 @@ assertRequiredOrder(sources, [
   '/ui/i18n-runtime.js',
   '/ui/api.js',
   '/ui/workspace-pagination.js',
+  '/ui/notification-pagination.js',
   '/ui/ui-capabilities.js',
   '/ui/ui-validation.js',
   '/ui/app-core.js',

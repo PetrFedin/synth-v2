@@ -45,8 +45,10 @@ jobs:
         run: |
           set -o pipefail
           npm run verify > verify.log 2>&1 || {
-            echo "Verification failed. Last 160 lines:"
-            tail -n 160 verify.log
+            echo "Verification failed. Failing test diagnostics:"
+            grep -n -B 5 -A 32 -E "not ok [0-9]+|ERR_ASSERTION|AssertionError|ReferenceError|TypeError" verify.log || true
+            echo "Verification summary:"
+            tail -n 24 verify.log
             exit 1
           }
           cat verify.log

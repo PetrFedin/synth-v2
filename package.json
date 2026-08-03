@@ -1,6 +1,6 @@
 {
   "name": "@syntha/platform-v2",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -11,6 +11,7 @@
     "start": "node --env-file=.env src/server.mjs",
     "db:migrate": "node --env-file=.env scripts/migrate.mjs",
     "bootstrap:owner": "node --env-file=.env scripts/bootstrap-owner.mjs",
+    "demo:seed": "node --env-file=.env scripts/seed-demo.mjs",
     "outbox:requeue": "node --env-file=.env scripts/requeue-outbox-event.mjs",
     "test": "node --test --test-concurrency=1 tests/*.test.mjs",
     "validate:architecture": "node scripts/validate-architecture.mjs",

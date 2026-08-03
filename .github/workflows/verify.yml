@@ -41,4 +41,12 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
 
       - name: Verify architecture, contracts, UI and tests
-        run: npm run verify
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run verify > verify.log 2>&1 || {
+            echo "Verification failed. Last 160 lines:"
+            tail -n 160 verify.log
+            exit 1
+          }
+          cat verify.log

@@ -17,6 +17,9 @@ const ASSETS = Object.freeze({
   '/omnidata-fidelity.css': ['omnidata-fidelity.css', 'text/css; charset=utf-8', VISUAL_CACHE],
   '/omnidata-v3.css': ['omnidata-v3.css', 'text/css; charset=utf-8', VISUAL_CACHE],
   '/omnidata-v4.css': ['omnidata-v4.css', 'text/css; charset=utf-8', VISUAL_CACHE],
+  '/omnidata-v5.css': ['omnidata-v5.css', 'text/css; charset=utf-8', VISUAL_CACHE],
+  '/omnidata-v5-workspace.css': ['omnidata-v5-workspace.css', 'text/css; charset=utf-8', VISUAL_CACHE],
+  '/omnidata-v5-responsive.css': ['omnidata-v5-responsive.css', 'text/css; charset=utf-8', VISUAL_CACHE],
   '/ui/i18n-runtime.js': ['modules/i18n-runtime.js', JS, CACHE],
   '/ui/ui-capabilities.js': ['modules/ui-capabilities.js', JS, CACHE],
   '/ui/ui-validation.js': ['modules/ui-validation.js', JS, CACHE],
@@ -46,6 +49,7 @@ const ASSETS = Object.freeze({
   '/ui/omnidata-polish.js': ['modules/omnidata-polish.js', JS, VISUAL_CACHE],
   '/ui/omnidata-fidelity.js': ['modules/omnidata-fidelity.js', JS, VISUAL_CACHE],
   '/ui/omnidata-v4.js': ['modules/omnidata-v4.js', JS, VISUAL_CACHE],
+  '/ui/omnidata-v5.js': ['modules/omnidata-v5.js', JS, VISUAL_CACHE],
   '/ui/app-start.js': ['modules/app-start.js', JS, CACHE],
 });
 

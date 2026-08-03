@@ -33,10 +33,13 @@
     const showrooms = list(workspace.showrooms).filter((item) => collectionIds.has(item.collectionId));
     const cycles = list(workspace.cycles).filter((item) => item.campaignId === campaign.id || collectionIds.has(item.collectionId));
     const showroomIds = new Set(showrooms.map((item) => item.id));
+    const selections = list(workspace.selections).filter((item) => showroomIds.has(item.showroomId));
+    const selectionIds = new Set(selections.map((item) => item.id));
     const orders = list(workspace.orders).filter((item) => (
       item.campaignId === campaign.id
       || collectionIds.has(item.collectionId)
       || showroomIds.has(item.showroomId)
+      || selectionIds.has(item.selectionId)
       || cycles.some((cycle) => cycle.id === item.cycleId)
     ));
 
@@ -47,7 +50,7 @@
     const publishedSkus = skus.filter((item) => item.status === 'published');
     const openShowrooms = showrooms.filter((item) => item.status === 'open');
     const activeCycles = cycles.filter((item) => !['cancelled', 'closed'].includes(item.status));
-    const liveOrders = orders.filter((item) => item.status !== 'cancelled');
+    const liveOrders = orders.filter((item) => !['cancelled'].includes(item.status));
 
     const gateScores = Object.freeze({
       timeline: timelineValid ? 15 : 0,
@@ -84,6 +87,7 @@
       skus,
       showrooms,
       cycles,
+      selections,
       orders,
       counts: Object.freeze({
         collections: collections.length,
@@ -93,6 +97,7 @@
         showrooms: showrooms.length,
         openShowrooms: openShowrooms.length,
         cycles: cycles.length,
+        selections: selections.length,
         orders: orders.length,
       }),
       gateScores,

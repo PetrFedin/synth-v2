@@ -142,12 +142,23 @@ export function normalizeHttpError(error) {
     'CATALOG_EXPECTED_VERSION_INVALID',
     'CATALOG_UPDATE_INVALID',
     'CATALOG_PUBLISH_INVALID',
+    'MATERIAL_ACTOR_INVALID',
+    'MATERIAL_PAGE_LIMIT_INVALID',
+    'MATERIAL_CURSOR_INVALID',
+    'MATERIAL_SEARCH_INVALID',
+    'MATERIAL_STATUS_FILTER_INVALID',
+    'MATERIAL_TYPE_FILTER_INVALID',
+    'MATERIAL_BRAND_FILTER_INVALID',
+    'MATERIAL_CODE_INVALID',
+    'MATERIAL_EXPECTED_VERSION_INVALID',
+    'MATERIAL_UPDATE_INVALID',
+    'MATERIAL_PUBLISH_INVALID',
     'ORDER_EXPECTED_VERSION_INVALID',
     'AUTH_EMAIL_INVALID',
     'AUTH_PASSWORD_INVALID',
   ].includes(code)) status = 400;
   else if (code === 'HTTP_BODY_TOO_LARGE') status = 413;
-  else if (code.includes('CONFLICT') || code.includes('ALREADY_EXISTS')) status = 409;
+  else if (code.includes('CONFLICT') || code.includes('ALREADY_EXISTS') || code === 'MATERIAL_NOT_DRAFT') status = 409;
   const retryAfterSeconds = code === 'AUTH_RATE_LIMITED' ? Math.max(1, Math.ceil(Number(error.details?.retryAfterSeconds) || 1)) : undefined;
   return { status, code, message: error.message, details: error.details ?? {}, retryAfterSeconds };
 }

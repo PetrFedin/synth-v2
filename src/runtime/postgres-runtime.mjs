@@ -1,5 +1,7 @@
 import { invariant } from '../core/errors.mjs';
 import { createAuthService } from '../application/auth-service.mjs';
+import { createBomService } from '../application/bom-service.mjs';
+import { createBomQueryService } from '../application/bom-query-service.mjs';
 import { createCatalogService } from '../application/catalog-service.mjs';
 import { createCatalogQueryService } from '../application/catalog-query-service.mjs';
 import { createMaterialService } from '../application/material-service.mjs';
@@ -15,6 +17,8 @@ import { createOrderBuilderService } from '../application/order-builder-service.
 import { createNotificationService } from '../application/notification-service.mjs';
 import { createWorkspaceQueryService } from '../application/workspace-query-service.mjs';
 import { createPostgresAuthStore } from '../infrastructure/postgres-auth-store.mjs';
+import { createPostgresBomStore } from '../infrastructure/postgres-bom-store.mjs';
+import { createPostgresBomReader } from '../infrastructure/postgres-bom-reader.mjs';
 import { createPostgresCatalogStore } from '../infrastructure/postgres-catalog-store.mjs';
 import { createPostgresCatalogReader } from '../infrastructure/postgres-catalog-reader.mjs';
 import { createPostgresMaterialStore } from '../infrastructure/postgres-material-store.mjs';
@@ -64,6 +68,7 @@ export function createPostgresWholesaleRuntime({
   const store = createPostgresWholesaleStore({ pool });
   const catalogStore = createPostgresCatalogStore({ pool });
   const materialStore = createPostgresMaterialStore({ pool });
+  const bomStore = createPostgresBomStore({ pool });
   const options = { store, nextId: runtimeNextId, ...(clock ? { clock } : {}) };
   const auth = createAuthService({
     store: createPostgresAuthStore({ pool }),
@@ -89,6 +94,9 @@ export function createPostgresWholesaleRuntime({
   const materialCommands = createMaterialService({ materialStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) });
   const materialQueries = createMaterialQueryService({ reader: createPostgresMaterialReader({ pool }) });
   const materials = Object.freeze({ ...materialCommands, ...materialQueries });
+  const bomCommands = createBomService({ bomStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) });
+  const bomQueries = createBomQueryService({ reader: createPostgresBomReader({ pool }) });
+  const boms = Object.freeze({ ...bomCommands, ...bomQueries });
   const partners = createPartnerAccessService(options);
   const collaboration = createShowroomSelectionService({ ...options, catalogReader: catalog });
   const orders = createOrderBuilderService(options);
@@ -128,8 +136,8 @@ export function createPostgresWholesaleRuntime({
     ...(outboxRetentionMs !== undefined ? { outboxRetentionMs } : {}),
   });
   const workspace = createWorkspaceQueryService({ reader: createPostgresWorkspaceReader({ pool }) });
-  const transport = { authenticate: auth.authenticate, auth, readiness, platform, catalog, materials, partners, collaboration, orders, notifications, workspace };
+  const transport = { authenticate: auth.authenticate, auth, readiness, platform, catalog, materials, boms, partners, collaboration, orders, notifications, workspace };
   const handler = createWholesaleHttpHandler(transport);
   const fetchHandler = createWholesaleFetchHandler(transport);
-  return Object.freeze({ auth, readiness, maintenance, outboxPublication, store, catalogStore, materialStore, platform, catalog, materials, partners, collaboration, orders, notifications, workspace, handler, fetchHandler });
+  return Object.freeze({ auth, readiness, maintenance, outboxPublication, store, catalogStore, materialStore, bomStore, platform, catalog, materials, boms, partners, collaboration, orders, notifications, workspace, handler, fetchHandler });
 }

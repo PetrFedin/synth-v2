@@ -4,7 +4,10 @@
   const RISK_RANK = Object.freeze({ critical: 4, high: 3, medium: 2, low: 1 });
 
   function list(value) { return Array.isArray(value) ? value : []; }
-  function finite(value) { return Number.isFinite(Number(value)) ? Number(value) : null; }
+  function finite(value) {
+    if (value === null || value === undefined || value === '') return null;
+    return Number.isFinite(Number(value)) ? Number(value) : null;
+  }
   function integer(value) { const number = finite(value); return Number.isInteger(number) ? number : null; }
   function risk(risks, code, severity, details = {}) { risks.push(Object.freeze({ code, severity, details })); }
 

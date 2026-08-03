@@ -28,6 +28,19 @@ const state = {
   sidebarCollapsed: localStorage.getItem(SIDEBAR_KEY) === 'true',
 };
 const root = document.querySelector('#app');
+const workspacePaging = window.SynthaWorkspacePaging.create({
+  request: (path, options) => api(path, options),
+  getWorkspace: () => state.workspace,
+  setWorkspace: workspace => { state.workspace = workspace; },
+  onChange: () => {
+    if (state.token && state.user) renderApp();
+  },
+  onError: error => {
+    if (state.token && state.user) toast(error.message, 'error');
+  },
+  pageLimit: 100,
+});
+window.SynthaWorkspaceController = workspacePaging;
 
 window.addEventListener('syntha:locale-changed', () => {
   if (state.token && state.user) renderApp();
@@ -41,12 +54,14 @@ async function boot() {
 }
 
 async function reload() {
+  workspacePaging.abortAll();
   const [me, workspace, notifications] = await Promise.all([
     api('/v2/auth/me'), api('/v2/workspace'), api('/v2/notifications').catch(() => []),
   ]);
   state.user = me;
   state.workspace = { ...emptyWorkspace(), ...workspace };
   state.notifications = Array.isArray(notifications) ? notifications : [];
+  workspacePaging.reset(state.workspace);
 }
 
 function renderLogin(message = '') {

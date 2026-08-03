@@ -1,0 +1,126 @@
+@media (max-width: 1380px) {
+  body.omnidata-v5 .shell {
+    grid-template-columns: 218px minmax(0, 1fr);
+  }
+
+  body.omnidata-v5 .od-master-detail {
+    grid-template-columns: minmax(0, 1fr) minmax(390px, 420px);
+  }
+
+  body.omnidata-v5 .topbar {
+    grid-template-columns: minmax(250px, .7fr) minmax(300px, 1fr) auto;
+  }
+}
+
+@media (max-width: 1120px) {
+  body.omnidata-v5 .topbar-organisation {
+    display: none;
+  }
+
+  body.omnidata-v5 .od-v5-command-title {
+    display: none;
+  }
+
+  body.omnidata-v5 .od-master-detail {
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 390px);
+  }
+}
+
+@media (max-width: 980px) {
+  body.omnidata-v5 .shell {
+    grid-template-columns: 68px minmax(0, 1fr);
+  }
+
+  body.omnidata-v5 .brand-copy,
+  body.omnidata-v5 .nav-group-label,
+  body.omnidata-v5 .nav-label,
+  body.omnidata-v5 .nav-plan-dot,
+  body.omnidata-v5 .od-v5-sidebar-search,
+  body.omnidata-v5 .button-label {
+    display: none;
+  }
+
+  body.omnidata-v5 .brand {
+    justify-content: center;
+    margin-inline: 0;
+  }
+
+  body.omnidata-v5 .nav-item {
+    justify-content: center;
+    padding: 0;
+  }
+
+  body.omnidata-v5 .topbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding-inline: 14px;
+  }
+
+  body.omnidata-v5 .global-search {
+    display: none;
+  }
+
+  body.omnidata-v5 .od-v5-page-context {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  body.omnidata-v5 .od-v5-context-side {
+    justify-content: flex-start;
+  }
+
+  body.omnidata-v5 .od-master-detail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.omnidata-v5 .od-inspector {
+    position: static;
+    max-height: none;
+  }
+}
+
+@media (max-width: 720px) {
+  body.omnidata-v5 .workspace-content {
+    padding-inline: 12px;
+  }
+
+  body.omnidata-v5 .od-v5-page-context,
+  body.omnidata-v5 .od-tabs {
+    margin-inline: -12px;
+    padding-inline: 14px;
+  }
+
+  body.omnidata-v5 .od-v5-context-copy h2 {
+    font-size: 18px;
+  }
+
+  body.omnidata-v5 .od-tabs {
+    gap: 22px;
+    overflow-x: auto;
+  }
+
+  body.omnidata-v5 .od-status-card {
+    min-width: 142px;
+  }
+
+  body.omnidata-v5 .od-commandbar {
+    flex-wrap: wrap;
+  }
+
+  body.omnidata-v5 .od-search {
+    width: 100%;
+    min-width: 100%;
+  }
+
+  body.omnidata-v5 .od-commandbar-spacer {
+    display: none;
+  }
+
+  body.omnidata-v5 .od-definition-grid {
+    grid-template-columns: 1fr;
+  }
+
+  body.omnidata-v5 .od-preview-gallery {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

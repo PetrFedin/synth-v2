@@ -6,21 +6,25 @@ async function source(path) {
   return readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 }
 
-test('the high-fidelity layer loads after the structural Omnidata workspace and before startup', async () => {
+test('the consolidated V7 layer replaces the legacy fidelity stylesheet while preserving its behavior', async () => {
   const html = await source('public/index.html');
   const baseCss = html.indexOf('/omnidata.css');
-  const fidelityCss = html.indexOf('/omnidata-fidelity.css');
+  const v7Css = html.indexOf('/omnidata-v7.css');
   const workspace = html.indexOf('/ui/omnidata-workspace.js');
   const polish = html.indexOf('/ui/omnidata-polish.js');
   const fidelity = html.indexOf('/ui/omnidata-fidelity.js');
+  const v7 = html.indexOf('/ui/omnidata-v7.js');
+  const audit = html.indexOf('/ui/omnidata-v7-language-audit.js');
   const start = html.indexOf('/ui/app-start.js');
 
-  assert.ok(baseCss >= 0 && baseCss < fidelityCss);
+  assert.ok(baseCss >= 0 && baseCss < v7Css);
+  assert.doesNotMatch(html, /<link[^>]+omnidata-fidelity\.css/);
   assert.ok(workspace >= 0 && workspace < polish);
-  assert.ok(polish < fidelity && fidelity < start);
+  assert.ok(polish < fidelity && fidelity < v7);
+  assert.ok(v7 < audit && audit < start);
 });
 
-test('the fidelity stylesheet matches the approved Omnidata geometry and density', async () => {
+test('the retired fidelity stylesheet remains a compatible reference asset', async () => {
   const css = await source('public/omnidata-fidelity.css');
 
   for (const selector of [
@@ -72,7 +76,7 @@ test('the fidelity behavior creates dense registry and inspector controls withou
   assert.doesNotMatch(js, /(?:\u00d0|\u00d1)[\u0080-\u00ff]/u);
 });
 
-test('the standalone server exposes both fidelity assets', async () => {
+test('the standalone server exposes both fidelity compatibility assets', async () => {
   const handler = await source('src/web/static-handler.mjs');
   assert.match(handler, /'\/omnidata-fidelity\.css':\s*\['omnidata-fidelity\.css'/);
   assert.match(handler, /'\/ui\/omnidata-fidelity\.js':\s*\['modules\/omnidata-fidelity\.js'/);

@@ -2,14 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createWholesaleFetchHandler } from '../src/http/fetch-api.mjs';
 import { createWholesaleHttpHandler } from '../src/http/api.mjs';
-import { matchRoute, validateRouteInput } from '../src/http/routes.mjs';
+import { queryParameters } from '../src/http/transport-contract.mjs';
 
 function runtimeFixture() {
   let calls = 0;
   return {
     get calls() { return calls; },
     runtime: {
-      authenticate: async () => ({ id: 'user-1' }),
+      authenticate: async () => ({ actorId: 'user-1' }),
       auth: {},
       readiness: {},
       platform: {},
@@ -51,16 +51,11 @@ async function invokeNode(handler, url) {
   };
 }
 
-test('route validation rejects repeated known query parameters', () => {
-  const match = matchRoute('GET', '/v2/notifications/page');
-  assert.ok(match);
+test('transport query parsing rejects repeated known query parameters', () => {
   assert.throws(
-    () => validateRouteInput(match.route, {
-      url: new URL('https://syntha.test/v2/notifications/page?limit=10&limit=20'),
-    }),
-    (error) => error.code === 'REQUEST_QUERY_FIELD_DUPLICATE'
-      && error.details.field === 'limit'
-      && error.details.count === 2,
+    () => queryParameters(new URL('https://syntha.test/v2/notifications/page?limit=10&limit=20')),
+    (error) => error.code === 'HTTP_QUERY_DUPLICATE'
+      && error.details.parameter === 'limit',
   );
 });
 
@@ -82,8 +77,8 @@ test('Node and Fetch transports reject duplicate query parameters before service
 
   assert.equal(nodeResponse.status, 400);
   assert.equal(fetchResponse.status, 400);
-  assert.equal(nodeResponse.body.error.code, 'REQUEST_QUERY_FIELD_DUPLICATE');
-  assert.equal(fetchBody.error.code, 'REQUEST_QUERY_FIELD_DUPLICATE');
+  assert.equal(nodeResponse.body.error.code, 'HTTP_QUERY_DUPLICATE');
+  assert.equal(fetchBody.error.code, 'HTTP_QUERY_DUPLICATE');
   assert.equal(nodeFixture.calls, 0);
   assert.equal(fetchFixture.calls, 0);
 });

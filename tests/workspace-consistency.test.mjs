@@ -65,7 +65,7 @@ test('workspace reader uses one repeatable read-only transaction', async () => {
     async connect() { connects += 1; return client; },
     async query() { throw new Error('workspace must not use pool.query'); },
   };
-  const workspace = await createPostgresWorkspaceReader({ pool }).readForActor('user-1');
+  const workspace = await createPostgresWorkspaceReader({ pool }).readForActor('user-1', { limit: 200 });
   assert.equal(connects, 1);
   assert.equal(queries[0].sql, 'BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
   assert.equal(queries.at(-2).sql, 'COMMIT');
@@ -84,7 +84,7 @@ test('workspace reader returns the complete empty shape for actors without membe
   };
   const workspace = await createPostgresWorkspaceReader({
     pool: { async connect() { return client; } },
-  }).readForActor('user-without-membership');
+  }).readForActor('user-without-membership', { limit: 200 });
 
   assert.deepEqual(workspace, {
     memberships: [],
@@ -100,10 +100,14 @@ test('workspace reader returns the complete empty shape for actors without membe
     orders: [],
     deals: [],
     calendar: [],
+    pageInfo: { truncatedSections: [] },
   });
-  assert.equal(queries.filter((item) => /^SELECT/.test(item.sql)).length, 1);
-  assert.match(queries[1].sql, /FROM memberships/);
-  assert.deepEqual(queries[1].params, ['user-without-membership', 'active']);
+  const selects = queries.filter((item) => /^SELECT/.test(item.sql));
+  assert.equal(selects.length, 2);
+  assert.match(selects[0].sql, /FROM memberships/);
+  assert.deepEqual(selects[0].params, ['user-without-membership', 'active']);
+  assert.match(selects[1].sql, /FROM memberships/);
+  assert.deepEqual(selects[1].params, ['user-without-membership', 'active', 201]);
   assert.equal(queries.at(-2).sql, 'COMMIT');
   assert.equal(queries.at(-1).sql, 'RELEASE');
 });
@@ -121,7 +125,7 @@ test('workspace reader rolls back and releases its connection after a query fail
   };
   const pool = { async connect() { return client; } };
   await assert.rejects(
-    () => createPostgresWorkspaceReader({ pool }).readForActor('user-1'),
+    () => createPostgresWorkspaceReader({ pool }).readForActor('user-1', { limit: 200 }),
     (error) => error === failure,
   );
   assert.deepEqual(queries.slice(-2), ['ROLLBACK', 'RELEASE']);

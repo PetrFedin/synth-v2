@@ -95,14 +95,17 @@ export function createNotificationService({
           .sort(compareNotificationPageOrder)
           .filter((notification) => isAfterPosition(notification, after));
         const rows = ordered.slice(0, normalizedLimit + 1);
+        const items = Object.freeze(rows.slice(0, normalizedLimit));
+        const hasMore = rows.length > normalizedLimit;
         page = Object.freeze({
-          items: Object.freeze(rows.slice(0, normalizedLimit)),
-          hasMore: rows.length > normalizedLimit,
+          items,
+          hasMore,
+          ...(hasMore ? { nextPosition: notificationPagePosition(items.at(-1)) } : {}),
         });
       }
 
       const nextCursor = page.hasMore && page.items.length
-        ? encodeNotificationCursor(page.items.at(-1))
+        ? encodeNotificationCursor(page.nextPosition ?? notificationPagePosition(page.items.at(-1)))
         : null;
       return Object.freeze({ items: page.items, nextCursor });
     },
@@ -290,6 +293,16 @@ function notificationCandidates(source, event) {
     }));
   }
   return [];
+}
+
+function notificationPagePosition(notification) {
+  invariant(
+    notification && typeof notification.createdAt === 'string' && Number.isFinite(Date.parse(notification.createdAt))
+      && typeof notification.id === 'string' && notification.id.length >= 1 && notification.id.length <= 160,
+    'NOTIFICATION_PAGE_RESULT_INVALID',
+    'Notification page position is invalid',
+  );
+  return Object.freeze({ createdAt: new Date(notification.createdAt).toISOString(), id: notification.id });
 }
 
 function notificationListLimit(value) {

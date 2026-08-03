@@ -77,10 +77,10 @@ test('router preserves the adapter contract used by Node and Fetch transports', 
   assert.equal(calls[1][0], 'createCampaign');
 });
 
-test('router retains strict request contracts and safe decoded parameters', () => {
+test('router retains strict request contracts and safe decoded parameters', async () => {
   const routes = createWholesaleRoutes(services());
   const page = matchWholesaleRoute(routes, 'GET', '/v2/notifications/page');
-  assert.throws(
+  await assert.rejects(
     () => page.execute({ actorId: 'actor-1', query: { debug: '1' }, body: {}, params: page.params }),
     (error) => error.code === 'HTTP_QUERY_FIELD_UNKNOWN',
   );

@@ -18,10 +18,18 @@ const ORDER_BODY = bodyContract(['selectionId', 'terms'], {
 });
 const ORDER_ACCEPT_BODY = bodyContract(['orderId', 'organisationId']);
 const ORDER_CANCEL_BODY = bodyContract(['orderId', 'reason']);
+const COLLABORATION_THREAD_BODY = bodyContract(['ownerOrganisationId', 'subjectType', 'subjectId', 'title']);
+const COLLABORATION_MESSAGE_BODY = bodyContract(['body']);
+const CALENDAR_EVENT_BODY = bodyContract([
+  'ownerOrganisationId', 'subjectType', 'subjectId', 'eventType', 'visibility', 'title', 'description',
+  'startsAt', 'endsAt', 'allDay', 'location', 'participantOrganisationIds', 'reminders',
+]);
+const CALENDAR_STATUS_BODY = bodyContract(['status']);
 
-export function createWholesaleRoutes({ platform, catalog, partners, collaboration, orders, notifications, workspace }) {
+export function createWholesaleRoutes({ platform, catalog, partners, collaboration, collaborationCalendar, orders, notifications, workspace }) {
   invariant(platform && partners && collaboration && orders && notifications && workspace, 'HTTP_SERVICES_REQUIRED', 'All V2 application services are required');
   const catalogService = catalog ?? unavailableCatalog();
+  const collaborationCalendarService = collaborationCalendar ?? unavailableCollaborationCalendar();
   return [
     mutate('POST', /^\/v2\/campaigns$/, CAMPAIGN_BODY, ({ commandId, actorId, body }) => platform.createCampaign(commandId, actorId, body)),
     mutate('POST', /^\/v2\/campaigns\/([^/]+)\/open$/, EMPTY_BODY, ({ commandId, actorId, params }) => platform.openCampaign(commandId, actorId, params[0])),
@@ -66,6 +74,11 @@ export function createWholesaleRoutes({ platform, catalog, partners, collaborati
       sameId(body.orderId, params[0], 'orderId');
       return orders.cancelOrder(commandId, actorId, { orderId: params[0], reason: body.reason });
     }),
+    mutate('POST', /^\/v2\/collaboration\/threads$/, COLLABORATION_THREAD_BODY, ({ commandId, actorId, body }) => collaborationCalendarService.createThread(commandId, actorId, body)),
+    mutate('POST', /^\/v2\/collaboration\/threads\/([^/]+)\/messages$/, COLLABORATION_MESSAGE_BODY, ({ commandId, actorId, params, body }) => collaborationCalendarService.postMessage(commandId, actorId, params[0], body)),
+    mutate('POST', /^\/v2\/collaboration\/threads\/([^/]+)\/archive$/, EMPTY_BODY, ({ commandId, actorId, params }) => collaborationCalendarService.archiveThread(commandId, actorId, params[0])),
+    mutate('POST', /^\/v2\/calendar\/events$/, CALENDAR_EVENT_BODY, ({ commandId, actorId, body }) => collaborationCalendarService.createEvent(commandId, actorId, body)),
+    mutate('POST', /^\/v2\/calendar\/events\/([^/]+)\/status$/, CALENDAR_STATUS_BODY, ({ commandId, actorId, params, body }) => collaborationCalendarService.updateEventStatus(commandId, actorId, params[0], body.status)),
     read('GET', /^\/v2\/workspace\/([^/]+)\/page$/, ['limit', 'cursor'], ({ actorId, params, query }) => workspace.pageForActor(actorId, {
       section: params[0],
       limit: query.limit,
@@ -118,4 +131,8 @@ function sameId(bodyValue, routeValue, field) {
 function unavailableCatalog() {
   const fail = () => invariant(false, 'CATALOG_SERVICE_REQUIRED', 'Catalog service is required');
   return Object.freeze({ createSku: fail, publishSku: fail });
+}
+function unavailableCollaborationCalendar() {
+  const fail = () => invariant(false, 'COLLABORATION_CALENDAR_SERVICE_REQUIRED', 'Collaboration and calendar service is required');
+  return Object.freeze({ createThread: fail, postMessage: fail, archiveThread: fail, createEvent: fail, updateEventStatus: fail });
 }

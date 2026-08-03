@@ -46,7 +46,7 @@ test('server registers notification health before listen but starts work only af
   const startIndex = source.indexOf('notificationWorker.start()');
   assert.ok(workerIndex >= 0 && healthIndex > workerIndex && listenIndex > healthIndex && startIndex > listenIndex);
   assert.match(source, /projectPending\(\{ limit: settings\.notificationProjectionBatchSize \}\)/);
-  assert.match(source, /stoppers: notificationWorker \? \[\(\) => notificationWorker\.stop\(\)\] : \[\]/);
+  assert.match(source, /stoppers:\s*\[notificationWorker, outboxWorker\]\.filter\(Boolean\)\.map\(\(worker\) => \(\) => worker\.stop\(\)\)/);
   assert.match(source, /SYNTHA_NOTIFICATION_PROJECTION_INTERVAL_MS/);
   assert.match(source, /SYNTHA_NOTIFICATION_PROJECTION_BATCH_SIZE/);
   assert.match(source, /SYNTHA_NOTIFICATION_PROJECTION_LEASE_MS/);

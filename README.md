@@ -10,7 +10,7 @@ The legacy `PetrFedin/syntha` repository remains unchanged; this repository is t
 
 `Campaign → Collection → Showroom → Selection → Order Builder → Order → Confirmation → DealSpace`
 
-The current system includes PostgreSQL-owned authentication, organisation RBAC, partner access, digital showrooms, server-authoritative catalog pricing, MOQ and ATS controls, atomic inventory reservations, bilateral confirmation, order cancellation with inventory release, DealSpace, calendar milestones, notifications, OpenAPI and a standalone web workspace.
+The current system includes PostgreSQL-owned authentication, organisation RBAC, partner access, digital showrooms, server-authoritative catalog pricing, MOQ and ATS controls, atomic inventory reservations, bilateral confirmation, order cancellation with inventory release, DealSpace, shared collaboration threads, operational calendar events and reminders, system milestones, notifications, OpenAPI and a standalone web workspace.
 
 ## Interface languages
 
@@ -31,6 +31,30 @@ docker compose up -d
 npm run bootstrap:owner
 npm run dev
 ```
+
+When PostgreSQL runs through Homebrew instead of Docker, point `SYNTHA_V2_DATABASE_URL` in `.env` to its actual local port before starting the application.
+
+## Connected demo workspace
+
+After the owner is created, populate the existing interface with a repeatable connected scenario:
+
+```bash
+npm run demo:seed
+npm run dev
+```
+
+The seed uses the real application services and creates:
+
+- brand owner, sales manager and buyer accounts;
+- active, pending, rejected and revoked partner relationships;
+- open and draft campaigns, collections, SKU catalog, MOQ and ATS cases;
+- open and draft digital showrooms plus accepted and pending invitations;
+- draft Selection, cancelled order and completed DealSpace scenarios;
+- operational calendar events with scheduled, in-progress, completed and cancelled statuses;
+- linked collaboration threads, messages and an archived discussion;
+- projected notifications and existing system milestones.
+
+The command is idempotent and can be run again without duplicating the scenario. The bootstrap owner keeps the password configured in `SYNTHA_BOOTSTRAP_PASSWORD`; optional demo accounts use `SYNTHA_DEMO_PASSWORD`.
 
 Run `npm run verify` before publishing changes.
 

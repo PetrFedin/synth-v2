@@ -76,9 +76,10 @@ export function apiResponseHeaders(requestId, extra = {}) {
 
 export function queryParameters(url) {
   const result = {};
-  for (const [key, value] of url.searchParams.entries()) {
-    invariant(result[key] === undefined, 'HTTP_QUERY_DUPLICATE', 'Query parameter must not be repeated', { parameter: key });
-    result[key] = value;
+  for (const key of new Set(url.searchParams.keys())) {
+    const values = url.searchParams.getAll(key);
+    invariant(values.length === 1, 'REQUEST_QUERY_FIELD_DUPLICATE', 'Query field must not be repeated', { field: key, count: values.length });
+    result[key] = values[0];
   }
   return Object.freeze(result);
 }

@@ -13,7 +13,9 @@ const requiredTables = [
   'commands', 'command_registry', 'outbox_events', 'notifications', 'notification_projections', 'notification_commands',
   'notification_projection_claims', 'outbox_publication_claims', 'outbox_dead_letters', 'outbox_dead_letter_audit',
   'auth_users', 'auth_sessions', 'auth_login_throttles', 'auth_login_audit',
-  'catalog_skus', 'materials', 'boms', 'bom_lines', 'catalog_commands', 'catalog_outbox_events', 'order_inventory_reservations',
+  'catalog_skus', 'materials', 'boms', 'bom_lines',
+  'measurement_charts', 'measurement_chart_sizes', 'measurement_points', 'measurement_values',
+  'catalog_commands', 'catalog_outbox_events', 'order_inventory_reservations',
 ];
 const requiredFragments = [
   'UNIQUE (brand_id, shop_id)', 'UNIQUE (showroom_id, shop_id)', 'cycle_id text NOT NULL UNIQUE',
@@ -41,6 +43,12 @@ const requiredFragments = [
   'unit_cost_snapshot numeric(20, 4) NOT NULL CHECK (unit_cost_snapshot > 0)',
   'waste_percent numeric(20, 4) NOT NULL CHECK (waste_percent >= 0 AND waste_percent <= 1000)',
   'PRIMARY KEY (bom_id, line_id)', 'UNIQUE (bom_id, position)', 'boms_brand_status_sku_idx', 'bom_lines_material_code_idx',
+  'sku_version integer NOT NULL CHECK (sku_version > 0)', "unit text NOT NULL CHECK (unit IN ('cm', 'in'))",
+  'measurement_charts_publication_state_check', 'measurement_charts_time_order_check',
+  'PRIMARY KEY (chart_id, size_code)', 'UNIQUE (chart_id, position)',
+  'PRIMARY KEY (chart_id, point_code)', 'PRIMARY KEY (chart_id, point_code, size_code)',
+  'FOREIGN KEY (chart_id, point_code)', 'FOREIGN KEY (chart_id, size_code)',
+  'measurement_charts_brand_status_sku_idx', 'measurement_values_size_idx',
   'INSERT INTO outbox_events (id, event_type, aggregate_id, status, event, published_at)', 'FROM catalog_outbox_events',
   'mirror_catalog_outbox_to_unified', 'catalog_outbox_unified_mirror', 'Catalog outbox event conflicts with unified outbox event',
   '-- syntha:migration-mode=online', 'workspace_page_memberships_idx', 'workspace_page_organisations_idx',

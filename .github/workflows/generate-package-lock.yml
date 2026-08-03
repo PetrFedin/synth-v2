@@ -46,10 +46,16 @@ jobs:
       - name: Run full repository verification
         run: npm run verify
 
-      - name: Upload generated lockfile
+      - name: Upload generated lockfile and verification diagnostics
+        if: always()
         uses: actions/upload-artifact@615b319bd27bb32c3d64dca6b6ed6974d5fbe653 # v6.0.0
         with:
           name: syntha-package-lock
-          path: package-lock.json
+          path: |
+            package-lock.json
+            package.json
+            tests/
+            src/http/routes.mjs
+            src/server.mjs
           if-no-files-found: error
           retention-days: 1

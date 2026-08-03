@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { createStandaloneHandler } from '../src/web/static-handler.mjs';
 
 const publicDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
+const build = 'visual-20260803-4';
 
 async function withServer(handler, work) {
   const server = createServer(handler);
@@ -20,7 +21,7 @@ async function withServer(handler, work) {
   }
 }
 
-test('standalone workspace serves the complete Omnidata v3 visual stack and screen module', async () => {
+test('standalone workspace serves the complete Syntha Omnidata V4 visual stack', async () => {
   const handler = createStandaloneHandler({
     publicDir,
     apiHandler: (_request, response) => {
@@ -33,15 +34,18 @@ test('standalone workspace serves the complete Omnidata v3 visual stack and scre
     const htmlResponse = await fetch(`${base}/`);
     assert.equal(htmlResponse.status, 200);
     const html = await htmlResponse.text();
-    assert.match(html, /\/omnidata\.css\?v=visual-20260803-3/);
-    assert.match(html, /\/omnidata-fidelity\.css\?v=visual-20260803-3/);
-    assert.match(html, /\/omnidata-v3\.css\?v=visual-20260803-3/);
-    assert.match(html, /\/ui\/omnidata-workspace\.js\?v=visual-20260803-3/);
+    assert.match(html, new RegExp(`\\/omnidata\\.css\\?v=${build}`));
+    assert.match(html, new RegExp(`\\/omnidata-fidelity\\.css\\?v=${build}`));
+    assert.match(html, new RegExp(`\\/omnidata-v3\\.css\\?v=${build}`));
+    assert.match(html, new RegExp(`\\/omnidata-v4\\.css\\?v=${build}`));
+    assert.match(html, new RegExp(`\\/ui\\/omnidata-workspace\\.js\\?v=${build}`));
+    assert.match(html, new RegExp(`\\/ui\\/omnidata-v4\\.js\\?v=${build}`));
 
     for (const [asset, contract] of [
       ['/omnidata.css', /\.od-master-detail/],
       ['/omnidata-fidelity.css', /\.od-status-strip/],
       ['/omnidata-v3.css', /--accent:\s*#e95b2a/],
+      ['/omnidata-v4.css', /--accent:\s*#5d39cf/],
     ]) {
       const cssResponse = await fetch(`${base}${asset}`);
       assert.equal(cssResponse.status, 200, asset);
@@ -50,9 +54,15 @@ test('standalone workspace serves the complete Omnidata v3 visual stack and scre
       assert.match(await cssResponse.text(), contract, asset);
     }
 
-    const moduleResponse = await fetch(`${base}/ui/omnidata-workspace.js`);
-    assert.equal(moduleResponse.status, 200);
-    assert.match(moduleResponse.headers.get('content-type'), /text\/javascript/);
-    assert.match(await moduleResponse.text(), /function renderCatalog\(/);
+    for (const [asset, contract] of [
+      ['/ui/omnidata-workspace.js', /function renderCatalog\(/],
+      ['/ui/omnidata-v4.js', /function odV4Navigation\(/],
+    ]) {
+      const moduleResponse = await fetch(`${base}${asset}`);
+      assert.equal(moduleResponse.status, 200, asset);
+      assert.match(moduleResponse.headers.get('content-type'), /text\/javascript/, asset);
+      assert.equal(moduleResponse.headers.get('cache-control'), 'no-store', asset);
+      assert.match(await moduleResponse.text(), contract, asset);
+    }
   });
 });

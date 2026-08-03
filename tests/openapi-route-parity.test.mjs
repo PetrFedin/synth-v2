@@ -20,6 +20,7 @@ const contracts = [
   ['POST', '/v2/collections/collection-1/publish', '/collections/{collectionId}/publish'],
   ['GET', '/v2/catalog/skus', '/catalog/skus'],
   ['GET', '/v2/catalog/skus/SKU-1', '/catalog/skus/{sku}'],
+  ['PATCH', '/v2/catalog/skus/SKU-1', '/catalog/skus/{sku}'],
   ['POST', '/v2/catalog/skus', '/catalog/skus'],
   ['POST', '/v2/catalog/skus/SKU-1/publish', '/catalog/skus/{sku}/publish'],
   ['POST', '/v2/showrooms', '/showrooms'],
@@ -110,4 +111,21 @@ test('cursor page responses reference bounded typed page schemas', () => {
   assert.equal(workspacePage.additionalProperties, false);
   assert.equal(workspacePage.properties.items.maxItems, 200);
   assert.equal(workspacePage.properties.nextCursor.oneOf[0].maxLength, 2048);
+});
+
+test('catalog edit and publish contracts require optimistic concurrency versions', () => {
+  const update = wholesaleV2OpenApi.components.schemas.CatalogSkuUpdate;
+  assert.deepEqual(update.required, ['expectedVersion', 'name', 'wholesalePrice', 'minimumOrderQuantity', 'availableQuantity']);
+  assert.equal(update.additionalProperties, false);
+  const updateOperation = wholesaleV2OpenApi.paths['/catalog/skus/{sku}'].patch;
+  assert.equal(updateOperation.requestBody.required, true);
+  assert.equal(updateOperation.requestBody.content['application/json'].schema.$ref, '#/components/schemas/CatalogSkuUpdate');
+  assert.ok(updateOperation.responses[409]);
+
+  const publication = wholesaleV2OpenApi.components.schemas.CatalogSkuVersionExpectation;
+  assert.deepEqual(publication.required, ['expectedVersion']);
+  assert.equal(publication.additionalProperties, false);
+  const publishOperation = wholesaleV2OpenApi.paths['/catalog/skus/{sku}/publish'].post;
+  assert.equal(publishOperation.requestBody.content['application/json'].schema.$ref, '#/components/schemas/CatalogSkuVersionExpectation');
+  assert.ok(publishOperation.responses[409]);
 });

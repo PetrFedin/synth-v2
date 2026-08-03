@@ -6,6 +6,8 @@ const EMPTY_BODY = bodyContract();
 const CAMPAIGN_BODY = bodyContract(['brandId', 'name', 'season', 'startsAt', 'endsAt']);
 const COLLECTION_BODY = bodyContract(['campaignId', 'brandId', 'name', 'currency']);
 const CATALOG_SKU_BODY = bodyContract(['sku', 'collectionId', 'brandId', 'name', 'wholesalePrice', 'currency', 'minimumOrderQuantity', 'availableQuantity']);
+const CATALOG_SKU_UPDATE_BODY = bodyContract(['expectedVersion', 'name', 'wholesalePrice', 'minimumOrderQuantity', 'availableQuantity']);
+const CATALOG_SKU_PUBLISH_BODY = bodyContract(['expectedVersion']);
 const SHOWROOM_BODY = bodyContract(['collectionId', 'brandId', 'name', 'opensAt', 'closesAt']);
 const RELATIONSHIP_BODY = bodyContract(['brandId', 'shopId']);
 const INVITATION_BODY = bodyContract(['showroomId', 'shopId', 'expiresAt']);
@@ -30,7 +32,8 @@ export function createWholesaleRoutes({ platform, catalog, partners, collaborati
     read('GET', /^\/v2\/catalog\/skus$/, ['limit', 'cursor', 'q', 'status', 'brandId', 'collectionId'], ({ actorId, query }) => catalogService.pageForActor(actorId, query)),
     read('GET', /^\/v2\/catalog\/skus\/([^/]+)$/, [], ({ actorId, params }) => catalogService.getForActor(actorId, params[0])),
     mutate('POST', /^\/v2\/catalog\/skus$/, CATALOG_SKU_BODY, ({ commandId, actorId, body }) => catalogService.createSku(commandId, actorId, body)),
-    mutate('POST', /^\/v2\/catalog\/skus\/([^/]+)\/publish$/, EMPTY_BODY, ({ commandId, actorId, params }) => catalogService.publishSku(commandId, actorId, params[0])),
+    mutate('PATCH', /^\/v2\/catalog\/skus\/([^/]+)$/, CATALOG_SKU_UPDATE_BODY, ({ commandId, actorId, params, body }) => catalogService.updateSku(commandId, actorId, params[0], body)),
+    mutate('POST', /^\/v2\/catalog\/skus\/([^/]+)\/publish$/, CATALOG_SKU_PUBLISH_BODY, ({ commandId, actorId, params, body }) => catalogService.publishSku(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/showrooms$/, SHOWROOM_BODY, ({ commandId, actorId, body }) => collaboration.createShowroom(commandId, actorId, body)),
     mutate('POST', /^\/v2\/showrooms\/([^/]+)\/open$/, EMPTY_BODY, ({ commandId, actorId, params }) => collaboration.openShowroom(commandId, actorId, params[0])),
     mutate('POST', /^\/v2\/relationships$/, RELATIONSHIP_BODY, ({ commandId, actorId, body }) => partners.requestRelationship(commandId, actorId, body)),
@@ -119,5 +122,5 @@ function sameId(bodyValue, routeValue, field) {
 }
 function unavailableCatalog() {
   const fail = () => invariant(false, 'CATALOG_SERVICE_REQUIRED', 'Catalog service is required');
-  return Object.freeze({ createSku: fail, publishSku: fail, pageForActor: fail, getForActor: fail });
+  return Object.freeze({ createSku: fail, updateSku: fail, publishSku: fail, pageForActor: fail, getForActor: fail });
 }

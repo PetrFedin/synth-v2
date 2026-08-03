@@ -54,7 +54,7 @@ test('Selection accepts only a published catalog SKU and derives price, currency
     () => context.collaboration.upsertSelectionLine('line-draft', 'buyer-1', context.selection.id, { sku: 'SKU-1', quantity: 3 }),
     (error) => error.code === 'CATALOG_SKU_NOT_PUBLISHED',
   );
-  await context.catalog.publishSku('sku-publish', 'sales-1', 'SKU-1');
+  await context.catalog.publishSku('sku-publish', 'sales-1', 'SKU-1', { expectedVersion: 1 });
   assert.throws(
     () => context.collaboration.upsertSelectionLine('line-client-price', 'buyer-1', context.selection.id, { sku: 'SKU-1', quantity: 3, unitPrice: 1 }),
     (error) => error.code === 'SELECTION_CLIENT_PRICE_FORBIDDEN',

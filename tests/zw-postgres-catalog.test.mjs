@@ -9,12 +9,12 @@ import { createCatalogService } from '../src/application/catalog-service.mjs';
 import { createPostgresWholesaleStore } from '../src/infrastructure/postgres-store.mjs';
 import { createPostgresCatalogStore } from '../src/infrastructure/postgres-catalog-store.mjs';
 import { migratePostgres } from '../src/infrastructure/postgres-migrator.mjs';
+import { createPostgresTestPool } from './postgres-test-pool.mjs';
 
 const databaseUrl = process.env.POSTGRES_TEST_URL;
 
 test('PostgreSQL catalog persists immutable published SKU snapshots and availability', { skip: !databaseUrl }, async () => {
-  const { Pool } = await import('pg');
-  const pool = new Pool({ connectionString: databaseUrl, max: 3 });
+  const pool = createPostgresTestPool({ connectionString: databaseUrl, max: 3 });
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
   const migrationsDir = path.join(root, 'db', 'migrations');
   let id = 0;
@@ -41,7 +41,7 @@ test('PostgreSQL catalog persists immutable published SKU snapshots and availabi
     });
     assert.equal(draft.status, 'draft');
     assert.equal(draft.availableToSell, 30);
-    const published = await catalog.publishSku('catalog-publish', 'sales-pg', draft.sku);
+    const published = await catalog.publishSku('catalog-publish', 'sales-pg', draft.sku, { expectedVersion: draft.version });
     assert.equal(published.status, 'published');
     assert.equal(published.version, 2);
     assert.equal((await catalog.getPublishedSku(draft.sku)).wholesalePrice, 125.5);
@@ -65,7 +65,7 @@ test('PostgreSQL catalog persists immutable published SKU snapshots and availabi
     assert.equal((await pool.query('SELECT count(*)::int AS count FROM catalog_commands')).rows[0].count, 2);
     assert.deepEqual((await pool.query('SELECT event_type FROM catalog_outbox_events ORDER BY id')).rows.map((row) => row.event_type).sort(), ['catalog-sku.created', 'catalog-sku.published']);
 
-    const replay = await catalog.publishSku('catalog-publish', 'sales-pg', draft.sku);
+    const replay = await catalog.publishSku('catalog-publish', 'sales-pg', draft.sku, { expectedVersion: draft.version });
     assert.deepEqual(replay, published);
   } finally { await pool.end(); }
 });

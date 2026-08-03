@@ -66,7 +66,7 @@ test('PostgreSQL catalog read model enforces draft ownership, published counterp
       sku: 'READER-PUBLISHED', collectionId: collection.id, brandId: 'brand-reader', name: 'Summer Published Coat',
       wholesalePrice: 120, currency: 'EUR', minimumOrderQuantity: 2, availableQuantity: 20,
     });
-    await commands.publishSku('catalog-reader-publish', 'sales-reader', 'READER-PUBLISHED');
+    await commands.publishSku('catalog-reader-publish', 'sales-reader', 'READER-PUBLISHED', { expectedVersion: 1 });
 
     const ownerPage = await query.pageForActor('sales-reader', { q: 'Summer', brandId: 'brand-reader', limit: 1 });
     assert.deepEqual(ownerPage.items.map((item) => item.sku), ['READER-DRAFT']);

@@ -14,12 +14,12 @@ import { createPostgresWholesaleStore } from '../src/infrastructure/postgres-sto
 import { createPostgresCatalogStore } from '../src/infrastructure/postgres-catalog-store.mjs';
 import { createPostgresNotificationProjectionStore } from '../src/infrastructure/postgres-notification-projection-store.mjs';
 import { migratePostgres } from '../src/infrastructure/postgres-migrator.mjs';
+import { createPostgresTestPool } from './postgres-test-pool.mjs';
 
 const databaseUrl = process.env.POSTGRES_TEST_URL;
 
 test('PostgreSQL persists the complete wholesale route, atomic inventory reservation and notification projection', { skip: !databaseUrl }, async () => {
-  const { Pool } = await import('pg');
-  const pool = new Pool({ connectionString: databaseUrl, max: 4 });
+  const pool = createPostgresTestPool({ connectionString: databaseUrl, max: 4 });
   try {
     await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
     const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -60,7 +60,7 @@ test('PostgreSQL persists the complete wholesale route, atomic inventory reserva
       sku: 'SKU-PG', collectionId: collection.id, brandId: 'brand-pg', name: 'Postgres Coat',
       wholesalePrice: 125, currency: 'EUR', minimumOrderQuantity: 2, availableQuantity: 10,
     });
-    await catalog.publishSku('pg-catalog-publish', 'sales-pg', 'SKU-PG');
+    await catalog.publishSku('pg-catalog-publish', 'sales-pg', 'SKU-PG', { expectedVersion: 1 });
     const showroom = await collaboration.createShowroom('pg-showroom-create', 'sales-pg', {
       collectionId: collection.id, brandId: 'brand-pg', name: 'Paris',
       opensAt: '2027-01-05T00:00:00.000Z', closesAt: '2027-01-20T00:00:00.000Z',

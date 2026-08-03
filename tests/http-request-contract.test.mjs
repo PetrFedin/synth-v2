@@ -16,7 +16,7 @@ function options(calls = []) {
       publishCollection: service('publishCollection'), startCycle: service('startCycle'), advanceCycle: service('advanceCycle'),
       confirmAndOpenDeal: service('confirmAndOpenDeal'),
     },
-    catalog: { createSku: service('createSku'), publishSku: service('publishSku') },
+    catalog: { createSku: service('createSku'), updateSku: service('updateSku'), publishSku: service('publishSku') },
     partners: {
       requestRelationship: service('requestRelationship'), acceptRelationship: service('acceptRelationship'),
       rejectRelationship: service('rejectRelationship'), revokeRelationship: service('revokeRelationship'),

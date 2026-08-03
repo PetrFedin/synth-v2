@@ -46,6 +46,35 @@ export function createCatalogSku({
   });
 }
 
+export function updateDraftCatalogSku(catalogSku, collection, input, updatedAt) {
+  invariant(catalogSku?.status === 'draft', 'CATALOG_SKU_NOT_DRAFT', 'Only a draft SKU can be edited');
+  invariant(collection?.id === catalogSku.collectionId, 'CATALOG_COLLECTION_MISMATCH', 'SKU does not belong to collection');
+  invariant(collection.brandId === catalogSku.brandId, 'CATALOG_BRAND_MISMATCH', 'Catalog SKU brand must match collection brand');
+  invariant(collection.currency === catalogSku.currency, 'CATALOG_CURRENCY_MISMATCH', 'Catalog currency must match collection currency');
+  invariant(input && typeof input === 'object' && !Array.isArray(input), 'CATALOG_UPDATE_INVALID', 'Catalog SKU update is invalid');
+  invariant(typeof input.name === 'string' && input.name.trim().length > 1 && input.name.trim().length <= 160, 'CATALOG_NAME_REQUIRED', 'Catalog SKU name must contain 2 to 160 characters');
+  const wholesalePrice = normalizeMoney(input.wholesalePrice, {
+    invalidCode: 'CATALOG_PRICE_INVALID',
+    scaleCode: 'CATALOG_PRICE_SCALE_INVALID',
+    overflowCode: 'CATALOG_PRICE_TOO_LARGE',
+    label: 'Wholesale price',
+  });
+  const minimumOrderQuantity = assertPostgresInteger(input.minimumOrderQuantity, { code: 'CATALOG_MOQ_INVALID', label: 'Minimum order quantity', min: 1 });
+  const availableQuantity = assertPostgresInteger(input.availableQuantity, { code: 'CATALOG_AVAILABLE_QUANTITY_INVALID', label: 'Available quantity', min: 0 });
+  const next = {
+    ...catalogSku,
+    name: input.name.trim(),
+    wholesalePrice,
+    minimumOrderQuantity,
+    availableQuantity,
+  };
+  if (next.name === catalogSku.name
+    && next.wholesalePrice === catalogSku.wholesalePrice
+    && next.minimumOrderQuantity === catalogSku.minimumOrderQuantity
+    && next.availableQuantity === catalogSku.availableQuantity) return catalogSku;
+  return freezeAvailability({ ...next, version: catalogSku.version + 1, updatedAt });
+}
+
 export function publishCatalogSku(catalogSku, collection, publishedAt) {
   invariant(catalogSku.status === 'draft', 'CATALOG_SKU_NOT_DRAFT', 'Only a draft SKU can be published');
   invariant(collection.id === catalogSku.collectionId, 'CATALOG_COLLECTION_MISMATCH', 'SKU does not belong to collection');

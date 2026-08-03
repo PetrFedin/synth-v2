@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const publicDir = path.join(root, 'public');
 const index = await readFile(path.join(publicDir, 'index.html'), 'utf8');
+assertUnicodeSafe(index, path.join(publicDir, 'index.html'));
 const sourceUrls = [...index.matchAll(/<script defer src="([^"]+)"/g)].map(match => match[1]);
 const sources = sourceUrls.map(assetPathname);
 const expectedFoundation = [
@@ -30,7 +31,7 @@ for (const [index, source] of expectedFoundation.entries()) {
 
 const runtimePath = path.join(publicDir, 'modules', 'i18n-runtime.js');
 const runtimeSource = await readFile(runtimePath, 'utf8');
-assertAscii(runtimeSource, runtimePath);
+assertUnicodeSafe(runtimeSource, runtimePath);
 new vm.Script(runtimeSource, { filename: runtimePath });
 
 const runtimeHarness = createHarness('ru-RU');
@@ -58,7 +59,7 @@ const executionHarness = createHarness('en-GB');
 for (const source of sources.slice(0, -1)) {
   const modulePath = path.join(publicDir, 'modules', path.basename(source));
   const moduleSource = await readFile(modulePath, 'utf8');
-  assertAscii(moduleSource, modulePath);
+  assertUnicodeSafe(moduleSource, modulePath);
   vm.runInContext(moduleSource, executionHarness.context, { filename: modulePath });
 }
 
@@ -73,6 +74,7 @@ assert(executionHarness.window.SynthaUiCapabilities, 'UI capability matrix was n
 assert(executionHarness.window.SynthaUiValidation, 'UI validation runtime was not loaded.');
 assert(executionHarness.window.SynthaWorkspacePaging, 'Workspace pagination runtime was not loaded.');
 assert(executionHarness.window.SynthaNotificationPaging, 'Notification pagination runtime was not loaded.');
+assert(executionHarness.window.SynthaBomCore, 'BOM projection runtime was not loaded.');
 
 console.log(`Localization and UI runtime contract OK (${sources.length} scripts, ${diagnostics.messageCount} keyed messages, ${diagnostics.phraseCount} compatibility phrases).`);
 
@@ -171,9 +173,13 @@ function assert(condition, message) {
   }
 }
 
-function assertAscii(text, file) {
-  if ([...Buffer.from(text)].some(byte => byte > 127)) {
-    console.error(`Non-ASCII source detected: ${path.relative(root, file)}`);
+function assertUnicodeSafe(text, file) {
+  if (text.includes('\uFFFD')) {
+    console.error(`Invalid UTF-8 replacement character detected: ${path.relative(root, file)}`);
+    process.exit(1);
+  }
+  if (/(?:\u00d0|\u00d1)[\u0080-\u00ff]/u.test(text)) {
+    console.error(`Mojibake detected: ${path.relative(root, file)}`);
     process.exit(1);
   }
 }

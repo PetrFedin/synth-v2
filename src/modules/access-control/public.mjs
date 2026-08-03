@@ -5,6 +5,8 @@ export const CAPABILITIES = Object.freeze({
   CAMPAIGN_MANAGE: 'campaign.manage',
   COLLECTION_MANAGE: 'collection.manage',
   CATALOG_MANAGE: 'catalog.manage',
+  BOM_READ: 'bom.read',
+  BOM_MANAGE: 'bom.manage',
   SHOWROOM_MANAGE: 'showroom.manage',
   PARTNER_RELATIONSHIP_MANAGE: 'partner-relationship.manage',
   SHOWROOM_INVITATION_MANAGE: 'showroom-invitation.manage',
@@ -49,6 +51,7 @@ export const ROLE_CAPABILITIES = Object.freeze({
     CAPABILITIES.CALENDAR_READ,
   ]),
   finance: Object.freeze([
+    CAPABILITIES.BOM_READ,
     CAPABILITIES.ORDER_CONFIRM,
     CAPABILITIES.DEAL_READ,
     CAPABILITIES.CALENDAR_READ,
@@ -73,20 +76,12 @@ export function createMembership({ id, organisationId, organisationType, userId,
 }
 
 export function membershipKey(organisationId, userId) { return `${organisationId}:${userId}`; }
-
-export function capabilitiesForRole(role) {
-  return ROLE_CAPABILITIES[role] ?? Object.freeze([]);
-}
-
-export function roleHasCapability(role, capability) {
-  return capabilitiesForRole(role).includes(capability);
-}
-
+export function capabilitiesForRole(role) { return ROLE_CAPABILITIES[role] ?? Object.freeze([]); }
+export function roleHasCapability(role, capability) { return capabilitiesForRole(role).includes(capability); }
 export function assertCapability(membership, capability) {
   invariant(membership?.status === 'active', 'ACTIVE_MEMBERSHIP_REQUIRED', 'Active organisation membership is required', { capability });
   invariant(roleHasCapability(membership.role, capability), 'CAPABILITY_DENIED', 'Role does not grant required capability', { role: membership.role, capability, organisationId: membership.organisationId });
 }
-
 export function assertTradeCapability({ memberships, actorId, brandId, shopId, capability }) {
   const membership = memberships.find((candidate) => candidate.userId === actorId && candidate.status === 'active' && (candidate.organisationId === brandId || candidate.organisationId === shopId));
   invariant(membership, 'TRADE_MEMBERSHIP_REQUIRED', 'Actor must belong to one of the trade organisations', { actorId, brandId, shopId, capability });

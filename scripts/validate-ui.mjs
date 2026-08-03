@@ -2,6 +2,7 @@ import { access, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import vm from 'node:vm';
+import { TextDecoder } from 'node:util';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -9,8 +10,7 @@ const publicDir = path.join(root, 'public');
 const modulesDir = path.join(publicDir, 'modules');
 const indexPath = path.join(publicDir, 'index.html');
 const index = await readFile(indexPath);
-assertAscii(index, indexPath);
-const html = index.toString('ascii');
+const html = decodeUtf8(index, indexPath);
 
 assertDocumentContract(html);
 
@@ -43,6 +43,7 @@ assertRequiredOrder(sources, [
   '/ui/planning-core.js',
   '/ui/styles-core.js',
   '/ui/materials-core.js',
+  '/ui/bom-core.js',
   '/ui/omnidata-workspace.js',
   '/ui/omnidata-v4.js',
   '/ui/omnidata-v5.js',
@@ -50,6 +51,7 @@ assertRequiredOrder(sources, [
   '/ui/planning.js',
   '/ui/styles.js',
   '/ui/materials.js',
+  '/ui/bom.js',
   '/ui/app-start.js',
 ]);
 
@@ -60,8 +62,8 @@ for (const [, before, sourceUrl, after] of scriptTags) {
   if (!source.startsWith('/ui/')) fail(`Unexpected script path: ${sourceUrl}`);
   const file = path.join(modulesDir, path.basename(source));
   const bytes = await readFile(file);
-  assertAscii(bytes, file);
-  new vm.Script(bytes.toString('ascii'), { filename: file });
+  const sourceText = decodeUtf8(bytes, file);
+  new vm.Script(sourceText, { filename: file });
 }
 
 console.log(`Standalone UI contract OK (${sources.length} scripts, ${stylesheets.length} stylesheets checked).`);
@@ -102,7 +104,12 @@ async function assertFileExists(file, publicPath) {
   try { await access(file); }
   catch { fail(`Referenced public asset does not exist: ${publicPath}`); }
 }
-function assertAscii(buffer, file) {
-  if ([...buffer].some((byte) => byte > 127)) fail(`Non-ASCII source detected: ${path.relative(root, file)}`);
+function decodeUtf8(buffer, file) {
+  let text;
+  try { text = new TextDecoder('utf-8', { fatal: true }).decode(buffer); }
+  catch { fail(`Invalid UTF-8 source detected: ${path.relative(root, file)}`); }
+  if (text.includes('\uFFFD')) fail(`Replacement character detected: ${path.relative(root, file)}`);
+  if (/(?:\u00d0|\u00d1)[\u0080-\u00ff]/u.test(text)) fail(`Mojibake detected: ${path.relative(root, file)}`);
+  return text;
 }
 function fail(message) { console.error(message); process.exit(1); }

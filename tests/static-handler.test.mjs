@@ -15,14 +15,15 @@ async function withServer(handler, work) {
   finally { server.close(); await once(server, 'close'); }
 }
 
-test('serves standalone workspace and every ordered script with security headers', async () => {
+test('serves standalone workspace and every ordered asset with security headers', async () => {
   await withServer(createStandaloneHandler({ publicDir, apiHandler: (_request, response) => { response.statusCode = 404; response.end(); } }), async (base) => {
     const response = await fetch(`${base}/`);
     assert.equal(response.status, 200);
     assert.match(response.headers.get('content-security-policy'), /default-src 'self'/);
     const html = await response.text();
     const sources = [...html.matchAll(/<script defer src="([^"]+)"/g)].map((match) => match[1]);
-    assert.deepEqual(sources.slice(0, 9), [
+    const sourcePaths = sources.map((source) => new URL(source, base).pathname);
+    assert.deepEqual(sourcePaths.slice(0, 9), [
       '/ui/i18n-runtime.js',
       '/ui/dom-2.js',
       '/ui/dom-1.js',
@@ -33,17 +34,21 @@ test('serves standalone workspace and every ordered script with security headers
       '/ui/ui-validation.js',
       '/ui/app-core.js',
     ]);
-    assert.equal(sources.at(-1), '/ui/app-start.js');
-    assert.ok(sources.length >= 20);
+    assert.ok(sourcePaths.indexOf('/ui/bom-core.js') > sourcePaths.indexOf('/ui/materials-core.js'));
+    assert.ok(sourcePaths.indexOf('/ui/bom.js') > sourcePaths.indexOf('/ui/materials.js'));
+    assert.equal(sourcePaths.at(-1), '/ui/app-start.js');
+    assert.ok(sourcePaths.length >= 20);
     for (const source of sources) {
-      const script = await fetch(`${base}${source}`);
+      const script = await fetch(new URL(source, base));
       assert.equal(script.status, 200, source);
       assert.match(script.headers.get('content-type'), /text\/javascript/);
       assert.doesNotMatch(await script.text(), /(?:\u00d0|\u00d1)[\u0080-\u00ff]/u, source);
     }
 
-    for (const stylesheet of ['/styles.css', '/i18n.css']) {
-      const css = await fetch(`${base}${stylesheet}`);
+    const stylesheets = [...html.matchAll(/<link\s+[^>]*rel="stylesheet"[^>]*href="([^"]+)"/g)].map((match) => match[1]);
+    assert.ok(stylesheets.some((source) => new URL(source, base).pathname === '/bom.css'));
+    for (const stylesheet of stylesheets) {
+      const css = await fetch(new URL(stylesheet, base));
       assert.equal(css.status, 200, stylesheet);
       assert.match(css.headers.get('content-type'), /text\/css/);
       assert.ok((await css.text()).length > 20, stylesheet);
@@ -53,7 +58,7 @@ test('serves standalone workspace and every ordered script with security headers
 
 test('supports HEAD for runtime assets without sending a body', async () => {
   await withServer(createStandaloneHandler({ publicDir, apiHandler: (_request, response) => { response.statusCode = 404; response.end(); } }), async (base) => {
-    for (const asset of ['/ui/i18n-runtime.js', '/ui/ui-capabilities.js', '/ui/ui-validation.js', '/i18n.css']) {
+    for (const asset of ['/ui/i18n-runtime.js', '/ui/ui-capabilities.js', '/ui/ui-validation.js', '/ui/bom-core.js', '/ui/bom.js', '/i18n.css', '/bom.css']) {
       const response = await fetch(`${base}${asset}`, { method: 'HEAD' });
       assert.equal(response.status, 200, asset);
       assert.equal(await response.text(), '');

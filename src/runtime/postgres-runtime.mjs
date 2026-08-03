@@ -1,5 +1,7 @@
 import { invariant } from '../core/errors.mjs';
 import { createAuthService } from '../application/auth-service.mjs';
+import { createBomService } from '../application/bom-service.mjs';
+import { createBomQueryService } from '../application/bom-query-service.mjs';
 import { createCatalogService } from '../application/catalog-service.mjs';
 import { createCatalogQueryService } from '../application/catalog-query-service.mjs';
 import { createMaterialService } from '../application/material-service.mjs';
@@ -15,6 +17,8 @@ import { createOrderBuilderService } from '../application/order-builder-service.
 import { createNotificationService } from '../application/notification-service.mjs';
 import { createWorkspaceQueryService } from '../application/workspace-query-service.mjs';
 import { createPostgresAuthStore } from '../infrastructure/postgres-auth-store.mjs';
+import { createPostgresBomStore } from '../infrastructure/postgres-bom-store.mjs';
+import { createPostgresBomReader } from '../infrastructure/postgres-bom-reader.mjs';
 import { createPostgresCatalogStore } from '../infrastructure/postgres-catalog-store.mjs';
 import { createPostgresCatalogReader } from '../infrastructure/postgres-catalog-reader.mjs';
 import { createPostgresMaterialStore } from '../infrastructure/postgres-material-store.mjs';
@@ -30,33 +34,13 @@ import { createWholesaleFetchHandler } from '../http/fetch-api.mjs';
 import { resolveRuntimeIdGenerator } from './id-generator.mjs';
 
 export function createPostgresWholesaleRuntime({
-  pool,
-  migrationsDir,
-  clock,
-  nextId,
-  randomBytesImpl,
-  sessionTtlMs,
-  maxLoginFailures,
-  loginWindowMs,
-  loginBlockMs,
-  revokedSessionRetentionMs,
-  notificationProjectionWorkerId,
-  notificationProjectionLeaseMs,
-  notificationProjectionRetryDelayMs,
-  notificationProjectionMaxAttempts,
-  outboxPublisher,
-  outboxPublicationWorkerId,
-  outboxPublicationLeaseMs,
-  outboxPublicationRetryDelayMs,
-  outboxPublicationMaxRetryDelayMs,
-  outboxPublicationMaxAttempts,
-  maintenanceIntervalMs,
-  maintenanceRetryDelayMs,
-  commandRetentionMs,
-  authAuditRetentionMs,
-  throttleRetentionMs,
-  outboxRetentionMs,
-  operationalReadiness,
+  pool, migrationsDir, clock, nextId, randomBytesImpl, sessionTtlMs, maxLoginFailures, loginWindowMs,
+  loginBlockMs, revokedSessionRetentionMs, notificationProjectionWorkerId, notificationProjectionLeaseMs,
+  notificationProjectionRetryDelayMs, notificationProjectionMaxAttempts, outboxPublisher,
+  outboxPublicationWorkerId, outboxPublicationLeaseMs, outboxPublicationRetryDelayMs,
+  outboxPublicationMaxRetryDelayMs, outboxPublicationMaxAttempts, maintenanceIntervalMs,
+  maintenanceRetryDelayMs, commandRetentionMs, authAuditRetentionMs, throttleRetentionMs,
+  outboxRetentionMs, operationalReadiness,
 } = {}) {
   invariant(pool, 'POSTGRES_POOL_REQUIRED', 'PostgreSQL pool is required');
   invariant(operationalReadiness === undefined || typeof operationalReadiness === 'function', 'READINESS_OPERATIONAL_CHECK_INVALID', 'Operational readiness check must be a function');
@@ -64,12 +48,11 @@ export function createPostgresWholesaleRuntime({
   const store = createPostgresWholesaleStore({ pool });
   const catalogStore = createPostgresCatalogStore({ pool });
   const materialStore = createPostgresMaterialStore({ pool });
+  const bomStore = createPostgresBomStore({ pool });
   const options = { store, nextId: runtimeNextId, ...(clock ? { clock } : {}) };
   const auth = createAuthService({
-    store: createPostgresAuthStore({ pool }),
-    nextId: runtimeNextId,
-    ...(clock ? { clock } : {}),
-    ...(randomBytesImpl ? { randomBytesImpl } : {}),
+    store: createPostgresAuthStore({ pool }), nextId: runtimeNextId,
+    ...(clock ? { clock } : {}), ...(randomBytesImpl ? { randomBytesImpl } : {}),
     ...(sessionTtlMs !== undefined ? { sessionTtlMs } : {}),
     ...(maxLoginFailures !== undefined ? { maxLoginFailures } : {}),
     ...(loginWindowMs !== undefined ? { loginWindowMs } : {}),
@@ -77,28 +60,28 @@ export function createPostgresWholesaleRuntime({
     ...(revokedSessionRetentionMs !== undefined ? { revokedSessionRetentionMs } : {}),
   });
   const readiness = migrationsDir ? createPostgresReadinessService({
-    pool,
-    migrationsDir,
-    ...(clock ? { clock } : {}),
-    ...(operationalReadiness ? { operationalCheck: operationalReadiness } : {}),
+    pool, migrationsDir, ...(clock ? { clock } : {}), ...(operationalReadiness ? { operationalCheck: operationalReadiness } : {}),
   }) : undefined;
   const platform = createWholesalePlatform(options);
-  const catalogCommands = createCatalogService({ wholesaleStore: store, catalogStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) });
-  const catalogQueries = createCatalogQueryService({ reader: createPostgresCatalogReader({ pool }) });
-  const catalog = Object.freeze({ ...catalogCommands, ...catalogQueries });
-  const materialCommands = createMaterialService({ materialStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) });
-  const materialQueries = createMaterialQueryService({ reader: createPostgresMaterialReader({ pool }) });
-  const materials = Object.freeze({ ...materialCommands, ...materialQueries });
+  const catalog = Object.freeze({
+    ...createCatalogService({ wholesaleStore: store, catalogStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }),
+    ...createCatalogQueryService({ reader: createPostgresCatalogReader({ pool }) }),
+  });
+  const materials = Object.freeze({
+    ...createMaterialService({ materialStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }),
+    ...createMaterialQueryService({ reader: createPostgresMaterialReader({ pool }) }),
+  });
+  const boms = Object.freeze({
+    ...createBomService({ bomStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }),
+    ...createBomQueryService({ reader: createPostgresBomReader({ pool }) }),
+  });
   const partners = createPartnerAccessService(options);
   const collaboration = createShowroomSelectionService({ ...options, catalogReader: catalog });
   const orders = createOrderBuilderService(options);
   const projectionStore = createPostgresNotificationProjectionStore({ pool });
   const notificationReader = createPostgresNotificationReader({ pool });
   const notificationCore = createNotificationService({
-    sourceStore: store,
-    projectionStore,
-    reader: notificationReader,
-    nextId: runtimeNextId,
+    sourceStore: store, projectionStore, reader: notificationReader, nextId: runtimeNextId,
     ...(clock ? { clock } : {}),
     ...(notificationProjectionWorkerId ? { projectionWorkerId: notificationProjectionWorkerId } : {}),
     ...(notificationProjectionLeaseMs !== undefined ? { projectionLeaseMs: notificationProjectionLeaseMs } : {}),
@@ -107,18 +90,15 @@ export function createPostgresWholesaleRuntime({
   });
   const notifications = withNotificationPageMetadata({ service: notificationCore, reader: notificationReader });
   const outboxPublication = outboxPublisher ? createOutboxPublisherService({
-    store: createPostgresOutboxPublicationStore({ pool }),
-    publisher: outboxPublisher,
-    ...(clock ? { clock } : {}),
-    ...(outboxPublicationWorkerId ? { workerId: outboxPublicationWorkerId } : {}),
+    store: createPostgresOutboxPublicationStore({ pool }), publisher: outboxPublisher,
+    ...(clock ? { clock } : {}), ...(outboxPublicationWorkerId ? { workerId: outboxPublicationWorkerId } : {}),
     ...(outboxPublicationLeaseMs !== undefined ? { leaseMs: outboxPublicationLeaseMs } : {}),
     ...(outboxPublicationRetryDelayMs !== undefined ? { retryDelayMs: outboxPublicationRetryDelayMs } : {}),
     ...(outboxPublicationMaxRetryDelayMs !== undefined ? { maxRetryDelayMs: outboxPublicationMaxRetryDelayMs } : {}),
     ...(outboxPublicationMaxAttempts !== undefined ? { maxAttempts: outboxPublicationMaxAttempts } : {}),
   }) : undefined;
   const maintenance = createMaintenanceService({
-    store: createPostgresMaintenanceStore({ pool }),
-    ...(clock ? { clock } : {}),
+    store: createPostgresMaintenanceStore({ pool }), ...(clock ? { clock } : {}),
     ...(maintenanceIntervalMs !== undefined ? { intervalMs: maintenanceIntervalMs } : {}),
     ...(maintenanceRetryDelayMs !== undefined ? { retryDelayMs: maintenanceRetryDelayMs } : {}),
     ...(commandRetentionMs !== undefined ? { commandRetentionMs } : {}),
@@ -128,8 +108,8 @@ export function createPostgresWholesaleRuntime({
     ...(outboxRetentionMs !== undefined ? { outboxRetentionMs } : {}),
   });
   const workspace = createWorkspaceQueryService({ reader: createPostgresWorkspaceReader({ pool }) });
-  const transport = { authenticate: auth.authenticate, auth, readiness, platform, catalog, materials, partners, collaboration, orders, notifications, workspace };
+  const transport = { authenticate: auth.authenticate, auth, readiness, platform, catalog, materials, boms, partners, collaboration, orders, notifications, workspace };
   const handler = createWholesaleHttpHandler(transport);
   const fetchHandler = createWholesaleFetchHandler(transport);
-  return Object.freeze({ auth, readiness, maintenance, outboxPublication, store, catalogStore, materialStore, platform, catalog, materials, partners, collaboration, orders, notifications, workspace, handler, fetchHandler });
+  return Object.freeze({ auth, readiness, maintenance, outboxPublication, store, catalogStore, materialStore, bomStore, platform, catalog, materials, boms, partners, collaboration, orders, notifications, workspace, handler, fetchHandler });
 }

@@ -44,7 +44,18 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
 
       - name: Run full repository verification
-        run: npm run verify
+        shell: bash
+        run: |
+          set +e
+          npm run verify 2>&1 | tee verify.log
+          status=${PIPESTATUS[0]}
+          echo "$status" > verify-status.txt
+          exit "$status"
+
+      - name: Package runner worktree
+        if: always()
+        shell: bash
+        run: tar --exclude=.git --exclude=syntha-runner-worktree.tgz -czf syntha-runner-worktree.tgz .
 
       - name: Upload generated lockfile and verification diagnostics
         if: always()
@@ -53,9 +64,8 @@ jobs:
           name: syntha-package-lock
           path: |
             package-lock.json
-            package.json
-            tests/
-            src/http/routes.mjs
-            src/server.mjs
+            verify.log
+            verify-status.txt
+            syntha-runner-worktree.tgz
           if-no-files-found: error
           retention-days: 1

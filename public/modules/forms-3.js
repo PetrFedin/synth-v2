@@ -57,14 +57,6 @@ function orderForm() {
   ], values => mutate('/v2/orders', { selectionId: values.selectionId, terms: validatedOrderTerms(values) }));
 }
 
-function orderTermsEditForm(order) {
-  openForm(I18N.t('form.editOrderTerms'), orderTermsFields(order.terms), values => mutate(
-    `/v2/orders/${encodeURIComponent(order.id)}/terms`,
-    { expectedVersion: order.version, terms: validatedOrderTerms(values) },
-    'PATCH',
-  ));
-}
-
 function orderTermsFields(terms = {}) {
   return [
     selectDef('incoterm', 'Incoterm', ['EXW', 'FCA', 'FOB', 'CIF', 'DAP', 'DDP'], undefined, terms.incoterm || 'EXW'),

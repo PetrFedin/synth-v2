@@ -38,10 +38,10 @@ jobs:
         run: |
           set -euo pipefail
           base64 --decode .automation/catalog-concurrency-ui.patch.gz.b64 > /tmp/catalog-concurrency-ui.patch.gz
-          echo 'ac40eb3527259f6dff912115b98c761729983f876c2023502a89fda927b86013  /tmp/catalog-concurrency-ui.patch.gz' | sha256sum --check --strict
+          echo 'b72c83db81a9aea4e859afae4839c0b171aefaa37732e984bac98c6fdca15735  /tmp/catalog-concurrency-ui.patch.gz' | sha256sum --check --strict
           gzip --test /tmp/catalog-concurrency-ui.patch.gz
           gzip --decompress --stdout /tmp/catalog-concurrency-ui.patch.gz > /tmp/catalog-concurrency-ui.patch
-          echo 'b43d5fa8ff94744522c1a042943e4b9302667f1f129014a517d0f5d2b06c028c  /tmp/catalog-concurrency-ui.patch' | sha256sum --check --strict
+          echo '46f346ae10efdc2d77aa974dd5c158b15f18e467376e522d99bd265f70f1ba00  /tmp/catalog-concurrency-ui.patch' | sha256sum --check --strict
           git apply --check /tmp/catalog-concurrency-ui.patch
           git apply --index /tmp/catalog-concurrency-ui.patch
 

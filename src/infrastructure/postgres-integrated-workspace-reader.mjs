@@ -25,12 +25,19 @@ export function createPostgresIntegratedWorkspaceReader({ pool }) {
         if (!organisationIds.length) return emptySupplement();
 
         const eventResult = await client.query(
-          `SELECT DISTINCT e.payload
+          `SELECT e.payload
              FROM calendar_events e
-             LEFT JOIN calendar_event_participants p ON p.event_id = e.id
             WHERE e.owner_organisation_id = ANY($1::text[])
-               OR (e.visibility = 'trade' AND p.organisation_id = ANY($1::text[]))
-            ORDER BY e.payload->>'startsAt' ASC NULLS LAST
+               OR (
+                 e.visibility = 'trade'
+                 AND EXISTS (
+                   SELECT 1
+                     FROM calendar_event_participants p
+                    WHERE p.event_id = e.id
+                      AND p.organisation_id = ANY($1::text[])
+                 )
+               )
+            ORDER BY e.starts_at ASC, e.id ASC
             LIMIT $2`,
           [organisationIds, limit],
         );

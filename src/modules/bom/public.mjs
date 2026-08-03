@@ -3,6 +3,8 @@ import { normalizeMoney } from '../../core/money.mjs';
 
 const CODE_PATTERN = /^[A-Z0-9][A-Z0-9._-]{1,63}$/;
 const LINE_ID_PATTERN = /^[A-Z0-9][A-Z0-9._-]{0,63}$/;
+const MATERIAL_TYPES = Object.freeze(['fabric', 'trim', 'packaging', 'other']);
+const MATERIAL_UNITS = Object.freeze(['m', 'kg', 'pc', 'yd']);
 const SCALE = 10_000n;
 const PERCENT_DENOMINATOR = 1_000_000n;
 const COST_DENOMINATOR = 100_000_000n;
@@ -43,16 +45,16 @@ export function publishBom(bom, { catalogSku, materials, publishedAt }) {
   for (const line of bom.lines) {
     const material = materialByCode.get(line.materialCode);
     invariant(material, 'BOM_MATERIAL_NOT_FOUND', 'BOM material not found', { materialCode: line.materialCode });
-    invariant(material.brandId === bom.brandId, 'BOM_MATERIAL_BRAND_MISMATCH', 'BOM material belongs to another brand', { materialCode: line.materialCode });
-    invariant(material.status === 'published', 'BOM_MATERIAL_NOT_PUBLISHED', 'Every BOM material must be published', { materialCode: line.materialCode });
+    const snapshot = materialSnapshot(material, bom.brandId, line.materialCode);
+    invariant(snapshot.status === 'published', 'BOM_MATERIAL_NOT_PUBLISHED', 'Every BOM material must be published', { materialCode: line.materialCode });
     invariant(
-      material.version === line.materialVersion
-        && material.currency === line.materialCurrency
-        && material.unit === line.unit
-        && material.unitCost === line.unitCostSnapshot,
+      snapshot.version === line.materialVersion
+        && snapshot.currency === line.materialCurrency
+        && snapshot.unit === line.unit
+        && snapshot.unitCost === line.unitCostSnapshot,
       'BOM_MATERIAL_SNAPSHOT_STALE',
       'BOM material snapshot is stale and must be repriced before publication',
-      { materialCode: line.materialCode, expectedVersion: line.materialVersion, actualVersion: material.version },
+      { materialCode: line.materialCode, expectedVersion: line.materialVersion, actualVersion: snapshot.version },
     );
   }
   invariant(bom.totalCost > 0, 'BOM_TOTAL_COST_INVALID', 'BOM total cost must be greater than zero');
@@ -70,7 +72,7 @@ function normalizeBomInput({ catalogSku, materials, input }) {
   const sku = code(input.sku, 'BOM_SKU_INVALID', 'BOM SKU');
   invariant(catalogSku?.sku === sku, 'BOM_SKU_NOT_FOUND', 'Catalog SKU not found', { sku });
   invariant(typeof catalogSku.brandId === 'string' && catalogSku.brandId, 'BOM_BRAND_REQUIRED', 'BOM brand is required');
-  const currency = currencyCode(input.currency);
+  const currency = currencyCode(input.currency, 'BOM_CURRENCY_INVALID', 'BOM currency');
   invariant(Array.isArray(input.lines), 'BOM_LINES_INVALID', 'BOM lines must be an array');
   invariant(input.lines.length >= 1 && input.lines.length <= 500, 'BOM_LINES_INVALID', 'BOM must contain 1 to 500 lines');
   const materialByCode = materialMap(materials);
@@ -117,18 +119,17 @@ function normalizeLine({ line, position, brandId, bomCurrency, materialByCode, l
   const materialCode = code(line.materialCode, 'BOM_MATERIAL_CODE_INVALID', 'Material code');
   const material = materialByCode.get(materialCode);
   invariant(material, 'BOM_MATERIAL_NOT_FOUND', 'BOM material not found', { materialCode });
-  invariant(material.brandId === brandId, 'BOM_MATERIAL_BRAND_MISMATCH', 'BOM material belongs to another brand', { materialCode, brandId, materialBrandId: material.brandId });
-  invariant(Number.isInteger(material.version) && material.version >= 1, 'BOM_MATERIAL_VERSION_INVALID', 'Material version is invalid', { materialCode });
+  const snapshot = materialSnapshot(material, brandId, materialCode);
   const quantity = positiveMoney(line.quantity, 'BOM_LINE_QUANTITY_INVALID', 'BOM line quantity');
   const wastePercent = nonNegativeMoney(line.wastePercent, 'BOM_LINE_WASTE_INVALID', 'BOM line waste percent');
   invariant(wastePercent <= 1000, 'BOM_LINE_WASTE_INVALID', 'BOM line waste percent cannot exceed 1000', { lineId, wastePercent });
-  const exchangeRate = exchangeRateFor(line.exchangeRate, material.currency, bomCurrency, lineId);
+  const exchangeRate = exchangeRateFor(line.exchangeRate, snapshot.currency, bomCurrency, lineId);
   const grossQuantityScaled = roundDivide(
     toScaled(quantity) * (PERCENT_DENOMINATOR + toScaled(wastePercent)),
     PERCENT_DENOMINATOR,
   );
   const lineCostScaled = roundDivide(
-    grossQuantityScaled * toScaled(material.unitCost) * toScaled(exchangeRate),
+    grossQuantityScaled * toScaled(snapshot.unitCost) * toScaled(exchangeRate),
     COST_DENOMINATOR,
   );
   return Object.freeze({
@@ -136,22 +137,40 @@ function normalizeLine({ line, position, brandId, bomCurrency, materialByCode, l
     position,
     component: requiredText(line.component, 2, 160, 'BOM_COMPONENT_REQUIRED', 'BOM component'),
     materialCode,
-    materialVersion: material.version,
-    materialName: material.name,
-    materialType: material.type,
-    unit: material.unit,
+    materialVersion: snapshot.version,
+    materialName: snapshot.name,
+    materialType: snapshot.type,
+    unit: snapshot.unit,
     quantity,
     wastePercent,
     grossQuantity: fromScaled(grossQuantityScaled, 'BOM_GROSS_QUANTITY_TOO_LARGE'),
-    materialCurrency: material.currency,
-    unitCostSnapshot: material.unitCost,
+    materialCurrency: snapshot.currency,
+    unitCostSnapshot: snapshot.unitCost,
     exchangeRate,
     lineCost: fromScaled(lineCostScaled, 'BOM_LINE_COST_TOO_LARGE'),
   });
 }
 
+function materialSnapshot(material, brandId, expectedCode) {
+  invariant(material && typeof material === 'object' && !Array.isArray(material), 'BOM_MATERIAL_INVALID', 'BOM material is invalid', { materialCode: expectedCode });
+  invariant(material.code === expectedCode, 'BOM_MATERIAL_CODE_MISMATCH', 'BOM material code does not match requested material', { expectedCode, materialCode: material.code });
+  invariant(material.brandId === brandId, 'BOM_MATERIAL_BRAND_MISMATCH', 'BOM material belongs to another brand', { materialCode: expectedCode, brandId, materialBrandId: material.brandId });
+  invariant(Number.isInteger(material.version) && material.version >= 1, 'BOM_MATERIAL_VERSION_INVALID', 'Material version is invalid', { materialCode: expectedCode });
+  invariant(['draft', 'published'].includes(material.status), 'BOM_MATERIAL_STATUS_INVALID', 'Material status is invalid', { materialCode: expectedCode });
+  invariant(MATERIAL_TYPES.includes(material.type), 'BOM_MATERIAL_TYPE_INVALID', 'Material type is invalid', { materialCode: expectedCode });
+  invariant(MATERIAL_UNITS.includes(material.unit), 'BOM_MATERIAL_UNIT_INVALID', 'Material unit is invalid', { materialCode: expectedCode });
+  return Object.freeze({
+    version: material.version,
+    status: material.status,
+    name: requiredText(material.name, 2, 160, 'BOM_MATERIAL_NAME_INVALID', 'Material name'),
+    type: material.type,
+    unit: material.unit,
+    currency: currencyCode(material.currency, 'BOM_MATERIAL_CURRENCY_INVALID', 'Material currency'),
+    unitCost: positiveMoney(material.unitCost, 'BOM_MATERIAL_UNIT_COST_INVALID', 'Material unit cost'),
+  });
+}
+
 function exchangeRateFor(value, materialCurrency, bomCurrency, lineId) {
-  invariant(typeof materialCurrency === 'string' && /^[A-Z]{3}$/.test(materialCurrency), 'BOM_MATERIAL_CURRENCY_INVALID', 'Material currency is invalid', { lineId, materialCurrency });
   if (materialCurrency === bomCurrency) {
     if (value === undefined || value === null || value === '') return 1;
     const rate = positiveMoney(value, 'BOM_EXCHANGE_RATE_INVALID', 'Exchange rate');
@@ -199,8 +218,8 @@ function code(value, errorCode, label, pattern = CODE_PATTERN) {
   return value;
 }
 
-function currencyCode(value) {
-  invariant(typeof value === 'string' && /^[A-Z]{3}$/.test(value), 'BOM_CURRENCY_INVALID', 'BOM currency must be a three-letter uppercase code');
+function currencyCode(value, errorCode, label) {
+  invariant(typeof value === 'string' && /^[A-Z]{3}$/.test(value), errorCode, `${label} must be a three-letter uppercase code`);
   return value;
 }
 

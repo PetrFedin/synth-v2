@@ -6,6 +6,7 @@ const SUBJECT_TYPES = new Set(['organisation', 'campaign', 'collection', 'showro
 const EVENT_TYPES = new Set(['production', 'purchase', 'marketing', 'meeting', 'shipment', 'deadline', 'sample', 'quality', 'other']);
 const VISIBILITY = new Set(['private', 'organisation', 'trade']);
 const EVENT_STATUSES = new Set(['scheduled', 'in_progress', 'completed', 'cancelled']);
+const REMINDER_CHANNELS = new Set(['in_app', 'email', 'push']);
 
 export function createCollaborationCalendarService({
   store,
@@ -18,6 +19,7 @@ export function createCollaborationCalendarService({
 
   return Object.freeze({
     createThread(commandId, actorId, input) {
+      assertInput(input);
       const fingerprint = `createThread:${actorId}:${canonicalJson(input)}`;
       return execute(commandId, actorId, fingerprint, async () => requiredOrganisation(input.ownerOrganisationId), async (tx, membership) => {
         assertCapability(membership, CAPABILITIES.COLLABORATION_WRITE);
@@ -41,6 +43,7 @@ export function createCollaborationCalendarService({
     },
 
     postMessage(commandId, actorId, threadId, input) {
+      assertInput(input);
       const fingerprint = `postMessage:${actorId}:${threadId}:${canonicalJson(input)}`;
       return execute(commandId, actorId, fingerprint, async (tx) => requireEntity(await tx.getThread(threadId), 'COLLABORATION_THREAD_NOT_FOUND', { threadId }).ownerOrganisationId, async (tx, membership) => {
         assertCapability(membership, CAPABILITIES.COLLABORATION_WRITE);
@@ -49,7 +52,7 @@ export function createCollaborationCalendarService({
         invariant(thread.status === 'open', 'COLLABORATION_THREAD_ARCHIVED', 'Archived thread cannot receive messages');
         const message = Object.freeze({
           id: nextId('message'),
-          threadId,
+          threadId: clean(threadId, 'threadId', 160),
           authorId: actorId,
           authorOrganisationId: membership.organisationId,
           body: clean(input.body, 'body', 5000),
@@ -64,10 +67,11 @@ export function createCollaborationCalendarService({
     },
 
     archiveThread(commandId, actorId, threadId) {
-      const fingerprint = `archiveThread:${actorId}:${threadId}`;
-      return execute(commandId, actorId, fingerprint, async (tx) => requireEntity(await tx.getThread(threadId), 'COLLABORATION_THREAD_NOT_FOUND', { threadId }).ownerOrganisationId, async (tx, membership) => {
+      const normalizedThreadId = clean(threadId, 'threadId', 160);
+      const fingerprint = `archiveThread:${actorId}:${normalizedThreadId}`;
+      return execute(commandId, actorId, fingerprint, async (tx) => requireEntity(await tx.getThread(normalizedThreadId), 'COLLABORATION_THREAD_NOT_FOUND', { threadId: normalizedThreadId }).ownerOrganisationId, async (tx, membership) => {
         assertCapability(membership, CAPABILITIES.COLLABORATION_WRITE);
-        const current = requireEntity(await tx.getThread(threadId), 'COLLABORATION_THREAD_NOT_FOUND', { threadId });
+        const current = requireEntity(await tx.getThread(normalizedThreadId), 'COLLABORATION_THREAD_NOT_FOUND', { threadId: normalizedThreadId });
         invariant(current.ownerOrganisationId === membership.organisationId, 'COLLABORATION_THREAD_ACCESS_DENIED', 'Thread is outside the active organisation');
         if (current.status === 'archived') return current;
         const updated = Object.freeze({ ...current, status: 'archived', version: current.version + 1, updatedAt: clock() });
@@ -77,12 +81,19 @@ export function createCollaborationCalendarService({
     },
 
     createEvent(commandId, actorId, input) {
+      assertInput(input);
       const fingerprint = `createCalendarEvent:${actorId}:${canonicalJson(input)}`;
       return execute(commandId, actorId, fingerprint, async () => requiredOrganisation(input.ownerOrganisationId), async (tx, membership) => {
         assertCapability(membership, CAPABILITIES.CALENDAR_WRITE);
         if (input.subjectType || input.subjectId) validateSubject(input.subjectType, input.subjectId);
         invariant(EVENT_TYPES.has(input.eventType), 'CALENDAR_EVENT_TYPE_INVALID', 'Unsupported calendar event type');
         invariant(VISIBILITY.has(input.visibility), 'CALENDAR_VISIBILITY_INVALID', 'Unsupported calendar visibility');
+        const participantOrganisationIds = input.participantOrganisationIds ?? [];
+        const reminders = input.reminders ?? [];
+        invariant(Array.isArray(participantOrganisationIds), 'CALENDAR_PARTICIPANTS_INVALID', 'Calendar participants must be an array');
+        invariant(participantOrganisationIds.length <= 100, 'CALENDAR_PARTICIPANTS_INVALID', 'Calendar participants exceed the supported limit');
+        invariant(Array.isArray(reminders), 'CALENDAR_REMINDERS_INVALID', 'Calendar reminders must be an array');
+        invariant(reminders.length <= 20, 'CALENDAR_REMINDERS_INVALID', 'Calendar reminders exceed the supported limit');
         const startsAt = iso(input.startsAt, 'startsAt');
         const endsAt = iso(input.endsAt, 'endsAt');
         invariant(Date.parse(endsAt) > Date.parse(startsAt), 'CALENDAR_RANGE_INVALID', 'Event end must be after start');
@@ -107,16 +118,17 @@ export function createCollaborationCalendarService({
           updatedAt: now,
         });
         await tx.insertEvent(event);
-        const participants = unique([membership.organisationId, ...(input.participantOrganisationIds ?? [])]);
+        const participants = unique([membership.organisationId, ...participantOrganisationIds.map((value) => clean(value, 'participantOrganisationId', 160))]);
         for (const organisationId of participants) {
           await tx.upsertParticipant(Object.freeze({
             eventId: event.id,
-            organisationId: clean(organisationId, 'participantOrganisationId', 160),
+            organisationId,
             responseStatus: organisationId === membership.organisationId ? 'accepted' : 'pending',
           }));
         }
-        for (const reminder of input.reminders ?? []) {
-          invariant(['in_app', 'email', 'push'].includes(reminder.channel), 'CALENDAR_REMINDER_CHANNEL_INVALID', 'Unsupported reminder channel');
+        for (const reminder of reminders) {
+          assertInput(reminder, 'CALENDAR_REMINDER_INVALID', 'Calendar reminder must be an object');
+          invariant(REMINDER_CHANNELS.has(reminder.channel), 'CALENDAR_REMINDER_CHANNEL_INVALID', 'Unsupported reminder channel');
           const minutesBefore = Number(reminder.minutesBefore);
           invariant(Number.isInteger(minutesBefore) && minutesBefore >= 0 && minutesBefore <= 525600, 'CALENDAR_REMINDER_OFFSET_INVALID', 'Reminder offset is invalid');
           await tx.insertReminder(Object.freeze({
@@ -133,11 +145,12 @@ export function createCollaborationCalendarService({
     },
 
     updateEventStatus(commandId, actorId, eventId, status) {
-      const fingerprint = `updateCalendarEventStatus:${actorId}:${eventId}:${status}`;
-      return execute(commandId, actorId, fingerprint, async (tx) => requireEntity(await tx.getEvent(eventId), 'CALENDAR_EVENT_NOT_FOUND', { eventId }).ownerOrganisationId, async (tx, membership) => {
+      const normalizedEventId = clean(eventId, 'eventId', 160);
+      const fingerprint = `updateCalendarEventStatus:${actorId}:${normalizedEventId}:${status}`;
+      return execute(commandId, actorId, fingerprint, async (tx) => requireEntity(await tx.getEvent(normalizedEventId), 'CALENDAR_EVENT_NOT_FOUND', { eventId: normalizedEventId }).ownerOrganisationId, async (tx, membership) => {
         assertCapability(membership, CAPABILITIES.CALENDAR_WRITE);
         invariant(EVENT_STATUSES.has(status), 'CALENDAR_STATUS_INVALID', 'Unsupported calendar event status');
-        const current = requireEntity(await tx.getEvent(eventId), 'CALENDAR_EVENT_NOT_FOUND', { eventId });
+        const current = requireEntity(await tx.getEvent(normalizedEventId), 'CALENDAR_EVENT_NOT_FOUND', { eventId: normalizedEventId });
         invariant(current.ownerOrganisationId === membership.organisationId, 'CALENDAR_EVENT_ACCESS_DENIED', 'Event is outside the active organisation');
         if (current.status === status) return current;
         const updated = Object.freeze({ ...current, status, version: current.version + 1, updatedAt: clock() });
@@ -148,7 +161,7 @@ export function createCollaborationCalendarService({
   });
 
   async function execute(commandId, actorId, fingerprint, resolveOrganisationId, work) {
-    invariant(commandId, 'COMMAND_ID_REQUIRED', 'Every mutation requires commandId');
+    invariant(typeof commandId === 'string' && commandId.length > 0, 'COMMAND_ID_REQUIRED', 'Every mutation requires commandId');
     invariant(typeof actorId === 'string' && actorId.length > 0, 'ACTOR_ID_REQUIRED', 'Actor id is required');
     const source = await membershipReader.snapshot();
     const memberships = source.memberships.filter((item) => item.userId === actorId && item.status === 'active');
@@ -170,6 +183,9 @@ export function createCollaborationCalendarService({
   }
 }
 
+function assertInput(value, code = 'INPUT_INVALID', message = 'Input must be an object') {
+  invariant(value !== null && typeof value === 'object' && !Array.isArray(value), code, message);
+}
 function requiredOrganisation(value) { return clean(value, 'ownerOrganisationId', 160); }
 function validateSubject(type, id) { invariant(SUBJECT_TYPES.has(type) && id, 'COLLABORATION_SUBJECT_INVALID', 'A supported subject type and id are required'); }
 function clean(value, field, max) { const text = String(value ?? '').trim(); invariant(text && text.length <= max, 'FIELD_INVALID', `${field} is required and must be at most ${max} characters`, { field, max }); return text; }

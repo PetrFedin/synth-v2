@@ -5,10 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-
-async function source(file) {
-  return readFile(path.join(root, file), 'utf8');
-}
+async function source(file) { return readFile(path.join(root, file), 'utf8'); }
 
 test('PostgreSQL runtime creates and exposes maintenance and optional outbox publication services', async () => {
   const runtime = await source('src/runtime/postgres-runtime.mjs');
@@ -18,7 +15,7 @@ test('PostgreSQL runtime creates and exposes maintenance and optional outbox pub
   assert.match(runtime, /createOutboxPublisherService/);
   assert.match(runtime, /createPostgresOutboxPublicationStore/);
   assert.match(runtime, /const outboxPublication = outboxPublisher \? createOutboxPublisherService\(\{/);
-  assert.match(runtime, /return Object\.freeze\(\{ auth, readiness, maintenance, outboxPublication,/);
+  assert.match(runtime, /return Object\.freeze\(\{\s*auth, readiness, maintenance, outboxPublication,/);
   assert.match(runtime, /commandRetentionMs/);
   assert.match(runtime, /outboxRetentionMs/);
 });
@@ -44,18 +41,10 @@ test('production workers run maintenance and external outbox publication indepen
 test('environment example documents retention and optional external delivery controls', async () => {
   const env = await source('.env.example');
   for (const key of [
-    'SYNTHA_MAINTENANCE_INTERVAL_MS',
-    'SYNTHA_MAINTENANCE_RETRY_DELAY_MS',
-    'SYNTHA_COMMAND_RETENTION_MS',
-    'SYNTHA_AUTH_AUDIT_RETENTION_MS',
-    'SYNTHA_AUTH_THROTTLE_RETENTION_MS',
-    'SYNTHA_REVOKED_SESSION_RETENTION_MS',
-    'SYNTHA_OUTBOX_RETENTION_MS',
-    'SYNTHA_OUTBOX_WEBHOOK_URL',
-    'SYNTHA_OUTBOX_WEBHOOK_SECRET',
-    'SYNTHA_OUTBOX_PUBLICATION_INTERVAL_MS',
-    'SYNTHA_OUTBOX_PUBLICATION_BATCH_SIZE',
-    'SYNTHA_OUTBOX_PUBLICATION_LEASE_MS',
+    'SYNTHA_MAINTENANCE_INTERVAL_MS','SYNTHA_MAINTENANCE_RETRY_DELAY_MS','SYNTHA_COMMAND_RETENTION_MS',
+    'SYNTHA_AUTH_AUDIT_RETENTION_MS','SYNTHA_AUTH_THROTTLE_RETENTION_MS','SYNTHA_REVOKED_SESSION_RETENTION_MS',
+    'SYNTHA_OUTBOX_RETENTION_MS','SYNTHA_OUTBOX_WEBHOOK_URL','SYNTHA_OUTBOX_WEBHOOK_SECRET',
+    'SYNTHA_OUTBOX_PUBLICATION_INTERVAL_MS','SYNTHA_OUTBOX_PUBLICATION_BATCH_SIZE','SYNTHA_OUTBOX_PUBLICATION_LEASE_MS',
     'SYNTHA_OUTBOX_PUBLICATION_MAX_ATTEMPTS',
   ]) assert.match(env, new RegExp(`^${key}=`, 'm'), key);
   assert.match(env, /^SYNTHA_COMMAND_RETENTION_MS=2592000000$/m);

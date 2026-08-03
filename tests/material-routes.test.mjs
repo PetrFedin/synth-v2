@@ -41,10 +41,10 @@ test('material routes expose bounded reads and all governed mutations', async ()
   assert.equal(page.mutation, false);
 });
 
-test('material route contracts reject unsupported query and body fields before services', () => {
+test('material route contracts reject unsupported query and body fields before services', async () => {
   const { routes, calls } = fixture();
   const page = matchWholesaleRoute(routes, 'GET', '/v2/materials');
-  assert.throws(() => page.execute({ actorId: 'user-1', query: { supplierId: 'hidden' }, params: page.params }), { code: 'HTTP_QUERY_FIELD_UNKNOWN' });
+  await assert.rejects(() => page.execute({ actorId: 'user-1', query: { supplierId: 'hidden' }, params: page.params }), { code: 'HTTP_QUERY_FIELD_UNKNOWN' });
   const create = matchWholesaleRoute(routes, 'POST', '/v2/materials');
   assert.throws(() => create.execute({ actorId: 'user-1', commandId: 'cmd-1', body: { ...createBody, reservedQuantity: 10 }, query: {}, params: create.params }), { code: 'HTTP_BODY_FIELD_UNKNOWN' });
   assert.equal(calls.length, 0);

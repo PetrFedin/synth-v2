@@ -41,8 +41,23 @@ test('PostgreSQL BOM lifecycle preserves snapshots, security, versions and event
     });
 
     await platform.registerOrganisation('org-create', 'system', createOrganisation({ id: 'brand-bom', type: 'brand', name: 'BOM Brand' }));
-    for (const [role, userId] of [['owner', 'product-owner'], ['finance', 'finance-user'], ['sales', 'sales-user']]) {
-      await platform.grantMembership(`member-${role}`, 'system', createMembership({ id: `membership-${role}`, organisationId: 'brand-bom', organisationType: 'brand', userId, role, createdAt: clock() }));
+    await platform.grantMembership('member-owner', 'system', createMembership({
+      id: 'membership-owner',
+      organisationId: 'brand-bom',
+      organisationType: 'brand',
+      userId: 'product-owner',
+      role: 'owner',
+      createdAt: clock(),
+    }));
+    for (const [role, userId] of [['finance', 'finance-user'], ['sales', 'sales-user']]) {
+      await platform.grantMembership(`member-${role}`, 'product-owner', createMembership({
+        id: `membership-${role}`,
+        organisationId: 'brand-bom',
+        organisationType: 'brand',
+        userId,
+        role,
+        createdAt: clock(),
+      }));
     }
     const campaign = await platform.createCampaign('campaign-create', 'product-owner', { brandId: 'brand-bom', name: 'FW Costing', season: 'FW27', startsAt: '2027-01-01T00:00:00.000Z', endsAt: '2027-02-01T00:00:00.000Z' });
     await platform.openCampaign('campaign-open', 'product-owner', campaign.id);

@@ -3,7 +3,8 @@
   gap: 16px;
 }
 
-.material-readiness {
+.material-readiness,
+.industrial-readiness {
   display: grid;
   grid-template-columns: minmax(72px, 1fr) auto;
   align-items: center;
@@ -11,7 +12,8 @@
   min-width: 116px;
 }
 
-.material-readiness-bar {
+.material-readiness-bar,
+.industrial-readiness-bar {
   display: block;
   height: 6px;
   overflow: hidden;
@@ -19,14 +21,16 @@
   background: color-mix(in srgb, var(--v5-sidebar, #111a2d) 10%, transparent);
 }
 
-.material-readiness-fill {
+.material-readiness-fill,
+.industrial-readiness-fill {
   display: block;
   height: 100%;
   border-radius: inherit;
   background: var(--accent, #5d39cf);
 }
 
-.material-risk {
+.material-risk,
+.industrial-risk {
   max-width: 210px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -34,19 +38,23 @@
 }
 
 .material-risk.critical,
-.material-risk.high {
+.material-risk.high,
+.industrial-risk.critical,
+.industrial-risk.high {
   border-color: color-mix(in srgb, #b42318 35%, transparent);
   background: color-mix(in srgb, #b42318 10%, transparent);
   color: #8f1d16;
 }
 
-.material-risk.medium {
+.material-risk.medium,
+.industrial-risk.medium {
   border-color: color-mix(in srgb, #b54708 32%, transparent);
   background: color-mix(in srgb, #b54708 9%, transparent);
   color: #8a3906;
 }
 
-.material-risk.low {
+.material-risk.low,
+.industrial-risk.low {
   border-color: color-mix(in srgb, #027a48 28%, transparent);
   background: color-mix(in srgb, #027a48 8%, transparent);
   color: #05603a;
@@ -67,11 +75,13 @@
 }
 
 @media (max-width: 980px) {
-  .material-readiness {
+  .material-readiness,
+  .industrial-readiness {
     grid-template-columns: minmax(54px, 1fr) auto;
   }
 
-  .material-risk {
+  .material-risk,
+  .industrial-risk {
     max-width: 150px;
   }
 }

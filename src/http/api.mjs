@@ -1,8 +1,6 @@
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { DomainError, invariant } from '../core/errors.mjs';
-import { withMaterialOpenApi } from './material-openapi.mjs';
-import { wholesaleV2OpenApi } from './openapi.mjs';
 import { assertBodyContract, assertQueryContract, bodyContract } from './request-contract.mjs';
 import { createWholesaleRoutes, matchWholesaleRoute } from './routes.mjs';
 import {
@@ -13,10 +11,10 @@ import {
   resolveRequestId,
   validateContentLength,
 } from './transport-contract.mjs';
+import { wholesaleV2ExtendedOpenApi } from './v2-openapi.mjs';
 
 const EMPTY_BODY = bodyContract();
 const LOGIN_BODY = bodyContract(['email', 'password']);
-const OPEN_API = withMaterialOpenApi(wholesaleV2OpenApi);
 
 export function createWholesaleHttpHandler({ authenticate, auth, readiness, maxBodyBytes = 256 * 1024, nextRequestId = randomUUID, ...services } = {}) {
   invariant(typeof authenticate === 'function', 'HTTP_AUTHENTICATOR_REQUIRED', 'HTTP authenticator is required');
@@ -39,7 +37,7 @@ export function createWholesaleHttpHandler({ authenticate, auth, readiness, maxB
       }
       if (request.method === 'GET' && url.pathname === '/openapi.json') {
         assertEmptyQuery(url);
-        return send(response, 200, OPEN_API);
+        return send(response, 200, wholesaleV2ExtendedOpenApi);
       }
       if (request.method === 'POST' && url.pathname === '/v2/auth/login') {
         assertEmptyQuery(url);
@@ -117,11 +115,16 @@ export function normalizeHttpError(error) {
     'CATALOG_BRAND_FILTER_INVALID', 'CATALOG_COLLECTION_FILTER_INVALID', 'CATALOG_EXPECTED_VERSION_INVALID', 'CATALOG_UPDATE_INVALID',
     'CATALOG_PUBLISH_INVALID', 'MATERIAL_ACTOR_INVALID', 'MATERIAL_PAGE_LIMIT_INVALID', 'MATERIAL_CURSOR_INVALID', 'MATERIAL_SEARCH_INVALID',
     'MATERIAL_STATUS_FILTER_INVALID', 'MATERIAL_TYPE_FILTER_INVALID', 'MATERIAL_BRAND_FILTER_INVALID', 'MATERIAL_CODE_INVALID',
-    'MATERIAL_EXPECTED_VERSION_INVALID', 'MATERIAL_UPDATE_INVALID', 'MATERIAL_PUBLISH_INVALID', 'ORDER_EXPECTED_VERSION_INVALID',
-    'AUTH_EMAIL_INVALID', 'AUTH_PASSWORD_INVALID',
+    'MATERIAL_EXPECTED_VERSION_INVALID', 'MATERIAL_UPDATE_INVALID', 'MATERIAL_PUBLISH_INVALID',
+    'BOM_ACTOR_INVALID', 'BOM_PAGE_LIMIT_INVALID', 'BOM_CURSOR_INVALID', 'BOM_SEARCH_INVALID', 'BOM_STATUS_FILTER_INVALID',
+    'BOM_BRAND_FILTER_INVALID', 'BOM_SKU_INVALID', 'BOM_EXPECTED_VERSION_INVALID', 'BOM_UPDATE_INVALID', 'BOM_PUBLISH_INVALID',
+    'MEASUREMENT_ACTOR_INVALID', 'MEASUREMENT_PAGE_LIMIT_INVALID', 'MEASUREMENT_CURSOR_INVALID', 'MEASUREMENT_SEARCH_INVALID',
+    'MEASUREMENT_STATUS_FILTER_INVALID', 'MEASUREMENT_UNIT_FILTER_INVALID', 'MEASUREMENT_BRAND_FILTER_INVALID', 'MEASUREMENT_SKU_INVALID',
+    'MEASUREMENT_EXPECTED_VERSION_INVALID', 'MEASUREMENT_UPDATE_INVALID', 'MEASUREMENT_PUBLISH_INVALID',
+    'ORDER_EXPECTED_VERSION_INVALID', 'AUTH_EMAIL_INVALID', 'AUTH_PASSWORD_INVALID',
   ].includes(code)) status = 400;
   else if (code === 'HTTP_BODY_TOO_LARGE') status = 413;
-  else if (code.includes('CONFLICT') || code.includes('ALREADY_EXISTS') || code === 'MATERIAL_NOT_DRAFT') status = 409;
+  else if (code.includes('CONFLICT') || code.includes('ALREADY_EXISTS') || ['MATERIAL_NOT_DRAFT', 'BOM_NOT_DRAFT', 'MEASUREMENT_NOT_DRAFT'].includes(code)) status = 409;
   const retryAfterSeconds = code === 'AUTH_RATE_LIMITED' ? Math.max(1, Math.ceil(Number(error.details?.retryAfterSeconds) || 1)) : undefined;
   return { status, code, message: error.message, details: error.details ?? {}, retryAfterSeconds };
 }

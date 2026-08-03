@@ -8,6 +8,8 @@
   const SECTION_SET = new Set(SECTIONS);
   const DEFAULT_PAGE_LIMIT = 100;
   const MAX_PAGE_LIMIT = 200;
+  const DEFAULT_DRAIN_PAGES = 50;
+  const MAX_DRAIN_PAGES = 100;
 
   function create({ request, getWorkspace, setWorkspace, onChange = () => {}, onError = () => {}, pageLimit = DEFAULT_PAGE_LIMIT } = {}) {
     if (typeof request !== 'function') throw new TypeError('Workspace paging request function is required');
@@ -86,6 +88,27 @@
       return promise;
     }
 
+    async function drain(section, { maxPages = DEFAULT_DRAIN_PAGES } = {}) {
+      validateSection(section);
+      if (!Number.isSafeInteger(maxPages) || maxPages < 1 || maxPages > MAX_DRAIN_PAGES) {
+        throw new TypeError('Workspace drain page budget must be an integer from 1 to 100');
+      }
+      if (status(section).state === 'error' && !cursors.has(section)) return false;
+      let pages = 0;
+      while (cursors.has(section)) {
+        if (pages >= maxPages) {
+          const error = pagingError('WORKSPACE_PAGE_BUDGET_EXCEEDED', 'Workspace section exceeded its automatic page budget');
+          setStatus(section, 'error', error);
+          onError(error, section);
+          return false;
+        }
+        const loaded = await loadNext(section);
+        if (!loaded) return !cursors.has(section);
+        pages += 1;
+      }
+      return true;
+    }
+
     function abort(section) {
       validateSection(section);
       const current = active.get(section);
@@ -113,7 +136,7 @@
       onChange(Object.freeze({ section, state, hasMore: cursors.has(section) }));
     }
 
-    return Object.freeze({ reset, hasMore, status, loadNext, abort, abortAll, snapshot });
+    return Object.freeze({ reset, hasMore, status, loadNext, drain, abort, abortAll, snapshot });
   }
 
   function normalizePageInfo(pageInfo) {

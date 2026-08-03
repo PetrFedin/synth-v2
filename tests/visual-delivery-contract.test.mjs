@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { createStandaloneHandler } from '../src/web/static-handler.mjs';
 
 const publicDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
+const build = 'visual-20260803-3';
 
 async function withServer(handler, work) {
   const server = createServer(handler);
@@ -23,12 +24,13 @@ async function withServer(handler, work) {
 
 test('the shell versions all Omnidata visual assets', async () => {
   const html = await readFile(path.join(publicDir, 'index.html'), 'utf8');
-  assert.match(html, /meta name="syntha-build" content="visual-20260803-2"/);
-  assert.match(html, /omnidata\.css\?v=visual-20260803-2/);
-  assert.match(html, /omnidata-fidelity\.css\?v=visual-20260803-2/);
-  assert.match(html, /omnidata-workspace\.js\?v=visual-20260803-2/);
-  assert.match(html, /omnidata-polish\.js\?v=visual-20260803-2/);
-  assert.match(html, /omnidata-fidelity\.js\?v=visual-20260803-2/);
+  assert.match(html, new RegExp(`meta name="syntha-build" content="${build}"`));
+  assert.match(html, new RegExp(`omnidata\\.css\\?v=${build}`));
+  assert.match(html, new RegExp(`omnidata-fidelity\\.css\\?v=${build}`));
+  assert.match(html, new RegExp(`omnidata-v3\\.css\\?v=${build}`));
+  assert.match(html, new RegExp(`omnidata-workspace\\.js\\?v=${build}`));
+  assert.match(html, new RegExp(`omnidata-polish\\.js\\?v=${build}`));
+  assert.match(html, new RegExp(`omnidata-fidelity\\.js\\?v=${build}`));
 });
 
 test('the standalone server prevents stale caching of Omnidata visual assets', async () => {
@@ -42,11 +44,12 @@ test('the standalone server prevents stale caching of Omnidata visual assets', a
 
   await withServer(handler, async (base) => {
     for (const asset of [
-      '/omnidata.css?v=visual-20260803-2',
-      '/omnidata-fidelity.css?v=visual-20260803-2',
-      '/ui/omnidata-workspace.js?v=visual-20260803-2',
-      '/ui/omnidata-polish.js?v=visual-20260803-2',
-      '/ui/omnidata-fidelity.js?v=visual-20260803-2',
+      `/omnidata.css?v=${build}`,
+      `/omnidata-fidelity.css?v=${build}`,
+      `/omnidata-v3.css?v=${build}`,
+      `/ui/omnidata-workspace.js?v=${build}`,
+      `/ui/omnidata-polish.js?v=${build}`,
+      `/ui/omnidata-fidelity.js?v=${build}`,
     ]) {
       const response = await fetch(`${base}${asset}`);
       assert.equal(response.status, 200, asset);

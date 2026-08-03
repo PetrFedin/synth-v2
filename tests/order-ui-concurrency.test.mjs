@@ -12,7 +12,7 @@ test('Order Builder UI sends fresh versions and exposes safe term revision', () 
   assert.match(forms, /max: 365/);
   assert.doesNotMatch(forms, /max: 3650/);
   assert.match(forms, /minLength: 3, maxLength: 1000/);
-  assert.ok(forms.includes('/terms') && forms.includes("'PATCH'"));
+  assert.ok(actions.includes('/terms') && actions.includes("'PATCH'"));
   assert.match(actions, /organisationId, expectedVersion: item\.version/);
   assert.ok(actions.includes('/attach') && actions.includes('expectedVersion: item.version'));
   assert.match(actions, /orderTermsEditForm\(item\)/);

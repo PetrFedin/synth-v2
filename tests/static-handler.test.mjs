@@ -35,9 +35,11 @@ test('serves standalone workspace and every ordered asset with security headers'
       '/ui/app-core.js',
     ]);
     assert.ok(sourcePaths.indexOf('/ui/bom-core.js') > sourcePaths.indexOf('/ui/materials-core.js'));
+    assert.ok(sourcePaths.indexOf('/ui/measurement-core.js') > sourcePaths.indexOf('/ui/bom-core.js'));
     assert.ok(sourcePaths.indexOf('/ui/bom.js') > sourcePaths.indexOf('/ui/materials.js'));
+    assert.ok(sourcePaths.indexOf('/ui/measurements.js') > sourcePaths.indexOf('/ui/bom.js'));
     assert.equal(sourcePaths.at(-1), '/ui/app-start.js');
-    assert.ok(sourcePaths.length >= 20);
+    assert.ok(sourcePaths.length >= 24);
     for (const source of sources) {
       const script = await fetch(new URL(source, base));
       assert.equal(script.status, 200, source);
@@ -47,6 +49,7 @@ test('serves standalone workspace and every ordered asset with security headers'
 
     const stylesheets = [...html.matchAll(/<link\s+[^>]*rel="stylesheet"[^>]*href="([^"]+)"/g)].map((match) => match[1]);
     assert.ok(stylesheets.some((source) => new URL(source, base).pathname === '/bom.css'));
+    assert.ok(stylesheets.some((source) => new URL(source, base).pathname === '/measurements.css'));
     for (const stylesheet of stylesheets) {
       const css = await fetch(new URL(stylesheet, base));
       assert.equal(css.status, 200, stylesheet);
@@ -58,7 +61,10 @@ test('serves standalone workspace and every ordered asset with security headers'
 
 test('supports HEAD for runtime assets without sending a body', async () => {
   await withServer(createStandaloneHandler({ publicDir, apiHandler: (_request, response) => { response.statusCode = 404; response.end(); } }), async (base) => {
-    for (const asset of ['/ui/i18n-runtime.js', '/ui/ui-capabilities.js', '/ui/ui-validation.js', '/ui/bom-core.js', '/ui/bom.js', '/i18n.css', '/bom.css']) {
+    for (const asset of [
+      '/ui/i18n-runtime.js', '/ui/ui-capabilities.js', '/ui/ui-validation.js', '/ui/bom-core.js', '/ui/bom.js',
+      '/ui/measurement-core.js', '/ui/measurements.js', '/i18n.css', '/bom.css', '/measurements.css',
+    ]) {
       const response = await fetch(`${base}${asset}`, { method: 'HEAD' });
       assert.equal(response.status, 200, asset);
       assert.equal(await response.text(), '');

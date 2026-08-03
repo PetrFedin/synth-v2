@@ -31,6 +31,7 @@ test('PostgreSQL migration ledger serializes runners and rejects changed history
     '014_material_master.sql',
     '015_unify_catalog_outbox.sql',
     '016_bom_costing.sql',
+    '017_measurement_charts.sql',
   ];
   try {
     await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
@@ -54,6 +55,10 @@ test('PostgreSQL migration ledger serializes runners and rejects changed history
               to_regclass('public.materials') AS materials,
               to_regclass('public.boms') AS boms,
               to_regclass('public.bom_lines') AS bom_lines,
+              to_regclass('public.measurement_charts') AS measurement_charts,
+              to_regclass('public.measurement_chart_sizes') AS measurement_chart_sizes,
+              to_regclass('public.measurement_points') AS measurement_points,
+              to_regclass('public.measurement_values') AS measurement_values,
               to_regclass('public.order_inventory_reservations') AS order_inventory_reservations,
               to_regclass('public.notification_projection_claims') AS notification_projection_claims,
               to_regclass('public.outbox_publication_claims') AS outbox_publication_claims,
@@ -68,6 +73,10 @@ test('PostgreSQL migration ledger serializes runners and rejects changed history
     assert.equal(tables.rows[0].materials, 'materials');
     assert.equal(tables.rows[0].boms, 'boms');
     assert.equal(tables.rows[0].bom_lines, 'bom_lines');
+    assert.equal(tables.rows[0].measurement_charts, 'measurement_charts');
+    assert.equal(tables.rows[0].measurement_chart_sizes, 'measurement_chart_sizes');
+    assert.equal(tables.rows[0].measurement_points, 'measurement_points');
+    assert.equal(tables.rows[0].measurement_values, 'measurement_values');
     assert.equal(tables.rows[0].order_inventory_reservations, 'order_inventory_reservations');
     assert.equal(tables.rows[0].notification_projection_claims, 'notification_projection_claims');
     assert.equal(tables.rows[0].outbox_publication_claims, 'outbox_publication_claims');

@@ -24,6 +24,7 @@ const ASSETS = Object.freeze({
   '/industrial-product.css': ['industrial-product.css', 'text/css; charset=utf-8', VISUAL_CACHE],
   '/bom.css': ['bom.css', 'text/css; charset=utf-8', VISUAL_CACHE],
   '/measurements.css': ['measurements.css', 'text/css; charset=utf-8', VISUAL_CACHE],
+  '/measurement-sync.css': ['measurement-sync.css', 'text/css; charset=utf-8', VISUAL_CACHE],
   '/ui/i18n-runtime.js': ['modules/i18n-runtime.js', JS, CACHE],
   '/ui/ui-capabilities.js': ['modules/ui-capabilities.js', JS, CACHE],
   '/ui/ui-validation.js': ['modules/ui-validation.js', JS, CACHE],
@@ -65,6 +66,7 @@ const ASSETS = Object.freeze({
   '/ui/materials.js': ['modules/materials.js', JS, VISUAL_CACHE],
   '/ui/bom.js': ['modules/bom.js', JS, VISUAL_CACHE],
   '/ui/measurements.js': ['modules/measurements.js', JS, VISUAL_CACHE],
+  '/ui/measurement-catalog-sync.js': ['modules/measurement-catalog-sync.js', JS, VISUAL_CACHE],
   '/ui/app-start.js': ['modules/app-start.js', JS, CACHE],
 });
 

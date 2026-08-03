@@ -82,9 +82,15 @@ test('cursor page responses reference bounded typed page schemas', () => {
   const notificationResponse = wholesaleV2OpenApi.paths['/notifications/page'].get.responses[200];
   assert.equal(notificationResponse.content['application/json'].schema.$ref, '#/components/schemas/NotificationPage');
   const notificationPage = wholesaleV2OpenApi.components.schemas.NotificationPage;
-  assert.deepEqual(notificationPage.required, ['items', 'nextCursor']);
+  assert.deepEqual(notificationPage.required, ['items', 'nextCursor', 'unreadCount']);
   assert.equal(notificationPage.additionalProperties, false);
   assert.equal(notificationPage.properties.items.maxItems, 200);
+  assert.deepEqual(notificationPage.properties.unreadCount, {
+    type: 'integer',
+    minimum: 0,
+    maximum: 9_007_199_254_740_991,
+    description: 'Exact unread notification count across every active organisation visible to the authenticated actor.',
+  });
 
   const workspaceResponse = wholesaleV2OpenApi.paths['/workspace/{section}/page'].get.responses[200];
   assert.equal(workspaceResponse.content['application/json'].schema.$ref, '#/components/schemas/WorkspaceSectionPage');

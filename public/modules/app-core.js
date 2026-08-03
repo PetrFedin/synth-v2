@@ -139,8 +139,12 @@ function renderLogin(message = '') {
       sessionStorage.setItem(TOKEN_KEY, state.token);
       await reload();
       renderApp();
-    } catch (error) { showInlineError(form, error.message); }
-    finally { setButtonBusy(submit, false, I18N.t('auth.signIn')); }
+    } catch (error) {
+      if (state.token) renderStartupFailure(error);
+      else showInlineError(form, error.message);
+    } finally {
+      if (submit.isConnected) setButtonBusy(submit, false, I18N.t('auth.signIn'));
+    }
   });
   card.append(form, el('p', { className: 'login-hint', text: I18N.t('auth.bootstrapHint') }));
   wrap.append(card);

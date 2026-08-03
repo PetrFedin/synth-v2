@@ -28,15 +28,16 @@ const state = {
   sidebarCollapsed: localStorage.getItem(SIDEBAR_KEY) === 'true',
 };
 const root = document.querySelector('#app');
+let workspaceHydrating = false;
 const workspacePaging = window.SynthaWorkspacePaging.create({
   request: (path, options) => api(path, options),
   getWorkspace: () => state.workspace,
   setWorkspace: workspace => { state.workspace = workspace; },
   onChange: () => {
-    if (state.token && state.user) renderApp();
+    if (!workspaceHydrating && state.token && state.user) renderApp();
   },
   onError: error => {
-    if (state.token && state.user) toast(error.message, 'error');
+    if (!workspaceHydrating && state.token && state.user) toast(error.message, 'error');
   },
   pageLimit: 100,
 });
@@ -50,18 +51,72 @@ window.addEventListener('syntha:locale-changed', () => {
 async function boot() {
   if (!state.token) return renderLogin();
   try { await reload(); renderApp(); }
-  catch { clearSession(); renderLogin(I18N.t('auth.sessionInvalid')); }
+  catch (error) {
+    if (error?.status === 401) {
+      clearSession();
+      renderLogin(I18N.t('auth.sessionInvalid'));
+    } else {
+      renderStartupFailure(error);
+    }
+  }
 }
 
 async function reload() {
   workspacePaging.abortAll();
-  const [me, workspace, notifications] = await Promise.all([
-    api('/v2/auth/me'), api('/v2/workspace'), api('/v2/notifications').catch(() => []),
-  ]);
-  state.user = me;
-  state.workspace = { ...emptyWorkspace(), ...workspace };
-  state.notifications = Array.isArray(notifications) ? notifications : [];
-  workspacePaging.reset(state.workspace);
+  const previous = { user: state.user, workspace: state.workspace, notifications: state.notifications };
+  workspaceHydrating = true;
+  try {
+    const [me, workspace, notifications] = await Promise.all([
+      api('/v2/auth/me'), api('/v2/workspace'), api('/v2/notifications').catch(() => []),
+    ]);
+    state.workspace = { ...emptyWorkspace(), ...workspace };
+    workspacePaging.reset(state.workspace);
+    const foundationReady = await Promise.all([
+      workspacePaging.drain('memberships', { maxPages: 50 }),
+      workspacePaging.drain('organisations', { maxPages: 50 }),
+    ]);
+    if (!foundationReady.every(Boolean)) throw workspaceFoundationError();
+    state.user = me;
+    state.notifications = Array.isArray(notifications) ? notifications : [];
+  } catch (error) {
+    state.user = previous.user;
+    state.workspace = previous.workspace;
+    state.notifications = previous.notifications;
+    workspacePaging.reset(state.workspace);
+    throw error;
+  } finally {
+    workspaceHydrating = false;
+  }
+}
+
+function renderStartupFailure(error) {
+  clear(root);
+  const wrap = el('main', { className: 'login-wrap' });
+  const card = el('section', { className: 'card login' });
+  card.append(
+    languageSwitcher(),
+    brandBlock(),
+    notice(error?.message || localText('\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c Workspace.', 'Workspace could not be loaded.'), 'error'),
+  );
+  const actions = el('div', { className: 'row' });
+  const retry = el('button', { className: 'button primary', rawText: localText('\u041f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u044c', 'Retry'), type: 'button' });
+  retry.addEventListener('click', async () => {
+    setButtonBusy(retry, true, localText('\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430\u2026', 'Loading\u2026'));
+    try { await reload(); renderApp(); }
+    catch (retryError) { renderStartupFailure(retryError); }
+  });
+  const signOut = el('button', { className: 'button', rawText: localText('\u0412\u044b\u0439\u0442\u0438', 'Sign out'), type: 'button' });
+  signOut.addEventListener('click', () => { clearSession(); renderLogin(); });
+  actions.append(retry, signOut);
+  card.append(actions);
+  wrap.append(card);
+  root.append(wrap);
+}
+
+function workspaceFoundationError() {
+  const error = new Error('WORKSPACE_FOUNDATION_INCOMPLETE: Membership and organisation context could not be loaded completely');
+  error.code = 'WORKSPACE_FOUNDATION_INCOMPLETE';
+  return error;
 }
 
 function renderLogin(message = '') {

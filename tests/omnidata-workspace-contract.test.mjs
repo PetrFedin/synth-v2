@@ -6,31 +6,48 @@ async function source(path) {
   return readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 }
 
-test('the Syntha shell loads V4 after every earlier Omnidata layer', async () => {
+test('the Syntha shell loads V5 after every earlier Omnidata layer', async () => {
   const html = await source('public/index.html');
-  const build = 'visual-20260803-4';
+  const build = 'visual-20260803-5';
   assert.match(html, new RegExp(`<meta name="syntha-build" content="${build}">`));
-  for (const file of ['omnidata.css', 'omnidata-fidelity.css', 'omnidata-v3.css', 'omnidata-v4.css']) {
-    assert.match(html, new RegExp(`<link rel="stylesheet" href="\\/${file.replace('.', '\\.')}\\?v=${build}">`));
+  for (const file of [
+    'omnidata.css',
+    'omnidata-fidelity.css',
+    'omnidata-v3.css',
+    'omnidata-v4.css',
+    'omnidata-v5.css',
+    'omnidata-v5-workspace.css',
+    'omnidata-v5-responsive.css',
+  ]) {
+    assert.match(html, new RegExp(`<link rel="stylesheet" href="\\/${file.replaceAll('.', '\\.')}\\?v=${build}">`));
   }
 
-  const baseStyleIndex = html.indexOf(`/omnidata.css?v=${build}`);
-  const fidelityStyleIndex = html.indexOf(`/omnidata-fidelity.css?v=${build}`);
-  const v3StyleIndex = html.indexOf(`/omnidata-v3.css?v=${build}`);
-  const v4StyleIndex = html.indexOf(`/omnidata-v4.css?v=${build}`);
+  const styleOrder = [
+    `/omnidata.css?v=${build}`,
+    `/omnidata-fidelity.css?v=${build}`,
+    `/omnidata-v3.css?v=${build}`,
+    `/omnidata-v4.css?v=${build}`,
+    `/omnidata-v5.css?v=${build}`,
+    `/omnidata-v5-workspace.css?v=${build}`,
+    `/omnidata-v5-responsive.css?v=${build}`,
+  ].map(asset => html.indexOf(asset));
+  styleOrder.forEach(index => assert.ok(index >= 0));
+  for (let index = 1; index < styleOrder.length; index += 1) {
+    assert.ok(styleOrder[index - 1] < styleOrder[index]);
+  }
+
   const formIndex = html.indexOf('/ui/open-form.js');
   const workspaceIndex = html.indexOf(`/ui/omnidata-workspace.js?v=${build}`);
   const fidelityIndex = html.indexOf(`/ui/omnidata-fidelity.js?v=${build}`);
   const v4Index = html.indexOf(`/ui/omnidata-v4.js?v=${build}`);
+  const v5Index = html.indexOf(`/ui/omnidata-v5.js?v=${build}`);
   const startIndex = html.indexOf('/ui/app-start.js');
 
-  assert.ok(baseStyleIndex >= 0 && baseStyleIndex < fidelityStyleIndex);
-  assert.ok(fidelityStyleIndex < v3StyleIndex);
-  assert.ok(v3StyleIndex < v4StyleIndex);
   assert.ok(formIndex >= 0 && formIndex < workspaceIndex);
   assert.ok(workspaceIndex < fidelityIndex);
   assert.ok(fidelityIndex < v4Index);
-  assert.ok(v4Index < startIndex);
+  assert.ok(v4Index < v5Index);
+  assert.ok(v5Index < startIndex);
 });
 
 test('the Omnidata layer provides tabs, KPI density, registries and a persistent inspector', async () => {

@@ -1,6 +1,8 @@
 import { invariant } from '../core/errors.mjs';
 import { createAuthService } from '../application/auth-service.mjs';
 import { createCatalogService } from '../application/catalog-service.mjs';
+import { createCollaborationCalendarService } from '../application/collaboration-calendar-service.mjs';
+import { createIntegratedWorkspaceQueryService } from '../application/integrated-workspace-query-service.mjs';
 import { createMaintenanceService } from '../application/maintenance-service.mjs';
 import { withNotificationPageMetadata } from '../application/notification-page-service.mjs';
 import { createOutboxPublisherService } from '../application/outbox-publisher-service.mjs';
@@ -10,15 +12,15 @@ import { createPartnerAccessService } from '../application/partner-access-servic
 import { createShowroomSelectionService } from '../application/showroom-selection-service.mjs';
 import { createOrderBuilderService } from '../application/order-builder-service.mjs';
 import { createNotificationService } from '../application/notification-service.mjs';
-import { createWorkspaceQueryService } from '../application/workspace-query-service.mjs';
 import { createPostgresAuthStore } from '../infrastructure/postgres-auth-store.mjs';
 import { createPostgresCatalogStore } from '../infrastructure/postgres-catalog-store.mjs';
+import { createPostgresCollaborationCalendarStore } from '../infrastructure/postgres-collaboration-calendar-store.mjs';
+import { createPostgresIntegratedWorkspaceReader } from '../infrastructure/postgres-integrated-workspace-reader.mjs';
 import { createPostgresMaintenanceStore } from '../infrastructure/postgres-maintenance-store.mjs';
 import { createPostgresOutboxPublicationStore } from '../infrastructure/postgres-outbox-publication-store.mjs';
 import { createPostgresWholesaleStore } from '../infrastructure/postgres-store.mjs';
 import { createPostgresNotificationProjectionStore } from '../infrastructure/postgres-notification-projection-store.mjs';
 import { createPostgresNotificationReader } from '../infrastructure/postgres-notification-reader.mjs';
-import { createPostgresWorkspaceReader } from '../infrastructure/postgres-workspace-reader.mjs';
 import { createWholesaleHttpHandler } from '../http/api.mjs';
 import { createWholesaleFetchHandler } from '../http/fetch-api.mjs';
 import { resolveRuntimeIdGenerator } from './id-generator.mjs';
@@ -79,6 +81,12 @@ export function createPostgresWholesaleRuntime({
   const catalog = createCatalogService({ wholesaleStore: store, catalogStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) });
   const partners = createPartnerAccessService(options);
   const collaboration = createShowroomSelectionService({ ...options, catalogReader: catalog });
+  const collaborationCalendar = createCollaborationCalendarService({
+    store: createPostgresCollaborationCalendarStore({ pool }),
+    membershipReader: store,
+    nextId: runtimeNextId,
+    ...(clock ? { clock } : {}),
+  });
   const orders = createOrderBuilderService(options);
   const projectionStore = createPostgresNotificationProjectionStore({ pool });
   const notificationReader = createPostgresNotificationReader({ pool });
@@ -115,9 +123,10 @@ export function createPostgresWholesaleRuntime({
     ...(revokedSessionRetentionMs !== undefined ? { revokedSessionRetentionMs } : {}),
     ...(outboxRetentionMs !== undefined ? { outboxRetentionMs } : {}),
   });
-  const workspace = createWorkspaceQueryService({ reader: createPostgresWorkspaceReader({ pool }) });
-  const transport = { authenticate: auth.authenticate, auth, readiness, platform, catalog, partners, collaboration, orders, notifications, workspace };
+  const workspaceReader = createPostgresIntegratedWorkspaceReader({ pool });
+  const workspace = createIntegratedWorkspaceQueryService({ reader: workspaceReader });
+  const transport = { authenticate: auth.authenticate, auth, readiness, platform, catalog, partners, collaboration, collaborationCalendar, orders, notifications, workspace };
   const handler = createWholesaleHttpHandler(transport);
   const fetchHandler = createWholesaleFetchHandler(transport);
-  return Object.freeze({ auth, readiness, maintenance, outboxPublication, store, catalogStore, platform, catalog, partners, collaboration, orders, notifications, workspace, handler, fetchHandler });
+  return Object.freeze({ auth, readiness, maintenance, outboxPublication, store, catalogStore, platform, catalog, partners, collaboration, collaborationCalendar, orders, notifications, workspace, handler, fetchHandler });
 }

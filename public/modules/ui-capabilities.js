@@ -14,6 +14,10 @@
     COMMERCIAL_CYCLE_ADVANCE: 'commercial-cycle.advance',
     ORDER_WRITE: 'order.write',
     ORDER_CONFIRM: 'order.confirm',
+    COLLABORATION_READ: 'collaboration.read',
+    COLLABORATION_WRITE: 'collaboration.write',
+    CALENDAR_READ: 'calendar.read',
+    CALENDAR_WRITE: 'calendar.write',
   });
 
   const ALL = Object.freeze(Object.values(CAPABILITIES));
@@ -31,6 +35,10 @@
       CAPABILITIES.COMMERCIAL_CYCLE_ADVANCE,
       CAPABILITIES.ORDER_WRITE,
       CAPABILITIES.ORDER_CONFIRM,
+      CAPABILITIES.COLLABORATION_READ,
+      CAPABILITIES.COLLABORATION_WRITE,
+      CAPABILITIES.CALENDAR_READ,
+      CAPABILITIES.CALENDAR_WRITE,
     ]),
     buyer: Object.freeze([
       CAPABILITIES.PARTNER_RELATIONSHIP_MANAGE,
@@ -40,9 +48,22 @@
       CAPABILITIES.COMMERCIAL_CYCLE_ADVANCE,
       CAPABILITIES.ORDER_WRITE,
       CAPABILITIES.ORDER_CONFIRM,
+      CAPABILITIES.COLLABORATION_READ,
+      CAPABILITIES.COLLABORATION_WRITE,
+      CAPABILITIES.CALENDAR_READ,
+      CAPABILITIES.CALENDAR_WRITE,
     ]),
-    finance: Object.freeze([CAPABILITIES.ORDER_CONFIRM]),
-    viewer: Object.freeze([]),
+    finance: Object.freeze([
+      CAPABILITIES.ORDER_CONFIRM,
+      CAPABILITIES.COLLABORATION_READ,
+      CAPABILITIES.COLLABORATION_WRITE,
+      CAPABILITIES.CALENDAR_READ,
+      CAPABILITIES.CALENDAR_WRITE,
+    ]),
+    viewer: Object.freeze([
+      CAPABILITIES.COLLABORATION_READ,
+      CAPABILITIES.CALENDAR_READ,
+    ]),
   });
 
   function activeMemberships(workspace = {}) {

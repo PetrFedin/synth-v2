@@ -38,6 +38,7 @@ const ASSETS = Object.freeze({
   '/ui/dom-1.js': ['modules/dom-1.js', JS, CACHE],
   '/ui/dom-2.js': ['modules/dom-2.js', JS, CACHE],
   '/ui/omnidata-workspace.js': ['modules/omnidata-workspace.js', JS, CACHE],
+  '/ui/order-lifecycle-actions.js': ['modules/order-lifecycle-actions.js', JS, CACHE],
   '/ui/omnidata-polish.js': ['modules/omnidata-polish.js', JS, CACHE],
   '/ui/app-start.js': ['modules/app-start.js', JS, CACHE],
 });

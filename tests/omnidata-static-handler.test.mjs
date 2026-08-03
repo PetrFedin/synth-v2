@@ -8,6 +8,7 @@ import { createStandaloneHandler } from '../src/web/static-handler.mjs';
 
 const publicDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 const build = 'visual-20260803-4';
+const industrialBuild = 'industrial-20260803-1';
 
 async function withServer(handler, work) {
   const server = createServer(handler);
@@ -21,7 +22,7 @@ async function withServer(handler, work) {
   }
 }
 
-test('standalone workspace serves the complete Syntha Omnidata V4 visual stack', async () => {
+test('standalone workspace serves the complete Syntha Omnidata V4 and industrial planning stack', async () => {
   const handler = createStandaloneHandler({
     publicDir,
     apiHandler: (_request, response) => {
@@ -38,14 +39,18 @@ test('standalone workspace serves the complete Syntha Omnidata V4 visual stack',
     assert.match(html, new RegExp(`\\/omnidata-fidelity\\.css\\?v=${build}`));
     assert.match(html, new RegExp(`\\/omnidata-v3\\.css\\?v=${build}`));
     assert.match(html, new RegExp(`\\/omnidata-v4\\.css\\?v=${build}`));
+    assert.match(html, new RegExp(`\\/planning\\.css\\?v=${industrialBuild}`));
     assert.match(html, new RegExp(`\\/ui\\/omnidata-workspace\\.js\\?v=${build}`));
     assert.match(html, new RegExp(`\\/ui\\/omnidata-v4\\.js\\?v=${build}`));
+    assert.match(html, new RegExp(`\\/ui\\/planning-core\\.js\\?v=${industrialBuild}`));
+    assert.match(html, new RegExp(`\\/ui\\/planning\\.js\\?v=${industrialBuild}`));
 
     for (const [asset, contract] of [
       ['/omnidata.css', /\.od-master-detail/],
       ['/omnidata-fidelity.css', /\.od-status-strip/],
       ['/omnidata-v3.css', /--accent:\s*#e95b2a/],
       ['/omnidata-v4.css', /--accent:\s*#5d39cf/],
+      ['/planning.css', /\.planning-readiness/],
     ]) {
       const cssResponse = await fetch(`${base}${asset}`);
       assert.equal(cssResponse.status, 200, asset);
@@ -57,6 +62,8 @@ test('standalone workspace serves the complete Syntha Omnidata V4 visual stack',
     for (const [asset, contract] of [
       ['/ui/omnidata-workspace.js', /function renderCatalog\(/],
       ['/ui/omnidata-v4.js', /function odV4Navigation\(/],
+      ['/ui/planning-core.js', /function buildPortfolio\(/],
+      ['/ui/planning.js', /function renderPlanning\(/],
     ]) {
       const moduleResponse = await fetch(`${base}${asset}`);
       assert.equal(moduleResponse.status, 200, asset);

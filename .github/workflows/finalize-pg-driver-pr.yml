@@ -1,0 +1,105 @@
+name: Finalize PostgreSQL driver compatibility
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: finalize-pg-driver-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  finalize:
+    if: github.head_ref == 'automation/generate-package-lock'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: true
+      NPM_CONFIG_AUDIT: "false"
+      NPM_CONFIG_FUND: "false"
+      NPM_CONFIG_IGNORE_SCRIPTS: "true"
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: syntha
+          POSTGRES_PASSWORD: syntha_test
+          POSTGRES_DB: syntha_v2_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U syntha -d syntha_v2_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: automation/generate-package-lock
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Normalize PostgreSQL integration imports and remove temporary automation
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          files = [
+              'tests/postgres-auth-store.test.mjs',
+              'tests/postgres-integration.test.mjs',
+              'tests/zu-postgres-order-cancellation.test.mjs',
+              'tests/zv-postgres-availability-rollback.test.mjs',
+              'tests/zw-postgres-catalog.test.mjs',
+              'tests/zx-postgres-auth-security.test.mjs',
+              'tests/zy-postgres-readiness.test.mjs',
+              'tests/zz-postgres-migrator.test.mjs',
+          ]
+          helper_import = "import { createPostgresTestPool } from './postgres-test-pool.mjs';"
+          for name in files:
+              path = Path(name)
+              source = path.read_text()
+              source = source.replace(
+                  "  const { Pool } = await import('pg');\n  const pool = new Pool(",
+                  "  const pool = createPostgresTestPool(",
+              )
+              if helper_import not in source:
+                  marker = '\n\nconst '
+                  position = source.find(marker)
+                  if position < 0:
+                      raise RuntimeError(f'Cannot locate import boundary in {name}')
+                  source = source[:position] + '\n' + helper_import + source[position:]
+              path.write_text(source)
+          PY
+          rm -f .automation/fix-postgres-test-driver.patch
+          rm -f .github/workflows/apply-postgres-test-driver.yml
+          rm -f .github/workflows/apply-pg-driver-pr.yml
+          rm -f .github/workflows/finalize-pg-driver-pr.yml
+          rm -f tests/pg-test-facade.mjs tests/pg-test-loader.mjs tests/register-pg-test-loader.mjs
+
+      - name: Verify all contracts with PostgreSQL
+        env:
+          POSTGRES_TEST_URL: postgresql://syntha:syntha_test@127.0.0.1:5432/syntha_v2_test
+        run: npm run verify
+
+      - name: Commit verified result
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: normalize PostgreSQL integration driver imports [pg-driver-finalized]"
+          git push origin HEAD:automation/generate-package-lock

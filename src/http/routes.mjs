@@ -12,6 +12,11 @@ const MATERIAL_FIELDS = ['name', 'type', 'unit', 'supplierName', 'supplierRefere
 const MATERIAL_BODY = bodyContract(['code', 'brandId', ...MATERIAL_FIELDS]);
 const MATERIAL_UPDATE_BODY = bodyContract(['expectedVersion', ...MATERIAL_FIELDS]);
 const MATERIAL_PUBLISH_BODY = bodyContract(['expectedVersion']);
+const BOM_EDITABLE_FIELDS = ['currency', 'lines', 'laborCost', 'overheadCost', 'logisticsCost', 'otherCost', 'notes'];
+const BOM_LINE_FIELDS = ['lineId', 'component', 'materialCode', 'quantity', 'wastePercent', 'exchangeRate'];
+const BOM_BODY = bodyContract(['sku', ...BOM_EDITABLE_FIELDS], {}, { lines: BOM_LINE_FIELDS });
+const BOM_UPDATE_BODY = bodyContract(['expectedVersion', ...BOM_EDITABLE_FIELDS], {}, { lines: BOM_LINE_FIELDS });
+const BOM_PUBLISH_BODY = bodyContract(['expectedVersion']);
 const SHOWROOM_BODY = bodyContract(['collectionId', 'brandId', 'name', 'opensAt', 'closesAt']);
 const RELATIONSHIP_BODY = bodyContract(['brandId', 'shopId']);
 const INVITATION_BODY = bodyContract(['showroomId', 'shopId', 'expiresAt']);
@@ -26,10 +31,11 @@ const ORDER_ACCEPT_BODY = bodyContract(['orderId', 'organisationId', 'expectedVe
 const ORDER_VERSION_BODY = bodyContract(['expectedVersion']);
 const ORDER_CANCEL_BODY = bodyContract(['orderId', 'reason', 'expectedVersion']);
 
-export function createWholesaleRoutes({ platform, catalog, materials, partners, collaboration, orders, notifications, workspace }) {
+export function createWholesaleRoutes({ platform, catalog, materials, boms, partners, collaboration, orders, notifications, workspace }) {
   invariant(platform && partners && collaboration && orders && notifications && workspace, 'HTTP_SERVICES_REQUIRED', 'All V2 application services are required');
   const catalogService = catalog ?? unavailableCatalog();
   const materialService = materials ?? unavailableMaterials();
+  const bomService = boms ?? unavailableBoms();
   return [
     mutate('POST', /^\/v2\/campaigns$/, CAMPAIGN_BODY, ({ commandId, actorId, body }) => platform.createCampaign(commandId, actorId, body)),
     mutate('POST', /^\/v2\/campaigns\/([^/]+)\/open$/, EMPTY_BODY, ({ commandId, actorId, params }) => platform.openCampaign(commandId, actorId, params[0])),
@@ -45,6 +51,11 @@ export function createWholesaleRoutes({ platform, catalog, materials, partners, 
     mutate('POST', /^\/v2\/materials$/, MATERIAL_BODY, ({ commandId, actorId, body }) => materialService.createMaterial(commandId, actorId, body)),
     mutate('PATCH', /^\/v2\/materials\/([^/]+)$/, MATERIAL_UPDATE_BODY, ({ commandId, actorId, params, body }) => materialService.updateMaterial(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/materials\/([^/]+)\/publish$/, MATERIAL_PUBLISH_BODY, ({ commandId, actorId, params, body }) => materialService.publishMaterial(commandId, actorId, params[0], body)),
+    read('GET', /^\/v2\/boms$/, ['limit', 'cursor', 'q', 'status', 'brandId'], ({ actorId, query }) => bomService.pageForActor(actorId, query)),
+    read('GET', /^\/v2\/boms\/([^/]+)$/, [], ({ actorId, params }) => bomService.getForActor(actorId, params[0])),
+    mutate('POST', /^\/v2\/boms$/, BOM_BODY, ({ commandId, actorId, body }) => bomService.createBom(commandId, actorId, body)),
+    mutate('PATCH', /^\/v2\/boms\/([^/]+)$/, BOM_UPDATE_BODY, ({ commandId, actorId, params, body }) => bomService.updateBom(commandId, actorId, params[0], body)),
+    mutate('POST', /^\/v2\/boms\/([^/]+)\/publish$/, BOM_PUBLISH_BODY, ({ commandId, actorId, params, body }) => bomService.publishBom(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/showrooms$/, SHOWROOM_BODY, ({ commandId, actorId, body }) => collaboration.createShowroom(commandId, actorId, body)),
     mutate('POST', /^\/v2\/showrooms\/([^/]+)\/open$/, EMPTY_BODY, ({ commandId, actorId, params }) => collaboration.openShowroom(commandId, actorId, params[0])),
     mutate('POST', /^\/v2\/relationships$/, RELATIONSHIP_BODY, ({ commandId, actorId, body }) => partners.requestRelationship(commandId, actorId, body)),
@@ -88,7 +99,7 @@ export function createWholesaleRoutes({ platform, catalog, materials, partners, 
     read('GET', /^\/v2\/workspace\/([^/]+)\/page$/, ['limit', 'cursor'], ({ actorId, params, query }) => workspace.pageForActor(actorId, { section: params[0], limit: query.limit, cursor: query.cursor })),
     read('GET', /^\/v2\/workspace$/, ['limit'], ({ actorId, query }) => workspace.loadForActor(actorId, { limit: query.limit })),
     read('GET', /^\/v2\/notifications\/page$/, ['limit', 'cursor'], ({ actorId, query }) => notifications.pageForActor(actorId, { limit: query.limit, cursor: query.cursor })),
-    read('GET', /^\/v2\/notifications$/, ['limit'], ({ actorId, query }) => notifications.listForActor(actorId, { limit: query.limit })),
+    read('GET', /^\/v2\/notifications$/, ['limit'], ({ actorId, query }) => notifications.listForActor(actorId, { limit: query.limit, cursor: query.cursor })),
     mutate('POST', /^\/v2\/notifications\/([^/]+)\/read$/, EMPTY_BODY, ({ commandId, actorId, params }) => notifications.markRead(commandId, actorId, params[0])),
   ];
 }
@@ -127,4 +138,8 @@ function unavailableCatalog() {
 function unavailableMaterials() {
   const fail = () => invariant(false, 'MATERIAL_SERVICE_REQUIRED', 'Material service is required');
   return Object.freeze({ createMaterial: fail, updateMaterial: fail, publishMaterial: fail, pageForActor: fail, getForActor: fail });
+}
+function unavailableBoms() {
+  const fail = () => invariant(false, 'BOM_SERVICE_REQUIRED', 'BOM service is required');
+  return Object.freeze({ createBom: fail, updateBom: fail, publishBom: fail, pageForActor: fail, getForActor: fail });
 }

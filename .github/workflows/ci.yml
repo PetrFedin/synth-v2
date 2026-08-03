@@ -54,6 +54,23 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
 
       - name: Verify Syntha V2 with PostgreSQL
-        run: npm run verify
+        shell: bash
         env:
           POSTGRES_TEST_URL: postgresql://syntha:syntha_test@127.0.0.1:5432/syntha_v2_test
+        run: |
+          set +e
+          npm run verify 2>&1 | tee postgres-verify.log
+          status=${PIPESTATUS[0]}
+          echo "$status" > postgres-verify-status.txt
+          exit "$status"
+
+      - name: Upload PostgreSQL verification diagnostics
+        if: always()
+        uses: actions/upload-artifact@615b319bd27bb32c3d64dca6b6ed6974d5fbe653 # v6.0.0
+        with:
+          name: syntha-postgres-verify
+          path: |
+            postgres-verify.log
+            postgres-verify-status.txt
+          if-no-files-found: error
+          retention-days: 1

@@ -12,13 +12,18 @@ async function migrationDir(name, sql) {
   return directory;
 }
 
-function fakePool({ indexes = {}, failLedgerOnce = false, appliedChecksums = {} } = {}) {
+function fakePool({ indexes = {}, failLedgerOnce = false, appliedChecksums = {}, lockResponses = [true] } = {}) {
   const queries = [];
   let ledgerFailurePending = failLedgerOnce;
+  const pendingLockResponses = [...lockResponses];
   const state = new Map(Object.entries(indexes));
   const client = {
     async query(sql, params = []) {
       queries.push({ sql, params });
+      if (sql === 'SELECT pg_try_advisory_lock($1) AS locked') {
+        const locked = pendingLockResponses.length > 1 ? pendingLockResponses.shift() : pendingLockResponses[0];
+        return { rowCount: 1, rows: [{ locked }] };
+      }
       if (sql === 'SELECT checksum FROM schema_migrations WHERE version = $1') {
         const checksum = appliedChecksums[params[0]];
         return checksum ? { rowCount: 1, rows: [{ checksum }] } : { rowCount: 0, rows: [] };
@@ -146,4 +151,50 @@ test('online migration rejects unsafe or multi-statement SQL before execution', 
     await assert.rejects(() => migratePostgres({ pool: fixture.pool, migrationsDir: directory }));
     assert.equal(fixture.queries.some((query) => /^CREATE INDEX CONCURRENTLY/i.test(query.sql)), false);
   }
+});
+
+test('migration lock polling does not leave a blocking server-side advisory lock wait', async () => {
+  const directory = await migrationDir('001_base.sql', 'CREATE TABLE example (id text PRIMARY KEY);');
+  const fixture = fakePool({ lockResponses: [false, false, true] });
+  const sleeps = [];
+
+  const result = await migratePostgres({
+    pool: fixture.pool,
+    migrationsDir: directory,
+    lockAttempts: 3,
+    lockDelayMs: 7,
+    sleep: async (delayMs) => sleeps.push(delayMs),
+  });
+
+  assert.deepEqual(result.applied, ['001_base.sql']);
+  assert.deepEqual(sleeps, [7, 7]);
+  const sql = fixture.queries.map((query) => query.sql);
+  assert.deepEqual(sql.slice(0, 3), [
+    'SELECT pg_try_advisory_lock($1) AS locked',
+    'SELECT pg_try_advisory_lock($1) AS locked',
+    'SELECT pg_try_advisory_lock($1) AS locked',
+  ]);
+  assert.equal(sql.includes('SELECT pg_advisory_lock($1)'), false);
+  assert.ok(sql.indexOf('BEGIN') > 2, 'no transaction may begin while a runner is waiting for the migration lock');
+});
+
+test('migration lock timeout fails before schema or ledger mutation and releases the client', async () => {
+  const directory = await migrationDir('001_base.sql', 'CREATE TABLE example (id text PRIMARY KEY);');
+  const fixture = fakePool({ lockResponses: [false] });
+
+  await assert.rejects(
+    () => migratePostgres({
+      pool: fixture.pool,
+      migrationsDir: directory,
+      lockAttempts: 2,
+      lockDelayMs: 0,
+      sleep: async () => undefined,
+    }),
+    (error) => error?.code === 'MIGRATION_LOCK_TIMEOUT' && error.details?.attempts === 2,
+  );
+
+  const sql = fixture.queries.map((query) => query.sql);
+  assert.equal(sql.some((value) => value.startsWith('CREATE TABLE IF NOT EXISTS schema_migrations')), false);
+  assert.equal(sql.includes('BEGIN'), false);
+  assert.equal(sql.at(-1), 'RELEASE');
 });

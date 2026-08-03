@@ -8,7 +8,8 @@ import { createStandaloneHandler } from '../src/web/static-handler.mjs';
 
 const publicDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 const build = 'visual-20260803-5';
-const industrialBuild = 'industrial-20260803-1';
+const planningBuild = 'industrial-20260803-1';
+const stylesBuild = 'industrial-20260803-2';
 
 async function withServer(handler, work) {
   const server = createServer(handler);
@@ -22,7 +23,7 @@ async function withServer(handler, work) {
   }
 }
 
-test('standalone workspace serves Syntha Omnidata V5 with industrial planning', async () => {
+test('standalone workspace serves Syntha Omnidata V5 with industrial planning and style master', async () => {
   const handler = createStandaloneHandler({
     publicDir,
     apiHandler: (_request, response) => {
@@ -44,12 +45,16 @@ test('standalone workspace serves Syntha Omnidata V5 with industrial planning', 
       'omnidata-v5-workspace.css',
       'omnidata-v5-responsive.css',
     ]) assert.match(html, new RegExp(`\\/${asset.replaceAll('.', '\\.')}\\?v=${build}`));
-    assert.match(html, new RegExp(`\\/planning\\.css\\?v=${industrialBuild}`));
+    assert.match(html, new RegExp(`\\/planning\\.css\\?v=${planningBuild}`));
+    assert.match(html, new RegExp(`\\/style-master\\.css\\?v=${stylesBuild}`));
     for (const asset of ['omnidata-workspace.js', 'omnidata-v4.js', 'omnidata-v5.js']) {
       assert.match(html, new RegExp(`\\/ui\\/${asset.replaceAll('.', '\\.')}\\?v=${build}`));
     }
     for (const asset of ['planning-core.js', 'planning.js']) {
-      assert.match(html, new RegExp(`\\/ui\\/${asset.replaceAll('.', '\\.')}\\?v=${industrialBuild}`));
+      assert.match(html, new RegExp(`\\/ui\\/${asset.replaceAll('.', '\\.')}\\?v=${planningBuild}`));
+    }
+    for (const asset of ['styles-core.js', 'styles.js']) {
+      assert.match(html, new RegExp(`\\/ui\\/${asset.replaceAll('.', '\\.')}\\?v=${stylesBuild}`));
     }
 
     for (const [asset, contract] of [
@@ -61,6 +66,7 @@ test('standalone workspace serves Syntha Omnidata V5 with industrial planning', 
       ['/omnidata-v5-workspace.css', /minmax\(420px, 460px\)/],
       ['/omnidata-v5-responsive.css', /@media \(max-width: 980px\)/],
       ['/planning.css', /\.planning-readiness/],
+      ['/style-master.css', /\.style-readiness/],
     ]) {
       const cssResponse = await fetch(`${base}${asset}`);
       assert.equal(cssResponse.status, 200, asset);
@@ -75,6 +81,8 @@ test('standalone workspace serves Syntha Omnidata V5 with industrial planning', 
       ['/ui/omnidata-v5.js', /function odV5Navigation\(/],
       ['/ui/planning-core.js', /function buildPortfolio\(/],
       ['/ui/planning.js', /function renderPlanning\(/],
+      ['/ui/styles-core.js', /function buildRegistry\(/],
+      ['/ui/styles.js', /function renderStyles\(/],
     ]) {
       const moduleResponse = await fetch(`${base}${asset}`);
       assert.equal(moduleResponse.status, 200, asset);

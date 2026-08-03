@@ -26,6 +26,7 @@ test('PostgreSQL migration ledger serializes runners and rejects changed history
     '009_outbox_publication_claims.sql',
     '010_outbox_dead_letter_recovery.sql',
     '011_global_command_registry.sql',
+    '012_workspace_paging_indexes.sql',
   ];
   try {
     await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');

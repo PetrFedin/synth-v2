@@ -46,6 +46,15 @@ function orderEntity(item) {
 function dealEntity(item) { return entity(item.id, item.status, [`\u0417\u0430\u043a\u0430\u0437: ${item.orderId}`, pairName(item.brandId,item.shopId), money(item.totalAmount)], []); }
 function calendarEntity(item) { return entity(item.title || item.type, item.visibility || item.type, [formatDate(item.startsAt), `\u041e\u0440\u0433\u0430\u043d\u0438\u0437\u0430\u0446\u0438\u044f: ${orgName(item.ownerOrganisationId)}`], []); }
 function notificationEntity(item) {
-  const actions = item.status !== 'read' ? [actionButton('\u041f\u0440\u043e\u0447\u0438\u0442\u0430\u043d\u043e', () => mutate(`/v2/notifications/${encodeURIComponent(item.id)}/read`, {}))] : [];
-  return entity(item.title || item.type, item.status, [item.message || item.type, formatDate(item.createdAt)], actions);
+  const actions = item.status !== 'read' ? [notificationReadButton(item)] : [];
+  return entity(item.title || item.type, item.status, [item.body || item.message || item.type, formatDate(item.createdAt)], actions);
+}
+function notificationReadButton(item) {
+  const button = el('button', { className: 'button small', text: '\u041f\u0440\u043e\u0447\u0438\u0442\u0430\u043d\u043e', type: 'button' });
+  button.addEventListener('click', () => runAction(async () => {
+    const updated = await mutate(`/v2/notifications/${encodeURIComponent(item.id)}/read`, {});
+    window.SynthaNotificationController.applyUpdated(updated);
+    toast(I18N.t('common.operationComplete'), 'success');
+  }, button));
+  return button;
 }

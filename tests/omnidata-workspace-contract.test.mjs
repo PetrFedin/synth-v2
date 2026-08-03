@@ -6,9 +6,9 @@ async function source(path) {
   return readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 }
 
-test('the Syntha shell loads V5 after every earlier Omnidata layer', async () => {
+test('the Syntha shell loads V6 after every earlier Omnidata layer', async () => {
   const html = await source('public/index.html');
-  const build = 'visual-20260803-5';
+  const build = 'visual-20260803-6';
   assert.match(html, new RegExp(`<meta name="syntha-build" content="${build}">`));
   for (const file of [
     'omnidata.css',
@@ -18,6 +18,7 @@ test('the Syntha shell loads V5 after every earlier Omnidata layer', async () =>
     'omnidata-v5.css',
     'omnidata-v5-workspace.css',
     'omnidata-v5-responsive.css',
+    'omnidata-v6.css',
   ]) {
     assert.match(html, new RegExp(`<link rel="stylesheet" href="\\/${file.replaceAll('.', '\\.')}\\?v=${build}">`));
   }
@@ -30,6 +31,7 @@ test('the Syntha shell loads V5 after every earlier Omnidata layer', async () =>
     `/omnidata-v5.css?v=${build}`,
     `/omnidata-v5-workspace.css?v=${build}`,
     `/omnidata-v5-responsive.css?v=${build}`,
+    `/omnidata-v6.css?v=${build}`,
   ].map(asset => html.indexOf(asset));
   styleOrder.forEach(index => assert.ok(index >= 0));
   for (let index = 1; index < styleOrder.length; index += 1) {
@@ -41,13 +43,15 @@ test('the Syntha shell loads V5 after every earlier Omnidata layer', async () =>
   const fidelityIndex = html.indexOf(`/ui/omnidata-fidelity.js?v=${build}`);
   const v4Index = html.indexOf(`/ui/omnidata-v4.js?v=${build}`);
   const v5Index = html.indexOf(`/ui/omnidata-v5.js?v=${build}`);
+  const v6Index = html.indexOf(`/ui/omnidata-v6.js?v=${build}`);
   const startIndex = html.indexOf('/ui/app-start.js');
 
   assert.ok(formIndex >= 0 && formIndex < workspaceIndex);
   assert.ok(workspaceIndex < fidelityIndex);
   assert.ok(fidelityIndex < v4Index);
   assert.ok(v4Index < v5Index);
-  assert.ok(v5Index < startIndex);
+  assert.ok(v5Index < v6Index);
+  assert.ok(v6Index < startIndex);
 });
 
 test('the Omnidata layer provides tabs, KPI density, registries and a persistent inspector', async () => {

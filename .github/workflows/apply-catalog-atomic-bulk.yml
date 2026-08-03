@@ -38,10 +38,10 @@ jobs:
         run: |
           set -euo pipefail
           cat .automation/catalog-atomic-bulk.patch.gz.b64.* | base64 --decode > /tmp/catalog-atomic-bulk.patch.gz
-          echo 'd09c8230380fbb04f7258528fdbf83d13c4c4e99fc1ca4bc10f53ec0599562ca  /tmp/catalog-atomic-bulk.patch.gz' | sha256sum --check --strict
+          echo 'f7b2a0111860426ec36c531e41ab3701d737cd79d1280f22205ba4b3a5f3f702  /tmp/catalog-atomic-bulk.patch.gz' | sha256sum --check --strict
           gzip --test /tmp/catalog-atomic-bulk.patch.gz
           gzip --decompress --stdout /tmp/catalog-atomic-bulk.patch.gz > /tmp/catalog-atomic-bulk.patch
-          echo 'bee3273c39a0c5db3f93e597fba3310ad7508546e63df6162f3c9fa8a899ee1b  /tmp/catalog-atomic-bulk.patch' | sha256sum --check --strict
+          echo '436bd6cf957945dfa47848f5802cb0781622dedf1180ccae1e7ae75bac3fc6a4  /tmp/catalog-atomic-bulk.patch' | sha256sum --check --strict
           git apply --check /tmp/catalog-atomic-bulk.patch
           git apply --index /tmp/catalog-atomic-bulk.patch
 

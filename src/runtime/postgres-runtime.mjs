@@ -6,6 +6,8 @@ import { createCatalogService } from '../application/catalog-service.mjs';
 import { createCatalogQueryService } from '../application/catalog-query-service.mjs';
 import { createMaterialService } from '../application/material-service.mjs';
 import { createMaterialQueryService } from '../application/material-query-service.mjs';
+import { createMeasurementService } from '../application/measurement-service.mjs';
+import { createMeasurementQueryService } from '../application/measurement-query-service.mjs';
 import { createMaintenanceService } from '../application/maintenance-service.mjs';
 import { withNotificationPageMetadata } from '../application/notification-page-service.mjs';
 import { createOutboxPublisherService } from '../application/outbox-publisher-service.mjs';
@@ -23,6 +25,8 @@ import { createPostgresCatalogStore } from '../infrastructure/postgres-catalog-s
 import { createPostgresCatalogReader } from '../infrastructure/postgres-catalog-reader.mjs';
 import { createPostgresMaterialStore } from '../infrastructure/postgres-material-store.mjs';
 import { createPostgresMaterialReader } from '../infrastructure/postgres-material-reader.mjs';
+import { createPostgresMeasurementStore } from '../infrastructure/postgres-measurement-store.mjs';
+import { createPostgresMeasurementReader } from '../infrastructure/postgres-measurement-reader.mjs';
 import { createPostgresMaintenanceStore } from '../infrastructure/postgres-maintenance-store.mjs';
 import { createPostgresOutboxPublicationStore } from '../infrastructure/postgres-outbox-publication-store.mjs';
 import { createPostgresWholesaleStore } from '../infrastructure/postgres-store.mjs';
@@ -49,6 +53,7 @@ export function createPostgresWholesaleRuntime({
   const catalogStore = createPostgresCatalogStore({ pool });
   const materialStore = createPostgresMaterialStore({ pool });
   const bomStore = createPostgresBomStore({ pool });
+  const measurementStore = createPostgresMeasurementStore({ pool });
   const options = { store, nextId: runtimeNextId, ...(clock ? { clock } : {}) };
   const auth = createAuthService({
     store: createPostgresAuthStore({ pool }), nextId: runtimeNextId,
@@ -74,6 +79,10 @@ export function createPostgresWholesaleRuntime({
   const boms = Object.freeze({
     ...createBomService({ bomStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }),
     ...createBomQueryService({ reader: createPostgresBomReader({ pool }) }),
+  });
+  const measurements = Object.freeze({
+    ...createMeasurementService({ measurementStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }),
+    ...createMeasurementQueryService({ reader: createPostgresMeasurementReader({ pool }) }),
   });
   const partners = createPartnerAccessService(options);
   const collaboration = createShowroomSelectionService({ ...options, catalogReader: catalog });
@@ -108,8 +117,12 @@ export function createPostgresWholesaleRuntime({
     ...(outboxRetentionMs !== undefined ? { outboxRetentionMs } : {}),
   });
   const workspace = createWorkspaceQueryService({ reader: createPostgresWorkspaceReader({ pool }) });
-  const transport = { authenticate: auth.authenticate, auth, readiness, platform, catalog, materials, boms, partners, collaboration, orders, notifications, workspace };
+  const transport = { authenticate: auth.authenticate, auth, readiness, platform, catalog, materials, boms, measurements, partners, collaboration, orders, notifications, workspace };
   const handler = createWholesaleHttpHandler(transport);
   const fetchHandler = createWholesaleFetchHandler(transport);
-  return Object.freeze({ auth, readiness, maintenance, outboxPublication, store, catalogStore, materialStore, bomStore, platform, catalog, materials, boms, partners, collaboration, orders, notifications, workspace, handler, fetchHandler });
+  return Object.freeze({
+    auth, readiness, maintenance, outboxPublication, store, catalogStore, materialStore, bomStore, measurementStore,
+    platform, catalog, materials, boms, measurements, partners, collaboration, orders, notifications, workspace,
+    handler, fetchHandler,
+  });
 }

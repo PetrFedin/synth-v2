@@ -177,6 +177,7 @@
       : header.active === 'risks'
         ? riskView(portfolio)
         : portfolioRegistry(portfolio);
+    schedulePlanningV5Context();
     return odPage(planningText('\u041f\u043b\u0430\u043d\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u0435 \u043a\u043e\u043b\u043b\u0435\u043a\u0446\u0438\u0439', 'Collection planning'), header, content);
   }
 
@@ -195,6 +196,12 @@
     return view === 'planning' ? planningText('\u0420\u0430\u0437\u0440\u0430\u0431\u043e\u0442\u043a\u0430', 'Development') : baseViewSectionName(view);
   };
 
+  function schedulePlanningV5Context() {
+    if (!usesV5Navigation) return;
+    if (typeof queueMicrotask === 'function') queueMicrotask(applyPlanningV5Context);
+    else Promise.resolve().then(applyPlanningV5Context);
+  }
+
   function applyPlanningV5Context() {
     if (state.view !== 'planning') return;
     const context = document.querySelector('.od-v5-page-context');
@@ -210,11 +217,4 @@
       'Campaign readiness, critical dependencies, deadlines and commercial execution in one governed view.',
     );
   }
-
-  const baseRenderApp = renderApp;
-  renderApp = (...args) => {
-    const result = baseRenderApp(...args);
-    applyPlanningV5Context();
-    return result;
-  };
 })();

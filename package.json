@@ -12,7 +12,7 @@
     "db:migrate": "node --env-file=.env scripts/migrate.mjs",
     "bootstrap:owner": "node --env-file=.env scripts/bootstrap-owner.mjs",
     "outbox:requeue": "node --env-file=.env scripts/requeue-outbox-event.mjs",
-    "test": "node --test --test-concurrency=1 tests/*.test.mjs",
+    "test": "node --import ./tests/register-pg-test-loader.mjs --test --test-concurrency=1 tests/*.test.mjs",
     "validate:architecture": "node scripts/validate-architecture.mjs",
     "validate:postgres": "node scripts/validate-postgres-contract.mjs",
     "validate:isolation": "node scripts/validate-isolation.mjs",

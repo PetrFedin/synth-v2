@@ -23,6 +23,7 @@ const state = {
   user: null,
   workspace: emptyWorkspace(),
   notifications: [],
+  notificationUnreadCount: 0,
   view: 'overview',
   busy: false,
   sidebarCollapsed: localStorage.getItem(SIDEBAR_KEY) === 'true',
@@ -41,7 +42,22 @@ const workspacePaging = window.SynthaWorkspacePaging.create({
   },
   pageLimit: 100,
 });
+const notificationPaging = window.SynthaNotificationPaging.create({
+  request: (path, options) => api(path, options),
+  getNotifications: () => state.notifications,
+  setNotifications: notifications => { state.notifications = notifications; },
+  getUnreadCount: () => state.notificationUnreadCount,
+  setUnreadCount: count => { state.notificationUnreadCount = count; },
+  onChange: () => {
+    if (!workspaceHydrating && state.token && state.user) renderApp();
+  },
+  onError: error => {
+    if (!workspaceHydrating && state.token && state.user) toast(error.message, 'error');
+  },
+  pageLimit: 100,
+});
 window.SynthaWorkspaceController = workspacePaging;
+window.SynthaNotificationController = notificationPaging;
 
 window.addEventListener('syntha:locale-changed', () => {
   if (state.token && state.user) renderApp();
@@ -63,11 +79,19 @@ async function boot() {
 
 async function reload() {
   workspacePaging.abortAll();
-  const previous = { user: state.user, workspace: state.workspace, notifications: state.notifications };
+  notificationPaging.abort();
+  const previous = {
+    user: state.user,
+    workspace: state.workspace,
+    notifications: state.notifications,
+    notificationUnreadCount: state.notificationUnreadCount,
+  };
   workspaceHydrating = true;
   try {
-    const [me, workspace, notifications] = await Promise.all([
-      api('/v2/auth/me'), api('/v2/workspace'), api('/v2/notifications').catch(() => []),
+    const [me, workspace, notificationPage] = await Promise.all([
+      api('/v2/auth/me'),
+      api('/v2/workspace'),
+      api('/v2/notifications/page?limit=100'),
     ]);
     state.workspace = { ...emptyWorkspace(), ...workspace };
     workspacePaging.reset(state.workspace);
@@ -76,12 +100,13 @@ async function reload() {
       workspacePaging.drain('organisations', { maxPages: 50 }),
     ]);
     if (!foundationReady.every(Boolean)) throw workspaceFoundationError();
+    notificationPaging.reset(notificationPage);
     state.user = me;
-    state.notifications = Array.isArray(notifications) ? notifications : [];
   } catch (error) {
     state.user = previous.user;
     state.workspace = previous.workspace;
     state.notifications = previous.notifications;
+    state.notificationUnreadCount = previous.notificationUnreadCount;
     workspacePaging.reset(state.workspace);
     throw error;
   } finally {
@@ -230,7 +255,7 @@ function renderTopbar() {
   search.append(input, el('kbd', { rawText: '\u2318K' }));
 
   const actions = el('div', { className: 'topbar-actions' });
-  const unread = state.notifications.filter(item => item.status !== 'read').length;
+  const unread = state.notificationUnreadCount;
   const notifications = el('button', {
     className: 'topbar-icon-button',
     type: 'button',

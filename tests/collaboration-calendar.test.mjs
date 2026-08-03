@@ -85,6 +85,31 @@ test('calendar event creates participants and reminder then advances status', as
   assert.equal(events.get(event.id).version, 2);
 });
 
+test('calendar rejects malformed participant and reminder collections', async () => {
+  const { service } = fixture();
+  const base = {
+    ownerOrganisationId: 'brand-1',
+    subjectType: 'showroom',
+    subjectId: 'showroom-1',
+    eventType: 'meeting',
+    visibility: 'trade',
+    title: 'Buyer appointment',
+    description: '',
+    startsAt: '2027-02-10T10:00:00.000Z',
+    endsAt: '2027-02-10T11:00:00.000Z',
+    allDay: false,
+    location: 'Digital showroom',
+  };
+  await assert.rejects(
+    service.createEvent('cmd-bad-participants', 'user-1', { ...base, participantOrganisationIds: 'shop-1', reminders: [] }),
+    (error) => error.code === 'CALENDAR_PARTICIPANTS_INVALID',
+  );
+  await assert.rejects(
+    service.createEvent('cmd-bad-reminders', 'user-1', { ...base, participantOrganisationIds: [], reminders: '60' }),
+    (error) => error.code === 'CALENDAR_REMINDERS_INVALID',
+  );
+});
+
 test('viewer cannot create collaboration or calendar records', async () => {
   const { service } = fixture('viewer');
   await assert.rejects(

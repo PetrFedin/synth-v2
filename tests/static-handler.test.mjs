@@ -33,14 +33,16 @@ test('serves standalone workspace and every ordered script with security headers
       '/ui/ui-validation.js',
       '/ui/app-core.js',
     ]);
-    assert.deepEqual(sources.slice(-5), [
+    assert.deepEqual(sources.slice(-7), [
       '/ui/integration-subjects.js',
       '/ui/integration-collaboration.js',
       '/ui/integration-calendar.js',
       '/ui/integration-views.js',
+      '/ui/omnidata-core.js',
+      '/ui/omnidata-views.js',
       '/ui/app-start.js',
     ]);
-    assert.ok(sources.length >= 29);
+    assert.ok(sources.length >= 31);
     for (const source of sources) {
       const script = await fetch(`${base}${source}`);
       assert.equal(script.status, 200, source);
@@ -48,7 +50,7 @@ test('serves standalone workspace and every ordered script with security headers
       assert.doesNotMatch(await script.text(), /(?:\u00d0|\u00d1)[\u0080-\u00ff]/u, source);
     }
 
-    for (const stylesheet of ['/styles.css', '/i18n.css']) {
+    for (const stylesheet of ['/styles.css', '/i18n.css', '/omnidata.css']) {
       const css = await fetch(`${base}${stylesheet}`);
       assert.equal(css.status, 200, stylesheet);
       assert.match(css.headers.get('content-type'), /text\/css/);
@@ -59,7 +61,7 @@ test('serves standalone workspace and every ordered script with security headers
 
 test('supports HEAD for runtime assets without sending a body', async () => {
   await withServer(createStandaloneHandler({ publicDir, apiHandler: (_request, response) => { response.statusCode = 404; response.end(); } }), async (base) => {
-    for (const asset of ['/ui/i18n-runtime.js', '/ui/ui-capabilities.js', '/ui/ui-validation.js', '/ui/integration-calendar.js', '/i18n.css']) {
+    for (const asset of ['/ui/i18n-runtime.js', '/ui/ui-capabilities.js', '/ui/ui-validation.js', '/ui/integration-calendar.js', '/ui/omnidata-core.js', '/ui/omnidata-views.js', '/i18n.css', '/omnidata.css']) {
       const response = await fetch(`${base}${asset}`, { method: 'HEAD' });
       assert.equal(response.status, 200, asset);
       assert.equal(await response.text(), '');

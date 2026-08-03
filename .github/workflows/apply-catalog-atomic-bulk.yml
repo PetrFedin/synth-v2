@@ -11,7 +11,7 @@ on:
     branches:
       - automation/catalog-atomic-bulk
     paths:
-      - '.automation/catalog-atomic-bulk.patch.gz.b64'
+      - '.automation/catalog-atomic-bulk.patch.gz.b64.*'
       - '.github/workflows/apply-catalog-atomic-bulk.yml'
 
 permissions:
@@ -37,7 +37,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          base64 --decode .automation/catalog-atomic-bulk.patch.gz.b64 > /tmp/catalog-atomic-bulk.patch.gz
+          cat .automation/catalog-atomic-bulk.patch.gz.b64.* | base64 --decode > /tmp/catalog-atomic-bulk.patch.gz
           echo 'd09c8230380fbb04f7258528fdbf83d13c4c4e99fc1ca4bc10f53ec0599562ca  /tmp/catalog-atomic-bulk.patch.gz' | sha256sum --check --strict
           gzip --test /tmp/catalog-atomic-bulk.patch.gz
           gzip --decompress --stdout /tmp/catalog-atomic-bulk.patch.gz > /tmp/catalog-atomic-bulk.patch
@@ -55,12 +55,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rm -f .automation/catalog-atomic-bulk.patch.gz.b64
+          rm -f .automation/catalog-atomic-bulk.patch.gz.b64.*
           rm -f .github/workflows/apply-catalog-atomic-bulk.yml
           rmdir .automation 2>/dev/null || true
           git add -A
           test ! -e .github/workflows/apply-catalog-atomic-bulk.yml
-          test -z "$(git ls-files '.automation/catalog-atomic-bulk.patch.gz.b64')"
+          test -z "$(git ls-files '.automation/catalog-atomic-bulk.patch.gz.b64.*')"
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m 'feat: add atomic catalog bulk operations'

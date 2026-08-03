@@ -15,6 +15,7 @@ const ASSETS = Object.freeze({
   '/i18n.css': ['i18n.css', 'text/css; charset=utf-8', CACHE],
   '/omnidata.css': ['omnidata.css', 'text/css; charset=utf-8', VISUAL_CACHE],
   '/omnidata-fidelity.css': ['omnidata-fidelity.css', 'text/css; charset=utf-8', VISUAL_CACHE],
+  '/omnidata-v3.css': ['omnidata-v3.css', 'text/css; charset=utf-8', VISUAL_CACHE],
   '/ui/i18n-runtime.js': ['modules/i18n-runtime.js', JS, CACHE],
   '/ui/ui-capabilities.js': ['modules/ui-capabilities.js', JS, CACHE],
   '/ui/ui-validation.js': ['modules/ui-validation.js', JS, CACHE],

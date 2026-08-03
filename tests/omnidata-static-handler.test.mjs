@@ -20,7 +20,7 @@ async function withServer(handler, work) {
   }
 }
 
-test('standalone workspace serves the Omnidata stylesheet and screen module', async () => {
+test('standalone workspace serves the complete Omnidata v3 visual stack and screen module', async () => {
   const handler = createStandaloneHandler({
     publicDir,
     apiHandler: (_request, response) => {
@@ -33,13 +33,22 @@ test('standalone workspace serves the Omnidata stylesheet and screen module', as
     const htmlResponse = await fetch(`${base}/`);
     assert.equal(htmlResponse.status, 200);
     const html = await htmlResponse.text();
-    assert.match(html, /\/omnidata\.css/);
-    assert.match(html, /\/ui\/omnidata-workspace\.js/);
+    assert.match(html, /\/omnidata\.css\?v=visual-20260803-3/);
+    assert.match(html, /\/omnidata-fidelity\.css\?v=visual-20260803-3/);
+    assert.match(html, /\/omnidata-v3\.css\?v=visual-20260803-3/);
+    assert.match(html, /\/ui\/omnidata-workspace\.js\?v=visual-20260803-3/);
 
-    const cssResponse = await fetch(`${base}/omnidata.css`);
-    assert.equal(cssResponse.status, 200);
-    assert.match(cssResponse.headers.get('content-type'), /text\/css/);
-    assert.match(await cssResponse.text(), /\.od-master-detail/);
+    for (const [asset, contract] of [
+      ['/omnidata.css', /\.od-master-detail/],
+      ['/omnidata-fidelity.css', /\.od-status-strip/],
+      ['/omnidata-v3.css', /--accent:\s*#e95b2a/],
+    ]) {
+      const cssResponse = await fetch(`${base}${asset}`);
+      assert.equal(cssResponse.status, 200, asset);
+      assert.match(cssResponse.headers.get('content-type'), /text\/css/, asset);
+      assert.equal(cssResponse.headers.get('cache-control'), 'no-store', asset);
+      assert.match(await cssResponse.text(), contract, asset);
+    }
 
     const moduleResponse = await fetch(`${base}/ui/omnidata-workspace.js`);
     assert.equal(moduleResponse.status, 200);

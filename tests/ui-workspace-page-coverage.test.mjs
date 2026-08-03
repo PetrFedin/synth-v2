@@ -32,7 +32,7 @@ test('workspace paging participates in refresh logout and empty state lifecycle'
   assert.match(files['app-core.js'], /workspacePaging\.abortAll\(\)/);
   assert.match(files['app-core.js'], /workspacePaging\.reset\(state\.workspace\)/);
   assert.match(files['app-core.js'], /window\.SynthaWorkspaceController = workspacePaging/);
-  assert.match(files['dom-2.js'], /SynthaWorkspaceController\?\.abortAll\(\)/);
+  assert.match(files['dom-2.js'], /SynthaWorkspaceController\?\.reset\(state\.workspace\)/);
   assert.match(files['dom-2.js'], /nextCursors:\{\}/);
 });
 

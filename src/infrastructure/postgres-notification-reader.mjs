@@ -31,6 +31,24 @@ export function createPostgresNotificationReader({ pool } = {}) {
       );
     },
 
+    async countUnreadForActor(actorId) {
+      invariant(typeof actorId === 'string' && actorId.length > 0, 'NOTIFICATION_ACTOR_REQUIRED', 'Notification actor is required');
+      const result = await pool.query(
+        `SELECT count(*)::bigint AS unread_count
+           FROM notifications AS notification
+          WHERE notification.status = 'unread'
+            AND EXISTS (
+              SELECT 1
+                FROM memberships AS membership
+               WHERE membership.user_id = $1
+                 AND membership.status = 'active'
+                 AND membership.organisation_id = notification.recipient_organisation_id
+            )`,
+        [actorId],
+      );
+      return safeCount(result.rows[0]?.unread_count);
+    },
+
     async getActiveMembership(organisationId, actorId) {
       invariant(typeof organisationId === 'string' && organisationId.length > 0, 'NOTIFICATION_ORGANISATION_REQUIRED', 'Notification organisation is required');
       invariant(typeof actorId === 'string' && actorId.length > 0, 'NOTIFICATION_ACTOR_REQUIRED', 'Notification actor is required');
@@ -56,6 +74,12 @@ async function payloadAny(pool, table, ids) {
 async function payloadWhere(pool, table, where, params) {
   const result = await pool.query(`SELECT payload FROM ${table} WHERE ${where} ORDER BY id`, params);
   return result.rows.map((row) => row.payload);
+}
+
+function safeCount(value) {
+  const count = Number(value ?? 0);
+  invariant(Number.isSafeInteger(count) && count >= 0, 'NOTIFICATION_COUNT_INVALID', 'Notification count is outside the supported range');
+  return count;
 }
 
 function unique(values) {

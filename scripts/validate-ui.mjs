@@ -44,6 +44,7 @@ assertRequiredOrder(sources, [
   '/ui/styles-core.js',
   '/ui/materials-core.js',
   '/ui/bom-core.js',
+  '/ui/measurement-core.js',
   '/ui/omnidata-workspace.js',
   '/ui/omnidata-v4.js',
   '/ui/omnidata-v5.js',
@@ -52,6 +53,7 @@ assertRequiredOrder(sources, [
   '/ui/styles.js',
   '/ui/materials.js',
   '/ui/bom.js',
+  '/ui/measurements.js',
   '/ui/app-start.js',
 ]);
 

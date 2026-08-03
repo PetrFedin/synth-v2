@@ -13,6 +13,7 @@ const ASSETS = Object.freeze({
   '/styles.css': ['styles.css', 'text/css; charset=utf-8', CACHE],
   '/i18n.css': ['i18n.css', 'text/css; charset=utf-8', CACHE],
   '/omnidata.css': ['omnidata.css', 'text/css; charset=utf-8', CACHE],
+  '/omnidata-fidelity.css': ['omnidata-fidelity.css', 'text/css; charset=utf-8', CACHE],
   '/ui/i18n-runtime.js': ['modules/i18n-runtime.js', JS, CACHE],
   '/ui/ui-capabilities.js': ['modules/ui-capabilities.js', JS, CACHE],
   '/ui/ui-validation.js': ['modules/ui-validation.js', JS, CACHE],
@@ -39,6 +40,7 @@ const ASSETS = Object.freeze({
   '/ui/dom-2.js': ['modules/dom-2.js', JS, CACHE],
   '/ui/omnidata-workspace.js': ['modules/omnidata-workspace.js', JS, CACHE],
   '/ui/omnidata-polish.js': ['modules/omnidata-polish.js', JS, CACHE],
+  '/ui/omnidata-fidelity.js': ['modules/omnidata-fidelity.js', JS, CACHE],
   '/ui/app-start.js': ['modules/app-start.js', JS, CACHE],
 });
 

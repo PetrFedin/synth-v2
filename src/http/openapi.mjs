@@ -13,6 +13,7 @@ const dateOrDateTime = { oneOf: [{ type: 'string', format: 'date' }, { type: 'st
 const nullableDateTime = { oneOf: [{ type: 'string', format: 'date-time' }, { type: 'null' }] };
 const currency = { type: 'string', pattern: '^[A-Z]{3}$' };
 const postgresIntegerMaximum = 2_147_483_647;
+const javascriptSafeIntegerMaximum = 9_007_199_254_740_991;
 const moneyMaximum = 900_719_925_474.0991;
 const workspaceSections = Object.freeze([
   'memberships',
@@ -32,7 +33,7 @@ const workspaceSections = Object.freeze([
 
 export const wholesaleV2OpenApi = Object.freeze({
   openapi: '3.1.0',
-  info: { title: 'Syntha Wholesale V2 API', version: '1.3.0' },
+  info: { title: 'Syntha Wholesale V2 API', version: '1.4.0' },
   servers: [{ url: '/v2', description: 'Authenticated Syntha V2 API prefix' }],
   'x-operational-endpoints': Object.freeze({
     liveness: '/health',
@@ -171,10 +172,16 @@ export const wholesaleV2OpenApi = Object.freeze({
         },
       },
       NotificationPage: {
-        type: 'object', required: ['items', 'nextCursor'], additionalProperties: false,
+        type: 'object', required: ['items', 'nextCursor', 'unreadCount'], additionalProperties: false,
         properties: {
           items: { type: 'array', maxItems: 200, items: { $ref: '#/components/schemas/Notification' } },
           nextCursor: { oneOf: [{ type: 'string', minLength: 1, maxLength: 1024 }, { type: 'null' }] },
+          unreadCount: {
+            type: 'integer',
+            minimum: 0,
+            maximum: javascriptSafeIntegerMaximum,
+            description: 'Exact unread notification count across every active organisation visible to the authenticated actor.',
+          },
         },
       },
       WorkspacePageInfo: {
@@ -319,13 +326,14 @@ export const wholesaleV2OpenApi = Object.freeze({
     },
     '/notifications/page': {
       get: {
-        ...readOperation('pageNotifications', { 200: 'Stable notification page', 400: 'Invalid limit or cursor', 401: 'Authentication required' }),
+        ...readOperation('pageNotifications', { 200: 'Stable notification page with exact unread count', 400: 'Invalid limit or cursor', 401: 'Authentication required' }),
+        description: 'Returns a stable notification keyset page and the exact unread count across all active organisations visible to the actor.',
         parameters: [
           { name: 'limit', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 200, default: 50 } },
           { name: 'cursor', in: 'query', required: false, schema: { type: 'string', minLength: 1, maxLength: 1024 } },
         ],
         responses: responseContent(
-          readOperation('pageNotifications', { 200: 'Stable notification page', 400: 'Invalid limit or cursor', 401: 'Authentication required' }).responses,
+          readOperation('pageNotifications', { 200: 'Stable notification page with exact unread count', 400: 'Invalid limit or cursor', 401: 'Authentication required' }).responses,
           200,
           '#/components/schemas/NotificationPage',
         ),

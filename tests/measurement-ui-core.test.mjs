@@ -10,6 +10,7 @@ const source = await readFile(path.join(root, 'public', 'modules', 'measurement-
 const context = vm.createContext({ globalThis: {} });
 vm.runInContext(source, context, { filename: 'measurement-core.js' });
 const core = context.globalThis.SynthaMeasurementCore;
+const plain = (value) => JSON.parse(JSON.stringify(value));
 
 function chart(overrides = {}) {
   return {
@@ -30,7 +31,7 @@ test('ready draft receives a publish gate without publication points', () => {
   const result = core.assessChart(chart(), [sku]);
   assert.equal(result.readiness, 90);
   assert.equal(result.publishReady, true);
-  assert.deepEqual(result.risks.map((risk) => risk.code), ['CHART_NOT_PUBLISHED']);
+  assert.deepEqual(plain(result.risks.map((risk) => risk.code)), ['CHART_NOT_PUBLISHED']);
   assert.equal(result.expectedValues, 2);
   assert.equal(result.actualValues, 2);
 });
@@ -59,13 +60,13 @@ test('registry prioritizes critical records and computes production metrics', ()
   const critical = chart({ id: 'bad', sku: 'STYLE-999', brandId: 'brand-9', sizes: [], points: [] });
   const registry = core.buildRegistry([chart(), chart({ id: 'published', status: 'published' }), critical], [sku]);
   assert.equal(registry.items[0].chart.id, 'bad');
-  assert.deepEqual({
+  assert.deepEqual(plain({
     total: registry.summary.total,
     draft: registry.summary.draft,
     published: registry.summary.published,
     publishReady: registry.summary.publishReady,
     critical: registry.summary.critical,
-  }, { total: 3, draft: 2, published: 1, publishReady: 1, critical: 1 });
+  }), { total: 3, draft: 2, published: 1, publishReady: 1, critical: 1 });
   assert.ok(Object.isFrozen(registry));
   assert.ok(Object.isFrozen(registry.items));
 });

@@ -14,12 +14,15 @@ const requiredTables = [
   'notification_projection_claims', 'outbox_publication_claims', 'outbox_dead_letters', 'outbox_dead_letter_audit',
   'auth_users', 'auth_sessions', 'auth_login_throttles', 'auth_login_audit',
   'catalog_skus', 'catalog_commands', 'catalog_outbox_events', 'order_inventory_reservations',
+  'collaboration_threads', 'collaboration_messages', 'calendar_events', 'calendar_event_participants',
+  'calendar_event_reminders', 'collaboration_commands',
 ];
 const requiredFragments = [
   'UNIQUE (brand_id, shop_id)', 'UNIQUE (showroom_id, shop_id)', 'cycle_id text NOT NULL UNIQUE',
   "status text NOT NULL CHECK (status IN ('pending', 'published'))", 'outbox_status_idx',
   "CHECK (status IN ('pending', 'published', 'dead-letter'))",
   "scope text NOT NULL CHECK (scope IN ('wholesale', 'catalog', 'notification'))",
+  "CHECK (scope IN ('wholesale', 'catalog', 'notification', 'collaboration'))",
   'command_registry_completed_idx',
   'commands_command_registry_fk', 'catalog_commands_command_registry_fk', 'notification_commands_command_registry_fk',
   'duplicate command ids exist across command ledgers',
@@ -54,6 +57,10 @@ const requiredFragments = [
   'workspace_page_orders_brand_idx', 'workspace_page_orders_shop_idx',
   'workspace_page_deals_brand_idx', 'workspace_page_deals_shop_idx',
   'workspace_page_calendar_owner_idx',
+  'collaboration_threads_owner_subject_idx', 'collaboration_messages_thread_created_idx',
+  'calendar_events_owner_time_idx', 'calendar_events_subject_idx',
+  'calendar_event_participants_org_idx', 'calendar_event_reminders_user_idx',
+  'id text PRIMARY KEY REFERENCES command_registry(id) ON DELETE CASCADE',
 ];
 const missing = [];
 for (const table of requiredTables) if (!new RegExp(`CREATE TABLE IF NOT EXISTS\\s+${table}\\s*\\(`, 'i').test(sql)) missing.push(`table:${table}`);

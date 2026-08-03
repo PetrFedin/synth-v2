@@ -6,15 +6,21 @@ async function source(path) {
   return readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 }
 
-test('the Syntha shell loads the versioned Omnidata layer after functional modules', async () => {
+test('the Syntha shell loads the versioned Omnidata v3 layer after functional styles', async () => {
   const html = await source('public/index.html');
-  assert.match(html, /<meta name="syntha-build" content="visual-20260803-2">/);
-  assert.match(html, /<link rel="stylesheet" href="\/omnidata\.css\?v=visual-20260803-2">/);
-  assert.match(html, /<link rel="stylesheet" href="\/omnidata-fidelity\.css\?v=visual-20260803-2">/);
+  assert.match(html, /<meta name="syntha-build" content="visual-20260803-3">/);
+  assert.match(html, /<link rel="stylesheet" href="\/omnidata\.css\?v=visual-20260803-3">/);
+  assert.match(html, /<link rel="stylesheet" href="\/omnidata-fidelity\.css\?v=visual-20260803-3">/);
+  assert.match(html, /<link rel="stylesheet" href="\/omnidata-v3\.css\?v=visual-20260803-3">/);
+  const baseStyleIndex = html.indexOf('/omnidata.css?v=visual-20260803-3');
+  const fidelityStyleIndex = html.indexOf('/omnidata-fidelity.css?v=visual-20260803-3');
+  const v3StyleIndex = html.indexOf('/omnidata-v3.css?v=visual-20260803-3');
   const formIndex = html.indexOf('/ui/open-form.js');
-  const workspaceIndex = html.indexOf('/ui/omnidata-workspace.js?v=visual-20260803-2');
-  const fidelityIndex = html.indexOf('/ui/omnidata-fidelity.js?v=visual-20260803-2');
+  const workspaceIndex = html.indexOf('/ui/omnidata-workspace.js?v=visual-20260803-3');
+  const fidelityIndex = html.indexOf('/ui/omnidata-fidelity.js?v=visual-20260803-3');
   const startIndex = html.indexOf('/ui/app-start.js');
+  assert.ok(baseStyleIndex >= 0 && baseStyleIndex < fidelityStyleIndex);
+  assert.ok(fidelityStyleIndex < v3StyleIndex);
   assert.ok(formIndex >= 0 && formIndex < workspaceIndex);
   assert.ok(workspaceIndex < fidelityIndex);
   assert.ok(fidelityIndex < startIndex);

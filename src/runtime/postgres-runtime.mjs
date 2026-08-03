@@ -2,6 +2,7 @@ import { invariant } from '../core/errors.mjs';
 import { createAuthService } from '../application/auth-service.mjs';
 import { createCatalogService } from '../application/catalog-service.mjs';
 import { createMaintenanceService } from '../application/maintenance-service.mjs';
+import { withNotificationPageMetadata } from '../application/notification-page-service.mjs';
 import { createOutboxPublisherService } from '../application/outbox-publisher-service.mjs';
 import { createPostgresReadinessService } from '../application/readiness-service.mjs';
 import { createWholesalePlatform } from '../application/platform.mjs';
@@ -80,10 +81,11 @@ export function createPostgresWholesaleRuntime({
   const collaboration = createShowroomSelectionService({ ...options, catalogReader: catalog });
   const orders = createOrderBuilderService(options);
   const projectionStore = createPostgresNotificationProjectionStore({ pool });
-  const notifications = createNotificationService({
+  const notificationReader = createPostgresNotificationReader({ pool });
+  const notificationCore = createNotificationService({
     sourceStore: store,
     projectionStore,
-    reader: createPostgresNotificationReader({ pool }),
+    reader: notificationReader,
     nextId: runtimeNextId,
     ...(clock ? { clock } : {}),
     ...(notificationProjectionWorkerId ? { projectionWorkerId: notificationProjectionWorkerId } : {}),
@@ -91,6 +93,7 @@ export function createPostgresWholesaleRuntime({
     ...(notificationProjectionRetryDelayMs !== undefined ? { projectionRetryDelayMs: notificationProjectionRetryDelayMs } : {}),
     ...(notificationProjectionMaxAttempts !== undefined ? { maxProjectionAttempts: notificationProjectionMaxAttempts } : {}),
   });
+  const notifications = withNotificationPageMetadata({ service: notificationCore, reader: notificationReader });
   const outboxPublication = outboxPublisher ? createOutboxPublisherService({
     store: createPostgresOutboxPublicationStore({ pool }),
     publisher: outboxPublisher,

@@ -75,6 +75,8 @@ assert(executionHarness.window.SynthaUiValidation, 'UI validation runtime was no
 assert(executionHarness.window.SynthaWorkspacePaging, 'Workspace pagination runtime was not loaded.');
 assert(executionHarness.window.SynthaNotificationPaging, 'Notification pagination runtime was not loaded.');
 assert(executionHarness.window.SynthaBomCore, 'BOM projection runtime was not loaded.');
+assert(executionHarness.window.SynthaMeasurementCore, 'Measurement chart projection runtime was not loaded.');
+assert(executionHarness.window.SynthaMeasurementWorkspace, 'Measurement chart workspace runtime was not loaded.');
 
 console.log(`Localization and UI runtime contract OK (${sources.length} scripts, ${diagnostics.messageCount} keyed messages, ${diagnostics.phraseCount} compatibility phrases).`);
 

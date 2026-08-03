@@ -142,6 +142,7 @@ export function normalizeHttpError(error) {
     'CATALOG_EXPECTED_VERSION_INVALID',
     'CATALOG_UPDATE_INVALID',
     'CATALOG_PUBLISH_INVALID',
+    'ORDER_EXPECTED_VERSION_INVALID',
     'AUTH_EMAIL_INVALID',
     'AUTH_PASSWORD_INVALID',
   ].includes(code)) status = 400;

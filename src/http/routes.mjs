@@ -15,11 +15,12 @@ const CYCLE_BODY = bodyContract(['brandId', 'shopId', 'campaignId', 'collectionI
 const CYCLE_ADVANCE_BODY = bodyContract(['cycleId', 'targetStage']);
 const SELECTION_BODY = bodyContract(['cycleId', 'showroomId']);
 const SELECTION_LINE_BODY = bodyContract(['selectionId', 'sku', 'quantity', 'note', 'unitPrice', 'currency', 'catalogVersion']);
-const ORDER_BODY = bodyContract(['selectionId', 'terms'], {
-  terms: ['incoterm', 'paymentDays', 'prepaymentPercent', 'deliveryStart', 'deliveryEnd'],
-});
-const ORDER_ACCEPT_BODY = bodyContract(['orderId', 'organisationId']);
-const ORDER_CANCEL_BODY = bodyContract(['orderId', 'reason']);
+const ORDER_TERMS_FIELDS = ['incoterm', 'paymentDays', 'prepaymentPercent', 'deliveryStart', 'deliveryEnd'];
+const ORDER_BODY = bodyContract(['selectionId', 'terms'], { terms: ORDER_TERMS_FIELDS });
+const ORDER_TERMS_UPDATE_BODY = bodyContract(['expectedVersion', 'terms'], { terms: ORDER_TERMS_FIELDS });
+const ORDER_ACCEPT_BODY = bodyContract(['orderId', 'organisationId', 'expectedVersion']);
+const ORDER_VERSION_BODY = bodyContract(['expectedVersion']);
+const ORDER_CANCEL_BODY = bodyContract(['orderId', 'reason', 'expectedVersion']);
 
 export function createWholesaleRoutes({ platform, catalog, partners, collaboration, orders, notifications, workspace }) {
   invariant(platform && partners && collaboration && orders && notifications && workspace, 'HTTP_SERVICES_REQUIRED', 'All V2 application services are required');
@@ -62,14 +63,22 @@ export function createWholesaleRoutes({ platform, catalog, partners, collaborati
     }),
     mutate('POST', /^\/v2\/selections\/([^/]+)\/submit$/, EMPTY_BODY, ({ commandId, actorId, params }) => collaboration.submitSelection(commandId, actorId, params[0])),
     mutate('POST', /^\/v2\/orders$/, ORDER_BODY, ({ commandId, actorId, body }) => orders.createOrderDraft(commandId, actorId, body)),
+    mutate('PATCH', /^\/v2\/orders\/([^/]+)\/terms$/, ORDER_TERMS_UPDATE_BODY, ({ commandId, actorId, params, body }) => orders.reviseTerms(commandId, actorId, {
+      orderId: params[0],
+      expectedVersion: body.expectedVersion,
+      terms: body.terms,
+    })),
     mutate('POST', /^\/v2\/orders\/([^/]+)\/accept$/, ORDER_ACCEPT_BODY, ({ commandId, actorId, params, body }) => {
       sameId(body.orderId, params[0], 'orderId');
       return orders.acceptTerms(commandId, actorId, { ...body, orderId: params[0] });
     }),
-    mutate('POST', /^\/v2\/orders\/([^/]+)\/attach$/, EMPTY_BODY, ({ commandId, actorId, params }) => orders.attachOrderToCycle(commandId, actorId, params[0])),
+    mutate('POST', /^\/v2\/orders\/([^/]+)\/attach$/, ORDER_VERSION_BODY, ({ commandId, actorId, params, body }) => orders.attachOrderToCycle(commandId, actorId, {
+      orderId: params[0],
+      expectedVersion: body.expectedVersion,
+    })),
     mutate('POST', /^\/v2\/orders\/([^/]+)\/cancel$/, ORDER_CANCEL_BODY, ({ commandId, actorId, params, body }) => {
       sameId(body.orderId, params[0], 'orderId');
-      return orders.cancelOrder(commandId, actorId, { orderId: params[0], reason: body.reason });
+      return orders.cancelOrder(commandId, actorId, { orderId: params[0], reason: body.reason, expectedVersion: body.expectedVersion });
     }),
     read('GET', /^\/v2\/workspace\/([^/]+)\/page$/, ['limit', 'cursor'], ({ actorId, params, query }) => workspace.pageForActor(actorId, {
       section: params[0],

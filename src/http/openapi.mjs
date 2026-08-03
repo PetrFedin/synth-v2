@@ -33,7 +33,7 @@ const workspaceSections = Object.freeze([
 
 export const wholesaleV2OpenApi = Object.freeze({
   openapi: '3.1.0',
-  info: { title: 'Syntha Wholesale V2 API', version: '1.6.0' },
+  info: { title: 'Syntha Wholesale V2 API', version: '1.7.0' },
   servers: [{ url: '/v2', description: 'Authenticated Syntha V2 API prefix' }],
   'x-operational-endpoints': Object.freeze({
     liveness: '/health',
@@ -189,13 +189,32 @@ export const wholesaleV2OpenApi = Object.freeze({
         type: 'object', required: ['selectionId', 'terms'], additionalProperties: false,
         properties: { selectionId: identifier, terms: { $ref: '#/components/schemas/OrderTerms' } },
       },
+      OrderTermsUpdate: {
+        type: 'object', required: ['expectedVersion', 'terms'], additionalProperties: false,
+        properties: {
+          expectedVersion: { type: 'integer', minimum: 1, maximum: postgresIntegerMaximum },
+          terms: { $ref: '#/components/schemas/OrderTerms' },
+        },
+      },
+      OrderVersionExpectation: {
+        type: 'object', required: ['expectedVersion'], additionalProperties: false,
+        properties: { expectedVersion: { type: 'integer', minimum: 1, maximum: postgresIntegerMaximum } },
+      },
       OrderAccept: {
-        type: 'object', required: ['organisationId'], additionalProperties: false,
-        properties: { orderId: identifier, organisationId: identifier },
+        type: 'object', required: ['organisationId', 'expectedVersion'], additionalProperties: false,
+        properties: {
+          orderId: identifier,
+          organisationId: identifier,
+          expectedVersion: { type: 'integer', minimum: 1, maximum: postgresIntegerMaximum },
+        },
       },
       OrderCancel: {
-        type: 'object', required: ['reason'], additionalProperties: false,
-        properties: { orderId: identifier, reason: { type: 'string', minLength: 3, maxLength: 1000 } },
+        type: 'object', required: ['reason', 'expectedVersion'], additionalProperties: false,
+        properties: {
+          orderId: identifier,
+          reason: { type: 'string', minLength: 3, maxLength: 1000 },
+          expectedVersion: { type: 'integer', minimum: 1, maximum: postgresIntegerMaximum },
+        },
       },
       Notification: {
         type: 'object',
@@ -348,8 +367,9 @@ export const wholesaleV2OpenApi = Object.freeze({
     '/selections/{selectionId}/lines/{sku}': { put: operation('upsertSelectionLine', ['selectionId', 'sku'], '#/components/schemas/SelectionLineInput') },
     '/selections/{selectionId}/submit': { post: operation('submitSelection', ['selectionId']) },
     '/orders': { post: operation('createOrderDraft', [], '#/components/schemas/OrderCreate') },
+    '/orders/{orderId}/terms': { patch: operation('reviseOrderTerms', ['orderId'], '#/components/schemas/OrderTermsUpdate') },
     '/orders/{orderId}/accept': { post: operation('acceptOrderTerms', ['orderId'], '#/components/schemas/OrderAccept') },
-    '/orders/{orderId}/attach': { post: operation('attachOrderToCycle', ['orderId']) },
+    '/orders/{orderId}/attach': { post: operation('attachOrderToCycle', ['orderId'], '#/components/schemas/OrderVersionExpectation') },
     '/orders/{orderId}/cancel': { post: operation('cancelOrder', ['orderId'], '#/components/schemas/OrderCancel') },
     '/workspace': {
       get: {

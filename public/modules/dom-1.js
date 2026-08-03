@@ -168,7 +168,9 @@ function buildField(field) {
     field.options.forEach(option => {
       const value = typeof option === 'string' ? option : option.id;
       const text = field.format ? field.format(option) : (typeof option === 'string' ? option : (option.name || option.id));
-      control.append(el('option',{value,rawText:text}));
+      const optionNode = el('option',{value,rawText:text});
+      if (field.value !== undefined && String(field.value) === String(value)) optionNode.selected = true;
+      control.append(optionNode);
     });
     label.append(control);
     return { label, control };
@@ -184,10 +186,10 @@ function buildField(field) {
 }
 
 function textDef(name, label, value = '', maxLength = 160) { return { name, label, kind: 'text', value, maxLength }; }
-function dateDef(name, label) { return { name, label, kind: 'date' }; }
-function dateTimeDef(name, label) { return { name, label, kind: 'datetime-local' }; }
+function dateDef(name, label, value = '') { return { name, label, kind: 'date', value }; }
+function dateTimeDef(name, label, value = '') { return { name, label, kind: 'datetime-local', value }; }
 function numberDef(name, label, value, integer, min = 0) { return { name, label, kind: 'number', value, integer, min }; }
-function selectDef(name, label, options, format) { return { name, label, kind: 'select', options, format }; }
+function selectDef(name, label, options, format, value) { return { name, label, kind: 'select', options, format, value }; }
 function showInlineError(form, message) { form.querySelector('.notice.error')?.remove(); form.prepend(notice(message, 'error')); }
 function setButtonBusy(button, busy, text) { button.disabled = busy; button.textContent = I18N.translate(String(text)); }
 

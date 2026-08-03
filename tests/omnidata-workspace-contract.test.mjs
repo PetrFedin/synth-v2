@@ -6,14 +6,18 @@ async function source(path) {
   return readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 }
 
-test('the Syntha shell loads the Omnidata layer after functional modules', async () => {
+test('the Syntha shell loads the versioned Omnidata layer after functional modules', async () => {
   const html = await source('public/index.html');
-  assert.match(html, /<link rel="stylesheet" href="\/omnidata\.css">/);
+  assert.match(html, /<meta name="syntha-build" content="visual-20260803-2">/);
+  assert.match(html, /<link rel="stylesheet" href="\/omnidata\.css\?v=visual-20260803-2">/);
+  assert.match(html, /<link rel="stylesheet" href="\/omnidata-fidelity\.css\?v=visual-20260803-2">/);
   const formIndex = html.indexOf('/ui/open-form.js');
-  const workspaceIndex = html.indexOf('/ui/omnidata-workspace.js');
+  const workspaceIndex = html.indexOf('/ui/omnidata-workspace.js?v=visual-20260803-2');
+  const fidelityIndex = html.indexOf('/ui/omnidata-fidelity.js?v=visual-20260803-2');
   const startIndex = html.indexOf('/ui/app-start.js');
   assert.ok(formIndex >= 0 && formIndex < workspaceIndex);
-  assert.ok(workspaceIndex < startIndex);
+  assert.ok(workspaceIndex < fidelityIndex);
+  assert.ok(fidelityIndex < startIndex);
 });
 
 test('the Omnidata layer provides tabs, KPI density, registries and a persistent inspector', async () => {

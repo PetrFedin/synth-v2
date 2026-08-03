@@ -7,13 +7,14 @@ import { invariant } from '../core/errors.mjs';
 const DEFAULT_PUBLIC_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'public');
 const JS = 'text/javascript; charset=utf-8';
 const CACHE = 'public, max-age=300';
+const VISUAL_CACHE = 'no-store';
 const ASSETS = Object.freeze({
   '/': ['index.html', 'text/html; charset=utf-8', 'no-store'],
   '/index.html': ['index.html', 'text/html; charset=utf-8', 'no-store'],
   '/styles.css': ['styles.css', 'text/css; charset=utf-8', CACHE],
   '/i18n.css': ['i18n.css', 'text/css; charset=utf-8', CACHE],
-  '/omnidata.css': ['omnidata.css', 'text/css; charset=utf-8', CACHE],
-  '/omnidata-fidelity.css': ['omnidata-fidelity.css', 'text/css; charset=utf-8', CACHE],
+  '/omnidata.css': ['omnidata.css', 'text/css; charset=utf-8', VISUAL_CACHE],
+  '/omnidata-fidelity.css': ['omnidata-fidelity.css', 'text/css; charset=utf-8', VISUAL_CACHE],
   '/ui/i18n-runtime.js': ['modules/i18n-runtime.js', JS, CACHE],
   '/ui/ui-capabilities.js': ['modules/ui-capabilities.js', JS, CACHE],
   '/ui/ui-validation.js': ['modules/ui-validation.js', JS, CACHE],
@@ -38,10 +39,10 @@ const ASSETS = Object.freeze({
   '/ui/api.js': ['modules/api.js', JS, CACHE],
   '/ui/dom-1.js': ['modules/dom-1.js', JS, CACHE],
   '/ui/dom-2.js': ['modules/dom-2.js', JS, CACHE],
-  '/ui/omnidata-workspace.js': ['modules/omnidata-workspace.js', JS, CACHE],
+  '/ui/omnidata-workspace.js': ['modules/omnidata-workspace.js', JS, VISUAL_CACHE],
   '/ui/order-lifecycle-actions.js': ['modules/order-lifecycle-actions.js', JS, CACHE],
-  '/ui/omnidata-polish.js': ['modules/omnidata-polish.js', JS, CACHE],
-  '/ui/omnidata-fidelity.js': ['modules/omnidata-fidelity.js', JS, CACHE],
+  '/ui/omnidata-polish.js': ['modules/omnidata-polish.js', JS, VISUAL_CACHE],
+  '/ui/omnidata-fidelity.js': ['modules/omnidata-fidelity.js', JS, VISUAL_CACHE],
   '/ui/app-start.js': ['modules/app-start.js', JS, CACHE],
 });
 

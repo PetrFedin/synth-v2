@@ -1,0 +1,59 @@
+name: Apply Catalog Concurrency UI
+
+on:
+  push:
+    branches:
+      - automation/catalog-concurrency-ui
+    paths:
+      - '.automation/catalog-concurrency-ui.patch.gz.b64.*'
+      - '.github/workflows/apply-catalog-concurrency-ui.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-catalog-concurrency-ui
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: automation/catalog-concurrency-ui
+          fetch-depth: 0
+
+      - name: Reconstruct and verify patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .automation/catalog-concurrency-ui.patch.gz.b64.* | base64 --decode > /tmp/catalog-concurrency-ui.patch.gz
+          echo 'ac40eb3527259f6dff912115b98c761729983f876c2023502a89fda927b86013  /tmp/catalog-concurrency-ui.patch.gz' | sha256sum --check --strict
+          gzip --decompress --stdout /tmp/catalog-concurrency-ui.patch.gz > /tmp/catalog-concurrency-ui.patch
+          echo 'b43d5fa8ff94744522c1a042943e4b9302667f1f129014a517d0f5d2b06c028c  /tmp/catalog-concurrency-ui.patch' | sha256sum --check --strict
+          git apply --check /tmp/catalog-concurrency-ui.patch
+          git apply --index /tmp/catalog-concurrency-ui.patch
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Verify Catalog concurrency and UI
+        run: npm run verify
+
+      - name: Commit verified implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .automation/catalog-concurrency-ui.patch.gz.b64.*
+          rm -f .github/workflows/apply-catalog-concurrency-ui.yml
+          rmdir .automation 2>/dev/null || true
+          git add -A
+          test ! -e .github/workflows/apply-catalog-concurrency-ui.yml
+          test -z "$(git ls-files '.automation/catalog-concurrency-ui.patch.gz.b64.*')"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat: add catalog optimistic concurrency and safe editing'
+          git push origin HEAD:automation/catalog-concurrency-ui

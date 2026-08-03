@@ -43,6 +43,17 @@ test('detects collection, brand, currency and inventory contradictions', () => {
   assert.equal(result.saleReady, false);
 });
 
+test('treats missing numeric master data as absent rather than zero', () => {
+  const missing = { ...completeSku, wholesalePrice: null, minimumOrderQuantity: '', availableQuantity: undefined, availableToSell: undefined };
+  const result = core.assessStyle(workspace({
+    collections: [{ id: 'col1', brandId: 'brand1', currency: 'EUR', status: 'published' }],
+    showrooms: [{ id: 'show1', collectionId: 'col1', status: 'open' }],
+  }), missing);
+  assert.equal(result.risks.some((item) => item.code === 'INVALID_WHOLESALE_PRICE'), true);
+  assert.equal(result.risks.some((item) => item.code === 'INVALID_MOQ'), true);
+  assert.equal(result.risks.some((item) => item.code === 'INVENTORY_INCONSISTENT'), true);
+});
+
 test('flags published style whose ATS is below MOQ', () => {
   const low = { ...completeSku, minimumOrderQuantity: 5, availableQuantity: 10, reservedQuantity: 8, availableToSell: 2 };
   const result = core.assessStyle(workspace({

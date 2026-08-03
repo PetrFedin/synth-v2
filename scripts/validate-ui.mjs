@@ -41,10 +41,12 @@ assertRequiredOrder(sources, [
   '/ui/app-core.js',
   '/ui/open-form.js',
   '/ui/planning-core.js',
+  '/ui/styles-core.js',
   '/ui/omnidata-workspace.js',
   '/ui/omnidata-v4.js',
   '/ui/omnidata-v5.js',
   '/ui/planning.js',
+  '/ui/styles.js',
   '/ui/app-start.js',
 ]);
 

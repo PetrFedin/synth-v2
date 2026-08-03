@@ -3,7 +3,13 @@ import { DomainError, invariant } from '../core/errors.mjs';
 import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
 import { assertWholesaleStore } from './store-contract.mjs';
 import { CAPABILITIES, assertCapability, assertTradeCapability } from '../modules/access-control/public.mjs';
-import { createOrderDraft, acceptOrderTerms, attachReadyOrder, cancelAttachedOrder } from '../modules/orders/public.mjs';
+import {
+  createOrderDraft,
+  reviseOrderTerms,
+  acceptOrderTerms,
+  attachReadyOrder,
+  cancelAttachedOrder,
+} from '../modules/orders/public.mjs';
 import { advanceCommercialCycle, attachOrder, cancelCommercialCycleOrder } from '../modules/commercial-cycle/public.mjs';
 
 const INVENTORY_ERROR_CODES = new Set([
@@ -67,10 +73,36 @@ export function createOrderBuilderService({
       );
     },
 
-    acceptTerms(commandId, actorId, { orderId, organisationId }) {
+    reviseTerms(commandId, actorId, { orderId, expectedVersion, terms }) {
       return execute(
         commandId,
-        `acceptOrderTerms:${actorId}:${orderId}:${organisationId}`,
+        versionedFingerprint(`reviseOrderTerms:${actorId}:${orderId}:${canonicalJson(terms)}`, expectedVersion),
+        actorId,
+        async (tx) => {
+          const current = requireEntity(await tx.getOrder(orderId), 'ORDER_NOT_FOUND', { orderId });
+          const cycle = requireEntity(await tx.getCycle(current.cycleId), 'CYCLE_NOT_FOUND', { cycleId: current.cycleId });
+          authorizeOrderMutation(await tx.listMembershipsForTrade(cycle.brandId, cycle.shopId), actorId, cycle);
+          return current;
+        },
+        async (tx, current) => {
+          const updated = reviseOrderTerms(current, terms, clock(), expectedVersion ?? current.version);
+          if (updated === current) return current;
+          await tx.saveOrder(updated, current.version);
+          await append(tx, 'order.terms-revised', orderId, {
+            expectedVersion: current.version,
+            version: updated.version,
+            status: updated.status,
+            approvalsReset: current.acceptedOrganisationIds.length > 0,
+          }, commandId, actorId);
+          return updated;
+        },
+      );
+    },
+
+    acceptTerms(commandId, actorId, { orderId, organisationId, expectedVersion }) {
+      return execute(
+        commandId,
+        versionedFingerprint(`acceptOrderTerms:${actorId}:${orderId}:${organisationId}`, expectedVersion),
         actorId,
         async (tx) => {
           const current = requireEntity(await tx.getOrder(orderId), 'ORDER_NOT_FOUND', { orderId });
@@ -79,18 +111,25 @@ export function createOrderBuilderService({
           return current;
         },
         async (tx, current) => {
-          const updated = acceptOrderTerms(current, organisationId, clock());
+          const updated = acceptOrderTerms(current, organisationId, clock(), expectedVersion ?? current.version);
+          if (updated === current) return current;
           await tx.saveOrder(updated, current.version);
-          await append(tx, 'order.terms-accepted', orderId, { organisationId, status: updated.status }, commandId, actorId);
+          await append(tx, 'order.terms-accepted', orderId, {
+            organisationId,
+            status: updated.status,
+            expectedVersion: current.version,
+            version: updated.version,
+          }, commandId, actorId);
           return updated;
         },
       );
     },
 
-    attachOrderToCycle(commandId, actorId, orderId) {
+    attachOrderToCycle(commandId, actorId, input) {
+      const { orderId, expectedVersion } = normalizeOrderVersionInput(input);
       return execute(
         commandId,
-        `attachOrderToCycle:${actorId}:${orderId}`,
+        versionedFingerprint(`attachOrderToCycle:${actorId}:${orderId}`, expectedVersion),
         actorId,
         async (tx) => {
           const current = requireEntity(await tx.getOrder(orderId), 'ORDER_NOT_FOUND', { orderId });
@@ -100,23 +139,28 @@ export function createOrderBuilderService({
         },
         async (tx, { current, cycle }) => {
           invariant(cycle.stage === 'order-builder', 'ORDER_BUILDER_STAGE_REQUIRED', 'Cycle must be at order-builder stage', { stage: cycle.stage });
-          const readyOrder = attachReadyOrder(current, clock());
+          const readyOrder = attachReadyOrder(current, clock(), expectedVersion ?? current.version);
           const orderStage = advanceCommercialCycle(cycle, 'order', clock());
           await tx.saveCycle(orderStage, cycle.version);
           const cycleWithOrder = attachOrder(orderStage, readyOrder, clock());
           await tx.saveCycle(cycleWithOrder, orderStage.version);
           await tx.saveOrder(readyOrder, current.version);
-          await append(tx, 'order.attached', orderId, { cycleId: cycle.id, totalAmount: readyOrder.totalAmount }, commandId, actorId);
+          await append(tx, 'order.attached', orderId, {
+            cycleId: cycle.id,
+            totalAmount: readyOrder.totalAmount,
+            expectedVersion: current.version,
+            version: readyOrder.version,
+          }, commandId, actorId);
           await append(tx, 'commercial-cycle.advanced', cycle.id, { from: cycle.stage, to: orderStage.stage, version: orderStage.version }, commandId, actorId);
           return Object.freeze({ order: readyOrder, cycle: cycleWithOrder });
         },
       ).catch(translateInventoryError);
     },
 
-    cancelOrder(commandId, actorId, { orderId, reason }) {
+    cancelOrder(commandId, actorId, { orderId, reason, expectedVersion }) {
       return execute(
         commandId,
-        `cancelOrder:${actorId}:${orderId}:${reason}`,
+        versionedFingerprint(`cancelOrder:${actorId}:${orderId}:${reason}`, expectedVersion),
         actorId,
         async (tx) => {
           const current = requireEntity(await tx.getOrder(orderId), 'ORDER_NOT_FOUND', { orderId });
@@ -125,13 +169,15 @@ export function createOrderBuilderService({
           return Object.freeze({ current, cycle });
         },
         async (tx, { current, cycle }) => {
-          const cancelled = cancelAttachedOrder(current, reason, clock());
+          const cancelled = cancelAttachedOrder(current, reason, clock(), expectedVersion ?? current.version);
           const cancelledCycle = cancelCommercialCycleOrder(cycle, cancelled, clock());
           await tx.saveCycle(cancelledCycle, cycle.version);
           await tx.saveOrder(cancelled, current.version);
           await append(tx, 'order.cancelled', orderId, {
             cycleId: cycle.id,
             reason: cancelled.cancellationReason,
+            expectedVersion: current.version,
+            version: cancelled.version,
             releasedLines: cancelled.lines.map((line) => ({ sku: line.sku, quantity: line.quantity })),
           }, commandId, actorId);
           return Object.freeze({ order: cancelled, cycle: cancelledCycle });
@@ -153,6 +199,13 @@ function authorizeOrderMutation(memberships, actorId, cycle) {
     shopId: cycle.shopId,
     capability: CAPABILITIES.ORDER_WRITE,
   });
+}
+function normalizeOrderVersionInput(input) {
+  if (typeof input === 'string') return Object.freeze({ orderId: input, expectedVersion: undefined });
+  return Object.freeze({ orderId: input?.orderId, expectedVersion: input?.expectedVersion });
+}
+function versionedFingerprint(base, expectedVersion) {
+  return expectedVersion === undefined ? base : `${base}:${expectedVersion}`;
 }
 function requireEntity(entity, code, details) { invariant(entity, code, 'Entity not found', details); return entity; }
 

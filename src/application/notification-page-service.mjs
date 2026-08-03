@@ -8,12 +8,12 @@ export function withNotificationPageMetadata({ service, reader } = {}) {
     ...service,
     async pageForActor(actorId, options) {
       const page = await service.pageForActor(actorId, options);
-      const unreadCount = await reader.countUnreadForActor(actorId);
       invariant(
         page && typeof page === 'object' && Array.isArray(page.items) && (page.nextCursor === null || typeof page.nextCursor === 'string'),
         'NOTIFICATION_PAGE_RESULT_INVALID',
         'Notification page result is invalid',
       );
+      const unreadCount = await reader.countUnreadForActor(actorId);
       invariant(
         Number.isSafeInteger(unreadCount) && unreadCount >= 0,
         'NOTIFICATION_COUNT_INVALID',

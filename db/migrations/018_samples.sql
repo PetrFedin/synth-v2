@@ -45,6 +45,10 @@ CREATE TABLE IF NOT EXISTS samples (
     OR (status = 'cancelled' AND requested_at IS NULL)
     OR (supplier_code IS NOT NULL AND due_at IS NOT NULL AND requested_at IS NOT NULL)
   ),
+  CONSTRAINT samples_approval_condition_check CHECK (
+    status <> 'approved'
+    OR COALESCE(payload #>> '{receipt,condition}', '') IN ('accepted','damaged')
+  ),
   CONSTRAINT samples_state_timestamps_check CHECK (
     (status = 'draft' AND requested_at IS NULL AND production_started_at IS NULL AND received_at IS NULL AND decision_at IS NULL AND cancelled_at IS NULL)
     OR (status = 'requested' AND requested_at IS NOT NULL AND production_started_at IS NULL AND received_at IS NULL AND decision_at IS NULL AND cancelled_at IS NULL)

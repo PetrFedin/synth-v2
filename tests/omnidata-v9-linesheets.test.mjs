@@ -58,7 +58,7 @@ test('Linesheets uses grounded Syntha workspace data and a clearly marked sample
   ]) assert.match(js, new RegExp(`function ${functionName}\\(`), functionName);
 
   for (const phrase of [
-    'Листы коллекций',
+    'Лист коллекции',
     'Linesheets',
     'Карта связей',
     'Relationship map',

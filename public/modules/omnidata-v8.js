@@ -31,6 +31,10 @@
       ru: ['РАЗРАБОТКА ПРОДУКТА', 'Таблицы измерений', 'Базовые измерения, градация размеров, допуски, версии и синхронизация с моделями.'],
       en: ['PRODUCT DEVELOPMENT', 'Measurement charts', 'Base measurements, size grading, tolerances, revisions and style synchronisation.'],
     },
+    samples: {
+      ru: ['РАЗРАБОТКА ПРОДУКТА', 'Образцы и согласования', 'Раунды образцов, поставщики, сроки, приёмка, решения и переход к следующей итерации.'],
+      en: ['PRODUCT DEVELOPMENT', 'Samples and approvals', 'Sample rounds, suppliers, due dates, receipt, decisions and controlled next iterations.'],
+    },
     partners: {
       ru: ['ЗАКУПКИ И ПРОИЗВОДСТВО', 'Партнёры и поставщики', 'Контрагенты, производственные площадки, коммерческие условия и история взаимодействий.'],
       en: ['SOURCING AND PRODUCTION', 'Partners and suppliers', 'Counterparties, production sites, commercial terms and relationship history.'],
@@ -85,22 +89,19 @@
     '.measurement-filters',
     '.measurement-table thead',
     '.measurement-inspector',
+    '.sample-header',
+    '.sample-filters',
+    '.sample-table thead',
+    '.sample-inspector',
+    '.sample-dialog',
     '.notice',
     'dialog',
     '.form-shell',
   ]);
 
-  function locale() {
-    return I18N.getLocale() === 'en' ? 'en' : 'ru';
-  }
-
-  function currentContext() {
-    return PAGE_CONTEXT[state?.view] || PAGE_CONTEXT.overview;
-  }
-
-  function contextText(index) {
-    return currentContext()[locale()][index];
-  }
+  function locale() { return I18N.getLocale() === 'en' ? 'en' : 'ru'; }
+  function currentContext() { return PAGE_CONTEXT[state?.view] || PAGE_CONTEXT.overview; }
+  function contextText(index) { return currentContext()[locale()][index]; }
 
   function normalizeTextNode(node) {
     const original = node.nodeValue;
@@ -112,11 +113,7 @@
   function normalizeRoot(root) {
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     let node = walker.nextNode();
-    while (node) {
-      normalizeTextNode(node);
-      node = walker.nextNode();
-    }
-
+    while (node) { normalizeTextNode(node); node = walker.nextNode(); }
     root.querySelectorAll('[title], [aria-label], input[placeholder], textarea[placeholder], option').forEach((element) => {
       for (const attribute of ['title', 'aria-label', 'placeholder']) {
         const value = element.getAttribute?.(attribute);
@@ -137,9 +134,7 @@
     document.documentElement.lang = activeLocale;
     document.body.dataset.locale = activeLocale;
     document.body.dataset.synthaVisual = BUILD;
-    document.title = activeLocale === 'en'
-      ? 'Syntha — Fashion Operating System'
-      : 'Syntha — операционная система моды';
+    document.title = activeLocale === 'en' ? 'Syntha — Fashion Operating System' : 'Syntha — операционная система моды';
   }
 
   function applyBrandLanguage() {
@@ -165,7 +160,6 @@
       }
       description.textContent = contextText(2);
     }
-
     const breadcrumb = document.querySelector('.breadcrumb');
     const current = breadcrumb?.querySelector('strong');
     if (current) current.textContent = contextText(1);
@@ -193,9 +187,7 @@
     if (parts.length) parts[parts.length - 1].textContent = BUILD;
   }
 
-  function auditLanguage() {
-    document.querySelectorAll(AUDIT_ROOTS.join(',')).forEach(normalizeRoot);
-  }
+  function auditLanguage() { document.querySelectorAll(AUDIT_ROOTS.join(',')).forEach(normalizeRoot); }
 
   function applyOmnidataV8() {
     document.body.classList.add('omnidata-v8');
@@ -208,16 +200,7 @@
   }
 
   const previousRenderApp = renderApp;
-  renderApp = (...args) => {
-    const result = previousRenderApp(...args);
-    applyOmnidataV8();
-    return result;
-  };
+  renderApp = (...args) => { const result = previousRenderApp(...args); applyOmnidataV8(); return result; };
 
-  window.SynthaOmnidataV8 = Object.freeze({
-    build: BUILD,
-    apply: applyOmnidataV8,
-    audit: auditLanguage,
-    pageContext: PAGE_CONTEXT,
-  });
+  window.SynthaOmnidataV8 = Object.freeze({ build: BUILD, apply: applyOmnidataV8, audit: auditLanguage, pageContext: PAGE_CONTEXT });
 })();

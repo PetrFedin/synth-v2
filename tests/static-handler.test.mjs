@@ -14,8 +14,7 @@ test('serves standalone workspace and every ordered asset with security headers'
     const html=await response.text();
     const sources=[...html.matchAll(/<script defer src="([^"]+)"/g)].map(match=>match[1]);
     const sourcePaths=sources.map(source=>new URL(source,base).pathname);
-    assert.deepEqual(sourcePaths.slice(-4),['/ui/omnidata-v11.js','/ui/dom-boolean-props.js','/ui/app-start.js'].slice(-4));
-    assert.ok(sourcePaths.indexOf('/ui/omnidata-v10.js')<sourcePaths.indexOf('/ui/omnidata-v11.js'));
+    assert.deepEqual(sourcePaths.slice(-4),['/ui/omnidata-v10.js','/ui/omnidata-v11.js','/ui/dom-boolean-props.js','/ui/app-start.js']);
     assert.ok(sourcePaths.indexOf('/ui/sample-core.js')>sourcePaths.indexOf('/ui/measurement-core.js'));
     assert.ok(sourcePaths.indexOf('/ui/samples.js')>sourcePaths.indexOf('/ui/measurement-catalog-sync.js'));
     for(const source of sources){const script=await fetch(new URL(source,base));assert.equal(script.status,200,source);assert.match(script.headers.get('content-type'),/text\/javascript/)}

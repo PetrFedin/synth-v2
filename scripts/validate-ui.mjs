@@ -63,6 +63,7 @@ assertRequiredOrder(sources, [
   '/ui/omnidata-v7-language-audit.js',
   '/ui/omnidata-v8.js',
   '/ui/omnidata-v9.js',
+  '/ui/dom-boolean-props.js',
   '/ui/app-start.js',
 ]);
 

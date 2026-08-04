@@ -1,7 +1,7 @@
 # JOOR Retailer Cabinet → Syntha B2B Fashion Platform
 
 Статус: рабочая продуктовая спецификация и master map.  
-Версия: 2.1, 4 августа 2026 года.  
+Версия: 2.2, 4 августа 2026 года.  
 Назначение: определить, как Syntha должна превзойти JOOR как B2B buying platform и одновременно закрыть PLM, sourcing, costing, production, quality, logistics, wholesale и analytics.
 
 > Документ объединяет результаты read-only аудита JOOR Retailer / LITE и целевую архитектуру Syntha. Наблюдаемое в JOOR не следует считать подтверждением его закрытой внутренней реализации. Все функции, которых не было в доступном аккаунте, помечаются как TARGET или UAT.
@@ -2469,3 +2469,476 @@ Brand publishes collection
 ```
 
 Только после этого имеет смысл расширять систему вширь. Иначе получится роскошный музей экранов: смотреть приятно, работать нельзя.
+
+---
+
+## 57. API architecture and command model
+
+API должна отражать бизнес-команды, а не быть прямым CRUD-доступом к таблицам.
+
+### 57.1 Principles
+
+- versioned API namespace;
+- organization and account context on every request;
+- server-side authorization;
+- idempotency for all important writes;
+- optimistic concurrency through entity version or ETag;
+- cursor pagination;
+- standardized validation errors;
+- trace/correlation ID;
+- immutable command audit;
+- separate read models for heavy analytics and workspaces.
+
+### 57.2 Example commands
+
+```text
+POST   /api/v1/connections/requests
+POST   /api/v1/connections/:id/accept
+POST   /api/v1/styles/:id/release
+POST   /api/v1/rfqs/:id/send
+POST   /api/v1/orders/:id/submit
+POST   /api/v1/orders/:id/confirm
+POST   /api/v1/orders/:id/amendments
+POST   /api/v1/samples/:id/approve
+POST   /api/v1/production-orders/:id/milestones/:milestoneId/complete
+POST   /api/v1/inspections/:id/finalize
+POST   /api/v1/shipments/:id/dispatch
+POST   /api/v1/invoices/:id/match
+```
+
+### 57.3 Error contract
+
+```json
+{
+  "code": "ORDER_PRICE_VERSION_EXPIRED",
+  "message": "Order contains prices that are no longer valid",
+  "field": null,
+  "objectId": "...",
+  "retryable": false,
+  "requiredAction": "REFRESH_PRICE_SNAPSHOT",
+  "correlationId": "..."
+}
+```
+
+User-facing messages are localized; stable machine codes remain language-independent.
+
+---
+
+## 58. Webhooks and external developer platform
+
+### 58.1 Webhook events
+
+- connection.created;
+- connection.accepted;
+- collection.published;
+- style.updated;
+- price.updated;
+- order.submitted;
+- order.confirmed;
+- order.amended;
+- production.delayed;
+- inspection.failed;
+- shipment.dispatched;
+- goods.received;
+- invoice.created;
+- invoice.matched.
+
+### 58.2 Delivery requirements
+
+- signed payload;
+- timestamp and replay protection;
+- idempotent event ID;
+- retry with exponential backoff;
+- dead-letter visibility;
+- endpoint health status;
+- delivery log;
+- manual replay;
+- secret rotation;
+- event subscription filtering.
+
+### 58.3 Developer portal
+
+- API keys/service accounts;
+- OAuth applications;
+- sandbox tenant;
+- OpenAPI documentation;
+- webhook tester;
+- example payloads;
+- rate-limit dashboard;
+- integration certification checklist.
+
+---
+
+## 59. Subscription, entitlement and monetization architecture
+
+Монетизация не должна ломать основной transaction flow. Платный барьер допустим для расширения эффективности, но не для доступа к уже созданному заказу или юридически значимому документу.
+
+### 59.1 Entitlement dimensions
+
+- organization plan;
+- active users;
+- brands;
+- retailer accounts;
+- stores/doors;
+- factories;
+- styles/SKUs;
+- storage;
+- API volume;
+- export volume;
+- analytics retention;
+- AI usage;
+- premium modules.
+
+### 59.2 Product packages
+
+- Network: discovery, profiles, connections and messaging;
+- Wholesale: showrooms, linesheets, ordering and amendments;
+- Buying Pro: OTB, Visual Assortment, allocation and analytics;
+- PLM: styles, BOM, measurements, samples and tech packs;
+- Source & Produce: RFQ, suppliers, production, QC and logistics;
+- Finance Control: costing, invoices, reconciliation and landed cost;
+- Enterprise: SSO, advanced permissions, API, data residency and SLA.
+
+### 59.3 Commercial safeguards
+
+- clear explanation of limitation;
+- no surprise blocking inside a workflow;
+- grace period after downgrade;
+- read-only access to historical records;
+- export before account closure;
+- proration and billing audit;
+- entitlement changes recorded as events.
+
+### 59.4 Platform revenue options
+
+- SaaS subscription;
+- implementation and migration;
+- premium analytics;
+- AI usage packages;
+- payment processing fee where legally supported;
+- marketplace/service commission;
+- supplier verification;
+- integration packages;
+- managed data onboarding.
+
+Sponsored discovery must always be visibly labeled and must not influence independent performance analytics.
+
+---
+
+## 60. Digital Product Passport and traceability readiness
+
+Syntha должна быть готова собирать product provenance even when regulatory requirements differ by territory.
+
+### 60.1 Traceability graph
+
+```text
+Style
+→ Colorway
+→ SKU
+→ BOM Component
+→ Material Batch
+→ Supplier
+→ Factory
+→ Production Batch
+→ Inspection
+→ Shipment
+→ Retail Receipt / Return
+```
+
+### 60.2 Passport data
+
+- unique product identifier;
+- manufacturer and responsible entity;
+- country of manufacture;
+- material composition;
+- component provenance;
+- certificates and test evidence;
+- care and repair instructions;
+- recyclability/disposal information;
+- production batch;
+- carbon or impact fields where reliably available;
+- document source and verification status.
+
+### 60.3 Data trust states
+
+- supplier-declared;
+- document-verified;
+- third-party verified;
+- system-calculated;
+- estimated;
+- missing;
+- disputed.
+
+Syntha must never present estimated sustainability values as verified facts.
+
+---
+
+## 61. Localization, currencies and international trade
+
+### 61.1 Localization
+
+- interface locale;
+- content locale;
+- translation status;
+- locale-specific formatting;
+- right-to-left readiness;
+- translated commercial terms;
+- language-specific PDFs;
+- fallback language rules.
+
+### 61.2 Currency model
+
+Each monetary value stores:
+
+- transaction currency;
+- amount;
+- functional/reporting currency;
+- FX rate;
+- FX source;
+- FX date/time;
+- rate type: spot, budget, contractual, accounting;
+- converted amount;
+- rounding rule.
+
+Historical reports must not silently recalculate old values using a current rate.
+
+### 61.3 International trade
+
+- HS code;
+- country of origin;
+- preferential origin evidence;
+- incoterm version;
+- export/import restrictions;
+- sanctions/compliance screening result;
+- estimated duty;
+- actual duty;
+- customs broker;
+- customs declaration and status.
+
+Compliance screening must support manual review and false-positive resolution rather than automatic irreversible blocking.
+
+---
+
+## 62. Mobile, tablet and offline strategy
+
+### 62.1 Desktop-first areas
+
+- Visual Assortment;
+- large SKU quantity matrices;
+- BOM and measurement charts;
+- quotation comparison;
+- financial reconciliation;
+- complex administration.
+
+### 62.2 Mobile-first actions
+
+- approvals;
+- exception review;
+- comments and mentions;
+- order status;
+- sample evaluation;
+- factory milestone update;
+- QC photo capture;
+- shipment status;
+- notification triage.
+
+### 62.3 Offline tablet mode
+
+For showrooms, market appointments and factories:
+
+- explicitly downloaded workspace;
+- encrypted local storage;
+- visible offline indicator;
+- queued commands;
+- media compression;
+- conflict detection on reconnect;
+- user-controlled resolution;
+- automatic local data expiry;
+- remote session revocation.
+
+Offline mode must never imply that an order was submitted until server acknowledgement is received.
+
+---
+
+## 63. Accessibility and inclusive UX
+
+Target: WCAG 2.2 AA for core workflows.
+
+Requirements:
+
+- complete keyboard navigation;
+- visible focus;
+- semantic headings and landmarks;
+- screen-reader labels;
+- no color-only status communication;
+- sufficient contrast;
+- scalable text;
+- accessible data tables;
+- error summary and inline error linkage;
+- reduced-motion support;
+- accessible charts with textual summaries;
+- touch targets suitable for tablet and mobile;
+- timeout warning and extension for long buying sessions.
+
+Quantity matrices require a dedicated accessibility mode rather than pretending that a huge spreadsheet is automatically accessible.
+
+---
+
+## 64. Disaster recovery and business continuity
+
+### 64.1 Service tiers
+
+Critical workflows:
+
+- order access;
+- order confirmation;
+- shipment documents;
+- production exceptions;
+- invoice records.
+
+Non-critical workflows:
+
+- recommendations;
+- secondary analytics;
+- visual enhancements;
+- long-running exports.
+
+### 64.2 Recovery requirements
+
+- defined RPO and RTO by service tier;
+- encrypted backups;
+- point-in-time database recovery;
+- object storage versioning;
+- tested restoration drills;
+- cross-region strategy where required;
+- runbooks;
+- incident roles;
+- customer communication process;
+- post-incident review.
+
+### 64.3 Degraded mode
+
+During partial outage the platform should, where safe:
+
+- keep historical orders readable;
+- show cached product data with stale warning;
+- queue non-destructive commands;
+- disable irreversible actions that cannot be confirmed;
+- expose system status and incident reference.
+
+---
+
+## 65. Testing strategy and UAT matrix
+
+### 65.1 Test layers
+
+- unit tests for calculations and state transitions;
+- contract tests for API and integrations;
+- permission tests;
+- tenant-isolation tests;
+- integration tests;
+- end-to-end workflows;
+- migration tests;
+- performance tests;
+- accessibility tests;
+- security tests;
+- disaster-recovery drills;
+- business UAT.
+
+### 65.2 Required test personas
+
+- retailer buyer;
+- retailer approver;
+- brand salesperson;
+- brand order manager;
+- product developer;
+- sourcing manager;
+- factory user;
+- quality inspector;
+- finance user;
+- organization admin;
+- external integration service account;
+- unauthorized user.
+
+### 65.3 High-risk scenarios
+
+- two buyers edit the same draft;
+- price changes while order is open;
+- connection revoked after order submission;
+- brand confirms partial quantities;
+- order amendment crosses approval threshold;
+- factory changes delivery after confirmation;
+- shipment exceeds confirmed quantity;
+- duplicate invoice received;
+- user switches organization mid-workflow;
+- integration retries the same event;
+- offline tablet reconnects with conflicting edits;
+- entitlement expires during an open workflow.
+
+### 65.4 UAT evidence
+
+Each scenario records:
+
+- test data;
+- actor and account;
+- steps;
+- expected result;
+- actual result;
+- screenshots/documents;
+- audit events;
+- analytics events;
+- defects;
+- business sign-off.
+
+---
+
+## 66. Product governance and decision log
+
+Master map must remain controlled, otherwise it превратится в склад хороших идей без ответственности.
+
+Each product decision stores:
+
+- decision ID;
+- date;
+- problem;
+- considered options;
+- chosen option;
+- rationale;
+- owner;
+- affected modules;
+- data migration impact;
+- security/compliance impact;
+- KPI expected to change;
+- review date;
+- status: proposed, accepted, superseded, rejected.
+
+Changes to canonical entities, state machines, money calculations or permissions require architecture and business-owner approval.
+
+---
+
+## 67. Updated implementation conclusion
+
+Следующий этап нельзя начинать с еще одного набора экранов. Требуется превратить master map в исполнимую спецификацию.
+
+Порядок:
+
+1. canonical ERD and ownership model;
+2. permission matrix;
+3. state machines;
+4. API and webhook contracts;
+5. screen contracts;
+6. event taxonomy;
+7. P0 vertical slice;
+8. two-style pilot;
+9. reconciliation and UAT;
+10. only then broad module expansion.
+
+Целевой критерий качества:
+
+```text
+Любое число, статус или решение на экране
+можно проследить до исходного объекта,
+версии, автора, правила расчета и audit event.
+```
+
+Если этого нет, система лишь аккуратно рисует неопределенность. Syntha должна неопределенность устранять.

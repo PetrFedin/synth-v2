@@ -55,6 +55,7 @@ const ASSETS = Object.freeze({
   '/ui/api.js': ['modules/api.js', JS, CACHE],
   '/ui/dom-1.js': ['modules/dom-1.js', JS, CACHE],
   '/ui/dom-2.js': ['modules/dom-2.js', JS, CACHE],
+  '/ui/dom-boolean-props.js': ['modules/dom-boolean-props.js', JS, VISUAL_CACHE],
   '/ui/planning-core.js': ['modules/planning-core.js', JS, VISUAL_CACHE],
   '/ui/styles-core.js': ['modules/styles-core.js', JS, VISUAL_CACHE],
   '/ui/materials-core.js': ['modules/materials-core.js', JS, VISUAL_CACHE],

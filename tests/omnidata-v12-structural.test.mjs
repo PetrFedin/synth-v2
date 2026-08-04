@@ -20,12 +20,12 @@ test('V12 keeps one strict RU or EN interface after every render',async()=>{
   assert.match(js,/Поиск в текущем разделе/);
 });
 
-test('V12 is delivered after V11 without stale cache',async()=>{
+test('V12 is preserved beneath V13 without stale cache',async()=>{
   const html=await source('public/index.html');
   const handler=await source('src/web/static-handler.mjs');
-  assert.match(html,/meta name="syntha-build" content="visual-20260804-12"/);
-  assert.ok(html.indexOf('/omnidata-v12.css?v=visual-20260804-12')>html.indexOf('/omnidata-v11.css?v=visual-20260804-11'));
-  assert.ok(html.indexOf('/ui/omnidata-v12.js?v=visual-20260804-12')>html.indexOf('/ui/omnidata-v11.js?v=visual-20260804-11'));
+  assert.match(html,/meta name="syntha-build" content="visual-20260804-13"/);
+  assert.ok(html.indexOf('/omnidata-v13.css?v=visual-20260804-13')>html.indexOf('/omnidata-v12.css?v=visual-20260804-12'));
+  assert.ok(html.indexOf('/ui/omnidata-v13.js?v=visual-20260804-13')>html.indexOf('/ui/omnidata-v12.js?v=visual-20260804-12'));
   assert.ok(handler.includes("'/omnidata-v12.css': ['omnidata-v12.css'"));
-  assert.ok(handler.includes("'/ui/omnidata-v12.js': ['modules/omnidata-v12.js'"));
+  assert.ok(handler.includes("'/ui/omnidata-v13.js': ['modules/omnidata-v13.js'"));
 });

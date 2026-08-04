@@ -47,33 +47,14 @@ test('Omnidata V8 applies one strict locale to every system workspace', async ()
   assert.doesNotThrow(() => new Function(js));
 
   for (const view of [
-    'overview',
-    'planning',
-    'catalog',
-    'styles',
-    'materials',
-    'boms',
-    'measurements',
-    'partners',
-    'showrooms',
-    'selections',
-    'orders',
-    'calendar',
-    'notifications',
+    'overview', 'planning', 'catalog', 'styles', 'materials', 'boms', 'measurements',
+    'partners', 'showrooms', 'selections', 'orders', 'calendar', 'notifications',
   ]) assert.match(js, new RegExp(`\\b${view}:\\s*\\{`), view);
 
   for (const selector of [
-    '.sidebar',
-    '.topbar',
-    '.od-table thead',
-    '.planning-table thead',
-    '.styles-table thead',
-    '.materials-table thead',
-    '.bom-table thead',
-    '.measurement-table thead',
-    '.bom-inspector',
-    '.measurement-inspector',
-    'dialog',
+    '.sidebar', '.topbar', '.od-table thead', '.planning-table thead', '.styles-table thead',
+    '.materials-table thead', '.bom-table thead', '.measurement-table thead',
+    '.bom-inspector', '.measurement-inspector', 'dialog',
   ]) assert.ok(js.includes(`'${selector}'`), selector);
 
   for (const contract of [
@@ -99,28 +80,33 @@ test('Omnidata V8 applies one strict locale to every system workspace', async ()
   assert.doesNotMatch(js, /(?:\u00d0|\u00d1)[\u0080-\u00ff]/u);
 });
 
-test('Omnidata V8 remains the calibrated base and V9 is the final no-cache visual layer', async () => {
+test('V8 remains the calibrated base, V9 provides Linesheets and V10 is the final no-cache visual layer', async () => {
   const html = await source('public/index.html');
   const handler = await source('src/web/static-handler.mjs');
 
   const baseCss = html.indexOf('/omnidata-v8.css?v=visual-20260804-8');
   const referenceCss = html.indexOf('/omnidata-v8-reference.css?v=visual-20260804-8');
   const v9Css = html.indexOf('/omnidata-v9.css?v=visual-20260804-9');
+  const v10Css = html.indexOf('/omnidata-v10.css?v=visual-20260804-10');
   const audit = html.indexOf('/ui/omnidata-v7-language-audit.js?v=visual-20260804-7');
   const v8 = html.indexOf('/ui/omnidata-v8.js?v=visual-20260804-8');
   const v9 = html.indexOf('/ui/omnidata-v9.js?v=visual-20260804-9');
+  const v10 = html.indexOf('/ui/omnidata-v10.js?v=visual-20260804-10');
+  const booleanRuntime = html.indexOf('/ui/dom-boolean-props.js?v=visual-20260804-9');
   const start = html.indexOf('/ui/app-start.js');
 
-  assert.ok(baseCss >= 0 && referenceCss > baseCss && v9Css > referenceCss);
-  assert.ok(audit >= 0 && v8 > audit && v9 > v8 && start > v9);
-  assert.match(html, /meta name="syntha-build" content="visual-20260804-9"/);
+  assert.ok(baseCss >= 0 && referenceCss > baseCss && v9Css > referenceCss && v10Css > v9Css);
+  assert.ok(audit >= 0 && v8 > audit && v9 > v8 && v10 > v9 && booleanRuntime > v10 && start > booleanRuntime);
+  assert.match(html, /meta name="syntha-build" content="visual-20260804-10"/);
 
   for (const route of [
     "'/omnidata-v8.css': ['omnidata-v8.css'",
     "'/omnidata-v8-reference.css': ['omnidata-v8-reference.css'",
     "'/omnidata-v9.css': ['omnidata-v9.css'",
+    "'/omnidata-v10.css': ['omnidata-v10.css'",
     "'/ui/omnidata-v8.js': ['modules/omnidata-v8.js'",
     "'/ui/omnidata-v9.js': ['modules/omnidata-v9.js'",
+    "'/ui/omnidata-v10.js': ['modules/omnidata-v10.js'",
     "'/ui/linesheets.js': ['modules/linesheets.js'",
   ]) assert.ok(handler.includes(route), route);
 

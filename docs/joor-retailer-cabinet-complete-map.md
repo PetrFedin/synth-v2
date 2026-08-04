@@ -1,7 +1,7 @@
 # JOOR Retailer Cabinet → Syntha B2B Fashion Platform
 
 Статус: рабочая продуктовая спецификация и master map.  
-Версия: 2.4, 4 августа 2026 года.  
+Версия: 2.5, 4 августа 2026 года.  
 Назначение: определить, как Syntha должна превзойти JOOR как B2B buying platform и одновременно закрыть PLM, sourcing, costing, production, quality, logistics, wholesale и analytics.
 
 > Документ объединяет результаты read-only аудита JOOR Retailer / LITE и целевую архитектуру Syntha. Наблюдаемое в JOOR не следует считать подтверждением его закрытой внутренней реализации. Все функции, которых не было в доступном аккаунте, помечаются как TARGET или UAT.
@@ -5502,3 +5502,1397 @@ NuORDER/Lightspeed integration is strong, but Syntha must remain POS-neutral thr
 NuORDER is currently the strongest direct benchmark for retailer assortment planning, trend intelligence, POS-linked replenishment and collaborative buying intent. Faire is the strongest benchmark for marketplace risk transfer. Brandboom is a strong benchmark for frictionless line-sheet sales, engagement and rep workflow. Pepperi is a strong benchmark for field sales, trade promotions and offline retail execution. Centric, Delogue and WFX define the PLM/planning baseline.
 
 Syntha should combine these strengths while preserving stricter order versioning, better financial traceability and a single product lifecycle from idea to sell-through.
+
+---
+
+## 106. Benchmark correction: what is market parity and what is a real gap
+
+Новые официальные материалы уточняют, что immersive virtual showroom сам по себе уже не может считаться преимуществом над JOOR.
+
+### 106.1 JOOR PUBLICLY CONFIRMED parity
+
+JOOR публично подтверждает:
+
+- drag-and-drop virtual showroom templates;
+- 360-degree media and video;
+- public and private views;
+- shoppable lookbooks;
+- collection and product highlights;
+- shareable links and QR codes;
+- integrated shopping;
+- multi-page layouts;
+- saved assortments and personalized links;
+- retailer-specific curation;
+- product, region and customer analytics.
+
+### 106.2 NuORDER PUBLICLY CONFIRMED parity
+
+NuORDER публично подтверждает:
+
+- interactive virtual showrooms;
+- 360-degree and 3D product imagery;
+- dynamic video;
+- shoppable hotspots;
+- multiple merchandising layouts;
+- virtual market appointment support;
+- product notes and order planning.
+
+### 106.3 Product conclusion
+
+Следующие функции являются market parity, а не уникальным преимуществом Syntha:
+
+- 360/3D media;
+- video and shoppable hotspots;
+- digital catalog;
+- shareable showroom;
+- mobile-assisted appointments;
+- basic showroom analytics.
+
+Реальный gap создают:
+
+- assortment targets and rollups;
+- store-photo visual merchandising;
+- revenue-attributed campaigns;
+- multi-shipment orchestration;
+- event microsites and group ordering;
+- licensing and royalty control;
+- sales-agency commission accounting;
+- supplier self-service and product approval;
+- persistent cart across complex buying contexts;
+- PLM, production and financial traceability.
+
+Official sources:
+
+- https://www.joor.com/virtual-showroom
+- https://www.joor.com/wholesale-management
+- https://www.nuorder.com/wholesale/virtual-showrooms/
+- https://www.nuorder.com/wholesale/online-wholesale-platform/
+
+---
+
+## 107. Elastic Suite — strongest benchmark for digital merchandising and visual sell-in
+
+### 107.1 COMPETITOR CONFIRMED capabilities
+
+Elastic Suite publicly confirms:
+
+- role-personalized branded dashboard;
+- rich digital catalogs;
+- images, video, 360-degree views and 3D renderings;
+- customer-specific custom collections;
+- customer-specific pricing inside collections;
+- print-ready and shareable catalogs;
+- Whiteboard for product placement on store-specific photos and POP displays;
+- marketing assets, fixtures and text on Whiteboard;
+- shoppable merchandising boards;
+- Assortment Builder for retailer, season, region, promotion and sales context;
+- shareable assortment links and exports;
+- order, backorder, invoice and shipment tracking;
+- real-time multi-shipment order creation;
+- quick order using real-time and future inventory;
+- sales campaigns connected to product catalogs;
+- campaign metrics linking email, products, sales and revenue;
+- customer-specific pricing and retailer-specific catalogs;
+- ERP, accounting, payment and back-office integration.
+
+### 107.2 JOOR evidence status
+
+JOOR publicly confirms virtual showrooms, curation and analytics. The following Elastic-style capabilities are not confirmed in the audited JOOR retailer cabinet:
+
+- store-photo/POP visual merchandising Whiteboard;
+- order-integrated Whiteboard;
+- detailed campaign-to-product-to-revenue attribution;
+- multi-shipment construction inside one active order;
+- customer-specific Custom Collection with printable sales proposal as a canonical object;
+- visual merchandising assets and fixtures connected to the order.
+
+### 107.3 SYNTHA TARGET
+
+Syntha must combine Elastic-style sell-in tools with planning and financial controls:
+
+- VisualBoard linked to Assortment and Order;
+- store/fixture photo as canvas background;
+- products, marketing assets, furniture and annotations as layers;
+- selected quantity and value on every product object;
+- visibility of target, selected, ordered and confirmed values;
+- link board placement to store/door and cluster;
+- convert board into assortment lines or order lines;
+- campaign attribution to product views, shortlist, draft, confirmed order, shipment and gross margin;
+- create multiple shipment groups without duplicating the order;
+- preserve immutable shipment agreement after confirmation.
+
+### 107.4 Competitor pattern not to copy
+
+Elastic support documentation indicates that submitted orders become locked and changes are handled through representatives. Syntha should preserve strict locking but add a formal Order Amendment workflow rather than forcing off-platform correction.
+
+Official sources:
+
+- https://www.elasticsuite.com/platform/
+- https://www.elasticsuite.com/
+- https://www.elasticsuite.com/demo/
+- https://support.elasticsuite.com/create-standard-order-flow
+- https://support.elasticsuite.com/create-a-whiteboard-flow
+
+---
+
+## 108. RepSpark — event commerce, persistent buying and licensing benchmark
+
+### 108.1 COMPETITOR CONFIRMED capabilities
+
+RepSpark publicly confirms:
+
+- Always-On Cart with persistent progress across pages and sessions;
+- dynamic multi-date and multi-location ordering;
+- live and allotted inventory views;
+- pre-book ordering;
+- custom assortments;
+- digital catalogs and virtual showrooms;
+- microsites for events, launches and temporary shops;
+- product customization;
+- Insignia workflows for logos and artwork;
+- Licensing workflows for approved logos and products;
+- automatic licensor filtering;
+- automatic royalty calculation and price adjustment;
+- in-platform approvals;
+- multi-brand management;
+- multi-warehouse management;
+- multi-currency and multilingual support;
+- ERP integrations and open API;
+- retailer discovery community;
+- trending and recommended brands;
+- AI-powered Order Insights;
+- accounts receivable and invoice payment;
+- contacts, accounts, tasks, lists and campaigns in the supporting product environment.
+
+### 108.2 Event microsites
+
+RepSpark event workflows publicly describe:
+
+- curated event assortment;
+- approved products and logos;
+- open/close dates;
+- event-specific instructions;
+- multiple payment structures;
+- attendee self-service ordering;
+- size and customization selection;
+- inventory validation and hold;
+- direct-to-attendee shipping or event pickup;
+- consolidated order summary;
+- no-code setup;
+- event orders separated from ordinary orders;
+- points-based event value in some configured flows.
+
+### 108.3 AI Order Insights
+
+RepSpark describes contextual order insights that can identify:
+
+- retailers at risk of not reordering;
+- unusual order patterns;
+- upsell opportunities;
+- accounts that deserve sales-rep attention.
+
+These are marketing descriptions rather than a complete public model specification. Syntha must therefore treat them as benchmark direction, not as a verified algorithm.
+
+### 108.4 JOOR evidence status
+
+The following were not confirmed in the audited JOOR retailer cabinet:
+
+- persistent cart across catalogs and operational pages;
+- event-specific microsite and participant order consolidation;
+- licensing and automatic royalty engine;
+- allotted inventory per customer/event;
+- dynamic multi-date and multi-location order workspace;
+- order-centric AI next-best-action feed;
+- multi-brand brand-owner administration as one operational tenant.
+
+### 108.5 SYNTHA TARGET
+
+- persistent CartWorkspace with explicit commercial context;
+- EventCommerce module;
+- LicensingAgreement and RoyaltyRule;
+- InventoryAllotment by account, event, channel and date;
+- MultiDeliveryOrderBuilder;
+- OrderInsight with source data, confidence and action outcome;
+- multi-brand group administration with brand-specific data walls;
+- event P&L from demand capture through fulfillment.
+
+Official sources:
+
+- https://www.repspark.com/
+- https://www.repspark.com/customers/features-and-updates
+- https://www.repspark.com/product-customization
+- https://www.repspark.com/event-microsites
+- https://support.repspark.com/core-products
+
+---
+
+## 109. MarketTime — sales-agency and multi-line order benchmark
+
+### 109.1 COMPETITOR CONFIRMED capabilities
+
+MarketTime publicly confirms:
+
+- order writing on desktop, iPhone, iPad and Android;
+- online and offline order writing;
+- multi-line orders for independent reps and agency groups;
+- itemized PO generation;
+- splitting a multi-line order into manufacturer orders at completion;
+- barcode scanning for order capture;
+- PDF hotspotting;
+- simple reorder;
+- customer management;
+- manufacturer management;
+- divisions and territory management;
+- customer GeoMap;
+- promotions and digital assets;
+- shoppable catalogs;
+- order-status synchronization between brand, agency and customer;
+- invoice tracking;
+- commission tracking;
+- automatic split salesperson commission;
+- order-writer attribution;
+- import/export and ERP integration;
+- secure buyer-driven invoice payment through InvoicePay / mtCharge+.
+
+### 109.2 JOOR evidence status
+
+The following agency-centric capabilities were not confirmed in the audited JOOR retailer cabinet:
+
+- one cross-manufacturer order-writing session that splits at completion;
+- agency/manufacturer/rep as separate commercial principals;
+- automatic split commissions;
+- effective-dated commission rules;
+- barcode-first showroom order capture;
+- geographic account routing and territory map;
+- offline order writing designed around independent agencies.
+
+### 109.3 SYNTHA TARGET
+
+Syntha must support both direct brand sales and multi-brand agency sales.
+
+Required model:
+
+```text
+SalesAgency
+→ Division
+→ Territory
+→ Manufacturer / Brand Principal
+→ Representative
+→ OrderWriter
+→ Retailer Account
+```
+
+Required process:
+
+```text
+Buyer session
+→ Scan/search products across authorized brands
+→ Build Master Agency Basket
+→ Validate each brand context
+→ Split into Brand Orders
+→ Preserve common appointment/session ID
+→ Calculate commissions
+→ Track confirmation, shipment, invoice and payment separately
+```
+
+Required controls:
+
+- no cross-brand data leakage;
+- explicit legal seller per resulting order;
+- commission conflict detection;
+- order-writer vs account-owner distinction;
+- territory overlap warnings;
+- barcode scan resolves exact SKU and price context;
+- offline submission remains pending until server acknowledgement.
+
+Official sources:
+
+- https://www.markettime.com/sellers/
+- https://www.markettime.com/sales-agencies/
+- https://overview.markettime.com/markettime-order-writing
+- https://support.markettime.com/hc/en-us/articles/33293064684187-MarketTime-Web-Portal-and-Mobile-App-Release-Notes-2024
+- https://news.markettime.com/latest-news/markettime-launches-secure-invoice-function-to-modernize-payment-workflow
+
+---
+
+## 110. B2B Wave — supplier onboarding and account-personalization benchmark
+
+### 110.1 COMPETITOR CONFIRMED capabilities
+
+B2B Wave publicly confirms:
+
+- customer-specific price lists;
+- customer-specific homepage;
+- customer-specific tax rates;
+- customer-specific discounts;
+- show/hide products by customer or privacy group;
+- multiple users per customer with roles;
+- multiple shipping addresses;
+- sales reps ordering on behalf of customers;
+- automatic order-related communications;
+- supplier accounts;
+- dedicated supplier portal;
+- supplier upload and management of product images and prices;
+- custom supplier permissions;
+- product approval before storefront publication;
+- real-time supplier activity tracking;
+- customer performance analytics;
+- customer-product sales analytics;
+- customer browsing and search activity;
+- inventory control;
+- coupon-performance analytics;
+- full API for products, orders, customers, pricing and tax rules.
+
+### 110.2 JOOR evidence status
+
+The following were not confirmed in the audited JOOR retailer cabinet:
+
+- supplier self-service product submission into a controlled approval queue;
+- customer-specific homepage as a governed merchandising object;
+- customer-specific tax logic managed directly in wholesale portal;
+- supplier activity dashboard;
+- product approval from external supplier to commercial catalog;
+- coupon-performance analytics.
+
+### 110.3 SYNTHA TARGET
+
+- external SupplierPortal distinct from factory production workspace;
+- ProductSubmission and ProductSubmissionVersion;
+- validation against category templates;
+- content, commercial, compliance and legal approval stages;
+- field-level supplier permissions;
+- supplier change request rather than direct overwrite;
+- customer-specific HomeExperience;
+- CustomerTaxProfile resolved at legal entity/location level;
+- activity and SLA dashboard;
+- conversion of approved supplier data into CommercialProductProjection;
+- supplier quality score for submitted data.
+
+Official sources:
+
+- https://www.b2bwave.com/features
+- https://www.b2bwave.com/
+- https://www.b2bwave.com/customers-and-sales-reps
+- https://www.b2bwave.com/b2b-ecommerce-platform
+
+---
+
+## 111. Expanded competitor gap matrix
+
+`NOT CONFIRMED` means the capability was not verified in the audited JOOR access and reviewed public materials, not that its absence has been conclusively proven.
+
+| Capability | Best benchmark | JOOR status | Syntha target | Priority |
+|---|---|---|---|---|
+| Store-photo visual merchandising board | Elastic | NOT CONFIRMED | VisualBoard linked to store, assortment and order | P1 |
+| Fixtures and POP assets on shoppable board | Elastic | NOT CONFIRMED | Layered board with assets and product hotspots | P1 |
+| Campaign revenue attribution | Elastic | NOT CONFIRMED | Campaign → engagement → order → margin attribution | P2 |
+| Multi-shipment order construction | Elastic/RepSpark | NOT CONFIRMED | One order workspace with multiple delivery groups | P1 |
+| Future inventory quick order | Elastic | PARTIAL/UAT | Time-phased ATS/ATP by delivery | P1 |
+| Persistent always-on cart | RepSpark | NOT CONFIRMED | Recoverable CartWorkspace across sessions | P0 |
+| Multi-date and multi-location buying | RepSpark | NOT CONFIRMED | Delivery/location matrix in one workspace | P1 |
+| Allotted inventory | RepSpark | NOT CONFIRMED | Account/event/channel allotment and release rules | P1 |
+| Event microsites | RepSpark | NOT CONFIRMED | EventCommerce with participants and consolidation | P2 |
+| Licensing and royalty calculation | RepSpark | NOT CONFIRMED | LicensingAgreement and RoyaltyLedger | P2 |
+| AI reorder-risk insights | RepSpark | NOT CONFIRMED | Explainable account next-best-action | P2 |
+| Multi-line agency order | MarketTime | NOT CONFIRMED | Master agency basket split by seller | P2 |
+| Barcode showroom order capture | MarketTime | NOT CONFIRMED | Scan-to-SKU with commercial validation | P2 |
+| Automatic split commissions | MarketTime | NOT CONFIRMED | Versioned CommissionRule and settlement | P2 |
+| Territory GeoMap | MarketTime | NOT CONFIRMED | Account map, routing and overlap control | P3 |
+| Supplier product submission portal | B2B Wave | NOT CONFIRMED | Supplier self-service + approval workflow | P1 |
+| Customer-specific homepage | B2B Wave | NOT CONFIRMED | Governed HomeExperience by account/location | P2 |
+| Customer-specific tax profile | B2B Wave/Shopify | PARTIAL/UAT | Legal-entity/location tax resolution | P0 |
+| Supplier activity tracking | B2B Wave | NOT CONFIRMED | Submission SLA and activity dashboard | P1 |
+| Coupon performance | B2B Wave | NOT CONFIRMED | Promotion attribution and profitability | P2 |
+
+---
+
+## 112. Visual merchandising Whiteboard — detailed Syntha specification
+
+### 112.1 Purpose
+
+Whiteboard is not a decorative moodboard. It must connect spatial merchandising, assortment, quantities, economics and order execution.
+
+### 112.2 Board types
+
+- store wall;
+- rail;
+- shelf;
+- table;
+- window;
+- pop-up;
+- shop-in-shop;
+- event booth;
+- showroom presentation;
+- assortment moodboard;
+- campaign board.
+
+### 112.3 Entities
+
+```text
+VisualBoard
+VisualBoardVersion
+VisualCanvas
+CanvasBackground
+CanvasLayer
+FixtureAsset
+MarketingAsset
+ProductPlacement
+PlacementHotspot
+BoardAnnotation
+BoardTarget
+BoardShare
+BoardApproval
+```
+
+### 112.4 Canvas data
+
+- store/location;
+- photo or plan;
+- width and height;
+- optional physical scale;
+- orientation;
+- safe zones;
+- restricted zones;
+- fixture coordinates;
+- background version;
+- capture date;
+- photographer/source;
+- access rights.
+
+### 112.5 Product placement
+
+- product/style/color/SKU;
+- image asset version;
+- x/y coordinate;
+- width/height;
+- rotation;
+- z-layer;
+- crop/mask;
+- delivery;
+- planned quantity;
+- ordered quantity;
+- retail value;
+- wholesale value;
+- margin;
+- status;
+- linked assortment line;
+- linked order line.
+
+### 112.6 Workspace behavior
+
+- drag and drop;
+- snap to grid;
+- align and distribute;
+- lock layer;
+- duplicate;
+- replace product;
+- compare versions;
+- filter by delivery/category/color/brand;
+- show/hide economics;
+- export PDF/image;
+- share controlled link;
+- convert selected placements to assortment/order;
+- highlight unavailable or changed product;
+- preserve board snapshot when order is submitted.
+
+### 112.7 Analytics
+
+- space by category/brand/color;
+- product count;
+- option count;
+- retail value per fixture;
+- wholesale investment per fixture;
+- margin per fixture;
+- sales per square meter after POS feedback;
+- compliance against approved board;
+- placement-to-order conversion.
+
+### 112.8 Acceptance criteria
+
+- board with 500 placements remains interactive;
+- product replacement preserves coordinates and records version history;
+- unavailable product is visibly flagged;
+- private retailer economics are not exposed in a brand-shared view;
+- board totals reconcile to linked assortment/order;
+- export reproduces layout without element loss;
+- mobile viewer supports comments, while complex editing remains tablet/desktop-first.
+
+---
+
+## 113. Multi-shipment, multi-date and multi-location order orchestration
+
+### 113.1 Order hierarchy
+
+```text
+Order
+→ ShipmentGroup
+→ DeliveryWindow
+→ ShipToLocation
+→ FulfillmentSource
+→ OrderLineAllocation
+```
+
+### 113.2 ShipmentGroup fields
+
+- group ID;
+- requested delivery window;
+- confirmed delivery window;
+- ship-to location;
+- bill-to entity;
+- warehouse/factory source;
+- incoterm;
+- carrier method;
+- freight payer;
+- currency;
+- minimums;
+- status;
+- line allocations;
+- totals;
+- documents;
+- change history.
+
+### 113.3 Builder behavior
+
+- add one product to several shipment groups;
+- copy size curve between groups;
+- split quantity by percentage or units;
+- bulk assign store/cluster quantities;
+- move lines between deliveries;
+- compare requested and confirmed groups;
+- show MOQ/MOV per group and order;
+- show freight and duty impact;
+- prevent location with invalid tax/shipping setup;
+- validate future inventory against promised date.
+
+### 113.4 State model
+
+```text
+DRAFT_GROUP
+→ REQUESTED
+→ CONFIRMED
+→ CAPACITY_RESERVED
+→ PICKING / IN_PRODUCTION
+→ PARTIALLY_SHIPPED
+→ SHIPPED
+→ RECEIVED
+→ CLOSED
+
+Side states:
+ON_HOLD / CHANGED / CANCELLED / FAILED
+```
+
+### 113.5 Amendment rules
+
+Changing delivery, location, quantity, incoterm or fulfillment source after submission creates an amendment with:
+
+- old/new values;
+- financial impact;
+- inventory impact;
+- production impact;
+- approval requirement;
+- counterparty acceptance.
+
+### 113.6 Acceptance criteria
+
+- one order supports at least 50 shipment groups;
+- totals reconcile at group, location, order and account levels;
+- partial brand confirmation does not lose retailer-requested quantities;
+- shipment groups can be split without duplicating commercial terms;
+- invoices and packing lists link to exact groups and lines;
+- cancellation releases reservations and OTB correctly.
+
+---
+
+## 114. Event microsites and group ordering
+
+### 114.1 Event types
+
+- trade show;
+- pop-up;
+- trunk show;
+- corporate gifting;
+- tournament;
+- club/member order;
+- staff uniform;
+- influencer capsule;
+- employee purchase;
+- limited launch;
+- preorder campaign.
+
+### 114.2 Entities
+
+```text
+CommerceEvent
+EventMicrosite
+EventAssortment
+EventParticipant
+EventAccessCode
+EventCredit
+EventCustomizationRule
+EventOrder
+EventOrderLine
+EventFulfillmentGroup
+EventSettlement
+EventSummary
+```
+
+### 114.3 Event setup
+
+- organizer;
+- sponsoring retailer/brand;
+- start/end dates;
+- timezone;
+- approved assortment;
+- catalog snapshot;
+- price policy;
+- inventory source;
+- inventory hold;
+- logos/customization;
+- participant eligibility;
+- payment model;
+- fulfillment model;
+- pickup locations;
+- minimum production threshold;
+- cancellation policy;
+- privacy notice.
+
+### 114.4 Payment models
+
+- participant pays fully;
+- retailer pays fully;
+- employer/club pays fully;
+- participant credit/points plus personal balance;
+- split payment;
+- deposit then balance;
+- no-charge internal allocation.
+
+### 114.5 Fulfillment models
+
+- direct ship to participant;
+- bulk ship to retailer/event;
+- store pickup;
+- event pickup;
+- made-to-order production;
+- consolidated production followed by individual parcel fulfillment.
+
+### 114.6 Workflow
+
+```text
+Event configured
+→ Assortment approved
+→ Access opened
+→ Participants order/customize
+→ Inventory or capacity held
+→ Event closes
+→ Minimum threshold evaluated
+→ Orders consolidated
+→ Production/fulfillment released
+→ Shipping/pickup
+→ Settlement and event P&L
+```
+
+### 114.7 Event economics
+
+- gross demand;
+- collected amount;
+- sponsor subsidy;
+- discounts;
+- customization surcharge;
+- royalty;
+- product cost;
+- fulfillment cost;
+- payment fee;
+- returns/refunds;
+- contribution margin.
+
+### 114.8 Acceptance criteria
+
+- participant cannot view other participants’ data;
+- event close prevents late silent changes;
+- inventory holds expire according to policy;
+- failed threshold triggers defined cancel/refund behavior;
+- event summary reconciles to participant orders;
+- direct-ship labels link to exact participant order;
+- logo and customization approvals are traceable.
+
+---
+
+## 115. Licensing, logo and royalty management
+
+### 115.1 Entities
+
+```text
+Licensor
+LicenseAgreement
+LicensedProperty
+ApprovedLogo
+LicenseTerritory
+LicenseChannel
+LicenseProductScope
+RoyaltyRule
+RoyaltyAccrual
+RoyaltyStatement
+ArtworkApproval
+UsageEvidence
+```
+
+### 115.2 Agreement fields
+
+- licensor/licensee;
+- property/logo;
+- territory;
+- channel;
+- product categories;
+- customer/event scope;
+- start/end dates;
+- sell-off period;
+- royalty basis;
+- rate/tier;
+- minimum guarantee;
+- currency;
+- reporting cadence;
+- approval requirements;
+- restricted uses;
+- document version.
+
+### 115.3 Catalog filtering
+
+The system must resolve:
+
+```text
+Buyer/Account
++ Event
++ Product
++ Territory
++ Channel
++ Date
+→ Eligible licensed logos and products
+```
+
+### 115.4 Royalty calculation
+
+```text
+Royalty Base
+= Eligible Net Sales or Eligible Wholesale Value
+  - Contractually Allowed Deductions
+
+Royalty Amount
+= Royalty Base × Applicable Rate
+```
+
+Every deduction type and rate version must be explicit.
+
+### 115.5 Workflow
+
+```text
+Artwork selected/uploaded
+→ Eligibility validation
+→ Proof generated
+→ Internal review
+→ Licensor approval if required
+→ Buyer approval
+→ Order release
+→ Fulfillment
+→ Royalty accrual
+→ Statement
+→ Settlement
+```
+
+### 115.6 Controls
+
+- expired logo cannot be ordered;
+- territory/channel restriction blocks submission;
+- product substitution rechecks license eligibility;
+- manual royalty override requires finance approval;
+- return/cancellation creates accrual reversal;
+- statement reconciles to immutable order/invoice lines.
+
+---
+
+## 116. Sales agency, territory and commission engine
+
+### 116.1 Entities
+
+```text
+SalesAgency
+AgencyDivision
+Territory
+TerritoryAssignment
+BrandPrincipal
+Representative
+OrderWriter
+AccountOwner
+CommissionPlan
+CommissionRule
+CommissionSplit
+CommissionAccrual
+CommissionStatement
+CommissionDispute
+```
+
+### 116.2 Commission basis
+
+- booked;
+- approved;
+- confirmed;
+- shipped;
+- invoiced;
+- paid;
+- net of returns;
+- net of discounts;
+- net of tax/freight;
+- gross margin based.
+
+### 116.3 Rule dimensions
+
+- agency;
+- brand principal;
+- rep;
+- order writer;
+- territory;
+- retailer;
+- product/category;
+- season;
+- order type;
+- effective dates;
+- threshold/tier;
+- currency;
+- event/market.
+
+### 116.4 Split logic
+
+Examples:
+
+- house + account owner + order writer;
+- regional manager + rep;
+- two reps sharing account;
+- agency and direct sales team;
+- temporary market-event split.
+
+### 116.5 Accrual lifecycle
+
+```text
+PROVISIONAL at order event
+→ EARNED at configured basis
+→ ADJUSTED for amendment/return
+→ APPROVED
+→ PAYABLE
+→ PAID
+→ DISPUTED / REVERSED
+```
+
+### 116.6 Acceptance criteria
+
+- effective-dated rule changes do not rewrite historical accruals;
+- order writer and account owner can differ;
+- one order may produce several transparent splits;
+- currency conversion uses documented rate/date;
+- cancellations and returns generate traceable clawbacks;
+- statement totals reconcile to source orders/invoices/payments.
+
+---
+
+## 117. Supplier onboarding and commercial product approval
+
+### 117.1 Portal roles
+
+- supplier admin;
+- supplier product editor;
+- supplier commercial editor;
+- supplier compliance editor;
+- brand content reviewer;
+- brand commercial reviewer;
+- legal/compliance approver;
+- catalog publisher.
+
+### 117.2 Submission entities
+
+```text
+SupplierSubmission
+SubmissionVersion
+SubmittedProduct
+SubmittedVariant
+SubmittedPrice
+SubmittedAsset
+SubmittedDocument
+ValidationIssue
+ApprovalStep
+PublicationDecision
+```
+
+### 117.3 Workflow
+
+```text
+DRAFT_BY_SUPPLIER
+→ SUBMITTED
+→ AUTOMATED_VALIDATION
+→ CONTENT_REVIEW
+→ COMMERCIAL_REVIEW
+→ COMPLIANCE_REVIEW
+→ CHANGES_REQUESTED / REJECTED / APPROVED
+→ COMMERCIAL_PROJECTION_CREATED
+→ PUBLISHED
+```
+
+### 117.4 Required validations
+
+- duplicate style/SKU/GTIN;
+- missing mandatory attributes;
+- taxonomy mismatch;
+- invalid UOM;
+- invalid price/currency/effective date;
+- missing country of origin;
+- missing composition/care;
+- asset resolution/rights;
+- certificate expiry;
+- territory restriction;
+- prohibited claim;
+- cost/wholesale/retail inconsistency.
+
+### 117.5 Change control
+
+A supplier cannot directly overwrite a published product. Change creates a new submission version showing:
+
+- changed fields;
+- reason;
+- impacted catalogs;
+- impacted drafts/orders;
+- price/margin impact;
+- required approvals;
+- effective date.
+
+### 117.6 Acceptance criteria
+
+- external supplier sees only own submissions;
+- field permissions are server-enforced;
+- rejection includes structured reason and required action;
+- approved data maps deterministically to canonical entities;
+- published product remains traceable to supplier submission version;
+- activity dashboard exposes SLA and bottleneck.
+
+---
+
+## 118. Shoppable campaigns and revenue attribution
+
+### 118.1 Campaign entities
+
+```text
+SalesCampaign
+CampaignVersion
+AudienceSegment
+CampaignMessage
+CampaignProductBlock
+CampaignLink
+CampaignSend
+EngagementEvent
+AttributedOrderLine
+CampaignCost
+CampaignExperiment
+```
+
+### 118.2 Campaign setup
+
+- objective;
+- sender/domain;
+- audience;
+- exclusions;
+- products/collections;
+- catalog snapshot;
+- customer-specific price context;
+- delivery windows;
+- schedule/timezone;
+- frequency cap;
+- tracking consent rules;
+- holdout/test group;
+- campaign cost.
+
+### 118.3 Funnel
+
+```text
+Delivered
+→ Opened where lawful
+→ Link opened
+→ Product viewed
+→ Saved/shortlisted
+→ Draft created
+→ Submitted
+→ Confirmed
+→ Shipped
+→ Paid
+```
+
+### 118.4 Attribution views
+
+- last touch;
+- first touch;
+- linear;
+- time decay;
+- campaign-assisted;
+- experiment-based incremental lift.
+
+### 118.5 Required metrics
+
+- delivered rate;
+- open/click rate where lawful;
+- product engagement;
+- draft creation;
+- order conversion;
+- confirmed revenue;
+- gross margin;
+- cancellation rate;
+- return rate;
+- revenue per recipient;
+- incremental revenue;
+- incremental gross margin;
+- campaign ROI.
+
+### 118.6 Guardrails
+
+- no order attribution to inaccessible price/product context;
+- canceled lines excluded or separately shown;
+- tracking disabled where consent or legal basis is absent;
+- revenue attribution is separated from causal incrementality;
+- campaign cannot send unavailable or expired-price products without warning.
+
+---
+
+## 119. Persistent cart, booking and allotted inventory
+
+### 119.1 CartWorkspace
+
+Persistent cart is not one global unstructured basket. It is scoped by:
+
+- buyer company/location;
+- seller/brand;
+- catalog and price list;
+- currency;
+- season;
+- order type;
+- commercial terms version.
+
+A multi-brand master workspace contains several valid brand carts, not one mixed legal order.
+
+### 119.2 Cart states
+
+```text
+ACTIVE
+→ SAVED
+→ SHARED_FOR_REVIEW
+→ APPROVAL_REQUIRED
+→ READY_TO_SUBMIT
+→ SUBMITTED
+→ EXPIRED / ABANDONED / CONVERTED
+```
+
+### 119.3 Persistence
+
+- autosave after quantity changes;
+- server acknowledgement visible;
+- restore across session/device;
+- conflict handling;
+- price and availability refresh;
+- stale item warning;
+- catalog version reference;
+- recover deleted line within grace period;
+- no irreversible silent merge.
+
+### 119.4 Booking modes
+
+- prebook;
+- immediate/ATS;
+- future inventory;
+- made-to-order;
+- replenishment;
+- event hold;
+- customer allotment.
+
+### 119.5 Allotment
+
+Inventory allotment contains:
+
+- SKU;
+- warehouse/source;
+- account/customer group/event/channel;
+- quantity;
+- valid from/to;
+- hard/soft policy;
+- unused release date;
+- priority;
+- oversell policy;
+- owner;
+- reason.
+
+```text
+Available to Customer
+= min(Global ATS after safety rules, Remaining Customer Allotment)
+```
+
+### 119.6 Multi-date/location behavior
+
+- one workspace displays delivery groups as tabs/columns;
+- quantities can be moved or copied;
+- each group validates inventory and minimums;
+- store allocations roll up to commercial order lines;
+- buyer sees requested, confirmed and changed quantities separately.
+
+---
+
+## 120. AI Order Insights and next-best-action control
+
+### 120.1 Use cases
+
+- account at risk of not reordering;
+- unusual fall in order value;
+- abnormal size/color mix;
+- opportunity to add complementary product;
+- missed delivery window;
+- high open-cart value without activity;
+- low sell-through but new reorder intent;
+- credit or payment risk;
+- potential substitution;
+- late confirmation requiring escalation.
+
+### 120.2 Insight record
+
+```text
+OrderInsight
+- insight type
+- object/account scope
+- generated at
+- data window
+- source facts
+- model/rule version
+- confidence
+- severity
+- estimated value/risk
+- recommended action
+- expiry
+- owner
+- accepted/rejected/snoozed
+- outcome
+```
+
+### 120.3 Explainability
+
+The interface must show:
+
+- why the insight appeared;
+- which facts support it;
+- data freshness;
+- known limitations;
+- confidence;
+- recommendation constraints;
+- whether it is rule-based, statistical or LLM-generated.
+
+### 120.4 Human control
+
+- AI does not submit or amend an order;
+- AI does not change credit limit;
+- AI does not contact buyer without configured approval;
+- user can dismiss and provide reason;
+- outcomes are measured;
+- protected or sensitive attributes are excluded unless legally justified;
+- tenant data is isolated.
+
+### 120.5 Success metrics
+
+- insight acceptance rate;
+- action completion;
+- incremental reorder conversion;
+- incremental gross margin;
+- prevented cancellation;
+- false-positive rate;
+- user override rate;
+- time saved;
+- complaint/unsubscribe impact.
+
+---
+
+## 121. New canonical entities introduced by competitor research
+
+```text
+VisualBoard
+VisualBoardVersion
+ProductPlacement
+FixtureAsset
+ShipmentGroup
+OrderLineAllocation
+CommerceEvent
+EventParticipant
+EventCredit
+EventSettlement
+Licensor
+LicenseAgreement
+ApprovedLogo
+RoyaltyRule
+RoyaltyAccrual
+SalesAgency
+AgencyDivision
+Territory
+BrandPrincipal
+OrderWriter
+CommissionPlan
+CommissionRule
+CommissionAccrual
+SupplierSubmission
+SubmissionVersion
+ValidationIssue
+PublicationDecision
+SalesCampaign
+AudienceSegment
+AttributedOrderLine
+CartWorkspace
+InventoryAllotment
+OrderInsight
+HomeExperience
+CustomerTaxProfile
+```
+
+Rules:
+
+- no entity duplicates existing canonical responsibility;
+- each entity has owner organization and account scope;
+- commercial/financial entities are versioned or immutable as appropriate;
+- every critical state transition emits audit and analytics events;
+- external-party objects have explicit sharing policy.
+
+---
+
+## 122. UAT scenarios added from analog benchmarks
+
+1. Buyer builds one agency basket across three brands and receives three legally separate orders.
+2. Sales rep scans 100 barcodes offline, reconnects and creates no duplicate lines.
+3. Buyer creates one order for five locations and four delivery windows.
+4. Brand partially confirms one shipment group without overwriting requested quantities.
+5. Merchandiser places products on a store photo and converts placements into assortment lines.
+6. Product becomes unavailable after board approval; board and order show controlled exception.
+7. Event participant uses sponsor credit and pays remaining balance.
+8. Event fails minimum production threshold and refunds follow policy.
+9. Licensed logo expires while draft is open; submission is blocked with explanation.
+10. Return reverses royalty and commission accruals.
+11. Supplier submits product, receives structured change request and resubmits a new version.
+12. Supplier price change identifies affected catalogs and drafts.
+13. Campaign attribution excludes canceled lines and separately reports assisted revenue.
+14. Customer-specific tax and catalog resolve correctly for two locations under one company.
+15. Persistent cart restores on another device with exact quantities and context.
+16. Allotted inventory releases after expiry and becomes globally available.
+17. AI insight is dismissed; dismissal reason is captured and recommendation is not repeated until policy allows.
+18. Buyer-owned draft cannot be edited by seller without timed assistance grant.
+
+---
+
+## 123. Revised implementation priority after expanded competitor benchmark
+
+### P0 — commercial truth and usable ordering
+
+- company/location context;
+- customer catalog and price resolution;
+- customer tax profile;
+- persistent CartWorkspace;
+- style/color/SKU quantity matrix;
+- ATS timestamp;
+- delivery groups;
+- draft/submit/confirm;
+- immutable order snapshot;
+- amendment;
+- audit and permissions.
+
+### P1 — direct parity with strongest buying platforms
+
+- assortment targets and rollups;
+- VisualBoard;
+- multi-date/multi-location order;
+- future inventory;
+- inventory allotment;
+- Custom Lists/Proposed Buy;
+- prepacks;
+- supplier product portal;
+- POS/ERP sync;
+- trend intelligence;
+- smart reorder;
+- customization/proof.
+
+### P2 — material differentiation for brands and agencies
+
+- event microsites;
+- licensing and royalty;
+- agency multi-line order;
+- commission engine;
+- campaigns and attribution;
+- AI Order Insights;
+- customer-specific HomeExperience;
+- trade promotions;
+- offline barcode order writing.
+
+### P3 — ecosystem and managed services
+
+- trade credit;
+- payment guarantee;
+- managed returns;
+- retail execution;
+- route planning;
+- advanced network benchmark;
+- spatial store analytics;
+- marketplace risk ledger.
+
+### Mandatory sequencing
+
+```text
+Commercial context
+→ Persistent cart
+→ Multi-delivery order
+→ Confirmation/amendment
+→ Assortment and visual planning
+→ POS/replenishment loop
+→ Supplier/PLM/production traceability
+→ Campaigns, agency and marketplace services
+```
+
+---
+
+## 124. Official sources added in version 2.5
+
+### JOOR and NuORDER parity validation
+
+- https://www.joor.com/virtual-showroom
+- https://www.joor.com/wholesale-management
+- https://www.nuorder.com/wholesale/virtual-showrooms/
+- https://www.nuorder.com/wholesale/online-wholesale-platform/
+
+### Elastic Suite
+
+- https://www.elasticsuite.com/platform/
+- https://www.elasticsuite.com/
+- https://www.elasticsuite.com/demo/
+- https://support.elasticsuite.com/create-standard-order-flow
+- https://support.elasticsuite.com/create-a-whiteboard-flow
+- https://support.elasticsuite.com/how-do-i-create-a-whiteboard
+
+### RepSpark
+
+- https://www.repspark.com/
+- https://www.repspark.com/customers/features-and-updates
+- https://www.repspark.com/product-customization
+- https://www.repspark.com/event-microsites
+- https://support.repspark.com/core-products
+
+### MarketTime
+
+- https://www.markettime.com/sellers/
+- https://www.markettime.com/sales-agencies/
+- https://overview.markettime.com/markettime-order-writing
+- https://support.markettime.com/hc/en-us/articles/33293064684187-MarketTime-Web-Portal-and-Mobile-App-Release-Notes-2024
+- https://news.markettime.com/latest-news/markettime-launches-secure-invoice-function-to-modernize-payment-workflow
+
+### B2B Wave
+
+- https://www.b2bwave.com/features
+- https://www.b2bwave.com/
+- https://www.b2bwave.com/customers-and-sales-reps
+- https://www.b2bwave.com/b2b-ecommerce-platform
+
+### Version 2.5 decision
+
+NuORDER remains the strongest direct benchmark for retailer assortments, targets, trend intelligence and POS-linked reorder. Elastic adds the most useful visual-merchandising and campaign-attribution patterns. RepSpark adds persistent ordering, event commerce, customization and licensing. MarketTime adds the most mature agency, territory and commission logic. B2B Wave adds a practical supplier product-approval portal and deep account-level personalization.
+
+Syntha should not copy these systems module by module. It should connect their best mechanics to one traceable lifecycle in which a visual selection, quantity, price, delivery, factory, material, quality result, shipment and financial outcome remain linked.

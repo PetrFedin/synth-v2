@@ -54,6 +54,7 @@ test('the Syntha shell loads strict bilingual V9 after all functional workspaces
   const auditIndex = html.indexOf(`/ui/omnidata-v7-language-audit.js?v=${legacyBuild}`);
   const v8Index = html.indexOf(`/ui/omnidata-v8.js?v=${v8Build}`);
   const v9Index = html.indexOf(`/ui/omnidata-v9.js?v=${build}`);
+  const booleanIndex = html.indexOf(`/ui/dom-boolean-props.js?v=${build}`);
   const startIndex = html.indexOf('/ui/app-start.js');
 
   assert.ok(runtimeIndex >= 0 && runtimeIndex < strictI18nIndex);
@@ -70,7 +71,7 @@ test('the Syntha shell loads strict bilingual V9 after all functional workspaces
   assert.ok(installedIndex < measurementsIndex);
   assert.ok(measurementsIndex < measurementActionsIndex && measurementActionsIndex < measurementSyncIndex);
   assert.ok(measurementSyncIndex < auditIndex && auditIndex < v8Index);
-  assert.ok(v8Index < v9Index && v9Index < startIndex);
+  assert.ok(v8Index < v9Index && v9Index < booleanIndex && booleanIndex < startIndex);
   assert.doesNotMatch(html, /\/ui\/omnidata-v4\.js/);
   assert.doesNotMatch(html, /\/ui\/omnidata-v6\.js/);
 });

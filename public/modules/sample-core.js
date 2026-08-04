@@ -61,7 +61,7 @@
 
   function summarize(samples, catalogBySku, referenceTime) {
     const values = Array.isArray(samples) ? samples : [];
-    const lookup = catalogBySku instanceof Map ? catalogBySku : new Map();
+    const lookup = catalogBySku && typeof catalogBySku.get === 'function' ? catalogBySku : new Map();
     const summary = { total: values.length, active: 0, overdue: 0, review: 0, approved: 0, rejected: 0, stale: 0 };
     for (const sample of values) {
       if (ACTIVE_STATUSES.includes(sample.status)) summary.active += 1;

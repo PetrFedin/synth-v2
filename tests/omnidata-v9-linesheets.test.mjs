@@ -32,7 +32,7 @@ test('Omnidata V9 matches the supplied Linesheets reference geometry', async () 
   assert.doesNotMatch(css, /@import|https?:\/\/|url\s*\(/i);
 });
 
-test('Linesheets uses real Syntha workspace data and a clearly marked sample fallback', async () => {
+test('Linesheets uses grounded Syntha workspace data and a clearly marked sample fallback', async () => {
   const js = await source('public/modules/linesheets.js');
   assert.doesNotThrow(() => new Function(js));
 
@@ -46,6 +46,8 @@ test('Linesheets uses real Syntha workspace data and a clearly marked sample fal
   for (const functionName of [
     'collectionStatus',
     'collectionSeason',
+    'organisationById',
+    'buyerFor',
     'buildRows',
     'sampleRows',
     'filteredRows',
@@ -66,8 +68,18 @@ test('Linesheets uses real Syntha workspace data and a clearly marked sample fal
     'Related data',
     'Примерный режим',
     'Sample mode',
+    'Не назначен',
+    'Not assigned',
+    'Не указан',
+    'Not specified',
   ]) assert.ok(js.includes(phrase), phrase);
 
+  assert.match(js, /return 'draft';/);
+  assert.match(js, /collection\.views \?\? collection\.viewCount/);
+  assert.match(js, /organisation\?\.country \|\| organisation\?\.market/);
+  assert.doesNotMatch(js, /United Kingdom|France|United States|Italy|Germany|UAE/);
+  assert.doesNotMatch(js, /relatedSelections\.length \* 6/);
+  assert.doesNotMatch(js, /retailers\[index/);
   assert.match(js, /state\.view === 'linesheets'/);
   assert.match(js, /global\.SynthaLinesheetsWorkspace = Object\.freeze/);
   assert.doesNotMatch(js, /\bstyle\s*=/);
@@ -98,4 +110,18 @@ test('Omnidata V9 applies a single RU or EN interface context after V8', async (
   assert.match(installed, /window\.SynthaLinesheetsWorkspace/);
   assert.match(installed, /'Linesheets',[\s\S]*?'linesheets',[\s\S]*?'\\u041b\\u0438\\u0441\\u0442\\u044b/);
   assert.doesNotMatch(`${js}\n${installed}`, /https?:\/\//i);
+});
+
+test('boolean DOM runtime preserves true and false control states before first render', async () => {
+  const js = await source('public/modules/dom-boolean-props.js');
+  assert.doesNotThrow(() => new Function(js));
+  for (const property of ['checked', 'disabled', 'required', 'selected', 'readOnly', 'multiple']) {
+    assert.ok(js.includes(`'${property}'`), property);
+  }
+  assert.match(js, /const baseEl = global\.el/);
+  assert.match(js, /typeof value === 'boolean'/);
+  assert.match(js, /node\[key\] = value/);
+  assert.match(js, /global\.el = createElement/);
+  assert.match(js, /global\.SynthaBooleanDomProperties = Object\.freeze/);
+  assert.doesNotMatch(js, /https?:\/\//i);
 });

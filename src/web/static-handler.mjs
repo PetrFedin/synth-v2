@@ -35,6 +35,7 @@ const ASSETS = Object.freeze({
   '/measurements.css': ['measurements.css', 'text/css; charset=utf-8', VISUAL_CACHE],
   '/measurement-sync.css': ['measurement-sync.css', 'text/css; charset=utf-8', VISUAL_CACHE],
   '/samples.css': ['samples.css', 'text/css; charset=utf-8', VISUAL_CACHE],
+  '/sourcing.css': ['sourcing.css', 'text/css; charset=utf-8', VISUAL_CACHE],
   '/ui/i18n-runtime.js': ['modules/i18n-runtime.js', JS, CACHE],
   '/ui/i18n-v7.js': ['modules/i18n-v7.js', JS, VISUAL_CACHE],
   '/ui/ui-capabilities.js': ['modules/ui-capabilities.js', JS, CACHE],
@@ -67,6 +68,7 @@ const ASSETS = Object.freeze({
   '/ui/bom-core.js': ['modules/bom-core.js', JS, VISUAL_CACHE],
   '/ui/measurement-core.js': ['modules/measurement-core.js', JS, VISUAL_CACHE],
   '/ui/sample-core.js': ['modules/sample-core.js', JS, VISUAL_CACHE],
+  '/ui/sourcing-core.js': ['modules/sourcing-core.js', JS, VISUAL_CACHE],
   '/ui/omnidata-workspace.js': ['modules/omnidata-workspace.js', JS, VISUAL_CACHE],
   '/ui/order-lifecycle-actions.js': ['modules/order-lifecycle-actions.js', JS, CACHE],
   '/ui/omnidata-polish.js': ['modules/omnidata-polish.js', JS, VISUAL_CACHE],
@@ -93,6 +95,7 @@ const ASSETS = Object.freeze({
   '/ui/measurement-catalog-sync.js': ['modules/measurement-catalog-sync.js', JS, VISUAL_CACHE],
   '/ui/samples.js': ['modules/samples.js', JS, VISUAL_CACHE],
   '/ui/sample-catalog-sync.js': ['modules/sample-catalog-sync.js', JS, VISUAL_CACHE],
+  '/ui/sourcing.js': ['modules/sourcing.js', JS, VISUAL_CACHE],
   '/ui/app-start.js': ['modules/app-start.js', JS, CACHE],
 });
 

@@ -20,6 +20,7 @@ export function createTechPack({ id, catalogSku, input, createdAt, revision = 1,
     sourceTechPackCode: sourceTechPackCode === null ? null : code(sourceTechPackCode, 'TECH_PACK_SOURCE_CODE_INVALID'),
     status: 'draft',
     version: 1,
+    dependencySnapshot: null,
     issuedAt: null,
     issuedBy: null,
     withdrawnAt: null,
@@ -56,11 +57,7 @@ export function createTechPackRevision({ id, issuedTechPack, catalogSku, input, 
   invariant(issuedTechPack?.status === 'issued', 'TECH_PACK_NOT_ISSUED', 'Only an issued tech pack can create a revision');
   assertObject(input, 'TECH_PACK_REVISION_INPUT_INVALID', 'Tech pack revision input is invalid');
   const next = createTechPack({
-    id,
-    catalogSku,
-    createdAt,
-    revision: issuedTechPack.revision + 1,
-    sourceTechPackCode: issuedTechPack.techPackCode,
+    id, catalogSku, createdAt, revision: issuedTechPack.revision + 1, sourceTechPackCode: issuedTechPack.techPackCode,
     input: {
       techPackCode: input.techPackCode,
       sku: issuedTechPack.sku,
@@ -98,17 +95,12 @@ function normalizeEditable({ catalogSku, input }) {
   invariant(typeof catalogSku.brandId === 'string' && ID_PATTERN.test(catalogSku.brandId), 'TECH_PACK_BRAND_INVALID', 'Tech pack brand is invalid');
   invariant(Number.isInteger(catalogSku.version) && catalogSku.version >= 1, 'TECH_PACK_SKU_VERSION_INVALID', 'Catalog SKU version is invalid');
   return Object.freeze({
-    sku: code(input.sku, 'TECH_PACK_SKU_INVALID'),
-    brandId: catalogSku.brandId,
-    skuVersion: catalogSku.version,
+    sku: code(input.sku, 'TECH_PACK_SKU_INVALID'), brandId: catalogSku.brandId, skuVersion: catalogSku.version,
     supplierCode: optionalCode(input.supplierCode, 'TECH_PACK_SUPPLIER_CODE_INVALID'),
-    supplierName: optionalText(input.supplierName, 160, 'TECH_PACK_SUPPLIER_NAME_INVALID'),
-    supplierEmail: optionalEmail(input.supplierEmail),
-    title: requiredText(input.title, 3, 200, 'TECH_PACK_TITLE_INVALID'),
-    description: optionalText(input.description, 4000, 'TECH_PACK_DESCRIPTION_INVALID'),
+    supplierName: optionalText(input.supplierName, 160, 'TECH_PACK_SUPPLIER_NAME_INVALID'), supplierEmail: optionalEmail(input.supplierEmail),
+    title: requiredText(input.title, 3, 200, 'TECH_PACK_TITLE_INVALID'), description: optionalText(input.description, 4000, 'TECH_PACK_DESCRIPTION_INVALID'),
     constructionNotes: optionalText(input.constructionNotes, 8000, 'TECH_PACK_CONSTRUCTION_NOTES_INVALID'),
-    qualityNotes: optionalText(input.qualityNotes, 4000, 'TECH_PACK_QUALITY_NOTES_INVALID'),
-    packingNotes: optionalText(input.packingNotes, 4000, 'TECH_PACK_PACKING_NOTES_INVALID'),
+    qualityNotes: optionalText(input.qualityNotes, 4000, 'TECH_PACK_QUALITY_NOTES_INVALID'), packingNotes: optionalText(input.packingNotes, 4000, 'TECH_PACK_PACKING_NOTES_INVALID'),
   });
 }
 
@@ -120,16 +112,14 @@ function assertDependencies(techPack, { catalogSku, bom, measurementChart, appro
   invariant(measurementChart?.sku === techPack.sku && measurementChart.brandId === techPack.brandId && measurementChart.status === 'published', 'TECH_PACK_MEASUREMENT_NOT_PUBLISHED', 'A published measurement chart is required before issuing a tech pack');
   invariant(approvedSample?.sku === techPack.sku && approvedSample.brandId === techPack.brandId && approvedSample.status === 'approved', 'TECH_PACK_SAMPLE_NOT_APPROVED', 'An approved sample is required before issuing a tech pack');
 }
-
 function assertDocumentComplete(value) {
   invariant(value.supplierCode && value.supplierName && value.supplierEmail, 'TECH_PACK_SUPPLIER_REQUIRED', 'Supplier code, name and email are required before issue');
   invariant(value.constructionNotes, 'TECH_PACK_CONSTRUCTION_NOTES_REQUIRED', 'Construction notes are required before issue');
   invariant(value.qualityNotes, 'TECH_PACK_QUALITY_NOTES_REQUIRED', 'Quality notes are required before issue');
   invariant(value.packingNotes, 'TECH_PACK_PACKING_NOTES_REQUIRED', 'Packing notes are required before issue');
 }
-
 function editableProjection(value) { return JSON.stringify({ skuVersion: value.skuVersion, supplierCode: value.supplierCode, supplierName: value.supplierName, supplierEmail: value.supplierEmail, title: value.title, description: value.description, constructionNotes: value.constructionNotes, qualityNotes: value.qualityNotes, packingNotes: value.packingNotes }); }
-function freezeTechPack(value) { return Object.freeze({ ...value }); }
+function freezeTechPack(value) { return Object.freeze({ ...value, dependencySnapshot: value.dependencySnapshot ? Object.freeze({ ...value.dependencySnapshot }) : null }); }
 function assertNotBefore(previous, current) { invariant(Date.parse(current) >= Date.parse(previous), 'TECH_PACK_TIME_ORDER_INVALID', 'Tech pack lifecycle cannot move time backwards', { previous, current }); }
 function assertObject(value, errorCode, message) { invariant(value && typeof value === 'object' && !Array.isArray(value), errorCode, message); }
 function assertAllowedFields(value, allowed, errorCode) { const forbidden = Object.keys(value).filter((field) => !allowed.has(field)).sort(); invariant(forbidden.length === 0, errorCode, 'Tech pack input contains unsupported fields', { fields: forbidden }); }

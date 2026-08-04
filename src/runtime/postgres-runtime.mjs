@@ -8,6 +8,8 @@ import { createMaterialService } from '../application/material-service.mjs';
 import { createMaterialQueryService } from '../application/material-query-service.mjs';
 import { createMeasurementService } from '../application/measurement-service.mjs';
 import { createMeasurementQueryService } from '../application/measurement-query-service.mjs';
+import { createSampleService } from '../application/sample-service.mjs';
+import { createSampleQueryService } from '../application/sample-query-service.mjs';
 import { createMaintenanceService } from '../application/maintenance-service.mjs';
 import { withNotificationPageMetadata } from '../application/notification-page-service.mjs';
 import { createOutboxPublisherService } from '../application/outbox-publisher-service.mjs';
@@ -27,6 +29,8 @@ import { createPostgresMaterialStore } from '../infrastructure/postgres-material
 import { createPostgresMaterialReader } from '../infrastructure/postgres-material-reader.mjs';
 import { createPostgresMeasurementStore } from '../infrastructure/postgres-measurement-store.mjs';
 import { createPostgresMeasurementReader } from '../infrastructure/postgres-measurement-reader.mjs';
+import { createPostgresSampleStore } from '../infrastructure/postgres-sample-store.mjs';
+import { createPostgresSampleReader } from '../infrastructure/postgres-sample-reader.mjs';
 import { createPostgresMaintenanceStore } from '../infrastructure/postgres-maintenance-store.mjs';
 import { createPostgresOutboxPublicationStore } from '../infrastructure/postgres-outbox-publication-store.mjs';
 import { createPostgresWholesaleStore } from '../infrastructure/postgres-store.mjs';
@@ -54,6 +58,7 @@ export function createPostgresWholesaleRuntime({
   const materialStore = createPostgresMaterialStore({ pool });
   const bomStore = createPostgresBomStore({ pool });
   const measurementStore = createPostgresMeasurementStore({ pool });
+  const sampleStore = createPostgresSampleStore({ pool });
   const options = { store, nextId: runtimeNextId, ...(clock ? { clock } : {}) };
   const auth = createAuthService({
     store: createPostgresAuthStore({ pool }), nextId: runtimeNextId,
@@ -70,6 +75,7 @@ export function createPostgresWholesaleRuntime({
   const materials = Object.freeze({ ...createMaterialService({ materialStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createMaterialQueryService({ reader: createPostgresMaterialReader({ pool }) }) });
   const boms = Object.freeze({ ...createBomService({ bomStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createBomQueryService({ reader: createPostgresBomReader({ pool }) }) });
   const measurements = Object.freeze({ ...createMeasurementService({ measurementStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createMeasurementQueryService({ reader: createPostgresMeasurementReader({ pool }) }) });
+  const samples = Object.freeze({ ...createSampleService({ sampleStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createSampleQueryService({ reader: createPostgresSampleReader({ pool }), ...(clock ? { clock } : {}) }) });
   const partners = createPartnerAccessService(options);
   const collaboration = createShowroomSelectionService({ ...options, catalogReader: catalog });
   const orders = createOrderBuilderService(options);
@@ -102,12 +108,12 @@ export function createPostgresWholesaleRuntime({
     ...(outboxRetentionMs !== undefined ? { outboxRetentionMs } : {}),
   });
   const workspace = createWorkspaceQueryService({ reader: createPostgresWorkspaceReader({ pool }) });
-  const transport = { authenticate: auth.authenticate, auth, readiness, platform, catalog, materials, boms, measurements, partners, collaboration, orders, notifications, workspace };
+  const transport = { authenticate: auth.authenticate, auth, readiness, platform, catalog, materials, boms, measurements, samples, partners, collaboration, orders, notifications, workspace };
   const handler = createWholesaleHttpHandler(transport);
   const fetchHandler = createWholesaleFetchHandler(transport);
   return Object.freeze({
-    auth, readiness, maintenance, outboxPublication, store, catalogStore, materialStore, bomStore, measurementStore,
-    platform, catalog, materials, boms, measurements, partners, collaboration, orders, notifications, workspace,
+    auth, readiness, maintenance, outboxPublication, store, catalogStore, materialStore, bomStore, measurementStore, sampleStore,
+    platform, catalog, materials, boms, measurements, samples, partners, collaboration, orders, notifications, workspace,
     handler, fetchHandler,
   });
 }

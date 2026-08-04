@@ -42,10 +42,9 @@ test('serves standalone workspace and every ordered asset with security headers'
     assert.ok(sourcePaths.indexOf('/ui/omnidata-v9.js') > sourcePaths.indexOf('/ui/omnidata-v8.js'));
     assert.ok(sourcePaths.indexOf('/ui/omnidata-v10.js') > sourcePaths.indexOf('/ui/omnidata-v9.js'));
     assert.ok(sourcePaths.indexOf('/ui/dom-boolean-props.js') > sourcePaths.indexOf('/ui/omnidata-v10.js'));
-    assert.equal(sourcePaths.at(-4), '/ui/omnidata-v10.js');
-    assert.equal(sourcePaths.at(-3), '/ui/dom-boolean-props.js');
-    assert.equal(sourcePaths.at(-2), '/ui/app-start.js');
-    assert.equal(sourcePaths.at(-1), undefined);
+    assert.deepEqual(sourcePaths.slice(-4), [
+      '/ui/omnidata-v9.js', '/ui/omnidata-v10.js', '/ui/dom-boolean-props.js', '/ui/app-start.js',
+    ]);
     assert.ok(sourcePaths.length >= 42);
     for (const source of sources) {
       const script = await fetch(new URL(source, base));

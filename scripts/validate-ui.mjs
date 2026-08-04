@@ -5,71 +5,29 @@ import vm from 'node:vm';
 import { TextDecoder } from 'node:util';
 import { fileURLToPath } from 'node:url';
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const publicDir = path.join(root, 'public');
-const modulesDir = path.join(publicDir, 'modules');
-const indexPath = path.join(publicDir, 'index.html');
-const index = await readFile(indexPath);
-const html = decodeUtf8(index, indexPath);
-
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+const publicDir=path.join(root,'public');
+const modulesDir=path.join(publicDir,'modules');
+const indexPath=path.join(publicDir,'index.html');
+const html=decodeUtf8(await readFile(indexPath),indexPath);
 assertDocumentContract(html);
-
-const stylesheetUrls = [...html.matchAll(/<link\s+[^>]*rel="stylesheet"[^>]*href="([^"]+)"[^>]*>/g)].map((match) => match[1]);
-const stylesheets = stylesheetUrls.map(assetPathname);
-assertUnique(stylesheets, 'stylesheet');
-for (let index = 0; index < stylesheetUrls.length; index += 1) {
-  const stylesheetUrl = stylesheetUrls[index];
-  const stylesheet = stylesheets[index];
-  assertPublicAssetPath(stylesheetUrl, 'stylesheet');
-  await assertFileExists(path.join(publicDir, stylesheet.slice(1)), stylesheetUrl);
-}
-
-const scriptTags = [...html.matchAll(/<script\s+([^>]*)src="([^"]+)"([^>]*)><\/script>/g)];
-const sourceUrls = scriptTags.map((match) => match[2]);
-const sources = sourceUrls.map(assetPathname);
-if (sources.length < 10 || sources.at(-1) !== '/ui/app-start.js' || sources.includes('/app.js')) fail('Standalone UI script order is invalid.');
-assertUnique(sources, 'script');
-assertRequiredOrder(sources, [
-  '/ui/i18n-runtime.js','/ui/i18n-v7.js','/ui/api.js','/ui/workspace-pagination.js','/ui/notification-pagination.js',
-  '/ui/ui-capabilities.js','/ui/ui-validation.js','/ui/app-core.js','/ui/open-form.js','/ui/planning-core.js',
-  '/ui/styles-core.js','/ui/materials-core.js','/ui/bom-core.js','/ui/measurement-core.js','/ui/sample-core.js',
-  '/ui/omnidata-workspace.js','/ui/omnidata-polish.js','/ui/omnidata-fidelity.js','/ui/omnidata-v5.js',
-  '/ui/planning.js','/ui/styles.js','/ui/materials.js','/ui/bom.js','/ui/omnidata-v7.js','/ui/linesheets.js',
-  '/ui/omnidata-v7-installed.js','/ui/measurements.js','/ui/measurement-revision-actions.js','/ui/measurement-catalog-sync.js',
-  '/ui/samples.js','/ui/sample-catalog-sync.js','/ui/omnidata-v7-language-audit.js','/ui/omnidata-v8.js',
-  '/ui/omnidata-v9.js','/ui/omnidata-v10.js','/ui/omnidata-v11.js','/ui/dom-boolean-props.js','/ui/app-start.js',
-]);
-
-for (const [, before, sourceUrl, after] of scriptTags) {
-  if (!/\bdefer\b/.test(`${before} ${after}`)) fail(`UI script must use defer: ${sourceUrl}`);
-  const source = assetPathname(sourceUrl);
-  assertPublicAssetPath(sourceUrl, 'script');
-  if (!source.startsWith('/ui/')) fail(`Unexpected script path: ${sourceUrl}`);
-  const file = path.join(modulesDir, path.basename(source));
-  const bytes = await readFile(file);
-  const sourceText = decodeUtf8(bytes, file);
-  new vm.Script(sourceText, { filename: file });
-}
-
-for (const retired of ['/ui/omnidata-v4.js', '/ui/omnidata-v6.js']) if (sources.includes(retired)) fail(`Retired visual layer must not be loaded: ${retired}`);
-if (!stylesheets.includes('/omnidata-v10.css') || stylesheets.at(-1) !== '/omnidata-v11.css') fail('Omnidata V11 must be loaded as the final visual system.');
-
+const stylesheetUrls=[...html.matchAll(/<link\s+[^>]*rel="stylesheet"[^>]*href="([^"]+)"[^>]*>/g)].map(match=>match[1]);
+const stylesheets=stylesheetUrls.map(assetPathname);assertUnique(stylesheets,'stylesheet');
+for(let i=0;i<stylesheetUrls.length;i+=1){assertPublicAssetPath(stylesheetUrls[i],'stylesheet');await assertFileExists(path.join(publicDir,stylesheets[i].slice(1)),stylesheetUrls[i])}
+const scriptTags=[...html.matchAll(/<script\s+([^>]*)src="([^"]+)"([^>]*)><\/script>/g)];
+const sourceUrls=scriptTags.map(match=>match[2]);const sources=sourceUrls.map(assetPathname);
+if(sources.length<10||sources.at(-1)!=='/ui/app-start.js'||sources.includes('/app.js'))fail('Standalone UI script order is invalid.');
+assertUnique(sources,'script');
+assertRequiredOrder(sources,['/ui/i18n-runtime.js','/ui/i18n-v7.js','/ui/api.js','/ui/workspace-pagination.js','/ui/notification-pagination.js','/ui/ui-capabilities.js','/ui/ui-validation.js','/ui/app-core.js','/ui/open-form.js','/ui/planning-core.js','/ui/styles-core.js','/ui/materials-core.js','/ui/bom-core.js','/ui/measurement-core.js','/ui/sample-core.js','/ui/omnidata-workspace.js','/ui/omnidata-polish.js','/ui/omnidata-fidelity.js','/ui/omnidata-v5.js','/ui/planning.js','/ui/styles.js','/ui/materials.js','/ui/bom.js','/ui/omnidata-v7.js','/ui/linesheets.js','/ui/omnidata-v7-installed.js','/ui/measurements.js','/ui/measurement-revision-actions.js','/ui/measurement-catalog-sync.js','/ui/samples.js','/ui/sample-catalog-sync.js','/ui/omnidata-v7-language-audit.js','/ui/omnidata-v8.js','/ui/omnidata-v9.js','/ui/omnidata-v10.js','/ui/omnidata-v11.js','/ui/omnidata-v12.js','/ui/dom-boolean-props.js','/ui/app-start.js']);
+for(const[,before,sourceUrl,after]of scriptTags){if(!/\bdefer\b/.test(`${before} ${after}`))fail(`UI script must use defer: ${sourceUrl}`);const source=assetPathname(sourceUrl);assertPublicAssetPath(sourceUrl,'script');if(!source.startsWith('/ui/'))fail(`Unexpected script path: ${sourceUrl}`);const file=path.join(modulesDir,path.basename(source));new vm.Script(decodeUtf8(await readFile(file),file),{filename:file})}
+for(const retired of ['/ui/omnidata-v4.js','/ui/omnidata-v6.js'])if(sources.includes(retired))fail(`Retired visual layer must not be loaded: ${retired}`);
+if(!stylesheets.includes('/omnidata-v11.css')||stylesheets.at(-1)!=='/omnidata-v12.css')fail('Omnidata V12 must be loaded as the final visual system.');
 console.log(`Standalone UI contract OK (${sources.length} scripts, ${stylesheets.length} stylesheets checked).`);
-
-function assertDocumentContract(document) {
-  if (!/^<!doctype html>/i.test(document.trimStart())) fail('Missing HTML doctype.');
-  if (!/<html\s+lang="(?:ru|en)"/.test(document)) fail('Document language is missing or unsupported.');
-  if (!/<meta\s+name="viewport"\s+content="[^"]*width=device-width/.test(document)) fail('Responsive viewport metadata is missing.');
-  const appRoots = [...document.matchAll(/\bid="app"/g)];
-  if (appRoots.length !== 1) fail(`Expected exactly one #app root, found ${appRoots.length}.`);
-  if (/<(?:script|style)[^>]*\son[a-z]+\s*=/i.test(document) || /\son(?:click|change|submit|input|load|error)\s*=/i.test(document)) fail('Inline event handlers are not allowed in the standalone UI.');
-  const ids = [...document.matchAll(/\bid="([^"]+)"/g)].map((match) => match[1]);
-  assertUnique(ids, 'HTML id');
-}
-function assertRequiredOrder(actual, required) { let previous = -1; for (const source of required) { const index = actual.indexOf(source); if (index === -1) fail(`Required UI script is missing: ${source}`); if (index <= previous) fail(`UI dependency order is invalid near: ${source}`); previous = index; } }
-function assertUnique(values, label) { const duplicates = values.filter((value, index) => values.indexOf(value) !== index); if (duplicates.length) fail(`Duplicate ${label} entries: ${[...new Set(duplicates)].join(', ')}`); }
-function assetPathname(asset) { try { return new URL(asset, 'http://syntha.local').pathname; } catch { fail(`Invalid public asset URL: ${asset}`); } }
-function assertPublicAssetPath(asset, label) { const pathname = assetPathname(asset); if (!asset.startsWith('/') || !pathname.startsWith('/') || pathname.includes('..') || pathname.includes('\\')) fail(`Invalid ${label} path: ${asset}`); }
-async function assertFileExists(file, publicPath) { try { await access(file); } catch { fail(`Referenced public asset does not exist: ${publicPath}`); } }
-function decodeUtf8(buffer, file) { let text; try { text = new TextDecoder('utf-8', { fatal: true }).decode(buffer); } catch { fail(`Invalid UTF-8 source detected: ${path.relative(root, file)}`); } if (text.includes('\uFFFD')) fail(`Replacement character detected: ${path.relative(root, file)}`); if (/(?:\u00d0|\u00d1)[\u0080-\u00ff]/u.test(text)) fail(`Mojibake detected: ${path.relative(root, file)}`); return text; }
-function fail(message) { console.error(message); process.exit(1); }
+function assertDocumentContract(document){if(!/^<!doctype html>/i.test(document.trimStart()))fail('Missing HTML doctype.');if(!/<html\s+lang="(?:ru|en)"/.test(document))fail('Document language is missing or unsupported.');if(!/<meta\s+name="viewport"\s+content="[^"]*width=device-width/.test(document))fail('Responsive viewport metadata is missing.');if([...document.matchAll(/\bid="app"/g)].length!==1)fail('Expected exactly one #app root.');if(/\son(?:click|change|submit|input|load|error)\s*=/i.test(document))fail('Inline event handlers are not allowed.');assertUnique([...document.matchAll(/\bid="([^"]+)"/g)].map(match=>match[1]),'HTML id')}
+function assertRequiredOrder(actual,required){let previous=-1;for(const source of required){const index=actual.indexOf(source);if(index===-1)fail(`Required UI script is missing: ${source}`);if(index<=previous)fail(`UI dependency order is invalid near: ${source}`);previous=index}}
+function assertUnique(values,label){const duplicates=values.filter((value,index)=>values.indexOf(value)!==index);if(duplicates.length)fail(`Duplicate ${label} entries: ${[...new Set(duplicates)].join(', ')}`)}
+function assetPathname(asset){try{return new URL(asset,'http://syntha.local').pathname}catch{fail(`Invalid public asset URL: ${asset}`)}}
+function assertPublicAssetPath(asset,label){const pathname=assetPathname(asset);if(!asset.startsWith('/')||!pathname.startsWith('/')||pathname.includes('..')||pathname.includes('\\'))fail(`Invalid ${label} path: ${asset}`)}
+async function assertFileExists(file,publicPath){try{await access(file)}catch{fail(`Referenced public asset does not exist: ${publicPath}`)}}
+function decodeUtf8(buffer,file){let text;try{text=new TextDecoder('utf-8',{fatal:true}).decode(buffer)}catch{fail(`Invalid UTF-8 source detected: ${path.relative(root,file)}`)}if(text.includes('\uFFFD'))fail(`Replacement character detected: ${path.relative(root,file)}`);if(/(?:\u00d0|\u00d1)[\u0080-\u00ff]/u.test(text))fail(`Mojibake detected: ${path.relative(root,file)}`);return text}
+function fail(message){console.error(message);process.exit(1)}

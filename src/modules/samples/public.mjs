@@ -98,6 +98,7 @@ export function decideSample(sample, { input, actorId, decidedAt }) {
   assertObject(input, 'SAMPLE_DECISION_INVALID', 'Sample decision is invalid');
   assertAllowedFields(input, DECISION_FIELDS, 'SAMPLE_DECISION_FIELD_FORBIDDEN', 'Sample decision contains unsupported fields');
   invariant(SAMPLE_DECISIONS.includes(input.decision), 'SAMPLE_DECISION_INVALID', 'Sample decision is invalid', { allowed: SAMPLE_DECISIONS });
+  invariant(input.decision !== 'approved' || sample.receipt?.condition !== 'incomplete', 'SAMPLE_INCOMPLETE_CANNOT_BE_APPROVED', 'An incomplete sample receipt cannot be approved');
   const notes = optionalText(input.notes, 2000, 'SAMPLE_DECISION_NOTES_INVALID', 'Decision notes');
   invariant(input.decision !== 'rejected' || notes, 'SAMPLE_REJECTION_NOTES_REQUIRED', 'Rejected samples require decision notes');
   invariant(typeof actorId === 'string' && IDENTIFIER_PATTERN.test(actorId), 'SAMPLE_DECISION_ACTOR_INVALID', 'Sample decision actor is invalid');

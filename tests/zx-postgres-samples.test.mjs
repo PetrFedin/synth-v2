@@ -91,7 +91,7 @@ test('PostgreSQL Samples completes rejected round to traceable next round with R
     assert.equal(rows.rows[1].sku_version, publishedSku.version);
     assert.equal(rows.rows[1].payload.notes, 'Correct sleeve and chest grading');
 
-    const events = (await pool.query("SELECT event_type FROM outbox_events WHERE event_type LIKE 'sample.%' ORDER BY occurred_at, id")).rows.map((row) => row.event_type);
+    const events = (await pool.query("SELECT event_type FROM outbox_events WHERE event_type LIKE 'sample.%' ORDER BY id")).rows.map((row) => row.event_type);
     assert.deepEqual(events, ['sample.created', 'sample.updated', 'sample.requested', 'sample.production-started', 'sample.received', 'sample.rejected', 'sample.next-round-created']);
   } finally {
     await pool.end();

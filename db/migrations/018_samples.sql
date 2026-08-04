@@ -35,7 +35,10 @@ CREATE TABLE IF NOT EXISTS samples (
     AND (payload ->> 'round')::integer = round
     AND payload ->> 'status' = status
     AND (payload ->> 'version')::integer = version
-    AND (payload -> 'sourceSampleCode') IS NOT DISTINCT FROM to_jsonb(source_sample_code)
+    AND (
+      (source_sample_code IS NULL AND payload -> 'sourceSampleCode' = 'null'::jsonb)
+      OR payload ->> 'sourceSampleCode' = source_sample_code
+    )
   ),
   CONSTRAINT samples_requested_context_check CHECK (
     status = 'draft'

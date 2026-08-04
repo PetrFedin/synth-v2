@@ -20,6 +20,7 @@ test('Samples migration persists one versioned lifecycle aggregate with next-rou
     'UNIQUE (source_sample_code)',
     'samples_payload_projection_check',
     'samples_requested_context_check',
+    'samples_approval_condition_check',
     'samples_state_timestamps_check',
     'samples_time_order_check',
     'samples_overdue_work_idx',
@@ -32,6 +33,7 @@ test('Samples lifecycle constraints prevent impossible normalized states', () =>
   assert.match(sql, /status = 'draft' AND requested_at IS NULL/);
   assert.match(sql, /status = 'in-production' AND requested_at IS NOT NULL AND production_started_at IS NOT NULL/);
   assert.match(sql, /status IN \('approved','rejected'\) AND requested_at IS NOT NULL AND received_at IS NOT NULL AND decision_at IS NOT NULL/);
+  assert.match(sql, /status <> 'approved'[\s\S]*?COALESCE\(payload #>> '\{receipt,condition\}', ''\) IN \('accepted','damaged'\)/);
   assert.match(sql, /updated_at >= COALESCE\(cancelled_at, decision_at, received_at, production_started_at, requested_at, created_at\)/);
   assert.match(sql, /due_at > requested_at/);
   assert.match(sql, /source_sample_code IS NULL OR source_sample_code <> sample_code/);

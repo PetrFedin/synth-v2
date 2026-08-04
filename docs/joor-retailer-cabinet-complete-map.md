@@ -1,7 +1,7 @@
 # JOOR Retailer Cabinet → Syntha B2B Fashion Platform
 
 Статус: рабочая продуктовая спецификация и master map.  
-Версия: 2.7, 5 августа 2026 года.  
+Версия: 2.8, 5 августа 2026 года.  
 Назначение: определить, как Syntha должна превзойти JOOR как B2B buying platform и одновременно закрыть PLM, sourcing, costing, production, quality, logistics, wholesale и analytics.
 
 > Документ объединяет результаты read-only аудита JOOR Retailer / LITE и целевую архитектуру Syntha. Наблюдаемое в JOOR не следует считать подтверждением его закрытой внутренней реализации. Все функции, которых не было в доступном аккаунте, помечаются как TARGET или UAT.
@@ -14822,3 +14822,2450 @@ The platform is stronger than JOOR only when the user can answer, from one trace
 ### Version 2.7 conclusion
 
 Version 2.7 adds the missing bridge between wholesale ordering and real retail economics. Syntha is no longer specified merely as PLM + B2B commerce + production. It now includes the decision system that determines budget, option count, quantity, location, replenishment, quality release, provenance and market response.
+
+---
+
+## 169. True Fit — fit intelligence and size-decision benchmark
+
+### 169.1 COMPETITOR CONFIRMED direction
+
+Официальные материалы True Fit описывают отдельный intelligence layer для определения подходящего размера и характера посадки на основе:
+
+- нормализованных product catalog data;
+- size charts и product descriptions;
+- сопоставления размеров разных брендов и моделей;
+- shopper fit preferences;
+- истории покупок и возвратов;
+- индивидуальных особенностей тела и предпочтения более свободной или плотной посадки;
+- universal guidance: модель маломерит, соответствует размеру или большемерит;
+- personalized size recommendation для конкретного shopper и конкретного товара;
+- Fit Needs;
+- выявления size sampling / bracketing, когда покупатель заказывает несколько размеров с намерением вернуть часть.
+
+True Fit публично позиционирует fit intelligence как решение задачи выбора размера, а не как статическую таблицу размеров. В доступном JOOR Retailer / LITE подобный consumer-fit intelligence, cross-brand size normalization и обратная связь возвратов в wholesale buy не наблюдались. Поэтому это не утверждение о полном отсутствии функции во всех продуктах JOOR, а `JOOR NOT CONFIRMED / SYNTHA TARGET`.
+
+### 169.2 Почему это важно Syntha
+
+Для fashion-платформы размер не должен быть только label `XS/S/M/L` или колонкой SKU. Он влияет одновременно на:
+
+- выбор размера конечным покупателем;
+- возвраты;
+- size curve закупки;
+- распределение по магазинам;
+- product development;
+- grading;
+- fit sample approvals;
+- рекомендации buyer;
+- replenishment;
+- риск неликвидных крайних размеров;
+- качество конкретной партии;
+- supplier scorecard.
+
+Syntha должна связать четыре разных уровня:
+
+```text
+Human / Shopper Fit Profile
+→ Product Technical Fit
+→ Commercial Size Guidance
+→ Buy, Allocation and Replenishment Size Curve
+```
+
+### 169.3 Canonical fit hierarchy
+
+```text
+Category Fit Standard
+└── Brand Size Scale
+    └── Product / Block Fit Profile
+        └── Colorway / Material Fit Effect
+            └── Batch / Supplier Variation
+                └── Shopper Recommendation and Outcome
+```
+
+Нельзя хранить fit только на SKU. Один style может иметь:
+
+- несколько size scales;
+- разные рынки и локальные labels;
+- разные blocks;
+- material stretch differences;
+- color-dependent shrinkage;
+- supplier/batch deviations;
+- revised measurement chart;
+- различные customer expectations по fit.
+
+### 169.4 Size and Fit Ontology
+
+#### SizeScale
+
+- `sizeScaleId`;
+- brand;
+- category;
+- market/region;
+- gender/audience;
+- label sequence;
+- numeric equivalents;
+- alpha/numeric/waist/inseam/cup/shoe dimensions;
+- locale labels;
+- effective dates;
+- version;
+- predecessor/successor;
+- measurement standard;
+- units;
+- active/archived state.
+
+#### SizeValue
+
+- canonical size key;
+- display label;
+- sort order;
+- body measurement range;
+- garment measurement range;
+- equivalent sizes;
+- market conversions;
+- tolerance;
+- recommended body profile;
+- availability status.
+
+#### ProductFitProfile
+
+- style/colorway/version;
+- category;
+- base block;
+- intended silhouette;
+- intended ease;
+- fitted/regular/relaxed/oversized;
+- rise, length, sleeve, shoulder and bust behavior;
+- material stretch and recovery;
+- shrinkage expectation;
+- lined/unlined effect;
+- fit-critical measurement points;
+- model measurements and worn size;
+- technical fit approval;
+- commercial fit guidance;
+- confidence;
+- source data version.
+
+#### ShopperFitProfile
+
+- customer/account-scoped identifier;
+- consent state;
+- height;
+- weight optional;
+- body measurements optional;
+- known best-fitting brands/styles/sizes;
+- fit preferences;
+- category-specific preferences;
+- mobility/accessibility needs where explicitly provided;
+- purchase and return outcomes;
+- confidence and freshness;
+- deletion/retention policy.
+
+PII и body data нельзя автоматически раскрывать брендам, sales representatives или другим retailer accounts. Analytics использует aggregated/anonymized fit signals.
+
+### 169.5 Recommendation contract
+
+FitRecommendation должна содержать не только `recommendedSize`, но и:
+
+- shopper/profile context;
+- product version;
+- size scale version;
+- recommended canonical size;
+- displayed local size;
+- confidence interval;
+- fit direction: small / true / large;
+- body-area cautions;
+- preferred-fit adjustment;
+- alternative size;
+- unavailable-size fallback;
+- recommendation reasons;
+- model version;
+- generatedAt;
+- outcome feedback.
+
+Пример объяснения:
+
+```text
+Рекомендуем IT 48 / EU M.
+Причины:
+- эта модель имеет более узкое плечо, чем выбранные вами ранее модели;
+- материал имеет низкую растяжимость;
+- предпочитаемая вами посадка — regular;
+- размер IT 50 даст более свободную посадку, но увеличит длину рукава.
+```
+
+Нельзя показывать ложную точность, если данных мало. Допустимые состояния:
+
+- `HIGH_CONFIDENCE`;
+- `MEDIUM_CONFIDENCE`;
+- `LOW_CONFIDENCE`;
+- `INSUFFICIENT_DATA`;
+- `SIZE_UNAVAILABLE`;
+- `PRODUCT_DATA_CONFLICT`;
+- `PROFILE_STALE`.
+
+### 169.6 Fit analytics for buyers and product teams
+
+Buyer view:
+
+- fit-related return rate;
+- size bracketing rate;
+- conversion by size availability;
+- lost demand due to missing sizes;
+- size sell-through;
+- size stock cover;
+- recommended buy curve;
+- current buy curve;
+- return-adjusted demand curve;
+- store cluster differences;
+- cross-brand normalized size comparison.
+
+Product/PLM view:
+
+- measurement points associated with fit complaints;
+- fit issue by block;
+- fit issue by supplier;
+- fit issue by material;
+- fit issue by sample version;
+- fit issue by batch;
+- approved measurement versus returned-item actual measurement;
+- repeat issue across carry-over styles;
+- grading inconsistency;
+- consumer language clustered into canonical defect/fit causes.
+
+### 169.7 Core formulas
+
+```text
+Fit Return Rate
+= Fit-related Returned Units / Delivered Units
+```
+
+```text
+Size Bracketing Rate
+= Orders containing multiple sizes of the same Style-Color
+  / Orders containing that Style-Color
+```
+
+```text
+Return-adjusted Demand(size)
+= Sold Units(size)
+- Fit Returns(size)
++ Estimated Lost Demand(size)
+```
+
+```text
+Size Availability Loss
+= Estimated Demand while Size OOS × Expected Contribution Margin
+```
+
+```text
+Fit Confidence
+= f(product data completeness,
+    measurement consistency,
+    shopper history,
+    comparable-product outcomes,
+    sample quality,
+    batch stability,
+    model freshness)
+```
+
+Формула confidence является model-governed; UI показывает факторы, но не обязан раскрывать proprietary weights.
+
+### 169.8 What Syntha should not copy blindly
+
+- не сводить fit к одному black-box размеру без explanation;
+- не использовать body data без consent;
+- не переносить DTC recommendation непосредственно в wholesale order curve без агрегирования;
+- не считать возврат доказательством неправильного размера без return reason и quality context;
+- не смешивать технические measurement deviations с субъективным preference;
+- не использовать старую product version после изменения BOM/material/measurement chart.
+
+---
+
+## 170. Size Curve Intelligence — закупка, распределение и производство
+
+### 170.1 Цель
+
+Связать реальные consumer-fit outcomes с решением, сколько единиц каждого размера:
+
+- разработать;
+- заказать у фабрики;
+- закупить retailer;
+- распределить по doors;
+- держать в резерве;
+- пополнять;
+- переводить между магазинами;
+- выводить из ассортимента.
+
+### 170.2 Curve layers
+
+Syntha хранит не одну size curve, а набор версий:
+
+1. `HistoricalSalesCurve`;
+2. `ReturnAdjustedCurve`;
+3. `LostDemandAdjustedCurve`;
+4. `PlannedBuyCurve`;
+5. `ApprovedBuyCurve`;
+6. `FactoryOrderCurve`;
+7. `ReceivedCurve`;
+8. `AllocatedCurve`;
+9. `SoldCurve`;
+10. `EndingStockCurve`.
+
+### 170.3 Curve dimensions
+
+- season/drop;
+- brand;
+- category/subcategory;
+- style/color;
+- size scale;
+- country/region;
+- store/door/cluster;
+- channel;
+- customer segment;
+- price band;
+- fit profile;
+- replenishable versus seasonal;
+- launch/markdown phase.
+
+### 170.4 Recommendation logic
+
+```text
+Base Size Demand
+= Historical Demand
+× Trend Factor
+× Store Cluster Factor
+× Product Fit Factor
+× Price Factor
+× Availability Correction
+```
+
+```text
+Recommended Size Units
+= Total Planned Units × Normalized Return-adjusted Size Share
+```
+
+Constraints:
+
+- factory MOQ by size/color;
+- pack ratio;
+- size run requirement;
+- presentation minimum;
+- store capacity;
+- e-commerce reserve;
+- wholesale commitments;
+- safety stock;
+- sample/display units;
+- regional size restrictions;
+- budget and OTB;
+- expected returns;
+- supplier capacity.
+
+### 170.5 Curve approval
+
+```text
+DRAFT
+→ GENERATED
+→ BUYER_REVIEW
+→ MERCHANT_APPROVAL
+→ SUPPLIER_FEASIBILITY_CHECK
+→ APPROVED
+→ ORDERED
+→ REVISED_WITH_REASON
+→ LOCKED_FOR_PRODUCTION
+```
+
+Каждый manual override хранит:
+
+- prior curve;
+- new curve;
+- actor;
+- reason code;
+- comment;
+- expected impact;
+- approval;
+- timestamp;
+- resulting outcome.
+
+### 170.6 Curve exception types
+
+- oversize concentration;
+- undersize concentration;
+- missing key size;
+- extreme-size overstock;
+- size bracketing spike;
+- fit return spike;
+- supplier/batch deviation;
+- e-commerce/store imbalance;
+- pack ratio distortion;
+- curve drift after markdown;
+- cross-market label mismatch.
+
+---
+
+## 171. Consumer Fit → PLM closed loop
+
+### 171.1 End-to-end process
+
+```text
+Purchase
+→ Delivery
+→ Wear / Fit Outcome
+→ Return / Review / Support Signal
+→ Canonical Fit Issue
+→ Product / Block / Material Root Cause
+→ Measurement or Pattern Change
+→ New Sample Version
+→ Fit Approval
+→ Commercial Fit Guidance Update
+→ Future Buy Curve Update
+```
+
+### 171.2 Canonical fit reasons
+
+- too small overall;
+- too large overall;
+- narrow shoulders;
+- broad shoulders;
+- tight bust/chest;
+- loose bust/chest;
+- tight waist;
+- loose waist;
+- tight hip;
+- loose hip;
+- rise too low/high;
+- inseam too short/long;
+- sleeve too short/long;
+- garment length too short/long;
+- armhole restrictive;
+- neckline issue;
+- shoe length;
+- shoe width;
+- heel slippage;
+- material too rigid;
+- excessive stretch;
+- shrinkage;
+- inconsistent with size chart;
+- inconsistent within same style;
+- preference mismatch, not technical defect.
+
+### 171.3 Root-cause separation
+
+Syntha должна разделять:
+
+- technical specification defect;
+- production tolerance breach;
+- material behavior;
+- grading rule defect;
+- inaccurate size chart;
+- incorrect product content;
+- customer preference;
+- recommendation model error;
+- fulfillment error: sent wrong size;
+- counterfeit/mislabeled item;
+- unknown.
+
+Каждая категория ведёт к разному owner и corrective action.
+
+### 171.4 Release impact
+
+Изменение fit profile должно запускать impact assessment:
+
+- affected open wholesale orders;
+- open factory POs;
+- unshipped production;
+- published linesheets;
+- PDP size guidance;
+- digital sample;
+- measurement chart;
+- care/shrinkage claims;
+- return policy;
+- future size curve.
+
+---
+
+## 172. Competera — unified initial price, promotion and markdown benchmark
+
+### 172.1 COMPETITOR CONFIRMED direction
+
+Официальные материалы Competera описывают AI-driven retail pricing platform, которая объединяет:
+
+- competitive data;
+- product matching;
+- price intelligence;
+- demand elasticity;
+- price optimization;
+- initial, promotional и markdown pricing;
+- what-if simulations;
+- smart segmentation;
+- dynamic assignment of products to markdown campaigns;
+- KVI management;
+- store-level optimization;
+- scenario-based recommendations;
+- omnichannel price management.
+
+В наблюдаемом JOOR подтверждены wholesale price types, discounts и order-level commercial fields, но не был подтверждён отдельный retail price optimization engine, связывающий elasticity, competitor position, store-level demand, lifecycle и markdown execution. Статус: `JOOR NOT CONFIRMED / SYNTHA TARGET`.
+
+### 172.2 Unified pricing spine
+
+```text
+Product Cost
+→ Initial Retail Price
+→ Channel / Market Price
+→ Promotion
+→ Markdown
+→ Clearance / Outlet
+→ Return / Resale Value
+→ Realized Margin
+```
+
+Syntha должна хранить каждую цену как versioned decision, а не переписывать одно поле `price`.
+
+### 172.3 Price architecture entities
+
+#### PriceStrategy
+
+- objective: margin/revenue/volume/stock/positioning;
+- market;
+- channel;
+- store cluster;
+- category;
+- customer segment;
+- competitor set;
+- target price index;
+- margin floor;
+- MAP/RRP/MSRP constraints;
+- psychological endings;
+- price ladder;
+- effective dates;
+- approval policy.
+
+#### PriceDecision
+
+- product/SKU;
+- current price;
+- recommended price;
+- approved price;
+- currency;
+- tax inclusion;
+- effective interval;
+- recommendation reason;
+- demand elasticity;
+- competitive position;
+- forecast revenue/units/margin/ending stock;
+- confidence;
+- scenario;
+- actor/model;
+- override reason;
+- downstream publication status.
+
+#### PriceExecution
+
+- channel/store;
+- scheduledAt;
+- sentAt;
+- acknowledgedAt;
+- appliedAt;
+- failedAt;
+- external system;
+- price label task;
+- POS/e-commerce verification;
+- exception.
+
+### 172.4 Initial price optimization
+
+Inputs:
+
+- planned landed cost;
+- actual landed cost;
+- target intake margin;
+- market willingness-to-pay;
+- competitive product matches;
+- brand positioning;
+- product role;
+- historical analogs;
+- launch timing;
+- season length;
+- expected markdown;
+- return rate;
+- duties/taxes;
+- channel commission;
+- price ladder rules.
+
+```text
+Expected Full-life Margin
+= Full-price Margin
++ Promotion Margin
++ Markdown Margin
+- Returns Cost
+- Fulfillment Cost
+- Unsold Stock Cost
+```
+
+Initial price must optimize full lifecycle, not only first-day markup.
+
+### 172.5 Elasticity and cross-effects
+
+Хранить:
+
+- own-price elasticity;
+- cross-price elasticity;
+- halo/cannibalization;
+- competitor elasticity;
+- channel migration;
+- size/color availability interaction;
+- promotion fatigue;
+- customer-segment sensitivity;
+- confidence and data window.
+
+```text
+Elasticity
+= % Change in Quantity / % Change in Price
+```
+
+Недостаток данных не должен автоматически создавать aggressive price changes. Нужны fallback hierarchy и human review.
+
+### 172.6 Store-level and cluster-level optimization
+
+Цена может различаться по:
+
+- country;
+- tax jurisdiction;
+- store cluster;
+- channel;
+- customer group;
+- currency;
+- franchise/owned door;
+- marketplace;
+- local competition;
+- inventory position;
+- legal rules.
+
+Но система обязана проверять:
+
+- unfair/discriminatory pricing risks;
+- contractual brand rules;
+- advertised-price restrictions;
+- price consistency policy;
+- customer communication;
+- label/POS readiness;
+- return/refund treatment при изменении цены.
+
+---
+
+## 173. Promotion Optimization and Funding Ledger
+
+### 173.1 Promotion is not markdown
+
+| Тип | Назначение | Базовая цена | Ограничение |
+|---|---|---|---|
+| Promotion | временно стимулировать спрос | сохраняется | период/условия/audience |
+| Markdown | изменить lifecycle price | заменяется | stock/margin target |
+| Coupon | персональный/канальный incentive | сохраняется | eligibility/code |
+| Trade promotion | B2B incentive | commercial terms | retailer/account/product |
+| Rebate | постфактум | invoice/claim | performance condition |
+| Loyalty benefit | customer value | сохраняется | membership/rules |
+
+### 173.2 PromotionPlan
+
+- objective;
+- products;
+- locations/channels;
+- audience;
+- start/end;
+- mechanic;
+- discount depth;
+- bundle rules;
+- vendor funding;
+- marketing budget;
+- expected cannibalization;
+- expected uplift;
+- inventory requirement;
+- operational tasks;
+- approval;
+- post-event measurement.
+
+### 173.3 Promotion funding
+
+PromotionFundingLedger хранит:
+
+- brand/supplier contribution;
+- retailer contribution;
+- co-op marketing;
+- fixed allowance;
+- per-unit allowance;
+- rebate threshold;
+- proof of performance;
+- claim;
+- approved amount;
+- invoiced/credited amount;
+- dispute;
+- recovery status.
+
+Это связывает marketing campaign, price execution, sales outcome и supplier receivable.
+
+### 173.4 Incrementality
+
+```text
+Incremental Units
+= Actual Units - Counterfactual Baseline Units
+```
+
+```text
+Incremental Contribution
+= Incremental Revenue
+- Incremental COGS
+- Incremental Fulfillment
+- Promotion Funding Net Cost
+- Cannibalization Loss
+```
+
+Post-event report должен показывать не только sales uplift, но и:
+
+- stock pulled forward;
+- cannibalization;
+- customer acquisition;
+- repeat effect;
+- returns;
+- margin;
+- supplier funding recovered;
+- residual inventory;
+- forecast error.
+
+---
+
+## 174. Markdown Optimization — lifecycle and scenario engine
+
+### 174.1 Lifecycle
+
+```text
+ELIGIBLE
+→ SCENARIO_GENERATED
+→ MERCHANT_REVIEW
+→ APPROVED
+→ SCHEDULED
+→ EXECUTED
+→ MONITORED
+→ NEXT_MARKDOWN / HOLD / EXIT
+→ CLOSED
+```
+
+### 174.2 Inputs
+
+- current stock by SKU/location;
+- inbound stock;
+- sell-through;
+- weeks of supply;
+- remaining season days;
+- demand forecast;
+- elasticity;
+- margin floor;
+- competitor position;
+- product role;
+- size/color fragmentation;
+- return rate;
+- transfer opportunity;
+- outlet/resale/recommerce value;
+- storage and liquidation costs;
+- brand/legal price restrictions.
+
+### 174.3 Scenario comparison
+
+Для каждой альтернативы:
+
+- no markdown;
+- earlier shallow markdown;
+- later deep markdown;
+- segmented markdown;
+- store transfer before markdown;
+- e-commerce only;
+- outlet transfer;
+- bundle/promotion;
+- wholesale clearance;
+- return to vendor;
+- donation/recycling.
+
+Показывать:
+
+- probability of stock target;
+- expected units;
+- revenue;
+- gross margin;
+- remaining stock;
+- cash recovery;
+- brand-price perception risk;
+- operational cost;
+- confidence.
+
+### 174.4 Guardrails
+
+- minimum price;
+- minimum margin;
+- MAP/RRP restrictions;
+- price step limit;
+- maximum frequency;
+- customer notification;
+- active promotion conflict;
+- return/refund policy;
+- franchise agreement;
+- country-specific regulation;
+- excluded strategic products;
+- manual approval threshold.
+
+### 174.5 Markdown attribution
+
+Каждое sold unit должно ссылаться на effective price decision, чтобы анализировать:
+
+- full-price versus marked-down units;
+- markdown depth;
+- timing;
+- gross margin realized;
+- whether transfer/replenishment would have been better;
+- size fragmentation at markdown;
+- recommendation outcome.
+
+---
+
+## 175. Worldly — facility environmental and social performance benchmark
+
+### 175.1 COMPETITOR CONFIRMED direction
+
+Официальные материалы Worldly описывают supply-chain sustainability data platform, включающую:
+
+- standardized facility environmental assessment;
+- standardized social and labor assessment;
+- Higg FEM;
+- Higg FSLM;
+- product impact tools;
+- supplier/manufacturer data sharing;
+- environmental и social benchmarking;
+- certificates and verified assessment artifacts;
+- performance insights and improvement actions;
+- collection of Scope 1–3 related supply-chain data;
+- coverage of working hours, wages, health and safety, worker rights, carbon, water and other impact dimensions.
+
+В наблюдаемом JOOR не был подтверждён facility-level ESG operating layer с standardized assessments, verification, corrective actions и product-level impact evidence. Статус: `JOOR NOT CONFIRMED / SYNTHA TARGET`.
+
+### 175.2 Sustainability data architecture
+
+```text
+Supplier Organization
+→ Facility / Site
+→ Assessment Cycle
+→ Self Assessment
+→ Verification
+→ Findings
+→ Corrective Actions
+→ Improvement Evidence
+→ Product / Order / Batch Attribution
+→ Disclosure / DPP Claim
+```
+
+### 175.3 Facility master
+
+- legal supplier;
+- facility/site identity;
+- address/geolocation;
+- site type;
+- tier;
+- processes;
+- workforce;
+- operating licenses;
+- certifications;
+- audit/assessment programs;
+- production capacity;
+- energy sources;
+- water sources;
+- wastewater systems;
+- chemical processes;
+- subcontractors;
+- brand relationships;
+- data-sharing permissions;
+- active/inactive/blocked state.
+
+### 175.4 Assessment model
+
+AssessmentCycle:
+
+- framework;
+- module;
+- reporting period;
+- self-assessment status;
+- verification status;
+- verification body;
+- completion date;
+- expiry date;
+- score/result;
+- section results;
+- source artifact;
+- certificate;
+- evidence files;
+- data quality flags;
+- sharing permissions.
+
+State machine:
+
+```text
+NOT_REQUESTED
+→ REQUESTED
+→ IN_PROGRESS
+→ SUBMITTED
+→ VERIFICATION_REQUIRED
+→ VERIFIED / NOT_VERIFIED
+→ FINDINGS_OPEN
+→ IMPROVEMENT_PLAN
+→ CLOSED
+→ EXPIRED
+```
+
+### 175.5 Environmental dimensions
+
+- energy;
+- greenhouse-gas emissions;
+- water use;
+- wastewater;
+- air emissions;
+- waste;
+- chemicals;
+- materials/process impacts;
+- renewable-energy share;
+- production output denominator;
+- intensity versus absolute impact;
+- data source and assurance level.
+
+### 175.6 Social and labor dimensions
+
+- working hours;
+- wages and benefits;
+- health and safety;
+- worker rights;
+- forced-labor indicators;
+- child-labor controls;
+- freedom of association;
+- grievance mechanisms;
+- worker voice;
+- dormitories where relevant;
+- subcontracting controls;
+- recruitment fees;
+- corrective action.
+
+Syntha не должна превращать social compliance в одно итоговое число, скрывающее critical violations.
+
+### 175.7 Critical finding policy
+
+Critical findings должны:
+
+- блокировать new allocation при определённых severity;
+- создать escalation;
+- назначить owner;
+- задать remediation deadline;
+- требовать evidence;
+- влиять на supplier risk;
+- быть видимыми в sourcing decision;
+- иметь exception approval;
+- сохраняться после истечения assessment;
+- не исчезать при новом self-assessment без closure evidence.
+
+---
+
+## 176. Sustainability Evidence and Claim Governance
+
+### 176.1 Problem
+
+Маркетинговое утверждение `sustainable`, `recycled`, `low impact` или `responsibly sourced` не должно существовать без доказательной цепочки.
+
+### 176.2 Claim model
+
+SustainabilityClaim:
+
+- claim type;
+- exact wording;
+- product/style/SKU/batch scope;
+- market/channel/locale;
+- percentage/value;
+- methodology;
+- calculation period;
+- evidence links;
+- facility/material/source links;
+- verifier;
+- validity dates;
+- legal approval;
+- status;
+- publication targets;
+- replacement/revocation history.
+
+### 176.3 Evidence levels
+
+1. supplier-declared;
+2. document-supported;
+3. platform-validated;
+4. third-party verified;
+5. transaction-traced;
+6. item/batch-specific verified.
+
+UI обязан показывать level, а не одинаковый green badge.
+
+### 176.4 Claim lifecycle
+
+```text
+DRAFT
+→ EVIDENCE_PENDING
+→ DATA_VALIDATION
+→ LEGAL_REVIEW
+→ APPROVED
+→ PUBLISHED
+→ EXPIRED / REVOKED / CHALLENGED
+```
+
+### 176.5 Publication gate
+
+Claim не публикуется, если:
+
+- evidence expired;
+- scope не соответствует продукту/партии;
+- percentage не подтверждён BOM/mass balance;
+- facility не относится к production path;
+- assessment unverified при обязательной verification;
+- locale wording юридически не согласовано;
+- source document revoked;
+- supplier relationship inferred, но не verified.
+
+### 176.6 Impact allocation
+
+Нужно хранить метод распределения facility impact на product/order/batch:
+
+- mass;
+- production units;
+- machine hours;
+- energy meter;
+- process-specific allocation;
+- supplier-provided factor;
+- modeled estimate.
+
+Modeled estimate нельзя выдавать как measured fact.
+
+---
+
+## 177. Supplier Improvement Portfolio
+
+### 177.1 Improvement action
+
+- source assessment/finding;
+- impact dimension;
+- baseline;
+- target;
+- action;
+- facility owner;
+- brand owner;
+- due date;
+- expected cost;
+- funding party;
+- evidence;
+- verification;
+- outcome;
+- closure/reopen.
+
+### 177.2 Portfolio view
+
+- high-risk facilities;
+- overdue actions;
+- investment required;
+- expected carbon/water/waste/social benefit;
+- affected spend/orders/products;
+- production dependency;
+- alternative sourcing availability;
+- supplier engagement rate;
+- verified improvements;
+- repeated findings.
+
+### 177.3 Sourcing decision integration
+
+RFQ and allocation screen должен показывать:
+
+- commercial quote;
+- capacity;
+- quality score;
+- delivery score;
+- environmental status;
+- social status;
+- critical findings;
+- remediation progress;
+- traceability completeness;
+- claim eligibility;
+- risk-adjusted total cost.
+
+Не допускается автоматическое исключение только по слабому self-assessment без review; одновременно critical verified violations не могут скрываться за низкой ценой.
+
+---
+
+## 178. EON — serialized Digital ID and connected-product benchmark
+
+### 178.1 COMPETITOR CONFIRMED direction
+
+Официальные материалы EON описывают:
+
+- уникальную serialized digital identity для физического изделия;
+- Digital ID, связанный через QR, NFC или RFID;
+- lifecycle tracking от производства до продажи, использования, resale и recycling;
+- customer engagement через connected product;
+- product transparency;
+- care, repair, resale и recycling services;
+- Digital Product Passport support;
+- partner network для circular services;
+- product/material-level common data protocol.
+
+Версия 2.7 уже описывает DPP и traceability. Версия 2.8 добавляет недостающий item-level operational layer после продажи. В наблюдаемом JOOR item serialization и post-sale circular-services orchestration не подтверждены.
+
+### 178.2 Product identity levels
+
+```text
+Style
+→ Colorway
+→ SKU
+→ Production Batch
+→ Serialized Item
+→ Ownership / Custody Events
+→ Service / Resale / Recycling Events
+```
+
+SKU identity недостаточна для:
+
+- authenticity;
+- warranty;
+- конкретного материала/батча;
+- repair history;
+- resale listing;
+- recall;
+- item-level carbon/traceability;
+- ownership transfer;
+- loss/theft status.
+
+### 178.3 SerializedItem
+
+- `itemId`;
+- brand;
+- GTIN/SKU;
+- serial;
+- batch;
+- factory;
+- production order;
+- material lots;
+- quality release;
+- tag identifiers;
+- QR/NFC/RFID references;
+- cryptographic/signature metadata optional;
+- current lifecycle state;
+- current custody, not necessarily legal ownership;
+- DPP record;
+- warranty;
+- care/repair eligibility;
+- resale/recycle eligibility;
+- recall state;
+- created/activated/deactivated timestamps.
+
+### 178.4 Activation and binding
+
+```text
+SERIAL_RESERVED
+→ TAG_ENCODED
+→ ATTACHED
+→ VERIFIED_AT_FACTORY
+→ PACKED
+→ SHIPPED
+→ RECEIVED
+→ SOLD
+→ CUSTOMER_ACTIVATED
+→ IN_USE
+→ REPAIRED / RESOLD / RECYCLED / LOST / DESTROYED
+```
+
+Checks:
+
+- duplicate serial;
+- wrong SKU/tag;
+- unbound tag;
+- cloned identifier;
+- item sold before receipt;
+- unauthorized ownership transfer;
+- recalled item;
+- invalid service provider;
+- privacy consent.
+
+### 178.5 Connected product experience
+
+Customer-facing page может включать:
+
+- authenticity result;
+- product story;
+- origin/materials;
+- care;
+- warranty registration;
+- repair booking;
+- spare parts;
+- styling/content;
+- resale eligibility;
+- resale listing creation;
+- recycling/drop-off;
+- recall notice;
+- ownership transfer;
+- item history with privacy-safe visibility.
+
+### 178.6 Business intelligence
+
+Item-level events дают:
+
+- activation rate;
+- scan geography;
+- care engagement;
+- repair incidence;
+- failure modes;
+- resale time-to-list;
+- resale price;
+- number of owners;
+- useful life;
+- recall response;
+- circular-service conversion.
+
+Но scans не равны ownership или usage без подтверждённого event semantics.
+
+---
+
+## 179. Circular Commerce and Item Service Orchestration
+
+### 179.1 CircularServiceOrder
+
+Общий aggregate для:
+
+- repair;
+- alteration;
+- cleaning;
+- refurbishment;
+- authentication;
+- take-back;
+- resale;
+- donation;
+- recycling.
+
+Fields:
+
+- item;
+- customer/account;
+- service type;
+- provider;
+- eligibility;
+- quote;
+- customer approval;
+- inbound shipment/drop-off;
+- inspection;
+- disposition;
+- work performed;
+- replacement parts/materials;
+- cost;
+- subsidy/warranty coverage;
+- outbound shipment;
+- completion evidence;
+- lifecycle event.
+
+### 179.2 Repair lifecycle
+
+```text
+REQUESTED
+→ ELIGIBILITY_CHECK
+→ QUOTED
+→ CUSTOMER_APPROVED
+→ ITEM_RECEIVED
+→ INSPECTED
+→ WORK_AUTHORIZED
+→ IN_REPAIR
+→ QUALITY_CHECK
+→ RETURNED
+→ CLOSED / WARRANTY_CLAIM
+```
+
+### 179.3 Resale readiness
+
+- authenticity;
+- ownership/custody right;
+- condition grade;
+- original product data;
+- images;
+- repair history;
+- prohibited/recalled status;
+- suggested resale price;
+- channel eligibility;
+- commission;
+- seller payout;
+- tax treatment;
+- DPP transfer.
+
+### 179.4 Circular value ledger
+
+```text
+Lifetime Product Value
+= Initial Sale Margin
++ Service Revenue
++ Resale Commission
++ Parts Revenue
+- Warranty Cost
+- Repair Subsidy
+- Take-back Cost
+- Recycling Cost
+```
+
+Financial view не должен стимулировать скрывать defects или необоснованно отказывать в warranty.
+
+---
+
+## 180. Loop Returns — retention-oriented returns and exchange benchmark
+
+### 180.1 COMPETITOR CONFIRMED direction
+
+Официальные материалы Loop описывают:
+
+- self-service returns portal;
+- advanced policy rules по регионам, warehouses и products;
+- exchanges и store credit вместо refund;
+- Shop Now / catalog exchange;
+- incentives и upsell;
+- instant exchanges с authorization hold;
+- AI product/variant recommendations в exchange flow;
+- out-of-stock exchange automation;
+- tracking, claims, fraud prevention и integrations;
+- retained-revenue analytics.
+
+JOOR-аудит подтвердил wholesale orders, cancellations и документы, но не consumer returns/exchange operating system с retention optimization. Статус: `JOOR NOT CONFIRMED / SYNTHA TARGET`.
+
+### 180.2 Return authorization model
+
+ReturnRequest:
+
+- original order/shipment;
+- item/SKU/serial;
+- customer/account;
+- request date;
+- delivery date;
+- return reason;
+- condition declaration;
+- photos/evidence;
+- policy version;
+- eligibility result;
+- allowed outcomes;
+- fees;
+- refund method;
+- return method;
+- risk score;
+- approval state;
+- receiving destination;
+- final disposition.
+
+### 180.3 Policy engine
+
+Rules by:
+
+- country;
+- channel;
+- store;
+- customer tier;
+- product/category;
+- sale/markdown state;
+- final-sale flag;
+- reason;
+- days from delivery;
+- item condition;
+- serial/identity;
+- gift order;
+- marketplace;
+- payment method;
+- warranty;
+- hazardous/sanitary restrictions;
+- return history/risk;
+- promotion.
+
+Policy result должен быть versioned и explainable.
+
+### 180.4 Outcome hierarchy
+
+1. same-SKU variant exchange;
+2. alternative product exchange;
+3. repair/alteration;
+4. store credit;
+5. refund;
+6. partial refund;
+7. warranty replacement;
+8. reject with reason;
+9. keep-item refund where economics justify;
+10. return-to-vendor/claim.
+
+Customer нельзя манипулятивно лишать законного refund; optimization действует только внутри разрешённых outcomes.
+
+### 180.5 Instant exchange
+
+```text
+Exchange Requested
+→ Replacement Reserved
+→ Payment Hold Authorized
+→ Replacement Released
+→ Original Item In Transit
+→ Hold Released
+```
+
+Exception branches:
+
+- original not returned;
+- item condition mismatch;
+- wrong item;
+- replacement out of stock;
+- authorization failure;
+- partial return;
+- lost return shipment;
+- cross-border tax/duty issue.
+
+### 180.6 Exchange recommendation
+
+Inputs:
+
+- original reason;
+- size/fit intelligence;
+- available inventory;
+- price difference;
+- customer history;
+- product similarity;
+- margin;
+- return likelihood;
+- delivery promise;
+- store credit incentive.
+
+Recommendation must not suggest another size when return reason is quality, style preference or fulfillment error.
+
+### 180.7 Return economics
+
+```text
+Net Return Cost
+= Refund
++ Reverse Logistics
++ Inspection
++ Processing
++ Refurbishment
++ Lost Value
++ Customer Service
+- Recovery Value
+- Supplier Recovery
+- Retained Revenue
+```
+
+```text
+Revenue Retention Rate
+= Exchange + Store Credit + Repair Value
+  / Eligible Return Value
+```
+
+---
+
+## 181. Happy Returns — physical reverse-logistics network benchmark
+
+### 181.1 COMPETITOR CONFIRMED direction
+
+Официальные материалы Happy Returns описывают:
+
+- box-free and label-free drop-off;
+- Return Bar network;
+- QR-based handoff;
+- item verification;
+- instant refund initiation;
+- risk-based delayed refund;
+- AI-assisted Return Vision audit;
+- consolidation of returns;
+- regional return hubs;
+- bulk shipments with advanced notice;
+- digital manifests;
+- return-to-store / BORIS;
+- eligibility APIs and webhooks.
+
+Syntha не должна строить физическую сеть с первого дня, но data model и partner integration должны поддерживать такую модель.
+
+### 181.2 Return method abstraction
+
+- mail label;
+- carrier pickup;
+- parcel locker;
+- return to original store;
+- return to any brand store;
+- third-party drop-off network;
+- box-free consolidated return;
+- keep item;
+- supplier direct return;
+- cross-border hub.
+
+### 181.3 Drop-off event
+
+- QR/token;
+- location;
+- operator;
+- item scan;
+- serial/SKU verification;
+- condition quick check;
+- package-free eligibility;
+- risk result;
+- refund release decision;
+- bag/container ID;
+- timestamp;
+- customer receipt.
+
+### 181.4 Consolidation hierarchy
+
+```text
+Return Item
+→ Return Bag
+→ Consolidation Container
+→ Hub Inbound Shipment
+→ Hub Sort
+→ Retailer Pallet / Bulk Shipment
+→ Retailer ASN
+→ Warehouse Receipt
+```
+
+### 181.5 Return fraud and loss controls
+
+- wrong item;
+- empty package;
+- tag switched;
+- serial mismatch;
+- counterfeit;
+- used/damaged beyond policy;
+- duplicate return;
+- refund already issued;
+- lost after drop-off;
+- employee collusion;
+- high-risk customer/account;
+- catalog image mismatch.
+
+Risk score не заменяет evidence review при high-value items.
+
+### 181.6 Reverse-logistics SLA
+
+- request to drop-off;
+- drop-off to hub;
+- hub processing;
+- hub to retailer;
+- receipt to disposition;
+- disposition to restock;
+- refund initiation;
+- refund completion.
+
+Показывать ownership каждого delay segment.
+
+---
+
+## 182. Return Disposition, Recovery and Inventory Re-entry
+
+### 182.1 Inspection outcome
+
+- new/sealed;
+- new without packaging;
+- sellable as new;
+- sellable after steam/repack;
+- minor repair;
+- refurbishable;
+- outlet/B-grade;
+- resale;
+- return to vendor;
+- donate;
+- recycle;
+- destroy;
+- quarantine;
+- fraud evidence.
+
+### 182.2 ConditionGrade
+
+- standardized grade;
+- category rules;
+- observed defects;
+- photos;
+- inspector;
+- automated signal;
+- final reviewer;
+- recovery channel;
+- expected value;
+- actual recovery.
+
+### 182.3 Re-entry controls
+
+Перед возвратом в available inventory:
+
+- item identity verified;
+- quality status passed;
+- hygiene/safety passed;
+- packaging complete;
+- correct SKU/location;
+- price/status determined;
+- DPP/item history updated;
+- warranty/recall checked;
+- inventory ledger event posted.
+
+### 182.4 Supplier recovery
+
+Return/quality defect может создавать:
+
+- supplier claim;
+- debit note;
+- replacement request;
+- chargeback;
+- warranty recovery;
+- freight recovery;
+- CAPA;
+- supplier score impact.
+
+Customer return reason alone не должен автоматически списывать сумму с supplier без validation.
+
+---
+
+## 183. Hokodo and TreviPay — embedded trade credit and B2B payments benchmark
+
+### 183.1 COMPETITOR CONFIRMED direction
+
+Официальные материалы Hokodo описывают B2B BNPL/trade-account infrastructure с:
+
+- digital registration;
+- rapid credit and fraud checks;
+- tailored credit limits;
+- deferred payment plans;
+- seller paid upfront;
+- risk protection;
+- statement of account;
+- payment processing;
+- consolidated buyer invoices.
+
+Официальные материалы TreviPay описывают end-to-end B2B payments and invoicing network с:
+
+- automated buyer onboarding;
+- prequalification and underwriting;
+- KYC/KYB/AML/sanctions screening;
+- omnichannel purchasing;
+- contract-price verification;
+- compliant multi-currency invoicing;
+- parent/child hierarchies;
+- guaranteed seller settlement;
+- self-service buyer/seller portals;
+- collections;
+- cash application;
+- disputes;
+- flexible funding.
+
+Версия 2.6 уже добавила AR self-service и wholesale application. Версия 2.8 расширяет их до полноценного credit-decision, funding и settlement layer. В JOOR Pay и payment tabs такой полный контур в доступном аккаунте не подтверждён.
+
+### 183.2 Credit account hierarchy
+
+```text
+Legal Customer Group
+├── Parent Company
+│   ├── Legal Entity
+│   │   ├── Buying Account
+│   │   └── Locations / Doors
+│   └── Central Billing Account
+└── Guarantor / Insurer / Finance Provider
+```
+
+Credit может задаваться:
+
+- group level;
+- legal entity;
+- account;
+- currency;
+- seller/brand;
+- market;
+- seasonal program;
+- insured/uninsured portion.
+
+### 183.3 Credit application
+
+- applicant legal identity;
+- registration/tax IDs;
+- addresses;
+- directors/beneficial owners where required;
+- requested limit;
+- requested terms;
+- expected spend;
+- currencies;
+- financial statements;
+- bank/trade references;
+- consent;
+- KYC/KYB/AML results;
+- fraud signals;
+- bureau/provider data;
+- manual review;
+- decision and reasons.
+
+### 183.4 Credit decision states
+
+```text
+DRAFT
+→ SUBMITTED
+→ IDENTITY_CHECK
+→ FRAUD_CHECK
+→ CREDIT_SCORING
+→ AUTO_APPROVED
+  / MANUAL_REVIEW
+  / MORE_INFO_REQUIRED
+  / DECLINED
+→ LIMIT_ASSIGNED
+→ ACTIVE
+→ SUSPENDED / REDUCED / INCREASED / EXPIRED
+```
+
+Decision хранит:
+
+- model/provider;
+- data timestamp;
+- score;
+- approved limit;
+- terms;
+- insured/funded amount;
+- decision reasons;
+- adverse-action explanation where legally required;
+- reviewer;
+- expiry/review date.
+
+### 183.5 Available credit
+
+```text
+Available Credit
+= Approved Limit
+- Posted Receivables
+- Authorized Uninvoiced Orders
+- Pending Orders Reserved
+- Disputed Exposure Included by Policy
++ Eligible Unapplied Credits
+```
+
+Все components должны быть drill-down. Нельзя показывать buyer только итог без reserved/pending details.
+
+### 183.6 Order credit authorization
+
+```text
+Order Submitted
+→ Commercial Validation
+→ Credit Availability Check
+→ Credit Reservation
+→ Seller Approval
+→ Shipment Authorization
+→ Invoice Posting
+→ Reservation Converted to Receivable
+```
+
+Exceptions:
+
+- partial approval;
+- split payment;
+- deposit plus net terms;
+- lower limit;
+- overdue account;
+- FX movement;
+- multiple orders racing for limit;
+- order amendment;
+- cancellation release;
+- shipment below order;
+- disputed invoice.
+
+Credit reservation requires optimistic locking/idempotency.
+
+---
+
+## 184. B2B Funding, Settlement and Risk Transfer
+
+### 184.1 Funding models
+
+- seller self-funded;
+- platform-funded;
+- bank-funded;
+- credit-insured;
+- factoring;
+- non-recourse funding;
+- recourse funding;
+- hybrid limit;
+- per-invoice auction/provider selection.
+
+### 184.2 FundingDecision
+
+- receivable/invoice;
+- eligible amount;
+- advance rate;
+- fee;
+- reserve;
+- settlement date;
+- recourse;
+- risk owner;
+- provider;
+- currency;
+- FX terms;
+- acceptance;
+- payout;
+- repayment;
+- exception.
+
+### 184.3 Seller settlement
+
+```text
+Invoice Issued
+→ Funding Eligibility
+→ Settlement Scheduled
+→ Seller Paid
+→ Buyer Pays
+→ Cash Applied
+→ Provider Reconciled
+```
+
+Seller settlement status нельзя смешивать с buyer payment status. Seller может быть уже оплачен provider, пока buyer receivable остаётся open.
+
+### 184.4 Economics
+
+```text
+Net Seller Proceeds
+= Invoice Amount
+- Funding Fee
+- Service Fee
+- Reserve
+- Dispute Hold
+- FX Cost
+```
+
+```text
+Credit Program Contribution
+= Incremental Gross Margin
+- Credit Loss
+- Funding Cost
+- Insurance Cost
+- Collections Cost
+- Fraud Loss
+- Operations Cost
+```
+
+### 184.5 Risk ownership
+
+UI должен явно показывать, кто несёт риск:
+
+- seller;
+- platform;
+- finance provider;
+- insurer;
+- buyer guarantor;
+- shared first-loss arrangement.
+
+---
+
+## 185. Invoice, Statement, Collections and Cash Application
+
+### 185.1 Invoice requirements
+
+- seller/legal entity;
+- buyer/legal entity;
+- order/shipment references;
+- line items;
+- tax;
+- currency;
+- due date;
+- payment terms;
+- legal e-invoice format;
+- buyer-required fields;
+- PO/department/cost center;
+- parent/child billing;
+- delivery and acceptance evidence;
+- version/correction;
+- dispute state.
+
+### 185.2 Consolidated invoicing
+
+Support:
+
+- invoice per shipment;
+- invoice per order;
+- weekly/monthly consolidated invoice;
+- parent-level statement;
+- location-level detail;
+- multi-brand program invoice where legally valid;
+- credit/debit notes;
+- split tax entities.
+
+### 185.3 Collections workflow
+
+```text
+NOT_DUE
+→ DUE_SOON
+→ DUE
+→ OVERDUE
+→ PROMISE_TO_PAY
+→ PARTIALLY_PAID
+→ DISPUTED
+→ ESCALATED
+→ COLLECTION_AGENCY / LEGAL
+→ PAID / WRITTEN_OFF
+```
+
+Actions:
+
+- reminder;
+- statement;
+- contact task;
+- payment link;
+- payment plan;
+- promise to pay;
+- dispute;
+- credit hold;
+- limit reduction;
+- escalation;
+- write-off approval.
+
+### 185.4 Cash application
+
+Payment matching hierarchy:
+
+1. explicit remittance/invoice reference;
+2. virtual account/payment link;
+3. amount/date/customer match;
+4. statement-level allocation;
+5. manual exception.
+
+Need support:
+
+- partial payment;
+- one payment to many invoices;
+- many payments to one invoice;
+- deductions;
+- bank fees;
+- FX differences;
+- unapplied cash;
+- overpayment;
+- refund;
+- chargeback/reversal.
+
+### 185.5 Dispute lifecycle
+
+```text
+OPENED
+→ CLASSIFIED
+→ EVIDENCE_REQUESTED
+→ OWNER_ASSIGNED
+→ UNDER_REVIEW
+→ ACCEPTED / REJECTED / PARTIAL
+→ CREDIT_NOTE / PAYMENT_DUE
+→ CLOSED
+```
+
+Dispute reason links to order, shipment, quality, return, pricing or tax evidence.
+
+---
+
+## 186. Cross-domain architecture added in version 2.8
+
+### 186.1 New bounded contexts
+
+1. Fit Intelligence.
+2. Size Curve Planning.
+3. Pricing and Markdown Optimization.
+4. Promotion Funding.
+5. Sustainability Assessments.
+6. Claim Governance.
+7. Serialized Item Identity.
+8. Circular Services.
+9. Returns and Reverse Logistics.
+10. Trade Credit and Funding.
+11. Collections and Cash Application.
+
+### 186.2 Separation rules
+
+- Fit recommendation is not product measurement master.
+- Size curve is not SKU inventory.
+- Recommended price is not effective price.
+- Promotion is not markdown.
+- Sustainability score is not evidence.
+- Product passport is not serialized ownership record.
+- Return authorization is not warehouse receipt.
+- Refund is not item disposition.
+- Credit reservation is not receivable.
+- Seller settlement is not buyer payment.
+- Dispute is not automatic credit note.
+
+### 186.3 Cross-domain correlation IDs
+
+Every flow should carry:
+
+- `correlationId`;
+- `causationId`;
+- source object/version;
+- tenant/account;
+- actor/model;
+- business effective time;
+- system recorded time;
+- visibility scope.
+
+---
+
+## 187. Expanded competitor gap matrix — version 2.8
+
+| Capability | Best reference | JOOR evidence status | Syntha decision |
+|---|---|---|---|
+| Cross-brand size normalization | True Fit | NOT CONFIRMED | Build fit ontology and recommendation layer |
+| Personalized fit guidance | True Fit | NOT CONFIRMED | Consumer/retailer integration with consent |
+| Return-adjusted buy curve | True Fit + Syntha | NOT CONFIRMED | Connect DTC outcomes to wholesale planning |
+| Initial price optimization | Competera | NOT CONFIRMED | Versioned scenario and approval engine |
+| Store-level pricing | Competera | NOT CONFIRMED | Support governed cluster/store pricing |
+| Promotion optimization | Competera / RELEX | NOT CONFIRMED | Add incrementality and funding ledger |
+| Markdown optimization | Competera | NOT CONFIRMED | SKU-location lifecycle scenarios |
+| Facility environmental assessments | Worldly | NOT CONFIRMED | Facility assessment and evidence model |
+| Social/labor assessments | Worldly | NOT CONFIRMED | Findings/CAPA integrated with sourcing |
+| Sustainability claim governance | Worldly + DPP tools | NOT CONFIRMED | Evidence-level and legal publication gate |
+| Serialized Digital ID | EON | NOT CONFIRMED | Item-level identity and lifecycle events |
+| Repair/resale/recycling services | EON | NOT CONFIRMED | Circular service order orchestration |
+| Retention-oriented exchanges | Loop | NOT CONFIRMED | Exchange/store-credit/repair outcomes |
+| Consolidated box-free returns | Happy Returns | NOT CONFIRMED | Partner-ready reverse-logistics abstraction |
+| Item-level return verification | Happy Returns / EON | NOT CONFIRMED | Serial/tag/condition/fraud checks |
+| Instant trade-credit decision | Hokodo / TreviPay | NOT CONFIRMED | Credit application and decision engine |
+| Guaranteed seller settlement | TreviPay / Hokodo | NOT CONFIRMED | Separate funding and payment states |
+| Global invoicing and AR automation | TreviPay | PARTIALLY TARGETED | Extend invoice, statement, collections and cash app |
+
+### 187.1 Competitive position
+
+Syntha should combine capabilities competitors usually separate:
+
+```text
+Fit Outcome
+→ Product Change
+→ Buy Curve
+→ Price and Markdown
+→ Sale
+→ Return / Exchange
+→ Item Repair / Resale
+→ Sustainability and Financial Outcome
+```
+
+The defensible advantage is the continuity of evidence and decisions, not the number of isolated modules.
+
+---
+
+## 188. New canonical entities — version 2.8
+
+### Fit and sizes
+
+- SizeScale;
+- SizeValue;
+- SizeEquivalence;
+- ProductFitProfile;
+- ShopperFitProfile;
+- FitRecommendation;
+- FitOutcome;
+- FitIssue;
+- SizeCurveVersion;
+- SizeCurveOverride;
+- SizeDemandSignal.
+
+### Pricing
+
+- PriceStrategy;
+- PriceDecision;
+- PriceScenario;
+- PriceExecution;
+- ElasticityEstimate;
+- CompetitivePriceObservation;
+- ProductMatch;
+- PromotionPlan;
+- PromotionFundingLedger;
+- MarkdownCampaign;
+- MarkdownRecommendation.
+
+### Sustainability
+
+- FacilityAssessmentCycle;
+- AssessmentResult;
+- VerificationRecord;
+- SustainabilityFinding;
+- SupplierImprovementAction;
+- SustainabilityClaim;
+- ClaimEvidence;
+- ImpactAllocation;
+- DisclosurePackage.
+
+### Connected items and circularity
+
+- SerializedItem;
+- DigitalIdentifier;
+- ItemCustodyEvent;
+- ItemOwnershipClaim;
+- ItemActivation;
+- CircularServiceOrder;
+- RepairJob;
+- ConditionGrade;
+- ResaleListing;
+- TakeBackRecord;
+- RecyclingOutcome.
+
+### Returns
+
+- ReturnPolicyVersion;
+- ReturnRequest;
+- ReturnAuthorization;
+- ReturnMethod;
+- DropOffEvent;
+- ReturnContainer;
+- ReturnShipment;
+- ReturnInspection;
+- ReturnDisposition;
+- RefundInstruction;
+- ExchangeOrder;
+- SupplierRecoveryClaim.
+
+### Credit and finance
+
+- CreditApplication;
+- CreditDecision;
+- CreditLimit;
+- CreditReservation;
+- TradeAccount;
+- FundingDecision;
+- SellerSettlement;
+- Receivable;
+- Statement;
+- CollectionCase;
+- PromiseToPay;
+- CashReceipt;
+- CashApplication;
+- FinancialDispute.
+
+---
+
+## 189. New routes and workspaces — version 2.8
+
+```text
+/fit/products/:styleId
+/fit/size-scales
+/fit/recommendations
+/fit/analytics
+/planning/size-curves
+/planning/size-curves/:id
+/pricing/strategies
+/pricing/decisions
+/pricing/scenarios
+/pricing/promotions
+/pricing/markdowns
+/suppliers/facilities/:facilityId/assessments
+/sustainability/findings
+/sustainability/improvements
+/sustainability/claims
+/items/serialized
+/items/:itemId/passport
+/items/:itemId/lifecycle
+/circular-services
+/returns/requests
+/returns/operations
+/returns/consolidation
+/returns/disposition
+/finance/credit-applications
+/finance/credit-accounts
+/finance/credit-reservations
+/finance/funding
+/finance/settlements
+/finance/collections
+/finance/cash-application
+/finance/disputes
+```
+
+### 189.1 Workspace requirements
+
+Every workspace must include:
+
+- role and account scope;
+- saved views;
+- filters in URL;
+- mass actions with preview;
+- explanation of disabled actions;
+- version and effective date;
+- source data freshness;
+- approval state;
+- exception queue;
+- audit timeline;
+- export with filter snapshot;
+- data quality warnings.
+
+---
+
+## 190. New event taxonomy — version 2.8
+
+### Fit
+
+- `size_scale_version_published`;
+- `product_fit_profile_approved`;
+- `fit_recommendation_generated`;
+- `fit_recommendation_outcome_recorded`;
+- `fit_issue_escalated_to_plm`;
+- `size_curve_generated`;
+- `size_curve_overridden`;
+- `size_curve_locked_for_order`.
+
+### Pricing
+
+- `price_scenario_generated`;
+- `price_decision_approved`;
+- `price_execution_acknowledged`;
+- `promotion_plan_approved`;
+- `promotion_funding_claimed`;
+- `markdown_recommendation_generated`;
+- `markdown_executed`;
+- `markdown_outcome_measured`.
+
+### Sustainability
+
+- `facility_assessment_requested`;
+- `facility_assessment_verified`;
+- `sustainability_finding_opened`;
+- `supplier_improvement_action_verified`;
+- `sustainability_claim_approved`;
+- `sustainability_claim_revoked`.
+
+### Items and returns
+
+- `serialized_item_activated`;
+- `item_custody_transferred`;
+- `circular_service_requested`;
+- `return_authorized`;
+- `return_dropped_off`;
+- `return_risk_flagged`;
+- `return_received`;
+- `return_disposition_assigned`;
+- `exchange_replacement_released`;
+- `item_reentered_inventory`.
+
+### Credit and payments
+
+- `credit_application_submitted`;
+- `credit_decision_issued`;
+- `credit_limit_changed`;
+- `credit_reserved`;
+- `credit_reservation_released`;
+- `seller_settlement_paid`;
+- `collection_case_opened`;
+- `promise_to_pay_recorded`;
+- `cash_applied`;
+- `financial_dispute_resolved`.
+
+---
+
+## 191. Controlled UAT scenarios — version 2.8
+
+### Fit and curve UAT
+
+1. Map US, EU, IT and alpha sizes into one canonical size scale.
+2. Change measurement chart after fit recommendation and verify invalidation.
+3. Distinguish preference mismatch from production tolerance defect.
+4. Generate size curve with missing historical sizes and lost-demand correction.
+5. Apply factory pack ratio and observe curve distortion warning.
+6. Override size curve with approval and compare actual outcome.
+7. Recalculate curve after fit-related return spike.
+8. Verify cross-account privacy of shopper body/fit data.
+
+### Pricing UAT
+
+9. Generate initial price scenarios using planned and actual landed cost.
+10. Simulate price change with elasticity and competitor position.
+11. Approve store-cluster price and verify POS/e-commerce acknowledgement.
+12. Prevent price below margin/MAP guardrail.
+13. Run promotion with supplier funding and reconcile claim.
+14. Compare markdown versus transfer versus outlet scenario.
+15. Verify return/refund handling after price reduction.
+16. Measure recommendation-versus-actual outcome without hindsight overwrite.
+
+### Sustainability UAT
+
+17. Request facility assessment and track expiry.
+18. Separate self-assessed and verified evidence.
+19. Block sourcing allocation for critical verified finding.
+20. Allow governed exception with approver and expiry.
+21. Publish product claim only when evidence scope matches batch.
+22. Revoke expired evidence and remove affected public claim.
+23. Allocate facility impact using declared methodology and label estimate.
+24. Verify supplier improvement action effectiveness.
+
+### Serialized item and circular UAT
+
+25. Encode, attach and verify serialized tag at factory.
+26. Detect duplicate/cloned identifier.
+27. Activate item after sale and bind warranty.
+28. Transfer custody without exposing personal owner data.
+29. Create repair order and append item history.
+30. Create resale listing from verified item data.
+31. Block recalled item from resale.
+32. Record recycling outcome and close lifecycle.
+
+### Returns UAT
+
+33. Evaluate return eligibility across country/product/customer policy.
+34. Offer size exchange using fit reason and available stock.
+35. Reserve instant exchange with payment hold.
+36. Resolve replacement out-of-stock automatically.
+37. Scan box-free drop-off and issue risk-based refund.
+38. Consolidate multiple merchants/brands without tenant leakage.
+39. Receive bulk return shipment through ASN and manifest.
+40. Verify item condition and route to restock/repair/outlet/recycle.
+41. Create supplier recovery only after defect validation.
+42. Re-enter sellable item into inventory with item identity updated.
+
+### Credit and O2C UAT
+
+43. Approve trade account with tailored limit and terms.
+44. Reserve credit atomically across two simultaneous orders.
+45. Release reservation after cancellation.
+46. Convert reservation to receivable after partial shipment.
+47. Split order between deposit and net terms.
+48. Pay seller via funding provider while buyer remains unpaid.
+49. Generate consolidated parent invoice with location details.
+50. Apply one payment across multiple invoices.
+51. Keep unmatched amount as unapplied cash.
+52. Resolve deduction dispute with credit note and supplier recovery.
+53. Suspend credit after overdue threshold and restore after review.
+54. Verify currency and FX treatment across settlement and buyer payment.
+
+---
+
+## 192. Revised implementation priority after version 2.8
+
+### P0 — data integrity and governed decisions
+
+- canonical size scales;
+- fit profile linked to product version;
+- versioned effective prices;
+- promotion versus markdown separation;
+- facility/site identity;
+- evidence-backed claims;
+- serialized item identity model;
+- return policy/version and disposition;
+- credit limit/reservation consistency;
+- invoice/payment/cash-application separation;
+- immutable audit and correlation IDs.
+
+### P1 — strongest near-term commercial value
+
+- return-adjusted size curves;
+- fit issue feedback to PLM;
+- initial price and markdown scenarios;
+- promotion funding ledger;
+- supplier assessment/finding workspace;
+- exchange and store-credit flow;
+- returns receiving/disposition;
+- trade credit application and reservation;
+- buyer AR portal and cash application.
+
+### P2 — network and optimization
+
+- personalized fit recommendations;
+- store-level pricing;
+- automated markdown cohorts;
+- item serialization and activation;
+- repair/resale partner orchestration;
+- box-free/consolidated returns integrations;
+- third-party funding and guaranteed settlement;
+- sustainability benchmarking.
+
+### P3 — advanced intelligence
+
+- cross-brand fit graph;
+- dynamic size-curve learning;
+- causal price/promotion optimization;
+- product-level impact optimization;
+- circular lifetime value;
+- automated item fraud detection;
+- portfolio credit optimization;
+- autonomous exception routing with human approval boundaries.
+
+### 192.1 Recommended delivery sequence
+
+```text
+1. Size and Price Master Data
+2. Return Reasons and Item Disposition
+3. Credit and Receivable Integrity
+4. Fit / Price / ESG Evidence Capture
+5. Recommendation Workspaces
+6. Serialized Item and Circular Services
+7. External Provider Integrations
+8. Closed-loop Outcome Learning
+```
+
+Не следует начинать с AI recommendation UI до появления reliable identities, versions, outcomes and exception handling.
+
+---
+
+## 193. Product conclusion — version 2.8
+
+Версия 2.8 закрывает ещё пять крупных разрывов между wholesale-ordering platform и реальной fashion operating system:
+
+```text
+1. Size label → Fit intelligence → Correct size curve
+2. Price field → Full lifecycle pricing and markdown decision
+3. Sustainability badge → Facility evidence and governed claim
+4. SKU → Serialized item with post-sale lifecycle
+5. Payment terms → Credit, funding, settlement and collections
+```
+
+Syntha должна обеспечивать сквозную прослеживаемость решения:
+
+```text
+Почему выбран этот продукт
+→ почему заказаны эти размеры
+→ почему установлена эта цена
+→ где и при каких условиях продукт произведён
+→ как конкретный item продан, возвращён, отремонтирован или перепродан
+→ кто профинансировал сделку
+→ какой окончательный коммерческий, качественный и sustainability outcome получен
+```
+
+Такой контур значительно сильнее JOOR-like ordering layer и отдельных point solutions, потому что сохраняет единую причинно-следственную цепочку между product development, buying, pricing, customer outcome, reverse logistics, supplier evidence and finance.
+
+---
+
+## 194. Official sources added in version 2.8
+
+### True Fit
+
+- https://www.truefit.com/about
+- https://www.truefit.com/resources/calling-all-merchants
+- https://www.truefit.com/shopify
+
+### Competera
+
+- https://competera.ai/
+- https://competera.ai/dynamic-pricing-platform
+- https://competera.ai/products/new-release
+- https://competera.ai/resources/articles/markdown-pricing-competera
+
+### Worldly
+
+- https://worldly.io/tools/social-and-labor-data/
+- https://worldly.io/solutions/sourcing-agents/
+- https://worldly.io/resources/how-manufacturers-use-worldly-data-esg/
+
+### EON
+
+- https://www.eon.xyz/
+- https://eon.xyz/initiatives/circular-product-data-protocol
+- https://eon.xyz/clients/zalando
+
+### Loop Returns
+
+- https://www.loopreturns.com/
+- https://www.loopreturns.com/returns/exchanges/
+- https://help.loopreturns.com/en/articles/1913025
+- https://help.loopreturns.com/en/articles/1911809
+
+### Happy Returns
+
+- https://happyreturns.com/
+- https://happyreturns.com/box-free-return-bar-network
+- https://developer-dev.happyreturns.com/guides/headless-returns/
+- https://happyreturns.com/boris
+
+### Hokodo
+
+- https://www.hokodo.co/b2b-buy-now-pay-later
+- https://www.hokodo.co/trade-account
+- https://www.hokodo.co/pay-now
+
+### TreviPay
+
+- https://www.trevipay.com/solutions/
+- https://www.trevipay.com/solutions/what-we-do/ar-automation-software/
+- https://www.trevipay.com/solutions/use-cases/o2c-automation/
+- https://www.trevipay.com/solutions/use-cases/international-expansion/

@@ -46,7 +46,7 @@ test('Tech Pack routes expose every explicit lifecycle command', async () => {
 
 test('Tech Pack routes reject generic transitions and unsupported payload fields', () => {
   const { calls, routes } = fixture();
-  assert.equal(matchWholesaleRoute(routes, 'POST', '/v2/tech-packs/TP-STYLE-001-R01/transition'), undefined);
+  assert.equal(matchWholesaleRoute(routes, 'POST', '/v2/tech-packs/TP-STYLE-001-R01/transition'), null);
   const create = matchWholesaleRoute(routes, 'POST', '/v2/tech-packs');
   assert.throws(() => create.execute({ actorId: 'owner', commandId: 'bad', query: {}, params: create.params, body: { techPackCode: 'TP-STYLE-001-R01', sku: 'STYLE-001', ...editable, status: 'issued' } }), { code: 'HTTP_BODY_FIELD_UNKNOWN' });
   assert.equal(calls.length, 0);

@@ -60,7 +60,7 @@
 В ходе read-only аудита не подтверждались:
 
 - Connect/Disconnect/Accept/Decline;
-- order creation/submit/cancel;
+- new order submit/approval/shipment;
 - message/comment/share send;
 - import/export/download generation;
 - Tax ID submission;
@@ -68,7 +68,7 @@
 - Styleboard archive/delete;
 - subscription payment.
 
-Если navigation сама открывала потенциальный draft или checkout, flow закрывался Cancel/back до final submit; такие случаи явно отмечены.
+Исключение: проверка `Duplicate Orders` немедленно создала cart copy без confirmation. Copy была открыта без редактирования, затем переведена через `Cancel Order` в Cancelled history; активная корзина снова пуста, исходный order и quantities не изменялись. Этот побочный audit-trail record явно разобран в разделах 15–16.
 ---
 
 ## 2. Общая архитектура кабинета
@@ -99,17 +99,38 @@ Brand Profile authoring, showroom builder, catalog publishing, seller order inbo
 |---|---|---|
 | LITE | Текущий plan/entitlement | Информирует об уровне доступа |
 | JOOR logo | Product identity | Переход на Dashboard |
-| Shop | Buying entry | Dropdown: Linesheets, Looks, Styleboards |
-| Orders & Visual Assortment | Order operations | Dropdown: Orders, Visual Assortment |
-| Explore Brands | Network/discovery | Connections, submissions, requests, favorites, discovery, Passport |
+| Shop | Buying entry | Dropdown: Start an Order, Linesheets, Looks, Styleboards |
+| Orders & Visual Assortment | Order operations | Dropdown: Manage Orders, Visual Assortment |
+| Explore Brands | Network/discovery | Connected Brands, Interested in You, Connection Requests — Received/Sent, Favorites, Find New Brands, Passport |
 | Notification badge | Количество сетевых событий | Открывает Explore Brands |
 | Get Shopify App | Интеграционный upsell | EXTERNAL: Shopify App Store |
 | Active account | Организация и account ID | Account menu, settings и переключение account context |
 | Messages badge | Непрочитанные/входящие | Inbox |
-| Cart | Активные brand-specific drafts | Cart Orders |
+| Cart | Активные brand-specific drafts | Popover с Cart, empty/progress summary и View Cart |
 | Help | Help Center/SSO | EXTERNAL |
 | Logout | Завершение сессии | MUTATION: session termination |
 | Support chat | Floating launcher | Support messenger |
+
+Точные shell routes:
+
+| Пункт | Route |
+|---|---|
+| Linesheets | `/collections/shop#dd=all` |
+| Looks | `/ra/showroom/collections` |
+| Styleboards | `/ra/showroom/styleboards` |
+| Manage Orders | `/orders` |
+| Visual Assortment | `/ra/visual-assortment` |
+| Connected Brands | `/matches/current` |
+| Interested in You | `/ra/submissions` |
+| Requests Received | `/matches/requests` |
+| Requests Sent | `/matches/pending` |
+| Favorites | `/r/passport/favorites` |
+| Find New Brands | `/ra/find_new_brands` |
+| Passport | `/r/passport` |
+| Messages | `/messages` |
+| Cart | `/orders/cart` |
+
+При пустой корзине popover показывает `You currently do not have any orders in progress` и всё равно предоставляет `View Cart`; прямой route затем перенаправляет на Dashboard. Поведение заполненной корзины описано только в разделе 15.
 
 ### 2.3 Единая IA улучшенной версии
 
@@ -195,7 +216,7 @@ Dashboard
 | Orders | /orders | Manage Orders | OBSERVED |
 | Catalog | /ra/products | Product Catalog | OBSERVED |
 | Catalog alias | /products | Redirect в /ra/products | OBSERVED |
-| Cart | /orders/cart | Cart Orders | OBSERVED redirect to Dashboard when empty |
+| Cart | /orders/cart | Cart Orders | OBSERVED populated workspace; empty route redirects to Dashboard |
 | Visual Assortment | /ra/visual-assortment | Assortment workspace | GATED |
 | Connected | /matches/current | Manage Connections | OBSERVED |
 | Incoming | /matches/requests | Connection Requests | OBSERVED |
@@ -518,27 +539,27 @@ CONNECTED
 
 Route: /matches/current
 
-Blocks:
+Page blocks and exact controls:
 
-- Search by Name or ID;
-- Submit;
+- Search by Name or ID + Submit;
 - Advanced Search;
-- Wholesale Price Range;
-- Categories;
+- collapsible Wholesale Price Range: Minimum and Maximum selectors + Submit;
+- collapsible Categories: checkbox dictionary из раздела 29.1;
 - Clear Filters;
 - Search;
 - Manage Connections;
-- result count;
+- Showing X–Y of Z results;
 - view size — значения из раздела 29.6;
 - brand list.
 
-Card/actions:
+В наблюдаемом состоянии на одной странице показаны все 40 connected brands. Card/actions:
 
-- brand name/profile;
+- brand name/profile → `/designers/view/{brandId}`;
 - Connected label;
-- message icon;
-- remove/disconnect link;
-- hidden/conditional Connect action may exist in shared template.
+- icon-only message → `/Messages/send/{brandId}`;
+- icon-only `×` disconnect → `/Matches/delete_by_account/{brandId}/1/CONNECTED-BRAND`.
+
+Операция disconnect выглядит как обычная ссылка и не объясняет последствия. В улучшенной версии нужны именованный control, confirmation, reason, audit и сохранение historical orders/messages.
 
 Data:
 
@@ -553,14 +574,14 @@ Data:
 
 Route: /matches/requests
 
-Card:
+Route не повторяет Advanced Search: это отдельный request inbox. Наблюдаемый badge `24` совпал с количеством cards. Card:
 
-- brand image;
+- brand image/link → `/Accounts/view/{brandId}`;
 - brand name;
-- View Profile;
+- View Profile → `/Accounts/view/{brandId}`;
 - request date;
-- Connect;
-- Not Now.
+- Connect → `/Matches/accept/{matchId}`;
+- Not Now → `/Matches/decline/{matchId}`.
 
 Accept sequence:
 
@@ -585,13 +606,13 @@ Not Now sequence:
 
 Route: /matches/pending
 
-Controls совпадают с Manage Connections.
+Controls совпадают с Connected Brands: Name/ID, price range, categories, Clear Filters и Search. В наблюдаемом состоянии: Showing 1–1 of 1 results.
 
 Card:
 
 - brand profile;
 - Pending status;
-- cancel/remove icon.
+- cancel/remove `×` → `/Matches/delete_by_account/{brandId}/1/PENDING`.
 
 Cancel sequence:
 
@@ -623,43 +644,8 @@ Cancel sequence:
 - confirmation;
 - audit log;
 - optional undo grace period.
----
-### 6.6 Карточки, фильтры и технические маршруты
 
-Connected/Pending используют:
-
-- Search by Name or ID;
-- Submit;
-- Advanced Search;
-- Wholesale Price Range;
-- Categories;
-- Clear Filters;
-- Search;
-- Showing X–Y of Z results.
-
-Wholesale Price Range использует Connection Search thresholds из раздела 29.4.
-
-Connected card:
-
-- ссылка /designers/view/{brandId};
-- состояние Connected;
-- удаление связи /Matches/delete_by_account/{brandId}/1/CONNECTED-BRAND;
-- pre-addressed message /Messages/send/{brandId}.
-
-Incoming card:
-
-- brand profile /Accounts/view/{brandId};
-- View Profile;
-- request date;
-- Connect через /Matches/accept/{matchId};
-- Not Now через /Matches/decline/{matchId}.
-
-Pending card:
-
-- состояние Pending;
-- отмена через /Matches/delete_by_account/{brandId}/1/PENDING.
-
-Все перечисленные legacy mutation URLs являются требованиями на замену безопасными POST/PATCH/DELETE-командами.
+Wholesale thresholds перечислены один раз в разделе 29.4, categories — в разделе 29.1. Все перечисленные legacy mutation URLs являются требованиями на замену безопасными POST/PATCH/DELETE-командами.
 
 
 ## 7. Brand Submissions
@@ -1812,7 +1798,13 @@ Order line хранит price/style/color/SKU snapshots. Текущая карт
 
 Route: /orders/cart.
 
-В проверенном аккаунте Draft count = 0. Прямой переход /orders/cart перенаправил на Dashboard вместо отдельного empty-cart screen.
+В проверенном аккаунте Draft count = 0. Header popover показывает:
+
+- Cart;
+- `You currently do not have any orders in progress`;
+- View Cart → `/orders/cart`.
+
+Прямой переход `/orders/cart` перенаправляет на Dashboard вместо отдельного empty-cart screen.
 
 Улучшенная версия должна показывать:
 
@@ -1825,7 +1817,61 @@ Route: /orders/cart.
 
 Redirect без объяснения скрывает причинно-следственную связь.
 
-### 15.3 Способы добавить ассортимент
+### 15.3 Populated Cart Orders — OBSERVED
+
+Заполненный `/orders/cart` — не простой список, а полноценный legacy quantity workspace. Верхняя часть:
+
+- Back to Catalog → `/products`;
+- manual-save warning;
+- Cart Orders;
+- пояснение, что cart разделён по брендам и brand tiles переключают orders;
+- tile: brand, delivery count, linesheet, delivery window;
+- Continue to Shipping & Billing;
+- Cancel Order.
+
+Order/brand summary:
+
+- BRAND;
+- STYLES;
+- SKUS;
+- QTY;
+- TOTAL;
+- brand link;
+- linesheet link;
+- Start Ship date;
+- Complete Ship date;
+- Door selector с placeholder `Select a door...`;
+- Add More Styles.
+
+Каждая style-color card содержит:
+
+- Delete;
+- product image/detail link;
+- `Quantities Required` при незаполненной matrix;
+- style number и name;
+- wholesale `W` и retail `R` price;
+- color;
+- QTY;
+- size labels и quantity inputs;
+- Apply Bulk Quantities;
+- Color Comment;
+- Style Comment;
+- Original Total;
+- Total;
+- Add More Colors.
+
+Footer order:
+
+- Order Comments;
+- Total Qty;
+- Sub Total;
+- Total;
+- Cancel Order;
+- Continue to Shipping & Billing.
+
+Наблюдаемый `Duplicate Orders` немедленно, без промежуточного confirmation, создал cart copy выбранного Note Order: brand/delivery/linesheet/styles/colors были перенесены, а quantities остались нулевыми. `Cancel Order` очистил active Cart и вернул Dashboard, но copy не была физически удалена: она сохранилась в Cancelled history, и registry counter Cancelled вырос на 1. Исходный order и его quantities не изменились. Это подтверждает, что duplicate является mutation на границе registry → cart, а cancel — lifecycle transition, не delete. Улучшенная версия обязана сначала показывать review: source orders, создаваемые drafts, copied/cleared fields, delivery/price compatibility и явное Confirm; discard до первого save должен уметь не создавать historical order, если policy это допускает.
+
+### 15.4 Способы добавить ассортимент
 
 1. Product Catalog внутри active order context.
 2. Add Products из Order Review.
@@ -1835,7 +1881,7 @@ Redirect без объяснения скрывает причинно-след�
 
 Все пути должны разрешать один и тот же canonical SKU, price type, delivery и access context.
 
-### 15.4 Add Products modal — OBSERVED
+### 15.5 Add Products modal — OBSERVED
 
 Открывается из Products Summary существующего Note Order с действующим shared linesheet.
 
@@ -1876,7 +1922,7 @@ Footer:
 
 Color checkbox является уровнем выбора: счётчики отдельно считают unique styles и style colors. Disabled swatch должен иметь reason: already in order, unavailable, restricted, discontinued или incompatible; исходный UI reason рядом не показывает.
 
-### 15.5 Add Products sequence
+### 15.6 Add Products sequence
 
 1. открыть modal;
 2. загрузить только доступные shared linesheets;
@@ -1894,7 +1940,7 @@ Color checkbox является уровнем выбора: счётчики о
 
 Cancel должен удалять только modal selection state и ничего не менять в order.
 
-### 15.6 Quantity matrix
+### 15.7 Quantity matrix
 
 Target unit of entry: colorway × size/SKU.
 
@@ -1909,7 +1955,7 @@ Target unit of entry: colorway × size/SKU.
 
 Нужны keyboard navigation, paste range, fill series, clear row, validation summary, undo и autosave. Прямой usable quantity editor всё ещё не подтверждён: кнопка Edit в исследованных Note Orders не показала input controls.
 
-### 15.7 Multi-order Cart — target architecture
+### 15.8 Multi-order Cart — target architecture
 
 Cart может содержать несколько brand-specific orders. Даже один brand может иметь разные drafts по price type/currency/delivery.
 
@@ -1922,7 +1968,7 @@ Retailer Cart
 
 Переключение tile не смешивает totals, terms, addresses, minimums или dirty state.
 
-### 15.8 Saving and conflict handling
+### 15.9 Saving and conflict handling
 
 - local edit получает orderVersion;
 - UI показывает Saving/Saved/Error;
@@ -1932,7 +1978,7 @@ Retailer Cart
 - autosave предпочтительнее наблюдаемого manual Save warning;
 - submission блокируется до завершения pending saves.
 
-### 15.9 Minimums and warnings
+### 15.10 Minimums and warnings
 
 Rules:
 
@@ -1946,7 +1992,7 @@ Rules:
 
 Правила классифицируются как blocking, overridable и informational. Override сохраняет reason/actor/timestamp. Наблюдаемая система допускает submit с предупреждением, что бренд может отклонить order.
 
-### 15.10 Submit boundary
+### 15.11 Submit boundary
 
 Перед Submit for Approval:
 
@@ -1987,6 +2033,21 @@ Quantity dimension:
 
 Если legacy JOOR фактически хранит Notes как status, улучшенная модель всё равно должна отделять жизненный цикл от признака наличия заметок/количеств.
 
+Account-scoped snapshot на дату исследования (не глобальные product totals):
+
+| Filter | Count |
+|---|---:|
+| Draft | 0 |
+| Notes | 28 |
+| With quantities | 11 |
+| Without quantities | 17 |
+| Pending | 8 |
+| Approved | 672 |
+| Shipped | 552 |
+| Cancelled | 747 после проверки Duplicate/Cancel; baseline был 746 |
+
+Default view включал Notes + With + Without, показывал 28 total, 20 rows на первой из двух страниц.
+
 ### 16.2 Registry actions and filters
 
 Top actions:
@@ -1996,10 +2057,12 @@ Top actions:
 
 Mass actions:
 
-- Change Status;
-- Duplicate Orders;
-- Remove Style Colors With No Quantities;
-- Send to Assortment.
+- Change Status — открывает modal;
+- Duplicate Orders — немедленно создаёт cart copy, отдельного confirmation нет;
+- Remove Style Colors With No Quantities — destructive cleanup;
+- Send to Assortment — может быть disabled для Note Order без quantities.
+
+При выборе одной строки footer меняется на `1 selected out of 28 total`, Export Data становится enabled, а Actions раскрывает четыре пункта в указанном порядке. Selection — prerequisite для этих операций.
 
 Search and filter:
 
@@ -2007,8 +2070,12 @@ Search and filter:
 - Your Selection;
 - brand/connection context при входе из Dashboard View Orders;
 - Clear All;
-- Buyer;
-- Date;
+- Buyer с внутренним search `Search...`;
+- Date group;
+- Created → `Add a date`;
+- Modified → `Add a date`;
+- Start Ship → `Add a date`;
+- Complete Ship → `Add a date`;
 - status checkboxes;
 - quantity With/Without;
 - Apply Filters.
@@ -2053,7 +2120,19 @@ DRAFT / NOTE ORDER
         └── CANCELLED
 ~~~
 
-Каждый transition должен иметь: from, to, actor role, timestamp, reason/comment, validation snapshot, idempotency key и source. Dropdown рядом с primary status action допускает альтернативы, но их фактический список не был надёжно загружен и остаётся UAT item.
+Каждый transition должен иметь: from, to, actor role, timestamp, reason/comment, validation snapshot, idempotency key и source.
+
+Наблюдаемый bulk Change Status для выбранного Notes order:
+
+1. modal `Change Status`;
+2. пояснение `Select an option to change your order status`;
+3. status selector: Notes selected, Pending available;
+4. Send email to Brand — checkbox;
+5. Send email to Retailer — checkbox;
+6. Cancel;
+7. Update, disabled пока новый status не выбран.
+
+Следовательно, доступные transitions контекстны: UI не должен показывать универсальный список без учёта текущих statuses и permissions. Для mixed selection нужно либо intersection разрешённых transitions, либо per-order preview с исключениями.
 
 ### 16.4 Order Review: page containers
 
@@ -2567,26 +2646,28 @@ Exclude previously exported orders должен сравнивать верси�
 
 Route: /ra/showroom/collections
 
-### 18.1 Page blocks
+### 18.1 Registry
 
-- title Looks;
-- filter panel;
-- Current tab;
-- Archived tab;
+Page blocks:
+
+- Looks;
+- Filters sidebar с collapse control;
+- Your selection;
+- Clear all;
+- Current tab с count;
+- Archived tab с count;
+- Apply Filters;
 - table.
 
-### 18.2 Filters
+Filters:
 
 - Collection Name;
 - Brand Name;
 - Creator Name;
 - Created On;
-- Last Modified;
-- Clear all;
-- Apply Filters;
-- collapse/back arrow.
+- Last Modified.
 
-### 18.3 Table columns
+Table columns:
 
 - Collection Name;
 - Creator Name;
@@ -2595,71 +2676,76 @@ Route: /ra/showroom/collections
 - Created On;
 - Last Modified.
 
-### 18.4 Entity
+В наблюдаемом состоянии Current = 2, Archived = 3. Это account/content snapshot, а не фиксированная product limit.
 
-- collectionId;
-- name;
-- brand;
-- creator;
-- styles/look items;
-- layout;
-- cover;
-- sharedTo accounts;
-- dateShared;
-- createdAt;
-- modifiedAt;
-- status CURRENT/ARCHIVED.
+### 18.2 Viewer and product selection
 
-### 18.5 Flow
+Route: `/ra/showroom/collections/{encodedCollectionId}`.
 
-Brand creates → adds styles/layout → shares → retailer receives under Current → opens → shops styles → archives.
----
-### 18.6 Просмотр Look
+Viewer состоит из многостраничного полотна и product rail. Наблюдаемые controls/data:
 
-Вложенный маршрут имеет форму /ra/showroom/collections/{encodedCollectionId}.
-
-Наблюдаемые элементы просмотрщика:
-
-- большая композиция/полотно;
-- богатый текст, заголовки, примечания и описания материалов;
+- product image;
+- product name;
+- style number;
+- color;
+- select/deselect icon на товаре;
 - Hide controls;
 - PREV;
 - PAGE current/total;
 - NEXT;
-- счётчик PRODUCTS;
-- счётчик selected;
+- PRODUCTS;
+- `N selected`;
 - ADD PRODUCTS TO;
 - Styleboard;
-- Order.
+- Order;
+- Select price type.
 
-Кнопки Styleboard и Order disabled при нулевом выборе. Значит, пользователь должен сначала выбрать товарные hotspots или связанные продукты на полотне.
+На проверенном Look было три страницы. Пока `0 selected`, Styleboard и Order disabled. Click по product card меняет select icon, counter на `1 selected` и включает обе кнопки. Selection локальна viewer session и не должна менять order/styleboard до подтверждения в modal.
 
-Процесс:
+### 18.3 Look → Styleboard modal — OBSERVED
 
-1. бренд создаёт визуальный Look;
-2. добавляет страницы и текстовые/медийные элементы;
-3. связывает элементы изображения с products/colorways;
-4. делится Look с ритейлером;
-5. ритейлер открывает Look;
-6. выбирает продукты;
-7. переносит выбор в Styleboard или Order.
+`Add to styleboard`:
 
-Необходимые сущности:
+1. Select a styleboard to add your products to;
+2. Add to existing styleboard — radio, default;
+3. searchable styleboard combobox `Select a styleboard`;
+4. Add to new styleboard — radio;
+5. при выборе new появляется `Name your styleboard`;
+6. Cancel;
+7. Add to board;
+8. Add and go to board.
 
-- look;
-- look_page;
-- look_widget;
-- text_widget;
-- media_widget;
-- product_hotspot;
-- hotspot_geometry;
-- linked_style;
-- linked_colorway;
-- share;
-- recipient_account;
-- viewed_at;
-- archived_at;
-- selection_session.
+Обе Add-кнопки disabled, пока existing board не выбран или new name не заполнен. `Add to board` остаётся в Look, `Add and go to board` должен завершить mutation и открыть board. Проверка остановлена до mutation.
+
+### 18.4 Look → Order modal — OBSERVED
+
+`Add to order`:
+
+1. Add to existing order — radio, default;
+2. searchable order combobox `Start typing to search...`;
+3. Add to a new order — radio;
+4. для new: Select order price type;
+5. для new: Select order warehouse;
+6. Cancel;
+7. Add to order;
+8. Add and go to order.
+
+В наблюдаемом brand context был один price type и один warehouse; оба выбирались автоматически, после чего Add-кнопки становились enabled. Это context-dependent dictionaries, а не глобальные значения. Existing order должен фильтроваться по brand, currency/price type, warehouse, status, access и compatibility выбранных products. `Add to order` возвращает в Look, `Add and go to order` ведёт в cart/order workspace. Проверка остановлена до mutation.
+
+### 18.5 Lifecycle and entity model
+
+Brand creates → adds pages/layout/widgets → links styles/colorways → shares → retailer receives under Current → opens → selects products → transfers to Styleboard/Order → optionally archives.
+
+Canonical entities:
+
+- Look/collection: id, name, brand, creator, cover, status CURRENT/ARCHIVED, dateShared, createdAt, modifiedAt;
+- LookPage: order, canvas dimensions, background/media;
+- LookWidget: text/media/product-hotspot, geometry, z-index, content;
+- ProductHotspot: linked style/colorway, placement, availability/access state;
+- LookShare: recipient account, sharedAt, revokedAt;
+- SelectionSession: selected product/colorway IDs, price context, source page;
+- Transfer: target type/id, create-new flag, result IDs, createdBy/At;
+- engagement: viewedAt, page impressions, product selections, transfer outcome.
 
 
 ## 19. Styleboards
@@ -2874,48 +2960,85 @@ Visual Assortment plan names, prices, users/doors/products и retention limits �
 ---
 ## 21. Messages
 
-### 21.1 Folders
+### 21.1 Navigation and folder contract
 
-- Inbox;
-- Invitation;
-- Sent;
-- Trash.
+Постоянные folders:
 
-### 21.2 Inbox controls
+- Inbox → `/messages`;
+- Invitation → `/messages/invitation`;
+- Sent → `/messages/sent`;
+- Trash → `/messages/trash`.
 
-- Search;
-- Submit;
+Inbox:
+
+- Search + Submit;
 - Compose Mail;
 - Delete;
 - Mark as Read;
 - Mark as Unread;
-- selection checkbox;
-- sort From;
-- sort Message;
-- sort Date;
-- open message;
-- pagination.
+- header select-all checkbox и checkbox per row;
+- sortable From, Message, Date;
+- sender, subject/body preview, date;
+- open message/thread;
+- pagination with next/last page.
 
-### 21.3 Inbox columns
+В наблюдаемом snapshot Inbox показывал 50 rows на page 1 и восемь страниц. Counts динамичны и account-scoped.
 
-- From;
-- Message/subject preview;
-- Date.
+Invitation:
 
-### 21.4 Compose
+- explanation: messages are related to connection invitations;
+- Delete;
+- Mark as Read / Mark as Unread;
+- From / Message / Date;
+- в snapshot одна строка.
 
-Fields in order:
+Sent:
 
-1. Send to all my connections — radio;
-2. Select Connections — radio;
-3. Recipient(s) — autocomplete;
-4. Subject — text;
-5. Message — textarea;
-6. Attach image — file;
-7. Send;
-8. Close.
+- Compose Mail;
+- Mark as Read / Mark as Unread;
+- To / Message / Date;
+- в snapshot 34 rows.
 
-### 21.5 Message entity
+Trash:
+
+- Compose Mail;
+- Move to Inbox;
+- Mark as Read / Mark as Unread;
+- From / Message / Date;
+- наблюдаемый empty table.
+
+Delete, read/unread и restore применяются к selection. При нулевом выборе destructive command должен быть disabled; при массовом удалении нужен confirmation.
+
+### 21.2 Compose a Message — exact field order
+
+Route: `/messages/send`; pre-addressed form: `/Messages/send/{brandId}`.
+
+1. Close;
+2. Send to all my connections — radio;
+3. Select Connections — radio;
+4. Recipient(s) — autocomplete с hint `Use the autocomplete to add recipients`;
+5. Subject — text, observed `maxlength=255`;
+6. Message — required textarea;
+7. Attach an image (optional) — UI contract `.jpg or .png, 4MB max`;
+8. Send.
+
+Broadcast и selected-recipient modes обязаны быть взаимоисключающими. Для broadcast UI должен показать resolved count и отдельное confirmation; autocomplete должен возвращать только разрешённые connected accounts. File restrictions перечислены один раз в разделе 29.7.
+
+### 21.3 Thread
+
+Просмотр сообщения построен как хронологическая таблица:
+
+- From / Date;
+- Subject Line;
+- ссылка на профиль участника;
+- несколько сообщений в одной цепочке;
+- subject;
+- body с переносами строк;
+- распознаваемые mailto-ссылки.
+
+Connection request может порождать thread, а не отдельный несвязанный notification. Structured order comments/status history при этом остаются отдельными aggregates.
+
+### 21.4 Message entity
 
 - messageId;
 - threadId;
@@ -2930,7 +3053,9 @@ Fields in order:
 - deletedAt;
 - optional brand/order/linesheet/style context.
 
-### 21.6 Sending
+Дополнительно нужны folder membership и read/deleted/restored timestamps per participant, replyToMessageId, connectionRequestId, delivery channel/email mirror, attachment scan state и spam/abuse state.
+
+### 21.5 Sending
 
 1. choose recipient mode;
 2. resolve recipients;
@@ -2943,78 +3068,8 @@ Fields in order:
 9. notify;
 10. show send result;
 11. audit.
----
-### 21.7 Invitation
 
-Есть объяснение, что папка содержит сообщения, связанные с connection invitations.
-
-Действия:
-
-- Delete;
-- Mark as Read;
-- Mark as Unread.
-
-### 21.8 Sent
-
-Действия:
-
-- Compose Mail;
-- Mark as Read;
-- Mark as Unread.
-
-### 21.9 Trash
-
-Действия:
-
-- Compose Mail;
-- Move to Inbox;
-- Mark as Read;
-- Mark as Unread.
-
-### 21.10 Thread
-
-Просмотр сообщения построен как хронологическая таблица:
-
-- From / Date;
-- Subject Line;
-- ссылка на профиль участника;
-- несколько сообщений в одной цепочке;
-- subject;
-- body с переносами строк;
-- распознаваемые mailto-ссылки.
-
-Connection request может порождать thread, а не отдельный несвязанный notification. Улучшенная архитектура должна хранить:
-
-- thread;
-- participants;
-- message;
-- folder membership для каждого пользователя;
-- read_at;
-- deleted_at;
-- restored_at;
-- connection_request_id;
-- attachments;
-- subject normalization;
-- reply_to_message_id;
-- delivery channel;
-- email mirror status;
-- spam/abuse state.
-
-Важно: наблюдаемые actions оформлены как URL. В новой версии мутации нельзя выполнять GET-запросами; нужны POST/PATCH, CSRF-защита, подтверждение массового удаления и idempotency.
-
-### 21.11 Точная форма Compose a Message
-
-- Close;
-- Send to all my connections;
-- Select Connections;
-- Recipient(s) с autocomplete;
-- Subject;
-- Message;
-- Attach an image, optional;
-- format и size limit — раздел 29.7;
-- Send.
-
-Pre-addressed маршрут /Messages/send/{brandId} использует тот же composer с заранее заданным получателем.
+Наблюдаемые folder actions оформлены как URL `/messages/actions/{delete|read|unread|inbox}`. В новой версии мутации нельзя выполнять GET-запросами: нужны POST/PATCH, CSRF, authorization, idempotency и audit. Search/sort/page/folder state должны быть shareable URL params и не смешиваться между active accounts.
 
 
 ## 22. User Settings
@@ -3338,12 +3393,23 @@ Account menu содержит:
 - Premium Features;
 - Manage Profile;
 - Data Activity Center;
-- Other Accounts;
+- Other Accounts с count;
 - Language;
 - Help Center;
 - Log Out.
 
-В проверенной membership доступен текущий retailer account и ещё 13 retailer accounts. Некоторые записи показывают Created by {brand}, created date, connection preview, archived state или read-only relationship. Brand-role в списке отсутствует.
+В проверенной membership доступен текущий retailer account и ещё 13 retailer accounts. `Other Accounts (13)` раскрывает:
+
+- Manage Account Visibility;
+- Search by connected brands;
+- account cards как buttons;
+- account name и ID;
+- preview connected brands с `+ N More`;
+- Created by brand либо Created date;
+- date;
+- archived/read-only marker, если применимо.
+
+Click по account card является фактическим переключением context, отдельной preview/confirmation стадии нет. Brand-role в списке отсутствует.
 
 ### 24.2 Switch sequence
 
@@ -3375,6 +3441,8 @@ Manage Account Visibility открывает modal:
 - Save;
 - предупреждение, что применение может занять до 30 минут.
 
+В modal перечислены current и associated accounts; индивидуальные checkboxes могут быть mixed checked/unchecked. `All Accounts` — отдельный bulk checkbox. Close icon закрывает modal без Save; Save является единственной подтверждающей mutation-кнопкой.
+
 Семантика: checked account скрыт от discovery новыми брендами; unchecked видим. Это отдельная политика, не primary flag и не connection state.
 
 ### 24.4 Data model and consistency
@@ -3392,6 +3460,16 @@ AccountDiscoveryVisibility:
 UI может применить optimistic display после Save, но directory/discovery search должен использовать effective server state. Archived/read-only accounts должны иметь явные ограничения изменения visibility.
 
 Все domain requests несут activeAccountId, проверенный сервером; client-side header не является security boundary.
+
+### 24.5 Language surface — OBSERVED
+
+Account menu показывает текущий language flag/code и раскрывает localization menu. Наблюдаемые пункты этого menu:
+
+- current flag/code;
+- ten observed localization options;
+- отдельная ссылка на provider attribution в localization widget.
+
+Точные values и различия с User Settings сведены один раз в canonical dictionary раздела 29.3. Переключение языка является user-global preference, не business-account data, но должно синхронно обновлять locale, date formatting и server preference без утечки active account context.
 
 
 ## 25. Shopify Integration
@@ -3770,7 +3848,7 @@ Beauty и Watches отсутствовали. Event category set должен б
 
 ### 29.3 User Settings Dictionaries — OBSERVED
 
-Languages:
+User Settings Languages:
 
 - English;
 - Español;
@@ -3781,6 +3859,21 @@ Languages:
 - 中文(简体);
 - Русский;
 - 한국어.
+
+Account/localization menu Languages:
+
+- English;
+- العربية;
+- Deutsch;
+- Español;
+- Français;
+- Italiano;
+- 日本語;
+- Português (Brasil);
+- Русский;
+- 中文(简体).
+
+Два observed selectors не идентичны: Korean присутствовал в User Settings, а Arabic и Portuguese (Brazil) — в account localization menu. Улучшенная версия должна получать один enabled-locale registry с признаками surface/availability, а не поддерживать расходящиеся hard-coded списки.
 
 Date Format:
 
@@ -4164,6 +4257,8 @@ ImportJob/ExportJob содержат source/filter snapshot, artifact, checksum,
 17. approved locks governed blocks;
 18. перейти к documents/payment/fulfillment.
 
+Duplicate branch: select one or more registry rows → Actions → Duplicate Orders → system immediately materializes brand-specific copy/copies in Cart → user reviews copied lines and cleared quantities/metadata → fills delivery/door/quantities/comments → Continue to Shipping & Billing либо Cancel Order. В observed legacy flow Cancel очищает active Cart, но сохраняет copy как Cancelled history. В улучшенной версии между command и materialization обязателен review/confirm step, потому что legacy action уже является mutation.
+
 ### 31.6 Access revocation after selection
 
 1. order уже содержит line snapshots;
@@ -4179,12 +4274,16 @@ ImportJob/ExportJob содержат source/filter snapshot, artifact, checksum,
 ### 31.7 Look → Styleboard → Order
 
 1. brand publishes/shares Look;
-2. retailer opens hotspots;
-3. selection идёт в Styleboard или Order;
-4. Styleboard сохраняет visual composition и price context;
-5. Add to Order создаёт/дополняет compatible draft;
-6. quantities распределяются по SKU;
-7. стандартный validation/submit lifecycle продолжается без отдельной копии заказа.
+2. retailer opens Look page and navigates PREV/NEXT;
+3. selects product cards/hotspots; counter moves from 0 to N;
+4. chooses Styleboard or Order;
+5. Styleboard branch: existing board search либо new board name → Add or Add and go;
+6. Order branch: existing compatible order search либо new order;
+7. new order resolves price type and warehouse;
+8. Add returns to Look, Add and go opens target;
+9. target receives canonical style/colorway references plus Look/source attribution;
+10. quantities распределяются по SKU в standard cart/order workspace;
+11. стандартный validation/submit lifecycle продолжается без отдельной модели «look order».
 
 ### 31.8 Message collaboration
 
@@ -4304,6 +4403,12 @@ Save/discard current edits → authorize target membership → set activeAccount
 38. Submissions All при пустом наборе повторяет формулировку No new brands, предназначенную для New.
 39. React-select поля профиля Location визуально подписаны, но их внутренние textboxes не имеют accessible names.
 40. Passport, Submissions, Favorites и Styleboards могут несколько секунд показывать почти пустой DOM до появления содержимого.
+41. Duplicate Orders мгновенно создаёт cart copy без review/confirmation и неожиданно уводит со списка; Cancel Order очищает cart, но оставляет новый Cancelled history record.
+42. Account menu длиннее viewport; Language находится ниже scrollable списка accounts и плохо достижим без явного scroll affordance.
+43. User Settings и account localization menu показывают разные language dictionaries.
+44. Send to Assortment остаётся disabled без объяснения причины для выбранного Note Order.
+45. Bulk Change Status показывает только допустимый следующий status, но не объясняет transition rules и mixed-selection exclusions.
+46. Cart дублирует Cancel Order сверху и снизу, а manual-save warning не сообщает dirty/saved state конкретных блоков.
 ---
 
 ## 34. Требования к улучшенному аналогу
@@ -4434,9 +4539,13 @@ Save/discard current edits → authorize target membership → set activeAccount
 - retailer profile, verification modal, media/basic/people/location forms;
 - Location Type, min/max price и Age dictionaries;
 - account switcher и discoverability;
+- Other Accounts search/card schema, full visibility modal semantics и localization menu;
 - Shopify disconnected mapping;
 - subscription plan limits/prices и Stripe Checkout fields;
-- messages folders, composer and thread.
+- messages folders, account-scoped row/pagination states, composer field constraints and thread;
+- populated Cart Orders quantity workspace, created through Duplicate Orders; active cart was cancelled, with a new Cancelled history record preserved;
+- bulk Change Status modal and context-dependent Notes → Pending option;
+- exact Look product selection and both Look → Styleboard/Order transfer modals.
 
 ### 36.2 Наблюдаемые ambiguity/broken states
 
@@ -4450,6 +4559,9 @@ Save/discard current edits → authorize target membership → set activeAccount
 - icon-only Styleboard controls недоступны по имени;
 - Currency и Brands Carried remote autocomplete не показывают preload options;
 - delayed loading сначала оставляет почти пустой content area.
+- Duplicate Orders performs immediate cart mutation without preview;
+- Send to Assortment was disabled without a visible reason;
+- account menu and User Settings expose different language sets.
 
 Это не следует считать универсальным поведением без повторяемого UAT.
 
@@ -4463,6 +4575,8 @@ Save/discard current edits → authorize target membership → set activeAccount
 - successful create/assign Styleboard;
 - фактический quantity edit/save;
 - создание нового order;
+- successful completion of Look → Styleboard/Order transfer;
+- actual Remove Style Colors With No Quantities and Send to Assortment;
 - Submit for Approval и brand decision;
 - shipment/fulfillment;
 - JOORPay transaction;

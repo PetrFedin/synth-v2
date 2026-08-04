@@ -114,12 +114,12 @@ export function createPostgresWholesaleRuntime({
     ...(outboxRetentionMs !== undefined ? { outboxRetentionMs } : {}),
   });
   const workspace = createWorkspaceQueryService({ reader: createPostgresWorkspaceReader({ pool }) });
-  const transport = { authenticate: auth.authenticate, auth, readiness, platform, catalog, materials, boms, measurements, samples, sourcing, partners, collaboration, orders, notifications, workspace };
+  const transport = { authenticate: auth.authenticate, auth, readiness, platform, catalog, materials, boms, measurements, samples, partners, sourcing, collaboration, orders, notifications, workspace };
   const handler = createWholesaleHttpHandler(transport);
   const fetchHandler = createWholesaleFetchHandler(transport);
   return Object.freeze({
     auth, readiness, maintenance, outboxPublication, store, catalogStore, materialStore, bomStore, measurementStore, sampleStore, sourcingStore,
-    platform, catalog, materials, boms, measurements, samples, sourcing, partners, collaboration, orders, notifications, workspace,
+    platform, catalog, materials, boms, measurements, samples, partners, sourcing, collaboration, orders, notifications, workspace,
     handler, fetchHandler,
   });
 }

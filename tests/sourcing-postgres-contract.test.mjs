@@ -34,8 +34,9 @@ test('PostgreSQL sourcing store uses locks, optimistic versions, shared command 
 test('PostgreSQL sourcing reader enforces organisation membership on every supplier and RFQ read', async () => {
   const source = await readFile(path.join(root, 'src/infrastructure/postgres-sourcing-reader.mjs'), 'utf8');
   assert.ok(source.includes("membership.organisation_id = aggregate.brand_id"));
-  assert.ok(source.includes("membership.organisation_id = supplier.brand_id"));
-  assert.ok(source.includes("membership.organisation_id = rfq.brand_id"));
+  assert.ok(source.includes("membershipClause('supplier')"));
+  assert.ok(source.includes("membershipClause('rfq')"));
+  assert.ok(source.includes("membership.organisation_id = ${alias}.brand_id"));
   assert.ok(source.includes("membership.status = 'active'"));
   assert.ok(source.includes("BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY"));
 });

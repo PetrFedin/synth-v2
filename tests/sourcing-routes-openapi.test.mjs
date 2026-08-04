@@ -43,12 +43,12 @@ test('sourcing routes expose the full supplier and RFQ mutation lifecycle', asyn
   assert.deepEqual(spy.calls.at(-1), ['awardRfq', 'cmd-1', 'actor-1', 'RFQ-001', { expectedVersion: 4, supplierCode: 'FACTORY-A' }]);
 });
 
-test('sourcing routes reject unsupported query fields and non-string supplier arrays', async () => {
+test('sourcing routes reject unsupported query fields and non-string supplier arrays', () => {
   const routes = createSourcingRoutes({ sourcing: serviceSpy().service });
   const listRoute = routeFor(routes, 'GET', '/v2/rfqs');
-  await assert.rejects(listRoute.execute({ actorId: 'actor-1', params: [], query: { secret: 'true' }, body: {} }), (error) => error.code === 'HTTP_QUERY_FIELD_UNKNOWN');
+  assert.throws(() => listRoute.execute({ actorId: 'actor-1', params: [], query: { secret: 'true' }, body: {} }), { code: 'HTTP_QUERY_FIELD_UNKNOWN' });
   const createRoute = routeFor(routes, 'POST', '/v2/rfqs');
-  await assert.rejects(createRoute.execute({ commandId: 'cmd-2', actorId: 'actor-1', params: [], query: {}, body: { rfqCode: 'RFQ-001', sku: 'SKU-001', targetQuantity: 100, responseDueAt: '2026-09-01T00:00:00.000Z', deliveryDueAt: '2026-10-01T00:00:00.000Z', incoterm: 'FOB', supplierCodes: [{ code: 'FACTORY-A' }], notes: null } }), (error) => error.code === 'HTTP_BODY_FIELD_INVALID');
+  assert.throws(() => createRoute.execute({ commandId: 'cmd-2', actorId: 'actor-1', params: [], query: {}, body: { rfqCode: 'RFQ-001', sku: 'SKU-001', targetQuantity: 100, responseDueAt: '2026-09-01T00:00:00.000Z', deliveryDueAt: '2026-10-01T00:00:00.000Z', incoterm: 'FOB', supplierCodes: [{ code: 'FACTORY-A' }], notes: null } }), { code: 'HTTP_BODY_FIELD_INVALID' });
 });
 
 test('OpenAPI publishes strict supplier, quotation, award and production allocation contracts', () => {

@@ -12,14 +12,14 @@ test('sourcing UI core exposes deterministic action matrices and quote ranking',
   vm.runInNewContext(source, { window, Object, Array, Number, String, Date, Set, Map });
   const core = window.SynthaSourcingCore;
   assert.ok(core);
-  assert.deepEqual([...core.allowedSupplierActions({ status: 'draft' }, { canManage: true })], ['edit', 'qualify', 'archive']);
-  assert.deepEqual([...core.allowedRfqActions({ status: 'quoted' }, { manage: true, award: true, allocate: false })], ['quote', 'cancel', 'award']);
+  assert.deepEqual(Array.from(core.allowedSupplierActions({ status: 'draft' }, { canManage: true })), ['edit', 'qualify', 'archive']);
+  assert.deepEqual(Array.from(core.allowedRfqActions({ status: 'quoted' }, { manage: true, award: true, allocate: false })), ['quote', 'cancel', 'award']);
   const ranked = core.rankQuotes({ quotes: [
     { supplierCode: 'B', totalCostMinor: 1000, leadTimeDays: 40 },
     { supplierCode: 'A', totalCostMinor: 1000, leadTimeDays: 30 },
     { supplierCode: 'C', totalCostMinor: 900, leadTimeDays: 60 },
   ] });
-  assert.deepEqual(ranked.map((item) => item.supplierCode), ['C', 'A', 'B']);
+  assert.deepEqual(Array.from(ranked, (item) => item.supplierCode), ['C', 'A', 'B']);
   assert.equal(core.isRfqOverdue({ status: 'issued', responseDueAt: '2026-08-01T00:00:00.000Z' }, '2026-08-02T00:00:00.000Z'), true);
 });
 

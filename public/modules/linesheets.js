@@ -461,8 +461,8 @@
     const edit = el('button', { className: 'button', type: 'button', rawText: text('Редактировать', 'Edit') });
     const share = el('button', { className: 'button', type: 'button', rawText: text('Поделиться', 'Share') });
     open.addEventListener('click', () => toast(text('Лист коллекции открыт в рабочем режиме.', 'Linesheet opened in workspace mode.'), 'success'));
-    edit.addEventListener('click', () => toast(text('Редактирование будет связано с коллекцией и SKU.', 'Editing will be linked to the collection and SKUs.'));
-    share.addEventListener('click', () => toast(text('Ссылка для покупателя будет сформирована после публикации.', 'The buyer link will be generated after publication.'));
+    edit.addEventListener('click', () => toast(text('Редактирование будет связано с коллекцией и SKU.', 'Editing will be linked to the collection and SKUs.')));
+    share.addEventListener('click', () => toast(text('Ссылка для покупателя будет сформирована после публикации.', 'The buyer link will be generated after publication.')));
     actions.append(open, edit, share);
 
     aside.append(header, summary, nav, gallery, description, info, related, actions);

@@ -1,9 +1,6 @@
 (function installBooleanDomProperties(global) {
   'use strict';
 
-  const baseEl = global.el;
-  if (typeof baseEl !== 'function') throw new Error('DOM helper must load before boolean property normalization');
-
   const BOOLEAN_PROPERTIES = new Set([
     'allowFullscreen',
     'async',
@@ -30,6 +27,15 @@
     'selected',
   ]);
 
+  const baseEl = global.el;
+  if (typeof baseEl !== 'function') {
+    global.SynthaBooleanDomProperties = Object.freeze({
+      supported: [...BOOLEAN_PROPERTIES],
+      installed: false,
+    });
+    return;
+  }
+
   function createElement(tag, props = {}) {
     const attributes = {};
     const booleanValues = [];
@@ -45,5 +51,8 @@
   }
 
   global.el = createElement;
-  global.SynthaBooleanDomProperties = Object.freeze({ supported: [...BOOLEAN_PROPERTIES] });
+  global.SynthaBooleanDomProperties = Object.freeze({
+    supported: [...BOOLEAN_PROPERTIES],
+    installed: true,
+  });
 })(window);

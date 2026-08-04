@@ -21,6 +21,7 @@ export function createSample({ id, catalogSku, input, createdAt, sourceSampleCod
   assertObject(input, 'SAMPLE_INPUT_INVALID', 'Sample input is invalid');
   assertAllowedFields(input, CREATE_FIELDS, 'SAMPLE_FIELD_FORBIDDEN', 'Sample input contains unsupported fields');
   const normalized = normalizeDraftInput({ catalogSku, input });
+  const created = timestamp(createdAt, 'SAMPLE_CREATED_AT_INVALID', 'Sample creation timestamp');
   return freezeSample({
     id,
     ...normalized,
@@ -35,8 +36,8 @@ export function createSample({ id, catalogSku, input, createdAt, sourceSampleCod
     receipt: null,
     decision: null,
     cancellationReason: null,
-    createdAt: timestamp(createdAt, 'SAMPLE_CREATED_AT_INVALID', 'Sample creation timestamp'),
-    updatedAt: timestamp(createdAt, 'SAMPLE_CREATED_AT_INVALID', 'Sample creation timestamp'),
+    createdAt: created,
+    updatedAt: created,
   });
 }
 
@@ -48,7 +49,9 @@ export function updateDraftSample(sample, { catalogSku, input, updatedAt }) {
   invariant(normalized.brandId === sample.brandId, 'SAMPLE_BRAND_MISMATCH', 'Sample brand cannot be changed');
   const next = { ...sample, ...normalized };
   if (editableProjection(next) === editableProjection(sample)) return sample;
-  return freezeSample({ ...next, version: sample.version + 1, updatedAt: timestamp(updatedAt, 'SAMPLE_UPDATED_AT_INVALID', 'Sample update timestamp') });
+  const at = timestamp(updatedAt, 'SAMPLE_UPDATED_AT_INVALID', 'Sample update timestamp');
+  assertNotBefore(sample.updatedAt, at, 'Sample update cannot move time backwards');
+  return freezeSample({ ...next, version: sample.version + 1, updatedAt: at });
 }
 
 export function requestSample(sample, { catalogSku, requestedAt }) {
@@ -116,8 +119,10 @@ export function createNextSampleRound({ id, rejectedSample, catalogSku, input, c
   invariant(rejectedSample.round < 100, 'SAMPLE_ROUND_LIMIT_REACHED', 'Sample round limit has been reached');
   assertObject(input, 'SAMPLE_NEXT_ROUND_INVALID', 'Next sample round input is invalid');
   assertAllowedFields(input, NEXT_ROUND_FIELDS, 'SAMPLE_NEXT_ROUND_FIELD_FORBIDDEN', 'Next sample round contains unsupported fields');
+  const created = timestamp(createdAt, 'SAMPLE_CREATED_AT_INVALID', 'Next sample round creation timestamp');
+  assertNotBefore(rejectedSample.updatedAt, created, 'Next sample round cannot be created before the rejected round decision');
   const draft = createSample({
-    id, catalogSku, sourceSampleCode: rejectedSample.sampleCode, createdAt,
+    id, catalogSku, sourceSampleCode: rejectedSample.sampleCode, createdAt: created,
     input: {
       sampleCode: input.sampleCode,
       sku: rejectedSample.sku,
@@ -129,7 +134,7 @@ export function createNextSampleRound({ id, rejectedSample, catalogSku, input, c
       quantity: rejectedSample.quantity,
       sizeCodes: rejectedSample.sizeCodes,
       colourway: rejectedSample.colourway,
-      notes: input.notes ?? rejectedSample.notes,
+      notes: Object.hasOwn(input, 'notes') ? input.notes : rejectedSample.notes,
     },
   });
   invariant(draft.brandId === rejectedSample.brandId, 'SAMPLE_BRAND_MISMATCH', 'Next sample round brand cannot change');
@@ -172,7 +177,13 @@ function normalizedSizeCodes(value) {
   return Object.freeze(result);
 }
 
-function transition(sample, changes) { return freezeSample({ ...sample, ...changes, version: sample.version + 1 }); }
+function transition(sample, changes) {
+  assertNotBefore(sample.updatedAt, changes.updatedAt, 'Sample lifecycle cannot move time backwards');
+  return freezeSample({ ...sample, ...changes, version: sample.version + 1 });
+}
+function assertNotBefore(previous, current, message) {
+  invariant(Number.isFinite(Date.parse(previous)) && Number.isFinite(Date.parse(current)) && Date.parse(current) >= Date.parse(previous), 'SAMPLE_TIME_ORDER_INVALID', message, { previous, current });
+}
 function editableProjection(value) { return JSON.stringify({ skuVersion: value.skuVersion, supplierCode: value.supplierCode, supplierName: value.supplierName, dueAt: value.dueAt, quantity: value.quantity, sizeCodes: value.sizeCodes, colourway: value.colourway, notes: value.notes }); }
 function sampleCode(value) { return code(value, SAMPLE_CODE_PATTERN, 'SAMPLE_CODE_INVALID', 'Sample code'); }
 function code(value, pattern, errorCode, label) { invariant(typeof value === 'string' && pattern.test(value), errorCode, `${label} is invalid`); return value; }

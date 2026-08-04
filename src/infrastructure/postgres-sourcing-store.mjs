@@ -64,7 +64,8 @@ function view(client) {
       const result = await client.query(
         `UPDATE suppliers
             SET status = $4, country_code = $5, currency = $6, lead_time_days = $7, minimum_order_quantity = $8,
-                audit_expires_at = $9::timestamptz, version = $10, payload = $11::jsonb, updated_at = $13::timestamptz,
+                audit_expires_at = $9::timestamptz, version = $10, payload = $11::jsonb,
+                created_at = $12::timestamptz, updated_at = $13::timestamptz,
                 qualified_at = $14::timestamptz, suspended_at = $15::timestamptz, archived_at = $16::timestamptz
           WHERE id = $1 AND supplier_code = $2 AND brand_id = $3 AND version = $17`,
         [...supplierParameters(supplier), expectedVersion],
@@ -94,7 +95,8 @@ function view(client) {
         `UPDATE sourcing_rfqs
             SET sku_version = $5, bom_version = $6, status = $7, target_quantity = $8,
                 response_due_at = $9::timestamptz, delivery_due_at = $10::timestamptz,
-                selected_supplier_code = $11, version = $12, payload = $13::jsonb, updated_at = $15::timestamptz,
+                selected_supplier_code = $11, version = $12, payload = $13::jsonb,
+                created_at = $14::timestamptz, updated_at = $15::timestamptz,
                 issued_at = $16::timestamptz, awarded_at = $17::timestamptz,
                 allocated_at = $18::timestamptz, cancelled_at = $19::timestamptz
           WHERE id = $1 AND rfq_code = $2 AND brand_id = $3 AND sku = $4 AND version = $20`,

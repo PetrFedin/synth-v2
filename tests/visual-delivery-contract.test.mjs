@@ -8,7 +8,8 @@ import { fileURLToPath } from 'node:url';
 import { createStandaloneHandler } from '../src/web/static-handler.mjs';
 
 const publicDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
-const build = 'visual-20260804-8';
+const build = 'visual-20260804-9';
+const v8Build = 'visual-20260804-8';
 const legacyBuild = 'visual-20260804-7';
 const industrialBuild = 'industrial-20260803-3';
 const bomBuild = 'industrial-20260804-1';
@@ -26,7 +27,7 @@ async function withServer(handler, work) {
   }
 }
 
-test('the shell loads Omnidata V8 after every implemented product workspace', async () => {
+test('the shell loads Omnidata V9 after every implemented product workspace', async () => {
   const html = await readFile(path.join(publicDir, 'index.html'), 'utf8');
   assert.match(html, new RegExp(`meta name="syntha-build" content="${build}"`));
 
@@ -40,11 +41,14 @@ test('the shell loads Omnidata V8 after every implemented product workspace', as
     'omnidata-fidelity.js',
     'omnidata-v5.js',
     'omnidata-v7.js',
-    'omnidata-v7-installed.js',
     'omnidata-v7-language-audit.js',
   ]) assert.match(html, new RegExp(`${asset.replaceAll('.', '\\.')}\\?v=${legacyBuild}`));
 
   for (const asset of ['omnidata-v8.css', 'omnidata-v8-reference.css', 'omnidata-v8.js']) {
+    assert.match(html, new RegExp(`${asset.replaceAll('.', '\\.')}\\?v=${v8Build}`));
+  }
+
+  for (const asset of ['omnidata-v9.css', 'linesheets.js', 'omnidata-v7-installed.js', 'omnidata-v9.js']) {
     assert.match(html, new RegExp(`${asset.replaceAll('.', '\\.')}\\?v=${build}`));
   }
 
@@ -70,14 +74,16 @@ test('the shell loads Omnidata V8 after every implemented product workspace', as
 
   const stylesheets = [...html.matchAll(/<link\s+[^>]*rel="stylesheet"[^>]*href="([^"]+)"/g)]
     .map((match) => new URL(match[1], 'http://syntha.local').pathname);
-  assert.deepEqual(stylesheets.slice(-2), ['/omnidata-v8.css', '/omnidata-v8-reference.css']);
+  assert.deepEqual(stylesheets.slice(-3), ['/omnidata-v8.css', '/omnidata-v8-reference.css', '/omnidata-v9.css']);
 
   const scripts = [...html.matchAll(/<script defer src="([^"]+)"/g)]
     .map((match) => new URL(match[1], 'http://syntha.local').pathname);
-  assert.deepEqual(scripts.slice(-2), ['/ui/omnidata-v8.js', '/ui/app-start.js']);
+  assert.ok(scripts.indexOf('/ui/linesheets.js') > scripts.indexOf('/ui/omnidata-v7.js'));
+  assert.ok(scripts.indexOf('/ui/omnidata-v7-installed.js') > scripts.indexOf('/ui/linesheets.js'));
+  assert.deepEqual(scripts.slice(-3), ['/ui/omnidata-v8.js', '/ui/omnidata-v9.js', '/ui/app-start.js']);
 });
 
-test('the standalone server prevents stale caching of every active V8 asset', async () => {
+test('the standalone server prevents stale caching of every active V9 asset', async () => {
   const handler = createStandaloneHandler({
     publicDir,
     apiHandler: (_request, response) => {
@@ -91,8 +97,9 @@ test('the standalone server prevents stale caching of every active V8 asset', as
       `/omnidata.css?v=${legacyBuild}`,
       `/omnidata-v7.css?v=${legacyBuild}`,
       `/omnidata-v7-bom.css?v=${legacyBuild}`,
-      `/omnidata-v8.css?v=${build}`,
-      `/omnidata-v8-reference.css?v=${build}`,
+      `/omnidata-v8.css?v=${v8Build}`,
+      `/omnidata-v8-reference.css?v=${v8Build}`,
+      `/omnidata-v9.css?v=${build}`,
       `/industrial-product.css?v=${industrialBuild}`,
       `/bom.css?v=${bomBuild}`,
       `/measurements.css?v=${measurementBuild}`,
@@ -102,9 +109,11 @@ test('the standalone server prevents stale caching of every active V8 asset', as
       `/ui/omnidata-fidelity.js?v=${legacyBuild}`,
       `/ui/omnidata-v5.js?v=${legacyBuild}`,
       `/ui/omnidata-v7.js?v=${legacyBuild}`,
-      `/ui/omnidata-v7-installed.js?v=${legacyBuild}`,
+      `/ui/linesheets.js?v=${build}`,
+      `/ui/omnidata-v7-installed.js?v=${build}`,
       `/ui/omnidata-v7-language-audit.js?v=${legacyBuild}`,
-      `/ui/omnidata-v8.js?v=${build}`,
+      `/ui/omnidata-v8.js?v=${v8Build}`,
+      `/ui/omnidata-v9.js?v=${build}`,
       `/ui/bom-core.js?v=${bomBuild}`,
       `/ui/bom.js?v=${bomBuild}`,
       `/ui/measurement-core.js?v=${measurementBuild}`,

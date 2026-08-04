@@ -1,0 +1,107 @@
+:root {
+  --od11-canvas:#f7f8f8;
+  --od11-surface:#ffffff;
+  --od11-surface-soft:#fbfbfb;
+  --od11-sidebar:#373b47;
+  --od11-sidebar-deep:#303440;
+  --od11-text:#343740;
+  --od11-text-soft:#666a72;
+  --od11-muted:#93979f;
+  --od11-line:#e5e6e8;
+  --od11-line-strong:#d8dade;
+  --od11-accent:#ff5a1f;
+  --od11-accent-hover:#e94c13;
+  --od11-accent-soft:#fff0e9;
+  --od11-selected:#fff1e9;
+  --od11-success:#7a8c37;
+  --od11-warning:#c5a227;
+  --od11-info:#6f7f92;
+  --od11-danger:#bd4a50;
+  --od11-radius:2px;
+  --od11-sidebar-width:54px;
+  --od11-topbar-height:48px;
+  --od11-control-height:30px;
+  --od11-row-height:52px;
+  --od11-footer-height:28px;
+}
+
+body.omnidata-v11{
+  background:var(--od11-canvas);
+  color:var(--od11-text);
+  font-family:Arial,"Helvetica Neue",Helvetica,sans-serif;
+  font-size:11px;
+  line-height:1.3;
+  letter-spacing:0;
+}
+body.omnidata-v11 *{box-sizing:border-box}
+body.omnidata-v11 button,body.omnidata-v11 input,body.omnidata-v11 select,body.omnidata-v11 textarea{font:inherit}
+body.omnidata-v11 .shell{grid-template-columns:var(--od11-sidebar-width) minmax(0,1fr);background:var(--od11-canvas)}
+body.omnidata-v11 .shell.sidebar-collapsed{grid-template-columns:var(--od11-sidebar-width) minmax(0,1fr)}
+body.omnidata-v11 .sidebar{width:var(--od11-sidebar-width);min-width:var(--od11-sidebar-width);background:linear-gradient(180deg,var(--od11-sidebar),var(--od11-sidebar-deep));border-right:1px solid #2d303a;color:#fff}
+body.omnidata-v11 .sidebar .brand{height:48px;min-height:48px;padding:0;justify-content:center;border-bottom:1px solid rgba(255,255,255,.08)}
+body.omnidata-v11 .brand-mark{width:22px;height:22px;flex-basis:22px}
+body.omnidata-v11 .brand-copy,body.omnidata-v11 .nav-group-label,body.omnidata-v11 .nav-label{display:none!important}
+body.omnidata-v11 .nav{padding:7px 6px 48px}
+body.omnidata-v11 .nav-item{width:42px;min-height:34px;justify-content:center;padding:0;border-radius:2px;color:rgba(255,255,255,.68)}
+body.omnidata-v11 .nav-item .icon{width:15px;height:15px;flex-basis:15px}
+body.omnidata-v11 .nav-item:hover{background:rgba(255,255,255,.07);color:#fff}
+body.omnidata-v11 .nav-item.active{background:transparent;color:var(--od11-accent);box-shadow:inset 2px 0 0 var(--od11-accent)}
+body.omnidata-v11 .sidebar-footer{padding:6px;border-top:1px solid rgba(255,255,255,.08)}
+body.omnidata-v11 .main{padding-bottom:var(--od11-footer-height);background:var(--od11-canvas)}
+body.omnidata-v11 .topbar{height:var(--od11-topbar-height);min-height:var(--od11-topbar-height);grid-template-columns:minmax(180px,1fr) minmax(220px,380px) auto;gap:10px;padding:0 12px;border-bottom:1px solid var(--od11-line);background:#fff;box-shadow:none}
+body.omnidata-v11 .breadcrumb{gap:6px;color:#777b82;font-size:10px}
+body.omnidata-v11 .breadcrumb strong{color:#30333a;font-size:11px;font-weight:600}
+body.omnidata-v11 .global-search{height:30px;padding:0 8px;border:1px solid var(--od11-line-strong);border-radius:2px;background:#fff}
+body.omnidata-v11 .global-search:focus-within{border-color:var(--od11-accent);box-shadow:0 0 0 1px rgba(255,90,31,.08)}
+body.omnidata-v11 .global-search input{font-size:10px}
+body.omnidata-v11 .global-search kbd{border-radius:2px;font-size:8px;background:#f8f8f8}
+body.omnidata-v11 .topbar-actions{gap:6px}
+body.omnidata-v11 .topbar-icon-button{width:28px;height:28px;color:#4d5058}
+body.omnidata-v11 .topbar-organisation,body.omnidata-v11 .topbar-user{min-height:30px;padding:0 6px;font-size:9px}
+body.omnidata-v11 .user-avatar{width:24px;height:24px;font-size:8px;background:#efefef;color:#555}
+body.omnidata-v11 .user-copy strong{font-size:9px}
+body.omnidata-v11 .user-copy small{font-size:8px}
+body.omnidata-v11 .workspace-content{padding:0 10px 12px;background:var(--od11-canvas)}
+body.omnidata-v11 .page-header{display:none!important}
+body.omnidata-v11 .od-tabs,body.omnidata-v11 .ls9-tabs,body.omnidata-v11 .planning-tabs,body.omnidata-v11 .styles-tabs,body.omnidata-v11 .materials-tabs,body.omnidata-v11 .bom-tabs,body.omnidata-v11 .measurement-tabs,body.omnidata-v11 .sample-tabs{min-height:38px;gap:22px;margin:0 -10px;padding:0 12px;border-bottom:1px solid var(--od11-line);background:#fff}
+body.omnidata-v11 .od-tab,body.omnidata-v11 .ls9-tab,body.omnidata-v11 .planning-tab,body.omnidata-v11 .styles-tab,body.omnidata-v11 .materials-tab,body.omnidata-v11 .bom-tab,body.omnidata-v11 .measurement-tab,body.omnidata-v11 .sample-tab{min-height:38px;color:#4d5057;font-size:9.5px;font-weight:400}
+body.omnidata-v11 .od-tab.active,body.omnidata-v11 .ls9-tab.active,body.omnidata-v11 .planning-tab.active,body.omnidata-v11 .styles-tab.active,body.omnidata-v11 .materials-tab.active,body.omnidata-v11 .bom-tab.active,body.omnidata-v11 .measurement-tab.active,body.omnidata-v11 .sample-tab.active{color:var(--od11-accent);font-weight:500}
+body.omnidata-v11 .od-tab.active::after,body.omnidata-v11 .ls9-tab.active::after,body.omnidata-v11 .planning-tab.active::after,body.omnidata-v11 .styles-tab.active::after,body.omnidata-v11 .materials-tab.active::after,body.omnidata-v11 .bom-tab.active::after,body.omnidata-v11 .measurement-tab.active::after,body.omnidata-v11 .sample-tab.active::after{height:1px;background:var(--od11-accent)}
+body.omnidata-v11 .button,body.omnidata-v11 .od-filter,body.omnidata-v11 .od-filter-button,body.omnidata-v11 .ls9-filter-button,body.omnidata-v11 .ls9-icon-button,body.omnidata-v11 .ls9-view-button{min-height:var(--od11-control-height);padding:0 9px;border:1px solid var(--od11-line-strong);border-radius:2px;background:#fff;color:#4d5056;font-size:9px;font-weight:400;box-shadow:none}
+body.omnidata-v11 .button:hover,body.omnidata-v11 .od-filter:hover,body.omnidata-v11 .od-filter-button:hover,body.omnidata-v11 .ls9-filter-button:hover,body.omnidata-v11 .ls9-icon-button:hover,body.omnidata-v11 .ls9-view-button:hover{border-color:#f3a184;color:var(--od11-accent);background:#fffaf7}
+body.omnidata-v11 .button.primary{border-color:var(--od11-accent);background:var(--od11-accent);color:#fff}
+body.omnidata-v11 .button.primary:hover{border-color:var(--od11-accent-hover);background:var(--od11-accent-hover);color:#fff}
+body.omnidata-v11 input,body.omnidata-v11 select,body.omnidata-v11 textarea{min-height:var(--od11-control-height);border:1px solid var(--od11-line-strong);border-radius:2px;background:#fff;color:#35383f;font-size:9.5px;box-shadow:none}
+body.omnidata-v11 input:focus,body.omnidata-v11 select:focus,body.omnidata-v11 textarea:focus{border-color:var(--od11-accent);outline:0;box-shadow:0 0 0 1px rgba(255,90,31,.08)}
+body.omnidata-v11 .od-metrics,body.omnidata-v11 .od-status-strip,body.omnidata-v11 .ls9-metrics,body.omnidata-v11 .planning-metrics,body.omnidata-v11 .styles-metrics,body.omnidata-v11 .materials-metrics,body.omnidata-v11 .bom-metrics,body.omnidata-v11 .measurement-metrics,body.omnidata-v11 .sample-metrics{gap:6px;padding:7px 0}
+body.omnidata-v11 .od-metric,body.omnidata-v11 .od-status-card,body.omnidata-v11 .ls9-metric,body.omnidata-v11 .planning-metric,body.omnidata-v11 .styles-metric,body.omnidata-v11 .materials-metric,body.omnidata-v11 .bom-metric,body.omnidata-v11 .measurement-metric,body.omnidata-v11 .sample-metric{min-width:120px;height:34px;padding:0 9px;border:1px solid var(--od11-line);border-radius:2px;background:#fff;color:#666a72;font-size:8.5px;font-weight:400;box-shadow:none}
+body.omnidata-v11 .od-commandbar,body.omnidata-v11 .ls9-commandbar,body.omnidata-v11 .planning-toolbar,body.omnidata-v11 .styles-toolbar,body.omnidata-v11 .materials-toolbar,body.omnidata-v11 .bom-toolbar,body.omnidata-v11 .measurement-toolbar,body.omnidata-v11 .sample-toolbar{min-height:44px;gap:6px;padding:7px 8px;border:1px solid var(--od11-line);border-bottom:0;border-radius:2px 2px 0 0;background:#fff;box-shadow:none}
+body.omnidata-v11 .od-master-detail,body.omnidata-v11 .ls9-layout,body.omnidata-v11 .bom-layout,body.omnidata-v11 .measurement-layout,body.omnidata-v11 .sample-layout{grid-template-columns:minmax(0,1fr) minmax(330px,370px);gap:10px}
+body.omnidata-v11 .od-master,body.omnidata-v11 .ls9-master,body.omnidata-v11 .planning-registry,body.omnidata-v11 .styles-registry,body.omnidata-v11 .materials-registry,body.omnidata-v11 .bom-master,body.omnidata-v11 .measurement-master,body.omnidata-v11 .sample-master,body.omnidata-v11 .card,body.omnidata-v11 .section{border:1px solid var(--od11-line);border-radius:2px;background:#fff;box-shadow:none}
+body.omnidata-v11 table{border-collapse:collapse;border-spacing:0}
+body.omnidata-v11 .od-table,body.omnidata-v11 .ls9-table,body.omnidata-v11 .planning-table,body.omnidata-v11 .styles-table,body.omnidata-v11 .materials-table,body.omnidata-v11 .bom-table,body.omnidata-v11 .measurement-table,body.omnidata-v11 .sample-table{width:100%;table-layout:fixed;background:#fff}
+body.omnidata-v11 .od-table th,body.omnidata-v11 .ls9-table th,body.omnidata-v11 .planning-table th,body.omnidata-v11 .styles-table th,body.omnidata-v11 .materials-table th,body.omnidata-v11 .bom-table th,body.omnidata-v11 .measurement-table th,body.omnidata-v11 .sample-table th{height:34px;padding:0 8px;border-bottom:1px solid var(--od11-line);background:#fafafa;color:#666a71;font-size:8px;font-weight:400;letter-spacing:0;text-transform:none}
+body.omnidata-v11 .od-table td,body.omnidata-v11 .ls9-table td,body.omnidata-v11 .planning-table td,body.omnidata-v11 .styles-table td,body.omnidata-v11 .materials-table td,body.omnidata-v11 .bom-table td,body.omnidata-v11 .measurement-table td,body.omnidata-v11 .sample-table td{height:var(--od11-row-height);padding:6px 8px;border-bottom:1px solid #ededee;color:#3f4249;font-size:9px;vertical-align:middle}
+body.omnidata-v11 tbody tr:hover{background:#fffaf7}
+body.omnidata-v11 .od-table-row.selected,body.omnidata-v11 .ls9-row.selected,body.omnidata-v11 .planning-row.selected,body.omnidata-v11 .styles-row.selected,body.omnidata-v11 .materials-row.selected,body.omnidata-v11 .bom-row.selected,body.omnidata-v11 .measurement-row.selected,body.omnidata-v11 .sample-row.selected{background:var(--od11-selected);box-shadow:inset 2px 0 0 var(--od11-accent)}
+body.omnidata-v11 .od-inspector,body.omnidata-v11 .ls9-inspector,body.omnidata-v11 .bom-inspector,body.omnidata-v11 .measurement-inspector,body.omnidata-v11 .sample-inspector{top:58px;max-height:calc(100vh - 96px);border:1px solid var(--od11-line);border-radius:2px;background:#fff;box-shadow:none}
+body.omnidata-v11 .od-inspector-header,body.omnidata-v11 .ls9-inspector-header,body.omnidata-v11 .bom-inspector-header,body.omnidata-v11 .measurement-inspector-header,body.omnidata-v11 .sample-inspector-header{padding:10px 11px 8px;border-bottom:1px solid var(--od11-line)}
+body.omnidata-v11 .od-inspector h2,body.omnidata-v11 .ls9-inspector h2,body.omnidata-v11 .bom-inspector h2,body.omnidata-v11 .measurement-inspector h2,body.omnidata-v11 .sample-inspector h2{margin:2px 0;color:#30333a;font-size:13px;line-height:1.2;font-weight:600}
+body.omnidata-v11 .od-inspector-tabs,body.omnidata-v11 .ls9-inspector-tabs,body.omnidata-v11 .bom-inspector-tabs,body.omnidata-v11 .measurement-inspector-tabs,body.omnidata-v11 .sample-inspector-tabs{min-height:36px;gap:16px;padding:0 11px;border-bottom:1px solid var(--od11-line)}
+body.omnidata-v11 .od-inspector-tabs button,body.omnidata-v11 .ls9-inspector-tabs button,body.omnidata-v11 .bom-inspector-tabs button,body.omnidata-v11 .measurement-inspector-tabs button,body.omnidata-v11 .sample-inspector-tabs button{min-height:36px;color:#5c6068;font-size:8.5px}
+body.omnidata-v11 .od-inspector-tabs button.active,body.omnidata-v11 .ls9-inspector-tabs button.active,body.omnidata-v11 .bom-inspector-tabs button.active,body.omnidata-v11 .measurement-inspector-tabs button.active,body.omnidata-v11 .sample-inspector-tabs button.active{color:var(--od11-accent);font-weight:500}
+body.omnidata-v11 .od-inspector-tabs button.active::after,body.omnidata-v11 .ls9-inspector-tabs button.active::after,body.omnidata-v11 .bom-inspector-tabs button.active::after,body.omnidata-v11 .measurement-inspector-tabs button.active::after,body.omnidata-v11 .sample-inspector-tabs button.active::after{height:1px;background:var(--od11-accent)}
+body.omnidata-v11 .badge,body.omnidata-v11 .od-status,body.omnidata-v11 .ls9-status{min-height:18px;padding:0 6px;border-radius:2px;font-size:7.5px;font-weight:400}
+body.omnidata-v11 .active,body.omnidata-v11 .published,body.omnidata-v11 .approved,body.omnidata-v11 .ls9-status-active{background:#f4f6e8;color:var(--od11-success);border-color:#e2e7c7}
+body.omnidata-v11 .draft,body.omnidata-v11 .pending,body.omnidata-v11 .ls9-status-draft{background:#fff9df;color:#a18419;border-color:#eee3ab}
+body.omnidata-v11 .sent,body.omnidata-v11 .confirmed,body.omnidata-v11 .ls9-status-sent{background:#f0f3f6;color:#68788c;border-color:#dce2e8}
+body.omnidata-v11 .viewed,body.omnidata-v11 .ls9-status-viewed{background:var(--od11-accent-soft);color:var(--od11-accent);border-color:#ffd2c0}
+body.omnidata-v11 dialog{border:1px solid var(--od11-line-strong);border-radius:3px;background:#fff;box-shadow:0 18px 50px rgba(35,38,45,.18)}
+body.omnidata-v11 dialog::backdrop{background:rgba(35,38,45,.46)}
+body.omnidata-v11 .od-v7-system-footer{left:var(--od11-sidebar-width);height:var(--od11-footer-height);padding:0 14px;background:#353943;color:rgba(255,255,255,.55);font-size:7.5px}
+body.omnidata-v11 .od-v7-language-switcher{height:24px;padding:1px;border-radius:2px;background:rgba(255,255,255,.06)}
+body.omnidata-v11 .language-option{min-width:28px;height:20px;padding:0 5px;border-radius:1px;color:rgba(255,255,255,.55);font-size:7.5px}
+body.omnidata-v11 .language-option.active{background:var(--od11-accent);color:#fff}
+body.omnidata-v11 input[type="checkbox"]{width:12px;height:12px;min-height:12px;accent-color:var(--od11-accent)}
+@media(max-width:1100px){body.omnidata-v11 .od-master-detail,body.omnidata-v11 .ls9-layout,body.omnidata-v11 .bom-layout,body.omnidata-v11 .measurement-layout,body.omnidata-v11 .sample-layout{grid-template-columns:minmax(0,1fr) minmax(300px,330px)}}
+@media(max-width:900px){body.omnidata-v11 .global-search{display:none}body.omnidata-v11 .od-master-detail,body.omnidata-v11 .ls9-layout,body.omnidata-v11 .bom-layout,body.omnidata-v11 .measurement-layout,body.omnidata-v11 .sample-layout{grid-template-columns:minmax(0,1fr)}body.omnidata-v11 .od-inspector,body.omnidata-v11 .ls9-inspector,body.omnidata-v11 .bom-inspector,body.omnidata-v11 .measurement-inspector,body.omnidata-v11 .sample-inspector{position:relative;top:auto;max-height:none}}

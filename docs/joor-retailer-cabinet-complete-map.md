@@ -864,7 +864,63 @@ Shop должен сохранять brand context. Наблюдался пог�
 
 Общие поля каждой секции: sectionId, pageId, type, title, internal label, order, visibility, audience, publish dates, locale, device behavior, background/theme, analytics key, created/updated/published metadata.
 
-### 10.6 Навигация презентации
+### 10.6 Наблюдаемые композиции Showroom
+
+#### Опубликованная редакционная презентация
+
+Подтверждён полноценный disconnected/public showroom следующей структуры:
+
+1. Brand Profile Logo и page title;
+2. Connect CTA с объяснением ограничений;
+3. Year established, price ranges, website и social links;
+4. длинный brand description;
+5. initial Gallery Element;
+6. embedded video player;
+7. тематическая глава:
+   - collection title;
+   - collection type/subtitle;
+   - editorial story;
+   - несколько абзацев rich text;
+   - повторный collection label;
+   - gallery из четырёх изображений;
+   - linesheet label;
+   - Card Cover;
+   - Preview Linesheet CTA;
+8. следующие главы повторяют video → story → gallery → linesheet card.
+
+В одном опубликованном showroom подтверждены 21 image element, семь iframe, три Preview Linesheet button, три linesheet overlays и три большие collection-story главы. Видео реализованы как embedded iframe players с Play/Pause, progress, time, mute/volume, settings и speed; один provider также показывает Like/Share. Эти provider controls принадлежат embed, а не собственному workflow платформы.
+
+Disconnected retailer может просматривать storytelling, но Preview Linesheet/ordering подчиняются connection и audience. Нажатие Connect является отдельной mutation и не должно автоматически запускать order.
+
+#### Placeholder / incomplete connected presentation
+
+Подтверждён connected storefront, где buyer-side показывает:
+
+- Untitled Page;
+- Overlay Text;
+- несколько Section Title;
+- Click to edit placeholders;
+- Linesheet Title;
+- Document Title;
+- View Document;
+- пустые/нулевые price ranges;
+- overlays о том, что linesheet доступен только selected retailers.
+
+Это важный факт: connected relationship не отменяет linesheet-level audience, а publish pipeline способен пропустить authoring placeholders. Улучшенная версия должна иметь content completeness score, preview-as-buyer и hard validation перед publish.
+
+#### Presentation state matrix
+
+| Page state | Section state | Buyer result |
+|---|---|---|
+| Draft | любой | виден только brand editors |
+| Published | complete + allowed | полноценный widget и CTA |
+| Published | placeholder | должно быть blocked validation, не buyer output |
+| Published | resource restricted | cover/teaser + restriction overlay |
+| Published | deleted/unavailable binding | controlled unavailable state |
+| Scheduled | before publish_from | hidden/preview only |
+| Expired/unpublished | after publish_to | removed with stable fallback/deep-link response |
+
+### 10.7 Навигация презентации
 
 Presentation может состоять из нескольких страниц/глав. Нужны:
 
@@ -879,7 +935,7 @@ Presentation может состоять из нескольких страни�
 - сохранение scroll/page state при возврате из Style;
 - access check при каждом deep link, а не только на landing page.
 
-### 10.7 Документы бренда
+### 10.8 Документы бренда
 
 Document record должен включать:
 
@@ -902,7 +958,7 @@ Document record должен включать:
 
 Исторический заказ может ссылаться на versioned document/terms snapshot, даже если текущий storefront-файл заменён.
 
-### 10.8 Seller workspace — INFERRED / TARGET
+### 10.9 Seller workspace — INFERRED / TARGET
 
 Чтобы породить наблюдаемый buyer-side опыт, brand cabinet должен иметь следующие рабочие зоны.
 
@@ -988,7 +1044,7 @@ Document record должен включать:
 - submit/approve conversion;
 - conversion by retailer, account, location, territory, campaign, showroom version and price type.
 
-### 10.9 Publishing validation
+### 10.10 Publishing validation
 
 Publish должен блокироваться или требовать явного override при:
 
@@ -1006,7 +1062,7 @@ Publish должен блокироваться или требовать явн
 - document checksum/storage failure;
 - draft с несохранёнными изменениями.
 
-### 10.10 Storefront → Catalog handoff
+### 10.11 Storefront → Catalog handoff
 
 1. retailer нажимает Shop внутри конкретного brand context;
 2. система проверяет active retailer account и connection;
@@ -1019,45 +1075,57 @@ Publish должен блокироваться или требовать явн
 9. sticky header показывает active order context;
 10. back navigation возвращает в исходную showroom page/section.
 
-## 11. Linesheets
+## 11. Linesheets: registry, detail, Print и Excel Order
 
-Route: /collections/shop#dd=all
+Linesheets — самостоятельный legacy buying surface, отличный от нового Product Catalog. Он использует routes с разным регистром, hash-state, отдельные POST filters и AJAX pagination.
 
-### 11.1 Filters
+### 11.1 Registry
 
-#### Brand
+Route: /collections/shop#dd=all.
+
+Основная структура:
+
+1. рекламный/passport banner;
+2. heading Linesheets;
+3. filter sidebar;
+4. Clear Filters и Search;
+5. sort links Brand Name / Delivery Date;
+6. result cards;
+7. loading, empty и pagination states;
+8. footer/legal/support.
+
+### 11.2 Brand filter
 
 - native select;
-- connected brand list;
-- archived markers possible;
-- Submit.
+- список connected/accessible brands;
+- archived marker внутри option;
+- отдельный Submit;
+- selected brand отражается в hash вида b={brandId};
+- смена brand перезапрашивает cards.
 
-#### Search Styles
+В наблюдаемой membership selector содержал более пятидесяти brand options, включая archived. Это не означает одинаковый ordering access: registry visibility, connection и конкретный linesheet audience могут различаться.
 
-Search by:
+### 11.3 Delivery Date filter
 
-- Style Name;
-- Style Number;
-- Color;
-- Tag.
-
-#### Delivery Date
-
-Options:
+Radio options:
 
 - All Available;
 - Immediates;
 - Select Date Range.
 
-When date range:
+Date range:
 
-- From;
-- To;
-- date picker links.
+- From textbox;
+- Start Date picker link;
+- To textbox;
+- End Date picker link;
+- Submit.
 
-#### Category tree
+Нужны locale/timezone rules, inclusive boundaries, validation From ≤ To и различение linesheet availability от shipping delivery window.
 
-Top-level observed:
+### 11.4 Category filter
+
+Наблюдаемые top-level values:
 
 - Womens;
 - Mens;
@@ -1070,106 +1138,126 @@ Top-level observed:
 - Boys;
 - Outdoor.
 
-Nested examples:
+В разных состояниях дерево может раскрывать Apparel, Denim, Shoes, Handbags, Accessories, Hosiery, Intimates, Swimwear, Outerwear, Activewear, Gifts, Jewelry, Sunglasses, Goodies, Bridal, Golf, Tennis и Raw Materials.
 
-- Apparel;
-- Denim;
-- Shoes;
-- Handbags;
-- Accessories;
-- Hosiery;
-- Intimates;
-- Swimwear;
-- Outerwear;
-- Activewear;
-- Gifts;
-- Jewelry;
-- Sunglasses;
-- Goodies;
-- Bridal;
-- Golf;
-- Tennis;
-- Raw Materials.
+Category filter имеет собственный Submit; выбранные категории должны быть видны как applied filters.
 
-#### Global actions
+### 11.5 Search and sorting
 
-- Submit per filter block;
+- Search textbox/trigger;
 - Clear Filters;
-- Search;
-- sort Brand Name;
-- sort Delivery Date.
+- sort by Brand Name;
+- sort by Delivery Date;
+- loading;
+- No linesheets found.
 
-### 11.2 Linesheet card — required
+Empty state должен различать:
 
-- cover;
-- brand;
+- no connection;
+- no shared linesheets;
+- selected brand has no current linesheets;
+- outside availability/delivery range;
+- category/date filters exclude results;
+- brand/account archived;
+- missing price type;
+- audience/territory restriction;
+- API/loading error.
+
+### 11.6 Linesheet registry card
+
+Непосредственно наблюдались:
+
+- brand name;
 - linesheet name;
-- season;
-- categories/divisions;
-- available from/to;
-- delivery window;
-- currency/price types;
-- style count;
-- new/updated badge;
-- archived/unavailable indicator;
-- Open/Shop.
+- delivery start/end;
+- card link /collections/view/{linesheetId};
+- ordered list of many seasons/drops.
 
-### 11.3 Empty state diagnostics
+Целевая карточка дополнительно должна показывать cover, season/year, category/division, style count, price types/currency, availability, new/updated badge, archived/restricted marker и reason tooltip.
 
-Вместо No linesheets found показывать причину:
+### 11.7 Linesheet detail
 
-- no active connection;
-- no assigned price type;
-- no published linesheets;
-- outside availability dates;
-- filter excludes results;
-- brand archived;
-- user/door restriction;
-- loading/API error.
----
-### 11.4 Вложенная страница конкретного Linesheet
+Route: /collections/view/{linesheetId}?brandId={brandId}#pt={priceTypeId}.
 
-Маршрут: /Collections/view/{linesheetId}.
+#### Left sidebar
 
-Левая колонка:
-
-- Brand и переход в /Accounts/view/{brandId};
+- Brand;
+- brand profile link;
 - Send Message;
+- Minimum Amount;
 - Search + Submit;
-- Category tree;
+- Category + Submit;
 - Clear Filters;
-- Search;
 - All Linesheets in This Brand;
-- переходы между linesheets одного бренда.
+- current linesheet disabled/selected;
+- navigation to sibling linesheets.
 
-Заголовок:
+Minimum Amount является commercial validation для будущего заказа и должен сохраняться с currency, scope и effective dates.
 
-- Linesheet name;
+#### Header
+
+- full linesheet name и audience/division marker;
 - Print;
 - Start Excel Order;
-- Delivery Window.
+- Delivery Window;
+- Price Type selector;
+- Submit/apply price type.
 
-Режим выдачи:
+Наблюдался выбор между несколькими price types одной валюты и сезона. URL/hash сохраняет выбранный priceTypeId.
+
+#### View and pagination
 
 - View 15;
 - View 30;
 - View All (total);
-- GROUP BY: LINESHEET, FABRICATION, CATEGORY, DIVISION, SILHOUETTE, LINESHEET GROUP;
-- пагинация и AJAX-маршрут следующей страницы.
+- current page;
+- numbered pages;
+- Next;
+- AJAX route следующей страницы;
+- stable style order.
 
-Style card:
+Totals и filtering должны рассчитываться сервером; View All не должен блокировать страницу большим количеством изображений.
 
-- число доступных изображений;
-- image/style link;
-- Style #;
-- Style name;
-- перечень colorways;
+### 11.8 GROUP BY dictionary
+
+Подтверждены:
+
+- LINESHEET;
+- FABRICATION;
+- CATEGORY;
+- DIVISION;
+- SILHOUETTE;
+- LINESHEET GROUP;
+- MODEL CODE;
+- COLLECTION;
+- SEASON;
+- PATTERN;
+- CONTENT;
+- FABRIC WEIGHT;
+- NECK SHAPE;
+- SLEEVE LENGTH.
+
+В selector присутствует disabled divider между базовыми и custom product attributes. Для улучшенной версии это один metadata-driven dictionary с type, order, applicability и localization.
+
+### 11.9 Style card inside Linesheet
+
+Непосредственно отображаются:
+
+- primary image/style link;
+- number of available images;
+- Style Number;
+- Style Name;
+- color display name и color code;
 - Wholesale price;
-- Retail price.
+- Retail/Suggested Retail price;
+- currency;
+- link в Style detail.
 
-### 11.5 Print-конструктор Linesheet
+Card может представлять один colorway как отдельную строку/карточку. Поэтому unique style count и displayed card count не всегда совпадают.
 
-Маршрут: /collections/print_select/{linesheetId}.
+### 11.10 Print constructor
+
+Route: /collections/print_select/{linesheetId}.
 
 Layouts:
 
@@ -1187,9 +1275,9 @@ Print Options:
 - Currency & Prices;
 - Retail Price;
 - Wholesale Price;
-- Image Resolution: Normal (recommended) или High;
+- Image Resolution: Normal или High;
 - три Custom Fields;
-- доступные custom fields: Fabrication, Silhouette, Materials, Heel Height, Measurements;
+- Fabrication, Silhouette, Materials, Heel Height, Measurements;
 - Group By: Linesheet groups, Fabrication, Category, Division, Silhouette;
 - Page Break by Group;
 - Overflow Colors;
@@ -1197,118 +1285,134 @@ Print Options:
 - Print;
 - Close.
 
-Формируемый print document должен сохранять layout, price type, currency, выбранные поля, grouping, resolution и параметры page break.
+Document job должен фиксировать linesheet/version, layout, price type, currency, custom fields, grouping, image resolution, page-break options, actor и generated artifact checksum.
 
-### 11.6 Start Excel Order
+### 11.11 Start Excel Order
 
-Модальное окно на linesheet:
+Это export-fill-import workflow, а не обычная загрузка пользовательского файла:
 
-- пояснение Add units and import directly to the Cart;
-- текущий linesheet;
-- возможность добавить другие linesheets бренда;
-- searchable list;
-- Price Type;
-- Include Images;
-- Export;
-- Close.
+1. открыть Start Excel Order;
+2. увидеть текущий linesheet;
+3. добавить другие linesheets того же brand;
+4. искать по списку;
+5. выбрать Price Type;
+6. выбрать Include Images;
+7. Export;
+8. получить Excel quantity matrix;
+9. заполнить units;
+10. импортировать результат в Cart;
+11. сопоставить строки с style/color/size;
+12. показать validation/row errors.
 
-Это не импорт пользовательского файла. Система формирует Excel-матрицу из выбранных linesheets, пользователь заполняет units и затем импортирует результат в Cart.
+Modal содержит пояснение Add units and import directly to the Cart, Export и Close. Template должен иметь immutable IDs помимо человекочитаемых codes, чтобы переименования не ломали импорт.
 
-## 12. Style and variant information — implementation target
+## 12. Style, Colorway, Variant и SKU
 
-Style detail не был доступен без order context, но catalog filters и Shopify mapping определяют минимальную модель.
+### 12.1 Роль Style detail
 
-### 12.1 Style fields
+Route: /Styles/view/{styleId}/{linesheetId}/{priceTypeId} с optional query brandId/fp.
 
-- styleId;
-- brandId;
-- linesheetId;
-- style name;
-- style number;
-- description;
-- category;
-- division;
-- silhouette/type;
-- fabrication;
-- season;
-- badges;
-- style tags;
-- media/photos;
-- delivery window;
-- inventory availability;
-- wholesale price range;
-- suggested retail;
-- currency;
-- active/archived;
-- modifiedAt.
+Наблюдаемый legacy Style screen — справочная коммерческая карточка. Явных quantity/Add to Order controls на нём нет; ввод количества идёт через Product Catalog, Excel Order или Cart. Поэтому read model Style отделяется от order selection command.
 
-### 12.2 Variant/SKU fields
-
-- color;
-- color code;
-- size;
-- size scale;
-- SKU code;
-- UPC/barcode;
-- wholesale price;
-- suggested retail price;
-- variant price;
-- available-to-sell;
-- minimum/order increment;
-- delivery;
-- image override.
-
-### 12.3 Actions
-
-- choose color;
-- choose size;
-- enter quantity;
-- add style/variant to order;
-- remove;
-- view image/gallery;
-- open linesheet;
-- compare;
-- add to Look/Styleboard/Assortment;
-- copy SKU;
-- download media if permitted.
----
-### 12.4 Наблюдаемая карточка Style
-
-Маршрут: /Styles/view/{styleId}/{linesheetId} с возможными дополнительными сегментами и query params.
-
-Навигация:
+### 12.2 Навигация
 
 - Brand profile;
 - Send Message;
 - Relevant Linesheets;
 - Back to Linesheet с hash-позицией style/page;
 - Go to All Styles;
-- Previous Style;
-- Next Style.
+- Previous Style, если доступен;
+- Next Style;
+- direct image/CDN link.
 
-Медиа:
+Relevant Linesheets показывает, что один Style может входить в несколько drops/collections.
 
-- основное изображение с прямой CDN-ссылкой;
-- thumbnail gallery;
-- число доступных изображений на карточке linesheet;
-- отдельные изображения colorways.
+### 12.3 Commercial context
 
-Поля:
-
-- Linesheet;
+- current Linesheet;
 - Delivery Window;
-- Style Name;
-- Style #;
-- Sizes и fit note;
-- Price Type;
+- Select Currency / Price Type;
+- несколько price-type blocks;
 - Wholesale;
 - Suggested Retail;
+- currency.
+
+В одном detail наблюдались две price-type версии с различными wholesale/RRP для одного style. Значит, цена не является единственным полем Style и должна моделироваться как PriceRecord(style/color/SKU, priceType, currency, amount, valid dates).
+
+### 12.4 Core fields — OBSERVED
+
+- Style Name;
+- Style Number;
+- Description;
+- Sizes;
+- fit note, например true to fit;
 - Materials;
 - Country of Origin;
-- Description;
-- Colors.
+- Colors;
+- main image;
+- colorway image.
 
-Colorway показывает display name, внутреннее/повторное имя и изображение. В наблюдаемом legacy-screen отсутствовали явные Add to Order и quantity controls: заказ инициируется через Catalog/Excel-order/Cart, а Style screen служит справочным просмотром.
+### 12.5 Classification/custom attributes — OBSERVED
+
+Подтверждены пары label/value:
+
+- COLLECTION;
+- CONTENT;
+- FABRIC WEIGHT;
+- MODEL CODE;
+- PATTERN;
+- SEASON;
+- SLEEVE LENGTH.
+
+Linesheet grouping дополнительно подтверждает FABRICATION, CATEGORY, DIVISION, SILHOUETTE, LINESHEET GROUP и NECK SHAPE. Значение может отображать display value и исходное/повторное значение; target data model должен хранить normalized value, raw source value и locale.
+
+### 12.6 Media
+
+- primary image;
+- direct CDN URL;
+- image count на linesheet card;
+- optional thumbnail/gallery;
+- colorway-specific image;
+- alt derived from style/color;
+- missing/broken image fallback.
+
+MediaAsset: id, owner account, original/derivatives, MIME, dimensions, checksum, alt, sort order, colorway binding, rights/access и deleted/replaced state.
+
+### 12.7 Colorway
+
+- color display name;
+- internal/short color code;
+- image;
+- optional alternate/raw name;
+- link/binding to Style;
+- availability per linesheet/price type.
+
+Colorway может быть отдельной card presentation внутри linesheet, но агрегируется обратно в Style и order totals.
+
+### 12.8 Variant/SKU target fields
+
+Не все поля выведены на read screen, но для order matrix нужны:
+
+- variant/SKU id;
+- styleId/colorwayId;
+- size;
+- size scale и sort order;
+- SKU code;
+- UPC/barcode;
+- wholesale/RRP override;
+- available-to-sell/orderable;
+- minimum;
+- increment/case pack;
+- delivery;
+- inventory timestamp;
+- image override;
+- active/discontinued.
+
+### 12.9 Selection boundary
+
+Read Style → choose order context → Product Catalog/Excel/Cart → color × size quantity → server validation → OrderLineSnapshot.
+
+Нельзя записывать quantity непосредственно в master Style/SKU. Selection принадлежит конкретному Draft Order, retailer account, price type, delivery context и version.
 
 ## 13. Start an Order
 
@@ -1327,7 +1431,23 @@ Route: /ra/products без активного order context; входы такж
 
 До выбора brand система не должна создавать draft или писать пустую бизнес-сущность.
 
-### 13.2 Контекст, который должен быть разрешён до создания
+### 13.2 Наблюдаемый autocomplete failure
+
+При открытии Start an Order из global Shop dialog был проверен brand search для нескольких connected brands. Autocomplete возвращал No results found; More options и Start an Order оставались disabled. Никакой draft не создавался.
+
+Это состояние нужно отличать от корректного empty eligibility:
+
+- loading;
+- no text entered;
+- no matching brand;
+- matching brand but not order-eligible;
+- connected but no shared linesheets;
+- API error;
+- stale account context.
+
+Исходный dialog не объясняет причину. Улучшенная версия должна показывать result/reason per brand и recovery: refresh access, open connection, contact brand или return to linesheets. Storefront Shop также обязан передавать brand context, чтобы пользователь не повторял поиск.
+
+### 13.3 Контекст, который должен быть разрешён до создания
 
 | Поле | Источник | Обязательность |
 |---|---|---|
@@ -1346,7 +1466,7 @@ Route: /ra/products без активного order context; входы такж
 
 More options следует документировать как policy-driven область. Поля, не открытые в текущем аккаунте, нельзя считать подтверждённым JOOR UI; для улучшенной версии туда логично поместить Buyer, Door, Season, Delivery Window и PO metadata.
 
-### 13.3 Последовательность
+### 13.4 Последовательность
 
 1. принять source context;
 2. выбрать или подтвердить Brand;
@@ -1362,7 +1482,7 @@ More options следует документировать как policy-driven 
 12. открыть scoped Product Catalog;
 13. не терять возврат в исходный showroom/linesheet/style.
 
-### 13.4 Валидации и ошибки
+### 13.5 Валидации и ошибки
 
 - brand required;
 - connection/access required;
@@ -1377,7 +1497,7 @@ More options следует документировать как policy-driven 
 - двойной click — idempotency key;
 - ошибка создания не должна оставлять невидимый partial draft.
 
-### 13.5 Создаваемые данные
+### 13.6 Создаваемые данные
 
 Create command фиксирует: retailerAccountId, brandAccountId, connectionId, priceTypeId, currency, optional linesheetId/sourceEntity, buyerId, door/locationId, season/year, delivery window, origin, createdBy, clientRequestId. Адреса, контакты, цены и terms далее сохраняются как snapshots согласно разделам 16 и 30.
 
@@ -1718,31 +1838,66 @@ Overview page состоит из последовательных блоков:
 
 Order принадлежит одному retailer account и одному brand, но может включать несколько linesheets этого бренда. Price Type определяет базовую валюту/прайс; цены в строках остаются snapshots.
 
-### 16.6 Header actions
+### 16.6 Header actions — точные формы
 
 #### Share Order
 
-Read-only аудит должен фиксировать доступные каналы/получателей, access scope, expiration и share event. Отправка/создание внешней ссылки — side effect и требует отдельного разрешения пользователя.
+Share открывает modal Share Order #…:
+
+- существующий Buyer/recipient;
+- Add additional emails;
+- Add a personalized message;
+- optional message toggle/field;
+- Advanced Settings;
+- Merge orders;
+- Zip PDFs;
+- Exclude terms;
+- Exclude images;
+- Buyer will be notified;
+- Cancel;
+- Send.
+
+Send является внешним side effect. ShareJob должен фиксировать order versions, recipients, message, options, artifact IDs, sent_by/at и delivery status. Additional emails требуют validation, deduplication и permission/PII policy.
 
 #### Visual Assortment
 
-Может быть disabled/gated entitlement. Order и assortment связаны через отдельную сущность/transfer, а не через изменение товарных строк без аудита.
+Кнопка может быть disabled/gated. Order → Assortment является отдельным transfer с entitlement check; disabled control должен объяснять plan/permission и не выглядеть сломанным.
 
 #### Comments
 
-- comment count;
-- View N Comment;
-- thread/drawer/modal;
-- author, timestamp, body и attachments по доступности;
-- read/unread;
-- create/edit/delete permissions;
-- audit and notification.
+Comments drawer показывает:
 
-Comment не равен internal order note: видимость должна быть brand-only, retailer-only или shared.
+- heading Comments;
+- существующие entries;
+- author;
+- comment body;
+- input с placeholder Send a comment;
+- submit button disabled до непустого валидного текста.
+
+Нужны timestamp, visibility scope, attachments, read state, edit/delete policy и notification. Comment thread не равен internal note или status reason.
 
 #### Download
 
-Должны быть перечислены тип документа, формат, locale, price visibility и version. Генерация крупного документа — background job; скачивание логируется.
+Download drawer содержит radio formats:
+
+- Order Summary PDF (.pdf);
+- Order Summary Excel (.xls);
+- Export Linesheet to Size (.xls).
+
+Advanced Options:
+
+- Merge orders into one PDF file;
+- Exclude Terms & Conditions from PDFs;
+- Exclude images from PDFs;
+- Linesheet format;
+- Cancel;
+- Download.
+
+OrderDocumentJob сохраняет selected order/version, format, advanced options, locale, price visibility, image/terms inclusion, generated checksum, size, status, actor и download audit. Linesheet format и Export Linesheet to Size связывают order document с legacy Excel workflow.
+
+#### Status combo
+
+В Note Order primary action — Submit for Approval. Arrow menu содержит альтернативу Cancel Order. Cancel является destructive lifecycle mutation и должен требовать confirmation/reason, optimistic version, audit и notification. Submit не был выполнен в исследовании.
 
 ### 16.7 Shipping and Billing editor
 
@@ -3586,7 +3741,15 @@ Save/discard current edits → authorize target membership → set activeAccount
 18. React Router выдаёт warnings о будущем v7 behavior.
 19. Data-dependent content загружается поздно.
 20. Privacy публичных contacts/locations не объяснена рядом с данными.
+21. Connected storefront способен показывать authoring placeholders Click to edit.
+22. Connected status не объясняет отдельное linesheet-level restriction до открытия card.
+23. Start an Order autocomplete может вернуть No results found для connected brands без reason code.
+24. Style detail предлагает Select Currency с none selected, хотя рядом уже показаны несколько price-type blocks.
+25. Download/Share/Comments используют разные drawer/modal patterns без единого action framework.
+26. Legacy Linesheets имеет отдельные Submit на Brand, Delivery и Category, что создаёт неясный applied-filter state.
+27. Initial loading может оставлять DOM почти пустым, а затем поздно добавлять крупные списки/products.
 ---
+
 ## 34. Требования к улучшенному аналогу
 
 ### P0
@@ -3697,10 +3860,19 @@ Save/discard current edits → authorize target membership → set activeAccount
 - discovery, connection surfaces, submissions, favorites и Passport;
 - connected Storefront и public/disconnected brand profile;
 - video, description, social, products, swatches, collections, gallery/press и PDF documents;
+- опубликованный multi-section showroom: iframe video, rich text, повторяющиеся collection chapters, galleries, card covers и Preview Linesheet;
+- placeholder/restricted connected showroom и linesheet overlays;
 - audience-restricted product state;
-- linesheets, styles, Looks, Styleboards и gated Visual Assortment;
+- Linesheets registry с Brand/Delivery/Category filters, sort, cards и pagination;
+- Linesheet detail с Minimum Amount, price types, Print, Start Excel Order, View counts и 14 Group By values;
+- Style detail с navigation, multiple price types, materials, origin, sizes/fit, colorway и custom classification attributes;
+- Looks, Styleboards и gated Visual Assortment;
 - Manage Orders registry, filters, mass actions, import/export/download entry points;
 - Approved Order Overview/Pay;
+- Share Order modal и advanced options;
+- Comments drawer/input;
+- Download drawer с PDF/Excel/Linesheet-to-Size и advanced options;
+- Note Order status combo с Cancel Order;
 - Notes Order с quantities;
 - editable Shipping/Billing modal и точные поля;
 - inline Contacts edit;
@@ -3717,6 +3889,7 @@ Save/discard current edits → authorize target membership → set activeAccount
 ### 36.2 Наблюдаемые ambiguity/broken states
 
 - Storefront Shop может не сохранить предвыбранный brand в Start an Order;
+- global Start an Order autocomplete возвращал No results found для проверенных connected brands без объяснения eligibility;
 - Product Edit в Notes order с отозванным linesheet не открыл usable form;
 - Order Details Edit остался в loading state;
 - некоторые storefront presentation blocks содержат placeholders/неполные документы;
@@ -3730,7 +3903,6 @@ Save/discard current edits → authorize target membership → set activeAccount
 - showroom builder controls;
 - publishing linesheet/style/price/document;
 - product quantity edit на действующем shared linesheet;
-- окончательный список альтернатив status combo;
 - создание нового draft через Start an Order;
 - Submit for Approval;
 - brand-side approve/reject/revision;

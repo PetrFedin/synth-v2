@@ -19,11 +19,11 @@ test('PostgreSQL migration ledger serializes runners and rejects changed history
     '006_order_cancellation.sql','007_notification_projection_claims.sql','008_notification_pagination.sql',
     '009_outbox_publication_claims.sql','010_outbox_dead_letter_recovery.sql','011_global_command_registry.sql',
     '012_workspace_paging_indexes.sql','013_catalog_search_indexes.sql','014_material_master.sql',
-    '015_unify_catalog_outbox.sql','016_bom_costing.sql','017_measurement_charts.sql',
+    '015_unify_catalog_outbox.sql','016_bom_costing.sql','017_measurement_charts.sql','018_samples.sql',
   ];
   try {
     await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
-    const clock = () => '2026-07-31T12:00:00.000Z';
+    const clock = () => '2026-08-04T12:00:00.000Z';
     const results = await Promise.all([migratePostgres({ pool, migrationsDir, clock }), migratePostgres({ pool, migrationsDir, clock })]);
     const applied = results.flatMap((result) => result.applied).sort();
     const skipped = results.flatMap((result) => result.skipped).sort();
@@ -41,9 +41,11 @@ test('PostgreSQL migration ledger serializes runners and rejects changed history
               to_regclass('public.boms') AS boms,
               to_regclass('public.bom_lines') AS bom_lines,
               to_regclass('public.measurement_charts') AS measurement_charts,
+              to_regclass('public.measurement_chart_revisions') AS measurement_chart_revisions,
               to_regclass('public.measurement_chart_sizes') AS measurement_chart_sizes,
               to_regclass('public.measurement_points') AS measurement_points,
               to_regclass('public.measurement_values') AS measurement_values,
+              to_regclass('public.samples') AS samples,
               to_regclass('public.order_inventory_reservations') AS order_inventory_reservations,
               to_regclass('public.notification_projection_claims') AS notification_projection_claims,
               to_regclass('public.outbox_publication_claims') AS outbox_publication_claims,

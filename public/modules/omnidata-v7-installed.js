@@ -41,6 +41,12 @@
     '\u0422\u0430\u0431\u043b\u0438\u0446\u044b \u0438\u0437\u043c\u0435\u0440\u0435\u043d\u0438\u0439',
     'Measurement charts',
   );
+  if (window.SynthaSampleCore) activate(
+    'Samples',
+    'samples',
+    '\u041e\u0431\u0440\u0430\u0437\u0446\u044b',
+    'Samples',
+  );
   if (window.SynthaLinesheetsWorkspace) activate(
     'Linesheets',
     'linesheets',

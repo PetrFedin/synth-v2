@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { DomainError, invariant } from '../core/errors.mjs';
 import { assertBodyContract, assertQueryContract, bodyContract } from './request-contract.mjs';
-import { createWholesaleRoutes, matchWholesaleRoute } from './routes.mjs';
+import { createWholesaleRoutes, matchWholesaleRoute } from './all-routes.mjs';
 import { apiResponseHeaders, decodeJsonObject, queryParameters, requireIdempotencyKey, resolveRequestId, validateContentLength } from './transport-contract.mjs';
 import { wholesaleV2ExtendedOpenApi } from './v2-openapi.mjs';
 
@@ -91,10 +91,16 @@ export function normalizeHttpError(error) {
     'MEASUREMENT_ACTOR_INVALID', 'MEASUREMENT_PAGE_LIMIT_INVALID', 'MEASUREMENT_CURSOR_INVALID', 'MEASUREMENT_SEARCH_INVALID',
     'MEASUREMENT_STATUS_FILTER_INVALID', 'MEASUREMENT_UNIT_FILTER_INVALID', 'MEASUREMENT_BRAND_FILTER_INVALID', 'MEASUREMENT_SKU_INVALID',
     'MEASUREMENT_EXPECTED_VERSION_INVALID', 'MEASUREMENT_UPDATE_INVALID', 'MEASUREMENT_PUBLISH_INVALID',
+    'SAMPLE_ACTOR_INVALID', 'SAMPLE_PAGE_LIMIT_INVALID', 'SAMPLE_CURSOR_INVALID', 'SAMPLE_SEARCH_INVALID', 'SAMPLE_STATUS_FILTER_INVALID',
+    'SAMPLE_TYPE_FILTER_INVALID', 'SAMPLE_BRAND_FILTER_INVALID', 'SAMPLE_SKU_FILTER_INVALID', 'SAMPLE_OVERDUE_FILTER_INVALID',
+    'SAMPLE_CODE_INVALID', 'SAMPLE_EXPECTED_VERSION_INVALID', 'SAMPLE_INPUT_INVALID', 'SAMPLE_COMMAND_INVALID', 'SAMPLE_NEXT_ROUND_INVALID',
     'ORDER_EXPECTED_VERSION_INVALID', 'AUTH_EMAIL_INVALID', 'AUTH_PASSWORD_INVALID',
   ].includes(code)) status = 400;
   else if (code === 'HTTP_BODY_TOO_LARGE') status = 413;
-  else if (code.includes('CONFLICT') || code.includes('ALREADY_EXISTS') || ['MATERIAL_NOT_DRAFT', 'BOM_NOT_DRAFT', 'MEASUREMENT_NOT_DRAFT'].includes(code)) status = 409;
+  else if (code.includes('CONFLICT') || code.includes('ALREADY_EXISTS') || [
+    'MATERIAL_NOT_DRAFT', 'BOM_NOT_DRAFT', 'MEASUREMENT_NOT_DRAFT', 'SAMPLE_NOT_DRAFT', 'SAMPLE_NOT_REQUESTED',
+    'SAMPLE_NOT_RECEIVABLE', 'SAMPLE_NOT_RECEIVED', 'SAMPLE_NOT_CANCELLABLE', 'SAMPLE_NOT_REJECTED', 'SAMPLE_NEXT_ROUND_EXISTS',
+  ].includes(code)) status = 409;
   const retryAfterSeconds = code === 'AUTH_RATE_LIMITED' ? Math.max(1, Math.ceil(Number(error.details?.retryAfterSeconds) || 1)) : undefined;
   return { status, code, message: error.message, details: error.details ?? {}, retryAfterSeconds };
 }

@@ -48,6 +48,6 @@ test('published revision archive is written before optimistic current-state repl
   const save = store.indexOf('async saveMeasurement');
   assert.ok(archive >= 0 && archive < save);
   assert.match(store, /INSERT INTO measurement_chart_revisions[\s\S]*?VALUES \(\$1, \$2, \$3, \$4, \$5, \$6::jsonb, \$7::timestamptz, \$8::timestamptz\)/);
-  assert.match(store, /chart\.status === 'published'/);
+  assert.match(store, /chart\?\.status === 'published'/);
   assert.match(store, /MEASUREMENT_REVISION_ALREADY_ARCHIVED/);
 });

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createMeasurementChart, publishMeasurementChart, updateDraftMeasurementChart } from '../src/modules/measurements/public.mjs';
+import { createMeasurementChart, publishMeasurementChart, revisePublishedMeasurementChart, updateDraftMeasurementChart } from '../src/modules/measurements/public.mjs';
 
 const sku = Object.freeze({ sku: 'STYLE-100', brandId: 'brand-1', status: 'published', version: 7 });
 const completeInput = Object.freeze({
@@ -13,43 +13,21 @@ const completeInput = Object.freeze({
     Object.freeze({ code: 'L', label: 'Large' }),
   ]),
   points: Object.freeze([
-    Object.freeze({
-      pointCode: 'CHEST', name: 'Half chest', description: 'Measured 2 cm below armhole', toleranceMinus: 0.5, tolerancePlus: 0.75,
-      measurements: Object.freeze([
-        Object.freeze({ sizeCode: 'L', value: 54.25 }),
-        Object.freeze({ sizeCode: 'S', value: 48.25 }),
-        Object.freeze({ sizeCode: 'M', value: 51.25 }),
-      ]),
-    }),
-    Object.freeze({
-      pointCode: 'BODY-LEN', name: 'Body length', description: null, toleranceMinus: 0.3, tolerancePlus: 0.3,
-      measurements: Object.freeze([
-        Object.freeze({ sizeCode: 'S', value: 69.1 }),
-        Object.freeze({ sizeCode: 'M', value: 70.2 }),
-        Object.freeze({ sizeCode: 'L', value: 71.3 }),
-      ]),
-    }),
+    Object.freeze({ pointCode: 'CHEST', name: 'Half chest', description: 'Measured 2 cm below armhole', toleranceMinus: 0.5, tolerancePlus: 0.75, measurements: Object.freeze([Object.freeze({ sizeCode: 'L', value: 54.25 }), Object.freeze({ sizeCode: 'S', value: 48.25 }), Object.freeze({ sizeCode: 'M', value: 51.25 })]) }),
+    Object.freeze({ pointCode: 'BODY-LEN', name: 'Body length', description: null, toleranceMinus: 0.3, tolerancePlus: 0.3, measurements: Object.freeze([Object.freeze({ sizeCode: 'S', value: 69.1 }), Object.freeze({ sizeCode: 'M', value: 70.2 }), Object.freeze({ sizeCode: 'L', value: 71.3 })]) }),
   ]),
   notes: 'Approved measuring method',
 });
 
-function create(input = completeInput, catalogSku = sku) {
-  return createMeasurementChart({ id: 'measurement-1', catalogSku, input, createdAt: '2026-08-04T08:00:00.000Z' });
-}
+function create(input = completeInput, catalogSku = sku) { return createMeasurementChart({ id: 'measurement-1', catalogSku, input, createdAt: '2026-08-04T08:00:00.000Z' }); }
 
 test('creates an immutable ordered size matrix and derives exact adjacent grading deltas', () => {
   const chart = create();
   assert.equal(chart.status, 'draft');
   assert.equal(chart.version, 1);
   assert.equal(chart.skuVersion, 7);
-  assert.deepEqual(chart.sizes.map(({ code, position }) => ({ code, position })), [
-    { code: 'S', position: 1 }, { code: 'M', position: 2 }, { code: 'L', position: 3 },
-  ]);
-  assert.deepEqual(chart.points[0].measurements, [
-    { sizeCode: 'S', value: 48.25, deltaFromPrevious: null },
-    { sizeCode: 'M', value: 51.25, deltaFromPrevious: 3 },
-    { sizeCode: 'L', value: 54.25, deltaFromPrevious: 3 },
-  ]);
+  assert.deepEqual(chart.sizes.map(({ code, position }) => ({ code, position })), [{ code: 'S', position: 1 }, { code: 'M', position: 2 }, { code: 'L', position: 3 }]);
+  assert.deepEqual(chart.points[0].measurements, [{ sizeCode: 'S', value: 48.25, deltaFromPrevious: null }, { sizeCode: 'M', value: 51.25, deltaFromPrevious: 3 }, { sizeCode: 'L', value: 54.25, deltaFromPrevious: 3 }]);
   assert.equal(chart.points[0].baseValue, 51.25);
   assert.ok(Object.isFrozen(chart));
   assert.ok(Object.isFrozen(chart.points[0].measurements));
@@ -69,6 +47,21 @@ test('publishes only against the exact current published SKU snapshot', () => {
   assert.equal(published.status, 'published');
   assert.equal(published.version, 2);
   assert.throws(() => updateDraftMeasurementChart(published, { catalogSku: sku, input: completeInput, updatedAt: '2026-08-04T10:00:00.000Z' }), { code: 'MEASUREMENT_NOT_DRAFT' });
+});
+
+test('starts a new draft revision while preserving immutable identity and refreshing the SKU snapshot', () => {
+  const published = publishMeasurementChart(create(), { catalogSku: sku, publishedAt: '2026-08-04T09:00:00.000Z' });
+  const currentSku = { ...sku, version: 8 };
+  const revised = revisePublishedMeasurementChart(published, { catalogSku: currentSku, input: { ...completeInput, notes: 'Revision two' }, revisedAt: '2026-08-04T10:00:00.000Z' });
+  assert.equal(revised.id, published.id);
+  assert.equal(revised.sku, published.sku);
+  assert.equal(revised.brandId, published.brandId);
+  assert.equal(revised.status, 'draft');
+  assert.equal(revised.version, 3);
+  assert.equal(revised.skuVersion, 8);
+  assert.equal(revised.publishedAt, null);
+  assert.equal(revised.notes, 'Revision two');
+  assert.throws(() => revisePublishedMeasurementChart(create(), { catalogSku: sku, input: completeInput, revisedAt: '2026-08-04T10:00:00.000Z' }), { code: 'MEASUREMENT_NOT_PUBLISHED' });
 });
 
 test('editing a draft rebases the SKU snapshot and supports no-op replay', () => {

@@ -41,6 +41,20 @@ function view(client) {
         throw error;
       }
     },
+    async archiveMeasurementRevision(chart, archivedAt) {
+      invariant(chart?.status === 'published' && chart.publishedAt, 'MEASUREMENT_NOT_PUBLISHED', 'Only a published measurement chart can be archived');
+      try {
+        await client.query(
+          `INSERT INTO measurement_chart_revisions
+             (chart_id, revision_version, sku, brand_id, sku_version, payload, published_at, archived_at)
+           VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::timestamptz, $8::timestamptz)`,
+          [chart.id, chart.version, chart.sku, chart.brandId, chart.skuVersion, JSON.stringify(chart), chart.publishedAt, archivedAt],
+        );
+      } catch (error) {
+        if (error?.code === '23505') invariant(false, 'MEASUREMENT_REVISION_ALREADY_ARCHIVED', 'Published measurement chart revision is already archived', { sku: chart.sku, version: chart.version });
+        throw error;
+      }
+    },
     async saveMeasurement(chart, expectedVersion) {
       invariant(chart.version === expectedVersion + 1, 'VERSION_INCREMENT_INVALID', 'Version must increment exactly once');
       const result = await client.query(
@@ -74,12 +88,8 @@ function view(client) {
   });
 }
 
-function measurementInsertParameters(chart) {
-  return [chart.id, chart.sku, chart.brandId, chart.skuVersion, chart.status, chart.unit, chart.baseSizeCode, chart.version, JSON.stringify(chart), chart.createdAt, chart.updatedAt, chart.publishedAt];
-}
-function measurementUpdateParameters(chart, expectedVersion) {
-  return [chart.id, chart.sku, chart.brandId, chart.skuVersion, chart.status, chart.unit, chart.baseSizeCode, chart.version, JSON.stringify(chart), chart.updatedAt, chart.publishedAt, expectedVersion];
-}
+function measurementInsertParameters(chart) { return [chart.id, chart.sku, chart.brandId, chart.skuVersion, chart.status, chart.unit, chart.baseSizeCode, chart.version, JSON.stringify(chart), chart.createdAt, chart.updatedAt, chart.publishedAt]; }
+function measurementUpdateParameters(chart, expectedVersion) { return [chart.id, chart.sku, chart.brandId, chart.skuVersion, chart.status, chart.unit, chart.baseSizeCode, chart.version, JSON.stringify(chart), chart.updatedAt, chart.publishedAt, expectedVersion]; }
 
 async function insertMatrix(client, chart) {
   const sizes = chart.sizes.map((size) => ({ size_code: size.code, label: size.label, position: size.position }));

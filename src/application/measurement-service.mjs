@@ -6,6 +6,7 @@ import { CAPABILITIES, assertCapability } from '../modules/access-control/public
 import {
   createMeasurementChart,
   publishMeasurementChart,
+  revisePublishedMeasurementChart,
   updateDraftMeasurementChart,
 } from '../modules/measurements/public.mjs';
 
@@ -67,10 +68,7 @@ export function createMeasurementService({ measurementStore, clock = () => new D
         commandId,
         `createMeasurementChart:${actorId}:${canonicalJson(input)}`,
         actorId,
-        async (tx) => Object.freeze({
-          catalogSku: await authorisedSku(tx, input.sku, actorId),
-          existingChart: await tx.getMeasurementBySku(input.sku),
-        }),
+        async (tx) => Object.freeze({ catalogSku: await authorisedSku(tx, input.sku, actorId), existingChart: await tx.getMeasurementBySku(input.sku) }),
         async (tx, context) => {
           invariant(!context.existingChart, 'MEASUREMENT_ALREADY_EXISTS', 'Measurement chart already exists for SKU', { sku: context.catalogSku.sku });
           const chart = createMeasurementChart({ id: nextId('measurement'), catalogSku: context.catalogSku, input, createdAt: clock() });
@@ -96,7 +94,16 @@ export function createMeasurementService({ measurementStore, clock = () => new D
         }),
         async (tx, context) => {
           assertExpectedVersion(context.locked, expectedVersion);
-          const updated = updateDraftMeasurementChart(context.locked, { catalogSku: context.catalogSku, input: editable, updatedAt: clock() });
+          const changedAt = clock();
+          if (context.locked.status === 'published') {
+            invariant(typeof tx.archiveMeasurementRevision === 'function', 'MEASUREMENT_REVISION_STORE_REQUIRED', 'Measurement revision archive is required');
+            const revised = revisePublishedMeasurementChart(context.locked, { catalogSku: context.catalogSku, input: editable, revisedAt: changedAt });
+            await tx.archiveMeasurementRevision(context.locked, changedAt);
+            await tx.saveMeasurement(revised, expectedVersion);
+            await append(tx, 'measurement.revision-started', revised, commandId, actorId);
+            return revised;
+          }
+          const updated = updateDraftMeasurementChart(context.locked, { catalogSku: context.catalogSku, input: editable, updatedAt: changedAt });
           if (updated === context.locked) return context.locked;
           await tx.saveMeasurement(updated, expectedVersion);
           await append(tx, 'measurement.updated', updated, commandId, actorId);
@@ -148,15 +155,11 @@ function assertRequiredObject(value, required, code, index, details = {}) {
   const missingFields = required.filter((field) => !Object.hasOwn(value, field)).sort();
   invariant(missingFields.length === 0, code, 'Measurement request item is missing required fields', { ...details, index, missingFields });
 }
-function expectedVersionOf(input) {
-  return assertPostgresInteger(input.expectedVersion, { code: 'MEASUREMENT_EXPECTED_VERSION_INVALID', label: 'Expected measurement chart version', min: 1 });
-}
+function expectedVersionOf(input) { return assertPostgresInteger(input.expectedVersion, { code: 'MEASUREMENT_EXPECTED_VERSION_INVALID', label: 'Expected measurement chart version', min: 1 }); }
 function assertAllowedFields(input, allowed, code) {
   const forbidden = Object.keys(input).filter((field) => !allowed.has(field)).sort();
   invariant(forbidden.length === 0, code, 'Measurement chart request contains a forbidden field', { fields: forbidden });
 }
-function assertExpectedVersion(chart, expectedVersion) {
-  invariant(chart.version === expectedVersion, 'MEASUREMENT_CONCURRENCY_CONFLICT', 'Measurement chart was changed by another operation', { sku: chart.sku, expectedVersion, actualVersion: chart.version });
-}
+function assertExpectedVersion(chart, expectedVersion) { invariant(chart.version === expectedVersion, 'MEASUREMENT_CONCURRENCY_CONFLICT', 'Measurement chart was changed by another operation', { sku: chart.sku, expectedVersion, actualVersion: chart.version }); }
 function requireEntity(entity, code, details) { invariant(entity, code, 'Entity not found', details); return entity; }
 function defaultIdGenerator() { let sequence = 0; return (prefix) => `${prefix}_${++sequence}`; }

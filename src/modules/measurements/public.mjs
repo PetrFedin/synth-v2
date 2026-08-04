@@ -37,6 +37,21 @@ export function updateDraftMeasurementChart(chart, { catalogSku, input, updatedA
   return freezeChart({ ...next, version: chart.version + 1, updatedAt });
 }
 
+export function revisePublishedMeasurementChart(chart, { catalogSku, input, revisedAt }) {
+  invariant(chart?.status === 'published', 'MEASUREMENT_NOT_PUBLISHED', 'Only a published measurement chart can start a revision');
+  invariant(catalogSku?.sku === chart.sku, 'MEASUREMENT_SKU_MISMATCH', 'Measurement chart SKU cannot be changed');
+  const normalized = normalizeChartInput({ catalogSku, input: { ...input, sku: chart.sku } });
+  invariant(normalized.brandId === chart.brandId, 'MEASUREMENT_BRAND_MISMATCH', 'Measurement chart brand cannot be changed');
+  return freezeChart({
+    ...chart,
+    ...normalized,
+    status: 'draft',
+    version: chart.version + 1,
+    publishedAt: null,
+    updatedAt: revisedAt,
+  });
+}
+
 export function publishMeasurementChart(chart, { catalogSku, publishedAt }) {
   invariant(chart?.status === 'draft', 'MEASUREMENT_NOT_DRAFT', 'Only a draft measurement chart can be published');
   invariant(catalogSku?.sku === chart.sku && catalogSku.brandId === chart.brandId, 'MEASUREMENT_SKU_MISMATCH', 'Measurement chart SKU context is invalid');
@@ -89,11 +104,7 @@ function normalizeSize(size, position, sizeCodes) {
   const sizeCode = code(size.code, SIZE_CODE_PATTERN, 'MEASUREMENT_SIZE_CODE_INVALID', 'Measurement size code');
   invariant(!sizeCodes.has(sizeCode), 'MEASUREMENT_SIZE_CODE_DUPLICATE', 'Measurement size code must be unique', { sizeCode });
   sizeCodes.add(sizeCode);
-  return Object.freeze({
-    code: sizeCode,
-    label: requiredText(size.label, 1, 40, 'MEASUREMENT_SIZE_LABEL_INVALID', 'Measurement size label'),
-    position,
-  });
+  return Object.freeze({ code: sizeCode, label: requiredText(size.label, 1, 40, 'MEASUREMENT_SIZE_LABEL_INVALID', 'Measurement size label'), position });
 }
 
 function normalizePoint({ point, position, sizes, sizeCodes, baseSizeCode, pointCodes }) {
@@ -121,11 +132,7 @@ function normalizePoint({ point, position, sizes, sizeCodes, baseSizeCode, point
     const value = measurementBySize.get(sizeCode);
     const previousSizeCode = sizes[index - 1]?.code;
     const previousValue = previousSizeCode && measurementBySize.has(previousSizeCode) ? measurementBySize.get(previousSizeCode) : null;
-    measurements.push(Object.freeze({
-      sizeCode,
-      value,
-      deltaFromPrevious: previousValue === null ? null : subtractDecimals(value, previousValue),
-    }));
+    measurements.push(Object.freeze({ sizeCode, value, deltaFromPrevious: previousValue === null ? null : subtractDecimals(value, previousValue) }));
   }
   return Object.freeze({
     pointCode,
@@ -139,9 +146,7 @@ function normalizePoint({ point, position, sizes, sizeCodes, baseSizeCode, point
   });
 }
 
-function positiveDecimal(value, errorCode, label) {
-  return decimal(value, { errorCode, label, allowZero: false, allowNegative: false });
-}
+function positiveDecimal(value, errorCode, label) { return decimal(value, { errorCode, label, allowZero: false, allowNegative: false }); }
 function nonNegativeDecimal(value, errorCode, label) {
   const normalized = value === undefined || value === null || value === '' ? 0 : value;
   return decimal(normalized, { errorCode, label, allowZero: true, allowNegative: false });
@@ -161,10 +166,7 @@ function subtractDecimals(left, right) {
   invariant(Number.isSafeInteger(result), 'MEASUREMENT_DELTA_TOO_LARGE', 'Measurement grading delta exceeds the safe fixed-point range');
   return result / SCALE;
 }
-function code(value, pattern, errorCode, label) {
-  invariant(typeof value === 'string' && pattern.test(value), errorCode, `${label} is invalid`);
-  return value;
-}
+function code(value, pattern, errorCode, label) { invariant(typeof value === 'string' && pattern.test(value), errorCode, `${label} is invalid`); return value; }
 function requiredText(value, minimum, maximum, errorCode, label) {
   invariant(typeof value === 'string', errorCode, `${label} is required`);
   const normalized = value.trim().replace(/\s+/g, ' ');
@@ -172,22 +174,14 @@ function requiredText(value, minimum, maximum, errorCode, label) {
   invariant(!/[\u0000-\u001f\u007f]/.test(normalized), errorCode, `${label} contains control characters`);
   return normalized;
 }
-function optionalText(value, maximum, errorCode, label) {
-  if (value === undefined || value === null || value === '') return null;
-  return requiredText(value, 1, maximum, errorCode, label);
-}
+function optionalText(value, maximum, errorCode, label) { if (value === undefined || value === null || value === '') return null; return requiredText(value, 1, maximum, errorCode, label); }
 function assertAllowedFields(value, allowed, errorCode, message, details = {}) {
   const forbidden = Object.keys(value).filter((field) => !allowed.has(field)).sort();
   invariant(forbidden.length === 0, errorCode, message, { ...details, fields: forbidden });
 }
-function editableProjection(value) {
-  return JSON.stringify({ skuVersion: value.skuVersion, unit: value.unit, baseSizeCode: value.baseSizeCode, sizes: value.sizes, points: value.points, notes: value.notes });
-}
+function editableProjection(value) { return JSON.stringify({ skuVersion: value.skuVersion, unit: value.unit, baseSizeCode: value.baseSizeCode, sizes: value.sizes, points: value.points, notes: value.notes }); }
 function freezeChart(value) {
   const sizes = Object.freeze((value.sizes || []).map((size) => Object.freeze({ ...size })));
-  const points = Object.freeze((value.points || []).map((point) => Object.freeze({
-    ...point,
-    measurements: Object.freeze((point.measurements || []).map((measurement) => Object.freeze({ ...measurement }))),
-  })));
+  const points = Object.freeze((value.points || []).map((point) => Object.freeze({ ...point, measurements: Object.freeze((point.measurements || []).map((measurement) => Object.freeze({ ...measurement }))) })));
   return Object.freeze({ ...value, sizes, points });
 }

@@ -23,6 +23,21 @@ CREATE TABLE IF NOT EXISTS measurement_charts (
   )
 );
 
+CREATE TABLE IF NOT EXISTS measurement_chart_revisions (
+  chart_id text NOT NULL REFERENCES measurement_charts(id),
+  revision_version integer NOT NULL CHECK (revision_version > 0),
+  sku text NOT NULL,
+  brand_id text NOT NULL REFERENCES organisations(id),
+  sku_version integer NOT NULL CHECK (sku_version > 0),
+  payload jsonb NOT NULL,
+  published_at timestamptz NOT NULL,
+  archived_at timestamptz NOT NULL,
+  PRIMARY KEY (chart_id, revision_version),
+  UNIQUE (sku, revision_version),
+  CONSTRAINT measurement_chart_revisions_published_payload_check CHECK (payload ->> 'status' = 'published'),
+  CONSTRAINT measurement_chart_revisions_time_order_check CHECK (archived_at >= published_at)
+);
+
 CREATE TABLE IF NOT EXISTS measurement_chart_sizes (
   chart_id text NOT NULL REFERENCES measurement_charts(id) ON DELETE CASCADE,
   size_code text NOT NULL,
@@ -59,6 +74,8 @@ CREATE TABLE IF NOT EXISTS measurement_values (
 
 CREATE INDEX IF NOT EXISTS measurement_charts_brand_status_sku_idx
   ON measurement_charts (brand_id, status, sku);
+CREATE INDEX IF NOT EXISTS measurement_chart_revisions_sku_version_idx
+  ON measurement_chart_revisions (sku, revision_version DESC);
 CREATE INDEX IF NOT EXISTS measurement_values_size_idx
   ON measurement_values (chart_id, size_code, point_code);
 

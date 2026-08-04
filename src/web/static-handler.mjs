@@ -25,6 +25,8 @@ const ASSETS = Object.freeze({
   '/omnidata-v7-bom.css': ['omnidata-v7-bom.css', 'text/css; charset=utf-8', VISUAL_CACHE],
   '/industrial-product.css': ['industrial-product.css', 'text/css; charset=utf-8', VISUAL_CACHE],
   '/bom.css': ['bom.css', 'text/css; charset=utf-8', VISUAL_CACHE],
+  '/measurements.css': ['measurements.css', 'text/css; charset=utf-8', VISUAL_CACHE],
+  '/measurement-sync.css': ['measurement-sync.css', 'text/css; charset=utf-8', VISUAL_CACHE],
   '/ui/i18n-runtime.js': ['modules/i18n-runtime.js', JS, CACHE],
   '/ui/i18n-v7.js': ['modules/i18n-v7.js', JS, VISUAL_CACHE],
   '/ui/ui-capabilities.js': ['modules/ui-capabilities.js', JS, CACHE],
@@ -54,6 +56,7 @@ const ASSETS = Object.freeze({
   '/ui/styles-core.js': ['modules/styles-core.js', JS, VISUAL_CACHE],
   '/ui/materials-core.js': ['modules/materials-core.js', JS, VISUAL_CACHE],
   '/ui/bom-core.js': ['modules/bom-core.js', JS, VISUAL_CACHE],
+  '/ui/measurement-core.js': ['modules/measurement-core.js', JS, VISUAL_CACHE],
   '/ui/omnidata-workspace.js': ['modules/omnidata-workspace.js', JS, VISUAL_CACHE],
   '/ui/order-lifecycle-actions.js': ['modules/order-lifecycle-actions.js', JS, CACHE],
   '/ui/omnidata-polish.js': ['modules/omnidata-polish.js', JS, VISUAL_CACHE],
@@ -68,6 +71,9 @@ const ASSETS = Object.freeze({
   '/ui/styles.js': ['modules/styles.js', JS, VISUAL_CACHE],
   '/ui/materials.js': ['modules/materials.js', JS, VISUAL_CACHE],
   '/ui/bom.js': ['modules/bom.js', JS, VISUAL_CACHE],
+  '/ui/measurements.js': ['modules/measurements.js', JS, VISUAL_CACHE],
+  '/ui/measurement-revision-actions.js': ['modules/measurement-revision-actions.js', JS, VISUAL_CACHE],
+  '/ui/measurement-catalog-sync.js': ['modules/measurement-catalog-sync.js', JS, VISUAL_CACHE],
   '/ui/app-start.js': ['modules/app-start.js', JS, CACHE],
 });
 
@@ -78,20 +84,15 @@ export function createStandaloneHandler({ apiHandler, publicDir = DEFAULT_PUBLIC
     const asset = ASSETS[url.pathname];
     if (!asset) return apiHandler(request, response);
     if (!['GET', 'HEAD'].includes(request.method ?? 'GET')) return methodNotAllowed(response);
-
     try {
       const [filename, contentType, cacheControl] = asset;
       const body = await readFile(path.join(publicDir, filename));
       const etag = strongEtag(body);
       applyStaticHeaders(response, { contentType, cacheControl, etag });
-      if (etagMatches(request.headers['if-none-match'], etag)) {
-        response.statusCode = 304;
-        return response.end();
-      }
+      if (etagMatches(request.headers['if-none-match'], etag)) { response.statusCode = 304; return response.end(); }
       response.statusCode = 200;
       response.setHeader('content-length', body.length);
-      if (request.method === 'HEAD') response.end();
-      else response.end(body);
+      if (request.method === 'HEAD') response.end(); else response.end(body);
     } catch {
       applyStaticHeaders(response, { contentType: 'application/json; charset=utf-8', cacheControl: 'no-store' });
       const body = JSON.stringify({ error: { code: 'STATIC_ASSET_UNAVAILABLE', message: 'Web workspace asset is unavailable' } });
@@ -101,7 +102,6 @@ export function createStandaloneHandler({ apiHandler, publicDir = DEFAULT_PUBLIC
     }
   };
 }
-
 function methodNotAllowed(response) {
   const body = JSON.stringify({ error: { code: 'HTTP_METHOD_NOT_ALLOWED', message: 'Only GET and HEAD are allowed for static assets' } });
   applyStaticHeaders(response, { contentType: 'application/json; charset=utf-8', cacheControl: 'no-store' });
@@ -110,20 +110,12 @@ function methodNotAllowed(response) {
   response.setHeader('content-length', Buffer.byteLength(body));
   response.end(body);
 }
-
-function strongEtag(body) {
-  return `"${createHash('sha256').update(body).digest('base64url')}"`;
-}
-
+function strongEtag(body) { return `"${createHash('sha256').update(body).digest('base64url')}"`; }
 function etagMatches(value, etag) {
   const header = Array.isArray(value) ? value.join(',') : value;
   if (!header) return false;
-  return header.split(',').some((candidate) => {
-    const normalized = candidate.trim();
-    return normalized === '*' || normalized === etag || normalized === `W/${etag}`;
-  });
+  return header.split(',').some((candidate) => { const normalized = candidate.trim(); return normalized === '*' || normalized === etag || normalized === `W/${etag}`; });
 }
-
 function applyStaticHeaders(response, { contentType, cacheControl, etag } = {}) {
   if (contentType) response.setHeader('content-type', contentType);
   response.setHeader('cache-control', cacheControl ?? 'no-store');

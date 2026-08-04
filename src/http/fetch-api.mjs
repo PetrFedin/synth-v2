@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { invariant } from '../core/errors.mjs';
 import { normalizeHttpError } from './api.mjs';
-import { wholesaleV2OpenApi } from './openapi.mjs';
 import { assertBodyContract, assertQueryContract, bodyContract } from './request-contract.mjs';
 import { createWholesaleRoutes, matchWholesaleRoute } from './routes.mjs';
 import {
@@ -12,6 +11,7 @@ import {
   resolveRequestId,
   validateContentLength,
 } from './transport-contract.mjs';
+import { wholesaleV2ExtendedOpenApi } from './v2-openapi.mjs';
 
 const EMPTY_BODY = bodyContract();
 const LOGIN_BODY = bodyContract(['email', 'password']);
@@ -36,7 +36,7 @@ export function createWholesaleFetchHandler({ authenticate, auth, readiness, max
       }
       if (request.method === 'GET' && url.pathname === '/openapi.json') {
         assertEmptyQuery(url);
-        return json(200, wholesaleV2OpenApi, requestId);
+        return json(200, wholesaleV2ExtendedOpenApi, requestId);
       }
       if (request.method === 'POST' && url.pathname === '/v2/auth/login') {
         assertEmptyQuery(url);

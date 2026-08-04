@@ -63,6 +63,7 @@ assertRequiredOrder(sources, [
   '/ui/omnidata-v7-language-audit.js',
   '/ui/omnidata-v8.js',
   '/ui/omnidata-v9.js',
+  '/ui/omnidata-v10.js',
   '/ui/dom-boolean-props.js',
   '/ui/app-start.js',
 ]);
@@ -82,8 +83,8 @@ for (const retired of ['/ui/omnidata-v4.js', '/ui/omnidata-v6.js']) {
   if (sources.includes(retired)) fail(`Retired visual layer must not be loaded: ${retired}`);
 }
 
-if (!stylesheets.includes('/omnidata-v8.css') || stylesheets.at(-1) !== '/omnidata-v9.css') {
-  fail('Omnidata V9 must be loaded as the final visual system.');
+if (!stylesheets.includes('/omnidata-v9.css') || stylesheets.at(-1) !== '/omnidata-v10.css') {
+  fail('Omnidata V10 must be loaded as the final visual system.');
 }
 
 console.log(`Standalone UI contract OK (${sources.length} scripts, ${stylesheets.length} stylesheets checked).`);

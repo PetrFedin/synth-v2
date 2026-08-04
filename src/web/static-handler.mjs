@@ -27,6 +27,7 @@ const ASSETS = Object.freeze({
   '/bom.css': ['bom.css', 'text/css; charset=utf-8', VISUAL_CACHE],
   '/measurements.css': ['measurements.css', 'text/css; charset=utf-8', VISUAL_CACHE],
   '/measurement-sync.css': ['measurement-sync.css', 'text/css; charset=utf-8', VISUAL_CACHE],
+  '/samples.css': ['samples.css', 'text/css; charset=utf-8', VISUAL_CACHE],
   '/ui/i18n-runtime.js': ['modules/i18n-runtime.js', JS, CACHE],
   '/ui/i18n-v7.js': ['modules/i18n-v7.js', JS, VISUAL_CACHE],
   '/ui/ui-capabilities.js': ['modules/ui-capabilities.js', JS, CACHE],
@@ -57,6 +58,7 @@ const ASSETS = Object.freeze({
   '/ui/materials-core.js': ['modules/materials-core.js', JS, VISUAL_CACHE],
   '/ui/bom-core.js': ['modules/bom-core.js', JS, VISUAL_CACHE],
   '/ui/measurement-core.js': ['modules/measurement-core.js', JS, VISUAL_CACHE],
+  '/ui/sample-core.js': ['modules/sample-core.js', JS, VISUAL_CACHE],
   '/ui/omnidata-workspace.js': ['modules/omnidata-workspace.js', JS, VISUAL_CACHE],
   '/ui/order-lifecycle-actions.js': ['modules/order-lifecycle-actions.js', JS, CACHE],
   '/ui/omnidata-polish.js': ['modules/omnidata-polish.js', JS, VISUAL_CACHE],
@@ -74,6 +76,8 @@ const ASSETS = Object.freeze({
   '/ui/measurements.js': ['modules/measurements.js', JS, VISUAL_CACHE],
   '/ui/measurement-revision-actions.js': ['modules/measurement-revision-actions.js', JS, VISUAL_CACHE],
   '/ui/measurement-catalog-sync.js': ['modules/measurement-catalog-sync.js', JS, VISUAL_CACHE],
+  '/ui/samples.js': ['modules/samples.js', JS, VISUAL_CACHE],
+  '/ui/sample-catalog-sync.js': ['modules/sample-catalog-sync.js', JS, VISUAL_CACHE],
   '/ui/app-start.js': ['modules/app-start.js', JS, CACHE],
 });
 
@@ -102,6 +106,7 @@ export function createStandaloneHandler({ apiHandler, publicDir = DEFAULT_PUBLIC
     }
   };
 }
+
 function methodNotAllowed(response) {
   const body = JSON.stringify({ error: { code: 'HTTP_METHOD_NOT_ALLOWED', message: 'Only GET and HEAD are allowed for static assets' } });
   applyStaticHeaders(response, { contentType: 'application/json; charset=utf-8', cacheControl: 'no-store' });

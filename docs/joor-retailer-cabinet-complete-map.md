@@ -44,7 +44,19 @@
 
 ## 2. Общая архитектура кабинета
 
-### 2.1 Product shell
+### 2.1 Граница исследования и уровни достоверности
+
+Карта разделяет три типа сведений:
+
+| Маркер | Значение |
+|---|---|
+| OBSERVED | Элемент или состояние непосредственно открыто в текущем Retailer LITE cabinet |
+| GATED | Элемент виден, но закрыт тарифом, ролью, connection, eligibility или настройкой бренда |
+| INFERRED / TARGET | Требование к улучшенной копии, выведенное из наблюдаемого результата, но не подтверждённое исходным brand-admin UI |
+
+В текущей сессии доступны только retailer accounts: один active/primary и тринадцать связанных аккаунтов. Brand-role среди переключаемых организаций нет. Поэтому buyer-side storefront, публичная карточка бренда, linesheets, товары и заказы подтверждены непосредственно, а экран создания этих материалов со стороны бренда описан как INFERRED / TARGET. Закрытые части нельзя выдавать за точную копию текущего интерфейса JOOR.
+
+### 2.2 Product shell
 
 Постоянная верхняя панель содержит:
 
@@ -54,17 +66,17 @@
 | JOOR logo | Product identity | Переход на Dashboard |
 | Shop | Buying entry | Dropdown: Linesheets, Looks, Styleboards |
 | Orders & Visual Assortment | Order operations | Dropdown: Orders, Visual Assortment |
-| Explore Brands | Network/discovery | Dropdown: connections, submissions, requests, favorites, discovery, Passport |
-| Notification badge | Количество событий в Explore Brands | Открывает соответствующий dropdown |
+| Explore Brands | Network/discovery | Connections, submissions, requests, favorites, discovery, Passport |
+| Notification badge | Количество сетевых событий | Открывает Explore Brands |
 | Get Shopify App | Интеграционный upsell | EXTERNAL: Shopify App Store |
-| Active account | Текущая организация и account ID | Account menu и переключение организации |
-| Messages badge | Число непрочитанных/входящих | Inbox |
-| Cart icon | Текущий cart/draft order | Cart |
-| Help | SSO в Help Center | EXTERNAL/SSO |
+| Active account | Организация и account ID | Account menu, settings и переключение account context |
+| Messages badge | Непрочитанные/входящие | Inbox |
+| Cart | Активные brand-specific drafts | Cart Orders |
+| Help | Help Center/SSO | EXTERNAL |
 | Logout | Завершение сессии | MUTATION: session termination |
-| Support chat | Floating launcher | Открывает support messenger |
+| Support chat | Floating launcher | Support messenger |
 
-### 2.2 Предлагаемая единая IA для Syntha V2
+### 2.3 Единая IA улучшенной версии
 
 ~~~text
 Dashboard
@@ -78,6 +90,7 @@ Dashboard
 │   ├── Sent / Pending
 │   └── Connected Brands
 ├── Buying
+│   ├── Brand Showrooms
 │   ├── Linesheets
 │   ├── Product Catalog
 │   ├── Cart / Draft Orders
@@ -86,59 +99,56 @@ Dashboard
 │   ├── Styleboards
 │   └── Visual Assortment
 ├── Inbox
-│   ├── Inbox
-│   ├── Invitations
-│   ├── Sent
-│   └── Trash
 ├── Integrations
-│   ├── Shopify
-│   └── Activity Center
 └── Account
     ├── User Settings
     ├── Company Profile
     ├── Locations & People
+    ├── Visibility
     ├── Subscription
     └── Account Switcher
 ~~~
 
-### 2.3 Роли
+В brand-role тот же shell должен переключаться на Seller workspace: Brand Profile, Showroom Builder, Catalog/Linesheets, Connections, Order Inbox, Commercial Settings, Documents, Analytics и Team/Permissions. Role navigation и activeAccountId обязаны рассчитываться сервером.
+
+### 2.4 Роли и ответственность
 
 #### Retailer / Buyer — OBSERVED
 
-- управляет retailer company profile;
-- ищет бренды;
-- принимает и отправляет connection requests;
-- получает submissions;
-- просматривает storefront и linesheets;
-- создаёт и ведёт orders;
-- получает Looks и создаёт Styleboards;
-- работает с messages;
-- подключает integrations;
-- может состоять в нескольких accounts.
+- ведёт company profile, people и locations;
+- управляет обнаружимостью каждого связанного retailer account;
+- ищет, фильтрует, сохраняет и подключает бренды;
+- получает submissions, requests, Looks и документы;
+- просматривает profile/storefront/showroom и linesheets;
+- выбирает style → colorway → size/SKU → quantity;
+- создаёт Notes/Draft, редактирует разрешённые блоки, отправляет на approval;
+- работает с orders, messages, import/export, integration и premium tools;
+- переключается между несколькими account contexts.
 
-#### Brand / Seller — INFERRED
+#### Brand / Seller — INFERRED / TARGET
 
-- ведёт storefront;
-- публикует linesheets/styles/documents;
-- управляет team contacts;
-- отправляет requests/submissions/messages;
-- получает и обрабатывает orders;
-- создаёт Looks;
-- участвует в Passport events.
+- ведёт brand identity, profile, team и commercial contacts;
+- собирает и публикует versioned showroom;
+- публикует linesheets, styles, colorways, SKUs, цены и delivery windows;
+- назначает audience, connection, territory, retailer group и product-level access;
+- предоставляет billing codes, payment/shipping methods и Terms & Conditions;
+- принимает connection requests и обрабатывает orders;
+- создаёт Looks, documents и submissions;
+- анализирует showroom → product → draft → order conversion.
 
-#### Organization administrator — OBSERVED/INFERRED
+#### Account administrator — OBSERVED / INFERRED
 
-- управляет membership пользователя;
-- определяет Primary Account;
-- переключает пользователя между несколькими accounts;
-- управляет profile/privacy/connection permissions;
-- контролирует integrations и subscription.
+- управляет memberships и display consent;
+- определяет primary account;
+- управляет profile, privacy и discoverability;
+- контролирует integrations, subscriptions и permissions;
+- обязан предотвращать перенос данных между account contexts.
 
 #### Premium user — GATED
 
-- получает Visual Assortment;
-- entitlement ограничивает users, doors, products и retention.
----
+- получает Visual Assortment и дополнительные лимиты;
+- entitlement может ограничивать users, doors, products, features и retention.
+
 ## 3. Полная карта маршрутов
 
 | Область | Route | Экран | Статус |
@@ -747,130 +757,267 @@ Event data:
 - sponsor/partner assets;
 - result ordering.
 ---
-## 10. Brand Storefront
+## 10. Кабинет бренда, Storefront, Showroom и презентация
 
-### 10.1 Read mode
+### 10.1 Назначение и граница
 
-Possible content:
+Этот раздел описывает единый домен представления бренда:
 
-- brand logo;
-- hero;
-- page title;
-- overlay title;
-- brand name;
-- Shop;
-- favorite heart;
-- message icon;
-- description;
-- year established;
-- categories;
-- wholesale price range;
-- retail price range;
-- website;
-- Instagram/social;
-- Meet the Team;
-- team card name/role/email;
-- documents;
-- View Document;
-- custom brand pages/sections.
+1. Brand Profile — структурированная карточка компании.
+2. Storefront — постоянная брендовая витрина и вход в покупки.
+3. Showroom / Presentation — редакционная история бренда из секций, товаров, коллекций, media и документов.
+4. Seller workspace — INFERRED / TARGET, необходимый для создания наблюдаемого buyer-side результата.
 
-### 10.2 Actions
+Поля заказа, товарная матрица и approval здесь не дублируются: они описаны в разделах 13–16.
 
-| Action | Result |
-|---|---|
-| Shop | Open/start brand order context |
-| Favorite | Save brand |
-| Message | Compose to brand |
-| Website/social | External page |
-| Team contact | Contact context |
-| View Document | Open/download brand document |
-| Connect | Create connection request if disconnected |
-| View Orders | Orders filtered by brand |
+### 10.2 Buyer-side состояния доступа
 
-### 10.3 Publishing validation
+| Состояние | Что видит retailer | Что недоступно |
+|---|---|---|
+| Public / disconnected | logo, teaser, описание, категории, social, часть media/products/documents, Connect/Accept | полные linesheets, ordering, sales rep и закрытые товары |
+| Incoming request | профиль бренда и Accept/Connect CTA | покупка до принятия, если connection required |
+| Pending outbound | профиль и состояние запроса | закрытые торговые данные |
+| Connected | storefront, team, разрешённые linesheets, price types, Shop, Message, View Orders | материалы вне audience |
+| Connected but audience-restricted | общая витрина и разрешённые блоки | конкретный product/collection/document |
+| Access revoked/expired | исторические заказы и snapshots | новые выборки из отозванного linesheet |
+| Archived/unpublished | fallback/ограничение или отсутствие presentation | новые просмотры и вход в покупку согласно политике |
 
-Не разрешать publish storefront, если:
+Connection — необходимое, но не всегда достаточное условие. Effective access может дополнительно зависеть от retailer account, location/door, territory, retailer group, price type, season, collection, product, document, даты публикации и entitlement.
 
-- title Untitled Page;
-- overlay placeholder;
-- missing hero without intentional fallback;
-- invalid price range;
-- minimum greater than maximum;
-- currency missing;
-- broken social/website URL;
-- missing accessibility alt;
-- document unavailable;
-- contact email malformed.
+### 10.3 Структура публичной карточки бренда
 
-### 10.4 Storefront → Catalog context
+Маршрут вида /Accounts/view/{brandId} совмещает профиль и preview витрины.
 
-Требуемый порядок:
-
-1. user clicks Shop;
-2. system resolves brand;
-3. checks CONNECTED/access;
-4. retrieves available price types;
-5. if one price type — preselect;
-6. if several — ask user;
-7. creates/resumes draft order;
-8. loads catalog scoped to brand;
-9. preserves context in URL/session;
-10. displays current order in sticky header.
----
-### 10.5 Публичная карточка бренда до подключения
-
-Маршрут /Accounts/view/{brandId} объединяет brand profile и storefront preview.
-
-#### 10.5.1 Верхний блок
+Верхний контейнер:
 
 - Brand Profile Logo;
-- переход на брендовый storefront;
-- Connect или Accept в зависимости от направления приглашения;
-- объяснение ограничения доступа до соединения.
+- brand name;
+- переход в storefront;
+- Connect или Accept;
+- favorite при доступности;
+- пояснение ограничения до connection;
+- status/CTA, зависящие от направления запроса.
 
-До принятия связи недоступны:
-
-- полные linesheets;
-- создание заказа;
-- информация sales rep.
-
-#### 10.5.2 Контент профиля
-
-Могут отображаться:
+Информационные контейнеры:
 
 - embedded video;
-- название;
-- Year established;
+- Year Established;
 - Categories;
-- website;
+- Website;
 - Facebook;
-- Instagram;
-- описание;
+- Instagram и другие social links;
+- long description / brand story;
+- wholesale и retail price range, если опубликованы;
+- market/category positioning.
+
+Коммерческие teaser-контейнеры:
+
 - product cards;
-- color swatches;
-- collection cards;
-- gallery/press elements;
-- документы lookbook/price list.
+- product image, name/code и color swatches;
+- collection/linesheet cards;
+- gallery, campaign или press tiles;
+- документы lookbook, price list и presentation PDF;
+- restricted-state message для выбранных retailers.
 
-Документы могут быть прямыми PDF на CDN, организованными по account/brand и коллекции. Нужны:
+### 10.4 Структура connected Storefront
 
-- document title;
-- type;
+Постоянная витрина может содержать:
+
+1. logo/hero;
+2. page title и overlay title;
+3. brand name;
+4. Shop;
+5. favorite;
+6. Message;
+7. View Orders;
+8. description;
+9. year established;
+10. categories;
+11. wholesale/retail price range и currency;
+12. website/social links;
+13. Meet the Team;
+14. team card: photo, name, role, e-mail и contact action;
+15. custom editorial sections;
+16. documents с View Document;
+17. product/collection modules;
+18. access/error/empty states.
+
+Shop должен сохранять brand context. Наблюдался пограничный дефект: переход в общий Start an Order способен потерять предвыбранный brand. В улучшенной версии brandId, accountId, connectionId и допустимые priceTypeIds передаются как подписанный server-resolved context, а не как ненадёжная локальная память UI.
+
+### 10.5 Showroom / Presentation: контейнерная модель
+
+Для улучшенной копии презентация должна быть page composition, а не одним rich-text полем.
+
+| Тип секции | Наполнение | Действия retailer | События аналитики |
+|---|---|---|---|
+| Hero | desktop/mobile media, title, subtitle, overlay, CTA | открыть CTA | impression, CTA click |
+| Video | poster, provider/file, caption, duration | play/pause/complete | play, progress, complete |
+| Rich text | heading, body, quote, links | открыть link | view, link click |
+| Image/gallery | media, alt, caption, order | zoom/carousel | view, zoom, slide |
+| Product grid | selected styles/colorways, badges, prices | open style, select, add | product view/select |
+| Collection/linesheet | cover, season, delivery, description | open linesheet | linesheet open |
+| Look/hotspot | composite media и product anchors | open hotspot/style | hotspot click |
+| Document | title, type, season, version, file | view/download | document view/download |
+| Team/contact | person, role, market, email | message/contact | contact intent |
+| CTA | label, target, access rule | Shop/Connect/Message | conversion click |
+| Spacer/divider | layout metadata | — | — |
+
+Общие поля каждой секции: sectionId, pageId, type, title, internal label, order, visibility, audience, publish dates, locale, device behavior, background/theme, analytics key, created/updated/published metadata.
+
+### 10.6 Навигация презентации
+
+Presentation может состоять из нескольких страниц/глав. Нужны:
+
+- page registry и navigation order;
+- cover/thumbnail;
+- page title и optional overlay;
+- next/previous;
+- anchor navigation;
+- responsive desktop/tablet/mobile;
+- deep link на страницу/секцию;
+- fallback для удалённого товара или документа;
+- сохранение scroll/page state при возврате из Style;
+- access check при каждом deep link, а не только на landing page.
+
+### 10.7 Документы бренда
+
+Document record должен включать:
+
+- title и internal name;
+- document type;
 - season/year;
-- audience;
 - locale;
 - currency/price type;
-- uploaded_by;
-- uploaded_at;
-- version;
-- file size;
-- checksum;
-- CDN/storage key;
-- access policy;
+- retailer audience;
+- connection/territory/group restrictions;
+- version и replaced_by;
+- original filename, MIME, size, checksum;
+- storage/CDN key;
+- uploaded_by/at;
+- publish_from/to;
+- revoked/expired state;
+- preview availability;
 - view/download audit;
-- expiry/revocation.
+- retention and signed-link policy.
 
-Карточка способна показывать teaser продукта, но блокировать полный доступ сообщением «только для выбранных ритейлеров». Следовательно, доступ может зависеть не только от connection, но и от product-level или collection-level audience.
+Исторический заказ может ссылаться на versioned document/terms snapshot, даже если текущий storefront-файл заменён.
+
+### 10.8 Seller workspace — INFERRED / TARGET
+
+Чтобы породить наблюдаемый buyer-side опыт, brand cabinet должен иметь следующие рабочие зоны.
+
+#### Brand Profile editor
+
+- legal/display name;
+- logo и brand imagery;
+- description/story;
+- year established;
+- categories;
+- market/price positioning;
+- website/social;
+- team members и contact routing;
+- preview as public/disconnected/connected retailer.
+
+#### Showroom Builder
+
+- page tree;
+- add/duplicate/delete/reorder page;
+- add/reorder/duplicate/delete section;
+- media picker/upload;
+- product/linesheet/look/document binding;
+- desktop/mobile preview;
+- draft, scheduled, published, unpublished и archived states;
+- audience assignment;
+- validation report;
+- version history;
+- publish confirmation;
+- rollback/restore.
+
+#### Catalog and Linesheet Manager
+
+- seasons, collections, delivery windows;
+- style, colorway, SKU/size;
+- images and media;
+- wholesale/RRP by price type/currency;
+- tags, badges, categories, fabrication, division, silhouette;
+- inventory/ATS and ordering constraints;
+- shared/unshared state;
+- audience and expiry;
+- import/export jobs.
+
+#### Connections and Access
+
+- retailer/accounts/groups/territories;
+- incoming/outgoing request lifecycle;
+- assign sales rep;
+- grant/revoke linesheet/product/document;
+- price type and payment method assignment;
+- effective access preview;
+- audit of who granted/revoked what and when.
+
+#### Order Inbox
+
+- Notes, Pending, Approved, Shipped, Cancelled;
+- open order aggregate and comments;
+- validate or adjust permitted fields;
+- approve/reject/request revision;
+- confirmation/invoice/shipment documents;
+- export/integration marks;
+- fulfillment and payment states;
+- immutable submission snapshot and audit.
+
+#### Commercial Settings
+
+- price types and currencies;
+- product/order discounts;
+- shipping methods and fees;
+- billing codes;
+- payment methods and terms;
+- order minimums, SKU increments and delivery rules;
+- Terms & Conditions versions.
+
+#### Analytics
+
+- profile/showroom visitors;
+- page/section impressions;
+- video engagement;
+- document views/downloads;
+- linesheet/style opens;
+- product selection and quantity entry;
+- draft creation;
+- submit/approve conversion;
+- conversion by retailer, account, location, territory, campaign, showroom version and price type.
+
+### 10.9 Publishing validation
+
+Publish должен блокироваться или требовать явного override при:
+
+- Untitled Page или placeholder overlay;
+- missing required hero/title;
+- invalid responsive media;
+- отсутствующем alt;
+- broken internal/external link;
+- invalid price range или currency;
+- malformed website/social/contact;
+- missing/deleted product, linesheet, look или document binding;
+- contradictory audience rules;
+- publish_end раньше publish_start;
+- presentation без доступного CTA/next step;
+- document checksum/storage failure;
+- draft с несохранёнными изменениями.
+
+### 10.10 Storefront → Catalog handoff
+
+1. retailer нажимает Shop внутри конкретного brand context;
+2. система проверяет active retailer account и connection;
+3. рассчитывает effective audience/access;
+4. получает допустимые price types, linesheets и delivery windows;
+5. один price type preselect; несколько требуют выбора;
+6. система предлагает resume compatible draft или create new;
+7. draft создаётся только после явного Start an Order;
+8. Catalog открывается scoped к brand/price type;
+9. sticky header показывает active order context;
+10. back navigation возвращает в исходную showroom page/section.
 
 ## 11. Linesheets
 
@@ -1165,65 +1312,108 @@ Colorway показывает display name, внутреннее/повторн�
 
 ## 13. Start an Order
 
-Route: /ra/products when no active order context.
+Route: /ra/products без активного order context; входы также возможны из Storefront Shop, Linesheet, Style, Orders и Cart.
 
-### 13.1 Initial modal
+### 13.1 Наблюдаемое начальное состояние
+
+Модальное окно содержит:
 
 - heading Start an Order;
 - required Search for a brand;
-- autocomplete;
-- More options disabled until brand;
-- Start an Order disabled until valid context.
+- autocomplete подключённых/доступных брендов;
+- More options, disabled до выбора бренда;
+- Start an Order, disabled до валидного context;
+- close/dismiss, возвращающий к исходной странице без создания заказа.
 
-### 13.2 Expected order
+До выбора brand система не должна создавать draft или писать пустую бизнес-сущность.
 
-1. select brand;
-2. validate connection;
-3. retrieve price types;
-4. select Price Type;
-5. optionally open More options;
-6. select season/buyer/currency/door/delivery if configured;
-7. click Start an Order;
-8. create draft;
-9. load Catalog.
+### 13.2 Контекст, который должен быть разрешён до создания
 
-### 13.3 Validation
+| Поле | Источник | Обязательность |
+|---|---|---|
+| Retailer Account | active account session | всегда |
+| Brand | user choice или storefront/linesheet context | всегда |
+| Connection | server-side lookup | для закрытого ordering |
+| Price Type | brand assignment/user choice | всегда, если цен несколько или не задана default |
+| Currency | price type | derived, не свободный текст |
+| Linesheet | optional source context | optional |
+| Buyer | account contacts/default | policy-dependent |
+| Door/Location | retailer locations and brand access | policy-dependent |
+| Season/Year | selected linesheet/order metadata | optional/policy-dependent |
+| Delivery Window | linesheet/order choices | optional/policy-dependent |
+| Shipping/Billing | profile/order snapshot | может заполняться после creation |
+| Existing compatible draft | server lookup | требует Resume/Create New decision |
+
+More options следует документировать как policy-driven область. Поля, не открытые в текущем аккаунте, нельзя считать подтверждённым JOOR UI; для улучшенной версии туда логично поместить Buyer, Door, Season, Delivery Window и PO metadata.
+
+### 13.3 Последовательность
+
+1. принять source context;
+2. выбрать или подтвердить Brand;
+3. проверить connection и ordering permission;
+4. загрузить price types/linesheets/delivery rules;
+5. выбрать Price Type;
+6. при необходимости раскрыть More options;
+7. проверить существующий совместимый draft;
+8. показать Resume, Create New или конфликт;
+9. валидировать обязательные поля;
+10. по явному Start an Order создать Order в Draft/Notes;
+11. зафиксировать origin и context snapshot;
+12. открыть scoped Product Catalog;
+13. не терять возврат в исходный showroom/linesheet/style.
+
+### 13.4 Валидации и ошибки
 
 - brand required;
 - connection/access required;
-- price type required;
-- buyer may be required;
-- currency compatible;
-- order cannot create duplicate context without resume choice;
-- clear feedback on no available catalog.
----
-## 14. Product Catalog
+- price type required и должен принадлежать brand/account relationship;
+- currency только из price type;
+- buyer/door обязательны только по политике;
+- выбранный linesheet должен быть published и shared;
+- delivery window должна пересекаться с допустимым периодом;
+- duplicate active draft требует явного решения;
+- no catalog/no shared linesheets — отдельное объяснимое состояние;
+- revoked access между modal и submit — server rejection;
+- двойной click — idempotency key;
+- ошибка создания не должна оставлять невидимый partial draft.
 
-Route: /ra/products
+### 13.5 Создаваемые данные
 
-### 14.1 Header
+Create command фиксирует: retailerAccountId, brandAccountId, connectionId, priceTypeId, currency, optional linesheetId/sourceEntity, buyerId, door/locationId, season/year, delivery window, origin, createdBy, clientRequestId. Адреса, контакты, цены и terms далее сохраняются как snapshots согласно разделам 16 и 30.
+
+## 14. Product Catalog и выбор товара
+
+Route: /ra/products внутри активного brand-specific order context.
+
+### 14.1 Header и active order context
 
 - Catalog;
-- Order for;
-- Select Price Type;
+- Order for: выбранный бренд;
+- current Price Type;
 - Styles Selected count;
 - Orders Created count;
-- View Order.
+- View Order;
+- active draft/cart indication;
+- возврат к source showroom/linesheet, если сохранён origin.
 
-### 14.2 Group By options
+Счётчики должны рассчитываться из server-authoritative draft, а не из локально видимых карточек.
+
+### 14.2 Browse controls
+
+Group By:
 
 - None;
 - Linesheet Group;
 - Silhouette;
 - Badge.
 
-### 14.3 Sort By options
+Sort By:
 
 - None;
 - Price Low to High;
 - Price High to Low.
 
-### 14.4 Filter By options
+Filter By:
 
 - Badges;
 - Categories;
@@ -1238,132 +1428,220 @@ Route: /ra/products
 - Style Tags;
 - Wholesale Price Range.
 
-### 14.5 Other controls
+Дополнительно:
 
-- filter value selector;
+- filter-value selector;
 - Filters Applied count;
 - Search;
-- product grid;
-- loading;
-- no results;
+- clear/reset;
+- loading skeleton;
+- empty/no-access/error states;
+- product grid/list;
+- pagination/lazy load;
 - View Order.
 
-### 14.6 Persistence
+### 14.3 Товарная иерархия
 
-Catalog filters:
+~~~text
+Linesheet
+└── Style
+    ├── Style metadata and media
+    └── Colorway
+        ├── color name/code/images
+        └── SKU / Size
+            ├── size value/order
+            ├── price and inventory rules
+            └── selected quantity
+~~~
 
-- transient URL/query state;
-- optional saved view per user;
-- must not alter product data.
+Карточка/деталь должна показывать по доступности: image, style name, style number, wholesale, suggested retail, currency, badges, delivery/linesheet context, colors и доступные sizes.
 
-Style selection:
+### 14.4 Ввод quantity
 
-- server-authoritative draft/order lines;
-- optimistic UI only with rollback;
-- quantity and price validated server-side;
-- selected count derived from current draft.
----
-## 15. Cart / Draft Orders
+Целевая матрица — colorway × size:
 
-Route: /orders/cart
+- строка или группа соответствует colorway;
+- колонка соответствует size/SKU;
+- ячейка — целое quantity;
+- ноль/пусто означает отсутствие заказа;
+- недоступный SKU disabled;
+- ввод проверяется по min, max, increment, ATS и delivery;
+- Total Qty/Cost пересчитываются по color и style;
+- selected style существует в draft, если хотя бы одна SKU quantity больше нуля;
+- удаление всех quantities должно удалить/обнулить line по явной политике.
 
-### 15.1 Architecture
+Нужны keyboard navigation, paste range, fill across sizes, undo, error summary и доступная таблица для screen reader. Эти улучшения являются TARGET, если не наблюдались напрямую.
 
-- cart contains one or several brand-specific draft orders;
-- brand tiles switch current order;
-- each order has line items;
-- cart is not a single cross-brand checkout transaction.
+### 14.5 Цена и доступ
 
-### 15.2 Blocks/states
+При выборе SKU сервер повторно проверяет:
 
-- Cart Orders;
-- explanation that cart is separated by brand;
-- brand tiles;
-- Back to Catalog;
-- style rows;
-- quantity editing;
-- notes;
-- Save;
-- delete style;
-- delete order;
-- Minimums not Met;
-- submit;
-- empty cart.
-
-### 15.3 Observed warnings
-
-- changes must be saved manually;
-- unsaved changes may be lost;
-- unmet minimums may still be submitted;
-- brand may decline such order.
-
-### 15.4 Required improved sequence
-
-1. add style;
-2. create/update draft server-side;
-3. autosave quantity changes;
-4. show Saving/Saved/Error;
-5. validate MOQ/minimum/increment/ATS;
-6. group exceptions;
-7. review totals and delivery;
-8. add PO/buyer/notes;
-9. submit;
-10. idempotent request;
-11. status Pending;
-12. confirmation and activity event.
-
-### 15.5 Data storage
-
-- DraftOrder;
-- DraftOrderLine;
-- line quantity;
-- unit price snapshot;
+- active account;
+- connection;
+- linesheet/product audience;
+- price type;
 - currency;
-- totals;
-- minimum validation result;
-- notes;
-- dirty/saved version;
-- createdBy/updatedBy;
-- timestamps.
----
-## 16. Manage Orders
+- delivery window;
+- SKU orderability;
+- inventory policy;
+- minimum/increment;
+- draft version.
 
-Route: /orders
+Order line хранит price/style/color/SKU snapshots. Текущая карточка каталога не должна переписывать историческую цену уже submitted order.
 
-### 16.1 Summary/status controls
+### 14.6 Сохранение и конкурентность
+
+- filters — URL/query и optional saved view;
+- quantity change — optimistic UI с rollback;
+- сервер — источник истины;
+- mutation включает orderVersion/clientMutationId;
+- Saving/Saved/Error показывается возле изменённой области;
+- конфликт версий даёт merge/reload decision;
+- переход к Style и обратно сохраняет filters, scroll и draft;
+- access revocation запрещает новые lines, но не удаляет исторические snapshots.
+
+## 15. Cart / Draft / Notes Orders
+
+Route: /orders/cart.
+
+### 15.1 Архитектура корзины
+
+Cart — контейнер нескольких независимых brand-specific orders, а не общий checkout:
+
+~~~text
+Retailer Cart
+├── Draft/Notes for Brand A + Price Type A
+├── Draft/Notes for Brand B + Price Type B
+└── Draft/Notes for Brand A + другой Price Type/контекст
+~~~
+
+Brand tile переключает current order. Суммы, minimums, currency, terms и submit выполняются отдельно для каждого заказа.
+
+### 15.2 Состав current order
+
+- brand/order tile;
+- Back to Catalog;
+- brand, price type, currency и linesheet context;
+- style/color/size rows;
+- quantity editing;
+- line/style totals;
+- order totals;
+- notes/comments;
+- buyer/PO/delivery metadata, если включены;
+- Shipping/Billing summary;
+- Minimums not Met и другие validation groups;
+- Save;
+- delete style/color;
+- delete order;
+- Submit for Approval;
+- empty cart state.
+
+### 15.3 Редактирование
+
+1. открыть brand tile;
+2. изменить quantities;
+3. пересчитать local preview;
+4. серверно проверить SKU/access/price/delivery;
+5. сохранить versioned mutation;
+6. отобразить Saved или field-level error;
+7. обновить totals/minimums;
+8. сохранить dirty-state при переходе между tiles;
+9. предупредить перед уходом только при реально несохранённых изменениях.
+
+Наблюдаемый интерфейс предупреждает, что изменения требуют ручного Save и могут быть потеряны. Для улучшенной версии предпочтителен autosave с явными Saving/Saved/Error и журналом восстановления.
+
+### 15.4 Minimums и исключения
+
+Минимумы могут быть:
+
+- order value;
+- total units;
+- style/color/SKU quantity;
+- size run;
+- increment/case pack;
+- delivery window;
+- door/territory;
+- currency/price type.
+
+Наблюдаемая логика допускает submit при unmet minimum с предупреждением, что бренд может отклонить заказ. Улучшенная версия должна различать blocking rule, overridable warning и informational notice; override сохраняет reason, actor и timestamp.
+
+### 15.5 Удаление
+
+- удаление style/color/order — mutation с confirmation;
+- draft deletion должна быть recoverable/soft-delete;
+- нулевые quantities можно очищать отдельной массовой операцией;
+- approved/submitted order нельзя удалять как draft;
+- удаление каталожного товара брендом не удаляет order snapshot.
+
+### 15.6 Submit boundary
+
+До Submit:
+
+- все mutations сохранены;
+- обязательные buyer/address/price/delivery поля валидны;
+- terms version определена;
+- totals рассчитаны сервером;
+- warnings представлены пользователю;
+- idempotency key создан.
+
+Submit создаёт immutable submission snapshot и status transition. Order mutation, payment и fulfillment после этого должны иметь отдельные permissions и audit streams.
+
+## 16. Manage Orders и рабочее место заказа
+
+Routes: /orders и /ra/orders/review/{orderId}.
+
+### 16.1 Registry: status and quantity dimensions
+
+Фильтры статуса:
 
 - Draft;
 - Notes;
-- Quantities:
-  - With;
-  - Without;
 - Pending;
 - Approved;
 - Shipped;
 - Cancelled.
 
-### 16.2 Top actions
+Quantity dimension:
 
-- Actions dropdown;
+- With quantities;
+- Without quantities.
+
+Наблюдаемый Notes filter содержит как нулевые заказы, так и полноценные заказы с большим количеством строк и units. Поэтому Notes нельзя моделировать как синоним empty draft. Рекомендуемая нормализация:
+
+- lifecycleStatus: DRAFT, PENDING, APPROVED, SHIPPED, CANCELLED;
+- workflowMode/flag: NOTE_ORDER;
+- hasQuantities — derived dimension;
+- validation/issues — отдельный набор.
+
+Если legacy JOOR фактически хранит Notes как status, улучшенная модель всё равно должна отделять жизненный цикл от признака наличия заметок/количеств.
+
+### 16.2 Registry actions and filters
+
+Top actions:
+
+- Actions;
 - Start an Order.
 
-### 16.3 Mass actions
+Mass actions:
 
 - Change Status;
 - Duplicate Orders;
 - Remove Style Colors With No Quantities;
 - Send to Assortment.
 
-### 16.4 Search & Filter
+Search and filter:
 
 - Search;
 - Your Selection;
+- brand/connection context при входе из Dashboard View Orders;
 - Clear All;
 - Buyer;
 - Date;
+- status checkboxes;
+- quantity With/Without;
 - Apply Filters.
 
-### 16.5 Table columns
+Table columns:
 
 - selection checkbox;
 - Brand;
@@ -1376,266 +1654,302 @@ Route: /orders
 - Buyer;
 - Modified.
 
-### 16.6 Bottom actions
+В одной строке несколько ячеек ведут в одну order review page. Улучшенная версия должна иметь один доступный row link и не создавать конфликтующих интерактивных зон.
+
+Bottom controls:
 
 - Import Orders;
 - Download Order Confirmation;
 - Export Data;
 - total count;
 - pagination;
-- page size:
-  - 10;
-  - 15;
-  - 20;
-  - 30.
+- page size 10/15/20/30.
 
-### 16.7 Order lifecycle
+### 16.3 Lifecycle and transition rules
 
 ~~~text
-DRAFT
-├── internal edits
-├── notes/revision
-└── SUBMIT → PENDING
-    ├── APPROVED
-    │   ├── partial/full shipment
-    │   └── SHIPPED
-    ├── revision/notes loop
-    └── CANCELLED
+DRAFT / NOTE ORDER
+├── edit independent blocks
+├── save / comments / share / download
+└── Submit for Approval
+    └── PENDING
+        ├── APPROVED
+        │   ├── payment flow
+        │   ├── fulfillment / partial shipment
+        │   └── SHIPPED
+        ├── revision request / notes loop
+        └── CANCELLED
 ~~~
 
-Notes и Quantities должны быть flags/validation dimensions, а не основные lifecycle states.
+Каждый transition должен иметь: from, to, actor role, timestamp, reason/comment, validation snapshot, idempotency key и source. Dropdown рядом с primary status action допускает альтернативы, но их фактический список не был надёжно загружен и остаётся UAT item.
 
-### 16.8 Order entity
+### 16.4 Order Review: page containers
 
-- orderId;
-- retailer account;
-- brand account;
-- buyer;
-- PO number;
-- price type;
-- currency;
-- status;
-- notes flag/thread;
-- quantities present flag;
-- units;
-- subtotal/total;
-- linesheet references;
-- complete ship;
-- requested delivery;
-- created/modified/submitted/approved/shipped/cancelled dates;
-- origin JOOR/import/external;
-- Shopify sync status;
-- assortment status;
-- version/audit.
----
-### 16.9 Карточка заказа — вложенный экран
+Overview page состоит из последовательных блоков:
 
-Маршрут экземпляра имеет форму /ra/orders/review/{orderId}. В таблице Manage Orders переход в одну карточку дублируется почти во всех ячейках строки: бренд, PO, статус, единицы, сумма, linesheet, complete ship, buyer и modified.
+1. tabs Overview и Pay;
+2. Last updated;
+3. Share Order;
+4. Visual Assortment, включая gated/disabled state;
+5. Comments с count и View Comment;
+6. Download;
+7. identification summary;
+8. current status и primary transition;
+9. Shipping and Billing;
+10. Products Summary;
+11. Contacts;
+12. Financial Summary;
+13. Order Details;
+14. Legal / Terms & Conditions.
 
-#### 16.9.1 Верхний уровень карточки
+Каждый блок имеет собственные permissions и edit mode. Нельзя выводить единый флаг orderEditable для всей страницы.
 
-Карточка состоит из двух вкладок:
-
-1. Overview — полная операционная и финансовая информация.
-2. Pay — состояние онлайн-оплаты или форма выражения интереса к JOOR Pay.
-
-Верхняя панель также содержит:
-
-- Last updated с датой и инициатором изменения;
-- Share Order;
-- переход в Visual Assortment;
-- состояние Product Sync и ссылку Integration Settings, если синхронизация не активирована;
-- Comments;
-- Download;
-- текущий Order Status;
-- Pay now, если сценарий оплаты доступен для просмотра;
-- ограничения действий в зависимости от статуса заказа и полномочий пользователя.
-
-#### 16.9.2 Идентификационный блок заказа
+### 16.5 Identification summary
 
 Отображаются:
 
 - Order #;
 - Brand;
-- один или несколько Linesheet со ссылками на соответствующие коллекции;
+- Linesheet link или несколько references;
 - Shipping Delivery Window;
-- Price Type с валютой и названием прайс-листа;
+- Price Type: currency и название;
 - Order Status;
-- дата последнего изменения.
+- last updated date/actor.
 
-Связи:
+Order принадлежит одному retailer account и одному brand, но может включать несколько linesheets этого бренда. Price Type определяет базовую валюту/прайс; цены в строках остаются snapshots.
 
-- заказ относится к одному бренду;
-- заказ может включать товары из нескольких linesheet одного бренда;
-- каждая товарная строка ссылается на Style и Linesheet;
-- Price Type определяет валюту и базовую оптовую цену;
-- Delivery Window существует и на уровне заказа, и как отдельное поле Complete Ship в списке.
+### 16.6 Header actions
 
-#### 16.9.3 Shipping and Billing
+#### Share Order
 
-Блок разделён на Shipping Info и Billing Info.
+Read-only аудит должен фиксировать доступные каналы/получателей, access scope, expiration и share event. Отправка/создание внешней ссылки — side effect и требует отдельного разрешения пользователя.
 
-Shipping Info:
+#### Visual Assortment
 
-- название юридического лица или торговой точки;
-- полный адрес;
-- контактный e-mail или связанный контакт;
-- Door;
-- Shipping Method.
+Может быть disabled/gated entitlement. Order и assortment связаны через отдельную сущность/transfer, а не через изменение товарных строк без аудита.
 
-Billing Info:
+#### Comments
 
-- название плательщика;
-- полный адрес;
-- VAT ID;
-- Billing Code;
-- Payment Method.
+- comment count;
+- View N Comment;
+- thread/drawer/modal;
+- author, timestamp, body и attachments по доступности;
+- read/unread;
+- create/edit/delete permissions;
+- audit and notification.
 
-Состояния доступа:
+Comment не равен internal order note: видимость должна быть brand-only, retailer-only или shared.
 
-- адреса могут быть read-only;
-- при ограничении отображается объяснение, что изменения должен выполнить бренд;
-- кнопка Edit становится disabled или отсутствует в зависимости от статуса и роли.
+#### Download
 
-Для улучшенной копии необходимо хранить отдельно:
+Должны быть перечислены тип документа, формат, locale, price visibility и version. Генерация крупного документа — background job; скачивание логируется.
 
-- снимок адреса, использованный в конкретном заказе;
-- ссылку на актуальную карточку локации;
-- признак источника адреса;
-- право редактирования;
-- историю изменений адреса после создания заказа;
-- юридические и логистические реквизиты независимо друг от друга.
+### 16.7 Shipping and Billing editor
 
-#### 16.9.4 Products Summary
+Edit открывает modal с tabs Shipping Info / Billing Info.
 
-Сводные показатели:
+Общие controls:
+
+- Select Address * — saved address selector;
+- Create New — переход в retailer profile;
+- Clear All Fields;
+- Cancel;
+- Update Address, disabled пока нет валидного изменения;
+- copy shipping → billing или billing → shipping.
+
+Shipping fields:
+
+| Поле | Режим |
+|---|---|
+| Store Name | read-only display |
+| Address 1 | required |
+| Address 2 | optional |
+| City | required |
+| Territory | optional |
+| Postal Code | optional/locale-dependent |
+| Country | required |
+| Email | required в наблюдаемой форме |
+| Phone | optional |
+| Door | selector/derived |
+| Shipping Method | selector |
+| Use as Billing Address | checkbox |
+
+Billing fields:
+
+| Поле | Режим |
+|---|---|
+| Store Name | read-only display |
+| Address 1 | required |
+| Address 2 | optional |
+| City | required |
+| Territory | optional |
+| Postal Code | optional/locale-dependent |
+| Country | selectable |
+| Phone | optional |
+| VAT ID | editable |
+| Billing Code | read-only; изменяется брендом |
+| Payment Method | brand-provided/read-only в наблюдаемом заказе |
+| Use as Shipping Address | checkbox |
+
+Create New не создаёт адрес внутри modal: пользователь перенаправляется в profile. После возврата order editor должен восстановить unsaved context и обновить address options.
+
+Order хранит OrderAddressSnapshot и sourceLocationId. Изменение profile address не переписывает submitted/approved history.
+
+### 16.8 Products Summary
+
+Aggregates:
 
 - Total Units;
-- Products — число уникальных styles;
-- Colors — число заказанных colorways.
+- Products = unique styles;
+- Colors = ordered colorways.
 
-Кнопка Add Products зависит от статуса. В Approved заказе добавление и изменение товаров запрещено, интерфейс явно объясняет причину и предлагает обратиться к бренду.
+Actions:
 
-Каждая товарная карточка содержит:
+- Add Products;
+- Edit;
+- Load More Products или Load All Products;
+- disabled tooltip/reason.
 
-- изображение;
-- название Style;
-- Wholesale Price;
-- Suggested Retail Price;
-- Style Number со ссылкой в карточку товара;
-- Linesheet со ссылкой;
-- один или несколько цветов;
-- цветовое имя и альтернативное/внутреннее имя;
-- размерный ряд;
-- количество по каждому размеру;
-- Total Qty по цвету;
-- Total Cost по цвету;
-- Total Style Qty;
-- Total Style Cost.
+Product hierarchy:
 
-При длинном заказе действует постепенная загрузка:
+- style image/name;
+- wholesale and currency;
+- style code/link;
+- suggested retail;
+- linesheet reference;
+- color display name/internal code;
+- sizes;
+- quantity per size;
+- Total Qty/Cost per color;
+- Total Style Qty/Cost.
 
-- первоначально отображается ограниченное число styles;
-- показывается диапазон Showing products X–Y of Z;
-- Load All Products загружает остаток.
+Long orders показывают диапазон X–Y of Z и загружают строки постепенно; totals должны вычисляться без загрузки всех media/cards.
 
-Это означает, что улучшенная версия должна поддерживать:
+#### Access revoked exception
 
-- постраничную или ленивую загрузку товарных строк;
-- независимую агрегацию SKU → цвет → размер;
-- перерасчёт totals без загрузки всех изображений;
-- стабильные ссылки Style и Linesheet;
-- сохранение порядка товаров;
-- фиксацию цены на момент заказа, а не только ссылку на текущий прайс.
+Подтверждённый сценарий:
 
-#### 16.9.5 Contacts
+1. заказ содержит исторические products;
+2. связанный linesheet больше не shared/visible retailer-у;
+3. строки, quantities и totals остаются видимыми;
+4. UI показывает предупреждение;
+5. Add Products disabled, если нет других shared linesheets;
+6. пользователь направляется связаться с брендом.
 
-Контакты представлены ролями:
+Правило данных: CatalogAccessGrant управляет новыми действиями, а OrderLineSnapshot защищает историю. Revoke не должен каскадно удалять строки, цены, media references или totals.
 
-- Sales Rep;
-- Buyer.
+#### Edit permissions
 
-Для каждого показываются имя/название и e-mail. Кнопка Edit может быть доступна даже при Approved заказе, то есть права на контакты отделены от прав на товары и адреса.
+- Draft/Notes: может быть доступен Edit;
+- Approved: product mutation блокируется;
+- access revoked: допустимость изменения существующей quantity должна определяться отдельной policy;
+- SKU deleted/unavailable: показать reason и безопасный resolution;
+- каждая save operation проверяет orderVersion и effective access.
 
-Рекомендуемая модель:
+В одном проверенном Notes-заказе Edit не открыл рабочую форму при отозванном linesheet; это фиксируется как AMBIGUOUS/BROKEN и требует UAT на тестовом заказе с действующим shared linesheet.
 
-- order_contact;
-- contact_role;
-- source_user_id;
-- snapshot_name;
-- snapshot_email;
-- active_from / active_to;
-- edited_by;
-- edited_at.
+### 16.9 Contacts editor
 
-#### 16.9.6 Financial Summary
+Read mode показывает Sales Rep и Buyer с именем/e-mail.
 
-Показываются:
+Edit переводит widget в inline mode:
+
+- Sales Rep — выбранный существующий контакт;
+- Buyer — search/select field;
+- Create new;
+- Save.
+
+Contacts — role bindings с snapshots:
+
+- orderContactId;
+- role;
+- sourceContactId/userId;
+- snapshotName;
+- snapshotEmail;
+- active period;
+- editedBy/At.
+
+Удаление или изменение contact profile после submit не должно переписывать историю.
+
+### 16.10 Financial Summary
+
+Отображаются:
 
 - Total Order Value;
 - Total Retail Value;
 - Subtotal Wholesale;
-- пометка Incl. Product Discounts;
-- Order Discount в процентах и денежном выражении;
+- Included Product Discounts;
+- Order Discount: percent и amount;
 - Shipping Fees;
 - Grand Total;
-- предупреждение об округлении.
+- rounding warning.
 
-Критически важно разделять:
+Источником истины является server decimal calculation. Хранить отдельно:
 
-- исходную цену SKU;
-- скидку на продукт;
-- скидку на заказ;
-- доставку;
-- валюту;
-- правило округления;
-- рассчитанный итог;
-- сохранённый финальный итог.
+- base SKU price;
+- line/product discount;
+- order discount;
+- shipping/fees;
+- tax, если применимо;
+- currency and precision;
+- rounding rule;
+- calculated totals;
+- accepted/final totals;
+- calculation version.
 
-Текст интерфейса подтверждает, что арифметическая сумма отображаемых округлённых компонентов может не совпадать с финальным total. Значит, источником истины должен быть серверный decimal-расчёт с сохранением точности и правила округления.
+Отображаемые округлённые компоненты могут не складываться в Grand Total, поэтому frontend не должен пересчитывать финальную бухгалтерскую сумму самостоятельно.
 
-#### 16.9.7 Order Details
+### 16.11 Order Details editor
 
-Наблюдаемые поля:
+Read mode подтверждает:
 
 - Order Created Date;
 - Season;
 - Year;
 - Order Delivery Window.
 
-Этот блок должен расширяться системными атрибутами:
+Edit запускает независимый inline/loading state и Save. В наблюдаемой сессии фактические controls не загрузились, поэтому дополнительные поля остаются UAT, а не подтверждённым фактом.
 
-- internal order id;
-- external PO;
-- creator;
-- buyer;
-- sales rep;
+Target metadata:
+
+- internal order ID и external PO;
+- creator/buyer/sales rep;
 - source channel;
-- created / modified / approved / shipped / cancelled timestamps;
-- version;
-- integration export state;
-- payment state;
-- currency;
+- created/modified/submitted/approved/shipped/cancelled timestamps;
+- season/year/delivery;
 - locale/date format;
-- комментарии и вложения.
+- integration/payment/fulfillment state;
+- version and audit.
 
-#### 16.9.8 Вкладка Pay
+### 16.12 Legal / Terms & Conditions
 
-Если бренд не активировал JOOR Pay:
+Brand-provided Terms & Conditions отображаются внутри order page. Заказ должен хранить:
 
-- показывается объяснение возможности онлайн-оплаты;
-- есть внешняя ссылка на описание JOOR Pay;
-- отображается призыв сообщить бренду об интересе;
-- кнопка I’m interested инициирует отдельный коммуникационный сигнал;
-- фактическая платёжная форма не показывается.
+- termsVersionId;
+- rendered HTML/PDF/document reference;
+- content checksum;
+- locale;
+- presentedAt;
+- acceptedAt/by и acceptance method;
+- submission snapshot.
 
-Для копии нужны отдельные состояния:
+Новая версия условий бренда не может молча заменить условия уже отправленного заказа.
+
+### 16.13 Pay tab
+
+Если JOOR Pay не активирован:
+
+- explanation;
+- external information link;
+- interest CTA;
+- no payment form.
+
+Payment states:
 
 - unavailable;
 - brand_not_enabled;
 - retailer_not_eligible;
-- interest_not_sent;
-- interest_sent;
+- interest_not_sent/sent;
 - payment_due;
 - partially_paid;
 - paid;
@@ -1643,7 +1957,27 @@ Billing Info:
 - refunded;
 - disputed.
 
-Pay now не должен смешиваться с изменением заказа: платёжное намерение и order mutation — разные домены и журналы аудита.
+PaymentIntent, PaymentTransaction и Order — разные aggregates. Interest CTA или payment submission являются side effects.
+
+### 16.14 Order entity summary
+
+- orderId, retailerAccountId, brandAccountId, connectionId;
+- buyer, sales rep, PO;
+- price type and currency;
+- lifecycle status and note flags;
+- quantities/units;
+- linesheet references;
+- delivery/complete ship;
+- line/color/SKU snapshots;
+- shipping/billing snapshots;
+- contacts snapshots;
+- financial calculation/final totals;
+- terms snapshot;
+- comments and attachments;
+- status history;
+- origin and integration/export marks;
+- assortment/payment/fulfillment links;
+- optimistic version, created/updated timestamps and audit.
 
 ## 17. Import, export, download and jobs
 
@@ -2552,29 +2886,74 @@ Demographics:
 
 Архитектурный вывод: категории, бренды, demographics и price range привязаны к Location, а не только к retailer account. Это позволяет разным магазинам одной сети иметь разные ассортиментные профили.
 
-## 24. Account switching
+## 24. Account switching и discoverability
 
-Observed:
+### 24.1 Account menu — OBSERVED
 
-- active account displayed in header;
-- Primary Account checkbox;
-- user has access to multiple accounts;
-- menu can log into/switch account.
+Account menu содержит:
 
-Required behavior:
+- current account card: name, account ID, connected brands preview и created date;
+- This is my Primary Account;
+- Account Settings;
+- Integration Settings;
+- Premium Features;
+- Manage Profile;
+- Data Activity Center;
+- Other Accounts;
+- Language;
+- Help Center;
+- Log Out.
 
-1. open account menu;
-2. list accessible organizations;
-3. mark current and primary;
-4. switch context;
-5. invalidate account-scoped caches;
-6. reload permissions, data and entitlements;
-7. preserve user preferences;
-8. never leak data from previous account;
-9. log switch event.
+В проверенной membership доступен текущий retailer account и ещё 13 retailer accounts. Некоторые записи показывают Created by {brand}, created date, connection preview, archived state или read-only relationship. Brand-role в списке отсутствует.
 
-All domain requests must carry activeAccountId validated server-side, never only from client state.
----
+### 24.2 Switch sequence
+
+1. открыть account menu;
+2. увидеть current и primary;
+3. открыть Other Accounts;
+4. выбрать доступную организацию;
+5. сервер проверяет membership и состояние account;
+6. сменить activeAccountId;
+7. инвалидировать account-scoped cache/query/cart;
+8. загрузить permissions, entitlements, connections, messages, orders и profile нового account;
+9. сохранить только user-global preferences;
+10. записать switch audit event.
+
+Нельзя переносить между accounts: cart/draft selection, last order, brand access, unread counts, export jobs, integration state и cached API responses.
+
+### 24.3 Accounts Visibility Settings — OBSERVED
+
+Manage Account Visibility открывает modal:
+
+- explanation primary и associated accounts;
+- Hide accounts from being discovered;
+- All Accounts;
+- checkbox на каждый account;
+- account name/ID;
+- connection preview;
+- Created by/date;
+- archived markers;
+- Save;
+- предупреждение, что применение может занять до 30 минут.
+
+Семантика: checked account скрыт от discovery новыми брендами; unchecked видим. Это отдельная политика, не primary flag и не connection state.
+
+### 24.4 Data model and consistency
+
+AccountDiscoveryVisibility:
+
+- accountId;
+- discoverable/hidden;
+- changedBy/At;
+- effectiveAt;
+- source;
+- optional reason;
+- version.
+
+UI может применить optimistic display после Save, но directory/discovery search должен использовать effective server state. Archived/read-only accounts должны иметь явные ограничения изменения visibility.
+
+Все domain requests несут activeAccountId, проверенный сервером; client-side header не является security boundary.
+
 ## 25. Shopify Integration
 
 Route: /ra/shopify/retailer-product-sync/config
@@ -2914,260 +3293,216 @@ Connections:
 
 ~~~text
 User
-  └──< AccountMembership >── Account
-                                 ├── RetailerProfile
-                                 ├──< Location
-                                 ├──< Subscription
-                                 ├──< Integration
-                                 ├──< ActivityJob
-                                 └──< MessageParticipant
+└──< AccountMembership >── Account
+    ├── AccountDiscoveryVisibility
+    ├── RetailerProfile
+    │   ├──< Location
+    │   ├──< Person / Contact
+    │   └──< MediaAsset
+    ├──< Subscription / Entitlement
+    ├──< Integration
+    ├──< ActivityJob
+    └──< MessageParticipant
 
 RetailerAccount
-  └──< Connection >── BrandAccount
-                         ├── BrandProfile
-                         ├── TeamMembers
-                         ├── Documents
-                         ├──< Linesheet
-                         │      └──< Style
-                         │             └──< Variant/SKU
-                         ├──< Submission
-                         └──< PassportEventBrand >── PassportEvent
+└──< Connection >── BrandAccount
+    ├── BrandProfile
+    ├──< TeamMember
+    ├──< StorefrontPage
+    │   └──< PresentationSection
+    │       └── Media/Product/Linesheet/Look/Document binding
+    ├──< DocumentVersion
+    ├──< Linesheet
+    │   └──< Style
+    │       └──< Colorway
+    │           └──< Variant / SKU / Size
+    ├──< PriceType
+    ├──< TermsVersion
+    ├──< Submission
+    └──< PassportEventBrand >── PassportEvent
 
 RetailerAccount
-  ├──< Order >── BrandAccount
-  │      └──< OrderLine >── Variant
-  ├──< Styleboard
-  ├──< Favorite >── BrandAccount
-  ├──< Assortment
-  └──< ReceivedLook >── Look
+├──< Order >── BrandAccount
+│   ├──< OrderLineSnapshot
+│   │   └──< ColorLineSnapshot
+│   │       └──< SizeQuantitySnapshot
+│   ├── ShippingAddressSnapshot
+│   ├── BillingAddressSnapshot
+│   ├──< OrderContactSnapshot
+│   ├── FinancialCalculation
+│   ├── TermsAcceptanceSnapshot
+│   ├──< OrderStatusHistory
+│   ├──< Comment / Attachment
+│   ├──< ExportMark
+│   └── Payment / Fulfillment links
+├──< Styleboard
+├──< Favorite >── BrandAccount
+├──< Assortment
+└──< ReceivedLook >── Look
 ~~~
----
-### 30.1 Уточнённые связи объектов
 
+### 30.1 Профиль, discovery и membership
 
-RetailerAccount
-→ содержит Users
-→ содержит Locations
-→ имеет PublicProfile
-→ имеет Settings
-→ имеет Connections с BrandAccount
-→ получает SharedLooks
-→ создаёт Styleboards
-→ создаёт Orders
-→ имеет MessageThreads
-→ запускает ImportJobs и ExportJobs
-→ может иметь IntegrationConfig и Subscription.
+RetailerAccount содержит Locations, people, public profile, settings и visibility. Категории, demographics, price range и brands carried могут различаться по Location.
 
-BrandAccount
-→ имеет PublicProfile/Storefront
-→ публикует Linesheets
-→ содержит Styles
-→ Styles содержат Colorways
-→ Colorways содержат SKUs/Sizes
-→ публикует Looks
-→ загружает Documents
-→ назначает SalesReps
-→ принимает/отклоняет Connections.
+AccountMembership связывает User и Account с role/permissions. Primary account — пользовательское/организационное отношение; discoverability — отдельная account policy.
 
-Order
-→ принадлежит RetailerAccount и BrandAccount
-→ содержит один PriceType
-→ содержит один Currency
-→ может ссылаться на несколько Linesheets
-→ содержит OrderLines
-→ OrderLine фиксирует Style snapshot
-→ ColorLine фиксирует Colorway snapshot
-→ SizeQuantity фиксирует SKU/size и quantity
-→ имеет Shipping/Billing snapshots
-→ имеет Contacts
-→ имеет FinancialSummary
-→ имеет StatusHistory
-→ имеет Comments
-→ имеет PaymentState
-→ имеет IntegrationExportMarks.
+### 30.2 Brand presentation
 
-Connection
-→ связывает RetailerAccount и BrandAccount
-→ имеет direction
-→ имеет request message/thread
-→ имеет pending/accepted/declined/cancelled state
-→ управляет доступом к storefront, linesheets, rep info и ordering
-→ может дополняться audience restrictions на уровне коллекции или продукта.
+BrandProfile хранит структурированные сведения. StorefrontPage и PresentationSection образуют versioned composition. Секция связывается с media, product, linesheet, look или document через typed binding, а не копированное произвольное поле.
 
-## 31. Полные пользовательские сценарии
+PublishedPresentationVersion фиксирует page/section order, audience, publish window и content checksum. AnalyticsEvent ссылается на version/page/section/entity и не должен раскрывать данные другого tenant.
 
-### 31.1 Retailer onboarding
+### 30.3 Catalog and access
+
+Linesheet → Style → Colorway → Variant/SKU. PriceType и currency назначаются через connection/audience policy.
+
+CatalogAccessGrant:
+
+- retailer/account/group/territory/door;
+- brand;
+- resource type/id;
+- price type;
+- valid from/to;
+- granted/revoked by/at;
+- reason/version.
+
+Connection и CatalogAccessGrant различаются: accepted connection не гарантирует доступ к каждому продукту.
+
+### 30.4 Order aggregate
+
+Order принадлежит одному retailer account и одному brand, использует один price type/currency context и может ссылаться на несколько linesheets.
+
+OrderLineSnapshot фиксирует style metadata и цену; ColorLineSnapshot — colorway; SizeQuantitySnapshot — SKU/size/quantity. Они не удаляются при revoke/delete каталожной сущности.
+
+OrderAddressSnapshot хранит sourceLocationId и исторические поля. OrderContactSnapshot сохраняет role/name/email. FinancialCalculation хранит precision/rounding/components/final. TermsAcceptanceSnapshot фиксирует представленную версию условий.
+
+### 30.5 Lifecycle, collaboration and downstream
+
+OrderStatusHistory — append-only transitions. Comments имеют visibility scope. ExportMark ставится после успешной генерации. Payment и Fulfillment связаны с Order, но имеют собственные statuses, audit и idempotency.
+
+ImportJob/ExportJob содержат source/filter snapshot, artifact, checksum, row-level errors, actor, status и retention. Background failure не должен частично менять final order/export state.
+
+## 31. End-to-end карта процессов
+
+Этот раздел содержит только междоменные последовательности. Поля экранов не повторяются: они определены в соответствующих функциональных главах.
+
+### 31.1 Главный поток Brand → Showroom → Retailer → Order → Fulfillment
+
+| Этап | Brand/Seller | Platform | Retailer/Buyer | Состояние/артефакт |
+|---|---|---|---|---|
+| 1. Setup | создаёт profile, team, commercial settings | валидирует dictionaries/permissions | ведёт account/profile/locations | publish-ready parties |
+| 2. Catalog | публикует linesheets, styles, SKUs, prices, delivery | версионирует catalog | — | sellable assortment |
+| 3. Presentation | собирает showroom pages/sections/documents/CTA | preview, validation, audience, publish | — | PublishedPresentationVersion |
+| 4. Discovery | получает inbound interest | индексирует с учётом discoverability | ищет/фильтрует/открывает | discovery visit |
+| 5. Connection | принимает/инициирует request | создаёт request/thread, пересчитывает access | Accept/Connect/Not Now | accepted connection |
+| 6. Access | назначает linesheets, prices, territory, rep | рассчитывает effective grants | видит разрешённую витрину | CatalogAccessGrant |
+| 7. Engagement | обновляет контент | пишет section/product/document events | смотрит showroom, team, PDF, Looks | engagement trail |
+| 8. Start Order | предоставляет commercial context | проверяет account/brand/price/access | выбирает brand/price/options | Draft/Notes Order |
+| 9. Selection | — | валидирует SKU, price, delivery, quantity | выбирает style → color → size → qty | order line snapshots |
+| 10. Review | видит collaboration/order | считает totals/minimums/terms | редактирует address/contact/products/details | validated draft |
+| 11. Submit | получает submitted snapshot | idempotent transition и notifications | Submit for Approval | Pending |
+| 12. Decision | approve/reject/request revision | audit/status history | отвечает на notes/revision | Approved/loop/cancel |
+| 13. Documents | подтверждение/invoice/packing | generates artifacts/jobs | downloads/exports | versioned documents |
+| 14. Payment | configures method/terms | payment intent/transactions | pays where enabled | payment state |
+| 15. Fulfillment | ships partially/fully | tracks shipment state | monitors receipt | Shipped/exception |
+| 16. Analytics | анализирует conversion | aggregates tenant-safe events | анализирует buys/orders | funnel and BI |
+
+### 31.2 Retailer onboarding
 
 1. authenticate;
-2. choose/create account;
-3. set primary account;
-4. complete user profile;
-5. configure language/date/landing page;
-6. complete company profile;
-7. add primary and other locations;
-8. add categories/brands/demographics;
-9. configure privacy;
-10. submit Tax ID verification;
-11. discover brands;
-12. create first connection;
-13. create first order;
-14. optionally install Shopify;
-15. optionally upgrade Visual Assortment.
+2. choose accessible account;
+3. set primary;
+4. configure user preferences;
+5. complete company profile;
+6. add locations, categories and demographics;
+7. set per-account discoverability;
+8. submit Tax ID verification;
+9. discover/connect first brand;
+10. create first order;
+11. optionally configure integration/subscription.
 
-### 31.2 Discovery to order
+### 31.3 Discovery and connection exceptions
 
-1. Dashboard or Find New Brands;
-2. search/filter/sort;
-3. open storefront;
-4. inspect category/price/team/documents;
-5. favorite or connect;
-6. wait for accept;
-7. open linesheet/storefront Shop;
-8. choose brand/price type;
-9. start draft order;
-10. filter products;
-11. select styles/colors/sizes;
-12. enter quantities;
-13. view cart;
-14. resolve minimum warnings;
-15. save;
-16. submit;
-17. monitor Pending;
-18. receive notes/approval;
-19. download confirmation;
-20. export/sync/send to assortment.
+- retailer hidden from brand discovery, но сам может искать бренд согласно permission;
+- incoming и outgoing request;
+- accepted, declined, cancelled, expired;
+- connected without product audience;
+- restricted document/product;
+- connection revoked while historical orders remain;
+- account archived/read-only;
+- brand storefront unpublished after prior engagement.
 
-### 31.3 Incoming brand request
+После любого connection/access change system инвалидирует permissions/cache, уведомляет стороны и пишет audit.
 
-1. notification;
-2. open Connection Requests;
-3. open View Profile;
-4. inspect brand;
-5. Connect or Not Now;
-6. if connected, open Shop/Message;
-7. relationship becomes available across Dashboard/Connections/Catalog.
+### 31.4 Showroom to order handoff
 
-### 31.4 Passport event
+1. retailer открывает конкретную presentation version;
+2. система пишет page/section impression;
+3. product/linesheet/document action проверяет access;
+4. Shop передаёт brand/source context;
+5. Start an Order разрешает price type и compatible draft;
+6. create/resume происходит только после явного действия;
+7. Catalog сохраняет backlink в showroom;
+8. selection пишет order lines;
+9. возврат восстанавливает page/section, scroll и filters;
+10. funnel связывает presentation version → selection → order без передачи PII в client analytics.
 
-1. open Passport;
-2. choose event;
-3. choose Style Story;
-4. filter category/min/max;
-5. search brand;
-6. open brand;
-7. favorite/connect/shop;
-8. registration separately as attendee/exhibitor.
+### 31.5 Draft/Notes to approval
 
-### 31.5 Message collaboration
+1. создать или resume order;
+2. выбрать products and quantities;
+3. заполнить/проверить Shipping/Billing;
+4. назначить Buyer/Sales Rep;
+5. заполнить order metadata;
+6. пересчитать totals;
+7. проверить minimums, access, delivery и SKU orderability;
+8. зафиксировать terms version;
+9. сохранить все mutations;
+10. сформировать immutable submission snapshot;
+11. Submit for Approval;
+12. Pending notification;
+13. brand approve, reject или request revision;
+14. approved locks governed blocks;
+15. перейти к documents/payment/fulfillment.
 
-1. Inbox;
-2. filter/search/sort;
-3. open or select messages;
-4. mark read/unread/delete;
-5. Compose;
-6. choose all connections or selected;
-7. autocomplete recipients;
-8. subject/body;
-9. optional image;
-10. send;
-11. store Sent;
-12. notify recipients.
+### 31.6 Access revocation after selection
 
-### 31.6 Profile improvement
+1. order уже содержит line snapshots;
+2. brand отзывает linesheet/product grant;
+3. catalog больше не предлагает ресурс;
+4. order сохраняет исторические строки и totals;
+5. UI показывает revoked warning;
+6. Add Products использует только оставшиеся grants;
+7. изменение существующих quantities решает explicit policy;
+8. submit может блокироваться или требовать brand resolution;
+9. revoke и resolution сохраняются в audit.
 
-1. Dashboard prompt Review your profile;
-2. open Company Profile;
-3. Edit Page;
-4. upload logo;
-5. add description/social;
-6. upload store photos;
-7. configure people;
-8. update locations and demographics;
-9. verify Tax ID;
-10. Save and View;
-11. profile participates in brand discovery/submissions.
+### 31.7 Look → Styleboard → Order
 
-### 31.7 Import/export
+1. brand publishes/shares Look;
+2. retailer opens hotspots;
+3. selection идёт в Styleboard или Order;
+4. Styleboard сохраняет visual composition и price context;
+5. Add to Order создаёт/дополняет compatible draft;
+6. quantities распределяются по SKU;
+7. стандартный validation/submit lifecycle продолжается без отдельной копии заказа.
 
-1. select Import Orders;
-2. upload source;
-3. create job;
-4. validate/map;
-5. preview;
-6. apply;
-7. inspect Activity Center;
-8. download errors if needed;
-9. retry corrected file.
+### 31.8 Message collaboration
 
-Export:
+Inbox → filter/search → thread → read/unread/delete или Compose → recipients → subject/body/media → send → Sent → notifications. Message thread может быть связан с connection/order, но не заменяет structured comments/status history.
 
-1. select orders;
-2. Export Data;
-3. choose format/columns if supported;
-4. create job;
-5. download artifact;
-6. artifact expires according to retention.
----
-### 31.8 Сквозные жизненные циклы данных
+### 31.9 Import
 
-#### 31.8.1 Discovery → Connection
+Template → upload → secure storage → parse → normalize → reference resolution → validation → preview → confirm → background job → row-level report → atomic create/update → audit/notification → retention/deletion.
 
-1. Ритейлер открывает discovery/passport/profile.
-2. Система учитывает privacy и eligibility.
-3. Пользователь просматривает teaser.
-4. Отправляет Connect с default или изменённым сообщением.
-5. Создаются ConnectionRequest и MessageThread.
-6. Бренд принимает или отклоняет.
-7. После accepted пересчитываются permissions.
-8. Открываются linesheets, rep info и ordering.
-9. Действие пишется в audit log и notification feed.
+### 31.10 Export and document generation
 
-#### 31.8.2 Look → Styleboard → Order
+Selection/filter snapshot → format/options → background generation → artifact checksum/size/version → temporary signed URL → download audit → export marks only after success → retry without duplicate side effects.
 
-1. Бренд публикует Look.
-2. Share связывает Look с retailer account.
-3. Ритейлер выбирает hotspots/products.
-4. Выбор переносится в Styleboard или прямо в Order.
-5. Styleboard хранит визуальную композицию и price type.
-6. Add to Order создаёт/дополняет draft.
-7. Пользователь распределяет quantities по size.
-8. Система валидирует minimums, delivery windows и inventory.
-9. Draft сохраняется.
-10. Заказ переходит Notes/Pending/Approved.
-11. Approved блокирует изменение products и адресов в зависимости от политики.
-12. Экспорт, оплата и shipment продолжают отдельные под-процессы.
+### 31.11 Account switch security sequence
 
-#### 31.8.3 Import
-
-1. Template.
-2. File upload.
-3. Secure storage.
-4. Parse.
-5. Normalize.
-6. Validate.
-7. Resolve reference data.
-8. Preview.
-9. Confirm.
-10. Background job.
-11. Row-level report.
-12. Create/update orders.
-13. Audit and notification.
-14. Retention or secure deletion source file.
-
-#### 31.8.4 Export/Document
-
-1. Пользователь задаёт statuses.
-2. Выбирает date type.
-3. Указывает date range.
-4. Выбирает integration type.
-5. Определяет previously exported policy.
-6. Сервер фиксирует immutable filter snapshot.
-7. Background worker строит файл.
-8. File record получает checksum, size и status.
-9. Пользователь получает временную signed URL.
-10. Download логируется.
-11. Order export marks обновляются только после успешной генерации.
-12. Ошибка не должна помечать заказ экспортированным.
+Save/discard current edits → authorize target membership → set activeAccountId → invalidate account-scoped state → reload permissions/data/counts → verify no prior account entities in view → log switch. User-global language/date preferences may persist; business data and drafts may not.
 
 ## 32. UI and interaction architecture
 
@@ -3354,75 +3689,79 @@ Export:
 12. Media & Documents.
 13. Notifications.
 ---
-## 36. Coverage and remaining unknowns
+## 36. Coverage, evidence and remaining unknowns
 
-Покрыт практически весь доступный Retailer LITE surface.
+### 36.1 Подтверждено в Retailer LITE
 
-Отдельный controlled audit нужен для:
+- product shell, Dashboard и active account;
+- discovery, connection surfaces, submissions, favorites и Passport;
+- connected Storefront и public/disconnected brand profile;
+- video, description, social, products, swatches, collections, gallery/press и PDF documents;
+- audience-restricted product state;
+- linesheets, styles, Looks, Styleboards и gated Visual Assortment;
+- Manage Orders registry, filters, mass actions, import/export/download entry points;
+- Approved Order Overview/Pay;
+- Notes Order с quantities;
+- editable Shipping/Billing modal и точные поля;
+- inline Contacts edit;
+- Order Details read fields и loading edit state;
+- Products Summary до color × size quantities;
+- historical products after linesheet access revocation;
+- financial summary and rounding warning;
+- Legal / Terms & Conditions;
+- retailer profile, locations, categories, demographics, people и settings;
+- account switcher с 14 retailer accounts;
+- Accounts Visibility Settings и задержка применения до 30 минут;
+- messages, integration/subscription/activity entry points.
 
-- brand admin;
-- linesheet/style publishing;
-- style detail quantity grid;
-- full order submit/approve/ship;
+### 36.2 Наблюдаемые ambiguity/broken states
+
+- Storefront Shop может не сохранить предвыбранный brand в Start an Order;
+- Product Edit в Notes order с отозванным linesheet не открыл usable form;
+- Order Details Edit остался в loading state;
+- некоторые storefront presentation blocks содержат placeholders/неполные документы;
+- gated features показываются рядом с доступными действиями без полного capability explanation.
+
+Это не следует автоматически интерпретировать как универсальное поведение: нужны повторяемые UAT cases.
+
+### 36.3 Не подтверждено без brand-role или side effects
+
+- реальный brand admin UI;
+- showroom builder controls;
+- publishing linesheet/style/price/document;
+- product quantity edit на действующем shared linesheet;
+- окончательный список альтернатив status combo;
+- создание нового draft через Start an Order;
+- Submit for Approval;
+- brand-side approve/reject/revision;
+- shipment/fulfillment;
+- реальная JOOR Pay form;
+- successful import/export job artifacts;
 - paid Visual Assortment;
-- connected Shopify;
-- purchase checkout;
-- JOORPay;
+- active Shopify sync;
 - Passport registration;
-- iPad/mobile apps;
-- public/internal APIs and webhooks;
-- SSO/admin moderation;
-- failed import/export jobs.
+- mobile/iPad apps;
+- APIs/webhooks, SSO и platform moderation.
 
-Документ должен использоваться как reference map и backlog source. Он не утверждает, что закрытые процессы полностью воспроизведены, и не копирует proprietary implementation.
----
-### 36.1 Подтверждено вложенным аудитом
+### 36.4 Требуемый controlled UAT
 
+Нужны обезличенные test accounts: brand admin, connected retailer, disconnected retailer, multi-location retailer и restricted retailer.
 
-Дополнительно подтверждены:
+Минимальный набор:
 
-- вложенная карточка Approved заказа;
-- Overview и Pay;
-- Shipping/Billing;
-- Products Summary до уровня size quantity;
-- Contacts;
-- Financial Summary;
-- Order Details;
-- Import Orders и оба шаблона;
-- Download Order Confirmation;
-- Export Data и типы дат;
-- Looks CURRENT/ARCHIVED и viewer;
-- Styleboards CURRENT/ARCHIVED и editor canvas;
-- Invitation/Sent/Trash;
-- thread;
-- публичная карточка бренда до connection;
-- audience-restricted products;
-- PDF-документы на CDN;
-- профиль ритейлера;
-- полный редактор локации;
-- категории и demographics;
-- user settings;
-- языки;
-- notification toggles;
-- date format;
-- landing page;
-- retail rounding;
-- POS;
-- connection permission;
-- privacy.
+1. publish/unpublish/version showroom;
+2. grant/revoke product/linesheet/document access;
+3. create/resume/delete draft;
+4. enter/edit/clear color × size quantities;
+5. test min/increment/ATS/delivery failures;
+6. edit every order widget;
+7. submit, revision, approve, cancel and ship;
+8. change catalog after submission and verify snapshots;
+9. change terms/address/contact and verify history;
+10. generate/download/export documents;
+11. payment success/failure/refund;
+12. switch accounts and probe isolation;
+13. accessibility/mobile/performance on large presentations and orders.
 
-Остаются недоступными без выполнения реальных бизнес-операций или дополнительных ролей:
+Документ является reference map, target architecture и backlog source. Он не утверждает закрытую proprietary implementation и явно отделяет observation от design inference.
 
-- фактическое принятие/отклонение connection;
-- создание и отправка нового заказа;
-- редактирование quantities в Draft/Notes;
-- шаги 2–3 импорта с реальным файлом;
-- результат экспортного job;
-- реальная платёжная форма JOOR Pay;
-- администраторские настройки бренда;
-- создание и сохранение нового Styleboard;
-- загрузка и сохранение медиа;
-- Shopify sync с активной интеграцией;
-- shipment/fulfillment workflow со стороны бренда.
-
-Эти области должны быть отдельными сценариями UAT на тестовом аккаунте с обезличенными данными.

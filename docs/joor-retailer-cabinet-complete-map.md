@@ -1255,13 +1255,13 @@ Totals и filtering должны рассчитываться сервером; 
 
 Card может представлять один colorway как отдельную строку/карточку. Поэтому unique style count и displayed card count не всегда совпадают.
 
-### 11.10 Print constructor
+### 11.10 Print constructor — OBSERVED
 
 Route: /collections/print_select/{linesheetId}.
 
 Layouts:
 
-- 8 Styles;
+- 8 Styles, selected by default;
 - 12 Styles;
 - 4 Styles (A);
 - 4 Styles (B);
@@ -1270,41 +1270,94 @@ Layouts:
 - Landscape (4);
 - By Fabrication.
 
-Print Options:
+Currency and prices:
 
-- Currency & Prices;
-- Retail Price;
-- Wholesale Price;
-- Image Resolution: Normal или High;
-- три Custom Fields;
-- Fabrication, Silhouette, Materials, Heel Height, Measurements;
-- Group By: Linesheet groups, Fabrication, Category, Division, Silhouette;
+- Price Type/Currency select;
+- Retail Price, checked by default;
+- Wholesale Price, checked by default.
+
+Image Resolution:
+
+- Normal (recommended), selected;
+- High.
+
+Custom Fields:
+
+- ровно три independent selectors;
+- select up to 3;
+- empty option;
+- Fabrication;
+- Silhouette;
+- Materials;
+- Heel Height;
+- Measurements;
+- SLEEVE LENGTH;
+- NECK SHAPE;
+- FABRIC WEIGHT;
+- CONTENT;
+- PATTERN;
+- SEASON;
+- COLLECTION;
+- MODEL CODE.
+
+Group By:
+
+- empty;
+- Linesheet groups;
+- Fabrication;
+- Category;
+- Division;
+- Silhouette;
+- SLEEVE LENGTH;
+- NECK SHAPE;
+- FABRIC WEIGHT;
+- CONTENT;
+- PATTERN;
+- SEASON;
+- COLLECTION;
+- MODEL CODE.
+
+Additional options:
+
 - Page Break by Group;
 - Overflow Colors;
 - Include Tag Name when grouped by tags;
 - Print;
 - Close.
 
-Document job должен фиксировать linesheet/version, layout, price type, currency, custom fields, grouping, image resolution, page-break options, actor и generated artifact checksum.
+Print является document-generation command. Job фиксирует linesheet/version, order of styles, layout, price type, price visibility, image resolution, three custom fields, grouping, page breaks, overflow/tag options, actor, timestamp, artifact checksum/size и expiry.
 
-### 11.11 Start Excel Order
+### 11.11 Start Excel Order — OBSERVED
 
-Это export-fill-import workflow, а не обычная загрузка пользовательского файла:
+Modal открывается поверх Linesheet и содержит:
 
-1. открыть Start Excel Order;
-2. увидеть текущий linesheet;
-3. добавить другие linesheets того же brand;
-4. искать по списку;
-5. выбрать Price Type;
-6. выбрать Include Images;
-7. Export;
-8. получить Excel quantity matrix;
-9. заполнить units;
-10. импортировать результат в Cart;
-11. сопоставить строки с style/color/size;
-12. показать validation/row errors.
+- Close;
+- heading Start Excel Order;
+- Add units and import directly to the Cart;
+- Linesheets;
+- текущий linesheet как selected item;
+- remove link/icon у selected item;
+- search textbox;
+- список sibling linesheets того же brand;
+- Price Type selector;
+- Include Images checkbox, unchecked в наблюдаемом состоянии;
+- Export.
 
-Modal содержит пояснение Add units and import directly to the Cart, Export и Close. Template должен иметь immutable IDs помимо человекочитаемых codes, чтобы переименования не ломали импорт.
+Последовательность:
+
+1. текущий linesheet preselected;
+2. при необходимости выбрать дополнительные sibling linesheets;
+3. удалить ошибочно выбранный linesheet;
+4. выбрать price type;
+5. решить, включать ли images;
+6. Export сформирует Excel matrix;
+7. пользователь заполняет units offline;
+8. импортирует файл в Cart;
+9. система сопоставляет immutable IDs/style codes/color/size;
+10. показывает row-level validation;
+11. создаёт или обновляет соответствующий Note/Draft.
+
+Export не был выполнен. Template должен содержать templateVersion, linesheet/version IDs, priceTypeId, currency, style/color/SKU IDs, human-readable codes, size scale/order, protected columns и checksum. Импорт изменённого/устаревшего template обязан выявлять catalog/access drift.
 
 ## 12. Style, Colorway, Variant и SKU
 
@@ -1620,91 +1673,170 @@ Order line хранит price/style/color/SKU snapshots. Текущая карт
 - переход к Style и обратно сохраняет filters, scroll и draft;
 - access revocation запрещает новые lines, но не удаляет исторические snapshots.
 
-## 15. Cart / Draft / Notes Orders
+## 15. Cart, Draft, Notes и формирование состава заказа
+
+### 15.1 Разделение понятий
+
+| Понятие | Смысл |
+|---|---|
+| Cart | навигационный контейнер активных незавершённых orders |
+| Draft | lifecycle state до отправки |
+| Note Order | рабочий незавершённый order mode/status в наблюдаемом UI |
+| Product selection | style/colorway уже включён в order |
+| Ordered quantity | сумма quantity по SKU/size |
+| Empty quantity order | order содержит products/colors, но Total Units = 0 |
+
+Наблюдаемый order способен показывать Products > 0 и Colors > 0 при Total Units = 0. Следовательно, наличие OrderLine/ColorLine нельзя вычислять только из quantity > 0: пользователь может предварительно сформировать ассортимент, а размеры заполнить позже.
+
+### 15.2 Cart route и empty state — OBSERVED
 
 Route: /orders/cart.
 
-### 15.1 Архитектура корзины
+В проверенном аккаунте Draft count = 0. Прямой переход /orders/cart перенаправил на Dashboard вместо отдельного empty-cart screen.
 
-Cart — контейнер нескольких независимых brand-specific orders, а не общий checkout:
+Улучшенная версия должна показывать:
+
+- Cart Orders heading;
+- объяснение отсутствия drafts;
+- Start an Order;
+- Browse Linesheets;
+- return to prior context;
+- archived/recoverable drafts, если применимо.
+
+Redirect без объяснения скрывает причинно-следственную связь.
+
+### 15.3 Способы добавить ассортимент
+
+1. Product Catalog внутри active order context.
+2. Add Products из Order Review.
+3. Start Excel Order → заполненный Excel → import to Cart.
+4. Look/Styleboard/Assortment transfer, если entitlement/flow доступен.
+5. Import Orders для внешнего order file — отдельный bulk workflow.
+
+Все пути должны разрешать один и тот же canonical SKU, price type, delivery и access context.
+
+### 15.4 Add Products modal — OBSERVED
+
+Открывается из Products Summary существующего Note Order с действующим shared linesheet.
+
+Header:
+
+- Add Products;
+- selected counter: N Style(s) / N Style color(s) selected;
+- close button.
+
+Context and filters:
+
+- Linesheet combobox с текущим linesheet;
+- пояснение, что доступны только shared linesheets;
+- рекомендация обратиться к бренду, если linesheet отсутствует;
+- Search textbox;
+- loading;
+- no-results state;
+- pagination Previous / page numbers / Next.
+
+Style card:
+
+- style image/breadcrumb;
+- Style Name;
+- Style Number;
+- несколько color swatches;
+- checkbox на каждый style color;
+- отдельные disabled checkboxes;
+- Wholesale;
+- Suggested Retail;
+- Fabrication, включая пустое значение;
+- currency наследуется от order price type.
+
+Footer:
+
+- Cancel;
+- Add to Order;
+- Add to Order disabled при нулевом выборе.
+
+Color checkbox является уровнем выбора: счётчики отдельно считают unique styles и style colors. Disabled swatch должен иметь reason: already in order, unavailable, restricted, discontinued или incompatible; исходный UI reason рядом не показывает.
+
+### 15.5 Add Products sequence
+
+1. открыть modal;
+2. загрузить только доступные shared linesheets;
+3. выбрать linesheet;
+4. искать/filter/paginate styles;
+5. выбрать colorway checkboxes;
+6. обновить selected styles/colors counters;
+7. проверить duplicates и orderability;
+8. Add to Order;
+9. создать OrderLine/ColorLine с quantity 0;
+10. закрыть modal;
+11. показать новые cards в Products Summary;
+12. quantity заполняется отдельным edit/ordering step;
+13. Save recalculates units/totals.
+
+Cancel должен удалять только modal selection state и ничего не менять в order.
+
+### 15.6 Quantity matrix
+
+Target unit of entry: colorway × size/SKU.
+
+- sizes идут в устойчивом sort order;
+- каждая ячейка содержит non-negative integer quantity;
+- disabled SKU объясняет причину;
+- Total Qty/Cost per color;
+- Total Style Qty/Cost;
+- Total Units/Order Value;
+- zero quantity сохраняет assortment line согласно policy;
+- Remove Style/Color удаляет selection отдельно от обнуления quantity.
+
+Нужны keyboard navigation, paste range, fill series, clear row, validation summary, undo и autosave. Прямой usable quantity editor всё ещё не подтверждён: кнопка Edit в исследованных Note Orders не показала input controls.
+
+### 15.7 Multi-order Cart — target architecture
+
+Cart может содержать несколько brand-specific orders. Даже один brand может иметь разные drafts по price type/currency/delivery.
 
 ~~~text
 Retailer Cart
-├── Draft/Notes for Brand A + Price Type A
-├── Draft/Notes for Brand B + Price Type B
-└── Draft/Notes for Brand A + другой Price Type/контекст
+├── Order A: Brand A / Price Type 1
+├── Order B: Brand B / Price Type 2
+└── Order C: Brand A / другой delivery/price context
 ~~~
 
-Brand tile переключает current order. Суммы, minimums, currency, terms и submit выполняются отдельно для каждого заказа.
+Переключение tile не смешивает totals, terms, addresses, minimums или dirty state.
 
-### 15.2 Состав current order
+### 15.8 Saving and conflict handling
 
-- brand/order tile;
-- Back to Catalog;
-- brand, price type, currency и linesheet context;
-- style/color/size rows;
-- quantity editing;
-- line/style totals;
-- order totals;
-- notes/comments;
-- buyer/PO/delivery metadata, если включены;
-- Shipping/Billing summary;
-- Minimums not Met и другие validation groups;
-- Save;
-- delete style/color;
-- delete order;
-- Submit for Approval;
-- empty cart state.
+- local edit получает orderVersion;
+- UI показывает Saving/Saved/Error;
+- server повторно проверяет access, price, SKU и delivery;
+- conflict предлагает reload/merge;
+- переход между orders сохраняет dirty state;
+- autosave предпочтительнее наблюдаемого manual Save warning;
+- submission блокируется до завершения pending saves.
 
-### 15.3 Редактирование
+### 15.9 Minimums and warnings
 
-1. открыть brand tile;
-2. изменить quantities;
-3. пересчитать local preview;
-4. серверно проверить SKU/access/price/delivery;
-5. сохранить versioned mutation;
-6. отобразить Saved или field-level error;
-7. обновить totals/minimums;
-8. сохранить dirty-state при переходе между tiles;
-9. предупредить перед уходом только при реально несохранённых изменениях.
+Rules:
 
-Наблюдаемый интерфейс предупреждает, что изменения требуют ручного Save и могут быть потеряны. Для улучшенной версии предпочтителен autosave с явными Saving/Saved/Error и журналом восстановления.
-
-### 15.4 Minimums и исключения
-
-Минимумы могут быть:
-
-- order value;
-- total units;
-- style/color/SKU quantity;
-- size run;
+- minimum order value;
+- minimum units;
+- style/color/SKU minimum;
 - increment/case pack;
-- delivery window;
-- door/territory;
+- size run;
+- delivery/door/territory;
 - currency/price type.
 
-Наблюдаемая логика допускает submit при unmet minimum с предупреждением, что бренд может отклонить заказ. Улучшенная версия должна различать blocking rule, overridable warning и informational notice; override сохраняет reason, actor и timestamp.
+Правила классифицируются как blocking, overridable и informational. Override сохраняет reason/actor/timestamp. Наблюдаемая система допускает submit с предупреждением, что бренд может отклонить order.
 
-### 15.5 Удаление
+### 15.10 Submit boundary
 
-- удаление style/color/order — mutation с confirmation;
-- draft deletion должна быть recoverable/soft-delete;
-- нулевые quantities можно очищать отдельной массовой операцией;
-- approved/submitted order нельзя удалять как draft;
-- удаление каталожного товара брендом не удаляет order snapshot.
+Перед Submit for Approval:
 
-### 15.6 Submit boundary
-
-До Submit:
-
-- все mutations сохранены;
-- обязательные buyer/address/price/delivery поля валидны;
-- terms version определена;
-- totals рассчитаны сервером;
-- warnings представлены пользователю;
-- idempotency key создан.
-
-Submit создаёт immutable submission snapshot и status transition. Order mutation, payment и fulfillment после этого должны иметь отдельные permissions и audit streams.
+1. все selection/quantity mutations сохранены;
+2. required address/contact/order metadata валидны;
+3. totals пересчитаны сервером;
+4. minimum/access/delivery issues показаны;
+5. terms version определена;
+6. immutable submission snapshot создан;
+7. idempotency key защищает от duplicate submit.
 
 ## 16. Manage Orders и рабочее место заказа
 
@@ -1901,27 +2033,32 @@ OrderDocumentJob сохраняет selected order/version, format, advanced opt
 
 ### 16.7 Shipping and Billing editor
 
-Edit открывает modal с tabs Shipping Info / Billing Info.
+Два подтверждённых permission states:
+
+1. editable — Edit открывает modal;
+2. restricted — кнопки Edit нет, виден текст с просьбой обратиться к бренду.
+
+Editable modal содержит tabs Shipping Info / Billing Info.
 
 Общие controls:
 
-- Select Address * — saved address selector;
-- Create New — переход в retailer profile;
+- Select Address *;
+- Create New → retailer profile;
 - Clear All Fields;
 - Cancel;
-- Update Address, disabled пока нет валидного изменения;
+- Update Address, disabled до валидного изменения;
 - copy shipping → billing или billing → shipping.
 
-Shipping fields:
+Shipping:
 
 | Поле | Режим |
 |---|---|
-| Store Name | read-only display |
+| Store Name | read-only |
 | Address 1 | required |
 | Address 2 | optional |
 | City | required |
 | Territory | optional |
-| Postal Code | optional/locale-dependent |
+| Postal Code | locale-dependent |
 | Country | required |
 | Email | required в наблюдаемой форме |
 | Phone | optional |
@@ -1929,26 +2066,26 @@ Shipping fields:
 | Shipping Method | selector |
 | Use as Billing Address | checkbox |
 
-Billing fields:
+Billing:
 
 | Поле | Режим |
 |---|---|
-| Store Name | read-only display |
+| Store Name | read-only |
 | Address 1 | required |
 | Address 2 | optional |
 | City | required |
 | Territory | optional |
-| Postal Code | optional/locale-dependent |
-| Country | selectable |
+| Postal Code | locale-dependent |
+| Country | selector |
 | Phone | optional |
 | VAT ID | editable |
-| Billing Code | read-only; изменяется брендом |
-| Payment Method | brand-provided/read-only в наблюдаемом заказе |
+| Billing Code | brand-controlled |
+| Payment Method | brand-provided |
 | Use as Shipping Address | checkbox |
 
-Create New не создаёт адрес внутри modal: пользователь перенаправляется в profile. После возврата order editor должен восстановить unsaved context и обновить address options.
+Restricted state доказывает, что address permission может задаваться brand/account/order policy независимо от Note status. Permission reason должен быть machine-readable, а не только текстом.
 
-Order хранит OrderAddressSnapshot и sourceLocationId. Изменение profile address не переписывает submitted/approved history.
+Order хранит AddressSnapshot и sourceLocationId; профильные изменения не переписывают submitted history.
 
 ### 16.8 Products Summary
 
@@ -1956,52 +2093,56 @@ Aggregates:
 
 - Total Units;
 - Products = unique styles;
-- Colors = ordered colorways.
+- Colors = selected colorways.
+
+Подтверждены два разных Note Order состояния:
+
+| Products | Colors | Units | Смысл |
+|---:|---:|---:|---|
+| > 0 | > 0 | > 0 | ассортимент и size quantities заполнены |
+| > 0 | > 0 | 0 | styles/colorways выбраны, все size quantities нулевые |
+
+Это требует отдельных derived metrics hasSelections и hasQuantities.
 
 Actions:
 
 - Add Products;
 - Edit;
-- Load More Products или Load All Products;
-- disabled tooltip/reason.
+- Load More/Load All;
+- disabled reason.
 
-Product hierarchy:
+Product card:
 
-- style image/name;
-- wholesale and currency;
-- style code/link;
+- image;
+- style name;
+- wholesale/currency;
+- style number link;
+- linesheet link;
 - suggested retail;
-- linesheet reference;
-- color display name/internal code;
-- sizes;
-- quantity per size;
-- Total Qty/Cost per color;
-- Total Style Qty/Cost.
+- один или несколько colors;
+- sizes and quantities;
+- color totals;
+- style totals.
 
-Long orders показывают диапазон X–Y of Z и загружают строки постепенно; totals должны вычисляться без загрузки всех media/cards.
+Add Products modal и selection lifecycle определены только в разделе 15, чтобы не дублировать order-building flow.
 
-#### Access revoked exception
+#### Access revoked
 
-Подтверждённый сценарий:
+- historical lines remain;
+- warning shown;
+- Add Products disabled при отсутствии других shared linesheets;
+- quantities/totals remain readable;
+- revoke does not delete snapshots.
 
-1. заказ содержит исторические products;
-2. связанный linesheet больше не shared/visible retailer-у;
-3. строки, quantities и totals остаются видимыми;
-4. UI показывает предупреждение;
-5. Add Products disabled, если нет других shared linesheets;
-6. пользователь направляется связаться с брендом.
+#### Permissions and observed ambiguity
 
-Правило данных: CatalogAccessGrant управляет новыми действиями, а OrderLineSnapshot защищает историю. Revoke не должен каскадно удалять строки, цены, media references или totals.
+- Note Order может иметь enabled Add Products;
+- другой Note Order имеет disabled Add Products из-за revoked linesheet;
+- Approved blocks product mutation;
+- Edit отображался active, но ни в active, ни в revoked проверенном order не появились quantity inputs;
+- usable quantity editor остаётся controlled UAT item.
 
-#### Edit permissions
-
-- Draft/Notes: может быть доступен Edit;
-- Approved: product mutation блокируется;
-- access revoked: допустимость изменения существующей quantity должна определяться отдельной policy;
-- SKU deleted/unavailable: показать reason и безопасный resolution;
-- каждая save operation проверяет orderVersion и effective access.
-
-В одном проверенном Notes-заказе Edit не открыл рабочую форму при отозванном linesheet; это фиксируется как AMBIGUOUS/BROKEN и требует UAT на тестовом заказе с действующим shared linesheet.
+Каждая product mutation должна проверять orderVersion, access, price type, SKU orderability и delivery.
 
 ### 16.9 Contacts editor
 
@@ -3606,20 +3747,23 @@ ImportJob/ExportJob содержат source/filter snapshot, artifact, checksum,
 ### 31.5 Draft/Notes to approval
 
 1. создать или resume order;
-2. выбрать products and quantities;
-3. заполнить/проверить Shipping/Billing;
-4. назначить Buyer/Sales Rep;
-5. заполнить order metadata;
-6. пересчитать totals;
-7. проверить minimums, access, delivery и SKU orderability;
-8. зафиксировать terms version;
-9. сохранить все mutations;
-10. сформировать immutable submission snapshot;
-11. Submit for Approval;
-12. Pending notification;
-13. brand approve, reject или request revision;
-14. approved locks governed blocks;
-15. перейти к documents/payment/fulfillment.
+2. добавить styles/colorways через Catalog, Add Products, Excel или visual transfer;
+3. сохранить assortment lines даже при нулевых quantities;
+4. заполнить color × size quantities;
+5. различать hasSelections и hasQuantities;
+6. заполнить/проверить Shipping/Billing;
+7. назначить Buyer/Sales Rep;
+8. заполнить order metadata;
+9. пересчитать totals;
+10. проверить minimums, access, delivery и SKU orderability;
+11. зафиксировать terms version;
+12. сохранить pending mutations;
+13. сформировать immutable submission snapshot;
+14. Submit for Approval;
+15. отправить Pending notification;
+16. brand approve, reject или request revision;
+17. approved locks governed blocks;
+18. перейти к documents/payment/fulfillment.
 
 ### 31.6 Access revocation after selection
 
@@ -3748,6 +3892,12 @@ Save/discard current edits → authorize target membership → set activeAccount
 25. Download/Share/Comments используют разные drawer/modal patterns без единого action framework.
 26. Legacy Linesheets имеет отдельные Submit на Brand, Delivery и Category, что создаёт неясный applied-filter state.
 27. Initial loading может оставлять DOM почти пустым, а затем поздно добавлять крупные списки/products.
+28. Empty Cart route перенаправляет на Dashboard без empty-state explanation.
+29. Product/Color selection checkboxes в Add Products не имеют доступных имён.
+30. Disabled color swatches не объясняют reason.
+31. Note Order Edit может стать active, не показав quantity inputs.
+32. Address editing restriction зависит от brand policy, но UI не показывает policy/source.
+33. Products/Colors могут быть ненулевыми при Units = 0, что без пояснения выглядит как рассинхронизация.
 ---
 
 ## 34. Требования к улучшенному аналогу
@@ -3864,7 +4014,9 @@ Save/discard current edits → authorize target membership → set activeAccount
 - placeholder/restricted connected showroom и linesheet overlays;
 - audience-restricted product state;
 - Linesheets registry с Brand/Delivery/Category filters, sort, cards и pagination;
-- Linesheet detail с Minimum Amount, price types, Print, Start Excel Order, View counts и 14 Group By values;
+- Linesheet detail с Minimum Amount, price types, View counts и 14 Group By values;
+- полный Print constructor с layouts, three custom fields, grouping и image/price options;
+- Start Excel Order modal с multi-linesheet selection, price type, Include Images и Export;
 - Style detail с navigation, multiple price types, materials, origin, sizes/fit, colorway и custom classification attributes;
 - Looks, Styleboards и gated Visual Assortment;
 - Manage Orders registry, filters, mass actions, import/export/download entry points;
@@ -3874,6 +4026,9 @@ Save/discard current edits → authorize target membership → set activeAccount
 - Download drawer с PDF/Excel/Linesheet-to-Size и advanced options;
 - Note Order status combo с Cancel Order;
 - Notes Order с quantities;
+- актуальный Note Order с Products/Colors > 0 и Units = 0;
+- Add Products catalog modal с linesheet, search, pagination, style cards и color checkboxes;
+- editable и brand-restricted address states;
 - editable Shipping/Billing modal и точные поля;
 - inline Contacts edit;
 - Order Details read fields и loading edit state;
@@ -3902,7 +4057,7 @@ Save/discard current edits → authorize target membership → set activeAccount
 - реальный brand admin UI;
 - showroom builder controls;
 - publishing linesheet/style/price/document;
-- product quantity edit на действующем shared linesheet;
+- фактический ввод и сохранение quantity на действующем shared linesheet;
 - создание нового draft через Start an Order;
 - Submit for Approval;
 - brand-side approve/reject/revision;
@@ -3923,7 +4078,7 @@ Save/discard current edits → authorize target membership → set activeAccount
 
 1. publish/unpublish/version showroom;
 2. grant/revoke product/linesheet/document access;
-3. create/resume/delete draft;
+3. create/resume/delete draft и проверить empty Cart;
 4. enter/edit/clear color × size quantities;
 5. test min/increment/ATS/delivery failures;
 6. edit every order widget;

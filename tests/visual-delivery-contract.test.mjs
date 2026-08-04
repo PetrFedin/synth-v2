@@ -19,7 +19,7 @@ async function withServer(handler,work){const server=createServer(handler);serve
 test('the shell loads Omnidata V11 after every implemented product workspace',async()=>{
   const html=await readFile(path.join(publicDir,'index.html'),'utf8');
   assert.match(html,new RegExp(`meta name="syntha-build" content="${build}"`));
-  for(const asset of [`omnidata-v8.css?v=${v8Build}`,`omnidata-v8-reference.css?v=${v8Build}`,`omnidata-v9.css?v=${v9Build}`,`omnidata-v10.css?v=${v10Build}`,`omnidata-v11.css?v=${build}`,`omnidata-v11.js?v=${build}`,`samples.css?v=${sampleBuild}`,`samples.js?v=${sampleBuild}`])assert.match(html,new RegExp(asset.replaceAll('.','\\.')));
+  for(const asset of [`omnidata-v8.css?v=${v8Build}`,`omnidata-v8-reference.css?v=${v8Build}`,`omnidata-v9.css?v=${v9Build}`,`omnidata-v10.css?v=${v10Build}`,`omnidata-v11.css?v=${build}`,`omnidata-v11.js?v=${build}`,`samples.css?v=${sampleBuild}`,`samples.js?v=${sampleBuild}`])assert.ok(html.includes(asset),asset);
   const styles=[...html.matchAll(/<link\s+[^>]*rel="stylesheet"[^>]*href="([^"]+)"/g)].map(match=>new URL(match[1],'http://syntha.local').pathname);
   assert.deepEqual(styles.slice(-5),['/omnidata-v8.css','/omnidata-v8-reference.css','/omnidata-v9.css','/omnidata-v10.css','/omnidata-v11.css']);
   const scripts=[...html.matchAll(/<script defer src="([^"]+)"/g)].map(match=>new URL(match[1],'http://syntha.local').pathname);

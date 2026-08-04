@@ -1,7 +1,7 @@
 # JOOR Retailer Cabinet → Syntha B2B Fashion Platform
 
 Статус: рабочая продуктовая спецификация и master map.  
-Версия: 2.3, 4 августа 2026 года.  
+Версия: 2.4, 4 августа 2026 года.  
 Назначение: определить, как Syntha должна превзойти JOOR как B2B buying platform и одновременно закрыть PLM, sourcing, costing, production, quality, logistics, wholesale и analytics.
 
 > Документ объединяет результаты read-only аудита JOOR Retailer / LITE и целевую архитектуру Syntha. Наблюдаемое в JOOR не следует считать подтверждением его закрытой внутренней реализации. Все функции, которых не было в доступном аккаунте, помечаются как TARGET или UAT.
@@ -3899,3 +3899,1606 @@ Retailer POS data
 ```
 
 Each slice must deliver operational value, immutable evidence and measurable KPI movement. No slice is accepted as complete solely because its pages render correctly.
+
+---
+
+## 85. Методика сравнения с NuORDER и аналогами
+
+В этом документе запрещено превращать неполный аудит конкурента в категоричное утверждение «функции нет».
+
+Используются следующие статусы:
+
+| Статус | Значение |
+|---|---|
+| COMPETITOR CONFIRMED | Возможность подтверждена официальной документацией конкурента |
+| JOOR OBSERVED | Возможность открыта и проверена в доступном JOOR Retailer / LITE |
+| JOOR PUBLICLY CONFIRMED | Возможность описана в официальных публичных материалах JOOR |
+| JOOR NOT CONFIRMED | Возможность не была найдена в доступном кабинете и не подтверждена использованными публичными материалами |
+| JOOR GATED / UAT | Возможность может существовать, но требует другого тарифа, роли или controlled test |
+| SYNTHA TARGET | Требование к нашей платформе |
+
+Фраза «лучше, чем JOOR» означает не наличие большего числа экранов, а лучшее решение процесса по критериям:
+
+- меньше ручного переноса данных;
+- меньше ошибок и расхождений;
+- быстрее принятие решения;
+- прозрачнее источник цифры;
+- лучше контроль доступа;
+- полнее финансовая и операционная трассировка;
+- выше измеримый коммерческий результат.
+
+---
+
+## 86. NuORDER — детальная карта сильных функций для заимствования и улучшения
+
+### 86.1 Marketplace discovery and multi-brand shopping — COMPETITOR CONFIRMED
+
+NuORDER / Lightspeed публично описывает:
+
+- discovery тысяч брендов;
+- browsing connected and new brands;
+- multi-brand product shopping;
+- сравнение товаров разных поставщиков;
+- единый обзор нескольких brand orders;
+- curated sections: bestsellers, trusted brands, suggested for you, recently viewed and new brands;
+- AI recommendations по истории заказов;
+- similar products на PDP;
+- connection request из marketplace.
+
+**JOOR status:** discovery и connection lifecycle подтверждены; полноценный multi-brand product comparison и единый multi-brand shopping flow в проверенном JOOR не подтверждены.
+
+**SYNTHA TARGET:**
+
+- глобальная Product Discovery страница поверх доступных брендов;
+- сравнение до 10 товаров разных брендов;
+- master basket, который при checkout детерминированно разбивается на отдельные brand orders;
+- общий budget/OTB контроль до разбиения;
+- отдельные MOQ/MOV, delivery, currency and terms checks по каждому бренду;
+- explainable recommendations;
+- сохранение причины выбора и отклонения рекомендаций;
+- фильтр overlap/cannibalization между брендами.
+
+### 86.2 Order Trends — COMPETITOR CONFIRMED
+
+NuORDER официально описывает Order Trends:
+
+- Top Product badges;
+- ranking products by units ordered;
+- разделение Immediate and Prebook;
+- category trend shares and change;
+- top colors;
+- size trends for products with the same style number;
+- AI similar-product recommendations;
+- Suggested for You на основании order history;
+- visibility rules set by the brand;
+- periodic refresh and eligibility thresholds.
+
+В текущей официальной документации NuORDER функция ограничена eligible brands/users и достаточным объемом данных; часть аналитики привязана к USD orders. Эти ограничения нельзя скрывать при сравнении.
+
+**JOOR status:** отдельный comparable Order Trends layer по продуктам, категориям, цветам и размерам в проверенном кабинете не подтвержден.
+
+**SYNTHA TARGET:**
+
+- trend layer во всех поддерживаемых валютах через certified FX normalization;
+- отдельно retailer-own trend, brand-network trend and market benchmark;
+- trend confidence and sample size;
+- minimum cohort thresholds;
+- top product, rising product, declining product and anomaly badges;
+- immediate/prebook/reorder segmentation;
+- trend data directly inside PDP, assortment and order matrix;
+- historic snapshots so Monday refresh не переписывает прошлое;
+- ability to explain the numerator, denominator and covered population.
+
+### 86.3 Assortments as live collaborative planning documents — COMPETITOR CONFIRMED
+
+NuORDER официально описывает assortments как live collaborative documents для proposed buys and store-door planning.
+
+Подтвержденные элементы:
+
+- assortment by doors and deliveries;
+- product selections and buying intent;
+- notes at product, cluster and allocator level;
+- quantities;
+- placeholders / SMU;
+- linking placeholder to real product;
+- syncing product updates into assortment;
+- single-brand and multi-brand assortments;
+- XLS export;
+- brand access to order-level intent data;
+- rollups across assortments;
+- target tables;
+- target upload or spreadsheet paste;
+- multiple targets per assortment;
+- bulk linking of SMUs;
+- order intents shared to brands.
+
+**JOOR status:** Visual Assortment был gated; перечисленный выше full planning workflow в текущем доступе не подтвержден.
+
+**SYNTHA TARGET:** взять механику NuORDER как baseline и расширить ее:
+
+- financial, option, unit and margin targets;
+- targets by store, cluster, category, brand, delivery, price band and color family;
+- OTB reservation;
+- SKU-level size curve;
+- open-to-buy and cash-flow view;
+- placeholder specification linked to line plan;
+- conversion placeholder → actual style with variance report;
+- plan, selection, order and received comparison;
+- scenario branching;
+- approval policy;
+- consolidated rollup across buyers and legal entities;
+- live collaborative cursor only for draft planning, not for immutable submitted orders.
+
+### 86.4 Custom Lists and buyer-specific recommendations — COMPETITOR CONFIRMED
+
+NuORDER Custom Lists support:
+
+- product lists created by buyer or sales rep;
+- delivery window;
+- description, link, label and thumbnail;
+- clone and share;
+- notes per product;
+- post-appointment recap;
+- direct send or downloadable PDF/XLSX;
+- campaign/open tracking;
+- EZ Order mode;
+- conversion into Working Order.
+
+**JOOR status:** Looks/Styleboards подтверждены, но buyer-specific recommendation list with tracked send and direct order conversion не подтвержден полностью.
+
+**SYNTHA TARGET:**
+
+- Shortlist, Appointment List, Proposed Buy, Reorder List and Recovery List as explicit types;
+- brand-created and retailer-created ownership;
+- internal/private and shared fields;
+- buyer acknowledgement;
+- expiry and catalog version lock;
+- conversion metrics;
+- list-to-order and list-to-revenue attribution;
+- safe external share link;
+- buyer consent for open tracking.
+
+### 86.5 Customer and User Groups — COMPETITOR CONFIRMED
+
+NuORDER groups can manage:
+
+- product visibility;
+- promotions;
+- order min/max rules;
+- linesheet visibility;
+- page widgets;
+- buyer companies and brand users.
+
+**JOOR status:** access by connection and account context подтвержден; flexible group-driven merchandising and rules engine в доступном кабинете не подтвержден.
+
+**SYNTHA TARGET:**
+
+- dynamic and static customer groups;
+- criteria by geography, segment, channel, tier, performance, credit, contract and invitation;
+- preview as group/company/location;
+- rule conflict explanation;
+- effective dates;
+- change simulation before publish;
+- audit of impacted products, customers and orders.
+
+### 86.6 Price sheets and View As — COMPETITOR CONFIRMED
+
+NuORDER supports product-level price sheets, customer assignment, multiple price visibility and View As company/pricing display.
+
+**SYNTHA TARGET:**
+
+- price-resolution trace showing every applied rule;
+- preview as buyer company/location, currency and date;
+- MSRP/wholesale/cost/margin field-level permission;
+- price-per-size and customization surcharge;
+- future-dated price simulation;
+- alert when a draft order uses expired price context.
+
+### 86.7 Customizable products and proof workflow — COMPETITOR CONFIRMED
+
+NuORDER supports customizable products with:
+
+- customization filter and badge;
+- configurable options;
+- required attributes;
+- image/text/measurement selections;
+- surcharges;
+- edit from Working Order;
+- proof file;
+- proof download from order and email;
+- export/import of customization data;
+- reordering if template remains valid.
+
+**JOOR status:** structured customization and proof lifecycle не подтвержден.
+
+**SYNTHA TARGET:** full SMU/customization flow linked to PLM and production; detailed specification in section 98.
+
+### 86.8 POS and Smart Reorder loop — COMPETITOR CONFIRMED
+
+NuORDER + Lightspeed supports:
+
+- two-way PO Sync;
+- importing order and product data into POS;
+- automatic supplier and product creation;
+- images, descriptions, prices, SKUs, sizes and colors;
+- receiving inventory in POS;
+- ordering directly from replenishment reports;
+- forecasted demand;
+- suggested order quantities;
+- grouping recommended products by supplier into a Working Order;
+- reorder from inventory reports;
+- preloaded product catalog.
+
+**JOOR status:** Shopify integration entry подтвержден; equally deep POS-native reorder loop не подтвержден.
+
+**SYNTHA TARGET:** POS-neutral replenishment loop across Lightspeed, Shopify POS, ERP and custom retail systems; detailed specification in section 96.
+
+### 86.9 NuORDER limitations that Syntha should explicitly solve
+
+According to official NuORDER documentation available during this review:
+
+- Order Trends may not be available to all brands/users;
+- some trend logic is limited to sufficient USD order data;
+- trend refresh is periodic rather than always real-time;
+- simultaneous editing of some linesheet objects is discouraged;
+- assortment features may depend on configuration;
+- advanced modules are entitlement-dependent.
+
+Syntha should not repeat these ambiguities. Each feature must expose:
+
+- entitlement;
+- eligibility;
+- refresh timestamp;
+- population coverage;
+- feature status: GA/Beta/Pilot;
+- fallback behavior;
+- precise reason when unavailable.
+
+Official sources:
+
+- https://x-series-support.lightspeedhq.com/hc/en-us/articles/46522641418523-Intro-to-Lightspeed-Wholesale-for-Retail-POS-X-Series
+- https://x-series-support.lightspeedhq.com/hc/en-us/articles/49211379755547-NuORDER-Marketplace-overview-for-Retail-POS-X-Series-merchants
+- https://helpdesk.nuorder.com/hc/en-us/articles/27071765927195-Order-Trends-overview
+- https://helpdesk.nuorder.com/hc/en-us/articles/30678542786203-Brand-assortments-overview
+- https://helpdesk.nuorder.com/hc/en-us/articles/18923106692379-Targets-in-assortments
+- https://helpdesk.nuorder.com/hc/en-us/articles/200719648-Custom-Lists-for-buyers
+- https://helpdesk.nuorder.com/hc/en-us/articles/13898584214939-Ordering-products-with-Customizations
+- https://helpdesk.nuorder.com/hc/en-us/articles/115005653283-Customer-and-User-Groups
+- https://helpdesk.nuorder.com/hc/en-us/articles/115005758446-Price-sheet-overview
+
+---
+
+## 87. Lightspeed Retail — то, что нужно перенести в retailer operating loop
+
+Lightspeed показывает важное направление: wholesale order должен продолжаться внутри retail operations, а не заканчиваться кнопкой Submit.
+
+### 87.1 Confirmed capabilities
+
+- PO created in NuORDER syncs to POS;
+- product and supplier records may be created automatically;
+- product attributes sync with PO;
+- receiving continues in POS;
+- replenishment report proposes quantity;
+- Smart Reorder groups items by supplier;
+- buyer reviews and adjusts recommendation;
+- completed PO returns into stock-control workflow;
+- landed procurement costs can be distributed into product cost;
+- multi-location inventory and sales analytics inform reorder.
+
+### 87.2 SYNTHA TARGET — neutral retail integration layer
+
+Syntha must not become dependent on one POS vendor.
+
+Required architecture:
+
+```text
+Retail Source Adapter
+→ Canonical Sale / Return / Stock / PO / Receipt Events
+→ Data Quality and Mapping
+→ Demand and Replenishment Engine
+→ Buyer Review
+→ Brand-specific Draft Orders
+→ Confirmation
+→ PO/Receipt Sync Back
+```
+
+Required entities:
+
+- RetailLocation;
+- ProductMapping;
+- InventorySnapshot;
+- SaleEvent;
+- ReturnEvent;
+- StockoutEvent;
+- DemandForecast;
+- ReplenishmentRecommendation;
+- PurchaseOrderSync;
+- Receipt;
+- LandedCostAdjustment.
+
+Required controls:
+
+- source-system ownership;
+- mapping confidence;
+- duplicate detection;
+- backfill window;
+- sync lag;
+- unresolved SKU queue;
+- retry and replay;
+- reconciliation totals;
+- no recommendation from stale stock data without warning.
+
+Official sources:
+
+- https://x-series-support.lightspeedhq.com/hc/en-us/articles/46522641418523-Intro-to-Lightspeed-Wholesale-for-Retail-POS-X-Series
+- https://x-series-support.lightspeedhq.com/hc/en-us/articles/47140576715035-Reordering-products-from-the-NuORDER-Marketplace-in-Retail-POS-X-Series
+- https://x-series-support.lightspeedhq.com/hc/en-us/articles/47468923592603-Lightspeed-Wholesale-Glossary
+
+---
+
+## 88. Faire — marketplace risk services, которых недостаточно у обычного order portal
+
+Faire differentiates not only through catalog and ordering, but through risk transfer and marketplace operations.
+
+### 88.1 Confirmed capabilities
+
+Official Faire materials confirm:
+
+- retailer business verification before ordering;
+- marketplace payment handling;
+- guaranteed payment to brands for fulfilled orders, subject to platform terms;
+- eligible retailer Net 60 terms;
+- brand payout independent from retailer payment timing;
+- opening-order returns financed and operated by Faire;
+- prepaid return labels;
+- return warehouse inspection and redistribution in supported markets;
+- platform-managed refunds and invoice adjustments;
+- shipping workflow, packing slips and commercial invoices;
+- shipment tracking;
+- payout speed options;
+- marketplace commission model;
+- cancellation and return windows;
+- return metrics shown to retailer.
+
+### 88.2 JOOR status
+
+JOOR Pay подтвержден публично, но full marketplace-operated credit underwriting, first-order return risk transfer and return-warehouse model не подтверждены использованными источниками.
+
+### 88.3 SYNTHA TARGET — optional managed marketplace services
+
+These functions should be modular, because they create financial and legal exposure.
+
+Modules:
+
+1. **Retailer Verification**
+   - legal business verification;
+   - tax/resale documentation;
+   - identity and authorized representative;
+   - fraud signals;
+   - decision and review queue.
+
+2. **Trade Credit**
+   - external credit provider or regulated partner;
+   - limit and exposure;
+   - due dates;
+   - late-payment handling;
+   - brand payout timing;
+   - fee calculation;
+   - country eligibility.
+
+3. **Payment Guarantee**
+   - guarantee eligibility;
+   - covered amount;
+   - exclusions;
+   - fulfillment evidence;
+   - payout state;
+   - dispute state.
+
+4. **Opening Order Protection**
+   - first order definition;
+   - return eligibility;
+   - non-returnable categories;
+   - return window;
+   - platform/brand-funded policy;
+   - warehouse disposition;
+   - economics by cohort.
+
+5. **Managed Shipping**
+   - platform-negotiated label;
+   - carrier selection;
+   - shipment cost estimate;
+   - commercial invoice;
+   - tracking;
+   - claim.
+
+Critical rule: Syntha must never display “guaranteed payment” unless the guarantee provider, scope, exclusions and evidence are explicit.
+
+Official sources:
+
+- https://www.faire.com/support/articles/46375737307035
+- https://www.faire.com/support/articles/360015892572
+- https://www.faire.com/support/articles/360015892592
+- https://www.faire.com/support/articles/360018414552
+- https://www.faire.com/support/articles/360023300451
+
+---
+
+## 89. Brandboom — frictionless wholesale, engagement and rep control
+
+### 89.1 Confirmed capabilities
+
+Official Brandboom materials confirm:
+
+- rich digital line sheets with video and lifestyle media;
+- instantly updated buyer links and PDF export;
+- buyer can view line sheets without a full account in some flows;
+- direct ordering from shared link;
+- real-time buyer activity and click tracking;
+- visibility of open/draft orders;
+- sales rep can intervene in stalled carts;
+- buyer and seller collaboration on the same order;
+- order, invoice, payment and shipment in one workspace;
+- Stripe and PayPal payments;
+- Shippo shipping integration;
+- order export through API, Zapier and custom mapping;
+- rep/territory performance;
+- automatic commission calculation;
+- Shopify and ApparelMagic integrations;
+- ERP file-drop and API integration;
+- real-time inventory where integration supports it;
+- prepacks;
+- multiple price lists and currencies;
+- automatic volume discounts;
+- multiple languages;
+- Marketplace with merchant-of-record payment flow;
+- buyer 60-day payment terms in marketplace flows;
+- guaranteed seller payout subject to platform rules.
+
+### 89.2 JOOR status
+
+JOOR supports linesheets, ordering and payments, but the following Brandboom-style flows were not confirmed in the audited retailer cabinet:
+
+- guest buyer line-sheet ordering without normal account onboarding;
+- visible open carts with seller intervention;
+- rep takeover of buyer draft;
+- automatic rep commission statements;
+- prepacks as a first-class product-ordering construct;
+- no-code ERP file-drop mapping;
+- cart recovery workflow tied directly to buyer engagement.
+
+### 89.3 SYNTHA TARGET — improve, do not copy blindly
+
+- Guest view may be accountless; placing a legally binding order requires verified identity or a controlled verification step.
+- Seller may assist a draft only after buyer consent or when draft ownership is seller-created.
+- After submission, all edits become amendments.
+- Open/click tracking requires transparent privacy settings.
+- Rep commission is calculated from certified order/invoice/payment states.
+- Prepack ordering expands into pack templates, break-pack policy, inner/outer carton and size ratio analytics.
+- Buyer inactivity workflow should create a task, not spam automatically.
+
+Official sources:
+
+- https://www.brandboom.com/
+- https://www.brandboom.com/order-management
+- https://www.brandboom.com/product-management
+- https://support.brandboom.com/en/articles/14120706-manage-marketplace-orders-and-get-paid
+- https://support.brandboom.com/en/articles/14120213-marketplace-faq-for-sellers
+
+---
+
+## 90. Pepperi — field sales, trade promotions and retail execution
+
+Pepperi is not fashion-specific, but several operating capabilities are valuable for wholesale brands with field teams and store networks.
+
+### 90.1 Confirmed capabilities
+
+Official Pepperi materials confirm:
+
+- self-service B2B ecommerce;
+- buyer-specific catalog, pricing, discounts and order history;
+- mobile order-taking for reps;
+- online/offline native apps;
+- complete account information in the field;
+- sales-rep activity planning and dashboards;
+- mobile CRM;
+- configurable forms and surveys;
+- asset reviews;
+- returns;
+- inventory access;
+- trade promotions;
+- cross-sell and upsell rules;
+- item, bundle, package, category and volume incentives;
+- retail execution;
+- route planning;
+- direct store delivery / route accounting;
+- van inventory, invoicing and payment collection;
+- operational analytics;
+- no-code workflows, forms, rules and dashboards;
+- multi-site, multi-catalog, multi-price-list, multi-language and multi-currency;
+- iPaaS and many ERP connectors.
+
+### 90.2 JOOR status
+
+Field-sales execution, route accounting, store audit and configurable no-code business rules were not confirmed in the audited JOOR cabinet.
+
+### 90.3 SYNTHA TARGET — fashion adaptation
+
+1. **Showroom and Market Rep App**
+   - offline product and account data;
+   - appointment plan;
+   - buyer shortlist;
+   - proposed order;
+   - note and photo capture;
+   - follow-up task.
+
+2. **Wholesale Door Visit**
+   - store visit plan;
+   - assortment compliance;
+   - visual merchandising check;
+   - stock count;
+   - display/photo evidence;
+   - local demand note;
+   - replenishment proposal;
+   - issue escalation.
+
+3. **Trade Promotion Execution**
+   - promotion eligibility;
+   - order-level application;
+   - display commitment;
+   - retailer evidence;
+   - accrual and claim;
+   - ROI.
+
+4. **Offline Control**
+   - encrypted dataset;
+   - conflict resolution;
+   - explicit unsubmitted state;
+   - no duplicate order after reconnect.
+
+Official sources:
+
+- https://www.pepperi.com/
+- https://www.pepperi.com/platform-overview/
+- https://www.pepperi.com/resources/features/
+- https://www.pepperi.com/why-pepperi/
+
+---
+
+## 91. Shopify B2B — company-location commerce model as mandatory baseline
+
+Shopify B2B reinforces that B2B customer is not one flat account.
+
+Confirmed capabilities include:
+
+- company;
+- multiple company locations;
+- multiple contacts;
+- catalog assignment by company or location;
+- customer-specific products and prices;
+- currencies;
+- quantity rules;
+- volume pricing;
+- discounts;
+- payment terms;
+- tax IDs and exemptions;
+- B2B checkout.
+
+### SYNTHA TARGET
+
+Every commercial calculation must resolve against:
+
+```text
+Buyer User
+→ Membership
+→ Buyer Company
+→ Company Location / Door
+→ Territory
+→ Catalog
+→ Price List
+→ Currency
+→ Tax Profile
+→ Payment Terms
+→ Shipping Rules
+```
+
+Required screens:
+
+- company hierarchy;
+- location commercial settings;
+- assigned contacts and roles;
+- assigned catalogs;
+- preview checkout as location;
+- effective date history;
+- conflicts and missing setup;
+- bulk assignment;
+- import/export.
+
+Official source:
+
+- https://help.shopify.com/en/manual/b2b/catalogs/index
+
+---
+
+## 92. PLM analogs — best capabilities absent from ordinary wholesale platforms
+
+### 92.1 Delogue — supplier collaboration and live product record
+
+Official Delogue materials confirm:
+
+- one structured product record;
+- BOM integrated into style;
+- reusable central item/component library;
+- bulk update or replacement of components across styles;
+- supplier users collaborating directly in the same workflow;
+- item clone by supplier;
+- sample requests across one or multiple styles;
+- sample status, comments, quantities, files and approvals;
+- communication attached to style/material/sample;
+- decision/change history;
+- live reports and collection overviews;
+- saved and shareable reports;
+- some updates from report views;
+- size charts, grading, care, SKU/barcodes, prepacks and lab dips;
+- Adobe/Illustrator-oriented integration.
+
+**SYNTHA TARGET:**
+
+- supplier portal at no additional per-supplier barrier for core collaboration;
+- field-level share policy;
+- bulk material substitution impact analysis;
+- sample cart and batch requests;
+- editable operational reports with audit;
+- native design-plugin API;
+- decision history linked to margin and calendar impact.
+
+### 92.2 Centric — connected planning, pricing, inventory and PXM
+
+Official Centric materials confirm integrated focus on:
+
+- PLM;
+- merchandise and assortment planning;
+- pricing and inventory optimization;
+- allocation and replenishment;
+- market intelligence;
+- visual boards;
+- PXM/content commercialization;
+- testing, quality, compliance and sustainability;
+- AI-assisted market and product insight;
+- what-if and lifecycle decision support.
+
+**SYNTHA TARGET:**
+
+- do not isolate PLM from commercial planning;
+- plan target price, target cost, unit count and margin inside line plan;
+- send approved product projection into wholesale catalog;
+- return actual sell-through, markdown, returns and margin into next line plan;
+- single visual board object connected to plan, style, assortment and campaign;
+- PXM readiness per channel.
+
+### 92.3 WFX — versioning and multi-cost-sheet discipline
+
+Official WFX materials confirm:
+
+- style information, specs, grading, labels, construction and packaging;
+- fabric/trim library;
+- product variants and versioning;
+- change log by user/date/time;
+- BOM;
+- multiple cost sheets;
+- indirect cost inclusion;
+- margin analysis;
+- online supplier product specs;
+- approvals and testing management.
+
+**SYNTHA TARGET:**
+
+- immutable cost versions;
+- side-by-side target/quoted/negotiated/PO/actual cost;
+- change impact on margin, price and order;
+- supplier acknowledgement of released specification;
+- automated detection of stale tech-pack usage.
+
+Official sources:
+
+- https://www.delogue.com/platform/core-features
+- https://www.delogue.com/en/solution
+- https://www.centricsoftware.com/fashion-apparel
+- https://www.centricsoftware.com/centric-planning-pricing
+- https://apptest.wfxondemand.com/web-pdm-fashion-apparel.html
+
+---
+
+## 93. Gap matrix — лучшие возможности аналогов, не подтвержденные в JOOR audit
+
+`JOOR NOT CONFIRMED` ниже не означает доказанное отсутствие; это список обязательного UAT и product-gap design.
+
+| Capability | Benchmark | JOOR evidence status | Syntha requirement | Priority |
+|---|---|---|---|---|
+| Multi-brand product shopping | NuORDER | NOT CONFIRMED | Global product discovery + split master basket | P1 |
+| AI brand/product recommendations | NuORDER | NOT CONFIRMED | Explainable ranking with business guardrails | P2 |
+| Product/category/color/size trends | NuORDER | NOT CONFIRMED | Certified network trend layer | P1 |
+| Top-product badges | NuORDER | NOT CONFIRMED | Confidence-aware trend badges | P1 |
+| Multi-door collaborative assortment | NuORDER | GATED/UAT | Native planning workspace | P1 |
+| Assortment targets upload/paste | NuORDER | NOT CONFIRMED | Target engine with OTB/margin | P1 |
+| Assortment rollups | NuORDER | NOT CONFIRMED | Rollup across buyers/doors/entities | P1 |
+| SMU placeholders and bulk linking | NuORDER | NOT CONFIRMED | Line-plan placeholder → real style | P1 |
+| Order intents before PO | NuORDER | NOT CONFIRMED | Buying intent state and forecast | P1 |
+| Campaign open tracking | NuORDER/Brandboom | NOT CONFIRMED | Consent-aware engagement analytics | P2 |
+| Customizable product proofs | NuORDER | NOT CONFIRMED | Customization + proof + production link | P1 |
+| Smart reorder from POS | Lightspeed | NOT CONFIRMED | Supplier-grouped reorder recommendation | P1 |
+| Automatic PO/product sync into POS | Lightspeed | NOT CONFIRMED | POS-neutral bi-directional integration | P1 |
+| Retailer verification | Faire | NOT CONFIRMED | Marketplace trust service | P2 |
+| Platform-funded first-order returns | Faire | NOT CONFIRMED | Optional risk product | P3 |
+| Net terms with independent brand payout | Faire | NOT CONFIRMED | Credit partner integration | P3 |
+| Managed return labels/warehouse | Faire | NOT CONFIRMED | Optional managed returns | P3 |
+| Guest buyer line-sheet access | Brandboom | NOT CONFIRMED | Secure expiring guest view | P1 |
+| Seller visibility into open carts | Brandboom | NOT CONFIRMED | Draft engagement with privacy controls | P2 |
+| Seller-assisted cart recovery | Brandboom | NOT CONFIRMED | Consent-based draft assistance | P2 |
+| Automatic rep commissions | Brandboom | NOT CONFIRMED | Certified commission engine | P2 |
+| Prepacks as first-class ordering | Brandboom/Delogue | NOT CONFIRMED | Pack templates and break-pack policy | P1 |
+| No-code ERP file mapping | Brandboom/Pepperi | NOT CONFIRMED | Mapping studio and activity center | P2 |
+| Trade promotions rule engine | Pepperi | NOT CONFIRMED | Promotion eligibility and accrual | P2 |
+| Native offline rep app | Pepperi | PARTIAL/UAT | Encrypted offline market workflow | P2 |
+| Retail execution/store audits | Pepperi | NOT CONFIRMED | Door visit and VM compliance | P3 |
+| Configurable forms/surveys | Pepperi | NOT CONFIRMED | No-code operational forms | P2 |
+| Company-location catalogs | Shopify B2B | PARTIAL/UAT | Canonical B2B commercial hierarchy | P0 |
+| Quantity rules/volume pricing | Shopify B2B | NOT CONFIRMED | Pricing and quantity rule engine | P1 |
+| Supplier shared BOM workspace | Delogue | NOT CONFIRMED | Supplier portal with field sharing | P1 |
+| Bulk component replacement | Delogue | NOT CONFIRMED | Impact-controlled material substitution | P1 |
+| Live editable collection reports | Delogue | NOT CONFIRMED | Operational report write-back | P2 |
+| Integrated PLM + planning + pricing | Centric | NOT CONFIRMED | Closed-loop fashion OS | P1 |
+| PXM/content syndication | Centric | NOT CONFIRMED | Channel-ready content projection | P2 |
+| Multiple cost sheets with indirect cost | WFX | NOT CONFIRMED | Versioned cost comparison | P1 |
+
+---
+
+## 94. Assortment, target and rollup engine — detailed Syntha specification
+
+### 94.1 Entities
+
+```text
+Assortment
+AssortmentVersion
+AssortmentLine
+AssortmentDoor
+AssortmentDelivery
+AssortmentTarget
+AssortmentTargetCell
+AssortmentRollup
+PlaceholderStyle
+PlaceholderLink
+BuyingIntent
+AssortmentApproval
+AssortmentComment
+AssortmentScenario
+```
+
+### 94.2 Assortment header
+
+- name;
+- season;
+- collection scope;
+- retailer organization;
+- legal entity;
+- buyer team;
+- currency;
+- reporting currency;
+- status;
+- owner;
+- version;
+- doors/clusters;
+- deliveries;
+- budget source;
+- approval policy;
+- source catalog versions;
+- last sync timestamp.
+
+### 94.3 Line fields
+
+- product or placeholder;
+- brand;
+- style/color/SKU;
+- category;
+- delivery;
+- wholesale;
+- landed cost;
+- retail price;
+- margin;
+- units by door and size;
+- value;
+- OTB consumption;
+- role in assortment;
+- allocator note;
+- buyer note;
+- brand-shared note;
+- availability;
+- risk flags;
+- recommendation reason;
+- manual override reason.
+
+### 94.4 Target types
+
+- value;
+- units;
+- style count;
+- option count;
+- SKU count;
+- intake margin;
+- gross margin forecast;
+- retail value;
+- price-band mix;
+- category mix;
+- brand mix;
+- color-family mix;
+- delivery mix;
+- carry-over/newness;
+- sustainable attribute share;
+- store capacity;
+- OTB;
+- cash-flow month.
+
+### 94.5 State machine
+
+```text
+DRAFT
+→ IN_REVIEW
+→ CHANGES_REQUESTED
+→ APPROVED
+→ LOCKED_FOR_ORDER_INTENT
+→ PARTIALLY_CONVERTED
+→ CONVERTED_TO_ORDERS
+→ ARCHIVED
+```
+
+Changes after approval create a new version or controlled revision.
+
+### 94.6 Rollup
+
+Rollup can aggregate by:
+
+- legal entity;
+- buyer;
+- store;
+- cluster;
+- brand;
+- category;
+- delivery;
+- currency;
+- status;
+- scenario.
+
+It must show:
+
+- target;
+- selected;
+- variance;
+- approved;
+- ordered;
+- confirmed;
+- received;
+- sold;
+- ending stock.
+
+### 94.7 Placeholder / SMU
+
+Placeholder contains:
+
+- desired category;
+- product brief;
+- target price;
+- target cost;
+- target margin;
+- delivery;
+- planned units;
+- colors;
+- size range;
+- image/sketch;
+- assigned brand or open sourcing;
+- match criteria;
+- linked actual product;
+- variance report.
+
+### 94.8 Required events
+
+- assortment_created;
+- target_uploaded;
+- line_added;
+- placeholder_created;
+- placeholder_linked;
+- quantity_changed;
+- target_breached;
+- scenario_created;
+- assortment_submitted;
+- assortment_approved;
+- buying_intent_shared;
+- assortment_converted_to_order.
+
+### 94.9 Acceptance criteria
+
+- paste 10,000 target cells without browser freeze;
+- support 100+ doors and 50,000 SKU-door cells through virtualization;
+- formula totals remain identical after export/import;
+- concurrent edits produce visible conflict, not silent overwrite;
+- every order line traces to assortment line/version;
+- permission prevents brand from seeing retailer private target/margin;
+- rollup reconciles exactly to component assortments.
+
+---
+
+## 95. Wholesale trend intelligence and privacy controls
+
+### 95.1 Trend grains
+
+- product;
+- style;
+- color;
+- size;
+- category;
+- price band;
+- brand;
+- market;
+- retailer segment;
+- immediate/prebook/reorder;
+- week/month/season.
+
+### 95.2 Metrics
+
+- ordered units;
+- ordered value;
+- unique buyers;
+- conversion;
+- reorder rate;
+- median order size;
+- velocity;
+- growth;
+- rank;
+- percentile;
+- share of category;
+- size share;
+- color share;
+- return/cancellation rate where permitted.
+
+### 95.3 Privacy
+
+Network benchmark requires:
+
+- minimum number of independent retailer organizations;
+- minimum order volume;
+- aggregation;
+- no single-retailer inference;
+- no competitor-specific sensitive detail;
+- opt-in/contract basis;
+- geographic and legal restrictions;
+- suppression of sparse cells;
+- access logging;
+- data retention policy.
+
+### 95.4 Badge logic
+
+```text
+Top Product
+= rank within eligible population
+AND minimum units
+AND minimum buyers
+AND acceptable cancellation/return quality
+```
+
+A high unit count from one buyer must not automatically create a marketplace bestseller badge.
+
+### 95.5 Recommendation explanation
+
+Every recommended product displays:
+
+- recommendation type;
+- strongest factors;
+- availability timestamp;
+- price context;
+- confidence;
+- business constraints applied;
+- sponsored/non-sponsored status;
+- hide/not relevant feedback.
+
+---
+
+## 96. Smart reorder and retail feedback loop — detailed specification
+
+### 96.1 Inputs
+
+- on hand;
+- on order;
+- in transit;
+- reserved;
+- sales history;
+- returns;
+- stockout days;
+- lead time;
+- delivery calendar;
+- MOQ/MOV;
+- pack size;
+- safety stock;
+- season end;
+- expected markdown;
+- supplier ATS/ATP;
+- buyer budget;
+- margin.
+
+### 96.2 Base calculation
+
+```text
+Forecast Demand during Lead Time
+= Forecast Daily Demand × Effective Lead-Time Days
+
+Net Requirement
+= Forecast Demand during Lead Time
++ Safety Stock
+- On Hand
+- Confirmed Inbound
+
+Suggested Order Qty
+= round_to_pack(max(0, Net Requirement))
+```
+
+The production algorithm may be more advanced, but these components must remain inspectable.
+
+### 96.3 Flow
+
+```text
+Retail data received
+→ Mapping and quality check
+→ Forecast calculated
+→ Constraint check
+→ Suggested quantities grouped by supplier
+→ Buyer reviews
+→ Budget/margin check
+→ Draft orders created
+→ Supplier availability check
+→ Submit/confirm
+→ PO sync back
+→ Receipt and actual performance
+```
+
+### 96.4 Buyer controls
+
+- accept all;
+- accept selected;
+- override quantity;
+- exclude SKU;
+- snooze recommendation;
+- substitute product;
+- change supplier;
+- change delivery;
+- set max investment;
+- save rule;
+- reason required for material override.
+
+### 96.5 Learning loop
+
+Record:
+
+- recommendation;
+- accepted quantity;
+- override;
+- reason;
+- confirmed quantity;
+- received quantity;
+- sold quantity;
+- markdown;
+- stockout;
+- outcome window.
+
+---
+
+## 97. Buyer engagement, outreach and cart recovery
+
+### 97.1 Engagement events
+
+- presentation_sent;
+- email_delivered;
+- email_opened where lawful and consented;
+- link_opened;
+- linesheet_viewed;
+- product_viewed;
+- product_saved;
+- quantity_entered;
+- cart_created;
+- cart_abandoned;
+- rep_followup_created;
+- buyer_replied;
+- order_submitted.
+
+### 97.2 Engagement workspace
+
+For seller/rep:
+
+- buyer/company;
+- last activity;
+- viewed products;
+- saved list;
+- open cart value;
+- inactive duration;
+- delivery/price changes since activity;
+- recommended next action;
+- contact preference;
+- owner;
+- SLA;
+- outcome.
+
+### 97.3 Draft assistance rules
+
+- buyer-owned private draft is not editable by seller by default;
+- buyer can request help and grant timed access;
+- seller-created proposal is explicitly labeled;
+- seller edits are visible before buyer acceptance;
+- after order submission, amendment rules apply;
+- no hidden quantity or price changes;
+- all assistance actions audited.
+
+### 97.4 Cart recovery guardrails
+
+- frequency cap;
+- quiet hours;
+- unsubscribe/contact preference;
+- no message after buyer explicitly rejects;
+- suppress when product is unavailable or price expired;
+- measure incremental conversion, not only contacted revenue.
+
+---
+
+## 98. Customization, SMU and made-to-order workflow
+
+### 98.1 Customization template
+
+- template ID/version;
+- eligible products;
+- eligible customers;
+- option groups;
+- required/optional;
+- dependencies;
+- validation;
+- price surcharge;
+- production lead-time impact;
+- image/artwork requirements;
+- proof requirement;
+- expiration.
+
+### 98.2 Option types
+
+- text;
+- number;
+- measurement;
+- color;
+- material;
+- placement;
+- embroidery;
+- print;
+- monogram;
+- logo upload;
+- trim;
+- packaging;
+- quantity-dependent configuration.
+
+### 98.3 State machine
+
+```text
+CONFIGURED
+→ VALIDATED
+→ SUBMITTED
+→ PROOF_REQUIRED
+→ PROOF_CREATED
+→ BUYER_REVIEW
+→ APPROVED / CHANGES_REQUESTED
+→ PRODUCTION_RELEASED
+→ COMPLETED
+```
+
+### 98.4 Order line snapshot
+
+Customized order line stores:
+
+- base product version;
+- customization template version;
+- selected values;
+- uploaded files and checksum;
+- surcharge breakdown;
+- lead-time effect;
+- proof version;
+- approval;
+- production instructions;
+- reorder compatibility status.
+
+### 98.5 PLM/production connection
+
+Customization can:
+
+- create an SMU colorway/SKU;
+- create a one-off production specification;
+- reuse approved template;
+- trigger material availability check;
+- trigger artwork approval;
+- generate BOM/BOL delta;
+- generate factory instruction attachment.
+
+---
+
+## 99. Trade promotions and wholesale incentives engine
+
+### 99.1 Promotion types
+
+- item discount;
+- category discount;
+- quantity tier;
+- order value tier;
+- buy X get Y;
+- bundle/package;
+- early order;
+- preseason commitment;
+- free freight;
+- payment-term incentive;
+- display allowance;
+- markdown support;
+- sample/tester allowance;
+- retailer-specific rebate.
+
+### 99.2 Rule scope
+
+- customer group;
+- company/location;
+- country;
+- currency;
+- brand;
+- category;
+- product;
+- delivery;
+- date/time;
+- channel;
+- sales rep;
+- order type;
+- quantity/value threshold.
+
+### 99.3 Conflict and stacking
+
+Each promotion defines:
+
+- combinable/non-combinable;
+- priority;
+- best-price or first-match;
+- max benefit;
+- exclusion list;
+- manual approval threshold;
+- budget owner;
+- funding split.
+
+### 99.4 Accrual and ROI
+
+```text
+Promotion ROI
+= Incremental Gross Margin - Promotion Cost - Execution Cost
+  divided by Promotion Cost + Execution Cost
+```
+
+Need holdout or baseline method; gross sales alone do not prove effectiveness.
+
+### 99.5 Evidence
+
+For display/retail-execution incentives:
+
+- task;
+- store;
+- photo;
+- timestamp;
+- geolocation where lawful;
+- approval;
+- claim;
+- settlement.
+
+---
+
+## 100. Retail execution and offline field operations
+
+### 100.1 Visit plan
+
+- retailer location;
+- purpose;
+- rep;
+- planned date/window;
+- route;
+- priority;
+- required forms;
+- open issues;
+- last visit;
+- expected outcome.
+
+### 100.2 Visit execution
+
+- check-in;
+- contact met;
+- stock observation;
+- merchandising compliance;
+- display/share-of-space;
+- competitor observation;
+- product feedback;
+- photo/video evidence;
+- replenishment need;
+- return/defect issue;
+- follow-up tasks;
+- signature/acknowledgement where required.
+
+### 100.3 Offline package
+
+- selected accounts;
+- product catalog subset;
+- valid price lists;
+- inventory timestamp;
+- forms;
+- open orders/tasks;
+- encrypted assets;
+- expiry;
+- sync conflict policy.
+
+### 100.4 Analytics
+
+- visits completed;
+- visit compliance;
+- orders per visit;
+- replenishment conversion;
+- issue closure;
+- visual compliance;
+- promotion execution;
+- rep productivity;
+- travel efficiency.
+
+---
+
+## 101. Managed marketplace risk and services architecture
+
+### 101.1 Service boundaries
+
+Syntha Core must work without becoming lender, insurer, carrier or merchant of record.
+
+Optional services may be delivered through licensed partners:
+
+- identity/business verification;
+- payment processing;
+- trade credit;
+- payment guarantee;
+- shipping labels;
+- return logistics;
+- insurance;
+- tax calculation;
+- customs brokerage.
+
+### 101.2 Marketplace order contract
+
+- seller of record;
+- merchant of record;
+- payment processor;
+- credit provider;
+- return-risk owner;
+- shipping-cost owner;
+- tax responsibility;
+- dispute process;
+- governing terms version.
+
+### 101.3 Economics ledger
+
+For every marketplace order:
+
+- product subtotal;
+- seller discount;
+- platform-funded incentive;
+- retailer fee;
+- commission;
+- payment fee;
+- financing fee;
+- shipping;
+- return reserve;
+- payout;
+- refund;
+- recovery;
+- contribution margin.
+
+### 101.4 Risk dashboard
+
+- approved exposure;
+- utilization;
+- delinquency;
+- fraud alerts;
+- return rate;
+- disputed amount;
+- guarantee claims;
+- net loss;
+- concentration by buyer/brand/country.
+
+---
+
+## 102. Guest access and frictionless buying
+
+### 102.1 Guest presentation link
+
+- random high-entropy token;
+- expiry;
+- optional email verification;
+- allowed products/fields;
+- allowed prices;
+- allowed actions;
+- territory/IP policy where justified;
+- revoke;
+- view audit;
+- rate limits.
+
+### 102.2 Guest states
+
+```text
+LINK_CREATED
+→ OPENED
+→ VERIFIED_OPTIONAL
+→ VIEWING
+→ CART_STARTED
+→ IDENTITY_REQUIRED
+→ VERIFIED_BUYER
+→ ORDER_SUBMITTED
+→ EXPIRED / REVOKED
+```
+
+### 102.3 Friction rules
+
+- browsing may be accountless;
+- internal cost/margin never exposed;
+- customer-specific price requires verified context;
+- order submission requires business identity and terms acceptance;
+- previously shared link must not reveal later restricted products;
+- link uses catalog snapshot or clearly displays live-update behavior.
+
+---
+
+## 103. Competitor patterns we should not copy literally
+
+### 103.1 Silent collaborative editing after submission
+
+Some competitors market buyer/seller editing of the same order. Syntha uses:
+
+- live collaboration in draft/proposal;
+- explicit amendment after submission;
+- counterparty acceptance;
+- immutable prior versions.
+
+### 103.2 Opaque bestseller and recommendation badges
+
+Do not display a badge without:
+
+- covered population;
+- period;
+- minimum sample;
+- metric;
+- sponsorship label;
+- eligibility explanation.
+
+### 103.3 Platform-guaranteed payment without contractual clarity
+
+Do not promise guarantee unless a regulated/contracted provider covers defined risk.
+
+### 103.4 Unlimited buyer tracking
+
+Open/click tracking must respect privacy law, consent and customer settings.
+
+### 103.5 Marketplace return subsidy as default SaaS feature
+
+Risk-funded returns are an optional financial product, not a free UI checkbox.
+
+### 103.6 Direct PLM record exposure to buyer
+
+Wholesale Catalog Product is a controlled commercial projection from approved PLM data.
+
+### 103.7 One vendor POS lock-in
+
+NuORDER/Lightspeed integration is strong, but Syntha must remain POS-neutral through canonical data contracts.
+
+---
+
+## 104. Revised priority based on competitor research
+
+### Baseline required before market positioning
+
+- company/location commercial model;
+- customer-specific catalog and pricing;
+- live ATS with timestamp;
+- working order;
+- order approval and confirmation;
+- custom lists/proposals;
+- guest presentation link;
+- prepacks and delivery windows;
+- ERP/POS product and PO sync;
+- buyer activity and draft recovery;
+- marketplace discovery;
+- basic order/product trend analytics.
+
+### Differentiators required to be stronger than JOOR/NuORDER
+
+- PLM-to-catalog projection;
+- target costing and BOM;
+- assortment targets and rollups;
+- OTB and cash control;
+- ATP from inventory + production capacity;
+- RFQ and supplier cost comparison;
+- order-to-production traceability;
+- QC, claims and actual landed cost;
+- sell-through feedback into planning;
+- certified semantic layer;
+- auditable AI;
+- optional managed credit/returns marketplace services.
+
+### Immediate P0/P1 backlog additions
+
+1. AssortmentTarget and AssortmentRollup.
+2. PlaceholderStyle / SMU.
+3. CustomList and ProposedOrder.
+4. ProductCustomizationTemplate and Proof.
+5. CompanyLocationCatalogAssignment.
+6. PackTemplate.
+7. InventorySnapshot and ATS.
+8. POSProductMapping and POSyncJob.
+9. EngagementEvent and DraftAssistanceGrant.
+10. TrendMetricSnapshot.
+11. ReplenishmentRecommendation.
+12. PromotionRule.
+13. SupplierSharedWorkspace.
+14. CommercialProductProjection.
+15. MetricDefinition registry.
+
+---
+
+## 105. Additional official source register
+
+### NuORDER / Lightspeed
+
+- https://www.lightspeedhq.com/partners/b2b/
+- https://x-series-support.lightspeedhq.com/hc/en-us/articles/46522641418523-Intro-to-Lightspeed-Wholesale-for-Retail-POS-X-Series
+- https://x-series-support.lightspeedhq.com/hc/en-us/articles/49211379755547-NuORDER-Marketplace-overview-for-Retail-POS-X-Series-merchants
+- https://x-series-support.lightspeedhq.com/hc/en-us/articles/47140576715035-Reordering-products-from-the-NuORDER-Marketplace-in-Retail-POS-X-Series
+- https://helpdesk.nuorder.com/hc/en-us/articles/27071765927195-Order-Trends-overview
+- https://helpdesk.nuorder.com/hc/en-us/articles/30678542786203-Brand-assortments-overview
+- https://helpdesk.nuorder.com/hc/en-us/articles/18923106692379-Targets-in-assortments
+- https://helpdesk.nuorder.com/hc/en-us/articles/43031595511451-Assortments-update-October-2025
+- https://helpdesk.nuorder.com/hc/en-us/articles/200719648-Custom-Lists-for-buyers
+- https://helpdesk.nuorder.com/hc/en-us/articles/360040938392-Creating-a-Custom-List
+- https://helpdesk.nuorder.com/hc/en-us/articles/13898584214939-Ordering-products-with-Customizations
+- https://helpdesk.nuorder.com/hc/en-us/articles/115005653283-Customer-and-User-Groups
+- https://helpdesk.nuorder.com/hc/en-us/articles/115005758446-Price-sheet-overview
+- https://helpdesk.nuorder.com/hc/en-us/articles/360046176951-Virtual-showrooms
+
+### Faire
+
+- https://www.faire.com/support/articles/46375737307035
+- https://www.faire.com/support/articles/360015892572
+- https://www.faire.com/support/articles/360015892592
+- https://www.faire.com/support/articles/360018414552
+- https://www.faire.com/support/articles/360023300451
+
+### Brandboom
+
+- https://www.brandboom.com/
+- https://www.brandboom.com/order-management
+- https://www.brandboom.com/product-management
+- https://support.brandboom.com/en/articles/14120706-manage-marketplace-orders-and-get-paid
+- https://support.brandboom.com/en/articles/14120213-marketplace-faq-for-sellers
+
+### Pepperi
+
+- https://www.pepperi.com/
+- https://www.pepperi.com/platform-overview/
+- https://www.pepperi.com/resources/features/
+- https://www.pepperi.com/why-pepperi/
+
+### PLM / planning
+
+- https://www.delogue.com/platform/core-features
+- https://www.delogue.com/en/solution
+- https://www.centricsoftware.com/fashion-apparel
+- https://www.centricsoftware.com/centric-planning-pricing
+- https://apptest.wfxondemand.com/web-pdm-fashion-apparel.html
+
+### Final decision
+
+NuORDER is currently the strongest direct benchmark for retailer assortment planning, trend intelligence, POS-linked replenishment and collaborative buying intent. Faire is the strongest benchmark for marketplace risk transfer. Brandboom is a strong benchmark for frictionless line-sheet sales, engagement and rep workflow. Pepperi is a strong benchmark for field sales, trade promotions and offline retail execution. Centric, Delogue and WFX define the PLM/planning baseline.
+
+Syntha should combine these strengths while preserving stricter order versioning, better financial traceability and a single product lifecycle from idea to sell-through.

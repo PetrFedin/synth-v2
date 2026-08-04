@@ -2337,3 +2337,1147 @@ Export:
 - failed import/export jobs.
 
 Документ должен использоваться как reference map и backlog source. Он не утверждает, что закрытые процессы полностью воспроизведены, и не копирует proprietary implementation.
+
+---
+
+## 37. Дополнение: второй глубокий проход по вложенным состояниям (2026-08-04)
+
+Ниже добавлены детали, которые невозможно увидеть только из верхнеуровневого меню: состояния карточки заказа, модальные окна импорта и экспорта, внутреннее устройство Looks и Styleboards, все папки сообщений, публичная карточка неподключённого бренда, редактор профиля ритейлера и отдельные мини-редакторы системных настроек.
+
+Ограничения аудита:
+
+- реальные номера заказов, суммы, адреса, телефоны, e-mail пользователей и другие значения конкретного аккаунта намеренно не переносятся в этот документ;
+- фиксируются структура, тип данных, порядок, доступные команды, статусы, ограничения и связи между объектами;
+- кнопки, которые создают заказ, принимают подключение, отправляют сообщение, сохраняют профиль, запускают экспорт или скачивание, не подтверждались до необратимого действия;
+- состояния форм изучались до шага отправки данных.
+
+## 38. Карточка заказа: полный состав экрана и зависимости
+
+Маршрут экземпляра имеет форму /ra/orders/review/{orderId}. В таблице Manage Orders переход в одну карточку дублируется почти во всех ячейках строки: бренд, PO, статус, единицы, сумма, linesheet, complete ship, buyer и modified.
+
+### 38.1 Верхний уровень карточки
+
+Карточка состоит из двух вкладок:
+
+1. Overview — полная операционная и финансовая информация.
+2. Pay — состояние онлайн-оплаты или форма выражения интереса к JOOR Pay.
+
+Верхняя панель также содержит:
+
+- Last updated с датой и инициатором изменения;
+- Share Order;
+- переход в Visual Assortment;
+- состояние Product Sync и ссылку Integration Settings, если синхронизация не активирована;
+- Comments;
+- Download;
+- текущий Order Status;
+- Pay now, если сценарий оплаты доступен для просмотра;
+- ограничения действий в зависимости от статуса заказа и полномочий пользователя.
+
+### 38.2 Идентификационный блок заказа
+
+Отображаются:
+
+- Order #;
+- Brand;
+- один или несколько Linesheet со ссылками на соответствующие коллекции;
+- Shipping Delivery Window;
+- Price Type с валютой и названием прайс-листа;
+- Order Status;
+- дата последнего изменения.
+
+Связи:
+
+- заказ относится к одному бренду;
+- заказ может включать товары из нескольких linesheet одного бренда;
+- каждая товарная строка ссылается на Style и Linesheet;
+- Price Type определяет валюту и базовую оптовую цену;
+- Delivery Window существует и на уровне заказа, и как отдельное поле Complete Ship в списке.
+
+### 38.3 Shipping and Billing
+
+Блок разделён на Shipping Info и Billing Info.
+
+Shipping Info:
+
+- название юридического лица или торговой точки;
+- полный адрес;
+- контактный e-mail или связанный контакт;
+- Door;
+- Shipping Method.
+
+Billing Info:
+
+- название плательщика;
+- полный адрес;
+- VAT ID;
+- Billing Code;
+- Payment Method.
+
+Состояния доступа:
+
+- адреса могут быть read-only;
+- при ограничении отображается объяснение, что изменения должен выполнить бренд;
+- кнопка Edit становится disabled или отсутствует в зависимости от статуса и роли.
+
+Для улучшенной копии необходимо хранить отдельно:
+
+- снимок адреса, использованный в конкретном заказе;
+- ссылку на актуальную карточку локации;
+- признак источника адреса;
+- право редактирования;
+- историю изменений адреса после создания заказа;
+- юридические и логистические реквизиты независимо друг от друга.
+
+### 38.4 Products Summary
+
+Сводные показатели:
+
+- Total Units;
+- Products — число уникальных styles;
+- Colors — число заказанных colorways.
+
+Кнопка Add Products зависит от статуса. В Approved заказе добавление и изменение товаров запрещено, интерфейс явно объясняет причину и предлагает обратиться к бренду.
+
+Каждая товарная карточка содержит:
+
+- изображение;
+- название Style;
+- Wholesale Price;
+- Suggested Retail Price;
+- Style Number со ссылкой в карточку товара;
+- Linesheet со ссылкой;
+- один или несколько цветов;
+- цветовое имя и альтернативное/внутреннее имя;
+- размерный ряд;
+- количество по каждому размеру;
+- Total Qty по цвету;
+- Total Cost по цвету;
+- Total Style Qty;
+- Total Style Cost.
+
+При длинном заказе действует постепенная загрузка:
+
+- первоначально отображается ограниченное число styles;
+- показывается диапазон Showing products X–Y of Z;
+- Load All Products загружает остаток.
+
+Это означает, что улучшенная версия должна поддерживать:
+
+- постраничную или ленивую загрузку товарных строк;
+- независимую агрегацию SKU → цвет → размер;
+- перерасчёт totals без загрузки всех изображений;
+- стабильные ссылки Style и Linesheet;
+- сохранение порядка товаров;
+- фиксацию цены на момент заказа, а не только ссылку на текущий прайс.
+
+### 38.5 Contacts
+
+Контакты представлены ролями:
+
+- Sales Rep;
+- Buyer.
+
+Для каждого показываются имя/название и e-mail. Кнопка Edit может быть доступна даже при Approved заказе, то есть права на контакты отделены от прав на товары и адреса.
+
+Рекомендуемая модель:
+
+- order_contact;
+- contact_role;
+- source_user_id;
+- snapshot_name;
+- snapshot_email;
+- active_from / active_to;
+- edited_by;
+- edited_at.
+
+### 38.6 Financial Summary
+
+Показываются:
+
+- Total Order Value;
+- Total Retail Value;
+- Subtotal Wholesale;
+- пометка Incl. Product Discounts;
+- Order Discount в процентах и денежном выражении;
+- Shipping Fees;
+- Grand Total;
+- предупреждение об округлении.
+
+Критически важно разделять:
+
+- исходную цену SKU;
+- скидку на продукт;
+- скидку на заказ;
+- доставку;
+- валюту;
+- правило округления;
+- рассчитанный итог;
+- сохранённый финальный итог.
+
+Текст интерфейса подтверждает, что арифметическая сумма отображаемых округлённых компонентов может не совпадать с финальным total. Значит, источником истины должен быть серверный decimal-расчёт с сохранением точности и правила округления.
+
+### 38.7 Order Details
+
+Наблюдаемые поля:
+
+- Order Created Date;
+- Season;
+- Year;
+- Order Delivery Window.
+
+Этот блок должен расширяться системными атрибутами:
+
+- internal order id;
+- external PO;
+- creator;
+- buyer;
+- sales rep;
+- source channel;
+- created / modified / approved / shipped / cancelled timestamps;
+- version;
+- integration export state;
+- payment state;
+- currency;
+- locale/date format;
+- комментарии и вложения.
+
+### 38.8 Вкладка Pay
+
+Если бренд не активировал JOOR Pay:
+
+- показывается объяснение возможности онлайн-оплаты;
+- есть внешняя ссылка на описание JOOR Pay;
+- отображается призыв сообщить бренду об интересе;
+- кнопка I’m interested инициирует отдельный коммуникационный сигнал;
+- фактическая платёжная форма не показывается.
+
+Для копии нужны отдельные состояния:
+
+- unavailable;
+- brand_not_enabled;
+- retailer_not_eligible;
+- interest_not_sent;
+- interest_sent;
+- payment_due;
+- partially_paid;
+- paid;
+- failed;
+- refunded;
+- disputed.
+
+Pay now не должен смешиваться с изменением заказа: платёжное намерение и order mutation — разные домены и журналы аудита.
+
+## 39. Manage Orders: фильтрация, массовые действия, импорт и документы
+
+### 39.1 Дополнительные детали списка
+
+Фильтры статусов показывают не только названия, но и количество заказов в каждом статусе. Для Notes дополнительно есть разбиение Quantities:
+
+- With;
+- Without.
+
+Search & Filter содержит:
+
+- Search;
+- Buyer;
+- Date;
+- Your Selection;
+- Clear All;
+- Apply Filters.
+
+Таблица поддерживает:
+
+- checkbox выбора всей страницы;
+- checkbox каждой строки;
+- сортируемые или кликабельные колонки;
+- пагинацию;
+- выбор размера страницы;
+- общий total найденных заказов.
+
+### 39.2 Import Orders
+
+Модальное окно Import Orders представляет трёхшаговый процесс, что визуально отмечено шагами 1, 2, 3.
+
+Шаг 1:
+
+- обязательный Select an Import Template;
+- варианты:
+  - JOOR Standard Excel Order;
+  - JOOR Vertical Order Template (UPC);
+- Upload File;
+- Drag and Drop;
+- Browse files;
+- ограничение 4 MB;
+- допустимы Excel или CSV;
+- Next disabled до выбора шаблона и валидного файла.
+
+Предполагаемая дальнейшая архитектура для копии:
+
+1. выбор схемы импорта;
+2. загрузка и антивирусная/форматная проверка;
+3. чтение заголовков;
+4. сопоставление колонок;
+5. валидация бренда, linesheet, style, color, size, currency, quantities;
+6. preview валидных и ошибочных строк;
+7. подтверждение;
+8. асинхронное задание;
+9. отчёт с row-level errors;
+10. ссылка на созданные или обновлённые заказы.
+
+Обязательные данные import job:
+
+- uploader;
+- account;
+- filename;
+- MIME;
+- size;
+- checksum;
+- template;
+- created_at;
+- status;
+- total_rows;
+- accepted_rows;
+- rejected_rows;
+- warnings;
+- downloadable error report;
+- affected order ids;
+- idempotency key.
+
+### 39.3 Download Order Confirmation
+
+Модальное окно различает выбранные заказы и все заказы.
+
+Download selected as:
+
+- PDF;
+- Excel.
+
+Оба пункта disabled, пока не выбрана хотя бы одна строка.
+
+Download all as:
+
+- Raw Order Data;
+- пояснение, что будут экспортированы данные всех заказов.
+
+Кнопки:
+
+- Cancel;
+- Download.
+
+В улучшенной версии необходимо явно показывать:
+
+- область выгрузки: selected / filtered / all;
+- число заказов;
+- число строк;
+- применённые фильтры;
+- формат;
+- язык;
+- валюту;
+- часовой пояс;
+- дату генерации;
+- включение изображений;
+- включение адресов и контактов;
+- masked/unmasked PII;
+- готовность файла;
+- срок жизни ссылки.
+
+### 39.4 Export Data
+
+Модальное окно содержит:
+
+- Select order status, по умолчанию наблюдались Notes, Pending, Approved;
+- Select a type of date:
+  - Complete Ship Date;
+  - Created Date;
+  - Modified Date;
+- Add date range, disabled до выбора типа даты;
+- Select a JOOR integration type;
+- Basic Export;
+- JOOR integration option;
+- Mark exported orders — может быть disabled для Basic Export;
+- Exclude previously exported orders;
+- Cancel;
+- Export.
+
+Семантика требует хранить экспортный след на уровне заказа:
+
+- export_job_id;
+- integration_type;
+- exported_at;
+- exported_by;
+- exported_order_version;
+- exported_file_checksum;
+- exported_filter_snapshot;
+- exported_successfully;
+- exclusion_reason.
+
+Exclude previously exported orders должен сравнивать версию заказа, а не только факт когда-либо выполненного экспорта. Изменённый после экспорта заказ должен попадать в новую выгрузку либо явно отмечаться как changed_since_export.
+
+## 40. Looks: реестр, просмотр и перенос товаров
+
+### 40.1 Реестр Looks
+
+Маршрут /ra/showroom/collections.
+
+Фильтры:
+
+- Collection Name;
+- Brand Name;
+- Creator Name;
+- Created On;
+- Last Modified;
+- Clear all;
+- Apply Filters.
+
+Вкладки состояний:
+
+- CURRENT с количеством;
+- ARCHIVED с количеством.
+
+Колонки:
+
+- Collection Name;
+- Creator Name;
+- Brand;
+- Date Shared;
+- Created On;
+- Last Modified.
+
+Каждая ячейка строки ведёт в один объект Look. Это подтверждает отдельную сущность shared showroom collection с собственным идентификатором и жизненным циклом.
+
+### 40.2 Просмотр Look
+
+Вложенный маршрут имеет форму /ra/showroom/collections/{encodedCollectionId}.
+
+Наблюдаемые элементы просмотрщика:
+
+- большая композиция/полотно;
+- богатый текст, заголовки, примечания и описания материалов;
+- Hide controls;
+- PREV;
+- PAGE current/total;
+- NEXT;
+- счётчик PRODUCTS;
+- счётчик selected;
+- ADD PRODUCTS TO;
+- Styleboard;
+- Order.
+
+Кнопки Styleboard и Order disabled при нулевом выборе. Значит, пользователь должен сначала выбрать товарные hotspots или связанные продукты на полотне.
+
+Процесс:
+
+1. бренд создаёт визуальный Look;
+2. добавляет страницы и текстовые/медийные элементы;
+3. связывает элементы изображения с products/colorways;
+4. делится Look с ритейлером;
+5. ритейлер открывает Look;
+6. выбирает продукты;
+7. переносит выбор в Styleboard или Order.
+
+Необходимые сущности:
+
+- look;
+- look_page;
+- look_widget;
+- text_widget;
+- media_widget;
+- product_hotspot;
+- hotspot_geometry;
+- linked_style;
+- linked_colorway;
+- share;
+- recipient_account;
+- viewed_at;
+- archived_at;
+- selection_session.
+
+## 41. Styleboards: реестр и рабочее полотно
+
+### 41.1 Реестр Styleboards
+
+Маршрут /ra/showroom/styleboards.
+
+Действия и фильтры:
+
+- Create New;
+- Styleboard Name;
+- Brand Name;
+- Creator Name;
+- Created On;
+- Last Modified;
+- Clear all;
+- Apply Filters;
+- CURRENT;
+- ARCHIVED;
+- row checkbox;
+- Actions, disabled без выбранных строк.
+
+Колонки:
+
+- Styleboard name;
+- Brand Name;
+- Creator Name;
+- Created On;
+- Last Modified.
+
+### 41.2 Карточка Styleboard
+
+Маршрут имеет форму /ra/showroom/styleboards/{encodedStyleboardId}.
+
+Наблюдаемые элементы:
+
+- название;
+- Products count;
+- панель добавления продукта;
+- Smart Buy;
+- добавление text widget;
+- графические инструменты;
+- canvas с product image widgets;
+- несколько contenteditable текстовых блоков;
+- discard/remove control у объектов;
+- Share;
+- Comment section;
+- Select price type;
+- Add to Order;
+- General Comments;
+- Enter comment here;
+- Send.
+
+Add to Order зависит от наличия валидного выбора и price type. Send disabled при пустом комментарии.
+
+Для улучшенной версии нужны:
+
+- координаты, размер, rotation и z-index каждого объекта;
+- background;
+- product/colorway binding;
+- text content и typography;
+- автор объекта;
+- optimistic locking/version;
+- autosave status;
+- undo/redo;
+- комментарии с author/time;
+- share permissions;
+- brand/account scope;
+- price type;
+- archived state;
+- derived order link;
+- export to image/PDF;
+- копирование и template mode.
+
+## 42. Сообщения: все папки и действия
+
+Маршруты:
+
+- /messages — Inbox;
+- /messages/invitation — Invitation;
+- /messages/sent — Sent;
+- /messages/trash — Trash;
+- /messages/send — Compose;
+- /messages/view/{messageId} — цепочка;
+- /messages/actions/delete;
+- /messages/actions/read;
+- /messages/actions/unread;
+- /messages/actions/inbox.
+
+### 42.1 Общая структура
+
+Во всех папках:
+
+- навигация Inbox / Invitation / Sent / Trash;
+- Search;
+- Submit;
+- checkbox всех;
+- checkbox строки;
+- таблица;
+- сортировка по Message и Date;
+- переход в thread по отправителю или subject.
+
+Inbox/Invitation/Trash используют From; Sent использует To.
+
+### 42.2 Invitation
+
+Есть объяснение, что папка содержит сообщения, связанные с connection invitations.
+
+Действия:
+
+- Delete;
+- Mark as Read;
+- Mark as Unread.
+
+### 42.3 Sent
+
+Действия:
+
+- Compose Mail;
+- Mark as Read;
+- Mark as Unread.
+
+### 42.4 Trash
+
+Действия:
+
+- Compose Mail;
+- Move to Inbox;
+- Mark as Read;
+- Mark as Unread.
+
+### 42.5 Thread
+
+Просмотр сообщения построен как хронологическая таблица:
+
+- From / Date;
+- Subject Line;
+- ссылка на профиль участника;
+- несколько сообщений в одной цепочке;
+- subject;
+- body с переносами строк;
+- распознаваемые mailto-ссылки.
+
+Connection request может порождать thread, а не отдельный несвязанный notification. Улучшенная архитектура должна хранить:
+
+- thread;
+- participants;
+- message;
+- folder membership для каждого пользователя;
+- read_at;
+- deleted_at;
+- restored_at;
+- connection_request_id;
+- attachments;
+- subject normalization;
+- reply_to_message_id;
+- delivery channel;
+- email mirror status;
+- spam/abuse state.
+
+Важно: наблюдаемые actions оформлены как URL. В новой версии мутации нельзя выполнять GET-запросами; нужны POST/PATCH, CSRF-защита, подтверждение массового удаления и idempotency.
+
+## 43. Публичная карточка неподключённого бренда
+
+Маршрут /Accounts/view/{brandId} объединяет brand profile и storefront preview.
+
+### 43.1 Верхний блок
+
+- Brand Profile Logo;
+- переход на брендовый storefront;
+- Connect или Accept в зависимости от направления приглашения;
+- объяснение ограничения доступа до соединения.
+
+До принятия связи недоступны:
+
+- полные linesheets;
+- создание заказа;
+- информация sales rep.
+
+### 43.2 Контент профиля
+
+Могут отображаться:
+
+- embedded video;
+- название;
+- Year established;
+- Categories;
+- website;
+- Facebook;
+- Instagram;
+- описание;
+- product cards;
+- color swatches;
+- collection cards;
+- gallery/press elements;
+- документы lookbook/price list.
+
+Документы могут быть прямыми PDF на CDN, организованными по account/brand и коллекции. Нужны:
+
+- document title;
+- type;
+- season/year;
+- audience;
+- locale;
+- currency/price type;
+- uploaded_by;
+- uploaded_at;
+- version;
+- file size;
+- checksum;
+- CDN/storage key;
+- access policy;
+- view/download audit;
+- expiry/revocation.
+
+Карточка способна показывать teaser продукта, но блокировать полный доступ сообщением «только для выбранных ритейлеров». Следовательно, доступ может зависеть не только от connection, но и от product-level или collection-level audience.
+
+## 44. Публичный профиль ритейлера и его редактор
+
+Маршрут просмотра/редактирования: /ra/profile/{retailerAccountId}.
+
+### 44.1 Просмотр
+
+Показываются:
+
+- business name;
+- verification state;
+- Get Verified;
+- объяснение ценности Tax ID;
+- People;
+- Administrator;
+- Primary Location;
+- Location Name;
+- Type;
+- Address со ссылкой Google Maps;
+- Other Locations;
+- Expand All Locations.
+
+### 44.2 Режим Editing Your Profile
+
+Главная команда:
+
+- Save and View.
+
+Logo Image:
+
+- Upload;
+- Browse Images;
+- библиотека ранее загруженных изображений;
+- максимум 10 MB.
+
+Verification — Tax ID:
+
+- Country;
+- Tax ID;
+- пример формата;
+- отдельное состояние проверки.
+
+Basic Info:
+
+- Business Name отображается read-only;
+- изменение business name отправляет пользователя в account settings;
+- Description;
+- Website;
+- Instagram;
+- X;
+- Facebook.
+
+Store Photos:
+
+- до 30 файлов за один выбор;
+- .jpg, .png, .gif;
+- до 10 MB на изображение;
+- назначение: интерьер и экстерьер магазинов;
+- Upload;
+- Browse Images.
+
+People:
+
+- управление идёт через /accounts/settings;
+- у пользователя могут быть name, title, image;
+- каждый пользователь сам включает или выключает показ на company profile;
+- Go to user settings.
+
+### 44.3 Location
+
+Для Primary Location и каждой Other Location повторяется один и тот же состав:
+
+- Location Name;
+- Type;
+- Year Established;
+- Wholesale Price Range:
+  - Minimum Price;
+  - Maximum Price;
+- Country, required;
+- Address 1, required;
+- Address 2;
+- City, required;
+- Territory;
+- Zip;
+- Phone;
+- Categories;
+- Brands Carried;
+- Demographics;
+- Delete для дополнительных локаций;
+- Add another Location.
+
+Categories:
+
+- Accessories;
+- Activewear/Yoga;
+- Beauty;
+- Bridal;
+- Candles;
+- Denim;
+- Eco-friendly;
+- Evening;
+- Eyewear;
+- Gifts;
+- Handbags;
+- Hats;
+- Home;
+- Hosiery;
+- Jewelry;
+- Kids;
+- Lingerie;
+- Luggage;
+- Mens Bags;
+- Mens RTW;
+- Mens Shoe;
+- Mens Underwear;
+- Outdoor;
+- Outerwear;
+- Plus Size;
+- Resort Wear;
+- Special Occasion;
+- Swimwear;
+- Watches;
+- Womens RTW;
+- Womens Shoe.
+
+Demographics:
+
+- Gender:
+  - Male;
+  - Female;
+- Age — multi/select dictionary;
+- Described as, максимум 3:
+  - Sophisticated;
+  - Edgy;
+  - Casual;
+  - Feminine;
+  - Downtown;
+  - Active;
+  - Classic;
+  - Vintage;
+  - Bohemian;
+- Shops for, максимум 3:
+  - Professional Looks;
+  - Day to Night;
+  - Cocktail and Events;
+  - Casual Sportswear;
+  - Resort/Beach/Swimwear;
+  - Gifts.
+
+Архитектурный вывод: категории, бренды, demographics и price range привязаны к Location, а не только к retailer account. Это позволяет разным магазинам одной сети иметь разные ассортиментные профили.
+
+## 45. My Settings: все мини-редакторы и справочники
+
+Маршрут /accounts/settings.
+
+### 45.1 Manage My Account
+
+Email:
+
+- отображается текущий login email.
+
+Password:
+
+- masked;
+- Reset password.
+
+User Profile:
+
+- Full Name;
+- Job Title;
+- Phone;
+- Upload Photo;
+- Display my information on my company profile;
+- ссылка на company profile;
+- X;
+- Save Changes.
+
+Languages:
+
+- Set default language as;
+- Send Emails In;
+- варианты:
+  - English;
+  - Español;
+  - Français;
+  - Deutsch;
+  - Italiano;
+  - 日本語;
+  - 中文(简体);
+  - Русский;
+  - 한국어;
+- X;
+- Save Changes.
+
+Email Settings — отдельные Yes/No для:
+
+- пересылки сообщений JOOR inbox на e-mail;
+- e-mail о connection requests;
+- еженедельных обновлений от connections;
+- industry updates and news;
+- заказов, назначенных пользователю на web;
+- заказов, назначенных пользователю на iPad.
+
+Default Connection Request Message:
+
+- отдельный шаблон текста, используемый при запросе связи;
+- должен храниться per user или per account с явным наследованием.
+
+Date Format:
+
+- mm/dd/yyyy;
+- dd/mm/yyyy;
+- yyyy/mm/dd.
+
+Landing Page:
+
+- Home;
+- My Connections;
+- Orders;
+- Profile.
+
+Round Retail Pricing:
+
+- none;
+- 1.00;
+- 5.00.
+
+Каждый редактор открывается inline и имеет X и Save Changes.
+
+### 45.2 Retailer Account Information
+
+Profile Name:
+
+- редактируемое название аккаунта.
+
+Account Email:
+
+- отдельный business/account e-mail, не равен login email пользователя.
+
+POS System:
+
+- POS System;
+- Version, if known.
+
+Buyer Name:
+
+- отдельное имя покупателя по умолчанию.
+
+Connection Permission:
+
+- Any brand or retailer can connect with me;
+- Yes / No.
+
+Privacy:
+
+- Show in Search;
+- Hide from Search.
+
+Ключевое разделение данных:
+
+- user.email — вход и персональные уведомления;
+- account.email — общий контакт бизнеса;
+- order buyer — снимок покупателя в заказе;
+- profile people — публичность конкретного пользователя;
+- account privacy — видимость аккаунта в поиске;
+- connection permission — автоматическое или управляемое принятие связей.
+
+## 46. Уточнённая карта связей сущностей
+
+RetailerAccount
+→ содержит Users
+→ содержит Locations
+→ имеет PublicProfile
+→ имеет Settings
+→ имеет Connections с BrandAccount
+→ получает SharedLooks
+→ создаёт Styleboards
+→ создаёт Orders
+→ имеет MessageThreads
+→ запускает ImportJobs и ExportJobs
+→ может иметь IntegrationConfig и Subscription.
+
+BrandAccount
+→ имеет PublicProfile/Storefront
+→ публикует Linesheets
+→ содержит Styles
+→ Styles содержат Colorways
+→ Colorways содержат SKUs/Sizes
+→ публикует Looks
+→ загружает Documents
+→ назначает SalesReps
+→ принимает/отклоняет Connections.
+
+Order
+→ принадлежит RetailerAccount и BrandAccount
+→ содержит один PriceType
+→ содержит один Currency
+→ может ссылаться на несколько Linesheets
+→ содержит OrderLines
+→ OrderLine фиксирует Style snapshot
+→ ColorLine фиксирует Colorway snapshot
+→ SizeQuantity фиксирует SKU/size и quantity
+→ имеет Shipping/Billing snapshots
+→ имеет Contacts
+→ имеет FinancialSummary
+→ имеет StatusHistory
+→ имеет Comments
+→ имеет PaymentState
+→ имеет IntegrationExportMarks.
+
+Connection
+→ связывает RetailerAccount и BrandAccount
+→ имеет direction
+→ имеет request message/thread
+→ имеет pending/accepted/declined/cancelled state
+→ управляет доступом к storefront, linesheets, rep info и ordering
+→ может дополняться audience restrictions на уровне коллекции или продукта.
+
+## 47. Полный жизненный цикл данных
+
+### 47.1 Discovery → Connection
+
+1. Ритейлер открывает discovery/passport/profile.
+2. Система учитывает privacy и eligibility.
+3. Пользователь просматривает teaser.
+4. Отправляет Connect с default или изменённым сообщением.
+5. Создаются ConnectionRequest и MessageThread.
+6. Бренд принимает или отклоняет.
+7. После accepted пересчитываются permissions.
+8. Открываются linesheets, rep info и ordering.
+9. Действие пишется в audit log и notification feed.
+
+### 47.2 Look → Styleboard → Order
+
+1. Бренд публикует Look.
+2. Share связывает Look с retailer account.
+3. Ритейлер выбирает hotspots/products.
+4. Выбор переносится в Styleboard или прямо в Order.
+5. Styleboard хранит визуальную композицию и price type.
+6. Add to Order создаёт/дополняет draft.
+7. Пользователь распределяет quantities по size.
+8. Система валидирует minimums, delivery windows и inventory.
+9. Draft сохраняется.
+10. Заказ переходит Notes/Pending/Approved.
+11. Approved блокирует изменение products и адресов в зависимости от политики.
+12. Экспорт, оплата и shipment продолжают отдельные под-процессы.
+
+### 47.3 Import
+
+1. Template.
+2. File upload.
+3. Secure storage.
+4. Parse.
+5. Normalize.
+6. Validate.
+7. Resolve reference data.
+8. Preview.
+9. Confirm.
+10. Background job.
+11. Row-level report.
+12. Create/update orders.
+13. Audit and notification.
+14. Retention or secure deletion source file.
+
+### 47.4 Export/Document
+
+1. Пользователь задаёт statuses.
+2. Выбирает date type.
+3. Указывает date range.
+4. Выбирает integration type.
+5. Определяет previously exported policy.
+6. Сервер фиксирует immutable filter snapshot.
+7. Background worker строит файл.
+8. File record получает checksum, size и status.
+9. Пользователь получает временную signed URL.
+10. Download логируется.
+11. Order export marks обновляются только после успешной генерации.
+12. Ошибка не должна помечать заказ экспортированным.
+
+## 48. Что улучшить в копии относительно наблюдаемого JOOR
+
+### 48.1 Единообразие
+
+- объединить legacy-таблицы и новый React-интерфейс общей дизайн-системой;
+- одинаковые фильтры, пагинация и массовые действия;
+- не использовать неочевидные icon-only buttons без aria-label;
+- показывать явный autosave/save status;
+- единый date/time/locale слой.
+
+### 48.2 Безопасность
+
+- любые мутации только POST/PATCH/DELETE;
+- CSRF и idempotency;
+- подтверждение Connect/Accept/Delete/Archive;
+- RBAC на поле и секцию;
+- immutable audit log;
+- PII masking в экспортах;
+- signed URLs для документов;
+- malware scan загрузок;
+- ограничение MIME и magic bytes;
+- rate limiting сообщений и connection requests.
+
+### 48.3 Производительность
+
+- виртуализация длинных заказов;
+- серверные агрегации totals;
+- thumbnails и responsive images;
+- lazy loading Look/Styleboard assets;
+- background import/export;
+- progress и retry;
+- cursor pagination для activity/messages;
+- кеширование справочников.
+
+### 48.4 Надёжность UX
+
+- не показывать бесконечный Loading без ошибки и retry;
+- объяснять, почему autocomplete бренда не возвращает результаты;
+- disabled controls должны иметь причину;
+- перед выгрузкой показывать точную область и объём;
+- сохранять фильтры в URL;
+- поддерживать drafts форм;
+- предупреждать о несохранённых изменениях;
+- различать «нет данных», «нет прав», «ошибка загрузки» и «нет результатов».
+
+## 49. Контроль покрытия второго прохода
+
+Дополнительно подтверждены:
+
+- вложенная карточка Approved заказа;
+- Overview и Pay;
+- Shipping/Billing;
+- Products Summary до уровня size quantity;
+- Contacts;
+- Financial Summary;
+- Order Details;
+- Import Orders и оба шаблона;
+- Download Order Confirmation;
+- Export Data и типы дат;
+- Looks CURRENT/ARCHIVED и viewer;
+- Styleboards CURRENT/ARCHIVED и editor canvas;
+- Invitation/Sent/Trash;
+- thread;
+- публичная карточка бренда до connection;
+- audience-restricted products;
+- PDF-документы на CDN;
+- профиль ритейлера;
+- полный редактор локации;
+- категории и demographics;
+- user settings;
+- языки;
+- notification toggles;
+- date format;
+- landing page;
+- retail rounding;
+- POS;
+- connection permission;
+- privacy.
+
+Остаются недоступными без выполнения реальных бизнес-операций или дополнительных ролей:
+
+- фактическое принятие/отклонение connection;
+- создание и отправка нового заказа;
+- редактирование quantities в Draft/Notes;
+- шаги 2–3 импорта с реальным файлом;
+- результат экспортного job;
+- реальная платёжная форма JOOR Pay;
+- администраторские настройки бренда;
+- создание и сохранение нового Styleboard;
+- загрузка и сохранение медиа;
+- Shopify sync с активной интеграцией;
+- shipment/fulfillment workflow со стороны бренда.
+
+Эти области должны быть отдельными сценариями UAT на тестовом аккаунте с обезличенными данными.

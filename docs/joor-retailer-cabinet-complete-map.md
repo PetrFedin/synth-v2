@@ -6,55 +6,90 @@
 
 > В документ сознательно не включены реальные адреса, сообщения, контакты и коммерческие значения конкретного аккаунта. Зафиксированы структура данных, поля, действия, состояния и связи. Закрытый brand-side back office, платный Visual Assortment, установленный Shopify, JOORPay и полный submit/approve/ship цикл требуют отдельного тестового доступа.
 ---
+
 ## 1. Как читать карту
 
-Для каждого раздела фиксируются:
+### 1.1 Назначение и граница
 
-1. точка входа и маршрут;
-2. назначение;
-3. информационные блоки;
-4. кнопки и действия;
-5. поля ввода;
-6. варианты выбора;
-7. проверки и ограничения;
-8. что читается, сохраняется, загружается, выгружается или отправляется;
-9. связанные сущности;
-10. следующий шаг пользователя;
-11. состояния загрузки, пустых данных и ошибок;
-12. что следует реализовать в улучшенной версии.
+Карта описывает наблюдаемую Retailer LITE часть JOOR, связанные target requirements и оставшиеся UAT gaps. Это функциональная спецификация для проектирования улучшенного аналога, а не утверждение о закрытой внутренней реализации JOOR.
 
-Обозначения:
+Для каждого product area фиксируются:
 
-- OBSERVED — непосредственно видно и проверено;
-- INFERRED — следует из доступного интерфейса, но действие не выполнялось;
-- GATED — закрыто тарифом или другой ролью;
-- MUTATION — изменяет данные и в ходе аудита не запускалось;
-- EXTERNAL — переход во внешний сервис.
+1. entry route;
+2. назначение и role;
+3. page/container composition;
+4. buttons/actions;
+5. fields и order заполнения;
+6. option dictionaries;
+7. states, permissions и validation;
+8. data read/write/upload/download/send;
+9. entities и ownership;
+10. переход к следующему шагу;
+11. loading/empty/error/gated states;
+12. end-to-end участие;
+13. требования улучшенного аналога.
+
+### 1.2 Evidence markers
+
+| Marker | Значение |
+|---|---|
+| OBSERVED | Экран, поле, action или route непосредственно открыт |
+| OBSERVED DISABLED | Элемент виден, но disabled |
+| GATED | Доступ закрыт plan/role/connection/eligibility |
+| NOT SUBMITTED / NOT EXECUTED | Точка действия открыта, final mutation не выполнена |
+| INFERRED | Серверная сущность/правило выведены из поведения |
+| TARGET | Нормативное требование улучшенной версии |
+| BROKEN/AMBIGUOUS | UI не дал однозначного результата |
+| UAT | Требуется controlled test data/access |
+
+Сочетания допустимы: OBSERVED, CANCELLED означает modal открыт и закрыт Cancel без сохранения.
+
+### 1.3 Уровни описания
+
+- Product map — что доступно пользователю.
+- Process map — что за чем следует.
+- Data map — какие сущности и snapshots требуются.
+- Permission map — кто и при каком state может действовать.
+- E2E map — связи discovery → showroom → selection → order → fulfillment.
+- Gap map — что gated, ambiguous или требует brand/test access.
+
+### 1.4 Privacy and audit discipline
+
+В карте не фиксируются реальные e-mail, телефоны, адреса, имена сотрудников, конкретные PO и коммерческие значения account. Сохраняются labels, типы полей, option values и обезличенная структура.
+
+В ходе read-only аудита не подтверждались:
+
+- Connect/Disconnect/Accept/Decline;
+- order creation/submit/cancel;
+- message/comment/share send;
+- import/export/download generation;
+- Tax ID submission;
+- Shopify install;
+- Styleboard archive/delete;
+- subscription payment.
+
+Если navigation сама открывала потенциальный draft или checkout, flow закрывался Cancel/back до final submit; такие случаи явно отмечены.
 ---
-### 1.4 Статусы достоверности
-
-- OBSERVED — непосредственно видимый экран, поле, кнопка или маршрут.
-- OBSERVED DISABLED — элемент присутствует, но недоступен в текущем тарифе, статусе или роли.
-- GATED — интерфейс показал paywall либо entitlement restriction.
-- INFERRED — необходимая серверная сущность или процесс, выведенные из поведения интерфейса.
-- NOT EXECUTED — действие найдено, но не запускалось из-за изменения бизнес-данных.
-- BROKEN/AMBIGUOUS — маршрут, loading state или переход ведёт себя непоследовательно.
-
-Персональные значения текущего аккаунта и коммерческие значения конкретных заказов в карте не фиксируются; документ описывает структуру данных и поведения.
 
 ## 2. Общая архитектура кабинета
 
-### 2.1 Граница исследования и уровни достоверности
 
-Карта разделяет три типа сведений:
+### 2.1 Граница текущего доступа
 
-| Маркер | Значение |
-|---|---|
-| OBSERVED | Элемент или состояние непосредственно открыто в текущем Retailer LITE cabinet |
-| GATED | Элемент виден, но закрыт тарифом, ролью, connection, eligibility или настройкой бренда |
-| INFERRED / TARGET | Требование к улучшенной копии, выведенное из наблюдаемого результата, но не подтверждённое исходным brand-admin UI |
+В active membership доступны только retailer accounts: один primary/active и тринадцать associated accounts. Brand-role среди переключаемых организаций нет.
 
-В текущей сессии доступны только retailer accounts: один active/primary и тринадцать связанных аккаунтов. Brand-role среди переключаемых организаций нет. Поэтому buyer-side storefront, публичная карточка бренда, linesheets, товары и заказы подтверждены непосредственно, а экран создания этих материалов со стороны бренда описан как INFERRED / TARGET. Закрытые части нельзя выдавать за точную копию текущего интерфейса JOOR.
+Поэтому непосредственно подтверждены:
+
+- buyer-side shell и account context;
+- discovery/connections/submissions/Passport;
+- public/connected storefront;
+- published showroom и shared/restricted content;
+- linesheets/styles/catalog;
+- retailer orders/documents;
+- Looks/Styleboards;
+- profile/settings/integration/subscription entry points.
+
+Brand Profile authoring, showroom builder, catalog publishing, seller order inbox и fulfillment описываются как INFERRED/TARGET либо UAT. Маркеры достоверности определены один раз в разделе 1.2.
 
 ### 2.2 Product shell
 
@@ -160,7 +195,7 @@ Dashboard
 | Orders | /orders | Manage Orders | OBSERVED |
 | Catalog | /ra/products | Product Catalog | OBSERVED |
 | Catalog alias | /products | Redirect в /ra/products | OBSERVED |
-| Cart | /orders/cart | Cart Orders | OBSERVED empty state |
+| Cart | /orders/cart | Cart Orders | OBSERVED redirect to Dashboard when empty |
 | Visual Assortment | /ra/visual-assortment | Assortment workspace | GATED |
 | Connected | /matches/current | Manage Connections | OBSERVED |
 | Incoming | /matches/requests | Connection Requests | OBSERVED |
@@ -203,6 +238,11 @@ Dashboard
 | Style detail | /Styles/view/{styleId}/{linesheetId} | Карточка style | OBSERVED |
 | Style navigation | /Styles/view/{styleId}/{linesheetId}/{priceTypeId}?fp=... | Карточка с контекстом price type | OBSERVED |
 | All styles | /Collections/view?brandId={brandId}#s={styleId} | Все styles бренда | OBSERVED |
+| Look detail | /ra/showroom/collections/{encodedCollectionId} | Просмотр Look | OBSERVED |
+| Styleboard create | /ra/showroom/styleboards/add | Brand association/create entry | OBSERVED, CANCELLED |
+| Styleboard detail | /ra/showroom/styleboards/{encodedStyleboardId} | Canvas | OBSERVED |
+| Retailer profile edit | /ra/profile/{accountId}?edit | Deep link в edit mode | OBSERVED |
+| Subscription cancel return | /ra/subscriptions?cancel=true&featureId={id} | Возврат из Stripe без оплаты | OBSERVED |
 | Alternate storefront | /r/storefront/{brandId} | Alias из рекламных баннеров | OBSERVED |
 | Accept connection | /Matches/accept/{matchId} | Принятие входящего запроса | OBSERVED, NOT EXECUTED |
 | Decline connection | /Matches/decline/{matchId} | Отложить/отклонить запрос | OBSERVED, NOT EXECUTED |
@@ -345,111 +385,113 @@ New to JOOR:
 - entitlement label LITE;
 - активный retailer account.
 
+
 ## 5. Discovery: Find New Brands
 
-### 5.1 Порядок работы
+Route: /ra/find_new_brands.
+
+### 5.1 Назначение и порядок работы — OBSERVED
 
 1. Открыть Explore Brands → Find New Brands.
 2. Получить All Brands grid.
 3. При необходимости изменить Sort by.
 4. Открыть Show Search and Filters.
-5. Заполнить один или несколько filters.
-6. Нажать Apply.
-7. Просмотреть brand cards.
-8. Открыть storefront.
-9. Добавить favorite или request connection.
-10. После request увидеть Requested.
+5. Заполнить один или несколько фильтров.
+6. Проверить счётчик N filters applied.
+7. Нажать Apply.
+8. Просмотреть brand cards.
+9. Открыть storefront.
+10. Добавить favorite или request connection.
+11. После исходящего запроса увидеть Requested.
 
-### 5.2 Блоки
+### 5.2 Page composition — OBSERVED
 
 - page title Find New Brands;
 - section title All Brands;
-- Show Search and Filters;
+- Show Search and Filters — раскрывает и скрывает панель;
 - Sort by;
-- applied filter count;
+- applied-filter count;
 - filter drawer;
-- brand grid;
-- lazy loading;
-- support chat.
+- lazy-loaded brand grid;
+- Loading state;
+- support messenger.
 
-### 5.3 Поля filters
+Начальное наблюдаемое состояние:
 
-| Поле | Тип | Значение |
+- 0 filters applied;
+- Clear All disabled;
+- Apply disabled;
+- default sort = Newest Linesheets.
+
+### 5.3 Sort by — OBSERVED
+
+Полный список:
+
+1. Newest Linesheets;
+2. A - Z;
+3. Most Purchased;
+4. New to JOOR.
+
+Сортировка должна передаваться в URL/query state, быть стабильной при pagination/lazy loading и иметь серверное определение tie-break.
+
+### 5.4 Search and Filters — OBSERVED
+
+| Блок | Control | Семантика |
 |---|---|---|
-| Search brand by name | Text | Brand name |
-| Currency | Select/autocomplete | Currency context |
-| Minimum | Numeric/text | Min wholesale price |
-| Maximum | Numeric/text | Max wholesale price |
-| Pay with JOORPay | Checkbox Yes | Только бренды с platform payment |
-| Categories | Multi-checkbox | Product category dictionary |
+| Brand | Search brand by name | Полнотекстовый поиск имени |
+| Wholesale Price Range | Currency autocomplete | Контекст валюты |
+| Wholesale Price Range | Minimum text input | Нижняя граница |
+| Wholesale Price Range | Maximum text input | Верхняя граница |
+| JOORPay | hasJoorpay checkbox, label Yes | Только бренды с оплатой на платформе |
+| Categories | Search categories | Локальный поиск справочника |
+| Categories | multi-checkbox | Фильтр по одной или нескольким категориям |
+
+Currency не показывает preload-options до ввода запроса; это remote autocomplete, а не статический select. Minimum и Maximum — свободные поля, а не preset menus.
+
+Панель также содержит ссылку Select your categories на /ra/profile/{accountId}?edit и поясняет, что профильные категории используются для персонализации discovery.
 
 Buttons:
 
-- Clear All — disabled при отсутствии filters;
-- Apply — disabled до изменения;
-- Show Search and Filters — toggle drawer.
+- Clear All — disabled без применённых/введённых фильтров;
+- Apply — disabled без изменения;
+- Show Search and Filters — toggle.
 
-### 5.4 Category dictionary
 
-- Accessories
-- Activewear/Yoga
-- Beauty
-- Bridal
-- Candles
-- Denim
-- Eco-friendly
-- Evening
-- Eyewear
-- Gifts
-- Handbags
-- Hats
-- Home
-- Hosiery
-- Jewelry
-- Kids
-- Lingerie
-- Luggage
-- Mens Bags
-- Mens RTW
-- Mens Shoe
-- Mens Underwear
-- Outdoor
-- Outerwear
-- Plus Size
-- Resort Wear
-- Special Occasion
-- Swimwear
-- Watches
-- Womens RTW
-- Womens Shoe
+### 5.5 Category dictionary — OBSERVED
 
-### 5.5 Brand card
+Discovery использует canonical Global Category Dictionary из раздела 29.1. На экране есть Search categories и checkbox для каждого значения; профильная персонализация использует тот же справочник.
 
-Показывает:
+### 5.6 Brand card and relationship state — OBSERVED
+
+Карточка реализована как button и содержит:
 
 - image/logo;
-- name;
-- categories;
+- brand name;
+- category list, которая может быть пустой;
 - relationship label, например Requested.
 
-Действия:
+Действия и переходы:
 
-- open brand;
+- открыть storefront;
 - favorite;
 - request connection;
-- после connection — shop/message/orders.
+- Requested после исходящего запроса;
+- после connection — shop/message/orders согласно grants.
 
-### 5.6 Состояния
+### 5.7 State model
 
 - default results;
-- loading;
+- Loading;
 - filters applied N;
 - no results;
 - Requested;
 - Connected;
 - hidden/private brand;
-- access or network error.
+- access/network error.
+
+DiscoveryQuery хранит search, currency, min/max, JOORPay flag, categories, sort, account context, cursor и source. Recommendation/exposure events должны отделяться от явного search click.
 ---
+
 ## 6. Connections — полный lifecycle
 
 ### 6.1 Единая state machine
@@ -487,7 +529,7 @@ Blocks:
 - Search;
 - Manage Connections;
 - result count;
-- view size 60/120/240;
+- view size — значения из раздела 29.6;
 - brand list.
 
 Card/actions:
@@ -595,10 +637,7 @@ Connected/Pending используют:
 - Search;
 - Showing X–Y of Z results.
 
-Wholesale Price Range:
-
-- Minimum: пусто, $10, $50, $100, $250, $500;
-- Maximum: пусто, $150, $250, $500, $750, $1000+.
+Wholesale Price Range использует Connection Search thresholds из раздела 29.4.
 
 Connected card:
 
@@ -622,59 +661,105 @@ Pending card:
 
 Все перечисленные legacy mutation URLs являются требованиями на замену безопасными POST/PATCH/DELETE-командами.
 
+
 ## 7. Brand Submissions
 
-### 7.1 Назначение
+Route: /ra/submissions?tab=new.
 
-Brand discovery outreach, отличающийся от connection request. Бренд находит retailer profile и отправляет персонализированное visual предложение.
+### 7.1 Назначение — OBSERVED
 
-### 7.2 Tabs
+Экран называется Brands Interested In You и объясняет: бренды могут обнаружить retailer profile и отправить персонализированный visual outreach. Это отдельный канал discovery, а не connection request и не обычное inbox message.
+
+### 7.2 Tabs and exact empty states — OBSERVED
+
+Tabs реализованы кнопками:
 
 - New;
 - Viewed;
 - All.
 
-### 7.3 Предлагаемая entity
+New при отсутствии данных:
+
+- You're all caught up;
+- No new brands have reached out to you yet;
+- Explore new brands to connect with;
+- Find New Brands.
+
+Viewed при отсутствии данных:
+
+- You haven't viewed anything yet;
+- When you view outreach from brands, it will appear here.
+
+All в проверенном пустом аккаунте повторяет состояние New, включая формулировку No new brands; это семантически слабее отдельного All-empty state.
+
+### 7.3 Populated submission card — UAT
+
+В текущем account нет New, Viewed или All records, поэтому точный card/detail payload не подтверждён. Для улучшенной версии требуется:
 
 - submissionId;
 - brandAccountId;
 - retailerAccountId;
-- title;
-- message;
+- title/message;
 - cover media;
-- attached styles/linesheets/look;
+- attached styles, linesheets или Look;
 - createdAt;
 - viewedAt;
 - status NEW/VIEWED/ARCHIVED;
 - CTA target;
-- relationship status.
+- relationship/connection state;
+- presentation version;
+- access result.
 
-### 7.4 Flow
+### 7.4 End-to-end flow
 
-1. brand создаёт submission;
-2. retailer notification count увеличивается;
-3. submission находится в New;
-4. открытие ставит Viewed;
-5. retailer открывает storefront/linesheet;
-6. retailer connects, favorites, messages или ignores;
-7. All сохраняет историю.
+1. brand создаёт outreach и выбирает retailer/audience;
+2. server проверяет право на discovery/contact;
+3. submission snapshot и attachments сохраняются;
+4. notification count увеличивается;
+5. retailer видит запись в New;
+6. первое открытие атомарно ставит viewedAt и переносит в Viewed;
+7. retailer открывает storefront/linesheet/look;
+8. retailer connects, favorites, messages, starts order или ignores;
+9. All сохраняет доступную историю;
+10. archive/expiration не удаляет engagement trail.
+
+Empty CTA ведёт в Find New Brands; populated CTA должен передавать source=submission для attribution.
 ---
+
+
 ## 8. Favorites
 
-Route: /r/passport/favorites
+Route: /r/passport/favorites.
 
-Observed empty state:
+### 8.1 Проверенное пустое состояние — OBSERVED
 
-- title Favorites;
-- footer;
-- отсутствуют guidance и CTA.
+После завершения delayed loading страница содержит только:
 
-Требуемая версия:
+- label FAVORITES;
+- общий footer;
+- Help Center;
+- Careers;
+- Case Studies;
+- social links;
+- Privacy Policy.
+
+Нет:
+
+- объяснения назначения;
+- карточек;
+- фильтров;
+- кнопки возврата в discovery;
+- empty illustration;
+- CTA Explore Brands.
+
+Это диагностический UX-gap, а не подтверждение отсутствия функции favorite в storefront.
+
+### 8.2 Требуемое populated state — TARGET
 
 - favorite brand cards;
 - source: discovery/passport/storefront;
 - date added;
-- notes;
+- private notes;
 - custom tags/lists;
 - category/price/event filters;
 - remove;
@@ -684,79 +769,114 @@ Observed empty state:
 - shop;
 - empty CTA Explore Brands.
 
-Persistence:
+### 8.3 Persistence
 
-- user-level или account-level favorite;
-- рекомендуется account-level с optional private user notes.
+Favorite должен быть account-level, потому что ассортимент и связи принадлежат retailer organization; private user notes могут быть user-scoped. Хранить favoriteId, accountId, brandId, source, eventId, addedBy/At, note visibility, tags и removedAt. Повторный favorite — idempotent.
 ---
+
+
 ## 9. Passport Events
 
-### 9.1 Passport landing
+### 9.1 Passport landing — OBSERVED
 
-Route: /r/passport
+Route: /r/passport.
 
-Blocks:
+После delayed loading экран содержит:
 
-- hero/promotional stories;
+- rotating editorial stories;
+- Passport logo и value proposition;
+- Learn More;
 - Featured Events;
 - Shop Passport Marketplaces;
 - Browse Retail Shows;
-- partners;
 - Brand Registration;
 - Retailer Registration;
-- footer/social links.
+- Our Partners;
+- общий footer.
 
-Buttons:
+Наблюдаемые текущие story/event labels являются динамическим контентом. В проходе 4 августа 2026 года присутствовали, среди прочих:
 
-- event/marketplace tiles;
+- Making Waves: Swim & Resort 2027;
+- En Vogue: Top French Fashion Retailers;
+- On Trend: Women's Fall 2026;
+- JOOR Showcase;
+- Destination Italy;
+- The Accessory Collective;
+- New To JOOR;
+- Step Into Style;
+- JOOR 100;
+- Explore Italy;
+- In The Bag.
+
+Registration actions:
+
 - Register to Exhibit;
-- Register to Attend;
-- Learn More.
+- Register to Attend.
 
-### 9.2 Event detail
+Они являются внешними side effects и в аудите не отправлялись.
 
-Route: /r/passport/:eventSlug
+### 9.2 Event detail — OBSERVED
 
-Blocks:
+Проверенный маршрут: /r/passport/making-waves-swim-and-resort-2027.
 
-- title;
-- description;
-- Style Stories;
-- category story tabs, например Swimwear/Apparel/Footwear/Accessories;
-- Filter;
-- category;
-- min price;
-- max price;
-- search;
-- results count;
-- participating brand grid.
+Composition:
 
-Flow:
+1. event hero image;
+2. title;
+3. editorial description;
+4. Style Stories;
+5. category story shortcuts: Swimwear, Apparel, Footwear, Accessories;
+6. FILTER;
+7. Category dropdown;
+8. Min Price dropdown;
+9. Max Price dropdown;
+10. Search textbox;
+11. results count;
+12. participating brand grid;
+13. links в /ra/storefront/{brandId};
+14. footer.
 
-1. open Passport;
-2. select event;
-3. read story;
-4. choose style story/category;
-5. set min/max;
-6. search;
-7. open brand;
-8. view storefront;
-9. favorite/connect/shop.
+В проверенном состоянии показано 111 Results. Число и набор участников являются динамическими.
 
-Event data:
 
-- slug;
-- title;
-- description;
+### 9.3 Event Category dictionary — OBSERVED
+
+Проверенный event использует Passport Event Category Dictionary из раздела 29.2. Он отличается от глобального: Beauty и Watches в нём отсутствовали.
+
+
+### 9.4 Price filters — OBSERVED
+
+Min/Max thresholds перечислены в разделе 29.4. Система должна валидировать min ≤ max и сохранять currency context; event UI показывает долларовые thresholds без отдельного currency selector.
+
+### 9.5 End-to-end Passport flow
+
+1. открыть Passport;
+2. выбрать editorial story/event/marketplace;
+3. открыть event detail;
+4. выбрать Style Story или filters;
+5. при необходимости задать category и price interval;
+6. искать brand;
+7. открыть storefront;
+8. favorite/connect/message/shop;
+9. сохранить event/source attribution;
+10. отдельно зарегистрироваться как exhibitor/attendee, если требуется.
+
+### 9.6 Event data
+
+- eventId/slug;
+- title and editorial description;
 - cover/hero;
-- start/end/active state;
-- stories;
-- categories;
+- start/end/published/active state;
+- stories and ordering;
+- category dictionary override;
+- price thresholds/currency;
 - participating brands;
 - registration configuration;
 - sponsor/partner assets;
-- result ordering.
+- result ordering;
+- impression/click/open/connect/order attribution.
 ---
+
 ## 10. Кабинет бренда, Storefront, Showroom и презентация
 
 ### 10.1 Назначение и граница
@@ -1915,7 +2035,7 @@ Bottom controls:
 - Export Data;
 - total count;
 - pagination;
-- page size 10/15/20/30.
+- page size — значения из раздела 29.6.
 
 ### 16.3 Lifecycle and transition rules
 
@@ -2283,16 +2403,13 @@ PaymentIntent, PaymentTransaction и Order — разные aggregates. Interest
 
 - logo Upload;
 - Browse Images from library;
-- store photos:
-  - JPG/PNG/GIF;
-  - up to 30 at a time;
-  - 10MB each.
+- Store Photos multi-upload;
+- форматы и limits — раздел 29.7.
 
 #### Message attachment
 
-- JPG/PNG;
-- optional;
-- 4MB max.
+- optional image attachment;
+- форматы и limit — раздел 29.7.
 
 ### 17.2 Downloads
 
@@ -2315,15 +2432,7 @@ Fields:
 - End Date;
 - Additional Info.
 
-Recommended statuses:
-
-- QUEUED;
-- RUNNING;
-- COMPLETED;
-- COMPLETED_WITH_WARNINGS;
-- FAILED;
-- CANCELLED;
-- EXPIRED.
+Job statuses используют canonical values из раздела 29.5.
 
 Actions:
 
@@ -2349,8 +2458,7 @@ Actions:
 - Upload File;
 - Drag and Drop;
 - Browse files;
-- ограничение 4 MB;
-- допустимы Excel или CSV;
+- formats и limit — раздел 29.7;
 - Next disabled до выбора шаблона и валидного файла.
 
 Предполагаемая дальнейшая архитектура для копии:
@@ -2553,21 +2661,43 @@ Brand creates → adds styles/layout → shares → retailer receives under Curr
 - archived_at;
 - selection_session.
 
+
 ## 19. Styleboards
 
-Route: /ra/showroom/styleboards
+Routes:
 
-### 19.1 Blocks
+- /ra/showroom/styleboards — registry;
+- /ra/showroom/styleboards/add — create entry;
+- /ra/showroom/styleboards/{encodedStyleboardId} — canvas.
+
+### 19.1 Registry — OBSERVED
+
+Composition:
 
 - Manage Styleboards;
 - Create New;
-- Current;
-- Archived;
 - Search & Filter;
+- Current/Archived tabs with counts;
 - table;
-- Actions footer.
+- Actions listbox.
 
-### 19.2 Filters
+В проверенном account:
+
+- CURRENT (1);
+- ARCHIVED (0).
+
+Counts являются динамическими и приведены только как evidence.
+
+Table columns:
+
+- checkbox;
+- Styleboard name;
+- Brand Name;
+- Creator Name;
+- Created On;
+- Last Modified.
+
+Search & Filter panels:
 
 - Styleboard Name;
 - Brand Name;
@@ -2577,52 +2707,55 @@ Route: /ra/showroom/styleboards
 - Clear all;
 - Apply Filters.
 
-### 19.3 Table columns
+Текстовые panels используют Search..., date panels — date input.
 
-- checkbox;
-- Styleboard name;
-- Brand Name;
-- Creator Name;
-- Created On;
-- Last Modified.
+### 19.2 Selection and bulk actions — OBSERVED
 
-### 19.4 Actions
+Без выбранных строк Actions disabled. После выбора текущего Styleboard доступны только:
 
-- Create New;
-- select row;
-- open/edit;
-- archive/restore;
-- duplicate;
-- delete;
-- actions enabled after selection.
+- Archive styleboard(s);
+- Delete styleboard(s).
 
-### 19.5 Entity
+Ранее предполагаемые Duplicate/Restore не подтверждены. Restore может появляться только в Archived, но archived count = 0, поэтому остаётся UAT.
 
-- styleboardId;
-- name;
-- retailer account;
-- brand scope;
-- creator;
-- items;
-- layout/notes;
-- current/archived;
-- created/modified.
----
-### 19.6 Карточка Styleboard
+Delete — destructive mutation с confirmation, optimistic version, permission и audit. В исследовании Archive/Delete не запускались.
 
-Маршрут имеет форму /ra/showroom/styleboards/{encodedStyleboardId}.
+### 19.3 Create New and brand association — OBSERVED, CANCELLED
 
-Наблюдаемые элементы:
+Переход /add показывает background canvas:
 
-- название;
+- UNTITLED STYLEBOARD;
+- Saving …;
+- 0 Products;
+- toolbar icons;
+- Add to Order disabled;
+- comments input;
+- Send disabled.
+
+Поверх canvas открывается modal Associate a brand to the styleboard:
+
+- Select a brand to associate this styleboard to;
+- brand combobox;
+- Start typing to search...;
+- Cancel;
+- Assign disabled до выбора.
+
+Cancel вернул в registry; count остался CURRENT (1), то есть новая запись после отмены не появилась. Тем не менее показ Saving … до выбора бренда создаёт ambiguity: улучшенная версия не должна создавать persistent entity до явного Assign/Create либо обязана помечать temporary draft и гарантированно удалять его при Cancel.
+
+### 19.4 Canvas structure — OBSERVED
+
+Проверенная существующая доска содержит:
+
+- title;
 - Products count;
-- панель добавления продукта;
-- Smart Buy;
-- добавление text widget;
-- графические инструменты;
-- canvas с product image widgets;
-- несколько contenteditable текстовых блоков;
-- discard/remove control у объектов;
+- product widgets;
+- один или несколько color availability labels;
+- discard icon у каждого объекта;
+- text widgets;
+- toolbar icons:
+  - Smart Buy;
+  - text;
+  - два Group controls;
 - Share;
 - Comment section;
 - Select price type;
@@ -2631,26 +2764,71 @@ Route: /ra/showroom/styleboards
 - Enter comment here;
 - Send.
 
-Add to Order зависит от наличия валидного выбора и price type. Send disabled при пустом комментарии.
+У наблюдаемой доски в price type list был только EUR. Это account/brand-specific option, а не глобальный справочник.
 
-Для улучшенной версии нужны:
+Add to Order может быть enabled при наличии продуктов; Send disabled при пустом comment.
 
-- координаты, размер, rotation и z-index каждого объекта;
-- background;
-- product/colorway binding;
-- text content и typography;
-- автор объекта;
-- optimistic locking/version;
-- autosave status;
-- undo/redo;
-- комментарии с author/time;
+### 19.5 Add to order modal — OBSERVED, CANCELLED
+
+Кнопка Add to Order открывает modal:
+
+- Add to existing order — selected by default;
+- autocomplete Start typing to search...;
+- Add to a new order;
+- Cancel;
+- Add to order — disabled без target;
+- Add and go to order — disabled без target.
+
+Семантика двух submit actions:
+
+- Add to order — переносит selection и остаётся на Styleboard;
+- Add and go to order — переносит selection и открывает order workspace.
+
+Ни одна мутация не выполнялась; modal закрыт Cancel.
+
+### 19.6 Comment and collaboration contract
+
+General Comments:
+
+- existing comments/history area;
+- Enter comment here;
+- Send disabled при пустом тексте.
+
+Хранить author, account, body, created/edited/deleted timestamps, visibility, mentions, attachments, read state и notifications. Comment не заменяет order comment после переноса.
+
+### 19.7 Styleboard entity and widget model
+
+- styleboardId;
+- retailer account;
+- associated brand;
+- name;
+- creator;
+- current/archived;
+- selected price type;
+- created/modified;
 - share permissions;
-- brand/account scope;
-- price type;
-- archived state;
-- derived order link;
-- export to image/PDF;
-- копирование и template mode.
+- comments;
+- derived order links;
+- optimistic version;
+- autosave state.
+
+Для каждого widget:
+
+- widgetId/type;
+- x/y;
+- width/height;
+- rotation;
+- z-index;
+- background;
+- linked style/colorway;
+- product snapshot;
+- text content and typography;
+- author;
+- created/modified;
+- deleted/discarded state.
+
+Нужны undo/redo, explicit autosave status, conflict resolution, export image/PDF, duplicate/template mode и keyboard accessibility.
+---
 
 ## 20. Visual Assortment
 
@@ -2673,23 +2851,10 @@ Route: /ra/visual-assortment
 - multiple doors;
 - historical storage.
 
-### 20.3 Plans observed
 
-#### Standard
+### 20.3 Plans
 
-- 2 users;
-- 1 door;
-- 1,000 products;
-- 2 years storage;
-- monthly/yearly billing.
-
-#### Premium
-
-- 5 users;
-- 5 doors;
-- 3,000 products;
-- 3 years storage;
-- monthly/yearly billing.
+Visual Assortment plan names, prices, users/doors/products и retention limits являются billing catalog и зафиксированы один раз в разделе 26.1.
 
 ### 20.4 Suggested assortment model
 
@@ -2846,216 +3011,253 @@ Connection request может порождать thread, а не отдельн�
 - Subject;
 - Message;
 - Attach an image, optional;
-- только .jpg или .png;
-- максимум 4 MB;
+- format и size limit — раздел 29.7;
 - Send.
 
 Pre-addressed маршрут /Messages/send/{brandId} использует тот же composer с заранее заданным получателем.
 
+
 ## 22. User Settings
 
-Route: /accounts/settings. Страница разделена на Manage My Account и Retailer Account Information. Каждый блок раскрывается inline, имеет X и Save Changes и сохраняется независимо.
+Route: /accounts/settings.
 
-### 22.1 Credentials
+Страница разделена на Manage My Account и Retailer Account Information. В collapsed state показаны summary и Edit. Каждый editor раскрывается inline, имеет X и Save Changes и сохраняется независимо.
 
-- login Email отображается read-only;
-- Password masked;
-- Reset password запускает отдельный credential flow.
+### 22.1 Credentials — OBSERVED
 
-### 22.2 User Profile
+- login Email — read-only;
+- Password — masked;
+- Reset password — link.
 
-Поля и действия:
+При нажатии Reset password появился blocking JavaScript alert без отдельной формы и без доступного текста в DOM. Было ли отправлено recovery письмо, интерфейс не подтвердил. Это BROKEN/AMBIGUOUS: reset flow должен показывать destination в masked form, confirmation, cooldown, expiry и результат отправки.
 
-- Full Name;
-- Job Title;
+### 22.2 User Profile — OBSERVED
+
+Поля:
+
+- FULL NAME;
+- JOB TITLE;
 - Phone;
-- Upload Photo через /accounts/update_photo;
+- Upload Photo;
 - Display my information on my company profile;
-- ссылка на /ra/profile/{accountId};
+- company profile link;
 - X;
 - Save Changes.
 
-Публичность пользователя отделена от видимости retailer account: сотрудник может не показываться в People, даже если company profile доступен в поиске.
+Public user consent отделён от account Privacy. Profile photo route: /accounts/update_photo.
 
-### 22.3 Languages
 
-Два независимых поля:
+### 22.3 Languages — OBSERVED
 
-- Set default language as — язык интерфейса;
-- Send Emails In — язык e-mail.
+Два независимых select:
 
-Справочник:
+- SET DEFAULT LANGUAGE AS;
+- SEND EMAILS IN.
 
-- English;
-- Español;
-- Français;
-- Deutsch;
-- Italiano;
-- 日本語;
-- 中文(简体);
-- Русский;
-- 한국어.
+Оба используют Language Dictionary из раздела 29.3. UI language и email language сохраняются отдельно.
 
-### 22.4 Email Settings
+### 22.4 Email Settings — OBSERVED
 
-Для каждого параметра отдельные radio Yes/No:
+Для каждого правила отдельные Yes/No radio:
 
-- пересылать сообщения JOOR inbox на e-mail;
-- присылать connection request e-mails;
-- еженедельно присылать новости от connections;
-- присылать industry updates and news;
-- присылать заказы, назначенные пользователю на web;
-- присылать заказы, назначенные пользователю на iPad.
+1. Send me messages from my JOOR inbox to my email.
+2. Send me connection request emails.
+3. Send me weekly update emails with news from my connections.
+4. Send me information about industry updates and news.
+5. Email orders that are assigned to me on the site.
+6. Email orders that are assigned to me on the iPad.
 
-Web и iPad order assignment notifications хранятся отдельно.
+Web и iPad assignment notifications являются разными preferences.
 
-### 22.5 Default Connection Request Message
+### 22.5 Default Connection Request Message — OBSERVED
 
-- отдельный шаблон текста;
-- используется при исходящем connection request;
+- Use default connect request message — checkbox;
+- MESSAGE — textarea;
 - X;
 - Save Changes.
 
-Нужны account default, optional user override и snapshot фактически отправленного сообщения.
+Нужны account default, optional user override и snapshot фактически отправленного текста. Checkbox должен явно показывать, используется ли system/account template или textarea.
 
-### 22.6 Date Format
 
-- mm/dd/yyyy;
-- dd/mm/yyyy;
-- yyyy/mm/dd.
+### 22.6 Date Format — OBSERVED
 
-Настройка распространяется на web и iPad, но сервер должен хранить даты в нормализованном формате.
+Date Format select использует значения из раздела 29.3. Формат действует на web и iPad display; server хранит даты нормализованно.
 
-### 22.7 Landing Page
 
-- пустое/default;
-- Home;
-- My Connections;
-- Orders;
-- Profile.
+### 22.7 Landing Page — OBSERVED
 
-### 22.8 Round Retail Pricing
+Landing Page select использует значения из раздела 29.3. Helper: Select a new default home page from the dropdown below. Неподдерживаемый/удалённый route должен падать обратно на Home.
 
-- choose one;
-- none;
-- 1.00;
-- 5.00.
 
-Это display/calculation preference для retail price; исходная цена и применённое правило округления должны храниться раздельно.
+### 22.8 Round Retail Pricing — OBSERVED
 
-### 22.9 Retailer Account Information
+Round Retail Pricing select использует значения из раздела 29.3. Helper: Automatically round retail prices to the nearest 1.00 or 5.00 values. Исходная цена и display rounding rule хранятся раздельно.
 
-Profile Name:
+### 22.9 Retailer Account Information — OBSERVED
 
-- business/account name;
-- не равно имени пользователя.
+#### Profile Name
 
-Account Email:
+- PROFILE NAME;
+- helper Reset your profile name;
+- это business/account identity, не user name.
 
-- общий контакт аккаунта;
-- не равно login e-mail.
+#### Account Email
 
-POS System:
+- EMAIL, input type=email;
+- helper: адрес является primary contact for all connection requests and messages;
+- это account contact, не login email.
 
-- POS System;
-- Version, if known.
+#### POS System
 
-Buyer Name:
+- POS SYSTEM;
+- VERSION(IF KNOWN).
 
-- значение покупателя по умолчанию;
-- заказ должен хранить snapshot.
+#### Buyer Name
 
-Connection Permission:
+- BUYER NAME;
+- helper: contact appears on all purchase orders;
+- order хранит snapshot.
 
-- Any brand or retailer can connect with me;
+#### Connection Permission
+
+Exact question: Any brand or retailer can connect with me.
+
 - Yes;
 - No.
 
-Privacy:
+Это inbound-connect policy, не текущий connection state.
+
+#### Privacy
+
+Helper: определяет, отображается ли profile в member search.
 
 - Show in Search;
 - Hide from Search.
 
-### 22.10 Модель сохранения
+Это profile search privacy, отдельная от per-associated-account discoverability modal.
+
+### 22.10 Form scope and visible storage keys — OBSERVED
+
+Форма показывает разделение User/Account/Boutique:
+
+| UI | Scope/key family |
+|---|---|
+| display language | User.display_language |
+| email language | User.email_language |
+| inbox forwarding | Account.send_messages |
+| connection e-mails | Account.send_match |
+| weekly/industry updates | User.send_updates / send_discounts |
+| assigned web/iPad orders | User.send_site_emails / send_ipad_emails |
+| default request text | User.use_invitation_msg / invitation_msg |
+| date format | User.date_format |
+| landing page | User.landing_page |
+| round pricing | User.round_retail_prices |
+| profile name/email/POS | Account fields |
+| buyer name | Boutique.buyer_name |
+| connect policy/privacy | Account.match_permissions / privacy |
+
+Эти visible form names не доказывают внутреннюю database schema, но подтверждают разные ownership scopes.
+
+### 22.11 Save and security model
 
 - independent settings endpoints;
 - field-level validation;
-- explicit save для identity/privacy;
-- optimistic UI только для безопасных preferences;
+- explicit Save Changes;
+- X discards editor changes;
 - server version/ETag;
-- audit для privacy, connection permission и identity;
-- success/error status;
-- источник изменения web/iPad/API;
-- changed_by и changed_at.
+- audit privacy, connection permission and identity;
+- success/error state;
+- source web/iPad/API;
+- changedBy/At;
+- reset token expiry and rate limits;
+- no raw PII in analytics.
+---
+
 
 ## 23. Retailer Company Profile
 
-Route: /ra/profile/:accountId
+Route: /ra/profile/{accountId}.
 
-### 23.1 View mode
+### 23.1 View mode — OBSERVED
 
 - company name;
 - Get Verified;
-- Why verify Tax ID tooltip;
+- Why verify your Tax ID;
+- credibility explanation;
 - Edit Page;
 - People;
 - administrator badge;
 - Primary Location;
 - Other Locations;
 - location name/type/address;
-- map link;
+- Google Maps search link;
 - Expand All Locations.
 
-### 23.2 Edit mode sequence
+### 23.2 Verification modal — OBSERVED, NOT SUBMITTED
 
-1. click Edit Page;
-2. enter Editing Your Profile;
-3. edit sections;
-4. Save and View.
+Get Verified открывает Verification:
 
-### 23.3 Logo Image
+- Country — searchable select;
+- Tax ID;
+- placeholder e.g. 12-3456789;
+- Add to profile.
 
-- current logo;
-- Upload;
-- Browse Images;
-- 10MB max.
+Modal закрыт без отправки. Нужны statuses NOT_STARTED/PENDING/VERIFIED/FAILED/EXPIRED, provider response, normalized country/tax identifier, masked display, evidence/audit и retry policy.
 
-### 23.4 Verification — Tax ID
+### 23.3 Edit mode — OBSERVED
 
-- Country select;
-- Tax ID text;
-- example placeholder;
-- verification status;
-- active business credibility explanation.
+Edit Page переключает в Editing Your Profile. Primary action: Save and View.
 
-### 23.5 Basic Info
+Порядок:
 
-- Business Name read-only here;
-- link/instruction to Account Settings;
-- Description;
-- Website;
-- Instagram username;
-- X username;
-- Facebook URL.
+1. Logo Image;
+2. Verification - Tax ID;
+3. Basic Info;
+4. Store Photos;
+5. People;
+6. Primary Location;
+7. Other Locations;
+8. Add another Location.
 
-### 23.6 Store Photos
+### 23.4 Logo and Store Photos — OBSERVED
+
+Logo:
 
 - Upload;
+- Browse Images.
+
+Store Photos:
+
+- Upload;
 - Browse Images;
-- up to 30 images;
-- JPG/PNG/GIF;
-- 10MB per image;
-- interior/exterior intent;
-- ordering/delete/crop recommended.
+- назначение: interior/exterior.
 
-### 23.7 People
+Форматы и limits для обоих blocks — раздел 29.7.
 
-- list account users opted into display;
+Нужны MIME/magic-byte validation, malware scan, EXIF stripping, crop/order/delete, thumbnails и signed asset URLs.
+
+### 23.5 Basic Info — OBSERVED
+
+- Business Name — read-only здесь;
+- ссылка/инструкция менять в Account Settings;
+- Description, placeholder Describe the aesthetic, values, and story behind your business;
+- Website, placeholder yourstore.com;
+- Instagram, @username;
+- X, @username;
+- Facebook, www.facebook.com/yourpage.
+
+### 23.6 People — OBSERVED
+
+- displayed account users;
 - Add or update your information;
 - Go to user settings;
-- user controls name/title/photo/display consent.
+- пояснение, что каждый user сам добавляет name/title/image и opt-in/opt-out.
 
-### 23.8 Location fields in order
+Company People является projection user memberships + per-user display consent.
+
+### 23.7 Location fields — OBSERVED
+
+Для Primary и каждой Other Location повторяется:
 
 1. Location Name;
 2. Type;
@@ -3068,119 +3270,60 @@ Route: /ra/profile/:accountId
 7. Address 2;
 8. City required;
 9. Territory;
-10. ZIP/Postal Code;
+10. Zip;
 11. Phone;
 12. Categories;
 13. Brands Carried;
 14. Demographics:
-    - Male;
-    - Female;
-    - Age;
-15. Described as — choose up to 3;
-16. Shops for — choose up to 3;
-17. Delete Location.
+   - Gender;
+   - Age;
+15. Described as, максимум 3;
+16. Shops for, максимум 3;
+17. Delete — только для non-primary records.
 
-Global location actions:
+Global actions:
 
-- Primary Location;
-- Other Locations;
 - Add another Location;
 - Save and View.
 
-### 23.9 Profile storage
 
-- company profile;
-- media assets;
-- verification record;
-- social links;
-- location records;
-- demographic tags;
-- brand/category references;
-- user display membership;
-- privacy/search visibility.
+### 23.8 Location Type, price and age dictionaries — OBSERVED
+
+Type, Minimum Price, Maximum Price и Age используют canonical Location Profile Dictionaries из раздела 29.4. Brands Carried — remote autocomplete без initial options; Country — searchable international directory.
+
+
+### 23.9 Category dictionary — OBSERVED
+
+Каждая location использует canonical Global Category Dictionary из раздела 29.1.
+
+
+### 23.10 Demographics dictionaries — OBSERVED
+
+Gender, Age, Described as и Shops for используют значения из раздела 29.4. UI ограничивает Described as и Shops for максимум тремя выборами.
+
+### 23.11 Location-centric architecture
+
+Categories, Brands Carried, demographics и wholesale range принадлежат Location, а не только account. Разные doors одной сети могут иметь разные audience/profile.
+
+Location entity:
+
+- locationId/accountId;
+- primary flag;
+- name/type/year;
+- price min/max and currency assumption;
+- structured address;
+- phone;
+- category ids;
+- carried brand ids;
+- gender/age segments;
+- descriptive tags;
+- shopping missions;
+- created/updated/deleted;
+- geocoding/map reference;
+- version/audit.
+
+Delete Location должен проверять связи с orders/doors/integrations и использовать archive при наличии истории.
 ---
-### 23.10 Location
-
-Для Primary Location и каждой Other Location повторяется один и тот же состав:
-
-- Location Name;
-- Type;
-- Year Established;
-- Wholesale Price Range:
-  - Minimum Price;
-  - Maximum Price;
-- Country, required;
-- Address 1, required;
-- Address 2;
-- City, required;
-- Territory;
-- Zip;
-- Phone;
-- Categories;
-- Brands Carried;
-- Demographics;
-- Delete для дополнительных локаций;
-- Add another Location.
-
-Categories:
-
-- Accessories;
-- Activewear/Yoga;
-- Beauty;
-- Bridal;
-- Candles;
-- Denim;
-- Eco-friendly;
-- Evening;
-- Eyewear;
-- Gifts;
-- Handbags;
-- Hats;
-- Home;
-- Hosiery;
-- Jewelry;
-- Kids;
-- Lingerie;
-- Luggage;
-- Mens Bags;
-- Mens RTW;
-- Mens Shoe;
-- Mens Underwear;
-- Outdoor;
-- Outerwear;
-- Plus Size;
-- Resort Wear;
-- Special Occasion;
-- Swimwear;
-- Watches;
-- Womens RTW;
-- Womens Shoe.
-
-Demographics:
-
-- Gender:
-  - Male;
-  - Female;
-- Age — multi/select dictionary;
-- Described as, максимум 3:
-  - Sophisticated;
-  - Edgy;
-  - Casual;
-  - Feminine;
-  - Downtown;
-  - Active;
-  - Classic;
-  - Vintage;
-  - Bohemian;
-- Shops for, максимум 3:
-  - Professional Looks;
-  - Day to Night;
-  - Cocktail and Events;
-  - Casual Sportswear;
-  - Resort/Beach/Swimwear;
-  - Gifts.
-
-Архитектурный вывод: категории, бренды, demographics и price range привязаны к Location, а не только к retailer account. Это позволяет разным магазинам одной сети иметь разные ассортиментные профили.
 
 ## 24. Account switching и discoverability
 
@@ -3250,38 +3393,44 @@ UI может применить optimistic display после Save, но direct
 
 Все domain requests несут activeAccountId, проверенный сервером; client-side header не является security boundary.
 
+
 ## 25. Shopify Integration
 
-Route: /ra/shopify/retailer-product-sync/config
+Route: /ra/shopify/retailer-product-sync/config.
 
-### 25.1 Disconnected state
+### 25.1 Disconnected state — OBSERVED
+
+Composition:
 
 - Integration Settings;
-- Shopify tab;
-- You are not connected;
+- Shopify provider/tab;
+- You are not connected to your Shopify shop;
 - Install on Shopify;
-- disabled Sync Settings;
+- Sync Settings;
+- Automation;
+- Field Preferences;
+- Sync Information;
 - Not synced yet.
 
-### 25.2 Automation
+Install on Shopify ведёт во внешний Shopify installation/OAuth flow и не запускался.
 
-- Automatic Sync;
-- sync approved orders;
-- all connected accounts;
-- customize by account after Expand.
+### 25.2 Automation — OBSERVED DISABLED
 
-### 25.3 Field Preferences
+- Automatic Sync — checked, disabled;
+- helper: approved orders from all connected accounts can sync automatically;
+- account-level customization обещана после Expand;
+- Expand All — disabled до connection.
 
-- Expand All;
-- global enable;
-- per-account override.
+Checked + disabled означает proposed/default configuration, а не active sync. UI должен различать desired settings и effective integration state.
 
-Mapping:
+### 25.3 Exact JOOR → Shopify mapping — OBSERVED DISABLED
 
-| JOOR | Shopify |
+Все checkboxes наблюдались checked and disabled:
+
+| JOOR field | Shopify destination |
 |---|---|
 | Style Name | Title |
-| Brand Name + Style Name | Title |
+| Brand Name \| Style Name | Title |
 | Description | Description |
 | Photos | Media |
 | Category | Category |
@@ -3289,122 +3438,175 @@ Mapping:
 | Silhouette | Type |
 | Brand Name | Vendor |
 | Suggested Retail Price | Price |
-| SKU Prices | Variant Price |
-| SKU Code | Variant SKU |
+| Sku Prices | Variant Price |
+| Sku Code | Variant SKU |
 | UPC Code | Variant Barcode |
+
+В UI используется label Brand Name | Style Name, а не математическое сложение. Это title template.
 
 ### 25.4 Integration lifecycle
 
 ~~~text
 DISCONNECTED
 → Install on Shopify
-→ OAuth/installation
+→ Shopify authorization
+→ callback/webhook verification
 → CONNECTED
-→ configure field mapping
-→ enable automatic sync
-→ approved order triggers job
-→ QUEUED/RUNNING
-→ COMPLETED or FAILED
-→ Activity Center details/retry
+→ configure automatic sync and fields
+→ optional per-account overrides
+→ approved order event
+→ QUEUED/RUNNING job
+→ COMPLETED / PARTIAL / FAILED
+→ Activity Center details, errors and retry
 ~~~
 
-### 25.5 Required conflict policies
+### 25.5 Required mapping and conflict policies
 
 - create vs update product;
-- matching by SKU/UPC;
+- identity by SKU/UPC and collision policy;
 - title template precedence;
-- currency conversion;
-- image overwrite;
-- variant deletion;
+- currency and price selection;
+- image add/replace/remove;
+- collection/linesheet lifecycle;
+- variant deletion and unavailable SKU;
 - inventory ownership;
-- order cancellation;
-- brand/account overrides;
-- partial failure;
+- order cancellation/change after approval;
+- global vs account override;
+- partial failure and row-level errors;
 - retries/idempotency;
-- rate limits;
-- webhook verification.
+- Shopify rate limits;
+- webhook signature/replay protection;
+- permission scopes and token rotation;
+- disconnect/data retention.
+
+### 25.6 Sync records
+
+IntegrationConnection:
+
+- accountId/provider/shop reference;
+- status;
+- granted scopes;
+- installedAt/disconnectedAt;
+- secret/token reference;
+- webhook health;
+- config version.
+
+SyncJob:
+
+- source order/version;
+- account/brand;
+- mapping snapshot;
+- status;
+- created/updated product ids;
+- warnings/errors;
+- retry count;
+- idempotency key;
+- started/finished;
+- Activity Center reference.
+
+No active connection or successful sync artifact был доступен; connected settings and job details остаются UAT.
 ---
-### 25.6 Точная карта JOOR → Shopify
-
-| JOOR | Shopify |
-|---|---|
-| Style Name | Title |
-| Brand Name + Style Name | Title |
-| Description | Description |
-| Photos | Media |
-| Category | Category |
-| Linesheet | Collections |
-| Silhouette | Type |
-| Brand Name | Vendor |
-| Suggested Retail Price | Price |
-| SKU Prices | Variant Price |
-| SKU Code | Variant SKU |
-| UPC Code | Variant Barcode |
-
-Disconnected state:
-
-- Shopify provider selector;
-- You are not connected;
-- Install on Shopify;
-- Automatic Sync checked, но disabled;
-- Expand All disabled;
-- все field preferences checked, но disabled;
-- Sync Information: Not synced yet.
-
-Automation обещает синхронизировать approved orders от всех connected accounts и затем разрешить account-level overrides.
 
 ## 26. Subscription and entitlements
 
-Route: /ra/subscriptions
+Route: /ra/subscriptions.
 
-Blocks:
+### 26.1 Plan catalog — OBSERVED
+
+Screen:
 
 - Premium Features;
 - Available For Purchase;
-- plan cards;
-- feature description;
-- monthly price;
-- yearly price;
-- Purchase;
-- Learn More.
+- plan card;
+- external feature detail;
+- description;
+- monthly/yearly price;
+- Purchase.
 
-Purchase was not executed.
+Наблюдаемые на 4 августа 2026 года offers:
 
-Required model:
+| Plan | Limits | Monthly | Yearly |
+|---|---|---:|---:|
+| Visual Assortment Premium | 5 users, 5 doors, 3,000 products, 3 years storage | $299 USD | $3,199 USD |
+| Visual Assortment Standard | 2 users, 1 door, 1,000 products, 2 years storage | $159 USD | $1,599 USD |
 
-- plan catalog;
-- feature entitlement;
-- billing interval;
-- price/currency;
-- account subscription;
-- trial;
-- active/past_due/cancelled;
+Цены и лимиты являются billing catalog data, не constants продукта.
+
+### 26.2 Checkout entry — OBSERVED, NOT SUBMITTED
+
+Purchase Standard monthly открыл Stripe Checkout без промежуточного JOOR modal.
+
+Order summary:
+
+- Visual Assortment - Standard;
+- product description;
+- billed monthly;
+- subtotal;
+- total due today;
+- promo code;
+- Apply disabled до кода;
+- merchant-back link with cancel=true and featureId.
+
+Payment choices:
+
+- Apple Pay;
+- Link;
+- card.
+
+Fields:
+
+- contact email;
+- card number;
+- expiry;
+- CVV/CVC;
+- cardholder name;
+- billing country/region.
+
+Additional controls:
+
+- Subscribe;
+- recurring-charge authorization text;
+- I am an AI agent acting on behalf of someone else — checkbox;
+- Stripe Terms/Privacy.
+
+Checkout локализуется browser locale. Никакие contact/payment fields не заполнялись, Subscribe не нажимался; возврат выполнен merchant-back link.
+
+### 26.3 Billing and entitlement model
+
+- PlanCatalog;
+- PlanPrice by currency/interval;
+- AccountSubscription;
+- Entitlement;
 - usage counters;
-- limits;
+- users/doors/products/retention limits;
+- trial;
+- active/past_due/cancelled/incomplete;
+- provider customer/session/subscription ids;
+- promo/discount;
+- tax;
 - proration;
-- payment provider reference.
+- renewal/cancel timestamps;
+- webhook event ledger.
 
-Purchase button must confirm exact plan, billing period, currency, account and amount.
+Purchase должен передавать exact account, plan, interval, currency, amount and versioned terms. Stripe webhook, а не client redirect, является источником истины активации.
+
+### 26.4 End-to-end purchase
+
+1. choose plan/interval;
+2. create idempotent checkout session;
+3. show immutable order summary;
+4. collect contact/payment data у provider;
+5. submit payment;
+6. provider authenticates where required;
+7. webhook verifies signature and event id;
+8. subscription becomes active;
+9. entitlements recalculate;
+10. shell/gated screens invalidate cache;
+11. receipt/notification;
+12. failures, retries, cancel and renewal lifecycle.
+
+Full successful checkout, cancellation after activation, invoice history и payment failure остаются UAT.
 ---
-### 26.1 Наблюдаемые лимиты тарифов
-
-Visual Assortment Standard:
-
-- 2 users;
-- 1 door;
-- 1,000 products;
-- 2 years data storage;
-- monthly и yearly purchase actions.
-
-Visual Assortment Premium:
-
-- 5 users;
-- 5 doors;
-- 3,000 products;
-- 3 years data storage;
-- monthly и yearly purchase actions.
-
-Карточка тарифа содержит Available For Purchase, описание, USD price, billing period, Purchase и внешнюю ссылку на описание функции. Цены являются временно изменяемыми данными и в реализации должны приходить из billing catalog.
 
 ## 27. Data Activity Center
 
@@ -3489,9 +3691,223 @@ Job Ref должен быть стабильным публичным идент
 | Send to Assortment | Orders | Assortment service | assortment items | success/job |
 | Archive Look/Board | List | Merchandising service | status Archived | updated tab |
 ---
-## 29. Справочники
 
-### 29.1 Connection statuses
+## 29. Справочники — canonical source
+
+Этот раздел является единственным перечнем option values. Feature-разделы описывают место, порядок и условия выбора и ссылаются сюда.
+
+### 29.1 Global Category Dictionary — OBSERVED
+
+- Accessories
+- Activewear/Yoga
+- Beauty
+- Bridal
+- Candles
+- Denim
+- Eco-friendly
+- Evening
+- Eyewear
+- Gifts
+- Handbags
+- Hats
+- Home
+- Hosiery
+- Jewelry
+- Kids
+- Lingerie
+- Luggage
+- Mens Bags
+- Mens RTW
+- Mens Shoe
+- Mens Underwear
+- Outdoor
+- Outerwear
+- Plus Size
+- Resort Wear
+- Special Occasion
+- Swimwear
+- Watches
+- Womens RTW
+- Womens Shoe
+
+Используется в Discovery и retailer Location profile. Конкретный Passport event может иметь subset.
+
+### 29.2 Passport Event Category Dictionary — OBSERVED
+
+Для проверенного Making Waves event:
+
+- Accessories
+- Activewear/Yoga
+- Bridal
+- Candles
+- Denim
+- Eco-friendly
+- Evening
+- Eyewear
+- Gifts
+- Handbags
+- Hats
+- Home
+- Hosiery
+- Jewelry
+- Kids
+- Lingerie
+- Luggage
+- Mens Bags
+- Mens RTW
+- Mens Shoe
+- Mens Underwear
+- Outdoor
+- Outerwear
+- Plus Size
+- Resort Wear
+- Special Occasion
+- Swimwear
+- Womens RTW
+- Womens Shoe
+
+Beauty и Watches отсутствовали. Event category set должен быть versioned configuration, а не копией global dictionary в client code.
+
+### 29.3 User Settings Dictionaries — OBSERVED
+
+Languages:
+
+- English;
+- Español;
+- Français;
+- Deutsch;
+- Italiano;
+- 日本語;
+- 中文(简体);
+- Русский;
+- 한국어.
+
+Date Format:
+
+- mm/dd/yyyy;
+- dd/mm/yyyy;
+- yyyy/mm/dd.
+
+Landing Page:
+
+- Home;
+- My Connections;
+- Orders;
+- Profile.
+
+Round Retail Pricing:
+
+- (choose one);
+- none;
+- 1.00;
+- 5.00.
+
+### 29.4 Price, location and demographics dictionaries — OBSERVED
+
+Passport Min Price:
+
+- None;
+- $10;
+- $50;
+- $100;
+- $250;
+- $500.
+
+Passport Max Price:
+
+- None;
+- $150;
+- $250;
+- $500;
+- $750;
+- $1000.
+
+Connection Search Wholesale Minimum:
+
+- empty;
+- $10;
+- $50;
+- $100;
+- $250;
+- $500.
+
+Connection Search Wholesale Maximum:
+
+- empty;
+- $150;
+- $250;
+- $500;
+- $750;
+- $1000+.
+
+Location Type:
+
+- Store;
+- Office.
+
+Location Minimum Price:
+
+- $10;
+- $50;
+- $100;
+- $250;
+- $500;
+- $1000;
+- $2500;
+- $5000;
+- $10000;
+- $15000.
+
+Location Maximum Price:
+
+- $150;
+- $250;
+- $500;
+- $750;
+- $1000;
+- $2500;
+- $5000;
+- $10000;
+- $15000;
+- >$30000.
+
+Age:
+
+- 16-22;
+- 22-25;
+- 25-40;
+- 40-65;
+- All Ages.
+
+Gender:
+
+- Male;
+- Female.
+
+Described as, максимум 3:
+
+- Sophisticated;
+- Edgy;
+- Casual;
+- Feminine;
+- Downtown;
+- Active;
+- Classic;
+- Vintage;
+- Bohemian.
+
+Shops for, максимум 3:
+
+- Professional Looks;
+- Day to Night;
+- Cocktail and Events;
+- Casual Sportswear;
+- Resort/Beach/Swimwear;
+- Gifts.
+
+### 29.5 Operational statuses and dimensions
+
+Connection:
 
 - NONE;
 - INCOMING_PENDING;
@@ -3502,9 +3918,7 @@ Job Ref должен быть стабильным публичным идент
 - DISCONNECTED;
 - ARCHIVED.
 
-### 29.2 Order statuses/flags
-
-Lifecycle:
+Order lifecycle:
 
 - DRAFT;
 - PENDING;
@@ -3512,7 +3926,7 @@ Lifecycle:
 - SHIPPED;
 - CANCELLED.
 
-Flags/dimensions:
+Order flags/dimensions:
 
 - NOTES;
 - WITH_QUANTITIES;
@@ -3522,7 +3936,7 @@ Flags/dimensions:
 - IMPORTED;
 - SYNCED/FAILED.
 
-### 29.3 Content statuses
+Content:
 
 - Current;
 - Archived;
@@ -3534,7 +3948,7 @@ Flags/dimensions:
 - Published;
 - Draft.
 
-### 29.4 Job statuses
+Job:
 
 - QUEUED;
 - RUNNING;
@@ -3544,13 +3958,7 @@ Flags/dimensions:
 - CANCELLED;
 - EXPIRED.
 
-### 29.5 Date formats
-
-- MM/DD/YYYY;
-- DD/MM/YYYY;
-- YYYY/MM/DD.
-
-### 29.6 Page sizes
+### 29.6 Pagination sizes — OBSERVED
 
 Orders:
 
@@ -3565,26 +3973,17 @@ Connections:
 - 120;
 - 240.
 
-### 29.7 Account landing pages
+### 29.7 Media and file limits — OBSERVED
 
-- Home;
-- My Connections;
-- Orders;
-- Profile.
-
-### 29.8 Retail rounding
-
-- none;
-- nearest 1.00;
-- nearest 5.00.
-
-### 29.9 Media limits
-
-- profile/store image: 10MB;
-- store photos: up to 30 at once;
+- profile/logo/store image: 10MB;
+- store photos: до 30 за один выбор;
 - message image: JPG/PNG, 4MB;
-- storefront documents: limit not observed.
+- order import: Excel/CSV, 4MB;
+- storefront documents: limit не наблюдался.
+
+Limits должны храниться в server configuration и дублироваться в client hints только для UX.
 ---
+
 ## 30. Entity relationship map
 
 ~~~text
@@ -3898,6 +4297,13 @@ Save/discard current edits → authorize target membership → set activeAccount
 31. Note Order Edit может стать active, не показав quantity inputs.
 32. Address editing restriction зависит от brand policy, но UI не показывает policy/source.
 33. Products/Colors могут быть ненулевыми при Units = 0, что без пояснения выглядит как рассинхронизация.
+34. Reset password вызывает blocking JavaScript alert без доступного объяснения и без подтверждённого результата отправки.
+35. Create Styleboard показывает Saving … до обязательного выбора бренда; persistence до Assign не объяснена.
+36. Styleboard toolbar использует icon-only controls без accessible names.
+37. Subscription Purchase сразу переводит во внешний Stripe Checkout; JOOR-level review/confirmation отсутствует.
+38. Submissions All при пустом наборе повторяет формулировку No new brands, предназначенную для New.
+39. React-select поля профиля Location визуально подписаны, но их внутренние textboxes не имеют accessible names.
+40. Passport, Submissions, Favorites и Styleboards могут несколько секунд показывать почти пустой DOM до появления содержимого.
 ---
 
 ## 34. Требования к улучшенному аналогу
@@ -4002,93 +4408,95 @@ Save/discard current edits → authorize target membership → set activeAccount
 12. Media & Documents.
 13. Notifications.
 ---
+
 ## 36. Coverage, evidence and remaining unknowns
 
 ### 36.1 Подтверждено в Retailer LITE
 
 - product shell, Dashboard и active account;
-- discovery, connection surfaces, submissions, favorites и Passport;
+- discovery grid, четыре sort modes, full filters, category dictionary и Requested state;
+- connected, incoming и pending connection surfaces;
+- Submissions New/Viewed/All и точные empty states;
+- Favorites bare empty state;
+- Passport landing, текущий event detail, Style Stories, точные category/min/max filters и storefront handoff;
 - connected Storefront и public/disconnected brand profile;
 - video, description, social, products, swatches, collections, gallery/press и PDF documents;
-- опубликованный multi-section showroom: iframe video, rich text, повторяющиеся collection chapters, galleries, card covers и Preview Linesheet;
-- placeholder/restricted connected showroom и linesheet overlays;
-- audience-restricted product state;
-- Linesheets registry с Brand/Delivery/Category filters, sort, cards и pagination;
-- Linesheet detail с Minimum Amount, price types, View counts и 14 Group By values;
-- полный Print constructor с layouts, three custom fields, grouping и image/price options;
-- Start Excel Order modal с multi-linesheet selection, price type, Include Images и Export;
-- Style detail с navigation, multiple price types, materials, origin, sizes/fit, colorway и custom classification attributes;
-- Looks, Styleboards и gated Visual Assortment;
-- Manage Orders registry, filters, mass actions, import/export/download entry points;
-- Approved Order Overview/Pay;
-- Share Order modal и advanced options;
-- Comments drawer/input;
-- Download drawer с PDF/Excel/Linesheet-to-Size и advanced options;
-- Note Order status combo с Cancel Order;
-- Notes Order с quantities;
-- актуальный Note Order с Products/Colors > 0 и Units = 0;
-- Add Products catalog modal с linesheet, search, pagination, style cards и color checkboxes;
-- editable и brand-restricted address states;
-- editable Shipping/Billing modal и точные поля;
-- inline Contacts edit;
-- Order Details read fields и loading edit state;
-- Products Summary до color × size quantities;
-- historical products after linesheet access revocation;
-- financial summary and rounding warning;
-- Legal / Terms & Conditions;
-- retailer profile, locations, categories, demographics, people и settings;
-- account switcher с 14 retailer accounts;
-- Accounts Visibility Settings и задержка применения до 30 минут;
-- messages, integration/subscription/activity entry points.
+- multi-section showroom и restricted/placeholder states;
+- Linesheets registry/detail, Print constructor и Start Excel Order;
+- Style detail, price types, sizes, colorway и custom attributes;
+- Looks Current/Archived registry, filters и viewer;
+- Styleboards registry, Create/Cancel brand-association step, current bulk actions, canvas, price type и Add to order modal;
+- gated Visual Assortment value proposition;
+- Manage Orders, order review, Notes states, Add Products, document/share/comment/address/contact/financial blocks;
+- Import Orders, Download Confirmation, Export Data и empty Activity Center;
+- User Settings: все inline editors, language/date/landing/rounding dictionaries, notification rules, connect/privacy policies;
+- Reset password alert behavior;
+- retailer profile, verification modal, media/basic/people/location forms;
+- Location Type, min/max price и Age dictionaries;
+- account switcher и discoverability;
+- Shopify disconnected mapping;
+- subscription plan limits/prices и Stripe Checkout fields;
+- messages folders, composer and thread.
 
 ### 36.2 Наблюдаемые ambiguity/broken states
 
-- Storefront Shop может не сохранить предвыбранный brand в Start an Order;
-- global Start an Order autocomplete возвращал No results found для проверенных connected brands без объяснения eligibility;
-- Product Edit в Notes order с отозванным linesheet не открыл usable form;
-- Order Details Edit остался в loading state;
-- некоторые storefront presentation blocks содержат placeholders/неполные документы;
-- gated features показываются рядом с доступными действиями без полного capability explanation.
+- Storefront Shop может потерять выбранный brand;
+- Start an Order autocomplete не объясняет No results;
+- Product Edit в Notes не открыл usable quantity form;
+- Order Details Edit оставался loading;
+- Empty Cart redirect не имеет explanation;
+- Reset password alert не сообщает в доступном DOM, что именно произошло;
+- Styleboard /add показывает Saving до Assign;
+- icon-only Styleboard controls недоступны по имени;
+- Currency и Brands Carried remote autocomplete не показывают preload options;
+- delayed loading сначала оставляет почти пустой content area.
 
-Это не следует автоматически интерпретировать как универсальное поведение: нужны повторяемые UAT cases.
+Это не следует считать универсальным поведением без повторяемого UAT.
 
-### 36.3 Не подтверждено без brand-role или side effects
+### 36.3 Не подтверждено без brand-role, populated data или side effects
 
-- реальный brand admin UI;
-- showroom builder controls;
-- publishing linesheet/style/price/document;
-- фактический ввод и сохранение quantity на действующем shared linesheet;
-- создание нового draft через Start an Order;
-- Submit for Approval;
-- brand-side approve/reject/revision;
+- реальный brand admin UI и showroom builder;
+- populated Brand Submission card/detail;
+- populated Favorites;
+- archived Styleboard actions/restore;
+- actual Share toolbar modal Styleboard;
+- successful create/assign Styleboard;
+- фактический quantity edit/save;
+- создание нового order;
+- Submit for Approval и brand decision;
 - shipment/fulfillment;
-- реальная JOOR Pay form;
-- successful import/export job artifacts;
-- paid Visual Assortment;
+- JOORPay transaction;
+- successful import/export/job artifacts;
 - active Shopify sync;
-- Passport registration;
+- Passport registration submission;
+- successful Stripe subscription, invoices, renew/cancel/failure;
+- было ли отправлено recovery письмо после Reset password alert;
+- paid Visual Assortment workspace;
 - mobile/iPad apps;
 - APIs/webhooks, SSO и platform moderation.
 
 ### 36.4 Требуемый controlled UAT
 
-Нужны обезличенные test accounts: brand admin, connected retailer, disconnected retailer, multi-location retailer и restricted retailer.
+Нужны обезличенные test accounts: brand admin, connected retailer, disconnected retailer, multi-location retailer, restricted retailer и billing sandbox.
 
 Минимальный набор:
 
 1. publish/unpublish/version showroom;
-2. grant/revoke product/linesheet/document access;
-3. create/resume/delete draft и проверить empty Cart;
-4. enter/edit/clear color × size quantities;
-5. test min/increment/ATS/delivery failures;
-6. edit every order widget;
-7. submit, revision, approve, cancel and ship;
-8. change catalog after submission and verify snapshots;
-9. change terms/address/contact and verify history;
-10. generate/download/export documents;
-11. payment success/failure/refund;
-12. switch accounts and probe isolation;
-13. accessibility/mobile/performance on large presentations and orders.
+2. create populated submission and favorite;
+3. grant/revoke product/linesheet/document access;
+4. create/resume/delete draft и проверить empty Cart;
+5. enter/edit/clear color × size quantities;
+6. test min/increment/ATS/delivery failures;
+7. edit every order widget;
+8. submit, revision, approve, cancel and ship;
+9. change catalog/terms/address/contact and verify snapshots;
+10. generate/import/export/download and inspect Activity jobs;
+11. create/share/archive/restore/delete Styleboard;
+12. payment success/failure/refund and subscription sandbox lifecycle;
+13. Shopify install/OAuth/sync/retry;
+14. reset password with test mailbox;
+15. switch accounts and probe isolation;
+16. accessibility/mobile/performance on delayed and large screens.
 
-Документ является reference map, target architecture и backlog source. Он не утверждает закрытую proprietary implementation и явно отделяет observation от design inference.
+Документ остаётся reference map, target architecture и backlog source. Он не утверждает закрытую proprietary implementation и явно отделяет observation от design inference.
 

@@ -1,7 +1,7 @@
 # JOOR Retailer Cabinet → Syntha B2B Fashion Platform
 
 Статус: рабочая продуктовая спецификация и master map.  
-Версия: 2.0, 4 августа 2026 года.  
+Версия: 2.1, 4 августа 2026 года.  
 Назначение: определить, как Syntha должна превзойти JOOR как B2B buying platform и одновременно закрыть PLM, sourcing, costing, production, quality, logistics, wholesale и analytics.
 
 > Документ объединяет результаты read-only аудита JOOR Retailer / LITE и целевую архитектуру Syntha. Наблюдаемое в JOOR не следует считать подтверждением его закрытой внутренней реализации. Все функции, которых не было в доступном аккаунте, помечаются как TARGET или UAT.
@@ -1572,3 +1572,900 @@ Syntha должна объединить четыре класса систем 
 4. **Commercial control tower** — OTB, margins, costing, payments, reconciliation and analytics.
 
 Это и есть стратегическое преимущество: не еще один красивый каталог, а единая операционная система, где коммерческое решение покупателя связано с конкретной моделью, фабрикой, материалом, себестоимостью, сроком, качеством и финансовым результатом.
+
+---
+
+## 37. Целевая карта маршрутов Syntha
+
+Маршруты являются contract между UX, frontend, backend, permissions и analytics. Alias- и legacy-routes не должны плодиться: один бизнес-объект — один канонический URL.
+
+| Область | Route | Назначение |
+|---|---|---|
+| Home | `/dashboard` | Role-based control tower |
+| Brands | `/discover/brands` | Discovery и сравнение брендов |
+| Brand profile | `/brands/:brandId` | Профиль и коммерческий паспорт |
+| Collections | `/discover/collections` | Поиск коллекций и drops |
+| Markets | `/discover/markets` | Events, appointments, digital markets |
+| Connections | `/connections` | Все отношения brand-retailer |
+| Incoming | `/connections/incoming` | Входящие запросы |
+| Pending | `/connections/pending` | Исходящие запросы |
+| Planning | `/planning/seasons` | Seasons и collection plans |
+| Line plan | `/planning/seasons/:seasonId/line-plan` | Структура коллекции |
+| OTB | `/planning/otb` | Бюджет закупки |
+| Styles | `/plm/styles` | Style master list |
+| Style | `/plm/styles/:styleId` | Полная карточка модели |
+| Materials | `/plm/materials` | Библиотека материалов |
+| Samples | `/plm/samples` | Sample lifecycle |
+| Tech packs | `/plm/tech-packs` | Версии и releases |
+| Suppliers | `/sourcing/suppliers` | Supplier master |
+| RFQ | `/sourcing/rfqs` | Запросы котировок |
+| Quote compare | `/sourcing/rfqs/:rfqId/compare` | Сравнение фабрик |
+| Showrooms | `/buying/showrooms` | Digital selling/buying |
+| Linesheets | `/buying/linesheets` | Каталоги заказов |
+| Selection | `/buying/selections/:selectionId` | Assortment workspace |
+| Cart | `/buying/cart` | Draft orders |
+| Orders | `/orders` | Все заказы |
+| Order | `/orders/:orderId` | Snapshot, lines, approvals, amendments |
+| Production | `/production/orders` | Production order list |
+| WIP | `/production/calendar` | Производственный календарь |
+| QC | `/quality/inspections` | Проверки и дефекты |
+| Shipments | `/logistics/shipments` | Отгрузки и tracking |
+| Costing | `/finance/costing` | Cost versions и variance |
+| Invoices | `/finance/invoices` | Invoices и 3-way match |
+| Analytics | `/analytics` | Role-specific analytics |
+| Inbox | `/inbox` | Unified operational inbox |
+| Integrations | `/admin/integrations` | Connectors и jobs |
+| Dictionaries | `/admin/dictionaries` | Управляемые справочники |
+| Audit | `/admin/audit` | Audit events |
+
+### 37.1 Route-state contract
+
+Каждый route обязан поддерживать:
+
+- loading skeleton;
+- no permission;
+- not found;
+- empty state с объяснением и корректным CTA;
+- partial data state;
+- stale/version conflict state;
+- network error с retry;
+- archived/read-only state;
+- unsaved changes protection;
+- deep link preservation after login.
+
+---
+
+## 38. Screen contract
+
+Каждый экран проектируется по одному шаблону.
+
+### 38.1 Header
+
+- breadcrumb;
+- object name and immutable ID;
+- state badge;
+- owner;
+- last updated;
+- current version;
+- primary action;
+- secondary actions;
+- overflow menu;
+- permissions explanation when action unavailable.
+
+### 38.2 Main content
+
+- summary;
+- business data;
+- linked objects;
+- calculations;
+- exceptions;
+- comments;
+- documents;
+- approvals;
+- activity timeline.
+
+### 38.3 Footer/status bar
+
+- save state;
+- validation errors count;
+- synchronization status;
+- active account;
+- currency/UOM context;
+- last successful sync.
+
+### 38.4 Forbidden UX patterns
+
+- destructive icon without text or tooltip;
+- mutation through GET-link;
+- silent data overwrite;
+- disabled control without explanation;
+- modal containing another modal;
+- recalculation without showing changed result;
+- export without job status;
+- mixed internal and external comments;
+- unexplained redirect;
+- action that changes account context without visible confirmation.
+
+---
+
+## 39. Managed dictionaries
+
+Справочники должны быть tenant-configurable, versioned и иметь status Active/Deprecated. Удаление используемого значения запрещено.
+
+### 39.1 Product dictionaries
+
+- seasons;
+- collections;
+- drops;
+- departments;
+- categories and subcategories;
+- product types;
+- gender/audience;
+- age groups;
+- fit;
+- silhouette;
+- length;
+- sleeve;
+- neckline/collar;
+- closure;
+- construction details;
+- size systems;
+- measurement points;
+- color families;
+- product lifecycle states;
+- novelty/carry-over status.
+
+### 39.2 Material dictionaries
+
+- material types/subtypes;
+- fibers;
+- compositions;
+- weave/knit;
+- finishes;
+- weights;
+- widths;
+- gauges;
+- color standards;
+- UOM;
+- test types;
+- certificates;
+- care instructions;
+- defect types;
+- ownership models.
+
+### 39.3 Commercial dictionaries
+
+- currencies;
+- price types;
+- price lists;
+- tax types;
+- incoterms;
+- payment terms;
+- shipping methods;
+- cancellation reasons;
+- order change reasons;
+- discount types;
+- commission types;
+- margin thresholds;
+- credit statuses.
+
+### 39.4 Production dictionaries
+
+- factories;
+- capabilities;
+- operations;
+- machines;
+- skill grades;
+- sample types;
+- production milestones;
+- delay reasons;
+- inspection types;
+- AQL levels;
+- defect severity;
+- corrective action types;
+- claim outcomes.
+
+### 39.5 Governance
+
+Для каждого dictionary value:
+
+- code;
+- display name;
+- locale translations;
+- parent;
+- valid from/to;
+- active/deprecated;
+- replacement value;
+- owner;
+- usage count;
+- audit history.
+
+---
+
+## 40. Event taxonomy and product analytics instrumentation
+
+Без единой event taxonomy невозможно доказать, что продукт лучше JOOR.
+
+### 40.1 Event envelope
+
+```text
+event_id
+occurred_at
+actor_user_id
+actor_role
+organization_id
+account_id
+session_id
+source_route
+object_type
+object_id
+object_version
+operation
+result
+reason_code
+correlation_id
+metadata
+```
+
+### 40.2 Core events
+
+- brand_impression;
+- brand_profile_viewed;
+- connection_requested;
+- connection_accepted;
+- showroom_opened;
+- linesheet_opened;
+- style_viewed;
+- colorway_selected;
+- quantity_entered;
+- selection_saved;
+- order_draft_created;
+- order_submitted;
+- order_confirmed;
+- order_amendment_created;
+- sample_requested;
+- sample_approved;
+- tech_pack_released;
+- rfq_sent;
+- quotation_received;
+- supplier_allocated;
+- production_milestone_completed;
+- inspection_failed;
+- shipment_departed;
+- goods_received;
+- invoice_matched;
+- alert_resolved.
+
+### 40.3 Analytics discipline
+
+- explicit user action отделяется от system-generated recommendation;
+- impression считается только после фактического отображения;
+- duplicate events дедуплицируются по event_id;
+- financial metrics строятся из immutable snapshots;
+- funnel stages имеют единое определение для всех tenants;
+- deleted/archived records сохраняются в historical aggregates согласно retention policy.
+
+---
+
+## 41. KPI formulas
+
+### 41.1 OTB
+
+```text
+Available OTB
+= Approved Budget
+- Open Order Commitments
+- Confirmed Orders Not Received
+- Received at Cost
++ Approved Cancellations
+```
+
+### 41.2 Intake margin
+
+```text
+Intake Margin %
+= (Retail Price ex VAT - Landed Cost) / Retail Price ex VAT
+```
+
+### 41.3 GMROI
+
+```text
+GMROI
+= Gross Margin Value / Average Inventory at Cost
+```
+
+### 41.4 Sell-through
+
+```text
+Sell-through %
+= Net Units Sold / (Net Units Sold + Ending On-hand Units)
+```
+
+### 41.5 Supplier OTD
+
+```text
+On-time Delivery %
+= Shipments Delivered On or Before Agreed Date / Total Delivered Shipments
+```
+
+### 41.6 Fill rate
+
+```text
+Fill Rate %
+= Accepted Delivered Units / Confirmed Ordered Units
+```
+
+### 41.7 Cost variance
+
+```text
+Cost Variance %
+= (Actual Landed Cost - Target Cost) / Target Cost
+```
+
+### 41.8 Sample approval efficiency
+
+```text
+First-pass Approval %
+= Styles Approved on First Relevant Sample / Styles Reaching Sample Review
+```
+
+Для каждого KPI фиксируются grain, source entities, currency conversion policy, timezone, returns treatment и refresh frequency.
+
+---
+
+## 42. AI functions that create real differentiation
+
+AI не должен подменять master data или принимать необратимые решения без человека.
+
+### 42.1 Buyer copilot
+
+- natural-language search по каталогу;
+- assortment gap detection;
+- suggested size curve;
+- suggested quantity by store cluster;
+- duplicate and cannibalization warning;
+- markup/margin anomaly detection;
+- order summary before submission;
+- explanation of why a style is recommended.
+
+### 42.2 Product development copilot
+
+- extraction of BOM candidates from tech documents;
+- comparison of tech pack versions;
+- missing field detection;
+- sample comment summarization;
+- measurement deviation summary;
+- suggested reusable components from historical styles;
+- risk estimate for late launch.
+
+### 42.3 Sourcing copilot
+
+- quotation normalization;
+- hidden-cost detection;
+- supplier comparison summary;
+- capacity and lead-time risk;
+- suggested negotiation points;
+- abnormal material consumption alert;
+- likely cost drivers.
+
+### 42.4 Production and quality copilot
+
+- milestone delay prediction;
+- defect clustering;
+- probable root-cause suggestion;
+- recurring factory issue detection;
+- claim evidence pack drafting;
+- shipment risk summary.
+
+### 42.5 AI control requirements
+
+- source citations inside product;
+- confidence score;
+- human approval;
+- no training on tenant data without explicit policy;
+- prompt and output audit for sensitive workflows;
+- deterministic calculations remain outside LLM;
+- explainability for recommendations;
+- feedback loop: accepted/rejected/edited.
+
+---
+
+## 43. Recommendation engine
+
+Recommendation must optimize business outcome, not clicks.
+
+### 43.1 Candidate features
+
+- category fit;
+- price-band fit;
+- retailer customer profile;
+- historical sell-through;
+- returns;
+- markdown dependency;
+- margin;
+- inventory position;
+- seasonality;
+- size availability;
+- delivery window;
+- brand overlap;
+- novelty;
+- supplier reliability.
+
+### 43.2 Ranking guardrails
+
+- do not recommend unavailable SKU;
+- do not exceed territory/access restrictions;
+- penalize late/high-risk delivery;
+- expose sponsored placement separately;
+- avoid concentration in one brand/category;
+- support diversity and exploration;
+- allow buyer to inspect recommendation factors.
+
+---
+
+## 44. Retail planning extensions
+
+Для сильного retailer cabinet недостаточно просто собрать заказ.
+
+### 44.1 Store clustering
+
+- cluster by sales, traffic, climate, price sensitivity, customer profile and capacity;
+- assign doors to cluster;
+- maintain effective dates;
+- allow scenario override;
+- compare planned and actual cluster performance.
+
+### 44.2 Initial allocation
+
+```text
+Recommended SKU Qty
+= Cluster Demand Weight
+× Store Capacity Factor
+× Size Curve Share
+× Availability Factor
+× Risk Adjustment
+```
+
+### 44.3 Replenishment and reorder
+
+- available-to-sell from brand;
+- retailer on-hand and sell-through;
+- minimum reorder;
+- lead time;
+- expected margin;
+- markdown risk;
+- suggested reorder quantity;
+- approval and order conversion.
+
+### 44.4 Markdown feedback
+
+Post-season results must feed back into:
+
+- next season line plan;
+- brand score;
+- category budget;
+- size curve;
+- price ladder;
+- carry-over decision;
+- reorder logic.
+
+---
+
+## 45. Market appointments and collaborative buying
+
+TARGET module absent from the current master map but critical for wholesale workflow.
+
+- appointment calendar;
+- brand, showroom, location and timezone;
+- attendee roles;
+- pre-meeting shortlist;
+- shared buying session;
+- live notes;
+- selected styles;
+- decisions and follow-up tasks;
+- meeting recap;
+- conversion into selection/order;
+- offline-capable tablet mode for market appointments.
+
+All participants see only data allowed by role; retailer internal margin and OTB remain private.
+
+---
+
+## 46. Document control
+
+Document types:
+
+- tech pack;
+- quotation;
+- contract;
+- PO;
+- order confirmation;
+- proforma;
+- invoice;
+- packing list;
+- certificate;
+- test report;
+- inspection report;
+- claim;
+- credit note;
+- customs document.
+
+Required metadata:
+
+- document type;
+- object links;
+- issuer;
+- recipient;
+- version;
+- issue/effective/expiry dates;
+- language;
+- signature state;
+- checksum;
+- confidentiality;
+- retention class.
+
+A newer file must not silently replace a legally or commercially used version.
+
+---
+
+## 47. Data quality control
+
+### 47.1 Data-quality dimensions
+
+- completeness;
+- validity;
+- uniqueness;
+- consistency;
+- timeliness;
+- lineage;
+- referential integrity.
+
+### 47.2 Examples of blocking rules
+
+- SKU cannot exist without style, colorway and size;
+- order cannot submit without price snapshot and terms version;
+- tech pack cannot release without mandatory sections;
+- production cannot start without approved sample or explicit waiver;
+- shipment cannot close above confirmed quantity without amendment;
+- invoice cannot auto-match when currency differs without approved FX rule;
+- material cost cannot be calculated without UOM conversion.
+
+### 47.3 Data-quality dashboard
+
+- invalid records;
+- missing mandatory data;
+- duplicate styles/SKUs;
+- expired prices;
+- expired certificates;
+- orphaned documents;
+- unsynchronized integrations;
+- unresolved mapping errors.
+
+---
+
+## 48. Import/export templates
+
+### 48.1 Imports
+
+- brands;
+- retailer doors;
+- styles/colorways/SKUs;
+- prices;
+- materials;
+- BOM;
+- measurement charts;
+- orders;
+- production milestones;
+- inspections;
+- shipments;
+- invoices.
+
+### 48.2 Import flow
+
+```text
+Upload
+→ Detect template/version
+→ Map columns
+→ Validate
+→ Preview changes
+→ User confirms
+→ Background job
+→ Row-level result
+→ Correct and re-run failed rows
+```
+
+### 48.3 Export principles
+
+- export respects permissions;
+- selected filters and columns persist;
+- financial exports contain currency and FX context;
+- large exports run asynchronously;
+- downloaded file has generated-at timestamp and source version;
+- all exports are audited.
+
+---
+
+## 49. Enterprise tenancy and organization model
+
+Syntha must support:
+
+- holding company;
+- multiple legal entities;
+- multiple brands;
+- multiple retailer banners;
+- business units;
+- countries;
+- stores/doors;
+- warehouses;
+- factories;
+- external agencies and inspectors.
+
+### 49.1 Data ownership
+
+Every business object has:
+
+- owning organization;
+- owning account/business unit;
+- visibility scope;
+- shared-with parties;
+- source system;
+- data steward.
+
+### 49.2 Cross-company collaboration
+
+Shared object access is explicit and revocable. Internal fields stay private even when an object is shared externally.
+
+---
+
+## 50. Operational SLA framework
+
+SLA objects:
+
+- connection response;
+- RFQ response;
+- sample delivery;
+- sample review;
+- order confirmation;
+- amendment response;
+- production milestone;
+- QC corrective action;
+- shipment document submission;
+- claim response;
+- invoice resolution.
+
+Each SLA contains:
+
+- start event;
+- pause conditions;
+- due duration;
+- calendar/business days;
+- timezone;
+- warning threshold;
+- escalation route;
+- breach reason;
+- resolution timestamp.
+
+---
+
+## 51. Prioritized delivery backlog
+
+### P0 — required to prove product viability
+
+- tenant/account/role foundation;
+- style-colorway-SKU model;
+- brand and retailer profiles;
+- connections;
+- collection, linesheet and product detail;
+- quantity matrix;
+- draft and submitted order;
+- order snapshots;
+- order approvals;
+- documents and messages;
+- audit log;
+- basic dashboard;
+- CSV/XLSX import/export;
+- end-to-end UAT.
+
+### P1 — decisive advantage over basic wholesale platforms
+
+- OTB;
+- Visual Assortment;
+- line plan;
+- BOM and costing;
+- samples and tech packs;
+- RFQ and quote comparison;
+- amendments;
+- production calendar;
+- inspections;
+- shipment tracking;
+- supplier scorecard;
+- analytics funnel.
+
+### P2 — enterprise scale
+
+- advanced approvals;
+- invoices and 3-way match;
+- actual landed cost;
+- store clustering/allocation;
+- replenishment;
+- market appointments;
+- external inspector portal;
+- EDI/API ecosystem;
+- SSO/MFA enterprise policies;
+- advanced data quality.
+
+### P3 — intelligent automation
+
+- AI buyer copilot;
+- quotation normalization;
+- delay prediction;
+- defect clustering;
+- recommendation engine;
+- scenario optimization;
+- automated claim pack;
+- natural-language analytics.
+
+---
+
+## 52. Definition of Ready
+
+A feature enters development only when available:
+
+- business objective;
+- actor and permissions;
+- entry route;
+- source-of-truth entities;
+- field list;
+- state machine;
+- validations;
+- empty/loading/error states;
+- audit events;
+- analytics events;
+- acceptance criteria;
+- designs or interaction contract;
+- integration dependencies;
+- migration impact;
+- security review requirement.
+
+---
+
+## 53. Definition of Done
+
+Feature is complete only when:
+
+- happy path works;
+- negative paths work;
+- permissions tested;
+- tenant isolation tested;
+- audit events verified;
+- analytics events verified;
+- accessibility passed;
+- large-data performance passed;
+- import/export passed where applicable;
+- documentation updated;
+- support playbook created;
+- monitoring and alerts configured;
+- UAT signed off by business owner.
+
+---
+
+## 54. Migration from Excel and fragmented systems
+
+### 54.1 Discovery
+
+- inventory current files and systems;
+- identify owners;
+- define source of truth;
+- classify sensitive data;
+- detect duplicates and obsolete fields.
+
+### 54.2 Mapping
+
+- source field;
+- target field;
+- transformation;
+- dictionary mapping;
+- default value;
+- validation;
+- unresolved owner.
+
+### 54.3 Migration sequence
+
+1. dictionaries;
+2. organizations/users/locations;
+3. suppliers and brands;
+4. seasons and styles;
+5. materials and BOM;
+6. prices;
+7. open orders;
+8. production and shipments;
+9. documents;
+10. historical analytics.
+
+### 54.4 Reconciliation
+
+- record counts;
+- control totals;
+- order value totals;
+- inventory quantities;
+- invoice balances;
+- sample/document counts;
+- exception report signed by owner.
+
+---
+
+## 55. Product success metrics
+
+### Adoption
+
+- weekly active buyer users;
+- active brands;
+- active connected pairs;
+- percentage of orders created fully in Syntha;
+- percentage of styles with complete product data.
+
+### Efficiency
+
+- time from collection publish to first order;
+- time to create order;
+- order confirmation time;
+- sample approval cycle;
+- RFQ comparison time;
+- manual spreadsheet hours removed.
+
+### Quality
+
+- order error rate;
+- price discrepancy rate;
+- late production rate;
+- defect rate;
+- invoice match rate;
+- data completeness.
+
+### Commercial outcome
+
+- confirmed wholesale GMV;
+- intake margin improvement;
+- cost variance reduction;
+- OTB utilization;
+- sell-through improvement;
+- markdown reduction;
+- claims recovery.
+
+North Star metric candidate:
+
+```text
+Verified Confirmed GMV processed through fully traceable orders
+```
+
+It must be paired with margin, fulfillment and quality guardrails so growth cannot be achieved by low-quality or unprofitable orders.
+
+---
+
+## 56. Immediate next implementation package
+
+Для перехода от master map к разработке необходимо выпустить следующие artifacts:
+
+1. canonical ERD;
+2. role-permission matrix;
+3. state machines for Connection, Style, Sample, Order, Production Order, Shipment and Invoice;
+4. route-by-route screen specification;
+5. API contract;
+6. event catalog;
+7. dictionaries workbook;
+8. two-style pilot dataset;
+9. UAT scripts;
+10. prioritized epics and user stories.
+
+Первый development slice должен быть вертикальным, а не модульным:
+
+```text
+Brand publishes collection
+→ Retailer sees linesheet
+→ Retailer selects SKU quantities
+→ Order passes approval
+→ Brand confirms
+→ Immutable order snapshot and audit are created
+```
+
+Только после этого имеет смысл расширять систему вширь. Иначе получится роскошный музей экранов: смотреть приятно, работать нельзя.

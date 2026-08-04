@@ -41,4 +41,10 @@
     '\u0422\u0430\u0431\u043b\u0438\u0446\u044b \u0438\u0437\u043c\u0435\u0440\u0435\u043d\u0438\u0439',
     'Measurement charts',
   );
+  if (window.SynthaLinesheetsWorkspace) activate(
+    'Linesheets',
+    'linesheets',
+    '\u041b\u0438\u0441\u0442\u044b \u043a\u043e\u043b\u043b\u0435\u043a\u0446\u0438\u0439',
+    'Linesheets',
+  );
 })();

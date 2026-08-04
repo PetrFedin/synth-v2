@@ -1,7 +1,7 @@
 # JOOR Retailer Cabinet → Syntha B2B Fashion Platform
 
 Статус: рабочая продуктовая спецификация и master map.  
-Версия: 2.2, 4 августа 2026 года.  
+Версия: 2.3, 4 августа 2026 года.  
 Назначение: определить, как Syntha должна превзойти JOOR как B2B buying platform и одновременно закрыть PLM, sourcing, costing, production, quality, logistics, wholesale и analytics.
 
 > Документ объединяет результаты read-only аудита JOOR Retailer / LITE и целевую архитектуру Syntha. Наблюдаемое в JOOR не следует считать подтверждением его закрытой внутренней реализации. Все функции, которых не было в доступном аккаунте, помечаются как TARGET или UAT.
@@ -2942,3 +2942,960 @@ Changes to canonical entities, state machines, money calculations or permissions
 ```
 
 Если этого нет, система лишь аккуратно рисует неопределенность. Syntha должна неопределенность устранять.
+
+---
+
+## 68. Verified competitive benchmark — August 2026
+
+Этот раздел основан на открытых официальных материалах поставщиков и отделен от результатов закрытого UI-аудита.
+
+### 68.1 JOOR — подтвержденные публичные возможности
+
+Официальные материалы JOOR подтверждают:
+
+- global curated network;
+- discovery брендов и retailers;
+- virtual showrooms;
+- digital linesheets and catalogs;
+- centralized order management;
+- draft, pending and approved order visibility;
+- live inventory and retailer reorder management;
+- pricing, discounts and customer records;
+- order, sales and financial reporting;
+- ERP/API integrations;
+- Shopify product/order sync for retailers;
+- Visual Assortment as paid add-on;
+- iPad-assisted hybrid selling;
+- JOOR Pay invoicing and embedded payments;
+- support for multiple currencies.
+
+Источники:
+
+- https://www.joor.com/
+- https://www.joor.com/order-management
+- https://www.joor.com/wholesale-management
+- https://www.joor.com/order-pay-brands
+- https://www.joor.com/joor-pay
+- https://www.joor.com/pricing
+
+### 68.2 NuORDER / Lightspeed — подтвержденные публичные возможности
+
+Официальные материалы Lightspeed подтверждают:
+
+- wholesale network integrated with POS;
+- marketplace discovery;
+- multi-brand shopping and comparison;
+- virtual showrooms, shoppable hotspots and digital linesheets;
+- live pre-book and ATS inventory;
+- personalized pricing, discounts and product selections;
+- pre-filled carts sent to buyers;
+- PO and product-data sync into POS;
+- product data import including images, descriptions, UPC and MSRP;
+- reordering alerts;
+- demand forecasting and suggested order quantities;
+- order trend analytics by products, sizes, colors and categories.
+
+Источники:
+
+- https://www.lightspeedhq.com/partners/b2b/
+- https://www.lightspeedhq.com/pos/retail/b2b-wholesale-platform/
+- https://retail-support.lightspeedhq.com/hc/en-us/categories/35130105405211-Lightspeed-Wholesale
+
+### 68.3 Shopify B2B — подтвержденные публичные возможности
+
+Официальные материалы Shopify подтверждают:
+
+- company profiles;
+- multiple company locations and contacts;
+- catalog assignment by company/location;
+- customer-specific products and prices;
+- multiple currencies;
+- quantity rules;
+- volume pricing;
+- discounts;
+- payment terms;
+- tax IDs and tax exemptions;
+- self-service B2B checkout.
+
+Источники:
+
+- https://help.shopify.com/en/manual/b2b/catalogs/index
+- https://www.shopify.com/enterprise/blog/unified-commerce-b2b-software
+
+### 68.4 Centric — подтвержденный PLM/planning benchmark
+
+Официальные материалы Centric подтверждают фокус на:
+
+- planning and allocation;
+- visual boards;
+- product development;
+- sourcing and manufacturing;
+- pricing and inventory;
+- testing, quality and compliance;
+- sustainability and traceability;
+- product commercialization and content distribution;
+- AI-supported market, product and consumer insights.
+
+Источник:
+
+- https://www.centricsoftware.com/fashion-apparel
+
+### 68.5 Вывод benchmark
+
+Syntha не сможет быть сильнее рынка, если просто повторит discovery, digital catalog и order form. Минимальный конкурентный baseline уже включает live inventory, personalized catalogs, multi-company B2B terms, POS/ERP sync, embedded payments, visual assortment and product performance analytics.
+
+Стратегическое преимущество Syntha возникает только при объединении:
+
+```text
+Wholesale Network
++ Retail Planning
++ PLM
++ Sourcing
++ Production
++ Quality
++ Logistics
++ Finance
++ Sell-through Feedback
+```
+
+---
+
+## 69. Inventory, ATP and order-book control
+
+Wholesale order placement без надежной availability model создает ложные обещания и последующие сокращения заказа.
+
+### 69.1 Inventory buckets
+
+- physical on hand;
+- available to sell / ATS;
+- available to promise / ATP;
+- reserved;
+- allocated;
+- in production;
+- expected inbound;
+- quality hold;
+- damaged;
+- sample stock;
+- virtual/unlimited preorder;
+- discontinued.
+
+### 69.2 Supply modes
+
+- pre-book;
+- made-to-order;
+- at-once;
+- immediate stock;
+- replenishment;
+- consignment;
+- drop ship;
+- vendor-managed inventory.
+
+### 69.3 ATP formula
+
+```text
+ATP by SKU and delivery window
+= On Hand
++ Confirmed Inbound before Promise Date
++ Approved Production Capacity
+- Existing Reservations
+- Safety Stock
+- Quality Hold
+```
+
+Каждый компонент должен быть раскрываемым. Пользователь не должен видеть магическое число без объяснения.
+
+### 69.4 Reservation lifecycle
+
+```text
+AVAILABLE
+→ SOFT_RESERVED in active cart
+→ HARD_RESERVED after agreed business event
+→ ALLOCATED to confirmed order
+→ PICKED / SHIPPED
+
+Release events:
+cart expiry / order rejection / cancellation / amendment / payment failure
+```
+
+### 69.5 Required controls
+
+- reservation expiry;
+- oversell policy;
+- backorder policy;
+- partial confirmation;
+- substitution rules;
+- priority by retailer tier;
+- allocation fairness;
+- safety stock;
+- stale inventory warning;
+- source-system timestamp;
+- reconciliation with ERP/WMS.
+
+---
+
+## 70. Retailer and wholesale customer 360
+
+Connection is not sufficient as a CRM model. Brand needs an operational and commercial record of each wholesale customer.
+
+### 70.1 Account hierarchy
+
+```text
+Retail Group
+→ Legal Entity
+→ Banner
+→ Company Location / Door
+→ Buyer Team
+→ Contacts
+```
+
+### 70.2 Customer 360 fields
+
+- relationship owner;
+- territory;
+- retailer segment;
+- brands/categories carried;
+- stores and channels;
+- currencies and price lists;
+- payment terms;
+- credit limit and exposure;
+- tax data;
+- delivery addresses;
+- order history;
+- average order value;
+- returns/claims;
+- payment performance;
+- sell-through where shared;
+- messages, meetings and tasks;
+- opportunities and lost-order reasons;
+- relationship health score.
+
+### 70.3 Account health
+
+```text
+Account Health Score
+= weighted combination of
+Order Growth
++ Payment Timeliness
++ Engagement
++ Sell-through
++ Forecast Accuracy
+- Claims
+- Cancellations
+- Overdue Exposure
+```
+
+Score components remain visible and configurable. A score without decomposition is decoration, not analytics.
+
+---
+
+## 71. Sales rep, showroom and agent operations
+
+### 71.1 Roles
+
+- internal sales representative;
+- regional sales manager;
+- external agent;
+- distributor;
+- showroom operator;
+- market coordinator;
+- customer service/order desk.
+
+### 71.2 Territory and portfolio
+
+- assigned countries/regions;
+- assigned retailers;
+- assigned brands/collections;
+- exclusivity;
+- effective dates;
+- revenue targets;
+- order targets;
+- commission scheme;
+- conflict detection.
+
+### 71.3 Sales workspace
+
+- target vs actual;
+- appointments;
+- buyer engagement;
+- open opportunities;
+- carts/drafts requiring follow-up;
+- orders awaiting retailer action;
+- overdue confirmations;
+- payment risks;
+- recommended next action;
+- activity timeline.
+
+### 71.4 Assisted order capture
+
+Sales rep may build a proposed order for a retailer, but:
+
+- retailer identity must be explicit;
+- proposal and retailer-approved order remain different states;
+- retailer must see all prices, terms, quantities and delivery splits;
+- acceptance is recorded;
+- internal notes are never exposed;
+- rep cannot bypass buyer approval policy.
+
+---
+
+## 72. Pricing, discounts, rebates and commission engine
+
+### 72.1 Price hierarchy
+
+```text
+Base Price List
+→ Market/Currency Price
+→ Customer Catalog Price
+→ Contract Price
+→ Volume Tier
+→ Promotional Discount
+→ Manual Override
+```
+
+System must show which rule won and why.
+
+### 72.2 Price scope
+
+- organization;
+- company location;
+- territory;
+- currency;
+- season;
+- collection;
+- style/color/SKU;
+- delivery;
+- effective dates;
+- quantity tier;
+- channel;
+- customer segment.
+
+### 72.3 Discount types
+
+- percentage;
+- fixed unit discount;
+- order-level discount;
+- early-order discount;
+- volume discount;
+- preseason commitment;
+- markdown support;
+- freight allowance;
+- payment discount;
+- sample allowance;
+- promotional rebate.
+
+### 72.4 Rebate and accrual
+
+Rebate contracts require:
+
+- basis;
+- threshold;
+- period;
+- eligible products/orders;
+- accrual method;
+- settlement method;
+- claim evidence;
+- approval;
+- accounting export.
+
+### 72.5 Commission
+
+- rep/agent;
+- territory/customer/product scope;
+- percentage or tier;
+- basis: booked, confirmed, shipped, invoiced or paid;
+- cancellation and return clawback;
+- split commission;
+- statement and dispute workflow.
+
+---
+
+## 73. Embedded payments, credit and order-to-cash
+
+### 73.1 Payment methods
+
+- card;
+- bank transfer;
+- ACH/direct debit where supported;
+- wallet/payment link;
+- net terms;
+- deposit plus balance;
+- letter of credit;
+- third-party financing.
+
+### 73.2 Credit model
+
+- requested credit;
+- approved limit;
+- available credit;
+- current exposure;
+- overdue exposure;
+- risk status;
+- guarantee/insurance;
+- manual hold;
+- review date;
+- decision evidence.
+
+```text
+Available Credit
+= Approved Credit Limit
+- Open Confirmed Orders
+- Unpaid Invoices
+- Disputed Exposure included by policy
++ Approved Payments not yet allocated
+```
+
+### 73.3 Order-to-cash flow
+
+```text
+Confirmed Order
+→ Proforma / Deposit Request
+→ Payment Authorization or Terms Check
+→ Fulfillment Release
+→ Commercial Invoice
+→ Collection
+→ Allocation
+→ Reconciliation
+→ Credit Note / Refund if required
+```
+
+### 73.4 Payment safeguards
+
+- PCI-sensitive data handled by payment provider;
+- 3DS/SCA where applicable;
+- webhook verification;
+- duplicate payment protection;
+- settlement reconciliation;
+- refund authorization;
+- chargeback evidence;
+- currency and fee transparency;
+- payment state independent from order state.
+
+---
+
+## 74. Returns, RMA, deductions and chargebacks
+
+Wholesale after-sales must be a first-class module rather than a comment attached to an order.
+
+### 74.1 Return reasons
+
+- quality defect;
+- wrong item;
+- quantity discrepancy;
+- late delivery;
+- unauthorized substitution;
+- transport damage;
+- commercial agreement;
+- recall;
+- customer cancellation where permitted.
+
+### 74.2 RMA flow
+
+```text
+Return Requested
+→ Evidence Review
+→ Authorized / Rejected
+→ Goods in Transit
+→ Received and Inspected
+→ Disposition
+→ Credit / Replacement / Repair / Rejection
+→ Closed
+```
+
+### 74.3 Disposition
+
+- return to stock;
+- second quality;
+- repair/rework;
+- return to supplier;
+- destroy;
+- donate;
+- sample/archive.
+
+### 74.4 Retailer deductions and vendor chargebacks
+
+- short shipment;
+- ASN/document failure;
+- carton/label non-compliance;
+- late delivery;
+- price discrepancy;
+- EDI failure;
+- quality failure;
+- routing guide violation.
+
+Each deduction must link to rule version, evidence, amount, responsible party, dispute and recovery outcome.
+
+---
+
+## 75. DAM, PXM and channel-ready product content
+
+Wholesale product data must be reusable for retailer onboarding and omnichannel commercialization.
+
+### 75.1 Asset library
+
+- campaign images;
+- product images;
+- flat lay;
+- ghost mannequin;
+- model shot;
+- detail shot;
+- video;
+- 360/3D;
+- swatch;
+- technical drawing;
+- logos and brand guidelines.
+
+### 75.2 Asset metadata
+
+- asset type;
+- product links;
+- color accuracy status;
+- rights owner;
+- usage territories;
+- usage channels;
+- valid dates;
+- model/talent rights;
+- photographer;
+- resolution/aspect ratio;
+- language;
+- approval state;
+- checksum/version.
+
+### 75.3 Content readiness
+
+For every target channel:
+
+- required attributes;
+- translated title/description;
+- composition and care;
+- dimensions;
+- SEO fields;
+- image rules;
+- taxonomy mapping;
+- completeness score;
+- validation errors;
+- publish status.
+
+### 75.4 Syndication
+
+- Shopify;
+- retailer PIM/e-commerce;
+- marketplaces;
+- POS catalog;
+- data pools;
+- custom feed/API.
+
+Published content stores destination, payload version, timestamp and result.
+
+---
+
+## 76. Search, discovery and query intelligence
+
+### 76.1 Search scopes
+
+- brands;
+- collections;
+- styles;
+- SKUs;
+- materials;
+- suppliers;
+- orders;
+- documents;
+- messages;
+- analytics metrics.
+
+### 76.2 Search features
+
+- exact code/SKU search;
+- typo tolerance;
+- synonyms;
+- multilingual search;
+- faceted filtering;
+- saved searches;
+- recent searches;
+- query suggestions;
+- image/similarity search;
+- natural-language query with structured filters;
+- permission-aware indexing.
+
+### 76.3 Quality metrics
+
+- zero-result rate;
+- reformulation rate;
+- click-through;
+- time to useful result;
+- result-to-order conversion;
+- search abandonment;
+- synonym gap;
+- stale-index rate.
+
+Search ranking must not expose inaccessible product data through snippets, counts or recommendations.
+
+---
+
+## 77. Forecasting and scenario planning
+
+### 77.1 Forecast hierarchy
+
+```text
+Company
+→ Channel
+→ Store Cluster
+→ Category
+→ Brand
+→ Style
+→ Color
+→ Size
+→ Week/Month/Season
+```
+
+### 77.2 Forecast inputs
+
+- historical demand;
+- lost sales/stockouts;
+- returns;
+- promotions;
+- price;
+- seasonality;
+- launch timing;
+- weather/climate where licensed and relevant;
+- store openings/closures;
+- product similarity;
+- buyer override;
+- supply constraints.
+
+### 77.3 Scenario dimensions
+
+- budget;
+- FX;
+- demand;
+- lead time;
+- freight;
+- duty;
+- markdown;
+- supplier capacity;
+- cancellation;
+- delivery delay.
+
+### 77.4 Scenario output
+
+- sales;
+- gross margin;
+- intake margin;
+- inventory;
+- stockout risk;
+- markdown risk;
+- cash requirement;
+- OTB;
+- purchase quantities;
+- supplier load;
+- expected sell-through.
+
+Forecasts must retain model version, training window, assumptions, confidence interval and human override.
+
+---
+
+## 78. Marketplace trust, verification and governance
+
+### 78.1 Organization verification
+
+- legal entity;
+- registration number;
+- tax ID;
+- beneficial owner where required;
+- business address;
+- bank account verification;
+- domain/email verification;
+- authorized representative;
+- sanctions screening result;
+- review status.
+
+### 78.2 Trust states
+
+- unverified;
+- verification in progress;
+- verified;
+- enhanced review;
+- restricted;
+- suspended;
+- closed.
+
+### 78.3 Marketplace controls
+
+- report organization/product;
+- counterfeit/IP complaint;
+- fraud suspicion;
+- unsafe content;
+- commercial dispute;
+- moderation queue;
+- appeal;
+- evidence preservation;
+- enforcement history.
+
+Verification badge scope and date must be explicit. A verified company is not the same as a guaranteed product or guaranteed payment.
+
+---
+
+## 79. Bounded contexts and service architecture
+
+Recommended bounded contexts:
+
+1. Identity & Tenancy;
+2. Network & CRM;
+3. Product & PLM;
+4. Catalog & Content;
+5. Pricing & Commercial Terms;
+6. Planning & Assortment;
+7. Ordering;
+8. Inventory & Availability;
+9. Sourcing & Suppliers;
+10. Production;
+11. Quality;
+12. Logistics;
+13. Finance & Payments;
+14. Workflow & Approvals;
+15. Messaging & Notifications;
+16. Documents;
+17. Analytics & Recommendations;
+18. Integrations;
+19. Billing & Entitlements;
+20. Trust & Compliance.
+
+### 79.1 Architecture rule
+
+Do not begin with independent microservices for every noun. Begin with clear domain boundaries and a modular architecture; extract services only where scale, security, ownership or reliability justify the operational cost.
+
+### 79.2 Data ownership examples
+
+- Order service owns order state and snapshots;
+- Pricing service owns valid price resolutions;
+- Inventory service owns ATS/ATP and reservations;
+- PLM owns current product-development versions;
+- Catalog owns published commercial projection;
+- Finance owns invoices, payments and reconciliation;
+- Analytics consumes events and snapshots but does not rewrite operational truth.
+
+### 79.3 Cross-context commands
+
+Use orchestration/saga for:
+
+- order submission;
+- order confirmation with reservation;
+- payment and fulfillment release;
+- shipment and invoicing;
+- return and credit;
+- connection termination with historical preservation.
+
+---
+
+## 80. Semantic layer and management reporting
+
+### 80.1 Facts
+
+- product engagement;
+- connection events;
+- selections;
+- order lines;
+- amendments;
+- inventory snapshots;
+- production milestones;
+- inspections/defects;
+- shipment lines;
+- invoices/payments;
+- sell-through;
+- returns/claims.
+
+### 80.2 Dimensions
+
+- date;
+- organization/account;
+- brand;
+- retailer;
+- store/cluster;
+- season/collection/drop;
+- product/category/style/color/SKU;
+- supplier/factory;
+- territory;
+- currency;
+- channel;
+- order/status;
+- source system.
+
+### 80.3 Metric governance
+
+Each metric has:
+
+- owner;
+- business definition;
+- formula;
+- grain;
+- dimensions;
+- exclusions;
+- currency treatment;
+- return/cancellation treatment;
+- refresh SLA;
+- certification state;
+- change history.
+
+Operational UI and BI must use the same certified definitions for order value, confirmed GMV, landed cost, margin and fill rate.
+
+---
+
+## 81. Service operations and customer success
+
+### 81.1 Support case model
+
+- tenant/user;
+- affected object;
+- severity;
+- category;
+- steps/evidence;
+- correlation ID;
+- environment;
+- owner;
+- SLA;
+- workaround;
+- root cause;
+- resolution;
+- product feedback link.
+
+### 81.2 Implementation health
+
+- onboarding progress;
+- migration completeness;
+- active users;
+- workflow adoption;
+- data quality;
+- integration health;
+- unresolved blockers;
+- training completion;
+- executive outcome metrics.
+
+### 81.3 Customer success playbooks
+
+- retailer activation;
+- brand catalog readiness;
+- first order;
+- first integration;
+- low adoption;
+- poor data quality;
+- payment risk;
+- renewal risk;
+- expansion opportunity.
+
+---
+
+## 82. Competitive differentiation matrix
+
+| Capability | Basic wholesale platform | Strong market baseline | Syntha target |
+|---|---|---|---|
+| Discovery/network | Directory | Vetted network + recommendations | Network + performance fit + trust graph |
+| Catalog | Digital linesheet | Rich media + live availability | PLM-derived, versioned, channel-ready catalog |
+| Ordering | Cart and PO | Personalized pricing, edits, approvals | OTB, margin, ATP, amendments, production traceability |
+| Inventory | Static stock | Live ATS/pre-book | ATP, reservations, capacity and replenishment |
+| Retail planning | Limited | Visual assortment | OTB, clusters, scenarios, allocation, sell-through loop |
+| Payments | External/manual | Embedded invoicing/payment | Credit, exposure, settlement and reconciliation |
+| Product development | External PLM | Integration | Native style/BOM/sample/tech-pack lifecycle |
+| Sourcing | External | Supplier records | RFQ, quote normalization, allocation and cost intelligence |
+| Production | External ERP | Status sync | WIP, exceptions, capacity, quality and claims |
+| Analytics | Order reports | Funnel and trend reports | Certified semantic layer from concept to sell-through |
+| AI | Search/recommendations | Personalized recommendations | Auditable copilot across buying, costing and operations |
+| Traceability | Minimal | Content/certificates | Batch-level product/material/order/shipment graph |
+
+---
+
+## 83. Updated priority decisions
+
+### Decision 1 — do not build catalog before commercial projection
+
+PLM Style is not directly exposed to buyer. Published Catalog Product is a controlled projection with approved fields, prices, availability, media and access policy.
+
+### Decision 2 — availability is a financial promise
+
+ATS/ATP and reservation logic belong in P0/P1 boundary. A platform cannot claim reliable ordering while quantities remain decorative.
+
+### Decision 3 — company/location commercial model is mandatory
+
+Price, catalog, tax, payment and shipping conditions attach to legal company and location, not merely to user login.
+
+### Decision 4 — order amendment is canonical
+
+After submission, no silent editing. Every commercial change is versioned, evaluated and accepted.
+
+### Decision 5 — payments remain separate state machine
+
+Paid does not mean shipped; confirmed does not mean credit-approved. Order, payment, production and shipment states are related but independent.
+
+### Decision 6 — post-order process is part of product advantage
+
+Returns, deductions, quality claims and reconciliation are not back-office leftovers. They determine real wholesale profitability.
+
+### Decision 7 — benchmark parity is not differentiation
+
+Live inventory, personalized catalogs, POS sync, visual buying and embedded payments are now baseline expectations. Syntha must win through end-to-end traceability, planning, costing and operational control.
+
+---
+
+## 84. Next vertical slices after the first order flow
+
+### Slice A — Live availability and confirmation
+
+```text
+ERP/WMS sends inventory
+→ Catalog shows timestamped ATS
+→ Buyer enters quantities
+→ Soft reservation
+→ Submit
+→ Brand confirms/partially confirms
+→ Hard reservation
+→ Order snapshot updated through amendment
+```
+
+### Slice B — Company-specific commerce
+
+```text
+Retailer company/location
+→ Assigned catalog and currency
+→ Price/quantity/payment rules
+→ Buyer checkout
+→ Tax and terms validation
+→ Approval
+→ Confirmed commercial snapshot
+```
+
+### Slice C — Product development to wholesale
+
+```text
+Style development
+→ BOM/sample approval
+→ Tech pack release
+→ Commercial product projection
+→ Linesheet publication
+→ Retailer order
+→ Product version traceability
+```
+
+### Slice D — Production to delivery
+
+```text
+Confirmed order
+→ Production order
+→ Materials/capacity
+→ WIP milestones
+→ QC
+→ Shipment
+→ Receipt
+→ Landed-cost reconciliation
+```
+
+### Slice E — Sell-through feedback
+
+```text
+Retailer POS data
+→ Sales/inventory normalization
+→ Sell-through and size curve
+→ Reorder suggestion
+→ Next-season planning feedback
+→ Supplier/product score update
+```
+
+Each slice must deliver operational value, immutable evidence and measurable KPI movement. No slice is accepted as complete solely because its pages render correctly.

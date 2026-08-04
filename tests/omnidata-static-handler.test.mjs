@@ -44,7 +44,7 @@ test('standalone workspace serves bilingual V9 and every implemented product wor
       assert.match(html, new RegExp(`\\/ui\\/${asset.replaceAll('.', '\\.')}\\?v=${legacyBuild}`));
     }
     assert.match(html, new RegExp(`\\/ui\\/omnidata-v8\\.js\\?v=${v8Build}`));
-    for (const asset of ['linesheets.js', 'omnidata-v7-installed.js', 'omnidata-v9.js']) {
+    for (const asset of ['linesheets.js', 'omnidata-v7-installed.js', 'omnidata-v9.js', 'dom-boolean-props.js']) {
       assert.match(html, new RegExp(`\\/ui\\/${asset.replaceAll('.', '\\.')}\\?v=${build}`));
     }
 
@@ -89,6 +89,7 @@ test('standalone workspace serves bilingual V9 and every implemented product wor
       ['/ui/omnidata-v7-language-audit.js', /installV7LanguageAudit/],
       ['/ui/omnidata-v8.js', /function applyOmnidataV8\(/],
       ['/ui/omnidata-v9.js', /function installOmnidataV9/],
+      ['/ui/dom-boolean-props.js', /function installBooleanDomProperties/],
       ['/ui/planning-core.js', /function buildPortfolio\(/],
       ['/ui/styles-core.js', /function buildRegistry\(/],
       ['/ui/materials-core.js', /function assessMaterial\(/],

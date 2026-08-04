@@ -20,6 +20,7 @@ test('PostgreSQL migration ledger serializes runners and rejects changed history
     '009_outbox_publication_claims.sql','010_outbox_dead_letter_recovery.sql','011_global_command_registry.sql',
     '012_workspace_paging_indexes.sql','013_catalog_search_indexes.sql','014_material_master.sql',
     '015_unify_catalog_outbox.sql','016_bom_costing.sql','017_measurement_charts.sql','018_samples.sql',
+    '019_tech_packs.sql',
   ];
   try {
     await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
@@ -46,6 +47,7 @@ test('PostgreSQL migration ledger serializes runners and rejects changed history
               to_regclass('public.measurement_points') AS measurement_points,
               to_regclass('public.measurement_values') AS measurement_values,
               to_regclass('public.samples') AS samples,
+              to_regclass('public.tech_packs') AS tech_packs,
               to_regclass('public.order_inventory_reservations') AS order_inventory_reservations,
               to_regclass('public.notification_projection_claims') AS notification_projection_claims,
               to_regclass('public.outbox_publication_claims') AS outbox_publication_claims,

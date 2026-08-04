@@ -56,13 +56,14 @@ test('Samples transport rejects unsupported fields and non-string size arrays be
   assert.equal(calls.length, 0);
 });
 
-test('authoritative OpenAPI 1.11 documents every Samples command and strict schema', () => {
+test('authoritative OpenAPI 1.12 preserves every Samples command and strict schema', () => {
   const specification = wholesaleV2ExtendedOpenApi;
-  assert.equal(specification.info.version, '1.11.0');
+  assert.equal(specification.info.version, '1.12.0');
   for (const path of ['/samples', '/samples/{sampleCode}', '/samples/{sampleCode}/request', '/samples/{sampleCode}/start-production', '/samples/{sampleCode}/receive', '/samples/{sampleCode}/decision', '/samples/{sampleCode}/cancel', '/samples/{sampleCode}/next-round']) assert.ok(specification.paths[path], path);
   assert.equal(specification.components.schemas.SampleCreate.additionalProperties, false);
   assert.equal(specification.components.schemas.SampleUpdate.required.includes('expectedVersion'), true);
   assert.deepEqual(specification.components.schemas.SampleDecisionInput.properties.decision.enum, ['approved', 'rejected']);
   assert.equal(specification.components.schemas.SamplePage.required.includes('referenceTime'), true);
+  assert.ok(specification.paths['/tech-packs']);
   assert.equal(Object.isFrozen(specification), true);
 });

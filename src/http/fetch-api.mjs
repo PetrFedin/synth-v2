@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { invariant } from '../core/errors.mjs';
 import { normalizeHttpError } from './api.mjs';
 import { assertBodyContract, assertQueryContract, bodyContract } from './request-contract.mjs';
-import { createWholesaleRoutes, matchWholesaleRoute } from './routes.mjs';
+import { createWholesaleRoutes, matchWholesaleRoute } from './all-routes.mjs';
 import {
   apiResponseHeaders,
   decodeJsonObject,
@@ -61,13 +61,7 @@ export function createWholesaleFetchHandler({ authenticate, auth, readiness, max
       invariant(route, 'HTTP_ROUTE_NOT_FOUND', 'Route not found', { method: request.method, path: url.pathname });
       const commandId = route.mutation ? requireIdempotencyKey(request.headers.get('idempotency-key')) : undefined;
       const body = route.mutation ? await readJson(request, maxBodyBytes) : {};
-      const data = await route.execute({
-        actorId: identity.actor.actorId,
-        commandId,
-        body,
-        params: route.params,
-        query: queryParameters(url),
-      });
+      const data = await route.execute({ actorId: identity.actor.actorId, commandId, body, params: route.params, query: queryParameters(url) });
       return json(200, { data, requestId }, requestId);
     } catch (error) {
       const normalized = normalizeHttpError(error);
@@ -103,6 +97,4 @@ function readinessUnavailable() {
   });
 }
 function publicIdentity(actor) { return Object.freeze({ actorId: actor.actorId, email: actor.email ?? null, displayName: actor.displayName ?? '' }); }
-function json(status, payload, requestId, extraHeaders = {}) {
-  return Response.json(payload, { status, headers: apiResponseHeaders(requestId, extraHeaders) });
-}
+function json(status, payload, requestId, extraHeaders = {}) { return Response.json(payload, { status, headers: apiResponseHeaders(requestId, extraHeaders) }); }

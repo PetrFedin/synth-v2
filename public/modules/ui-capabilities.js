@@ -5,6 +5,10 @@
     CAMPAIGN_MANAGE: 'campaign.manage',
     COLLECTION_MANAGE: 'collection.manage',
     CATALOG_MANAGE: 'catalog.manage',
+    BOM_READ: 'bom.read',
+    BOM_MANAGE: 'bom.manage',
+    MEASUREMENT_READ: 'measurement.read',
+    MEASUREMENT_MANAGE: 'measurement.manage',
     SHOWROOM_MANAGE: 'showroom.manage',
     PARTNER_RELATIONSHIP_MANAGE: 'partner-relationship.manage',
     SHOWROOM_INVITATION_MANAGE: 'showroom-invitation.manage',
@@ -24,6 +28,7 @@
       CAPABILITIES.CAMPAIGN_MANAGE,
       CAPABILITIES.COLLECTION_MANAGE,
       CAPABILITIES.CATALOG_MANAGE,
+      CAPABILITIES.MEASUREMENT_READ,
       CAPABILITIES.SHOWROOM_MANAGE,
       CAPABILITIES.PARTNER_RELATIONSHIP_MANAGE,
       CAPABILITIES.SHOWROOM_INVITATION_MANAGE,
@@ -41,7 +46,7 @@
       CAPABILITIES.ORDER_WRITE,
       CAPABILITIES.ORDER_CONFIRM,
     ]),
-    finance: Object.freeze([CAPABILITIES.ORDER_CONFIRM]),
+    finance: Object.freeze([CAPABILITIES.BOM_READ, CAPABILITIES.ORDER_CONFIRM]),
     viewer: Object.freeze([]),
   });
 

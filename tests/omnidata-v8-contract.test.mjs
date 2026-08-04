@@ -99,24 +99,29 @@ test('Omnidata V8 applies one strict locale to every system workspace', async ()
   assert.doesNotMatch(js, /(?:\u00d0|\u00d1)[\u0080-\u00ff]/u);
 });
 
-test('Omnidata V8 is the final no-cache visual layer in the standalone shell', async () => {
+test('Omnidata V8 remains the calibrated base and V9 is the final no-cache visual layer', async () => {
   const html = await source('public/index.html');
   const handler = await source('src/web/static-handler.mjs');
 
   const baseCss = html.indexOf('/omnidata-v8.css?v=visual-20260804-8');
   const referenceCss = html.indexOf('/omnidata-v8-reference.css?v=visual-20260804-8');
+  const v9Css = html.indexOf('/omnidata-v9.css?v=visual-20260804-9');
   const audit = html.indexOf('/ui/omnidata-v7-language-audit.js?v=visual-20260804-7');
   const v8 = html.indexOf('/ui/omnidata-v8.js?v=visual-20260804-8');
+  const v9 = html.indexOf('/ui/omnidata-v9.js?v=visual-20260804-9');
   const start = html.indexOf('/ui/app-start.js');
 
-  assert.ok(baseCss >= 0 && referenceCss > baseCss);
-  assert.ok(audit >= 0 && v8 > audit && start > v8);
-  assert.match(html, /meta name="syntha-build" content="visual-20260804-8"/);
+  assert.ok(baseCss >= 0 && referenceCss > baseCss && v9Css > referenceCss);
+  assert.ok(audit >= 0 && v8 > audit && v9 > v8 && start > v9);
+  assert.match(html, /meta name="syntha-build" content="visual-20260804-9"/);
 
   for (const route of [
     "'/omnidata-v8.css': ['omnidata-v8.css'",
     "'/omnidata-v8-reference.css': ['omnidata-v8-reference.css'",
+    "'/omnidata-v9.css': ['omnidata-v9.css'",
     "'/ui/omnidata-v8.js': ['modules/omnidata-v8.js'",
+    "'/ui/omnidata-v9.js': ['modules/omnidata-v9.js'",
+    "'/ui/linesheets.js': ['modules/linesheets.js'",
   ]) assert.ok(handler.includes(route), route);
 
   assert.match(handler, /const VISUAL_CACHE = 'no-store'/);

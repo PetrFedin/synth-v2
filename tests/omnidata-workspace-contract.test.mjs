@@ -6,9 +6,10 @@ async function source(path) {
   return readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 }
 
-test('the Syntha shell loads strict bilingual V8 after all functional workspaces', async () => {
+test('the Syntha shell loads strict bilingual V9 after all functional workspaces', async () => {
   const html = await source('public/index.html');
-  const build = 'visual-20260804-8';
+  const build = 'visual-20260804-9';
+  const v8Build = 'visual-20260804-8';
   const legacyBuild = 'visual-20260804-7';
   const industrialBuild = 'industrial-20260803-3';
   const bomBuild = 'industrial-20260804-1';
@@ -20,8 +21,9 @@ test('the Syntha shell loads strict bilingual V8 after all functional workspaces
   assert.match(html, new RegExp(`<link rel="stylesheet" href="\\/measurements\\.css\\?v=${measurementBuild}">`));
   assert.match(html, new RegExp(`<link rel="stylesheet" href="\\/omnidata-v7\\.css\\?v=${legacyBuild}">`));
   assert.match(html, new RegExp(`<link rel="stylesheet" href="\\/omnidata-v7-bom\\.css\\?v=${legacyBuild}">`));
-  assert.match(html, new RegExp(`<link rel="stylesheet" href="\\/omnidata-v8\\.css\\?v=${build}">`));
-  assert.match(html, new RegExp(`<link rel="stylesheet" href="\\/omnidata-v8-reference\\.css\\?v=${build}">`));
+  assert.match(html, new RegExp(`<link rel="stylesheet" href="\\/omnidata-v8\\.css\\?v=${v8Build}">`));
+  assert.match(html, new RegExp(`<link rel="stylesheet" href="\\/omnidata-v8-reference\\.css\\?v=${v8Build}">`));
+  assert.match(html, new RegExp(`<link rel="stylesheet" href="\\/omnidata-v9\\.css\\?v=${build}">`));
 
   for (const retiredStyle of ['omnidata-v3.css', 'omnidata-v4.css', 'omnidata-v5.css', 'omnidata-v6.css']) {
     assert.doesNotMatch(html, new RegExp(`<link[^>]+${retiredStyle.replaceAll('.', '\\.')}`));
@@ -44,12 +46,15 @@ test('the Syntha shell loads strict bilingual V8 after all functional workspaces
   const materialsIndex = html.indexOf(`/ui/materials.js?v=${industrialBuild}`);
   const bomIndex = html.indexOf(`/ui/bom.js?v=${bomBuild}`);
   const v7Index = html.indexOf(`/ui/omnidata-v7.js?v=${legacyBuild}`);
-  const installedIndex = html.indexOf(`/ui/omnidata-v7-installed.js?v=${legacyBuild}`);
+  const linesheetsIndex = html.indexOf(`/ui/linesheets.js?v=${build}`);
+  const installedIndex = html.indexOf(`/ui/omnidata-v7-installed.js?v=${build}`);
   const measurementsIndex = html.indexOf(`/ui/measurements.js?v=${measurementBuild}`);
   const measurementActionsIndex = html.indexOf(`/ui/measurement-revision-actions.js?v=${measurementBuild}`);
   const measurementSyncIndex = html.indexOf(`/ui/measurement-catalog-sync.js?v=${measurementBuild}`);
   const auditIndex = html.indexOf(`/ui/omnidata-v7-language-audit.js?v=${legacyBuild}`);
-  const v8Index = html.indexOf(`/ui/omnidata-v8.js?v=${build}`);
+  const v8Index = html.indexOf(`/ui/omnidata-v8.js?v=${v8Build}`);
+  const v9Index = html.indexOf(`/ui/omnidata-v9.js?v=${build}`);
+  const booleanIndex = html.indexOf(`/ui/dom-boolean-props.js?v=${build}`);
   const startIndex = html.indexOf('/ui/app-start.js');
 
   assert.ok(runtimeIndex >= 0 && runtimeIndex < strictI18nIndex);
@@ -62,10 +67,11 @@ test('the Syntha shell loads strict bilingual V8 after all functional workspaces
   assert.ok(v5Index < planningIndex);
   assert.ok(planningIndex < stylesIndex && stylesIndex < materialsIndex);
   assert.ok(materialsIndex < bomIndex && bomIndex < v7Index);
-  assert.ok(v7Index < installedIndex && installedIndex < measurementsIndex);
+  assert.ok(v7Index < linesheetsIndex && linesheetsIndex < installedIndex);
+  assert.ok(installedIndex < measurementsIndex);
   assert.ok(measurementsIndex < measurementActionsIndex && measurementActionsIndex < measurementSyncIndex);
   assert.ok(measurementSyncIndex < auditIndex && auditIndex < v8Index);
-  assert.ok(v8Index < startIndex);
+  assert.ok(v8Index < v9Index && v9Index < booleanIndex && booleanIndex < startIndex);
   assert.doesNotMatch(html, /\/ui\/omnidata-v4\.js/);
   assert.doesNotMatch(html, /\/ui\/omnidata-v6\.js/);
 });
@@ -102,4 +108,20 @@ test('every current workspace is rebuilt through the Omnidata table-first system
   assert.doesNotMatch(js, /\bstyle\s*=/);
   assert.doesNotMatch(js, /\.style\./);
   assert.doesNotMatch(js, /#[0-9a-fA-F]{3,8}\b/);
+});
+
+test('Linesheets is a working V9 workspace rather than a planned navigation placeholder', async () => {
+  const linesheets = await source('public/modules/linesheets.js');
+  const installed = await source('public/modules/omnidata-v7-installed.js');
+  assert.doesNotThrow(() => new Function(linesheets));
+  for (const functionName of ['buildRows', 'tabs', 'metrics', 'controls', 'registry', 'inspector', 'renderLinesheets']) {
+    assert.match(linesheets, new RegExp(`function ${functionName}\\(`));
+  }
+  assert.match(linesheets, /state\.view === 'linesheets'/);
+  assert.match(linesheets, /window\.SynthaLinesheets|global\.SynthaLinesheetsWorkspace/);
+  assert.match(installed, /window\.SynthaLinesheetsWorkspace/);
+  assert.match(installed, /'Linesheets',[\s\S]*?'linesheets'/);
+  assert.doesNotMatch(linesheets, /\bstyle\s*=/);
+  assert.doesNotMatch(linesheets, /\.style\./);
+  assert.doesNotMatch(linesheets, /https?:\/\//i);
 });

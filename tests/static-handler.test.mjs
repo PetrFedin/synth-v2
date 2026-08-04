@@ -39,12 +39,17 @@ test('serves standalone workspace and every ordered asset with security headers'
     assert.ok(sourcePaths.indexOf('/ui/measurement-core.js') > sourcePaths.indexOf('/ui/bom-core.js'));
     assert.ok(sourcePaths.indexOf('/ui/bom.js') > sourcePaths.indexOf('/ui/materials.js'));
     assert.ok(sourcePaths.indexOf('/ui/omnidata-v7.js') > sourcePaths.indexOf('/ui/bom.js'));
+    assert.ok(sourcePaths.indexOf('/ui/linesheets.js') > sourcePaths.indexOf('/ui/omnidata-v7.js'));
+    assert.ok(sourcePaths.indexOf('/ui/omnidata-v7-installed.js') > sourcePaths.indexOf('/ui/linesheets.js'));
     assert.ok(sourcePaths.indexOf('/ui/measurements.js') > sourcePaths.indexOf('/ui/omnidata-v7-installed.js'));
     assert.ok(sourcePaths.indexOf('/ui/omnidata-v7-language-audit.js') > sourcePaths.indexOf('/ui/measurement-catalog-sync.js'));
     assert.ok(sourcePaths.indexOf('/ui/omnidata-v8.js') > sourcePaths.indexOf('/ui/omnidata-v7-language-audit.js'));
-    assert.equal(sourcePaths.at(-2), '/ui/omnidata-v8.js');
+    assert.ok(sourcePaths.indexOf('/ui/omnidata-v9.js') > sourcePaths.indexOf('/ui/omnidata-v8.js'));
+    assert.ok(sourcePaths.indexOf('/ui/dom-boolean-props.js') > sourcePaths.indexOf('/ui/omnidata-v9.js'));
+    assert.equal(sourcePaths.at(-3), '/ui/omnidata-v9.js');
+    assert.equal(sourcePaths.at(-2), '/ui/dom-boolean-props.js');
     assert.equal(sourcePaths.at(-1), '/ui/app-start.js');
-    assert.ok(sourcePaths.length >= 35);
+    assert.ok(sourcePaths.length >= 38);
     for (const source of sources) {
       const script = await fetch(new URL(source, base));
       assert.equal(script.status, 200, source);
@@ -60,7 +65,8 @@ test('serves standalone workspace and every ordered asset with security headers'
     assert.ok(stylesheetPaths.includes('/omnidata-v7-bom.css'));
     assert.ok(stylesheetPaths.includes('/omnidata-v8.css'));
     assert.ok(stylesheetPaths.includes('/omnidata-v8-reference.css'));
-    assert.deepEqual(stylesheetPaths.slice(-2), ['/omnidata-v8.css', '/omnidata-v8-reference.css']);
+    assert.ok(stylesheetPaths.includes('/omnidata-v9.css'));
+    assert.deepEqual(stylesheetPaths.slice(-3), ['/omnidata-v8.css', '/omnidata-v8-reference.css', '/omnidata-v9.css']);
     assert.ok(!stylesheetPaths.includes('/omnidata-fidelity.css'));
     assert.ok(!stylesheetPaths.includes('/omnidata-v6.css'));
     for (const stylesheet of stylesheets) {
@@ -84,13 +90,17 @@ test('supports HEAD for runtime assets without sending a body', async () => {
       '/ui/measurement-core.js',
       '/ui/measurements.js',
       '/ui/omnidata-v7.js',
+      '/ui/linesheets.js',
       '/ui/omnidata-v8.js',
+      '/ui/omnidata-v9.js',
+      '/ui/dom-boolean-props.js',
       '/i18n.css',
       '/bom.css',
       '/measurements.css',
       '/omnidata-v7.css',
       '/omnidata-v8.css',
       '/omnidata-v8-reference.css',
+      '/omnidata-v9.css',
     ]) {
       const response = await fetch(`${base}${asset}`, { method: 'HEAD' });
       assert.equal(response.status, 200, asset);

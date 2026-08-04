@@ -26,8 +26,9 @@ function chartInput(sku, overrides = {}) {
     ], notes: 'Initial measuring method', ...overrides,
   };
 }
+function editable(value) { const copy = structuredClone(value); delete copy.sku; return copy; }
 
-test('PostgreSQL Measurement Charts preserve matrix integrity, RBAC, versions and events', { skip: !databaseUrl }, async () => {
+test('PostgreSQL Measurement Charts preserve matrix integrity, RBAC, revisions, versions and events', { skip: !databaseUrl }, async () => {
   const pool = createPostgresTestPool({ connectionString: databaseUrl, max: 6 });
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
   let id = 0; let tick = 0;
@@ -64,13 +65,12 @@ test('PostgreSQL Measurement Charts preserve matrix integrity, RBAC, versions an
 
     const publishedSku = await catalog.publishSku('sku-publish', 'product-owner', skuDraft.sku, { expectedVersion: skuDraft.version });
     await assert.rejects(() => measurements.publishMeasurementChart('measurement-stale-publish', 'product-owner', created.sku, { expectedVersion: created.version }), { code: 'MEASUREMENT_SKU_SNAPSHOT_STALE' });
-    const editable = chartInput(created.sku, { notes: 'Rebased after SKU publication', points: [{ ...initial.points[0], measurements: [{ sizeCode: 'S', value: 49 }, { sizeCode: 'M', value: 52.25 }, { sizeCode: 'L', value: 55.5 }] }, initial.points[1]] });
-    delete editable.sku;
-    const updated = await measurements.updateMeasurementChart('measurement-update', 'product-owner', created.sku, { expectedVersion: created.version, ...editable });
+    const updateInput = chartInput(created.sku, { notes: 'Rebased after SKU publication', points: [{ ...initial.points[0], measurements: [{ sizeCode: 'S', value: 49 }, { sizeCode: 'M', value: 52.25 }, { sizeCode: 'L', value: 55.5 }] }, initial.points[1]] });
+    const updated = await measurements.updateMeasurementChart('measurement-update', 'product-owner', created.sku, { expectedVersion: created.version, ...editable(updateInput) });
     assert.equal(updated.skuVersion, publishedSku.version);
     assert.equal(updated.version, 2);
     assert.equal(updated.points[0].measurements[1].deltaFromPrevious, 3.25);
-    await assert.rejects(() => measurements.updateMeasurementChart('measurement-stale-update', 'product-owner', created.sku, { expectedVersion: created.version, ...editable }), { code: 'MEASUREMENT_CONCURRENCY_CONFLICT' });
+    await assert.rejects(() => measurements.updateMeasurementChart('measurement-stale-update', 'product-owner', created.sku, { expectedVersion: created.version, ...editable(updateInput) }), { code: 'MEASUREMENT_CONCURRENCY_CONFLICT' });
 
     assert.equal((await measurements.getForActor('sales-user', created.sku)).sku, created.sku);
     await assert.rejects(() => measurements.getForActor('finance-user', created.sku), { code: 'MEASUREMENT_NOT_FOUND' });
@@ -80,23 +80,36 @@ test('PostgreSQL Measurement Charts preserve matrix integrity, RBAC, versions an
     const published = await measurements.publishMeasurementChart('measurement-publish', 'product-owner', created.sku, { expectedVersion: updated.version });
     assert.equal(published.status, 'published');
     assert.equal(published.version, 3);
-    const aggregate = (await pool.query('SELECT sku_version, status, unit, base_size_code, version, payload FROM measurement_charts WHERE sku = $1', [created.sku])).rows[0];
-    assert.deepEqual({ sku_version: aggregate.sku_version, status: aggregate.status, unit: aggregate.unit, base_size_code: aggregate.base_size_code, version: aggregate.version }, { sku_version: publishedSku.version, status: 'published', unit: 'cm', base_size_code: 'M', version: 3 });
-    assert.equal(aggregate.payload.points[0].baseValue, 52.25);
+    const revisionInput = chartInput(created.sku, { notes: 'Revision two' });
+    const revised = await measurements.updateMeasurementChart('measurement-revise', 'product-owner', created.sku, { expectedVersion: published.version, ...editable(revisionInput) });
+    assert.equal(revised.status, 'draft');
+    assert.equal(revised.version, 4);
+    assert.equal(revised.publishedAt, null);
+    assert.equal((await measurements.updateMeasurementChart('measurement-revise', 'product-owner', created.sku, { expectedVersion: published.version, ...editable(revisionInput) })).version, 4);
+    const archived = await pool.query('SELECT revision_version, sku_version, payload, published_at, archived_at FROM measurement_chart_revisions WHERE chart_id = $1', [published.id]);
+    assert.equal(archived.rows.length, 1);
+    assert.equal(archived.rows[0].revision_version, published.version);
+    assert.equal(archived.rows[0].sku_version, published.skuVersion);
+    assert.equal(archived.rows[0].payload.status, 'published');
+    assert.equal(archived.rows[0].payload.version, published.version);
+    assert.ok(new Date(archived.rows[0].archived_at) >= new Date(archived.rows[0].published_at));
+    const republished = await measurements.publishMeasurementChart('measurement-republish', 'product-owner', created.sku, { expectedVersion: revised.version });
+    assert.equal(republished.status, 'published');
+    assert.equal(republished.version, 5);
 
-    const sizes = await pool.query('SELECT size_code, label, position FROM measurement_chart_sizes WHERE chart_id = $1 ORDER BY position', [published.id]);
+    const aggregate = (await pool.query('SELECT sku_version, status, unit, base_size_code, version, payload FROM measurement_charts WHERE sku = $1', [created.sku])).rows[0];
+    assert.deepEqual({ sku_version: aggregate.sku_version, status: aggregate.status, unit: aggregate.unit, base_size_code: aggregate.base_size_code, version: aggregate.version }, { sku_version: publishedSku.version, status: 'published', unit: 'cm', base_size_code: 'M', version: 5 });
+    assert.equal(aggregate.payload.notes, 'Revision two');
+    assert.equal(archived.rows[0].payload.notes, 'Rebased after SKU publication');
+
+    const sizes = await pool.query('SELECT size_code, label, position FROM measurement_chart_sizes WHERE chart_id = $1 ORDER BY position', [republished.id]);
     assert.deepEqual(sizes.rows, [{ size_code: 'S', label: 'Small', position: 1 }, { size_code: 'M', label: 'Medium', position: 2 }, { size_code: 'L', label: 'Large', position: 3 }]);
-    const points = await pool.query("SELECT point_code, position, tolerance_minus::text AS tolerance_minus, tolerance_plus::text AS tolerance_plus, base_value::text AS base_value FROM measurement_points WHERE chart_id = $1 ORDER BY position", [published.id]);
-    assert.deepEqual(points.rows, [
-      { point_code: 'CHEST', position: 1, tolerance_minus: '0.5000', tolerance_plus: '0.7500', base_value: '52.2500' },
-      { point_code: 'BODY-LEN', position: 2, tolerance_minus: '0.3000', tolerance_plus: '0.3000', base_value: '70.2000' },
-    ]);
-    const values = await pool.query("SELECT point_code, size_code, value::text AS value, delta_from_previous::text AS delta_from_previous FROM measurement_values WHERE chart_id = $1 AND point_code = 'CHEST' ORDER BY CASE size_code WHEN 'S' THEN 1 WHEN 'M' THEN 2 ELSE 3 END", [published.id]);
+    const values = await pool.query("SELECT point_code, size_code, value::text AS value, delta_from_previous::text AS delta_from_previous FROM measurement_values WHERE chart_id = $1 AND point_code = 'CHEST' ORDER BY CASE size_code WHEN 'S' THEN 1 WHEN 'M' THEN 2 ELSE 3 END", [republished.id]);
     assert.deepEqual(values.rows, [
-      { point_code: 'CHEST', size_code: 'S', value: '49.0000', delta_from_previous: null },
-      { point_code: 'CHEST', size_code: 'M', value: '52.2500', delta_from_previous: '3.2500' },
-      { point_code: 'CHEST', size_code: 'L', value: '55.5000', delta_from_previous: '3.2500' },
+      { point_code: 'CHEST', size_code: 'S', value: '48.5000', delta_from_previous: null },
+      { point_code: 'CHEST', size_code: 'M', value: '51.5000', delta_from_previous: '3.0000' },
+      { point_code: 'CHEST', size_code: 'L', value: '54.5000', delta_from_previous: '3.0000' },
     ]);
-    assert.deepEqual((await pool.query("SELECT event_type FROM outbox_events WHERE event_type LIKE 'measurement.%' ORDER BY event_type")).rows.map((row) => row.event_type), ['measurement.created', 'measurement.published', 'measurement.updated']);
+    assert.deepEqual((await pool.query("SELECT event_type FROM outbox_events WHERE event_type LIKE 'measurement.%' ORDER BY event_type")).rows.map((row) => row.event_type), ['measurement.created', 'measurement.published', 'measurement.published', 'measurement.revision-started', 'measurement.updated']);
   } finally { await pool.end(); }
 });

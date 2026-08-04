@@ -48,7 +48,7 @@ test('the shell loads Omnidata V9 after every implemented product workspace', as
     assert.match(html, new RegExp(`${asset.replaceAll('.', '\\.')}\\?v=${v8Build}`));
   }
 
-  for (const asset of ['omnidata-v9.css', 'linesheets.js', 'omnidata-v7-installed.js', 'omnidata-v9.js']) {
+  for (const asset of ['omnidata-v9.css', 'linesheets.js', 'omnidata-v7-installed.js', 'omnidata-v9.js', 'dom-boolean-props.js']) {
     assert.match(html, new RegExp(`${asset.replaceAll('.', '\\.')}\\?v=${build}`));
   }
 
@@ -80,7 +80,7 @@ test('the shell loads Omnidata V9 after every implemented product workspace', as
     .map((match) => new URL(match[1], 'http://syntha.local').pathname);
   assert.ok(scripts.indexOf('/ui/linesheets.js') > scripts.indexOf('/ui/omnidata-v7.js'));
   assert.ok(scripts.indexOf('/ui/omnidata-v7-installed.js') > scripts.indexOf('/ui/linesheets.js'));
-  assert.deepEqual(scripts.slice(-3), ['/ui/omnidata-v8.js', '/ui/omnidata-v9.js', '/ui/app-start.js']);
+  assert.deepEqual(scripts.slice(-4), ['/ui/omnidata-v8.js', '/ui/omnidata-v9.js', '/ui/dom-boolean-props.js', '/ui/app-start.js']);
 });
 
 test('the standalone server prevents stale caching of every active V9 asset', async () => {
@@ -114,6 +114,7 @@ test('the standalone server prevents stale caching of every active V9 asset', as
       `/ui/omnidata-v7-language-audit.js?v=${legacyBuild}`,
       `/ui/omnidata-v8.js?v=${v8Build}`,
       `/ui/omnidata-v9.js?v=${build}`,
+      `/ui/dom-boolean-props.js?v=${build}`,
       `/ui/bom-core.js?v=${bomBuild}`,
       `/ui/bom.js?v=${bomBuild}`,
       `/ui/measurement-core.js?v=${measurementBuild}`,

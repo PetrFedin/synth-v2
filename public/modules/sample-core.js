@@ -53,7 +53,7 @@
       case 'draft': return Object.freeze(['edit', 'request', 'cancel']);
       case 'requested': return Object.freeze(['start-production', 'receive', 'cancel']);
       case 'in-production': return Object.freeze(['receive', 'cancel']);
-      case 'received': return Object.freeze(['approve', 'reject']);
+      case 'received': return sample.receipt?.condition === 'incomplete' ? Object.freeze(['reject']) : Object.freeze(['approve', 'reject']);
       case 'rejected': return Object.freeze(['next-round']);
       default: return Object.freeze([]);
     }

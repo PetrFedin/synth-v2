@@ -46,13 +46,17 @@ test('transport rejects derived fields at every measurement matrix level', () =>
   assert.equal(calls.length, 0);
 });
 
-test('one authoritative OpenAPI document includes Materials, BOM and Measurement Charts', () => {
+test('one authoritative OpenAPI document includes governed Measurement revision semantics', () => {
   const specification = wholesaleV2ExtendedOpenApi;
-  assert.equal(specification.info.version, '1.10.0');
+  assert.equal(specification.info.version, '1.10.1');
   assert.ok(specification.paths['/materials'].get);
   assert.ok(specification.paths['/boms'].post);
   assert.ok(specification.paths['/measurements'].get);
-  assert.ok(specification.paths['/measurements/{sku}'].patch);
+  const update = specification.paths['/measurements/{sku}'].patch;
+  assert.ok(update);
+  assert.match(update.description, /atomically archives/);
+  assert.equal(update['x-syntha-published-transition'], 'archive-published-snapshot-and-open-draft-revision');
+  assert.match(specification.components.schemas.MeasurementChartUpdate.description, /governed draft revision/);
   assert.ok(specification.paths['/measurements/{sku}/publish'].post);
   assert.equal(specification.components.schemas.MeasurementChartCreate.additionalProperties, false);
   assert.equal(specification.components.schemas.MeasurementValueInput.properties.deltaFromPrevious, undefined);

@@ -15,6 +15,7 @@ export function withProductionOrderOpenApi(base) {
 
 function schemas() {
   return {
+    ProductionOrderEmptyInput: { type: 'object', additionalProperties: false, maxProperties: 0 },
     ProductionOrderVersionExpectation: { type: 'object', additionalProperties: false, required: ['expectedVersion'], properties: { expectedVersion: version() } },
     ProductionOrderConfirmationInput: { type: 'object', additionalProperties: false, required: ['expectedVersion','supplierCode','confirmationReference','confirmedBy','notes'], properties: { expectedVersion: version(), supplierCode: { type: 'string', pattern: CODE }, confirmationReference: text(2,120), confirmedBy: text(2,200), notes: nullableText(2000) } },
     ProductionOrderCancellationInput: { type: 'object', additionalProperties: false, required: ['expectedVersion','reason'], properties: { expectedVersion: version(), reason: text(5,1000) } },

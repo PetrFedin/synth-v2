@@ -1,4 +1,4 @@
-/* Structural adapters for workspaces added after the base Omnidata V14 layer. */
+/* Structural adapters and semantic roles for workspaces added after the base Omnidata V14 layer. */
 body.omnidata-v14 .od14-module-summary{
   display:grid!important;
   grid-template-columns:minmax(0,1fr)!important;
@@ -13,10 +13,13 @@ body.omnidata-v14 .od14-module-summary{
 }
 body.omnidata-v14 .od14-module-summary>.od14-module-heading,
 body.omnidata-v14 .od14-module-summary>.tech-pack-header-actions,
-body.omnidata-v14 .od14-module-summary>.production-orders-actions{display:none!important}
+body.omnidata-v14 .od14-module-summary>.production-orders-actions,
+body.omnidata-v14 .od14-module-summary>.production-execution-header-actions{display:none!important}
 body.omnidata-v14 .od14-module-summary>.tech-pack-kpis,
-body.omnidata-v14 .od14-module-summary>.production-orders-kpis{grid-column:1/-1!important;margin:0!important}
-body.omnidata-v14 .production-orders-create{
+body.omnidata-v14 .od14-module-summary>.production-orders-kpis,
+body.omnidata-v14 .od14-module-summary>.production-execution-kpis{grid-column:1/-1!important;margin:0!important}
+body.omnidata-v14 .production-orders-create,
+body.omnidata-v14 .production-execution-create{
   display:grid!important;
   grid-template-columns:minmax(220px,340px) max-content!important;
   justify-content:start!important;
@@ -25,23 +28,63 @@ body.omnidata-v14 .production-orders-create{
   width:100%!important;
   min-width:0!important;
 }
-body.omnidata-v14 .production-orders-create input{width:100%!important;max-width:340px!important}
+body.omnidata-v14 .production-orders-create input,
+body.omnidata-v14 .production-execution-create input{width:100%!important;max-width:340px!important}
 body.omnidata-v14 .tech-pack-readiness{display:grid!important;gap:3px!important;margin:0 0 10px!important;padding:10px!important}
 body.omnidata-v14 .tech-pack-readiness strong{font-size:10.5px!important;font-weight:600!important}
 body.omnidata-v14 .tech-pack-readiness span{color:var(--od14-text-soft)!important;font-size:9.5px!important}
 body.omnidata-v14 .tech-pack-actions,
-body.omnidata-v14 .production-orders-actions{display:flex!important;align-items:center!important;flex-wrap:wrap!important;gap:6px!important}
-body.omnidata-v14 .tech-pack-card,
-body.omnidata-v14 .production-orders-card{margin-top:8px!important;padding:10px!important}
-body.omnidata-v14 .tech-pack-card h3,
-body.omnidata-v14 .production-orders-card h3{margin:0 0 7px!important;font-size:10.5px!important;font-weight:600!important}
-body.omnidata-v14 .tech-pack-card p,
-body.omnidata-v14 .production-orders-card p{margin:4px 0!important;color:var(--od14-text-soft)!important;font-size:9.5px!important;line-height:1.4!important}
+body.omnidata-v14 .production-orders-actions,
+body.omnidata-v14 .production-execution-actions{display:flex!important;align-items:center!important;flex-wrap:wrap!important;gap:6px!important}
 body.omnidata-v14 .tech-pack-inspector-head{display:flex!important;align-items:flex-start!important;justify-content:space-between!important;gap:10px!important;margin-bottom:10px!important}
-body.omnidata-v14 .production-orders-error{margin:8px 0!important;padding:8px 10px!important;border:1px solid #e6c5c7!important;border-radius:4px!important;background:#fff5f5!important;color:var(--od14-danger)!important;font-size:9.5px!important}
+
+/* Roles not present in the original V14 set use the same Omnidata tokens and density. */
+body.omnidata-v14 [data-od14-component="card"]{
+  min-width:0!important;
+  margin:8px 0 0!important;
+  padding:10px 11px!important;
+  border:1px solid var(--od14-line)!important;
+  border-radius:var(--od14-radius)!important;
+  background:var(--od14-surface)!important;
+  color:var(--od14-text)!important;
+  box-shadow:none!important;
+}
+body.omnidata-v14 [data-od14-component="card"] h2,
+body.omnidata-v14 [data-od14-component="card"] h3,
+body.omnidata-v14 [data-od14-component="card"] h4{margin:0 0 7px!important;color:var(--od14-text)!important;font-size:10.5px!important;font-weight:600!important;line-height:1.3!important}
+body.omnidata-v14 [data-od14-component="card"] p{margin:4px 0!important;color:var(--od14-text-soft)!important;font-size:9.5px!important;line-height:1.4!important}
+body.omnidata-v14 [data-od14-component="list"]{display:grid!important;gap:6px!important;min-width:0!important;margin:0!important;padding:0!important;list-style:none!important}
+body.omnidata-v14 [data-od14-component="list-item"]{min-width:0!important;padding:9px 10px!important;border:1px solid var(--od14-line)!important;border-radius:var(--od14-radius-small)!important;background:#fff!important;box-shadow:none!important}
+body.omnidata-v14 [data-od14-component="list-item"]:hover{border-color:#efc2b1!important;background:#fffaf7!important}
+
+body.omnidata-v14 [data-od14-component="alert"]{display:grid!important;gap:4px!important;min-width:0!important;margin:8px 0!important;padding:9px 11px!important;border:1px solid #c8d9e7!important;border-left:3px solid var(--od14-info,#426b8c)!important;border-radius:var(--od14-radius)!important;background:#f0f6fb!important;color:var(--od14-text)!important;font-size:9.5px!important;box-shadow:none!important}
+body.omnidata-v14 [data-od14-component="alert"][data-od14-tone="success"]{border-color:#c8ddcb!important;border-left-color:var(--od14-success)!important;background:#f1f7f2!important;color:var(--od14-success)!important}
+body.omnidata-v14 [data-od14-component="alert"][data-od14-tone="warning"]{border-color:#ead8ad!important;border-left-color:var(--od14-warning)!important;background:#fff8e9!important;color:var(--od14-warning)!important}
+body.omnidata-v14 [data-od14-component="alert"][data-od14-tone="danger"]{border-color:#e8c1c4!important;border-left-color:var(--od14-danger)!important;background:#fff1f2!important;color:var(--od14-danger)!important}
+body.omnidata-v14 [data-od14-component="alert"][data-od14-tone="info"]{border-color:#c8d9e7!important;border-left-color:#426b8c!important;background:#f0f6fb!important;color:#426b8c!important}
+body.omnidata-v14 [data-od14-component="status"][data-od14-tone="success"]{border-color:#c8ddcb!important;background:#f1f7f2!important;color:var(--od14-success)!important}
+body.omnidata-v14 [data-od14-component="status"][data-od14-tone="warning"]{border-color:#ead8ad!important;background:#fff8e9!important;color:var(--od14-warning)!important}
+body.omnidata-v14 [data-od14-component="status"][data-od14-tone="danger"]{border-color:#e8c1c4!important;background:#fff1f2!important;color:var(--od14-danger)!important}
+body.omnidata-v14 [data-od14-component="status"][data-od14-tone="info"]{border-color:#c8d9e7!important;background:#f0f6fb!important;color:#426b8c!important}
+
+body.omnidata-v14 [data-od14-component="timeline"]{display:grid!important;gap:0!important;min-width:0!important;margin:10px 0 0!important;padding:0!important;list-style:none!important}
+body.omnidata-v14 [data-od14-component="timeline-item"]{position:relative!important;display:grid!important;grid-template-columns:24px minmax(0,1fr)!important;gap:8px!important;min-width:0!important;padding:7px 0!important;border:0!important;border-bottom:1px solid #eceef0!important;background:transparent!important;box-shadow:none!important}
+body.omnidata-v14 [data-od14-component="timeline-item"]:last-child{border-bottom:0!important}
+body.omnidata-v14 [data-od14-component="timeline-part"]{display:inline-flex!important;width:22px!important;min-width:22px!important;height:22px!important;min-height:22px!important;align-items:center!important;justify-content:center!important;border:1px solid var(--od14-line-strong)!important;border-radius:999px!important;background:#fff!important;color:var(--od14-muted)!important;font-size:8.5px!important;font-weight:700!important}
+body.omnidata-v14 [data-od14-component="timeline-item"] strong{display:block!important;color:var(--od14-text)!important;font-size:10px!important;font-weight:600!important}
+body.omnidata-v14 [data-od14-component="timeline-item"] small{display:block!important;margin-top:2px!important;color:var(--od14-muted)!important;font-size:8.5px!important}
+
+body.omnidata-v14 [data-od14-component="progress"]{display:grid!important;gap:4px!important;min-width:90px!important;margin:0!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important}
+body.omnidata-v14 [data-od14-component="progress-track"]{position:relative!important;width:100%!important;height:5px!important;min-height:5px!important;border:0!important;border-radius:999px!important;background:#e8eaed!important;box-shadow:none!important;overflow:hidden!important}
+body.omnidata-v14 [data-od14-component="progress-fill"]{display:block!important;height:100%!important;min-height:5px!important;border:0!important;border-radius:999px!important;background:var(--od14-accent)!important;box-shadow:none!important}
+body.omnidata-v14 [data-od14-component="progress"] small{color:var(--od14-muted)!important;font-size:8.5px!important}
+
 @media(max-width:680px){
-  body.omnidata-v14 .production-orders-create{grid-template-columns:minmax(0,1fr)!important}
+  body.omnidata-v14 .production-orders-create,
+  body.omnidata-v14 .production-execution-create{grid-template-columns:minmax(0,1fr)!important}
   body.omnidata-v14 .production-orders-create input,
-  body.omnidata-v14 .production-orders-create button{width:100%!important;max-width:none!important}
+  body.omnidata-v14 .production-orders-create button,
+  body.omnidata-v14 .production-execution-create input,
+  body.omnidata-v14 .production-execution-create button{width:100%!important;max-width:none!important}
   body.omnidata-v14 .tech-pack-inspector-head{display:grid!important;grid-template-columns:minmax(0,1fr)!important}
 }

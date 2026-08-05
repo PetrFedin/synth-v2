@@ -1,7 +1,7 @@
 (function installOmnidataV14ModuleAdapters(global){
   'use strict';
 
-  const BUILD='visual-20260805-14-module-adapters-3';
+  const BUILD='visual-20260805-14-module-adapters-4';
   const enqueue=typeof global.queueMicrotask==='function'?global.queueMicrotask.bind(global):typeof queueMicrotask==='function'?queueMicrotask:(callback)=>Promise.resolve().then(callback);
   if(typeof global.queueMicrotask!=='function')global.queueMicrotask=enqueue;
   const DEFINITIONS=Object.freeze({
@@ -35,9 +35,17 @@
     ['.tech-pack-inspector,.production-orders-inspector,.production-execution-inspector','inspector'],
     ['.tech-pack-facts,.production-orders-facts,.production-execution-facts','definition-grid'],
     ['.tech-pack-facts>div,.production-orders-facts>div,.production-execution-facts>div','definition-item'],
-    ['.tech-pack-card,.production-orders-card,.tech-pack-readiness,.production-execution-card','surface'],
+    ['.tech-pack-readiness','surface'],
+    ['.tech-pack-card,.production-orders-card,.production-execution-card','card'],
     ['.tech-pack-badge,.production-order-badge,.production-execution-badge','status'],
-    ['.tech-pack-empty,.production-orders-empty,.production-execution-empty','empty']
+    ['.tech-pack-empty,.production-orders-empty,.production-execution-empty','empty'],
+    ['.production-orders-error,.production-execution-error','alert'],
+    ['.production-timeline','timeline'],
+    ['.production-milestone','timeline-item'],
+    ['.production-milestone-sequence','timeline-part'],
+    ['.production-progress','progress'],
+    ['.production-progress-track','progress-track'],
+    ['.production-progress-fill','progress-fill']
   ]);
   let scheduled=false;
 
@@ -45,7 +53,7 @@
   function text(pair){return pair[locale()==='en'?1:0]}
   function currentView(){try{return typeof state!=='undefined'?state.view:''}catch{return''}}
   function roots(selector){return [...document.querySelectorAll(selector)]}
-  function setRole(selector,role){roots(selector).forEach((node)=>{node.dataset.od14Component=role})}
+  function setRole(selector,role){roots(selector).forEach((node)=>{node.dataset.od14Component=role;node.dataset.od14RoleSource='adapter'})}
   function updateHeader(view,definition){
     const header=document.querySelector(`.od14-page-header[data-view="${view}"]`)||document.querySelector('.od14-page-header');
     if(!header)return;
@@ -67,8 +75,8 @@
   }
   function assignRoles(){
     ROLE_MAP.forEach(([selector,role])=>setRole(selector,role));
-    roots('.tech-pack-actions,.production-orders-actions,.production-execution-actions,.tech-pack-confirm,.production-orders-confirm,.production-execution-command-grid').forEach((node)=>{node.dataset.od14Component='toolbar'});
-    roots('.tech-pack-filters input,.tech-pack-filters select,.production-orders-filters input,.production-orders-filters select,.production-orders-create input,.tech-pack-confirm input,.tech-pack-confirm textarea,.production-orders-confirm input,.production-orders-confirm textarea,.production-execution-filters input,.production-execution-filters select,.production-execution-create input,.production-execution-command input,.production-execution-command textarea,.production-execution-cancel input').forEach((node)=>{node.dataset.od14Component='field'});
+    roots('.tech-pack-actions,.production-orders-actions,.production-execution-actions,.tech-pack-confirm,.production-orders-confirm,.production-execution-command-grid').forEach((node)=>{node.dataset.od14Component='toolbar';node.dataset.od14RoleSource='adapter'});
+    roots('.tech-pack-filters input,.tech-pack-filters select,.production-orders-filters input,.production-orders-filters select,.production-orders-create input,.tech-pack-confirm input,.tech-pack-confirm textarea,.production-orders-confirm input,.production-orders-confirm textarea,.production-execution-filters input,.production-execution-filters select,.production-execution-create input,.production-execution-command input,.production-execution-command textarea,.production-execution-cancel input').forEach((node)=>{node.dataset.od14Component='field';node.dataset.od14RoleSource='adapter'});
   }
   function apply(){
     const view=currentView();
@@ -84,5 +92,5 @@
     renderApp=(...args)=>{const result=previousRenderApp(...args);apply();return result};
   }
   global.addEventListener('syntha:locale-changed',schedule);
-  global.SynthaOmnidataV14ModuleAdapters=Object.freeze({build:BUILD,apply,assignRoles,updateHeader});
+  global.SynthaOmnidataV14ModuleAdapters=Object.freeze({build:BUILD,apply,assignRoles,updateHeader,roleMap:ROLE_MAP});
 })(window);

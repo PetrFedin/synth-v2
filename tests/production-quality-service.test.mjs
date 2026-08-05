@@ -63,6 +63,6 @@ test('service never accepts caller-supplied decisions or derived defect fields',
   const { service } = fixture();
   let quality = await service.createFromExecution('quality-create', 'owner-1', execution.executionCode);
   quality = await service.startInspection('quality-start', 'owner-1', quality.qualityCaseCode, { expectedVersion: quality.version });
-  await assert.rejects(() => service.recordInspection('quality-forged', 'owner-1', quality.qualityCaseCode, { expectedVersion: quality.version, inspectedQuantity: 32, defects: [], decision: 'passed' }), { code: 'PRODUCTION_QUALITY_FIELD_FORBIDDEN' });
+  assert.throws(() => service.recordInspection('quality-forged', 'owner-1', quality.qualityCaseCode, { expectedVersion: quality.version, inspectedQuantity: 32, defects: [], decision: 'passed' }), { code: 'PRODUCTION_QUALITY_FIELD_FORBIDDEN' });
   await assert.rejects(() => service.recordInspection('quality-forged-defect', 'owner-1', quality.qualityCaseCode, { expectedVersion: quality.version, inspectedQuantity: 32, defects: [{ ...majorFailure[0], accepted: true }] }), { code: 'PRODUCTION_QUALITY_DEFECT_FIELD_FORBIDDEN' });
 });

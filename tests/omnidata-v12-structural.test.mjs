@@ -24,8 +24,11 @@ test('V12 is preserved beneath V13 and V14 without stale cache',async()=>{
   const html=await source('public/index.html');
   const handler=await source('src/web/static-handler.mjs');
   assert.match(html,/meta name="syntha-build" content="visual-20260805-14"/);
-  assert.ok(html.indexOf('/omnidata-v13.css?v=visual-20260804-13')>html.indexOf('/omnidata-v12.css?v=visual-20260804-12'));
-  assert.ok(html.indexOf('/omnidata-v14.css?v=visual-20260805-14')>html.indexOf('/omnidata-v13.css?v=visual-20260804-13'));
+  const v12=html.indexOf('/omnidata-v12.css?v=visual-20260804-12');
+  const v13=html.indexOf('/omnidata-v13.css?v=visual-20260804-13');
+  const v14=html.indexOf('/omnidata-v14.css?v=visual-20260805-14');
+  const extensions=html.indexOf('/omnidata-v14-extensions.css?v=visual-20260805-14');
+  assert.ok(v12>=0&&v13>v12&&v14>v13&&extensions>v14);
   assert.ok(html.indexOf('/ui/omnidata-v14.js?v=visual-20260805-14')>html.indexOf('/ui/omnidata-v13.js?v=visual-20260804-13'));
   assert.ok(handler.includes("'/omnidata-v12.css': ['omnidata-v12.css'"));
   assert.ok(handler.includes("'/ui/omnidata-v14.js': ['modules/omnidata-v14.js'"));

@@ -14,6 +14,7 @@ import { createSourcingService } from '../src/application/sourcing-service.mjs';
 import { createTechPackService } from '../src/application/tech-pack-service.mjs';
 import { createSourcingTechPackAllocationService } from '../src/application/sourcing-tech-pack-allocation-service.mjs';
 import { createProductionOrderService } from '../src/application/production-order-service.mjs';
+import { createProductionExecutionService } from '../src/application/production-execution-service.mjs';
 import { createPostgresWholesaleStore } from '../src/infrastructure/postgres-store.mjs';
 import { createPostgresCatalogStore } from '../src/infrastructure/postgres-catalog-store.mjs';
 import { createPostgresMaterialStore } from '../src/infrastructure/postgres-material-store.mjs';
@@ -24,12 +25,13 @@ import { createPostgresSourcingStore } from '../src/infrastructure/postgres-sour
 import { createPostgresTechPackStore } from '../src/infrastructure/postgres-tech-pack-store.mjs';
 import { createPostgresSourcingTechPackAllocationStore } from '../src/infrastructure/postgres-sourcing-tech-pack-allocation-store.mjs';
 import { createPostgresProductionOrderStore } from '../src/infrastructure/postgres-production-order-store.mjs';
+import { createPostgresProductionExecutionStore } from '../src/infrastructure/postgres-production-execution-store.mjs';
 import { migratePostgres } from '../src/infrastructure/postgres-migrator.mjs';
 import { createPostgresTestPool } from './postgres-test-pool.mjs';
 
 const databaseUrl = process.env.POSTGRES_TEST_URL;
 
-test('PostgreSQL closes approved PPS through acknowledged Tech Pack, allocation and confirmed Production Order', { skip: !databaseUrl }, async () => {
+test('PostgreSQL closes approved PPS through confirmed Production Order and Production Execution ready-for-QC', { skip: !databaseUrl }, async () => {
   const pool = createPostgresTestPool({ connectionString: databaseUrl, max: 8 });
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
   let id = 0; let tick = 0;
@@ -49,6 +51,7 @@ test('PostgreSQL closes approved PPS through acknowledged Tech Pack, allocation 
     const techPackStore = createPostgresTechPackStore({ pool });
     const allocationStore = createPostgresSourcingTechPackAllocationStore({ pool });
     const productionOrderStore = createPostgresProductionOrderStore({ pool });
+    const productionExecutionStore = createPostgresProductionExecutionStore({ pool });
     const platform = createWholesalePlatform({ store: wholesaleStore, clock, nextId });
     const catalog = createCatalogService({ wholesaleStore, catalogStore, clock, nextId });
     const materials = createMaterialService({ materialStore, clock, nextId });
@@ -59,6 +62,7 @@ test('PostgreSQL closes approved PPS through acknowledged Tech Pack, allocation 
     const techPacks = createTechPackService({ techPackStore, clock, nextId });
     const allocation = createSourcingTechPackAllocationService({ store: allocationStore, clock, nextId });
     const productionOrders = createProductionOrderService({ store: productionOrderStore, clock, nextId });
+    const productionExecutions = createProductionExecutionService({ store: productionExecutionStore, clock, nextId });
 
     await platform.registerOrganisation('org-create', 'system', createOrganisation({ id: 'brand-tech-gate', type: 'brand', name: 'Tech Gate Brand' }));
     await platform.grantMembership('member-owner', 'system', createMembership({ id: 'membership-owner', organisationId: 'brand-tech-gate', organisationType: 'brand', userId: 'product-owner', role: 'owner', createdAt: clock() }));
@@ -120,6 +124,50 @@ test('PostgreSQL closes approved PPS through acknowledged Tech Pack, allocation 
       () => pool.query("UPDATE production_orders SET payload = jsonb_set(payload, '{commercialSnapshot,totalCostMinor}', '1'::jsonb) WHERE production_order_number = $1", [productionOrder.productionOrderNumber]),
       (error) => error?.code === '23514' && error?.constraint === 'production_orders_source_immutable',
     );
+
+    let execution = await productionExecutions.createFromProductionOrder('production-execution-create', 'product-owner', productionOrder.productionOrderNumber);
+    assert.equal(execution.status, 'planned');
+    assert.equal(execution.milestones.length, 6);
+    assert.equal(execution.sourceSnapshot.productionOrderVersion, productionOrder.version);
+    assert.equal(execution.sourceSnapshot.techPackCode, techPack.techPackCode);
+    execution = await productionExecutions.start('production-execution-start', 'product-owner', execution.executionCode, { expectedVersion: execution.version });
+    assert.equal(execution.status, 'active');
+
+    execution = await productionExecutions.blockMilestone('production-execution-block-materials', 'product-owner', execution.executionCode, { expectedVersion: execution.version, milestoneCode: 'materials-ready', reason: 'Fabric inspection certificate missing' });
+    assert.equal(execution.milestones[0].status, 'blocked');
+    await assert.rejects(
+      () => productionExecutions.completeMilestone('production-execution-complete-blocked', 'product-owner', execution.executionCode, { expectedVersion: execution.version, milestoneCode: 'materials-ready', notes: 'Must not complete while blocked' }),
+      { code: 'PRODUCTION_MILESTONE_NOT_PENDING' },
+    );
+    execution = await productionExecutions.resolveMilestone('production-execution-resolve-materials', 'product-owner', execution.executionCode, { expectedVersion: execution.version, milestoneCode: 'materials-ready', notes: 'Certificate received and approved by quality team' });
+    assert.equal(execution.milestones[0].status, 'pending');
+    assert.equal(execution.milestones[0].resolutionNotes, 'Certificate received and approved by quality team');
+
+    execution = await productionExecutions.completeMilestone('production-execution-complete-materials', 'product-owner', execution.executionCode, { expectedVersion: execution.version, milestoneCode: 'materials-ready', notes: 'Materials released to cutting' });
+    for (const milestoneCode of ['cutting-complete', 'assembly-complete', 'finishing-complete', 'packing-complete']) {
+      execution = await productionExecutions.completeMilestone(`production-execution-complete-${milestoneCode}`, 'product-owner', execution.executionCode, { expectedVersion: execution.version, milestoneCode, notes: `${milestoneCode} verified` });
+    }
+    const readyInput = { expectedVersion: execution.version, milestoneCode: 'ready-for-qc', notes: 'Packed batch transferred to quality-control staging' };
+    execution = await productionExecutions.completeMilestone('production-execution-complete-ready', 'product-owner', execution.executionCode, readyInput);
+    assert.equal(execution.status, 'ready-for-qc');
+    assert.equal(execution.version, 10);
+    assert.ok(execution.readyForQcAt);
+    assert.deepEqual(execution.milestones.map((milestone) => milestone.status), Array(6).fill('completed'));
+
+    const executionRow = (await pool.query('SELECT status, version, production_order_number, payload FROM production_executions WHERE execution_code = $1', [execution.executionCode])).rows[0];
+    assert.deepEqual({ status: executionRow.status, version: executionRow.version, productionOrderNumber: executionRow.production_order_number }, { status: 'ready-for-qc', version: 10, productionOrderNumber: productionOrder.productionOrderNumber });
+    assert.equal(executionRow.payload.sourceSnapshot.confirmationReference, 'PO-CONFIRM-TECH-1');
+    const eventsBeforeReplay = Number((await pool.query('SELECT count(*)::integer AS count FROM outbox_events WHERE aggregate_id = $1', [execution.id])).rows[0].count);
+    const replay = await productionExecutions.completeMilestone('production-execution-complete-ready', 'product-owner', execution.executionCode, readyInput);
+    const eventsAfterReplay = Number((await pool.query('SELECT count(*)::integer AS count FROM outbox_events WHERE aggregate_id = $1', [execution.id])).rows[0].count);
+    assert.equal(replay.version, execution.version);
+    assert.equal(eventsBeforeReplay, 10);
+    assert.equal(eventsAfterReplay, eventsBeforeReplay);
+    await assert.rejects(
+      () => pool.query("UPDATE production_executions SET payload = jsonb_set(payload, '{sourceSnapshot,quantity}', '1'::jsonb) WHERE execution_code = $1", [execution.executionCode]),
+      (error) => error?.code === '23514' && error?.constraint === 'production_executions_source_immutable',
+    );
+
     assert.equal(pps.status, 'approved');
     assert.equal(chart.status, 'published');
     assert.equal(bom.status, 'published');

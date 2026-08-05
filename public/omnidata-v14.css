@@ -1,0 +1,628 @@
+:root{
+  --od14-bg:#f3f4f5;
+  --od14-surface:#ffffff;
+  --od14-surface-soft:#f8f9fa;
+  --od14-sidebar:#373b45;
+  --od14-text:#2f3339;
+  --od14-text-soft:#626871;
+  --od14-muted:#8a9099;
+  --od14-line:#e0e3e7;
+  --od14-line-strong:#d2d6dc;
+  --od14-accent:#ff5b22;
+  --od14-accent-hover:#e94d14;
+  --od14-accent-soft:#fff1eb;
+  --od14-success:#527a55;
+  --od14-warning:#a47625;
+  --od14-danger:#ad464b;
+  --od14-radius:8px;
+  --od14-radius-small:6px;
+  --od14-control:36px;
+  --od14-shadow:0 1px 2px rgba(30,34,40,.04),0 8px 22px rgba(30,34,40,.035);
+}
+
+body.omnidata-v14{
+  background:var(--od14-bg)!important;
+  color:var(--od14-text)!important;
+  font-family:Arial,"Helvetica Neue",Helvetica,sans-serif!important;
+  font-size:12px!important;
+  line-height:1.4!important;
+  letter-spacing:0!important;
+  -webkit-font-smoothing:antialiased;
+}
+body.omnidata-v14 *,body.omnidata-v14 *::before,body.omnidata-v14 *::after{box-sizing:border-box}
+body.omnidata-v14 button,body.omnidata-v14 input,body.omnidata-v14 select,body.omnidata-v14 textarea{font:inherit}
+body.omnidata-v14 .main{background:var(--od14-bg)!important}
+body.omnidata-v14 .workspace-content{width:100%!important;min-width:0!important;max-width:100%!important;padding:0 16px 44px!important;overflow-x:hidden!important}
+body.omnidata-v14 .page-header{display:none!important}
+
+/* One page header for every workspace section. */
+body.omnidata-v14 .od14-page-header{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) auto!important;
+  align-items:center!important;
+  gap:16px!important;
+  width:100%!important;
+  min-width:0!important;
+  margin:16px 0 12px!important;
+  padding:18px 20px!important;
+  border:1px solid var(--od14-line)!important;
+  border-radius:var(--od14-radius)!important;
+  background:var(--od14-surface)!important;
+  box-shadow:var(--od14-shadow)!important;
+}
+body.omnidata-v14 .od14-page-heading{min-width:0!important}
+body.omnidata-v14 .od14-page-section{
+  margin:0 0 5px!important;
+  color:var(--od14-accent)!important;
+  font-size:9px!important;
+  font-weight:700!important;
+  line-height:1.2!important;
+  letter-spacing:.08em!important;
+  text-transform:uppercase!important;
+}
+body.omnidata-v14 .od14-page-title{
+  margin:0!important;
+  color:var(--od14-text)!important;
+  font-size:24px!important;
+  font-weight:600!important;
+  line-height:1.15!important;
+  letter-spacing:-.015em!important;
+}
+body.omnidata-v14 .od14-page-description{
+  max-width:780px!important;
+  margin:7px 0 0!important;
+  color:var(--od14-text-soft)!important;
+  font-size:11px!important;
+  line-height:1.45!important;
+}
+body.omnidata-v14 .od14-page-actions{
+  display:flex!important;
+  min-width:0!important;
+  align-items:center!important;
+  justify-content:flex-end!important;
+  flex-wrap:wrap!important;
+  gap:8px!important;
+}
+body.omnidata-v14 .od14-page-actions:empty{display:none!important}
+
+/* Hide duplicate title systems but preserve their functional content. */
+body.omnidata-v14 .view-toolbar.od14-source-toolbar{display:none!important}
+body.omnidata-v14 .bom-header.od14-source-header,
+body.omnidata-v14 .measurement-header.od14-source-header,
+body.omnidata-v14 .sample-header.od14-source-header,
+body.omnidata-v14 .sourcing-header.od14-source-header{
+  display:block!important;
+  width:100%!important;
+  min-width:0!important;
+  margin:0!important;
+  padding:0!important;
+  border:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+body.omnidata-v14 .bom-header.od14-source-header>:first-child,
+body.omnidata-v14 .measurement-header.od14-source-header>:first-child,
+body.omnidata-v14 .sample-header.od14-source-header>:first-child,
+body.omnidata-v14 .sourcing-header.od14-source-header>:first-child,
+body.omnidata-v14 .bom-header.od14-source-header>.bom-header-actions,
+body.omnidata-v14 .measurement-header.od14-source-header>.measurement-header-actions,
+body.omnidata-v14 .sample-header.od14-source-header>.sample-header-actions,
+body.omnidata-v14 .sourcing-header.od14-source-header>.sourcing-header-actions{display:none!important}
+
+/* Unified navigation tabs. */
+body.omnidata-v14 .od-tabs,
+body.omnidata-v14 .ls9-tabs,
+body.omnidata-v14 .planning-tabs,
+body.omnidata-v14 .styles-tabs,
+body.omnidata-v14 .materials-tabs,
+body.omnidata-v14 .bom-tabs,
+body.omnidata-v14 .measurement-tabs,
+body.omnidata-v14 .sample-tabs,
+body.omnidata-v14 .sourcing-tabs{
+  display:flex!important;
+  min-width:0!important;
+  min-height:44px!important;
+  align-items:stretch!important;
+  gap:24px!important;
+  margin:0!important;
+  padding:0 14px!important;
+  border:1px solid var(--od14-line)!important;
+  border-radius:var(--od14-radius) var(--od14-radius) 0 0!important;
+  background:var(--od14-surface)!important;
+  box-shadow:none!important;
+  overflow-x:auto!important;
+  overflow-y:hidden!important;
+  scrollbar-width:thin!important;
+}
+body.omnidata-v14 .od-tab,
+body.omnidata-v14 .ls9-tab,
+body.omnidata-v14 .planning-tab,
+body.omnidata-v14 .styles-tab,
+body.omnidata-v14 .materials-tab,
+body.omnidata-v14 .bom-tab,
+body.omnidata-v14 .measurement-tab,
+body.omnidata-v14 .sample-tab,
+body.omnidata-v14 .sourcing-tabs button{
+  position:relative!important;
+  flex:0 0 auto!important;
+  min-height:42px!important;
+  padding:0!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  color:#555b64!important;
+  font-size:11px!important;
+  font-weight:500!important;
+  line-height:1!important;
+  box-shadow:none!important;
+  white-space:nowrap!important;
+}
+body.omnidata-v14 .od-tab.active,
+body.omnidata-v14 .ls9-tab.active,
+body.omnidata-v14 .planning-tab.active,
+body.omnidata-v14 .styles-tab.active,
+body.omnidata-v14 .materials-tab.active,
+body.omnidata-v14 .bom-tab.active,
+body.omnidata-v14 .measurement-tab.active,
+body.omnidata-v14 .sample-tab.active,
+body.omnidata-v14 .sourcing-tabs button.active{color:var(--od14-accent)!important;font-weight:600!important}
+body.omnidata-v14 .od-tab.active::after,
+body.omnidata-v14 .ls9-tab.active::after,
+body.omnidata-v14 .planning-tab.active::after,
+body.omnidata-v14 .styles-tab.active::after,
+body.omnidata-v14 .materials-tab.active::after,
+body.omnidata-v14 .bom-tab.active::after,
+body.omnidata-v14 .measurement-tab.active::after,
+body.omnidata-v14 .sample-tab.active::after,
+body.omnidata-v14 .sourcing-tabs button.active::after{
+  position:absolute!important;
+  right:0!important;
+  bottom:0!important;
+  left:0!important;
+  height:2px!important;
+  background:var(--od14-accent)!important;
+  content:""!important;
+}
+
+/* KPI rhythm shared by all PLM workspaces. */
+body.omnidata-v14 .od-metrics,
+body.omnidata-v14 .bom-kpis,
+body.omnidata-v14 .measurement-kpis,
+body.omnidata-v14 .sample-kpis,
+body.omnidata-v14 .sourcing-kpis,
+body.omnidata-v14 .kpi-grid{
+  display:grid!important;
+  grid-template-columns:repeat(auto-fit,minmax(142px,1fr))!important;
+  gap:8px!important;
+  width:100%!important;
+  min-width:0!important;
+  margin:0!important;
+  padding:10px 0!important;
+}
+body.omnidata-v14 .od-metric,
+body.omnidata-v14 .bom-kpi,
+body.omnidata-v14 .measurement-kpi,
+body.omnidata-v14 .sample-kpi,
+body.omnidata-v14 .sourcing-kpi,
+body.omnidata-v14 .card.kpi{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) auto!important;
+  grid-template-areas:"label value" "detail detail"!important;
+  align-items:center!important;
+  gap:2px 10px!important;
+  min-width:0!important;
+  min-height:64px!important;
+  margin:0!important;
+  padding:11px 12px!important;
+  border:1px solid var(--od14-line)!important;
+  border-radius:var(--od14-radius)!important;
+  background:var(--od14-surface)!important;
+  box-shadow:none!important;
+  overflow:hidden!important;
+}
+body.omnidata-v14 .od-metric-label,
+body.omnidata-v14 .bom-kpi span,
+body.omnidata-v14 .measurement-kpi span,
+body.omnidata-v14 .sample-kpi span,
+body.omnidata-v14 .sourcing-kpi span,
+body.omnidata-v14 .card.kpi>.muted{
+  grid-area:label!important;
+  min-width:0!important;
+  color:var(--od14-text-soft)!important;
+  font-size:9.5px!important;
+  line-height:1.25!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  white-space:nowrap!important;
+}
+body.omnidata-v14 .od-metric-value,
+body.omnidata-v14 .bom-kpi strong,
+body.omnidata-v14 .measurement-kpi strong,
+body.omnidata-v14 .sample-kpi strong,
+body.omnidata-v14 .sourcing-kpi strong,
+body.omnidata-v14 .card.kpi>strong{
+  grid-area:value!important;
+  color:var(--od14-text)!important;
+  font-size:18px!important;
+  font-weight:600!important;
+  line-height:1!important;
+  white-space:nowrap!important;
+}
+body.omnidata-v14 .od-metric-detail,
+body.omnidata-v14 .measurement-kpi small,
+body.omnidata-v14 .sample-kpi small,
+body.omnidata-v14 .sourcing-kpi small{
+  grid-area:detail!important;
+  min-width:0!important;
+  color:var(--od14-muted)!important;
+  font-size:9px!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  white-space:nowrap!important;
+}
+
+/* Compact and logical filter bars; never stretch controls across the page. */
+body.omnidata-v14 .od-commandbar{
+  display:grid!important;
+  grid-template-columns:minmax(220px,360px) minmax(150px,190px) max-content!important;
+  justify-content:start!important;
+  align-items:center!important;
+  gap:8px!important;
+  width:100%!important;
+  min-width:0!important;
+  min-height:56px!important;
+  margin:0 0 10px!important;
+  padding:10px 12px!important;
+  border:1px solid var(--od14-line)!important;
+  border-top:0!important;
+  border-radius:0 0 var(--od14-radius) var(--od14-radius)!important;
+  background:var(--od14-surface)!important;
+  box-shadow:none!important;
+}
+body.omnidata-v14 .od-commandbar .od-search{width:100%!important;max-width:360px!important}
+body.omnidata-v14 .od-commandbar .od-filter:not(.od-search){width:190px!important;max-width:190px!important}
+body.omnidata-v14 .od-commandbar>.button{justify-self:start!important;width:auto!important}
+body.omnidata-v14 .od-filter,
+body.omnidata-v14 .od-search,
+body.omnidata-v14 .global-search{
+  display:flex!important;
+  align-items:center!important;
+  gap:7px!important;
+  min-height:var(--od14-control)!important;
+  padding:0 10px!important;
+  border:1px solid var(--od14-line-strong)!important;
+  border-radius:var(--od14-radius-small)!important;
+  background:#fff!important;
+  box-shadow:none!important;
+}
+body.omnidata-v14 .od-filter:focus-within,
+body.omnidata-v14 .od-search:focus-within,
+body.omnidata-v14 .global-search:focus-within{border-color:var(--od14-accent)!important;box-shadow:0 0 0 2px rgba(255,91,34,.09)!important}
+body.omnidata-v14 .od-filter input,
+body.omnidata-v14 .od-filter select,
+body.omnidata-v14 .od-search input,
+body.omnidata-v14 .global-search input{
+  width:100%!important;
+  min-width:0!important;
+  min-height:32px!important;
+  padding:0!important;
+  border:0!important;
+  background:transparent!important;
+  color:var(--od14-text)!important;
+  font-size:11px!important;
+  box-shadow:none!important;
+  outline:0!important;
+}
+body.omnidata-v14 .od-filter-label{flex:0 0 auto!important;color:var(--od14-muted)!important;font-size:9px!important}
+body.omnidata-v14 .sample-filters,
+body.omnidata-v14 .sourcing-toolbar,
+body.omnidata-v14 .toolbar-filters,
+body.omnidata-v14 .filter-row,
+body.omnidata-v14 .filters{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:flex-start!important;
+  flex-wrap:wrap!important;
+  gap:8px!important;
+  min-width:0!important;
+  max-width:100%!important;
+}
+body.omnidata-v14 .sample-filters select,
+body.omnidata-v14 .sourcing-toolbar select,
+body.omnidata-v14 .toolbar-filters select,
+body.omnidata-v14 .filter-row select,
+body.omnidata-v14 .filters select{
+  width:auto!important;
+  min-width:160px!important;
+  max-width:220px!important;
+  min-height:var(--od14-control)!important;
+  padding:0 30px 0 10px!important;
+  border:1px solid var(--od14-line-strong)!important;
+  border-radius:var(--od14-radius-small)!important;
+  background-color:#fff!important;
+  font-size:11px!important;
+}
+body.omnidata-v14 .sample-filters input[type="search"],
+body.omnidata-v14 .sourcing-toolbar input[type="search"],
+body.omnidata-v14 .toolbar-filters input[type="search"],
+body.omnidata-v14 .filter-row input[type="search"],
+body.omnidata-v14 .filters input[type="search"]{width:280px!important;max-width:100%!important}
+body.omnidata-v14 .sourcing-toolbar{min-height:54px!important;padding:9px 12px!important;border-bottom:1px solid var(--od14-line)!important;background:#fff!important}
+body.omnidata-v14 .sourcing-toolbar h2{margin:0 auto 0 0!important;font-size:13px!important;font-weight:600!important}
+body.omnidata-v14 .global-search{width:100%!important;max-width:360px!important;justify-self:center!important;height:34px!important;min-height:34px!important}
+
+/* Unified controls. */
+body.omnidata-v14 .workspace-content .button,
+body.omnidata-v14 .workspace-content button.primary,
+body.omnidata-v14 .workspace-content button.secondary,
+body.omnidata-v14 .workspace-content button.danger,
+body.omnidata-v14 .od14-page-actions button{
+  display:inline-flex!important;
+  width:auto!important;
+  min-width:0!important;
+  min-height:var(--od14-control)!important;
+  align-items:center!important;
+  justify-content:center!important;
+  gap:7px!important;
+  padding:0 13px!important;
+  border:1px solid var(--od14-line-strong)!important;
+  border-radius:var(--od14-radius-small)!important;
+  background:#fff!important;
+  color:#4e545d!important;
+  font-size:11px!important;
+  font-weight:600!important;
+  line-height:1!important;
+  box-shadow:none!important;
+  white-space:nowrap!important;
+}
+body.omnidata-v14 .workspace-content .button:hover,
+body.omnidata-v14 .workspace-content button.secondary:hover,
+body.omnidata-v14 .od14-page-actions button:not(.primary):not(.danger):hover{border-color:#f0a084!important;background:#fffaf7!important;color:var(--od14-accent)!important}
+body.omnidata-v14 .workspace-content .button.primary,
+body.omnidata-v14 .workspace-content button.primary,
+body.omnidata-v14 .od14-page-actions button.primary{border-color:var(--od14-accent)!important;background:var(--od14-accent)!important;color:#fff!important}
+body.omnidata-v14 .workspace-content .button.primary:hover,
+body.omnidata-v14 .workspace-content button.primary:hover,
+body.omnidata-v14 .od14-page-actions button.primary:hover{border-color:var(--od14-accent-hover)!important;background:var(--od14-accent-hover)!important;color:#fff!important}
+body.omnidata-v14 .workspace-content button.danger,
+body.omnidata-v14 .od14-page-actions button.danger{border-color:#e6c2c5!important;background:#fff!important;color:var(--od14-danger)!important}
+body.omnidata-v14 .workspace-content button:disabled,
+body.omnidata-v14 .od14-page-actions button:disabled{opacity:.48!important;cursor:not-allowed!important}
+
+/* Surfaces, tables and inspectors. */
+body.omnidata-v14 .card,
+body.omnidata-v14 .section,
+body.omnidata-v14 .od-section,
+body.omnidata-v14 .sourcing-panel,
+body.omnidata-v14 .measurement-matrix-panel,
+body.omnidata-v14 .bom-cost-card{
+  border:1px solid var(--od14-line)!important;
+  border-radius:var(--od14-radius)!important;
+  background:var(--od14-surface)!important;
+  box-shadow:var(--od14-shadow)!important;
+}
+body.omnidata-v14 .section-toolbar,
+body.omnidata-v14 .od-section-head{
+  min-height:48px!important;
+  padding:10px 12px!important;
+  border-bottom:1px solid var(--od14-line)!important;
+  background:#fff!important;
+}
+body.omnidata-v14 .section-heading h3,
+body.omnidata-v14 .od-section-head h3{margin:0!important;font-size:13px!important;font-weight:600!important;line-height:1.25!important}
+body.omnidata-v14 .section-count{display:inline-flex!important;min-width:22px!important;height:22px!important;align-items:center!important;justify-content:center!important;padding:0 6px!important;border-radius:999px!important;background:#f0f1f2!important;color:#626871!important;font-size:9px!important}
+body.omnidata-v14 .od-master-detail,
+body.omnidata-v14 .bom-layout,
+body.omnidata-v14 .measurement-layout,
+body.omnidata-v14 .sample-layout,
+body.omnidata-v14 .sourcing-grid{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) minmax(320px,360px)!important;
+  gap:10px!important;
+  align-items:start!important;
+  width:100%!important;
+  min-width:0!important;
+  max-width:100%!important;
+}
+body.omnidata-v14 .od-master,
+body.omnidata-v14 .bom-table-wrap,
+body.omnidata-v14 .measurement-table-wrap,
+body.omnidata-v14 .sample-table-wrap,
+body.omnidata-v14 .sourcing-table-wrap,
+body.omnidata-v14 .od-table-wrap{
+  min-width:0!important;
+  max-width:100%!important;
+  border:1px solid var(--od14-line)!important;
+  border-radius:var(--od14-radius)!important;
+  background:#fff!important;
+  box-shadow:var(--od14-shadow)!important;
+  overflow:auto!important;
+}
+body.omnidata-v14 .od-table,
+body.omnidata-v14 .bom-table,
+body.omnidata-v14 .measurement-table,
+body.omnidata-v14 .measurement-matrix,
+body.omnidata-v14 .sample-table,
+body.omnidata-v14 .sourcing-table,
+body.omnidata-v14 .od-mini-table{width:100%!important;min-width:720px!important;border-collapse:separate!important;border-spacing:0!important;background:#fff!important}
+body.omnidata-v14 .od-table th,
+body.omnidata-v14 .bom-table th,
+body.omnidata-v14 .measurement-table th,
+body.omnidata-v14 .measurement-matrix th,
+body.omnidata-v14 .sample-table th,
+body.omnidata-v14 .sourcing-table th,
+body.omnidata-v14 .od-mini-table th{
+  height:38px!important;
+  padding:0 10px!important;
+  border-bottom:1px solid var(--od14-line-strong)!important;
+  background:#f6f7f8!important;
+  color:#6b717a!important;
+  font-size:9px!important;
+  font-weight:700!important;
+  letter-spacing:.045em!important;
+  text-align:left!important;
+  text-transform:uppercase!important;
+  white-space:nowrap!important;
+}
+body.omnidata-v14 .od-table td,
+body.omnidata-v14 .bom-table td,
+body.omnidata-v14 .measurement-table td,
+body.omnidata-v14 .measurement-matrix td,
+body.omnidata-v14 .sample-table td,
+body.omnidata-v14 .sourcing-table td,
+body.omnidata-v14 .od-mini-table td{
+  min-height:44px!important;
+  padding:9px 10px!important;
+  border-bottom:1px solid #eceef0!important;
+  color:#444a52!important;
+  font-size:10.5px!important;
+  line-height:1.35!important;
+  vertical-align:middle!important;
+}
+body.omnidata-v14 .od-table tbody tr:hover td,
+body.omnidata-v14 .bom-table tbody tr:hover td,
+body.omnidata-v14 .measurement-table tbody tr:hover td,
+body.omnidata-v14 .sample-table tbody tr:hover td,
+body.omnidata-v14 .sourcing-table tbody tr:hover td{background:#fffaf7!important}
+body.omnidata-v14 .od-table tbody tr.selected td,
+body.omnidata-v14 .bom-table tbody tr.selected td,
+body.omnidata-v14 .measurement-table tbody tr.selected td,
+body.omnidata-v14 .sample-table tbody tr.selected td,
+body.omnidata-v14 .sourcing-table tbody tr.selected td{background:var(--od14-accent-soft)!important}
+body.omnidata-v14 .od-table tbody tr.selected td:first-child,
+body.omnidata-v14 .bom-table tbody tr.selected td:first-child,
+body.omnidata-v14 .measurement-table tbody tr.selected td:first-child,
+body.omnidata-v14 .sample-table tbody tr.selected td:first-child,
+body.omnidata-v14 .sourcing-table tbody tr.selected td:first-child{box-shadow:inset 3px 0 0 var(--od14-accent)!important}
+body.omnidata-v14 .od-inspector,
+body.omnidata-v14 .bom-inspector,
+body.omnidata-v14 .measurement-inspector,
+body.omnidata-v14 .sample-inspector,
+body.omnidata-v14 .sourcing-inspector{
+  position:sticky!important;
+  top:64px!important;
+  min-width:0!important;
+  max-width:100%!important;
+  max-height:calc(100vh - 82px)!important;
+  padding:14px!important;
+  border:1px solid var(--od14-line)!important;
+  border-radius:var(--od14-radius)!important;
+  background:#fff!important;
+  box-shadow:var(--od14-shadow)!important;
+  overflow:auto!important;
+}
+body.omnidata-v14 .od-inspector h2,
+body.omnidata-v14 .od-inspector h3,
+body.omnidata-v14 .bom-inspector h2,
+body.omnidata-v14 .measurement-inspector h2,
+body.omnidata-v14 .sample-inspector h2,
+body.omnidata-v14 .sourcing-inspector h2{margin:0!important;color:var(--od14-text)!important;font-size:15px!important;font-weight:600!important;line-height:1.25!important}
+body.omnidata-v14 .od-inspector h3,
+body.omnidata-v14 .bom-inspector h3,
+body.omnidata-v14 .measurement-inspector h3,
+body.omnidata-v14 .sample-inspector h3,
+body.omnidata-v14 .sourcing-inspector h3{margin:16px 0 8px!important;font-size:11px!important;font-weight:700!important;text-transform:none!important}
+body.omnidata-v14 .od-definition-grid,
+body.omnidata-v14 .bom-summary,
+body.omnidata-v14 .measurement-summary,
+body.omnidata-v14 .sample-summary,
+body.omnidata-v14 .sourcing-details{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important;margin:12px 0!important}
+body.omnidata-v14 .od-definition-item,
+body.omnidata-v14 .bom-summary>div,
+body.omnidata-v14 .measurement-summary>div,
+body.omnidata-v14 .sample-summary>div,
+body.omnidata-v14 .sourcing-details>div{min-width:0!important;padding:9px!important;border:1px solid #e8eaed!important;border-radius:var(--od14-radius-small)!important;background:var(--od14-surface-soft)!important}
+body.omnidata-v14 dt{color:var(--od14-muted)!important;font-size:9px!important}
+body.omnidata-v14 dd{margin:3px 0 0!important;color:var(--od14-text)!important;font-size:10.5px!important;font-weight:600!important;overflow-wrap:anywhere!important}
+
+/* Consistent badges. */
+body.omnidata-v14 .badge,
+body.omnidata-v14 .od-status,
+body.omnidata-v14 .bom-badge,
+body.omnidata-v14 .measurement-badge,
+body.omnidata-v14 .sample-badge,
+body.omnidata-v14 .sourcing-badge{
+  display:inline-flex!important;
+  min-height:22px!important;
+  align-items:center!important;
+  justify-content:center!important;
+  padding:2px 8px!important;
+  border:1px solid #dedfe2!important;
+  border-radius:999px!important;
+  background:#f5f6f7!important;
+  color:#626871!important;
+  font-size:9px!important;
+  font-weight:600!important;
+  line-height:1.2!important;
+  white-space:nowrap!important;
+}
+body.omnidata-v14 .badge.published,
+body.omnidata-v14 .badge.approved,
+body.omnidata-v14 .badge.ready,
+body.omnidata-v14 .bom-ok,
+body.omnidata-v14 .measurement-ok,
+body.omnidata-v14 .sample-ok,
+body.omnidata-v14 .sourcing-ok{border-color:#c9dccb!important;background:#f2f8f2!important;color:var(--od14-success)!important}
+body.omnidata-v14 .badge.draft,
+body.omnidata-v14 .bom-neutral,
+body.omnidata-v14 .measurement-neutral,
+body.omnidata-v14 .sample-neutral,
+body.omnidata-v14 .sourcing-neutral{border-color:#dfe1e4!important;background:#f6f7f8!important;color:#6d737c!important}
+body.omnidata-v14 .badge.cancelled,
+body.omnidata-v14 .badge.rejected,
+body.omnidata-v14 .bom-high,
+body.omnidata-v14 .measurement-high,
+body.omnidata-v14 .sample-high,
+body.omnidata-v14 .sourcing-danger{border-color:#e7c6c8!important;background:#fff5f5!important;color:var(--od14-danger)!important}
+
+body.omnidata-v14 .od13-abbr{border-bottom:1px dotted currentColor!important;text-decoration:none!important;cursor:help!important}
+body.omnidata-v14 [data-od14-untranslated="true"]{text-decoration:underline dotted rgba(173,70,75,.7)!important;text-underline-offset:3px!important}
+
+@media(max-width:1180px){
+  body.omnidata-v14 .od-master-detail,
+  body.omnidata-v14 .bom-layout,
+  body.omnidata-v14 .measurement-layout,
+  body.omnidata-v14 .sample-layout,
+  body.omnidata-v14 .sourcing-grid{grid-template-columns:minmax(0,1fr)!important}
+  body.omnidata-v14 .od-inspector,
+  body.omnidata-v14 .bom-inspector,
+  body.omnidata-v14 .measurement-inspector,
+  body.omnidata-v14 .sample-inspector,
+  body.omnidata-v14 .sourcing-inspector{position:static!important;max-height:none!important}
+}
+@media(max-width:900px){
+  body.omnidata-v14 .od14-page-header{grid-template-columns:minmax(0,1fr)!important;align-items:start!important;padding:16px!important}
+  body.omnidata-v14 .od14-page-actions{justify-content:flex-start!important}
+  body.omnidata-v14 .od-commandbar{grid-template-columns:minmax(200px,1fr) minmax(150px,190px)!important}
+  body.omnidata-v14 .od-commandbar>.button{grid-column:1/-1!important}
+  body.omnidata-v14 .global-search{max-width:300px!important}
+}
+@media(max-width:680px){
+  body.omnidata-v14 .workspace-content{padding-right:10px!important;padding-left:10px!important}
+  body.omnidata-v14 .od14-page-header{margin-top:10px!important;padding:14px!important}
+  body.omnidata-v14 .od14-page-title{font-size:20px!important}
+  body.omnidata-v14 .od14-page-description{font-size:10.5px!important}
+  body.omnidata-v14 .od-commandbar{grid-template-columns:minmax(0,1fr)!important}
+  body.omnidata-v14 .od-commandbar .od-search,
+  body.omnidata-v14 .od-commandbar .od-filter:not(.od-search){width:100%!important;max-width:none!important}
+  body.omnidata-v14 .sample-filters,
+  body.omnidata-v14 .sourcing-toolbar,
+  body.omnidata-v14 .toolbar-filters,
+  body.omnidata-v14 .filter-row,
+  body.omnidata-v14 .filters{display:grid!important;grid-template-columns:minmax(0,1fr)!important;width:100%!important}
+  body.omnidata-v14 .sample-filters select,
+  body.omnidata-v14 .sourcing-toolbar select,
+  body.omnidata-v14 .toolbar-filters select,
+  body.omnidata-v14 .filter-row select,
+  body.omnidata-v14 .filters select,
+  body.omnidata-v14 .sample-filters input[type="search"],
+  body.omnidata-v14 .sourcing-toolbar input[type="search"],
+  body.omnidata-v14 .toolbar-filters input[type="search"],
+  body.omnidata-v14 .filter-row input[type="search"],
+  body.omnidata-v14 .filters input[type="search"]{width:100%!important;max-width:none!important}
+  body.omnidata-v14 .od-definition-grid,
+  body.omnidata-v14 .bom-summary,
+  body.omnidata-v14 .measurement-summary,
+  body.omnidata-v14 .sample-summary,
+  body.omnidata-v14 .sourcing-details{grid-template-columns:minmax(0,1fr)!important}
+}

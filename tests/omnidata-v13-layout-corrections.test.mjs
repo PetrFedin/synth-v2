@@ -42,12 +42,14 @@ test('Application start performs a strict audit of remaining enum labels and com
   for(const token of ['window.I18N = window.SynthaI18n','installStrictLocaleAudit','SynthaStrictLocaleAudit','fabric: \'Ткань\'','Incoterm: \'Условие поставки\'','EXW:','FOB:','DDP:','EUR:','USD:','MutationObserver','syntha:locale-changed','Promise.resolve(boot()).finally(schedule)']) assert.ok(start.includes(token),token);
 });
 
-test('V13 remains the final delivered visual layer',async()=>{
+test('V13 remains installed as the prerequisite layer immediately before V14',async()=>{
   const html=await source('public/index.html');
   const handler=await source('src/web/static-handler.mjs');
-  assert.match(html,/meta name="syntha-build" content="visual-20260804-13"/);
+  assert.match(html,/meta name="syntha-build" content="visual-20260805-14"/);
   assert.ok(html.indexOf('/omnidata-v13.css?v=visual-20260804-13')>html.indexOf('/omnidata-v12.css?v=visual-20260804-12'));
+  assert.ok(html.indexOf('/omnidata-v14.css?v=visual-20260805-14')>html.indexOf('/omnidata-v13.css?v=visual-20260804-13'));
   assert.ok(html.indexOf('/ui/omnidata-v13.js?v=visual-20260804-13')>html.indexOf('/ui/omnidata-v12.js?v=visual-20260804-12'));
+  assert.ok(html.indexOf('/ui/omnidata-v14.js?v=visual-20260805-14')>html.indexOf('/ui/omnidata-v13.js?v=visual-20260804-13'));
   assert.ok(handler.includes("'/omnidata-v13.css': ['omnidata-v13.css'"));
   assert.ok(handler.includes("'/ui/omnidata-v13.js': ['modules/omnidata-v13.js'"));
 });

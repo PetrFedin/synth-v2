@@ -51,8 +51,8 @@ test('sourcing routes reject unsupported query fields and non-string supplier ar
   assert.throws(() => createRoute.execute({ commandId: 'cmd-2', actorId: 'actor-1', params: [], query: {}, body: { rfqCode: 'RFQ-001', sku: 'SKU-001', targetQuantity: 100, responseDueAt: '2026-09-01T00:00:00.000Z', deliveryDueAt: '2026-10-01T00:00:00.000Z', incoterm: 'FOB', supplierCodes: [{ code: 'FACTORY-A' }], notes: null } }), { code: 'HTTP_BODY_FIELD_INVALID' });
 });
 
-test('OpenAPI publishes strict supplier, quotation, award and production allocation contracts', () => {
-  assert.equal(wholesaleV2ExtendedOpenApi.info.version, '1.12.0');
+test('OpenAPI 1.14 publishes strict supplier, quotation, award and guarded production allocation contracts', () => {
+  assert.equal(wholesaleV2ExtendedOpenApi.info.version, '1.14.0');
   for (const path of ['/suppliers', '/suppliers/{supplierCode}/qualify', '/suppliers/{supplierCode}/suspend', '/rfqs', '/rfqs/{rfqCode}/quotes', '/rfqs/{rfqCode}/award', '/rfqs/{rfqCode}/allocate', '/rfqs/{rfqCode}/cancel']) assert.ok(wholesaleV2ExtendedOpenApi.paths[path], `missing OpenAPI path ${path}`);
   const quote = wholesaleV2ExtendedOpenApi.components.schemas.RfqQuoteInput;
   assert.equal(quote.additionalProperties, false);
@@ -61,5 +61,9 @@ test('OpenAPI publishes strict supplier, quotation, award and production allocat
   const allocation = wholesaleV2ExtendedOpenApi.components.schemas.RfqAllocationInput;
   assert.ok(allocation.required.includes('purchaseOrderNumber'));
   assert.ok(allocation.required.includes('productionStartAt'));
+  assert.equal(allocation.properties.techPackCode, undefined);
+  const resultAllocation = wholesaleV2ExtendedOpenApi.components.schemas.RfqAllocation;
+  assert.ok(resultAllocation.required.includes('techPackCode'));
+  assert.ok(resultAllocation.required.includes('techPackAcknowledgementReference'));
   assert.equal(wholesaleV2ExtendedOpenApi.paths['/rfqs/{rfqCode}/award'].post.parameters.some((parameter) => parameter.name === 'Idempotency-Key'), true);
 });

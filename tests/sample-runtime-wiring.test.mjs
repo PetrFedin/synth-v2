@@ -15,11 +15,12 @@ test('Node and Fetch transports compose the same Samples route registry', async 
   for (const code of ['SAMPLE_CURSOR_INVALID', 'SAMPLE_EXPECTED_VERSION_INVALID', 'SAMPLE_NOT_RECEIVED']) assert.ok(nodeHttp.includes(code), code);
 });
 
-test('PostgreSQL runtime exposes one Samples command/query service to both handlers', async () => {
-  const runtime = await source('src/runtime/postgres-runtime.mjs');
-  for (const symbol of ['createSampleService', 'createSampleQueryService', 'createPostgresSampleStore', 'createPostgresSampleReader']) assert.ok(runtime.includes(symbol), symbol);
-  assert.match(runtime, /const samples = Object\.freeze/);
-  assert.match(runtime, /transport = \{[\s\S]*?measurements, samples, partners/);
-  assert.match(runtime, /measurementStore, sampleStore/);
-  assert.match(runtime, /measurements, samples, partners/);
+test('PostgreSQL base runtime exposes one Samples command/query service and wrapper preserves it for both handlers', async () => {
+  const [base, wrapper] = await Promise.all([source('src/runtime/postgres-base-runtime.mjs'), source('src/runtime/postgres-runtime.mjs')]);
+  for (const symbol of ['createSampleService', 'createSampleQueryService', 'createPostgresSampleStore', 'createPostgresSampleReader']) assert.ok(base.includes(symbol), symbol);
+  assert.match(base, /const samples = Object\.freeze/);
+  assert.match(base, /transport = \{[\s\S]*?measurements, samples, partners/);
+  assert.match(base, /measurementStore, sampleStore/);
+  assert.match(base, /measurements, samples, partners/);
+  assert.match(wrapper, /samples: base\.samples/);
 });

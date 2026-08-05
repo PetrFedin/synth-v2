@@ -13,6 +13,7 @@ import { createSampleService } from '../src/application/sample-service.mjs';
 import { createSourcingService } from '../src/application/sourcing-service.mjs';
 import { createTechPackService } from '../src/application/tech-pack-service.mjs';
 import { createSourcingTechPackAllocationService } from '../src/application/sourcing-tech-pack-allocation-service.mjs';
+import { createProductionOrderService } from '../src/application/production-order-service.mjs';
 import { createPostgresWholesaleStore } from '../src/infrastructure/postgres-store.mjs';
 import { createPostgresCatalogStore } from '../src/infrastructure/postgres-catalog-store.mjs';
 import { createPostgresMaterialStore } from '../src/infrastructure/postgres-material-store.mjs';
@@ -22,12 +23,13 @@ import { createPostgresSampleStore } from '../src/infrastructure/postgres-sample
 import { createPostgresSourcingStore } from '../src/infrastructure/postgres-sourcing-store.mjs';
 import { createPostgresTechPackStore } from '../src/infrastructure/postgres-tech-pack-store.mjs';
 import { createPostgresSourcingTechPackAllocationStore } from '../src/infrastructure/postgres-sourcing-tech-pack-allocation-store.mjs';
+import { createPostgresProductionOrderStore } from '../src/infrastructure/postgres-production-order-store.mjs';
 import { migratePostgres } from '../src/infrastructure/postgres-migrator.mjs';
 import { createPostgresTestPool } from './postgres-test-pool.mjs';
 
 const databaseUrl = process.env.POSTGRES_TEST_URL;
 
-test('PostgreSQL closes approved PPS through supplier-acknowledged Tech Pack to guarded production allocation', { skip: !databaseUrl }, async () => {
+test('PostgreSQL closes approved PPS through acknowledged Tech Pack, allocation and confirmed Production Order', { skip: !databaseUrl }, async () => {
   const pool = createPostgresTestPool({ connectionString: databaseUrl, max: 8 });
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
   let id = 0; let tick = 0;
@@ -46,6 +48,7 @@ test('PostgreSQL closes approved PPS through supplier-acknowledged Tech Pack to 
     const sourcingStore = createPostgresSourcingStore({ pool });
     const techPackStore = createPostgresTechPackStore({ pool });
     const allocationStore = createPostgresSourcingTechPackAllocationStore({ pool });
+    const productionOrderStore = createPostgresProductionOrderStore({ pool });
     const platform = createWholesalePlatform({ store: wholesaleStore, clock, nextId });
     const catalog = createCatalogService({ wholesaleStore, catalogStore, clock, nextId });
     const materials = createMaterialService({ materialStore, clock, nextId });
@@ -55,6 +58,7 @@ test('PostgreSQL closes approved PPS through supplier-acknowledged Tech Pack to 
     const sourcingBase = createSourcingService({ sourcingStore, clock, nextId });
     const techPacks = createTechPackService({ techPackStore, clock, nextId });
     const allocation = createSourcingTechPackAllocationService({ store: allocationStore, clock, nextId });
+    const productionOrders = createProductionOrderService({ store: productionOrderStore, clock, nextId });
 
     await platform.registerOrganisation('org-create', 'system', createOrganisation({ id: 'brand-tech-gate', type: 'brand', name: 'Tech Gate Brand' }));
     await platform.grantMembership('member-owner', 'system', createMembership({ id: 'membership-owner', organisationId: 'brand-tech-gate', organisationType: 'brand', userId: 'product-owner', role: 'owner', createdAt: clock() }));
@@ -85,7 +89,6 @@ test('PostgreSQL closes approved PPS through supplier-acknowledged Tech Pack to 
     pps = await samples.startProduction('sample-production', 'product-owner', pps.sampleCode, { expectedVersion: pps.version });
     pps = await samples.receiveSample('sample-receive', 'product-owner', pps.sampleCode, { expectedVersion: pps.version, receivedQuantity: 1, condition: 'accepted', trackingReference: 'PPS-TRACK-1', notes: 'Received intact' });
     pps = await samples.decideSample('sample-approve', 'product-owner', pps.sampleCode, { expectedVersion: pps.version, decision: 'approved', notes: 'Approved for bulk production' });
-    assert.equal(pps.status, 'approved');
 
     const rfqInput = { rfqCode: 'RFQ-TECH-GATE-1', sku: sku.sku, targetQuantity: 500, responseDueAt: '2026-09-10T00:00:00.000Z', deliveryDueAt: '2026-12-01T00:00:00.000Z', incoterm: 'FOB', supplierCodes: [supplier.supplierCode], notes: 'Bulk production allocation' };
     let rfq = await sourcingBase.createRfq('rfq-create', 'product-owner', rfqInput);
@@ -95,20 +98,29 @@ test('PostgreSQL closes approved PPS through supplier-acknowledged Tech Pack to 
 
     let techPack = await techPacks.createTechPack('tech-pack-create', 'product-owner', { techPackCode: 'TP-TECH-GATE-1-R01', sku: sku.sku, supplierCode: supplier.supplierCode, supplierName: supplier.legalName, supplierEmail: supplier.email, title: 'Production Coat Tech Pack', description: 'Approved bulk-production specification', constructionNotes: 'Follow the approved seam construction and operation sequence.', qualityNotes: 'Inspect critical measurements and workmanship checkpoints.', packingNotes: 'Pack by size and colour with barcode identification.' });
     techPack = await techPacks.issueTechPack('tech-pack-issue', 'product-owner', techPack.techPackCode, { expectedVersion: techPack.version });
-    assert.equal(techPack.status, 'issued');
     const allocationInput = { expectedVersion: rfq.version, purchaseOrderNumber: 'PO-TECH-GATE-1', quantity: 500, productionStartAt: '2026-08-20T00:00:00.000Z', deliveryDueAt: '2026-11-20T00:00:00.000Z', notes: 'Capacity confirmed' };
     await assert.rejects(() => allocation.allocateRfq('rfq-allocate-before-ack', 'product-owner', rfq.rfqCode, allocationInput), { code: 'TECH_PACK_ACKNOWLEDGEMENT_REQUIRED' });
 
     techPack = await techPacks.acknowledgeTechPack('tech-pack-ack', 'product-owner', techPack.techPackCode, { expectedVersion: techPack.version, supplierCode: supplier.supplierCode, acknowledgementReference: 'FACTORY-ACK-TECH-1', acknowledgedBy: 'Mei Lin', notes: 'Current revision accepted for bulk production' });
     rfq = await allocation.allocateRfq('rfq-allocate', 'product-owner', rfq.rfqCode, allocationInput);
-    assert.equal(rfq.status, 'allocated');
-    assert.equal(rfq.allocation.techPackCode, techPack.techPackCode);
-    assert.equal(rfq.allocation.techPackVersion, techPack.version);
-    assert.equal(rfq.allocation.techPackAcknowledgementReference, 'FACTORY-ACK-TECH-1');
 
-    const row = (await pool.query('SELECT status, tech_pack_gate_enforced, tech_pack_code, tech_pack_revision, tech_pack_version, tech_pack_issued_version, tech_pack_acknowledgement_reference, payload FROM sourcing_rfqs WHERE rfq_code = $1', [rfq.rfqCode])).rows[0];
-    assert.deepEqual({ status: row.status, gate: row.tech_pack_gate_enforced, code: row.tech_pack_code, revision: row.tech_pack_revision, version: row.tech_pack_version, issuedVersion: row.tech_pack_issued_version, reference: row.tech_pack_acknowledgement_reference }, { status: 'allocated', gate: true, code: techPack.techPackCode, revision: 1, version: 3, issuedVersion: 2, reference: 'FACTORY-ACK-TECH-1' });
-    assert.equal(row.payload.allocation.techPackAcknowledgedAt, techPack.acknowledgedAt);
+    let productionOrder = await productionOrders.createFromAllocation('production-order-create', 'product-owner', rfq.rfqCode);
+    assert.equal(productionOrder.status, 'draft');
+    assert.equal(productionOrder.techPackSnapshot.techPackCode, techPack.techPackCode);
+    assert.equal(productionOrder.commercialSnapshot.totalCostMinor, rfq.award.totalCostMinor);
+    productionOrder = await productionOrders.issue('production-order-issue', 'product-owner', productionOrder.productionOrderNumber, { expectedVersion: productionOrder.version });
+    productionOrder = await productionOrders.confirm('production-order-confirm', 'product-owner', productionOrder.productionOrderNumber, { expectedVersion: productionOrder.version, supplierCode: supplier.supplierCode, confirmationReference: 'PO-CONFIRM-TECH-1', confirmedBy: 'Mei Lin', notes: 'Capacity, price and delivery dates confirmed' });
+    assert.equal(productionOrder.status, 'confirmed');
+    assert.equal(productionOrder.confirmation.issuedProductionOrderVersion, 2);
+
+    const row = (await pool.query('SELECT status, version, rfq_code, supplier_code, payload FROM production_orders WHERE production_order_number = $1', [productionOrder.productionOrderNumber])).rows[0];
+    assert.deepEqual({ status: row.status, version: row.version, rfqCode: row.rfq_code, supplierCode: row.supplier_code }, { status: 'confirmed', version: 3, rfqCode: rfq.rfqCode, supplierCode: supplier.supplierCode });
+    assert.equal(row.payload.techPackSnapshot.acknowledgementReference, 'FACTORY-ACK-TECH-1');
+    await assert.rejects(
+      () => pool.query("UPDATE production_orders SET payload = jsonb_set(payload, '{commercialSnapshot,totalCostMinor}', '1'::jsonb) WHERE production_order_number = $1", [productionOrder.productionOrderNumber]),
+      (error) => error?.code === '23514' && error?.constraint === 'production_orders_source_immutable',
+    );
+    assert.equal(pps.status, 'approved');
     assert.equal(chart.status, 'published');
     assert.equal(bom.status, 'published');
   } finally {

@@ -14,7 +14,7 @@ const dependencies = Object.freeze({
   catalogSku: sku,
   bom: Object.freeze({ id: 'bom-1', sku: sku.sku, brandId: sku.brandId, status: 'published', version: 4 }),
   measurementChart: Object.freeze({ id: 'measurement-1', sku: sku.sku, brandId: sku.brandId, status: 'published', version: 5 }),
-  approvedSample: Object.freeze({ sampleCode: 'SMP-STYLE-001-R02', sku: sku.sku, brandId: sku.brandId, status: 'approved', version: 7 }),
+  approvedSample: Object.freeze({ sampleCode: 'SMP-STYLE-001-PPS-R02', sku: sku.sku, brandId: sku.brandId, status: 'approved', sampleType: 'pre-production', supplierCode: 'FACTORY-01', version: 7 }),
 });
 const complete = Object.freeze({
   techPackCode: 'TP-STYLE-001-R01', sku: sku.sku,

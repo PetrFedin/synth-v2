@@ -130,6 +130,8 @@ function assertDependencies(techPack, { catalogSku, bom, measurementChart, appro
   invariant(bom?.sku === techPack.sku && bom.brandId === techPack.brandId && bom.status === 'published', 'TECH_PACK_BOM_NOT_PUBLISHED', 'A published BOM is required before issuing a tech pack');
   invariant(measurementChart?.sku === techPack.sku && measurementChart.brandId === techPack.brandId && measurementChart.status === 'published', 'TECH_PACK_MEASUREMENT_NOT_PUBLISHED', 'A published measurement chart is required before issuing a tech pack');
   invariant(approvedSample?.sku === techPack.sku && approvedSample.brandId === techPack.brandId && approvedSample.status === 'approved', 'TECH_PACK_SAMPLE_NOT_APPROVED', 'An approved sample is required before issuing a tech pack');
+  invariant(approvedSample.sampleType === 'pre-production', 'TECH_PACK_SAMPLE_NOT_PRE_PRODUCTION', 'An approved pre-production sample is required before issuing a tech pack', { sampleCode: approvedSample.sampleCode, sampleType: approvedSample.sampleType });
+  invariant(approvedSample.supplierCode === techPack.supplierCode, 'TECH_PACK_SAMPLE_SUPPLIER_MISMATCH', 'Approved pre-production sample must belong to the Tech Pack supplier', { sampleCode: approvedSample.sampleCode, expectedSupplierCode: techPack.supplierCode, actualSupplierCode: approvedSample.supplierCode });
 }
 function assertDocumentComplete(value) {
   invariant(value.supplierCode && value.supplierName && value.supplierEmail, 'TECH_PACK_SUPPLIER_REQUIRED', 'Supplier code, name and email are required before issue');

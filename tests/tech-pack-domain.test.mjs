@@ -22,7 +22,7 @@ const dependencies = Object.freeze({
   catalogSku: sku,
   bom: Object.freeze({ id: 'bom-1', sku: sku.sku, brandId: sku.brandId, status: 'published', version: 4 }),
   measurementChart: Object.freeze({ id: 'measurement-1', sku: sku.sku, brandId: sku.brandId, status: 'published', version: 5 }),
-  approvedSample: Object.freeze({ sampleCode: 'SMP-STYLE-001-R02', sku: sku.sku, brandId: sku.brandId, status: 'approved', version: 7 }),
+  approvedSample: Object.freeze({ sampleCode: 'SMP-STYLE-001-PPS-R02', sku: sku.sku, brandId: sku.brandId, status: 'approved', sampleType: 'pre-production', supplierCode: 'FACTORY-01', version: 7 }),
 });
 
 function draft(overrides = {}) {
@@ -36,6 +36,8 @@ test('Tech Pack issues only when all production dependencies and document sectio
   assert.equal(value.issuedBy, 'owner-1');
 
   assert.throws(() => issueTechPack(draft(), { ...dependencies, approvedSample: { ...dependencies.approvedSample, status: 'rejected' }, actorId: 'owner-1', issuedAt: '2026-08-04T16:10:00.000Z' }), { code: 'TECH_PACK_SAMPLE_NOT_APPROVED' });
+  assert.throws(() => issueTechPack(draft(), { ...dependencies, approvedSample: { ...dependencies.approvedSample, sampleType: 'fit' }, actorId: 'owner-1', issuedAt: '2026-08-04T16:10:00.000Z' }), { code: 'TECH_PACK_SAMPLE_NOT_PRE_PRODUCTION' });
+  assert.throws(() => issueTechPack(draft(), { ...dependencies, approvedSample: { ...dependencies.approvedSample, supplierCode: 'FACTORY-02' }, actorId: 'owner-1', issuedAt: '2026-08-04T16:10:00.000Z' }), { code: 'TECH_PACK_SAMPLE_SUPPLIER_MISMATCH' });
   assert.throws(() => issueTechPack(draft(), { ...dependencies, bom: { ...dependencies.bom, status: 'draft' }, actorId: 'owner-1', issuedAt: '2026-08-04T16:10:00.000Z' }), { code: 'TECH_PACK_BOM_NOT_PUBLISHED' });
   assert.throws(() => issueTechPack(draft({ packingNotes: null }), { ...dependencies, actorId: 'owner-1', issuedAt: '2026-08-04T16:10:00.000Z' }), { code: 'TECH_PACK_PACKING_NOTES_REQUIRED' });
 });

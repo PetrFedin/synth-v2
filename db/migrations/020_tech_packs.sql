@@ -86,4 +86,48 @@ CREATE INDEX IF NOT EXISTS tech_packs_sku_revision_idx
 CREATE INDEX IF NOT EXISTS tech_packs_supplier_status_idx
   ON tech_packs (brand_id, supplier_code, status, sku);
 
+CREATE OR REPLACE FUNCTION enforce_tech_pack_approved_pps_supplier()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  sample_record record;
+  sample_code text;
+BEGIN
+  IF NEW.status NOT IN ('issued','acknowledged','superseded') THEN
+    RETURN NEW;
+  END IF;
+
+  sample_code := NEW.payload #>> '{dependencySnapshot,sampleCode}';
+  IF sample_code IS NULL OR sample_code = '' THEN
+    RAISE EXCEPTION 'Issued Tech Pack requires an approved pre-production sample snapshot'
+      USING ERRCODE = '23514', CONSTRAINT = 'tech_packs_approved_pps_required';
+  END IF;
+
+  SELECT sku, brand_id, supplier_code, sample_type, status
+    INTO sample_record
+    FROM samples
+   WHERE samples.sample_code = sample_code;
+
+  IF NOT FOUND
+     OR sample_record.status <> 'approved'
+     OR sample_record.sample_type <> 'pre-production'
+     OR sample_record.sku <> NEW.sku
+     OR sample_record.brand_id <> NEW.brand_id
+     OR sample_record.supplier_code IS DISTINCT FROM NEW.supplier_code THEN
+    RAISE EXCEPTION 'Approved PPS must belong to the same SKU, brand and supplier as the Tech Pack'
+      USING ERRCODE = '23514', CONSTRAINT = 'tech_packs_approved_pps_supplier_match';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS tech_packs_approved_pps_supplier_gate ON tech_packs;
+CREATE TRIGGER tech_packs_approved_pps_supplier_gate
+BEFORE INSERT OR UPDATE OF status, supplier_code, payload
+ON tech_packs
+FOR EACH ROW
+EXECUTE FUNCTION enforce_tech_pack_approved_pps_supplier();
+
 COMMIT;

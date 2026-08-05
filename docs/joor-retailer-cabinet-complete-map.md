@@ -1,7 +1,7 @@
 # JOOR Retailer Cabinet → Syntha B2B Fashion Platform
 
 Статус: рабочая продуктовая спецификация и master map.  
-Версия: 2.9, 5 августа 2026 года.  
+Версия: 3.0, 5 августа 2026 года.  
 Назначение: определить, как Syntha должна превзойти JOOR как B2B buying platform и одновременно закрыть PLM, sourcing, costing, production, quality, logistics, wholesale и analytics.
 
 > Документ объединяет результаты read-only аудита JOOR Retailer / LITE и целевую архитектуру Syntha. Наблюдаемое в JOOR не следует считать подтверждением его закрытой внутренней реализации. Все функции, которых не было в доступном аккаунте, помечаются как TARGET или UAT.
@@ -19311,3 +19311,1388 @@ Consumer Evidence
 The strategic advantage is not the number of isolated modules. It is a shared identity, version history and evidence graph across product development, wholesale buying, samples, content, inventory and consumer fulfillment.
 
 No module may create its own incompatible truth for product, inventory, organization, price, order or outcome.
+
+## 237. Version 3.0 scope — commercial operating system beyond JOOR
+
+### 237.1 Why this version exists
+
+Versions 2.0–2.9 expanded Syntha from a JOOR-like B2B cabinet into a connected fashion platform covering planning, PLM, sourcing, ordering, production, quality, logistics, pricing, inventory, payments, traceability and circular commerce.
+
+Version 3.0 closes another structural gap: most B2B commerce products treat forecasts, agreements, supplier obligations, consignment, rebates, tax documents and recalls as external ERP/legal processes. Syntha must make them explicit, versioned and operational.
+
+Target operating loop:
+
+```text
+Commercial Agreement
+→ Joint Forecast
+→ Supplier Commit
+→ Capacity / Material Reservation
+→ Buy / VMI / Consignment Decision
+→ Fulfillment
+→ Consumption / Sell-through
+→ Rebate / Settlement / Invoice
+→ Obligation and Compliance Evidence
+→ Recall / Claim / Recovery when required
+→ Relationship Performance Review
+```
+
+### 237.2 Evidence boundary
+
+- NuORDER remains the primary direct benchmark for assortment collaboration, buying intent and retailer/brand workflow.
+- Oracle Supply Chain Collaboration is used as a benchmark for forecast sharing, supplier commits, VMI and multitier collaboration.
+- Icertis is used as a benchmark for contract lifecycle and obligation management.
+- Vistex is used as a benchmark for rebates, reimbursements, chargebacks, marketing funds and incentive agreements.
+- OpenPeppol is used as a benchmark for interoperable e-orders and e-invoices.
+- GS1 EPCIS/CBV is used as the event model benchmark for traceability and recall.
+- User-provided Omnidata PLM and Centric Software materials are treated as reference evidence for PLM, material roll-up, supplier collaboration, mobile capture, fit review and visual data workspaces.
+- JOOR status for these flows is `NOT CONFIRMED / UAT` unless separately observed. The document does not assert absence from inaccessible JOOR tiers.
+
+---
+
+## 238. Collaborative Forecast and Commitment Network
+
+### 238.1 Business purpose
+
+A wholesale order arrives too late to be the first supply signal. Syntha must support a controlled collaboration process before PO creation so that brands, retailers, suppliers and factories can align expected demand, available capacity and material risk.
+
+```text
+Retailer Demand Forecast
+→ Brand Supply Forecast
+→ Factory / Supplier Commit
+→ Exception Negotiation
+→ Approved Collaborative Plan
+→ Buying Intent / PO / Material Reservation
+```
+
+### 238.2 Canonical forecast hierarchy
+
+```text
+ForecastProgram
+→ ForecastCycle
+→ ForecastVersion
+→ ForecastSeries
+→ ForecastBucket
+→ PartnerCommitment
+→ CommitmentException
+→ Resolution
+```
+
+Dimensions:
+
+- organization and legal entity;
+- brand and retailer relationship;
+- season, collection and drop;
+- style, colorway, SKU, material or capacity family;
+- country, channel, cluster, door and fulfillment location;
+- weekly, monthly and delivery-window buckets;
+- base, upside, downside and event scenarios;
+- units, value, cost, capacity minutes and material demand;
+- confidence and data coverage.
+
+### 238.3 Forecast states
+
+```text
+DRAFT
+→ INTERNAL_REVIEW
+→ PUBLISHED_TO_PARTNER
+→ PARTNER_REVIEW
+→ COMMITTED / PARTIALLY_COMMITTED / REJECTED
+→ EXCEPTION_NEGOTIATION
+→ AGREED
+→ SUPERSEDED / CLOSED
+```
+
+A forecast is not an order. A supplier commit is not a legally binding PO unless an agreement explicitly says otherwise.
+
+### 238.4 Partner commitment fields
+
+- requested quantity/value/capacity;
+- committed quantity/value/capacity;
+- commit date and delivery bucket;
+- minimum and maximum range;
+- confidence;
+- constraint reason;
+- alternative material/factory/date;
+- MOQ and economic batch effect;
+- capacity reservation requirement;
+- price validity assumptions;
+- cancellation window;
+- owner and approver;
+- source forecast version;
+- expiration date.
+
+### 238.5 Exception types
+
+- demand exceeds supplier capacity;
+- demand below MOQ;
+- material lead time exceeds launch window;
+- price no longer valid;
+- forecast change exceeds tolerance;
+- supplier commit falls below threshold;
+- retailer forecast conflicts with OTB;
+- planned delivery conflicts with warehouse capacity;
+- currency or cost assumption changed;
+- product readiness insufficient;
+- compliance evidence missing;
+- forecast freshness SLA breached.
+
+### 238.6 Forecast consumption
+
+Syntha must show how downstream facts consume the collaborative forecast:
+
+```text
+Open Forecast
+= Agreed Forecast
+- Approved Buying Intents
+- Confirmed POs
+- Cancelled / Expired Commitments
+```
+
+The system must prevent double counting when a buying intent becomes a PO.
+
+### 238.7 Accuracy and accountability
+
+Metrics:
+
+```text
+Forecast Bias = Sum(Forecast - Actual) / Sum(Actual)
+WAPE = Sum(abs(Forecast - Actual)) / Sum(Actual)
+Commit Reliability = Delivered Against Commit / Committed Quantity
+Commit Response SLA = Partner Response Time / Agreed SLA
+Exception Resolution Time = Resolved At - Opened At
+```
+
+Accuracy must be shown by horizon, product level and partner. A forecast that was accurate only after repeated last-minute revisions must not receive the same quality score as an early accurate forecast.
+
+---
+
+## 239. Joint Business Planning workspace
+
+### 239.1 Purpose
+
+The relationship between a brand and retailer must have a shared operating plan rather than disconnected orders and messages.
+
+`JointBusinessPlan` contains:
+
+- strategic objectives;
+- annual and seasonal sales targets;
+- gross margin and intake margin targets;
+- planned receipts and inventory;
+- channel and door expansion;
+- category growth priorities;
+- exclusivity or launch commitments;
+- marketing calendar;
+- service-level commitments;
+- data-sharing rules;
+- payment and credit objectives;
+- sustainability and compliance targets;
+- action plan and owners.
+
+### 239.2 Shared versus private layers
+
+Shared:
+
+- agreed targets;
+- approved forecasts;
+- obligations;
+- actions;
+- meeting decisions;
+- performance against agreement.
+
+Retailer-private:
+
+- internal OTB;
+- internal margin floors;
+- competitor comparisons;
+- planned negotiation range.
+
+Brand-private:
+
+- factory cost;
+- internal capacity allocation;
+- other retailer commitments;
+- internal price floor.
+
+### 239.3 Business review cadence
+
+- weekly exception review;
+- monthly operational review;
+- seasonal line review;
+- quarterly business review;
+- annual agreement renewal.
+
+Every review must freeze a versioned snapshot of metrics and decisions. Later data corrections cannot silently rewrite what participants saw at the meeting.
+
+---
+
+## 240. Vendor-Managed Inventory and consignment operating model
+
+### 240.1 Distinct models
+
+Syntha must keep these models separate:
+
+| Model | Inventory owner before sale/consumption | Who plans replenishment | Settlement trigger |
+|---|---|---|---|
+| Wholesale | Retailer | Retailer or shared | Receipt/invoice terms |
+| VMI, retailer-owned | Retailer | Supplier | Receipt/invoice terms |
+| Consignment | Supplier | Retailer or supplier | Consumption/sale |
+| VMI + consignment | Supplier | Supplier | Consumption/sale |
+| Dropship | Supplier | Supplier | Customer shipment/delivery |
+
+### 240.2 Consignment agreement
+
+`ConsignmentAgreement` fields:
+
+- supplier and buyer entities;
+- covered products and locations;
+- ownership-transfer event;
+- valuation method;
+- settlement price and price version;
+- consumption reporting frequency;
+- shrink and damage responsibility;
+- return and aging policy;
+- markdown authority;
+- inventory count cadence;
+- insurance responsibility;
+- tax and e-invoice treatment;
+- replenishment policy;
+- minimum/maximum stock;
+- termination and stock disposition rules.
+
+### 240.3 Inventory ownership ledger
+
+Every stock unit or quantity bucket must expose:
+
+- physical custodian;
+- legal owner;
+- financial owner;
+- planning owner;
+- risk-of-loss owner;
+- sellable status;
+- settlement status;
+- location;
+- lot/serial where available.
+
+Physical possession does not imply ownership.
+
+### 240.4 Consumption advice
+
+```text
+Inventory Event
+→ Consumption Candidate
+→ Validation
+→ Consumption Advice
+→ Supplier Acknowledgement
+→ Invoice / Self-bill
+→ Payment
+→ Reconciliation
+```
+
+Consumption can originate from:
+
+- POS sale;
+- e-commerce shipment;
+- internal use;
+- sample conversion;
+- damage or shrink where contractually billable;
+- ownership transfer;
+- manual adjustment with approval.
+
+### 240.5 VMI replenishment policy
+
+- min/max;
+- reorder point;
+- target weeks of supply;
+- service-level target;
+- presentation minimum;
+- forecast-based target;
+- one-for-one replacement;
+- seasonal ramp-up/ramp-down;
+- event or launch override;
+- supplier capacity constraint;
+- retailer OTB or exposure ceiling.
+
+Suppliers may propose replenishment, but retailer policy determines whether a request is auto-approved, requires review or is blocked.
+
+### 240.6 Reconciliation
+
+Required comparisons:
+
+```text
+Opening Stock
++ Receipts
+- Sales / Consumption
+- Returns to Supplier
+- Write-offs
++ Adjustments
+= Expected Closing Stock
+```
+
+Expected closing stock must reconcile with retailer count, supplier ledger and financial settlement. Differences create a `ConsignmentDiscrepancy` with evidence, owner and financial exposure.
+
+---
+
+## 241. Contract Lifecycle Management for fashion trade relationships
+
+### 241.1 Contract hierarchy
+
+```text
+Master Agreement
+→ Territory / Channel Addendum
+→ Season Terms
+→ Price List / Rebate Program
+→ Purchase Order
+→ Amendment
+→ Claim / Settlement
+```
+
+### 241.2 Contract lifecycle
+
+```text
+REQUESTED
+→ DRAFTING
+→ INTERNAL_REVIEW
+→ COUNTERPARTY_NEGOTIATION
+→ APPROVAL
+→ SIGNATURE
+→ ACTIVE
+→ AMENDED / SUSPENDED
+→ EXPIRING
+→ RENEWED / TERMINATED / EXPIRED
+```
+
+### 241.3 Clause library
+
+Controlled clause categories:
+
+- territory and channel rights;
+- exclusivity;
+- price and currency;
+- payment terms;
+- credit and security;
+- MOQ/MOV;
+- forecasts and commitments;
+- cancellation;
+- delivery windows;
+- quality and inspection;
+- product compliance;
+- sustainability evidence;
+- IP, imagery and content rights;
+- data sharing and AI use;
+- confidentiality;
+- returns and claims;
+- rebates and marketing funds;
+- consignment/VMI;
+- recalls;
+- audit rights;
+- governing law and dispute resolution;
+- termination and post-termination obligations.
+
+### 241.4 Contract-to-system policy compilation
+
+Approved clauses must generate executable controls where possible:
+
+```text
+Signed Clause
+→ Structured Term
+→ Policy Rule
+→ Transaction Validation
+→ Evidence
+```
+
+Examples:
+
+- exclusivity clause → assortment/territory conflict check;
+- credit clause → order credit policy;
+- delivery SLA → shipment exception threshold;
+- rebate clause → accrual rule;
+- data-sharing clause → feed permissions;
+- return window → RMA eligibility;
+- compliance clause → product readiness gate.
+
+A human-readable contract remains authoritative. A compiled rule must always reference the exact clause and contract version.
+
+---
+
+## 242. Obligation and deliverable management
+
+### 242.1 Obligation entity
+
+`ContractObligation` fields:
+
+- contract and clause reference;
+- obligation type;
+- obligated party;
+- beneficiary;
+- owner and approver;
+- trigger event;
+- due date or recurrence;
+- grace period;
+- required evidence;
+- monetary exposure;
+- severity;
+- fulfillment criteria;
+- waiver policy;
+- status and history.
+
+### 242.2 Lifecycle
+
+```text
+IDENTIFIED
+→ ASSIGNED
+→ SCHEDULED
+→ IN_PROGRESS
+→ EVIDENCE_SUBMITTED
+→ VERIFIED
+→ FULFILLED
+```
+
+Alternative states:
+
+```text
+ON_HOLD / WAIVED / BREACHED / DISPUTED / REMEDIATION / CANCELLED
+```
+
+### 242.3 Fashion-specific obligations
+
+- provide seasonal line by agreed date;
+- deliver samples before market appointment;
+- publish approved imagery;
+- maintain inventory feed SLA;
+- meet launch delivery window;
+- keep minimum stock;
+- provide lab tests and certificates;
+- maintain MAP/RRP policy;
+- fund campaign or markdown allowance;
+- provide sell-through data;
+- complete corrective action;
+- submit ASN before shipment;
+- maintain insurance;
+- provide recall response within SLA;
+- remove expired content claim;
+- destroy or return confidential samples.
+
+### 242.4 Breach impact
+
+A breach can trigger:
+
+- alert and remediation plan;
+- approval hold;
+- shipment hold;
+- order suspension;
+- credit hold;
+- financial deduction;
+- rebate forfeiture;
+- claim;
+- contract escalation;
+- supplier/retailer score impact.
+
+No irreversible action may execute solely from an AI-extracted obligation without human validation.
+
+---
+
+## 243. Rebate, allowance and commercial fund engine
+
+### 243.1 Program types
+
+- volume rebate;
+- growth rebate;
+- sell-through rebate;
+- early-order discount;
+- prompt-payment discount;
+- markdown support;
+- marketing development fund;
+- co-op advertising;
+- new-store opening allowance;
+- listing/onboarding fee;
+- freight allowance;
+- returns allowance;
+- defective-product allowance;
+- data-sharing incentive;
+- sustainability-performance incentive;
+- loyalty or tier rebate;
+- royalty/licensing fee.
+
+### 243.2 Rebate program structure
+
+`CommercialProgram` contains:
+
+- agreement and version;
+- payer and beneficiary;
+- eligible products, accounts and territories;
+- effective period;
+- calculation basis;
+- thresholds and tiers;
+- rate or fixed amount;
+- inclusion/exclusion rules;
+- stacking priority;
+- accrual timing;
+- claim requirement;
+- evidence requirement;
+- settlement method;
+- cap/floor;
+- currency and FX rule;
+- tax treatment;
+- reversal/clawback rule.
+
+### 243.3 Calculation examples
+
+```text
+Volume Rebate
+= Eligible Net Sales × Applicable Tier Rate
+
+Growth Rebate
+= max(0, Current Eligible Sales - Baseline Sales) × Growth Rate
+
+Markdown Support
+= Eligible Marked-down Units × Approved Support per Unit
+
+Marketing Fund Available
+= Earned Fund + Manual Credits - Approved Claims - Expired Amount
+```
+
+The system must define whether returns, cancellations, tax, freight, discounts and credit notes reduce the basis.
+
+### 243.4 Accrual and settlement
+
+```text
+Program Activated
+→ Eligible Transaction Posted
+→ Accrual Calculated
+→ Period Estimate
+→ Partner Statement
+→ Claim / Auto-settlement
+→ Validation
+→ Credit Note / Invoice / Payment
+→ Reconciliation
+→ Close
+```
+
+Estimated accrual, approved liability and settled amount are separate states.
+
+### 243.5 Dispute workflow
+
+- transaction-level drill-down;
+- rule version used;
+- excluded transaction reason;
+- supporting documents;
+- counterparty response;
+- partial acceptance;
+- credit note or correction;
+- audit trail;
+- impact on net-net margin.
+
+---
+
+## 244. Net-net profitability and commercial waterfall
+
+Syntha must calculate profitability after all commercial programs, not only wholesale price minus product cost.
+
+```text
+Gross Invoice Revenue
+- Line Discounts
+- Returns and Cancellations
+- Rebates and Allowances
+- Markdown Support
+- Marketing Funds
+- Commissions
+- Payment and Financing Cost
+- Freight and Fulfillment
+- Quality Claims and Chargebacks
+- Tax Leakage / FX Variance
+= Net-Net Revenue
+
+Net-Net Margin
+= Net-Net Revenue - Landed Cost - Service Cost
+```
+
+Required views:
+
+- planned versus accrued versus settled;
+- by brand, retailer, agreement, season, product and channel;
+- controllable versus contractual cost;
+- margin before and after rebate;
+- profitability by relationship;
+- lost value due to missed claims or expired funds.
+
+---
+
+## 245. Structured e-invoicing and fiscal compliance network
+
+### 245.1 Principle
+
+A PDF invoice is a visual document, not sufficient structured e-invoice data. Syntha must support country- and network-specific structured formats while retaining a human-readable rendering.
+
+### 245.2 E-invoice profile
+
+`EInvoiceComplianceProfile` fields:
+
+- seller and buyer tax jurisdictions;
+- B2B/B2G/export scope;
+- mandatory start date;
+- document format;
+- network or government portal;
+- real-time clearance versus post-audit;
+- required identifiers;
+- tax codes;
+- signature/seal requirements;
+- reporting deadline;
+- archiving period and location;
+- cancellation/correction method;
+- permitted currencies and rounding;
+- service provider/access point;
+- evidence and acknowledgement requirements.
+
+### 245.3 Processing lifecycle
+
+```text
+Invoice Draft
+→ Commercial Validation
+→ Tax Validation
+→ Format Transformation
+→ Network Submission
+→ Technical Acknowledgement
+→ Fiscal Clearance / Acceptance
+→ Buyer Delivery
+→ Buyer Business Response
+→ Accounting Posting
+→ Payment
+→ Archive
+```
+
+Error states must distinguish:
+
+- syntax rejected;
+- tax validation failed;
+- recipient not reachable;
+- duplicate invoice;
+- clearance timeout;
+- buyer business rejection;
+- accounting mismatch;
+- cancelled/superseded.
+
+### 245.4 Peppol-style interoperability
+
+Syntha should implement a provider-neutral adapter model:
+
+```text
+Syntha Canonical Invoice
+→ Country/Network Profile
+→ Access Point / Service Provider
+→ Recipient Access Point
+→ Recipient System
+```
+
+One canonical invoice model must support multiple delivery networks without contaminating business logic with provider-specific fields.
+
+### 245.5 Invoice corrections
+
+Never mutate a fiscally issued invoice. Use:
+
+- credit note;
+- debit note;
+- corrected invoice;
+- cancellation message where legally supported;
+- reference to original fiscal document and clearance ID.
+
+---
+
+## 246. Product incident, withdrawal and recall control tower
+
+### 246.1 Incident sources
+
+- failed lab test;
+- production defect;
+- consumer complaint;
+- retailer return cluster;
+- regulatory notice;
+- supplier notification;
+- incorrect label or composition;
+- chemical restriction violation;
+- counterfeit/authenticity issue;
+- packaging safety issue;
+- data or claim error;
+- cyber compromise of serialized identities.
+
+### 246.2 Incident scope resolution
+
+```text
+Material Lot
+→ Production Batch
+→ SKU / Serialized Items
+→ Shipment / Container
+→ Retailer / Location
+→ Sale / Customer where legally permitted
+```
+
+The system must support batch-level and serialized scope. When identification is only class-level, uncertainty must be shown rather than hidden.
+
+### 246.3 Recall lifecycle
+
+```text
+SIGNAL
+→ TRIAGE
+→ INVESTIGATION
+→ SCOPE_CONFIRMED
+→ DECISION
+→ NOTIFICATION
+→ QUARANTINE / STOP_SALE
+→ RECOVERY
+→ DISPOSITION
+→ REGULATORY_CLOSE
+→ ROOT_CAUSE / CAPA
+→ CLOSED
+```
+
+### 246.4 Recall actions
+
+- stop sale by channel/location;
+- block replenishment and order release;
+- quarantine warehouse and store stock;
+- notify retailers, suppliers and logistics partners;
+- consumer communication where required;
+- generate item/location target lists;
+- receive acknowledgement;
+- track recovered, sold, consumed, destroyed and unresolved units;
+- create return labels and reverse logistics;
+- issue refund/credit;
+- create supplier recovery claim;
+- update DPP and serialized item status;
+- preserve regulatory evidence.
+
+### 246.5 Recall effectiveness
+
+```text
+Recovery Rate
+= Recovered Affected Units / Recoverable Affected Units
+
+Notification Coverage
+= Acknowledged Target Parties / Total Target Parties
+
+Time to Containment
+= First Effective Stop Action - Incident Confirmed At
+
+Traceability Completeness
+= Units with Resolved Location / Affected Units
+```
+
+### 246.6 Mock recall
+
+Syntha must support scheduled simulations without triggering real customer communications or stock blocks. Results must expose missing events, unresponsive partners, unresolved inventory and time-to-scope.
+
+---
+
+## 247. GS1 EPCIS-compatible event model
+
+### 247.1 Event dimensions
+
+Every traceability event answers:
+
+- **What** object, lot, logistic unit or serialized item;
+- **When** event and record time;
+- **Where** read point and business location;
+- **Why** business step and disposition;
+- **How** sensor or condition data where relevant.
+
+### 247.2 Event types
+
+- object event;
+- aggregation event;
+- transformation event;
+- transaction event;
+- association event.
+
+Fashion examples:
+
+- material batch commissioned;
+- fabric rolls aggregated on pallet;
+- material lots transformed into garment batch;
+- cartons linked to ASN/PO;
+- serialized item received in store;
+- item sold, returned, repaired, resold or recycled.
+
+### 247.3 Correction rule
+
+Historical traceability events are append-only. A correction must create a subsequent corrective event referencing the original; it must not silently delete physical history.
+
+### 247.4 Interoperability identifiers
+
+- GTIN;
+- GLN;
+- SSCC;
+- lot/batch;
+- serial/EPC;
+- GDTI/document identifiers;
+- internal IDs with explicit mapping.
+
+---
+
+## 248. Centric-inspired material roll-up and material sourcing
+
+### 248.1 Reference capability
+
+The user-provided Centric materials describe:
+
+- material usage across product lines and seasons;
+- aggregation to avoid under/over-purchase;
+- material data sheets;
+- lap dip/bulk dip/color assignments;
+- seasonal material roll-up;
+- material RFQ independent of styles;
+- material-process tracking in calendars;
+- supplier-quoted item-level costs and supplier portal collaboration.
+
+### 248.2 SYNTHA TARGET — Material Demand Control Tower
+
+```text
+Approved BOM Demand
++ Forecast / Intent Demand
++ Sample Demand
++ Safety and Waste Allowance
+- Available Material Stock
+- Reserved Stock
+- Valid Supplier Commitments
+= Net Material Requirement
+```
+
+Views:
+
+- material × color × supplier × season;
+- raw requirement versus yield-adjusted requirement;
+- confirmed versus at-risk demand;
+- deadstock and reuse opportunities;
+- shared material impact across multiple styles;
+- minimum dye lot and MOQ gaps;
+- late material effect on styles and orders;
+- material price exposure by currency.
+
+### 248.3 Material RFQ independent of style
+
+The sourcing team can negotiate strategic material capacity before final style allocation.
+
+`MaterialRFQ` includes:
+
+- material specification/version;
+- forecast volume bands;
+- colors and testing requirements;
+- delivery windows;
+- supplier capacity;
+- MOQ and minimum dye lot;
+- sample/production price;
+- lead time;
+- payment and incoterms;
+- validity;
+- certification and traceability requirements;
+- reservation fee;
+- price-index linkage.
+
+### 248.4 Material reservation ledger
+
+Reservations must distinguish:
+
+- forecast reservation;
+- paid capacity reservation;
+- physical stock allocation;
+- supplier soft commitment;
+- PO-backed hard commitment;
+- released or expired reservation.
+
+---
+
+## 249. Mobile Capture and Fit Review
+
+### 249.1 Mobile Capture
+
+Based on the user-provided Centric reference, Syntha needs a native/mobile-web capture workflow for teams away from desks.
+
+Capabilities:
+
+- search or scan style/material/sample/item;
+- capture photo/video;
+- crop and annotate;
+- identify color card or scale reference;
+- record location, device time and user;
+- attach directly to canonical entity;
+- offline queue with encrypted storage;
+- duplicate detection;
+- upload quality and resolution rules;
+- consent/privacy controls for people in images.
+
+### 249.2 Fit Review app
+
+- open assigned sample evaluation;
+- display target, tolerance, previous actual and proposed revision;
+- enter actual measurements;
+- voice/text notes;
+- photo annotation by point of measure;
+- approve/reject/request revision;
+- create measurement-chart proposal;
+- publish background sync;
+- retain draft offline;
+- capture reviewer, date, sample unit and version.
+
+### 249.3 Guardrails
+
+- mobile review cannot overwrite approved measurement chart without workflow;
+- offline edits require conflict resolution;
+- unit of measure must be explicit;
+- values outside plausible limits require confirmation;
+- every published value references sample version and physical unit.
+
+---
+
+## 250. Live Visual Operating Boards
+
+### 250.1 Beyond static moodboards
+
+The user-provided Centric reference describes visual boards connected to PLM, ERP and PIM data, with visual assortment slicing and go-to-market outputs. Syntha should implement a governed, real-time visual workspace rather than image-only boards.
+
+### 250.2 Board modes
+
+- concept and inspiration;
+- color/material direction;
+- line architecture;
+- assortment by delivery/channel/door;
+- sample review;
+- market appointment;
+- range review;
+- pricing and margin review;
+- launch readiness;
+- issue war room.
+
+### 250.3 Data-bound objects
+
+A visual card is a projection of a canonical entity, not a copied image.
+
+It can show:
+
+- style/colorway/SKU;
+- placeholder/SMU;
+- target and actual metrics;
+- readiness;
+- cost and margin with permission;
+- order intent;
+- sample status;
+- delivery risk;
+- inventory/sell-through;
+- comments and decisions.
+
+### 250.4 Board snapshots
+
+- live mode for current data;
+- frozen review snapshot;
+- approved assortment baseline;
+- presentation/public export projection;
+- difference view between snapshots.
+
+### 250.5 Go-to-market generation
+
+From an approved board Syntha can generate:
+
+- linesheet;
+- showroom chapter;
+- buyer presentation;
+- PPT/PDF export;
+- retailer-specific assortment proposal;
+- product-content request;
+- order-intent draft;
+- launch task plan.
+
+Generated output must retain source version and permissions.
+
+---
+
+## 251. Product and collection readiness score
+
+The Omnidata reference structures PLM across planning, product design, supplier/production and order management, including BOM, BOL, measurement charts, samples, tech packs, supplier quotation, production status, delivery and QC. Syntha should convert this into a measurable readiness framework.
+
+### 251.1 Readiness domains
+
+```text
+Design Readiness
+Technical Readiness
+Material Readiness
+Cost Readiness
+Sample and Fit Readiness
+Compliance Readiness
+Commercial Content Readiness
+Wholesale Readiness
+Production Readiness
+Channel Readiness
+```
+
+### 251.2 Rule examples
+
+- approved colorway but unapproved material color → blocked;
+- wholesale price exists but cost version expired → warning/block by policy;
+- tech pack generated from superseded BOM → blocked;
+- order intent references unavailable size range → blocked;
+- shipment planned before final inspection → exception;
+- sustainability claim lacks current evidence → blocked from publication;
+- product image missing for retailer-required angle → channel not ready.
+
+### 251.3 Score versus gate
+
+A score summarizes completeness. A gate decides whether an action is permitted. A high average score cannot override one critical missing compliance requirement.
+
+---
+
+## 252. Unified exception and commitment workbench
+
+Operators need one queue for mismatches across forecasts, contracts, inventory and finance.
+
+Exception categories:
+
+- forecast/commit mismatch;
+- capacity/material shortage;
+- contract obligation overdue;
+- consignment discrepancy;
+- rebate accrual anomaly;
+- invoice network rejection;
+- recall acknowledgement overdue;
+- traceability gap;
+- product readiness failure;
+- partner data SLA breach.
+
+Workspace fields:
+
+- severity and financial exposure;
+- affected entities;
+- root data facts;
+- policy or contract rule;
+- owner and due date;
+- proposed actions;
+- human decision;
+- evidence;
+- resolution;
+- recurrence detection.
+
+AI may summarize and rank exceptions but cannot fabricate missing facts or close an exception without permitted evidence.
+
+---
+
+## 253. New canonical entities
+
+```text
+ForecastProgram
+ForecastCycle
+ForecastVersion
+ForecastSeries
+ForecastBucket
+PartnerCommitment
+CommitmentException
+JointBusinessPlan
+BusinessReviewSnapshot
+ConsignmentAgreement
+ConsignedInventoryBalance
+InventoryOwnershipRecord
+ConsumptionAdvice
+ConsignmentDiscrepancy
+VMIReplenishmentPolicy
+VMIReplenishmentRequest
+CommercialContract
+ContractClause
+StructuredCommercialTerm
+ContractAmendment
+ContractObligation
+ObligationFulfillment
+ObligationWaiver
+CommercialProgram
+CommercialProgramTier
+ProgramEligibilityRule
+CommercialAccrual
+ProgramClaim
+ProgramSettlement
+EInvoiceComplianceProfile
+EInvoiceSubmission
+FiscalAcknowledgement
+ProductIncident
+RecallCase
+RecallScope
+RecallTarget
+RecallAction
+RecallAcknowledgement
+RecallRecovery
+MockRecall
+EPCISEvent
+MaterialDemandSnapshot
+MaterialRFQ
+MaterialQuote
+MaterialReservation
+MobileCaptureAsset
+FitReviewSession
+VisualOperatingBoard
+BoardSnapshot
+ReadinessGate
+CommitmentExceptionCase
+```
+
+---
+
+## 254. New routes
+
+```text
+/collaboration/forecasts
+/collaboration/forecasts/:forecastId
+/collaboration/commitments
+/collaboration/exceptions
+/relationships/:relationshipId/joint-plan
+/relationships/:relationshipId/business-reviews
+/inventory/consignment
+/inventory/consignment/agreements
+/inventory/vmi
+/contracts
+/contracts/:contractId
+/contracts/:contractId/obligations
+/commercial-programs
+/commercial-programs/:programId/accruals
+/commercial-programs/:programId/claims
+/finance/e-invoicing
+/finance/e-invoicing/compliance-profiles
+/quality/incidents
+/quality/recalls
+/quality/recalls/:recallId
+/traceability/events
+/materials/demand-control-tower
+/materials/rfq
+/mobile/capture
+/mobile/fit-review
+/boards
+/readiness/control-tower
+/exceptions/commitments
+```
+
+---
+
+## 255. New API outline
+
+```text
+POST   /api/v1/forecast-programs
+POST   /api/v1/forecast-versions/:id/publish
+POST   /api/v1/partner-commitments
+POST   /api/v1/partner-commitments/:id/respond
+POST   /api/v1/commitment-exceptions/:id/resolve
+POST   /api/v1/joint-business-plans
+POST   /api/v1/business-reviews/:id/freeze
+POST   /api/v1/consignment-agreements
+POST   /api/v1/consumption-advices
+POST   /api/v1/vmi-replenishment-requests
+POST   /api/v1/contracts
+POST   /api/v1/contracts/:id/compile-terms
+POST   /api/v1/obligations/:id/submit-evidence
+POST   /api/v1/commercial-programs
+POST   /api/v1/commercial-programs/:id/calculate-accruals
+POST   /api/v1/program-claims
+POST   /api/v1/e-invoices/:id/submit
+POST   /api/v1/e-invoices/:id/correct
+POST   /api/v1/product-incidents
+POST   /api/v1/recalls/:id/confirm-scope
+POST   /api/v1/recalls/:id/activate
+POST   /api/v1/recalls/:id/run-mock
+POST   /api/v1/epcis/events
+GET    /api/v1/epcis/events/query
+POST   /api/v1/material-rfqs
+POST   /api/v1/material-reservations
+POST   /api/v1/mobile-captures
+POST   /api/v1/fit-reviews/:id/publish
+POST   /api/v1/boards/:id/freeze
+GET    /api/v1/readiness/:entityType/:entityId
+```
+
+All mutations require tenant context, permission, idempotency where applicable and audit metadata.
+
+---
+
+## 256. New domain events
+
+```text
+forecast_version_published
+partner_commitment_submitted
+partner_commitment_revised
+commitment_exception_opened
+commitment_exception_resolved
+joint_business_plan_approved
+business_review_snapshot_frozen
+consignment_stock_received
+consigned_inventory_consumed
+consumption_advice_issued
+consignment_discrepancy_opened
+vmi_replenishment_requested
+contract_signed
+contract_term_compiled
+contract_amended
+obligation_due
+obligation_fulfilled
+obligation_breached
+commercial_accrual_calculated
+program_claim_submitted
+program_claim_settled
+einvoice_submitted
+einvoice_fiscally_accepted
+einvoice_rejected
+product_incident_opened
+recall_scope_confirmed
+recall_activated
+recall_target_acknowledged
+recall_unit_recovered
+mock_recall_completed
+epcis_event_captured
+material_demand_snapshot_certified
+material_reservation_created
+mobile_capture_uploaded
+fit_review_published
+board_snapshot_frozen
+readiness_gate_failed
+```
+
+---
+
+## 257. UAT scenarios for version 3.0
+
+1. Retailer publishes a forecast; brand sees only shared dimensions and not internal OTB.
+2. Supplier partially commits due to capacity and proposes a later delivery.
+3. Buyer accepts only part of the counterproposal; agreed version remains immutable.
+4. Buying intent converts to PO without double-counting forecast consumption.
+5. Forecast revision above tolerance opens an exception.
+6. Joint business review freezes metrics while later data corrections remain visible separately.
+7. VMI supplier proposes replenishment above retailer exposure ceiling; request is blocked.
+8. Consigned stock is received without ownership transfer.
+9. POS sale creates consumption advice and later supplier invoice.
+10. Physical count exposes consignment shrink and opens discrepancy.
+11. Agreement terminates with residual consigned stock; disposition workflow is required.
+12. Signed exclusivity term blocks conflicting retailer/product assignment.
+13. Contract amendment changes delivery SLA only for future orders.
+14. Obligation evidence is rejected and due date remains open.
+15. AI extracts an obligation but human review is required before activation.
+16. Volume rebate crosses a tier; accrual recalculates with versioned basis.
+17. Return posted after period close creates a rebate reversal in next period.
+18. Marketing-fund claim exceeds available earned balance.
+19. Partner disputes excluded sales and sees exact eligibility-rule reason.
+20. Structured invoice passes business validation but fails network syntax validation.
+21. Fiscal acknowledgement is received but buyer later rejects quantity mismatch.
+22. Correction creates credit/debit document rather than editing issued invoice.
+23. Product incident traces one material lot into multiple production batches.
+24. Recall stop-sale reaches warehouse and stores; acknowledgements are monitored.
+25. Serialized and non-serialized recall scope show different confidence.
+26. Mock recall identifies a retailer feed gap without sending real notification.
+27. Incorrect EPCIS event is corrected by append-only corrective event.
+28. Material roll-up detects MOQ gap across styles and suggests consolidation.
+29. Material reservation expires and releases demand back to sourcing.
+30. Mobile capture uploads after offline period and detects a newer conflicting asset.
+31. Fit review cannot overwrite approved chart without change request.
+32. Frozen visual board retains old prices while live board shows current values.
+33. Board export hides cost/margin for external buyer role.
+34. Readiness score is high but critical compliance gate blocks publish.
+35. Commitment workbench groups repeated supplier short-commit exceptions.
+36. Cross-tenant contract, forecast and recall data remain isolated.
+
+---
+
+## 258. Updated competitive gap matrix
+
+| Capability | Benchmark | JOOR evidence status | Syntha target | Priority |
+|---|---|---|---|---|
+| Forecast sharing and supplier commits | Oracle SCC | NOT CONFIRMED | Versioned collaborative forecast network | P1 |
+| Joint business planning | Enterprise retail practice | NOT CONFIRMED | Shared plan with private data layers | P1 |
+| VMI replenishment | Oracle | NOT CONFIRMED | Supplier proposals with retailer policy control | P1 |
+| Consignment ownership and pay-on-use | Oracle | NOT CONFIRMED | Ownership ledger + consumption settlement | P1 |
+| Contract lifecycle management | Icertis | NOT CONFIRMED | Contract hierarchy, clauses and amendments | P1 |
+| Contract obligations | Icertis | NOT CONFIRMED | Obligation evidence, breach and remediation | P1 |
+| Rebate and allowance management | Vistex | NOT CONFIRMED | Program, accrual, claim and settlement engine | P1 |
+| Net-net margin | Vistex / enterprise practice | NOT CONFIRMED | Full commercial waterfall | P1 |
+| Interoperable e-invoicing | OpenPeppol | NOT CONFIRMED | Canonical invoice + country/network adapters | P1 |
+| Recall and event traceability | GS1 EPCIS | NOT CONFIRMED | Batch/serial recall control tower | P1 |
+| Material seasonal roll-up | Centric reference | NOT CONFIRMED | Net material requirement and consolidation | P1 |
+| Material RFQ independent of style | Centric reference | NOT CONFIRMED | Strategic material sourcing and reservation | P2 |
+| Mobile product/material capture | Centric reference | NOT CONFIRMED | Offline governed capture | P2 |
+| Mobile fit review | Centric reference | NOT CONFIRMED | Sample measurement and review app | P2 |
+| Live data-bound visual boards | Centric reference | PARTIAL/GATED | Governed real-time operating boards | P1 |
+| Cross-domain readiness gates | Omnidata/Centric reference | NOT CONFIRMED | Product/collection readiness control tower | P0 |
+
+---
+
+## 259. Updated delivery priorities
+
+### P0 — transactional and readiness foundation
+
+1. Canonical relationship/agreement IDs.
+2. Readiness gates connected to product, content, order and shipment.
+3. Append-only audit/event model.
+4. Inventory ownership fields.
+5. Canonical invoice and correction model.
+
+### P1 — relationship and commercial operations
+
+1. Collaborative forecasts and partner commitments.
+2. Joint Business Plan and business-review snapshots.
+3. VMI/consignment agreement and consumption advice.
+4. Contract lifecycle and obligation management.
+5. Commercial program, accrual and claim engine.
+6. Net-net profitability.
+7. Structured e-invoice adapters.
+8. Product incident and recall control tower.
+9. Material demand control tower.
+10. Live data-bound visual boards.
+
+### P2 — field execution and optimization
+
+1. Material RFQ and capacity reservations.
+2. Mobile Capture.
+3. Mobile Fit Review.
+4. Mock recall automation.
+5. Forecast and commitment optimization.
+6. Automated contract-term compilation with human review.
+
+### P3 — network intelligence
+
+1. Cross-partner forecast benchmarking with privacy controls.
+2. Relationship health scoring.
+3. Rebate leakage detection.
+4. Recall propagation simulation.
+5. Supplier commitment-risk prediction.
+6. Autonomous recommendations that remain approval-bound.
+
+---
+
+## 260. Official and reference source register for version 3.0
+
+### Public official sources
+
+- Oracle Supply Chain Collaboration: https://www.oracle.com/scm/supply-chain-planning/supply-chain-collaboration/
+- Oracle Consigned Inventory: https://docs.oracle.com/en/cloud/saas/supply-chain-and-manufacturing/25d/faims/consigned-inventory.html
+- Oracle Vendor-Managed Inventory: https://docs.oracle.com/en/cloud/saas/supply-chain-and-manufacturing/25c/faims/overview-of-vendor-managed-inventory.html
+- Icertis Contract Lifecycle Management: https://www.icertis.com/learn/what-is-contract-lifecycle-management/
+- Vistex Rebates and Reimbursements: https://www.vistex.com/solutions/sap-margin-optimization-solutions/rebates-reimbursements/
+- OpenPeppol: https://peppol.org/about/
+- GS1 EPCIS and CBV: https://www.gs1.org/standards/epcis
+- GS1 Global Traceability Standard: https://www.gs1.org/standards/gs1-global-traceability-standard/current-standard
+
+### User-provided reference sources
+
+- `Omnidata.PLM Fashion 2026-сжатый(1).pdf`
+- `Centric Software x Mercury - Offer.pdf`
+
+The user-provided files are reference material and may contain vendor claims, confidential/commercial details or dated statements. Syntha product requirements derived from them must be validated independently before procurement or public competitive claims.
+
+---
+
+## 261. Version 3.0 product decision
+
+Syntha must not stop at connecting a buyer to a brand and converting a linesheet into an order. The platform must manage the economic and operational commitments that determine whether the relationship is actually profitable and reliable.
+
+Final operating model:
+
+```text
+Plan Together
+→ Commit Explicitly
+→ Contract and Govern
+→ Source and Reserve
+→ Order / Consign / Replenish
+→ Trace and Fulfill
+→ Invoice and Settle
+→ Measure Obligations and Net-Net Margin
+→ Resolve Incidents and Recover Value
+→ Improve the Next Plan
+```
+
+The decisive advantage over a conventional B2B wholesale portal is not the number of screens. It is the preservation of one explainable chain from intention and contract to physical event, financial outcome and partner accountability.

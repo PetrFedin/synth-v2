@@ -38,13 +38,24 @@ test('default runtime ids remain unique within a production process', () => {
   assert.equal(values.size, 1000);
 });
 
-test('PostgreSQL runtime injects one shared generator into every id-producing service', async () => {
+test('PostgreSQL base runtime injects one shared generator into every id-producing base service', async () => {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-  const source = await readFile(path.join(root, 'src', 'runtime', 'postgres-runtime.mjs'), 'utf8');
+  const source = await readFile(path.join(root, 'src', 'runtime', 'postgres-base-runtime.mjs'), 'utf8');
   assert.match(source, /const runtimeNextId = resolveRuntimeIdGenerator\(nextId\)/);
   assert.match(source, /createAuthService\([\s\S]*?nextId: runtimeNextId/);
   assert.match(source, /createCatalogService\([\s\S]*?nextId: runtimeNextId/);
   assert.match(source, /createNotificationService\([\s\S]*?nextId: runtimeNextId/);
   assert.match(source, /const options = \{ store, nextId: runtimeNextId/);
   assert.doesNotMatch(source, /\.\.\.\(nextId \? \{ nextId \} : \{\}\)/);
+});
+
+test('guarded allocation preserves an injected generator and otherwise uses collision-resistant UUID ids', async () => {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+  const [wrapper, allocation] = await Promise.all([
+    readFile(path.join(root, 'src', 'runtime', 'postgres-runtime.mjs'), 'utf8'),
+    readFile(path.join(root, 'src', 'application', 'sourcing-tech-pack-allocation-service.mjs'), 'utf8'),
+  ]);
+  assert.match(wrapper, /\.\.\.\(options\.nextId \? \{ nextId: options\.nextId \} : \{\}\)/);
+  assert.match(allocation, /randomUUID/);
+  assert.match(allocation, /return \(prefix\) => `\$\{prefix\}_\$\{randomUUID\(\)\}`/);
 });

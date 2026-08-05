@@ -36,6 +36,12 @@ test('V13 enforces clean RU and EN module names and dynamic status labels',async
   assert.ok(js.includes("'Черновик':'Draft'"));
 });
 
+test('Application start performs a strict audit of remaining enum labels and commercial abbreviations',async()=>{
+  const start=await source('public/modules/app-start.js');
+  assert.doesNotThrow(()=>new Function(start));
+  for(const token of ['window.I18N = window.SynthaI18n','installStrictLocaleAudit','SynthaStrictLocaleAudit','fabric: \'Ткань\'','Incoterm: \'Условие поставки\'','EXW:','FOB:','DDP:','EUR:','USD:','MutationObserver','syntha:locale-changed','Promise.resolve(boot()).finally(schedule)']) assert.ok(start.includes(token),token);
+});
+
 test('V13 remains the final delivered visual layer',async()=>{
   const html=await source('public/index.html');
   const handler=await source('src/web/static-handler.mjs');

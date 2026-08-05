@@ -43,15 +43,19 @@ test('Tech Pack UI filters and summaries distinguish supplier-acknowledged readi
   assert.deepEqual(Array.from(core.filter(values, { status: 'issued', search: 'factory' }), (value) => value.techPackCode), ['TP-STYLE-002-R01']);
 });
 
-test('Tech Pack workspace is syntactically valid, uses real API commands and activates the planned navigation item', async () => {
-  const [workspace, index, css, capabilities] = await Promise.all([
-    source('public/modules/tech-packs.js'), source('public/index.html'), source('public/tech-packs.css'), source('public/modules/ui-capabilities.js'),
+test('Tech Pack workspace is syntactically valid, uses real API commands and installs a safe navigation bridge', async () => {
+  const [workspace, bridge, index, css, capabilities] = await Promise.all([
+    source('public/modules/tech-packs.js'), source('public/modules/tech-pack-navigation.js'), source('public/index.html'), source('public/tech-packs.css'), source('public/modules/ui-capabilities.js'),
   ]);
   assert.doesNotThrow(() => new vm.Script(workspace, { filename: 'tech-packs.js' }));
-  for (const fragment of ['/v2/tech-packs?', '/issue', '/acknowledge', '/revisions', '/withdraw', "state.view = 'tech-packs'", 'stopImmediatePropagation']) assert.ok(workspace.includes(fragment), fragment);
-  assert.match(index, /\/tech-packs\.css\?v=industrial-20260805-2/);
-  assert.match(index, /\/ui\/tech-pack-core\.js\?v=industrial-20260805-2/);
-  assert.match(index, /\/ui\/tech-packs\.js\?v=industrial-20260805-2/);
+  assert.doesNotThrow(() => new vm.Script(bridge, { filename: 'tech-pack-navigation.js' }));
+  for (const fragment of ['/v2/tech-packs?', '/issue', '/acknowledge', '/revisions', '/withdraw', "state.view = 'tech-packs'"]) assert.ok(workspace.includes(fragment) || bridge.includes(fragment), fragment);
+  assert.match(bridge, /MutationObserver/);
+  assert.match(bridge, /stopImmediatePropagation/);
+  assert.match(index, /\/tech-packs\.css\?v=industrial-20260805-3/);
+  assert.match(index, /\/ui\/tech-pack-core\.js\?v=industrial-20260805-3/);
+  assert.match(index, /\/ui\/tech-pack-navigation\.js\?v=industrial-20260805-3/);
+  assert.match(index, /\/ui\/tech-packs\.js\?v=industrial-20260805-3/);
   assert.match(css, /tech-pack-readiness\.ready/);
   assert.match(css, /tech-pack-readiness\.blocked/);
   assert.match(capabilities, /TECH_PACK_MANAGE: 'tech-pack\.manage'/);

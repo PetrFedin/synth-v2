@@ -1,0 +1,50 @@
+name: JOOR Master Map v3.1 One-Time Update
+
+on:
+  push:
+    paths:
+      - 'docs/.joor-v31-append.tmp.md'
+
+permissions:
+  contents: write
+
+jobs:
+  update-master-map:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Append v3.1 specification
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          target = Path('docs/joor-retailer-cabinet-complete-map.md')
+          appendix_path = Path('docs/.joor-v31-append.tmp.md')
+          text = target.read_text(encoding='utf-8')
+          old = 'Версия: 3.0, 5 августа 2026 года.'
+          new = 'Версия: 3.1, 5 августа 2026 года.'
+          if old in text:
+              text = text.replace(old, new, 1)
+          elif new not in text:
+              raise SystemExit('Expected version marker not found')
+
+          appendix = appendix_path.read_text(encoding='utf-8')
+          marker = '## 262. Version 3.1 scope — intelligent execution architecture beyond JOOR'
+          if marker not in text:
+              text = text.rstrip() + '\n\n' + appendix.strip() + '\n'
+
+          target.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Commit master map and remove one-time updater
+        run: |
+          rm -f docs/.joor-v31-append.tmp.md
+          rm -f .github/workflows/joor-master-map-v31-once.yml
+          git config user.name 'openai-docs-bot'
+          git config user.email 'openai-docs-bot@users.noreply.github.com'
+          git add -A
+          git commit -m 'docs: add NuORDER June 2026, agentic planning, spec graph and platform governance'
+          git push

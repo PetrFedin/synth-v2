@@ -2,11 +2,15 @@ import { createProductionExecutionQueryService } from '../application/production
 import { createProductionExecutionService } from '../application/production-execution-service.mjs';
 import { createProductionOrderQueryService } from '../application/production-order-query-service.mjs';
 import { createProductionOrderService } from '../application/production-order-service.mjs';
+import { createProductionQualityQueryService } from '../application/production-quality-query-service.mjs';
+import { createProductionQualityService } from '../application/production-quality-service.mjs';
 import { createSourcingTechPackAllocationService } from '../application/sourcing-tech-pack-allocation-service.mjs';
 import { createPostgresProductionExecutionReader } from '../infrastructure/postgres-production-execution-reader.mjs';
 import { createPostgresProductionExecutionStore } from '../infrastructure/postgres-production-execution-store.mjs';
 import { createPostgresProductionOrderReader } from '../infrastructure/postgres-production-order-reader.mjs';
 import { createPostgresProductionOrderStore } from '../infrastructure/postgres-production-order-store.mjs';
+import { createPostgresProductionQualityReader } from '../infrastructure/postgres-production-quality-reader.mjs';
+import { createPostgresProductionQualityStore } from '../infrastructure/postgres-production-quality-store.mjs';
 import { createPostgresSourcingTechPackAllocationStore } from '../infrastructure/postgres-sourcing-tech-pack-allocation-store.mjs';
 import { createWholesaleHttpHandler } from '../http/api.mjs';
 import { createWholesaleFetchHandler } from '../http/fetch-api.mjs';
@@ -15,32 +19,26 @@ import { createPostgresWholesaleRuntime as createBaseRuntime } from './postgres-
 export function createPostgresWholesaleRuntime(options = {}) {
   const base = createBaseRuntime(options);
   const allocationStore = createPostgresSourcingTechPackAllocationStore({ pool: options.pool });
-  const allocation = createSourcingTechPackAllocationService({
-    store: allocationStore,
-    ...(options.clock ? { clock: options.clock } : {}),
-    ...(options.nextId ? { nextId: options.nextId } : {}),
-  });
+  const allocation = createSourcingTechPackAllocationService({ store: allocationStore, ...(options.clock ? { clock: options.clock } : {}), ...(options.nextId ? { nextId: options.nextId } : {}) });
   const sourcing = Object.freeze({ ...base.sourcing, ...allocation });
 
   const productionOrderStore = createPostgresProductionOrderStore({ pool: options.pool });
   const productionOrderReader = createPostgresProductionOrderReader({ pool: options.pool });
-  const productionOrderCommands = createProductionOrderService({
-    store: productionOrderStore,
-    ...(options.clock ? { clock: options.clock } : {}),
-    ...(options.nextId ? { nextId: options.nextId } : {}),
-  });
+  const productionOrderCommands = createProductionOrderService({ store: productionOrderStore, ...(options.clock ? { clock: options.clock } : {}), ...(options.nextId ? { nextId: options.nextId } : {}) });
   const productionOrderQueries = createProductionOrderQueryService({ reader: productionOrderReader });
   const productionOrders = Object.freeze({ ...productionOrderQueries, ...productionOrderCommands });
 
   const productionExecutionStore = createPostgresProductionExecutionStore({ pool: options.pool });
   const productionExecutionReader = createPostgresProductionExecutionReader({ pool: options.pool });
-  const productionExecutionCommands = createProductionExecutionService({
-    store: productionExecutionStore,
-    ...(options.clock ? { clock: options.clock } : {}),
-    ...(options.nextId ? { nextId: options.nextId } : {}),
-  });
+  const productionExecutionCommands = createProductionExecutionService({ store: productionExecutionStore, ...(options.clock ? { clock: options.clock } : {}), ...(options.nextId ? { nextId: options.nextId } : {}) });
   const productionExecutionQueries = createProductionExecutionQueryService({ reader: productionExecutionReader });
   const productionExecutions = Object.freeze({ ...productionExecutionQueries, ...productionExecutionCommands });
+
+  const productionQualityStore = createPostgresProductionQualityStore({ pool: options.pool });
+  const productionQualityReader = createPostgresProductionQualityReader({ pool: options.pool });
+  const productionQualityCommands = createProductionQualityService({ store: productionQualityStore, ...(options.clock ? { clock: options.clock } : {}), ...(options.nextId ? { nextId: options.nextId } : {}) });
+  const productionQualityQueries = createProductionQualityQueryService({ reader: productionQualityReader });
+  const productionQuality = Object.freeze({ ...productionQualityQueries, ...productionQualityCommands });
 
   const transport = {
     authenticate: base.auth.authenticate,
@@ -57,6 +55,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
     techPacks: base.techPacks,
     productionOrders,
     productionExecutions,
+    productionQuality,
     collaboration: base.collaboration,
     orders: base.orders,
     notifications: base.notifications,
@@ -74,6 +73,9 @@ export function createPostgresWholesaleRuntime(options = {}) {
     productionExecutionStore,
     productionExecutionReader,
     productionExecutions,
+    productionQualityStore,
+    productionQualityReader,
+    productionQuality,
     handler,
     fetchHandler,
   });

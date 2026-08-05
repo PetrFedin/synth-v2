@@ -1,9 +1,9 @@
-name: JOOR Master Map v3.5 One-Time Update
+name: JOOR Master Map v3.6 One-Time Update
 
 on:
   push:
     paths:
-      - 'docs/.joor-v35-append.tmp.md'
+      - 'docs/.joor-v36-append.tmp.md'
 
 permissions:
   contents: write
@@ -16,23 +16,23 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Append v3.5 specification
+      - name: Append v3.6 specification
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
           target = Path('docs/joor-retailer-cabinet-complete-map.md')
-          appendix_path = Path('docs/.joor-v35-append.tmp.md')
+          appendix_path = Path('docs/.joor-v36-append.tmp.md')
           text = target.read_text(encoding='utf-8')
-          old = 'Версия: 3.4, 5 августа 2026 года.'
-          new = 'Версия: 3.5, 5 августа 2026 года.'
+          old = 'Версия: 3.5, 5 августа 2026 года.'
+          new = 'Версия: 3.6, 5 августа 2026 года.'
           if old in text:
               text = text.replace(old, new, 1)
           elif new not in text:
               raise SystemExit('Expected version marker not found')
 
           appendix = appendix_path.read_text(encoding='utf-8')
-          marker = '## 392. Version 3.5 scope — supplier trust, responsible purchasing and production-network resilience'
+          marker = '## 432. Version 3.6 scope — continuous wholesale, price intelligence and product trust'
           if marker not in text:
               text = text.rstrip() + '\n\n' + appendix.strip() + '\n'
 
@@ -41,10 +41,10 @@ jobs:
 
       - name: Commit master map and remove one-time updater
         run: |
-          rm -f docs/.joor-v35-append.tmp.md
-          rm -f .github/workflows/joor-master-map-v35-once.yml
+          rm -f docs/.joor-v36-append.tmp.md
+          rm -f .github/workflows/joor-master-map-v36-once.yml
           git config user.name 'openai-docs-bot'
           git config user.email 'openai-docs-bot@users.noreply.github.com'
           git add -A
-          git commit -m 'docs: add supplier trust, responsible purchasing, due diligence and worker voice models'
+          git commit -m 'docs: add continuous wholesale, price intelligence, credential trust and circular lifecycle models'
           git push

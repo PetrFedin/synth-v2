@@ -1,0 +1,47 @@
+/* Structural adapters for workspaces added after the base Omnidata V14 layer. */
+body.omnidata-v14 .od14-module-summary{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr)!important;
+  gap:8px!important;
+  width:100%!important;
+  min-width:0!important;
+  margin:8px 0 0!important;
+  padding:0!important;
+  border:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+body.omnidata-v14 .od14-module-summary>.od14-module-heading,
+body.omnidata-v14 .od14-module-summary>.tech-pack-header-actions,
+body.omnidata-v14 .od14-module-summary>.production-orders-actions{display:none!important}
+body.omnidata-v14 .od14-module-summary>.tech-pack-kpis,
+body.omnidata-v14 .od14-module-summary>.production-orders-kpis{grid-column:1/-1!important;margin:0!important}
+body.omnidata-v14 .production-orders-create{
+  display:grid!important;
+  grid-template-columns:minmax(220px,340px) max-content!important;
+  justify-content:start!important;
+  align-items:center!important;
+  gap:7px!important;
+  width:100%!important;
+  min-width:0!important;
+}
+body.omnidata-v14 .production-orders-create input{width:100%!important;max-width:340px!important}
+body.omnidata-v14 .tech-pack-readiness{display:grid!important;gap:3px!important;margin:0 0 10px!important;padding:10px!important}
+body.omnidata-v14 .tech-pack-readiness strong{font-size:10.5px!important;font-weight:600!important}
+body.omnidata-v14 .tech-pack-readiness span{color:var(--od14-text-soft)!important;font-size:9.5px!important}
+body.omnidata-v14 .tech-pack-actions,
+body.omnidata-v14 .production-orders-actions{display:flex!important;align-items:center!important;flex-wrap:wrap!important;gap:6px!important}
+body.omnidata-v14 .tech-pack-card,
+body.omnidata-v14 .production-orders-card{margin-top:8px!important;padding:10px!important}
+body.omnidata-v14 .tech-pack-card h3,
+body.omnidata-v14 .production-orders-card h3{margin:0 0 7px!important;font-size:10.5px!important;font-weight:600!important}
+body.omnidata-v14 .tech-pack-card p,
+body.omnidata-v14 .production-orders-card p{margin:4px 0!important;color:var(--od14-text-soft)!important;font-size:9.5px!important;line-height:1.4!important}
+body.omnidata-v14 .tech-pack-inspector-head{display:flex!important;align-items:flex-start!important;justify-content:space-between!important;gap:10px!important;margin-bottom:10px!important}
+body.omnidata-v14 .production-orders-error{margin:8px 0!important;padding:8px 10px!important;border:1px solid #e6c5c7!important;border-radius:4px!important;background:#fff5f5!important;color:var(--od14-danger)!important;font-size:9.5px!important}
+@media(max-width:680px){
+  body.omnidata-v14 .production-orders-create{grid-template-columns:minmax(0,1fr)!important}
+  body.omnidata-v14 .production-orders-create input,
+  body.omnidata-v14 .production-orders-create button{width:100%!important;max-width:none!important}
+  body.omnidata-v14 .tech-pack-inspector-head{display:grid!important;grid-template-columns:minmax(0,1fr)!important}
+}

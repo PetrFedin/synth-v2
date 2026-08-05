@@ -26,8 +26,9 @@ test('Production Order routes expose reads and strict lifecycle commands', async
   await route(routes, 'POST', '/v2/production-orders/PO-1/issue').execute({ commandId: 'c2', actorId: 'owner-1', params: ['PO-1'], query: {}, body: { expectedVersion: 1 } });
   await route(routes, 'POST', '/v2/production-orders/PO-1/confirm').execute({ commandId: 'c3', actorId: 'owner-1', params: ['PO-1'], query: {}, body: { expectedVersion: 2, supplierCode: 'FACTORY-1', confirmationReference: 'ACK-1', confirmedBy: 'Mei Lin', notes: null } });
   assert.deepEqual(calls.map((call) => call[0]), ['page','create','issue','confirm']);
-  await assert.rejects(
+  assert.throws(
     () => route(routes, 'POST', '/v2/production-orders/from-allocation/RFQ-1').execute({ commandId: 'bad', actorId: 'owner-1', params: ['RFQ-1'], query: {}, body: { productionOrderNumber: 'FORGED' } }),
+    { code: 'HTTP_BODY_FIELD_UNKNOWN' },
   );
 });
 

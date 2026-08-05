@@ -133,6 +133,23 @@ test('PostgreSQL closes approved PPS through confirmed Production Order and Prod
     execution = await productionExecutions.start('production-execution-start', 'product-owner', execution.executionCode, { expectedVersion: execution.version });
     assert.equal(execution.status, 'active');
 
+    await assert.rejects(
+      () => pool.query("UPDATE production_executions SET started_at = started_at + interval '1 minute' WHERE execution_code = $1", [execution.executionCode]),
+      (error) => error?.code === '23514' && error?.constraint === 'production_executions_lifecycle_projection_match',
+    );
+    const futureBlocked = structuredClone(execution);
+    futureBlocked.milestones[1] = {
+      ...futureBlocked.milestones[1],
+      status: 'blocked',
+      blockedAt: execution.updatedAt,
+      blockedBy: 'product-owner',
+      blockReason: 'Future stage cannot be blocked before materials are complete',
+    };
+    await assert.rejects(
+      () => pool.query('UPDATE production_executions SET payload = $2::jsonb WHERE execution_code = $1', [execution.executionCode, JSON.stringify(futureBlocked)]),
+      (error) => error?.code === '23514' && error?.constraint === 'production_executions_milestone_sequence_valid',
+    );
+
     execution = await productionExecutions.blockMilestone('production-execution-block-materials', 'product-owner', execution.executionCode, { expectedVersion: execution.version, milestoneCode: 'materials-ready', reason: 'Fabric inspection certificate missing' });
     assert.equal(execution.milestones[0].status, 'blocked');
     await assert.rejects(
@@ -166,6 +183,20 @@ test('PostgreSQL closes approved PPS through confirmed Production Order and Prod
     await assert.rejects(
       () => pool.query("UPDATE production_executions SET payload = jsonb_set(payload, '{sourceSnapshot,quantity}', '1'::jsonb) WHERE execution_code = $1", [execution.executionCode]),
       (error) => error?.code === '23514' && error?.constraint === 'production_executions_source_immutable',
+    );
+
+    const incompleteReady = structuredClone(execution);
+    incompleteReady.milestones[5] = {
+      ...incompleteReady.milestones[5],
+      status: 'pending',
+      completedAt: null,
+      completedBy: null,
+      completionNotes: null,
+      varianceMinutes: null,
+    };
+    await assert.rejects(
+      () => pool.query('UPDATE production_executions SET payload = $2::jsonb WHERE execution_code = $1', [execution.executionCode, JSON.stringify(incompleteReady)]),
+      (error) => error?.code === '23514' && error?.constraint === 'production_executions_lifecycle_state_valid',
     );
 
     assert.equal(pps.status, 'approved');

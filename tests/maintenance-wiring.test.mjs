@@ -7,8 +7,8 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 async function source(file) { return readFile(path.join(root, file), 'utf8'); }
 
-test('PostgreSQL runtime creates and exposes maintenance and optional outbox publication services', async () => {
-  const runtime = await source('src/runtime/postgres-runtime.mjs');
+test('PostgreSQL base runtime creates and exposes maintenance and optional outbox publication services', async () => {
+  const runtime = await source('src/runtime/postgres-base-runtime.mjs');
   assert.match(runtime, /createMaintenanceService/);
   assert.match(runtime, /createPostgresMaintenanceStore/);
   assert.match(runtime, /const maintenance = createMaintenanceService\(\{/);

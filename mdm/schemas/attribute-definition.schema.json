@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://syntha.example/schemas/mdm/attribute-definition.schema.json",
+  "title": "Syntha Attribute Definition",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["code", "name", "description", "data_type", "cardinality", "applies_to", "version", "status", "owner", "steward"],
+  "properties": {
+    "code": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{2,127}$"},
+    "name": {"type": "object", "required": ["ru", "en"], "properties": {"ru": {"type": "string", "minLength": 1}, "en": {"type": "string", "minLength": 1}}, "additionalProperties": {"type": "string"}},
+    "description": {"type": "object", "required": ["ru", "en"], "properties": {"ru": {"type": "string", "minLength": 1}, "en": {"type": "string", "minLength": 1}}, "additionalProperties": {"type": "string"}},
+    "data_type": {"enum": ["string", "text", "integer", "decimal", "boolean", "date", "datetime", "duration", "money", "quantity", "reference", "reference_list", "json"]},
+    "cardinality": {"enum": ["one", "zero_or_one", "one_or_more", "zero_or_more"]},
+    "unit_dimension": {"type": ["string", "null"]},
+    "uom_dictionary": {"type": ["string", "null"]},
+    "allowed_values_dictionary": {"type": ["string", "null"]},
+    "applies_to": {"type": "array", "minItems": 1, "items": {"type": "string"}, "uniqueItems": true},
+    "required_when": {"type": ["string", "null"]},
+    "validation_rules": {"type": "array", "items": {"type": "object"}, "default": []},
+    "searchable": {"type": "boolean", "default": false},
+    "filterable": {"type": "boolean", "default": false},
+    "confidentiality": {"enum": ["public", "internal", "confidential", "restricted"], "default": "internal"},
+    "version": {"type": "integer", "minimum": 1},
+    "status": {"enum": ["draft", "active", "inactive", "archived"]},
+    "owner": {"type": "string", "minLength": 1},
+    "steward": {"type": "string", "minLength": 1}
+  }
+}

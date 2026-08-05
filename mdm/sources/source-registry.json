@@ -1,0 +1,95 @@
+{
+  "registry_version": "0.1.0",
+  "policy": {
+    "silent_production_update": false,
+    "change_delivery": "pull_request",
+    "required_reviewers": ["data_steward", "domain_owner"],
+    "licence_review_required": true
+  },
+  "sources": [
+    {
+      "code": "iso_3166",
+      "authority": "International Organization for Standardization",
+      "standard": "ISO 3166 country and subdivision codes",
+      "source_url": "https://www.iso.org/iso-3166-country-codes.html",
+      "probe_url": "https://www.iso.org/iso-3166-country-codes.html",
+      "sync_mode": "manual_review",
+      "cadence": "monthly",
+      "licence": "Free use of codes; bulk ready-to-use collections and automated subscriptions may require commercial terms.",
+      "adapter": null,
+      "affects": ["country", "country_subdivision", "country_former_code"]
+    },
+    {
+      "code": "iso_4217_six",
+      "authority": "SIX Financial Information AG / ISO 4217 Maintenance Agency",
+      "standard": "ISO 4217 current currency and funds list",
+      "source_url": "https://www.six-group.com/en/products-services/financial-information/market-reference-data/data-standards.html",
+      "probe_url": "https://www.six-group.com/dam/download/financial-information/data-center/iso-currrency/lists/list-one.xml",
+      "sync_mode": "automated_probe",
+      "cadence": "weekly",
+      "licence": "Published online by the official Maintenance Agency; preserve attribution and review terms before redistribution.",
+      "adapter": null,
+      "affects": ["currency", "currency_minor_unit"]
+    },
+    {
+      "code": "uncefact_rec20",
+      "authority": "United Nations Economic Commission for Europe / UN/CEFACT",
+      "standard": "Recommendation 20 codes for units of measure",
+      "source_url": "https://unece.org/code-list-recommendations",
+      "probe_url": "https://unece.org/code-list-recommendations",
+      "sync_mode": "manual_review",
+      "cadence": "quarterly",
+      "licence": "United Nations publication; verify the current download and reuse terms before ingestion.",
+      "adapter": null,
+      "affects": ["unit_of_measure", "unit_dimension", "conversion_rule"]
+    },
+    {
+      "code": "iana_tzdb",
+      "authority": "Internet Assigned Numbers Authority",
+      "standard": "IANA Time Zone Database",
+      "source_url": "https://data.iana.org/time-zones/tz-link.html",
+      "probe_url": "https://data.iana.org/time-zones/tzdata-latest.tar.gz",
+      "sync_mode": "automated_probe",
+      "cadence": "weekly",
+      "licence": "Public IANA time-zone database; preserve upstream notices.",
+      "adapter": null,
+      "affects": ["time_zone"]
+    },
+    {
+      "code": "wco_hs_2022",
+      "authority": "World Customs Organization",
+      "standard": "Harmonized System 2022",
+      "source_url": "https://www.wcoomd.org/en/topics/nomenclature/instrument-and-tools/hs-nomenclature-2022-edition.aspx",
+      "probe_url": "https://www.wcoomd.org/en/topics/nomenclature/instrument-and-tools/hs-nomenclature-2022-edition.aspx",
+      "sync_mode": "licensed_import",
+      "cadence": "quarterly",
+      "licence": "Nomenclature content and national tariff extensions may be licensed; legal and jurisdictional review is mandatory.",
+      "adapter": null,
+      "affects": ["hs_code", "hs_revision", "hs_correlation"]
+    },
+    {
+      "code": "wco_hs_2028",
+      "authority": "World Customs Organization",
+      "standard": "Harmonized System 2028 and HS 2022-2028 correlation tables",
+      "source_url": "https://www.wcoomd.org/en/topics/nomenclature/instrument-and-tools/hs-nomenclature-2028-edition.aspx",
+      "probe_url": "https://www.wcoomd.org/en/topics/nomenclature/instrument-and-tools/hs-nomenclature-2028-edition.aspx",
+      "sync_mode": "manual_review",
+      "cadence": "monthly",
+      "licence": "Correlation tables are guidance and may change; classification and national implementation require customs review.",
+      "adapter": null,
+      "affects": ["hs_code", "hs_revision", "hs_correlation"]
+    },
+    {
+      "code": "icc_incoterms_2020",
+      "authority": "International Chamber of Commerce",
+      "standard": "Incoterms 2020",
+      "source_url": "https://iccwbo.org/business-solutions/incoterms-rules/incoterms-2020/",
+      "probe_url": "https://iccwbo.org/business-solutions/incoterms-rules/incoterms-2020/",
+      "sync_mode": "licensed_import",
+      "cadence": "annual",
+      "licence": "ICC rules are copyrighted; store governed codes and licensed interpretations, not copied publication text.",
+      "adapter": null,
+      "affects": ["incoterm", "named_place_rule"]
+    }
+  ]
+}

@@ -78,10 +78,18 @@ export function createTechPackService({ techPackStore, clock = () => new Date().
       return execute(commandId, `issueTechPack:${actorId}:${code}:${canonicalJson(input)}`, actorId,
         async (tx) => {
           const context = await contextForPack(tx, code, actorId);
-          return Object.freeze({ ...context, bom: await tx.getBomBySku(context.techPack.sku), measurementChart: await tx.getMeasurementBySku(context.techPack.sku), approvedSample: await tx.getApprovedSampleBySku(context.techPack.sku), currentActive: await tx.getActiveTechPackBySku(context.techPack.sku) });
+          return Object.freeze({
+            ...context,
+            bom: await tx.getBomBySku(context.techPack.sku),
+            measurementChart: await tx.getMeasurementBySku(context.techPack.sku),
+            approvedSample: await tx.getApprovedPpsBySkuAndSupplier(context.techPack.sku, context.techPack.supplierCode),
+            currentActive: await tx.getActiveTechPackBySku(context.techPack.sku),
+          });
         },
         async (tx, context) => {
           assertVersion(context.techPack, input?.expectedVersion);
+          invariant(context.techPack.supplierCode, 'TECH_PACK_SUPPLIER_REQUIRED', 'Supplier code, name and email are required before issue');
+          invariant(context.approvedSample, 'TECH_PACK_APPROVED_PPS_NOT_FOUND', 'An approved pre-production sample from the Tech Pack supplier is required before issue', { sku: context.techPack.sku, supplierCode: context.techPack.supplierCode });
           invariant(!context.currentActive || context.currentActive.id === context.techPack.id || context.techPack.sourceTechPackCode === context.currentActive.techPackCode, 'TECH_PACK_ACTIVE_ISSUE_EXISTS', 'A different issued or acknowledged tech pack is already active for this SKU');
           const issued = issueTechPackDomain(context.techPack, { catalogSku: context.catalogSku, bom: context.bom, measurementChart: context.measurementChart, approvedSample: context.approvedSample, actorId, issuedAt: clock() });
           const value = Object.freeze({ ...issued, dependencySnapshot: Object.freeze({ skuVersion: context.catalogSku.version, bomId: context.bom.id, bomVersion: context.bom.version, measurementChartId: context.measurementChart.id, measurementChartVersion: context.measurementChart.version, sampleCode: context.approvedSample.sampleCode, sampleVersion: context.approvedSample.version }) });

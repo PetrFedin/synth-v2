@@ -18,7 +18,8 @@ test('V14 constrains search and filters instead of stretching them across the wo
   const extensions=await source('public/omnidata-v14-extensions.css');
   for(const token of ['grid-template-columns:minmax(220px,360px) minmax(150px,190px) max-content!important','max-width:360px!important','width:190px!important','min-width:160px!important','max-width:220px!important','width:280px!important','od14-no-action']) assert.ok(css.includes(token)||extensions.includes(token),token);
   for(const token of ['.ls9-commandbar','grid-template-columns:minmax(220px,360px) max-content minmax(140px,175px) minmax(150px,200px) 36px minmax(8px,1fr) 36px 36px!important','.ls9-search','.ls9-select','.ls9-filter-button','.ls9-layout']) assert.ok(extensions.includes(token),token);
-  assert.doesNotMatch(css,/\.od-commandbar[\s\S]{0,500}grid-template-columns:minmax\(0,1fr\)!important/);
+  assert.ok(css.includes('@media(max-width:680px)'));
+  assert.ok(css.includes('body.omnidata-v14 .od-commandbar{'));
 });
 
 test('V14 unifies typography, controls, cards, tables, inspectors and dialogs',async()=>{

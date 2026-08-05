@@ -16,7 +16,9 @@ test('V14 builds one consistent page header and removes duplicate module title s
 test('V14 constrains search and filters instead of stretching them across the workspace',async()=>{
   const css=await source('public/omnidata-v14.css');
   const extensions=await source('public/omnidata-v14-extensions.css');
-  for(const token of ['grid-template-columns:minmax(220px,360px) minmax(150px,190px) max-content!important','max-width:360px!important','width:190px!important','min-width:160px!important','max-width:220px!important','width:280px!important','od14-no-action']) assert.ok(css.includes(token)||extensions.includes(token),token);
+  const runtime=await source('public/modules/omnidata-v14.js');
+  for(const token of ['grid-template-columns:minmax(220px,360px) minmax(150px,190px) max-content!important','max-width:360px!important','width:190px!important','min-width:160px!important','max-width:220px!important','width:280px!important']) assert.ok(css.includes(token)||extensions.includes(token),token);
+  assert.ok(runtime.includes('od14-no-action'));
   for(const token of ['.ls9-commandbar','grid-template-columns:minmax(220px,360px) max-content minmax(140px,175px) minmax(150px,200px) 36px minmax(8px,1fr) 36px 36px!important','.ls9-search','.ls9-select','.ls9-filter-button','.ls9-layout']) assert.ok(extensions.includes(token),token);
   assert.ok(extensions.includes('[data-od14-component="filterbar"]'));
   assert.ok(extensions.includes('grid-template-columns:minmax(220px,360px) repeat(3,minmax(140px,190px)) max-content!important'));
@@ -44,7 +46,7 @@ test('V14 module adapters map Tech Packs and Production Orders into the same com
   const js=await source('public/modules/omnidata-v14-module-adapters.js');
   const css=await source('public/omnidata-v14-module-adapters.css');
   assert.doesNotThrow(()=>new Function(js));
-  for(const token of ['tech-packs','production-orders','Технические пакеты','Tech Packs','Производственные заказы','Production Orders','tech-pack-kpis','production-orders-kpis','tech-pack-filters','production-orders-filters','tech-pack-table','production-orders-table','tech-pack-inspector','production-orders-inspector','data.od14Component','SynthaOmnidataV14ModuleAdapters']) assert.ok(js.includes(token),token);
+  for(const token of ['tech-packs','production-orders','Технические пакеты','Tech Packs','Производственные заказы','Production Orders','tech-pack-kpis','production-orders-kpis','tech-pack-filters','production-orders-filters','tech-pack-table','production-orders-table','tech-pack-inspector','production-orders-inspector','dataset.od14Component','SynthaOmnidataV14ModuleAdapters']) assert.ok(js.includes(token),token);
   for(const token of ['od14-module-summary','production-orders-create','tech-pack-readiness','tech-pack-card','production-orders-card','production-orders-error']) assert.ok(css.includes(token),token);
   assert.doesNotMatch(css,/@import|https?:\/\//i);
 });

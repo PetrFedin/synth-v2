@@ -1,3 +1,4 @@
+import { createFinalQualityRoutes } from './final-quality-routes.mjs';
 import { createProductionExecutionRoutes } from './production-execution-routes.mjs';
 import { createProductionOrderRoutes } from './production-order-routes.mjs';
 import { createSampleRoutes } from './sample-routes.mjs';
@@ -13,6 +14,7 @@ export function createWholesaleRoutes(services = {}) {
     ...createTechPackRoutes({ techPacks: services.techPacks }),
     ...createProductionOrderRoutes({ productionOrders: services.productionOrders }),
     ...createProductionExecutionRoutes({ productionExecutions: services.productionExecutions }),
+    ...createFinalQualityRoutes({ finalQuality: services.finalQuality }),
   ]);
 }
 

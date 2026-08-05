@@ -1,7 +1,9 @@
 (function installOmnidataV14ModuleAdapters(global){
   'use strict';
 
-  const BUILD='visual-20260805-14-module-adapters-1';
+  const BUILD='visual-20260805-14-module-adapters-2';
+  const enqueue=typeof global.queueMicrotask==='function'?global.queueMicrotask.bind(global):typeof queueMicrotask==='function'?queueMicrotask:(callback)=>Promise.resolve().then(callback);
+  if(typeof global.queueMicrotask!=='function')global.queueMicrotask=enqueue;
   const DEFINITIONS=Object.freeze({
     'tech-packs':{
       section:['PLM / Техническая документация','PLM / Technical Documentation'],
@@ -69,7 +71,7 @@
     assignRoles();
     document.body.dataset.od14ModuleAdapters=BUILD;
   }
-  function schedule(){if(scheduled)return;scheduled=true;global.queueMicrotask(()=>{scheduled=false;apply()})}
+  function schedule(){if(scheduled)return;scheduled=true;enqueue(()=>{scheduled=false;apply()})}
 
   if(typeof renderApp==='function'){
     const previousRenderApp=renderApp;

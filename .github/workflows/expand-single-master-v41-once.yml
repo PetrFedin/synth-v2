@@ -1,0 +1,66 @@
+name: Expand Single Master Specification v4.1
+
+on:
+  push:
+    paths:
+      - 'docs/.single-master-v41-append.tmp.md'
+
+permissions:
+  contents: write
+
+jobs:
+  expand-master:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Update the single source of truth
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          target = Path('docs/joor-retailer-cabinet-complete-map.md')
+          appendix_path = Path('docs/.single-master-v41-append.tmp.md')
+          text = target.read_text(encoding='utf-8')
+
+          text = text.replace(
+              'Статус: целевая продуктовая спецификация после пересмотра scope.',
+              'Статус: единственная актуальная продуктовая спецификация и source of truth для Syntha.'
+          )
+          text = text.replace(
+              'Версия: 4.0, 5 августа 2026 года.',
+              'Версия: 4.1, 5 августа 2026 года.'
+          )
+          text = text.replace(
+              '> Предыдущая расширенная карта версии 3.6 сохранена как библиотека будущих возможностей: `docs/archive/joor-retailer-cabinet-enterprise-capability-library-v3.6.md`.\n\n',
+              '> Все продуктовые решения, статусы, сущности, процессы, API-контракты, интеграции, UAT и приоритеты ведутся только в этом файле. Отдельные функциональные спецификации не создаются; устаревшие формулировки удаляются или заменяются здесь.\n\n'
+          )
+          text = text.replace('UПД', 'УПД')
+          text = text.replace('Omnidata подтверждает практическую необходимость карточек модели, BOM, BOL, measurement charts, техпаков, линейного планирования, поставщиков, образцов, заказов и интеграций. fileciteturn104file0',
+                              'Omnidata PLM Fashion 2026 используется как benchmark для карточек модели, BOM, BOL, measurement charts, техпаков, линейного планирования, поставщиков, образцов, заказов и интеграций.')
+          text = text.replace('- Omnidata PLM Fashion 2026 — планирование коллекций, карточки моделей, BOM, материалы, BOL, цвета, measurement charts, техпаки, sourcing, образцы, заказы, производство, качество и интеграции. fileciteturn104file0',
+                              '- Omnidata PLM Fashion 2026 — планирование коллекций, карточки моделей, BOM, материалы, BOL, цвета, measurement charts, техпаки, sourcing, образцы, заказы, производство, качество и интеграции.')
+
+          appendix = appendix_path.read_text(encoding='utf-8')
+          marker = '## 48. Правило единственного актуального документа'
+          if marker not in text:
+              text = text.rstrip() + '\n\n---\n\n# ДЕТАЛЬНАЯ ФУНКЦИОНАЛЬНАЯ СПЕЦИФИКАЦИЯ\n\n' + appendix.strip() + '\n'
+
+          target.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Remove superseded overlapping product document
+        run: |
+          rm -f docs/supplier-sourcing-production.md
+
+      - name: Commit and remove one-time files
+        run: |
+          rm -f docs/.single-master-v41-append.tmp.md
+          rm -f .github/workflows/expand-single-master-v41-once.yml
+          git config user.name 'openai-docs-bot'
+          git config user.email 'openai-docs-bot@users.noreply.github.com'
+          git add -A
+          git commit -m 'docs: establish one product source of truth and expand retained Syntha domains in detail'
+          git push

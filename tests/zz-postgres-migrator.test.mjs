@@ -20,7 +20,8 @@ test('PostgreSQL migration ledger serializes runners and rejects changed history
     '009_outbox_publication_claims.sql','010_outbox_dead_letter_recovery.sql','011_global_command_registry.sql',
     '012_workspace_paging_indexes.sql','013_catalog_search_indexes.sql','014_material_master.sql',
     '015_unify_catalog_outbox.sql','016_bom_costing.sql','017_measurement_charts.sql','018_samples.sql',
-    '019_supplier_sourcing.sql','020_tech_packs.sql','021_sourcing_tech_pack_gate.sql','022_production_orders.sql','023_production_executions.sql',
+    '019_supplier_sourcing.sql','020_tech_packs.sql','021_sourcing_tech_pack_gate.sql','022_production_orders.sql',
+    '023_production_executions.sql','024_production_execution_integrity.sql',
   ];
   try {
     await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
@@ -70,6 +71,7 @@ test('PostgreSQL migration ledger serializes runners and rejects changed history
     ]);
     assert.deepEqual((await pool.query("SELECT tgname FROM pg_trigger WHERE tgrelid = 'public.production_executions'::regclass AND NOT tgisinternal ORDER BY tgname")).rows, [
       { tgname: 'production_executions_immutable_source_gate' },
+      { tgname: 'production_executions_integrity_gate' },
       { tgname: 'production_executions_source_gate' },
     ]);
 

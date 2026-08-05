@@ -1,7 +1,7 @@
 (function installOmnidataV14ModuleAdapters(global){
   'use strict';
 
-  const BUILD='visual-20260805-14-module-adapters-2';
+  const BUILD='visual-20260805-14-module-adapters-3';
   const enqueue=typeof global.queueMicrotask==='function'?global.queueMicrotask.bind(global):typeof queueMicrotask==='function'?queueMicrotask:(callback)=>Promise.resolve().then(callback);
   if(typeof global.queueMicrotask!=='function')global.queueMicrotask=enqueue;
   const DEFINITIONS=Object.freeze({
@@ -16,22 +16,28 @@
       title:['Производственные заказы','Production Orders'],
       description:['Неизменяемые производственные заказы из распределённых запросов с коммерческими условиями, техпаком и подтверждением фабрики.','Immutable Production Orders from allocated requests with commercial terms, Tech Pack and supplier confirmation.'],
       source:'.production-orders-header',actions:'.production-orders-actions'
+    },
+    'production-executions':{
+      section:['PLM / Исполнение производства','PLM / Production Execution'],
+      title:['Производственный календарь','Production Execution'],
+      description:['Последовательное фактическое прохождение партии от подтверждённого PO до допуска к контролю качества с блокировками и отклонениями от плана.','Sequential batch execution from supplier-confirmed PO to the quality-control gate, including blocks and schedule variance.'],
+      source:'.production-execution-header',actions:'.production-execution-header-actions'
     }
   });
   const ROLE_MAP=Object.freeze([
-    ['.tech-pack-kpis,.production-orders-kpis','metrics'],
-    ['.tech-pack-kpi,.production-orders-kpi','metric'],
-    ['.tech-pack-filters,.production-orders-filters','filterbar'],
-    ['.production-orders-create','toolbar'],
-    ['.tech-pack-layout,.production-orders-layout','master-detail'],
-    ['.tech-pack-table-wrap,.production-orders-registry','table-wrap'],
-    ['.tech-pack-table,.production-orders-table','table'],
-    ['.tech-pack-inspector,.production-orders-inspector','inspector'],
-    ['.tech-pack-facts,.production-orders-facts','definition-grid'],
-    ['.tech-pack-facts>div,.production-orders-facts>div','definition-item'],
-    ['.tech-pack-card,.production-orders-card,.tech-pack-readiness','surface'],
-    ['.tech-pack-badge,.production-order-badge','status'],
-    ['.tech-pack-empty,.production-orders-empty','empty']
+    ['.tech-pack-kpis,.production-orders-kpis,.production-execution-kpis','metrics'],
+    ['.tech-pack-kpi,.production-orders-kpi,.production-execution-kpi','metric'],
+    ['.tech-pack-filters,.production-orders-filters,.production-execution-filters','filterbar'],
+    ['.production-orders-create,.production-execution-create','toolbar'],
+    ['.tech-pack-layout,.production-orders-layout,.production-execution-layout','master-detail'],
+    ['.tech-pack-table-wrap,.production-orders-registry,.production-execution-registry','table-wrap'],
+    ['.tech-pack-table,.production-orders-table,.production-execution-table','table'],
+    ['.tech-pack-inspector,.production-orders-inspector,.production-execution-inspector','inspector'],
+    ['.tech-pack-facts,.production-orders-facts,.production-execution-facts','definition-grid'],
+    ['.tech-pack-facts>div,.production-orders-facts>div,.production-execution-facts>div','definition-item'],
+    ['.tech-pack-card,.production-orders-card,.tech-pack-readiness,.production-execution-card','surface'],
+    ['.tech-pack-badge,.production-order-badge,.production-execution-badge','status'],
+    ['.tech-pack-empty,.production-orders-empty,.production-execution-empty','empty']
   ]);
   let scheduled=false;
 
@@ -61,8 +67,8 @@
   }
   function assignRoles(){
     ROLE_MAP.forEach(([selector,role])=>setRole(selector,role));
-    roots('.tech-pack-actions,.production-orders-actions,.tech-pack-confirm,.production-orders-confirm').forEach((node)=>{node.dataset.od14Component='toolbar'});
-    roots('.tech-pack-filters input,.tech-pack-filters select,.production-orders-filters input,.production-orders-filters select,.production-orders-create input,.tech-pack-confirm input,.tech-pack-confirm textarea,.production-orders-confirm input,.production-orders-confirm textarea').forEach((node)=>{node.dataset.od14Component='field'});
+    roots('.tech-pack-actions,.production-orders-actions,.production-execution-actions,.tech-pack-confirm,.production-orders-confirm,.production-execution-command-grid').forEach((node)=>{node.dataset.od14Component='toolbar'});
+    roots('.tech-pack-filters input,.tech-pack-filters select,.production-orders-filters input,.production-orders-filters select,.production-orders-create input,.tech-pack-confirm input,.tech-pack-confirm textarea,.production-orders-confirm input,.production-orders-confirm textarea,.production-execution-filters input,.production-execution-filters select,.production-execution-create input,.production-execution-command input,.production-execution-command textarea,.production-execution-cancel input').forEach((node)=>{node.dataset.od14Component='field'});
   }
   function apply(){
     const view=currentView();

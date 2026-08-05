@@ -51,7 +51,7 @@ test('shell loads Production Orders after Tech Packs and before final Omnidata V
   const v14 = html.indexOf('/ui/omnidata-v14.js?v=visual-20260805-14');
   assert.ok(techPack >= 0 && productionOrders > techPack && languageAudit > productionOrders && v14 > languageAudit);
   assert.match(html, /production-orders\.css\?v=industrial-20260805-1/);
-  assert.match(html, /ui-capabilities\.js\?v=industrial-20260805-3/);
+  assert.match(html, /ui-capabilities\.js\?v=industrial-20260805-4/);
 });
 
 test('standalone server delivers Tech Pack and Production Order assets instead of API fallthrough', async () => {

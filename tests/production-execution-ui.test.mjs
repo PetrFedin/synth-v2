@@ -49,13 +49,14 @@ test('Production Execution workspace is syntactically valid and calls only gover
   assert.doesNotMatch(css, /@import|https?:\/\//i);
 });
 
-test('V14 shell loads Production Execution after Production Orders and before module adapters', async () => {
+test('V14 shell loads Production Execution after Production Orders and before semantic adapters', async () => {
   const html = await source('public/index.html');
   const core = html.indexOf('/ui/production-execution-core.js?v=industrial-20260805-1');
   const orders = html.indexOf('/ui/production-orders.js?v=industrial-20260805-1');
   const executions = html.indexOf('/ui/production-executions.js?v=industrial-20260805-1');
-  const adapters = html.indexOf('/ui/omnidata-v14-module-adapters.js?v=visual-20260805-14-module-adapters-3');
-  assert.ok(core >= 0 && orders >= 0 && executions > orders && adapters > executions);
+  const adapters = html.indexOf('/ui/omnidata-v14-module-adapters.js?v=visual-20260805-14-module-adapters-4');
+  const components = html.indexOf('/ui/omnidata-v14-components.js?v=visual-20260805-14-components-3');
+  assert.ok(core >= 0 && orders >= 0 && executions > orders && adapters > executions && components > adapters);
   assert.match(html, /production-executions\.css\?v=industrial-20260805-1/);
   assert.match(html, /ui-capabilities\.js\?v=industrial-20260805-4/);
 });

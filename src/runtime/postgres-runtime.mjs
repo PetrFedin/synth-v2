@@ -12,6 +12,8 @@ import { createSampleService } from '../application/sample-service.mjs';
 import { createSampleQueryService } from '../application/sample-query-service.mjs';
 import { createSourcingService } from '../application/sourcing-service.mjs';
 import { createSourcingQueryService } from '../application/sourcing-query-service.mjs';
+import { createTechPackService } from '../application/tech-pack-service.mjs';
+import { createTechPackQueryService } from '../application/tech-pack-query-service.mjs';
 import { createMaintenanceService } from '../application/maintenance-service.mjs';
 import { withNotificationPageMetadata } from '../application/notification-page-service.mjs';
 import { createOutboxPublisherService } from '../application/outbox-publisher-service.mjs';
@@ -35,6 +37,8 @@ import { createPostgresSampleStore } from '../infrastructure/postgres-sample-sto
 import { createPostgresSampleReader } from '../infrastructure/postgres-sample-reader.mjs';
 import { createPostgresSourcingStore } from '../infrastructure/postgres-sourcing-store.mjs';
 import { createPostgresSourcingReader } from '../infrastructure/postgres-sourcing-reader.mjs';
+import { createPostgresTechPackStore } from '../infrastructure/postgres-tech-pack-store.mjs';
+import { createPostgresTechPackReader } from '../infrastructure/postgres-tech-pack-reader.mjs';
 import { createPostgresMaintenanceStore } from '../infrastructure/postgres-maintenance-store.mjs';
 import { createPostgresOutboxPublicationStore } from '../infrastructure/postgres-outbox-publication-store.mjs';
 import { createPostgresWholesaleStore } from '../infrastructure/postgres-store.mjs';
@@ -64,6 +68,7 @@ export function createPostgresWholesaleRuntime({
   const measurementStore = createPostgresMeasurementStore({ pool });
   const sampleStore = createPostgresSampleStore({ pool });
   const sourcingStore = createPostgresSourcingStore({ pool });
+  const techPackStore = createPostgresTechPackStore({ pool });
   const options = { store, nextId: runtimeNextId, ...(clock ? { clock } : {}) };
   const auth = createAuthService({
     store: createPostgresAuthStore({ pool }), nextId: runtimeNextId,
@@ -82,6 +87,7 @@ export function createPostgresWholesaleRuntime({
   const measurements = Object.freeze({ ...createMeasurementService({ measurementStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createMeasurementQueryService({ reader: createPostgresMeasurementReader({ pool }) }) });
   const samples = Object.freeze({ ...createSampleService({ sampleStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createSampleQueryService({ reader: createPostgresSampleReader({ pool }), ...(clock ? { clock } : {}) }) });
   const sourcing = Object.freeze({ ...createSourcingService({ sourcingStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createSourcingQueryService({ reader: createPostgresSourcingReader({ pool }), ...(clock ? { clock } : {}) }) });
+  const techPacks = Object.freeze({ ...createTechPackService({ techPackStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createTechPackQueryService({ reader: createPostgresTechPackReader({ pool }) }) });
   const partners = createPartnerAccessService(options);
   const collaboration = createShowroomSelectionService({ ...options, catalogReader: catalog });
   const orders = createOrderBuilderService(options);
@@ -114,12 +120,12 @@ export function createPostgresWholesaleRuntime({
     ...(outboxRetentionMs !== undefined ? { outboxRetentionMs } : {}),
   });
   const workspace = createWorkspaceQueryService({ reader: createPostgresWorkspaceReader({ pool }) });
-  const transport = { authenticate: auth.authenticate, auth, readiness, platform, catalog, materials, boms, measurements, samples, partners, sourcing, collaboration, orders, notifications, workspace };
+  const transport = { authenticate: auth.authenticate, auth, readiness, platform, catalog, materials, boms, measurements, samples, partners, sourcing, techPacks, collaboration, orders, notifications, workspace };
   const handler = createWholesaleHttpHandler(transport);
   const fetchHandler = createWholesaleFetchHandler(transport);
   return Object.freeze({
-    auth, readiness, maintenance, outboxPublication, store, catalogStore, materialStore, bomStore, measurementStore, sampleStore, sourcingStore,
-    platform, catalog, materials, boms, measurements, samples, partners, sourcing, collaboration, orders, notifications, workspace,
+    auth, readiness, maintenance, outboxPublication, store, catalogStore, materialStore, bomStore, measurementStore, sampleStore, sourcingStore, techPackStore,
+    platform, catalog, materials, boms, measurements, samples, partners, sourcing, techPacks, collaboration, orders, notifications, workspace,
     handler, fetchHandler,
   });
 }

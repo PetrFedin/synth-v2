@@ -1,7 +1,7 @@
 # JOOR Retailer Cabinet → Syntha B2B Fashion Platform
 
 Статус: рабочая продуктовая спецификация и master map.  
-Версия: 3.5, 5 августа 2026 года.  
+Версия: 3.6, 5 августа 2026 года.  
 Назначение: определить, как Syntha должна превзойти JOOR как B2B buying platform и одновременно закрыть PLM, sourcing, costing, production, quality, logistics, wholesale и analytics.
 
 > Документ объединяет результаты read-only аудита JOOR Retailer / LITE и целевую архитектуру Syntha. Наблюдаемое в JOOR не следует считать подтверждением его закрытой внутренней реализации. Все функции, которых не было в доступном аккаунте, помечаются как TARGET или UAT.
@@ -30613,3 +30613,1845 @@ Open Supply Hub:
 - https://info.opensupplyhub.org/resources/an-open-data-model
 - https://info.opensupplyhub.org/resources/claim-a-facility
 - https://info.opensupplyhub.org/digital-product-passport
+
+## 432. Version 3.6 scope — continuous wholesale, price intelligence and product trust
+
+Version 3.6 extends Syntha beyond seasonal wholesale ordering into an always-on commercial, pricing, content, identity and circular-lifecycle platform.
+
+The added operating model connects:
+
+```text
+Evergreen Product and Account Truth
+→ Continuous Assortment
+→ Account-specific Price and Terms
+→ Search and Guided Buying
+→ Order / Replenishment / Preorder
+→ Product Identity and Credentials
+→ Sale / Service / Return / Resale
+→ Verified Commercial and Circular Outcome
+```
+
+This version focuses on five unresolved strategic gaps:
+
+1. wholesale relationships continue between markets and seasons;
+2. price, promotion and markdown decisions require governed execution, not spreadsheets;
+3. product data must be transformed into reliable channel-ready content;
+4. certificates and product claims require machine-verifiable status and revocation;
+5. the platform must manage product identity after the first sale through service, return and resale.
+
+### 432.1 Evidence boundary
+
+- Existing JOOR observations remain limited to the audited account and previously recorded public evidence.
+- Capabilities below are `SYNTHA TARGET` unless explicitly identified as external benchmark.
+- Oracle Retail is used as the pricing execution and lifecycle-pricing benchmark.
+- GS1 Digital Link and EPCIS/CBV are used as product-identity and event-interoperability benchmarks.
+- W3C Verifiable Credentials are used as a credential exchange benchmark, not as a mandate to expose sensitive supplier data publicly.
+- No external credential, AI score or digital signature is automatically treated as proof that an underlying business fact is true. Trust depends on issuer, scope, evidence, status and verification policy.
+
+---
+
+## 433. Continuous Wholesale Operating Model
+
+Seasonal market ordering remains important, but Syntha must support a continuous relationship lifecycle:
+
+```text
+Prospect
+→ Connected Account
+→ Initial Assortment
+→ Seasonal Buy
+→ At-once Purchase
+→ Replenishment
+→ New Drop
+→ Service / Claim
+→ Renewal / Expansion
+```
+
+### 433.1 Commercial buying modes
+
+- seasonal prebook;
+- immediate / at-once;
+- future inventory;
+- made-to-order;
+- replenishment;
+- continuity / never-out-of-stock;
+- limited drop;
+- exclusivity allocation;
+- consignment;
+- dropship;
+- event and group ordering;
+- sample-to-order;
+- retailer private label / SMU;
+- preorder backed by consumer demand.
+
+### 433.2 Continuous account workspace
+
+A brand-retailer relationship has one persistent workspace containing:
+
+- current terms and historical terms;
+- account hierarchy and buyer roles;
+- active assortments;
+- current and future availability;
+- drafts and intents;
+- orders, amendments and shipments;
+- returns, claims and deductions;
+- sell-through data and confidence;
+- payment and credit status;
+- open tasks, cases and appointments;
+- recommendations and their outcomes;
+- relationship health and renewal dates.
+
+The workspace must not reset when a season closes.
+
+---
+
+## 434. Evergreen Assortment and Account Assortment Lifecycle
+
+### 434.1 Canonical entities
+
+```text
+EvergreenRange
+AccountAssortment
+AssortmentVersion
+AssortmentEligibility
+AssortmentSubscription
+ProductIntroduction
+ProductRetirement
+ReplacementRelationship
+```
+
+### 434.2 Account assortment states
+
+```text
+DRAFT
+→ PROPOSED
+→ REVIEWING
+→ APPROVED
+→ ACTIVE
+→ PARTIALLY_AVAILABLE
+→ SUSPENDED
+→ EXITING
+→ RETIRED
+```
+
+An assortment version records:
+
+- retailer, banner, door cluster and channel;
+- applicable products and alternatives;
+- presentation minimums;
+- size/color expectations;
+- price and margin conditions;
+- valid dates;
+- launch and exit rules;
+- inventory and replenishment policy;
+- content and compliance readiness;
+- owner and approvals;
+- evidence snapshot.
+
+### 434.3 Product introduction and exit
+
+Adding or removing a product must calculate impact on:
+
+- open orders;
+- replenishment rules;
+- store presentation;
+- customer preorders;
+- campaign commitments;
+- service parts and warranty;
+- replacement product;
+- residual inventory;
+- markdown and returns;
+- contractual listing obligations.
+
+A product cannot be silently removed from an account assortment while obligations remain open.
+
+---
+
+## 435. Replenishment Subscription and Continuity Programs
+
+### 435.1 Program types
+
+- fixed schedule;
+- min/max inventory;
+- target weeks of supply;
+- sell-through triggered;
+- forecast triggered;
+- retailer-requested call-off;
+- vendor-managed inventory;
+- presentation-stock protection;
+- launch top-up;
+- size-curve balancing;
+- threshold-based consignment refill.
+
+### 435.2 Replenishment policy
+
+```text
+ReplenishmentPolicy
+├── scope
+├── demand signal
+├── inventory signal
+├── target service level
+├── min / max / multiple
+├── lead time
+├── blackout dates
+├── capacity and ATP requirements
+├── credit and payment rules
+├── approval threshold
+└── stop conditions
+```
+
+### 435.3 Autonomy levels
+
+- L0: insight only;
+- L1: recommendation;
+- L2: draft replenishment order;
+- L3: auto-release within a signed framework and low-risk threshold;
+- L4: multi-location coordinated release with checkpoints.
+
+Auto-release is blocked when:
+
+- feed coverage is insufficient;
+- inventory confidence is below threshold;
+- product is suspended or recalled;
+- price/terms changed without acknowledgement;
+- credit or payment condition is unmet;
+- capacity is unconfirmed;
+- recommendation conflicts with an active exit or markdown plan.
+
+---
+
+## 436. Preorder, Waitlist and Demand Reservation
+
+### 436.1 Distinct objects
+
+```text
+ConsumerInterest
+WaitlistEntry
+PreorderCommitment
+WholesaleDemandReservation
+InventoryReservation
+CapacityReservation
+```
+
+These objects must not be conflated.
+
+### 436.2 Reservation hierarchy
+
+```text
+Signal only
+→ Non-binding waitlist
+→ Refundable preorder
+→ Non-refundable deposit
+→ Retailer wholesale reservation
+→ Confirmed inventory allocation
+→ Confirmed production capacity
+```
+
+### 436.3 Controls
+
+- explicit binding/non-binding status;
+- quantity and expiry;
+- price-change policy;
+- cancellation and refund rights;
+- oversubscription rules;
+- allocation fairness;
+- market and channel restrictions;
+- estimated delivery confidence;
+- consumer and retailer communication;
+- reconciliation when product or date changes.
+
+A preorder must never be displayed as guaranteed inventory until an applicable allocation or capacity commitment exists.
+
+---
+
+## 437. Price Architecture and Price Book Governance
+
+### 437.1 Canonical pricing objects
+
+```text
+PriceArchitecture
+PriceBook
+PriceList
+PriceZone
+PriceRule
+PriceEvent
+PriceOverride
+PriceApproval
+PricePublication
+PriceAcknowledgement
+```
+
+### 437.2 Price dimensions
+
+- legal entity;
+- brand;
+- retailer/account group;
+- customer class;
+- market;
+- channel;
+- currency;
+- tax inclusion;
+- incoterm;
+- delivery;
+- season/drop;
+- product/style/color/SKU;
+- order quantity;
+- payment term;
+- contract;
+- promotion;
+- effective date and time.
+
+### 437.3 Price lifecycle
+
+```text
+DRAFT
+→ VALIDATED
+→ IMPACT_ANALYZED
+→ APPROVED
+→ SCHEDULED
+→ PUBLISHED
+→ ACKNOWLEDGED
+→ EFFECTIVE
+→ EXPIRED / REVOKED / SUPERSEDED
+```
+
+A price is executable only when it resolves unambiguously for the transaction context.
+
+### 437.4 Price precedence
+
+Suggested hierarchy:
+
+```text
+Law / tax constraint
+> signed contract
+> customer-specific price
+> program price
+> channel/market price
+> standard price book
+> fallback list price
+```
+
+Any override must expose:
+
+- base price;
+- rule or contract displaced;
+- amount and percentage change;
+- requester;
+- approver;
+- reason;
+- validity;
+- downstream affected objects.
+
+---
+
+## 438. Net Price and Commercial Waterfall
+
+Syntha must distinguish visible wholesale price from economic net price.
+
+```text
+List Wholesale Price
+- Customer Discount
+- Volume Discount
+- Promotional Allowance
+- Early-payment Discount
+- Rebate Accrual
+- Markdown Support
+- Marketing Fund
+- Freight Allowance
+- Return Allowance
+- Expected Deductions
++ Surcharges
+= Expected Net Revenue
+```
+
+### 438.1 Transaction views
+
+- list;
+- invoice;
+- expected net;
+- recognized net;
+- collected net;
+- net after returns;
+- net-net after commercial funds and service costs.
+
+### 438.2 Governance
+
+- no hidden discount stacking;
+- prevent duplicate funding;
+- contract-to-price traceability;
+- accrual and settlement linkage;
+- currency/FX version;
+- historical prices remain reproducible;
+- margin and commission calculations reference the same certified waterfall.
+
+---
+
+## 439. Competitive and Market Price Intelligence
+
+### 439.1 Evidence types
+
+- retailer-provided observed price;
+- public market observation;
+- authorized marketplace feed;
+- brand-published RRP;
+- transaction-derived realized price;
+- promotion observation;
+- manual verified evidence;
+- inferred price range.
+
+### 439.2 Price observation schema
+
+```text
+PriceObservation
+├── product match and confidence
+├── seller / channel / market
+├── regular / promo / clearance status
+├── currency and tax basis
+├── observed time
+├── availability
+├── evidence source
+├── terms and exclusions
+└── verification status
+```
+
+### 439.3 Matching controls
+
+Do not compare prices until the system resolves:
+
+- exact SKU versus similar product;
+- pack or unit quantity;
+- tax inclusion;
+- condition: new, sample, used, refurbished;
+- authenticity and seller authorization;
+- delivery/fees;
+- market and currency;
+- effective time.
+
+Low-confidence matches can inform investigation but cannot automatically change price.
+
+---
+
+## 440. Lifecycle Pricing, Promotion and Markdown Workbench
+
+Oracle Retail Lifecycle Pricing Optimization is used as a benchmark for regular price, promotion, markdown and targeted-offer planning, plus impact visibility across sales, margin and inventory.
+
+### 440.1 Decision types
+
+- regular price change;
+- temporary promotion;
+- customer-targeted offer;
+- volume incentive;
+- wholesale launch offer;
+- clearance markdown;
+- markdown reset;
+- exit price;
+- account-specific support;
+- bundle or pack price.
+
+### 440.2 Scenario output
+
+Each recommendation shows:
+
+- baseline demand;
+- elasticity assumptions;
+- expected units;
+- revenue;
+- gross and net margin;
+- inventory position;
+- sell-through;
+- stockout or residual risk;
+- channel conflict;
+- partner funding;
+- return and cancellation effect;
+- confidence and sensitivity;
+- affected customer groups and doors.
+
+### 440.3 Execution separation
+
+```text
+Recommendation
+→ Merchant Review
+→ Commercial / Finance Approval
+→ Price Event
+→ Downstream Publication
+→ Acknowledgement
+→ Execution Monitoring
+→ Outcome Evaluation
+```
+
+An AI recommendation never changes an executable price directly.
+
+---
+
+## 441. Price Fairness, Consistency and Channel Conflict
+
+Controls include:
+
+- contract-price compliance;
+- minimum advertised price where legally and contractually applicable;
+- unauthorized discount detection;
+- price parity rules where lawful;
+- region and currency consistency;
+- channel-specific entitlement;
+- employee/insider pricing restrictions;
+- discrimination and unfair-treatment review;
+- promotion eligibility explanation;
+- rounding and tax consistency;
+- notification of material customer-specific price changes.
+
+The platform must avoid hard-coding legally sensitive pricing policies. Rules are versioned by jurisdiction and reviewed by authorized legal/commercial owners.
+
+---
+
+## 442. Product Content Supply Chain
+
+### 442.1 Content hierarchy
+
+```text
+Canonical Product Truth
+→ Market Projection
+→ Channel Projection
+→ Retailer Projection
+→ Locale Projection
+→ Published Listing
+```
+
+### 442.2 Content package
+
+- product identity;
+- commercial title;
+- descriptions;
+- taxonomy;
+- attributes;
+- composition;
+- dimensions and fit;
+- care and warnings;
+- origin;
+- price and availability projection;
+- imagery/video/3D;
+- packaging;
+- legal claims;
+- DPP/Digital Link targets;
+- translations;
+- SEO/discovery metadata;
+- retailer-specific fields.
+
+### 442.3 Readiness states
+
+```text
+SOURCE_INCOMPLETE
+→ TRANSFORMING
+→ REVIEW_REQUIRED
+→ READY_INTERNAL
+→ READY_MARKET
+→ READY_CHANNEL
+→ PUBLISHED
+→ REJECTED / SUSPENDED / OUTDATED
+```
+
+Readiness is computed for a precise product version, market, channel, locale and date.
+
+---
+
+## 443. Content Syndication and Publication Control
+
+### 443.1 Publication contract
+
+Every destination has a versioned contract describing:
+
+- required and optional fields;
+- allowed values;
+- taxonomy mapping;
+- media specifications;
+- legal requirements;
+- character and file limits;
+- price/availability behavior;
+- update frequency;
+- acknowledgement format;
+- rejection codes;
+- delete/unpublish semantics.
+
+### 443.2 Publication lifecycle
+
+```text
+GENERATED
+→ VALIDATED
+→ APPROVED
+→ SENT
+→ ACKNOWLEDGED
+→ LIVE_VERIFIED
+→ OUTDATED / REJECTED / UNPUBLISHED
+```
+
+### 443.3 Drift monitoring
+
+Syntha compares canonical truth with live destination state and identifies:
+
+- stale price;
+- stale availability;
+- missing variation;
+- outdated image;
+- unauthorized text change;
+- missing warning;
+- incorrect composition;
+- removed product still live;
+- destination-side publication failure.
+
+---
+
+## 444. Intelligent Document and Data Intake
+
+Supported sources:
+
+- supplier forms;
+- line sheets;
+- invoices;
+- packing lists;
+- certificates;
+- lab reports;
+- test reports;
+- spreadsheets;
+- PDFs;
+- email attachments;
+- scanned labels;
+- product images;
+- EDI/API payloads.
+
+### 444.1 Intake pipeline
+
+```text
+Receive
+→ Malware / File Validation
+→ Document Classification
+→ Extraction
+→ Entity Resolution
+→ Schema Mapping
+→ Validation
+→ Confidence Review
+→ Proposed Domain Commands
+→ Human Approval where required
+→ Commit and Reconcile
+```
+
+### 444.2 Non-negotiable controls
+
+- original file preserved;
+- extraction model/version recorded;
+- field-level confidence;
+- exact source location for extracted values;
+- no silent overwrite;
+- unit and currency normalization visible;
+- contradiction detection;
+- supplier identity verification;
+- sensitive-data classification;
+- human approval for legal, financial, safety and bank details.
+
+---
+
+## 445. Data Confidence and Evidence-aware UX
+
+Every critical field should expose:
+
+```text
+Value
+Source
+Source date
+Effective date
+Owner
+Verification status
+Confidence
+Conflicts
+Last reconciliation
+Downstream usage
+```
+
+Confidence states:
+
+- verified authoritative;
+- verified external;
+- partner-declared;
+- system-derived;
+- inferred;
+- conflicting;
+- stale;
+- unknown.
+
+Inferred or stale data must never look identical to verified canonical truth.
+
+---
+
+## 446. Semantic Commerce Search
+
+Search must span:
+
+- brands;
+- products;
+- materials;
+- colors;
+- fit and silhouettes;
+- collections;
+- available inventory;
+- commercial terms;
+- compliance;
+- delivery;
+- suppliers;
+- past orders;
+- performance;
+- documents and evidence.
+
+### 446.1 Query examples
+
+- “carry-over black knit dresses deliverable in September under €120 wholesale”;
+- “alternatives to this style with higher margin and lower return rate”;
+- “products approved for UAE and EU with Arabic content ready”;
+- “replenishable core items with confirmed capacity and low stockout risk”;
+- “materials similar in hand feel but with lower lead time”.
+
+### 446.2 Retrieval controls
+
+- entitlement filtering before retrieval;
+- tenant isolation;
+- field-level masking;
+- effective-date filtering;
+- exact versus semantic match distinction;
+- source and confidence display;
+- no use of inaccessible data in embeddings or generated explanations;
+- freshness and index-lag indicator;
+- reproducible filter snapshot.
+
+---
+
+## 447. Guided Buying Workspace
+
+The guided buyer experience combines search, assortment, OTB, constraints, availability and account terms.
+
+### 447.1 Buying brief
+
+```text
+BuyingBrief
+├── business objective
+├── customer / door scope
+├── category and price architecture
+├── units and OTB
+├── delivery windows
+├── margin target
+├── product roles
+├── constraints
+├── risk tolerance
+└── evidence preferences
+```
+
+### 447.2 Output
+
+- recommended candidate pool;
+- excluded candidates and reasons;
+- assortment composition;
+- size/color quantities;
+- delivery allocation;
+- budget and margin result;
+- novelty/core balance;
+- overlap and cannibalization;
+- demand and stock risk;
+- explainable alternatives;
+- proposal or order draft.
+
+The system must let buyers lock decisions and rerun only the unlocked scope.
+
+---
+
+## 448. Credential Trust Registry
+
+Syntha requires a credential layer for certificates, licences, approvals and attestations.
+
+### 448.1 Credential types
+
+- organization verification;
+- tax registration;
+- bank verification;
+- facility licence;
+- audit or assessment;
+- laboratory accreditation;
+- material certification;
+- product test result;
+- chain-of-custody statement;
+- insurance;
+- authorized reseller status;
+- authenticity attestation;
+- repair authorization;
+- condition assessment;
+- DPP operator registration.
+
+### 448.2 Credential model
+
+```text
+Credential
+├── issuer
+├── subject
+├── claims
+├── scope
+├── evidence references
+├── issuance and expiry
+├── status / revocation
+├── schema and version
+├── signature / proof
+├── disclosure policy
+└── verification history
+```
+
+W3C Verifiable Credentials provide a benchmark for issuer-holder-verifier exchange, tamper-evident credentials and machine-verifiable claims.
+
+---
+
+## 449. Credential Verification, Revocation and Selective Disclosure
+
+### 449.1 Verification checks
+
+- trusted issuer policy;
+- signature/proof validity;
+- schema validity;
+- subject match;
+- applicable product/facility/market scope;
+- effective and expiry dates;
+- revocation/status;
+- evidence completeness;
+- chain of delegation;
+- duplicate or conflicting credential;
+- current issuer authority.
+
+### 449.2 Credential states
+
+```text
+RECEIVED
+→ PARSED
+→ CRYPTOGRAPHICALLY_VERIFIED
+→ BUSINESS_SCOPE_VERIFIED
+→ ACCEPTED
+→ EXPIRED / REVOKED / SUSPENDED / SUPERSEDED / DISPUTED
+```
+
+Cryptographic verification does not equal business acceptance.
+
+### 449.3 Privacy
+
+- reveal only required claims;
+- do not expose worker or personal data unnecessarily;
+- support scoped presentations;
+- record verifier purpose;
+- prevent credentials from becoming global tracking identifiers;
+- respect retention and deletion rules.
+
+---
+
+## 450. GS1 Digital Link and Resolver Architecture
+
+GS1 Digital Link provides the benchmark for expressing GS1 identifiers in web-address form and resolving an identifier to multiple digital information services.
+
+### 450.1 Resolver targets
+
+A single product identity may resolve, according to role and market, to:
+
+- product information;
+- DPP;
+- care instructions;
+- authenticity check;
+- warranty registration;
+- repair booking;
+- recall status;
+- recycling guidance;
+- retailer product page;
+- partner API;
+- traceability evidence;
+- resale record.
+
+### 450.2 Resolver policy
+
+```text
+Identifier
++ Link Type
++ Market
++ Language
++ Channel
++ User / Partner Role
++ Time
+→ Authorized Target
+```
+
+### 450.3 Controls
+
+- resolver configuration versioning;
+- link-type vocabulary;
+- market and language fallback;
+- no broken or hijacked destination;
+- redirect audit;
+- malicious-link protection;
+- cache and expiry policy;
+- withdrawal and recall override;
+- no leakage of confidential product or supplier information.
+
+---
+
+## 451. Product Identity Resolution
+
+Syntha must distinguish:
+
+```text
+Style
+Colorway
+SKU
+Trade Item / GTIN
+Lot / Batch
+Serialized Item
+Packaging Unit / SSCC
+Asset / Sample
+```
+
+### 451.1 Identity rules
+
+- one canonical ID per entity;
+- multiple source-system aliases;
+- effective-dated GTIN relationships;
+- pack and hierarchy relationships;
+- merge/split history;
+- replacement and supersession;
+- duplicate detection;
+- item identity cannot inherit unverified product identity;
+- recalled or counterfeit serials remain preserved for investigation.
+
+---
+
+## 452. Item-level Authenticity and Custody
+
+### 452.1 Serialized item record
+
+```text
+SerializedItem
+├── product / SKU version
+├── serial or encoded identity
+├── production batch
+├── manufacturing event
+├── quality release
+├── custody events
+├── sale / ownership events
+├── service / repair events
+├── return / resale events
+└── current status
+```
+
+### 452.2 Authenticity result
+
+```text
+VERIFIED
+LIKELY_VALID
+INSUFFICIENT_EVIDENCE
+DUPLICATE_SCAN
+INVALID_IDENTIFIER
+REVOKED
+REPORTED_STOLEN
+RECALLED
+SUSPECTED_COUNTERFEIT
+```
+
+A scan result must explain whether it verifies:
+
+- identifier syntax only;
+- issuer signature;
+- production record;
+- custody history;
+- current ownership;
+- authorized channel.
+
+These are separate questions.
+
+---
+
+## 453. Anti-diversion and Grey-market Control
+
+Signals include:
+
+- item appears in an unauthorized market;
+- serial scanned in impossible locations or time sequence;
+- repeated scans of the same identifier;
+- sale before authorized launch;
+- channel or territory restriction breach;
+- seller lacks authorized-reseller credential;
+- shipment and sales channel mismatch;
+- price far outside authorized context;
+- bulk returns with suspicious identity patterns.
+
+### 453.1 Investigation lifecycle
+
+```text
+SIGNAL
+→ TRIAGE
+→ IDENTITY AND CUSTODY REVIEW
+→ PARTNER RESPONSE
+→ FINDING
+→ COMMERCIAL / LEGAL ACTION
+→ REMEDIATION
+→ CLOSED
+```
+
+Signals cannot automatically accuse a seller or customer. Evidence and appeal are required.
+
+---
+
+## 454. Warranty, Repair and Service Lifecycle
+
+### 454.1 Service objects
+
+```text
+WarrantyPolicy
+WarrantyRegistration
+ServiceRequest
+RepairOrder
+RepairAssessment
+RepairEstimate
+ServicePart
+RepairEvent
+WarrantyDecision
+ServiceOutcome
+```
+
+### 454.2 Workflow
+
+```text
+REQUESTED
+→ ELIGIBILITY_CHECK
+→ TRIAGED
+→ ITEM_RECEIVED
+→ ASSESSED
+→ ESTIMATE / WARRANTY_DECISION
+→ APPROVED
+→ REPAIRING
+→ QUALITY_CHECK
+→ RETURNED
+→ CLOSED
+```
+
+### 454.3 Controls
+
+- exact product/item identity;
+- ownership/custody right;
+- warranty terms version;
+- recall and safety checks;
+- service-provider authorization;
+- parts and material traceability;
+- before/after evidence;
+- customer consent;
+- repairability and cost;
+- carbon/waste outcome;
+- impact on resale condition and warranty.
+
+---
+
+## 455. Circular Commerce and Resale Network
+
+### 455.1 Circular paths
+
+```text
+First Sale
+→ Return
+→ Repair
+→ Refurbishment
+→ Resale
+→ Rental / Loan
+→ Donation
+→ Material Recovery
+→ Recycling
+```
+
+### 455.2 Resale listing readiness
+
+- item authenticity;
+- ownership right;
+- condition grade;
+- repair and alteration history;
+- hygiene/safety readiness;
+- original product data;
+- current images;
+- recalled/prohibited status;
+- channel eligibility;
+- price recommendation;
+- applicable warranty or guarantee;
+- required disclosure.
+
+### 455.3 Circular value ledger
+
+```text
+Recovered Revenue
+- Inspection
+- Cleaning
+- Repair
+- Refurbishment
+- Logistics
+- Marketplace Fee
+- Warranty Reserve
+- Fraud Loss
+= Circular Contribution
+```
+
+Environmental impact must be reported separately from financial contribution unless a governed methodology explicitly connects them.
+
+---
+
+## 456. Trade-in and Buyback Programs
+
+### 456.1 Program policy
+
+- eligible products and brands;
+- item age;
+- condition bands;
+- geography;
+- ownership evidence;
+- authenticity requirement;
+- quoted versus final value;
+- store credit/cash/discount options;
+- inspection time;
+- fraud controls;
+- data deletion for connected products;
+- rejected-item disposition.
+
+### 456.2 Workflow
+
+```text
+QUOTE_REQUESTED
+→ PROVISIONAL_QUOTE
+→ ITEM_RECEIVED
+→ AUTHENTICATED
+→ CONDITION_GRADED
+→ FINAL_OFFER
+→ ACCEPTED / REJECTED
+→ PAYOUT
+→ RESALE / REPAIR / RECYCLE
+```
+
+---
+
+## 457. Condition Grading Standard
+
+Condition grade must be structured, category-specific and evidence-backed.
+
+### 457.1 Grade components
+
+- exterior condition;
+- interior condition;
+- functional condition;
+- missing parts;
+- alterations;
+- repairs;
+- stains/odor/hygiene;
+- packaging/accessories;
+- authenticity evidence;
+- safety concerns.
+
+### 457.2 Governance
+
+- grading guide version;
+- assessor identity and qualification;
+- photos/video;
+- automated suggestions separated from human decision;
+- appeal and re-grade;
+- no grade based only on resale price target;
+- changed grade produces a new version;
+- material defects and safety issues cannot be hidden in a summary grade.
+
+---
+
+## 458. Returns Disposition Optimization
+
+For each returned item, options may include:
+
+- return to stock;
+- clean/repack;
+- repair;
+- refurbish;
+- outlet;
+- resale;
+- return to supplier;
+- donation;
+- recycle;
+- destruction when legally permitted.
+
+### 458.1 Decision inputs
+
+- item identity;
+- reason and condition;
+- safety/recall status;
+- marketability;
+- expected recovery value;
+- processing cost;
+- inventory need;
+- seasonality;
+- transport;
+- contractual ownership;
+- sustainability policy;
+- legal restrictions.
+
+### 458.2 Decision packet
+
+```text
+Option
+Expected Recovery
+Cost
+Time
+Risk
+Required Work
+Market Eligibility
+Waste / Circular Outcome
+Confidence
+Approval
+```
+
+---
+
+## 459. Sustainability and Product Claim Substantiation
+
+Claims can include:
+
+- recycled content;
+- organic or certified material;
+- lower-impact process;
+- traceable origin;
+- local production;
+- repairability;
+- recyclability;
+- durability;
+- carbon footprint;
+- water or chemical claim;
+- animal-welfare claim;
+- social-impact claim.
+
+### 459.1 Claim object
+
+```text
+ProductClaim
+├── exact wording
+├── language and market
+├── product/specification scope
+├── comparison baseline
+├── methodology
+├── evidence
+├── issuer / owner
+├── reviewer
+├── effective period
+├── channel restrictions
+└── status
+```
+
+### 459.2 States
+
+```text
+DRAFT
+→ EVIDENCE_INCOMPLETE
+→ TECHNICAL_REVIEW
+→ LEGAL_REVIEW
+→ APPROVED
+→ PUBLISHED
+→ SUSPENDED / EXPIRED / WITHDRAWN / CHALLENGED
+```
+
+No claim can be inherited from a material to a finished product without an explicit applicability calculation.
+
+---
+
+## 460. Claim Evidence Graph
+
+The evidence graph connects:
+
+```text
+Claim
+→ Product / Specification Version
+→ Material and Quantity
+→ Supplier / Facility
+→ Certificate / Test / Calculation
+→ Methodology Version
+→ Batch / Period
+→ Publication
+```
+
+### 460.1 Evidence requirements
+
+- direct versus indirect evidence;
+- current versus expired;
+- product-specific versus supplier-wide;
+- verified versus self-declared;
+- calculation inputs and uncertainty;
+- chain-of-custody coverage;
+- exclusions;
+- reviewer and decision;
+- affected listings when evidence changes.
+
+A revoked credential or changed BOM triggers claim impact analysis.
+
+---
+
+## 461. Marketplace Seller and Reseller Governance
+
+### 461.1 Seller profile
+
+```text
+SellerProfile
+├── legal identity
+├── beneficial ownership where required
+├── tax and payout accounts
+├── authorized brands/categories
+├── markets/channels
+├── credentials
+├── performance
+├── disputes
+├── risk controls
+└── status
+```
+
+### 461.2 Seller states
+
+```text
+APPLICANT
+→ IDENTITY_REVIEW
+→ COMMERCIAL_REVIEW
+→ APPROVED
+→ ACTIVE
+→ RESTRICTED
+→ SUSPENDED
+→ OFFBOARDED
+```
+
+### 461.3 Permission model
+
+A seller may be authorized by:
+
+- brand;
+- category;
+- market;
+- channel;
+- product list;
+- condition type;
+- date;
+- inventory source;
+- fulfillment model.
+
+Authorization is not inferred merely from possessing inventory.
+
+---
+
+## 462. Listing Policy Compiler
+
+Before a listing is published, the compiler checks:
+
+```text
+Seller Eligibility
++ Product Identity
++ Marketability Passport
++ Channel Policy
++ Price Policy
++ Asset Rights
++ Claim Approval
++ Inventory Evidence
++ Service / Return Capability
+→ Publish / Review / Block
+```
+
+### 462.1 Policy outcomes
+
+- publish;
+- publish with warning;
+- require missing evidence;
+- require brand approval;
+- restrict market/channel;
+- remove claim;
+- replace asset;
+- block;
+- takedown after publication.
+
+Every block includes rule version, evidence and remediation path.
+
+---
+
+## 463. Commerce Trust and Fraud Signal Layer
+
+Signals may cover:
+
+- account takeover;
+- buyer or seller identity mismatch;
+- unusual bank change;
+- synthetic or duplicate organization;
+- payment fraud;
+- refund abuse;
+- return substitution;
+- counterfeit product;
+- manipulated documents;
+- fake credentials;
+- repeated failed delivery;
+- collusive orders;
+- promotion abuse;
+- inventory that cannot be evidenced.
+
+### 463.1 Decision principles
+
+- signal is not a verdict;
+- high-impact action requires review or policy-defined evidence threshold;
+- users receive an appropriate explanation and appeal path;
+- protected or irrelevant attributes cannot be used;
+- models are monitored for drift and false positives;
+- confirmed outcomes feed evaluation, not unrestricted training.
+
+---
+
+## 464. Trust and Safety Case Management
+
+```text
+REPORTED / DETECTED
+→ TRIAGED
+→ EVIDENCE_PRESERVED
+→ ACCESS_CONTAINED if required
+→ INVESTIGATED
+→ DECISION
+→ REMEDIATION / APPEAL
+→ MONITORED
+→ CLOSED
+```
+
+Cases can link to:
+
+- account;
+- listing;
+- order;
+- payment;
+- product/item identity;
+- credential;
+- shipment;
+- return;
+- user/device;
+- evidence;
+- policy and jurisdiction.
+
+Sensitive investigations are isolated from ordinary commercial comments.
+
+---
+
+## 465. Reputation, Reviews and Commercial Dispute Integrity
+
+### 465.1 Review eligibility
+
+- verified commercial relationship;
+- sufficient transaction or interaction;
+- conflict-of-interest check;
+- no duplicate review;
+- moderation policy;
+- right of response;
+- appeal;
+- separate product, service and logistics dimensions.
+
+### 465.2 Reputation model
+
+Do not collapse all performance into one star rating. Show:
+
+- response reliability;
+- confirmation reliability;
+- OTIF;
+- quality;
+- claims handling;
+- payment behavior;
+- data quality;
+- responsible-purchasing behavior;
+- dispute rate and resolution;
+- evidence coverage and observation period.
+
+Scores must disclose coverage and must not punish low-volume partners through unstable averages.
+
+---
+
+## 466. Canonical entities added in Version 3.6
+
+```text
+EvergreenRange
+AccountAssortment
+AssortmentVersion
+AssortmentSubscription
+ProductIntroduction
+ProductRetirement
+ReplacementRelationship
+ReplenishmentPolicy
+ReplenishmentRun
+ConsumerInterest
+WaitlistEntry
+PreorderCommitment
+WholesaleDemandReservation
+PriceArchitecture
+PriceBook
+PriceList
+PriceZone
+PriceRule
+PriceEvent
+PriceOverride
+PriceApproval
+PricePublication
+PriceAcknowledgement
+PriceObservation
+PriceMatchCandidate
+LifecyclePriceScenario
+PromotionPlan
+MarkdownPlan
+ContentPackage
+ChannelProjection
+PublicationContract
+PublicationJob
+PublicationAcknowledgement
+PublicationDriftIssue
+DocumentIntake
+ExtractionResult
+ExtractionFieldEvidence
+SemanticQuery
+BuyingBrief
+Credential
+CredentialPresentation
+CredentialVerification
+CredentialStatusRecord
+ResolverConfiguration
+ResolverLink
+SerializedItem
+AuthenticityCheck
+DiversionSignal
+WarrantyPolicy
+WarrantyRegistration
+ServiceRequest
+RepairOrder
+RepairEvent
+CircularDisposition
+ResaleListing
+TradeInQuote
+BuybackTransaction
+ConditionAssessment
+ConditionGrade
+ProductClaim
+ClaimEvidenceLink
+SellerProfile
+SellerAuthorization
+ListingPolicy
+ListingDecision
+FraudSignal
+TrustSafetyCase
+ReputationObservation
+```
+
+---
+
+## 467. Routes and workspaces added in Version 3.6
+
+```text
+/wholesale/continuous
+/wholesale/accounts/:accountId/workspace
+/wholesale/accounts/:accountId/assortment
+/wholesale/accounts/:accountId/replenishment
+/wholesale/preorders
+/pricing/architecture
+/pricing/books
+/pricing/events
+/pricing/intelligence
+/pricing/lifecycle
+/pricing/promotions
+/pricing/markdowns
+/content/packages
+/content/publications
+/content/drift
+/intake/documents
+/search/semantic
+/buying/guided
+/trust/credentials
+/trust/credentials/:credentialId
+/trust/resolvers
+/trust/authenticity
+/trust/diversion
+/service/warranties
+/service/repairs
+/circular/resale
+/circular/trade-in
+/circular/returns-disposition
+/claims/product
+/claims/evidence
+/marketplace/sellers
+/marketplace/authorizations
+/marketplace/listing-policies
+/trust-safety/cases
+/reputation/partners
+```
+
+---
+
+## 468. API outline added in Version 3.6
+
+```text
+POST   /api/v1/account-assortments
+POST   /api/v1/account-assortments/:id/versions
+POST   /api/v1/replenishment-policies
+POST   /api/v1/replenishment-runs/:id/approve
+POST   /api/v1/preorders
+POST   /api/v1/demand-reservations
+POST   /api/v1/price-books
+POST   /api/v1/price-events
+POST   /api/v1/price-events/:id/impact-analysis
+POST   /api/v1/price-events/:id/approve
+POST   /api/v1/price-events/:id/publish
+POST   /api/v1/price-observations
+POST   /api/v1/lifecycle-price-scenarios
+POST   /api/v1/content-packages
+POST   /api/v1/publication-jobs
+POST   /api/v1/publication-jobs/:id/reconcile
+POST   /api/v1/document-intakes
+POST   /api/v1/document-intakes/:id/commit
+POST   /api/v1/semantic-search
+POST   /api/v1/buying-briefs/:id/generate
+POST   /api/v1/credentials
+POST   /api/v1/credential-presentations/verify
+POST   /api/v1/credentials/:id/revoke
+POST   /api/v1/resolvers/resolve
+POST   /api/v1/authenticity-checks
+POST   /api/v1/diversion-signals
+POST   /api/v1/service-requests
+POST   /api/v1/repair-orders/:id/events
+POST   /api/v1/trade-in-quotes
+POST   /api/v1/condition-assessments
+POST   /api/v1/product-claims
+POST   /api/v1/product-claims/:id/impact-analysis
+POST   /api/v1/seller-authorizations
+POST   /api/v1/listing-decisions/evaluate
+POST   /api/v1/trust-safety-cases
+```
+
+API requirements:
+
+- tenant and relationship authorization;
+- idempotency for mutations;
+- effective-dated version references;
+- source and evidence links;
+- optimistic concurrency;
+- immutable event IDs;
+- no direct update of certified historical states;
+- async job status for high-volume publication and pricing calculations.
+
+---
+
+## 469. Domain events added in Version 3.6
+
+```text
+AccountAssortmentProposed
+AccountAssortmentActivated
+AccountAssortmentRetired
+ReplenishmentRecommended
+ReplenishmentDrafted
+ReplenishmentReleased
+PreorderCreated
+DemandReservationExpired
+PriceEventProposed
+PriceEventApproved
+PriceEventPublished
+PriceEventAcknowledged
+PriceEventEffective
+PriceObservationReceived
+PriceMatchDisputed
+LifecyclePriceScenarioCalculated
+PromotionApproved
+MarkdownActivated
+ContentPackageReady
+PublicationSent
+PublicationAcknowledged
+PublicationRejected
+PublicationDriftDetected
+DocumentIntakeReceived
+ExtractionReviewed
+IntakeCommitted
+SemanticQueryExecuted
+BuyingBriefGenerated
+CredentialIssued
+CredentialVerified
+CredentialRejected
+CredentialRevoked
+ResolverTargetChanged
+SerializedItemCreated
+AuthenticityChecked
+DiversionSignalOpened
+WarrantyRegistered
+RepairCompleted
+TradeInOfferAccepted
+ConditionGradeChanged
+CircularDispositionCompleted
+ProductClaimApproved
+ProductClaimSuspended
+SellerAuthorized
+SellerRestricted
+ListingBlocked
+FraudSignalRaised
+TrustSafetyCaseOpened
+TrustSafetyCaseResolved
+ReputationObservationCertified
+```
+
+---
+
+## 470. Additional UAT scenarios for Version 3.6
+
+1. Evergreen product remains visible after season close while seasonal styles retire.
+2. Product removal from an active account assortment identifies open replenishment and customer-preorder obligations.
+3. Replenishment recommendation is blocked when retailer POS coverage falls below threshold.
+4. Auto-release is blocked after price terms expire.
+5. A waitlist is not counted as committed demand.
+6. Preorder converts to inventory allocation without double-counting demand.
+7. Oversubscribed drop allocates according to approved fairness policy.
+8. Customer-specific price correctly overrides a standard price book.
+9. Expired contract price cannot be selected for a new order.
+10. Historical invoice reproduces the original price and FX logic.
+11. Discount stacking attempts are rejected with rule explanation.
+12. Price change impact analysis identifies affected catalogs, drafts, agreements and margin.
+13. Scheduled price publishes to two channels; one acknowledgement fails and creates an exception.
+14. Low-confidence competitive match cannot trigger a price event.
+15. Markdown scenario separates expected outcome from actual outcome.
+16. Destination catalog contains an outdated warning and drift monitoring opens a critical issue.
+17. Product publication is blocked because a claim credential was revoked.
+18. Document extraction proposes a changed bank account but cannot commit without independent verification.
+19. Extracted composition conflicts with PLM and opens a review instead of overwriting.
+20. Semantic search excludes products outside the buyer's commercial entitlement.
+21. Search result shows stale inventory confidence and does not present it as confirmed ATP.
+22. Guided buying preserves locked hero products while reoptimizing the rest.
+23. Credential has a valid signature but is rejected because it covers a different facility.
+24. Credential is selectively disclosed without exposing unrelated personal data.
+25. Revoked credential immediately affects dependent claims and listings.
+26. Digital Link resolves to different language content without changing the product identifier.
+27. Recall policy overrides normal resolver target and directs to safety information.
+28. Duplicate serial scans in incompatible locations open an investigation.
+29. Invalid serial does not expose confidential internal manufacturing data.
+30. Unauthorized seller listing is blocked even though the item identifier is valid.
+31. Warranty decision uses the exact terms version valid at original sale.
+32. Repair event updates item history without rewriting original production history.
+33. Condition grade change retains previous grade, evidence and assessor.
+34. Recalled item cannot enter resale or trade-in payout.
+35. Trade-in provisional quote changes after inspection with transparent reasons.
+36. Return disposition chooses repair over liquidation and records cost and recovery outcome.
+37. Recycled-material claim is suspended after BOM substitution invalidates evidence.
+38. Product claim in one language is approved while unsupported translation remains blocked.
+39. Seller bank change freezes payout until re-verification.
+40. Trust-and-safety case isolates sensitive evidence from normal account workspace.
+41. Reputation metric excludes unverified and duplicated review activity.
+42. Low-volume supplier score displays coverage and confidence instead of a misleading rank.
+43. Publication replay after connector recovery remains idempotent.
+44. Price event rollback restores downstream state without deleting the superseded event.
+
+---
+
+## 471. Competitive gap matrix — Version 3.6
+
+| Capability | Benchmark | JOOR status | Syntha decision | Priority |
+|---|---|---|---|---|
+| Continuous account assortment | B2B commerce / ERP suites | PARTIAL / UAT | Persistent assortment lifecycle | P0 |
+| Governed price books and events | Oracle Retail Pricing | NOT CONFIRMED | Versioned price execution plane | P0 |
+| Lifecycle promotion and markdown scenarios | Oracle LPO | NOT CONFIRMED | Explainable recommendation plus controlled execution | P1 |
+| Channel content publication and drift | PIM/PXM suites | NOT CONFIRMED | Canonical projection and reconciliation | P0 |
+| Intelligent document intake | Procurement/PIM suites | NOT CONFIRMED | Evidence-aware extraction to domain commands | P1 |
+| Semantic cross-domain search | Enterprise search | NOT CONFIRMED | Entitlement-safe fashion knowledge retrieval | P1 |
+| Guided buying from a structured brief | Planning/AI tools | NOT CONFIRMED | Constraint-aware buyer decision workspace | P1 |
+| Machine-verifiable credentials | W3C VC ecosystem | NOT CONFIRMED | Credential registry with business verification | P1 |
+| Product-linked web resolver | GS1 Digital Link | NOT CONFIRMED | Role/market-aware product service resolver | P1 |
+| Item authenticity and custody | Traceability platforms | NOT CONFIRMED | Serialized-item evidence and case workflow | P2 |
+| Warranty and repair lifecycle | After-sales platforms | NOT CONFIRMED | Product-linked service record | P2 |
+| Resale, trade-in and condition grading | Circular commerce platforms | NOT CONFIRMED | Circular operating and value ledger | P2 |
+| Claim substantiation graph | ESG/product compliance tools | NOT CONFIRMED | Product-version claim evidence graph | P0 |
+| Marketplace seller authorization | Marketplace platforms | PARTIAL / UAT | Scope-specific seller permissions | P1 |
+| Trust and safety case management | Marketplace platforms | NOT CONFIRMED | Evidence, appeal and remediation workflow | P1 |
+
+---
+
+## 472. Version 3.6 delivery roadmap
+
+### P0 — trustworthy commercial execution
+
+- account assortment lifecycle;
+- price books, price resolution and price-event versioning;
+- net-price waterfall integration;
+- content package and channel projection;
+- publication acknowledgements and drift monitoring;
+- evidence-aware data confidence;
+- product claim registry and evidence graph;
+- listing policy compiler;
+- credential status foundation;
+- identity hierarchy: SKU, GTIN, lot, serial, SSCC.
+
+### P1 — continuous growth and controlled intelligence
+
+- replenishment subscription;
+- preorder and demand reservation;
+- competitive price observations;
+- lifecycle price scenarios;
+- document intake and extraction review;
+- semantic search;
+- guided buying;
+- verifiable credential exchange;
+- Digital Link resolver;
+- seller authorization;
+- commerce fraud and trust-safety cases.
+
+### P2 — post-sale and circular differentiation
+
+- serialized-item authenticity;
+- diversion monitoring;
+- warranty and repair;
+- condition grading;
+- trade-in and buyback;
+- resale listing readiness;
+- returns disposition optimization;
+- circular value and outcome ledger.
+
+### Dependency rule
+
+```text
+Canonical Product and Partner Truth
+→ Price / Content / Credential Foundations
+→ Continuous Buying and Publication
+→ Product Identity
+→ Service and Circular Lifecycle
+```
+
+Do not build consumer-facing authenticity or resale promises before product, credential, custody and authorization foundations are reliable.
+
+---
+
+## 473. Source register for Version 3.6
+
+Official benchmark sources:
+
+- W3C Verifiable Credentials Data Model v2.0 and current W3C VC series;
+- W3C Verifiable Credentials JSON Schema and JOSE/COSE specifications;
+- GS1 Digital Link standards and GS1-Conformant Resolver standard;
+- GS1 EPCIS and Core Business Vocabulary 2.0;
+- Oracle Retail Pricing Cloud Service;
+- Oracle Retail Lifecycle Pricing Optimization Cloud Service.
+
+Source interpretation:
+
+- W3C specifications define exchange and verification structures, not commercial trust decisions.
+- GS1 standards provide interoperable identity, resolution and event patterns, not a complete Syntha authorization model.
+- Oracle pricing products are capability benchmarks; Syntha must adapt concepts to B2B fashion, account-specific terms, wholesale commitments and product lifecycle evidence.
+
+---
+
+## 474. Final decision — Version 3.6
+
+Syntha should now be designed as four connected operating layers:
+
+```text
+1. Product and Partner Truth
+2. Commercial Decision and Execution
+3. Product Identity and Trust
+4. Service and Circular Lifecycle
+```
+
+JOOR remains a strong benchmark for digital wholesale discovery, presentation and ordering. Syntha's defensible advantage must come from keeping the wholesale relationship active before, during and after the seasonal buy, while preserving traceable price, content, credential, item and outcome history.
+
+The Version 3.6 product promise is:
+
+```text
+Find the right product
+→ Prove it is eligible and correctly represented
+→ Price it under governed commercial terms
+→ Sell and replenish it continuously
+→ Verify the item and its claims
+→ Support, repair, return and recirculate it
+→ Learn from the certified outcome
+```

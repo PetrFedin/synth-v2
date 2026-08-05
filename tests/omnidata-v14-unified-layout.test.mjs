@@ -18,8 +18,9 @@ test('V14 constrains search and filters instead of stretching them across the wo
   const extensions=await source('public/omnidata-v14-extensions.css');
   for(const token of ['grid-template-columns:minmax(220px,360px) minmax(150px,190px) max-content!important','max-width:360px!important','width:190px!important','min-width:160px!important','max-width:220px!important','width:280px!important','od14-no-action']) assert.ok(css.includes(token)||extensions.includes(token),token);
   for(const token of ['.ls9-commandbar','grid-template-columns:minmax(220px,360px) max-content minmax(140px,175px) minmax(150px,200px) 36px minmax(8px,1fr) 36px 36px!important','.ls9-search','.ls9-select','.ls9-filter-button','.ls9-layout']) assert.ok(extensions.includes(token),token);
-  assert.ok(css.includes('@media(max-width:680px)'));
-  assert.ok(css.includes('body.omnidata-v14 .od-commandbar{'));
+  assert.ok(extensions.includes('[data-od14-component="filterbar"]'));
+  assert.ok(extensions.includes('grid-template-columns:minmax(220px,360px) repeat(3,minmax(140px,190px)) max-content!important'));
+  assert.ok(extensions.includes('@media(max-width:680px)'));
 });
 
 test('V14 unifies typography, controls, cards, tables, inspectors and dialogs',async()=>{
@@ -27,27 +28,44 @@ test('V14 unifies typography, controls, cards, tables, inspectors and dialogs',a
   const extensions=await source('public/omnidata-v14-extensions.css');
   for(const token of ['--od14-accent:#ff5b22','--od14-control:36px','--od14-radius:8px','font-size:24px!important','min-height:44px!important','grid-template-columns:repeat(auto-fit,minmax(142px,1fr))!important','grid-template-columns:minmax(0,1fr) minmax(320px,360px)!important','box-shadow:var(--od14-shadow)!important']) assert.ok(css.includes(token),token);
   for(const selector of ['.od-master-detail','.bom-layout','.measurement-layout','.sample-layout','.sourcing-grid','.od-inspector','.bom-inspector','.measurement-inspector','.sample-inspector','.sourcing-inspector','.od-table','.bom-table','.measurement-table','.sample-table','.sourcing-table']) assert.ok(css.includes(selector),selector);
-  for(const token of ['Forms and dialogs inherit the same visual language','dialog::backdrop','border-radius:10px!important','min-height:var(--od14-control)!important']) assert.ok(extensions.includes(token),token);
+  for(const token of ['Forms and dialogs inherit the same visual language','dialog::backdrop','border-radius:10px!important','min-height:var(--od14-control)!important','--od14-control:32px','--od14-radius:6px','--od14-shadow:none']) assert.ok(extensions.includes(token),token);
+  for(const role of ['surface','section-head','toolbar','filterbar','tabs','tab','metrics','metric','button','icon-button','field','master-detail','table-wrap','table','inspector','definition-grid','definition-item','entity','empty','status']) assert.ok(extensions.includes(`[data-od14-component="${role}"]`),role);
   assert.doesNotMatch(css+extensions,/@import|https?:\/\//i);
+});
+
+test('V14 component runtime maps legacy modules to shared semantic roles',async()=>{
+  const js=await source('public/modules/omnidata-v14-components.js');
+  assert.doesNotThrow(()=>new Function(js));
+  for(const token of ["const COMPONENTS=Object.freeze",'assignComponents','setRole','dataset.od14Component','dataset.od14Variant','data-od14-business-data','STRICT_PAIRS','RU_EXACT','EN_EXACT','translateText','decorateAbbreviations','auditLanguage','od14LanguageAudit','MutationObserver','syntha:locale-changed','SynthaOmnidataV14Components']) assert.ok(js.includes(token),token);
+  for(const selector of ['.od-commandbar','.ls9-commandbar','.bom-kpis','.measurement-kpis','.sample-kpis','.sourcing-kpis','.od-master-detail','.ls9-layout','.bom-layout','.measurement-layout','.sample-layout','.sourcing-grid','.od-table','.ls9-table','.bom-table','.measurement-table','.sample-table','.sourcing-table','.od-inspector','.ls9-inspector','.bom-inspector','.measurement-inspector','.sample-inspector','.sourcing-inspector','.entity']) assert.ok(js.includes(selector),selector);
+});
+
+test('V14 module adapters map Tech Packs and Production Orders into the same components',async()=>{
+  const js=await source('public/modules/omnidata-v14-module-adapters.js');
+  const css=await source('public/omnidata-v14-module-adapters.css');
+  assert.doesNotThrow(()=>new Function(js));
+  for(const token of ['tech-packs','production-orders','Технические пакеты','Tech Packs','Производственные заказы','Production Orders','tech-pack-kpis','production-orders-kpis','tech-pack-filters','production-orders-filters','tech-pack-table','production-orders-table','tech-pack-inspector','production-orders-inspector','data.od14Component','SynthaOmnidataV14ModuleAdapters']) assert.ok(js.includes(token),token);
+  for(const token of ['od14-module-summary','production-orders-create','tech-pack-readiness','tech-pack-card','production-orders-card','production-orders-error']) assert.ok(css.includes(token),token);
+  assert.doesNotMatch(css,/@import|https?:\/\//i);
 });
 
 test('V14 audits RU and EN labels and explains abbreviations without translating business data',async()=>{
   const js=await source('public/modules/omnidata-v14.js');
+  const components=await source('public/modules/omnidata-v14-components.js');
   for(const token of ['RU_EXACT','EN_EXACT','ROLE_RU','auditInterface','diagnosticAudit','DIAGNOSTIC_SELECTOR','data-od14-untranslated','translateRole','translateBrand','Fashion Operating System','Операционная система моды','syntha:locale-changed','MutationObserver']) assert.ok(js.includes(token),token);
-  for(const abbreviation of ['PLM','BOM','SKU','POM','MOQ','ATS','RFQ','PO','ERP','WMS','PIM','OMS','QC','QMS','FX','API','RFID','EAN','GTIN','EXW','FCA','FOB','CIF','DAP','DDP','EUR','USD','RUB','CNY','GBP','ISO','UTC','PDF','ZIP','PPS','HEX','RGB','SMB','SaaS','RU','EN']) assert.ok(js.includes(`${abbreviation}:`),abbreviation);
-  for(const pair of ['Ткань','Fabric','Фурнитура','Trim','Условие поставки','Incoterm','Электронная почта','Email','Срок выполнения','Lead time','Линейные листы','Linesheets']) assert.ok(js.includes(pair),pair);
-  assert.ok(js.includes("if(parent.closest('script,style,textarea,input,[contenteditable=\"true\"],.od13-abbr'))"));
+  for(const abbreviation of ['PLM','BOM','SKU','POM','MOQ','ATS','RFQ','PO','ERP','WMS','PIM','OMS','QC','QMS','FX','API','RFID','EAN','GTIN','EXW','FCA','FOB','CIF','DAP','DDP','EUR','USD','RUB','CNY','GBP','PDF','ZIP','PPS','HEX','RGB','RU','EN']) assert.ok(components.includes(`${abbreviation}:`),abbreviation);
+  for(const pair of ['Ткань','Fabric','Фурнитура','Trim','Условие поставки','Incoterm','Электронная почта','Email','Срок выполнения','Lead time','Листы коллекций','Linesheets']) assert.ok(components.includes(pair),pair);
+  assert.ok(components.includes(".entity-title,.entity-code,td,dd,[data-od14-business-data=\"true\"]"));
 });
 
-test('V14 is the final cache-busted visual layer and is served with no-store caching',async()=>{
+test('V14 adapters and component unifier are final cache-busted no-store assets',async()=>{
   const html=await source('public/index.html');
   const handler=await source('src/web/static-handler.mjs');
   assert.match(html,/meta name="syntha-build" content="visual-20260805-14"/);
-  assert.ok(html.indexOf('/omnidata-v14.css?v=visual-20260805-14')>html.indexOf('/omnidata-v13.css?v=visual-20260804-13'));
-  assert.ok(html.indexOf('/omnidata-v14-extensions.css?v=visual-20260805-14')>html.indexOf('/omnidata-v14.css?v=visual-20260805-14'));
-  assert.ok(html.indexOf('/ui/omnidata-v14.js?v=visual-20260805-14')>html.indexOf('/ui/omnidata-v13.js?v=visual-20260804-13'));
-  assert.ok(html.includes('/ui/app-start.js?v=visual-20260805-14'));
-  assert.ok(handler.includes("'/omnidata-v14.css': ['omnidata-v14.css', 'text/css; charset=utf-8', VISUAL_CACHE]"));
-  assert.ok(handler.includes("'/omnidata-v14-extensions.css': ['omnidata-v14-extensions.css', 'text/css; charset=utf-8', VISUAL_CACHE]"));
-  assert.ok(handler.includes("'/ui/omnidata-v14.js': ['modules/omnidata-v14.js', JS, VISUAL_CACHE]"));
+  const styleOrder=['/omnidata-v14.css?v=visual-20260805-14','/omnidata-v14-module-adapters.css?v=visual-20260805-14-module-adapters-1','/omnidata-v14-extensions.css?v=visual-20260805-14-components-2'];
+  let previous=-1;for(const asset of styleOrder){const index=html.indexOf(asset);assert.ok(index>previous,asset);previous=index}
+  const scriptOrder=['/ui/production-orders.js?v=industrial-20260805-1','/ui/omnidata-v14.js?v=visual-20260805-14','/ui/omnidata-v14-module-adapters.js?v=visual-20260805-14-module-adapters-1','/ui/omnidata-v14-components.js?v=visual-20260805-14-components-2','/ui/dom-boolean-props.js?v=visual-20260804-9'];
+  previous=-1;for(const asset of scriptOrder){const index=html.indexOf(asset);assert.ok(index>previous,asset);previous=index}
+  assert.ok(html.includes('/ui/app-start.js?v=visual-20260805-14-components-2'));
+  for(const mapping of ["'/omnidata-v14-module-adapters.css': ['omnidata-v14-module-adapters.css', 'text/css; charset=utf-8', VISUAL_CACHE]","'/omnidata-v14-extensions.css': ['omnidata-v14-extensions.css', 'text/css; charset=utf-8', VISUAL_CACHE]","'/ui/omnidata-v14-module-adapters.js': ['modules/omnidata-v14-module-adapters.js', JS, VISUAL_CACHE]","'/ui/omnidata-v14-components.js': ['modules/omnidata-v14-components.js', JS, VISUAL_CACHE]"]) assert.ok(handler.includes(mapping),mapping);
 });

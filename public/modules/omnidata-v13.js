@@ -64,20 +64,20 @@
     ]
   };
   const ABBREVIATIONS={
-    PLM:{ru:'Product Lifecycle Management — управление жизненным циклом продукта',en:'Product Lifecycle Management'},
-    BOM:{ru:'Bill of Materials — спецификация материалов и компонентов',en:'Bill of Materials'},
-    SKU:{ru:'Stock Keeping Unit — единица складского учёта',en:'Stock Keeping Unit'},
-    POM:{ru:'Point of Measure — точка измерения',en:'Point of Measure'},
-    MOQ:{ru:'Minimum Order Quantity — минимальная партия заказа',en:'Minimum Order Quantity'},
-    ATS:{ru:'Available to Sell — доступно к продаже',en:'Available to Sell'},
-    FX:{ru:'Foreign Exchange — валютный курс',en:'Foreign Exchange'},
-    QC:{ru:'Quality Control — контроль качества',en:'Quality Control'},
-    RFQ:{ru:'Request for Quotation — запрос коммерческого предложения',en:'Request for Quotation'},
-    PO:{ru:'Purchase Order — заказ на закупку',en:'Purchase Order'},
-    ERP:{ru:'Enterprise Resource Planning — система управления ресурсами предприятия',en:'Enterprise Resource Planning'},
-    WMS:{ru:'Warehouse Management System — система управления складом',en:'Warehouse Management System'},
-    EAN:{ru:'European Article Number — международный товарный код',en:'European Article Number'},
-    GTIN:{ru:'Global Trade Item Number — глобальный номер товарной позиции',en:'Global Trade Item Number'}
+    PLM:{ru:'Управление жизненным циклом продукта',en:'Product Lifecycle Management'},
+    BOM:{ru:'Спецификация материалов и компонентов',en:'Bill of Materials'},
+    SKU:{ru:'Единица складского учёта',en:'Stock Keeping Unit'},
+    POM:{ru:'Точка измерения',en:'Point of Measure'},
+    MOQ:{ru:'Минимальная партия заказа',en:'Minimum Order Quantity'},
+    ATS:{ru:'Доступно к продаже',en:'Available to Sell'},
+    FX:{ru:'Валютный курс',en:'Foreign Exchange'},
+    QC:{ru:'Контроль качества',en:'Quality Control'},
+    RFQ:{ru:'Запрос коммерческого предложения',en:'Request for Quotation'},
+    PO:{ru:'Заказ на закупку',en:'Purchase Order'},
+    ERP:{ru:'Система управления ресурсами предприятия',en:'Enterprise Resource Planning'},
+    WMS:{ru:'Система управления складом',en:'Warehouse Management System'},
+    EAN:{ru:'Международный товарный код',en:'European Article Number'},
+    GTIN:{ru:'Глобальный номер товарной позиции',en:'Global Trade Item Number'}
   };
   const ABBREVIATION_PATTERN=new RegExp(`\\b(${Object.keys(ABBREVIATIONS).join('|')})\\b`,'g');
   const RUNTIME_CSS=`

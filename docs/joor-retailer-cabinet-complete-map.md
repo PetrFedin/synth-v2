@@ -1,7 +1,7 @@
 # JOOR Retailer Cabinet → Syntha B2B Fashion Platform
 
 Статус: рабочая продуктовая спецификация и master map.  
-Версия: 3.2, 5 августа 2026 года.  
+Версия: 3.3, 5 августа 2026 года.  
 Назначение: определить, как Syntha должна превзойти JOOR как B2B buying platform и одновременно закрыть PLM, sourcing, costing, production, quality, logistics, wholesale и analytics.
 
 > Документ объединяет результаты read-only аудита JOOR Retailer / LITE и целевую архитектуру Syntha. Наблюдаемое в JOOR не следует считать подтверждением его закрытой внутренней реализации. Все функции, которых не было в доступном аккаунте, помечаются как TARGET или UAT.
@@ -24897,3 +24897,2146 @@ Reliability:
 - https://sre.google/sre-book/service-best-practices/
 - https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/reliability.html
 - https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/plan-for-disaster-recovery-dr.html
+
+## 324. Version 3.3 scope — concurrent planning, supplier execution and process intelligence
+
+### 324.1 Evidence boundary
+
+Version 3.3 extends the master map with capabilities confirmed in current NuORDER release notes and official documentation from adjacent supply-chain planning, supplier-collaboration, process-intelligence, should-cost and product-carbon standards.
+
+The following labels remain mandatory:
+
+- `JOOR OBSERVED` — directly visible in the audited Retailer / LITE account;
+- `JOOR PARTIAL / GATED / UAT` — visible only in part, limited by role/tier, or not safely executable;
+- `JOOR NOT CONFIRMED` — not confirmed in the audited account and public evidence used for this document;
+- `COMPETITOR CONFIRMED` — supported by an official competitor or standards source;
+- `SYNTHA TARGET` — target product requirement;
+- `DECISION` — adopted architecture rule;
+- `UAT` — requires controlled testing.
+
+### 324.2 Strategic direction
+
+Syntha must now connect four loops that are usually separated:
+
+```text
+COMMERCIAL LOOP
+Discovery → Assortment → Intent → Order → Account Growth
+
+SUPPLY LOOP
+Forecast → Capacity → Material → Production → Delivery
+
+FINANCIAL LOOP
+Cost → Price → Margin → Invoice → Cash → Net-Net Outcome
+
+LEARNING LOOP
+Event History → Process Analysis → Decision Quality → Policy Change
+```
+
+The strongest competitive advantage is not another dashboard. It is the ability to propagate a commercial change through supply, finance and execution immediately, then measure whether the decision improved the final outcome.
+
+---
+
+## 325. NuORDER 2026 operational delta — Product Directory, SMU resolution and recommendation loops
+
+### 325.1 COMPETITOR CONFIRMED
+
+Current NuORDER documentation confirms:
+
+- a centralized Product Directory for brand administrators;
+- retailer profiles that unify company information, locations, buyers and organization-linked orders;
+- brand recommendations based on existing connections and recent orders;
+- bulk linking and auto-matching of Special Make Ups / placeholders to real brand products;
+- preservation of assortment quantities, door distribution, notes and custom attributes when a placeholder is linked;
+- export/import of customized cart data without losing customization selections;
+- product customization with controlled logos, proof/approval states and option-based prices;
+- sales overview by orders, units, companies, status and Immediate versus Prebook order types.
+
+### 325.2 JOOR evidence status
+
+The audited JOOR cabinet showed catalog, product detail, linesheets, brands, connections, orders, account switching and gated assortment tools. The following were not confirmed as one governed operational model:
+
+- a canonical product operations directory spanning PLM, wholesale and channel projections;
+- bulk placeholder-to-product resolution with confidence, preservation rules and approval;
+- network recommendations with explainable evidence and tenant-safe learning;
+- organization-level order visibility combined with field-level confidentiality;
+- controlled customization import/export preserving versioned technical and commercial context.
+
+Status: `JOOR PARTIAL / NOT CONFIRMED / UAT`.
+
+### 325.3 SYNTHA TARGET
+
+Add the following connected workspaces:
+
+```text
+Product Operations Directory
+Placeholder Resolution Queue
+Network Recommendation Center
+Customization Operations
+Organization Order Overview
+```
+
+The Product Directory is not a second product master. It is an operational projection of canonical product, specification, content, commercial and channel-readiness data.
+
+---
+
+## 326. Product Operations Directory
+
+### 326.1 Purpose
+
+The Product Operations Directory must provide a single operational list of all product records that can be acted upon by brand, retailer, PLM, merchandising, content, compliance and wholesale teams.
+
+### 326.2 Required columns and views
+
+- canonical product ID;
+- brand style code;
+- season, collection and drop;
+- style, colorway and SKU counts;
+- lifecycle state;
+- commercial state;
+- technical-readiness state;
+- marketability state;
+- wholesale publication state;
+- channel projection states;
+- product owner;
+- unresolved specification issues;
+- missing images/content;
+- missing price/availability;
+- active retailer/market restrictions;
+- open samples/tests;
+- open orders and production commitments;
+- last source update;
+- last downstream synchronization;
+- data-quality score;
+- blocking reason.
+
+Saved views:
+
+- Ready to Publish;
+- Missing Commercial Data;
+- Missing Technical Data;
+- Missing Compliance Evidence;
+- Active but No Availability;
+- Open Orders with Product Change;
+- Superseded Product Versions;
+- Carry-over Candidates;
+- High Return / Fit Risk;
+- High Carbon / Cost Exposure;
+- Unmapped External Product IDs.
+
+### 326.3 Bulk actions
+
+Bulk actions must use controlled commands, not direct field overwrite:
+
+- assign owner;
+- request missing data;
+- submit for readiness review;
+- publish/unpublish channel projection;
+- activate/deactivate season;
+- generate content package;
+- initiate specification change;
+- create carry-over version;
+- propose duplicate merge;
+- apply taxonomy mapping;
+- export selected projection;
+- create buyer/retailer custom list.
+
+### 326.4 Product lifecycle separation
+
+```text
+Technical Lifecycle
+Commercial Lifecycle
+Channel Publication Lifecycle
+Inventory Lifecycle
+Regulatory Lifecycle
+```
+
+These states must not be collapsed. A product can be technically approved but commercially inactive, or commercially active but blocked for one market.
+
+---
+
+## 327. Placeholder / SMU Resolution Engine
+
+### 327.1 Purpose
+
+Retailers and brands frequently plan with placeholders, SMUs, provisional style concepts or retailer-created rows before final product data exists. Syntha must preserve planning work while safely resolving those placeholders to canonical products.
+
+### 327.2 Canonical objects
+
+```text
+PlaceholderProduct
+PlaceholderRequirement
+ProductMatchCandidate
+ProductMatchDecision
+PlaceholderResolution
+ResolutionConflict
+```
+
+### 327.3 Match signals
+
+- brand;
+- style code;
+- provisional code;
+- product name;
+- category and subcategory;
+- color family;
+- delivery window;
+- wholesale price band;
+- silhouette/fit;
+- material/composition;
+- image similarity;
+- season/drop;
+- supplier/factory reference;
+- previously linked placeholder history.
+
+### 327.4 Resolution rules
+
+When linking a placeholder to a canonical product, the system must classify every field as:
+
+- replace with canonical value;
+- preserve retailer planning value;
+- retain as private retailer attribute;
+- merge;
+- require conflict decision;
+- archive as historical placeholder evidence.
+
+Quantities, door allocations, buyer notes, targets and internal attributes must not be lost.
+
+### 327.5 Match decision
+
+The decision packet includes:
+
+- candidate list;
+- confidence by signal;
+- conflicting fields;
+- selected match;
+- rejected candidates;
+- data preservation preview;
+- downstream impact;
+- approver;
+- effective date;
+- rollback window.
+
+### 327.6 Anti-error controls
+
+- never auto-link across brands without explicit permission;
+- prevent linking one placeholder to several incompatible product versions;
+- detect already-linked product reuse where exclusivity applies;
+- require review when price, delivery, category or gender materially conflicts;
+- preserve historical assortment snapshots;
+- support unlink/relink through a controlled event, never silent replacement.
+
+---
+
+## 328. Concurrent Planning Graph
+
+### 328.1 Benchmark
+
+Kinaxis describes concurrent planning as synchronized planning across demand, supply, inventory and operations, with real-time visibility, scenario evaluation and actionable insight in one environment. Its control-tower model links planning and execution data across functions and partners.
+
+### 328.2 JOOR evidence status
+
+Concurrent propagation of demand, supply, inventory, production and financial changes was not confirmed in the audited JOOR cabinet.
+
+Status: `JOOR NOT CONFIRMED / UAT`.
+
+### 328.3 SYNTHA TARGET
+
+Create a `PlanningGraph` linking:
+
+```text
+Financial Target
+→ Merchandise Plan
+→ Assortment Plan
+→ Buying Intent
+→ Demand Forecast
+→ Supply Plan
+→ Material Plan
+→ Capacity Plan
+→ Production Plan
+→ Inventory Plan
+→ Fulfillment Plan
+→ Cash Plan
+```
+
+### 328.4 Planning node contract
+
+Every planning node stores:
+
+- planning object type;
+- grain;
+- time bucket;
+- scenario/version;
+- baseline value;
+- current value;
+- source inputs;
+- derived calculations;
+- constraints;
+- owner;
+- approval state;
+- effective horizon;
+- freshness;
+- confidence;
+- linked execution objects.
+
+### 328.5 Propagation requirement
+
+A change to any planning node must show:
+
+- direct impact;
+- indirect impact;
+- affected targets;
+- affected orders/commitments;
+- feasibility conflicts;
+- cash and margin impact;
+- service impact;
+- recommended responses;
+- unresolved decisions.
+
+Example:
+
+```text
+Material lead time +21 days
+→ Sample approval risk
+→ Production start risk
+→ Delivery-window risk
+→ Retail launch risk
+→ Revenue timing risk
+→ OTB and cash-flow impact
+```
+
+---
+
+## 329. Scenario Workbench and Scenario Governance
+
+### 329.1 Scenario types
+
+- demand upside/downside;
+- delayed material;
+- supplier capacity loss;
+- factory shutdown;
+- port/carrier disruption;
+- FX movement;
+- duty/tariff change;
+- price increase;
+- MOQ change;
+- promotion uplift;
+- warm/cold weather shift;
+- store opening/closure;
+- wholesale customer loss;
+- quality failure;
+- recall;
+- credit restriction;
+- production acceleration;
+- assortment reduction;
+- transfer/markdown alternative.
+
+### 329.2 Scenario lifecycle
+
+```text
+DRAFT
+→ CALCULATING
+→ VALIDATED
+→ REVIEWED
+→ APPROVED_FOR_DECISION
+→ SELECTED
+→ EXECUTION_PLAN_CREATED
+→ EXECUTED
+→ OUTCOME_MEASURED
+→ ARCHIVED
+```
+
+### 329.3 Required scenario outputs
+
+- revenue;
+- gross margin;
+- net-net margin;
+- cash timing;
+- inventory units/value;
+- stockout risk;
+- excess risk;
+- service level;
+- fill rate;
+- delivery risk;
+- production utilization;
+- material shortage;
+- carbon impact;
+- customer/account impact;
+- contractual exposure;
+- required approvals.
+
+### 329.4 Scenario comparison
+
+Scenarios must be comparable on one normalized baseline, using the same:
+
+- source-data snapshot;
+- forecast version;
+- FX version;
+- cost version;
+- policy version;
+- calendar;
+- market assumptions.
+
+### 329.5 Scenario-to-execution control
+
+Selecting a scenario does not directly alter production or orders. It creates an `ExecutionPlan` with commands, owners, due dates, dependencies, reversibility and approval checkpoints.
+
+---
+
+## 330. Constraint Propagation and Feasibility Engine
+
+### 330.1 Constraint domains
+
+- assortment and OTB;
+- material MOQ and availability;
+- supplier/factory capacity;
+- labor and machine capacity;
+- production sequence;
+- sample/test approval;
+- regulatory readiness;
+- customer allocation;
+- delivery windows;
+- transportation capacity;
+- credit and cash;
+- warehouse/store capacity;
+- carbon or sustainability policy;
+- contractual exclusivity.
+
+### 330.2 Feasibility states
+
+```text
+FEASIBLE
+FEASIBLE_WITH_RISK
+FEASIBLE_WITH_EXCEPTION
+PARTIALLY_FEASIBLE
+INFEASIBLE
+UNKNOWN_DUE_TO_DATA_GAP
+```
+
+### 330.3 Binding-constraint explanation
+
+For every infeasible or constrained result, show:
+
+- binding constraint;
+- source and version;
+- effective date;
+- impacted quantity/date/value;
+- available slack;
+- alternative options;
+- commercial impact;
+- required approver;
+- evidence quality.
+
+### 330.4 Least-violation plan
+
+Where policy permits, calculate alternatives such as:
+
+- reduce quantity;
+- split delivery;
+- substitute material;
+- change factory;
+- expedite;
+- defer lower-priority account;
+- reallocate inventory;
+- change assortment;
+- revise price/promotion;
+- use controlled exception.
+
+The engine must never hide a violated rule inside an optimized result.
+
+---
+
+## 331. Demand Signal Hierarchy and Forecast Consumption
+
+### 331.1 Signal classes
+
+```text
+Market / Trend Signal
+Consumer Test
+Buyer Engagement
+Buyer Shortlist
+Assortment Selection
+Order Intent
+Wholesale PO
+Retail Preorder
+POS Sale
+Return
+Lost Sale
+Markdown
+```
+
+### 331.2 Signal strength
+
+Each signal stores:
+
+- signal class;
+- quantity/value;
+- probability;
+- source;
+- timestamp;
+- horizon;
+- customer/segment;
+- product granularity;
+- confidence;
+- bias history;
+- whether it is contractual;
+- whether it consumes forecast.
+
+### 331.3 Forecast consumption rules
+
+- a confirmed PO consumes the applicable forecast bucket;
+- an order intent reserves optional/soft demand according to policy;
+- consumer-test intent informs forecast but does not consume it;
+- duplicate signals from the same underlying demand must be deduplicated;
+- cancellation releases consumed demand;
+- shipment and sale close the relevant forecast-to-actual chain;
+- late events are applied without rewriting certified historical snapshots.
+
+### 331.4 Double-count prevention
+
+The system must detect patterns such as:
+
+```text
+Buyer Intent + PO for the same demand
+Preorder + POS Sale for the same unit
+Marketplace Click + Cart + Order treated as three independent demands
+```
+
+---
+
+## 332. Forecast Value Add and Override Accountability
+
+### 332.1 Purpose
+
+Syntha must measure whether human and model interventions improve the forecast rather than merely recording that an override occurred.
+
+### 332.2 Forecast versions
+
+```text
+Naive Baseline
+Statistical Forecast
+ML Forecast
+Consensus Forecast
+Buyer Override
+Merchant Override
+Sales Override
+Supplier Constraint Adjustment
+Approved Operating Forecast
+```
+
+### 332.3 Core formulas
+
+```text
+Forecast Error = Actual - Forecast
+Absolute Percentage Error = |Actual - Forecast| / Actual
+Forecast Bias = Sum(Forecast - Actual) / Sum(Actual)
+Forecast Value Add = Error(Baseline) - Error(Adjusted Forecast)
+```
+
+Use WAPE/MAE or alternative measures where actuals are zero or highly intermittent.
+
+### 332.4 Override record
+
+Every override requires:
+
+- previous value;
+- new value;
+- reason code;
+- narrative;
+- affected horizon;
+- evidence;
+- owner;
+- approval where required;
+- expected impact;
+- later actual outcome;
+- measured value add.
+
+### 332.5 Decision-quality view
+
+Report forecast performance by:
+
+- model/version;
+- planner;
+- buyer/merchant;
+- brand;
+- category;
+- horizon;
+- season;
+- new versus carry-over;
+- promotion/weather event;
+- sparse versus mature data.
+
+The objective is not to punish overrides, but to learn where human context adds value and where it introduces bias.
+
+---
+
+## 333. Capacity Reservation and Constrained Supply
+
+### 333.1 Capacity objects
+
+```text
+CapacityResource
+CapacityCalendar
+CapacityBucket
+CapacityOffer
+CapacityReservation
+CapacityCommitment
+CapacityConsumption
+CapacityRelease
+CapacityException
+```
+
+### 333.2 Capacity dimensions
+
+- supplier/factory;
+- production line;
+- operation type;
+- skill;
+- machine/tool;
+- style/category;
+- material/process dependency;
+- week/day/shift;
+- minimum run;
+- setup/changeover;
+- overtime;
+- subcontracting;
+- efficiency and yield;
+- approved versus theoretical capacity.
+
+### 333.3 Reservation types
+
+- indicative;
+- soft reservation;
+- paid option;
+- hard reservation;
+- order-backed commitment;
+- emergency hold;
+- customer-dedicated capacity.
+
+### 333.4 Reservation lifecycle
+
+```text
+REQUESTED
+→ OFFERED
+→ NEGOTIATING
+→ RESERVED
+→ COMMITTED
+→ CONSUMED
+```
+
+Alternative states:
+
+```text
+PARTIALLY_RESERVED
+EXPIRED
+RELEASED
+BREACHED
+REALLOCATED
+CANCELLED
+```
+
+### 333.5 Commercial controls
+
+- reservation fee;
+- expiry;
+- cancellation fee;
+- take-or-pay obligation;
+- minimum utilization;
+- priority tier;
+- reallocation rights;
+- compensation for breach;
+- linkage to agreement and buying intent.
+
+---
+
+## 334. Scarce Supply Allocation and Fairness Governance
+
+### 334.1 Allocation contexts
+
+- limited initial production;
+- bestseller shortage;
+- delayed material;
+- factory capacity loss;
+- partial inbound receipt;
+- recall replacement;
+- constrained transport;
+- new-launch allocation.
+
+### 334.2 Allocation policy dimensions
+
+- contractual commitment;
+- customer priority tier;
+- confirmed order date;
+- launch importance;
+- minimum presentation quantity;
+- store/account productivity;
+- margin and net-net value;
+- strategic-account rule;
+- fairness/minimum service;
+- geographic balance;
+- regulatory restrictions;
+- customer-specific exclusivity;
+- cancellation risk;
+- inventory already available.
+
+### 334.3 Allocation result
+
+For every line/account:
+
+- requested quantity;
+- committed quantity;
+- allocated quantity;
+- short quantity;
+- priority score components;
+- binding constraint;
+- reason code;
+- alternative date/source;
+- financial impact;
+- approval/override history.
+
+### 334.4 Fairness controls
+
+- prevent hidden discrimination using protected or irrelevant attributes;
+- expose strategic-account weighting;
+- enforce minimum-service rules where configured;
+- compare outcome concentration;
+- preserve manual override reason;
+- support appeals/dispute case;
+- simulate policy before activation.
+
+---
+
+## 335. Supplier PO Collaboration benchmark
+
+### 335.1 COMPETITOR CONFIRMED
+
+Coupa Supplier Portal supports:
+
+- purchase-order receipt through portal, cXML or email/HTML;
+- header- or line-level confirmations;
+- confirmation due times;
+- accept/reject actions;
+- confirmed quantity, price and need-by/delivery changes;
+- reason codes and comments;
+- bulk CSV confirmation;
+- advance ship notices;
+- shipment/tracking information;
+- invoice creation from PO;
+- transaction status and history.
+
+### 335.2 JOOR evidence status
+
+The audited JOOR account exposed retailer orders but did not confirm a full supplier/factory PO-collaboration protocol with line-level acknowledgement, supplier-proposed changes, ASN, receipt and invoice reconciliation.
+
+Status: `JOOR NOT CONFIRMED / UAT`.
+
+### 335.3 SYNTHA TARGET
+
+Implement a multi-channel supplier collaboration layer:
+
+```text
+Portal
+API
+EDI / cXML
+SFTP / CSV
+Actionable Email
+Mobile
+```
+
+All channels resolve to the same canonical commands and event history.
+
+---
+
+## 336. Purchase Order Confirmation and Change Protocol
+
+### 336.1 Confirmation scopes
+
+- whole PO;
+- delivery group;
+- line;
+- SKU/size;
+- schedule line;
+- production lot.
+
+### 336.2 Supplier responses
+
+```text
+ACCEPT
+ACCEPT_WITH_CHANGES
+PARTIAL_ACCEPT
+REJECT
+REQUEST_CLARIFICATION
+DEFER_DECISION
+```
+
+Proposed changes may include:
+
+- quantity;
+- price;
+- delivery date;
+- ship date;
+- factory;
+- material;
+- pack configuration;
+- MOQ/MOV;
+- payment/deposit condition;
+- split shipment;
+- cancellation.
+
+### 336.3 Buyer resolution
+
+```text
+PROPOSAL_RECEIVED
+→ IMPACT_CALCULATED
+→ BUYER_REVIEW
+→ ACCEPTED / COUNTERED / REJECTED
+→ PO_AMENDMENT_CREATED
+→ SUPPLIER_ACKNOWLEDGED
+```
+
+### 336.4 Time controls
+
+- acknowledgement deadline;
+- escalation before due time;
+- overdue confirmation state;
+- automatic risk score increase;
+- controlled alternate-source search;
+- customer communication trigger;
+- history preserved after cancellation.
+
+### 336.5 Concurrency protection
+
+A supplier cannot confirm an obsolete PO version. Every confirmation carries:
+
+- PO version;
+- line version;
+- current ETag/version precondition;
+- idempotency key;
+- responding organization and user;
+- received timestamp;
+- source channel.
+
+---
+
+## 337. PO → ASN → Receipt → Invoice Execution Chain
+
+### 337.1 Canonical chain
+
+```text
+Purchase Order
+→ Order Confirmation
+→ Production / Supply Commitment
+→ ASN
+→ Shipment
+→ Goods Receipt
+→ Quality Acceptance
+→ Invoice
+→ Payment
+```
+
+### 337.2 ASN requirements
+
+- PO and line references;
+- shipment identifier;
+- ship-from and ship-to;
+- carrier/service;
+- planned ship/arrival;
+- carton/pallet/SSCC;
+- SKU quantities;
+- lot/batch/serial where applicable;
+- packing-list documents;
+- customs/trade documents;
+- split/backorder indication;
+- tracking;
+- hazardous/special handling;
+- cancellation/replacement chain.
+
+### 337.3 Reconciliation dimensions
+
+- ordered;
+- confirmed;
+- shipped;
+- received;
+- accepted;
+- rejected/quarantined;
+- invoiced;
+- credited;
+- paid.
+
+### 337.4 Tolerance policy
+
+Tolerance may be configured by:
+
+- supplier;
+- product/category;
+- quantity;
+- price;
+- date;
+- currency;
+- delivery;
+- unit of measure;
+- over/under shipment;
+- invoice amount.
+
+Outside-tolerance values create a case; they do not silently pass.
+
+---
+
+## 338. Multi-enterprise Exception Case Management
+
+### 338.1 Purpose
+
+Messages, comments and alerts are insufficient for complex exceptions. Syntha needs a structured case that connects the business issue to all affected objects and decisions.
+
+### 338.2 Case types
+
+- PO confirmation delay;
+- supplier change request;
+- capacity shortage;
+- material delay;
+- sample/test failure;
+- quality defect;
+- shipment delay;
+- quantity discrepancy;
+- invoice mismatch;
+- payment dispute;
+- compliance block;
+- recall;
+- return/claim;
+- data-quality issue;
+- integration failure;
+- commercial-term dispute.
+
+### 338.3 Case model
+
+```text
+ExceptionCase
+CaseParticipant
+CaseObjectLink
+CaseIssue
+CaseEvidence
+CaseDecision
+CaseAction
+CaseSLA
+CaseEscalation
+CaseResolution
+CaseFinancialImpact
+```
+
+### 338.4 Lifecycle
+
+```text
+OPEN
+→ TRIAGED
+→ OWNER_ASSIGNED
+→ INVESTIGATING
+→ RESPONSE_REQUIRED
+→ DECISION_PENDING
+→ REMEDIATION
+→ VERIFICATION
+→ RESOLVED
+→ CLOSED
+```
+
+Alternative states:
+
+```text
+ON_HOLD
+ESCALATED
+DISPUTED
+REOPENED
+DUPLICATE
+CANCELLED
+```
+
+### 338.5 Collaboration rules
+
+- internal and external notes are separate;
+- each participant sees only authorized fields and evidence;
+- decisions are immutable records;
+- attachments are linked to canonical evidence objects;
+- external partner response deadlines are explicit;
+- commercial and financial impact updates dynamically;
+- case closure requires resolution criteria, not only a comment.
+
+---
+
+## 339. Object-Centric Process Intelligence benchmark
+
+### 339.1 COMPETITOR CONFIRMED
+
+Celonis defines object-centric process mining as analysis of related business objects, events and relationships using one reusable model. Official documentation supports perspectives, process-health KPIs, bottleneck analysis, target-process/adherence models and deviation exploration.
+
+### 339.2 JOOR evidence status
+
+Process discovery, object-centric conformance, variant analysis and automated bottleneck identification were not confirmed in the audited JOOR cabinet.
+
+Status: `JOOR NOT CONFIRMED / UAT`.
+
+### 339.3 SYNTHA TARGET
+
+Use the canonical event model already defined in this master map to build a `Process Intelligence Layer` rather than exporting data into disconnected BI tables.
+
+Core object types:
+
+```text
+Style
+Sample
+Material
+Supplier
+RFQ
+Quote
+BOM
+BuyingIntent
+PurchaseOrder
+ProductionOrder
+Shipment
+Receipt
+Invoice
+Payment
+Return
+Case
+```
+
+---
+
+## 340. Process Model, Variant and Conformance
+
+### 340.1 Process perspectives
+
+- Concept to Approved Style;
+- Sample Request to Fit Approval;
+- Material Request to BOM Approval;
+- RFQ to Supplier Allocation;
+- Buying Intent to Purchase Order;
+- PO to Supplier Confirmation;
+- PO to Receipt;
+- Receipt to Invoice Match;
+- Invoice to Payment;
+- Order to Cash;
+- Return to Recovery;
+- Product Incident to Recall Closure.
+
+### 340.2 Target process definition
+
+Each target process specifies:
+
+- expected event order;
+- permitted optional events;
+- prohibited events;
+- maximum/minimum duration;
+- mandatory approvals;
+- separation-of-duty rules;
+- rework limits;
+- data prerequisites;
+- acceptable exception paths.
+
+### 340.3 Conformance result
+
+For every object/process instance:
+
+- compliant/non-compliant;
+- missing events;
+- unexpected events;
+- sequence deviation;
+- timing deviation;
+- repeated/rework loop;
+- unauthorized transition;
+- business impact;
+- responsible role/system;
+- recommended remediation.
+
+### 340.4 Variant analysis
+
+Identify:
+
+- dominant successful variant;
+- high-margin variant;
+- fastest variant;
+- lowest-rework variant;
+- high-risk variant;
+- supplier-specific variants;
+- region/channel variants;
+- manual-workaround variants;
+- variants correlated with late delivery or claims.
+
+---
+
+## 341. Bottleneck, Rework and Waiting-Time Intelligence
+
+### 341.1 Time decomposition
+
+```text
+Total Cycle Time
+= Active Work Time
++ Waiting for Internal Decision
++ Waiting for External Partner
++ System/Integration Delay
++ Queue Time
++ Rework Time
+```
+
+### 341.2 Rework examples
+
+- sample revision loops;
+- repeated cost approval;
+- BOM reopened after approval;
+- PO amended multiple times;
+- invoice repeatedly rejected;
+- content corrected after retailer rejection;
+- manual identity remapping;
+- repeated data import correction.
+
+### 341.3 Root-cause dimensions
+
+- product complexity;
+- supplier/factory;
+- buyer/brand team;
+- category;
+- market;
+- missing data;
+- policy version;
+- integration channel;
+- order value/priority;
+- workload;
+- season peak;
+- source-system quality.
+
+### 341.4 Action trigger
+
+A process insight may create:
+
+- task;
+- case;
+- policy-change proposal;
+- workflow-change proposal;
+- data-quality issue;
+- supplier improvement action;
+- training recommendation;
+- automation candidate.
+
+No automatic policy change occurs solely from correlation.
+
+---
+
+## 342. Digital Process Twin and Historical Replay
+
+### 342.1 Purpose
+
+Before changing workflow, policy or automation, Syntha should replay historical event data against the proposed configuration.
+
+### 342.2 Replay inputs
+
+- selected historical period;
+- object population;
+- target workflow version;
+- target policy version;
+- SLA rules;
+- automation rules;
+- exception thresholds;
+- cost assumptions.
+
+### 342.3 Replay outputs
+
+- number of cases that would follow a different path;
+- new blocks and approvals;
+- estimated cycle-time change;
+- workload by role;
+- expected exception volume;
+- false-positive candidates;
+- financial and service impact;
+- affected integrations;
+- unhandled edge cases.
+
+### 342.4 Safety rules
+
+- replay is read-only;
+- historical records are never rewritten;
+- replay results are explicitly labeled simulated;
+- production activation requires approved test evidence;
+- sensitive data remains scoped to authorized analysts.
+
+---
+
+## 343. Should-Cost Engineering benchmark
+
+### 343.1 COMPETITOR CONFIRMED
+
+aPriori defines should-cost analysis as a bottom-up calculation of material, manufacturing, service and distribution costs using efficient production practices and current regional inputs.
+
+### 343.2 JOOR evidence status
+
+The audited JOOR cabinet did not confirm engineering-grade bottom-up should-cost modeling linked to BOM, BOL, factory capability, regional labor, machine/process and logistics data.
+
+Status: `JOOR NOT CONFIRMED / UAT`.
+
+### 343.3 SYNTHA TARGET
+
+Build a fashion-specific should-cost model:
+
+```text
+Material Cost
++ Trim Cost
++ Packaging Cost
++ Labor Operations
++ Machine / Process Cost
++ Waste / Yield
++ Overhead
++ Compliance / Testing
++ Quality Cost
++ Logistics / Duty
++ Financing / FX
++ Supplier Margin
+= Should Cost
+```
+
+---
+
+## 344. Cost Driver Library and Manufacturing Assumptions
+
+### 344.1 Cost drivers
+
+- material price by supplier/region/date;
+- consumption and marker efficiency;
+- waste and defect allowance;
+- operation standard minute value;
+- labor rate by facility/skill/shift;
+- machine rate;
+- setup/changeover;
+- order quantity and learning curve;
+- complexity factor;
+- embellishment/printing/wash;
+- quality inspection/testing;
+- energy and utility assumptions;
+- packaging;
+- freight and duty;
+- capacity utilization;
+- financing period;
+- supplier margin.
+
+### 344.2 BOL connection
+
+Every operation in the Bill of Labor links to:
+
+- standard method;
+- equipment;
+- skill;
+- standard time;
+- allowed tolerance;
+- facility capability;
+- benchmark rate;
+- observed actual rate;
+- source and effective date.
+
+### 344.3 Assumption reliability
+
+Each cost input has:
+
+- source;
+- geography;
+- currency;
+- effective date;
+- confidence;
+- verified/estimated status;
+- owner;
+- expiry;
+- sensitivity range.
+
+---
+
+## 345. Quote Decomposition and Negotiation Workspace
+
+### 345.1 Quote structure
+
+Supplier quotations must be decomposable into:
+
+- material;
+- trims;
+- packaging;
+- labor;
+- process;
+- overhead;
+- testing/compliance;
+- freight;
+- duty/tax if included;
+- tooling/development;
+- margin;
+- MOQ/MOV;
+- capacity/lead time;
+- payment terms.
+
+### 345.2 Variance analysis
+
+```text
+Supplier Quote
+- Should Cost
+= Quote Variance
+```
+
+Variance is explained by driver, not only total amount.
+
+### 345.3 Negotiation packet
+
+- current quote version;
+- should-cost version;
+- comparable supplier/factory range;
+- material-market movement;
+- labor/process assumptions;
+- quantity breakpoints;
+- lead-time/capacity tradeoffs;
+- requested change;
+- supplier response;
+- agreed concession;
+- non-price value;
+- expiry and effective date.
+
+### 345.4 Governance
+
+Should cost is a decision aid, not an accusation. The UI must distinguish:
+
+- verified actual input;
+- market benchmark;
+- model assumption;
+- confidential supplier data;
+- user estimate.
+
+---
+
+## 346. Product Carbon Footprint benchmark
+
+### 346.1 COMPETITOR / STANDARD CONFIRMED
+
+WBCSD PACT Methodology Version 3 provides a harmonized framework for cradle-to-gate Product Carbon Footprints, including data-reliability and verification pathways. PACT also defines standardized exchange of product-level carbon information across software and supply-chain partners.
+
+### 346.2 JOOR evidence status
+
+Product-level carbon calculation, supplier-specific primary-data exchange, reliability scoring and versioned PCF evidence were not confirmed in the audited JOOR cabinet.
+
+Status: `JOOR NOT CONFIRMED / UAT`.
+
+### 346.3 SYNTHA TARGET
+
+Create a `ProductCarbonFootprint` tied to a precise product/specification/production scope.
+
+Required scope:
+
+- product or component;
+- specification version;
+- supplier/facility;
+- production route;
+- geography;
+- production period;
+- quantity basis;
+- system boundary;
+- methodology version;
+- allocation method;
+- primary/secondary data ratio;
+- verification state.
+
+---
+
+## 347. Carbon Activity Data and Calculation Graph
+
+### 347.1 Activity sources
+
+- material production;
+- yarn/fabric processing;
+- dyeing/finishing;
+- cut-and-sew;
+- trims;
+- packaging;
+- energy/electricity;
+- fuel;
+- water/wastewater where methodology requires;
+- waste and yield loss;
+- inbound transport;
+- inter-facility transport;
+- outbound transport to agreed boundary;
+- land-sector emissions/removals where applicable.
+
+### 347.2 Calculation graph
+
+```text
+Activity Data
+× Emission Factor
+× Allocation Rule
+× Quantity Conversion
+= Emission Contribution
+```
+
+All contributions roll up to product/component/facility/order/season views.
+
+### 347.3 Evidence contract
+
+- source document/system;
+- supplier/facility;
+- period;
+- measurement unit;
+- primary/secondary estimate;
+- emission factor source/version;
+- conversion;
+- allocation basis;
+- uncertainty;
+- verification;
+- expiry;
+- audit evidence.
+
+### 347.4 Versioning
+
+A change in methodology, emission factor, specification, supplier, factory or production route creates a new PCF version. Historical commercial claims retain the PCF version used at publication time.
+
+---
+
+## 348. Carbon Data Exchange and Reliability
+
+### 348.1 Exchange object
+
+```text
+PCFDataRequest
+PCFDataResponse
+PCFDataPackage
+PCFDataValidation
+PCFDataVerification
+PCFDataDispute
+```
+
+### 348.2 Data-request workflow
+
+```text
+REQUESTED
+→ SUPPLIER_ACCEPTED
+→ DATA_SUBMITTED
+→ TECHNICAL_VALIDATION
+→ METHODOLOGY_VALIDATION
+→ VERIFIED / CONDITIONALLY_ACCEPTED / REJECTED
+→ INCORPORATED
+```
+
+### 348.3 Reliability score
+
+Factors:
+
+- primary-data share;
+- supplier/facility specificity;
+- recency;
+- completeness;
+- methodology conformance;
+- factor quality;
+- allocation quality;
+- third-party verification;
+- reconciliation with production quantities;
+- uncertainty range.
+
+### 348.4 Claim controls
+
+Statements such as `lower carbon` require:
+
+- defined comparison baseline;
+- same functional unit;
+- same boundary;
+- compatible methodology;
+- valid time period;
+- approved evidence;
+- legal/claim review;
+- disclosure of material limitations.
+
+---
+
+## 349. Network Recommendation and Discovery Governance
+
+### 349.1 Benchmark
+
+NuORDER confirms brand recommendations based on existing brand connections and recent order activity.
+
+### 349.2 SYNTHA TARGET
+
+Recommendation types:
+
+- brands for retailer;
+- retailers for brand;
+- products for buyer;
+- complementary assortment;
+- substitute product;
+- new-market opportunity;
+- replenishment opportunity;
+- supplier/factory candidate;
+- material alternative.
+
+### 349.3 Input classes
+
+- explicit preferences;
+- connections;
+- orders;
+- assortments;
+- product/category affinity;
+- price band;
+- geography;
+- target customer;
+- store/channel profile;
+- capacity/availability;
+- performance outcomes;
+- exclusions and contractual restrictions.
+
+### 349.4 RecommendationPacket
+
+- recommended entity;
+- reason codes;
+- supporting signals;
+- excluded constraints;
+- confidence;
+- novelty/diversity contribution;
+- commercial eligibility;
+- privacy-safe aggregation status;
+- expiry;
+- action and later outcome.
+
+### 349.5 Governance
+
+- no cross-tenant disclosure of confidential sales, margins or buyer identity;
+- cold-start strategy uses explicit profile and public/authorized attributes;
+- users can hide/dismiss and provide reason;
+- prevent pay-to-rank from being shown as organic recommendation;
+- sponsored placement is explicitly labeled and separated;
+- measure qualified connection/order outcome, not only clicks;
+- audit model/version and recommendation reason.
+
+---
+
+## 350. Product Recommendation Diversity and Assortment Cannibalization
+
+### 350.1 Objectives
+
+A recommendation engine must balance:
+
+- relevance;
+- newness;
+- diversity;
+- commercial availability;
+- margin;
+- price-band coverage;
+- category balance;
+- size/color coverage;
+- territory rights;
+- inventory risk;
+- cannibalization;
+- strategic brand/account goals.
+
+### 350.2 Cannibalization model
+
+For each suggested item:
+
+- overlapping customer need;
+- substitute/complement relationship;
+- expected incremental demand;
+- expected transferred demand;
+- impact on current assortment;
+- markdown risk;
+- margin impact;
+- uncertainty.
+
+### 350.3 Human control
+
+Buyers can set:
+
+- required core brands/categories;
+- exclusion list;
+- maximum concentration;
+- newness target;
+- local/strategic brand target;
+- sustainability requirements;
+- price ladder;
+- risk appetite.
+
+---
+
+## 351. Master Data Stewardship and Change Governance
+
+### 351.1 Stewardship domains
+
+- product/style/color/SKU;
+- organization/legal entity;
+- supplier/facility;
+- customer/location/door;
+- material/component;
+- taxonomy;
+- units of measure;
+- currency/tax;
+- payment/shipping terms;
+- country/region/market;
+- brand and account aliases;
+- identifiers and cross-references.
+
+### 351.2 Data-change request
+
+```text
+DRAFT
+→ VALIDATED
+→ STEWARD_REVIEW
+→ BUSINESS_APPROVAL
+→ EFFECTIVE_DATE_SCHEDULED
+→ APPLIED
+→ DOWNSTREAM_ACKNOWLEDGED
+→ CLOSED
+```
+
+### 351.3 Merge/split controls
+
+- proposed duplicate candidates;
+- survivorship rules;
+- field-by-field preview;
+- linked object impact;
+- historical alias retention;
+- source-system writeback plan;
+- rollback strategy;
+- financial/order history preservation.
+
+### 351.4 Effective dating
+
+Legal-name, address, bank, tax and commercial-term changes must support future effective dates and must not rewrite historical documents.
+
+---
+
+## 352. Data Contracts and Event Schema Governance
+
+### 352.1 Data contract
+
+Every published API/event/data product defines:
+
+- owner;
+- consumers;
+- schema;
+- required/optional fields;
+- semantics;
+- units;
+- identity keys;
+- event time;
+- privacy classification;
+- quality expectations;
+- freshness;
+- compatibility policy;
+- deprecation timeline;
+- examples and test fixtures.
+
+### 352.2 Schema lifecycle
+
+```text
+DRAFT
+→ REVIEWED
+→ APPROVED
+→ ACTIVE
+→ DEPRECATED
+→ RETIRED
+```
+
+### 352.3 Compatibility rules
+
+- additive optional fields may be backward compatible;
+- removing/renaming fields requires a new major version;
+- changing semantics without version change is forbidden;
+- consumers declare supported versions;
+- events retain original schema/version;
+- replay uses the historical schema adapter.
+
+### 352.4 Consumer impact
+
+Before release, identify affected:
+
+- integrations;
+- dashboards;
+- agents;
+- exports;
+- mobile/offline clients;
+- customer extensions;
+- archived/replay processes.
+
+---
+
+## 353. Planning and Execution Control Tower
+
+### 353.1 Unified exception view
+
+The control tower groups exceptions by business impact rather than source system:
+
+- revenue at risk;
+- margin at risk;
+- launch at risk;
+- customer/service risk;
+- quality/safety risk;
+- compliance risk;
+- cash risk;
+- excess inventory risk;
+- carbon/claim risk.
+
+### 353.2 Priority score
+
+```text
+Priority
+= Severity
+× Probability
+× Time Criticality
+× Financial Exposure
+× Customer/Regulatory Weight
+× Data Confidence Factor
+```
+
+Priority must remain explainable and manually overridable with reason.
+
+### 353.3 Control-tower card
+
+- issue summary;
+- affected objects;
+- predicted impact;
+- current owner;
+- decision deadline;
+- partner response status;
+- recommended options;
+- open case;
+- selected execution plan;
+- resolution and actual outcome.
+
+### 353.4 Noise control
+
+- deduplicate alerts from the same root cause;
+- suppress downstream symptoms when a root case exists;
+- aggregate low-value repeating issues;
+- reopen if impact changes;
+- never suppress safety/compliance critical alerts;
+- maintain alert-to-case lineage.
+
+---
+
+## 354. New canonical entities
+
+```text
+ProductOperationsView
+ProductOperationalStatus
+PlaceholderProduct
+PlaceholderRequirement
+ProductMatchCandidate
+ProductMatchDecision
+PlaceholderResolution
+PlanningGraph
+PlanningNode
+PlanningEdge
+PlanningPropagation
+Scenario
+ScenarioAssumption
+ScenarioResult
+ExecutionPlan
+ExecutionPlanStep
+ConstraintBinding
+FeasibilityResult
+DemandSignal
+ForecastConsumption
+ForecastVersion
+ForecastOverride
+ForecastValueAddResult
+CapacityResource
+CapacityBucket
+CapacityOffer
+CapacityReservation
+CapacityCommitment
+CapacityConsumption
+ScarceSupplyPolicy
+SupplyAllocationResult
+SupplyAllocationAppeal
+POConfirmationRequirement
+POConfirmation
+POConfirmationLine
+SupplierChangeProposal
+SupplierChangeDecision
+AdvanceShipNotice
+ASNLine
+ReceiptReconciliation
+ExceptionCase
+CaseParticipant
+CaseObjectLink
+CaseIssue
+CaseEvidence
+CaseDecision
+CaseAction
+CaseResolution
+ProcessModel
+ProcessPerspective
+ProcessInstance
+ProcessVariant
+ProcessDeviation
+ConformanceResult
+ProcessBottleneck
+HistoricalReplay
+ReplayResult
+ShouldCostModel
+ShouldCostVersion
+CostDriver
+CostAssumption
+QuoteCostBreakdown
+NegotiationPacket
+ProductCarbonFootprint
+PCFContribution
+PCFActivityData
+PCFEmissionFactor
+PCFDataRequest
+PCFDataPackage
+PCFVerification
+RecommendationPacket
+RecommendationFeedback
+CannibalizationEstimate
+MasterDataChangeRequest
+MasterDataMergeProposal
+DataContract
+SchemaVersion
+ConsumerCompatibility
+ControlTowerExceptionGroup
+```
+
+---
+
+## 355. New routes and workspaces
+
+```text
+/products/operations
+/products/placeholders
+/products/match-review
+/planning/concurrent
+/planning/scenarios
+/planning/feasibility
+/planning/forecast-consumption
+/planning/forecast-value-add
+/capacity/resources
+/capacity/reservations
+/supply/allocation
+/suppliers/po-confirmations
+/suppliers/change-proposals
+/logistics/asn
+/reconciliation/order-flow
+/cases
+/cases/:id/collaboration
+/process-intelligence/models
+/process-intelligence/variants
+/process-intelligence/conformance
+/process-intelligence/bottlenecks
+/process-intelligence/replay
+/costing/should-cost
+/costing/drivers
+/costing/negotiations
+/sustainability/product-carbon
+/sustainability/pcf-data-exchange
+/discovery/recommendations
+/admin/master-data-stewardship
+/admin/data-contracts
+/control-tower/planning-execution
+```
+
+---
+
+## 356. New API outline
+
+```text
+GET    /api/v1/product-operations
+POST   /api/v1/placeholders/:id/match-candidates
+POST   /api/v1/placeholders/:id/resolve
+POST   /api/v1/planning-graphs/:id/propagate
+POST   /api/v1/scenarios
+POST   /api/v1/scenarios/:id/calculate
+POST   /api/v1/scenarios/:id/select
+POST   /api/v1/scenarios/:id/execution-plan
+POST   /api/v1/feasibility/evaluate
+POST   /api/v1/forecast-consumption/apply
+GET    /api/v1/forecast-value-add
+POST   /api/v1/capacity-reservations
+POST   /api/v1/capacity-reservations/:id/commit
+POST   /api/v1/supply-allocation/simulate
+POST   /api/v1/supply-allocation/:id/approve
+POST   /api/v1/purchase-orders/:id/confirmations
+POST   /api/v1/purchase-orders/:id/change-proposals
+POST   /api/v1/supplier-change-proposals/:id/decide
+POST   /api/v1/asns
+POST   /api/v1/receipts/:id/reconcile
+POST   /api/v1/cases
+POST   /api/v1/cases/:id/actions
+POST   /api/v1/cases/:id/resolve
+POST   /api/v1/process-models
+POST   /api/v1/process-models/:id/analyze
+POST   /api/v1/process-models/:id/replay
+POST   /api/v1/should-cost-models/:id/calculate
+POST   /api/v1/quotes/:id/cost-breakdown
+POST   /api/v1/negotiation-packets
+POST   /api/v1/product-carbon-footprints/calculate
+POST   /api/v1/pcf-data-requests
+POST   /api/v1/pcf-data-packages/:id/validate
+GET    /api/v1/recommendations
+POST   /api/v1/recommendations/:id/feedback
+POST   /api/v1/master-data-change-requests
+POST   /api/v1/data-contracts/:id/validate-compatibility
+```
+
+All mutations require idempotency, actor context, organization/tenant scope, optimistic concurrency and policy evaluation.
+
+---
+
+## 357. New domain events
+
+```text
+product_operational_state_changed
+placeholder_match_candidates_generated
+placeholder_resolved
+planning_change_propagated
+scenario_calculation_started
+scenario_calculated
+scenario_selected
+execution_plan_created
+feasibility_changed
+binding_constraint_detected
+demand_signal_recorded
+forecast_consumed
+forecast_override_applied
+forecast_value_add_measured
+capacity_offer_created
+capacity_reserved
+capacity_commitment_breached
+scarce_supply_allocation_proposed
+scarce_supply_allocation_approved
+po_confirmation_requested
+po_line_confirmed
+supplier_change_proposed
+supplier_change_accepted
+supplier_change_rejected
+asn_submitted
+receipt_reconciled
+exception_case_opened
+case_response_requested
+case_decision_recorded
+case_resolved
+process_deviation_detected
+process_bottleneck_detected
+historical_replay_completed
+should_cost_calculated
+quote_cost_variance_detected
+negotiation_packet_approved
+product_carbon_footprint_calculated
+pcf_data_requested
+pcf_data_verified
+recommendation_generated
+recommendation_dismissed
+recommendation_outcome_recorded
+master_data_change_requested
+master_data_merge_applied
+data_contract_published
+schema_compatibility_failed
+control_tower_exception_grouped
+```
+
+---
+
+## 358. KPI catalogue additions
+
+### Planning
+
+```text
+Plan Attainment = Actual / Approved Plan
+Scenario Decision Lead Time = Decision Time - Scenario Creation Time
+Propagation Coverage = Updated Dependent Nodes / Identified Dependent Nodes
+Feasibility Rate = Feasible Planned Quantity / Total Planned Quantity
+```
+
+### Forecast
+
+```text
+WAPE = Sum(|Actual - Forecast|) / Sum(Actual)
+Bias = Sum(Forecast - Actual) / Sum(Actual)
+Forecast Value Add = Baseline Error - Final Forecast Error
+Override Positive Rate = Overrides Improving Error / Measured Overrides
+```
+
+### Supplier collaboration
+
+```text
+PO Confirmation On-Time Rate = On-time Confirmations / Confirmation Requests
+Supplier Commit Reliability = Fulfilled Confirmed Quantity / Confirmed Quantity
+Change Proposal Rate = Lines with Supplier Change / Confirmed Lines
+ASN Accuracy = Correct ASN Lines / ASN Lines
+```
+
+### Process
+
+```text
+Process Conformance Rate = Conforming Instances / Completed Instances
+Rework Rate = Instances with Repeated Corrective Events / Instances
+Waiting Ratio = Waiting Time / Total Cycle Time
+First-Time-Right Rate = Instances without Rework / Completed Instances
+```
+
+### Cost
+
+```text
+Quote-to-Should-Cost Variance = Supplier Quote - Should Cost
+Negotiated Savings = Initial Quote - Final Agreed Quote
+Cost Assumption Coverage = Verified Cost Inputs / Total Cost Inputs
+```
+
+### Carbon
+
+```text
+Primary Data Share = Primary-data Emissions / Total PCF Emissions
+Verified PCF Coverage = Products with Verified PCF / In-scope Products
+PCF Reliability Score = Weighted Evidence-quality Index
+Carbon Intensity = Product Carbon Footprint / Functional Unit
+```
+
+---
+
+## 359. Additional UAT scenarios
+
+1. Brand admin filters Product Operations Directory to products with open orders and a superseded specification.
+2. Bulk product action attempts to publish a market-blocked product and is rejected with exact gate evidence.
+3. Placeholder auto-match proposes two similar products; price and delivery conflict force manual review.
+4. Resolving a placeholder preserves retailer quantities, doors, notes and private target margin.
+5. Placeholder is relinked through a controlled event; historical assortment snapshot remains unchanged.
+6. Material delay propagates into production, delivery, revenue timing and cash-plan impact.
+7. Scenario comparison rejects results calculated from different FX or forecast snapshots.
+8. Selected scenario creates an execution plan but does not directly mutate POs.
+9. Constraint engine identifies impossible MOQ, OTB and capacity combination.
+10. Least-violation option is shown but cannot override contractual restriction automatically.
+11. Confirmed PO consumes forecast; its prior order intent no longer double-counts demand.
+12. Cancellation releases consumed demand into the correct planning bucket.
+13. Forecast override improves WAPE and is recorded as positive FVA.
+14. Override based on obsolete weather evidence is flagged and later measured separately.
+15. Capacity reservation expires and releases unused capacity with financial adjustment.
+16. Supplier breaches paid capacity commitment; exception case and contractual exposure are created.
+17. Scarce supply policy provides minimum service to several accounts instead of allocating all units to the highest-margin account.
+18. Manual strategic-account override is visible in allocation explanation and fairness report.
+19. Supplier confirms a PO line with lower quantity and later date.
+20. Buyer accepts the proposed date but rejects the quantity change, creating a formal PO amendment.
+21. Supplier attempts to confirm an obsolete PO version and receives a concurrency error.
+22. CSV confirmation replay does not duplicate accepted quantities.
+23. ASN references exact PO lines and carton identifiers.
+24. Receipt variance outside tolerance creates a case and blocks automatic invoice match.
+25. External supplier sees shared case evidence but not internal target cost or legal notes.
+26. Closing a case without resolution criteria is prevented.
+27. Process intelligence detects repeated sample revision loops for one factory.
+28. Conformance analysis identifies invoice created before required receipt/acceptance event.
+29. Historical replay shows a new approval rule would have created excessive workload.
+30. Workflow policy is not activated until replay findings are reviewed.
+31. Should-cost model recalculates after labor rate and material-price changes.
+32. Supplier quotation variance is decomposed into material, labor, overhead and margin drivers.
+33. Unverified benchmark rate is labeled as assumption, not actual supplier cost.
+34. PCF calculation links to exact material, facility, period and methodology version.
+35. New emission factor creates a new PCF version without rewriting the value used in a prior claim.
+36. Supplier submits PCF package with insufficient primary data; it is conditionally accepted with low reliability.
+37. `Lower carbon` claim is blocked because comparison boundary differs.
+38. Brand recommendation explains category, price-band and order-history signals without exposing another retailer’s data.
+39. Sponsored discovery placement is labeled and kept outside organic ranking score.
+40. Master-data merge preserves source aliases and historical order references.
+41. Breaking event-schema change fails compatibility validation for an offline mobile consumer.
+42. Control tower groups shipment-delay, ATP and customer-risk alerts under one root exception.
+43. Safety-critical issue is never suppressed by alert deduplication.
+44. Process variant analysis identifies the route with the best first-time-right and on-time-delivery outcomes.
+
+---
+
+## 360. Version 3.3 competitive gap matrix
+
+| Capability | Benchmark | JOOR evidence status | Syntha target | Priority |
+|---|---|---|---|---|
+| Central product operations directory | NuORDER Product Directory | PARTIAL/UAT | Canonical operational product projection | P1 |
+| Bulk placeholder / SMU auto-match | NuORDER | NOT CONFIRMED | Governed placeholder resolution engine | P1 |
+| Network brand recommendations | NuORDER | NOT CONFIRMED | Explainable privacy-safe recommendation service | P2 |
+| Concurrent demand/supply/inventory planning | Kinaxis | NOT CONFIRMED | Planning Graph and propagation engine | P0 |
+| Scenario evaluation and execution bridge | Kinaxis | NOT CONFIRMED | Governed Scenario Workbench | P0 |
+| Capacity reservation and commitment | Supply-planning benchmark | NOT CONFIRMED | Capacity commercial and operational ledger | P1 |
+| Scarce supply allocation | Planning benchmark | PARTIAL/UAT | Explainable allocation and fairness governance | P1 |
+| Supplier line-level PO confirmation | Coupa | NOT CONFIRMED | Multi-channel confirmation/change protocol | P0 |
+| ASN/receipt/invoice chain | Coupa | PARTIAL/UAT | Canonical execution and reconciliation chain | P0 |
+| Multi-enterprise exception case | Coupa / network benchmark | NOT CONFIRMED | Structured Case Management | P0 |
+| Object-centric process mining | Celonis | NOT CONFIRMED | Native Process Intelligence Layer | P1 |
+| Process adherence and replay | Celonis | NOT CONFIRMED | Conformance and Digital Process Twin | P1 |
+| Bottom-up should cost | aPriori | NOT CONFIRMED | Fashion Should-Cost Engine | P1 |
+| Product carbon footprint exchange | WBCSD PACT | NOT CONFIRMED | Versioned PCF calculation and exchange | P1 |
+| Forecast value add | Planning benchmark | NOT CONFIRMED | Override outcome and FVA analytics | P1 |
+| Master-data change governance | Enterprise benchmark | PARTIAL/UAT | Stewardship, merge/split and effective dating | P0 |
+| Data-contract/schema governance | Platform benchmark | NOT CONFIRMED | Versioned contracts and compatibility controls | P0 |
+
+---
+
+## 361. Version 3.3 delivery roadmap
+
+### P0 — executable planning and supplier truth
+
+1. Planning Graph foundation and propagation service.
+2. Scenario snapshot/version governance.
+3. PO confirmation and supplier change protocol.
+4. ASN, receipt and invoice reconciliation chain.
+5. Multi-enterprise Exception Case Management.
+6. Master Data Stewardship.
+7. Data Contracts and schema compatibility.
+8. Control-tower root-cause grouping.
+
+### P1 — commercial and operational differentiation
+
+1. Product Operations Directory.
+2. Placeholder / SMU Resolution Engine.
+3. Forecast consumption and Forecast Value Add.
+4. Capacity reservation and constrained-supply allocation.
+5. Process intelligence, conformance and replay.
+6. Should-cost and quote decomposition.
+7. Product Carbon Footprint and supplier PCF exchange.
+8. Scenario-to-execution planning.
+
+### P2 — network intelligence
+
+1. Explainable brand/product/account recommendations.
+2. Cannibalization and assortment-diversity optimization.
+3. Advanced process root-cause models.
+4. Predictive supplier-confirmation and execution risk.
+5. Carbon-aware sourcing and scenario optimization.
+6. Agent-assisted case resolution under governance controls.
+
+### Final decisions
+
+1. **A plan is not executable unless feasibility, data freshness and policy version are known.**
+2. **Supplier acknowledgements and change proposals are first-class versioned objects, not email comments.**
+3. **Every exception must connect to affected objects, financial exposure, owner and resolution.**
+4. **Process intelligence must use canonical object/event history and cannot rewrite operational records.**
+5. **Should cost separates verified facts, benchmarks and assumptions.**
+6. **Product carbon values require exact scope, methodology, evidence and historical versioning.**
+7. **Recommendations must be explainable, privacy-safe and separated from sponsored placement.**
+8. **Scenario selection creates an approved execution plan rather than silently changing transactions.**
+
+### Official source register for version 3.3
+
+NuORDER:
+
+- https://helpdesk.nuorder.com/hc/en-us/articles/52320082658843-Brand-update-June-2026
+- https://helpdesk.nuorder.com/hc/en-us/articles/51128650175387-Brand-update-May-2026
+- https://helpdesk.nuorder.com/hc/en-us/articles/48563518237979-Brand-update-March-2026
+- https://helpdesk.nuorder.com/hc/en-us/articles/47286965076507-Brand-update-February-2026
+- https://helpdesk.nuorder.com/hc/en-us/articles/46493922326683-Brand-recommendations
+- https://helpdesk.nuorder.com/hc/en-us/articles/43537045658139-Retailer-profile-overview
+- https://helpdesk.nuorder.com/hc/en-us/articles/13898524646299-Product-Customizations-for-brands
+
+Concurrent planning and control tower:
+
+- https://www.kinaxis.com/en/solutions/planning-one
+- https://www.kinaxis.com/en/supply-chain-control-tower
+- https://kinaxis.com/en/solutions/supply-chain-control-tower-and-visibility-arc
+
+Supplier collaboration:
+
+- https://docs.coupa.com/en/supplier-documentation/coupa-for-suppliers/the-coupa-supplier-portal-or-csp/features-and-processes-in-the-coupa-supplier-portal/purchase-orders/purchase-order-collaboration-with-buyers
+- https://docs.coupa.com/en/supplier-documentation/coupa-for-suppliers/the-coupa-supplier-portal-or-csp/features-and-processes-in-the-coupa-supplier-portal/purchase-orders/purchase-order-collaboration-with-buyers/confirm-supply-chain-collaboration-orders-with-csv-files
+- https://docs.coupa.com/en/supplier-documentation/coupa-for-suppliers/the-coupa-supplier-portal-or-csp/features-and-processes-in-the-coupa-supplier-portal/purchase-orders/about-purchase-orders
+
+Process intelligence:
+
+- https://docs.celonis.com/en/glossary.html
+- https://docs.celonis.com/en/pql---process-query-language
+- https://docs.celonis.com/en/procurement-starter-kit---object-centric.html
+
+Should cost:
+
+- https://www.apriori.com/should-cost-analysis/
+
+Product carbon footprint:
+
+- https://www.wbcsd.org/resources/pact-methodology-version-3/
+- https://www.wbcsd.org/actions/partnership-for-carbon-transparency-pact/
+- https://www.wbcsd.org/news/pact-updated-tech-specifications-emissions-data/

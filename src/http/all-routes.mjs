@@ -1,3 +1,4 @@
+import { createProductionOrderRoutes } from './production-order-routes.mjs';
 import { createSampleRoutes } from './sample-routes.mjs';
 import { createSourcingRoutes } from './sourcing-routes.mjs';
 import { createTechPackRoutes } from './tech-pack-routes.mjs';
@@ -9,6 +10,7 @@ export function createWholesaleRoutes(services = {}) {
     ...createSampleRoutes({ samples: services.samples }),
     ...createSourcingRoutes({ sourcing: services.sourcing }),
     ...createTechPackRoutes({ techPacks: services.techPacks }),
+    ...createProductionOrderRoutes({ productionOrders: services.productionOrders }),
   ]);
 }
 

@@ -1,0 +1,36 @@
+name: Restructure JOOR Master Map v4.0
+
+on:
+  push:
+    paths:
+      - 'docs/.joor-v40-focused-plan.tmp.md'
+
+permissions:
+  contents: write
+
+jobs:
+  restructure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Archive v3.6 and replace main specification
+        run: |
+          set -e
+          mkdir -p docs/archive
+          if [ ! -f docs/archive/joor-retailer-cabinet-enterprise-capability-library-v3.6.md ]; then
+            cp docs/joor-retailer-cabinet-complete-map.md docs/archive/joor-retailer-cabinet-enterprise-capability-library-v3.6.md
+          fi
+          cp docs/.joor-v40-focused-plan.tmp.md docs/joor-retailer-cabinet-complete-map.md
+
+      - name: Commit focused product structure
+        run: |
+          rm -f docs/.joor-v40-focused-plan.tmp.md
+          rm -f .github/workflows/restructure-joor-map-v40-once.yml
+          git config user.name 'openai-docs-bot'
+          git config user.email 'openai-docs-bot@users.noreply.github.com'
+          git add -A
+          git commit -m 'docs: refocus Syntha into PLM-production and wholesale-commerce domains for Russian brands'
+          git push

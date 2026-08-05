@@ -1,6 +1,10 @@
+import { createProductionExecutionQueryService } from '../application/production-execution-query-service.mjs';
+import { createProductionExecutionService } from '../application/production-execution-service.mjs';
 import { createProductionOrderQueryService } from '../application/production-order-query-service.mjs';
 import { createProductionOrderService } from '../application/production-order-service.mjs';
 import { createSourcingTechPackAllocationService } from '../application/sourcing-tech-pack-allocation-service.mjs';
+import { createPostgresProductionExecutionReader } from '../infrastructure/postgres-production-execution-reader.mjs';
+import { createPostgresProductionExecutionStore } from '../infrastructure/postgres-production-execution-store.mjs';
 import { createPostgresProductionOrderReader } from '../infrastructure/postgres-production-order-reader.mjs';
 import { createPostgresProductionOrderStore } from '../infrastructure/postgres-production-order-store.mjs';
 import { createPostgresSourcingTechPackAllocationStore } from '../infrastructure/postgres-sourcing-tech-pack-allocation-store.mjs';
@@ -28,6 +32,16 @@ export function createPostgresWholesaleRuntime(options = {}) {
   const productionOrderQueries = createProductionOrderQueryService({ reader: productionOrderReader });
   const productionOrders = Object.freeze({ ...productionOrderQueries, ...productionOrderCommands });
 
+  const productionExecutionStore = createPostgresProductionExecutionStore({ pool: options.pool });
+  const productionExecutionReader = createPostgresProductionExecutionReader({ pool: options.pool });
+  const productionExecutionCommands = createProductionExecutionService({
+    store: productionExecutionStore,
+    ...(options.clock ? { clock: options.clock } : {}),
+    ...(options.nextId ? { nextId: options.nextId } : {}),
+  });
+  const productionExecutionQueries = createProductionExecutionQueryService({ reader: productionExecutionReader });
+  const productionExecutions = Object.freeze({ ...productionExecutionQueries, ...productionExecutionCommands });
+
   const transport = {
     authenticate: base.auth.authenticate,
     auth: base.auth,
@@ -42,6 +56,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
     sourcing,
     techPacks: base.techPacks,
     productionOrders,
+    productionExecutions,
     collaboration: base.collaboration,
     orders: base.orders,
     notifications: base.notifications,
@@ -56,6 +71,9 @@ export function createPostgresWholesaleRuntime(options = {}) {
     productionOrderStore,
     productionOrderReader,
     productionOrders,
+    productionExecutionStore,
+    productionExecutionReader,
+    productionExecutions,
     handler,
     fetchHandler,
   });

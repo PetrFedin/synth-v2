@@ -5,7 +5,7 @@ import path from 'node:path';
 
 const root = path.resolve(new URL('..', import.meta.url).pathname);
 
-test('PostgreSQL runtime wires sourcing commands, reads, routes and transport as one service', async () => {
+test('PostgreSQL runtime wires sourcing and Tech Pack commands, reads, routes and transport', async () => {
   const source = await readFile(path.join(root, 'src/runtime/postgres-runtime.mjs'), 'utf8');
   for (const fragment of [
     'createSourcingService',
@@ -15,12 +15,18 @@ test('PostgreSQL runtime wires sourcing commands, reads, routes and transport as
     'const sourcingStore = createPostgresSourcingStore({ pool })',
     'const sourcing = Object.freeze({ ...createSourcingService',
     '...createSourcingQueryService',
-    'samples, partners, sourcing, collaboration',
-    'sampleStore, sourcingStore',
+    'createTechPackService',
+    'createTechPackQueryService',
+    'createPostgresTechPackStore',
+    'createPostgresTechPackReader',
+    'const techPackStore = createPostgresTechPackStore({ pool })',
+    'const techPacks = Object.freeze({ ...createTechPackService',
+    'samples, partners, sourcing, techPacks, collaboration',
+    'sampleStore, sourcingStore, techPackStore',
   ]) assert.ok(source.includes(fragment), `missing runtime wiring: ${fragment}`);
 });
 
-test('HTTP composition exposes sourcing routes and OpenAPI after the sample module', async () => {
+test('HTTP composition exposes sourcing and Tech Pack routes and OpenAPI', async () => {
   const [routes, openapi, api] = await Promise.all([
     readFile(path.join(root, 'src/http/all-routes.mjs'), 'utf8'),
     readFile(path.join(root, 'src/http/v2-openapi.mjs'), 'utf8'),
@@ -28,8 +34,11 @@ test('HTTP composition exposes sourcing routes and OpenAPI after the sample modu
   ]);
   assert.ok(routes.includes('createSourcingRoutes'));
   assert.ok(routes.includes('...createSourcingRoutes({ sourcing: services.sourcing })'));
+  assert.ok(routes.includes('createTechPackRoutes'));
+  assert.ok(routes.includes('...createTechPackRoutes({ techPacks: services.techPacks })'));
   assert.ok(openapi.includes('withSourcingOpenApi'));
-  assert.match(openapi, /withSourcingOpenApi\(\s*withSampleOpenApi/);
+  assert.ok(openapi.includes('withTechPackOpenApi'));
+  assert.match(openapi, /withTechPackOpenApi\(\s*withSourcingOpenApi/);
   assert.ok(api.includes('SOURCING_CURSOR_INVALID'));
   assert.ok(api.includes('RFQ_NOT_ALLOCATABLE'));
 });

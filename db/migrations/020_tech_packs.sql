@@ -92,22 +92,22 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
   sample_record record;
-  sample_code text;
+  dependency_sample_code text;
 BEGIN
   IF NEW.status NOT IN ('issued','acknowledged','superseded') THEN
     RETURN NEW;
   END IF;
 
-  sample_code := NEW.payload #>> '{dependencySnapshot,sampleCode}';
-  IF sample_code IS NULL OR sample_code = '' THEN
+  dependency_sample_code := NEW.payload #>> '{dependencySnapshot,sampleCode}';
+  IF dependency_sample_code IS NULL OR dependency_sample_code = '' THEN
     RAISE EXCEPTION 'Issued Tech Pack requires an approved pre-production sample snapshot'
       USING ERRCODE = '23514', CONSTRAINT = 'tech_packs_approved_pps_required';
   END IF;
 
-  SELECT sku, brand_id, supplier_code, sample_type, status
+  SELECT samples.sku, samples.brand_id, samples.supplier_code, samples.sample_type, samples.status
     INTO sample_record
     FROM samples
-   WHERE samples.sample_code = sample_code;
+   WHERE samples.sample_code = dependency_sample_code;
 
   IF NOT FOUND
      OR sample_record.status <> 'approved'

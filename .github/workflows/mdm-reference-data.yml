@@ -6,7 +6,7 @@ on:
       - "mdm/**"
       - "scripts/validate-mdm.mjs"
       - "scripts/sync-mdm-sources.mjs"
-      - "db/migrations/022_mdm_core.sql"
+      - "db/migrations/023_mdm_core.sql"
       - "package.json"
   push:
     branches:
@@ -15,7 +15,7 @@ on:
       - "mdm/**"
       - "scripts/validate-mdm.mjs"
       - "scripts/sync-mdm-sources.mjs"
-      - "db/migrations/022_mdm_core.sql"
+      - "db/migrations/023_mdm_core.sql"
       - "package.json"
   schedule:
     - cron: "17 3 * * 1"

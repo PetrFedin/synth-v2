@@ -29,7 +29,7 @@ The resolver must select the most specific active record whose validity period c
 - `schemas/` — JSON Schemas for records, attributes and metrics.
 - `sources/` — authoritative-source registry and update policy.
 - `generated/` — machine-generated source fingerprints. Do not edit manually.
-- `db/migrations/022_mdm_core.sql` — PostgreSQL persistence, versioning, approvals, snapshots and audit controls.
+- `db/migrations/023_mdm_core.sql` — PostgreSQL persistence, versioning, approvals, snapshots and audit controls.
 - `scripts/validate-mdm.mjs` — deterministic repository validator.
 - `scripts/sync-mdm-sources.mjs` — source-change detector and adapter runner.
 

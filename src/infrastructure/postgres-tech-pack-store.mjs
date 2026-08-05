@@ -31,8 +31,19 @@ function view(client) {
       const result = await client.query("SELECT payload FROM measurement_charts WHERE sku = $1 AND status = 'published' FOR SHARE", [sku]);
       return result.rows[0]?.payload;
     },
-    async getApprovedSampleBySku(sku) {
-      const result = await client.query("SELECT payload FROM samples WHERE sku = $1 AND status = 'approved' ORDER BY decision_at DESC, sample_code DESC LIMIT 1 FOR SHARE", [sku]);
+    async getApprovedPpsBySkuAndSupplier(sku, supplierCode) {
+      const result = await client.query(
+        `SELECT payload
+           FROM samples
+          WHERE sku = $1
+            AND supplier_code = $2
+            AND sample_type = 'pre-production'
+            AND status = 'approved'
+          ORDER BY decision_at DESC, sample_code DESC
+          LIMIT 1
+          FOR SHARE`,
+        [sku, supplierCode],
+      );
       return result.rows[0]?.payload;
     },
     async getTechPackByCode(code) {

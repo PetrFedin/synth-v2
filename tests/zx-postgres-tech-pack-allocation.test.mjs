@@ -15,6 +15,7 @@ import { createTechPackService } from '../src/application/tech-pack-service.mjs'
 import { createSourcingTechPackAllocationService } from '../src/application/sourcing-tech-pack-allocation-service.mjs';
 import { createProductionOrderService } from '../src/application/production-order-service.mjs';
 import { createProductionExecutionService } from '../src/application/production-execution-service.mjs';
+import { createFinalQualityService } from '../src/application/final-quality-service.mjs';
 import { createPostgresWholesaleStore } from '../src/infrastructure/postgres-store.mjs';
 import { createPostgresCatalogStore } from '../src/infrastructure/postgres-catalog-store.mjs';
 import { createPostgresMaterialStore } from '../src/infrastructure/postgres-material-store.mjs';
@@ -26,12 +27,13 @@ import { createPostgresTechPackStore } from '../src/infrastructure/postgres-tech
 import { createPostgresSourcingTechPackAllocationStore } from '../src/infrastructure/postgres-sourcing-tech-pack-allocation-store.mjs';
 import { createPostgresProductionOrderStore } from '../src/infrastructure/postgres-production-order-store.mjs';
 import { createPostgresProductionExecutionStore } from '../src/infrastructure/postgres-production-execution-store.mjs';
+import { createPostgresFinalQualityStore } from '../src/infrastructure/postgres-final-quality-store.mjs';
 import { migratePostgres } from '../src/infrastructure/postgres-migrator.mjs';
 import { createPostgresTestPool } from './postgres-test-pool.mjs';
 
 const databaseUrl = process.env.POSTGRES_TEST_URL;
 
-test('PostgreSQL closes approved PPS through confirmed Production Order and Production Execution ready-for-QC', { skip: !databaseUrl }, async () => {
+test('PostgreSQL closes approved PPS through production, rework, reinspection and shipment release', { skip: !databaseUrl }, async () => {
   const pool = createPostgresTestPool({ connectionString: databaseUrl, max: 8 });
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
   let id = 0; let tick = 0;
@@ -52,6 +54,7 @@ test('PostgreSQL closes approved PPS through confirmed Production Order and Prod
     const allocationStore = createPostgresSourcingTechPackAllocationStore({ pool });
     const productionOrderStore = createPostgresProductionOrderStore({ pool });
     const productionExecutionStore = createPostgresProductionExecutionStore({ pool });
+    const finalQualityStore = createPostgresFinalQualityStore({ pool });
     const platform = createWholesalePlatform({ store: wholesaleStore, clock, nextId });
     const catalog = createCatalogService({ wholesaleStore, catalogStore, clock, nextId });
     const materials = createMaterialService({ materialStore, clock, nextId });
@@ -63,9 +66,11 @@ test('PostgreSQL closes approved PPS through confirmed Production Order and Prod
     const allocation = createSourcingTechPackAllocationService({ store: allocationStore, clock, nextId });
     const productionOrders = createProductionOrderService({ store: productionOrderStore, clock, nextId });
     const productionExecutions = createProductionExecutionService({ store: productionExecutionStore, clock, nextId });
+    const finalQuality = createFinalQualityService({ store: finalQualityStore, clock, nextId });
 
     await platform.registerOrganisation('org-create', 'system', createOrganisation({ id: 'brand-tech-gate', type: 'brand', name: 'Tech Gate Brand' }));
     await platform.grantMembership('member-owner', 'system', createMembership({ id: 'membership-owner', organisationId: 'brand-tech-gate', organisationType: 'brand', userId: 'product-owner', role: 'owner', createdAt: clock() }));
+    await platform.grantMembership('member-quality-approver', 'system', createMembership({ id: 'membership-quality-approver', organisationId: 'brand-tech-gate', organisationType: 'brand', userId: 'quality-approver', role: 'admin', createdAt: clock() }));
     const campaign = await platform.createCampaign('campaign-create', 'product-owner', { brandId: 'brand-tech-gate', name: 'AW Tech Gate', season: 'AW28', startsAt: '2028-01-01T00:00:00.000Z', endsAt: '2028-02-01T00:00:00.000Z' });
     await platform.openCampaign('campaign-open', 'product-owner', campaign.id);
     const collection = await platform.createCollection('collection-create', 'product-owner', { campaignId: campaign.id, brandId: 'brand-tech-gate', name: 'Main', currency: 'EUR' });
@@ -197,6 +202,107 @@ test('PostgreSQL closes approved PPS through confirmed Production Order and Prod
     await assert.rejects(
       () => pool.query('UPDATE production_executions SET payload = $2::jsonb WHERE execution_code = $1', [execution.executionCode, JSON.stringify(incompleteReady)]),
       (error) => error?.code === '23514' && error?.constraint === 'production_executions_lifecycle_state_valid',
+    );
+
+    let quality = await finalQuality.createFromExecution('quality-create', 'product-owner', execution.executionCode);
+    assert.equal(quality.status, 'planned');
+    assert.equal(quality.executionVersion, execution.version);
+    assert.equal(quality.sourceSnapshot.techPackCode, techPack.techPackCode);
+    quality = await finalQuality.start('quality-run-1-start', 'product-owner', quality.inspectionCode, {
+      expectedVersion: quality.version,
+      inspectorName: 'Factory Quality Inspector',
+      sampleSize: 20,
+      allowedMajorDefects: 1,
+      allowedMinorDefects: 2,
+    });
+    quality = await finalQuality.completeRun('quality-run-1-complete', 'product-owner', quality.inspectionCode, {
+      expectedVersion: quality.version,
+      inspectedQuantity: 20,
+      defects: [{ defectCode: 'SEAM-OPEN-01', severity: 'major', category: 'Workmanship', description: 'Two open side-seam sections found in the approved sample', quantity: 2, evidenceReferences: ['evidence://quality/run-1/seam'] }],
+      measurementFailures: [],
+      checkpoints: [{ checkpointCode: 'WORKMANSHIP', name: 'Workmanship', result: 'fail', severity: 'major', notes: 'Open seam requires rework' }],
+      evidenceReferences: ['evidence://quality/run-1/report'],
+      notes: 'Sample exceeds the approved major-defect tolerance',
+    });
+    assert.equal(quality.status, 'review-pending');
+    assert.equal(quality.runs[0].recommendation, 'rework');
+    assert.deepEqual(quality.runs[0].defectCounts, { critical: 0, major: 3, minor: 0 });
+
+    await assert.rejects(() => finalQuality.review('quality-run-1-self-review', 'product-owner', quality.inspectionCode, {
+      expectedVersion: quality.version,
+      decision: 'rework',
+      releaseCode: null,
+      notes: 'The same inspector cannot approve this disposition',
+    }), { code: 'QUALITY_SELF_APPROVAL_FORBIDDEN' });
+
+    quality = await finalQuality.review('quality-run-1-review', 'quality-approver', quality.inspectionCode, {
+      expectedVersion: quality.version,
+      decision: 'rework',
+      releaseCode: null,
+      notes: 'Independent approver requires seam repair and full reinspection',
+    });
+    assert.equal(quality.status, 'rework-required');
+    assert.equal(quality.runs[0].reviewedBy, 'quality-approver');
+
+    quality = await finalQuality.startReinspection('quality-run-2-start', 'product-owner', quality.inspectionCode, {
+      expectedVersion: quality.version,
+      inspectorName: 'Factory Quality Inspector',
+      sampleSize: 20,
+      allowedMajorDefects: 1,
+      allowedMinorDefects: 2,
+      reworkReference: 'RWK-TECH-GATE-1',
+      resolutionNotes: 'Affected seams were reopened, reinforced, resewn and checked before reinspection',
+    });
+    assert.equal(quality.currentRun, 2);
+    quality = await finalQuality.completeRun('quality-run-2-complete', 'product-owner', quality.inspectionCode, {
+      expectedVersion: quality.version,
+      inspectedQuantity: 20,
+      defects: [],
+      measurementFailures: [],
+      checkpoints: [
+        { checkpointCode: 'WORKMANSHIP', name: 'Workmanship', result: 'pass', severity: null, notes: 'Repaired seams accepted' },
+        { checkpointCode: 'PACKING', name: 'Packing and labelling', result: 'pass', severity: null, notes: 'Packing sample accepted' },
+      ],
+      evidenceReferences: ['evidence://quality/run-2/report'],
+      notes: 'Reinspection sample passed all defined checkpoints',
+    });
+    assert.equal(quality.runs[1].recommendation, 'pass');
+    const releaseInput = {
+      expectedVersion: quality.version,
+      decision: 'release',
+      releaseCode: 'SHIP-REL-TECH-GATE-1',
+      notes: 'Independent Final Quality approval after successful reinspection',
+    };
+    quality = await finalQuality.review('quality-run-2-release', 'quality-approver', quality.inspectionCode, releaseInput);
+    assert.equal(quality.status, 'released');
+    assert.equal(quality.shipmentRelease.releaseCode, 'SHIP-REL-TECH-GATE-1');
+    assert.equal(quality.shipmentRelease.releasedBy, 'quality-approver');
+    assert.equal(quality.runs.length, 2);
+
+    const qualityRow = (await pool.query('SELECT status, version, current_run, payload FROM quality_inspections WHERE inspection_code = $1', [quality.inspectionCode])).rows[0];
+    assert.deepEqual({ status: qualityRow.status, version: qualityRow.version, currentRun: qualityRow.current_run }, { status: 'released', version: 7, currentRun: 2 });
+    assert.equal(qualityRow.payload.runs[0].disposition, 'rework');
+    assert.equal(qualityRow.payload.runs[1].disposition, 'release');
+    const releaseRow = (await pool.query('SELECT release_code, inspection_version, released_by, payload FROM quality_shipment_releases WHERE inspection_code = $1', [quality.inspectionCode])).rows[0];
+    assert.deepEqual({ releaseCode: releaseRow.release_code, inspectionVersion: releaseRow.inspection_version, releasedBy: releaseRow.released_by }, { releaseCode: 'SHIP-REL-TECH-GATE-1', inspectionVersion: 7, releasedBy: 'quality-approver' });
+    assert.equal(releaseRow.payload.productionOrderNumber, productionOrder.productionOrderNumber);
+
+    const qualityEventsBeforeReplay = Number((await pool.query('SELECT count(*)::integer AS count FROM outbox_events WHERE aggregate_id = $1', [quality.id])).rows[0].count);
+    const releaseReplay = await finalQuality.review('quality-run-2-release', 'quality-approver', quality.inspectionCode, releaseInput);
+    const qualityEventsAfterReplay = Number((await pool.query('SELECT count(*)::integer AS count FROM outbox_events WHERE aggregate_id = $1', [quality.id])).rows[0].count);
+    assert.equal(releaseReplay.version, quality.version);
+    assert.equal(qualityEventsBeforeReplay, 7);
+    assert.equal(qualityEventsAfterReplay, qualityEventsBeforeReplay);
+
+    const selfApprovedPayload = structuredClone(quality);
+    selfApprovedPayload.runs[1].reviewedBy = 'product-owner';
+    await assert.rejects(
+      () => pool.query('UPDATE quality_inspections SET payload = $2::jsonb WHERE inspection_code = $1', [quality.inspectionCode, JSON.stringify(selfApprovedPayload)]),
+      (error) => error?.code === '23514' && error?.constraint === 'quality_inspections_approval_segregation',
+    );
+    await assert.rejects(
+      () => pool.query("UPDATE quality_shipment_releases SET released_by = 'product-owner' WHERE inspection_code = $1", [quality.inspectionCode]),
+      (error) => error?.code === '23514' && error?.constraint === 'quality_shipment_releases_immutable',
     );
 
     assert.equal(pps.status, 'approved');

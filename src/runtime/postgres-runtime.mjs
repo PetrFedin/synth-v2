@@ -1,5 +1,7 @@
 import { createFinalQualityQueryService } from '../application/final-quality-query-service.mjs';
 import { createFinalQualityService } from '../application/final-quality-service.mjs';
+import { createOutboundShipmentQueryService } from '../application/outbound-shipment-query-service.mjs';
+import { createOutboundShipmentService } from '../application/outbound-shipment-service.mjs';
 import { createProductionExecutionQueryService } from '../application/production-execution-query-service.mjs';
 import { createProductionExecutionService } from '../application/production-execution-service.mjs';
 import { createProductionOrderQueryService } from '../application/production-order-query-service.mjs';
@@ -7,6 +9,8 @@ import { createProductionOrderService } from '../application/production-order-se
 import { createSourcingTechPackAllocationService } from '../application/sourcing-tech-pack-allocation-service.mjs';
 import { createPostgresFinalQualityReader } from '../infrastructure/postgres-final-quality-reader.mjs';
 import { createPostgresFinalQualityStore } from '../infrastructure/postgres-final-quality-store.mjs';
+import { createPostgresOutboundShipmentReader } from '../infrastructure/postgres-outbound-shipment-reader.mjs';
+import { createPostgresOutboundShipmentStore } from '../infrastructure/postgres-outbound-shipment-store.mjs';
 import { createPostgresProductionExecutionReader } from '../infrastructure/postgres-production-execution-reader.mjs';
 import { createPostgresProductionExecutionStore } from '../infrastructure/postgres-production-execution-store.mjs';
 import { createPostgresProductionOrderReader } from '../infrastructure/postgres-production-order-reader.mjs';
@@ -56,6 +60,16 @@ export function createPostgresWholesaleRuntime(options = {}) {
   const finalQualityQueries = createFinalQualityQueryService({ reader: finalQualityReader });
   const finalQuality = Object.freeze({ ...finalQualityQueries, ...finalQualityCommands });
 
+  const outboundShipmentStore = createPostgresOutboundShipmentStore({ pool: options.pool });
+  const outboundShipmentReader = createPostgresOutboundShipmentReader({ pool: options.pool });
+  const outboundShipmentCommands = createOutboundShipmentService({
+    store: outboundShipmentStore,
+    ...(options.clock ? { clock: options.clock } : {}),
+    ...(options.nextId ? { nextId: options.nextId } : {}),
+  });
+  const outboundShipmentQueries = createOutboundShipmentQueryService({ reader: outboundShipmentReader });
+  const outboundShipments = Object.freeze({ ...outboundShipmentQueries, ...outboundShipmentCommands });
+
   const transport = {
     authenticate: base.auth.authenticate,
     auth: base.auth,
@@ -72,6 +86,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
     productionOrders,
     productionExecutions,
     finalQuality,
+    outboundShipments,
     collaboration: base.collaboration,
     orders: base.orders,
     notifications: base.notifications,
@@ -92,6 +107,9 @@ export function createPostgresWholesaleRuntime(options = {}) {
     finalQualityStore,
     finalQualityReader,
     finalQuality,
+    outboundShipmentStore,
+    outboundShipmentReader,
+    outboundShipments,
     handler,
     fetchHandler,
   });

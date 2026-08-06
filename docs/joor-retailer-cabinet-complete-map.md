@@ -1,9 +1,9 @@
 # Платформа Syntha / Syntha Fashion Platform — Product & Supply + Wholesale Commerce
 
 Статус / Status: единственная актуальная двуязычная продуктовая спецификация / the only current bilingual product source of truth for Syntha.  
-Версия / Version: 4.2, 6 августа 2026 года.  
-Основной рынок: российские fashion-бренды, работающие с российскими и зарубежными фабриками, поставщиками материалов и поставщиками готовых изделий.  
-Назначение: разделить управление разработкой, закупками и производством от B2B-коммерции бренда с магазинами, сохранив единое ядро товарных данных.
+Версия / Version: 4.3, 6 августа 2026 года.  
+Основной рынок / Primary market: российские fashion-бренды, работающие с российскими и зарубежными фабриками, поставщиками материалов, готовых изделий и магазинами / Russian fashion brands working with domestic and international factories, material suppliers, finished-goods suppliers and retailers.  
+Назначение / Purpose: связать Product & Supply и Wholesale Commerce через единое версионное ядро товара, сохранив отдельные процессы, права, документы, статусы и системы учёта / connect Product & Supply and Wholesale Commerce through one versioned product core while preserving separate processes, permissions, documents, states and systems of record.
 
 > Все продуктовые решения, статусы, сущности, процессы, API-контракты, интеграции, UAT и приоритеты ведутся только в этом файле. Отдельные функциональные спецификации не создаются; устаревшие формулировки удаляются или заменяются здесь.
 
@@ -4262,7 +4262,6 @@ BOL supports:
 - export in tech pack;
 - version comparison.
 
-BOL does not become MES machine scheduling; it remains a product/production specification.
 
 ### 77.3 Measurement Chart
 
@@ -6659,4 +6658,1757 @@ RU/EN international supplier and buyer collaboration
 Syntha operating model
 ```
 
-Only retained capabilities belonging to this operating model are developed in this document.
+---
+
+## 104. Каркас полной сквозной спецификации / Complete End-to-End Specification Framework
+
+### 104.1 Цель / Objective
+
+RU: Каждый модуль Syntha должен быть описан не как изолированный экран, а как часть завершённой цепочки от бизнес-намерения до подтверждённого результата, внешнего документа, статуса исполнения и измеримого эффекта.
+
+EN: Every Syntha module is specified as part of a completed business chain, not as an isolated screen. A flow is complete only when it produces a controlled result, downstream status, external-system reference where required and measurable outcome.
+
+Для каждого процесса обязательны / Every process must define:
+
+1. trigger / инициирующее событие;
+2. preconditions / предусловия;
+3. actors and permissions / роли и права;
+4. source objects and versions / исходные объекты и версии;
+5. commands and user actions / команды и действия;
+6. validations and blocking rules / проверки и блокировки;
+7. state transitions / переходы статусов;
+8. resulting objects and snapshots / результирующие объекты и снимки;
+9. domain events / доменные события;
+10. integrations and external references / интеграции и внешние ссылки;
+11. exceptions and recovery / исключения и восстановление;
+12. audit trail / аудит;
+13. analytics and SLA / аналитика и SLA;
+14. UAT evidence / доказательства приёмки.
+
+### 104.2 Универсальный объект действия / Universal Action Record
+
+Каждое значимое действие создаёт `ActionExecution`:
+
+- action ID;
+- command type;
+- aggregate type and ID;
+- source version;
+- requested by;
+- organization and role;
+- request timestamp;
+- expected version;
+- validation result;
+- approval requirement;
+- execution status;
+- resulting version;
+- emitted events;
+- integration messages;
+- correlation ID;
+- error/recovery reference.
+
+Lifecycle:
+
+```text
+REQUESTED
+→ VALIDATING
+→ APPROVAL_REQUIRED / READY_TO_EXECUTE
+→ EXECUTING
+→ SUCCEEDED / FAILED
+→ COMPENSATED where applicable
+```
+
+### 104.3 Completion rule / Правило завершённости
+
+Процесс не считается завершённым, если:
+
+- пользователь получил только визуальное подтверждение без сохранённого результата;
+- статус изменён без проверки обязательных зависимостей;
+- внешняя интеграция не вернула подтверждение, но UI показывает успех;
+- новая версия потеряла связь с исходной;
+- ошибка не имеет владельца и recovery action;
+- отсутствует конечный UAT-сценарий.
+
+---
+
+## 105. Сквозной граф зависимостей / Cross-Domain Dependency Graph
+
+### 105.1 Основная цепочка / Primary chain
+
+```text
+CollectionStrategy
+→ CollectionPlan
+→ CollectionItem
+→ DevelopmentRoute
+→ Product/Supplier Candidate
+→ Technical or Purchase Readiness
+→ Supplier Decision
+→ Supplier Order
+→ Production/Supply Execution
+→ Quality Acceptance
+→ Import and Russian Readiness
+→ ProductReadinessSnapshot
+→ CommercialProductProjection
+→ Price and Access
+→ Catalog/Linesheet/Showroom
+→ Retailer Assortment
+→ WholesaleOrder
+→ Order Agreement
+→ ERP/1C Execution
+→ EDO/UPD and Shipment
+→ Payment and Delivery Status
+```
+
+### 105.2 Обязательные связи / Mandatory relationships
+
+| Upstream object | Downstream object | Связь / Relationship | Правило / Rule |
+|---|---|---|---|
+| `CollectionItem` | `StyleVersion` or `SupplierProductCandidate` | source identity | Один активный sourcing branch на конкретную версию решения |
+| `StyleVersion` | `BOM`, `MeasurementChart`, `TechPack` | technical version set | Released objects resolve to one immutable source set |
+| `RFQ` | `QuotationVersion` | supplier response | Quotation references exact RFQ version |
+| `Award` | Supplier Order | commercial commitment | PO cannot use unawarded terms without override approval |
+| Supplier Order | Milestones/Inspections/Receipts | execution scope | All facts resolve to order line and version |
+| `ProductReadinessSnapshot` | `CommercialProductProjectionVersion` | publication source | Projection stores source snapshot ID |
+| `PriceListVersion` | Wholesale Order line | price source | Submitted line stores exact price resolution |
+| `CommercialAccessGrant` | Catalog/Order | visibility authority | Access is checked on every read and command |
+| `WholesaleOrderVersion` | ERP/1C document | execution mapping | External ID maps to agreed version, not mutable draft |
+| Shipment | UPD/EDO/marking references | legal execution | Quantities and codes reconcile at line level |
+
+### 105.3 Dependency status / Статус зависимости
+
+Each dependency is represented as:
+
+```text
+NOT_REQUIRED
+REQUIRED_NOT_STARTED
+IN_PROGRESS
+READY
+BLOCKED
+WAIVED
+EXPIRED
+```
+
+A waiver stores authorized user, reason, evidence, scope and expiry/review date.
+
+---
+
+## 106. Двуязычные данные, локализация и поиск / Bilingual Data, Localization and Search
+
+### 106.1 TranslatableValue
+
+Любое переводимое поле хранится как набор значений, а не как одна строка:
+
+- field key;
+- source language;
+- source text;
+- translated language;
+- translated text;
+- translation method: `HUMAN`, `MACHINE_DRAFT`, `IMPORT`;
+- translator;
+- reviewer;
+- review status;
+- terminology warnings;
+- effective version.
+
+Lifecycle:
+
+```text
+SOURCE_READY
+→ TRANSLATION_DRAFT
+→ LANGUAGE_REVIEW
+→ APPROVED
+→ SUPERSEDED
+```
+
+### 106.2 Минимальные языковые требования / Minimum language requirements
+
+| Object | RU required | EN required | Rule |
+|---|---:|---:|---|
+| Internal Russian legal entity | Да | Опционально | English used for foreign contract/export context |
+| Foreign supplier/factory profile | Да, краткое имя | Да | Original legal name remains unchanged |
+| Style commercial name | Да | Да for international sales | Publication blocked by target-market language policy |
+| Tech Pack | Configurable | Да for foreign factory | Factory language can override default |
+| RFQ instructions | Да | Да for foreign supplier | Supplier sees selected language plus original |
+| Label text | Да | Optional other language | Russian version controlled separately |
+| Linesheet/Showroom | Да | Да for international buyer | One version may contain both languages |
+| Error/notification template | Да | Да | Recipient language selected by membership preference |
+
+### 106.3 Search index
+
+Index contains:
+
+- Russian normalized text;
+- English normalized text;
+- original supplier text;
+- transliteration;
+- style/article/SKU/GTIN;
+- material and color codes;
+- legal entity identifiers;
+- document numbers;
+- synonyms from controlled glossary.
+
+Search results show matched field and language. Access filtering occurs before result rendering.
+
+### 106.4 Terminology governance
+
+`TerminologyTerm` stores:
+
+- canonical system code;
+- RU label;
+- EN label;
+- allowed synonyms;
+- prohibited/ambiguous variants;
+- domain;
+- definition;
+- example;
+- owner;
+- effective version.
+
+Changing a canonical UI label does not change API field names or historical document text.
+
+---
+
+## 107. Планирование коллекции End-to-End / Collection Planning End-to-End
+
+### 107.1 Trigger / Триггер
+
+RU: Бренд создаёт сезон, коллекцию, capsule или drop и фиксирует плановые коммерческие и производственные ограничения.
+
+EN: A brand opens a season, collection, capsule or drop and establishes commercial, product and sourcing targets.
+
+### 107.2 Preconditions
+
+- active brand organization and legal entity;
+- season/calendar dictionaries;
+- category and size dictionaries;
+- currencies and planning exchange-rate policy;
+- user with Collection Planning permission.
+
+### 107.3 Planning objects
+
+- `BusinessYear`;
+- `Season`;
+- `Collection`;
+- `Capsule`;
+- `Drop`;
+- `CollectionPlanVersion`;
+- `CollectionItem`;
+- `CalendarTemplate`;
+- `PlanningTarget`;
+- `ApprovalDecision`.
+
+### 107.4 Collection plan dimensions
+
+- category/subcategory;
+- gender/age group;
+- route;
+- source country;
+- supplier/factory candidate;
+- style count;
+- colorway count;
+- SKU count;
+- planned units;
+- target cost;
+- target wholesale and retail price;
+- target margin;
+- launch date;
+- delivery window;
+- channel/market;
+- owner;
+- readiness target date.
+
+### 107.5 User actions
+
+- create from template;
+- copy previous season with controlled carry-over;
+- import XLSX with preview and mapping;
+- create placeholders;
+- split/merge planning rows;
+- assign route and owner;
+- create calendar milestones from template;
+- compare plan versions;
+- submit for approval;
+- approve/reject with comments;
+- baseline approved plan;
+- create execution objects from approved positions.
+
+### 107.6 Validations
+
+- every approved row has category, route, owner and target dates;
+- target cost and price use declared currency;
+- total plan reconciles by hierarchy;
+- duplicate style/carry-over links are flagged;
+- route-specific mandatory planning data is checked;
+- baseline cannot be edited; changes create new version;
+- deleted planning row with downstream objects becomes `CANCELLED`, not physically deleted.
+
+### 107.7 Outputs
+
+- approved `CollectionPlanVersion`;
+- executable `CollectionItem` records;
+- generated tasks and calendar;
+- planned demand for sourcing/material calculation;
+- initial collection readiness dashboard.
+
+### 107.8 Events
+
+- `collection_plan_created`;
+- `collection_plan_imported`;
+- `collection_plan_submitted`;
+- `collection_plan_approved`;
+- `collection_plan_baselined`;
+- `collection_item_activated`;
+- `collection_item_cancelled`.
+
+### 107.9 UAT closure
+
+A planning E2E test must prove that an approved row becomes a route-specific CollectionItem, inherits dates/targets, creates traceable downstream work and remains linked to its planning baseline.
+
+---
+
+## 108. Route A End-to-End — собственная разработка и контрактное производство / Own Development and Contract Manufacturing
+
+### 108.1 Full path
+
+```text
+CollectionItem
+→ Style and StyleVersion
+→ Colorways and Size Scale
+→ BOM/Measurements/Construction
+→ Tech Pack Draft
+→ Sample Requests
+→ Technical Approval
+→ Manufacturing RFQ
+→ Quotation/Award
+→ Released Tech Pack
+→ Production Order
+→ Materials and PPS Readiness
+→ Production Milestones
+→ Inline/Final QC
+→ Shipment/Import/Receipt
+→ Compliance and Marking Readiness
+→ ProductReadinessSnapshot
+→ CommercialProductProjection
+```
+
+### 108.2 Technical readiness gate
+
+Required conditions are configured by category and include:
+
+- approved StyleVersion;
+- all orderable colorways resolved;
+- complete BOM;
+- approved measurement chart;
+- construction and callouts;
+- labels/packaging version;
+- approved required sample;
+- test results where required;
+- target/negotiated cost reviewed;
+- factory decision;
+- released Tech Pack.
+
+### 108.3 Release to production command
+
+`ReleaseProductionOrder` validates:
+
+- supplier/factory active;
+- award or approved direct-source decision;
+- exact technical source versions;
+- required material availability or confirmed responsibility;
+- sample/PPS policy;
+- packaging/label version;
+- order quantity and MOQ;
+- currency, Incoterms, payment schedule;
+- quality plan;
+- compliance assumptions;
+- authorized approval.
+
+### 108.4 Change after production release
+
+A technical change creates `ProductionChangeRequest`:
+
+- affected specifications;
+- old/new version;
+- supplier feasibility response;
+- cost impact;
+- schedule impact;
+- material impact;
+- sample/retest requirement;
+- order-line impact;
+- commercial projection impact;
+- approval and effective point.
+
+No approved production version is overwritten.
+
+### 108.5 End condition
+
+Route A is complete only when accepted quantities, actual source version, quality result, landed-cost state, compliance state and commercial projection source can be traced to the original CollectionItem.
+
+---
+
+## 109. Route B End-to-End — отдельная закупка материалов / Separate Material Procurement
+
+### 109.1 Full path
+
+```text
+CollectionItem
+→ Style/BOM
+→ Material Requirement
+→ Existing Balance Check
+→ Material RFQ
+→ Material Quotation/Award
+→ Material Purchase Order
+→ Shipment to Brand or Factory
+→ Factory Receipt and Lot Creation
+→ Testing/Acceptance
+→ Reservation to Production Order
+→ Production Order Release
+→ Consumption
+→ Balance/Variance/Disposition
+→ Finished Product QC
+→ Product Readiness
+```
+
+### 109.2 Material requirement engine
+
+Inputs:
+
+- BOM version;
+- production quantities by color/size;
+- sample requirement;
+- consumption rules;
+- wastage;
+- unit conversion;
+- usable owned balances;
+- existing reservations;
+- MOQ and price break;
+- safety allowance.
+
+Outputs:
+
+- gross requirement;
+- available balance;
+- shortage;
+- recommended purchase;
+- expected excess;
+- affected production orders;
+- required-by date.
+
+### 109.3 Cross-border direct shipment
+
+For supplier-country → factory-country movement the system stores:
+
+- buyer and legal owner;
+- seller;
+- manufacturer where different;
+- consignee factory;
+- notify party;
+- ship-from/ship-to;
+- Incoterms;
+- invoice/packing list/transport references;
+- test/certificate scope;
+- customs/import responsibility by route;
+- shipment quantities;
+- factory receipt and discrepancy;
+- ownership acknowledgement.
+
+### 109.4 Lot controls
+
+- immutable lot ID;
+- supplier and manufacturer lot;
+- dye lot;
+- material/color/version;
+- received and usable quantities;
+- testing status;
+- owner and custodian;
+- restrictions;
+- reservations;
+- consumption;
+- valuation;
+- remaining balance.
+
+### 109.5 Blocking rules
+
+- production cannot consume unreceived or blocked lot;
+- reservation cannot exceed usable balance;
+- dye-lot restriction applies at style/color/order level;
+- unit conversion must be effective and approved;
+- discrepancy requires resolution before final receipt;
+- actual consumption above tolerance creates exception and cost impact;
+- leftover requires disposition decision.
+
+### 109.6 End condition
+
+Every finished quantity can be traced to reserved material lots, planned and actual consumption, variance, ownership and resulting landed cost.
+
+---
+
+## 110. Route C End-to-End — готовые изделия, ODM и white label / Finished Goods, ODM and White Label
+
+### 110.1 Full path
+
+```text
+Supplier Catalog/Offer
+→ SupplierProductCandidate
+→ Data Mapping
+→ Sample or Waiver
+→ Commercial/Quality/Compliance Review
+→ Customization and Branding Specification
+→ Finished Goods RFQ/Quotation
+→ Award
+→ Finished Goods Purchase Order
+→ Supplier Confirmation
+→ Supply/Production Milestones
+→ Shipment and Import
+→ Incoming QC
+→ Russian Label/Compliance/GTIN/Marking Readiness
+→ Brand SKU Mapping
+→ ProductReadinessSnapshot
+→ CommercialProductProjection
+```
+
+### 110.2 SupplierProductCandidate
+
+Fields:
+
+- supplier product ID/article;
+- manufacturer;
+- original name and description;
+- category;
+- images;
+- composition;
+- colors;
+- supplier sizes;
+- supplier SKUs/barcodes;
+- MOQ/MOV;
+- price and currency;
+- lead time;
+- country of origin;
+- documents;
+- customization options;
+- data completeness;
+- mapping status.
+
+### 110.3 Mapping workbench
+
+Functions:
+
+- upload XLSX/CSV/API catalog;
+- map supplier fields to canonical fields;
+- detect duplicate candidates;
+- map categories/colors/sizes/units;
+- preserve raw source row;
+- validate composition totals;
+- create proposed brand article/SKU;
+- show unresolved fields;
+- approve mapping template for reuse;
+- version supplier data refresh.
+
+### 110.4 Customization specification
+
+Optional controlled objects:
+
+- brand label;
+- hangtag;
+- packaging;
+- color change;
+- material change;
+- logo/print/embroidery;
+- size-label mapping;
+- bundle/kit composition;
+- Russian-language information;
+- approval sample requirement.
+
+### 110.5 Simplified technical rule
+
+A full brand-owned BOM/BOL is not required unless customization or quality policy requires it. Supplier specification, composition, dimensions/size mapping, branding, packaging, quality and compliance information remain versioned and mandatory according to category.
+
+### 110.6 End condition
+
+The accepted imported item must have an auditable chain from supplier candidate and source documents to brand SKU, incoming QC, Russian readiness and buyer-visible commercial version.
+
+---
+
+## 111. Supplier Collaboration End-to-End / Сквозная работа с поставщиком
+
+### 111.1 Supplier workspace
+
+External supplier/factory portal contains:
+
+- Home / required actions;
+- RFQ invitations;
+- quotation drafts and submissions;
+- sample requests and shipments;
+- assigned product/specification packages;
+- supplier orders and amendments;
+- material shipments/receipts assigned to factory;
+- production milestones;
+- inspection findings and corrective actions;
+- document requests;
+- message threads;
+- profile and banking-change workflow.
+
+### 111.2 Task inbox
+
+Every external task contains:
+
+- task type;
+- object and version;
+- requested action;
+- due date/timezone;
+- priority;
+- requester;
+- required fields/files;
+- visibility;
+- SLA;
+- state;
+- escalation.
+
+Lifecycle:
+
+```text
+OPEN → ACKNOWLEDGED → IN_PROGRESS → SUBMITTED → ACCEPTED / REVISION_REQUIRED → CLOSED
+```
+
+### 111.3 Secure collaboration rules
+
+- supplier sees only explicitly assigned objects;
+- supplier cannot see competing quotations or internal margins;
+- downloaded specifications are versioned and logged;
+- comments support internal and shared visibility;
+- bank-detail change triggers controlled verification and payment hold policy;
+- supplier confirmation always references exact buyer version;
+- supplier cannot mark inspection or buyer approval as completed.
+
+### 111.4 Communication continuity
+
+Email/notification links open the exact object, version and required action. Reply by email may be captured only when sender identity and thread token are validated. Attachments are virus-scanned and classified.
+
+---
+
+## 112. Образцы End-to-End / Samples End-to-End
+
+### 112.1 Sample dependency graph
+
+```text
+SampleRequest
+→ Supplier Acknowledgement
+→ SampleVersion
+→ Shipment
+→ Receipt
+→ Measurement/Fit/Visual Review
+→ Decision
+→ Required Corrections
+→ Next Sample or Approval
+→ Downstream Release
+```
+
+### 112.2 Sample round controls
+
+- sample type and round number;
+- source Style/BOM/Measurement/Customization versions;
+- requested versus actual material/color;
+- requested/received sizes;
+- due dates;
+- physical sample ID;
+- shipping chain;
+- review panels;
+- decision and conditions;
+- downstream blockers.
+
+### 112.3 Measurement review
+
+The review screen shows:
+
+- approved/target values;
+- actual values;
+- tolerance range;
+- absolute and percentage deviation;
+- pass/fail per POM;
+- image/diagram reference;
+- comment and correction;
+- comparison with previous sample round.
+
+### 112.4 Fit and visual review
+
+Supports:
+
+- model/body measurements reference;
+- fit session date/location;
+- reviewer group;
+- annotated photos/video;
+- issue category;
+- severity;
+- correction instruction;
+- owner and due date;
+- internal/supplier-visible split.
+
+### 112.5 Decision propagation
+
+`APPROVED` may release sourcing or production conditions. `REVISION_REQUIRED` creates the next required task. `REJECTED` blocks the branch. `APPROVED_WITH_CONDITIONS` creates explicit dated conditions that must be resolved before the configured gate.
+
+---
+
+## 113. Quality Management End-to-End / Управление качеством End-to-End
+
+### 113.1 Quality chain
+
+```text
+QualityPolicy
+→ QualityPlan
+→ InspectionRequest
+→ Inspection Execution
+→ Defects/Measurements/Evidence
+→ Inspector Recommendation
+→ Authorized Release Decision
+→ Corrective Action/Reinspection
+→ Accepted and Rejected Quantities
+→ Supplier Claim/Commercial Resolution
+→ Receipt and Cost Update
+```
+
+### 113.2 QualityPolicy
+
+Configured by:
+
+- brand/legal entity;
+- category;
+- route;
+- supplier/factory risk level;
+- country;
+- order value/quantity;
+- inspection stage;
+- sampling/AQL method;
+- mandatory checks;
+- release authority;
+- evidence requirements;
+- conditional-release rules.
+
+### 113.3 Inspection checklist types
+
+- construction and workmanship;
+- measurements;
+- material/color;
+- print/embroidery/logo;
+- labels and Russian text;
+- packaging;
+- quantity and assortment;
+- carton marking;
+- barcode/GTIN readability;
+- Data Matrix/marking check where applicable;
+- documentation;
+- transport/loading condition.
+
+### 113.4 Defect and nonconformity
+
+`Nonconformity` stores:
+
+- requirement source;
+- failed checkpoint;
+- defect taxonomy version;
+- severity;
+- affected item/SKU/lot/carton;
+- affected and inspected quantity;
+- evidence;
+- root-cause hypothesis;
+- containment action;
+- corrective action;
+- owner;
+- due date;
+- verification;
+- closure.
+
+### 113.5 Release decision
+
+The release screen shows:
+
+- inspector recommendation;
+- policy thresholds;
+- critical/major/minor counts;
+- measurement failures;
+- open corrective actions;
+- accepted/rejected quantities;
+- commercial and schedule impact;
+- required approver;
+- decision reason.
+
+### 113.6 Quantity truth
+
+System separately stores:
+
+- ordered;
+- supplier confirmed;
+- produced/supplied;
+- inspected;
+- passed;
+- conditionally passed;
+- rejected;
+- shipped;
+- received;
+- accepted into stock.
+
+These quantities reconcile but are never silently collapsed into one number.
+
+### 113.7 Quality-to-cost link
+
+Rejected/reworked/replaced quantities and claims update actual cost analysis using controlled references. A supplier credit note or compensation remains an external accounting reference when managed in 1С.
+
+---
+
+## 114. Costing End-to-End / Сквозная себестоимость
+
+### 114.1 Cost lineage
+
+```text
+Planning Target
+→ BOM/BOL Estimate or Supplier Offer
+→ Quotation Version
+→ Award Terms
+→ PO Committed Cost
+→ Planned Landed Cost
+→ Shipment Expenses
+→ Actual Landed Cost
+→ Reconciled Cost
+→ Margin Impact
+```
+
+### 114.2 CostVersion
+
+- version type;
+- scope: style/colorway/SKU/order/shipment;
+- source versions;
+- base currency;
+- transaction currencies;
+- FX source/date/rate;
+- component lines;
+- allocation rules;
+- calculated totals;
+- assumptions;
+- owner/approver;
+- created/effective timestamp;
+- status.
+
+### 114.3 Cost component controls
+
+Every component stores:
+
+- component type;
+- source document/reference;
+- amount and currency;
+- recoverable/non-recoverable tax treatment where configured;
+- quantity basis;
+- allocation method;
+- allocated objects;
+- rounding method;
+- variance reason;
+- evidence.
+
+### 114.4 Margin views
+
+- planned wholesale margin;
+- current expected margin;
+- actual margin using reconciled landed cost;
+- margin by style/color/SKU/order/retailer;
+- currency effect;
+- sourcing variance;
+- freight/customs variance;
+- quality/claim effect;
+- price-version reference.
+
+A cost change never silently changes an active price list or submitted wholesale order.
+
+---
+
+## 115. Международная торговля и российская готовность End-to-End / International Trade and Russian Readiness
+
+### 115.1 Trade lane profile
+
+`TradeLaneProfile` is configured for:
+
+- exporter country;
+- importer country;
+- ship-from and destination;
+- legal entities;
+- product/material category;
+- Incoterms;
+- transport mode;
+- required documents;
+- responsible parties;
+- expected lead times;
+- customs broker;
+- currency/payment restrictions;
+- compliance and marking steps.
+
+### 115.2 Shipment dossier
+
+- supplier order lines;
+- seller/exporter/manufacturer;
+- buyer/importer/consignee;
+- country of origin;
+- commodity description RU/EN;
+- ТН ВЭД ЕАЭС;
+- quantity and units;
+- net/gross weight;
+- cartons/packing details;
+- commercial invoice;
+- packing list;
+- transport document;
+- contract/specification;
+- certificate/declaration references;
+- customs declaration reference;
+- broker and status;
+- duty/customs-cost snapshots;
+- discrepancy and receipt.
+
+### 115.3 Compliance applicability decision
+
+Inputs:
+
+- category;
+- product attributes;
+- composition;
+- intended use/age group;
+- ТН ВЭД ЕАЭС;
+- ОКПД2 where applicable;
+- manufacturer/importer role;
+- country of origin;
+- effective date;
+- market/legal entity.
+
+Output:
+
+- applicable requirements;
+- required evidence/documents;
+- marking applicability;
+- label fields;
+- blocking gates;
+- rule version and source reference.
+
+### 115.4 Russian label pack
+
+`RussianLabelVersion` contains:
+
+- product name;
+- brand/trademark;
+- manufacturer;
+- importer/applicant where applicable;
+- country of origin;
+- composition;
+- size;
+- care instructions/symbols;
+- EAC and other required marks;
+- article/GTIN;
+- production information where applicable;
+- packaging/label layout;
+- source product version;
+- reviewer and approval.
+
+### 115.5 Marking chain
+
+```text
+Applicability Decision
+→ Product Description Ready
+→ GTIN Mapping
+→ National Catalog Card Reference
+→ Code Order Reference
+→ Printing/Application Plan
+→ Applied/Verified Quantities
+→ Introduction into Circulation Reference
+→ Wholesale Transfer/UPD Readiness
+→ Reconciliation
+```
+
+Official external states remain authoritative. Syntha stores requested, received, reconciled and failed exchange states plus external references.
+
+### 115.6 Readiness gate
+
+Russian readiness can be:
+
+```text
+NOT_ASSESSED
+ASSESSMENT_IN_PROGRESS
+DOCUMENTS_REQUIRED
+DOCUMENTS_UNDER_REVIEW
+LABEL_READY
+MARKING_PREPARED
+READY_FOR_IMPORT
+READY_FOR_CIRCULATION
+READY_FOR_WHOLESALE_TRANSFER
+BLOCKED
+```
+
+Each state is derived from explicit checks, not manually painted green.
+
+---
+
+## 116. Product Readiness and Commercial Publication End-to-End / Готовность и публикация товара
+
+### 116.1 Readiness dimensions
+
+- identity;
+- technical or supplier specification;
+- sourcing/order;
+- material;
+- sample;
+- quality;
+- cost;
+- trade/import;
+- compliance;
+- label;
+- GTIN/marking;
+- commercial content;
+- images/rights;
+- price;
+- delivery;
+- order-unit/pack;
+- access scope.
+
+### 116.2 ReadinessCheckResult
+
+- dimension;
+- rule/check ID and version;
+- status;
+- required object;
+- current object/version;
+- blocking reason;
+- owner;
+- due date;
+- evidence;
+- waiver;
+- last evaluated at.
+
+### 116.3 ProductReadinessSnapshot
+
+Immutable snapshot stores:
+
+- product/style/SKU scope;
+- route;
+- source technical/purchase versions;
+- results of all checks;
+- accepted quantities where relevant;
+- compliance rule version;
+- cost version;
+- generated at;
+- approved by;
+- publication eligibility;
+- expiry/review conditions.
+
+### 116.4 Commercial projection creation
+
+The creation wizard:
+
+1. selects readiness snapshot;
+2. selects market/language;
+3. maps commercial attributes;
+4. selects media and rights;
+5. defines size/color presentation;
+6. assigns price context;
+7. defines delivery/availability mode;
+8. selects buyer-visible documents;
+9. validates RU/EN content;
+10. submits projection for commercial approval.
+
+### 116.5 Publication impact control
+
+Before update/unpublish the system lists:
+
+- active catalogs;
+- linesheets;
+- showrooms;
+- access grants;
+- assortments;
+- draft orders;
+- submitted/confirmed order snapshots;
+- exports/share links;
+- affected retailers.
+
+The user chooses publication action and communication plan. Historical order data never changes.
+
+---
+
+## 117. Catalog, Linesheet and Showroom End-to-End / Каталог, лайншит и шоурум
+
+### 117.1 Catalog view resolution
+
+For every buyer request:
+
+```text
+User Membership
++ Retailer Organization
++ Connection
++ CommercialAccessGrant
++ Publication Scope
++ Price Resolution
++ Language/Currency
++ Effective Date
+= Buyer Catalog View
+```
+
+### 117.2 Catalog functions
+
+- search and filters;
+- saved views;
+- grid/list/quick view;
+- product comparison;
+- favorites/shortlist;
+- size/color availability;
+- delivery filters;
+- price/RRP/margin display as permitted;
+- MOQ/MOV/pack display;
+- buyer-visible documents;
+- add to assortment/order;
+- controlled XLSX/PDF export;
+- view analytics.
+
+### 117.3 Linesheet lifecycle
+
+```text
+DRAFT → CONTENT_READY → PRICE_CONTEXT_ASSIGNED → REVIEWED → PUBLISHED → SUPERSEDED / ARCHIVED
+```
+
+Linesheet version stores product projection versions, price/access context, sort order, visible fields, language, currency and export template.
+
+### 117.4 Showroom lifecycle
+
+```text
+DRAFT → CURATION → PREVIEW → SCHEDULED → PUBLISHED → UNPUBLISHED → ARCHIVED
+```
+
+Components:
+
+- cover/story;
+- chapters;
+- visual boards;
+- looks;
+- hotspots;
+- products;
+- campaign media;
+- linesheet links;
+- buyer CTA;
+- retailer-group visibility;
+- publication window.
+
+### 117.5 Controlled sharing
+
+A share link never expands permissions. It can narrow:
+
+- recipient;
+- resource/version;
+- language/currency;
+- view/download/order actions;
+- expiry;
+- password/one-time token;
+- watermark;
+- revocation.
+
+---
+
+## 118. Retailer Assortment and Wholesale Order End-to-End / Ассортимент и оптовый заказ
+
+### 118.1 Assortment chain
+
+```text
+Catalog/Showroom View
+→ Favorite/Shortlist
+→ RetailerAssortment
+→ Doors and Deliveries
+→ Budget/Quantity Review
+→ Order Intent where used
+→ Draft Wholesale Order
+→ Internal Retailer Approval
+→ Submission
+→ Brand Review
+→ Amendment Negotiation
+→ Current Agreed Order
+```
+
+### 118.2 RetailerAssortment
+
+- retailer/legal entity;
+- brand/collection;
+- owner/team;
+- selected product versions;
+- status: must buy/consider/reject;
+- quantities;
+- doors;
+- deliveries;
+- budget/category totals;
+- notes;
+- internal visibility;
+- source and last update.
+
+### 118.3 Doors and deliveries
+
+Door types:
+
+- store;
+- warehouse;
+- e-commerce;
+- franchise;
+- regional distributor;
+- other controlled destination.
+
+Delivery allocation stores quantity by SKU × door × delivery window. Rollups reconcile to assortment/order totals.
+
+### 118.4 Order entry quality
+
+- keyboard navigation;
+- color/size matrix;
+- Excel copy/paste;
+- paste preview;
+- invalid-cell explanation;
+- pack conversion;
+- MOQ/MOV checks;
+- budget and total updates;
+- autosave and conflict handling;
+- undo/redo for local editing actions;
+- duplicate SKU and buyer-PO warnings.
+
+### 118.5 Submission snapshot
+
+Submitted order stores:
+
+- exact commercial projection versions;
+- exact price resolution and terms;
+- access-grant version;
+- quantities;
+- addresses;
+- delivery windows;
+- buyer legal entity;
+- buyer PO/reference;
+- approvers;
+- submitted timestamp;
+- source assortment/intent references.
+
+### 118.6 Brand review workbench
+
+For each line the brand sees:
+
+- requested quantity/date/price;
+- availability and production commitment;
+- MOQ/pack;
+- proposed action;
+- replacement options;
+- internal notes;
+- buyer-visible reason;
+- resulting value/date impact.
+
+### 118.7 Amendment closure
+
+An amendment is complete only after the authorized receiving party accepts/rejects it. Accepted changes create a new immutable agreed order version. Pending proposals do not change fulfillment truth.
+
+---
+
+## 119. Fulfillment, 1С, ЭДО and Wholesale Transfer End-to-End / Исполнение, 1С, ЭДО и оптовая передача
+
+### 119.1 ERP handoff
+
+Only an approved agreed order version is eligible for export. Export package includes:
+
+- seller/buyer legal entities;
+- mapped products/SKUs;
+- quantities and prices;
+- tax/VAT context;
+- delivery and payment terms;
+- addresses;
+- marking applicability references;
+- source order/version;
+- idempotency key.
+
+### 119.2 ERP acknowledgement
+
+The order is not marked exported until Syntha receives or records:
+
+- external order/document ID;
+- accepted/rejected status;
+- line mapping result;
+- validation errors;
+- source timestamp.
+
+Partial mapping creates reconciliation, not partial silent success.
+
+### 119.3 Fulfillment quantities
+
+At order-line level:
+
+```text
+Agreed
+→ Reserved/Planned
+→ Ready
+→ Shipped
+→ Delivered
+→ Accepted
+```
+
+Side quantities:
+
+```text
+Cancelled / Backordered / Rejected / Returned-to-sender / Discrepancy
+```
+
+### 119.4 Shipment package
+
+- shipment ID;
+- order versions/lines;
+- warehouse/location;
+- cartons;
+- quantities;
+- carrier/tracking;
+- planned/actual dates;
+- packing list;
+- marking-code batch references where required;
+- ERP document IDs;
+- EDO/UPD references;
+- delivery/discrepancy status.
+
+### 119.5 EDO/UPD state
+
+```text
+NOT_CREATED
+→ CREATED_EXTERNALLY
+→ SENT
+→ DELIVERED_TO_OPERATOR
+→ RECEIVED_BY_COUNTERPARTY
+→ SIGNED / REJECTED / CORRECTION_REQUIRED
+→ COMPLETED
+```
+
+Syntha displays source system, last status time, external ID and failure reason.
+
+### 119.6 Wholesale marking reconciliation
+
+For marking-required items the check compares:
+
+- shipment SKU and quantity;
+- expected code count;
+- codes assigned to shipment/document;
+- external validation result;
+- UPD transfer reference;
+- unresolved differences.
+
+Shipment/legal completion is blocked according to effective policy when required reconciliation fails.
+
+---
+
+## 120. Integration Contracts and Reconciliation / Интеграционные контракты и сверка
+
+### 120.1 IntegrationMessage
+
+- message ID;
+- connector;
+- direction;
+- business operation;
+- source object/version;
+- idempotency key;
+- payload schema version;
+- created/sent/received timestamps;
+- attempt count;
+- status;
+- external response/reference;
+- error code and message RU/EN;
+- owner;
+- next retry;
+- reconciliation case.
+
+Lifecycle:
+
+```text
+CREATED → QUEUED → SENT → ACKNOWLEDGED → COMPLETED
+```
+
+Failure states:
+
+```text
+RETRYABLE_FAILED / PERMANENT_FAILED / RECONCILIATION_REQUIRED / CANCELLED
+```
+
+### 120.2 Connector boundaries
+
+| Connector | Syntha sends | Syntha receives | Authoritative boundary |
+|---|---|---|---|
+| 1С/ERP | mappings, agreed orders, supplier orders if configured, shipment preparation | IDs, accounting docs, stock/payment/shipment/receipt statuses | Accounting and stock truth remain external |
+| EDO provider | document request/reference through integration | delivery/signature/rejection/correction status | Legal-signature truth remains with operator |
+| Marking provider/1С | product/GTIN/code-operation requests as configured | official operation/status/errors | Official marking truth remains external |
+| Logistics provider | shipment/tracking request | tracking milestones/exceptions | Physical carrier status remains external |
+| Supplier/retailer EDI | controlled business documents | acknowledgements/changes/statuses | Mapping and business acceptance remain explicit |
+
+### 120.3 ReconciliationCase
+
+- object and external mapping;
+- conflicting values;
+- source timestamps;
+- source-of-truth rule;
+- business impact;
+- automatic resolution proposal;
+- assigned owner;
+- due date;
+- resolution action;
+- before/after references;
+- audit.
+
+### 120.4 Recovery rules
+
+- retry preserves idempotency key;
+- manual export/import uses same business operation reference;
+- user can never convert an integration failure to success without external reference or authorized manual evidence;
+- dead-letter items remain searchable and assigned;
+- correction creates a new message/version rather than editing transmitted history.
+
+---
+
+## 121. Экранный стандарт и функциональная глубина / Screen Standard and Functional Depth
+
+### 121.1 Registry screen
+
+Every registry includes:
+
+- scoped search;
+- filters and saved views;
+- configurable columns;
+- sorting;
+- pagination/virtualization;
+- bulk selection and permitted bulk actions;
+- status/owner/next action;
+- data quality indicators;
+- export respecting visibility;
+- import where supported;
+- empty/loading/error states;
+- RU/EN labels and values.
+
+### 121.2 Object workspace
+
+Standard zones:
+
+1. header: identity, version, state, owner, primary action;
+2. readiness/validation summary;
+3. tabs by domain;
+4. related objects and dependency graph;
+5. activity/comments;
+6. documents/files;
+7. history/version comparison;
+8. integration/external references;
+9. audit and events for authorized roles.
+
+### 121.3 Command UX
+
+A lifecycle action dialog shows:
+
+- current state/version;
+- requested target state;
+- checks passed/failed;
+- affected downstream objects;
+- required reason/files;
+- approval requirement;
+- external operations;
+- irreversible effects;
+- confirmation and resulting next step.
+
+### 121.4 Data-quality panel
+
+Shows:
+
+- missing required fields;
+- invalid dictionary values;
+- untranslated mandatory content;
+- duplicate identifiers;
+- stale/expired documents;
+- unresolved mappings;
+- integration conflicts;
+- blocking/non-blocking classification;
+- owner and fix action.
+
+---
+
+## 122. Notifications, Tasks, SLA and Escalation / Уведомления, задачи, SLA и эскалации
+
+### 122.1 NotificationRule
+
+- event;
+- condition;
+- recipient role/user/organization;
+- channel: in-app/email/Telegram where enabled;
+- language;
+- urgency;
+- quiet hours/timezone;
+- template version;
+- deduplication window;
+- escalation policy.
+
+### 122.2 Required-action notification
+
+Contains:
+
+- business object;
+- exact required action;
+- due date;
+- impact if missed;
+- deep link;
+- owner;
+- current status;
+- language selected for recipient.
+
+### 122.3 SLA examples
+
+- RFQ acknowledgement;
+- quotation submission;
+- sample acknowledgement and dispatch;
+- milestone update;
+- inspection report submission;
+- corrective-action response;
+- wholesale-order brand review;
+- retailer amendment response;
+- integration-error ownership.
+
+SLA timers support pause reasons, business calendars and supplier/retailer timezones.
+
+---
+
+## 123. Permissions and Confidentiality Matrix / Матрица прав и конфиденциальности
+
+### 123.1 Permission dimensions
+
+Access decision combines:
+
+- organization;
+- membership status;
+- role;
+- domain action;
+- object assignment;
+- collection/account scope;
+- legal entity;
+- market/territory;
+- field classification;
+- object state;
+- temporary delegation.
+
+### 123.2 Field classifications
+
+```text
+PUBLIC_COMMERCIAL
+CONNECTED_BUYER
+INTERNAL_BRAND
+SUPPLY_PARTNER_SHARED
+CONFIDENTIAL_COST
+BANKING_RESTRICTED
+LEGAL_RESTRICTED
+PERSONAL_DATA
+```
+
+### 123.3 Critical separation rules
+
+- retailer never sees technical BOM, supplier cost or other retailers;
+- supplier never sees retailer orders, competitor quotations or unrestricted target margins;
+- inspector sees assigned quality scope and active specifications;
+- sales user cannot change technical source data;
+- product/sourcing user cannot publish price without commercial permission;
+- banking data export and change are separately permissioned;
+- support/admin access is logged and time-bound.
+
+### 123.4 Delegation
+
+Temporary delegation stores grantor, grantee, exact actions, scope, start/end time, reason and revocation. It never grants broader organization access than the grantor owns.
+
+---
+
+## 124. Failure and Recovery Matrix / Матрица сбоев и восстановления
+
+| Stage | Failure | Blocking result | Recovery |
+|---|---|---|---|
+| Collection plan | invalid import/mapping | rows not committed | preview errors, mapping correction, re-import |
+| Product version | concurrent update | command rejected | reload, compare versions, reapply controlled changes |
+| RFQ | supplier not active | invitation blocked | complete onboarding/approval |
+| Quotation | late/obsolete source | submission held | buyer accepts late response or reopens RFQ |
+| Material | receipt discrepancy | lot not fully usable | discrepancy review, partial receipt, supplier claim |
+| Sample | lost/incomplete | review blocked | replacement shipment or authorized waiver |
+| Production | material shortage | start/release blocked | reallocation, substitute approval, new purchase |
+| Quality | critical defect | release blocked | corrective action/reinspection/rejection |
+| Compliance | expired/missing evidence | readiness blocked | new document, scope correction, approved rule review |
+| Marking | code/status mismatch | shipment/legal step blocked | provider reconciliation and corrected operation |
+| Catalog | price/access missing | buyer cannot order | activate price/access and republish context |
+| Wholesale order | MOQ/pack/address error | submission blocked | correct lines/terms/address or approved override |
+| ERP export | validation/mapping error | order not exported | fix mapping/data and retry same idempotent operation |
+| EDO | rejection/correction | legal completion pending | correction document/reference and resubmission |
+| Shipment | quantity discrepancy | completion held | delivery/claim/reconciliation decision |
+
+Every blocking failure must expose owner, next action, due date and business impact.
+
+---
+
+## 125. End-to-End UAT Evidence and Definition of Done / Сквозная приёмка и критерий готовности
+
+### 125.1 Required evidence pack
+
+For each E2E scenario:
+
+- scenario ID and version;
+- preconditions and seeded data;
+- roles/users;
+- steps RU/EN;
+- expected state after every step;
+- generated objects/versions;
+- audit entries;
+- events/outbox messages;
+- external mock/real acknowledgements;
+- screenshots/log references;
+- negative checks;
+- final reconciliation;
+- tester and approval.
+
+### 125.2 Route A mandatory scenario
+
+Prove:
+
+- plan → StyleVersion → BOM/measurements/tech pack;
+- sample revision and approval;
+- RFQ/award/ProductionOrder;
+- milestone and QC failure/reinspection;
+- accepted receipt and actual cost;
+- Russian readiness;
+- commercial publication;
+- retailer order and ERP handoff.
+
+### 125.3 Route B mandatory scenario
+
+Prove:
+
+- material calculation;
+- Chinese supplier purchase;
+- direct shipment to Turkish factory;
+- Russian brand ownership;
+- lot receipt/testing/reservation;
+- consumption variance and leftover;
+- finished production and commercial sale.
+
+### 125.4 Route C mandatory scenario
+
+Prove:
+
+- supplier catalog import;
+- candidate mapping;
+- ready-goods sample;
+- branding/Russian label;
+- FinishedGoodsPurchaseOrder;
+- import/incoming QC;
+- GTIN/marking readiness;
+- brand SKU publication and wholesale order.
+
+### 125.5 Wholesale mandatory scenario
+
+Prove:
+
+- retailer connection but no automatic price access;
+- explicit access and price assignment;
+- RU/EN catalog/linesheet;
+- Excel quantity-grid entry;
+- internal approval;
+- submission snapshot;
+- partial brand confirmation and amendment;
+- accepted agreed order;
+- idempotent 1С export;
+- shipment, UPD/EDO and payment statuses.
+
+### 125.6 Definition of Done
+
+A retained capability is complete only when:
+
+- entity model and migrations exist;
+- API/OpenAPI commands and reads exist;
+- lifecycle and validations are server-enforced;
+- permissions and tenant isolation are tested;
+- RU/EN UI, values and error text are implemented;
+- audit and domain events are emitted;
+- integration behavior and recovery are defined;
+- analytics dimensions are available;
+- positive and negative automated tests pass;
+- E2E UAT evidence proves downstream closure;
+- operational logs/metrics/alerts identify failures.
+
+---
+
+## 126. Систематизированное применение benchmark-функций / Systematized Benchmark Capability Application
+
+### 126.1 Omnidata-derived retained structure
+
+Applied to Syntha Product & Supply:
+
+- collection and assortment planning;
+- style/colorway product master;
+- material and color libraries;
+- BOM, BOL and measurement charts;
+- costing and tech-pack generation;
+- development calendars and role tasks;
+- supplier library, quotations and allocation;
+- samples;
+- supplier orders and production status;
+- quality inspections and defects;
+- enterprise-system integration.
+
+### 126.2 Centric-derived retained principles
+
+Applied where they strengthen the same operating model:
+
+- centralized versioned product data;
+- supplier collaboration portal;
+- item-level quotation comparison;
+- split allocation across suppliers;
+- specification and sourcing linkage;
+- mobile capture/review for samples and quality;
+- visual collaboration connected to controlled product data;
+- supplier quality/compliance performance visibility.
+
+### 126.3 JOOR-derived retained wholesale principles
+
+Applied to Wholesale Commerce:
+
+- controlled brand-retailer connection;
+- digital showroom and linesheet;
+- buyer-specific catalog and commercial visibility;
+- order capture and order-management lifecycle;
+- buyer/retailer workspace;
+- reporting and account activity.
+
+### 126.4 NuORDER-derived retained wholesale principles
+
+Applied to Wholesale Commerce:
+
+- account-specific products, prices and terms;
+- catalog and virtual-showroom buying;
+- collaborative assortments;
+- doors and deliveries;
+- visual assortment/board workflow;
+- rollups and order intent;
+- conversion from selection to controlled order;
+- sales and buyer reporting.
+
+### 126.5 Syntha unification rule
+
+Benchmark capability is not copied as a disconnected feature. It must map to:
+
+- Syntha canonical entity;
+- owner domain;
+- lifecycle;
+- permission boundary;
+- RU/EN representation;
+- Russian/international operating requirement;
+- upstream/downstream links;
+- measurable E2E outcome.
+
+---
+
+## 127. Финальная карта сквозных результатов / Final End-to-End Outcome Map
+
+| Result / Результат | Start | Finish | Required proof |
+|---|---|---|---|
+| Approved collection item | planning target | executable CollectionItem | baseline and route |
+| Technically approved style | Style draft | immutable approved source set | BOM/measurements/sample/tech pack |
+| Awarded supplier | RFQ | approved quotation/allocation | exact versions and decision |
+| Controlled supplier commitment | award | confirmed supplier order | buyer/supplier agreed version |
+| Material available at factory | requirement | accepted/reserved lot | ownership, receipt, testing, balance |
+| Product accepted | supplier order | accepted quantity | inspection/release/receipt chain |
+| Russian-ready product | product/specification | readiness snapshot | applicable rules, documents, label, marking state |
+| Published commercial product | readiness snapshot | buyer-visible version | content, price, delivery, access |
+| Agreed wholesale order | retailer selection | immutable agreed version | submission and accepted amendments |
+| ERP-executed order | agreed order | external acknowledgement | mapping and external ID |
+| Legally tracked shipment | fulfillment | delivery/UPD status | quantities, documents, marking reconciliation |
+| Measured commercial result | connected data | analytics | source versions and coverage |
+
+The platform is operationally complete when every result above can be reached through explicit, testable and recoverable transitions in both Russian and English user journeys.

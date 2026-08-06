@@ -43,6 +43,8 @@ test('Production Execution workspace is syntactically valid and calls only gover
   const css = await source('public/production-executions.css');
   assert.doesNotThrow(() => new Function(js));
   for (const token of ['/v2/production-executions?','/from-production-order/','/start','/milestones/complete','/milestones/block','/milestones/resolve','/cancel','expectedVersion','PRODUCTION_EXECUTION_MANAGE','Производственный календарь','Production Execution']) assert.ok(js.includes(token), token);
+  for (const handoff of ['SynthaFinalQualityWorkspace','openForExecution','QUALITY_MANAGE','data-final-quality-handoff','Перейти к Final Quality','Open Final Quality']) assert.ok(js.includes(handoff), handoff);
+  assert.match(js, /value\.status === 'ready-for-qc' && qualityManage/);
   assert.doesNotMatch(js, /prompt\s*\(|\.style\./);
   assert.match(css, /\.production-execution-layout/);
   assert.match(css, /\.production-milestone\.blocked/);

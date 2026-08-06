@@ -182,16 +182,23 @@ BEGIN
       RAISE EXCEPTION 'Final Quality run number can only stay current or increment once'
         USING ERRCODE = '23514', CONSTRAINT = 'quality_inspections_run_progression';
     END IF;
-    FOR i IN 0..greatest(OLD.current_run - 2, -1) LOOP
-      IF NEW.payload -> 'runs' -> i IS DISTINCT FROM OLD.payload -> 'runs' -> i THEN
-        RAISE EXCEPTION 'Reviewed Final Quality history is immutable'
-          USING ERRCODE = '23514', CONSTRAINT = 'quality_inspections_history_immutable';
-      END IF;
-    END LOOP;
+    IF OLD.current_run > 1 THEN
+      FOR i IN 0..OLD.current_run - 2 LOOP
+        IF (NEW.payload -> 'runs' -> i) IS DISTINCT FROM (OLD.payload -> 'runs' -> i) THEN
+          RAISE EXCEPTION 'Reviewed Final Quality history is immutable'
+            USING ERRCODE = '23514', CONSTRAINT = 'quality_inspections_history_immutable';
+        END IF;
+      END LOOP;
+    END IF;
     IF NEW.current_run = OLD.current_run + 1 THEN
-      IF OLD.status <> 'rework-required'
+      old_run := OLD.payload -> 'runs' -> (OLD.current_run - 1);
+      IF OLD.current_run < 1
+         OR OLD.status <> 'rework-required'
          OR NEW.status <> 'in-progress'
-         OR NEW.payload -> 'runs' -> (OLD.current_run - 1) IS DISTINCT FROM OLD.payload -> 'runs' -> (OLD.current_run - 1) THEN
+         OR jsonb_typeof(old_run) <> 'object'
+         OR old_run ->> 'status' <> 'reviewed'
+         OR old_run ->> 'disposition' <> 'rework'
+         OR (NEW.payload -> 'runs' -> (OLD.current_run - 1)) IS DISTINCT FROM old_run THEN
         RAISE EXCEPTION 'A new Final Quality run requires an immutable reviewed rework run'
           USING ERRCODE = '23514', CONSTRAINT = 'quality_inspections_reinspection_gate';
       END IF;

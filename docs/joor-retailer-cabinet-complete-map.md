@@ -3739,7 +3739,7 @@ JOOR + NUORDER
 → Sales and order analytics
 ```
 
-Omnidata и Centric подтверждают необходимость единого продуктового контура, версионных карточек, BOM/BOL, measurement charts, tech packs, materials, sourcing, quotations, supplier collaboration, samples, orders, quality и интеграций. fileciteturn143file0
+Omnidata и Centric подтверждают необходимость единого продуктового контура, версионных карточек, BOM/BOL, measurement charts, tech packs, materials, sourcing, quotations, supplier collaboration, samples, orders, quality и интеграций.
 
 ### 72.2 Карта функциональных источников / Capability source map
 
@@ -6615,9 +6615,9 @@ Omnidata PLM Fashion 2026 confirms the functional sequence and key objects for:
 - supplier sourcing and allocation;
 - samples;
 - supplier orders, production status and ERP exchange;
-- quality inspections and defects. fileciteturn143file0
+- quality inspections and defects.
 
-Centric materials are used only as a benchmark for retained Product & Supply principles such as centralized product data, supplier quotation comparison, supplier portal collaboration, product specifications, mobile capture/review and visual collaboration. Commercial offer prices and confidential project terms are not part of this specification. fileciteturn148file0
+Centric materials are used only as a benchmark for retained Product & Supply principles such as centralized product data, supplier quotation comparison, supplier portal collaboration, product specifications, mobile capture/review and visual collaboration. Commercial offer prices and confidential project terms are not part of this specification.
 
 ### 103.2 Wholesale benchmarks
 

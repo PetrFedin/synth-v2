@@ -14,6 +14,7 @@ function fixture() {
   const state = { inspection: null, commands: new Map(), outbox: [], releases: [] };
   const memberships = new Map([
     ['brand-1:owner', { organisationId: 'brand-1', organisationType: 'brand', userId: 'owner', role: 'owner', status: 'active' }],
+    ['brand-1:admin', { organisationId: 'brand-1', organisationType: 'brand', userId: 'admin', role: 'admin', status: 'active' }],
     ['brand-1:sales', { organisationId: 'brand-1', organisationType: 'brand', userId: 'sales', role: 'sales', status: 'active' }],
     ['brand-1:finance', { organisationId: 'brand-1', organisationType: 'brand', userId: 'finance', role: 'finance', status: 'active' }],
   ]);
@@ -33,6 +34,19 @@ function fixture() {
   const clock = () => new Date(Date.parse('2026-08-20T10:01:00.000Z') + tick++ * 60_000).toISOString();
   const nextId = (prefix) => `${prefix}_${++id}`;
   return { state, service: createFinalQualityService({ store: { transaction: (work) => work(tx) }, clock, nextId }) };
+}
+
+async function completePassingRun(service, actorId = 'sales') {
+  let inspection = await service.createFromExecution(`quality-create-${actorId}`, actorId, readyExecution.executionCode);
+  inspection = await service.start(`quality-start-${actorId}`, actorId, inspection.inspectionCode, {
+    expectedVersion: inspection.version, inspectorName: 'Factory Quality Inspector', sampleSize: 20,
+    allowedMajorDefects: 1, allowedMinorDefects: 2,
+  });
+  return service.completeRun(`quality-complete-${actorId}`, actorId, inspection.inspectionCode, {
+    expectedVersion: inspection.version, inspectedQuantity: 20, defects: [], measurementFailures: [],
+    checkpoints: [{ checkpointCode: 'WORKMANSHIP', name: 'Workmanship', result: 'pass', severity: null, notes: 'Accepted' }],
+    evidenceReferences: ['evidence://quality/pass'], notes: 'Inspection sample accepted',
+  });
 }
 
 test('Final Quality separates execution from approval and creates release atomically', async () => {
@@ -65,6 +79,29 @@ test('Final Quality separates execution from approval and creates release atomic
   assert.equal(state.releases[0].releaseCode, 'SHIP-REL-QUALITY-1');
   assert.equal(state.outbox.at(-1).type, 'final-quality.shipment-released');
   assert.equal(state.commands.size, 4);
+});
+
+test('Final Quality forbids an approver from reviewing a run they inspected or completed', async () => {
+  const { state, service } = fixture();
+  const inspection = await completePassingRun(service, 'owner');
+
+  await assert.rejects(() => service.review('quality-self-review', 'owner', inspection.inspectionCode, {
+    expectedVersion: inspection.version,
+    decision: 'release',
+    releaseCode: 'SHIP-REL-SELF-1',
+    notes: 'This self approval must never be accepted',
+  }), { code: 'QUALITY_SELF_APPROVAL_FORBIDDEN' });
+  assert.equal(state.inspection.status, 'review-pending');
+  assert.equal(state.releases.length, 0);
+
+  const released = await service.review('quality-independent-review', 'admin', inspection.inspectionCode, {
+    expectedVersion: inspection.version,
+    decision: 'release',
+    releaseCode: 'SHIP-REL-INDEPENDENT-1',
+    notes: 'Independent quality approver accepted the lot',
+  });
+  assert.equal(released.status, 'released');
+  assert.equal(released.shipmentRelease.releasedBy, 'admin');
 });
 
 test('Finance can read but cannot mutate Final Quality', async () => {

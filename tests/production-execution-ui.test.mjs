@@ -58,7 +58,7 @@ test('V14 shell loads Production Execution after Production Orders and before se
   const components = html.indexOf('/ui/omnidata-v14-components.js?v=visual-20260805-14-components-3');
   assert.ok(core >= 0 && orders >= 0 && executions > orders && adapters > executions && components > adapters);
   assert.match(html, /production-executions\.css\?v=industrial-20260805-1/);
-  assert.match(html, /ui-capabilities\.js\?v=industrial-20260805-4/);
+  assert.match(html, /ui-capabilities\.js\?v=industrial-20260805-5/);
 });
 
 test('standalone server delivers Production Execution assets with no-store caching', async () => {

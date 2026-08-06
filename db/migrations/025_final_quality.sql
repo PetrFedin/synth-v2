@@ -191,16 +191,25 @@ BEGIN
       END LOOP;
     END IF;
     IF NEW.current_run = OLD.current_run + 1 THEN
-      old_run := OLD.payload -> 'runs' -> (OLD.current_run - 1);
-      IF OLD.current_run < 1
-         OR OLD.status <> 'rework-required'
-         OR NEW.status <> 'in-progress'
-         OR jsonb_typeof(old_run) <> 'object'
-         OR old_run ->> 'status' <> 'reviewed'
-         OR old_run ->> 'disposition' <> 'rework'
-         OR (NEW.payload -> 'runs' -> (OLD.current_run - 1)) IS DISTINCT FROM old_run THEN
-        RAISE EXCEPTION 'A new Final Quality run requires an immutable reviewed rework run'
-          USING ERRCODE = '23514', CONSTRAINT = 'quality_inspections_reinspection_gate';
+      IF OLD.current_run = 0 THEN
+        IF OLD.status <> 'planned'
+           OR NEW.current_run <> 1
+           OR NEW.status <> 'in-progress'
+           OR jsonb_array_length(OLD.payload -> 'runs') <> 0 THEN
+          RAISE EXCEPTION 'The first Final Quality run must start from an empty planned inspection'
+            USING ERRCODE = '23514', CONSTRAINT = 'quality_inspections_initial_run_gate';
+        END IF;
+      ELSE
+        old_run := OLD.payload -> 'runs' -> (OLD.current_run - 1);
+        IF OLD.status <> 'rework-required'
+           OR NEW.status <> 'in-progress'
+           OR jsonb_typeof(old_run) <> 'object'
+           OR old_run ->> 'status' <> 'reviewed'
+           OR old_run ->> 'disposition' <> 'rework'
+           OR (NEW.payload -> 'runs' -> (OLD.current_run - 1)) IS DISTINCT FROM old_run THEN
+          RAISE EXCEPTION 'A new Final Quality run requires an immutable reviewed rework run'
+            USING ERRCODE = '23514', CONSTRAINT = 'quality_inspections_reinspection_gate';
+        END IF;
       END IF;
     END IF;
   ELSE

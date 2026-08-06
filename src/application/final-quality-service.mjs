@@ -122,6 +122,13 @@ export function createFinalQualityService({ store, clock = () => new Date().toIS
         (tx) => contextForInspection(tx, inspectionCode, actorId, CAPABILITIES.QUALITY_APPROVE),
         async (tx, current) => {
           assertQualityInspectionVersion(current, expectedVersion);
+          const currentRun = current.runs.at(-1);
+          invariant(
+            currentRun?.inspectorId !== actorId && currentRun?.completedBy !== actorId,
+            'QUALITY_SELF_APPROVAL_FORBIDDEN',
+            'The inspector who executed the run cannot approve its disposition',
+            { inspectionCode: current.inspectionCode, runNumber: current.currentRun, actorId },
+          );
           const value = reviewQualityInspection(current, { ...withoutExpectedVersion(input), actorId, reviewedAt: clock() });
           await tx.saveInspection(value, expectedVersion);
           if (value.status === 'released') {

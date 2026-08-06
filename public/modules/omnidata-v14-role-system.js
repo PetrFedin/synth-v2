@@ -1,157 +1,109 @@
-(function installOmnidataV14RoleSystem(global){
+(function installOmnidataDesignSystemV1(global){
   'use strict';
 
   const BUILD='visual-20260806-14-role-system-1';
+  const DESIGN_SYSTEM='omnidata-design-system-v1';
+  const VERSION='1.0.0';
   const CORE_ROLES=Object.freeze(['table','filterbar','card','status','inspector','button','field']);
   const SOURCE_PRIORITY=Object.freeze({heuristic:10,structure:20,component:30,explicit:40,native:50});
   const COMPONENT_TO_ROLE=Object.freeze({
     table:'table','table-wrap':'table',
     filterbar:'filterbar',toolbar:'filterbar',tabs:'filterbar',pagination:'filterbar',breadcrumb:'filterbar','global-search':'filterbar',segmented:'filterbar','button-group':'filterbar','section-head':'filterbar',
     card:'card',surface:'card',metrics:'card',metric:'card',layout:'card','master-detail':'card',list:'card','list-item':'card',entity:'card',empty:'card',timeline:'card','timeline-item':'card','timeline-part':'card',progress:'card','progress-track':'card','progress-fill':'card','definition-grid':'card','definition-item':'card',form:'card',
-    status:'status',alert:'status',toast:'status',
-    inspector:'inspector',
+    status:'status',alert:'status',toast:'status',inspector:'inspector',
     button:'button','icon-button':'button',tab:'button','segmented-option':'button','navigation-item':'button','navigation-action':'button',
     field:'field','field-group':'field',choice:'field'
   });
+  const COMPONENT_PART=Object.freeze({
+    table:'table','table-wrap':'table-wrap',filterbar:'filterbar',toolbar:'toolbar',tabs:'tabs',pagination:'pagination',breadcrumb:'breadcrumb','global-search':'global-search',segmented:'segmented','button-group':'toolbar','section-head':'section-head',
+    card:'card',surface:'surface',metrics:'metrics',metric:'metric',layout:'layout','master-detail':'master-detail',list:'list','list-item':'list-item',entity:'list-item',empty:'empty',timeline:'timeline','timeline-item':'timeline-item','timeline-part':'timeline-part',progress:'progress','progress-track':'progress-track','progress-fill':'progress-fill','definition-grid':'definition-grid','definition-item':'definition-item',form:'form',
+    status:'status',alert:'alert',toast:'toast',inspector:'inspector',button:'button','icon-button':'icon-button',tab:'tab','segmented-option':'segmented-option','navigation-item':'navigation-item','navigation-action':'navigation-action',field:'field','field-group':'field-group',choice:'choice'
+  });
   const EXPLICIT_SELECTORS=Object.freeze({
-    table:'table,.od-table,.ls9-table,.bom-table,.measurement-table,.measurement-matrix,.sample-table,.sourcing-table,.tech-pack-table,.production-orders-table,.production-execution-table,.data-table,.table-wrap,.table-wrapper,.table-container,.registry,.registry-container,.data-grid-wrapper,.od-table-wrap,.ls9-table-wrap,.bom-table-wrap,.measurement-table-wrap,.sample-table-wrap,.sourcing-table-wrap,.tech-pack-table-wrap,.production-orders-registry,.production-execution-registry',
-    filterbar:'.filters,.filter-row,.filter-panel,.toolbar-filters,.search-panel,.commandbar,.command-bar,.od-commandbar,.ls9-commandbar,.table-toolbar,.toolbar,.action-bar,.actions-bar,.command-actions,[role="tablist"],.pagination,.pager,.breadcrumbs,.breadcrumb,.global-search,.language-switcher,.segmented-control',
-    card:'.card,.panel,.tile,.widget,.box,.section,.od-section,.workspace-panel,.summary-card,.info-card,.kpi-grid,.stats-grid,.summary-cards,.record-list,.entity-list,.card-list,.activity-list,.timeline,.milestone-list,.steps,.facts,.info-grid,.details-grid,.metadata-grid,form',
-    status:'.badge,.status,.status-badge,.status-chip,.state-pill,.pill,.chip,.alert,.notice,.callout,.message-banner,.toast,.toast-message,[role="alert"]',
-    inspector:'.inspector,.od-inspector,.ls9-inspector,.bom-inspector,.measurement-inspector,.sample-inspector,.sourcing-inspector,.tech-pack-inspector,.production-orders-inspector,.production-execution-inspector,.details-panel,.detail-panel,.detail-drawer,.property-panel,.properties-panel,.drawer,.side-panel',
+    table:'table,.od-table,.ls9-table,.bom-table,.measurement-table,.measurement-matrix,.sample-table,.sourcing-table,.tech-pack-table,.production-orders-table,.production-execution-table,.final-quality-table,.data-table,.table-wrap,.table-wrapper,.table-container,.registry,.registry-container,.data-grid-wrapper,.od-table-wrap,.ls9-table-wrap,.bom-table-wrap,.measurement-table-wrap,.sample-table-wrap,.sourcing-table-wrap,.tech-pack-table-wrap,.production-orders-registry,.production-execution-registry,.final-quality-registry',
+    filterbar:'.filters,.filter-row,.filter-panel,.toolbar-filters,.search-panel,.commandbar,.command-bar,.od-commandbar,.ls9-commandbar,.table-toolbar,.toolbar,.action-bar,.actions-bar,.command-actions,.final-quality-filters,.final-quality-actions,.final-quality-create,[role="tablist"],.pagination,.pager,.breadcrumbs,.breadcrumb,.global-search,.language-switcher,.segmented-control',
+    card:'.card,.panel,.tile,.widget,.box,.section,.od-section,.workspace-panel,.summary-card,.info-card,.kpi-grid,.stats-grid,.summary-cards,.record-list,.entity-list,.card-list,.activity-list,.timeline,.milestone-list,.steps,.facts,.info-grid,.details-grid,.metadata-grid,.final-quality-header,.final-quality-kpis,.final-quality-kpi,.final-quality-layout,.final-quality-grid,.final-quality-facts,.final-quality-runs,.final-quality-run,.final-quality-card,form',
+    status:'.badge,.status,.status-badge,.status-chip,.state-pill,.pill,.chip,.alert,.notice,.callout,.message-banner,.toast,.toast-message,.final-quality-badge,.final-quality-recommendation,.final-quality-release,.final-quality-error,[role="alert"]',
+    inspector:'.inspector,.od-inspector,.ls9-inspector,.bom-inspector,.measurement-inspector,.sample-inspector,.sourcing-inspector,.tech-pack-inspector,.production-orders-inspector,.production-execution-inspector,.final-quality-inspector,.details-panel,.detail-panel,.detail-drawer,.property-panel,.properties-panel,.drawer,.side-panel',
     button:'button,[role="button"],[role="tab"],.button,.btn,.icon-button,.topbar-icon-button,.nav-item,.sidebar-action,.language-option',
     field:'input,select,textarea,fieldset,label.form-field,.field-group,.form-field,.input-group,.control-group'
   });
+  const EXACT_PARTS=Object.freeze({
+    'od14-page-header':'page-header','final-quality-header':'page-header','final-quality-kpis':'metrics','final-quality-kpi':'metric','final-quality-layout':'master-detail','final-quality-grid':'layout','final-quality-facts':'definition-grid','final-quality-runs':'list','final-quality-run':'list-item','final-quality-card':'card','final-quality-filters':'filterbar','final-quality-actions':'toolbar','final-quality-create':'header-toolbar','final-quality-registry':'table-wrap','final-quality-table':'table','final-quality-inspector':'inspector','final-quality-badge':'status','final-quality-recommendation':'status','final-quality-release':'status','final-quality-error':'alert',
+    'production-execution-kpis':'metrics','production-execution-kpi':'metric','production-execution-layout':'master-detail','production-execution-filters':'filterbar','production-execution-registry':'table-wrap','production-execution-table':'table','production-execution-inspector':'inspector','production-timeline':'timeline','production-milestone':'timeline-item','production-progress':'progress','production-progress-track':'progress-track','production-progress-fill':'progress-fill',
+    'tech-pack-kpis':'metrics','tech-pack-kpi':'metric','tech-pack-layout':'master-detail','tech-pack-filters':'filterbar','tech-pack-table':'table','tech-pack-inspector':'inspector','production-orders-kpis':'metrics','production-orders-kpi':'metric','production-orders-layout':'master-detail','production-orders-filters':'filterbar','production-orders-registry':'table-wrap','production-orders-table':'table','production-orders-inspector':'inspector','stack':'list','entity':'list-item'
+  });
   const CLASS_RULES=Object.freeze([
-    Object.freeze({role:'table',pattern:/(^|[-_ ])(?:table|matrix|registry|data-grid)(?:$|[-_ ])/}),
-    Object.freeze({role:'filterbar',pattern:/(^|[-_ ])(?:filter|filters|filterbar|filter-panel|commandbar|command-bar|searchbar|search-bar|search-panel|toolbar|action-bar|actions-bar|tabs|tablist|pagination|pager|breadcrumb|global-search|segmented)(?:$|[-_ ])/}),
-    Object.freeze({role:'status',pattern:/(^|[-_ ])(?:status|badge|pill|chip|state|alert|notice|callout|toast|snackbar)(?:$|[-_ ])/}),
-    Object.freeze({role:'inspector',pattern:/(^|[-_ ])(?:inspector|details-panel|detail-panel|detail-drawer|properties|property-panel|drawer|side-panel)(?:$|[-_ ])/}),
-    Object.freeze({role:'button',pattern:/(^|[-_ ])(?:button|btn|action|tab|nav-item|sidebar-action)(?:$|[-_ ])/}),
-    Object.freeze({role:'field',pattern:/(^|[-_ ])(?:field|input|select|textarea|control-group|form-field)(?:$|[-_ ])/}),
-    Object.freeze({role:'card',pattern:/(^|[-_ ])(?:card|panel|tile|widget|box|section|surface|metric|kpi|summary|facts|list|timeline|progress|layout|grid)(?:$|[-_ ])/})
+    Object.freeze({role:'table',part:'table-wrap',pattern:/(^|[-_ ])(?:(?:table|data-grid)[-_ ]?(?:wrap|wrapper|container)|registry(?:-container)?|data-grid-wrapper)(?:$|[-_ ])/}),
+    Object.freeze({role:'table',part:'table',pattern:/(^|[-_ ])(?:table|matrix|data-table)(?:$|[-_ ])/}),
+    Object.freeze({role:'filterbar',part:'filterbar',pattern:/(^|[-_ ])(?:filter|filters|filterbar|filter-panel|commandbar|command-bar|search-panel)(?:$|[-_ ])/}),
+    Object.freeze({role:'filterbar',part:'tabs',pattern:/(^|[-_ ])(?:tabs|tablist|tab-list)(?:$|[-_ ])/}),
+    Object.freeze({role:'filterbar',part:'pagination',pattern:/(^|[-_ ])(?:pagination|pager|page-controls)(?:$|[-_ ])/}),
+    Object.freeze({role:'filterbar',part:'breadcrumb',pattern:/(^|[-_ ])breadcrumbs?(?:$|[-_ ])/}),
+    Object.freeze({role:'filterbar',part:'toolbar',pattern:/(^|[-_ ])(?:toolbar|action-bar|actions-bar|command-actions|actions-row|button-group|form-actions|actions)(?:$|[-_ ])/}),
+    Object.freeze({role:'status',part:'alert',pattern:/(^|[-_ ])(?:alert|notice|error|warning|callout|message-banner)(?:$|[-_ ])/}),
+    Object.freeze({role:'status',part:'status',pattern:/(^|[-_ ])(?:status|status-chip|badge|pill|chip|state|tag)(?:$|[-_ ])/}),
+    Object.freeze({role:'inspector',part:'inspector',pattern:/(^|[-_ ])(?:inspector|details-panel|detail-panel|detail-drawer|properties|properties-panel|property-panel|drawer|side-panel)(?:$|[-_ ])/}),
+    Object.freeze({role:'button',part:'button',pattern:/(^|[-_ ])(?:button|btn|action)(?:$|[-_ ])/}),
+    Object.freeze({role:'field',part:'field-group',pattern:/(^|[-_ ])(?:field-group|form-field|input-group|control-group)(?:$|[-_ ])/}),
+    Object.freeze({role:'card',part:'metrics',pattern:/(^|[-_ ])(?:metrics|kpis|stats-grid|summary-cards)(?:$|[-_ ])/}),
+    Object.freeze({role:'card',part:'metric',pattern:/(^|[-_ ])(?:metric|kpi|stat-card|stat-tile)(?:$|[-_ ])/}),
+    Object.freeze({role:'card',part:'master-detail',pattern:/(^|[-_ ])(?:master-detail|split-layout|detail-layout)(?:$|[-_ ])/}),
+    Object.freeze({role:'card',part:'definition-grid',pattern:/(^|[-_ ])(?:facts|summary|info-grid|details-grid|definition-grid|metadata-grid)(?:$|[-_ ])/}),
+    Object.freeze({role:'card',part:'timeline-item',pattern:/(^|[-_ ])(?:timeline-item|milestone|step-item)(?:$|[-_ ])/}),
+    Object.freeze({role:'card',part:'timeline',pattern:/(^|[-_ ])(?:timeline|milestone-list|step-list|steps)(?:$|[-_ ])/}),
+    Object.freeze({role:'card',part:'progress-fill',pattern:/(^|[-_ ])(?:progress|readiness|completion)[-_ ]?fill(?:$|[-_ ])/}),
+    Object.freeze({role:'card',part:'progress-track',pattern:/(^|[-_ ])(?:progress|readiness|completion)[-_ ]?track(?:$|[-_ ])/}),
+    Object.freeze({role:'card',part:'progress',pattern:/(^|[-_ ])(?:progress|progress-bar|readiness-bar|completion-bar)(?:$|[-_ ])/}),
+    Object.freeze({role:'card',part:'empty',pattern:/(^|[-_ ])(?:empty|empty-state|no-data|placeholder-state)(?:$|[-_ ])/}),
+    Object.freeze({role:'card',part:'list',pattern:/(^|[-_ ])(?:record-list|entity-list|card-list|compact-list|activity-list|stack)(?:$|[-_ ])/}),
+    Object.freeze({role:'card',part:'layout',pattern:/(^|[-_ ])(?:layout|content-grid|cards-grid|dashboard-grid|two-column)(?:$|[-_ ])/}),
+    Object.freeze({role:'card',part:'surface',pattern:/(^|[-_ ])(?:surface|section|workspace-panel)(?:$|[-_ ])/}),
+    Object.freeze({role:'card',part:'card',pattern:/(^|[-_ ])(?:card|panel|tile|widget|box)(?:$|[-_ ])/})
   ]);
-  const COMPONENT_LIKE=/(table|matrix|registry|grid|filter|search|command|card|panel|tile|widget|box|badge|status|pill|chip|alert|notice|inspector|detail|drawer|toolbar|action|button|btn|field|input|select|textarea|tabs?|timeline|milestone|progress|list|pager|pagination|breadcrumb|toast|form)/i;
-  const BUSINESS_DATA_SELECTOR='.entity-title,.entity-code,td,dd,option,[data-od14-business-data="true"],[data-business-data="true"],[data-od14-no-translate="true"]';
+  const COMPONENT_LIKE=/(table|matrix|registry|grid|filter|search|command|card|panel|tile|widget|box|badge|status|pill|chip|alert|notice|inspector|detail|drawer|toolbar|action|button|btn|field|input|select|textarea|tabs?|timeline|milestone|progress|list|pager|pagination|breadcrumb|toast|form|kpi|metric|facts|summary|layout)/i;
+  const BUSINESS_DATA_SELECTOR='.entity-title,.entity-code,td,dd,option,[data-od14-business-data="true"],[data-business-data="true"],[data-od14-no-translate="true"],.topbar-user,.topbar-organisation';
+  const ALLOWED_RU_ABBREVIATIONS=Object.freeze(['PLM','BOM','SKU','POM','MOQ','ATS','RFQ','PO','ERP','WMS','PIM','OMS','QC','QMS','FX','API','RFID','EAN','GTIN','EXW','FCA','FOB','CIF','DAP','DDP','EUR','USD','RUB','CNY','GBP','ISO','UTC','PDF','ZIP','PPS','HEX','RGB','RU','EN']);
+  const STRICT_PAIRS=Object.freeze([
+    Object.freeze(['PLM / ФИНАЛЬНЫЙ КОНТРОЛЬ КАЧЕСТВА','PLM / FINAL QUALITY']),Object.freeze(['Финальный контроль качества','Final Quality']),Object.freeze(['Исполнение в статусе «готово к контролю»','Ready-for-QC execution code']),Object.freeze(['Укажите код исполнения производства.','Enter a production execution code.']),Object.freeze(['Требуется согласующий','Needs approver']),Object.freeze(['Допустимо значительных дефектов','Allowed major defects']),Object.freeze(['Допустимо незначительных дефектов','Allowed minor defects']),Object.freeze(['Некорректный порог значительных дефектов.','Invalid major defect threshold.']),Object.freeze(['Некорректный порог незначительных дефектов.','Invalid minor defect threshold.']),Object.freeze(['Инспекция, исполнение, заказ, SKU, фабрика…','Inspection, execution, PO, SKU, supplier…']),Object.freeze(['Контур финального контроля качества обновлён.','Final Quality workflow updated.']),Object.freeze(['Исполнение','Execution']),Object.freeze(['Версия исполнения','Execution version']),Object.freeze(['Готово к контролю качества','Ready for QC'])
+  ]);
+  const RU_ALIASES=Object.freeze({'PLM / FINAL QUALITY':'PLM / ФИНАЛЬНЫЙ КОНТРОЛЬ КАЧЕСТВА','Execution в статусе ready-for-qc':'Исполнение в статусе «готово к контролю»','Ready-for-QC execution code':'Исполнение в статусе «готово к контролю»','Укажите production execution.':'Укажите код исполнения производства.','Enter a production execution code.':'Укажите код исполнения производства.','Нужен approver':'Требуется согласующий','Needs approver':'Требуется согласующий','Допустимо major':'Допустимо значительных дефектов','Allowed major':'Допустимо значительных дефектов','Allowed major defects':'Допустимо значительных дефектов','Допустимо minor':'Допустимо незначительных дефектов','Allowed minor':'Допустимо незначительных дефектов','Allowed minor defects':'Допустимо незначительных дефектов','Некорректный major threshold.':'Некорректный порог значительных дефектов.','Invalid major threshold.':'Некорректный порог значительных дефектов.','Invalid major defect threshold.':'Некорректный порог значительных дефектов.','Некорректный minor threshold.':'Некорректный порог незначительных дефектов.','Invalid minor threshold.':'Некорректный порог незначительных дефектов.','Invalid minor defect threshold.':'Некорректный порог незначительных дефектов.','Inspection, execution, PO, SKU, фабрика…':'Инспекция, исполнение, заказ, SKU, фабрика…','Inspection, execution, PO, SKU, supplier…':'Инспекция, исполнение, заказ, SKU, фабрика…','Контур Final Quality обновлён.':'Контур финального контроля качества обновлён.','Final Quality workflow updated.':'Контур финального контроля качества обновлён.','Execution version':'Версия исполнения','Версия execution':'Версия исполнения','Ready for QC':'Готово к контролю качества','Готово к QC':'Готово к контролю качества'});
+  const EN_ALIASES=Object.freeze(Object.fromEntries(STRICT_PAIRS.flatMap(([ru,en])=>[[ru,en],[en,en]])));
 
+  function locale(){return global.SynthaI18n?.getLocale?.()==='en'?'en':'ru'}
   function classText(node){return String(node?.className?.baseVal||node?.className||'').replace(/\s+/g,' ').trim()}
   function sourcePriority(value){return SOURCE_PRIORITY[value]||0}
   function currentSource(node){return String(node?.dataset?.od14UnifiedRoleSource||'heuristic')}
-  function setRole(node,role,source='heuristic'){
-    if(!node?.dataset||!CORE_ROLES.includes(role))return false;
-    if(node.dataset.od14UnifiedRole&&sourcePriority(currentSource(node))>sourcePriority(source))return false;
-    if(node.dataset.od14UnifiedRole===role&&currentSource(node)===source)return false;
-    node.dataset.od14UnifiedRole=role;
-    node.dataset.od14UnifiedRoleSource=source;
-    return true;
-  }
-  function setPart(node,part){if(node?.dataset&&part)node.dataset.od14UnifiedPart=part}
-
-  function roleFor(node){
-    if(!node||node.nodeType!==1)return'';
-    const tag=String(node.tagName||'').toLowerCase();
-    const aria=String(node.getAttribute?.('role')||'').toLowerCase();
-    if(tag==='table')return'table';
-    if(tag==='button'||aria==='button'||aria==='tab')return'button';
-    if(['input','select','textarea','fieldset'].includes(tag))return'field';
-    if(aria==='alert')return'status';
-    const component=String(node.dataset?.od14Component||'');
-    if(COMPONENT_TO_ROLE[component])return COMPONENT_TO_ROLE[component];
-    const classes=classText(node).toLowerCase();
-    for(const rule of CLASS_RULES)if(rule.pattern.test(classes))return rule.role;
-    if(node.querySelector?.('table'))return'table';
-    if(node.querySelector?.('input,select,textarea')&&/(filter|search|command|toolbar)/i.test(classes))return'filterbar';
-    return'';
-  }
-
-  function partFor(node,role){
-    const component=String(node?.dataset?.od14Component||'');
-    if(component)return component;
-    const tag=String(node?.tagName||'').toLowerCase();
-    if(role==='table')return tag==='table'?'table':'table-wrap';
-    if(role==='button')return /icon/i.test(classText(node))?'icon-button':'button';
-    if(role==='field')return ['input','select','textarea'].includes(tag)?tag:(tag==='fieldset'?'fieldset':'field-group');
-    if(role==='status')return node?.getAttribute?.('role')==='alert'?'alert':'status';
-    return role;
-  }
-
-  function applyExplicit(root=document){
-    for(const [role,selector] of Object.entries(EXPLICIT_SELECTORS))for(const node of root.querySelectorAll?.(selector)||[]){setRole(node,role,'explicit');setPart(node,partFor(node,role))}
-  }
-  function applyComponents(root=document){
-    for(const node of root.querySelectorAll?.('[data-od14-component]')||[]){const role=COMPONENT_TO_ROLE[node.dataset.od14Component];if(role){setRole(node,role,'component');setPart(node,node.dataset.od14Component)}}
-  }
-  function applyNative(root=document){
-    for(const node of root.querySelectorAll?.('table,button,[role="button"],[role="tab"],input,select,textarea,fieldset,[role="alert"]')||[]){const role=roleFor(node);if(role){setRole(node,role,'native');setPart(node,partFor(node,role))}}
-  }
-  function applyHeuristics(root=document){
-    const scope=root.querySelectorAll?.('.workspace-content *,dialog *, .topbar *, .sidebar *')||[];
-    for(const node of scope){if(!node.dataset?.od14UnifiedRole&&(node.dataset?.od14Component||COMPONENT_LIKE.test(classText(node)))){const role=roleFor(node);if(role){setRole(node,role,'heuristic');setPart(node,partFor(node,role))}}}
-  }
-  function applyStructure(root=document){
-    for(const table of root.querySelectorAll?.('table,[data-od14-component="table"]')||[]){const parent=table.parentElement;if(parent&&!parent.dataset?.od14UnifiedRole){setRole(parent,'table','structure');setPart(parent,'table-wrap')}}
-    for(const label of root.querySelectorAll?.('label')||[]){if(label.querySelector?.('input,select,textarea')){setRole(label,'field','structure');setPart(label,'field-group')}}
-    for(const node of root.querySelectorAll?.('[data-od14-unified-role="filterbar"]')||[])for(const child of node.children||[]){if(child.matches?.('button,[role="button"],[role="tab"]')){setRole(child,'button','structure');setPart(child,partFor(child,'button'))}else if(child.matches?.('input,select,textarea,label')){setRole(child,'field','structure');setPart(child,partFor(child,'field'))}}
-  }
-
-  function buttonVariant(node){
-    const value=`${classText(node)} ${node?.textContent||''}`.toLowerCase();
-    if(/(primary|create|save|publish|confirm|submit|создать|сохранить|опубликовать|подтвердить)/.test(value))return'primary';
-    if(/(danger|delete|remove|cancel|reject|удалить|отменить|отклонить)/.test(value))return'danger';
-    if(/(ghost|link|tertiary)/.test(value))return'ghost';
-    return'secondary';
-  }
-  function statusTone(node){
-    const value=`${classText(node)} ${node?.textContent||''}`.toLowerCase();
-    if(/(danger|error|failed|blocked|overdue|rejected|cancelled|ошиб|заблок|просроч|отклон|отмен)/.test(value))return'danger';
-    if(/(warning|risk|pending|draft|attention|ожида|чернов|риск|вниман)/.test(value))return'warning';
-    if(/(success|ready|approved|active|published|confirmed|complete|успеш|готов|одобрен|актив|опублик|подтверж|заверш)/.test(value))return'success';
-    if(/(info|sent|viewed|processing|инфо|отправ|просмотр|обработ)/.test(value))return'info';
-    return'neutral';
-  }
-  function applyVariants(root=document){
-    for(const node of root.querySelectorAll?.('[data-od14-unified-role="button"]')||[])node.dataset.od14UnifiedVariant=buttonVariant(node);
-    for(const node of root.querySelectorAll?.('[data-od14-unified-role="status"]')||[])node.dataset.od14UnifiedTone=statusTone(node);
-  }
-
-  function enforceLanguage(root=document){
-    const system=global.SynthaOmnidataV14Components;
-    system?.translateInterface?.(root);
-    system?.decorateAbbreviations?.(root);
-    system?.auditLanguage?.(root);
-    if(document.documentElement)document.documentElement.lang=global.SynthaI18n?.getLocale?.()==='en'?'en':'ru';
-  }
-
-  function audit(root=document){
-    let total=0,classified=0;
-    const nodes=root.querySelectorAll?.('.workspace-content *,dialog *, .topbar *, .sidebar *')||[];
-    for(const node of nodes){
-      if(!node.dataset?.od14Component&&!COMPONENT_LIKE.test(classText(node)))continue;
-      total+=1;
-      if(node.dataset?.od14UnifiedRole){classified+=1;delete node.dataset.od14UnifiedUnclassified}else node.dataset.od14UnifiedUnclassified='true';
-    }
-    if(document.body){document.body.dataset.od14UnifiedRoleAudit=`${classified}/${total}`;document.body.dataset.od14UnifiedRoleUnclassified=String(total-classified);document.body.dataset.od14UnifiedRoleBuild=BUILD}
-    return Object.freeze({total,classified,unclassified:total-classified});
-  }
-
-  function normalize(root=document){
-    document.body?.classList?.add('omnidata-v14','omnidata-role-system');
-    applyExplicit(root);applyComponents(root);applyNative(root);applyHeuristics(root);applyStructure(root);applyVariants(root);enforceLanguage(root);
-    return audit(root);
-  }
-
-  let scheduled=false;
-  let retries=0;
-  function schedule(root=document){
-    if(scheduled)return;
-    scheduled=true;
-    (global.queueMicrotask||((fn)=>Promise.resolve().then(fn)))(()=>{scheduled=false;const result=normalize(root);if(result.total===0&&retries<8){retries+=1;global.setTimeout?.(()=>schedule(document),40*retries)}else retries=0});
-  }
+  function exactPart(classes){const normalized=String(classes||'').toLowerCase().trim();if(EXACT_PARTS[normalized])return EXACT_PARTS[normalized];for(const token of normalized.split(/\s+/))if(EXACT_PARTS[token])return EXACT_PARTS[token];return''}
+  function classDescriptor(node){const classes=classText(node).toLowerCase();const direct=exactPart(classes);if(direct){const role=direct==='table'||direct==='table-wrap'?'table':direct==='filterbar'||direct==='toolbar'||direct==='header-toolbar'?'filterbar':direct==='status'||direct==='alert'?'status':direct==='inspector'?'inspector':'card';return Object.freeze({role,part:direct,source:'explicit'})}for(const rule of CLASS_RULES)if(rule.pattern.test(classes))return Object.freeze({role:rule.role,part:rule.part,source:'heuristic'});return null}
+  function setRole(node,role,source='heuristic'){if(!node?.dataset||!CORE_ROLES.includes(role))return false;if(node.dataset.od14UnifiedRole&&sourcePriority(currentSource(node))>sourcePriority(source))return false;node.dataset.od14UnifiedRole=role;node.dataset.od14UnifiedRoleSource=source;node.dataset.odsRole=role;return true}
+  function setPart(node,part){if(node?.dataset&&part){node.dataset.od14UnifiedPart=part;node.dataset.odsPart=part}}
+  function setDescriptor(node,value){if(!value)return false;const changed=setRole(node,value.role,value.source||'heuristic');setPart(node,value.part||value.role);return changed}
+  function roleFor(node){if(!node||node.nodeType!==1)return'';const tag=String(node.tagName||'').toLowerCase();const aria=String(node.getAttribute?.('role')||'').toLowerCase();if(tag==='table')return'table';if(tag==='button'||aria==='button'||aria==='tab')return'button';if(['input','select','textarea','fieldset'].includes(tag))return'field';if(aria==='alert')return'status';const component=String(node.dataset?.od14Component||'');if(COMPONENT_TO_ROLE[component])return COMPONENT_TO_ROLE[component];return classDescriptor(node)?.role||''}
+  function partFor(node,role){const component=String(node?.dataset?.od14Component||'');if(COMPONENT_PART[component])return COMPONENT_PART[component];const explicit=classDescriptor(node);if(explicit?.part)return explicit.part;const tag=String(node?.tagName||'').toLowerCase();const aria=String(node?.getAttribute?.('role')||'').toLowerCase();if(role==='table')return tag==='table'?'table':'table-wrap';if(role==='button')return aria==='tab'?'tab':/icon/i.test(classText(node))?'icon-button':'button';if(role==='field')return ['input','select','textarea'].includes(tag)?tag:(tag==='fieldset'?'fieldset':'field-group');if(role==='status')return aria==='alert'?'alert':'status';return role}
+  function applyExplicit(root=document){for(const [role,selector] of Object.entries(EXPLICIT_SELECTORS))for(const node of root.querySelectorAll?.(selector)||[]){const value=classDescriptor(node);setRole(node,role,'explicit');setPart(node,value?.part||partFor(node,role))}}
+  function applyComponents(root=document){for(const node of root.querySelectorAll?.('[data-od14-component]')||[]){const component=String(node.dataset.od14Component||'');const role=COMPONENT_TO_ROLE[component];if(role){setRole(node,role,'component');setPart(node,COMPONENT_PART[component]||component)}}}
+  function applyNative(root=document){for(const node of root.querySelectorAll?.('table,button,[role="button"],[role="tab"],input,select,textarea,fieldset,[role="alert"]')||[]){const role=roleFor(node);if(role){setRole(node,role,'native');setPart(node,partFor(node,role))}}}
+  function applyHeuristics(root=document){const scope=root.querySelectorAll?.('.workspace-content *,dialog *, .topbar *, .sidebar *')||[];for(const node of scope){if(node.dataset?.od14Component||COMPONENT_LIKE.test(classText(node))){const value=classDescriptor(node);if(value)setDescriptor(node,value);else{const role=roleFor(node);if(role){setRole(node,role,'heuristic');setPart(node,partFor(node,role))}}}}}
+  function applyStructure(root=document){for(const table of root.querySelectorAll?.('table,[data-od14-component="table"]')||[]){const parent=table.parentElement;if(parent&&!parent.dataset?.od14UnifiedRole){setRole(parent,'table','structure');setPart(parent,'table-wrap')}}for(const label of root.querySelectorAll?.('label')||[]){if(label.querySelector?.('input,select,textarea')){setRole(label,'field','structure');setPart(label,'field-group')}}for(const node of root.querySelectorAll?.('[data-od14-unified-role="filterbar"]')||[])for(const child of node.children||[]){if(child.matches?.('button,[role="button"],[role="tab"]')){setRole(child,'button','structure');setPart(child,partFor(child,'button'))}else if(child.matches?.('input,select,textarea,label')){setRole(child,'field','structure');setPart(child,partFor(child,'field'))}}for(const [containerPart,itemPart] of [['metrics','metric'],['list','list-item'],['definition-grid','definition-item'],['timeline','timeline-item']])for(const parent of root.querySelectorAll?.(`[data-od14-unified-role="card"][data-od14-unified-part="${containerPart}"]`)||[])for(const child of parent.children||[])if(!child.dataset?.od14UnifiedRole){setRole(child,'card','structure');setPart(child,itemPart)}}
+  function buttonVariant(node){const value=`${classText(node)} ${node?.textContent||''}`.toLowerCase();if(/(primary|create|save|publish|confirm|submit|release|approve|создать|сохранить|опубликовать|подтвердить|допустить|одобрить)/.test(value))return'primary';if(/(danger|delete|remove|cancel|reject|удалить|отменить|отклонить)/.test(value))return'danger';if(/(ghost|link|tertiary)/.test(value))return'ghost';return'secondary'}
+  function statusTone(node){const value=`${classText(node)} ${node?.textContent||''}`.toLowerCase();if(/(danger|error|failed|blocked|overdue|rejected|cancelled|rework|required|ошиб|заблок|просроч|отклон|отмен|доработ)/.test(value))return'danger';if(/(warning|risk|pending|draft|attention|review|ожида|чернов|риск|вниман|решен)/.test(value))return'warning';if(/(success|ready|approved|active|published|confirmed|complete|released|pass|успеш|готов|одобрен|актив|опублик|подтверж|заверш|допущ|соответств)/.test(value))return'success';if(/(info|sent|viewed|processing|planned|in-progress|инфо|отправ|просмотр|обработ|заплан|инспекц)/.test(value))return'info';return'neutral'}
+  function applyVariants(root=document){for(const node of root.querySelectorAll?.('[data-od14-unified-role="button"]')||[]){const value=buttonVariant(node);node.dataset.od14UnifiedVariant=value;node.dataset.odsVariant=value}for(const node of root.querySelectorAll?.('[data-od14-unified-role="status"]')||[]){const value=statusTone(node);node.dataset.od14UnifiedTone=value;node.dataset.odsTone=value}}
+  function translateAlias(value,target=locale()){const source=String(value||'').trim();if(!source)return source;return target==='en'?(EN_ALIASES[source]||source):(RU_ALIASES[source]||source)}
+  function translateAliases(root=document){const target=locale();let changed=0;const walker=document.createTreeWalker?.(root.body||root,global.NodeFilter?.SHOW_TEXT||4);if(walker){let node;while((node=walker.nextNode())){const parent=node.parentElement;if(!parent||parent.closest?.(BUSINESS_DATA_SELECTOR)||parent.closest?.('script,style,code,pre'))continue;const original=String(node.nodeValue||'');const trimmed=original.trim();const next=translateAlias(trimmed,target);if(next!==trimmed){node.nodeValue=original.replace(trimmed,next);changed+=1}}}for(const element of root.querySelectorAll?.('[placeholder],[title],[aria-label]')||[]){if(element.closest?.(BUSINESS_DATA_SELECTOR))continue;for(const attribute of ['placeholder','title','aria-label']){const value=element.getAttribute?.(attribute);const next=translateAlias(value,target);if(value&&next!==value){element.setAttribute(attribute,next);changed+=1}}}return changed}
+  function auditMixedLanguage(root=document){const target=locale();let mixed=0;const allowed=new RegExp(`\\b(?:${ALLOWED_RU_ABBREVIATIONS.join('|')})\\b`,'g');const nodes=root.querySelectorAll?.('.workspace-content :is(h1,h2,h3,h4,p,span,label,button,a,th),dialog :is(h1,h2,h3,h4,p,span,label,button,a,th),.topbar :is(button,span),.sidebar :is(button,span,a)')||[];for(const node of nodes){if(node.closest?.(BUSINESS_DATA_SELECTOR)||node.children?.length)continue;const text=String(node.textContent||'').trim();if(!text)continue;const normalized=text.replace(allowed,'').replace(/[0-9.,:;()\/+\-–—%№'"«»…]/g,' ');const mismatch=target==='en'?/[А-Яа-яЁё]/.test(normalized):/[A-Za-z]{3,}/.test(normalized);if(mismatch){mixed+=1;node.dataset.odsLanguageMismatch=target}else delete node.dataset.odsLanguageMismatch}if(document.body)document.body.dataset.odsLanguageAudit=String(mixed);return mixed}
+  function enforceLanguage(root=document){const system=global.SynthaOmnidataV14Components;system?.translateInterface?.(root);translateAliases(root);system?.decorateAbbreviations?.(root);const legacy=system?.auditLanguage?.(root)||0;const mixed=auditMixedLanguage(root);if(document.documentElement)document.documentElement.lang=locale();if(document.body)document.body.dataset.od14UnifiedLanguageAudit=String(Number(legacy)||mixed);return mixed}
+  function audit(root=document){let total=0,classified=0;const counts=Object.fromEntries(CORE_ROLES.map(role=>[role,0]));const nodes=root.querySelectorAll?.('.workspace-content *,dialog *, .topbar *, .sidebar *')||[];for(const node of nodes){if(!node.dataset?.od14Component&&!COMPONENT_LIKE.test(classText(node)))continue;total+=1;const role=node.dataset?.od14UnifiedRole;if(role&&CORE_ROLES.includes(role)){classified+=1;counts[role]+=1;delete node.dataset.od14UnifiedUnclassified}else node.dataset.od14UnifiedUnclassified='true'}if(document.body){document.body.dataset.od14UnifiedRoleAudit=`${classified}/${total}`;document.body.dataset.od14UnifiedRoleUnclassified=String(total-classified);document.body.dataset.od14UnifiedRoleCounts=JSON.stringify(counts);document.body.dataset.od14UnifiedRoleBuild=BUILD;document.body.dataset.odsName=DESIGN_SYSTEM;document.body.dataset.odsVersion=VERSION;document.body.dataset.odsLastRun=new Date().toISOString()}return Object.freeze({total,classified,unclassified:total-classified,counts:Object.freeze(counts)})}
+  function normalize(root=document){document.body?.classList?.add('omnidata-v14','omnidata-role-system','omnidata-design-system-v1');applyExplicit(root);applyComponents(root);applyNative(root);applyHeuristics(root);applyStructure(root);applyVariants(root);enforceLanguage(root);return audit(root)}
+  let scheduled=false,retries=0,retryTimer=0,watchdog=0;
+  function requestRetry(result){if(!result?.unclassified){retries=0;return}if(retries>=8)return;retries+=1;global.clearTimeout?.(retryTimer);retryTimer=global.setTimeout?.(()=>schedule(document),Math.min(80*retries,640))||0}
+  function schedule(root=document){if(scheduled)return;scheduled=true;(global.queueMicrotask||((fn)=>Promise.resolve().then(fn)))(()=>{scheduled=false;const result=normalize(root);requestRetry(result)})}
+  function startWatchdog(){if(watchdog||typeof global.setInterval!=='function')return;watchdog=global.setInterval(()=>{if(document.visibilityState!=='hidden')schedule(document)},4000);if(document.body)document.body.dataset.odsWatchdog='active'}
   const observer=typeof MutationObserver==='function'?new MutationObserver(()=>schedule(document)):null;
-  function boot(){normalize(document);observer?.observe?.(document.body,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['class','role','aria-selected','aria-pressed','hidden']})}
+  function boot(){const result=normalize(document);requestRetry(result);observer?.observe?.(document.body,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['class','role','aria-selected','aria-pressed','hidden','data-od14-component']});startWatchdog()}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
-  global.addEventListener?.('syntha:locale-changed',()=>schedule(document));
-  global.addEventListener?.('popstate',()=>schedule(document));
-
-  global.SynthaOmnidataV14RoleSystem=Object.freeze({BUILD,build:BUILD,coreRoles:CORE_ROLES,componentToRole:COMPONENT_TO_ROLE,explicitSelectors:EXPLICIT_SELECTORS,roleFor,partFor,setRole,buttonVariant,statusTone,normalize,audit,schedule,BUSINESS_DATA_SELECTOR});
+  global.addEventListener?.('syntha:locale-changed',()=>schedule(document));global.addEventListener?.('popstate',()=>schedule(document));document.addEventListener?.('visibilitychange',()=>{if(document.visibilityState!=='hidden')schedule(document)});
+  const api=Object.freeze({BUILD,build:BUILD,DESIGN_SYSTEM,VERSION,coreRoles:CORE_ROLES,componentToRole:COMPONENT_TO_ROLE,componentParts:COMPONENT_PART,explicitSelectors:EXPLICIT_SELECTORS,classRules:CLASS_RULES,roleFor,partFor,setRole,buttonVariant,statusTone,translateAlias,translateAliases,enforceLanguage,normalize,audit,schedule,startWatchdog,BUSINESS_DATA_SELECTOR});
+  global.SynthaOmnidataV14RoleSystem=api;
+  global.SynthaOmnidataDesignSystemV1=api;
 })(window);

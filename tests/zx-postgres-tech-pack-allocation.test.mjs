@@ -70,7 +70,7 @@ test('PostgreSQL closes approved PPS through production, rework, reinspection an
 
     await platform.registerOrganisation('org-create', 'system', createOrganisation({ id: 'brand-tech-gate', type: 'brand', name: 'Tech Gate Brand' }));
     await platform.grantMembership('member-owner', 'system', createMembership({ id: 'membership-owner', organisationId: 'brand-tech-gate', organisationType: 'brand', userId: 'product-owner', role: 'owner', createdAt: clock() }));
-    await platform.grantMembership('member-quality-approver', 'system', createMembership({ id: 'membership-quality-approver', organisationId: 'brand-tech-gate', organisationType: 'brand', userId: 'quality-approver', role: 'admin', createdAt: clock() }));
+    await platform.grantMembership('member-quality-approver', 'product-owner', createMembership({ id: 'membership-quality-approver', organisationId: 'brand-tech-gate', organisationType: 'brand', userId: 'quality-approver', role: 'admin', createdAt: clock() }));
     const campaign = await platform.createCampaign('campaign-create', 'product-owner', { brandId: 'brand-tech-gate', name: 'AW Tech Gate', season: 'AW28', startsAt: '2028-01-01T00:00:00.000Z', endsAt: '2028-02-01T00:00:00.000Z' });
     await platform.openCampaign('campaign-open', 'product-owner', campaign.id);
     const collection = await platform.createCollection('collection-create', 'product-owner', { campaignId: campaign.id, brandId: 'brand-tech-gate', name: 'Main', currency: 'EUR' });

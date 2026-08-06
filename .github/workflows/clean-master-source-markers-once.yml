@@ -1,0 +1,43 @@
+name: Clean Master Source Markers
+
+on:
+  push:
+    paths:
+      - 'docs/.clean-master-source-markers.tmp'
+
+permissions:
+  contents: write
+
+jobs:
+  clean:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Remove chat-only source markers
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('docs/joor-retailer-cabinet-complete-map.md')
+          text = path.read_text(encoding='utf-8')
+          for marker in (
+              ' fileciteturn143file0',
+              ' fileciteturn148file0',
+              'fileciteturn143file0',
+              'fileciteturn148file0',
+          ):
+              text = text.replace(marker, '')
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Commit cleanup
+        run: |
+          rm -f docs/.clean-master-source-markers.tmp
+          rm -f .github/workflows/clean-master-source-markers-once.yml
+          git config user.name 'openai-docs-bot'
+          git config user.email 'openai-docs-bot@users.noreply.github.com'
+          git add -A
+          git commit -m 'docs: normalize source references in bilingual master specification'
+          git push

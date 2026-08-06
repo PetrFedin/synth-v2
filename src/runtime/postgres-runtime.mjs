@@ -1,8 +1,12 @@
+import { createFinalQualityQueryService } from '../application/final-quality-query-service.mjs';
+import { createFinalQualityService } from '../application/final-quality-service.mjs';
 import { createProductionExecutionQueryService } from '../application/production-execution-query-service.mjs';
 import { createProductionExecutionService } from '../application/production-execution-service.mjs';
 import { createProductionOrderQueryService } from '../application/production-order-query-service.mjs';
 import { createProductionOrderService } from '../application/production-order-service.mjs';
 import { createSourcingTechPackAllocationService } from '../application/sourcing-tech-pack-allocation-service.mjs';
+import { createPostgresFinalQualityReader } from '../infrastructure/postgres-final-quality-reader.mjs';
+import { createPostgresFinalQualityStore } from '../infrastructure/postgres-final-quality-store.mjs';
 import { createPostgresProductionExecutionReader } from '../infrastructure/postgres-production-execution-reader.mjs';
 import { createPostgresProductionExecutionStore } from '../infrastructure/postgres-production-execution-store.mjs';
 import { createPostgresProductionOrderReader } from '../infrastructure/postgres-production-order-reader.mjs';
@@ -42,6 +46,16 @@ export function createPostgresWholesaleRuntime(options = {}) {
   const productionExecutionQueries = createProductionExecutionQueryService({ reader: productionExecutionReader });
   const productionExecutions = Object.freeze({ ...productionExecutionQueries, ...productionExecutionCommands });
 
+  const finalQualityStore = createPostgresFinalQualityStore({ pool: options.pool });
+  const finalQualityReader = createPostgresFinalQualityReader({ pool: options.pool });
+  const finalQualityCommands = createFinalQualityService({
+    store: finalQualityStore,
+    ...(options.clock ? { clock: options.clock } : {}),
+    ...(options.nextId ? { nextId: options.nextId } : {}),
+  });
+  const finalQualityQueries = createFinalQualityQueryService({ reader: finalQualityReader });
+  const finalQuality = Object.freeze({ ...finalQualityQueries, ...finalQualityCommands });
+
   const transport = {
     authenticate: base.auth.authenticate,
     auth: base.auth,
@@ -57,6 +71,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
     techPacks: base.techPacks,
     productionOrders,
     productionExecutions,
+    finalQuality,
     collaboration: base.collaboration,
     orders: base.orders,
     notifications: base.notifications,
@@ -74,6 +89,9 @@ export function createPostgresWholesaleRuntime(options = {}) {
     productionExecutionStore,
     productionExecutionReader,
     productionExecutions,
+    finalQualityStore,
+    finalQualityReader,
+    finalQuality,
     handler,
     fetchHandler,
   });

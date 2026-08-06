@@ -21,7 +21,8 @@ test('PostgreSQL migration ledger serializes runners and rejects changed history
     '012_workspace_paging_indexes.sql','013_catalog_search_indexes.sql','014_material_master.sql',
     '015_unify_catalog_outbox.sql','016_bom_costing.sql','017_measurement_charts.sql','018_samples.sql',
     '019_supplier_sourcing.sql','020_tech_packs.sql','021_sourcing_tech_pack_gate.sql','022_production_orders.sql',
-    '023_production_executions.sql','024_production_execution_integrity.sql',
+    '023_production_executions.sql','024_production_execution_integrity.sql','025_final_quality.sql',
+    '026_final_quality_approval_segregation.sql',
   ];
   try {
     await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
@@ -53,6 +54,8 @@ test('PostgreSQL migration ledger serializes runners and rejects changed history
               to_regclass('public.tech_packs') AS tech_packs,
               to_regclass('public.production_orders') AS production_orders,
               to_regclass('public.production_executions') AS production_executions,
+              to_regclass('public.quality_inspections') AS quality_inspections,
+              to_regclass('public.quality_shipment_releases') AS quality_shipment_releases,
               to_regclass('public.order_inventory_reservations') AS order_inventory_reservations,
               to_regclass('public.notification_projection_claims') AS notification_projection_claims,
               to_regclass('public.outbox_publication_claims') AS outbox_publication_claims,
@@ -73,6 +76,16 @@ test('PostgreSQL migration ledger serializes runners and rejects changed history
       { tgname: 'production_executions_immutable_source_gate' },
       { tgname: 'production_executions_integrity_gate' },
       { tgname: 'production_executions_source_gate' },
+    ]);
+    assert.deepEqual((await pool.query("SELECT tgname FROM pg_trigger WHERE tgrelid = 'public.quality_inspections'::regclass AND NOT tgisinternal ORDER BY tgname")).rows, [
+      { tgname: 'quality_inspections_approval_segregation_gate' },
+      { tgname: 'quality_inspections_integrity_gate' },
+      { tgname: 'quality_inspections_source_gate' },
+      { tgname: 'quality_inspections_source_immutable_gate' },
+    ]);
+    assert.deepEqual((await pool.query("SELECT tgname FROM pg_trigger WHERE tgrelid = 'public.quality_shipment_releases'::regclass AND NOT tgisinternal ORDER BY tgname")).rows, [
+      { tgname: 'quality_shipment_releases_immutable_gate' },
+      { tgname: 'quality_shipment_releases_source_gate' },
     ]);
 
     const commandForeignKeys = await pool.query(

@@ -60,6 +60,14 @@
   }
   function can(brandId, capability) { return caps.hasForOrganisation(state.workspace, brandId, capability); }
   function canManageAny() { return caps.hasAny(state.workspace, caps.CAPABILITIES.PRODUCTION_EXECUTION_MANAGE, 'brand'); }
+  function openFinalQuality(value) {
+    const workspace = global.SynthaFinalQualityWorkspace;
+    if (!workspace || typeof workspace.openForExecution !== 'function') {
+      toast(t('Модуль Final Quality недоступен. Обновите страницу и повторите.', 'Final Quality is unavailable. Refresh the page and try again.'), 'error');
+      return;
+    }
+    workspace.openForExecution(value.executionCode);
+  }
 
   function reset() { ui.items = []; ui.loaded = false; ui.error = ''; ui.selectedCode = null; ui.generation += 1; }
   async function fetchAll(request = api) {
@@ -261,12 +269,16 @@
   function inspector(value) {
     if (!value) return h('aside', { className: 'production-execution-inspector' }, [h('p', { className: 'muted', text: t('Выберите производственный календарь.', 'Select a production calendar.') })]);
     const manage = can(value.brandId, caps.CAPABILITIES.PRODUCTION_EXECUTION_MANAGE);
+    const qualityManage = can(value.brandId, caps.CAPABILITIES.QUALITY_MANAGE);
     const actions = core.allowedActions(value, { canManage: manage });
     const current = core.currentMilestone(value);
+    const headerActions = [];
+    if (actions.includes('start')) headerActions.push(h('button', { type: 'button', className: 'primary', disabled: Boolean(ui.busyCode), text: t('Запустить производство', 'Start production'), onclick: () => { void command(value.executionCode, `/v2/production-executions/${encodeURIComponent(value.executionCode)}/start`, { expectedVersion: value.version }); } }));
+    if (value.status === 'ready-for-qc' && qualityManage) headerActions.push(h('button', { type: 'button', className: 'primary', 'data-final-quality-handoff': value.executionCode, text: t('Перейти к Final Quality', 'Open Final Quality'), onclick: () => { openFinalQuality(value); } }));
     const children = [
       h('div', { className: 'production-execution-inspector-head' }, [
         h('div', {}, [h('p', { className: 'eyebrow', text: value.executionCode }), h('h2', { text: statusLabel(value.status) })]),
-        h('div', { className: 'production-execution-actions' }, actions.includes('start') ? h('button', { type: 'button', className: 'primary', disabled: Boolean(ui.busyCode), text: t('Запустить производство', 'Start production'), onclick: () => { void command(value.executionCode, `/v2/production-executions/${encodeURIComponent(value.executionCode)}/start`, { expectedVersion: value.version }); } }) : null),
+        h('div', { className: 'production-execution-actions' }, headerActions),
       ]),
       h('dl', { className: 'production-execution-facts' }, [pair('PO', value.productionOrderNumber), pair('SKU', value.sku), pair(t('Фабрика', 'Supplier'), value.supplierCode), pair(t('Количество', 'Quantity'), value.quantity), pair(t('Начало окна', 'Window start'), date(value.productionStartAt)), pair(t('Срок поставки', 'Delivery due'), date(value.deliveryDueAt)), pair(t('Подтверждение фабрики', 'Supplier confirmation'), value.sourceSnapshot?.confirmationReference), pair(t('Техпак', 'Tech Pack'), `${value.sourceSnapshot?.techPackCode || '—'} · v${value.sourceSnapshot?.techPackVersion || '—'}`)]),
       h('section', { className: 'production-execution-card' }, [h('h3', { text: t('Контрольные точки', 'Milestones') }), timeline(value)]),

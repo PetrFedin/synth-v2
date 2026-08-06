@@ -43,6 +43,8 @@ test('Production Execution workspace is syntactically valid and calls only gover
   const css = await source('public/production-executions.css');
   assert.doesNotThrow(() => new Function(js));
   for (const token of ['/v2/production-executions?','/from-production-order/','/start','/milestones/complete','/milestones/block','/milestones/resolve','/cancel','expectedVersion','PRODUCTION_EXECUTION_MANAGE','Производственный календарь','Production Execution']) assert.ok(js.includes(token), token);
+  for (const handoff of ['SynthaFinalQualityWorkspace','openForExecution','QUALITY_MANAGE','data-final-quality-handoff','Перейти к Final Quality','Open Final Quality']) assert.ok(js.includes(handoff), handoff);
+  assert.match(js, /value\.status === 'ready-for-qc' && qualityManage/);
   assert.doesNotMatch(js, /prompt\s*\(|\.style\./);
   assert.match(css, /\.production-execution-layout/);
   assert.match(css, /\.production-milestone\.blocked/);
@@ -58,7 +60,7 @@ test('V14 shell loads Production Execution after Production Orders and before se
   const components = html.indexOf('/ui/omnidata-v14-components.js?v=visual-20260805-14-components-4');
   assert.ok(core >= 0 && orders >= 0 && executions > orders && adapters > executions && components > adapters);
   assert.match(html, /production-executions\.css\?v=industrial-20260805-1/);
-  assert.match(html, /ui-capabilities\.js\?v=industrial-20260805-4/);
+  assert.match(html, /ui-capabilities\.js\?v=industrial-20260805-5/);
 });
 
 test('standalone server delivers Production Execution assets with no-store caching', async () => {

@@ -48,9 +48,9 @@ test('Production Execution routes reject generic transitions and unsupported fie
   assert.equal(calls.length, 0);
 });
 
-test('OpenAPI 1.16 documents the governed Production Execution calendar without dangling schema references', () => {
+test('OpenAPI 1.17 documents the governed Production Execution calendar without dangling schema references', () => {
   const specification = wholesaleV2ExtendedOpenApi;
-  assert.equal(specification.info.version, '1.16.0');
+  assert.equal(specification.info.version, '1.17.0');
   for (const path of ['/production-executions','/production-executions/{executionCode}','/production-executions/from-production-order/{productionOrderNumber}','/production-executions/{executionCode}/start','/production-executions/{executionCode}/milestones/complete','/production-executions/{executionCode}/milestones/block','/production-executions/{executionCode}/milestones/resolve','/production-executions/{executionCode}/cancel']) assert.ok(specification.paths[path], path);
   assert.equal(specification.components.schemas.ProductionExecution.additionalProperties, false);
   assert.deepEqual(specification.components.schemas.ProductionMilestone.properties.code.enum, ['materials-ready','cutting-complete','assembly-complete','finishing-complete','packing-complete','ready-for-qc']);

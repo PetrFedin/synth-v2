@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://syntha.example/schemas/mdm/metric-definition.schema.json",
+  "title": "Syntha Metric Definition",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["code", "name", "domain", "metric_type", "business_question", "formula", "unit", "grain", "dimensions", "source_facts", "aggregation", "time_semantics", "owner", "steward", "version", "status", "tests"],
+  "properties": {
+    "code": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{2,127}$"},
+    "name": {"type": "object", "required": ["ru", "en"], "properties": {"ru": {"type": "string", "minLength": 1}, "en": {"type": "string", "minLength": 1}}, "additionalProperties": {"type": "string"}},
+    "domain": {"type": "string", "minLength": 1},
+    "metric_type": {"enum": ["outcome", "driver", "guardrail", "diagnostic", "data_quality", "model_quality"]},
+    "business_question": {"type": "object", "required": ["ru", "en"], "properties": {"ru": {"type": "string", "minLength": 1}, "en": {"type": "string", "minLength": 1}}, "additionalProperties": {"type": "string"}},
+    "formula": {"type": "string", "minLength": 1},
+    "numerator": {"type": ["string", "null"]},
+    "denominator": {"type": ["string", "null"]},
+    "unit": {"type": "string", "minLength": 1},
+    "grain": {"type": "array", "minItems": 1, "items": {"type": "string"}, "uniqueItems": true},
+    "dimensions": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "filters": {"type": "array", "items": {"type": "string"}, "default": []},
+    "source_facts": {"type": "array", "minItems": 1, "items": {"type": "string"}, "uniqueItems": true},
+    "aggregation": {"enum": ["sum", "average", "weighted_average", "ratio_of_sums", "last_non_null", "distinct_count", "percentile", "custom"]},
+    "null_handling": {"type": "string", "default": "exclude_from_denominator"},
+    "time_semantics": {"type": "string", "minLength": 1},
+    "owner": {"type": "string", "minLength": 1},
+    "steward": {"type": "string", "minLength": 1},
+    "version": {"type": "integer", "minimum": 1},
+    "status": {"enum": ["draft", "active", "inactive", "archived"]},
+    "tests": {"type": "array", "minItems": 1, "items": {"type": "string"}}
+  }
+}

@@ -40,7 +40,7 @@ test('Final Quality workspace is bilingual and covers every mutation path', asyn
   ]);
   assert.doesNotThrow(() => new Function(workspace));
   for (const capability of ['QUALITY_READ','QUALITY_MANAGE','QUALITY_APPROVE']) assert.match(capabilities, new RegExp(`${capability}: 'quality\\.`));
-  for (const path of ['from-execution','/complete-run','/review','/reinspect','/cancel']) assert.match(workspace, new RegExp(path.replace('/', '\\/')));
+  for (const path of ['from-execution','/complete-run','/review','/cancel']) assert.match(workspace, new RegExp(path.replace('/', '\\/')));
   assert.match(workspace, /reinspection \? 'reinspect' : 'start'/);
   assert.match(workspace, /Финальный контроль качества/);
   assert.match(workspace, /Final Quality/);

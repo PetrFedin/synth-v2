@@ -12,6 +12,12 @@ The legacy `PetrFedin/syntha` repository remains unchanged; this repository is t
 
 The current system includes PostgreSQL-owned authentication, organisation RBAC, partner access, digital showrooms, server-authoritative catalog pricing, MOQ and ATS controls, atomic inventory reservations, bilateral confirmation, order cancellation with inventory release, DealSpace, calendar milestones, notifications, OpenAPI and a standalone web workspace.
 
+## Omnidata Design System v1
+
+All PLM workspaces share one visual and bilingual contract through Omnidata Design System v1. Planning, BOM, Measurements, Samples, Sourcing, Tech Packs, Production and Final Quality load beneath the same final token/role layer. New workspaces must reuse the seven canonical ODS roles (`table`, `filterbar`, `card`, `status`, `inspector`, `button`, `field`) and semantic `data-ods-part` structure instead of creating a local visual dialect.
+
+The complete integration and migration rules are documented in [`docs/omnidata-design-system-v1.md`](docs/omnidata-design-system-v1.md). `npm run verify` includes the ODS contract validator.
+
 ## Interface languages
 
 The web workspace supports Russian and English. The `RU / EN` switch is available before authentication and inside the workspace. The selected locale is persisted in the browser and controls navigation, forms, statuses, dates, numbers and fallback UI messages without reloading the application.

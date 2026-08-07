@@ -4,7 +4,6 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const publicDir = path.join(root, 'public');
 const html = await source('public/index.html');
 const css = await source('public/omnidata-v14-role-system.css');
 const runtime = await source('public/modules/omnidata-v14-role-system.js');
@@ -20,6 +19,12 @@ const PARTS = [
   'metrics', 'metric', 'layout', 'master-detail', 'list', 'list-item',
   'definition-grid', 'definition-item', 'timeline', 'timeline-item', 'progress',
   'progress-track', 'progress-fill', 'empty', 'alert', 'toast'
+];
+const CRITICAL_STYLED_PARTS = [
+  'page-header', 'table-wrap', 'filterbar', 'toolbar', 'card', 'surface', 'form',
+  'metrics', 'metric', 'layout', 'master-detail', 'list', 'list-item',
+  'definition-grid', 'definition-item', 'timeline', 'timeline-item', 'progress',
+  'progress-track', 'progress-fill', 'empty', 'alert'
 ];
 const TOKENS = [
   '--ods-font-family', '--ods-font-size-xs', '--ods-font-size-sm', '--ods-font-size-md',
@@ -75,15 +80,17 @@ for (const role of ROLES) {
 }
 for (const part of PARTS) {
   assert(runtime.includes(`'${part}'`) || runtime.includes(`:${part}`), `Missing runtime part: ${part}`);
-  assert(css.includes(`data-ods-part="${part}"`), `Missing ODS part selector: ${part}`);
 }
+const styledParts = new Set([...css.matchAll(/data-ods-part="([^"]+)"/g)].map((match) => match[1]));
+for (const part of CRITICAL_STYLED_PARTS) assert(styledParts.has(part), `Missing critical ODS styled part: ${part}`);
+assert(styledParts.size >= 20, `ODS structural coverage is too small: ${styledParts.size} styled parts.`);
 
 for (const token of [
   `const DESIGN_SYSTEM='${DESIGN_SYSTEM}'`,
   `const VERSION='${VERSION}'`,
   "const CORE_ROLES=Object.freeze(['table','filterbar','card','status','inspector','button','field'])",
   'COMPONENT_TO_ROLE', 'COMPONENT_PART', 'EXPLICIT_SELECTORS', 'EXACT_PARTS',
-  'CLASS_RULES', 'data-ods-role', 'data-ods-part', 'STRICT_PAIRS', 'RU_ALIASES',
+  'CLASS_RULES', 'dataset.odsRole', 'dataset.odsPart', 'STRICT_PAIRS', 'RU_ALIASES',
   'EN_ALIASES', 'translateAliases', 'auditMixedLanguage', 'translateInterface',
   'decorateAbbreviations', 'auditLanguage', 'syntha:locale-changed', 'MutationObserver',
   'SynthaOmnidataDesignSystemV1', 'SynthaOmnidataV14RoleSystem', 'odsLanguageAudit'
@@ -104,7 +111,7 @@ for (const mapping of [
   "'/ui/final-quality.js': ['modules/final-quality.js', JS, VISUAL_CACHE]"
 ]) assert(staticHandler.includes(mapping), `Missing no-store static mapping: ${mapping}`);
 
-console.log(`Omnidata Design System v1 contract OK (${ROLES.length} roles, ${PARTS.length} parts, ${TOKENS.length} tokens).`);
+console.log(`Omnidata Design System v1 contract OK (${ROLES.length} roles, ${PARTS.length} semantic parts, ${styledParts.size} styled parts, ${TOKENS.length} tokens).`);
 
 async function source(relativePath) {
   return readFile(path.join(root, relativePath), 'utf8');

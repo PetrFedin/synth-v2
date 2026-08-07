@@ -11,7 +11,6 @@ const errorResponse = { description: 'Domain or transport error', content: { 'ap
 
 export function withOrderEconomicsOpenApi(base) {
   const specification = structuredClone(base);
-  specification.info.version = '1.19.0';
   Object.assign(specification.components.schemas, schemas());
   Object.assign(specification.paths, paths());
   return deepFreeze(specification);

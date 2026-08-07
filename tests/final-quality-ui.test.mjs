@@ -5,14 +5,17 @@ import vm from 'node:vm';
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
-test('Final Quality assets load after Production Execution without changing the visual build', async () => {
+test('Final Quality runtime loads after Production Execution and inherits the ODS visual build', async () => {
   const html = await read('public/index.html');
   assert.match(html, /<meta name="syntha-build" content="visual-20260805-14">/);
-  assert.match(html, /\/final-quality\.css\?v=industrial-20260805-1/);
+  assert.match(html, /<meta name="syntha-design-system" content="omnidata-design-system-v1">/);
+  assert.doesNotMatch(html, /\/final-quality\.css/);
   assert.match(html, /\/ui\/final-quality-core\.js\?v=industrial-20260805-1/);
   assert.match(html, /\/ui\/final-quality\.js\?v=industrial-20260805-1/);
   assert.ok(html.indexOf('/ui/production-execution-core.js') < html.indexOf('/ui/final-quality-core.js'));
   assert.ok(html.indexOf('/ui/production-executions.js') < html.indexOf('/ui/final-quality.js'));
+  const styles = [...html.matchAll(/<link\s+[^>]*rel="stylesheet"[^>]*href="([^"]+)"/g)].map((match) => new URL(match[1], 'http://syntha.local').pathname);
+  assert.equal(styles.at(-1), '/omnidata-v14-role-system.css');
 });
 
 test('Final Quality core exposes lifecycle actions and risk summaries', async () => {
@@ -34,9 +37,9 @@ test('Final Quality core exposes lifecycle actions and risk summaries', async ()
   assert.deepEqual(core.filter(values, { search: 'rel-2' }).map((value) => value.inspectionCode), ['QCI-2']);
 });
 
-test('Final Quality workspace is bilingual and covers every mutation path', async () => {
-  const [workspace, capabilities, css] = await Promise.all([
-    read('public/modules/final-quality.js'), read('public/modules/ui-capabilities.js'), read('public/final-quality.css'),
+test('Final Quality workspace is bilingual, covers every mutation path and maps to shared ODS semantics', async () => {
+  const [workspace, capabilities, odsRuntime] = await Promise.all([
+    read('public/modules/final-quality.js'), read('public/modules/ui-capabilities.js'), read('public/modules/omnidata-v14-role-system.js'),
   ]);
   assert.doesNotThrow(() => new Function(workspace));
   for (const capability of ['QUALITY_READ','QUALITY_MANAGE','QUALITY_APPROVE']) assert.match(capabilities, new RegExp(`${capability}: 'quality\\.`));
@@ -46,6 +49,17 @@ test('Final Quality workspace is bilingual and covers every mutation path', asyn
   assert.match(workspace, /Final Quality/);
   assert.match(workspace, /Разрешить отгрузку/);
   assert.match(workspace, /Release shipment/);
-  assert.match(css, /\.final-quality-layout/);
-  assert.match(css, /\.final-quality-badge\.released/);
+  for (const mapping of [
+    "'final-quality-header':'page-header'",
+    "'final-quality-kpis':'metrics'",
+    "'final-quality-layout':'master-detail'",
+    "'final-quality-filters':'filterbar'",
+    "'final-quality-registry':'table-wrap'",
+    "'final-quality-table':'table'",
+    "'final-quality-inspector':'inspector'",
+    "'final-quality-badge':'status'",
+    "'final-quality-error':'alert'",
+  ]) assert.ok(odsRuntime.includes(mapping), mapping);
+  assert.match(odsRuntime, /dataset\.odsTone/);
+  assert.match(odsRuntime, /released|rejected|rework|required/);
 });

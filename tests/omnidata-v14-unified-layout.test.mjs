@@ -73,7 +73,7 @@ test('V14 audits RU and EN labels and explains abbreviations without translating
   for(const token of ['RU_EXACT','EN_EXACT','ROLE_RU','auditInterface','diagnosticAudit','DIAGNOSTIC_SELECTOR','data-od14-untranslated','translateRole','translateBrand','Fashion Operating System','Операционная система моды','syntha:locale-changed','MutationObserver']) assert.ok(js.includes(token),token);
   for(const abbreviation of ['PLM','BOM','SKU','POM','MOQ','ATS','RFQ','PO','ERP','WMS','PIM','OMS','QC','QMS','FX','API','RFID','EAN','GTIN','EXW','FCA','FOB','CIF','DAP','DDP','EUR','USD','RUB','CNY','GBP','ISO','UTC','PDF','ZIP','PPS','HEX','RGB','RU','EN']) assert.ok(components.includes(`${abbreviation}:`),abbreviation);
   for(const pair of ['Ткань','Fabric','Фурнитура','Trim','Условие поставки','Incoterm','Электронная почта','Email','Срок выполнения','Lead time','Листы коллекций','Linesheets','Все статусы','All statuses','Только просроченные','Overdue only','Коммерческий процесс','Commercial pipeline']) assert.ok(components.includes(pair),pair);
-  assert.ok(components.includes("const BUSINESS_SELECTOR='.entity-title,.entity-code,.meta,td,dd,.topbar-user,.topbar-organisation,[data-od14-business-data=\"true\"]'"));
+  for(const token of ["const BUSINESS_SELECTOR='",'.entity-title','.entity-code','.meta,td,dd','.topbar-user','.topbar-organisation','[data-od14-business-data="true"]','[data-od14-no-translate="true"]']) assert.ok(components.includes(token),token);
   assert.equal((components.match(/\['PLM \/ Контроль технических пакетов'/g)||[]).length,1,'canonical EN pair must not be duplicated');
 });
 

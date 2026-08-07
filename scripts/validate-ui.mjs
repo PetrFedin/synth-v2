@@ -47,6 +47,7 @@ assertRequiredOrder(sources, [
   '/ui/sourcing-core.js',
   '/ui/tech-pack-core.js',
   '/ui/production-execution-core.js',
+  '/ui/final-quality-core.js',
   '/ui/omnidata-workspace.js',
   '/ui/omnidata-polish.js',
   '/ui/omnidata-fidelity.js',
@@ -68,6 +69,7 @@ assertRequiredOrder(sources, [
   '/ui/tech-packs.js',
   '/ui/production-orders.js',
   '/ui/production-executions.js',
+  '/ui/final-quality.js',
   '/ui/omnidata-v7-language-audit.js',
   '/ui/omnidata-v8.js',
   '/ui/omnidata-v9.js',
@@ -100,6 +102,7 @@ assertRequiredOrder(stylesheets, [
   '/tech-packs.css',
   '/production-orders.css',
   '/production-executions.css',
+  '/final-quality.css',
   '/omnidata-v12.css',
   '/omnidata-v13.css',
   '/omnidata-v14.css',
@@ -108,7 +111,7 @@ assertRequiredOrder(stylesheets, [
   '/omnidata-v14-role-system.css'
 ]);
 if (stylesheets.at(-1) !== '/omnidata-v14-role-system.css') {
-  fail('Omnidata V14 role system must be loaded as the final corrective visual system.');
+  fail('Omnidata Design System v1 must be loaded as the final visual contract.');
 }
 
 for (const required of [
@@ -122,7 +125,14 @@ for (const required of [
 if (!/<meta\s+name="syntha-build"\s+content="visual-20260805-14">/.test(html)) {
   fail('Omnidata V14 build metadata is missing.');
 }
+if (!/<meta\s+name="syntha-design-system"\s+content="omnidata-design-system-v1">/.test(html)) {
+  fail('Omnidata Design System v1 metadata is missing.');
+}
+if (!/<meta\s+name="syntha-design-system-version"\s+content="1\.0\.0">/.test(html)) {
+  fail('Omnidata Design System version metadata is missing.');
+}
 if (!stylesheets.includes('/sourcing.css')) fail('Industrial sourcing stylesheet is missing.');
+if (!stylesheets.includes('/final-quality.css')) fail('Final Quality stylesheet is missing.');
 
 console.log(`Standalone UI contract OK (${sources.length} scripts, ${stylesheets.length} stylesheets checked).`);
 

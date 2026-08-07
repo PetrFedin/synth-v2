@@ -100,7 +100,6 @@ for (const retired of ['/ui/omnidata-v4.js', '/ui/omnidata-v6.js']) {
 
 assertRequiredOrder(stylesheets, [
   '/tech-packs.css',
-  '/production-orders.css',
   '/production-executions.css',
   '/omnidata-v12.css',
   '/omnidata-v13.css',
@@ -131,9 +130,10 @@ if (!/<meta\s+name="syntha-design-system-version"\s+content="1\.0\.0">/.test(htm
   fail('Omnidata Design System version metadata is missing.');
 }
 if (!stylesheets.includes('/sourcing.css')) fail('Industrial sourcing stylesheet is missing.');
+if (stylesheets.includes('/production-orders.css')) fail('Production Orders must inherit ODS and must not load a local stylesheet.');
 if (stylesheets.includes('/final-quality.css')) fail('Final Quality must inherit ODS and must not load a local stylesheet.');
 
-console.log(`Standalone UI contract OK (${sources.length} scripts, ${stylesheets.length} stylesheets checked; Final Quality is ODS-native).`);
+console.log(`Standalone UI contract OK (${sources.length} scripts, ${stylesheets.length} stylesheets checked; Production Orders and Final Quality are ODS-native).`);
 
 function assertDocumentContract(document) {
   if (!/^<!doctype html>/i.test(document.trimStart())) fail('Missing HTML doctype.');

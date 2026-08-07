@@ -43,7 +43,6 @@ const ASSETS = Object.freeze({
   '/tech-packs.css': ['tech-packs.css', 'text/css; charset=utf-8', VISUAL_CACHE],
   '/production-orders.css': ['production-orders.css', 'text/css; charset=utf-8', VISUAL_CACHE],
   '/production-executions.css': ['production-executions.css', 'text/css; charset=utf-8', VISUAL_CACHE],
-  '/final-quality.css': ['final-quality.css', 'text/css; charset=utf-8', VISUAL_CACHE],
   '/ui/i18n-runtime.js': ['modules/i18n-runtime.js', JS, CACHE],
   '/ui/i18n-v7.js': ['modules/i18n-v7.js', JS, VISUAL_CACHE],
   '/ui/ui-capabilities.js': ['modules/ui-capabilities.js', JS, CACHE],

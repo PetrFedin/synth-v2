@@ -107,9 +107,9 @@
   }
   function badge(value, tone) { return h('span', { className: `bom-badge bom-${tone}`, text: value }); }
   function progress(value) {
-    const bar = h('span', { className: 'bom-progress-value' });
-    bar.style.width = `${Math.max(0, Math.min(100, Number(value) || 0))}%`;
-    return h('div', { className: 'bom-readiness' }, [h('span', { className: 'bom-progress-track' }, [bar]), h('strong', { text: `${value}%` })]);
+    const normalized = Math.max(0, Math.min(100, Number(value) || 0));
+    const bar = h('progress', { className: 'bom-progress-track', max: '100', value: String(normalized), 'aria-label': text('Готовность', 'Readiness') });
+    return h('div', { className: 'bom-readiness' }, [bar, h('strong', { text: `${value}%` })]);
   }
 
   function header(summary) {

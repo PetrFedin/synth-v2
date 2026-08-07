@@ -51,7 +51,7 @@ test('V14 module adapters keep Tech Packs, Production Orders and Production Exec
   const css=await source('public/omnidata-v14-module-adapters.css');
   assert.doesNotThrow(()=>new Function(js));
   for(const token of ["const BUILD='visual-20260805-14-module-adapters-4'",'tech-packs','production-orders','production-executions','Технические пакеты','Tech Packs','Производственные заказы','Production Orders','tech-pack-kpis','production-orders-kpis','tech-pack-filters','production-orders-filters','tech-pack-table','production-orders-table','tech-pack-inspector','production-orders-inspector','production-execution-kpis','production-execution-filters','production-execution-table','production-execution-inspector','production-timeline','production-milestone','production-progress-track','dataset.od14Component','od14RoleSource','SynthaOmnidataV14ModuleAdapters']) assert.ok(js.includes(token),token);
-  for(const token of ['Structural adapters and semantic roles','od14-module-summary','production-execution-header-actions','production-execution-kpis','production-orders-create','production-execution-create','tech-pack-readiness','data-od14-component="card"','data-od14-component="alert"','data-od14-component="timeline"','data-od14-component="progress-track"']) assert.ok(css.includes(token),token);
+  for(const token of ['Structural adapters and semantic roles','od14-module-summary','production-execution-header-actions','production-execution-kpis','production-orders-create','production-execution-create','tech-pack-readiness','data-od14-component="card"','data-od14-component="alert"','data-od14-component="timeline"','data-od14-component="progress-track"','body.omnidata-v14 dialog','data-od14-component="form"','data-od14-component="field-group"','grid-template-columns:repeat(2,minmax(0,1fr))']) assert.ok(css.includes(token),token);
   assert.doesNotMatch(css,/@import|https?:\/\//i);
 });
 
@@ -81,11 +81,12 @@ test('V14 semantic component unifier is the final cache-busted no-store visual a
   const html=await source('public/index.html');
   const handler=await source('src/web/static-handler.mjs');
   assert.match(html,/meta name="syntha-build" content="visual-20260805-14"/);
-  assert.ok(!html.includes('/production-executions.css'),'Production Executions must inherit ODS without a local stylesheet');
+  for(const retired of ['/tech-packs.css','/production-executions.css','/production-orders.css','/final-quality.css']) assert.ok(!html.includes(retired),`${retired} must inherit ODS without a local stylesheet`);
   const styleOrder=['/omnidata-v14.css?v=visual-20260805-14','/omnidata-v14-module-adapters.css?v=visual-20260805-14-module-adapters-1','/omnidata-v14-extensions.css?v=visual-20260805-14-components-4','/omnidata-v14-role-system.css?v=visual-20260806-14-role-system-1'];
   let previous=-1;for(const asset of styleOrder){const index=html.indexOf(asset);assert.ok(index>previous,asset);previous=index}
   const scriptOrder=['/ui/production-orders.js?v=industrial-20260805-1','/ui/production-executions.js?v=industrial-20260805-1','/ui/omnidata-v14.js?v=visual-20260805-14','/ui/omnidata-v14-module-adapters.js?v=visual-20260805-14-module-adapters-4','/ui/omnidata-v14-components.js?v=visual-20260805-14-components-4','/ui/omnidata-v14-role-system.js?v=visual-20260806-14-role-system-1','/ui/dom-boolean-props.js?v=visual-20260804-9'];
   previous=-1;for(const asset of scriptOrder){const index=html.indexOf(asset);assert.ok(index>previous,asset);previous=index}
   assert.ok(html.includes('/ui/app-start.js?v=visual-20260805-14-components-4'));
   for(const mapping of ["'/omnidata-v14-module-adapters.css': ['omnidata-v14-module-adapters.css', 'text/css; charset=utf-8', VISUAL_CACHE]","'/omnidata-v14-extensions.css': ['omnidata-v14-extensions.css', 'text/css; charset=utf-8', VISUAL_CACHE]","'/omnidata-v14-role-system.css': ['omnidata-v14-role-system.css', 'text/css; charset=utf-8', VISUAL_CACHE]","'/ui/omnidata-v14-module-adapters.js': ['modules/omnidata-v14-module-adapters.js', JS, VISUAL_CACHE]","'/ui/omnidata-v14-components.js': ['modules/omnidata-v14-components.js', JS, VISUAL_CACHE]","'/ui/omnidata-v14-role-system.js': ['modules/omnidata-v14-role-system.js', JS, VISUAL_CACHE]"]) assert.ok(handler.includes(mapping),mapping);
+  for(const retired of ['/tech-packs.css','/production-executions.css','/production-orders.css','/final-quality.css']) assert.ok(!handler.includes(`'${retired}':`),`${retired} static route must remain retired`);
 });

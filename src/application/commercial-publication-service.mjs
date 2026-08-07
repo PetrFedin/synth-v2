@@ -1,7 +1,7 @@
 import { domainEvent } from '../core/events.mjs';
 import { invariant } from '../core/errors.mjs';
 import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
-import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
+import { CAPABILITIES, assertCapability, roleHasCapability } from '../modules/access-control/public.mjs';
 import { assertAcceptedShowroomAccess } from '../modules/showroom-invitations/public.mjs';
 import {
   createBuyerCatalogVersion,
@@ -57,6 +57,32 @@ export function createCommercialPublicationService({
     });
   }
 
+  async function authorizePublicationRead(actorId, publication) {
+    return wholesaleStore.transaction(async (tx) => {
+      const membership = await tx.getMembership(publication.brandId, actorId);
+      assertCapability(membership, CAPABILITIES.DEAL_READ);
+      return publication;
+    });
+  }
+
+  async function authorizeBuyerCatalogRead(actorId, buyerCatalog) {
+    return wholesaleStore.transaction(async (tx) => {
+      const brandMembership = await tx.getMembership(buyerCatalog.brandId, actorId);
+      if (brandMembership?.status === 'active' && roleHasCapability(brandMembership.role, CAPABILITIES.DEAL_READ)) return buyerCatalog;
+
+      const shopMembership = await tx.getMembership(buyerCatalog.shopId, actorId);
+      assertCapability(shopMembership, CAPABILITIES.DEAL_READ);
+      const invitation = requireEntity(await tx.getShowroomInvitation(buyerCatalog.accessGrantId), 'SHOWROOM_INVITATION_NOT_FOUND', { invitationId: buyerCatalog.accessGrantId });
+      assertAcceptedShowroomAccess(invitation, {
+        showroomId: buyerCatalog.showroomId,
+        brandId: buyerCatalog.brandId,
+        shopId: buyerCatalog.shopId,
+        now: clock(),
+      });
+      return buyerCatalog;
+    });
+  }
+
   return Object.freeze({
     async publishCommercialPublication(commandId, actorId, input) {
       invariant(input && Array.isArray(input.skuCodes), 'COMMERCIAL_PUBLICATION_SKUS_REQUIRED', 'skuCodes must be an array');
@@ -100,6 +126,16 @@ export function createCommercialPublicationService({
         }, commandId, actorId);
         return Object.freeze({ priceListVersion, buyerCatalogVersion });
       });
+    },
+
+    async getCommercialPublicationForActor(actorId, id) {
+      const publication = requireEntity(await commercialStore.getCommercialPublication(id), 'COMMERCIAL_PUBLICATION_NOT_FOUND', { publicationId: id });
+      return authorizePublicationRead(actorId, publication);
+    },
+
+    async getBuyerCatalogVersionForActor(actorId, id) {
+      const buyerCatalog = requireEntity(await commercialStore.getBuyerCatalogVersion(id), 'BUYER_CATALOG_NOT_FOUND', { buyerCatalogVersionId: id });
+      return authorizeBuyerCatalogRead(actorId, buyerCatalog);
     },
 
     getCommercialPublication: (id) => commercialStore.getCommercialPublication(id),

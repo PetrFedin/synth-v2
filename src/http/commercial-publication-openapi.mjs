@@ -10,7 +10,6 @@ const errorResponse = { description: 'Domain or transport error', content: { 'ap
 
 export function withCommercialPublicationOpenApi(base) {
   const specification = structuredClone(base);
-  specification.info.version = '1.18.0';
   Object.assign(specification.components.schemas, schemas());
   Object.assign(specification.paths, paths());
   return deepFreeze(specification);

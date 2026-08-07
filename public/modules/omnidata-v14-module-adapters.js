@@ -39,7 +39,7 @@
     ['.tech-pack-card,.production-orders-card,.production-execution-card','card'],
     ['.tech-pack-badge,.production-order-badge,.production-execution-badge','status'],
     ['.tech-pack-empty,.production-orders-empty,.production-execution-empty','empty'],
-    ['.production-orders-error,.production-execution-error','alert'],
+    ['.tech-pack-error,.production-orders-error,.production-execution-error','alert'],
     ['.production-timeline','timeline'],
     ['.production-milestone','timeline-item'],
     ['.production-milestone-sequence','timeline-part'],

@@ -24,7 +24,7 @@ A workspace owns business logic, data fetching and semantic structure. It does n
 
 No new workspace stylesheet may be added to the shell. Loaded UI runtimes must not use `element.style`, `setAttribute('style', ...)`, dynamically created `<style>` nodes, `CSSStyleSheet`, `adoptedStyleSheets` or `insertRule()`.
 
-`validate:ods-boundaries` freezes the historical shell debt allowlist at 22 legacy stylesheets. Migrations may remove those entries without changing the ceiling; additions fail verification. With Final Quality, Production Orders and Production Executions migrated, only **20 of the historical 22** entries remain loaded. The debt count must only move down.
+`validate:ods-boundaries` freezes the historical shell debt allowlist at 22 legacy stylesheets. Migrations may remove those entries without changing the ceiling; additions fail verification. With Final Quality, Production Orders, Production Executions and Tech Packs migrated, only **19 of the historical 22** entries remain loaded. The debt count must only move down.
 
 ## Shared progress primitive
 
@@ -32,13 +32,21 @@ Readiness/completion is now a reusable ODS primitive rather than a module-level 
 
 Planning, Styles, Materials, BOM and Measurements already store readiness as native `progress.max/value`. Production Executions keeps its business runtime intact while its semantic progress fill is interpreted by the same shared primitive.
 
+## Shared dialog/form primitive
+
+Native dialogs and editor forms use one shared geometry instead of workspace-specific modal CSS. `public/omnidata-v14-module-adapters.css` provides the responsive dialog width, two-column form grid, full-width header/action rows and ODS field-group/control sizing. `public/modules/omnidata-v14-components.js` classifies native `form`, `label`, `input`, `select`, `textarea` and buttons into the same form/field/button semantics, so business runtimes do not need to invent another control system.
+
+This primitive is deliberately module-neutral. Tech Packs is its first stylesheet-retirement consumer; Samples and Sourcing should reuse the same dialog/form contract during their migrations rather than copying Tech Pack selectors.
+
 ## ODS-native workspaces
 
 Final Quality is ODS-native: header, KPI, master-detail layout, filters, toolbar, table, inspector, status tones and alerts inherit shared ODS parts; `final-quality.css` is not loaded or served.
 
 Production Orders is ODS-native: page header/actions, KPI metrics, filters, create/confirm controls, master-detail layout, table/registry, inspector, facts, cards, statuses, empty states and alerts are mapped by the shared adapter; `production-orders.css` is not loaded or served.
 
-Production Executions is the third ODS-native PLM workspace. KPI metrics, filters, create/actions, master-detail layout, table/registry, inspector, facts, cards, statuses, timeline/milestones, alerts and progress inherit shared ODS semantics; `production-executions.css` is not loaded or served.
+Production Executions is ODS-native. KPI metrics, filters, create/actions, master-detail layout, table/registry, inspector, facts, cards, statuses, timeline/milestones, alerts and progress inherit shared ODS semantics; `production-executions.css` is not loaded or served.
+
+Tech Packs is the fourth ODS-native PLM workspace. Page actions, KPI metrics, filters, master-detail layout, registry/table, inspector, immutable dependency facts, readiness surfaces, cards, statuses, empty/error states and native dialog/forms inherit shared ODS semantics; `tech-packs.css` is not loaded or served.
 
 The migration pattern for remaining modules is: establish reusable semantic coverage first, verify behavior, then remove the module stylesheet. Never copy old module selectors into the canonical ODS stylesheet; add/improve a reusable role, part or shared primitive instead.
 
@@ -52,7 +60,7 @@ Useful audit targets include `document.documentElement.dataset.odsName`, `odsVer
 
 ## Validation
 
-Run `npm run verify`. It includes `validate:design-system` and `validate:ods-boundaries`, checking metadata/load order, tokens, seven roles, semantic parts, bilingual hooks, CSP-safe markup, the frozen stylesheet boundary, absence of dynamic UI styling, shared progress primitives and ODS-native delivery of Production Executions, Production Orders and Final Quality.
+Run `npm run verify`. It includes `validate:design-system` and `validate:ods-boundaries`, checking metadata/load order, tokens, seven roles, semantic parts, bilingual hooks, CSP-safe markup, the frozen stylesheet boundary, absence of dynamic UI styling, shared progress/dialog primitives and ODS-native delivery of Tech Packs, Production Executions, Production Orders and Final Quality.
 
 Node.js 22 or newer is required.
 

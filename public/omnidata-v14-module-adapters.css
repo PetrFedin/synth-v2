@@ -117,6 +117,39 @@ body.omnidata-v14 [data-ods-part="progress-fill"][class$="-5"]{width:83.333%!imp
 body.omnidata-v14 [data-od14-component="progress-fill"][class$="-6"],
 body.omnidata-v14 [data-ods-part="progress-fill"][class$="-6"]{width:100%!important}
 
+/* Shared dialog/form geometry. Native controls are classified by ODS at runtime; no workspace selector is involved. */
+body.omnidata-v14 dialog{
+  width:min(720px,calc(100vw - 32px))!important;
+  max-width:720px!important;
+  padding:0!important;
+}
+body.omnidata-v14 dialog [data-od14-component="form"],
+body.omnidata-v14 dialog [data-ods-part="form"]{
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  gap:var(--ods-space-3,10px)!important;
+  padding:var(--ods-space-5,20px)!important;
+}
+body.omnidata-v14 dialog [data-od14-component="form"]>div,
+body.omnidata-v14 dialog [data-ods-part="form"]>div{
+  grid-column:1/-1!important;
+  display:flex!important;
+  align-items:center!important;
+  flex-wrap:wrap!important;
+  gap:var(--ods-space-2,6px)!important;
+}
+body.omnidata-v14 dialog [data-od14-component="form"]>div:first-child,
+body.omnidata-v14 dialog [data-ods-part="form"]>div:first-child{justify-content:space-between!important}
+body.omnidata-v14 dialog [data-od14-component="form"]>div:last-child,
+body.omnidata-v14 dialog [data-ods-part="form"]>div:last-child{justify-content:flex-end!important}
+body.omnidata-v14 dialog [data-od14-component="field-group"],
+body.omnidata-v14 dialog [data-ods-part="field-group"]{display:grid!important;gap:var(--ods-space-2,6px)!important;min-width:0!important}
+body.omnidata-v14 dialog [data-od14-component="field-group"]>input,
+body.omnidata-v14 dialog [data-od14-component="field-group"]>select,
+body.omnidata-v14 dialog [data-od14-component="field-group"]>textarea,
+body.omnidata-v14 dialog [data-ods-part="field-group"]>input,
+body.omnidata-v14 dialog [data-ods-part="field-group"]>select,
+body.omnidata-v14 dialog [data-ods-part="field-group"]>textarea{width:100%!important;box-sizing:border-box!important}
+
 @media(max-width:680px){
   body.omnidata-v14 .production-orders-create,
   body.omnidata-v14 .production-execution-create{grid-template-columns:minmax(0,1fr)!important}
@@ -125,4 +158,6 @@ body.omnidata-v14 [data-ods-part="progress-fill"][class$="-6"]{width:100%!import
   body.omnidata-v14 .production-execution-create input,
   body.omnidata-v14 .production-execution-create button{width:100%!important;max-width:none!important}
   body.omnidata-v14 .tech-pack-inspector-head{display:grid!important;grid-template-columns:minmax(0,1fr)!important}
+  body.omnidata-v14 dialog [data-od14-component="form"],
+  body.omnidata-v14 dialog [data-ods-part="form"]{grid-template-columns:minmax(0,1fr)!important}
 }

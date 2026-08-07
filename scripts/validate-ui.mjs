@@ -45,16 +45,16 @@ for (const [, before, sourceUrl, after] of scriptTags) {
 
 for (const retired of ['/ui/omnidata-v4.js', '/ui/omnidata-v6.js']) if (sources.includes(retired)) fail(`Retired visual layer must not be loaded: ${retired}`);
 
-assertRequiredOrder(stylesheets, ['/tech-packs.css','/omnidata-v12.css','/omnidata-v13.css','/omnidata-v14.css','/omnidata-v14-module-adapters.css','/omnidata-v14-extensions.css','/omnidata-v14-role-system.css']);
+assertRequiredOrder(stylesheets, ['/omnidata-v12.css','/omnidata-v13.css','/omnidata-v14.css','/omnidata-v14-module-adapters.css','/omnidata-v14-extensions.css','/omnidata-v14-role-system.css']);
 if (stylesheets.at(-1) !== '/omnidata-v14-role-system.css') fail('Omnidata Design System v1 must be loaded as the final visual contract.');
 for (const required of ['/ui/omnidata-v14.js','/ui/omnidata-v14-module-adapters.js','/ui/omnidata-v14-components.js','/ui/omnidata-v14-role-system.js']) if (!sources.includes(required)) fail(`Required Omnidata runtime is missing: ${required}`);
 if (!/<meta\s+name="syntha-build"\s+content="visual-20260805-14">/.test(html)) fail('Omnidata V14 build metadata is missing.');
 if (!/<meta\s+name="syntha-design-system"\s+content="omnidata-design-system-v1">/.test(html)) fail('Omnidata Design System v1 metadata is missing.');
 if (!/<meta\s+name="syntha-design-system-version"\s+content="1\.0\.0">/.test(html)) fail('Omnidata Design System version metadata is missing.');
 if (!stylesheets.includes('/sourcing.css')) fail('Industrial sourcing stylesheet is missing.');
-for (const retiredStyle of ['/production-executions.css','/production-orders.css','/final-quality.css']) if (stylesheets.includes(retiredStyle)) fail(`${retiredStyle} must remain ODS-native and must not load a local stylesheet.`);
+for (const retiredStyle of ['/tech-packs.css','/production-executions.css','/production-orders.css','/final-quality.css']) if (stylesheets.includes(retiredStyle)) fail(`${retiredStyle} must remain ODS-native and must not load a local stylesheet.`);
 
-console.log(`Standalone UI contract OK (${sources.length} scripts, ${stylesheets.length} stylesheets checked; Production Executions, Production Orders and Final Quality are ODS-native).`);
+console.log(`Standalone UI contract OK (${sources.length} scripts, ${stylesheets.length} stylesheets checked; Tech Packs, Production Executions, Production Orders and Final Quality are ODS-native).`);
 
 function assertDocumentContract(document) {
   if (!/^<!doctype html>/i.test(document.trimStart())) fail('Missing HTML doctype.');

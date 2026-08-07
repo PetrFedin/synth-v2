@@ -43,21 +43,26 @@ test('Tech Pack UI filters and summaries distinguish supplier-acknowledged readi
   assert.deepEqual(Array.from(core.filter(values, { status: 'issued', search: 'factory' }), (value) => value.techPackCode), ['TP-STYLE-002-R01']);
 });
 
-test('Tech Pack workspace is syntactically valid, uses real API commands and installs a safe navigation bridge', async () => {
-  const [workspace, bridge, index, css, capabilities] = await Promise.all([
-    source('public/modules/tech-packs.js'), source('public/modules/tech-pack-navigation.js'), source('public/index.html'), source('public/tech-packs.css'), source('public/modules/ui-capabilities.js'),
+test('Tech Pack workspace is syntactically valid, uses real API commands and inherits ODS semantics without local CSS', async () => {
+  const [workspace, bridge, index, adapters, adapterCss, capabilities] = await Promise.all([
+    source('public/modules/tech-packs.js'), source('public/modules/tech-pack-navigation.js'), source('public/index.html'), source('public/modules/omnidata-v14-module-adapters.js'), source('public/omnidata-v14-module-adapters.css'), source('public/modules/ui-capabilities.js'),
   ]);
   assert.doesNotThrow(() => new vm.Script(workspace, { filename: 'tech-packs.js' }));
   assert.doesNotThrow(() => new vm.Script(bridge, { filename: 'tech-pack-navigation.js' }));
   for (const fragment of ['/v2/tech-packs?', '/issue', '/acknowledge', '/revisions', '/withdraw', "state.view = 'tech-packs'"]) assert.ok(workspace.includes(fragment) || bridge.includes(fragment), fragment);
   assert.match(bridge, /MutationObserver/);
   assert.match(bridge, /stopImmediatePropagation/);
-  assert.match(index, /\/tech-packs\.css\?v=industrial-20260805-3/);
+  assert.doesNotMatch(index, /\/tech-packs\.css(?:\?|\")/);
   assert.match(index, /\/ui\/tech-pack-core\.js\?v=industrial-20260805-3/);
   assert.match(index, /\/ui\/tech-pack-navigation\.js\?v=industrial-20260805-3/);
   assert.match(index, /\/ui\/tech-packs\.js\?v=industrial-20260805-3/);
-  assert.match(css, /tech-pack-readiness\.ready/);
-  assert.match(css, /tech-pack-readiness\.blocked/);
+  for (const hook of ['tech-pack-kpis','tech-pack-filters','tech-pack-layout','tech-pack-table-wrap','tech-pack-inspector','tech-pack-readiness','tech-pack-card','tech-pack-badge','tech-pack-empty','tech-pack-error']) assert.ok(adapters.includes(hook), hook);
+  assert.match(adapters, /\.tech-pack-error,\.production-orders-error,\.production-execution-error/);
+  assert.match(workspace, /h\('dialog'/);
+  assert.match(workspace, /h\('form'/);
+  assert.match(adapterCss, /body\.omnidata-v14 dialog/);
+  assert.match(adapterCss, /data-od14-component="form"/);
+  assert.match(adapterCss, /data-od14-component="field-group"/);
   assert.match(capabilities, /TECH_PACK_MANAGE: 'tech-pack\.manage'/);
   assert.match(capabilities, /TECH_PACK_ACKNOWLEDGE: 'tech-pack\.acknowledge'/);
 });

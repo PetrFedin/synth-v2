@@ -9,6 +9,7 @@ import { createMaterialService } from '../application/material-service.mjs';
 import { createMaterialQueryService } from '../application/material-query-service.mjs';
 import { createMeasurementService } from '../application/measurement-service.mjs';
 import { createMeasurementQueryService } from '../application/measurement-query-service.mjs';
+import { createOrderEconomicsService } from '../application/order-economics-service.mjs';
 import { createSampleService } from '../application/sample-service.mjs';
 import { createSampleQueryService } from '../application/sample-query-service.mjs';
 import { createSourcingService } from '../application/sourcing-service.mjs';
@@ -35,6 +36,7 @@ import { createPostgresMaterialStore } from '../infrastructure/postgres-material
 import { createPostgresMaterialReader } from '../infrastructure/postgres-material-reader.mjs';
 import { createPostgresMeasurementStore } from '../infrastructure/postgres-measurement-store.mjs';
 import { createPostgresMeasurementReader } from '../infrastructure/postgres-measurement-reader.mjs';
+import { createPostgresOrderEconomicsStore } from '../infrastructure/postgres-order-economics-store.mjs';
 import { createPostgresSampleStore } from '../infrastructure/postgres-sample-store.mjs';
 import { createPostgresSampleReader } from '../infrastructure/postgres-sample-reader.mjs';
 import { createPostgresSourcingStore } from '../infrastructure/postgres-sourcing-store.mjs';
@@ -66,6 +68,7 @@ export function createPostgresWholesaleRuntime({
   const store = createPostgresWholesaleStore({ pool });
   const catalogStore = createPostgresCatalogStore({ pool });
   const commercialPublicationStore = createPostgresCommercialPublicationStore({ pool });
+  const orderEconomicsStore = createPostgresOrderEconomicsStore({ pool });
   const materialStore = createPostgresMaterialStore({ pool });
   const bomStore = createPostgresBomStore({ pool });
   const measurementStore = createPostgresMeasurementStore({ pool });
@@ -92,6 +95,7 @@ export function createPostgresWholesaleRuntime({
     nextId: runtimeNextId,
     ...(clock ? { clock } : {}),
   });
+  const orderEconomics = createOrderEconomicsService({ economicsStore: orderEconomicsStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) });
   const materials = Object.freeze({ ...createMaterialService({ materialStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createMaterialQueryService({ reader: createPostgresMaterialReader({ pool }) }) });
   const boms = Object.freeze({ ...createBomService({ bomStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createBomQueryService({ reader: createPostgresBomReader({ pool }) }) });
   const measurements = Object.freeze({ ...createMeasurementService({ measurementStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createMeasurementQueryService({ reader: createPostgresMeasurementReader({ pool }) }) });
@@ -130,12 +134,12 @@ export function createPostgresWholesaleRuntime({
     ...(outboxRetentionMs !== undefined ? { outboxRetentionMs } : {}),
   });
   const workspace = createWorkspaceQueryService({ reader: createPostgresWorkspaceReader({ pool }) });
-  const transport = { authenticate: auth.authenticate, auth, readiness, platform, catalog, commercialPublication, materials, boms, measurements, samples, partners, sourcing, techPacks, collaboration, orders, notifications, workspace };
+  const transport = { authenticate: auth.authenticate, auth, readiness, platform, catalog, commercialPublication, orderEconomics, materials, boms, measurements, samples, partners, sourcing, techPacks, collaboration, orders, notifications, workspace };
   const handler = createWholesaleHttpHandler(transport);
   const fetchHandler = createWholesaleFetchHandler(transport);
   return Object.freeze({
-    auth, readiness, maintenance, outboxPublication, store, catalogStore, commercialPublicationStore, materialStore, bomStore, measurementStore, sampleStore, sourcingStore, techPackStore,
-    platform, catalog, commercialPublication, materials, boms, measurements, samples, partners, sourcing, techPacks, collaboration, orders, notifications, workspace,
+    auth, readiness, maintenance, outboxPublication, store, catalogStore, commercialPublicationStore, orderEconomicsStore, materialStore, bomStore, measurementStore, sampleStore, sourcingStore, techPackStore,
+    platform, catalog, commercialPublication, orderEconomics, materials, boms, measurements, samples, partners, sourcing, techPacks, collaboration, orders, notifications, workspace,
     handler, fetchHandler,
   });
 }

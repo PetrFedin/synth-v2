@@ -1,3 +1,5 @@
+BEGIN;
+
 CREATE TABLE commercial_publications (
   id TEXT PRIMARY KEY,
   brand_id TEXT NOT NULL REFERENCES organisations(id),
@@ -64,3 +66,5 @@ FOR EACH ROW EXECUTE FUNCTION reject_commercial_snapshot_mutation();
 CREATE TRIGGER buyer_catalog_versions_immutable
 BEFORE UPDATE OR DELETE ON buyer_catalog_versions
 FOR EACH ROW EXECUTE FUNCTION reject_commercial_snapshot_mutation();
+
+COMMIT;

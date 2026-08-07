@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { wholesaleV2ExtendedOpenApi } from '../src/http/v2-openapi.mjs';
 
-test('extended OpenAPI exposes commercial publication and order economics', () => {
-  assert.equal(wholesaleV2ExtendedOpenApi.info.version, '1.19.0');
+test('extended OpenAPI exposes commercial publication and order economics without changing the authoritative contract version', () => {
+  assert.equal(wholesaleV2ExtendedOpenApi.info.version, '1.17.0');
   for (const path of [
     '/commercial-publications',
     '/commercial-publications/{publicationId}',

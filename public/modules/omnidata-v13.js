@@ -314,14 +314,9 @@
   function positionTooltip(target){
     const text=target.dataset.od13Tooltip?.trim();
     if(!text||!shouldShowTooltip(target)){hideTooltip();return}
-    const tooltip=ensureTooltip();
-    tooltip.textContent=text;
-    tooltip.classList.add('visible');
-    const rect=target.getBoundingClientRect();
-    const width=tooltip.offsetWidth;
-    const height=tooltip.offsetHeight;
-    tooltip.style.left=`${Math.min(global.innerWidth-width-10,Math.max(10,rect.right+10))}px`;
-    tooltip.style.top=`${Math.min(global.innerHeight-height-10,Math.max(10,rect.top+(rect.height-height)/2))}px`;
+    target.title=text;
+    target.setAttribute('aria-label',target.getAttribute('aria-label')||text);
+    hideTooltip();
     tooltipTarget=target;
   }
   function installTooltipDelegation(){

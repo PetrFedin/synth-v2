@@ -49,9 +49,17 @@ A workspace owns business logic, data fetching and semantic structure. It does n
 
 New or migrated modules must expose semantic structure that ODS can classify. Prefer explicit `data-ods-role` and `data-ods-part` when the component is created. The ODS runtime may adapt legacy classes during migration, but that is not the target architecture.
 
-Module CSS must not introduce a competing system for fonts, button appearance, table appearance, status badges, form controls, surface styling or global spacing. Existing module CSS is treated as legacy/functional migration code and is overridden by the final ODS layer. Any new local exception requires an explicit architectural reason and should be removed once the semantic role exists.
+No new workspace stylesheet may be added to the shell. New modules must inherit ODS through semantic roles/parts and shared tokens. Loaded UI runtimes must not use `element.style`, `setAttribute('style', ...)`, dynamically created `<style>` nodes, `CSSStyleSheet`, `adoptedStyleSheets` or `insertRule()`.
 
-The final ODS stylesheet must remain after every workspace stylesheet. The ODS runtime must remain after all workspace runtimes, before `dom-boolean-props.js`, and `app-start.js` must remain the final script.
+Existing local stylesheets are migration debt, not an extension point. `validate:ods-boundaries` freezes the current shell debt at a maximum of 22 legacy stylesheets. A migration may remove a frozen stylesheet without changing the baseline; adding another stylesheet fails verification. The debt count is therefore intended to move in one direction only: down.
+
+The final ODS stylesheet must remain after every legacy stylesheet. The ODS runtime must remain after all workspace runtimes, before `dom-boolean-props.js`, and `app-start.js` must remain the final script.
+
+## First ODS-native workspace
+
+Final Quality is the first PLM workspace whose local visual stylesheet has been retired. Its business runtime remains `public/modules/final-quality.js`, while header, KPI, master-detail layout, filters, toolbar, table, inspector, status tones and alerts are mapped to reusable ODS parts by `public/modules/omnidata-v14-role-system.js`.
+
+This is the migration pattern for the remaining modules: establish semantic coverage first, verify shared behaviour, then remove the module stylesheet from the shell and static handler. Do not move its old visual declarations into ODS under module-specific selectors; add or improve a reusable semantic part instead.
 
 ## Bilingual behaviour
 
@@ -80,10 +88,10 @@ Run:
 npm run verify
 ```
 
-`verify` includes `validate:design-system`, which checks ODS metadata, final load order, canonical tokens, seven roles, semantic parts, bilingual runtime hooks, self-contained CSS, absence of module-specific selectors in the ODS stylesheet, CSP-safe shell markup and static delivery for Final Quality and ODS assets.
+`verify` includes `validate:design-system` and `validate:ods-boundaries`. Together they check ODS metadata, final load order, canonical tokens, seven roles, semantic parts, bilingual runtime hooks, self-contained CSS, absence of module-specific selectors in the ODS stylesheet, CSP-safe shell markup, the frozen legacy stylesheet boundary, prohibition of dynamic UI styling and ODS-native delivery of Final Quality.
 
 Node.js 22 or newer is required by the repository.
 
 ## Rule for future workspaces
 
-A new workspace is acceptable when its business markup can be added without inventing another font scale, button system, table system, status system, inspector treatment or translation layer. If a new interaction pattern is genuinely reusable, add it to ODS as a shared role/part/component rather than styling one module locally.
+A new workspace is acceptable when its business markup can be added without inventing another font scale, button system, table system, status system, inspector treatment, stylesheet or translation layer. If a new interaction pattern is genuinely reusable, add it to ODS as a shared role/part/component rather than styling one module locally.

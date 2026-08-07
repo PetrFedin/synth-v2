@@ -101,9 +101,9 @@
   }
   function badge(value, tone) { return h('span', { className: `measurement-badge measurement-${tone}`, text: value }); }
   function progress(value) {
-    const fill = h('span', { className: 'measurement-progress-fill' });
-    fill.style.width = `${Math.max(0, Math.min(100, Number(value) || 0))}%`;
-    return h('div', { className: 'measurement-progress' }, [h('span', { className: 'measurement-progress-track' }, [fill]), h('strong', { text: `${value}%` })]);
+    const normalized = Math.max(0, Math.min(100, Number(value) || 0));
+    const bar = h('progress', { className: 'measurement-progress-track', max: '100', value: String(normalized), 'aria-label': text('Готовность', 'Readiness') });
+    return h('div', { className: 'measurement-progress' }, [bar, h('strong', { text: `${value}%` })]);
   }
   function metric(label, value, detail) {
     return h('article', { className: 'measurement-kpi' }, [h('span', { text: label }), h('strong', { text: value }), detail ? h('small', { text: detail }) : null]);
@@ -237,7 +237,6 @@
     await mutate(`/v2/measurements/${encodeURIComponent(item.chart.sku)}/publish`, { expectedVersion: item.chart.version });
     await loadCharts({ reset: true });
   }
-
   async function fetchCatalogSkus() {
     const items = new Map();
     const seen = new Set();
@@ -317,7 +316,6 @@
         model.points.forEach((point) => point.values.set(size.key, ''));
         renderBody();
       } })), sizeList);
-
       const tableHead = [h('th', { text: 'POM' }), h('th', { text: text('Название / описание', 'Name / description') }), h('th', { text: '− Tol.' }), h('th', { text: '+ Tol.' })];
       model.sizes.forEach((size) => tableHead.push(h('th', { text: size.code || '—' })));
       tableHead.push(h('th', { text: '' }));
@@ -396,7 +394,6 @@
     control.addEventListener('change', () => setter(control.value));
     return control;
   }
-
   const previousRenderView = renderView;
   renderView = (...args) => state.view === 'measurements' ? renderMeasurements() : previousRenderView(...args);
   const previousViewTitle = viewTitle;

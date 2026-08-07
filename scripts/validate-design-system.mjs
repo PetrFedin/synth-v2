@@ -38,10 +38,9 @@ const TOKENS = [
   '--ods-control-height', '--ods-row-height', '--ods-radius-sm', '--ods-radius-md',
   '--ods-radius-lg', '--ods-content-max', '--ods-inspector-width'
 ];
-const WORKSPACE_STYLES = [
+const LEGACY_WORKSPACE_STYLES = [
   '/industrial-product.css', '/bom.css', '/measurements.css', '/samples.css',
-  '/sourcing.css', '/tech-packs.css', '/production-orders.css',
-  '/production-executions.css', '/final-quality.css'
+  '/sourcing.css', '/tech-packs.css', '/production-orders.css', '/production-executions.css'
 ];
 const WORKSPACE_SCRIPTS = [
   '/ui/planning.js', '/ui/bom.js', '/ui/measurements.js', '/ui/samples.js',
@@ -60,13 +59,14 @@ const scriptUrls = [...html.matchAll(/<script\s+[^>]*defer[^>]*src="([^"]+)"/g)]
 const scripts = scriptUrls.map(pathname);
 
 assert(stylesheets.at(-1) === '/omnidata-v14-role-system.css', 'ODS stylesheet must remain the final stylesheet.');
+assert(!stylesheets.includes('/final-quality.css'), 'Final Quality must remain ODS-native without a local stylesheet.');
 assert(scripts.at(-1) === '/ui/app-start.js', 'app-start.js must remain the final script.');
 const runtimeIndex = scripts.indexOf('/ui/omnidata-v14-role-system.js');
 const normalizerIndex = scripts.indexOf('/ui/dom-boolean-props.js');
 const appStartIndex = scripts.indexOf('/ui/app-start.js');
 assert(runtimeIndex !== -1, 'ODS runtime is missing.');
 assert(runtimeIndex < normalizerIndex && normalizerIndex < appStartIndex, 'ODS runtime order is invalid.');
-for (const workspace of WORKSPACE_STYLES) assert(stylesheets.indexOf(workspace) < stylesheets.length - 1, `Workspace stylesheet must load below ODS: ${workspace}`);
+for (const workspace of LEGACY_WORKSPACE_STYLES) assert(stylesheets.indexOf(workspace) < stylesheets.length - 1, `Legacy workspace stylesheet must load below ODS: ${workspace}`);
 for (const workspace of WORKSPACE_SCRIPTS) assert(scripts.indexOf(workspace) < runtimeIndex, `Workspace runtime must load before ODS: ${workspace}`);
 
 for (const token of TOKENS) assert(css.includes(`${token}:`), `Missing ODS token: ${token}`);
@@ -78,9 +78,7 @@ for (const role of ROLES) {
   assert(css.includes(`[data-ods-role="${role}"]`), `Missing ODS role selector: ${role}`);
   assert(css.includes(`[data-od14-unified-role="${role}"]`), `Missing compatibility role selector: ${role}`);
 }
-for (const part of PARTS) {
-  assert(runtime.includes(`'${part}'`) || runtime.includes(`:${part}`), `Missing runtime part: ${part}`);
-}
+for (const part of PARTS) assert(runtime.includes(`'${part}'`) || runtime.includes(`:${part}`), `Missing runtime part: ${part}`);
 const styledParts = new Set([...css.matchAll(/data-ods-part="([^"]+)"/g)].map((match) => match[1]));
 for (const part of CRITICAL_STYLED_PARTS) assert(styledParts.has(part), `Missing critical ODS styled part: ${part}`);
 assert(styledParts.size >= 20, `ODS structural coverage is too small: ${styledParts.size} styled parts.`);
@@ -106,12 +104,12 @@ assert(!/\son(?:click|change|submit|input|load|error)\s*=/i.test(html), 'Inline 
 for (const mapping of [
   "'/omnidata-v14-role-system.css': ['omnidata-v14-role-system.css', 'text/css; charset=utf-8', VISUAL_CACHE]",
   "'/ui/omnidata-v14-role-system.js': ['modules/omnidata-v14-role-system.js', JS, VISUAL_CACHE]",
-  "'/final-quality.css': ['final-quality.css', 'text/css; charset=utf-8', VISUAL_CACHE]",
   "'/ui/final-quality-core.js': ['modules/final-quality-core.js', JS, VISUAL_CACHE]",
   "'/ui/final-quality.js': ['modules/final-quality.js', JS, VISUAL_CACHE]"
 ]) assert(staticHandler.includes(mapping), `Missing no-store static mapping: ${mapping}`);
+assert(!staticHandler.includes("'/final-quality.css':"), 'Final Quality local stylesheet route must not be restored.');
 
-console.log(`Omnidata Design System v1 contract OK (${ROLES.length} roles, ${PARTS.length} semantic parts, ${styledParts.size} styled parts, ${TOKENS.length} tokens).`);
+console.log(`Omnidata Design System v1 contract OK (${ROLES.length} roles, ${PARTS.length} semantic parts, ${styledParts.size} styled parts, ${TOKENS.length} tokens; Final Quality ODS-native).`);
 
 async function source(relativePath) {
   return readFile(path.join(root, relativePath), 'utf8');

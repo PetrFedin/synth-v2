@@ -26,10 +26,10 @@
   }
   function readiness(item) {
     const node = el('div', { className: 'industrial-readiness' });
-    const bar = el('span', { className: 'industrial-readiness-bar', ariaHidden: 'true' });
-    const fill = el('span', { className: 'industrial-readiness-fill', ariaHidden: 'true' });
-    fill.style.width = `${item.readiness}%`;
-    bar.append(fill);
+    const bar = el('progress', { className: 'industrial-readiness-bar' });
+    bar.max = 100;
+    bar.value = Math.max(0, Math.min(100, Number(item.readiness) || 0));
+    bar.setAttribute('aria-label', text('\u0413\u043e\u0442\u043e\u0432\u043d\u043e\u0441\u0442\u044c', 'Readiness'));
     node.append(bar, el('strong', { rawText: `${item.readiness}%` }));
     return node;
   }

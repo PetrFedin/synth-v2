@@ -229,10 +229,10 @@
 
   function readinessCell(assessment) {
     const wrap = el('div', { className: 'material-readiness' });
-    const bar = el('span', { className: 'material-readiness-bar', ariaHidden: 'true' });
-    const fill = el('span', { className: 'material-readiness-fill', ariaHidden: 'true' });
-    fill.style.width = `${assessment.readiness}%`;
-    bar.append(fill);
+    const bar = el('progress', { className: 'material-readiness-bar' });
+    bar.max = 100;
+    bar.value = Math.max(0, Math.min(100, Number(assessment.readiness) || 0));
+    bar.setAttribute('aria-label', materialText('\u0413\u043e\u0442\u043e\u0432\u043d\u043e\u0441\u0442\u044c', 'Readiness'));
     wrap.append(bar, el('strong', { rawText: `${assessment.readiness}%` }));
     return wrap;
   }

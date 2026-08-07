@@ -19,6 +19,7 @@ export function createOrderDraft({ id, selection, currency, terms, createdAt }) 
       overflowCode: 'ORDER_LINE_PRICE_TOO_LARGE',
       label: 'Order line unit price',
     }),
+    catalogVersion: line.catalogVersion,
   })));
   const totalAmount = calculateMoneyTotal(lines, {
     priceInvalidCode: 'ORDER_LINE_PRICE_INVALID',
@@ -34,6 +35,11 @@ export function createOrderDraft({ id, selection, currency, terms, createdAt }) 
     cycleId: selection.cycleId,
     brandId: selection.brandId,
     shopId: selection.shopId,
+    commercialPublicationId: selection.commercialPublicationId ?? null,
+    priceListVersionId: selection.priceListVersionId ?? null,
+    buyerCatalogVersionId: selection.buyerCatalogVersionId ?? null,
+    commercialBasisHash: selection.commercialBasisHash ?? null,
+    accessGrantId: selection.accessGrantId ?? null,
     currency,
     lines,
     totalAmount,

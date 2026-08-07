@@ -12,9 +12,9 @@ export function createCommercialPublicationRoutes({ commercialPublication } = {}
   const service = commercialPublication ?? unavailableCommercialPublication();
   return Object.freeze([
     mutate('POST', /^\/v2\/commercial-publications$/, validatePublicationBody, ({ commandId, actorId, body }) => service.publishCommercialPublication(commandId, actorId, body)),
-    read('GET', /^\/v2\/commercial-publications\/([^/]+)$/, ({ params }) => service.getCommercialPublication(params[0])),
+    read('GET', /^\/v2\/commercial-publications\/([^/]+)$/, ({ actorId, params }) => service.getCommercialPublicationForActor(actorId, params[0])),
     mutate('POST', /^\/v2\/commercial-publications\/([^/]+)\/buyer-catalogs$/, validateBuyerCatalogBody, ({ commandId, actorId, params, body }) => service.publishBuyerCatalog(commandId, actorId, params[0], body)),
-    read('GET', /^\/v2\/buyer-catalog-versions\/([^/]+)$/, ({ params }) => service.getBuyerCatalogVersion(params[0])),
+    read('GET', /^\/v2\/buyer-catalog-versions\/([^/]+)$/, ({ actorId, params }) => service.getBuyerCatalogVersionForActor(actorId, params[0])),
   ]);
 }
 
@@ -57,5 +57,10 @@ function read(method, pattern, execute) {
 }
 function unavailableCommercialPublication() {
   const fail = () => invariant(false, 'COMMERCIAL_PUBLICATION_SERVICE_REQUIRED', 'Commercial publication service is required');
-  return Object.freeze({ publishCommercialPublication: fail, publishBuyerCatalog: fail, getCommercialPublication: fail, getBuyerCatalogVersion: fail });
+  return Object.freeze({
+    publishCommercialPublication: fail,
+    publishBuyerCatalog: fail,
+    getCommercialPublicationForActor: fail,
+    getBuyerCatalogVersionForActor: fail,
+  });
 }

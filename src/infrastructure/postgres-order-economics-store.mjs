@@ -62,6 +62,10 @@ function view(client) {
       [value.id, value.orderId, value.landedCostSnapshotId, value.currency, value.netRevenue, value.landedCost, value.contributionMarginAmount, value.contributionMarginPercent, value.createdAt, value.contentHash, JSON.stringify(value)],
       'MARGIN_ACTUALIZATION_ALREADY_EXISTS', { marginActualizationSnapshotId: value.id });
     },
+    async getMarginActualizationSnapshot(id) {
+      const result = await client.query('SELECT payload FROM margin_actualization_snapshots WHERE id = $1 FOR SHARE', [id]);
+      return result.rows[0]?.payload;
+    },
     getCommand: (id) => getRegisteredCommand(client, 'wholesale', id),
     insertCommand: (value) => insertRegisteredCommand(client, 'wholesale', value),
     async appendOutbox(event) {

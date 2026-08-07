@@ -4,95 +4,57 @@ Omnidata Design System v1 (ODS v1) is the visual and interaction contract for ev
 
 ## Source of truth
 
-The current compatibility entry points remain:
-
 - `public/omnidata-v14-role-system.css` — canonical design tokens and role/part styling.
 - `public/modules/omnidata-v14-role-system.js` — semantic role mapping, structural parts, bilingual normalisation and runtime audit.
-- `/omnidata-v14-role-system.css?v=visual-20260806-14-role-system-1` — final stylesheet in the shell.
-- `/ui/omnidata-v14-role-system.js?v=visual-20260806-14-role-system-1` — final design-system runtime before DOM normalisation and `app-start.js`.
+- `public/modules/omnidata-v14-components.js` — semantic component classification.
+- `public/modules/omnidata-v14-module-adapters.js` and `public/omnidata-v14-module-adapters.css` — shared migration adapters/primitives for legacy markup.
+- `/omnidata-v14-role-system.css?v=visual-20260806-14-role-system-1` remains the final stylesheet; `/ui/omnidata-v14-role-system.js?v=visual-20260806-14-role-system-1` remains the final design-system runtime before DOM normalisation and `app-start.js`.
 
-The legacy `v14` public names are compatibility URLs. The runtime identity is `omnidata-design-system-v1`, version `1.0.0`.
+The legacy `v14` public names are compatibility URLs. Runtime identity is `omnidata-design-system-v1`, version `1.0.0`.
 
-## Canonical roles
+## Canonical roles and tokens
 
-ODS v1 intentionally exposes exactly seven visual roles:
+ODS exposes exactly seven visual roles: `table`, `filterbar`, `card`, `status`, `inspector`, `button`, `field`. Structural meaning is expressed with `data-ods-part` for page headers, table wrappers, toolbars, tabs, pagination, cards, surfaces, forms, metrics, master-detail layouts, lists, definition grids, timelines, progress, alerts and toasts.
 
-- `table`
-- `filterbar`
-- `card`
-- `status`
-- `inspector`
-- `button`
-- `field`
-
-Runtime markup uses `data-ods-role`. `data-od14-unified-role` is retained only as a compatibility alias during migration.
-
-Structural meaning is expressed with `data-ods-part`, including page headers, table wrappers, toolbars, tabs, pagination, cards, surfaces, forms, metrics, master-detail layouts, lists, definition grids, timelines, progress, alerts and toasts.
-
-## Tokens
-
-All shared visual values come from `--ods-*` custom properties. The current contract includes:
-
-- typography: font family, type sizes and line height;
-- colour: workspace, sidebar, surfaces, text, borders, accent and semantic states;
-- spacing: `--ods-space-1` through `--ods-space-6`;
-- controls: shared control and table-row heights;
-- shape: small, medium and large radii;
-- layout: content max width and inspector width;
-- elevation: shared surface shadow.
-
-`--odr-*` variables are compatibility aliases and must not be expanded into a second token system.
+All shared visual values come from `--ods-*` custom properties: typography, colour, spacing, control/row heights, radii, layout widths and elevation. `--odr-*` variables are compatibility aliases and must not become a second token system.
 
 ## Module integration rule
 
-A workspace owns business logic, data fetching and semantic structure. It does not own its own visual dialect.
+A workspace owns business logic, data fetching and semantic structure. It does not own a visual dialect. New or migrated modules should emit explicit `data-ods-role` / `data-ods-part` where possible; legacy classes may be adapted temporarily by the shared ODS runtime.
 
-New or migrated modules must expose semantic structure that ODS can classify. Prefer explicit `data-ods-role` and `data-ods-part` when the component is created. The ODS runtime may adapt legacy classes during migration, but that is not the target architecture.
+No new workspace stylesheet may be added to the shell. Loaded UI runtimes must not use `element.style`, `setAttribute('style', ...)`, dynamically created `<style>` nodes, `CSSStyleSheet`, `adoptedStyleSheets` or `insertRule()`.
 
-No new workspace stylesheet may be added to the shell. New modules must inherit ODS through semantic roles/parts and shared tokens. Loaded UI runtimes must not use `element.style`, `setAttribute('style', ...)`, dynamically created `<style>` nodes, `CSSStyleSheet`, `adoptedStyleSheets` or `insertRule()`.
+`validate:ods-boundaries` freezes the historical shell debt allowlist at 22 legacy stylesheets. Migrations may remove those entries without changing the ceiling; additions fail verification. With Final Quality, Production Orders and Production Executions migrated, only **20 of the historical 22** entries remain loaded. The debt count must only move down.
 
-Existing local stylesheets are migration debt, not an extension point. `validate:ods-boundaries` freezes the historical shell debt allowlist at a maximum of 22 legacy stylesheets. A migration may remove a frozen stylesheet without changing that ceiling; adding another stylesheet fails verification. With Production Orders and Final Quality migrated, only 21 entries from that frozen allowlist remain loaded. The debt count therefore moves in one direction only: down.
+## Shared progress primitive
 
-The final ODS stylesheet must remain after every legacy stylesheet. The ODS runtime must remain after all workspace runtimes, before `dom-boolean-props.js`, and `app-start.js` must remain the final script.
+Readiness/completion is now a reusable ODS primitive rather than a module-level CSS exception. `public/omnidata-v14-module-adapters.css` provides a token-driven native `<progress>` treatment using `--ods-color-border` and `--ods-color-accent`, plus semantic `progress / progress-track / progress-fill` support. A generic six-step compatibility bridge handles legacy step-based progress without naming a Production module.
+
+Planning, Styles, Materials, BOM and Measurements already store readiness as native `progress.max/value`. Production Executions keeps its business runtime intact while its semantic progress fill is interpreted by the same shared primitive.
 
 ## ODS-native workspaces
 
-Final Quality was the first PLM workspace whose local visual stylesheet was retired. Its business runtime remains `public/modules/final-quality.js`, while header, KPI, master-detail layout, filters, toolbar, table, inspector, status tones and alerts are mapped to reusable ODS parts by `public/modules/omnidata-v14-role-system.js`.
+Final Quality is ODS-native: header, KPI, master-detail layout, filters, toolbar, table, inspector, status tones and alerts inherit shared ODS parts; `final-quality.css` is not loaded or served.
 
-Production Orders is the second ODS-native PLM workspace. Its business runtime remains `public/modules/production-orders.js`; `public/modules/omnidata-v14-module-adapters.js` maps its page header/actions, KPI metrics, filters, create/confirm controls, master-detail layout, table/registry, inspector, facts, cards, statuses, empty states and alerts into shared ODS components and parts. `production-orders.css` is not loaded or served.
+Production Orders is ODS-native: page header/actions, KPI metrics, filters, create/confirm controls, master-detail layout, table/registry, inspector, facts, cards, statuses, empty states and alerts are mapped by the shared adapter; `production-orders.css` is not loaded or served.
 
-This is the migration pattern for the remaining modules: establish semantic coverage first, verify shared behaviour, then remove the module stylesheet from the shell and static handler. Do not move its old visual declarations into ODS under module-specific selectors; add or improve a reusable semantic part instead.
+Production Executions is the third ODS-native PLM workspace. KPI metrics, filters, create/actions, master-detail layout, table/registry, inspector, facts, cards, statuses, timeline/milestones, alerts and progress inherit shared ODS semantics; `production-executions.css` is not loaded or served.
+
+The migration pattern for remaining modules is: establish reusable semantic coverage first, verify behavior, then remove the module stylesheet. Never copy old module selectors into the canonical ODS stylesheet; add/improve a reusable role, part or shared primitive instead.
 
 ## Bilingual behaviour
 
-Visible UI is strictly Russian or English according to the selected locale. New user-facing strings should continue to use the shared i18n runtime. The ODS runtime additionally normalises legacy aliases and audits mixed-language interface text.
-
-Technical abbreviations such as PLM, BOM, SKU, POM, MOQ, ATS, RFQ, PO, ERP, WMS, PIM, OMS, QC, QMS, API and standard currency/transport abbreviations may remain unchanged where they are the established domain term.
-
-Business data must not be translated by the visual normaliser.
+Visible UI is strictly Russian or English according to selected locale. New user-facing strings continue through the shared i18n runtime; ODS additionally normalises legacy aliases and audits mixed-language UI. Established domain abbreviations such as PLM, BOM, SKU, POM, MOQ, ATS, RFQ, PO, ERP, WMS, PIM, OMS, QC, QMS and API may remain unchanged. Business data must not be translated by the visual normaliser.
 
 ## Runtime diagnostics
 
-The ODS runtime exposes compatibility and diagnostic state on the document/root runtime, including the ODS name/version and language audit. The browser API is available through `SynthaOmnidataDesignSystemV1`; `SynthaOmnidataV14RoleSystem` remains a compatibility alias.
-
-Useful audit targets include:
-
-- `document.documentElement.dataset.odsName`
-- `document.documentElement.dataset.odsVersion`
-- `document.documentElement.dataset.odsLanguageAudit`
-- `window.SynthaOmnidataDesignSystemV1`
+Useful audit targets include `document.documentElement.dataset.odsName`, `odsVersion`, `odsLanguageAudit` and `window.SynthaOmnidataDesignSystemV1`. `SynthaOmnidataV14RoleSystem` remains a compatibility alias.
 
 ## Validation
 
-Run:
+Run `npm run verify`. It includes `validate:design-system` and `validate:ods-boundaries`, checking metadata/load order, tokens, seven roles, semantic parts, bilingual hooks, CSP-safe markup, the frozen stylesheet boundary, absence of dynamic UI styling, shared progress primitives and ODS-native delivery of Production Executions, Production Orders and Final Quality.
 
-```bash
-npm run verify
-```
-
-`verify` includes `validate:design-system` and `validate:ods-boundaries`. Together they check ODS metadata, final load order, canonical tokens, seven roles, semantic parts, bilingual runtime hooks, self-contained CSS, absence of module-specific selectors in the ODS stylesheet, CSP-safe shell markup, the frozen legacy stylesheet boundary, prohibition of dynamic UI styling and ODS-native delivery of Production Orders and Final Quality.
-
-Node.js 22 or newer is required by the repository.
+Node.js 22 or newer is required.
 
 ## Rule for future workspaces
 

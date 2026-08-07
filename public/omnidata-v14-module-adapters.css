@@ -79,6 +79,44 @@ body.omnidata-v14 [data-od14-component="progress-track"]{position:relative!impor
 body.omnidata-v14 [data-od14-component="progress-fill"]{display:block!important;height:100%!important;min-height:5px!important;border:0!important;border-radius:999px!important;background:var(--od14-accent)!important;box-shadow:none!important}
 body.omnidata-v14 [data-od14-component="progress"] small{color:var(--od14-muted)!important;font-size:8.5px!important}
 
+/* Native progress is the shared state primitive for readiness/completion across workspaces. */
+body.omnidata-v14 progress{
+  -webkit-appearance:none!important;
+  appearance:none!important;
+  display:block!important;
+  width:100%!important;
+  min-width:90px!important;
+  height:5px!important;
+  min-height:5px!important;
+  margin:0!important;
+  padding:0!important;
+  border:0!important;
+  border-radius:999px!important;
+  background:var(--ods-color-border,var(--od14-line))!important;
+  vertical-align:middle!important;
+  overflow:hidden!important;
+  box-shadow:none!important;
+}
+body.omnidata-v14 progress::-webkit-progress-bar{background:var(--ods-color-border,var(--od14-line))!important;border-radius:999px!important}
+body.omnidata-v14 progress::-webkit-progress-value{background:var(--ods-color-accent,var(--od14-accent))!important;border-radius:999px!important}
+body.omnidata-v14 progress::-moz-progress-bar{background:var(--ods-color-accent,var(--od14-accent))!important;border-radius:999px!important}
+
+/* Compatibility bridge for semantic six-step workflows; no module selector is involved. */
+body.omnidata-v14 [data-od14-component="progress-fill"][class$="-0"],
+body.omnidata-v14 [data-ods-part="progress-fill"][class$="-0"]{width:0!important}
+body.omnidata-v14 [data-od14-component="progress-fill"][class$="-1"],
+body.omnidata-v14 [data-ods-part="progress-fill"][class$="-1"]{width:16.666%!important}
+body.omnidata-v14 [data-od14-component="progress-fill"][class$="-2"],
+body.omnidata-v14 [data-ods-part="progress-fill"][class$="-2"]{width:33.333%!important}
+body.omnidata-v14 [data-od14-component="progress-fill"][class$="-3"],
+body.omnidata-v14 [data-ods-part="progress-fill"][class$="-3"]{width:50%!important}
+body.omnidata-v14 [data-od14-component="progress-fill"][class$="-4"],
+body.omnidata-v14 [data-ods-part="progress-fill"][class$="-4"]{width:66.666%!important}
+body.omnidata-v14 [data-od14-component="progress-fill"][class$="-5"],
+body.omnidata-v14 [data-ods-part="progress-fill"][class$="-5"]{width:83.333%!important}
+body.omnidata-v14 [data-od14-component="progress-fill"][class$="-6"],
+body.omnidata-v14 [data-ods-part="progress-fill"][class$="-6"]{width:100%!important}
+
 @media(max-width:680px){
   body.omnidata-v14 .production-orders-create,
   body.omnidata-v14 .production-execution-create{grid-template-columns:minmax(0,1fr)!important}

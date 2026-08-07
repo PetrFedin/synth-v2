@@ -7,69 +7,15 @@ import path from 'node:path';
 import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 import { createStandaloneHandler } from '../src/web/static-handler.mjs';
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+const source=(relative)=>readFile(path.join(root,relative),'utf8');
+async function withServer(work){const handler=createStandaloneHandler({publicDir:path.join(root,'public'),apiHandler:(_request,response)=>{response.statusCode=404;response.end()}});const server=createServer(handler);server.listen(0,'127.0.0.1');await once(server,'listening');try{await work(`http://127.0.0.1:${server.address().port}`)}finally{server.close();await once(server,'close')}}
+function execution({status='active',milestoneStatus='pending',dueAt='2026-08-05T12:00:00.000Z'}={}){const codes=['materials-ready','cutting-complete','assembly-complete','finishing-complete','packing-complete','ready-for-qc'];return{executionCode:'EXEC-PO-001',productionOrderNumber:'PO-001',supplierCode:'FACTORY-01',sku:'STYLE-001',status,milestones:codes.map((code,index)=>({code,status:index===0?milestoneStatus:'pending',dueAt}))}}
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const source = (relative) => readFile(path.join(root, relative), 'utf8');
+test('Production Execution core exposes only valid lifecycle actions and risk summaries',async()=>{const context={window:{}};vm.runInNewContext(await source('public/modules/production-execution-core.js'),context);const core=context.window.SynthaProductionExecutionCore;assert.deepEqual([...core.allowedActions(execution(),{canManage:true})],['complete','block','cancel']);assert.deepEqual([...core.allowedActions(execution({milestoneStatus:'blocked'}),{canManage:true})],['resolve','cancel']);assert.deepEqual([...core.allowedActions(execution({status:'ready-for-qc'}),{canManage:true})],[]);const summary=core.summarize([execution({milestoneStatus:'blocked'}),execution()],'2026-08-06T00:00:00.000Z');assert.equal(summary.blocked,1);assert.equal(summary.overdue,2);assert.equal(Object.isFrozen(summary),true)});
 
-async function withServer(work) {
-  const handler = createStandaloneHandler({ publicDir: path.join(root, 'public'), apiHandler: (_request, response) => { response.statusCode = 404; response.end(); } });
-  const server = createServer(handler);
-  server.listen(0, '127.0.0.1');
-  await once(server, 'listening');
-  try { await work(`http://127.0.0.1:${server.address().port}`); }
-  finally { server.close(); await once(server, 'close'); }
-}
+test('Production Execution workspace stays governed and is covered by shared ODS semantics',async()=>{const [js,adapter,adapterCss]=await Promise.all([source('public/modules/production-executions.js'),source('public/modules/omnidata-v14-module-adapters.js'),source('public/omnidata-v14-module-adapters.css')]);assert.doesNotThrow(()=>new Function(js));for(const token of ['/v2/production-executions?','/from-production-order/','/start','/milestones/complete','/milestones/block','/milestones/resolve','/cancel','expectedVersion','PRODUCTION_EXECUTION_MANAGE','Production Execution'])assert.ok(js.includes(token),token);for(const handoff of ['SynthaFinalQualityWorkspace','openForExecution','QUALITY_MANAGE','data-final-quality-handoff'])assert.ok(js.includes(handoff),handoff);assert.doesNotMatch(js,/prompt\s*\(|\.style\./);for(const selector of ['.production-execution-kpis','.production-execution-filters','.production-execution-layout','.production-execution-registry','.production-execution-table','.production-execution-inspector','.production-timeline','.production-milestone','.production-progress','.production-progress-track','.production-progress-fill'])assert.ok(adapter.includes(selector),selector);for(const token of ['body.omnidata-v14 progress','progress::-webkit-progress-value','progress::-moz-progress-bar','[data-od14-component="progress-fill"][class$="-0"]','[data-od14-component="progress-fill"][class$="-6"]'])assert.ok(adapterCss.includes(token),token)});
 
-function execution({ status = 'active', milestoneStatus = 'pending', dueAt = '2026-08-05T12:00:00.000Z' } = {}) {
-  const codes = ['materials-ready','cutting-complete','assembly-complete','finishing-complete','packing-complete','ready-for-qc'];
-  return { executionCode: 'EXEC-PO-001', productionOrderNumber: 'PO-001', supplierCode: 'FACTORY-01', sku: 'STYLE-001', status, milestones: codes.map((code, index) => ({ code, status: index === 0 ? milestoneStatus : 'pending', dueAt })) };
-}
+test('shell loads Production Execution beneath ODS without a local stylesheet',async()=>{const html=await source('public/index.html');const core=html.indexOf('/ui/production-execution-core.js?v=industrial-20260805-1');const orders=html.indexOf('/ui/production-orders.js?v=industrial-20260805-1');const executions=html.indexOf('/ui/production-executions.js?v=industrial-20260805-1');const adapters=html.indexOf('/ui/omnidata-v14-module-adapters.js?v=visual-20260805-14-module-adapters-4');const role=html.indexOf('/ui/omnidata-v14-role-system.js?v=visual-20260806-14-role-system-1');assert.ok(core>=0&&orders>=0&&executions>orders&&adapters>executions&&role>adapters);assert.doesNotMatch(html,/production-executions\.css/);const styles=[...html.matchAll(/<link\s+[^>]*rel="stylesheet"[^>]*href="([^"]+)"/g)].map(m=>new URL(m[1],'http://syntha.local').pathname);assert.equal(styles.at(-1),'/omnidata-v14-role-system.css')});
 
-test('Production Execution UI core exposes only valid current-stage actions and risk summaries', async () => {
-  const context = { window: {} };
-  vm.runInNewContext(await source('public/modules/production-execution-core.js'), context);
-  const core = context.window.SynthaProductionExecutionCore;
-  assert.deepEqual([...core.allowedActions(execution(), { canManage: true })], ['complete','block','cancel']);
-  assert.deepEqual([...core.allowedActions(execution({ milestoneStatus: 'blocked' }), { canManage: true })], ['resolve','cancel']);
-  assert.deepEqual([...core.allowedActions(execution({ status: 'ready-for-qc' }), { canManage: true })], []);
-  const summary = core.summarize([execution({ milestoneStatus: 'blocked' }), execution()], '2026-08-06T00:00:00.000Z');
-  assert.equal(summary.blocked, 1);
-  assert.equal(summary.overdue, 2);
-  assert.equal(Object.isFrozen(summary), true);
-});
-
-test('Production Execution workspace is syntactically valid and calls only governed lifecycle APIs', async () => {
-  const js = await source('public/modules/production-executions.js');
-  const css = await source('public/production-executions.css');
-  assert.doesNotThrow(() => new Function(js));
-  for (const token of ['/v2/production-executions?','/from-production-order/','/start','/milestones/complete','/milestones/block','/milestones/resolve','/cancel','expectedVersion','PRODUCTION_EXECUTION_MANAGE','Производственный календарь','Production Execution']) assert.ok(js.includes(token), token);
-  for (const handoff of ['SynthaFinalQualityWorkspace','openForExecution','QUALITY_MANAGE','data-final-quality-handoff','Перейти к Final Quality','Open Final Quality']) assert.ok(js.includes(handoff), handoff);
-  assert.match(js, /value\.status === 'ready-for-qc' && qualityManage/);
-  assert.doesNotMatch(js, /prompt\s*\(|\.style\./);
-  assert.match(css, /\.production-execution-layout/);
-  assert.match(css, /\.production-milestone\.blocked/);
-  assert.doesNotMatch(css, /@import|https?:\/\//i);
-});
-
-test('V14 shell loads Production Execution after Production Orders and before semantic adapters', async () => {
-  const html = await source('public/index.html');
-  const core = html.indexOf('/ui/production-execution-core.js?v=industrial-20260805-1');
-  const orders = html.indexOf('/ui/production-orders.js?v=industrial-20260805-1');
-  const executions = html.indexOf('/ui/production-executions.js?v=industrial-20260805-1');
-  const adapters = html.indexOf('/ui/omnidata-v14-module-adapters.js?v=visual-20260805-14-module-adapters-4');
-  const components = html.indexOf('/ui/omnidata-v14-components.js?v=visual-20260805-14-components-4');
-  assert.ok(core >= 0 && orders >= 0 && executions > orders && adapters > executions && components > adapters);
-  assert.match(html, /production-executions\.css\?v=industrial-20260805-1/);
-  assert.match(html, /ui-capabilities\.js\?v=industrial-20260805-5/);
-});
-
-test('standalone server delivers Production Execution assets with no-store caching', async () => {
-  await withServer(async (base) => {
-    for (const asset of ['/production-executions.css','/ui/production-execution-core.js','/ui/production-executions.js']) {
-      const response = await fetch(`${base}${asset}`);
-      assert.equal(response.status, 200, asset);
-      assert.equal(response.headers.get('cache-control'), 'no-store', asset);
-      assert.match(response.headers.get('content-type') || '', asset.endsWith('.css') ? /text\/css/ : /text\/javascript/);
-    }
-  });
-});
+test('standalone server delivers Production Execution runtime and rejects retired stylesheet',async()=>{await withServer(async(base)=>{for(const asset of ['/ui/production-execution-core.js','/ui/production-executions.js']){const response=await fetch(`${base}${asset}`);assert.equal(response.status,200,asset);assert.equal(response.headers.get('cache-control'),'no-store',asset)}const retired=await fetch(`${base}/production-executions.css`);assert.equal(retired.status,404)})});

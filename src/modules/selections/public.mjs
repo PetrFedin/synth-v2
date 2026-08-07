@@ -3,12 +3,13 @@ import { assertPostgresInteger, normalizeMoney } from '../../core/money.mjs';
 
 const NOTE_MAX_LENGTH = 2_000;
 
-export function createSelection({ id, cycle, showroom, createdAt }) {
+export function createSelection({ id, cycle, showroom, commercialBasis = null, createdAt }) {
   invariant(id && cycle?.id && showroom?.id, 'SELECTION_IDENTITY_REQUIRED', 'Selection, cycle and showroom are required');
   invariant(cycle.stage === 'showroom', 'SELECTION_CYCLE_STAGE_INVALID', 'Selection can be created only at showroom stage', { stage: cycle.stage });
   invariant(showroom.status === 'open', 'SHOWROOM_NOT_OPEN', 'Selection requires an open showroom');
   invariant(showroom.collectionId === cycle.collectionId, 'SELECTION_COLLECTION_MISMATCH', 'Showroom and cycle must use the same collection');
   invariant(showroom.brandId === cycle.brandId, 'SELECTION_BRAND_MISMATCH', 'Showroom and cycle must use the same brand');
+  const basis = commercialBasis ? validateCommercialBasis(commercialBasis, cycle, showroom) : null;
   return Object.freeze({
     id,
     cycleId: cycle.id,
@@ -16,6 +17,11 @@ export function createSelection({ id, cycle, showroom, createdAt }) {
     collectionId: cycle.collectionId,
     brandId: cycle.brandId,
     shopId: cycle.shopId,
+    commercialPublicationId: basis?.publicationId ?? null,
+    priceListVersionId: basis?.priceListVersionId ?? null,
+    buyerCatalogVersionId: basis?.buyerCatalogVersionId ?? null,
+    commercialBasisHash: basis?.contentHash ?? null,
+    accessGrantId: basis?.accessGrantId ?? null,
     status: 'draft',
     lines: Object.freeze([]),
     version: 1,
@@ -62,4 +68,20 @@ export function submitSelection(selection, updatedAt) {
   const currencies = new Set(selection.lines.map((line) => line.currency));
   invariant(currencies.size === 1, 'SELECTION_CURRENCY_MISMATCH', 'All selection lines must use one currency');
   return Object.freeze({ ...selection, status: 'submitted', version: selection.version + 1, updatedAt });
+}
+
+function validateCommercialBasis(basis, cycle, showroom) {
+  invariant(basis && basis.status === 'published', 'SELECTION_BUYER_CATALOG_NOT_PUBLISHED', 'Selection commercial basis must be a published buyer catalog');
+  invariant(basis.publicationId && basis.priceListVersionId && basis.id && basis.contentHash && basis.accessGrantId, 'SELECTION_COMMERCIAL_BASIS_INCOMPLETE', 'Selection commercial basis is incomplete');
+  invariant(basis.collectionId === cycle.collectionId, 'SELECTION_COMMERCIAL_COLLECTION_MISMATCH', 'Buyer catalog collection does not match cycle');
+  invariant(basis.brandId === cycle.brandId, 'SELECTION_COMMERCIAL_BRAND_MISMATCH', 'Buyer catalog brand does not match cycle');
+  invariant(basis.shopId === cycle.shopId, 'SELECTION_COMMERCIAL_SHOP_MISMATCH', 'Buyer catalog shop does not match cycle');
+  invariant(basis.showroomId === showroom.id, 'SELECTION_COMMERCIAL_SHOWROOM_MISMATCH', 'Buyer catalog showroom does not match selection showroom');
+  return Object.freeze({
+    publicationId: basis.publicationId,
+    priceListVersionId: basis.priceListVersionId,
+    buyerCatalogVersionId: basis.id,
+    contentHash: basis.contentHash,
+    accessGrantId: basis.accessGrantId,
+  });
 }

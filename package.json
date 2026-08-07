@@ -17,8 +17,9 @@
     "validate:postgres": "node scripts/validate-postgres-contract.mjs",
     "validate:isolation": "node scripts/validate-isolation.mjs",
     "validate:ui": "node scripts/validate-ui.mjs",
+    "validate:design-system": "node scripts/validate-design-system.mjs",
     "validate:i18n": "node scripts/validate-i18n.mjs",
-    "verify": "npm run validate:isolation && npm run validate:architecture && npm run validate:postgres && npm run validate:ui && npm run validate:i18n && npm test"
+    "verify": "npm run validate:isolation && npm run validate:architecture && npm run validate:postgres && npm run validate:ui && npm run validate:design-system && npm run validate:i18n && npm test"
   },
   "dependencies": {
     "pg": "8.13.1"

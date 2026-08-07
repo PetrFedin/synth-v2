@@ -90,7 +90,7 @@ for (const token of [
   `const VERSION='${VERSION}'`,
   "const CORE_ROLES=Object.freeze(['table','filterbar','card','status','inspector','button','field'])",
   'COMPONENT_TO_ROLE', 'COMPONENT_PART', 'EXPLICIT_SELECTORS', 'EXACT_PARTS',
-  'CLASS_RULES', 'data-ods-role', 'data-ods-part', 'STRICT_PAIRS', 'RU_ALIASES',
+  'CLASS_RULES', 'dataset.odsRole', 'dataset.odsPart', 'STRICT_PAIRS', 'RU_ALIASES',
   'EN_ALIASES', 'translateAliases', 'auditMixedLanguage', 'translateInterface',
   'decorateAbbreviations', 'auditLanguage', 'syntha:locale-changed', 'MutationObserver',
   'SynthaOmnidataDesignSystemV1', 'SynthaOmnidataV14RoleSystem', 'odsLanguageAudit'

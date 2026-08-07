@@ -19,9 +19,11 @@ async function withServer(work) {
   finally { server.close(); await once(server, 'close'); }
 }
 
-test('Production Orders workspace is syntactically valid and calls only lifecycle APIs', async () => {
-  const js = await source('public/modules/production-orders.js');
-  const css = await source('public/production-orders.css');
+test('Production Orders workspace is syntactically valid, lifecycle-only and covered by ODS semantics', async () => {
+  const [js, adapter] = await Promise.all([
+    source('public/modules/production-orders.js'),
+    source('public/modules/omnidata-v14-module-adapters.js'),
+  ]);
   assert.doesNotThrow(() => new Function(js));
   for (const token of [
     '/v2/production-orders?',
@@ -38,30 +40,47 @@ test('Production Orders workspace is syntactically valid and calls only lifecycl
     'commercialSnapshot',
   ]) assert.ok(js.includes(token), token);
   assert.doesNotMatch(js, /prompt\s*\(|\.style\./);
-  assert.match(css, /\.production-orders-layout/);
-  assert.match(css, /\.production-order-badge\.confirmed/);
-  assert.doesNotMatch(css, /@import|https?:\/\//i);
+  for (const token of [
+    "'production-orders':{",
+    "source:'.production-orders-header'",
+    "actions:'.production-orders-actions'",
+    '.production-orders-kpis',
+    '.production-orders-filters',
+    '.production-orders-create',
+    '.production-orders-layout',
+    '.production-orders-registry',
+    '.production-orders-table',
+    '.production-orders-inspector',
+    '.production-orders-facts',
+    '.production-orders-card',
+    '.production-order-badge',
+    '.production-orders-empty',
+    '.production-orders-error',
+    '.production-orders-confirm',
+  ]) assert.ok(adapter.includes(token), token);
 });
 
-test('shell loads Production Orders after Tech Packs and before final Omnidata V14', async () => {
+test('shell loads Production Orders runtime beneath ODS without a local stylesheet', async () => {
   const html = await source('public/index.html');
   const techPack = html.indexOf('/ui/tech-packs.js?v=industrial-20260805-3');
   const productionOrders = html.indexOf('/ui/production-orders.js?v=industrial-20260805-1');
   const languageAudit = html.indexOf('/ui/omnidata-v7-language-audit.js?v=visual-20260804-7');
   const v14 = html.indexOf('/ui/omnidata-v14.js?v=visual-20260805-14');
   assert.ok(techPack >= 0 && productionOrders > techPack && languageAudit > productionOrders && v14 > languageAudit);
-  assert.match(html, /production-orders\.css\?v=industrial-20260805-1/);
+  assert.doesNotMatch(html, /production-orders\.css/);
+  assert.match(html, /<meta name="syntha-design-system" content="omnidata-design-system-v1">/);
   assert.match(html, /ui-capabilities\.js\?v=industrial-20260805-5/);
+  const styles = [...html.matchAll(/<link\s+[^>]*rel="stylesheet"[^>]*href="([^"]+)"/g)].map((match) => new URL(match[1], 'http://syntha.local').pathname);
+  assert.equal(styles.at(-1), '/omnidata-v14-role-system.css');
 });
 
-test('standalone server delivers Tech Pack and Production Order assets instead of API fallthrough', async () => {
+test('standalone server delivers Production Orders runtime and rejects its retired stylesheet route', async () => {
   await withServer(async (base) => {
     for (const asset of [
       '/tech-packs.css',
       '/ui/tech-pack-core.js',
       '/ui/tech-pack-navigation.js',
       '/ui/tech-packs.js',
-      '/production-orders.css',
       '/ui/production-orders.js',
     ]) {
       const response = await fetch(`${base}${asset}`);
@@ -69,5 +88,7 @@ test('standalone server delivers Tech Pack and Production Order assets instead o
       assert.equal(response.headers.get('cache-control'), 'no-store', asset);
       assert.match(response.headers.get('content-type') || '', asset.endsWith('.css') ? /text\/css/ : /text\/javascript/);
     }
+    const retired = await fetch(`${base}/production-orders.css`);
+    assert.equal(retired.status, 404, '/production-orders.css');
   });
 });

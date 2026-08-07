@@ -9,6 +9,8 @@ const html = await source('public/index.html');
 const staticHandler = await source('src/web/static-handler.mjs');
 const roleRuntime = await source('public/modules/omnidata-v14-role-system.js');
 const componentRuntime = await source('public/modules/omnidata-v14-components.js');
+const adapterRuntime = await source('public/modules/omnidata-v14-module-adapters.js');
+const productionOrdersRuntime = await source('public/modules/production-orders.js');
 const finalQualityRuntime = await source('public/modules/final-quality.js');
 
 const FOUNDATION_STYLES = new Set(['/styles.css', '/i18n.css']);
@@ -38,6 +40,21 @@ const LEGACY_VISUAL_DEBT = Object.freeze([
   '/omnidata-v14-extensions.css'
 ]);
 const LEGACY_VISUAL_DEBT_SET = new Set(LEGACY_VISUAL_DEBT);
+const PRODUCTION_ORDERS_ODS_PARTS = Object.freeze({
+  'production-orders-kpis': 'metrics',
+  'production-orders-kpi': 'metric',
+  'production-orders-filters': 'filterbar',
+  'production-orders-create': 'toolbar',
+  'production-orders-layout': 'master-detail',
+  'production-orders-registry': 'table-wrap',
+  'production-orders-table': 'table',
+  'production-orders-inspector': 'inspector',
+  'production-orders-facts': 'definition-grid',
+  'production-orders-card': 'card',
+  'production-order-badge': 'status',
+  'production-orders-empty': 'empty',
+  'production-orders-error': 'alert'
+});
 const FINAL_QUALITY_ODS_PARTS = Object.freeze({
   'final-quality-header': 'page-header',
   'final-quality-kpis': 'metrics',
@@ -73,7 +90,9 @@ assert(LEGACY_VISUAL_DEBT.length === 22, 'Legacy visual debt baseline must only 
 const stylesheetUrls = [...html.matchAll(/<link\s+[^>]*rel="stylesheet"[^>]*href="([^"]+)"/g)].map((match) => match[1]);
 const stylesheets = stylesheetUrls.map(pathname);
 assert(stylesheets.at(-1) === ODS_STYLESHEET, 'ODS must remain the final stylesheet.');
+assert(!stylesheets.includes('/production-orders.css'), 'Production Orders must remain ODS-native and must not restore a local stylesheet.');
 assert(!stylesheets.includes('/final-quality.css'), 'Final Quality must remain ODS-native and must not restore a local stylesheet.');
+assert(!staticHandler.includes("'/production-orders.css':"), 'Production Orders local stylesheet route must not be restored.');
 assert(!staticHandler.includes("'/final-quality.css':"), 'Final Quality local stylesheet route must not be restored.');
 
 const unknownStyles = stylesheets.filter((item) => !FOUNDATION_STYLES.has(item) && item !== ODS_STYLESHEET && !LEGACY_VISUAL_DEBT_SET.has(item));
@@ -92,6 +111,15 @@ assert(componentRuntime.includes('semanticRoleFor'), 'Semantic component classif
 assert(componentRuntime.includes('classifyLegacyComponents'), 'Legacy component classifier is missing.');
 assert(componentRuntime.includes('auditComponents'), 'Component audit is missing.');
 
+for (const [legacyClass, part] of Object.entries(PRODUCTION_ORDERS_ODS_PARTS)) {
+  assert(productionOrdersRuntime.includes(legacyClass), `Production Orders semantic hook disappeared: ${legacyClass}`);
+  assert(adapterRuntime.includes(legacyClass), `Production Orders adapter hook disappeared: ${legacyClass}`);
+  assert(adapterRuntime.includes(`'${part}'`) || adapterRuntime.includes(`,${part}`) || adapterRuntime.includes(`,'${part}'`), `Production Orders ODS part disappeared: ${part}`);
+}
+for (const token of ["'production-orders':{", "source:'.production-orders-header'", "actions:'.production-orders-actions'", '.production-orders-confirm', '.production-orders-filters input']) {
+  assert(adapterRuntime.includes(token), `Production Orders adapter contract is missing: ${token}`);
+}
+
 for (const [legacyClass, part] of Object.entries(FINAL_QUALITY_ODS_PARTS)) {
   assert(finalQualityRuntime.includes(legacyClass), `Final Quality semantic hook disappeared: ${legacyClass}`);
   assert(roleRuntime.includes(`'${legacyClass}':'${part}'`), `Final Quality is not covered by ODS semantic mapping: ${legacyClass} -> ${part}`);
@@ -109,7 +137,7 @@ for (const script of scripts) {
   }
 }
 
-console.log(`ODS boundary contract OK (${presentLegacyDebt.length}/${LEGACY_VISUAL_DEBT.length} frozen legacy styles remain; Final Quality is ODS-native; no new stylesheet or dynamic style API).`);
+console.log(`ODS boundary contract OK (${presentLegacyDebt.length}/${LEGACY_VISUAL_DEBT.length} frozen legacy styles remain; Production Orders and Final Quality are ODS-native; no new stylesheet or dynamic style API).`);
 
 async function source(relativePath) {
   return readFile(path.join(root, relativePath), 'utf8');

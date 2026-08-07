@@ -51,13 +51,15 @@ New or migrated modules must expose semantic structure that ODS can classify. Pr
 
 No new workspace stylesheet may be added to the shell. New modules must inherit ODS through semantic roles/parts and shared tokens. Loaded UI runtimes must not use `element.style`, `setAttribute('style', ...)`, dynamically created `<style>` nodes, `CSSStyleSheet`, `adoptedStyleSheets` or `insertRule()`.
 
-Existing local stylesheets are migration debt, not an extension point. `validate:ods-boundaries` freezes the current shell debt at a maximum of 22 legacy stylesheets. A migration may remove a frozen stylesheet without changing the baseline; adding another stylesheet fails verification. The debt count is therefore intended to move in one direction only: down.
+Existing local stylesheets are migration debt, not an extension point. `validate:ods-boundaries` freezes the historical shell debt allowlist at a maximum of 22 legacy stylesheets. A migration may remove a frozen stylesheet without changing that ceiling; adding another stylesheet fails verification. With Production Orders and Final Quality migrated, only 21 entries from that frozen allowlist remain loaded. The debt count therefore moves in one direction only: down.
 
 The final ODS stylesheet must remain after every legacy stylesheet. The ODS runtime must remain after all workspace runtimes, before `dom-boolean-props.js`, and `app-start.js` must remain the final script.
 
-## First ODS-native workspace
+## ODS-native workspaces
 
-Final Quality is the first PLM workspace whose local visual stylesheet has been retired. Its business runtime remains `public/modules/final-quality.js`, while header, KPI, master-detail layout, filters, toolbar, table, inspector, status tones and alerts are mapped to reusable ODS parts by `public/modules/omnidata-v14-role-system.js`.
+Final Quality was the first PLM workspace whose local visual stylesheet was retired. Its business runtime remains `public/modules/final-quality.js`, while header, KPI, master-detail layout, filters, toolbar, table, inspector, status tones and alerts are mapped to reusable ODS parts by `public/modules/omnidata-v14-role-system.js`.
+
+Production Orders is the second ODS-native PLM workspace. Its business runtime remains `public/modules/production-orders.js`; `public/modules/omnidata-v14-module-adapters.js` maps its page header/actions, KPI metrics, filters, create/confirm controls, master-detail layout, table/registry, inspector, facts, cards, statuses, empty states and alerts into shared ODS components and parts. `production-orders.css` is not loaded or served.
 
 This is the migration pattern for the remaining modules: establish semantic coverage first, verify shared behaviour, then remove the module stylesheet from the shell and static handler. Do not move its old visual declarations into ODS under module-specific selectors; add or improve a reusable semantic part instead.
 
@@ -88,7 +90,7 @@ Run:
 npm run verify
 ```
 
-`verify` includes `validate:design-system` and `validate:ods-boundaries`. Together they check ODS metadata, final load order, canonical tokens, seven roles, semantic parts, bilingual runtime hooks, self-contained CSS, absence of module-specific selectors in the ODS stylesheet, CSP-safe shell markup, the frozen legacy stylesheet boundary, prohibition of dynamic UI styling and ODS-native delivery of Final Quality.
+`verify` includes `validate:design-system` and `validate:ods-boundaries`. Together they check ODS metadata, final load order, canonical tokens, seven roles, semantic parts, bilingual runtime hooks, self-contained CSS, absence of module-specific selectors in the ODS stylesheet, CSP-safe shell markup, the frozen legacy stylesheet boundary, prohibition of dynamic UI styling and ODS-native delivery of Production Orders and Final Quality.
 
 Node.js 22 or newer is required by the repository.
 

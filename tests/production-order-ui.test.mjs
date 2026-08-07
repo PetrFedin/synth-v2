@@ -67,17 +67,16 @@ test('shell loads Production Orders runtime beneath ODS without a local styleshe
   const languageAudit = html.indexOf('/ui/omnidata-v7-language-audit.js?v=visual-20260804-7');
   const v14 = html.indexOf('/ui/omnidata-v14.js?v=visual-20260805-14');
   assert.ok(techPack >= 0 && productionOrders > techPack && languageAudit > productionOrders && v14 > languageAudit);
-  assert.doesNotMatch(html, /production-orders\.css/);
+  assert.doesNotMatch(html, /tech-packs\.css|production-orders\.css/);
   assert.match(html, /<meta name="syntha-design-system" content="omnidata-design-system-v1">/);
   assert.match(html, /ui-capabilities\.js\?v=industrial-20260805-5/);
   const styles = [...html.matchAll(/<link\s+[^>]*rel="stylesheet"[^>]*href="([^"]+)"/g)].map((match) => new URL(match[1], 'http://syntha.local').pathname);
   assert.equal(styles.at(-1), '/omnidata-v14-role-system.css');
 });
 
-test('standalone server delivers Production Orders runtime and rejects its retired stylesheet route', async () => {
+test('standalone server delivers Production Orders and Tech Packs runtimes and rejects retired local stylesheet routes', async () => {
   await withServer(async (base) => {
     for (const asset of [
-      '/tech-packs.css',
       '/ui/tech-pack-core.js',
       '/ui/tech-pack-navigation.js',
       '/ui/tech-packs.js',
@@ -86,9 +85,11 @@ test('standalone server delivers Production Orders runtime and rejects its retir
       const response = await fetch(`${base}${asset}`);
       assert.equal(response.status, 200, asset);
       assert.equal(response.headers.get('cache-control'), 'no-store', asset);
-      assert.match(response.headers.get('content-type') || '', asset.endsWith('.css') ? /text\/css/ : /text\/javascript/);
+      assert.match(response.headers.get('content-type') || '', /text\/javascript/);
     }
-    const retired = await fetch(`${base}/production-orders.css`);
-    assert.equal(retired.status, 404, '/production-orders.css');
+    for (const retiredAsset of ['/tech-packs.css', '/production-orders.css']) {
+      const retired = await fetch(`${base}${retiredAsset}`);
+      assert.equal(retired.status, 404, retiredAsset);
+    }
   });
 });

@@ -116,7 +116,7 @@ for (const [legacyClass, part] of Object.entries(PRODUCTION_ORDERS_ODS_PARTS)) {
   assert(adapterRuntime.includes(legacyClass), `Production Orders adapter hook disappeared: ${legacyClass}`);
   assert(adapterRuntime.includes(`'${part}'`) || adapterRuntime.includes(`,${part}`) || adapterRuntime.includes(`,'${part}'`), `Production Orders ODS part disappeared: ${part}`);
 }
-for (const token of ["'production-orders':{", "source:'.production-orders-header'", "actions:'.production-orders-actions'", "'.production-orders-confirm", "'.production-orders-filters input"]) {
+for (const token of ["'production-orders':{", "source:'.production-orders-header'", "actions:'.production-orders-actions'", '.production-orders-confirm', '.production-orders-filters input']) {
   assert(adapterRuntime.includes(token), `Production Orders adapter contract is missing: ${token}`);
 }
 

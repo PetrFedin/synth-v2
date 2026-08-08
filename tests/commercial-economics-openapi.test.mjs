@@ -22,4 +22,12 @@ test('extended OpenAPI exposes commercial publication and order economics withou
   assert.ok(wholesaleV2ExtendedOpenApi.components.schemas.SupplyCommitmentSnapshot);
   assert.ok(wholesaleV2ExtendedOpenApi.components.schemas.LandedCostSnapshot);
   assert.ok(wholesaleV2ExtendedOpenApi.components.schemas.MarginActualizationSnapshot);
+
+  for (const schemaName of ['SupplyCommitmentSnapshot', 'ActualCostLedgerEntry', 'LandedCostSnapshot', 'MarginActualizationSnapshot']) {
+    const schema = wholesaleV2ExtendedOpenApi.components.schemas[schemaName];
+    assert.ok(schema.required.includes('orderCommitSnapshotId'), `${schemaName} must require orderCommitSnapshotId`);
+    assert.deepEqual(schema.properties.orderCommitSnapshotId, wholesaleV2ExtendedOpenApi.components.schemas[schemaName].properties.orderCommitSnapshotId);
+    assert.equal(schema.properties.orderCommitSnapshotId.type, 'string');
+  }
+  assert.ok(wholesaleV2ExtendedOpenApi.components.schemas.MarginActualizationSnapshot.required.includes('priceListVersionId'));
 });

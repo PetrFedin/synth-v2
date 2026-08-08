@@ -72,8 +72,9 @@ function schemas() {
       },
     },
     ActualCostInput: {
-      type: 'object', additionalProperties: false, required: ['costType', 'amount', 'currency', 'sourceRef'],
+      type: 'object', additionalProperties: false, required: ['supplyCommitmentSnapshotId', 'costType', 'amount', 'currency', 'sourceRef'],
       properties: {
+        supplyCommitmentSnapshotId: identifier,
         costType: costType(), amount: { ...money, not: { const: 0 } }, currency,
         fxRateSnapshotId: identifier,
         sku: { oneOf: [{ type: 'string', pattern: SKU }, { type: 'null' }] },
@@ -82,9 +83,9 @@ function schemas() {
     },
     ActualCostLedgerEntry: {
       type: 'object', additionalProperties: false,
-      required: ['id', 'orderId', 'orderVersion', 'orderCommitSnapshotId', 'brandId', 'shopId', 'costType', 'sourceAmount', 'sourceCurrency', 'fxRateSnapshotId', 'amount', 'currency', 'sku', 'sourceRef', 'occurredAt', 'recordedAt'],
+      required: ['id', 'orderId', 'orderVersion', 'orderCommitSnapshotId', 'supplyCommitmentSnapshotId', 'brandId', 'shopId', 'costType', 'sourceAmount', 'sourceCurrency', 'fxRateSnapshotId', 'amount', 'currency', 'sku', 'sourceRef', 'occurredAt', 'recordedAt'],
       properties: {
-        id: identifier, orderId: identifier, orderVersion: version(), orderCommitSnapshotId: identifier,
+        id: identifier, orderId: identifier, orderVersion: version(), orderCommitSnapshotId: identifier, supplyCommitmentSnapshotId: identifier,
         brandId: identifier, shopId: identifier,
         costType: costType(), sourceAmount: money, sourceCurrency: currency, fxRateSnapshotId: nullableIdentifier(), amount: money, currency,
         sku: { oneOf: [{ type: 'string', pattern: SKU }, { type: 'null' }] },
@@ -94,9 +95,12 @@ function schemas() {
     EmptyEconomicsInput: { type: 'object', additionalProperties: false, maxProperties: 0 },
     LandedCostSnapshot: {
       type: 'object', additionalProperties: false,
-      required: ['id', 'orderId', 'orderVersion', 'orderCommitSnapshotId', 'currency', 'costEntryIds', 'componentTotals', 'totalCost', 'status', 'contentHash', 'createdAt'],
+      required: ['id', 'orderId', 'orderVersion', 'orderCommitSnapshotId', 'supplyCommitmentSnapshotIds', 'supplyLineageComplete', 'currency', 'costEntryIds', 'componentTotals', 'totalCost', 'status', 'contentHash', 'createdAt'],
       properties: {
-        id: identifier, orderId: identifier, orderVersion: version(), orderCommitSnapshotId: identifier, currency,
+        id: identifier, orderId: identifier, orderVersion: version(), orderCommitSnapshotId: identifier,
+        supplyCommitmentSnapshotIds: { type: 'array', maxItems: 100_000, uniqueItems: true, items: identifier },
+        supplyLineageComplete: { type: 'boolean' },
+        currency,
         costEntryIds: { type: 'array', minItems: 1, maxItems: 100_000, items: identifier },
         componentTotals: { type: 'object', additionalProperties: money }, totalCost: positiveMoney,
         status: { type: 'string', enum: ['actual'] }, contentHash: sha256(), createdAt: date(),
@@ -108,9 +112,11 @@ function schemas() {
     },
     MarginActualizationSnapshot: {
       type: 'object', additionalProperties: false,
-      required: ['id', 'orderId', 'orderVersion', 'orderCommitSnapshotId', 'landedCostSnapshotId', 'commercialPublicationId', 'priceListVersionId', 'buyerCatalogVersionId', 'currency', 'netRevenue', 'landedCost', 'contributionMarginAmount', 'contributionMarginPercent', 'status', 'contentHash', 'createdAt'],
+      required: ['id', 'orderId', 'orderVersion', 'orderCommitSnapshotId', 'landedCostSnapshotId', 'supplyCommitmentSnapshotIds', 'supplyLineageComplete', 'commercialPublicationId', 'priceListVersionId', 'buyerCatalogVersionId', 'currency', 'netRevenue', 'landedCost', 'contributionMarginAmount', 'contributionMarginPercent', 'status', 'contentHash', 'createdAt'],
       properties: {
         id: identifier, orderId: identifier, orderVersion: version(), orderCommitSnapshotId: identifier, landedCostSnapshotId: identifier,
+        supplyCommitmentSnapshotIds: { type: 'array', maxItems: 100_000, uniqueItems: true, items: identifier },
+        supplyLineageComplete: { type: 'boolean' },
         commercialPublicationId: nullableIdentifier(), priceListVersionId: nullableIdentifier(), buyerCatalogVersionId: nullableIdentifier(), currency,
         netRevenue: positiveMoney, landedCost: positiveMoney, contributionMarginAmount: money,
         contributionMarginPercent: { type: 'number', minimum: -1_000_000, maximum: 100, multipleOf: 0.0001 },

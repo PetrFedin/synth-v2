@@ -3,7 +3,7 @@ import { assertBodyContract, assertQueryContract, bodyContract } from './request
 
 const SUPPLY_BODY = bodyContract(['allocations'], {}, { allocations: ['sku', 'quantity', 'sourceType', 'sourceRef', 'expectedAvailabilityAt'] });
 const FX_BODY = bodyContract(['sourceCurrency', 'rate', 'rateType', 'sourceRef', 'effectiveAt']);
-const COST_BODY = bodyContract(['costType', 'amount', 'currency', 'fxRateSnapshotId', 'sku', 'sourceRef', 'occurredAt']);
+const COST_BODY = bodyContract(['supplyCommitmentSnapshotId', 'costType', 'amount', 'currency', 'fxRateSnapshotId', 'sku', 'sourceRef', 'occurredAt']);
 const EMPTY_BODY = bodyContract();
 const MARGIN_BODY = bodyContract(['landedCostSnapshotId']);
 const FX_RATE_TYPES = new Set(['plan', 'budget', 'po', 'invoice', 'accounting', 'settlement']);
@@ -34,6 +34,7 @@ function validateFxBody(body) {
 }
 function validateCostBody(body) {
   assertBodyContract(body, COST_BODY);
+  invariant(typeof body.supplyCommitmentSnapshotId === 'string' && body.supplyCommitmentSnapshotId.length > 0, 'HTTP_BODY_FIELD_INVALID', 'supplyCommitmentSnapshotId is required', { field: 'supplyCommitmentSnapshotId' });
   invariant(typeof body.costType === 'string' && body.costType.length > 0, 'HTTP_BODY_FIELD_INVALID', 'costType is required', { field: 'costType' });
   invariant(Number.isFinite(body.amount), 'HTTP_BODY_FIELD_INVALID', 'amount must be numeric', { field: 'amount' });
   invariant(typeof body.currency === 'string' && /^[A-Z]{3}$/.test(body.currency), 'HTTP_BODY_FIELD_INVALID', 'currency must be ISO-4217', { field: 'currency' });

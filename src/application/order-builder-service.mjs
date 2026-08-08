@@ -18,10 +18,12 @@ import { advanceCommercialCycle, attachOrder, cancelCommercialCycleOrder } from 
 const INVENTORY_ERROR_CODES = new Set([
   'CATALOG_SKU_NOT_FOUND',
   'CATALOG_SKU_NOT_PUBLISHED',
+  'CATALOG_SKU_LINEAGE_MISMATCH',
   'CATALOG_MOQ_NOT_MET',
   'CATALOG_AVAILABILITY_EXCEEDED',
   'CATALOG_RESERVATION_NOT_FOUND',
   'CATALOG_RELEASE_EXCEEDS_RESERVED',
+  'ORDER_COMMIT_SNAPSHOT_NOT_FOUND',
 ]);
 
 export function createOrderBuilderService({
@@ -263,11 +265,13 @@ function translateInventoryError(error) {
 function inventoryMessage(code) {
   return ({
     CATALOG_SKU_NOT_FOUND: 'Catalog SKU not found during inventory mutation',
-    CATALOG_SKU_NOT_PUBLISHED: 'Order contains an unavailable catalog SKU',
-    CATALOG_MOQ_NOT_MET: 'Order quantity is below minimum order quantity',
+    CATALOG_SKU_NOT_PUBLISHED: 'Legacy order contains an unavailable catalog SKU',
+    CATALOG_SKU_LINEAGE_MISMATCH: 'Catalog availability row does not match the pinned commercial order lineage',
+    CATALOG_MOQ_NOT_MET: 'Legacy order quantity is below current catalog minimum order quantity',
     CATALOG_AVAILABILITY_EXCEEDED: 'Order quantity exceeds available-to-sell',
     CATALOG_RESERVATION_NOT_FOUND: 'Order inventory reservation is missing',
     CATALOG_RELEASE_EXCEEDS_RESERVED: 'Inventory release exceeds reserved quantity',
+    ORDER_COMMIT_SNAPSHOT_NOT_FOUND: 'Pinned order commit snapshot is missing during inventory reservation',
   })[code] ?? 'Inventory mutation failed';
 }
 function defaultIdGenerator() { let sequence = 0; return (prefix) => `${prefix}_${++sequence}`; }

@@ -80,8 +80,22 @@ export function createOrderFxRateSnapshot({
   });
 }
 
-export function createActualCostLedgerEntry({ id, order, orderCommit, costType, amount, currency, fxRateSnapshot = null, sku = null, sourceRef, occurredAt, recordedAt }) {
+export function createActualCostLedgerEntry({
+  id,
+  order,
+  orderCommit,
+  supplyCommitment,
+  costType,
+  amount,
+  currency,
+  fxRateSnapshot = null,
+  sku = null,
+  sourceRef,
+  occurredAt,
+  recordedAt,
+}) {
   assertExecutionLineage(order, orderCommit);
+  assertSupplyCostBasis(supplyCommitment, orderCommit);
   invariant(id, 'ACTUAL_COST_ENTRY_ID_REQUIRED', 'Actual cost entry id is required');
   invariant(COST_TYPES.includes(costType), 'ACTUAL_COST_TYPE_INVALID', 'Actual cost type is invalid', { costType });
   invariant(isCurrency(currency), 'ACTUAL_COST_CURRENCY_INVALID', 'Actual cost currency must be an ISO-4217 code', { currency });
@@ -95,6 +109,7 @@ export function createActualCostLedgerEntry({ id, order, orderCommit, costType, 
     orderId: orderCommit.orderId,
     orderVersion: orderCommit.orderVersion,
     orderCommitSnapshotId: orderCommit.id,
+    supplyCommitmentSnapshotId: supplyCommitment.id,
     brandId: orderCommit.brandId,
     shopId: orderCommit.shopId,
     costType,
@@ -115,11 +130,15 @@ export function createLandedCostSnapshot({ id, order, orderCommit, costEntries, 
   invariant(id, 'LANDED_COST_SNAPSHOT_ID_REQUIRED', 'Landed cost snapshot id is required');
   invariant(Array.isArray(costEntries) && costEntries.length > 0, 'LANDED_COST_ENTRIES_REQUIRED', 'Landed cost requires actual cost entries');
   const componentTotals = {};
+  const supplyCommitmentSnapshotIds = new Set();
+  let supplyLineageComplete = true;
   let scaledTotal = 0;
   for (const entry of costEntries) {
     invariant(entry.orderId === orderCommit.orderId, 'LANDED_COST_ORDER_MISMATCH', 'Cost entry belongs to another order', { entryId: entry.id });
     invariant(entry.orderCommitSnapshotId === orderCommit.id, 'LANDED_COST_COMMIT_MISMATCH', 'Cost entry belongs to another order commit snapshot', { entryId: entry.id, expectedOrderCommitSnapshotId: orderCommit.id, actualOrderCommitSnapshotId: entry.orderCommitSnapshotId });
     invariant(entry.currency === orderCommit.currency, 'LANDED_COST_CURRENCY_MISMATCH', 'Cost entry currency does not match committed order currency', { entryId: entry.id });
+    if (entry.supplyCommitmentSnapshotId) supplyCommitmentSnapshotIds.add(entry.supplyCommitmentSnapshotId);
+    else supplyLineageComplete = false;
     scaledTotal += Math.round(entry.amount * MONEY_FACTOR);
     componentTotals[entry.costType] = roundMoney((componentTotals[entry.costType] ?? 0) + entry.amount);
   }
@@ -129,6 +148,8 @@ export function createLandedCostSnapshot({ id, order, orderCommit, costEntries, 
     orderId: orderCommit.orderId,
     orderVersion: orderCommit.orderVersion,
     orderCommitSnapshotId: orderCommit.id,
+    supplyCommitmentSnapshotIds: Object.freeze([...supplyCommitmentSnapshotIds].sort()),
+    supplyLineageComplete,
     currency: orderCommit.currency,
     costEntryIds: Object.freeze(costEntries.map((entry) => entry.id).sort()),
     componentTotals: Object.freeze(Object.fromEntries(Object.entries(componentTotals).sort(([a], [b]) => a.localeCompare(b)))),
@@ -151,6 +172,8 @@ export function createMarginActualizationSnapshot({ id, order, orderCommit, land
     orderVersion: orderCommit.orderVersion,
     orderCommitSnapshotId: orderCommit.id,
     landedCostSnapshotId: landedCost.id,
+    supplyCommitmentSnapshotIds: Object.freeze([...(landedCost.supplyCommitmentSnapshotIds ?? [])]),
+    supplyLineageComplete: landedCost.supplyLineageComplete ?? false,
     commercialPublicationId: orderCommit.commercialPublicationId ?? null,
     priceListVersionId: orderCommit.priceListVersionId ?? null,
     buyerCatalogVersionId: orderCommit.buyerCatalogVersionId ?? null,
@@ -161,6 +184,17 @@ export function createMarginActualizationSnapshot({ id, order, orderCommit, land
     contributionMarginPercent,
   });
   return Object.freeze({ id, ...basis, status: 'actual', contentHash: hashBasis(basis), createdAt });
+}
+
+function assertSupplyCostBasis(supplyCommitment, orderCommit) {
+  invariant(supplyCommitment?.id, 'ACTUAL_COST_SUPPLY_COMMITMENT_REQUIRED', 'Actual cost requires an immutable supply commitment snapshot');
+  invariant(supplyCommitment.status === 'committed', 'ACTUAL_COST_SUPPLY_COMMITMENT_STATUS_INVALID', 'Supply commitment snapshot must be committed', { supplyCommitmentSnapshotId: supplyCommitment.id, status: supplyCommitment.status });
+  invariant(supplyCommitment.orderId === orderCommit.orderId && supplyCommitment.orderCommitSnapshotId === orderCommit.id, 'ACTUAL_COST_SUPPLY_LINEAGE_MISMATCH', 'Supply commitment belongs to another order commit', {
+    supplyCommitmentSnapshotId: supplyCommitment.id,
+    orderId: orderCommit.orderId,
+    orderCommitSnapshotId: orderCommit.id,
+  });
+  invariant(supplyCommitment.currency === orderCommit.currency, 'ACTUAL_COST_SUPPLY_CURRENCY_MISMATCH', 'Supply commitment currency differs from the committed order currency', { supplyCommitmentSnapshotId: supplyCommitment.id });
 }
 
 function normalizeActualCostCurrency({ sourceAmount, sourceCurrency, orderCommit, fxRateSnapshot }) {

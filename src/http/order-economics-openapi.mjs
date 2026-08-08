@@ -7,6 +7,7 @@ const positiveMoney = { type: 'number', exclusiveMinimum: 0, maximum: 900_719_92
 const fxRate = { type: 'number', exclusiveMinimum: 0, maximum: 90_071_992.54740991, multipleOf: 0.00000001 };
 const idempotency = { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 1, maxLength: 128, pattern: SAFE_ID } };
 const orderId = { name: 'orderId', in: 'path', required: true, schema: identifier };
+const actualCostEntryId = { name: 'actualCostEntryId', in: 'path', required: true, schema: identifier };
 const marginActualizationId = { name: 'marginActualizationId', in: 'path', required: true, schema: identifier };
 const errorResponse = { description: 'Domain or transport error', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } };
 
@@ -73,23 +74,36 @@ function schemas() {
     },
     ActualCostInput: {
       type: 'object', additionalProperties: false, required: ['supplyCommitmentSnapshotId', 'costType', 'amount', 'currency', 'sourceRef'],
+      properties: actualCostWriteProperties(),
+    },
+    ActualCostCorrectionInput: {
+      type: 'object', additionalProperties: false, required: ['reason', 'supplyCommitmentSnapshotId', 'costType', 'amount', 'currency', 'sourceRef'],
       properties: {
-        supplyCommitmentSnapshotId: identifier,
-        costType: costType(), amount: { ...money, not: { const: 0 } }, currency,
-        fxRateSnapshotId: identifier,
-        sku: { oneOf: [{ type: 'string', pattern: SKU }, { type: 'null' }] },
-        sourceRef: { type: 'string', minLength: 1, maxLength: 240 }, occurredAt: date(),
+        reason: { type: 'string', minLength: 1, maxLength: 1000 },
+        ...actualCostWriteProperties(),
       },
     },
     ActualCostLedgerEntry: {
       type: 'object', additionalProperties: false,
-      required: ['id', 'orderId', 'orderVersion', 'orderCommitSnapshotId', 'supplyCommitmentSnapshotId', 'brandId', 'shopId', 'costType', 'sourceAmount', 'sourceCurrency', 'fxRateSnapshotId', 'amount', 'currency', 'sku', 'sourceRef', 'occurredAt', 'recordedAt'],
+      required: ['id', 'orderId', 'orderVersion', 'orderCommitSnapshotId', 'supplyCommitmentSnapshotId', 'brandId', 'shopId', 'entryKind', 'reversalOfEntryId', 'correctionId', 'correctionReason', 'costType', 'sourceAmount', 'sourceCurrency', 'fxRateSnapshotId', 'amount', 'currency', 'sku', 'sourceRef', 'occurredAt', 'recordedAt'],
       properties: {
         id: identifier, orderId: identifier, orderVersion: version(), orderCommitSnapshotId: identifier, supplyCommitmentSnapshotId: identifier,
         brandId: identifier, shopId: identifier,
+        entryKind: { type: 'string', enum: ['actual', 'reversal'] },
+        reversalOfEntryId: nullableIdentifier(), correctionId: nullableIdentifier(), correctionReason: nullableString(1000),
         costType: costType(), sourceAmount: money, sourceCurrency: currency, fxRateSnapshotId: nullableIdentifier(), amount: money, currency,
         sku: { oneOf: [{ type: 'string', pattern: SKU }, { type: 'null' }] },
         sourceRef: { type: 'string', minLength: 1, maxLength: 240 }, occurredAt: date(), recordedAt: date(),
+      },
+    },
+    ActualCostCorrectionResult: {
+      type: 'object', additionalProperties: false,
+      required: ['correctionId', 'originalEntryId', 'reversal', 'replacement'],
+      properties: {
+        correctionId: identifier,
+        originalEntryId: identifier,
+        reversal: { $ref: '#/components/schemas/ActualCostLedgerEntry' },
+        replacement: { $ref: '#/components/schemas/ActualCostLedgerEntry' },
       },
     },
     EmptyEconomicsInput: { type: 'object', additionalProperties: false, maxProperties: 0 },
@@ -141,6 +155,9 @@ function paths() {
     '/orders/{orderId}/actual-costs': {
       post: mutation('recordActualCost', '#/components/schemas/ActualCostInput', '#/components/schemas/ActualCostLedgerEntry', 'Recorded append-only actual cost'),
     },
+    '/orders/{orderId}/actual-costs/{actualCostEntryId}/corrections': {
+      post: mutationWithParameters('correctActualCost', [orderId, actualCostEntryId], '#/components/schemas/ActualCostCorrectionInput', '#/components/schemas/ActualCostCorrectionResult', 'Append-only actual cost reversal and replacement'),
+    },
     '/orders/{orderId}/landed-cost/actualize': {
       post: mutation('actualizeLandedCost', '#/components/schemas/EmptyEconomicsInput', '#/components/schemas/LandedCostSnapshot', 'Actualized landed cost'),
     },
@@ -156,8 +173,20 @@ function paths() {
   };
 }
 
+function actualCostWriteProperties() {
+  return {
+    supplyCommitmentSnapshotId: identifier,
+    costType: costType(), amount: { ...money, not: { const: 0 } }, currency,
+    fxRateSnapshotId: identifier,
+    sku: { oneOf: [{ type: 'string', pattern: SKU }, { type: 'null' }] },
+    sourceRef: { type: 'string', minLength: 1, maxLength: 240 }, occurredAt: date(),
+  };
+}
 function mutation(operationId, input, output, description) {
-  return { operationId, security: [{ bearerAuth: [] }], parameters: [orderId, idempotency], requestBody: body(input), responses: mutationResponses(description, output) };
+  return mutationWithParameters(operationId, [orderId], input, output, description);
+}
+function mutationWithParameters(operationId, parameters, input, output, description) {
+  return { operationId, security: [{ bearerAuth: [] }], parameters: [...parameters, idempotency], requestBody: body(input), responses: mutationResponses(description, output) };
 }
 function body(reference) { return { required: true, content: { 'application/json': { schema: { $ref: reference } } } }; }
 function dataResponse(description, reference) {
@@ -172,5 +201,6 @@ function version() { return { type: 'integer', minimum: 1, maximum: 2_147_483_64
 function date() { return { type: 'string', format: 'date-time' }; }
 function nullableDate() { return { oneOf: [date(), { type: 'null' }] }; }
 function nullableIdentifier() { return { oneOf: [identifier, { type: 'null' }] }; }
+function nullableString(maxLength) { return { oneOf: [{ type: 'string', minLength: 1, maxLength }, { type: 'null' }] }; }
 function sha256() { return { type: 'string', pattern: '^[a-f0-9]{64}$' }; }
 function deepFreeze(value) { if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value; Object.freeze(value); for (const nested of Object.values(value)) deepFreeze(nested); return value; }

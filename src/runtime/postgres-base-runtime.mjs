@@ -104,7 +104,7 @@ export function createPostgresWholesaleRuntime({
   const techPacks = Object.freeze({ ...createTechPackService({ techPackStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createTechPackQueryService({ reader: createPostgresTechPackReader({ pool }) }) });
   const partners = createPartnerAccessService(options);
   const collaboration = createShowroomSelectionService({ ...options, catalogReader: catalog, commercialPublicationReader: commercialPublication });
-  const orders = createOrderBuilderService(options);
+  const orders = createOrderBuilderService({ ...options, commercialPublicationReader: commercialPublication });
   const projectionStore = createPostgresNotificationProjectionStore({ pool });
   const notificationReader = createPostgresNotificationReader({ pool });
   const notificationCore = createNotificationService({

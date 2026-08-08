@@ -4,6 +4,7 @@ import { assertBodyContract, assertQueryContract, bodyContract } from './request
 const SUPPLY_BODY = bodyContract(['allocations'], {}, { allocations: ['sku', 'quantity', 'sourceType', 'sourceRef', 'expectedAvailabilityAt'] });
 const FX_BODY = bodyContract(['sourceCurrency', 'rate', 'rateType', 'sourceRef', 'effectiveAt']);
 const COST_BODY = bodyContract(['supplyCommitmentSnapshotId', 'costType', 'amount', 'currency', 'fxRateSnapshotId', 'sku', 'sourceRef', 'occurredAt']);
+const COST_CORRECTION_BODY = bodyContract(['reason', 'supplyCommitmentSnapshotId', 'costType', 'amount', 'currency', 'fxRateSnapshotId', 'sku', 'sourceRef', 'occurredAt']);
 const EMPTY_BODY = bodyContract();
 const MARGIN_BODY = bodyContract(['landedCostSnapshotId']);
 const FX_RATE_TYPES = new Set(['plan', 'budget', 'po', 'invoice', 'accounting', 'settlement']);
@@ -14,6 +15,7 @@ export function createOrderEconomicsRoutes({ orderEconomics } = {}) {
     mutate('POST', /^\/v2\/orders\/([^/]+)\/supply-commitments$/, validateSupplyBody, ({ commandId, actorId, params, body }) => service.createSupplyCommitment(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/orders\/([^/]+)\/fx-rate-snapshots$/, validateFxBody, ({ commandId, actorId, params, body }) => service.createFxRateSnapshot(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/orders\/([^/]+)\/actual-costs$/, validateCostBody, ({ commandId, actorId, params, body }) => service.recordActualCost(commandId, actorId, params[0], body)),
+    mutate('POST', /^\/v2\/orders\/([^/]+)\/actual-costs\/([^/]+)\/corrections$/, validateCostCorrectionBody, ({ commandId, actorId, params, body }) => service.correctActualCost(commandId, actorId, params[0], params[1], body)),
     mutate('POST', /^\/v2\/orders\/([^/]+)\/landed-cost\/actualize$/, (body) => assertBodyContract(body, EMPTY_BODY), ({ commandId, actorId, params }) => service.actualizeLandedCost(commandId, actorId, params[0])),
     mutate('POST', /^\/v2\/orders\/([^/]+)\/margin\/actualize$/, validateMarginBody, ({ commandId, actorId, params, body }) => service.actualizeMargin(commandId, actorId, params[0], body.landedCostSnapshotId)),
     read('GET', /^\/v2\/margin-actualizations\/([^/]+)$/, ({ actorId, params }) => service.getMarginForActor(actorId, params[0])),
@@ -34,6 +36,14 @@ function validateFxBody(body) {
 }
 function validateCostBody(body) {
   assertBodyContract(body, COST_BODY);
+  validateCostFields(body);
+}
+function validateCostCorrectionBody(body) {
+  assertBodyContract(body, COST_CORRECTION_BODY);
+  invariant(typeof body.reason === 'string' && body.reason.trim().length > 0 && body.reason.trim().length <= 1000, 'HTTP_BODY_FIELD_INVALID', 'reason must contain 1 to 1000 characters', { field: 'reason' });
+  validateCostFields(body);
+}
+function validateCostFields(body) {
   invariant(typeof body.supplyCommitmentSnapshotId === 'string' && body.supplyCommitmentSnapshotId.length > 0, 'HTTP_BODY_FIELD_INVALID', 'supplyCommitmentSnapshotId is required', { field: 'supplyCommitmentSnapshotId' });
   invariant(typeof body.costType === 'string' && body.costType.length > 0, 'HTTP_BODY_FIELD_INVALID', 'costType is required', { field: 'costType' });
   invariant(Number.isFinite(body.amount), 'HTTP_BODY_FIELD_INVALID', 'amount must be numeric', { field: 'amount' });
@@ -66,5 +76,5 @@ function read(method, pattern, execute) {
 }
 function unavailableOrderEconomics() {
   const fail = () => invariant(false, 'ORDER_ECONOMICS_SERVICE_REQUIRED', 'Order economics service is required');
-  return Object.freeze({ createSupplyCommitment: fail, createFxRateSnapshot: fail, recordActualCost: fail, actualizeLandedCost: fail, actualizeMargin: fail, getMarginForActor: fail });
+  return Object.freeze({ createSupplyCommitment: fail, createFxRateSnapshot: fail, recordActualCost: fail, correctActualCost: fail, actualizeLandedCost: fail, actualizeMargin: fail, getMarginForActor: fail });
 }

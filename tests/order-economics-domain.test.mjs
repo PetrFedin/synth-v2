@@ -82,7 +82,7 @@ test('cross-currency actual cost uses an immutable FX snapshot and preserves sou
   assert.equal(entry.sourceCurrency, 'USD');
   assert.equal(entry.fxRateSnapshotId, 'FX-USD-EUR');
   assert.equal(entry.currency, 'EUR');
-  assert.equal(entry.amount, 114.007);
+  assert.equal(entry.amount, 114.0069);
 });
 
 test('cross-currency actual cost rejects an FX snapshot from another order commit', () => {

@@ -40,19 +40,31 @@ export function createOrderEconomicsService({
     return order;
   }
 
+  async function executionBasisForCapability(tx, orderId, actorId, capability) {
+    const order = await orderForCapability(tx, orderId, actorId, capability);
+    invariant(typeof order.orderCommitSnapshotId === 'string' && order.orderCommitSnapshotId.length > 0, 'ORDER_COMMIT_SNAPSHOT_REQUIRED_FOR_EXECUTION', 'Supply and cost actualization require an immutable order commit snapshot', { orderId });
+    const orderCommit = requireEntity(
+      await tx.getOrderCommitSnapshot(order.orderCommitSnapshotId),
+      'ORDER_COMMIT_SNAPSHOT_NOT_FOUND',
+      { orderId, orderCommitSnapshotId: order.orderCommitSnapshotId },
+    );
+    return Object.freeze({ order, orderCommit });
+  }
+
   return Object.freeze({
     createSupplyCommitment(commandId, actorId, orderId, input) {
       return execute(
         commandId,
         `createSupplyCommitment:${actorId}:${orderId}:${canonicalJson(input)}`,
         actorId,
-        (tx) => orderForCapability(tx, orderId, actorId, CAPABILITIES.SUPPLY_MANAGE),
-        async (tx, order) => {
-          const commitment = createSupplyCommitmentSnapshot({ id: nextId('supply-commitment'), order, allocations: input.allocations, createdAt: clock() });
+        (tx) => executionBasisForCapability(tx, orderId, actorId, CAPABILITIES.SUPPLY_MANAGE),
+        async (tx, { order, orderCommit }) => {
+          const commitment = createSupplyCommitmentSnapshot({ id: nextId('supply-commitment'), order, orderCommit, allocations: input.allocations, createdAt: clock() });
           await tx.insertSupplyCommitment(commitment);
           await append(tx, 'supply-commitment.created', commitment.id, {
             orderId,
             orderVersion: commitment.orderVersion,
+            orderCommitSnapshotId: commitment.orderCommitSnapshotId,
             allocationCount: commitment.allocations.length,
             commercialPublicationId: commitment.commercialPublicationId,
             buyerCatalogVersionId: commitment.buyerCatalogVersionId,
@@ -68,15 +80,16 @@ export function createOrderEconomicsService({
         commandId,
         `recordActualCost:${actorId}:${orderId}:${canonicalJson(input)}`,
         actorId,
-        (tx) => orderForCapability(tx, orderId, actorId, CAPABILITIES.COST_MANAGE),
-        async (tx, order) => {
+        (tx) => executionBasisForCapability(tx, orderId, actorId, CAPABILITIES.COST_MANAGE),
+        async (tx, { order, orderCommit }) => {
           const entry = createActualCostLedgerEntry({
-            id: nextId('actual-cost'), order, ...input,
+            id: nextId('actual-cost'), order, orderCommit, ...input,
             occurredAt: input.occurredAt ?? clock(), recordedAt: clock(),
           });
           await tx.insertActualCostEntry(entry);
           await append(tx, 'actual-cost.recorded', entry.id, {
-            orderId, costType: entry.costType, amount: entry.amount, currency: entry.currency,
+            orderId, orderCommitSnapshotId: entry.orderCommitSnapshotId,
+            costType: entry.costType, amount: entry.amount, currency: entry.currency,
             sku: entry.sku, sourceRef: entry.sourceRef,
           }, commandId, actorId);
           return entry;
@@ -89,13 +102,15 @@ export function createOrderEconomicsService({
         commandId,
         `actualizeLandedCost:${actorId}:${orderId}`,
         actorId,
-        (tx) => orderForCapability(tx, orderId, actorId, CAPABILITIES.COST_MANAGE),
-        async (tx, order) => {
+        (tx) => executionBasisForCapability(tx, orderId, actorId, CAPABILITIES.COST_MANAGE),
+        async (tx, { order, orderCommit }) => {
           const entries = await tx.listActualCostEntries(orderId);
-          const snapshot = createLandedCostSnapshot({ id: nextId('landed-cost'), order, costEntries: entries, createdAt: clock() });
+          const currentEntries = entries.filter((entry) => entry.orderCommitSnapshotId === orderCommit.id);
+          const snapshot = createLandedCostSnapshot({ id: nextId('landed-cost'), order, orderCommit, costEntries: currentEntries, createdAt: clock() });
           await tx.insertLandedCostSnapshot(snapshot);
           await append(tx, 'landed-cost.actualized', snapshot.id, {
-            orderId, totalCost: snapshot.totalCost, currency: snapshot.currency,
+            orderId, orderCommitSnapshotId: snapshot.orderCommitSnapshotId,
+            totalCost: snapshot.totalCost, currency: snapshot.currency,
             costEntryCount: snapshot.costEntryIds.length, contentHash: snapshot.contentHash,
           }, commandId, actorId);
           return snapshot;
@@ -108,13 +123,14 @@ export function createOrderEconomicsService({
         commandId,
         `actualizeMargin:${actorId}:${orderId}:${landedCostSnapshotId}`,
         actorId,
-        (tx) => orderForCapability(tx, orderId, actorId, CAPABILITIES.COST_MANAGE),
-        async (tx, order) => {
+        (tx) => executionBasisForCapability(tx, orderId, actorId, CAPABILITIES.COST_MANAGE),
+        async (tx, { order, orderCommit }) => {
           const landedCost = requireEntity(await tx.getLandedCostSnapshot(landedCostSnapshotId), 'LANDED_COST_SNAPSHOT_NOT_FOUND', { landedCostSnapshotId });
-          const snapshot = createMarginActualizationSnapshot({ id: nextId('margin-actualization'), order, landedCost, createdAt: clock() });
+          const snapshot = createMarginActualizationSnapshot({ id: nextId('margin-actualization'), order, orderCommit, landedCost, createdAt: clock() });
           await tx.insertMarginActualizationSnapshot(snapshot);
           await append(tx, 'margin.actualized', snapshot.id, {
             orderId,
+            orderCommitSnapshotId: snapshot.orderCommitSnapshotId,
             landedCostSnapshotId,
             netRevenue: snapshot.netRevenue,
             landedCost: snapshot.landedCost,

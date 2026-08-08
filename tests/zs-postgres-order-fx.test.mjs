@@ -8,7 +8,7 @@ import { createOrderEconomicsService } from '../src/application/order-economics-
 
 const databaseUrl = process.env.POSTGRES_TEST_URL;
 
-test('PostgreSQL persists FX source money and converted landed cost on one immutable order commit', { skip: !databaseUrl }, async () => {
+test('PostgreSQL persists supply, FX source money and converted landed cost on one immutable order commit', { skip: !databaseUrl }, async () => {
   const { Pool } = await import('pg');
   const pool = new Pool({ connectionString: databaseUrl, max: 2 });
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -102,29 +102,38 @@ test('PostgreSQL persists FX source money and converted landed cost on one immut
       clock: () => now,
       nextId: (prefix) => `${prefix}-pg-${++sequence}`,
     });
+    const supply = await service.createSupplyCommitment('cmd-supply', 'cost-user', order.id, {
+      allocations: [{ sku: 'SKU-FX', quantity: 10, sourceType: 'production', sourceRef: 'PO-FX' }],
+    });
     const fx = await service.createFxRateSnapshot('cmd-fx', 'cost-user', order.id, {
       sourceCurrency: 'USD', rate: 0.92, rateType: 'invoice', sourceRef: 'FX-INVOICE-RATE', effectiveAt: now,
     });
     const cost = await service.recordActualCost('cmd-cost', 'cost-user', order.id, {
+      supplyCommitmentSnapshotId: supply.id,
       costType: 'freight', amount: 100, currency: 'USD', fxRateSnapshotId: fx.id, sourceRef: 'FREIGHT-INVOICE', occurredAt: now,
     });
     const landed = await service.actualizeLandedCost('cmd-landed', 'cost-user', order.id);
 
+    assert.equal(cost.supplyCommitmentSnapshotId, supply.id);
     assert.equal(cost.sourceAmount, 100);
     assert.equal(cost.sourceCurrency, 'USD');
     assert.equal(cost.fxRateSnapshotId, fx.id);
     assert.equal(cost.amount, 92);
     assert.equal(cost.currency, 'EUR');
     assert.equal(landed.totalCost, 92);
+    assert.deepEqual(landed.supplyCommitmentSnapshotIds, [supply.id]);
+    assert.equal(landed.supplyLineageComplete, true);
 
     const row = await pool.query(
-      `SELECT source_amount::text, source_currency, amount::text, currency, fx_rate_snapshot_id, order_commit_snapshot_id, lineage_version
+      `SELECT source_amount::text, source_currency, amount::text, currency, fx_rate_snapshot_id,
+              supply_commitment_snapshot_id, order_commit_snapshot_id, lineage_version
          FROM actual_cost_ledger_entries WHERE id = $1`,
       [cost.id],
     );
     assert.deepEqual(row.rows, [{
       source_amount: '100.0000', source_currency: 'USD', amount: '92.0000', currency: 'EUR',
-      fx_rate_snapshot_id: fx.id, order_commit_snapshot_id: commit.id, lineage_version: 2,
+      fx_rate_snapshot_id: fx.id, supply_commitment_snapshot_id: supply.id,
+      order_commit_snapshot_id: commit.id, lineage_version: 3,
     }]);
   } finally {
     await pool.end();

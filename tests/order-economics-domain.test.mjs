@@ -4,6 +4,7 @@ import {
   createActualCostLedgerEntry,
   createLandedCostSnapshot,
   createMarginActualizationSnapshot,
+  createOrderFxRateSnapshot,
   createSupplyCommitmentSnapshot,
 } from '../src/modules/order-economics/public.mjs';
 
@@ -51,6 +52,9 @@ test('actual cost ledger closes landed cost and actual contribution margin on im
   const landedCost = createLandedCostSnapshot({ id: 'LC-1', order, orderCommit, costEntries: [factory, freight, credit], createdAt: at });
   const margin = createMarginActualizationSnapshot({ id: 'M-1', order, orderCommit, landedCost, createdAt: at });
 
+  assert.equal(factory.sourceAmount, 600);
+  assert.equal(factory.sourceCurrency, 'EUR');
+  assert.equal(factory.fxRateSnapshotId, null);
   assert.equal(landedCost.totalCost, 680);
   assert.equal(landedCost.orderCommitSnapshotId, 'ORDER-COMMIT-1');
   assert.deepEqual(landedCost.componentTotals, { factory: 600, freight: 100, quality: -20 });
@@ -61,6 +65,35 @@ test('actual cost ledger closes landed cost and actual contribution margin on im
   assert.equal(margin.landedCostSnapshotId, 'LC-1');
   assert.equal(margin.buyerCatalogVersionId, 'BUYER-CAT-1');
   assert.equal(margin.priceListVersionId, 'PRICE-1');
+});
+
+test('cross-currency actual cost uses an immutable FX snapshot and preserves source money', () => {
+  const fx = createOrderFxRateSnapshot({
+    id: 'FX-USD-EUR', order, orderCommit, sourceCurrency: 'USD', rate: 0.92345678,
+    rateType: 'invoice', sourceRef: 'ECB-2026-08-08', effectiveAt: at, recordedAt: at,
+  });
+  const entry = createActualCostLedgerEntry({
+    id: 'C-USD', order, orderCommit, costType: 'freight', amount: 123.4567, currency: 'USD',
+    fxRateSnapshot: fx, sourceRef: 'FREIGHT-USD-1', occurredAt: at, recordedAt: at,
+  });
+  assert.equal(fx.targetCurrency, 'EUR');
+  assert.equal(fx.orderCommitSnapshotId, 'ORDER-COMMIT-1');
+  assert.equal(entry.sourceAmount, 123.4567);
+  assert.equal(entry.sourceCurrency, 'USD');
+  assert.equal(entry.fxRateSnapshotId, 'FX-USD-EUR');
+  assert.equal(entry.currency, 'EUR');
+  assert.equal(entry.amount, 114.007);
+});
+
+test('cross-currency actual cost rejects an FX snapshot from another order commit', () => {
+  const fx = Object.freeze({
+    id: 'FX-WRONG', orderId: order.id, orderCommitSnapshotId: 'ORDER-COMMIT-OTHER', status: 'recorded',
+    sourceCurrency: 'USD', targetCurrency: 'EUR', rate: 0.92,
+  });
+  assert.throws(
+    () => createActualCostLedgerEntry({ id: 'C-WRONG-FX', order, orderCommit, costType: 'freight', amount: 100, currency: 'USD', fxRateSnapshot: fx, sourceRef: 'INV', occurredAt: at, recordedAt: at }),
+    (error) => error?.code === 'ACTUAL_COST_FX_LINEAGE_MISMATCH',
+  );
 });
 
 test('supply commitment rejects oversupply against committed quantity', () => {

@@ -6,6 +6,7 @@ import {
   createActualCostLedgerEntry,
   createLandedCostSnapshot,
   createMarginActualizationSnapshot,
+  createOrderFxRateSnapshot,
   createSupplyCommitmentSnapshot,
 } from '../modules/order-economics/public.mjs';
 
@@ -75,6 +76,41 @@ export function createOrderEconomicsService({
       );
     },
 
+    createFxRateSnapshot(commandId, actorId, orderId, input) {
+      return execute(
+        commandId,
+        `createFxRateSnapshot:${actorId}:${orderId}:${canonicalJson(input)}`,
+        actorId,
+        (tx) => executionBasisForCapability(tx, orderId, actorId, CAPABILITIES.COST_MANAGE),
+        async (tx, { order, orderCommit }) => {
+          const snapshot = createOrderFxRateSnapshot({
+            id: nextId('fx-rate'),
+            order,
+            orderCommit,
+            sourceCurrency: input.sourceCurrency,
+            rate: input.rate,
+            rateType: input.rateType,
+            sourceRef: input.sourceRef,
+            effectiveAt: input.effectiveAt,
+            recordedAt: clock(),
+          });
+          await tx.insertFxRateSnapshot(snapshot);
+          await append(tx, 'fx-rate.snapshot-recorded', snapshot.id, {
+            orderId,
+            orderCommitSnapshotId: snapshot.orderCommitSnapshotId,
+            sourceCurrency: snapshot.sourceCurrency,
+            targetCurrency: snapshot.targetCurrency,
+            rate: snapshot.rate,
+            rateType: snapshot.rateType,
+            effectiveAt: snapshot.effectiveAt,
+            sourceRef: snapshot.sourceRef,
+            contentHash: snapshot.contentHash,
+          }, commandId, actorId);
+          return snapshot;
+        },
+      );
+    },
+
     recordActualCost(commandId, actorId, orderId, input) {
       return execute(
         commandId,
@@ -82,15 +118,34 @@ export function createOrderEconomicsService({
         actorId,
         (tx) => executionBasisForCapability(tx, orderId, actorId, CAPABILITIES.COST_MANAGE),
         async (tx, { order, orderCommit }) => {
+          const fxRateSnapshot = input.fxRateSnapshotId
+            ? requireEntity(await tx.getFxRateSnapshot(input.fxRateSnapshotId), 'FX_RATE_SNAPSHOT_NOT_FOUND', { fxRateSnapshotId: input.fxRateSnapshotId })
+            : null;
           const entry = createActualCostLedgerEntry({
-            id: nextId('actual-cost'), order, orderCommit, ...input,
-            occurredAt: input.occurredAt ?? clock(), recordedAt: clock(),
+            id: nextId('actual-cost'),
+            order,
+            orderCommit,
+            costType: input.costType,
+            amount: input.amount,
+            currency: input.currency,
+            fxRateSnapshot,
+            sku: input.sku ?? null,
+            sourceRef: input.sourceRef,
+            occurredAt: input.occurredAt ?? clock(),
+            recordedAt: clock(),
           });
           await tx.insertActualCostEntry(entry);
           await append(tx, 'actual-cost.recorded', entry.id, {
-            orderId, orderCommitSnapshotId: entry.orderCommitSnapshotId,
-            costType: entry.costType, amount: entry.amount, currency: entry.currency,
-            sku: entry.sku, sourceRef: entry.sourceRef,
+            orderId,
+            orderCommitSnapshotId: entry.orderCommitSnapshotId,
+            costType: entry.costType,
+            sourceAmount: entry.sourceAmount,
+            sourceCurrency: entry.sourceCurrency,
+            fxRateSnapshotId: entry.fxRateSnapshotId,
+            amount: entry.amount,
+            currency: entry.currency,
+            sku: entry.sku,
+            sourceRef: entry.sourceRef,
           }, commandId, actorId);
           return entry;
         },

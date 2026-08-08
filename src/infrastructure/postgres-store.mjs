@@ -12,7 +12,7 @@ export function createPostgresWholesaleStore({ pool }) {
   return Object.freeze({
     transaction,
     async snapshot() {
-      const [organisations, memberships, relationships, invitations, campaigns, collections, showrooms, selections, orders, cycles, deals, calendar, commands, outbox] = await Promise.all([
+      const [organisations, memberships, relationships, invitations, campaigns, collections, showrooms, selections, orders, orderCommitSnapshots, cycles, deals, calendar, commands, outbox] = await Promise.all([
         payloads(pool, 'organisations'),
         payloads(pool, 'memberships'),
         payloads(pool, 'counterparty_relationships'),
@@ -22,6 +22,7 @@ export function createPostgresWholesaleStore({ pool }) {
         payloads(pool, 'showrooms'),
         payloads(pool, 'selections'),
         payloads(pool, 'orders'),
+        payloads(pool, 'order_commit_snapshots'),
         payloads(pool, 'commercial_cycles'),
         payloads(pool, 'deals'),
         payloads(pool, 'calendar_milestones'),
@@ -38,6 +39,7 @@ export function createPostgresWholesaleStore({ pool }) {
         showrooms,
         selections,
         orders,
+        orderCommitSnapshots,
         cycles,
         deals,
         calendar,
@@ -80,7 +82,7 @@ function transactionView(client) {
     ),
 
     getRelationship: (id) => getPayload(client, 'counterparty_relationships', 'id', id),
-    getRelationshipByTrade: (brandId, shopId) => getPayloadBy(client, 'counterparty_relationships', ['brand_id', 'shop_id'], [brandId, shopId]),
+    getRelationshipByTrade: (brandId, shopId) => getPayloadBy(client, 'counterparty_relationships', ['brand_id', 'shop_id'], [brandId, shopId], 'FOR SHARE'),
     insertRelationship: (value) => insert(
       client,
       'counterparty_relationships',
@@ -98,8 +100,8 @@ function transactionView(client) {
       'RELATIONSHIP_CONCURRENCY_CONFLICT',
     ),
 
-    getShowroomInvitation: (id) => getPayload(client, 'showroom_invitations', 'id', id),
-    getShowroomInvitationByAccess: (showroomId, shopId) => getPayloadBy(client, 'showroom_invitations', ['showroom_id', 'shop_id'], [showroomId, shopId]),
+    getShowroomInvitation: (id) => getPayloadBy(client, 'showroom_invitations', ['id'], [id], 'FOR SHARE'),
+    getShowroomInvitationByAccess: (showroomId, shopId) => getPayloadBy(client, 'showroom_invitations', ['showroom_id', 'shop_id'], [showroomId, shopId], 'FOR SHARE'),
     insertShowroomInvitation: (value) => insert(
       client,
       'showroom_invitations',
@@ -131,7 +133,7 @@ function transactionView(client) {
     ),
     saveCollection: (value, expectedVersion) => saveVersioned(client, 'collections', value, expectedVersion, ['status', 'currency'], [value.status, value.currency], 'COLLECTION_CONCURRENCY_CONFLICT'),
 
-    getShowroom: (id) => getPayload(client, 'showrooms', 'id', id),
+    getShowroom: (id) => getPayloadBy(client, 'showrooms', ['id'], [id], 'FOR SHARE'),
     insertShowroom: (value) => insert(client, 'showrooms', ['id', 'collection_id', 'brand_id', 'status', 'version', 'payload'], [value.id, value.collectionId, value.brandId, value.status, value.version, value], 'SHOWROOM_ALREADY_EXISTS'),
     saveShowroom: (value, expectedVersion) => saveVersioned(client, 'showrooms', value, expectedVersion, ['status'], [value.status], 'SHOWROOM_CONCURRENCY_CONFLICT'),
 
@@ -151,8 +153,8 @@ function transactionView(client) {
     insertOrder: (value) => insert(
       client,
       'orders',
-      ['id', 'selection_id', 'cycle_id', 'brand_id', 'shop_id', 'status', 'currency', 'total_amount', 'version', 'payload'],
-      [value.id, value.selectionId, value.cycleId, value.brandId, value.shopId, value.status, value.currency, value.totalAmount, value.version, value],
+      ['id', 'selection_id', 'cycle_id', 'brand_id', 'shop_id', 'status', 'currency', 'total_amount', 'order_commit_snapshot_id', 'version', 'payload'],
+      [value.id, value.selectionId, value.cycleId, value.brandId, value.shopId, value.status, value.currency, value.totalAmount, value.orderCommitSnapshotId ?? null, value.version, value],
       'ORDER_ALREADY_EXISTS',
     ),
     saveOrder: (value, expectedVersion) => saveVersioned(
@@ -160,9 +162,18 @@ function transactionView(client) {
       'orders',
       value,
       expectedVersion,
-      ['status', 'currency', 'total_amount'],
-      [value.status, value.currency, value.totalAmount],
+      ['status', 'currency', 'total_amount', 'order_commit_snapshot_id'],
+      [value.status, value.currency, value.totalAmount, value.orderCommitSnapshotId ?? null],
       'ORDER_CONCURRENCY_CONFLICT',
+    ),
+
+    getOrderCommitSnapshot: (id) => getPayload(client, 'order_commit_snapshots', 'id', id),
+    insertOrderCommitSnapshot: (value) => insert(
+      client,
+      'order_commit_snapshots',
+      ['id', 'order_id', 'order_version', 'brand_id', 'shop_id', 'currency', 'committed_at', 'content_hash', 'payload'],
+      [value.id, value.orderId, value.orderVersion, value.brandId, value.shopId, value.currency, value.committedAt, value.contentHash, value],
+      'ORDER_COMMIT_SNAPSHOT_ALREADY_EXISTS',
     ),
 
     getCycle: (id) => getPayload(client, 'commercial_cycles', 'id', id),

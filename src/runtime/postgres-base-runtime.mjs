@@ -4,10 +4,12 @@ import { createBomService } from '../application/bom-service.mjs';
 import { createBomQueryService } from '../application/bom-query-service.mjs';
 import { createCatalogService } from '../application/catalog-service.mjs';
 import { createCatalogQueryService } from '../application/catalog-query-service.mjs';
+import { createCommercialPublicationService } from '../application/commercial-publication-service.mjs';
 import { createMaterialService } from '../application/material-service.mjs';
 import { createMaterialQueryService } from '../application/material-query-service.mjs';
 import { createMeasurementService } from '../application/measurement-service.mjs';
 import { createMeasurementQueryService } from '../application/measurement-query-service.mjs';
+import { createOrderEconomicsService } from '../application/order-economics-service.mjs';
 import { createSampleService } from '../application/sample-service.mjs';
 import { createSampleQueryService } from '../application/sample-query-service.mjs';
 import { createSourcingService } from '../application/sourcing-service.mjs';
@@ -29,10 +31,12 @@ import { createPostgresBomStore } from '../infrastructure/postgres-bom-store.mjs
 import { createPostgresBomReader } from '../infrastructure/postgres-bom-reader.mjs';
 import { createPostgresCatalogStore } from '../infrastructure/postgres-catalog-store.mjs';
 import { createPostgresCatalogReader } from '../infrastructure/postgres-catalog-reader.mjs';
+import { createPostgresCommercialPublicationStore } from '../infrastructure/postgres-commercial-publication-store.mjs';
 import { createPostgresMaterialStore } from '../infrastructure/postgres-material-store.mjs';
 import { createPostgresMaterialReader } from '../infrastructure/postgres-material-reader.mjs';
 import { createPostgresMeasurementStore } from '../infrastructure/postgres-measurement-store.mjs';
 import { createPostgresMeasurementReader } from '../infrastructure/postgres-measurement-reader.mjs';
+import { createPostgresOrderEconomicsStore } from '../infrastructure/postgres-order-economics-store.mjs';
 import { createPostgresSampleStore } from '../infrastructure/postgres-sample-store.mjs';
 import { createPostgresSampleReader } from '../infrastructure/postgres-sample-reader.mjs';
 import { createPostgresSourcingStore } from '../infrastructure/postgres-sourcing-store.mjs';
@@ -63,6 +67,8 @@ export function createPostgresWholesaleRuntime({
   const runtimeNextId = resolveRuntimeIdGenerator(nextId);
   const store = createPostgresWholesaleStore({ pool });
   const catalogStore = createPostgresCatalogStore({ pool });
+  const commercialPublicationStore = createPostgresCommercialPublicationStore({ pool });
+  const orderEconomicsStore = createPostgresOrderEconomicsStore({ pool });
   const materialStore = createPostgresMaterialStore({ pool });
   const bomStore = createPostgresBomStore({ pool });
   const measurementStore = createPostgresMeasurementStore({ pool });
@@ -82,6 +88,14 @@ export function createPostgresWholesaleRuntime({
   const readiness = migrationsDir ? createPostgresReadinessService({ pool, migrationsDir, ...(clock ? { clock } : {}), ...(operationalReadiness ? { operationalCheck: operationalReadiness } : {}) }) : undefined;
   const platform = createWholesalePlatform(options);
   const catalog = Object.freeze({ ...createCatalogService({ wholesaleStore: store, catalogStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createCatalogQueryService({ reader: createPostgresCatalogReader({ pool }) }) });
+  const commercialPublication = createCommercialPublicationService({
+    commercialStore: commercialPublicationStore,
+    wholesaleStore: store,
+    catalogReader: catalog,
+    nextId: runtimeNextId,
+    ...(clock ? { clock } : {}),
+  });
+  const orderEconomics = createOrderEconomicsService({ economicsStore: orderEconomicsStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) });
   const materials = Object.freeze({ ...createMaterialService({ materialStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createMaterialQueryService({ reader: createPostgresMaterialReader({ pool }) }) });
   const boms = Object.freeze({ ...createBomService({ bomStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createBomQueryService({ reader: createPostgresBomReader({ pool }) }) });
   const measurements = Object.freeze({ ...createMeasurementService({ measurementStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createMeasurementQueryService({ reader: createPostgresMeasurementReader({ pool }) }) });
@@ -89,8 +103,8 @@ export function createPostgresWholesaleRuntime({
   const sourcing = Object.freeze({ ...createSourcingService({ sourcingStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createSourcingQueryService({ reader: createPostgresSourcingReader({ pool }), ...(clock ? { clock } : {}) }) });
   const techPacks = Object.freeze({ ...createTechPackService({ techPackStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createTechPackQueryService({ reader: createPostgresTechPackReader({ pool }) }) });
   const partners = createPartnerAccessService(options);
-  const collaboration = createShowroomSelectionService({ ...options, catalogReader: catalog });
-  const orders = createOrderBuilderService(options);
+  const collaboration = createShowroomSelectionService({ ...options, catalogReader: catalog, commercialPublicationReader: commercialPublication });
+  const orders = createOrderBuilderService({ ...options, commercialPublicationReader: commercialPublication });
   const projectionStore = createPostgresNotificationProjectionStore({ pool });
   const notificationReader = createPostgresNotificationReader({ pool });
   const notificationCore = createNotificationService({
@@ -120,12 +134,12 @@ export function createPostgresWholesaleRuntime({
     ...(outboxRetentionMs !== undefined ? { outboxRetentionMs } : {}),
   });
   const workspace = createWorkspaceQueryService({ reader: createPostgresWorkspaceReader({ pool }) });
-  const transport = { authenticate: auth.authenticate, auth, readiness, platform, catalog, materials, boms, measurements, samples, partners, sourcing, techPacks, collaboration, orders, notifications, workspace };
+  const transport = { authenticate: auth.authenticate, auth, readiness, platform, catalog, commercialPublication, orderEconomics, materials, boms, measurements, samples, partners, sourcing, techPacks, collaboration, orders, notifications, workspace };
   const handler = createWholesaleHttpHandler(transport);
   const fetchHandler = createWholesaleFetchHandler(transport);
   return Object.freeze({
-    auth, readiness, maintenance, outboxPublication, store, catalogStore, materialStore, bomStore, measurementStore, sampleStore, sourcingStore, techPackStore,
-    platform, catalog, materials, boms, measurements, samples, partners, sourcing, techPacks, collaboration, orders, notifications, workspace,
+    auth, readiness, maintenance, outboxPublication, store, catalogStore, commercialPublicationStore, orderEconomicsStore, materialStore, bomStore, measurementStore, sampleStore, sourcingStore, techPackStore,
+    platform, catalog, commercialPublication, orderEconomics, materials, boms, measurements, samples, partners, sourcing, techPacks, collaboration, orders, notifications, workspace,
     handler, fetchHandler,
   });
 }

@@ -4,6 +4,7 @@ import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
 import {
   createActualCostLedgerEntry,
+  createActualCostReversalEntry,
   createLandedCostSnapshot,
   createMarginActualizationSnapshot,
   createOrderFxRateSnapshot,
@@ -50,6 +51,18 @@ export function createOrderEconomicsService({
       { orderId, orderCommitSnapshotId: order.orderCommitSnapshotId },
     );
     return Object.freeze({ order, orderCommit });
+  }
+
+  async function loadCostBasis(tx, input) {
+    const supplyCommitment = requireEntity(
+      await tx.getSupplyCommitment(input.supplyCommitmentSnapshotId),
+      'SUPPLY_COMMITMENT_NOT_FOUND',
+      { supplyCommitmentSnapshotId: input.supplyCommitmentSnapshotId },
+    );
+    const fxRateSnapshot = input.fxRateSnapshotId
+      ? requireEntity(await tx.getFxRateSnapshot(input.fxRateSnapshotId), 'FX_RATE_SNAPSHOT_NOT_FOUND', { fxRateSnapshotId: input.fxRateSnapshotId })
+      : null;
+    return Object.freeze({ supplyCommitment, fxRateSnapshot });
   }
 
   return Object.freeze({
@@ -118,14 +131,7 @@ export function createOrderEconomicsService({
         actorId,
         (tx) => executionBasisForCapability(tx, orderId, actorId, CAPABILITIES.COST_MANAGE),
         async (tx, { order, orderCommit }) => {
-          const supplyCommitment = requireEntity(
-            await tx.getSupplyCommitment(input.supplyCommitmentSnapshotId),
-            'SUPPLY_COMMITMENT_NOT_FOUND',
-            { supplyCommitmentSnapshotId: input.supplyCommitmentSnapshotId },
-          );
-          const fxRateSnapshot = input.fxRateSnapshotId
-            ? requireEntity(await tx.getFxRateSnapshot(input.fxRateSnapshotId), 'FX_RATE_SNAPSHOT_NOT_FOUND', { fxRateSnapshotId: input.fxRateSnapshotId })
-            : null;
+          const { supplyCommitment, fxRateSnapshot } = await loadCostBasis(tx, input);
           const entry = createActualCostLedgerEntry({
             id: nextId('actual-cost'),
             order,
@@ -141,20 +147,77 @@ export function createOrderEconomicsService({
             recordedAt: clock(),
           });
           await tx.insertActualCostEntry(entry);
-          await append(tx, 'actual-cost.recorded', entry.id, {
-            orderId,
-            orderCommitSnapshotId: entry.orderCommitSnapshotId,
-            supplyCommitmentSnapshotId: entry.supplyCommitmentSnapshotId,
-            costType: entry.costType,
-            sourceAmount: entry.sourceAmount,
-            sourceCurrency: entry.sourceCurrency,
-            fxRateSnapshotId: entry.fxRateSnapshotId,
-            amount: entry.amount,
-            currency: entry.currency,
-            sku: entry.sku,
-            sourceRef: entry.sourceRef,
-          }, commandId, actorId);
+          await appendActualCostRecorded(tx, entry, commandId, actorId);
           return entry;
+        },
+      );
+    },
+
+    correctActualCost(commandId, actorId, orderId, originalEntryId, input) {
+      return execute(
+        commandId,
+        `correctActualCost:${actorId}:${orderId}:${originalEntryId}:${canonicalJson(input)}`,
+        actorId,
+        (tx) => executionBasisForCapability(tx, orderId, actorId, CAPABILITIES.COST_MANAGE),
+        async (tx, { order, orderCommit }) => {
+          const originalEntry = requireEntity(await tx.getActualCostEntry(originalEntryId), 'ACTUAL_COST_ENTRY_NOT_FOUND', { originalEntryId });
+          invariant(originalEntry.orderId === orderId && originalEntry.orderCommitSnapshotId === orderCommit.id, 'ACTUAL_COST_CORRECTION_LINEAGE_MISMATCH', 'Actual cost entry belongs to another order commit', { originalEntryId, orderId, orderCommitSnapshotId: orderCommit.id });
+          const existingReversal = await tx.getActualCostReversal(originalEntryId);
+          invariant(!existingReversal, 'ACTUAL_COST_ALREADY_CORRECTED', 'Actual cost entry already has a reversal', { originalEntryId, reversalEntryId: existingReversal?.id });
+
+          const correctionId = nextId('cost-correction');
+          const recordedAt = clock();
+          const reversal = createActualCostReversalEntry({
+            id: nextId('actual-cost-reversal'),
+            correctionId,
+            reason: input.reason,
+            order,
+            orderCommit,
+            originalEntry,
+            recordedAt,
+          });
+          const { supplyCommitment, fxRateSnapshot } = await loadCostBasis(tx, input);
+          const replacement = createActualCostLedgerEntry({
+            id: nextId('actual-cost'),
+            order,
+            orderCommit,
+            supplyCommitment,
+            costType: input.costType,
+            amount: input.amount,
+            currency: input.currency,
+            fxRateSnapshot,
+            sku: input.sku ?? null,
+            sourceRef: input.sourceRef,
+            occurredAt: input.occurredAt ?? recordedAt,
+            recordedAt,
+            correctionId,
+            correctionReason: input.reason,
+          });
+
+          await tx.insertActualCostEntry(reversal);
+          await tx.insertActualCostEntry(replacement);
+          await append(tx, 'actual-cost.reversed', reversal.id, {
+            orderId,
+            orderCommitSnapshotId: reversal.orderCommitSnapshotId,
+            supplyCommitmentSnapshotId: reversal.supplyCommitmentSnapshotId,
+            reversalOfEntryId: reversal.reversalOfEntryId,
+            correctionId,
+            sourceAmount: reversal.sourceAmount,
+            sourceCurrency: reversal.sourceCurrency,
+            fxRateSnapshotId: reversal.fxRateSnapshotId,
+            amount: reversal.amount,
+            currency: reversal.currency,
+          }, commandId, actorId);
+          await appendActualCostRecorded(tx, replacement, commandId, actorId);
+          await append(tx, 'actual-cost.corrected', correctionId, {
+            orderId,
+            orderCommitSnapshotId: orderCommit.id,
+            originalEntryId,
+            reversalEntryId: reversal.id,
+            replacementEntryId: replacement.id,
+            correctionReason: replacement.correctionReason,
+          }, commandId, actorId);
+          return Object.freeze({ correctionId, originalEntryId, reversal, replacement });
         },
       );
     },
@@ -222,6 +285,25 @@ export function createOrderEconomicsService({
       });
     },
   });
+
+  async function appendActualCostRecorded(tx, entry, commandId, actorId) {
+    await append(tx, 'actual-cost.recorded', entry.id, {
+      orderId: entry.orderId,
+      orderCommitSnapshotId: entry.orderCommitSnapshotId,
+      supplyCommitmentSnapshotId: entry.supplyCommitmentSnapshotId,
+      entryKind: entry.entryKind,
+      correctionId: entry.correctionId,
+      correctionReason: entry.correctionReason,
+      costType: entry.costType,
+      sourceAmount: entry.sourceAmount,
+      sourceCurrency: entry.sourceCurrency,
+      fxRateSnapshotId: entry.fxRateSnapshotId,
+      amount: entry.amount,
+      currency: entry.currency,
+      sku: entry.sku,
+      sourceRef: entry.sourceRef,
+    }, commandId, actorId);
+  }
 }
 
 function requireEntity(entity, code, details) { invariant(entity, code, 'Entity not found', details); return entity; }

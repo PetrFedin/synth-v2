@@ -18,7 +18,7 @@ const membership = Object.freeze({ id: 'MEM-1', organisationId: 'BRAND-1', organ
 
 function createHarness({ committed = orderCommit } = {}) {
   const state = {
-    commands: new Map(), outbox: [], supply: [], costs: [], landed: [], margins: [],
+    commands: new Map(), outbox: [], supply: [], fxRates: [], costs: [], landed: [], margins: [],
     orderCommitReads: 0,
   };
   const tx = {
@@ -28,6 +28,8 @@ function createHarness({ committed = orderCommit } = {}) {
     getOrderCommitSnapshot: async (id) => { state.orderCommitReads += 1; return id === committed?.id ? committed : undefined; },
     getMembership: async (organisationId, userId) => organisationId === 'BRAND-1' && userId === actorId ? membership : undefined,
     insertSupplyCommitment: async (value) => state.supply.push(value),
+    insertFxRateSnapshot: async (value) => state.fxRates.push(value),
+    getFxRateSnapshot: async (id) => state.fxRates.find((value) => value.id === id),
     insertActualCostEntry: async (value) => state.costs.push(value),
     listActualCostEntries: async () => [...state.costs],
     insertLandedCostSnapshot: async (value) => state.landed.push(value),
@@ -65,6 +67,29 @@ test('service pins supply, cost, landed cost and margin to the immutable order c
   assert.equal(margin.contributionMarginAmount, 400);
   assert.ok(state.orderCommitReads >= 4);
   assert.equal(state.outbox.filter((event) => event.payload?.orderCommitSnapshotId === 'ORDER-COMMIT-1').length, 4);
+});
+
+test('service records immutable FX basis and converts cross-currency actual cost before landed cost', async () => {
+  const { service, state } = createHarness();
+  const fx = await service.createFxRateSnapshot('CMD-FX', actorId, order.id, {
+    sourceCurrency: 'USD', rate: 0.92, rateType: 'invoice', sourceRef: 'FX-SOURCE-1', effectiveAt: at,
+  });
+  const cost = await service.recordActualCost('CMD-USD', actorId, order.id, {
+    costType: 'freight', amount: 100, currency: 'USD', fxRateSnapshotId: fx.id, sourceRef: 'FREIGHT-USD', occurredAt: at,
+  });
+  const landed = await service.actualizeLandedCost('CMD-USD-LC', actorId, order.id);
+
+  assert.equal(state.fxRates.length, 1);
+  assert.equal(fx.orderCommitSnapshotId, 'ORDER-COMMIT-1');
+  assert.equal(fx.sourceCurrency, 'USD');
+  assert.equal(fx.targetCurrency, 'EUR');
+  assert.equal(cost.sourceAmount, 100);
+  assert.equal(cost.sourceCurrency, 'USD');
+  assert.equal(cost.fxRateSnapshotId, fx.id);
+  assert.equal(cost.amount, 92);
+  assert.equal(cost.currency, 'EUR');
+  assert.equal(landed.totalCost, 92);
+  assert.ok(state.outbox.some((event) => event.type === 'fx-rate.snapshot-recorded' && event.payload?.orderCommitSnapshotId === 'ORDER-COMMIT-1'));
 });
 
 test('service refuses execution when the pinned order commit snapshot cannot be loaded', async () => {

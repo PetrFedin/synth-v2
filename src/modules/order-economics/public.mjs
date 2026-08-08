@@ -93,12 +93,15 @@ export function createActualCostLedgerEntry({
   sourceRef,
   occurredAt,
   recordedAt,
+  correctionId = null,
+  correctionReason = null,
 }) {
   assertExecutionLineage(order, orderCommit);
   assertSupplyCostBasis(supplyCommitment, orderCommit);
   invariant(id, 'ACTUAL_COST_ENTRY_ID_REQUIRED', 'Actual cost entry id is required');
   invariant(COST_TYPES.includes(costType), 'ACTUAL_COST_TYPE_INVALID', 'Actual cost type is invalid', { costType });
   invariant(isCurrency(currency), 'ACTUAL_COST_CURRENCY_INVALID', 'Actual cost currency must be an ISO-4217 code', { currency });
+  const correction = normalizeCorrectionMetadata(correctionId, correctionReason);
   const sourceAmount = normalizeSignedMoney(amount);
   const sourceCurrency = currency;
   const converted = normalizeActualCostCurrency({ sourceAmount, sourceCurrency, orderCommit, fxRateSnapshot });
@@ -112,6 +115,10 @@ export function createActualCostLedgerEntry({
     supplyCommitmentSnapshotId: supplyCommitment.id,
     brandId: orderCommit.brandId,
     shopId: orderCommit.shopId,
+    entryKind: 'actual',
+    reversalOfEntryId: null,
+    correctionId: correction.correctionId,
+    correctionReason: correction.correctionReason,
     costType,
     sourceAmount,
     sourceCurrency,
@@ -122,6 +129,53 @@ export function createActualCostLedgerEntry({
     sourceRef: sourceRef.trim(),
     occurredAt: requiredTimestamp(occurredAt, 'ACTUAL_COST_OCCURRED_AT_INVALID'),
     recordedAt: requiredTimestamp(recordedAt, 'ACTUAL_COST_RECORDED_AT_INVALID'),
+  });
+}
+
+export function createActualCostReversalEntry({
+  id,
+  correctionId,
+  reason,
+  order,
+  orderCommit,
+  originalEntry,
+  recordedAt,
+}) {
+  assertExecutionLineage(order, orderCommit);
+  invariant(id, 'ACTUAL_COST_REVERSAL_ID_REQUIRED', 'Actual cost reversal id is required');
+  invariant(originalEntry?.id, 'ACTUAL_COST_ORIGINAL_REQUIRED', 'Actual cost correction requires an original ledger entry');
+  invariant((originalEntry.entryKind ?? 'actual') !== 'reversal', 'ACTUAL_COST_REVERSAL_OF_REVERSAL_FORBIDDEN', 'A reversal entry cannot itself be reversed', { originalEntryId: originalEntry.id });
+  invariant(originalEntry.orderId === orderCommit.orderId && originalEntry.orderCommitSnapshotId === orderCommit.id, 'ACTUAL_COST_REVERSAL_LINEAGE_MISMATCH', 'Original actual cost belongs to another order commit', { originalEntryId: originalEntry.id });
+  invariant(typeof originalEntry.supplyCommitmentSnapshotId === 'string' && originalEntry.supplyCommitmentSnapshotId.length > 0, 'ACTUAL_COST_REVERSAL_SUPPLY_REQUIRED', 'Only supply-linked actual costs can be corrected', { originalEntryId: originalEntry.id });
+  invariant(originalEntry.currency === orderCommit.currency, 'ACTUAL_COST_REVERSAL_CURRENCY_MISMATCH', 'Original actual cost currency differs from the committed order currency', { originalEntryId: originalEntry.id });
+  invariant(COST_TYPES.includes(originalEntry.costType), 'ACTUAL_COST_TYPE_INVALID', 'Original actual cost type is invalid', { costType: originalEntry.costType });
+  invariant(isCurrency(originalEntry.sourceCurrency), 'ACTUAL_COST_CURRENCY_INVALID', 'Original source currency is invalid', { sourceCurrency: originalEntry.sourceCurrency });
+  const correction = normalizeCorrectionMetadata(correctionId, reason, { required: true });
+  const reversedSourceAmount = normalizeSignedMoney(-originalEntry.sourceAmount);
+  const reversedAmount = normalizeSignedMoney(-originalEntry.amount);
+  const timestamp = requiredTimestamp(recordedAt, 'ACTUAL_COST_RECORDED_AT_INVALID');
+  return Object.freeze({
+    id,
+    orderId: originalEntry.orderId,
+    orderVersion: originalEntry.orderVersion,
+    orderCommitSnapshotId: originalEntry.orderCommitSnapshotId,
+    supplyCommitmentSnapshotId: originalEntry.supplyCommitmentSnapshotId,
+    brandId: originalEntry.brandId,
+    shopId: originalEntry.shopId,
+    entryKind: 'reversal',
+    reversalOfEntryId: originalEntry.id,
+    correctionId: correction.correctionId,
+    correctionReason: correction.correctionReason,
+    costType: originalEntry.costType,
+    sourceAmount: reversedSourceAmount,
+    sourceCurrency: originalEntry.sourceCurrency,
+    fxRateSnapshotId: originalEntry.fxRateSnapshotId ?? null,
+    amount: reversedAmount,
+    currency: originalEntry.currency,
+    sku: originalEntry.sku ?? null,
+    sourceRef: originalEntry.sourceRef,
+    occurredAt: timestamp,
+    recordedAt: timestamp,
   });
 }
 
@@ -195,6 +249,14 @@ function assertSupplyCostBasis(supplyCommitment, orderCommit) {
     orderCommitSnapshotId: orderCommit.id,
   });
   invariant(supplyCommitment.currency === orderCommit.currency, 'ACTUAL_COST_SUPPLY_CURRENCY_MISMATCH', 'Supply commitment currency differs from the committed order currency', { supplyCommitmentSnapshotId: supplyCommitment.id });
+}
+
+function normalizeCorrectionMetadata(correctionId, correctionReason, { required = false } = {}) {
+  const hasId = typeof correctionId === 'string' && correctionId.trim().length > 0;
+  const hasReason = typeof correctionReason === 'string' && correctionReason.trim().length > 0;
+  invariant(hasId === hasReason, 'ACTUAL_COST_CORRECTION_METADATA_INCOMPLETE', 'Correction id and reason must be supplied together');
+  invariant(!required || hasId, 'ACTUAL_COST_CORRECTION_METADATA_REQUIRED', 'Correction id and reason are required');
+  return Object.freeze({ correctionId: hasId ? correctionId.trim() : null, correctionReason: hasReason ? correctionReason.trim() : null });
 }
 
 function normalizeActualCostCurrency({ sourceAmount, sourceCurrency, orderCommit, fxRateSnapshot }) {

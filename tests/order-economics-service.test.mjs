@@ -31,6 +31,8 @@ function createHarness({ committed = orderCommit } = {}) {
     getSupplyCommitment: async (id) => state.supply.find((value) => value.id === id),
     insertFxRateSnapshot: async (value) => state.fxRates.push(value),
     getFxRateSnapshot: async (id) => state.fxRates.find((value) => value.id === id),
+    getActualCostEntry: async (id) => state.costs.find((value) => value.id === id),
+    getActualCostReversal: async (originalEntryId) => state.costs.find((value) => value.reversalOfEntryId === originalEntryId),
     insertActualCostEntry: async (value) => state.costs.push(value),
     listActualCostEntries: async () => [...state.costs],
     insertLandedCostSnapshot: async (value) => state.landed.push(value),
@@ -63,6 +65,8 @@ test('service pins supply, cost, landed cost and margin to the immutable order c
   assert.equal(supply.orderCommitSnapshotId, 'ORDER-COMMIT-1');
   assert.equal(cost.orderCommitSnapshotId, 'ORDER-COMMIT-1');
   assert.equal(cost.supplyCommitmentSnapshotId, supply.id);
+  assert.equal(cost.entryKind, 'actual');
+  assert.equal(cost.reversalOfEntryId, null);
   assert.equal(landed.orderCommitSnapshotId, 'ORDER-COMMIT-1');
   assert.deepEqual(landed.supplyCommitmentSnapshotIds, [supply.id]);
   assert.equal(landed.supplyLineageComplete, true);
@@ -74,6 +78,48 @@ test('service pins supply, cost, landed cost and margin to the immutable order c
   assert.equal(margin.contributionMarginAmount, 400);
   assert.ok(state.orderCommitReads >= 4);
   assert.equal(state.outbox.filter((event) => event.payload?.orderCommitSnapshotId === 'ORDER-COMMIT-1').length, 4);
+});
+
+test('service corrects actual cost atomically by reversal and replacement, then landed cost nets to replacement', async () => {
+  const { service, state } = createHarness();
+  const supply = await service.createSupplyCommitment('CMD-SUPPLY-CORR', actorId, order.id, {
+    allocations: [{ sku: 'SKU-1', quantity: 10, sourceType: 'production', sourceRef: 'PO-CORR' }],
+  });
+  const original = await service.recordActualCost('CMD-ORIGINAL', actorId, order.id, {
+    supplyCommitmentSnapshotId: supply.id,
+    costType: 'factory', amount: 600, currency: 'EUR', sourceRef: 'INVOICE-OLD', occurredAt: at,
+  });
+  const correction = await service.correctActualCost('CMD-CORRECTION', actorId, order.id, original.id, {
+    reason: 'Supplier issued corrected invoice',
+    supplyCommitmentSnapshotId: supply.id,
+    costType: 'factory', amount: 450, currency: 'EUR', sourceRef: 'INVOICE-NEW', occurredAt: at,
+  });
+  const landed = await service.actualizeLandedCost('CMD-CORRECTED-LC', actorId, order.id);
+  const margin = await service.actualizeMargin('CMD-CORRECTED-MARGIN', actorId, order.id, landed.id);
+
+  assert.equal(correction.originalEntryId, original.id);
+  assert.equal(correction.reversal.entryKind, 'reversal');
+  assert.equal(correction.reversal.reversalOfEntryId, original.id);
+  assert.equal(correction.reversal.amount, -600);
+  assert.equal(correction.reversal.supplyCommitmentSnapshotId, supply.id);
+  assert.equal(correction.replacement.entryKind, 'actual');
+  assert.equal(correction.replacement.amount, 450);
+  assert.equal(correction.replacement.correctionId, correction.correctionId);
+  assert.equal(correction.replacement.correctionReason, 'Supplier issued corrected invoice');
+  assert.equal(landed.totalCost, 450);
+  assert.equal(margin.contributionMarginAmount, 550);
+  assert.equal(state.costs.length, 3);
+  assert.ok(state.outbox.some((event) => event.type === 'actual-cost.reversed' && event.payload?.reversalOfEntryId === original.id));
+  assert.ok(state.outbox.some((event) => event.type === 'actual-cost.corrected' && event.payload?.replacementEntryId === correction.replacement.id));
+
+  await assert.rejects(
+    () => service.correctActualCost('CMD-CORRECTION-AGAIN', actorId, order.id, original.id, {
+      reason: 'Attempted duplicate correction',
+      supplyCommitmentSnapshotId: supply.id,
+      costType: 'factory', amount: 440, currency: 'EUR', sourceRef: 'INVOICE-NEWER', occurredAt: at,
+    }),
+    (error) => error?.code === 'ACTUAL_COST_ALREADY_CORRECTED',
+  );
 });
 
 test('service records immutable FX basis and converts cross-currency actual cost before landed cost', async () => {

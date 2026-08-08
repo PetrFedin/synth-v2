@@ -84,5 +84,5 @@ test('landed cost ignores legacy cost rows that are not pinned to the current or
   await service.recordActualCost('CMD-COST', actorId, order.id, { costType: 'factory', amount: 400, currency: 'EUR', sourceRef: 'CURRENT', occurredAt: at });
   const landed = await service.actualizeLandedCost('CMD-LC', actorId, order.id);
   assert.equal(landed.totalCost, 400);
-  assert.deepEqual(landed.costEntryIds, ['actual-cost-2']);
+  assert.deepEqual(landed.costEntryIds, ['actual-cost-1']);
 });

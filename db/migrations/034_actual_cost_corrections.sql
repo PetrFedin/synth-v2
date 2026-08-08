@@ -6,6 +6,7 @@ ALTER TABLE actual_cost_ledger_entries
   ADD COLUMN correction_id TEXT NULL,
   ADD COLUMN correction_reason TEXT NULL,
   ADD CONSTRAINT actual_cost_entry_kind_check CHECK (entry_kind IN ('actual', 'reversal')),
+  ADD CONSTRAINT actual_cost_reversal_lineage_version_check CHECK (entry_kind = 'actual' OR lineage_version = 3),
   ADD CONSTRAINT actual_cost_reversal_shape_check CHECK (
     (entry_kind = 'actual' AND reversal_of_entry_id IS NULL)
     OR
@@ -67,13 +68,29 @@ BEGIN
       DETAIL = jsonb_build_object('reversalOfEntryId', NEW.reversal_of_entry_id)::text;
   END IF;
 
+  IF NEW.lineage_version <> 3
+     OR original.lineage_version <> 3
+     OR original.order_commit_snapshot_id IS NULL
+     OR original.supply_commitment_snapshot_id IS NULL
+     OR original.source_amount IS NULL
+     OR original.source_currency IS NULL THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'ACTUAL_COST_REVERSAL_LEGACY_UNSUPPORTED',
+      DETAIL = jsonb_build_object(
+        'reversalOfEntryId', NEW.reversal_of_entry_id,
+        'originalLineageVersion', original.lineage_version,
+        'reversalLineageVersion', NEW.lineage_version
+      )::text;
+  END IF;
+
   IF NEW.order_id <> original.order_id
-     OR NEW.order_commit_snapshot_id <> original.order_commit_snapshot_id
+     OR NEW.order_commit_snapshot_id IS DISTINCT FROM original.order_commit_snapshot_id
      OR NEW.supply_commitment_snapshot_id IS DISTINCT FROM original.supply_commitment_snapshot_id
      OR NEW.brand_id <> original.brand_id
      OR NEW.shop_id <> original.shop_id
      OR NEW.cost_type <> original.cost_type
-     OR NEW.source_currency <> original.source_currency
+     OR NEW.source_currency IS DISTINCT FROM original.source_currency
      OR NEW.currency <> original.currency
      OR NEW.fx_rate_snapshot_id IS DISTINCT FROM original.fx_rate_snapshot_id
      OR NEW.sku IS DISTINCT FROM original.sku

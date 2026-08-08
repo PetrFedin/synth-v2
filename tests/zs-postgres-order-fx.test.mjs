@@ -8,7 +8,7 @@ import { createOrderEconomicsService } from '../src/application/order-economics-
 
 const databaseUrl = process.env.POSTGRES_TEST_URL;
 
-test('PostgreSQL persists supply, FX source money and converted landed cost on one immutable order commit', { skip: !databaseUrl }, async () => {
+test('PostgreSQL persists supply, FX and append-only cost corrections on one immutable order commit', { skip: !databaseUrl }, async () => {
   const { Pool } = await import('pg');
   const pool = new Pool({ connectionString: databaseUrl, max: 2 });
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -110,31 +110,75 @@ test('PostgreSQL persists supply, FX source money and converted landed cost on o
     });
     const cost = await service.recordActualCost('cmd-cost', 'cost-user', order.id, {
       supplyCommitmentSnapshotId: supply.id,
-      costType: 'freight', amount: 100, currency: 'USD', fxRateSnapshotId: fx.id, sourceRef: 'FREIGHT-INVOICE', occurredAt: now,
+      costType: 'freight', amount: 100, currency: 'USD', fxRateSnapshotId: fx.id, sourceRef: 'FREIGHT-INVOICE-OLD', occurredAt: now,
     });
-    const landed = await service.actualizeLandedCost('cmd-landed', 'cost-user', order.id);
+    const initialLanded = await service.actualizeLandedCost('cmd-landed-initial', 'cost-user', order.id);
 
+    assert.equal(cost.entryKind, 'actual');
     assert.equal(cost.supplyCommitmentSnapshotId, supply.id);
     assert.equal(cost.sourceAmount, 100);
     assert.equal(cost.sourceCurrency, 'USD');
     assert.equal(cost.fxRateSnapshotId, fx.id);
     assert.equal(cost.amount, 92);
     assert.equal(cost.currency, 'EUR');
-    assert.equal(landed.totalCost, 92);
-    assert.deepEqual(landed.supplyCommitmentSnapshotIds, [supply.id]);
-    assert.equal(landed.supplyLineageComplete, true);
+    assert.equal(initialLanded.totalCost, 92);
 
-    const row = await pool.query(
-      `SELECT source_amount::text, source_currency, amount::text, currency, fx_rate_snapshot_id,
+    const correction = await service.correctActualCost('cmd-correction', 'cost-user', order.id, cost.id, {
+      reason: 'Corrected freight invoice',
+      supplyCommitmentSnapshotId: supply.id,
+      costType: 'freight', amount: 80, currency: 'USD', fxRateSnapshotId: fx.id, sourceRef: 'FREIGHT-INVOICE-NEW', occurredAt: now,
+    });
+    const correctedLanded = await service.actualizeLandedCost('cmd-landed-corrected', 'cost-user', order.id);
+
+    assert.equal(correction.reversal.reversalOfEntryId, cost.id);
+    assert.equal(correction.reversal.sourceAmount, -100);
+    assert.equal(correction.reversal.amount, -92);
+    assert.equal(correction.reversal.fxRateSnapshotId, fx.id);
+    assert.equal(correction.replacement.sourceAmount, 80);
+    assert.equal(correction.replacement.amount, 73.6);
+    assert.equal(correction.replacement.correctionId, correction.correctionId);
+    assert.equal(correctedLanded.totalCost, 73.6);
+    assert.deepEqual(correctedLanded.supplyCommitmentSnapshotIds, [supply.id]);
+    assert.equal(correctedLanded.supplyLineageComplete, true);
+
+    const rows = await pool.query(
+      `SELECT id, entry_kind, reversal_of_entry_id, correction_id, correction_reason,
+              source_amount::text, source_currency, amount::text, currency, fx_rate_snapshot_id,
               supply_commitment_snapshot_id, order_commit_snapshot_id, lineage_version
-         FROM actual_cost_ledger_entries WHERE id = $1`,
-      [cost.id],
+         FROM actual_cost_ledger_entries
+        WHERE order_id = $1
+        ORDER BY recorded_at, id`,
+      [order.id],
     );
-    assert.deepEqual(row.rows, [{
+    assert.equal(rows.rowCount, 3);
+    const originalRow = rows.rows.find((row) => row.id === cost.id);
+    const reversalRow = rows.rows.find((row) => row.id === correction.reversal.id);
+    const replacementRow = rows.rows.find((row) => row.id === correction.replacement.id);
+    assert.deepEqual(originalRow, {
+      id: cost.id, entry_kind: 'actual', reversal_of_entry_id: null, correction_id: null, correction_reason: null,
       source_amount: '100.0000', source_currency: 'USD', amount: '92.0000', currency: 'EUR',
       fx_rate_snapshot_id: fx.id, supply_commitment_snapshot_id: supply.id,
       order_commit_snapshot_id: commit.id, lineage_version: 3,
-    }]);
+    });
+    assert.deepEqual(reversalRow, {
+      id: correction.reversal.id, entry_kind: 'reversal', reversal_of_entry_id: cost.id,
+      correction_id: correction.correctionId, correction_reason: 'Corrected freight invoice',
+      source_amount: '-100.0000', source_currency: 'USD', amount: '-92.0000', currency: 'EUR',
+      fx_rate_snapshot_id: fx.id, supply_commitment_snapshot_id: supply.id,
+      order_commit_snapshot_id: commit.id, lineage_version: 3,
+    });
+    assert.deepEqual(replacementRow, {
+      id: correction.replacement.id, entry_kind: 'actual', reversal_of_entry_id: null,
+      correction_id: correction.correctionId, correction_reason: 'Corrected freight invoice',
+      source_amount: '80.0000', source_currency: 'USD', amount: '73.6000', currency: 'EUR',
+      fx_rate_snapshot_id: fx.id, supply_commitment_snapshot_id: supply.id,
+      order_commit_snapshot_id: commit.id, lineage_version: 3,
+    });
+
+    await assert.rejects(
+      () => pool.query('UPDATE actual_cost_ledger_entries SET amount = amount + 1 WHERE id = $1', [cost.id]),
+      (error) => error?.code === 'P0001' && error?.message === 'ORDER_ECONOMICS_SNAPSHOT_IMMUTABLE',
+    );
   } finally {
     await pool.end();
   }

@@ -76,7 +76,7 @@ test('pinned buyer selection keeps published price, MOQ and version when live PL
   const edited = await collaboration.upsertSelectionLine('line-valid', 'buyer-1', selection.id, { sku: 'SKU-1', quantity: 3 });
   assert.deepEqual(edited.lines[0], {
     sku: 'SKU-1', quantity: 3, unitPrice: 75, currency: 'EUR', catalogVersion: 7,
-    note: undefined, updatedBy: 'buyer-1', updatedAt: clock(),
+    note: '', updatedBy: 'buyer-1', updatedAt: clock(),
   });
 });
 

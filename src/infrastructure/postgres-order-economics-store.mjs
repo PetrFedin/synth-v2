@@ -7,6 +7,7 @@ export function createPostgresOrderEconomicsStore({ pool } = {}) {
   return Object.freeze({
     transaction: (work) => withPostgresTransaction(pool, work, { createView: view }),
     async getSupplyCommitment(id) { return payloadOne(pool, 'SELECT payload FROM supply_commitment_snapshots WHERE id = $1', [id]); },
+    async getFxRateSnapshot(id) { return payloadOne(pool, 'SELECT payload FROM order_fx_rate_snapshots WHERE id = $1', [id]); },
     async getLandedCostSnapshot(id) { return payloadOne(pool, 'SELECT payload FROM landed_cost_snapshots WHERE id = $1', [id]); },
     async getMarginActualizationSnapshot(id) { return payloadOne(pool, 'SELECT payload FROM margin_actualization_snapshots WHERE id = $1', [id]); },
     async listActualCostEntries(orderId) {
@@ -37,11 +38,24 @@ function view(client) {
       [value.id, value.orderId, value.orderCommitSnapshotId, value.brandId, value.shopId, value.currency, value.createdAt, value.contentHash, JSON.stringify(value)],
       'SUPPLY_COMMITMENT_ALREADY_EXISTS', { supplyCommitmentId: value.id });
     },
+    async insertFxRateSnapshot(value) {
+      await insertImmutable(client, `INSERT INTO order_fx_rate_snapshots
+        (id, order_id, order_commit_snapshot_id, source_currency, target_currency, rate, rate_type, source_ref, effective_at, recorded_at, content_hash, payload)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb)`,
+      [value.id, value.orderId, value.orderCommitSnapshotId, value.sourceCurrency, value.targetCurrency, value.rate, value.rateType, value.sourceRef, value.effectiveAt, value.recordedAt, value.contentHash, JSON.stringify(value)],
+      'FX_RATE_SNAPSHOT_ALREADY_EXISTS', { fxRateSnapshotId: value.id });
+    },
+    async getFxRateSnapshot(id) {
+      const result = await client.query('SELECT payload FROM order_fx_rate_snapshots WHERE id = $1 FOR SHARE', [id]);
+      return result.rows[0]?.payload;
+    },
     async insertActualCostEntry(value) {
       await insertImmutable(client, `INSERT INTO actual_cost_ledger_entries
-        (id, order_id, order_commit_snapshot_id, lineage_version, brand_id, shop_id, cost_type, amount, currency, sku, source_ref, occurred_at, recorded_at, payload)
-        VALUES ($1, $2, $3, 2, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb)`,
-      [value.id, value.orderId, value.orderCommitSnapshotId, value.brandId, value.shopId, value.costType, value.amount, value.currency, value.sku, value.sourceRef, value.occurredAt, value.recordedAt, JSON.stringify(value)],
+        (id, order_id, order_commit_snapshot_id, lineage_version, brand_id, shop_id, cost_type,
+         source_amount, source_currency, fx_rate_snapshot_id, amount, currency, sku, source_ref, occurred_at, recorded_at, payload)
+        VALUES ($1, $2, $3, 2, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::jsonb)`,
+      [value.id, value.orderId, value.orderCommitSnapshotId, value.brandId, value.shopId, value.costType,
+        value.sourceAmount, value.sourceCurrency, value.fxRateSnapshotId, value.amount, value.currency, value.sku, value.sourceRef, value.occurredAt, value.recordedAt, JSON.stringify(value)],
       'ACTUAL_COST_ENTRY_ALREADY_EXISTS', { costEntryId: value.id });
     },
     async listActualCostEntries(orderId) {

@@ -3,7 +3,7 @@ import { invariant } from '../core/errors.mjs';
 import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
 import { assertWholesaleStore } from './store-contract.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
-import { assertCatalogQuantity, assertPublishedCatalogSku } from '../modules/catalog/public.mjs';
+import { assertCatalogAvailableToSell, assertCatalogQuantity, assertPublishedCatalogSku } from '../modules/catalog/public.mjs';
 import { buyerCatalogLine } from '../modules/commercial-publication/public.mjs';
 import { assertActiveRelationship } from '../modules/counterparty-relationships/public.mjs';
 import { assertAcceptedShowroomAccess } from '../modules/showroom-invitations/public.mjs';
@@ -141,24 +141,35 @@ export function createShowroomSelectionService({
           return current;
         },
         async (tx, current) => {
-          const publishedSku = assertPublishedCatalogSku(await trustedCatalogReader.getSku(line.sku), { collectionId: current.collectionId, brandId: current.brandId });
-          const catalogSku = assertCatalogQuantity(publishedSku, line.quantity);
-          let commercialLine = null;
+          const liveSku = await trustedCatalogReader.getSku(line.sku);
+          let trustedLine;
           if (current.buyerCatalogVersionId) {
             invariant(trustedCommercialReader, 'COMMERCIAL_PUBLICATION_READER_REQUIRED', 'Commercial publication reader is required for a pinned selection');
             const buyerCatalog = requireEntity(await trustedCommercialReader.getBuyerCatalogVersion(current.buyerCatalogVersionId), 'BUYER_CATALOG_NOT_FOUND', { buyerCatalogVersionId: current.buyerCatalogVersionId });
             invariant(buyerCatalog.contentHash === current.commercialBasisHash, 'SELECTION_COMMERCIAL_BASIS_CHANGED', 'Pinned buyer catalog does not match selection commercial basis');
-            commercialLine = buyerCatalogLine(buyerCatalog, line.sku);
+            const commercialLine = buyerCatalogLine(buyerCatalog, line.sku);
             invariant(line.quantity >= commercialLine.minimumOrderQuantity, 'BUYER_CATALOG_MOQ_NOT_MET', 'Selection quantity is below buyer catalog MOQ', { sku: line.sku, minimumOrderQuantity: commercialLine.minimumOrderQuantity });
+            assertCatalogAvailableToSell(liveSku, line.quantity, { sku: line.sku, collectionId: current.collectionId, brandId: current.brandId });
+            trustedLine = Object.freeze({
+              sku: commercialLine.sku,
+              quantity: line.quantity,
+              unitPrice: commercialLine.unitPrice,
+              currency: commercialLine.currency,
+              catalogVersion: commercialLine.catalogVersion,
+              note: line.note,
+            });
+          } else {
+            const publishedSku = assertPublishedCatalogSku(liveSku, { collectionId: current.collectionId, brandId: current.brandId });
+            const catalogSku = assertCatalogQuantity(publishedSku, line.quantity);
+            trustedLine = Object.freeze({
+              sku: catalogSku.sku,
+              quantity: line.quantity,
+              unitPrice: catalogSku.wholesalePrice,
+              currency: catalogSku.currency,
+              catalogVersion: catalogSku.version,
+              note: line.note,
+            });
           }
-          const trustedLine = Object.freeze({
-            sku: catalogSku.sku,
-            quantity: line.quantity,
-            unitPrice: commercialLine?.unitPrice ?? catalogSku.wholesalePrice,
-            currency: commercialLine?.currency ?? catalogSku.currency,
-            catalogVersion: commercialLine?.catalogVersion ?? catalogSku.version,
-            note: line.note,
-          });
           const updated = upsertSelectionLine(current, trustedLine, actorId, clock());
           await tx.saveSelection(updated, current.version);
           await append(tx, 'selection.line-upserted', selectionId, {

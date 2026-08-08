@@ -38,6 +38,10 @@ function view(client) {
       [value.id, value.orderId, value.orderCommitSnapshotId, value.brandId, value.shopId, value.currency, value.createdAt, value.contentHash, JSON.stringify(value)],
       'SUPPLY_COMMITMENT_ALREADY_EXISTS', { supplyCommitmentId: value.id });
     },
+    async getSupplyCommitment(id) {
+      const result = await client.query('SELECT payload FROM supply_commitment_snapshots WHERE id = $1 FOR SHARE', [id]);
+      return result.rows[0]?.payload;
+    },
     async insertFxRateSnapshot(value) {
       await insertImmutable(client, `INSERT INTO order_fx_rate_snapshots
         (id, order_id, order_commit_snapshot_id, source_currency, target_currency, rate, rate_type, source_ref, effective_at, recorded_at, content_hash, payload)
@@ -51,10 +55,10 @@ function view(client) {
     },
     async insertActualCostEntry(value) {
       await insertImmutable(client, `INSERT INTO actual_cost_ledger_entries
-        (id, order_id, order_commit_snapshot_id, lineage_version, brand_id, shop_id, cost_type,
+        (id, order_id, order_commit_snapshot_id, lineage_version, supply_commitment_snapshot_id, brand_id, shop_id, cost_type,
          source_amount, source_currency, fx_rate_snapshot_id, amount, currency, sku, source_ref, occurred_at, recorded_at, payload)
-        VALUES ($1, $2, $3, 2, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::jsonb)`,
-      [value.id, value.orderId, value.orderCommitSnapshotId, value.brandId, value.shopId, value.costType,
+        VALUES ($1, $2, $3, 3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17::jsonb)`,
+      [value.id, value.orderId, value.orderCommitSnapshotId, value.supplyCommitmentSnapshotId, value.brandId, value.shopId, value.costType,
         value.sourceAmount, value.sourceCurrency, value.fxRateSnapshotId, value.amount, value.currency, value.sku, value.sourceRef, value.occurredAt, value.recordedAt, JSON.stringify(value)],
       'ACTUAL_COST_ENTRY_ALREADY_EXISTS', { costEntryId: value.id });
     },

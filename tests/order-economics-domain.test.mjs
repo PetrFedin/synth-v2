@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createActualCostLedgerEntry,
+  createActualCostReversalEntry,
   createLandedCostSnapshot,
   createMarginActualizationSnapshot,
   createOrderFxRateSnapshot,
@@ -59,6 +60,10 @@ test('actual cost ledger closes landed cost and actual contribution margin on im
   const landedCost = createLandedCostSnapshot({ id: 'LC-1', order, orderCommit, costEntries: [factory, freight, credit], createdAt: at });
   const margin = createMarginActualizationSnapshot({ id: 'M-1', order, orderCommit, landedCost, createdAt: at });
 
+  assert.equal(factory.entryKind, 'actual');
+  assert.equal(factory.reversalOfEntryId, null);
+  assert.equal(factory.correctionId, null);
+  assert.equal(factory.correctionReason, null);
   assert.equal(factory.supplyCommitmentSnapshotId, 'SUPPLY-COST-1');
   assert.equal(factory.sourceAmount, 600);
   assert.equal(factory.sourceCurrency, 'EUR');
@@ -77,6 +82,51 @@ test('actual cost ledger closes landed cost and actual contribution margin on im
   assert.equal(margin.supplyLineageComplete, true);
   assert.equal(margin.buyerCatalogVersionId, 'BUYER-CAT-1');
   assert.equal(margin.priceListVersionId, 'PRICE-1');
+});
+
+test('actual cost correction reverses the exact original money without recomputing FX', () => {
+  const fx = createOrderFxRateSnapshot({
+    id: 'FX-CORRECTION', order, orderCommit, sourceCurrency: 'USD', rate: 0.92345678,
+    rateType: 'invoice', sourceRef: 'FX-INVOICE-1', effectiveAt: at, recordedAt: at,
+  });
+  const original = createActualCostLedgerEntry({
+    id: 'C-ORIGINAL', order, orderCommit, supplyCommitment, costType: 'freight', amount: 123.4567, currency: 'USD',
+    fxRateSnapshot: fx, sourceRef: 'FREIGHT-ORIGINAL', occurredAt: at, recordedAt: at,
+  });
+  const reversal = createActualCostReversalEntry({
+    id: 'C-REVERSAL', correctionId: 'CORR-1', reason: 'Supplier invoice corrected',
+    order, orderCommit, originalEntry: original, recordedAt: '2026-08-09T00:00:00.000Z',
+  });
+  const replacement = createActualCostLedgerEntry({
+    id: 'C-REPLACEMENT', order, orderCommit, supplyCommitment, costType: 'freight', amount: 100, currency: 'USD',
+    fxRateSnapshot: fx, sourceRef: 'FREIGHT-CORRECTED', occurredAt: at, recordedAt: '2026-08-09T00:00:00.000Z',
+    correctionId: 'CORR-1', correctionReason: 'Supplier invoice corrected',
+  });
+  const landedCost = createLandedCostSnapshot({ id: 'LC-CORRECTED', order, orderCommit, costEntries: [original, reversal, replacement], createdAt: at });
+
+  assert.equal(reversal.entryKind, 'reversal');
+  assert.equal(reversal.reversalOfEntryId, original.id);
+  assert.equal(reversal.correctionId, 'CORR-1');
+  assert.equal(reversal.correctionReason, 'Supplier invoice corrected');
+  assert.equal(reversal.supplyCommitmentSnapshotId, original.supplyCommitmentSnapshotId);
+  assert.equal(reversal.sourceAmount, -original.sourceAmount);
+  assert.equal(reversal.sourceCurrency, original.sourceCurrency);
+  assert.equal(reversal.fxRateSnapshotId, original.fxRateSnapshotId);
+  assert.equal(reversal.amount, -original.amount);
+  assert.equal(reversal.currency, original.currency);
+  assert.equal(replacement.entryKind, 'actual');
+  assert.equal(replacement.correctionId, 'CORR-1');
+  assert.equal(replacement.correctionReason, 'Supplier invoice corrected');
+  assert.equal(landedCost.totalCost, replacement.amount);
+});
+
+test('actual cost correction cannot reverse a reversal entry', () => {
+  const original = createActualCostLedgerEntry({ id: 'C-A', order, orderCommit, supplyCommitment, costType: 'factory', amount: 10, currency: 'EUR', sourceRef: 'A', occurredAt: at, recordedAt: at });
+  const reversal = createActualCostReversalEntry({ id: 'C-B', correctionId: 'CORR-A', reason: 'Correction', order, orderCommit, originalEntry: original, recordedAt: at });
+  assert.throws(
+    () => createActualCostReversalEntry({ id: 'C-C', correctionId: 'CORR-B', reason: 'Second correction', order, orderCommit, originalEntry: reversal, recordedAt: at }),
+    (error) => error?.code === 'ACTUAL_COST_REVERSAL_OF_REVERSAL_FORBIDDEN',
+  );
 });
 
 test('cross-currency actual cost uses an immutable FX snapshot and preserves source money', () => {

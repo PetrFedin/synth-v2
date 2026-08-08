@@ -40,6 +40,7 @@ export function createOrderDraft({ id, selection, currency, terms, createdAt }) 
     buyerCatalogVersionId: selection.buyerCatalogVersionId ?? null,
     commercialBasisHash: selection.commercialBasisHash ?? null,
     accessGrantId: selection.accessGrantId ?? null,
+    orderCommitSnapshotId: null,
     currency,
     lines,
     totalAmount,
@@ -87,10 +88,17 @@ export function acceptOrderTerms(order, organisationId, updatedAt, expectedVersi
   });
 }
 
-export function attachReadyOrder(order, updatedAt, expectedVersion = order?.version) {
+export function attachReadyOrder(order, updatedAt, expectedVersion = order?.version, orderCommitSnapshotId = null) {
   assertExpectedVersion(order, expectedVersion);
   invariant(order.status === 'ready', 'ORDER_NOT_READY', 'Both Brand and Shop must accept order terms');
-  return Object.freeze({ ...order, status: 'attached', version: order.version + 1, updatedAt });
+  invariant(orderCommitSnapshotId === null || (typeof orderCommitSnapshotId === 'string' && orderCommitSnapshotId.trim().length > 0), 'ORDER_COMMIT_SNAPSHOT_ID_INVALID', 'Order commit snapshot id must be a non-empty string');
+  return Object.freeze({
+    ...order,
+    orderCommitSnapshotId: orderCommitSnapshotId?.trim() ?? null,
+    status: 'attached',
+    version: order.version + 1,
+    updatedAt,
+  });
 }
 
 export function cancelAttachedOrder(order, reason, cancelledAt, expectedVersion = order?.version) {

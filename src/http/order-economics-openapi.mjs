@@ -41,9 +41,10 @@ function schemas() {
     },
     SupplyCommitmentSnapshot: {
       type: 'object', additionalProperties: false,
-      required: ['id', 'orderId', 'orderVersion', 'brandId', 'shopId', 'commercialPublicationId', 'priceListVersionId', 'buyerCatalogVersionId', 'currency', 'allocations', 'status', 'contentHash', 'createdAt'],
+      required: ['id', 'orderId', 'orderVersion', 'orderCommitSnapshotId', 'brandId', 'shopId', 'commercialPublicationId', 'priceListVersionId', 'buyerCatalogVersionId', 'currency', 'allocations', 'status', 'contentHash', 'createdAt'],
       properties: {
-        id: identifier, orderId: identifier, orderVersion: version(), brandId: identifier, shopId: identifier,
+        id: identifier, orderId: identifier, orderVersion: version(), orderCommitSnapshotId: identifier,
+        brandId: identifier, shopId: identifier,
         commercialPublicationId: nullableIdentifier(), priceListVersionId: nullableIdentifier(), buyerCatalogVersionId: nullableIdentifier(),
         currency, allocations: { type: 'array', minItems: 1, maxItems: 10_000, items: { $ref: '#/components/schemas/SupplyAllocation' } },
         status: { type: 'string', enum: ['committed'] }, contentHash: sha256(), createdAt: date(),
@@ -59,9 +60,10 @@ function schemas() {
     },
     ActualCostLedgerEntry: {
       type: 'object', additionalProperties: false,
-      required: ['id', 'orderId', 'orderVersion', 'brandId', 'shopId', 'costType', 'amount', 'currency', 'sku', 'sourceRef', 'occurredAt', 'recordedAt'],
+      required: ['id', 'orderId', 'orderVersion', 'orderCommitSnapshotId', 'brandId', 'shopId', 'costType', 'amount', 'currency', 'sku', 'sourceRef', 'occurredAt', 'recordedAt'],
       properties: {
-        id: identifier, orderId: identifier, orderVersion: version(), brandId: identifier, shopId: identifier,
+        id: identifier, orderId: identifier, orderVersion: version(), orderCommitSnapshotId: identifier,
+        brandId: identifier, shopId: identifier,
         costType: costType(), amount: money, currency,
         sku: { oneOf: [{ type: 'string', pattern: SKU }, { type: 'null' }] },
         sourceRef: { type: 'string', minLength: 1, maxLength: 240 }, occurredAt: date(), recordedAt: date(),
@@ -70,9 +72,9 @@ function schemas() {
     EmptyEconomicsInput: { type: 'object', additionalProperties: false, maxProperties: 0 },
     LandedCostSnapshot: {
       type: 'object', additionalProperties: false,
-      required: ['id', 'orderId', 'orderVersion', 'currency', 'costEntryIds', 'componentTotals', 'totalCost', 'status', 'contentHash', 'createdAt'],
+      required: ['id', 'orderId', 'orderVersion', 'orderCommitSnapshotId', 'currency', 'costEntryIds', 'componentTotals', 'totalCost', 'status', 'contentHash', 'createdAt'],
       properties: {
-        id: identifier, orderId: identifier, orderVersion: version(), currency,
+        id: identifier, orderId: identifier, orderVersion: version(), orderCommitSnapshotId: identifier, currency,
         costEntryIds: { type: 'array', minItems: 1, maxItems: 100_000, items: identifier },
         componentTotals: { type: 'object', additionalProperties: money }, totalCost: positiveMoney,
         status: { type: 'string', enum: ['actual'] }, contentHash: sha256(), createdAt: date(),
@@ -84,10 +86,10 @@ function schemas() {
     },
     MarginActualizationSnapshot: {
       type: 'object', additionalProperties: false,
-      required: ['id', 'orderId', 'orderVersion', 'landedCostSnapshotId', 'commercialPublicationId', 'buyerCatalogVersionId', 'currency', 'netRevenue', 'landedCost', 'contributionMarginAmount', 'contributionMarginPercent', 'status', 'contentHash', 'createdAt'],
+      required: ['id', 'orderId', 'orderVersion', 'orderCommitSnapshotId', 'landedCostSnapshotId', 'commercialPublicationId', 'priceListVersionId', 'buyerCatalogVersionId', 'currency', 'netRevenue', 'landedCost', 'contributionMarginAmount', 'contributionMarginPercent', 'status', 'contentHash', 'createdAt'],
       properties: {
-        id: identifier, orderId: identifier, orderVersion: version(), landedCostSnapshotId: identifier,
-        commercialPublicationId: nullableIdentifier(), buyerCatalogVersionId: nullableIdentifier(), currency,
+        id: identifier, orderId: identifier, orderVersion: version(), orderCommitSnapshotId: identifier, landedCostSnapshotId: identifier,
+        commercialPublicationId: nullableIdentifier(), priceListVersionId: nullableIdentifier(), buyerCatalogVersionId: nullableIdentifier(), currency,
         netRevenue: positiveMoney, landedCost: positiveMoney, contributionMarginAmount: money,
         contributionMarginPercent: { type: 'number', minimum: -1_000_000, maximum: 100, multipleOf: 0.0001 },
         status: { type: 'string', enum: ['actual'] }, contentHash: sha256(), createdAt: date(),

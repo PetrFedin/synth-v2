@@ -30,9 +30,18 @@ test('extended OpenAPI exposes commercial publication and order economics withou
     assert.ok(schema.required.includes('orderCommitSnapshotId'), `${schemaName} must require orderCommitSnapshotId`);
     assert.equal(schema.properties.orderCommitSnapshotId.type, 'string');
   }
+  const actualCostInput = wholesaleV2ExtendedOpenApi.components.schemas.ActualCostInput;
+  assert.ok(actualCostInput.required.includes('supplyCommitmentSnapshotId'));
   const actualCost = wholesaleV2ExtendedOpenApi.components.schemas.ActualCostLedgerEntry;
+  assert.ok(actualCost.required.includes('supplyCommitmentSnapshotId'));
   assert.ok(actualCost.required.includes('sourceAmount'));
   assert.ok(actualCost.required.includes('sourceCurrency'));
   assert.ok(actualCost.required.includes('fxRateSnapshotId'));
-  assert.ok(wholesaleV2ExtendedOpenApi.components.schemas.MarginActualizationSnapshot.required.includes('priceListVersionId'));
+  const landedCost = wholesaleV2ExtendedOpenApi.components.schemas.LandedCostSnapshot;
+  assert.ok(landedCost.required.includes('supplyCommitmentSnapshotIds'));
+  assert.ok(landedCost.required.includes('supplyLineageComplete'));
+  const margin = wholesaleV2ExtendedOpenApi.components.schemas.MarginActualizationSnapshot;
+  assert.ok(margin.required.includes('supplyCommitmentSnapshotIds'));
+  assert.ok(margin.required.includes('supplyLineageComplete'));
+  assert.ok(margin.required.includes('priceListVersionId'));
 });

@@ -58,12 +58,19 @@ test('PostgreSQL migration ledger serializes runners and rejects changed history
               to_regclass('public.commercial_publications') AS commercial_publications,
               to_regclass('public.price_list_versions') AS price_list_versions,
               to_regclass('public.buyer_catalog_versions') AS buyer_catalog_versions,
+              to_regclass('public.order_commit_snapshots') AS order_commit_snapshots,
               to_regclass('public.supply_commitment_snapshots') AS supply_commitment_snapshots,
               to_regclass('public.actual_cost_ledger_entries') AS actual_cost_ledger_entries,
               to_regclass('public.landed_cost_snapshots') AS landed_cost_snapshots,
               to_regclass('public.margin_actualization_snapshots') AS margin_actualization_snapshots`,
     );
     for (const [name, value] of Object.entries(tables.rows[0])) assert.equal(value, name);
+
+    const orderCommitColumn = await pool.query("SELECT is_nullable, data_type FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'orders' AND column_name = 'order_commit_snapshot_id'");
+    assert.deepEqual(orderCommitColumn.rows, [{ is_nullable: 'YES', data_type: 'text' }]);
+    const orderCommitFk = await pool.query("SELECT condeferrable, condeferred FROM pg_constraint WHERE conname = 'orders_order_commit_snapshot_fk'");
+    assert.deepEqual(orderCommitFk.rows, [{ condeferrable: true, condeferred: true }]);
+    assert.deepEqual((await pool.query("SELECT tgname FROM pg_trigger WHERE tgrelid = 'public.order_commit_snapshots'::regclass AND tgname = 'order_commit_snapshots_immutable' AND NOT tgisinternal")).rows, [{ tgname: 'order_commit_snapshots_immutable' }]);
 
     const gateColumns = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'sourcing_rfqs' AND column_name LIKE 'tech_pack_%' ORDER BY column_name");
     assert.deepEqual(gateColumns.rows.map((row) => row.column_name), ['tech_pack_acknowledged_at','tech_pack_acknowledgement_reference','tech_pack_code','tech_pack_gate_enforced','tech_pack_issued_version','tech_pack_revision','tech_pack_version']);

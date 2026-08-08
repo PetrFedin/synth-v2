@@ -118,6 +118,11 @@ export function createOrderEconomicsService({
         actorId,
         (tx) => executionBasisForCapability(tx, orderId, actorId, CAPABILITIES.COST_MANAGE),
         async (tx, { order, orderCommit }) => {
+          const supplyCommitment = requireEntity(
+            await tx.getSupplyCommitment(input.supplyCommitmentSnapshotId),
+            'SUPPLY_COMMITMENT_NOT_FOUND',
+            { supplyCommitmentSnapshotId: input.supplyCommitmentSnapshotId },
+          );
           const fxRateSnapshot = input.fxRateSnapshotId
             ? requireEntity(await tx.getFxRateSnapshot(input.fxRateSnapshotId), 'FX_RATE_SNAPSHOT_NOT_FOUND', { fxRateSnapshotId: input.fxRateSnapshotId })
             : null;
@@ -125,6 +130,7 @@ export function createOrderEconomicsService({
             id: nextId('actual-cost'),
             order,
             orderCommit,
+            supplyCommitment,
             costType: input.costType,
             amount: input.amount,
             currency: input.currency,
@@ -138,6 +144,7 @@ export function createOrderEconomicsService({
           await append(tx, 'actual-cost.recorded', entry.id, {
             orderId,
             orderCommitSnapshotId: entry.orderCommitSnapshotId,
+            supplyCommitmentSnapshotId: entry.supplyCommitmentSnapshotId,
             costType: entry.costType,
             sourceAmount: entry.sourceAmount,
             sourceCurrency: entry.sourceCurrency,
@@ -164,9 +171,14 @@ export function createOrderEconomicsService({
           const snapshot = createLandedCostSnapshot({ id: nextId('landed-cost'), order, orderCommit, costEntries: currentEntries, createdAt: clock() });
           await tx.insertLandedCostSnapshot(snapshot);
           await append(tx, 'landed-cost.actualized', snapshot.id, {
-            orderId, orderCommitSnapshotId: snapshot.orderCommitSnapshotId,
-            totalCost: snapshot.totalCost, currency: snapshot.currency,
-            costEntryCount: snapshot.costEntryIds.length, contentHash: snapshot.contentHash,
+            orderId,
+            orderCommitSnapshotId: snapshot.orderCommitSnapshotId,
+            supplyCommitmentSnapshotIds: snapshot.supplyCommitmentSnapshotIds,
+            supplyLineageComplete: snapshot.supplyLineageComplete,
+            totalCost: snapshot.totalCost,
+            currency: snapshot.currency,
+            costEntryCount: snapshot.costEntryIds.length,
+            contentHash: snapshot.contentHash,
           }, commandId, actorId);
           return snapshot;
         },
@@ -187,6 +199,8 @@ export function createOrderEconomicsService({
             orderId,
             orderCommitSnapshotId: snapshot.orderCommitSnapshotId,
             landedCostSnapshotId,
+            supplyCommitmentSnapshotIds: snapshot.supplyCommitmentSnapshotIds,
+            supplyLineageComplete: snapshot.supplyLineageComplete,
             netRevenue: snapshot.netRevenue,
             landedCost: snapshot.landedCost,
             contributionMarginAmount: snapshot.contributionMarginAmount,

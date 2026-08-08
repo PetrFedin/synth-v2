@@ -4,6 +4,7 @@ const identifier = { type: 'string', minLength: 1, maxLength: 200, pattern: SAFE
 const currency = { type: 'string', pattern: '^[A-Z]{3}$' };
 const money = { type: 'number', minimum: -900_719_925_474.0991, maximum: 900_719_925_474.0991, multipleOf: 0.0001 };
 const positiveMoney = { type: 'number', exclusiveMinimum: 0, maximum: 900_719_925_474.0991, multipleOf: 0.0001 };
+const fxRate = { type: 'number', exclusiveMinimum: 0, maximum: 90_071_992.54740991, multipleOf: 0.00000001 };
 const idempotency = { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 1, maxLength: 128, pattern: SAFE_ID } };
 const orderId = { name: 'orderId', in: 'path', required: true, schema: identifier };
 const marginActualizationId = { name: 'marginActualizationId', in: 'path', required: true, schema: identifier };
@@ -50,21 +51,42 @@ function schemas() {
         status: { type: 'string', enum: ['committed'] }, contentHash: sha256(), createdAt: date(),
       },
     },
+    OrderFxRateSnapshotInput: {
+      type: 'object', additionalProperties: false, required: ['sourceCurrency', 'rate', 'rateType', 'sourceRef', 'effectiveAt'],
+      properties: {
+        sourceCurrency: currency,
+        rate: fxRate,
+        rateType: fxRateType(),
+        sourceRef: { type: 'string', minLength: 1, maxLength: 240 },
+        effectiveAt: date(),
+      },
+    },
+    OrderFxRateSnapshot: {
+      type: 'object', additionalProperties: false,
+      required: ['id', 'orderId', 'orderVersion', 'orderCommitSnapshotId', 'sourceCurrency', 'targetCurrency', 'rate', 'rateType', 'sourceRef', 'effectiveAt', 'status', 'contentHash', 'recordedAt'],
+      properties: {
+        id: identifier, orderId: identifier, orderVersion: version(), orderCommitSnapshotId: identifier,
+        sourceCurrency: currency, targetCurrency: currency, rate: fxRate, rateType: fxRateType(),
+        sourceRef: { type: 'string', minLength: 1, maxLength: 240 }, effectiveAt: date(),
+        status: { type: 'string', enum: ['recorded'] }, contentHash: sha256(), recordedAt: date(),
+      },
+    },
     ActualCostInput: {
       type: 'object', additionalProperties: false, required: ['costType', 'amount', 'currency', 'sourceRef'],
       properties: {
         costType: costType(), amount: { ...money, not: { const: 0 } }, currency,
+        fxRateSnapshotId: identifier,
         sku: { oneOf: [{ type: 'string', pattern: SKU }, { type: 'null' }] },
         sourceRef: { type: 'string', minLength: 1, maxLength: 240 }, occurredAt: date(),
       },
     },
     ActualCostLedgerEntry: {
       type: 'object', additionalProperties: false,
-      required: ['id', 'orderId', 'orderVersion', 'orderCommitSnapshotId', 'brandId', 'shopId', 'costType', 'amount', 'currency', 'sku', 'sourceRef', 'occurredAt', 'recordedAt'],
+      required: ['id', 'orderId', 'orderVersion', 'orderCommitSnapshotId', 'brandId', 'shopId', 'costType', 'sourceAmount', 'sourceCurrency', 'fxRateSnapshotId', 'amount', 'currency', 'sku', 'sourceRef', 'occurredAt', 'recordedAt'],
       properties: {
         id: identifier, orderId: identifier, orderVersion: version(), orderCommitSnapshotId: identifier,
         brandId: identifier, shopId: identifier,
-        costType: costType(), amount: money, currency,
+        costType: costType(), sourceAmount: money, sourceCurrency: currency, fxRateSnapshotId: nullableIdentifier(), amount: money, currency,
         sku: { oneOf: [{ type: 'string', pattern: SKU }, { type: 'null' }] },
         sourceRef: { type: 'string', minLength: 1, maxLength: 240 }, occurredAt: date(), recordedAt: date(),
       },
@@ -107,6 +129,9 @@ function paths() {
     '/orders/{orderId}/supply-commitments': {
       post: mutation('createSupplyCommitment', '#/components/schemas/SupplyCommitmentInput', '#/components/schemas/SupplyCommitmentSnapshot', 'Committed order supply'),
     },
+    '/orders/{orderId}/fx-rate-snapshots': {
+      post: mutation('createOrderFxRateSnapshot', '#/components/schemas/OrderFxRateSnapshotInput', '#/components/schemas/OrderFxRateSnapshot', 'Recorded immutable FX rate for order costing'),
+    },
     '/orders/{orderId}/actual-costs': {
       post: mutation('recordActualCost', '#/components/schemas/ActualCostInput', '#/components/schemas/ActualCostLedgerEntry', 'Recorded append-only actual cost'),
     },
@@ -135,6 +160,7 @@ function dataResponse(description, reference) {
 function mutationResponses(description, reference) { return { 200: dataResponse(description, reference), 400: errorResponse, 401: errorResponse, 403: errorResponse, 404: errorResponse, 409: errorResponse, 422: errorResponse }; }
 function readResponses(description, reference) { return { 200: dataResponse(description, reference), 400: errorResponse, 401: errorResponse, 403: errorResponse, 404: errorResponse }; }
 function costType() { return { type: 'string', enum: ['factory', 'material', 'labor', 'freight', 'insurance', 'duty', 'brokerage', 'warehouse', 'quality', 'rework', 'packaging', 'commission', 'other'] }; }
+function fxRateType() { return { type: 'string', enum: ['plan', 'budget', 'po', 'invoice', 'accounting', 'settlement'] }; }
 function quantity() { return { type: 'integer', minimum: 1, maximum: 2_147_483_647 }; }
 function version() { return { type: 'integer', minimum: 1, maximum: 2_147_483_647 }; }
 function date() { return { type: 'string', format: 'date-time' }; }

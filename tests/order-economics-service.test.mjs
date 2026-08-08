@@ -28,6 +28,7 @@ function createHarness({ committed = orderCommit } = {}) {
     getOrderCommitSnapshot: async (id) => { state.orderCommitReads += 1; return id === committed?.id ? committed : undefined; },
     getMembership: async (organisationId, userId) => organisationId === 'BRAND-1' && userId === actorId ? membership : undefined,
     insertSupplyCommitment: async (value) => state.supply.push(value),
+    getSupplyCommitment: async (id) => state.supply.find((value) => value.id === id),
     insertFxRateSnapshot: async (value) => state.fxRates.push(value),
     getFxRateSnapshot: async (id) => state.fxRates.find((value) => value.id === id),
     insertActualCostEntry: async (value) => state.costs.push(value),
@@ -53,6 +54,7 @@ test('service pins supply, cost, landed cost and margin to the immutable order c
     allocations: [{ sku: 'SKU-1', quantity: 10, sourceType: 'production', sourceRef: 'PO-1' }],
   });
   const cost = await service.recordActualCost('CMD-2', actorId, order.id, {
+    supplyCommitmentSnapshotId: supply.id,
     costType: 'factory', amount: 600, currency: 'EUR', sourceRef: 'SUPPLIER-INVOICE-1', occurredAt: at,
   });
   const landed = await service.actualizeLandedCost('CMD-3', actorId, order.id);
@@ -60,8 +62,13 @@ test('service pins supply, cost, landed cost and margin to the immutable order c
 
   assert.equal(supply.orderCommitSnapshotId, 'ORDER-COMMIT-1');
   assert.equal(cost.orderCommitSnapshotId, 'ORDER-COMMIT-1');
+  assert.equal(cost.supplyCommitmentSnapshotId, supply.id);
   assert.equal(landed.orderCommitSnapshotId, 'ORDER-COMMIT-1');
+  assert.deepEqual(landed.supplyCommitmentSnapshotIds, [supply.id]);
+  assert.equal(landed.supplyLineageComplete, true);
   assert.equal(margin.orderCommitSnapshotId, 'ORDER-COMMIT-1');
+  assert.deepEqual(margin.supplyCommitmentSnapshotIds, [supply.id]);
+  assert.equal(margin.supplyLineageComplete, true);
   assert.equal(margin.netRevenue, 1000);
   assert.equal(margin.landedCost, 600);
   assert.equal(margin.contributionMarginAmount, 400);
@@ -71,10 +78,14 @@ test('service pins supply, cost, landed cost and margin to the immutable order c
 
 test('service records immutable FX basis and converts cross-currency actual cost before landed cost', async () => {
   const { service, state } = createHarness();
+  const supply = await service.createSupplyCommitment('CMD-SUPPLY', actorId, order.id, {
+    allocations: [{ sku: 'SKU-1', quantity: 10, sourceType: 'production', sourceRef: 'PO-FX' }],
+  });
   const fx = await service.createFxRateSnapshot('CMD-FX', actorId, order.id, {
     sourceCurrency: 'USD', rate: 0.92, rateType: 'invoice', sourceRef: 'FX-SOURCE-1', effectiveAt: at,
   });
   const cost = await service.recordActualCost('CMD-USD', actorId, order.id, {
+    supplyCommitmentSnapshotId: supply.id,
     costType: 'freight', amount: 100, currency: 'USD', fxRateSnapshotId: fx.id, sourceRef: 'FREIGHT-USD', occurredAt: at,
   });
   const landed = await service.actualizeLandedCost('CMD-USD-LC', actorId, order.id);
@@ -83,19 +94,22 @@ test('service records immutable FX basis and converts cross-currency actual cost
   assert.equal(fx.orderCommitSnapshotId, 'ORDER-COMMIT-1');
   assert.equal(fx.sourceCurrency, 'USD');
   assert.equal(fx.targetCurrency, 'EUR');
+  assert.equal(cost.supplyCommitmentSnapshotId, supply.id);
   assert.equal(cost.sourceAmount, 100);
   assert.equal(cost.sourceCurrency, 'USD');
   assert.equal(cost.fxRateSnapshotId, fx.id);
   assert.equal(cost.amount, 92);
   assert.equal(cost.currency, 'EUR');
   assert.equal(landed.totalCost, 92);
+  assert.deepEqual(landed.supplyCommitmentSnapshotIds, [supply.id]);
+  assert.equal(landed.supplyLineageComplete, true);
   assert.ok(state.outbox.some((event) => event.type === 'fx-rate.snapshot-recorded' && event.payload?.orderCommitSnapshotId === 'ORDER-COMMIT-1'));
 });
 
 test('service refuses execution when the pinned order commit snapshot cannot be loaded', async () => {
   const { service } = createHarness({ committed: null });
   await assert.rejects(
-    () => service.recordActualCost('CMD-X', actorId, order.id, { costType: 'factory', amount: 10, currency: 'EUR', sourceRef: 'INV-X', occurredAt: at }),
+    () => service.recordActualCost('CMD-X', actorId, order.id, { supplyCommitmentSnapshotId: 'SUPPLY-X', costType: 'factory', amount: 10, currency: 'EUR', sourceRef: 'INV-X', occurredAt: at }),
     (error) => error?.code === 'ORDER_COMMIT_SNAPSHOT_NOT_FOUND',
   );
 });
@@ -106,8 +120,16 @@ test('landed cost ignores legacy cost rows that are not pinned to the current or
     id: 'LEGACY-COST', orderId: order.id, orderVersion: order.version, brandId: order.brandId, shopId: order.shopId,
     costType: 'freight', amount: 900, currency: 'EUR', sku: null, sourceRef: 'LEGACY', occurredAt: at, recordedAt: at,
   }));
-  await service.recordActualCost('CMD-COST', actorId, order.id, { costType: 'factory', amount: 400, currency: 'EUR', sourceRef: 'CURRENT', occurredAt: at });
+  const supply = await service.createSupplyCommitment('CMD-SUPPLY', actorId, order.id, {
+    allocations: [{ sku: 'SKU-1', quantity: 10, sourceType: 'production', sourceRef: 'PO-CURRENT' }],
+  });
+  await service.recordActualCost('CMD-COST', actorId, order.id, {
+    supplyCommitmentSnapshotId: supply.id,
+    costType: 'factory', amount: 400, currency: 'EUR', sourceRef: 'CURRENT', occurredAt: at,
+  });
   const landed = await service.actualizeLandedCost('CMD-LC', actorId, order.id);
   assert.equal(landed.totalCost, 400);
-  assert.deepEqual(landed.costEntryIds, ['actual-cost-1']);
+  assert.deepEqual(landed.costEntryIds, ['actual-cost-3']);
+  assert.deepEqual(landed.supplyCommitmentSnapshotIds, [supply.id]);
+  assert.equal(landed.supplyLineageComplete, true);
 });

@@ -28,6 +28,13 @@ const orderCommit = Object.freeze({
     Object.freeze({ sku: 'SKU-2', quantity: 4, unitPrice: 100 }),
   ]),
 });
+const supplyCommitment = createSupplyCommitmentSnapshot({
+  id: 'SUPPLY-COST-1', order, orderCommit, createdAt: at,
+  allocations: [
+    { sku: 'SKU-1', quantity: 6, sourceType: 'production', sourceRef: 'PO-1' },
+    { sku: 'SKU-2', quantity: 4, sourceType: 'production', sourceRef: 'PO-1' },
+  ],
+});
 
 test('order supply commitment supports split sources without exceeding committed ordered quantity', () => {
   const commitment = createSupplyCommitmentSnapshot({
@@ -45,24 +52,29 @@ test('order supply commitment supports split sources without exceeding committed
   assert.match(commitment.contentHash, /^[a-f0-9]{64}$/);
 });
 
-test('actual cost ledger closes landed cost and actual contribution margin on immutable commit basis', () => {
-  const factory = createActualCostLedgerEntry({ id: 'C1', order, orderCommit, costType: 'factory', amount: 600, currency: 'EUR', sourceRef: 'INV-FACTORY', occurredAt: at, recordedAt: at });
-  const freight = createActualCostLedgerEntry({ id: 'C2', order, orderCommit, costType: 'freight', amount: 100, currency: 'EUR', sourceRef: 'INV-FREIGHT', occurredAt: at, recordedAt: at });
-  const credit = createActualCostLedgerEntry({ id: 'C3', order, orderCommit, costType: 'quality', amount: -20, currency: 'EUR', sourceRef: 'CREDIT-QUALITY', occurredAt: at, recordedAt: at });
+test('actual cost ledger closes landed cost and actual contribution margin on immutable supply and commit basis', () => {
+  const factory = createActualCostLedgerEntry({ id: 'C1', order, orderCommit, supplyCommitment, costType: 'factory', amount: 600, currency: 'EUR', sourceRef: 'INV-FACTORY', occurredAt: at, recordedAt: at });
+  const freight = createActualCostLedgerEntry({ id: 'C2', order, orderCommit, supplyCommitment, costType: 'freight', amount: 100, currency: 'EUR', sourceRef: 'INV-FREIGHT', occurredAt: at, recordedAt: at });
+  const credit = createActualCostLedgerEntry({ id: 'C3', order, orderCommit, supplyCommitment, costType: 'quality', amount: -20, currency: 'EUR', sourceRef: 'CREDIT-QUALITY', occurredAt: at, recordedAt: at });
   const landedCost = createLandedCostSnapshot({ id: 'LC-1', order, orderCommit, costEntries: [factory, freight, credit], createdAt: at });
   const margin = createMarginActualizationSnapshot({ id: 'M-1', order, orderCommit, landedCost, createdAt: at });
 
+  assert.equal(factory.supplyCommitmentSnapshotId, 'SUPPLY-COST-1');
   assert.equal(factory.sourceAmount, 600);
   assert.equal(factory.sourceCurrency, 'EUR');
   assert.equal(factory.fxRateSnapshotId, null);
   assert.equal(landedCost.totalCost, 680);
   assert.equal(landedCost.orderCommitSnapshotId, 'ORDER-COMMIT-1');
+  assert.deepEqual(landedCost.supplyCommitmentSnapshotIds, ['SUPPLY-COST-1']);
+  assert.equal(landedCost.supplyLineageComplete, true);
   assert.deepEqual(landedCost.componentTotals, { factory: 600, freight: 100, quality: -20 });
   assert.equal(margin.netRevenue, 1000);
   assert.equal(margin.contributionMarginAmount, 320);
   assert.equal(margin.contributionMarginPercent, 32);
   assert.equal(margin.orderCommitSnapshotId, 'ORDER-COMMIT-1');
   assert.equal(margin.landedCostSnapshotId, 'LC-1');
+  assert.deepEqual(margin.supplyCommitmentSnapshotIds, ['SUPPLY-COST-1']);
+  assert.equal(margin.supplyLineageComplete, true);
   assert.equal(margin.buyerCatalogVersionId, 'BUYER-CAT-1');
   assert.equal(margin.priceListVersionId, 'PRICE-1');
 });
@@ -73,11 +85,12 @@ test('cross-currency actual cost uses an immutable FX snapshot and preserves sou
     rateType: 'invoice', sourceRef: 'ECB-2026-08-08', effectiveAt: at, recordedAt: at,
   });
   const entry = createActualCostLedgerEntry({
-    id: 'C-USD', order, orderCommit, costType: 'freight', amount: 123.4567, currency: 'USD',
+    id: 'C-USD', order, orderCommit, supplyCommitment, costType: 'freight', amount: 123.4567, currency: 'USD',
     fxRateSnapshot: fx, sourceRef: 'FREIGHT-USD-1', occurredAt: at, recordedAt: at,
   });
   assert.equal(fx.targetCurrency, 'EUR');
   assert.equal(fx.orderCommitSnapshotId, 'ORDER-COMMIT-1');
+  assert.equal(entry.supplyCommitmentSnapshotId, 'SUPPLY-COST-1');
   assert.equal(entry.sourceAmount, 123.4567);
   assert.equal(entry.sourceCurrency, 'USD');
   assert.equal(entry.fxRateSnapshotId, 'FX-USD-EUR');
@@ -91,8 +104,16 @@ test('cross-currency actual cost rejects an FX snapshot from another order commi
     sourceCurrency: 'USD', targetCurrency: 'EUR', rate: 0.92,
   });
   assert.throws(
-    () => createActualCostLedgerEntry({ id: 'C-WRONG-FX', order, orderCommit, costType: 'freight', amount: 100, currency: 'USD', fxRateSnapshot: fx, sourceRef: 'INV', occurredAt: at, recordedAt: at }),
+    () => createActualCostLedgerEntry({ id: 'C-WRONG-FX', order, orderCommit, supplyCommitment, costType: 'freight', amount: 100, currency: 'USD', fxRateSnapshot: fx, sourceRef: 'INV', occurredAt: at, recordedAt: at }),
     (error) => error?.code === 'ACTUAL_COST_FX_LINEAGE_MISMATCH',
+  );
+});
+
+test('actual cost rejects a supply commitment from another order commit', () => {
+  const foreignSupply = Object.freeze({ ...supplyCommitment, id: 'SUPPLY-FOREIGN', orderCommitSnapshotId: 'ORDER-COMMIT-OTHER' });
+  assert.throws(
+    () => createActualCostLedgerEntry({ id: 'C-WRONG-SUPPLY', order, orderCommit, supplyCommitment: foreignSupply, costType: 'factory', amount: 10, currency: 'EUR', sourceRef: 'INV', occurredAt: at, recordedAt: at }),
+    (error) => error?.code === 'ACTUAL_COST_SUPPLY_LINEAGE_MISMATCH',
   );
 });
 
@@ -106,13 +127,13 @@ test('supply commitment rejects oversupply against committed quantity', () => {
 test('economics reject an order commit snapshot from another execution basis', () => {
   const wrongCommit = Object.freeze({ ...orderCommit, id: 'ORDER-COMMIT-OTHER' });
   assert.throws(
-    () => createActualCostLedgerEntry({ id: 'C-X', order, orderCommit: wrongCommit, costType: 'factory', amount: 10, currency: 'EUR', sourceRef: 'INV-X', occurredAt: at, recordedAt: at }),
+    () => createActualCostLedgerEntry({ id: 'C-X', order, orderCommit: wrongCommit, supplyCommitment, costType: 'factory', amount: 10, currency: 'EUR', sourceRef: 'INV-X', occurredAt: at, recordedAt: at }),
     (error) => error?.code === 'ORDER_COMMIT_SNAPSHOT_MISMATCH_FOR_EXECUTION',
   );
 });
 
 test('landed cost rejects cost entries from a different order commit snapshot', () => {
-  const valid = createActualCostLedgerEntry({ id: 'C-VALID', order, orderCommit, costType: 'factory', amount: 100, currency: 'EUR', sourceRef: 'INV-VALID', occurredAt: at, recordedAt: at });
+  const valid = createActualCostLedgerEntry({ id: 'C-VALID', order, orderCommit, supplyCommitment, costType: 'factory', amount: 100, currency: 'EUR', sourceRef: 'INV-VALID', occurredAt: at, recordedAt: at });
   const foreign = Object.freeze({ ...valid, id: 'C-FOREIGN', orderCommitSnapshotId: 'ORDER-COMMIT-OTHER' });
   assert.throws(
     () => createLandedCostSnapshot({ id: 'LC-X', order, orderCommit, costEntries: [foreign], createdAt: at }),

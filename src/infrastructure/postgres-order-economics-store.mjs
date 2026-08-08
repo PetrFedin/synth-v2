@@ -26,18 +26,22 @@ function view(client) {
       const result = await client.query('SELECT payload FROM orders WHERE id = $1 FOR SHARE', [id]);
       return result.rows[0]?.payload;
     },
+    async getOrderCommitSnapshot(id) {
+      const result = await client.query('SELECT payload FROM order_commit_snapshots WHERE id = $1 FOR SHARE', [id]);
+      return result.rows[0]?.payload;
+    },
     async insertSupplyCommitment(value) {
       await insertImmutable(client, `INSERT INTO supply_commitment_snapshots
-        (id, order_id, brand_id, shop_id, currency, created_at, content_hash, payload)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)`,
-      [value.id, value.orderId, value.brandId, value.shopId, value.currency, value.createdAt, value.contentHash, JSON.stringify(value)],
+        (id, order_id, order_commit_snapshot_id, lineage_version, brand_id, shop_id, currency, created_at, content_hash, payload)
+        VALUES ($1, $2, $3, 2, $4, $5, $6, $7, $8, $9::jsonb)`,
+      [value.id, value.orderId, value.orderCommitSnapshotId, value.brandId, value.shopId, value.currency, value.createdAt, value.contentHash, JSON.stringify(value)],
       'SUPPLY_COMMITMENT_ALREADY_EXISTS', { supplyCommitmentId: value.id });
     },
     async insertActualCostEntry(value) {
       await insertImmutable(client, `INSERT INTO actual_cost_ledger_entries
-        (id, order_id, brand_id, shop_id, cost_type, amount, currency, sku, source_ref, occurred_at, recorded_at, payload)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb)`,
-      [value.id, value.orderId, value.brandId, value.shopId, value.costType, value.amount, value.currency, value.sku, value.sourceRef, value.occurredAt, value.recordedAt, JSON.stringify(value)],
+        (id, order_id, order_commit_snapshot_id, lineage_version, brand_id, shop_id, cost_type, amount, currency, sku, source_ref, occurred_at, recorded_at, payload)
+        VALUES ($1, $2, $3, 2, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb)`,
+      [value.id, value.orderId, value.orderCommitSnapshotId, value.brandId, value.shopId, value.costType, value.amount, value.currency, value.sku, value.sourceRef, value.occurredAt, value.recordedAt, JSON.stringify(value)],
       'ACTUAL_COST_ENTRY_ALREADY_EXISTS', { costEntryId: value.id });
     },
     async listActualCostEntries(orderId) {
@@ -46,9 +50,9 @@ function view(client) {
     },
     async insertLandedCostSnapshot(value) {
       await insertImmutable(client, `INSERT INTO landed_cost_snapshots
-        (id, order_id, currency, total_cost, created_at, content_hash, payload)
-        VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)`,
-      [value.id, value.orderId, value.currency, value.totalCost, value.createdAt, value.contentHash, JSON.stringify(value)],
+        (id, order_id, order_commit_snapshot_id, lineage_version, currency, total_cost, created_at, content_hash, payload)
+        VALUES ($1, $2, $3, 2, $4, $5, $6, $7, $8::jsonb)`,
+      [value.id, value.orderId, value.orderCommitSnapshotId, value.currency, value.totalCost, value.createdAt, value.contentHash, JSON.stringify(value)],
       'LANDED_COST_SNAPSHOT_ALREADY_EXISTS', { landedCostSnapshotId: value.id });
     },
     async getLandedCostSnapshot(id) {
@@ -57,9 +61,9 @@ function view(client) {
     },
     async insertMarginActualizationSnapshot(value) {
       await insertImmutable(client, `INSERT INTO margin_actualization_snapshots
-        (id, order_id, landed_cost_snapshot_id, currency, net_revenue, landed_cost, contribution_margin_amount, contribution_margin_percent, created_at, content_hash, payload)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb)`,
-      [value.id, value.orderId, value.landedCostSnapshotId, value.currency, value.netRevenue, value.landedCost, value.contributionMarginAmount, value.contributionMarginPercent, value.createdAt, value.contentHash, JSON.stringify(value)],
+        (id, order_id, order_commit_snapshot_id, lineage_version, landed_cost_snapshot_id, currency, net_revenue, landed_cost, contribution_margin_amount, contribution_margin_percent, created_at, content_hash, payload)
+        VALUES ($1, $2, $3, 2, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb)`,
+      [value.id, value.orderId, value.orderCommitSnapshotId, value.landedCostSnapshotId, value.currency, value.netRevenue, value.landedCost, value.contributionMarginAmount, value.contributionMarginPercent, value.createdAt, value.contentHash, JSON.stringify(value)],
       'MARGIN_ACTUALIZATION_ALREADY_EXISTS', { marginActualizationSnapshotId: value.id });
     },
     async getMarginActualizationSnapshot(id) {

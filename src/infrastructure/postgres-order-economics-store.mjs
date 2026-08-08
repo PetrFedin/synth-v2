@@ -8,6 +8,8 @@ export function createPostgresOrderEconomicsStore({ pool } = {}) {
     transaction: (work) => withPostgresTransaction(pool, work, { createView: view }),
     async getSupplyCommitment(id) { return payloadOne(pool, 'SELECT payload FROM supply_commitment_snapshots WHERE id = $1', [id]); },
     async getFxRateSnapshot(id) { return payloadOne(pool, 'SELECT payload FROM order_fx_rate_snapshots WHERE id = $1', [id]); },
+    async getActualCostEntry(id) { return payloadOne(pool, 'SELECT payload FROM actual_cost_ledger_entries WHERE id = $1', [id]); },
+    async getActualCostReversal(originalEntryId) { return payloadOne(pool, 'SELECT payload FROM actual_cost_ledger_entries WHERE reversal_of_entry_id = $1', [originalEntryId]); },
     async getLandedCostSnapshot(id) { return payloadOne(pool, 'SELECT payload FROM landed_cost_snapshots WHERE id = $1', [id]); },
     async getMarginActualizationSnapshot(id) { return payloadOne(pool, 'SELECT payload FROM margin_actualization_snapshots WHERE id = $1', [id]); },
     async listActualCostEntries(orderId) {
@@ -53,12 +55,22 @@ function view(client) {
       const result = await client.query('SELECT payload FROM order_fx_rate_snapshots WHERE id = $1 FOR SHARE', [id]);
       return result.rows[0]?.payload;
     },
+    async getActualCostEntry(id) {
+      const result = await client.query('SELECT payload FROM actual_cost_ledger_entries WHERE id = $1 FOR SHARE', [id]);
+      return result.rows[0]?.payload;
+    },
+    async getActualCostReversal(originalEntryId) {
+      const result = await client.query('SELECT payload FROM actual_cost_ledger_entries WHERE reversal_of_entry_id = $1 FOR SHARE', [originalEntryId]);
+      return result.rows[0]?.payload;
+    },
     async insertActualCostEntry(value) {
       await insertImmutable(client, `INSERT INTO actual_cost_ledger_entries
-        (id, order_id, order_commit_snapshot_id, lineage_version, supply_commitment_snapshot_id, brand_id, shop_id, cost_type,
+        (id, order_id, order_commit_snapshot_id, lineage_version, supply_commitment_snapshot_id, brand_id, shop_id,
+         entry_kind, reversal_of_entry_id, correction_id, correction_reason, cost_type,
          source_amount, source_currency, fx_rate_snapshot_id, amount, currency, sku, source_ref, occurred_at, recorded_at, payload)
-        VALUES ($1, $2, $3, 3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17::jsonb)`,
-      [value.id, value.orderId, value.orderCommitSnapshotId, value.supplyCommitmentSnapshotId, value.brandId, value.shopId, value.costType,
+        VALUES ($1, $2, $3, 3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21::jsonb)`,
+      [value.id, value.orderId, value.orderCommitSnapshotId, value.supplyCommitmentSnapshotId, value.brandId, value.shopId,
+        value.entryKind ?? 'actual', value.reversalOfEntryId ?? null, value.correctionId ?? null, value.correctionReason ?? null, value.costType,
         value.sourceAmount, value.sourceCurrency, value.fxRateSnapshotId, value.amount, value.currency, value.sku, value.sourceRef, value.occurredAt, value.recordedAt, JSON.stringify(value)],
       'ACTUAL_COST_ENTRY_ALREADY_EXISTS', { costEntryId: value.id });
     },

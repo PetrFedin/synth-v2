@@ -5,7 +5,10 @@ import { canonicalJson } from '../../core/fingerprints.mjs';
 
 const SUPPLY_SOURCES = Object.freeze(['inventory', 'inbound', 'production', 'drop-ship']);
 const COST_TYPES = Object.freeze(['factory', 'material', 'labor', 'freight', 'insurance', 'duty', 'brokerage', 'warehouse', 'quality', 'rework', 'packaging', 'commission', 'other']);
+const FX_RATE_TYPES = Object.freeze(['plan', 'budget', 'po', 'invoice', 'accounting', 'settlement']);
 const MONEY_FACTOR = 10_000;
+const FX_RATE_FACTOR = 100_000_000;
+const FX_RATE_FACTOR_BIGINT = BigInt(FX_RATE_FACTOR);
 
 export function createSupplyCommitmentSnapshot({ id, order, orderCommit, allocations, createdAt }) {
   assertExecutionLineage(order, orderCommit);
@@ -39,12 +42,52 @@ export function createSupplyCommitmentSnapshot({ id, order, orderCommit, allocat
   return Object.freeze({ id, ...basis, status: 'committed', contentHash: hashBasis(basis), createdAt });
 }
 
-export function createActualCostLedgerEntry({ id, order, orderCommit, costType, amount, currency, sku = null, sourceRef, occurredAt, recordedAt }) {
+export function createOrderFxRateSnapshot({
+  id,
+  order,
+  orderCommit,
+  sourceCurrency,
+  rate,
+  rateType,
+  sourceRef,
+  effectiveAt,
+  recordedAt,
+}) {
+  assertExecutionLineage(order, orderCommit);
+  invariant(id, 'FX_RATE_SNAPSHOT_ID_REQUIRED', 'FX rate snapshot id is required');
+  invariant(isCurrency(sourceCurrency), 'FX_RATE_SOURCE_CURRENCY_INVALID', 'FX source currency must be an ISO-4217 code', { sourceCurrency });
+  invariant(sourceCurrency !== orderCommit.currency, 'FX_RATE_CURRENCY_PAIR_INVALID', 'FX source and target currencies must differ', { sourceCurrency, targetCurrency: orderCommit.currency });
+  invariant(FX_RATE_TYPES.includes(rateType), 'FX_RATE_TYPE_INVALID', 'FX rate type is invalid', { rateType });
+  invariant(typeof sourceRef === 'string' && sourceRef.trim().length > 0, 'FX_RATE_SOURCE_REF_REQUIRED', 'FX source reference is required');
+  const normalizedRate = normalizeFxRate(rate);
+  const basis = Object.freeze({
+    orderId: orderCommit.orderId,
+    orderVersion: orderCommit.orderVersion,
+    orderCommitSnapshotId: orderCommit.id,
+    sourceCurrency,
+    targetCurrency: orderCommit.currency,
+    rate: normalizedRate,
+    rateType,
+    sourceRef: sourceRef.trim(),
+    effectiveAt: requiredTimestamp(effectiveAt, 'FX_RATE_EFFECTIVE_AT_INVALID'),
+  });
+  return Object.freeze({
+    id,
+    ...basis,
+    status: 'recorded',
+    contentHash: hashBasis(basis),
+    recordedAt: requiredTimestamp(recordedAt, 'FX_RATE_RECORDED_AT_INVALID'),
+  });
+}
+
+export function createActualCostLedgerEntry({ id, order, orderCommit, costType, amount, currency, fxRateSnapshot = null, sku = null, sourceRef, occurredAt, recordedAt }) {
   assertExecutionLineage(order, orderCommit);
   invariant(id, 'ACTUAL_COST_ENTRY_ID_REQUIRED', 'Actual cost entry id is required');
   invariant(COST_TYPES.includes(costType), 'ACTUAL_COST_TYPE_INVALID', 'Actual cost type is invalid', { costType });
-  invariant(currency === orderCommit.currency, 'ACTUAL_COST_CURRENCY_MISMATCH', 'Actual cost currency must match committed order currency until FX actualization is enabled', { orderCurrency: orderCommit.currency, currency });
-  const normalizedAmount = normalizeSignedMoney(amount);
+  invariant(isCurrency(currency), 'ACTUAL_COST_CURRENCY_INVALID', 'Actual cost currency must be an ISO-4217 code', { currency });
+  const sourceAmount = normalizeSignedMoney(amount);
+  const sourceCurrency = currency;
+  const converted = normalizeActualCostCurrency({ sourceAmount, sourceCurrency, orderCommit, fxRateSnapshot });
   if (sku !== null) invariant(orderCommit.lines.some((line) => line.sku === sku), 'ACTUAL_COST_SKU_UNKNOWN', 'Actual cost SKU is not in committed order', { sku });
   invariant(typeof sourceRef === 'string' && sourceRef.trim().length > 0, 'ACTUAL_COST_SOURCE_REF_REQUIRED', 'Actual cost source reference is required');
   return Object.freeze({
@@ -55,8 +98,11 @@ export function createActualCostLedgerEntry({ id, order, orderCommit, costType, 
     brandId: orderCommit.brandId,
     shopId: orderCommit.shopId,
     costType,
-    amount: normalizedAmount,
-    currency,
+    sourceAmount,
+    sourceCurrency,
+    fxRateSnapshotId: converted.fxRateSnapshotId,
+    amount: converted.amount,
+    currency: orderCommit.currency,
     sku,
     sourceRef: sourceRef.trim(),
     occurredAt: requiredTimestamp(occurredAt, 'ACTUAL_COST_OCCURRED_AT_INVALID'),
@@ -117,6 +163,22 @@ export function createMarginActualizationSnapshot({ id, order, orderCommit, land
   return Object.freeze({ id, ...basis, status: 'actual', contentHash: hashBasis(basis), createdAt });
 }
 
+function normalizeActualCostCurrency({ sourceAmount, sourceCurrency, orderCommit, fxRateSnapshot }) {
+  if (sourceCurrency === orderCommit.currency) {
+    invariant(fxRateSnapshot === null || fxRateSnapshot === undefined, 'ACTUAL_COST_FX_NOT_REQUIRED', 'Same-currency actual cost must not reference an FX rate snapshot');
+    return Object.freeze({ amount: sourceAmount, fxRateSnapshotId: null });
+  }
+  invariant(fxRateSnapshot?.id, 'ACTUAL_COST_FX_REQUIRED', 'Cross-currency actual cost requires an immutable FX rate snapshot', { sourceCurrency, targetCurrency: orderCommit.currency });
+  invariant(fxRateSnapshot.status === 'recorded', 'ACTUAL_COST_FX_STATUS_INVALID', 'FX rate snapshot must be recorded', { fxRateSnapshotId: fxRateSnapshot.id, status: fxRateSnapshot.status });
+  invariant(fxRateSnapshot.orderId === orderCommit.orderId && fxRateSnapshot.orderCommitSnapshotId === orderCommit.id, 'ACTUAL_COST_FX_LINEAGE_MISMATCH', 'FX rate snapshot belongs to another order commit', { fxRateSnapshotId: fxRateSnapshot.id });
+  invariant(fxRateSnapshot.sourceCurrency === sourceCurrency && fxRateSnapshot.targetCurrency === orderCommit.currency, 'ACTUAL_COST_FX_PAIR_MISMATCH', 'FX rate snapshot currency pair does not match the actual cost', {
+    fxRateSnapshotId: fxRateSnapshot.id,
+    sourceCurrency,
+    targetCurrency: orderCommit.currency,
+  });
+  return Object.freeze({ amount: convertSignedMoney(sourceAmount, fxRateSnapshot.rate), fxRateSnapshotId: fxRateSnapshot.id });
+}
+
 function assertExecutionLineage(order, orderCommit) {
   invariant(order?.id && order.status === 'attached', 'ORDER_NOT_COMMITTED_FOR_EXECUTION', 'Supply and cost actualization require an attached wholesale order', { orderId: order?.id, status: order?.status });
   invariant(typeof order.orderCommitSnapshotId === 'string' && order.orderCommitSnapshotId.length > 0, 'ORDER_COMMIT_SNAPSHOT_REQUIRED_FOR_EXECUTION', 'Supply and cost actualization require an immutable order commit snapshot', { orderId: order.id });
@@ -131,9 +193,33 @@ function normalizeSignedMoney(value) {
   const scaled = Math.round(value * MONEY_FACTOR);
   invariant(Number.isSafeInteger(scaled), 'ACTUAL_COST_AMOUNT_TOO_LARGE', 'Actual cost amount exceeds safe fixed-point range');
   const normalized = scaled / MONEY_FACTOR;
-  invariant(Math.abs(value - normalized) <= 1e-10, 'ACTUAL_COST_AMOUNT_SCALE_INVALID', 'Actual cost amount must use at most 4 decimal places');
+  const tolerance = Math.max(1e-12, Number.EPSILON * Math.max(1, Math.abs(value)) * 4);
+  invariant(Math.abs(value - normalized) <= tolerance, 'ACTUAL_COST_AMOUNT_SCALE_INVALID', 'Actual cost amount must use at most 4 decimal places');
   return normalized;
 }
+function normalizeFxRate(value) {
+  invariant(Number.isFinite(value) && value > 0, 'FX_RATE_INVALID', 'FX rate must be positive');
+  const scaled = Math.round(value * FX_RATE_FACTOR);
+  invariant(Number.isSafeInteger(scaled), 'FX_RATE_TOO_LARGE', 'FX rate exceeds safe fixed-point range');
+  const normalized = scaled / FX_RATE_FACTOR;
+  const tolerance = Math.max(1e-12, Number.EPSILON * Math.max(1, Math.abs(value)) * 4);
+  invariant(Math.abs(value - normalized) <= tolerance, 'FX_RATE_SCALE_INVALID', 'FX rate must use at most 8 decimal places');
+  return normalized;
+}
+function convertSignedMoney(amount, rate) {
+  const amountScaled = BigInt(Math.round(amount * MONEY_FACTOR));
+  const rateScaled = BigInt(Math.round(normalizeFxRate(rate) * FX_RATE_FACTOR));
+  const product = amountScaled * rateScaled;
+  const half = FX_RATE_FACTOR_BIGINT / 2n;
+  const convertedScaled = product >= 0n
+    ? (product + half) / FX_RATE_FACTOR_BIGINT
+    : -((-product + half) / FX_RATE_FACTOR_BIGINT);
+  invariant(convertedScaled <= BigInt(Number.MAX_SAFE_INTEGER) && convertedScaled >= BigInt(Number.MIN_SAFE_INTEGER), 'ACTUAL_COST_AMOUNT_TOO_LARGE', 'Converted actual cost exceeds safe fixed-point range');
+  const converted = Number(convertedScaled) / MONEY_FACTOR;
+  invariant(converted !== 0, 'ACTUAL_COST_CONVERTED_ZERO', 'Converted actual cost cannot round to zero');
+  return converted;
+}
+function isCurrency(value) { return typeof value === 'string' && /^[A-Z]{3}$/.test(value); }
 function roundMoney(value) { return Math.round(value * MONEY_FACTOR) / MONEY_FACTOR; }
 function roundMetric(value) { return Math.round(value * 10_000) / 10_000; }
 function requiredTimestamp(value, code) { const parsed = Date.parse(value); invariant(typeof value === 'string' && Number.isFinite(parsed), code, 'Timestamp must be a valid ISO date-time'); return new Date(parsed).toISOString(); }

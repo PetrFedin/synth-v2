@@ -8,7 +8,7 @@ import { createOrderEconomicsService } from '../src/application/order-economics-
 
 const databaseUrl = process.env.POSTGRES_TEST_URL;
 
-test('PostgreSQL persists supply, FX, immutable cost close and post-close re-actualization on one order commit', { skip: !databaseUrl }, async () => {
+test('PostgreSQL persists supply, FX, readiness, immutable cost close and post-close re-actualization on one order commit', { skip: !databaseUrl }, async () => {
   const { Pool } = await import('pg');
   const pool = new Pool({ connectionString: databaseUrl, max: 2 });
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -130,9 +130,20 @@ test('PostgreSQL persists supply, FX, immutable cost close and post-close re-act
     });
     const correctedLanded = await service.actualizeLandedCost('cmd-landed-corrected', 'cost-user', order.id);
     const correctedMargin = await service.actualizeMargin('cmd-margin-corrected', 'cost-user', order.id, correctedLanded.id);
+    const readiness = await service.evaluateCostCloseReadiness('cmd-readiness', 'cost-user', order.id, {
+      landedCostSnapshotId: correctedLanded.id,
+      marginActualizationSnapshotId: correctedMargin.id,
+      requirements: [
+        { type: 'factory', status: 'waived', waiverReason: 'Factory cost is embedded in the supplier freight test fixture' },
+        { type: 'freight', status: 'complete', evidenceEntryIds: [correction.replacement.id] },
+        { type: 'duty', status: 'waived', waiverReason: 'No duty is expected for this fixture' },
+        { type: 'credits', status: 'waived', waiverReason: 'No open supplier credits or claims' },
+      ],
+    });
     const close = await service.closeCost('cmd-cost-close', 'cost-user', order.id, {
       landedCostSnapshotId: correctedLanded.id,
       marginActualizationSnapshotId: correctedMargin.id,
+      costCloseReadinessSnapshotId: readiness.id,
     });
 
     assert.equal(correction.reversal.reversalOfEntryId, cost.id);
@@ -146,6 +157,9 @@ test('PostgreSQL persists supply, FX, immutable cost close and post-close re-act
     assert.deepEqual(correctedLanded.supplyCommitmentSnapshotIds, [supply.id]);
     assert.equal(correctedLanded.supplyLineageComplete, true);
     assert.equal(correctedMargin.contributionMarginAmount, 926.4);
+    assert.equal(readiness.status, 'READY_TO_CLOSE');
+    assert.deepEqual(readiness.blockingReasons, []);
+    assert.equal(close.costCloseReadinessSnapshotId, readiness.id);
     assert.equal(close.totalLandedCost, 73.6);
     assert.equal(close.contributionMarginAmount, 926.4);
 
@@ -205,18 +219,33 @@ test('PostgreSQL persists supply, FX, immutable cost close and post-close re-act
       order_commit_snapshot_id: commit.id, lineage_version: 3,
     });
 
-    const closeRow = (await pool.query(
+    const readinessRow = (await pool.query(
       `SELECT order_commit_snapshot_id, landed_cost_snapshot_id, margin_actualization_snapshot_id,
-              total_landed_cost::text, contribution_margin_amount::text
+              status, requirements, blocking_reasons
+         FROM cost_close_readiness_snapshots WHERE id = $1`,
+      [readiness.id],
+    )).rows[0];
+    assert.equal(readinessRow.order_commit_snapshot_id, commit.id);
+    assert.equal(readinessRow.landed_cost_snapshot_id, correctedLanded.id);
+    assert.equal(readinessRow.margin_actualization_snapshot_id, correctedMargin.id);
+    assert.equal(readinessRow.status, 'READY_TO_CLOSE');
+    assert.deepEqual(readinessRow.blocking_reasons, []);
+    assert.equal(readinessRow.requirements.length, 4);
+
+    const closeRow = (await pool.query(
+      `SELECT order_commit_snapshot_id, cost_close_readiness_snapshot_id, landed_cost_snapshot_id, margin_actualization_snapshot_id,
+              total_landed_cost::text, contribution_margin_amount::text, lineage_version
          FROM cost_close_snapshots WHERE id = $1`,
       [close.id],
     )).rows[0];
     assert.deepEqual(closeRow, {
       order_commit_snapshot_id: commit.id,
+      cost_close_readiness_snapshot_id: readiness.id,
       landed_cost_snapshot_id: correctedLanded.id,
       margin_actualization_snapshot_id: correctedMargin.id,
       total_landed_cost: '73.6000',
       contribution_margin_amount: '926.4000',
+      lineage_version: 2,
     });
 
     const adjustmentRow = (await pool.query(
@@ -242,6 +271,10 @@ test('PostgreSQL persists supply, FX, immutable cost close and post-close re-act
     await assert.rejects(
       () => pool.query('UPDATE actual_cost_ledger_entries SET amount = amount + 1 WHERE id = $1', [cost.id]),
       (error) => error?.code === '55000' && error?.message === 'immutable order economics record cannot be changed: actual_cost_ledger_entries',
+    );
+    await assert.rejects(
+      () => pool.query("UPDATE cost_close_readiness_snapshots SET status = 'OPEN' WHERE id = $1", [readiness.id]),
+      (error) => error?.code === '55000' && error?.message === 'immutable order economics record cannot be changed: cost_close_readiness_snapshots',
     );
     await assert.rejects(
       () => pool.query('UPDATE cost_close_snapshots SET total_landed_cost = total_landed_cost + 1 WHERE id = $1', [close.id]),

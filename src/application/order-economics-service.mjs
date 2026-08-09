@@ -5,9 +5,11 @@ import { CAPABILITIES, assertCapability } from '../modules/access-control/public
 import {
   createActualCostLedgerEntry,
   createActualCostReversalEntry,
+  createCostCloseSnapshot,
   createLandedCostSnapshot,
   createMarginActualizationSnapshot,
   createOrderFxRateSnapshot,
+  createPostCloseAdjustment,
   createSupplyCommitmentSnapshot,
 } from '../modules/order-economics/public.mjs';
 
@@ -63,6 +65,15 @@ export function createOrderEconomicsService({
       ? requireEntity(await tx.getFxRateSnapshot(input.fxRateSnapshotId), 'FX_RATE_SNAPSHOT_NOT_FOUND', { fxRateSnapshotId: input.fxRateSnapshotId })
       : null;
     return Object.freeze({ supplyCommitment, fxRateSnapshot });
+  }
+
+  async function assertCostOpen(tx, orderCommit) {
+    const closed = await tx.getCostCloseByOrderCommitSnapshotId(orderCommit.id);
+    invariant(!closed, 'COST_CLOSE_REQUIRES_POST_CLOSE_ADJUSTMENT', 'Cost is closed for this order commit; use the post-close adjustment path', {
+      orderId: orderCommit.orderId,
+      orderCommitSnapshotId: orderCommit.id,
+      costCloseSnapshotId: closed?.id,
+    });
   }
 
   return Object.freeze({
@@ -131,6 +142,7 @@ export function createOrderEconomicsService({
         actorId,
         (tx) => executionBasisForCapability(tx, orderId, actorId, CAPABILITIES.COST_MANAGE),
         async (tx, { order, orderCommit }) => {
+          await assertCostOpen(tx, orderCommit);
           const { supplyCommitment, fxRateSnapshot } = await loadCostBasis(tx, input);
           const entry = createActualCostLedgerEntry({
             id: nextId('actual-cost'),
@@ -160,6 +172,7 @@ export function createOrderEconomicsService({
         actorId,
         (tx) => executionBasisForCapability(tx, orderId, actorId, CAPABILITIES.COST_MANAGE),
         async (tx, { order, orderCommit }) => {
+          await assertCostOpen(tx, orderCommit);
           const originalEntry = requireEntity(await tx.getActualCostEntry(originalEntryId), 'ACTUAL_COST_ENTRY_NOT_FOUND', { originalEntryId });
           invariant(originalEntry.orderId === orderId && originalEntry.orderCommitSnapshotId === orderCommit.id, 'ACTUAL_COST_CORRECTION_LINEAGE_MISMATCH', 'Actual cost entry belongs to another order commit', { originalEntryId, orderId, orderCommitSnapshotId: orderCommit.id });
           const existingReversal = await tx.getActualCostReversal(originalEntryId);
@@ -229,20 +242,12 @@ export function createOrderEconomicsService({
         actorId,
         (tx) => executionBasisForCapability(tx, orderId, actorId, CAPABILITIES.COST_MANAGE),
         async (tx, { order, orderCommit }) => {
+          await assertCostOpen(tx, orderCommit);
           const entries = await tx.listActualCostEntries(orderId);
           const currentEntries = entries.filter((entry) => entry.orderCommitSnapshotId === orderCommit.id);
           const snapshot = createLandedCostSnapshot({ id: nextId('landed-cost'), order, orderCommit, costEntries: currentEntries, createdAt: clock() });
           await tx.insertLandedCostSnapshot(snapshot);
-          await append(tx, 'landed-cost.actualized', snapshot.id, {
-            orderId,
-            orderCommitSnapshotId: snapshot.orderCommitSnapshotId,
-            supplyCommitmentSnapshotIds: snapshot.supplyCommitmentSnapshotIds,
-            supplyLineageComplete: snapshot.supplyLineageComplete,
-            totalCost: snapshot.totalCost,
-            currency: snapshot.currency,
-            costEntryCount: snapshot.costEntryIds.length,
-            contentHash: snapshot.contentHash,
-          }, commandId, actorId);
+          await appendLandedCostActualized(tx, snapshot, commandId, actorId);
           return snapshot;
         },
       );
@@ -255,24 +260,129 @@ export function createOrderEconomicsService({
         actorId,
         (tx) => executionBasisForCapability(tx, orderId, actorId, CAPABILITIES.COST_MANAGE),
         async (tx, { order, orderCommit }) => {
+          await assertCostOpen(tx, orderCommit);
           const landedCost = requireEntity(await tx.getLandedCostSnapshot(landedCostSnapshotId), 'LANDED_COST_SNAPSHOT_NOT_FOUND', { landedCostSnapshotId });
           const snapshot = createMarginActualizationSnapshot({ id: nextId('margin-actualization'), order, orderCommit, landedCost, createdAt: clock() });
           await tx.insertMarginActualizationSnapshot(snapshot);
-          await append(tx, 'margin.actualized', snapshot.id, {
+          await appendMarginActualized(tx, snapshot, commandId, actorId);
+          return snapshot;
+        },
+      );
+    },
+
+    closeCost(commandId, actorId, orderId, input) {
+      return execute(
+        commandId,
+        `closeCost:${actorId}:${orderId}:${canonicalJson(input)}`,
+        actorId,
+        (tx) => executionBasisForCapability(tx, orderId, actorId, CAPABILITIES.COST_MANAGE),
+        async (tx, { order, orderCommit }) => {
+          await assertCostOpen(tx, orderCommit);
+          const landedCost = requireEntity(await tx.getLandedCostSnapshot(input.landedCostSnapshotId), 'LANDED_COST_SNAPSHOT_NOT_FOUND', { landedCostSnapshotId: input.landedCostSnapshotId });
+          const marginActualization = requireEntity(await tx.getMarginActualizationSnapshot(input.marginActualizationSnapshotId), 'MARGIN_ACTUALIZATION_NOT_FOUND', { marginActualizationSnapshotId: input.marginActualizationSnapshotId });
+          const snapshot = createCostCloseSnapshot({
+            id: nextId('cost-close'),
+            order,
+            orderCommit,
+            landedCost,
+            marginActualization,
+            closedAt: clock(),
+          });
+          await tx.insertCostCloseSnapshot(snapshot);
+          await append(tx, 'cost-close.closed', snapshot.id, {
             orderId,
             orderCommitSnapshotId: snapshot.orderCommitSnapshotId,
-            landedCostSnapshotId,
-            supplyCommitmentSnapshotIds: snapshot.supplyCommitmentSnapshotIds,
-            supplyLineageComplete: snapshot.supplyLineageComplete,
+            landedCostSnapshotId: snapshot.landedCostSnapshotId,
+            marginActualizationSnapshotId: snapshot.marginActualizationSnapshotId,
+            totalLandedCost: snapshot.totalLandedCost,
             netRevenue: snapshot.netRevenue,
-            landedCost: snapshot.landedCost,
             contributionMarginAmount: snapshot.contributionMarginAmount,
             contributionMarginPercent: snapshot.contributionMarginPercent,
-            commercialPublicationId: snapshot.commercialPublicationId,
-            buyerCatalogVersionId: snapshot.buyerCatalogVersionId,
+            currency: snapshot.currency,
             contentHash: snapshot.contentHash,
           }, commandId, actorId);
           return snapshot;
+        },
+      );
+    },
+
+    recordPostCloseAdjustment(commandId, actorId, orderId, input) {
+      return execute(
+        commandId,
+        `recordPostCloseAdjustment:${actorId}:${orderId}:${canonicalJson(input)}`,
+        actorId,
+        (tx) => executionBasisForCapability(tx, orderId, actorId, CAPABILITIES.COST_MANAGE),
+        async (tx, { order, orderCommit }) => {
+          const costClose = requireEntity(
+            await tx.lockCostCloseByOrderCommitSnapshotId(orderCommit.id),
+            'COST_CLOSE_REQUIRED_FOR_ADJUSTMENT',
+            { orderId, orderCommitSnapshotId: orderCommit.id },
+          );
+          const previousAdjustment = await tx.getLatestPostCloseAdjustment(costClose.id);
+          const priorLandedCostSnapshotId = previousAdjustment?.landedCostSnapshotId ?? costClose.landedCostSnapshotId;
+          const priorMarginActualizationSnapshotId = previousAdjustment?.marginActualizationSnapshotId ?? costClose.marginActualizationSnapshotId;
+          const priorLandedCost = requireEntity(await tx.getLandedCostSnapshot(priorLandedCostSnapshotId), 'LANDED_COST_SNAPSHOT_NOT_FOUND', { landedCostSnapshotId: priorLandedCostSnapshotId });
+          const priorMarginActualization = requireEntity(await tx.getMarginActualizationSnapshot(priorMarginActualizationSnapshotId), 'MARGIN_ACTUALIZATION_NOT_FOUND', { marginActualizationSnapshotId: priorMarginActualizationSnapshotId });
+          const { supplyCommitment, fxRateSnapshot } = await loadCostBasis(tx, input);
+          const recordedAt = clock();
+          const actualCost = createActualCostLedgerEntry({
+            id: nextId('actual-cost'),
+            order,
+            orderCommit,
+            supplyCommitment,
+            costType: input.costType,
+            amount: input.amount,
+            currency: input.currency,
+            fxRateSnapshot,
+            sku: input.sku ?? null,
+            sourceRef: input.sourceRef,
+            occurredAt: input.occurredAt ?? recordedAt,
+            recordedAt,
+          });
+          await tx.insertActualCostEntry(actualCost);
+
+          const entries = await tx.listActualCostEntries(orderId);
+          const currentEntries = entries.filter((entry) => entry.orderCommitSnapshotId === orderCommit.id);
+          const landedCost = createLandedCostSnapshot({ id: nextId('landed-cost'), order, orderCommit, costEntries: currentEntries, createdAt: recordedAt });
+          await tx.insertLandedCostSnapshot(landedCost);
+          const marginActualization = createMarginActualizationSnapshot({ id: nextId('margin-actualization'), order, orderCommit, landedCost, createdAt: recordedAt });
+          await tx.insertMarginActualizationSnapshot(marginActualization);
+          const adjustment = createPostCloseAdjustment({
+            id: nextId('post-close-adjustment'),
+            order,
+            orderCommit,
+            costClose,
+            previousAdjustment,
+            actualCostEntry: actualCost,
+            priorLandedCost,
+            landedCost,
+            priorMarginActualization,
+            marginActualization,
+            reason: input.reason,
+            recordedAt,
+          });
+          await tx.insertPostCloseAdjustment(adjustment);
+
+          await appendActualCostRecorded(tx, actualCost, commandId, actorId);
+          await appendLandedCostActualized(tx, landedCost, commandId, actorId, { postCloseAdjustmentId: adjustment.id, costCloseSnapshotId: costClose.id });
+          await appendMarginActualized(tx, marginActualization, commandId, actorId, { postCloseAdjustmentId: adjustment.id, costCloseSnapshotId: costClose.id });
+          await append(tx, 'cost-close.adjustment-recorded', adjustment.id, {
+            orderId,
+            orderCommitSnapshotId: adjustment.orderCommitSnapshotId,
+            costCloseSnapshotId: adjustment.costCloseSnapshotId,
+            previousAdjustmentId: adjustment.previousAdjustmentId,
+            actualCostEntryId: adjustment.actualCostEntryId,
+            priorLandedCostSnapshotId: adjustment.priorLandedCostSnapshotId,
+            landedCostSnapshotId: adjustment.landedCostSnapshotId,
+            priorMarginActualizationSnapshotId: adjustment.priorMarginActualizationSnapshotId,
+            marginActualizationSnapshotId: adjustment.marginActualizationSnapshotId,
+            costDeltaAmount: adjustment.costDeltaAmount,
+            marginDeltaAmount: adjustment.marginDeltaAmount,
+            reason: adjustment.reason,
+            contentHash: adjustment.contentHash,
+          }, commandId, actorId);
+
+          return Object.freeze({ adjustment, actualCost, landedCost, marginActualization });
         },
       );
     },
@@ -282,6 +392,14 @@ export function createOrderEconomicsService({
         const margin = requireEntity(await tx.getMarginActualizationSnapshot(marginActualizationId), 'MARGIN_ACTUALIZATION_NOT_FOUND', { marginActualizationId });
         const order = await orderForCapability(tx, margin.orderId, actorId, CAPABILITIES.MARGIN_READ);
         return Object.freeze({ margin, orderId: order.id });
+      });
+    },
+
+    async getCostCloseForActor(actorId, costCloseSnapshotId) {
+      return economicsStore.transaction(async (tx) => {
+        const costClose = requireEntity(await tx.getCostCloseSnapshot(costCloseSnapshotId), 'COST_CLOSE_NOT_FOUND', { costCloseSnapshotId });
+        const order = await orderForCapability(tx, costClose.orderId, actorId, CAPABILITIES.MARGIN_READ);
+        return Object.freeze({ costClose, orderId: order.id });
       });
     },
   });
@@ -302,6 +420,38 @@ export function createOrderEconomicsService({
       currency: entry.currency,
       sku: entry.sku,
       sourceRef: entry.sourceRef,
+    }, commandId, actorId);
+  }
+
+  async function appendLandedCostActualized(tx, snapshot, commandId, actorId, metadata = {}) {
+    await append(tx, 'landed-cost.actualized', snapshot.id, {
+      orderId: snapshot.orderId,
+      orderCommitSnapshotId: snapshot.orderCommitSnapshotId,
+      supplyCommitmentSnapshotIds: snapshot.supplyCommitmentSnapshotIds,
+      supplyLineageComplete: snapshot.supplyLineageComplete,
+      totalCost: snapshot.totalCost,
+      currency: snapshot.currency,
+      costEntryCount: snapshot.costEntryIds.length,
+      contentHash: snapshot.contentHash,
+      ...metadata,
+    }, commandId, actorId);
+  }
+
+  async function appendMarginActualized(tx, snapshot, commandId, actorId, metadata = {}) {
+    await append(tx, 'margin.actualized', snapshot.id, {
+      orderId: snapshot.orderId,
+      orderCommitSnapshotId: snapshot.orderCommitSnapshotId,
+      landedCostSnapshotId: snapshot.landedCostSnapshotId,
+      supplyCommitmentSnapshotIds: snapshot.supplyCommitmentSnapshotIds,
+      supplyLineageComplete: snapshot.supplyLineageComplete,
+      netRevenue: snapshot.netRevenue,
+      landedCost: snapshot.landedCost,
+      contributionMarginAmount: snapshot.contributionMarginAmount,
+      contributionMarginPercent: snapshot.contributionMarginPercent,
+      commercialPublicationId: snapshot.commercialPublicationId,
+      buyerCatalogVersionId: snapshot.buyerCatalogVersionId,
+      contentHash: snapshot.contentHash,
+      ...metadata,
     }, commandId, actorId);
   }
 }

@@ -1,4 +1,7 @@
-import { wholesaleV2ExtendedOpenApi } from './v2-openapi.mjs';
+import { withCostAllocationOpenApi } from './cost-allocation-openapi.mjs';
 import { withOrderMarginBridgeOpenApi } from './order-margin-bridge-openapi.mjs';
+import { wholesaleV2ExtendedOpenApi } from './v2-openapi.mjs';
 
-export const wholesaleV2CompleteOpenApi = withOrderMarginBridgeOpenApi(wholesaleV2ExtendedOpenApi);
+export const wholesaleV2CompleteOpenApi = withCostAllocationOpenApi(
+  withOrderMarginBridgeOpenApi(wholesaleV2ExtendedOpenApi),
+);

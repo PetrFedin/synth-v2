@@ -1,6 +1,6 @@
 import { createCommercialPublicationRoutes } from './commercial-publication-routes.mjs';
+import { createEconomicsRouteBundle } from './economics-route-bundle.mjs';
 import { createFinalQualityRoutes } from './final-quality-routes.mjs';
-import { createOrderEconomicsRoutes } from './order-economics-routes.mjs';
 import { createProductionExecutionRoutes } from './production-execution-routes.mjs';
 import { createProductionOrderRoutes } from './production-order-routes.mjs';
 import { createSampleRoutes } from './sample-routes.mjs';
@@ -12,7 +12,7 @@ export function createWholesaleRoutes(services = {}) {
   return Object.freeze([
     ...createCoreWholesaleRoutes(services),
     ...createCommercialPublicationRoutes({ commercialPublication: services.commercialPublication }),
-    ...createOrderEconomicsRoutes({ orderEconomics: services.orderEconomics }),
+    ...createEconomicsRouteBundle({ orderEconomics: services.orderEconomics, costAllocation: services.costAllocation }),
     ...createSampleRoutes({ samples: services.samples }),
     ...createSourcingRoutes({ sourcing: services.sourcing }),
     ...createTechPackRoutes({ techPacks: services.techPacks }),

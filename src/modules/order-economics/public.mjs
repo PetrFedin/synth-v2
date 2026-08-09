@@ -240,6 +240,127 @@ export function createMarginActualizationSnapshot({ id, order, orderCommit, land
   return Object.freeze({ id, ...basis, status: 'actual', contentHash: hashBasis(basis), createdAt });
 }
 
+export function createCostCloseSnapshot({
+  id,
+  order,
+  orderCommit,
+  landedCost,
+  marginActualization,
+  closedAt,
+}) {
+  assertExecutionLineage(order, orderCommit);
+  invariant(id, 'COST_CLOSE_ID_REQUIRED', 'Cost close id is required');
+  assertLandedCostLineage(landedCost, orderCommit, 'COST_CLOSE');
+  assertMarginLineage(marginActualization, landedCost, orderCommit, 'COST_CLOSE');
+  invariant(landedCost.supplyLineageComplete === true && marginActualization.supplyLineageComplete === true, 'COST_CLOSE_SUPPLY_LINEAGE_INCOMPLETE', 'Cost close requires complete supply lineage');
+  const timestamp = requiredTimestamp(closedAt, 'COST_CLOSE_TIMESTAMP_INVALID');
+  invariant(Date.parse(timestamp) >= Date.parse(landedCost.createdAt) && Date.parse(timestamp) >= Date.parse(marginActualization.createdAt), 'COST_CLOSE_TIMESTAMP_INVALID', 'Cost close cannot predate its landed cost or margin basis');
+  const basis = Object.freeze({
+    orderId: orderCommit.orderId,
+    orderVersion: orderCommit.orderVersion,
+    orderCommitSnapshotId: orderCommit.id,
+    brandId: orderCommit.brandId,
+    shopId: orderCommit.shopId,
+    landedCostSnapshotId: landedCost.id,
+    marginActualizationSnapshotId: marginActualization.id,
+    costEntryIds: Object.freeze([...(landedCost.costEntryIds ?? [])]),
+    supplyCommitmentSnapshotIds: Object.freeze([...(landedCost.supplyCommitmentSnapshotIds ?? [])]),
+    currency: orderCommit.currency,
+    totalLandedCost: landedCost.totalCost,
+    netRevenue: marginActualization.netRevenue,
+    contributionMarginAmount: marginActualization.contributionMarginAmount,
+    contributionMarginPercent: marginActualization.contributionMarginPercent,
+    closedAt: timestamp,
+  });
+  return Object.freeze({ id, ...basis, status: 'closed', contentHash: hashBasis(basis) });
+}
+
+export function createPostCloseAdjustment({
+  id,
+  order,
+  orderCommit,
+  costClose,
+  previousAdjustment = null,
+  actualCostEntry,
+  priorLandedCost,
+  landedCost,
+  priorMarginActualization,
+  marginActualization,
+  reason,
+  recordedAt,
+}) {
+  assertExecutionLineage(order, orderCommit);
+  invariant(id, 'POST_CLOSE_ADJUSTMENT_ID_REQUIRED', 'Post-close adjustment id is required');
+  invariant(costClose?.id && costClose.status === 'closed', 'POST_CLOSE_COST_CLOSE_REQUIRED', 'Post-close adjustment requires an immutable closed cost basis');
+  invariant(costClose.orderId === orderCommit.orderId && costClose.orderCommitSnapshotId === orderCommit.id, 'POST_CLOSE_COST_CLOSE_LINEAGE_MISMATCH', 'Cost close belongs to another order commit');
+  invariant(typeof reason === 'string' && reason.trim().length > 0 && reason.trim().length <= 1000, 'POST_CLOSE_REASON_INVALID', 'Post-close adjustment reason must contain 1 to 1000 characters');
+  invariant(actualCostEntry?.id && actualCostEntry.entryKind === 'actual', 'POST_CLOSE_ACTUAL_COST_REQUIRED', 'Post-close adjustment requires a new actual cost entry');
+  invariant(actualCostEntry.orderId === orderCommit.orderId && actualCostEntry.orderCommitSnapshotId === orderCommit.id, 'POST_CLOSE_ACTUAL_COST_LINEAGE_MISMATCH', 'Post-close actual cost belongs to another order commit');
+
+  const previousAdjustmentId = previousAdjustment?.id ?? null;
+  if (previousAdjustment) {
+    invariant(previousAdjustment.costCloseSnapshotId === costClose.id && previousAdjustment.orderCommitSnapshotId === orderCommit.id, 'POST_CLOSE_CHAIN_MISMATCH', 'Previous post-close adjustment belongs to another cost close');
+    invariant(priorLandedCost?.id === previousAdjustment.landedCostSnapshotId && priorMarginActualization?.id === previousAdjustment.marginActualizationSnapshotId, 'POST_CLOSE_CHAIN_BASIS_MISMATCH', 'Previous post-close economics basis does not match the adjustment chain');
+  } else {
+    invariant(priorLandedCost?.id === costClose.landedCostSnapshotId && priorMarginActualization?.id === costClose.marginActualizationSnapshotId, 'POST_CLOSE_BASELINE_MISMATCH', 'First post-close adjustment must start from the immutable cost close basis');
+  }
+
+  assertLandedCostLineage(priorLandedCost, orderCommit, 'POST_CLOSE_PRIOR');
+  assertLandedCostLineage(landedCost, orderCommit, 'POST_CLOSE');
+  assertMarginLineage(priorMarginActualization, priorLandedCost, orderCommit, 'POST_CLOSE_PRIOR');
+  assertMarginLineage(marginActualization, landedCost, orderCommit, 'POST_CLOSE');
+  invariant(landedCost.id !== priorLandedCost.id && marginActualization.id !== priorMarginActualization.id, 'POST_CLOSE_NEW_ACTUALIZATION_REQUIRED', 'Post-close adjustment must create new landed cost and margin snapshots');
+  invariant(landedCost.supplyLineageComplete === true && marginActualization.supplyLineageComplete === true, 'POST_CLOSE_SUPPLY_LINEAGE_INCOMPLETE', 'Post-close actualization requires complete supply lineage');
+
+  const priorEntryIds = new Set(priorLandedCost.costEntryIds ?? []);
+  const currentEntryIds = new Set(landedCost.costEntryIds ?? []);
+  invariant([...priorEntryIds].every((entryId) => currentEntryIds.has(entryId)), 'POST_CLOSE_PRIOR_COST_BASIS_LOST', 'Post-close landed cost must preserve the prior immutable cost basis');
+  invariant(currentEntryIds.has(actualCostEntry.id), 'POST_CLOSE_COST_ENTRY_NOT_IN_LANDED_COST', 'Post-close landed cost must include the new actual cost entry', { actualCostEntryId: actualCostEntry.id });
+
+  const timestamp = requiredTimestamp(recordedAt, 'POST_CLOSE_TIMESTAMP_INVALID');
+  invariant(Date.parse(timestamp) >= Date.parse(costClose.closedAt), 'POST_CLOSE_TIMESTAMP_INVALID', 'Post-close adjustment cannot predate the cost close');
+  invariant(requiredTimestamp(actualCostEntry.recordedAt, 'POST_CLOSE_ACTUAL_COST_TIMESTAMP_INVALID') === timestamp, 'POST_CLOSE_ACTUAL_COST_TIMESTAMP_MISMATCH', 'Post-close actual cost must be recorded in the same adjustment transaction');
+
+  const costDeltaAmount = roundMoney(landedCost.totalCost - priorLandedCost.totalCost);
+  const marginDeltaAmount = roundMoney(marginActualization.contributionMarginAmount - priorMarginActualization.contributionMarginAmount);
+  invariant(costDeltaAmount === actualCostEntry.amount, 'POST_CLOSE_COST_DELTA_MISMATCH', 'Post-close cost delta must equal the new actual cost entry', { actualCostEntryId: actualCostEntry.id, costDeltaAmount, actualCostAmount: actualCostEntry.amount });
+  invariant(marginDeltaAmount === -costDeltaAmount, 'POST_CLOSE_MARGIN_DELTA_MISMATCH', 'Post-close margin delta must offset the cost delta', { costDeltaAmount, marginDeltaAmount });
+  invariant(marginActualization.netRevenue === priorMarginActualization.netRevenue, 'POST_CLOSE_REVENUE_CHANGED', 'Post-close cost adjustment cannot rewrite committed revenue');
+
+  const basis = Object.freeze({
+    costCloseSnapshotId: costClose.id,
+    previousAdjustmentId,
+    orderId: orderCommit.orderId,
+    orderVersion: orderCommit.orderVersion,
+    orderCommitSnapshotId: orderCommit.id,
+    actualCostEntryId: actualCostEntry.id,
+    priorLandedCostSnapshotId: priorLandedCost.id,
+    landedCostSnapshotId: landedCost.id,
+    priorMarginActualizationSnapshotId: priorMarginActualization.id,
+    marginActualizationSnapshotId: marginActualization.id,
+    costDeltaAmount,
+    marginDeltaAmount,
+    reason: reason.trim(),
+    recordedAt: timestamp,
+  });
+  return Object.freeze({ id, ...basis, status: 'recorded', contentHash: hashBasis(basis) });
+}
+
+function assertLandedCostLineage(landedCost, orderCommit, prefix) {
+  invariant(landedCost?.id, `${prefix}_LANDED_COST_REQUIRED`, 'Landed cost snapshot is required');
+  invariant(landedCost.orderId === orderCommit.orderId, `${prefix}_LANDED_COST_ORDER_MISMATCH`, 'Landed cost belongs to another order');
+  invariant(landedCost.orderCommitSnapshotId === orderCommit.id, `${prefix}_LANDED_COST_COMMIT_MISMATCH`, 'Landed cost belongs to another order commit');
+  invariant(landedCost.currency === orderCommit.currency, `${prefix}_LANDED_COST_CURRENCY_MISMATCH`, 'Landed cost currency differs from committed order currency');
+}
+
+function assertMarginLineage(margin, landedCost, orderCommit, prefix) {
+  invariant(margin?.id, `${prefix}_MARGIN_REQUIRED`, 'Margin actualization snapshot is required');
+  invariant(margin.orderId === orderCommit.orderId && margin.orderCommitSnapshotId === orderCommit.id, `${prefix}_MARGIN_COMMIT_MISMATCH`, 'Margin actualization belongs to another order commit');
+  invariant(margin.landedCostSnapshotId === landedCost.id, `${prefix}_MARGIN_LANDED_COST_MISMATCH`, 'Margin actualization does not reference the supplied landed cost snapshot');
+  invariant(margin.currency === orderCommit.currency, `${prefix}_MARGIN_CURRENCY_MISMATCH`, 'Margin currency differs from committed order currency');
+  invariant(margin.landedCost === landedCost.totalCost, `${prefix}_MARGIN_COST_MISMATCH`, 'Margin actualization landed cost differs from its immutable landed cost basis');
+}
+
 function assertSupplyCostBasis(supplyCommitment, orderCommit) {
   invariant(supplyCommitment?.id, 'ACTUAL_COST_SUPPLY_COMMITMENT_REQUIRED', 'Actual cost requires an immutable supply commitment snapshot');
   invariant(supplyCommitment.status === 'committed', 'ACTUAL_COST_SUPPLY_COMMITMENT_STATUS_INVALID', 'Supply commitment snapshot must be committed', { supplyCommitmentSnapshotId: supplyCommitment.id, status: supplyCommitment.status });

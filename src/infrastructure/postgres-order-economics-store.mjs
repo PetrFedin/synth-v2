@@ -12,6 +12,8 @@ export function createPostgresOrderEconomicsStore({ pool } = {}) {
     async getActualCostReversal(originalEntryId) { return payloadOne(pool, 'SELECT payload FROM actual_cost_ledger_entries WHERE reversal_of_entry_id = $1', [originalEntryId]); },
     async getLandedCostSnapshot(id) { return payloadOne(pool, 'SELECT payload FROM landed_cost_snapshots WHERE id = $1', [id]); },
     async getMarginActualizationSnapshot(id) { return payloadOne(pool, 'SELECT payload FROM margin_actualization_snapshots WHERE id = $1', [id]); },
+    async getCostCloseSnapshot(id) { return payloadOne(pool, 'SELECT payload FROM cost_close_snapshots WHERE id = $1', [id]); },
+    async getPostCloseAdjustment(id) { return payloadOne(pool, 'SELECT payload FROM post_close_adjustments WHERE id = $1', [id]); },
     async listActualCostEntries(orderId) {
       const result = await pool.query('SELECT payload FROM actual_cost_ledger_entries WHERE order_id = $1 ORDER BY recorded_at, id', [orderId]);
       return result.rows.map((row) => row.payload);
@@ -99,6 +101,49 @@ function view(client) {
     async getMarginActualizationSnapshot(id) {
       const result = await client.query('SELECT payload FROM margin_actualization_snapshots WHERE id = $1 FOR SHARE', [id]);
       return result.rows[0]?.payload;
+    },
+    async getCostCloseSnapshot(id) {
+      const result = await client.query('SELECT payload FROM cost_close_snapshots WHERE id = $1 FOR SHARE', [id]);
+      return result.rows[0]?.payload;
+    },
+    async getCostCloseByOrderCommitSnapshotId(orderCommitSnapshotId) {
+      const result = await client.query('SELECT payload FROM cost_close_snapshots WHERE order_commit_snapshot_id = $1 FOR SHARE', [orderCommitSnapshotId]);
+      return result.rows[0]?.payload;
+    },
+    async lockCostCloseByOrderCommitSnapshotId(orderCommitSnapshotId) {
+      const result = await client.query('SELECT payload FROM cost_close_snapshots WHERE order_commit_snapshot_id = $1 FOR UPDATE', [orderCommitSnapshotId]);
+      return result.rows[0]?.payload;
+    },
+    async insertCostCloseSnapshot(value) {
+      await insertImmutable(client, `INSERT INTO cost_close_snapshots
+        (id, order_id, order_commit_snapshot_id, lineage_version, brand_id, shop_id,
+         landed_cost_snapshot_id, margin_actualization_snapshot_id, currency, total_landed_cost,
+         net_revenue, contribution_margin_amount, contribution_margin_percent, closed_at, content_hash, payload)
+        VALUES ($1, $2, $3, 1, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::jsonb)`,
+      [value.id, value.orderId, value.orderCommitSnapshotId, value.brandId, value.shopId,
+        value.landedCostSnapshotId, value.marginActualizationSnapshotId, value.currency, value.totalLandedCost,
+        value.netRevenue, value.contributionMarginAmount, value.contributionMarginPercent, value.closedAt, value.contentHash, JSON.stringify(value)],
+      'COST_CLOSE_ALREADY_EXISTS', { costCloseSnapshotId: value.id, orderCommitSnapshotId: value.orderCommitSnapshotId });
+    },
+    async getLatestPostCloseAdjustment(costCloseSnapshotId) {
+      const result = await client.query(
+        'SELECT payload FROM post_close_adjustments WHERE cost_close_snapshot_id = $1 ORDER BY recorded_at DESC, id DESC LIMIT 1 FOR SHARE',
+        [costCloseSnapshotId],
+      );
+      return result.rows[0]?.payload;
+    },
+    async insertPostCloseAdjustment(value) {
+      await insertImmutable(client, `INSERT INTO post_close_adjustments
+        (id, cost_close_snapshot_id, previous_adjustment_id, order_id, order_commit_snapshot_id,
+         actual_cost_entry_id, prior_landed_cost_snapshot_id, landed_cost_snapshot_id,
+         prior_margin_actualization_snapshot_id, margin_actualization_snapshot_id,
+         cost_delta_amount, margin_delta_amount, reason, recorded_at, content_hash, payload)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::jsonb)`,
+      [value.id, value.costCloseSnapshotId, value.previousAdjustmentId, value.orderId, value.orderCommitSnapshotId,
+        value.actualCostEntryId, value.priorLandedCostSnapshotId, value.landedCostSnapshotId,
+        value.priorMarginActualizationSnapshotId, value.marginActualizationSnapshotId,
+        value.costDeltaAmount, value.marginDeltaAmount, value.reason, value.recordedAt, value.contentHash, JSON.stringify(value)],
+      'POST_CLOSE_ADJUSTMENT_ALREADY_EXISTS', { postCloseAdjustmentId: value.id });
     },
     getCommand: (id) => getRegisteredCommand(client, 'wholesale', id),
     insertCommand: (value) => insertRegisteredCommand(client, 'wholesale', value),

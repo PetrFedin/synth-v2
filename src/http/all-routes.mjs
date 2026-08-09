@@ -1,4 +1,6 @@
+import { createCommercialPublicationRoutes } from './commercial-publication-routes.mjs';
 import { createFinalQualityRoutes } from './final-quality-routes.mjs';
+import { createOrderEconomicsRoutes } from './order-economics-routes.mjs';
 import { createProductionExecutionRoutes } from './production-execution-routes.mjs';
 import { createProductionOrderRoutes } from './production-order-routes.mjs';
 import { createSampleRoutes } from './sample-routes.mjs';
@@ -9,6 +11,8 @@ import { createWholesaleRoutes as createCoreWholesaleRoutes, matchWholesaleRoute
 export function createWholesaleRoutes(services = {}) {
   return Object.freeze([
     ...createCoreWholesaleRoutes(services),
+    ...createCommercialPublicationRoutes({ commercialPublication: services.commercialPublication }),
+    ...createOrderEconomicsRoutes({ orderEconomics: services.orderEconomics }),
     ...createSampleRoutes({ samples: services.samples }),
     ...createSourcingRoutes({ sourcing: services.sourcing }),
     ...createTechPackRoutes({ techPacks: services.techPacks }),

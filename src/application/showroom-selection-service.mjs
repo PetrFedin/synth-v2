@@ -3,7 +3,8 @@ import { invariant } from '../core/errors.mjs';
 import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
 import { assertWholesaleStore } from './store-contract.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
-import { assertCatalogQuantity, assertPublishedCatalogSku } from '../modules/catalog/public.mjs';
+import { assertCatalogAvailableToSell, assertCatalogQuantity, assertPublishedCatalogSku } from '../modules/catalog/public.mjs';
+import { buyerCatalogLine } from '../modules/commercial-publication/public.mjs';
 import { assertActiveRelationship } from '../modules/counterparty-relationships/public.mjs';
 import { assertAcceptedShowroomAccess } from '../modules/showroom-invitations/public.mjs';
 import { createShowroom, openShowroom } from '../modules/showrooms/public.mjs';
@@ -13,6 +14,7 @@ import { advanceCommercialCycle } from '../modules/commercial-cycle/public.mjs';
 export function createShowroomSelectionService({
   store,
   catalogReader,
+  commercialPublicationReader,
   clock = () => new Date().toISOString(),
   nextId = defaultIdGenerator(),
 } = {}) {
@@ -20,6 +22,10 @@ export function createShowroomSelectionService({
   const trustedCatalogReader = catalogReader && typeof catalogReader.getSku === 'function'
     ? catalogReader
     : Object.freeze({ getSku: async () => undefined });
+  const trustedCommercialReader = commercialPublicationReader && typeof commercialPublicationReader.getBuyerCatalogVersion === 'function'
+    && typeof commercialPublicationReader.getBuyerCatalogForAccess === 'function'
+    ? commercialPublicationReader
+    : null;
 
   function execute(commandId, fingerprint, actorId, authorize, action) {
     invariant(commandId, 'COMMAND_ID_REQUIRED', 'Every mutation requires commandId');
@@ -99,15 +105,24 @@ export function createShowroomSelectionService({
           assertActiveRelationship(relationship, { brandId: cycle.brandId, shopId: cycle.shopId });
           const invitation = await tx.getShowroomInvitationByAccess(showroomId, cycle.shopId);
           assertAcceptedShowroomAccess(invitation, { showroomId, brandId: cycle.brandId, shopId: cycle.shopId, now: clock() });
-          return Object.freeze({ cycle, showroom, invitation });
+          const buyerCatalog = trustedCommercialReader
+            ? requireEntity(await trustedCommercialReader.getBuyerCatalogForAccess(showroomId, cycle.shopId), 'BUYER_CATALOG_REQUIRED', { showroomId, shopId: cycle.shopId })
+            : null;
+          return Object.freeze({ cycle, showroom, invitation, buyerCatalog });
         },
-        async (tx, { cycle, showroom, invitation }) => {
+        async (tx, { cycle, showroom, invitation, buyerCatalog }) => {
           invariant(!await tx.getSelectionByCycle(cycleId), 'SELECTION_FOR_CYCLE_EXISTS', 'Cycle already has a selection', { cycleId });
-          const selection = createSelection({ id: nextId('selection'), cycle, showroom, createdAt: clock() });
+          const selection = createSelection({ id: nextId('selection'), cycle, showroom, commercialBasis: buyerCatalog, createdAt: clock() });
           const advanced = advanceCommercialCycle(cycle, 'selection', clock());
           await tx.insertSelection(selection);
           await tx.saveCycle(advanced, cycle.version);
-          await append(tx, 'selection.created', selection.id, { cycleId, showroomId, invitationId: invitation.id }, commandId, actorId);
+          await append(tx, 'selection.created', selection.id, {
+            cycleId, showroomId, invitationId: invitation.id,
+            commercialPublicationId: selection.commercialPublicationId,
+            priceListVersionId: selection.priceListVersionId,
+            buyerCatalogVersionId: selection.buyerCatalogVersionId,
+            commercialBasisHash: selection.commercialBasisHash,
+          }, commandId, actorId);
           await append(tx, 'commercial-cycle.advanced', cycleId, { from: cycle.stage, to: advanced.stage, version: advanced.version }, commandId, actorId);
           return Object.freeze({ selection, cycle: advanced });
         },
@@ -115,7 +130,7 @@ export function createShowroomSelectionService({
     },
 
     upsertSelectionLine(commandId, actorId, selectionId, line) {
-      invariant(line?.unitPrice === undefined && line?.currency === undefined && line?.catalogVersion === undefined, 'SELECTION_CLIENT_PRICE_FORBIDDEN', 'Selection price and currency are controlled by the catalog');
+      invariant(line?.unitPrice === undefined && line?.currency === undefined && line?.catalogVersion === undefined, 'SELECTION_CLIENT_PRICE_FORBIDDEN', 'Selection price and currency are controlled by the published commercial basis');
       return execute(
         commandId,
         `upsertSelectionLine:${actorId}:${selectionId}:${canonicalJson(line)}`,
@@ -126,19 +141,41 @@ export function createShowroomSelectionService({
           return current;
         },
         async (tx, current) => {
-          const publishedSku = assertPublishedCatalogSku(await trustedCatalogReader.getSku(line.sku), { collectionId: current.collectionId, brandId: current.brandId });
-          const catalogSku = assertCatalogQuantity(publishedSku, line.quantity);
-          const trustedLine = Object.freeze({
-            sku: catalogSku.sku,
-            quantity: line.quantity,
-            unitPrice: catalogSku.wholesalePrice,
-            currency: catalogSku.currency,
-            catalogVersion: catalogSku.version,
-            note: line.note,
-          });
+          const liveSku = await trustedCatalogReader.getSku(line.sku);
+          let trustedLine;
+          if (current.buyerCatalogVersionId) {
+            invariant(trustedCommercialReader, 'COMMERCIAL_PUBLICATION_READER_REQUIRED', 'Commercial publication reader is required for a pinned selection');
+            const buyerCatalog = requireEntity(await trustedCommercialReader.getBuyerCatalogVersion(current.buyerCatalogVersionId), 'BUYER_CATALOG_NOT_FOUND', { buyerCatalogVersionId: current.buyerCatalogVersionId });
+            invariant(buyerCatalog.contentHash === current.commercialBasisHash, 'SELECTION_COMMERCIAL_BASIS_CHANGED', 'Pinned buyer catalog does not match selection commercial basis');
+            const commercialLine = buyerCatalogLine(buyerCatalog, line.sku);
+            invariant(line.quantity >= commercialLine.minimumOrderQuantity, 'BUYER_CATALOG_MOQ_NOT_MET', 'Selection quantity is below buyer catalog MOQ', { sku: line.sku, minimumOrderQuantity: commercialLine.minimumOrderQuantity });
+            assertCatalogAvailableToSell(liveSku, line.quantity, { sku: line.sku, collectionId: current.collectionId, brandId: current.brandId });
+            trustedLine = Object.freeze({
+              sku: commercialLine.sku,
+              quantity: line.quantity,
+              unitPrice: commercialLine.unitPrice,
+              currency: commercialLine.currency,
+              catalogVersion: commercialLine.catalogVersion,
+              note: line.note,
+            });
+          } else {
+            const publishedSku = assertPublishedCatalogSku(liveSku, { collectionId: current.collectionId, brandId: current.brandId });
+            const catalogSku = assertCatalogQuantity(publishedSku, line.quantity);
+            trustedLine = Object.freeze({
+              sku: catalogSku.sku,
+              quantity: line.quantity,
+              unitPrice: catalogSku.wholesalePrice,
+              currency: catalogSku.currency,
+              catalogVersion: catalogSku.version,
+              note: line.note,
+            });
+          }
           const updated = upsertSelectionLine(current, trustedLine, actorId, clock());
           await tx.saveSelection(updated, current.version);
-          await append(tx, 'selection.line-upserted', selectionId, { sku: trustedLine.sku, quantity: trustedLine.quantity, catalogVersion: trustedLine.catalogVersion }, commandId, actorId);
+          await append(tx, 'selection.line-upserted', selectionId, {
+            sku: trustedLine.sku, quantity: trustedLine.quantity, catalogVersion: trustedLine.catalogVersion,
+            buyerCatalogVersionId: current.buyerCatalogVersionId, priceListVersionId: current.priceListVersionId,
+          }, commandId, actorId);
           return updated;
         },
       );
@@ -152,6 +189,10 @@ export function createShowroomSelectionService({
         async (tx) => {
           const current = requireEntity(await tx.getSelection(selectionId), 'SELECTION_NOT_FOUND', { selectionId });
           await assertOrganisationActor(tx, current.shopId, actorId, CAPABILITIES.SELECTION_WRITE);
+          if (current.accessGrantId) {
+            const invitation = requireEntity(await tx.getShowroomInvitation(current.accessGrantId), 'SHOWROOM_INVITATION_NOT_FOUND', { invitationId: current.accessGrantId });
+            assertAcceptedShowroomAccess(invitation, { showroomId: current.showroomId, brandId: current.brandId, shopId: current.shopId, now: clock() });
+          }
           return current;
         },
         async (tx, current) => {
@@ -163,7 +204,12 @@ export function createShowroomSelectionService({
           const advanced = advanceCommercialCycle(cycle, 'order-builder', clock());
           await tx.saveSelection(submitted, current.version);
           await tx.saveCycle(advanced, cycle.version);
-          await append(tx, 'selection.submitted', selectionId, { lineCount: submitted.lines.length }, commandId, actorId);
+          await append(tx, 'selection.submitted', selectionId, {
+            lineCount: submitted.lines.length,
+            commercialPublicationId: submitted.commercialPublicationId,
+            priceListVersionId: submitted.priceListVersionId,
+            buyerCatalogVersionId: submitted.buyerCatalogVersionId,
+          }, commandId, actorId);
           await append(tx, 'commercial-cycle.advanced', cycle.id, { from: cycle.stage, to: advanced.stage, version: advanced.version }, commandId, actorId);
           return Object.freeze({ selection: submitted, cycle: advanced });
         },

@@ -1,8 +1,10 @@
 import { invariant } from './errors.mjs';
 
 export const MONEY_SCALE = 4;
+export const MONEY_PERCENTAGE_SCALE = 4;
 export const POSTGRES_INTEGER_MAX = 2_147_483_647;
 const MONEY_FACTOR = 10 ** MONEY_SCALE;
+const MONEY_PERCENTAGE_FACTOR = 10 ** MONEY_PERCENTAGE_SCALE;
 const MAX_SCALED_MONEY = Number.MAX_SAFE_INTEGER;
 const MAX_SCALED_MONEY_BIGINT = BigInt(MAX_SCALED_MONEY);
 
@@ -20,6 +22,42 @@ export function normalizeMoney(value, {
   const tolerance = Math.max(1e-12, Number.EPSILON * Math.max(1, Math.abs(value)) * 4);
   invariant(Math.abs(value - normalized) <= tolerance, scaleCode, `${label} must use at most ${MONEY_SCALE} decimal places`, { scale: MONEY_SCALE });
   return normalized;
+}
+
+export function calculateMoneyPercentage(numerator, denominator, {
+  invalidCode = 'MONEY_PERCENTAGE_INVALID',
+  scaleCode = 'MONEY_PERCENTAGE_SCALE_INVALID',
+  overflowCode = 'MONEY_PERCENTAGE_TOO_LARGE',
+  numeratorLabel = 'Money numerator',
+  denominatorLabel = 'Money denominator',
+} = {}) {
+  const numeratorUnits = toSignedMoneyUnits(numerator, {
+    invalidCode,
+    scaleCode,
+    overflowCode,
+    label: numeratorLabel,
+  });
+  const denominatorUnits = toPositiveMoneyUnits(denominator, {
+    invalidCode,
+    scaleCode,
+    overflowCode,
+    label: denominatorLabel,
+  });
+  const percentageDividend = BigInt(numeratorUnits)
+    * 100n
+    * BigInt(MONEY_PERCENTAGE_FACTOR);
+  const scaledPercentage = divideAndRoundHalfAwayFromZero(
+    percentageDividend,
+    BigInt(denominatorUnits),
+  );
+  invariant(
+    scaledPercentage <= MAX_SCALED_MONEY_BIGINT
+      && scaledPercentage >= -MAX_SCALED_MONEY_BIGINT,
+    overflowCode,
+    'Money percentage exceeds the safe fixed-point range',
+    { scale: MONEY_PERCENTAGE_SCALE },
+  );
+  return Number(scaledPercentage) / MONEY_PERCENTAGE_FACTOR;
 }
 
 export function calculateMoneyTotal(lines, {
@@ -54,4 +92,43 @@ export function assertPostgresInteger(value, { code = 'INTEGER_INVALID', label =
     max: POSTGRES_INTEGER_MAX,
   });
   return value;
+}
+
+function toSignedMoneyUnits(value, {
+  invalidCode,
+  scaleCode,
+  overflowCode,
+  label,
+}) {
+  invariant(Number.isFinite(value), invalidCode, `${label} must be finite`);
+  return toMoneyUnits(value, { scaleCode, overflowCode, label });
+}
+
+function toPositiveMoneyUnits(value, {
+  invalidCode,
+  scaleCode,
+  overflowCode,
+  label,
+}) {
+  invariant(Number.isFinite(value) && value > 0, invalidCode, `${label} must be positive`);
+  return toMoneyUnits(value, { scaleCode, overflowCode, label });
+}
+
+function toMoneyUnits(value, { scaleCode, overflowCode, label }) {
+  const scaled = Math.round(value * MONEY_FACTOR);
+  invariant(Number.isSafeInteger(scaled), overflowCode, `${label} exceeds the safe fixed-point range`, { scale: MONEY_SCALE });
+  const normalized = scaled / MONEY_FACTOR;
+  const tolerance = Math.max(1e-12, Number.EPSILON * Math.max(1, Math.abs(value)) * 4);
+  invariant(Math.abs(value - normalized) <= tolerance, scaleCode, `${label} must use at most ${MONEY_SCALE} decimal places`, { scale: MONEY_SCALE });
+  return scaled;
+}
+
+function divideAndRoundHalfAwayFromZero(dividend, divisor) {
+  invariant(divisor > 0n, 'MONEY_PERCENTAGE_INVALID', 'Money percentage divisor must be positive');
+  const negative = dividend < 0n;
+  const absoluteDividend = negative ? -dividend : dividend;
+  let quotient = absoluteDividend / divisor;
+  const remainder = absoluteDividend % divisor;
+  if (remainder * 2n >= divisor) quotient += 1n;
+  return negative ? -quotient : quotient;
 }

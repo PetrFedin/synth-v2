@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { copyFile, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,16 +14,9 @@ test('PostgreSQL migration ledger serializes runners and rejects changed history
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
   const migrationsDir = path.join(root, 'db', 'migrations');
   const tempDir = await mkdtemp(path.join(os.tmpdir(), 'syntha-v2-migrations-'));
-  const migrationFiles = [
-    '001_wholesale_v2.sql','002_auth.sql','003_auth_security.sql','004_catalog.sql','005_catalog_availability.sql',
-    '006_order_cancellation.sql','007_notification_projection_claims.sql','008_notification_pagination.sql',
-    '009_outbox_publication_claims.sql','010_outbox_dead_letter_recovery.sql','011_global_command_registry.sql',
-    '012_workspace_paging_indexes.sql','013_catalog_search_indexes.sql','014_material_master.sql',
-    '015_unify_catalog_outbox.sql','016_bom_costing.sql','017_measurement_charts.sql','018_samples.sql',
-    '019_supplier_sourcing.sql','020_tech_packs.sql','021_sourcing_tech_pack_gate.sql','022_production_orders.sql',
-    '023_production_executions.sql','024_production_execution_integrity.sql','025_final_quality.sql',
-    '026_final_quality_approval_segregation.sql',
-  ];
+  const migrationFiles = (await readdir(migrationsDir))
+    .filter((file) => /^\d+_.+\.sql$/.test(file))
+    .sort((left, right) => left.localeCompare(right));
   try {
     await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
     const clock = () => '2026-08-04T12:00:00.000Z';
@@ -61,9 +54,23 @@ test('PostgreSQL migration ledger serializes runners and rejects changed history
               to_regclass('public.outbox_publication_claims') AS outbox_publication_claims,
               to_regclass('public.outbox_dead_letters') AS outbox_dead_letters,
               to_regclass('public.outbox_dead_letter_audit') AS outbox_dead_letter_audit,
-              to_regclass('public.command_registry') AS command_registry`,
+              to_regclass('public.command_registry') AS command_registry,
+              to_regclass('public.commercial_publications') AS commercial_publications,
+              to_regclass('public.price_list_versions') AS price_list_versions,
+              to_regclass('public.buyer_catalog_versions') AS buyer_catalog_versions,
+              to_regclass('public.order_commit_snapshots') AS order_commit_snapshots,
+              to_regclass('public.supply_commitment_snapshots') AS supply_commitment_snapshots,
+              to_regclass('public.actual_cost_ledger_entries') AS actual_cost_ledger_entries,
+              to_regclass('public.landed_cost_snapshots') AS landed_cost_snapshots,
+              to_regclass('public.margin_actualization_snapshots') AS margin_actualization_snapshots`,
     );
     for (const [name, value] of Object.entries(tables.rows[0])) assert.equal(value, name);
+
+    const orderCommitColumn = await pool.query("SELECT is_nullable, data_type FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'orders' AND column_name = 'order_commit_snapshot_id'");
+    assert.deepEqual(orderCommitColumn.rows, [{ is_nullable: 'YES', data_type: 'text' }]);
+    const orderCommitFk = await pool.query("SELECT condeferrable, condeferred FROM pg_constraint WHERE conname = 'orders_order_commit_snapshot_fk'");
+    assert.deepEqual(orderCommitFk.rows, [{ condeferrable: true, condeferred: true }]);
+    assert.deepEqual((await pool.query("SELECT tgname FROM pg_trigger WHERE tgrelid = 'public.order_commit_snapshots'::regclass AND tgname = 'order_commit_snapshots_immutable' AND NOT tgisinternal")).rows, [{ tgname: 'order_commit_snapshots_immutable' }]);
 
     const gateColumns = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'sourcing_rfqs' AND column_name LIKE 'tech_pack_%' ORDER BY column_name");
     assert.deepEqual(gateColumns.rows.map((row) => row.column_name), ['tech_pack_acknowledged_at','tech_pack_acknowledgement_reference','tech_pack_code','tech_pack_gate_enforced','tech_pack_issued_version','tech_pack_revision','tech_pack_version']);

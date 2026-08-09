@@ -107,6 +107,28 @@ export function assertCatalogQuantity(catalogSku, quantity) {
   return normalized;
 }
 
+export function assertCatalogAvailableToSell(catalogSku, quantity, { sku, collectionId, brandId } = {}) {
+  invariant(catalogSku, 'CATALOG_SKU_NOT_FOUND', 'Catalog SKU not found');
+  invariant(!sku || catalogSku.sku === sku, 'CATALOG_SKU_MISMATCH', 'Availability row does not match requested SKU', { sku, actualSku: catalogSku.sku });
+  invariant(!collectionId || catalogSku.collectionId === collectionId, 'CATALOG_SKU_COLLECTION_MISMATCH', 'SKU availability belongs to another collection', { sku: catalogSku.sku, collectionId });
+  invariant(!brandId || catalogSku.brandId === brandId, 'CATALOG_SKU_BRAND_MISMATCH', 'SKU availability belongs to another brand', { sku: catalogSku.sku, brandId });
+  assertPostgresInteger(quantity, { code: 'SELECTION_LINE_QUANTITY_INVALID', label: 'Selection quantity', min: 1 });
+  const availableQuantity = assertPostgresInteger(catalogSku.availableQuantity, { code: 'CATALOG_AVAILABLE_QUANTITY_INVALID', label: 'Available quantity', min: 0 });
+  const reservedQuantity = assertPostgresInteger(catalogSku.reservedQuantity ?? 0, { code: 'CATALOG_RESERVED_QUANTITY_INVALID', label: 'Reserved quantity', min: 0 });
+  invariant(reservedQuantity <= availableQuantity, 'CATALOG_RESERVED_QUANTITY_INVALID', 'Reserved quantity cannot exceed available quantity', {
+    sku: catalogSku.sku,
+    availableQuantity,
+    reservedQuantity,
+  });
+  const availableToSell = availableQuantity - reservedQuantity;
+  invariant(quantity <= availableToSell, 'CATALOG_AVAILABILITY_EXCEEDED', 'Selection quantity exceeds available-to-sell', {
+    sku: catalogSku.sku,
+    quantity,
+    availableToSell,
+  });
+  return Object.freeze({ sku: catalogSku.sku, availableQuantity, reservedQuantity, availableToSell });
+}
+
 export function reserveCatalogQuantity(catalogSku, quantity, updatedAt) {
   const normalized = assertCatalogQuantity(assertPublishedCatalogSku(catalogSku), quantity);
   return freezeAvailability({

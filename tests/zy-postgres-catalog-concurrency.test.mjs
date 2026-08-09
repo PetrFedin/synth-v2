@@ -18,7 +18,8 @@ test('PostgreSQL serializes competing catalog edits and rejects stale publicatio
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
   let id = 0;
   let tick = 0;
-  const clock = () => `2026-08-03T12:00:${String(tick++).padStart(2, '0')}.000Z`;
+  const baseTime = Date.parse('2026-08-03T12:00:00.000Z');
+  const clock = () => new Date(baseTime + tick++ * 1000).toISOString();
   const nextId = (prefix) => `${prefix}_${++id}`;
   try {
     await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');

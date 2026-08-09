@@ -33,7 +33,7 @@ function emptyState() {
   return {
     organisations: new Map(), memberships: new Map(), relationships: new Map(), showroomInvitations: new Map(),
     campaigns: new Map(), collections: new Map(), showrooms: new Map(), selections: new Map(), orders: new Map(),
-    cycles: new Map(), deals: new Map(), calendar: new Map(), commands: new Map(), outbox: new Map(),
+    orderCommitSnapshots: new Map(), cycles: new Map(), deals: new Map(), calendar: new Map(), commands: new Map(), outbox: new Map(),
   };
 }
 function cloneState(state) { return Object.fromEntries(Object.entries(state).map(([key, value]) => [key, new Map(value)])); }
@@ -74,6 +74,8 @@ function transactionView(state) {
     getOrderByCycle: (cycleId) => [...state.orders.values()].find((item) => item.cycleId === cycleId),
     insertOrder: (order) => insertUnique(state.orders, order.id, order, 'ORDER_ALREADY_EXISTS'),
     saveOrder: (order, expectedVersion) => saveVersioned(state.orders, order, expectedVersion, 'ORDER_CONCURRENCY_CONFLICT'),
+    getOrderCommitSnapshot: (id) => state.orderCommitSnapshots.get(id),
+    insertOrderCommitSnapshot: (snapshot) => insertUnique(state.orderCommitSnapshots, snapshot.id, snapshot, 'ORDER_COMMIT_SNAPSHOT_ALREADY_EXISTS'),
     getCycle: (id) => state.cycles.get(id),
     insertCycle: (cycle) => insertUnique(state.cycles, cycle.id, cycle, 'CYCLE_ALREADY_EXISTS'),
     saveCycle: (cycle, expectedVersion) => saveVersioned(state.cycles, cycle, expectedVersion, 'CYCLE_CONCURRENCY_CONFLICT'),
@@ -106,7 +108,8 @@ function freezeSnapshot(state) {
     organisations: [...state.organisations.values()], memberships: [...state.memberships.values()],
     relationships: [...state.relationships.values()], showroomInvitations: [...state.showroomInvitations.values()],
     campaigns: [...state.campaigns.values()], collections: [...state.collections.values()], showrooms: [...state.showrooms.values()],
-    selections: [...state.selections.values()], orders: [...state.orders.values()], cycles: [...state.cycles.values()], deals: [...state.deals.values()],
+    selections: [...state.selections.values()], orders: [...state.orders.values()], orderCommitSnapshots: [...state.orderCommitSnapshots.values()],
+    cycles: [...state.cycles.values()], deals: [...state.deals.values()],
     calendar: [...state.calendar.values()], commands: [...state.commands.values()], outbox: [...state.outbox.values()],
     events: [...state.outbox.values()].map((record) => record.event),
   });

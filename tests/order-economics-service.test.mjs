@@ -18,7 +18,7 @@ const membership = Object.freeze({ id: 'MEM-1', organisationId: 'BRAND-1', organ
 
 function createHarness({ committed = orderCommit } = {}) {
   const state = {
-    commands: new Map(), outbox: [], supply: [], fxRates: [], costs: [], landed: [], margins: [],
+    commands: new Map(), outbox: [], supply: [], fxRates: [], costs: [], landed: [], margins: [], closes: [], adjustments: [],
     orderCommitReads: 0,
   };
   const tx = {
@@ -39,15 +39,22 @@ function createHarness({ committed = orderCommit } = {}) {
     getLandedCostSnapshot: async (id) => state.landed.find((value) => value.id === id),
     insertMarginActualizationSnapshot: async (value) => state.margins.push(value),
     getMarginActualizationSnapshot: async (id) => state.margins.find((value) => value.id === id),
+    insertCostCloseSnapshot: async (value) => state.closes.push(value),
+    getCostCloseSnapshot: async (id) => state.closes.find((value) => value.id === id),
+    getCostCloseByOrderCommitSnapshotId: async (id) => state.closes.find((value) => value.orderCommitSnapshotId === id),
+    lockCostCloseByOrderCommitSnapshotId: async (id) => state.closes.find((value) => value.orderCommitSnapshotId === id),
+    getLatestPostCloseAdjustment: async (costCloseSnapshotId) => [...state.adjustments].reverse().find((value) => value.costCloseSnapshotId === costCloseSnapshotId),
+    insertPostCloseAdjustment: async (value) => state.adjustments.push(value),
     appendOutbox: async (event) => state.outbox.push(event),
   };
   let sequence = 0;
+  let currentTime = at;
   const service = createOrderEconomicsService({
     economicsStore: { transaction: (work) => work(tx) },
-    clock: () => at,
+    clock: () => currentTime,
     nextId: (prefix) => `${prefix}-${++sequence}`,
   });
-  return { service, state };
+  return { service, state, setClock: (value) => { currentTime = value; } };
 }
 
 test('service pins supply, cost, landed cost and margin to the immutable order commit snapshot', async () => {
@@ -178,4 +185,66 @@ test('landed cost ignores legacy cost rows that are not pinned to the current or
   assert.deepEqual(landed.costEntryIds, ['actual-cost-3']);
   assert.deepEqual(landed.supplyCommitmentSnapshotIds, [supply.id]);
   assert.equal(landed.supplyLineageComplete, true);
+});
+
+test('cost close blocks normal costing and atomically chains late cost re-actualizations', async () => {
+  const { service, state, setClock } = createHarness();
+  const supply = await service.createSupplyCommitment('CMD-CLOSE-SUPPLY', actorId, order.id, {
+    allocations: [{ sku: 'SKU-1', quantity: 10, sourceType: 'production', sourceRef: 'PO-CLOSE' }],
+  });
+  await service.recordActualCost('CMD-CLOSE-COST', actorId, order.id, {
+    supplyCommitmentSnapshotId: supply.id,
+    costType: 'factory', amount: 600, currency: 'EUR', sourceRef: 'FACTORY-INVOICE', occurredAt: at,
+  });
+  const landed = await service.actualizeLandedCost('CMD-CLOSE-LANDED', actorId, order.id);
+  const margin = await service.actualizeMargin('CMD-CLOSE-MARGIN', actorId, order.id, landed.id);
+  setClock('2026-08-09T01:00:00.000Z');
+  const close = await service.closeCost('CMD-CLOSE', actorId, order.id, {
+    landedCostSnapshotId: landed.id,
+    marginActualizationSnapshotId: margin.id,
+  });
+
+  assert.equal(close.totalLandedCost, 600);
+  assert.equal(close.contributionMarginAmount, 400);
+  assert.equal(state.closes.length, 1);
+  await assert.rejects(
+    () => service.recordActualCost('CMD-LATE-WRONG-PATH', actorId, order.id, {
+      supplyCommitmentSnapshotId: supply.id,
+      costType: 'freight', amount: 50, currency: 'EUR', sourceRef: 'LATE-WRONG-PATH', occurredAt: at,
+    }),
+    (error) => error?.code === 'COST_CLOSE_REQUIRES_POST_CLOSE_ADJUSTMENT',
+  );
+
+  setClock('2026-08-09T02:00:00.000Z');
+  const first = await service.recordPostCloseAdjustment('CMD-LATE-1', actorId, order.id, {
+    reason: 'Freight invoice arrived after close',
+    supplyCommitmentSnapshotId: supply.id,
+    costType: 'freight', amount: 50, currency: 'EUR', sourceRef: 'LATE-FREIGHT', occurredAt: at,
+  });
+  assert.equal(first.adjustment.previousAdjustmentId, null);
+  assert.equal(first.adjustment.costDeltaAmount, 50);
+  assert.equal(first.adjustment.marginDeltaAmount, -50);
+  assert.equal(first.landedCost.totalCost, 650);
+  assert.equal(first.marginActualization.contributionMarginAmount, 350);
+
+  setClock('2026-08-09T03:00:00.000Z');
+  const second = await service.recordPostCloseAdjustment('CMD-LATE-2', actorId, order.id, {
+    reason: 'Supplier quality credit arrived after close',
+    supplyCommitmentSnapshotId: supply.id,
+    costType: 'quality', amount: -20, currency: 'EUR', sourceRef: 'LATE-CREDIT', occurredAt: at,
+  });
+  assert.equal(second.adjustment.previousAdjustmentId, first.adjustment.id);
+  assert.equal(second.adjustment.costDeltaAmount, -20);
+  assert.equal(second.adjustment.marginDeltaAmount, 20);
+  assert.equal(second.landedCost.totalCost, 630);
+  assert.equal(second.marginActualization.contributionMarginAmount, 370);
+  assert.equal(close.totalLandedCost, 600);
+  assert.equal(close.contributionMarginAmount, 400);
+  assert.equal(state.adjustments.length, 2);
+  assert.ok(state.outbox.some((event) => event.type === 'cost-close.closed' && event.aggregateId === close.id));
+  assert.equal(state.outbox.filter((event) => event.type === 'cost-close.adjustment-recorded').length, 2);
+
+  const read = await service.getCostCloseForActor(actorId, close.id);
+  assert.equal(read.costClose.id, close.id);
+  assert.equal(read.orderId, order.id);
 });

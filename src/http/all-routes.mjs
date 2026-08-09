@@ -1,6 +1,7 @@
 import { createCommercialPublicationRoutes } from './commercial-publication-routes.mjs';
 import { createEconomicsRouteBundle } from './economics-route-bundle.mjs';
 import { createFinalQualityRoutes } from './final-quality-routes.mjs';
+import { createFulfillmentRoutes } from './fulfillment-routes.mjs';
 import { createProductionExecutionRoutes } from './production-execution-routes.mjs';
 import { createProductionOrderRoutes } from './production-order-routes.mjs';
 import { createSampleRoutes } from './sample-routes.mjs';
@@ -13,6 +14,7 @@ export function createWholesaleRoutes(services = {}) {
     ...createCoreWholesaleRoutes(services),
     ...createCommercialPublicationRoutes({ commercialPublication: services.commercialPublication }),
     ...createEconomicsRouteBundle({ orderEconomics: services.orderEconomics, costAllocation: services.costAllocation }),
+    ...createFulfillmentRoutes({ fulfillment: services.fulfillment }),
     ...createSampleRoutes({ samples: services.samples }),
     ...createSourcingRoutes({ sourcing: services.sourcing }),
     ...createTechPackRoutes({ techPacks: services.techPacks }),

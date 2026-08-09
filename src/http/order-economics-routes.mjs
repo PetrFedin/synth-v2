@@ -8,8 +8,15 @@ const COST_CORRECTION_BODY = bodyContract(['reason', 'supplyCommitmentSnapshotId
 const POST_CLOSE_ADJUSTMENT_BODY = COST_CORRECTION_BODY;
 const EMPTY_BODY = bodyContract();
 const MARGIN_BODY = bodyContract(['landedCostSnapshotId']);
-const COST_CLOSE_BODY = bodyContract(['landedCostSnapshotId', 'marginActualizationSnapshotId']);
+const READINESS_BODY = bodyContract(
+  ['landedCostSnapshotId', 'marginActualizationSnapshotId', 'requirements'],
+  {},
+  { requirements: ['type', 'status', 'evidenceEntryIds', 'waiverReason'] },
+);
+const COST_CLOSE_BODY = bodyContract(['landedCostSnapshotId', 'marginActualizationSnapshotId', 'costCloseReadinessSnapshotId']);
 const FX_RATE_TYPES = new Set(['plan', 'budget', 'po', 'invoice', 'accounting', 'settlement']);
+const READINESS_TYPES = new Set(['factory', 'freight', 'duty', 'credits']);
+const READINESS_STATUSES = new Set(['pending', 'complete', 'waived']);
 
 export function createOrderEconomicsRoutes({ orderEconomics } = {}) {
   const service = orderEconomics ?? unavailableOrderEconomics();
@@ -20,9 +27,11 @@ export function createOrderEconomicsRoutes({ orderEconomics } = {}) {
     mutate('POST', /^\/v2\/orders\/([^/]+)\/actual-costs\/([^/]+)\/corrections$/, validateCostCorrectionBody, ({ commandId, actorId, params, body }) => service.correctActualCost(commandId, actorId, params[0], params[1], body)),
     mutate('POST', /^\/v2\/orders\/([^/]+)\/landed-cost\/actualize$/, (body) => assertBodyContract(body, EMPTY_BODY), ({ commandId, actorId, params }) => service.actualizeLandedCost(commandId, actorId, params[0])),
     mutate('POST', /^\/v2\/orders\/([^/]+)\/margin\/actualize$/, validateMarginBody, ({ commandId, actorId, params, body }) => service.actualizeMargin(commandId, actorId, params[0], body.landedCostSnapshotId)),
+    mutate('POST', /^\/v2\/orders\/([^/]+)\/cost-close\/readiness$/, validateReadinessBody, ({ commandId, actorId, params, body }) => service.evaluateCostCloseReadiness(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/orders\/([^/]+)\/cost-close$/, validateCostCloseBody, ({ commandId, actorId, params, body }) => service.closeCost(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/orders\/([^/]+)\/cost-close\/adjustments$/, validatePostCloseAdjustmentBody, ({ commandId, actorId, params, body }) => service.recordPostCloseAdjustment(commandId, actorId, params[0], body)),
     read('GET', /^\/v2\/margin-actualizations\/([^/]+)$/, ({ actorId, params }) => service.getMarginForActor(actorId, params[0])),
+    read('GET', /^\/v2\/cost-close-readiness\/([^/]+)$/, ({ actorId, params }) => service.getCostCloseReadinessForActor(actorId, params[0])),
     read('GET', /^\/v2\/cost-closes\/([^/]+)$/, ({ actorId, params }) => service.getCostCloseForActor(actorId, params[0])),
   ]);
 }
@@ -68,10 +77,26 @@ function validateMarginBody(body) {
   assertBodyContract(body, MARGIN_BODY);
   invariant(typeof body.landedCostSnapshotId === 'string' && body.landedCostSnapshotId.length > 0, 'HTTP_BODY_FIELD_INVALID', 'landedCostSnapshotId is required', { field: 'landedCostSnapshotId' });
 }
+function validateReadinessBody(body) {
+  assertBodyContract(body, READINESS_BODY);
+  invariant(typeof body.landedCostSnapshotId === 'string' && body.landedCostSnapshotId.length > 0, 'HTTP_BODY_FIELD_INVALID', 'landedCostSnapshotId is required', { field: 'landedCostSnapshotId' });
+  invariant(typeof body.marginActualizationSnapshotId === 'string' && body.marginActualizationSnapshotId.length > 0, 'HTTP_BODY_FIELD_INVALID', 'marginActualizationSnapshotId is required', { field: 'marginActualizationSnapshotId' });
+  invariant(Array.isArray(body.requirements) && body.requirements.length === 4, 'HTTP_BODY_FIELD_INVALID', 'requirements must contain exactly factory, freight, duty and credits', { field: 'requirements' });
+  const seen = new Set();
+  for (const requirement of body.requirements) {
+    invariant(READINESS_TYPES.has(requirement?.type) && !seen.has(requirement.type), 'HTTP_BODY_FIELD_INVALID', 'readiness requirement type must be unique and supported', { field: 'requirements.type', value: requirement?.type });
+    seen.add(requirement.type);
+    invariant(READINESS_STATUSES.has(requirement?.status), 'HTTP_BODY_FIELD_INVALID', 'readiness requirement status is invalid', { field: 'requirements.status', value: requirement?.status });
+    invariant(requirement.evidenceEntryIds === undefined || Array.isArray(requirement.evidenceEntryIds), 'HTTP_BODY_FIELD_INVALID', 'evidenceEntryIds must be an array', { field: 'requirements.evidenceEntryIds' });
+    invariant(requirement.waiverReason === undefined || requirement.waiverReason === null || typeof requirement.waiverReason === 'string', 'HTTP_BODY_FIELD_INVALID', 'waiverReason must be a string or null', { field: 'requirements.waiverReason' });
+  }
+  invariant([...READINESS_TYPES].every((type) => seen.has(type)), 'HTTP_BODY_FIELD_INVALID', 'requirements must contain factory, freight, duty and credits', { field: 'requirements' });
+}
 function validateCostCloseBody(body) {
   assertBodyContract(body, COST_CLOSE_BODY);
   invariant(typeof body.landedCostSnapshotId === 'string' && body.landedCostSnapshotId.length > 0, 'HTTP_BODY_FIELD_INVALID', 'landedCostSnapshotId is required', { field: 'landedCostSnapshotId' });
   invariant(typeof body.marginActualizationSnapshotId === 'string' && body.marginActualizationSnapshotId.length > 0, 'HTTP_BODY_FIELD_INVALID', 'marginActualizationSnapshotId is required', { field: 'marginActualizationSnapshotId' });
+  invariant(typeof body.costCloseReadinessSnapshotId === 'string' && body.costCloseReadinessSnapshotId.length > 0, 'HTTP_BODY_FIELD_INVALID', 'costCloseReadinessSnapshotId is required', { field: 'costCloseReadinessSnapshotId' });
 }
 function mutate(method, pattern, contract, execute) {
   return Object.freeze({
@@ -101,9 +126,11 @@ function unavailableOrderEconomics() {
     correctActualCost: fail,
     actualizeLandedCost: fail,
     actualizeMargin: fail,
+    evaluateCostCloseReadiness: fail,
     closeCost: fail,
     recordPostCloseAdjustment: fail,
     getMarginForActor: fail,
+    getCostCloseReadinessForActor: fail,
     getCostCloseForActor: fail,
   });
 }

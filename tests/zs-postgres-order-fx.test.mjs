@@ -177,7 +177,7 @@ test('PostgreSQL persists supply, FX and append-only cost corrections on one imm
 
     await assert.rejects(
       () => pool.query('UPDATE actual_cost_ledger_entries SET amount = amount + 1 WHERE id = $1', [cost.id]),
-      (error) => error?.code === 'P0001' && error?.message === 'ORDER_ECONOMICS_SNAPSHOT_IMMUTABLE',
+      (error) => error?.code === '55000' && error?.message === 'immutable order economics record cannot be changed: actual_cost_ledger_entries',
     );
   } finally {
     await pool.end();

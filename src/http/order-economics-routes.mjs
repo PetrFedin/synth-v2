@@ -5,8 +5,10 @@ const SUPPLY_BODY = bodyContract(['allocations'], {}, { allocations: ['sku', 'qu
 const FX_BODY = bodyContract(['sourceCurrency', 'rate', 'rateType', 'sourceRef', 'effectiveAt']);
 const COST_BODY = bodyContract(['supplyCommitmentSnapshotId', 'costType', 'amount', 'currency', 'fxRateSnapshotId', 'sku', 'sourceRef', 'occurredAt']);
 const COST_CORRECTION_BODY = bodyContract(['reason', 'supplyCommitmentSnapshotId', 'costType', 'amount', 'currency', 'fxRateSnapshotId', 'sku', 'sourceRef', 'occurredAt']);
+const POST_CLOSE_ADJUSTMENT_BODY = COST_CORRECTION_BODY;
 const EMPTY_BODY = bodyContract();
 const MARGIN_BODY = bodyContract(['landedCostSnapshotId']);
+const COST_CLOSE_BODY = bodyContract(['landedCostSnapshotId', 'marginActualizationSnapshotId']);
 const FX_RATE_TYPES = new Set(['plan', 'budget', 'po', 'invoice', 'accounting', 'settlement']);
 
 export function createOrderEconomicsRoutes({ orderEconomics } = {}) {
@@ -18,7 +20,10 @@ export function createOrderEconomicsRoutes({ orderEconomics } = {}) {
     mutate('POST', /^\/v2\/orders\/([^/]+)\/actual-costs\/([^/]+)\/corrections$/, validateCostCorrectionBody, ({ commandId, actorId, params, body }) => service.correctActualCost(commandId, actorId, params[0], params[1], body)),
     mutate('POST', /^\/v2\/orders\/([^/]+)\/landed-cost\/actualize$/, (body) => assertBodyContract(body, EMPTY_BODY), ({ commandId, actorId, params }) => service.actualizeLandedCost(commandId, actorId, params[0])),
     mutate('POST', /^\/v2\/orders\/([^/]+)\/margin\/actualize$/, validateMarginBody, ({ commandId, actorId, params, body }) => service.actualizeMargin(commandId, actorId, params[0], body.landedCostSnapshotId)),
+    mutate('POST', /^\/v2\/orders\/([^/]+)\/cost-close$/, validateCostCloseBody, ({ commandId, actorId, params, body }) => service.closeCost(commandId, actorId, params[0], body)),
+    mutate('POST', /^\/v2\/orders\/([^/]+)\/cost-close\/adjustments$/, validatePostCloseAdjustmentBody, ({ commandId, actorId, params, body }) => service.recordPostCloseAdjustment(commandId, actorId, params[0], body)),
     read('GET', /^\/v2\/margin-actualizations\/([^/]+)$/, ({ actorId, params }) => service.getMarginForActor(actorId, params[0])),
+    read('GET', /^\/v2\/cost-closes\/([^/]+)$/, ({ actorId, params }) => service.getCostCloseForActor(actorId, params[0])),
   ]);
 }
 
@@ -40,8 +45,16 @@ function validateCostBody(body) {
 }
 function validateCostCorrectionBody(body) {
   assertBodyContract(body, COST_CORRECTION_BODY);
-  invariant(typeof body.reason === 'string' && body.reason.trim().length > 0 && body.reason.trim().length <= 1000, 'HTTP_BODY_FIELD_INVALID', 'reason must contain 1 to 1000 characters', { field: 'reason' });
+  validateReason(body.reason);
   validateCostFields(body);
+}
+function validatePostCloseAdjustmentBody(body) {
+  assertBodyContract(body, POST_CLOSE_ADJUSTMENT_BODY);
+  validateReason(body.reason);
+  validateCostFields(body);
+}
+function validateReason(reason) {
+  invariant(typeof reason === 'string' && reason.trim().length > 0 && reason.trim().length <= 1000, 'HTTP_BODY_FIELD_INVALID', 'reason must contain 1 to 1000 characters', { field: 'reason' });
 }
 function validateCostFields(body) {
   invariant(typeof body.supplyCommitmentSnapshotId === 'string' && body.supplyCommitmentSnapshotId.length > 0, 'HTTP_BODY_FIELD_INVALID', 'supplyCommitmentSnapshotId is required', { field: 'supplyCommitmentSnapshotId' });
@@ -54,6 +67,11 @@ function validateCostFields(body) {
 function validateMarginBody(body) {
   assertBodyContract(body, MARGIN_BODY);
   invariant(typeof body.landedCostSnapshotId === 'string' && body.landedCostSnapshotId.length > 0, 'HTTP_BODY_FIELD_INVALID', 'landedCostSnapshotId is required', { field: 'landedCostSnapshotId' });
+}
+function validateCostCloseBody(body) {
+  assertBodyContract(body, COST_CLOSE_BODY);
+  invariant(typeof body.landedCostSnapshotId === 'string' && body.landedCostSnapshotId.length > 0, 'HTTP_BODY_FIELD_INVALID', 'landedCostSnapshotId is required', { field: 'landedCostSnapshotId' });
+  invariant(typeof body.marginActualizationSnapshotId === 'string' && body.marginActualizationSnapshotId.length > 0, 'HTTP_BODY_FIELD_INVALID', 'marginActualizationSnapshotId is required', { field: 'marginActualizationSnapshotId' });
 }
 function mutate(method, pattern, contract, execute) {
   return Object.freeze({
@@ -76,5 +94,16 @@ function read(method, pattern, execute) {
 }
 function unavailableOrderEconomics() {
   const fail = () => invariant(false, 'ORDER_ECONOMICS_SERVICE_REQUIRED', 'Order economics service is required');
-  return Object.freeze({ createSupplyCommitment: fail, createFxRateSnapshot: fail, recordActualCost: fail, correctActualCost: fail, actualizeLandedCost: fail, actualizeMargin: fail, getMarginForActor: fail });
+  return Object.freeze({
+    createSupplyCommitment: fail,
+    createFxRateSnapshot: fail,
+    recordActualCost: fail,
+    correctActualCost: fail,
+    actualizeLandedCost: fail,
+    actualizeMargin: fail,
+    closeCost: fail,
+    recordPostCloseAdjustment: fail,
+    getMarginForActor: fail,
+    getCostCloseForActor: fail,
+  });
 }

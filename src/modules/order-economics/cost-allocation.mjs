@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { invariant } from '../../core/errors.mjs';
+import { calculateMoneyPercentage } from '../../core/money.mjs';
 import { canonicalJson } from '../../core/fingerprints.mjs';
 
 const BASES = Object.freeze(['direct', 'unit', 'net_value', 'custom']);
@@ -183,7 +184,15 @@ function buildSkuEconomics(skuBasis, allocations, currency) {
   return [...skuBasis.entries()].map(([sku, values]) => {
     const allocatedLandedCost = costBySku.get(sku) ?? 0;
     const contributionMarginAmount = roundMoney(values.netValue - allocatedLandedCost);
-    const contributionMarginPercent = values.netValue === 0 ? null : roundPercent((contributionMarginAmount / values.netValue) * 100);
+    const contributionMarginPercent = values.netValue === 0
+      ? null
+      : calculateMoneyPercentage(contributionMarginAmount, values.netValue, {
+        invalidCode: 'COST_ALLOCATION_MARGIN_PERCENT_INVALID',
+        scaleCode: 'COST_ALLOCATION_MARGIN_PERCENT_SCALE_INVALID',
+        overflowCode: 'COST_ALLOCATION_MARGIN_PERCENT_TOO_LARGE',
+        numeratorLabel: 'SKU contribution margin',
+        denominatorLabel: 'SKU net revenue',
+      });
     return Object.freeze({
       sku,
       quantity: values.quantity,
@@ -211,4 +220,3 @@ function hashBasis(value) { return createHash('sha256').update(canonicalJson(val
 function roundMoney(value) { return Math.round((value + Number.EPSILON) * 10_000) / 10_000; }
 function roundMeasure(value) { return Math.round((value + Number.EPSILON) * 1_000_000) / 1_000_000; }
 function roundShare(value) { return Math.round((value + Number.EPSILON) * 100_000_000) / 100_000_000; }
-function roundPercent(value) { return Math.round((value + Number.EPSILON) * 10_000) / 10_000; }

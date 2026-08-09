@@ -3,6 +3,7 @@ import { withFinalQualityOpenApi } from './final-quality-openapi.mjs';
 import { withMaterialOpenApi } from './material-openapi.mjs';
 import { withMeasurementOpenApi } from './measurement-openapi.mjs';
 import { withMeasurementRevisionOpenApi } from './measurement-revision-openapi.mjs';
+import { withOutboundShipmentOpenApi } from './outbound-shipment-openapi.mjs';
 import { withProductionExecutionOpenApi } from './production-execution-openapi.mjs';
 import { withProductionOrderOpenApi } from './production-order-openapi.mjs';
 import { withSampleOpenApi } from './sample-openapi.mjs';
@@ -11,17 +12,19 @@ import { withSourcingTechPackGateOpenApi } from './sourcing-tech-pack-gate-opena
 import { withTechPackOpenApi } from './tech-pack-openapi.mjs';
 import { wholesaleV2OpenApi } from './openapi.mjs';
 
-export const wholesaleV2ExtendedOpenApi = withFinalQualityOpenApi(
-  withProductionExecutionOpenApi(
-    withProductionOrderOpenApi(
-      withSourcingTechPackGateOpenApi(
-        withTechPackOpenApi(
-          withSourcingOpenApi(
-            withSampleOpenApi(
-              withMeasurementRevisionOpenApi(
-                withMeasurementOpenApi(
-                  withBomOpenApi(
-                    withMaterialOpenApi(wholesaleV2OpenApi),
+export const wholesaleV2ExtendedOpenApi = withOutboundShipmentOpenApi(
+  withFinalQualityOpenApi(
+    withProductionExecutionOpenApi(
+      withProductionOrderOpenApi(
+        withSourcingTechPackGateOpenApi(
+          withTechPackOpenApi(
+            withSourcingOpenApi(
+              withSampleOpenApi(
+                withMeasurementRevisionOpenApi(
+                  withMeasurementOpenApi(
+                    withBomOpenApi(
+                      withMaterialOpenApi(wholesaleV2OpenApi),
+                    ),
                   ),
                 ),
               ),

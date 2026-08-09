@@ -45,7 +45,7 @@ test('cost close route requires explicit readiness snapshot with landed cost and
 test('post-close adjustment route requires reason and full cost lineage', async () => {
   const calls = [];
   const path = '/v2/orders/ORDER-1/cost-close/adjustments';
-  const service = { recordPostCloseAdjustment: async (...args) => { calls.push(args); return { adjustment: { id: 'ADJ-1' } }; };
+  const service = { recordPostCloseAdjustment: async (...args) => { calls.push(args); return { adjustment: { id: 'ADJ-1' } }; } };
   const route = routeFor(service, 'POST', path);
   const body = {
     reason: 'Late freight invoice',

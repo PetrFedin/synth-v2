@@ -171,7 +171,7 @@ function assertExecutionBasis(order, orderCommit) {
 }
 
 function assertEconomicsBasis(landedCost, margin, orderCommit) {
-  invariant(landedCost?.id && landedCost.orderId === orderCommit.id === false, 'COST_CLOSE_READINESS_LANDED_COST_REQUIRED', 'Landed cost snapshot is required');
+  invariant(landedCost?.id, 'COST_CLOSE_READINESS_LANDED_COST_REQUIRED', 'Landed cost snapshot is required');
   invariant(landedCost.orderId === orderCommit.orderId && landedCost.orderCommitSnapshotId === orderCommit.id && landedCost.currency === orderCommit.currency, 'COST_CLOSE_READINESS_LANDED_COST_MISMATCH', 'Landed cost belongs to another order commit');
   invariant(margin?.id && margin.orderId === orderCommit.orderId && margin.orderCommitSnapshotId === orderCommit.id, 'COST_CLOSE_READINESS_MARGIN_MISMATCH', 'Margin actualization belongs to another order commit');
   invariant(margin.landedCostSnapshotId === landedCost.id && margin.currency === orderCommit.currency && margin.landedCost === landedCost.totalCost, 'COST_CLOSE_READINESS_MARGIN_BASIS_MISMATCH', 'Margin actualization does not match the exact landed cost basis');

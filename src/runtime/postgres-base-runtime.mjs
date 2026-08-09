@@ -10,6 +10,7 @@ import { createMaterialQueryService } from '../application/material-query-servic
 import { createMeasurementService } from '../application/measurement-service.mjs';
 import { createMeasurementQueryService } from '../application/measurement-query-service.mjs';
 import { createOrderEconomicsService } from '../application/order-economics-service.mjs';
+import { createOrderEconomicsPositionService } from '../application/order-economics-position-service.mjs';
 import { createSampleService } from '../application/sample-service.mjs';
 import { createSampleQueryService } from '../application/sample-query-service.mjs';
 import { createSourcingService } from '../application/sourcing-service.mjs';
@@ -95,7 +96,10 @@ export function createPostgresWholesaleRuntime({
     nextId: runtimeNextId,
     ...(clock ? { clock } : {}),
   });
-  const orderEconomics = createOrderEconomicsService({ economicsStore: orderEconomicsStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) });
+  const orderEconomics = Object.freeze({
+    ...createOrderEconomicsService({ economicsStore: orderEconomicsStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }),
+    ...createOrderEconomicsPositionService({ economicsStore: orderEconomicsStore }),
+  });
   const materials = Object.freeze({ ...createMaterialService({ materialStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createMaterialQueryService({ reader: createPostgresMaterialReader({ pool }) }) });
   const boms = Object.freeze({ ...createBomService({ bomStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createBomQueryService({ reader: createPostgresBomReader({ pool }) }) });
   const measurements = Object.freeze({ ...createMeasurementService({ measurementStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createMeasurementQueryService({ reader: createPostgresMeasurementReader({ pool }) }) });

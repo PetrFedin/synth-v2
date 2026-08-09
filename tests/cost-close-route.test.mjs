@@ -45,7 +45,7 @@ test('cost close route requires explicit readiness snapshot with landed cost and
 test('post-close adjustment route requires reason and full cost lineage', async () => {
   const calls = [];
   const path = '/v2/orders/ORDER-1/cost-close/adjustments';
-  const service = { recordPostCloseAdjustment: async (...args) => { calls.push(args); return { adjustment: { id: 'ADJ-1' } }; } };
+  const service = { recordPostCloseAdjustment: async (...args) => { calls.push(args); return { adjustment: { id: 'ADJ-1' } }; };
   const route = routeFor(service, 'POST', path);
   const body = {
     reason: 'Late freight invoice',
@@ -63,6 +63,20 @@ test('post-close adjustment route requires reason and full cost lineage', async 
     }),
     (error) => error?.code === 'HTTP_BODY_FIELD_INVALID',
   );
+});
+
+test('order economics position route returns one canonical effective view', async () => {
+  const calls = [];
+  const path = '/v2/orders/ORDER-1/economics-position';
+  const position = {
+    orderId: 'ORDER-1', orderCommitSnapshotId: 'COMMIT-1', currency: 'EUR', status: 'ADJUSTED',
+    effectiveTotalLandedCost: 630, effectiveContributionMarginAmount: 370,
+  };
+  const service = { getOrderEconomicsPositionForActor: async (...args) => { calls.push(args); return position; } };
+  const route = routeFor(service, 'GET', path);
+  const result = await route.execute({ actorId: 'USER-1', params: ['ORDER-1'], query: {} });
+  assert.deepEqual(result, position);
+  assert.deepEqual(calls, [['USER-1', 'ORDER-1']]);
 });
 
 test('readiness and cost close read routes forward immutable identities', async () => {

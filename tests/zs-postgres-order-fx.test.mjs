@@ -8,7 +8,7 @@ import { createOrderEconomicsService } from '../src/application/order-economics-
 
 const databaseUrl = process.env.POSTGRES_TEST_URL;
 
-test('PostgreSQL persists supply, FX and append-only cost corrections on one immutable order commit', { skip: !databaseUrl }, async () => {
+test('PostgreSQL persists supply, FX, immutable cost close and post-close re-actualization on one order commit', { skip: !databaseUrl }, async () => {
   const { Pool } = await import('pg');
   const pool = new Pool({ connectionString: databaseUrl, max: 2 });
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -129,6 +129,11 @@ test('PostgreSQL persists supply, FX and append-only cost corrections on one imm
       costType: 'freight', amount: 80, currency: 'USD', fxRateSnapshotId: fx.id, sourceRef: 'FREIGHT-INVOICE-NEW', occurredAt: now,
     });
     const correctedLanded = await service.actualizeLandedCost('cmd-landed-corrected', 'cost-user', order.id);
+    const correctedMargin = await service.actualizeMargin('cmd-margin-corrected', 'cost-user', order.id, correctedLanded.id);
+    const close = await service.closeCost('cmd-cost-close', 'cost-user', order.id, {
+      landedCostSnapshotId: correctedLanded.id,
+      marginActualizationSnapshotId: correctedMargin.id,
+    });
 
     assert.equal(correction.reversal.reversalOfEntryId, cost.id);
     assert.equal(correction.reversal.sourceAmount, -100);
@@ -140,6 +145,31 @@ test('PostgreSQL persists supply, FX and append-only cost corrections on one imm
     assert.equal(correctedLanded.totalCost, 73.6);
     assert.deepEqual(correctedLanded.supplyCommitmentSnapshotIds, [supply.id]);
     assert.equal(correctedLanded.supplyLineageComplete, true);
+    assert.equal(correctedMargin.contributionMarginAmount, 926.4);
+    assert.equal(close.totalLandedCost, 73.6);
+    assert.equal(close.contributionMarginAmount, 926.4);
+
+    await assert.rejects(
+      () => service.recordActualCost('cmd-late-wrong-path', 'cost-user', order.id, {
+        supplyCommitmentSnapshotId: supply.id,
+        costType: 'duty', amount: 10, currency: 'EUR', sourceRef: 'LATE-DUTY-WRONG-PATH', occurredAt: now,
+      }),
+      (error) => error?.code === 'COST_CLOSE_REQUIRES_POST_CLOSE_ADJUSTMENT',
+    );
+
+    const late = await service.recordPostCloseAdjustment('cmd-post-close', 'cost-user', order.id, {
+      reason: 'Duty invoice arrived after cost close',
+      supplyCommitmentSnapshotId: supply.id,
+      costType: 'duty', amount: 10, currency: 'EUR', sourceRef: 'LATE-DUTY', occurredAt: now,
+    });
+    assert.equal(late.adjustment.costCloseSnapshotId, close.id);
+    assert.equal(late.adjustment.previousAdjustmentId, null);
+    assert.equal(late.adjustment.costDeltaAmount, 10);
+    assert.equal(late.adjustment.marginDeltaAmount, -10);
+    assert.equal(late.landedCost.totalCost, 83.6);
+    assert.equal(late.marginActualization.contributionMarginAmount, 916.4);
+    assert.equal(close.totalLandedCost, 73.6);
+    assert.equal(close.contributionMarginAmount, 926.4);
 
     const rows = await pool.query(
       `SELECT id, entry_kind, reversal_of_entry_id, correction_id, correction_reason,
@@ -150,7 +180,7 @@ test('PostgreSQL persists supply, FX and append-only cost corrections on one imm
         ORDER BY recorded_at, id`,
       [order.id],
     );
-    assert.equal(rows.rowCount, 3);
+    assert.equal(rows.rowCount, 4);
     const originalRow = rows.rows.find((row) => row.id === cost.id);
     const reversalRow = rows.rows.find((row) => row.id === correction.reversal.id);
     const replacementRow = rows.rows.find((row) => row.id === correction.replacement.id);
@@ -175,9 +205,51 @@ test('PostgreSQL persists supply, FX and append-only cost corrections on one imm
       order_commit_snapshot_id: commit.id, lineage_version: 3,
     });
 
+    const closeRow = (await pool.query(
+      `SELECT order_commit_snapshot_id, landed_cost_snapshot_id, margin_actualization_snapshot_id,
+              total_landed_cost::text, contribution_margin_amount::text
+         FROM cost_close_snapshots WHERE id = $1`,
+      [close.id],
+    )).rows[0];
+    assert.deepEqual(closeRow, {
+      order_commit_snapshot_id: commit.id,
+      landed_cost_snapshot_id: correctedLanded.id,
+      margin_actualization_snapshot_id: correctedMargin.id,
+      total_landed_cost: '73.6000',
+      contribution_margin_amount: '926.4000',
+    });
+
+    const adjustmentRow = (await pool.query(
+      `SELECT cost_close_snapshot_id, previous_adjustment_id, actual_cost_entry_id,
+              prior_landed_cost_snapshot_id, landed_cost_snapshot_id,
+              prior_margin_actualization_snapshot_id, margin_actualization_snapshot_id,
+              cost_delta_amount::text, margin_delta_amount::text
+         FROM post_close_adjustments WHERE id = $1`,
+      [late.adjustment.id],
+    )).rows[0];
+    assert.deepEqual(adjustmentRow, {
+      cost_close_snapshot_id: close.id,
+      previous_adjustment_id: null,
+      actual_cost_entry_id: late.actualCost.id,
+      prior_landed_cost_snapshot_id: correctedLanded.id,
+      landed_cost_snapshot_id: late.landedCost.id,
+      prior_margin_actualization_snapshot_id: correctedMargin.id,
+      margin_actualization_snapshot_id: late.marginActualization.id,
+      cost_delta_amount: '10.0000',
+      margin_delta_amount: '-10.0000',
+    });
+
     await assert.rejects(
       () => pool.query('UPDATE actual_cost_ledger_entries SET amount = amount + 1 WHERE id = $1', [cost.id]),
       (error) => error?.code === '55000' && error?.message === 'immutable order economics record cannot be changed: actual_cost_ledger_entries',
+    );
+    await assert.rejects(
+      () => pool.query('UPDATE cost_close_snapshots SET total_landed_cost = total_landed_cost + 1 WHERE id = $1', [close.id]),
+      (error) => error?.code === '55000' && error?.message === 'immutable order economics record cannot be changed: cost_close_snapshots',
+    );
+    await assert.rejects(
+      () => pool.query('UPDATE post_close_adjustments SET reason = reason || $2 WHERE id = $1', [late.adjustment.id, ' changed']),
+      (error) => error?.code === '55000' && error?.message === 'immutable order economics record cannot be changed: post_close_adjustments',
     );
   } finally {
     await pool.end();

@@ -12,6 +12,7 @@ export function createPostgresOrderEconomicsStore({ pool } = {}) {
     async getActualCostReversal(originalEntryId) { return payloadOne(pool, 'SELECT payload FROM actual_cost_ledger_entries WHERE reversal_of_entry_id = $1', [originalEntryId]); },
     async getLandedCostSnapshot(id) { return payloadOne(pool, 'SELECT payload FROM landed_cost_snapshots WHERE id = $1', [id]); },
     async getMarginActualizationSnapshot(id) { return payloadOne(pool, 'SELECT payload FROM margin_actualization_snapshots WHERE id = $1', [id]); },
+    async getCostCloseReadinessSnapshot(id) { return payloadOne(pool, 'SELECT payload FROM cost_close_readiness_snapshots WHERE id = $1', [id]); },
     async getCostCloseSnapshot(id) { return payloadOne(pool, 'SELECT payload FROM cost_close_snapshots WHERE id = $1', [id]); },
     async getPostCloseAdjustment(id) { return payloadOne(pool, 'SELECT payload FROM post_close_adjustments WHERE id = $1', [id]); },
     async listActualCostEntries(orderId) {
@@ -102,6 +103,21 @@ function view(client) {
       const result = await client.query('SELECT payload FROM margin_actualization_snapshots WHERE id = $1 FOR SHARE', [id]);
       return result.rows[0]?.payload;
     },
+    async insertCostCloseReadinessSnapshot(value) {
+      await insertImmutable(client, `INSERT INTO cost_close_readiness_snapshots
+        (id, order_id, order_commit_snapshot_id, lineage_version, brand_id, shop_id,
+         landed_cost_snapshot_id, margin_actualization_snapshot_id, currency, status,
+         requirements, blocking_reasons, evaluated_at, content_hash, payload)
+        VALUES ($1, $2, $3, 1, $4, $5, $6, $7, $8, $9, $10::jsonb, $11::jsonb, $12, $13, $14::jsonb)`,
+      [value.id, value.orderId, value.orderCommitSnapshotId, value.brandId, value.shopId,
+        value.landedCostSnapshotId, value.marginActualizationSnapshotId, value.currency, value.status,
+        JSON.stringify(value.requirements), JSON.stringify(value.blockingReasons), value.evaluatedAt, value.contentHash, JSON.stringify(value)],
+      'COST_CLOSE_READINESS_ALREADY_EXISTS', { costCloseReadinessSnapshotId: value.id });
+    },
+    async getCostCloseReadinessSnapshot(id) {
+      const result = await client.query('SELECT payload FROM cost_close_readiness_snapshots WHERE id = $1 FOR SHARE', [id]);
+      return result.rows[0]?.payload;
+    },
     async getCostCloseSnapshot(id) {
       const result = await client.query('SELECT payload FROM cost_close_snapshots WHERE id = $1 FOR SHARE', [id]);
       return result.rows[0]?.payload;
@@ -117,12 +133,14 @@ function view(client) {
     async insertCostCloseSnapshot(value) {
       await insertImmutable(client, `INSERT INTO cost_close_snapshots
         (id, order_id, order_commit_snapshot_id, lineage_version, brand_id, shop_id,
-         landed_cost_snapshot_id, margin_actualization_snapshot_id, currency, total_landed_cost,
-         net_revenue, contribution_margin_amount, contribution_margin_percent, closed_at, content_hash, payload)
-        VALUES ($1, $2, $3, 1, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::jsonb)`,
+         landed_cost_snapshot_id, margin_actualization_snapshot_id, cost_close_readiness_snapshot_id,
+         currency, total_landed_cost, net_revenue, contribution_margin_amount,
+         contribution_margin_percent, closed_at, content_hash, payload)
+        VALUES ($1, $2, $3, 2, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::jsonb)`,
       [value.id, value.orderId, value.orderCommitSnapshotId, value.brandId, value.shopId,
-        value.landedCostSnapshotId, value.marginActualizationSnapshotId, value.currency, value.totalLandedCost,
-        value.netRevenue, value.contributionMarginAmount, value.contributionMarginPercent, value.closedAt, value.contentHash, JSON.stringify(value)],
+        value.landedCostSnapshotId, value.marginActualizationSnapshotId, value.costCloseReadinessSnapshotId,
+        value.currency, value.totalLandedCost, value.netRevenue, value.contributionMarginAmount,
+        value.contributionMarginPercent, value.closedAt, value.contentHash, JSON.stringify(value)],
       'COST_CLOSE_ALREADY_EXISTS', { costCloseSnapshotId: value.id, orderCommitSnapshotId: value.orderCommitSnapshotId });
     },
     async getLatestPostCloseAdjustment(costCloseSnapshotId) {

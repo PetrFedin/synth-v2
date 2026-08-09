@@ -18,7 +18,7 @@ const membership = Object.freeze({ id: 'MEM-1', organisationId: 'BRAND-1', organ
 
 function createHarness({ committed = orderCommit } = {}) {
   const state = {
-    commands: new Map(), outbox: [], supply: [], fxRates: [], costs: [], landed: [], margins: [], closes: [], adjustments: [],
+    commands: new Map(), outbox: [], supply: [], fxRates: [], costs: [], landed: [], margins: [], readiness: [], closes: [], adjustments: [],
     orderCommitReads: 0,
   };
   const tx = {
@@ -39,6 +39,8 @@ function createHarness({ committed = orderCommit } = {}) {
     getLandedCostSnapshot: async (id) => state.landed.find((value) => value.id === id),
     insertMarginActualizationSnapshot: async (value) => state.margins.push(value),
     getMarginActualizationSnapshot: async (id) => state.margins.find((value) => value.id === id),
+    insertCostCloseReadinessSnapshot: async (value) => state.readiness.push(value),
+    getCostCloseReadinessSnapshot: async (id) => state.readiness.find((value) => value.id === id),
     insertCostCloseSnapshot: async (value) => state.closes.push(value),
     getCostCloseSnapshot: async (id) => state.closes.find((value) => value.id === id),
     getCostCloseByOrderCommitSnapshotId: async (id) => state.closes.find((value) => value.orderCommitSnapshotId === id),
@@ -55,6 +57,23 @@ function createHarness({ committed = orderCommit } = {}) {
     nextId: (prefix) => `${prefix}-${++sequence}`,
   });
   return { service, state, setClock: (value) => { currentTime = value; } };
+}
+
+function readyRequirements({ factoryEntryId, freightEntryId = null, dutyEntryId = null, creditEntryId = null } = {}) {
+  return [
+    factoryEntryId
+      ? { type: 'factory', status: 'complete', evidenceEntryIds: [factoryEntryId] }
+      : { type: 'factory', status: 'waived', waiverReason: 'Factory cost is included in another reconciled cost bucket' },
+    freightEntryId
+      ? { type: 'freight', status: 'complete', evidenceEntryIds: [freightEntryId] }
+      : { type: 'freight', status: 'waived', waiverReason: 'No separate freight charge is expected' },
+    dutyEntryId
+      ? { type: 'duty', status: 'complete', evidenceEntryIds: [dutyEntryId] }
+      : { type: 'duty', status: 'waived', waiverReason: 'No duty is expected for this trade lane' },
+    creditEntryId
+      ? { type: 'credits', status: 'complete', evidenceEntryIds: [creditEntryId] }
+      : { type: 'credits', status: 'waived', waiverReason: 'No open supplier credits or claims' },
+  ];
 }
 
 test('service pins supply, cost, landed cost and margin to the immutable order commit snapshot', async () => {
@@ -187,23 +206,34 @@ test('landed cost ignores legacy cost rows that are not pinned to the current or
   assert.equal(landed.supplyLineageComplete, true);
 });
 
-test('cost close blocks normal costing and atomically chains late cost re-actualizations', async () => {
+test('cost close requires READY_TO_CLOSE and atomically chains late cost re-actualizations', async () => {
   const { service, state, setClock } = createHarness();
   const supply = await service.createSupplyCommitment('CMD-CLOSE-SUPPLY', actorId, order.id, {
     allocations: [{ sku: 'SKU-1', quantity: 10, sourceType: 'production', sourceRef: 'PO-CLOSE' }],
   });
-  await service.recordActualCost('CMD-CLOSE-COST', actorId, order.id, {
+  const factory = await service.recordActualCost('CMD-CLOSE-COST', actorId, order.id, {
     supplyCommitmentSnapshotId: supply.id,
     costType: 'factory', amount: 600, currency: 'EUR', sourceRef: 'FACTORY-INVOICE', occurredAt: at,
   });
   const landed = await service.actualizeLandedCost('CMD-CLOSE-LANDED', actorId, order.id);
   const margin = await service.actualizeMargin('CMD-CLOSE-MARGIN', actorId, order.id, landed.id);
+  setClock('2026-08-09T00:30:00.000Z');
+  const readiness = await service.evaluateCostCloseReadiness('CMD-READINESS', actorId, order.id, {
+    landedCostSnapshotId: landed.id,
+    marginActualizationSnapshotId: margin.id,
+    requirements: readyRequirements({ factoryEntryId: factory.id }),
+  });
+  assert.equal(readiness.status, 'READY_TO_CLOSE');
+  assert.deepEqual(readiness.blockingReasons, []);
+
   setClock('2026-08-09T01:00:00.000Z');
   const close = await service.closeCost('CMD-CLOSE', actorId, order.id, {
     landedCostSnapshotId: landed.id,
     marginActualizationSnapshotId: margin.id,
+    costCloseReadinessSnapshotId: readiness.id,
   });
 
+  assert.equal(close.costCloseReadinessSnapshotId, readiness.id);
   assert.equal(close.totalLandedCost, 600);
   assert.equal(close.contributionMarginAmount, 400);
   assert.equal(state.closes.length, 1);
@@ -241,10 +271,40 @@ test('cost close blocks normal costing and atomically chains late cost re-actual
   assert.equal(close.totalLandedCost, 600);
   assert.equal(close.contributionMarginAmount, 400);
   assert.equal(state.adjustments.length, 2);
+  assert.ok(state.outbox.some((event) => event.type === 'cost-close.readiness-evaluated' && event.aggregateId === readiness.id));
   assert.ok(state.outbox.some((event) => event.type === 'cost-close.closed' && event.aggregateId === close.id));
   assert.equal(state.outbox.filter((event) => event.type === 'cost-close.adjustment-recorded').length, 2);
 
+  const readinessRead = await service.getCostCloseReadinessForActor(actorId, readiness.id);
+  assert.equal(readinessRead.readiness.id, readiness.id);
   const read = await service.getCostCloseForActor(actorId, close.id);
   assert.equal(read.costClose.id, close.id);
   assert.equal(read.orderId, order.id);
+});
+
+test('cost added after readiness invalidates the stale landed-cost basis before close', async () => {
+  const { service, setClock } = createHarness();
+  const supply = await service.createSupplyCommitment('CMD-ST-SUPPLY', actorId, order.id, {
+    allocations: [{ sku: 'SKU-1', quantity: 10, sourceType: 'production', sourceRef: 'PO-ST' }],
+  });
+  const factory = await service.recordActualCost('CMD-ST-FACTORY', actorId, order.id, {
+    supplyCommitmentSnapshotId: supply.id, costType: 'factory', amount: 500, currency: 'EUR', sourceRef: 'FACTORY-ST', occurredAt: at,
+  });
+  const landed = await service.actualizeLandedCost('CMD-ST-LANDED', actorId, order.id);
+  const margin = await service.actualizeMargin('CMD-ST-MARGIN', actorId, order.id, landed.id);
+  const readiness = await service.evaluateCostCloseReadiness('CMD-ST-READY', actorId, order.id, {
+    landedCostSnapshotId: landed.id, marginActualizationSnapshotId: margin.id,
+    requirements: readyRequirements({ factoryEntryId: factory.id }),
+  });
+
+  setClock('2026-08-09T01:00:00.000Z');
+  await service.recordActualCost('CMD-ST-LATE', actorId, order.id, {
+    supplyCommitmentSnapshotId: supply.id, costType: 'freight', amount: 25, currency: 'EUR', sourceRef: 'FREIGHT-ST', occurredAt: at,
+  });
+  await assert.rejects(
+    () => service.closeCost('CMD-ST-CLOSE-STALE', actorId, order.id, {
+      landedCostSnapshotId: landed.id, marginActualizationSnapshotId: margin.id, costCloseReadinessSnapshotId: readiness.id,
+    }),
+    (error) => error?.code === 'COST_CLOSE_READINESS_STALE_LANDED_COST',
+  );
 });

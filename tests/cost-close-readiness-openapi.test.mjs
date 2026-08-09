@@ -4,8 +4,10 @@ import { wholesaleV2ExtendedOpenApi } from '../src/http/v2-openapi.mjs';
 
 test('OpenAPI requires immutable readiness before final cost close', () => {
   assert.ok(wholesaleV2ExtendedOpenApi.paths['/orders/{orderId}/cost-close/readiness']);
+  assert.ok(wholesaleV2ExtendedOpenApi.paths['/orders/{orderId}/economics-position']);
   assert.ok(wholesaleV2ExtendedOpenApi.paths['/cost-close-readiness/{costCloseReadinessSnapshotId}']);
   assert.equal(wholesaleV2ExtendedOpenApi.paths['/orders/{orderId}/cost-close/readiness'].post.operationId, 'evaluateCostCloseReadiness');
+  assert.equal(wholesaleV2ExtendedOpenApi.paths['/orders/{orderId}/economics-position'].get.operationId, 'getOrderEconomicsPosition');
   assert.equal(wholesaleV2ExtendedOpenApi.paths['/cost-close-readiness/{costCloseReadinessSnapshotId}'].get.operationId, 'getCostCloseReadiness');
 
   const input = wholesaleV2ExtendedOpenApi.components.schemas.CostCloseReadinessInput;
@@ -31,4 +33,20 @@ test('OpenAPI requires immutable readiness before final cost close', () => {
   assert.ok(close.required.includes('readinessContentHash'));
   assert.equal(close.properties.costCloseReadinessSnapshotId.type, 'string');
   assert.equal(close.properties.readinessContentHash.pattern, '^[a-f0-9]{64}$');
+
+  const position = wholesaleV2ExtendedOpenApi.components.schemas.OrderEconomicsPosition;
+  assert.deepEqual(position.properties.status.enum, ['OPEN', 'WAITING_FOR_FREIGHT', 'WAITING_FOR_DUTY', 'WAITING_FOR_CREDITS', 'READY_TO_CLOSE', 'STALE', 'CLOSED', 'ADJUSTED']);
+  for (const field of [
+    'orderId', 'orderCommitSnapshotId', 'status', 'blockingReasons',
+    'effectiveLandedCostSnapshotId', 'effectiveMarginActualizationSnapshotId',
+    'effectiveTotalLandedCost', 'effectiveContributionMarginAmount',
+    'baseTotalLandedCost', 'baseContributionMarginAmount',
+    'cumulativePostCloseCostDelta', 'cumulativePostCloseMarginDelta',
+  ]) {
+    assert.ok(position.required.includes(field), `OrderEconomicsPosition must require ${field}`);
+  }
+  assert.deepEqual(
+    position.properties.blockingReasons.items.enum,
+    ['factory', 'freight', 'duty', 'credits', 'ledger_changed', 'readiness_not_evaluated'],
+  );
 });

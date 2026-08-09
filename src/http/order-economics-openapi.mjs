@@ -9,6 +9,7 @@ const idempotency = { name: 'Idempotency-Key', in: 'header', required: true, sch
 const orderId = { name: 'orderId', in: 'path', required: true, schema: identifier };
 const actualCostEntryId = { name: 'actualCostEntryId', in: 'path', required: true, schema: identifier };
 const marginActualizationId = { name: 'marginActualizationId', in: 'path', required: true, schema: identifier };
+const costCloseSnapshotId = { name: 'costCloseSnapshotId', in: 'path', required: true, schema: identifier };
 const errorResponse = { description: 'Domain or transport error', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } };
 
 export function withOrderEconomicsOpenApi(base) {
@@ -78,10 +79,7 @@ function schemas() {
     },
     ActualCostCorrectionInput: {
       type: 'object', additionalProperties: false, required: ['reason', 'supplyCommitmentSnapshotId', 'costType', 'amount', 'currency', 'sourceRef'],
-      properties: {
-        reason: { type: 'string', minLength: 1, maxLength: 1000 },
-        ...actualCostWriteProperties(),
-      },
+      properties: { reason: reason(), ...actualCostWriteProperties() },
     },
     ActualCostLedgerEntry: {
       type: 'object', additionalProperties: false,
@@ -141,6 +139,54 @@ function schemas() {
       type: 'object', additionalProperties: false, required: ['margin', 'orderId'],
       properties: { margin: { $ref: '#/components/schemas/MarginActualizationSnapshot' }, orderId: identifier },
     },
+    CostCloseInput: {
+      type: 'object', additionalProperties: false, required: ['landedCostSnapshotId', 'marginActualizationSnapshotId'],
+      properties: { landedCostSnapshotId: identifier, marginActualizationSnapshotId: identifier },
+    },
+    CostCloseSnapshot: {
+      type: 'object', additionalProperties: false,
+      required: ['id', 'orderId', 'orderVersion', 'orderCommitSnapshotId', 'brandId', 'shopId', 'landedCostSnapshotId', 'marginActualizationSnapshotId', 'costEntryIds', 'supplyCommitmentSnapshotIds', 'currency', 'totalLandedCost', 'netRevenue', 'contributionMarginAmount', 'contributionMarginPercent', 'closedAt', 'status', 'contentHash'],
+      properties: {
+        id: identifier, orderId: identifier, orderVersion: version(), orderCommitSnapshotId: identifier,
+        brandId: identifier, shopId: identifier,
+        landedCostSnapshotId: identifier, marginActualizationSnapshotId: identifier,
+        costEntryIds: { type: 'array', minItems: 1, maxItems: 100_000, uniqueItems: true, items: identifier },
+        supplyCommitmentSnapshotIds: { type: 'array', minItems: 1, maxItems: 100_000, uniqueItems: true, items: identifier },
+        currency, totalLandedCost: positiveMoney, netRevenue: positiveMoney, contributionMarginAmount: money,
+        contributionMarginPercent: { type: 'number', minimum: -1_000_000, maximum: 100, multipleOf: 0.0001 },
+        closedAt: date(), status: { type: 'string', enum: ['closed'] }, contentHash: sha256(),
+      },
+    },
+    PostCloseAdjustmentInput: {
+      type: 'object', additionalProperties: false, required: ['reason', 'supplyCommitmentSnapshotId', 'costType', 'amount', 'currency', 'sourceRef'],
+      properties: { reason: reason(), ...actualCostWriteProperties() },
+    },
+    PostCloseAdjustment: {
+      type: 'object', additionalProperties: false,
+      required: ['id', 'costCloseSnapshotId', 'previousAdjustmentId', 'orderId', 'orderVersion', 'orderCommitSnapshotId', 'actualCostEntryId', 'priorLandedCostSnapshotId', 'landedCostSnapshotId', 'priorMarginActualizationSnapshotId', 'marginActualizationSnapshotId', 'costDeltaAmount', 'marginDeltaAmount', 'reason', 'recordedAt', 'status', 'contentHash'],
+      properties: {
+        id: identifier, costCloseSnapshotId: identifier, previousAdjustmentId: nullableIdentifier(),
+        orderId: identifier, orderVersion: version(), orderCommitSnapshotId: identifier,
+        actualCostEntryId: identifier, priorLandedCostSnapshotId: identifier, landedCostSnapshotId: identifier,
+        priorMarginActualizationSnapshotId: identifier, marginActualizationSnapshotId: identifier,
+        costDeltaAmount: money, marginDeltaAmount: money, reason: reason(), recordedAt: date(),
+        status: { type: 'string', enum: ['recorded'] }, contentHash: sha256(),
+      },
+    },
+    PostCloseAdjustmentResult: {
+      type: 'object', additionalProperties: false,
+      required: ['adjustment', 'actualCost', 'landedCost', 'marginActualization'],
+      properties: {
+        adjustment: { $ref: '#/components/schemas/PostCloseAdjustment' },
+        actualCost: { $ref: '#/components/schemas/ActualCostLedgerEntry' },
+        landedCost: { $ref: '#/components/schemas/LandedCostSnapshot' },
+        marginActualization: { $ref: '#/components/schemas/MarginActualizationSnapshot' },
+      },
+    },
+    CostCloseReadResult: {
+      type: 'object', additionalProperties: false, required: ['costClose', 'orderId'],
+      properties: { costClose: { $ref: '#/components/schemas/CostCloseSnapshot' }, orderId: identifier },
+    },
   };
 }
 
@@ -164,10 +210,22 @@ function paths() {
     '/orders/{orderId}/margin/actualize': {
       post: mutation('actualizeOrderMargin', '#/components/schemas/MarginActualizationInput', '#/components/schemas/MarginActualizationSnapshot', 'Actualized order contribution margin'),
     },
+    '/orders/{orderId}/cost-close': {
+      post: mutation('closeOrderCost', '#/components/schemas/CostCloseInput', '#/components/schemas/CostCloseSnapshot', 'Closed immutable order cost and margin basis'),
+    },
+    '/orders/{orderId}/cost-close/adjustments': {
+      post: mutation('recordPostCloseAdjustment', '#/components/schemas/PostCloseAdjustmentInput', '#/components/schemas/PostCloseAdjustmentResult', 'Recorded late cost and re-actualized landed cost and margin'),
+    },
     '/margin-actualizations/{marginActualizationId}': {
       get: {
         operationId: 'getMarginActualization', security: [{ bearerAuth: [] }], parameters: [marginActualizationId],
         responses: readResponses('Margin actualization', '#/components/schemas/MarginActualizationReadResult'),
+      },
+    },
+    '/cost-closes/{costCloseSnapshotId}': {
+      get: {
+        operationId: 'getCostClose', security: [{ bearerAuth: [] }], parameters: [costCloseSnapshotId],
+        responses: readResponses('Cost close', '#/components/schemas/CostCloseReadResult'),
       },
     },
   };
@@ -196,6 +254,7 @@ function mutationResponses(description, reference) { return { 200: dataResponse(
 function readResponses(description, reference) { return { 200: dataResponse(description, reference), 400: errorResponse, 401: errorResponse, 403: errorResponse, 404: errorResponse }; }
 function costType() { return { type: 'string', enum: ['factory', 'material', 'labor', 'freight', 'insurance', 'duty', 'brokerage', 'warehouse', 'quality', 'rework', 'packaging', 'commission', 'other'] }; }
 function fxRateType() { return { type: 'string', enum: ['plan', 'budget', 'po', 'invoice', 'accounting', 'settlement'] }; }
+function reason() { return { type: 'string', minLength: 1, maxLength: 1000 }; }
 function quantity() { return { type: 'integer', minimum: 1, maximum: 2_147_483_647 }; }
 function version() { return { type: 'integer', minimum: 1, maximum: 2_147_483_647 }; }
 function date() { return { type: 'string', format: 'date-time' }; }

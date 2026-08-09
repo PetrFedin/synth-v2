@@ -13,5 +13,10 @@
 - Transport retries for mutations must reuse the original idempotency key and must not retry domain HTTP errors.
 - Destructive actions require explicit confirmation or a reason form.
 - Preserve the browser dependency order: localization, shared DOM/API, capabilities and validation load before `app-core.js`; `app-start.js` loads last.
-- Run `npm run verify` before publishing.
+- Fashion KPI definitions, calculations, source mappings and publication rules must follow `docs/fashion-kpi/`. Do not duplicate KPI formulas in UI modules or silently redefine a governed KPI locally.
+- A KPI is not production-ready until its physical mappings are verified, calculation/population tests pass, reconciliation passes where applicable, and owner/data-steward UAT is complete.
+- Alias and blocked-umbrella KPI definitions must never emit independent observations.
+- Changes to KPI population, temporal basis, numerator/denominator, UOM, aggregation, normalizer, estimator/quantile method or other semantic meaning require a new formula version; never overwrite historical meaning in place.
+- KPI observations must preserve formula version, period/as-of, canonical UOM, DQ status, source/run lineage and restatement lineage; do not persist only a formatted dashboard value.
+- Run `npm run verify` before publishing. It includes the governed fashion KPI methodology validator.
 - Priority: stabilize existing commercial workflows before expanding fashion catalog/planning, PLM/BOM/samples, production, QC, logistics, landed cost, analytics and integrations.

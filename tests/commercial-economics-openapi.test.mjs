@@ -15,7 +15,10 @@ test('extended OpenAPI exposes commercial publication and order economics withou
     '/orders/{orderId}/actual-costs/{actualCostEntryId}/corrections',
     '/orders/{orderId}/landed-cost/actualize',
     '/orders/{orderId}/margin/actualize',
+    '/orders/{orderId}/cost-close',
+    '/orders/{orderId}/cost-close/adjustments',
     '/margin-actualizations/{marginActualizationId}',
+    '/cost-closes/{costCloseSnapshotId}',
   ]) {
     assert.ok(wholesaleV2ExtendedOpenApi.paths[path], `missing OpenAPI path ${path}`);
   }
@@ -27,8 +30,11 @@ test('extended OpenAPI exposes commercial publication and order economics withou
   assert.ok(wholesaleV2ExtendedOpenApi.components.schemas.ActualCostCorrectionResult);
   assert.ok(wholesaleV2ExtendedOpenApi.components.schemas.LandedCostSnapshot);
   assert.ok(wholesaleV2ExtendedOpenApi.components.schemas.MarginActualizationSnapshot);
+  assert.ok(wholesaleV2ExtendedOpenApi.components.schemas.CostCloseSnapshot);
+  assert.ok(wholesaleV2ExtendedOpenApi.components.schemas.PostCloseAdjustment);
+  assert.ok(wholesaleV2ExtendedOpenApi.components.schemas.PostCloseAdjustmentResult);
 
-  for (const schemaName of ['SupplyCommitmentSnapshot', 'OrderFxRateSnapshot', 'ActualCostLedgerEntry', 'LandedCostSnapshot', 'MarginActualizationSnapshot']) {
+  for (const schemaName of ['SupplyCommitmentSnapshot', 'OrderFxRateSnapshot', 'ActualCostLedgerEntry', 'LandedCostSnapshot', 'MarginActualizationSnapshot', 'CostCloseSnapshot', 'PostCloseAdjustment']) {
     const schema = wholesaleV2ExtendedOpenApi.components.schemas[schemaName];
     assert.ok(schema.required.includes('orderCommitSnapshotId'), `${schemaName} must require orderCommitSnapshotId`);
     assert.equal(schema.properties.orderCommitSnapshotId.type, 'string');
@@ -53,4 +59,17 @@ test('extended OpenAPI exposes commercial publication and order economics withou
   assert.ok(margin.required.includes('supplyCommitmentSnapshotIds'));
   assert.ok(margin.required.includes('supplyLineageComplete'));
   assert.ok(margin.required.includes('priceListVersionId'));
+
+  const costClose = wholesaleV2ExtendedOpenApi.components.schemas.CostCloseSnapshot;
+  for (const field of ['landedCostSnapshotId', 'marginActualizationSnapshotId', 'costEntryIds', 'totalLandedCost', 'contributionMarginAmount', 'closedAt']) {
+    assert.ok(costClose.required.includes(field), `CostCloseSnapshot must require ${field}`);
+  }
+  assert.deepEqual(costClose.properties.status.enum, ['closed']);
+  const adjustment = wholesaleV2ExtendedOpenApi.components.schemas.PostCloseAdjustment;
+  for (const field of ['costCloseSnapshotId', 'previousAdjustmentId', 'actualCostEntryId', 'priorLandedCostSnapshotId', 'landedCostSnapshotId', 'priorMarginActualizationSnapshotId', 'marginActualizationSnapshotId', 'costDeltaAmount', 'marginDeltaAmount', 'reason']) {
+    assert.ok(adjustment.required.includes(field), `PostCloseAdjustment must require ${field}`);
+  }
+  assert.deepEqual(adjustment.properties.status.enum, ['recorded']);
+  assert.equal(wholesaleV2ExtendedOpenApi.paths['/orders/{orderId}/cost-close'].post.operationId, 'closeOrderCost');
+  assert.equal(wholesaleV2ExtendedOpenApi.paths['/orders/{orderId}/cost-close/adjustments'].post.operationId, 'recordPostCloseAdjustment');
 });

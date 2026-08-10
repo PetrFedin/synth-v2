@@ -2,6 +2,7 @@ import { invariant } from '../core/errors.mjs';
 import { assertBodyContract, assertQueryContract, bodyContract } from './request-contract.mjs';
 
 const LOCATION_FIELDS = ['locationId', 'name', 'countryCode', 'city', 'addressLine1', 'addressLine2', 'postalCode'];
+const PHYSICAL_COST_TYPES = new Set(['freight', 'insurance', 'duty', 'brokerage', 'warehouse', 'quality', 'rework', 'packaging', 'other']);
 const PLAN_BODY = bodyContract(
   ['supplyCommitmentSnapshotId', 'shipFrom', 'shipTo', 'plannedShipAt', 'expectedDeliveryAt'],
   { shipFrom: LOCATION_FIELDS, shipTo: LOCATION_FIELDS },
@@ -16,6 +17,17 @@ const RECEIPT_BODY = bodyContract(
   {},
   { lines: ['lineId', 'receivedQuantity', 'damagedQuantity', 'rejectedQuantity'] },
 );
+const PHYSICAL_COST_BODY = bodyContract([
+  'costType',
+  'amount',
+  'currency',
+  'fxRateSnapshotId',
+  'sku',
+  'sourceRef',
+  'occurredAt',
+  'receiptSnapshotId',
+  'receiptDiscrepancySnapshotId',
+]);
 
 export function createFulfillmentRoutes({ fulfillment } = {}) {
   const service = fulfillment ?? unavailableFulfillment();
@@ -28,6 +40,8 @@ export function createFulfillmentRoutes({ fulfillment } = {}) {
     read('GET', /^\/v2\/shipment-notices\/([^/]+)$/, ({ actorId, params }) => service.getShipmentNoticeForActor(actorId, params[0])),
     mutate('POST', /^\/v2\/shipment-notices\/([^/]+)\/receipts$/, validateReceiptBody,
       ({ commandId, actorId, params, body }) => service.recordReceipt(commandId, actorId, params[0], body)),
+    mutate('POST', /^\/v2\/shipment-notices\/([^/]+)\/actual-costs$/, validatePhysicalCostBody,
+      ({ commandId, actorId, params, body }) => service.recordPhysicalActualCost(commandId, actorId, params[0], body)),
     read('GET', /^\/v2\/receipts\/([^/]+)$/, ({ actorId, params }) => service.getReceiptForActor(actorId, params[0])),
     read('GET', /^\/v2\/receipt-discrepancies\/([^/]+)$/, ({ actorId, params }) => service.getReceiptDiscrepancyForActor(actorId, params[0])),
   ]);
@@ -79,6 +93,21 @@ function validateReceiptBody(body) {
     nonNegativeInteger(line.rejectedQuantity ?? 0, `lines[${index}].rejectedQuantity`);
     invariant((line.damagedQuantity ?? 0) + (line.rejectedQuantity ?? 0) <= line.receivedQuantity, 'HTTP_BODY_FIELD_INVALID', 'damagedQuantity + rejectedQuantity cannot exceed receivedQuantity', { field: `lines[${index}]` });
   }
+}
+
+function validatePhysicalCostBody(body) {
+  assertBodyContract(body, PHYSICAL_COST_BODY);
+  invariant(PHYSICAL_COST_TYPES.has(body.costType), 'HTTP_BODY_FIELD_INVALID', 'costType must be a physical fulfillment cost type', { field: 'costType', costType: body.costType });
+  invariant(typeof body.amount === 'number' && Number.isFinite(body.amount) && body.amount !== 0, 'HTTP_BODY_FIELD_INVALID', 'amount must be a finite non-zero number', { field: 'amount' });
+  requiredString(body.currency, 'currency', 3, 3);
+  invariant(/^[A-Z]{3}$/.test(body.currency), 'HTTP_BODY_FIELD_INVALID', 'currency must be an ISO-4217 code', { field: 'currency' });
+  optionalString(body.fxRateSnapshotId, 'fxRateSnapshotId', 200);
+  optionalString(body.sku, 'sku', 200);
+  requiredString(body.sourceRef, 'sourceRef', 1, 240);
+  timestamp(body.occurredAt, 'occurredAt');
+  optionalString(body.receiptSnapshotId, 'receiptSnapshotId', 200);
+  optionalString(body.receiptDiscrepancySnapshotId, 'receiptDiscrepancySnapshotId', 200);
+  invariant(!['quality', 'rework'].includes(body.costType) || body.receiptSnapshotId || body.receiptDiscrepancySnapshotId, 'HTTP_BODY_FIELD_INVALID', 'quality and rework costs require receipt evidence', { field: 'receiptSnapshotId' });
 }
 
 function validateLocation(value, field) {
@@ -135,6 +164,7 @@ function unavailableFulfillment() {
     createFulfillmentPlan: fail,
     createShipmentNotice: fail,
     recordReceipt: fail,
+    recordPhysicalActualCost: fail,
     getFulfillmentPlanForActor: fail,
     getShipmentNoticeForActor: fail,
     getReceiptForActor: fail,

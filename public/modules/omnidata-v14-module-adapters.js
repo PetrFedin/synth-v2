@@ -1,7 +1,7 @@
 (function installOmnidataV14ModuleAdapters(global){
   'use strict';
 
-  const BUILD='visual-20260805-14-module-adapters-6';
+  const BUILD='visual-20260805-14-module-adapters-5';
   const SHELL_LAYOUT_MIGRATION_KEY='syntha-v2-shell-layout-v2';
   const LEGACY_SIDEBAR_KEY='syntha-v2-sidebar-collapsed';
   const enqueue=typeof global.queueMicrotask==='function'?global.queueMicrotask.bind(global):typeof queueMicrotask==='function'?queueMicrotask:(callback)=>Promise.resolve().then(callback);
@@ -11,7 +11,7 @@
     'tech-packs':{section:['PLM / Техническая документация','PLM / Technical Documentation'],title:['Технические пакеты','Tech Packs'],description:['Версионный производственный контракт, выпуск, подтверждение фабрики и допуск к размещению производства.','Versioned production contracts, issue, supplier acknowledgement and production-allocation readiness.'],source:'.tech-pack-header',actions:'.tech-pack-header-actions'},
     'production-orders':{section:['PLM / Управление производством','PLM / Production Management'],title:['Производственные заказы','Production Orders'],description:['Неизменяемые производственные заказы из распределённых запросов с коммерческими условиями, техпаком и подтверждением фабрики.','Immutable Production Orders from allocated requests with commercial terms, Tech Pack and supplier confirmation.'],source:'.production-orders-header',actions:'.production-orders-actions'},
     'production-executions':{section:['PLM / Исполнение производства','PLM / Production Execution'],title:['Производственный календарь','Production Execution'],description:['Последовательное фактическое прохождение партии от подтверждённого PO до допуска к контролю качества с блокировками и отклонениями от плана.','Sequential batch execution from supplier-confirmed PO to the quality-control gate, including blocks and schedule variance.'],source:'.production-execution-header',actions:'.production-execution-header-actions'},
-    linesheets:{section:['Wholesale / Коммерческая публикация','Wholesale / Commercial Publication'],title:['Листы коллекций','Linesheets'],description:['Реестр неизменяемых опубликованных коммерческих snapshots коллекции без браузерных расчётов и демонстрационных значений.','Registry of immutable published commercial collection snapshots without browser-derived or demonstration values.'],source:'.ls9-header',actions:'.ls9-header-actions'}
+    linesheets:{section:['Wholesale / Коммерческая публикация','Wholesale / Commercial Publication'],title:['Листы коллекций','Linesheets'],description:['Реестр неизменяемых опубликованных коммерческих снимков коллекции без браузерных расчётов и демонстрационных значений.','Registry of immutable published commercial collection snapshots without browser-derived or demonstration values.'],source:'.ls9-header',actions:'.ls9-header-actions'}
   });
   const ROLE_MAP=Object.freeze([
     ['.sample-kpis,.tech-pack-kpis,.production-orders-kpis,.production-execution-kpis,.ls9-metrics','metrics'],

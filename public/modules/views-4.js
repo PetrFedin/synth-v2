@@ -33,7 +33,9 @@ function orderEntity(item) {
     }
   }
   const canWrite = caps.hasForTrade(state.workspace, item.brandId, item.shopId, caps.CAPABILITIES.ORDER_WRITE);
+  const canReadMargin = caps.hasForOrganisation(state.workspace, item.brandId, caps.CAPABILITIES.MARGIN_READ);
   if (item.status === 'ready' && canWrite) actions.push(actionButton('Прикрепить к циклу', () => mutate(`/v2/orders/${encodeURIComponent(item.id)}/attach`, {}), 'primary'));
+  if (item.orderCommitSnapshotId && canReadMargin) actions.push(formActionButton(economicsText('Экономика', 'Economics'), () => orderEconomicsDialog(item)));
   if (item.status === 'attached' && canWrite) actions.push(actionButton('Отменить заказ', () => orderCancellationForm(item)));
   const details = [
     `${money(item.totalAmount)} ${item.currency}`,
@@ -42,6 +44,55 @@ function orderEntity(item) {
   ];
   if (item.status === 'cancelled') details.push(`Причина: ${item.cancellationReason}`, `Отменён: ${formatDate(item.cancelledAt)}`);
   return entity(item.id, item.status, details, actions);
+}
+async function orderEconomicsDialog(order) {
+  const position = await api(`/v2/orders/${encodeURIComponent(order.id)}/economics-position`);
+  if (!position || position.orderId !== order.id || position.orderCommitSnapshotId !== order.orderCommitSnapshotId) throw new Error(I18N.t('common.requestError'));
+
+  const rows = [
+    economicsRow('Статус экономики', 'Economics status', economicsStatus(position.status)),
+    economicsRow('Фиксация заказа', 'Order commit', position.orderCommitSnapshotId),
+    economicsRow('Фактическая себестоимость', 'Effective landed cost', economicsMoney(position.effectiveTotalLandedCost, position.currency)),
+    economicsRow('Маржа', 'Contribution margin', economicsMoney(position.effectiveContributionMarginAmount, position.currency)),
+    economicsRow('Маржа, %', 'Contribution margin, %', economicsPercent(position.effectiveContributionMarginPercent)),
+  ];
+  if (position.blockingReasons?.length) rows.push(economicsRow('Блокирует закрытие', 'Close blockers', position.blockingReasons.map(economicsBlockingReason).join(', ')));
+  if (position.costCloseSnapshotId) rows.push(economicsRow('Закрытие себестоимости', 'Cost close', position.costCloseSnapshotId));
+  if (position.latestPostCloseAdjustmentId) rows.push(economicsRow('Последняя корректировка', 'Latest adjustment', position.latestPostCloseAdjustmentId));
+  if (position.cumulativePostCloseCostDelta !== null && position.cumulativePostCloseCostDelta !== undefined) rows.push(economicsRow('Изменение себестоимости после закрытия', 'Post-close cost delta', economicsMoney(position.cumulativePostCloseCostDelta, position.currency)));
+  if (position.cumulativePostCloseMarginDelta !== null && position.cumulativePostCloseMarginDelta !== undefined) rows.push(economicsRow('Изменение маржи после закрытия', 'Post-close margin delta', economicsMoney(position.cumulativePostCloseMarginDelta, position.currency)));
+
+  openDetails(economicsText('Экономика заказа', 'Order economics'), rows);
+}
+function economicsRow(ruLabel, enLabel, value) { return Object.freeze({ label: economicsText(ruLabel, enLabel), value }); }
+function economicsText(ru, en) { return I18N.getLocale() === 'en' ? en : ru; }
+function economicsMoney(value, currency) { return value === null || value === undefined ? '—' : `${I18N.formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} ${currency}`; }
+function economicsPercent(value) { return value === null || value === undefined ? '—' : `${I18N.formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`; }
+function economicsStatus(status) {
+  const labels = {
+    OPEN: ['Открыта', 'Open'],
+    WAITING_FOR_FREIGHT: ['Ожидает фрахт', 'Waiting for freight'],
+    WAITING_FOR_DUTY: ['Ожидает пошлину', 'Waiting for duty'],
+    WAITING_FOR_CREDITS: ['Ожидает кредитные корректировки', 'Waiting for credits'],
+    READY_TO_CLOSE: ['Готова к закрытию', 'Ready to close'],
+    STALE: ['Требует пересчёта', 'Needs recalculation'],
+    CLOSED: ['Закрыта', 'Closed'],
+    ADJUSTED: ['Закрыта с корректировками', 'Closed with adjustments'],
+  };
+  const label = labels[status];
+  return label ? economicsText(label[0], label[1]) : economicsText('Неизвестно', 'Unknown');
+}
+function economicsBlockingReason(reason) {
+  const labels = {
+    readiness_not_evaluated: ['готовность не оценена', 'readiness not evaluated'],
+    ledger_changed: ['реестр затрат изменён', 'cost ledger changed'],
+    factory: ['фабричные затраты', 'factory costs'],
+    freight: ['фрахт', 'freight'],
+    duty: ['пошлина', 'duty'],
+    credits: ['кредитные корректировки', 'credits'],
+  };
+  const label = labels[reason];
+  return label ? economicsText(label[0], label[1]) : economicsText('неизвестная причина', 'unknown reason');
 }
 function dealEntity(item) { return entity(item.id, item.status, [`Заказ: ${item.orderId}`, pairName(item.brandId,item.shopId), money(item.totalAmount)], []); }
 function calendarEntity(item) { return entity(item.title || item.type, item.visibility || item.type, [formatDate(item.startsAt), `Организация: ${orgName(item.ownerOrganisationId)}`], []); }

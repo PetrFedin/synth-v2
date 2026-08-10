@@ -2,6 +2,7 @@
   'use strict';
 
   const CAPABILITIES = Object.freeze({
+    ORGANISATION_MANAGE: 'organisation.manage',
     CAMPAIGN_MANAGE: 'campaign.manage',
     COLLECTION_MANAGE: 'collection.manage',
     CATALOG_MANAGE: 'catalog.manage',
@@ -37,6 +38,14 @@
     COMMERCIAL_CYCLE_ADVANCE: 'commercial-cycle.advance',
     ORDER_WRITE: 'order.write',
     ORDER_CONFIRM: 'order.confirm',
+    SUPPLY_MANAGE: 'supply.manage',
+    FULFILLMENT_MANAGE: 'fulfillment.manage',
+    RECEIPT_MANAGE: 'receipt.manage',
+    LOGISTICS_READ: 'logistics.read',
+    COST_MANAGE: 'cost.manage',
+    MARGIN_READ: 'margin.read',
+    DEAL_READ: 'deal.read',
+    CALENDAR_READ: 'calendar.read',
   });
 
   const ALL = Object.freeze(Object.values(CAPABILITIES));
@@ -65,6 +74,12 @@
       CAPABILITIES.COMMERCIAL_CYCLE_ADVANCE,
       CAPABILITIES.ORDER_WRITE,
       CAPABILITIES.ORDER_CONFIRM,
+      CAPABILITIES.SUPPLY_MANAGE,
+      CAPABILITIES.FULFILLMENT_MANAGE,
+      CAPABILITIES.LOGISTICS_READ,
+      CAPABILITIES.MARGIN_READ,
+      CAPABILITIES.DEAL_READ,
+      CAPABILITIES.CALENDAR_READ,
     ]),
     buyer: Object.freeze([
       CAPABILITIES.PARTNER_RELATIONSHIP_MANAGE,
@@ -74,6 +89,10 @@
       CAPABILITIES.COMMERCIAL_CYCLE_ADVANCE,
       CAPABILITIES.ORDER_WRITE,
       CAPABILITIES.ORDER_CONFIRM,
+      CAPABILITIES.RECEIPT_MANAGE,
+      CAPABILITIES.LOGISTICS_READ,
+      CAPABILITIES.DEAL_READ,
+      CAPABILITIES.CALENDAR_READ,
     ]),
     finance: Object.freeze([
       CAPABILITIES.BOM_READ,
@@ -84,8 +103,16 @@
       CAPABILITIES.PRODUCTION_EXECUTION_READ,
       CAPABILITIES.QUALITY_READ,
       CAPABILITIES.ORDER_CONFIRM,
+      CAPABILITIES.LOGISTICS_READ,
+      CAPABILITIES.COST_MANAGE,
+      CAPABILITIES.MARGIN_READ,
+      CAPABILITIES.DEAL_READ,
+      CAPABILITIES.CALENDAR_READ,
     ]),
-    viewer: Object.freeze([]),
+    viewer: Object.freeze([
+      CAPABILITIES.DEAL_READ,
+      CAPABILITIES.CALENDAR_READ,
+    ]),
   });
 
   function activeMemberships(workspace = {}) {

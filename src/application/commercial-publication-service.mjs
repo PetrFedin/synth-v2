@@ -1,6 +1,7 @@
 import { domainEvent } from '../core/events.mjs';
 import { invariant } from '../core/errors.mjs';
 import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
+import { decodeCommercialPublicationCursor, encodeCommercialPublicationCursor } from '../core/commercial-publication-cursor.mjs';
 import { CAPABILITIES, assertCapability, roleHasCapability } from '../modules/access-control/public.mjs';
 import { assertAcceptedShowroomAccess } from '../modules/showroom-invitations/public.mjs';
 import {
@@ -41,6 +42,15 @@ export function createCommercialPublicationService({
       const collection = requireEntity(await tx.getCollection(collectionId), 'COLLECTION_NOT_FOUND', { collectionId });
       const membership = await tx.getMembership(collection.brandId, actorId);
       assertCapability(membership, CAPABILITIES.CATALOG_MANAGE);
+      return collection;
+    });
+  }
+
+  async function publicationReadContext(actorId, collectionId) {
+    return wholesaleStore.transaction(async (tx) => {
+      const collection = requireEntity(await tx.getCollection(collectionId), 'COLLECTION_NOT_FOUND', { collectionId });
+      const membership = await tx.getMembership(collection.brandId, actorId);
+      assertCapability(membership, CAPABILITIES.DEAL_READ);
       return collection;
     });
   }
@@ -126,6 +136,20 @@ export function createCommercialPublicationService({
         }, commandId, actorId);
         return Object.freeze({ priceListVersion, buyerCatalogVersion });
       });
+    },
+
+    async listCommercialPublicationsForActor(actorId, collectionId, { limit = 50, cursor = null } = {}) {
+      invariant(Number.isInteger(limit) && limit > 0 && limit <= 200, 'COMMERCIAL_PUBLICATION_LIMIT_INVALID', 'Commercial publication page limit must be between 1 and 200', { limit });
+      invariant(typeof commercialStore.listCommercialPublicationsByCollection === 'function', 'COMMERCIAL_PUBLICATION_QUERY_REQUIRED', 'Commercial publication query store is required');
+      await publicationReadContext(actorId, collectionId);
+      const decodedCursor = decodeCommercialPublicationCursor(cursor);
+      const rows = await commercialStore.listCommercialPublicationsByCollection(collectionId, { limit, cursor: decodedCursor });
+      const items = rows.slice(0, limit);
+      const lastItem = items.at(-1);
+      const nextCursor = rows.length > limit && lastItem
+        ? encodeCommercialPublicationCursor({ publishedAt: lastItem.publishedAt, id: lastItem.id })
+        : null;
+      return Object.freeze({ items: Object.freeze(items), nextCursor });
     },
 
     async getCommercialPublicationForActor(actorId, id) {

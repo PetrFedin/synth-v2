@@ -20,69 +20,41 @@ import { createPostgresWholesaleRuntime as createBaseRuntime } from './postgres-
 import { createPostgresCostAllocationRuntime } from './postgres-cost-allocation-runtime.mjs';
 import { createPostgresFulfillmentRuntime } from './postgres-fulfillment-runtime.mjs';
 import { createPostgresInventoryRuntime } from './postgres-inventory-runtime.mjs';
+import { createPostgresReceiptClaimsRuntime } from './postgres-receipt-claims-runtime.mjs';
 
 export function createPostgresWholesaleRuntime(options = {}) {
   const base = createBaseRuntime(options);
 
   const orderMarginBridgeReader = createPostgresOrderMarginBridgeReader({ pool: options.pool });
-  const orderEconomics = Object.freeze({
-    ...base.orderEconomics,
-    ...createOrderMarginBridgeService({ reader: orderMarginBridgeReader }),
-  });
-  const costAllocationRuntime = createPostgresCostAllocationRuntime({
-    pool: options.pool,
-    ...(options.clock ? { clock: options.clock } : {}),
-    ...(options.nextId ? { nextId: options.nextId } : {}),
-  });
+  const orderEconomics = Object.freeze({ ...base.orderEconomics, ...createOrderMarginBridgeService({ reader: orderMarginBridgeReader }) });
+  const costAllocationRuntime = createPostgresCostAllocationRuntime({ pool: options.pool, ...(options.clock ? { clock: options.clock } : {}), ...(options.nextId ? { nextId: options.nextId } : {}) });
   const costAllocation = costAllocationRuntime.service;
-  const fulfillmentRuntime = createPostgresFulfillmentRuntime({
-    pool: options.pool,
-    ...(options.clock ? { clock: options.clock } : {}),
-    ...(options.nextId ? { nextId: options.nextId } : {}),
-  });
+  const fulfillmentRuntime = createPostgresFulfillmentRuntime({ pool: options.pool, ...(options.clock ? { clock: options.clock } : {}), ...(options.nextId ? { nextId: options.nextId } : {}) });
   const fulfillment = fulfillmentRuntime.service;
-  const inventoryRuntime = createPostgresInventoryRuntime({
-    pool: options.pool,
-    ...(options.clock ? { clock: options.clock } : {}),
-    ...(options.nextId ? { nextId: options.nextId } : {}),
-  });
+  const inventoryRuntime = createPostgresInventoryRuntime({ pool: options.pool, ...(options.clock ? { clock: options.clock } : {}), ...(options.nextId ? { nextId: options.nextId } : {}) });
   const inventory = inventoryRuntime.service;
+  const receiptClaimsRuntime = createPostgresReceiptClaimsRuntime({ pool: options.pool, ...(options.clock ? { clock: options.clock } : {}), ...(options.nextId ? { nextId: options.nextId } : {}) });
+  const receiptClaims = receiptClaimsRuntime.service;
 
   const allocationStore = createPostgresSourcingTechPackAllocationStore({ pool: options.pool });
-  const allocation = createSourcingTechPackAllocationService({
-    store: allocationStore,
-    ...(options.clock ? { clock: options.clock } : {}),
-    ...(options.nextId ? { nextId: options.nextId } : {}),
-  });
+  const allocation = createSourcingTechPackAllocationService({ store: allocationStore, ...(options.clock ? { clock: options.clock } : {}), ...(options.nextId ? { nextId: options.nextId } : {}) });
   const sourcing = Object.freeze({ ...base.sourcing, ...allocation });
 
   const productionOrderStore = createPostgresProductionOrderStore({ pool: options.pool });
   const productionOrderReader = createPostgresProductionOrderReader({ pool: options.pool });
-  const productionOrderCommands = createProductionOrderService({
-    store: productionOrderStore,
-    ...(options.clock ? { clock: options.clock } : {}),
-    ...(options.nextId ? { nextId: options.nextId } : {}),
-  });
+  const productionOrderCommands = createProductionOrderService({ store: productionOrderStore, ...(options.clock ? { clock: options.clock } : {}), ...(options.nextId ? { nextId: options.nextId } : {}) });
   const productionOrderQueries = createProductionOrderQueryService({ reader: productionOrderReader });
   const productionOrders = Object.freeze({ ...productionOrderQueries, ...productionOrderCommands });
 
   const productionExecutionStore = createPostgresProductionExecutionStore({ pool: options.pool });
   const productionExecutionReader = createPostgresProductionExecutionReader({ pool: options.pool });
-  const productionExecutionCommands = createProductionExecutionService({
-    store: productionExecutionStore,
-    ...(options.clock ? { clock: options.clock } : {}),
-    ...(options.nextId ? { nextId: options.nextId } : {}),
-  });
+  const productionExecutionCommands = createProductionExecutionService({ store: productionExecutionStore, ...(options.clock ? { clock: options.clock } : {}), ...(options.nextId ? { nextId: options.nextId } : {}) });
   const productionExecutionQueries = createProductionExecutionQueryService({ reader: productionExecutionReader });
   const productionExecutions = Object.freeze({ ...productionExecutionQueries, ...productionExecutionCommands });
 
   const finalQualityStore = createPostgresFinalQualityStore({ pool: options.pool });
   const finalQualityReader = createPostgresFinalQualityReader({ pool: options.pool });
-  const finalQualityCommands = createFinalQualityService({
-    store: finalQualityStore,
-    ...(options.clock ? { clock: options.clock } : {}),
-    ...(options.nextId ? { nextId: options.nextId } : {}),
-  });
+  const finalQualityCommands = createFinalQualityService({ store: finalQualityStore, ...(options.clock ? { clock: options.clock } : {}), ...(options.nextId ? { nextId: options.nextId } : {}) });
   const finalQualityQueries = createFinalQualityQueryService({ reader: finalQualityReader });
   const finalQuality = Object.freeze({ ...finalQualityQueries, ...finalQualityCommands });
 
@@ -97,6 +69,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
     costAllocation,
     fulfillment,
     inventory,
+    receiptClaims,
     materials: base.materials,
     boms: base.boms,
     measurements: base.measurements,
@@ -124,6 +97,8 @@ export function createPostgresWholesaleRuntime(options = {}) {
     fulfillment,
     inventoryStore: inventoryRuntime.store,
     inventory,
+    receiptClaimsStore: receiptClaimsRuntime.store,
+    receiptClaims,
     sourcingTechPackAllocationStore: allocationStore,
     sourcing,
     productionOrderStore,

@@ -48,20 +48,23 @@ DECLARE
   receipt receipt_snapshots%ROWTYPE;
   discrepancy receipt_discrepancy_snapshots%ROWTYPE;
 BEGIN
-  -- Existing correction APIs do not need to know about the new columns: if the
-  -- original entry is physical, reversals and replacement rows inherit the exact
-  -- immutable execution lineage inside the same transaction.
+  -- Physical cost corrections must enter with explicit physical lineage through
+  -- the shipment-scoped command path. The generic order-level correction path
+  -- is rejected at the database boundary so persisted, API and event truth
+  -- cannot diverge.
   IF NEW.physical_lineage_version = 1 AND NEW.entry_kind = 'reversal' THEN
     SELECT * INTO original
     FROM actual_cost_ledger_entries
     WHERE id = NEW.reversal_of_entry_id
     FOR SHARE;
     IF FOUND AND original.physical_lineage_version = 2 THEN
-      NEW.physical_lineage_version := 2;
-      NEW.fulfillment_plan_snapshot_id := original.fulfillment_plan_snapshot_id;
-      NEW.shipment_notice_snapshot_id := original.shipment_notice_snapshot_id;
-      NEW.receipt_snapshot_id := original.receipt_snapshot_id;
-      NEW.receipt_discrepancy_snapshot_id := original.receipt_discrepancy_snapshot_id;
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'PHYSICAL_ACTUAL_COST_REQUIRES_SHIPMENT_CORRECTION',
+        DETAIL = jsonb_build_object(
+          'originalEntryId', original.id,
+          'shipmentNoticeSnapshotId', original.shipment_notice_snapshot_id
+        )::text;
     END IF;
   ELSIF NEW.physical_lineage_version = 1 AND NEW.entry_kind = 'actual' AND NEW.correction_id IS NOT NULL THEN
     SELECT original_entry.* INTO original
@@ -71,11 +74,13 @@ BEGIN
       AND reversal.entry_kind = 'reversal'
     LIMIT 1;
     IF FOUND AND original.physical_lineage_version = 2 THEN
-      NEW.physical_lineage_version := 2;
-      NEW.fulfillment_plan_snapshot_id := original.fulfillment_plan_snapshot_id;
-      NEW.shipment_notice_snapshot_id := original.shipment_notice_snapshot_id;
-      NEW.receipt_snapshot_id := original.receipt_snapshot_id;
-      NEW.receipt_discrepancy_snapshot_id := original.receipt_discrepancy_snapshot_id;
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'PHYSICAL_ACTUAL_COST_REQUIRES_SHIPMENT_CORRECTION',
+        DETAIL = jsonb_build_object(
+          'originalEntryId', original.id,
+          'shipmentNoticeSnapshotId', original.shipment_notice_snapshot_id
+        )::text;
     END IF;
   END IF;
 

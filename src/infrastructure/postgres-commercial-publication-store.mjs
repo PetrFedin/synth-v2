@@ -6,6 +6,15 @@ export function createPostgresCommercialPublicationStore({ pool } = {}) {
   invariant(pool && typeof pool.connect === 'function' && typeof pool.query === 'function', 'POSTGRES_POOL_REQUIRED', 'PostgreSQL pool is required');
   return Object.freeze({
     transaction: (work) => withPostgresTransaction(pool, work, { createView: view }),
+    async listCommercialPublicationsByCollection(collectionId) {
+      const result = await pool.query(
+        `SELECT payload FROM commercial_publications
+          WHERE collection_id = $1
+          ORDER BY published_at DESC, id DESC`,
+        [collectionId],
+      );
+      return result.rows.map(row => row.payload);
+    },
     async getCommercialPublication(id) {
       const result = await pool.query('SELECT payload FROM commercial_publications WHERE id = $1', [id]);
       return result.rows[0]?.payload;

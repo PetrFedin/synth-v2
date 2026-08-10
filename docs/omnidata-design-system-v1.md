@@ -26,6 +26,16 @@ No new workspace stylesheet may be added to the shell. Loaded UI runtimes must n
 
 `validate:ods-boundaries` now enforces a 21-entry legacy visual-debt baseline, reduced from the previous 22-entry baseline after retiring `samples.css`. With Samples, Final Quality, Production Orders, Production Executions and Tech Packs ODS-native, only **18 of the current 21** legacy-debt entries remain loaded. The debt count must only move down.
 
+The HTML shell still carries frozen compatibility layers such as `omnidata-v12.css?v=visual-20260804-12`; their presence is therefore detectable by a source grep. They are not the final visual contract: ODS v1 loads after the legacy layers and remains authoritative. Compatibility layers are removed only when their semantic coverage has been migrated and guarded, so that visual cleanup does not silently break operational workspaces.
+
+## Shared shell and list-item geometry
+
+The application shell now follows the same restrained Omnidata direction as the workspace primitives: charcoal navigation, light content surfaces, compact typography and orange active-state emphasis. The expanded desktop sidebar is **232 px**, narrows to **208 px** on compact desktop/tablet widths, and only becomes the **68 px** icon rail when the user explicitly collapses it or the viewport is at most 720 px. This fixes the previous 920 px breakpoint where the shell became icon-width while labels remained visible and were therefore clipped.
+
+A one-time shell migration removes the obsolete persisted `syntha-v2-sidebar-collapsed` value and starts the redesigned shell expanded. After that migration, explicit user collapse/expand choices continue to work normally. The runtime exposes `data-ods-shell-layout="readable-v2"` for diagnostics.
+
+Generic business list items now isolate the title block from the status chip with an internal `minmax(0,1fr) max-content` grid. Metadata wraps independently and actions occupy bounded columns/rows. Collections use this shared `entity()` path, so long collection names can no longer physically occupy the status chip's column. The same geometry hardens Campaigns, SKU and other entity-based workspaces instead of introducing a Collections-only patch.
+
 ## Shared progress primitive
 
 Readiness/completion is now a reusable ODS primitive rather than a module-level CSS exception. `public/omnidata-v14-module-adapters.css` provides a token-driven native `<progress>` treatment using `--ods-color-border` and `--ods-color-accent`, plus semantic `progress / progress-track / progress-fill` support. A generic six-step compatibility bridge handles legacy step-based progress without naming a Production module.
@@ -58,13 +68,17 @@ The migration pattern for remaining modules is: establish reusable semantic cove
 
 Visible UI is strictly Russian or English according to selected locale. New user-facing strings continue through the shared i18n runtime; ODS additionally normalises legacy aliases and audits mixed-language UI. Established domain abbreviations such as PLM, BOM, SKU, POM, MOQ, ATS, RFQ, PO, ERP, WMS, PIM, OMS, QC, QMS and API may remain unchanged. Business data must not be translated by the visual normaliser.
 
+The grouped navigation remains locale-driven through `localText(item.ru, item.en)`. The shell migration changes geometry and styling only; it does not introduce mixed-language labels or a parallel translation layer.
+
 ## Runtime diagnostics
 
-Useful audit targets include `document.documentElement.dataset.odsName`, `odsVersion`, `odsLanguageAudit` and `window.SynthaOmnidataDesignSystemV1`. `SynthaOmnidataV14RoleSystem` remains a compatibility alias.
+Useful audit targets include `document.documentElement.dataset.odsName`, `odsVersion`, `odsLanguageAudit`, `document.querySelector('.shell')?.dataset.odsShellLayout` and `window.SynthaOmnidataDesignSystemV1`. `SynthaOmnidataV14RoleSystem` remains a compatibility alias.
 
 ## Validation
 
-Run `npm run verify`. It includes `validate:design-system` and `validate:ods-boundaries`, checking metadata/load order, tokens, seven roles, semantic parts, bilingual hooks, CSP-safe markup, the decreasing stylesheet boundary, absence of dynamic UI styling, shared progress/dialog primitives and ODS-native delivery of Samples, Tech Packs, Production Executions, Production Orders and Final Quality. `tests/samples-ods-native.test.mjs` separately guards Samples stylesheet retirement, semantic adapter coverage, responsive master-detail geometry and RU/EN content hooks.
+Run `npm run verify`. It includes `validate:design-system` and `validate:ods-boundaries`, checking metadata/load order, tokens, seven roles, semantic parts, bilingual hooks, CSP-safe markup, the decreasing stylesheet boundary, absence of dynamic UI styling, readable shell breakpoints, no-overlap list-item geometry, shared progress/dialog primitives and ODS-native delivery of Samples, Tech Packs, Production Executions, Production Orders and Final Quality.
+
+`tests/samples-ods-native.test.mjs` guards Samples stylesheet retirement, semantic adapter coverage, responsive master-detail geometry and RU/EN content hooks. `tests/ods-shell-collections-layout.test.mjs` guards the one-time sidebar preference migration, expanded/collapsed breakpoints, Omnidata orange navigation state, shared entity/status isolation and the RU/EN Collections navigation path.
 
 Node.js 22 or newer is required.
 

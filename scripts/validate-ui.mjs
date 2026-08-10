@@ -52,9 +52,9 @@ if (!/<meta\s+name="syntha-build"\s+content="visual-20260805-14">/.test(html)) f
 if (!/<meta\s+name="syntha-design-system"\s+content="omnidata-design-system-v1">/.test(html)) fail('Omnidata Design System v1 metadata is missing.');
 if (!/<meta\s+name="syntha-design-system-version"\s+content="1\.0\.0">/.test(html)) fail('Omnidata Design System version metadata is missing.');
 if (!stylesheets.includes('/sourcing.css')) fail('Industrial sourcing stylesheet is missing.');
-for (const retiredStyle of ['/tech-packs.css','/production-executions.css','/production-orders.css','/final-quality.css']) if (stylesheets.includes(retiredStyle)) fail(`${retiredStyle} must remain ODS-native and must not load a local stylesheet.`);
+for (const retiredStyle of ['/samples.css','/tech-packs.css','/production-executions.css','/production-orders.css','/final-quality.css']) if (stylesheets.includes(retiredStyle)) fail(`${retiredStyle} must remain ODS-native and must not load a local stylesheet.`);
 
-console.log(`Standalone UI contract OK (${sources.length} scripts, ${stylesheets.length} stylesheets checked; Tech Packs, Production Executions, Production Orders and Final Quality are ODS-native).`);
+console.log(`Standalone UI contract OK (${sources.length} scripts, ${stylesheets.length} stylesheets checked; Samples, Tech Packs, Production Executions, Production Orders and Final Quality are ODS-native).`);
 
 function assertDocumentContract(document) {
   if (!/^<!doctype html>/i.test(document.trimStart())) fail('Missing HTML doctype.');

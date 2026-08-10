@@ -12,19 +12,25 @@ const capabilities = await readFile(path.join(root, 'public', 'modules', 'ui-cap
 const v8 = await readFile(path.join(root, 'public', 'modules', 'omnidata-v8.js'), 'utf8');
 
 const assets = [
-  ['/samples.css', 'public/samples.css'],
   ['/ui/sample-core.js', 'public/modules/sample-core.js'],
   ['/ui/samples.js', 'public/modules/samples.js'],
   ['/ui/sample-catalog-sync.js', 'public/modules/sample-catalog-sync.js'],
 ];
 
-test('every referenced Samples asset exists and is delivered with no-store', async () => {
+test('every referenced Samples runtime exists and is delivered with no-store', async () => {
   for (const [url, filename] of assets) {
     await access(path.join(root, filename));
     assert.ok(html.includes(`${url}?v=industrial-20260804-2`), url);
     const escaped = url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     assert.match(handler, new RegExp(`'${escaped}': \\[.*VISUAL_CACHE\\]`), url);
   }
+});
+
+test('Samples local stylesheet is retired from shell and static delivery', () => {
+  assert.doesNotMatch(html, /href="\/samples\.css(?:\?|\")/);
+  assert.doesNotMatch(handler, /['"]\/samples\.css['"]\s*:/);
+  assert.match(html, /omnidata-v14-module-adapters\.css\?v=visual-20260805-14-module-adapters-5/);
+  assert.match(html, /omnidata-v14-role-system\.css\?v=visual-20260806-14-role-system-1/);
 });
 
 test('Samples V8 dependency order is core, workspace, catalog guard, language audit, V8 and startup', () => {

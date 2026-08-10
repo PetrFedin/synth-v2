@@ -22,14 +22,12 @@ test('physical actual-cost migration pins exact fulfillment execution lineage', 
   assert.match(migration, /FOREIGN KEY \(receipt_discrepancy_snapshot_id, shipment_notice_snapshot_id\)/);
 });
 
-test('physical actual-cost migration preserves lineage through append-only corrections', () => {
-  assert.match(migration, /NEW\.entry_kind = 'reversal'/);
+test('physical corrections require explicit shipment-scoped lineage at database boundary', () => {
+  assert.match(migration, /NEW\.physical_lineage_version = 1 AND NEW\.entry_kind = 'reversal'/);
   assert.match(migration, /original\.physical_lineage_version = 2/);
-  assert.match(migration, /NEW\.fulfillment_plan_snapshot_id := original\.fulfillment_plan_snapshot_id/);
-  assert.match(migration, /NEW\.shipment_notice_snapshot_id := original\.shipment_notice_snapshot_id/);
-  assert.match(migration, /NEW\.receipt_snapshot_id := original\.receipt_snapshot_id/);
-  assert.match(migration, /NEW\.receipt_discrepancy_snapshot_id := original\.receipt_discrepancy_snapshot_id/);
-  assert.match(migration, /NEW\.correction_id IS NOT NULL/);
+  assert.match(migration, /MESSAGE = 'PHYSICAL_ACTUAL_COST_REQUIRES_SHIPMENT_CORRECTION'/);
+  assert.match(migration, /NEW\.entry_kind = 'actual' AND NEW\.correction_id IS NOT NULL/);
+  assert.doesNotMatch(migration, /NEW\.shipment_notice_snapshot_id := original\.shipment_notice_snapshot_id/);
 });
 
 test('physical quality and rework costs require receipt evidence and shipped SKU scope', () => {

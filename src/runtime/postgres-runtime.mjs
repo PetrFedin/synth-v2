@@ -21,20 +21,24 @@ import { createPostgresCostAllocationRuntime } from './postgres-cost-allocation-
 import { createPostgresFulfillmentRuntime } from './postgres-fulfillment-runtime.mjs';
 import { createPostgresInventoryRuntime } from './postgres-inventory-runtime.mjs';
 import { createPostgresReceiptClaimsRuntime } from './postgres-receipt-claims-runtime.mjs';
+import { createPostgresSupplierRecoveryRuntime } from './postgres-supplier-recovery-runtime.mjs';
 
 export function createPostgresWholesaleRuntime(options = {}) {
   const base = createBaseRuntime(options);
+  const shared = { pool: options.pool, ...(options.clock ? { clock: options.clock } : {}), ...(options.nextId ? { nextId: options.nextId } : {}) };
 
   const orderMarginBridgeReader = createPostgresOrderMarginBridgeReader({ pool: options.pool });
   const orderEconomics = Object.freeze({ ...base.orderEconomics, ...createOrderMarginBridgeService({ reader: orderMarginBridgeReader }) });
-  const costAllocationRuntime = createPostgresCostAllocationRuntime({ pool: options.pool, ...(options.clock ? { clock: options.clock } : {}), ...(options.nextId ? { nextId: options.nextId } : {}) });
+  const costAllocationRuntime = createPostgresCostAllocationRuntime(shared);
   const costAllocation = costAllocationRuntime.service;
-  const fulfillmentRuntime = createPostgresFulfillmentRuntime({ pool: options.pool, ...(options.clock ? { clock: options.clock } : {}), ...(options.nextId ? { nextId: options.nextId } : {}) });
+  const fulfillmentRuntime = createPostgresFulfillmentRuntime(shared);
   const fulfillment = fulfillmentRuntime.service;
-  const inventoryRuntime = createPostgresInventoryRuntime({ pool: options.pool, ...(options.clock ? { clock: options.clock } : {}), ...(options.nextId ? { nextId: options.nextId } : {}) });
+  const inventoryRuntime = createPostgresInventoryRuntime(shared);
   const inventory = inventoryRuntime.service;
-  const receiptClaimsRuntime = createPostgresReceiptClaimsRuntime({ pool: options.pool, ...(options.clock ? { clock: options.clock } : {}), ...(options.nextId ? { nextId: options.nextId } : {}) });
+  const receiptClaimsRuntime = createPostgresReceiptClaimsRuntime(shared);
   const receiptClaims = receiptClaimsRuntime.service;
+  const supplierRecoveryRuntime = createPostgresSupplierRecoveryRuntime(shared);
+  const supplierRecovery = supplierRecoveryRuntime.service;
 
   const allocationStore = createPostgresSourcingTechPackAllocationStore({ pool: options.pool });
   const allocation = createSourcingTechPackAllocationService({ store: allocationStore, ...(options.clock ? { clock: options.clock } : {}), ...(options.nextId ? { nextId: options.nextId } : {}) });
@@ -59,58 +63,27 @@ export function createPostgresWholesaleRuntime(options = {}) {
   const finalQuality = Object.freeze({ ...finalQualityQueries, ...finalQualityCommands });
 
   const transport = {
-    authenticate: base.auth.authenticate,
-    auth: base.auth,
-    readiness: base.readiness,
-    platform: base.platform,
-    catalog: base.catalog,
-    commercialPublication: base.commercialPublication,
-    orderEconomics,
-    costAllocation,
-    fulfillment,
-    inventory,
-    receiptClaims,
-    materials: base.materials,
-    boms: base.boms,
-    measurements: base.measurements,
-    samples: base.samples,
-    partners: base.partners,
-    sourcing,
-    techPacks: base.techPacks,
-    productionOrders,
-    productionExecutions,
-    finalQuality,
-    collaboration: base.collaboration,
-    orders: base.orders,
-    notifications: base.notifications,
-    workspace: base.workspace,
+    authenticate: base.auth.authenticate, auth: base.auth, readiness: base.readiness, platform: base.platform,
+    catalog: base.catalog, commercialPublication: base.commercialPublication,
+    orderEconomics, costAllocation, fulfillment, inventory, receiptClaims, supplierRecovery,
+    materials: base.materials, boms: base.boms, measurements: base.measurements, samples: base.samples,
+    partners: base.partners, sourcing, techPacks: base.techPacks, productionOrders, productionExecutions, finalQuality,
+    collaboration: base.collaboration, orders: base.orders, notifications: base.notifications, workspace: base.workspace,
   };
   const handler = createWholesaleHttpHandler(transport);
   const fetchHandler = createWholesaleFetchHandler(transport);
   return Object.freeze({
     ...base,
-    orderMarginBridgeReader,
-    orderEconomics,
-    costAllocationStore: costAllocationRuntime.store,
-    costAllocation,
-    fulfillmentStore: fulfillmentRuntime.store,
-    fulfillment,
-    inventoryStore: inventoryRuntime.store,
-    inventory,
-    receiptClaimsStore: receiptClaimsRuntime.store,
-    receiptClaims,
-    sourcingTechPackAllocationStore: allocationStore,
-    sourcing,
-    productionOrderStore,
-    productionOrderReader,
-    productionOrders,
-    productionExecutionStore,
-    productionExecutionReader,
-    productionExecutions,
-    finalQualityStore,
-    finalQualityReader,
-    finalQuality,
-    handler,
-    fetchHandler,
+    orderMarginBridgeReader, orderEconomics,
+    costAllocationStore: costAllocationRuntime.store, costAllocation,
+    fulfillmentStore: fulfillmentRuntime.store, fulfillment,
+    inventoryStore: inventoryRuntime.store, inventory,
+    receiptClaimsStore: receiptClaimsRuntime.store, receiptClaims,
+    supplierRecoveryStore: supplierRecoveryRuntime.store, supplierRecovery,
+    sourcingTechPackAllocationStore: allocationStore, sourcing,
+    productionOrderStore, productionOrderReader, productionOrders,
+    productionExecutionStore, productionExecutionReader, productionExecutions,
+    finalQualityStore, finalQualityReader, finalQuality,
+    handler, fetchHandler,
   });
 }

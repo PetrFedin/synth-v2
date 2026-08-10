@@ -32,7 +32,6 @@ const ASSETS = Object.freeze({
   '/omnidata-v13.css': ['omnidata-v13.css', 'text/css; charset=utf-8', VISUAL_CACHE],
   '/omnidata-v14.css': ['omnidata-v14.css', 'text/css; charset=utf-8', VISUAL_CACHE],
   '/omnidata-v14-module-adapters.css': ['omnidata-v14-module-adapters.css', 'text/css; charset=utf-8', VISUAL_CACHE],
-  '/omnidata-v14-linesheets.css': ['omnidata-v14-linesheets.css', 'text/css; charset=utf-8', VISUAL_CACHE],
   '/omnidata-v14-extensions.css': ['omnidata-v14-extensions.css', 'text/css; charset=utf-8', VISUAL_CACHE],
   '/omnidata-v14-role-system.css': ['omnidata-v14-role-system.css', 'text/css; charset=utf-8', VISUAL_CACHE],
   '/industrial-product.css': ['industrial-product.css', 'text/css; charset=utf-8', VISUAL_CACHE],

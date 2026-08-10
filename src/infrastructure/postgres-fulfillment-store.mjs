@@ -42,6 +42,20 @@ function view(client) {
       const result = await client.query('SELECT payload FROM cost_close_snapshots WHERE order_commit_snapshot_id = $1 FOR SHARE', [orderCommitSnapshotId]);
       return result.rows[0]?.payload;
     },
+    async lockOrderCostLedger(orderCommitSnapshotId) {
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [orderCommitSnapshotId]);
+    },
+    async lockActualCostEntry(id) {
+      const result = await client.query('SELECT payload FROM actual_cost_ledger_entries WHERE id = $1 FOR UPDATE', [id]);
+      return result.rows[0]?.payload;
+    },
+    async getActualCostReversal(originalEntryId) {
+      const result = await client.query(
+        'SELECT payload FROM actual_cost_ledger_entries WHERE reversal_of_entry_id = $1 ORDER BY recorded_at, id LIMIT 1 FOR SHARE',
+        [originalEntryId],
+      );
+      return result.rows[0]?.payload;
+    },
     async listReservations(orderId) {
       const result = await client.query(
         `SELECT order_id, sku, quantity, order_commit_snapshot_id, lineage_version

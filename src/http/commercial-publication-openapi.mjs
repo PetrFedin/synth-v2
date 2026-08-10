@@ -5,7 +5,10 @@ const currency = { type: 'string', pattern: '^[A-Z]{3}$' };
 const money = { type: 'number', minimum: 0, maximum: 900_719_925_474.0991, multipleOf: 0.0001 };
 const idempotency = { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 1, maxLength: 128, pattern: SAFE_ID } };
 const publicationId = { name: 'publicationId', in: 'path', required: true, schema: identifier };
+const collectionId = { name: 'collectionId', in: 'path', required: true, schema: identifier };
 const buyerCatalogVersionId = { name: 'buyerCatalogVersionId', in: 'path', required: true, schema: identifier };
+const pageLimit = { name: 'limit', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 200, default: 50 } };
+const pageCursor = { name: 'cursor', in: 'query', required: false, schema: { type: 'string', minLength: 1, maxLength: 512 } };
 const errorResponse = { description: 'Domain or transport error', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } };
 
 export function withCommercialPublicationOpenApi(base) {
@@ -40,6 +43,13 @@ function schemas() {
         id: identifier, brandId: identifier, collectionId: identifier, currency,
         lines: { type: 'array', minItems: 1, maxItems: 10_000, items: { $ref: '#/components/schemas/CommercialPublicationLine' } },
         status: { type: 'string', enum: ['published'] }, contentHash: sha256(), publishedAt: date(),
+      },
+    },
+    CommercialPublicationPage: {
+      type: 'object', additionalProperties: false, required: ['items', 'nextCursor'],
+      properties: {
+        items: { type: 'array', maxItems: 200, items: { $ref: '#/components/schemas/CommercialPublication' } },
+        nextCursor: { anyOf: [{ type: 'string', minLength: 1, maxLength: 512 }, { type: 'null' }] },
       },
     },
     PriceOverride: {
@@ -97,6 +107,12 @@ function paths() {
         operationId: 'publishCommercialPublication', security: [{ bearerAuth: [] }], parameters: [idempotency],
         requestBody: body('#/components/schemas/CommercialPublicationInput'),
         responses: mutationResponses('Published commercial snapshot', '#/components/schemas/CommercialPublication'),
+      },
+    },
+    '/collections/{collectionId}/commercial-publications': {
+      get: {
+        operationId: 'listCommercialPublicationsByCollection', security: [{ bearerAuth: [] }], parameters: [collectionId, pageLimit, pageCursor],
+        responses: readResponses('Published commercial snapshots for collection', '#/components/schemas/CommercialPublicationPage'),
       },
     },
     '/commercial-publications/{publicationId}': {

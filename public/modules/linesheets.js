@@ -55,9 +55,10 @@
       LS.nextCursor = page?.nextCursor || null;
       LS.loadedCollectionId = collectionId;
       if (!LS.selectedId || !LS.items.some(item => item.id === LS.selectedId)) LS.selectedId = LS.items[0]?.id || '';
-    } catch (error) {
+    } catch {
       if (requestToken !== LS.requestToken || collectionId !== LS.collectionId) return;
-      LS.error = value(error?.message) || text('Не удалось загрузить опубликованные листы.', 'Could not load published linesheets.');
+      LS.error = text('Не удалось загрузить опубликованные листы.', 'Could not load published linesheets.');
+      LS.loadedCollectionId = collectionId;
       if (!append) LS.items = [];
     } finally {
       if (requestToken === LS.requestToken) {
@@ -153,7 +154,7 @@
     const wrap = el('div', { className: 'ls9-table-wrap ls9-line-table-wrap' });
     const table = el('table', { className: 'ls9-table ls9-line-table' });
     const head = el('thead'); const row = el('tr');
-    [text('SKU', 'SKU'), text('Наименование', 'Name'), text('Версия', 'Version'), text('Цена', 'Price'), text('MOQ', 'MOQ')]
+    [text('SKU', 'SKU'), text('Наименование', 'Name'), text('Версия', 'Version'), text('Цена', 'Price'), text('Мин. заказ', 'MOQ')]
       .forEach(label => row.append(el('th', { rawText: label })));
     head.append(row); const body = el('tbody');
     list(publication.lines).forEach(line => { const tr = el('tr'); tr.append(el('td', { rawText: value(line.sku) || '—' }), el('td', { rawText: value(line.name) || '—' }),
@@ -166,7 +167,7 @@
     const aside = el('aside', { className: 'ls9-inspector' });
     if (!publication) { aside.append(el('div', { className: 'ls9-empty', rawText: text('Выберите опубликованный лист.', 'Select a published linesheet.') })); return aside; }
     const header = el('div', { className: 'ls9-inspector-head' }); const title = el('div');
-    title.append(el('span', { className: 'ls9-eyebrow', rawText: text('Неизменяемый коммерческий snapshot', 'Immutable commercial snapshot') }), el('h3', { rawText: value(publication.id) || text('Публикация', 'Publication') }));
+    title.append(el('span', { className: 'ls9-eyebrow', rawText: text('Неизменяемый коммерческий снимок', 'Immutable commercial snapshot') }), el('h3', { rawText: value(publication.id) || text('Публикация', 'Publication') }));
     header.append(title, el('span', { className: 'ls9-status ls9-status-published', rawText: text('Опубликовано', 'Published') }));
     const info = el('dl', { className: 'ls9-info-grid' });
     [[text('Коллекция', 'Collection'), value(publication.collectionId) || '—'], [text('Валюта', 'Currency'), value(publication.currency) || '—'],
@@ -194,10 +195,10 @@
   }
 
   function content() {
-    if (!collections().length) return statePanel('ls9-empty', text('Нет доступных коллекций', 'No collections available'), text('Сначала создайте или откройте коллекцию. Linesheets не создаёт демонстрационные коммерческие данные.', 'Create or open a collection first. Linesheets does not create demonstration commercial data.'));
-    if (LS.loading && !LS.items.length) return statePanel('ls9-loading', text('Загрузка опубликованных листов…', 'Loading published linesheets...'), text('Получаем неизменяемые коммерческие snapshots из серверного реестра.', 'Fetching immutable commercial snapshots from the server registry.'));
+    if (!collections().length) return statePanel('ls9-empty', text('Нет доступных коллекций', 'No collections available'), text('Сначала создайте или откройте коллекцию. Раздел листов не создаёт демонстрационные коммерческие данные.', 'Create or open a collection first. Linesheets does not create demonstration commercial data.'));
+    if (LS.loading && !LS.items.length) return statePanel('ls9-loading', text('Загрузка опубликованных листов…', 'Loading published linesheets...'), text('Получаем неизменяемые коммерческие снимки из серверного реестра.', 'Fetching immutable commercial snapshots from the server registry.'));
     if (LS.error && !LS.items.length) { const retry = el('button', { className: 'button', type: 'button', rawText: text('Повторить', 'Retry') }); retry.addEventListener('click', () => { LS.loadedCollectionId = ''; void loadPublications(); renderApp(); }); return statePanel('ls9-error', text('Не удалось загрузить публикации', 'Could not load publications'), LS.error, retry); }
-    if (!LS.items.length) return statePanel('ls9-empty', text('Опубликованных листов пока нет', 'No published linesheets yet'), text('После коммерческой публикации коллекции immutable snapshot появится здесь автоматически.', 'After the collection is commercially published, its immutable snapshot will appear here automatically.'));
+    if (!LS.items.length) return statePanel('ls9-empty', text('Опубликованных листов пока нет', 'No published linesheets yet'), text('После коммерческой публикации коллекции неизменяемый снимок появится здесь автоматически.', 'After the collection is commercially published, its immutable snapshot will appear here automatically.'));
     const filtered = filteredPublications(); const selected = LS.items.find(item => item.id === LS.selectedId) || LS.items[0] || null;
     const layout = el('section', { className: 'ls9-layout' }); const registry = el('div', { className: 'ls9-registry' }); const registryHead = el('div', { className: 'ls9-section-title' });
     registryHead.append(el('h3', { rawText: text('Реестр публикаций', 'Publication registry') }), el('span', { rawText: `${filtered.length}/${LS.items.length}` })); registry.append(registryHead);
@@ -210,7 +211,7 @@
   function renderLinesheets() {
     ensureLoad();
     const page = el('div', { className: 'ls9-view' }); const header = el('header', { className: 'ls9-header' }); const copy = el('div');
-    copy.append(el('span', { className: 'ls9-eyebrow', rawText: 'Commercial Publication' }), el('h2', { rawText: text('Листы коллекций', 'Linesheets') }),
+    copy.append(el('span', { className: 'ls9-eyebrow', rawText: text('Коммерческая публикация', 'Commercial Publication') }), el('h2', { rawText: text('Листы коллекций', 'Linesheets') }),
       el('p', { rawText: text('Опубликованная коммерческая версия коллекции. Данные только для чтения и не вычисляются в браузере.', 'Published commercial version of a collection. Data is read-only and is never derived in the browser.') }));
     header.append(copy, el('span', { className: 'ls9-readonly', rawText: text('Только опубликованные данные', 'Published data only') }));
     page.append(header, toolbar(), metrics(), content()); return page;

@@ -79,3 +79,19 @@ function openForm(title, fields, submitAction) {
   });
   body.append(head, form); dialog.append(body); dialog.showModal();
 }
+
+function openDetails(title, rows) {
+  const dialog = document.querySelector('#form-dialog'); clear(dialog);
+  const body = el('div', { className: 'dialog-body' });
+  const close = el('button', { className: 'button small', text: I18N.t('common.close'), type: 'button' });
+  const head = el('div', { className: 'dialog-head' }); head.append(el('h3', { text: title }), close);
+  const grid = el('div', { className: 'form-grid' });
+  for (const row of rows) {
+    const label = el('label');
+    const output = el('input', { type: 'text', value: row.value ?? '—', readOnly: true });
+    label.append(el('span', { text: row.label }), output);
+    grid.append(label);
+  }
+  close.addEventListener('click', () => dialog.close());
+  body.append(head, grid); dialog.append(body); dialog.showModal();
+}

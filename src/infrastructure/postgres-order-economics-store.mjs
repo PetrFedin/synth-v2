@@ -130,10 +130,12 @@ function view(client) {
       return result.rows[0]?.payload;
     },
     async getCostCloseByOrderCommitSnapshotId(orderCommitSnapshotId) {
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [orderCommitSnapshotId]);
       const result = await client.query('SELECT payload FROM cost_close_snapshots WHERE order_commit_snapshot_id = $1 FOR SHARE', [orderCommitSnapshotId]);
       return result.rows[0]?.payload;
     },
     async lockCostCloseByOrderCommitSnapshotId(orderCommitSnapshotId) {
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [orderCommitSnapshotId]);
       const result = await client.query('SELECT payload FROM cost_close_snapshots WHERE order_commit_snapshot_id = $1 FOR UPDATE', [orderCommitSnapshotId]);
       return result.rows[0]?.payload;
     },

@@ -34,6 +34,29 @@ function view(client) {
       const result = await client.query('SELECT payload FROM supply_commitment_snapshots WHERE id = $1 FOR SHARE', [id]);
       return result.rows[0]?.payload;
     },
+    async getFxRateSnapshot(id) {
+      const result = await client.query('SELECT payload FROM order_fx_rate_snapshots WHERE id = $1 FOR SHARE', [id]);
+      return result.rows[0]?.payload;
+    },
+    async getCostCloseByOrderCommitSnapshotId(orderCommitSnapshotId) {
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [orderCommitSnapshotId]);
+      const result = await client.query('SELECT payload FROM cost_close_snapshots WHERE order_commit_snapshot_id = $1 FOR SHARE', [orderCommitSnapshotId]);
+      return result.rows[0]?.payload;
+    },
+    async lockOrderCostLedger(orderCommitSnapshotId) {
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [orderCommitSnapshotId]);
+    },
+    async lockActualCostEntry(id) {
+      const result = await client.query('SELECT payload FROM actual_cost_ledger_entries WHERE id = $1 FOR UPDATE', [id]);
+      return result.rows[0]?.payload;
+    },
+    async getActualCostReversal(originalEntryId) {
+      const result = await client.query(
+        'SELECT payload FROM actual_cost_ledger_entries WHERE reversal_of_entry_id = $1 ORDER BY recorded_at, id LIMIT 1 FOR SHARE',
+        [originalEntryId],
+      );
+      return result.rows[0]?.payload;
+    },
     async listReservations(orderId) {
       const result = await client.query(
         `SELECT order_id, sku, quantity, order_commit_snapshot_id, lineage_version
@@ -124,6 +147,21 @@ function view(client) {
     async getReceiptDiscrepancy(id) {
       const result = await client.query('SELECT payload FROM receipt_discrepancy_snapshots WHERE id = $1 FOR SHARE', [id]);
       return result.rows[0]?.payload;
+    },
+    async insertPhysicalActualCostEntry(value) {
+      await insertImmutable(client, `INSERT INTO actual_cost_ledger_entries
+        (id, order_id, order_commit_snapshot_id, lineage_version, supply_commitment_snapshot_id,
+         physical_lineage_version, fulfillment_plan_snapshot_id, shipment_notice_snapshot_id,
+         receipt_snapshot_id, receipt_discrepancy_snapshot_id, brand_id, shop_id,
+         entry_kind, reversal_of_entry_id, correction_id, correction_reason, cost_type,
+         source_amount, source_currency, fx_rate_snapshot_id, amount, currency, sku, source_ref, occurred_at, recorded_at, payload)
+        VALUES ($1, $2, $3, 3, $4, 2, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25::jsonb)`,
+      [value.id, value.orderId, value.orderCommitSnapshotId, value.supplyCommitmentSnapshotId,
+        value.fulfillmentPlanSnapshotId, value.shipmentNoticeSnapshotId, value.receiptSnapshotId, value.receiptDiscrepancySnapshotId,
+        value.brandId, value.shopId, value.entryKind ?? 'actual', value.reversalOfEntryId ?? null, value.correctionId ?? null,
+        value.correctionReason ?? null, value.costType, value.sourceAmount, value.sourceCurrency, value.fxRateSnapshotId,
+        value.amount, value.currency, value.sku, value.sourceRef, value.occurredAt, value.recordedAt, JSON.stringify(value)],
+      'ACTUAL_COST_ENTRY_ALREADY_EXISTS', { costEntryId: value.id });
     },
     getCommand: (id) => getRegisteredCommand(client, 'wholesale', id),
     insertCommand: (value) => insertRegisteredCommand(client, 'wholesale', value),

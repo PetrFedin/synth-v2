@@ -3,13 +3,16 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { migratePostgres } from '../src/infrastructure/postgres-migrator.mjs';
-import { createPostgresFulfillmentStore } from '../src/infrastructure/postgres-fulfillment-store.mjs';
-import { createFulfillmentService } from '../src/application/fulfillment-service.mjs';
+import { createPostgresFulfillmentRuntime } from '../src/runtime/postgres-fulfillment-runtime.mjs';
+import { createPostgresOrderEconomicsStore } from '../src/infrastructure/postgres-order-economics-store.mjs';
+import { createOrderEconomicsService } from '../src/application/order-economics-service.mjs';
+import { createPostgresCostAllocationStore } from '../src/infrastructure/postgres-cost-allocation-store.mjs';
+import { createCostAllocationService } from '../src/application/cost-allocation-service.mjs';
 
 const databaseUrl = process.env.POSTGRES_TEST_URL;
 const now = '2026-08-10T00:00:00.000Z';
 
-test('PostgreSQL fulfillment executes order commit -> reservation -> plan -> ASN -> receipt -> discrepancy end to end', { skip: !databaseUrl }, async () => {
+test('PostgreSQL closes committed order -> fulfillment -> physical cost -> landed cost -> SKU allocation -> margin end to end', { skip: !databaseUrl }, async () => {
   const { Pool } = await import('pg');
   const pool = new Pool({ connectionString: databaseUrl, max: 6 });
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -20,13 +23,20 @@ test('PostgreSQL fulfillment executes order commit -> reservation -> plan -> ASN
     await seedCommittedOrder(pool);
 
     let sequence = 0;
-    const service = createFulfillmentService({
-      store: createPostgresFulfillmentStore({ pool }),
+    const nextId = (prefix) => `${prefix}-pg-${++sequence}`;
+    const fulfillment = createPostgresFulfillmentRuntime({ pool, clock: () => now, nextId }).service;
+    const economics = createOrderEconomicsService({
+      economicsStore: createPostgresOrderEconomicsStore({ pool }),
       clock: () => now,
-      nextId: (prefix) => `${prefix}-pg-${++sequence}`,
+      nextId,
+    });
+    const costAllocation = createCostAllocationService({
+      store: createPostgresCostAllocationStore({ pool }),
+      clock: () => now,
+      nextId,
     });
 
-    const plan = await service.createFulfillmentPlan('cmd-pg-plan', 'brand-sales', 'order-pg', {
+    const plan = await fulfillment.createFulfillmentPlan('cmd-pg-plan', 'brand-sales', 'order-pg', {
       supplyCommitmentSnapshotId: 'supply-pg',
       shipFrom: { locationId: 'origin-pg', name: 'Factory', countryCode: 'TR', city: 'Istanbul', addressLine1: 'Factory Road 1' },
       shipTo: { locationId: 'dc-pg', name: 'Retail DC', countryCode: 'DE', city: 'Berlin', addressLine1: 'DC Road 1' },
@@ -38,12 +48,12 @@ test('PostgreSQL fulfillment executes order commit -> reservation -> plan -> ASN
     assert.equal(plan.lines[0].quantity, 2);
 
     const attempts = await Promise.allSettled([
-      service.createShipmentNotice('cmd-pg-asn-a', 'brand-sales', plan.id, {
+      fulfillment.createShipmentNotice('cmd-pg-asn-a', 'brand-sales', plan.id, {
         shipmentNumber: 'ASN-PG-A', carrier: 'DHL', serviceLevel: 'road',
         lines: [{ lineId: plan.lines[0].lineId, quantity: 2 }],
         shippedAt: '2026-08-11T10:00:00.000Z', expectedDeliveryAt: '2026-08-14T08:00:00.000Z',
       }),
-      service.createShipmentNotice('cmd-pg-asn-b', 'brand-sales', plan.id, {
+      fulfillment.createShipmentNotice('cmd-pg-asn-b', 'brand-sales', plan.id, {
         shipmentNumber: 'ASN-PG-B', carrier: 'UPS', serviceLevel: 'road',
         lines: [{ lineId: plan.lines[0].lineId, quantity: 2 }],
         shippedAt: '2026-08-11T10:01:00.000Z', expectedDeliveryAt: '2026-08-14T08:00:00.000Z',
@@ -53,7 +63,7 @@ test('PostgreSQL fulfillment executes order commit -> reservation -> plan -> ASN
     assert.equal(attempts.filter((result) => result.status === 'rejected').length, 1, 'overshipping competitor must roll back');
     const shipment = attempts.find((result) => result.status === 'fulfilled').value;
 
-    const receiptResult = await service.recordReceipt('cmd-pg-receipt', 'shop-buyer', shipment.id, {
+    const receiptResult = await fulfillment.recordReceipt('cmd-pg-receipt', 'shop-buyer', shipment.id, {
       receiptReference: 'GRN-PG-1', receivedBy: 'Berlin DC', receiptComplete: true,
       lines: [{ lineId: shipment.lines[0].lineId, receivedQuantity: 2 }],
       receivedAt: '2026-08-13T12:00:00.000Z',
@@ -62,16 +72,101 @@ test('PostgreSQL fulfillment executes order commit -> reservation -> plan -> ASN
     assert.equal(receiptResult.discrepancy.finalized, true);
     assert.equal(receiptResult.discrepancy.issueCount, 0);
 
+    const freight = await fulfillment.recordPhysicalActualCost('cmd-pg-freight', 'brand-finance', shipment.id, {
+      costType: 'freight', amount: 30, currency: 'EUR', sku: 'SKU-PG', sourceRef: 'DHL-INV-100', occurredAt: '2026-08-13T14:00:00.000Z',
+    });
+    const quality = await fulfillment.recordPhysicalActualCost('cmd-pg-quality', 'brand-finance', shipment.id, {
+      costType: 'quality', amount: 10, currency: 'EUR', sku: 'SKU-PG', sourceRef: 'QC-CLAIM-100', occurredAt: '2026-08-13T15:00:00.000Z',
+      receiptDiscrepancySnapshotId: receiptResult.discrepancy.id,
+    });
+    assert.equal(quality.receiptSnapshotId, receiptResult.receipt.id);
+    assert.equal(quality.receiptDiscrepancySnapshotId, receiptResult.discrepancy.id);
+
+    await assert.rejects(
+      economics.correctActualCost('cmd-pg-generic-physical-correction', 'brand-finance', 'order-pg', freight.id, {
+        reason: 'Wrong generic path', supplyCommitmentSnapshotId: 'supply-pg', costType: 'freight', amount: 25, currency: 'EUR', sku: 'SKU-PG', sourceRef: 'DHL-CREDIT-100', occurredAt: '2026-08-14T09:00:00.000Z',
+      }),
+      (error) => error.code === 'P0001' && error.message === 'PHYSICAL_ACTUAL_COST_REQUIRES_SHIPMENT_CORRECTION',
+    );
+
+    const correction = await fulfillment.correctPhysicalActualCost('cmd-pg-physical-correction', 'brand-finance', shipment.id, freight.id, {
+      reason: 'Carrier credit memo', costType: 'freight', amount: 25, currency: 'EUR', sku: 'SKU-PG', sourceRef: 'DHL-CREDIT-100', occurredAt: '2026-08-14T09:00:00.000Z',
+    });
+    assert.equal(correction.reversal.amount, -30);
+    assert.equal(correction.replacement.amount, 25);
+    for (const entry of [correction.reversal, correction.replacement]) {
+      assert.equal(entry.physicalLineageVersion, 2);
+      assert.equal(entry.shipmentNoticeSnapshotId, shipment.id);
+      assert.equal(entry.fulfillmentPlanSnapshotId, plan.id);
+    }
+
+    const persistedPhysicalRows = await pool.query(
+      `SELECT id, physical_lineage_version, fulfillment_plan_snapshot_id, shipment_notice_snapshot_id,
+              receipt_snapshot_id, receipt_discrepancy_snapshot_id, payload
+         FROM actual_cost_ledger_entries
+        WHERE order_id = 'order-pg'
+        ORDER BY recorded_at, id`,
+    );
+    assert.equal(persistedPhysicalRows.rowCount, 4);
+    for (const row of persistedPhysicalRows.rows) {
+      assert.equal(row.physical_lineage_version, 2);
+      assert.equal(row.fulfillment_plan_snapshot_id, plan.id);
+      assert.equal(row.shipment_notice_snapshot_id, shipment.id);
+      assert.equal(row.payload.physicalLineageVersion, 2);
+      assert.equal(row.payload.shipmentNoticeSnapshotId, shipment.id);
+    }
+
+    const landed = await economics.actualizeLandedCost('cmd-pg-landed', 'brand-finance', 'order-pg');
+    assert.equal(landed.totalCost, 35);
+    assert.deepEqual(landed.componentTotals, { freight: 25, quality: 10 });
+    assert.equal(landed.supplyLineageComplete, true);
+    assert.ok(landed.costEntryIds.includes(freight.id));
+    assert.ok(landed.costEntryIds.includes(correction.reversal.id));
+    assert.ok(landed.costEntryIds.includes(correction.replacement.id));
+    assert.ok(landed.costEntryIds.includes(quality.id));
+
+    const policy = await costAllocation.createPolicyVersion('cmd-pg-policy', 'brand-finance', 'brand-pg', {
+      name: 'Physical landed cost allocation', version: 1, defaultBasis: 'unit', rules: [],
+    });
+    const allocation = await costAllocation.allocateLandedCost('cmd-pg-allocation', 'brand-finance', 'order-pg', {
+      landedCostSnapshotId: landed.id,
+      policyVersionId: policy.id,
+      customWeightsByCostEntryId: {},
+    });
+    assert.equal(allocation.allocatedTotal, 35);
+    assert.equal(allocation.skuEconomics.length, 1);
+    assert.equal(allocation.skuEconomics[0].sku, 'SKU-PG');
+    assert.equal(allocation.skuEconomics[0].allocatedLandedCost, 35);
+
+    const margin = await economics.actualizeMargin('cmd-pg-margin', 'brand-finance', 'order-pg', landed.id);
+    assert.equal(margin.netRevenue, 200);
+    assert.equal(margin.landedCost, 35);
+    assert.equal(margin.contributionMarginAmount, 165);
+    assert.equal(margin.contributionMarginPercent, 82.5);
+    assert.equal(margin.commercialPublicationId, 'pub-pg');
+    assert.equal(margin.buyerCatalogVersionId, 'buyer-catalog-pg');
+
     const counts = await pool.query(`SELECT
       (SELECT count(*)::int FROM fulfillment_plan_snapshots) AS plans,
       (SELECT count(*)::int FROM shipment_notice_snapshots) AS shipments,
       (SELECT count(*)::int FROM receipt_snapshots) AS receipts,
       (SELECT count(*)::int FROM receipt_discrepancy_snapshots) AS discrepancies,
+      (SELECT count(*)::int FROM actual_cost_ledger_entries) AS actual_cost_entries,
+      (SELECT count(*)::int FROM landed_cost_snapshots) AS landed_costs,
+      (SELECT count(*)::int FROM cost_allocation_run_snapshots) AS allocation_runs,
+      (SELECT count(*)::int FROM margin_actualization_snapshots) AS margins,
       (SELECT count(*)::int FROM outbox_events WHERE event_type LIKE 'fulfillment.%') AS fulfillment_events`);
-    assert.deepEqual(counts.rows[0], { plans: 1, shipments: 1, receipts: 1, discrepancies: 1, fulfillment_events: 4 });
+    assert.deepEqual(counts.rows[0], {
+      plans: 1, shipments: 1, receipts: 1, discrepancies: 1,
+      actual_cost_entries: 4, landed_costs: 1, allocation_runs: 1, margins: 1, fulfillment_events: 4,
+    });
 
     await assert.rejects(
       pool.query('UPDATE receipt_snapshots SET status = status WHERE id = $1', [receiptResult.receipt.id]),
+      (error) => error.code === '55000',
+    );
+    await assert.rejects(
+      pool.query('UPDATE actual_cost_ledger_entries SET amount = amount WHERE id = $1', [quality.id]),
       (error) => error.code === '55000',
     );
   } finally {
@@ -88,12 +183,16 @@ async function seedCommittedOrder(pool) {
     [brand.id, JSON.stringify(brand), shop.id, JSON.stringify(shop)],
   );
   const brandMembership = { id: 'membership-brand-pg', organisationId: brand.id, organisationType: 'brand', userId: 'brand-sales', role: 'sales', status: 'active' };
+  const financeMembership = { id: 'membership-finance-pg', organisationId: brand.id, organisationType: 'brand', userId: 'brand-finance', role: 'finance', status: 'active' };
   const shopMembership = { id: 'membership-shop-pg', organisationId: shop.id, organisationType: 'shop', userId: 'shop-buyer', role: 'buyer', status: 'active' };
   await pool.query(
     `INSERT INTO memberships (id, organisation_id, user_id, organisation_type, role, status, payload) VALUES
      ($1, $2, $3, 'brand', 'sales', 'active', $4::jsonb),
-     ($5, $6, $7, 'shop', 'buyer', 'active', $8::jsonb)`,
-    [brandMembership.id, brand.id, brandMembership.userId, JSON.stringify(brandMembership), shopMembership.id, shop.id, shopMembership.userId, JSON.stringify(shopMembership)],
+     ($5, $6, $7, 'brand', 'finance', 'active', $8::jsonb),
+     ($9, $10, $11, 'shop', 'buyer', 'active', $12::jsonb)`,
+    [brandMembership.id, brand.id, brandMembership.userId, JSON.stringify(brandMembership),
+      financeMembership.id, brand.id, financeMembership.userId, JSON.stringify(financeMembership),
+      shopMembership.id, shop.id, shopMembership.userId, JSON.stringify(shopMembership)],
   );
 
   const campaign = { id: 'campaign-pg', brandId: brand.id, status: 'open', version: 1 };

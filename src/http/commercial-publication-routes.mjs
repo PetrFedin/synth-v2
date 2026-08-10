@@ -3,9 +3,6 @@ import {
   assertBodyContract,
   assertQueryContract,
   bodyContract,
-  parsePositiveIntegerQuery,
-  parseQueryCursor,
-  queryValues,
 } from './request-contract.mjs';
 
 const PUBLICATION_BODY = bodyContract(['collectionId', 'skuCodes']);
@@ -67,16 +64,31 @@ function pagedRead(method, pattern, execute) {
   return Object.freeze({
     method, pattern, mutation: false,
     execute(context) {
-      assertQueryContract(context.query ?? {}, ['limit', 'cursor']);
-      const limitValue = queryValues(context.query ?? {}, 'limit')[0];
-      const cursorValue = queryValues(context.query ?? {}, 'cursor')[0];
-      const limit = limitValue === undefined || limitValue === ''
-        ? 50
-        : parsePositiveIntegerQuery(limitValue, 'limit', { max: 200 });
-      const cursor = parseQueryCursor(cursorValue, 'cursor');
+      const query = context.query ?? {};
+      assertQueryContract(query, ['limit', 'cursor']);
+      const limitValue = optionalQueryValue(query, 'limit');
+      const cursorValue = optionalQueryValue(query, 'cursor');
+      const limit = limitValue === undefined || limitValue === '' ? 50 : positiveInteger(limitValue, 'limit', 200);
+      const cursor = cursorValue === undefined || cursorValue === '' ? null : boundedCursor(cursorValue);
       return execute({ ...context, limit, cursor });
     },
   });
+}
+function optionalQueryValue(query, field) {
+  const raw = query[field];
+  if (raw === undefined) return undefined;
+  invariant(typeof raw === 'string', 'HTTP_QUERY_FIELD_INVALID', `${field} must be a single query value`, { field });
+  return raw;
+}
+function positiveInteger(raw, field, max) {
+  invariant(/^[1-9]\d*$/.test(raw), 'HTTP_QUERY_FIELD_INVALID', `${field} must be a positive integer`, { field });
+  const parsed = Number(raw);
+  invariant(Number.isSafeInteger(parsed) && parsed <= max, 'HTTP_QUERY_FIELD_INVALID', `${field} exceeds the allowed maximum`, { field, max });
+  return parsed;
+}
+function boundedCursor(raw) {
+  invariant(raw.length <= 512, 'HTTP_QUERY_FIELD_INVALID', 'cursor exceeds the allowed maximum length', { field: 'cursor', maxLength: 512 });
+  return raw;
 }
 function unavailableCommercialPublication() {
   const fail = () => invariant(false, 'COMMERCIAL_PUBLICATION_SERVICE_REQUIRED', 'Commercial publication service is required');

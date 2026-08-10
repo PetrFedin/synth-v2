@@ -12,9 +12,11 @@ body.omnidata-v14 .od14-module-summary{
   box-shadow:none!important;
 }
 body.omnidata-v14 .od14-module-summary>.od14-module-heading,
+body.omnidata-v14 .od14-module-summary>.sample-header-actions,
 body.omnidata-v14 .od14-module-summary>.tech-pack-header-actions,
 body.omnidata-v14 .od14-module-summary>.production-orders-actions,
 body.omnidata-v14 .od14-module-summary>.production-execution-header-actions{display:none!important}
+body.omnidata-v14 .od14-module-summary>.sample-kpis,
 body.omnidata-v14 .od14-module-summary>.tech-pack-kpis,
 body.omnidata-v14 .od14-module-summary>.production-orders-kpis,
 body.omnidata-v14 .od14-module-summary>.production-execution-kpis{grid-column:1/-1!important;margin:0!important}
@@ -37,6 +39,108 @@ body.omnidata-v14 .tech-pack-actions,
 body.omnidata-v14 .production-orders-actions,
 body.omnidata-v14 .production-execution-actions{display:flex!important;align-items:center!important;flex-wrap:wrap!important;gap:6px!important}
 body.omnidata-v14 .tech-pack-inspector-head{display:flex!important;align-items:flex-start!important;justify-content:space-between!important;gap:10px!important;margin-bottom:10px!important}
+
+/* Samples is ODS-native: legacy sample classes only identify business structure while ODS owns density and geometry. */
+body.omnidata-v14 .sample-page{
+  display:grid!important;
+  gap:var(--ods-space-3,12px)!important;
+  width:100%!important;
+  min-width:0!important;
+  margin:0!important;
+}
+body.omnidata-v14 .sample-kpis{
+  display:grid!important;
+  grid-template-columns:repeat(7,minmax(96px,1fr))!important;
+  gap:var(--ods-space-2,8px)!important;
+  width:100%!important;
+  min-width:0!important;
+}
+body.omnidata-v14 .sample-kpi{min-width:0!important}
+body.omnidata-v14 .sample-kpi>span,
+body.omnidata-v14 .sample-kpi>small{color:var(--ods-color-muted,var(--od14-muted))!important;font-size:var(--ods-font-size-xs,11px)!important}
+body.omnidata-v14 .sample-kpi>strong{overflow-wrap:anywhere!important;font-variant-numeric:tabular-nums!important}
+body.omnidata-v14 .sample-filters{
+  display:flex!important;
+  align-items:center!important;
+  flex-wrap:wrap!important;
+  gap:var(--ods-space-2,8px)!important;
+  width:100%!important;
+  min-width:0!important;
+}
+body.omnidata-v14 .sample-filters select{min-width:180px!important;max-width:100%!important}
+body.omnidata-v14 .sample-check{display:inline-flex!important;align-items:center!important;gap:var(--ods-space-2,8px)!important;min-height:var(--ods-control-height,34px)!important;color:var(--ods-color-text-soft,var(--od14-text-soft))!important;font-size:var(--ods-font-size-sm,12px)!important}
+body.omnidata-v14 .sample-check input{margin:0!important}
+body.omnidata-v14 .sample-layout{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) minmax(320px,var(--ods-inspector-width,360px))!important;
+  align-items:start!important;
+  gap:var(--ods-space-3,12px)!important;
+  width:100%!important;
+  min-width:0!important;
+}
+body.omnidata-v14 .sample-layout>*{min-width:0!important;max-width:100%!important}
+body.omnidata-v14 .sample-table-wrap{
+  width:100%!important;
+  min-width:0!important;
+  max-width:100%!important;
+  overflow:auto!important;
+  overscroll-behavior:contain!important;
+}
+body.omnidata-v14 .sample-table{width:100%!important;min-width:820px!important}
+body.omnidata-v14 .sample-table tbody tr{cursor:pointer!important}
+body.omnidata-v14 .sample-table tbody tr.selected{background:#fff4ef!important;box-shadow:inset 3px 0 0 var(--ods-color-accent,var(--od14-accent))!important}
+body.omnidata-v14 .sample-table td strong,
+body.omnidata-v14 .sample-table td small{display:block!important}
+body.omnidata-v14 .sample-table td small{margin-top:2px!important}
+body.omnidata-v14 .sample-empty{width:100%!important;text-align:center!important}
+body.omnidata-v14 .sample-badge{max-width:220px!important;overflow:hidden!important;text-overflow:ellipsis!important}
+body.omnidata-v14 .sample-inspector{
+  position:sticky!important;
+  top:var(--ods-space-3,12px)!important;
+  display:grid!important;
+  gap:var(--ods-space-3,12px)!important;
+  width:100%!important;
+  min-width:0!important;
+  max-width:100%!important;
+  overflow:hidden!important;
+}
+body.omnidata-v14 .sample-inspector-head{
+  display:flex!important;
+  align-items:flex-start!important;
+  justify-content:space-between!important;
+  flex-wrap:wrap!important;
+  gap:var(--ods-space-3,12px)!important;
+  min-width:0!important;
+}
+body.omnidata-v14 .sample-inspector-head>div{min-width:0!important;flex:1 1 180px!important}
+body.omnidata-v14 .sample-inspector-actions,
+body.omnidata-v14 .sample-dialog-actions{display:flex!important;align-items:center!important;flex-wrap:wrap!important;gap:var(--ods-space-2,8px)!important;min-width:0!important}
+body.omnidata-v14 .sample-summary{
+  display:grid!important;
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  gap:var(--ods-space-2,8px)!important;
+  min-width:0!important;
+  margin:0!important;
+}
+body.omnidata-v14 .sample-summary>div{min-width:0!important}
+body.omnidata-v14 .sample-summary dt{color:var(--ods-color-muted,var(--od14-muted))!important;font-size:var(--ods-font-size-xs,11px)!important}
+body.omnidata-v14 .sample-summary dd{min-width:0!important;margin:3px 0 0!important;color:var(--ods-color-text,var(--od14-text))!important;font-size:var(--ods-font-size-sm,12px)!important;font-weight:600!important;overflow-wrap:anywhere!important}
+body.omnidata-v14 .sample-detail-card{display:grid!important;gap:var(--ods-space-1,4px)!important;margin:0!important}
+body.omnidata-v14 .sample-blockers{display:flex!important;align-items:center!important;flex-wrap:wrap!important;gap:var(--ods-space-2,8px)!important}
+body.omnidata-v14 .sample-blockers>strong{width:100%!important}
+body.omnidata-v14 .sample-sync-state{display:grid!important;justify-items:start!important;gap:var(--ods-space-3,12px)!important;width:100%!important;min-width:0!important}
+body.omnidata-v14 .sample-dialog{max-height:92vh!important;overflow:hidden!important}
+body.omnidata-v14 .sample-dialog::backdrop{background:rgba(35,40,48,.46)!important;backdrop-filter:blur(2px)!important}
+body.omnidata-v14 .sample-form{max-height:calc(92vh - 2px)!important;overflow:auto!important}
+body.omnidata-v14 .sample-dialog-head,
+body.omnidata-v14 .sample-dialog-actions{min-width:0!important}
+body.omnidata-v14 .sample-dialog-head h2{min-width:0!important;overflow-wrap:anywhere!important}
+body.omnidata-v14 .sample-field{min-width:0!important}
+body.omnidata-v14 .sample-field>span{color:var(--ods-color-text-soft,var(--od14-text-soft))!important;font-size:var(--ods-font-size-xs,11px)!important;font-weight:600!important}
+body.omnidata-v14 .sample-field input,
+body.omnidata-v14 .sample-field select,
+body.omnidata-v14 .sample-field textarea{width:100%!important;min-width:0!important;max-width:100%!important}
+body.omnidata-v14 .sample-field textarea{resize:vertical!important}
 
 /* Roles not present in the original V14 set use the same Omnidata tokens and density. */
 body.omnidata-v14 [data-od14-component="card"]{
@@ -150,6 +254,18 @@ body.omnidata-v14 dialog [data-ods-part="field-group"]>input,
 body.omnidata-v14 dialog [data-ods-part="field-group"]>select,
 body.omnidata-v14 dialog [data-ods-part="field-group"]>textarea{width:100%!important;box-sizing:border-box!important}
 
+@media(max-width:1180px){
+  body.omnidata-v14 .sample-kpis{grid-template-columns:repeat(4,minmax(96px,1fr))!important}
+  body.omnidata-v14 .sample-layout{grid-template-columns:minmax(0,1fr)!important}
+  body.omnidata-v14 .sample-inspector{position:static!important}
+}
+@media(max-width:760px){
+  body.omnidata-v14 .sample-kpis{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  body.omnidata-v14 .sample-filters{display:grid!important;grid-template-columns:minmax(0,1fr)!important}
+  body.omnidata-v14 .sample-filters select{width:100%!important;min-width:0!important}
+  body.omnidata-v14 .sample-summary{grid-template-columns:minmax(0,1fr)!important}
+  body.omnidata-v14 .sample-inspector-head{display:grid!important;grid-template-columns:minmax(0,1fr)!important}
+}
 @media(max-width:680px){
   body.omnidata-v14 .production-orders-create,
   body.omnidata-v14 .production-execution-create{grid-template-columns:minmax(0,1fr)!important}

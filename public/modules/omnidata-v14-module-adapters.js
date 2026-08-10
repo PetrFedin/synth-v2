@@ -1,10 +1,16 @@
 (function installOmnidataV14ModuleAdapters(global){
   'use strict';
 
-  const BUILD='visual-20260805-14-module-adapters-4';
+  const BUILD='visual-20260805-14-module-adapters-5';
   const enqueue=typeof global.queueMicrotask==='function'?global.queueMicrotask.bind(global):typeof queueMicrotask==='function'?queueMicrotask:(callback)=>Promise.resolve().then(callback);
   if(typeof global.queueMicrotask!=='function')global.queueMicrotask=enqueue;
   const DEFINITIONS=Object.freeze({
+    samples:{
+      section:['PLM / Образцы и согласования','PLM / Samples & Approvals'],
+      title:['Образцы и согласования','Samples and Approvals'],
+      description:['Контроль раундов образцов, сроков, статусов согласования и следующей итерации в едином PLM-контуре.','Control sample rounds, due dates, approval status and the next iteration in one PLM workflow.'],
+      source:'.sample-header',actions:'.sample-header-actions'
+    },
     'tech-packs':{
       section:['PLM / Техническая документация','PLM / Technical Documentation'],
       title:['Технические пакеты','Tech Packs'],
@@ -25,21 +31,23 @@
     }
   });
   const ROLE_MAP=Object.freeze([
-    ['.tech-pack-kpis,.production-orders-kpis,.production-execution-kpis','metrics'],
-    ['.tech-pack-kpi,.production-orders-kpi,.production-execution-kpi','metric'],
-    ['.tech-pack-filters,.production-orders-filters,.production-execution-filters','filterbar'],
+    ['.sample-kpis,.tech-pack-kpis,.production-orders-kpis,.production-execution-kpis','metrics'],
+    ['.sample-kpi,.tech-pack-kpi,.production-orders-kpi,.production-execution-kpi','metric'],
+    ['.sample-filters,.tech-pack-filters,.production-orders-filters,.production-execution-filters','filterbar'],
     ['.production-orders-create,.production-execution-create','toolbar'],
-    ['.tech-pack-layout,.production-orders-layout,.production-execution-layout','master-detail'],
-    ['.tech-pack-table-wrap,.production-orders-registry,.production-execution-registry','table-wrap'],
-    ['.tech-pack-table,.production-orders-table,.production-execution-table','table'],
-    ['.tech-pack-inspector,.production-orders-inspector,.production-execution-inspector','inspector'],
-    ['.tech-pack-facts,.production-orders-facts,.production-execution-facts','definition-grid'],
-    ['.tech-pack-facts>div,.production-orders-facts>div,.production-execution-facts>div','definition-item'],
+    ['.sample-layout,.tech-pack-layout,.production-orders-layout,.production-execution-layout','master-detail'],
+    ['.sample-table-wrap,.tech-pack-table-wrap,.production-orders-registry,.production-execution-registry','table-wrap'],
+    ['.sample-table,.tech-pack-table,.production-orders-table,.production-execution-table','table'],
+    ['.sample-inspector,.tech-pack-inspector,.production-orders-inspector,.production-execution-inspector','inspector'],
+    ['.sample-summary,.tech-pack-facts,.production-orders-facts,.production-execution-facts','definition-grid'],
+    ['.sample-summary>div,.tech-pack-facts>div,.production-orders-facts>div,.production-execution-facts>div','definition-item'],
     ['.tech-pack-readiness','surface'],
-    ['.tech-pack-card,.production-orders-card,.production-execution-card','card'],
-    ['.tech-pack-badge,.production-order-badge,.production-execution-badge','status'],
-    ['.tech-pack-empty,.production-orders-empty,.production-execution-empty','empty'],
-    ['.tech-pack-error,.production-orders-error,.production-execution-error','alert'],
+    ['.sample-detail-card,.tech-pack-card,.production-orders-card,.production-execution-card','card'],
+    ['.sample-badge,.tech-pack-badge,.production-order-badge,.production-execution-badge','status'],
+    ['.sample-empty,.sample-sync-state,.tech-pack-empty,.production-orders-empty,.production-execution-empty','empty'],
+    ['.sample-error,.sample-blockers,.tech-pack-error,.production-orders-error,.production-execution-error','alert'],
+    ['.sample-form','form'],
+    ['.sample-field','field-group'],
     ['.production-timeline','timeline'],
     ['.production-milestone','timeline-item'],
     ['.production-milestone-sequence','timeline-part'],
@@ -73,10 +81,18 @@
       if(target&&!button.closest('.od14-page-actions'))target.append(button);
     });
   }
+  function assignSampleTones(){
+    roots('.sample-ok').forEach((node)=>node.classList.add('od14-tone-success'));
+    roots('.sample-medium').forEach((node)=>node.classList.add('od14-tone-warning'));
+    roots('.sample-high').forEach((node)=>node.classList.add('od14-tone-danger'));
+    roots('.sample-blockers').forEach((node)=>node.classList.add('od14-tone-warning'));
+    roots('.sample-sync-error').forEach((node)=>{node.dataset.od14Component='alert';node.dataset.od14RoleSource='adapter';node.classList.add('od14-tone-danger')});
+  }
   function assignRoles(){
     ROLE_MAP.forEach(([selector,role])=>setRole(selector,role));
-    roots('.tech-pack-actions,.production-orders-actions,.production-execution-actions,.tech-pack-confirm,.production-orders-confirm,.production-execution-command-grid').forEach((node)=>{node.dataset.od14Component='toolbar';node.dataset.od14RoleSource='adapter'});
-    roots('.tech-pack-filters input,.tech-pack-filters select,.production-orders-filters input,.production-orders-filters select,.production-orders-create input,.tech-pack-confirm input,.tech-pack-confirm textarea,.production-orders-confirm input,.production-orders-confirm textarea,.production-execution-filters input,.production-execution-filters select,.production-execution-create input,.production-execution-command input,.production-execution-command textarea,.production-execution-cancel input').forEach((node)=>{node.dataset.od14Component='field';node.dataset.od14RoleSource='adapter'});
+    roots('.sample-inspector-actions,.sample-dialog-actions,.tech-pack-actions,.production-orders-actions,.production-execution-actions,.tech-pack-confirm,.production-orders-confirm,.production-execution-command-grid').forEach((node)=>{node.dataset.od14Component='toolbar';node.dataset.od14RoleSource='adapter'});
+    roots('.sample-field input,.sample-field select,.sample-field textarea,.tech-pack-filters input,.tech-pack-filters select,.production-orders-filters input,.production-orders-filters select,.production-orders-create input,.tech-pack-confirm input,.tech-pack-confirm textarea,.production-orders-confirm input,.production-orders-confirm textarea,.production-execution-filters input,.production-execution-filters select,.production-execution-create input,.production-execution-command input,.production-execution-command textarea,.production-execution-cancel input').forEach((node)=>{node.dataset.od14Component='field';node.dataset.od14RoleSource='adapter'});
+    assignSampleTones();
   }
   function apply(){
     const view=currentView();

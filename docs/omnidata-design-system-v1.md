@@ -24,7 +24,7 @@ A workspace owns business logic, data fetching and semantic structure. It does n
 
 No new workspace stylesheet may be added to the shell. Loaded UI runtimes must not use `element.style`, `setAttribute('style', ...)`, dynamically created `<style>` nodes, `CSSStyleSheet`, `adoptedStyleSheets` or `insertRule()`.
 
-`validate:ods-boundaries` freezes the historical shell debt allowlist at 22 legacy stylesheets. Migrations may remove those entries without changing the ceiling; additions fail verification. With Final Quality, Production Orders, Production Executions and Tech Packs migrated, only **19 of the historical 22** entries remain loaded. The debt count must only move down.
+`validate:ods-boundaries` now enforces a 21-entry legacy visual-debt baseline, reduced from the previous 22-entry baseline after retiring `samples.css`. With Samples, Final Quality, Production Orders, Production Executions and Tech Packs ODS-native, only **18 of the current 21** legacy-debt entries remain loaded. The debt count must only move down.
 
 ## Shared progress primitive
 
@@ -36,9 +36,13 @@ Planning, Styles, Materials, BOM and Measurements already store readiness as nat
 
 Native dialogs and editor forms use one shared geometry instead of workspace-specific modal CSS. `public/omnidata-v14-module-adapters.css` provides the responsive dialog width, two-column form grid, full-width header/action rows and ODS field-group/control sizing. `public/modules/omnidata-v14-components.js` classifies native `form`, `label`, `input`, `select`, `textarea` and buttons into the same form/field/button semantics, so business runtimes do not need to invent another control system.
 
-This primitive is deliberately module-neutral. Tech Packs is its first stylesheet-retirement consumer; Samples and Sourcing should reuse the same dialog/form contract during their migrations rather than copying Tech Pack selectors.
+This primitive is deliberately module-neutral. Tech Packs and Samples both consume it without restoring local modal CSS. Sourcing should reuse the same dialog/form contract during its migration.
 
 ## ODS-native workspaces
+
+Samples is ODS-native. The shared module adapter owns its page-header projection, KPI metrics, filters, master-detail geometry, registry/table, inspector, definition grid, cards, empty/error states, dialog/forms and status semantics. Responsive rules keep the registry and inspector from overlapping, the table wrapper owns horizontal overflow, and the inspector stacks below the registry at narrower widths. `samples.css` is neither loaded by `public/index.html` nor served by the standalone static handler.
+
+Samples remains strictly bilingual through the existing business runtime: the active locale controls labels, filters, actions, sync states and dialogs. The adapter itself also supplies RU/EN page-header text. Status colour meaning is locale-independent: existing business state classes are converted by the adapter into generic ODS success/warning/danger semantic hooks before the role system applies visual tones.
 
 Final Quality is ODS-native: header, KPI, master-detail layout, filters, toolbar, table, inspector, status tones and alerts inherit shared ODS parts; `final-quality.css` is not loaded or served.
 
@@ -46,9 +50,9 @@ Production Orders is ODS-native: page header/actions, KPI metrics, filters, crea
 
 Production Executions is ODS-native. KPI metrics, filters, create/actions, master-detail layout, table/registry, inspector, facts, cards, statuses, timeline/milestones, alerts and progress inherit shared ODS semantics; `production-executions.css` is not loaded or served.
 
-Tech Packs is the fourth ODS-native PLM workspace. Page actions, KPI metrics, filters, master-detail layout, registry/table, inspector, immutable dependency facts, readiness surfaces, cards, statuses, empty/error states and native dialog/forms inherit shared ODS semantics; `tech-packs.css` is not loaded or served.
+Tech Packs is ODS-native. Page actions, KPI metrics, filters, master-detail layout, registry/table, inspector, immutable dependency facts, readiness surfaces, cards, statuses, empty/error states and native dialog/forms inherit shared ODS semantics; `tech-packs.css` is not loaded or served.
 
-The migration pattern for remaining modules is: establish reusable semantic coverage first, verify behavior, then remove the module stylesheet. Never copy old module selectors into the canonical ODS stylesheet; add/improve a reusable role, part or shared primitive instead.
+The migration pattern for remaining modules is: establish reusable semantic coverage first, verify behavior, then remove the module stylesheet. Never copy old module selectors into the canonical ODS stylesheet; add/improve a reusable role, part or shared primitive instead. Temporary module selectors belong only in the shared migration adapter and must be removed as business markup becomes natively semantic.
 
 ## Bilingual behaviour
 
@@ -60,7 +64,7 @@ Useful audit targets include `document.documentElement.dataset.odsName`, `odsVer
 
 ## Validation
 
-Run `npm run verify`. It includes `validate:design-system` and `validate:ods-boundaries`, checking metadata/load order, tokens, seven roles, semantic parts, bilingual hooks, CSP-safe markup, the frozen stylesheet boundary, absence of dynamic UI styling, shared progress/dialog primitives and ODS-native delivery of Tech Packs, Production Executions, Production Orders and Final Quality.
+Run `npm run verify`. It includes `validate:design-system` and `validate:ods-boundaries`, checking metadata/load order, tokens, seven roles, semantic parts, bilingual hooks, CSP-safe markup, the decreasing stylesheet boundary, absence of dynamic UI styling, shared progress/dialog primitives and ODS-native delivery of Samples, Tech Packs, Production Executions, Production Orders and Final Quality. `tests/samples-ods-native.test.mjs` separately guards Samples stylesheet retirement, semantic adapter coverage, responsive master-detail geometry and RU/EN content hooks.
 
 Node.js 22 or newer is required.
 

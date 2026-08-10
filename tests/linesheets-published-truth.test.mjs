@@ -40,5 +40,5 @@ test('Linesheets is covered by shared ODS semantics without a standalone stylesh
   }
   assert.equal(html.includes('/omnidata-v14-linesheets.css'), false);
   assert.match(html, /\/ui\/linesheets\.js\?v=visual-20260810-linesheets-1/);
-  assert.match(html, /\/ui\/omnidata-v14-module-adapters\.js\?v=visual-20260805-14-module-adapters-6/);
+  assert.match(html, /\/ui\/omnidata-v14-module-adapters\.js\?v=visual-20260805-14-module-adapters-5/);
 });

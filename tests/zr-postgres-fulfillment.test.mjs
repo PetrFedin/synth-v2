@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { migratePostgres } from '../src/infrastructure/postgres-migrator.mjs';
 import { createPostgresFulfillmentRuntime } from '../src/runtime/postgres-fulfillment-runtime.mjs';
+import { createPostgresInventoryRuntime } from '../src/runtime/postgres-inventory-runtime.mjs';
 import { createPostgresOrderEconomicsStore } from '../src/infrastructure/postgres-order-economics-store.mjs';
 import { createOrderEconomicsService } from '../src/application/order-economics-service.mjs';
 import { createPostgresCostAllocationStore } from '../src/infrastructure/postgres-cost-allocation-store.mjs';
@@ -12,7 +13,7 @@ import { createCostAllocationService } from '../src/application/cost-allocation-
 const databaseUrl = process.env.POSTGRES_TEST_URL;
 const now = '2026-08-10T00:00:00.000Z';
 
-test('PostgreSQL closes committed order -> fulfillment -> physical cost -> landed cost -> SKU allocation -> margin end to end', { skip: !databaseUrl }, async () => {
+test('PostgreSQL closes committed order -> fulfillment -> receipt inventory -> physical cost -> landed cost -> SKU allocation -> margin end to end', { skip: !databaseUrl }, async () => {
   const { Pool } = await import('pg');
   const pool = new Pool({ connectionString: databaseUrl, max: 6 });
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -25,6 +26,7 @@ test('PostgreSQL closes committed order -> fulfillment -> physical cost -> lande
     let sequence = 0;
     const nextId = (prefix) => `${prefix}-pg-${++sequence}`;
     const fulfillment = createPostgresFulfillmentRuntime({ pool, clock: () => now, nextId }).service;
+    const inventory = createPostgresInventoryRuntime({ pool, clock: () => now, nextId }).service;
     const economics = createOrderEconomicsService({
       economicsStore: createPostgresOrderEconomicsStore({ pool }),
       clock: () => now,
@@ -65,12 +67,27 @@ test('PostgreSQL closes committed order -> fulfillment -> physical cost -> lande
 
     const receiptResult = await fulfillment.recordReceipt('cmd-pg-receipt', 'shop-buyer', shipment.id, {
       receiptReference: 'GRN-PG-1', receivedBy: 'Berlin DC', receiptComplete: true,
-      lines: [{ lineId: shipment.lines[0].lineId, receivedQuantity: 2 }],
+      lines: [{ lineId: shipment.lines[0].lineId, receivedQuantity: 2, damagedQuantity: 1 }],
       receivedAt: '2026-08-13T12:00:00.000Z',
     });
-    assert.equal(receiptResult.discrepancy.status, 'clear');
+    assert.equal(receiptResult.discrepancy.status, 'open');
     assert.equal(receiptResult.discrepancy.finalized, true);
-    assert.equal(receiptResult.discrepancy.issueCount, 0);
+    assert.equal(receiptResult.discrepancy.issueCount, 1);
+
+    const inventoryPosting = await inventory.postReceipt('cmd-pg-inventory', 'shop-buyer', receiptResult.receipt.id);
+    assert.equal(inventoryPosting.warehouseLocationId, 'dc-pg');
+    assert.equal(inventoryPosting.movements.length, 1);
+    assert.equal(inventoryPosting.movements[0].onHandDelta, 2);
+    assert.equal(inventoryPosting.movements[0].availableDelta, 1);
+    assert.equal(inventoryPosting.movements[0].quarantineDelta, 1);
+    const inventoryReplay = await inventory.postReceipt('cmd-pg-inventory', 'shop-buyer', receiptResult.receipt.id);
+    assert.equal(inventoryReplay.movementIds[0], inventoryPosting.movementIds[0]);
+    await assert.rejects(inventory.postReceipt('cmd-pg-inventory-duplicate', 'shop-buyer', receiptResult.receipt.id), (error) => error.code === 'INVENTORY_RECEIPT_ALREADY_POSTED');
+    const position = await inventory.getWarehousePositionsForActor('shop-buyer', 'shop-pg', 'dc-pg', { sku: 'SKU-PG' });
+    assert.equal(position.positions.length, 1);
+    assert.equal(position.positions[0].onHandQuantity, 2);
+    assert.equal(position.positions[0].availableQuantity, 1);
+    assert.equal(position.positions[0].quarantineQuantity, 1);
 
     const freight = await fulfillment.recordPhysicalActualCost('cmd-pg-freight', 'brand-finance', shipment.id, {
       costType: 'freight', amount: 30, currency: 'EUR', sku: 'SKU-PG', sourceRef: 'DHL-INV-100', occurredAt: '2026-08-13T14:00:00.000Z',
@@ -151,19 +168,25 @@ test('PostgreSQL closes committed order -> fulfillment -> physical cost -> lande
       (SELECT count(*)::int FROM shipment_notice_snapshots) AS shipments,
       (SELECT count(*)::int FROM receipt_snapshots) AS receipts,
       (SELECT count(*)::int FROM receipt_discrepancy_snapshots) AS discrepancies,
+      (SELECT count(*)::int FROM inventory_movement_ledger_entries) AS inventory_movements,
       (SELECT count(*)::int FROM actual_cost_ledger_entries) AS actual_cost_entries,
       (SELECT count(*)::int FROM landed_cost_snapshots) AS landed_costs,
       (SELECT count(*)::int FROM cost_allocation_run_snapshots) AS allocation_runs,
       (SELECT count(*)::int FROM margin_actualization_snapshots) AS margins,
-      (SELECT count(*)::int FROM outbox_events WHERE event_type LIKE 'fulfillment.%') AS fulfillment_events`);
+      (SELECT count(*)::int FROM outbox_events WHERE event_type LIKE 'fulfillment.%') AS fulfillment_events,
+      (SELECT count(*)::int FROM outbox_events WHERE event_type LIKE 'inventory.%') AS inventory_events`);
     assert.deepEqual(counts.rows[0], {
-      plans: 1, shipments: 1, receipts: 1, discrepancies: 1,
-      actual_cost_entries: 4, landed_costs: 1, allocation_runs: 1, margins: 1, fulfillment_events: 4,
+      plans: 1, shipments: 1, receipts: 1, discrepancies: 1, inventory_movements: 1,
+      actual_cost_entries: 4, landed_costs: 1, allocation_runs: 1, margins: 1, fulfillment_events: 4, inventory_events: 2,
     });
 
     await assert.rejects(
       pool.query('UPDATE receipt_snapshots SET status = status WHERE id = $1', [receiptResult.receipt.id]),
       (error) => error.code === '55000',
+    );
+    await assert.rejects(
+      pool.query('UPDATE inventory_movement_ledger_entries SET on_hand_delta = on_hand_delta WHERE id = $1', [inventoryPosting.movementIds[0]]),
+      (error) => error.code === '55000' && error.message === 'INVENTORY_LEDGER_APPEND_ONLY',
     );
     await assert.rejects(
       pool.query('UPDATE actual_cost_ledger_entries SET amount = amount WHERE id = $1', [quality.id]),

@@ -2,493 +2,221 @@
   'use strict';
 
   const LS = global.SynthaLinesheets || (global.SynthaLinesheets = {
-    selectedId: '',
-    query: '',
-    status: 'all',
-    season: 'all',
-    tab: 'main',
-    page: 1,
-    pageSize: 10,
+    collectionId: '', selectedId: '', query: '', items: [], nextCursor: null,
+    loadedCollectionId: '', loading: false, loadingMore: false, error: '', requestToken: 0,
   });
-
-  const STATUS_ORDER = ['active', 'draft', 'sent', 'viewed'];
-  const STATUS_TEXT = Object.freeze({
-    active: ['Активна', 'Active'],
-    draft: ['Черновик', 'Draft'],
-    sent: ['Отправлена', 'Sent'],
-    viewed: ['Просмотрена', 'Viewed'],
-  });
-  const TABS = Object.freeze([
-    ['main', 'Главная', 'Home'],
-    ['relations', 'Карта связей', 'Relationship map'],
-    ['roles', 'Матрица ролей', 'Role matrix'],
-    ['sources', 'Источники', 'Sources'],
-    ['history', 'История изменений', 'Change history'],
-  ]);
 
   function text(ru, en) { return localText(ru, en); }
   function list(input) { return Array.isArray(input) ? input : []; }
   function value(input) { return String(input ?? '').trim(); }
-  function finiteNumber(input, fallback = 0) {
-    const parsed = Number(input);
-    return Number.isFinite(parsed) ? parsed : fallback;
-  }
-
-  function collectionStatus(collection) {
-    const raw = value(collection.status).toLowerCase();
-    if (raw === 'published' || raw === 'active' || raw === 'open') return 'active';
-    if (raw === 'sent' || raw === 'submitted') return 'sent';
-    if (raw === 'viewed' || raw === 'closed' || raw === 'completed') return 'viewed';
-    return 'draft';
-  }
-
-  function collectionSeason(collection) {
-    return value(collection.season || collection.seasonName || collection.code || collection.campaignName)
-      || text('Без сезона', 'No season');
-  }
+  function collections() { return list(state.workspace?.collections); }
+  function collectionName(collection) { return value(collection?.name || collection?.title || collection?.code || collection?.id) || text('Коллекция', 'Collection'); }
 
   function formatDate(raw) {
     const date = raw ? new Date(raw) : null;
     if (!date || Number.isNaN(date.getTime())) return '—';
     return new Intl.DateTimeFormat(I18N.getLocale() === 'en' ? 'en-GB' : 'ru-RU', {
-      day: '2-digit', month: '2-digit', year: 'numeric',
+      day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
     }).format(date);
   }
 
-  function daysAgo(raw) {
-    const date = raw ? new Date(raw) : null;
-    if (!date || Number.isNaN(date.getTime())) return '';
-    const days = Math.max(0, Math.floor((Date.now() - date.getTime()) / 86400000));
-    if (I18N.getLocale() === 'en') return days === 0 ? 'today' : `${days} days ago`;
-    if (days === 0) return 'сегодня';
-    if (days % 10 === 1 && days % 100 !== 11) return `${days} день назад`;
-    if ([2, 3, 4].includes(days % 10) && ![12, 13, 14].includes(days % 100)) return `${days} дня назад`;
-    return `${days} дней назад`;
+  function formatMoney(amount, currency) {
+    const number = Number(amount);
+    if (!Number.isFinite(number)) return '—';
+    try {
+      return new Intl.NumberFormat(I18N.getLocale() === 'en' ? 'en-GB' : 'ru-RU', {
+        style: 'currency', currency: value(currency) || 'USD', maximumFractionDigits: 2,
+      }).format(number);
+    } catch { return `${number.toFixed(2)} ${value(currency)}`.trim(); }
   }
 
-  function organisationById(id) {
-    return list(state.workspace.organisations).find(item => item.id === id) || null;
+  function shortHash(hash) {
+    const normalized = value(hash);
+    return normalized ? `${normalized.slice(0, 10)}…${normalized.slice(-6)}` : '—';
   }
 
-  function buyerFor(collection) {
-    const selection = list(state.workspace.selections).find(item => item.collectionId === collection.id);
-    const buyerId = selection?.retailerId || selection?.buyerId || selection?.organisationId;
-    const organisation = buyerId ? organisationById(buyerId) : null;
-    return {
-      name: value(organisation?.name) || text('Не назначен', 'Not assigned'),
-      country: value(organisation?.country || organisation?.market || organisation?.address?.country)
-        || value(collection.country || collection.market)
-        || text('Не указан', 'Not specified'),
-    };
+  function resetForCollection(collectionId) {
+    LS.collectionId = collectionId; LS.selectedId = ''; LS.items = []; LS.nextCursor = null;
+    LS.loadedCollectionId = ''; LS.loading = false; LS.loadingMore = false; LS.error = ''; LS.requestToken += 1;
   }
 
-  function buildRows() {
-    const collections = list(state.workspace.collections);
-    const skus = list(state.workspace.catalogSkus);
-    const selections = list(state.workspace.selections);
-    return collections.map((collection, index) => {
-      const relatedSkus = skus.filter(item => item.collectionId === collection.id);
-      const relatedSelections = selections.filter(item => item.collectionId === collection.id);
-      const buyer = buyerFor(collection);
-      const updatedAt = collection.updatedAt || collection.publishedAt || collection.createdAt;
-      return {
-        id: value(collection.id) || `collection-${index + 1}`,
-        code: value(collection.code) || `LS-${String(index + 1).padStart(3, '0')}`,
-        title: value(collection.name) || text(`Лист коллекции ${index + 1}`, `Collection linesheet ${index + 1}`),
-        subtitle: relatedSkus.length
-          ? text(`${relatedSkus.length} товаров`, `${relatedSkus.length} products`)
-          : text('Нет добавленных товаров', 'No products added'),
-        buyer: buyer.name,
-        country: buyer.country,
-        collection: collectionSeason(collection),
-        updatedAt,
-        updatedDate: formatDate(updatedAt),
-        updatedRelative: daysAgo(updatedAt),
-        status: collectionStatus(collection),
-        views: finiteNumber(collection.views ?? collection.viewCount, 0),
-        selectionCount: relatedSelections.length,
-        products: relatedSkus,
-        productCount: relatedSkus.length,
-        description: value(collection.description) || text(
-          'Лист коллекции объединяет ассортимент, коммерческие условия, материалы и связанные данные для работы с покупателем.',
-          'The linesheet brings together the assortment, commercial terms, materials and related data for buyer collaboration.',
-        ),
-      };
-    });
+  async function loadPublications({ append = false } = {}) {
+    const collectionId = value(LS.collectionId);
+    if (!collectionId || LS.loading || LS.loadingMore) return;
+    const requestToken = ++LS.requestToken;
+    if (append) LS.loadingMore = true; else LS.loading = true;
+    LS.error = '';
+    try {
+      const cursor = append && LS.nextCursor ? `&cursor=${encodeURIComponent(LS.nextCursor)}` : '';
+      const page = await api(`/v2/collections/${encodeURIComponent(collectionId)}/commercial-publications?limit=50${cursor}`);
+      if (requestToken !== LS.requestToken || collectionId !== LS.collectionId) return;
+      const incoming = list(page?.items);
+      LS.items = append ? [...LS.items, ...incoming] : incoming;
+      LS.nextCursor = page?.nextCursor || null;
+      LS.loadedCollectionId = collectionId;
+      if (!LS.selectedId || !LS.items.some(item => item.id === LS.selectedId)) LS.selectedId = LS.items[0]?.id || '';
+    } catch (error) {
+      if (requestToken !== LS.requestToken || collectionId !== LS.collectionId) return;
+      LS.error = value(error?.message) || text('Не удалось загрузить опубликованные листы.', 'Could not load published linesheets.');
+      if (!append) LS.items = [];
+    } finally {
+      if (requestToken === LS.requestToken) {
+        LS.loading = false; LS.loadingMore = false;
+        if (state.view === 'linesheets') renderApp();
+      }
+    }
   }
 
-  function sampleRows() {
-    const names = I18N.getLocale() === 'en'
-      ? ['Fall 2026 Main Line', 'Spring 2026 Preview', 'Resort 2026', 'Pre-Order Summer']
-      : ['Основная линия Осень 2026', 'Предпросмотр Весна 2026', 'Круизная коллекция 2026', 'Предзаказ Лето'];
-    return names.map((title, index) => ({
-      id: `sample-${index + 1}`,
-      code: `LS-${125 + index}`,
-      title,
-      subtitle: text('Демонстрационная структура', 'Demonstration structure'),
-      buyer: text('Не назначен', 'Not assigned'),
-      country: text('Не указан', 'Not specified'),
-      collection: title,
-      updatedAt: '',
-      updatedDate: '—',
-      updatedRelative: '',
-      status: STATUS_ORDER[index],
-      views: 0,
-      selectionCount: 0,
-      products: [],
-      productCount: 0,
-      example: true,
-      description: text(
-        'Создайте коллекцию и добавьте товары — этот пример будет автоматически заменён реальными данными Syntha.',
-        'Create a collection and add products — this example will be replaced automatically with real Syntha data.',
-      ),
-    }));
+  function ensureLoad() {
+    const available = collections();
+    if (!LS.collectionId && available.length) LS.collectionId = value(available[0].id);
+    if (!LS.collectionId || LS.loading || LS.loadedCollectionId === LS.collectionId) return;
+    void loadPublications();
   }
 
-  function rows() {
-    const actual = buildRows();
-    return actual.length ? actual : sampleRows();
+  function filteredPublications() {
+    const query = value(LS.query).toLocaleLowerCase();
+    if (!query) return LS.items;
+    return LS.items.filter(publication => [publication.id, publication.currency, publication.contentHash,
+      ...list(publication.lines).flatMap(line => [line.sku, line.name])].join(' ').toLocaleLowerCase().includes(query));
   }
 
-  function badge(status) {
-    const pair = STATUS_TEXT[status] || STATUS_TEXT.draft;
-    return el('span', {
-      className: `ls9-status ls9-status-${status}`,
-      rawText: text(pair[0], pair[1]),
-    });
-  }
-
-  function thumbnail(row, position = 0) {
-    const sku = row.products[position];
-    const title = value(sku?.name || row.title);
-    const node = el('div', { className: `ls9-thumb ls9-thumb-${(position % 6) + 1}`, title });
-    node.append(el('span', { rawText: initials(title || row.code) }));
-    return node;
-  }
-
-  function tabs() {
-    const nav = el('nav', { className: 'ls9-tabs', ariaLabel: text('Вкладки листов коллекций', 'Linesheet tabs') });
-    TABS.forEach(([id, ru, en]) => {
-      const button = el('button', {
-        className: `ls9-tab ${LS.tab === id ? 'active' : ''}`.trim(),
-        type: 'button',
-        rawText: text(ru, en),
-        ariaPressed: LS.tab === id ? 'true' : 'false',
-      });
-      button.addEventListener('click', () => {
-        LS.tab = id;
-        if (id !== 'main') toast(text(
-          'Раздел будет связан с данными листа коллекции.',
-          'This section will be linked to the linesheet data.',
-        ));
-        renderApp();
-      });
-      nav.append(button);
-    });
-    return nav;
-  }
-
-  function metrics(allRows) {
-    const strip = el('section', { className: 'ls9-metrics', ariaLabel: text('Статусы листов коллекций', 'Linesheet statuses') });
-    const definitions = [
-      ['all', text('Все листы', 'All linesheets'), allRows.length],
-      ...STATUS_ORDER.map(status => [
-        status,
-        text(STATUS_TEXT[status][0], STATUS_TEXT[status][1]),
-        allRows.filter(row => row.status === status).length,
-      ]),
-    ];
-    definitions.forEach(([id, label, count]) => {
-      const button = el('button', {
-        className: `ls9-metric ${LS.status === id ? 'active' : ''}`.trim(),
-        type: 'button',
-        ariaPressed: LS.status === id ? 'true' : 'false',
-      });
-      button.append(
-        el('span', { className: `ls9-metric-dot tone-${id}`, ariaHidden: 'true' }),
-        el('span', { className: 'ls9-metric-label', rawText: label }),
-        el('strong', { rawText: String(count) }),
-      );
-      button.addEventListener('click', () => { LS.status = id; LS.page = 1; renderApp(); });
-      strip.append(button);
-    });
-    return strip;
-  }
-
-  function controls(allRows) {
+  function toolbar() {
+    const available = collections();
     const bar = el('section', { className: 'ls9-commandbar' });
-    const search = el('label', { className: 'ls9-search' });
-    search.append(icon('search'));
-    const input = el('input', {
-      type: 'search',
-      value: LS.query,
-      placeholder: text('Поиск листа, покупателя, коллекции…', 'Search linesheet, buyer, collection...'),
-      ariaLabel: text('Поиск листов коллекций', 'Search linesheets'),
-    });
-    input.addEventListener('change', () => { LS.query = input.value.trim(); LS.page = 1; renderApp(); });
-    input.addEventListener('keydown', event => {
-      if (event.key === 'Enter') { LS.query = input.value.trim(); LS.page = 1; renderApp(); }
-    });
-    search.append(input);
-
-    const filter = el('button', { className: 'ls9-filter-button', type: 'button' });
-    filter.append(icon('selections'), el('span', { rawText: text('Фильтры', 'Filters') }));
-    filter.addEventListener('click', () => toast(text(
-      'Расширенные фильтры будут открываться в боковой панели.',
-      'Advanced filters will open in a side panel.',
-    )));
-
-    const status = el('select', { className: 'ls9-select', ariaLabel: text('Фильтр по статусу', 'Filter by status') });
-    [['all', text('Статус', 'Status')], ...STATUS_ORDER.map(item => [item, text(STATUS_TEXT[item][0], STATUS_TEXT[item][1])])]
-      .forEach(([id, label]) => {
-        const option = el('option', { value: id, rawText: label, selected: LS.status === id });
-        status.append(option);
-      });
-    status.addEventListener('change', () => { LS.status = status.value; LS.page = 1; renderApp(); });
-
-    const seasons = [...new Set(allRows.map(row => row.collection).filter(Boolean))];
-    const season = el('select', { className: 'ls9-select', ariaLabel: text('Фильтр по сезону', 'Filter by season') });
-    season.append(el('option', { value: 'all', rawText: text('Сезон', 'Season'), selected: LS.season === 'all' }));
-    seasons.forEach(item => season.append(el('option', {
-      value: item,
-      rawText: item,
-      selected: LS.season === item,
+    const collectionLabel = el('label', { className: 'ls9-field' });
+    collectionLabel.append(el('span', { className: 'ls9-field-label', rawText: text('Коллекция', 'Collection') }));
+    const select = el('select', { className: 'ls9-select', ariaLabel: text('Выберите коллекцию', 'Select collection'), disabled: available.length === 0 });
+    if (!available.length) select.append(el('option', { value: '', rawText: text('Нет доступных коллекций', 'No collections available') }));
+    available.forEach(collection => select.append(el('option', {
+      value: value(collection.id), rawText: collectionName(collection), selected: value(collection.id) === LS.collectionId,
     })));
-    season.addEventListener('change', () => { LS.season = season.value; LS.page = 1; renderApp(); });
+    select.addEventListener('change', () => { resetForCollection(select.value); renderApp(); });
+    collectionLabel.append(select);
 
-    const more = el('button', { className: 'ls9-icon-button', type: 'button', rawText: '•••', ariaLabel: text('Дополнительные действия', 'More actions') });
-    const spacer = el('span', { className: 'ls9-command-spacer', ariaHidden: 'true' });
-    const listButton = el('button', { className: 'ls9-view-button active', type: 'button', ariaLabel: text('Список', 'List') });
-    listButton.append(el('span', { className: 'ls9-list-glyph', ariaHidden: 'true' }));
-    const gridButton = el('button', { className: 'ls9-view-button', type: 'button', ariaLabel: text('Сетка', 'Grid') });
-    gridButton.append(el('span', { className: 'ls9-grid-glyph', ariaHidden: 'true' }));
-    gridButton.addEventListener('click', () => toast(text(
-      'Сеточный режим будет добавлен после товарной галереи.',
-      'Grid mode will follow the product gallery.',
-    )));
+    const searchLabel = el('label', { className: 'ls9-search' });
+    searchLabel.append(icon('search'));
+    const search = el('input', { type: 'search', value: LS.query,
+      placeholder: text('Поиск по публикации, SKU или товару…', 'Search publication, SKU or product...'),
+      ariaLabel: text('Поиск опубликованных листов', 'Search published linesheets') });
+    search.addEventListener('input', () => { LS.query = search.value; });
+    search.addEventListener('change', () => renderApp());
+    search.addEventListener('keydown', event => { if (event.key === 'Enter') renderApp(); });
+    searchLabel.append(search);
 
-    bar.append(search, filter, status, season, more, spacer, listButton, gridButton);
+    const refresh = el('button', { className: 'ls9-filter-button', type: 'button' });
+    refresh.append(icon('refresh'), el('span', { rawText: text('Обновить', 'Refresh') }));
+    refresh.addEventListener('click', () => { LS.loadedCollectionId = ''; LS.nextCursor = null; LS.selectedId = ''; void loadPublications(); renderApp(); });
+    bar.append(collectionLabel, searchLabel, refresh);
     return bar;
   }
 
-  function filteredRows(allRows) {
-    const query = LS.query.toLocaleLowerCase();
-    return allRows.filter(row => {
-      if (LS.status !== 'all' && row.status !== LS.status) return false;
-      if (LS.season !== 'all' && row.collection !== LS.season) return false;
-      if (!query) return true;
-      return [row.code, row.title, row.buyer, row.country, row.collection]
-        .join(' ').toLocaleLowerCase().includes(query);
-    });
+  function metrics() {
+    const publications = LS.items.length;
+    const lines = LS.items.reduce((sum, publication) => sum + list(publication.lines).length, 0);
+    const currencies = new Set(LS.items.map(publication => publication.currency).filter(Boolean)).size;
+    const strip = el('section', { className: 'ls9-metrics', ariaLabel: text('Сводка опубликованных листов', 'Published linesheet summary') });
+    [[text('Публикации', 'Publications'), publications], [text('Строки ассортимента', 'Assortment lines'), lines],
+      [text('Валюты', 'Currencies'), currencies], [text('Режим', 'Mode'), text('Только чтение', 'Read only')]]
+      .forEach(([label, metric]) => { const card = el('div', { className: 'ls9-metric' }); card.append(el('span', { className: 'ls9-metric-label', rawText: label }), el('strong', { rawText: String(metric) })); strip.append(card); });
+    return strip;
   }
 
-  function tableRow(row, index) {
-    const tr = el('tr', { className: `ls9-row ${LS.selectedId === row.id ? 'selected' : ''}`.trim(), tabindex: '0' });
-    const selectRow = () => { LS.selectedId = row.id; renderApp(); };
-    tr.addEventListener('click', selectRow);
-    tr.addEventListener('keydown', event => {
-      if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectRow(); }
-    });
-
-    const checkboxCell = el('td', { className: 'ls9-check-cell' });
-    const checkbox = el('input', {
-      type: 'checkbox',
-      checked: LS.selectedId === row.id,
-      ariaLabel: text('Выбрать строку', 'Select row'),
-    });
-    checkbox.addEventListener('click', event => { event.stopPropagation(); LS.selectedId = row.id; renderApp(); });
-    checkboxCell.append(checkbox);
-
-    const numberCell = el('td', { className: 'ls9-number-cell', rawText: String(index + 1) });
-    const nameCell = el('td', { className: 'ls9-name-cell' });
-    const name = el('div', { className: 'ls9-name-copy' });
-    name.append(
-      el('strong', { rawText: row.code }),
-      el('span', { rawText: row.title }),
-      el('small', { rawText: row.subtitle }),
-    );
-    nameCell.append(thumbnail(row), name);
-
-    const buyerCell = el('td');
-    buyerCell.append(el('strong', { rawText: row.buyer }), el('small', { rawText: row.country }));
-    const collectionCell = el('td', { rawText: row.collection });
-    const dateCell = el('td');
-    dateCell.append(el('strong', { rawText: row.updatedDate }), el('small', { rawText: row.updatedRelative }));
-    const statusCell = el('td'); statusCell.append(badge(row.status));
-    const viewsCell = el('td', { className: 'ls9-views-cell', rawText: String(row.views) });
-    const actionsCell = el('td', { className: 'ls9-actions-cell' });
-    const actions = el('button', { className: 'ls9-row-menu', type: 'button', rawText: '•••', ariaLabel: text('Действия строки', 'Row actions') });
-    actions.addEventListener('click', event => {
-      event.stopPropagation();
-      toast(text('Меню действий листа коллекции.', 'Linesheet actions menu.'));
-    });
-    actionsCell.append(actions);
-    tr.append(checkboxCell, numberCell, nameCell, buyerCell, collectionCell, dateCell, statusCell, viewsCell, actionsCell);
-    return tr;
+  function statusCell() {
+    const cell = el('td');
+    cell.append(el('span', { className: 'ls9-status ls9-status-published', rawText: text('Опубликовано', 'Published') }));
+    return cell;
   }
 
-  function registry(allRows) {
-    const filtered = filteredRows(allRows);
-    const totalPages = Math.max(1, Math.ceil(filtered.length / LS.pageSize));
-    LS.page = Math.min(Math.max(1, LS.page), totalPages);
-    const offset = (LS.page - 1) * LS.pageSize;
-    const visible = filtered.slice(offset, offset + LS.pageSize);
-    if (!LS.selectedId || !filtered.some(row => row.id === LS.selectedId)) LS.selectedId = filtered[0]?.id || allRows[0]?.id || '';
-
-    const master = el('section', { className: 'ls9-master' });
-    const tableWrap = el('div', { className: 'ls9-table-wrap' });
+  function publicationTable(publications) {
+    const wrap = el('div', { className: 'ls9-table-wrap' });
     const table = el('table', { className: 'ls9-table' });
-    const thead = el('thead');
-    const head = el('tr');
-    [
-      '', '№', text('Лист коллекции', 'Linesheet'), text('Покупатель / Ретейл', 'Buyer / Retailer'),
-      text('Коллекция', 'Collection'), text('Дата обновления', 'Updated'), text('Статус', 'Status'),
-      text('Просмотры', 'Views'), text('Действия', 'Actions'),
-    ].forEach((label, index) => head.append(el('th', { className: index === 0 ? 'ls9-check-cell' : '', rawText: label })));
-    thead.append(head);
-    const tbody = el('tbody');
-    visible.forEach((row, index) => tbody.append(tableRow(row, offset + index)));
-    table.append(thead, tbody);
-    tableWrap.append(table);
-    if (!visible.length) tableWrap.append(el('div', {
-      className: 'ls9-empty',
-      rawText: text('По выбранным фильтрам данных нет.', 'No data matches the selected filters.'),
-    }));
-
-    const footer = el('footer', { className: 'ls9-table-footer' });
-    const start = visible.length ? offset + 1 : 0;
-    const end = offset + visible.length;
-    footer.append(el('span', { rawText: text(`Показано ${start}–${end} из ${filtered.length}`, `Showing ${start}–${end} of ${filtered.length}`) }));
-    const pages = el('div', { className: 'ls9-pagination' });
-    const prev = el('button', {
-      type: 'button', rawText: '‹', disabled: LS.page <= 1,
-      ariaLabel: text('Предыдущая страница', 'Previous page'),
+    const head = el('thead'); const headRow = el('tr');
+    [text('Публикация', 'Publication'), text('Статус', 'Status'), text('Опубликовано', 'Published'), text('Валюта', 'Currency'), text('Позиций', 'Lines'), text('Контрольная сумма', 'Checksum')]
+      .forEach(label => headRow.append(el('th', { rawText: label })));
+    head.append(headRow);
+    const body = el('tbody');
+    publications.forEach(publication => {
+      const row = el('tr', { className: `ls9-row ${LS.selectedId === publication.id ? 'selected' : ''}`.trim(), tabindex: '0' });
+      const choose = () => { LS.selectedId = publication.id; renderApp(); };
+      row.addEventListener('click', choose);
+      row.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); choose(); } });
+      row.append(el('td', { rawText: value(publication.id) || '—' }), statusCell(), el('td', { rawText: formatDate(publication.publishedAt) }),
+        el('td', { rawText: value(publication.currency) || '—' }), el('td', { rawText: String(list(publication.lines).length) }),
+        el('td', { rawText: shortHash(publication.contentHash), title: value(publication.contentHash) }));
+      body.append(row);
     });
-    prev.addEventListener('click', () => { LS.page -= 1; renderApp(); });
-    pages.append(prev);
-    for (let page = 1; page <= Math.min(totalPages, 5); page += 1) {
-      const button = el('button', { className: LS.page === page ? 'active' : '', type: 'button', rawText: String(page) });
-      button.addEventListener('click', () => { LS.page = page; renderApp(); });
-      pages.append(button);
-    }
-    const next = el('button', {
-      type: 'button', rawText: '›', disabled: LS.page >= totalPages,
-      ariaLabel: text('Следующая страница', 'Next page'),
-    });
-    next.addEventListener('click', () => { LS.page += 1; renderApp(); });
-    pages.append(next);
-    const size = el('select', { className: 'ls9-page-size', ariaLabel: text('Записей на странице', 'Rows per page') });
-    [10, 25, 50].forEach(count => size.append(el('option', {
-      value: count,
-      rawText: text(`${count} на странице`, `${count} per page`),
-      selected: LS.pageSize === count,
-    })));
-    size.addEventListener('change', () => { LS.pageSize = Number(size.value); LS.page = 1; renderApp(); });
-    footer.append(pages, size);
-    master.append(tableWrap, footer);
-    return { master, selected: filtered.find(row => row.id === LS.selectedId) || allRows[0] };
+    table.append(head, body); wrap.append(table); return wrap;
   }
 
-  function infoItem(label, content) {
-    const node = el('div', { className: 'ls9-info-item' });
-    node.append(el('span', { rawText: label }), el('strong', { rawText: content || '—' }));
-    return node;
+  function lineTable(publication) {
+    const wrap = el('div', { className: 'ls9-table-wrap ls9-line-table-wrap' });
+    const table = el('table', { className: 'ls9-table ls9-line-table' });
+    const head = el('thead'); const row = el('tr');
+    [text('SKU', 'SKU'), text('Наименование', 'Name'), text('Версия', 'Version'), text('Цена', 'Price'), text('MOQ', 'MOQ')]
+      .forEach(label => row.append(el('th', { rawText: label })));
+    head.append(row); const body = el('tbody');
+    list(publication.lines).forEach(line => { const tr = el('tr'); tr.append(el('td', { rawText: value(line.sku) || '—' }), el('td', { rawText: value(line.name) || '—' }),
+      el('td', { rawText: line.catalogVersion == null ? '—' : String(line.catalogVersion) }), el('td', { rawText: formatMoney(line.unitPrice, line.currency || publication.currency) }),
+      el('td', { rawText: line.minimumOrderQuantity == null ? '—' : String(line.minimumOrderQuantity) })); body.append(tr); });
+    table.append(head, body); wrap.append(table); return wrap;
   }
 
-  function inspector(row) {
+  function inspector(publication) {
     const aside = el('aside', { className: 'ls9-inspector' });
-    if (!row) return aside;
-    const header = el('header', { className: 'ls9-inspector-header' });
-    const title = el('div', { className: 'ls9-inspector-title' });
-    title.append(
-      el('span', { className: 'ls9-code', rawText: row.code }),
-      el('h2', { rawText: row.title }),
-      el('p', { rawText: row.collection }),
-    );
-    const tools = el('div', { className: 'ls9-inspector-tools' });
-    tools.append(badge(row.status));
-    const more = el('button', { type: 'button', rawText: '•••', ariaLabel: text('Дополнительные действия', 'More actions') });
-    const close = el('button', { type: 'button', rawText: '×', ariaLabel: text('Закрыть панель', 'Close panel') });
-    close.addEventListener('click', () => { LS.selectedId = ''; renderApp(); });
-    tools.append(more, close);
-    header.append(title, tools);
+    if (!publication) { aside.append(el('div', { className: 'ls9-empty', rawText: text('Выберите опубликованный лист.', 'Select a published linesheet.') })); return aside; }
+    const header = el('div', { className: 'ls9-inspector-head' }); const title = el('div');
+    title.append(el('span', { className: 'ls9-eyebrow', rawText: text('Неизменяемый коммерческий snapshot', 'Immutable commercial snapshot') }), el('h3', { rawText: value(publication.id) || text('Публикация', 'Publication') }));
+    header.append(title, el('span', { className: 'ls9-status ls9-status-published', rawText: text('Опубликовано', 'Published') }));
+    const info = el('dl', { className: 'ls9-info-grid' });
+    [[text('Коллекция', 'Collection'), value(publication.collectionId) || '—'], [text('Валюта', 'Currency'), value(publication.currency) || '—'],
+      [text('Опубликовано', 'Published'), formatDate(publication.publishedAt)], [text('Позиций', 'Lines'), String(list(publication.lines).length)], [text('Контрольная сумма', 'Checksum'), value(publication.contentHash) || '—']]
+      .forEach(([label, content]) => { const item = el('div', { className: 'ls9-info-item' }); item.append(el('dt', { rawText: label }), el('dd', { rawText: content })); info.append(item); });
+    const sectionTitle = el('div', { className: 'ls9-section-title' });
+    sectionTitle.append(el('h4', { rawText: text('Опубликованный ассортимент', 'Published assortment') }), el('span', { rawText: text('Только чтение', 'Read only') }));
+    const actions = el('div', { className: 'ls9-actions' });
+    const printButton = el('button', { className: 'button', type: 'button', rawText: text('Печать', 'Print') }); printButton.addEventListener('click', () => global.print());
+    const exportButton = el('button', { className: 'button primary', type: 'button', rawText: text('Экспорт CSV', 'Export CSV') }); exportButton.addEventListener('click', () => exportPublication(publication));
+    actions.append(printButton, exportButton); aside.append(header, info, sectionTitle, lineTable(publication), actions); return aside;
+  }
 
-    const summary = el('div', { className: 'ls9-inspector-summary' });
-    [
-      [String(row.productCount), text('товаров', 'products')],
-      [row.buyer, text('покупатель', 'buyer')],
-      [row.collection, text('коллекция', 'collection')],
-      [row.updatedDate, text('обновлено', 'updated')],
-    ].forEach(([primary, secondary]) => {
-      const item = el('div');
-      item.append(el('strong', { rawText: primary }), el('span', { rawText: secondary }));
-      summary.append(item);
-    });
+  function exportPublication(publication) {
+    const headers = ['sku', 'name', 'catalogVersion', 'unitPrice', 'currency', 'minimumOrderQuantity'];
+    const escapeCsv = input => `"${String(input ?? '').replaceAll('"', '""')}"`;
+    const rows = list(publication.lines).map(line => headers.map(key => escapeCsv(line[key])).join(','));
+    const blob = new Blob([[headers.join(','), ...rows].join('\n')], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url;
+    link.download = `${value(publication.id) || 'commercial-publication'}.csv`; document.body.append(link); link.click(); link.remove(); URL.revokeObjectURL(url);
+  }
 
-    const nav = el('nav', { className: 'ls9-inspector-tabs' });
-    [text('Обзор', 'Overview'), text('Товары', 'Products'), text('Покупатели', 'Buyers'), text('Статистика', 'Statistics'), text('История', 'History')]
-      .forEach((label, index) => nav.append(el('button', { className: index === 0 ? 'active' : '', type: 'button', rawText: label })));
+  function statePanel(className, title, description, action) {
+    const panel = el('section', { className: `ls9-state ${className}`.trim() }); panel.append(el('h3', { rawText: title }), el('p', { rawText: description })); if (action) panel.append(action); return panel;
+  }
 
-    const gallery = el('div', { className: 'ls9-gallery' });
-    const previewCount = Math.max(5, Math.min(6, row.products.length || 5));
-    for (let index = 0; index < previewCount; index += 1) gallery.append(thumbnail(row, index));
-    if (row.productCount > 5) gallery.append(el('div', { className: 'ls9-gallery-more', rawText: `+${row.productCount - 5}` }));
-
-    const description = el('section', { className: 'ls9-description' });
-    description.append(el('h3', { rawText: text('Описание', 'Description') }), el('p', { rawText: row.description }));
-    if (row.example) description.append(el('span', { className: 'ls9-example-note', rawText: text('Примерный режим', 'Sample mode') }));
-
-    const info = el('section', { className: 'ls9-info-grid' });
-    info.append(
-      infoItem(text('Сезон', 'Season'), row.collection),
-      infoItem(text('Коллекция', 'Collection'), row.title),
-      infoItem(text('Тип', 'Type'), text('Лист коллекции', 'Linesheet')),
-      infoItem(text('Товаров', 'Products'), String(row.productCount)),
-      infoItem(text('Дата обновления', 'Updated'), row.updatedDate),
-      infoItem(text('Статус', 'Status'), text(STATUS_TEXT[row.status][0], STATUS_TEXT[row.status][1])),
-    );
-
-    const related = el('section', { className: 'ls9-related' });
-    related.append(el('h3', { rawText: text('Связанные данные', 'Related data') }));
-    const tags = el('div');
-    [row.buyer, row.collection, text('Ассортимент', 'Assortment')]
-      .forEach(item => tags.append(el('button', { type: 'button', rawText: item })));
-    tags.append(el('button', { type: 'button', rawText: '+' }));
-    related.append(tags);
-
-    const actions = el('footer', { className: 'ls9-inspector-actions' });
-    const open = el('button', { className: 'button primary', type: 'button', rawText: text('Открыть лист', 'Open linesheet') });
-    const edit = el('button', { className: 'button', type: 'button', rawText: text('Редактировать', 'Edit') });
-    const share = el('button', { className: 'button', type: 'button', rawText: text('Поделиться', 'Share') });
-    open.addEventListener('click', () => toast(text('Лист коллекции открыт в рабочем режиме.', 'Linesheet opened in workspace mode.'), 'success'));
-    edit.addEventListener('click', () => toast(text('Редактирование будет связано с коллекцией и SKU.', 'Editing will be linked to the collection and SKUs.')));
-    share.addEventListener('click', () => toast(text('Ссылка для покупателя будет сформирована после публикации.', 'The buyer link will be generated after publication.')));
-    actions.append(open, edit, share);
-
-    aside.append(header, summary, nav, gallery, description, info, related, actions);
-    return aside;
+  function content() {
+    if (!collections().length) return statePanel('ls9-empty', text('Нет доступных коллекций', 'No collections available'), text('Сначала создайте или откройте коллекцию. Linesheets не создаёт демонстрационные коммерческие данные.', 'Create or open a collection first. Linesheets does not create demonstration commercial data.'));
+    if (LS.loading && !LS.items.length) return statePanel('ls9-loading', text('Загрузка опубликованных листов…', 'Loading published linesheets...'), text('Получаем неизменяемые коммерческие snapshots из серверного реестра.', 'Fetching immutable commercial snapshots from the server registry.'));
+    if (LS.error && !LS.items.length) { const retry = el('button', { className: 'button', type: 'button', rawText: text('Повторить', 'Retry') }); retry.addEventListener('click', () => { LS.loadedCollectionId = ''; void loadPublications(); renderApp(); }); return statePanel('ls9-error', text('Не удалось загрузить публикации', 'Could not load publications'), LS.error, retry); }
+    if (!LS.items.length) return statePanel('ls9-empty', text('Опубликованных листов пока нет', 'No published linesheets yet'), text('После коммерческой публикации коллекции immutable snapshot появится здесь автоматически.', 'After the collection is commercially published, its immutable snapshot will appear here automatically.'));
+    const filtered = filteredPublications(); const selected = LS.items.find(item => item.id === LS.selectedId) || LS.items[0] || null;
+    const layout = el('section', { className: 'ls9-layout' }); const registry = el('div', { className: 'ls9-registry' }); const registryHead = el('div', { className: 'ls9-section-title' });
+    registryHead.append(el('h3', { rawText: text('Реестр публикаций', 'Publication registry') }), el('span', { rawText: `${filtered.length}/${LS.items.length}` })); registry.append(registryHead);
+    registry.append(filtered.length ? publicationTable(filtered) : el('div', { className: 'ls9-empty', rawText: text('По вашему запросу ничего не найдено.', 'No publications match your search.') }));
+    if (LS.nextCursor) { const loadMore = el('button', { className: 'button ls9-load-more', type: 'button', disabled: LS.loadingMore, rawText: LS.loadingMore ? text('Загрузка…', 'Loading...') : text('Загрузить ещё', 'Load more') }); loadMore.addEventListener('click', () => { void loadPublications({ append: true }); renderApp(); }); registry.append(loadMore); }
+    if (LS.error) registry.append(el('div', { className: 'ls9-inline-error', rawText: LS.error }));
+    layout.append(registry, inspector(selected)); return layout;
   }
 
   function renderLinesheets() {
-    const allRows = rows();
-    if (!LS.selectedId) LS.selectedId = allRows[0]?.id || '';
-    const page = el('div', { className: 'ls9-view' });
-    page.append(tabs(), metrics(allRows), controls(allRows));
-    const registryNode = registry(allRows);
-    const layout = el('section', { className: 'ls9-layout' });
-    layout.append(registryNode.master, inspector(registryNode.selected));
-    page.append(layout);
-    return page;
+    ensureLoad();
+    const page = el('div', { className: 'ls9-view' }); const header = el('header', { className: 'ls9-header' }); const copy = el('div');
+    copy.append(el('span', { className: 'ls9-eyebrow', rawText: 'Commercial Publication' }), el('h2', { rawText: text('Листы коллекций', 'Linesheets') }),
+      el('p', { rawText: text('Опубликованная коммерческая версия коллекции. Данные только для чтения и не вычисляются в браузере.', 'Published commercial version of a collection. Data is read-only and is never derived in the browser.') }));
+    header.append(copy, el('span', { className: 'ls9-readonly', rawText: text('Только опубликованные данные', 'Published data only') }));
+    page.append(header, toolbar(), metrics(), content()); return page;
   }
 
   const previousRenderView = renderView;
-  renderView = function renderViewWithLinesheets() {
-    if (state.view === 'linesheets') return renderLinesheets();
-    return previousRenderView();
-  };
-
-  global.SynthaLinesheetsWorkspace = Object.freeze({
-    render: renderLinesheets,
-    rows,
-  });
+  renderView = function renderViewWithLinesheets() { if (state.view === 'linesheets') return renderLinesheets(); return previousRenderView(); };
+  global.SynthaLinesheetsWorkspace = Object.freeze({ render: renderLinesheets, rows: () => LS.items, reload: () => { LS.loadedCollectionId = ''; return loadPublications(); } });
 })(window);

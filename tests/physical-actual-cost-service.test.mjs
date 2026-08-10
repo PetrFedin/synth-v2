@@ -42,6 +42,9 @@ function fixture() {
       getReceipt: async (id) => id === state.receipt.id ? state.receipt : undefined,
       getReceiptDiscrepancy: async (id) => id === state.discrepancy.id ? state.discrepancy : undefined,
       getCostCloseByOrderCommitSnapshotId: async () => state.costClose,
+      lockOrderCostLedger: async () => undefined,
+      lockActualCostEntry: async (id) => state.entries.find((entry) => entry.id === id),
+      getActualCostReversal: async (originalEntryId) => state.entries.find((entry) => entry.reversalOfEntryId === originalEntryId),
       insertPhysicalActualCostEntry: async (entry) => state.entries.push(entry),
       appendOutbox: async (event) => state.outbox.push(event),
     }),
@@ -78,6 +81,36 @@ test('quality cost derives exact receipt evidence from discrepancy snapshot', as
   });
   assert.equal(entry.receiptSnapshotId, 'receipt-1');
   assert.equal(entry.receiptDiscrepancySnapshotId, 'disc-1');
+});
+
+test('shipment-scoped correction preserves physical lineage in ledger result and events', async () => {
+  const { state, service } = fixture();
+  const original = await service.recordPhysicalActualCost('cmd-original', 'finance-1', 'asn-1', freight);
+  const result = await service.correctPhysicalActualCost('cmd-correct', 'finance-1', 'asn-1', original.id, {
+    reason: 'Carrier credit memo',
+    costType: 'freight', amount: 25, currency: 'EUR', sku: 'SKU-1', sourceRef: 'DHL-CREDIT-100', occurredAt: '2026-08-14T09:00:00.000Z',
+  });
+
+  assert.equal(result.reversal.reversalOfEntryId, original.id);
+  assert.equal(result.reversal.amount, -30);
+  assert.equal(result.replacement.amount, 25);
+  for (const entry of [result.reversal, result.replacement]) {
+    assert.equal(entry.physicalLineageVersion, 2);
+    assert.equal(entry.fulfillmentPlanSnapshotId, 'plan-1');
+    assert.equal(entry.shipmentNoticeSnapshotId, 'asn-1');
+    assert.equal(entry.receiptSnapshotId, null);
+  }
+  assert.equal(state.entries.length, 3);
+  const correctedEvent = state.outbox.find((event) => event.type === 'actual-cost.corrected');
+  assert.equal(correctedEvent.payload.physicalLineageVersion, 2);
+  assert.equal(correctedEvent.payload.shipmentNoticeSnapshotId, 'asn-1');
+
+  const replay = await service.correctPhysicalActualCost('cmd-correct', 'finance-1', 'asn-1', original.id, {
+    reason: 'Carrier credit memo',
+    costType: 'freight', amount: 25, currency: 'EUR', sku: 'SKU-1', sourceRef: 'DHL-CREDIT-100', occurredAt: '2026-08-14T09:00:00.000Z',
+  });
+  assert.equal(replay.correctionId, result.correctionId);
+  assert.equal(state.entries.length, 3);
 });
 
 test('physical cost is finance-authorized, SKU-scoped and blocked after cost close', async () => {

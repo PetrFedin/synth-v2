@@ -1,0 +1,53 @@
+/* ODS-native Linesheets: immutable Commercial Publication registry and read-only inspector. */
+body.omnidata-v14 .ls9-view{display:grid!important;gap:12px!important;width:100%!important;min-width:0!important;margin:0!important;color:var(--od14-text)!important}
+body.omnidata-v14 .ls9-header{display:grid!important;grid-template-columns:minmax(0,1fr) max-content!important;align-items:start!important;gap:12px!important;min-width:0!important;margin:0!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important}
+body.omnidata-v14 .ls9-header>div{min-width:0!important}
+body.omnidata-v14 .ls9-header h2{margin:2px 0 4px!important;font-size:16px!important;line-height:1.25!important;font-weight:650!important;color:var(--od14-text)!important}
+body.omnidata-v14 .ls9-header p{max-width:760px!important;margin:0!important;font-size:10px!important;line-height:1.45!important;color:var(--od14-text-soft)!important}
+body.omnidata-v14 .ls9-eyebrow{display:block!important;color:var(--od14-muted)!important;font-size:8.5px!important;font-weight:700!important;letter-spacing:.08em!important;text-transform:uppercase!important}
+body.omnidata-v14 .ls9-readonly{display:inline-flex!important;align-items:center!important;min-height:24px!important;padding:3px 8px!important;border:1px solid var(--od14-line)!important;border-radius:999px!important;background:#fff!important;color:var(--od14-text-soft)!important;font-size:9px!important;font-weight:600!important;white-space:nowrap!important}
+body.omnidata-v14 .ls9-commandbar{display:flex!important;align-items:end!important;flex-wrap:wrap!important;gap:8px!important;width:100%!important;min-width:0!important;padding:9px 10px!important;border:1px solid var(--od14-line)!important;border-radius:var(--od14-radius)!important;background:var(--od14-surface)!important;box-shadow:none!important}
+body.omnidata-v14 .ls9-field{display:grid!important;gap:3px!important;min-width:210px!important;max-width:360px!important}
+body.omnidata-v14 .ls9-field-label{color:var(--od14-muted)!important;font-size:8.5px!important;font-weight:600!important}
+body.omnidata-v14 .ls9-select{width:100%!important;min-width:0!important;height:30px!important;padding:0 28px 0 8px!important;border:1px solid var(--od14-line-strong)!important;border-radius:3px!important;background:#fff!important;color:var(--od14-text)!important;font-size:10px!important}
+body.omnidata-v14 .ls9-search{display:flex!important;align-items:center!important;gap:6px!important;flex:1 1 260px!important;min-width:220px!important;max-width:520px!important;height:30px!important;padding:0 8px!important;border:1px solid var(--od14-line-strong)!important;border-radius:3px!important;background:#fff!important}
+body.omnidata-v14 .ls9-search svg{width:13px!important;height:13px!important;color:var(--od14-muted)!important}
+body.omnidata-v14 .ls9-search input{width:100%!important;min-width:0!important;height:28px!important;padding:0!important;border:0!important;outline:0!important;background:transparent!important;color:var(--od14-text)!important;font-size:10px!important}
+body.omnidata-v14 .ls9-filter-button{display:inline-flex!important;align-items:center!important;justify-content:center!important;gap:5px!important;height:30px!important;padding:0 9px!important;border:1px solid var(--od14-line-strong)!important;border-radius:3px!important;background:#fff!important;color:var(--od14-text)!important;font-size:9.5px!important;font-weight:600!important;box-shadow:none!important}
+body.omnidata-v14 .ls9-filter-button:hover{border-color:var(--od14-accent)!important;color:var(--od14-accent)!important;background:#fffaf7!important}
+body.omnidata-v14 .ls9-metrics{display:grid!important;grid-template-columns:repeat(4,minmax(110px,1fr))!important;gap:8px!important;width:100%!important;min-width:0!important}
+body.omnidata-v14 .ls9-metric{display:grid!important;gap:3px!important;min-width:0!important;padding:9px 10px!important;border:1px solid var(--od14-line)!important;border-radius:var(--od14-radius)!important;background:#fff!important;box-shadow:none!important}
+body.omnidata-v14 .ls9-metric-label{color:var(--od14-muted)!important;font-size:8.5px!important;font-weight:600!important}
+body.omnidata-v14 .ls9-metric strong{min-width:0!important;color:var(--od14-text)!important;font-size:14px!important;line-height:1.2!important;font-weight:650!important;overflow-wrap:anywhere!important;font-variant-numeric:tabular-nums!important}
+body.omnidata-v14 .ls9-layout{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(360px,44%)!important;align-items:start!important;gap:12px!important;width:100%!important;min-width:0!important}
+body.omnidata-v14 .ls9-layout>*{min-width:0!important;max-width:100%!important}
+body.omnidata-v14 .ls9-registry,body.omnidata-v14 .ls9-inspector{min-width:0!important;padding:10px!important;border:1px solid var(--od14-line)!important;border-radius:var(--od14-radius)!important;background:#fff!important;box-shadow:none!important}
+body.omnidata-v14 .ls9-registry{display:grid!important;gap:8px!important}
+body.omnidata-v14 .ls9-inspector{position:sticky!important;top:12px!important;display:grid!important;gap:10px!important;max-height:calc(100vh - 112px)!important;overflow:auto!important}
+body.omnidata-v14 .ls9-section-title,body.omnidata-v14 .ls9-inspector-head{display:flex!important;align-items:flex-start!important;justify-content:space-between!important;gap:10px!important;min-width:0!important}
+body.omnidata-v14 .ls9-section-title h3,body.omnidata-v14 .ls9-section-title h4,body.omnidata-v14 .ls9-inspector-head h3{min-width:0!important;margin:0!important;color:var(--od14-text)!important;font-size:10.5px!important;font-weight:650!important;overflow-wrap:anywhere!important}
+body.omnidata-v14 .ls9-section-title>span{color:var(--od14-muted)!important;font-size:8.5px!important;white-space:nowrap!important}
+body.omnidata-v14 .ls9-table-wrap{width:100%!important;min-width:0!important;max-width:100%!important;overflow:auto!important;overscroll-behavior:contain!important;border:1px solid var(--od14-line)!important;border-radius:3px!important}
+body.omnidata-v14 .ls9-table{width:100%!important;min-width:680px!important;border-collapse:collapse!important;background:#fff!important;font-size:9.5px!important}
+body.omnidata-v14 .ls9-table th{height:29px!important;padding:5px 8px!important;border-bottom:1px solid var(--od14-line-strong)!important;background:#f7f7f8!important;color:var(--od14-muted)!important;font-size:8.5px!important;font-weight:700!important;letter-spacing:.02em!important;text-align:left!important;white-space:nowrap!important}
+body.omnidata-v14 .ls9-table td{max-width:280px!important;padding:7px 8px!important;border-bottom:1px solid var(--od14-line)!important;color:var(--od14-text)!important;vertical-align:middle!important;overflow-wrap:anywhere!important;font-variant-numeric:tabular-nums!important}
+body.omnidata-v14 .ls9-table tbody tr{cursor:pointer!important;background:#fff!important}
+body.omnidata-v14 .ls9-table tbody tr:hover{background:#fffaf7!important}
+body.omnidata-v14 .ls9-table tbody tr.selected{background:#fff4ef!important;box-shadow:inset 3px 0 0 var(--od14-accent)!important}
+body.omnidata-v14 .ls9-line-table{min-width:620px!important}
+body.omnidata-v14 .ls9-line-table tbody tr{cursor:default!important}
+body.omnidata-v14 .ls9-status{display:inline-flex!important;align-items:center!important;min-height:20px!important;padding:2px 6px!important;border:1px solid #c8ddcb!important;border-radius:999px!important;background:#f1f7f2!important;color:var(--od14-success)!important;font-size:8.5px!important;font-weight:650!important;white-space:nowrap!important}
+body.omnidata-v14 .ls9-info-grid{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:6px!important;margin:0!important}
+body.omnidata-v14 .ls9-info-item{min-width:0!important;padding:7px 8px!important;border:1px solid var(--od14-line)!important;border-radius:3px!important;background:#fafafa!important}
+body.omnidata-v14 .ls9-info-item dt{color:var(--od14-muted)!important;font-size:8.5px!important;font-weight:600!important}
+body.omnidata-v14 .ls9-info-item dd{min-width:0!important;margin:3px 0 0!important;color:var(--od14-text)!important;font-size:9.5px!important;font-weight:600!important;overflow-wrap:anywhere!important}
+body.omnidata-v14 .ls9-actions{display:flex!important;align-items:center!important;justify-content:flex-end!important;flex-wrap:wrap!important;gap:6px!important;padding-top:2px!important}
+body.omnidata-v14 .ls9-state{display:grid!important;justify-items:start!important;gap:5px!important;width:100%!important;min-width:0!important;padding:22px!important;border:1px dashed var(--od14-line-strong)!important;border-radius:var(--od14-radius)!important;background:#fff!important}
+body.omnidata-v14 .ls9-state h3{margin:0!important;font-size:11px!important;font-weight:650!important;color:var(--od14-text)!important}
+body.omnidata-v14 .ls9-state p{max-width:720px!important;margin:0!important;font-size:9.5px!important;line-height:1.45!important;color:var(--od14-text-soft)!important}
+body.omnidata-v14 .ls9-error,body.omnidata-v14 .ls9-inline-error{border-color:#e8c1c4!important;background:#fff5f5!important;color:var(--od14-danger)!important}
+body.omnidata-v14 .ls9-inline-error{padding:7px 8px!important;border:1px solid #e8c1c4!important;border-radius:3px!important;font-size:9px!important}
+body.omnidata-v14 .ls9-load-more{justify-self:start!important}
+@media(max-width:1180px){body.omnidata-v14 .ls9-layout{grid-template-columns:minmax(0,1fr) minmax(320px,40%)!important}body.omnidata-v14 .ls9-metrics{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+@media(max-width:920px){body.omnidata-v14 .ls9-layout{grid-template-columns:minmax(0,1fr)!important}body.omnidata-v14 .ls9-inspector{position:static!important;max-height:none!important}body.omnidata-v14 .ls9-header{grid-template-columns:minmax(0,1fr)!important}.ls9-readonly{justify-self:start!important}}
+@media(max-width:640px){body.omnidata-v14 .ls9-metrics{grid-template-columns:minmax(0,1fr)!important}body.omnidata-v14 .ls9-info-grid{grid-template-columns:minmax(0,1fr)!important}body.omnidata-v14 .ls9-commandbar{align-items:stretch!important}body.omnidata-v14 .ls9-field,body.omnidata-v14 .ls9-search{width:100%!important;max-width:none!important}}

@@ -76,6 +76,64 @@ test('commercial publication service rejects actors without active collection me
   );
 });
 
+test('commercial publication service discovers latest buyer catalog through actor-authorized showroom access', async () => {
+  const catalog = buyerCatalog();
+  const accessLookups = [];
+  const service = createCommercialPublicationService({
+    commercialStore: {
+      transaction: async work => work({}),
+      getBuyerCatalogForAccess: async (showroomId, shopId) => {
+        accessLookups.push({ showroomId, shopId });
+        return catalog;
+      },
+    },
+    wholesaleStore: {
+      transaction: async work => work({
+        getMembership: async organisationId => organisationId === 'shop-1'
+          ? { organisationId: 'shop-1', status: 'active', role: 'buyer' }
+          : null,
+        getShowroomInvitation: async invitationId => invitationId === 'invitation-1'
+          ? {
+              id: 'invitation-1',
+              showroomId: 'showroom-1',
+              brandId: 'brand-1',
+              shopId: 'shop-1',
+              status: 'accepted',
+              expiresAt: '2026-09-01T00:00:00.000Z',
+            }
+          : null,
+      }),
+    },
+    catalogReader: { getSku: async () => null },
+    clock: () => '2026-08-11T00:00:00.000Z',
+  });
+
+  const result = await service.getBuyerCatalogForAccessForActor('actor-1', 'showroom-1', 'shop-1');
+  assert.equal(result, catalog);
+  assert.deepEqual(accessLookups, [{ showroomId: 'showroom-1', shopId: 'shop-1' }]);
+});
+
+test('commercial publication service does not expose discovered buyer catalog without actor access', async () => {
+  const service = createCommercialPublicationService({
+    commercialStore: {
+      transaction: async work => work({}),
+      getBuyerCatalogForAccess: async () => buyerCatalog(),
+    },
+    wholesaleStore: {
+      transaction: async work => work({
+        getMembership: async () => null,
+        getShowroomInvitation: async () => null,
+      }),
+    },
+    catalogReader: { getSku: async () => null },
+  });
+
+  await assert.rejects(
+    service.getBuyerCatalogForAccessForActor('actor-2', 'showroom-1', 'shop-1'),
+    error => error?.code === 'ACTIVE_MEMBERSHIP_REQUIRED',
+  );
+});
+
 test('postgres commercial publication query uses stable tuple pagination and limit plus one', async () => {
   const calls = [];
   const pool = {
@@ -105,6 +163,7 @@ test('commercial publication HTTP route parses bounded collection pagination', a
       publishBuyerCatalog: async () => {},
       getCommercialPublicationForActor: async () => {},
       getBuyerCatalogVersionForActor: async () => {},
+      getBuyerCatalogForAccessForActor: async () => {},
     },
   });
   const route = routes.find(candidate => candidate.method === 'GET' && candidate.pattern.test('/v2/collections/collection-1/commercial-publications'));
@@ -114,6 +173,43 @@ test('commercial publication HTTP route parses bounded collection pagination', a
   assert.deepEqual(received[0], ['actor-1', 'collection-1', { limit: 25, cursor: null }]);
   assert.throws(
     () => route.execute({ actorId: 'actor-1', params: match.slice(1), query: { limit: '201' } }),
+    error => error?.code === 'HTTP_QUERY_FIELD_INVALID',
+  );
+});
+
+test('commercial publication HTTP resolves buyer catalog by showroom and required shop context', async () => {
+  const received = [];
+  const routes = createCommercialPublicationRoutes({
+    commercialPublication: {
+      listCommercialPublicationsForActor: async () => ({ items: [], nextCursor: null }),
+      publishCommercialPublication: async () => {},
+      publishBuyerCatalog: async () => {},
+      getCommercialPublicationForActor: async () => {},
+      getBuyerCatalogVersionForActor: async () => {},
+      getBuyerCatalogForAccessForActor: async (...args) => {
+        received.push(args);
+        return { id: 'buyer-catalog-version-1' };
+      },
+    },
+  });
+  const pathname = '/v2/showrooms/showroom-1/buyer-catalog';
+  const route = routes.find(candidate => candidate.method === 'GET' && candidate.pattern.test(pathname));
+  assert.ok(route);
+  const match = pathname.match(route.pattern);
+
+  const result = await route.execute({ actorId: 'actor-1', params: match.slice(1), query: { shopId: 'shop-1' } });
+  assert.equal(result.id, 'buyer-catalog-version-1');
+  assert.deepEqual(received, [['actor-1', 'showroom-1', 'shop-1']]);
+  assert.throws(
+    () => route.execute({ actorId: 'actor-1', params: match.slice(1), query: {} }),
+    error => error?.code === 'HTTP_QUERY_FIELD_INVALID',
+  );
+  assert.throws(
+    () => route.execute({ actorId: 'actor-1', params: match.slice(1), query: { shopId: 'shop-1', surprise: '1' } }),
+    error => error?.code === 'HTTP_QUERY_FIELD_UNKNOWN',
+  );
+  assert.throws(
+    () => route.execute({ actorId: 'actor-1', params: match.slice(1), query: { shopId: 'bad id' } }),
     error => error?.code === 'HTTP_QUERY_FIELD_INVALID',
   );
 });
@@ -128,5 +224,31 @@ function publication(id, publishedAt) {
     status: 'published',
     contentHash: 'a'.repeat(64),
     publishedAt,
+  });
+}
+
+function buyerCatalog() {
+  return Object.freeze({
+    id: 'buyer-catalog-version-1',
+    publicationId: 'publication-1',
+    priceListVersionId: 'price-list-version-1',
+    brandId: 'brand-1',
+    shopId: 'shop-1',
+    showroomId: 'showroom-1',
+    accessGrantId: 'invitation-1',
+    collectionId: 'collection-1',
+    currency: 'EUR',
+    lines: Object.freeze([
+      Object.freeze({
+        sku: 'SKU-1',
+        catalogVersion: 1,
+        unitPrice: 100,
+        currency: 'EUR',
+        minimumOrderQuantity: 1,
+      }),
+    ]),
+    status: 'published',
+    contentHash: 'b'.repeat(64),
+    publishedAt: '2026-08-10T10:00:00.000Z',
   });
 }

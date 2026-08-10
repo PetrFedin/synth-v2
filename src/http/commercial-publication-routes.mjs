@@ -11,6 +11,7 @@ const BUYER_CATALOG_BODY = bodyContract(
   {},
   { priceOverrides: ['sku', 'unitPrice'] },
 );
+const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/;
 
 export function createCommercialPublicationRoutes({ commercialPublication } = {}) {
   const service = commercialPublication ?? unavailableCommercialPublication();
@@ -19,6 +20,7 @@ export function createCommercialPublicationRoutes({ commercialPublication } = {}
     pagedRead('GET', /^\/v2\/collections\/([^/]+)\/commercial-publications$/, ({ actorId, params, limit, cursor }) => service.listCommercialPublicationsForActor(actorId, params[0], { limit, cursor })),
     read('GET', /^\/v2\/commercial-publications\/([^/]+)$/, ({ actorId, params }) => service.getCommercialPublicationForActor(actorId, params[0])),
     mutate('POST', /^\/v2\/commercial-publications\/([^/]+)\/buyer-catalogs$/, validateBuyerCatalogBody, ({ commandId, actorId, params, body }) => service.publishBuyerCatalog(commandId, actorId, params[0], body)),
+    accessRead('GET', /^\/v2\/showrooms\/([^/]+)\/buyer-catalog$/, ({ actorId, params, shopId }) => service.getBuyerCatalogForAccessForActor(actorId, params[0], shopId)),
     read('GET', /^\/v2\/buyer-catalog-versions\/([^/]+)$/, ({ actorId, params }) => service.getBuyerCatalogVersionForActor(actorId, params[0])),
   ]);
 }
@@ -60,6 +62,18 @@ function read(method, pattern, execute) {
     },
   });
 }
+function accessRead(method, pattern, execute) {
+  return Object.freeze({
+    method, pattern, mutation: false,
+    execute(context) {
+      const query = context.query ?? {};
+      assertQueryContract(query, ['shopId']);
+      const shopId = optionalQueryValue(query, 'shopId');
+      invariant(shopId !== undefined && SAFE_ID.test(shopId), 'HTTP_QUERY_FIELD_INVALID', 'shopId must be a valid identifier', { field: 'shopId' });
+      return execute({ ...context, shopId });
+    },
+  });
+}
 function pagedRead(method, pattern, execute) {
   return Object.freeze({
     method, pattern, mutation: false,
@@ -98,5 +112,6 @@ function unavailableCommercialPublication() {
     listCommercialPublicationsForActor: fail,
     getCommercialPublicationForActor: fail,
     getBuyerCatalogVersionForActor: fail,
+    getBuyerCatalogForAccessForActor: fail,
   });
 }

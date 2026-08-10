@@ -6,6 +6,8 @@ const money = { type: 'number', minimum: 0, maximum: 900_719_925_474.0991, multi
 const idempotency = { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 1, maxLength: 128, pattern: SAFE_ID } };
 const publicationId = { name: 'publicationId', in: 'path', required: true, schema: identifier };
 const collectionId = { name: 'collectionId', in: 'path', required: true, schema: identifier };
+const showroomId = { name: 'showroomId', in: 'path', required: true, schema: identifier };
+const shopId = { name: 'shopId', in: 'query', required: true, schema: identifier };
 const buyerCatalogVersionId = { name: 'buyerCatalogVersionId', in: 'path', required: true, schema: identifier };
 const pageLimit = { name: 'limit', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 200, default: 50 } };
 const pageCursor = { name: 'cursor', in: 'query', required: false, schema: { type: 'string', minLength: 1, maxLength: 512 } };
@@ -126,6 +128,12 @@ function paths() {
         operationId: 'publishBuyerCatalogVersion', security: [{ bearerAuth: [] }], parameters: [publicationId, idempotency],
         requestBody: body('#/components/schemas/BuyerCatalogPublicationInput'),
         responses: mutationResponses('Published buyer-specific catalog and price list', '#/components/schemas/BuyerCatalogPublicationResult'),
+      },
+    },
+    '/showrooms/{showroomId}/buyer-catalog': {
+      get: {
+        operationId: 'getBuyerCatalogForShowroomAccess', security: [{ bearerAuth: [] }], parameters: [showroomId, shopId],
+        responses: readResponses('Latest buyer catalog version for showroom access', '#/components/schemas/BuyerCatalogVersion'),
       },
     },
     '/buyer-catalog-versions/{buyerCatalogVersionId}': {

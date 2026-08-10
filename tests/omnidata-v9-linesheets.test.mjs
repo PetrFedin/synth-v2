@@ -32,54 +32,34 @@ test('Omnidata V9 matches the supplied Linesheets reference geometry', async () 
   assert.doesNotMatch(css, /@import|https?:\/\/|url\s*\(/i);
 });
 
-test('Linesheets uses grounded Syntha workspace data and a clearly marked sample fallback', async () => {
+test('Linesheets reads immutable published commercial truth without sample fallback', async () => {
   const js = await source('public/modules/linesheets.js');
   assert.doesNotThrow(() => new Function(js));
 
-  for (const dataSource of [
-    'state.workspace.collections',
-    'state.workspace.catalogSkus',
-    'state.workspace.selections',
-    'state.workspace.organisations',
-  ]) assert.ok(js.includes(dataSource), dataSource);
-
-  for (const functionName of [
-    'collectionStatus',
-    'collectionSeason',
-    'organisationById',
-    'buyerFor',
-    'buildRows',
-    'sampleRows',
-    'filteredRows',
-    'tableRow',
-    'registry',
+  for (const token of [
+    'state.workspace?.collections',
+    '/v2/collections/${encodeURIComponent(collectionId)}/commercial-publications?limit=50',
+    'loadPublications',
+    'filteredPublications',
+    'publicationTable',
     'inspector',
     'renderLinesheets',
-  ]) assert.match(js, new RegExp(`function ${functionName}\\(`), functionName);
+    'line.unitPrice',
+    'line.minimumOrderQuantity',
+    "text('Опубликовано', 'Published')",
+    "text('Коммерческая публикация', 'Commercial Publication')",
+  ]) assert.ok(js.includes(token), token);
 
-  for (const phrase of [
-    'Лист коллекции',
-    'Linesheets',
-    'Карта связей',
-    'Relationship map',
-    'Покупатель / Ретейл',
-    'Buyer / Retailer',
-    'Связанные данные',
-    'Related data',
-    'Примерный режим',
-    'Sample mode',
-    'Не назначен',
-    'Not assigned',
-    'Не указан',
-    'Not specified',
-  ]) assert.ok(js.includes(phrase), phrase);
+  for (const forbidden of [
+    'sampleRows',
+    'fallbackPrice',
+    'collectionBudget',
+    'buyerName',
+    "status: 'draft'",
+    "status: 'sent'",
+    "status: 'viewed'",
+  ]) assert.equal(js.includes(forbidden), false, forbidden);
 
-  assert.match(js, /return 'draft';/);
-  assert.match(js, /collection\.views \?\? collection\.viewCount/);
-  assert.match(js, /organisation\?\.country \|\| organisation\?\.market/);
-  assert.doesNotMatch(js, /United Kingdom|France|United States|Italy|Germany|UAE/);
-  assert.doesNotMatch(js, /relatedSelections\.length \* 6/);
-  assert.doesNotMatch(js, /retailers\[index/);
   assert.match(js, /state\.view === 'linesheets'/);
   assert.match(js, /global\.SynthaLinesheetsWorkspace = Object\.freeze/);
   assert.doesNotMatch(js, /\bstyle\s*=/);

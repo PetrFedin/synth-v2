@@ -2,6 +2,8 @@
   'use strict';
 
   const BUILD='visual-20260805-14-module-adapters-5';
+  const SHELL_LAYOUT_MIGRATION_KEY='syntha-v2-shell-layout-v2';
+  const LEGACY_SIDEBAR_KEY='syntha-v2-sidebar-collapsed';
   const enqueue=typeof global.queueMicrotask==='function'?global.queueMicrotask.bind(global):typeof queueMicrotask==='function'?queueMicrotask:(callback)=>Promise.resolve().then(callback);
   if(typeof global.queueMicrotask!=='function')global.queueMicrotask=enqueue;
   const DEFINITIONS=Object.freeze({
@@ -62,6 +64,20 @@
   function currentView(){try{return typeof state!=='undefined'?state.view:''}catch{return''}}
   function roots(selector){return [...document.querySelectorAll(selector)]}
   function setRole(selector,role){roots(selector).forEach((node)=>{node.dataset.od14Component=role;node.dataset.od14RoleSource='adapter'})}
+  function normalizeShell(){
+    try{
+      const storage=global.localStorage;
+      if(storage&&storage.getItem(SHELL_LAYOUT_MIGRATION_KEY)!=='done'){
+        storage.removeItem(LEGACY_SIDEBAR_KEY);
+        try{if(typeof state!=='undefined')state.sidebarCollapsed=false}catch{}
+        storage.setItem(SHELL_LAYOUT_MIGRATION_KEY,'done');
+      }
+    }catch{}
+    const shell=document.querySelector('.shell');
+    if(!shell)return;
+    try{if(typeof state!=='undefined')shell.classList.toggle('sidebar-collapsed',Boolean(state.sidebarCollapsed))}catch{}
+    shell.dataset.odsShellLayout='readable-v2';
+  }
   function updateHeader(view,definition){
     const header=document.querySelector(`.od14-page-header[data-view="${view}"]`)||document.querySelector('.od14-page-header');
     if(!header)return;
@@ -95,6 +111,7 @@
     assignSampleTones();
   }
   function apply(){
+    normalizeShell();
     const view=currentView();
     const definition=DEFINITIONS[view];
     if(definition)updateHeader(view,definition);
@@ -108,5 +125,5 @@
     renderApp=(...args)=>{const result=previousRenderApp(...args);apply();return result};
   }
   global.addEventListener('syntha:locale-changed',schedule);
-  global.SynthaOmnidataV14ModuleAdapters=Object.freeze({build:BUILD,apply,assignRoles,updateHeader,roleMap:ROLE_MAP});
+  global.SynthaOmnidataV14ModuleAdapters=Object.freeze({build:BUILD,apply,assignRoles,updateHeader,normalizeShell,roleMap:ROLE_MAP});
 })(window);

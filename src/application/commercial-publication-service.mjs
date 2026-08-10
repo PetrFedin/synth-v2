@@ -162,6 +162,16 @@ export function createCommercialPublicationService({
       return authorizeBuyerCatalogRead(actorId, buyerCatalog);
     },
 
+    async getBuyerCatalogForAccessForActor(actorId, showroomId, shopId) {
+      invariant(typeof commercialStore.getBuyerCatalogForAccess === 'function', 'BUYER_CATALOG_ACCESS_QUERY_REQUIRED', 'Buyer catalog access query store is required');
+      const buyerCatalog = requireEntity(
+        await commercialStore.getBuyerCatalogForAccess(showroomId, shopId),
+        'BUYER_CATALOG_NOT_FOUND',
+        { showroomId, shopId },
+      );
+      return authorizeBuyerCatalogRead(actorId, buyerCatalog);
+    },
+
     getCommercialPublication: (id) => commercialStore.getCommercialPublication(id),
     getBuyerCatalogVersion: (id) => commercialStore.getBuyerCatalogVersion(id),
     getBuyerCatalogForAccess: (showroomId, shopId) => commercialStore.getBuyerCatalogForAccess(showroomId, shopId),

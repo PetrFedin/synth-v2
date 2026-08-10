@@ -1,5 +1,12 @@
 import { invariant } from '../core/errors.mjs';
-import { assertBodyContract, assertQueryContract, bodyContract } from './request-contract.mjs';
+import {
+  assertBodyContract,
+  assertQueryContract,
+  bodyContract,
+  parsePositiveIntegerQuery,
+  parseQueryCursor,
+  queryValues,
+} from './request-contract.mjs';
 
 const PUBLICATION_BODY = bodyContract(['collectionId', 'skuCodes']);
 const BUYER_CATALOG_BODY = bodyContract(
@@ -12,6 +19,7 @@ export function createCommercialPublicationRoutes({ commercialPublication } = {}
   const service = commercialPublication ?? unavailableCommercialPublication();
   return Object.freeze([
     mutate('POST', /^\/v2\/commercial-publications$/, validatePublicationBody, ({ commandId, actorId, body }) => service.publishCommercialPublication(commandId, actorId, body)),
+    pagedRead('GET', /^\/v2\/collections\/([^/]+)\/commercial-publications$/, ({ actorId, params, limit, cursor }) => service.listCommercialPublicationsForActor(actorId, params[0], { limit, cursor })),
     read('GET', /^\/v2\/commercial-publications\/([^/]+)$/, ({ actorId, params }) => service.getCommercialPublicationForActor(actorId, params[0])),
     mutate('POST', /^\/v2\/commercial-publications\/([^/]+)\/buyer-catalogs$/, validateBuyerCatalogBody, ({ commandId, actorId, params, body }) => service.publishBuyerCatalog(commandId, actorId, params[0], body)),
     read('GET', /^\/v2\/buyer-catalog-versions\/([^/]+)$/, ({ actorId, params }) => service.getBuyerCatalogVersionForActor(actorId, params[0])),
@@ -55,11 +63,27 @@ function read(method, pattern, execute) {
     },
   });
 }
+function pagedRead(method, pattern, execute) {
+  return Object.freeze({
+    method, pattern, mutation: false,
+    execute(context) {
+      assertQueryContract(context.query ?? {}, ['limit', 'cursor']);
+      const limitValue = queryValues(context.query ?? {}, 'limit')[0];
+      const cursorValue = queryValues(context.query ?? {}, 'cursor')[0];
+      const limit = limitValue === undefined || limitValue === ''
+        ? 50
+        : parsePositiveIntegerQuery(limitValue, 'limit', { max: 200 });
+      const cursor = parseQueryCursor(cursorValue, 'cursor');
+      return execute({ ...context, limit, cursor });
+    },
+  });
+}
 function unavailableCommercialPublication() {
   const fail = () => invariant(false, 'COMMERCIAL_PUBLICATION_SERVICE_REQUIRED', 'Commercial publication service is required');
   return Object.freeze({
     publishCommercialPublication: fail,
     publishBuyerCatalog: fail,
+    listCommercialPublicationsForActor: fail,
     getCommercialPublicationForActor: fail,
     getBuyerCatalogVersionForActor: fail,
   });

@@ -1,10 +1,10 @@
 # Product Identity V2
 
-Status: consolidation implementation slice, 2026-08-12.
+Status: executable consolidation slice, 2026-08-12.
 
 ## Purpose
 
-Product Identity V2 closes the structural gap between the richer PLM/product specification and the current flat operational buyer catalog. It introduces one canonical technical product identity without replacing the already-working commercial-publication/economics spine.
+Product Identity V2 closes the structural gap between the richer PLM/product specification and the historical flat operational buyer catalog. It introduces one canonical technical Product Master without replacing the already-working commercial-publication/economics spine.
 
 The canonical technical hierarchy is:
 
@@ -20,11 +20,11 @@ and governed enrichment through:
 
 A canonical sellable Product SKU therefore means:
 
-`exact StyleVersion + exact Colorway + exact SizeValue`
+`exact StyleVersion + exact Colorway + exact SizeValue`.
 
-## What this slice does not do
+## What Product Identity does not own
 
-This slice does not make Product Identity itself a buyer catalog. In particular it does not own:
+Product Identity is not a buyer catalog. It does not own:
 
 - buyer-specific visibility;
 - wholesale price, price type or RRP;
@@ -47,7 +47,7 @@ The governed lifecycle vocabulary is:
 
 `draft -> in_development -> sample_review -> technically_approved -> sourcing_approved -> purchase_or_production_ready -> compliance_ready -> commercial_ready -> active -> discontinued`
 
-with side states `on_hold`, `rejected`, `superseded`. The domain module owns allowed transition semantics; later application services must persist the head transition atomically with command/idempotency handling.
+with side states `on_hold`, `rejected`, `superseded`.
 
 ### ProductStyleVersion
 
@@ -61,9 +61,9 @@ A Colorway belongs to exactly one StyleVersion. It may pin an exact governed col
 
 ### ProductSizeScale / ProductSizeScaleVersion / ProductSizeValue
 
-`product_size_scales` is the stable scale identity. `product_size_scale_versions` freezes the scale semantics and optional exact MDM size-system version. Every version after 1 points to its immediate predecessor.
+`product_size_scales` is the stable scale identity. `product_size_scale_versions` freezes scale semantics and the optional exact MDM size-system version. Every version after 1 points to its immediate predecessor.
 
-`product_size_values` freezes buyer order and display ordering through an explicit `sort_order`. Size values can pin exact governed size-entry versions. This is the basis for an ordered Color x Size buyer matrix; alphabetical sorting of size labels is not authoritative.
+`product_size_values` freezes buyer display/order ordering through explicit `sort_order`. Size values can pin exact governed size-entry versions. Alphabetical sorting of size labels is not authoritative.
 
 ### ProductSku
 
@@ -72,34 +72,80 @@ A Colorway belongs to exactly one StyleVersion. It may pin an exact governed col
 - SKU brand + StyleVersion must match;
 - Colorway must belong to that exact StyleVersion and brand;
 - SizeValue must belong to the same brand;
-- the tuple `StyleVersion + Colorway + SizeValue` is unique.
+- `StyleVersion + Colorway + SizeValue` is unique.
 
-A technical revision that changes the exact variant meaning creates a new canonical Product SKU identity/code according to the product/versioning policy; historical buyer/order snapshots must never be silently rebound to a different StyleVersion.
+A technical revision that changes exact variant meaning creates a new canonical Product SKU identity/code according to product/versioning policy; historical buyer/order snapshots are never silently rebound to a different StyleVersion.
 
 ## Product media
 
-`product_media` belongs to an exact StyleVersion and optionally an exact Colorway. Roles cover hero/gallery/detail/swatch/technical/video/document. Ordering is explicit. Media records are immutable in this slice; changed content creates a new identity row and later commercial projection chooses which exact media records to publish.
+`product_media` belongs to an exact StyleVersion and optionally an exact Colorway. Roles cover hero/gallery/detail/swatch/technical/video/document. Ordering is explicit. Media records are immutable; changed content creates a new identity row and the later commercial projection chooses which exact media records to publish.
 
 ## Product attributes
 
 `product_attribute_values` stores governed reusable attributes against an immutable `style_version`, `colorway` or `sku` owner. Each value freezes:
 
 - `attribute_code`;
-- the repository attribute-catalog version;
+- repository attribute-catalog version;
 - JSON value;
 - optional exact MDM entry version for reference-valued attributes.
 
 The attribute catalog declares semantics; this table does not turn every fashion attribute into a new database column.
 
-## MDM contract
+## Governed MDM runtime contract
 
-Product Identity references `mdm_entry_versions(entry_id, version)`, never a mutable current display label. Core FKs and optional reference-valued attributes therefore preserve the exact master-data version used by a technical product snapshot.
+The executable Product Identity service resolves MDM references before creating new technical facts. A new reference must satisfy all of the following:
 
-A later resolver/admin service will enforce dictionary-type compatibility (for example category references must resolve to category dictionaries, colour references to colour dictionaries) and will create `mdm_usage_snapshots` for historical publication/transaction use.
+1. the exact `(entryId, version)` exists;
+2. the requested version is the current MDM entry version for a new fact;
+3. the entry belongs to the compatible dictionary family;
+4. the entry is global or belongs to the same brand/tenant;
+5. it is active;
+6. it is approved or does not require approval;
+7. it is effective at the business write time.
+
+After resolution, the service writes an immutable `mdm_usage_snapshots` record whose JSON is forced by PostgreSQL to equal the exact persisted `mdm_entry_versions.snapshot`. Historical Product Identity meaning therefore does not float when a dictionary later changes.
+
+Dictionary compatibility currently covers the high-value structural references:
+
+- category -> `assortment.category`;
+- product type -> `assortment.product_type`;
+- gender -> `assortment.gender`;
+- colour -> `colour.colour`;
+- size system -> `size.system`;
+- size value -> `size.size`, `size.footwear_size`, `size.accessory_size`.
+
+Reference-valued generic product attributes can pin any governed MDM entry version; the next MDM admin/import slice will also validate the attribute definition itself against the governed attribute catalog.
+
+## Command, concurrency and outbox contract
+
+Public Product Identity mutations use the global durable command registry under the `product-identity` scope. Reusing a command ID with a different fingerprint fails. Replaying the same completed command re-authorizes the actor and returns the original result without reapplying volatile current-state checks such as a later MDM head version.
+
+Stable heads use optimistic version checks. StyleVersion and SizeScaleVersion creation require `expectedLatestVersionNo`, preventing two writers from silently creating competing next versions.
+
+Product Identity database triggers publish domain-specific events into the existing unified transactional outbox in the same PostgreSQL transaction. The application service intentionally does not create a second outbox event path.
+
+## Executable runtime surface
+
+The PostgreSQL runtime now composes Product Identity command/query services. The HTTP surface is strict and documented in the extended OpenAPI:
+
+- read Style aggregate by latest or exact technical version;
+- read Size Scale aggregate by latest or exact version;
+- create/transition Style;
+- create immutable StyleVersion;
+- create Colorway;
+- create/update SizeScale head;
+- create immutable SizeScaleVersion;
+- create ordered SizeValue;
+- create canonical Product SKU;
+- add immutable media;
+- add immutable governed attribute value;
+- link one canonical Product SKU to one legacy flat `catalog_skus` record during migration.
+
+Technical Product Master access is protected by dedicated `product.read` / `product.manage` capabilities. Buyer role does not receive technical Product Master access; buyer UX consumes commercial projection/catalog instead.
 
 ## Flat catalog compatibility
 
-The current `catalog_skus` implementation remains operational during the migration. Product Identity does not repurpose or overwrite it.
+The existing `catalog_skus` implementation remains operational during migration. Product Identity does not repurpose or overwrite it.
 
 `product_catalog_sku_links` is an explicit one-to-one compatibility bridge:
 
@@ -109,26 +155,19 @@ The link requires the same brand and SKU code. This keeps existing selection/ord
 
 The bridge is temporary architecture debt with a named boundary; it must not become a second Product Master.
 
-## Mutation and event contract
+## Commercial handoff invariant
 
-Snapshot tables are immutable at PostgreSQL level. Stable heads (`ProductStyle`, `ProductSizeScale`) require exact +1 version increments. Product Identity writes emit domain-specific events through the existing unified `outbox_events` table.
+Product Identity is upstream of readiness and commercial publication. The only approved commercial handoff is:
 
-This migration-level outbox protection does not replace the repository application rule: public business mutations still need durable command IDs/idempotency and must be committed transactionally with their outbox events.
-
-## Next handoff
-
-Product Identity V2 is upstream of readiness and commercial publication. The only approved future commercial handoff is:
-
-`ProductStyleVersion + exact variants/MDM -> ProductReadinessSnapshot -> CommercialProductProjectionVersion -> CommercialPublication -> PriceListVersion -> BuyerCatalogVersion`
+`ProductStyleVersion + exact variants/MDM -> ProductReadinessSnapshot -> CommercialProductProjectionVersion -> CommercialPublication -> PriceListVersion -> BuyerCatalogVersion`.
 
 Buyer catalog must never reconstruct current product truth by joining mutable live masters after publication.
 
-## Next implementation gates
+## Remaining gates
 
-1. Add PostgreSQL repository/application service/API for Product Identity with RBAC and command registry semantics.
-2. Add MDM dictionary-type resolver/usage snapshots for Product Identity refs.
-3. Migrate/bridge existing flat `catalog_skus` into canonical Product SKU identities without changing order history.
-4. Build `ProductReadinessSnapshot` for one exact StyleVersion and its required BOM/measurements/Tech Pack/sourcing/sample/QC/compliance inputs.
-5. Build `CommercialProductProjectionVersion` containing the exact approved variants/media/labels but no account-specific mutable reads.
-6. Extend immutable CommercialPublication/BuyerCatalog payloads with Style -> Colorway -> ordered SizeValue -> SKU structure.
-7. Replace table-only buyer lines with Style cards/detail and then Color x Size order grid.
+1. Validate generic `ProductAttributeValue.attributeCode` against the governed attribute-definition catalog/admin model, not syntax alone.
+2. Reconcile existing flat `catalog_skus` to canonical ProductSku through an explicit migration/import workflow without rewriting order history.
+3. Rescue only unique readiness invariants/tests from stale PR #50 and create canonical `ProductReadinessSnapshot` for one exact StyleVersion.
+4. Create immutable `CommercialProductProjectionVersion` with approved exact variants/media/labels and no account-specific mutable reads.
+5. Extend immutable CommercialPublication/BuyerCatalog payloads with Style -> Colorway -> ordered SizeValue -> SKU.
+6. Replace table-only buyer lines with Style cards/detail and then Color x Size order grid.

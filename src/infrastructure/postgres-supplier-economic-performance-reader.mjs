@@ -8,10 +8,20 @@ export function createPostgresSupplierEconomicPerformanceReader({ pool } = {}) {
 
 function createView(client) {
   return Object.freeze({
-    async getSupplierByCode(supplierCode) {
+    async getSupplierByCode(supplierCode, actorId) {
       const result = await client.query(
-        'SELECT payload FROM suppliers WHERE supplier_code = $1 FOR SHARE',
-        [supplierCode],
+        `SELECT supplier.payload
+           FROM suppliers AS supplier
+          WHERE supplier.supplier_code = $1
+            AND EXISTS (
+              SELECT 1
+                FROM memberships AS membership
+               WHERE membership.organisation_id = supplier.brand_id
+                 AND membership.user_id = $2
+                 AND membership.status = 'active'
+            )
+          FOR SHARE OF supplier`,
+        [supplierCode, actorId],
       );
       return result.rows[0]?.payload;
     },

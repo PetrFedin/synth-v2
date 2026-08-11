@@ -5,6 +5,7 @@ import { createFulfillmentRoutes } from './fulfillment-routes.mjs';
 import { createInventoryRoutes } from './inventory-routes.mjs';
 import { createReceiptClaimsRoutes } from './receipt-claims-routes.mjs';
 import { createSupplierRecoveryRoutes } from './supplier-recovery-routes.mjs';
+import { createSupplierEconomicPerformanceRoutes } from './supplier-economic-performance-routes.mjs';
 import { createProductionExecutionRoutes } from './production-execution-routes.mjs';
 import { createProductionOrderRoutes } from './production-order-routes.mjs';
 import { createSampleRoutes } from './sample-routes.mjs';
@@ -21,6 +22,7 @@ export function createWholesaleRoutes(services = {}) {
     ...createInventoryRoutes({ inventory: services.inventory }),
     ...createReceiptClaimsRoutes({ receiptClaims: services.receiptClaims }),
     ...createSupplierRecoveryRoutes({ supplierRecovery: services.supplierRecovery }),
+    ...createSupplierEconomicPerformanceRoutes({ supplierPerformance: services.supplierPerformance }),
     ...createSampleRoutes({ samples: services.samples }),
     ...createSourcingRoutes({ sourcing: services.sourcing }),
     ...createTechPackRoutes({ techPacks: services.techPacks }),

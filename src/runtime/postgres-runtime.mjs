@@ -21,6 +21,7 @@ import { createPostgresCostAllocationRuntime } from './postgres-cost-allocation-
 import { createPostgresFulfillmentRuntime } from './postgres-fulfillment-runtime.mjs';
 import { createPostgresInventoryRuntime } from './postgres-inventory-runtime.mjs';
 import { createPostgresReceiptClaimsRuntime } from './postgres-receipt-claims-runtime.mjs';
+import { createPostgresSupplierRecoveryRuntime } from './postgres-supplier-recovery-runtime.mjs';
 
 export function createPostgresWholesaleRuntime(options = {}) {
   const base = createBaseRuntime(options);
@@ -54,6 +55,12 @@ export function createPostgresWholesaleRuntime(options = {}) {
     ...(options.nextId ? { nextId: options.nextId } : {}),
   });
   const receiptClaims = receiptClaimsRuntime.service;
+  const supplierRecoveryRuntime = createPostgresSupplierRecoveryRuntime({
+    pool: options.pool,
+    ...(options.clock ? { clock: options.clock } : {}),
+    ...(options.nextId ? { nextId: options.nextId } : {}),
+  });
+  const supplierRecovery = supplierRecoveryRuntime.service;
 
   const allocationStore = createPostgresSourcingTechPackAllocationStore({ pool: options.pool });
   const allocation = createSourcingTechPackAllocationService({
@@ -105,6 +112,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
     fulfillment,
     inventory,
     receiptClaims,
+    supplierRecovery,
     materials: base.materials,
     boms: base.boms,
     measurements: base.measurements,
@@ -134,6 +142,8 @@ export function createPostgresWholesaleRuntime(options = {}) {
     inventory,
     receiptClaimsStore: receiptClaimsRuntime.store,
     receiptClaims,
+    supplierRecoveryStore: supplierRecoveryRuntime.store,
+    supplierRecovery,
     sourcingTechPackAllocationStore: allocationStore,
     sourcing,
     productionOrderStore,

@@ -52,25 +52,32 @@ test('Product Identity createStyle is command-idempotent and re-authorizes repla
   );
 });
 
-test('StyleVersion pins current compatible MDM versions and captures exact immutable usage', async () => {
+test('StyleVersion pins current compatible MDM versions, captures exact usage and replays after later MDM changes', async () => {
   const h = harness();
   h.memberships.set('brand:1:user:1', activeMembership('brand:1', 'user:1'));
   const style = await h.service.createStyle('cmd:style', 'user:1', { brandId: 'brand:1', styleCode: 'DRS-001' });
   h.mdm.set('mdm:category:dress:3', mdmRecord({ entryId: 'mdm:category:dress', version: 3, dictionaryCode: 'assortment.category' }));
   h.mdm.set('mdm:type:dress:2', mdmRecord({ entryId: 'mdm:type:dress', version: 2, dictionaryCode: 'assortment.product_type' }));
-  const version = await h.service.createStyleVersion('cmd:v1', 'user:1', style.id, {
+  const input = {
     expectedLatestVersionNo: 0,
     titleRu: 'Платье миди',
     titleEn: 'Midi dress',
     categoryRef: { entryId: 'mdm:category:dress', version: 3 },
     productTypeRef: { entryId: 'mdm:type:dress', version: 2 },
     technicalPayload: { construction: 'woven' },
-  });
+  };
+  const version = await h.service.createStyleVersion('cmd:v1', 'user:1', style.id, input);
   assert.equal(version.versionNo, 1);
   assert.deepEqual(version.categoryRef, { entryId: 'mdm:category:dress', version: 3 });
   assert.equal(h.usages.length, 2);
   assert.deepEqual(h.usages.map((value) => value.fieldPath).sort(), ['categoryRef', 'productTypeRef']);
   assert.deepEqual(h.usages[0].snapshot, h.mdm.get(`${h.usages[0].entryId}:${h.usages[0].entryVersion}`).snapshot);
+
+  h.mdm.set('mdm:category:dress:3', mdmRecord({ entryId: 'mdm:category:dress', version: 3, currentVersion: 4, dictionaryCode: 'assortment.category' }));
+  const replay = await h.service.createStyleVersion('cmd:v1', 'user:1', style.id, input);
+  assert.equal(replay.id, version.id);
+  assert.equal(h.styleVersions.length, 1);
+  assert.equal(h.usages.length, 2);
 });
 
 test('new Product Identity facts reject stale, wrong-dictionary and cross-tenant MDM references', async () => {

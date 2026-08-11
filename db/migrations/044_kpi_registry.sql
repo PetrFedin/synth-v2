@@ -97,23 +97,15 @@ CREATE TABLE kpi_source_mapping_versions (
   currency_path TEXT NULL CHECK (currency_path IS NULL OR length(btrim(currency_path)) BETWEEN 1 AND 500),
   join_contract JSONB NOT NULL CHECK (jsonb_typeof(join_contract) = 'object'),
   filter_contract JSONB NOT NULL CHECK (jsonb_typeof(filter_contract) = 'object'),
-  mapping_status TEXT NOT NULL CHECK (mapping_status IN ('PENDING', 'MAPPED_UNVERIFIED', 'VERIFIED', 'DEPRECATED')),
-  verified_at TIMESTAMPTZ NULL,
-  verified_by TEXT NULL,
   created_at TIMESTAMPTZ NOT NULL,
   created_by TEXT NOT NULL CHECK (length(btrim(created_by)) BETWEEN 1 AND 160),
   content_hash TEXT NOT NULL UNIQUE CHECK (content_hash ~ '^[a-f0-9]{64}$'),
   payload JSONB NOT NULL CHECK (jsonb_typeof(payload) = 'object'),
-  CONSTRAINT kpi_source_mapping_verification_shape CHECK (
-    (mapping_status = 'VERIFIED' AND verified_at IS NOT NULL AND verified_by IS NOT NULL AND length(btrim(verified_by)) >= 1)
-    OR (mapping_status <> 'VERIFIED' AND verified_at IS NULL AND verified_by IS NULL)
-  ),
   CONSTRAINT kpi_source_mapping_payload_identity CHECK (
     COALESCE(payload ->> 'id', '') = id
     AND COALESCE(payload ->> 'kpiDefinitionId', '') = kpi_definition_id
     AND COALESCE((payload ->> 'mappingSetVersion')::integer, 0) = mapping_set_version
     AND COALESCE(payload ->> 'variableName', '') = variable_name
-    AND COALESCE(payload ->> 'mappingStatus', '') = mapping_status
   ),
   UNIQUE (kpi_definition_id, mapping_set_version, variable_name)
 );
@@ -122,8 +114,33 @@ CREATE INDEX kpi_source_mapping_definition_idx
   ON kpi_source_mapping_versions (kpi_definition_id, mapping_set_version DESC, variable_name);
 CREATE INDEX kpi_source_mapping_contract_idx
   ON kpi_source_mapping_versions (source_contract_id, source_entity, source_path);
-CREATE INDEX kpi_source_mapping_status_idx
-  ON kpi_source_mapping_versions (mapping_status, created_at DESC);
+
+CREATE TABLE kpi_source_mapping_verification_events (
+  id TEXT PRIMARY KEY,
+  kpi_source_mapping_id TEXT NOT NULL REFERENCES kpi_source_mapping_versions(id),
+  previous_verification_event_id TEXT NULL REFERENCES kpi_source_mapping_verification_events(id),
+  verification_status TEXT NOT NULL CHECK (verification_status IN ('MAPPED_UNVERIFIED', 'VERIFIED', 'DEPRECATED')),
+  evidence JSONB NOT NULL CHECK (jsonb_typeof(evidence) = 'object'),
+  created_at TIMESTAMPTZ NOT NULL,
+  created_by TEXT NOT NULL CHECK (length(btrim(created_by)) BETWEEN 1 AND 160),
+  content_hash TEXT NOT NULL UNIQUE CHECK (content_hash ~ '^[a-f0-9]{64}$'),
+  payload JSONB NOT NULL CHECK (jsonb_typeof(payload) = 'object'),
+  CONSTRAINT kpi_mapping_verification_payload_identity CHECK (
+    COALESCE(payload ->> 'id', '') = id
+    AND COALESCE(payload ->> 'kpiSourceMappingId', '') = kpi_source_mapping_id
+    AND COALESCE(payload ->> 'verificationStatus', '') = verification_status
+    AND COALESCE(payload ->> 'previousVerificationEventId', '') = COALESCE(previous_verification_event_id, '')
+  )
+);
+
+CREATE UNIQUE INDEX kpi_mapping_verification_event_chain_idx
+  ON kpi_source_mapping_verification_events (kpi_source_mapping_id, previous_verification_event_id)
+  WHERE previous_verification_event_id IS NOT NULL;
+CREATE UNIQUE INDEX kpi_mapping_initial_verification_event_idx
+  ON kpi_source_mapping_verification_events (kpi_source_mapping_id)
+  WHERE previous_verification_event_id IS NULL;
+CREATE INDEX kpi_mapping_verification_current_idx
+  ON kpi_source_mapping_verification_events (kpi_source_mapping_id, created_at DESC, id DESC);
 
 CREATE TABLE kpi_definition_dependencies (
   id TEXT PRIMARY KEY,
@@ -170,6 +187,10 @@ FOR EACH ROW EXECUTE FUNCTION reject_kpi_registry_mutation();
 
 CREATE TRIGGER kpi_source_mapping_versions_immutable
 BEFORE UPDATE OR DELETE ON kpi_source_mapping_versions
+FOR EACH ROW EXECUTE FUNCTION reject_kpi_registry_mutation();
+
+CREATE TRIGGER kpi_source_mapping_verification_events_immutable
+BEFORE UPDATE OR DELETE ON kpi_source_mapping_verification_events
 FOR EACH ROW EXECUTE FUNCTION reject_kpi_registry_mutation();
 
 CREATE TRIGGER kpi_definition_dependencies_immutable

@@ -19,7 +19,7 @@ export function createSupplierRecoveryService({ store, clock = () => new Date().
       return store.transaction(async (tx) => {
         const previous = await tx.getCommand(commandId);
         if (previous) invariant(fingerprintsMatch(previous.fingerprint,fingerprint),'COMMAND_ID_CONFLICT','commandId was already used by another mutation',{commandId});
-        const resolution = requireEntity(await tx.lockResolution(resolutionSnapshotId),'RECEIPT_CLAIM_RESOLUTION_NOT_FOUND',{resolutionSnapshotId});
+        const resolution = requireEntity(await tx.lockResolution(resolutionSnapshotId,actorId),'RECEIPT_CLAIM_RESOLUTION_NOT_FOUND',{resolutionSnapshotId});
         const membership = await tx.getMembership(resolution.brandId,actorId);
         assertCapability(membership,CAPABILITIES.COST_MANAGE);
         invariant(membership.organisationId===resolution.brandId,'SUPPLIER_RECOVERY_BRAND_MEMBERSHIP_REQUIRED','Supplier recovery is brand-internal economics',{brandId:resolution.brandId,actorId});
@@ -83,7 +83,7 @@ export function createSupplierRecoveryService({ store, clock = () => new Date().
       });
     },
 
-    getRecoveryForActor(actorId,recoveryId){ return store.transaction(async(tx)=>{ const recovery=requireEntity(await tx.getRecovery(recoveryId),'SUPPLIER_RECOVERY_NOT_FOUND',{recoveryId}); const membership=await tx.getMembership(recovery.brandId,actorId); assertCapability(membership,CAPABILITIES.MARGIN_READ); invariant(membership.organisationId===recovery.brandId,'SUPPLIER_RECOVERY_BRAND_MEMBERSHIP_REQUIRED','Supplier recovery is brand-internal economics',{brandId:recovery.brandId,actorId}); return recovery; }); },
+    getRecoveryForActor(actorId,recoveryId){ return store.transaction(async(tx)=>{ const recovery=requireEntity(await tx.getRecovery(recoveryId,actorId),'SUPPLIER_RECOVERY_NOT_FOUND',{recoveryId}); const membership=await tx.getMembership(recovery.brandId,actorId); assertCapability(membership,CAPABILITIES.MARGIN_READ); invariant(membership.organisationId===recovery.brandId,'SUPPLIER_RECOVERY_BRAND_MEMBERSHIP_REQUIRED','Supplier recovery is brand-internal economics',{brandId:recovery.brandId,actorId}); return recovery; }); },
   });
 }
 function requireEntity(entity,code,details){ invariant(entity,code,'Entity not found',details); return entity; }

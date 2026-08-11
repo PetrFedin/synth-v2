@@ -95,8 +95,10 @@
     "src/modules/kpi-registry/public.mjs",
     "src/infrastructure/postgres-kpi-registry-store.mjs",
     "docs/fashion-kpi/registry-model.md",
+    "scripts/validate-kpi-registry.mjs",
     "tests/kpi-registry-domain.test.mjs",
-    "tests/kpi-registry-migration.test.mjs"
+    "tests/kpi-registry-migration.test.mjs",
+    "tests/kpi-registry-store.test.mjs"
   ],
   "invariants": {
     "aliasMustNotPublish": true,

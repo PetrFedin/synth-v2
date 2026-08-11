@@ -6,6 +6,7 @@ import { createProductionExecutionService } from '../application/production-exec
 import { createProductionOrderQueryService } from '../application/production-order-query-service.mjs';
 import { createProductionOrderService } from '../application/production-order-service.mjs';
 import { createSourcingTechPackAllocationService } from '../application/sourcing-tech-pack-allocation-service.mjs';
+import { createSupplierEconomicPerformanceService } from '../application/supplier-economic-performance-service.mjs';
 import { createPostgresFinalQualityReader } from '../infrastructure/postgres-final-quality-reader.mjs';
 import { createPostgresFinalQualityStore } from '../infrastructure/postgres-final-quality-store.mjs';
 import { createPostgresOrderMarginBridgeReader } from '../infrastructure/postgres-order-margin-bridge-reader.mjs';
@@ -14,6 +15,7 @@ import { createPostgresProductionExecutionStore } from '../infrastructure/postgr
 import { createPostgresProductionOrderReader } from '../infrastructure/postgres-production-order-reader.mjs';
 import { createPostgresProductionOrderStore } from '../infrastructure/postgres-production-order-store.mjs';
 import { createPostgresSourcingTechPackAllocationStore } from '../infrastructure/postgres-sourcing-tech-pack-allocation-store.mjs';
+import { createPostgresSupplierEconomicPerformanceReader } from '../infrastructure/postgres-supplier-economic-performance-reader.mjs';
 import { createWholesaleHttpHandler } from '../http/api.mjs';
 import { createWholesaleFetchHandler } from '../http/fetch-api.mjs';
 import { createPostgresWholesaleRuntime as createBaseRuntime } from './postgres-base-runtime.mjs';
@@ -61,6 +63,8 @@ export function createPostgresWholesaleRuntime(options = {}) {
     ...(options.nextId ? { nextId: options.nextId } : {}),
   });
   const supplierRecovery = supplierRecoveryRuntime.service;
+  const supplierPerformanceReader = createPostgresSupplierEconomicPerformanceReader({ pool: options.pool });
+  const supplierPerformance = createSupplierEconomicPerformanceService({ reader: supplierPerformanceReader });
 
   const allocationStore = createPostgresSourcingTechPackAllocationStore({ pool: options.pool });
   const allocation = createSourcingTechPackAllocationService({
@@ -113,6 +117,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
     inventory,
     receiptClaims,
     supplierRecovery,
+    supplierPerformance,
     materials: base.materials,
     boms: base.boms,
     measurements: base.measurements,
@@ -144,6 +149,8 @@ export function createPostgresWholesaleRuntime(options = {}) {
     receiptClaims,
     supplierRecoveryStore: supplierRecoveryRuntime.store,
     supplierRecovery,
+    supplierPerformanceReader,
+    supplierPerformance,
     sourcingTechPackAllocationStore: allocationStore,
     sourcing,
     productionOrderStore,

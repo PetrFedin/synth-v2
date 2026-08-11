@@ -1,0 +1,150 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://syntha.local/schemas/fashion-kpi-registry-v17.json",
+  "title": "SYNTH-V2 KPI Registry Records v17",
+  "oneOf": [
+    {"$ref": "#/$defs/definitionVersion"},
+    {"$ref": "#/$defs/definitionReleaseEvent"},
+    {"$ref": "#/$defs/sourceMappingVersion"},
+    {"$ref": "#/$defs/mappingVerificationEvent"},
+    {"$ref": "#/$defs/definitionDependency"}
+  ],
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$"},
+    "hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "timestamp": {"type": "string", "format": "date-time"},
+    "formulaVersion": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+$"},
+    "definitionRole": {"enum": ["CANONICAL", "SPLIT_CHILD", "BLOCKED_UMBRELLA", "ALIAS"]},
+    "releaseStatus": {"enum": [
+      "DRAFT", "DEFINED", "MAPPING_PENDING", "MAPPED_UNVERIFIED", "VALIDATION_PENDING",
+      "UAT_PENDING", "PRODUCTION_READY", "DEPRECATED", "BLOCKED_UMBRELLA", "ALIAS_NONPUBLISH"
+    ]},
+    "mappingVerificationStatus": {"enum": ["MAPPED_UNVERIFIED", "VERIFIED", "DEPRECATED"]},
+    "definitionVersion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id", "scopeType", "organisationId", "kpiCode", "formulaVersion", "role",
+        "canonicalNameRu", "canonicalNameEn", "domainCode", "businessDefinition", "businessFormula",
+        "calculationPrimitive", "canonicalUom", "directionality", "goalFunction",
+        "grainContract", "populationContract", "temporalContract", "aggregationContract",
+        "dimensionalContract", "zeroNullErrorPolicy", "controlContract", "publicationContract",
+        "effectiveFrom", "effectiveTo", "createdAt", "createdBy", "contentHash"
+      ],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "scopeType": {"enum": ["system", "organisation"]},
+        "organisationId": {"type": ["string", "null"]},
+        "kpiCode": {"type": "string", "pattern": "^[A-Z0-9][A-Z0-9._/-]{2,79}$"},
+        "formulaVersion": {"$ref": "#/$defs/formulaVersion"},
+        "role": {"$ref": "#/$defs/definitionRole"},
+        "canonicalNameRu": {"type": "string", "minLength": 2},
+        "canonicalNameEn": {"type": "string", "minLength": 2},
+        "domainCode": {"type": "string", "minLength": 2},
+        "businessDefinition": {"type": "string", "minLength": 5},
+        "businessFormula": {"type": "string", "minLength": 1},
+        "calculationPrimitive": {"type": "string", "minLength": 2},
+        "canonicalUom": {"type": "string", "minLength": 1},
+        "directionality": {"type": "string", "minLength": 2},
+        "goalFunction": {"enum": ["MAXIMIZE", "MINIMIZE", "TARGET_BAND", "AT_LEAST", "AT_MOST", "SIGN_DEPENDENT", "DIAGNOSTIC"]},
+        "grainContract": {"type": "object"},
+        "populationContract": {"type": "object"},
+        "temporalContract": {"type": "object"},
+        "aggregationContract": {"type": "object"},
+        "dimensionalContract": {"type": "object"},
+        "zeroNullErrorPolicy": {"type": "object"},
+        "controlContract": {"type": "object"},
+        "publicationContract": {"type": "object"},
+        "effectiveFrom": {"$ref": "#/$defs/timestamp"},
+        "effectiveTo": {"anyOf": [{"$ref": "#/$defs/timestamp"}, {"type": "null"}]},
+        "createdAt": {"$ref": "#/$defs/timestamp"},
+        "createdBy": {"type": "string", "minLength": 1},
+        "contentHash": {"$ref": "#/$defs/hash"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"scopeType": {"const": "system"}}},
+          "then": {"properties": {"organisationId": {"type": "null"}}}
+        },
+        {
+          "if": {"properties": {"scopeType": {"const": "organisation"}}},
+          "then": {"properties": {"organisationId": {"type": "string", "minLength": 1}}}
+        }
+      ]
+    },
+    "definitionReleaseEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kpiDefinitionId", "previousReleaseEventId", "releaseStatus", "evidence", "createdAt", "createdBy", "contentHash"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "kpiDefinitionId": {"$ref": "#/$defs/id"},
+        "previousReleaseEventId": {"anyOf": [{"$ref": "#/$defs/id"}, {"type": "null"}]},
+        "releaseStatus": {"$ref": "#/$defs/releaseStatus"},
+        "evidence": {"type": "object"},
+        "createdAt": {"$ref": "#/$defs/timestamp"},
+        "createdBy": {"type": "string", "minLength": 1},
+        "contentHash": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "sourceMappingVersion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id", "kpiDefinitionId", "mappingSetVersion", "variableName", "sourceContractId", "sourceSystem",
+        "sourceEntity", "sourcePath", "datatype", "primaryOrEventKey", "eventTimestampPath", "uomPath",
+        "currencyPath", "joinContract", "filterContract", "createdAt", "createdBy", "contentHash"
+      ],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "kpiDefinitionId": {"$ref": "#/$defs/id"},
+        "mappingSetVersion": {"type": "integer", "minimum": 1},
+        "variableName": {"type": "string", "minLength": 1},
+        "sourceContractId": {"type": "string", "minLength": 2},
+        "sourceSystem": {"type": "string", "minLength": 2},
+        "sourceEntity": {"type": "string", "minLength": 1},
+        "sourcePath": {"type": "string", "minLength": 1},
+        "datatype": {"type": "string", "minLength": 1},
+        "primaryOrEventKey": {"type": ["string", "null"]},
+        "eventTimestampPath": {"type": ["string", "null"]},
+        "uomPath": {"type": ["string", "null"]},
+        "currencyPath": {"type": ["string", "null"]},
+        "joinContract": {"type": "object"},
+        "filterContract": {"type": "object"},
+        "createdAt": {"$ref": "#/$defs/timestamp"},
+        "createdBy": {"type": "string", "minLength": 1},
+        "contentHash": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "mappingVerificationEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kpiSourceMappingId", "previousVerificationEventId", "verificationStatus", "evidence", "createdAt", "createdBy", "contentHash"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "kpiSourceMappingId": {"$ref": "#/$defs/id"},
+        "previousVerificationEventId": {"anyOf": [{"$ref": "#/$defs/id"}, {"type": "null"}]},
+        "verificationStatus": {"$ref": "#/$defs/mappingVerificationStatus"},
+        "evidence": {"type": "object"},
+        "createdAt": {"$ref": "#/$defs/timestamp"},
+        "createdBy": {"type": "string", "minLength": 1},
+        "contentHash": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "definitionDependency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "sourceDefinitionId", "targetDefinitionId", "relationType", "relationContract", "createdAt", "createdBy", "contentHash"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "sourceDefinitionId": {"$ref": "#/$defs/id"},
+        "targetDefinitionId": {"$ref": "#/$defs/id"},
+        "relationType": {"enum": ["ALIAS_OF", "SPLIT_FROM", "COMPONENT_OF", "DRIVER_OF", "GUARDRAIL_OF"]},
+        "relationContract": {"type": "object"},
+        "createdAt": {"$ref": "#/$defs/timestamp"},
+        "createdBy": {"type": "string", "minLength": 1},
+        "contentHash": {"$ref": "#/$defs/hash"}
+      }
+    }
+  }
+}

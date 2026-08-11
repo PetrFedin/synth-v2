@@ -1,5 +1,8 @@
 {
-  "methodologyVersion": "16.0",
+  "methodologyVersion": "17.0",
+  "catalogBaselineVersion": "14.0",
+  "nativeBundleVersion": "16.0",
+  "registryVersion": "17.0",
   "roles": ["CANONICAL", "SPLIT_CHILD", "BLOCKED_UMBRELLA", "ALIAS"],
   "releaseStatuses": [
     "DRAFT",
@@ -51,6 +54,9 @@
   ],
   "dataStates": ["ZERO", "VALUE", "NOT_APPLICABLE", "MISSING", "INVALID"],
   "physicalMappingStatuses": ["PENDING", "MAPPED_UNVERIFIED", "VERIFIED", "DEPRECATED"],
+  "registryMappingVerificationStatuses": ["MAPPED_UNVERIFIED", "VERIFIED", "DEPRECATED"],
+  "dependencyTypes": ["ALIAS_OF", "SPLIT_FROM", "COMPONENT_OF", "DRIVER_OF", "GUARDRAIL_OF"],
+  "scopeTypes": ["system", "organisation"],
   "requiredForActive": [
     "id",
     "canonicalName",
@@ -85,6 +91,16 @@
     "inputMappings",
     "physicalSource"
   ],
+  "registryArtifacts": [
+    "db/migrations/044_kpi_registry.sql",
+    "src/modules/kpi-registry/public.mjs",
+    "src/infrastructure/postgres-kpi-registry-store.mjs",
+    "docs/fashion-kpi/registry-model.md",
+    "scripts/validate-kpi-registry.mjs",
+    "tests/kpi-registry-domain.test.mjs",
+    "tests/kpi-registry-migration.test.mjs",
+    "tests/kpi-registry-store.test.mjs"
+  ],
   "invariants": {
     "aliasMustNotPublish": true,
     "blockedUmbrellaMustNotPublish": true,
@@ -102,6 +118,13 @@
     "nativeKpiInputsMustResolveToSourceContract": true,
     "sourcePercentageScaleMustBeNormalizedExplicitly": true,
     "dueCohortMustNotUseClosedOnlyDenominator": true,
-    "historicalSnapshotsMustNotBeSummedAsIndependentFacts": true
+    "historicalSnapshotsMustNotBeSummedAsIndependentFacts": true,
+    "formulaVersionSeparateFromMappingSetVersion": true,
+    "releaseLifecycleSeparateFromDefinition": true,
+    "mappingVerificationSeparateFromPhysicalMapping": true,
+    "registryRecordsImmutable": true,
+    "systemDefinitionsNotTenantEditableByDefault": true,
+    "definitionAndObservationHistorySeparated": true,
+    "registryPayloadIdentityMustMatchIndexedColumns": true
   }
 }

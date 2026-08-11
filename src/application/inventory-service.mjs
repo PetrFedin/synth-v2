@@ -26,7 +26,7 @@ export function createInventoryService({ store, clock = () => new Date().toISOSt
         const previous = await tx.getCommand(commandId);
         if (previous) invariant(fingerprintsMatch(previous.fingerprint, fingerprint), 'COMMAND_ID_CONFLICT', 'commandId was already used by another mutation', { commandId });
 
-        const receipt = requireEntity(await tx.lockReceipt(receiptSnapshotId), 'RECEIPT_NOT_FOUND', { receiptSnapshotId });
+        const receipt = requireEntity(await tx.lockReceipt(receiptSnapshotId, actorId), 'RECEIPT_NOT_FOUND', { receiptSnapshotId });
         const membership = await tx.getMembership(receipt.shopId, actorId);
         assertCapability(membership, CAPABILITIES.INVENTORY_MANAGE);
         invariant(membership.organisationId === receipt.shopId, 'INVENTORY_SHOP_MEMBERSHIP_REQUIRED', 'Only the receiving retailer organisation can post its receipt to inventory', { receiptSnapshotId, shopId: receipt.shopId, actorId });

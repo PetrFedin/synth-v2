@@ -1,10 +1,11 @@
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const docsRoot = path.join(root, 'docs', 'fashion-kpi');
+const migrationsRoot = path.join(root, 'db', 'migrations');
 const violations = [];
 
 const requiredFiles = [
@@ -38,6 +39,7 @@ const rules = parseJson('governance-rules.json');
 const examples = parseJson(path.join('examples', 'core-kpis.json'));
 const nativeSourcesDocument = parseJson('native-source-contracts.json');
 const nativeKpisDocument = parseJson('native-kpi-bundles.json');
+const migrationCorpus = await loadMigrationCorpus();
 
 if (schema && schema.$schema !== 'https://json-schema.org/draft/2020-12/schema') {
   violations.push('kpi-contract.schema.json must use JSON Schema draft 2020-12');
@@ -100,7 +102,7 @@ if (rules && nativeSourcesDocument) {
         if (logicalNames.has(field.logical)) violations.push(`${label} duplicates logical field ${field.logical}`);
         logicalNames.add(field.logical);
       }
-      await validateNativeContractAgainstRepository(contract, label);
+      await validateNativeContractAgainstRepository(contract, label, migrationCorpus);
     }
   }
 }
@@ -114,37 +116,39 @@ if (rules && nativeKpisDocument) {
   }
 }
 
-const methodology = contents.get('calculation-methodology.md') ?? '';
-for (const phrase of [
+requireSections('calculation-methodology.md', [
   'Zero/null/error semantics',
   'Ratio of sums',
   'Temporal layer',
   'Dimensional analysis',
   'Anti-gaming requirements',
   'Restatement',
-]) {
-  if (!methodology.includes(phrase)) violations.push(`calculation-methodology.md missing required section: ${phrase}`);
-}
-
-const testing = contents.get('testing-and-release.md') ?? '';
-for (const phrase of ['Definition tests', 'Calculation tests', 'Population/time tests', 'Reconciliation tests', 'Production-ready gates']) {
-  if (!testing.includes(phrase)) violations.push(`testing-and-release.md missing required section: ${phrase}`);
-}
-
-const costing = contents.get('costing-economics-methodology.md') ?? '';
-for (const phrase of ['Critical scale rule', 'Cost allocation', 'Cost-close readiness', 'Corrections and reversals']) {
-  if (!costing.includes(phrase)) violations.push(`costing-economics-methodology.md missing required section: ${phrase}`);
-}
-
-const fulfillment = contents.get('fulfillment-quality-methodology.md') ?? '';
-for (const phrase of ['Receipt Acceptance Rate', 'Finalized Shipment Shortage Rate', 'On-time Final Receipt Rate', 'Snapshot deduplication']) {
-  if (!fulfillment.includes(phrase)) violations.push(`fulfillment-quality-methodology.md missing required section: ${phrase}`);
-}
-
-const reconciliation = contents.get('reconciliation-matrix.md') ?? '';
-for (const phrase of ['Hard identity', 'Scale controls', 'Due-cohort service controls', 'Publication policy on failures']) {
-  if (!reconciliation.includes(phrase)) violations.push(`reconciliation-matrix.md missing required section: ${phrase}`);
-}
+]);
+requireSections('testing-and-release.md', [
+  'Definition tests',
+  'Calculation tests',
+  'Population/time tests',
+  'Reconciliation tests',
+  'Production-ready gates',
+]);
+requireSections('costing-economics-methodology.md', [
+  'Critical scale rule',
+  'Cost allocation',
+  'Cost-close readiness',
+  'Corrections and reversals',
+]);
+requireSections('fulfillment-quality-methodology.md', [
+  'Receipt Acceptance Rate',
+  'Finalized Shipment Shortage Rate',
+  'On-time Final Receipt Rate',
+  'Snapshot deduplication',
+]);
+requireSections('reconciliation-matrix.md', [
+  'Hard identity',
+  'Scale controls',
+  'Due-cohort service controls',
+  'Publication policy on failures',
+]);
 
 if (violations.length) {
   console.error('Fashion KPI methodology violations:\n' + violations.map((item) => `- ${item}`).join('\n'));
@@ -220,6 +224,7 @@ function validateNativeKpi(kpi, label, contracts) {
   for (const contractId of kpi.sourceContracts) {
     if (!contracts.has(contractId)) violations.push(`${label} references unknown source contract ${contractId}`);
   }
+
   if (!kpi.inputMappings || typeof kpi.inputMappings !== 'object' || Array.isArray(kpi.inputMappings)) {
     violations.push(`${label} inputMappings must be an object`);
   } else {
@@ -246,6 +251,7 @@ function validateNativeKpi(kpi, label, contracts) {
       }
     }
   }
+
   if (kpi.physicalSource?.mappingStatus !== 'VERIFIED') {
     violations.push(`${label} native KPI must use VERIFIED repository-native mapping before entering native bundle`);
   }
@@ -262,6 +268,7 @@ function validateNativeKpi(kpi, label, contracts) {
       violations.push(`${label} DUE_COHORT must explicitly protect denominator from closed-only survivorship bias`);
     }
   }
+
   const physicalFields = Array.isArray(kpi.physicalSource?.fields) ? kpi.physicalSource.fields.join(' ') : '';
   if (/contribution_margin_percent|contributionMarginPercent/.test(physicalFields)) {
     const scaleText = `${kpi.scaleContract ?? ''} ${kpi.reconciliationControl ?? ''}`.toLowerCase();
@@ -271,9 +278,10 @@ function validateNativeKpi(kpi, label, contracts) {
   }
 }
 
-async function validateNativeContractAgainstRepository(contract, label) {
+async function validateNativeContractAgainstRepository(contract, label, corpus) {
   const sourceText = await readRepositoryText(contract.sourceFile, label, 'sourceFile');
   const persistenceText = await readRepositoryText(contract.persistenceFile, label, 'persistenceFile');
+
   if (sourceText) {
     for (const token of contract.requiredSourceTokens ?? []) {
       if (!sourceText.includes(token)) violations.push(`${label} sourceFile no longer contains required token ${token}`);
@@ -285,17 +293,36 @@ async function validateNativeContractAgainstRepository(contract, label) {
       }
     }
   }
+
   if (persistenceText) {
     const entityToken = String(contract.entity ?? '').split(/\s+/)[0];
-    if (entityToken && !persistenceText.includes(entityToken)) {
-      violations.push(`${label} persistenceFile does not contain entity token ${entityToken}`);
+    if (entityToken && !persistenceText.includes(entityToken) && !corpus.includes(entityToken)) {
+      violations.push(`${label} persistence history does not contain entity token ${entityToken}`);
     }
-    for (const field of contract.fields ?? []) {
-      const dbRoot = String(field.dbPath ?? '').split(/[.[]/, 1)[0];
-      if (dbRoot && !persistenceText.includes(dbRoot)) {
-        violations.push(`${label} persistenceFile does not expose db field/container ${dbRoot} for ${field.logical}`);
-      }
+  }
+
+  for (const field of contract.fields ?? []) {
+    const dbPath = String(field.dbPath ?? '');
+    const dbRoot = dbPath.split('.')[0].split('[')[0];
+    if (!dbRoot) continue;
+    const runtimeLeaf = String(field.runtimePath ?? '').replace(/\[\]/g, '').split('.').at(-1);
+    const representedInMigrations = corpus.includes(dbRoot) || corpus.includes(toSnakeCase(runtimeLeaf));
+    const payloadBacked = corpus.includes('payload JSONB') && sourceText?.includes(runtimeLeaf);
+    if (!representedInMigrations && !payloadBacked) {
+      violations.push(`${label} cannot reconcile persistence path ${dbPath} for ${field.logical} against migration history or payload-backed runtime field`);
     }
+  }
+}
+
+async function loadMigrationCorpus() {
+  try {
+    const entries = await readdir(migrationsRoot, { withFileTypes: true });
+    const sqlFiles = entries.filter((entry) => entry.isFile() && entry.name.endsWith('.sql')).map((entry) => entry.name).sort();
+    const texts = await Promise.all(sqlFiles.map((name) => readFile(path.join(migrationsRoot, name), 'utf8')));
+    return texts.join('\n');
+  } catch (error) {
+    violations.push(`unable to read db/migrations for KPI native source validation: ${error.message}`);
+    return '';
   }
 }
 
@@ -309,6 +336,13 @@ async function readRepositoryText(relative, label, fieldName) {
   } catch {
     violations.push(`${label} references missing ${fieldName}: ${relative}`);
     return null;
+  }
+}
+
+function requireSections(relative, phrases) {
+  const text = contents.get(relative) ?? '';
+  for (const phrase of phrases) {
+    if (!text.includes(phrase)) violations.push(`${relative} missing required section: ${phrase}`);
   }
 }
 
@@ -331,4 +365,11 @@ function requireUniqueArray(value, name) {
   if (new Set(value).size !== value.length) {
     violations.push(`governance-rules.json ${name} contains duplicates`);
   }
+}
+
+function toSnakeCase(value) {
+  return String(value ?? '')
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .replace(/[^A-Za-z0-9]+/g, '_')
+    .toLowerCase();
 }

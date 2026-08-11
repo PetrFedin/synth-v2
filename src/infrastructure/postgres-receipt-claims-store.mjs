@@ -17,28 +17,80 @@ function view(client) {
       const result = await client.query('SELECT payload FROM memberships WHERE organisation_id = $1 AND user_id = $2 FOR SHARE', [organisationId, userId]);
       return result.rows[0]?.payload;
     },
-    async lockDiscrepancy(id) {
-      const result = await client.query('SELECT payload FROM receipt_discrepancy_snapshots WHERE id = $1 FOR UPDATE', [id]);
+    async lockDiscrepancy(id, actorId) {
+      const result = await client.query(
+        `SELECT discrepancy.payload
+           FROM receipt_discrepancy_snapshots AS discrepancy
+          WHERE discrepancy.id = $1
+            AND EXISTS (
+              SELECT 1
+                FROM memberships AS membership
+               WHERE membership.organisation_id = discrepancy.shop_id
+                 AND membership.user_id = $2
+                 AND membership.status = 'active'
+            )
+          FOR UPDATE OF discrepancy`,
+        [id, actorId],
+      );
       return result.rows[0]?.payload;
     },
     async getClaimByDiscrepancy(id) {
       const result = await client.query('SELECT payload FROM receipt_discrepancy_claim_snapshots WHERE receipt_discrepancy_snapshot_id = $1 FOR SHARE', [id]);
       return result.rows[0]?.payload;
     },
-    async getClaim(id) {
-      const result = await client.query('SELECT payload FROM receipt_discrepancy_claim_snapshots WHERE id = $1 FOR SHARE', [id]);
+    async getClaim(id, actorId) {
+      const result = await client.query(
+        `SELECT claim.payload
+           FROM receipt_discrepancy_claim_snapshots AS claim
+          WHERE claim.id = $1
+            AND EXISTS (
+              SELECT 1
+                FROM memberships AS membership
+               WHERE membership.user_id = $2
+                 AND membership.status = 'active'
+                 AND membership.organisation_id IN (claim.brand_id, claim.shop_id)
+            )
+          FOR SHARE OF claim`,
+        [id, actorId],
+      );
       return result.rows[0]?.payload;
     },
-    async lockClaim(id) {
-      const result = await client.query('SELECT payload FROM receipt_discrepancy_claim_snapshots WHERE id = $1 FOR UPDATE', [id]);
+    async lockClaim(id, actorId) {
+      const result = await client.query(
+        `SELECT claim.payload
+           FROM receipt_discrepancy_claim_snapshots AS claim
+          WHERE claim.id = $1
+            AND EXISTS (
+              SELECT 1
+                FROM memberships AS membership
+               WHERE membership.organisation_id = claim.brand_id
+                 AND membership.user_id = $2
+                 AND membership.status = 'active'
+            )
+          FOR UPDATE OF claim`,
+        [id, actorId],
+      );
       return result.rows[0]?.payload;
     },
     async getResolutionByClaim(id) {
       const result = await client.query('SELECT payload FROM receipt_claim_resolution_snapshots WHERE claim_snapshot_id = $1 FOR SHARE', [id]);
       return result.rows[0]?.payload;
     },
-    async getResolution(id) {
-      const result = await client.query('SELECT payload FROM receipt_claim_resolution_snapshots WHERE id = $1 FOR SHARE', [id]);
+    async getResolution(id, actorId) {
+      const result = await client.query(
+        `SELECT resolution.payload
+           FROM receipt_claim_resolution_snapshots AS resolution
+          WHERE resolution.id = $1
+            AND EXISTS (
+              SELECT 1
+                FROM memberships AS membership
+               WHERE membership.user_id = $2
+                 AND membership.status = 'active'
+                 AND membership.organisation_id IN (resolution.brand_id, resolution.shop_id)
+            )
+          FOR SHARE OF resolution`,
+        [id, actorId],
+      );
       return result.rows[0]?.payload;
     },
     async insertClaim(value) {

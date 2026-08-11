@@ -1,10 +1,11 @@
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const docsRoot = path.join(root, 'docs', 'fashion-kpi');
+const migrationsRoot = path.join(root, 'db', 'migrations');
 const violations = [];
 
 const requiredFiles = [
@@ -13,9 +14,15 @@ const requiredFiles = [
   'data-contracts.md',
   'testing-and-release.md',
   'syntha-v2-integration.md',
+  'costing-economics-methodology.md',
+  'fulfillment-quality-methodology.md',
+  'reconciliation-matrix.md',
+  'implementation-checklist.md',
   'kpi-contract.schema.json',
   'governance-rules.json',
-  path.join('examples', 'core-kpis.json')
+  'native-source-contracts.json',
+  'native-kpi-bundles.json',
+  path.join('examples', 'core-kpis.json'),
 ];
 
 const contents = new Map();
@@ -30,9 +37,15 @@ for (const relative of requiredFiles) {
 const schema = parseJson('kpi-contract.schema.json');
 const rules = parseJson('governance-rules.json');
 const examples = parseJson(path.join('examples', 'core-kpis.json'));
+const nativeSourcesDocument = parseJson('native-source-contracts.json');
+const nativeKpisDocument = parseJson('native-kpi-bundles.json');
+const migrationCorpus = await loadMigrationCorpus();
 
 if (schema && schema.$schema !== 'https://json-schema.org/draft/2020-12/schema') {
   violations.push('kpi-contract.schema.json must use JSON Schema draft 2020-12');
+}
+if (schema && !String(schema.$id ?? '').includes('v16')) {
+  violations.push('kpi-contract.schema.json must expose the current v16 contract id');
 }
 
 if (rules) {
@@ -45,15 +58,121 @@ if (rules) {
   requireUniqueArray(rules.temporalClasses, 'temporalClasses');
   requireUniqueArray(rules.calculationPrimitives, 'calculationPrimitives');
   requireUniqueArray(rules.dataStates, 'dataStates');
+  requireUniqueArray(rules.physicalMappingStatuses, 'physicalMappingStatuses');
 }
 
 if (rules && Array.isArray(examples)) {
+  validateKpiDefinitions(examples, 'core-kpis.json', { native: false });
+}
+
+const sourceContracts = new Map();
+if (rules && nativeSourcesDocument) {
+  if (!Array.isArray(nativeSourcesDocument.contracts) || nativeSourcesDocument.contracts.length === 0) {
+    violations.push('native-source-contracts.json contracts must be a non-empty array');
+  } else {
+    for (const [index, contract] of nativeSourcesDocument.contracts.entries()) {
+      const label = `native-source-contracts.json[${index}]${contract?.id ? ` (${contract.id})` : ''}`;
+      for (const field of rules.nativeContractRequiredFields ?? []) {
+        if (contract?.[field] === undefined || contract?.[field] === null || contract?.[field] === '') {
+          violations.push(`${label} missing required field ${field}`);
+        }
+      }
+      if (contract?.id) {
+        if (sourceContracts.has(contract.id)) violations.push(`${label} duplicates source contract id ${contract.id}`);
+        sourceContracts.set(contract.id, contract);
+      }
+      if (contract?.mappingStatus && !rules.physicalMappingStatuses.includes(contract.mappingStatus)) {
+        violations.push(`${label} has unknown mappingStatus ${contract.mappingStatus}`);
+      }
+      if (!Array.isArray(contract?.lineageKeys) || contract.lineageKeys.length === 0) {
+        violations.push(`${label} lineageKeys must be a non-empty array`);
+      } else if (new Set(contract.lineageKeys).size !== contract.lineageKeys.length) {
+        violations.push(`${label} lineageKeys contains duplicates`);
+      }
+      if (!Array.isArray(contract?.fields) || contract.fields.length === 0) {
+        violations.push(`${label} fields must be a non-empty array`);
+        continue;
+      }
+      const logicalNames = new Set();
+      for (const field of contract.fields) {
+        if (!field?.logical || !field?.runtimePath || !field?.dbPath) {
+          violations.push(`${label} every field requires logical, runtimePath and dbPath`);
+          continue;
+        }
+        if (logicalNames.has(field.logical)) violations.push(`${label} duplicates logical field ${field.logical}`);
+        logicalNames.add(field.logical);
+      }
+      await validateNativeContractAgainstRepository(contract, label, migrationCorpus);
+    }
+  }
+}
+
+const nativeKpis = nativeKpisDocument?.kpis;
+if (rules && nativeKpisDocument) {
+  if (!Array.isArray(nativeKpis) || nativeKpis.length === 0) {
+    violations.push('native-kpi-bundles.json kpis must be a non-empty array');
+  } else {
+    validateKpiDefinitions(nativeKpis, 'native-kpi-bundles.json', { native: true, sourceContracts });
+  }
+}
+
+requireSections('calculation-methodology.md', [
+  'Zero/null/error semantics',
+  'Ratio of sums',
+  'Temporal layer',
+  'Dimensional analysis',
+  'Anti-gaming requirements',
+  'Restatement',
+]);
+requireSections('testing-and-release.md', [
+  'Definition tests',
+  'Calculation tests',
+  'Population/time tests',
+  'Reconciliation tests',
+  'Production-ready gates',
+]);
+requireSections('costing-economics-methodology.md', [
+  'Critical scale rule',
+  'Cost allocation',
+  'Cost-close readiness',
+  'Corrections and reversals',
+]);
+requireSections('fulfillment-quality-methodology.md', [
+  'Receipt Acceptance Rate',
+  'Finalized Shipment Shortage Rate',
+  'On-time Final Receipt Rate',
+  'Snapshot deduplication',
+]);
+requireSections('reconciliation-matrix.md', [
+  'Hard identity',
+  'Scale controls',
+  'Due-cohort service controls',
+  'Publication policy on failures',
+]);
+
+if (violations.length) {
+  console.error('Fashion KPI methodology violations:\n' + violations.map((item) => `- ${item}`).join('\n'));
+  process.exit(1);
+}
+
+console.log(
+  `Fashion KPI methodology OK (${examples?.length ?? 0} generic examples, ${nativeKpis?.length ?? 0} native KPI contracts, ${sourceContracts.size} verified native source contracts, methodology v${rules?.methodologyVersion ?? 'unknown'}).`,
+);
+
+function validateKpiDefinitions(definitions, fileLabel, { native, sourceContracts: contracts = new Map() }) {
   const ids = new Set();
-  for (const [index, kpi] of examples.entries()) {
-    const label = `core-kpis.json[${index}]${kpi?.id ? ` (${kpi.id})` : ''}`;
+  for (const [index, kpi] of definitions.entries()) {
+    const label = `${fileLabel}[${index}]${kpi?.id ? ` (${kpi.id})` : ''}`;
     for (const field of rules.requiredForActive ?? []) {
       if (kpi?.[field] === undefined || kpi?.[field] === null || kpi?.[field] === '') {
         violations.push(`${label} missing required field ${field}`);
+      }
+    }
+    if (native) {
+      for (const field of rules.nativeKpiRequiredFields ?? []) {
+        if (kpi?.[field] === undefined || kpi?.[field] === null || kpi?.[field] === '') {
+          violations.push(`${label} missing native KPI field ${field}`);
+        }
       }
     }
     if (kpi?.id) {
@@ -63,39 +182,19 @@ if (rules && Array.isArray(examples)) {
     if (!/^\d+\.\d+$/.test(String(kpi?.formulaVersion ?? ''))) {
       violations.push(`${label} formulaVersion must be major.minor`);
     }
-    if (kpi?.role && !rules.roles.includes(kpi.role)) {
-      violations.push(`${label} has unknown role ${kpi.role}`);
-    }
-    if (kpi?.goalFunction && !rules.goalFunctions.includes(kpi.goalFunction)) {
-      violations.push(`${label} has unknown goalFunction ${kpi.goalFunction}`);
-    }
-    if (kpi?.temporalClass && !rules.temporalClasses.includes(kpi.temporalClass)) {
-      violations.push(`${label} has unknown temporalClass ${kpi.temporalClass}`);
-    }
-    if (kpi?.calculationPrimitive && !rules.calculationPrimitives.includes(kpi.calculationPrimitive)) {
-      violations.push(`${label} has unknown calculationPrimitive ${kpi.calculationPrimitive}`);
-    }
-    if (kpi?.releaseStatus && !rules.releaseStatuses.includes(kpi.releaseStatus)) {
-      violations.push(`${label} has unknown releaseStatus ${kpi.releaseStatus}`);
-    }
+    if (kpi?.role && !rules.roles.includes(kpi.role)) violations.push(`${label} has unknown role ${kpi.role}`);
+    if (kpi?.goalFunction && !rules.goalFunctions.includes(kpi.goalFunction)) violations.push(`${label} has unknown goalFunction ${kpi.goalFunction}`);
+    if (kpi?.temporalClass && !rules.temporalClasses.includes(kpi.temporalClass)) violations.push(`${label} has unknown temporalClass ${kpi.temporalClass}`);
+    if (kpi?.calculationPrimitive && !rules.calculationPrimitives.includes(kpi.calculationPrimitive)) violations.push(`${label} has unknown calculationPrimitive ${kpi.calculationPrimitive}`);
+    if (kpi?.releaseStatus && !rules.releaseStatuses.includes(kpi.releaseStatus)) violations.push(`${label} has unknown releaseStatus ${kpi.releaseStatus}`);
 
-    if (kpi?.role === 'ALIAS' && !/ALIAS|NONPUBLISH/.test(kpi.releaseStatus ?? '')) {
-      violations.push(`${label} alias must be non-publishable`);
-    }
-    if (kpi?.role === 'BLOCKED_UMBRELLA' && !/BLOCK/.test(kpi.releaseStatus ?? '')) {
-      violations.push(`${label} blocked umbrella must use a blocked release status`);
-    }
-    if (kpi?.releaseStatus === 'PRODUCTION_READY' && kpi?.physicalSource?.mappingStatus !== 'VERIFIED') {
-      violations.push(`${label} PRODUCTION_READY requires VERIFIED physical mapping`);
-    }
-    if (kpi?.calculationPrimitive === 'TRUE_SUBSET_SHARE') {
-      if (!kpi.numerator || !kpi.denominator) {
-        violations.push(`${label} TRUE_SUBSET_SHARE requires numerator and denominator`);
-      }
-      const policy = `${kpi.zeroNullErrorPolicy ?? ''} ${kpi.aggregationRule ?? ''}`.toLowerCase();
-      if (!policy.includes('numerator') && !policy.includes('subset') && !policy.includes('distinct')) {
-        violations.push(`${label} TRUE_SUBSET_SHARE must document subset/distinctness protection`);
-      }
+    if (kpi?.role === 'ALIAS' && !/ALIAS|NONPUBLISH/.test(kpi.releaseStatus ?? '')) violations.push(`${label} alias must be non-publishable`);
+    if (kpi?.role === 'BLOCKED_UMBRELLA' && !/BLOCK/.test(kpi.releaseStatus ?? '')) violations.push(`${label} blocked umbrella must use a blocked release status`);
+    if (kpi?.releaseStatus === 'PRODUCTION_READY' && kpi?.physicalSource?.mappingStatus !== 'VERIFIED') violations.push(`${label} PRODUCTION_READY requires VERIFIED physical mapping`);
+
+    const ratioPrimitives = new Set(['TRUE_SUBSET_SHARE', 'RATIO_OF_SUMS', 'UNIT_RATE', 'NORMALIZED_EVENT_RATE']);
+    if (ratioPrimitives.has(kpi?.calculationPrimitive) && (!kpi?.numerator || !kpi?.denominator)) {
+      violations.push(`${label} ${kpi.calculationPrimitive} requires numerator and denominator`);
     }
     if (kpi?.calculationPrimitive === 'NORMALIZED_EVENT_RATE' && (kpi.normalizerK === undefined || kpi.normalizerK === null)) {
       violations.push(`${label} NORMALIZED_EVENT_RATE requires normalizerK`);
@@ -112,35 +211,140 @@ if (rules && Array.isArray(examples)) {
         violations.push(`${label} snapshot cannot be additive across time`);
       }
     }
-    if (kpi?.canonicalUom === 'ratio' && /%/.test(String(kpi.businessFormula ?? '')) && !String(kpi.businessFormula).includes('* 100')) {
-      violations.push(`${label} ratio formula contains percentage syntax without explicit scaling contract`);
+
+    if (native) validateNativeKpi(kpi, label, contracts);
+  }
+}
+
+function validateNativeKpi(kpi, label, contracts) {
+  if (!Array.isArray(kpi.sourceContracts) || kpi.sourceContracts.length === 0) {
+    violations.push(`${label} sourceContracts must be a non-empty array`);
+    return;
+  }
+  for (const contractId of kpi.sourceContracts) {
+    if (!contracts.has(contractId)) violations.push(`${label} references unknown source contract ${contractId}`);
+  }
+
+  if (!kpi.inputMappings || typeof kpi.inputMappings !== 'object' || Array.isArray(kpi.inputMappings)) {
+    violations.push(`${label} inputMappings must be an object`);
+  } else {
+    for (const [inputName, mapping] of Object.entries(kpi.inputMappings)) {
+      if (typeof mapping !== 'string' || mapping.length === 0) {
+        violations.push(`${label} input ${inputName} has invalid mapping`);
+        continue;
+      }
+      if (mapping.startsWith('constant:')) continue;
+      const separator = mapping.lastIndexOf('.');
+      if (separator <= 0) {
+        violations.push(`${label} input ${inputName} mapping must be ContractId.LogicalField or constant:*`);
+        continue;
+      }
+      const contractId = mapping.slice(0, separator);
+      const logicalField = mapping.slice(separator + 1);
+      const contract = contracts.get(contractId);
+      if (!contract) {
+        violations.push(`${label} input ${inputName} references unknown contract ${contractId}`);
+        continue;
+      }
+      if (!contract.fields.some((field) => field.logical === logicalField)) {
+        violations.push(`${label} input ${inputName} references missing logical field ${contractId}.${logicalField}`);
+      }
+    }
+  }
+
+  if (kpi.physicalSource?.mappingStatus !== 'VERIFIED') {
+    violations.push(`${label} native KPI must use VERIFIED repository-native mapping before entering native bundle`);
+  }
+  if (kpi.releaseStatus === 'PRODUCTION_READY') {
+    for (const contractId of kpi.sourceContracts) {
+      if (contracts.get(contractId)?.mappingStatus !== 'VERIFIED') {
+        violations.push(`${label} PRODUCTION_READY references unverified source contract ${contractId}`);
+      }
+    }
+  }
+  if (kpi.temporalClass === 'DUE_COHORT') {
+    const antiGaming = `${kpi.eligiblePopulation ?? ''} ${kpi.antiGamingControl ?? ''}`.toLowerCase();
+    if (!antiGaming.includes('overdue') || !antiGaming.includes('denominator')) {
+      violations.push(`${label} DUE_COHORT must explicitly protect denominator from closed-only survivorship bias`);
+    }
+  }
+
+  const physicalFields = Array.isArray(kpi.physicalSource?.fields) ? kpi.physicalSource.fields.join(' ') : '';
+  if (/contribution_margin_percent|contributionMarginPercent/.test(physicalFields)) {
+    const scaleText = `${kpi.scaleContract ?? ''} ${kpi.reconciliationControl ?? ''}`.toLowerCase();
+    if (!scaleText.includes('decimal') || !(scaleText.includes('/ 100') || scaleText.includes('divided by 100'))) {
+      violations.push(`${label} uses source contribution margin percent but lacks explicit 0-100 -> decimal normalization/reconciliation`);
     }
   }
 }
 
-const methodology = contents.get('calculation-methodology.md') ?? '';
-for (const phrase of [
-  'Zero/null/error semantics',
-  'Ratio of sums',
-  'Temporal layer',
-  'Dimensional analysis',
-  'Anti-gaming requirements',
-  'Restatement'
-]) {
-  if (!methodology.includes(phrase)) violations.push(`calculation-methodology.md missing required section: ${phrase}`);
+async function validateNativeContractAgainstRepository(contract, label, corpus) {
+  const sourceText = await readRepositoryText(contract.sourceFile, label, 'sourceFile');
+  const persistenceText = await readRepositoryText(contract.persistenceFile, label, 'persistenceFile');
+
+  if (sourceText) {
+    for (const token of contract.requiredSourceTokens ?? []) {
+      if (!sourceText.includes(token)) violations.push(`${label} sourceFile no longer contains required token ${token}`);
+    }
+    for (const field of contract.fields ?? []) {
+      const runtimeLeaf = String(field.runtimePath ?? '').replace(/\[\]/g, '').split('.').at(-1);
+      if (runtimeLeaf && !sourceText.includes(runtimeLeaf)) {
+        violations.push(`${label} sourceFile does not expose runtime field token ${runtimeLeaf} for ${field.logical}`);
+      }
+    }
+  }
+
+  if (persistenceText) {
+    const entityToken = String(contract.entity ?? '').split(/\s+/)[0];
+    if (entityToken && !persistenceText.includes(entityToken) && !corpus.includes(entityToken)) {
+      violations.push(`${label} persistence history does not contain entity token ${entityToken}`);
+    }
+  }
+
+  for (const field of contract.fields ?? []) {
+    const dbPath = String(field.dbPath ?? '');
+    const dbRoot = dbPath.split('.')[0].split('[')[0];
+    if (!dbRoot) continue;
+    const runtimeLeaf = String(field.runtimePath ?? '').replace(/\[\]/g, '').split('.').at(-1);
+    const representedInMigrations = corpus.includes(dbRoot) || corpus.includes(toSnakeCase(runtimeLeaf));
+    const payloadBacked = corpus.includes('payload JSONB') && sourceText?.includes(runtimeLeaf);
+    if (!representedInMigrations && !payloadBacked) {
+      violations.push(`${label} cannot reconcile persistence path ${dbPath} for ${field.logical} against migration history or payload-backed runtime field`);
+    }
+  }
 }
 
-const testing = contents.get('testing-and-release.md') ?? '';
-for (const phrase of ['Definition tests', 'Calculation tests', 'Population/time tests', 'Reconciliation tests', 'Production-ready gates']) {
-  if (!testing.includes(phrase)) violations.push(`testing-and-release.md missing required section: ${phrase}`);
+async function loadMigrationCorpus() {
+  try {
+    const entries = await readdir(migrationsRoot, { withFileTypes: true });
+    const sqlFiles = entries.filter((entry) => entry.isFile() && entry.name.endsWith('.sql')).map((entry) => entry.name).sort();
+    const texts = await Promise.all(sqlFiles.map((name) => readFile(path.join(migrationsRoot, name), 'utf8')));
+    return texts.join('\n');
+  } catch (error) {
+    violations.push(`unable to read db/migrations for KPI native source validation: ${error.message}`);
+    return '';
+  }
 }
 
-if (violations.length) {
-  console.error('Fashion KPI methodology violations:\n' + violations.map((item) => `- ${item}`).join('\n'));
-  process.exit(1);
+async function readRepositoryText(relative, label, fieldName) {
+  if (typeof relative !== 'string' || relative.length === 0 || path.isAbsolute(relative) || relative.includes('..')) {
+    violations.push(`${label} has unsafe/invalid ${fieldName} ${relative}`);
+    return null;
+  }
+  try {
+    return await readFile(path.join(root, relative), 'utf8');
+  } catch {
+    violations.push(`${label} references missing ${fieldName}: ${relative}`);
+    return null;
+  }
 }
 
-console.log(`Fashion KPI methodology OK (${examples?.length ?? 0} governed examples, methodology v${rules?.methodologyVersion ?? 'unknown'}).`);
+function requireSections(relative, phrases) {
+  const text = contents.get(relative) ?? '';
+  for (const phrase of phrases) {
+    if (!text.includes(phrase)) violations.push(`${relative} missing required section: ${phrase}`);
+  }
+}
 
 function parseJson(relative) {
   const source = contents.get(relative);
@@ -161,4 +365,11 @@ function requireUniqueArray(value, name) {
   if (new Set(value).size !== value.length) {
     violations.push(`governance-rules.json ${name} contains duplicates`);
   }
+}
+
+function toSnakeCase(value) {
+  return String(value ?? '')
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .replace(/[^A-Za-z0-9]+/g, '_')
+    .toLowerCase();
 }

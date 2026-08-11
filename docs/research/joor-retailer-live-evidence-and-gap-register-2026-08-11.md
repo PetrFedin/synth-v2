@@ -430,7 +430,226 @@ Prices and exact commercial limits are time-dependent configuration, not source-
 
 ### 5.1 Retail/discovery categories
 
-Accessories; Activewear/Yoga; Beauty; Bridal; Candles; Denim; Eco-friendly; Evening; Eyewear; Gifts; Handbags; Hats; Home; Hosiery; Jewelry; Kids; Lingerie; Luggage; Mens Bags; Mens RTW; Mens Shoe; Mens Underwear; Outdoor; Outerwear; Plus Size; Resort Wear; Special Occasion; Swimwe…4242 tokens truncated…sted; scan uploads, validate MIME independently of extension, and serve with safe content headers.
+Accessories; Activewear/Yoga; Beauty; Bridal; Candles; Denim; Eco-friendly; Evening; Eyewear; Gifts; Handbags; Hats; Home; Hosiery; Jewelry; Kids; Lingerie; Luggage; Mens Bags; Mens RTW; Mens Shoe; Mens Underwear; Outdoor; Outerwear; Plus Size; Resort Wear; Special Occasion; Swimwear; Watches; Womens RTW; Womens Shoe.
+
+Category dictionaries are tenant/configuration data with stable IDs, localized labels, aliases, active intervals and ordering. They must not be enums embedded in UI code.
+
+### 5.2 Order/commercial dictionaries
+
+- Price type: brand-specific code, currency and label.
+- Delivery: Immediate or named/ranged delivery window.
+- Door/location: organisation-specific.
+- Buyer: membership/user-specific, stable ID despite duplicate labels.
+- Shipping method, payment method, billing code and tax identity: organisation/order-context-specific.
+- Group-by dimensions: system and brand-defined merchandising attributes.
+- Size scale: ordered, brand/category-specific; never assume universal numeric sorting.
+
+### 5.3 Cross-cutting dictionary requirements
+
+Every reference value needs: stable ID, code, localized label, display order, scope, valid-from/to, active flag and optional parent. Historical orders must render the snapshot label even after a dictionary entry is renamed or retired.
+
+## 6. Layout and responsive evidence
+
+Measured at desktop viewport `1429 × 810`, device pixel ratio 1:
+
+- Home document height was approximately 2116 px.
+- Linesheet detail used a left brand rail around x=228–480 and product content beginning around x=526.
+- Representative style card media was about `219 × 299`; small color swatches about `18 × 18`.
+- Style detail used a primary image around `330 × 450`, thumbnails about `58 × 77`, color swatches about `37 × 37`; media began around x=556 and detail column around x=916.
+- Start Order modal was approximately 440 px wide; inputs about `308 × 38`; action buttons about `198 × 38`.
+- Rich storefront hero occupied approximately `1414 × 608`; page content margin began near x=145. Representative grids used `359 × 478` three-column images, `263 × 351` four-column images and `550 × 733` two-column cards.
+
+Responsive checks at `390 × 844`, `768 × 1024` and desktop widths found two coexisting systems:
+
+1. Modern storefront/home surfaces reflow without horizontal overflow; header text collapses on mobile and CTA width changes.
+2. Legacy linesheet surfaces retain an approximately 1026 px working canvas and create horizontal scrolling on narrow viewports; the sidebar remains about 252 px and content begins around x=332.
+
+Parity decision: preserve the *functional information density* and safe usability, not accidental legacy breakage. If exact visual compatibility is required for a legacy route, document that per route and add horizontal-scroll regression tests. New `synth-v2` pages should use responsive tokens with explicit density modes.
+
+Minimum responsive matrix:
+
+- 390 × 844 mobile portrait.
+- 768 × 1024 tablet portrait.
+- 1024 × 768 small desktop/tablet landscape.
+- 1440 × 900 desktop.
+- 1920 × 1080 wide desktop.
+- 200% zoom and keyboard-only navigation.
+
+## 7. What is already executable in synth-v2
+
+CODE-CONFIRMED from `main` on 2026-08-11:
+
+| Area | Implemented behavior | Evidence path | Parity assessment |
+|---|---|---|---|
+| Runtime | PostgreSQL composition, auth, readiness, maintenance, notifications, outbox | `src/runtime/postgres-base-runtime.mjs`, `src/server.mjs` | Strong platform foundation |
+| Wholesale workflow | Organisations, relationships, campaigns, collections, showrooms, invitations, cycles, selections and orders | application services + workspace UI | Core present |
+| Catalog | Flat SKU create/edit with collection, name, wholesale price, currency, MOQ and sellable quantity | `public/modules/catalog-form.js` | Partial; lacks style/color/size/media |
+| Publications | Immutable commercial publication per collection, content hash, published lines, print and CSV | `public/modules/linesheets.js` | Strong snapshot idea; buyer UX partial |
+| Selection | Create from accepted showroom context; add/update SKU quantity with MOQ validation | `public/modules/forms-3.js` | Partial; flat SKU quantity only |
+| Order | Create from submitted selection; Incoterm, payment days, prepayment, delivery range; bilateral lifecycle/cancel | `public/modules/forms-3.js`, `public/modules/order-lifecycle-actions.js` | Core present, JOOR status/UI incomplete |
+| Inventory/economics | Reservation, availability, server-side economics/cost allocation | application/runtime modules | Useful core, needs matrix projection |
+| Partner access | Relationship accept/reject/revoke and showroom invitation lifecycle | partners/views modules | Partial versus discovery/inbox states |
+| Notifications/calendar | Dedicated views and services | runtime/UI modules | Present; not a message inbox |
+| PLM/production | Materials, BOMs, measurements, samples, sourcing, tech packs, production and quality | runtime/UI modules | Additional product value, not JOOR retailer parity |
+| Localization | RU/EN runtime | `public/modules/i18n-runtime.js` | Infrastructure only; preference/locales incomplete |
+
+Current primary UI navigation is Overview, Catalog, Showrooms, Partners, Selections, Orders, Calendar and Notifications. No executable first-class navigation was confirmed for Discovery, Storefronts, Retailer Profile, Account Settings, Messages, Favorites/Passport, Payments, Shopify/Jobs, Subscriptions, Looks, Styleboards or Visual Assortment.
+
+## 8. Gap register
+
+Priority meanings:
+
+- **P0** — blocks a correct buyer order and data model; implement before claiming commerce parity.
+- **P1** — blocks complete retailer-cabinet parity and daily buyer operations.
+- **P2** — advanced/premium/integration surface; implement after core contracts or after controlled UAT.
+
+| ID | Priority | Gap | Required deliverable | Acceptance evidence |
+|---|---:|---|---|---|
+| CAT-01 | P0 | Flat SKU model | Style, Colorway, SKU, SizeScale, SizeValue, media, attributes | One style with 2 colors × 4 sizes retains distinct SKU/UPC/qty |
+| CAT-02 | P0 | No rich media | Ordered assets, variant association, crop/focal/alt, failure states | Gallery, thumbnails and swatches pass responsive/a11y tests |
+| CAT-03 | P0 | Price type too shallow | PriceBook/PriceType, currency, wholesale, suggested retail, effective dates | Buyer switches valid price type without mutating snapshot |
+| CAT-04 | P0 | Delivery not line-aware | DeliveryWindow and availability per color/SKU | Mixed Immediate/future lines calculate and filter correctly |
+| CAT-05 | P0 | Attribute/grouping taxonomy absent | Configurable attributes and group-by registry | Observed 10 grouping options map by stable IDs |
+| ORD-01 | P0 | Flat quantity line | Color × size matrix and server totals | Matrix round-trip is lossless; zero cells removable |
+| ORD-02 | P0 | Cart/draft context incomplete | DraftOrder/Cart bound to brand, door, publication and price type | Empty redirect, resume and immutable source version tested |
+| ORD-03 | P0 | Status mismatch | Explicit state machine for Draft/Notes/Pending/Approved/Shipped/Cancelled plus bilateral events | Forbidden transitions rejected; history auditable |
+| ORD-04 | P0 | Missing address/door terms | Shipping/billing snapshots, door, shipping/payment/tax/billing code | Approved order remains historically stable after profile edits |
+| ORD-05 | P0 | Totals/projections incomplete | Units/styles/colors/value summaries at color/style/order level | Totals reconcile with matrix in multiple currencies/rounding |
+| PUB-01 | P0 | Buyer linesheet is table-only | Card/grid buyer view, filters, groups, style drill-down, start order | Discovery-to-draft journey works from publication snapshot |
+| IAM-01 | P0 | Organisation preferences incomplete | Membership, permissions, retailer/brand roles, plan capabilities | Route/action checks enforced server-side and in UI |
+| CON-01 | P1 | Relationship state is too narrow | Incoming, outgoing pending, connected, dismissed, interested/viewed | All connection tabs derive from one auditable model |
+| DIS-01 | P1 | Brand discovery absent | Search/filter/sort, request state, pagination/infinite loading | Filter URL/state, zero/error/loading and request idempotency tested |
+| STO-01 | P1 | Storefront absent | Versioned storefront with block content and access gates | Connected and disconnected variants render safely |
+| PRO-01 | P1 | Retailer profile absent | Company, media, verification, people, demographics | Field limits/dictionaries/media validation tested |
+| PRO-02 | P1 | Doors/locations absent | Door/location CRUD, address, price range, categories, brands carried | Primary/additional door invariants and order references tested |
+| SET-01 | P1 | Account settings absent | Language, email, date, landing, rounding, POS, privacy, connection prefs | Preferences persist per user/org and affect rendering/actions |
+| MSG-01 | P1 | Inbox absent | Mailboxes, threads/messages, read/trash states, bulk actions, pagination | Per-recipient state and invitation classification tested |
+| MSG-02 | P1 | Compose/attachment absent | Recipient autocomplete/modes, subject/body, validated image attachment | MIME/size/security/permission cases covered |
+| ORD-06 | P1 | Order registry shallow | JOOR-like counters, columns, buyer/date filters, pagination | Filter/count consistency and stable buyer IDs tested |
+| ORD-07 | P1 | Bulk operations absent | Status change, duplicate, remove zero qty colors, send to assortment | Preview/idempotency/partial-failure audit tested |
+| ORD-08 | P1 | Comments/downloads absent | Order conversation and async PDF/XLSX/size export | Permission, redaction, export version and job state tested |
+| ORD-09 | P1 | Import/confirmation exports absent | Validated import pipeline and confirmation artifacts | Row-level errors, dry run, repeat upload idempotency tested |
+| PAY-01 | P2 | Pay tab/payment absent | Payment intent/status, provider abstraction, reconciliation | No card secrets stored; webhook/idempotency/retry tested |
+| INT-01 | P2 | Shopify configuration absent | Installation, mappings, approved-order automation and checkpoints | Sandbox sync with retry and per-record outcome |
+| JOB-01 | P2 | Activity center absent | Async job registry and operator-visible actions/details | Queued/running/succeeded/failed/cancelled/retry states tested |
+| FAV-01 | P2 | Favorites/Passport absent | Favorites and event/discovery entities | Seeded-account UAT defines exact behavior first |
+| ASM-01 | P2 | Looks absent | Registry, archive state, creator/brand/collection metadata | Empty/list/filter/archive contracts tested |
+| ASM-02 | P2 | Styleboard partial/absent | Board document, items, layout/group/text/comments/share/order handoff | Controlled UAT defines canvas schema and concurrency |
+| ENT-01 | P2 | Entitlements/plans absent | Capability/quotas, billing-cycle configuration, paywall component | Tier changes affect server authorization, not just UI |
+| RES-01 | P1 | Responsive density incomplete | Route-specific responsive specs and tokenized components | Full viewport/zoom/keyboard matrix in CI |
+| A11Y-01 | P1 | Legacy accessibility risks | Names/roles/focus/error announcements/table semantics | WCAG-oriented automated and manual audit |
+| OBS-01 | P1 | Parity telemetry absent | Journey events, job/order transition metrics and audit correlation | Funnel/drop-off and transition errors observable without PII |
+
+## 9. Recommended target aggregates
+
+This is a boundary proposal, not a demand to collapse existing `synth-v2` services:
+
+```text
+Identity & Organisation
+  User ─ Membership ─ Organisation
+  OrganisationProfile ─ Door/Location ─ Address
+  UserPreference / OrganisationPreference / Verification
+
+Network & Discovery
+  ConnectionRequest ─ Relationship ─ Submission/Interest
+  Favorite ─ Passport/Event presence
+
+Commercial Catalog
+  Campaign ─ Collection ─ Linesheet/CommercialPublication
+  Style ─ Colorway ─ SKU ─ SizeValue/SizeScale
+  MediaAsset ─ AttributeDefinition/Value
+  PriceBook/PriceType ─ Price
+  DeliveryWindow ─ Availability
+
+Buyer Workspace
+  DraftOrder/Cart ─ OrderLineMatrix ─ Door allocation
+  Order ─ Address snapshots ─ Terms ─ StatusEvent
+  OrderComment ─ Document/ExportJob ─ Payment
+
+Content & Assortment
+  StorefrontVersion ─ ContentBlock
+  Look ─ StyleboardDocument ─ BoardItem/Group/Annotation
+
+Messaging & Integration
+  Conversation ─ Message ─ Attachment ─ MailboxState
+  IntegrationInstallation ─ MappingVersion ─ SyncJob ─ JobItemResult
+  Subscription ─ Entitlement ─ QuotaUsage
+```
+
+Critical invariant: catalog and profile data may evolve, but an approved order must preserve immutable commercial, address, tax, term, label and media references required to reproduce its confirmation.
+
+## 10. Delivery sequence
+
+### Milestone A — correct product/order foundation (P0)
+
+1. Add Style/Colorway/SizeScale/SKU/media/attributes and migrate flat SKU semantics compatibly.
+2. Extend immutable commercial publication to snapshot variant, price, delivery, media and dictionary labels.
+3. Build buyer linesheet cards/style detail and Start Order context.
+4. Implement cart and color-size quantity matrix with server totals.
+5. Add door/address/tax/shipping/payment-method snapshots and explicit JOOR-like order state mapping.
+
+Exit gate: a buyer can traverse connected publication → style → quantities by color/size → draft → pending/approved representation without data loss, and a historical order is reproducible after source catalog edits.
+
+### Milestone B — complete daily retailer cabinet (P1)
+
+1. Discovery and full connection state machine.
+2. Retailer profile, locations/doors, people, verification and settings.
+3. Storefront renderer and access gates.
+4. Order registry filters/counters/bulk actions/comments/downloads/import/export.
+5. Inbox/compose and order-linked conversations.
+6. Responsive, accessibility and journey telemetry hardening.
+
+Exit gate: every non-premium route in the audited information architecture has loading, empty, error, permission and populated states plus contract/e2e evidence.
+
+### Milestone C — gated/premium/integrations (P2)
+
+1. Shopify installation/mapping/sync and Data Activity Center.
+2. Payment/provider abstraction and Pay view.
+3. Looks, Styleboards and Visual Assortment entitlements.
+4. Favorites/Passport after seeded-account controlled UAT.
+5. Subscription/entitlement administration.
+
+Exit gate: sandbox/provider tests, quota/permission enforcement, retry/audit behavior and controlled UAT evidence exist; no feature is marked parity-complete from paywall text alone.
+
+## 11. Still unobserved or unsafe to claim
+
+The following need explicit test tenants, seeded fixtures or permission to perform controlled state changes:
+
+- Successful connection acceptance/decline and disconnect consequences.
+- Saving quantities, creating/resuming a real draft, submitting and revising an order.
+- Brand-side approve/reject/revision actions and cross-party notification timing.
+- Shipment creation, partial shipment, tracking and receipt/claim behavior in JOOR.
+- Successful JOORPay flow, refunds/disputes and payment reconciliation.
+- Successful Shopify installation/sync, mapping conflict behavior and retry details.
+- Populated/successful/failed Data Activity Center jobs and downloadable job artifacts.
+- Passport and Favorites with seeded content.
+- Visual Assortment paid workspace, collaboration and exports.
+- Styleboard save/version/concurrency/share/export/order hand-off.
+- Mobile-native/iPad-specific behavior, push notifications and assigned-order behavior.
+- Authentication edge cases: SSO, MFA, password reset, session expiry, multiple organisations.
+- Public/partner API behavior, rate limits, webhook signatures and bulk limits.
+- Exact validation boundaries for every text field and upload type.
+
+These are not reasons to block the core build. They are reasons to label the corresponding parity items GATED and design adapters/state machines so evidence can be added without destructive rewrites.
+
+## 12. QA and evidence policy
+
+For every parity item:
+
+1. Store a redacted observation: route, role, plan, viewport, precondition, visible fields/actions and state.
+2. Define the domain/API contract independently of JOOR implementation details.
+3. Add unit tests for invariants and forbidden transitions.
+4. Add API/contract tests for validation, permission, idempotency and pagination.
+5. Add UI tests for populated, loading, empty, error, locked and read-only states.
+6. Add responsive snapshots at the required viewport matrix.
+7. Add keyboard/focus/name-role-value checks for dialogs, filters, tables and matrix editing.
+8. Add audit/telemetry assertions without storing PII.
+9. Mark parity complete only when executable behavior and evidence exist; a prose row is not completion.
+
+## 13. Security, privacy and product independence
+
+- Never commit real retailer names, people, emails, addresses, tax IDs, order IDs, PO numbers, quantities, prices, message bodies or integration credentials from the reference account.
+- Treat all external media and documents as untrusted; scan uploads, validate MIME independently of extension, and serve with safe content headers.
 - Enforce tenant, organisation, relationship, role and entitlement checks server-side on every read and mutation.
 - Use idempotency keys for connection, import, submit, bulk, payment and sync commands.
 - Preserve audit events for permission changes, commercial publication, order transitions, downloads, payments and integration actions.
@@ -742,4 +961,3 @@ Still intentionally not executed:
 - Pay now, I'm interested or any payment instrument flow.
 
 Those actions require a dedicated disposable tenant or explicit approval for controlled state-changing UAT. Their absence must remain visible in parity reporting.
-

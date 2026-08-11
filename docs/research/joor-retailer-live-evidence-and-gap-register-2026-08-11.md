@@ -961,3 +961,183 @@ Still intentionally not executed:
 - Pay now, I'm interested or any payment instrument flow.
 
 Those actions require a dedicated disposable tenant or explicit approval for controlled state-changing UAT. Their absence must remain visible in parity reporting.
+
+## 16. Third-pass audit: newly opened controls only
+
+This section contains only controls and states that were not opened in the first two passes. Previously documented home, discovery, storefront, message, import/export, payment and order-status evidence is not repeated.
+
+### 16.1 Bulk status contract and unsafe duplicate semantics
+
+Newly OBSERVED after selecting one Note without quantities in the order registry:
+
+- The selection footer reports both the selected count and the total result count.
+- Change Status offered only `Notes` and `Pending` for the observed source state.
+- The dialog independently offered `Send email to Brand` and `Send email to Retailer` checkboxes.
+- Update remained disabled until a target status was selected.
+- Cancel closed the dialog without changing the order.
+
+Critical new safety evidence:
+
+- Selecting `Duplicate Orders` did not show a preview or confirmation dialog.
+- It immediately navigated to a populated cart carrying the source style/color membership.
+- After leaving the cart and reloading the registry, the Draft counter had changed from 0 to 1 even though no Save, Continue or confirmation action was used.
+- Therefore duplicate is a state-changing command attached directly to a menu item, not a harmless preview route.
+
+Required `synth-v2` behavior:
+
+- Opening the duplicate workflow is read-only and returns a preview with source order IDs, clone count, target buyer/door/publication, excluded fields and warnings.
+- The actual clone is an explicit POST command with idempotency key, optimistic concurrency, permission recheck and per-source result.
+- A confirmation step distinguishes `duplicate into new draft`, `merge into existing cart` and `cancel`.
+- The new draft records `duplicatedFromOrderId`, actor, command ID, timestamp and copied snapshot version.
+- Repeated clicks, browser retry and network retry cannot create additional drafts.
+- Status targets and notification recipients are returned as capabilities for the selected set; the UI must not infer an intersection from labels.
+- Mixed-status or mixed-brand selection produces a preview explaining unsupported rows and atomic versus partial execution policy.
+
+`Remove Style Colors With No Quantities` and `Send to Assortment` were not executed because their menu entries may also be direct state-changing commands.
+
+### 16.2 Cart order matrix
+
+The duplicate action exposed a previously unobserved populated cart surface:
+
+- The cart is separated by brand; a brand tile includes the number of delivery groups and switches the active order context.
+- A delivery group exposes its linesheet/publication, delivery range, editable Start Ship and Complete Ship fields, and a required Door selector.
+- The group summary separates Styles, SKUs, total quantity and monetary total.
+- Each repeated order item is a style-color membership block rather than only a positive-quantity SKU row.
+- The block contains style media/link, style code/name, wholesale and retail price, color, a size-column quantity matrix and color total.
+- Controls include Apply Bulk Quantities, Color Comment, Style Comment, Add More Colors and Delete.
+- Order Comments are separate from color and style comments.
+- Original Total and current Total are shown per style-color; subtotal, quantity and order total are repeated at the order boundary.
+- A zero run is labelled `Quantities Required` but remains present in the cart.
+- The page warns that edits must be saved; Continue to Shipping & Billing and Cancel Order are separate commands.
+
+Required model refinements:
+
+~~~text
+Cart
+└── BrandDraft
+    └── DeliveryGroup(publicationId, startShip, completeShip, doorId)
+        └── StyleColorMembership(styleId, colorwayId, position, comments)
+            └── SizeQuantity(sizeValueId/skuId, quantity)
+~~~
+
+- Start/complete dates and door allocation belong to the delivery group, not only the whole cart.
+- Style, color and order comments are distinct fields with independent permissions and snapshot rules.
+- Membership persists independently of quantity; `Quantities Required` is a validation state, not automatic deletion.
+- Bulk quantity application must preview affected sizes and validate pack/MOQ rules server-side.
+- Delete style-color, cancel order and continue-to-billing are explicit commands with confirmation, idempotency and audit.
+- Totals are server projections and must not depend on whether all style blocks are rendered.
+
+### 16.3 Linesheet density, pagination and capability-dependent grouping
+
+Newly OBSERVED on a populated linesheet:
+
+- Density controls: View 15, View 30 and View All with the total style count.
+- Pagination uses numbered pages and Next while preserving sort direction and group context.
+- Each style card can display an explicit count of available images.
+- The brand rail can show an `All Styles By Linesheet` item in a disabled state.
+- Group By options are capability-dependent. The newly inspected linesheet exposed Linesheet, Fabrication, Category, Division, Silhouette and Linesheet Group, while other previously observed linesheets exposed additional merchandising dimensions.
+
+Required behavior:
+
+- The publication response supplies supported grouping capabilities by stable attribute IDs; the client does not hard-code one global list.
+- Page size, page cursor/index, group, sort and filters are canonical URL/query state and survive navigation intentionally.
+- `View All` has a server-enforced maximum and can fall back to virtualization or cursor paging for large publications.
+- Image count is derived from authorized, active media and does not require loading every asset.
+- Disabled grouping/rail entries expose a reason for assistive technology and are not merely grey text.
+
+### 16.4 Remaining retailer-profile dictionaries and constraints
+
+Newly OBSERVED location dictionaries:
+
+- Location Type: Store; Office.
+- Wholesale minimum bands: $10, $50, $100, $250, $500, $1,000, $2,500, $5,000, $10,000, $15,000.
+- Wholesale maximum bands: $150, $250, $500, $750, $1,000, $2,500, $5,000, $10,000, $15,000, greater than $30,000.
+- Age: 16–22; 22–25; 25–40; 40–65; All Ages.
+- Gender currently exposes Male and Female as independent checkboxes.
+- Brands Carried is a creatable typeahead: the user may search platform brands or create a new free-text brand label.
+
+Newly OBSERVED HTML constraints:
+
+- Year Established: maximum 4 characters.
+- Postal code: maximum 10 characters.
+- Location phone: maximum 15 characters.
+- Description, website and social inputs did not expose authoritative HTML maximum lengths in the inspected state.
+
+Required profile/reference design:
+
+- Price bands have stable IDs and an explicit currency/reference policy; do not infer currency from the location country or copy display strings as numeric values.
+- Legacy age bands overlap at their printed boundaries. Preserve provider aliases, but define unambiguous internal segment semantics instead of parsing labels into inclusive numeric ranges.
+- Gender/demographic values are configurable reference data and remain optional; the internal model must not be restricted to the observed legacy binary list.
+- A carried-brand value records either a platform `brandAccountId` or a normalized custom label plus optional later match/merge metadata.
+- Server validation owns all limits, normalization and jurisdictional address rules; HTML attributes are only client hints.
+
+### 16.5 Settings field contracts and credential recovery
+
+Newly OBSERVED from the page's edit-form controls without saving:
+
+- Website and email language are separate values using codes `en`, `es`, `fr`, `de`, `it`, `ja`, `zh`, `ru`, `ko`.
+- Landing-page codes map to Home, My Connections, Orders and Profile.
+- Retail rounding maps display choices none, 1.00 and 5.00 to semantic strategies rather than raw decimal amounts.
+- User display name and title allow up to 100 characters; user phone up to 20.
+- Retailer profile name allows up to 100 characters; retailer email up to 255; buyer name up to 255.
+- POS System is a free-text backend-system field up to 150 characters with a separate comments/version field, not a fixed POS enum.
+
+Credential-recovery safety observation:
+
+- `Reset password` was a `#` action link rather than a visible form.
+- Activating it produced an alert without first showing a form or confirmation. Whether a recovery email was emitted was not observable, so the action must be treated as potentially side-effectful.
+
+Required credential-recovery contract:
+
+- A visible confirmation explains the destination in masked form and the consequence before dispatch.
+- Dispatch is an explicit POST command protected by CSRF/session checks, generic anti-enumeration responses, rate limit and cooldown.
+- Tokens are random, hashed at rest, single-use, short-lived and revoked after successful use or credential rotation.
+- Audit and security telemetry record request/outcome without token, password or unmasked destination data.
+- Repeated clicks and retries are idempotent within the cooldown window.
+
+### 16.6 Multi-account organisation switcher
+
+Newly OBSERVED in the global account menu:
+
+- A Current Account section identifies the active retailer account and marks the primary account.
+- The account card includes an account identifier, selected/visibility indicators, a connected-brand summary with `+ more`, and account creation date.
+- Account-scoped links include Account Settings, Integration Settings, Premium Features, Manage Profile and Data Activity Center.
+- A separate Other Accounts section exposes an account count; Language, Help Center and Log Out remain global controls.
+
+Required organisation-context behavior:
+
+- Every request resolves an explicit active organisation membership server-side; a client-selected account ID is never trusted alone.
+- Switching organisation clears or namespaces cached queries, counters, carts, drafts, messages and integration state.
+- Deep links revalidate membership and redirect safely without leaking whether another tenant resource exists.
+- Unsaved edits or a populated cart produce a leave/switch warning.
+- Primary-account designation is distinct from the current active account and from visibility/search privacy.
+- Account cards use stable IDs and capability summaries; connected-brand names are a projection, not authorization evidence.
+- Switching is audited and tested for revoked membership, multiple roles, stale tabs and concurrent sessions.
+
+### 16.7 Gap refinements from the third pass
+
+| Existing ID | New strengthening only |
+|---|---|
+| CAT-05 | Supported group-by dimensions are publication capabilities, not a single hard-coded dictionary |
+| ORD-02 | Add per-brand and per-delivery cart groups, door/date allocation, comments and resume/leave protection |
+| ORD-07 | Duplicate must preview before an explicit idempotent clone command; selected-set capabilities drive status targets and notification recipients |
+| PRO-02 | Add Store/Office, price-band references, overlapping age aliases, creatable carried-brand values and field constraints |
+| SET-01 | Add semantic locale/landing/rounding codes, free-text POS/version fields and authoritative server limits |
+| IAM-01 | Add active/primary organisation distinction, account switcher projection, cache isolation and deep-link reauthorization |
+
+New gap item:
+
+| ID | Priority | Gap | Required deliverable | Acceptance evidence |
+|---|---:|---|---|---|
+| IAM-02 | P1 | Credential-recovery dispatch/confirmation parity is not evidenced | Explicit rate-limited password-reset request and single-use token lifecycle | Repeated clicks create at most one active request in the cooldown; responses do not enumerate accounts or expose destinations |
+
+### 16.8 Safety boundary and cleanup note
+
+Not executed in this pass:
+
+- Update in Change Status.
+- Remove Style Colors With No Quantities or Send to Assortment.
+- Any cart field edit, Apply Bulk Quantities, Add More Colors, Delete, Continue to Shipping & Billing, Save or Cancel Order.
+- Any profile/settings Save, upload, location add/delete or organisation switch.
+
+The direct Duplicate Orders action created one new Draft in the reference account. It was not edited, continued, saved again or cancelled. Removing it is intentionally not attempted without explicit user approval because cancellation/deletion is itself an external state-changing action.

@@ -5,6 +5,7 @@ import { withCostCloseReadinessOpenApi } from './cost-close-readiness-openapi.mj
 import { withFinalQualityOpenApi } from './final-quality-openapi.mjs';
 import { withFulfillmentOpenApi } from './fulfillment-openapi.mjs';
 import { withInventoryOpenApi } from './inventory-openapi.mjs';
+import { withProductIdentityOpenApi } from './product-identity-openapi.mjs';
 import { withReceiptClaimsOpenApi } from './receipt-claims-openapi.mjs';
 import { withSupplierRecoveryOpenApi } from './supplier-recovery-openapi.mjs';
 import { withSupplierEconomicPerformanceOpenApi } from './supplier-economic-performance-openapi.mjs';
@@ -33,17 +34,19 @@ export const wholesaleV2ExtendedOpenApi = withSupplierEconomicPerformanceOpenApi
                 withCostCloseReadinessOpenApi(
                   withOrderEconomicsOpenApi(
                     withCommercialPublicationOpenApi(
-                      withFinalQualityOpenApi(
-                        withProductionExecutionOpenApi(
-                          withProductionOrderOpenApi(
-                            withSourcingTechPackGateOpenApi(
-                              withTechPackOpenApi(
-                                withSourcingOpenApi(
-                                  withSampleOpenApi(
-                                    withMeasurementRevisionOpenApi(
-                                      withMeasurementOpenApi(
-                                        withBomOpenApi(
-                                          withMaterialOpenApi(wholesaleV2OpenApi),
+                      withProductIdentityOpenApi(
+                        withFinalQualityOpenApi(
+                          withProductionExecutionOpenApi(
+                            withProductionOrderOpenApi(
+                              withSourcingTechPackGateOpenApi(
+                                withTechPackOpenApi(
+                                  withSourcingOpenApi(
+                                    withSampleOpenApi(
+                                      withMeasurementRevisionOpenApi(
+                                        withMeasurementOpenApi(
+                                          withBomOpenApi(
+                                            withMaterialOpenApi(wholesaleV2OpenApi),
+                                          ),
                                         ),
                                       ),
                                     ),

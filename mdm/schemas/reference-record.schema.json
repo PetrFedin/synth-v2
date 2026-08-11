@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://syntha.example/schemas/mdm/reference-record.schema.json",
+  "title": "Syntha MDM Reference Record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "dictionary_code", "code", "name", "translations", "status", "version", "source_system", "owner", "steward", "approval_status", "created_at", "created_by", "updated_at", "updated_by"],
+  "properties": {
+    "id": {"type": "string", "format": "uuid"},
+    "tenant_id": {"type": ["string", "null"], "minLength": 1},
+    "dictionary_code": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{2,127}$"},
+    "code": {"type": "string", "pattern": "^[A-Z0-9][A-Z0-9_.:/-]{0,127}$"},
+    "name": {"type": "string", "minLength": 1, "maxLength": 500},
+    "translations": {
+      "type": "object",
+      "required": ["ru", "en"],
+      "properties": {
+        "ru": {"type": "string", "minLength": 1, "maxLength": 500},
+        "en": {"type": "string", "minLength": 1, "maxLength": 500}
+      },
+      "additionalProperties": {"type": "string", "minLength": 1, "maxLength": 500}
+    },
+    "aliases": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true, "default": []},
+    "parent_id": {"type": ["string", "null"], "format": "uuid"},
+    "status": {"enum": ["draft", "active", "inactive", "archived"]},
+    "valid_from": {"type": ["string", "null"], "format": "date-time"},
+    "valid_to": {"type": ["string", "null"], "format": "date-time"},
+    "version": {"type": "integer", "minimum": 1},
+    "source_system": {"type": "string", "minLength": 1},
+    "external_ids": {"type": "object", "additionalProperties": {"type": ["string", "number"]}, "default": {}},
+    "owner": {"type": "string", "minLength": 1},
+    "steward": {"type": "string", "minLength": 1},
+    "approval_status": {"enum": ["not_required", "pending", "approved", "rejected"]},
+    "attributes": {"type": "object", "default": {}},
+    "created_at": {"type": "string", "format": "date-time"},
+    "created_by": {"type": "string", "minLength": 1},
+    "updated_at": {"type": "string", "format": "date-time"},
+    "updated_by": {"type": "string", "minLength": 1},
+    "audit_log": {"type": "array", "items": {"type": "object"}, "default": []}
+  },
+  "allOf": [
+    {
+      "if": {"required": ["valid_from", "valid_to"], "properties": {"valid_from": {"type": "string"}, "valid_to": {"type": "string"}}},
+      "then": {"description": "Application validation must ensure valid_to is later than valid_from."}
+    }
+  ]
+}

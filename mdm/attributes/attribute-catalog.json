@@ -1,0 +1,875 @@
+{
+  "catalog_version": "0.1.0",
+  "resolution": "Definition fields inherit missing governance values from defaults before publication.",
+  "defaults": {
+    "cardinality": "zero_or_one",
+    "required_when": null,
+    "validation_rules": [],
+    "searchable": false,
+    "filterable": true,
+    "confidentiality": "internal",
+    "version": 1,
+    "status": "active",
+    "owner": "product_data_owner",
+    "steward": "product_data_steward"
+  },
+  "definitions": [
+    {
+      "code": "common.dimensions",
+      "name": {"ru": "Габариты изделия", "en": "Product dimensions"},
+      "description": {"ru": "Длина, ширина и высота изделия в нормализованных единицах.", "en": "Product length, width and height in normalized units."},
+      "data_type": "json",
+      "applies_to": ["apparel", "footwear", "bags_accessories", "beauty", "home"],
+      "unit_dimension": "length",
+      "uom_dictionary": "system.unit_of_measure",
+      "searchable": false,
+      "filterable": true,
+      "validation_rules": [{"rule": "all_values_non_negative"}]
+    },
+    {
+      "code": "common.net_weight",
+      "name": {"ru": "Масса нетто", "en": "Net weight"},
+      "description": {"ru": "Масса товара без транспортной упаковки.", "en": "Product weight excluding transport packaging."},
+      "data_type": "quantity",
+      "applies_to": ["apparel", "footwear", "bags_accessories", "beauty", "home"],
+      "unit_dimension": "mass",
+      "uom_dictionary": "system.unit_of_measure",
+      "validation_rules": [{"rule": "greater_than_or_equal", "value": 0}]
+    },
+    {
+      "code": "common.primary_material",
+      "name": {"ru": "Основной материал", "en": "Primary material"},
+      "description": {"ru": "Материал, определяющий основную конструкцию или потребительское свойство изделия.", "en": "Material defining the main construction or consumer property of the product."},
+      "data_type": "reference",
+      "applies_to": ["apparel", "footwear", "bags_accessories", "beauty", "home"],
+      "allowed_values_dictionary": "material.material",
+      "searchable": true
+    },
+    {
+      "code": "common.secondary_materials",
+      "name": {"ru": "Дополнительные материалы", "en": "Secondary materials"},
+      "description": {"ru": "Перечень дополнительных материалов изделия.", "en": "List of secondary product materials."},
+      "data_type": "reference_list",
+      "cardinality": "zero_or_more",
+      "applies_to": ["apparel", "footwear", "bags_accessories", "beauty", "home"],
+      "allowed_values_dictionary": "material.material",
+      "searchable": true
+    },
+    {
+      "code": "common.care_method",
+      "name": {"ru": "Способ ухода", "en": "Care method"},
+      "description": {"ru": "Разрешённые и запрещённые действия по уходу за изделием.", "en": "Permitted and prohibited product care actions."},
+      "data_type": "reference_list",
+      "cardinality": "one_or_more",
+      "applies_to": ["apparel", "footwear", "bags_accessories", "beauty", "home"],
+      "allowed_values_dictionary": "material.care_method",
+      "filterable": false
+    },
+    {
+      "code": "common.operating_season",
+      "name": {"ru": "Сезон эксплуатации", "en": "Operating season"},
+      "description": {"ru": "Условия сезона, для которых предназначено изделие.", "en": "Seasonal conditions for which the product is intended."},
+      "data_type": "reference_list",
+      "cardinality": "one_or_more",
+      "applies_to": ["apparel", "footwear", "bags_accessories", "home"],
+      "allowed_values_dictionary": "assortment.seasonality"
+    },
+    {
+      "code": "common.transparency",
+      "name": {"ru": "Прозрачность", "en": "Transparency"},
+      "description": {"ru": "Степень прозрачности изделия или материала.", "en": "Degree of product or material transparency."},
+      "data_type": "reference",
+      "applies_to": ["apparel", "home"],
+      "allowed_values_dictionary": "attribute.value_synonym"
+    },
+    {
+      "code": "common.elasticity",
+      "name": {"ru": "Эластичность", "en": "Elasticity"},
+      "description": {"ru": "Способность изделия или материала растягиваться и восстанавливаться.", "en": "Ability of a product or material to stretch and recover."},
+      "data_type": "decimal",
+      "applies_to": ["apparel", "footwear", "home"],
+      "unit_dimension": "percentage",
+      "validation_rules": [{"rule": "between", "min": 0, "max": 1000}]
+    },
+    {
+      "code": "common.packaging_rule",
+      "name": {"ru": "Правило упаковки", "en": "Packaging rule"},
+      "description": {"ru": "Требуемая конфигурация индивидуальной и транспортной упаковки.", "en": "Required individual and transport packaging configuration."},
+      "data_type": "reference",
+      "applies_to": ["apparel", "footwear", "bags_accessories", "beauty", "home"],
+      "allowed_values_dictionary": "packaging.pack_ratio",
+      "filterable": false
+    },
+    {
+      "code": "common.country_of_origin",
+      "name": {"ru": "Страна происхождения", "en": "Country of origin"},
+      "description": {"ru": "Юридически определённая страна происхождения товара.", "en": "Legally determined country of origin of the product."},
+      "data_type": "reference",
+      "applies_to": ["apparel", "footwear", "bags_accessories", "beauty", "home"],
+      "allowed_values_dictionary": "system.country",
+      "searchable": true
+    },
+    {
+      "code": "apparel.silhouette",
+      "name": {"ru": "Силуэт", "en": "Silhouette"},
+      "description": {"ru": "Общая объёмно-пространственная форма изделия.", "en": "Overall volumetric shape of the garment."},
+      "data_type": "reference",
+      "applies_to": ["apparel"],
+      "allowed_values_dictionary": "attribute.value_synonym",
+      "searchable": true
+    },
+    {
+      "code": "apparel.fit",
+      "name": {"ru": "Посадка", "en": "Fit"},
+      "description": {"ru": "Характер прилегания изделия к телу.", "en": "How closely the garment fits the body."},
+      "data_type": "reference",
+      "applies_to": ["apparel"],
+      "allowed_values_dictionary": "fit.block",
+      "searchable": true
+    },
+    {
+      "code": "apparel.garment_length",
+      "name": {"ru": "Длина изделия", "en": "Garment length"},
+      "description": {"ru": "Классификационная или измеряемая длина изделия.", "en": "Classified or measured garment length."},
+      "data_type": "quantity",
+      "applies_to": ["apparel"],
+      "unit_dimension": "length",
+      "uom_dictionary": "system.unit_of_measure",
+      "validation_rules": [{"rule": "greater_than", "value": 0}]
+    },
+    {
+      "code": "apparel.sleeve_length",
+      "name": {"ru": "Длина рукава", "en": "Sleeve length"},
+      "description": {"ru": "Длина или категорийное обозначение рукава.", "en": "Sleeve length or categorical sleeve-length designation."},
+      "data_type": "quantity",
+      "applies_to": ["apparel"],
+      "unit_dimension": "length",
+      "uom_dictionary": "system.unit_of_measure",
+      "validation_rules": [{"rule": "greater_than_or_equal", "value": 0}]
+    },
+    {
+      "code": "apparel.sleeve_type",
+      "name": {"ru": "Тип рукава", "en": "Sleeve type"},
+      "description": {"ru": "Конструктивный тип рукава.", "en": "Construction type of the sleeve."},
+      "data_type": "reference",
+      "applies_to": ["apparel"],
+      "allowed_values_dictionary": "attribute.value_synonym"
+    },
+    {
+      "code": "apparel.shoulder_type",
+      "name": {"ru": "Тип плеча", "en": "Shoulder type"},
+      "description": {"ru": "Конструктивное решение плечевого пояса.", "en": "Construction of the shoulder area."},
+      "data_type": "reference",
+      "applies_to": ["apparel"],
+      "allowed_values_dictionary": "attribute.value_synonym"
+    },
+    {
+      "code": "apparel.neckline",
+      "name": {"ru": "Горловина", "en": "Neckline"},
+      "description": {"ru": "Форма и глубина горловины.", "en": "Shape and depth of the neckline."},
+      "data_type": "reference",
+      "applies_to": ["apparel"],
+      "allowed_values_dictionary": "attribute.value_synonym"
+    },
+    {
+      "code": "apparel.collar",
+      "name": {"ru": "Воротник", "en": "Collar"},
+      "description": {"ru": "Тип и конструкция воротника.", "en": "Collar type and construction."},
+      "data_type": "reference",
+      "applies_to": ["apparel"],
+      "allowed_values_dictionary": "attribute.value_synonym"
+    },
+    {
+      "code": "apparel.lapel",
+      "name": {"ru": "Лацкан", "en": "Lapel"},
+      "description": {"ru": "Тип, ширина и форма лацкана.", "en": "Lapel type, width and shape."},
+      "data_type": "reference",
+      "applies_to": ["apparel"],
+      "allowed_values_dictionary": "attribute.value_synonym"
+    },
+    {
+      "code": "apparel.closure",
+      "name": {"ru": "Застёжка", "en": "Closure"},
+      "description": {"ru": "Основной тип застёжки изделия.", "en": "Primary garment closure type."},
+      "data_type": "reference_list",
+      "cardinality": "one_or_more",
+      "applies_to": ["apparel"],
+      "allowed_values_dictionary": "trim.type"
+    },
+    {
+      "code": "apparel.waist_construction",
+      "name": {"ru": "Конструкция талии", "en": "Waist construction"},
+      "description": {"ru": "Конструктивное решение области талии.", "en": "Construction of the waist area."},
+      "data_type": "reference",
+      "applies_to": ["apparel"],
+      "allowed_values_dictionary": "attribute.value_synonym"
+    },
+    {
+      "code": "apparel.rise",
+      "name": {"ru": "Высота посадки", "en": "Rise"},
+      "description": {"ru": "Высота посадки брюк, юбки или шорт.", "en": "Rise height of trousers, skirts or shorts."},
+      "data_type": "reference",
+      "applies_to": ["apparel"],
+      "allowed_values_dictionary": "attribute.value_synonym"
+    },
+    {
+      "code": "apparel.pocket",
+      "name": {"ru": "Карманы", "en": "Pockets"},
+      "description": {"ru": "Типы, количество и расположение карманов.", "en": "Pocket types, count and placement."},
+      "data_type": "json",
+      "applies_to": ["apparel"]
+    },
+    {
+      "code": "apparel.vent",
+      "name": {"ru": "Шлица", "en": "Vent"},
+      "description": {"ru": "Тип, количество и расположение шлиц.", "en": "Vent type, count and placement."},
+      "data_type": "json",
+      "applies_to": ["apparel"]
+    },
+    {
+      "code": "apparel.cuff",
+      "name": {"ru": "Манжета", "en": "Cuff"},
+      "description": {"ru": "Тип и параметры манжеты.", "en": "Cuff type and parameters."},
+      "data_type": "reference",
+      "applies_to": ["apparel"],
+      "allowed_values_dictionary": "attribute.value_synonym"
+    },
+    {
+      "code": "apparel.belt",
+      "name": {"ru": "Пояс", "en": "Belt"},
+      "description": {"ru": "Наличие, тип и конструкция пояса.", "en": "Presence, type and construction of the belt."},
+      "data_type": "json",
+      "applies_to": ["apparel"]
+    },
+    {
+      "code": "apparel.hood",
+      "name": {"ru": "Капюшон", "en": "Hood"},
+      "description": {"ru": "Наличие и конструкция капюшона.", "en": "Presence and construction of the hood."},
+      "data_type": "json",
+      "applies_to": ["apparel"]
+    },
+    {
+      "code": "apparel.lining",
+      "name": {"ru": "Подкладка", "en": "Lining"},
+      "description": {"ru": "Тип, покрытие и материал подкладки.", "en": "Lining type, coverage and material."},
+      "data_type": "json",
+      "applies_to": ["apparel"]
+    },
+    {
+      "code": "apparel.insulation",
+      "name": {"ru": "Утепление", "en": "Insulation"},
+      "description": {"ru": "Тип, масса и распределение утеплителя.", "en": "Insulation type, weight and distribution."},
+      "data_type": "json",
+      "applies_to": ["apparel"],
+      "required_when": "assortment.product_type is outerwear and insulation is present"
+    },
+    {
+      "code": "apparel.construction_features",
+      "name": {"ru": "Конструктивные особенности", "en": "Construction features"},
+      "description": {"ru": "Список значимых конструктивных особенностей изделия.", "en": "List of significant garment construction features."},
+      "data_type": "reference_list",
+      "cardinality": "zero_or_more",
+      "applies_to": ["apparel"],
+      "allowed_values_dictionary": "design.construction_node"
+    },
+    {
+      "code": "footwear.type",
+      "name": {"ru": "Тип обуви", "en": "Footwear type"},
+      "description": {"ru": "Коммерческий и конструктивный тип обуви.", "en": "Commercial and construction footwear type."},
+      "data_type": "reference",
+      "applies_to": ["footwear"],
+      "allowed_values_dictionary": "assortment.product_type",
+      "searchable": true
+    },
+    {
+      "code": "footwear.last",
+      "name": {"ru": "Колодка", "en": "Last"},
+      "description": {"ru": "Колодка, определяющая форму и посадку обуви.", "en": "Last defining footwear shape and fit."},
+      "data_type": "reference",
+      "applies_to": ["footwear"],
+      "allowed_values_dictionary": "fit.block",
+      "searchable": true
+    },
+    {
+      "code": "footwear.width",
+      "name": {"ru": "Полнота", "en": "Width fitting"},
+      "description": {"ru": "Полнота обуви по выбранной размерной системе.", "en": "Footwear width according to the selected size system."},
+      "data_type": "reference",
+      "applies_to": ["footwear"],
+      "allowed_values_dictionary": "fit.fullness"
+    },
+    {
+      "code": "footwear.heel_height",
+      "name": {"ru": "Высота каблука", "en": "Heel height"},
+      "description": {"ru": "Вертикальная высота каблука.", "en": "Vertical heel height."},
+      "data_type": "quantity",
+      "applies_to": ["footwear"],
+      "unit_dimension": "length",
+      "uom_dictionary": "system.unit_of_measure",
+      "validation_rules": [{"rule": "greater_than_or_equal", "value": 0}]
+    },
+    {
+      "code": "footwear.heel_type",
+      "name": {"ru": "Тип каблука", "en": "Heel type"},
+      "description": {"ru": "Геометрический и конструктивный тип каблука.", "en": "Geometric and construction heel type."},
+      "data_type": "reference",
+      "applies_to": ["footwear"],
+      "allowed_values_dictionary": "attribute.value_synonym"
+    },
+    {
+      "code": "footwear.platform_height",
+      "name": {"ru": "Высота платформы", "en": "Platform height"},
+      "description": {"ru": "Высота платформы в передней части обуви.", "en": "Platform height at the forepart of the footwear."},
+      "data_type": "quantity",
+      "applies_to": ["footwear"],
+      "unit_dimension": "length",
+      "uom_dictionary": "system.unit_of_measure",
+      "validation_rules": [{"rule": "greater_than_or_equal", "value": 0}]
+    },
+    {
+      "code": "footwear.shaft_height",
+      "name": {"ru": "Высота голенища", "en": "Shaft height"},
+      "description": {"ru": "Высота голенища от опорной поверхности.", "en": "Shaft height measured from the support surface."},
+      "data_type": "quantity",
+      "applies_to": ["footwear"],
+      "unit_dimension": "length",
+      "uom_dictionary": "system.unit_of_measure",
+      "required_when": "footwear.type has a shaft",
+      "validation_rules": [{"rule": "greater_than", "value": 0}]
+    },
+    {
+      "code": "footwear.shaft_circumference",
+      "name": {"ru": "Обхват голенища", "en": "Shaft circumference"},
+      "description": {"ru": "Внутренний обхват голенища в контрольной точке.", "en": "Internal shaft circumference at the specified control point."},
+      "data_type": "quantity",
+      "applies_to": ["footwear"],
+      "unit_dimension": "length",
+      "uom_dictionary": "system.unit_of_measure",
+      "required_when": "footwear.type has a shaft",
+      "validation_rules": [{"rule": "greater_than", "value": 0}]
+    },
+    {
+      "code": "footwear.toe_shape",
+      "name": {"ru": "Форма мыса", "en": "Toe shape"},
+      "description": {"ru": "Коммерческая форма носочной части.", "en": "Commercial shape of the toe area."},
+      "data_type": "reference",
+      "applies_to": ["footwear"],
+      "allowed_values_dictionary": "attribute.value_synonym"
+    },
+    {
+      "code": "footwear.closure",
+      "name": {"ru": "Застёжка обуви", "en": "Footwear closure"},
+      "description": {"ru": "Способ фиксации обуви на стопе.", "en": "Method used to secure footwear on the foot."},
+      "data_type": "reference_list",
+      "cardinality": "one_or_more",
+      "applies_to": ["footwear"],
+      "allowed_values_dictionary": "trim.type"
+    },
+    {
+      "code": "footwear.upper_material",
+      "name": {"ru": "Материал верха", "en": "Upper material"},
+      "description": {"ru": "Материал или композиция материалов верха обуви.", "en": "Material or material composition of the footwear upper."},
+      "data_type": "reference_list",
+      "cardinality": "one_or_more",
+      "applies_to": ["footwear"],
+      "allowed_values_dictionary": "material.material"
+    },
+    {
+      "code": "footwear.lining_material",
+      "name": {"ru": "Материал подкладки", "en": "Lining material"},
+      "description": {"ru": "Материал внутренней подкладки обуви.", "en": "Material of the footwear lining."},
+      "data_type": "reference_list",
+      "cardinality": "one_or_more",
+      "applies_to": ["footwear"],
+      "allowed_values_dictionary": "material.material"
+    },
+    {
+      "code": "footwear.insole_material",
+      "name": {"ru": "Материал стельки", "en": "Insole material"},
+      "description": {"ru": "Материал и конструкция вкладной или основной стельки.", "en": "Material and construction of the insole."},
+      "data_type": "reference_list",
+      "cardinality": "one_or_more",
+      "applies_to": ["footwear"],
+      "allowed_values_dictionary": "material.material"
+    },
+    {
+      "code": "footwear.outsole_material",
+      "name": {"ru": "Материал подошвы", "en": "Outsole material"},
+      "description": {"ru": "Материал ходовой поверхности подошвы.", "en": "Material of the outsole contact surface."},
+      "data_type": "reference_list",
+      "cardinality": "one_or_more",
+      "applies_to": ["footwear"],
+      "allowed_values_dictionary": "material.material"
+    },
+    {
+      "code": "footwear.sole_attachment_method",
+      "name": {"ru": "Метод крепления подошвы", "en": "Sole attachment method"},
+      "description": {"ru": "Технологический способ соединения подошвы и верха.", "en": "Production method used to attach the sole to the upper."},
+      "data_type": "reference",
+      "applies_to": ["footwear"],
+      "allowed_values_dictionary": "production.operation"
+    },
+    {
+      "code": "footwear.water_resistance",
+      "name": {"ru": "Водостойкость", "en": "Water resistance"},
+      "description": {"ru": "Заявленный и испытанный уровень водостойкости.", "en": "Claimed and tested water-resistance level."},
+      "data_type": "quantity",
+      "applies_to": ["footwear"],
+      "unit_dimension": "pressure_or_time",
+      "uom_dictionary": "system.unit_of_measure"
+    },
+    {
+      "code": "footwear.pair_weight",
+      "name": {"ru": "Вес пары", "en": "Pair weight"},
+      "description": {"ru": "Масса пары обуви в базовом размере.", "en": "Weight of a footwear pair in the base size."},
+      "data_type": "quantity",
+      "applies_to": ["footwear"],
+      "unit_dimension": "mass",
+      "uom_dictionary": "system.unit_of_measure",
+      "validation_rules": [{"rule": "greater_than", "value": 0}]
+    },
+    {
+      "code": "bag.type",
+      "name": {"ru": "Тип сумки", "en": "Bag type"},
+      "description": {"ru": "Коммерческий и конструктивный тип сумки.", "en": "Commercial and construction bag type."},
+      "data_type": "reference",
+      "applies_to": ["bags_accessories"],
+      "allowed_values_dictionary": "assortment.product_type",
+      "searchable": true
+    },
+    {
+      "code": "bag.construction",
+      "name": {"ru": "Конструкция сумки", "en": "Bag construction"},
+      "description": {"ru": "Жёсткость, каркасность и конструктивная схема сумки.", "en": "Rigidity, frame and construction scheme of the bag."},
+      "data_type": "reference",
+      "applies_to": ["bags_accessories"],
+      "allowed_values_dictionary": "attribute.value_synonym"
+    },
+    {
+      "code": "bag.capacity",
+      "name": {"ru": "Вместимость", "en": "Capacity"},
+      "description": {"ru": "Полезный внутренний объём изделия.", "en": "Usable internal volume of the product."},
+      "data_type": "quantity",
+      "applies_to": ["bags_accessories"],
+      "unit_dimension": "volume",
+      "uom_dictionary": "system.unit_of_measure",
+      "validation_rules": [{"rule": "greater_than_or_equal", "value": 0}]
+    },
+    {
+      "code": "bag.handle_drop",
+      "name": {"ru": "Высота ручек", "en": "Handle drop"},
+      "description": {"ru": "Вертикальное расстояние от центра ручки до верхнего края сумки.", "en": "Vertical distance from the handle center to the top edge of the bag."},
+      "data_type": "quantity",
+      "applies_to": ["bags_accessories"],
+      "unit_dimension": "length",
+      "uom_dictionary": "system.unit_of_measure"
+    },
+    {
+      "code": "bag.strap",
+      "name": {"ru": "Ремень", "en": "Strap"},
+      "description": {"ru": "Наличие, съёмность, регулируемость и длина ремня.", "en": "Presence, removability, adjustability and length of the strap."},
+      "data_type": "json",
+      "applies_to": ["bags_accessories"]
+    },
+    {
+      "code": "bag.closure",
+      "name": {"ru": "Тип закрывания", "en": "Closure type"},
+      "description": {"ru": "Основной и дополнительные способы закрывания сумки.", "en": "Primary and secondary bag closure methods."},
+      "data_type": "reference_list",
+      "cardinality": "one_or_more",
+      "applies_to": ["bags_accessories"],
+      "allowed_values_dictionary": "trim.type"
+    },
+    {
+      "code": "bag.internal_compartments",
+      "name": {"ru": "Внутренние отделения", "en": "Internal compartments"},
+      "description": {"ru": "Количество, тип и назначение внутренних отделений.", "en": "Count, type and purpose of internal compartments."},
+      "data_type": "json",
+      "applies_to": ["bags_accessories"]
+    },
+    {
+      "code": "bag.pockets",
+      "name": {"ru": "Карманы", "en": "Pockets"},
+      "description": {"ru": "Количество, тип и расположение карманов.", "en": "Count, type and placement of pockets."},
+      "data_type": "json",
+      "applies_to": ["bags_accessories"]
+    },
+    {
+      "code": "bag.hardware_type",
+      "name": {"ru": "Тип металлической фурнитуры", "en": "Hardware type"},
+      "description": {"ru": "Типы и отделка видимой металлической фурнитуры.", "en": "Types and finishes of visible metal hardware."},
+      "data_type": "reference_list",
+      "cardinality": "zero_or_more",
+      "applies_to": ["bags_accessories"],
+      "allowed_values_dictionary": "trim.hardware_finish"
+    },
+    {
+      "code": "bag.device_compatibility",
+      "name": {"ru": "Совместимость с устройствами", "en": "Device compatibility"},
+      "description": {"ru": "Максимальные габариты совместимых телефонов, планшетов или ноутбуков.", "en": "Maximum dimensions of compatible phones, tablets or laptops."},
+      "data_type": "json",
+      "applies_to": ["bags_accessories"]
+    },
+    {
+      "code": "bag.carry_method",
+      "name": {"ru": "Способ ношения", "en": "Carry method"},
+      "description": {"ru": "Допустимые способы ношения изделия.", "en": "Supported ways to carry the product."},
+      "data_type": "reference_list",
+      "cardinality": "one_or_more",
+      "applies_to": ["bags_accessories"],
+      "allowed_values_dictionary": "attribute.value_synonym"
+    },
+    {
+      "code": "beauty.net_volume",
+      "name": {"ru": "Объём нетто", "en": "Net volume"},
+      "description": {"ru": "Количество продукта по объёму без упаковки.", "en": "Volume of product excluding packaging."},
+      "data_type": "quantity",
+      "applies_to": ["beauty"],
+      "unit_dimension": "volume",
+      "uom_dictionary": "system.unit_of_measure",
+      "validation_rules": [{"rule": "greater_than", "value": 0}]
+    },
+    {
+      "code": "beauty.formula",
+      "name": {"ru": "Рецептура", "en": "Formula"},
+      "description": {"ru": "Версионируемая рецептура продукта с долями компонентов.", "en": "Versioned product formulation with component proportions."},
+      "data_type": "json",
+      "applies_to": ["beauty"],
+      "confidentiality": "restricted",
+      "filterable": false
+    },
+    {
+      "code": "beauty.ingredients",
+      "name": {"ru": "Ингредиенты", "en": "Ingredients"},
+      "description": {"ru": "Маркировочный список ингредиентов в установленном порядке.", "en": "Label ingredient list in the required order."},
+      "data_type": "reference_list",
+      "cardinality": "one_or_more",
+      "applies_to": ["beauty"],
+      "allowed_values_dictionary": "material.material",
+      "searchable": true
+    },
+    {
+      "code": "beauty.fragrance",
+      "name": {"ru": "Аромат", "en": "Fragrance"},
+      "description": {"ru": "Ароматическая характеристика и семейство продукта.", "en": "Fragrance profile and family of the product."},
+      "data_type": "reference_list",
+      "cardinality": "zero_or_more",
+      "applies_to": ["beauty"],
+      "allowed_values_dictionary": "attribute.value_synonym"
+    },
+    {
+      "code": "beauty.shelf_life",
+      "name": {"ru": "Срок годности", "en": "Shelf life"},
+      "description": {"ru": "Срок годности в закрытой упаковке при установленных условиях хранения.", "en": "Shelf life in unopened packaging under specified storage conditions."},
+      "data_type": "duration",
+      "applies_to": ["beauty"],
+      "validation_rules": [{"rule": "greater_than", "value": 0}]
+    },
+    {
+      "code": "beauty.period_after_opening",
+      "name": {"ru": "Срок после вскрытия", "en": "Period after opening"},
+      "description": {"ru": "Допустимый срок использования после первого вскрытия.", "en": "Permitted use period after first opening."},
+      "data_type": "duration",
+      "applies_to": ["beauty"],
+      "validation_rules": [{"rule": "greater_than", "value": 0}]
+    },
+    {
+      "code": "beauty.skin_type",
+      "name": {"ru": "Тип кожи", "en": "Skin type"},
+      "description": {"ru": "Типы кожи, для которых предназначен продукт.", "en": "Skin types for which the product is intended."},
+      "data_type": "reference_list",
+      "cardinality": "one_or_more",
+      "applies_to": ["beauty"],
+      "allowed_values_dictionary": "attribute.value_synonym"
+    },
+    {
+      "code": "beauty.purpose",
+      "name": {"ru": "Назначение", "en": "Purpose"},
+      "description": {"ru": "Функциональное назначение и заявленный эффект продукта.", "en": "Functional purpose and claimed effect of the product."},
+      "data_type": "reference_list",
+      "cardinality": "one_or_more",
+      "applies_to": ["beauty"],
+      "allowed_values_dictionary": "assortment.purpose"
+    },
+    {
+      "code": "beauty.directions",
+      "name": {"ru": "Способ применения", "en": "Directions for use"},
+      "description": {"ru": "Инструкция, дозировка и ограничения по применению.", "en": "Instructions, dosage and restrictions for use."},
+      "data_type": "text",
+      "applies_to": ["beauty"],
+      "filterable": false
+    },
+    {
+      "code": "beauty.packaging_type",
+      "name": {"ru": "Тип первичной упаковки", "en": "Primary packaging type"},
+      "description": {"ru": "Тип упаковки, непосредственно контактирующей с продуктом.", "en": "Type of packaging in direct contact with the product."},
+      "data_type": "reference",
+      "applies_to": ["beauty"],
+      "allowed_values_dictionary": "packaging.individual"
+    },
+    {
+      "code": "home.room",
+      "name": {"ru": "Помещение", "en": "Room"},
+      "description": {"ru": "Тип помещения или зоны применения товара.", "en": "Room or application area for the product."},
+      "data_type": "reference_list",
+      "cardinality": "one_or_more",
+      "applies_to": ["home"],
+      "allowed_values_dictionary": "attribute.value_synonym"
+    },
+    {
+      "code": "home.capacity",
+      "name": {"ru": "Вместимость", "en": "Capacity"},
+      "description": {"ru": "Полезный объём или допустимое количество содержимого.", "en": "Usable volume or permitted content quantity."},
+      "data_type": "quantity",
+      "applies_to": ["home"],
+      "unit_dimension": "volume",
+      "uom_dictionary": "system.unit_of_measure"
+    },
+    {
+      "code": "home.assembly_required",
+      "name": {"ru": "Требуется сборка", "en": "Assembly required"},
+      "description": {"ru": "Признак необходимости сборки после поставки.", "en": "Indicates whether assembly is required after delivery."},
+      "data_type": "boolean",
+      "applies_to": ["home"]
+    },
+    {
+      "code": "home.assembly_instructions",
+      "name": {"ru": "Инструкция по сборке", "en": "Assembly instructions"},
+      "description": {"ru": "Ссылка на утверждённую версию инструкции по сборке.", "en": "Reference to the approved assembly instruction version."},
+      "data_type": "reference",
+      "applies_to": ["home"],
+      "allowed_values_dictionary": "system.document_type",
+      "required_when": "home.assembly_required is true",
+      "filterable": false
+    },
+    {
+      "code": "home.fragility",
+      "name": {"ru": "Хрупкость", "en": "Fragility"},
+      "description": {"ru": "Класс хрупкости и требования к обращению.", "en": "Fragility class and handling requirements."},
+      "data_type": "reference",
+      "applies_to": ["home"],
+      "allowed_values_dictionary": "logistics.cargo_class"
+    },
+    {
+      "code": "home.maximum_load",
+      "name": {"ru": "Максимальная нагрузка", "en": "Maximum load"},
+      "description": {"ru": "Максимальная безопасная эксплуатационная нагрузка.", "en": "Maximum safe operating load."},
+      "data_type": "quantity",
+      "applies_to": ["home"],
+      "unit_dimension": "mass_or_force",
+      "uom_dictionary": "system.unit_of_measure",
+      "validation_rules": [{"rule": "greater_than_or_equal", "value": 0}]
+    },
+    {
+      "code": "home.flame_resistance",
+      "name": {"ru": "Огнестойкость", "en": "Flame resistance"},
+      "description": {"ru": "Класс, стандарт и результат испытания на огнестойкость.", "en": "Class, standard and result of flame-resistance testing."},
+      "data_type": "json",
+      "applies_to": ["home"]
+    },
+    {
+      "code": "home.outdoor_suitability",
+      "name": {"ru": "Пригодность для улицы", "en": "Outdoor suitability"},
+      "description": {"ru": "Допустимость и ограничения наружной эксплуатации.", "en": "Suitability and restrictions for outdoor use."},
+      "data_type": "boolean",
+      "applies_to": ["home"]
+    },
+    {
+      "code": "material.gsm",
+      "name": {"ru": "Поверхностная плотность", "en": "Grams per square metre"},
+      "description": {"ru": "Масса материала на единицу площади.", "en": "Material mass per unit area."},
+      "data_type": "quantity",
+      "applies_to": ["material"],
+      "unit_dimension": "mass_per_area",
+      "uom_dictionary": "system.unit_of_measure",
+      "validation_rules": [{"rule": "greater_than", "value": 0}]
+    },
+    {
+      "code": "material.width",
+      "name": {"ru": "Номинальная ширина", "en": "Nominal width"},
+      "description": {"ru": "Полная номинальная ширина рулонного материала.", "en": "Full nominal width of roll material."},
+      "data_type": "quantity",
+      "applies_to": ["material"],
+      "unit_dimension": "length",
+      "uom_dictionary": "system.unit_of_measure",
+      "validation_rules": [{"rule": "greater_than", "value": 0}]
+    },
+    {
+      "code": "material.usable_width",
+      "name": {"ru": "Полезная ширина", "en": "Usable width"},
+      "description": {"ru": "Ширина материала, пригодная для раскроя после исключения кромок и дефектов.", "en": "Width usable for cutting after excluding selvedges and defects."},
+      "data_type": "quantity",
+      "applies_to": ["material"],
+      "unit_dimension": "length",
+      "uom_dictionary": "system.unit_of_measure",
+      "validation_rules": [{"rule": "less_than_or_equal_to_attribute", "attribute": "material.width"}]
+    },
+    {
+      "code": "material.thickness",
+      "name": {"ru": "Толщина", "en": "Thickness"},
+      "description": {"ru": "Толщина материала при установленном методе измерения.", "en": "Material thickness under a specified measurement method."},
+      "data_type": "quantity",
+      "applies_to": ["material"],
+      "unit_dimension": "length",
+      "uom_dictionary": "system.unit_of_measure",
+      "validation_rules": [{"rule": "greater_than", "value": 0}]
+    },
+    {
+      "code": "material.shrinkage_length",
+      "name": {"ru": "Усадка по длине", "en": "Lengthwise shrinkage"},
+      "description": {"ru": "Изменение размера по длине после заданной обработки.", "en": "Lengthwise dimensional change after specified treatment."},
+      "data_type": "decimal",
+      "applies_to": ["material"],
+      "unit_dimension": "percentage",
+      "validation_rules": [{"rule": "between", "min": -100, "max": 100}]
+    },
+    {
+      "code": "material.shrinkage_width",
+      "name": {"ru": "Усадка по ширине", "en": "Widthwise shrinkage"},
+      "description": {"ru": "Изменение размера по ширине после заданной обработки.", "en": "Widthwise dimensional change after specified treatment."},
+      "data_type": "decimal",
+      "applies_to": ["material"],
+      "unit_dimension": "percentage",
+      "validation_rules": [{"rule": "between", "min": -100, "max": 100}]
+    },
+    {
+      "code": "material.stretch_length",
+      "name": {"ru": "Растяжимость по длине", "en": "Lengthwise stretch"},
+      "description": {"ru": "Процент растяжения материала по длине при заданной нагрузке.", "en": "Percentage lengthwise stretch under a specified load."},
+      "data_type": "decimal",
+      "applies_to": ["material"],
+      "unit_dimension": "percentage",
+      "validation_rules": [{"rule": "greater_than_or_equal", "value": 0}]
+    },
+    {
+      "code": "material.stretch_width",
+      "name": {"ru": "Растяжимость по ширине", "en": "Widthwise stretch"},
+      "description": {"ru": "Процент растяжения материала по ширине при заданной нагрузке.", "en": "Percentage widthwise stretch under a specified load."},
+      "data_type": "decimal",
+      "applies_to": ["material"],
+      "unit_dimension": "percentage",
+      "validation_rules": [{"rule": "greater_than_or_equal", "value": 0}]
+    },
+    {
+      "code": "material.breathability",
+      "name": {"ru": "Воздухопроницаемость", "en": "Breathability"},
+      "description": {"ru": "Результат испытания воздухопроницаемости с методом и условиями.", "en": "Breathability test result with method and conditions."},
+      "data_type": "quantity",
+      "applies_to": ["material"],
+      "unit_dimension": "air_flow_per_area",
+      "uom_dictionary": "system.unit_of_measure"
+    },
+    {
+      "code": "material.water_resistance",
+      "name": {"ru": "Водостойкость материала", "en": "Material water resistance"},
+      "description": {"ru": "Результат испытания сопротивления проникновению воды.", "en": "Result of a water-penetration resistance test."},
+      "data_type": "quantity",
+      "applies_to": ["material"],
+      "unit_dimension": "pressure",
+      "uom_dictionary": "system.unit_of_measure"
+    },
+    {
+      "code": "material.weave_or_knit",
+      "name": {"ru": "Переплетение или вязка", "en": "Weave or knit structure"},
+      "description": {"ru": "Структура формирования тканого или трикотажного полотна.", "en": "Structural formation of woven or knitted material."},
+      "data_type": "reference",
+      "applies_to": ["material"],
+      "allowed_values_dictionary": "material.weave"
+    },
+    {
+      "code": "material.gauge",
+      "name": {"ru": "Класс вязальной машины", "en": "Gauge"},
+      "description": {"ru": "Количество игл или петель на установленную единицу длины.", "en": "Needles or stitches per specified unit of length."},
+      "data_type": "decimal",
+      "applies_to": ["material"],
+      "validation_rules": [{"rule": "greater_than", "value": 0}]
+    },
+    {
+      "code": "material.nap_direction",
+      "name": {"ru": "Направление ворса", "en": "Nap direction"},
+      "description": {"ru": "Направленность ворса и ограничение раскладки one-way.", "en": "Nap direction and one-way marker restriction."},
+      "data_type": "reference",
+      "applies_to": ["material"],
+      "allowed_values_dictionary": "material.nap_direction"
+    },
+    {
+      "code": "material.usable_yield",
+      "name": {"ru": "Полезный выход материала", "en": "Usable material yield"},
+      "description": {"ru": "Доля материала, пригодная для производства после дефектов и технических потерь.", "en": "Share of material usable for production after defects and technical losses."},
+      "data_type": "decimal",
+      "applies_to": ["material"],
+      "unit_dimension": "percentage",
+      "validation_rules": [{"rule": "between", "min": 0, "max": 100}]
+    },
+    {
+      "code": "material.storage_condition",
+      "name": {"ru": "Условия хранения", "en": "Storage condition"},
+      "description": {"ru": "Требования к температуре, влажности, свету и размещению.", "en": "Temperature, humidity, light and placement storage requirements."},
+      "data_type": "json",
+      "applies_to": ["material"]
+    },
+    {
+      "code": "material.shelf_life",
+      "name": {"ru": "Срок хранения", "en": "Shelf life"},
+      "description": {"ru": "Срок хранения до обязательной повторной проверки или списания.", "en": "Storage period before mandatory retesting or disposal."},
+      "data_type": "duration",
+      "applies_to": ["material"],
+      "validation_rules": [{"rule": "greater_than", "value": 0}]
+    }
+  ],
+  "attribute_sets": [
+    {
+      "code": "product.apparel.core",
+      "name": {"ru": "Одежда — базовый набор", "en": "Apparel — core set"},
+      "applies_to_product_types": ["apparel"],
+      "attributes": [
+        "common.dimensions", "common.net_weight", "common.primary_material", "common.secondary_materials", "common.care_method", "common.operating_season", "common.transparency", "common.elasticity", "common.packaging_rule", "common.country_of_origin",
+        "apparel.silhouette", "apparel.fit", "apparel.garment_length", "apparel.sleeve_length", "apparel.sleeve_type", "apparel.shoulder_type", "apparel.neckline", "apparel.collar", "apparel.lapel", "apparel.closure", "apparel.waist_construction", "apparel.rise", "apparel.pocket", "apparel.vent", "apparel.cuff", "apparel.belt", "apparel.hood", "apparel.lining", "apparel.insulation", "apparel.construction_features"
+      ]
+    },
+    {
+      "code": "product.footwear.core",
+      "name": {"ru": "Обувь — базовый набор", "en": "Footwear — core set"},
+      "applies_to_product_types": ["footwear"],
+      "attributes": [
+        "common.dimensions", "common.net_weight", "common.primary_material", "common.secondary_materials", "common.care_method", "common.operating_season", "common.packaging_rule", "common.country_of_origin",
+        "footwear.type", "footwear.last", "footwear.width", "footwear.heel_height", "footwear.heel_type", "footwear.platform_height", "footwear.shaft_height", "footwear.shaft_circumference", "footwear.toe_shape", "footwear.closure", "footwear.upper_material", "footwear.lining_material", "footwear.insole_material", "footwear.outsole_material", "footwear.sole_attachment_method", "footwear.water_resistance", "footwear.pair_weight"
+      ]
+    },
+    {
+      "code": "product.bags_accessories.core",
+      "name": {"ru": "Сумки и аксессуары — базовый набор", "en": "Bags and accessories — core set"},
+      "applies_to_product_types": ["bags_accessories"],
+      "attributes": [
+        "common.dimensions", "common.net_weight", "common.primary_material", "common.secondary_materials", "common.care_method", "common.packaging_rule", "common.country_of_origin",
+        "bag.type", "bag.construction", "bag.capacity", "bag.handle_drop", "bag.strap", "bag.closure", "bag.internal_compartments", "bag.pockets", "bag.hardware_type", "bag.device_compatibility", "bag.carry_method"
+      ]
+    },
+    {
+      "code": "product.beauty.core",
+      "name": {"ru": "Beauty — базовый набор", "en": "Beauty — core set"},
+      "applies_to_product_types": ["beauty"],
+      "attributes": [
+        "common.dimensions", "common.net_weight", "common.primary_material", "common.packaging_rule", "common.country_of_origin",
+        "beauty.net_volume", "beauty.formula", "beauty.ingredients", "beauty.fragrance", "beauty.shelf_life", "beauty.period_after_opening", "beauty.skin_type", "beauty.purpose", "beauty.directions", "beauty.packaging_type"
+      ]
+    },
+    {
+      "code": "product.home.core",
+      "name": {"ru": "Home — базовый набор", "en": "Home — core set"},
+      "applies_to_product_types": ["home"],
+      "attributes": [
+        "common.dimensions", "common.net_weight", "common.primary_material", "common.secondary_materials", "common.care_method", "common.operating_season", "common.transparency", "common.elasticity", "common.packaging_rule", "common.country_of_origin",
+        "home.room", "home.capacity", "home.assembly_required", "home.assembly_instructions", "home.fragility", "home.maximum_load", "home.flame_resistance", "home.outdoor_suitability"
+      ]
+    },
+    {
+      "code": "material.technical.core",
+      "name": {"ru": "Материал — технический набор", "en": "Material — technical set"},
+      "applies_to_product_types": ["material"],
+      "attributes": [
+        "material.gsm", "material.width", "material.usable_width", "material.thickness", "material.shrinkage_length", "material.shrinkage_width", "material.stretch_length", "material.stretch_width", "material.breathability", "material.water_resistance", "material.weave_or_knit", "material.gauge", "material.nap_direction", "material.usable_yield", "material.storage_condition", "material.shelf_life"
+      ]
+    }
+  ]
+}

@@ -12,6 +12,7 @@
     "db:migrate": "node --env-file=.env scripts/migrate.mjs",
     "bootstrap:owner": "node --env-file=.env scripts/bootstrap-owner.mjs",
     "outbox:requeue": "node --env-file=.env scripts/requeue-outbox-event.mjs",
+    "sync:mdm-sources": "node scripts/sync-mdm-sources.mjs",
     "test": "node --import ./tests/register-pg-test-loader.mjs --test --test-concurrency=1 tests/*.test.mjs",
     "validate:architecture": "node scripts/validate-architecture.mjs",
     "validate:postgres": "node scripts/validate-postgres-contract.mjs",
@@ -20,8 +21,9 @@
     "validate:design-system": "node scripts/validate-design-system.mjs",
     "validate:ods-boundaries": "node scripts/validate-ods-boundaries.mjs",
     "validate:i18n": "node scripts/validate-i18n.mjs",
+    "validate:mdm": "node scripts/validate-mdm.mjs",
     "validate:kpi-methodology": "node scripts/validate-fashion-kpi.mjs",
-    "verify": "npm run validate:isolation && npm run validate:architecture && npm run validate:postgres && npm run validate:ui && npm run validate:design-system && npm run validate:ods-boundaries && npm run validate:i18n && npm run validate:kpi-methodology && npm test"
+    "verify": "npm run validate:isolation && npm run validate:architecture && npm run validate:postgres && npm run validate:ui && npm run validate:design-system && npm run validate:ods-boundaries && npm run validate:i18n && npm run validate:mdm && npm run validate:kpi-methodology && npm test"
   },
   "dependencies": {
     "pg": "8.13.1"

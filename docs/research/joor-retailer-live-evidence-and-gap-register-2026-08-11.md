@@ -380,6 +380,7 @@ OBSERVED Styleboards:
 - Board name, product count, share/comments, price type selection and Add to Order.
 - General Comments and Send.
 - Brand assignment gate for a new board.
+- Audit safety note: opening the new-board route rendered `Saving …` and an `UNTITLED STYLEBOARD` shell before any explicit Save/Assign action. Treat this route as side-effectful and verify whether an empty draft was created. No Assign, Save or Delete action was executed during the audit.
 
 OBSERVED Visual Assortment:
 

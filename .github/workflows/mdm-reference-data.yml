@@ -6,7 +6,8 @@ on:
       - "mdm/**"
       - "scripts/validate-mdm.mjs"
       - "scripts/sync-mdm-sources.mjs"
-      - "db/migrations/050_mdm_reference_core.sql"
+      - "db/migrations/*mdm*.sql"
+      - "tests/mdm-*.test.mjs"
       - "docs/architecture/syntha-v2-live-capability-register.md"
       - "package.json"
   push:
@@ -16,7 +17,8 @@ on:
       - "mdm/**"
       - "scripts/validate-mdm.mjs"
       - "scripts/sync-mdm-sources.mjs"
-      - "db/migrations/050_mdm_reference_core.sql"
+      - "db/migrations/*mdm*.sql"
+      - "tests/mdm-*.test.mjs"
       - "docs/architecture/syntha-v2-live-capability-register.md"
       - "package.json"
   schedule:

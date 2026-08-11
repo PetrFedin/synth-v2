@@ -19,6 +19,7 @@ import { createWholesaleFetchHandler } from '../http/fetch-api.mjs';
 import { createPostgresWholesaleRuntime as createBaseRuntime } from './postgres-base-runtime.mjs';
 import { createPostgresCostAllocationRuntime } from './postgres-cost-allocation-runtime.mjs';
 import { createPostgresFulfillmentRuntime } from './postgres-fulfillment-runtime.mjs';
+import { createPostgresInventoryRuntime } from './postgres-inventory-runtime.mjs';
 
 export function createPostgresWholesaleRuntime(options = {}) {
   const base = createBaseRuntime(options);
@@ -40,6 +41,12 @@ export function createPostgresWholesaleRuntime(options = {}) {
     ...(options.nextId ? { nextId: options.nextId } : {}),
   });
   const fulfillment = fulfillmentRuntime.service;
+  const inventoryRuntime = createPostgresInventoryRuntime({
+    pool: options.pool,
+    ...(options.clock ? { clock: options.clock } : {}),
+    ...(options.nextId ? { nextId: options.nextId } : {}),
+  });
+  const inventory = inventoryRuntime.service;
 
   const allocationStore = createPostgresSourcingTechPackAllocationStore({ pool: options.pool });
   const allocation = createSourcingTechPackAllocationService({
@@ -89,6 +96,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
     orderEconomics,
     costAllocation,
     fulfillment,
+    inventory,
     materials: base.materials,
     boms: base.boms,
     measurements: base.measurements,
@@ -114,6 +122,8 @@ export function createPostgresWholesaleRuntime(options = {}) {
     costAllocation,
     fulfillmentStore: fulfillmentRuntime.store,
     fulfillment,
+    inventoryStore: inventoryRuntime.store,
+    inventory,
     sourcingTechPackAllocationStore: allocationStore,
     sourcing,
     productionOrderStore,

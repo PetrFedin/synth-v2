@@ -12,6 +12,10 @@ Explainability extends the closed economics without replacing it:
 
 `CostCloseSnapshot -> order_margin_bridge_steps -> effective closed economics`
 
+Physical recovery extends the same economics without a second financial ledger:
+
+`ReceiptDiscrepancy -> Claim -> Resolution -> SupplierRecovery -> ActualCostLedgerEntry -> LandedCostSnapshot -> MarginActualizationSnapshot`
+
 ## Truth ownership
 
 - `OrderCommitSnapshot` — immutable accepted commercial deal.
@@ -25,6 +29,7 @@ Explainability extends the closed economics without replacing it:
 - `PostCloseAdjustment` — serialized late-cost chain; never rewrites cost close.
 - `CostAllocationPolicyVersion` — immutable brand allocation policy.
 - `CostAllocationRunSnapshot` — immutable allocation of an exact Landed Cost snapshot to SKU economics.
+- `SupplierRecovery` — immutable attribution/evidence snapshot for a supplier credit whose financial truth remains the canonical negative Actual Cost entry.
 
 No derived read model may become a second mutable source of financial truth.
 
@@ -92,6 +97,31 @@ Rules:
 6. Sum of SKU allocated landed cost must equal order Landed Cost.
 7. `SkuEconomics` contains committed quantity, net revenue, allocated landed cost, contribution margin amount and contribution margin percent.
 
+## Supplier Economic Performance / Cost of Failure
+
+Supplier performance is derived from immutable operational and economic evidence; no supplier-entered mutable score is authoritative.
+
+Operational evidence:
+
+- Production Orders provide committed supplier, SKU, quantity and due-date context.
+- Production Executions provide actual ready-for-QC timing against the immutable delivery due date.
+- Final Quality run history provides first-pass outcome, rework incidence, rejection and defect counts.
+
+Economic evidence is currency-separated and deliberately conservative:
+
+- supplier recovery credits come only from immutable `SupplierRecovery` snapshots backed by canonical negative `ActualCostLedgerEntry` records;
+- positive physical `quality` / `rework` actual costs are attributed to a supplier only when the exact Receipt Discrepancy has recorded recoveries to one unique supplier;
+- a discrepancy linked to more than one supplier is not allocated heuristically and is excluded from supplier monetary attribution;
+- costs without a governed supplier attribution path are excluded rather than guessed;
+- different currencies are never summed into one supplier total without an explicit immutable FX basis.
+
+Derived read models:
+
+- `supplier_operational_performance` — Production Order, execution-timeliness and Final Quality metrics by brand + supplier;
+- `supplier_failure_economics_by_currency` — confirmed physical quality/rework cost, supplier recovery credit and net confirmed failure cost by brand + supplier + currency.
+
+The API projection is read-only and requires brand-side margin visibility. Its attribution contract is versioned as `unique-recovery-supplier-v1`.
+
 ## Runtime / contract entrypoints
 
 Order economics:
@@ -106,8 +136,15 @@ Complete economics including SKU allocation:
 - `src/http/economics-route-bundle.mjs`
 - `src/http/v2-economics-openapi.mjs`
 
-Full SYNTH-V2 assembly currently exposes the complete order-economics service/route bundle/OpenAPI through `src/runtime/postgres-syntha-v2-runtime.mjs`; the legacy base handler remains a compatibility surface until its central route registry is switched to the complete economics bundle.
+Supplier economic performance:
+
+- `src/application/supplier-economic-performance-service.mjs`
+- `src/infrastructure/postgres-supplier-economic-performance-reader.mjs`
+- `src/http/supplier-economic-performance-routes.mjs`
+- `src/http/supplier-economic-performance-openapi.mjs`
+
+Full SYNTH-V2 assembly exposes the complete economics, physical execution, supplier recovery and supplier performance services through the production PostgreSQL runtime and central route/OpenAPI composition.
 
 ## Next architecture slice
 
-After CI is green on the same head, the next economics slice is `Supplier Economic Performance / Cost of Failure`, fed from immutable sourcing/production/quality/cost lineage rather than supplier-entered mutable scores.
+After Supplier Economic Performance is green on the same head, prioritize enterprise hardening: tenant/isolation stress, concurrency and lock testing, outbox retry/dead-letter recovery, observability/SLOs, migration safety, backup/restore drills and load gates. ODS migration of remaining PLM workspaces continues without creating new local visual dialects.

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://syntha.local/schemas/fashion-kpi-contract-v14.json",
-  "title": "SYNTH-V2 Fashion KPI Contract v14",
+  "$id": "https://syntha.local/schemas/fashion-kpi-contract-v16.json",
+  "title": "SYNTH-V2 Fashion KPI Contract v16",
   "type": "object",
   "additionalProperties": true,
   "required": [
@@ -62,11 +62,22 @@
     "additivity": {"type": "string"},
     "distinctnessKey": {"type": ["string", "null"]},
     "dueCensoringRule": {"type": ["string", "null"]},
+    "quantileMethod": {"type": ["string", "null"]},
     "zeroNullErrorPolicy": {"type": "string", "minLength": 1},
     "uomConversionRule": {"type": ["string", "null"]},
     "currencyFxRule": {"type": ["string", "null"]},
     "logicalSourceEntity": {"type": ["string", "null"]},
     "logicalFieldContract": {"type": ["string", "null"]},
+    "sourceContracts": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    },
+    "inputMappings": {
+      "type": "object",
+      "additionalProperties": {"type": "string", "minLength": 1}
+    },
+    "nativeSourceContractVersion": {"type": ["string", "null"]},
     "physicalSource": {
       "type": "object",
       "properties": {
@@ -77,13 +88,14 @@
         "primaryOrEventKey": {"type": ["string", "null"]},
         "eventTimestamp": {"type": ["string", "null"]},
         "joinCardinality": {"type": ["string", "null"]},
-        "mappingStatus": {"type": "string"}
+        "mappingStatus": {"enum": ["PENDING", "MAPPED_UNVERIFIED", "VERIFIED", "DEPRECATED"]}
       },
       "required": ["mappingStatus"]
     },
     "semanticSqlPattern": {"type": ["string", "null"]},
     "daxPattern": {"type": ["string", "null"]},
     "measurementValidityRule": {"type": ["string", "null"]},
+    "scaleContract": {"type": ["string", "null"]},
     "reconciliationControl": {"type": ["string", "null"]},
     "antiGamingControl": {"type": ["string", "null"]},
     "validationChecks": {"type": ["string", "null"]},
@@ -106,6 +118,17 @@
     {
       "if": {"properties": {"role": {"const": "BLOCKED_UMBRELLA"}}},
       "then": {"properties": {"releaseStatus": {"pattern": "BLOCK|DO_NOT_PUBLISH"}}}
+    },
+    {
+      "if": {"properties": {"releaseStatus": {"const": "PRODUCTION_READY"}}},
+      "then": {
+        "required": ["physicalSource"],
+        "properties": {
+          "physicalSource": {
+            "properties": {"mappingStatus": {"const": "VERIFIED"}}
+          }
+        }
+      }
     }
   ]
 }

@@ -54,6 +54,7 @@
   ],
   "dataStates": ["ZERO", "VALUE", "NOT_APPLICABLE", "MISSING", "INVALID"],
   "physicalMappingStatuses": ["PENDING", "MAPPED_UNVERIFIED", "VERIFIED", "DEPRECATED"],
+  "registryMappingVerificationStatuses": ["MAPPED_UNVERIFIED", "VERIFIED", "DEPRECATED"],
   "dependencyTypes": ["ALIAS_OF", "SPLIT_FROM", "COMPONENT_OF", "DRIVER_OF", "GUARDRAIL_OF"],
   "scopeTypes": ["system", "organisation"],
   "requiredForActive": [
@@ -119,6 +120,8 @@
     "dueCohortMustNotUseClosedOnlyDenominator": true,
     "historicalSnapshotsMustNotBeSummedAsIndependentFacts": true,
     "formulaVersionSeparateFromMappingSetVersion": true,
+    "releaseLifecycleSeparateFromDefinition": true,
+    "mappingVerificationSeparateFromPhysicalMapping": true,
     "registryRecordsImmutable": true,
     "systemDefinitionsNotTenantEditableByDefault": true,
     "definitionAndObservationHistorySeparated": true,

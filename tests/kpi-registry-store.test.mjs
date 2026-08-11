@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import { createPostgresKpiRegistryStore } from '../src/infrastructure/postgres-kpi-registry-store.mjs';
 
-test('PostgreSQL KPI registry store reads immutable definition payloads and release lifecycle', async () => {
+test('PostgreSQL KPI registry store reads immutable definition payloads and release lifecycle leaf', async () => {
   const calls = [];
   const pool = {
     connect() { throw new Error('transaction not used in this smoke test'); },
@@ -31,7 +31,8 @@ test('PostgreSQL KPI registry store reads immutable definition payloads and rele
   assert.match(calls[1].sql, /organisation_id IS NULL/);
   assert.deepEqual(calls[1].params, ['system', 'SYNTH-LOG-001', null]);
   assert.match(calls[2].sql, /FROM kpi_definition_release_events/);
-  assert.match(calls[2].sql, /ORDER BY created_at DESC, id DESC/);
+  assert.match(calls[2].sql, /NOT EXISTS/);
+  assert.match(calls[2].sql, /child\.previous_release_event_id = event\.id/);
   assert.deepEqual(calls[2].params, ['def-1']);
 });
 

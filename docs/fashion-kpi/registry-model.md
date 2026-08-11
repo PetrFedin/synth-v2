@@ -2,21 +2,25 @@
 
 Version: 17.0
 
-The KPI registry is the durable semantic control plane for SYNTH-V2 analytics. It stores **what a KPI means** and **how a logical KPI input is physically mapped**, but it does not yet store calculated observations. Observations/runs are deliberately separated so definition history cannot be overwritten by recalculation history.
+The KPI registry is the durable semantic control plane for SYNTH-V2 analytics. It stores **what a KPI means**, **how its logical inputs are physically mapped**, and the independent append-only lifecycle histories for definition release and mapping verification.
+
+Calculated runs/observations are intentionally not stored in this registry layer yet. Definition history, mapping history, governance lifecycle and future observation history are separate concerns.
 
 ## 1. Why the registry is separate
 
-Without a registry, KPI meaning tends to leak into:
+Without a registry, KPI meaning leaks into SQL views, dashboard formulas, API handlers, spreadsheets and local module helpers. That creates silent drift.
 
-- SQL views;
-- dashboard formulas;
-- one-off API handlers;
-- spreadsheet calculations;
-- local module helpers.
+The registry makes these concepts first-class and versioned:
 
-That creates silent definition drift. The registry makes formula version, population, time basis, aggregation and source mapping explicit first-class data.
+- formula semantics;
+- grain/population/time basis;
+- aggregation/UOM/scale;
+- physical input mapping;
+- mapping verification;
+- release readiness;
+- alias/split/component/driver relationships.
 
-## 2. Three immutable registry objects
+## 2. Five append-only registry object types
 
 ### `kpi_definition_versions`
 
@@ -24,14 +28,11 @@ One immutable semantic definition version.
 
 It contains:
 
-- scope (`system` or `organisation`);
-- optional organisation ID;
+- scope (`system` or `organisation`) and optional organisation ID;
 - stable KPI code;
 - immutable formula version;
 - role (`CANONICAL`, `SPLIT_CHILD`, `BLOCKED_UMBRELLA`, `ALIAS`);
-- canonical RU/EN names;
-- domain;
-- release status;
+- canonical RU/EN names and domain;
 - business definition/formula;
 - calculation primitive;
 - canonical UOM;
@@ -41,17 +42,31 @@ It contains:
 - controls/publication contract;
 - effective period;
 - creator/time;
-- content hash and complete JSON payload.
+- SHA-256 content hash and complete JSON payload.
 
-The SQL row and payload identities are cross-checked so a payload cannot claim another KPI code/formula version than the indexed columns.
+**It does not contain mutable release status.** Definition meaning remains immutable after insert.
+
+### `kpi_definition_release_events`
+
+Append-only lifecycle stream for one immutable definition.
+
+Each event contains:
+
+- definition ID;
+- previous release-event ID;
+- new release status;
+- evidence;
+- creator/time/hash/payload.
+
+Current release state is derived from the latest event in the chain. Moving `DEFINED -> MAPPING_PENDING -> VALIDATION_PENDING` does not modify the semantic definition and does not require a new formula version.
 
 ### `kpi_source_mapping_versions`
 
 One immutable physical mapping for one logical variable within a mapping-set version.
 
-A mapping records:
+It contains:
 
-- KPI definition ID;
+- definition ID;
 - mapping-set version;
 - logical variable name;
 - governed source-contract ID;
@@ -61,14 +76,25 @@ A mapping records:
 - event timestamp path;
 - UOM/currency paths where applicable;
 - join/filter contracts;
-- mapping status;
-- verification evidence.
+- creator/time/hash/payload.
 
-`VERIFIED` requires both `verifiedAt` and `verifiedBy`. Unverified mappings are prohibited from carrying fake verification fields.
+**It does not contain mutable verification status.** Physical mapping identity and mapping verification are separate.
+
+### `kpi_source_mapping_verification_events`
+
+Append-only verification stream for one immutable physical mapping.
+
+Statuses:
+
+- `MAPPED_UNVERIFIED`;
+- `VERIFIED`;
+- `DEPRECATED`.
+
+A `VERIFIED` event requires verification evidence. Moving from unverified to verified does not create a fake new mapping-set version because the physical path did not change.
 
 ### `kpi_definition_dependencies`
 
-Version-to-version semantic graph edge.
+Immutable version-to-version semantic graph edge.
 
 Supported relations:
 
@@ -78,27 +104,56 @@ Supported relations:
 - `DRIVER_OF`;
 - `GUARDRAIL_OF`.
 
-Self-reference is prohibited.
+Self-reference is prohibited. `ALIAS_OF` must point from an alias to a calculable definition. `SPLIT_FROM` must point from a split child to a blocked umbrella parent.
 
-`ALIAS_OF` must point from an alias definition to a calculable definition. `SPLIT_FROM` must point from a split-child to its blocked umbrella parent.
+## 3. Why release status is not part of the definition row
 
-## 3. Formula version is not mapping version
+Suppose a formula is frozen as version `17.0`.
+
+Its governance path may be:
+
+`DRAFT -> DEFINED -> MAPPING_PENDING -> MAPPED_UNVERIFIED -> VALIDATION_PENDING -> UAT_PENDING -> PRODUCTION_READY`.
+
+If `releaseStatus` were stored inside an immutable definition row, the status could never advance. If the row were updated, the registry would no longer be immutable. Creating another row with the same formula version just to change status would mix lifecycle with semantics.
+
+Therefore release state is a separate append-only event chain.
+
+This is the same event-sourcing principle used elsewhere in SYNTH-V2: facts that happened are appended; historical meaning is not rewritten.
+
+## 4. Why mapping verification is not part of the physical mapping row
+
+Physical mapping version means **where the logical variable comes from**.
+
+Example mapping version 1:
+
+`ReceivedQuantity -> NATIVE-RECEIPT.lines[].receivedQuantity`.
+
+A data engineer can map it today and a steward can verify it tomorrow. The source path has not changed, so a new mapping-set version would be false history.
+
+Therefore:
+
+- mapping path/version = immutable physical contract;
+- verification = append-only lifecycle event.
+
+A new mapping-set version is created only when the actual physical implementation changes.
+
+## 5. Formula version is not mapping-set version
 
 This distinction is mandatory.
 
 ### New formula version required
 
-Create a new KPI formula version when any semantic meaning changes, including:
+Create a new formula version when business meaning changes, including:
 
 - numerator;
 - denominator/exposure;
-- population;
+- eligible population;
 - inclusion/exclusion;
 - grain;
-- event identity;
+- case/event identity;
 - time/cohort/as-of basis;
 - UOM algebra;
-- normalizer K;
+- normalizer `K`;
 - aggregation method;
 - statistical estimator/quantile method;
 - sign convention;
@@ -106,55 +161,58 @@ Create a new KPI formula version when any semantic meaning changes, including:
 
 Example:
 
-`DamageRate = DamagedUnits / ReceivedUnits`
+`DamageRate = DamagedUnits / ReceivedUnits`.
 
-changing denominator to `ShippedUnits` is a **new formula version**.
+Changing denominator to `ShippedUnits` is a **new formula version**.
 
-### Mapping-set version only
+### New mapping-set version only
 
-A new mapping-set version is sufficient when the KPI meaning is unchanged but the physical implementation changes, for example:
+Create a new mapping-set version when meaning is unchanged but the physical implementation changes, for example:
 
-- table/topic renamed;
-- event moved to another read model;
-- ERP adapter replaced;
-- source column changed while semantic variable remains identical;
-- join path changes without changing eligible population.
+- source table/topic renamed;
+- field moved to another read model;
+- ERP/WMS adapter replaced;
+- join path changes without changing population meaning.
 
 Example:
 
-`ReceivedQuantity` moving from an external WMS table to a governed SYNTH-V2 receipt read model does not require a new formula version if the business meaning/population remains identical.
+`ReceivedQuantity` moving from an external WMS column to governed SYNTH-V2 receipt data is normally a mapping-set change, not a formula change.
 
-## 4. System vs organisation scope
+### Verification event only
+
+If the path remains exactly the same and is simply reviewed/verified, append a mapping-verification event. Do not increment mapping-set version merely to record approval.
+
+## 6. System vs organisation scope
 
 ### System scope
 
 `scopeType = system`, `organisationId = null`.
 
-Use for canonical platform definitions such as native receipt acceptance or canonical contribution-margin ratio.
+Use for platform canonical definitions such as receipt acceptance or canonical contribution-margin ratio.
 
-System definitions are platform governance objects. Ordinary organisation members must not receive a generic capability to redefine them.
+System definitions are platform governance objects. Ordinary organisation membership must not grant the ability to redefine them.
 
 ### Organisation scope
 
-`scopeType = organisation`, `organisationId` required.
+`scopeType = organisation`, organisation ID required.
 
-Use only when an organisation intentionally owns a semantic variant. A tenant-specific threshold normally belongs in threshold policy, not a new formula definition. Create an organisation definition only when meaning genuinely differs.
+Use only for a genuine tenant-specific semantic variant. A tenant-specific threshold or dashboard target usually belongs in threshold policy, not a cloned formula definition.
 
-Do not create tenant clones merely to change display name, target or dashboard visibility.
+Organisation-scoped queries must enforce normal SYNTH-V2 organisation isolation and capability checks.
 
-## 5. Role and publication semantics
+## 7. Role and publication semantics
 
 ### Canonical
 
-Normal calculable KPI definition.
+Normal calculable definition.
 
 ### Split child
 
-Calculable KPI created by resolving an ambiguous umbrella into one explicit basis.
+Calculable KPI produced by resolving an ambiguous umbrella into one explicit basis.
 
-Example:
+Example blocked umbrella:
 
-Blocked umbrella: `Cancellation Rate (orders or units)`.
+`Cancellation Rate (orders or units)`.
 
 Split children:
 
@@ -163,58 +221,81 @@ Split children:
 
 ### Blocked umbrella
 
-Documentation only. Must never own executable mappings or observations.
+Documentation-only semantic parent. It must not own executable source mappings or observations.
+
+Its release stream begins in `BLOCKED_UMBRELLA` and can later move only to `DEPRECATED`.
 
 ### Alias
 
-Legacy/name compatibility only. Must never calculate independently. The dependency graph resolves it through `ALIAS_OF`.
+Compatibility/name indirection only. It does not calculate independently and resolves via `ALIAS_OF`.
 
-## 6. Release lifecycle
+Its release stream begins in `ALIAS_NONPUBLISH` and can later move only to `DEPRECATED`.
 
-Governed stages:
+## 8. Calculable release lifecycle
 
-`DRAFT -> DEFINED -> MAPPING_PENDING -> MAPPED_UNVERIFIED -> VALIDATION_PENDING -> UAT_PENDING -> PRODUCTION_READY -> DEPRECATED`
+Normal forward order:
 
-Non-calculable roles use:
+`DRAFT -> DEFINED -> MAPPING_PENDING -> MAPPED_UNVERIFIED -> VALIDATION_PENDING -> UAT_PENDING -> PRODUCTION_READY`.
 
-- `BLOCKED_UMBRELLA`;
-- `ALIAS_NONPUBLISH`.
+`DEPRECATED` is terminal and may be appended from a prior state with a documented reason.
 
-A stage is not decoration. Each stage has evidence requirements.
+The domain prevents backwards transitions and duplicate no-op lifecycle events.
 
 ### DRAFT
 
-Business idea exists but contract can still change.
+Business idea exists; semantic contract may still change.
 
 ### DEFINED
 
-Semantic/mathematical/time/UOM contracts frozen for this formula version.
+Semantic/mathematical/time/UOM contracts are frozen for this formula version.
 
 ### MAPPING_PENDING
 
-Physical variables still unresolved.
+Required logical inputs are not fully mapped.
 
 ### MAPPED_UNVERIFIED
 
-Paths identified but not independently verified/tested.
+Physical paths exist but verification is incomplete.
 
 ### VALIDATION_PENDING
 
-Mappings verified; calculation/population/reconciliation tests incomplete.
+Required mappings are verified; calculation/population/reconciliation tests remain incomplete.
 
 ### UAT_PENDING
 
-Technical checks complete; business owner/data steward acceptance incomplete.
+Technical checks are complete; owner/data-steward acceptance remains incomplete.
 
 ### PRODUCTION_READY
 
 All applicable source, calculation, population/time, reconciliation and UAT gates pass.
 
+A `PRODUCTION_READY` release event requires explicit evidence including verified mapping IDs, passed calculation/population tests, reconciliation status, owner UAT and steward UAT.
+
 ### DEPRECATED
 
-Historical definition remains immutable/readable but new calculation runs should not use it unless reconstructing history.
+Historical definition remains immutable/readable but should not be selected for new normal calculations. The deprecation event requires a reason.
 
-## 7. Production-ready assertion
+## 9. Mapping verification lifecycle
+
+### Initial `MAPPED_UNVERIFIED`
+
+Use when the path has been identified but independent verification/test evidence is incomplete.
+
+### `VERIFIED`
+
+Requires evidence with at least who verified and how verification was performed.
+
+Examples of verification method:
+
+- repository native source contract + test fixture;
+- ERP data dictionary + source query validation;
+- event schema + sample payload reconciliation.
+
+### `DEPRECATED`
+
+Terminal state for a physical mapping. Requires a reason. A replacement path is a **new mapping-set version**, not a mutation of the deprecated row.
+
+## 10. Production-ready assertion
 
 The domain exposes `assertKpiDefinitionReadyForProduction(...)`.
 
@@ -222,19 +303,22 @@ It requires:
 
 - calculable definition role;
 - non-empty mapping set;
-- every supplied mapping belongs to the definition;
-- every mapping is `VERIFIED`;
+- all mappings belong to the definition;
+- one coherent mapping-set version;
+- unique logical variables;
+- one current verification event per effective mapping;
+- every effective mapping verification status = `VERIFIED`;
 - calculation tests pass;
 - population/time tests pass;
 - reconciliation passes;
 - owner UAT passes;
 - data-steward UAT passes.
 
-This keeps `PRODUCTION_READY` from becoming a manual label with no evidence.
+This assertion can be used before appending a `PRODUCTION_READY` release event. The release event additionally stores durable evidence of the decision.
 
-## 8. Content hashing
+## 11. Content hashing
 
-Definition, mapping and dependency domain objects receive a SHA-256 content hash over canonical JSON.
+Definition, release event, mapping, mapping-verification event and dependency receive a SHA-256 content hash over canonical JSON.
 
 Purpose:
 
@@ -244,152 +328,145 @@ Purpose:
 - safe comparison between repository seed and persisted registry;
 - future calculation-run lineage.
 
-The hash is not a substitute for formula version. Two semantically different versions must have different explicit formula versions even if a hash already proves bytes differ.
+Hash does not replace explicit formula/mapping versions.
 
-## 9. Effective dating
+## 12. Effective dating
 
 Definition versions carry `effectiveFrom` and optional `effectiveTo`.
 
 Rules:
 
 - `effectiveTo > effectiveFrom`;
-- historical rows never updated/deleted;
+- historical rows never update/delete;
 - effective selection happens before calculation;
-- calculation run stores the exact definition ID, not only KPI code;
-- restatement may intentionally rerun historical period with either historical definition or a new approved restatement policy, but the choice must be explicit.
+- future calculation run stores exact definition ID;
+- restatement policy explicitly chooses which definition applies.
 
-The registry does not automatically close a prior row because immutable records cannot be updated. Future governance workflow should create a superseding version plus a separate lifecycle/effectivity decision record if automated closure is needed. Until that workflow exists, overlapping active versions must be prevented/flagged by registry service policy.
+V17 does not yet implement an automated supersession/effectivity workflow. Overlapping effective versions must be prevented/flagged by the future registry application service before runtime selection.
 
-## 10. Mapping-set semantics
+## 13. Mapping-set completeness
 
-A KPI usually has multiple logical inputs. Example:
+A KPI usually requires multiple logical inputs.
+
+Example:
 
 `ReceiptAcceptanceRate = AcceptedQuantity / ReceivedQuantity`.
 
-Mapping-set version 1 can include:
+Mapping-set version 1 may contain:
 
 - `AcceptedQuantity -> NATIVE-RECEIPT.AcceptedQuantity`;
 - `ReceivedQuantity -> NATIVE-RECEIPT.ReceivedQuantity`.
 
-A mapping set is complete only when every required formula/population/time input is resolved.
+A mapping set is complete only when every formula/population/time/UOM input required by the definition is present.
 
-A single verified row does **not** mean the KPI mapping set is complete.
+A single verified mapping does not mean the mapping set is complete.
 
-Future application service should compare required logical inputs from definition contract with mapped variable names before allowing `VALIDATION_PENDING` or higher status.
+Verification is also per mapping row. Production readiness requires the effective set to be complete and every mapping verified.
 
-## 11. Registry and repository-native contracts
+## 14. Registry and repository-native contracts
 
-`docs/fashion-kpi/native-source-contracts.json` describes source contracts verified against current repository files/migrations.
+`docs/fashion-kpi/native-source-contracts.json` describes repository-native source contracts verified against current code and migration history.
 
-The durable registry may reference those contract IDs, for example:
+Durable registry mappings reference those contract IDs, e.g. `NATIVE-RECEIPT`.
 
-`sourceContractId = NATIVE-RECEIPT`.
+Layers:
 
-Repository validation protects source drift; durable mapping rows capture the effective mapping used by runtime governance.
+- repository source contract = what current code/persistence exposes;
+- durable mapping version = which source path a KPI logical variable uses;
+- verification event = whether that mapping has been independently verified;
+- formula definition = what the KPI means.
 
-These layers complement each other:
+Keeping these separate is what lets a source adapter evolve without silently changing KPI semantics.
 
-- JSON source contract = code/repository contract;
-- persisted source mapping = effective runtime registry record.
-
-## 12. Example — Receipt Acceptance Rate
+## 15. Example — Receipt Acceptance Rate
 
 Definition:
 
-- KPI code: `SYNTH-LOG-001`;
-- formula version: `17.0` (example registry version, not a claim that V16 native bundle changed semantics);
-- primitive: `TRUE_SUBSET_SHARE`;
-- formula: `AcceptedQuantity / ReceivedQuantity`;
-- grain: receipt snapshot x shipment line;
-- temporal class: period exposure;
-- aggregation: ratio of sums;
-- canonical UOM: ratio;
-- zero exposure: N/A;
-- accepted > received: invalid.
+- KPI code `SYNTH-LOG-001`;
+- primitive `TRUE_SUBSET_SHARE`;
+- formula `AcceptedQuantity / ReceivedQuantity`;
+- grain receipt snapshot x shipment line;
+- temporal class period exposure;
+- aggregation ratio of sums;
+- canonical UOM ratio;
+- zero exposure N/A;
+- accepted > received invalid.
 
 Mapping set:
 
-- AcceptedQuantity -> native receipt line accepted quantity;
-- ReceivedQuantity -> native receipt line received quantity;
-- event time -> receipt `receivedAt`.
+- AcceptedQuantity -> native receipt accepted quantity;
+- ReceivedQuantity -> native receipt received quantity;
+- receipt event time -> `receivedAt` as needed by population contract.
 
 Control:
 
 `Accepted + Damaged + Rejected = Received`.
 
-Portfolio calculation:
+Portfolio:
 
 `SUM(Accepted) / SUM(Received)`.
 
-Never average line-level acceptance percentages.
+Never average line-level percentages.
 
-## 13. Example — Contribution Margin Ratio
+## 16. Example — Contribution Margin Ratio
 
-Definition formula:
+Definition:
 
 `ContributionMarginAmount / NetRevenue`.
 
 Native mapping:
 
-- margin amount -> actualization snapshot;
-- revenue -> same actualization snapshot;
+- amount -> margin actualization snapshot;
+- revenue -> same snapshot;
 - source percentage points -> optional reconciliation mirror.
 
 Canonical storage is decimal ratio.
 
-If native source stores 24.0000 percentage points and canonical result is 0.24:
+If native source stores `24.0000` percentage points and canonical result is `0.24`:
 
 `24.0000 / 100 = 0.24` -> scale reconciliation passes.
 
-Changing only the source field from one read model to another is a mapping version. Changing denominator from net revenue to gross sales is a formula version.
+Changing only the physical read-model path is a mapping-set change. Changing denominator from net revenue to another revenue basis is a formula change.
 
-## 14. Organisation isolation
+## 17. Mutation rules
 
-Organisation-scoped registry queries must enforce the same isolation discipline as other SYNTH-V2 modules.
-
-Do not implement a query that accepts arbitrary `organisationId` from client input without membership/capability checks.
-
-System definitions can be read as platform metadata, but system-definition mutation needs a platform-governance path, not ordinary tenant membership.
-
-## 15. Mutation rules
-
-When application commands are introduced, they must follow repository rules:
+Future registry commands must follow repository standards:
 
 - durable command ID;
 - deterministic fingerprint;
-- command registry replay/conflict behavior;
+- replay/conflict behavior;
 - transaction;
-- immutable insert;
+- append immutable definition/mapping/lifecycle record;
 - transactional outbox event;
-- capability/governance authorization;
-- no update/delete of historical registry rows.
+- platform/organisation governance authorization;
+- no update/delete of registry history.
 
-The PostgreSQL registry store already exposes command-registry and outbox primitives for that next application layer.
+The PostgreSQL store already exposes command-registry and outbox primitives for this next application layer.
 
-## 16. What V17 intentionally does not do
+## 18. What V17 intentionally does not do
 
 V17 does not yet:
 
 - expose registry HTTP routes;
-- grant tenant roles the right to manage system definitions;
+- grant tenant roles management of system definitions;
 - persist calculation runs;
 - persist observations;
-- persist DQ results;
+- persist DQ/reconciliation results;
 - persist threshold/target policy;
 - auto-import all 1,290 catalog definitions.
 
-Those are separate rollout layers. Keeping them separate reduces the chance that a dashboard/API becomes live before semantic governance is stable.
+This keeps semantic governance ahead of dashboards and prevents a half-governed observation model from becoming production truth.
 
-## 17. Next persistence layer
+## 19. Next persistence layer
 
-The next layer should add:
+Next should add separate immutable runtime history:
 
 - `kpi_calculation_runs`;
 - `kpi_observations`;
 - `kpi_quality_results`;
 - `kpi_reconciliation_results`;
 - restatement lineage;
-- exact definition/mapping IDs on every observation;
-- threshold-policy versions separately from formula versions.
+- exact definition ID and mapping-set lineage on every observation;
+- threshold-policy versions separate from formula versions.
 
-Definition history and observation history must remain separate immutable concerns.
+Definition, release, mapping, verification, calculation and observation history must remain separate immutable concerns.

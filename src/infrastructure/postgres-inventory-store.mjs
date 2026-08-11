@@ -37,8 +37,21 @@ function view(client) {
       );
       return result.rows[0]?.payload;
     },
-    async lockReceipt(id) {
-      const result = await client.query('SELECT payload FROM receipt_snapshots WHERE id = $1 FOR UPDATE', [id]);
+    async lockReceipt(id, actorId) {
+      const result = await client.query(
+        `SELECT receipt.payload
+           FROM receipt_snapshots AS receipt
+          WHERE receipt.id = $1
+            AND EXISTS (
+              SELECT 1
+                FROM memberships AS membership
+               WHERE membership.organisation_id = receipt.shop_id
+                 AND membership.user_id = $2
+                 AND membership.status = 'active'
+            )
+          FOR UPDATE OF receipt`,
+        [id, actorId],
+      );
       return result.rows[0]?.payload;
     },
     async getShipmentNotice(id) {

@@ -21,7 +21,8 @@
     "validate:ods-boundaries": "node scripts/validate-ods-boundaries.mjs",
     "validate:i18n": "node scripts/validate-i18n.mjs",
     "validate:kpi-methodology": "node scripts/validate-fashion-kpi.mjs",
-    "verify": "npm run validate:isolation && npm run validate:architecture && npm run validate:postgres && npm run validate:ui && npm run validate:design-system && npm run validate:ods-boundaries && npm run validate:i18n && npm run validate:kpi-methodology && npm test"
+    "validate:kpi-registry": "node scripts/validate-kpi-registry.mjs",
+    "verify": "npm run validate:isolation && npm run validate:architecture && npm run validate:postgres && npm run validate:ui && npm run validate:design-system && npm run validate:ods-boundaries && npm run validate:i18n && npm run validate:kpi-methodology && npm run validate:kpi-registry && npm test"
   },
   "dependencies": {
     "pg": "8.13.1"

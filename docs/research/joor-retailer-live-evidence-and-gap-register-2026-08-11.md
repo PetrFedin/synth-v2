@@ -15,10 +15,10 @@ This document answers three separate questions:
 
 Evidence labels:
 
-- **OBSERVED** вЂ” rendered in the authenticated cabinet and inspected read-only.
-- **CODE-CONFIRMED** вЂ” present in executable `synth-v2` code, not merely described in a document.
-- **INFERRED** вЂ” required by an observed UI/workflow but not proven through a state-changing action.
-- **GATED** вЂ” hidden by plan, missing data, external integration, role, payment, or an unsafe state-changing action.
+- **OBSERVED** — rendered in the authenticated cabinet and inspected read-only.
+- **CODE-CONFIRMED** — present in executable `synth-v2` code, not merely described in a document.
+- **INFERRED** — required by an observed UI/workflow but not proven through a state-changing action.
+- **GATED** — hidden by plan, missing data, external integration, role, payment, or an unsafe state-changing action.
 
 No Connect, Save, Submit, Send, Export, Download, Pay, Delete, Import, Shopify install, plan purchase, order approval/cancellation, or logout action was executed. Account-specific names, emails, addresses, order numbers, totals and quantities are intentionally omitted.
 
@@ -30,7 +30,7 @@ It does **not** yet reproduce the full retailer cabinet. The largest parity gap 
 
 - Brand discovery, connection requests, pending/connected states, submissions, favorites and Passport.
 - Rich storefront pages and content blocks.
-- Style в†’ colorway в†’ SKU/size hierarchy, size scales, images, swatches, attributes and delivery groups.
+- Style → colorway → SKU/size hierarchy, size scales, images, swatches, attributes and delivery groups.
 - Buyer order grid with quantities by color and size, draft cart semantics and JOOR-like order statuses.
 - Retailer company profile, doors/locations, people, preferences, privacy and email settings.
 - Inbox/compose/comments and file attachment constraints.
@@ -96,7 +96,7 @@ OBSERVED connection states:
 
 OBSERVED discovery fields:
 
-- Sort: Newest Linesheets; AвЂ“Z; Most Purchased; New to JOOR.
+- Sort: Newest Linesheets; A–Z; Most Purchased; New to JOOR.
 - Brand name search.
 - Wholesale price range: Currency, Minimum, Maximum.
 - JOORPay availability checkbox.
@@ -131,18 +131,18 @@ OBSERVED style hierarchy:
 
 ```text
 Brand
-в””в”Ђв”Ђ Linesheet
-    в””в”Ђв”Ђ Style
-        в”њв”Ђв”Ђ media[]
-        в”њв”Ђв”Ђ attributes and grouping dimensions
-        в”њв”Ђв”Ђ price type / currency / wholesale / suggested retail
-        в”њв”Ђв”Ђ delivery window(s)
-        в”њв”Ђв”Ђ colorways[]
-        в”‚   в”њв”Ђв”Ђ color name
-        в”‚   в”њв”Ђв”Ђ color code
-        в”‚   в”њв”Ђв”Ђ swatch/media
-        в”‚   в””в”Ђв”Ђ SKUs by size
-        в””в”Ђв”Ђ size scale[]
+└── Linesheet
+    └── Style
+        ├── media[]
+        ├── attributes and grouping dimensions
+        ├── price type / currency / wholesale / suggested retail
+        ├── delivery window(s)
+        ├── colorways[]
+        │   ├── color name
+        │   ├── color code
+        │   ├── swatch/media
+        │   └── SKUs by size
+        └── size scale[]
 ```
 
 OBSERVED fields and actions:
@@ -325,7 +325,7 @@ OBSERVED user/account controls:
 
 OBSERVED language dictionary:
 
-- English, EspaГ±ol, FranГ§ais, Deutsch, Italiano, ж—Ґжњ¬иЄћ, дё­ж–‡(з®ЂдЅ“), Р СѓСЃСЃРєРёР№, н•њкµ­м–ґ.
+- English, Español, Français, Deutsch, Italiano, 日本語, 中文(简体), Русский, 한국어.
 
 Current RU/EN UI localization in `synth-v2` is useful infrastructure but does not cover this preference model or the observed locale set.
 
@@ -394,18 +394,18 @@ OBSERVED Shopify configuration:
 - Install on Shopify gate.
 - Automation: synchronize approved orders from connected accounts.
 - Mapping examples:
-  - Style Name в†’ Title.
-  - Brand Name + Style Name в†’ Title.
-  - Description в†’ Description.
-  - Photos в†’ Media.
-  - Category в†’ Category.
-  - Linesheet в†’ Collections.
-  - Silhouette в†’ Type.
-  - Brand Name в†’ Vendor.
-  - Suggested Retail Price в†’ Price.
-  - SKU Prices в†’ Variant Price.
-  - SKU Code в†’ Variant SKU.
-  - UPC Code в†’ Variant Barcode.
+  - Style Name → Title.
+  - Brand Name + Style Name → Title.
+  - Description → Description.
+  - Photos → Media.
+  - Category → Category.
+  - Linesheet → Collections.
+  - Silhouette → Type.
+  - Brand Name → Vendor.
+  - Suggested Retail Price → Price.
+  - SKU Prices → Variant Price.
+  - SKU Code → Variant SKU.
+  - UPC Code → Variant Barcode.
 - Last/initial sync status; controls disabled while disconnected.
 
 OBSERVED Data Activity Center columns:
@@ -449,16 +449,16 @@ Every reference value needs: stable ID, code, localized label, display order, sc
 
 ## 6. Layout and responsive evidence
 
-Measured at desktop viewport `1429 Г— 810`, device pixel ratio 1:
+Measured at desktop viewport `1429 × 810`, device pixel ratio 1:
 
 - Home document height was approximately 2116 px.
-- Linesheet detail used a left brand rail around x=228вЂ“480 and product content beginning around x=526.
-- Representative style card media was about `219 Г— 299`; small color swatches about `18 Г— 18`.
-- Style detail used a primary image around `330 Г— 450`, thumbnails about `58 Г— 77`, color swatches about `37 Г— 37`; media began around x=556 and detail column around x=916.
-- Start Order modal was approximately 440 px wide; inputs about `308 Г— 38`; action buttons about `198 Г— 38`.
-- Rich storefront hero occupied approximately `1414 Г— 608`; page content margin began near x=145. Representative grids used `359 Г— 478` three-column images, `263 Г— 351` four-column images and `550 Г— 733` two-column cards.
+- Linesheet detail used a left brand rail around x=228–480 and product content beginning around x=526.
+- Representative style card media was about `219 × 299`; small color swatches about `18 × 18`.
+- Style detail used a primary image around `330 × 450`, thumbnails about `58 × 77`, color swatches about `37 × 37`; media began around x=556 and detail column around x=916.
+- Start Order modal was approximately 440 px wide; inputs about `308 × 38`; action buttons about `198 × 38`.
+- Rich storefront hero occupied approximately `1414 × 608`; page content margin began near x=145. Representative grids used `359 × 478` three-column images, `263 × 351` four-column images and `550 × 733` two-column cards.
 
-Responsive checks at `390 Г— 844`, `768 Г— 1024` and desktop widths found two coexisting systems:
+Responsive checks at `390 × 844`, `768 × 1024` and desktop widths found two coexisting systems:
 
 1. Modern storefront/home surfaces reflow without horizontal overflow; header text collapses on mobile and CTA width changes.
 2. Legacy linesheet surfaces retain an approximately 1026 px working canvas and create horizontal scrolling on narrow viewports; the sidebar remains about 252 px and content begins around x=332.
@@ -467,11 +467,11 @@ Parity decision: preserve the *functional information density* and safe usabilit
 
 Minimum responsive matrix:
 
-- 390 Г— 844 mobile portrait.
-- 768 Г— 1024 tablet portrait.
-- 1024 Г— 768 small desktop/tablet landscape.
-- 1440 Г— 900 desktop.
-- 1920 Г— 1080 wide desktop.
+- 390 × 844 mobile portrait.
+- 768 × 1024 tablet portrait.
+- 1024 × 768 small desktop/tablet landscape.
+- 1440 × 900 desktop.
+- 1920 × 1080 wide desktop.
 - 200% zoom and keyboard-only navigation.
 
 ## 7. What is already executable in synth-v2
@@ -498,18 +498,18 @@ Current primary UI navigation is Overview, Catalog, Showrooms, Partners, Selecti
 
 Priority meanings:
 
-- **P0** вЂ” blocks a correct buyer order and data model; implement before claiming commerce parity.
-- **P1** вЂ” blocks complete retailer-cabinet parity and daily buyer operations.
-- **P2** вЂ” advanced/premium/integration surface; implement after core contracts or after controlled UAT.
+- **P0** — blocks a correct buyer order and data model; implement before claiming commerce parity.
+- **P1** — blocks complete retailer-cabinet parity and daily buyer operations.
+- **P2** — advanced/premium/integration surface; implement after core contracts or after controlled UAT.
 
 | ID | Priority | Gap | Required deliverable | Acceptance evidence |
 |---|---:|---|---|---|
-| CAT-01 | P0 | Flat SKU model | Style, Colorway, SKU, SizeScale, SizeValue, media, attributes | One style with 2 colors Г— 4 sizes retains distinct SKU/UPC/qty |
+| CAT-01 | P0 | Flat SKU model | Style, Colorway, SKU, SizeScale, SizeValue, media, attributes | One style with 2 colors × 4 sizes retains distinct SKU/UPC/qty |
 | CAT-02 | P0 | No rich media | Ordered assets, variant association, crop/focal/alt, failure states | Gallery, thumbnails and swatches pass responsive/a11y tests |
 | CAT-03 | P0 | Price type too shallow | PriceBook/PriceType, currency, wholesale, suggested retail, effective dates | Buyer switches valid price type without mutating snapshot |
 | CAT-04 | P0 | Delivery not line-aware | DeliveryWindow and availability per color/SKU | Mixed Immediate/future lines calculate and filter correctly |
 | CAT-05 | P0 | Attribute/grouping taxonomy absent | Configurable attributes and group-by registry | Observed 10 grouping options map by stable IDs |
-| ORD-01 | P0 | Flat quantity line | Color Г— size matrix and server totals | Matrix round-trip is lossless; zero cells removable |
+| ORD-01 | P0 | Flat quantity line | Color × size matrix and server totals | Matrix round-trip is lossless; zero cells removable |
 | ORD-02 | P0 | Cart/draft context incomplete | DraftOrder/Cart bound to brand, door, publication and price type | Empty redirect, resume and immutable source version tested |
 | ORD-03 | P0 | Status mismatch | Explicit state machine for Draft/Notes/Pending/Approved/Shipped/Cancelled plus bilateral events | Forbidden transitions rejected; history auditable |
 | ORD-04 | P0 | Missing address/door terms | Shipping/billing snapshots, door, shipping/payment/tax/billing code | Approved order remains historically stable after profile edits |
@@ -545,41 +545,41 @@ This is a boundary proposal, not a demand to collapse existing `synth-v2` servic
 
 ```text
 Identity & Organisation
-  User в”Ђ Membership в”Ђ Organisation
-  OrganisationProfile в”Ђ Door/Location в”Ђ Address
+  User ─ Membership ─ Organisation
+  OrganisationProfile ─ Door/Location ─ Address
   UserPreference / OrganisationPreference / Verification
 
 Network & Discovery
-  ConnectionRequest в”Ђ Relationship в”Ђ Submission/Interest
-  Favorite в”Ђ Passport/Event presence
+  ConnectionRequest ─ Relationship ─ Submission/Interest
+  Favorite ─ Passport/Event presence
 
 Commercial Catalog
-  Campaign в”Ђ Collection в”Ђ Linesheet/CommercialPublication
-  Style в”Ђ Colorway в”Ђ SKU в”Ђ SizeValue/SizeScale
-  MediaAsset в”Ђ AttributeDefinition/Value
-  PriceBook/PriceType в”Ђ Price
-  DeliveryWindow в”Ђ Availability
+  Campaign ─ Collection ─ Linesheet/CommercialPublication
+  Style ─ Colorway ─ SKU ─ SizeValue/SizeScale
+  MediaAsset ─ AttributeDefinition/Value
+  PriceBook/PriceType ─ Price
+  DeliveryWindow ─ Availability
 
 Buyer Workspace
-  DraftOrder/Cart в”Ђ OrderLineMatrix в”Ђ Door allocation
-  Order в”Ђ Address snapshots в”Ђ Terms в”Ђ StatusEvent
-  OrderComment в”Ђ Document/ExportJob в”Ђ Payment
+  DraftOrder/Cart ─ OrderLineMatrix ─ Door allocation
+  Order ─ Address snapshots ─ Terms ─ StatusEvent
+  OrderComment ─ Document/ExportJob ─ Payment
 
 Content & Assortment
-  StorefrontVersion в”Ђ ContentBlock
-  Look в”Ђ StyleboardDocument в”Ђ BoardItem/Group/Annotation
+  StorefrontVersion ─ ContentBlock
+  Look ─ StyleboardDocument ─ BoardItem/Group/Annotation
 
 Messaging & Integration
-  Conversation в”Ђ Message в”Ђ Attachment в”Ђ MailboxState
-  IntegrationInstallation в”Ђ MappingVersion в”Ђ SyncJob в”Ђ JobItemResult
-  Subscription в”Ђ Entitlement в”Ђ QuotaUsage
+  Conversation ─ Message ─ Attachment ─ MailboxState
+  IntegrationInstallation ─ MappingVersion ─ SyncJob ─ JobItemResult
+  Subscription ─ Entitlement ─ QuotaUsage
 ```
 
 Critical invariant: catalog and profile data may evolve, but an approved order must preserve immutable commercial, address, tax, term, label and media references required to reproduce its confirmation.
 
 ## 10. Delivery sequence
 
-### Milestone A вЂ” correct product/order foundation (P0)
+### Milestone A — correct product/order foundation (P0)
 
 1. Add Style/Colorway/SizeScale/SKU/media/attributes and migrate flat SKU semantics compatibly.
 2. Extend immutable commercial publication to snapshot variant, price, delivery, media and dictionary labels.
@@ -587,9 +587,9 @@ Critical invariant: catalog and profile data may evolve, but an approved order m
 4. Implement cart and color-size quantity matrix with server totals.
 5. Add door/address/tax/shipping/payment-method snapshots and explicit JOOR-like order state mapping.
 
-Exit gate: a buyer can traverse connected publication в†’ style в†’ quantities by color/size в†’ draft в†’ pending/approved representation without data loss, and a historical order is reproducible after source catalog edits.
+Exit gate: a buyer can traverse connected publication → style → quantities by color/size → draft → pending/approved representation without data loss, and a historical order is reproducible after source catalog edits.
 
-### Milestone B вЂ” complete daily retailer cabinet (P1)
+### Milestone B — complete daily retailer cabinet (P1)
 
 1. Discovery and full connection state machine.
 2. Retailer profile, locations/doors, people, verification and settings.
@@ -600,7 +600,7 @@ Exit gate: a buyer can traverse connected publication в†’ style в†’ qu
 
 Exit gate: every non-premium route in the audited information architecture has loading, empty, error, permission and populated states plus contract/e2e evidence.
 
-### Milestone C вЂ” gated/premium/integrations (P2)
+### Milestone C — gated/premium/integrations (P2)
 
 1. Shopify installation/mapping/sync and Data Activity Center.
 2. Payment/provider abstraction and Pay view.

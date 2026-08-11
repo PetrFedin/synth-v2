@@ -1,0 +1,23 @@
+const SAFE='^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$';
+const id={type:'string',minLength:1,maxLength:200,pattern:SAFE};
+const nullableId={oneOf:[id,{type:'null'}]};
+const money={type:'number',exclusiveMinimum:0,maximum:900719925474.0991,multipleOf:0.0001};
+const currency={type:'string',pattern:'^[A-Z]{3}$'};
+const idem={name:'Idempotency-Key',in:'header',required:true,schema:{type:'string',minLength:1,maxLength:128,pattern:SAFE}};
+const error={description:'Domain or transport error',content:{'application/json':{schema:{$ref:'#/components/schemas/Error'}}}};
+
+export function withSupplierRecoveryOpenApi(base){
+  const s=structuredClone(base); Object.assign(s.components.schemas,schemas()); Object.assign(s.paths,paths()); return deepFreeze(s);
+}
+function schemas(){return{
+  SupplierRecoveryInput:{type:'object',additionalProperties:false,required:['supplierCode','amount','currency','sourceRef','occurredAt','reason'],properties:{supplierCode:{type:'string',minLength:2,maxLength:64},amount:money,currency,fxRateSnapshotId:nullableId,sku:{oneOf:[{type:'string',minLength:1,maxLength:160},{type:'null'}]},sourceRef:{type:'string',minLength:1,maxLength:240},occurredAt:{type:'string',format:'date-time'},reason:{type:'string',minLength:2,maxLength:1000}}},
+  SupplierRecoverySnapshot:{type:'object',additionalProperties:false,required:['id','claimResolutionSnapshotId','claimResolutionContentHash','claimSnapshotId','orderId','orderVersion','orderCommitSnapshotId','supplyCommitmentSnapshotId','fulfillmentPlanSnapshotId','shipmentNoticeSnapshotId','receiptSnapshotId','receiptDiscrepancySnapshotId','brandId','shopId','supplierId','supplierCode','supplierStatus','actualCostEntryId','sourceRef','sourceRecoveryAmount','sourceCurrency','recoveryAmount','currency','landedCostSnapshotId','marginActualizationSnapshotId','costCloseSnapshotId','postCloseAdjustmentId','reason','status','recordedAt','contentHash'],properties:{id,claimResolutionSnapshotId:id,claimResolutionContentHash:sha(),claimSnapshotId:id,orderId:id,orderVersion:{type:'integer',minimum:1},orderCommitSnapshotId:id,supplyCommitmentSnapshotId:id,fulfillmentPlanSnapshotId:id,shipmentNoticeSnapshotId:id,receiptSnapshotId:id,receiptDiscrepancySnapshotId:id,brandId:id,shopId:id,supplierId:id,supplierCode:{type:'string',minLength:2,maxLength:64},supplierStatus:{type:'string',enum:['qualified','suspended','archived']},actualCostEntryId:id,sourceRef:{type:'string',minLength:1,maxLength:240},sourceRecoveryAmount:money,sourceCurrency:currency,recoveryAmount:money,currency,landedCostSnapshotId:id,marginActualizationSnapshotId:id,costCloseSnapshotId:nullableId,postCloseAdjustmentId:nullableId,reason:{type:'string',minLength:2,maxLength:1000},status:{type:'string',enum:['recorded']},recordedAt:{type:'string',format:'date-time'},contentHash:sha()}},
+  SupplierRecoveryResult:{type:'object',additionalProperties:false,required:['recovery','actualCost','landedCost','marginActualization','postCloseAdjustment'],properties:{recovery:{$ref:'#/components/schemas/SupplierRecoverySnapshot'},actualCost:{$ref:'#/components/schemas/ActualCostLedgerEntry'},landedCost:{$ref:'#/components/schemas/LandedCostSnapshot'},marginActualization:{$ref:'#/components/schemas/MarginActualizationSnapshot'},postCloseAdjustment:{oneOf:[{$ref:'#/components/schemas/PostCloseAdjustment'},{type:'null'}]}}},
+};}
+function paths(){const resolution={name:'resolutionSnapshotId',in:'path',required:true,schema:id};const recovery={name:'recoveryId',in:'path',required:true,schema:id};return{
+  '/receipt-claim-resolutions/{resolutionSnapshotId}/supplier-recoveries':{post:{operationId:'recordSupplierRecovery',security:[{bearerAuth:[]}],parameters:[resolution,idem],requestBody:{required:true,content:{'application/json':{schema:{$ref:'#/components/schemas/SupplierRecoveryInput'}}},responses:responses('#/components/schemas/SupplierRecoveryResult',true)}},
+  '/supplier-recoveries/{recoveryId}':{get:{operationId:'getSupplierRecovery',security:[{bearerAuth:[]}],parameters:[recovery],responses:responses('#/components/schemas/SupplierRecoverySnapshot',false)}},
+};}
+function responses(ref,mutation){return{200:{description:'Success',content:{'application/json':{schema:{type:'object',additionalProperties:false,required:['data','requestId'],properties:{data:{$ref:ref},requestId:{type:'string',pattern:SAFE}}}}}},400:error,401:error,403:error,404:error,...(mutation?{409:error,422:error}:{})};}
+function sha(){return{type:'string',pattern:'^[a-f0-9]{64}$'};}
+function deepFreeze(v){if(!v||typeof v!=='object'||Object.isFrozen(v))return v;Object.freeze(v);for(const n of Object.values(v))deepFreeze(n);return v;}

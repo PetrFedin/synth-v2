@@ -29,7 +29,7 @@ test('supplier recovery route rejects invalid amount, currency and unknown field
   const [mutation] = createSupplierRecoveryRoutes({ supplierRecovery: { recordRecovery() {}, getRecoveryForActor() {} } });
   assert.throws(() => mutation.execute({ commandId: 'cmd-1', actorId: 'finance-1', params: ['resolution-1'], query: {}, body: { ...validBody, amount: 0 } }), (error) => error.code === 'HTTP_BODY_FIELD_INVALID');
   assert.throws(() => mutation.execute({ commandId: 'cmd-2', actorId: 'finance-1', params: ['resolution-1'], query: {}, body: { ...validBody, currency: 'eur' } }), (error) => error.code === 'HTTP_BODY_FIELD_INVALID');
-  assert.throws(() => mutation.execute({ commandId: 'cmd-3', actorId: 'finance-1', params: ['resolution-1'], query: {}, body: { ...validBody, surprise: true } }), (error) => error.code === 'HTTP_BODY_FIELD_FORBIDDEN');
+  assert.throws(() => mutation.execute({ commandId: 'cmd-3', actorId: 'finance-1', params: ['resolution-1'], query: {}, body: { ...validBody, surprise: true } }), (error) => error.code === 'HTTP_BODY_FIELD_UNKNOWN');
 });
 
 test('authoritative OpenAPI contains supplier recovery contracts after claims and economics composition', () => {

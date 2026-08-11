@@ -11,7 +11,7 @@ export function createSupplierEconomicPerformanceService({ reader } = {}) {
       invariant(typeof actorId === 'string' && actorId.length > 0, 'ACTOR_ID_REQUIRED', 'Actor id is required');
       invariant(typeof supplierCode === 'string' && supplierCode.length > 0, 'SUPPLIER_CODE_REQUIRED', 'Supplier code is required');
       return reader.transaction(async (tx) => {
-        const supplier = requireEntity(await tx.getSupplierByCode(supplierCode), 'SUPPLIER_NOT_FOUND', { supplierCode });
+        const supplier = requireEntity(await tx.getSupplierByCode(supplierCode, actorId), 'SUPPLIER_NOT_FOUND', { supplierCode });
         const membership = await tx.getMembership(supplier.brandId, actorId);
         assertCapability(membership, CAPABILITIES.MARGIN_READ);
         invariant(membership.organisationType === 'brand', 'SUPPLIER_PERFORMANCE_BRAND_MEMBERSHIP_REQUIRED', 'Supplier economic performance requires a brand membership', { supplierCode, brandId: supplier.brandId });

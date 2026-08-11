@@ -1,0 +1,248 @@
+{
+  "version": "16.0",
+  "scope": "SYNTH-V2 native immutable execution/economics sources",
+  "note": "These mappings are verified against repository code and persistence contracts. They do not imply KPI production readiness: calculation tests, reconciliation and owner/data-steward UAT remain required.",
+  "contracts": [
+    {
+      "id": "NATIVE-SUPPLY-COMMITMENT",
+      "sourceFile": "src/modules/order-economics/public.mjs",
+      "persistenceFile": "db/migrations/028_order_supply_cost_margin.sql",
+      "entity": "supply_commitment_snapshots",
+      "mappingStatus": "VERIFIED",
+      "grain": "order_commit_snapshot_id x allocation item",
+      "lineageKeys": ["order_id", "order_commit_snapshot_id", "brand_id", "shop_id"],
+      "requiredSourceTokens": ["createSupplyCommitmentSnapshot", "allocations", "sourceType", "sourceRef", "expectedAvailabilityAt"],
+      "fields": [
+        {"logical": "OrderId", "runtimePath": "orderId", "dbPath": "order_id", "datatype": "text"},
+        {"logical": "OrderCommitSnapshotId", "runtimePath": "orderCommitSnapshotId", "dbPath": "order_commit_snapshot_id", "datatype": "text"},
+        {"logical": "SupplyAllocationSku", "runtimePath": "allocations[].sku", "dbPath": "allocations[*].sku", "datatype": "text"},
+        {"logical": "SupplyAllocationQuantity", "runtimePath": "allocations[].quantity", "dbPath": "allocations[*].quantity", "datatype": "integer", "uom": "unit"},
+        {"logical": "SupplySourceType", "runtimePath": "allocations[].sourceType", "dbPath": "allocations[*].sourceType", "datatype": "enum", "allowed": ["inventory", "inbound", "production", "drop-ship"]},
+        {"logical": "SupplySourceRef", "runtimePath": "allocations[].sourceRef", "dbPath": "allocations[*].sourceRef", "datatype": "text"},
+        {"logical": "ExpectedAvailabilityAt", "runtimePath": "allocations[].expectedAvailabilityAt", "dbPath": "allocations[*].expectedAvailabilityAt", "datatype": "timestamp nullable"}
+      ]
+    },
+    {
+      "id": "NATIVE-ACTUAL-COST-LEDGER",
+      "sourceFile": "src/modules/order-economics/public.mjs",
+      "persistenceFile": "db/migrations/033_actual_cost_supply_lineage.sql",
+      "entity": "actual_cost_ledger_entries",
+      "mappingStatus": "VERIFIED",
+      "grain": "actual cost ledger entry",
+      "lineageKeys": ["order_id", "order_commit_snapshot_id", "supply_commitment_snapshot_id", "id"],
+      "requiredSourceTokens": ["createActualCostLedgerEntry", "costType", "sourceAmount", "sourceCurrency", "fxRateSnapshotId", "occurredAt", "recordedAt"],
+      "fields": [
+        {"logical": "ActualCostEntryId", "runtimePath": "id", "dbPath": "id", "datatype": "text"},
+        {"logical": "CostType", "runtimePath": "costType", "dbPath": "cost_type", "datatype": "enum"},
+        {"logical": "SourceAmount", "runtimePath": "sourceAmount", "dbPath": "source_amount", "datatype": "money signed"},
+        {"logical": "SourceCurrency", "runtimePath": "sourceCurrency", "dbPath": "source_currency", "datatype": "char(3)"},
+        {"logical": "FxRateSnapshotId", "runtimePath": "fxRateSnapshotId", "dbPath": "fx_rate_snapshot_id", "datatype": "text nullable"},
+        {"logical": "OrderCurrencyAmount", "runtimePath": "amount", "dbPath": "amount", "datatype": "money signed"},
+        {"logical": "OrderCurrency", "runtimePath": "currency", "dbPath": "currency", "datatype": "char(3)"},
+        {"logical": "Sku", "runtimePath": "sku", "dbPath": "sku", "datatype": "text nullable"},
+        {"logical": "SourceRef", "runtimePath": "sourceRef", "dbPath": "source_ref", "datatype": "text"},
+        {"logical": "OccurredAt", "runtimePath": "occurredAt", "dbPath": "occurred_at", "datatype": "timestamptz"},
+        {"logical": "RecordedAt", "runtimePath": "recordedAt", "dbPath": "recorded_at", "datatype": "timestamptz"},
+        {"logical": "EntryKind", "runtimePath": "entryKind", "dbPath": "entry_kind", "datatype": "enum actual/reversal"},
+        {"logical": "ReversalOfEntryId", "runtimePath": "reversalOfEntryId", "dbPath": "reversal_of_entry_id", "datatype": "text nullable"},
+        {"logical": "CorrectionId", "runtimePath": "correctionId", "dbPath": "correction_id", "datatype": "text nullable"}
+      ]
+    },
+    {
+      "id": "NATIVE-PHYSICAL-ACTUAL-COST-LINEAGE",
+      "sourceFile": "src/application/physical-actual-cost-service.mjs",
+      "persistenceFile": "db/migrations/043_physical_actual_cost_lineage.sql",
+      "entity": "actual_cost_ledger_entries physical lineage extension",
+      "mappingStatus": "VERIFIED",
+      "grain": "physical actual cost ledger entry",
+      "lineageKeys": ["fulfillment_plan_snapshot_id", "shipment_notice_snapshot_id", "receipt_snapshot_id", "receipt_discrepancy_snapshot_id"],
+      "requiredSourceTokens": ["physicalLineageVersion", "fulfillmentPlanSnapshotId", "shipmentNoticeSnapshotId", "receiptSnapshotId", "receiptDiscrepancySnapshotId", "PHYSICAL_ACTUAL_COST_TYPES"],
+      "fields": [
+        {"logical": "PhysicalLineageVersion", "runtimePath": "physicalLineageVersion", "dbPath": "physical_lineage_version", "datatype": "integer"},
+        {"logical": "FulfillmentPlanSnapshotId", "runtimePath": "fulfillmentPlanSnapshotId", "dbPath": "fulfillment_plan_snapshot_id", "datatype": "text"},
+        {"logical": "ShipmentNoticeSnapshotId", "runtimePath": "shipmentNoticeSnapshotId", "dbPath": "shipment_notice_snapshot_id", "datatype": "text"},
+        {"logical": "ReceiptSnapshotId", "runtimePath": "receiptSnapshotId", "dbPath": "receipt_snapshot_id", "datatype": "text nullable"},
+        {"logical": "ReceiptDiscrepancySnapshotId", "runtimePath": "receiptDiscrepancySnapshotId", "dbPath": "receipt_discrepancy_snapshot_id", "datatype": "text nullable"}
+      ],
+      "controls": [
+        "quality and rework physical costs require immutable receipt evidence",
+        "SKU-scoped cost must reference a SKU present in the immutable shipment notice",
+        "correction stays on the exact immutable physical execution lineage"
+      ]
+    },
+    {
+      "id": "NATIVE-LANDED-COST",
+      "sourceFile": "src/modules/order-economics/public.mjs",
+      "persistenceFile": "db/migrations/028_order_supply_cost_margin.sql",
+      "entity": "landed_cost_snapshots",
+      "mappingStatus": "VERIFIED",
+      "grain": "order_commit_snapshot_id x landed cost snapshot",
+      "lineageKeys": ["order_id", "order_commit_snapshot_id", "landed_cost_snapshot_id"],
+      "requiredSourceTokens": ["createLandedCostSnapshot", "componentTotals", "totalCost", "costEntryIds", "supplyLineageComplete"],
+      "fields": [
+        {"logical": "LandedCostSnapshotId", "runtimePath": "id", "dbPath": "id", "datatype": "text"},
+        {"logical": "CostEntryIds", "runtimePath": "costEntryIds", "dbPath": "cost_entry_ids", "datatype": "jsonb array"},
+        {"logical": "ComponentTotals", "runtimePath": "componentTotals", "dbPath": "component_totals", "datatype": "jsonb object money by cost type"},
+        {"logical": "TotalLandedCost", "runtimePath": "totalCost", "dbPath": "total_cost", "datatype": "numeric(20,4)"},
+        {"logical": "SupplyLineageComplete", "runtimePath": "supplyLineageComplete", "dbPath": "supply_lineage_complete", "datatype": "boolean"},
+        {"logical": "CreatedAt", "runtimePath": "createdAt", "dbPath": "created_at", "datatype": "timestamptz"}
+      ]
+    },
+    {
+      "id": "NATIVE-MARGIN-ACTUALIZATION",
+      "sourceFile": "src/modules/order-economics/public.mjs",
+      "persistenceFile": "db/migrations/028_order_supply_cost_margin.sql",
+      "entity": "margin_actualization_snapshots",
+      "mappingStatus": "VERIFIED",
+      "grain": "order_commit_snapshot_id x landed_cost_snapshot_id",
+      "lineageKeys": ["order_id", "order_commit_snapshot_id", "landed_cost_snapshot_id"],
+      "requiredSourceTokens": ["createMarginActualizationSnapshot", "netRevenue", "landedCost", "contributionMarginAmount", "contributionMarginPercent"],
+      "fields": [
+        {"logical": "NetRevenue", "runtimePath": "netRevenue", "dbPath": "net_revenue", "datatype": "numeric(20,4)"},
+        {"logical": "LandedCost", "runtimePath": "landedCost", "dbPath": "landed_cost", "datatype": "numeric(20,4)"},
+        {"logical": "ContributionMarginAmount", "runtimePath": "contributionMarginAmount", "dbPath": "contribution_margin_amount", "datatype": "numeric(20,4) signed"},
+        {"logical": "ContributionMarginPercentSource", "runtimePath": "contributionMarginPercent", "dbPath": "contribution_margin_percent", "datatype": "percentage points 0-100 scale", "adapterRule": "Do not use directly as canonical ratio. Canonical KPI ratio = ContributionMarginAmount / NetRevenue; source percentage divided by 100 is a reconciliation mirror."}
+      ],
+      "scaleWarning": "The runtime money helper calculateMoneyPercentage multiplies by 100. Governed KPI ratio storage remains decimal 0..1 unless the KPI contract explicitly says otherwise."
+    },
+    {
+      "id": "NATIVE-COST-ALLOCATION",
+      "sourceFile": "src/modules/order-economics/cost-allocation.mjs",
+      "persistenceFile": "db/migrations/041_cost_allocation.sql",
+      "entity": "cost_allocation_run_snapshots",
+      "mappingStatus": "VERIFIED",
+      "grain": "order_commit_snapshot_id x cost_entry_id x sku allocation",
+      "lineageKeys": ["order_id", "order_commit_snapshot_id", "landed_cost_snapshot_id", "policy_version_id"],
+      "requiredSourceTokens": ["createCostAllocationRun", "allocations", "skuEconomics", "allocatedTotal", "basisWeight", "allocatedAmount"],
+      "fields": [
+        {"logical": "AllocatedTotal", "runtimePath": "allocatedTotal", "dbPath": "allocated_total", "datatype": "numeric(20,4)"},
+        {"logical": "AllocationCostEntryId", "runtimePath": "allocations[].costEntryId", "dbPath": "allocations[*].costEntryId", "datatype": "text"},
+        {"logical": "AllocationCostType", "runtimePath": "allocations[].costType", "dbPath": "allocations[*].costType", "datatype": "text"},
+        {"logical": "AllocationSku", "runtimePath": "allocations[].sku", "dbPath": "allocations[*].sku", "datatype": "text"},
+        {"logical": "AllocationBasis", "runtimePath": "allocations[].basis", "dbPath": "allocations[*].basis", "datatype": "enum direct/unit/net_value/custom"},
+        {"logical": "AllocationBasisWeight", "runtimePath": "allocations[].basisWeight", "dbPath": "allocations[*].basisWeight", "datatype": "numeric"},
+        {"logical": "AllocationShare", "runtimePath": "allocations[].share", "dbPath": "allocations[*].share", "datatype": "decimal ratio"},
+        {"logical": "AllocatedAmount", "runtimePath": "allocations[].allocatedAmount", "dbPath": "allocations[*].allocatedAmount", "datatype": "money"},
+        {"logical": "SkuQuantity", "runtimePath": "skuEconomics[].quantity", "dbPath": "sku_economics[*].quantity", "datatype": "integer"},
+        {"logical": "SkuNetRevenue", "runtimePath": "skuEconomics[].netRevenue", "dbPath": "sku_economics[*].netRevenue", "datatype": "money"},
+        {"logical": "SkuAllocatedLandedCost", "runtimePath": "skuEconomics[].allocatedLandedCost", "dbPath": "sku_economics[*].allocatedLandedCost", "datatype": "money"},
+        {"logical": "SkuContributionMarginAmount", "runtimePath": "skuEconomics[].contributionMarginAmount", "dbPath": "sku_economics[*].contributionMarginAmount", "datatype": "money signed"},
+        {"logical": "SkuContributionMarginPercentSource", "runtimePath": "skuEconomics[].contributionMarginPercent", "dbPath": "sku_economics[*].contributionMarginPercent", "datatype": "percentage points 0-100 scale", "adapterRule": "Canonical ratio = SkuContributionMarginAmount / SkuNetRevenue; source percent/100 only for reconciliation."}
+      ],
+      "controls": [
+        "SUM(allocatedAmount) = allocatedTotal",
+        "SUM(skuEconomics.allocatedLandedCost) = allocatedTotal",
+        "allocatedTotal = landed_cost_snapshots.total_cost",
+        "all cost_entry_ids equal the current actual-cost ledger for the same order commit"
+      ]
+    },
+    {
+      "id": "NATIVE-FULFILLMENT-PLAN",
+      "sourceFile": "src/modules/fulfillment/public.mjs",
+      "persistenceFile": "db/migrations/042_fulfillment_logistics.sql",
+      "entity": "fulfillment_plan_snapshots",
+      "mappingStatus": "VERIFIED",
+      "grain": "fulfillment_plan_snapshot_id x line_id",
+      "lineageKeys": ["order_id", "order_commit_snapshot_id", "supply_commitment_snapshot_id", "id"],
+      "requiredSourceTokens": ["createFulfillmentPlanSnapshot", "plannedShipAt", "expectedDeliveryAt", "lines", "sourceType"],
+      "fields": [
+        {"logical": "PlannedShipAt", "runtimePath": "plannedShipAt", "dbPath": "planned_ship_at", "datatype": "timestamptz"},
+        {"logical": "PlanExpectedDeliveryAt", "runtimePath": "expectedDeliveryAt", "dbPath": "expected_delivery_at", "datatype": "timestamptz"},
+        {"logical": "PlanLineId", "runtimePath": "lines[].lineId", "dbPath": "lines[*].lineId", "datatype": "text"},
+        {"logical": "PlanSku", "runtimePath": "lines[].sku", "dbPath": "lines[*].sku", "datatype": "text"},
+        {"logical": "PlanQuantity", "runtimePath": "lines[].quantity", "dbPath": "lines[*].quantity", "datatype": "integer"},
+        {"logical": "PlanSupplySourceType", "runtimePath": "lines[].sourceType", "dbPath": "lines[*].sourceType", "datatype": "enum"},
+        {"logical": "PlanExpectedAvailabilityAt", "runtimePath": "lines[].expectedAvailabilityAt", "dbPath": "lines[*].expectedAvailabilityAt", "datatype": "timestamp nullable"}
+      ]
+    },
+    {
+      "id": "NATIVE-SHIPMENT-NOTICE",
+      "sourceFile": "src/modules/fulfillment/public.mjs",
+      "persistenceFile": "db/migrations/042_fulfillment_logistics.sql",
+      "entity": "shipment_notice_snapshots",
+      "mappingStatus": "VERIFIED",
+      "grain": "shipment_notice_snapshot_id x line_id",
+      "lineageKeys": ["fulfillment_plan_snapshot_id", "order_commit_snapshot_id", "supply_commitment_snapshot_id", "id"],
+      "requiredSourceTokens": ["createShipmentNoticeSnapshot", "shipmentNumber", "carrier", "serviceLevel", "shippedAt", "expectedDeliveryAt"],
+      "fields": [
+        {"logical": "ShipmentNoticeId", "runtimePath": "id", "dbPath": "id", "datatype": "text"},
+        {"logical": "ShipmentNumber", "runtimePath": "shipmentNumber", "dbPath": "shipment_number", "datatype": "text"},
+        {"logical": "Carrier", "runtimePath": "carrier", "dbPath": "carrier", "datatype": "text"},
+        {"logical": "ServiceLevel", "runtimePath": "serviceLevel", "dbPath": "service_level", "datatype": "text"},
+        {"logical": "ShippedAt", "runtimePath": "shippedAt", "dbPath": "shipped_at", "datatype": "timestamptz"},
+        {"logical": "ShipmentExpectedDeliveryAt", "runtimePath": "expectedDeliveryAt", "dbPath": "expected_delivery_at", "datatype": "timestamptz"},
+        {"logical": "ShipmentLineId", "runtimePath": "lines[].lineId", "dbPath": "lines[*].lineId", "datatype": "text"},
+        {"logical": "ShippedQuantity", "runtimePath": "lines[].quantity", "dbPath": "lines[*].quantity", "datatype": "integer"}
+      ]
+    },
+    {
+      "id": "NATIVE-RECEIPT",
+      "sourceFile": "src/modules/fulfillment/public.mjs",
+      "persistenceFile": "db/migrations/042_fulfillment_logistics.sql",
+      "entity": "receipt_snapshots",
+      "mappingStatus": "VERIFIED",
+      "grain": "receipt_snapshot_id x shipment_line_id",
+      "lineageKeys": ["shipment_notice_snapshot_id", "fulfillment_plan_snapshot_id", "order_commit_snapshot_id", "id"],
+      "requiredSourceTokens": ["createReceiptSnapshot", "receivedQuantity", "damagedQuantity", "rejectedQuantity", "acceptedQuantity", "receivedAt", "receiptComplete"],
+      "fields": [
+        {"logical": "ReceiptSnapshotId", "runtimePath": "id", "dbPath": "id", "datatype": "text"},
+        {"logical": "ReceiptComplete", "runtimePath": "receiptComplete", "dbPath": "receipt_complete", "datatype": "boolean"},
+        {"logical": "ReceivedAt", "runtimePath": "receivedAt", "dbPath": "received_at", "datatype": "timestamptz"},
+        {"logical": "ReceiptLineId", "runtimePath": "lines[].lineId", "dbPath": "lines[*].lineId", "datatype": "text"},
+        {"logical": "ReceivedQuantity", "runtimePath": "lines[].receivedQuantity", "dbPath": "lines[*].receivedQuantity", "datatype": "integer"},
+        {"logical": "DamagedQuantity", "runtimePath": "lines[].damagedQuantity", "dbPath": "lines[*].damagedQuantity", "datatype": "integer"},
+        {"logical": "RejectedQuantity", "runtimePath": "lines[].rejectedQuantity", "dbPath": "lines[*].rejectedQuantity", "datatype": "integer"},
+        {"logical": "AcceptedQuantity", "runtimePath": "lines[].acceptedQuantity", "dbPath": "lines[*].acceptedQuantity", "datatype": "integer"}
+      ],
+      "controls": ["DamagedQuantity + RejectedQuantity <= ReceivedQuantity", "AcceptedQuantity = ReceivedQuantity - DamagedQuantity - RejectedQuantity"]
+    },
+    {
+      "id": "NATIVE-RECEIPT-DISCREPANCY",
+      "sourceFile": "src/modules/fulfillment/public.mjs",
+      "persistenceFile": "db/migrations/042_fulfillment_logistics.sql",
+      "entity": "receipt_discrepancy_snapshots",
+      "mappingStatus": "VERIFIED",
+      "grain": "receipt_discrepancy_snapshot_id x shipment_line_id",
+      "lineageKeys": ["shipment_notice_snapshot_id", "latest_receipt_snapshot_id", "id"],
+      "requiredSourceTokens": ["createReceiptDiscrepancySnapshot", "shortageQuantity", "overageQuantity", "issueCount", "finalized"],
+      "fields": [
+        {"logical": "DiscrepancyFinalized", "runtimePath": "finalized", "dbPath": "finalized", "datatype": "boolean"},
+        {"logical": "DiscrepancyStatus", "runtimePath": "status", "dbPath": "status", "datatype": "enum pending/clear/open"},
+        {"logical": "IssueCount", "runtimePath": "issueCount", "dbPath": "issue_count", "datatype": "integer"},
+        {"logical": "DiscrepancyShippedQuantity", "runtimePath": "lines[].shippedQuantity", "dbPath": "lines[*].shippedQuantity", "datatype": "integer"},
+        {"logical": "DiscrepancyReceivedQuantity", "runtimePath": "lines[].receivedQuantity", "dbPath": "lines[*].receivedQuantity", "datatype": "integer"},
+        {"logical": "DiscrepancyAcceptedQuantity", "runtimePath": "lines[].acceptedQuantity", "dbPath": "lines[*].acceptedQuantity", "datatype": "integer"},
+        {"logical": "DiscrepancyDamagedQuantity", "runtimePath": "lines[].damagedQuantity", "dbPath": "lines[*].damagedQuantity", "datatype": "integer"},
+        {"logical": "DiscrepancyRejectedQuantity", "runtimePath": "lines[].rejectedQuantity", "dbPath": "lines[*].rejectedQuantity", "datatype": "integer"},
+        {"logical": "ShortageQuantity", "runtimePath": "lines[].shortageQuantity", "dbPath": "lines[*].shortageQuantity", "datatype": "integer"},
+        {"logical": "OverageQuantity", "runtimePath": "lines[].overageQuantity", "dbPath": "lines[*].overageQuantity", "datatype": "integer"}
+      ],
+      "controls": ["shortage is recognized only when the receipt sequence is finalized", "overage is max(received-shipped,0)", "open status requires issueCount > 0"]
+    },
+    {
+      "id": "NATIVE-COST-CLOSE-READINESS",
+      "sourceFile": "src/modules/order-economics/cost-close-readiness.mjs",
+      "persistenceFile": "db/migrations/039_cost_close_readiness.sql",
+      "entity": "cost_close_readiness_snapshots",
+      "mappingStatus": "VERIFIED",
+      "grain": "order_commit_snapshot_id x requirement type",
+      "lineageKeys": ["order_id", "order_commit_snapshot_id", "landed_cost_snapshot_id", "margin_actualization_snapshot_id", "id"],
+      "requiredSourceTokens": ["createCostCloseReadinessSnapshot", "REQUIREMENT_ORDER", "factory", "freight", "duty", "credits", "blockingReasons", "READY_TO_CLOSE"],
+      "fields": [
+        {"logical": "ReadinessStatus", "runtimePath": "status", "dbPath": "status", "datatype": "enum"},
+        {"logical": "ReadinessRequirementType", "runtimePath": "requirements[].type", "dbPath": "requirements[*].type", "datatype": "enum factory/freight/duty/credits"},
+        {"logical": "ReadinessRequirementStatus", "runtimePath": "requirements[].status", "dbPath": "requirements[*].status", "datatype": "enum pending/complete/waived"},
+        {"logical": "ReadinessEvidenceEntryIds", "runtimePath": "requirements[].evidenceEntryIds", "dbPath": "requirements[*].evidenceEntryIds", "datatype": "array"},
+        {"logical": "ReadinessWaiverReason", "runtimePath": "requirements[].waiverReason", "dbPath": "requirements[*].waiverReason", "datatype": "text nullable"},
+        {"logical": "ReadinessBlockingReasons", "runtimePath": "blockingReasons", "dbPath": "blocking_reasons", "datatype": "array"},
+        {"logical": "ReadinessEvaluatedAt", "runtimePath": "evaluatedAt", "dbPath": "evaluated_at", "datatype": "timestamptz"}
+      ],
+      "controls": [
+        "all four requirement types must exist exactly once",
+        "complete requires valid non-reversed actual-cost evidence",
+        "waived requires a waiver reason and no evidence entries",
+        "READY_TO_CLOSE is allowed only when no requirement is pending"
+      ]
+    }
+  ]
+}

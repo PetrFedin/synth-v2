@@ -28,10 +28,14 @@ export function createPostgresKpiRegistryStore({ pool } = {}) {
     },
     async getLatestReleaseEvent(kpiDefinitionId) {
       const result = await pool.query(
-        `SELECT payload
-           FROM kpi_definition_release_events
-          WHERE kpi_definition_id = $1
-          ORDER BY created_at DESC, id DESC
+        `SELECT event.payload
+           FROM kpi_definition_release_events event
+          WHERE event.kpi_definition_id = $1
+            AND NOT EXISTS (
+              SELECT 1
+                FROM kpi_definition_release_events child
+               WHERE child.previous_release_event_id = event.id
+            )
           LIMIT 1`,
         [kpiDefinitionId],
       );
@@ -87,10 +91,14 @@ function view(client) {
     },
     async getLatestReleaseEvent(kpiDefinitionId, { forUpdate = false } = {}) {
       const result = await client.query(
-        `SELECT payload
-           FROM kpi_definition_release_events
-          WHERE kpi_definition_id = $1
-          ORDER BY created_at DESC, id DESC
+        `SELECT event.payload
+           FROM kpi_definition_release_events event
+          WHERE event.kpi_definition_id = $1
+            AND NOT EXISTS (
+              SELECT 1
+                FROM kpi_definition_release_events child
+               WHERE child.previous_release_event_id = event.id
+            )
           LIMIT 1${forUpdate ? ' FOR UPDATE' : ' FOR SHARE'}`,
         [kpiDefinitionId],
       );
@@ -159,10 +167,14 @@ function view(client) {
     },
     async getLatestMappingVerificationEvent(kpiSourceMappingId, { forUpdate = false } = {}) {
       const result = await client.query(
-        `SELECT payload
-           FROM kpi_source_mapping_verification_events
-          WHERE kpi_source_mapping_id = $1
-          ORDER BY created_at DESC, id DESC
+        `SELECT event.payload
+           FROM kpi_source_mapping_verification_events event
+          WHERE event.kpi_source_mapping_id = $1
+            AND NOT EXISTS (
+              SELECT 1
+                FROM kpi_source_mapping_verification_events child
+               WHERE child.previous_verification_event_id = event.id
+            )
           LIMIT 1${forUpdate ? ' FOR UPDATE' : ' FOR SHARE'}`,
         [kpiSourceMappingId],
       );
@@ -235,100 +247,33 @@ function view(client) {
 
 function definitionParameters(value) {
   return [
-    value.id,
-    value.scopeType,
-    value.organisationId,
-    value.kpiCode,
-    value.formulaVersion,
-    value.role,
-    value.canonicalNameRu,
-    value.canonicalNameEn,
-    value.domainCode,
-    value.businessDefinition,
-    value.businessFormula,
-    value.calculationPrimitive,
-    value.canonicalUom,
-    value.directionality,
-    value.goalFunction,
-    JSON.stringify(value.grainContract),
-    JSON.stringify(value.populationContract),
-    JSON.stringify(value.temporalContract),
-    JSON.stringify(value.aggregationContract),
-    JSON.stringify(value.dimensionalContract),
-    JSON.stringify(value.zeroNullErrorPolicy),
-    JSON.stringify(value.controlContract),
-    JSON.stringify(value.publicationContract),
-    value.effectiveFrom,
-    value.effectiveTo,
-    value.createdAt,
-    value.createdBy,
-    value.contentHash,
-    JSON.stringify(value),
+    value.id, value.scopeType, value.organisationId, value.kpiCode, value.formulaVersion, value.role,
+    value.canonicalNameRu, value.canonicalNameEn, value.domainCode, value.businessDefinition, value.businessFormula,
+    value.calculationPrimitive, value.canonicalUom, value.directionality, value.goalFunction,
+    JSON.stringify(value.grainContract), JSON.stringify(value.populationContract), JSON.stringify(value.temporalContract),
+    JSON.stringify(value.aggregationContract), JSON.stringify(value.dimensionalContract), JSON.stringify(value.zeroNullErrorPolicy),
+    JSON.stringify(value.controlContract), JSON.stringify(value.publicationContract), value.effectiveFrom, value.effectiveTo,
+    value.createdAt, value.createdBy, value.contentHash, JSON.stringify(value),
   ];
 }
 
 function releaseEventParameters(value) {
-  return [
-    value.id,
-    value.kpiDefinitionId,
-    value.previousReleaseEventId,
-    value.releaseStatus,
-    JSON.stringify(value.evidence),
-    value.createdAt,
-    value.createdBy,
-    value.contentHash,
-    JSON.stringify(value),
-  ];
+  return [value.id, value.kpiDefinitionId, value.previousReleaseEventId, value.releaseStatus, JSON.stringify(value.evidence), value.createdAt, value.createdBy, value.contentHash, JSON.stringify(value)];
 }
 
 function mappingParameters(value) {
   return [
-    value.id,
-    value.kpiDefinitionId,
-    value.mappingSetVersion,
-    value.variableName,
-    value.sourceContractId,
-    value.sourceSystem,
-    value.sourceEntity,
-    value.sourcePath,
-    value.datatype,
-    value.primaryOrEventKey,
-    value.eventTimestampPath,
-    value.uomPath,
-    value.currencyPath,
-    JSON.stringify(value.joinContract),
-    JSON.stringify(value.filterContract),
-    value.createdAt,
-    value.createdBy,
-    value.contentHash,
-    JSON.stringify(value),
+    value.id, value.kpiDefinitionId, value.mappingSetVersion, value.variableName, value.sourceContractId, value.sourceSystem,
+    value.sourceEntity, value.sourcePath, value.datatype, value.primaryOrEventKey, value.eventTimestampPath, value.uomPath,
+    value.currencyPath, JSON.stringify(value.joinContract), JSON.stringify(value.filterContract), value.createdAt, value.createdBy,
+    value.contentHash, JSON.stringify(value),
   ];
 }
 
 function mappingVerificationEventParameters(value) {
-  return [
-    value.id,
-    value.kpiSourceMappingId,
-    value.previousVerificationEventId,
-    value.verificationStatus,
-    JSON.stringify(value.evidence),
-    value.createdAt,
-    value.createdBy,
-    value.contentHash,
-    JSON.stringify(value),
-  ];
+  return [value.id, value.kpiSourceMappingId, value.previousVerificationEventId, value.verificationStatus, JSON.stringify(value.evidence), value.createdAt, value.createdBy, value.contentHash, JSON.stringify(value)];
 }
 
 function dependencyParameters(value) {
-  return [
-    value.id,
-    value.sourceDefinitionId,
-    value.targetDefinitionId,
-    value.relationType,
-    JSON.stringify(value.relationContract),
-    value.createdAt,
-    value.createdBy,
-    value.contentHash,
-    JSON.stringify(value),
-  ];
+  return [value.id, value.sourceDefinitionId, value.targetDefinitionId, value.relationType, JSON.stringify(value.relationContract), value.createdAt, value.createdBy, value.contentHash, JSON.stringify(value)];
 }

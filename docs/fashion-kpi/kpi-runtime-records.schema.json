@@ -1,0 +1,188 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://syntha.local/schemas/fashion-kpi-runtime-v18.json",
+  "title": "SYNTH-V2 KPI Runtime Records v18",
+  "oneOf": [
+    {"$ref": "#/$defs/calculationRun"},
+    {"$ref": "#/$defs/runStatusEvent"},
+    {"$ref": "#/$defs/runDefinitionBinding"},
+    {"$ref": "#/$defs/runMappingBinding"},
+    {"$ref": "#/$defs/observation"},
+    {"$ref": "#/$defs/qualityResult"},
+    {"$ref": "#/$defs/reconciliationResult"},
+    {"$ref": "#/$defs/runRestatement"}
+  ],
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$"},
+    "hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "timestamp": {"type": "string", "format": "date-time"},
+    "decimal": {"type": "string", "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]{1,12})?$"},
+    "decimalOrNull": {"oneOf": [{"$ref": "#/$defs/decimal"}, {"type": "null"}]},
+    "runMode": {"enum": ["NORMAL", "RESTATEMENT", "RECONSTRUCTION"]},
+    "runStatus": {"enum": ["REQUESTED", "RUNNING", "SUCCEEDED", "FAILED", "REJECTED", "CANCELLED"]},
+    "dataState": {"enum": ["VALUE", "ZERO", "NOT_APPLICABLE", "MISSING", "INVALID"]},
+    "controlStatus": {"enum": ["PASS", "FAIL", "NOT_APPLICABLE", "MISSING_EVIDENCE"]},
+    "calculationRun": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "organisationId", "runMode", "commandId", "requestedBy", "periodStart", "periodEnd", "asOfTimestamp", "reportingTimezone", "engineVersion", "sourceManifest", "inputManifestHash", "requestedAt", "contentHash"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "organisationId": {"$ref": "#/$defs/id"},
+        "runMode": {"$ref": "#/$defs/runMode"},
+        "commandId": {"oneOf": [{"$ref": "#/$defs/id"}, {"type": "null"}]},
+        "requestedBy": {"type": "string", "minLength": 1},
+        "periodStart": {"oneOf": [{"$ref": "#/$defs/timestamp"}, {"type": "null"}]},
+        "periodEnd": {"oneOf": [{"$ref": "#/$defs/timestamp"}, {"type": "null"}]},
+        "asOfTimestamp": {"oneOf": [{"$ref": "#/$defs/timestamp"}, {"type": "null"}]},
+        "reportingTimezone": {"type": "string", "minLength": 1},
+        "engineVersion": {"type": "string", "minLength": 1},
+        "sourceManifest": {"type": "object", "minProperties": 1},
+        "inputManifestHash": {"$ref": "#/$defs/hash"},
+        "requestedAt": {"$ref": "#/$defs/timestamp"},
+        "contentHash": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "runStatusEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "runId", "previousStatusEventId", "runStatus", "evidence", "createdAt", "createdBy", "contentHash"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "runId": {"$ref": "#/$defs/id"},
+        "previousStatusEventId": {"oneOf": [{"$ref": "#/$defs/id"}, {"type": "null"}]},
+        "runStatus": {"$ref": "#/$defs/runStatus"},
+        "evidence": {"type": "object"},
+        "createdAt": {"$ref": "#/$defs/timestamp"},
+        "createdBy": {"type": "string", "minLength": 1},
+        "contentHash": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "runDefinitionBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "runId", "kpiDefinitionId", "releaseEventId", "activationEventId", "mappingSetVersion", "selectionReason", "createdAt", "createdBy", "contentHash"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "runId": {"$ref": "#/$defs/id"},
+        "kpiDefinitionId": {"$ref": "#/$defs/id"},
+        "releaseEventId": {"$ref": "#/$defs/id"},
+        "activationEventId": {"$ref": "#/$defs/id"},
+        "mappingSetVersion": {"type": "integer", "minimum": 1},
+        "selectionReason": {"type": "string", "minLength": 3},
+        "createdAt": {"$ref": "#/$defs/timestamp"},
+        "createdBy": {"type": "string", "minLength": 1},
+        "contentHash": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "runMappingBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "runDefinitionBindingId", "variableName", "kpiSourceMappingId", "verificationEventId", "createdAt", "createdBy", "contentHash"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "runDefinitionBindingId": {"$ref": "#/$defs/id"},
+        "variableName": {"type": "string", "minLength": 1},
+        "kpiSourceMappingId": {"$ref": "#/$defs/id"},
+        "verificationEventId": {"$ref": "#/$defs/id"},
+        "createdAt": {"$ref": "#/$defs/timestamp"},
+        "createdBy": {"type": "string", "minLength": 1},
+        "contentHash": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "runId", "runDefinitionBindingId", "organisationId", "periodStart", "periodEnd", "asOfTimestamp", "grain", "grainHash", "dataState", "valueNumeric", "canonicalUom", "numeratorNumeric", "denominatorNumeric", "normalizerK", "componentPayload", "sourceLineage", "calculatedAt", "contentHash"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "runId": {"$ref": "#/$defs/id"},
+        "runDefinitionBindingId": {"$ref": "#/$defs/id"},
+        "organisationId": {"$ref": "#/$defs/id"},
+        "periodStart": {"oneOf": [{"$ref": "#/$defs/timestamp"}, {"type": "null"}]},
+        "periodEnd": {"oneOf": [{"$ref": "#/$defs/timestamp"}, {"type": "null"}]},
+        "asOfTimestamp": {"oneOf": [{"$ref": "#/$defs/timestamp"}, {"type": "null"}]},
+        "grain": {"type": "object"},
+        "grainHash": {"$ref": "#/$defs/hash"},
+        "dataState": {"$ref": "#/$defs/dataState"},
+        "valueNumeric": {"$ref": "#/$defs/decimalOrNull"},
+        "canonicalUom": {"type": "string", "minLength": 1},
+        "numeratorNumeric": {"$ref": "#/$defs/decimalOrNull"},
+        "denominatorNumeric": {"$ref": "#/$defs/decimalOrNull"},
+        "normalizerK": {"$ref": "#/$defs/decimalOrNull"},
+        "componentPayload": {"type": "object"},
+        "sourceLineage": {"type": "object", "minProperties": 1},
+        "calculatedAt": {"$ref": "#/$defs/timestamp"},
+        "contentHash": {"$ref": "#/$defs/hash"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"dataState": {"const": "ZERO"}}},
+          "then": {"properties": {"valueNumeric": {"const": "0"}}}
+        },
+        {
+          "if": {"properties": {"dataState": {"enum": ["NOT_APPLICABLE", "MISSING", "INVALID"]}}},
+          "then": {"properties": {"valueNumeric": {"type": "null"}}}
+        }
+      ]
+    },
+    "qualityResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "runId", "runDefinitionBindingId", "observationId", "ruleId", "ruleVersion", "ruleFamily", "severity", "resultStatus", "observedPayload", "expectedContract", "evidence", "evaluatedAt", "contentHash"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "runId": {"$ref": "#/$defs/id"},
+        "runDefinitionBindingId": {"$ref": "#/$defs/id"},
+        "observationId": {"oneOf": [{"$ref": "#/$defs/id"}, {"type": "null"}]},
+        "ruleId": {"type": "string", "minLength": 1},
+        "ruleVersion": {"type": "string", "minLength": 1},
+        "ruleFamily": {"type": "string", "minLength": 1},
+        "severity": {"enum": ["INFO", "WARNING", "ERROR", "BLOCKING"]},
+        "resultStatus": {"$ref": "#/$defs/controlStatus"},
+        "observedPayload": {"type": "object"},
+        "expectedContract": {"type": "object"},
+        "evidence": {"type": "object"},
+        "evaluatedAt": {"$ref": "#/$defs/timestamp"},
+        "contentHash": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "reconciliationResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "runId", "runDefinitionBindingId", "observationId", "reconciliationRuleId", "reconciliationRuleVersion", "observedNumeric", "expectedNumeric", "absoluteDifference", "relativeDifference", "toleranceContract", "resultStatus", "evidence", "evaluatedAt", "contentHash"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "runId": {"$ref": "#/$defs/id"},
+        "runDefinitionBindingId": {"$ref": "#/$defs/id"},
+        "observationId": {"oneOf": [{"$ref": "#/$defs/id"}, {"type": "null"}]},
+        "reconciliationRuleId": {"type": "string", "minLength": 1},
+        "reconciliationRuleVersion": {"type": "string", "minLength": 1},
+        "observedNumeric": {"$ref": "#/$defs/decimalOrNull"},
+        "expectedNumeric": {"$ref": "#/$defs/decimalOrNull"},
+        "absoluteDifference": {"$ref": "#/$defs/decimalOrNull"},
+        "relativeDifference": {"$ref": "#/$defs/decimalOrNull"},
+        "toleranceContract": {"type": "object"},
+        "resultStatus": {"$ref": "#/$defs/controlStatus"},
+        "evidence": {"type": "object"},
+        "evaluatedAt": {"$ref": "#/$defs/timestamp"},
+        "contentHash": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "runRestatement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "newRunId", "supersededRunId", "reasonCode", "reason", "approvedBy", "createdAt", "contentHash"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "newRunId": {"$ref": "#/$defs/id"},
+        "supersededRunId": {"$ref": "#/$defs/id"},
+        "reasonCode": {"enum": ["LATE_SOURCE_FACT", "SOURCE_CORRECTION", "REVERSAL", "MAPPING_CORRECTION", "FORMULA_CORRECTION", "FX_REFERENCE_CORRECTION", "DUPLICATE_REMEDIATION", "GOVERNANCE_CORRECTION"]},
+        "reason": {"type": "string", "minLength": 5},
+        "approvedBy": {"type": "string", "minLength": 1},
+        "createdAt": {"$ref": "#/$defs/timestamp"},
+        "contentHash": {"$ref": "#/$defs/hash"}
+      }
+    }
+  }
+}

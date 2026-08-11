@@ -14,9 +14,14 @@
 - Destructive actions require explicit confirmation or a reason form.
 - Preserve the browser dependency order: localization, shared DOM/API, capabilities and validation load before `app-core.js`; `app-start.js` loads last.
 - Fashion KPI definitions, calculations, source mappings and publication rules must follow `docs/fashion-kpi/`. Do not duplicate KPI formulas in UI modules or silently redefine a governed KPI locally.
+- Repository-native KPI mappings live in `docs/fashion-kpi/native-source-contracts.json`. If a mapped module export, runtime field, persistence table/container or lineage key changes, update the native source contract in the same change; `npm run verify` is expected to reject stale mappings.
+- Native KPI implementations must resolve every logical input through a governed source contract or an explicit constant/policy input. Do not join by fuzzy SKU/date/text when exact immutable lineage IDs exist.
 - A KPI is not production-ready until its physical mappings are verified, calculation/population tests pass, reconciliation passes where applicable, and owner/data-steward UAT is complete.
 - Alias and blocked-umbrella KPI definitions must never emit independent observations.
 - Changes to KPI population, temporal basis, numerator/denominator, UOM, aggregation, normalizer, estimator/quantile method or other semantic meaning require a new formula version; never overwrite historical meaning in place.
+- Percentage-like source fields must declare storage scale. In particular, do not treat a 0-100 percentage-points source as a canonical 0-1 ratio without an explicit adapter/reconciliation rule.
+- Snapshot/versioned sources must define latest/effective/as-of selection before aggregation. Never sum historical snapshots as independent business facts.
+- Due-cohort service KPI must keep open overdue cases in the denominator; closed-only denominators are prohibited unless the KPI explicitly measures completed-case duration rather than SLA compliance.
 - KPI observations must preserve formula version, period/as-of, canonical UOM, DQ status, source/run lineage and restatement lineage; do not persist only a formatted dashboard value.
-- Run `npm run verify` before publishing. It includes the governed fashion KPI methodology validator.
+- Run `npm run verify` before publishing. It includes the governed fashion KPI methodology and repository-native source-contract validator.
 - Priority: stabilize existing commercial workflows before expanding fashion catalog/planning, PLM/BOM/samples, production, QC, logistics, landed cost, analytics and integrations.

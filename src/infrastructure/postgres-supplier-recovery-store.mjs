@@ -13,7 +13,23 @@ export function createPostgresSupplierRecoveryStore({ pool } = {}) {
 function view(client) {
   return Object.freeze({
     async getMembership(organisationId, userId) { const r = await client.query('SELECT payload FROM memberships WHERE organisation_id=$1 AND user_id=$2 FOR SHARE', [organisationId,userId]); return r.rows[0]?.payload; },
-    async lockResolution(id) { const r = await client.query('SELECT payload FROM receipt_claim_resolution_snapshots WHERE id=$1 FOR UPDATE', [id]); return r.rows[0]?.payload; },
+    async lockResolution(id, actorId) {
+      const r = await client.query(
+        `SELECT resolution.payload
+           FROM receipt_claim_resolution_snapshots AS resolution
+          WHERE resolution.id = $1
+            AND EXISTS (
+              SELECT 1
+                FROM memberships AS membership
+               WHERE membership.organisation_id = resolution.brand_id
+                 AND membership.user_id = $2
+                 AND membership.status = 'active'
+            )
+          FOR UPDATE OF resolution`,
+        [id, actorId],
+      );
+      return r.rows[0]?.payload;
+    },
     async getClaim(id) { const r = await client.query('SELECT payload FROM receipt_discrepancy_claim_snapshots WHERE id=$1 FOR SHARE', [id]); return r.rows[0]?.payload; },
     async getSupplierByCode(brandId, supplierCode) { const r = await client.query('SELECT payload FROM suppliers WHERE brand_id=$1 AND supplier_code=$2 FOR SHARE', [brandId,supplierCode]); return r.rows[0]?.payload; },
     async getOrder(id) { const r = await client.query('SELECT payload FROM orders WHERE id=$1 FOR SHARE', [id]); return r.rows[0]?.payload; },
@@ -47,7 +63,23 @@ function view(client) {
       (id,claim_resolution_snapshot_id,claim_resolution_content_hash,claim_snapshot_id,order_id,order_version,order_commit_snapshot_id,supply_commitment_snapshot_id,fulfillment_plan_snapshot_id,shipment_notice_snapshot_id,receipt_snapshot_id,receipt_discrepancy_snapshot_id,brand_id,shop_id,supplier_id,supplier_code,supplier_status,actual_cost_entry_id,source_recovery_amount,source_currency,recovery_amount,currency,landed_cost_snapshot_id,margin_actualization_snapshot_id,cost_close_snapshot_id,post_close_adjustment_id,reason,status,recorded_at,content_hash,payload)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31::jsonb)`,
       [value.id,value.claimResolutionSnapshotId,value.claimResolutionContentHash,value.claimSnapshotId,value.orderId,value.orderVersion,value.orderCommitSnapshotId,value.supplyCommitmentSnapshotId,value.fulfillmentPlanSnapshotId,value.shipmentNoticeSnapshotId,value.receiptSnapshotId,value.receiptDiscrepancySnapshotId,value.brandId,value.shopId,value.supplierId,value.supplierCode,value.supplierStatus,value.actualCostEntryId,value.sourceRecoveryAmount,value.sourceCurrency,value.recoveryAmount,value.currency,value.landedCostSnapshotId,value.marginActualizationSnapshotId,value.costCloseSnapshotId,value.postCloseAdjustmentId,value.reason,value.status,value.recordedAt,value.contentHash,JSON.stringify(value)]); } catch (error) { if (error?.code==='23505') invariant(false,'SUPPLIER_RECOVERY_ALREADY_RECORDED','Supplier recovery fact already exists',{claimResolutionSnapshotId:value.claimResolutionSnapshotId,supplierCode:value.supplierCode}); throw error; } },
-    async getRecovery(id) { const r = await client.query('SELECT payload FROM supplier_claim_recovery_snapshots WHERE id=$1 FOR SHARE',[id]); return r.rows[0]?.payload; },
+    async getRecovery(id, actorId) {
+      const r = await client.query(
+        `SELECT recovery.payload
+           FROM supplier_claim_recovery_snapshots AS recovery
+          WHERE recovery.id = $1
+            AND EXISTS (
+              SELECT 1
+                FROM memberships AS membership
+               WHERE membership.organisation_id = recovery.brand_id
+                 AND membership.user_id = $2
+                 AND membership.status = 'active'
+            )
+          FOR SHARE OF recovery`,
+        [id, actorId],
+      );
+      return r.rows[0]?.payload;
+    },
     getCommand: (id) => getRegisteredCommand(client,'wholesale',id),
     insertCommand: (value) => insertRegisteredCommand(client,'wholesale',value),
     async appendOutbox(event) { await client.query(`INSERT INTO outbox_events (id,event_type,aggregate_id,status,event,published_at) VALUES ($1,$2,$3,'pending',$4::jsonb,NULL)`,[event.id,event.type,event.aggregateId,JSON.stringify(event)]); },

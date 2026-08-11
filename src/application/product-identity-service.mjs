@@ -1,5 +1,5 @@
-import { invariant } from '../core/errors.mjs';
 import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
+import { invariant } from '../core/errors.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
 import {
   createProductAttributeValue as createAttributeDomain,
@@ -33,7 +33,7 @@ export function createProductIdentityService({ store, clock = () => new Date().t
     return store.transaction(async (tx) => {
       const previous = await tx.getCommand(commandId);
       if (previous) invariant(fingerprintsMatch(previous.fingerprint, fingerprint), 'COMMAND_ID_CONFLICT', 'commandId was already used by another mutation', { commandId });
-      const context = await prepare(tx);
+      const context = await prepare(tx, { replay: Boolean(previous), previous });
       if (previous) return previous.result;
       const result = await action(tx, context);
       await tx.insertCommand(Object.freeze({ id: commandId, fingerprint, actorId, result, completedAt: now(clock) }));
@@ -63,9 +63,9 @@ export function createProductIdentityService({ store, clock = () => new Date().t
     invariant(record.tenantId === null || record.tenantId === brandId, 'PRODUCT_MDM_TENANT_MISMATCH', 'MDM reference belongs to another tenant', { entryId: ref.entryId, brandId });
     invariant(record.status === 'active', 'PRODUCT_MDM_REFERENCE_INACTIVE', 'MDM reference must be active for new Product Identity facts', { entryId: ref.entryId, status: record.status });
     invariant(record.approvalStatus === 'approved' || record.approvalStatus === 'not_required', 'PRODUCT_MDM_REFERENCE_UNAPPROVED', 'MDM reference is not approved for use', { entryId: ref.entryId, approvalStatus: record.approvalStatus });
-    const at = now(clock);
-    invariant(record.validFrom === null || record.validFrom <= at, 'PRODUCT_MDM_REFERENCE_NOT_EFFECTIVE', 'MDM reference is not effective yet', { entryId: ref.entryId, validFrom: record.validFrom });
-    invariant(record.validTo === null || record.validTo > at, 'PRODUCT_MDM_REFERENCE_EXPIRED', 'MDM reference is no longer effective', { entryId: ref.entryId, validTo: record.validTo });
+    const atMs = Date.parse(now(clock));
+    invariant(record.validFrom === null || Date.parse(record.validFrom) <= atMs, 'PRODUCT_MDM_REFERENCE_NOT_EFFECTIVE', 'MDM reference is not effective yet', { entryId: ref.entryId, validFrom: record.validFrom });
+    invariant(record.validTo === null || Date.parse(record.validTo) > atMs, 'PRODUCT_MDM_REFERENCE_EXPIRED', 'MDM reference is no longer effective', { entryId: ref.entryId, validTo: record.validTo });
     return record;
   }
 
@@ -106,10 +106,10 @@ export function createProductIdentityService({ store, clock = () => new Date().t
         async (tx) => {
           const style = requireEntity(await tx.getStyleForUpdate(styleId), 'PRODUCT_STYLE_NOT_FOUND', { styleId });
           await authorize(tx, style.brandId, actorId);
-          assertExpectedVersion(style.version, input?.expectedVersion, 'PRODUCT_STYLE_CONCURRENCY_CONFLICT');
           return style;
         },
         async (tx, style) => {
+          assertExpectedVersion(style.version, input?.expectedVersion, 'PRODUCT_STYLE_CONCURRENCY_CONFLICT');
           const value = transitionStyleDomain(style, input.nextStatus, { updatedAt: now(clock), updatedBy: actorId });
           await tx.saveStyle(value, input.expectedVersion);
           return value;
@@ -118,22 +118,23 @@ export function createProductIdentityService({ store, clock = () => new Date().t
 
     createStyleVersion(commandId, actorId, styleId, input) {
       return execute(commandId, actorId, `createProductStyleVersion:${styleId}`, input,
-        async (tx) => {
+        async (tx, { replay }) => {
           const style = requireEntity(await tx.getStyleForUpdate(styleId), 'PRODUCT_STYLE_NOT_FOUND', { styleId });
           await authorize(tx, style.brandId, actorId);
-          invariant(!['discontinued', 'rejected', 'superseded'].includes(style.lifecycleStatus), 'PRODUCT_STYLE_VERSION_TERMINAL_STYLE', 'Cannot create a technical version for a terminal Product Style', { styleId, lifecycleStatus: style.lifecycleStatus });
+          if (replay) return Object.freeze({ style, replay: true });
           const latest = await tx.getLatestStyleVersion(styleId);
-          const expectedLatestVersionNo = input?.expectedLatestVersionNo;
-          invariant(Number.isInteger(expectedLatestVersionNo) && expectedLatestVersionNo >= 0, 'PRODUCT_STYLE_VERSION_EXPECTATION_INVALID', 'expectedLatestVersionNo must be a non-negative integer');
-          invariant((latest?.versionNo ?? 0) === expectedLatestVersionNo, 'PRODUCT_STYLE_VERSION_CONCURRENCY_CONFLICT', 'Product Style technical version changed', { styleId, expectedLatestVersionNo, actualLatestVersionNo: latest?.versionNo ?? 0 });
           const [category, productType, gender] = await Promise.all([
             resolveMdm(tx, input.categoryRef, CATEGORY_DICTIONARIES, style.brandId),
             resolveMdm(tx, input.productTypeRef, PRODUCT_TYPE_DICTIONARIES, style.brandId),
             resolveMdm(tx, input.genderRef, GENDER_DICTIONARIES, style.brandId),
           ]);
-          return Object.freeze({ style, latest, category, productType, gender });
+          return Object.freeze({ style, latest, category, productType, gender, replay: false });
         },
         async (tx, context) => {
+          invariant(!['discontinued', 'rejected', 'superseded'].includes(context.style.lifecycleStatus), 'PRODUCT_STYLE_VERSION_TERMINAL_STYLE', 'Cannot create a technical version for a terminal Product Style', { styleId, lifecycleStatus: context.style.lifecycleStatus });
+          const expectedLatestVersionNo = input?.expectedLatestVersionNo;
+          invariant(Number.isInteger(expectedLatestVersionNo) && expectedLatestVersionNo >= 0, 'PRODUCT_STYLE_VERSION_EXPECTATION_INVALID', 'expectedLatestVersionNo must be a non-negative integer');
+          invariant((context.latest?.versionNo ?? 0) === expectedLatestVersionNo, 'PRODUCT_STYLE_VERSION_CONCURRENCY_CONFLICT', 'Product Style technical version changed', { styleId, expectedLatestVersionNo, actualLatestVersionNo: context.latest?.versionNo ?? 0 });
           const value = createStyleVersionDomain({
             id: nextId('product-style-version'),
             style: context.style,
@@ -158,15 +159,16 @@ export function createProductIdentityService({ store, clock = () => new Date().t
 
     createColorway(commandId, actorId, styleVersionId, input) {
       return execute(commandId, actorId, `createProductColorway:${styleVersionId}`, input,
-        async (tx) => {
+        async (tx, { replay }) => {
           const styleVersion = requireEntity(await tx.getStyleVersion(styleVersionId), 'PRODUCT_STYLE_VERSION_NOT_FOUND', { styleVersionId });
           await authorize(tx, styleVersion.brandId, actorId);
+          if (replay) return Object.freeze({ styleVersion, replay: true });
           const color = await resolveMdm(tx, input?.colorRef, COLOUR_DICTIONARIES, styleVersion.brandId);
-          return Object.freeze({ styleVersion, color, existing: await tx.getColorwayByCode(styleVersionId, input?.colorwayCode) });
+          return Object.freeze({ styleVersion, color, existing: await tx.getColorwayByCode(styleVersionId, input?.colorwayCode), replay: false });
         },
         async (tx, context) => {
           invariant(!context.existing, 'PRODUCT_COLORWAY_ALREADY_EXISTS', 'Colorway code already exists for this Style Version', { styleVersionId, colorwayCode: input.colorwayCode });
-          const value = createColorwayDomain({ id: nextId('product-colorway'), styleVersion: context.styleVersion, ...without(input, []), createdAt: now(clock), createdBy: actorId });
+          const value = createColorwayDomain({ id: nextId('product-colorway'), styleVersion: context.styleVersion, ...input, createdAt: now(clock), createdBy: actorId });
           await tx.insertColorway(value);
           await captureMdmUsage(tx, { brandId: value.brandId, sourceType: 'product_colorway', sourceId: value.id, fieldPath: 'colorRef', record: context.color, actorId });
           return value;
@@ -192,10 +194,10 @@ export function createProductIdentityService({ store, clock = () => new Date().t
         async (tx) => {
           const scale = requireEntity(await tx.getSizeScaleForUpdate(sizeScaleId), 'PRODUCT_SIZE_SCALE_NOT_FOUND', { sizeScaleId });
           await authorize(tx, scale.brandId, actorId);
-          assertExpectedVersion(scale.version, input?.expectedVersion, 'PRODUCT_SIZE_SCALE_CONCURRENCY_CONFLICT');
           return scale;
         },
         async (tx, scale) => {
+          assertExpectedVersion(scale.version, input?.expectedVersion, 'PRODUCT_SIZE_SCALE_CONCURRENCY_CONFLICT');
           const value = updateSizeScaleDomain(scale, { nameRu: input.nameRu, nameEn: input.nameEn, status: input.status, updatedAt: now(clock), updatedBy: actorId });
           await tx.saveSizeScale(value, input.expectedVersion);
           return value;
@@ -204,17 +206,18 @@ export function createProductIdentityService({ store, clock = () => new Date().t
 
     createSizeScaleVersion(commandId, actorId, sizeScaleId, input) {
       return execute(commandId, actorId, `createProductSizeScaleVersion:${sizeScaleId}`, input,
-        async (tx) => {
+        async (tx, { replay }) => {
           const sizeScale = requireEntity(await tx.getSizeScaleForUpdate(sizeScaleId), 'PRODUCT_SIZE_SCALE_NOT_FOUND', { sizeScaleId });
           await authorize(tx, sizeScale.brandId, actorId);
+          if (replay) return Object.freeze({ sizeScale, replay: true });
           const latest = await tx.getLatestSizeScaleVersion(sizeScaleId);
-          const expectedLatestVersionNo = input?.expectedLatestVersionNo;
-          invariant(Number.isInteger(expectedLatestVersionNo) && expectedLatestVersionNo >= 0, 'PRODUCT_SIZE_SCALE_VERSION_EXPECTATION_INVALID', 'expectedLatestVersionNo must be a non-negative integer');
-          invariant((latest?.versionNo ?? 0) === expectedLatestVersionNo, 'PRODUCT_SIZE_SCALE_VERSION_CONCURRENCY_CONFLICT', 'Product Size Scale version changed', { sizeScaleId, expectedLatestVersionNo, actualLatestVersionNo: latest?.versionNo ?? 0 });
           const sizeSystem = await resolveMdm(tx, input.sizeSystemRef, SIZE_SYSTEM_DICTIONARIES, sizeScale.brandId);
-          return Object.freeze({ sizeScale, latest, sizeSystem });
+          return Object.freeze({ sizeScale, latest, sizeSystem, replay: false });
         },
         async (tx, context) => {
+          const expectedLatestVersionNo = input?.expectedLatestVersionNo;
+          invariant(Number.isInteger(expectedLatestVersionNo) && expectedLatestVersionNo >= 0, 'PRODUCT_SIZE_SCALE_VERSION_EXPECTATION_INVALID', 'expectedLatestVersionNo must be a non-negative integer');
+          invariant((context.latest?.versionNo ?? 0) === expectedLatestVersionNo, 'PRODUCT_SIZE_SCALE_VERSION_CONCURRENCY_CONFLICT', 'Product Size Scale version changed', { sizeScaleId, expectedLatestVersionNo, actualLatestVersionNo: context.latest?.versionNo ?? 0 });
           const value = createSizeScaleVersionDomain({ id: nextId('product-size-scale-version'), sizeScale: context.sizeScale, versionNo: (context.latest?.versionNo ?? 0) + 1, sourceSizeScaleVersion: context.latest, sizeSystemRef: input.sizeSystemRef ?? null, payload: input.payload ?? {}, createdAt: now(clock), createdBy: actorId });
           await tx.insertSizeScaleVersion(value);
           await captureMdmUsage(tx, { brandId: value.brandId, sourceType: 'product_size_scale_version', sourceId: value.id, fieldPath: 'sizeSystemRef', record: context.sizeSystem, actorId });
@@ -224,11 +227,12 @@ export function createProductIdentityService({ store, clock = () => new Date().t
 
     createSizeValue(commandId, actorId, sizeScaleVersionId, input) {
       return execute(commandId, actorId, `createProductSizeValue:${sizeScaleVersionId}`, input,
-        async (tx) => {
+        async (tx, { replay }) => {
           const sizeScaleVersion = requireEntity(await tx.getSizeScaleVersion(sizeScaleVersionId), 'PRODUCT_SIZE_SCALE_VERSION_NOT_FOUND', { sizeScaleVersionId });
           await authorize(tx, sizeScaleVersion.brandId, actorId);
+          if (replay) return Object.freeze({ sizeScaleVersion, replay: true });
           const size = await resolveMdm(tx, input?.sizeRef, SIZE_VALUE_DICTIONARIES, sizeScaleVersion.brandId);
-          return Object.freeze({ sizeScaleVersion, size });
+          return Object.freeze({ sizeScaleVersion, size, replay: false });
         },
         async (tx, context) => {
           const value = createSizeValueDomain({ id: nextId('product-size-value'), sizeScaleVersion: context.sizeScaleVersion, ...input, createdAt: now(clock), createdBy: actorId });
@@ -272,11 +276,12 @@ export function createProductIdentityService({ store, clock = () => new Date().t
 
     createAttributeValue(commandId, actorId, input) {
       return execute(commandId, actorId, 'createProductAttributeValue', input,
-        async (tx) => {
+        async (tx, { replay }) => {
           const owner = requireEntity(await tx.getAttributeOwner(input?.ownerType, input?.ownerId), 'PRODUCT_ATTRIBUTE_OWNER_NOT_FOUND', { ownerType: input?.ownerType, ownerId: input?.ownerId });
           await authorize(tx, owner.brandId, actorId);
+          if (replay) return Object.freeze({ owner, replay: true });
           const mdm = await resolveMdm(tx, input?.mdmRef, null, owner.brandId);
-          return Object.freeze({ owner, mdm });
+          return Object.freeze({ owner, mdm, replay: false });
         },
         async (tx, context) => {
           const value = createAttributeDomain({ id: nextId('product-attribute-value'), ownerType: input.ownerType, owner: context.owner, attributeCode: input.attributeCode, attributeCatalogVersion: input.attributeCatalogVersion, value: input.value, mdmRef: input.mdmRef ?? null, createdAt: now(clock), createdBy: actorId });
@@ -288,11 +293,12 @@ export function createProductIdentityService({ store, clock = () => new Date().t
 
     linkCatalogSku(commandId, actorId, productSkuId, input) {
       return execute(commandId, actorId, `linkProductCatalogSku:${productSkuId}`, input,
-        async (tx) => {
+        async (tx, { replay }) => {
           const productSku = requireEntity(await tx.getSku(productSkuId), 'PRODUCT_SKU_NOT_FOUND', { productSkuId });
           await authorize(tx, productSku.brandId, actorId);
+          if (replay) return Object.freeze({ productSku, replay: true });
           const catalogSku = requireEntity(await tx.getCatalogSku(input?.catalogSku), 'CATALOG_SKU_NOT_FOUND', { catalogSku: input?.catalogSku });
-          return Object.freeze({ productSku, catalogSku });
+          return Object.freeze({ productSku, catalogSku, replay: false });
         },
         async (tx, context) => {
           const value = createCatalogLinkDomain({ id: nextId('product-catalog-link'), productSku: context.productSku, catalogSku: context.catalogSku, brandId: context.productSku.brandId, linkedAt: now(clock), linkedBy: actorId });
@@ -309,5 +315,4 @@ function assertExpectedVersion(actualVersion, expectedVersion, code) {
 }
 function requireEntity(value, code, details) { invariant(value, code, 'Product Identity entity not found', details); return value; }
 function now(clock) { const value = clock(); invariant(typeof value === 'string' && Number.isFinite(Date.parse(value)), 'PRODUCT_IDENTITY_CLOCK_INVALID', 'Product Identity clock must return an ISO-compatible string'); return new Date(value).toISOString(); }
-function without(value, fields) { const blocked = new Set(fields); return Object.freeze(Object.fromEntries(Object.entries(value ?? {}).filter(([key]) => !blocked.has(key)))); }
 function defaultIdGenerator() { let sequence = 0; return (prefix) => `${prefix}_${++sequence}`; }

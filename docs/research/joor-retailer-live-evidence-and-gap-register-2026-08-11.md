@@ -1141,3 +1141,153 @@ Not executed in this pass:
 - Any profile/settings Save, upload, location add/delete or organisation switch.
 
 The direct Duplicate Orders action created one new Draft in the reference account. It was not edited, continued, saved again or cancelled. Removing it is intentionally not attempted without explicit user approval because cancellation/deletion is itself an external state-changing action.
+
+## 17. Fourth-pass audit: showroom and product-presentation details only
+
+This pass was deliberately limited to previously unopened presentation states. It did not repeat the earlier linesheet, order-detail, profile, settings, Looks, Styleboards or Visual Assortment walkthroughs.
+
+### 17.1 Standalone catalog query contract
+
+Newly OBSERVED in the standalone product chooser without creating or editing an order:
+
+- The page retained an explicit commercial context header: Order for, Price Type, Styles Selected and Orders Created.
+- In the observed no-context state, the Price Type control had no selectable values and the result area stayed empty. The Start an Order dialog could be dismissed without changing data.
+- Group By exposed exactly: None, Linesheet Group, Silhouette and Badge.
+- Sort By exposed exactly: None, Price (Low to High) and Price (High to Low).
+- Filter By exposed the following top-level dimensions: Badges, Categories, Division, Fabrication, Inventory Availability, Linesheet, Linesheet Delivery Window, Price Types, Season, Silhouette, Style Tags and Wholesale Price Range.
+- Choosing only the Categories dimension produced a secondary Select a value control, but no values were available without a valid order/publication/price context.
+- At a 1429 x 810 desktop viewport, the first control row placed the catalog heading at x=50, Price Type at x=490 and the second context selector at x=739. The query row placed Group By at x=65, Sort By at x=285, Filter By at x=515, Filters Applied at x=895 and Search at x=1165.
+
+Required `synth-v2` contract:
+
+~~~text
+CatalogQueryCapabilities
+|- context: organisationId, buyerId, brandId?, publicationId?, priceTypeId?, currency?
+|- groups[]: stableAttributeId, label, supported, disabledReason?
+|- sorts[]: stableSortId, direction, supported, disabledReason?
+|- filters[]: stableAttributeId, valueSource, operatorSet, multiSelect, supported
+`- valueDependencies[]: context fields required before values can be requested
+~~~
+
+- Group, sort, filter, search, page and active commercial context are canonical URL/query state.
+- The server returns capabilities and value dictionaries for the active publication and price type; the client never assumes a global taxonomy.
+- A disabled control explains which context is missing. An empty value list is distinct from loading, permission denied, no matching values and request failure.
+- Filter chips use stable IDs, retain labels as snapshots and can be removed individually or cleared without resetting unrelated order context.
+- Style selection remains separate from order creation. A selection count does not imply that a draft order already exists.
+
+### 17.2 Style-detail media, thumbnails and zoom
+
+Newly OBSERVED on a representative style that had not been opened in earlier passes:
+
+- The primary image was a 330 x 450 CDN derivative linked to the original asset.
+- Eleven visible thumbnails were 58 x 77 derivatives. The active thumbnail was represented by an explicit active class.
+- Each thumbnail carried separate gallery, small-image and large-image references. Selecting the second thumbnail updated the active index, the primary derivative, the full-image link and the zoom source together. The first thumbnail was then restored.
+- The primary media control used a crosshair zoom surface. Its hidden lens was 38 x 48, and the hidden zoom window contained a 330 x 450 image area backed by the original asset.
+- Color swatches were 37 x 37 derivatives linked to their original color artwork. This evidence does not prove that clicking a swatch changes the commercial colorway selection.
+- The inspected document contained 29 images in total, 21 with empty alt text, 11 marked for lazy loading and none with `srcset`. These counts include page-shell imagery and are evidence for this page only.
+- No product video or presentation-document link was present on this representative style. This must not be generalized into a platform-wide claim.
+- The style page exposed navigation and information links but no visible quantity/order form in this state.
+
+Required media behavior:
+
+- A media item stores role, type, MIME type, original object key, ordered position, colorway association, dimensions, aspect ratio, duration, poster, focal point, alt text, caption, checksum, processing status and visibility policy.
+- Renditions are explicit records, not filename conventions: thumbnail, card, detail, zoom/fullscreen and responsive widths each carry dimensions, bytes, format and immutable URL/version metadata.
+- Thumbnail selection is a client presentation state; it must update the derivative, zoom source, selected indicator and accessible announcement atomically without changing the selection/order domain.
+- Detail zoom uses a resolution appropriate to the viewport and pointer location. The original is not fetched eagerly only to support a hidden zoom pane.
+- Keyboard and touch users receive an equivalent lightbox/fullscreen flow with previous/next, zoom controls, focus trapping, Escape close and restored focus.
+- Alt text falls back to a meaningful style/color/media label and never to generic values such as Breadcrumb, Gallery Element or an empty string when the asset conveys product information.
+
+### 17.3 Versioned showroom block system
+
+Newly OBSERVED on one previously unopened disconnected-brand storefront:
+
+- The page was a long-form composition with a 7,241 px document height at a 1429 x 810 desktop viewport.
+- The composition combined a full-width hero video, About Brand content, formatted text, portrait and landscape image widgets, landscape and portrait video widgets, embedded product widgets, embedded linesheet widgets, external/social links and closing editorial media.
+- About Brand projected year established, categories, wholesale/retail ranges, website, social links and narrative copy next to an image.
+- The inspected showroom contained eight HTML video elements: one full-width 1414 x 768 hero, three larger landscape placements and a four-column portrait-video row with 263 x 351 tiles.
+- All eight videos were simultaneously playing even when off-screen. Each used a blob URL, native controls, autoplay, runtime muting, loop and preload=auto; none exposed a poster and `playsInline` was not set.
+- Twelve substantial content images used loading=auto and no `srcset`. Several originals were 3,000-4,000 px square while rendered product images were 220 x 450. Embedded product photos were marked high fetch priority even when initially off-screen.
+- Editorial image widgets were not links or buttons, had no tabindex or zoom/lightbox metadata and used the default cursor. No enlargement path was evidenced for those images.
+- Alt text quality was inconsistent: one About Brand image was empty and generic values such as Gallery Element, Breadcrumb and Card Cover were used for other meaningful assets.
+- No PDF, document or external presentation link was found in this single storefront. That is negative evidence for the sample, not proof that the platform lacks document blocks.
+
+The retailer role did not expose showroom authoring, upload, reorder, draft or publish controls. Those producer-side operations remain GATED. The following model is therefore an implementation requirement inferred from the observed renderer, not a claim about JOOR's hidden editor:
+
+~~~text
+StorefrontPage(id, ownerOrganisationId, status, version, audiencePolicy, publishedAt)
+`- StorefrontRow(id, position, layoutPreset, gap, background, visibilityRule)
+   `- StorefrontWidget(id, type, position, width, aspect, alignment, config, revision)
+      |- TextWidget(richTextDocument)
+      |- ImageWidget(mediaAssetId, crop, focalPoint, alt, caption, link?)
+      |- VideoWidget(mediaAssetId, posterAssetId, autoplayPolicy, controls, loop, captions[])
+      |- ProductWidget(styleIds[], displayFields, gatePolicy)
+      |- LinesheetWidget(publicationId, coverAssetId, previewPolicy)
+      `- BrandProfileWidget(fieldVisibility, socialLinks[])
+
+MediaAsset(id, ownerOrganisationId, type, sourceObjectKey, mimeType, bytes,
+           width, height, durationMs, checksum, processingStatus, visibilityPolicy)
+`- MediaRendition(id, purpose, format, width, height, bitrate?, bytes, objectKey)
+~~~
+
+Required authoring and upload pipeline:
+
+- Direct-to-object-storage upload uses short-lived signed requests, MIME sniffing, file-size/dimension/duration limits and tenant-scoped object keys.
+- Images and videos enter an async processing state with malware scanning, metadata extraction, derivative generation, video transcoding, poster generation and actionable failure/retry states.
+- Draft preview, optimistic revision checks and atomic publish prevent a partially processed page from becoming public.
+- Reordering rows/widgets is persisted by stable IDs and positions; undo/redo and autosave operate on a draft revision, not the published page.
+- Audience rules are server-enforced by relationship state, selected retailers, region and entitlement. Hidden product or price data never ships in the page payload.
+- Captions/subtitles, poster, alt text and keyboard semantics are publish validation rules, with an explicit override reason rather than silent omission.
+- Only the visible hero may autoplay by default. Off-screen videos pause, below-fold media is intersection-loaded, preload defaults to metadata/none, and a per-page media budget limits concurrent playback and decoded memory.
+- Responsive image `picture/srcset/sizes`, modern formats, CDN cache keys and focal-point crops are required. Oversized originals are not delivered to 220 px cards.
+
+### 17.4 Embedded product and linesheet presentation
+
+Newly OBSERVED in the same disconnected showroom:
+
+- Four product widgets formed a four-column editorial row. Each card combined a 220 x 450 image, style name, a swatch area and one to six 10 px photo-position dots.
+- Choosing a non-active photo dot changed the image and active-dot index locally; the original first frame was restored. This did not create a selection or order.
+- The observed products used a no-swatch placeholder rather than a fabricated color value.
+- Commercial access was gated at widget level: hovering exposed a message requiring a connection and a Connect button. The product card itself had no direct interactive detail/order control while disconnected.
+- Linesheet widgets used 550 x 550 cover cards in a two-column row. Hover exposed Preview Linesheet.
+- Preview opened a read-only dimmed modal approximately 728 px wide. The page body was scroll-locked while the dimmer provided vertical scrolling.
+- The modal header combined the linesheet title with a connection-required explanation and a Connect action. The action was not used.
+- Preview styles rendered in three columns of 220 x 485 cards. Six styles loaded initially; Show More Styles appended six more and remained available, proving incremental batches rather than a single fixed preview set.
+- Closing the modal restored the showroom without a navigation or data mutation.
+
+Required presentation and gating behavior:
+
+- ProductWidget stores an ordered style reference list and display configuration; it resolves current authorized product projections at view time rather than duplicating commercial data into rich-text JSON.
+- Photo dots expose button semantics, position and total count to assistive technology and support keyboard/touch input.
+- The relationship/entitlement gate is a capability result with reason and allowed next action. The same gate applies consistently to product detail, linesheet preview, price visibility, selection and order creation.
+- A read-only linesheet preview is not a cart. It returns a cursor and batch size, preserves deterministic ordering, and can expose additional styles without granting pricing or order permissions.
+- Preview-modal focus is trapped, close is labelled, background is inert, the current scroll position is restored and repeated open/close cycles do not retain stale product data.
+- Connecting is an explicit, confirmed, idempotent command. Neither opening a card nor previewing a linesheet sends a request.
+
+### 17.5 Gap refinements from the fourth pass
+
+No duplicate backlog IDs are added here. The new evidence strengthens existing gaps:
+
+| Existing ID | New strengthening only |
+|---|---|
+| CAT-02 | Add originals/renditions, processing lifecycle, posters/transcodes, responsive images, zoom/lightbox parity, captions and accessibility validation |
+| CAT-05 | Add schema-driven Group/Sort/Filter capability responses, value dependencies, disabled reasons and canonical query state |
+| ORD-02 | Keep product selection separate from draft creation; require buyer/publication/price-type context before order-dependent product values are available |
+| PUB-01 | Add ordered thumbnail gallery, active-frame synchronization, full-resolution zoom and cursor-based incremental linesheet preview |
+| CON-01 | Apply relationship and entitlement capabilities at product-widget, linesheet-preview, price, detail and order boundaries |
+| STO-01 | Add a versioned block renderer/editor model, draft/publish lifecycle, upload processing, audience rules and embedded product/linesheet references |
+| RES-01 | Add banner, landscape, portrait, multi-column and modal media layouts plus keyboard/touch alternatives and responsive crop rules |
+| OBS-01 | Add media processing, CDN rendition, playback concurrency, autoplay, decode-memory, preview-pagination and publish-failure telemetry |
+
+### 17.6 Safety boundary and remaining unknowns
+
+Safe actions used in this pass were limited to navigation, dropdown inspection, local thumbnail/photo switching, opening and closing a read-only linesheet preview, and one Show More Styles request. Original gallery frames were restored, no Connect action was used, and the Chrome tab was returned to `/ra/home`.
+
+Not executed or claimed:
+
+- Start Order confirmation, Price Type selection, style selection, quantity entry, add-to-order, cart change or checkout.
+- Connect, favorite, message, shop, product-order or linesheet-order actions.
+- Any upload, delete, reorder, autosave, publish or audience change; the retailer role did not expose the producer editor.
+- Product video support platform-wide; the inspected style had no video, while the inspected storefront had multiple video widgets.
+- PDF/document block support platform-wide; none appeared in the inspected storefront.
+
+The one Draft created by the earlier direct Duplicate Orders command still exists and was not touched in this pass. The legacy `PetrFedin/syntha` repository remains out of scope and unchanged.

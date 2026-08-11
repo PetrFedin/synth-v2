@@ -430,226 +430,7 @@ Prices and exact commercial limits are time-dependent configuration, not source-
 
 ### 5.1 Retail/discovery categories
 
-Accessories; Activewear/Yoga; Beauty; Bridal; Candles; Denim; Eco-friendly; Evening; Eyewear; Gifts; Handbags; Hats; Home; Hosiery; Jewelry; Kids; Lingerie; Luggage; Mens Bags; Mens RTW; Mens Shoe; Mens Underwear; Outdoor; Outerwear; Plus Size; Resort Wear; Special Occasion; Swimwear; Watches; Womens RTW; Womens Shoe.
-
-Category dictionaries are tenant/configuration data with stable IDs, localized labels, aliases, active intervals and ordering. They must not be enums embedded in UI code.
-
-### 5.2 Order/commercial dictionaries
-
-- Price type: brand-specific code, currency and label.
-- Delivery: Immediate or named/ranged delivery window.
-- Door/location: organisation-specific.
-- Buyer: membership/user-specific, stable ID despite duplicate labels.
-- Shipping method, payment method, billing code and tax identity: organisation/order-context-specific.
-- Group-by dimensions: system and brand-defined merchandising attributes.
-- Size scale: ordered, brand/category-specific; never assume universal numeric sorting.
-
-### 5.3 Cross-cutting dictionary requirements
-
-Every reference value needs: stable ID, code, localized label, display order, scope, valid-from/to, active flag and optional parent. Historical orders must render the snapshot label even after a dictionary entry is renamed or retired.
-
-## 6. Layout and responsive evidence
-
-Measured at desktop viewport `1429 × 810`, device pixel ratio 1:
-
-- Home document height was approximately 2116 px.
-- Linesheet detail used a left brand rail around x=228–480 and product content beginning around x=526.
-- Representative style card media was about `219 × 299`; small color swatches about `18 × 18`.
-- Style detail used a primary image around `330 × 450`, thumbnails about `58 × 77`, color swatches about `37 × 37`; media began around x=556 and detail column around x=916.
-- Start Order modal was approximately 440 px wide; inputs about `308 × 38`; action buttons about `198 × 38`.
-- Rich storefront hero occupied approximately `1414 × 608`; page content margin began near x=145. Representative grids used `359 × 478` three-column images, `263 × 351` four-column images and `550 × 733` two-column cards.
-
-Responsive checks at `390 × 844`, `768 × 1024` and desktop widths found two coexisting systems:
-
-1. Modern storefront/home surfaces reflow without horizontal overflow; header text collapses on mobile and CTA width changes.
-2. Legacy linesheet surfaces retain an approximately 1026 px working canvas and create horizontal scrolling on narrow viewports; the sidebar remains about 252 px and content begins around x=332.
-
-Parity decision: preserve the *functional information density* and safe usability, not accidental legacy breakage. If exact visual compatibility is required for a legacy route, document that per route and add horizontal-scroll regression tests. New `synth-v2` pages should use responsive tokens with explicit density modes.
-
-Minimum responsive matrix:
-
-- 390 × 844 mobile portrait.
-- 768 × 1024 tablet portrait.
-- 1024 × 768 small desktop/tablet landscape.
-- 1440 × 900 desktop.
-- 1920 × 1080 wide desktop.
-- 200% zoom and keyboard-only navigation.
-
-## 7. What is already executable in synth-v2
-
-CODE-CONFIRMED from `main` on 2026-08-11:
-
-| Area | Implemented behavior | Evidence path | Parity assessment |
-|---|---|---|---|
-| Runtime | PostgreSQL composition, auth, readiness, maintenance, notifications, outbox | `src/runtime/postgres-base-runtime.mjs`, `src/server.mjs` | Strong platform foundation |
-| Wholesale workflow | Organisations, relationships, campaigns, collections, showrooms, invitations, cycles, selections and orders | application services + workspace UI | Core present |
-| Catalog | Flat SKU create/edit with collection, name, wholesale price, currency, MOQ and sellable quantity | `public/modules/catalog-form.js` | Partial; lacks style/color/size/media |
-| Publications | Immutable commercial publication per collection, content hash, published lines, print and CSV | `public/modules/linesheets.js` | Strong snapshot idea; buyer UX partial |
-| Selection | Create from accepted showroom context; add/update SKU quantity with MOQ validation | `public/modules/forms-3.js` | Partial; flat SKU quantity only |
-| Order | Create from submitted selection; Incoterm, payment days, prepayment, delivery range; bilateral lifecycle/cancel | `public/modules/forms-3.js`, `public/modules/order-lifecycle-actions.js` | Core present, JOOR status/UI incomplete |
-| Inventory/economics | Reservation, availability, server-side economics/cost allocation | application/runtime modules | Useful core, needs matrix projection |
-| Partner access | Relationship accept/reject/revoke and showroom invitation lifecycle | partners/views modules | Partial versus discovery/inbox states |
-| Notifications/calendar | Dedicated views and services | runtime/UI modules | Present; not a message inbox |
-| PLM/production | Materials, BOMs, measurements, samples, sourcing, tech packs, production and quality | runtime/UI modules | Additional product value, not JOOR retailer parity |
-| Localization | RU/EN runtime | `public/modules/i18n-runtime.js` | Infrastructure only; preference/locales incomplete |
-
-Current primary UI navigation is Overview, Catalog, Showrooms, Partners, Selections, Orders, Calendar and Notifications. No executable first-class navigation was confirmed for Discovery, Storefronts, Retailer Profile, Account Settings, Messages, Favorites/Passport, Payments, Shopify/Jobs, Subscriptions, Looks, Styleboards or Visual Assortment.
-
-## 8. Gap register
-
-Priority meanings:
-
-- **P0** — blocks a correct buyer order and data model; implement before claiming commerce parity.
-- **P1** — blocks complete retailer-cabinet parity and daily buyer operations.
-- **P2** — advanced/premium/integration surface; implement after core contracts or after controlled UAT.
-
-| ID | Priority | Gap | Required deliverable | Acceptance evidence |
-|---|---:|---|---|---|
-| CAT-01 | P0 | Flat SKU model | Style, Colorway, SKU, SizeScale, SizeValue, media, attributes | One style with 2 colors × 4 sizes retains distinct SKU/UPC/qty |
-| CAT-02 | P0 | No rich media | Ordered assets, variant association, crop/focal/alt, failure states | Gallery, thumbnails and swatches pass responsive/a11y tests |
-| CAT-03 | P0 | Price type too shallow | PriceBook/PriceType, currency, wholesale, suggested retail, effective dates | Buyer switches valid price type without mutating snapshot |
-| CAT-04 | P0 | Delivery not line-aware | DeliveryWindow and availability per color/SKU | Mixed Immediate/future lines calculate and filter correctly |
-| CAT-05 | P0 | Attribute/grouping taxonomy absent | Configurable attributes and group-by registry | Observed 10 grouping options map by stable IDs |
-| ORD-01 | P0 | Flat quantity line | Color × size matrix and server totals | Matrix round-trip is lossless; zero cells removable |
-| ORD-02 | P0 | Cart/draft context incomplete | DraftOrder/Cart bound to brand, door, publication and price type | Empty redirect, resume and immutable source version tested |
-| ORD-03 | P0 | Status mismatch | Explicit state machine for Draft/Notes/Pending/Approved/Shipped/Cancelled plus bilateral events | Forbidden transitions rejected; history auditable |
-| ORD-04 | P0 | Missing address/door terms | Shipping/billing snapshots, door, shipping/payment/tax/billing code | Approved order remains historically stable after profile edits |
-| ORD-05 | P0 | Totals/projections incomplete | Units/styles/colors/value summaries at color/style/order level | Totals reconcile with matrix in multiple currencies/rounding |
-| PUB-01 | P0 | Buyer linesheet is table-only | Card/grid buyer view, filters, groups, style drill-down, start order | Discovery-to-draft journey works from publication snapshot |
-| IAM-01 | P0 | Organisation preferences incomplete | Membership, permissions, retailer/brand roles, plan capabilities | Route/action checks enforced server-side and in UI |
-| CON-01 | P1 | Relationship state is too narrow | Incoming, outgoing pending, connected, dismissed, interested/viewed | All connection tabs derive from one auditable model |
-| DIS-01 | P1 | Brand discovery absent | Search/filter/sort, request state, pagination/infinite loading | Filter URL/state, zero/error/loading and request idempotency tested |
-| STO-01 | P1 | Storefront absent | Versioned storefront with block content and access gates | Connected and disconnected variants render safely |
-| PRO-01 | P1 | Retailer profile absent | Company, media, verification, people, demographics | Field limits/dictionaries/media validation tested |
-| PRO-02 | P1 | Doors/locations absent | Door/location CRUD, address, price range, categories, brands carried | Primary/additional door invariants and order references tested |
-| SET-01 | P1 | Account settings absent | Language, email, date, landing, rounding, POS, privacy, connection prefs | Preferences persist per user/org and affect rendering/actions |
-| MSG-01 | P1 | Inbox absent | Mailboxes, threads/messages, read/trash states, bulk actions, pagination | Per-recipient state and invitation classification tested |
-| MSG-02 | P1 | Compose/attachment absent | Recipient autocomplete/modes, subject/body, validated image attachment | MIME/size/security/permission cases covered |
-| ORD-06 | P1 | Order registry shallow | JOOR-like counters, columns, buyer/date filters, pagination | Filter/count consistency and stable buyer IDs tested |
-| ORD-07 | P1 | Bulk operations absent | Status change, duplicate, remove zero qty colors, send to assortment | Preview/idempotency/partial-failure audit tested |
-| ORD-08 | P1 | Comments/downloads absent | Order conversation and async PDF/XLSX/size export | Permission, redaction, export version and job state tested |
-| ORD-09 | P1 | Import/confirmation exports absent | Validated import pipeline and confirmation artifacts | Row-level errors, dry run, repeat upload idempotency tested |
-| PAY-01 | P2 | Pay tab/payment absent | Payment intent/status, provider abstraction, reconciliation | No card secrets stored; webhook/idempotency/retry tested |
-| INT-01 | P2 | Shopify configuration absent | Installation, mappings, approved-order automation and checkpoints | Sandbox sync with retry and per-record outcome |
-| JOB-01 | P2 | Activity center absent | Async job registry and operator-visible actions/details | Queued/running/succeeded/failed/cancelled/retry states tested |
-| FAV-01 | P2 | Favorites/Passport absent | Favorites and event/discovery entities | Seeded-account UAT defines exact behavior first |
-| ASM-01 | P2 | Looks absent | Registry, archive state, creator/brand/collection metadata | Empty/list/filter/archive contracts tested |
-| ASM-02 | P2 | Styleboard partial/absent | Board document, items, layout/group/text/comments/share/order handoff | Controlled UAT defines canvas schema and concurrency |
-| ENT-01 | P2 | Entitlements/plans absent | Capability/quotas, billing-cycle configuration, paywall component | Tier changes affect server authorization, not just UI |
-| RES-01 | P1 | Responsive density incomplete | Route-specific responsive specs and tokenized components | Full viewport/zoom/keyboard matrix in CI |
-| A11Y-01 | P1 | Legacy accessibility risks | Names/roles/focus/error announcements/table semantics | WCAG-oriented automated and manual audit |
-| OBS-01 | P1 | Parity telemetry absent | Journey events, job/order transition metrics and audit correlation | Funnel/drop-off and transition errors observable without PII |
-
-## 9. Recommended target aggregates
-
-This is a boundary proposal, not a demand to collapse existing `synth-v2` services:
-
-```text
-Identity & Organisation
-  User ─ Membership ─ Organisation
-  OrganisationProfile ─ Door/Location ─ Address
-  UserPreference / OrganisationPreference / Verification
-
-Network & Discovery
-  ConnectionRequest ─ Relationship ─ Submission/Interest
-  Favorite ─ Passport/Event presence
-
-Commercial Catalog
-  Campaign ─ Collection ─ Linesheet/CommercialPublication
-  Style ─ Colorway ─ SKU ─ SizeValue/SizeScale
-  MediaAsset ─ AttributeDefinition/Value
-  PriceBook/PriceType ─ Price
-  DeliveryWindow ─ Availability
-
-Buyer Workspace
-  DraftOrder/Cart ─ OrderLineMatrix ─ Door allocation
-  Order ─ Address snapshots ─ Terms ─ StatusEvent
-  OrderComment ─ Document/ExportJob ─ Payment
-
-Content & Assortment
-  StorefrontVersion ─ ContentBlock
-  Look ─ StyleboardDocument ─ BoardItem/Group/Annotation
-
-Messaging & Integration
-  Conversation ─ Message ─ Attachment ─ MailboxState
-  IntegrationInstallation ─ MappingVersion ─ SyncJob ─ JobItemResult
-  Subscription ─ Entitlement ─ QuotaUsage
-```
-
-Critical invariant: catalog and profile data may evolve, but an approved order must preserve immutable commercial, address, tax, term, label and media references required to reproduce its confirmation.
-
-## 10. Delivery sequence
-
-### Milestone A — correct product/order foundation (P0)
-
-1. Add Style/Colorway/SizeScale/SKU/media/attributes and migrate flat SKU semantics compatibly.
-2. Extend immutable commercial publication to snapshot variant, price, delivery, media and dictionary labels.
-3. Build buyer linesheet cards/style detail and Start Order context.
-4. Implement cart and color-size quantity matrix with server totals.
-5. Add door/address/tax/shipping/payment-method snapshots and explicit JOOR-like order state mapping.
-
-Exit gate: a buyer can traverse connected publication → style → quantities by color/size → draft → pending/approved representation without data loss, and a historical order is reproducible after source catalog edits.
-
-### Milestone B — complete daily retailer cabinet (P1)
-
-1. Discovery and full connection state machine.
-2. Retailer profile, locations/doors, people, verification and settings.
-3. Storefront renderer and access gates.
-4. Order registry filters/counters/bulk actions/comments/downloads/import/export.
-5. Inbox/compose and order-linked conversations.
-6. Responsive, accessibility and journey telemetry hardening.
-
-Exit gate: every non-premium route in the audited information architecture has loading, empty, error, permission and populated states plus contract/e2e evidence.
-
-### Milestone C — gated/premium/integrations (P2)
-
-1. Shopify installation/mapping/sync and Data Activity Center.
-2. Payment/provider abstraction and Pay view.
-3. Looks, Styleboards and Visual Assortment entitlements.
-4. Favorites/Passport after seeded-account controlled UAT.
-5. Subscription/entitlement administration.
-
-Exit gate: sandbox/provider tests, quota/permission enforcement, retry/audit behavior and controlled UAT evidence exist; no feature is marked parity-complete from paywall text alone.
-
-## 11. Still unobserved or unsafe to claim
-
-The following need explicit test tenants, seeded fixtures or permission to perform controlled state changes:
-
-- Successful connection acceptance/decline and disconnect consequences.
-- Saving quantities, creating/resuming a real draft, submitting and revising an order.
-- Brand-side approve/reject/revision actions and cross-party notification timing.
-- Shipment creation, partial shipment, tracking and receipt/claim behavior in JOOR.
-- Successful JOORPay flow, refunds/disputes and payment reconciliation.
-- Successful Shopify installation/sync, mapping conflict behavior and retry details.
-- Populated/successful/failed Data Activity Center jobs and downloadable job artifacts.
-- Passport and Favorites with seeded content.
-- Visual Assortment paid workspace, collaboration and exports.
-- Styleboard save/version/concurrency/share/export/order hand-off.
-- Mobile-native/iPad-specific behavior, push notifications and assigned-order behavior.
-- Authentication edge cases: SSO, MFA, password reset, session expiry, multiple organisations.
-- Public/partner API behavior, rate limits, webhook signatures and bulk limits.
-- Exact validation boundaries for every text field and upload type.
-
-These are not reasons to block the core build. They are reasons to label the corresponding parity items GATED and design adapters/state machines so evidence can be added without destructive rewrites.
-
-## 12. QA and evidence policy
-
-For every parity item:
-
-1. Store a redacted observation: route, role, plan, viewport, precondition, visible fields/actions and state.
-2. Define the domain/API contract independently of JOOR implementation details.
-3. Add unit tests for invariants and forbidden transitions.
-4. Add API/contract tests for validation, permission, idempotency and pagination.
-5. Add UI tests for populated, loading, empty, error, locked and read-only states.
-6. Add responsive snapshots at the required viewport matrix.
-7. Add keyboard/focus/name-role-value checks for dialogs, filters, tables and matrix editing.
-8. Add audit/telemetry assertions without storing PII.
-9. Mark parity complete only when executable behavior and evidence exist; a prose row is not completion.
-
-## 13. Security, privacy and product independence
-
-- Never commit real retailer names, people, emails, addresses, tax IDs, order IDs, PO numbers, quantities, prices, message bodies or integration credentials from the reference account.
-- Treat all external media and documents as untrusted; scan uploads, validate MIME independently of extension, and serve with safe content headers.
+Accessories; Activewear/Yoga; Beauty; Bridal; Candles; Denim; Eco-friendly; Evening; Eyewear; Gifts; Handbags; Hats; Home; Hosiery; Jewelry; Kids; Lingerie; Luggage; Mens Bags; Mens RTW; Mens Shoe; Mens Underwear; Outdoor; Outerwear; Plus Size; Resort Wear; Special Occasion; Swimwe…4242 tokens truncated…sted; scan uploads, validate MIME independently of extension, and serve with safe content headers.
 - Enforce tenant, organisation, relationship, role and entitlement checks server-side on every read and mutation.
 - Use idempotency keys for connection, import, submit, bulk, payment and sync commands.
 - Preserve audit events for permission changes, commercial publication, order transitions, downloads, payments and integration actions.
@@ -658,3 +439,307 @@ For every parity item:
 ## 14. Repository boundary
 
 All implementation and documentation work arising from this register belongs only in `PetrFedin/synth-v2`. References to the legacy `PetrFedin/syntha` repository are prohibited as implementation targets, migration sources or destinations unless a future user request explicitly changes that boundary.
+
+## 15. Second-pass deep audit: previously unobserved safe surfaces
+
+Audit date: 2026-08-11, continuation pass.
+
+This pass intentionally targeted only previously unobserved or weakly evidenced behavior. It used existing read-only records and opened non-committing panels. No order, quantity, connection, message, profile, payment or integration state was intentionally changed. Real account values remain excluded.
+
+### 15.1 Status-specific order behavior
+
+The order status and the presence of products/quantities are separate dimensions.
+
+| Status/state | Newly observed actions | Editability and messages | Required synth-v2 rule |
+|---|---|---|---|
+| Note with quantities | Submit for Approval; section-level Edit; Add Products when the source is available | Existing quantities and financial totals are rendered; unavailable/archived linesheets can independently block additions | Preserve editable note state without rebasing its commercial snapshot |
+| Note without quantities | Submit for Approval is visibly enabled; Add Products; section-level Edit | An order can contain styles and colorways while every size quantity is zero | Do not infer product/color counts from non-zero quantity lines |
+| Pending | Edit Order | Products cannot be added or edited until the order is returned to an editable state | Model the explicit return-to-edit command and its audit event |
+| Approved | Pay/Pay now can be present; read-only products | Product editing is disabled; payment capability is brand/order-dependent | Approval and payment eligibility are orthogonal |
+| Shipped | Duplicate Order may exist; Load All Products | Product editing is disabled; tracking field is displayed; archived source can disable duplication | Shipping is a terminal commercial state but not a reason to discard product or snapshot data |
+| Cancelled | Duplicate Order can be shown but conditionally disabled | Cancelled orders may retain non-zero quantities/value or may be empty | Cancellation never implies deletion or zeroing of historical lines |
+| Draft | No record was available in this tenant | GATED | Keep draft behavior unclaimed until controlled fixtures exist |
+
+Observed UI labels imply `Note → Pending` through **Submit for Approval** and `Pending → editable Note` through **Edit Order**. The actual command result, notifications and brand-side transition remain GATED and require controlled UAT.
+
+Required lifecycle properties:
+
+- Store status history separately from the current status.
+- Store actor, organisation side, timestamp, command, reason and correlation/idempotency key for every transition.
+- Evaluate action availability from status, role, relationship, source visibility, entitlement and payment/integration capability.
+- Never derive cancellation from empty quantities or shipped state from a tracking value alone.
+- Preserve the distinction between list label **Notes** and detail label **Note Order** in the localization/alias layer without creating two domain states.
+
+### 15.2 Product membership versus ordered quantity
+
+OBSERVED on a Note order with zero total units:
+
+- The order retained multiple products/styles and more colorways than products.
+- Every size cell was zero, but style/color membership remained visible.
+- Per-color and per-style totals were zero.
+- Add Products and Submit for Approval were visibly enabled.
+- The registry classified the record as Notes → Without Quantities.
+
+This establishes two distinct concepts:
+
+~~~text
+OrderProductSelection
+  styleId
+  selectedColorwayIds[]
+  commercialSnapshotReference
+
+OrderQuantity
+  selectedColorwayId
+  sizeValueId / skuId
+  quantity
+~~~
+
+A product/color selection must not disappear merely because all its quantity cells are zero. The observed bulk action **Remove Style Colors With No Quantities** is therefore an explicit cleanup command, not an automatic persistence rule.
+
+Acceptance requirements:
+
+- Product count, color count and total-unit count are computed independently.
+- Setting the last non-zero cell to zero retains selection until explicit removal.
+- Explicit zero-color cleanup is previewable, auditable and idempotent.
+- Submit validation states whether zero-total submission is allowed; the enabled reference button is not sufficient evidence that the server accepts it.
+- Snapshot and UI tests include a style with multiple selected colors, zero and non-zero matrices, and removal/re-add behavior.
+
+### 15.3 Add Products selector contract
+
+OBSERVED from an editable Note order:
+
+- Add Products opens an overlay/drawer while preserving the order-detail URL.
+- Header count is expressed as selected Styles and selected Style Colors.
+- Only shared linesheets are selectable.
+- The selector has linesheet context, search, product cards and pagination.
+- Product cards expose name, style number, wholesale, suggested retail and Fabrication.
+- Selection checkboxes operate at style-color granularity.
+- Existing/unavailable style-colors may be disabled while other style-colors remain selectable.
+- Cancel closes without mutation; Add to Order remains disabled until a valid selection exists.
+
+The selector is not the same surface as the standalone `/ra/products` browser. `synth-v2` should reuse query/domain contracts but may use separate presentation components for order-scoped add and catalog browsing.
+
+Required selector API:
+
+- Cursor/page pagination with stable ordering.
+- Search and filter state bound to the commercial publication snapshot.
+- `selectable` plus machine-readable `disabledReason` per style-color.
+- Existing membership flag independent of quantity.
+- Server-side revalidation when Add to Order is submitted.
+- Selection counts returned or deterministically derived from stable IDs.
+
+### 15.4 Import and batch export
+
+OBSERVED Import Orders wizard:
+
+- Step 1 requires an import template and an uploaded file.
+- Available templates: **JOOR Standard Excel Order** and **JOOR Vertical Order Template (UPC)**.
+- Accepted copy states Excel or CSV with a 4 MB maximum.
+- Drag-and-drop and Browse files entry points are present.
+- A three-step progress indicator is shown.
+- Next is disabled until the required inputs are satisfied.
+- Steps 2–3 remain GATED because uploading a file would transmit data.
+
+OBSERVED order-confirmation/batch download with no selected rows:
+
+- **PDF** and **Excel** apply to selected orders and are disabled when no order is selected.
+- **Raw Order Data** applies to all matching orders, is selected by default in the observed no-selection state, and enables Download.
+- This all-results export is materially different from exporting only the visible page.
+
+Required import contract:
+
+- Template version is explicit and stored with the job.
+- Upload is scanned and parsed outside the request transaction.
+- Dry-run validation returns row/cell errors without creating orders.
+- Preview shows create/update/reject counts and currency/brand/door conflicts.
+- Commit requires an idempotency key and an immutable source-file hash.
+- Job results are visible in Activity Center and exclude file contents/secrets from logs.
+
+Required export contract:
+
+- Scope must be explicit: selected IDs, current filtered result set, or all permitted orders.
+- Show the resolved count before execution and require a deliberate confirmation for all-results export.
+- Export permissions, filter snapshot, actor, format and artifact expiry are audited.
+- Large exports run as jobs with retry-safe artifact creation and expiring signed download URLs.
+
+### 15.5 Order detail fields and projections
+
+Newly confirmed fields/sections:
+
+- Contacts with Sales Rep and Buyer roles; each can have an email and may be missing.
+- Financial Summary: total order value, total retail value, wholesale subtotal including product discounts, order discount percent/value, shipping fees and grand total.
+- A rounding disclaimer confirms displayed components may not arithmetically reconstruct the authoritative total.
+- Shipping exposes Door, Shipping Method and Tracking Number.
+- Billing exposes tax identifier, Billing Code and Payment Method.
+- Product attributes can include Country of Origin.
+- Style detail can include Materials, Country of Origin and Description in addition to prices, delivery, sizes and colors.
+- Product lists paginate inside the order; actions include Load More Products or Load All Products.
+- Legal Terms & Conditions are attached at order level and can be long, localized and brand-specific.
+
+The Order Details editor additionally exposed:
+
+- Order Created Date — immutable.
+- Linesheets — derived from products and immutable in the observed state.
+- Warehouse — immutable in the observed state.
+- Season and Year — displayed but immutable in the observed state.
+- Division — derived from products.
+- Order Delivery Window — derived from products in the observed state.
+- Event — immutable; the observed value demonstrated that source channel/device is retained.
+- Order Type — displayed but immutable in the observed state.
+
+Model implications:
+
+- Separate source channel/event from the user-facing order type.
+- Store Warehouse as a reference/snapshot, not free text.
+- Store Sales Rep and Buyer as role assignments with optional membership/external-contact references.
+- Version legal terms and retain the exact accepted/rendered order snapshot; never copy reference-site legal text into product source.
+- Server calculations return both atomic components and authoritative totals with rounding metadata.
+- Product pagination must not change order-level totals or counts.
+
+### 15.6 Payment capability states
+
+Two distinct Pay-tab states were safely observed:
+
+1. A brand/order without a usable online payment flow shows an **Interested in paying online?** explanation and **I'm interested** lead action.
+2. An approved order can additionally expose **Pay now** while the interest CTA remains present.
+
+Do not model the Pay tab as a boolean. Required capability state:
+
+~~~text
+paymentCapability:
+  providerAvailable
+  brandEnabled
+  retailerEligible
+  orderEligible
+  payableAmount
+  currency
+  payNowAllowed
+  interestLeadAllowed
+  blockedReasons[]
+~~~
+
+`I'm interested` is a lead/notification command, not a payment command. It needs separate consent, idempotency, rate limiting and audit behavior. The Pay now dialog, payment instruments, fees and successful settlement remain GATED.
+
+### 15.7 Connection and storefront gating
+
+Newly confirmed:
+
+- Incoming requests link to a full brand storefront and expose **Accept**.
+- Before acceptance, the storefront can still show brand profile, editorial/product previews, collection cards and color swatches.
+- Linesheets, ordering and representative information remain gated.
+- Individual storefront content can display its own selective-retailer restriction.
+- A rich incoming storefront exceeded 9,900 px document height and contained hundreds of media/swatch assets; representative product tiles were four-column at about 220 × 450 px, swatches about 20 × 20 px and two-column collection covers about 550 × 367 px.
+- Connected-brand legacy profile routes redirect to the modern storefront.
+- During initial storefront hydration, a connected brand briefly rendered a Connect CTA before relationship data resolved, then corrected itself.
+
+Required storefront/access design:
+
+- Content-block visibility supports public preview, relationship-required, invitation-required and selected-retailer audience rules.
+- Catalog/ordering authorization remains server-side even if preview content is public.
+- Initial relationship/entitlement state is pessimistic: show a skeleton/disabled action until resolved; never flash an actionable Connect/Accept/Order control with unknown authorization.
+- Media is lazy-loaded, virtualized where appropriate, has responsive variants and limits concurrent requests.
+- Content limits and performance budgets cover very long storefronts and hundreds of assets.
+
+Security observation from legacy routes:
+
+- Accept, decline/not-now, disconnect and pending-cancel controls were represented as navigable GET-like URLs.
+
+`synth-v2` must preserve its stronger command semantics: POST/PUT/PATCH/DELETE as appropriate, CSRF protection for cookie sessions, idempotency, confirmation for destructive disconnect, and no state mutation from link prefetch/crawling.
+
+### 15.8 Messaging folder policies
+
+Newly confirmed folder differences:
+
+- Inbox columns: From, Message, Date; Delete and read/unread bulk actions.
+- Invitation uses the same columns and bulk actions but can omit Compose.
+- Sent changes the first column to To and did not expose the same Delete action in the observed state.
+- Trash can be empty and does not imply the same action set as Inbox.
+- A connection-scoped compose route pre-fills the recipient and removes the all-connections/recipient selector, leaving Subject, Message and optional image attachment.
+
+Required policy model:
+
+- Folder is a per-user projection, not a mutable global message folder.
+- Available bulk actions are derived from folder, ownership, read state and retention policy.
+- Sent recipient display uses recipient snapshots but stable membership/account IDs.
+- Connection-scoped compose validates that the relationship still permits messaging at send time.
+- Do not mark messages read merely by listing or prefetching them; message-open state change is an explicit, idempotent command.
+
+### 15.9 Verification reference data
+
+OBSERVED verification panel:
+
+- Country selector.
+- Tax ID input with example formatting placeholder.
+- Add to profile command.
+- The selector returned 133 country/territory labels.
+- Several labels are business aliases or legacy/non-ISO names rather than canonical ISO display names.
+
+Required reference model:
+
+- Canonical ISO 3166 country code where applicable.
+- Localized canonical label.
+- External/provider aliases and legacy labels.
+- Tax identifier type, format/help text and validation policy by jurisdiction.
+- Verification status, provider/reference, requested/verified/expired timestamps and reason.
+- Tax ID encryption/redaction and permission-scoped access.
+
+Do not copy the observed country labels into a hard-coded enum. Map external aliases to canonical internal codes and preserve the submitted snapshot for audit.
+
+### 15.10 Cross-cutting feedback and support
+
+OBSERVED but non-core:
+
+- A satisfaction survey can overlay the order registry with a 1–5 scale and Send Feedback.
+- A support/messaging widget is embedded across routes.
+
+These should not block wholesale parity. If implemented, treat them as configurable integrations with consent, CSP/privacy review, lazy loading, failure isolation and no ability to obscure critical order actions. A third-party widget failure must not fail the cabinet.
+
+### 15.11 Strengthened gap items
+
+The following requirements refine existing gap IDs:
+
+| Existing ID | Strengthening from this pass |
+|---|---|
+| ORD-03 | Add Note-with/without-quantities facets, explicit Pending → Edit command, Shipped/Cancelled read-only rules and status history |
+| ORD-05 | Add total retail, discounts, fees, authoritative rounding metadata and totals independent of product pagination |
+| ORD-06 | Preserve multi-status facets and nested Notes quantity facet; selected filters must survive navigation intentionally |
+| ORD-08 | Add selected-versus-filtered-versus-all export scope, count preview, async artifacts and audit |
+| ORD-09 | Add template version, 4 MB Excel/CSV gate, dry run, row errors, source hash and three-step job lifecycle |
+| PAY-01 | Split payment capability, Pay now, interest lead and blocked reasons |
+| CON-01 | Add incoming storefront preview, audience gates and safe non-GET connection commands |
+| STO-01 | Add selected-retailer block visibility, long-page media budgets and pessimistic hydration |
+| MSG-01 | Add folder-specific column/action policies and explicit read command |
+| MSG-02 | Add relationship-prefilled compose variant |
+| PRO-01 | Add canonical country/alias/tax-type verification model |
+
+CODE-CONFIRMED comparison with the current `synth-v2` implementation:
+
+- Existing strengths to keep: order creation already uses `commandId` idempotency, a database transaction, an outbox event, a pinned commercial snapshot and an explicit cancellation reason. These are stronger foundations than the observed legacy GET-like mutation routes and must not be weakened for visual parity.
+- The executable order lifecycle currently exposes only `draft`, `ready`, `attached` and `cancelled`; it does not yet model the observed Note without quantities, Note with quantities, Pending, Approved and Shipped behavior or their distinct commands and editability rules.
+- The showroom selection and order-line forms currently persist a flat positive-quantity SKU line. They cannot represent a selected style/colorway whose entire size run is zero, so the observed Products/Colors counts and explicit zero-quantity cleanup cannot be implemented faithfully without separating assortment membership from quantities.
+- Current order terms cover incoterm, payment days, prepayment and delivery dates. The observed order projections additionally need season/year, warehouse, division, event/source, order type, representative/buyer snapshots, retail totals, discounts, shipping fees, rounding metadata and capability-derived actions.
+
+New gap items:
+
+| ID | Priority | Gap | Required deliverable | Acceptance evidence |
+|---|---:|---|---|---|
+| ORD-10 | P0 | Product/color membership is conflated with quantity | Persist selected styles/colorways separately from size quantities | Zeroing the last quantity retains the color until explicit removal; counts remain correct |
+| UX-01 | P1 | Unknown relationship/entitlement state can flash an unsafe CTA | Pessimistic loading/authorization primitives for gated actions | Slow-network tests never expose actionable Connect/Accept/Order/Pay controls before authorization |
+| REF-01 | P1 | Country/tax reference normalization is absent | Canonical country codes, provider aliases and jurisdictional tax metadata | Legacy labels round-trip to canonical codes without losing submitted snapshots |
+| SUP-01 | P2 | Optional support/feedback integrations are undefined | Isolated configurable widget/CSAT adapter | Provider failure, CSP block or opt-out cannot break or obscure core flows |
+
+### 15.12 Remaining safe boundary after the second pass
+
+Still intentionally not executed:
+
+- Submit for Approval, Edit Order transition, status change and duplicate order.
+- Changing or saving a quantity, contact, address or order-detail field.
+- Add to Order and zero-color cleanup.
+- Import file upload, import preview/commit and any download/export.
+- Accept, decline, disconnect or cancel a connection.
+- Send message, mark read/unread, delete/trash or open an unread message.
+- Add tax ID to profile.
+- Pay now, I'm interested or any payment instrument flow.
+
+Those actions require a dedicated disposable tenant or explicit approval for controlled state-changing UAT. Their absence must remain visible in parity reporting.
+

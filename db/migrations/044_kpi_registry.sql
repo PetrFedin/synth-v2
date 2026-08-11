@@ -10,10 +10,6 @@ CREATE TABLE kpi_definition_versions (
   canonical_name_ru TEXT NOT NULL CHECK (length(btrim(canonical_name_ru)) BETWEEN 2 AND 240),
   canonical_name_en TEXT NOT NULL CHECK (length(btrim(canonical_name_en)) BETWEEN 2 AND 240),
   domain_code TEXT NOT NULL CHECK (length(btrim(domain_code)) BETWEEN 2 AND 80),
-  release_status TEXT NOT NULL CHECK (release_status IN (
-    'DRAFT', 'DEFINED', 'MAPPING_PENDING', 'MAPPED_UNVERIFIED', 'VALIDATION_PENDING',
-    'UAT_PENDING', 'PRODUCTION_READY', 'DEPRECATED', 'BLOCKED_UMBRELLA', 'ALIAS_NONPUBLISH'
-  )),
   business_definition TEXT NOT NULL CHECK (length(btrim(business_definition)) BETWEEN 5 AND 4000),
   business_formula TEXT NOT NULL CHECK (length(btrim(business_formula)) BETWEEN 1 AND 4000),
   calculation_primitive TEXT NOT NULL CHECK (length(btrim(calculation_primitive)) BETWEEN 2 AND 120),
@@ -39,29 +35,51 @@ CREATE TABLE kpi_definition_versions (
     OR (scope_type = 'organisation' AND organisation_id IS NOT NULL)
   ),
   CONSTRAINT kpi_definition_effective_window CHECK (effective_to IS NULL OR effective_to > effective_from),
-  CONSTRAINT kpi_definition_role_release CHECK (
-    (role = 'BLOCKED_UMBRELLA' AND release_status = 'BLOCKED_UMBRELLA')
-    OR (role = 'ALIAS' AND release_status = 'ALIAS_NONPUBLISH')
-    OR (role IN ('CANONICAL', 'SPLIT_CHILD') AND release_status NOT IN ('BLOCKED_UMBRELLA', 'ALIAS_NONPUBLISH'))
-  ),
   CONSTRAINT kpi_definition_payload_identity CHECK (
     COALESCE(payload ->> 'id', '') = id
     AND COALESCE(payload ->> 'kpiCode', '') = kpi_code
     AND COALESCE(payload ->> 'formulaVersion', '') = formula_version
     AND COALESCE(payload ->> 'role', '') = role
-    AND COALESCE(payload ->> 'releaseStatus', '') = release_status
   )
 );
 
 CREATE UNIQUE INDEX kpi_definition_scope_code_version_unique_idx
-  ON kpi_definition_versions (COALESCE(organisation_id, '__system__'), kpi_code, formula_version);
+  ON kpi_definition_versions (scope_type, COALESCE(organisation_id, ''), kpi_code, formula_version);
 CREATE INDEX kpi_definition_code_idx
   ON kpi_definition_versions (kpi_code, effective_from DESC);
 CREATE INDEX kpi_definition_org_idx
   ON kpi_definition_versions (organisation_id, domain_code, effective_from DESC)
   WHERE organisation_id IS NOT NULL;
-CREATE INDEX kpi_definition_release_idx
-  ON kpi_definition_versions (release_status, domain_code, effective_from DESC);
+
+CREATE TABLE kpi_definition_release_events (
+  id TEXT PRIMARY KEY,
+  kpi_definition_id TEXT NOT NULL REFERENCES kpi_definition_versions(id),
+  previous_release_event_id TEXT NULL REFERENCES kpi_definition_release_events(id),
+  release_status TEXT NOT NULL CHECK (release_status IN (
+    'DRAFT', 'DEFINED', 'MAPPING_PENDING', 'MAPPED_UNVERIFIED', 'VALIDATION_PENDING',
+    'UAT_PENDING', 'PRODUCTION_READY', 'DEPRECATED', 'BLOCKED_UMBRELLA', 'ALIAS_NONPUBLISH'
+  )),
+  evidence JSONB NOT NULL CHECK (jsonb_typeof(evidence) = 'object'),
+  created_at TIMESTAMPTZ NOT NULL,
+  created_by TEXT NOT NULL CHECK (length(btrim(created_by)) BETWEEN 1 AND 160),
+  content_hash TEXT NOT NULL UNIQUE CHECK (content_hash ~ '^[a-f0-9]{64}$'),
+  payload JSONB NOT NULL CHECK (jsonb_typeof(payload) = 'object'),
+  CONSTRAINT kpi_definition_release_payload_identity CHECK (
+    COALESCE(payload ->> 'id', '') = id
+    AND COALESCE(payload ->> 'kpiDefinitionId', '') = kpi_definition_id
+    AND COALESCE(payload ->> 'releaseStatus', '') = release_status
+    AND COALESCE(payload ->> 'previousReleaseEventId', '') = COALESCE(previous_release_event_id, '')
+  )
+);
+
+CREATE UNIQUE INDEX kpi_definition_release_event_chain_idx
+  ON kpi_definition_release_events (kpi_definition_id, previous_release_event_id)
+  WHERE previous_release_event_id IS NOT NULL;
+CREATE UNIQUE INDEX kpi_definition_initial_release_event_idx
+  ON kpi_definition_release_events (kpi_definition_id)
+  WHERE previous_release_event_id IS NULL;
+CREATE INDEX kpi_definition_release_current_idx
+  ON kpi_definition_release_events (kpi_definition_id, created_at DESC, id DESC);
 
 CREATE TABLE kpi_source_mapping_versions (
   id TEXT PRIMARY KEY,
@@ -144,6 +162,10 @@ $$;
 
 CREATE TRIGGER kpi_definition_versions_immutable
 BEFORE UPDATE OR DELETE ON kpi_definition_versions
+FOR EACH ROW EXECUTE FUNCTION reject_kpi_registry_mutation();
+
+CREATE TRIGGER kpi_definition_release_events_immutable
+BEFORE UPDATE OR DELETE ON kpi_definition_release_events
 FOR EACH ROW EXECUTE FUNCTION reject_kpi_registry_mutation();
 
 CREATE TRIGGER kpi_source_mapping_versions_immutable

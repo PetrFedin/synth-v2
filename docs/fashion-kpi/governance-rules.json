@@ -1,5 +1,5 @@
 {
-  "methodologyVersion": "15.0",
+  "methodologyVersion": "16.0",
   "roles": ["CANONICAL", "SPLIT_CHILD", "BLOCKED_UMBRELLA", "ALIAS"],
   "releaseStatuses": [
     "DRAFT",
@@ -70,6 +70,21 @@
     "dataSteward",
     "releaseStatus"
   ],
+  "nativeContractRequiredFields": [
+    "id",
+    "sourceFile",
+    "persistenceFile",
+    "entity",
+    "mappingStatus",
+    "grain",
+    "lineageKeys",
+    "fields"
+  ],
+  "nativeKpiRequiredFields": [
+    "sourceContracts",
+    "inputMappings",
+    "physicalSource"
+  ],
   "invariants": {
     "aliasMustNotPublish": true,
     "blockedUmbrellaMustNotPublish": true,
@@ -81,6 +96,12 @@
     "percentileRequiresQuantileMethod": true,
     "snapshotNonAdditiveAcrossTime": true,
     "ratioAggregateAsComponents": true,
-    "zeroNotApplicableMissingInvalidAreDistinct": true
+    "zeroNotApplicableMissingInvalidAreDistinct": true,
+    "nativeSourcePathMustExist": true,
+    "nativePersistencePathMustExist": true,
+    "nativeKpiInputsMustResolveToSourceContract": true,
+    "sourcePercentageScaleMustBeNormalizedExplicitly": true,
+    "dueCohortMustNotUseClosedOnlyDenominator": true,
+    "historicalSnapshotsMustNotBeSummedAsIndependentFacts": true
   }
 }

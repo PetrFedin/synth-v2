@@ -39,6 +39,21 @@
       .sort((left, right) => left.sku.localeCompare(right.sku)));
   }
 
+  function strictQuantityEntries(quantities) {
+    if (!quantities || typeof quantities !== 'object' || Array.isArray(quantities)) return Object.freeze([]);
+    const entries = [];
+    for (const [rawSku, rawQuantity] of Object.entries(quantities)) {
+      const sku = text(rawSku);
+      if (!sku) continue;
+      if (rawQuantity === '' || rawQuantity === null || rawQuantity === undefined || (typeof rawQuantity === 'string' && rawQuantity.trim() === '')) continue;
+      const quantity = positiveInteger(rawQuantity);
+      if (quantity === null) fail('BUYER_MATRIX_QUANTITY_INVALID', 'Buyer matrix quantity must be a positive integer or blank to remove the SKU from the matrix', { sku, quantity: rawQuantity });
+      entries.push(Object.freeze({ sku, quantity }));
+    }
+    entries.sort((left, right) => left.sku.localeCompare(right.sku));
+    return Object.freeze(entries);
+  }
+
   function buildStyleMatrices(catalog) {
     if (!isRichBuyerCatalog(catalog)) return Object.freeze([]);
     const currency = text(catalog.currency);
@@ -225,7 +240,7 @@
     const id = text(selectionId);
     if (!id) fail('BUYER_MATRIX_SELECTION_ID_REQUIRED', 'Selection id is required for matrix replacement');
     const cells = matrixCellsBySku(matrices);
-    const lines = quantityEntries(quantities).map(entry => {
+    const lines = strictQuantityEntries(quantities).map(entry => {
       const cell = cells.get(entry.sku);
       if (!cell) fail('BUYER_MATRIX_SKU_UNKNOWN', 'Quantity refers to a SKU outside the rendered immutable buyer matrix', { sku: entry.sku });
       return Object.freeze({ sku: entry.sku, quantity: validateRequestedQuantity(cell, entry.quantity) });

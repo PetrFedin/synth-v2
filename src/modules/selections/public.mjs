@@ -33,6 +33,38 @@ export function createSelection({ id, cycle, showroom, commercialBasis = null, c
 
 export function upsertSelectionLine(selection, line, actorId, updatedAt) {
   invariant(selection.status === 'draft', 'SELECTION_NOT_DRAFT', 'Only a draft selection can be edited');
+  const nextLine = normalizeSelectionLine(line, actorId, updatedAt);
+  const existingIndex = selection.lines.findIndex((candidate) => candidate.sku === nextLine.sku);
+  const lines = [...selection.lines];
+  if (existingIndex >= 0) lines[existingIndex] = nextLine;
+  else lines.push(nextLine);
+  lines.sort((left, right) => left.sku.localeCompare(right.sku));
+  return Object.freeze({ ...selection, lines: Object.freeze(lines), version: selection.version + 1, updatedAt });
+}
+
+export function replaceSelectionLines(selection, lines, actorId, updatedAt) {
+  invariant(selection.status === 'draft', 'SELECTION_NOT_DRAFT', 'Only a draft selection can be edited');
+  invariant(Array.isArray(lines), 'SELECTION_MATRIX_LINES_INVALID', 'Selection matrix lines must be an array');
+  const seen = new Set();
+  const normalized = lines.map((line) => {
+    const nextLine = normalizeSelectionLine(line, actorId, updatedAt);
+    invariant(!seen.has(nextLine.sku), 'SELECTION_MATRIX_SKU_DUPLICATE', 'Selection matrix contains duplicate SKU', { sku: nextLine.sku });
+    seen.add(nextLine.sku);
+    return nextLine;
+  });
+  normalized.sort((left, right) => left.sku.localeCompare(right.sku));
+  return Object.freeze({ ...selection, lines: Object.freeze(normalized), version: selection.version + 1, updatedAt });
+}
+
+export function submitSelection(selection, updatedAt) {
+  invariant(selection.status === 'draft', 'SELECTION_NOT_DRAFT', 'Only a draft selection can be submitted');
+  invariant(selection.lines.length > 0, 'SELECTION_LINES_REQUIRED', 'Selection must contain at least one line');
+  const currencies = new Set(selection.lines.map((line) => line.currency));
+  invariant(currencies.size === 1, 'SELECTION_CURRENCY_MISMATCH', 'All selection lines must use one currency');
+  return Object.freeze({ ...selection, status: 'submitted', version: selection.version + 1, updatedAt });
+}
+
+function normalizeSelectionLine(line, actorId, updatedAt) {
   invariant(typeof line.sku === 'string' && line.sku.length > 0, 'SELECTION_LINE_SKU_REQUIRED', 'Selection line SKU is required');
   const quantity = assertPostgresInteger(line.quantity, { code: 'SELECTION_LINE_QUANTITY_INVALID', label: 'Selection quantity', min: 1 });
   const unitPrice = normalizeMoney(line.unitPrice, {
@@ -46,7 +78,7 @@ export function upsertSelectionLine(selection, line, actorId, updatedAt) {
   const note = typeof line.note === 'string' ? line.note.trim() : '';
   invariant(note.length <= NOTE_MAX_LENGTH, 'SELECTION_LINE_NOTE_TOO_LONG', `Selection note must not exceed ${NOTE_MAX_LENGTH} characters`);
   const lineage = normalizeOptionalLineage(line);
-  const nextLine = Object.freeze({
+  return Object.freeze({
     sku: line.sku,
     quantity,
     unitPrice,
@@ -57,20 +89,6 @@ export function upsertSelectionLine(selection, line, actorId, updatedAt) {
     updatedBy: actorId,
     updatedAt,
   });
-  const existingIndex = selection.lines.findIndex((candidate) => candidate.sku === line.sku);
-  const lines = [...selection.lines];
-  if (existingIndex >= 0) lines[existingIndex] = nextLine;
-  else lines.push(nextLine);
-  lines.sort((left, right) => left.sku.localeCompare(right.sku));
-  return Object.freeze({ ...selection, lines: Object.freeze(lines), version: selection.version + 1, updatedAt });
-}
-
-export function submitSelection(selection, updatedAt) {
-  invariant(selection.status === 'draft', 'SELECTION_NOT_DRAFT', 'Only a draft selection can be submitted');
-  invariant(selection.lines.length > 0, 'SELECTION_LINES_REQUIRED', 'Selection must contain at least one line');
-  const currencies = new Set(selection.lines.map((line) => line.currency));
-  invariant(currencies.size === 1, 'SELECTION_CURRENCY_MISMATCH', 'All selection lines must use one currency');
-  return Object.freeze({ ...selection, status: 'submitted', version: selection.version + 1, updatedAt });
 }
 
 function normalizeOptionalLineage(line) {

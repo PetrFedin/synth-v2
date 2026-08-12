@@ -9,12 +9,14 @@ function harness() {
   const commands = new Map();
   const readiness = new Map();
   const projections = [];
+  const locks = [];
   const membership = { id: 'm:1', organisationId: 'brand:1', organisationType: 'brand', userId: 'user:1', role: 'sales', status: 'active' };
   const tx = {
     getCommand: async (id) => commands.get(id),
     insertCommand: async (value) => commands.set(value.id, value),
     insertReadinessSnapshot: async (value) => readiness.set(value.id, value),
     getReadinessSnapshotForUpdate: async (id) => readiness.get(id),
+    lockStyleVersion: async (id) => locks.push(id),
     getLatestProjectionForUpdate: async () => projections.at(-1),
     insertCommercialProjection: async (value) => projections.push(value),
   };
@@ -32,7 +34,7 @@ function harness() {
   };
   let sequence = 0;
   const service = createProductReadinessService({ store, sourceReader, clock: () => now, nextId: (prefix) => `${prefix}:${++sequence}` });
-  return { service, commands, readiness, projections };
+  return { service, commands, readiness, projections, locks };
 }
 
 function context() {
@@ -75,7 +77,16 @@ test('assessment is command-idempotent and freezes a ready handoff', async () =>
   assert.equal(h.commands.size, 1);
 });
 
-test('projection publish is contiguous, idempotent and consumes the exact readiness snapshot', async () => {
+test('readiness mutations reject missing durable command ids before repository work', async () => {
+  const h = harness();
+  await assert.rejects(
+    h.service.assessReadiness('', 'user:1', 'style-version:1', input()),
+    (error) => error?.code === 'COMMAND_ID_REQUIRED',
+  );
+  assert.equal(h.readiness.size, 0);
+});
+
+test('projection publish is contiguous, idempotent and serializes version allocation on StyleVersion', async () => {
   const h = harness();
   const snapshot = await h.service.assessReadiness('cmd:assess', 'user:1', 'style-version:1', input());
   const first = await h.service.publishCommercialProjection('cmd:projection', 'user:1', snapshot.id, { expectedLatestVersionNo: 0 });
@@ -84,8 +95,10 @@ test('projection publish is contiguous, idempotent and consumes the exact readin
   assert.equal(first.versionNo, 1);
   assert.equal(first.payload.readinessSnapshotId, snapshot.id);
   assert.equal(h.projections.length, 1);
+  assert.deepEqual(h.locks, ['style-version:1']);
   await assert.rejects(
     h.service.publishCommercialProjection('cmd:projection-2', 'user:1', snapshot.id, { expectedLatestVersionNo: 0 }),
     (error) => error?.code === 'COMMERCIAL_PROJECTION_CONCURRENCY_CONFLICT',
   );
+  assert.deepEqual(h.locks, ['style-version:1', 'style-version:1']);
 });

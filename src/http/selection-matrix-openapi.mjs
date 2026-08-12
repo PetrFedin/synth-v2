@@ -1,5 +1,5 @@
 const SAFE_ID = '^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$';
-const SKU = '^[A-Z0-9][A-Z0-9._-]{1,127}$';
+const SKU = '^[A-Z0-9][A-Z0-9._-]{1,63}$';
 const identifier = { type: 'string', minLength: 1, maxLength: 200, pattern: SAFE_ID };
 const currency = { type: 'string', pattern: '^[A-Z]{3}$' };
 const idempotency = { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 1, maxLength: 128, pattern: SAFE_ID } };
@@ -32,7 +32,7 @@ function schemas() {
     },
     SelectionMatrixLine: {
       type: 'object', additionalProperties: true,
-      required: ['sku', 'quantity', 'unitPrice', 'currency', 'catalogVersion', 'note', 'updatedBy', 'updatedAt'],
+      required: ['sku', 'quantity', 'unitPrice', 'currency', 'catalogVersion', 'productSkuId', 'styleId', 'styleVersionId', 'colorwayId', 'sizeValueId', 'sizeCode', 'sizeLabelRu', 'sizeLabelEn', 'sizeSortOrder', 'gtin', 'note', 'updatedBy', 'updatedAt'],
       properties: {
         sku: { type: 'string', pattern: SKU },
         quantity: { type: 'integer', minimum: 1, maximum: 2_147_483_647 },

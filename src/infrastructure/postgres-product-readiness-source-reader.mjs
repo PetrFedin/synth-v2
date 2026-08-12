@@ -5,24 +5,26 @@ export function createPostgresProductReadinessSourceReader({ pool, productIdenti
   invariant(pool && typeof pool.query === 'function', 'POSTGRES_POOL_REQUIRED', 'PostgreSQL pool is required');
   const productReader = productIdentityReader ?? createPostgresProductIdentityReader({ pool });
 
+  async function getStyleVersion(styleVersionId) {
+    const result = await pool.query(
+      `SELECT id, style_id, brand_id, version_no, content_hash
+         FROM product_style_versions
+        WHERE id = $1`,
+      [styleVersionId],
+    );
+    return result.rows[0] ? mapStyleVersionIdentity(result.rows[0]) : undefined;
+  }
+
   return Object.freeze({
     async getMembership(organisationId, userId) {
       const result = await pool.query('SELECT payload FROM memberships WHERE organisation_id = $1 AND user_id = $2', [organisationId, userId]);
       return result.rows[0]?.payload;
     },
 
-    async getStyleVersion(styleVersionId) {
-      const result = await pool.query(
-        `SELECT id, style_id, brand_id, version_no, content_hash
-           FROM product_style_versions
-          WHERE id = $1`,
-        [styleVersionId],
-      );
-      return result.rows[0] ? mapStyleVersionIdentity(result.rows[0]) : undefined;
-    },
+    getStyleVersion,
 
     async loadAssessmentContext(styleVersionId) {
-      const styleVersion = await this.getStyleVersion(styleVersionId);
+      const styleVersion = await getStyleVersion(styleVersionId);
       if (!styleVersion) return undefined;
       const aggregate = await productReader.getStyleAggregate(styleVersion.styleId, styleVersion.versionNo);
       invariant(aggregate?.styleVersion?.id === styleVersionId, 'PRODUCT_READINESS_STYLE_VERSION_RESOLUTION_FAILED', 'Exact Product Style Version aggregate could not be resolved', { styleVersionId });

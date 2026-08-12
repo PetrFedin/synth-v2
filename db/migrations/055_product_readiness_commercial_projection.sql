@@ -101,15 +101,19 @@ BEGIN
            WHERE jsonb_typeof(value) <> 'object'
               OR value ->> 'code' IS NULL
               OR value ->> 'status' NOT IN ('ready','blocked','not_applicable')
-              OR jsonb_typeof(value -> 'required') <> 'boolean'
-              OR (value ->> 'required')::boolean <> (value ->> 'status' <> 'not_applicable')
+              OR CASE
+                   WHEN jsonb_typeof(value -> 'required') = 'boolean'
+                     THEN (value ->> 'required')::boolean <> (value ->> 'status' <> 'not_applicable')
+                   ELSE true
+                 END
               OR jsonb_typeof(value -> 'evidence') <> 'object'
          )
     INTO actual_codes, actual_ready, actual_blocked, actual_not_applicable, invalid_count
     FROM jsonb_array_elements(NEW.dimensions) AS dimension(value);
 
-  SELECT array_agg(code ORDER BY code) INTO expected_codes
-    FROM unnest(expected_codes) AS code;
+  SELECT array_agg(code ORDER BY code)
+    INTO expected_codes
+    FROM unnest(expected_codes) AS item(code);
 
   IF invalid_count <> 0 OR actual_codes IS DISTINCT FROM expected_codes THEN
     RAISE EXCEPTION 'Product readiness dimensions must contain each governed dimension exactly once with valid required/status/evidence semantics'

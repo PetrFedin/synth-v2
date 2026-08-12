@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { invariant } from '../../core/errors.mjs';
 import { normalizeMoney } from '../../core/money.mjs';
 import { canonicalJson } from '../../core/fingerprints.mjs';
+export { assertBuyerCatalogQuantity, buyerCatalogProductSku, isRichBuyerCatalog } from './buyer-catalog-product.mjs';
 
 // Historical V1 constructor is preserved only for old immutable snapshots/tests.
 // New application writes use createProjectionBackedCommercialPublication.

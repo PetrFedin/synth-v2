@@ -46,7 +46,7 @@ async function fixture() {
   let cycle = await platform.startCycle('cycle-create', 'buyer-1', { brandId: 'brand-1', shopId: 'shop-1', campaignId: campaign.id, collectionId: collection.id });
   cycle = await platform.advanceCycle('cycle-collection', 'buyer-1', cycle.id, 'collection');
   cycle = await platform.advanceCycle('cycle-showroom', 'buyer-1', cycle.id, 'showroom');
-  return { store, platform, collaboration, showroomId: showroom.id, cycle };
+  return { store, platform, collaboration, showroomId: showroom.id, invitationId: invitation.id, cycle };
 }
 
 function richBuyerCatalog(context, overrides = {}) {
@@ -69,7 +69,7 @@ function richBuyerCatalog(context, overrides = {}) {
     publicationId: 'publication-1',
     priceListVersionId: 'price-list-1',
     contentHash: 'catalog-hash-1',
-    accessGrantId: 'invitation-1',
+    accessGrantId: context.invitationId,
     collectionId: context.cycle.collectionId,
     brandId: 'brand-1',
     shopId: 'shop-1',

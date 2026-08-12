@@ -26,6 +26,10 @@ export function createPostgresCommercialPublicationStore({ pool } = {}) {
       );
       return result.rows.map(row => row.payload);
     },
+    async getCommercialProjection(id) {
+      const result = await pool.query('SELECT * FROM commercial_product_projection_versions WHERE id = $1', [id]);
+      return result.rows[0] ? mapCommercialProjection(result.rows[0]) : undefined;
+    },
     async getCommercialPublication(id) {
       const result = await pool.query('SELECT payload FROM commercial_publications WHERE id = $1', [id]);
       return result.rows[0]?.payload;
@@ -91,6 +95,22 @@ function view(client) {
   });
 }
 
+function mapCommercialProjection(row) {
+  return Object.freeze({
+    id: row.id,
+    styleVersionId: row.style_version_id,
+    brandId: row.brand_id,
+    readinessSnapshotId: row.readiness_snapshot_id,
+    versionNo: row.version_no,
+    sourceProjectionId: row.source_projection_id,
+    status: row.status,
+    payload: deepFreeze(row.payload),
+    contentHash: row.content_hash,
+    publishedAt: timestamp(row.published_at),
+    publishedBy: row.published_by,
+  });
+}
+
 async function insertImmutable(client, table, values, sql, conflictCode, details) {
   try {
     await client.query(sql, values);
@@ -99,3 +119,6 @@ async function insertImmutable(client, table, values, sql, conflictCode, details
     throw error;
   }
 }
+
+function timestamp(value) { return value?.toISOString?.() ?? value; }
+function deepFreeze(value) { if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value; Object.freeze(value); for (const nested of Object.values(value)) deepFreeze(nested); return value; }

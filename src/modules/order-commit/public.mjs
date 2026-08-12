@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { invariant } from '../../core/errors.mjs';
 import { canonicalJson } from '../../core/fingerprints.mjs';
 import { normalizeMoney } from '../../core/money.mjs';
-import { buyerCatalogProductSku, isRichBuyerCatalog } from '../commercial-publication/buyer-catalog-product.mjs';
+import { buyerCatalogProductSku, isRichBuyerCatalog } from '../commercial-publication/public.mjs';
 
 const RICH_LINEAGE_KEYS = Object.freeze(['productSkuId', 'styleId', 'styleVersionId', 'colorwayId', 'sizeValueId', 'sizeCode', 'sizeSortOrder']);
 

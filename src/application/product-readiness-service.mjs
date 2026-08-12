@@ -29,7 +29,7 @@ export function createProductReadinessService({
   }
 
   async function replayOrExecute({ commandId, actorId, fingerprint, action }) {
-    invariant(typeof commandId === 'string' && commandId.trim(), 'COMMAND_ID_REQUIRED', 'Every readiness/projection mutation requires commandId');
+    assertCommandId(commandId);
     return store.transaction(async (tx) => {
       const previous = await tx.getCommand(commandId);
       if (previous) invariant(fingerprintsMatch(previous.fingerprint, fingerprint), 'COMMAND_ID_CONFLICT', 'commandId was already used by another mutation', { commandId });
@@ -42,6 +42,7 @@ export function createProductReadinessService({
 
   return Object.freeze({
     async assessReadiness(commandId, actorId, styleVersionId, input) {
+      assertCommandId(commandId);
       assertAssessmentInput(input);
       const styleVersionIdentity = await authorizeStyleVersion(actorId, styleVersionId, CAPABILITIES.PRODUCT_MANAGE);
       const fingerprint = `assessProductReadiness:${actorId}:${styleVersionId}:${canonicalJson(input)}`;
@@ -70,7 +71,7 @@ export function createProductReadinessService({
       });
       const snapshot = createProductReadinessSnapshot({
         id: nextId('product-readiness'),
-        styleVersion: Object.freeze({ ...styleVersionIdentity, brandId: styleVersionIdentity.brandId }),
+        styleVersion: styleVersionIdentity,
         developmentRoute: input.developmentRoute,
         dimensions,
         technicalSnapshot,
@@ -91,6 +92,7 @@ export function createProductReadinessService({
     },
 
     async publishCommercialProjection(commandId, actorId, readinessSnapshotId, input) {
+      assertCommandId(commandId);
       assertProjectionInput(input);
       const readiness = requireEntity(await store.getReadinessSnapshot(readinessSnapshotId), 'PRODUCT_READINESS_NOT_FOUND', { readinessSnapshotId });
       await authorizeBrand(actorId, readiness.brandId, CAPABILITIES.CATALOG_MANAGE);
@@ -106,6 +108,7 @@ export function createProductReadinessService({
             readinessSnapshotId,
             blockedDimensionCount: exactReadiness.blockedDimensionCount,
           });
+          await tx.lockStyleVersion(exactReadiness.styleVersionId);
           const latest = await tx.getLatestProjectionForUpdate(exactReadiness.styleVersionId);
           const actualLatestVersionNo = latest?.versionNo ?? 0;
           invariant(input.expectedLatestVersionNo === actualLatestVersionNo, 'COMMERCIAL_PROJECTION_CONCURRENCY_CONFLICT', 'Commercial Product Projection changed concurrently', {
@@ -151,6 +154,10 @@ export function createProductReadinessService({
       return store.listCommercialProjectionsByStyleVersion(styleVersionId, { limit });
     },
   });
+}
+
+function assertCommandId(commandId) {
+  invariant(typeof commandId === 'string' && commandId.trim(), 'COMMAND_ID_REQUIRED', 'Every readiness/projection mutation requires commandId');
 }
 
 function assertAssessmentInput(input) {

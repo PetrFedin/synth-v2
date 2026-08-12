@@ -14,7 +14,7 @@ const matrices = Object.freeze([Object.freeze({
 })]);
 
 test('buyer matrix builds one atomic exact-SKU replacement request', () => {
-  assert.deepEqual(matrix.selectionMatrixRequest('selection:1', matrices, { 'SKU-L': 3, 'SKU-M': 4, 'SKU-ZERO': 0 }), {
+  assert.deepEqual(matrix.selectionMatrixRequest('selection:1', matrices, { 'SKU-L': 3, 'SKU-M': 4, 'SKU-BLANK': '' }), {
     method: 'PUT',
     path: '/v2/selections/selection%3A1/matrix',
     body: {
@@ -25,6 +25,12 @@ test('buyer matrix builds one atomic exact-SKU replacement request', () => {
       ],
     },
   });
+});
+
+test('buyer matrix requires blank to remove a SKU and rejects zero or fractional quantities', () => {
+  assert.throws(() => matrix.selectionMatrixRequest('selection:1', matrices, { 'SKU-M': 0 }), error => error?.code === 'BUYER_MATRIX_QUANTITY_INVALID');
+  assert.throws(() => matrix.selectionMatrixRequest('selection:1', matrices, { 'SKU-M': '2.5' }), error => error?.code === 'BUYER_MATRIX_QUANTITY_INVALID');
+  assert.deepEqual(matrix.selectionMatrixRequest('selection:1', matrices, { 'SKU-M': '' }).body.lines, []);
 });
 
 test('buyer matrix client validation mirrors frozen MOQ and explicit available-to-sell bounds', () => {

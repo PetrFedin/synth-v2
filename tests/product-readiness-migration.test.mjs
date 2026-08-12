@@ -6,6 +6,20 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const migration = await fs.readFile(path.join(root, 'db', 'migrations', '055_product_readiness_commercial_projection.sql'), 'utf8');
+const commandRegistry = await fs.readFile(path.join(root, 'src', 'infrastructure', 'postgres-command-registry.mjs'), 'utf8');
+
+test('migration extends durable command registry without rewriting applied migration 011', () => {
+  assert.match(migration, /DROP CONSTRAINT IF EXISTS command_registry_scope_check/);
+  assert.match(migration, /'product-identity'/);
+  assert.match(migration, /'product-readiness'/);
+  assert.match(migration, /CREATE TABLE product_identity_commands/);
+  assert.match(migration, /CREATE TABLE product_readiness_commands/);
+  assert.match(migration, /product_identity_commands_command_registry_fk/);
+  assert.match(migration, /product_readiness_commands_command_registry_fk/);
+  assert.match(migration, /REFERENCES command_registry\(id\) ON DELETE RESTRICT/);
+  assert.match(commandRegistry, /'product-identity': 'product_identity_commands'/);
+  assert.match(commandRegistry, /'product-readiness': 'product_readiness_commands'/);
+});
 
 test('readiness migration freezes exactly 18 governed dimensions and route-aware snapshots', () => {
   assert.match(migration, /CREATE TABLE product_readiness_snapshots/);

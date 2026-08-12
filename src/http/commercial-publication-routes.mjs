@@ -5,7 +5,7 @@ import {
   bodyContract,
 } from './request-contract.mjs';
 
-const PUBLICATION_BODY = bodyContract(['collectionId', 'skuCodes']);
+const PUBLICATION_BODY = bodyContract(['collectionId', 'commercialProjectionId']);
 const BUYER_CATALOG_BODY = bodyContract(
   ['showroomId', 'shopId', 'priceOverrides'],
   {},
@@ -27,9 +27,8 @@ export function createCommercialPublicationRoutes({ commercialPublication } = {}
 
 function validatePublicationBody(body) {
   assertBodyContract(body, PUBLICATION_BODY);
-  invariant(typeof body.collectionId === 'string' && body.collectionId.length > 0, 'HTTP_BODY_FIELD_INVALID', 'collectionId must be a non-empty string', { field: 'collectionId' });
-  invariant(Array.isArray(body.skuCodes) && body.skuCodes.length > 0, 'HTTP_BODY_FIELD_INVALID', 'skuCodes must be a non-empty array', { field: 'skuCodes' });
-  body.skuCodes.forEach((sku, index) => invariant(typeof sku === 'string' && sku.length > 0, 'HTTP_BODY_FIELD_INVALID', `skuCodes[${index}] must be a non-empty string`, { field: 'skuCodes', index }));
+  invariant(typeof body.collectionId === 'string' && SAFE_ID.test(body.collectionId), 'HTTP_BODY_FIELD_INVALID', 'collectionId must be a valid identifier', { field: 'collectionId' });
+  invariant(typeof body.commercialProjectionId === 'string' && SAFE_ID.test(body.commercialProjectionId), 'HTTP_BODY_FIELD_INVALID', 'commercialProjectionId must be a valid identifier', { field: 'commercialProjectionId' });
 }
 
 function validateBuyerCatalogBody(body) {

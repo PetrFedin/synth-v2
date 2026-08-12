@@ -172,15 +172,15 @@ test('order commit fails closed when order variant lineage differs from pinned B
 });
 
 test('order commit fails closed when submitted buyer selection lineage differs from pinned BuyerCatalogVersion', () => {
-  const original = richSelection();
-  const selection = Object.freeze({
-    ...original,
-    lines: Object.freeze([Object.freeze({ ...original.lines[0], sizeValueId: 'size-l' })]),
+  const originalSelection = richSelection();
+  const order = attachedOrder(originalSelection);
+  const tamperedSelection = Object.freeze({
+    ...originalSelection,
+    lines: Object.freeze([Object.freeze({ ...originalSelection.lines[0], sizeValueId: 'size-l' })]),
   });
-  const order = attachedOrder(selection);
 
   assert.throws(
-    () => createOrderCommitSnapshot({ id: 'snapshot-1', order, selection, buyerCatalog: richBuyerCatalog(), committedAt: NOW }),
-    (error) => error.code === 'ORDER_COMMIT_ORDER_LINEAGE_MISMATCH' || error.code === 'ORDER_COMMIT_SELECTION_LINEAGE_MISMATCH',
+    () => createOrderCommitSnapshot({ id: 'snapshot-1', order, selection: tamperedSelection, buyerCatalog: richBuyerCatalog(), committedAt: NOW }),
+    (error) => error.code === 'ORDER_COMMIT_SELECTION_LINEAGE_MISMATCH',
   );
 });

@@ -13,6 +13,13 @@
 - Transport retries for mutations must reuse the original idempotency key and must not retry domain HTTP errors.
 - Destructive actions require explicit confirmation or a reason form.
 - Preserve the browser dependency order: localization, shared DOM/API, capabilities and validation load before `app-core.js`; `app-start.js` loads last.
+- Product Identity V2 is the only canonical Product Master. Do not create a second Style/StyleVersion/Colorway/Size/SKU hierarchy in catalog, planning, PLM workspaces or buyer modules.
+- `catalog_skus` is a temporary compatibility surface. New product semantics belong to Product Identity; do not extend the flat catalog into a competing Product Master.
+- The only canonical PLM-to-commerce handoff is `ProductReadinessSnapshot -> CommercialProductProjectionVersion -> CommercialPublication`. Buyer/catalog code must not reconstruct published product truth from mutable live PLM/MDM sources.
+- Readiness evidence is fail-closed. If a canonical repository source exists for the development route, external evidence must not be used to override a missing/failed repository gate. External evidence is only allowed at explicitly documented integration boundaries.
+- Historical readiness, commercial projection, publication, buyer catalog, order and economics facts must preserve exact source versions/snapshots. Never silently re-resolve them against current Product Master or current MDM labels.
+- MDM owns reference semantics and exact reference versions; it does not own KPI formula truth. Do not create a parallel editable formula catalog under MDM.
+- Do not add another `omnidata-vN.css`/JS visual layer or a new page-local visual dialect. ODS work must reduce compatibility debt through shared roles/components and remove obsolete local/static assets after validation.
 - Fashion KPI definitions, calculations, source mappings and publication rules must follow `docs/fashion-kpi/`. Do not duplicate KPI formulas in UI modules or silently redefine a governed KPI locally.
 - Repository-native KPI mappings live in `docs/fashion-kpi/native-source-contracts.json`. If a mapped module export, runtime field, persistence table/container or lineage key changes, update the native source contract in the same change; `npm run verify` is expected to reject stale mappings.
 - Native KPI implementations must resolve every logical input through a governed source contract or an explicit constant/policy input. Do not join by fuzzy SKU/date/text when exact immutable lineage IDs exist.
@@ -24,4 +31,4 @@
 - Due-cohort service KPI must keep open overdue cases in the denominator; closed-only denominators are prohibited unless the KPI explicitly measures completed-case duration rather than SLA compliance.
 - KPI observations must preserve formula version, period/as-of, canonical UOM, DQ status, source/run lineage and restatement lineage; do not persist only a formatted dashboard value.
 - Run `npm run verify` before publishing. It includes the governed fashion KPI methodology and repository-native source-contract validator.
-- Priority: stabilize existing commercial workflows before expanding fashion catalog/planning, PLM/BOM/samples, production, QC, logistics, landed cost, analytics and integrations.
+- Priority: close the canonical Product Master -> Readiness -> Commercial Projection -> Buyer Catalog -> Order Matrix spine before expanding premium buyer features, analytics or additional integration breadth.

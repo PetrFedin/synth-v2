@@ -105,17 +105,39 @@ export function createPriceListVersion({ id, publication, shopId, priceOverrides
       overflowCode: 'PRICE_LIST_OVERRIDE_PRICE_TOO_LARGE', label: 'Price override',
     }));
   }
-  const lines = publication.lines.map((line) => Object.freeze({
-    ...line,
-    unitPrice: overrides.get(line.sku) ?? line.unitPrice,
-  }));
+
+  const projectionBacked = publication.formatVersion === 2 && Array.isArray(publication.styles);
+  const lines = publication.lines.map((line) => {
+    const unitPrice = overrides.get(line.sku) ?? line.unitPrice;
+    if (projectionBacked) return Object.freeze({ ...line, unitPrice });
+    // Preserve the exact V1 immutable snapshot shape and therefore its hash basis.
+    return Object.freeze({
+      sku: line.sku,
+      catalogVersion: line.catalogVersion,
+      unitPrice,
+      currency: line.currency,
+      minimumOrderQuantity: line.minimumOrderQuantity,
+    });
+  });
+
+  if (!projectionBacked) {
+    const basis = Object.freeze({
+      publicationId: publication.id,
+      brandId: publication.brandId,
+      shopId,
+      currency: publication.currency,
+      lines: Object.freeze(lines),
+    });
+    return Object.freeze({ id, ...basis, status: 'published', contentHash: hashBasis(basis), publishedAt });
+  }
+
   const basis = deepFreeze({
     publicationId: publication.id,
     brandId: publication.brandId,
     shopId,
     currency: publication.currency,
     lines,
-    ...(publication.styles ? { styles: applyBuyerPrices(publication.styles, lines) } : {}),
+    styles: applyBuyerPrices(publication.styles, lines),
   });
   return deepFreeze({ id, ...basis, status: 'published', contentHash: hashBasis(basis), publishedAt });
 }

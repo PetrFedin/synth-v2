@@ -64,7 +64,7 @@ const strictHarness = createHarness('ru-RU');
 vm.runInContext(runtimeSource, strictHarness.context, { filename: runtimePath });
 vm.runInContext(strictSource, strictHarness.context, { filename: strictPath });
 const strictI18n = strictHarness.window.SynthaI18n;
-assert(strictI18n.t('auth.description') === '\u0415\u0434\u0438\u043d\u043e\u0435 \u0440\u0430\u0431\u043e\u0447\u0435\u0435 \u043f\u0440\u043e\u0441\u0442\u0440\u0430\u043d\u0441\u0442\u0432\u043e \u0434\u043b\u044f \u0440\u0430\u0437\u0440\u0430\u0431\u043e\u0442\u043a\u0438, \u043f\u0440\u043e\u0438\u0437\u0432\u043e\u0434\u0441\u0442\u0432\u0430 \u0438 \u043e\u043f\u0442\u043e\u0432\u043e\u0439 \u0442\u043e\u0440\u0433\u043e\u0432\u043b\u0438.', 'Russian login copy is not strict Russian.');
+assert(strictI18n.t('auth.description') === '\u0415\u0434\u0438\u043d\u043e\u0435 \u0440\u0430\u0431\u043e\u0447\u0435\u0435 \u043f\u0440\u043e\u0441\u0442\u0440\u0430\u043d\u0441\u0442\u0432\u043e \u0434\u043b\u044f \u0440\u0430\u0437\u0440\u0430\u0431\u043e\u0442\u043a\u0438, \u043f\u0440\u043e\u0438\u0437\u0432\u043e\u0434\u0441\u0442\u0432\u0430 \u0438 \u043e\u043f\u0442\u043e\u0430432\u043e\u0439 \u0442\u043e\u0440\u0433\u043e\u0432\u043b\u0438.', 'Russian login copy is not strict Russian.');
 assert(strictI18n.translate('Linesheets') === '\u041b\u0438\u0441\u0442\u044b \u043a\u043e\u043b\u043b\u0435\u043a\u0446\u0438\u0439', 'Russian strict terminology is invalid.');
 assert(strictI18n.translate('\u041d\u0435\u0442 linesheet') === '\u041d\u0435\u0442 \u043b\u0438\u0441\u0442 \u043a\u043e\u043b\u043b\u0435\u043a\u0446\u0438\u0438', 'Embedded Russian terminology is not normalized.');
 assert(strictI18n.translate('\u041d\u0435\u043a\u043e\u0440\u0440\u0435\u043a\u0442\u043d\u044b\u0439 cost snapshot') === '\u041d\u0435\u043a\u043e\u0440\u0440\u0435\u043a\u0442\u043d\u044b\u0439 \u0441\u043d\u0438\u043c\u043e\u043a \u0441\u0442\u043e\u0438\u043c\u043e\u0441\u0442\u0438', 'Mixed Russian BOM terminology is not normalized.');
@@ -193,6 +193,7 @@ function createHarness(browserLanguage) {
     Date,
     URL,
     URLSearchParams,
+    structuredClone,
     queueMicrotask: () => {},
     encodeURIComponent,
     setTimeout: () => 0,

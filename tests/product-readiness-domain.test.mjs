@@ -61,8 +61,8 @@ function external(evidenceId) {
   return { status: 'ready', evidenceId, sourceSystem: 'syntha-documents', version: 'v1', contentHash: hash, approvedAt: now, approvedBy: 'user:1' };
 }
 
-function technicalSnapshot() {
-  return { styleVersionId: 'style-version:1', brandId: 'brand:1', capturedAt: now, product: product(), legacyEvidence: legacyEvidence() };
+function technicalSnapshot(evidence = legacyEvidence()) {
+  return { styleVersionId: 'style-version:1', brandId: 'brand:1', capturedAt: now, product: product(), legacyEvidence: evidence };
 }
 
 test('OWN_DEVELOPMENT readiness emits exactly 18 governed ready dimensions from repository + compliance evidence', () => {
@@ -76,6 +76,46 @@ test('OWN_DEVELOPMENT readiness emits exactly 18 governed ready dimensions from 
   assert.deepEqual(dimensions.map((value) => value.code), PRODUCT_READINESS_DIMENSIONS);
   assert.equal(dimensions.filter((value) => value.status === 'blocked').length, 0);
   assert.equal(dimensions.filter((value) => value.status === 'not_applicable').length, 0);
+});
+
+test('development routes fail closed and do not allow external evidence to override repository sourcing or Final Quality', () => {
+  assert.throws(
+    () => evaluateProductReadiness({
+      developmentRoute: 'OWN_DEVELOPMENT',
+      technicalSnapshot: technicalSnapshot(),
+      commercialPreparation: commercialPreparation(),
+      externalEvidence: { sourcing: external('external-rfq:1'), compliance: external('compliance:1') },
+    }),
+    (error) => error?.code === 'PRODUCT_READINESS_EXTERNAL_EVIDENCE_NOT_ALLOWED',
+  );
+
+  const evidence = legacyEvidence().map((row) => ({ ...row, sourcing: null, quality: null }));
+  const dimensions = evaluateProductReadiness({
+    developmentRoute: 'OWN_DEVELOPMENT',
+    technicalSnapshot: technicalSnapshot(evidence),
+    commercialPreparation: commercialPreparation(),
+    externalEvidence: { compliance: external('compliance:1') },
+  });
+  assert.equal(dimensions.find((value) => value.code === 'sourcing').status, 'blocked');
+  assert.equal(dimensions.find((value) => value.code === 'quality').status, 'blocked');
+});
+
+test('MATERIALS_SEPARATE requires repository production plus immutable material-purchase evidence', () => {
+  const blocked = evaluateProductReadiness({
+    developmentRoute: 'MATERIALS_SEPARATE',
+    technicalSnapshot: technicalSnapshot(),
+    commercialPreparation: commercialPreparation(),
+    externalEvidence: { compliance: external('compliance:1') },
+  });
+  assert.equal(blocked.find((value) => value.code === 'purchase_or_production_commitment').status, 'blocked');
+
+  const ready = evaluateProductReadiness({
+    developmentRoute: 'MATERIALS_SEPARATE',
+    technicalSnapshot: technicalSnapshot(),
+    commercialPreparation: commercialPreparation(),
+    externalEvidence: { purchase_or_production_commitment: external('material-po:1'), compliance: external('compliance:1') },
+  });
+  assert.equal(ready.find((value) => value.code === 'purchase_or_production_commitment').status, 'ready');
 });
 
 test('READY_GOODS makes BOM/sample/Tech Pack non-applicable and requires explicit external sourcing, PO, QC and compliance evidence', () => {

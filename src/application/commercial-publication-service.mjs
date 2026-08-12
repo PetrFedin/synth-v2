@@ -6,20 +6,20 @@ import { CAPABILITIES, assertCapability, roleHasCapability } from '../modules/ac
 import { assertAcceptedShowroomAccess } from '../modules/showroom-invitations/public.mjs';
 import {
   createBuyerCatalogVersion,
-  createCommercialPublication,
   createPriceListVersion,
+  createProjectionBackedCommercialPublication,
 } from '../modules/commercial-publication/public.mjs';
 
 export function createCommercialPublicationService({
   commercialStore,
   wholesaleStore,
-  catalogReader,
+  commercialProjectionReader,
   clock = () => new Date().toISOString(),
   nextId = defaultIdGenerator(),
 } = {}) {
   invariant(commercialStore && typeof commercialStore.transaction === 'function', 'COMMERCIAL_PUBLICATION_STORE_REQUIRED', 'Commercial publication store is required');
   invariant(wholesaleStore && typeof wholesaleStore.transaction === 'function', 'WHOLESALE_STORE_REQUIRED', 'Wholesale store is required');
-  invariant(catalogReader && typeof catalogReader.getSku === 'function', 'CATALOG_READER_REQUIRED', 'Catalog reader is required');
+  invariant(commercialProjectionReader && typeof commercialProjectionReader.getCommercialProjection === 'function', 'COMMERCIAL_PROJECTION_READER_REQUIRED', 'Commercial Product Projection reader is required');
 
   function execute(commandId, fingerprint, actorId, action) {
     invariant(commandId, 'COMMAND_ID_REQUIRED', 'Every mutation requires commandId');
@@ -79,32 +79,33 @@ export function createCommercialPublicationService({
     return wholesaleStore.transaction(async (tx) => {
       const brandMembership = await tx.getMembership(buyerCatalog.brandId, actorId);
       if (brandMembership?.status === 'active' && roleHasCapability(brandMembership.role, CAPABILITIES.DEAL_READ)) return buyerCatalog;
-
       const shopMembership = await tx.getMembership(buyerCatalog.shopId, actorId);
       assertCapability(shopMembership, CAPABILITIES.DEAL_READ);
       const invitation = requireEntity(await tx.getShowroomInvitation(buyerCatalog.accessGrantId), 'SHOWROOM_INVITATION_NOT_FOUND', { invitationId: buyerCatalog.accessGrantId });
-      assertAcceptedShowroomAccess(invitation, {
-        showroomId: buyerCatalog.showroomId,
-        brandId: buyerCatalog.brandId,
-        shopId: buyerCatalog.shopId,
-        now: clock(),
-      });
+      assertAcceptedShowroomAccess(invitation, { showroomId: buyerCatalog.showroomId, brandId: buyerCatalog.brandId, shopId: buyerCatalog.shopId, now: clock() });
       return buyerCatalog;
     });
   }
 
   return Object.freeze({
     async publishCommercialPublication(commandId, actorId, input) {
-      invariant(input && Array.isArray(input.skuCodes), 'COMMERCIAL_PUBLICATION_SKUS_REQUIRED', 'skuCodes must be an array');
+      invariant(input && typeof input.collectionId === 'string' && typeof input.commercialProjectionId === 'string', 'COMMERCIAL_PUBLICATION_INPUT_INVALID', 'collectionId and commercialProjectionId are required');
       const fingerprint = `publishCommercialPublication:${actorId}:${canonicalJson(input)}`;
       const collection = await publicationContext(actorId, input.collectionId);
-      const catalogSkus = await Promise.all(input.skuCodes.map(async (skuCode) => requireEntity(await catalogReader.getSku(skuCode), 'CATALOG_SKU_NOT_FOUND', { sku: skuCode })));
+      const projection = requireEntity(await commercialProjectionReader.getCommercialProjection(input.commercialProjectionId), 'COMMERCIAL_PROJECTION_NOT_FOUND', { commercialProjectionId: input.commercialProjectionId });
+      invariant(projection.brandId === collection.brandId, 'COMMERCIAL_PUBLICATION_BRAND_MISMATCH', 'Commercial projection brand does not match collection brand');
       return execute(commandId, fingerprint, actorId, async (tx) => {
-        const publication = createCommercialPublication({ id: nextId('commercial-publication'), collection, catalogSkus, publishedAt: clock() });
+        const publication = createProjectionBackedCommercialPublication({ id: nextId('commercial-publication'), collection, commercialProjection: projection, publishedAt: clock() });
         await tx.insertCommercialPublication(publication);
         await append(tx, 'commercial-publication.published', publication.id, {
-          brandId: publication.brandId, collectionId: publication.collectionId, currency: publication.currency,
-          lineCount: publication.lines.length, contentHash: publication.contentHash,
+          brandId: publication.brandId,
+          collectionId: publication.collectionId,
+          commercialProjectionId: publication.commercialProjectionId,
+          styleVersionId: publication.styleVersionId,
+          currency: publication.currency,
+          lineCount: publication.lines.length,
+          styleCount: publication.styles.length,
+          contentHash: publication.contentHash,
         }, commandId, actorId);
         return publication;
       });
@@ -117,23 +118,12 @@ export function createCommercialPublicationService({
       const context = await buyerCatalogContext(actorId, publication, input.showroomId, input.shopId);
       return execute(commandId, fingerprint, actorId, async (tx) => {
         const publishedAt = clock();
-        const priceListVersion = createPriceListVersion({
-          id: nextId('price-list-version'), publication, shopId: input.shopId,
-          priceOverrides: input.priceOverrides ?? [], publishedAt,
-        });
-        const buyerCatalogVersion = createBuyerCatalogVersion({
-          id: nextId('buyer-catalog-version'), publication, priceListVersion,
-          showroom: context.showroom, invitation: context.invitation, publishedAt,
-        });
+        const priceListVersion = createPriceListVersion({ id: nextId('price-list-version'), publication, shopId: input.shopId, priceOverrides: input.priceOverrides ?? [], publishedAt });
+        const buyerCatalogVersion = createBuyerCatalogVersion({ id: nextId('buyer-catalog-version'), publication, priceListVersion, showroom: context.showroom, invitation: context.invitation, publishedAt });
         await tx.insertPriceListVersion(priceListVersion);
         await tx.insertBuyerCatalogVersion(buyerCatalogVersion);
-        await append(tx, 'price-list-version.published', priceListVersion.id, {
-          publicationId, brandId: publication.brandId, shopId: input.shopId, contentHash: priceListVersion.contentHash,
-        }, commandId, actorId);
-        await append(tx, 'buyer-catalog-version.published', buyerCatalogVersion.id, {
-          publicationId, priceListVersionId: priceListVersion.id, showroomId: input.showroomId,
-          shopId: input.shopId, accessGrantId: context.invitation.id, contentHash: buyerCatalogVersion.contentHash,
-        }, commandId, actorId);
+        await append(tx, 'price-list-version.published', priceListVersion.id, { publicationId, brandId: publication.brandId, shopId: input.shopId, contentHash: priceListVersion.contentHash }, commandId, actorId);
+        await append(tx, 'buyer-catalog-version.published', buyerCatalogVersion.id, { publicationId, priceListVersionId: priceListVersion.id, showroomId: input.showroomId, shopId: input.shopId, accessGrantId: context.invitation.id, contentHash: buyerCatalogVersion.contentHash }, commandId, actorId);
         return Object.freeze({ priceListVersion, buyerCatalogVersion });
       });
     },
@@ -146,9 +136,7 @@ export function createCommercialPublicationService({
       const rows = await commercialStore.listCommercialPublicationsByCollection(collectionId, { limit, cursor: decodedCursor });
       const items = rows.slice(0, limit);
       const lastItem = items.at(-1);
-      const nextCursor = rows.length > limit && lastItem
-        ? encodeCommercialPublicationCursor({ publishedAt: lastItem.publishedAt, id: lastItem.id })
-        : null;
+      const nextCursor = rows.length > limit && lastItem ? encodeCommercialPublicationCursor({ publishedAt: lastItem.publishedAt, id: lastItem.id }) : null;
       return Object.freeze({ items: Object.freeze(items), nextCursor });
     },
 
@@ -156,22 +144,15 @@ export function createCommercialPublicationService({
       const publication = requireEntity(await commercialStore.getCommercialPublication(id), 'COMMERCIAL_PUBLICATION_NOT_FOUND', { publicationId: id });
       return authorizePublicationRead(actorId, publication);
     },
-
     async getBuyerCatalogVersionForActor(actorId, id) {
       const buyerCatalog = requireEntity(await commercialStore.getBuyerCatalogVersion(id), 'BUYER_CATALOG_NOT_FOUND', { buyerCatalogVersionId: id });
       return authorizeBuyerCatalogRead(actorId, buyerCatalog);
     },
-
     async getBuyerCatalogForAccessForActor(actorId, showroomId, shopId) {
       invariant(typeof commercialStore.getBuyerCatalogForAccess === 'function', 'BUYER_CATALOG_ACCESS_QUERY_REQUIRED', 'Buyer catalog access query store is required');
-      const buyerCatalog = requireEntity(
-        await commercialStore.getBuyerCatalogForAccess(showroomId, shopId),
-        'BUYER_CATALOG_NOT_FOUND',
-        { showroomId, shopId },
-      );
+      const buyerCatalog = requireEntity(await commercialStore.getBuyerCatalogForAccess(showroomId, shopId), 'BUYER_CATALOG_NOT_FOUND', { showroomId, shopId });
       return authorizeBuyerCatalogRead(actorId, buyerCatalog);
     },
-
     getCommercialPublication: (id) => commercialStore.getCommercialPublication(id),
     getBuyerCatalogVersion: (id) => commercialStore.getBuyerCatalogVersion(id),
     getBuyerCatalogForAccess: (showroomId, shopId) => commercialStore.getBuyerCatalogForAccess(showroomId, shopId),

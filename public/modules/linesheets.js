@@ -280,7 +280,7 @@
 
   function stageText(stage) {
     const labels = {
-      showroom: ["Шоурум", 'Showroom'], selection: ['Подборка', 'Selection'], 'order-builder': ['Сборка заказа', 'Order builder'],
+      showroom: ['Шоурум', 'Showroom'], selection: ['Подборка', 'Selection'], 'order-builder': ['Сборка заказа', 'Order builder'],
       order: ['Заказ', 'Order'], confirmation: ['Подтверждение', 'Confirmation'], 'deal-space': ['DealSpace', 'DealSpace'], collection: ['Коллекция', 'Collection'],
     };
     const pair = labels[stage];
@@ -330,8 +330,7 @@
   }
 
   function noticePanel(message, tone = 'info') {
-    const panel = el('div', { className: `notice ${tone}`.trim(), 'data-od14-component': 'alert', rawText: message });
-    return panel;
+    return el('div', { className: `notice ${tone}`.trim(), 'data-od14-component': 'alert', rawText: message });
   }
 
   function buyerCatalogIdentity(context) {
@@ -479,11 +478,8 @@
       style.sizes.forEach(size => {
         const cell = row.cells[size.key];
         const td = el('td');
-        if (!cell) {
-          td.append(el('span', { className: 'muted', rawText: '—' }));
-        } else {
-          td.append(matrixCell(cell, editable));
-        }
+        if (!cell) td.append(el('span', { className: 'muted', rawText: '—' }));
+        else td.append(matrixCell(cell, editable));
         tr.append(td);
       });
       tbody.append(tr);
@@ -498,9 +494,13 @@
     const name = localized(row.nameRu, row.nameEn) || row.code;
     const firstLine = el('strong', { rawText: name });
     if (/^#[0-9A-Fa-f]{6}$/.test(row.swatchHex || '')) {
-      const swatch = el('span', { rawText: ' ●', ariaLabel: `${text('Цвет', 'Color')} ${row.swatchHex}` });
-      swatch.style.color = row.swatchHex;
-      firstLine.append(swatch);
+      const swatch = el('input', {
+        type: 'color', value: row.swatchHex, disabled: true,
+        ariaLabel: `${text('Цвет', 'Color')} ${row.swatchHex}`,
+        title: row.swatchHex,
+        'data-od14-component': 'field',
+      });
+      firstLine.append(' ', swatch);
     }
     block.append(firstLine, el('small', { rawText: `${row.code} · ${row.id}` }));
     return block;
@@ -727,13 +727,22 @@
   function registryContent() {
     if (!collections().length) return statePanel('ls9-empty', text('Нет доступных коллекций', 'No collections available'), text('Сначала создайте или откройте коллекцию. Раздел листов не создаёт демонстрационные коммерческие данные.', 'Create or open a collection first. Linesheets does not create demonstration commercial data.'));
     if (LS.loading && !LS.items.length) return statePanel('ls9-loading', text('Загрузка опубликованных листов…', 'Loading published linesheets...'), text('Получаем неизменяемые коммерческие снимки из серверного реестра.', 'Fetching immutable commercial snapshots from the server registry.'));
-    if (LS.error && !LS.items.length) { const retry = el('button', { className: 'button', type: 'button', rawText: text('Повторить', 'Retry') }); retry.addEventListener('click', () => { LS.loadedCollectionId = ''; void loadPublications(); renderApp(); }); return statePanel('ls9-error', text('Не удалось загрузить публикации', 'Could not load publications'), LS.error, retry); }
+    if (LS.error && !LS.items.length) {
+      const retry = el('button', { className: 'button', type: 'button', rawText: text('Повторить', 'Retry') });
+      retry.addEventListener('click', () => { LS.loadedCollectionId = ''; void loadPublications(); renderApp(); });
+      return statePanel('ls9-error', text('Не удалось загрузить публикации', 'Could not load publications'), LS.error, retry);
+    }
     if (!LS.items.length) return statePanel('ls9-empty', text('Опубликованных листов пока нет', 'No published linesheets yet'), text('После коммерческой публикации коллекции неизменяемый снимок появится здесь автоматически.', 'After the collection is commercially published, its immutable snapshot will appear here automatically.'));
     const filtered = filteredPublications(); const selected = LS.items.find(item => item.id === LS.selectedId) || LS.items[0] || null;
     const layout = el('section', { className: 'ls9-layout' }); const registry = el('div', { className: 'ls9-registry' }); const registryHead = el('div', { className: 'ls9-section-title' });
     registryHead.append(el('h3', { rawText: text('Реестр публикаций', 'Publication registry') }), el('span', { rawText: `${filtered.length}/${LS.items.length}` })); registry.append(registryHead);
     registry.append(filtered.length ? publicationTable(filtered) : el('div', { className: 'ls9-empty', rawText: text('По вашему запросу ничего не найдено.', 'No publications match your search.') }));
-    if (LS.nextCursor) { const loadMore = el('button', { className: 'button ls9-load-more', type: 'button', rawText: LS.loadingMore ? text('Загрузка…', 'Loading...') : text('Загрузить ещё', 'Load more') }); loadMore.disabled = LS.loadingMore; loadMore.addEventListener('click', () => { void loadPublications({ append: true }); renderApp(); }); registry.append(loadMore); }
+    if (LS.nextCursor) {
+      const loadMore = el('button', { className: 'button ls9-load-more', type: 'button', rawText: LS.loadingMore ? text('Загрузка…', 'Loading...') : text('Загрузить ещё', 'Load more') });
+      loadMore.disabled = LS.loadingMore;
+      loadMore.addEventListener('click', () => { void loadPublications({ append: true }); renderApp(); });
+      registry.append(loadMore);
+    }
     if (LS.error) registry.append(el('div', { className: 'ls9-inline-error', rawText: LS.error }));
     layout.append(registry, registryInspector(selected)); return layout;
   }

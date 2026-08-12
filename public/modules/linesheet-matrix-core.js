@@ -2,6 +2,8 @@
   'use strict';
 
   function list(value) { return Array.isArray(value) ? value : []; }
+  function copy(value) { return value === undefined ? undefined : structuredClone(value); }
+  function copyList(value) { return list(value).map(item => copy(item)); }
   function text(value) { return String(value ?? '').trim(); }
 
   function fail(code, message, details = {}) {
@@ -65,7 +67,7 @@
     if (!colorways.length) fail('BUYER_MATRIX_COLORWAYS_REQUIRED', 'Rich buyer style requires at least one colorway', { styleId });
 
     const sizesByKey = new Map();
-    const rows = colorways.map(colorway => buildColorwayRow({ style, styleId, styleVersionId, colorway, priceBySku, sizesByKey, currency, catalog }));
+    const rows = colorways.map(colorway => buildColorwayRow({ styleId, styleVersionId, colorway, priceBySku, sizesByKey, currency, catalog }));
     const sizes = [...sizesByKey.values()].sort(compareSizes);
     rows.sort((left, right) => left.code.localeCompare(right.code) || left.id.localeCompare(right.id));
 
@@ -81,14 +83,14 @@
       compositionRu: text(style.compositionRu),
       compositionEn: text(style.compositionEn),
       countryOfOrigin: text(style.countryOfOrigin),
-      media: list(style.media),
-      commercialTerms: style.commercialTerms ?? null,
+      media: copyList(style.media),
+      commercialTerms: copy(style.commercialTerms ?? null),
       sizes,
       rows,
     });
   }
 
-  function buildColorwayRow({ style, styleId, styleVersionId, colorway, priceBySku, sizesByKey, currency, catalog }) {
+  function buildColorwayRow({ styleId, styleVersionId, colorway, priceBySku, sizesByKey, currency, catalog }) {
     const colorwayId = text(colorway?.colorwayId);
     const code = text(colorway?.colorwayCode);
     if (!colorwayId || !code) fail('BUYER_MATRIX_COLORWAY_IDENTITY_REQUIRED', 'Rich buyer colorway identity is incomplete', { styleId });
@@ -97,7 +99,7 @@
     if (!skus.length) fail('BUYER_MATRIX_COLORWAY_SKUS_REQUIRED', 'Buyer colorway requires at least one SKU', { styleId, colorwayId });
 
     for (const sku of skus) {
-      const cell = matrixCell({ style, styleId, styleVersionId, colorway, colorwayId, sku, priceBySku, currency, catalog });
+      const cell = matrixCell({ styleId, styleVersionId, colorwayId, sku, priceBySku, currency, catalog });
       const existingSize = sizesByKey.get(cell.size.key);
       if (existingSize) assertSameSize(existingSize, cell.size, styleId);
       else sizesByKey.set(cell.size.key, cell.size);
@@ -112,10 +114,10 @@
       code,
       nameRu: text(colorway.nameRu),
       nameEn: text(colorway.nameEn),
-      colorRef: colorway.colorRef ?? null,
+      colorRef: copy(colorway.colorRef ?? null),
       swatchHex: text(colorway.swatchHex) || null,
-      media: list(colorway.media),
-      attributes: list(colorway.attributes),
+      media: copyList(colorway.media),
+      attributes: copyList(colorway.attributes),
       cells: Object.fromEntries([...cells.entries()]),
     });
   }
@@ -145,6 +147,7 @@
     if (sku.buyerUnitPrice !== undefined && String(sku.buyerUnitPrice) !== String(line.unitPrice)) fail('BUYER_MATRIX_BUYER_PRICE_MISMATCH', 'Rich SKU buyer price does not match frozen price line', { sku: skuCode });
     if (sku.buyerMinimumOrderQuantity !== undefined && Number(sku.buyerMinimumOrderQuantity) !== minimumOrderQuantity) fail('BUYER_MATRIX_BUYER_PRICE_MISMATCH', 'Rich SKU buyer MOQ does not match frozen price line', { sku: skuCode });
 
+    const availability = copy(line.availability ?? sku.commercialTerms?.availability ?? null);
     return deepFreeze({
       sku: skuCode,
       productSkuId,
@@ -158,8 +161,8 @@
       currency: lineCurrency,
       catalogVersion,
       minimumOrderQuantity,
-      availability: line.availability ?? sku.commercialTerms?.availability ?? null,
-      availableToSell: availableToSellQuantity(line.availability ?? sku.commercialTerms?.availability),
+      availability,
+      availableToSell: availableToSellQuantity(availability),
     });
   }
 

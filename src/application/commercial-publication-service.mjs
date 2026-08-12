@@ -19,7 +19,6 @@ export function createCommercialPublicationService({
 } = {}) {
   invariant(commercialStore && typeof commercialStore.transaction === 'function', 'COMMERCIAL_PUBLICATION_STORE_REQUIRED', 'Commercial publication store is required');
   invariant(wholesaleStore && typeof wholesaleStore.transaction === 'function', 'WHOLESALE_STORE_REQUIRED', 'Wholesale store is required');
-  invariant(commercialProjectionReader && typeof commercialProjectionReader.getCommercialProjection === 'function', 'COMMERCIAL_PROJECTION_READER_REQUIRED', 'Commercial Product Projection reader is required');
 
   function execute(commandId, fingerprint, actorId, action) {
     invariant(commandId, 'COMMAND_ID_REQUIRED', 'Every mutation requires commandId');
@@ -90,6 +89,7 @@ export function createCommercialPublicationService({
   return Object.freeze({
     async publishCommercialPublication(commandId, actorId, input) {
       invariant(input && typeof input.collectionId === 'string' && typeof input.commercialProjectionId === 'string', 'COMMERCIAL_PUBLICATION_INPUT_INVALID', 'collectionId and commercialProjectionId are required');
+      invariant(commercialProjectionReader && typeof commercialProjectionReader.getCommercialProjection === 'function', 'COMMERCIAL_PROJECTION_READER_REQUIRED', 'Commercial Product Projection reader is required');
       const fingerprint = `publishCommercialPublication:${actorId}:${canonicalJson(input)}`;
       const collection = await publicationContext(actorId, input.collectionId);
       const projection = requireEntity(await commercialProjectionReader.getCommercialProjection(input.commercialProjectionId), 'COMMERCIAL_PROJECTION_NOT_FOUND', { commercialProjectionId: input.commercialProjectionId });

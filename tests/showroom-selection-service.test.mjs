@@ -49,6 +49,67 @@ async function fixture() {
   return { store, platform, collaboration, showroomId: showroom.id, cycle };
 }
 
+function richBuyerCatalog(context, overrides = {}) {
+  const availability = overrides.availability ?? { mode: 'available_to_sell', quantity: 10 };
+  const line = {
+    sku: 'SKU-1',
+    productSkuId: 'product-sku-1',
+    styleVersionId: 'style-version-1',
+    colorwayId: 'colorway-1',
+    sizeValueId: 'size-m',
+    catalogVersion: 7,
+    unitPrice: 95,
+    currency: 'EUR',
+    minimumOrderQuantity: overrides.minimumOrderQuantity ?? 2,
+    availability,
+  };
+  return Object.freeze({
+    id: 'buyer-catalog-1',
+    status: 'published',
+    publicationId: 'publication-1',
+    priceListVersionId: 'price-list-1',
+    contentHash: 'catalog-hash-1',
+    accessGrantId: 'invitation-1',
+    collectionId: context.cycle.collectionId,
+    brandId: 'brand-1',
+    shopId: 'shop-1',
+    showroomId: context.showroomId,
+    currency: 'EUR',
+    lines: Object.freeze([Object.freeze(line)]),
+    styles: Object.freeze([Object.freeze({
+      styleId: 'style-1',
+      styleVersionId: 'style-version-1',
+      colorways: Object.freeze([Object.freeze({
+        colorwayId: 'colorway-1',
+        skus: Object.freeze([Object.freeze({
+          productSkuId: 'product-sku-1',
+          skuCode: 'SKU-1',
+          gtin: '4601234567890',
+          sizeValueId: 'size-m',
+          size: Object.freeze({ id: 'size-m', code: 'M', labelRu: 'М', labelEn: 'M', sortOrder: 2 }),
+          commercialTerms: Object.freeze({ availability }),
+        })]),
+      })]),
+    })]),
+  });
+}
+
+function richCollaboration(context, buyerCatalog) {
+  let id = 0;
+  return createShowroomSelectionService({
+    store: context.store,
+    clock: () => '2026-07-30T20:00:00.000Z',
+    nextId: (prefix) => `rich_${prefix}_${++id}`,
+    catalogReader: Object.freeze({
+      getSku: async () => { throw new Error('live catalog must not be read for a rich pinned buyer cart'); },
+    }),
+    commercialPublicationReader: Object.freeze({
+      getBuyerCatalogForAccess: async () => buyerCatalog,
+      getBuyerCatalogVersion: async () => buyerCatalog,
+    }),
+  });
+}
+
 test('shop selection advances cycle atomically to order-builder', async () => {
   const context = await fixture();
   const created = await context.collaboration.createSelection('selection-create', 'buyer-1', { cycleId: context.cycle.id, showroomId: context.showroomId });
@@ -60,6 +121,61 @@ test('shop selection advances cycle atomically to order-builder', async () => {
   assert.equal(submitted.selection.status, 'submitted');
   assert.equal(submitted.cycle.stage, 'order-builder');
   assert.equal(context.store.snapshot().selections.length, 1);
+});
+
+test('rich pinned buyer cart resolves Style Colorway Size SKU entirely from frozen buyer catalog', async () => {
+  const context = await fixture();
+  const buyerCatalog = richBuyerCatalog(context);
+  const collaboration = richCollaboration(context, buyerCatalog);
+  const created = await collaboration.createSelection('rich-selection-create', 'buyer-1', { cycleId: context.cycle.id, showroomId: context.showroomId });
+  const edited = await collaboration.upsertSelectionLine('rich-selection-line', 'buyer-1', created.selection.id, { sku: 'SKU-1', quantity: 3 });
+
+  assert.equal(edited.buyerCatalogVersionId, buyerCatalog.id);
+  assert.equal(edited.commercialBasisHash, buyerCatalog.contentHash);
+  assert.deepEqual(edited.lines[0], {
+    sku: 'SKU-1',
+    quantity: 3,
+    unitPrice: 95,
+    currency: 'EUR',
+    catalogVersion: 7,
+    productSkuId: 'product-sku-1',
+    styleId: 'style-1',
+    styleVersionId: 'style-version-1',
+    colorwayId: 'colorway-1',
+    sizeValueId: 'size-m',
+    sizeCode: 'M',
+    sizeLabelRu: 'М',
+    sizeLabelEn: 'M',
+    sizeSortOrder: 2,
+    gtin: '4601234567890',
+    note: '',
+    updatedBy: 'buyer-1',
+    updatedAt: '2026-07-30T20:00:00.000Z',
+  });
+});
+
+test('rich pinned buyer cart enforces frozen MOQ without reading live flat catalog', async () => {
+  const context = await fixture();
+  const buyerCatalog = richBuyerCatalog(context, { minimumOrderQuantity: 4 });
+  const collaboration = richCollaboration(context, buyerCatalog);
+  const created = await collaboration.createSelection('rich-moq-create', 'buyer-1', { cycleId: context.cycle.id, showroomId: context.showroomId });
+
+  await assert.rejects(
+    collaboration.upsertSelectionLine('rich-moq-line', 'buyer-1', created.selection.id, { sku: 'SKU-1', quantity: 3 }),
+    (error) => error.code === 'BUYER_CATALOG_MOQ_NOT_MET',
+  );
+});
+
+test('rich pinned buyer cart enforces documented frozen available-to-sell quantity', async () => {
+  const context = await fixture();
+  const buyerCatalog = richBuyerCatalog(context, { availability: { mode: 'available_to_sell', quantity: 2 } });
+  const collaboration = richCollaboration(context, buyerCatalog);
+  const created = await collaboration.createSelection('rich-ats-create', 'buyer-1', { cycleId: context.cycle.id, showroomId: context.showroomId });
+
+  await assert.rejects(
+    collaboration.upsertSelectionLine('rich-ats-line', 'buyer-1', created.selection.id, { sku: 'SKU-1', quantity: 3 }),
+    (error) => error.code === 'BUYER_CATALOG_AVAILABILITY_EXCEEDED',
+  );
 });
 
 test('brand actor cannot write a shop selection', async () => {

@@ -5,6 +5,7 @@ import { assertWholesaleStore } from './store-contract.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
 import { assertCatalogAvailableToSell, assertCatalogQuantity, assertPublishedCatalogSku } from '../modules/catalog/public.mjs';
 import { buyerCatalogLine } from '../modules/commercial-publication/public.mjs';
+import { assertBuyerCatalogQuantity, buyerCatalogProductSku, isRichBuyerCatalog } from '../modules/commercial-publication/buyer-catalog-product.mjs';
 import { assertActiveRelationship } from '../modules/counterparty-relationships/public.mjs';
 import { assertAcceptedShowroomAccess } from '../modules/showroom-invitations/public.mjs';
 import { createShowroom, openShowroom } from '../modules/showrooms/public.mjs';
@@ -141,24 +142,49 @@ export function createShowroomSelectionService({
           return current;
         },
         async (tx, current) => {
-          const liveSku = await trustedCatalogReader.getSku(line.sku);
           let trustedLine;
           if (current.buyerCatalogVersionId) {
             invariant(trustedCommercialReader, 'COMMERCIAL_PUBLICATION_READER_REQUIRED', 'Commercial publication reader is required for a pinned selection');
             const buyerCatalog = requireEntity(await trustedCommercialReader.getBuyerCatalogVersion(current.buyerCatalogVersionId), 'BUYER_CATALOG_NOT_FOUND', { buyerCatalogVersionId: current.buyerCatalogVersionId });
             invariant(buyerCatalog.contentHash === current.commercialBasisHash, 'SELECTION_COMMERCIAL_BASIS_CHANGED', 'Pinned buyer catalog does not match selection commercial basis');
-            const commercialLine = buyerCatalogLine(buyerCatalog, line.sku);
-            invariant(line.quantity >= commercialLine.minimumOrderQuantity, 'BUYER_CATALOG_MOQ_NOT_MET', 'Selection quantity is below buyer catalog MOQ', { sku: line.sku, minimumOrderQuantity: commercialLine.minimumOrderQuantity });
-            assertCatalogAvailableToSell(liveSku, line.quantity, { sku: line.sku, collectionId: current.collectionId, brandId: current.brandId });
-            trustedLine = Object.freeze({
-              sku: commercialLine.sku,
-              quantity: line.quantity,
-              unitPrice: commercialLine.unitPrice,
-              currency: commercialLine.currency,
-              catalogVersion: commercialLine.catalogVersion,
-              note: line.note,
-            });
+
+            if (isRichBuyerCatalog(buyerCatalog)) {
+              const product = buyerCatalogProductSku(buyerCatalog, { skuCode: line.sku });
+              const quantity = assertBuyerCatalogQuantity(product, line.quantity);
+              trustedLine = Object.freeze({
+                sku: product.sku,
+                quantity,
+                unitPrice: product.unitPrice,
+                currency: product.currency,
+                catalogVersion: product.catalogVersion,
+                productSkuId: product.productSkuId,
+                gtin: product.gtin,
+                styleId: product.styleId,
+                styleVersionId: product.styleVersionId,
+                colorwayId: product.colorwayId,
+                sizeValueId: product.sizeValueId,
+                sizeCode: product.sizeCode,
+                sizeLabelRu: product.sizeLabelRu,
+                sizeLabelEn: product.sizeLabelEn,
+                sizeSortOrder: product.sizeSortOrder,
+                note: line.note,
+              });
+            } else {
+              const liveSku = await trustedCatalogReader.getSku(line.sku);
+              const commercialLine = buyerCatalogLine(buyerCatalog, line.sku);
+              invariant(line.quantity >= commercialLine.minimumOrderQuantity, 'BUYER_CATALOG_MOQ_NOT_MET', 'Selection quantity is below buyer catalog MOQ', { sku: line.sku, minimumOrderQuantity: commercialLine.minimumOrderQuantity });
+              assertCatalogAvailableToSell(liveSku, line.quantity, { sku: line.sku, collectionId: current.collectionId, brandId: current.brandId });
+              trustedLine = Object.freeze({
+                sku: commercialLine.sku,
+                quantity: line.quantity,
+                unitPrice: commercialLine.unitPrice,
+                currency: commercialLine.currency,
+                catalogVersion: commercialLine.catalogVersion,
+                note: line.note,
+              });
+            }
           } else {
+            const liveSku = await trustedCatalogReader.getSku(line.sku);
             const publishedSku = assertPublishedCatalogSku(liveSku, { collectionId: current.collectionId, brandId: current.brandId });
             const catalogSku = assertCatalogQuantity(publishedSku, line.quantity);
             trustedLine = Object.freeze({
@@ -174,6 +200,10 @@ export function createShowroomSelectionService({
           await tx.saveSelection(updated, current.version);
           await append(tx, 'selection.line-upserted', selectionId, {
             sku: trustedLine.sku, quantity: trustedLine.quantity, catalogVersion: trustedLine.catalogVersion,
+            productSkuId: trustedLine.productSkuId ?? null,
+            styleVersionId: trustedLine.styleVersionId ?? null,
+            colorwayId: trustedLine.colorwayId ?? null,
+            sizeValueId: trustedLine.sizeValueId ?? null,
             buyerCatalogVersionId: current.buyerCatalogVersionId, priceListVersionId: current.priceListVersionId,
           }, commandId, actorId);
           return updated;

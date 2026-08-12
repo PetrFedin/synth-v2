@@ -24,7 +24,7 @@ import { withSourcingTechPackGateOpenApi } from './sourcing-tech-pack-gate-opena
 import { withTechPackOpenApi } from './tech-pack-openapi.mjs';
 import { wholesaleV2OpenApi } from './openapi.mjs';
 
-export const wholesaleV2ExtendedOpenApi = withSupplierEconomicPerformanceOpenApi(
+const composed = withSupplierEconomicPerformanceOpenApi(
   withSupplierRecoveryOpenApi(
     withReceiptClaimsOpenApi(
       withInventoryOpenApi(
@@ -71,3 +71,18 @@ export const wholesaleV2ExtendedOpenApi = withSupplierEconomicPerformanceOpenApi
     ),
   ),
 );
+
+export const wholesaleV2ExtendedOpenApi = preserveAuthoritativeContractVersion(composed);
+
+function preserveAuthoritativeContractVersion(specification) {
+  const normalized = structuredClone(specification);
+  normalized.info.version = wholesaleV2OpenApi.info.version;
+  return deepFreeze(normalized);
+}
+
+function deepFreeze(value) {
+  if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value;
+  Object.freeze(value);
+  for (const nested of Object.values(value)) deepFreeze(nested);
+  return value;
+}

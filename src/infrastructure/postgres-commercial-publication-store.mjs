@@ -54,10 +54,10 @@ function view(client) {
     },
     async insertCommercialPublication(value) {
       await insertImmutable(client, 'commercial_publications', [
-        value.id, value.brandId, value.collectionId, value.currency, value.publishedAt, value.contentHash, JSON.stringify(value),
+        value.id, value.brandId, value.collectionId, value.currency, value.publishedAt, value.contentHash, value.commercialProjectionId, JSON.stringify(value),
       ], `INSERT INTO commercial_publications
-            (id, brand_id, collection_id, currency, published_at, content_hash, payload)
-          VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)`, 'COMMERCIAL_PUBLICATION_ALREADY_EXISTS', { publicationId: value.id });
+            (id, brand_id, collection_id, currency, published_at, content_hash, commercial_projection_id, payload)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)`, 'COMMERCIAL_PUBLICATION_ALREADY_EXISTS', { publicationId: value.id });
     },
     async insertPriceListVersion(value) {
       await insertImmutable(client, 'price_list_versions', [

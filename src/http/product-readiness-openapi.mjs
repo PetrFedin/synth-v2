@@ -4,14 +4,13 @@ const DEVELOPMENT_ROUTES = ['OWN_DEVELOPMENT', 'MATERIALS_SEPARATE', 'READY_GOOD
 const READINESS_CODES = [
   'product_identity','category','colorways','size_scale','sku_matrix','product_attributes','bom','measurements','samples','tech_pack','sourcing','purchase_or_production_commitment','quality','compliance','commercial_media','commercial_content','commercial_terms','availability_delivery',
 ];
-const errorResponse = { description: 'Domain or transport error', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } };
+const errorResponse = { description: 'Domain or transport error', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } } };
 const idempotencyHeader = { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 1, maxLength: 128, pattern: SAFE_ID_PATTERN } };
 const idParameter = (name) => ({ name, in: 'path', required: true, schema: id() });
 const limitParameter = { name: 'limit', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 200, default: 50 } };
 
 export function withProductReadinessOpenApi(base) {
   const specification = structuredClone(base);
-  specification.info.version = '1.21.0';
   Object.assign(specification.components.schemas, schemas());
   Object.assign(specification.paths, paths());
   return deepFreeze(specification);

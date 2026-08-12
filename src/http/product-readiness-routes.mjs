@@ -7,6 +7,7 @@ const COMMERCIAL_FIELDS = [
   'minimumOrderValueMinor', 'packRatio', 'deliveryStart', 'deliveryEnd', 'availability',
   'mediaIds', 'documentRefs', 'attributeCoverageConfirmed',
 ];
+const DEVELOPMENT_ROUTES = ['OWN_DEVELOPMENT', 'MATERIALS_SEPARATE', 'READY_GOODS'];
 const EXTERNAL_DIMENSIONS = ['sourcing', 'purchase_or_production_commitment', 'quality', 'compliance'];
 const EXTERNAL_EVIDENCE_FIELDS = ['status', 'evidenceId', 'sourceSystem', 'version', 'contentHash', 'approvedAt', 'approvedBy'];
 const ASSESSMENT = bodyContract(
@@ -55,6 +56,7 @@ function read(method, pattern, queryFields, execute) {
 
 function validateAssessment(body) {
   invariant(Object.hasOwn(body, 'developmentRoute'), 'HTTP_BODY_FIELD_INVALID', 'developmentRoute is required', { field: 'developmentRoute' });
+  invariant(DEVELOPMENT_ROUTES.includes(body.developmentRoute), 'HTTP_BODY_FIELD_INVALID', 'developmentRoute is invalid', { field: 'developmentRoute', allowed: DEVELOPMENT_ROUTES });
   invariant(Object.hasOwn(body, 'commercialPreparation'), 'HTTP_BODY_FIELD_INVALID', 'commercialPreparation is required', { field: 'commercialPreparation' });
   const preparation = body.commercialPreparation;
   invariant(preparation && typeof preparation === 'object' && !Array.isArray(preparation), 'HTTP_BODY_FIELD_INVALID', 'commercialPreparation must be an object', { field: 'commercialPreparation' });
@@ -62,9 +64,11 @@ function validateAssessment(body) {
   for (const field of requiredCommercial) invariant(Object.hasOwn(preparation, field), 'HTTP_BODY_FIELD_INVALID', `${field} is required`, { field: `commercialPreparation.${field}` });
   invariant(preparation.availability && typeof preparation.availability === 'object' && !Array.isArray(preparation.availability), 'HTTP_BODY_FIELD_INVALID', 'availability must be an object', { field: 'commercialPreparation.availability' });
   assertExactFields(preparation.availability, ['mode', 'quantity'], 'commercialPreparation.availability');
-  invariant(Array.isArray(preparation.mediaIds), 'HTTP_BODY_FIELD_INVALID', 'mediaIds must be an array', { field: 'commercialPreparation.mediaIds' });
-  invariant(preparation.documentRefs === undefined || Array.isArray(preparation.documentRefs), 'HTTP_BODY_FIELD_INVALID', 'documentRefs must be an array', { field: 'commercialPreparation.documentRefs' });
-  invariant(preparation.packRatio === undefined || preparation.packRatio === null || Array.isArray(preparation.packRatio), 'HTTP_BODY_FIELD_INVALID', 'packRatio must be an array or null', { field: 'commercialPreparation.packRatio' });
+  for (const field of ['mode', 'quantity']) invariant(Object.hasOwn(preparation.availability, field), 'HTTP_BODY_FIELD_INVALID', `${field} is required`, { field: `commercialPreparation.availability.${field}` });
+  invariant(Array.isArray(preparation.mediaIds) && preparation.mediaIds.length > 0, 'HTTP_BODY_FIELD_INVALID', 'mediaIds must be a non-empty array', { field: 'commercialPreparation.mediaIds' });
+  invariant(preparation.mediaIds.every(isIdentifier), 'HTTP_BODY_FIELD_INVALID', 'mediaIds must contain identifiers', { field: 'commercialPreparation.mediaIds' });
+  invariant(preparation.documentRefs === undefined || (Array.isArray(preparation.documentRefs) && preparation.documentRefs.every(isIdentifier)), 'HTTP_BODY_FIELD_INVALID', 'documentRefs must be an identifier array', { field: 'commercialPreparation.documentRefs' });
+  invariant(preparation.packRatio === undefined || preparation.packRatio === null || (Array.isArray(preparation.packRatio) && preparation.packRatio.length > 0 && preparation.packRatio.every((value) => Number.isSafeInteger(value) && value > 0)), 'HTTP_BODY_FIELD_INVALID', 'packRatio must contain positive integers or be null', { field: 'commercialPreparation.packRatio' });
 
   if (body.externalEvidence !== undefined) {
     invariant(body.externalEvidence && typeof body.externalEvidence === 'object' && !Array.isArray(body.externalEvidence), 'HTTP_BODY_FIELD_INVALID', 'externalEvidence must be an object', { field: 'externalEvidence' });
@@ -87,6 +91,8 @@ function assertExactFields(value, allowedFields, label) {
   const unknownFields = Object.keys(value).filter((field) => !allowed.has(field)).sort();
   invariant(unknownFields.length === 0, 'HTTP_BODY_FIELD_UNKNOWN', `${label} contains unsupported fields`, { field: label, unknownFields, allowedFields: [...allowed].sort() });
 }
+
+function isIdentifier(value) { return typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/.test(value); }
 
 function unavailableService() {
   const fail = () => invariant(false, 'PRODUCT_READINESS_SERVICE_REQUIRED', 'Product readiness service is required');

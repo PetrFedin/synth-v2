@@ -74,6 +74,11 @@ function view(client) {
       return result.rows[0] ? mapReadiness(result.rows[0]) : undefined;
     },
 
+    async lockStyleVersion(styleVersionId) {
+      const result = await client.query('SELECT id FROM product_style_versions WHERE id = $1 FOR UPDATE', [styleVersionId]);
+      invariant(result.rowCount === 1, 'PRODUCT_STYLE_VERSION_NOT_FOUND', 'Product Style Version not found while allocating Commercial Product Projection version', { styleVersionId });
+    },
+
     async getLatestProjectionForUpdate(styleVersionId) {
       const result = await client.query(
         `SELECT * FROM commercial_product_projection_versions

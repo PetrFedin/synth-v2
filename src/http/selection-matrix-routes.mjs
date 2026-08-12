@@ -3,7 +3,7 @@ import { assertBodyContract, assertQueryContract, bodyContract } from './request
 
 const MATRIX_BODY = bodyContract(['selectionId', 'lines'], {}, { lines: ['sku', 'quantity', 'note'] });
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/;
-const SKU = /^[A-Z0-9][A-Z0-9._-]{1,127}$/;
+const SKU = /^[A-Z0-9][A-Z0-9._-]{1,63}$/;
 const MAX_LINES = 5_000;
 const MAX_QUANTITY = 2_147_483_647;
 const MAX_NOTE = 2_000;
@@ -33,7 +33,7 @@ function validateMatrixBody(body, selectionId) {
   const seen = new Set();
   body.lines.forEach((line, index) => {
     invariant(line && typeof line === 'object' && !Array.isArray(line), 'HTTP_BODY_FIELD_INVALID', `lines[${index}] must be an object`, { field: 'lines', index });
-    invariant(typeof line.sku === 'string' && SKU.test(line.sku), 'HTTP_BODY_FIELD_INVALID', `lines[${index}].sku must be a valid SKU`, { field: 'lines.sku', index });
+    invariant(typeof line.sku === 'string' && SKU.test(line.sku), 'HTTP_BODY_FIELD_INVALID', `lines[${index}].sku must be a canonical Product Identity SKU code`, { field: 'lines.sku', index });
     invariant(!seen.has(line.sku), 'HTTP_BODY_FIELD_INVALID', `lines[${index}].sku is duplicated`, { field: 'lines.sku', index, sku: line.sku });
     seen.add(line.sku);
     invariant(Number.isSafeInteger(line.quantity) && line.quantity >= 1 && line.quantity <= MAX_QUANTITY, 'HTTP_BODY_FIELD_INVALID', `lines[${index}].quantity must be a positive PostgreSQL integer`, { field: 'lines.quantity', index });

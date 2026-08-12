@@ -25,13 +25,20 @@ export const PRODUCT_READINESS_DIMENSIONS = Object.freeze([
   'availability_delivery',
 ]);
 
-const externalEvidenceDimensions = new Set(['sourcing', 'purchase_or_production_commitment', 'quality', 'compliance']);
+const allowedExternalEvidence = Object.freeze({
+  OWN_DEVELOPMENT: new Set(['compliance']),
+  MATERIALS_SEPARATE: new Set(['purchase_or_production_commitment', 'compliance']),
+  READY_GOODS: new Set(['sourcing', 'purchase_or_production_commitment', 'quality', 'compliance']),
+});
 
 export function evaluateProductReadiness({ developmentRoute, technicalSnapshot, commercialPreparation, externalEvidence = {} }) {
   invariant(DEVELOPMENT_ROUTES.includes(developmentRoute), 'PRODUCT_READINESS_ROUTE_INVALID', 'Development route is invalid', { developmentRoute });
   requireObject(technicalSnapshot, 'PRODUCT_READINESS_TECHNICAL_SNAPSHOT_INVALID', 'Technical snapshot is required');
   requireObject(commercialPreparation, 'PRODUCT_READINESS_COMMERCIAL_PREPARATION_INVALID', 'Commercial preparation is required');
   requireObject(externalEvidence, 'PRODUCT_READINESS_EXTERNAL_EVIDENCE_INVALID', 'External evidence must be an object');
+  for (const dimension of Object.keys(externalEvidence)) {
+    invariant(allowedExternalEvidence[developmentRoute].has(dimension), 'PRODUCT_READINESS_EXTERNAL_EVIDENCE_NOT_ALLOWED', 'External evidence cannot replace the canonical repository source for this development route', { developmentRoute, dimension });
+  }
 
   const product = technicalSnapshot.product ?? {};
   const styleVersion = product.styleVersion ?? null;
@@ -66,12 +73,12 @@ export function evaluateProductReadiness({ developmentRoute, technicalSnapshot, 
   }, 'Every Colorway must contain at least one canonical Product SKU.'));
 
   dimensions.push(fact('product_attributes', commercialPreparation.attributeCoverageConfirmed === true, {
-    attributeCoverageConfirmed: commercialPreparation.attributeCoverageConfirmed === true,
+    coverageAttestation: commercialPreparation.attributeCoverageConfirmed === true,
     styleAttributeCount: Array.isArray(product.styleAttributes) ? product.styleAttributes.length : 0,
     skuAttributeCount: skus.reduce((sum, sku) => sum + (Array.isArray(sku.attributes) ? sku.attributes.length : 0), 0),
   }, 'Governed category attribute coverage has not been confirmed.'));
 
-  const linkedLegacy = legacyEvidence.length === skus.length && legacyEvidence.every((row) => row.catalogSku);
+  const linkedLegacy = skus.length > 0 && legacyEvidence.length === skus.length && legacyEvidence.every((row) => row.catalogSku);
   if (developmentRoute === 'READY_GOODS') {
     dimensions.push(notApplicable('bom', { developmentRoute }, 'BOM is not required for governed READY_GOODS route.'));
   } else {
@@ -106,23 +113,23 @@ export function evaluateProductReadiness({ developmentRoute, technicalSnapshot, 
     const repositoryReady = linkedLegacy && legacyEvidence.every((row) => row.sourcing?.status === 'allocated');
     dimensions.push(repositoryReady
       ? ready('sourcing', { source: 'repository', sources: legacyEvidence.map((row) => row.sourcing ?? null) })
-      : externalOrBlocked('sourcing', externalEvidence.sourcing, 'Allocated sourcing RFQ is required for every canonical SKU.'));
+      : blocked('sourcing', { source: 'repository', sources: legacyEvidence.map((row) => row.sourcing ?? null), reason: 'Allocated sourcing RFQ is required for every canonical SKU; external evidence cannot replace it for development routes.' }));
   }
 
   if (developmentRoute === 'OWN_DEVELOPMENT') {
     const repositoryReady = linkedLegacy && legacyEvidence.every((row) => row.productionOrder?.status === 'confirmed');
     dimensions.push(repositoryReady
       ? ready('purchase_or_production_commitment', { source: 'repository', sources: legacyEvidence.map((row) => row.productionOrder ?? null) })
-      : externalOrBlocked('purchase_or_production_commitment', externalEvidence.purchase_or_production_commitment, 'Confirmed Production Order is required for every canonical SKU.'));
+      : blocked('purchase_or_production_commitment', { source: 'repository', sources: legacyEvidence.map((row) => row.productionOrder ?? null), reason: 'Confirmed Production Order is required for every canonical SKU.' }));
   } else if (developmentRoute === 'MATERIALS_SEPARATE') {
     const productionReady = linkedLegacy && legacyEvidence.every((row) => row.productionOrder?.status === 'confirmed');
-    const external = normalizeExternalEvidence(externalEvidence.purchase_or_production_commitment, 'purchase_or_production_commitment');
-    dimensions.push(productionReady && external
-      ? ready('purchase_or_production_commitment', { source: 'mixed', productionOrders: legacyEvidence.map((row) => row.productionOrder ?? null), materialPurchaseEvidence: external })
+    const materialPurchaseEvidence = normalizeExternalEvidence(externalEvidence.purchase_or_production_commitment, 'purchase_or_production_commitment');
+    dimensions.push(productionReady && materialPurchaseEvidence
+      ? ready('purchase_or_production_commitment', { source: 'mixed', productionOrders: legacyEvidence.map((row) => row.productionOrder ?? null), materialPurchaseEvidence })
       : blocked('purchase_or_production_commitment', {
-        source: productionReady ? 'external-required' : 'repository-and-external-required',
+        source: productionReady ? 'external-material-purchase-required' : 'repository-production-and-external-material-purchase-required',
         productionOrders: legacyEvidence.map((row) => row.productionOrder ?? null),
-        externalEvidence: external,
+        materialPurchaseEvidence,
         reason: 'MATERIALS_SEPARATE requires both confirmed Production Order and immutable material-purchase evidence.',
       }));
   } else {
@@ -135,7 +142,7 @@ export function evaluateProductReadiness({ developmentRoute, technicalSnapshot, 
     const repositoryReady = linkedLegacy && legacyEvidence.every((row) => row.quality?.status === 'released');
     dimensions.push(repositoryReady
       ? ready('quality', { source: 'repository', sources: legacyEvidence.map((row) => row.quality ?? null) })
-      : externalOrBlocked('quality', externalEvidence.quality, 'Released Final Quality evidence is required for every canonical SKU.'));
+      : blocked('quality', { source: 'repository', sources: legacyEvidence.map((row) => row.quality ?? null), reason: 'Released Final Quality evidence is required for every canonical SKU; external evidence cannot replace repository Final Quality for development routes.' }));
   }
 
   dimensions.push(externalOrBlocked('compliance', externalEvidence.compliance, 'Russian/EAEU compliance and marking readiness evidence is required.'));
@@ -311,7 +318,6 @@ function validateAvailabilityDelivery(value) {
 }
 
 function externalOrBlocked(code, value, reason) {
-  invariant(externalEvidenceDimensions.has(code), 'PRODUCT_READINESS_EXTERNAL_EVIDENCE_DIMENSION_INVALID', 'External evidence is not allowed for this readiness dimension', { code });
   const evidence = normalizeExternalEvidence(value, code);
   return evidence ? ready(code, { source: 'external', ...evidence }) : blocked(code, { source: 'external-required', reason });
 }

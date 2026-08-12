@@ -13,7 +13,7 @@ import {
 export function createCommercialPublicationService({
   commercialStore,
   wholesaleStore,
-  commercialProjectionReader,
+  commercialProjectionReader = commercialStore,
   clock = () => new Date().toISOString(),
   nextId = defaultIdGenerator(),
 } = {}) {

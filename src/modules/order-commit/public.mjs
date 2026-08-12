@@ -2,6 +2,9 @@ import { createHash } from 'node:crypto';
 import { invariant } from '../../core/errors.mjs';
 import { canonicalJson } from '../../core/fingerprints.mjs';
 import { normalizeMoney } from '../../core/money.mjs';
+import { buyerCatalogProductSku, isRichBuyerCatalog } from '../commercial-publication/buyer-catalog-product.mjs';
+
+const RICH_LINEAGE_KEYS = Object.freeze(['productSkuId', 'styleId', 'styleVersionId', 'colorwayId', 'sizeValueId', 'sizeCode', 'sizeSortOrder']);
 
 export function createOrderCommitSnapshot({ id, order, selection, buyerCatalog = null, committedAt }) {
   invariant(id && order?.id && selection?.id, 'ORDER_COMMIT_IDENTITY_REQUIRED', 'Order commit snapshot identity is required');
@@ -23,6 +26,7 @@ export function createOrderCommitSnapshot({ id, order, selection, buyerCatalog =
       quantity: line.quantity,
       unitPrice: normalizeMoney(line.unitPrice, { label: 'Committed order line price' }),
       catalogVersion: line.catalogVersion,
+      ...copyExistingLineage(line),
     })));
 
   const basis = Object.freeze({
@@ -67,6 +71,7 @@ function validateCommercialLines(order, selection, buyerCatalog) {
   invariant((selection.collectionId ?? buyerCatalog.collectionId) === buyerCatalog.collectionId, 'ORDER_COMMIT_COLLECTION_MISMATCH', 'Pinned buyer catalog belongs to another collection');
   invariant(buyerCatalog.currency === order.currency, 'ORDER_COMMIT_CURRENCY_MISMATCH', 'Pinned buyer catalog currency does not match the order');
   invariant(order.lines.length === selection.lines.length, 'ORDER_COMMIT_LINE_COUNT_MISMATCH', 'Order and submitted selection line counts differ');
+  const richCatalog = isRichBuyerCatalog(buyerCatalog);
 
   return Object.freeze(order.lines.map((orderLine) => {
     const selectionLine = selection.lines.find((line) => line.sku === orderLine.sku);
@@ -79,8 +84,64 @@ function validateCommercialLines(order, selection, buyerCatalog) {
     const selectionPrice = normalizeMoney(selectionLine.unitPrice, { label: 'Submitted selection line price' });
     const catalogPrice = normalizeMoney(catalogLine.unitPrice, { label: 'Pinned buyer catalog price' });
     invariant(committedPrice === selectionPrice && committedPrice === catalogPrice, 'ORDER_COMMIT_PRICE_MISMATCH', 'Committed price differs from the submitted selection or pinned buyer catalog', { sku: orderLine.sku });
-    return Object.freeze({ sku: orderLine.sku, quantity: orderLine.quantity, unitPrice: committedPrice, catalogVersion: orderLine.catalogVersion });
+
+    if (!richCatalog) {
+      return Object.freeze({ sku: orderLine.sku, quantity: orderLine.quantity, unitPrice: committedPrice, catalogVersion: orderLine.catalogVersion });
+    }
+
+    const product = buyerCatalogProductSku(buyerCatalog, { skuCode: orderLine.sku });
+    assertRichLineage(orderLine, product, 'ORDER_COMMIT_ORDER_LINEAGE_MISMATCH');
+    assertRichLineage(selectionLine, product, 'ORDER_COMMIT_SELECTION_LINEAGE_MISMATCH');
+    return Object.freeze({
+      sku: orderLine.sku,
+      quantity: orderLine.quantity,
+      unitPrice: committedPrice,
+      catalogVersion: orderLine.catalogVersion,
+      productSkuId: product.productSkuId,
+      gtin: product.gtin,
+      styleId: product.styleId,
+      styleVersionId: product.styleVersionId,
+      colorwayId: product.colorwayId,
+      sizeValueId: product.sizeValueId,
+      sizeCode: product.sizeCode,
+      sizeLabelRu: product.sizeLabelRu,
+      sizeLabelEn: product.sizeLabelEn,
+      sizeSortOrder: product.sizeSortOrder,
+    });
   }));
+}
+
+function assertRichLineage(line, product, code) {
+  const expected = {
+    productSkuId: product.productSkuId,
+    styleId: product.styleId,
+    styleVersionId: product.styleVersionId,
+    colorwayId: product.colorwayId,
+    sizeValueId: product.sizeValueId,
+    sizeCode: product.sizeCode,
+    sizeSortOrder: product.sizeSortOrder,
+  };
+  for (const key of RICH_LINEAGE_KEYS) {
+    invariant(line?.[key] === expected[key], code, 'Committed Product/Style/Colorway/Size lineage differs from the pinned buyer catalog', { sku: product.sku, key, expected: expected[key], actual: line?.[key] });
+  }
+  invariant((line.gtin ?? null) === (product.gtin ?? null), code, 'Committed GTIN differs from the pinned buyer catalog', { sku: product.sku });
+  invariant((line.sizeLabelRu ?? product.sizeCode) === product.sizeLabelRu && (line.sizeLabelEn ?? product.sizeCode) === product.sizeLabelEn, code, 'Committed localized size labels differ from the pinned buyer catalog', { sku: product.sku });
+}
+
+function copyExistingLineage(line) {
+  if (!line?.productSkuId) return {};
+  return {
+    productSkuId: line.productSkuId,
+    gtin: line.gtin ?? null,
+    styleId: line.styleId,
+    styleVersionId: line.styleVersionId,
+    colorwayId: line.colorwayId,
+    sizeValueId: line.sizeValueId,
+    sizeCode: line.sizeCode,
+    sizeLabelRu: line.sizeLabelRu ?? line.sizeCode,
+    sizeLabelEn: line.sizeLabelEn ?? line.sizeCode,
+    sizeSortOrder: line.sizeSortOrder,
+  };
 }
 
 function requiredTimestamp(value) {

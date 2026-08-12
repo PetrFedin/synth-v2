@@ -199,6 +199,51 @@
     return left.sortOrder - right.sortOrder || left.code.localeCompare(right.code) || left.id.localeCompare(right.id);
   }
 
+  function matrixCellsBySku(matrices) {
+    const cells = new Map();
+    for (const style of list(matrices)) {
+      for (const row of list(style?.rows)) {
+        for (const cell of Object.values(row?.cells ?? {})) {
+          if (!cell?.sku) continue;
+          if (cells.has(cell.sku)) fail('BUYER_MATRIX_SKU_DUPLICATE', 'Buyer order matrix contains duplicate SKU cells', { sku: cell.sku });
+          cells.set(cell.sku, cell);
+        }
+      }
+    }
+    return cells;
+  }
+
+  function validateRequestedQuantity(cell, quantity) {
+    const normalized = positiveInteger(quantity);
+    if (normalized === null) fail('BUYER_MATRIX_QUANTITY_INVALID', 'Buyer matrix quantity must be a positive integer', { sku: cell?.sku, quantity });
+    if (normalized < cell.minimumOrderQuantity) fail('BUYER_MATRIX_MOQ_NOT_MET', 'Buyer matrix quantity is below the frozen buyer MOQ', { sku: cell.sku, quantity: normalized, minimumOrderQuantity: cell.minimumOrderQuantity });
+    if (cell.availableToSell !== null && normalized > cell.availableToSell) fail('BUYER_MATRIX_AVAILABILITY_EXCEEDED', 'Buyer matrix quantity exceeds frozen available-to-sell', { sku: cell.sku, quantity: normalized, availableToSell: cell.availableToSell });
+    return normalized;
+  }
+
+  function selectionMatrixRequest(selectionId, matrices, quantities) {
+    const id = text(selectionId);
+    if (!id) fail('BUYER_MATRIX_SELECTION_ID_REQUIRED', 'Selection id is required for matrix replacement');
+    const cells = matrixCellsBySku(matrices);
+    const lines = quantityEntries(quantities).map(entry => {
+      const cell = cells.get(entry.sku);
+      if (!cell) fail('BUYER_MATRIX_SKU_UNKNOWN', 'Quantity refers to a SKU outside the rendered immutable buyer matrix', { sku: entry.sku });
+      return Object.freeze({ sku: entry.sku, quantity: validateRequestedQuantity(cell, entry.quantity) });
+    });
+    return deepFreeze({
+      method: 'PUT',
+      path: `/v2/selections/${encodeURIComponent(id)}/matrix`,
+      body: { selectionId: id, lines },
+    });
+  }
+
+  function createSelectionRequest(cycleId, showroomId) {
+    const normalizedCycleId = text(cycleId);
+    const normalizedShowroomId = text(showroomId);
+    if (!normalizedCycleId || !normalizedShowroomId) fail('BUYER_MATRIX_SELECTION_CONTEXT_REQUIRED', 'Cycle and showroom are required to create a buyer selection');
+    return deepFreeze({ method: 'POST', path: '/v2/selections', body: { cycleId: normalizedCycleId, showroomId: normalizedShowroomId } });
+  }
+
   function deepFreeze(value) {
     if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value;
     Object.freeze(value);
@@ -212,5 +257,9 @@
     availableToSellQuantity,
     positiveInteger,
     quantityEntries,
+    matrixCellsBySku,
+    validateRequestedQuantity,
+    selectionMatrixRequest,
+    createSelectionRequest,
   });
 })(typeof window === 'undefined' ? globalThis : window);

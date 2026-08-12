@@ -1,5 +1,45 @@
 BEGIN;
 
+-- Applied migration 011 intentionally remains immutable. Extend the global
+-- registry here so the already-merged Product Identity runtime and this
+-- Product Readiness slice have real PostgreSQL command ledgers.
+ALTER TABLE command_registry
+  DROP CONSTRAINT IF EXISTS command_registry_scope_check;
+ALTER TABLE command_registry
+  ADD CONSTRAINT command_registry_scope_check
+  CHECK (scope IN ('wholesale', 'catalog', 'notification', 'product-identity', 'product-readiness'));
+
+CREATE TABLE product_identity_commands (
+  id text PRIMARY KEY,
+  fingerprint text NOT NULL,
+  actor_id text NOT NULL,
+  result jsonb NOT NULL,
+  completed_at timestamptz NOT NULL,
+  CONSTRAINT product_identity_commands_command_registry_fk
+    FOREIGN KEY (id) REFERENCES command_registry(id) ON DELETE RESTRICT
+);
+
+CREATE INDEX product_identity_commands_completed_idx
+  ON product_identity_commands (completed_at, id);
+
+CREATE TABLE product_readiness_commands (
+  id text PRIMARY KEY,
+  fingerprint text NOT NULL,
+  actor_id text NOT NULL,
+  result jsonb NOT NULL,
+  completed_at timestamptz NOT NULL,
+  CONSTRAINT product_readiness_commands_command_registry_fk
+    FOREIGN KEY (id) REFERENCES command_registry(id) ON DELETE RESTRICT
+);
+
+CREATE INDEX product_readiness_commands_completed_idx
+  ON product_readiness_commands (completed_at, id);
+
+COMMENT ON TABLE product_identity_commands IS
+  'Durable idempotent command results for canonical Product Identity mutations. Global command id uniqueness is enforced by command_registry.';
+COMMENT ON TABLE product_readiness_commands IS
+  'Durable idempotent command results for Product Readiness and Commercial Product Projection mutations. Global command id uniqueness is enforced by command_registry.';
+
 CREATE TABLE product_readiness_snapshots (
   id text PRIMARY KEY,
   style_version_id text NOT NULL,

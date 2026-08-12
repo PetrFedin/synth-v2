@@ -111,6 +111,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
     platform: base.platform,
     catalog: base.catalog,
     productIdentity: base.productIdentity,
+    productReadiness: base.productReadiness,
     commercialPublication: base.commercialPublication,
     orderEconomics,
     costAllocation,

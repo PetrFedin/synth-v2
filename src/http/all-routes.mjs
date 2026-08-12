@@ -4,6 +4,7 @@ import { createFinalQualityRoutes } from './final-quality-routes.mjs';
 import { createFulfillmentRoutes } from './fulfillment-routes.mjs';
 import { createInventoryRoutes } from './inventory-routes.mjs';
 import { createProductIdentityRoutes } from './product-identity-routes.mjs';
+import { createProductReadinessRoutes } from './product-readiness-routes.mjs';
 import { createReceiptClaimsRoutes } from './receipt-claims-routes.mjs';
 import { createSupplierRecoveryRoutes } from './supplier-recovery-routes.mjs';
 import { createSupplierEconomicPerformanceRoutes } from './supplier-economic-performance-routes.mjs';
@@ -18,6 +19,7 @@ export function createWholesaleRoutes(services = {}) {
   return Object.freeze([
     ...createCoreWholesaleRoutes(services),
     ...createProductIdentityRoutes({ productIdentity: services.productIdentity }),
+    ...createProductReadinessRoutes({ productReadiness: services.productReadiness }),
     ...createCommercialPublicationRoutes({ commercialPublication: services.commercialPublication }),
     ...createEconomicsRouteBundle({ orderEconomics: services.orderEconomics, costAllocation: services.costAllocation }),
     ...createFulfillmentRoutes({ fulfillment: services.fulfillment }),

@@ -1,8 +1,8 @@
 # SYNTH-V2 Live Capability Register
 
 Status date: 2026-08-12  
-Baseline main reviewed for this consolidation wave: `11ea2e53aecd609868ab59e89e2bec3d1adcabc3`  
-Current stacked implementation slice: MDM rescue PR #78 + Product Identity V2 branch.
+Baseline main reviewed for this consolidation wave: `53bae4e062af200e4d6593909f743d868506df8d`  
+Current implementation slice: `codex/product-readiness-projection-20260812` on top of merged MDM Core + Product Identity V2/runtime.
 
 This register is the operational architecture checkpoint for the current SYNTH-V2 codebase. It prevents specifications, stale pull requests and executable capabilities from being treated as the same thing.
 
@@ -20,31 +20,31 @@ This register is the operational architecture checkpoint for the current SYNTH-V
 
 | Capability | SPEC | DB | DOMAIN | SERVICE | API | UI | E2E | ODS | PROD | Current truth / next gate |
 |---|---|---|---|---|---|---|---|---|---|---|
-| Governed MDM reference core | YES | YES | DECLARED | NO | NO | NO | NO | N/A | NO | Rescued semantic catalogs and versioned persistence in migrations 050-051. Historical usage snapshots are exact/immutable. Next: resolver + RBAC/admin/import APIs + production seed sets. |
-| Category / assortment hierarchy | YES | PARTIAL | PARTIAL | NO | NO | PARTIAL | NO | PARTIAL | NO | MDM hierarchy vocabulary is declared and StyleVersion can pin exact category/product-type MDM versions; dictionary-type resolver and production seeds are still missing. |
-| Size systems / scales / values | YES | YES | YES | NO | NO | NO | NO | NO | NO | Product Identity now has stable SizeScale, immutable SizeScaleVersion, ordered SizeValue and exact optional MDM version refs. Next: persistence service/API and buyer publication snapshot. |
-| Colour master / swatches | YES | YES | YES | NO | NO | PARTIAL | NO | NO | NO | Colorway now pins exact StyleVersion, optional exact MDM colour version and swatch HEX. Buyer-facing projection is still missing. |
-| Product attributes / attribute sets | YES | YES | YES | NO | NO | NO | NO | NO | NO | Governed bilingual definitions exist and immutable ProductAttributeValue pins catalog version plus optional exact MDM version. Resolver/type validation remains to be added. |
-| Product Identity V2: Style | YES | YES | YES | NO | NO | PARTIAL | NO | PARTIAL | NO | Stable ProductStyle identity/lifecycle head exists on the stacked Product Identity branch. No public mutation service/API yet. |
-| Product Identity V2: StyleVersion | YES | YES | YES | NO | NO | NO | NO | NO | NO | Immutable exact technical StyleVersion with contiguous predecessor chain, RU/EN titles, MDM refs and content hash exists. |
-| Product Identity V2: Colorway | YES | YES | YES | NO | NO | PARTIAL | NO | NO | NO | Immutable Colorway belongs to one exact StyleVersion/brand and can pin exact colour MDM version. |
-| Product Identity V2: SizeScale / SizeValue | YES | YES | YES | NO | NO | NO | NO | NO | NO | Ordered immutable size structure exists and is ready to feed Commercial Projection / Order Grid after service/API wiring. |
-| Product Identity V2: SKU | YES | YES | YES | NO | NO | YES | PARTIAL | PARTIAL | NO | Canonical immutable ProductSku = exact StyleVersion + Colorway + same-brand SizeValue. Existing `catalog_skus` remains operational through an explicit one-to-one compatibility bridge. |
-| Product media / gallery / swatches | YES | YES | YES | NO | NO | PARTIAL | NO | NO | NO | Immutable StyleVersion/Colorway-scoped media and explicit ordering exist; buyer gallery/read model is still a later commercial slice. |
-| ProductReadinessSnapshot | YES | NO | NO | NO | NO | NO | NO | NO | NO | Current-main code search did not confirm a canonical implementation. Old readiness PRs must be diffed; only unique invariants/tests should be rescued. |
-| CommercialProductProjectionVersion | YES | NO | NO | NO | NO | NO | NO | NO | NO | Current-main code search did not confirm a canonical aggregate. This must become the single formal handoff from readiness into commerce. |
-| CommercialPublication | YES | YES | YES | YES | YES | YES | YES | PARTIAL | PARTIAL | Immutable publication spine exists. Next: snapshot canonical Product Identity variant hierarchy, media, ordered sizes, MDM labels, delivery/price metadata. |
-| PriceListVersion | YES | YES | YES | YES | YES | PARTIAL | PARTIAL | PARTIAL | PARTIAL | Immutable price version exists; richer price type/RRP/effective semantics remain to be connected. |
-| BuyerCatalogVersion | YES | YES | YES | YES | YES | YES | PARTIAL | PARTIAL | NO | Immutable buyer catalog exists, but payload/read model remains too SKU-flat for JOOR/NuORDER-class buyer UX. |
+| Governed MDM reference core | YES | YES | YES | PARTIAL | PARTIAL | NO | PARTIAL | N/A | NO | Versioned MDM persistence, exact immutable usage snapshots and Product Identity resolver are canonical. Next: admin/import API, governed seed sets and dictionary/attribute management UI. |
+| Category / assortment hierarchy | YES | PARTIAL | PARTIAL | PARTIAL | PARTIAL | PARTIAL | PARTIAL | PARTIAL | NO | StyleVersion pins exact compatible category/product-type MDM versions. Production hierarchy seeds/admin workflow remain incomplete. |
+| Size systems / scales / values | YES | YES | YES | YES | YES | NO | PARTIAL | NO | NO | Stable SizeScale + immutable SizeScaleVersion + ordered SizeValue are executable with exact MDM resolution. Buyer publication snapshot is next. |
+| Colour master / swatches | YES | YES | YES | YES | YES | PARTIAL | PARTIAL | NO | NO | Colorway pins exact StyleVersion and optional current compatible colour MDM version; buyer-facing projection now freezes it but catalog UI is not migrated yet. |
+| Product attributes / attribute sets | YES | YES | YES | YES | YES | NO | PARTIAL | NO | NO | ProductAttributeValue is executable and can pin exact MDM. Governed attribute-definition applicability/type/cardinality validation is still pending; readiness currently uses an explicit coverage attestation. |
+| Product Identity V2: Style | YES | YES | YES | YES | YES | PARTIAL | PARTIAL | PARTIAL | NO | Stable ProductStyle lifecycle, RBAC, idempotent mutation/read API and PostgreSQL runtime are merged. |
+| Product Identity V2: StyleVersion | YES | YES | YES | YES | YES | NO | PARTIAL | NO | NO | Immutable exact technical StyleVersion with contiguous predecessor chain, bilingual titles, MDM refs and content hash is executable. |
+| Product Identity V2: Colorway | YES | YES | YES | YES | YES | PARTIAL | PARTIAL | NO | NO | Immutable Colorway belongs to one exact StyleVersion/brand and can pin exact colour MDM version. |
+| Product Identity V2: SizeScale / SizeValue | YES | YES | YES | YES | YES | NO | PARTIAL | NO | NO | Ordered immutable size structure is executable and ready to feed BuyerCatalog/Order Grid. |
+| Product Identity V2: SKU | YES | YES | YES | YES | YES | YES | PARTIAL | PARTIAL | NO | Canonical immutable ProductSku = exact StyleVersion + Colorway + same-brand SizeValue. Existing `catalog_skus` is isolated behind an explicit one-to-one compatibility bridge. |
+| Product media / gallery / swatches | YES | YES | YES | YES | YES | PARTIAL | PARTIAL | NO | NO | Immutable StyleVersion/Colorway-scoped media with explicit ordering is executable and can be selected into readiness/commercial projection. Buyer gallery remains next. |
+| ProductReadinessSnapshot | YES | YES | YES | YES | YES | NO | PARTIAL | NO | NO | Current slice freezes exactly 18 route-aware readiness dimensions, exact Product Identity/legacy PLM source versions, commercial preparation and external evidence contracts. Blocked snapshots remain immutable history. |
+| CommercialProductProjectionVersion | YES | YES | YES | YES | YES | NO | PARTIAL | NO | NO | Current slice creates immutable contiguous projections only from ready snapshots and requires exact frozen readiness payload. Next: make CommercialPublication consume this projection exclusively. |
+| CommercialPublication | YES | YES | YES | YES | YES | YES | YES | PARTIAL | PARTIAL | Immutable publication spine exists, but current production path still originates from the historical flat catalog. Next: projection-only variant-rich publication. |
+| PriceListVersion | YES | YES | YES | YES | YES | PARTIAL | PARTIAL | PARTIAL | PARTIAL | Immutable price version exists; richer price type/RRP/effective semantics must be connected to projection-backed publication. |
+| BuyerCatalogVersion | YES | YES | YES | YES | YES | YES | PARTIAL | PARTIAL | NO | Immutable buyer catalog exists, but payload/read model remains too SKU-flat. Next: preserve projection-backed Style/Colorway/ordered Size/SKU hierarchy. |
 | Buyer Linesheet | YES | PARTIAL | PARTIAL | YES | YES | YES | PARTIAL | PARTIAL | NO | Current linesheet is a publication projection; next gate is Product Identity-backed Style cards -> Style detail -> colorways/sizes/media. |
-| Buyer Style Detail | YES | NO | NO | NO | NO | NO | NO | NO | NO | Product Identity prerequisite now exists on the stacked branch; Commercial Projection V2 is the remaining core dependency. |
+| Buyer Style Detail | YES | PARTIAL | PARTIAL | NO | NO | NO | NO | NO | NO | Product Identity + immutable Commercial Projection prerequisites now exist. Variant-rich publication/read model is the remaining dependency. |
 | Draft Buyer Cart | YES | PARTIAL | PARTIAL | PARTIAL | PARTIAL | PARTIAL | PARTIAL | PARTIAL | NO | Selection/order flow exists, but draft context must freeze buyer catalog, door, price type and delivery terms. |
-| Color x Size Order Grid | YES | NO | NO | NO | NO | NO | NO | NO | NO | Ordered size and canonical SKU prerequisites now exist on the stacked Product Identity branch; buyer matrix service/read model/UI is still missing. |
+| Color x Size Order Grid | YES | PARTIAL | PARTIAL | NO | NO | NO | NO | NO | NO | Canonical ordered SizeValue and SKU matrix prerequisites exist. BuyerCatalog variant projection and matrix write model remain missing. |
 | Retailer / Door master | YES | PARTIAL | PARTIAL | PARTIAL | PARTIAL | PARTIAL | NO | PARTIAL | NO | Organisation/relationship foundation exists; door/location/commercial master depth is insufficient for immutable order snapshots. |
 | Wholesale Order | YES | YES | YES | YES | YES | YES | YES | PARTIAL | PARTIAL | Strong bilateral order lifecycle exists; next gate is variant matrix + door/address/terms snapshots from canonical masters. |
 | OrderCommitSnapshot | YES | YES | YES | YES | YES | PARTIAL | YES | N/A | PARTIAL | Immutable commercial deal snapshot is part of the canonical economics spine. |
-| Supply / production execution | YES | YES | YES | YES | YES | YES | YES | PARTIAL | PARTIAL | Strong execution backbone; keep derived performance separated from product master truth. |
-| Shipment / receipt / physical recovery | YES | PARTIAL | PARTIAL | PARTIAL | PARTIAL | PARTIAL | PARTIAL | PARTIAL | NO | Receipt discrepancies/recoveries exist; older outbound-shipment work must be diffed and selectively rescued. |
+| Supply / production execution | YES | YES | YES | YES | YES | YES | YES | PARTIAL | PARTIAL | Strong execution backbone; derived performance remains separated from product master truth. |
+| Shipment / receipt / physical recovery | YES | PARTIAL | PARTIAL | PARTIAL | PARTIAL | PARTIAL | PARTIAL | PARTIAL | NO | Receipt discrepancies/recoveries exist; older outbound-shipment work still needs selective comparison/rescue. |
 | Actual cost / landed cost / margin / close | YES | YES | YES | YES | YES | PARTIAL | YES | N/A | PARTIAL | One of the strongest areas. Immutable lineage/corrections/allocation/close architecture is established. |
 | Supplier recovery / performance | YES | YES | YES | YES | YES | PARTIAL | YES | N/A | PARTIAL | Derived from immutable production, quality, discrepancy, recovery and actual-cost evidence. |
 | KPI methodology / source contracts | YES | N/A | YES | PARTIAL | PARTIAL | PARTIAL | PARTIAL | N/A | PARTIAL | Governed methodology exists; not every catalog KPI is executable/production-ready. |
@@ -55,12 +55,12 @@ This register is the operational architecture checkpoint for the current SYNTH-V
 | Measurements ODS migration | YES | N/A | YES | YES | YES | YES | PARTIAL | PARTIAL | NO | Migrate after Sourcing; remove local stylesheet/static serving only after semantic/screenshot/i18n/responsive validation. |
 | BOM ODS migration | YES | YES | YES | YES | YES | YES | PARTIAL | PARTIAL | NO | Same migration rule; do not create another visual version layer. |
 | Materials ODS migration | YES | YES | YES | YES | YES | YES | PARTIAL | PARTIAL | NO | Same migration rule. |
-| Styles / Collection Planning ODS migration | YES | PARTIAL | PARTIAL | PARTIAL | PARTIAL | YES | NO | PARTIAL | NO | Must align UI/ODS work with the new Product Identity model instead of styling a second product model. |
+| Styles / Collection Planning ODS migration | YES | PARTIAL | PARTIAL | PARTIAL | PARTIAL | YES | PARTIAL | PARTIAL | NO | Must align UI/ODS work with canonical Product Identity/readiness instead of styling a second product model. |
 | Shared shell/navigation ODS convergence | YES | N/A | YES | N/A | N/A | YES | PARTIAL | PARTIAL | NO | Final ODS convergence step after PLM workspaces. |
 | Buyer discovery / connection management | YES | PARTIAL | PARTIAL | PARTIAL | PARTIAL | NO | NO | PARTIAL | NO | P1 after P0 publication-to-order journey. |
 | Retailer profile / settings / messages | YES | PARTIAL | PARTIAL | PARTIAL | PARTIAL | PARTIAL | NO | PARTIAL | NO | Notifications are not a buyer Inbox; messaging requires its own bounded context. |
 | Visual Assortment / Looks / Styleboards | YES | NO | NO | NO | NO | NO | NO | NO | NO | Premium P2 after Product Identity, catalog and order matrix are stable. |
-| 1C / EDO / marking / customs perimeter | YES | PARTIAL | PARTIAL | PARTIAL | PARTIAL | PARTIAL | NO | PARTIAL | NO | Russian production perimeter is specified but not yet a complete executable chain. |
+| 1C / EDO / marking / customs perimeter | YES | PARTIAL | PARTIAL | PARTIAL | PARTIAL | PARTIAL | NO | PARTIAL | NO | Russian production perimeter is specified but not yet a complete executable chain. Compliance is currently admitted to readiness only as immutable external evidence. |
 
 ## Canonical spine to protect
 
@@ -68,24 +68,25 @@ This register is the operational architecture checkpoint for the current SYNTH-V
 
 ## Consolidation guardrails
 
-1. **No second Product Master.** New Product Identity work extends one canonical Style/StyleVersion/Colorway/Size/SKU lineage. Existing `catalog_skus` remains a compatibility surface until migration is complete.
+1. **No second Product Master.** Product Identity is the canonical Style/StyleVersion/Colorway/Size/SKU lineage. Existing `catalog_skus` remains a compatibility surface until migration is complete.
 2. **One formal handoff into commerce.** Technical/runtime objects may not be read ad hoc by buyer catalog. The handoff is `ProductReadinessSnapshot -> CommercialProductProjectionVersion -> CommercialPublication`.
-3. **MDM is reference truth, not formula truth.** Persistent KPI Registry owns formulas. `docs/fashion-kpi/` owns methodology/source contracts. No parallel editable formula catalog under MDM.
-4. **Historical business facts freeze versions.** Buyer catalog, order, cost and later KPI observations must keep exact version/lineage references instead of resolving current masters retroactively.
-5. **No new Omnidata version stylesheet.** ODS migration burns compatibility debt down; it never adds `omnidata-v15.css`, `v16`, or another page-local visual dialect.
-6. **No blind stale-PR merges.** Every old PR is compared with current main. Keep unique invariants/tests; rebase or extract them; close superseded parallel implementations.
-7. **Cross-module imports only through `public.mjs`.** Existing repository boundary rule remains mandatory.
-8. **Mutations require idempotency/outbox.** MDM and Product Identity mutations must follow the same command/outbox discipline as other SYNTH-V2 bounded contexts.
-9. **RU/EN is mandatory for user-facing governed values and UI.**
-10. **PROD is earned end to end.** A spec, migration or UI mock alone never upgrades a capability to production-ready.
+3. **Route evidence is fail-closed.** Existing repository sources cannot be overridden with arbitrary external readiness evidence. External facts are allowed only where the bounded context is intentionally outside/not yet canonical.
+4. **MDM is reference truth, not formula truth.** Persistent KPI Registry owns formulas. `docs/fashion-kpi/` owns methodology/source contracts. No parallel editable formula catalog under MDM.
+5. **Historical business facts freeze versions.** Readiness, commercial projection, buyer catalog, order, cost and later KPI observations keep exact version/lineage references instead of resolving current masters retroactively.
+6. **No new Omnidata version stylesheet.** ODS migration burns compatibility debt down; it never adds `omnidata-v15.css`, `v16`, or another page-local visual dialect.
+7. **No blind stale-PR merges.** Every old PR is compared with current main. Keep unique invariants/tests; rebase or extract them; close superseded parallel implementations.
+8. **Cross-module imports only through `public.mjs`.** Existing repository boundary rule remains mandatory.
+9. **Mutations require idempotency/outbox.** MDM, Product Identity and readiness/projection mutations follow durable command and unified transactional-outbox discipline.
+10. **RU/EN is mandatory for user-facing governed values and UI.**
+11. **PROD is earned end to end.** A spec, migration or UI mock alone never upgrades a capability to production-ready.
 
 ## Consolidation Wave order
 
-1. MDM Core Rescue — PR #78, current stacked base.
-2. Product Identity V2 — current stacked slice: Style / StyleVersion / Colorway / SizeScale / SizeValue / SKU / Media / AttributeValue.
-3. Product Identity application/persistence/API layer + MDM dictionary-type resolver and exact usage snapshots.
-4. ProductReadinessSnapshot -> CommercialProductProjectionVersion.
-5. Variant-rich immutable CommercialPublication / BuyerCatalog snapshots.
+1. MDM Core Rescue — merged.
+2. Product Identity V2 — merged.
+3. Product Identity runtime + exact MDM binding — merged.
+4. ProductReadinessSnapshot -> CommercialProductProjectionVersion — current slice.
+5. Variant-rich projection-only CommercialPublication / BuyerCatalog snapshots.
 6. Buyer Linesheet / Style Detail.
 7. Draft Buyer Cart + Color x Size Matrix.
 8. Door/address/commercial master snapshots.

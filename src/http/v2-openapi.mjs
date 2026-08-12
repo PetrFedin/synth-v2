@@ -6,6 +6,7 @@ import { withFinalQualityOpenApi } from './final-quality-openapi.mjs';
 import { withFulfillmentOpenApi } from './fulfillment-openapi.mjs';
 import { withInventoryOpenApi } from './inventory-openapi.mjs';
 import { withProductIdentityOpenApi } from './product-identity-openapi.mjs';
+import { withProductReadinessOpenApi } from './product-readiness-openapi.mjs';
 import { withReceiptClaimsOpenApi } from './receipt-claims-openapi.mjs';
 import { withSupplierRecoveryOpenApi } from './supplier-recovery-openapi.mjs';
 import { withSupplierEconomicPerformanceOpenApi } from './supplier-economic-performance-openapi.mjs';
@@ -23,7 +24,9 @@ import { withSourcingTechPackGateOpenApi } from './sourcing-tech-pack-gate-opena
 import { withTechPackOpenApi } from './tech-pack-openapi.mjs';
 import { wholesaleV2OpenApi } from './openapi.mjs';
 
-export const wholesaleV2ExtendedOpenApi = withSupplierEconomicPerformanceOpenApi(
+const AUTHORITATIVE_V2_CONTRACT_VERSION = '1.17.0';
+
+const composed = withSupplierEconomicPerformanceOpenApi(
   withSupplierRecoveryOpenApi(
     withReceiptClaimsOpenApi(
       withInventoryOpenApi(
@@ -34,18 +37,20 @@ export const wholesaleV2ExtendedOpenApi = withSupplierEconomicPerformanceOpenApi
                 withCostCloseReadinessOpenApi(
                   withOrderEconomicsOpenApi(
                     withCommercialPublicationOpenApi(
-                      withProductIdentityOpenApi(
-                        withFinalQualityOpenApi(
-                          withProductionExecutionOpenApi(
-                            withProductionOrderOpenApi(
-                              withSourcingTechPackGateOpenApi(
-                                withTechPackOpenApi(
-                                  withSourcingOpenApi(
-                                    withSampleOpenApi(
-                                      withMeasurementRevisionOpenApi(
-                                        withMeasurementOpenApi(
-                                          withBomOpenApi(
-                                            withMaterialOpenApi(wholesaleV2OpenApi),
+                      withProductReadinessOpenApi(
+                        withProductIdentityOpenApi(
+                          withFinalQualityOpenApi(
+                            withProductionExecutionOpenApi(
+                              withProductionOrderOpenApi(
+                                withSourcingTechPackGateOpenApi(
+                                  withTechPackOpenApi(
+                                    withSourcingOpenApi(
+                                      withSampleOpenApi(
+                                        withMeasurementRevisionOpenApi(
+                                          withMeasurementOpenApi(
+                                            withBomOpenApi(
+                                              withMaterialOpenApi(wholesaleV2OpenApi),
+                                            ),
                                           ),
                                         ),
                                       ),
@@ -68,3 +73,18 @@ export const wholesaleV2ExtendedOpenApi = withSupplierEconomicPerformanceOpenApi
     ),
   ),
 );
+
+export const wholesaleV2ExtendedOpenApi = preserveAuthoritativeContractVersion(composed);
+
+function preserveAuthoritativeContractVersion(specification) {
+  const normalized = structuredClone(specification);
+  normalized.info.version = AUTHORITATIVE_V2_CONTRACT_VERSION;
+  return deepFreeze(normalized);
+}
+
+function deepFreeze(value) {
+  if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value;
+  Object.freeze(value);
+  for (const nested of Object.values(value)) deepFreeze(nested);
+  return value;
+}

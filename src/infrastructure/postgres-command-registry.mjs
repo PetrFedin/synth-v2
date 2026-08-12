@@ -4,6 +4,8 @@ const LEDGERS = Object.freeze({
   wholesale: 'commands',
   catalog: 'catalog_commands',
   notification: 'notification_commands',
+  'product-identity': 'product_identity_commands',
+  'product-readiness': 'product_readiness_commands',
 });
 
 export async function getRegisteredCommand(client, scope, id) {

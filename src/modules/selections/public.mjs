@@ -2,6 +2,7 @@ import { invariant } from '../../core/errors.mjs';
 import { assertPostgresInteger, normalizeMoney } from '../../core/money.mjs';
 
 const NOTE_MAX_LENGTH = 2_000;
+const RICH_LINEAGE_KEYS = Object.freeze(['productSkuId', 'styleId', 'styleVersionId', 'colorwayId', 'sizeValueId', 'sizeCode']);
 
 export function createSelection({ id, cycle, showroom, commercialBasis = null, createdAt }) {
   invariant(id && cycle?.id && showroom?.id, 'SELECTION_IDENTITY_REQUIRED', 'Selection, cycle and showroom are required');
@@ -32,6 +33,38 @@ export function createSelection({ id, cycle, showroom, commercialBasis = null, c
 
 export function upsertSelectionLine(selection, line, actorId, updatedAt) {
   invariant(selection.status === 'draft', 'SELECTION_NOT_DRAFT', 'Only a draft selection can be edited');
+  const nextLine = normalizeSelectionLine(line, actorId, updatedAt);
+  const existingIndex = selection.lines.findIndex((candidate) => candidate.sku === nextLine.sku);
+  const lines = [...selection.lines];
+  if (existingIndex >= 0) lines[existingIndex] = nextLine;
+  else lines.push(nextLine);
+  lines.sort((left, right) => left.sku.localeCompare(right.sku));
+  return Object.freeze({ ...selection, lines: Object.freeze(lines), version: selection.version + 1, updatedAt });
+}
+
+export function replaceSelectionLines(selection, lines, actorId, updatedAt) {
+  invariant(selection.status === 'draft', 'SELECTION_NOT_DRAFT', 'Only a draft selection can be edited');
+  invariant(Array.isArray(lines), 'SELECTION_MATRIX_LINES_INVALID', 'Selection matrix lines must be an array');
+  const seen = new Set();
+  const normalized = lines.map((line) => {
+    const nextLine = normalizeSelectionLine(line, actorId, updatedAt);
+    invariant(!seen.has(nextLine.sku), 'SELECTION_MATRIX_SKU_DUPLICATE', 'Selection matrix contains duplicate SKU', { sku: nextLine.sku });
+    seen.add(nextLine.sku);
+    return nextLine;
+  });
+  normalized.sort((left, right) => left.sku.localeCompare(right.sku));
+  return Object.freeze({ ...selection, lines: Object.freeze(normalized), version: selection.version + 1, updatedAt });
+}
+
+export function submitSelection(selection, updatedAt) {
+  invariant(selection.status === 'draft', 'SELECTION_NOT_DRAFT', 'Only a draft selection can be submitted');
+  invariant(selection.lines.length > 0, 'SELECTION_LINES_REQUIRED', 'Selection must contain at least one line');
+  const currencies = new Set(selection.lines.map((line) => line.currency));
+  invariant(currencies.size === 1, 'SELECTION_CURRENCY_MISMATCH', 'All selection lines must use one currency');
+  return Object.freeze({ ...selection, status: 'submitted', version: selection.version + 1, updatedAt });
+}
+
+function normalizeSelectionLine(line, actorId, updatedAt) {
   invariant(typeof line.sku === 'string' && line.sku.length > 0, 'SELECTION_LINE_SKU_REQUIRED', 'Selection line SKU is required');
   const quantity = assertPostgresInteger(line.quantity, { code: 'SELECTION_LINE_QUANTITY_INVALID', label: 'Selection quantity', min: 1 });
   const unitPrice = normalizeMoney(line.unitPrice, {
@@ -44,30 +77,49 @@ export function upsertSelectionLine(selection, line, actorId, updatedAt) {
   invariant(Number.isInteger(line.catalogVersion) && line.catalogVersion > 0, 'SELECTION_CATALOG_VERSION_INVALID', 'Catalog version must be a positive integer');
   const note = typeof line.note === 'string' ? line.note.trim() : '';
   invariant(note.length <= NOTE_MAX_LENGTH, 'SELECTION_LINE_NOTE_TOO_LONG', `Selection note must not exceed ${NOTE_MAX_LENGTH} characters`);
-  const nextLine = Object.freeze({
+  const lineage = normalizeOptionalLineage(line);
+  return Object.freeze({
     sku: line.sku,
     quantity,
     unitPrice,
     currency: line.currency,
     catalogVersion: line.catalogVersion,
+    ...(lineage ?? {}),
     note,
     updatedBy: actorId,
     updatedAt,
   });
-  const existingIndex = selection.lines.findIndex((candidate) => candidate.sku === line.sku);
-  const lines = [...selection.lines];
-  if (existingIndex >= 0) lines[existingIndex] = nextLine;
-  else lines.push(nextLine);
-  lines.sort((left, right) => left.sku.localeCompare(right.sku));
-  return Object.freeze({ ...selection, lines: Object.freeze(lines), version: selection.version + 1, updatedAt });
 }
 
-export function submitSelection(selection, updatedAt) {
-  invariant(selection.status === 'draft', 'SELECTION_NOT_DRAFT', 'Only a draft selection can be submitted');
-  invariant(selection.lines.length > 0, 'SELECTION_LINES_REQUIRED', 'Selection must contain at least one line');
-  const currencies = new Set(selection.lines.map((line) => line.currency));
-  invariant(currencies.size === 1, 'SELECTION_CURRENCY_MISMATCH', 'All selection lines must use one currency');
-  return Object.freeze({ ...selection, status: 'submitted', version: selection.version + 1, updatedAt });
+function normalizeOptionalLineage(line) {
+  const present = RICH_LINEAGE_KEYS.filter((key) => line[key] !== undefined && line[key] !== null && line[key] !== '');
+  if (present.length === 0) return null;
+  invariant(present.length === RICH_LINEAGE_KEYS.length, 'SELECTION_LINE_LINEAGE_INCOMPLETE', 'Rich selection line requires complete Product/Style/Colorway/Size lineage', { sku: line.sku, present });
+  for (const key of RICH_LINEAGE_KEYS) {
+    invariant(typeof line[key] === 'string' && line[key].trim().length > 0, 'SELECTION_LINE_LINEAGE_INVALID', 'Rich selection lineage values must be non-empty strings', { sku: line.sku, key });
+  }
+  const sizeSortOrder = assertPostgresInteger(line.sizeSortOrder, { code: 'SELECTION_LINE_SIZE_ORDER_INVALID', label: 'Selection size sort order', min: 0 });
+  const sizeLabelRu = normalizeOptionalLabel(line.sizeLabelRu, line.sizeCode);
+  const sizeLabelEn = normalizeOptionalLabel(line.sizeLabelEn, line.sizeCode);
+  const gtin = line.gtin === undefined || line.gtin === null || line.gtin === '' ? null : String(line.gtin).trim();
+  return Object.freeze({
+    productSkuId: line.productSkuId.trim(),
+    styleId: line.styleId.trim(),
+    styleVersionId: line.styleVersionId.trim(),
+    colorwayId: line.colorwayId.trim(),
+    sizeValueId: line.sizeValueId.trim(),
+    sizeCode: line.sizeCode.trim(),
+    sizeLabelRu,
+    sizeLabelEn,
+    sizeSortOrder,
+    gtin,
+  });
+}
+
+function normalizeOptionalLabel(value, fallback) {
+  if (value === undefined || value === null || value === '') return fallback;
+  invariant(typeof value === 'string' && value.trim().length > 0, 'SELECTION_LINE_SIZE_LABEL_INVALID', 'Selection size label must be a non-empty string');
+  return value.trim();
 }
 
 function validateCommercialBasis(basis, cycle, showroom) {

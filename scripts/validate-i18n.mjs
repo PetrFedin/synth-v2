@@ -193,6 +193,7 @@ function createHarness(browserLanguage) {
     Date,
     URL,
     URLSearchParams,
+    structuredClone,
     queueMicrotask: () => {},
     encodeURIComponent,
     setTimeout: () => 0,

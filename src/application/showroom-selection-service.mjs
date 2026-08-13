@@ -4,12 +4,14 @@ import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
 import { assertWholesaleStore } from './store-contract.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
 import { assertCatalogAvailableToSell, assertCatalogQuantity, assertPublishedCatalogSku } from '../modules/catalog/public.mjs';
-import { buyerCatalogLine } from '../modules/commercial-publication/public.mjs';
+import { assertBuyerCatalogQuantity, buyerCatalogLine, buyerCatalogProductSku, isRichBuyerCatalog } from '../modules/commercial-publication/public.mjs';
 import { assertActiveRelationship } from '../modules/counterparty-relationships/public.mjs';
 import { assertAcceptedShowroomAccess } from '../modules/showroom-invitations/public.mjs';
 import { createShowroom, openShowroom } from '../modules/showrooms/public.mjs';
-import { createSelection, submitSelection, upsertSelectionLine } from '../modules/selections/public.mjs';
+import { createSelection, replaceSelectionLines, submitSelection, upsertSelectionLine } from '../modules/selections/public.mjs';
 import { advanceCommercialCycle } from '../modules/commercial-cycle/public.mjs';
+
+const MATRIX_MAX_LINES = 5_000;
 
 export function createShowroomSelectionService({
   store,
@@ -50,6 +52,78 @@ export function createShowroomSelectionService({
   async function assertOrganisationActor(tx, organisationId, actorId, capability) {
     const membership = await tx.getMembership(organisationId, actorId);
     assertCapability(membership, capability);
+  }
+
+  function assertClientControlledLine(line) {
+    invariant(line && typeof line === 'object' && !Array.isArray(line), 'SELECTION_LINE_INPUT_INVALID', 'Selection line input is invalid');
+    invariant(line.unitPrice === undefined && line.currency === undefined && line.catalogVersion === undefined, 'SELECTION_CLIENT_PRICE_FORBIDDEN', 'Selection price and currency are controlled by the published commercial basis');
+  }
+
+  async function richBuyerCatalogForSelection(current) {
+    invariant(current.buyerCatalogVersionId, 'SELECTION_MATRIX_BUYER_CATALOG_REQUIRED', 'Selection matrix requires a pinned BuyerCatalogVersion');
+    invariant(trustedCommercialReader, 'COMMERCIAL_PUBLICATION_READER_REQUIRED', 'Commercial publication reader is required for a pinned selection');
+    const buyerCatalog = requireEntity(await trustedCommercialReader.getBuyerCatalogVersion(current.buyerCatalogVersionId), 'BUYER_CATALOG_NOT_FOUND', { buyerCatalogVersionId: current.buyerCatalogVersionId });
+    invariant(buyerCatalog.contentHash === current.commercialBasisHash, 'SELECTION_COMMERCIAL_BASIS_CHANGED', 'Pinned buyer catalog does not match selection commercial basis');
+    invariant(isRichBuyerCatalog(buyerCatalog), 'SELECTION_MATRIX_RICH_CATALOG_REQUIRED', 'Color and size matrix requires a rich BuyerCatalogVersion');
+    return buyerCatalog;
+  }
+
+  function richTrustedLine(buyerCatalog, line) {
+    const product = buyerCatalogProductSku(buyerCatalog, { skuCode: line.sku });
+    const quantity = assertBuyerCatalogQuantity(product, line.quantity);
+    return Object.freeze({
+      sku: product.sku,
+      quantity,
+      unitPrice: product.unitPrice,
+      currency: product.currency,
+      catalogVersion: product.catalogVersion,
+      productSkuId: product.productSkuId,
+      gtin: product.gtin,
+      styleId: product.styleId,
+      styleVersionId: product.styleVersionId,
+      colorwayId: product.colorwayId,
+      sizeValueId: product.sizeValueId,
+      sizeCode: product.sizeCode,
+      sizeLabelRu: product.sizeLabelRu,
+      sizeLabelEn: product.sizeLabelEn,
+      sizeSortOrder: product.sizeSortOrder,
+      note: line.note,
+    });
+  }
+
+  async function trustedLineForUpsert(current, line) {
+    if (current.buyerCatalogVersionId) {
+      invariant(trustedCommercialReader, 'COMMERCIAL_PUBLICATION_READER_REQUIRED', 'Commercial publication reader is required for a pinned selection');
+      const buyerCatalog = requireEntity(await trustedCommercialReader.getBuyerCatalogVersion(current.buyerCatalogVersionId), 'BUYER_CATALOG_NOT_FOUND', { buyerCatalogVersionId: current.buyerCatalogVersionId });
+      invariant(buyerCatalog.contentHash === current.commercialBasisHash, 'SELECTION_COMMERCIAL_BASIS_CHANGED', 'Pinned buyer catalog does not match selection commercial basis');
+
+      if (isRichBuyerCatalog(buyerCatalog)) return richTrustedLine(buyerCatalog, line);
+
+      const liveSku = await trustedCatalogReader.getSku(line.sku);
+      const commercialLine = buyerCatalogLine(buyerCatalog, line.sku);
+      invariant(line.quantity >= commercialLine.minimumOrderQuantity, 'BUYER_CATALOG_MOQ_NOT_MET', 'Selection quantity is below buyer catalog MOQ', { sku: line.sku, minimumOrderQuantity: commercialLine.minimumOrderQuantity });
+      assertCatalogAvailableToSell(liveSku, line.quantity, { sku: line.sku, collectionId: current.collectionId, brandId: current.brandId });
+      return Object.freeze({
+        sku: commercialLine.sku,
+        quantity: line.quantity,
+        unitPrice: commercialLine.unitPrice,
+        currency: commercialLine.currency,
+        catalogVersion: commercialLine.catalogVersion,
+        note: line.note,
+      });
+    }
+
+    const liveSku = await trustedCatalogReader.getSku(line.sku);
+    const publishedSku = assertPublishedCatalogSku(liveSku, { collectionId: current.collectionId, brandId: current.brandId });
+    const catalogSku = assertCatalogQuantity(publishedSku, line.quantity);
+    return Object.freeze({
+      sku: catalogSku.sku,
+      quantity: line.quantity,
+      unitPrice: catalogSku.wholesalePrice,
+      currency: catalogSku.currency,
+      catalogVersion: catalogSku.version,
+      note: line.note,
+    });
   }
 
   return Object.freeze({
@@ -130,7 +204,7 @@ export function createShowroomSelectionService({
     },
 
     upsertSelectionLine(commandId, actorId, selectionId, line) {
-      invariant(line?.unitPrice === undefined && line?.currency === undefined && line?.catalogVersion === undefined, 'SELECTION_CLIENT_PRICE_FORBIDDEN', 'Selection price and currency are controlled by the published commercial basis');
+      assertClientControlledLine(line);
       return execute(
         commandId,
         `upsertSelectionLine:${actorId}:${selectionId}:${canonicalJson(line)}`,
@@ -141,40 +215,45 @@ export function createShowroomSelectionService({
           return current;
         },
         async (tx, current) => {
-          const liveSku = await trustedCatalogReader.getSku(line.sku);
-          let trustedLine;
-          if (current.buyerCatalogVersionId) {
-            invariant(trustedCommercialReader, 'COMMERCIAL_PUBLICATION_READER_REQUIRED', 'Commercial publication reader is required for a pinned selection');
-            const buyerCatalog = requireEntity(await trustedCommercialReader.getBuyerCatalogVersion(current.buyerCatalogVersionId), 'BUYER_CATALOG_NOT_FOUND', { buyerCatalogVersionId: current.buyerCatalogVersionId });
-            invariant(buyerCatalog.contentHash === current.commercialBasisHash, 'SELECTION_COMMERCIAL_BASIS_CHANGED', 'Pinned buyer catalog does not match selection commercial basis');
-            const commercialLine = buyerCatalogLine(buyerCatalog, line.sku);
-            invariant(line.quantity >= commercialLine.minimumOrderQuantity, 'BUYER_CATALOG_MOQ_NOT_MET', 'Selection quantity is below buyer catalog MOQ', { sku: line.sku, minimumOrderQuantity: commercialLine.minimumOrderQuantity });
-            assertCatalogAvailableToSell(liveSku, line.quantity, { sku: line.sku, collectionId: current.collectionId, brandId: current.brandId });
-            trustedLine = Object.freeze({
-              sku: commercialLine.sku,
-              quantity: line.quantity,
-              unitPrice: commercialLine.unitPrice,
-              currency: commercialLine.currency,
-              catalogVersion: commercialLine.catalogVersion,
-              note: line.note,
-            });
-          } else {
-            const publishedSku = assertPublishedCatalogSku(liveSku, { collectionId: current.collectionId, brandId: current.brandId });
-            const catalogSku = assertCatalogQuantity(publishedSku, line.quantity);
-            trustedLine = Object.freeze({
-              sku: catalogSku.sku,
-              quantity: line.quantity,
-              unitPrice: catalogSku.wholesalePrice,
-              currency: catalogSku.currency,
-              catalogVersion: catalogSku.version,
-              note: line.note,
-            });
-          }
+          const trustedLine = await trustedLineForUpsert(current, line);
           const updated = upsertSelectionLine(current, trustedLine, actorId, clock());
           await tx.saveSelection(updated, current.version);
           await append(tx, 'selection.line-upserted', selectionId, {
             sku: trustedLine.sku, quantity: trustedLine.quantity, catalogVersion: trustedLine.catalogVersion,
+            productSkuId: trustedLine.productSkuId ?? null,
+            styleVersionId: trustedLine.styleVersionId ?? null,
+            colorwayId: trustedLine.colorwayId ?? null,
+            sizeValueId: trustedLine.sizeValueId ?? null,
             buyerCatalogVersionId: current.buyerCatalogVersionId, priceListVersionId: current.priceListVersionId,
+          }, commandId, actorId);
+          return updated;
+        },
+      );
+    },
+
+    replaceSelectionMatrix(commandId, actorId, selectionId, input) {
+      invariant(input && Array.isArray(input.lines), 'SELECTION_MATRIX_INPUT_INVALID', 'Selection matrix requires a lines array');
+      invariant(input.lines.length <= MATRIX_MAX_LINES, 'SELECTION_MATRIX_TOO_LARGE', `Selection matrix must not exceed ${MATRIX_MAX_LINES} lines`, { lineCount: input.lines.length });
+      input.lines.forEach(assertClientControlledLine);
+      return execute(
+        commandId,
+        `replaceSelectionMatrix:${actorId}:${selectionId}:${canonicalJson(input)}`,
+        actorId,
+        async (tx) => {
+          const current = requireEntity(await tx.getSelection(selectionId), 'SELECTION_NOT_FOUND', { selectionId });
+          await assertOrganisationActor(tx, current.shopId, actorId, CAPABILITIES.SELECTION_WRITE);
+          return current;
+        },
+        async (tx, current) => {
+          const buyerCatalog = await richBuyerCatalogForSelection(current);
+          const trustedLines = input.lines.map((line) => richTrustedLine(buyerCatalog, line));
+          const updated = replaceSelectionLines(current, trustedLines, actorId, clock());
+          await tx.saveSelection(updated, current.version);
+          await append(tx, 'selection.matrix-replaced', selectionId, {
+            lineCount: updated.lines.length,
+            version: updated.version,
+            buyerCatalogVersionId: current.buyerCatalogVersionId,
+            priceListVersionId: current.priceListVersionId,
           }, commandId, actorId);
           return updated;
         },

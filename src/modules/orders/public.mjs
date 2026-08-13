@@ -4,6 +4,7 @@ import { calculateMoneyTotal, normalizeMoney } from '../../core/money.mjs';
 const INCOTERMS = Object.freeze(['EXW', 'FCA', 'FOB', 'CIF', 'DAP', 'DDP']);
 const CANCELLATION_REASON_MAX_LENGTH = 1_000;
 const POSTGRES_INTEGER_MAXIMUM = 2_147_483_647;
+const RICH_LINEAGE_KEYS = Object.freeze(['productSkuId', 'styleId', 'styleVersionId', 'colorwayId', 'sizeValueId', 'sizeCode']);
 
 export function createOrderDraft({ id, selection, currency, terms, createdAt }) {
   invariant(id && selection?.id, 'ORDER_DRAFT_IDENTITY_REQUIRED', 'Order id and selection are required');
@@ -20,6 +21,7 @@ export function createOrderDraft({ id, selection, currency, terms, createdAt }) 
       label: 'Order line unit price',
     }),
     catalogVersion: line.catalogVersion,
+    ...copyOptionalLineage(line),
   })));
   const totalAmount = calculateMoneyTotal(lines, {
     priceInvalidCode: 'ORDER_LINE_PRICE_INVALID',
@@ -114,6 +116,25 @@ export function cancelAttachedOrder(order, reason, cancelledAt, expectedVersion 
     version: order.version + 1,
     updatedAt: cancelledAt,
   });
+}
+
+function copyOptionalLineage(line) {
+  const present = RICH_LINEAGE_KEYS.filter((key) => line[key] !== undefined && line[key] !== null && line[key] !== '');
+  if (present.length === 0) return {};
+  invariant(present.length === RICH_LINEAGE_KEYS.length, 'ORDER_LINE_LINEAGE_INCOMPLETE', 'Rich order line requires complete Product/Style/Colorway/Size lineage', { sku: line.sku, present });
+  invariant(Number.isInteger(line.sizeSortOrder) && line.sizeSortOrder >= 0, 'ORDER_LINE_SIZE_ORDER_INVALID', 'Rich order line requires an ordered size value', { sku: line.sku });
+  return {
+    productSkuId: line.productSkuId,
+    gtin: line.gtin ?? null,
+    styleId: line.styleId,
+    styleVersionId: line.styleVersionId,
+    colorwayId: line.colorwayId,
+    sizeValueId: line.sizeValueId,
+    sizeCode: line.sizeCode,
+    sizeLabelRu: line.sizeLabelRu ?? line.sizeCode,
+    sizeLabelEn: line.sizeLabelEn ?? line.sizeCode,
+    sizeSortOrder: line.sizeSortOrder,
+  };
 }
 
 function assertExpectedVersion(order, expectedVersion) {

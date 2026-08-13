@@ -29,7 +29,7 @@ assertUnique(sources, 'script');
 assertRequiredOrder(sources, [
   '/ui/i18n-runtime.js','/ui/i18n-v7.js','/ui/api.js','/ui/workspace-pagination.js','/ui/notification-pagination.js','/ui/ui-capabilities.js','/ui/ui-validation.js','/ui/app-core.js','/ui/open-form.js',
   '/ui/planning-core.js','/ui/styles-core.js','/ui/materials-core.js','/ui/bom-core.js','/ui/measurement-core.js','/ui/sample-core.js','/ui/sourcing-core.js','/ui/tech-pack-core.js','/ui/production-execution-core.js','/ui/final-quality-core.js',
-  '/ui/omnidata-workspace.js','/ui/omnidata-polish.js','/ui/omnidata-fidelity.js','/ui/omnidata-v5.js','/ui/planning.js','/ui/styles.js','/ui/materials.js','/ui/bom.js','/ui/omnidata-v7.js','/ui/linesheets.js','/ui/omnidata-v7-installed.js',
+  '/ui/omnidata-workspace.js','/ui/omnidata-polish.js','/ui/omnidata-fidelity.js','/ui/omnidata-v5.js','/ui/planning.js','/ui/styles.js','/ui/materials.js','/ui/bom.js','/ui/omnidata-v7.js','/ui/linesheet-matrix-core.js','/ui/linesheets.js','/ui/omnidata-v7-installed.js',
   '/ui/measurements.js','/ui/measurement-revision-actions.js','/ui/measurement-catalog-sync.js','/ui/samples.js','/ui/sample-catalog-sync.js','/ui/sourcing.js','/ui/tech-pack-navigation.js','/ui/tech-packs.js','/ui/production-orders.js','/ui/production-executions.js','/ui/final-quality.js',
   '/ui/omnidata-v7-language-audit.js','/ui/omnidata-v8.js','/ui/omnidata-v9.js','/ui/omnidata-v10.js','/ui/omnidata-v11.js','/ui/omnidata-v12.js','/ui/omnidata-v13.js','/ui/omnidata-v14.js','/ui/omnidata-v14-module-adapters.js','/ui/omnidata-v14-components.js','/ui/omnidata-v14-role-system.js','/ui/dom-boolean-props.js','/ui/app-start.js'
 ]);

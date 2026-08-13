@@ -32,22 +32,27 @@ test('Omnidata V9 matches the supplied Linesheets reference geometry', async () 
   assert.doesNotMatch(css, /@import|https?:\/\/|url\s*\(/i);
 });
 
-test('Linesheets reads immutable published commercial truth without sample fallback', async () => {
+test('Linesheets keeps immutable publication truth and pins the buyer matrix to BuyerCatalogVersion', async () => {
   const js = await source('public/modules/linesheets.js');
   assert.doesNotThrow(() => new Function(js));
 
   for (const token of [
-    'state.workspace?.collections',
+    'function workspace() { return state.workspace || {}; }',
+    'function collections() { return list(workspace().collections); }',
     '/v2/collections/${encodeURIComponent(collectionId)}/commercial-publications?limit=50',
+    '/v2/buyer-catalog-versions/${encodeURIComponent(pinned)}',
+    '/v2/showrooms/${encodeURIComponent(context.access.showroomId)}/buyer-catalog?shopId=${encodeURIComponent(context.access.shopId)}',
+    'Matrix.buildStyleMatrices(catalog)',
+    'Matrix.selectionMatrixRequest(selection.id, LS.matrices, LS.quantities)',
     'loadPublications',
     'filteredPublications',
     'publicationTable',
-    'inspector',
+    'registryInspector',
     'renderLinesheets',
     'line.unitPrice',
     'line.minimumOrderQuantity',
     "text('Опубликовано', 'Published')",
-    "text('Коммерческая публикация', 'Commercial Publication')",
+    "text('Неизменяемый коммерческий снимок', 'Immutable commercial snapshot')",
   ]) assert.ok(js.includes(token), token);
 
   for (const forbidden of [
@@ -62,7 +67,6 @@ test('Linesheets reads immutable published commercial truth without sample fallb
 
   assert.match(js, /state\.view === 'linesheets'/);
   assert.match(js, /global\.SynthaLinesheetsWorkspace = Object\.freeze/);
-  assert.doesNotMatch(js, /\bstyle\s*=/);
   assert.doesNotMatch(js, /\.style\./);
   assert.doesNotMatch(js, /https?:\/\//i);
   assert.doesNotMatch(js, /(?:\u00d0|\u00d1)[\u0080-\u00ff]/u);

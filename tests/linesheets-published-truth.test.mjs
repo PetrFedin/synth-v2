@@ -39,6 +39,10 @@ test('Linesheets is covered by shared ODS semantics without a standalone stylesh
     assert.ok(adapters.includes(token), `Missing Linesheets ODS semantic hook: ${token}`);
   }
   assert.equal(html.includes('/omnidata-v14-linesheets.css'), false);
-  assert.match(html, /\/ui\/linesheets\.js\?v=visual-20260810-linesheets-1/);
+  const matrixAsset = '/ui/linesheet-matrix-core.js?v=buyer-order-matrix-20260813-1';
+  const linesheetsAsset = '/ui/linesheets.js?v=buyer-order-matrix-20260813-1';
+  assert.ok(html.includes(matrixAsset));
+  assert.ok(html.includes(linesheetsAsset));
+  assert.ok(html.indexOf(matrixAsset) < html.indexOf(linesheetsAsset), 'Buyer matrix core must load before Linesheets');
   assert.match(html, /\/ui\/omnidata-v14-module-adapters\.js\?v=visual-20260805-14-module-adapters-5/);
 });

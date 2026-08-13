@@ -77,7 +77,7 @@ test('rich buyer matrix replacement is one atomic selection version change and p
     sizeValueId: 'size-m', sizeCode: 'M', sizeLabelRu: 'М', sizeLabelEn: 'M', sizeSortOrder: 2, gtin: '4601234567890',
     note: 'core buy', updatedBy: 'buyer-1', updatedAt: now,
   });
-  assert.equal(context.store.snapshot().outbox.some(event => event.type === 'selection.matrix-replaced'), true);
+  assert.equal(context.store.snapshot().events.some(event => event.type === 'selection.matrix-replaced'), true);
 });
 
 test('rich buyer matrix replacement can explicitly clear a draft matrix', async () => {
@@ -109,7 +109,7 @@ test('rich buyer matrix replacement rejects client controlled price fields', asy
   const context = await fixture();
   const created = await context.rich.createSelection('matrix-price-create', 'buyer-1', { cycleId: context.cycle.id, showroomId: context.showroom.id });
   await assert.rejects(
-    context.rich.replaceSelectionMatrix('matrix-price-invalid', 'buyer-1', created.selection.id, { lines: [{ sku: 'SKU-1', quantity: 3, unitPrice: 1 }] }),
+    async () => context.rich.replaceSelectionMatrix('matrix-price-invalid', 'buyer-1', created.selection.id, { lines: [{ sku: 'SKU-1', quantity: 3, unitPrice: 1 }] }),
     error => error?.code === 'SELECTION_CLIENT_PRICE_FORBIDDEN',
   );
 });

@@ -8,7 +8,7 @@ import { createStandaloneHandler } from '../src/web/static-handler.mjs';
 
 const publicDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 const build = 'visual-20260804-9';
-const linesheetsBuild = 'visual-20260810-linesheets-1';
+const linesheetsBuild = 'buyer-order-matrix-20260813-1';
 const v8Build = 'visual-20260804-8';
 const legacyBuild = 'visual-20260804-7';
 const industrialBuild = 'industrial-20260803-3';
@@ -45,6 +45,7 @@ test('standalone workspace serves bilingual V9 and every implemented product wor
       assert.match(html, new RegExp(`\\/ui\\/${asset.replaceAll('.', '\\.')}\\?v=${legacyBuild}`));
     }
     assert.match(html, new RegExp(`\\/ui\\/omnidata-v8\\.js\\?v=${v8Build}`));
+    assert.match(html, new RegExp(`\\/ui\\/linesheet-matrix-core\\.js\\?v=${linesheetsBuild}`));
     assert.match(html, new RegExp(`\\/ui\\/linesheets\\.js\\?v=${linesheetsBuild}`));
     for (const asset of ['omnidata-v7-installed.js', 'omnidata-v9.js', 'dom-boolean-props.js']) {
       assert.match(html, new RegExp(`\\/ui\\/${asset.replaceAll('.', '\\.')}\\?v=${build}`));
@@ -86,6 +87,7 @@ test('standalone workspace serves bilingual V9 and every implemented product wor
       ['/ui/omnidata-workspace.js', /function renderCatalog\(/],
       ['/ui/omnidata-v5.js', /function odV5Navigation\(/],
       ['/ui/omnidata-v7.js', /function applyOmnidataV7\(/],
+      ['/ui/linesheet-matrix-core.js', /SynthaLinesheetMatrix/],
       ['/ui/linesheets.js', /function renderLinesheets\(/],
       ['/ui/omnidata-v7-installed.js', /SynthaLinesheetsWorkspace/],
       ['/ui/omnidata-v7-language-audit.js', /installV7LanguageAudit/],

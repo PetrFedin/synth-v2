@@ -18,6 +18,9 @@ const requiredTables = [
 const requiredFragments = [
   'UNIQUE (brand_id, shop_id)', 'UNIQUE (showroom_id, shop_id)', 'UNIQUE (shop_id, code)', 'cycle_id text NOT NULL UNIQUE',
   'retail_doors_shop_status_idx', 'ADD COLUMN retail_door_id text NULL REFERENCES retail_doors(id)', 'ADD COLUMN retail_door_version integer NULL CHECK (retail_door_version > 0)',
+  'orders_retail_door_snapshot_integrity_check', 'orders_id_retail_door_version_unique',
+  'order_commit_retail_door_snapshot_integrity_check', 'order_commit_order_retail_door_version_fk',
+  "payload#>>'{buyerCommercialSnapshot,organisationId}' = shop_id",
   "status text NOT NULL CHECK (status IN ('pending', 'published'))", 'outbox_status_idx',
   "CHECK (status IN ('pending', 'published', 'dead-letter'))",
   "scope text NOT NULL CHECK (scope IN ('wholesale', 'catalog', 'notification'))",

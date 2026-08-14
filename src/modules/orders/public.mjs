@@ -1,15 +1,20 @@
 import { invariant } from '../../core/errors.mjs';
 import { calculateMoneyTotal, normalizeMoney } from '../../core/money.mjs';
+import { assertBuyerCommercialSnapshot } from '../retail-doors/public.mjs';
 
 const INCOTERMS = Object.freeze(['EXW', 'FCA', 'FOB', 'CIF', 'DAP', 'DDP']);
 const CANCELLATION_REASON_MAX_LENGTH = 1_000;
 const POSTGRES_INTEGER_MAXIMUM = 2_147_483_647;
 const RICH_LINEAGE_KEYS = Object.freeze(['productSkuId', 'styleId', 'styleVersionId', 'colorwayId', 'sizeValueId', 'sizeCode']);
 
-export function createOrderDraft({ id, selection, currency, terms, createdAt }) {
+export function createOrderDraft({ id, selection, currency, terms, buyerCommercialSnapshot = null, createdAt }) {
   invariant(id && selection?.id, 'ORDER_DRAFT_IDENTITY_REQUIRED', 'Order id and selection are required');
   invariant(selection.status === 'submitted', 'SELECTION_NOT_SUBMITTED', 'Order builder requires a submitted selection');
   invariant(/^[A-Z]{3}$/.test(currency), 'ORDER_CURRENCY_INVALID', 'Order currency must be an ISO-4217 code');
+  const pinnedCommercialBasis = hasPinnedCommercialBasis(selection);
+  invariant(!pinnedCommercialBasis || buyerCommercialSnapshot, 'ORDER_BUYER_COMMERCIAL_SNAPSHOT_REQUIRED', 'Commercial order requires a frozen buyer retail door snapshot');
+  invariant(pinnedCommercialBasis || buyerCommercialSnapshot === null, 'ORDER_UNEXPECTED_BUYER_COMMERCIAL_SNAPSHOT', 'Legacy order without a commercial basis cannot attach an unrelated buyer retail door snapshot');
+  const frozenBuyerSnapshot = buyerCommercialSnapshot ? freezeBuyerCommercialSnapshot(buyerCommercialSnapshot, selection.shopId) : null;
   const normalizedTerms = validateTerms(terms);
   const lines = Object.freeze(selection.lines.map((line) => Object.freeze({
     sku: line.sku,
@@ -42,6 +47,9 @@ export function createOrderDraft({ id, selection, currency, terms, createdAt }) 
     buyerCatalogVersionId: selection.buyerCatalogVersionId ?? null,
     commercialBasisHash: selection.commercialBasisHash ?? null,
     accessGrantId: selection.accessGrantId ?? null,
+    buyerCommercialSnapshot: frozenBuyerSnapshot,
+    retailDoorId: frozenBuyerSnapshot?.retailDoorId ?? null,
+    retailDoorVersion: frozenBuyerSnapshot?.retailDoorVersion ?? null,
     orderCommitSnapshotId: null,
     currency,
     lines,
@@ -135,6 +143,24 @@ function copyOptionalLineage(line) {
     sizeLabelEn: line.sizeLabelEn ?? line.sizeCode,
     sizeSortOrder: line.sizeSortOrder,
   };
+}
+
+function freezeBuyerCommercialSnapshot(snapshot, shopId) {
+  assertBuyerCommercialSnapshot(snapshot, { shopId });
+  return Object.freeze({
+    organisationId: snapshot.organisationId,
+    organisationName: snapshot.organisationName,
+    retailDoorId: snapshot.retailDoorId,
+    retailDoorVersion: snapshot.retailDoorVersion,
+    doorCode: snapshot.doorCode,
+    doorName: snapshot.doorName,
+    shipToAddress: Object.freeze({ ...snapshot.shipToAddress }),
+    billToAddress: Object.freeze({ ...snapshot.billToAddress }),
+  });
+}
+
+function hasPinnedCommercialBasis(value) {
+  return Boolean(value?.buyerCatalogVersionId || value?.commercialPublicationId || value?.priceListVersionId || value?.commercialBasisHash || value?.accessGrantId);
 }
 
 function assertExpectedVersion(order, expectedVersion) {

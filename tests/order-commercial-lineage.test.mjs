@@ -20,10 +20,34 @@ const buyerCatalog = Object.freeze({
     Object.freeze({ sku: 'SKU-1', unitPrice: 75, currency: 'EUR', catalogVersion: 8, minimumOrderQuantity: 2 }),
   ]),
 });
+const buyerCommercialSnapshot = Object.freeze({
+  organisationId: 'SHOP-1',
+  organisationName: 'Buyer Shop',
+  retailDoorId: 'DOOR-BERLIN-1',
+  retailDoorVersion: 3,
+  doorCode: 'BERLIN-01',
+  doorName: 'Berlin Flagship',
+  shipToAddress: Object.freeze({
+    countryCode: 'DE',
+    postalCode: '10115',
+    city: 'Berlin',
+    region: 'Berlin',
+    line1: 'Invalidenstrasse 1',
+    line2: null,
+  }),
+  billToAddress: Object.freeze({
+    countryCode: 'DE',
+    postalCode: '10117',
+    city: 'Berlin',
+    region: 'Berlin',
+    line1: 'Friedrichstrasse 1',
+    line2: null,
+  }),
+});
 
 function createDraft() {
   return createOrderDraft({
-    id: 'ORDER-1', selection, currency: 'EUR', createdAt: '2026-08-08T00:00:00.000Z',
+    id: 'ORDER-1', selection, currency: 'EUR', buyerCommercialSnapshot, createdAt: '2026-08-08T00:00:00.000Z',
     terms: {
       incoterm: 'FOB', paymentDays: 30, prepaymentPercent: 0,
       deliveryStart: '2026-09-01T00:00:00.000Z', deliveryEnd: '2026-09-30T00:00:00.000Z',
@@ -38,7 +62,7 @@ function createAttachedOrder() {
   return attachReadyOrder(ready, committedAt, ready.version, 'COMMIT-1');
 }
 
-test('wholesale order draft retains immutable commercial publication lineage', () => {
+test('wholesale order draft retains immutable commercial publication and buyer door lineage', () => {
   const order = createDraft();
 
   assert.equal(order.commercialPublicationId, 'PUB-1');
@@ -46,13 +70,19 @@ test('wholesale order draft retains immutable commercial publication lineage', (
   assert.equal(order.buyerCatalogVersionId, 'BUYER-CAT-1');
   assert.equal(order.commercialBasisHash, 'a'.repeat(64));
   assert.equal(order.accessGrantId, 'ACCESS-1');
+  assert.equal(order.retailDoorId, 'DOOR-BERLIN-1');
+  assert.equal(order.retailDoorVersion, 3);
+  assert.deepEqual(order.buyerCommercialSnapshot, buyerCommercialSnapshot);
+  assert.ok(Object.isFrozen(order.buyerCommercialSnapshot));
+  assert.ok(Object.isFrozen(order.buyerCommercialSnapshot.shipToAddress));
+  assert.ok(Object.isFrozen(order.buyerCommercialSnapshot.billToAddress));
   assert.equal(order.orderCommitSnapshotId, null);
   assert.equal(order.lines[0].catalogVersion, 8);
   assert.equal(order.lines[0].unitPrice, 75);
   assert.equal(order.totalAmount, 300);
 });
 
-test('order commit snapshot freezes accepted commercial truth before execution', () => {
+test('order commit snapshot freezes accepted commercial and buyer delivery truth before execution', () => {
   const attached = createAttachedOrder();
   const snapshot = createOrderCommitSnapshot({ id: 'COMMIT-1', order: attached, selection, buyerCatalog, committedAt });
 
@@ -65,10 +95,14 @@ test('order commit snapshot freezes accepted commercial truth before execution',
   assert.equal(snapshot.priceListVersionId, 'PRICE-1');
   assert.equal(snapshot.buyerCatalogVersionId, 'BUYER-CAT-1');
   assert.equal(snapshot.accessGrantId, 'ACCESS-1');
+  assert.equal(snapshot.retailDoorId, 'DOOR-BERLIN-1');
+  assert.equal(snapshot.retailDoorVersion, 3);
+  assert.deepEqual(snapshot.buyerCommercialSnapshot, buyerCommercialSnapshot);
   assert.equal(snapshot.lines[0].unitPrice, 75);
   assert.equal(snapshot.lines[0].quantity, 4);
   assert.match(snapshot.contentHash, /^[a-f0-9]{64}$/);
   assert.ok(Object.isFrozen(snapshot));
+  assert.ok(Object.isFrozen(snapshot.buyerCommercialSnapshot));
 });
 
 test('order commit rejects a buyer catalog whose pinned price differs from accepted order', () => {

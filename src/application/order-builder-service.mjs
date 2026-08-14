@@ -12,6 +12,7 @@ import {
   attachReadyOrder,
   cancelAttachedOrder,
 } from '../modules/orders/public.mjs';
+import { createBuyerCommercialSnapshot } from '../modules/retail-doors/public.mjs';
 import { assertAcceptedShowroomAccess } from '../modules/showroom-invitations/public.mjs';
 import { advanceCommercialCycle, attachOrder, cancelCommercialCycleOrder } from '../modules/commercial-cycle/public.mjs';
 
@@ -59,10 +60,13 @@ export function createOrderBuilderService({
   }
 
   return Object.freeze({
-    createOrderDraft(commandId, actorId, { selectionId, terms }) {
+    createOrderDraft(commandId, actorId, { selectionId, terms, retailDoorId = null }) {
+      const fingerprint = retailDoorId
+        ? `createOrderDraft:${actorId}:${selectionId}:${retailDoorId}:${canonicalJson(terms)}`
+        : `createOrderDraft:${actorId}:${selectionId}:${canonicalJson(terms)}`;
       return execute(
         commandId,
-        `createOrderDraft:${actorId}:${selectionId}:${canonicalJson(terms)}`,
+        fingerprint,
         actorId,
         async (tx) => {
           const selection = requireEntity(await tx.getSelection(selectionId), 'SELECTION_NOT_FOUND', { selectionId });
@@ -74,9 +78,28 @@ export function createOrderBuilderService({
           const collection = requireEntity(await tx.getCollection(selection.collectionId), 'COLLECTION_NOT_FOUND', { collectionId: selection.collectionId });
           invariant(cycle.stage === 'order-builder', 'ORDER_BUILDER_STAGE_REQUIRED', 'Cycle must be at order-builder stage', { stage: cycle.stage });
           invariant(!await tx.getOrderByCycle(cycle.id), 'ORDER_FOR_CYCLE_EXISTS', 'Cycle already has an order draft', { cycleId: cycle.id });
-          const order = createOrderDraft({ id: nextId('order'), selection, currency: collection.currency, terms, createdAt: clock() });
+
+          const pinnedCommercialBasis = hasPinnedCommercialBasis(selection);
+          invariant(!pinnedCommercialBasis || (typeof retailDoorId === 'string' && retailDoorId.trim().length > 0), 'ORDER_RETAIL_DOOR_REQUIRED', 'Commercially pinned selection requires retailDoorId');
+          invariant(pinnedCommercialBasis || retailDoorId === null, 'ORDER_UNEXPECTED_RETAIL_DOOR', 'Legacy selection without a commercial basis cannot attach an unrelated retail door');
+          let buyerCommercialSnapshot = null;
+          if (pinnedCommercialBasis) {
+            const buyer = requireEntity(await tx.getOrganisation(selection.shopId), 'SHOP_NOT_FOUND', { shopId: selection.shopId });
+            const door = requireEntity(await tx.getRetailDoor(retailDoorId.trim()), 'RETAIL_DOOR_NOT_FOUND', { retailDoorId });
+            buyerCommercialSnapshot = createBuyerCommercialSnapshot({ buyer, door });
+          }
+
+          const order = createOrderDraft({
+            id: nextId('order'), selection, currency: collection.currency, terms, buyerCommercialSnapshot, createdAt: clock(),
+          });
           await tx.insertOrder(order);
-          await append(tx, 'order.draft-created', order.id, { selectionId, totalAmount: order.totalAmount, currency: order.currency }, commandId, actorId);
+          await append(tx, 'order.draft-created', order.id, {
+            selectionId,
+            totalAmount: order.totalAmount,
+            currency: order.currency,
+            retailDoorId: order.retailDoorId,
+            retailDoorVersion: order.retailDoorVersion,
+          }, commandId, actorId);
           return order;
         },
       );
@@ -148,6 +171,7 @@ export function createOrderBuilderService({
           let buyerCatalog = null;
           if (hasPinnedCommercialBasis(current)) {
             invariant(current.commercialPublicationId && current.priceListVersionId && current.buyerCatalogVersionId && current.commercialBasisHash && current.accessGrantId, 'ORDER_COMMERCIAL_BASIS_INCOMPLETE', 'Commercial order lineage is incomplete');
+            invariant(current.buyerCommercialSnapshot && current.retailDoorId && current.retailDoorVersion, 'ORDER_BUYER_COMMERCIAL_SNAPSHOT_REQUIRED', 'Commercial order lost its frozen buyer retail door snapshot');
             invariant(trustedCommercialReader, 'COMMERCIAL_PUBLICATION_READER_REQUIRED', 'Commercial publication reader is required to commit a commercially pinned order');
             const relationship = requireEntity(await tx.getRelationshipByTrade(current.brandId, current.shopId), 'RELATIONSHIP_NOT_FOUND', { brandId: current.brandId, shopId: current.shopId });
             assertActiveRelationship(relationship, { brandId: current.brandId, shopId: current.shopId });
@@ -184,12 +208,16 @@ export function createOrderBuilderService({
             priceListVersionId: orderCommitSnapshot.priceListVersionId,
             buyerCatalogVersionId: orderCommitSnapshot.buyerCatalogVersionId,
             accessGrantId: orderCommitSnapshot.accessGrantId,
+            retailDoorId: orderCommitSnapshot.retailDoorId,
+            retailDoorVersion: orderCommitSnapshot.retailDoorVersion,
             contentHash: orderCommitSnapshot.contentHash,
           }, commandId, actorId);
           await append(tx, 'order.attached', orderId, {
             cycleId: cycle.id,
             totalAmount: readyOrder.totalAmount,
             orderCommitSnapshotId: orderCommitSnapshot.id,
+            retailDoorId: readyOrder.retailDoorId,
+            retailDoorVersion: readyOrder.retailDoorVersion,
             expectedVersion: current.version,
             version: readyOrder.version,
           }, commandId, actorId);

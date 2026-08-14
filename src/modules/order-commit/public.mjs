@@ -3,6 +3,7 @@ import { invariant } from '../../core/errors.mjs';
 import { canonicalJson } from '../../core/fingerprints.mjs';
 import { normalizeMoney } from '../../core/money.mjs';
 import { buyerCatalogProductSku, isRichBuyerCatalog } from '../commercial-publication/public.mjs';
+import { assertBuyerCommercialSnapshot } from '../retail-doors/public.mjs';
 
 const RICH_LINEAGE_KEYS = Object.freeze(['productSkuId', 'styleId', 'styleVersionId', 'colorwayId', 'sizeValueId', 'sizeCode', 'sizeSortOrder']);
 
@@ -18,6 +19,9 @@ export function createOrderCommitSnapshot({ id, order, selection, buyerCatalog =
   const hasCommercialBasis = Boolean(order.buyerCatalogVersionId || order.commercialPublicationId || order.priceListVersionId || order.commercialBasisHash || order.accessGrantId);
   invariant(!hasCommercialBasis || buyerCatalog, 'ORDER_COMMIT_BUYER_CATALOG_REQUIRED', 'Commercial order commit requires its pinned buyer catalog');
   invariant(hasCommercialBasis || buyerCatalog === null, 'ORDER_COMMIT_UNEXPECTED_BUYER_CATALOG', 'Legacy order without a commercial basis cannot attach an unrelated buyer catalog');
+  invariant(!hasCommercialBasis || order.buyerCommercialSnapshot, 'ORDER_COMMIT_BUYER_COMMERCIAL_SNAPSHOT_REQUIRED', 'Commercial order commit requires its frozen buyer retail door snapshot');
+  invariant(hasCommercialBasis || order.buyerCommercialSnapshot == null, 'ORDER_COMMIT_UNEXPECTED_BUYER_COMMERCIAL_SNAPSHOT', 'Legacy order cannot attach an unrelated buyer retail door snapshot');
+  const buyerCommercialSnapshot = hasCommercialBasis ? freezeBuyerCommercialSnapshot(order) : null;
 
   const committedLines = hasCommercialBasis
     ? validateCommercialLines(order, selection, buyerCatalog)
@@ -43,6 +47,9 @@ export function createOrderCommitSnapshot({ id, order, selection, buyerCatalog =
     buyerCatalogVersionId: order.buyerCatalogVersionId ?? null,
     commercialBasisHash: order.commercialBasisHash ?? null,
     accessGrantId: order.accessGrantId ?? null,
+    retailDoorId: buyerCommercialSnapshot?.retailDoorId ?? null,
+    retailDoorVersion: buyerCommercialSnapshot?.retailDoorVersion ?? null,
+    buyerCommercialSnapshot,
     currency: order.currency,
     totalAmount: normalizeMoney(order.totalAmount, { label: 'Committed order total' }),
     terms: order.terms,
@@ -109,6 +116,23 @@ function validateCommercialLines(order, selection, buyerCatalog) {
       sizeSortOrder: product.sizeSortOrder,
     });
   }));
+}
+
+function freezeBuyerCommercialSnapshot(order) {
+  const snapshot = order.buyerCommercialSnapshot;
+  assertBuyerCommercialSnapshot(snapshot, { shopId: order.shopId });
+  invariant(order.retailDoorId === snapshot.retailDoorId, 'ORDER_COMMIT_RETAIL_DOOR_ID_MISMATCH', 'Order retail door id differs from its frozen buyer snapshot');
+  invariant(order.retailDoorVersion === snapshot.retailDoorVersion, 'ORDER_COMMIT_RETAIL_DOOR_VERSION_MISMATCH', 'Order retail door version differs from its frozen buyer snapshot');
+  return Object.freeze({
+    organisationId: snapshot.organisationId,
+    organisationName: snapshot.organisationName,
+    retailDoorId: snapshot.retailDoorId,
+    retailDoorVersion: snapshot.retailDoorVersion,
+    doorCode: snapshot.doorCode,
+    doorName: snapshot.doorName,
+    shipToAddress: Object.freeze({ ...snapshot.shipToAddress }),
+    billToAddress: Object.freeze({ ...snapshot.billToAddress }),
+  });
 }
 
 function assertRichLineage(line, product, code) {

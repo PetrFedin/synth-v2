@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createBuyerCommercialSnapshot, createRetailDoor, deactivateRetailDoor, updateRetailDoor } from '../src/modules/retail-doors/public.mjs';
+import { createBuyerCommercialSnapshot, createRetailDoor, deactivateRetailDoor, reactivateRetailDoor, updateRetailDoor } from '../src/modules/retail-doors/public.mjs';
 
 const address = Object.freeze({ countryCode: 'RU', postalCode: '125009', city: 'Moscow', region: 'Moscow', line1: 'Tverskaya 1', line2: null });
 const createdAt = '2026-08-13T12:00:00.000Z';
@@ -33,4 +33,24 @@ test('inactive or cross-shop door cannot create buyer snapshot', () => {
   const inactive = deactivateRetailDoor(door(), '2026-08-13T15:00:00.000Z', 1);
   assert.throws(() => createBuyerCommercialSnapshot({ buyer: { id: 'shop_1', type: 'shop', name: 'Buyer LLC' }, door: inactive }), /active/);
   assert.throws(() => createBuyerCommercialSnapshot({ buyer: { id: 'shop_2', type: 'shop', name: 'Other Buyer' }, door: door() }), /belong/);
+});
+
+test('deactivated door can be reactivated with optimistic concurrency and used by a new buyer snapshot', () => {
+  const buyer = { id: 'shop_1', type: 'shop', name: 'Buyer LLC' };
+  const inactive = deactivateRetailDoor(door(), '2026-08-13T15:00:00.000Z', 1);
+  assert.equal(inactive.status, 'inactive');
+  assert.equal(inactive.version, 2);
+  assert.throws(() => createBuyerCommercialSnapshot({ buyer, door: inactive }), /active/);
+  assert.throws(() => reactivateRetailDoor(inactive, '2026-08-13T16:00:00.000Z', 1), /changed by another operation/);
+
+  const active = reactivateRetailDoor(inactive, '2026-08-13T16:00:00.000Z', 2);
+  assert.equal(active.status, 'active');
+  assert.equal(active.version, 3);
+  assert.equal(active.code, inactive.code);
+
+  const snapshot = createBuyerCommercialSnapshot({ buyer, door: active });
+  assert.equal(snapshot.retailDoorId, active.id);
+  assert.equal(snapshot.retailDoorVersion, 3);
+  assert.equal(snapshot.doorCode, 'MSK-01');
+  assert.strictEqual(reactivateRetailDoor(active, '2026-08-13T17:00:00.000Z', 3), active);
 });

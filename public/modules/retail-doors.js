@@ -60,6 +60,13 @@ function retailDoorEntity(shop, door) {
       'danger',
       localText('Деактивировать торговую точку? Новые заказы больше нельзя будет привязать к ней.', 'Deactivate this retail door? New orders will no longer be assignable to it.'),
     ));
+  } else if (canManage && door.status === 'inactive') {
+    actions.push(actionButton(
+      localText('Активировать', 'Reactivate'),
+      () => mutate(`/v2/retail-doors/${encodeURIComponent(door.id)}/reactivate`, { expectedVersion: door.version }),
+      undefined,
+      localText('Активировать торговую точку? После этого её снова можно будет выбирать для новых заказов.', 'Reactivate this retail door? It will become available for new orders again.'),
+    ));
   }
   return entity(
     `${door.code} · ${door.name}`,

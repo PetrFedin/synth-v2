@@ -109,12 +109,17 @@ function paths() {
         responses: { 200: dataResponse('Updated retail door master', '#/components/schemas/RetailDoor'), 400: errorResponse, 401: errorResponse, 403: errorResponse, 404: errorResponse, 409: errorResponse, 422: errorResponse },
       },
     },
-    '/retail-doors/{retailDoorId}/deactivate': {
-      post: {
-        operationId: 'deactivateRetailDoor', security: [{ bearerAuth: [] }], parameters: [retailDoorId, idempotency],
-        requestBody: { required: true, content: { 'application/json': { schema: { $ref: '#/components/schemas/RetailDoorVersionExpectation' } } } },
-        responses: { 200: dataResponse('Deactivated retail door master', '#/components/schemas/RetailDoor'), 400: errorResponse, 401: errorResponse, 403: errorResponse, 404: errorResponse, 409: errorResponse, 422: errorResponse },
-      },
+    '/retail-doors/{retailDoorId}/deactivate': statusTransition('deactivateRetailDoor', 'Deactivated retail door master'),
+    '/retail-doors/{retailDoorId}/reactivate': statusTransition('reactivateRetailDoor', 'Reactivated retail door master'),
+  };
+}
+
+function statusTransition(operationId, description) {
+  return {
+    post: {
+      operationId, security: [{ bearerAuth: [] }], parameters: [retailDoorId, idempotency],
+      requestBody: { required: true, content: { 'application/json': { schema: { $ref: '#/components/schemas/RetailDoorVersionExpectation' } } } },
+      responses: { 200: dataResponse(description, '#/components/schemas/RetailDoor'), 400: errorResponse, 401: errorResponse, 403: errorResponse, 404: errorResponse, 409: errorResponse, 422: errorResponse },
     },
   };
 }

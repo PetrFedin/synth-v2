@@ -6,6 +6,7 @@ import { CAPABILITIES, assertCapability } from '../modules/access-control/public
 import {
   createRetailDoor as createDoor,
   deactivateRetailDoor as deactivateDoor,
+  reactivateRetailDoor as reactivateDoor,
   updateRetailDoor as updateDoor,
 } from '../modules/retail-doors/public.mjs';
 
@@ -97,6 +98,25 @@ export function createRetailDoorService({ store, clock = () => new Date().toISOS
           if (updated === current) return current;
           await tx.saveRetailDoor(updated, expectedVersion);
           await append(tx, 'retail-door.deactivated', updated, commandId, actorId);
+          return updated;
+        });
+    },
+
+    reactivateRetailDoor(commandId, actorId, doorId, { expectedVersion } = {}) {
+      const input = { expectedVersion };
+      const fingerprint = `retailDoor.reactivate:${actorId}:${doorId}:${canonicalJson(input)}`;
+      return execute(commandId, fingerprint, actorId,
+        async (tx) => {
+          const current = await currentDoor(tx, doorId, true);
+          await shopAccess(tx, current.shopId, actorId, CAPABILITIES.RETAIL_DOOR_MANAGE);
+          return current;
+        },
+        async (tx, current) => {
+          requireExpectedVersion(expectedVersion);
+          const updated = reactivateDoor(current, clock(), expectedVersion);
+          if (updated === current) return current;
+          await tx.saveRetailDoor(updated, expectedVersion);
+          await append(tx, 'retail-door.reactivated', updated, commandId, actorId);
           return updated;
         });
     },

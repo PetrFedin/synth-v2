@@ -33,6 +33,11 @@ export function createRetailDoorRoutes({ retailDoors } = {}) {
       requireVersion(body.expectedVersion);
       return service.deactivateRetailDoor(commandId, actorId, params[0], body);
     }),
+    mutate('POST', /^\/v2\/retail-doors\/([^/]+)\/reactivate$/, VERSION_BODY, ({ commandId, actorId, params, body }) => {
+      assertId(params[0], 'retailDoorId');
+      requireVersion(body.expectedVersion);
+      return service.reactivateRetailDoor(commandId, actorId, params[0], body);
+    }),
   ]);
 }
 
@@ -57,5 +62,5 @@ function requireVersion(value) {
 }
 function unavailableRetailDoors() {
   const fail = () => invariant(false, 'RETAIL_DOOR_SERVICE_REQUIRED', 'Retail door service is required');
-  return Object.freeze({ createRetailDoor: fail, updateRetailDoor: fail, deactivateRetailDoor: fail, getRetailDoorForActor: fail, listRetailDoorsForActor: fail });
+  return Object.freeze({ createRetailDoor: fail, updateRetailDoor: fail, deactivateRetailDoor: fail, reactivateRetailDoor: fail, getRetailDoorForActor: fail, listRetailDoorsForActor: fail });
 }

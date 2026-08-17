@@ -51,6 +51,19 @@ export function deactivateRetailDoor(door, updatedAt, expectedVersion = door?.ve
   });
 }
 
+export function reactivateRetailDoor(door, updatedAt, expectedVersion = door?.version) {
+  assertRetailDoorIdentity(door);
+  assertVersion(door, expectedVersion);
+  if (door.status === 'active') return door;
+  invariant(door.status === 'inactive', 'RETAIL_DOOR_STATUS_INVALID', 'Retail door status is invalid', { doorId: door.id, status: door.status });
+  return Object.freeze({
+    ...door,
+    status: 'active',
+    version: door.version + 1,
+    updatedAt: normalizeTimestamp(updatedAt, 'RETAIL_DOOR_UPDATED_AT_INVALID', 'Retail door updatedAt'),
+  });
+}
+
 export function createBuyerCommercialSnapshot({ buyer, door }) {
   invariant(buyer?.type === 'shop', 'BUYER_COMMERCIAL_SHOP_REQUIRED', 'Buyer organisation must be a shop');
   assertRetailDoorIdentity(door, { shopId: buyer.id });

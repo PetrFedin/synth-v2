@@ -17,7 +17,7 @@ test('Selection line authoring uses the pinned immutable BuyerCatalogVersion', (
   const selectionLineSource = functionSource(
     formsSource,
     'async function selectionLineForm(selection)',
-    '\nfunction orderForm()',
+    '\nasync function orderForm()',
   );
 
   assert.match(selectionLineSource, /buyerCatalogVersionId/);

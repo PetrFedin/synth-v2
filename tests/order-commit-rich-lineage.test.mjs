@@ -87,11 +87,39 @@ function richBuyerCatalog() {
   });
 }
 
+function buyerCommercialSnapshot() {
+  return Object.freeze({
+    organisationId: 'shop-1',
+    organisationName: 'Buyer Shop',
+    retailDoorId: 'door-moscow-1',
+    retailDoorVersion: 4,
+    doorCode: 'MOSCOW-01',
+    doorName: 'Moscow Flagship',
+    shipToAddress: Object.freeze({
+      countryCode: 'RU',
+      postalCode: '125009',
+      city: 'Moscow',
+      region: 'Moscow',
+      line1: 'Tverskaya 1',
+      line2: null,
+    }),
+    billToAddress: Object.freeze({
+      countryCode: 'RU',
+      postalCode: '125009',
+      city: 'Moscow',
+      region: 'Moscow',
+      line1: 'Tverskaya 1',
+      line2: null,
+    }),
+  });
+}
+
 function attachedOrder(selection = richSelection()) {
   let order = createOrderDraft({
     id: 'order-1',
     selection,
     currency: 'EUR',
+    buyerCommercialSnapshot: buyerCommercialSnapshot(),
     terms: {
       incoterm: 'DAP',
       paymentDays: 30,
@@ -106,7 +134,7 @@ function attachedOrder(selection = richSelection()) {
   return attachReadyOrder(order, NOW, order.version, 'snapshot-1');
 }
 
-test('rich Product Style Colorway Size lineage survives selection to wholesale order to immutable commit snapshot', () => {
+test('rich Product Style Colorway Size and Retail Door lineage survives selection to wholesale order to immutable commit snapshot', () => {
   const selection = richSelection();
   const order = attachedOrder(selection);
 
@@ -126,6 +154,9 @@ test('rich Product Style Colorway Size lineage survives selection to wholesale o
     sizeLabelEn: 'M',
     sizeSortOrder: 2,
   });
+  assert.equal(order.retailDoorId, 'door-moscow-1');
+  assert.equal(order.retailDoorVersion, 4);
+  assert.deepEqual(order.buyerCommercialSnapshot, buyerCommercialSnapshot());
 
   const snapshot = createOrderCommitSnapshot({
     id: 'snapshot-1',
@@ -154,6 +185,9 @@ test('rich Product Style Colorway Size lineage survives selection to wholesale o
   });
   assert.equal(snapshot.buyerCatalogVersionId, 'buyer-catalog-1');
   assert.equal(snapshot.commercialBasisHash, 'catalog-hash-1');
+  assert.equal(snapshot.retailDoorId, 'door-moscow-1');
+  assert.equal(snapshot.retailDoorVersion, 4);
+  assert.deepEqual(snapshot.buyerCommercialSnapshot, buyerCommercialSnapshot());
   assert.match(snapshot.contentHash, /^[a-f0-9]{64}$/);
 });
 

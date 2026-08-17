@@ -9,14 +9,18 @@ const files = (await readdir(directory)).filter((name) => name.endsWith('.sql'))
 const sql = (await Promise.all(files.map((file) => readFile(path.join(directory, file), 'utf8')))).join('\n');
 const requiredTables = [
   'organisations', 'memberships', 'counterparty_relationships', 'campaigns', 'collections', 'showrooms',
-  'showroom_invitations', 'commercial_cycles', 'selections', 'orders', 'deals', 'calendar_milestones',
+  'showroom_invitations', 'retail_doors', 'commercial_cycles', 'selections', 'orders', 'deals', 'calendar_milestones',
   'commands', 'command_registry', 'outbox_events', 'notifications', 'notification_projections', 'notification_commands',
   'notification_projection_claims', 'outbox_publication_claims', 'outbox_dead_letters', 'outbox_dead_letter_audit',
   'auth_users', 'auth_sessions', 'auth_login_throttles', 'auth_login_audit',
   'catalog_skus', 'materials', 'boms', 'bom_lines', 'catalog_commands', 'catalog_outbox_events', 'order_inventory_reservations',
 ];
 const requiredFragments = [
-  'UNIQUE (brand_id, shop_id)', 'UNIQUE (showroom_id, shop_id)', 'cycle_id text NOT NULL UNIQUE',
+  'UNIQUE (brand_id, shop_id)', 'UNIQUE (showroom_id, shop_id)', 'UNIQUE (shop_id, code)', 'cycle_id text NOT NULL UNIQUE',
+  'retail_doors_shop_status_idx', 'ADD COLUMN retail_door_id text NULL REFERENCES retail_doors(id)', 'ADD COLUMN retail_door_version integer NULL CHECK (retail_door_version > 0)',
+  'orders_retail_door_snapshot_integrity_check', 'orders_id_retail_door_version_unique',
+  'order_commit_retail_door_snapshot_integrity_check', 'order_commit_order_retail_door_version_fk',
+  "payload#>>'{buyerCommercialSnapshot,organisationId}' = shop_id",
   "status text NOT NULL CHECK (status IN ('pending', 'published'))", 'outbox_status_idx',
   "CHECK (status IN ('pending', 'published', 'dead-letter'))",
   "scope text NOT NULL CHECK (scope IN ('wholesale', 'catalog', 'notification'))",

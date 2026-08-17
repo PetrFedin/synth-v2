@@ -59,7 +59,7 @@ jobs:
           POSTGRES_TEST_URL: postgresql://syntha:syntha_test@127.0.0.1:5432/syntha_v2_test
         run: |
           set +e
-          npm run verify 2>&1 | tee postgres-verify.log
+          npm run verify:postgres 2>&1 | tee postgres-verify.log
           status=${PIPESTATUS[0]}
           echo "$status" > postgres-verify-status.txt
           exit "$status"

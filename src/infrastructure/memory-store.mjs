@@ -31,7 +31,7 @@ export function createMemoryWholesaleStore() {
 
 function emptyState() {
   return {
-    organisations: new Map(), memberships: new Map(), relationships: new Map(), showroomInvitations: new Map(),
+    organisations: new Map(), memberships: new Map(), relationships: new Map(), showroomInvitations: new Map(), retailDoors: new Map(),
     campaigns: new Map(), collections: new Map(), showrooms: new Map(), selections: new Map(), orders: new Map(),
     orderCommitSnapshots: new Map(), cycles: new Map(), deals: new Map(), calendar: new Map(), commands: new Map(), outbox: new Map(),
   };
@@ -56,6 +56,16 @@ function transactionView(state) {
     getShowroomInvitationByAccess: (showroomId, shopId) => state.showroomInvitations.get(showroomInvitationKey(showroomId, shopId)),
     insertShowroomInvitation: (invitation) => insertUnique(state.showroomInvitations, showroomInvitationKey(invitation.showroomId, invitation.shopId), invitation, 'SHOWROOM_INVITATION_ALREADY_EXISTS'),
     saveShowroomInvitation: (invitation, expectedVersion) => saveVersioned(state.showroomInvitations, invitation, expectedVersion, 'SHOWROOM_INVITATION_CONCURRENCY_CONFLICT', showroomInvitationKey(invitation.showroomId, invitation.shopId)),
+
+    getRetailDoor: (id) => state.retailDoors.get(id),
+    getRetailDoorForUpdate: (id) => state.retailDoors.get(id),
+    getRetailDoorByShopCode: (shopId, code) => [...state.retailDoors.values()].find((item) => item.shopId === shopId && item.code === code),
+    listRetailDoorsByShop: (shopId) => [...state.retailDoors.values()].filter((item) => item.shopId === shopId).sort((left, right) => left.code.localeCompare(right.code) || left.id.localeCompare(right.id)),
+    insertRetailDoor: (door) => {
+      invariant(![...state.retailDoors.values()].some((item) => item.shopId === door.shopId && item.code === door.code), 'RETAIL_DOOR_CODE_EXISTS', 'Retail door code already exists for shop', { shopId: door.shopId, code: door.code });
+      insertUnique(state.retailDoors, door.id, door, 'RETAIL_DOOR_ALREADY_EXISTS');
+    },
+    saveRetailDoor: (door, expectedVersion) => saveVersioned(state.retailDoors, door, expectedVersion, 'RETAIL_DOOR_CONCURRENCY_CONFLICT'),
 
     getCampaign: (id) => state.campaigns.get(id),
     insertCampaign: (campaign) => insertUnique(state.campaigns, campaign.id, campaign, 'CAMPAIGN_ALREADY_EXISTS'),
@@ -106,7 +116,7 @@ function saveVersioned(map, entity, expectedVersion, code, key = entity.id) {
 function freezeSnapshot(state) {
   return Object.freeze({
     organisations: [...state.organisations.values()], memberships: [...state.memberships.values()],
-    relationships: [...state.relationships.values()], showroomInvitations: [...state.showroomInvitations.values()],
+    relationships: [...state.relationships.values()], showroomInvitations: [...state.showroomInvitations.values()], retailDoors: [...state.retailDoors.values()],
     campaigns: [...state.campaigns.values()], collections: [...state.collections.values()], showrooms: [...state.showrooms.values()],
     selections: [...state.selections.values()], orders: [...state.orders.values()], orderCommitSnapshots: [...state.orderCommitSnapshots.values()],
     cycles: [...state.cycles.values()], deals: [...state.deals.values()],

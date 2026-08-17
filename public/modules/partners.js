@@ -3,26 +3,27 @@ function renderPartners() {
   const caps = window.SynthaUiCapabilities;
   const canManage = caps.hasAny(state.workspace, caps.CAPABILITIES.PARTNER_RELATIONSHIP_MANAGE);
   box.append(toolbar(
-    '\u0422\u043e\u0440\u0433\u043e\u0432\u044b\u0435 \u043e\u0442\u043d\u043e\u0448\u0435\u043d\u0438\u044f \u0438 \u0434\u043e\u0441\u0442\u0443\u043f\u044b',
-    canManage ? '\u0417\u0430\u043f\u0440\u043e\u0441\u0438\u0442\u044c \u0441\u0432\u044f\u0437\u044c' : undefined,
+    'Торговые отношения и доступы',
+    canManage ? 'Запросить связь' : undefined,
     canManage ? relationshipForm : undefined,
   ));
   const grid = el('div', { className: 'grid two' });
   grid.append(
     sectionCard(
-      '\u041e\u0442\u043d\u043e\u0448\u0435\u043d\u0438\u044f',
-      state.workspace.relationships.length ? state.workspace.relationships.map(relationshipEntity) : [empty('\u041d\u0435\u0442 \u043e\u0442\u043d\u043e\u0448\u0435\u043d\u0438\u0439 \u0441 \u043a\u043e\u043d\u0442\u0440\u0430\u0433\u0435\u043d\u0442\u0430\u043c\u0438.')],
+      'Отношения',
+      state.workspace.relationships.length ? state.workspace.relationships.map(relationshipEntity) : [empty('Нет отношений с контрагентами.')],
       undefined,
       undefined,
       'relationships',
     ),
     sectionCard(
-      '\u041f\u0440\u0438\u0433\u043b\u0430\u0448\u0435\u043d\u0438\u044f \u0432 \u0448\u043e\u0443\u0440\u0443\u043c\u044b',
-      state.workspace.invitations.length ? state.workspace.invitations.map(invitationEntity) : [empty('\u041d\u0435\u0442 \u043f\u0440\u0438\u0433\u043b\u0430\u0448\u0435\u043d\u0438\u0439.')],
+      'Приглашения в шоурумы',
+      state.workspace.invitations.length ? state.workspace.invitations.map(invitationEntity) : [empty('Нет приглашений.')],
       undefined,
       undefined,
       'invitations',
     ),
   );
-  box.append(grid); return box;
+  box.append(grid, renderRetailDoorWorkspace());
+  return box;
 }

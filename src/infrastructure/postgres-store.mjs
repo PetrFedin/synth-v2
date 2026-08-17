@@ -12,11 +12,12 @@ export function createPostgresWholesaleStore({ pool }) {
   return Object.freeze({
     transaction,
     async snapshot() {
-      const [organisations, memberships, relationships, invitations, campaigns, collections, showrooms, selections, orders, orderCommitSnapshots, cycles, deals, calendar, commands, outbox] = await Promise.all([
+      const [organisations, memberships, relationships, invitations, retailDoors, campaigns, collections, showrooms, selections, orders, orderCommitSnapshots, cycles, deals, calendar, commands, outbox] = await Promise.all([
         payloads(pool, 'organisations'),
         payloads(pool, 'memberships'),
         payloads(pool, 'counterparty_relationships'),
         payloads(pool, 'showroom_invitations'),
+        payloads(pool, 'retail_doors'),
         payloads(pool, 'campaigns'),
         payloads(pool, 'collections'),
         payloads(pool, 'showrooms'),
@@ -34,6 +35,7 @@ export function createPostgresWholesaleStore({ pool }) {
         memberships,
         relationships,
         showroomInvitations: invitations,
+        retailDoors,
         campaigns,
         collections,
         showrooms,
@@ -119,6 +121,27 @@ function transactionView(client) {
       'SHOWROOM_INVITATION_CONCURRENCY_CONFLICT',
     ),
 
+    getRetailDoor: (id) => getPayloadBy(client, 'retail_doors', ['id'], [id], 'FOR SHARE'),
+    getRetailDoorForUpdate: (id) => getPayloadBy(client, 'retail_doors', ['id'], [id], 'FOR UPDATE'),
+    getRetailDoorByShopCode: (shopId, code) => getPayloadBy(client, 'retail_doors', ['shop_id', 'code'], [shopId, code], 'FOR SHARE'),
+    listRetailDoorsByShop: (shopId) => listRetailDoorsByShop(client, shopId),
+    insertRetailDoor: (value) => insert(
+      client,
+      'retail_doors',
+      ['id', 'shop_id', 'code', 'status', 'version', 'payload', 'created_at', 'updated_at'],
+      [value.id, value.shopId, value.code, value.status, value.version, value, value.createdAt, value.updatedAt],
+      'RETAIL_DOOR_ALREADY_EXISTS',
+    ),
+    saveRetailDoor: (value, expectedVersion) => saveVersioned(
+      client,
+      'retail_doors',
+      value,
+      expectedVersion,
+      ['status', 'updated_at'],
+      [value.status, value.updatedAt],
+      'RETAIL_DOOR_CONCURRENCY_CONFLICT',
+    ),
+
     getCampaign: (id) => getPayload(client, 'campaigns', 'id', id),
     insertCampaign: (value) => insert(client, 'campaigns', ['id', 'brand_id', 'status', 'version', 'payload'], [value.id, value.brandId, value.status, value.version, value], 'CAMPAIGN_ALREADY_EXISTS'),
     saveCampaign: (value, expectedVersion) => saveVersioned(client, 'campaigns', value, expectedVersion, ['status'], [value.status], 'CAMPAIGN_CONCURRENCY_CONFLICT'),
@@ -153,8 +176,8 @@ function transactionView(client) {
     insertOrder: (value) => insert(
       client,
       'orders',
-      ['id', 'selection_id', 'cycle_id', 'brand_id', 'shop_id', 'status', 'currency', 'total_amount', 'order_commit_snapshot_id', 'version', 'payload'],
-      [value.id, value.selectionId, value.cycleId, value.brandId, value.shopId, value.status, value.currency, value.totalAmount, value.orderCommitSnapshotId ?? null, value.version, value],
+      ['id', 'selection_id', 'cycle_id', 'brand_id', 'shop_id', 'status', 'currency', 'total_amount', 'retail_door_id', 'retail_door_version', 'order_commit_snapshot_id', 'version', 'payload'],
+      [value.id, value.selectionId, value.cycleId, value.brandId, value.shopId, value.status, value.currency, value.totalAmount, value.retailDoorId ?? null, value.retailDoorVersion ?? null, value.orderCommitSnapshotId ?? null, value.version, value],
       'ORDER_ALREADY_EXISTS',
     ),
     saveOrder: (value, expectedVersion) => saveVersioned(
@@ -171,8 +194,8 @@ function transactionView(client) {
     insertOrderCommitSnapshot: (value) => insert(
       client,
       'order_commit_snapshots',
-      ['id', 'order_id', 'order_version', 'brand_id', 'shop_id', 'currency', 'committed_at', 'content_hash', 'payload'],
-      [value.id, value.orderId, value.orderVersion, value.brandId, value.shopId, value.currency, value.committedAt, value.contentHash, value],
+      ['id', 'order_id', 'order_version', 'brand_id', 'shop_id', 'currency', 'retail_door_id', 'retail_door_version', 'committed_at', 'content_hash', 'payload'],
+      [value.id, value.orderId, value.orderVersion, value.brandId, value.shopId, value.currency, value.retailDoorId ?? null, value.retailDoorVersion ?? null, value.committedAt, value.contentHash, value],
       'ORDER_COMMIT_SNAPSHOT_ALREADY_EXISTS',
     ),
 
@@ -262,6 +285,11 @@ async function getPayloadBy(client, table, columns, values, lockClause = '') {
 async function listPayloadBy(client, table, column, value, lockClause = '') {
   const suffix = lockClause ? ` ${lockClause}` : '';
   const result = await client.query(`SELECT payload FROM ${table} WHERE ${column} = $1${suffix}`, [value]);
+  return result.rows.map((row) => row.payload);
+}
+
+async function listRetailDoorsByShop(client, shopId) {
+  const result = await client.query('SELECT payload FROM retail_doors WHERE shop_id = $1 ORDER BY code, id FOR SHARE', [shopId]);
   return result.rows.map((row) => row.payload);
 }
 

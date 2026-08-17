@@ -21,7 +21,7 @@ test('form lifecycle removes global listeners and distinguishes mutation success
   assert.match(source, /dialog\.addEventListener\('close', cleanup, \{ once: true \}\)/);
   assert.match(source, /await submitAction\(values\);\s*saved = true;\s*dialog\.close\(\)/s);
   assert.match(source, /common\.savedRefreshFailed/);
-  assert.match(source, /if \(submit\.isConnected\) setButtonBusy/);
+  assert.match(source, /if \(submit\.isConnected\)\s*\{\s*setButtonBusy/s);
   assert.match(i18n, /common\.unsavedChangesConfirm/);
   assert.match(i18n, /common\.savedRefreshFailed/);
 });

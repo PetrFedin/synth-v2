@@ -60,13 +60,38 @@ async function selectionLineForm(selection) {
     return mutate(`/v2/selections/${encodeURIComponent(selection.id)}/lines/${encodeURIComponent(line.sku)}`, { selectionId: selection.id, sku: line.sku, quantity }, 'PUT');
   });
 }
-function orderForm() {
+async function orderForm() {
   const caps = window.SynthaUiCapabilities;
+  const doorUi = window.SynthaRetailDoorUi;
   const selections = state.workspace.selections.filter(x => x.status === 'submitted' && caps.hasForOrganisation(state.workspace, x.shopId, caps.CAPABILITIES.ORDER_WRITE) && !state.workspace.orders.some(o => o.selectionId === x.id));
-  openForm('Создать заказ', [
-    selectDef('selectionId', 'Selection', selections),
-    ...orderTermsFields(),
-  ], values => mutate('/v2/orders', { selectionId: values.selectionId, terms: validatedOrderTerms(values) }));
+  if (!selections.length) {
+    toast(I18N.translate('Нет отправленных Selection, доступных для создания заказа.'), 'error');
+    return;
+  }
+  try {
+    const shopIds = [...new Set(selections.map(selection => selection.shopId))];
+    const doorEntries = await Promise.all(shopIds.map(async shopId => [shopId, await api(`/v2/shops/${encodeURIComponent(shopId)}/doors`)]));
+    const doorsByShop = Object.fromEntries(doorEntries.map(([shopId, doors]) => [shopId, Array.isArray(doors) ? doors : []]));
+    openForm('Создать заказ', [
+      selectDef('selectionId', 'Selection', selections, selection => `${orgName(selection.shopId)} · ${selection.id}`),
+      dependentSelectDef(
+        'retailDoorId',
+        'Торговая точка / Retail Door',
+        'selectionId',
+        selectionId => doorUi.activeDoorsForSelection(selections.find(selection => selection.id === selectionId), doorsByShop),
+        door => `${door.code} · ${door.name} · ${door.shipToAddress?.city || '—'}`,
+        undefined,
+        'Для выбранного магазина нет активной торговой точки. Создайте или активируйте её в «Партнёры → Торговые точки».',
+      ),
+      ...orderTermsFields(),
+    ], values => mutate('/v2/orders', doorUi.buildOrderPayload({
+      selectionId: values.selectionId,
+      retailDoorId: values.retailDoorId,
+      terms: validatedOrderTerms(values),
+    }, selections, doorsByShop)));
+  } catch (error) {
+    toast(error.message, 'error');
+  }
 }
 
 function orderTermsFields(terms = {}) {

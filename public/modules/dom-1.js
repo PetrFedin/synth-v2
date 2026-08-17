@@ -28,7 +28,7 @@ function entity(title, status, metadata, actions) {
   const head = el('div', { className: 'entity-head' });
   const titleBlock = el('div', { className: 'entity-title-block' });
   titleBlock.append(
-    el('div', { className: 'entity-title', rawText: title || I18N.translate('\u0411\u0435\u0437 \u043d\u0430\u0437\u0432\u0430\u043d\u0438\u044f') }),
+    el('div', { className: 'entity-title', rawText: title || I18N.translate('Без названия') }),
     el('div', { className: 'entity-code', rawText: String(title || '').slice(0, 42) }),
   );
   head.append(titleBlock, statusBadge(status));
@@ -62,10 +62,10 @@ function sectionCard(title, children, buttonLabel, onButton, pagingSection) {
   if (pagingSection && paging?.hasMore(pagingSection)) {
     const status = paging.status(pagingSection);
     const label = status.state === 'loading'
-      ? localText('\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430\u2026', 'Loading\u2026')
+      ? localText('Загрузка…', 'Loading…')
       : status.state === 'error'
-        ? localText('\u041f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u044c', 'Retry')
-        : localText('\u0417\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c \u0435\u0449\u0451', 'Load more');
+        ? localText('Повторить', 'Retry')
+        : localText('Загрузить ещё', 'Load more');
     const button = el('button', { className: 'button small', rawText: label, type: 'button' });
     button.disabled = status.state === 'loading';
     button.addEventListener('click', () => { void paging.loadNext(pagingSection); });
@@ -164,7 +164,8 @@ function buildField(field) {
   if (field.kind === 'select') {
     const label = el('label');
     label.append(el('span', { text: field.label }));
-    const control = el('select', { name: field.name, required: true });
+    const control = el('select', { name: field.name });
+    control.required = field.required !== false;
     field.options.forEach(option => {
       const value = typeof option === 'string' ? option : option.id;
       const text = field.format ? field.format(option) : (typeof option === 'string' ? option : (option.name || option.id));
@@ -175,17 +176,19 @@ function buildField(field) {
     label.append(control);
     return { label, control };
   }
-  return inputField(field.label, field.kind === 'number' ? 'number' : field.kind, {
+  const built = inputField(field.label, field.kind === 'number' ? 'number' : field.kind, {
     name: field.name,
-    required: true,
     value: field.value ?? '',
     step: field.kind === 'number' ? (field.integer ? '1' : '0.01') : undefined,
     min: field.min ?? (field.kind === 'number' ? '0' : undefined),
     maxlength: field.maxLength,
   });
+  built.control.required = field.required !== false;
+  return built;
 }
 
-function textDef(name, label, value = '', maxLength = 160) { return { name, label, kind: 'text', value, maxLength }; }
+function textDef(name, label, value = '', maxLength = 160, required = true) { return { name, label, kind: 'text', value, maxLength, required }; }
+function optionalTextDef(name, label, value = '', maxLength = 160) { return textDef(name, label, value, maxLength, false); }
 function dateDef(name, label, value = '') { return { name, label, kind: 'date', value }; }
 function dateTimeDef(name, label, value = '') { return { name, label, kind: 'datetime-local', value }; }
 function numberDef(name, label, value, integer, min = 0) { return { name, label, kind: 'number', value, integer, min }; }

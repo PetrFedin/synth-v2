@@ -4,8 +4,8 @@ function cycleEntity(item) {
   const caps = window.SynthaUiCapabilities;
   const canAdvance = caps.hasForTrade(state.workspace, item.brandId, item.shopId, caps.CAPABILITIES.COMMERCIAL_CYCLE_ADVANCE);
   const canConfirm = caps.hasForTrade(state.workspace, item.brandId, item.shopId, caps.CAPABILITIES.ORDER_CONFIRM);
-  if (canAdvance && index >= 0 && index < STAGES.indexOf('showroom')) actions.push(actionButton(`Перейти: ${stageLabel(STAGES[index+1])}`, () => mutate(`/v2/cycles/${encodeURIComponent(item.id)}/advance`, { targetStage: STAGES[index+1] })));
-  if (canConfirm && item.stage === 'confirmation') actions.push(actionButton('Открыть DealSpace', () => mutate(`/v2/cycles/${encodeURIComponent(item.id)}/confirm`, {}), 'primary'));
+  if (canAdvance && index >= 0 && index < STAGES.indexOf('showroom')) actions.push(actionButton(`${localText('Перейти', 'Advance')}: ${stageLabel(STAGES[index+1])}`, () => mutate(`/v2/cycles/${encodeURIComponent(item.id)}/advance`, { cycleId: item.id, targetStage: STAGES[index+1] })));
+  if (canConfirm && item.stage === 'order' && item.order?.status === 'attached' && Number(item.order.totalAmount) > 0) actions.push(actionButton(localText('Открыть DealSpace', 'Open DealSpace'), () => mutate(`/v2/cycles/${encodeURIComponent(item.id)}/confirm`, {}), 'primary'));
   const wrapper = entity(`${orgName(item.brandId)} → ${orgName(item.shopId)}`, item.stage, [`Кампания: ${nameById('campaigns',item.campaignId)}`, `Коллекция: ${nameById('collections',item.collectionId)}`, item.id], actions);
   const pipeline = el('div', { className: 'pipeline' });
   STAGES.forEach((stage, position) => pipeline.append(el('div', { className: `pipeline-step ${position < index ? 'done' : position === index ? 'current' : ''}`, text: stageLabel(stage) })));
@@ -29,12 +29,12 @@ function orderEntity(item) {
   const accepted = new Set(item.acceptedOrganisationIds || []);
   for (const orgId of ownIds().filter(id => [item.brandId,item.shopId].includes(id))) {
     if (!accepted.has(orgId) && ['draft','ready'].includes(item.status) && caps.hasForOrganisation(state.workspace, orgId, caps.CAPABILITIES.ORDER_CONFIRM)) {
-      actions.push(actionButton(`Согласовать: ${orgName(orgId)}`, () => mutate(`/v2/orders/${encodeURIComponent(item.id)}/accept`, { organisationId: orgId })));
+      actions.push(actionButton(`Согласовать: ${orgName(orgId)}`, () => mutate(`/v2/orders/${encodeURIComponent(item.id)}/accept`, { orderId: item.id, organisationId: orgId, expectedVersion: item.version })));
     }
   }
   const canWrite = caps.hasForTrade(state.workspace, item.brandId, item.shopId, caps.CAPABILITIES.ORDER_WRITE);
   const canReadMargin = caps.hasForOrganisation(state.workspace, item.brandId, caps.CAPABILITIES.MARGIN_READ);
-  if (item.status === 'ready' && canWrite) actions.push(actionButton('Прикрепить к циклу', () => mutate(`/v2/orders/${encodeURIComponent(item.id)}/attach`, {}), 'primary'));
+  if (item.status === 'ready' && canWrite) actions.push(actionButton('Прикрепить к циклу', () => mutate(`/v2/orders/${encodeURIComponent(item.id)}/attach`, { expectedVersion: item.version }), 'primary'));
   if (item.orderCommitSnapshotId && canReadMargin) actions.push(formActionButton(economicsText('Экономика', 'Economics'), () => orderEconomicsDialog(item)));
   if (item.status === 'attached' && canWrite) actions.push(actionButton('Отменить заказ', () => orderCancellationForm(item)));
   const details = [

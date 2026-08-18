@@ -1,7 +1,7 @@
 # Платформа Syntha / Syntha Fashion Platform — Product & Supply + Wholesale Commerce
 
 Статус / Status: единственная актуальная двуязычная продуктовая спецификация / the only current bilingual product source of truth for Syntha.  
-Версия / Version: 4.4, 18 августа 2026 года.  
+Версия / Version: 4.5, 18 августа 2026 года.  
 Основной рынок / Primary market: российские fashion-бренды, работающие с российскими и зарубежными фабриками, поставщиками материалов, готовых изделий и магазинами / Russian fashion brands working with domestic and international factories, material suppliers, finished-goods suppliers and retailers.  
 Назначение / Purpose: связать Product & Supply и Wholesale Commerce через единое версионное ядро товара, сохранив отдельные процессы, права, документы, статусы и системы учёта / connect Product & Supply and Wholesale Commerce through one versioned product core while preserving separate processes, permissions, documents, states and systems of record.
 
@@ -9160,3 +9160,370 @@ The following JOOR behaviors are benchmark lessons, not features to copy:
 ### 128.14 Source note / Примечание об источнике
 
 This delta is grounded in direct observation of the authenticated JOOR retailer web application. It is a product benchmark, not evidence of JOOR internal APIs or implementation. Time-sensitive prices, limits and UI labels must be revalidated before commercial decisions. Syntha requirements above are product decisions derived from the observed behavior and the canonical rules in this document.
+
+---
+
+## 129. Визуально-геометрический аудит личного кабинета JOOR / JOOR Retailer Cabinet Visual Geometry Audit
+
+### 129.1. Назначение и границы доказательств / Purpose and evidence boundary
+
+Этот раздел фиксирует фактически наблюдавшуюся геометрию авторизованного retailer-интерфейса JOOR: размеры контейнеров, карточек, изображений, иконок и контролов; координаты и интервалы; типографику; цвета; состояния фильтров, выпадающих списков, чекбоксов и hover-слоёв. Это **референс поведения JOOR, а не готовая дизайн-спецификация Syntha**.
+
+| Параметр | Зафиксированное значение |
+|---|---|
+| Дата наблюдения | 18 августа 2026 года |
+| Контекст | авторизованный кабинет retailer |
+| Desktop viewport | 1299 × 810 CSS px |
+| Device pixel ratio | 1 |
+| Фактическая ширина страницы при вертикальном scrollbar | преимущественно 1284 px |
+| Точность | DOM/CSS-замеры; округление до 0.01 px там, где браузер вернул дробное значение; визуальный допуск для UAT ±1 px |
+| Покрытые поверхности | глобальная шапка и account menu; Account Settings; Find New Brands; Products; Orders; Messages; публичный профиль; редактирование профиля |
+| Непокрытые доказательством состояния | другие viewport и мобильные брейкпоинты; реальные ошибки upload/save; наполненная фотогалерея публичного профиля |
+| Приватность | названия аккаунтов, e-mail, телефоны, адреса, сообщения, внутренние ID, бренды и товары намеренно не записаны |
+
+Все координаты ниже даны как \`x / y / width / height\` в CSS px относительно viewport либо явно указанного родителя. Дробные размеры — результат реального браузерного layout, а не рекомендация использовать дробные токены в Syntha.
+
+### 129.2. Глобальная оболочка / Global shell
+
+| Элемент | Наблюдение JOOR | Обязательное решение Syntha |
+|---|---|---|
+| Основная шапка | \`0 / 0 / 1284 / 53\`; fixed; фон \`#323E48\` | единая desktop-высота 56 px либо документированное исключение; sticky/fixed не должен перекрывать контент |
+| Логотип | SVG \`28 / 13 / 90 / 30\`; кликабельная зона \`106 × 53\`; padding \`13px 8px\` | изображение не меньше 90 × 30; кликабельная зона не меньше 44 × 44 |
+| Группа основной навигации | начало \`x=126\`; ширина \`708.56\`; flex gap 8 | gap-токен 8; доступная клавиатурная навигация |
+| Наблюдавшиеся nav-trigger | \`71.44 × 53\`, \`207.22 × 53\`, \`170.66 × 53\` | ширина по контенту, но без скачка layout при открытии |
+| Внутренний label навигации | высота 26–30; padding \`5px 8px\` | высота интерактивной зоны ≥40 px через внешний trigger |
+| Текст навигации | Montserrat 12/500; line-height 16 | сохранить читаемость; при локализации не обрезать текст |
+| Базовые иконки | преимущественно \`16 × 16\` | визуальный glyph 16–20, target ≥40 × 40 |
+| Utility-иконки | преимущественно \`24 × 24\` | target ≥40 × 40 |
+| Account trigger | \`300.78 × 53\`; начало \`x=883.22\`; placeholder/avatar \`20 × 20\`, radius 10 | имя допускает ellipsis; аватар 24–32; полная зона trigger доступна |
+| Language control | приблизительно \`40 × 25\` | target ≥40 × 40 |
+| Messages trigger | приблизительно \`52 × 53\` | badge не должен сдвигать иконку |
+| New/premium chip | \`51.38 × 20\`; padding \`2px 8px\`; radius 20; \`#008BAD\` | pill-компонент с семантическим label |
+| Unread badge | \`30.81 × 16\`; padding \`2.75px 5.5px\`; radius 20; \`#E7251A\`; Nunito Sans 11/700 | минимум 16 px по высоте; \`99+\` без переполнения |
+
+### 129.3. Account menu и popup-геометрия / Account dropdown
+
+| Элемент | Наблюдение JOOR |
+|---|---|
+| Dropdown-контейнер | \`806 / 53 / 360 / 497\` |
+| Фон / рамка | \`#EBEDF0\`; border 1 px \`#CDD4DA\` |
+| Padding / углы | 10 px; нижний radius 4 px |
+| Внутренний список | ширина 338 px |
+| Строка primary account | \`338 × 32\`; padding \`8px 0\`; gap 3 px |
+| Визуальная отметка checkbox | SVG приблизительно \`21.33 × 21.33\` |
+| Нативный checkbox | layout-size \`0 × 0\` в наблюдавшейся кастомной реализации |
+
+Требование Syntha: dropdown привязан к trigger, закрывается по \`Escape\`, клику вне и возврату фокуса; имеет \`role/menu\` или корректную listbox-семантику; не выходит за viewport; scroll применяется к списку, а не ко всей странице. Нативный input не должен терять focusability и accessible name из-за визуального размера \`0 × 0\`.
+
+### 129.4. Цветовые токены / Observed color tokens
+
+| Роль в JOOR | Значение | Использование в Syntha |
+|---|---:|---|
+| Dark shell / primary dark | \`#323E48\` | допустим как референс neutral-900 |
+| Teal accent / links | \`#008BAD\` | accent; проверить WCAG-контраст на белом |
+| Slate primary / selection | \`#5C7284\` | secondary action / selected state |
+| Strong text | \`#2D3439\` | основной текст |
+| Secondary text | \`#40515D\` | вторичный текст |
+| Legacy text | \`#515253\` | не вводить как новый дублирующий токен |
+| Muted / legacy heading | \`#82858A\` | только при достаточном контрасте |
+| Modern input border | \`#8C9BA8\` | border-default |
+| Light border | \`#CDD4DA\`, \`#CCCCCC\` | объединить в один канонический token, если семантика совпадает |
+| Divider | \`#EDEDED\` | divider/subtle border |
+| Surface | \`#FFFFFF\`, \`#F9F9F9\`, \`#F5F8F9\`, \`#EBEDF0\` | сократить до документированных surface levels |
+| Danger / unread | \`#E7251A\` | danger и badge; цвет не должен быть единственным признаком состояния |
+| Collection band | \`rgba(66,138,126,0.15)\` | отдельный informational surface token |
+| Hover image overlay | \`rgba(255,255,255,0.75)\` | текст поверх изображения обязан сохранять контраст |
+
+### 129.5. Типографика / Typography inventory
+
+| Контекст | Family | Size / weight / line-height | Letter spacing / цвет |
+|---|---|---|---|
+| Header/navigation | Montserrat | 12 / 500 / 16 | стандартный; white/light |
+| Discovery brand title | Montserrat | 16 / 500 / 24 | 1.4 px; \`#008BAD\` |
+| Discovery secondary text | Montserrat | 12 / 500 / 16 | 0.6 px |
+| Orders H1 | Nunito Sans | 24 / 200 / 30 | \`#5C7284\` |
+| Product-card body | Nunito Sans | 12 / 400 / 14 | neutral text |
+| Product-card heading / hover action | Montserrat | 13 / 600 / 14 | 1 px |
+| Public profile title | Montserrat | 48 / 300 / 60 | 2.4 px |
+| Account Settings title | Montserrat | 20 / 400 / 32 | 1.2 px; uppercase |
+| Modern profile-edit labels | Montserrat | 12 / 400 / 16 | 1 px |
+| Modern profile-edit controls | Montserrat | 14 / 500 / 16 | 0.6 px |
+| Legacy settings rows | generic sans-serif | 16 / 300 / 16 | legacy |
+| Legacy micro-labels | generic sans-serif | 10 / 400 / 12 | 1 px; uppercase |
+| Messages table cells | generic sans-serif | 12 / 400 / 14.4 | legacy |
+| Messages headers | generic sans-serif | 10 / 400 / 12 | uppercase; \`#82858A\` |
+| Отдельные legacy-участки | Georgia | 12 / normal / normal | не переносить в новую систему |
+
+Требование Syntha: одна каноническая пара семейств и ограниченная шкала \`12 / 14 / 16 / 20 / 24 / 32 / 48\`; legacy generic/Georgia не воспроизводятся. Вес 200 для H1 допускается только после проверки читаемости и реального наличия font-face.
+
+### 129.6. Account Settings / \`/accounts/settings\`
+
+| Элемент | Размер / расположение / стиль |
+|---|---|
+| Внешняя legacy-панель | \`129 / 80 / 1026 / 942\`; white; border 1 px \`#CDD4DA\`; radius \`10px 10px 0 0\` |
+| Основной контент | \`163 / 80 / 958\`; padding-top 20 |
+| Form | \`163 / 166 / 958\` |
+| Value grid | ширина 405; row height 71 |
+| Ссылка Edit | 13 наблюдавшихся ссылок; каждая приблизительно \`22.48 × 14.39\`; 12 px |
+| Landing Page native select | \`118 × 19\`; border 1 px black; браузерный font 13.333 px |
+| Close X | glyph приблизительно \`10.67 × 16\` |
+| Save Changes | \`126.53 × 34\`; padding \`8px 16px\`; radius 5; \`#323E48\`; Montserrat 12/500/16 |
+
+Функциональная фиксация: редактор Landing Page открывается inline. В ходе аудита значения не изменялись и сохранение не выполнялось. Для Syntha ссылки \`Edit\` и close-glyph должны получить hit area не меньше 40 × 40, видимый focus и точное имя редактируемого поля.
+
+### 129.7. Find New Brands / Discovery
+
+#### 129.7.1. Результаты без раскрытой панели фильтров
+
+| Элемент | Наблюдение JOOR |
+|---|---|
+| Колонки | две колонки по \`558.5\` px; \`x=68\` и \`x=658.5\` |
+| Горизонтальный gap | 32 px |
+| Первый ряд | \`y=240\`; card visual row height 332 |
+| Следующий ряд | \`y=604\`; вертикальный gap 32 |
+| Image/carousel area | \`558.5 × 240\` |
+| Обработка изображения | \`object-fit: cover\` для контентного фото либо \`contain\` и центрирование для logo/asset |
+| Footer | высота 48 либо 76; padding \`0 8px 16px\`; gap 12 |
+| Favorite action container | \`38 × 32\`; padding 4 |
+| Favorite SVG | приблизительно \`26.88 × 26.88\` |
+| Brand/logo avatar | \`52 × 52\` |
+
+#### 129.7.2. Раскрытая панель фильтров
+
+| Элемент | Наблюдение JOOR |
+|---|---|
+| Левая filter rail | \`x=69\`; ширина 298 |
+| Колонка результатов | \`x=400\`; ширина 817; gap около 33 |
+| Search section | ширина 298; padding \`16px 24px\` |
+| Search control | outer \`250 × 32\`; input \`248 × 30\`; padding \`0 34px 0 12px\`; radius 5; border \`#8C9BA8\`; Montserrat 14/500/16.1 |
+| Currency select | outer \`250 × 32\`; inner padding \`2px 8px\` |
+| Min / Max | каждый \`109 × 30\`; gap 8; padding \`4px 8px\`; radius 5 |
+| Price range block | \`250 × 118\`; gap 16 |
+| Checkbox row | ширина 250; label height 16; custom SVG около \`21.33 × 21.33\`; native input \`0 × 0\` |
+| Sort select | outer \`175 × 32\` |
+
+При открытии rail выдача становится одноколоночной шириной 817 px, а высота media-area остаётся 240 px. Это зафиксированное изменение layout JOOR, но **не целевой паттерн Syntha**: ширина карточки и плотность контента не должны скачком меняться без адаптивного media-ratio и max-width.
+
+### 129.8. Products / Catalog
+
+| Элемент | Размер / расположение |
+|---|---|
+| Main router region | \`0 / 78 / 1284\` |
+| Catalog header | \`-5 / 78 / 1294 / 58\` |
+| Filter row | \`-5 / 147 / 1294 / 60\` |
+| Filter list block | \`481 / 147 / 488 / 60\`; padding 10 |
+| Collection band | \`0 / 217 / 1284 / 60\`; padding \`10px 30px\`; margin-block 10; teal translucent surface |
+| Products main column | \`x=144\`; width 996 |
+| Product cards | три по 320 px; \`x=149 / 479 / 809\`; horizontal gap 10; \`y=296\`; height 661 |
+| Product image | \`220 × 300\`; \`object-fit: contain\`; 50 px бокового свободного пространства внутри карточки |
+| Breadcrumb/image wrapper | \`220 × 350\` |
+| Info block | \`320 × 303\`; margin-top 8 |
+| Name/comments row | \`320 × 60\` |
+| Note block | около \`320 × 64\` |
+| Search input | \`116 × 37\`; padding \`10px 14px\`; border 1 px \`#8C9BA8\`; radius 0 |
+| Typical dropdown | \`156 × 40\`; padding \`10px 35px 10px 12px\`; border 1 px \`#CCC\`; radius 0 |
+| Group By open menu | \`156 × 148.25\` |
+| Dropdown option | \`154 × 36.81\`; padding 10.92; font 14/400/14 |
+| Selected option | фон \`#5C7284\`; white text |
+| Наблюдавшиеся Group By options | None; Linesheet Group; Silhouette; Badge |
+
+Hover overlay над media: \`330 × 300\`, выступает на 5 px по бокам и на 6 px вверх относительно карточки; два слоя по \`330 × 150\`; фон \`rgba(255,255,255,0.75)\`; действие Montserrat 13/600/14 с letter-spacing 1 px.
+
+Требование Syntha: overlay не должен менять layout, закрывать focus-ring или быть единственным способом открыть действие. На touch и клавиатуре те же действия должны быть доступны без hover.
+
+### 129.9. Orders
+
+| Элемент | Размер / расположение / стиль |
+|---|---|
+| Content start | \`y=78\` |
+| H1 | \`123 × 60\`; Nunito Sans 24/200/30; \`#5C7284\` |
+| Top status/filter row | высота 85 |
+| Start an Order | \`154 × 38\`; \`x=1026, y=79\`; \`#5C7284\`; white; radius 0 |
+| Search & Filter outer | width 330 |
+| Bordered filter content | \`310 × 325\`; padding 15; border 1 px \`#5C7284\` |
+| Scrollable filter region | \`278 × 233\`; padding-right 5 |
+| Search input | \`233 × 37\`; parent 273; padding \`10px 14px\`; border \`#8C9BA8\` |
+| Table | \`1018 × 729\`; \`x=486.5, y=203.97\` |
+| Table header | height 44 |
+| Колонки | \`40 / 150 / 80 / 80 / 80 / 115 / 150 / 86 / 150 / 86\` |
+| Header type | Nunito Sans 12/700/15 |
+| Header padding | обычно \`7px 15px 7px 12px\`; checkbox-column \`7px 0 7px 12px\` |
+| Checkbox visual | \`20 × 20\` |
+| Apply Filters | \`154 × 38\` |
+| Import / Download / Export | каждый \`154 × 38\` |
+| Pagination | \`90 × 40\`; chevron glyph около \`6.44 × 18\` |
+| Search icon shell | \`40 × 37\`; фон \`#8C9BA8\` |
+| Filter-list icon | \`30 × 19\` |
+
+Критический факт: правая граница таблицы находится приблизительно на \`x=1504.5\`, то есть таблица выходит за viewport 1299 px и вызывает горизонтальное переполнение. Syntha не воспроизводит этот дефект: на desktop используются устойчивые колонки, pinning при необходимости и локальный horizontal scroll внутри table container; вся страница не должна расширяться.
+
+### 129.10. Messages
+
+| Элемент | Размер / стиль |
+|---|---|
+| Основной legacy-content | \`x=163\`; width 958 |
+| Таблица | width 958; начало \`y=201\` |
+| Header row | height 33 |
+| Data row | около 33.39 |
+| Колонки | \`246.75 / 37.73 / 531.25 / 37.73 / 104.53\` |
+| Header cells | padding-block 8; sans-serif 10/400/12; uppercase; \`#82858A\` |
+| Data cells | padding-block 8; sans-serif 12/400/14.4 |
+| Unread row | \`#F9F9F9\` |
+| Search native input | \`151 × 21\`; padding \`3px 2px\`; radius 0 |
+| Native checkbox | \`13 × 13\` |
+| Compose Mail | \`127.53 × 34\`; padding \`8px 16px\`; radius 5; \`#323E48\`; Montserrat 12/500/16 |
+| Delete | \`75.64 × 34\`; padding \`8px 15px\`; radius 5; light surface с dark border |
+| Mark read/unread | текстовые действия около 10 px |
+
+Syntha: row density может быть компактной, но все действия получают target ≥40 × 40; unread обозначается не только фоном, но и семантическим/типографическим признаком. Таблица должна поддерживать keyboard selection и ясное bulk-action состояние. Реальные темы и отправители сообщений в аудит не включены.
+
+### 129.11. Retailer public profile
+
+| Элемент | Наблюдение JOOR |
+|---|---|
+| Hero/header | \`1284 × 156\`; padding 32; flex gap 16 |
+| Основной title | Montserrat 48/300/60; letter-spacing 2.4 |
+| Action buttons | height 32; radius 5; padding-inline 16 |
+| Location/info card | приблизительно \`408.5 × 294\`; padding 16; gap 8 |
+| Фотогалерея | в исследованном аккаунте отсутствовало наполненное состояние |
+
+В документе фиксируется только empty-state публичного профиля; выводы о размерах опубликованных gallery tiles без наблюдения не делаются. Syntha обязана иметь явные empty/loading/error состояния и не раскрывать адресные данные в telemetry или документации.
+
+### 129.12. Retailer profile edit mode
+
+| Элемент | Размер / расположение / стиль |
+|---|---|
+| Полная высота страницы в наблюдении | около 3890 px |
+| Edit toolbar | \`y=53\`; height 50; фон \`#E9F4F6\`; padding \`0 16px\` |
+| Save and View | \`144.59 × 32\`; \`#323E48\`; padding \`0 16px\`; radius 5; Montserrat 14/500 |
+| Main edit grid | width 1284; padding 16; gap 16 |
+| Logo card | \`16 / 119 / 254.41 / 514\`; radius 8; inner padding \`24px 24px 32px\`; gap 24 |
+| Basic info card | width 398; height 764 |
+| Store photos card | \`700.41 / 119 / 567.59 / 764\`; radius 8; inner width 519.59; padding \`24px 24px 32px\` |
+| Gap между верхними cards | 16 |
+| Upload | \`81.55 × 32\`; border 1 px \`#5C7284\`; radius 5; light surface |
+| Browse Images | \`151.25 × 32\`; фон \`#323E48\` |
+| Button-row gap | 16 |
+| Basic single-column field | outer \`350 × 32\`; inner \`348 × 30\`; padding \`0 34px 0 12px\`; radius 5; border \`#8C9BA8\` |
+| Description textarea | outer \`350 × 102\`; inner \`348 × 100\`; padding \`6px 34px 6px 12px\`; radius 5 |
+| Locations content | \`x=40\`; width 1204 |
+| Locations grid | gap 48 |
+| Standard location field | outer \`277 × 32\`; inner \`275 × 30\` |
+| Two-column subsection | width 554; internal gap 36 |
+| Checkbox/tag zone | \`554 × 300\`; gap 8 |
+| Checkbox icons | off/on/indeterminate SVG по \`21.33 × 21.33\` |
+| Checkbox label row | height 16; native input layout-size \`0 × 0\` |
+
+В ходе аудита режим редактирования был открыт только для чтения геометрии: upload, изменение значения и Save and View не выполнялись.
+
+### 129.13. Сводная матрица контролов / Component geometry matrix
+
+| Компонент | Наблюдаемый диапазон JOOR | Каноническая цель Syntha |
+|---|---|---|
+| Primary button | 32–38 px height; padding-inline 16; radius 0 или 5 | 40 px desktop / 44 px touch; единый radius token |
+| Secondary button | 32–38 px height; border slate/dark | те же размеры и ясные hover/focus/disabled |
+| Icon-only action | от 16 до 40 px по контейнеру | target ≥40 × 40; glyph 16–20 |
+| Text action | иногда только 10–14 px по высоте | target ≥40 × 40 или строка целиком интерактивна |
+| Modern input/select | 30–32 px height; radius 5; border \`#8C9BA8\` | control height 40; padding-inline 12; end-icon zone 32–40 |
+| Catalog/search input | 37 px; radius 0 | привести к общему Input |
+| Legacy native input | 19–21 px | не переносить; заменить каноническим control |
+| Catalog dropdown | 40 px; menu option 36.81 px | trigger 40; option ≥40; целое кратное 4 |
+| Account dropdown | 360 px wide; 497 px high | responsive max-width \`min(360px, viewport - 32px)\` |
+| Checkbox glyph | 13, 20 или 21.33 px | visual 20; row target ≥40; native semantics сохранены |
+| Unread badge | height 16 | minimum 16; content-aware width |
+| Favorite action | container 38 × 32; glyph 26.88 | target 40 × 40; glyph 20–24 |
+| Data-table row | 33.39–44 px | compact 40 или comfortable 48 |
+| Product photo | 220 × 300; contain | ratio/box задаётся токеном; object-fit зависит от типа media |
+| Discovery media | 558.5 × 240 | responsive aspect-ratio и max-height; без деформации |
+| Brand avatar/logo | 52 × 52 | 48 или 56 token |
+| Profile upload card | до 567.59 × 764 | адаптивный grid; dropzone с состояниями empty/progress/error/success |
+
+### 129.14. Карточки, фото и media rules / Cards and images
+
+1. Product card: ширина 320, высота 661, media \`220 × 300\`, \`contain\`; текстовый блок 320 × 303.
+2. Discovery card: media \`558.5 × 240\`; footer 48/76; карточки идут с gap 32.
+3. Public info card: около \`408.5 × 294\`; padding 16.
+4. Profile edit cards: radius 8; внешний grid gap 16; внутренний padding 24/32.
+5. Для logo-asset используется \`contain\`; для editorial/store photo допустим \`cover\`. Выбор должен быть явным свойством media-компонента.
+6. Для Syntha обязательны \`alt\`/accessible name, фиксированный aspect-ratio для предотвращения layout shift, placeholder, broken-image и retry state.
+7. Upload/dropzone обязана показывать разрешённые форматы, лимит размера, прогресс, ошибку, preview, remove/replace и порядок фотографий. Эти состояния не были доказаны текущим наблюдением JOOR и поэтому являются продуктовым требованием Syntha, а не утверждением о JOOR.
+
+### 129.15. Сетка и интервалы / Spacing inventory
+
+В фактической геометрии JOOR повторяются \`4 / 5 / 8 / 10 / 12 / 16 / 24 / 30 / 32 / 36 / 48\` px. Дробные значения \`10.92\`, \`21.33\`, \`33.39\`, \`36.81\`, \`254.41\`, \`408.5\`, \`558.5\` и другие возникают из браузерного деления сетки/line-box и не становятся токенами Syntha.
+
+| Роль | JOOR reference | Syntha token |
+|---|---|---|
+| Micro gap | 3–5 | 4 |
+| Inline gap | 8–12 | 8 или 12 |
+| Control group | 16 | 16 |
+| Card inner padding | 16 или 24, иногда 32 снизу | 16 / 24 / 32 |
+| Grid gap | 10 / 16 / 32 / 36 / 48 | 16 / 24 / 32 / 48 |
+| Page side padding | 16 / 30 / 32 | 16 mobile; 24 tablet; 32 desktop |
+| Large section gap | 48 | 48 |
+
+Каноническая 4 px scale Syntha: \`4 / 8 / 12 / 16 / 24 / 32 / 48\`. Исключения должны быть результатом fluid grid, а не вручную созданным spacing token.
+
+### 129.16. Зафиксированные UI-риски JOOR и обязательные улучшения Syntha
+
+| Приоритет | Наблюдение / риск | Требование Syntha |
+|---|---|---|
+| P0 | Orders table расширяет страницу до ~1504.5 px при viewport 1299 | исключить page-level horizontal overflow; локальный table scroll / адаптивные колонки |
+| P0 | Кастомные checkbox имеют native input \`0 × 0\` | сохранить keyboard focus, accessible name и state; тестировать screen reader |
+| P0 | Text/icon actions имеют hit area 10–34 px | desktop ≥40 × 40; touch ≥44 × 44 |
+| P0 | Hover overlay содержит значимые действия | полная keyboard/touch альтернатива |
+| P0 | Цвет используется для unread/selected | добавить типографику, иконку или семантический state |
+| P1 | На одной платформе смешаны Montserrat, Nunito Sans, generic sans и Georgia | единая типографическая система и font loading |
+| P1 | Input/select heights 19–40 px, radius 0/5 | единый control API и size variants |
+| P1 | При раскрытии Discovery filters карточка скачком растёт до 817 px | responsive grid с устойчивым max-width/media ratio |
+| P1 | Слишком низкий контраст возможен у muted text/teal link | автоматический WCAG AA contrast check |
+| P1 | Длинная profile-edit page около 3890 px | sticky section navigation, autosave/draft либо предупреждение об уходе |
+| P1 | Upload состояния не доказаны | реализовать полный state machine: empty → selecting → uploading → processing → success/error |
+| P2 | Дублирующиеся border/surface цвета | сократить token set |
+| P2 | Дробные padding/row heights из legacy CSS | нормализовать на 4 px scale |
+| P2 | Разные button radii и плотности | единый Button с documented variants |
+
+### 129.17. Визуальные acceptance-сценарии Syntha / Visual UAT
+
+1. Desktop \`1299 × 810\`: shell не перекрывает content; ширина документа не превышает viewport.
+2. Desktop \`1440 × 900\` и \`1920 × 1080\`: карточки сохраняют max-width и media ratio, а не растягиваются бесконечно.
+3. Tablet \`1024 × 768\`: nav/account controls остаются доступны; overflow локализован.
+4. Mobile \`390 × 844\`: filters работают как drawer/sheet; закрытие возвращает focus к trigger.
+5. Масштаб браузера 200%: текст и controls не обрезаются.
+6. Навигация только клавиатурой: все trigger, checkbox, dropdown option, hover-action, table action и upload доступны последовательно.
+7. Account menu: \`Enter/Space\` открывает, \`Escape\` закрывает, focus возвращается.
+8. Dropdown: выбранное значение озвучивается, стрелки перемещают active option, menu не выходит за viewport.
+9. Checkbox: off/on/indeterminate имеют программное состояние и visible focus.
+10. Discovery filters: открытие не меняет непредсказуемо media ratio; Apply/Reset имеют результат и live region при обновлении выдачи.
+11. Product card: изображение \`contain\` не обрезается; editorial image \`cover\` не искажает пропорции.
+12. Product hover-actions доступны через focus и touch.
+13. Orders table: нет page-level horizontal scroll; заголовок, bulk selection и pagination остаются доступны.
+14. Messages: unread отличим без цвета; bulk actions активируются только при выборе.
+15. Profile edit: длинная форма предупреждает о несохранённых изменениях; Save имеет loading/success/error.
+16. Upload: keyboard selection, drag/drop, progress, cancellation, error, retry, remove и reorder покрыты тестами.
+17. Локализация: длинные русские и английские labels не обрезаются и не ломают nav/dropdown.
+18. Empty/loading/error: public profile, gallery, catalog, orders и messages имеют отдельные устойчивые состояния.
+19. Контраст: normal text ≥4.5:1, large text и non-text controls ≥3:1.
+20. Скриншотная регрессия: ключевые экраны проверяются с геометрическим допуском ±1 px для fixed components и разумным content tolerance.
+
+### 129.18. Реализационная нормализация для Syntha / Implementation baseline
+
+Рекомендуемый минимальный набор design tokens:
+
+- \`size.control.md = 40px\`, \`size.control.touch = 44px\`;
+- \`size.icon.sm = 16px\`, \`size.icon.md = 20px\`, \`size.icon.lg = 24px\`;
+- \`radius.control = 5px\`, \`radius.card = 8px\`, \`radius.pill = 999px\`;
+- \`space = 4, 8, 12, 16, 24, 32, 48\`;
+- \`page.padding = 16 / 24 / 32px\` по breakpoint;
+- \`table.row.compact = 40px\`, \`table.row.comfortable = 48px\`;
+- \`card.product.width = minmax(280px, 320px)\`;
+- \`dropdown.maxWidth = min(360px, calc(100vw - 32px))\`;
+- \`focus.ring = 2px\` с контрастом не ниже 3:1;
+- \`motion.fast = 120–160ms\`, с поддержкой \`prefers-reduced-motion\`.
+
+Это baseline для собственной системы Syntha. Он намеренно улучшает доступность и согласованность, не копируя legacy-несоответствия JOOR.
+
+### 129.19. Источник и воспроизводимость / Source and reproducibility
+
+Источник раздела — ручной DOM/CSS-аудит текущей авторизованной web-версии JOOR в Chrome при \`1299 × 810\`, DPR 1, выполненный 18 августа 2026 года. Структура и размеры сторонней платформы могут измениться; перед pixel-critical реализацией либо коммерческим сравнением замеры необходимо повторить на актуальной версии и на дополнительных breakpoint. В репозиторий сохранены только обезличенные функциональные и геометрические факты.
+

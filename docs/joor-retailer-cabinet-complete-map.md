@@ -1,7 +1,7 @@
 # Платформа Syntha / Syntha Fashion Platform — Product & Supply + Wholesale Commerce
 
 Статус / Status: единственная актуальная двуязычная продуктовая спецификация / the only current bilingual product source of truth for Syntha.  
-Версия / Version: 4.5, 18 августа 2026 года.  
+Версия / Version: 4.6, 18 августа 2026 года.  
 Основной рынок / Primary market: российские fashion-бренды, работающие с российскими и зарубежными фабриками, поставщиками материалов, готовых изделий и магазинами / Russian fashion brands working with domestic and international factories, material suppliers, finished-goods suppliers and retailers.  
 Назначение / Purpose: связать Product & Supply и Wholesale Commerce через единое версионное ядро товара, сохранив отдельные процессы, права, документы, статусы и системы учёта / connect Product & Supply and Wholesale Commerce through one versioned product core while preserving separate processes, permissions, documents, states and systems of record.
 
@@ -9526,4 +9526,431 @@ Syntha: row density может быть компактной, но все дей
 ### 129.19. Источник и воспроизводимость / Source and reproducibility
 
 Источник раздела — ручной DOM/CSS-аудит текущей авторизованной web-версии JOOR в Chrome при \`1299 × 810\`, DPR 1, выполненный 18 августа 2026 года. Структура и размеры сторонней платформы могут измениться; перед pixel-critical реализацией либо коммерческим сравнением замеры необходимо повторить на актуальной версии и на дополнительных breakpoint. В репозиторий сохранены только обезличенные функциональные и геометрические факты.
+
+---
+
+## 130. Продолженный gap-аудит кабинета JOOR: скрытый legacy-слой, незавершённые процессы и связи / Continued Cabinet Gap Audit
+
+### 130.1. Цель, метод и граница безопасности
+
+Раздел 130 содержит только новые наблюдения, которых не было в разделах 128–129. Проверялись доступные из авторизованного retailer-контекста маршруты, переходы и безопасные UI-состояния. Значения форм не изменялись, сообщения не отправлялись, connection-действия не выполнялись, аккаунт не переключался, покупка подписки не запускалась и Help Center SSO не открывался.
+
+| Класс действия | Что сделано | Что намеренно не сделано |
+|---|---|---|
+| Read-only navigation | открытие Home, subscriptions, outreach tabs, connection registries, Best Sellers, Messages compose | logout, account switch, purchase, Connect, Not Now, Withdraw, Disconnect |
+| UI state | переключение New / Viewed / All; открытие пустой Compose form | ввод получателей, текста, файла; Send |
+| Route inspection | проверка фактического destination и route aliases | вызов URL, похожих на mutation endpoint |
+| Privacy | записаны только обезличенные labels, route patterns и продуктовые выводы | account names, brand names, сообщения, контакты и реальные ID исключены |
+
+### 130.2. Новая карта доказательств / Newly inspected surface matrix
+
+| Поверхность | Маршрут / состояние | Новое наблюдение | Статус для Syntha |
+|---|---|---|---|
+| Home | \`/ra/home\` | operational feed объединяет connected brands, быстрые View Orders / Shop, profile prompt, inbound-looking requests, outreach и New to JOOR | спроектировать как Buyer Home, а не набор несвязанных carousel |
+| Brand outreach | \`/ra/submissions?tab=new|viewed|all\` | New и Viewed имеют разные empty states; All в наблюдаемом пустом состоянии не показал объяснения или CTA | унифицировать state model и empty-state contract |
+| Subscription catalog | \`/ra/subscriptions\` | доступны только purchase cards Standard/Premium с monthly/yearly CTA; жизненный цикл подписки и usage не виден | добавить полный subscription management |
+| Inbound connection requests | \`/matches/requests\` | legacy-страница сначала оставалась без содержимого и поздно отрисовала список; нет заметного skeleton/error/retry | обязательные loading/error/retry и SLA |
+| Outbound pending | \`/matches/pending\` | legacy navigation и self-links; route-shaped connection commands; отдельный PENDING registry | заменить единым relationship workbench |
+| Shop By Brand | \`/Matches/shop\` | фактически приводит в \`/matches/current\` — Manage Connections, а не в shopping surface | убрать misleading alias |
+| Best Sellers | \`/Styles/best_sellers\` | доступен из legacy Shop menu; показывает Best Sellers From My Brands и остаётся в Loading без recovery | удалить dead entry до готовности либо реализовать полноценный insight product |
+| Compose message | \`/messages\` inline compose | аудитория All Connections или Select Connections, subject, required body, одно optional JPG/PNG ≤4 MB | mass-send governance и object-linked communication |
+| Support | modern \`/ra/zendesk/sso\`; legacy \`/hc/en-us/\` | две разные точки входа в поддержку; SSO boundary не проверялся из-за передачи identity внешнему provider | единый SupportEntryPoint |
+| Legacy account/session links | \`/users/logIntoAccount/{accountId}\`, \`/Users/logout\` | session transitions представлены обычными links | POST command, CSRF/session protection, audit |
+
+### 130.3. Home как операционный центр покупателя / Buyer Home
+
+Новые детали Home:
+
+- Connected Brands имеет поиск по подключённым брендам;
+- каждая connected-brand карточка предлагает минимум два разных перехода: View Orders и Shop;
+- View Orders передаёт brand filter в order registry;
+- Shop открывает коммерческий storefront/catalog context;
+- premium upsell встроен до operational feed;
+- профиль объясняется как входной сигнал для brand discovery;
+- Home одновременно показывает Brands Interested in You, Connection Requests и New to JOOR;
+- в наблюдавшемся DOM ссылка See All у блока Connection Requests указывала на \`/matches/pending\`, хотя отдельный inbound registry существует на \`/matches/requests\`;
+- ссылка See All у New to JOOR также указывала на \`/matches/pending\`, что семантически не соответствует new-brand feed.
+
+Это не просто naming-дефект: неправильный destination меняет направление relationship state и может привести покупателя к исходящим pending requests вместо входящих запросов либо discovery.
+
+**Syntha Buyer Home contract:**
+
+| Widget | Источник данных | Обязательный destination | Основное действие |
+|---|---|---|---|
+| Required actions | \`WorkItem\` | object-specific task view | выполнить / делегировать / отложить |
+| Inbound connection requests | \`ConnectionRequest.direction=BRAND_TO_RETAILER\` | inbound queue | Accept / Not Now |
+| Sent requests | \`ConnectionRequest.direction=RETAILER_TO_BRAND\` | sent queue | View / Withdraw |
+| Brand outreach | \`BrandOutreach\` | outreach inbox | View / Archive / Request connection |
+| Connected brands | \`RelationshipState=CONNECTED\` | relationship registry | Open storefront / Orders / Message |
+| New brands | \`DiscoveryCandidate\` | discovery directory with retained filters | View / Favorite / Connect |
+| Order alerts | \`OrderWorkItem\` | exact order/version | Review / Approve / Resolve |
+| Integration failures | \`JobRun/ReconciliationCase\` | job detail | Retry / Download errors / Resolve |
+| Subscription/usage | \`EntitlementUsage\` | plan and usage center | Manage plan / Resolve limit |
+
+Каждый Home deep link обязан включать tenant, role, source widget, filter state и canonical object ID. Сервер повторно проверяет доступ; Home count и destination query используют один backend contract, чтобы badge не расходился со списком.
+
+### 130.4. Несогласованность маршрутов и legacy navigation
+
+На legacy-экранах обнаружен второй navigation dialect:
+
+- Shop menu содержит Shop By Brand, Shop By Linesheet и Best Sellers;
+- Shop By Brand через \`/Matches/shop\` открывает Manage Connections на \`/matches/current\`;
+- пункты Orders, Connections и Messages на нескольких legacy-страницах могут ссылаться обратно на текущий route вместо целевого модуля;
+- рядом с retailer navigation показывается upsell о функции, доступной только JOOR Brands;
+- встречаются route variants с разным регистром: \`/Matches\`, \`/Collections\`, \`/Styles\`, \`/Orders\`, \`/Users\`;
+- legacy browser/help menu всё ещё содержит устаревшие browser references, включая Internet Explorer;
+- modern Help route и legacy Help route различаются;
+- page labels и destinations не образуют надёжную one-to-one mapping.
+
+**Syntha requirement:** один canonical route registry генерирует global navigation, breadcrumbs, deep links, permissions и analytics. Alias допускается только как server redirect с telemetry и сроком удаления. UI label никогда не ведёт в объект другого типа.
+
+Минимальный route contract:
+
+\`RouteDefinition { routeId, objectType, canonicalPath, aliases[], capability, requiredPermission, tenantScope, sourceContext, analyticsEvent, deprecatedAt }\`.
+
+CI обязана проверять:
+
+1. уникальность \`routeId\` и canonical path;
+2. отсутствие case-only duplicates;
+3. соответствие menu label и destination object type;
+4. запрет self-link для пункта, который обещает другой модуль;
+5. наличие 404/403/error boundary;
+6. отсутствие mutation в navigation URL;
+7. удаление deprecated aliases после установленного срока.
+
+### 130.5. Command safety: connection, session и destructive links
+
+В legacy DOM были видны action links с route patterns вида:
+
+- \`/Matches/match/{brandId}\`;
+- \`/Matches/delete_by_account/{brandId}/.../PENDING\`;
+- \`/Matches/delete_by_account/{brandId}/.../CONNECTED-BRAND\`;
+- \`/users/logIntoAccount/{accountId}\`;
+- \`/Users/logout\`.
+
+Delete/disconnect-like action отображается как одиночный символ \`×\` без достаточного accessible name. Аудит **не активировал** эти ссылки, поэтому фактический HTTP method и наличие server confirmation не утверждаются. Сам факт представления потенциальной mutation как обычного navigational anchor — риск accidental activation, prefetch/crawler execution, CSRF и неполного audit trail.
+
+**Syntha command standard:**
+
+- navigation всегда GET/read-only;
+- state change использует typed command через POST/PATCH/DELETE;
+- CSRF/session binding и tenant scope обязательны;
+- \`Idempotency-Key\` обязателен для Connect, Accept, Withdraw, Disconnect, account switch, order creation и paid subscription command;
+- destructive/externally visible action имеет explicit label, consequence preview и подтверждение;
+- Disconnect требует reason, effect preview, active-draft impact и сохраняет historical orders;
+- account switch создаёт \`AccountContextChanged\`, очищает tenant-scoped caches и повторно проверяет current route;
+- logout аннулирует session server-side и не исполняется prefetch;
+- каждая команда пишет actor, active account, target, before/after state, source surface, timestamp и correlation ID.
+
+### 130.6. Best Sellers From My Brands: скрытый модуль и незавершённая реализация
+
+Best Sellers доступен только через legacy Shop menu. Наблюдавшаяся страница:
+
+- title: Best Sellers From My Brands;
+- page-size actions View 15, View 30 и View All;
+- после загрузки shell остаётся в состоянии Loading;
+- после дополнительного ожидания не появились данные, error explanation, retry или empty state;
+- переход и подключение к странице были существенно медленнее других разделов.
+
+Состояние не позволяет доказать, какой рейтинг, период или metric должен был отображаться. Поэтому Syntha не копирует экран, а формализует продуктовую развилку:
+
+**Option A — remove:** скрыть entry point, пока service health и data contract не готовы.
+
+**Option B — implement as Buyer Insight:**
+
+\`BestSellerSignal { brandId, commercialProductVersionId, rankingScope, metricType, metricValue, currency, periodStart, periodEnd, rank, inventoryContext, accessGrantId, generatedAt, expiresAt, confidence, provenance }\`.
+
+Обязательные функции:
+
+- time range и сравнение с предыдущим периодом;
+- явная metric definition: units, wholesale value, order count либо sell-through;
+- ranking scope: один brand, category, territory или connected portfolio;
+- freshness timestamp и source/provenance;
+- фильтры brand/category/season/delivery/price;
+- переход в доступный catalog/product context;
+- Favorite / Add to Styleboard / Add to assortment, но не мгновенный order без quantity validation;
+- скрытие данных, которые brand не разрешил агрегировать;
+- no-data, insufficient-sample, stale-data, access-revoked, loading и error states;
+- retry с correlation ID;
+- usage analytics без раскрытия cross-tenant sales.
+
+### 130.7. Outreach и connection direction: обнаруженные state gaps
+
+\`/ra/submissions\` сохраняет tab в URL:
+
+- New: информативный empty state и CTA Find New Brands;
+- Viewed: объясняет, что просмотренный outreach появится здесь;
+- All: в наблюдавшемся пустом состоянии отображал только tabs без объяснения и CTA.
+
+Одновременно Home называет один блок Connection Requests, но See All ведёт на outbound pending route. New to JOOR тоже может вести в тот же pending route. Эти факты подтверждают, что discovery, outreach и двунаправленные connection requests не собраны в одну state machine.
+
+**Syntha canonical relationship state:**
+
+\`DISCOVERED → FAVORITED? → OUTREACH_RECEIVED? → REQUESTED_INBOUND | REQUESTED_OUTBOUND → CONNECTED → ACCESS_PENDING? → COMMERCIAL_ACCESS_ACTIVE → SUSPENDED | DISCONNECTED\`.
+
+Outreach остаётся отдельной сущностью и не является connection state. Favorite остаётся приватным save-state. \`CONNECTED\` не гарантирует price/catalog/order access без effective \`CommercialAccessGrant\`.
+
+Обязательные state counters:
+
+- New outreach;
+- Viewed outreach;
+- Inbound requests awaiting retailer;
+- Sent requests awaiting brand;
+- Connected but access pending;
+- Commercially active;
+- Suspended/revoked;
+- Action overdue.
+
+Empty-state contract общий: title, meaning, why empty, primary next action, retained filters, support link при error. \`All\` никогда не остаётся пустым без объяснения.
+
+### 130.8. Subscription и entitlement lifecycle
+
+В LITE-контексте subscriptions page показывает две purchasable Visual Assortment tiers и monthly/yearly Purchase actions. На наблюдавшейся поверхности не были видны:
+
+- current usage по users, doors, products и storage;
+- comparison matrix;
+- trial;
+- effective date и renewal date;
+- proration;
+- upgrade/downgrade impact;
+- cancellation and grace period;
+- invoices, taxes и billing contact;
+- overage behavior;
+- permission required to purchase;
+- pending/failed payment;
+- subscription history.
+
+Purchase не активировался, поэтому checkout и платёжный flow не исследованы.
+
+**Syntha entities:**
+
+- \`PlanDefinition\` — immutable marketed limits and feature set;
+- \`SubscriptionContract\` — tenant, plan version, billing cycle, dates and commercial terms;
+- \`EntitlementGrant\` — server-authoritative feature access by effective interval;
+- \`UsageMeter\` — dimension, used, reserved, limit, measuredAt;
+- \`SubscriptionChange\` — upgrade/downgrade/cancel request with proration preview;
+- \`BillingAccount\`, \`Invoice\`, \`PaymentAttempt\`;
+- \`EntitlementDecision\` — allow/deny with reason and remediation.
+
+**Syntha requirements:**
+
+1. marketing catalog и active subscription разделены;
+2. checkout показывает exact plan version, currency, tax, renewal, cancellation and effective date;
+3. Purchase доступен только billing-authorized role;
+4. server grants entitlement only after confirmed commercial state;
+5. usage near limit creates warning; exceeded limit has deterministic read/write behavior;
+6. downgrade validates current users/doors/products/storage and proposes remediation;
+7. cancellation не удаляет business data и определяет export/retention window;
+8. payment failure has grace and recovery states;
+9. all plan changes are idempotent and auditable;
+10. locked feature surface объясняет current plan, required entitlement и next allowed action.
+
+### 130.9. Compose Message и массовая коммуникация
+
+Compose открывается inline на Messages и содержит:
+
+- radio option Send to All My Connections;
+- radio option Select Connections;
+- recipient text control для выбранной аудитории;
+- Subject;
+- required Message body;
+- optional single image upload: JPG/PNG, maximum 4 MB;
+- Send.
+
+На наблюдавшейся форме не было явной привязки к order, linesheet, product, styleboard, connection request или task. Также не были видны draft, preview, scheduled send, audience count, permission explanation, template, unsubscribe/compliance context, delivery estimate или idempotency state.
+
+**P0 mass-send safeguards Syntha:**
+
+- отдельное permission \`communication.broadcast.send\`;
+- точный recipient preview и count перед подтверждением;
+- immutable \`RecipientSnapshot\` с причиной включения;
+- автоматическое исключение disconnected, blocked и legally suppressed recipients;
+- rate limit, duplicate detection и idempotency;
+- subject/body validation и safe attachment scan;
+- allowed MIME types и content rights;
+- test send / preview;
+- scheduled/cancel window для broadcast;
+- delivery state: queued, sent, delivered, bounced, failed, suppressed;
+- per-recipient audit without exposing recipients cross-tenant;
+- structured opt-out/commercial-communication policy;
+- failure report and retry only eligible recipients.
+
+**Communication model Syntha:**
+
+\`ConversationThread\` связывается с \`BusinessObjectLink[]\` и участниками. \`Message\` — содержимое; \`Notification\` — delivery projection; \`WorkItem\` — обязательное действие; \`BroadcastCampaign\` — массовая коммуникация. Эти сущности не смешиваются в одном unread count.
+
+Attachment baseline должен поддерживать не только image, но и governed document types, если бизнес-процесс это требует; лимиты, retention, malware scan, download authorization и version binding обязательны.
+
+### 130.10. Support и external SSO boundary
+
+Новая и legacy оболочки ведут в поддержку разными путями: modern route \`/ra/zendesk/sso\` и legacy \`/hc/en-us/\`. SSO route не открывался, потому что переход способен передать identity/context внешнему support provider.
+
+**Syntha SupportEntryPoint:**
+
+- один canonical help route;
+- local help first: object-aware documentation и troubleshooting;
+- явное объяснение перед external SSO;
+- минимально необходимый identity payload;
+- tenant-safe context: routeId, correlation ID, application version, error class — без business data по умолчанию;
+- consent для передачи дополнительных diagnostics;
+- SupportCase ID возвращается в Syntha;
+- links из error state передают correlation, но не credentials/PII;
+- доступность Help не зависит от работоспособности основного business API;
+- support provider outage имеет fallback contact and status page.
+
+### 130.11. Новые проблемы JOOR → backlog Syntha
+
+| Priority | Наблюдение | Доработка Syntha |
+|---|---|---|
+| P0 | Home Connection Requests ведёт в outbound pending route | typed deep links и automated route-contract tests |
+| P0 | New to JOOR See All ведёт в pending connections | разделить DiscoveryCandidate и ConnectionRequest |
+| P0 | потенциальные mutation представлены anchors с route IDs | command API, CSRF, idempotency, confirm, audit |
+| P0 | disconnect/delete action обозначен только \`×\` | explicit action label, accessible name, consequence preview |
+| P0 | account switch/logout выглядят как GET navigation | protected session commands и cache isolation |
+| P0 | mass send всем connections доступен из обычной compose form | broadcast permission, audience preview, recipient snapshot, rate limit |
+| P0 | Best Sellers остаётся Loading без recovery | remove entry or error boundary/retry/SLA |
+| P0 | inbound registry долго не показывает meaningful loading/error | skeleton, timeout, retry, correlation |
+| P1 | Shop By Brand открывает Manage Connections | canonical naming and destination |
+| P1 | legacy Orders/Connections/Messages могут быть self-links | единый generated navigation |
+| P1 | All outreach state blank | shared empty-state contract |
+| P1 | subscription page не показывает usage и lifecycle | subscription/usage/billing center |
+| P1 | communication не привязана к business objects | object-linked collaboration |
+| P1 | modern и legacy Help используют разные routes | one SupportEntryPoint |
+| P1 | brand-only upsell смешан с retailer navigation | capability-aware navigation, без role noise |
+| P2 | Best Sellers concept не объясняет metric/provenance | governed Buyer Insight |
+| P2 | Home feed не объясняет ranking и source | explainable recommendation and freshness |
+| P2 | устаревшие browser references | supported-browser policy from current telemetry |
+
+### 130.12. Каноническая карта связей / Canonical relationship map
+
+\`TenantAccount\`
+→ имеет \`Membership[]\`
+→ активирует \`AccountContext\`
+→ определяет \`RoleAssignment[]\` и \`PermissionDecision\`.
+
+\`RetailerPrivateProfile\`
+→ публикует versioned \`RetailerPublicProfileProjection\`
+→ участвует в \`DiscoveryEligibility\`
+→ порождает \`DiscoveryCandidate\` для бренда
+→ может привести к \`BrandOutreach\` или \`ConnectionRequest\`.
+
+\`ConnectionRequest\`
+→ имеет direction, initiator, recipient, message, timestamps and state
+→ при acceptance создаёт/обновляет \`RelationshipState\`
+→ запускает \`CommercialAccessEvaluation\`
+→ только effective \`CommercialAccessGrant\` открывает price, representative, linesheet, catalog and order capabilities.
+
+\`BrandStorefrontProjection\`
+→ ссылается на approved \`CommercialProductProjectionVersion[]\`
+→ группирует \`LinesheetVersion[]\`
+→ открывает \`CatalogSession\`
+→ создаёт \`CartDraft\`
+→ pin-ит brand, access grant, price type, currency, warehouse, door and delivery context
+→ создаёт \`OrderDraft\`
+→ после validation/approval становится \`WholesaleOrder\`.
+
+\`HomeWidgetProjection\`
+→ агрегирует только typed \`WorkItem\`, \`RelationshipState\`, \`BrandOutreach\`, \`OrderAlert\`, \`JobRun\`, \`EntitlementUsage\`
+→ каждый item deep-link ведёт к тому же object/version.
+
+\`ConversationThread\`
+→ содержит \`BusinessObjectLink[]\`
+→ создаёт \`Message[]\`
+→ доставляется через \`NotificationDelivery[]\`
+→ при required action создаёт отдельный \`WorkItem\`.
+
+\`SubscriptionContract\`
+→ выдаёт \`EntitlementGrant[]\`
+→ ограничивается \`UsageMeter[]\`
+→ определяет FeatureGate для Visual Assortment и других premium capabilities.
+
+\`IntegrationRun\`
+→ является \`JobRun\`
+→ ссылается на source object versions и destination IDs
+→ при discrepancy создаёт \`ReconciliationCase\`
+→ на Home появляется как typed required action.
+
+### 130.13. Command/event matrix
+
+| Command | Preconditions | Event | Side effects / recovery |
+|---|---|---|---|
+| \`RequestConnection\` | discoverable target, permission, no active duplicate | \`ConnectionRequestedOutbound\` | sent queue; Withdraw allowed |
+| \`AcceptConnection\` | active inbound request, recipient authority | \`ConnectionAccepted\` | relationship update; access evaluation |
+| \`DeferConnection\` | active inbound request | \`ConnectionDeferred\` | remains recoverable; optional reminder |
+| \`WithdrawConnectionRequest\` | actor owns pending outbound | \`ConnectionRequestWithdrawn\` | no new access; audit preserved |
+| \`DisconnectRelationship\` | connected state, authority, impact preview | \`RelationshipDisconnected\` | revoke future access; preserve history; resolve active drafts |
+| \`SwitchAccountContext\` | active membership, account enabled | \`AccountContextChanged\` | clear caches, re-evaluate route and permissions |
+| \`StartSubscriptionCheckout\` | billing permission, eligible plan/version | \`CheckoutStarted\` | no entitlement yet |
+| \`ActivateSubscription\` | confirmed commercial state | \`SubscriptionActivated\` | effective entitlement grants |
+| \`SendBroadcast\` | permission, confirmed recipient snapshot, valid content | \`BroadcastQueued\` | per-recipient delivery; cancel/retry policy |
+| \`CreateOrderDraft\` | effective access, pinned commercial context | \`OrderDraftCreated\` | durable autosave and idempotent resume |
+
+### 130.14. Дополнительные acceptance scenarios
+
+1. Home Inbound Requests count и destination возвращают одну и ту же query population.
+2. Home Sent Requests никогда не смешивается с inbound.
+3. New Brands See All ведёт в discovery с сохранённым ranking/filter context.
+4. Connected brand View Orders открывает registry с однозначным brand ID, не с locale-dependent name-only filter.
+5. Connected brand Shop открывает effective catalog grant либо объясняет access denial.
+6. Любой legacy alias делает один redirect в canonical route и пишет deprecation telemetry.
+7. Case-only duplicate routes блокируются CI.
+8. Menu item с label Orders не может иметь self-link на unrelated current page.
+9. GET/HEAD никогда не меняет connection, account, session, subscription или message state.
+10. Prefetch/crawler не способен выполнить command.
+11. Disconnect требует explicit label, reason и impact preview.
+12. Disconnect сохраняет historical orders и comments, но блокирует новый catalog access.
+13. Account switch очищает tenant-scoped cache и не показывает данные предыдущего аккаунта.
+14. Logout инвалидирует server session и не запускается link prefetch.
+15. Outreach New, Viewed и All имеют loading, empty, data, error и retry.
+16. Best Sellers при timeout показывает error, correlation ID и retry; бесконечный Loading запрещён.
+17. Best Seller metric показывает definition, period, scope, freshness и provenance.
+18. Best Seller signal исчезает при revoked data-sharing/access без утраты audit.
+19. Subscription page показывает current plan, usage, limits, renewal and billing authority.
+20. Upgrade preview показывает price, tax, proration и effective date до confirmation.
+21. Downgrade с excess usage предлагает remediation и не удаляет data.
+22. Payment failure создаёт grace-state и required action.
+23. Feature gate проверяется server-side, а не только скрытием UI.
+24. Compose to All показывает exact audience count и sampled preview.
+25. Broadcast не включает disconnected/blocked/suppressed recipients.
+26. Double-click Send не создаёт duplicate campaign.
+27. Attachment проходит MIME/size/malware validation до send.
+28. Message, notification, broadcast и required task имеют разные counts.
+29. Message from order сохраняет object link и visible order version.
+30. Support SSO показывает external-provider disclosure до перехода.
+31. Support payload не содержит PII/business content без явного consent.
+32. Help остаётся доступным при outage основного API.
+33. Blank registry > defined timeout заменяется recovery state.
+34. Capability-inapplicable brand-only upsell не появляется в retailer navigation.
+35. Route analytics содержит source widget и target object type без private object label.
+
+### 130.15. Implementation epics и порядок работ
+
+| Epic | Priority | Result |
+|---|---|---|
+| E1 Canonical Routes & Navigation | P0 | единый route registry, typed deep links, alias migration, CI checks |
+| E2 Relationship State Machine | P0 | outreach/inbound/outbound/connected/access separated |
+| E3 Secure Command Gateway | P0 | POST commands, CSRF, idempotency, confirmation, audit |
+| E4 Buyer Home & Work Queue | P0 | object-linked actions, trustworthy counts, no misrouting |
+| E5 Communication Governance | P0 | threads, object links, broadcast safety, delivery audit |
+| E6 Loading/Error/Recovery Standard | P0 | timeout, retry, correlation, no infinite spinner |
+| E7 Subscription & Entitlements | P1 | plan, contract, usage, billing, changes, feature gates |
+| E8 Legacy Retirement | P1 | remove self-links, old routes, obsolete browser/help surfaces |
+| E9 Buyer Insights | P2 | governed BestSellerSignal and explainable recommendations |
+| E10 Support Boundary | P1 | one help entrypoint, safe SSO, context-aware cases |
+
+Порядок: E1 + E2 + E3 формируют platform spine; затем E4 + E5 + E6; после этого E7 и E8; E9 не начинается до готовности provenance/access controls.
+
+### 130.16. Definition of Done для этого gap-аудита
+
+- новые факты не дублируют разделы 128–129;
+- route и action patterns обезличены;
+- потенциально destructive actions не активировались;
+- Purchase, Send, Connect, Not Now, Withdraw, Disconnect, account switch, Help SSO и logout не выполнялись;
+- каждое наблюдение отделено от продуктового решения Syntha;
+- для каждого нового gap назначены entity/contract, priority и acceptance evidence;
+- никакие account names, brand names, message texts, e-mail, phone, address или реальные IDs не сохранены.
+
+### 130.17. Source note
+
+Источник — прямое read-only наблюдение авторизованной retailer web-версии JOOR 18 августа 2026 года. Legacy-route latency и Loading-состояния отражают конкретный сеанс и должны быть повторно проверены перед количественным SLA-сравнением. Отсутствие элемента означает «не виден на исследованной поверхности/в данном entitlement context», а не доказательство его полного отсутствия во всех тарифах JOOR.
 

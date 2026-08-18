@@ -15,9 +15,10 @@ test('managed wholesale workflow reaches DealSpace without generic stage bypasse
   let tick = 0;
   const store = createMemoryWholesaleStore();
   const catalogStore = createMemoryCatalogStore();
+  const epoch = Date.parse('2026-08-18T12:00:00.000Z');
   const options = {
     store,
-    clock: () => `2026-08-18T12:00:${String(tick++).padStart(2, '0')}.000Z`,
+    clock: () => new Date(epoch + (tick++ * 1_000)).toISOString(),
     nextId: (prefix) => `${prefix}_${++id}`,
   };
   const platform = createWholesalePlatform(options);

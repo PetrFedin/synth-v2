@@ -213,6 +213,12 @@ export function createWholesalePlatform({
         async (tx) => {
           const current = requireEntity(await tx.getCycle(cycleId), 'CYCLE_NOT_FOUND', { cycleId });
           await authorizeTrade(tx, actorId, current, CAPABILITIES.COMMERCIAL_CYCLE_ADVANCE);
+          invariant(
+            current.stage === 'campaign' || current.stage === 'collection',
+            'CYCLE_MANAGED_TRANSITION_REQUIRED',
+            'This commercial stage must advance through its dedicated workflow',
+            { stage: current.stage, targetStage },
+          );
           return current;
         },
         async (tx, current) => {

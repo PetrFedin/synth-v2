@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createOrganisation } from '../src/modules/organisations/public.mjs';
 import { createMembership } from '../src/modules/access-control/public.mjs';
+import { advanceCommercialCycle } from '../src/modules/commercial-cycle/public.mjs';
 import { createWholesalePlatform } from '../src/application/platform.mjs';
 import { createPartnerAccessService } from '../src/application/partner-access-service.mjs';
 import { createMemoryWholesaleStore } from '../src/infrastructure/memory-store.mjs';
@@ -49,13 +50,40 @@ async function fixture(existingStore) {
 }
 
 async function moveToOrder(context, actorId = 'buyer-1') {
-  const { platform, campaignId, collectionId } = context;
+  const { platform, campaignId, collectionId, store } = context;
   let cycle = await platform.startCycle('cmd-cycle', actorId, { brandId: 'brand-1', shopId: 'shop-1', campaignId, collectionId });
-  for (const stage of ['collection', 'showroom', 'selection', 'order-builder', 'order']) {
-    cycle = await platform.advanceCycle(`cmd-cycle-stage-${stage}`, actorId, cycle.id, stage);
-  }
+  cycle = await platform.advanceCycle('cmd-cycle-stage-collection', actorId, cycle.id, 'collection');
+  cycle = await platform.advanceCycle('cmd-cycle-stage-showroom', actorId, cycle.id, 'showroom');
+
+  await store.transaction(async (tx) => {
+    let current = await tx.getCycle(cycle.id);
+    for (const stage of ['selection', 'order-builder', 'order']) {
+      const updated = advanceCommercialCycle(current, stage, '2026-07-30T20:10:00.000Z');
+      await tx.saveCycle(updated, current.version);
+      current = updated;
+    }
+    cycle = current;
+  });
   return cycle;
 }
+
+test('generic cycle advancement stops before workflow-managed stages', async () => {
+  const context = await fixture();
+  let cycle = await context.platform.startCycle('cmd-managed-cycle', 'buyer-1', {
+    brandId: 'brand-1', shopId: 'shop-1', campaignId: context.campaignId, collectionId: context.collectionId,
+  });
+  cycle = await context.platform.advanceCycle('cmd-managed-collection', 'buyer-1', cycle.id, 'collection');
+  cycle = await context.platform.advanceCycle('cmd-managed-showroom', 'buyer-1', cycle.id, 'showroom');
+
+  await assert.rejects(
+    context.platform.advanceCycle('cmd-managed-selection-bypass', 'buyer-1', cycle.id, 'selection'),
+    (error) => error.code === 'CYCLE_MANAGED_TRANSITION_REQUIRED',
+  );
+
+  const snapshot = context.platform.snapshot();
+  assert.equal(snapshot.cycles.find((item) => item.id === cycle.id).stage, 'showroom');
+  assert.equal(snapshot.commands.some((item) => item.id === 'cmd-managed-selection-bypass'), false);
+});
 
 test('confirmation atomically opens DealSpace and shared milestones', async () => {
   const context = await fixture();

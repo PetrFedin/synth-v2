@@ -1,7 +1,7 @@
 # Платформа Syntha / Syntha Fashion Platform — Product & Supply + Wholesale Commerce
 
 Статус / Status: единственная актуальная двуязычная продуктовая спецификация / the only current bilingual product source of truth for Syntha.  
-Версия / Version: 4.3, 6 августа 2026 года.  
+Версия / Version: 4.4, 18 августа 2026 года.  
 Основной рынок / Primary market: российские fashion-бренды, работающие с российскими и зарубежными фабриками, поставщиками материалов, готовых изделий и магазинами / Russian fashion brands working with domestic and international factories, material suppliers, finished-goods suppliers and retailers.  
 Назначение / Purpose: связать Product & Supply и Wholesale Commerce через единое версионное ядро товара, сохранив отдельные процессы, права, документы, статусы и системы учёта / connect Product & Supply and Wholesale Commerce through one versioned product core while preserving separate processes, permissions, documents, states and systems of record.
 
@@ -8412,3 +8412,751 @@ Benchmark capability is not copied as a disconnected feature. It must map to:
 | Measured commercial result | connected data | analytics | source versions and coverage |
 
 The platform is operationally complete when every result above can be reached through explicit, testable and recoverable transitions in both Russian and English user journeys.
+
+
+---
+
+## 128. Дельта-аудит авторизованного кабинета JOOR Retailer / Authenticated JOOR Retailer Cabinet Delta Audit
+
+Дата наблюдения / Observation date: 17–18 августа 2026 года.  
+Среда / Environment: авторизованный retailer-аккаунт на плане LITE; идентифицирующие данные, контакты, адреса, история сообщений и коммерческие значения аккаунта намеренно исключены из этой спецификации / authenticated retailer account on the LITE plan; identifying data, contacts, addresses, message history and account-specific commercial values are intentionally excluded from this specification.
+
+### 128.1 Evidence boundary и правило недублирования
+
+Этот раздел содержит только подтверждённые детали живого интерфейса JOOR, отсутствовавшие в предыдущих разделах документа. Общие сущности RetailerProfile, Connection, CommercialAccessGrant, Linesheet, RetailerAssortment и WholesaleOrder здесь не переопределяются.
+
+This section records only live JOOR UI and behavior details that were not already present in the specification. It does not redefine the canonical Syntha entities documented earlier.
+
+Evidence labels:
+
+- **OBSERVED** — экран, поле, состояние или ограничение непосредственно показано в авторизованном интерфейсе;
+- **INFERRED** — вывод следует из нескольких наблюдаемых экранов, но серверный контракт не проверялся;
+- **NOT VALIDATED** — операция намеренно не завершалась из-за внешнего эффекта: подключение к бренду, создание заказа, сохранение профиля, установка интеграции, оплата или покупка подписки;
+- после выбора Reset password первый клик немедленно вызвал browser alert без предварительного экрана подтверждения; точный backend-эффект не проверялся;
+- никакие connection requests не принимались и не отклонялись, заказы не создавались, количества не вводились, настройки не сохранялись, интеграции не устанавливались и платежи не выполнялись.
+
+### 128.2 Фактическая информационная архитектура / Observed Information Architecture
+
+В живом retailer-интерфейсе одновременно существуют новая React-навигация и legacy-экраны.
+
+| Область | Наблюдаемые экраны и функции |
+|---|---|
+| Home | connected brands, быстрый View Orders, Shop, Brands Interested in You, Connection Requests, New to JOOR, профиль как источник discovery-сигналов |
+| Shop | Start an Order, Linesheets, Looks, Styleboards |
+| Orders & Visual Assortment | Manage Orders, Visual Assortment |
+| Explore Brands | current connections, brand outreach, inbound requests, outbound pending requests, Favorites, Find New Brands, Passport |
+| Account menu | current account, primary-account state, other accounts, Account Settings, Integration Settings, Premium Features, Manage Profile, Data Activity Center, language, Help Center, Log Out |
+| Messages | отдельный unread counter и inbox-подобный центр коммуникаций |
+
+Наблюдаемые маршруты / observed routes:
+
+- /ra/home — retailer home;
+- /accounts/settings — user and retailer account settings;
+- /ra/profile/{retailerId} — public retailer profile and edit mode;
+- /ra/shopify/retailer-product-sync/config — Shopify integration settings;
+- /ra/data-activity-center — background data jobs;
+- /ra/subscriptions — premium feature entitlements;
+- /matches/current — connected brands;
+- /matches/requests — inbound brand connection requests;
+- /matches/pending — pending outbound connection state;
+- /ra/submissions — Brands Interested In You outreach;
+- /ra/find_new_brands — discovery directory;
+- /r/passport/favorites — saved brands;
+- /r/passport — event and marketplace discovery;
+- /collections/shop — legacy linesheet registry;
+- /ra/products — modern catalog and quantity entry;
+- /orders/cart — active order cart;
+- /ra/showroom/collections — Looks;
+- /ra/showroom/styleboards — Styleboards;
+- /ra/visual-assortment — premium Visual Assortment gate.
+
+**Syntha decision:** one canonical retailer navigation must expose the same objects through one design system. Legacy registry pages and modern catalog/order pages must not coexist as separate interaction dialects.
+
+### 128.3 Пользовательские настройки / Personal User Settings
+
+Account Settings separates personal settings from retailer-organization settings.
+
+#### User profile
+
+OBSERVED fields and controls:
+
+- login email displayed separately from organization contact email;
+- password reset action;
+- full name;
+- job title;
+- phone;
+- profile photo upload;
+- opt-in checkbox to display the user on the company profile;
+- company-profile deep link.
+
+**Syntha requirement:** User, OrganizationMembership and public RetailerContactProjection remain separate. A user controls whether personal information is published; organization administrators cannot silently expose private user fields.
+
+#### Interface and email languages
+
+JOOR stores two independent language preferences:
+
+- default interface language;
+- email language.
+
+Account Settings offered English, Spanish, French, German, Italian, Japanese, Simplified Chinese, Russian and Korean. The live page language switcher exposed English, Arabic, German, Spanish, French, Italian, Japanese, Brazilian Portuguese, Russian and Simplified Chinese.
+
+**Observed inconsistency:** Korean appeared in settings but not in the live switcher; Arabic and Brazilian Portuguese appeared in the switcher but not in the settings form.
+
+**Syntha requirement:** one governed LanguageCapability registry must drive interface availability, email templates, translation status and fallback behavior. A language must not be selectable for a channel that cannot render it.
+
+#### Email preferences
+
+Independent Yes/No preferences were observed for:
+
+- forwarding JOOR inbox messages to email;
+- connection-request emails;
+- weekly updates from connections;
+- industry updates and news;
+- orders assigned to the user on the web;
+- orders assigned to the user on the iPad.
+
+**Syntha requirement:** notification preferences are channel- and event-specific, organization-policy-aware and auditable. Mandatory security or legal notifications cannot be disabled by ordinary marketing preferences.
+
+#### Connection-request template
+
+Observed controls:
+
+- Use default connect request message checkbox;
+- editable default message;
+- Save Changes.
+
+**Syntha requirement:** store a versioned user/organization message template with RU/EN variants. Applying the template to a request must create a snapshot; later edits must not rewrite already sent requests.
+
+#### Date format
+
+Observed values:
+
+- mm/dd/yyyy;
+- dd/mm/yyyy;
+- yyyy/mm/dd.
+
+**Syntha requirement:** date display is a user preference; persisted deadlines remain canonical timestamps or dates and never change semantics when the display format changes.
+
+#### Landing page
+
+Observed choices:
+
+- Home;
+- My Connections;
+- Orders;
+- Profile.
+
+**Syntha requirement:** configurable landing destinations must pass capability checks. A user cannot land on a page that the current account context or plan does not permit.
+
+#### Retail-price rounding
+
+Observed values:
+
+- none;
+- nearest 1.00;
+- nearest 5.00.
+
+**Syntha requirement:** rounding is an explicit presentation/calculation policy, scoped by currency and price-list context. It cannot silently overwrite source retail price or wholesale price. Preview must show original, rounded and effective values.
+
+#### Password reset safety
+
+OBSERVED: the first Reset password click produced an immediate browser alert instead of an explanatory form or confirmation step.
+
+**Syntha improvement:** password reset must use an explicit, rate-limited flow that states the destination channel, never reveals whether an unrelated account exists, records security audit evidence and requires confirmation before sending when the user is already authenticated.
+
+### 128.4 Retailer account settings и публичный профиль / Retailer Account Settings and Public Profile
+
+#### Retailer account information
+
+Observed editable fields:
+
+- profile name;
+- organization primary contact email used for connection requests and messages;
+- POS system;
+- POS version;
+- buyer name shown on purchase orders;
+- connection permission: whether any brand or retailer may connect;
+- privacy: Show in Search or Hide from Search.
+
+**Syntha requirement:** separate discoverability, inbound-request policy and commercial access. Hiding a profile from search must not delete existing connections or grants. Changing the buyer name must create a new display/contact version and must not rewrite historical order snapshots.
+
+#### Public retailer profile
+
+Observed profile-edit dimensions:
+
+- logo image;
+- Tax ID verification with country and Tax ID;
+- business description;
+- website;
+- Instagram, X and Facebook;
+- store photos, with up to 30 files selected at once and a 10 MB per-image limit shown by JOOR;
+- people section populated from user settings and per-user publication opt-in;
+- primary location and additional locations;
+- location name and type;
+- year established;
+- wholesale price minimum and maximum;
+- country, address lines, city, territory, postal code and phone;
+- category selection;
+- brands carried;
+- gender and age demographics;
+- up to three style descriptors;
+- up to three shopping-use cases;
+- add another location;
+- delete non-primary locations.
+
+Observed retailer descriptors include Sophisticated, Edgy, Casual, Feminine, Downtown, Active, Classic, Vintage and Bohemian. Shopping-use cases include Professional Looks, Day to Night, Cocktail and Events, Casual Sportswear, Resort/Beach/Swimwear and Gifts.
+
+The public view exposes verification state, people, primary location and expandable other locations. JOOR explicitly explains that profile quality affects whether brands show interest.
+
+**Syntha requirements:**
+
+- create a versioned RetailerPublicProfileProjection separate from private legal/account data;
+- implement field-level publication state and completeness scoring;
+- keep Tax ID evidence protected; expose only verification result and permitted country/legal-entity signals;
+- validate images, file size, MIME type, moderation status and publication rights;
+- model stores, warehouses, e-commerce destinations and billing addresses as typed locations rather than duplicating free-text blocks;
+- use profile categories and price positioning as explainable discovery features, not as opaque permanent labels;
+- preserve historical profile snapshots referenced by connection decisions.
+
+### 128.5 Мультиаккаунтность / Multi-Account Context
+
+JOOR supports one user associated with multiple retailer accounts.
+
+OBSERVED behavior:
+
+- current account card shows account identity, connected-brand summary and creation provenance/date;
+- current account can be marked as the primary account;
+- Other Accounts section can be expanded;
+- accounts can be searched by connected brand;
+- selecting another account changes the active retailer context;
+- account cards may show the creating brand or account creation date;
+- some account-brand relationships may be read-only or archived;
+- Manage Account Visibility opens a separate visibility settings screen;
+- checked accounts are hidden from discovery by new brands;
+- unchecked accounts remain visible;
+- JOOR warns that visibility changes may take up to 30 minutes;
+- All Accounts control can apply visibility at scale.
+
+**Syntha requirements:**
+
+- every request resolves an explicit active OrganizationMembership and tenant context;
+- UI must display the active account persistently;
+- primary account is a user preference, not a permission grant;
+- account switch invalidates tenant-scoped caches, drafts, search results and file handles;
+- cross-account search can use safe metadata only and must never leak private orders, prices or contacts;
+- visibility changes use a durable command, propagation status and completion timestamp;
+- pending visibility propagation must be shown; Syntha must not claim immediate completion;
+- archived/read-only relationships are explicit capabilities, not text decorations;
+- switching context while an unsaved order/profile form exists requires a clear save/discard decision.
+
+### 128.6 Discovery, outreach, favorites and connection direction
+
+JOOR exposes several distinct relationship surfaces that must not be collapsed into one ambiguous Pending state.
+
+#### Brands Interested In You
+
+Observed:
+
+- tabs New, Viewed and All;
+- brands can send personalized visual outreach after discovering the retailer profile;
+- outreach empty state links to Find New Brands.
+
+**Syntha requirement:** model BrandOutreach separately from ConnectionRequest. Outreach can be viewed, archived or converted into a connection action without becoming commercial access by itself.
+
+#### Inbound requests
+
+/matches/requests shows:
+
+- brand profile link;
+- request date;
+- message preview and full-message link;
+- Connect;
+- Not Now.
+
+#### Outbound pending
+
+/matches/pending represents a separate pending state initiated from the retailer side and exposes cancellation/removal.
+
+#### Connected brands
+
+/matches/current supports:
+
+- search by brand name or ID;
+- wholesale price range and category filters;
+- connected status;
+- brand profile;
+- direct message;
+- disconnect action.
+
+#### Storefront access states
+
+Three observable storefront states:
+
+| State | Primary action | Access behavior |
+|---|---|---|
+| Connected | Shop | catalog and order workflow available |
+| Inbound brand request | Accept | linesheets, orders and representative information remain hidden until retailer acceptance |
+| Not connected | Connect | retailer requests to do business; linesheets, orders and representative information remain hidden until brand acceptance |
+
+Unconnected storefronts may show teaser product names/images while stating that products are available only to selected retailers.
+
+**Syntha requirements:**
+
+- represent request direction explicitly: BRAND_TO_RETAILER and RETAILER_TO_BRAND;
+- use separate statuses for outreach, inbound request, outbound request, connection and commercial access;
+- Connect, Accept, Not Now, Withdraw and Disconnect require different permissions, reasons and events;
+- connection alone does not expose catalog, price, representative or ordering data until CommercialAccessGrant is effective;
+- each storefront must explain the current access state and next responsible party;
+- all connection mutations require confirmation where destructive or externally visible.
+
+#### Find New Brands
+
+Observed directory functions:
+
+- default sort by Newest Linesheets;
+- brand-name search;
+- wholesale price range with currency, minimum and maximum;
+- JOORPay availability filter;
+- category search and category checkboxes;
+- prompt to configure retailer-profile categories for more personalized results;
+- brand cards with image, name and categories;
+- brand quick-view modal with Connect, Favorite, Message, View Full Profile, profile summary and additional images;
+- Favorite is a separate non-connection action.
+
+**Syntha requirements:**
+
+- discovery ranking inputs must be explainable and must not override access/privacy rules;
+- filters use normalized category, currency and price-range values;
+- PaymentCapability is a filterable commercial capability, not a generic marketing badge;
+- Favorite must be private to the authorized user/account unless explicitly shared;
+- quick view and full profile resolve the same profile version.
+
+#### Favorites
+
+/r/passport/favorites displayed a Favorites title but, when empty, provided no useful empty-state explanation or discovery action.
+
+**Syntha improvement:** show a clear empty state, why favorites matter, and a link back to discovery; distinguish personal favorites from shared buyer-team lists.
+
+#### Passport
+
+JOOR Passport acts as a discovery and event layer:
+
+- featured events;
+- curated marketplaces;
+- retail-show browsing;
+- retailer registration to attend;
+- brand registration to exhibit;
+- partner presentation.
+
+**Syntha priority:** event marketplace registration is P2 unless it directly strengthens the canonical connection → catalog → order spine. It must not precede core wholesale execution.
+
+### 128.7 Storefront, legacy linesheets and modern catalog
+
+#### Storefront
+
+Observed connected storefront content:
+
+- logo;
+- page title/navigation;
+- Shop action;
+- year established;
+- categories;
+- wholesale and retail price ranges;
+- website and social links;
+- brand description;
+- editorial sections;
+- product, linesheet and document blocks.
+
+OBSERVED quality defect: some published storefronts exposed authoring placeholders such as Untitled Page, Overlay Text, Section Title, Linesheet Title, Document Title and Click to edit to the retailer.
+
+**Syntha requirement:** storefront publication is fail-closed. Placeholder, editor-only or incomplete blocks cannot enter the buyer projection. Preview, validation and publication must use the same resolved component tree.
+
+#### Legacy linesheet registry
+
+Observed functions not previously recorded at UI level:
+
+- brand selector;
+- delivery-date filters: all available, immediates or date range;
+- category filters;
+- search and clear filters;
+- linesheet switching within a brand;
+- delivery window and cut-off;
+- print;
+- Start Excel Order;
+- pagination and view-count controls;
+- grouping by Linesheet, Fabrication, Category, Division, Silhouette or Linesheet Group;
+- product cards with image count, style code/name, colors, wholesale and suggested retail price.
+
+#### Modern catalog
+
+The Shop action from a connected storefront opened a different modern catalog at /ra/products.
+
+Observed order context:
+
+- price type/currency;
+- order warehouse;
+- Styles Selected counter;
+- Orders Created counter;
+- View Order cart;
+- group by None, Linesheet Group, Silhouette or Badge;
+- sort by None, Price Low to High or Price High to Low;
+- filters for badges, categories, division, fabrication, inventory availability, linesheet, linesheet delivery window, price types, season, silhouette, style tags and wholesale price;
+- applied-filter count;
+- text search.
+
+Observed product-card data:
+
+- linesheet/group name and number of styles;
+- shipping delivery window, including Immediate;
+- image;
+- style name and code;
+- color count and color names/codes;
+- wholesale and suggested retail values;
+- availability source by warehouse;
+- Made to Order signal;
+- fabrication;
+- Preview;
+- View and Quantify.
+
+Preview opens an image drawer with style identity. View and Quantify opens a detailed quantity workspace with:
+
+- delivery window;
+- wholesale and suggested retail context;
+- color swatches;
+- custom size scale;
+- warehouse context;
+- Bulk and Sized modes;
+- color selection checkboxes;
+- size-by-color quantity inputs;
+- per-color quantity and value;
+- grand totals;
+- Back to Catalog;
+- Add to Order disabled until valid quantities exist.
+
+The empty cart showed a warning that changes must be saved but did not provide a strong empty-state explanation.
+
+**Syntha requirements and improvements:**
+
+- consolidate legacy linesheet browsing and modern catalog quantity entry into one buyer journey;
+- retain stable price-type, currency, warehouse and access context in the URL/session model;
+- quantity matrix supports keyboard navigation, paste, validation and accessible labels;
+- inventory source and Made to Order state remain distinct;
+- Add to Order becomes enabled only after server-compatible quantity validation;
+- cart drafts autosave durably or provide explicit dirty-state navigation protection;
+- empty cart links to the exact catalog context that created it;
+- product preview and quantify views resolve the same CommercialProductProjectionVersion.
+
+### 128.8 Order registry, order creation and order truth view
+
+#### Manage Orders registry
+
+Observed UI states and filters:
+
+- Draft;
+- Notes;
+- Pending;
+- Approved;
+- Shipped;
+- Cancelled;
+- quantities With or Without;
+- free-text search;
+- buyer filter;
+- date filter;
+- selection and bulk Actions;
+- Start an Order;
+- Import Orders;
+- Download Order Confirmation;
+- Export Data;
+- pagination and page-size control.
+
+Observed columns:
+
+- Brand;
+- PO number;
+- Status;
+- Units;
+- Total;
+- Linesheet;
+- Complete Ship;
+- Buyer;
+- Modified.
+
+The live account used a Note Order status in addition to conventional lifecycle states.
+
+**Syntha requirement:** Note/Notes must be defined as a non-binding commercial state or migrated to a typed Draft/OrderIntent model. It must not remain an unexplained string beside legally meaningful order states.
+
+#### Start an Order
+
+Observed staged form:
+
+1. search for a connected brand;
+2. after brand selection, Start an Order and More options become enabled;
+3. More options expose linesheet selection, price type/currency and door selection;
+4. the user may return to fewer options;
+5. order creation was not completed during this audit.
+
+**Syntha requirement:** opening or searching the modal must not create a draft. The first durable draft mutation must be explicit, idempotent and return the pinned brand/access/price/door context.
+
+#### Order truth view
+
+Observed functions:
+
+- Overview and Pay;
+- last-updated timestamp;
+- Share Order;
+- Visual Assortment link;
+- Comments;
+- Download;
+- order number, brand, linesheet, delivery window and price type;
+- order status and Submit for Approval;
+- shipping and billing blocks;
+- restriction message when retailer cannot edit address data;
+- Add Products and Edit;
+- products summarized by image, style, color, size, quantity, wholesale and retail price;
+- contacts with role, including buyer and sales representative;
+- financial summary with retail value, subtotal wholesale, product discounts, order discount, fees and grand total;
+- order details including created date, season, year and delivery window.
+
+The Pay action exists in the order UI, while Find New Brands separately supports a JOORPay filter.
+
+**Syntha requirement:** showing Pay requires active PaymentCapability, payable balance, supported currency/market and user authority. The button must never be a dead or marketing-only action.
+
+#### Shipping and billing control
+
+JOOR may prevent the retailer from editing address information and instruct the retailer to contact the brand.
+
+**Syntha improvement:** show source ownership, reason, effective address version and a structured change-request workflow instead of a dead-end restriction message.
+
+### 128.9 Looks, Styleboards, Visual Assortment and messages
+
+#### Looks
+
+Observed registry:
+
+- filters by collection name, brand name, creator, created date and last modified;
+- Current and Archived tabs/counters;
+- brand-shared collection name, creator, brand, date shared, created date and modified date.
+
+One Look detail remained in an indefinite loading state during the audit.
+
+**Syntha requirement:** failed detail loading must expose a recoverable error, correlation ID and retry; registry access does not guarantee detail authorization and the error must distinguish authorization from transport failure.
+
+#### Styleboards
+
+Observed registry and creation:
+
+- Current and Archived;
+- filters by styleboard name, brand name, creator, created date and last modified;
+- Create New;
+- a new styleboard must first be associated with a brand;
+- empty board shows product count;
+- share;
+- comments;
+- Add to Order disabled until products exist;
+- brand search and Assign;
+- Cancel.
+
+**Syntha requirements:**
+
+- Styleboard is brand-scoped unless a separately authorized cross-brand assortment mode exists;
+- brand assignment pins access and price context;
+- comments and share visibility use explicit participants;
+- archive is reversible and distinct from delete;
+- conversion to order preserves source board/version and selected delivery context.
+
+#### Visual Assortment entitlement
+
+On LITE, Visual Assortment was a paywall page rather than an active workspace. The page states that products ordered outside JOOR can be included.
+
+Observed time-sensitive plans:
+
+| Plan | Monthly | Yearly | Included limits shown |
+|---|---:|---:|---|
+| Standard | $159 USD | $1,599 USD | 2 users, 1 door, 1,000 products, 2 years of storage |
+| Premium | $299 USD | $3,199 USD | 5 users, 5 doors, 3,000 products, 3 years of storage |
+
+These prices are benchmark evidence as of the observation date, not Syntha pricing requirements.
+
+**Syntha requirement:** entitlements are server-authoritative by organization, plan and effective period. Locked pages explain value and limits but must not expose partially functional controls.
+
+#### Messages
+
+Observed inbox functions:
+
+- Inbox;
+- Invitation;
+- Sent;
+- Trash;
+- search;
+- Compose Mail;
+- bulk Delete;
+- Mark as Read;
+- Mark as Unread;
+- sortable From, Message and Date columns;
+- pagination.
+
+**Syntha improvement:** preserve a message center where required, but link communication to canonical business objects and required actions. High-volume broadcast messages must be separable from approvals, order changes and deadlines.
+
+### 128.10 Shopify integration, Data Activity Center and background work
+
+#### Shopify Retailer Product Sync
+
+When not connected:
+
+- Install on Shopify is the primary action;
+- Automatic Sync is visible but disabled;
+- field preferences are visible but disabled;
+- Expand All is disabled;
+- no sync has run.
+
+Observed automation description: approved orders from connected accounts can sync automatically, with per-account customization after expansion.
+
+Observed JOOR → Shopify field mapping:
+
+| JOOR field | Shopify field |
+|---|---|
+| Style Name | Title |
+| Brand Name + Style Name | Title |
+| Description | Description |
+| Photos | Media |
+| Category | Category |
+| Linesheet | Collections |
+| Silhouette | Type |
+| Brand Name | Vendor |
+| Suggested Retail Price | Price |
+| SKU Prices | Variant Price |
+| SKU Code | Variant SKU |
+| UPC Code | Variant Barcode |
+
+**Syntha requirements:**
+
+- integration installation, authorization and mapping activation are separate states;
+- mapping conflicts such as two possible Title sources require an explicit precedence rule and preview;
+- approved-order auto-sync is account-scoped and must preserve the exact order/product/price versions;
+- per-account overrides are versioned;
+- sync mutations are idempotent;
+- every run records source version, destination ID, status, counts, errors and reconciliation result;
+- disabling a field affects future runs only unless a controlled resync is requested;
+- sensitive credentials never appear in job output.
+
+#### Data Activity Center
+
+Observed job registry columns:
+
+- Job Ref #;
+- Created By;
+- Type;
+- Status;
+- Actions;
+- Start Date;
+- End Date;
+- Additional Info;
+- Refresh.
+
+The audited account displayed no rows.
+
+**Syntha requirements:**
+
+- all asynchronous import, export, sync and bulk jobs use one JobRun contract;
+- statuses include queued, running, succeeded, partially succeeded, failed and cancelled;
+- Actions are capability-based: view details, download result/error file, retry safe failures or cancel eligible jobs;
+- retry reuses the logical command/idempotency identity where required;
+- Additional Info is structured, localized and safe for the current tenant;
+- jobs expose progress and terminal timestamps;
+- a no-rows state explains which operations create jobs.
+
+### 128.11 Наблюдаемые UX и reliability gaps / Observed Gaps
+
+The following JOOR behaviors are benchmark lessons, not features to copy:
+
+1. modern and legacy design systems coexist across catalog, linesheets, connections, messages and orders;
+2. storefront authoring placeholders can leak into the retailer-visible page;
+3. inbound requests, outbound pending, outreach and home Connection Requests use overlapping or inconsistent labels;
+4. language choices differ between account settings and the live switcher;
+5. Favorites and empty cart have weak empty states;
+6. a Look detail remained indefinitely in Loading state;
+7. repeated Account Settings reloads produced a transient 500 Internal Server Error;
+8. Reset password produced an immediate alert without a clear pre-action confirmation;
+9. some restrictions tell the retailer to contact the brand without a structured change request;
+10. the platform exposes many raw messages without separating broadcasts from required actions;
+11. current screens may show editor-oriented text such as Click to edit to a buyer;
+12. premium marketing is prominent inside a plan-gated workflow.
+
+**Syntha improvement standard:**
+
+- one design system and one object vocabulary;
+- fail-closed publication;
+- explicit directional states;
+- resilient error states with retry and correlation;
+- no destructive or externally visible action on a first ambiguous click;
+- actionable empty states;
+- object-linked collaboration and work queues;
+- server-authoritative capability and entitlement checks.
+
+### 128.12 Дополнительные приоритеты Syntha / Additional Syntha Priorities
+
+#### P0 — required for the canonical wholesale spine
+
+- user settings separated from retailer organization settings;
+- active account/tenant context and safe account switching;
+- public-profile projection with discoverability and inbound-request policies;
+- directional connection requests and distinct outreach;
+- commercial-access gating before prices, representatives, linesheets or orders;
+- unified catalog/linesheet/quantity matrix;
+- explicit price type, currency, warehouse and door context;
+- durable order draft with idempotent creation;
+- order registry, truth view, approval and export;
+- background JobRun observability;
+- safe password-reset and visibility-change flows;
+- governed interface/email language capability.
+
+#### P1 — commercial differentiation
+
+- favorites and buyer-team saved lists;
+- profile-driven explainable discovery;
+- brand outreach New/Viewed/All;
+- Looks and Styleboards;
+- Shopify mapping with per-account overrides and reconciliation;
+- structured address-change request;
+- separated broadcast, task and approval inboxes;
+- POS identity/version for integration planning.
+
+#### P2 — scale or premium
+
+- cross-brand Visual Assortment;
+- external-order ingestion into assortment planning;
+- event marketplaces and registration;
+- advanced rollups across doors/accounts;
+- payment-capability discovery where commercially justified.
+
+### 128.13 Дополнительные UAT-сценарии / Additional Acceptance Scenarios
+
+1. User selects Russian UI and English email language; both channels render correctly and use one governed language registry.
+2. User changes date format; historical order deadlines remain semantically unchanged.
+3. Retail rounding preview shows source and rounded values without modifying the canonical price.
+4. User switches active retailer account; no draft, price, message, file or search result from the previous tenant remains accessible.
+5. User hides one account from discovery; UI shows propagation pending and later completion without breaking existing connections.
+6. User opts out of public people display; the public profile removes the contact while historical audit remains.
+7. Brand sends outreach; retailer views it without creating a connection request.
+8. Brand sends inbound request; retailer can Accept or Not Now, and access remains closed before acceptance and grant activation.
+9. Retailer sends outbound request; the screen clearly identifies the retailer as initiator and allows withdrawal.
+10. Unconnected storefront exposes permitted teaser content but no restricted prices, representatives, linesheets or order actions.
+11. Storefront containing placeholder/editor blocks fails publication.
+12. Buyer filters discovery by category, currency/price range and payment capability; results explain applied filters.
+13. Buyer favorites a brand without sending a connection request.
+14. Connected-brand Shop opens a catalog pinned to brand, price type/currency and warehouse.
+15. Buyer enters color/size quantities; totals recalculate, invalid values block Add to Order and the valid selection creates one durable draft.
+16. Opening Start an Order and searching for a brand creates no server-side draft until explicit confirmation.
+17. Buyer associates a new Styleboard with a brand; board access and price context cannot drift silently.
+18. Locked Visual Assortment route denies data operations server-side even if a client control is manipulated.
+19. Approved order syncs to Shopify once; mapping version, destination identifiers and reconciliation evidence appear in Data Activity Center.
+20. Failed background sync displays a localized error, downloadable evidence where permitted and a safe retry action.
+21. Password reset requires an explicit, rate-limited confirmation and records a security audit event.
+22. Look detail transport failure shows a recoverable error rather than an endless loading indicator.
+23. Storefront, catalog preview and quantity workspace resolve the same commercial product version.
+24. Read-only or archived account relationships block writes through both UI and API.
+25. Connection, profile visibility and Shopify mutations preserve durable command IDs and transactional outbox events.
+
+### 128.14 Source note / Примечание об источнике
+
+This delta is grounded in direct observation of the authenticated JOOR retailer web application. It is a product benchmark, not evidence of JOOR internal APIs or implementation. Time-sensitive prices, limits and UI labels must be revalidated before commercial decisions. Syntha requirements above are product decisions derived from the observed behavior and the canonical rules in this document.

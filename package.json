@@ -11,6 +11,7 @@
     "start": "node --env-file=.env src/server.mjs",
     "db:migrate": "node --env-file=.env scripts/migrate.mjs",
     "bootstrap:owner": "node --env-file=.env scripts/bootstrap-owner.mjs",
+    "bootstrap:mdm-reference": "node --env-file=.env scripts/bootstrap-mdm-reference.mjs",
     "outbox:requeue": "node --env-file=.env scripts/requeue-outbox-event.mjs",
     "sync:mdm-sources": "node scripts/sync-mdm-sources.mjs",
     "test": "node --import ./tests/register-pg-test-loader.mjs --test --test-concurrency=1 tests/*.test.mjs",

@@ -4,6 +4,7 @@ import { createOrganisation } from '../src/modules/organisations/public.mjs';
 import { createMembership } from '../src/modules/access-control/public.mjs';
 import { createWholesalePlatform } from '../src/application/platform.mjs';
 import { createPartnerAccessService } from '../src/application/partner-access-service.mjs';
+import { createRetailDoorService } from '../src/application/retail-door-service.mjs';
 import { createShowroomSelectionService } from '../src/application/showroom-selection-service.mjs';
 import { createMemoryWholesaleStore } from '../src/infrastructure/memory-store.mjs';
 
@@ -15,12 +16,17 @@ async function fixture() {
   const base = { store, clock: () => now, nextId: prefix => `${prefix}_${++id}` };
   const platform = createWholesalePlatform(base);
   const partners = createPartnerAccessService(base);
+  const retailDoors = createRetailDoorService(base);
   const collaboration = createShowroomSelectionService(base);
 
   await platform.registerOrganisation('matrix-org-brand', 'system', createOrganisation({ id: 'brand-1', type: 'brand', name: 'Brand' }));
   await platform.registerOrganisation('matrix-org-shop', 'system', createOrganisation({ id: 'shop-1', type: 'shop', name: 'Shop' }));
   await platform.grantMembership('matrix-member-brand', 'system', createMembership({ id: 'brand-member', organisationId: 'brand-1', organisationType: 'brand', userId: 'sales-1', role: 'owner', createdAt: now }));
   await platform.grantMembership('matrix-member-shop', 'system', createMembership({ id: 'shop-member', organisationId: 'shop-1', organisationType: 'shop', userId: 'buyer-1', role: 'owner', createdAt: now }));
+  const door = await retailDoors.createRetailDoor('matrix-door-create', 'buyer-1', {
+    shopId: 'shop-1', code: 'PARIS-01', name: 'Paris Flagship',
+    shipToAddress: { countryCode: 'FR', postalCode: '75001', city: 'Paris', region: null, line1: '1 Rue de Rivoli', line2: null },
+  });
 
   const relationship = await partners.requestRelationship('matrix-relationship-request', 'sales-1', { brandId: 'brand-1', shopId: 'shop-1' });
   await partners.acceptRelationship('matrix-relationship-accept', 'buyer-1', relationship.id);
@@ -45,7 +51,7 @@ async function fixture() {
       getBuyerCatalogVersion: async idValue => idValue === buyerCatalog.id ? buyerCatalog : undefined,
     }),
   });
-  return { store, cycle, showroom, buyerCatalog, rich };
+  return { store, cycle, showroom, buyerCatalog, rich, door };
 }
 
 function richBuyerCatalog({ collectionId, showroomId, invitationId }) {
@@ -65,7 +71,7 @@ function richBuyerCatalog({ collectionId, showroomId, invitationId }) {
 
 test('rich buyer matrix replacement is one atomic selection version change and preserves immutable lineage', async () => {
   const context = await fixture();
-  const created = await context.rich.createSelection('matrix-selection-create', 'buyer-1', { cycleId: context.cycle.id, showroomId: context.showroom.id });
+  const created = await context.rich.createSelection('matrix-selection-create', 'buyer-1', { cycleId: context.cycle.id, showroomId: context.showroom.id, retailDoorId: context.door.id });
   const beforeVersion = created.selection.version;
   const updated = await context.rich.replaceSelectionMatrix('matrix-replace', 'buyer-1', created.selection.id, { lines: [{ sku: 'SKU-1', quantity: 3, note: 'core buy' }] });
 
@@ -82,7 +88,7 @@ test('rich buyer matrix replacement is one atomic selection version change and p
 
 test('rich buyer matrix replacement can explicitly clear a draft matrix', async () => {
   const context = await fixture();
-  const created = await context.rich.createSelection('matrix-clear-create', 'buyer-1', { cycleId: context.cycle.id, showroomId: context.showroom.id });
+  const created = await context.rich.createSelection('matrix-clear-create', 'buyer-1', { cycleId: context.cycle.id, showroomId: context.showroom.id, retailDoorId: context.door.id });
   const populated = await context.rich.replaceSelectionMatrix('matrix-clear-populate', 'buyer-1', created.selection.id, { lines: [{ sku: 'SKU-1', quantity: 3 }] });
   const cleared = await context.rich.replaceSelectionMatrix('matrix-clear-empty', 'buyer-1', populated.id, { lines: [] });
   assert.equal(cleared.lines.length, 0);
@@ -91,7 +97,7 @@ test('rich buyer matrix replacement can explicitly clear a draft matrix', async 
 
 test('rich buyer matrix replacement rolls back completely when any SKU is outside the pinned BuyerCatalogVersion', async () => {
   const context = await fixture();
-  const created = await context.rich.createSelection('matrix-rollback-create', 'buyer-1', { cycleId: context.cycle.id, showroomId: context.showroom.id });
+  const created = await context.rich.createSelection('matrix-rollback-create', 'buyer-1', { cycleId: context.cycle.id, showroomId: context.showroom.id, retailDoorId: context.door.id });
   const populated = await context.rich.replaceSelectionMatrix('matrix-rollback-populate', 'buyer-1', created.selection.id, { lines: [{ sku: 'SKU-1', quantity: 3 }] });
 
   await assert.rejects(
@@ -107,7 +113,7 @@ test('rich buyer matrix replacement rolls back completely when any SKU is outsid
 
 test('rich buyer matrix replacement rejects client controlled price fields', async () => {
   const context = await fixture();
-  const created = await context.rich.createSelection('matrix-price-create', 'buyer-1', { cycleId: context.cycle.id, showroomId: context.showroom.id });
+  const created = await context.rich.createSelection('matrix-price-create', 'buyer-1', { cycleId: context.cycle.id, showroomId: context.showroom.id, retailDoorId: context.door.id });
   await assert.rejects(
     async () => context.rich.replaceSelectionMatrix('matrix-price-invalid', 'buyer-1', created.selection.id, { lines: [{ sku: 'SKU-1', quantity: 3, unitPrice: 1 }] }),
     error => error?.code === 'SELECTION_CLIENT_PRICE_FORBIDDEN',

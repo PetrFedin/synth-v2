@@ -169,9 +169,12 @@ export function createShowroomSelectionService({
 
     createSelection(commandId, actorId, { cycleId, showroomId, retailDoorId = null }) {
       const normalizedRetailDoorId = typeof retailDoorId === 'string' && retailDoorId.trim().length > 0 ? retailDoorId.trim() : null;
+      const fingerprint = normalizedRetailDoorId
+        ? `createSelection:${actorId}:${cycleId}:${showroomId}:${normalizedRetailDoorId}`
+        : `createSelection:${actorId}:${cycleId}:${showroomId}`;
       return execute(
         commandId,
-        `createSelection:${actorId}:${cycleId}:${showroomId}:${normalizedRetailDoorId ?? 'legacy'}`,
+        fingerprint,
         actorId,
         async (tx) => {
           const cycle = requireEntity(await tx.getCycle(cycleId), 'CYCLE_NOT_FOUND', { cycleId });

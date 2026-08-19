@@ -3,7 +3,7 @@
 
   const SECTIONS = Object.freeze([
     'memberships', 'organisations', 'relationships', 'invitations', 'campaigns', 'collections',
-    'catalogSkus', 'showrooms', 'cycles', 'selections', 'orders', 'deals', 'calendar',
+    'productStyles', 'catalogSkus', 'showrooms', 'cycles', 'selections', 'orders', 'deals', 'calendar',
   ]);
   const SECTION_SET = new Set(SECTIONS);
   const DEFAULT_PAGE_LIMIT = 100;

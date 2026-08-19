@@ -4,6 +4,7 @@ import { createOrganisation } from '../src/modules/organisations/public.mjs';
 import { createMembership } from '../src/modules/access-control/public.mjs';
 import { createWholesalePlatform } from '../src/application/platform.mjs';
 import { createPartnerAccessService } from '../src/application/partner-access-service.mjs';
+import { createRetailDoorService } from '../src/application/retail-door-service.mjs';
 import { createShowroomSelectionService } from '../src/application/showroom-selection-service.mjs';
 import { createMemoryWholesaleStore } from '../src/infrastructure/memory-store.mjs';
 
@@ -16,11 +17,18 @@ async function fixture({ availableQuantity = 10 } = {}) {
   const options = { store, clock, nextId };
   const platform = createWholesalePlatform(options);
   const partners = createPartnerAccessService(options);
+  const retailDoors = createRetailDoorService(options);
 
   await platform.registerOrganisation('org-brand', 'system', createOrganisation({ id: 'brand-1', type: 'brand', name: 'Brand' }));
   await platform.registerOrganisation('org-shop', 'system', createOrganisation({ id: 'shop-1', type: 'shop', name: 'Shop' }));
   await platform.grantMembership('member-sales', 'system', createMembership({ id: 'm1', organisationId: 'brand-1', organisationType: 'brand', userId: 'sales-1', role: 'owner', createdAt: clock() }));
   await platform.grantMembership('member-buyer', 'system', createMembership({ id: 'm2', organisationId: 'shop-1', organisationType: 'shop', userId: 'buyer-1', role: 'owner', createdAt: clock() }));
+  const door = await retailDoors.createRetailDoor('door-create', 'buyer-1', {
+    shopId: 'shop-1',
+    code: 'PARIS-01',
+    name: 'Paris Flagship',
+    shipToAddress: { countryCode: 'FR', postalCode: '75001', city: 'Paris', region: null, line1: '1 Rue de Rivoli', line2: null },
+  });
   const relationship = await partners.requestRelationship('relationship-request', 'sales-1', { brandId: 'brand-1', shopId: 'shop-1' });
   await partners.acceptRelationship('relationship-accept', 'buyer-1', relationship.id);
   const campaign = await platform.createCampaign('campaign-create', 'sales-1', {
@@ -67,8 +75,8 @@ async function fixture({ availableQuantity = 10 } = {}) {
   let cycle = await platform.startCycle('cycle-create', 'buyer-1', { brandId: 'brand-1', shopId: 'shop-1', campaignId: campaign.id, collectionId: collection.id });
   cycle = await platform.advanceCycle('cycle-collection', 'buyer-1', cycle.id, 'collection');
   cycle = await platform.advanceCycle('cycle-showroom', 'buyer-1', cycle.id, 'showroom');
-  const selection = (await collaboration.createSelection('selection-create', 'buyer-1', { cycleId: cycle.id, showroomId: showroom.id })).selection;
-  return { collaboration, selection };
+  const selection = (await collaboration.createSelection('selection-create', 'buyer-1', { cycleId: cycle.id, showroomId: showroom.id, retailDoorId: door.id })).selection;
+  return { collaboration, selection, retailDoors, door };
 }
 
 test('pinned buyer selection keeps published price, MOQ and version when live PLM/catalog fields later change', async () => {
@@ -86,4 +94,22 @@ test('pinned buyer selection still uses live inventory only as a dynamic availab
     () => collaboration.upsertSelectionLine('line-over-ats', 'buyer-1', selection.id, { sku: 'SKU-1', quantity: 3 }),
     (error) => error?.code === 'CATALOG_AVAILABILITY_EXCEEDED',
   );
+});
+
+test('selection freezes buyer Retail Door version and addresses independently of later master edits', async () => {
+  const { selection, retailDoors, door } = await fixture();
+  assert.equal(selection.retailDoorId, door.id);
+  assert.equal(selection.retailDoorVersion, 1);
+  assert.equal(selection.buyerCommercialSnapshot.doorCode, 'PARIS-01');
+  assert.equal(selection.buyerCommercialSnapshot.shipToAddress.line1, '1 Rue de Rivoli');
+
+  const updated = await retailDoors.updateRetailDoor('door-update', 'buyer-1', door.id, {
+    expectedVersion: 1,
+    name: 'Paris Flagship New',
+    shipToAddress: { countryCode: 'FR', postalCode: '75008', city: 'Paris', region: null, line1: '99 Avenue New', line2: null },
+  });
+  assert.equal(updated.version, 2);
+  assert.equal(selection.retailDoorVersion, 1);
+  assert.equal(selection.buyerCommercialSnapshot.doorName, 'Paris Flagship');
+  assert.equal(selection.buyerCommercialSnapshot.shipToAddress.line1, '1 Rue de Rivoli');
 });

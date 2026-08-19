@@ -37,13 +37,13 @@ async function selectionLineForm(selection) {
   const validation = window.SynthaUiValidation;
   const caps = window.SynthaUiCapabilities;
   if (!caps.hasForOrganisation(state.workspace, selection.shopId, caps.CAPABILITIES.SELECTION_WRITE)) throw new Error('CAPABILITY_DENIED');
-  if (!selection.buyerCatalogVersionId || !selection.buyerCatalogContentHash) throw new Error(I18N.t('common.requestError'));
+  if (!selection.buyerCatalogVersionId || !selection.commercialBasisHash) throw new Error(I18N.t('common.requestError'));
 
   const catalog = await api(`/v2/buyer-catalog-versions/${encodeURIComponent(selection.buyerCatalogVersionId)}`);
   if (
     !catalog
     || catalog.id !== selection.buyerCatalogVersionId
-    || catalog.contentHash !== selection.buyerCatalogContentHash
+    || catalog.contentHash !== selection.commercialBasisHash
     || catalog.currency !== selection.currency
   ) throw new Error(I18N.t('common.requestError'));
 
@@ -60,7 +60,7 @@ async function selectionLineForm(selection) {
     return mutate(`/v2/selections/${encodeURIComponent(selection.id)}/lines/${encodeURIComponent(line.sku)}`, { selectionId: selection.id, sku: line.sku, quantity }, 'PUT');
   });
 }
-async function orderForm() {
+async function orderForm(preferredSelectionId = '') {
   const caps = window.SynthaUiCapabilities;
   const doorUi = window.SynthaRetailDoorUi;
   const selections = state.workspace.selections.filter(x => x.status === 'submitted' && caps.hasForOrganisation(state.workspace, x.shopId, caps.CAPABILITIES.ORDER_WRITE) && !state.workspace.orders.some(o => o.selectionId === x.id));
@@ -69,11 +69,12 @@ async function orderForm() {
     return;
   }
   try {
+    const selectedSelectionId = selections.some(selection => selection.id === preferredSelectionId) ? preferredSelectionId : '';
     const shopIds = [...new Set(selections.map(selection => selection.shopId))];
     const doorEntries = await Promise.all(shopIds.map(async shopId => [shopId, await api(`/v2/shops/${encodeURIComponent(shopId)}/doors`)]));
     const doorsByShop = Object.fromEntries(doorEntries.map(([shopId, doors]) => [shopId, Array.isArray(doors) ? doors : []]));
     openForm('Создать заказ', [
-      selectDef('selectionId', 'Selection', selections, selection => `${orgName(selection.shopId)} · ${selection.id}`),
+      selectDef('selectionId', 'Selection', selections, selection => `${orgName(selection.shopId)} · ${selection.id}`, selectedSelectionId),
       dependentSelectDef(
         'retailDoorId',
         'Торговая точка / Retail Door',

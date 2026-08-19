@@ -17,17 +17,18 @@ test('Selection line authoring uses the pinned immutable BuyerCatalogVersion', (
   const selectionLineSource = functionSource(
     formsSource,
     'async function selectionLineForm(selection)',
-    '\nasync function orderForm()',
+    '\nasync function orderForm(',
   );
 
   assert.match(selectionLineSource, /buyerCatalogVersionId/);
-  assert.match(selectionLineSource, /buyerCatalogContentHash/);
+  assert.match(selectionLineSource, /commercialBasisHash/);
   assert.match(selectionLineSource, /\/v2\/buyer-catalog-versions\//);
-  assert.match(selectionLineSource, /catalog\.contentHash !== selection\.buyerCatalogContentHash/);
+  assert.match(selectionLineSource, /catalog\.contentHash !== selection\.commercialBasisHash/);
   assert.match(selectionLineSource, /catalog\.currency !== selection\.currency/);
   assert.match(selectionLineSource, /line\.unitPrice/);
   assert.match(selectionLineSource, /line\.minimumOrderQuantity/);
 
+  assert.doesNotMatch(selectionLineSource, /buyerCatalogContentHash/);
   assert.doesNotMatch(selectionLineSource, /state\.workspace\.catalogSkus/);
   assert.doesNotMatch(selectionLineSource, /wholesalePrice/);
   assert.doesNotMatch(selectionLineSource, /availableToSell/);

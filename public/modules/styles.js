@@ -7,7 +7,7 @@
   if (nav) { nav.view = 'styles'; nav.ru = 'Модели'; nav.en = 'Product Master'; nav.planned = false; }
 
   function text(ru, en) { return localText(ru, en); }
-  function title(style) { return I18N.getLocale?.() === 'en' ? (style.titleEn || style.titleRu || style.styleCode) : (style.titleRu || style.titleEn || style.styleCode); }
+  function title(product) { return I18N.getLocale?.() === 'en' ? (product.titleEn || product.titleRu || product.styleCode) : (product.titleRu || product.titleEn || product.styleCode); }
   function riskLabel(code) {
     const labels = {
       STYLE_VERSION_MISSING: ['Нет канонической версии модели', 'Canonical StyleVersion is missing'],
@@ -28,13 +28,13 @@
     bar.max = 100;
     bar.value = Math.max(0, Math.min(100, item.readinessPercent));
     bar.setAttribute('aria-label', 'Product Readiness');
-    node.append(bar, el('strong', { rawText: item.style.readinessSnapshotId ? `${item.readinessPercent}%` : '—' }));
+    node.append(bar, el('strong', { rawText: item.product.readinessSnapshotId ? `${item.readinessPercent}%` : '—' }));
     return node;
   }
 
   function readinessBadge(item) {
-    if (!item.style.readinessSnapshotId) return statusBadge('not_assessed');
-    return statusBadge(item.style.readinessStatus);
+    if (!item.product.readinessSnapshotId) return statusBadge('not_assessed');
+    return statusBadge(item.product.readinessStatus);
   }
 
   function projectionBadge(item) {
@@ -42,24 +42,24 @@
   }
 
   function inspector(item) {
-    const style = item.style;
+    const product = item.product;
     const risks = item.risks.length
       ? odMiniTable([text('Проверка', 'Gate'), text('Уровень', 'Severity')], item.risks.map((risk) => [riskLabel(risk.code), statusBadge(risk.severity)]))
       : notice(text('Цепочка Product Master → Readiness → Commercial Projection замкнута.', 'Product Master → Readiness → Commercial Projection chain is complete.'), 'success');
     return odInspector({
-      title: title(style),
-      subtitle: `${style.styleCode} · v${style.styleVersionNo || '—'}`,
-      status: style.lifecycleStatus,
+      title: title(product),
+      subtitle: `${product.styleCode} · v${product.styleVersionNo || '—'}`,
+      status: product.lifecycleStatus,
       preview: true,
       tabs: [text('Продукт', 'Product'), text('Готовность', 'Readiness'), text('Коммерция', 'Commercial')],
       fields: [
-        { label: 'Style ID', value: style.id },
-        { label: 'StyleVersion', value: style.styleVersionId || '—' },
-        { label: text('Версия', 'Version'), value: style.styleVersionNo || '—' },
+        { label: 'Style ID', value: product.id },
+        { label: 'StyleVersion', value: product.styleVersionId || '—' },
+        { label: text('Версия', 'Version'), value: product.styleVersionNo || '—' },
         { label: text('Цвета', 'Colorways'), value: item.colorwayCount },
         { label: 'Product SKU', value: item.productSkuCount },
-        { label: 'Product Readiness', value: style.readinessSnapshotId ? `${style.readinessStatus} · ${item.readinessPercent}%` : text('Не оценён', 'Not assessed') },
-        { label: 'Commercial Projection', value: style.commercialProjectionId ? `v${style.commercialProjectionVersionNo} · ${style.commercialProjectionStatus}` : text('Не опубликован', 'Not published') },
+        { label: 'Product Readiness', value: product.readinessSnapshotId ? `${product.readinessStatus} · ${item.readinessPercent}%` : text('Не оценён', 'Not assessed') },
+        { label: 'Commercial Projection', value: product.commercialProjectionId ? `v${product.commercialProjectionVersionNo} · ${product.commercialProjectionStatus}` : text('Не опубликован', 'Not published') },
         { label: 'Legacy SKU bridge', value: `${item.legacyCatalogLinkCount}/${item.productSkuCount}` },
       ],
       content: [risks],
@@ -83,18 +83,18 @@
     ], [], text('Поиск модели или StyleVersion', 'Search style or StyleVersion'), null);
 
     let rows = registry.styles;
-    if (header.active === 'readiness') rows = rows.filter((item) => item.style.readinessStatus !== 'ready');
+    if (header.active === 'readiness') rows = rows.filter((item) => item.product.readinessStatus !== 'ready');
     if (header.active === 'publication') rows = rows.filter((item) => item.readinessReady && !item.projected);
     if (header.active === 'exceptions') rows = rows.filter((item) => item.risks.length);
 
     const content = odRegistry({
-      scope: 'od-styles', filterScope: 'styles', rows, rowKey: (item) => item.style.id,
-      statusAccessor: (item) => item.style.lifecycleStatus,
+      scope: 'od-styles', filterScope: 'styles', rows, rowKey: (item) => item.product.id,
+      statusAccessor: (item) => item.product.lifecycleStatus,
       columns: [
-        { label: text('Код модели', 'Style code'), value: (item) => item.style.styleCode },
-        { label: text('Название', 'Title'), value: (item) => title(item.style) },
-        { label: 'StyleVersion', value: (item) => `v${item.style.styleVersionNo || '—'}` },
-        { label: text('Статус', 'Lifecycle'), render: (item) => statusBadge(item.style.lifecycleStatus) },
+        { label: text('Код модели', 'Style code'), value: (item) => item.product.styleCode },
+        { label: text('Название', 'Title'), value: (item) => title(item.product) },
+        { label: 'StyleVersion', value: (item) => `v${item.product.styleVersionNo || '—'}` },
+        { label: text('Статус', 'Lifecycle'), render: (item) => statusBadge(item.product.lifecycleStatus) },
         { label: text('Цвета', 'Colorways'), value: (item) => item.colorwayCount },
         { label: 'Product SKU', value: (item) => item.productSkuCount },
         { label: 'Readiness', render: readiness },

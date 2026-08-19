@@ -93,6 +93,7 @@ test('workspace reader returns the complete empty shape for actors without membe
     invitations: [],
     campaigns: [],
     collections: [],
+    productStyles: [],
     catalogSkus: [],
     showrooms: [],
     cycles: [],

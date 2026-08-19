@@ -16,6 +16,7 @@ const SORT_FIELDS = Object.freeze({
   invitations: Object.freeze([['updatedAt', 'desc'], ['createdAt', 'desc'], ['id', 'asc']]),
   campaigns: Object.freeze([['startsAt', 'desc'], ['name', 'asc'], ['id', 'asc']]),
   collections: Object.freeze([['name', 'asc'], ['id', 'asc']]),
+  productStyles: Object.freeze([['styleCode', 'asc'], ['id', 'asc']]),
   catalogSkus: Object.freeze([['sku', 'asc']]),
   showrooms: Object.freeze([['opensAt', 'desc'], ['name', 'asc'], ['id', 'asc']]),
   cycles: Object.freeze([['updatedAt', 'desc'], ['createdAt', 'desc'], ['id', 'asc']]),
@@ -35,66 +36,32 @@ export function createWorkspaceQueryService({ reader }) {
       const workspace = await reader.readForActor(actorId, { limit });
       return freezeWorkspace(workspace, limit);
     },
-
     async pageForActor(actorId, { section: requestedSection, limit: requestedLimit, cursor } = {}) {
       validateActor(actorId);
       const section = workspaceSection(requestedSection);
       const limit = workspacePageLimit(requestedLimit);
-      const after = cursor === undefined || cursor === null || cursor === ''
-        ? undefined
-        : decodeWorkspaceCursor(cursor, { section }).position;
-      invariant(
-        typeof reader.pageForActor === 'function',
-        'WORKSPACE_PAGE_READER_REQUIRED',
-        'Workspace reader does not support section pages',
-      );
+      const after = cursor === undefined || cursor === null || cursor === '' ? undefined : decodeWorkspaceCursor(cursor, { section }).position;
+      invariant(typeof reader.pageForActor === 'function', 'WORKSPACE_PAGE_READER_REQUIRED', 'Workspace reader does not support section pages');
       const page = await reader.pageForActor(actorId, { section, limit, after });
       return freezePage(page, { section, limit });
     },
   });
 }
-
-function validateActor(actorId) {
-  invariant(typeof actorId === 'string' && actorId.length > 0, 'WORKSPACE_ACTOR_REQUIRED', 'Workspace actor is required');
-}
-
-function workspaceLimit(value) {
-  return strictLimit(value, DEFAULT_WORKSPACE_LIMIT, MAX_WORKSPACE_LIMIT, 'WORKSPACE_LIMIT_INVALID', 'Workspace limit');
-}
-
-function workspacePageLimit(value) {
-  return strictLimit(value, DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT, 'WORKSPACE_PAGE_LIMIT_INVALID', 'Workspace page limit');
-}
-
+function validateActor(actorId) { invariant(typeof actorId === 'string' && actorId.length > 0, 'WORKSPACE_ACTOR_REQUIRED', 'Workspace actor is required'); }
+function workspaceLimit(value) { return strictLimit(value, DEFAULT_WORKSPACE_LIMIT, MAX_WORKSPACE_LIMIT, 'WORKSPACE_LIMIT_INVALID', 'Workspace limit'); }
+function workspacePageLimit(value) { return strictLimit(value, DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT, 'WORKSPACE_PAGE_LIMIT_INVALID', 'Workspace page limit'); }
 function strictLimit(value, defaultValue, maximum, code, label) {
   if (value === undefined || value === null || value === '') return defaultValue;
   const normalized = typeof value === 'number' ? String(value) : value;
-  invariant(
-    typeof normalized === 'string' && /^\d+$/.test(normalized),
-    code,
-    `${label} must be an integer from 1 to ${maximum}`,
-    { min: 1, max: maximum },
-  );
+  invariant(typeof normalized === 'string' && /^\d+$/.test(normalized), code, `${label} must be an integer from 1 to ${maximum}`, { min: 1, max: maximum });
   const limit = Number(normalized);
-  invariant(
-    Number.isSafeInteger(limit) && limit >= 1 && limit <= maximum,
-    code,
-    `${label} must be an integer from 1 to ${maximum}`,
-    { min: 1, max: maximum },
-  );
+  invariant(Number.isSafeInteger(limit) && limit >= 1 && limit <= maximum, code, `${label} must be an integer from 1 to ${maximum}`, { min: 1, max: maximum });
   return limit;
 }
-
 function workspaceSection(value) {
-  invariant(
-    typeof value === 'string' && WORKSPACE_SECTION_NAMES.includes(value),
-    'WORKSPACE_SECTION_INVALID',
-    'Workspace section is invalid',
-    { allowed: WORKSPACE_SECTION_NAMES },
-  );
+  invariant(typeof value === 'string' && WORKSPACE_SECTION_NAMES.includes(value), 'WORKSPACE_SECTION_INVALID', 'Workspace section is invalid', { allowed: WORKSPACE_SECTION_NAMES });
   return value;
 }
-
 function freezeWorkspace(workspace, limit) {
   invariant(workspace && typeof workspace === 'object' && !Array.isArray(workspace), 'WORKSPACE_RESULT_INVALID', 'Workspace reader must return an object');
   const result = {};
@@ -104,53 +71,31 @@ function freezeWorkspace(workspace, limit) {
     const items = [...value].sort(compareBy(SORT_FIELDS[key]));
     result[key] = Object.freeze(items.map(immutableCopy));
   }
-  const truncatedSections = [...new Set(
-    Array.isArray(workspace.pageInfo?.truncatedSections)
-      ? workspace.pageInfo.truncatedSections.filter((section) => COLLECTIONS.includes(section))
-      : [],
-  )].sort();
+  const truncatedSections = [...new Set(Array.isArray(workspace.pageInfo?.truncatedSections) ? workspace.pageInfo.truncatedSections.filter((section) => COLLECTIONS.includes(section)) : [])].sort();
   const nextCursors = {};
   for (const section of truncatedSections) {
     const last = result[section].at(-1);
-    invariant(
-      last,
-      'WORKSPACE_PAGE_RESULT_INVALID',
-      'Truncated workspace section must contain a continuation item',
-      { section },
-    );
-    nextCursors[section] = encodeWorkspaceCursor({
-      section,
-      position: cursorPosition(section, last),
-    });
+    invariant(last, 'WORKSPACE_PAGE_RESULT_INVALID', 'Truncated workspace section must contain a continuation item', { section });
+    nextCursors[section] = encodeWorkspaceCursor({ section, position: cursorPosition(section, last) });
   }
-  result.pageInfo = Object.freeze({
-    limit,
-    hasMore: truncatedSections.length > 0,
-    truncatedSections: Object.freeze(truncatedSections),
-    nextCursors: Object.freeze(nextCursors),
-  });
+  result.pageInfo = Object.freeze({ limit, hasMore: truncatedSections.length > 0, truncatedSections: Object.freeze(truncatedSections), nextCursors: Object.freeze(nextCursors) });
   return Object.freeze(result);
 }
-
 function freezePage(page, { section, limit }) {
   invariant(page && typeof page === 'object' && !Array.isArray(page), 'WORKSPACE_PAGE_RESULT_INVALID', 'Workspace page reader must return an object');
   invariant(Array.isArray(page.items) && page.items.length <= limit, 'WORKSPACE_PAGE_RESULT_INVALID', 'Workspace page items are invalid', { section, limit });
   invariant(typeof page.hasMore === 'boolean', 'WORKSPACE_PAGE_RESULT_INVALID', 'Workspace page hasMore flag is invalid', { section });
   invariant(!page.hasMore || page.items.length > 0, 'WORKSPACE_PAGE_RESULT_INVALID', 'Workspace page cannot continue without items', { section });
   const items = Object.freeze(page.items.map(immutableCopy));
-  const nextCursor = page.hasMore
-    ? encodeWorkspaceCursor({ section, position: page.nextPosition })
-    : null;
+  const nextCursor = page.hasMore ? encodeWorkspaceCursor({ section, position: page.nextPosition }) : null;
   return Object.freeze({ items, nextCursor });
 }
-
 function cursorPosition(section, item) {
   return Object.freeze(SORT_FIELDS[section].map(([field]) => {
     const value = item?.[field];
     return value === undefined || value === null ? null : String(value);
   }));
 }
-
 function compareBy(fields) {
   return (left, right) => {
     for (const [field, direction] of fields) {
@@ -165,11 +110,8 @@ function compareBy(fields) {
     return 0;
   };
 }
-
 function immutableCopy(value) {
   if (Array.isArray(value)) return Object.freeze(value.map(immutableCopy));
-  if (value && typeof value === 'object') {
-    return Object.freeze(Object.fromEntries(Object.entries(value).map(([key, nested]) => [key, immutableCopy(nested)])));
-  }
+  if (value && typeof value === 'object') return Object.freeze(Object.fromEntries(Object.entries(value).map(([key, nested]) => [key, immutableCopy(nested)])));
   return value;
 }

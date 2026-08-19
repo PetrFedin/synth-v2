@@ -98,7 +98,7 @@ test('selection creation replay does not re-run the one-selection-per-cycle muta
           return Object.freeze({
             id,
             actorId: 'buyer-1',
-            fingerprint: 'createSelection:buyer-1:cycle-1:showroom-1:legacy',
+            fingerprint: 'createSelection:buyer-1:cycle-1:showroom-1',
             result: previousResult,
           });
         },

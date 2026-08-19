@@ -5,6 +5,7 @@ import { createMembership } from '../src/modules/access-control/public.mjs';
 import { createWholesalePlatform } from '../src/application/platform.mjs';
 import { createCatalogService } from '../src/application/catalog-service.mjs';
 import { createPartnerAccessService } from '../src/application/partner-access-service.mjs';
+import { createRetailDoorService } from '../src/application/retail-door-service.mjs';
 import { createShowroomSelectionService } from '../src/application/showroom-selection-service.mjs';
 import { createMemoryWholesaleStore } from '../src/infrastructure/memory-store.mjs';
 import { createMemoryCatalogStore } from '../src/infrastructure/memory-catalog-store.mjs';
@@ -17,11 +18,16 @@ async function fixture() {
   const platform = createWholesalePlatform(options);
   const catalog = createCatalogService({ wholesaleStore: store, catalogStore, clock: options.clock, nextId: options.nextId });
   const partners = createPartnerAccessService(options);
+  const retailDoors = createRetailDoorService(options);
   const collaboration = createShowroomSelectionService({ ...options, catalogReader: catalog });
   await platform.registerOrganisation('org-brand', 'system', createOrganisation({ id: 'brand-1', type: 'brand', name: 'Brand' }));
   await platform.registerOrganisation('org-shop', 'system', createOrganisation({ id: 'shop-1', type: 'shop', name: 'Shop' }));
   await platform.grantMembership('member-sales', 'system', createMembership({ id: 'm1', organisationId: 'brand-1', organisationType: 'brand', userId: 'sales-1', role: 'owner', createdAt: 'now' }));
   await platform.grantMembership('member-buyer', 'system', createMembership({ id: 'm2', organisationId: 'shop-1', organisationType: 'shop', userId: 'buyer-1', role: 'owner', createdAt: 'now' }));
+  const door = await retailDoors.createRetailDoor('door-create', 'buyer-1', {
+    shopId: 'shop-1', code: 'PARIS-01', name: 'Paris Flagship',
+    shipToAddress: { countryCode: 'FR', postalCode: '75001', city: 'Paris', region: null, line1: '1 Rue de Rivoli', line2: null },
+  });
   const relationship = await partners.requestRelationship('relationship-request', 'sales-1', { brandId: 'brand-1', shopId: 'shop-1' });
   await partners.acceptRelationship('relationship-accept', 'buyer-1', relationship.id);
   const campaign = await platform.createCampaign('campaign-create', 'sales-1', {
@@ -46,7 +52,7 @@ async function fixture() {
   let cycle = await platform.startCycle('cycle-create', 'buyer-1', { brandId: 'brand-1', shopId: 'shop-1', campaignId: campaign.id, collectionId: collection.id });
   cycle = await platform.advanceCycle('cycle-collection', 'buyer-1', cycle.id, 'collection');
   cycle = await platform.advanceCycle('cycle-showroom', 'buyer-1', cycle.id, 'showroom');
-  return { store, platform, collaboration, showroomId: showroom.id, invitationId: invitation.id, cycle };
+  return { store, platform, collaboration, showroomId: showroom.id, invitationId: invitation.id, cycle, door };
 }
 
 function richBuyerCatalog(context, overrides = {}) {
@@ -127,11 +133,12 @@ test('rich pinned buyer cart resolves Style Colorway Size SKU entirely from froz
   const context = await fixture();
   const buyerCatalog = richBuyerCatalog(context);
   const collaboration = richCollaboration(context, buyerCatalog);
-  const created = await collaboration.createSelection('rich-selection-create', 'buyer-1', { cycleId: context.cycle.id, showroomId: context.showroomId });
+  const created = await collaboration.createSelection('rich-selection-create', 'buyer-1', { cycleId: context.cycle.id, showroomId: context.showroomId, retailDoorId: context.door.id });
   const edited = await collaboration.upsertSelectionLine('rich-selection-line', 'buyer-1', created.selection.id, { sku: 'SKU-1', quantity: 3 });
 
   assert.equal(edited.buyerCatalogVersionId, buyerCatalog.id);
   assert.equal(edited.commercialBasisHash, buyerCatalog.contentHash);
+  assert.equal(edited.retailDoorId, context.door.id);
   assert.deepEqual(edited.lines[0], {
     sku: 'SKU-1',
     quantity: 3,
@@ -158,7 +165,7 @@ test('rich pinned buyer cart enforces frozen MOQ without reading live flat catal
   const context = await fixture();
   const buyerCatalog = richBuyerCatalog(context, { minimumOrderQuantity: 4 });
   const collaboration = richCollaboration(context, buyerCatalog);
-  const created = await collaboration.createSelection('rich-moq-create', 'buyer-1', { cycleId: context.cycle.id, showroomId: context.showroomId });
+  const created = await collaboration.createSelection('rich-moq-create', 'buyer-1', { cycleId: context.cycle.id, showroomId: context.showroomId, retailDoorId: context.door.id });
 
   await assert.rejects(
     collaboration.upsertSelectionLine('rich-moq-line', 'buyer-1', created.selection.id, { sku: 'SKU-1', quantity: 3 }),
@@ -170,7 +177,7 @@ test('rich pinned buyer cart enforces documented frozen available-to-sell quanti
   const context = await fixture();
   const buyerCatalog = richBuyerCatalog(context, { availability: { mode: 'available_to_sell', quantity: 2 } });
   const collaboration = richCollaboration(context, buyerCatalog);
-  const created = await collaboration.createSelection('rich-ats-create', 'buyer-1', { cycleId: context.cycle.id, showroomId: context.showroomId });
+  const created = await collaboration.createSelection('rich-ats-create', 'buyer-1', { cycleId: context.cycle.id, showroomId: context.showroomId, retailDoorId: context.door.id });
 
   await assert.rejects(
     collaboration.upsertSelectionLine('rich-ats-line', 'buyer-1', created.selection.id, { sku: 'SKU-1', quantity: 3 }),

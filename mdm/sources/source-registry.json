@@ -1,5 +1,5 @@
 {
-  "registry_version": "0.1.0",
+  "registry_version": "0.2.0",
   "policy": {
     "silent_production_update": false,
     "change_delivery": "pull_request",
@@ -90,6 +90,18 @@
       "licence": "ICC rules are copyrighted; store governed codes and licensed interpretations, not copied publication text.",
       "adapter": null,
       "affects": ["incoterm", "named_place_rule"]
+    },
+    {
+      "code": "syntha_operational_master",
+      "authority": "SYNTHA Data Governance",
+      "standard": "SYNTHA Russia-first fashion operational master",
+      "source_url": "https://github.com/PetrFedin/synth-v2/tree/main/mdm/reference",
+      "probe_url": "https://github.com/PetrFedin/synth-v2/tree/main/mdm/reference",
+      "sync_mode": "manual_review",
+      "cadence": "on_change",
+      "licence": "SYNTHA internal operational master data; changes are governed through repository review and MDM versioning.",
+      "adapter": null,
+      "affects": ["size.system", "size.size", "size.footwear_size", "measurement.unit", "measurement.point"]
     }
   ]
 }

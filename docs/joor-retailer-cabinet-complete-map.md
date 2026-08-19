@@ -1,7 +1,7 @@
 # Платформа Syntha / Syntha Fashion Platform — Product & Supply + Wholesale Commerce
 
 Статус / Status: единственная актуальная двуязычная продуктовая спецификация / the only current bilingual product source of truth for Syntha.  
-Версия / Version: 4.6, 18 августа 2026 года.  
+Версия / Version: 4.7, 19 августа 2026 года.  
 Основной рынок / Primary market: российские fashion-бренды, работающие с российскими и зарубежными фабриками, поставщиками материалов, готовых изделий и магазинами / Russian fashion brands working with domestic and international factories, material suppliers, finished-goods suppliers and retailers.  
 Назначение / Purpose: связать Product & Supply и Wholesale Commerce через единое версионное ядро товара, сохранив отдельные процессы, права, документы, статусы и системы учёта / connect Product & Supply and Wholesale Commerce through one versioned product core while preserving separate processes, permissions, documents, states and systems of record.
 
@@ -9954,3 +9954,714 @@ Attachment baseline должен поддерживать не только imag
 
 Источник — прямое read-only наблюдение авторизованной retailer web-версии JOOR 18 августа 2026 года. Legacy-route latency и Loading-состояния отражают конкретный сеанс и должны быть повторно проверены перед количественным SLA-сравнением. Отсутствие элемента означает «не виден на исследованной поверхности/в данном entitlement context», а не доказательство его полного отсутствия во всех тарифах JOOR.
 
+## 131. JOOR × NuORDER: полный buyer-commerce benchmark и целевая гибридная модель Syntha
+
+**Версия карты:** 4.7  
+**Дата исследования:** 19 августа 2026 года  
+**Фокус:** кабинет ритейлера/заказчика — от профиля и доступа к бренду до ассортимента, размерной матрицы, multi-door заказа, оплаты и повторного заказа.
+
+Этот раздел является дельтой к разделам 128–130. Уже описанные маршруты, геометрия JOOR, фильтры современного каталога, карточка View and Quantify, реестр заказов, Start Order, legacy-поверхности, ошибки навигации и дизайн-токены здесь не пересказываются. Ниже зафиксированы:
+
+1. функции NuORDER, которых ранее в карте не было или они были обозначены только общими принципами;
+2. более строгая предметная модель заказа;
+3. сопоставление сильных и слабых сторон JOOR и NuORDER;
+4. целевой вариант Syntha, который устраняет неоднозначность цен, размеров, поставок, дверей, прав доступа и статусов.
+
+### 131.1. Границы доказательств и безопасность исследования
+
+- JOOR проверялся в авторизованном retailer-контексте только чтением интерфейса. Товары не добавлялись, количество не менялось, заказы не создавались и не отправлялись.
+- При повторной проверке 19 августа 2026 года маршрут /ra/home дважды, включая полную перезагрузку, отобразил пустую страницу: body без текста, ссылок и изображений, один безымянный элемент button размером приблизительно 113 × 24 px; в журнале страницы зафиксирован Failed to fetch. Пользовательского error state, retry, fallback и диагностического идентификатора не было.
+- Детали JOOR, доступные в предыдущих сеансах, остаются в разделах 128–130. Текущий белый экран не отменяет эти наблюдения, но не позволил безопасно продолжить новый продуктовый drill-down.
+- NuORDER исследован по официальному NuORDER Help Desk. Наличие функций зависит от конфигурации бренда, роли, customer group, warehouse, price sheet, payment setup, тарифа, beta-доступа и иногда обращения к Account Manager/Support.
+- Частные названия компаний, покупателей, брендов, заказов, артикулов, адресов и цены исследуемого аккаунта в репозиторий не переносятся.
+
+### 131.2. Сквозной путь заказчика: сравнение и целевое поведение
+
+| Этап | JOOR, подтвержденное в карте | NuORDER, новая детализация | Цель Syntha |
+|---|---|---|---|
+| Вход и профиль | Retailer Home, connections, account/profile, subscription и legacy/modern переходы | Общий Retailer Profile организации, компания, locations, buyers, роли, Marketplace visibility, preferred currency | Organization workspace с явной ролью, capability manifest, completeness score, audit trail и без дублирующих профилей |
+| Поиск бренда | Connections, profiles, Discover Brands, Shop | Marketplace, категории, keyword, рекомендации, open/closed environment, connection request | Один каталог брендов с прозрачным Access state: public preview, request pending, connected, restricted, suspended |
+| Витрина | Storefront, linesheets, catalog, Best Sellers и media tiles | Brand page, Product Gallery, Linesheets/Custom Lists, Whiteboards | Storytelling и buying data в одном showroom: image/video/3D/360/hotspots без разрыва контекста заказа |
+| Поиск товара | Современный каталог с фильтрами, сортировкой, card grid и View and Quantify | Product Gallery; standard prefix search и expanded substring search; Panel/Small Tile/Large Tile/Card/Row | Единый быстрый полнотекстовый и facet search, saved filters/views, явная область поиска и отсутствие временного режима, который сбрасывается при закрытии браузера |
+| Карточка товара | style code, colors, wholesale/RRP, delivery, warehouse, MTO, fabrication, Bulk/Sized | Style/colorway data, department/division, season, category, stock per size, order close date, multiple media types | Style → Colorway → SKU; медиагалерея; explainable price, availability and delivery; compare/favorite/list; keyboard-accessible quantity grid |
+| Подборка | Linesheet, selection/order context | Lists, Linesheets, Whiteboards, Assortments, SMU/placeholders | Assortment как версия плана закупки, а не временный список; комментарии, цели, бюджет, двери, approval и conversion to order |
+| Размеры и количество | Bulk/Sized, матрица size-by-color, subtotal по цвету и общий total | Line Items/Sizing View, quantity by size × delivery × location, copy/paste, duplicate across locations, bulk order | Универсальный Allocation Matrix: SKU × delivery × door; paste, undo, formulas, validation, optimistic concurrency и сохраненные представления |
+| Поставки | delivery window и warehouse в каталоге/заказе | Immediate/Future/Prebook, min/default window, Inventory Arriving, apply delivery to multiple products | Delivery promise с типом, допустимым диапазоном, availability source, reserve policy, confidence и причиной недоступности |
+| Корзина | Active cart/order context, Start Order и order registry | Working Order/cart, autosave, drafts, grouping, warnings, duplicate product, export/import, Allocation Summary | Durable OrderDraft с immutable price snapshot, autosave status, version history, conflict handling, approval and recovery |
+| Двери | Door на старте заказа | Multi-location bulk order; All Locations Combined/By Location; split into orders per door | Явные OrderAllocation и ShipmentPlan; предсказуемый split preview до отправки; одна коммерческая сделка, несколько fulfillment orders |
+| Цена | Price type, currency, wholesale/RRP, financial summary | Customer price sheet, per-size price, company/order/line discount, promotion, surcharge, customization fee | Детальный Price Ledger с источником и приоритетом каждого adjustment, tax/FX/rounding policy и воспроизводимой формулой |
+| Проверка | Order details, summary, Pay restrictions | Product issues, min/max, missing qty, duplicates, order review, T&C, payment options | Validation Center: ошибки, предупреждения и рекомендации с переходом к конкретной ячейке; server-side revalidation перед submit |
+| После отправки | Orders registry/details/status/payment surfaces | Company orders, organization-wide visibility, re-order, payment/order history, CSV export; buyer не редактирует submitted order | Amendment/change request, audit timeline, reorder as new draft, shipment/invoice/payment reconciliation, role-based visibility |
+
+### 131.3. Профиль ритейлера как корпоративный объект
+
+В NuORDER Retailer Profile объединяет организацию, покупателей, locations и историю заказов. Заказы принадлежат организации, а не исчезают вместе с сотрудником. Настройки профиля включают:
+
+- General: company name, email, phone, primary address;
+- Retailer info: overview, store images, stocked brands, merchandise categories, business details, sales/revenue, verification, social accounts;
+- Marketplace settings: разрешение брендам находить ритейлера, скрытие контактной информации при отключении, preferred currency;
+- Locations: primary и дополнительные locations;
+- Buyers: invite/add/remove, назначение ролей;
+- onboarding: где компания продает, POS, website, год открытия, число магазинов, annual revenue, average product price, категории и текущие бренды.
+
+Сильная сторона — организационное владение заказами. Слабые стороны — чувствительные коммерческие поля смешаны с discoverability, joining another organization может архивировать прежний профиль, а подключение buyer к organization само по себе не дает подключение ко всем brand portals.
+
+**Требования Syntha:**
+
+1. Развести Organization, RetailerProfile, LegalEntity, Location/Door, User и Membership.
+2. У Membership хранить role, permissions, scopes, start/end date, invitedBy, status и lastAccessReview.
+3. Не архивировать рабочую организацию автоматически при последнем выходе пользователя; использовать owner transfer, recovery admin и retention policy.
+4. Разделить marketplace-public данные, shared-with-connected-brand данные и private verification данные.
+5. Дать предпросмотр: «что именно увидит бренд» до включения discoverability.
+6. Хранить заказы и assortment history на Organization/LegalEntity, сохраняя authorId и actor snapshot.
+7. Поддержать multiple legal entities, currencies, tax registrations, billing accounts и purchasing teams в одном workspace.
+8. Вывести Profile completeness не как блокирующую анкету целиком, а по capability: что необходимо для browse, request access, draft, submit, pay.
+
+### 131.4. Доступ к брендам и объяснимая видимость
+
+NuORDER различает:
+
+- open environment: до подключения можно просматривать весь бренд, но нельзя заказать;
+- fully closed: видна только marketplace brand page и Connect;
+- partially closed: preview плюс whitelisted products;
+- connected: каталог, назначенные цены и возможность заказа;
+- marketplace direct order: для открытых брендов заказ возможен сразу, а connection создается после submit;
+- customer/user groups: видимость продуктов, promotions, min/max rules, linesheets, widgets и availability types;
+- company price sheet и assigned warehouse дополнительно меняют видимые товары, цену и availability.
+
+Это мощно, но buyer не всегда понимает, почему товар, цена или действие отсутствует.
+
+**Целевой Syntha AccessDecision:**
+
+| Поле | Назначение |
+|---|---|
+| resourceType/resourceId | brand, collection, style, colorway, price, inventory, document |
+| subject | organization, membership, customer group |
+| decision | allow, preview, request, deny, temporarily unavailable |
+| reasons[] | connection required, region restricted, price book missing, warehouse not assigned, launch embargo, entitlement missing |
+| requestedAt/approvedAt/expiresAt | жизненный цикл доступа |
+| decisionSource | brand rule, marketplace rule, contract, manual override |
+| appeal/action | request access, contact rep, complete profile, select region |
+
+Любой закрытый товар или CTA должен показывать безопасную причину и допустимое следующее действие, не раскрывая чужие данные и внутренние правила.
+
+### 131.5. Предметная модель товара и медиа
+
+NuORDER определяет product как отдельный colorway стиля. Для одного colorway разрешено до 100 media items: standard images, 3D, 360 и video. Первое изображение является hero, второе может использоваться как hover, если оно не 3D/360/video; полная медиагалерея доступна в Product Details. Есть watermarking.
+
+Для Syntha недостаточно одной сущности Product. Каноническая иерархия:
+
+    Brand
+      └─ Style
+          ├─ Colorway
+          │   ├─ SKU (size / length / width / pack / barcode)
+          │   └─ MediaAsset[]
+          └─ ProductDocument[]
+
+**Style:**
+
+- styleId, styleNumber/article, name, description;
+- season, collection, department, division, category/subcategory, silhouette;
+- composition, care, country of origin, HS code;
+- carryOver/new/discontinued/cancelled state;
+- tags, custom attributes, certifications.
+
+**Colorway:**
+
+- colorwayId, colorCode, colorName, colorFamily, swatch;
+- launch/embargo dates, order close date;
+- color-specific wholesale/MSRP override;
+- image/video/3D/360 set;
+- fabric/material variation.
+
+**SKU:**
+
+- skuId, sizeCode, normalized size, width/length, barcode/UPC/EAN;
+- unitsPerPack, MOQ, multipleOf;
+- weight/dimensions;
+- active/sellable state.
+
+**MediaAsset:**
+
+- type: image, video, 3d, 360, CAD, look, document;
+- role: hero, hover, front, back, detail, scale, packaging, fit, runway;
+- locale, accessibility alt/caption/transcript;
+- colorway linkage, sort order, crop/focal point;
+- rendition metadata, duration, poster, codec, dimensions, file size;
+- rights owner, license territory, validFrom/validTo, watermark policy;
+- version, moderation state, checksum, source and audit fields.
+
+**Улучшения Syntha:**
+
+1. Показывать счетчик медиа и типы до открытия detail.
+2. Сохранять zoom/pan, full screen, side-by-side color comparison и synchronized zoom.
+3. Давать video speed, captions, mute state, poster, keyboard controls.
+4. Для 3D/360 показывать явный badge, drag hint и fallback image.
+5. Не использовать вторую позицию как неявную hover-семантику: роль hover хранится явно.
+6. Проверять alt text, разрешение, цветовой профиль, дубликаты и лицензию при публикации.
+7. Поддержать shoppable hotspots, но каждый hotspot должен открывать preview и не добавлять товар в заказ одним неявным кликом.
+
+### 131.6. Product Gallery, поиск, фильтры и представления
+
+NuORDER дает общий Product Gallery и тематические Linesheets/Catalogs. Возможны фильтры по season, color, availability, department и category; конкретный набор задает бренд. Поиск работает по name/style number/color. Standard search ищет по началу поля, Expanded search — по вхождению, медленнее и сбрасывается после закрытия браузера. Представления: Panel, Small Tile, Large Tile, Card и Row; Large Tile недоступен на mobile.
+
+Это показывает два анти-паттерна:
+
+- режим поиска является временной настройкой вместо явной части запроса;
+- доступность view меняется по устройству без сохраненного функционального эквивалента.
+
+**Цель Syntha Search:**
+
+- единый индекс styleNumber, name, color code/name/family, SKU/barcode, category, material, tags;
+- exact, prefix, fuzzy и semantic ranking в одном explainable запросе;
+- token highlighting и подсказка, где найдено совпадение;
+- filters из общей taxonomy, а brand custom facets подключаются дополнительно;
+- zero-result state с remove-last-filter, broaden search, show unavailable и request-access действиями;
+- saved searches, views и alert on new matches;
+- URL содержит запрос, sort, filters и view, поэтому результат воспроизводим и расшариваем;
+- browser/mobile view сохраняет те же действия, меняя плотность, а не функциональность;
+- bulk selection показывает точное число selected across pages и явный scope.
+
+### 131.7. Карточка товара: состав и критерии удобства
+
+Минимальный buyer product detail должен включать:
+
+1. identity: image/media, brand, style name, article/style number, color code/name;
+2. taxonomy: season, collection, department, division, category/subcategory;
+3. commercial: wholesale, MSRP/RRP, currency, price type/price book, applicable discounts/promotions;
+4. availability: warehouse, immediate/future/prebook, stock/reserved/available-to-sell per SKU, confidence timestamp;
+5. delivery: allowed windows, order close date, ship start/end, earliest/latest dates;
+6. order rules: MOQ, maximum, multipleOf, mandatory buy, pack composition, customization requirements;
+7. product facts: description, composition, care, country, certifications, dimensions;
+8. actions: favorite, compare, add to list/assortment, share, export, message, quantity entry;
+9. history: changed price, cancelled style, new color, changed delivery, replacement;
+10. trust: data owner, last updated, timezone and reason for unavailable/disabled controls.
+
+Удобство не должно зависеть от раскрытия десятка accordion. На desktop identity/media и buying panel остаются синхронно видимыми; на mobile нижняя sticky summary показывает selected units, value, validation state и Add/Update.
+
+### 131.8. Матрица количества: от Bulk/Sized к Allocation Matrix
+
+JOOR уже подтверждает Bulk/Sized и size-by-color. NuORDER добавляет Sizing View для больших заказов и нескольких deliveries/locations:
+
+- configurable columns, group/sort/filter/search;
+- group by delivery, затем location;
+- quantities на delivery или size level;
+- copy/paste quantities, paste by related size group, paste across cart;
+- duplicate quantities to locations;
+- hide/show sizes, bulk remove;
+- alerts по reservations, overstock, auto-adjustments и min/max;
+- required custom columns;
+- All Locations Combined или By Location;
+- saved views для columns/grouping/sorting, но filters/search не сохраняются.
+
+**Целевая Syntha Allocation Matrix:**
+
+| Ось/поле | Поведение |
+|---|---|
+| Row identity | Style + Colorway + optional delivery |
+| Columns | Door/Location × SKU/Size или переключаемая ориентация |
+| Cell | ordered quantity, pack quantity, available ATS, reserved, warning/error |
+| Header totals | units, packs, wholesale value, retail value, margin |
+| Group totals | collection, category, delivery, location, currency |
+| Editing | keyboard arrows/tab/enter, multi-cell paste, fill, copy, undo/redo |
+| Modes | All doors combined, By door, By delivery, compact Line Items |
+| Validation | inline and centralized, never color-only |
+| Persistence | autosave indicator, last saved time, offline queue, conflict banner |
+| Concurrency | row/cell versioning and merge, no silent last-write-wins |
+
+Правила ввода:
+
+- пусто означает not specified, 0 означает explicit zero;
+- отрицательные и дробные значения запрещены, кроме отдельно разрешенных измеряемых единиц;
+- paste предварительно показывает mapping и ошибки, затем применяется одной отменяемой транзакцией;
+- изменение unitsPerPack не должно молча менять pack count или заказанные units;
+- bulk fill требует preview затронутых ячеек;
+- inventory warning не заменяет server-side reservation;
+- при переключении combined ↔ by door система сохраняет распределение и показывает расхождение.
+
+### 131.9. Availability, warehouse и delivery windows
+
+NuORDER различает Immediate, Future и Prebook. Brand settings и inventory Period Start/End задают допустимые buyer ranges, также есть default/minimum length. В Product Details и Working Order можно выбрать delivery, применить ее к нескольким товарам и посмотреть Inventory Arriving. Prebook может не уменьшать inventory до перехода в обычное окно. Прошедший start date корректируется до current date.
+
+**Целевая модель:**
+
+    InventoryPosition = SKU + Warehouse + AvailabilityType + Period + OnHand + Reserved + ATS + UpdatedAt
+    DeliveryWindow = Brand + Warehouse + Type + EarliestStart + LatestEnd + MinDays + DefaultDays + CloseAt
+    SupplyPromise = OrderLine + Window + Quantity + State + Confidence + SourceVersion
+
+Обязательные правила:
+
+1. Выбранный warehouse всегда виден рядом с ценой и delivery.
+2. ATS имеет timestamp и timezone; stale data получает предупреждение.
+3. Для disabled delivery показывается причина: нет stock, не назначен warehouse, окно закрыто, регион недоступен, не выполнен minimum.
+4. Prebook, Future и Immediate имеют разные reserve/cancel policies.
+5. Apply to multiple сначала показывает eligible/ineligible товары и не меняет неподходящие строки молча.
+6. При изменении delivery автоматически пересчитываются price, promotion, inventory и min/max, но пользователю показывается diff.
+7. Заказ хранит snapshot обещания поставки; последующие изменения inventory не переписывают исторические условия.
+
+### 131.10. Multi-door и распределение по магазинам
+
+NuORDER Bulk Order позволяет одним действием создать отдельные orders по locations. Buyer выбирает shipping addresses, их порядок, delivery и quantities; ввод возможен All Locations Combined или By Location. При submit система добавляет suffix к номеру для каждого split order.
+
+**Что улучшить в Syntha:**
+
+- до ввода quantity определить hierarchy: LegalEntity → BuyingGroup → Region → Door/Location → Address;
+- shipping address не должна быть единственным идентификатором двери;
+- иметь reusable door clusters и allocation templates;
+- показывать Split Preview до submit: orders, doors, deliveries, currencies, totals, rules и PO numbers;
+- объяснять, где minimum применяется к whole draft, shipment, door или resulting split order;
+- не клонировать общие order notes/attachments без явной политики;
+- поддержать central buy с последующим allocation, прямой by-door buy и смешанный режим;
+- хранить parent CommercialOrder и child FulfillmentOrder, чтобы связь не терялась;
+- позволить rebalance between doors до cut-off с audit trail;
+- экспортировать door identifiers и выбранный display order без зависимости от визуального порядка строк.
+
+### 131.11. Working Order / Cart / Draft
+
+NuORDER Working Order содержит:
+
+- Order Details: company, buyer, sales rep, shipping/billing addresses, multiple doors, generated order number, optional Customer PO, discount, surcharge, CC emails, order tags, order type и notes;
+- Products: Line Items или Sizing View, grouping/sorting, missing quantities, stock issues, duplicates;
+- delivery type/range per product, apply to multiple, Add Product Again;
+- order-level и line-level discounts;
+- autosave изменений, Save Draft, повторное открытие draft;
+- экспорт/импорт order spreadsheet и Allocation Summary;
+- Order Review, T&C/payment в зависимости от конфигурации;
+- submit confirmation и email.
+
+Новая beta Cart добавляет отдельный интерфейс, filters, sort by delivery/recently added, review queues, inventory indicators, required fields и именованные drafts. Сосуществование classic Working Order и beta Cart означает риск разных правил и результатов.
+
+**Syntha OrderDraft:**
+
+| Группа | Поля |
+|---|---|
+| Identity | draftId, organization, brand, legalEntity, owner, collaborators, status, version |
+| Context | currency, priceBook, warehouse, orderType, salesRep, buyer, doors |
+| Commercial | customerPO, terms, tax mode, discounts, promotions, surcharges |
+| Fulfillment | shipping/billing, delivery windows, allocations, split policy |
+| Content | lines, SKUs, quantities, notes, attachments, customizations |
+| Safety | validation snapshot, price snapshot, inventory snapshot, lastSavedAt, conflict state |
+| Lifecycle | created, named, shared, approved, submitted, expired, abandoned |
+
+Требования:
+
+1. Autosave показывает Saving/Saved/Offline/Conflict и не маскирует ошибку.
+2. Clear products и Reset entire draft — разные команды; order metadata не удаляется вместе с cart без предупреждения.
+3. Opening another draft не заменяет текущую корзину до preview и выбора merge/replace/open separately.
+4. Один style/colorway может присутствовать несколько раз только при разных delivery/customization/door-group или по явному duplicate intent.
+5. Re-order создает новый draft с ссылкой sourceOrderId; данные повторно валидируются по текущим price, inventory и access.
+6. Submitted order нельзя silently edit; поддерживаются change request, amendment version и authorized brand revision.
+
+### 131.12. Прозрачная модель цен и расчетов
+
+NuORDER поддерживает customer-specific price sheets, default wholesale fallback, per-size wholesale, currencies, company/order/line discounts, promotions, surcharge, customization fees и units per pack. Product-level discount перекрывает order-level discount; surcharge применяется ко всему заказу. Цена pack рассчитывается через unit price × units per pack, при этом в NuORDER inventory для pack может уменьшаться на число pack, а отображаемые units и price — на содержимое pack. Это требует явного разделения commercial units и inventory units.
+
+**Приоритет определения base unit price в Syntha:**
+
+1. SKU/size price в назначенном customer price book;
+2. colorway/style price в customer price book;
+3. contract price;
+4. default wholesale price;
+5. если ничего нет — строка незаказываемая с причиной Price unavailable.
+
+**Базовые величины:**
+
+    orderedPacks = sum(packQuantity)
+    commercialUnits = sum(packQuantity × unitsPerPack) + sum(looseSkuQuantity)
+    inventoryUnits = sum(packInventoryQuantity) или sum(commercialUnits) согласно InventoryUomPolicy
+    grossLine = sum(quantityBasis × baseUnitPrice)
+
+Количество для цены и для inventory нельзя выводить из одного поля без InventoryUomPolicy.
+
+**Adjustment ledger:**
+
+    effectiveManualDiscount =
+      lineDiscount, если он задан,
+      иначе orderDiscount
+
+    netAfterManual = grossLine - manualDiscountAmount
+    netAfterPromotions = applyPromotionPolicy(netAfterManual, eligiblePromotions)
+    customizationTotal = sum(customizationQuantity × customizationUnitFee)
+    surchargeTotal = applySurchargePolicy(eligibleBase)
+    shippingTotal = ratedShipping or quotedShipping
+    taxTotal = taxEngine(taxableBase, jurisdiction, exemption)
+    grandTotal = netAfterPromotions
+                 + customizationTotal
+                 + surchargeTotal
+                 + shippingTotal
+                 + taxTotal
+
+Для каждой строки ledger обязательны:
+
+- type, label, amount/percent, currency;
+- source: price book, contract, promotion, user override, tax/shipping engine;
+- priority, stackable/exclusive group, eligibility explanation;
+- applied base и rounding result;
+- actor и permission для ручного override;
+- timestamp и snapshot version.
+
+**Непереговорные правила:**
+
+1. Денежные значения хранятся decimal/minor units, не float.
+2. Currency, tax inclusive/exclusive и rounding mode показываются явно.
+3. FX фиксируется rate, source, timestamp и base/quote currency; order snapshot неизменяем.
+4. MSRP/RRP является информационной величиной и не попадает в payable total.
+5. Средний discount не выдается за одинаковую скидку всех строк.
+6. Promotion stacking отображается пошагово; buyer может раскрыть причины применено/не применено.
+7. Любое изменение price book, company, currency, delivery, size или quantity вызывает детерминированный recalculation diff.
+8. Перед submit сервер повторяет расчет и просит подтвердить только реальные изменения.
+
+### 131.13. Min/max, multiples, mandatory buys и validation center
+
+NuORDER позволяет задавать Minimum, Maximum, Multiples Of и Mandatory Buys в units или currency, на order/line/size/custom group, для all customers/single company/customer groups. Возможна автоматическая подстановка valid sizes. Required custom fields, missing quantities, duplicate deliveries, inventory и customizations также блокируют submit.
+
+**Syntha Rule Engine:**
+
+| Поле | Пример |
+|---|---|
+| ruleType | min, max, multiple, mandatory, compatibility, exclusivity |
+| subject | order, split order, door, shipment, line, SKU, category, custom group |
+| measure | commercial units, packs, inventory units, wholesale value, retail value |
+| audience | organization, customer group, contract, region |
+| effective period | season/date/timezone |
+| expression | machine-readable predicate |
+| message | localized human explanation |
+| remediation | add N, remove N, choose delivery, complete field |
+| severity | info, warning, blocking |
+| version | snapshot used by draft/order |
+
+Validation Center группирует проблемы по:
+
+- Order details;
+- Price/currency;
+- Product and quantity;
+- Inventory/delivery;
+- Door/allocation;
+- Commercial rules;
+- Customization;
+- Payment/legal.
+
+Каждая проблема имеет count, affected rows/cells, reason, owner, fix action и scroll/focus target. Цвет никогда не является единственным индикатором. Проверка запускается при вводе, по запросу и обязательно server-side на submit.
+
+### 131.14. Customization, notes и product-specific data
+
+NuORDER может помечать product как customizable и требовать print type, text, color, upload или другие атрибуты; возможна fee/surcharge и применение настройки к similar products. Отсутствующая обязательная customization блокирует submit.
+
+Syntha должна хранить:
+
+- CustomizationDefinition с type, options, constraints, preview renderer, fee rule;
+- CustomizationSelection на конкретной order line/allocation;
+- generated preview и production-ready file как разные assets;
+- consent/rights для загружаемых buyer files;
+- proof approval status и approval actor;
+- effect on lead time, MOQ, cancellation and return policy.
+
+Order note, line note, door note, internal note и vendor-visible note — разные поля с явной видимостью. Нельзя сводить их к одному Notes.
+
+### 131.15. Checkout, платежи и после-заказный цикл
+
+NuORDER документирует credit card, ACH и choose payment later; multiple deliveries могут иметь раздельный payment. Payment methods управляются отдельно, платежи и status history доступны из Orders, если функция включена. Buyer после submit не редактирует заказ; изменение выполняет brand sales rep.
+
+**Syntha:**
+
+1. PaymentInstrument хранится у payment provider/token vault; PAN/bank credentials не попадают в Syntha.
+2. Checkout показывает amount due today, future schedule, currency, fees, authorization language и refund/cancel policy.
+3. Поддержать deposit, net terms, pay later, card/ACH, invoice, payment link и split payment — только как capability, разрешенную брендом/регионом.
+4. Разделить OrderStatus, FulfillmentStatus, InvoiceStatus и PaymentStatus.
+5. Timeline содержит actor, event, changed fields, documents and correlation ID.
+6. Buyer может создать change request; платформа показывает, влияет ли он на price, delivery или payment.
+7. Order Details всегда показывает quantities, totals, adjustments, shipments, invoices, payments и source draft.
+8. Export отражает тот же ledger, а не пересчитанную отдельной логикой сумму.
+
+### 131.16. Assortments, Whiteboards, Rollups и Targets
+
+NuORDER Assortment — live collaborative plan для doors: catalog data/images, selections, quantities и notes of intent. Есть placeholders/SMU, fields для cluster/style/allocator notes, XLS export и downstream conversion в retailer ordering system.
+
+Rollup объединяет несколько assortments и позволяет:
+
+- анализировать combined buy;
+- tile/grid views, search/filter/sort/group/pivot;
+- saved views и sharing;
+- totals по doors: units, products, average depth, cost, retail;
+- редактировать units, targets и notes, видеть real-time updates;
+- добавлять product в underlying assortment.
+
+Targets задают плановые metrics, загружаются/вставляются и сравниваются с working totals/variance. Whiteboards объединяют visual storytelling и shoppable products.
+
+**Целевая Syntha Buying Plan:**
+
+    AssortmentPlan
+      ├─ PlanVersion
+      ├─ DoorScope / Cluster
+      ├─ AssortmentItem (Style/Colorway/SKU or Placeholder/SMU)
+      ├─ TargetSet
+      ├─ Note / Decision / Approval
+      ├─ VisualBoard / Hotspot
+      └─ OrderConversion
+
+Улучшения:
+
+1. Assortment и OrderDraft используют одну product, price, delivery и allocation модель.
+2. Conversion показывает exact diff: planned vs ordered units/value/doors/delivery.
+3. Rollup не дублирует items; он является query/view над source plans.
+4. Target хранит metric definition, scope, period, currency, source и owner.
+5. Placeholder/SMU имеет lifecycle: proposed → linked to product → approved/rejected → ordered.
+6. Одновременное редактирование поддерживает presence, comments, cell history и conflict resolution.
+7. Visual Board hotspot открывает detail; Add создает явное действие с quantity/delivery, а не скрытый cart mutation.
+8. Approval gates доступны по budget, margin, category, region и door cluster.
+
+### 131.17. Что реализовано плохо или не до конца
+
+| Платформа | Наблюдаемая проблема | Риск | Исправление в Syntha |
+|---|---|---|---|
+| JOOR | /ra/home может остаться пустым после Failed to fetch без error/retry | Полная потеря рабочего кабинета | App shell, timeout, retry, cached safe state, incident ID, status page link |
+| JOOR | Смешение modern и legacy routes, anchor-команды и непоследовательные Loading states | Потеря контекста, непредсказуемый back/refresh | Единый router contract, route registry, loading/error spec |
+| JOOR | Entitlement/subscription может открывать legacy upgrade без ясного результата | Недоверие к доступу | Capability page с планом, причиной и owner |
+| NuORDER | Функции зависят от brand config/role/group/support и часто просто отсутствуют | Buyer не знает, почему UI отличается | Capability manifest + explanation для каждого скрытого/disabled действия |
+| NuORDER | Classic Working Order и beta Cart сосуществуют | Разная логика и обучение | Один domain engine и parity contract для любых UI |
+| NuORDER | Expanded search медленнее и сбрасывается при закрытии браузера | Невоспроизводимый поиск | Единый search grammar и URL state |
+| NuORDER | Sizing View требует включения через Account Manager; custom columns через Support | Медленное администрирование | Self-service schema/config с preview, validation и audit |
+| NuORDER | Saved views не сохраняют filters/search | Повторная ручная настройка | Saved view включает columns, grouping, sorting, filters, query и scope |
+| NuORDER | Clear cart может удалить order details | Потеря введенных данных | Отдельные clear products/reset draft, recycle history |
+| NuORDER | Line discount перекрывает order discount, promotions могут stack; итоговая последовательность сложна | Ошибки ожидания цены | Раскрываемый adjustment ledger и policy simulator |
+| NuORDER | Pack влияет на displayed units/price, но inventory может списываться pack-level | Ошибка units и availability | Раздельные commercialUom/inventoryUom и явная конверсия |
+| NuORDER | Bulk order превращается в несколько orders с suffix | Потеря общей коммерческой связи | Parent CommercialOrder + child FulfillmentOrders |
+| NuORDER | Buyer не может исправить submitted order, только rep | Медленные изменения и неявная ответственность | Change request/amendment workflow |
+| NuORDER | Видимость определяется многими слоями: connection, whitelist, groups, price sheet, warehouse | «Исчезающие» товары и цены | Explainable AccessDecision и visibility debug для authorized admins |
+| Обе | Spreadsheet export/import используется как обходной путь массового ввода | Версионные ошибки и silent overwrite | Безопасный grid paste/import preview, schema version и row-level error report |
+| Обе | Информация и функции меняются по бренду | Низкая обучаемость | Consistent shell, capability-aware onboarding и in-context help |
+
+### 131.18. Канонические связи Syntha
+
+| Source | Relation | Target | Кардинальность/ограничение |
+|---|---|---|---|
+| Organization | owns | RetailerProfile | 1:1 per marketplace identity |
+| Organization | contains | LegalEntity | 1:N |
+| Organization | has | Membership | 1:N, temporal |
+| Organization | operates | Door/Location | 1:N |
+| Organization | connectsTo | Brand | N:M через BrandConnection |
+| BrandConnection | grants | AccessPolicy/PriceBook/Warehouse | N:M, effective-dated |
+| Brand | owns | Style | 1:N |
+| Style | has | Colorway | 1:N |
+| Colorway | has | SKU | 1:N |
+| Colorway | has | MediaAsset | 1:N |
+| SKU | pricedBy | PriceBookEntry | 1:N by currency/size/customer |
+| SKU | stockedAt | InventoryPosition | 1:N by warehouse/period |
+| Brand | offers | DeliveryWindow | 1:N |
+| AssortmentPlan | contains | AssortmentItem | 1:N, versioned |
+| AssortmentPlan | measuredBy | TargetSet | N:M |
+| Rollup | queries | AssortmentPlan | N:M, no item duplication |
+| OrderDraft | contains | OrderLine | 1:N |
+| OrderLine | allocates | OrderAllocation | 1:N by SKU/door/delivery |
+| OrderDraft | calculatedBy | PriceLedger | 1:1 versioned snapshot |
+| OrderDraft | validatedBy | ValidationSnapshot | 1:N |
+| Submitted Order | derivesFrom | OrderDraftVersion | N:1 immutable |
+| CommercialOrder | splitsInto | FulfillmentOrder | 1:N |
+| FulfillmentOrder | produces | Shipment/Invoice | 1:N |
+| Invoice | settledBy | Payment | N:M |
+| Any aggregate | emits | DomainEvent/AuditEvent | 1:N |
+
+### 131.19. Capability manifest вместо скрытых функций
+
+API кабинета должен возвращать не только data, но и capabilities:
+
+    canBrowse
+    canViewWholesale
+    canViewInventory
+    canOrder
+    canUseSizingMatrix
+    canUseMultiDoor
+    canOverridePrice
+    canApplyDiscount
+    canUsePromotions
+    canCustomizeProduct
+    canPayByCard
+    canPayByAch
+    canPayLater
+    canExport
+    canImport
+    canCreateAssortment
+    canShareAssortment
+
+Каждая capability содержит enabled, reasonCode, message, remediation, source и expiresAt. UI не угадывает возможности по отсутствию данных и не прячет критическую причину.
+
+### 131.20. Надежность, пустые состояния и восстановление
+
+Новый дефект белого экрана JOOR делает этот блок P0.
+
+**Общий app shell обязан работать даже при отказе бизнес-API:**
+
+- logo/navigation minimal shell;
+- понятное состояние «не удалось загрузить кабинет»;
+- Retry, Go to safe home, Check connection;
+- correlation/incident ID и timestamp;
+- status page/help link;
+- last successful sync и read-only cached data, если это безопасно;
+- сохранение unsent draft в локальной encrypted queue;
+- exponential backoff с ограничением, а не бесконечный spinner;
+- отдельные ошибки auth, permission, network, validation, server and maintenance;
+- telemetry без private order/customer payload.
+
+Для catalog, product, cart, order, assortment и profile обязательны состояния loading, empty, filtered-empty, partial, stale, error, unauthorized, forbidden и offline.
+
+### 131.21. Приоритетный backlog Syntha
+
+**P0 — фундамент commerce и защита от потери работы**
+
+1. Organization/RetailerProfile/Membership/Location domain.
+2. Style/Colorway/SKU/MediaAsset schema.
+3. BrandConnection + explainable AccessDecision.
+4. Durable OrderDraft with autosave/version/conflict recovery.
+5. Allocation Matrix SKU × delivery × door.
+6. Deterministic Price Ledger, decimal currency, tax/FX/rounding policy.
+7. Rule Engine и Validation Center.
+8. InventoryPosition/DeliveryWindow/SupplyPromise.
+9. App shell with error/retry/cached safe state.
+10. Submit idempotency, server revalidation и immutable order snapshot.
+
+**P1 — сильнее JOOR/NuORDER для ежедневной работы**
+
+11. Customer price books, per-size price, promotions and stack simulator.
+12. Multi-door split preview и parent/child orders.
+13. Assortment Plan + Targets + Rollup.
+14. Whiteboard/showroom с media, 3D/360/video и safe hotspots.
+15. Product compare, favorites, lists and saved searches/views.
+16. Grid copy/paste/import preview, undo/redo, keyboard accessibility.
+17. Order amendment/change request and organization-wide history.
+18. Payments capability layer, invoice/payment timeline.
+19. Collaboration, comments, approvals and presence.
+20. Data freshness, audit and field-level provenance.
+
+**P2 — развитие и оптимизация**
+
+21. AI-assisted assortment suggestions с объяснимыми constraints и human approval.
+22. Door allocation optimizer по targets, capacity, history и delivery.
+23. Budget/margin/OTB scenario planning.
+24. Replenishment recommendations and anomaly detection.
+25. Substitute style/color suggestions при cancellation/stockout.
+26. Public API/webhooks/ERP/POS sync с idempotency and reconciliation.
+27. International tax, landed cost, duties and incoterms.
+28. Offline/mobile market mode.
+
+### 131.22. Acceptance criteria для реализации
+
+#### Профиль и доступ
+
+1. Уход сотрудника не удаляет и не скрывает organization order history.
+2. Пользователь видит, какие profile fields public, brand-shared и private.
+3. Для любого denied/preview ресурса доступен reasonCode и допустимое действие.
+4. Переключение legal entity/door/currency не сохраняет несовместимый order context молча.
+5. Изменение membership/role попадает в audit log.
+
+#### Каталог и медиа
+
+6. Один запрос находит style number, color, SKU и barcode, а UI показывает поле совпадения.
+7. Search/filter/view воспроизводимы из URL и saved view.
+8. Zero results различает отсутствие товаров, отсутствие доступа и слишком узкие filters.
+9. Hero/hover/detail media имеют явную role; 3D/360/video имеют fallback и accessibility.
+10. Product detail показывает источник и timestamp price/inventory.
+
+#### Количество и поставки
+
+11. Paste 1 000+ ячеек проходит preview, отображает invalid cells и отменяется одной командой.
+12. Combined-to-door allocation сохраняет total и показывает unallocated variance.
+13. Pack order отображает packs, commercial units, inventory units и расчет.
+14. Изменение delivery показывает price/inventory/rule diff до подтверждения.
+15. Stale inventory не выглядит как real-time availability.
+16. Apply delivery to multiple перечисляет skipped lines с причиной.
+17. Min/max/multiple message ведет к точной ячейке и предлагает допустимое значение.
+
+#### Цена
+
+18. Base price имеет source: price book/contract/default.
+19. Line discount override order discount отражен в ledger до submit.
+20. Promotion stacking показывает последовательность, eligibility и неиспользованные предложения.
+21. MSRP/RRP не влияет на payable total.
+22. Все суммы воспроизводятся сервером при одинаковом snapshot.
+23. FX и rounding неизменяемы после submit.
+24. Reprice на submit показывает only changed lines и требует явного подтверждения.
+
+#### Draft/order
+
+25. Ошибка autosave видна не позднее следующего изменения и не стирает локальную работу.
+26. Clear products сохраняет order details; Reset draft требует отдельного подтверждения.
+27. Открытие другого draft предлагает merge/replace/separate.
+28. Duplicate line без отличающего delivery/customization/door intent получает warning.
+29. Submit повторным запросом с тем же idempotency key не создает второй order.
+30. Submitted order связан с immutable draft, price, inventory и validation snapshots.
+31. Re-order создает новый draft и повторно проверяет доступ/цены/stock.
+32. Change request имеет status, owner, diff и влияние на payment/delivery.
+
+#### Multi-door и планы
+
+33. Split Preview совпадает с фактически созданными child orders.
+34. Rule scope явно различает whole draft, door, shipment и split order.
+35. Rollup totals равны сумме source assortments без дублирования.
+36. Planned-to-ordered conversion показывает units/value/door/delivery variance.
+37. Placeholder/SMU сохраняет историю после связывания с реальным product.
+38. Одновременное изменение одной ячейки создает merge/conflict flow, а не silent overwrite.
+
+#### Надежность и доступность
+
+39. Failed to fetch не приводит к пустому body: отображаются error, Retry и incident ID.
+40. App shell остается доступен при падении catalog/order API.
+41. Loading/empty/error/offline различаются семантически и для screen reader.
+42. Disabled action имеет reason, а не только серый цвет.
+43. Quantity matrix полностью управляется клавиатурой.
+44. Все destructive bulk commands имеют affected-count preview и undo/recovery, где возможно.
+
+### 131.23. Решение: какой гибрид строить
+
+Syntha должна взять:
+
+- у JOOR — connection-driven wholesale marketplace, современный catalog card, быстрый View and Quantify, price/currency/warehouse context и простой staged Start Order;
+- у NuORDER — organization-level retailer profile, rich media, Sizing View, delivery/availability model, multi-door, Working Order, price sheets, rules, Assortments/Rollups/Targets и Whiteboards;
+- не переносить — JOOR legacy/modern разрыв и белые экраны; NuORDER support-gated configuration, скрытую вариативность, temporary search mode, несохраненные filters, неоднозначность pack inventory и непрозрачное stacking.
+
+Конечная модель — не набор разрозненных страниц, а одна связанная цепочка:
+
+    Retailer Profile
+      → Brand Access
+      → Catalog / Showroom
+      → Product Detail
+      → Assortment Plan
+      → Allocation Matrix
+      → Validated OrderDraft
+      → Price Ledger + Split Preview
+      → Approval / Checkout
+      → CommercialOrder
+      → Fulfillment / Invoice / Payment / Amendment
+
+### 131.24. Официальные источники NuORDER
+
+Дата доступа ко всем источникам: 19 августа 2026 года.
+
+- Buyer dashboard: https://helpdesk.nuorder.com/hc/en-us/articles/360049930051-Buyer-dashboard
+- Retailer profile overview: https://helpdesk.nuorder.com/hc/en-us/articles/43537045658139-Retailer-profile-overview
+- Retailer settings: https://helpdesk.nuorder.com/hc/en-us/articles/360000748503-Retailer-settings-Edit-or-update-your-Retailer-info
+- Setting up retailer profile: https://helpdesk.nuorder.com/hc/en-us/articles/43537436072091-Setting-up-your-retailer-profile
+- Browse products: https://helpdesk.nuorder.com/hc/en-us/articles/201010833-Browse-products
+- Product images overview: https://helpdesk.nuorder.com/hc/en-us/articles/360040825432-Product-images-overview
+- Working Order overview: https://helpdesk.nuorder.com/hc/en-us/articles/202048009-Working-Order-overview
+- Cart overview for buyers, beta: https://helpdesk.nuorder.com/hc/en-us/articles/48766830188571-Cart-overview-for-buyers-beta
+- Sizing View: https://helpdesk.nuorder.com/hc/en-us/articles/17643170128795-Sizing-View-in-the-Working-Order
+- Multi-location bulk ordering: https://helpdesk.nuorder.com/hc/en-us/articles/17014177680539-Ship-to-multiple-locations-with-bulk-ordering
+- Delivery windows overview: https://helpdesk.nuorder.com/hc/en-us/articles/206501413-Delivery-windows-overview
+- Order min/max rules: https://helpdesk.nuorder.com/hc/en-us/articles/115005914466-Order-min-and-max-rules
+- Price sheet overview: https://helpdesk.nuorder.com/hc/en-us/articles/115005758446-Price-sheet-overview
+- Units per pack: https://helpdesk.nuorder.com/hc/en-us/articles/115005881623-Set-up-units-per-pack
+- Discounts and surcharges: https://helpdesk.nuorder.com/hc/en-us/articles/202850375-Order-discounts-and-surcharges
+- Promotions overview: https://helpdesk.nuorder.com/hc/en-us/articles/16009537894299-Promotions-overview
+- Price per size: https://helpdesk.nuorder.com/hc/en-us/articles/201674203-Price-per-size
+- Currency overview: https://helpdesk.nuorder.com/hc/en-us/articles/207482793-Currency-overview
+- Retail assortments: https://helpdesk.nuorder.com/hc/en-us/articles/18914001755419-Retail-assortments-overview
+- Rollups: https://helpdesk.nuorder.com/hc/en-us/articles/18410683909147-Rollups-Review-multiple-assortments-in-a-rollup
+- Targets in assortments: https://helpdesk.nuorder.com/hc/en-us/articles/18923106692379-Targets-in-assortments
+- Whiteboards for buyers: https://helpdesk.nuorder.com/hc/en-us/articles/15763978188443-Whiteboards-for-buyers
+- Orders page: https://helpdesk.nuorder.com/hc/en-us/articles/209205146-Orders-page-overview
+- Export/import Working Order: https://helpdesk.nuorder.com/hc/en-us/articles/203152425-Export-and-import-orders-into-the-Working-Order
+- Order checkout: https://helpdesk.nuorder.com/hc/en-us/articles/28203420398235-Order-checkout-overview
+- Product customizations: https://helpdesk.nuorder.com/hc/en-us/articles/13898584214939-Ordering-products-with-Customizations
+- Open vs. closed environment: https://helpdesk.nuorder.com/hc/en-us/articles/8503864082459-Open-vs-closed-environment
+
+Источники описывают доступный набор возможностей NuORDER, но не гарантируют включение каждой функции у любого бренда. Перед реализацией интеграционной совместимости необходимо дополнительно проверить конкретные API/exports, entitlement и regional/payment constraints.

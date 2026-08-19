@@ -12,7 +12,7 @@ import {
   attachReadyOrder,
   cancelAttachedOrder,
 } from '../modules/orders/public.mjs';
-import { createBuyerCommercialSnapshot } from '../modules/retail-doors/public.mjs';
+import { assertBuyerCommercialSnapshot } from '../modules/retail-doors/public.mjs';
 import { assertAcceptedShowroomAccess } from '../modules/showroom-invitations/public.mjs';
 import { advanceCommercialCycle, attachOrder, cancelCommercialCycleOrder } from '../modules/commercial-cycle/public.mjs';
 
@@ -61,8 +61,9 @@ export function createOrderBuilderService({
 
   return Object.freeze({
     createOrderDraft(commandId, actorId, { selectionId, terms, retailDoorId = null }) {
-      const fingerprint = retailDoorId
-        ? `createOrderDraft:${actorId}:${selectionId}:${retailDoorId}:${canonicalJson(terms)}`
+      const requestedRetailDoorId = typeof retailDoorId === 'string' && retailDoorId.trim().length > 0 ? retailDoorId.trim() : null;
+      const fingerprint = requestedRetailDoorId
+        ? `createOrderDraft:${actorId}:${selectionId}:${requestedRetailDoorId}:${canonicalJson(terms)}`
         : `createOrderDraft:${actorId}:${selectionId}:${canonicalJson(terms)}`;
       return execute(
         commandId,
@@ -80,13 +81,25 @@ export function createOrderBuilderService({
           invariant(!await tx.getOrderByCycle(cycle.id), 'ORDER_FOR_CYCLE_EXISTS', 'Cycle already has an order draft', { cycleId: cycle.id });
 
           const pinnedCommercialBasis = hasPinnedCommercialBasis(selection);
-          invariant(!pinnedCommercialBasis || (typeof retailDoorId === 'string' && retailDoorId.trim().length > 0), 'ORDER_RETAIL_DOOR_REQUIRED', 'Commercially pinned selection requires retailDoorId');
-          invariant(pinnedCommercialBasis || retailDoorId === null, 'ORDER_UNEXPECTED_RETAIL_DOOR', 'Legacy selection without a commercial basis cannot attach an unrelated retail door');
           let buyerCommercialSnapshot = null;
           if (pinnedCommercialBasis) {
-            const buyer = requireEntity(await tx.getOrganisation(selection.shopId), 'SHOP_NOT_FOUND', { shopId: selection.shopId });
-            const door = requireEntity(await tx.getRetailDoor(retailDoorId.trim()), 'RETAIL_DOOR_NOT_FOUND', { retailDoorId });
-            buyerCommercialSnapshot = createBuyerCommercialSnapshot({ buyer, door });
+            invariant(selection.buyerCommercialSnapshot && selection.retailDoorId && selection.retailDoorVersion, 'ORDER_BUYER_CONTEXT_NOT_PINNED', 'Commercially pinned selection must already freeze its buyer Retail Door context');
+            buyerCommercialSnapshot = assertBuyerCommercialSnapshot(selection.buyerCommercialSnapshot, { shopId: selection.shopId });
+            invariant(
+              buyerCommercialSnapshot.retailDoorId === selection.retailDoorId
+                && buyerCommercialSnapshot.retailDoorVersion === selection.retailDoorVersion,
+              'ORDER_BUYER_CONTEXT_LINEAGE_MISMATCH',
+              'Selection buyer context does not match its Retail Door lineage',
+              { selectionId: selection.id, retailDoorId: selection.retailDoorId, retailDoorVersion: selection.retailDoorVersion },
+            );
+            invariant(
+              requestedRetailDoorId === null || requestedRetailDoorId === selection.retailDoorId,
+              'ORDER_RETAIL_DOOR_SELECTION_MISMATCH',
+              'Order cannot switch the Retail Door already pinned by Selection',
+              { selectionId: selection.id, pinnedRetailDoorId: selection.retailDoorId, requestedRetailDoorId },
+            );
+          } else {
+            invariant(requestedRetailDoorId === null, 'ORDER_UNEXPECTED_RETAIL_DOOR', 'Legacy selection without a commercial basis cannot attach an unrelated retail door');
           }
 
           const order = createOrderDraft({

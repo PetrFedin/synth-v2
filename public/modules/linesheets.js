@@ -10,6 +10,7 @@
     collectionId: '', selectedId: '', query: '', items: [], nextCursor: null,
     loadedCollectionId: '', loading: false, loadingMore: false, error: '', requestToken: 0,
     buyerAccessKey: '', cycleId: '', buyerCatalog: null, matrices: [], buyerLoadedKey: '', buyerLoading: false, buyerError: '', buyerRequestToken: 0,
+    buyerDoorId: '', buyerDoors: [], buyerDoorShopId: '', buyerDoorLoading: false, buyerDoorError: '', buyerDoorRequestToken: 0,
     selectedStyleId: '', quantities: {}, quantityCatalogId: '', quantitySelectionId: '', dirty: false,
   };
   for (const [key, fallback] of Object.entries(defaults)) if (LS[key] === undefined) LS[key] = structuredClone(fallback);
@@ -25,6 +26,29 @@
   function collectionName(collection) { return value(collection?.name || collection?.title || collection?.code || collection?.id) || text('Коллекция', 'Collection'); }
   function organisationName(id) { const item = organisationById(id); return value(item?.name || item?.legalName || item?.id || id) || '—'; }
   function showroomName(id) { const item = showroomById(id); return value(item?.name || item?.id || id) || '—'; }
+  function retailDoorLabel(door) {
+    if (!door) return '—';
+    const identity = [value(door.code), value(door.name)].filter(Boolean).join(' · ') || value(door.id) || '—';
+    const city = value(door.shipToAddress?.city);
+    return city ? `${identity} · ${city}` : identity;
+  }
+  function retailDoorAddressLabel(address) {
+    if (!address) return '—';
+    return [address.countryCode, address.postalCode, address.city, address.region, address.line1, address.line2].map(value).filter(Boolean).join(', ') || '—';
+  }
+  function pinnedRetailDoor(selection) {
+    const snapshot = selection?.buyerCommercialSnapshot;
+    if (!selection?.retailDoorId || !snapshot) return null;
+    return Object.freeze({
+      id: selection.retailDoorId,
+      code: snapshot.doorCode,
+      name: snapshot.doorName,
+      version: selection.retailDoorVersion,
+      status: 'pinned',
+      shipToAddress: snapshot.shipToAddress,
+      billToAddress: snapshot.billToAddress,
+    });
+  }
 
   function formatDate(raw) {
     const date = raw ? new Date(raw) : null;
@@ -122,14 +146,16 @@
 
   function currentBuyerContext() {
     const accesses = buyerAccesses();
-    if (!accesses.length) return Object.freeze({ accesses, access: null, cycles: [], cycle: null, selection: null });
+    if (!accesses.length) return Object.freeze({ accesses, access: null, cycles: [], cycle: null, selection: null, retailDoors: [], retailDoor: null });
     if (!LS.buyerAccessKey || !accesses.some(item => item.key === LS.buyerAccessKey)) LS.buyerAccessKey = accesses[0].key;
     const access = accesses.find(item => item.key === LS.buyerAccessKey) || accesses[0];
     const cycles = cyclesForAccess(access);
     if (!LS.cycleId || !cycles.some(item => item.id === LS.cycleId)) LS.cycleId = cycles[0]?.id || '';
     const cycle = cycles.find(item => item.id === LS.cycleId) || null;
     const selection = cycle ? list(workspace().selections).find(item => item.cycleId === cycle.id && item.showroomId === access.showroomId) || null : null;
-    return Object.freeze({ accesses, access, cycles, cycle, selection });
+    const retailDoors = LS.buyerDoorShopId === access.shopId ? list(LS.buyerDoors) : [];
+    const retailDoor = pinnedRetailDoor(selection) || retailDoors.find(item => item.id === LS.buyerDoorId) || null;
+    return Object.freeze({ accesses, access, cycles, cycle, selection, retailDoors, retailDoor });
   }
 
   function resetBuyerCatalog({ preserveQuantities = false } = {}) {
@@ -145,6 +171,56 @@
       LS.quantityCatalogId = '';
       LS.quantitySelectionId = '';
       LS.dirty = false;
+    }
+  }
+
+  function resetBuyerDoor() {
+    LS.buyerDoorId = '';
+    LS.buyerDoors = [];
+    LS.buyerDoorShopId = '';
+    LS.buyerDoorLoading = false;
+    LS.buyerDoorError = '';
+    LS.buyerDoorRequestToken += 1;
+  }
+
+  function buyerDoorRequest(context) {
+    if (!context.access || context.selection?.retailDoorId) return null;
+    return Object.freeze({
+      key: context.access.shopId,
+      path: `/v2/shops/${encodeURIComponent(context.access.shopId)}/doors`,
+    });
+  }
+
+  function ensureBuyerDoorLoad(context) {
+    const request = buyerDoorRequest(context);
+    if (!request || LS.buyerDoorLoading || LS.buyerDoorShopId === request.key) return;
+    void loadBuyerDoors(context, request);
+  }
+
+  async function loadBuyerDoors(context, request = buyerDoorRequest(context)) {
+    if (!request || LS.buyerDoorLoading) return;
+    const requestToken = ++LS.buyerDoorRequestToken;
+    LS.buyerDoorLoading = true;
+    LS.buyerDoorError = '';
+    try {
+      const doors = list(await api(request.path))
+        .filter(door => door?.status === 'active')
+        .sort((left, right) => retailDoorLabel(left).localeCompare(retailDoorLabel(right)) || value(left.id).localeCompare(value(right.id)));
+      if (requestToken !== LS.buyerDoorRequestToken || buyerDoorRequest(currentBuyerContext())?.key !== request.key) return;
+      LS.buyerDoors = doors;
+      LS.buyerDoorShopId = request.key;
+      if (!doors.some(door => door.id === LS.buyerDoorId)) LS.buyerDoorId = doors.length === 1 ? doors[0].id : '';
+    } catch (error) {
+      if (requestToken !== LS.buyerDoorRequestToken) return;
+      LS.buyerDoors = [];
+      LS.buyerDoorId = '';
+      LS.buyerDoorShopId = request.key;
+      LS.buyerDoorError = value(error?.message) || text('Не удалось загрузить торговые точки покупателя.', 'Could not load buyer Retail Doors.');
+    } finally {
+      if (requestToken === LS.buyerDoorRequestToken) {
+        LS.buyerDoorLoading = false;
+        if (state.view === 'linesheets') renderApp();
+      }
     }
   }
 
@@ -228,7 +304,7 @@
   }
 
   function canCreateSelection(context) {
-    return canWriteSelection(context) && !context.selection && context.cycle?.stage === 'showroom' && context.access?.showroomStatus === 'open' && Boolean(LS.buyerCatalog);
+    return canWriteSelection(context) && !context.selection && context.cycle?.stage === 'showroom' && context.access?.showroomStatus === 'open' && Boolean(LS.buyerCatalog) && Boolean(context.retailDoor?.id);
   }
 
   function canEditMatrix(context) {
@@ -244,6 +320,7 @@
       LS.buyerAccessKey = next;
       LS.cycleId = '';
       resetBuyerCatalog();
+      resetBuyerDoor();
       renderApp();
     }));
     bar.append(selectField(text('Коммерческий цикл', 'Commercial cycle'), context.cycles, context.cycle?.id || '', cycle => `${value(cycle.id)} · ${stageText(cycle.stage)}`, next => {
@@ -251,11 +328,44 @@
       resetBuyerCatalog();
       renderApp();
     }, text('Цикл не найден', 'No cycle')));
+    bar.append(retailDoorField(context));
 
     const refresh = el('button', { className: 'button', type: 'button', rawText: text('Обновить каталог', 'Refresh catalog') });
     refresh.addEventListener('click', () => { resetBuyerCatalog({ preserveQuantities: false }); renderApp(); });
     bar.append(refresh);
     return bar;
+  }
+
+  function retailDoorField(context) {
+    const labelText = text('Торговая точка / Retail Door', 'Retail Door');
+    const label = el('label', { className: 'ls9-field', 'data-od14-component': 'field-group' });
+    label.append(el('span', { className: 'ls9-field-label', rawText: labelText }));
+    const select = el('select', { className: 'ls9-select', ariaLabel: labelText, 'data-od14-component': 'field' });
+    if (context.selection?.retailDoorId && context.retailDoor) {
+      select.append(el('option', { value: context.retailDoor.id, rawText: `${retailDoorLabel(context.retailDoor)} · v${context.retailDoor.version}` }));
+      select.disabled = true;
+    } else {
+      const placeholder = LS.buyerDoorLoading
+        ? text('Загрузка торговых точек…', 'Loading Retail Doors...')
+        : context.retailDoors.length
+          ? text('Выберите торговую точку', 'Select Retail Door')
+          : text('Нет активных торговых точек', 'No active Retail Doors');
+      const emptyOption = el('option', { value: '', rawText: placeholder });
+      if (!LS.buyerDoorId) emptyOption.selected = true;
+      select.append(emptyOption);
+      context.retailDoors.forEach(door => {
+        const option = el('option', { value: door.id, rawText: retailDoorLabel(door) });
+        if (door.id === LS.buyerDoorId) option.selected = true;
+        select.append(option);
+      });
+      select.disabled = LS.buyerDoorLoading || context.retailDoors.length === 0;
+      select.addEventListener('change', () => {
+        LS.buyerDoorId = select.value;
+        renderApp();
+      });
+    }
+    label.append(select);
+    return label;
   }
 
   function selectField(labelText, items, selected, formatter, onChange, emptyLabel = text('Нет доступных значений', 'No available values')) {
@@ -296,6 +406,7 @@
       [text('Модели', 'Styles'), matrices.length],
       [text('SKU', 'SKUs'), skuCount],
       [text('Валюта', 'Currency'), value(LS.buyerCatalog?.currency) || '—'],
+      [text('Retail Door', 'Retail Door'), value(context.retailDoor?.code) || text('Не выбрана', 'Not selected')],
       [text('Подборка', 'Selection'), selectionStatus],
     ].forEach(([label, metric]) => {
       const card = el('div', { className: 'ls9-metric', 'data-od14-component': 'metric' });
@@ -323,6 +434,10 @@
 
     const wrapper = el('div', { className: 'stack' });
     if (!context.cycle) wrapper.append(noticePanel(text('Матрица доступна для просмотра, но подборку нельзя создать без коммерческого цикла этой коллекции.', 'The matrix is available for viewing, but a selection cannot be created without a commercial cycle for this collection.')));
+    if (!context.selection && LS.buyerDoorLoading) wrapper.append(noticePanel(text('Загружаем активные торговые точки покупателя…', 'Loading active buyer Retail Doors...')));
+    if (!context.selection && LS.buyerDoorError) wrapper.append(noticePanel(LS.buyerDoorError, 'warning'));
+    if (!context.selection && !LS.buyerDoorLoading && !LS.buyerDoorError && !context.retailDoors.length) wrapper.append(noticePanel(text('Для магазина нет активной торговой точки. Сначала добавьте или активируйте Retail Door — без неё коммерческий контекст не будет зафиксирован.', 'This shop has no active Retail Door. Add or reactivate one before Selection so the commercial context can be frozen.'), 'warning'));
+    if (!context.selection && context.retailDoors.length > 1 && !context.retailDoor) wrapper.append(noticePanel(text('Выберите торговую точку в верхней панели. Она будет зафиксирована в Selection и унаследована заказом без повторного выбора.', 'Select a Retail Door in the toolbar. It will be frozen in Selection and inherited by the order without another choice.')));
     if (context.selection && !context.selection.buyerCatalogVersionId) wrapper.append(noticePanel(text('Текущая подборка создана по legacy-каталогу. Она доступна только для просмотра в новом rich-каталоге и не может быть перепривязана молча.', 'The current selection was created from a legacy catalog. It is read-only in the new rich catalog and cannot be silently rebound.'), 'warning'));
     if (LS.buyerError) wrapper.append(noticePanel(LS.buyerError, 'warning'));
     wrapper.append(buyerCatalogIdentity(context), styleTabs(), styleWorkspace(context));
@@ -337,12 +452,16 @@
     const card = el('section', { className: 'card', 'data-od14-component': 'card' });
     card.append(el('h3', { rawText: text('Зафиксированный коммерческий контекст', 'Pinned commercial context') }));
     const info = el('dl', { className: 'ls9-info-grid', 'data-od14-component': 'definition-grid' });
+    const door = context.retailDoor;
     const values = [
       [text('BuyerCatalogVersion', 'BuyerCatalogVersion'), value(LS.buyerCatalog.id) || '—'],
       [text('Публикация', 'Publication'), value(LS.buyerCatalog.publicationId) || '—'],
       [text('Прайс-лист', 'Price list'), value(LS.buyerCatalog.priceListVersionId) || '—'],
       [text('Шоурум', 'Showroom'), showroomName(context.access.showroomId)],
       [text('Магазин', 'Shop'), organisationName(context.access.shopId)],
+      [text('Retail Door', 'Retail Door'), retailDoorLabel(door)],
+      [text('Версия точки', 'Door version'), door?.version ? `v${door.version}` : '—'],
+      [text('Адрес поставки', 'Ship-to'), retailDoorAddressLabel(door?.shipToAddress)],
       [text('Контрольная сумма', 'Checksum'), shortHash(LS.buyerCatalog.contentHash)],
     ];
     values.forEach(([label, content]) => {
@@ -445,6 +564,11 @@
       actions.append(create);
       return actions;
     }
+    if (!context.selection && context.cycle?.stage === 'showroom' && LS.buyerCatalog && !context.retailDoor) {
+      const badge = el('span', { className: 'badge', rawText: text('Выберите Retail Door', 'Select Retail Door') });
+      actions.append(badge);
+      return actions;
+    }
     if (canEditMatrix(context)) {
       const save = el('button', { className: 'button primary', type: 'button', rawText: text('Сохранить матрицу', 'Save matrix') });
       save.disabled = !LS.dirty;
@@ -531,10 +655,13 @@
   async function createBuyerSelection(context) {
     const catalog = LS.buyerCatalog;
     if (!catalog || !context.cycle || !context.access) throw uiError('BUYER_MATRIX_CONTEXT_REQUIRED', text('Не выбран коммерческий контекст.', 'Commercial context is not selected.'));
-    const request = Matrix.createSelectionRequest(context.cycle.id, context.access.showroomId);
+    if (!context.retailDoor?.id) throw uiError('BUYER_MATRIX_RETAIL_DOOR_REQUIRED', text('Выберите Retail Door до создания подборки.', 'Select a Retail Door before creating the selection.'));
+    const pinnedRetailDoorId = context.retailDoor.id;
+    const request = Matrix.createSelectionRequest(context.cycle.id, context.access.showroomId, pinnedRetailDoorId);
     const result = await mutate(request.path, request.body, request.method);
     const created = result?.selection;
     if (!created?.id) throw uiError('BUYER_MATRIX_SELECTION_CREATE_FAILED', text('Сервер не вернул созданную подборку.', 'Server did not return the created selection.'));
+    if (created.retailDoorId !== pinnedRetailDoorId || !created.buyerCommercialSnapshot) throw uiError('BUYER_MATRIX_RETAIL_DOOR_PIN_FAILED', text('Сервер не зафиксировал выбранную торговую точку в подборке.', 'Server did not freeze the selected Retail Door in the selection.'));
     if (created.buyerCatalogVersionId !== catalog.id || created.commercialBasisHash !== catalog.contentHash) {
       LS.quantities = {};
       LS.quantityCatalogId = '';
@@ -550,7 +677,7 @@
     await reload();
     LS.buyerLoadedKey = '';
     renderApp();
-    toast(text('Подборка создана. Теперь сохраните количества матрицы.', 'Selection created. Save the matrix quantities next.'), 'success');
+    toast(text('Подборка создана. Retail Door зафиксирован; теперь сохраните количества матрицы.', 'Selection created with the Retail Door pinned. Save the matrix quantities next.'), 'success');
   }
 
   async function saveBuyerMatrix(context) {
@@ -752,6 +879,7 @@
     let buyerContext = null;
     if (LS.mode === 'buyer') {
       buyerContext = currentBuyerContext();
+      ensureBuyerDoorLoad(buyerContext);
       ensureBuyerLoad(buyerContext);
     } else {
       ensureRegistryLoad();
@@ -763,7 +891,7 @@
     copy.append(el('span', { className: 'ls9-eyebrow', rawText: LS.mode === 'buyer' ? text('Wholesale / Buyer Experience', 'Wholesale / Buyer Experience') : text('Коммерческая публикация', 'Commercial Publication') }),
       el('h2', { rawText: text('Листы коллекций', 'Linesheets') }),
       el('p', { rawText: LS.mode === 'buyer'
-        ? text('Опубликованный BuyerCatalogVersion превращён в Style → Colorway → Size матрицу заказа без live-чтения PLM и без клиентского управления ценой.', 'Published BuyerCatalogVersion rendered as a Style → Colorway → Size order matrix without live PLM reads or client-controlled pricing.')
+        ? text('Buyer Catalog, Retail Door и Color × Size матрица работают как единый коммерческий контекст: точка фиксируется до Selection и дальше наследуется заказом.', 'Buyer Catalog, Retail Door, and the Color × Size matrix operate as one commercial context: the door is pinned before Selection and then inherited by the order.')
         : text('Реестр неизменяемых коммерческих публикаций коллекции. Данные только для чтения и не вычисляются в браузере.', 'Registry of immutable commercial collection publications. Data is read-only and is never derived in the browser.') }));
     header.append(copy, el('div', { className: 'ls9-header-actions' }));
     page.append(header, modeTabs(accesses.length > 0));

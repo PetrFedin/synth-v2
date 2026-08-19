@@ -43,10 +43,10 @@ test('buyer matrix refuses quantities for SKUs outside rendered immutable buyer 
   assert.throws(() => matrix.selectionMatrixRequest('selection:1', matrices, { 'SKU-UNKNOWN': 2 }), error => error?.code === 'BUYER_MATRIX_SKU_UNKNOWN');
 });
 
-test('buyer matrix builds the exact selection creation route without commercial data from the client', () => {
-  assert.deepEqual(matrix.createSelectionRequest('cycle:1', 'showroom:1'), {
+test('buyer matrix builds the exact selection creation route with pinned Retail Door identity only', () => {
+  assert.deepEqual(matrix.createSelectionRequest('cycle:1', 'showroom:1', 'door:moscow:1'), {
     method: 'POST',
     path: '/v2/selections',
-    body: { cycleId: 'cycle:1', showroomId: 'showroom:1' },
+    body: { cycleId: 'cycle:1', showroomId: 'showroom:1', retailDoorId: 'door:moscow:1' },
   });
 });

@@ -6,6 +6,7 @@ import { CAPABILITIES, assertCapability } from '../modules/access-control/public
 import { assertCatalogAvailableToSell, assertCatalogQuantity, assertPublishedCatalogSku } from '../modules/catalog/public.mjs';
 import { assertBuyerCatalogQuantity, buyerCatalogLine, buyerCatalogProductSku, isRichBuyerCatalog } from '../modules/commercial-publication/public.mjs';
 import { assertActiveRelationship } from '../modules/counterparty-relationships/public.mjs';
+import { createBuyerCommercialSnapshot } from '../modules/retail-doors/public.mjs';
 import { assertAcceptedShowroomAccess } from '../modules/showroom-invitations/public.mjs';
 import { createShowroom, openShowroom } from '../modules/showrooms/public.mjs';
 import { createSelection, replaceSelectionLines, submitSelection, upsertSelectionLine } from '../modules/selections/public.mjs';
@@ -166,10 +167,14 @@ export function createShowroomSelectionService({
       );
     },
 
-    createSelection(commandId, actorId, { cycleId, showroomId }) {
+    createSelection(commandId, actorId, { cycleId, showroomId, retailDoorId = null }) {
+      const normalizedRetailDoorId = typeof retailDoorId === 'string' && retailDoorId.trim().length > 0 ? retailDoorId.trim() : null;
+      const fingerprint = normalizedRetailDoorId
+        ? `createSelection:${actorId}:${cycleId}:${showroomId}:${normalizedRetailDoorId}`
+        : `createSelection:${actorId}:${cycleId}:${showroomId}`;
       return execute(
         commandId,
-        `createSelection:${actorId}:${cycleId}:${showroomId}`,
+        fingerprint,
         actorId,
         async (tx) => {
           const cycle = requireEntity(await tx.getCycle(cycleId), 'CYCLE_NOT_FOUND', { cycleId });
@@ -182,11 +187,27 @@ export function createShowroomSelectionService({
           const buyerCatalog = trustedCommercialReader
             ? requireEntity(await trustedCommercialReader.getBuyerCatalogForAccess(showroomId, cycle.shopId), 'BUYER_CATALOG_REQUIRED', { showroomId, shopId: cycle.shopId })
             : null;
-          return Object.freeze({ cycle, showroom, invitation, buyerCatalog });
+          let buyerCommercialSnapshot = null;
+          if (buyerCatalog) {
+            invariant(normalizedRetailDoorId, 'SELECTION_RETAIL_DOOR_REQUIRED', 'Buyer Catalog selection requires a Retail Door');
+            const buyer = requireEntity(await tx.getOrganisation(cycle.shopId), 'SHOP_NOT_FOUND', { shopId: cycle.shopId });
+            const door = requireEntity(await tx.getRetailDoor(normalizedRetailDoorId), 'RETAIL_DOOR_NOT_FOUND', { retailDoorId: normalizedRetailDoorId });
+            buyerCommercialSnapshot = createBuyerCommercialSnapshot({ buyer, door });
+          } else {
+            invariant(normalizedRetailDoorId === null, 'SELECTION_RETAIL_DOOR_REQUIRES_BUYER_CATALOG', 'Retail Door can be pinned only to a Buyer Catalog selection');
+          }
+          return Object.freeze({ cycle, showroom, invitation, buyerCatalog, buyerCommercialSnapshot });
         },
-        async (tx, { cycle, showroom, invitation, buyerCatalog }) => {
+        async (tx, { cycle, showroom, invitation, buyerCatalog, buyerCommercialSnapshot }) => {
           invariant(!await tx.getSelectionByCycle(cycleId), 'SELECTION_FOR_CYCLE_EXISTS', 'Cycle already has a selection', { cycleId });
-          const selection = createSelection({ id: nextId('selection'), cycle, showroom, commercialBasis: buyerCatalog, createdAt: clock() });
+          const selection = createSelection({
+            id: nextId('selection'),
+            cycle,
+            showroom,
+            commercialBasis: buyerCatalog,
+            buyerCommercialSnapshot,
+            createdAt: clock(),
+          });
           const advanced = advanceCommercialCycle(cycle, 'selection', clock());
           await tx.insertSelection(selection);
           await tx.saveCycle(advanced, cycle.version);
@@ -196,6 +217,8 @@ export function createShowroomSelectionService({
             priceListVersionId: selection.priceListVersionId,
             buyerCatalogVersionId: selection.buyerCatalogVersionId,
             commercialBasisHash: selection.commercialBasisHash,
+            retailDoorId: selection.retailDoorId,
+            retailDoorVersion: selection.retailDoorVersion,
           }, commandId, actorId);
           await append(tx, 'commercial-cycle.advanced', cycleId, { from: cycle.stage, to: advanced.stage, version: advanced.version }, commandId, actorId);
           return Object.freeze({ selection, cycle: advanced });
@@ -288,6 +311,8 @@ export function createShowroomSelectionService({
             commercialPublicationId: submitted.commercialPublicationId,
             priceListVersionId: submitted.priceListVersionId,
             buyerCatalogVersionId: submitted.buyerCatalogVersionId,
+            retailDoorId: submitted.retailDoorId,
+            retailDoorVersion: submitted.retailDoorVersion,
           }, commandId, actorId);
           await append(tx, 'commercial-cycle.advanced', cycle.id, { from: cycle.stage, to: advanced.stage, version: advanced.version }, commandId, actorId);
           return Object.freeze({ selection: submitted, cycle: advanced });

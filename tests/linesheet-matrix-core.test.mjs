@@ -131,3 +131,18 @@ test('quantityEntries returns only positive integer SKU quantities in determinis
     { sku: 'SKU-B', quantity: 3 },
   ]);
 });
+
+test('buyer selection request freezes Retail Door together with cycle and showroom context', () => {
+  assert.deepEqual(matrix.createSelectionRequest(' cycle-1 ', ' showroom-1 ', ' door-moscow-1 '), {
+    method: 'POST',
+    path: '/v2/selections',
+    body: { cycleId: 'cycle-1', showroomId: 'showroom-1', retailDoorId: 'door-moscow-1' },
+  });
+});
+
+test('buyer selection request fails closed before a Retail Door is selected', () => {
+  assert.throws(
+    () => matrix.createSelectionRequest('cycle-1', 'showroom-1', ''),
+    error => error?.code === 'BUYER_MATRIX_RETAIL_DOOR_REQUIRED',
+  );
+});

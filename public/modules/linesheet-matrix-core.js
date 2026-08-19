@@ -252,11 +252,17 @@
     });
   }
 
-  function createSelectionRequest(cycleId, showroomId) {
+  function createSelectionRequest(cycleId, showroomId, retailDoorId) {
     const normalizedCycleId = text(cycleId);
     const normalizedShowroomId = text(showroomId);
+    const normalizedRetailDoorId = text(retailDoorId);
     if (!normalizedCycleId || !normalizedShowroomId) fail('BUYER_MATRIX_SELECTION_CONTEXT_REQUIRED', 'Cycle and showroom are required to create a buyer selection');
-    return deepFreeze({ method: 'POST', path: '/v2/selections', body: { cycleId: normalizedCycleId, showroomId: normalizedShowroomId } });
+    if (!normalizedRetailDoorId) fail('BUYER_MATRIX_RETAIL_DOOR_REQUIRED', 'Retail Door is required to freeze buyer commercial context before Selection');
+    return deepFreeze({
+      method: 'POST',
+      path: '/v2/selections',
+      body: { cycleId: normalizedCycleId, showroomId: normalizedShowroomId, retailDoorId: normalizedRetailDoorId },
+    });
   }
 
   function deepFreeze(value) {

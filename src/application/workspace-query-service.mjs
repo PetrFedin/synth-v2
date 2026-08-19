@@ -16,6 +16,7 @@ const SORT_FIELDS = Object.freeze({
   invitations: Object.freeze([['updatedAt', 'desc'], ['createdAt', 'desc'], ['id', 'asc']]),
   campaigns: Object.freeze([['startsAt', 'desc'], ['name', 'asc'], ['id', 'asc']]),
   collections: Object.freeze([['name', 'asc'], ['id', 'asc']]),
+  productStyles: Object.freeze([['styleCode', 'asc'], ['id', 'asc']]),
   catalogSkus: Object.freeze([['sku', 'asc']]),
   showrooms: Object.freeze([['opensAt', 'desc'], ['name', 'asc'], ['id', 'asc']]),
   cycles: Object.freeze([['updatedAt', 'desc'], ['createdAt', 'desc'], ['id', 'asc']]),
@@ -169,7 +170,7 @@ function compareBy(fields) {
 function immutableCopy(value) {
   if (Array.isArray(value)) return Object.freeze(value.map(immutableCopy));
   if (value && typeof value === 'object') {
-    return Object.freeze(Object.fromEntries(Object.entries(value).map(([key, nested]) => [key, immutableCopy(nested)])));
+    return Object.freeze(Object.fromEntries(Object.entries(value).map(([key, nested]) => [key, immutableCopy(nested)]));
   }
   return value;
 }

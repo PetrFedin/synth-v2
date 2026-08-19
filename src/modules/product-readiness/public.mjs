@@ -44,6 +44,7 @@ export function evaluateProductReadiness({ developmentRoute, technicalSnapshot, 
   const styleVersion = product.styleVersion ?? null;
   const colorways = Array.isArray(product.colorways) ? product.colorways : [];
   const skus = colorways.flatMap((colorway) => Array.isArray(colorway.skus) ? colorway.skus : []);
+  const measurementEvidence = Array.isArray(technicalSnapshot.measurementEvidence) ? technicalSnapshot.measurementEvidence : [];
   const legacyEvidence = Array.isArray(technicalSnapshot.legacyEvidence) ? technicalSnapshot.legacyEvidence : [];
 
   const dimensions = [];
@@ -88,10 +89,8 @@ export function evaluateProductReadiness({ developmentRoute, technicalSnapshot, 
     }, linkedLegacy ? 'Published BOM is required for every canonical SKU.' : 'Legacy PLM bridge is incomplete; BOM evidence cannot be resolved.'));
   }
 
-  dimensions.push(fact('measurements', linkedLegacy && legacyEvidence.every((row) => row.measurement?.status === 'published'), {
-    linkedLegacy,
-    sources: legacyEvidence.map((row) => row.measurement ?? null),
-  }, linkedLegacy ? 'Published measurement/size chart is required for every canonical SKU.' : 'Legacy PLM bridge is incomplete; measurement evidence cannot be resolved.'));
+  const measurementCoverage = evaluateMeasurementCoverage({ styleVersion, colorways, measurementEvidence });
+  dimensions.push(fact('measurements', measurementCoverage.ready, measurementCoverage.evidence, measurementCoverage.reason));
 
   if (developmentRoute === 'READY_GOODS') {
     dimensions.push(notApplicable('samples', { developmentRoute }, 'Sample approval is recommended but not a hard gate for READY_GOODS.'));
@@ -257,6 +256,67 @@ export function createCommercialProductProjectionVersion({ id, readinessSnapshot
     publishedBy,
   });
 }
+
+function evaluateMeasurementCoverage({ styleVersion, colorways, measurementEvidence }) {
+  const expectedByKey = new Map();
+  for (const colorway of colorways) {
+    for (const sku of Array.isArray(colorway.skus) ? colorway.skus : []) {
+      const sizeScaleVersionId = sku?.size?.sizeScaleVersionId;
+      const sizeValueId = sku?.size?.id;
+      if (!colorway?.id || !sizeScaleVersionId || !sizeValueId) continue;
+      const key = measurementContextKey(colorway.id, sizeScaleVersionId);
+      if (!expectedByKey.has(key)) expectedByKey.set(key, { colorwayId: colorway.id, sizeScaleVersionId, sizeValueIds: new Set() });
+      expectedByKey.get(key).sizeValueIds.add(sizeValueId);
+    }
+  }
+
+  const evidenceByKey = new Map();
+  const duplicateKeys = new Set();
+  for (const chart of measurementEvidence) {
+    if (chart?.styleVersionId !== styleVersion?.id || !chart?.colorwayId || !chart?.sizeScaleVersionId) continue;
+    const key = measurementContextKey(chart.colorwayId, chart.sizeScaleVersionId);
+    if (evidenceByKey.has(key)) duplicateKeys.add(key);
+    else evidenceByKey.set(key, chart);
+  }
+
+  const contexts = [...expectedByKey.entries()].map(([key, expected]) => {
+    const chart = evidenceByKey.get(key) ?? null;
+    const chartSizeIds = new Set(Array.isArray(chart?.sizeValueIds) ? chart.sizeValueIds : []);
+    const expectedSizeValueIds = [...expected.sizeValueIds];
+    const missingSizeValueIds = expectedSizeValueIds.filter((id) => !chartSizeIds.has(id));
+    const published = chart?.status === 'published' && Boolean(chart.publishedAt);
+    const unitFrozen = Boolean(chart?.measurementUnitRef?.entryId && Number.isInteger(chart?.measurementUnitRef?.version));
+    const duplicate = duplicateKeys.has(key);
+    return Object.freeze({
+      colorwayId: expected.colorwayId,
+      sizeScaleVersionId: expected.sizeScaleVersionId,
+      expectedSizeValueIds: Object.freeze(expectedSizeValueIds),
+      chartId: chart?.id ?? null,
+      chartVersion: chart?.version ?? null,
+      chartStatus: chart?.status ?? null,
+      measurementUnitRef: chart?.measurementUnitRef ?? null,
+      baseSizeValueId: chart?.baseSizeValueId ?? null,
+      missingSizeValueIds: Object.freeze(missingSizeValueIds),
+      duplicate,
+      ready: Boolean(chart) && published && unitFrozen && !duplicate && missingSizeValueIds.length === 0,
+    });
+  });
+
+  const readyState = contexts.length > 0 && contexts.every((context) => context.ready);
+  return {
+    ready: readyState,
+    evidence: {
+      source: 'canonical-product-identity',
+      styleVersionId: styleVersion?.id ?? null,
+      expectedContextCount: contexts.length,
+      readyContextCount: contexts.filter((context) => context.ready).length,
+      contexts,
+    },
+    reason: readyState ? null : 'Every Colorway × SizeScaleVersion requires one published canonical Measurement Chart with a frozen governed unit and coverage of every sellable ProductSizeValue.',
+  };
+}
+
+function measurementContextKey(colorwayId, sizeScaleVersionId) { return `${colorwayId}\u0000${sizeScaleVersionId}`; }
 
 function validateSelectedMedia(product, mediaIds) {
   const requested = Array.isArray(mediaIds) ? mediaIds : [];

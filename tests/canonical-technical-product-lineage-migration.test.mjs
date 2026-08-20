@@ -23,8 +23,10 @@ test('migration 061 pins readiness technical sources to canonical ProductSku lin
     assert.match(sql, new RegExp(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS product_sku_id text NULL;`));
     assert.match(sql, new RegExp(`ALTER TABLE ${table}[\\s\\S]*FOREIGN KEY \\(product_sku_id, brand_id\\) REFERENCES product_skus\\(id, brand_id\\)`));
     assert.match(sql, new RegExp(`${table}_assign_product_sku_lineage`));
+    assert.match(sql, new RegExp(`BEFORE INSERT OR UPDATE ON ${table}`));
   }
 
+  assert.doesNotMatch(sql, /INSERT OR UPDATE OF/);
   assert.match(sql, /CREATE OR REPLACE FUNCTION technical_evidence_assign_product_sku_lineage\(\)/);
   assert.match(sql, /product_sku\.brand_id = NEW\.brand_id/);
   assert.match(sql, /product_sku\.sku_code = NEW\.sku/);

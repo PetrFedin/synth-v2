@@ -128,17 +128,17 @@ export function createPostgresProductReadinessSourceReader({ pool, productIdenti
                 chart.status,
                 chart.version,
                 chart.measurement_unit_entry_id,
-                chart.measurement_unit_entry_version,
-                chart.base_size_value_id,
+                chart.measurement_unit_version,
+                chart.payload ->> 'baseSizeValueId' AS base_size_value_id,
                 chart.published_at,
                 COALESCE(
                   jsonb_agg(
                     jsonb_build_object(
-                      'sizeValueId', chart_size.size_value_id,
+                      'sizeValueId', chart_size.product_size_value_id,
                       'sizeCode', chart_size.size_code,
                       'position', chart_size.position
                     ) ORDER BY chart_size.position
-                  ) FILTER (WHERE chart_size.size_value_id IS NOT NULL),
+                  ) FILTER (WHERE chart_size.product_size_value_id IS NOT NULL),
                   '[]'::jsonb
                 ) AS sizes
            FROM measurement_charts AS chart
@@ -154,8 +154,8 @@ export function createPostgresProductReadinessSourceReader({ pool, productIdenti
                    chart.status,
                    chart.version,
                    chart.measurement_unit_entry_id,
-                   chart.measurement_unit_entry_version,
-                   chart.base_size_value_id,
+                   chart.measurement_unit_version,
+                   chart.payload,
                    chart.published_at
           ORDER BY chart.colorway_id, chart.size_scale_version_id, chart.id`,
         [styleVersionId],
@@ -190,7 +190,7 @@ function mapMeasurementEvidence(row) {
     sizeScaleVersionId: row.size_scale_version_id,
     status: row.status,
     version: row.version,
-    measurementUnitRef: row.measurement_unit_entry_id ? Object.freeze({ entryId: row.measurement_unit_entry_id, version: row.measurement_unit_entry_version }) : null,
+    measurementUnitRef: row.measurement_unit_entry_id ? Object.freeze({ entryId: row.measurement_unit_entry_id, version: row.measurement_unit_version }) : null,
     baseSizeValueId: row.base_size_value_id,
     sizeValueIds: Object.freeze(sizes.map((value) => value.sizeValueId).filter(Boolean)),
     sizes: Object.freeze(sizes.map((value) => Object.freeze({ sizeValueId: value.sizeValueId, sizeCode: value.sizeCode, position: value.position }))),

@@ -8,7 +8,14 @@ const SKU_PATTERN = /^[A-Z0-9][A-Z0-9._-]{1,63}$/;
 const IDENTIFIER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/;
 
 export function createMeasurementQueryService({ reader } = {}) {
-  invariant(reader && typeof reader.pageForActor === 'function' && typeof reader.getForActor === 'function', 'MEASUREMENT_READER_REQUIRED', 'Measurement chart reader is required');
+  invariant(
+    reader
+      && typeof reader.pageForActor === 'function'
+      && typeof reader.getForActor === 'function'
+      && typeof reader.getCanonicalForActor === 'function',
+    'MEASUREMENT_READER_REQUIRED',
+    'Measurement chart reader is required',
+  );
   return Object.freeze({
     async pageForActor(actorId, options = {}) {
       validateActor(actorId);
@@ -31,6 +38,13 @@ export function createMeasurementQueryService({ reader } = {}) {
       const sku = normalizeSku(requestedSku);
       const item = await reader.getForActor(actorId, sku);
       invariant(item, 'MEASUREMENT_NOT_FOUND', 'Measurement chart not found', { sku });
+      return immutableCopy(item);
+    },
+    async getCanonicalForActor(actorId, requestedChartId) {
+      validateActor(actorId);
+      const chartId = normalizeIdentifier(requestedChartId, 'MEASUREMENT_ID_INVALID', 'Canonical Measurement Chart id is invalid');
+      const item = await reader.getCanonicalForActor(actorId, chartId);
+      invariant(item, 'MEASUREMENT_NOT_FOUND', 'Canonical Measurement Chart not found', { chartId });
       return immutableCopy(item);
     },
   });
@@ -61,6 +75,10 @@ function normalizeSku(value) {
   invariant(SKU_PATTERN.test(value ?? ''), 'MEASUREMENT_SKU_INVALID', 'Measurement chart SKU is invalid');
   return value;
 }
+function normalizeIdentifier(value, errorCode, message) {
+  invariant(typeof value === 'string' && IDENTIFIER_PATTERN.test(value), errorCode, message);
+  return value;
+}
 function optionalSearch(value) {
   if (value === undefined || value === null || value === '') return undefined;
   invariant(typeof value === 'string', 'MEASUREMENT_SEARCH_INVALID', 'Measurement chart search must be a string');
@@ -76,8 +94,7 @@ function optionalEnum(value, allowed, code, label) {
 }
 function optionalIdentifier(value) {
   if (value === undefined || value === null || value === '') return undefined;
-  invariant(typeof value === 'string' && IDENTIFIER_PATTERN.test(value), 'MEASUREMENT_BRAND_FILTER_INVALID', 'Measurement chart brand filter is invalid');
-  return value;
+  return normalizeIdentifier(value, 'MEASUREMENT_BRAND_FILTER_INVALID', 'Measurement chart brand filter is invalid');
 }
 function immutableCopy(value) {
   if (Array.isArray(value)) return Object.freeze(value.map(immutableCopy));

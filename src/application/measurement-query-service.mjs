@@ -11,8 +11,7 @@ export function createMeasurementQueryService({ reader } = {}) {
   invariant(
     reader
       && typeof reader.pageForActor === 'function'
-      && typeof reader.getForActor === 'function'
-      && typeof reader.getCanonicalForActor === 'function',
+      && typeof reader.getForActor === 'function',
     'MEASUREMENT_READER_REQUIRED',
     'Measurement chart reader is required',
   );
@@ -42,6 +41,11 @@ export function createMeasurementQueryService({ reader } = {}) {
     },
     async getCanonicalForActor(actorId, requestedChartId) {
       validateActor(actorId);
+      invariant(
+        typeof reader.getCanonicalForActor === 'function',
+        'MEASUREMENT_CANONICAL_READER_REQUIRED',
+        'Canonical Measurement chart reader is required',
+      );
       const chartId = normalizeIdentifier(requestedChartId, 'MEASUREMENT_ID_INVALID', 'Canonical Measurement Chart id is invalid');
       const item = await reader.getCanonicalForActor(actorId, chartId);
       invariant(item, 'MEASUREMENT_NOT_FOUND', 'Canonical Measurement Chart not found', { chartId });

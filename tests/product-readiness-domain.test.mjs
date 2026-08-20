@@ -33,12 +33,27 @@ function legacyEvidence() {
   return [{
     productSkuId: 'product-sku:black-m', skuCode: 'DRS-001-BLK-M', catalogSku: 'DRS-001-BLK-M',
     bom: { id: 'bom:1', status: 'published', version: 3 },
-    measurement: { id: 'measurement:1', status: 'published', version: 2 },
+    measurement: { id: 'legacy-measurement:1', status: 'published', version: 99 },
     sample: { sampleCode: 'PPS-001', status: 'approved', sampleType: 'pre-production', round: 2, version: 5 },
     techPack: { techPackCode: 'TP-001', status: 'acknowledged', revision: 2, version: 4 },
     sourcing: { rfqCode: 'RFQ-001', status: 'allocated', version: 7 },
     productionOrder: { productionOrderNumber: 'PO-001', status: 'confirmed', version: 3 },
     quality: { inspectionCode: 'QC-001', status: 'released', version: 5 },
+  }];
+}
+
+function canonicalMeasurementEvidence(sizeValueIds = ['size:m']) {
+  return [{
+    id: 'measurement:canonical:1',
+    styleVersionId: 'style-version:1',
+    colorwayId: 'colorway:black',
+    sizeScaleVersionId: 'scale-version:1',
+    status: 'published',
+    version: 4,
+    measurementUnitRef: { entryId: 'mdm:unit:cm', version: 2 },
+    baseSizeValueId: 'size:m',
+    sizeValueIds,
+    publishedAt: now,
   }];
 }
 
@@ -61,8 +76,11 @@ function external(evidenceId) {
   return { status: 'ready', evidenceId, sourceSystem: 'syntha-documents', version: 'v1', contentHash: hash, approvedAt: now, approvedBy: 'user:1' };
 }
 
-function technicalSnapshot(evidence = legacyEvidence()) {
-  return { styleVersionId: 'style-version:1', brandId: 'brand:1', capturedAt: now, product: product(), legacyEvidence: evidence };
+function technicalSnapshot(evidence = legacyEvidence(), measurementEvidence = canonicalMeasurementEvidence()) {
+  return {
+    styleVersionId: 'style-version:1', brandId: 'brand:1', capturedAt: now,
+    product: product(), measurementEvidence, legacyEvidence: evidence,
+  };
 }
 
 test('OWN_DEVELOPMENT readiness emits exactly 18 governed ready dimensions from repository + compliance evidence', () => {
@@ -76,6 +94,31 @@ test('OWN_DEVELOPMENT readiness emits exactly 18 governed ready dimensions from 
   assert.deepEqual(dimensions.map((value) => value.code), PRODUCT_READINESS_DIMENSIONS);
   assert.equal(dimensions.filter((value) => value.status === 'blocked').length, 0);
   assert.equal(dimensions.filter((value) => value.status === 'not_applicable').length, 0);
+});
+
+test('legacy published measurement cannot satisfy canonical Product Readiness', () => {
+  const dimensions = evaluateProductReadiness({
+    developmentRoute: 'OWN_DEVELOPMENT',
+    technicalSnapshot: technicalSnapshot(legacyEvidence(), []),
+    commercialPreparation: commercialPreparation(),
+    externalEvidence: { compliance: external('compliance:1') },
+  });
+  const measurement = dimensions.find((value) => value.code === 'measurements');
+  assert.equal(measurement.status, 'blocked');
+  assert.equal(measurement.evidence.source, 'canonical-product-identity');
+  assert.equal(measurement.evidence.readyContextCount, 0);
+});
+
+test('canonical measurement readiness fails closed when a sellable ProductSizeValue is not covered', () => {
+  const dimensions = evaluateProductReadiness({
+    developmentRoute: 'OWN_DEVELOPMENT',
+    technicalSnapshot: technicalSnapshot(legacyEvidence(), canonicalMeasurementEvidence([])),
+    commercialPreparation: commercialPreparation(),
+    externalEvidence: { compliance: external('compliance:1') },
+  });
+  const measurement = dimensions.find((value) => value.code === 'measurements');
+  assert.equal(measurement.status, 'blocked');
+  assert.deepEqual(measurement.evidence.contexts[0].missingSizeValueIds, ['size:m']);
 });
 
 test('development routes fail closed and do not allow external evidence to override repository sourcing or Final Quality', () => {

@@ -43,10 +43,6 @@ export function createPostgresProductReadinessSourceReader({ pool, productIdenti
                 bom.id AS bom_id,
                 bom.status AS bom_status,
                 bom.version AS bom_version,
-                measurement.id AS measurement_id,
-                measurement.status AS measurement_status,
-                measurement.version AS measurement_version,
-                measurement.published_at AS measurement_published_at,
                 sample.sample_code,
                 sample.status AS sample_status,
                 sample.sample_type,
@@ -83,13 +79,6 @@ export function createPostgresProductReadinessSourceReader({ pool, productIdenti
               ORDER BY version DESC, id DESC
               LIMIT 1
            ) AS bom ON true
-           LEFT JOIN LATERAL (
-             SELECT id, status, version, published_at
-               FROM measurement_charts
-              WHERE sku = link.catalog_sku
-              ORDER BY version DESC, id DESC
-              LIMIT 1
-           ) AS measurement ON true
            LEFT JOIN LATERAL (
              SELECT sample_code, status, sample_type, round, version, decision_at
                FROM samples
@@ -131,9 +120,51 @@ export function createPostgresProductReadinessSourceReader({ pool, productIdenti
         [styleVersionId],
       );
 
+      const measurementResult = await pool.query(
+        `SELECT chart.id,
+                chart.style_version_id,
+                chart.colorway_id,
+                chart.size_scale_version_id,
+                chart.status,
+                chart.version,
+                chart.measurement_unit_entry_id,
+                chart.measurement_unit_entry_version,
+                chart.base_size_value_id,
+                chart.published_at,
+                COALESCE(
+                  jsonb_agg(
+                    jsonb_build_object(
+                      'sizeValueId', chart_size.size_value_id,
+                      'sizeCode', chart_size.size_code,
+                      'position', chart_size.position
+                    ) ORDER BY chart_size.position
+                  ) FILTER (WHERE chart_size.size_value_id IS NOT NULL),
+                  '[]'::jsonb
+                ) AS sizes
+           FROM measurement_charts AS chart
+           LEFT JOIN measurement_chart_sizes AS chart_size
+             ON chart_size.chart_id = chart.id
+          WHERE chart.style_version_id = $1
+            AND chart.colorway_id IS NOT NULL
+            AND chart.size_scale_version_id IS NOT NULL
+          GROUP BY chart.id,
+                   chart.style_version_id,
+                   chart.colorway_id,
+                   chart.size_scale_version_id,
+                   chart.status,
+                   chart.version,
+                   chart.measurement_unit_entry_id,
+                   chart.measurement_unit_entry_version,
+                   chart.base_size_value_id,
+                   chart.published_at
+          ORDER BY chart.colorway_id, chart.size_scale_version_id, chart.id`,
+        [styleVersionId],
+      );
+
       return Object.freeze({
         styleVersion,
         product: aggregate,
+        measurementEvidence: Object.freeze(measurementResult.rows.map(mapMeasurementEvidence)),
         legacyEvidence: Object.freeze(evidenceResult.rows.map(mapLegacyEvidence)),
       });
     },
@@ -147,6 +178,23 @@ function mapStyleVersionIdentity(row) {
     brandId: row.brand_id,
     versionNo: row.version_no,
     contentHash: row.content_hash,
+  });
+}
+
+function mapMeasurementEvidence(row) {
+  const sizes = Array.isArray(row.sizes) ? row.sizes : [];
+  return Object.freeze({
+    id: row.id,
+    styleVersionId: row.style_version_id,
+    colorwayId: row.colorway_id,
+    sizeScaleVersionId: row.size_scale_version_id,
+    status: row.status,
+    version: row.version,
+    measurementUnitRef: row.measurement_unit_entry_id ? Object.freeze({ entryId: row.measurement_unit_entry_id, version: row.measurement_unit_entry_version }) : null,
+    baseSizeValueId: row.base_size_value_id,
+    sizeValueIds: Object.freeze(sizes.map((value) => value.sizeValueId).filter(Boolean)),
+    sizes: Object.freeze(sizes.map((value) => Object.freeze({ sizeValueId: value.sizeValueId, sizeCode: value.sizeCode, position: value.position }))),
+    publishedAt: iso(row.published_at),
   });
 }
 
@@ -166,7 +214,6 @@ function mapLegacyEvidence(row) {
       reservedQuantity: row.catalog_reserved_quantity,
     }) : null,
     bom: row.bom_id ? Object.freeze({ id: row.bom_id, status: row.bom_status, version: row.bom_version }) : null,
-    measurement: row.measurement_id ? Object.freeze({ id: row.measurement_id, status: row.measurement_status, version: row.measurement_version, publishedAt: iso(row.measurement_published_at) }) : null,
     sample: row.sample_code ? Object.freeze({ sampleCode: row.sample_code, status: row.sample_status, sampleType: row.sample_type, round: row.sample_round, version: row.sample_version, decisionAt: iso(row.sample_decision_at) }) : null,
     techPack: row.tech_pack_code ? Object.freeze({ techPackCode: row.tech_pack_code, status: row.tech_pack_status, revision: row.tech_pack_revision, version: row.tech_pack_version, acknowledgedAt: iso(row.tech_pack_acknowledged_at) }) : null,
     sourcing: row.rfq_code ? Object.freeze({ rfqCode: row.rfq_code, status: row.sourcing_status, version: row.sourcing_version, selectedSupplierCode: row.selected_supplier_code, allocatedAt: iso(row.sourcing_allocated_at) }) : null,

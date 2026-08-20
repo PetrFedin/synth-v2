@@ -60,6 +60,7 @@ export function createProductReadinessService({
         brandId: styleVersionIdentity.brandId,
         capturedAt: assessedAt,
         product: context.product,
+        measurementEvidence: context.measurementEvidence ?? [],
         legacyEvidence: context.legacyEvidence,
       });
       const commercialPreparation = normalizeCommercialPreparation(styleVersionIdentity.brandId, input.commercialPreparation);

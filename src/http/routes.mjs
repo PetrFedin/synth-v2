@@ -21,9 +21,22 @@ const MEASUREMENT_EDITABLE_FIELDS = ['unit', 'baseSizeCode', 'sizes', 'points', 
 const MEASUREMENT_SIZE_FIELDS = ['code', 'label'];
 const MEASUREMENT_POINT_FIELDS = ['pointCode', 'name', 'description', 'toleranceMinus', 'tolerancePlus', 'measurements'];
 const MEASUREMENT_VALUE_FIELDS = ['sizeCode', 'value'];
-const MEASUREMENT_BODY = measurementBody(bodyContract(['sku', ...MEASUREMENT_EDITABLE_FIELDS], {}, { sizes: MEASUREMENT_SIZE_FIELDS, points: MEASUREMENT_POINT_FIELDS }));
-const MEASUREMENT_UPDATE_BODY = measurementBody(bodyContract(['expectedVersion', ...MEASUREMENT_EDITABLE_FIELDS], {}, { sizes: MEASUREMENT_SIZE_FIELDS, points: MEASUREMENT_POINT_FIELDS }));
+const MEASUREMENT_BODY = measurementBody(bodyContract(['sku', ...MEASUREMENT_EDITABLE_FIELDS], {}, { sizes: MEASUREMENT_SIZE_FIELDS, points: MEASUREMENT_POINT_FIELDS }), MEASUREMENT_VALUE_FIELDS);
+const MEASUREMENT_UPDATE_BODY = measurementBody(bodyContract(['expectedVersion', ...MEASUREMENT_EDITABLE_FIELDS], {}, { sizes: MEASUREMENT_SIZE_FIELDS, points: MEASUREMENT_POINT_FIELDS }), MEASUREMENT_VALUE_FIELDS);
 const MEASUREMENT_PUBLISH_BODY = bodyContract(['expectedVersion']);
+const CANONICAL_MEASUREMENT_IDENTITY_FIELDS = ['styleVersionId', 'colorwayId', 'sizeScaleVersionId'];
+const CANONICAL_MEASUREMENT_EDITABLE_FIELDS = ['measurementUnitEntryId', 'baseSizeValueId', 'sizes', 'points', 'notes'];
+const CANONICAL_MEASUREMENT_SIZE_FIELDS = ['sizeValueId'];
+const CANONICAL_MEASUREMENT_POINT_FIELDS = ['pointEntryId', 'description', 'toleranceMinus', 'tolerancePlus', 'measurements'];
+const CANONICAL_MEASUREMENT_VALUE_FIELDS = ['sizeValueId', 'value'];
+const CANONICAL_MEASUREMENT_BODY = measurementBody(
+  bodyContract([...CANONICAL_MEASUREMENT_IDENTITY_FIELDS, ...CANONICAL_MEASUREMENT_EDITABLE_FIELDS], {}, { sizes: CANONICAL_MEASUREMENT_SIZE_FIELDS, points: CANONICAL_MEASUREMENT_POINT_FIELDS }),
+  CANONICAL_MEASUREMENT_VALUE_FIELDS,
+);
+const CANONICAL_MEASUREMENT_UPDATE_BODY = measurementBody(
+  bodyContract(['expectedVersion', ...CANONICAL_MEASUREMENT_EDITABLE_FIELDS], {}, { sizes: CANONICAL_MEASUREMENT_SIZE_FIELDS, points: CANONICAL_MEASUREMENT_POINT_FIELDS }),
+  CANONICAL_MEASUREMENT_VALUE_FIELDS,
+);
 const SHOWROOM_BODY = bodyContract(['collectionId', 'brandId', 'name', 'opensAt', 'closesAt']);
 const RELATIONSHIP_BODY = bodyContract(['brandId', 'shopId']);
 const INVITATION_BODY = bodyContract(['showroomId', 'shopId', 'expiresAt']);
@@ -65,6 +78,10 @@ export function createWholesaleRoutes({ platform, catalog, materials, boms, meas
     mutate('PATCH', /^\/v2\/boms\/([^/]+)$/, BOM_UPDATE_BODY, ({ commandId, actorId, params, body }) => bomService.updateBom(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/boms\/([^/]+)\/publish$/, BOM_PUBLISH_BODY, ({ commandId, actorId, params, body }) => bomService.publishBom(commandId, actorId, params[0], body)),
     read('GET', /^\/v2\/measurements$/, ['limit', 'cursor', 'q', 'status', 'unit', 'brandId'], ({ actorId, query }) => measurementService.pageForActor(actorId, query)),
+    read('GET', /^\/v2\/measurements\/canonical\/([^/]+)$/, [], ({ actorId, params }) => measurementService.getCanonicalForActor(actorId, params[0])),
+    mutate('POST', /^\/v2\/measurements\/canonical$/, CANONICAL_MEASUREMENT_BODY, ({ commandId, actorId, body }) => measurementService.createCanonicalMeasurementChart(commandId, actorId, body)),
+    mutate('PATCH', /^\/v2\/measurements\/canonical\/([^/]+)$/, CANONICAL_MEASUREMENT_UPDATE_BODY, ({ commandId, actorId, params, body }) => measurementService.updateCanonicalMeasurementChart(commandId, actorId, params[0], body)),
+    mutate('POST', /^\/v2\/measurements\/canonical\/([^/]+)\/publish$/, MEASUREMENT_PUBLISH_BODY, ({ commandId, actorId, params, body }) => measurementService.publishCanonicalMeasurementChart(commandId, actorId, params[0], body)),
     read('GET', /^\/v2\/measurements\/([^/]+)$/, [], ({ actorId, params }) => measurementService.getForActor(actorId, params[0])),
     mutate('POST', /^\/v2\/measurements$/, MEASUREMENT_BODY, ({ commandId, actorId, body }) => measurementService.createMeasurementChart(commandId, actorId, body)),
     mutate('PATCH', /^\/v2\/measurements\/([^/]+)$/, MEASUREMENT_UPDATE_BODY, ({ commandId, actorId, params, body }) => measurementService.updateMeasurementChart(commandId, actorId, params[0], body)),
@@ -125,8 +142,8 @@ function mutate(method, pattern, contract, execute) {
 function read(method, pattern, queryFields, execute) {
   return { method, pattern, mutation: false, async execute(context) { assertQueryContract(context.query ?? {}, queryFields); return execute(context); } };
 }
-function measurementBody(contract) {
-  const valueContract = bodyContract(MEASUREMENT_VALUE_FIELDS);
+function measurementBody(contract, valueFields) {
+  const valueContract = bodyContract(valueFields);
   return (body) => {
     assertBodyContract(body, contract);
     if (!Array.isArray(body.points)) return body;
@@ -148,4 +165,17 @@ function sameId(bodyValue, routeValue, field) { invariant(bodyValue === undefine
 function unavailableCatalog() { const fail = () => invariant(false, 'CATALOG_SERVICE_REQUIRED', 'Catalog service is required'); return Object.freeze({ createSku: fail, updateSku: fail, publishSku: fail, pageForActor: fail, getForActor: fail }); }
 function unavailableMaterials() { const fail = () => invariant(false, 'MATERIAL_SERVICE_REQUIRED', 'Material service is required'); return Object.freeze({ createMaterial: fail, updateMaterial: fail, publishMaterial: fail, pageForActor: fail, getForActor: fail }); }
 function unavailableBoms() { const fail = () => invariant(false, 'BOM_SERVICE_REQUIRED', 'BOM service is required'); return Object.freeze({ createBom: fail, updateBom: fail, publishBom: fail, pageForActor: fail, getForActor: fail }); }
-function unavailableMeasurements() { const fail = () => invariant(false, 'MEASUREMENT_SERVICE_REQUIRED', 'Measurement chart service is required'); return Object.freeze({ createMeasurementChart: fail, updateMeasurementChart: fail, publishMeasurementChart: fail, pageForActor: fail, getForActor: fail }); }
+function unavailableMeasurements() {
+  const fail = () => invariant(false, 'MEASUREMENT_SERVICE_REQUIRED', 'Measurement chart service is required');
+  return Object.freeze({
+    createMeasurementChart: fail,
+    updateMeasurementChart: fail,
+    publishMeasurementChart: fail,
+    createCanonicalMeasurementChart: fail,
+    updateCanonicalMeasurementChart: fail,
+    publishCanonicalMeasurementChart: fail,
+    pageForActor: fail,
+    getForActor: fail,
+    getCanonicalForActor: fail,
+  });
+}

@@ -132,32 +132,32 @@ $$;
 
 DROP TRIGGER IF EXISTS boms_assign_product_sku_lineage ON boms;
 CREATE TRIGGER boms_assign_product_sku_lineage
-BEFORE INSERT OR UPDATE OF product_sku_id, brand_id, sku ON boms
+BEFORE INSERT OR UPDATE ON boms
 FOR EACH ROW EXECUTE FUNCTION technical_evidence_assign_product_sku_lineage();
 
 DROP TRIGGER IF EXISTS samples_assign_product_sku_lineage ON samples;
 CREATE TRIGGER samples_assign_product_sku_lineage
-BEFORE INSERT OR UPDATE OF product_sku_id, brand_id, sku ON samples
+BEFORE INSERT OR UPDATE ON samples
 FOR EACH ROW EXECUTE FUNCTION technical_evidence_assign_product_sku_lineage();
 
 DROP TRIGGER IF EXISTS tech_packs_assign_product_sku_lineage ON tech_packs;
 CREATE TRIGGER tech_packs_assign_product_sku_lineage
-BEFORE INSERT OR UPDATE OF product_sku_id, brand_id, sku ON tech_packs
+BEFORE INSERT OR UPDATE ON tech_packs
 FOR EACH ROW EXECUTE FUNCTION technical_evidence_assign_product_sku_lineage();
 
 DROP TRIGGER IF EXISTS sourcing_rfqs_assign_product_sku_lineage ON sourcing_rfqs;
 CREATE TRIGGER sourcing_rfqs_assign_product_sku_lineage
-BEFORE INSERT OR UPDATE OF product_sku_id, brand_id, sku ON sourcing_rfqs
+BEFORE INSERT OR UPDATE ON sourcing_rfqs
 FOR EACH ROW EXECUTE FUNCTION technical_evidence_assign_product_sku_lineage();
 
 DROP TRIGGER IF EXISTS production_orders_assign_product_sku_lineage ON production_orders;
 CREATE TRIGGER production_orders_assign_product_sku_lineage
-BEFORE INSERT OR UPDATE OF product_sku_id, brand_id, sku ON production_orders
+BEFORE INSERT OR UPDATE ON production_orders
 FOR EACH ROW EXECUTE FUNCTION technical_evidence_assign_product_sku_lineage();
 
 DROP TRIGGER IF EXISTS quality_inspections_assign_product_sku_lineage ON quality_inspections;
 CREATE TRIGGER quality_inspections_assign_product_sku_lineage
-BEFORE INSERT OR UPDATE OF product_sku_id, brand_id, sku ON quality_inspections
+BEFORE INSERT OR UPDATE ON quality_inspections
 FOR EACH ROW EXECUTE FUNCTION technical_evidence_assign_product_sku_lineage();
 
 COMMIT;

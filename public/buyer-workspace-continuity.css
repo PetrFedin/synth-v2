@@ -1,0 +1,137 @@
+.buyer-journey {
+  display: grid;
+  gap: 16px;
+  margin-block: 12px;
+}
+
+.buyer-journey-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.buyer-journey-head h3 {
+  margin: 4px 0 6px;
+}
+
+.buyer-journey-head p {
+  max-width: 920px;
+  margin: 0;
+}
+
+.buyer-journey-rail {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.buyer-journey-step {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-block: 1px solid var(--od-border, #d9dce3);
+  background: var(--od-surface, #fff);
+}
+
+.buyer-journey-step:first-child {
+  border-inline-start: 1px solid var(--od-border, #d9dce3);
+  border-radius: 8px 0 0 8px;
+}
+
+.buyer-journey-step:last-child {
+  border-inline-end: 1px solid var(--od-border, #d9dce3);
+  border-radius: 0 8px 8px 0;
+}
+
+.buyer-journey-step + .buyer-journey-step {
+  border-inline-start: 1px solid var(--od-border, #d9dce3);
+}
+
+.buyer-journey-step.active {
+  box-shadow: inset 0 -2px 0 var(--od-accent, #353945);
+  background: var(--od-surface-subtle, #f7f8fa);
+}
+
+.buyer-journey-step.complete .buyer-journey-marker {
+  font-weight: 700;
+}
+
+.buyer-journey-marker {
+  display: inline-grid;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  place-items: center;
+  border: 1px solid var(--od-border-strong, #aeb3bf);
+  border-radius: 50%;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.buyer-journey-step.complete .buyer-journey-marker,
+.buyer-journey-step.active .buyer-journey-marker {
+  border-color: currentColor;
+}
+
+.buyer-journey-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.buyer-journey-copy strong,
+.buyer-journey-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.buyer-journey-context {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.buyer-journey-context-item {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid var(--od-border, #d9dce3);
+  border-radius: 6px;
+  background: var(--od-surface-subtle, #f7f8fa);
+}
+
+.buyer-journey-context-item strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.buyer-journey-actions {
+  justify-content: flex-end;
+}
+
+@media (max-width: 980px) {
+  .buyer-journey-rail {
+    grid-template-columns: 1fr;
+  }
+
+  .buyer-journey-step,
+  .buyer-journey-step:first-child,
+  .buyer-journey-step:last-child {
+    border: 1px solid var(--od-border, #d9dce3);
+    border-radius: 6px;
+  }
+
+  .buyer-journey-step + .buyer-journey-step {
+    margin-top: 6px;
+  }
+}

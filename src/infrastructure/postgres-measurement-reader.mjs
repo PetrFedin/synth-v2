@@ -28,6 +28,27 @@ export function createPostgresMeasurementReader({ pool } = {}) {
         return result.rows[0]?.payload;
       }, { begin: SNAPSHOT_BEGIN });
     },
+    getCanonicalForActor(actorId, chartId) {
+      return withPostgresTransaction(pool, async (queryable) => {
+        const result = await queryable.query(
+          `SELECT chart.payload
+             FROM measurement_charts AS chart
+            WHERE chart.id = $1
+              AND chart.style_version_id IS NOT NULL
+              AND chart.colorway_id IS NOT NULL
+              AND chart.size_scale_version_id IS NOT NULL
+              AND EXISTS (
+                SELECT 1 FROM memberships AS membership
+                 WHERE membership.user_id = $2
+                   AND membership.organisation_id = chart.brand_id
+                   AND membership.status = 'active'
+                   AND membership.role = ANY($3::text[])
+              )`,
+          [chartId, actorId, MEASUREMENT_READ_ROLES],
+        );
+        return result.rows[0]?.payload;
+      }, { begin: SNAPSHOT_BEGIN });
+    },
   });
 }
 
@@ -41,6 +62,7 @@ async function page(queryable, actorId, { limit, afterSku, filters }) {
           AND membership.status = 'active'
           AND membership.role = ANY($2::text[])
      )`,
+    'chart.sku IS NOT NULL',
   ];
   if (filters.brandId) { params.push(filters.brandId); clauses.push(`chart.brand_id = $${params.length}`); }
   if (filters.status) { params.push(filters.status); clauses.push(`chart.status = $${params.length}`); }

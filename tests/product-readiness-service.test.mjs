@@ -45,7 +45,7 @@ function context() {
       styleVersion: { id: 'style-version:1', brandId: 'brand:1', versionNo: 1, categoryRef: { entryId: 'category:dress', version: 1 }, contentHash: hash },
       styleMedia: [{ id: 'media:hero', colorwayId: null, mediaType: 'image', mediaRole: 'hero' }],
       styleAttributes: [], mdmUsage: [],
-      colorways: [{ id: 'colorway:1', media: [{ id: 'media:color', colorwayId: 'colorway:1', mediaType: 'image', mediaRole: 'gallery' }], attributes: [], skus: [{ id: 'sku:1', attributes: [], size: { id: 'size:1', sizeScaleVersionId: 'scale-version:1', sortOrder: 1 } }] }],
+      colorways: [{ id: 'colorway:1', media: [{ id: 'media:color', colorwayId: 'colorway:1', mediaType: 'image', mediaRole: 'gallery' }], attributes: [], skus: [{ id: 'sku:1', skuCode: 'SKU-1', attributes: [], size: { id: 'size:1', sizeScaleVersionId: 'scale-version:1', sortOrder: 1 } }] }],
     },
     measurementEvidence: [{
       id: 'measurement:canonical:1',
@@ -54,9 +54,9 @@ function context() {
       measurementUnitRef: { entryId: 'mdm:unit:cm', version: 2 },
       baseSizeValueId: 'size:1', sizeValueIds: ['size:1'], publishedAt: now,
     }],
-    legacyEvidence: [{
-      productSkuId: 'sku:1', skuCode: 'SKU-1', catalogSku: 'SKU-1',
-      bom: { status: 'published' }, measurement: { status: 'published' }, sample: { status: 'approved', sampleType: 'pre-production' },
+    technicalEvidence: [{
+      productSkuId: 'sku:1', skuCode: 'SKU-1',
+      bom: { status: 'published' }, sample: { status: 'approved', sampleType: 'pre-production' },
       techPack: { status: 'acknowledged' }, sourcing: { status: 'allocated' }, productionOrder: { status: 'confirmed' }, quality: { status: 'released' },
     }],
   };
@@ -74,7 +74,7 @@ function input() {
   };
 }
 
-test('assessment is command-idempotent and freezes a ready handoff with canonical measurement evidence', async () => {
+test('assessment is command-idempotent and freezes canonical measurement plus ProductSku technical evidence', async () => {
   const h = harness();
   const first = await h.service.assessReadiness('cmd:assess', 'user:1', 'style-version:1', input());
   const replay = await h.service.assessReadiness('cmd:assess', 'user:1', 'style-version:1', input());
@@ -84,8 +84,12 @@ test('assessment is command-idempotent and freezes a ready handoff with canonica
   assert.equal(h.commands.size, 1);
   assert.equal(first.technicalSnapshot.measurementEvidence[0].id, 'measurement:canonical:1');
   assert.deepEqual(first.technicalSnapshot.measurementEvidence[0].sizeValueIds, ['size:1']);
+  assert.equal(first.technicalSnapshot.technicalEvidence[0].productSkuId, 'sku:1');
+  assert.equal(Object.hasOwn(first.technicalSnapshot.technicalEvidence[0], 'catalogSku'), false);
   assert.equal(Object.isFrozen(first.technicalSnapshot.measurementEvidence), true);
   assert.equal(Object.isFrozen(first.technicalSnapshot.measurementEvidence[0]), true);
+  assert.equal(Object.isFrozen(first.technicalSnapshot.technicalEvidence), true);
+  assert.equal(Object.isFrozen(first.technicalSnapshot.technicalEvidence[0]), true);
 });
 
 test('readiness mutations reject missing durable command ids before repository work', async () => {
@@ -106,6 +110,7 @@ test('projection publish is contiguous, idempotent and serializes version alloca
   assert.equal(first.versionNo, 1);
   assert.equal(first.payload.readinessSnapshotId, snapshot.id);
   assert.equal(first.payload.technicalSnapshot.measurementEvidence[0].id, 'measurement:canonical:1');
+  assert.equal(first.payload.technicalSnapshot.technicalEvidence[0].productSkuId, 'sku:1');
   assert.equal(h.projections.length, 1);
   assert.deepEqual(h.locks, ['style-version:1']);
   await assert.rejects(

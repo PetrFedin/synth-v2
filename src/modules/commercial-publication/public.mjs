@@ -4,6 +4,8 @@ import { normalizeMoney } from '../../core/money.mjs';
 import { canonicalJson } from '../../core/fingerprints.mjs';
 export { assertBuyerCatalogQuantity, buyerCatalogProductSku, isRichBuyerCatalog } from './buyer-catalog-product.mjs';
 
+const MINOR_MONEY_FACTOR = 100;
+
 // Historical V1 constructor is preserved only for old immutable snapshots/tests.
 // New application writes use createProjectionBackedCommercialPublication.
 export function createCommercialPublication({ id, collection, catalogSkus, publishedAt }) {
@@ -35,22 +37,18 @@ export function createProjectionBackedCommercialPublication({ id, collection, co
   invariant(colorways.length > 0, 'COMMERCIAL_PUBLICATION_COLORWAYS_REQUIRED', 'Projection-backed publication requires at least one Colorway');
   const selectedMediaIds = new Set(Array.isArray(preparation.mediaIds) ? preparation.mediaIds : []);
   const styleMedia = selectMedia(product.styleMedia, selectedMediaIds);
-  const legacyByProductSku = new Map((technical.legacyEvidence ?? []).map((row) => [row.productSkuId, row]));
   const seenSku = new Set();
 
   const projectedColorways = colorways
     .map((colorway) => projectColorway(colorway, {
       preparation,
       selectedMediaIds,
-      legacyByProductSku,
       seenSku,
-      collection,
-      styleVersion: product.styleVersion,
     }))
     .sort((left, right) => left.colorwayCode.localeCompare(right.colorwayCode));
 
   const lines = projectedColorways
-    .flatMap((colorway) => colorway.skus.map((sku) => compatibilityLine(sku, colorway, product.styleVersion, preparation)))
+    .flatMap((colorway) => colorway.skus.map((sku) => compatibilityLine(sku, colorway, product.styleVersion, preparation, commercialProjection)))
     .sort((left, right) => left.sku.localeCompare(right.sku));
   invariant(lines.length > 0, 'COMMERCIAL_PUBLICATION_LINES_REQUIRED', 'Projection-backed publication requires at least one Product SKU');
 
@@ -211,9 +209,6 @@ function projectSku(sku, colorway, context) {
   invariant(sku?.id && sku?.skuCode && sku?.size?.id, 'COMMERCIAL_PUBLICATION_PRODUCT_SKU_INVALID', 'Projected Product SKU is invalid', { productSkuId: sku?.id });
   invariant(!context.seenSku.has(sku.skuCode), 'COMMERCIAL_PUBLICATION_SKU_DUPLICATE', 'Commercial publication contains duplicate SKU', { sku: sku.skuCode });
   context.seenSku.add(sku.skuCode);
-  const legacy = context.legacyByProductSku.get(sku.id);
-  invariant(legacy?.catalog?.status === 'published', 'COMMERCIAL_PUBLICATION_LEGACY_PRICE_SNAPSHOT_REQUIRED', 'Projection must contain the frozen published compatibility catalog snapshot for the Product SKU', { productSkuId: sku.id, sku: sku.skuCode });
-  invariant(legacy.catalog.currency === context.collection.currency, 'COMMERCIAL_PUBLICATION_CURRENCY_MISMATCH', 'Frozen compatibility price currency does not match collection currency', { sku: sku.skuCode });
   return deepFreeze({
     productSkuId: sku.id,
     skuCode: sku.skuCode,
@@ -222,13 +217,11 @@ function projectSku(sku, colorway, context) {
     sizeValueId: sku.sizeValueId,
     size: deepCopy(sku.size),
     attributes: deepCopy(sku.attributes ?? []),
-    legacyCatalogSnapshot: deepCopy(legacy.catalog),
     commercialTerms: commercialTerms(context.preparation),
   });
 }
 
-function compatibilityLine(sku, colorway, styleVersion, preparation) {
-  const legacy = sku.legacyCatalogSnapshot;
+function compatibilityLine(sku, colorway, styleVersion, preparation, commercialProjection) {
   return deepFreeze({
     sku: sku.skuCode,
     productSkuId: sku.productSkuId,
@@ -236,10 +229,13 @@ function compatibilityLine(sku, colorway, styleVersion, preparation) {
     colorwayId: colorway.colorwayId,
     sizeValueId: sku.sizeValueId,
     name: preparation.titleEn,
-    catalogVersion: legacy.version,
-    unitPrice: normalizeMoney(legacy.wholesalePrice, moneyOptions('Frozen compatibility wholesale price')),
-    currency: legacy.currency,
-    minimumOrderQuantity: legacy.minimumOrderQuantity,
+    // Downstream legacy selection/order contracts still require a positive integer
+    // `catalogVersion`. For projection-backed publications it is now sourced from
+    // the immutable CommercialProductProjectionVersion, never from flat catalog_skus.
+    catalogVersion: commercialProjection.versionNo,
+    unitPrice: moneyFromMinor(preparation.wholesalePriceMinor, 'Commercial projection wholesale price'),
+    currency: preparation.currency,
+    minimumOrderQuantity: preparation.minimumOrderQuantity,
     rrpMinor: preparation.rrpMinor,
     wholesalePriceMinor: preparation.wholesalePriceMinor,
     deliveryStart: preparation.deliveryStart,
@@ -286,6 +282,11 @@ function applyBuyerPrices(styles, lines) {
 
 function compareSkuBySize(left, right) {
   return (left.size?.sortOrder ?? 0) - (right.size?.sortOrder ?? 0) || left.skuCode.localeCompare(right.skuCode);
+}
+
+function moneyFromMinor(value, label) {
+  invariant(Number.isSafeInteger(value) && value > 0, 'COMMERCIAL_PUBLICATION_PRICE_INVALID', `${label} minor amount must be a positive safe integer`);
+  return normalizeMoney(value / MINOR_MONEY_FACTOR, moneyOptions(label));
 }
 
 function moneyOptions(label) {

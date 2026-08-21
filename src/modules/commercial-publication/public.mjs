@@ -132,6 +132,7 @@ export function createPriceListVersion({ id, publication, shopId, priceOverrides
 
   const basis = deepFreeze({
     publicationId: publication.id,
+    ...projectionLineage(publication),
     brandId: publication.brandId,
     shopId,
     currency: publication.currency,
@@ -152,6 +153,7 @@ export function createBuyerCatalogVersion({ id, publication, priceListVersion, s
   const basis = deepFreeze({
     publicationId: publication.id,
     priceListVersionId: priceListVersion.id,
+    ...projectionLineage(priceListVersion),
     brandId: publication.brandId,
     shopId: priceListVersion.shopId,
     showroomId: showroom.id,
@@ -256,6 +258,21 @@ function commercialTerms(preparation) {
     deliveryEnd: preparation.deliveryEnd,
     availability: deepCopy(preparation.availability),
   });
+}
+
+function projectionLineage(snapshot) {
+  if (!snapshot?.commercialProjectionId) return {};
+  invariant(Number.isInteger(snapshot.commercialProjectionVersionNo) && snapshot.commercialProjectionVersionNo > 0, 'COMMERCIAL_PROJECTION_LINEAGE_INVALID', 'Commercial projection version lineage is invalid');
+  invariant(typeof snapshot.commercialProjectionContentHash === 'string' && snapshot.commercialProjectionContentHash.length > 0, 'COMMERCIAL_PROJECTION_LINEAGE_INVALID', 'Commercial projection content hash lineage is invalid');
+  invariant(typeof snapshot.readinessSnapshotId === 'string' && snapshot.readinessSnapshotId.length > 0, 'COMMERCIAL_PROJECTION_LINEAGE_INVALID', 'Product readiness snapshot lineage is invalid');
+  invariant(typeof snapshot.styleVersionId === 'string' && snapshot.styleVersionId.length > 0, 'COMMERCIAL_PROJECTION_LINEAGE_INVALID', 'StyleVersion lineage is invalid');
+  return {
+    commercialProjectionId: snapshot.commercialProjectionId,
+    commercialProjectionVersionNo: snapshot.commercialProjectionVersionNo,
+    commercialProjectionContentHash: snapshot.commercialProjectionContentHash,
+    readinessSnapshotId: snapshot.readinessSnapshotId,
+    styleVersionId: snapshot.styleVersionId,
+  };
 }
 
 function selectMedia(media, selectedIds) {

@@ -6,6 +6,13 @@ import { buyerCatalogProductSku, isRichBuyerCatalog } from '../commercial-public
 import { assertBuyerCommercialSnapshot } from '../retail-doors/public.mjs';
 
 const RICH_LINEAGE_KEYS = Object.freeze(['productSkuId', 'styleId', 'styleVersionId', 'colorwayId', 'sizeValueId', 'sizeCode', 'sizeSortOrder']);
+const COMMERCIAL_PROJECTION_LINEAGE_KEYS = Object.freeze([
+  'commercialProjectionId',
+  'commercialProjectionVersionNo',
+  'commercialProjectionContentHash',
+  'readinessSnapshotId',
+  'styleVersionId',
+]);
 
 export function createOrderCommitSnapshot({ id, order, selection, buyerCatalog = null, committedAt }) {
   invariant(id && order?.id && selection?.id, 'ORDER_COMMIT_IDENTITY_REQUIRED', 'Order commit snapshot identity is required');
@@ -47,6 +54,11 @@ export function createOrderCommitSnapshot({ id, order, selection, buyerCatalog =
     buyerCatalogVersionId: order.buyerCatalogVersionId ?? null,
     commercialBasisHash: order.commercialBasisHash ?? null,
     accessGrantId: order.accessGrantId ?? null,
+    commercialProjectionId: order.commercialProjectionId ?? null,
+    commercialProjectionVersionNo: order.commercialProjectionVersionNo ?? null,
+    commercialProjectionContentHash: order.commercialProjectionContentHash ?? null,
+    readinessSnapshotId: order.readinessSnapshotId ?? null,
+    styleVersionId: order.styleVersionId ?? null,
     retailDoorId: buyerCommercialSnapshot?.retailDoorId ?? null,
     retailDoorVersion: buyerCommercialSnapshot?.retailDoorVersion ?? null,
     buyerCommercialSnapshot,
@@ -79,6 +91,7 @@ function validateCommercialLines(order, selection, buyerCatalog) {
   invariant(buyerCatalog.currency === order.currency, 'ORDER_COMMIT_CURRENCY_MISMATCH', 'Pinned buyer catalog currency does not match the order');
   invariant(order.lines.length === selection.lines.length, 'ORDER_COMMIT_LINE_COUNT_MISMATCH', 'Order and submitted selection line counts differ');
   const richCatalog = isRichBuyerCatalog(buyerCatalog);
+  if (richCatalog) assertCommercialProjectionLineage(order, selection, buyerCatalog);
 
   return Object.freeze(order.lines.map((orderLine) => {
     const selectionLine = selection.lines.find((line) => line.sku === orderLine.sku);
@@ -86,7 +99,9 @@ function validateCommercialLines(order, selection, buyerCatalog) {
     invariant(selectionLine && catalogLine, 'ORDER_COMMIT_SKU_MISSING', 'Committed SKU is missing from the submitted selection or buyer catalog', { sku: orderLine.sku });
     invariant(orderLine.quantity === selectionLine.quantity, 'ORDER_COMMIT_QUANTITY_MISMATCH', 'Order quantity differs from submitted buyer intent', { sku: orderLine.sku });
     invariant(orderLine.quantity >= catalogLine.minimumOrderQuantity, 'ORDER_COMMIT_MOQ_NOT_MET', 'Committed quantity is below buyer catalog MOQ', { sku: orderLine.sku, minimumOrderQuantity: catalogLine.minimumOrderQuantity });
-    invariant(orderLine.catalogVersion === catalogLine.catalogVersion && selectionLine.catalogVersion === catalogLine.catalogVersion, 'ORDER_COMMIT_CATALOG_VERSION_MISMATCH', 'Committed catalog version differs from the pinned buyer catalog', { sku: orderLine.sku });
+    if (!richCatalog) {
+      invariant(orderLine.catalogVersion === catalogLine.catalogVersion && selectionLine.catalogVersion === catalogLine.catalogVersion, 'ORDER_COMMIT_CATALOG_VERSION_MISMATCH', 'Committed catalog version differs from the pinned buyer catalog', { sku: orderLine.sku });
+    }
     const committedPrice = normalizeMoney(orderLine.unitPrice, { label: 'Committed order line price' });
     const selectionPrice = normalizeMoney(selectionLine.unitPrice, { label: 'Submitted selection line price' });
     const catalogPrice = normalizeMoney(catalogLine.unitPrice, { label: 'Pinned buyer catalog price' });
@@ -103,6 +118,8 @@ function validateCommercialLines(order, selection, buyerCatalog) {
       sku: orderLine.sku,
       quantity: orderLine.quantity,
       unitPrice: committedPrice,
+      // catalogVersion remains a compatibility transport field. Rich V2 integrity is
+      // anchored by immutable projection lineage plus exact ProductSku variant lineage.
       catalogVersion: orderLine.catalogVersion,
       productSkuId: product.productSkuId,
       gtin: product.gtin,
@@ -116,6 +133,22 @@ function validateCommercialLines(order, selection, buyerCatalog) {
       sizeSortOrder: product.sizeSortOrder,
     });
   }));
+}
+
+function assertCommercialProjectionLineage(order, selection, buyerCatalog) {
+  for (const key of COMMERCIAL_PROJECTION_LINEAGE_KEYS) {
+    const expected = buyerCatalog?.[key];
+    const validExpected = key === 'commercialProjectionVersionNo'
+      ? Number.isInteger(expected) && expected > 0
+      : typeof expected === 'string' && expected.trim().length > 0;
+    invariant(validExpected, 'ORDER_COMMIT_COMMERCIAL_PROJECTION_LINEAGE_REQUIRED', 'Rich BuyerCatalogVersion requires complete immutable CommercialProductProjectionVersion lineage', { buyerCatalogVersionId: buyerCatalog?.id, key });
+    invariant(
+      order?.[key] === expected && selection?.[key] === expected,
+      'ORDER_COMMIT_COMMERCIAL_PROJECTION_LINEAGE_MISMATCH',
+      'Canonical commercial projection lineage differs from the pinned BuyerCatalogVersion',
+      { key, expected, order: order?.[key] ?? null, selection: selection?.[key] ?? null },
+    );
+  }
 }
 
 function freezeBuyerCommercialSnapshot(order) {

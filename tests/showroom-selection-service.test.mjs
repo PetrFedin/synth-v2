@@ -10,6 +10,14 @@ import { createShowroomSelectionService } from '../src/application/showroom-sele
 import { createMemoryWholesaleStore } from '../src/infrastructure/memory-store.mjs';
 import { createMemoryCatalogStore } from '../src/infrastructure/memory-catalog-store.mjs';
 
+const PROJECTION_LINEAGE = Object.freeze({
+  commercialProjectionId: 'projection-1',
+  commercialProjectionVersionNo: 4,
+  commercialProjectionContentHash: 'b'.repeat(64),
+  readinessSnapshotId: 'readiness-1',
+  styleVersionId: 'style-version-1',
+});
+
 async function fixture() {
   let id = 0;
   const store = createMemoryWholesaleStore();
@@ -81,6 +89,7 @@ function richBuyerCatalog(context, overrides = {}) {
     shopId: 'shop-1',
     showroomId: context.showroomId,
     currency: 'EUR',
+    ...PROJECTION_LINEAGE,
     lines: Object.freeze([Object.freeze(line)]),
     styles: Object.freeze([Object.freeze({
       styleId: 'style-1',
@@ -138,6 +147,7 @@ test('rich pinned buyer cart resolves Style Colorway Size SKU entirely from froz
 
   assert.equal(edited.buyerCatalogVersionId, buyerCatalog.id);
   assert.equal(edited.commercialBasisHash, buyerCatalog.contentHash);
+  for (const [key, value] of Object.entries(PROJECTION_LINEAGE)) assert.equal(edited[key], value);
   assert.equal(edited.retailDoorId, context.door.id);
   assert.deepEqual(edited.lines[0], {
     sku: 'SKU-1',

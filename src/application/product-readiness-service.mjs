@@ -61,7 +61,7 @@ export function createProductReadinessService({
         capturedAt: assessedAt,
         product: context.product,
         measurementEvidence: context.measurementEvidence ?? [],
-        legacyEvidence: context.legacyEvidence,
+        technicalEvidence: context.technicalEvidence ?? [],
       });
       const commercialPreparation = normalizeCommercialPreparation(styleVersionIdentity.brandId, input.commercialPreparation);
       const dimensions = evaluateProductReadiness({

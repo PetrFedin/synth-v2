@@ -29,11 +29,10 @@ function product() {
   };
 }
 
-function legacyEvidence() {
+function technicalEvidence() {
   return [{
-    productSkuId: 'product-sku:black-m', skuCode: 'DRS-001-BLK-M', catalogSku: 'DRS-001-BLK-M',
+    productSkuId: 'product-sku:black-m', skuCode: 'DRS-001-BLK-M',
     bom: { id: 'bom:1', status: 'published', version: 3 },
-    measurement: { id: 'legacy-measurement:1', status: 'published', version: 99 },
     sample: { sampleCode: 'PPS-001', status: 'approved', sampleType: 'pre-production', round: 2, version: 5 },
     techPack: { techPackCode: 'TP-001', status: 'acknowledged', revision: 2, version: 4 },
     sourcing: { rfqCode: 'RFQ-001', status: 'allocated', version: 7 },
@@ -76,14 +75,14 @@ function external(evidenceId) {
   return { status: 'ready', evidenceId, sourceSystem: 'syntha-documents', version: 'v1', contentHash: hash, approvedAt: now, approvedBy: 'user:1' };
 }
 
-function technicalSnapshot(evidence = legacyEvidence(), measurementEvidence = canonicalMeasurementEvidence()) {
+function technicalSnapshot(evidence = technicalEvidence(), measurementEvidence = canonicalMeasurementEvidence()) {
   return {
     styleVersionId: 'style-version:1', brandId: 'brand:1', capturedAt: now,
-    product: product(), measurementEvidence, legacyEvidence: evidence,
+    product: product(), measurementEvidence, technicalEvidence: evidence,
   };
 }
 
-test('OWN_DEVELOPMENT readiness emits exactly 18 governed ready dimensions from repository + compliance evidence', () => {
+test('OWN_DEVELOPMENT readiness emits exactly 18 governed ready dimensions from canonical repository + compliance evidence', () => {
   const dimensions = evaluateProductReadiness({
     developmentRoute: 'OWN_DEVELOPMENT',
     technicalSnapshot: technicalSnapshot(),
@@ -94,12 +93,15 @@ test('OWN_DEVELOPMENT readiness emits exactly 18 governed ready dimensions from 
   assert.deepEqual(dimensions.map((value) => value.code), PRODUCT_READINESS_DIMENSIONS);
   assert.equal(dimensions.filter((value) => value.status === 'blocked').length, 0);
   assert.equal(dimensions.filter((value) => value.status === 'not_applicable').length, 0);
+  for (const code of ['bom', 'samples', 'tech_pack', 'sourcing', 'purchase_or_production_commitment', 'quality']) {
+    assert.equal(dimensions.find((value) => value.code === code).evidence.source, 'canonical-product-sku');
+  }
 });
 
-test('legacy published measurement cannot satisfy canonical Product Readiness', () => {
+test('absence of canonical Measurement evidence cannot be satisfied by other technical records', () => {
   const dimensions = evaluateProductReadiness({
     developmentRoute: 'OWN_DEVELOPMENT',
-    technicalSnapshot: technicalSnapshot(legacyEvidence(), []),
+    technicalSnapshot: technicalSnapshot(technicalEvidence(), []),
     commercialPreparation: commercialPreparation(),
     externalEvidence: { compliance: external('compliance:1') },
   });
@@ -112,13 +114,28 @@ test('legacy published measurement cannot satisfy canonical Product Readiness', 
 test('canonical measurement readiness fails closed when a sellable ProductSizeValue is not covered', () => {
   const dimensions = evaluateProductReadiness({
     developmentRoute: 'OWN_DEVELOPMENT',
-    technicalSnapshot: technicalSnapshot(legacyEvidence(), canonicalMeasurementEvidence([])),
+    technicalSnapshot: technicalSnapshot(technicalEvidence(), canonicalMeasurementEvidence([])),
     commercialPreparation: commercialPreparation(),
     externalEvidence: { compliance: external('compliance:1') },
   });
   const measurement = dimensions.find((value) => value.code === 'measurements');
   assert.equal(measurement.status, 'blocked');
   assert.deepEqual(measurement.evidence.contexts[0].missingSizeValueIds, ['size:m']);
+});
+
+test('technical gates fail closed when evidence is not pinned to the exact canonical ProductSku', () => {
+  const mismatchedEvidence = technicalEvidence().map((row) => ({ ...row, productSkuId: 'product-sku:other' }));
+  const dimensions = evaluateProductReadiness({
+    developmentRoute: 'OWN_DEVELOPMENT',
+    technicalSnapshot: technicalSnapshot(mismatchedEvidence),
+    commercialPreparation: commercialPreparation(),
+    externalEvidence: { compliance: external('compliance:1') },
+  });
+  for (const code of ['bom', 'samples', 'tech_pack', 'sourcing', 'purchase_or_production_commitment', 'quality']) {
+    const dimension = dimensions.find((value) => value.code === code);
+    assert.equal(dimension.status, 'blocked');
+    assert.equal(dimension.evidence.canonicalTechnicalCoverage, false);
+  }
 });
 
 test('development routes fail closed and do not allow external evidence to override repository sourcing or Final Quality', () => {
@@ -132,7 +149,7 @@ test('development routes fail closed and do not allow external evidence to overr
     (error) => error?.code === 'PRODUCT_READINESS_EXTERNAL_EVIDENCE_NOT_ALLOWED',
   );
 
-  const evidence = legacyEvidence().map((row) => ({ ...row, sourcing: null, quality: null }));
+  const evidence = technicalEvidence().map((row) => ({ ...row, sourcing: null, quality: null }));
   const dimensions = evaluateProductReadiness({
     developmentRoute: 'OWN_DEVELOPMENT',
     technicalSnapshot: technicalSnapshot(evidence),
@@ -143,7 +160,7 @@ test('development routes fail closed and do not allow external evidence to overr
   assert.equal(dimensions.find((value) => value.code === 'quality').status, 'blocked');
 });
 
-test('MATERIALS_SEPARATE requires repository production plus immutable material-purchase evidence', () => {
+test('MATERIALS_SEPARATE requires canonical repository production plus immutable material-purchase evidence', () => {
   const blocked = evaluateProductReadiness({
     developmentRoute: 'MATERIALS_SEPARATE',
     technicalSnapshot: technicalSnapshot(),
@@ -158,7 +175,9 @@ test('MATERIALS_SEPARATE requires repository production plus immutable material-
     commercialPreparation: commercialPreparation(),
     externalEvidence: { purchase_or_production_commitment: external('material-po:1'), compliance: external('compliance:1') },
   });
-  assert.equal(ready.find((value) => value.code === 'purchase_or_production_commitment').status, 'ready');
+  const commitment = ready.find((value) => value.code === 'purchase_or_production_commitment');
+  assert.equal(commitment.status, 'ready');
+  assert.equal(commitment.evidence.repositorySource, 'canonical-product-sku');
 });
 
 test('READY_GOODS makes BOM/sample/Tech Pack non-applicable and requires explicit external sourcing, PO, QC and compliance evidence', () => {

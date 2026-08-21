@@ -45,7 +45,12 @@ export function evaluateProductReadiness({ developmentRoute, technicalSnapshot, 
   const colorways = Array.isArray(product.colorways) ? product.colorways : [];
   const skus = colorways.flatMap((colorway) => Array.isArray(colorway.skus) ? colorway.skus : []);
   const measurementEvidence = Array.isArray(technicalSnapshot.measurementEvidence) ? technicalSnapshot.measurementEvidence : [];
-  const legacyEvidence = Array.isArray(technicalSnapshot.legacyEvidence) ? technicalSnapshot.legacyEvidence : [];
+  const technicalEvidence = Array.isArray(technicalSnapshot.technicalEvidence) ? technicalSnapshot.technicalEvidence : [];
+  const technicalEvidenceBySkuId = new Map(technicalEvidence.map((row) => [row?.productSkuId, row]));
+  const canonicalTechnicalCoverage = skus.length > 0
+    && technicalEvidence.length === skus.length
+    && technicalEvidenceBySkuId.size === technicalEvidence.length
+    && skus.every((sku) => technicalEvidenceBySkuId.get(sku?.id)?.skuCode === sku?.skuCode);
 
   const dimensions = [];
   dimensions.push(fact('product_identity', Boolean(styleVersion?.id && styleVersion?.contentHash), {
@@ -79,14 +84,14 @@ export function evaluateProductReadiness({ developmentRoute, technicalSnapshot, 
     skuAttributeCount: skus.reduce((sum, sku) => sum + (Array.isArray(sku.attributes) ? sku.attributes.length : 0), 0),
   }, 'Governed category attribute coverage has not been confirmed.'));
 
-  const linkedLegacy = skus.length > 0 && legacyEvidence.length === skus.length && legacyEvidence.every((row) => row.catalogSku);
   if (developmentRoute === 'READY_GOODS') {
     dimensions.push(notApplicable('bom', { developmentRoute }, 'BOM is not required for governed READY_GOODS route.'));
   } else {
-    dimensions.push(fact('bom', linkedLegacy && legacyEvidence.every((row) => row.bom?.status === 'published'), {
-      linkedLegacy,
-      sources: legacyEvidence.map((row) => row.bom ?? null),
-    }, linkedLegacy ? 'Published BOM is required for every canonical SKU.' : 'Legacy PLM bridge is incomplete; BOM evidence cannot be resolved.'));
+    dimensions.push(fact('bom', canonicalTechnicalCoverage && technicalEvidence.every((row) => row.bom?.status === 'published'), {
+      source: 'canonical-product-sku',
+      canonicalTechnicalCoverage,
+      sources: technicalEvidence.map((row) => row.bom ?? null),
+    }, canonicalTechnicalCoverage ? 'Published BOM is required for every canonical SKU.' : 'Canonical ProductSku lineage is incomplete; BOM evidence cannot be resolved.'));
   }
 
   const measurementCoverage = evaluateMeasurementCoverage({ styleVersion, colorways, measurementEvidence });
@@ -96,38 +101,41 @@ export function evaluateProductReadiness({ developmentRoute, technicalSnapshot, 
     dimensions.push(notApplicable('samples', { developmentRoute }, 'Sample approval is recommended but not a hard gate for READY_GOODS.'));
     dimensions.push(notApplicable('tech_pack', { developmentRoute }, 'Tech Pack is not required for governed READY_GOODS route.'));
   } else {
-    dimensions.push(fact('samples', linkedLegacy && legacyEvidence.every((row) => row.sample?.status === 'approved' && row.sample?.sampleType === 'pre-production'), {
-      linkedLegacy,
-      sources: legacyEvidence.map((row) => row.sample ?? null),
-    }, 'Approved pre-production sample is required for every canonical SKU.'));
-    dimensions.push(fact('tech_pack', linkedLegacy && legacyEvidence.every((row) => row.techPack?.status === 'acknowledged'), {
-      linkedLegacy,
-      sources: legacyEvidence.map((row) => row.techPack ?? null),
-    }, 'Acknowledged Tech Pack is required for every canonical SKU.'));
+    dimensions.push(fact('samples', canonicalTechnicalCoverage && technicalEvidence.every((row) => row.sample?.status === 'approved' && row.sample?.sampleType === 'pre-production'), {
+      source: 'canonical-product-sku',
+      canonicalTechnicalCoverage,
+      sources: technicalEvidence.map((row) => row.sample ?? null),
+    }, canonicalTechnicalCoverage ? 'Approved pre-production sample is required for every canonical SKU.' : 'Canonical ProductSku lineage is incomplete; sample evidence cannot be resolved.'));
+    dimensions.push(fact('tech_pack', canonicalTechnicalCoverage && technicalEvidence.every((row) => row.techPack?.status === 'acknowledged'), {
+      source: 'canonical-product-sku',
+      canonicalTechnicalCoverage,
+      sources: technicalEvidence.map((row) => row.techPack ?? null),
+    }, canonicalTechnicalCoverage ? 'Acknowledged Tech Pack is required for every canonical SKU.' : 'Canonical ProductSku lineage is incomplete; Tech Pack evidence cannot be resolved.'));
   }
 
   if (developmentRoute === 'READY_GOODS') {
     dimensions.push(externalOrBlocked('sourcing', externalEvidence.sourcing, 'READY_GOODS requires immutable finished-goods supplier selection evidence.'));
   } else {
-    const repositoryReady = linkedLegacy && legacyEvidence.every((row) => row.sourcing?.status === 'allocated');
+    const repositoryReady = canonicalTechnicalCoverage && technicalEvidence.every((row) => row.sourcing?.status === 'allocated');
     dimensions.push(repositoryReady
-      ? ready('sourcing', { source: 'repository', sources: legacyEvidence.map((row) => row.sourcing ?? null) })
-      : blocked('sourcing', { source: 'repository', sources: legacyEvidence.map((row) => row.sourcing ?? null), reason: 'Allocated sourcing RFQ is required for every canonical SKU; external evidence cannot replace it for development routes.' }));
+      ? ready('sourcing', { source: 'canonical-product-sku', sources: technicalEvidence.map((row) => row.sourcing ?? null) })
+      : blocked('sourcing', { source: 'canonical-product-sku', canonicalTechnicalCoverage, sources: technicalEvidence.map((row) => row.sourcing ?? null), reason: 'Allocated sourcing RFQ is required for every canonical SKU; external evidence cannot replace it for development routes.' }));
   }
 
   if (developmentRoute === 'OWN_DEVELOPMENT') {
-    const repositoryReady = linkedLegacy && legacyEvidence.every((row) => row.productionOrder?.status === 'confirmed');
+    const repositoryReady = canonicalTechnicalCoverage && technicalEvidence.every((row) => row.productionOrder?.status === 'confirmed');
     dimensions.push(repositoryReady
-      ? ready('purchase_or_production_commitment', { source: 'repository', sources: legacyEvidence.map((row) => row.productionOrder ?? null) })
-      : blocked('purchase_or_production_commitment', { source: 'repository', sources: legacyEvidence.map((row) => row.productionOrder ?? null), reason: 'Confirmed Production Order is required for every canonical SKU.' }));
+      ? ready('purchase_or_production_commitment', { source: 'canonical-product-sku', sources: technicalEvidence.map((row) => row.productionOrder ?? null) })
+      : blocked('purchase_or_production_commitment', { source: 'canonical-product-sku', canonicalTechnicalCoverage, sources: technicalEvidence.map((row) => row.productionOrder ?? null), reason: 'Confirmed Production Order is required for every canonical SKU.' }));
   } else if (developmentRoute === 'MATERIALS_SEPARATE') {
-    const productionReady = linkedLegacy && legacyEvidence.every((row) => row.productionOrder?.status === 'confirmed');
+    const productionReady = canonicalTechnicalCoverage && technicalEvidence.every((row) => row.productionOrder?.status === 'confirmed');
     const materialPurchaseEvidence = normalizeExternalEvidence(externalEvidence.purchase_or_production_commitment, 'purchase_or_production_commitment');
     dimensions.push(productionReady && materialPurchaseEvidence
-      ? ready('purchase_or_production_commitment', { source: 'mixed', productionOrders: legacyEvidence.map((row) => row.productionOrder ?? null), materialPurchaseEvidence })
+      ? ready('purchase_or_production_commitment', { source: 'mixed', repositorySource: 'canonical-product-sku', productionOrders: technicalEvidence.map((row) => row.productionOrder ?? null), materialPurchaseEvidence })
       : blocked('purchase_or_production_commitment', {
-        source: productionReady ? 'external-material-purchase-required' : 'repository-production-and-external-material-purchase-required',
-        productionOrders: legacyEvidence.map((row) => row.productionOrder ?? null),
+        source: productionReady ? 'external-material-purchase-required' : 'canonical-production-and-external-material-purchase-required',
+        canonicalTechnicalCoverage,
+        productionOrders: technicalEvidence.map((row) => row.productionOrder ?? null),
         materialPurchaseEvidence,
         reason: 'MATERIALS_SEPARATE requires both confirmed Production Order and immutable material-purchase evidence.',
       }));
@@ -138,10 +146,10 @@ export function evaluateProductReadiness({ developmentRoute, technicalSnapshot, 
   if (developmentRoute === 'READY_GOODS') {
     dimensions.push(externalOrBlocked('quality', externalEvidence.quality, 'READY_GOODS requires immutable incoming-QC release evidence.'));
   } else {
-    const repositoryReady = linkedLegacy && legacyEvidence.every((row) => row.quality?.status === 'released');
+    const repositoryReady = canonicalTechnicalCoverage && technicalEvidence.every((row) => row.quality?.status === 'released');
     dimensions.push(repositoryReady
-      ? ready('quality', { source: 'repository', sources: legacyEvidence.map((row) => row.quality ?? null) })
-      : blocked('quality', { source: 'repository', sources: legacyEvidence.map((row) => row.quality ?? null), reason: 'Released Final Quality evidence is required for every canonical SKU; external evidence cannot replace repository Final Quality for development routes.' }));
+      ? ready('quality', { source: 'canonical-product-sku', sources: technicalEvidence.map((row) => row.quality ?? null) })
+      : blocked('quality', { source: 'canonical-product-sku', canonicalTechnicalCoverage, sources: technicalEvidence.map((row) => row.quality ?? null), reason: 'Released Final Quality evidence is required for every canonical SKU; external evidence cannot replace repository Final Quality for development routes.' }));
   }
 
   dimensions.push(externalOrBlocked('compliance', externalEvidence.compliance, 'Russian/EAEU compliance and marking readiness evidence is required.'));

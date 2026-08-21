@@ -32,14 +32,6 @@ export function createPostgresProductReadinessSourceReader({ pool, productIdenti
       const evidenceResult = await pool.query(
         `SELECT product_sku.id AS product_sku_id,
                 product_sku.sku_code,
-                link.catalog_sku,
-                catalog.status AS catalog_status,
-                catalog.version AS catalog_version,
-                catalog.wholesale_price AS catalog_wholesale_price,
-                catalog.currency AS catalog_currency,
-                catalog.minimum_order_quantity AS catalog_minimum_order_quantity,
-                catalog.available_quantity AS catalog_available_quantity,
-                catalog.reserved_quantity AS catalog_reserved_quantity,
                 bom.id AS bom_id,
                 bom.status AS bom_status,
                 bom.version AS bom_version,
@@ -68,21 +60,17 @@ export function createPostgresProductReadinessSourceReader({ pool, productIdenti
                 quality.version AS quality_version,
                 quality.released_at AS quality_released_at
            FROM product_skus AS product_sku
-           LEFT JOIN product_catalog_sku_links AS link
-             ON link.product_sku_id = product_sku.id
-           LEFT JOIN catalog_skus AS catalog
-             ON catalog.sku = link.catalog_sku
            LEFT JOIN LATERAL (
              SELECT id, status, version
                FROM boms
-              WHERE sku = link.catalog_sku
+              WHERE product_sku_id = product_sku.id
               ORDER BY version DESC, id DESC
               LIMIT 1
            ) AS bom ON true
            LEFT JOIN LATERAL (
              SELECT sample_code, status, sample_type, round, version, decision_at
                FROM samples
-              WHERE sku = link.catalog_sku
+              WHERE product_sku_id = product_sku.id
                 AND sample_type = 'pre-production'
               ORDER BY round DESC, version DESC, sample_code DESC
               LIMIT 1
@@ -90,28 +78,28 @@ export function createPostgresProductReadinessSourceReader({ pool, productIdenti
            LEFT JOIN LATERAL (
              SELECT tech_pack_code, status, revision, version, acknowledged_at
                FROM tech_packs
-              WHERE sku = link.catalog_sku
+              WHERE product_sku_id = product_sku.id
               ORDER BY revision DESC, version DESC, tech_pack_code DESC
               LIMIT 1
            ) AS tech ON true
            LEFT JOIN LATERAL (
              SELECT rfq_code, status, version, selected_supplier_code, allocated_at
                FROM sourcing_rfqs
-              WHERE sku = link.catalog_sku
+              WHERE product_sku_id = product_sku.id
               ORDER BY version DESC, rfq_code DESC
               LIMIT 1
            ) AS rfq ON true
            LEFT JOIN LATERAL (
              SELECT production_order_number, status, version, confirmed_at
                FROM production_orders
-              WHERE sku = link.catalog_sku
+              WHERE product_sku_id = product_sku.id
               ORDER BY version DESC, production_order_number DESC
               LIMIT 1
            ) AS production ON true
            LEFT JOIN LATERAL (
              SELECT inspection_code, status, version, released_at
                FROM quality_inspections
-              WHERE sku = link.catalog_sku
+              WHERE product_sku_id = product_sku.id
               ORDER BY version DESC, inspection_code DESC
               LIMIT 1
            ) AS quality ON true
@@ -165,7 +153,7 @@ export function createPostgresProductReadinessSourceReader({ pool, productIdenti
         styleVersion,
         product: aggregate,
         measurementEvidence: Object.freeze(measurementResult.rows.map(mapMeasurementEvidence)),
-        legacyEvidence: Object.freeze(evidenceResult.rows.map(mapLegacyEvidence)),
+        technicalEvidence: Object.freeze(evidenceResult.rows.map(mapTechnicalEvidence)),
       });
     },
   });
@@ -198,21 +186,10 @@ function mapMeasurementEvidence(row) {
   });
 }
 
-function mapLegacyEvidence(row) {
+function mapTechnicalEvidence(row) {
   return Object.freeze({
     productSkuId: row.product_sku_id,
     skuCode: row.sku_code,
-    catalogSku: row.catalog_sku ?? null,
-    catalog: row.catalog_sku ? Object.freeze({
-      sku: row.catalog_sku,
-      status: row.catalog_status,
-      version: row.catalog_version,
-      wholesalePrice: Number(row.catalog_wholesale_price),
-      currency: row.catalog_currency,
-      minimumOrderQuantity: row.catalog_minimum_order_quantity,
-      availableQuantity: row.catalog_available_quantity,
-      reservedQuantity: row.catalog_reserved_quantity,
-    }) : null,
     bom: row.bom_id ? Object.freeze({ id: row.bom_id, status: row.bom_status, version: row.bom_version }) : null,
     sample: row.sample_code ? Object.freeze({ sampleCode: row.sample_code, status: row.sample_status, sampleType: row.sample_type, round: row.sample_round, version: row.sample_version, decisionAt: iso(row.sample_decision_at) }) : null,
     techPack: row.tech_pack_code ? Object.freeze({ techPackCode: row.tech_pack_code, status: row.tech_pack_status, revision: row.tech_pack_revision, version: row.tech_pack_version, acknowledgedAt: iso(row.tech_pack_acknowledged_at) }) : null,

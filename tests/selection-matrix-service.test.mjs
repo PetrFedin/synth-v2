@@ -9,6 +9,13 @@ import { createShowroomSelectionService } from '../src/application/showroom-sele
 import { createMemoryWholesaleStore } from '../src/infrastructure/memory-store.mjs';
 
 const now = '2026-08-13T00:00:00.000Z';
+const PROJECTION_LINEAGE = Object.freeze({
+  commercialProjectionId: 'projection-1',
+  commercialProjectionVersionNo: 2,
+  commercialProjectionContentHash: 'b'.repeat(64),
+  readinessSnapshotId: 'readiness-1',
+  styleVersionId: 'style-version-1',
+});
 
 async function fixture() {
   let id = 0;
@@ -64,6 +71,7 @@ function richBuyerCatalog({ collectionId, showroomId, invitationId }) {
   return Object.freeze({
     id: 'buyer-catalog-1', status: 'published', publicationId: 'publication-1', priceListVersionId: 'price-list-1', contentHash: 'buyer-catalog-hash-1',
     accessGrantId: invitationId, collectionId, brandId: 'brand-1', shopId: 'shop-1', showroomId, currency: 'EUR',
+    ...PROJECTION_LINEAGE,
     lines: Object.freeze([Object.freeze({ sku: 'SKU-1', productSkuId: product.productSkuId, styleVersionId: 'style-version-1', colorwayId: 'colorway-1', sizeValueId: 'size-m', catalogVersion: 4, unitPrice: 95, currency: 'EUR', minimumOrderQuantity: 2, availability })]),
     styles: Object.freeze([Object.freeze({ styleId: 'style-1', styleVersionId: 'style-version-1', colorways: Object.freeze([Object.freeze({ colorwayId: 'colorway-1', skus: Object.freeze([product]) })]) })]),
   });
@@ -77,6 +85,7 @@ test('rich buyer matrix replacement is one atomic selection version change and p
 
   assert.equal(updated.version, beforeVersion + 1);
   assert.equal(updated.lines.length, 1);
+  for (const [key, value] of Object.entries(PROJECTION_LINEAGE)) assert.equal(updated[key], value);
   assert.deepEqual(updated.lines[0], {
     sku: 'SKU-1', quantity: 3, unitPrice: 95, currency: 'EUR', catalogVersion: 4,
     productSkuId: 'product-sku-1', styleId: 'style-1', styleVersionId: 'style-version-1', colorwayId: 'colorway-1',

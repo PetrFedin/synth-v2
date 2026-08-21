@@ -4,6 +4,13 @@ import { assertBuyerCommercialSnapshot } from '../retail-doors/public.mjs';
 
 const NOTE_MAX_LENGTH = 2_000;
 const RICH_LINEAGE_KEYS = Object.freeze(['productSkuId', 'styleId', 'styleVersionId', 'colorwayId', 'sizeValueId', 'sizeCode']);
+const COMMERCIAL_PROJECTION_LINEAGE_KEYS = Object.freeze([
+  'commercialProjectionId',
+  'commercialProjectionVersionNo',
+  'commercialProjectionContentHash',
+  'readinessSnapshotId',
+  'styleVersionId',
+]);
 
 export function createSelection({ id, cycle, showroom, commercialBasis = null, buyerCommercialSnapshot = null, createdAt }) {
   invariant(id && cycle?.id && showroom?.id, 'SELECTION_IDENTITY_REQUIRED', 'Selection, cycle and showroom are required');
@@ -28,6 +35,11 @@ export function createSelection({ id, cycle, showroom, commercialBasis = null, b
     buyerCatalogVersionId: basis?.buyerCatalogVersionId ?? null,
     commercialBasisHash: basis?.contentHash ?? null,
     accessGrantId: basis?.accessGrantId ?? null,
+    commercialProjectionId: basis?.commercialProjectionId ?? null,
+    commercialProjectionVersionNo: basis?.commercialProjectionVersionNo ?? null,
+    commercialProjectionContentHash: basis?.commercialProjectionContentHash ?? null,
+    readinessSnapshotId: basis?.readinessSnapshotId ?? null,
+    styleVersionId: basis?.styleVersionId ?? null,
     retailDoorId: buyerContext?.retailDoorId ?? null,
     retailDoorVersion: buyerContext?.retailDoorVersion ?? null,
     buyerCommercialSnapshot: buyerContext,
@@ -137,11 +149,41 @@ function validateCommercialBasis(basis, cycle, showroom) {
   invariant(basis.brandId === cycle.brandId, 'SELECTION_COMMERCIAL_BRAND_MISMATCH', 'Buyer catalog brand does not match cycle');
   invariant(basis.shopId === cycle.shopId, 'SELECTION_COMMERCIAL_SHOP_MISMATCH', 'Buyer catalog shop does not match cycle');
   invariant(basis.showroomId === showroom.id, 'SELECTION_COMMERCIAL_SHOWROOM_MISMATCH', 'Buyer catalog showroom does not match selection showroom');
+  const projectionLineage = isRichCommercialBasis(basis) ? validateProjectionLineage(basis) : null;
   return Object.freeze({
     publicationId: basis.publicationId,
     priceListVersionId: basis.priceListVersionId,
     buyerCatalogVersionId: basis.id,
     contentHash: basis.contentHash,
     accessGrantId: basis.accessGrantId,
+    commercialProjectionId: projectionLineage?.commercialProjectionId ?? null,
+    commercialProjectionVersionNo: projectionLineage?.commercialProjectionVersionNo ?? null,
+    commercialProjectionContentHash: projectionLineage?.commercialProjectionContentHash ?? null,
+    readinessSnapshotId: projectionLineage?.readinessSnapshotId ?? null,
+    styleVersionId: projectionLineage?.styleVersionId ?? null,
+  });
+}
+
+function isRichCommercialBasis(basis) {
+  return Array.isArray(basis?.styles) && basis.styles.length > 0;
+}
+
+function validateProjectionLineage(basis) {
+  const present = COMMERCIAL_PROJECTION_LINEAGE_KEYS.filter((key) => basis[key] !== undefined && basis[key] !== null && basis[key] !== '');
+  invariant(present.length === COMMERCIAL_PROJECTION_LINEAGE_KEYS.length, 'SELECTION_COMMERCIAL_PROJECTION_LINEAGE_REQUIRED', 'Rich BuyerCatalogVersion requires complete immutable CommercialProductProjectionVersion lineage', { buyerCatalogVersionId: basis?.id, present });
+  for (const key of ['commercialProjectionId', 'commercialProjectionContentHash', 'readinessSnapshotId', 'styleVersionId']) {
+    invariant(typeof basis[key] === 'string' && basis[key].trim().length > 0, 'SELECTION_COMMERCIAL_PROJECTION_LINEAGE_INVALID', 'Commercial projection lineage values must be non-empty strings', { buyerCatalogVersionId: basis?.id, key });
+  }
+  const commercialProjectionVersionNo = assertPostgresInteger(basis.commercialProjectionVersionNo, {
+    code: 'SELECTION_COMMERCIAL_PROJECTION_VERSION_INVALID',
+    label: 'Commercial projection version',
+    min: 1,
+  });
+  return Object.freeze({
+    commercialProjectionId: basis.commercialProjectionId.trim(),
+    commercialProjectionVersionNo,
+    commercialProjectionContentHash: basis.commercialProjectionContentHash.trim(),
+    readinessSnapshotId: basis.readinessSnapshotId.trim(),
+    styleVersionId: basis.styleVersionId.trim(),
   });
 }

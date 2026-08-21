@@ -76,6 +76,7 @@ test('PostgreSQL migration ledger serializes runners and rejects changed history
     assert.deepEqual(gateColumns.rows.map((row) => row.column_name), ['tech_pack_acknowledged_at','tech_pack_acknowledgement_reference','tech_pack_code','tech_pack_gate_enforced','tech_pack_issued_version','tech_pack_revision','tech_pack_version']);
     assert.deepEqual((await pool.query("SELECT tgname FROM pg_trigger WHERE tgrelid = 'public.sourcing_rfqs'::regclass AND tgname = 'sourcing_rfqs_tech_pack_gate' AND NOT tgisinternal")).rows, [{ tgname: 'sourcing_rfqs_tech_pack_gate' }]);
     assert.deepEqual((await pool.query("SELECT tgname FROM pg_trigger WHERE tgrelid = 'public.production_orders'::regclass AND NOT tgisinternal ORDER BY tgname")).rows, [
+      { tgname: 'production_orders_assign_product_sku_lineage' },
       { tgname: 'production_orders_immutable_source_gate' },
       { tgname: 'production_orders_source_gate' },
     ]);
@@ -86,6 +87,7 @@ test('PostgreSQL migration ledger serializes runners and rejects changed history
     ]);
     assert.deepEqual((await pool.query("SELECT tgname FROM pg_trigger WHERE tgrelid = 'public.quality_inspections'::regclass AND NOT tgisinternal ORDER BY tgname")).rows, [
       { tgname: 'quality_inspections_approval_segregation_gate' },
+      { tgname: 'quality_inspections_assign_product_sku_lineage' },
       { tgname: 'quality_inspections_integrity_gate' },
       { tgname: 'quality_inspections_source_gate' },
       { tgname: 'quality_inspections_source_immutable_gate' },

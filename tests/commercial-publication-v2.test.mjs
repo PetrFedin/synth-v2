@@ -55,10 +55,21 @@ test('projection-backed publication fails closed when canonical commercial whole
   assert.throws(() => createProjectionBackedCommercialPublication({ id: 'publication:1', collection, commercialProjection: value, publishedAt: at }), (error) => error?.code === 'COMMERCIAL_PUBLICATION_PRICE_INVALID');
 });
 
-test('rich Style hierarchy survives buyer-specific PriceList and BuyerCatalog versions', () => {
+test('rich Style hierarchy and exact projection lineage survive PriceList and BuyerCatalog snapshots', () => {
   const publication = createProjectionBackedCommercialPublication({ id: 'publication:1', collection, commercialProjection: projection(), publishedAt: at });
   const priceList = createPriceListVersion({ id: 'price:1', publication, shopId: 'shop:1', priceOverrides: [{ sku: 'SKU-1', unitPrice: 950 }], publishedAt: at });
   assert.equal(priceList.styles[0].colorways[0].skus[0].buyerUnitPrice, 950);
+  assert.equal(priceList.commercialProjectionId, 'projection:1');
+  assert.equal(priceList.commercialProjectionVersionNo, 1);
+  assert.equal(priceList.commercialProjectionContentHash, hash);
+  assert.equal(priceList.readinessSnapshotId, 'readiness:1');
+  assert.equal(priceList.styleVersionId, 'style-version:1');
+
   const buyer = createBuyerCatalogVersion({ id: 'buyer:1', publication, priceListVersion: priceList, showroom: { id: 'showroom:1', brandId: 'brand:1', collectionId: 'collection:1', status: 'open' }, invitation: { id: 'invite:1', showroomId: 'showroom:1', brandId: 'brand:1', shopId: 'shop:1', status: 'accepted' }, publishedAt: at });
   assert.equal(buyer.styles[0].colorways[0].skus[0].buyerUnitPrice, 950);
+  assert.equal(buyer.commercialProjectionId, 'projection:1');
+  assert.equal(buyer.commercialProjectionVersionNo, 1);
+  assert.equal(buyer.commercialProjectionContentHash, hash);
+  assert.equal(buyer.readinessSnapshotId, 'readiness:1');
+  assert.equal(buyer.styleVersionId, 'style-version:1');
 });

@@ -26,6 +26,7 @@ function schemas() {
   const media = { type: 'object', additionalProperties: true, required: ['id', 'mediaType', 'mediaRole', 'uri', 'sortOrder'], properties: { id: identifier, colorwayId: optionalIdentifier, mediaType: { type: 'string' }, mediaRole: { type: 'string' }, uri: { type: 'string' }, sortOrder: { type: 'integer', minimum: 0 } } };
   const availability = { type: 'object', additionalProperties: false, required: ['mode', 'quantity'], properties: { mode: { type: 'string', enum: ['available_to_sell', 'made_to_order', 'preorder'] }, quantity: { anyOf: [{ type: 'integer', minimum: 0 }, { type: 'null' }] } } };
   const commercialTerms = { type: 'object', additionalProperties: false, required: ['currency','wholesalePriceMinor','rrpMinor','minimumOrderQuantity','minimumOrderValueMinor','packRatio','deliveryStart','deliveryEnd','availability'], properties: { currency, wholesalePriceMinor: { type: 'integer', minimum: 1 }, rrpMinor: { type: 'integer', minimum: 1 }, minimumOrderQuantity: { type: 'integer', minimum: 1 }, minimumOrderValueMinor: { anyOf: [{ type: 'integer', minimum: 0 }, { type: 'null' }] }, packRatio: { anyOf: [{ type: 'array', minItems: 1, items: { type: 'integer', minimum: 1 } }, { type: 'null' }] }, deliveryStart: date(), deliveryEnd: date(), availability } };
+  const projectionLineageProperties = { commercialProjectionId: identifier, commercialProjectionVersionNo: version(), commercialProjectionContentHash: sha256(), readinessSnapshotId: identifier, styleVersionId: identifier };
   return {
     CommercialPublicationInput: {
       type: 'object', additionalProperties: false, required: ['collectionId', 'commercialProjectionId'],
@@ -65,7 +66,7 @@ function schemas() {
       type: 'object', additionalProperties: false,
       required: ['id', 'brandId', 'collectionId', 'currency', 'lines', 'status', 'contentHash', 'publishedAt'],
       properties: {
-        id: identifier, formatVersion: { type: 'integer', enum: [2] }, commercialProjectionId: identifier, commercialProjectionVersionNo: version(), commercialProjectionContentHash: sha256(), readinessSnapshotId: identifier, styleVersionId: identifier,
+        id: identifier, formatVersion: { type: 'integer', enum: [2] }, ...projectionLineageProperties,
         brandId: identifier, collectionId: identifier, currency,
         styles: { type: 'array', minItems: 1, items: { $ref: '#/components/schemas/CommercialProductStyle' } },
         lines: { type: 'array', minItems: 1, maxItems: 10_000, items: { $ref: '#/components/schemas/CommercialPublicationLine' } },
@@ -79,12 +80,12 @@ function schemas() {
     PriceListVersion: {
       type: 'object', additionalProperties: false,
       required: ['id', 'publicationId', 'brandId', 'shopId', 'currency', 'lines', 'status', 'contentHash', 'publishedAt'],
-      properties: { id: identifier, publicationId: identifier, brandId: identifier, shopId: identifier, currency, lines: { type: 'array', minItems: 1, maxItems: 10_000, items: { $ref: '#/components/schemas/CommercialPublicationLine' } }, styles: { type: 'array', minItems: 1, items: { $ref: '#/components/schemas/CommercialProductStyle' } }, status: { type: 'string', enum: ['published'] }, contentHash: sha256(), publishedAt: date() },
+      properties: { id: identifier, publicationId: identifier, ...projectionLineageProperties, brandId: identifier, shopId: identifier, currency, lines: { type: 'array', minItems: 1, maxItems: 10_000, items: { $ref: '#/components/schemas/CommercialPublicationLine' } }, styles: { type: 'array', minItems: 1, items: { $ref: '#/components/schemas/CommercialProductStyle' } }, status: { type: 'string', enum: ['published'] }, contentHash: sha256(), publishedAt: date() },
     },
     BuyerCatalogVersion: {
       type: 'object', additionalProperties: false,
       required: ['id', 'publicationId', 'priceListVersionId', 'brandId', 'shopId', 'showroomId', 'accessGrantId', 'collectionId', 'currency', 'lines', 'status', 'contentHash', 'publishedAt'],
-      properties: { id: identifier, publicationId: identifier, priceListVersionId: identifier, brandId: identifier, shopId: identifier, showroomId: identifier, accessGrantId: identifier, collectionId: identifier, currency, lines: { type: 'array', minItems: 1, maxItems: 10_000, items: { $ref: '#/components/schemas/CommercialPublicationLine' } }, styles: { type: 'array', minItems: 1, items: { $ref: '#/components/schemas/CommercialProductStyle' } }, status: { type: 'string', enum: ['published'] }, contentHash: sha256(), publishedAt: date() },
+      properties: { id: identifier, publicationId: identifier, priceListVersionId: identifier, ...projectionLineageProperties, brandId: identifier, shopId: identifier, showroomId: identifier, accessGrantId: identifier, collectionId: identifier, currency, lines: { type: 'array', minItems: 1, maxItems: 10_000, items: { $ref: '#/components/schemas/CommercialPublicationLine' } }, styles: { type: 'array', minItems: 1, items: { $ref: '#/components/schemas/CommercialProductStyle' } }, status: { type: 'string', enum: ['published'] }, contentHash: sha256(), publishedAt: date() },
     },
     BuyerCatalogPublicationResult: { type: 'object', additionalProperties: false, required: ['priceListVersion', 'buyerCatalogVersion'], properties: { priceListVersion: { $ref: '#/components/schemas/PriceListVersion' }, buyerCatalogVersion: { $ref: '#/components/schemas/BuyerCatalogVersion' } } },
   };

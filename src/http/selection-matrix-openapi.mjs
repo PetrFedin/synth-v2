@@ -5,6 +5,13 @@ const currency = { type: 'string', pattern: '^[A-Z]{3}$' };
 const idempotency = { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 1, maxLength: 128, pattern: SAFE_ID } };
 const selectionId = { name: 'selectionId', in: 'path', required: true, schema: identifier };
 const errorResponse = { description: 'Domain or transport error', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } };
+const projectionLineageProperties = Object.freeze({
+  commercialProjectionId: identifier,
+  commercialProjectionVersionNo: { type: 'integer', minimum: 1 },
+  commercialProjectionContentHash: { type: 'string', minLength: 1 },
+  readinessSnapshotId: identifier,
+  styleVersionId: identifier,
+});
 
 export function withSelectionMatrixOpenApi(base) {
   const specification = structuredClone(base);
@@ -38,7 +45,7 @@ function schemas() {
         quantity: { type: 'integer', minimum: 1, maximum: 2_147_483_647 },
         unitPrice: { type: 'number', minimum: 0 },
         currency,
-        catalogVersion: { type: 'integer', minimum: 1 },
+        catalogVersion: { type: 'integer', minimum: 1, description: 'Compatibility sequencing field. Rich V2 integrity is anchored by immutable projection and ProductSku lineage.' },
         productSkuId: identifier,
         gtin: { anyOf: [{ type: 'string' }, { type: 'null' }] },
         styleId: identifier,
@@ -61,6 +68,7 @@ function schemas() {
         id: identifier,
         buyerCatalogVersionId: identifier,
         commercialBasisHash: { type: 'string', minLength: 1 },
+        ...projectionLineageProperties,
         status: { type: 'string', enum: ['draft'] },
         lines: { type: 'array', maxItems: 5_000, items: { $ref: '#/components/schemas/SelectionMatrixLine' } },
         version: { type: 'integer', minimum: 1 },

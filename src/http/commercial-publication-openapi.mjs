@@ -36,7 +36,7 @@ function schemas() {
       required: ['sku', 'name', 'catalogVersion', 'unitPrice', 'currency', 'minimumOrderQuantity'],
       properties: {
         sku: { type: 'string', pattern: SKU }, name: { type: 'string', minLength: 1, maxLength: 240 },
-        catalogVersion: version(), unitPrice: money, currency, minimumOrderQuantity: { type: 'integer', minimum: 1, maximum: 2_147_483_647 },
+        catalogVersion: { ...version(), description: 'Compatibility sequencing field. For projection-backed V2 publications it equals CommercialProductProjectionVersion.versionNo and is not a flat catalog_skus version.' }, unitPrice: money, currency, minimumOrderQuantity: { type: 'integer', minimum: 1, maximum: 2_147_483_647 },
         productSkuId: identifier, styleVersionId: identifier, colorwayId: identifier, sizeValueId: identifier,
         rrpMinor: { type: 'integer', minimum: 1 }, wholesalePriceMinor: { type: 'integer', minimum: 1 }, deliveryStart: date(), deliveryEnd: date(), availability,
       },
@@ -48,8 +48,8 @@ function schemas() {
     },
     CommercialProductSku: {
       type: 'object', additionalProperties: false,
-      required: ['productSkuId','skuCode','contentHash','gtin','sizeValueId','size','attributes','legacyCatalogSnapshot','commercialTerms'],
-      properties: { productSkuId: identifier, skuCode: { type: 'string', pattern: SKU }, contentHash: sha256(), gtin: { anyOf: [{ type: 'string' }, { type: 'null' }] }, sizeValueId: identifier, size: { $ref: '#/components/schemas/CommercialProductSize' }, attributes: { type: 'array', items: { type: 'object', additionalProperties: true } }, legacyCatalogSnapshot: { type: 'object', additionalProperties: true }, commercialTerms, buyerUnitPrice: money, buyerCurrency: currency, buyerMinimumOrderQuantity: { type: 'integer', minimum: 1 } },
+      required: ['productSkuId','skuCode','contentHash','gtin','sizeValueId','size','attributes','commercialTerms'],
+      properties: { productSkuId: identifier, skuCode: { type: 'string', pattern: SKU }, contentHash: sha256(), gtin: { anyOf: [{ type: 'string' }, { type: 'null' }] }, sizeValueId: identifier, size: { $ref: '#/components/schemas/CommercialProductSize' }, attributes: { type: 'array', items: { type: 'object', additionalProperties: true } }, commercialTerms, buyerUnitPrice: money, buyerCurrency: currency, buyerMinimumOrderQuantity: { type: 'integer', minimum: 1 } },
     },
     CommercialProductColorway: {
       type: 'object', additionalProperties: false,

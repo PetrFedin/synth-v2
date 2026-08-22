@@ -126,10 +126,10 @@ WHERE reservation.order_id = snapshot_identity.order_id
 UPDATE order_inventory_reservations AS reservation
 SET product_sku_id = link.product_sku_id,
     inventory_identity_version = 2
-FROM product_catalog_sku_links AS link
-JOIN orders AS existing_order
-  ON existing_order.id = reservation.order_id
+FROM product_catalog_sku_links AS link,
+     orders AS existing_order
 WHERE reservation.product_sku_id IS NULL
+  AND existing_order.id = reservation.order_id
   AND link.catalog_sku = reservation.sku
   AND link.brand_id = existing_order.brand_id;
 

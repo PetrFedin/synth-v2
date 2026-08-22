@@ -21,9 +21,9 @@ CREATE INDEX product_sku_inventory_brand_idx
   ON product_sku_inventory_balances (brand_id, product_sku_id);
 
 -- One-time migration from the temporary flat-catalog compatibility edge. An
--- explicit compatibility link wins. The same-code/same-brand fallback exists
--- only to reconcile ProductSkus whose already-committed orders pre-date the link.
--- A ProductSku with no historical catalog identity starts with zero availability.
+-- explicit compatibility link wins; exact same-code/same-brand identity is also
+-- reconciled so an already-existing ProductSku and catalog SKU cannot carry two
+-- independent stock counters after this migration.
 INSERT INTO product_sku_inventory_balances (
   product_sku_id,
   brand_id,
@@ -120,18 +120,18 @@ FROM snapshot_identity
 WHERE reservation.order_id = snapshot_identity.order_id
   AND reservation.sku = snapshot_identity.sku;
 
--- Historical linked reservations that pre-date ProductSku in OrderCommit are
--- moved to the same canonical physical balance so V1 and V2 can never reserve
--- independent counters for the same linked SKU.
+-- If the same brand already has an exact ProductSku code, every historical
+-- reservation for that code is moved to the canonical counter. Leaving even one
+-- old row on catalog_skus would preserve a double-spend path after cutover.
 UPDATE order_inventory_reservations AS reservation
-SET product_sku_id = link.product_sku_id,
+SET product_sku_id = product_sku.id,
     inventory_identity_version = 2
-FROM product_catalog_sku_links AS link,
+FROM product_skus AS product_sku,
      orders AS existing_order
 WHERE reservation.product_sku_id IS NULL
   AND existing_order.id = reservation.order_id
-  AND link.catalog_sku = reservation.sku
-  AND link.brand_id = existing_order.brand_id;
+  AND product_sku.sku_code = reservation.sku
+  AND product_sku.brand_id = existing_order.brand_id;
 
 CREATE INDEX order_inventory_reservations_product_sku_idx
   ON order_inventory_reservations (product_sku_id, order_id)
@@ -174,6 +174,18 @@ BEGIN
         )::text;
     END IF;
   ELSE
+    IF EXISTS (
+      SELECT 1
+      FROM product_skus
+      WHERE sku_code = NEW.sku
+        AND brand_id = order_brand_id
+    ) THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'ORDER_RESERVATION_PRODUCT_SKU_REQUIRED',
+        DETAIL = jsonb_build_object('orderId', NEW.order_id, 'sku', NEW.sku)::text;
+    END IF;
+
     IF NOT EXISTS (
       SELECT 1
       FROM catalog_skus
@@ -239,6 +251,7 @@ DECLARE
   line_sku text;
   line_quantity integer;
   resolved_product_sku_id text;
+  unlinked_product_sku_id text;
   inventory_row product_sku_inventory_balances%ROWTYPE;
   catalog_row catalog_skus%ROWTYPE;
   next_reserved integer;
@@ -277,6 +290,7 @@ BEGIN
       line_sku := line ->> 'sku';
       line_quantity := (line ->> 'quantity')::integer;
       resolved_product_sku_id := NULL;
+      unlinked_product_sku_id := NULL;
 
       IF canonical_lineage_required AND (
         NULLIF(btrim(COALESCE(line ->> 'productSkuId', '')), '') IS NULL
@@ -326,6 +340,25 @@ BEGIN
           AND link.brand_id = NEW.brand_id
           AND product_sku.sku_code = line_sku
         FOR SHARE OF product_sku;
+
+        IF resolved_product_sku_id IS NULL THEN
+          SELECT product_sku.id INTO unlinked_product_sku_id
+          FROM product_skus AS product_sku
+          WHERE product_sku.sku_code = line_sku
+            AND product_sku.brand_id = NEW.brand_id
+          FOR SHARE;
+
+          IF unlinked_product_sku_id IS NOT NULL THEN
+            RAISE EXCEPTION USING
+              ERRCODE = 'P0001',
+              MESSAGE = 'PRODUCT_SKU_COMPATIBILITY_LINK_REQUIRED',
+              DETAIL = jsonb_build_object(
+                'orderId', NEW.id,
+                'sku', line_sku,
+                'productSkuId', unlinked_product_sku_id
+              )::text;
+          END IF;
+        END IF;
       END IF;
 
       IF canonical_lineage_required AND resolved_product_sku_id IS NULL THEN
@@ -404,8 +437,8 @@ BEGIN
             updated_by = 'order:' || NEW.id
         WHERE product_sku_id = resolved_product_sku_id;
 
-        -- catalog_skus is only a one-way compatibility projection for linked
-        -- records. Canonical reservation authority never reads its stock counter.
+        -- Any exact same-brand/same-code flat row is only a one-way compatibility
+        -- projection. Canonical reservation authority never reads its stock counter.
         UPDATE catalog_skus AS catalog
         SET available_quantity = inventory_row.available_quantity,
             reserved_quantity = next_reserved,
@@ -415,9 +448,8 @@ BEGIN
               'reservedQuantity', next_reserved,
               'availableToSell', inventory_row.available_quantity - next_reserved
             )
-        FROM product_catalog_sku_links AS link
-        WHERE link.product_sku_id = resolved_product_sku_id
-          AND catalog.sku = link.catalog_sku;
+        WHERE catalog.sku = line_sku
+          AND catalog.brand_id = NEW.brand_id;
 
         INSERT INTO order_inventory_reservations (
           order_id,
@@ -605,9 +637,8 @@ BEGIN
               'reservedQuantity', next_reserved,
               'availableToSell', inventory_row.available_quantity - next_reserved
             )
-        FROM product_catalog_sku_links AS link
-        WHERE link.product_sku_id = reservation.product_sku_id
-          AND catalog.sku = link.catalog_sku;
+        WHERE catalog.sku = reservation.sku
+          AND catalog.brand_id = NEW.brand_id;
       ELSE
         SELECT * INTO catalog_row
         FROM catalog_skus

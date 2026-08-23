@@ -1,69 +1,89 @@
 -- Product Identity outbox polymorphic trigger integrity.
 --
--- Migration 052 attached one generic trigger function to several Product Identity
+-- Migration 052 attaches one generic trigger function to several Product Identity
 -- tables whose aggregate-version columns are not uniform. Direct references to
 -- both NEW.version and NEW.version_no from that generic trigger can fail at
 -- runtime because NEW has the composite row type of the table that fired the
--- trigger. Read table-specific version fields from a JSONB projection instead,
--- while preserving the existing event contract and trigger registrations.
+-- trigger.
+--
+-- Read table-specific fields from a JSONB projection of NEW while preserving the
+-- canonical outbox_events schema and Product Identity event contract established
+-- by migrations 001 and 052.
 
 CREATE OR REPLACE FUNCTION product_identity_emit_outbox()
-RETURNS TRIGGER
+RETURNS trigger
 LANGUAGE plpgsql
 AS $$
 DECLARE
-  event_type TEXT;
-  aggregate_version BIGINT;
-  row_payload JSONB;
+  event_type text;
+  aggregate_id text;
+  aggregate_version text;
+  event_id text;
+  row_payload jsonb;
+  brand_id text;
 BEGIN
   row_payload := to_jsonb(NEW);
 
   event_type := CASE TG_TABLE_NAME
-    WHEN 'product_styles' THEN CASE WHEN TG_OP = 'INSERT' THEN 'catalog.style.created' ELSE 'catalog.style.updated' END
-    WHEN 'product_style_versions' THEN 'catalog.style_version.created'
-    WHEN 'product_colorways' THEN CASE WHEN TG_OP = 'INSERT' THEN 'catalog.colorway.created' ELSE 'catalog.colorway.updated' END
-    WHEN 'product_size_scales' THEN CASE WHEN TG_OP = 'INSERT' THEN 'catalog.size_scale.created' ELSE 'catalog.size_scale.updated' END
-    WHEN 'product_size_scale_versions' THEN 'catalog.size_scale_version.created'
-    WHEN 'product_skus' THEN CASE WHEN TG_OP = 'INSERT' THEN 'catalog.product_sku.created' ELSE 'catalog.product_sku.updated' END
-    WHEN 'product_barcode_aliases' THEN CASE WHEN TG_OP = 'INSERT' THEN 'catalog.barcode_alias.created' ELSE 'catalog.barcode_alias.updated' END
-    WHEN 'product_attribute_definitions' THEN CASE WHEN TG_OP = 'INSERT' THEN 'catalog.attribute_definition.created' ELSE 'catalog.attribute_definition.updated' END
-    WHEN 'product_attribute_values' THEN CASE WHEN TG_OP = 'INSERT' THEN 'catalog.attribute_value.created' ELSE 'catalog.attribute_value.updated' END
-    ELSE 'catalog.unknown.updated'
+    WHEN 'product_styles' THEN 'ProductStyleChanged'
+    WHEN 'product_style_versions' THEN 'ProductStyleVersionCreated'
+    WHEN 'product_colorways' THEN 'ProductColorwayCreated'
+    WHEN 'product_size_scales' THEN 'ProductSizeScaleChanged'
+    WHEN 'product_size_scale_versions' THEN 'ProductSizeScaleVersionCreated'
+    WHEN 'product_size_values' THEN 'ProductSizeValueCreated'
+    WHEN 'product_skus' THEN 'ProductSkuCreated'
+    WHEN 'product_media' THEN 'ProductMediaCreated'
+    WHEN 'product_attribute_values' THEN 'ProductAttributeValueCreated'
+    WHEN 'product_catalog_sku_links' THEN 'ProductCatalogSkuLinked'
+    ELSE NULL
   END;
+
+  IF event_type IS NULL THEN
+    RAISE EXCEPTION 'Unsupported Product Identity outbox table %', TG_TABLE_NAME;
+  END IF;
+
+  aggregate_id := row_payload ->> 'id';
+  brand_id := row_payload ->> 'brand_id';
+
+  IF aggregate_id IS NULL OR aggregate_id = '' THEN
+    RAISE EXCEPTION 'Product Identity outbox row from % has no id', TG_TABLE_NAME;
+  END IF;
+  IF brand_id IS NULL OR brand_id = '' THEN
+    RAISE EXCEPTION 'Product Identity outbox row from % has no brand_id', TG_TABLE_NAME;
+  END IF;
 
   aggregate_version := CASE TG_TABLE_NAME
-    WHEN 'product_styles' THEN NULLIF(row_payload ->> 'version', '')::BIGINT
-    WHEN 'product_size_scales' THEN NULLIF(row_payload ->> 'version', '')::BIGINT
-    WHEN 'product_style_versions' THEN NULLIF(row_payload ->> 'version_no', '')::BIGINT
-    WHEN 'product_size_scale_versions' THEN NULLIF(row_payload ->> 'version_no', '')::BIGINT
-    ELSE 1
+    WHEN 'product_styles' THEN row_payload ->> 'version'
+    WHEN 'product_size_scales' THEN row_payload ->> 'version'
+    WHEN 'product_style_versions' THEN row_payload ->> 'version_no'
+    WHEN 'product_size_scale_versions' THEN row_payload ->> 'version_no'
+    ELSE '1'
   END;
 
-  INSERT INTO outbox_events(
+  IF aggregate_version IS NULL OR aggregate_version = '' THEN
+    RAISE EXCEPTION 'Product Identity outbox row from % has no aggregate version', TG_TABLE_NAME;
+  END IF;
+
+  event_id := 'product-identity:' || TG_TABLE_NAME || ':' || aggregate_id || ':v' || aggregate_version;
+
+  INSERT INTO outbox_events (id, event_type, aggregate_id, status, event, published_at)
+  VALUES (
+    event_id,
     event_type,
-    aggregate_type,
     aggregate_id,
-    aggregate_version,
-    payload,
-    occurred_at,
-    created_at,
-    updated_at
-  ) VALUES (
-    event_type,
-    TG_TABLE_NAME,
-    NEW.id,
-    COALESCE(aggregate_version, 1),
+    'pending',
     jsonb_build_object(
-      'brandId', NEW.brand_id,
-      'table', TG_TABLE_NAME,
-      'operation', TG_OP,
-      'payload', row_payload
+      'eventId', event_id,
+      'eventType', event_type,
+      'aggregateId', aggregate_id,
+      'brandId', brand_id,
+      'version', aggregate_version,
+      'payload', row_payload,
+      'occurredAt', now()
     ),
-    NOW(),
-    NOW(),
-    NOW()
+    NULL
   );
 
   RETURN NEW;
-END;
+END
 $$;

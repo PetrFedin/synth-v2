@@ -17,31 +17,34 @@ export function createReceiptInventoryMovements({
   const warehouseLocationId = requiredText(fulfillmentPlan.shipTo?.locationId, 1, 120, 'INVENTORY_WAREHOUSE_LOCATION_REQUIRED', 'Warehouse location id');
   const timestamp = requiredTimestamp(postedAt, 'INVENTORY_POSTED_AT_INVALID');
 
-  return Object.freeze(receipt.lines.map((line) => createInventoryMovementLedgerEntry({
-    id: idForLine(line.lineId),
-    movementType: 'receipt-posting',
-    lineageVersion: line.productSkuId ? 2 : 1,
-    orderId: receipt.orderId,
-    orderVersion: receipt.orderVersion,
-    orderCommitSnapshotId: receipt.orderCommitSnapshotId,
-    supplyCommitmentSnapshotId: receipt.supplyCommitmentSnapshotId,
-    fulfillmentPlanSnapshotId: receipt.fulfillmentPlanSnapshotId,
-    shipmentNoticeSnapshotId: receipt.shipmentNoticeSnapshotId,
-    receiptSnapshotId: receipt.id,
-    brandId: receipt.brandId,
-    shopId: receipt.shopId,
-    warehouseLocationId,
-    receiptLineId: line.lineId,
-    orderLineNo: line.orderLineNo ?? null,
-    productSkuId: line.productSkuId ?? null,
-    sku: line.sku,
-    receivedQuantity: line.receivedQuantity,
-    acceptedQuantity: line.acceptedQuantity,
-    damagedQuantity: line.damagedQuantity,
-    rejectedQuantity: line.rejectedQuantity,
-    occurredAt: receipt.receivedAt,
-    postedAt: timestamp,
-  })));
+  return Object.freeze(receipt.lines.map((line) => {
+    const hasCanonicalProductSkuLineage = typeof line.productSkuId === 'string' && line.productSkuId.trim().length > 0;
+    return createInventoryMovementLedgerEntry({
+      id: idForLine(line.lineId),
+      movementType: 'receipt-posting',
+      lineageVersion: hasCanonicalProductSkuLineage ? 2 : 1,
+      orderId: receipt.orderId,
+      orderVersion: receipt.orderVersion,
+      orderCommitSnapshotId: receipt.orderCommitSnapshotId,
+      supplyCommitmentSnapshotId: receipt.supplyCommitmentSnapshotId,
+      fulfillmentPlanSnapshotId: receipt.fulfillmentPlanSnapshotId,
+      shipmentNoticeSnapshotId: receipt.shipmentNoticeSnapshotId,
+      receiptSnapshotId: receipt.id,
+      brandId: receipt.brandId,
+      shopId: receipt.shopId,
+      warehouseLocationId,
+      receiptLineId: line.lineId,
+      orderLineNo: hasCanonicalProductSkuLineage ? line.orderLineNo ?? null : null,
+      productSkuId: hasCanonicalProductSkuLineage ? line.productSkuId : null,
+      sku: line.sku,
+      receivedQuantity: line.receivedQuantity,
+      acceptedQuantity: line.acceptedQuantity,
+      damagedQuantity: line.damagedQuantity,
+      rejectedQuantity: line.rejectedQuantity,
+      occurredAt: receipt.receivedAt,
+      postedAt: timestamp,
+    });
+  }));
 }
 
 export function createInventoryMovementLedgerEntry({

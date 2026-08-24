@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto';
 import { invariant } from '../../core/errors.mjs';
 import { canonicalJson } from '../../core/fingerprints.mjs';
-import { canonicalizeSupplyAllocations } from '../order-economics/product-sku-lineage.mjs';
 
 const SUPPLY_SOURCE_TYPES = new Set(['inventory', 'inbound', 'production', 'drop-ship']);
 const DISCREPANCY_STATUSES = new Set(['pending', 'clear', 'open']);
@@ -32,7 +31,7 @@ export function createFulfillmentPlanSnapshot({
     reservationByCanonicalSku.set(key, (reservationByCanonicalSku.get(key) ?? 0) + quantity);
   }
 
-  const canonicalAllocations = canonicalizeSupplyAllocations(orderCommit, supplyCommitment.allocations);
+  const canonicalAllocations = canonicalizeSupplyAllocationsForFulfillment(orderCommit, supplyCommitment.allocations);
   const inventoryPlannedByCanonicalSku = new Map();
   const lines = canonicalAllocations.map((allocation, index) => {
     invariant(SUPPLY_SOURCE_TYPES.has(allocation.sourceType), 'FULFILLMENT_SUPPLY_SOURCE_INVALID', 'Fulfillment source type is invalid', { sourceType: allocation.sourceType });
@@ -314,6 +313,39 @@ function assertSupplyLineage(supplyCommitment, orderCommit) {
   invariant(supplyCommitment?.status === 'committed', 'FULFILLMENT_SUPPLY_COMMITMENT_REQUIRED', 'Fulfillment requires an immutable supply commitment');
   invariant(supplyCommitment.orderId === orderCommit.orderId && supplyCommitment.orderCommitSnapshotId === orderCommit.id, 'FULFILLMENT_SUPPLY_LINEAGE_MISMATCH', 'Supply commitment belongs to another order commit');
   invariant(supplyCommitment.brandId === orderCommit.brandId && supplyCommitment.shopId === orderCommit.shopId, 'FULFILLMENT_SUPPLY_TRADE_MISMATCH', 'Supply commitment belongs to another trade pair');
+}
+function canonicalizeSupplyAllocationsForFulfillment(orderCommit, allocations) {
+  invariant(Array.isArray(allocations) && allocations.length > 0, 'FULFILLMENT_SUPPLY_ALLOCATIONS_REQUIRED', 'Fulfillment requires supply allocations');
+  const orderLines = orderCommit.lines.map((line, index) => Object.freeze({
+    ...line,
+    lineNo: Number.isInteger(line?.lineNo) && line.lineNo > 0 ? line.lineNo : index + 1,
+  }));
+  return Object.freeze(allocations.map((allocation) => {
+    const requestedLineNo = allocation?.orderLineNo ?? allocation?.lineNo ?? null;
+    const requestedProductSkuId = allocation?.productSkuId ?? null;
+    const requestedSku = allocation?.sku ?? null;
+    let matches;
+    if (requestedLineNo !== null) {
+      invariant(Number.isInteger(requestedLineNo) && requestedLineNo > 0, 'FULFILLMENT_SUPPLY_ORDER_LINE_NO_INVALID', 'Supply allocation order line number must be a positive integer', { orderLineNo: requestedLineNo });
+      matches = orderLines.filter((line) => line.lineNo === requestedLineNo);
+    } else if (requestedProductSkuId !== null) {
+      matches = orderLines.filter((line) => line.productSkuId === requestedProductSkuId);
+    } else {
+      invariant(typeof requestedSku === 'string' && requestedSku.trim().length > 0, 'FULFILLMENT_SUPPLY_LINE_IDENTITY_REQUIRED', 'Supply allocation must identify an immutable committed order line');
+      matches = orderLines.filter((line) => line.sku === requestedSku);
+    }
+    invariant(matches.length > 0, 'FULFILLMENT_SUPPLY_ORDER_LINE_UNKNOWN', 'Supply allocation does not match an immutable committed order line', { orderLineNo: requestedLineNo, productSkuId: requestedProductSkuId, sku: requestedSku });
+    invariant(matches.length === 1, 'FULFILLMENT_SUPPLY_ORDER_LINE_AMBIGUOUS', 'Supply allocation must resolve to exactly one immutable committed order line', { orderLineNo: requestedLineNo, productSkuId: requestedProductSkuId, sku: requestedSku, matchingOrderLineNos: matches.map((line) => line.lineNo) });
+    const line = matches[0];
+    if (requestedProductSkuId !== null) invariant(line.productSkuId === requestedProductSkuId, 'FULFILLMENT_SUPPLY_PRODUCT_SKU_MISMATCH', 'Supply allocation ProductSku differs from immutable order lineage', { orderLineNo: line.lineNo });
+    if (requestedSku !== null) invariant(line.sku === requestedSku, 'FULFILLMENT_SUPPLY_SKU_MISMATCH', 'Supply allocation SKU differs from immutable order lineage', { orderLineNo: line.lineNo });
+    return Object.freeze({
+      ...allocation,
+      orderLineNo: line.lineNo,
+      productSkuId: line.productSkuId ?? null,
+      sku: line.sku,
+    });
+  }));
 }
 function assertShipmentPlanLineage(shipment, plan) {
   invariant(shipment?.fulfillmentPlanSnapshotId === plan.id && shipment.orderId === plan.orderId && shipment.orderCommitSnapshotId === plan.orderCommitSnapshotId && shipment.supplyCommitmentSnapshotId === plan.supplyCommitmentSnapshotId, 'SHIPMENT_PLAN_LINEAGE_MISMATCH', 'Shipment notice belongs to another fulfillment plan');

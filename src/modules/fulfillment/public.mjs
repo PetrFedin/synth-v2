@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { invariant } from '../../core/errors.mjs';
 import { canonicalJson } from '../../core/fingerprints.mjs';
+import { canonicalizeSupplyAllocations } from '../order-economics/product-sku-lineage.mjs';
 
 const SUPPLY_SOURCE_TYPES = new Set(['inventory', 'inbound', 'production', 'drop-ship']);
 const DISCREPANCY_STATUSES = new Set(['pending', 'clear', 'open']);
@@ -23,28 +24,35 @@ export function createFulfillmentPlanSnapshot({
   invariant(id, 'FULFILLMENT_PLAN_ID_REQUIRED', 'Fulfillment plan id is required');
   invariant(Array.isArray(reservations), 'FULFILLMENT_RESERVATIONS_INVALID', 'Inventory reservations must be an array');
 
-  const reservationBySku = new Map();
+  const reservationByCanonicalSku = new Map();
   for (const reservation of reservations) {
-    invariant(reservation?.orderId === order.id && reservation?.orderCommitSnapshotId === orderCommit.id, 'FULFILLMENT_RESERVATION_LINEAGE_MISMATCH', 'Inventory reservation belongs to another order commit', { sku: reservation?.sku });
+    invariant(reservation?.orderId === order.id && reservation?.orderCommitSnapshotId === orderCommit.id, 'FULFILLMENT_RESERVATION_LINEAGE_MISMATCH', 'Inventory reservation belongs to another order commit', { sku: reservation?.sku, productSkuId: reservation?.productSkuId ?? null });
     const quantity = positiveInteger(reservation.quantity, 'FULFILLMENT_RESERVATION_QUANTITY_INVALID', 'Reservation quantity');
-    reservationBySku.set(reservation.sku, (reservationBySku.get(reservation.sku) ?? 0) + quantity);
+    const key = physicalSkuKey(reservation);
+    reservationByCanonicalSku.set(key, (reservationByCanonicalSku.get(key) ?? 0) + quantity);
   }
 
-  const inventoryPlannedBySku = new Map();
-  const lines = supplyCommitment.allocations.map((allocation, index) => {
+  const canonicalAllocations = canonicalizeSupplyAllocations(orderCommit, supplyCommitment.allocations);
+  const inventoryPlannedByCanonicalSku = new Map();
+  const lines = canonicalAllocations.map((allocation, index) => {
     invariant(SUPPLY_SOURCE_TYPES.has(allocation.sourceType), 'FULFILLMENT_SUPPLY_SOURCE_INVALID', 'Fulfillment source type is invalid', { sourceType: allocation.sourceType });
     const quantity = positiveInteger(allocation.quantity, 'FULFILLMENT_LINE_QUANTITY_INVALID', 'Fulfillment line quantity');
     if (allocation.sourceType === 'inventory') {
-      const next = (inventoryPlannedBySku.get(allocation.sku) ?? 0) + quantity;
-      invariant(next <= (reservationBySku.get(allocation.sku) ?? 0), 'FULFILLMENT_INVENTORY_NOT_RESERVED', 'Inventory-backed fulfillment cannot exceed the pinned order reservation', {
+      const key = physicalSkuKey(allocation);
+      const next = (inventoryPlannedByCanonicalSku.get(key) ?? 0) + quantity;
+      invariant(next <= (reservationByCanonicalSku.get(key) ?? 0), 'FULFILLMENT_INVENTORY_NOT_RESERVED', 'Inventory-backed fulfillment cannot exceed the pinned ProductSku order reservation', {
+        orderLineNo: allocation.orderLineNo,
+        productSkuId: allocation.productSkuId ?? null,
         sku: allocation.sku,
         plannedInventoryQuantity: next,
-        reservedQuantity: reservationBySku.get(allocation.sku) ?? 0,
+        reservedQuantity: reservationByCanonicalSku.get(key) ?? 0,
       });
-      inventoryPlannedBySku.set(allocation.sku, next);
+      inventoryPlannedByCanonicalSku.set(key, next);
     }
     return Object.freeze({
       lineId: `line-${String(index + 1).padStart(4, '0')}`,
+      orderLineNo: allocation.orderLineNo,
+      productSkuId: allocation.productSkuId ?? null,
       sku: requiredText(allocation.sku, 1, 200, 'FULFILLMENT_LINE_SKU_REQUIRED', 'SKU'),
       quantity,
       sourceType: allocation.sourceType,
@@ -117,16 +125,21 @@ export function createShipmentNoticeSnapshot({
     seen.add(lineId);
     const planLine = planByLine.get(lineId);
     invariant(planLine, 'SHIPMENT_LINE_NOT_IN_PLAN', 'Shipment line is not present in the fulfillment plan', { lineId });
+    assertClientLineage(input, planLine, 'SHIPMENT');
     const quantity = positiveInteger(input.quantity, 'SHIPMENT_LINE_QUANTITY_INVALID', 'Shipment quantity');
     const cumulative = (alreadyShipped.get(lineId) ?? 0) + quantity;
     invariant(cumulative <= planLine.quantity, 'SHIPMENT_EXCEEDS_FULFILLMENT_PLAN', 'Cumulative shipped quantity cannot exceed fulfillment plan quantity', {
       lineId,
+      orderLineNo: planLine.orderLineNo ?? null,
+      productSkuId: planLine.productSkuId ?? null,
       sku: planLine.sku,
       planQuantity: planLine.quantity,
       cumulativeShippedQuantity: cumulative,
     });
     return Object.freeze({
       lineId,
+      orderLineNo: planLine.orderLineNo ?? null,
+      productSkuId: planLine.productSkuId ?? null,
       sku: planLine.sku,
       quantity,
       sourceType: planLine.sourceType,
@@ -189,12 +202,15 @@ export function createReceiptSnapshot({
     seen.add(lineId);
     const shipmentLine = shipmentByLine.get(lineId);
     invariant(shipmentLine, 'RECEIPT_LINE_NOT_IN_SHIPMENT', 'Receipt line is not present in the shipment notice', { lineId });
+    assertClientLineage(input, shipmentLine, 'RECEIPT');
     const receivedQuantity = positiveInteger(input.receivedQuantity, 'RECEIPT_QUANTITY_INVALID', 'Received quantity');
     const damagedQuantity = nonNegativeInteger(input.damagedQuantity ?? 0, 'RECEIPT_DAMAGED_QUANTITY_INVALID', 'Damaged quantity');
     const rejectedQuantity = nonNegativeInteger(input.rejectedQuantity ?? 0, 'RECEIPT_REJECTED_QUANTITY_INVALID', 'Rejected quantity');
     invariant(damagedQuantity + rejectedQuantity <= receivedQuantity, 'RECEIPT_DISPOSITION_EXCEEDS_RECEIVED', 'Damaged and rejected quantities cannot exceed physically received quantity', { lineId, receivedQuantity, damagedQuantity, rejectedQuantity });
     return Object.freeze({
       lineId,
+      orderLineNo: shipmentLine.orderLineNo ?? null,
+      productSkuId: shipmentLine.productSkuId ?? null,
       sku: shipmentLine.sku,
       shippedQuantity: shipmentLine.quantity,
       receivedQuantity,
@@ -237,6 +253,8 @@ export function createReceiptDiscrepancySnapshot({ id, shipment, receipts, creat
   const finalized = receipts.some((receipt) => receipt.receiptComplete === true);
   const aggregate = new Map(shipment.lines.map((line) => [line.lineId, {
     lineId: line.lineId,
+    orderLineNo: line.orderLineNo ?? null,
+    productSkuId: line.productSkuId ?? null,
     sku: line.sku,
     shippedQuantity: line.quantity,
     receivedQuantity: 0,
@@ -302,6 +320,15 @@ function assertShipmentPlanLineage(shipment, plan) {
 }
 function assertReceiptShipmentLineage(receipt, shipment) {
   invariant(receipt?.shipmentNoticeSnapshotId === shipment.id && receipt.fulfillmentPlanSnapshotId === shipment.fulfillmentPlanSnapshotId && receipt.orderId === shipment.orderId && receipt.orderCommitSnapshotId === shipment.orderCommitSnapshotId, 'RECEIPT_SHIPMENT_LINEAGE_MISMATCH', 'Receipt belongs to another shipment lineage');
+}
+function assertClientLineage(input, canonicalLine, prefix) {
+  if (input?.orderLineNo !== undefined && input.orderLineNo !== null) invariant(input.orderLineNo === canonicalLine.orderLineNo, `${prefix}_ORDER_LINE_NO_MISMATCH`, 'Client order line number differs from immutable execution lineage', { lineId: canonicalLine.lineId });
+  if (input?.productSkuId !== undefined && input.productSkuId !== null) invariant(input.productSkuId === canonicalLine.productSkuId, `${prefix}_PRODUCT_SKU_MISMATCH`, 'Client ProductSku differs from immutable execution lineage', { lineId: canonicalLine.lineId });
+  if (input?.sku !== undefined && input.sku !== null) invariant(input.sku === canonicalLine.sku, `${prefix}_SKU_MISMATCH`, 'Client SKU differs from immutable execution lineage', { lineId: canonicalLine.lineId });
+}
+function physicalSkuKey(value) {
+  if (typeof value?.productSkuId === 'string' && value.productSkuId.trim()) return `product-sku:${value.productSkuId}`;
+  return `sku:${requiredText(value?.sku, 1, 200, 'FULFILLMENT_LINE_SKU_REQUIRED', 'SKU')}`;
 }
 function normalizeLocation(value, prefix) {
   invariant(value && typeof value === 'object' && !Array.isArray(value), `${prefix}_INVALID`, 'Location snapshot must be an object');

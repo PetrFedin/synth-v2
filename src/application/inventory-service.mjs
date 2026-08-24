@@ -50,8 +50,11 @@ export function createInventoryService({ store, clock = () => new Date().toISOSt
           await tx.insertMovement(movement);
           await append(tx, 'inventory.movement-posted.v1', movement.id, {
             movementType: movement.movementType,
+            lineageVersion: movement.lineageVersion,
             shopId: movement.shopId,
             warehouseLocationId: movement.warehouseLocationId,
+            orderLineNo: movement.orderLineNo,
+            productSkuId: movement.productSkuId,
             sku: movement.sku,
             receiptSnapshotId: movement.receiptSnapshotId,
             shipmentNoticeSnapshotId: movement.shipmentNoticeSnapshotId,
@@ -78,6 +81,7 @@ export function createInventoryService({ store, clock = () => new Date().toISOSt
           warehouseLocationId: result.warehouseLocationId,
           movementIds: result.movementIds,
           movementCount: movements.length,
+          productSkuIds: Object.freeze([...new Set(movements.map((movement) => movement.productSkuId).filter(Boolean))].sort()),
           onHandDelta: movements.reduce((sum, movement) => sum + movement.onHandDelta, 0),
           availableDelta: movements.reduce((sum, movement) => sum + movement.availableDelta, 0),
           quarantineDelta: movements.reduce((sum, movement) => sum + movement.quarantineDelta, 0),
@@ -87,16 +91,17 @@ export function createInventoryService({ store, clock = () => new Date().toISOSt
       });
     },
 
-    getWarehousePositionsForActor(actorId, shopId, warehouseLocationId, { sku = null } = {}) {
+    getWarehousePositionsForActor(actorId, shopId, warehouseLocationId, { sku = null, productSkuId = null } = {}) {
       return store.transaction(async (tx) => {
         const membership = await tx.getMembership(shopId, actorId);
         assertCapability(membership, CAPABILITIES.INVENTORY_READ);
         invariant(membership.organisationId === shopId, 'INVENTORY_SHOP_MEMBERSHIP_REQUIRED', 'Warehouse inventory is readable only by members of the owning retailer organisation', { shopId, actorId });
-        const positions = await tx.getWarehousePositions(shopId, warehouseLocationId, sku);
+        const positions = await tx.getWarehousePositions(shopId, warehouseLocationId, sku, productSkuId);
         return Object.freeze({
           shopId,
           warehouseLocationId,
           sku,
+          productSkuId,
           positions: Object.freeze(positions),
           asOf: clock(),
         });

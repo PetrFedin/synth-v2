@@ -6,6 +6,11 @@ import {
   createActualCostLedgerEntry,
   createActualCostReversalEntry,
 } from '../modules/order-economics/public.mjs';
+import {
+  assertSamePhysicalCostLine,
+  hasPhysicalCostLineIdentity,
+  resolvePhysicalCostLine,
+} from '../modules/order-economics/product-sku-physical-cost.mjs';
 
 export const PHYSICAL_ACTUAL_COST_TYPES = Object.freeze([
   'freight',
@@ -114,14 +119,6 @@ export function createPhysicalActualCostService({
       'Quality and rework costs require immutable receipt evidence',
       { costType: input.costType, shipmentNoticeId: shipment.id },
     );
-    if (input.sku != null) {
-      invariant(
-        shipment.lines.some((line) => line.sku === input.sku),
-        'PHYSICAL_ACTUAL_COST_SKU_NOT_SHIPPED',
-        'SKU-scoped physical cost must reference a SKU present in the immutable shipment notice',
-        { sku: input.sku, shipmentNoticeId: shipment.id },
-      );
-    }
   }
 
   async function resolveReceiptEvidence(tx, shipment, input) {
@@ -165,7 +162,7 @@ export function createPhysicalActualCostService({
     return Object.freeze({ receipt, discrepancy });
   }
 
-  function withPhysicalLineage(entry, lineage) {
+  function withPhysicalLineage(entry, lineage, costLine = null) {
     return Object.freeze({
       ...entry,
       physicalLineageVersion: 2,
@@ -173,6 +170,9 @@ export function createPhysicalActualCostService({
       shipmentNoticeSnapshotId: lineage.shipmentNoticeSnapshotId,
       receiptSnapshotId: lineage.receiptSnapshotId ?? null,
       receiptDiscrepancySnapshotId: lineage.receiptDiscrepancySnapshotId ?? null,
+      orderLineNo: costLine?.orderLineNo ?? null,
+      productSkuId: costLine?.productSkuId ?? null,
+      sku: costLine?.sku ?? null,
     });
   }
 
@@ -186,6 +186,8 @@ export function createPhysicalActualCostService({
       shipmentNoticeSnapshotId: entry.shipmentNoticeSnapshotId,
       receiptSnapshotId: entry.receiptSnapshotId,
       receiptDiscrepancySnapshotId: entry.receiptDiscrepancySnapshotId,
+      orderLineNo: entry.orderLineNo,
+      productSkuId: entry.productSkuId,
       entryKind: entry.entryKind,
       correctionId: entry.correctionId,
       correctionReason: entry.correctionReason,
@@ -222,6 +224,7 @@ export function createPhysicalActualCostService({
         await assertCostOpen(tx, orderCommit);
         const fxRateSnapshot = await loadFxRateSnapshot(tx, input);
         const { receipt, discrepancy } = await resolveReceiptEvidence(tx, shipment, input);
+        const costLine = resolvePhysicalCostLine(shipment, input);
         assertCostInput(input, shipment, receipt?.id ?? null);
 
         const baseEntry = createActualCostLedgerEntry({
@@ -233,7 +236,7 @@ export function createPhysicalActualCostService({
           amount: input.amount,
           currency: input.currency,
           fxRateSnapshot,
-          sku: input.sku ?? null,
+          sku: costLine?.sku ?? null,
           sourceRef: input.sourceRef,
           occurredAt: input.occurredAt,
           recordedAt: clock(),
@@ -243,7 +246,7 @@ export function createPhysicalActualCostService({
           shipmentNoticeSnapshotId: shipment.id,
           receiptSnapshotId: receipt?.id ?? null,
           receiptDiscrepancySnapshotId: discrepancy?.id ?? null,
-        });
+        }, costLine);
 
         await tx.insertPhysicalActualCostEntry(entry);
         await appendRecorded(tx, entry, commandId, actorId);
@@ -293,6 +296,15 @@ export function createPhysicalActualCostService({
         const existingReversal = await tx.getActualCostReversal(originalEntryId);
         invariant(!existingReversal, 'ACTUAL_COST_ALREADY_CORRECTED', 'Actual cost entry already has a reversal', { originalEntryId, reversalEntryId: existingReversal?.id });
 
+        const originalCostLine = resolvePhysicalCostLine(shipment, {
+          orderLineNo: originalEntry.orderLineNo ?? null,
+          productSkuId: originalEntry.productSkuId ?? null,
+          sku: originalEntry.sku ?? null,
+        });
+        if (hasPhysicalCostLineIdentity(input)) {
+          const requestedCostLine = resolvePhysicalCostLine(shipment, input);
+          assertSamePhysicalCostLine(originalCostLine, requestedCostLine);
+        }
         assertCostInput(input, shipment, originalEntry.receiptSnapshotId ?? null);
         const fxRateSnapshot = await loadFxRateSnapshot(tx, input);
         const correctionId = nextId('cost-correction');
@@ -312,7 +324,7 @@ export function createPhysicalActualCostService({
           orderCommit,
           originalEntry,
           recordedAt,
-        }), lineage);
+        }), lineage, originalCostLine);
         const replacement = withPhysicalLineage(createActualCostLedgerEntry({
           id: nextId('actual-cost'),
           order,
@@ -322,13 +334,13 @@ export function createPhysicalActualCostService({
           amount: input.amount,
           currency: input.currency,
           fxRateSnapshot,
-          sku: input.sku ?? null,
+          sku: originalCostLine?.sku ?? null,
           sourceRef: input.sourceRef,
           occurredAt: input.occurredAt ?? recordedAt,
           recordedAt,
           correctionId,
           correctionReason: input.reason,
-        }), lineage);
+        }), lineage, originalCostLine);
 
         await tx.insertPhysicalActualCostEntry(reversal);
         await tx.insertPhysicalActualCostEntry(replacement);
@@ -341,6 +353,9 @@ export function createPhysicalActualCostService({
           shipmentNoticeSnapshotId: reversal.shipmentNoticeSnapshotId,
           receiptSnapshotId: reversal.receiptSnapshotId,
           receiptDiscrepancySnapshotId: reversal.receiptDiscrepancySnapshotId,
+          orderLineNo: reversal.orderLineNo,
+          productSkuId: reversal.productSkuId,
+          sku: reversal.sku,
           reversalOfEntryId: reversal.reversalOfEntryId,
           correctionId,
           sourceAmount: reversal.sourceAmount,
@@ -359,6 +374,9 @@ export function createPhysicalActualCostService({
           shipmentNoticeSnapshotId: lineage.shipmentNoticeSnapshotId,
           receiptSnapshotId: lineage.receiptSnapshotId,
           receiptDiscrepancySnapshotId: lineage.receiptDiscrepancySnapshotId,
+          orderLineNo: originalCostLine?.orderLineNo ?? null,
+          productSkuId: originalCostLine?.productSkuId ?? null,
+          sku: originalCostLine?.sku ?? null,
           originalEntryId,
           reversalEntryId: reversal.id,
           replacementEntryId: replacement.id,

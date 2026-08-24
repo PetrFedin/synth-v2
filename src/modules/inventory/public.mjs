@@ -168,6 +168,18 @@ function assertReceiptExecutionLineage(receipt, shipment, fulfillmentPlan) {
     'Receipt, shipment and fulfillment plan must belong to the exact same immutable execution lineage',
     { receiptSnapshotId: receipt?.id, shipmentNoticeSnapshotId: shipment?.id, fulfillmentPlanSnapshotId: fulfillmentPlan?.id },
   );
+
+  const hasCanonicalLineSnapshots = Array.isArray(shipment.lines) && Array.isArray(fulfillmentPlan.lines);
+  if (!hasCanonicalLineSnapshots) {
+    invariant(
+      receipt.lines.every((line) => line?.productSkuId == null && line?.orderLineNo == null),
+      'INVENTORY_CANONICAL_LINEAGE_REQUIRES_EXECUTION_LINES',
+      'ProductSku receipt posting requires shipment and fulfillment plan line snapshots for exact lineage validation',
+      { receiptSnapshotId: receipt.id },
+    );
+    return;
+  }
+
   const shipmentByLine = new Map(shipment.lines.map((line) => [line.lineId, line]));
   const planByLine = new Map(fulfillmentPlan.lines.map((line) => [line.lineId, line]));
   for (const receiptLine of receipt.lines) {

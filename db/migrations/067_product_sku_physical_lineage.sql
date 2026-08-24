@@ -163,4 +163,167 @@ COMMENT ON COLUMN inventory_movement_ledger_entries.product_sku_id IS
 COMMENT ON COLUMN inventory_movement_ledger_entries.order_line_no IS
   '1-based immutable OrderCommit line number for V2 physical receipt postings.';
 
+-- Physical actual cost is allowed to remain aggregate (freight/insurance/etc.).
+-- When a cost is SKU-scoped, ProductSku + immutable order line become authoritative
+-- for new canonical shipment snapshots; historical shipment snapshots remain valid.
+ALTER TABLE actual_cost_ledger_entries
+  ADD COLUMN IF NOT EXISTS order_line_no integer NULL CHECK (order_line_no IS NULL OR order_line_no > 0),
+  ADD COLUMN IF NOT EXISTS product_sku_id text NULL,
+  ADD CONSTRAINT actual_cost_product_sku_fk
+    FOREIGN KEY (product_sku_id, brand_id) REFERENCES product_skus(id, brand_id),
+  ADD CONSTRAINT actual_cost_product_sku_identity_shape_check
+    CHECK (
+      (product_sku_id IS NULL AND order_line_no IS NULL)
+      OR
+      (product_sku_id IS NOT NULL AND order_line_no IS NOT NULL)
+    );
+
+CREATE INDEX IF NOT EXISTS actual_cost_product_sku_idx
+  ON actual_cost_ledger_entries
+    (brand_id, product_sku_id, occurred_at, id)
+  WHERE product_sku_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS actual_cost_order_line_idx
+  ON actual_cost_ledger_entries
+    (order_commit_snapshot_id, order_line_no, shipment_notice_snapshot_id)
+  WHERE order_line_no IS NOT NULL;
+
+CREATE OR REPLACE FUNCTION validate_actual_cost_product_sku_lineage()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  shipment_lines JSONB;
+  matching_count integer;
+  matched_line JSONB;
+  shipment_product_sku_id text;
+  shipment_order_line_no integer;
+BEGIN
+  IF NEW.physical_lineage_version <> 2 THEN
+    IF NEW.product_sku_id IS NOT NULL OR NEW.order_line_no IS NOT NULL THEN
+      RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'ACTUAL_COST_PRODUCT_SKU_REQUIRES_PHYSICAL_LINEAGE';
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  SELECT lines INTO shipment_lines
+  FROM shipment_notice_snapshots
+  WHERE id = NEW.shipment_notice_snapshot_id
+  FOR SHARE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'ACTUAL_COST_SHIPMENT_LINEAGE_NOT_FOUND';
+  END IF;
+
+  IF NEW.sku IS NULL THEN
+    IF NEW.product_sku_id IS NOT NULL OR NEW.order_line_no IS NOT NULL THEN
+      RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'ACTUAL_COST_AGGREGATE_PRODUCT_SKU_FORBIDDEN';
+    END IF;
+  ELSE
+    WITH candidate_identities AS (
+      SELECT DISTINCT jsonb_build_object(
+        'orderLineNo', line -> 'orderLineNo',
+        'productSkuId', line -> 'productSkuId',
+        'sku', line -> 'sku'
+      ) AS identity
+      FROM jsonb_array_elements(shipment_lines) AS shipment_line(line)
+      WHERE CASE
+        WHEN NEW.order_line_no IS NOT NULL THEN
+          NULLIF(btrim(COALESCE(line ->> 'orderLineNo', '')), '')::integer = NEW.order_line_no
+        WHEN NEW.product_sku_id IS NOT NULL THEN
+          NULLIF(btrim(COALESCE(line ->> 'productSkuId', '')), '') = NEW.product_sku_id
+        ELSE
+          COALESCE(line ->> 'sku', '') = NEW.sku
+      END
+    )
+    SELECT count(*), (jsonb_agg(identity) -> 0)
+      INTO matching_count, matched_line
+      FROM candidate_identities;
+
+    IF matching_count = 0 THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'ACTUAL_COST_ORDER_LINE_UNKNOWN',
+        DETAIL = jsonb_build_object(
+          'shipmentNoticeSnapshotId', NEW.shipment_notice_snapshot_id,
+          'orderLineNo', NEW.order_line_no,
+          'productSkuId', NEW.product_sku_id,
+          'sku', NEW.sku
+        )::text;
+    ELSIF matching_count > 1 THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'ACTUAL_COST_ORDER_LINE_AMBIGUOUS',
+        DETAIL = jsonb_build_object(
+          'shipmentNoticeSnapshotId', NEW.shipment_notice_snapshot_id,
+          'orderLineNo', NEW.order_line_no,
+          'productSkuId', NEW.product_sku_id,
+          'sku', NEW.sku,
+          'matchingIdentityCount', matching_count
+        )::text;
+    END IF;
+
+    shipment_product_sku_id := NULLIF(btrim(COALESCE(matched_line ->> 'productSkuId', '')), '');
+    shipment_order_line_no := CASE
+      WHEN NULLIF(btrim(COALESCE(matched_line ->> 'orderLineNo', '')), '') IS NULL THEN NULL
+      ELSE (matched_line ->> 'orderLineNo')::integer
+    END;
+
+    IF COALESCE(matched_line ->> 'sku', '') <> NEW.sku THEN
+      RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'ACTUAL_COST_SKU_LINEAGE_MISMATCH';
+    END IF;
+
+    IF shipment_product_sku_id IS NOT NULL THEN
+      IF shipment_order_line_no IS NULL THEN
+        RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'ACTUAL_COST_SHIPMENT_PRODUCT_SKU_LINEAGE_INCOMPLETE';
+      END IF;
+      IF NEW.product_sku_id IS DISTINCT FROM shipment_product_sku_id
+         OR NEW.order_line_no IS DISTINCT FROM shipment_order_line_no THEN
+        RAISE EXCEPTION USING
+          ERRCODE = 'P0001',
+          MESSAGE = 'ACTUAL_COST_PRODUCT_SKU_LINEAGE_MISMATCH',
+          DETAIL = jsonb_build_object(
+            'expectedOrderLineNo', shipment_order_line_no,
+            'actualOrderLineNo', NEW.order_line_no,
+            'expectedProductSkuId', shipment_product_sku_id,
+            'actualProductSkuId', NEW.product_sku_id,
+            'sku', NEW.sku
+          )::text;
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM product_skus
+        WHERE id = NEW.product_sku_id
+          AND brand_id = NEW.brand_id
+          AND sku_code = NEW.sku
+      ) THEN
+        RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'ACTUAL_COST_PRODUCT_SKU_SCOPE_MISMATCH';
+      END IF;
+    ELSE
+      IF NEW.product_sku_id IS NOT NULL OR NEW.order_line_no IS NOT NULL THEN
+        RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'ACTUAL_COST_LEGACY_SHIPMENT_PRODUCT_SKU_FORBIDDEN';
+      END IF;
+    END IF;
+  END IF;
+
+  IF NULLIF(btrim(COALESCE(NEW.payload ->> 'productSkuId', '')), '') IS DISTINCT FROM NEW.product_sku_id
+     OR (CASE
+           WHEN NULLIF(btrim(COALESCE(NEW.payload ->> 'orderLineNo', '')), '') IS NULL THEN NULL
+           ELSE (NEW.payload ->> 'orderLineNo')::integer
+         END) IS DISTINCT FROM NEW.order_line_no THEN
+    RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'ACTUAL_COST_PRODUCT_SKU_PAYLOAD_MISMATCH';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS actual_cost_product_sku_lineage_trigger ON actual_cost_ledger_entries;
+CREATE TRIGGER actual_cost_product_sku_lineage_trigger
+BEFORE INSERT ON actual_cost_ledger_entries
+FOR EACH ROW EXECUTE FUNCTION validate_actual_cost_product_sku_lineage();
+
+COMMENT ON COLUMN actual_cost_ledger_entries.product_sku_id IS
+  'Canonical ProductSku for SKU-specific physical actual costs. NULL for aggregate and immutable legacy costs.';
+COMMENT ON COLUMN actual_cost_ledger_entries.order_line_no IS
+  '1-based immutable OrderCommit line for SKU-specific physical actual costs.';
+
 COMMIT;

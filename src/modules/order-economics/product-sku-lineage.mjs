@@ -14,21 +14,22 @@ export function resolveOrderCommitLine(orderCommit, candidate = {}, { codePrefix
   const requestedProductSkuId = candidate?.productSkuId ?? null;
   const requestedSku = candidate?.sku ?? null;
 
-  let matches = lines;
   if (requestedLineNo !== null) {
     invariant(Number.isInteger(requestedLineNo) && requestedLineNo > 0, `${codePrefix}_ORDER_LINE_NO_INVALID`, 'Order line number must be a positive integer', { orderLineNo: requestedLineNo });
-    matches = matches.filter((line) => line.lineNo === requestedLineNo);
   }
   if (requestedProductSkuId !== null) {
     invariant(typeof requestedProductSkuId === 'string' && requestedProductSkuId.trim().length > 0, `${codePrefix}_PRODUCT_SKU_ID_INVALID`, 'ProductSku id must be a non-empty string', { productSkuId: requestedProductSkuId });
-    matches = matches.filter((line) => line.productSkuId === requestedProductSkuId);
   }
   if (requestedSku !== null) {
     invariant(typeof requestedSku === 'string' && requestedSku.trim().length > 0, `${codePrefix}_SKU_INVALID`, 'SKU must be a non-empty string', { sku: requestedSku });
-    matches = matches.filter((line) => line.sku === requestedSku);
   }
-
   invariant(requestedLineNo !== null || requestedProductSkuId !== null || requestedSku !== null, `${codePrefix}_ORDER_LINE_IDENTITY_REQUIRED`, 'Supply allocation must identify an immutable committed order line');
+
+  let matches;
+  if (requestedLineNo !== null) matches = lines.filter((line) => line.lineNo === requestedLineNo);
+  else if (requestedProductSkuId !== null) matches = lines.filter((line) => line.productSkuId === requestedProductSkuId);
+  else matches = lines.filter((line) => line.sku === requestedSku);
+
   invariant(matches.length > 0, `${codePrefix}_ORDER_LINE_UNKNOWN`, 'Supply allocation does not match any immutable committed order line', {
     orderLineNo: requestedLineNo,
     productSkuId: requestedProductSkuId,
@@ -42,9 +43,8 @@ export function resolveOrderCommitLine(orderCommit, candidate = {}, { codePrefix
   });
 
   const line = matches[0];
-  if (requestedLineNo !== null) invariant(line.lineNo === requestedLineNo, `${codePrefix}_ORDER_LINE_NO_MISMATCH`, 'Client order line number differs from canonical immutable order lineage');
-  if (requestedProductSkuId !== null) invariant(line.productSkuId === requestedProductSkuId, `${codePrefix}_PRODUCT_SKU_MISMATCH`, 'Client ProductSku differs from canonical immutable order lineage');
-  if (requestedSku !== null) invariant(line.sku === requestedSku, `${codePrefix}_SKU_MISMATCH`, 'Client SKU differs from canonical immutable order lineage');
+  if (requestedProductSkuId !== null) invariant(line.productSkuId === requestedProductSkuId, `${codePrefix}_PRODUCT_SKU_MISMATCH`, 'Client ProductSku differs from canonical immutable order lineage', { orderLineNo: line.lineNo, expectedProductSkuId: line.productSkuId ?? null, actualProductSkuId: requestedProductSkuId });
+  if (requestedSku !== null) invariant(line.sku === requestedSku, `${codePrefix}_SKU_MISMATCH`, 'Client SKU differs from canonical immutable order lineage', { orderLineNo: line.lineNo, expectedSku: line.sku, actualSku: requestedSku });
 
   return line;
 }

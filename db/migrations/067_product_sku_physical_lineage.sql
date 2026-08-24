@@ -1,13 +1,36 @@
 BEGIN;
 
--- Historical receipt postings remain immutable V1 rows. ProductSku lineage is
--- nullable-first only for those existing rows; every new canonical receipt line
--- carrying ProductSku must be persisted as V2 with its immutable order line no.
+-- Historical receipt postings remain immutable V1 rows. Migration 045 created
+-- lineage_version with an inline `CHECK (lineage_version = 1)`. PostgreSQL owns
+-- the generated constraint name, so remove the legacy check by definition
+-- instead of guessing that name. This is important for clean-clone portability.
+DO $$
+DECLARE
+  legacy_constraint_name text;
+BEGIN
+  FOR legacy_constraint_name IN
+    SELECT c.conname
+      FROM pg_constraint c
+      JOIN pg_class t ON t.oid = c.conrelid
+      JOIN pg_namespace n ON n.oid = t.relnamespace
+     WHERE n.nspname = current_schema()
+       AND t.relname = 'inventory_movement_ledger_entries'
+       AND c.contype = 'c'
+       AND pg_get_constraintdef(c.oid) ~* 'lineage_version'
+  LOOP
+    EXECUTE format(
+      'ALTER TABLE inventory_movement_ledger_entries DROP CONSTRAINT %I',
+      legacy_constraint_name
+    );
+  END LOOP;
+END $$;
+
 ALTER TABLE inventory_movement_ledger_entries
-  DROP CONSTRAINT IF EXISTS inventory_movement_ledger_entries_lineage_version_check,
   ADD COLUMN IF NOT EXISTS order_line_no integer NULL CHECK (order_line_no IS NULL OR order_line_no > 0),
-  ADD COLUMN IF NOT EXISTS product_sku_id text NULL,
-  ADD CONSTRAINT inventory_movement_ledger_entries_lineage_version_check
+  ADD COLUMN IF NOT EXISTS product_sku_id text NULL;
+
+ALTER TABLE inventory_movement_ledger_entries
+  ADD CONSTRAINT inventory_movement_lineage_version_check
     CHECK (lineage_version IN (1, 2)),
   ADD CONSTRAINT inventory_movement_product_sku_fk
     FOREIGN KEY (product_sku_id, brand_id) REFERENCES product_skus(id, brand_id),

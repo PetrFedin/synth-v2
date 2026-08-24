@@ -25,6 +25,18 @@ const INVENTORY_ERROR_CODES = new Set([
   'CATALOG_RESERVATION_NOT_FOUND',
   'CATALOG_RELEASE_EXCEEDS_RESERVED',
   'ORDER_COMMIT_SNAPSHOT_NOT_FOUND',
+  'PRODUCT_SKU_LINEAGE_REQUIRED',
+  'PRODUCT_SKU_LINEAGE_MISMATCH',
+  'PRODUCT_SKU_COMPATIBILITY_LINK_REQUIRED',
+  'PRODUCT_SKU_INVENTORY_NOT_FOUND',
+  'PRODUCT_SKU_AVAILABILITY_EXCEEDED',
+  'ORDER_RESERVATION_ORDER_NOT_FOUND',
+  'ORDER_RESERVATION_PRODUCT_SKU_LINEAGE_MISMATCH',
+  'ORDER_RESERVATION_PRODUCT_SKU_REQUIRED',
+  'ORDER_RESERVATION_LEGACY_SKU_NOT_FOUND',
+  'ORDER_RESERVATION_COMMIT_NOT_FOUND',
+  'ORDER_RESERVATION_COMMIT_PRODUCT_SKU_MISMATCH',
+  'PRODUCT_SKU_RELEASE_EXCEEDS_RESERVED',
 ]);
 
 export function createOrderBuilderService({
@@ -313,6 +325,18 @@ function inventoryMessage(code) {
     CATALOG_RESERVATION_NOT_FOUND: 'Order inventory reservation is missing',
     CATALOG_RELEASE_EXCEEDS_RESERVED: 'Inventory release exceeds reserved quantity',
     ORDER_COMMIT_SNAPSHOT_NOT_FOUND: 'Pinned order commit snapshot is missing during inventory reservation',
+    PRODUCT_SKU_LINEAGE_REQUIRED: 'Canonical ProductSku lineage is required for this commercial order',
+    PRODUCT_SKU_LINEAGE_MISMATCH: 'ProductSku does not match the pinned order product lineage',
+    PRODUCT_SKU_COMPATIBILITY_LINK_REQUIRED: 'Legacy catalog SKU is not mapped to its canonical ProductSku inventory identity',
+    PRODUCT_SKU_INVENTORY_NOT_FOUND: 'Authoritative ProductSku inventory balance is missing',
+    PRODUCT_SKU_AVAILABILITY_EXCEEDED: 'Order quantity exceeds canonical ProductSku available-to-sell',
+    ORDER_RESERVATION_ORDER_NOT_FOUND: 'Inventory reservation references an order that no longer exists',
+    ORDER_RESERVATION_PRODUCT_SKU_LINEAGE_MISMATCH: 'Inventory reservation ProductSku does not match the order lineage',
+    ORDER_RESERVATION_PRODUCT_SKU_REQUIRED: 'Inventory reservation must use the canonical ProductSku identity',
+    ORDER_RESERVATION_LEGACY_SKU_NOT_FOUND: 'Legacy inventory reservation references an unavailable catalog SKU',
+    ORDER_RESERVATION_COMMIT_NOT_FOUND: 'Inventory reservation references a missing order commit snapshot',
+    ORDER_RESERVATION_COMMIT_PRODUCT_SKU_MISMATCH: 'Inventory reservation does not match the ProductSku frozen in the order commit snapshot',
+    PRODUCT_SKU_RELEASE_EXCEEDS_RESERVED: 'Inventory release exceeds the active ProductSku reserved quantity',
   })[code] ?? 'Inventory mutation failed';
 }
 function defaultIdGenerator() { let sequence = 0; return (prefix) => `${prefix}_${++sequence}`; }

@@ -6,24 +6,8 @@ export function createPostgresInventoryStore({ pool } = {}) {
   invariant(pool && typeof pool.connect === 'function' && typeof pool.query === 'function', 'POSTGRES_POOL_REQUIRED', 'PostgreSQL pool is required');
   return Object.freeze({
     transaction: (work) => withPostgresTransaction(pool, work, { createView: view }),
-    async getWarehousePositions(shopId, warehouseLocationId, sku = null) {
-      const params = [shopId, warehouseLocationId];
-      const skuClause = sku ? ' AND sku = $3' : '';
-      if (sku) params.push(sku);
-      const result = await pool.query(
-        `SELECT shop_id, warehouse_location_id, sku,
-                sum(on_hand_delta)::bigint AS on_hand_quantity,
-                sum(available_delta)::bigint AS available_quantity,
-                sum(quarantine_delta)::bigint AS quarantine_quantity,
-                count(*)::bigint AS movement_count,
-                max(posted_at) AS latest_posted_at
-           FROM inventory_movement_ledger_entries
-          WHERE shop_id = $1 AND warehouse_location_id = $2${skuClause}
-          GROUP BY shop_id, warehouse_location_id, sku
-          ORDER BY sku`,
-        params,
-      );
-      return result.rows.map(positionFromRow);
+    async getWarehousePositions(shopId, warehouseLocationId, sku = null, productSkuId = null) {
+      return queryWarehousePositions(pool, shopId, warehouseLocationId, sku, productSkuId);
     },
   });
 }
@@ -62,16 +46,18 @@ function view(client) {
           `INSERT INTO inventory_movement_ledger_entries
             (id, movement_type, lineage_version, order_id, order_version, order_commit_snapshot_id,
              supply_commitment_snapshot_id, fulfillment_plan_snapshot_id, shipment_notice_snapshot_id,
-             receipt_snapshot_id, brand_id, shop_id, warehouse_location_id, receipt_line_id, sku,
+             receipt_snapshot_id, brand_id, shop_id, warehouse_location_id, receipt_line_id,
+             order_line_no, product_sku_id, sku,
              received_quantity, accepted_quantity, damaged_quantity, rejected_quantity,
              on_hand_delta, available_delta, quarantine_delta, occurred_at, posted_at, content_hash, payload)
            VALUES
-            ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
-             $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26::jsonb)`,
+            ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,
+             $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28::jsonb)`,
           [
             value.id, value.movementType, value.lineageVersion, value.orderId, value.orderVersion, value.orderCommitSnapshotId,
             value.supplyCommitmentSnapshotId, value.fulfillmentPlanSnapshotId, value.shipmentNoticeSnapshotId,
-            value.receiptSnapshotId, value.brandId, value.shopId, value.warehouseLocationId, value.receiptLineId, value.sku,
+            value.receiptSnapshotId, value.brandId, value.shopId, value.warehouseLocationId, value.receiptLineId,
+            value.orderLineNo, value.productSkuId, value.sku,
             value.receivedQuantity, value.acceptedQuantity, value.damagedQuantity, value.rejectedQuantity,
             value.onHandDelta, value.availableDelta, value.quarantineDelta, value.occurredAt, value.postedAt, value.contentHash,
             JSON.stringify(value),
@@ -82,24 +68,8 @@ function view(client) {
         throw error;
       }
     },
-    async getWarehousePositions(shopId, warehouseLocationId, sku = null) {
-      const params = [shopId, warehouseLocationId];
-      const skuClause = sku ? ' AND sku = $3' : '';
-      if (sku) params.push(sku);
-      const result = await client.query(
-        `SELECT shop_id, warehouse_location_id, sku,
-                sum(on_hand_delta)::bigint AS on_hand_quantity,
-                sum(available_delta)::bigint AS available_quantity,
-                sum(quarantine_delta)::bigint AS quarantine_quantity,
-                count(*)::bigint AS movement_count,
-                max(posted_at) AS latest_posted_at
-           FROM inventory_movement_ledger_entries
-          WHERE shop_id = $1 AND warehouse_location_id = $2${skuClause}
-          GROUP BY shop_id, warehouse_location_id, sku
-          ORDER BY sku`,
-        params,
-      );
-      return result.rows.map(positionFromRow);
+    async getWarehousePositions(shopId, warehouseLocationId, sku = null, productSkuId = null) {
+      return queryWarehousePositions(client, shopId, warehouseLocationId, sku, productSkuId);
     },
     getCommand: (id) => getRegisteredCommand(client, 'wholesale', id),
     insertCommand: (value) => insertRegisteredCommand(client, 'wholesale', value),
@@ -118,6 +88,33 @@ function view(client) {
   });
 }
 
+async function queryWarehousePositions(queryable, shopId, warehouseLocationId, sku = null, productSkuId = null) {
+  const params = [shopId, warehouseLocationId];
+  const clauses = ['shop_id = $1', 'warehouse_location_id = $2'];
+  if (sku) {
+    params.push(sku);
+    clauses.push(`sku = $${params.length}`);
+  }
+  if (productSkuId) {
+    params.push(productSkuId);
+    clauses.push(`product_sku_id = $${params.length}`);
+  }
+  const result = await queryable.query(
+    `SELECT shop_id, warehouse_location_id, product_sku_id, sku,
+            sum(on_hand_delta)::bigint AS on_hand_quantity,
+            sum(available_delta)::bigint AS available_quantity,
+            sum(quarantine_delta)::bigint AS quarantine_quantity,
+            count(*)::bigint AS movement_count,
+            max(posted_at) AS latest_posted_at
+       FROM inventory_movement_ledger_entries
+      WHERE ${clauses.join(' AND ')}
+      GROUP BY shop_id, warehouse_location_id, product_sku_id, sku
+      ORDER BY sku, product_sku_id NULLS FIRST`,
+    params,
+  );
+  return result.rows.map(positionFromRow);
+}
+
 function positionFromRow(row) {
   const onHandQuantity = safeInteger(row.on_hand_quantity, 'WAREHOUSE_POSITION_ON_HAND_OVERFLOW');
   const availableQuantity = safeInteger(row.available_quantity, 'WAREHOUSE_POSITION_AVAILABLE_OVERFLOW');
@@ -128,6 +125,7 @@ function positionFromRow(row) {
   return Object.freeze({
     shopId: row.shop_id,
     warehouseLocationId: row.warehouse_location_id,
+    productSkuId: row.product_sku_id ?? null,
     sku: row.sku,
     onHandQuantity,
     availableQuantity,

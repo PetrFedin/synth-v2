@@ -18,7 +18,10 @@ export function resolvePhysicalCostLine(shipment, input = {}) {
   else if (requestedProductSkuId !== null) matches = lineages.filter((line) => line.productSkuId === requestedProductSkuId);
   else matches = lineages.filter((line) => line.sku === requestedSku);
 
-  invariant(matches.length > 0, 'PHYSICAL_ACTUAL_COST_ORDER_LINE_UNKNOWN', 'Physical actual cost does not match any immutable shipment order line', {
+  const unknownCode = requestedOrderLineNo === null && requestedProductSkuId === null
+    ? 'PHYSICAL_ACTUAL_COST_SKU_NOT_SHIPPED'
+    : 'PHYSICAL_ACTUAL_COST_ORDER_LINE_UNKNOWN';
+  invariant(matches.length > 0, unknownCode, 'Physical actual cost does not match any immutable shipment order line', {
     shipmentNoticeSnapshotId: shipment.id,
     orderLineNo: requestedOrderLineNo,
     productSkuId: requestedProductSkuId,

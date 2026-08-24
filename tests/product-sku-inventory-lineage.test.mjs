@@ -56,6 +56,33 @@ test('legacy receipt without ProductSku remains an explicit V1 compatibility mov
   assert.equal(movements[0].orderLineNo, null);
 });
 
+test('transitional SKU-only receipt may carry immutable orderLineNo in snapshots without creating partial ProductSku lineage', () => {
+  const { fulfillmentPlan, shipment, receipt } = canonicalExecution();
+  const transitionalPlan = Object.freeze({
+    ...fulfillmentPlan,
+    lines: Object.freeze([Object.freeze({ lineId: 'line-0001', orderLineNo: 1, sku: 'SKU-1' })]),
+  });
+  const transitionalShipment = Object.freeze({
+    ...shipment,
+    lines: Object.freeze([Object.freeze({ lineId: 'line-0001', orderLineNo: 1, sku: 'SKU-1', quantity: 3 })]),
+  });
+  const transitionalReceipt = Object.freeze({
+    ...receipt,
+    lines: Object.freeze([Object.freeze({ lineId: 'line-0001', orderLineNo: 1, sku: 'SKU-1', receivedQuantity: 3, acceptedQuantity: 3, damagedQuantity: 0, rejectedQuantity: 0 })]),
+  });
+  const movements = createReceiptInventoryMovements({
+    idForLine: () => 'movement-transitional',
+    receipt: transitionalReceipt,
+    shipment: transitionalShipment,
+    fulfillmentPlan: transitionalPlan,
+    postedAt,
+  });
+  assert.equal(movements[0].lineageVersion, 1);
+  assert.equal(movements[0].productSkuId, null);
+  assert.equal(movements[0].orderLineNo, null);
+  assert.equal(movements[0].sku, 'SKU-1');
+});
+
 test('warehouse position cannot aggregate another ProductSku into a canonical position', () => {
   const { fulfillmentPlan, shipment, receipt } = canonicalExecution();
   const [movement] = createReceiptInventoryMovements({ idForLine: () => 'movement-1', receipt, shipment, fulfillmentPlan, postedAt });

@@ -59,15 +59,16 @@ function view(client) {
     },
     async listReservations(orderId) {
       const result = await client.query(
-        `SELECT order_id, sku, quantity, order_commit_snapshot_id, lineage_version
+        `SELECT order_id, product_sku_id, sku, quantity, order_commit_snapshot_id, lineage_version
            FROM order_inventory_reservations
           WHERE order_id = $1
-          ORDER BY sku
+          ORDER BY product_sku_id NULLS FIRST, sku
           FOR SHARE`,
         [orderId],
       );
       return result.rows.map((row) => Object.freeze({
         orderId: row.order_id,
+        productSkuId: row.product_sku_id ?? null,
         sku: row.sku,
         quantity: row.quantity,
         orderCommitSnapshotId: row.order_commit_snapshot_id,
@@ -154,13 +155,15 @@ function view(client) {
          physical_lineage_version, fulfillment_plan_snapshot_id, shipment_notice_snapshot_id,
          receipt_snapshot_id, receipt_discrepancy_snapshot_id, brand_id, shop_id,
          entry_kind, reversal_of_entry_id, correction_id, correction_reason, cost_type,
-         source_amount, source_currency, fx_rate_snapshot_id, amount, currency, sku, source_ref, occurred_at, recorded_at, payload)
-        VALUES ($1, $2, $3, 3, $4, 2, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25::jsonb)`,
+         source_amount, source_currency, fx_rate_snapshot_id, amount, currency,
+         order_line_no, product_sku_id, sku, source_ref, occurred_at, recorded_at, payload)
+        VALUES ($1, $2, $3, 3, $4, 2, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27::jsonb)`,
       [value.id, value.orderId, value.orderCommitSnapshotId, value.supplyCommitmentSnapshotId,
         value.fulfillmentPlanSnapshotId, value.shipmentNoticeSnapshotId, value.receiptSnapshotId, value.receiptDiscrepancySnapshotId,
         value.brandId, value.shopId, value.entryKind ?? 'actual', value.reversalOfEntryId ?? null, value.correctionId ?? null,
         value.correctionReason ?? null, value.costType, value.sourceAmount, value.sourceCurrency, value.fxRateSnapshotId,
-        value.amount, value.currency, value.sku, value.sourceRef, value.occurredAt, value.recordedAt, JSON.stringify(value)],
+        value.amount, value.currency, value.orderLineNo ?? null, value.productSkuId ?? null, value.sku, value.sourceRef,
+        value.occurredAt, value.recordedAt, JSON.stringify(value)],
       'ACTUAL_COST_ENTRY_ALREADY_EXISTS', { costEntryId: value.id });
     },
     getCommand: (id) => getRegisteredCommand(client, 'wholesale', id),

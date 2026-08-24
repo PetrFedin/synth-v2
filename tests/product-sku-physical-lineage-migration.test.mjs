@@ -9,6 +9,9 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 test('physical lineage migration pins inventory and SKU costs to immutable ProductSku identity without guessing history', async () => {
   const sql = await readFile(path.join(root, 'db', 'migrations', '067_product_sku_physical_lineage.sql'), 'utf8');
 
+  assert.match(sql, /pg_get_constraintdef\(c\.oid\) ~\* 'lineage_version'/);
+  assert.match(sql, /ALTER TABLE inventory_movement_ledger_entries DROP CONSTRAINT %I/);
+  assert.match(sql, /inventory_movement_lineage_version_check/);
   assert.match(sql, /ALTER TABLE inventory_movement_ledger_entries/);
   assert.match(sql, /ADD COLUMN IF NOT EXISTS order_line_no integer NULL/);
   assert.match(sql, /ADD COLUMN IF NOT EXISTS product_sku_id text NULL/);
@@ -31,6 +34,7 @@ test('physical lineage migration pins inventory and SKU costs to immutable Produ
   assert.match(sql, /actual_cost_order_line_idx/);
   assert.match(sql, /jsonb_array_elements\(shipment_lines\)/);
 
+  assert.doesNotMatch(sql, /DROP CONSTRAINT IF EXISTS inventory_movement_ledger_entries_lineage_version_check/);
   assert.doesNotMatch(sql, /UPDATE\s+inventory_movement_ledger_entries/i);
   assert.doesNotMatch(sql, /UPDATE\s+actual_cost_ledger_entries/i);
   assert.doesNotMatch(sql, /SET\s+product_sku_id\s*=\s*product_sku\.id/i);

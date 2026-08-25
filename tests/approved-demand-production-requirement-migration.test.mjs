@@ -12,8 +12,10 @@ test('migration creates immutable production requirement header and relational P
   const sql = await migration();
   assert.match(sql, /CREATE TABLE production_requirement_snapshots/i);
   assert.match(sql, /CREATE TABLE production_requirement_lines/i);
+  assert.match(sql, /order_commit_snapshot_id text NOT NULL REFERENCES order_commit_snapshots\(id\)/i);
   assert.match(sql, /supply_commitment_snapshot_id text NOT NULL UNIQUE REFERENCES supply_commitment_snapshots\(id\)/i);
-  assert.match(sql, /FOREIGN KEY \(order_commit_snapshot_id, order_id\)[\s\S]*REFERENCES order_commit_snapshots\(id, order_id\)/i);
+  assert.match(sql, /commit_row\.order_id <> NEW\.order_id/i);
+  assert.doesNotMatch(sql, /REFERENCES order_commit_snapshots\(id, order_id\)/i);
   assert.match(sql, /FOREIGN KEY \(product_sku_id, brand_id\) REFERENCES product_skus\(id, brand_id\)/i);
   assert.match(sql, /FOREIGN KEY \(colorway_id, style_version_id, brand_id\)[\s\S]*REFERENCES product_colorways\(id, style_version_id, brand_id\)/i);
   assert.match(sql, /production_quantity integer NOT NULL CHECK \(production_quantity > 0 AND production_quantity <= ordered_quantity\)/i);

@@ -61,6 +61,33 @@ test('multiple shipment lines for one immutable ProductSku identity do not creat
   });
 });
 
+test('transitional shipment orderLineNo without ProductSku remains wholly on legacy physical cost lineage', () => {
+  const value = shipment([
+    { lineId: 'line-legacy', orderLineNo: 1, sku: 'LEGACY-SKU', quantity: 1 },
+  ]);
+
+  assert.deepEqual(resolvePhysicalCostLine(value, { sku: 'LEGACY-SKU' }), {
+    orderLineNo: null,
+    productSkuId: null,
+    sku: 'LEGACY-SKU',
+  });
+  assert.throws(
+    () => resolvePhysicalCostLine(value, { orderLineNo: 1, sku: 'LEGACY-SKU' }),
+    (error) => error.code === 'PHYSICAL_ACTUAL_COST_ORDER_LINE_UNKNOWN',
+  );
+});
+
+test('ProductSku shipment lineage without immutable orderLineNo is rejected', () => {
+  const value = shipment([
+    { lineId: 'line-invalid', productSkuId: 'product-sku-1', sku: 'SKU-1', quantity: 1 },
+  ]);
+
+  assert.throws(
+    () => resolvePhysicalCostLine(value, { sku: 'SKU-1' }),
+    (error) => error.code === 'PHYSICAL_ACTUAL_COST_SHIPMENT_PRODUCT_SKU_LINEAGE_INCOMPLETE',
+  );
+});
+
 test('aggregate physical cost remains valid without ProductSku identity', () => {
   const value = shipment([
     { lineId: 'line-1', orderLineNo: 1, productSkuId: 'product-sku-1', sku: 'SKU-1', quantity: 1 },

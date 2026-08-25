@@ -36,6 +36,10 @@ function view(client) {
       const result = await client.query('SELECT payload FROM supply_commitment_snapshots WHERE id = $1 FOR SHARE', [id]);
       return result.rows[0]?.payload;
     },
+    async getProductionRequirement(id) {
+      const result = await client.query('SELECT payload FROM production_requirement_snapshots WHERE id = $1 FOR SHARE', [id]);
+      return result.rows[0]?.payload;
+    },
     async getProductionRequirementBySupplyCommitment(supplyCommitmentSnapshotId) {
       const result = await client.query(
         'SELECT payload FROM production_requirement_snapshots WHERE supply_commitment_snapshot_id = $1 FOR SHARE',

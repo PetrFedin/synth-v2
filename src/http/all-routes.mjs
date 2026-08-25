@@ -5,6 +5,7 @@ import { createFulfillmentRoutes } from './fulfillment-routes.mjs';
 import { createInventoryRoutes } from './inventory-routes.mjs';
 import { createProductIdentityRoutes } from './product-identity-routes.mjs';
 import { createProductReadinessRoutes } from './product-readiness-routes.mjs';
+import { createProductionRequirementRoutes } from './production-requirement-routes.mjs';
 import { createReceiptClaimsRoutes } from './receipt-claims-routes.mjs';
 import { createRetailDoorRoutes } from './retail-door-routes.mjs';
 import { createSelectionMatrixRoutes } from './selection-matrix-routes.mjs';
@@ -26,6 +27,7 @@ export function createWholesaleRoutes(services = {}) {
     ...createRetailDoorRoutes({ retailDoors: services.retailDoors }),
     ...createSelectionMatrixRoutes({ collaboration: services.collaboration }),
     ...createEconomicsRouteBundle({ orderEconomics: services.orderEconomics, costAllocation: services.costAllocation }),
+    ...createProductionRequirementRoutes({ productionRequirements: services.productionRequirements }),
     ...createFulfillmentRoutes({ fulfillment: services.fulfillment }),
     ...createInventoryRoutes({ inventory: services.inventory }),
     ...createReceiptClaimsRoutes({ receiptClaims: services.receiptClaims }),

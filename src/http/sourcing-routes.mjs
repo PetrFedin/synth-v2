@@ -8,6 +8,7 @@ const VERSION_BODY = bodyContract(['expectedVersion']);
 const SUPPLIER_SUSPEND_BODY = bodyContract(['expectedVersion', 'reason']);
 const RFQ_EDITABLE = ['targetQuantity', 'responseDueAt', 'deliveryDueAt', 'incoterm', 'supplierCodes', 'notes'];
 const RFQ_CREATE_BODY = listBody(bodyContract(['rfqCode', 'sku', ...RFQ_EDITABLE]), ['supplierCodes']);
+const PRODUCTION_RFQ_BODY = listBody(bodyContract(['rfqCode', 'responseDueAt', 'deliveryDueAt', 'incoterm', 'supplierCodes', 'notes']), ['supplierCodes']);
 const RFQ_UPDATE_BODY = listBody(bodyContract(['expectedVersion', ...RFQ_EDITABLE]), ['supplierCodes']);
 const QUOTE_BODY = bodyContract(['expectedVersion', 'supplierCode', 'unitPriceMinor', 'fixedCostMinor', 'leadTimeDays', 'minimumOrderQuantity', 'validUntil', 'notes']);
 const AWARD_BODY = bodyContract(['expectedVersion', 'supplierCode']);
@@ -29,6 +30,7 @@ export function createSourcingRoutes({ sourcing } = {}) {
     read('GET', /^\/v2\/rfqs$/, RFQ_QUERY_FIELDS, ({ actorId, query }) => service.rfqPageForActor(actorId, query)),
     read('GET', /^\/v2\/rfqs\/([^/]+)$/, [], ({ actorId, params }) => service.rfqGetForActor(actorId, params[0])),
     mutate('POST', /^\/v2\/rfqs$/, RFQ_CREATE_BODY, ({ commandId, actorId, body }) => service.createRfq(commandId, actorId, body)),
+    mutate('POST', /^\/v2\/production-requirements\/([^/]+)\/lines\/([1-9][0-9]*)\/rfq$/, PRODUCTION_RFQ_BODY, ({ commandId, actorId, params, body }) => service.createRfqFromProductionRequirement(commandId, actorId, { ...body, productionRequirementSnapshotId: params[0], orderLineNo: positiveIntegerPath(params[1]) })),
     mutate('PATCH', /^\/v2\/rfqs\/([^/]+)$/, RFQ_UPDATE_BODY, ({ commandId, actorId, params, body }) => service.updateRfq(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/rfqs\/([^/]+)\/issue$/, VERSION_BODY, ({ commandId, actorId, params, body }) => service.issueRfq(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/rfqs\/([^/]+)\/quotes$/, QUOTE_BODY, ({ commandId, actorId, params, body }) => service.upsertQuote(commandId, actorId, params[0], body)),
@@ -72,12 +74,17 @@ function listBody(contract, fields) {
     return body;
   };
 }
+function positiveIntegerPath(value) {
+  const parsed = Number(value);
+  invariant(Number.isSafeInteger(parsed) && parsed > 0, 'HTTP_PATH_PARAMETER_INVALID', 'Production requirement order line number must be a positive integer', { value });
+  return parsed;
+}
 function unavailableSourcing() {
   const fail = () => invariant(false, 'SOURCING_SERVICE_REQUIRED', 'Sourcing service is required');
   return Object.freeze({
     supplierPageForActor: fail, supplierGetForActor: fail, createSupplier: fail, updateSupplier: fail,
     qualifySupplier: fail, suspendSupplier: fail, archiveSupplier: fail, rfqPageForActor: fail,
-    rfqGetForActor: fail, createRfq: fail, updateRfq: fail, issueRfq: fail, upsertQuote: fail,
+    rfqGetForActor: fail, createRfq: fail, createRfqFromProductionRequirement: fail, updateRfq: fail, issueRfq: fail, upsertQuote: fail,
     awardRfq: fail, allocateRfq: fail, cancelRfq: fail,
   });
 }

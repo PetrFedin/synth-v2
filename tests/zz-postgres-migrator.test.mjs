@@ -79,6 +79,7 @@ test('PostgreSQL migration ledger serializes runners and rejects changed history
       { tgname: 'production_orders_assign_product_sku_lineage' },
       { tgname: 'production_orders_immutable_source_gate' },
       { tgname: 'production_orders_source_gate' },
+      { tgname: 'production_orders_validate_approved_demand_lineage' },
     ]);
     assert.deepEqual((await pool.query("SELECT tgname FROM pg_trigger WHERE tgrelid = 'public.production_executions'::regclass AND NOT tgisinternal ORDER BY tgname")).rows, [
       { tgname: 'production_executions_immutable_source_gate' },

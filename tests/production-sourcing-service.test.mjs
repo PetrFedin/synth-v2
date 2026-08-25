@@ -70,11 +70,11 @@ test('service creates RFQ with exact approved ProductSku quantity without accept
   assert.equal(state.events[0].payload.targetQuantity, 7);
 });
 
-test('service rejects manual SKU or target quantity fields before loading sourcing context', async () => {
+test('service rejects manual SKU or target quantity fields before loading sourcing context', () => {
   const { service } = fixture();
   for (const forbidden of [{ sku: 'FORGED' }, { targetQuantity: 999 }]) {
-    await assert.rejects(
-      service.createRfqFromProductionRequirement('cmd-forbidden', 'actor-1', input(forbidden)),
+    assert.throws(
+      () => service.createRfqFromProductionRequirement('cmd-forbidden', 'actor-1', input(forbidden)),
       (error) => error.code === 'PRODUCTION_RFQ_FIELD_FORBIDDEN',
     );
   }

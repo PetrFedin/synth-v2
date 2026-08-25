@@ -27,7 +27,7 @@ import { withSourcingTechPackGateOpenApi } from './sourcing-tech-pack-gate-opena
 import { withTechPackOpenApi } from './tech-pack-openapi.mjs';
 import { wholesaleV2OpenApi } from './openapi.mjs';
 
-const AUTHORITATIVE_V2_CONTRACT_VERSION = '1.18.0';
+const AUTHORITATIVE_V2_CONTRACT_VERSION = '1.17.0';
 
 const composed = withApprovedDemandProductionOpenApi(
   withSupplierEconomicPerformanceOpenApi(

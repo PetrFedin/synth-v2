@@ -3,7 +3,7 @@ BEGIN;
 CREATE TABLE production_requirement_snapshots (
   id text PRIMARY KEY,
   order_id text NOT NULL REFERENCES orders(id),
-  order_commit_snapshot_id text NOT NULL,
+  order_commit_snapshot_id text NOT NULL REFERENCES order_commit_snapshots(id),
   supply_commitment_snapshot_id text NOT NULL UNIQUE REFERENCES supply_commitment_snapshots(id),
   lineage_version smallint NOT NULL DEFAULT 1 CHECK (lineage_version = 1),
   brand_id text NOT NULL REFERENCES organisations(id),
@@ -17,9 +17,6 @@ CREATE TABLE production_requirement_snapshots (
   created_at timestamptz NOT NULL,
   content_hash char(64) NOT NULL UNIQUE CHECK (content_hash ~ '^[0-9a-f]{64}$'),
   payload jsonb NOT NULL CHECK (jsonb_typeof(payload) = 'object'),
-  CONSTRAINT production_requirement_order_commit_fk
-    FOREIGN KEY (order_commit_snapshot_id, order_id)
-    REFERENCES order_commit_snapshots(id, order_id),
   CONSTRAINT production_requirement_payload_status_check
     CHECK (payload ->> 'status' = status),
   CONSTRAINT production_requirement_payload_identity_check

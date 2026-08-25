@@ -3,11 +3,11 @@ import { domainEvent } from '../core/events.mjs';
 import { invariant } from '../core/errors.mjs';
 import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
+import { createProductionOrderFromApprovedAllocation } from '../modules/production-orders/approved-demand-lineage.mjs';
 import {
   assertProductionOrderVersion,
   cancelProductionOrder,
   confirmProductionOrder,
-  createProductionOrderFromAllocation,
   issueProductionOrder,
 } from '../modules/production-orders/public.mjs';
 
@@ -52,6 +52,23 @@ export function createProductionOrderService({ store, clock = () => new Date().t
         quantity: value.quantity,
         status: value.status,
         version: value.version,
+        ...(value.lineageVersion === 2 ? {
+          lineageVersion: 2,
+          productionRequirementSnapshotId: value.productionRequirementSnapshotId,
+          productionRequirementOrderLineNo: value.productionRequirementOrderLineNo,
+          orderId: value.orderId,
+          orderCommitSnapshotId: value.orderCommitSnapshotId,
+          supplyCommitmentSnapshotId: value.supplyCommitmentSnapshotId,
+          productSkuId: value.productSkuId,
+          styleVersionId: value.styleVersionId,
+          colorwayId: value.colorwayId,
+          sizeValueId: value.sizeValueId,
+          sizeCode: value.sizeCode,
+          collectionId: value.collectionId,
+          showroomId: value.showroomId,
+          commercialPublicationId: value.commercialPublicationId,
+          buyerCatalogVersionId: value.buyerCatalogVersionId,
+        } : {}),
       },
       metadata: { commandId, actorId },
     }));
@@ -76,7 +93,7 @@ export function createProductionOrderService({ store, clock = () => new Date().t
         async (tx, context) => {
           invariant(!context.existingByRfq, 'PRODUCTION_ORDER_FOR_RFQ_EXISTS', 'Allocated RFQ already has a Production Order', { rfqCode: context.rfq.rfqCode, productionOrderNumber: context.existingByRfq?.productionOrderNumber });
           invariant(!context.existingByNumber, 'PRODUCTION_ORDER_NUMBER_EXISTS', 'Production Order number already exists', { productionOrderNumber: context.rfq.allocation?.purchaseOrderNumber });
-          const value = createProductionOrderFromAllocation({ id: nextId('production-order'), rfq: context.rfq, supplier: context.supplier, createdAt: clock() });
+          const value = createProductionOrderFromApprovedAllocation({ id: nextId('production-order'), rfq: context.rfq, supplier: context.supplier, createdAt: clock() });
           await tx.insertProductionOrder(value);
           await append(tx, 'production-order.created', value, commandId, actorId);
           return value;

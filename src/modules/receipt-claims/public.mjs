@@ -29,6 +29,8 @@ export function createReceiptDiscrepancyClaimSnapshot({
     .filter(isIssueLine)
     .map((line) => Object.freeze({
       lineId: requiredText(line.lineId, 1, 80, 'RECEIPT_CLAIM_LINE_ID_INVALID', 'Line id'),
+      ...(Object.hasOwn(line, 'orderLineNo') ? { orderLineNo: line.orderLineNo } : {}),
+      ...(Object.hasOwn(line, 'productSkuId') ? { productSkuId: line.productSkuId } : {}),
       sku: requiredText(line.sku, 1, 160, 'RECEIPT_CLAIM_SKU_INVALID', 'SKU'),
       shippedQuantity: nonNegativeInteger(line.shippedQuantity, 'RECEIPT_CLAIM_QUANTITY_INVALID'),
       receivedQuantity: nonNegativeInteger(line.receivedQuantity, 'RECEIPT_CLAIM_QUANTITY_INVALID'),

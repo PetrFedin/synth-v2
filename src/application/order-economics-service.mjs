@@ -9,8 +9,8 @@ import {
   createMarginActualizationSnapshot,
   createOrderFxRateSnapshot,
   createPostCloseAdjustment,
-  createSupplyCommitmentSnapshot,
 } from '../modules/order-economics/public.mjs';
+import { createProductSkuSupplyCommitmentSnapshot } from '../modules/order-economics/product-sku-supply.mjs';
 import {
   createCostCloseReadinessSnapshot,
   createReadinessBoundCostCloseSnapshot,
@@ -102,7 +102,7 @@ export function createOrderEconomicsService({
         actorId,
         (tx) => executionBasisForCapability(tx, orderId, actorId, CAPABILITIES.SUPPLY_MANAGE),
         async (tx, { order, orderCommit }) => {
-          const commitment = createSupplyCommitmentSnapshot({ id: nextId('supply-commitment'), order, orderCommit, allocations: input.allocations, createdAt: clock() });
+          const commitment = createProductSkuSupplyCommitmentSnapshot({ id: nextId('supply-commitment'), order, orderCommit, allocations: input.allocations, createdAt: clock() });
           await tx.insertSupplyCommitment(commitment);
           await append(tx, 'supply-commitment.created', commitment.id, {
             orderId,

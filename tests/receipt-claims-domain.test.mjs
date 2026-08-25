@@ -7,20 +7,38 @@ const discrepancy = Object.freeze({
   fulfillmentPlanSnapshotId: 'plan-1', shipmentNoticeSnapshotId: 'asn-1', latestReceiptSnapshotId: 'receipt-1',
   brandId: 'brand-1', shopId: 'shop-1', finalized: true, status: 'open', issueCount: 1, contentHash: 'a'.repeat(64),
   lines: Object.freeze([
-    Object.freeze({ lineId: 'line-1', sku: 'SKU-A', shippedQuantity: 10, receivedQuantity: 10, acceptedQuantity: 8, damagedQuantity: 1, rejectedQuantity: 1, shortageQuantity: 0, overageQuantity: 0 }),
-    Object.freeze({ lineId: 'line-2', sku: 'SKU-B', shippedQuantity: 5, receivedQuantity: 5, acceptedQuantity: 5, damagedQuantity: 0, rejectedQuantity: 0, shortageQuantity: 0, overageQuantity: 0 }),
+    Object.freeze({ lineId: 'line-1', orderLineNo: 1, productSkuId: 'product-sku-a', sku: 'SKU-A', shippedQuantity: 10, receivedQuantity: 10, acceptedQuantity: 8, damagedQuantity: 1, rejectedQuantity: 1, shortageQuantity: 0, overageQuantity: 0 }),
+    Object.freeze({ lineId: 'line-2', orderLineNo: 2, productSkuId: 'product-sku-b', sku: 'SKU-B', shippedQuantity: 5, receivedQuantity: 5, acceptedQuantity: 5, damagedQuantity: 0, rejectedQuantity: 0, shortageQuantity: 0, overageQuantity: 0 }),
   ]),
 });
 
-test('claim copies only immutable discrepancy issue lines', () => {
+test('claim copies only immutable discrepancy issue lines including ProductSku lineage', () => {
   const claim = createReceiptDiscrepancyClaimSnapshot({ id: 'claim-1', discrepancy, claimReference: 'CLAIM-100', reason: 'Damaged goods', requestedRemedy: 'credit', submittedAt: '2026-08-10T12:00:00.000Z' });
   assert.equal(claim.issueCount, 1);
   assert.equal(claim.lines.length, 1);
+  assert.equal(claim.lines[0].orderLineNo, 1);
+  assert.equal(claim.lines[0].productSkuId, 'product-sku-a');
   assert.equal(claim.lines[0].sku, 'SKU-A');
   assert.equal(claim.lines[0].damagedQuantity, 1);
   assert.equal(claim.receiptDiscrepancyContentHash, 'a'.repeat(64));
   assert.equal(claim.status, 'submitted');
   assert.match(claim.contentHash, /^[a-f0-9]{64}$/);
+});
+
+test('claim preserves historical discrepancy line shape without inventing ProductSku lineage', () => {
+  const legacyDiscrepancy = Object.freeze({
+    ...discrepancy,
+    id: 'disc-legacy',
+    lines: Object.freeze(discrepancy.lines.map((line) => {
+      const { orderLineNo, productSkuId, ...legacyLine } = line;
+      return Object.freeze(legacyLine);
+    })),
+  });
+  const claim = createReceiptDiscrepancyClaimSnapshot({ id: 'claim-legacy', discrepancy: legacyDiscrepancy, claimReference: 'CLAIM-LEGACY', reason: 'Historical damaged goods', requestedRemedy: 'investigation', submittedAt: '2026-08-10T12:00:00.000Z' });
+
+  assert.equal(Object.hasOwn(claim.lines[0], 'orderLineNo'), false);
+  assert.equal(Object.hasOwn(claim.lines[0], 'productSkuId'), false);
+  assert.equal(claim.lines[0].sku, 'SKU-A');
 });
 
 test('claim rejects pending, clear or non-finalized discrepancies', () => {

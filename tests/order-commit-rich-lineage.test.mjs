@@ -178,6 +178,7 @@ test('rich Product Style Colorway Size, projection and Retail Door lineage survi
 
   assert.equal(snapshot.status, 'committed');
   assert.deepEqual(snapshot.lines[0], {
+    lineNo: 1,
     sku: 'SKU-1',
     quantity: 3,
     unitPrice: 95,

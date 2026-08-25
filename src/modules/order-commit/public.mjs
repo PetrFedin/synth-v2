@@ -32,7 +32,8 @@ export function createOrderCommitSnapshot({ id, order, selection, buyerCatalog =
 
   const committedLines = hasCommercialBasis
     ? validateCommercialLines(order, selection, buyerCatalog)
-    : Object.freeze(order.lines.map((line) => Object.freeze({
+    : Object.freeze(order.lines.map((line, index) => Object.freeze({
+      lineNo: index + 1,
       sku: line.sku,
       quantity: line.quantity,
       unitPrice: normalizeMoney(line.unitPrice, { label: 'Committed order line price' }),
@@ -93,7 +94,7 @@ function validateCommercialLines(order, selection, buyerCatalog) {
   const richCatalog = isRichBuyerCatalog(buyerCatalog);
   if (richCatalog) assertCommercialProjectionLineage(order, selection, buyerCatalog);
 
-  return Object.freeze(order.lines.map((orderLine) => {
+  return Object.freeze(order.lines.map((orderLine, index) => {
     const selectionLine = selection.lines.find((line) => line.sku === orderLine.sku);
     const catalogLine = buyerCatalog.lines.find((line) => line.sku === orderLine.sku);
     invariant(selectionLine && catalogLine, 'ORDER_COMMIT_SKU_MISSING', 'Committed SKU is missing from the submitted selection or buyer catalog', { sku: orderLine.sku });
@@ -108,13 +109,14 @@ function validateCommercialLines(order, selection, buyerCatalog) {
     invariant(committedPrice === selectionPrice && committedPrice === catalogPrice, 'ORDER_COMMIT_PRICE_MISMATCH', 'Committed price differs from the submitted selection or pinned buyer catalog', { sku: orderLine.sku });
 
     if (!richCatalog) {
-      return Object.freeze({ sku: orderLine.sku, quantity: orderLine.quantity, unitPrice: committedPrice, catalogVersion: orderLine.catalogVersion });
+      return Object.freeze({ lineNo: index + 1, sku: orderLine.sku, quantity: orderLine.quantity, unitPrice: committedPrice, catalogVersion: orderLine.catalogVersion });
     }
 
     const product = buyerCatalogProductSku(buyerCatalog, { skuCode: orderLine.sku });
     assertRichLineage(orderLine, product, 'ORDER_COMMIT_ORDER_LINEAGE_MISMATCH');
     assertRichLineage(selectionLine, product, 'ORDER_COMMIT_SELECTION_LINEAGE_MISMATCH');
     return Object.freeze({
+      lineNo: index + 1,
       sku: orderLine.sku,
       quantity: orderLine.quantity,
       unitPrice: committedPrice,

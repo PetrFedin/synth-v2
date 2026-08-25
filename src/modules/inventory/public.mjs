@@ -17,33 +17,40 @@ export function createReceiptInventoryMovements({
   const warehouseLocationId = requiredText(fulfillmentPlan.shipTo?.locationId, 1, 120, 'INVENTORY_WAREHOUSE_LOCATION_REQUIRED', 'Warehouse location id');
   const timestamp = requiredTimestamp(postedAt, 'INVENTORY_POSTED_AT_INVALID');
 
-  return Object.freeze(receipt.lines.map((line) => createInventoryMovementLedgerEntry({
-    id: idForLine(line.lineId),
-    movementType: 'receipt-posting',
-    orderId: receipt.orderId,
-    orderVersion: receipt.orderVersion,
-    orderCommitSnapshotId: receipt.orderCommitSnapshotId,
-    supplyCommitmentSnapshotId: receipt.supplyCommitmentSnapshotId,
-    fulfillmentPlanSnapshotId: receipt.fulfillmentPlanSnapshotId,
-    shipmentNoticeSnapshotId: receipt.shipmentNoticeSnapshotId,
-    receiptSnapshotId: receipt.id,
-    brandId: receipt.brandId,
-    shopId: receipt.shopId,
-    warehouseLocationId,
-    receiptLineId: line.lineId,
-    sku: line.sku,
-    receivedQuantity: line.receivedQuantity,
-    acceptedQuantity: line.acceptedQuantity,
-    damagedQuantity: line.damagedQuantity,
-    rejectedQuantity: line.rejectedQuantity,
-    occurredAt: receipt.receivedAt,
-    postedAt: timestamp,
-  })));
+  return Object.freeze(receipt.lines.map((line) => {
+    const hasCanonicalProductSkuLineage = typeof line.productSkuId === 'string' && line.productSkuId.trim().length > 0;
+    return createInventoryMovementLedgerEntry({
+      id: idForLine(line.lineId),
+      movementType: 'receipt-posting',
+      lineageVersion: hasCanonicalProductSkuLineage ? 2 : 1,
+      orderId: receipt.orderId,
+      orderVersion: receipt.orderVersion,
+      orderCommitSnapshotId: receipt.orderCommitSnapshotId,
+      supplyCommitmentSnapshotId: receipt.supplyCommitmentSnapshotId,
+      fulfillmentPlanSnapshotId: receipt.fulfillmentPlanSnapshotId,
+      shipmentNoticeSnapshotId: receipt.shipmentNoticeSnapshotId,
+      receiptSnapshotId: receipt.id,
+      brandId: receipt.brandId,
+      shopId: receipt.shopId,
+      warehouseLocationId,
+      receiptLineId: line.lineId,
+      orderLineNo: hasCanonicalProductSkuLineage ? line.orderLineNo ?? null : null,
+      productSkuId: hasCanonicalProductSkuLineage ? line.productSkuId : null,
+      sku: line.sku,
+      receivedQuantity: line.receivedQuantity,
+      acceptedQuantity: line.acceptedQuantity,
+      damagedQuantity: line.damagedQuantity,
+      rejectedQuantity: line.rejectedQuantity,
+      occurredAt: receipt.receivedAt,
+      postedAt: timestamp,
+    });
+  }));
 }
 
 export function createInventoryMovementLedgerEntry({
   id,
   movementType,
+  lineageVersion = 1,
   orderId,
   orderVersion,
   orderCommitSnapshotId,
@@ -55,6 +62,8 @@ export function createInventoryMovementLedgerEntry({
   shopId,
   warehouseLocationId,
   receiptLineId,
+  orderLineNo = null,
+  productSkuId = null,
   sku,
   receivedQuantity,
   acceptedQuantity,
@@ -65,6 +74,13 @@ export function createInventoryMovementLedgerEntry({
 }) {
   invariant(id, 'INVENTORY_MOVEMENT_ID_REQUIRED', 'Inventory movement id is required');
   invariant(INVENTORY_MOVEMENT_TYPES.includes(movementType), 'INVENTORY_MOVEMENT_TYPE_INVALID', 'Inventory movement type is invalid', { movementType });
+  invariant(lineageVersion === 1 || lineageVersion === 2, 'INVENTORY_LINEAGE_VERSION_INVALID', 'Inventory lineage version must be 1 or 2', { lineageVersion });
+  if (lineageVersion === 2) {
+    invariant(Number.isInteger(orderLineNo) && orderLineNo > 0, 'INVENTORY_ORDER_LINE_NO_REQUIRED', 'ProductSku inventory movement requires immutable order line number', { orderLineNo });
+    invariant(typeof productSkuId === 'string' && productSkuId.trim().length > 0, 'INVENTORY_PRODUCT_SKU_REQUIRED', 'ProductSku inventory movement requires canonical ProductSku id');
+  } else {
+    invariant(productSkuId == null && orderLineNo == null, 'INVENTORY_LEGACY_LINEAGE_INVALID', 'Legacy inventory movement cannot carry partial ProductSku lineage');
+  }
   const received = nonNegativeInteger(receivedQuantity, 'INVENTORY_RECEIVED_QUANTITY_INVALID', 'Received quantity');
   const accepted = nonNegativeInteger(acceptedQuantity, 'INVENTORY_ACCEPTED_QUANTITY_INVALID', 'Accepted quantity');
   const damaged = nonNegativeInteger(damagedQuantity, 'INVENTORY_DAMAGED_QUANTITY_INVALID', 'Damaged quantity');
@@ -74,7 +90,7 @@ export function createInventoryMovementLedgerEntry({
 
   const basis = Object.freeze({
     movementType,
-    lineageVersion: 1,
+    lineageVersion,
     orderId: requiredText(orderId, 1, 200, 'INVENTORY_ORDER_ID_REQUIRED', 'Order id'),
     orderVersion: positiveInteger(orderVersion, 'INVENTORY_ORDER_VERSION_INVALID', 'Order version'),
     orderCommitSnapshotId: requiredText(orderCommitSnapshotId, 1, 200, 'INVENTORY_ORDER_COMMIT_REQUIRED', 'Order commit snapshot id'),
@@ -86,6 +102,8 @@ export function createInventoryMovementLedgerEntry({
     shopId: requiredText(shopId, 1, 200, 'INVENTORY_SHOP_REQUIRED', 'Shop id'),
     warehouseLocationId: requiredText(warehouseLocationId, 1, 120, 'INVENTORY_WAREHOUSE_LOCATION_REQUIRED', 'Warehouse location id'),
     receiptLineId: requiredText(receiptLineId, 1, 80, 'INVENTORY_RECEIPT_LINE_REQUIRED', 'Receipt line id'),
+    orderLineNo: lineageVersion === 2 ? orderLineNo : null,
+    productSkuId: lineageVersion === 2 ? requiredText(productSkuId, 1, 200, 'INVENTORY_PRODUCT_SKU_REQUIRED', 'ProductSku id') : null,
     sku: requiredText(sku, 1, 160, 'INVENTORY_SKU_REQUIRED', 'SKU'),
     receivedQuantity: received,
     acceptedQuantity: accepted,
@@ -100,16 +118,20 @@ export function createInventoryMovementLedgerEntry({
   return Object.freeze({ id, ...basis, contentHash: hashBasis(basis) });
 }
 
-export function createWarehousePosition({ shopId, warehouseLocationId, sku, movements, asOf }) {
+export function createWarehousePosition({ shopId, warehouseLocationId, sku, productSkuId = null, movements, asOf }) {
   invariant(Array.isArray(movements), 'WAREHOUSE_POSITION_MOVEMENTS_INVALID', 'Warehouse position movements must be an array');
   const normalizedShopId = requiredText(shopId, 1, 200, 'WAREHOUSE_POSITION_SHOP_REQUIRED', 'Shop id');
   const normalizedLocationId = requiredText(warehouseLocationId, 1, 120, 'WAREHOUSE_POSITION_LOCATION_REQUIRED', 'Warehouse location id');
   const normalizedSku = requiredText(sku, 1, 160, 'WAREHOUSE_POSITION_SKU_REQUIRED', 'SKU');
+  const normalizedProductSkuId = productSkuId == null ? null : requiredText(productSkuId, 1, 200, 'WAREHOUSE_POSITION_PRODUCT_SKU_INVALID', 'ProductSku id');
   for (const movement of movements) {
     invariant(
-      movement.shopId === normalizedShopId && movement.warehouseLocationId === normalizedLocationId && movement.sku === normalizedSku,
+      movement.shopId === normalizedShopId &&
+        movement.warehouseLocationId === normalizedLocationId &&
+        movement.sku === normalizedSku &&
+        (normalizedProductSkuId === null || movement.productSkuId === normalizedProductSkuId),
       'WAREHOUSE_POSITION_SCOPE_MISMATCH',
-      'Warehouse position cannot aggregate movements outside its exact shop/location/SKU scope',
+      'Warehouse position cannot aggregate movements outside its exact shop/location/ProductSku scope',
       { movementId: movement.id },
     );
   }
@@ -121,6 +143,7 @@ export function createWarehousePosition({ shopId, warehouseLocationId, sku, move
   return Object.freeze({
     shopId: normalizedShopId,
     warehouseLocationId: normalizedLocationId,
+    productSkuId: normalizedProductSkuId,
     sku: normalizedSku,
     onHandQuantity,
     availableQuantity,
@@ -148,6 +171,35 @@ function assertReceiptExecutionLineage(receipt, shipment, fulfillmentPlan) {
     'Receipt, shipment and fulfillment plan must belong to the exact same immutable execution lineage',
     { receiptSnapshotId: receipt?.id, shipmentNoticeSnapshotId: shipment?.id, fulfillmentPlanSnapshotId: fulfillmentPlan?.id },
   );
+
+  const hasCanonicalLineSnapshots = Array.isArray(shipment.lines) && Array.isArray(fulfillmentPlan.lines);
+  if (!hasCanonicalLineSnapshots) {
+    invariant(
+      receipt.lines.every((line) => line?.productSkuId == null && line?.orderLineNo == null),
+      'INVENTORY_CANONICAL_LINEAGE_REQUIRES_EXECUTION_LINES',
+      'ProductSku receipt posting requires shipment and fulfillment plan line snapshots for exact lineage validation',
+      { receiptSnapshotId: receipt.id },
+    );
+    return;
+  }
+
+  const shipmentByLine = new Map(shipment.lines.map((line) => [line.lineId, line]));
+  const planByLine = new Map(fulfillmentPlan.lines.map((line) => [line.lineId, line]));
+  for (const receiptLine of receipt.lines) {
+    const shipmentLine = shipmentByLine.get(receiptLine.lineId);
+    const planLine = planByLine.get(receiptLine.lineId);
+    invariant(shipmentLine && planLine, 'INVENTORY_RECEIPT_LINEAGE_MISSING', 'Receipt line must exist in shipment and fulfillment plan', { lineId: receiptLine.lineId });
+    invariant(
+      receiptLine.sku === shipmentLine.sku && receiptLine.sku === planLine.sku &&
+        (receiptLine.productSkuId ?? null) === (shipmentLine.productSkuId ?? null) &&
+        (receiptLine.productSkuId ?? null) === (planLine.productSkuId ?? null) &&
+        (receiptLine.orderLineNo ?? null) === (shipmentLine.orderLineNo ?? null) &&
+        (receiptLine.orderLineNo ?? null) === (planLine.orderLineNo ?? null),
+      'INVENTORY_RECEIPT_PRODUCT_SKU_LINEAGE_MISMATCH',
+      'Receipt, shipment and fulfillment plan line must preserve the same ProductSku identity',
+      { lineId: receiptLine.lineId },
+    );
+  }
 }
 function compareMovements(a, b) { return Date.parse(a.occurredAt) - Date.parse(b.occurredAt) || a.id.localeCompare(b.id); }
 function sumInteger(values, field) {

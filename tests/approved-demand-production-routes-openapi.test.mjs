@@ -62,8 +62,8 @@ test('production RFQ HTTP route derives requirement id and order line from path 
   );
 });
 
-test('authoritative OpenAPI publishes wholesale-to-production path and marks v2 lineage on RFQ and Production Order', () => {
-  assert.equal(wholesaleV2ExtendedOpenApi.info.version, '1.18.0');
+test('authoritative OpenAPI 1.17 publishes wholesale-to-production path and marks v2 lineage on RFQ and Production Order without version drift', () => {
+  assert.equal(wholesaleV2ExtendedOpenApi.info.version, '1.17.0');
   for (const path of [
     '/orders/{orderId}/supply-commitments/{supplyCommitmentSnapshotId}/production-requirement',
     '/production-requirements/{productionRequirementSnapshotId}',

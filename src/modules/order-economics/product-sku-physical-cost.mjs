@@ -62,9 +62,14 @@ function uniqueShipmentLineages(lines) {
   const byKey = new Map();
   for (const line of lines) {
     invariant(typeof line?.sku === 'string' && line.sku.trim().length > 0, 'PHYSICAL_ACTUAL_COST_SHIPMENT_LINE_SKU_REQUIRED', 'Shipment line requires SKU');
-    const orderLineNo = Number.isInteger(line.orderLineNo) && line.orderLineNo > 0 ? line.orderLineNo : null;
+    const rawOrderLineNo = Number.isInteger(line.orderLineNo) && line.orderLineNo > 0 ? line.orderLineNo : null;
     const productSkuId = typeof line.productSkuId === 'string' && line.productSkuId.trim().length > 0 ? line.productSkuId : null;
-    invariant((orderLineNo === null) === (productSkuId === null), 'PHYSICAL_ACTUAL_COST_SHIPMENT_PRODUCT_SKU_LINEAGE_INCOMPLETE', 'Canonical shipment line must carry ProductSku and immutable order line number together', { lineId: line.lineId, orderLineNo, productSkuId });
+    invariant(productSkuId === null || rawOrderLineNo !== null, 'PHYSICAL_ACTUAL_COST_SHIPMENT_PRODUCT_SKU_LINEAGE_INCOMPLETE', 'Canonical shipment line must carry ProductSku and immutable order line number together', { lineId: line.lineId, orderLineNo: rawOrderLineNo, productSkuId });
+
+    // A transitional snapshot may already carry the immutable order line number while
+    // still lacking canonical ProductSku identity. It remains wholly on V1 lineage:
+    // do not promote or guess a partial ProductSku identity from textual SKU.
+    const orderLineNo = productSkuId === null ? null : rawOrderLineNo;
     const lineage = Object.freeze({ orderLineNo, productSkuId, sku: line.sku });
     const key = `${orderLineNo ?? 'legacy'}\u001f${productSkuId ?? 'legacy'}\u001f${line.sku}`;
     if (!byKey.has(key)) byKey.set(key, lineage);

@@ -5,7 +5,7 @@ import path from 'node:path';
 
 const root = path.resolve(new URL('..', import.meta.url).pathname);
 
-test('PostgreSQL runtime wires sourcing, Tech Packs and guarded allocation without replacing stable base services', async () => {
+test('PostgreSQL runtime wires sourcing, Tech Packs, guarded allocation and approved-demand sourcing without replacing stable base services', async () => {
   const [base, wrapper] = await Promise.all([
     readFile(path.join(root, 'src/runtime/postgres-base-runtime.mjs'), 'utf8'),
     readFile(path.join(root, 'src/runtime/postgres-runtime.mjs'), 'utf8'),
@@ -20,10 +20,14 @@ test('PostgreSQL runtime wires sourcing, Tech Packs and guarded allocation witho
     'createSourcingTechPackAllocationService',
     'createPostgresSourcingTechPackAllocationStore',
     'const allocationStore = createPostgresSourcingTechPackAllocationStore',
-    'const sourcing = Object.freeze({ ...base.sourcing, ...allocation })',
+    'createProductionSourcingService',
+    'createPostgresProductionSourcingStore',
+    'const productionSourcingStore = createPostgresProductionSourcingStore',
+    'const sourcing = Object.freeze({ ...base.sourcing, ...allocation, ...productionSourcing })',
     'sourcingTechPackAllocationStore: allocationStore',
+    'productionSourcingStore',
     'createWholesaleHttpHandler(transport)',
-  ]) assert.ok(wrapper.includes(fragment), `missing guarded allocation runtime wiring: ${fragment}`);
+  ]) assert.ok(wrapper.includes(fragment), `missing production sourcing runtime wiring: ${fragment}`);
 });
 
 test('HTTP composition exposes sourcing, Tech Pack routes and guarded-allocation OpenAPI', async () => {
@@ -39,6 +43,7 @@ test('HTTP composition exposes sourcing, Tech Pack routes and guarded-allocation
   assert.ok(openapi.includes('withSourcingOpenApi'));
   assert.ok(openapi.includes('withTechPackOpenApi'));
   assert.ok(openapi.includes('withSourcingTechPackGateOpenApi'));
+  assert.ok(openapi.includes('withApprovedDemandProductionOpenApi'));
   assert.match(openapi, /withSourcingTechPackGateOpenApi\(\s*withTechPackOpenApi/);
   assert.ok(api.includes('SOURCING_CURSOR_INVALID'));
   assert.ok(api.includes('RFQ_NOT_ALLOCATABLE'));

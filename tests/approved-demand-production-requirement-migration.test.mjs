@@ -29,7 +29,7 @@ test('migration validates parent hashes, canonical ProductSku identity and compl
   assert.match(sql, /production_requirement_parent_hash_match/i);
   assert.match(sql, /production_requirement_supply_v2_required/i);
   assert.match(sql, /production_requirement_line_product_sku_match/i);
-  assert.match(sql, /product_sku\.sku_code <> NEW\.sku/i);
+  assert.match(sql, /sku_row\.sku_code <> NEW\.sku/i);
   assert.match(sql, /style_version\.style_id/i);
   assert.match(sql, /size_value\.size_code/i);
   assert.match(sql, /production_requirement_line_payload_match/i);

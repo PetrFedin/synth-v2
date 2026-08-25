@@ -190,7 +190,7 @@ BEGIN
       USING ERRCODE = '23514', CONSTRAINT = 'production_requirement_line_product_sku_match';
   END IF;
 
-  SELECT count(*), min(value)
+  SELECT count(*), jsonb_agg(value) -> 0
     INTO payload_match_count, payload_line
     FROM jsonb_array_elements(COALESCE(requirement_row.payload -> 'lines', '[]'::jsonb)) AS item(value)
    WHERE (value ->> 'orderLineNo')::integer = NEW.order_line_no;

@@ -54,13 +54,15 @@ function view(client) {
         await client.query(
           `INSERT INTO production_orders (
              id, production_order_number, rfq_id, rfq_code, rfq_version,
-             brand_id, supplier_code, sku, sku_version, bom_version, quantity,
-             status, version, production_start_at, delivery_due_at, payload,
+             brand_id, supplier_code, sku, product_sku_id, sku_version, bom_version, quantity,
+             status, version, production_start_at, delivery_due_at,
+             lineage_version, production_requirement_snapshot_id, production_requirement_order_line_no,
+             production_requirement_content_hash, payload,
              issued_at, confirmed_at, cancelled_at, created_at, updated_at
            ) VALUES (
-             $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,
-             $14::timestamptz,$15::timestamptz,$16::jsonb,$17::timestamptz,
-             $18::timestamptz,$19::timestamptz,$20::timestamptz,$21::timestamptz
+             $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,
+             $15::timestamptz,$16::timestamptz,$17,$18,$19,$20,$21::jsonb,
+             $22::timestamptz,$23::timestamptz,$24::timestamptz,$25::timestamptz,$26::timestamptz
            )`,
           parameters(value),
         );
@@ -135,6 +137,7 @@ function parameters(value) {
     value.brandId,
     value.supplierCode,
     value.sku,
+    value.productSkuId ?? null,
     value.skuVersion,
     value.bomVersion,
     value.quantity,
@@ -142,6 +145,10 @@ function parameters(value) {
     value.version,
     value.productionStartAt,
     value.deliveryDueAt,
+    value.lineageVersion ?? 1,
+    value.productionRequirementSnapshotId ?? null,
+    value.productionRequirementOrderLineNo ?? null,
+    value.productionRequirementContentHash ?? null,
     JSON.stringify(value),
     value.issuedAt,
     value.confirmedAt,

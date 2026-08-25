@@ -29,7 +29,7 @@ export function createProductionRequirementService({
   async function authorize(tx, brandId, actorId) {
     const membership = await tx.getMembership(brandId, actorId);
     assertCapability(membership, CAPABILITIES.PRODUCTION_ALLOCATE);
-    invariant(membership.organisationType === 'brand', 'PRODUCTION_REQUIREMENT_BRAND_MEMBERSHIP_REQUIRED', 'Production demand release requires a brand membership', { brandId, actorId });
+    invariant(membership.organisationType === 'brand', 'PRODUCTION_REQUIREMENT_BRAND_MEMBERSHIP_REQUIRED', 'Production demand access requires a brand membership', { brandId, actorId });
     return membership;
   }
 
@@ -89,6 +89,26 @@ export function createProductionRequirementService({
           return snapshot;
         },
       );
+    },
+
+    async getForActor(actorId, productionRequirementSnapshotId) {
+      invariant(typeof actorId === 'string' && actorId.trim().length > 0, 'ACTOR_ID_REQUIRED', 'Production requirement read requires actor id');
+      invariant(typeof productionRequirementSnapshotId === 'string' && productionRequirementSnapshotId.length > 0, 'PRODUCTION_REQUIREMENT_ID_REQUIRED', 'Production requirement snapshot id is required');
+      return store.transaction(async (tx) => {
+        const requirement = requireEntity(await tx.getProductionRequirement(productionRequirementSnapshotId), 'PRODUCTION_REQUIREMENT_NOT_FOUND', { productionRequirementSnapshotId });
+        await authorize(tx, requirement.brandId, actorId);
+        return requirement;
+      });
+    },
+
+    async getBySupplyCommitmentForActor(actorId, supplyCommitmentSnapshotId) {
+      invariant(typeof actorId === 'string' && actorId.trim().length > 0, 'ACTOR_ID_REQUIRED', 'Production requirement read requires actor id');
+      invariant(typeof supplyCommitmentSnapshotId === 'string' && supplyCommitmentSnapshotId.length > 0, 'PRODUCTION_REQUIREMENT_SUPPLY_ID_REQUIRED', 'Supply commitment snapshot id is required');
+      return store.transaction(async (tx) => {
+        const requirement = requireEntity(await tx.getProductionRequirementBySupplyCommitment(supplyCommitmentSnapshotId), 'PRODUCTION_REQUIREMENT_NOT_FOUND', { supplyCommitmentSnapshotId });
+        await authorize(tx, requirement.brandId, actorId);
+        return requirement;
+      });
     },
 
     async get(productionRequirementSnapshotId) {

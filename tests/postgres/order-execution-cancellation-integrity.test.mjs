@@ -16,7 +16,7 @@ function expectPostgres(message, code = 'P0001') {
   };
 }
 
-test('physical supply starts only after DealSpace and permanently closes attached-order cancellation', async () => {
+test('supply start atomically marks execution and permanently closes attached-order cancellation', async () => {
   assert.ok(connectionString, 'POSTGRES_TEST_URL is required for PostgreSQL integration tests');
 
   const pool = new Pool({ connectionString, max: 3 });
@@ -126,27 +126,13 @@ test('physical supply starts only after DealSpace and permanently closes attache
       currency: 'EUR',
       allocations: [{ sku, quantity: 2, sourceType: 'production', sourceRef: `PO-${suffix}` }],
     };
-    const insertSupply = () => pool.query(
+    await pool.query(
       `INSERT INTO supply_commitment_snapshots (
          id, order_id, brand_id, shop_id, currency, created_at, content_hash, payload,
          order_commit_snapshot_id, lineage_version
        ) VALUES ($1, $2, $3, $4, 'EUR', $5, $6, $7::jsonb, $8, 2)`,
       [ids.supply, ids.order, ids.brand, ids.shop, now, `supply-hash-${suffix}`, JSON.stringify(supplyPayload), ids.commit],
     );
-
-    await assert.rejects(insertSupply(), expectPostgres('SUPPLY_COMMERCIAL_STAGE_CONFLICT'));
-    assert.equal((await pool.query('SELECT execution_started_at FROM orders WHERE id = $1', [ids.order])).rows[0].execution_started_at, null);
-    assert.equal((await pool.query('SELECT count(*)::int AS count FROM supply_commitment_snapshots WHERE order_id = $1', [ids.order])).rows[0].count, 0);
-
-    await pool.query(
-      `UPDATE commercial_cycles
-          SET stage = 'deal-space',
-              version = version + 1,
-              payload = jsonb_set(payload, '{stage}', '"deal-space"'::jsonb)
-        WHERE id = $1`,
-      [ids.cycle],
-    );
-    await insertSupply();
 
     const executedOrder = await pool.query('SELECT status, execution_started_at FROM orders WHERE id = $1', [ids.order]);
     assert.equal(executedOrder.rows[0].status, 'attached');

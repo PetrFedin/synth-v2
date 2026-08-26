@@ -5,7 +5,6 @@ import { translatePostgresDomainInvariant } from '../src/infrastructure/postgres
 import { withPostgresTransaction } from '../src/infrastructure/postgres-transaction.mjs';
 
 for (const code of [
-  'SUPPLY_COMMERCIAL_STAGE_CONFLICT',
   'SUPPLY_ORDER_EXECUTION_CONFLICT',
   'ORDER_CANCELLATION_EXECUTION_CONFLICT',
 ]) {
@@ -27,7 +26,7 @@ test('unmapped PostgreSQL errors preserve their original identity', () => {
 test('transaction rollback translates execution conflicts before they reach HTTP', async () => {
   const statements = [];
   let released = 0;
-  const raw = Object.assign(new Error('SUPPLY_COMMERCIAL_STAGE_CONFLICT'), { code: 'P0001' });
+  const raw = Object.assign(new Error('ORDER_CANCELLATION_EXECUTION_CONFLICT'), { code: 'P0001' });
   const client = {
     async query(statement) { statements.push(statement); },
     async release() { released += 1; },
@@ -36,7 +35,7 @@ test('transaction rollback translates execution conflicts before they reach HTTP
 
   await assert.rejects(
     () => withPostgresTransaction(pool, async () => { throw raw; }),
-    (error) => error instanceof DomainError && error.code === 'SUPPLY_COMMERCIAL_STAGE_CONFLICT',
+    (error) => error instanceof DomainError && error.code === 'ORDER_CANCELLATION_EXECUTION_CONFLICT',
   );
   assert.deepEqual(statements, ['BEGIN', 'ROLLBACK']);
   assert.equal(released, 1);

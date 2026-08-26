@@ -22,7 +22,7 @@ import { createWholesaleRoutes as createCoreWholesaleRoutes, matchWholesaleRoute
 export function createWholesaleRoutes(services = {}) {
   return Object.freeze([
     ...createCoreWholesaleRoutes(services),
-    ...createCollectionStyleVersionRoutes({ platform: services.platform }),
+    ...createOptionalCollectionStyleVersionRoutes(services.platform),
     ...createProductIdentityRoutes({ productIdentity: services.productIdentity }),
     ...createProductReadinessRoutes({ productReadiness: services.productReadiness }),
     ...createCommercialPublicationRoutes({ commercialPublication: services.commercialPublication }),
@@ -42,6 +42,11 @@ export function createWholesaleRoutes(services = {}) {
     ...createProductionExecutionRoutes({ productionExecutions: services.productionExecutions }),
     ...createFinalQualityRoutes({ finalQuality: services.finalQuality }),
   ]);
+}
+
+function createOptionalCollectionStyleVersionRoutes(platform) {
+  if (!platform || typeof platform.assignStyleVersionToCollection !== 'function') return [];
+  return createCollectionStyleVersionRoutes({ platform });
 }
 
 export { matchWholesaleRoute };

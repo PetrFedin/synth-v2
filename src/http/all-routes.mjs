@@ -33,7 +33,7 @@ export function createWholesaleRoutes(services = {}) {
     ...createFulfillmentRoutes({ fulfillment: services.fulfillment }),
     ...createInventoryRoutes({ inventory: services.inventory }),
     ...createReceiptClaimsRoutes({ receiptClaims: services.receiptClaims }),
-    ...createSupplierRecoveryRoutes({ receiptClaims: services.receiptClaims }),
+    ...createSupplierRecoveryRoutes({ supplierRecovery: services.supplierRecovery }),
     ...createSupplierEconomicPerformanceRoutes({ supplierPerformance: services.supplierPerformance }),
     ...createSampleRoutes({ samples: services.samples }),
     ...createSourcingRoutes({ sourcing: services.sourcing }),

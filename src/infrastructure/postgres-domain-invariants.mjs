@@ -1,7 +1,6 @@
 import { DomainError } from '../core/errors.mjs';
 
 const DOMAIN_CONFLICT_MESSAGES = Object.freeze({
-  SUPPLY_COMMERCIAL_STAGE_CONFLICT: 'Physical supply execution requires a confirmed DealSpace',
   SUPPLY_ORDER_EXECUTION_CONFLICT: 'Order is no longer executable for this immutable commit',
   ORDER_CANCELLATION_EXECUTION_CONFLICT: 'Order cannot be cancelled after physical execution has started',
 });

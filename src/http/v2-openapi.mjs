@@ -1,5 +1,6 @@
 import { withApprovedDemandProductionOpenApi } from './approved-demand-production-openapi.mjs';
 import { withBomOpenApi } from './bom-openapi.mjs';
+import { withCollectionStyleVersionOpenApi } from './collection-style-version-openapi.mjs';
 import { withCommercialPublicationOpenApi } from './commercial-publication-openapi.mjs';
 import { withCostAllocationOpenApi } from './cost-allocation-openapi.mjs';
 import { withCostCloseReadinessOpenApi } from './cost-close-readiness-openapi.mjs';
@@ -27,7 +28,7 @@ import { withSourcingTechPackGateOpenApi } from './sourcing-tech-pack-gate-opena
 import { withTechPackOpenApi } from './tech-pack-openapi.mjs';
 import { wholesaleV2OpenApi } from './openapi.mjs';
 
-const AUTHORITATIVE_V2_CONTRACT_VERSION = '1.17.0';
+const AUTHORITATIVE_V2_CONTRACT_VERSION = '1.18.0';
 
 const composed = withApprovedDemandProductionOpenApi(
   withSupplierEconomicPerformanceOpenApi(
@@ -43,19 +44,21 @@ const composed = withApprovedDemandProductionOpenApi(
                       withSelectionMatrixOpenApi(
                         withRetailDoorOpenApi(
                           withCommercialPublicationOpenApi(
-                            withProductReadinessOpenApi(
-                              withProductIdentityOpenApi(
-                                withFinalQualityOpenApi(
-                                  withProductionExecutionOpenApi(
-                                    withProductionOrderOpenApi(
-                                      withSourcingTechPackGateOpenApi(
-                                        withTechPackOpenApi(
-                                          withSourcingOpenApi(
-                                            withSampleOpenApi(
-                                              withMeasurementRevisionOpenApi(
-                                                withMeasurementOpenApi(
-                                                  withBomOpenApi(
-                                                    withMaterialOpenApi(wholesaleV2OpenApi),
+                            withCollectionStyleVersionOpenApi(
+                              withProductReadinessOpenApi(
+                                withProductIdentityOpenApi(
+                                  withFinalQualityOpenApi(
+                                    withProductionExecutionOpenApi(
+                                      withProductionOrderOpenApi(
+                                        withSourcingTechPackGateOpenApi(
+                                          withTechPackOpenApi(
+                                            withSourcingOpenApi(
+                                              withSampleOpenApi(
+                                                withMeasurementRevisionOpenApi(
+                                                  withMeasurementOpenApi(
+                                                    withBomOpenApi(
+                                                      withMaterialOpenApi(wholesaleV2OpenApi),
+                                                    ),
                                                   ),
                                                 ),
                                               ),

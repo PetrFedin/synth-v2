@@ -6,13 +6,14 @@ import { assertTradePair } from '../modules/organisations/public.mjs';
 import { CAPABILITIES, assertCapability, assertTradeCapability } from '../modules/access-control/public.mjs';
 import { assertActiveRelationship } from '../modules/counterparty-relationships/public.mjs';
 import { createCampaign, changeCampaignStatus } from '../modules/campaigns/public.mjs';
-import { createCollection, publishCollection } from '../modules/collections/public.mjs';
+import { createCollection, createCollectionStyleVersionAssignment, publishCollection } from '../modules/collections/public.mjs';
 import { advanceCommercialCycle, attachOrder, createCommercialCycle } from '../modules/commercial-cycle/public.mjs';
 import { openDealSpace } from '../modules/deal-space/public.mjs';
 import { createCalendarMilestone } from '../modules/calendar/public.mjs';
 
 export function createWholesalePlatform({
   store,
+  productIdentityStore = null,
   clock = () => new Date().toISOString(),
   nextId = defaultIdGenerator(),
   systemActorId = 'system',
@@ -50,6 +51,14 @@ export function createWholesalePlatform({
     return assertTradeCapability({
       memberships: await tx.listMembershipsForTrade(cycle.brandId, cycle.shopId), actorId,
       brandId: cycle.brandId, shopId: cycle.shopId, capability,
+    });
+  }
+
+  async function loadStyleVersion(styleVersionId) {
+    invariant(productIdentityStore && typeof productIdentityStore.transaction === 'function', 'PRODUCT_IDENTITY_STORE_REQUIRED', 'Product Identity store is required for collection Style Version assignment');
+    return productIdentityStore.transaction(async (tx) => {
+      invariant(typeof tx.getStyleVersion === 'function', 'PRODUCT_STYLE_VERSION_READER_REQUIRED', 'Product Identity store must expose getStyleVersion');
+      return tx.getStyleVersion(styleVersionId);
     });
   }
 
@@ -152,6 +161,42 @@ export function createWholesalePlatform({
           await tx.insertCollection(collection);
           await append(tx, 'collection.created', collection.id, { campaignId: campaign.id, currency: collection.currency }, commandId, actorId);
           return collection;
+        },
+      );
+    },
+
+    assignStyleVersionToCollection(commandId, actorId, input) {
+      invariant(input?.collectionId && input?.styleVersionId, 'COLLECTION_STYLE_VERSION_INPUT_REQUIRED', 'collectionId and styleVersionId are required');
+      return execute(
+        commandId,
+        `assignStyleVersionToCollection:${actorId}:${canonicalJson(input)}`,
+        actorId,
+        async (tx) => {
+          const collection = requireEntity(await tx.getCollection(input.collectionId), 'COLLECTION_NOT_FOUND', { collectionId: input.collectionId });
+          await assertOrganisationActor(tx, collection.brandId, actorId, CAPABILITIES.COLLECTION_MANAGE);
+          invariant(collection.status === 'draft', 'COLLECTION_ASSORTMENT_LOCKED', 'Style Version assortment can only change while the collection is draft');
+          const existing = await tx.getCollectionStyleVersion(collection.id, input.styleVersionId);
+          if (existing) return Object.freeze({ collection, existing, styleVersion: null });
+          const styleVersion = requireEntity(await loadStyleVersion(input.styleVersionId), 'PRODUCT_STYLE_VERSION_NOT_FOUND', { styleVersionId: input.styleVersionId });
+          invariant(styleVersion.brandId === collection.brandId, 'COLLECTION_STYLE_VERSION_BRAND_MISMATCH', 'Style Version brand must match collection brand');
+          return Object.freeze({ collection, existing: null, styleVersion });
+        },
+        async (tx, { collection, existing, styleVersion }) => {
+          if (existing) return existing;
+          const assignment = createCollectionStyleVersionAssignment({
+            id: nextId('collection-style-version'),
+            collection,
+            styleVersion,
+            assignedAt: clock(),
+            assignedBy: actorId,
+          });
+          await tx.insertCollectionStyleVersion(assignment);
+          await append(tx, 'collection.style-version-assigned', collection.id, {
+            collectionId: collection.id,
+            styleVersionId: styleVersion.id,
+            brandId: collection.brandId,
+          }, commandId, actorId);
+          return assignment;
         },
       );
     },

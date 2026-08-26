@@ -19,8 +19,10 @@ for (const code of [
 }
 
 test('unmapped PostgreSQL errors preserve their original identity', () => {
-  const source = Object.assign(new Error('SUPPLY_ALLOCATIONS_REQUIRED'), { code: 'P0001' });
-  assert.equal(translatePostgresDomainInvariant(source), source);
+  for (const code of ['SUPPLY_ALLOCATIONS_REQUIRED', 'SUPPLY_COMMERCIAL_STAGE_CONFLICT']) {
+    const source = Object.assign(new Error(code), { code: 'P0001' });
+    assert.equal(translatePostgresDomainInvariant(source), source);
+  }
 });
 
 test('transaction rollback translates execution conflicts before they reach HTTP', async () => {

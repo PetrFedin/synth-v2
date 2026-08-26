@@ -7,6 +7,13 @@ export function readIntegerSetting(value, { name, defaultValue, min = 0, max = N
   return parsed;
 }
 
+export function readHostSetting(value, { defaultValue = '0.0.0.0' } = {}) {
+  const fallback = typeof defaultValue === 'string' ? defaultValue.trim() : '';
+  if (!fallback) throw new Error('Default HTTP host is required');
+  const configured = typeof value === 'string' ? value.trim() : '';
+  return configured || fallback;
+}
+
 export function configureHttpServer(server, {
   requestTimeoutMs,
   headersTimeoutMs,

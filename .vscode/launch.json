@@ -5,9 +5,8 @@
       "name": "Syntha V2 API",
       "type": "node",
       "request": "launch",
-      "program": "${workspaceFolder}/src/server.mjs",
+      "program": "${workspaceFolder}/scripts/start.mjs",
       "cwd": "${workspaceFolder}",
-      "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal",
       "restart": true,
       "skipFiles": ["<node_internals>/**"]

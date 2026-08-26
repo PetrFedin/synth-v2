@@ -20,19 +20,36 @@ WHERE o.id = execution.order_id
 CREATE OR REPLACE FUNCTION mark_order_execution_from_supply_commitment()
 RETURNS TRIGGER AS $$
 DECLARE
-  current_status TEXT;
-  current_commit_snapshot_id TEXT;
+  current_cycle_stage TEXT;
 BEGIN
-  -- This UPDATE is both the execution-state check and the serialization lock. It makes
+  -- Physical execution is downstream of bilateral confirmation. A concurrent confirmation
+  -- that has not committed yet is intentionally not visible here: callers can retry after
+  -- the commercial transaction reaches its final deal-space stage.
+  SELECT c.stage
+    INTO current_cycle_stage
+    FROM orders AS o
+    JOIN commercial_cycles AS c
+      ON c.id = o.cycle_id
+     AND c.brand_id = o.brand_id
+     AND c.shop_id = o.shop_id
+   WHERE o.id = NEW.order_id
+     AND o.order_commit_snapshot_id = NEW.order_commit_snapshot_id;
+
+  IF current_cycle_stage IS DISTINCT FROM 'deal-space' THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'SUPPLY_COMMERCIAL_STAGE_CONFLICT',
+      DETAIL = format('order %s requires a confirmed deal-space cycle before physical execution', NEW.order_id);
+  END IF;
+
+  -- This UPDATE is both the execution-state re-check and the serialization lock. It makes
   -- supply creation and cancellation contend on the same order row and leaves a durable,
-  -- monotonic marker that a waiting cancellation observes after the winning transaction.
+  -- monotonic marker that any later cancellation observes.
   UPDATE orders
      SET execution_started_at = COALESCE(execution_started_at, NEW.created_at)
    WHERE id = NEW.order_id
      AND status IN ('attached', 'committed')
-     AND order_commit_snapshot_id = NEW.order_commit_snapshot_id
-  RETURNING status, order_commit_snapshot_id
-       INTO current_status, current_commit_snapshot_id;
+     AND order_commit_snapshot_id = NEW.order_commit_snapshot_id;
 
   IF NOT FOUND THEN
     RAISE EXCEPTION USING

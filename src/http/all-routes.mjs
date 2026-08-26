@@ -1,3 +1,4 @@
+import { createCollectionStyleVersionRoutes } from './collection-style-version-routes.mjs';
 import { createCommercialPublicationRoutes } from './commercial-publication-routes.mjs';
 import { createEconomicsRouteBundle } from './economics-route-bundle.mjs';
 import { createFinalQualityRoutes } from './final-quality-routes.mjs';
@@ -21,6 +22,7 @@ import { createWholesaleRoutes as createCoreWholesaleRoutes, matchWholesaleRoute
 export function createWholesaleRoutes(services = {}) {
   return Object.freeze([
     ...createCoreWholesaleRoutes(services),
+    ...createCollectionStyleVersionRoutes({ platform: services.platform }),
     ...createProductIdentityRoutes({ productIdentity: services.productIdentity }),
     ...createProductReadinessRoutes({ productReadiness: services.productReadiness }),
     ...createCommercialPublicationRoutes({ commercialPublication: services.commercialPublication }),
@@ -31,7 +33,7 @@ export function createWholesaleRoutes(services = {}) {
     ...createFulfillmentRoutes({ fulfillment: services.fulfillment }),
     ...createInventoryRoutes({ inventory: services.inventory }),
     ...createReceiptClaimsRoutes({ receiptClaims: services.receiptClaims }),
-    ...createSupplierRecoveryRoutes({ supplierRecovery: services.supplierRecovery }),
+    ...createSupplierRecoveryRoutes({ receiptClaims: services.receiptClaims }),
     ...createSupplierEconomicPerformanceRoutes({ supplierPerformance: services.supplierPerformance }),
     ...createSampleRoutes({ samples: services.samples }),
     ...createSourcingRoutes({ sourcing: services.sourcing }),

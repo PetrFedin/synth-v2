@@ -32,11 +32,12 @@ export function createMemoryWholesaleStore() {
 function emptyState() {
   return {
     organisations: new Map(), memberships: new Map(), relationships: new Map(), showroomInvitations: new Map(), retailDoors: new Map(),
-    campaigns: new Map(), collections: new Map(), showrooms: new Map(), selections: new Map(), orders: new Map(),
+    campaigns: new Map(), collections: new Map(), collectionStyleVersions: new Map(), showrooms: new Map(), selections: new Map(), orders: new Map(),
     orderCommitSnapshots: new Map(), cycles: new Map(), deals: new Map(), calendar: new Map(), commands: new Map(), outbox: new Map(),
   };
 }
 function cloneState(state) { return Object.fromEntries(Object.entries(state).map(([key, value]) => [key, new Map(value)])); }
+function collectionStyleVersionKey(collectionId, styleVersionId) { return `${collectionId}:${styleVersionId}`; }
 
 function transactionView(state) {
   return Object.freeze({
@@ -71,7 +72,17 @@ function transactionView(state) {
     insertCampaign: (campaign) => insertUnique(state.campaigns, campaign.id, campaign, 'CAMPAIGN_ALREADY_EXISTS'),
     saveCampaign: (campaign, expectedVersion) => saveVersioned(state.campaigns, campaign, expectedVersion, 'CAMPAIGN_CONCURRENCY_CONFLICT'),
     getCollection: (id) => state.collections.get(id),
+    getCollectionStyleVersion: (collectionId, styleVersionId) => state.collectionStyleVersions.get(collectionStyleVersionKey(collectionId, styleVersionId)),
+    listCollectionStyleVersions: (collectionId) => [...state.collectionStyleVersions.values()]
+      .filter((item) => item.collectionId === collectionId)
+      .sort((left, right) => left.assignedAt.localeCompare(right.assignedAt) || left.id.localeCompare(right.id)),
     insertCollection: (collection) => insertUnique(state.collections, collection.id, collection, 'COLLECTION_ALREADY_EXISTS'),
+    insertCollectionStyleVersion: (assignment) => insertUnique(
+      state.collectionStyleVersions,
+      collectionStyleVersionKey(assignment.collectionId, assignment.styleVersionId),
+      assignment,
+      'COLLECTION_STYLE_VERSION_ALREADY_ASSIGNED',
+    ),
     saveCollection: (collection, expectedVersion) => saveVersioned(state.collections, collection, expectedVersion, 'COLLECTION_CONCURRENCY_CONFLICT'),
     getShowroom: (id) => state.showrooms.get(id),
     insertShowroom: (showroom) => insertUnique(state.showrooms, showroom.id, showroom, 'SHOWROOM_ALREADY_EXISTS'),
@@ -117,7 +128,7 @@ function freezeSnapshot(state) {
   return Object.freeze({
     organisations: [...state.organisations.values()], memberships: [...state.memberships.values()],
     relationships: [...state.relationships.values()], showroomInvitations: [...state.showroomInvitations.values()], retailDoors: [...state.retailDoors.values()],
-    campaigns: [...state.campaigns.values()], collections: [...state.collections.values()], showrooms: [...state.showrooms.values()],
+    campaigns: [...state.campaigns.values()], collections: [...state.collections.values()], collectionStyleVersions: [...state.collectionStyleVersions.values()], showrooms: [...state.showrooms.values()],
     selections: [...state.selections.values()], orders: [...state.orders.values()], orderCommitSnapshots: [...state.orderCommitSnapshots.values()],
     cycles: [...state.cycles.values()], deals: [...state.deals.values()],
     calendar: [...state.calendar.values()], commands: [...state.commands.values()], outbox: [...state.outbox.values()],

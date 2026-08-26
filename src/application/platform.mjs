@@ -26,9 +26,9 @@ export function createWholesalePlatform({
       const previous = await tx.getCommand(commandId);
       if (previous) {
         invariant(fingerprintsMatch(previous.fingerprint, fingerprint), 'COMMAND_ID_CONFLICT', 'commandId was already used by another mutation', { commandId });
+        return previous.result;
       }
       const context = await prepare(tx);
-      if (previous) return previous.result;
       const result = await action(tx, context);
       await tx.insertCommand(Object.freeze({ id: commandId, fingerprint, actorId, result, completedAt: clock() }));
       return result;

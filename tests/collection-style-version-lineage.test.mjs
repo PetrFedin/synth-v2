@@ -111,6 +111,29 @@ test('assigning the same Style Version twice is relation-idempotent', async () =
   assert.equal(snapshot.events.filter((event) => event.type === 'collection.style-version-assigned').length, 1);
 });
 
+test('completed command replay returns the original result after later state transitions', async () => {
+  const context = await fixture();
+  addStyleVersion(context, 'style-version-1');
+  const input = { collectionId: context.collection.id, styleVersionId: 'style-version-1' };
+
+  const first = await context.platform.assignStyleVersionToCollection(
+    'cmd-lineage-replay',
+    'brand-owner',
+    input,
+  );
+  await context.platform.publishCollection('cmd-lineage-replay-publish', 'brand-owner', context.collection.id);
+  const replay = await context.platform.assignStyleVersionToCollection(
+    'cmd-lineage-replay',
+    'brand-owner',
+    input,
+  );
+
+  assert.deepEqual(replay, first);
+  const snapshot = context.store.snapshot();
+  assert.equal(snapshot.collectionStyleVersions.length, 1);
+  assert.equal(snapshot.events.filter((event) => event.type === 'collection.style-version-assigned').length, 1);
+});
+
 test('collection rejects a Style Version owned by another brand', async () => {
   const context = await fixture();
   addStyleVersion(context, 'style-version-foreign', 'brand-2');

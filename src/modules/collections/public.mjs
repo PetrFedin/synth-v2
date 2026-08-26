@@ -20,6 +20,22 @@ export function createCollection({ id, campaign, brandId, name, currency, create
   });
 }
 
+export function createCollectionStyleVersionAssignment({ id, collection, styleVersion, assignedAt, assignedBy }) {
+  invariant(id && collection?.id && styleVersion?.id, 'COLLECTION_STYLE_VERSION_IDENTITY_REQUIRED', 'Assignment id, collection and Style Version are required');
+  invariant(collection.status === 'draft', 'COLLECTION_ASSORTMENT_LOCKED', 'Style Version assortment can only change while the collection is draft');
+  invariant(collection.brandId === styleVersion.brandId, 'COLLECTION_STYLE_VERSION_BRAND_MISMATCH', 'Style Version brand must match collection brand');
+  invariant(typeof assignedBy === 'string' && assignedBy.length > 0, 'COLLECTION_STYLE_VERSION_ACTOR_REQUIRED', 'Assignment actor is required');
+  invariant(typeof assignedAt === 'string' && !Number.isNaN(Date.parse(assignedAt)), 'COLLECTION_STYLE_VERSION_TIMESTAMP_INVALID', 'Assignment timestamp must be a valid ISO-compatible timestamp');
+  return Object.freeze({
+    id,
+    collectionId: collection.id,
+    brandId: collection.brandId,
+    styleVersionId: styleVersion.id,
+    assignedAt,
+    assignedBy,
+  });
+}
+
 export function publishCollection(collection, campaign, updatedAt) {
   invariant(collection.status === 'draft', 'COLLECTION_ALREADY_PUBLISHED', 'Only a draft collection can be published');
   invariant(campaign.id === collection.campaignId, 'COLLECTION_CAMPAIGN_MISMATCH', 'Collection does not belong to campaign');

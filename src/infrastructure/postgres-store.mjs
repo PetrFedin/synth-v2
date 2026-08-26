@@ -12,7 +12,7 @@ export function createPostgresWholesaleStore({ pool }) {
   return Object.freeze({
     transaction,
     async snapshot() {
-      const [organisations, memberships, relationships, invitations, retailDoors, campaigns, collections, showrooms, selections, orders, orderCommitSnapshots, cycles, deals, calendar, commands, outbox] = await Promise.all([
+      const [organisations, memberships, relationships, invitations, retailDoors, campaigns, collections, collectionStyleVersions, showrooms, selections, orders, orderCommitSnapshots, cycles, deals, calendar, commands, outbox] = await Promise.all([
         payloads(pool, 'organisations'),
         payloads(pool, 'memberships'),
         payloads(pool, 'counterparty_relationships'),
@@ -20,6 +20,7 @@ export function createPostgresWholesaleStore({ pool }) {
         payloads(pool, 'retail_doors'),
         payloads(pool, 'campaigns'),
         payloads(pool, 'collections'),
+        payloads(pool, 'collection_style_versions'),
         payloads(pool, 'showrooms'),
         payloads(pool, 'selections'),
         payloads(pool, 'orders'),
@@ -38,6 +39,7 @@ export function createPostgresWholesaleStore({ pool }) {
         retailDoors,
         campaigns,
         collections,
+        collectionStyleVersions,
         showrooms,
         selections,
         orders,
@@ -147,12 +149,27 @@ function transactionView(client) {
     saveCampaign: (value, expectedVersion) => saveVersioned(client, 'campaigns', value, expectedVersion, ['status'], [value.status], 'CAMPAIGN_CONCURRENCY_CONFLICT'),
 
     getCollection: (id) => getPayload(client, 'collections', 'id', id),
+    getCollectionStyleVersion: (collectionId, styleVersionId) => getPayloadBy(
+      client,
+      'collection_style_versions',
+      ['collection_id', 'style_version_id'],
+      [collectionId, styleVersionId],
+      'FOR SHARE',
+    ),
+    listCollectionStyleVersions: (collectionId) => listCollectionStyleVersions(client, collectionId),
     insertCollection: (value) => insert(
       client,
       'collections',
       ['id', 'campaign_id', 'brand_id', 'status', 'currency', 'version', 'payload'],
       [value.id, value.campaignId, value.brandId, value.status, value.currency, value.version, value],
       'COLLECTION_ALREADY_EXISTS',
+    ),
+    insertCollectionStyleVersion: (value) => insert(
+      client,
+      'collection_style_versions',
+      ['id', 'collection_id', 'brand_id', 'style_version_id', 'assigned_at', 'assigned_by', 'payload'],
+      [value.id, value.collectionId, value.brandId, value.styleVersionId, value.assignedAt, value.assignedBy, value],
+      'COLLECTION_STYLE_VERSION_ALREADY_ASSIGNED',
     ),
     saveCollection: (value, expectedVersion) => saveVersioned(client, 'collections', value, expectedVersion, ['status', 'currency'], [value.status, value.currency], 'COLLECTION_CONCURRENCY_CONFLICT'),
 
@@ -285,6 +302,14 @@ async function getPayloadBy(client, table, columns, values, lockClause = '') {
 async function listPayloadBy(client, table, column, value, lockClause = '') {
   const suffix = lockClause ? ` ${lockClause}` : '';
   const result = await client.query(`SELECT payload FROM ${table} WHERE ${column} = $1${suffix}`, [value]);
+  return result.rows.map((row) => row.payload);
+}
+
+async function listCollectionStyleVersions(client, collectionId) {
+  const result = await client.query(
+    'SELECT payload FROM collection_style_versions WHERE collection_id = $1 ORDER BY assigned_at, id FOR SHARE',
+    [collectionId],
+  );
   return result.rows.map((row) => row.payload);
 }
 

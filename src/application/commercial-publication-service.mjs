@@ -45,6 +45,22 @@ export function createCommercialPublicationService({
     });
   }
 
+  async function assertCollectionStyleVersionAssigned(collection, styleVersionId) {
+    return wholesaleStore.transaction(async (tx) => {
+      invariant(typeof tx.getCollectionStyleVersion === 'function', 'COLLECTION_STYLE_VERSION_READER_REQUIRED', 'Wholesale store must expose collection Style Version lineage');
+      const assignment = await tx.getCollectionStyleVersion(collection.id, styleVersionId);
+      invariant(assignment, 'COMMERCIAL_PUBLICATION_STYLE_VERSION_NOT_ASSIGNED', 'Commercial publication Style Version must be assigned to the collection', {
+        collectionId: collection.id,
+        styleVersionId,
+      });
+      invariant(assignment.brandId === collection.brandId, 'COMMERCIAL_PUBLICATION_STYLE_VERSION_BRAND_MISMATCH', 'Collection Style Version assignment brand is inconsistent', {
+        collectionId: collection.id,
+        styleVersionId,
+      });
+      return assignment;
+    });
+  }
+
   async function publicationReadContext(actorId, collectionId) {
     return wholesaleStore.transaction(async (tx) => {
       const collection = requireEntity(await tx.getCollection(collectionId), 'COLLECTION_NOT_FOUND', { collectionId });
@@ -94,6 +110,7 @@ export function createCommercialPublicationService({
       const collection = await publicationContext(actorId, input.collectionId);
       const projection = requireEntity(await commercialProjectionReader.getCommercialProjection(input.commercialProjectionId), 'COMMERCIAL_PROJECTION_NOT_FOUND', { commercialProjectionId: input.commercialProjectionId });
       invariant(projection.brandId === collection.brandId, 'COMMERCIAL_PUBLICATION_BRAND_MISMATCH', 'Commercial projection brand does not match collection brand');
+      await assertCollectionStyleVersionAssigned(collection, projection.styleVersionId);
       return execute(commandId, fingerprint, actorId, async (tx) => {
         const publication = createProjectionBackedCommercialPublication({ id: nextId('commercial-publication'), collection, commercialProjection: projection, publishedAt: clock() });
         await tx.insertCommercialPublication(publication);

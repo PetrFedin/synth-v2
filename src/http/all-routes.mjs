@@ -1,3 +1,4 @@
+import { createCollectionStyleVersionRoutes } from './collection-style-version-routes.mjs';
 import { createCommercialPublicationRoutes } from './commercial-publication-routes.mjs';
 import { createEconomicsRouteBundle } from './economics-route-bundle.mjs';
 import { createFinalQualityRoutes } from './final-quality-routes.mjs';
@@ -21,6 +22,7 @@ import { createWholesaleRoutes as createCoreWholesaleRoutes, matchWholesaleRoute
 export function createWholesaleRoutes(services = {}) {
   return Object.freeze([
     ...createCoreWholesaleRoutes(services),
+    ...createOptionalCollectionStyleVersionRoutes(services.platform),
     ...createProductIdentityRoutes({ productIdentity: services.productIdentity }),
     ...createProductReadinessRoutes({ productReadiness: services.productReadiness }),
     ...createCommercialPublicationRoutes({ commercialPublication: services.commercialPublication }),
@@ -40,6 +42,11 @@ export function createWholesaleRoutes(services = {}) {
     ...createProductionExecutionRoutes({ productionExecutions: services.productionExecutions }),
     ...createFinalQualityRoutes({ finalQuality: services.finalQuality }),
   ]);
+}
+
+function createOptionalCollectionStyleVersionRoutes(platform) {
+  if (!platform || typeof platform.assignStyleVersionToCollection !== 'function') return [];
+  return createCollectionStyleVersionRoutes({ platform });
 }
 
 export { matchWholesaleRoute };

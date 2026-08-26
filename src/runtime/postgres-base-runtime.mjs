@@ -97,7 +97,7 @@ export function createPostgresWholesaleRuntime({
     ...(revokedSessionRetentionMs !== undefined ? { revokedSessionRetentionMs } : {}),
   });
   const readiness = migrationsDir ? createPostgresReadinessService({ pool, migrationsDir, ...(clock ? { clock } : {}), ...(operationalReadiness ? { operationalCheck: operationalReadiness } : {}) }) : undefined;
-  const platform = createWholesalePlatform(options);
+  const platform = createWholesalePlatform({ ...options, productIdentityStore });
   const catalog = Object.freeze({ ...createCatalogService({ wholesaleStore: store, catalogStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createCatalogQueryService({ reader: createPostgresCatalogReader({ pool }) }) });
   const productIdentityReader = createPostgresProductIdentityReader({ pool });
   const productIdentity = Object.freeze({

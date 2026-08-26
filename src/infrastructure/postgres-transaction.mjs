@@ -1,3 +1,5 @@
+import { translatePostgresDomainInvariant } from './postgres-domain-invariants.mjs';
+
 const SECONDARY_ERROR_FIELDS = Object.freeze({
   rollback: 'rollbackError',
   release: 'releaseError',
@@ -37,7 +39,7 @@ export async function withPostgresTransaction(pool, work, {
     } catch (rollbackError) {
       attachSecondaryError(error, SECONDARY_ERROR_FIELDS.rollback, rollbackError);
     }
-    throw error;
+    throw translatePostgresDomainInvariant(error);
   } finally {
     try {
       await client.release();

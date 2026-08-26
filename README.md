@@ -28,17 +28,39 @@ All new user-facing text must be routed through `public/modules/i18n-runtime.js`
 
 Digital linesheets and buyer collaboration; assortment planning, budgets, doors and size curves; wholesale CRM and payments; style/color/size catalog; PLM, BOM and samples; production, QC, logistics and landed cost; analytics and integration APIs.
 
-## Start
+## Local start / Cursor
+
+Node.js 22+ and PostgreSQL 17 are the supported runtime baseline. For a deterministic local workspace:
 
 ```bash
 cp .env.example .env
-npm install
+npm ci
 docker compose up -d
 npm run bootstrap:owner
 npm run dev
 ```
 
-Run `npm run verify` before publishing changes.
+The local example keeps `HOST=127.0.0.1`. `bootstrap:owner` waits for PostgreSQL and applies repository migrations before creating the initial owner organisation and membership. The application also waits for PostgreSQL and applies any pending migrations during startup.
+
+## Cloud start
+
+A physical `.env` file is optional. `npm start`, database migration, owner bootstrap and other operational commands load `.env` only when it exists; environment variables already supplied by the platform take precedence over local file values.
+
+Configure at least `SYNTHA_V2_DATABASE_URL` (or `DATABASE_URL`). Managed platforms normally inject `PORT`; otherwise Syntha uses `4100`. When `HOST` is not supplied, the supported startup command binds to `0.0.0.0` so the service is reachable through a container or cloud ingress. Set `HOST` explicitly when a deployment requires a narrower bind address.
+
+Recommended deployment sequence:
+
+```bash
+npm ci --ignore-scripts --no-audit --no-fund
+npm run verify
+npm start
+```
+
+Provision the first owner once with `SYNTHA_BOOTSTRAP_EMAIL`, `SYNTHA_BOOTSTRAP_PASSWORD`, `SYNTHA_BOOTSTRAP_NAME`, `SYNTHA_BOOTSTRAP_ORGANISATION` and `SYNTHA_BOOTSTRAP_ORGANISATION_TYPE`, then run `npm run bootstrap:owner`. Do not bake these bootstrap credentials into an image or repository file.
+
+Use `GET /health` as the process liveness probe and `GET /ready` as the traffic/readiness probe. Readiness verifies PostgreSQL, migration state and registered operational workers; a non-ready dependency returns HTTP 503. Startup migrations are checksum-verified and serialized with a PostgreSQL advisory lock, so concurrent application instances do not race the migration sequence.
+
+Run `npm run verify:postgres` against PostgreSQL before promoting a release candidate. GitHub CI runs the same PostgreSQL-backed verification on pull requests.
 
 ## Operations
 

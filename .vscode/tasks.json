@@ -4,7 +4,7 @@
     {
       "label": "Syntha V2: install",
       "type": "shell",
-      "command": "npm install",
+      "command": "npm ci --ignore-scripts --no-audit --no-fund",
       "options": { "cwd": "${workspaceFolder}" },
       "problemMatcher": []
     },

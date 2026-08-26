@@ -1,13 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { configureHttpServer, createShutdownCoordinator, listen, readIntegerSetting } from '../src/runtime/server-lifecycle.mjs';
+import { configureHttpServer, createShutdownCoordinator, listen, readHostSetting, readIntegerSetting } from '../src/runtime/server-lifecycle.mjs';
 
 test('integer settings use defaults and reject invalid values', () => {
   assert.equal(readIntegerSetting(undefined, { name: 'PORT', defaultValue: 4100, min: 1, max: 65535 }), 4100);
   assert.equal(readIntegerSetting('5000', { name: 'PORT', defaultValue: 4100, min: 1, max: 65535 }), 5000);
   assert.throws(() => readIntegerSetting('NaN', { name: 'PORT', defaultValue: 4100, min: 1, max: 65535 }), /PORT must be an integer/);
   assert.throws(() => readIntegerSetting('70000', { name: 'PORT', defaultValue: 4100, min: 1, max: 65535 }), /PORT must be an integer/);
+});
+
+test('HTTP host defaults to cloud-reachable binding and preserves explicit configuration', () => {
+  assert.equal(readHostSetting(undefined), '0.0.0.0');
+  assert.equal(readHostSetting('   '), '0.0.0.0');
+  assert.equal(readHostSetting(' 127.0.0.1 '), '127.0.0.1');
+  assert.equal(readHostSetting('::', { defaultValue: '127.0.0.1' }), '::');
+  assert.throws(() => readHostSetting(undefined, { defaultValue: '   ' }), /Default HTTP host is required/);
 });
 
 test('HTTP timeout configuration is explicit and internally consistent', () => {

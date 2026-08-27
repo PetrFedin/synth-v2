@@ -75,13 +75,58 @@ export async function snapshotAcceptanceIsolation(pool, brandId = PRODUCTION_ACC
        (SELECT COALESCE(SUM(on_hand_delta), 0) FROM inventory_movement_ledger_entries WHERE brand_id = $1)::text AS warehouse_on_hand_delta,
        (SELECT COALESCE(SUM(available_delta), 0) FROM inventory_movement_ledger_entries WHERE brand_id = $1)::text AS warehouse_available_delta,
        (SELECT COALESCE(SUM(quarantine_delta), 0) FROM inventory_movement_ledger_entries WHERE brand_id = $1)::text AS warehouse_quarantine_delta,
+       (SELECT COUNT(*) FROM commercial_publications WHERE brand_id = $1)::text AS commercial_publication_rows,
+       (SELECT COUNT(*) FROM price_list_versions WHERE brand_id = $1)::text AS price_list_rows,
+       (SELECT COUNT(*) FROM buyer_catalog_versions WHERE brand_id = $1)::text AS buyer_catalog_rows,
+       (SELECT COUNT(*) FROM selections WHERE brand_id = $1)::text AS selection_rows,
+       (SELECT COUNT(*) FROM orders WHERE brand_id = $1)::text AS order_rows,
+       (SELECT COUNT(*) FROM supply_commitment_snapshots WHERE brand_id = $1)::text AS supply_commitment_rows,
        (SELECT COUNT(*) FROM actual_cost_ledger_entries WHERE brand_id = $1)::text AS actual_cost_ledger_rows,
-       (SELECT COALESCE(SUM(amount), 0) FROM actual_cost_ledger_entries WHERE brand_id = $1)::text AS actual_cost_amount,
-       (SELECT COUNT(*) FROM supply_commitment_snapshots WHERE brand_id = $1)::text AS supply_commitment_rows`,
+       (SELECT COALESCE(SUM(amount), 0) FROM actual_cost_ledger_entries WHERE brand_id = $1)::text AS actual_cost_amount`,
     [brandId],
   );
   if (result.rows.length !== 1) throw new Error('Acceptance isolation snapshot query returned an unexpected result');
   return Object.freeze({ ...result.rows[0] });
+}
+
+export async function assertAcceptancePersistence(pool, { campaignId, collectionId, brandId } = {}) {
+  if (!pool || typeof pool.query !== 'function') throw new Error('PostgreSQL pool is required');
+  if (!campaignId || !collectionId || !brandId) throw new Error('Acceptance persistence identity is required');
+  const result = await pool.query(
+    `SELECT campaign.id AS campaign_id,
+            campaign.brand_id AS campaign_brand_id,
+            campaign.status AS campaign_status,
+            collection.id AS collection_id,
+            collection.campaign_id AS collection_campaign_id,
+            collection.brand_id AS collection_brand_id,
+            collection.status AS collection_status
+       FROM campaigns AS campaign
+       JOIN collections AS collection ON collection.campaign_id = campaign.id
+      WHERE campaign.id = $1 AND collection.id = $2`,
+    [campaignId, collectionId],
+  );
+  if (result.rows.length !== 1) {
+    throw new Error('Acceptance HTTP mutations are not visible in the configured PostgreSQL target; verify SYNTHA_ACCEPTANCE_BASE_URL and database URL point to the same environment');
+  }
+  const row = result.rows[0];
+  if (
+    row.campaign_id !== campaignId
+    || row.collection_id !== collectionId
+    || row.collection_campaign_id !== campaignId
+    || row.campaign_brand_id !== brandId
+    || row.collection_brand_id !== brandId
+    || row.campaign_status !== 'open'
+    || row.collection_status !== 'published'
+  ) {
+    throw new Error('Acceptance persisted campaign/collection lineage or lifecycle status does not match the HTTP result');
+  }
+  return Object.freeze({
+    campaignId: row.campaign_id,
+    collectionId: row.collection_id,
+    brandId,
+    campaignStatus: row.campaign_status,
+    collectionStatus: row.collection_status,
+  });
 }
 
 export function assertIsolationUnchanged(before, after) {
@@ -89,7 +134,7 @@ export function assertIsolationUnchanged(before, after) {
   if (!keys.length || keys.length !== Object.keys(after ?? {}).length) throw new Error('Acceptance isolation snapshot shape changed');
   const changed = keys.filter((key) => String(before[key]) !== String(after[key]));
   if (changed.length) {
-    const error = new Error(`Collection acceptance changed unrelated warehouse/economic state: ${changed.join(', ')}`);
+    const error = new Error(`Collection acceptance changed unrelated downstream/warehouse/economic state: ${changed.join(', ')}`);
     error.code = 'ACCEPTANCE_ISOLATION_CHANGED';
     error.details = Object.freeze(Object.fromEntries(changed.map((key) => [key, Object.freeze({ before: before[key], after: after[key] })])));
     throw error;
@@ -149,6 +194,11 @@ export async function runCollectionLiveAcceptance({
   }), 'collection publish');
   if (publishedCollection.status !== 'published') throw new Error('Acceptance collection did not reach published status');
 
+  const persistence = await assertAcceptancePersistence(pool, {
+    campaignId: openedCampaign.id,
+    collectionId: publishedCollection.id,
+    brandId: references.brand.id,
+  });
   const after = await snapshotAcceptanceIsolation(pool, references.brand.id);
   assertIsolationUnchanged(before, after);
   return Object.freeze({
@@ -158,6 +208,7 @@ export async function runCollectionLiveAcceptance({
     actorId: identity.data.actorId,
     campaign: Object.freeze({ id: openedCampaign.id, status: openedCampaign.status }),
     collection: Object.freeze({ id: publishedCollection.id, status: publishedCollection.status }),
+    persistence: Object.freeze({ ...persistence, verified: true }),
     isolation: Object.freeze({ before, after, unchanged: true }),
   });
 }

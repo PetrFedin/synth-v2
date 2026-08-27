@@ -16,7 +16,7 @@ function draft() {
     id: 'order-1',
     selection: Object.freeze({
       id: 'selection-1', cycleId: 'cycle-1', brandId: 'brand-1', shopId: 'shop-1', status: 'submitted',
-      lines: Object.freeze([Object.freeze({ sku: 'SKU-1', quantity: 2, unitPrice: 80 })]),
+      lines: Object.freeze([Object.freeze({ sku: 'SKU-1', quantity: 2, unitPrice: 80, currency: 'EUR', catalogVersion: 1 })]),
     }),
     currency: 'EUR', terms, createdAt: '2026-08-03T00:00:00.000Z',
   });

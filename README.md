@@ -64,7 +64,7 @@ Provision the first owner with `SYNTHA_BOOTSTRAP_EMAIL`, `SYNTHA_BOOTSTRAP_PASSW
 
 Use `GET /health` as the process liveness probe and `GET /ready` as the traffic/readiness probe. Readiness verifies PostgreSQL, migration state and registered operational workers; a non-ready dependency returns HTTP 503. Startup migrations are checksum-verified and serialized with a PostgreSQL advisory lock, so concurrent application instances do not race the migration sequence.
 
-Run `npm run verify:postgres` against the dedicated PostgreSQL verification database before promoting a release candidate. GitHub CI runs the same PostgreSQL-backed verification on pull requests.
+Run `npm run verify:postgres` against the dedicated PostgreSQL verification database before promoting a release candidate. The gate includes a real runtime process smoke: it starts the production-compatible `scripts/start.mjs` entrypoint against `POSTGRES_TEST_URL`, verifies migrations plus `/health` and `/ready`, sends `SIGTERM`, and requires a clean HTTP/worker/PostgreSQL shutdown. It never substitutes the normal development/production database for the verification database. GitHub CI runs the same PostgreSQL-backed verification on pull requests.
 
 ## Live acceptance gate
 

@@ -23,9 +23,30 @@
       "problemMatcher": []
     },
     {
+      "label": "Syntha V2: bootstrap owner",
+      "type": "shell",
+      "command": "npm run bootstrap:owner",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
       "label": "Syntha V2: verify",
       "type": "shell",
       "command": "npm run verify",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Syntha V2: verify PostgreSQL",
+      "type": "shell",
+      "command": "npm run verify:postgres",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Syntha V2: collection acceptance",
+      "type": "shell",
+      "command": "npm run acceptance:collection",
       "options": { "cwd": "${workspaceFolder}" },
       "problemMatcher": []
     },

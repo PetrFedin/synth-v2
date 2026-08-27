@@ -44,6 +44,13 @@
       "problemMatcher": []
     },
     {
+      "label": "Syntha V2: runtime smoke",
+      "type": "shell",
+      "command": "npm run smoke:runtime",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
       "label": "Syntha V2: collection acceptance",
       "type": "shell",
       "command": "npm run acceptance:collection",

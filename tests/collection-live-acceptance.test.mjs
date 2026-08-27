@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  assertAcceptancePersistence,
   assertIsolationUnchanged,
   ensureAcceptanceBrandOwner,
   runCollectionLiveAcceptance,
@@ -43,8 +44,28 @@ test('acceptance auth bootstrap refuses identity collisions', async () => {
   );
 });
 
-test('isolation assertion identifies warehouse or economics drift', () => {
-  const before = { inventory_balance_rows: '1', warehouse_ledger_rows: '0', actual_cost_amount: '0' };
+test('persistence assertion proves HTTP and SQL point to the same accepted collection', async () => {
+  const brandId = PRODUCTION_ACCEPTANCE_REFERENCES.brand.id;
+  const pool = {
+    query: async (_sql, values) => {
+      assert.deepEqual(values, ['campaign-1', 'collection-1']);
+      return { rows: [{
+        campaign_id: 'campaign-1', campaign_brand_id: brandId, campaign_status: 'open',
+        collection_id: 'collection-1', collection_campaign_id: 'campaign-1', collection_brand_id: brandId, collection_status: 'published',
+      }] };
+    },
+  };
+  const persisted = await assertAcceptancePersistence(pool, { campaignId: 'campaign-1', collectionId: 'collection-1', brandId });
+  assert.equal(persisted.campaignStatus, 'open');
+  assert.equal(persisted.collectionStatus, 'published');
+  await assert.rejects(
+    assertAcceptancePersistence({ query: async () => ({ rows: [] }) }, { campaignId: 'campaign-1', collectionId: 'collection-1', brandId }),
+    /not visible in the configured PostgreSQL target/,
+  );
+});
+
+test('isolation assertion identifies downstream, warehouse or economics drift', () => {
+  const before = { inventory_balance_rows: '1', warehouse_ledger_rows: '0', order_rows: '0', actual_cost_amount: '0' };
   assert.equal(assertIsolationUnchanged(before, { ...before }), true);
   assert.throws(
     () => assertIsolationUnchanged(before, { ...before, actual_cost_amount: '10' }),
@@ -52,8 +73,9 @@ test('isolation assertion identifies warehouse or economics drift', () => {
   );
 });
 
-test('live collection acceptance uses authenticated idempotent HTTP flow and leaves physical state unchanged', async () => {
+test('live collection acceptance uses authenticated idempotent HTTP flow, proves persistence and leaves downstream state unchanged', async () => {
   const requests = [];
+  const brandId = PRODUCTION_ACCEPTANCE_REFERENCES.brand.id;
   const snapshot = {
     inventory_balance_rows: '0',
     inventory_available_quantity: '0',
@@ -62,11 +84,26 @@ test('live collection acceptance uses authenticated idempotent HTTP flow and lea
     warehouse_on_hand_delta: '0',
     warehouse_available_delta: '0',
     warehouse_quarantine_delta: '0',
+    commercial_publication_rows: '0',
+    price_list_rows: '0',
+    buyer_catalog_rows: '0',
+    selection_rows: '0',
+    order_rows: '0',
+    supply_commitment_rows: '0',
     actual_cost_ledger_rows: '0',
     actual_cost_amount: '0',
-    supply_commitment_rows: '0',
   };
-  const pool = { query: async () => ({ rows: [{ ...snapshot }] }) };
+  const pool = {
+    query: async (sql) => {
+      if (sql.includes('FROM campaigns AS campaign')) {
+        return { rows: [{
+          campaign_id: 'campaign-acceptance', campaign_brand_id: brandId, campaign_status: 'open',
+          collection_id: 'collection-acceptance', collection_campaign_id: 'campaign-acceptance', collection_brand_id: brandId, collection_status: 'published',
+        }] };
+      }
+      return { rows: [{ ...snapshot }] };
+    },
+  };
   const fetchImpl = async (url, options = {}) => {
     const parsed = new URL(url);
     const method = options.method ?? 'GET';
@@ -97,6 +134,7 @@ test('live collection acceptance uses authenticated idempotent HTTP flow and lea
   assert.equal(result.actorId, PRODUCTION_ACCEPTANCE_REFERENCES.actors.brandOwner);
   assert.deepEqual(result.campaign, { id: 'campaign-acceptance', status: 'open' });
   assert.deepEqual(result.collection, { id: 'collection-acceptance', status: 'published' });
+  assert.equal(result.persistence.verified, true);
   assert.equal(result.isolation.unchanged, true);
 
   const mutations = requests.filter((request) => request.method === 'POST' && !request.path.includes('/auth/'));

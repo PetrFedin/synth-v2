@@ -46,6 +46,35 @@ curl -X POST http://127.0.0.1:4100/v2/auth/login \
 
 Если Cursor/Cloud передаёт `SYNTHA_V2_DATABASE_URL` или `DATABASE_URL`, `PORT` и другие настройки напрямую, физический `.env` не требуется. При отсутствии `HOST` поддерживаемый startup adapter использует `0.0.0.0`; явный `HOST` имеет приоритет.
 
+## Сквозная acceptance-проверка коллекции
+
+После запуска приложения можно проверить реальный HTTP + PostgreSQL контур без сброса базы и без создания заказа/складского движения:
+
+```bash
+# в .env задайте отдельный acceptance-пароль
+# SYNTHA_ACCEPTANCE_PASSWORD=...
+npm run acceptance:collection
+```
+
+Команда идемпотентно устанавливает только зарезервированные acceptance organisation/membership reference records, создаёт или использует отдельного пользователя `syntha-acceptance-brand-owner`, проверяет `/health`, `/ready` и `/v2/auth/me`, а затем через тот же публичный `/v2` API выполняет:
+
+`Campaign draft → Campaign open → Collection draft → Collection published`.
+
+После HTTP-записи команда подтверждает созданные Campaign/Collection непосредственно в настроенной PostgreSQL-базе. Это защищает от опасной ситуации, когда `SYNTHA_ACCEPTANCE_BASE_URL` указывает на один environment, а `SYNTHA_V2_DATABASE_URL` — на другой. До и после сценария сравниваются downstream/warehouse/economics counters: CommercialPublication/PriceList/BuyerCatalog, Selection/Order, ProductSku inventory, warehouse movement ledger, SupplyCommitment и ActualCost должны остаться неизменными.
+
+Для удалённого environment acceptance заблокирован по умолчанию. Разрешайте его только намеренно и только для нужного acceptance/staging target:
+
+```bash
+SYNTHA_ACCEPTANCE_BASE_URL=https://your-acceptance-host.example \
+SYNTHA_ACCEPTANCE_ALLOW_REMOTE=true \
+SYNTHA_V2_DATABASE_URL='postgresql://...' \
+SYNTHA_ACCEPTANCE_EMAIL='acceptance@example.com' \
+SYNTHA_ACCEPTANCE_PASSWORD='...' \
+npm run acceptance:collection
+```
+
+Вместо email/password можно передать короткоживущий `SYNTHA_ACCEPTANCE_TOKEN`, но он обязан аутентифицироваться именно как `syntha-acceptance-brand-owner`. Токены и пароли команда не выводит. `SYNTHA_ACCEPTANCE_RUN_ID` можно повторно использовать для проверки idempotency того же сценария; без него создаётся новый независимый acceptance run.
+
 ## Правила миграций
 
 - Новая схема добавляется только новым нумерованным SQL-файлом в `db/migrations`.
@@ -65,4 +94,4 @@ npm run verify
 npm run verify:postgres
 ```
 
-Проверки покрывают архитектурные границы, изоляцию V2, PostgreSQL-контракт, migration ledger, standalone UI и тесты приложения.
+Проверки покрывают архитектурные границы, изоляцию V2, PostgreSQL-контракт, migration ledger, standalone UI и тесты приложения. Live acceptance не входит автоматически в `verify`, потому что требует запущенный HTTP target и намеренно создаёт только namespace-isolated acceptance Campaign/Collection records.

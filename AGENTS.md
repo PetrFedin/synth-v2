@@ -30,5 +30,9 @@
 - Snapshot/versioned sources must define latest/effective/as-of selection before aggregation. Never sum historical snapshots as independent business facts.
 - Due-cohort service KPI must keep open overdue cases in the denominator; closed-only denominators are prohibited unless the KPI explicitly measures completed-case duration rather than SLA compliance.
 - KPI observations must preserve formula version, period/as-of, canonical UOM, DQ status, source/run lineage and restatement lineage; do not persist only a formatted dashboard value.
+- `npm run acceptance:collection` is the authoritative live gate for the current Campaign -> Collection slice. It must exercise the public authenticated HTTP API, prove the HTTP writes are visible in the configured PostgreSQL target and fail if downstream publication/order/inventory/warehouse/economics state changes. Do not replace it with direct service calls or destructive cleanup.
+- Remote live acceptance is opt-in only: require HTTPS, `SYNTHA_ACCEPTANCE_ALLOW_REMOTE=true`, the reserved `syntha-acceptance-brand-owner` identity and a database URL for the same environment. Never weaken these guards to make a deployment pass.
+- Extend live acceptance one business slice at a time. A later Product/Readiness/Publication/Order/Physical Execution gate must add its own before/after invariants rather than silently broadening the collection gate into production writes.
 - Run `npm run verify` before publishing. It includes the governed fashion KPI methodology and repository-native source-contract validator.
+- Run `npm run verify:postgres` for a release candidate. When a running local/staging target is available, also run the relevant live acceptance command before claiming end-to-end readiness.
 - Priority: close the canonical Product Master -> Readiness -> Commercial Projection -> Buyer Catalog -> Order Matrix spine before expanding premium buyer features, analytics or additional integration breadth.

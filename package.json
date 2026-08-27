@@ -13,6 +13,7 @@
     "bootstrap:owner": "node scripts/run-with-env.mjs scripts/bootstrap-owner.mjs",
     "bootstrap:mdm-reference": "node scripts/run-with-env.mjs scripts/bootstrap-mdm-reference.mjs",
     "bootstrap:production-reference": "node scripts/run-with-env.mjs scripts/bootstrap-production-reference.mjs",
+    "acceptance:collection": "node scripts/run-with-env.mjs scripts/acceptance-collection.mjs",
     "outbox:requeue": "node scripts/run-with-env.mjs scripts/requeue-outbox-event.mjs",
     "sync:mdm-sources": "node scripts/sync-mdm-sources.mjs",
     "test": "node --import ./tests/register-pg-test-loader.mjs --test --test-concurrency=1 tests/*.test.mjs",

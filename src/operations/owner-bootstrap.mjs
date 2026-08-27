@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { verifyPassword } from '../auth/passwords.mjs';
 import { createMembership } from '../modules/access-control/public.mjs';
 import { createOrganisation } from '../modules/organisations/public.mjs';
@@ -9,10 +9,11 @@ export async function withOwnerBootstrapLock(pool, work) {
   if (!pool || typeof pool.connect !== 'function') throw new Error('PostgreSQL pool is required');
   if (typeof work !== 'function') throw new Error('Bootstrap work callback is required');
   const client = await pool.connect();
-  let result;
-  let workError;
+  let released = false;
   try {
     await client.query('SELECT pg_advisory_lock(hashtextextended($1, 0))', [BOOTSTRAP_LOCK_KEY]);
+    let result;
+    let workError;
     try { result = await work(); }
     catch (error) { workError = error; }
 
@@ -20,14 +21,16 @@ export async function withOwnerBootstrapLock(pool, work) {
     try { await client.query('SELECT pg_advisory_unlock(hashtextextended($1, 0))', [BOOTSTRAP_LOCK_KEY]); }
     catch (error) { unlockError = error; }
     client.release(unlockError);
+    released = true;
 
     if (workError) throw workError;
     if (unlockError) throw unlockError;
     return result;
   } catch (error) {
-    if (!client.released) {
+    if (!released) {
       try { client.release(error); }
-      catch { /* the original bootstrap error is more useful */ }
+      catch { /* preserve the original bootstrap failure */ }
+      released = true;
     }
     throw error;
   }
@@ -43,17 +46,16 @@ export async function ensureOwnerBootstrap({
   organisationName = 'Syntha Brand',
   organisationType = 'brand',
   clock = () => new Date().toISOString(),
-  nextId = defaultBootstrapId,
 } = {}) {
   if (!pool || typeof pool.query !== 'function') throw new Error('PostgreSQL pool is required');
   if (!auth || typeof auth.bootstrapUser !== 'function') throw new Error('Authentication service is required');
   if (!platform || typeof platform.registerOrganisation !== 'function' || typeof platform.grantMembership !== 'function') {
     throw new Error('Platform bootstrap services are required');
   }
-  if (typeof nextId !== 'function') throw new Error('Bootstrap id generator is required');
   if (typeof clock !== 'function') throw new Error('Bootstrap clock is required');
 
-  const normalizedEmail = normalizeEmail(email);
+  const suppliedEmail = typeof email === 'string' ? email.trim() : '';
+  const normalizedEmail = normalizeEmail(suppliedEmail);
   const desiredUserId = deterministicId('bootstrap-user', normalizedEmail);
   const desiredOrganisation = createOrganisation({
     id: deterministicId('bootstrap-organisation', `${normalizedEmail}:${organisationType}:${String(organisationName).trim()}`),
@@ -87,10 +89,9 @@ export async function ensureOwnerBootstrap({
     }
   }
 
-  const userId = rows.length > 0 ? rows[0].user_id : desiredUserId;
   const user = rows.length > 0
     ? publicUser(rows[0])
-    : await auth.bootstrapUser({ id: userId, email: normalizedEmail, password, displayName: String(displayName).trim() });
+    : await auth.bootstrapUser({ id: desiredUserId, email: suppliedEmail, password, displayName: String(displayName).trim() });
 
   const organisation = await platform.registerOrganisation(
     `bootstrap-owner:organisation:${desiredOrganisation.id}`,
@@ -157,14 +158,12 @@ function publicUser(row) {
   return Object.freeze({ id: row.user_id, email: row.email, displayName: row.display_name, status: row.user_status });
 }
 function deterministicId(prefix, seed) { return `${prefix}_${createHash('sha256').update(seed).digest('hex').slice(0, 32)}`; }
-function defaultBootstrapId(prefix) { return `${prefix}_${randomUUID()}`; }
 function normalizeEmail(email) {
-  const value = typeof email === 'string' ? email.trim() : '';
-  if (value.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) throw new Error('SYNTHA_BOOTSTRAP_EMAIL must be a valid email address');
-  return value.toLowerCase();
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('SYNTHA_BOOTSTRAP_EMAIL must be a valid email address');
+  return email.toLowerCase();
 }
-function iso(value) {
-  const timestamp = value();
+function iso(clock) {
+  const timestamp = clock();
   if (typeof timestamp !== 'string' || !Number.isFinite(Date.parse(timestamp))) throw new Error('Bootstrap clock must return a valid timestamp');
   return new Date(Date.parse(timestamp)).toISOString();
 }

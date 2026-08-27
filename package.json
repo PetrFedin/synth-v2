@@ -14,6 +14,7 @@
     "bootstrap:mdm-reference": "node scripts/run-with-env.mjs scripts/bootstrap-mdm-reference.mjs",
     "bootstrap:production-reference": "node scripts/run-with-env.mjs scripts/bootstrap-production-reference.mjs",
     "acceptance:collection": "node scripts/run-with-env.mjs scripts/acceptance-collection.mjs",
+    "smoke:runtime": "node scripts/run-with-env.mjs scripts/smoke-runtime.mjs",
     "outbox:requeue": "node scripts/run-with-env.mjs scripts/requeue-outbox-event.mjs",
     "sync:mdm-sources": "node scripts/sync-mdm-sources.mjs",
     "test": "node --import ./tests/register-pg-test-loader.mjs --test --test-concurrency=1 tests/*.test.mjs",
@@ -28,7 +29,7 @@
     "validate:mdm": "node scripts/validate-mdm.mjs",
     "validate:kpi-methodology": "node scripts/validate-fashion-kpi.mjs",
     "verify": "npm run validate:isolation && npm run validate:architecture && npm run validate:postgres && npm run validate:ui && npm run validate:design-system && npm run validate:ods-boundaries && npm run validate:i18n && npm run validate:mdm && npm run validate:kpi-methodology && npm test",
-    "verify:postgres": "npm run verify && npm run test:postgres"
+    "verify:postgres": "npm run verify && npm run test:postgres && npm run smoke:runtime"
   },
   "dependencies": {
     "pg": "8.13.1"

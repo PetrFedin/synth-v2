@@ -12,7 +12,7 @@ npm ci --ignore-scripts --no-audit --no-fund
 docker compose up -d
 ```
 
-`docker compose` поднимает две изолированные PostgreSQL 17 базы: рабочую dev-базу на `127.0.0.1:5434` и отдельную verification-базу на `127.0.0.1:5435`. Скопированный `.env.example` уже связывает `SYNTHA_V2_DATABASE_URL` с dev-базой, а `POSTGRES_TEST_URL` — только с verification-базой. PostgreSQL-backed тесты не должны использовать рабочие данные.
+`docker compose` поднимает две изолированные PostgreSQL 17 базы: рабочую dev-базу на `127.0.0.1:5434` и отдельную verification-базу на `127.0.0.1:5435`. Скопированный `.env.example` уже связывает `SYNTHA_V2_DATABASE_URL` с dev-базой, а `POSTGRES_TEST_URL` — только с verification-базой. PostgreSQL-backed тесты и runtime smoke не должны использовать рабочие данные.
 
 `.env` нужен только как удобный локальный файл. Команды Syntha загружают его, если он существует, но не перезаписывают переменные, уже переданные средой Cursor/Cloud. Скопированный `.env.example` оставляет локальный сервер на `127.0.0.1`.
 
@@ -46,9 +46,19 @@ curl -X POST http://127.0.0.1:4100/v2/auth/login \
 
 ## Cursor
 
-В `.vscode/tasks.json` находятся задачи lockfile-установки, запуска обеих PostgreSQL баз, миграций, повторяемого owner bootstrap, обычной проверки, PostgreSQL-backed проверки, collection acceptance и dev-сервера. В `.vscode/launch.json` конфигурация `Syntha V2 API` запускает тот же `scripts/start.mjs`, что и поддерживаемый production entrypoint, поэтому Run and Debug и terminal-start не расходятся по загрузке окружения.
+В `.vscode/tasks.json` находятся задачи lockfile-установки, запуска обеих PostgreSQL баз, миграций, повторяемого owner bootstrap, обычной проверки, PostgreSQL-backed проверки, отдельного runtime smoke, collection acceptance и dev-сервера. В `.vscode/launch.json` конфигурация `Syntha V2 API` запускает тот же `scripts/start.mjs`, что и поддерживаемый production entrypoint, поэтому Run and Debug и terminal-start не расходятся по загрузке окружения.
 
 Если Cursor/Cloud передаёт `SYNTHA_V2_DATABASE_URL` или `DATABASE_URL`, `PORT` и другие настройки напрямую, физический `.env` не требуется. При отсутствии `HOST` поддерживаемый startup adapter использует `0.0.0.0`; явный `HOST` имеет приоритет.
+
+## Runtime smoke: настоящий production entrypoint
+
+`npm run smoke:runtime` запускает отдельный дочерний процесс через тот же `scripts/start.mjs`, который используется `npm start`. Gate всегда перенаправляет приложение на `POSTGRES_TEST_URL`, отключает внешний outbox webhook и не использует `SYNTHA_V2_DATABASE_URL`/рабочую базу. Он проверяет реальную последовательность:
+
+`process start → PostgreSQL connect → migrations → HTTP listen → GET /health → GET /ready → SIGTERM → graceful PostgreSQL/HTTP shutdown`.
+
+Порт выбирается временный loopback, поэтому smoke не конфликтует с обычным dev-сервером на `4100`. По умолчанию startup должен уложиться в 30 секунд, graceful shutdown — в 15 секунд; при инфраструктурной необходимости эти пределы можно временно изменить через `SYNTHA_RUNTIME_SMOKE_STARTUP_TIMEOUT_MS` и `SYNTHA_RUNTIME_SMOKE_SHUTDOWN_TIMEOUT_MS`.
+
+Этот gate автоматически входит в `npm run verify:postgres`. Поэтому release-candidate проверка теперь доказывает не только модульные/PostgreSQL-контракты, но и то, что реальный поддерживаемый entrypoint действительно стартует и корректно завершается.
 
 ## Сквозная acceptance-проверка коллекции
 
@@ -98,4 +108,4 @@ npm run verify
 npm run verify:postgres
 ```
 
-После `cp .env.example .env && docker compose up -d` эта команда работает без ручного создания test database: `POSTGRES_TEST_URL` указывает на отдельный `postgres-test` service. Проверки покрывают архитектурные границы, изоляцию V2, PostgreSQL-контракт, migration ledger, standalone UI и тесты приложения. Live acceptance не входит автоматически в `verify`, потому что требует запущенный HTTP target и намеренно создаёт только namespace-isolated acceptance Campaign/Collection records.
+После `cp .env.example .env && docker compose up -d` эта команда работает без ручного создания test database: `POSTGRES_TEST_URL` указывает на отдельный `postgres-test` service. Проверки покрывают архитектурные границы, изоляцию V2, PostgreSQL-контракт, migration ledger, standalone UI, тесты приложения и реальный `npm start`-совместимый process smoke с `/health`, `/ready` и graceful shutdown. Live acceptance не входит автоматически в `verify`, потому что требует запущенный HTTP target и намеренно создаёт только namespace-isolated acceptance Campaign/Collection records.

@@ -40,7 +40,11 @@ npm run bootstrap:owner
 npm run dev
 ```
 
-The local example keeps `HOST=127.0.0.1`. `bootstrap:owner` waits for PostgreSQL and applies repository migrations before creating the initial owner organisation and membership. The application also waits for PostgreSQL and applies any pending migrations during startup.
+`docker compose` starts a dev PostgreSQL on port `5434` and a separate verification PostgreSQL on port `5435`. `.env.example` maps `SYNTHA_V2_DATABASE_URL` to the dev database and `POSTGRES_TEST_URL` to the verification database, so `npm run verify:postgres` does not populate or mutate normal workspace data.
+
+The local example keeps `HOST=127.0.0.1`. `bootstrap:owner` waits for PostgreSQL and applies repository migrations before ensuring the initial owner organisation and membership. The operation is idempotent and concurrency-serialized: rerunning it with the same credentials and organisation returns the existing owner instead of creating duplicates. It does not rotate credentials or silently reinterpret an existing account as another organisation.
+
+The application also waits for PostgreSQL and applies any pending migrations during startup.
 
 ## Cloud start
 
@@ -56,11 +60,11 @@ npm run verify
 npm start
 ```
 
-Provision the first owner once with `SYNTHA_BOOTSTRAP_EMAIL`, `SYNTHA_BOOTSTRAP_PASSWORD`, `SYNTHA_BOOTSTRAP_NAME`, `SYNTHA_BOOTSTRAP_ORGANISATION` and `SYNTHA_BOOTSTRAP_ORGANISATION_TYPE`, then run `npm run bootstrap:owner`. Do not bake these bootstrap credentials into an image or repository file.
+Provision the first owner with `SYNTHA_BOOTSTRAP_EMAIL`, `SYNTHA_BOOTSTRAP_PASSWORD`, `SYNTHA_BOOTSTRAP_NAME`, `SYNTHA_BOOTSTRAP_ORGANISATION` and `SYNTHA_BOOTSTRAP_ORGANISATION_TYPE`, then run `npm run bootstrap:owner`. Re-running the command is safe only with the same owner password and ownership topology; changing either is intentionally fail-closed and must use an explicit account/organisation administration path instead. Do not bake bootstrap credentials into an image or repository file.
 
 Use `GET /health` as the process liveness probe and `GET /ready` as the traffic/readiness probe. Readiness verifies PostgreSQL, migration state and registered operational workers; a non-ready dependency returns HTTP 503. Startup migrations are checksum-verified and serialized with a PostgreSQL advisory lock, so concurrent application instances do not race the migration sequence.
 
-Run `npm run verify:postgres` against PostgreSQL before promoting a release candidate. GitHub CI runs the same PostgreSQL-backed verification on pull requests.
+Run `npm run verify:postgres` against the dedicated PostgreSQL verification database before promoting a release candidate. GitHub CI runs the same PostgreSQL-backed verification on pull requests.
 
 ## Live acceptance gate
 

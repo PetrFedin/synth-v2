@@ -12,6 +12,8 @@ npm ci --ignore-scripts --no-audit --no-fund
 docker compose up -d
 ```
 
+`docker compose` поднимает две изолированные PostgreSQL 17 базы: рабочую dev-базу на `127.0.0.1:5434` и отдельную verification-базу на `127.0.0.1:5435`. Скопированный `.env.example` уже связывает `SYNTHA_V2_DATABASE_URL` с dev-базой, а `POSTGRES_TEST_URL` — только с verification-базой. PostgreSQL-backed тесты не должны использовать рабочие данные.
+
 `.env` нужен только как удобный локальный файл. Команды Syntha загружают его, если он существует, но не перезаписывают переменные, уже переданные средой Cursor/Cloud. Скопированный `.env.example` оставляет локальный сервер на `127.0.0.1`.
 
 При `npm run dev`, `npm run db:migrate` и `npm run bootstrap:owner` используется единый migration ledger `schema_migrations`. Миграции защищены PostgreSQL advisory lock; повторный запуск пропускает уже применённые файлы, а изменение применённой миграции блокируется checksum-ошибкой.
@@ -21,6 +23,8 @@ docker compose up -d
 ```bash
 npm run bootstrap:owner
 ```
+
+`bootstrap:owner` безопасно повторяем. Первый успешный запуск создаёт детерминированные bootstrap identities; повторный запуск с теми же email/password/типом и названием организации возвращает уже существующего владельца и не создаёт дубль. Bootstrap не является reset/credential-rotation командой: другой пароль, другая организация, неоднозначная ownership topology или disabled user приводят к fail-closed ошибке. Параллельные bootstrap-запуски сериализуются PostgreSQL advisory lock.
 
 Запуск приложения:
 
@@ -42,7 +46,7 @@ curl -X POST http://127.0.0.1:4100/v2/auth/login \
 
 ## Cursor
 
-В `.vscode/tasks.json` находятся задачи lockfile-установки, запуска PostgreSQL, миграций, проверки и dev-сервера. В `.vscode/launch.json` конфигурация `Syntha V2 API` запускает тот же `scripts/start.mjs`, что и поддерживаемый production entrypoint, поэтому Run and Debug и terminal-start не расходятся по загрузке окружения.
+В `.vscode/tasks.json` находятся задачи lockfile-установки, запуска обеих PostgreSQL баз, миграций, повторяемого owner bootstrap, обычной проверки, PostgreSQL-backed проверки, collection acceptance и dev-сервера. В `.vscode/launch.json` конфигурация `Syntha V2 API` запускает тот же `scripts/start.mjs`, что и поддерживаемый production entrypoint, поэтому Run and Debug и terminal-start не расходятся по загрузке окружения.
 
 Если Cursor/Cloud передаёт `SYNTHA_V2_DATABASE_URL` или `DATABASE_URL`, `PORT` и другие настройки напрямую, физический `.env` не требуется. При отсутствии `HOST` поддерживаемый startup adapter использует `0.0.0.0`; явный `HOST` имеет приоритет.
 
@@ -94,4 +98,4 @@ npm run verify
 npm run verify:postgres
 ```
 
-Проверки покрывают архитектурные границы, изоляцию V2, PostgreSQL-контракт, migration ledger, standalone UI и тесты приложения. Live acceptance не входит автоматически в `verify`, потому что требует запущенный HTTP target и намеренно создаёт только namespace-isolated acceptance Campaign/Collection records.
+После `cp .env.example .env && docker compose up -d` эта команда работает без ручного создания test database: `POSTGRES_TEST_URL` указывает на отдельный `postgres-test` service. Проверки покрывают архитектурные границы, изоляцию V2, PostgreSQL-контракт, migration ledger, standalone UI и тесты приложения. Live acceptance не входит автоматически в `verify`, потому что требует запущенный HTTP target и намеренно создаёт только namespace-isolated acceptance Campaign/Collection records.

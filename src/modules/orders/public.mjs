@@ -11,6 +11,12 @@ export function createOrderDraft({ id, selection, currency, terms, buyerCommerci
   invariant(id && selection?.id, 'ORDER_DRAFT_IDENTITY_REQUIRED', 'Order id and selection are required');
   invariant(selection.status === 'submitted', 'SELECTION_NOT_SUBMITTED', 'Order builder requires a submitted selection');
   invariant(/^[A-Z]{3}$/.test(currency), 'ORDER_CURRENCY_INVALID', 'Order currency must be an ISO-4217 code');
+  const selectionCurrency = assertSubmittedSelectionCurrency(selection);
+  invariant(currency === selectionCurrency, 'ORDER_SELECTION_CURRENCY_MISMATCH', 'Order currency must match the frozen submitted selection currency', {
+    orderCurrency: currency,
+    selectionCurrency,
+    selectionId: selection.id,
+  });
   const pinnedCommercialBasis = hasPinnedCommercialBasis(selection);
   invariant(!pinnedCommercialBasis || buyerCommercialSnapshot, 'ORDER_BUYER_COMMERCIAL_SNAPSHOT_REQUIRED', 'Commercial order requires a frozen buyer retail door snapshot');
   invariant(pinnedCommercialBasis || buyerCommercialSnapshot === null, 'ORDER_UNEXPECTED_BUYER_COMMERCIAL_SNAPSHOT', 'Legacy order without a commercial basis cannot attach an unrelated buyer retail door snapshot');
@@ -56,7 +62,7 @@ export function createOrderDraft({ id, selection, currency, terms, buyerCommerci
     retailDoorId: frozenBuyerSnapshot?.retailDoorId ?? null,
     retailDoorVersion: frozenBuyerSnapshot?.retailDoorVersion ?? null,
     orderCommitSnapshotId: null,
-    currency,
+    currency: selectionCurrency,
     lines,
     totalAmount,
     terms: normalizedTerms,
@@ -129,6 +135,24 @@ export function cancelAttachedOrder(order, reason, cancelledAt, expectedVersion 
     version: order.version + 1,
     updatedAt: cancelledAt,
   });
+}
+
+function assertSubmittedSelectionCurrency(selection) {
+  invariant(Array.isArray(selection.lines) && selection.lines.length > 0, 'ORDER_SELECTION_LINES_REQUIRED', 'Submitted selection must contain at least one line');
+  const currencies = new Set();
+  for (const line of selection.lines) {
+    invariant(/^[A-Z]{3}$/.test(line?.currency ?? ''), 'ORDER_SELECTION_CURRENCY_INVALID', 'Every submitted selection line must carry its frozen ISO-4217 currency', {
+      selectionId: selection.id,
+      sku: line?.sku ?? null,
+      currency: line?.currency ?? null,
+    });
+    currencies.add(line.currency);
+  }
+  invariant(currencies.size === 1, 'ORDER_SELECTION_CURRENCY_INCONSISTENT', 'Submitted selection lines must use one frozen currency', {
+    selectionId: selection.id,
+    currencies: [...currencies].sort(),
+  });
+  return [...currencies][0];
 }
 
 function copyOptionalLineage(line) {

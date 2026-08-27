@@ -40,7 +40,7 @@ test('selection lines enforce fixed-point prices quantity range and bounded note
 test('order totals are exact and delivery dates are canonicalized', () => {
   const selection = {
     id: 'selection-1', cycleId: 'cycle-1', brandId: 'brand-1', shopId: 'shop-1', status: 'submitted',
-    lines: [{ sku: 'SKU-1', quantity: 3, unitPrice: 0.1 }],
+    lines: [{ sku: 'SKU-1', quantity: 3, unitPrice: 0.1, currency: 'EUR', catalogVersion: 1 }],
   };
   const order = createOrderDraft({
     id: 'order-1', selection, currency: 'EUR', createdAt: timestamp,

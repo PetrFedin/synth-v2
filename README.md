@@ -62,6 +62,16 @@ Use `GET /health` as the process liveness probe and `GET /ready` as the traffic/
 
 Run `npm run verify:postgres` against PostgreSQL before promoting a release candidate. GitHub CI runs the same PostgreSQL-backed verification on pull requests.
 
+## Live acceptance gate
+
+`npm run acceptance:collection` is the first non-destructive live acceptance scenario for a running Syntha environment. It uses reserved acceptance organisations and actor identities, checks liveness/readiness/authentication, and drives the real `/v2` HTTP surface through:
+
+`Campaign draft → Campaign open → Collection draft → Collection published`.
+
+The command then verifies that the exact Campaign/Collection are visible in the configured PostgreSQL database and that no downstream commercial publication, buyer catalog, selection/order, ProductSku inventory, warehouse movement, SupplyCommitment or ActualCost state changed during the collection-only flow. Reusing `SYNTHA_ACCEPTANCE_RUN_ID` replays the same mutation idempotency keys; omitting it creates a fresh isolated acceptance run.
+
+Remote execution is fail-closed: non-local targets require HTTPS plus explicit `SYNTHA_ACCEPTANCE_ALLOW_REMOTE=true`. The configured database URL must point to the same environment as `SYNTHA_ACCEPTANCE_BASE_URL`, otherwise the persistence check fails. Use dedicated acceptance credentials or a short-lived token for the reserved `syntha-acceptance-brand-owner`; credentials and tokens are never printed by the command. See [`CURSOR_START_HERE.md`](CURSOR_START_HERE.md) and `.env.example` for the exact variables.
+
 ## Operations
 
 Production metrics, scrape security, cardinality rules and incident response are documented in [`docs/observability.md`](docs/observability.md). Initial Prometheus alerts are provided in [`ops/prometheus/syntha-v2-alerts.yml`](ops/prometheus/syntha-v2-alerts.yml).

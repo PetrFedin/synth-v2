@@ -104,7 +104,7 @@ export async function ensureOwnerBootstrap({
     organisationType: organisation.type,
     userId: user.id,
     role: 'owner',
-    createdAt: iso(clock()),
+    createdAt: iso(clock),
   });
   const grantedMembership = await platform.grantMembership(
     `bootstrap-owner:membership:${membership.id}`,

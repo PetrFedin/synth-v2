@@ -2,6 +2,14 @@
 
 Репозиторий является самостоятельным проектом Syntha V2.
 
+## Авторитетное ТЗ платформы
+
+Перед любым изменением откройте [`ARCHITECTURE.md`](ARCHITECTURE.md). Это единый living master-spec Syntha V2: архитектура, домены и их связи, канонические сущности/lineage, API и PostgreSQL-контракты, статусы реализации, known gaps, UI/UX/ODS-параметры, экраны, поля/действия и Definition of Done.
+
+**Любое изменение продукта или runtime должно синхронно менять `ARCHITECTURE.md` в том же PR.** Это относится к сущностям и полям, relations, API/OpenAPI, migrations, lifecycle/state transitions, ролям/действиям, экранам/блокам/таблицам/полям/кнопкам/иконкам, шрифтам/цветам/design tokens, deployment/env/workers и acceptance evidence. Для каждого изменённого блока нужно обновить фактическое поведение, IMPLEMENTED/PARTIAL/PLANNED/GAP-статус и change register. Детальные документы в `docs/` являются supporting specifications и не заменяют обновление master-spec.
+
+`npm run validate:architecture` сохраняет обычную проверку module boundaries и в GitHub Actions дополнительно проверяет diff PR/push: если изменена управляемая code/runtime/UI/DB/spec-поверхность, а `ARCHITECTURE.md` отсутствует в том же diff, CI завершится ошибкой. Поэтому не оставляйте документацию «на потом» после реализации.
+
 ## Первый запуск
 
 Требуются Node.js 22+ и Docker с PostgreSQL 17. Для воспроизводимой установки используйте lockfile, а не плавающий dependency resolution:
@@ -101,6 +109,8 @@ npm run acceptance:collection
 ```bash
 npm run verify
 ```
+
+`verify` включает `validate:architecture`. Локально он проверяет архитектурные module boundaries; в GitHub Actions тот же validator дополнительно требует синхронного изменения `ARCHITECTURE.md` для управляемых продуктовых/runtime изменений.
 
 Для release candidate также запускайте PostgreSQL-backed gate:
 

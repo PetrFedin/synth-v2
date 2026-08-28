@@ -6,6 +6,12 @@ Syntha V2 combines and extends the strongest operating patterns of JOOR, NuORDER
 
 The legacy `PetrFedin/syntha` repository remains unchanged; this repository is the independent home of all further Syntha V2 development.
 
+## Authoritative platform specification
+
+[`ARCHITECTURE.md`](ARCHITECTURE.md) is the authoritative living specification and technical requirements source of truth for Syntha V2. It records the canonical business chain, domain/entity lineage, module relations, fields and lifecycle rules, API/PostgreSQL/runtime contracts, UI/UX/ODS tokens and screen rules, current implementation status, architecture gaps, acceptance evidence and change register.
+
+Every governed product/runtime change must update the affected `ARCHITECTURE.md` sections in the same pull request. This includes changes to behavior, entities/fields/relations, API/OpenAPI, migrations, lifecycle, roles/actions, UI blocks/fields/tables/buttons/icons, typography/colour/design tokens, deployment/env/workers and acceptance behavior. `npm run validate:architecture` enforces this synchronization in GitHub Actions. Supporting files under `docs/` deepen individual topics but do not replace the master specification.
+
 ## Executable core
 
 `Campaign → Collection → Showroom → Selection → Order Builder → Order → Confirmation → DealSpace`

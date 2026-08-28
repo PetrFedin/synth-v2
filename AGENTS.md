@@ -1,6 +1,9 @@
 # Syntha V2 agent rules
 
 - This repository is the only active Syntha V2 codebase.
+- `ARCHITECTURE.md` is the authoritative living platform specification and technical requirements source of truth. It owns the current architecture, domain/UI/API/data contracts, implementation status, gaps and change register; supporting documents may deepen it but must not contradict or replace it.
+- Any change to governed product/runtime behavior, entities/fields/relations, API/OpenAPI, PostgreSQL/migrations, UI/UX/design tokens, roles/actions, lifecycle, deployment, workers, integrations or acceptance evidence MUST update the affected `ARCHITECTURE.md` sections and change register in the same pull request. A behavior-changing PR without that synchronization is incomplete and CI is expected to reject it.
+- When adding or changing a screen/workspace, document its purpose/personas, upstream IDs, blocks, fields, columns, filters, buttons/icons, RU/EN labels, capabilities, handlers/API calls, state transitions, loading/empty/error/conflict states, responsive behavior, downstream effects and automated evidence in `ARCHITECTURE.md`; do not invent unaudited details—mark them PARTIAL/GAP instead.
 - Never modify or import code from frozen legacy Syntha applications.
 - Do not introduce an external identity provider; authentication belongs to Syntha V2.
 - Cross-module imports go only through `public.mjs`.

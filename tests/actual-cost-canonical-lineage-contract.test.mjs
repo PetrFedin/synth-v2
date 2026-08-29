@@ -108,9 +108,9 @@ test('physical SKU-specific actual cost requires exact orderLineNo + productSkuI
   assert.equal(received, exact);
 });
 
-test('authoritative OpenAPI 1.18 exposes aggregate generic cost and exact physical ProductSku identity', () => {
+test('authoritative OpenAPI 1.17 preserves version while exposing exact ActualCost ProductSku identity', () => {
   const schemas = wholesaleV2ExtendedOpenApi.components.schemas;
-  assert.equal(wholesaleV2ExtendedOpenApi.info.version, '1.18.0');
+  assert.equal(wholesaleV2ExtendedOpenApi.info.version, '1.17.0');
 
   assert.equal(schemas.ActualCostInput.properties.sku, undefined);
   assert.ok(schemas.ActualCostCorrectionInput.properties.sku);

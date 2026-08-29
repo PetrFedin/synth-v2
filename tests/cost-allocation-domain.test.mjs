@@ -69,6 +69,7 @@ test('allocation run applies direct, unit, net value and custom bases without ro
     createdAt: at,
   });
 
+  assert.equal(run.lineageMode, 'legacy');
   assert.equal(run.allocatedTotal, 370);
   assert.equal(run.allocations.filter((row) => row.costEntryId === 'COST-DIRECT').length, 1);
   assert.deepEqual(
@@ -95,10 +96,12 @@ test('allocation run applies direct, unit, net value and custom bases without ro
 
   assert.deepEqual(run.skuEconomics, [
     {
+      orderLineNo: null, productSkuId: null,
       sku: 'SKU-A', quantity: 1, netRevenue: 100, allocatedLandedCost: 250.7143,
       contributionMarginAmount: -150.7143, contributionMarginPercent: -150.7143, currency: 'EUR',
     },
     {
+      orderLineNo: null, productSkuId: null,
       sku: 'SKU-B', quantity: 3, netRevenue: 600, allocatedLandedCost: 119.2857,
       contributionMarginAmount: 480.7143, contributionMarginPercent: 80.1191, currency: 'EUR',
     },

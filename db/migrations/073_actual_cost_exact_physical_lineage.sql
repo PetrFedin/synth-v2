@@ -154,8 +154,12 @@ BEGIN
 END;
 $$;
 
+-- PostgreSQL executes BEFORE INSERT triggers of the same kind in name order.
+-- Prefix 000 makes this shape guard run before the older physical-lineage gate,
+-- so incomplete SKU-specific requests fail on missing immutable identity first.
 DROP TRIGGER IF EXISTS actual_cost_canonical_write_guard_trigger ON actual_cost_ledger_entries;
-CREATE TRIGGER actual_cost_canonical_write_guard_trigger
+DROP TRIGGER IF EXISTS actual_cost_000_canonical_write_guard_trigger ON actual_cost_ledger_entries;
+CREATE TRIGGER actual_cost_000_canonical_write_guard_trigger
 BEFORE INSERT ON actual_cost_ledger_entries
 FOR EACH ROW EXECUTE FUNCTION guard_actual_cost_canonical_write();
 

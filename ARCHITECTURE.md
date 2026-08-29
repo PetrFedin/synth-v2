@@ -450,7 +450,7 @@ PR #111 closes the P0 new-write bypass with one contract across HTTP, OpenAPI, a
 - `POST /v2/shipment-notices/:shipmentNoticeId/actual-costs` accepts either no line identity for an aggregate physical cost or the exact pair `orderLineNo + productSkuId` for a SKU-specific cost;
 - supplying only `sku`, only `orderLineNo`, or only `productSkuId` is invalid. Optional `sku`, when present with the exact pair, is only a display/consistency assertion and must match immutable shipment lineage;
 - physical corrections may omit line identity and inherit the immutable original physical line; if a caller supplies identity, the exact pair is mandatory and correction cannot move to another ProductSku line or between aggregate and SKU-specific scope;
-- authoritative OpenAPI contract version `1.18.0` exposes `orderLineNo` and `productSkuId` on physical ActualCost request/response and removes `sku` from generic new-write/post-close inputs while retaining it on historical correction input;
+- the composed authoritative `/v2` OpenAPI contract preserves version `1.17.0` without version drift while exposing `orderLineNo` and `productSkuId` on physical ActualCost request/response and removing `sku` from generic new-write/post-close inputs while retaining it on historical correction input;
 - migration `073_actual_cost_exact_physical_lineage.sql` installs the forward-only `actual_cost_000_canonical_write_guard_trigger` before the existing physical lineage gate. It blocks fresh generic textual-SKU writes and incomplete physical-v2 SKU identity without rewriting historical rows;
 - generic correction of a historical legacy textual-SKU entry remains legal only as append-only reversal + replacement preserving the original SKU/order/commit/supply/brand/shop scope. It cannot introduce SKU scope onto an aggregate row, remove it from a legacy SKU row, move it to another SKU, or route a physical-v2 correction through the generic path;
 - permissions and organisation scope are unchanged: supported writes continue through the existing authenticated/capability-scoped route/application boundaries and database lineage checks.
@@ -680,6 +680,7 @@ Russian and English are mandatory. User-facing strings route through the shared 
 ### 12.1 General rules
 
 - API namespace: `/v2`.
+- The composed authoritative `/v2` OpenAPI `info.version` remains `1.17.0`; module/schema corrections inside the current v2 namespace must not independently create version drift.
 - Auth: bearer access token for protected routes.
 - Business mutation retries reuse the original idempotency key.
 - Transport failures may be retried according to client policy; domain HTTP errors must not be blindly retried with a new command.
@@ -858,7 +859,7 @@ Minimum frozen lineage fields for the current commercial spine include:
 | 2026-08 | #108 | Order currency frozen to submitted Selection lineage | 7.5 | merged; Verify/PostgreSQL CI |
 | 2026-08 | #109 / `4f5c452dede1ce9c8ffe518eddb8b6632cc89ad0` | Real supported runtime process smoke added to `verify:postgres` | 2.2, 15.2 | merged; Verify/MDM/PostgreSQL CI green |
 | 2026-08-28 | #110 | Establish one authoritative platform/UI/data/architecture specification and CI synchronization contract | entire document | merged; `ARCHITECTURE.md` authoritative |
-| 2026-08-29 | #111 | Close ActualCost textual-SKU bypass; require exact ProductSku physical identity; expose HTTP/OpenAPI 1.18.0; add forward-only PostgreSQL guard and compatibility-safe tests | 1.2, 8, 9, 12, 13, 15, 16, 17, 19 | implementation + unit/HTTP/OpenAPI/PostgreSQL evidence in PR; CI/merge pending |
+| 2026-08-29 | #111 | Close ActualCost textual-SKU bypass; require exact ProductSku physical identity; expose exact fields in authoritative OpenAPI 1.17.0 without version drift; add forward-only PostgreSQL guard and compatibility-safe tests | 1.2, 8, 9, 12, 13, 15, 16, 17, 19 | implementation + unit/HTTP/OpenAPI/PostgreSQL evidence in PR; CI/merge pending |
 
 Future implementation PRs add a row here. The row is not a substitute for updating the affected detailed sections.
 

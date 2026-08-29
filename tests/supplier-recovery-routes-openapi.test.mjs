@@ -4,7 +4,8 @@ import { createSupplierRecoveryRoutes } from '../src/http/supplier-recovery-rout
 import { wholesaleV2ExtendedOpenApi } from '../src/http/v2-openapi.mjs';
 
 const validBody = Object.freeze({
-  supplierCode: 'SUP-01', amount: 10, currency: 'EUR', fxRateSnapshotId: null, sku: 'SKU-1',
+  supplierCode: 'SUP-01', amount: 10, currency: 'EUR', fxRateSnapshotId: null,
+  orderLineNo: 1, productSkuId: 'product-sku-1', sku: 'SKU-1',
   sourceRef: 'CREDIT-NOTE-1', occurredAt: '2026-08-11T10:00:00.000Z', reason: 'Accepted supplier credit',
 });
 
@@ -25,19 +26,29 @@ test('supplier recovery routes expose strict mutation and read paths', async () 
   assert.equal(calls[1][2], 'recovery-1');
 });
 
-test('supplier recovery route rejects invalid amount, currency and unknown fields', () => {
+test('supplier recovery route rejects invalid amount, currency, incomplete physical identity and unknown fields', () => {
   const [mutation] = createSupplierRecoveryRoutes({ supplierRecovery: { recordRecovery() {}, getRecoveryForActor() {} } });
   assert.throws(() => mutation.execute({ commandId: 'cmd-1', actorId: 'finance-1', params: ['resolution-1'], query: {}, body: { ...validBody, amount: 0 } }), (error) => error.code === 'HTTP_BODY_FIELD_INVALID');
   assert.throws(() => mutation.execute({ commandId: 'cmd-2', actorId: 'finance-1', params: ['resolution-1'], query: {}, body: { ...validBody, currency: 'eur' } }), (error) => error.code === 'HTTP_BODY_FIELD_INVALID');
-  assert.throws(() => mutation.execute({ commandId: 'cmd-3', actorId: 'finance-1', params: ['resolution-1'], query: {}, body: { ...validBody, surprise: true } }), (error) => error.code === 'HTTP_BODY_FIELD_UNKNOWN');
+  assert.throws(() => mutation.execute({ commandId: 'cmd-3', actorId: 'finance-1', params: ['resolution-1'], query: {}, body: { ...validBody, productSkuId: undefined } }), (error) => error.code === 'HTTP_BODY_FIELD_INVALID');
+  assert.throws(() => mutation.execute({ commandId: 'cmd-4', actorId: 'finance-1', params: ['resolution-1'], query: {}, body: { ...validBody, surprise: true } }), (error) => error.code === 'HTTP_BODY_FIELD_UNKNOWN');
+  assert.doesNotThrow(() => mutation.execute({
+    commandId: 'cmd-aggregate', actorId: 'finance-1', params: ['resolution-1'], query: {},
+    body: { supplierCode:'SUP-01',amount:10,currency:'EUR',fxRateSnapshotId:null,sourceRef:'CREDIT-NOTE-AGG',occurredAt:'2026-08-11T10:00:00.000Z',reason:'Aggregate accepted supplier credit' },
+  }));
 });
 
-test('authoritative OpenAPI contains supplier recovery contracts after claims and economics composition', () => {
+test('authoritative OpenAPI contains exact supplier recovery ProductSku contract after claims and economics composition', () => {
   const post = wholesaleV2ExtendedOpenApi.paths['/receipt-claim-resolutions/{resolutionSnapshotId}/supplier-recoveries']?.post;
   const get = wholesaleV2ExtendedOpenApi.paths['/supplier-recoveries/{recoveryId}']?.get;
   assert.equal(post?.operationId, 'recordSupplierRecovery');
   assert.equal(get?.operationId, 'getSupplierRecovery');
-  assert.ok(wholesaleV2ExtendedOpenApi.components.schemas.SupplierRecoveryInput);
+  const input = wholesaleV2ExtendedOpenApi.components.schemas.SupplierRecoveryInput;
+  assert.ok(input);
+  assert.ok(input.properties.orderLineNo);
+  assert.ok(input.properties.productSkuId);
+  assert.ok(input.properties.sku);
+  assert.ok(Array.isArray(input.anyOf));
   assert.ok(wholesaleV2ExtendedOpenApi.components.schemas.SupplierRecoverySnapshot);
   assert.ok(wholesaleV2ExtendedOpenApi.components.schemas.ActualCostLedgerEntry);
   assert.ok(wholesaleV2ExtendedOpenApi.components.schemas.PostCloseAdjustment);

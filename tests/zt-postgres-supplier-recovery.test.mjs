@@ -8,7 +8,7 @@ import { createPostgresWholesaleRuntime } from '../src/runtime/postgres-runtime.
 const databaseUrl = process.env.POSTGRES_TEST_URL;
 const now = '2026-08-11T10:00:00.000Z';
 
-test('PostgreSQL closes accepted receipt claim into supplier credit, post-close adjustment and new margin', { skip: !databaseUrl }, async () => {
+test('PostgreSQL closes accepted legacy receipt claim into aggregate supplier credit, post-close adjustment and new margin', { skip: !databaseUrl }, async () => {
   const { Pool } = await import('pg');
   const pool = new Pool({ connectionString: databaseUrl, max: 4 });
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -72,12 +72,17 @@ test('PostgreSQL closes accepted receipt claim into supplier credit, post-close 
     });
     assert.equal(costClose.status, 'closed');
 
+    // The fixture predates canonical ProductSku lineage. Recovery remains legal
+    // only as aggregate physical economics and must not infer identity from SKU.
     const result = await runtime.supplierRecovery.recordRecovery('cmd-recovery-credit', 'brand-finance', resolution.id, {
-      supplierCode: 'SUP-RECOVERY', amount: 10, currency: 'EUR', fxRateSnapshotId: null, sku: 'SKU-RECOVERY',
+      supplierCode: 'SUP-RECOVERY', amount: 10, currency: 'EUR', fxRateSnapshotId: null,
       sourceRef: 'CREDIT-NOTE-RECOVERY-1', occurredAt: now, reason: 'Supplier accepted quality claim credit',
     });
     assert.equal(result.actualCost.amount, -10);
     assert.equal(result.actualCost.costType, 'quality');
+    assert.equal(result.actualCost.sku, null);
+    assert.equal(result.actualCost.orderLineNo, null);
+    assert.equal(result.actualCost.productSkuId, null);
     assert.equal(result.actualCost.receiptSnapshotId, received.receipt.id);
     assert.equal(result.actualCost.receiptDiscrepancySnapshotId, received.discrepancy.id);
     assert.equal(result.landedCost.totalCost, 50);
@@ -92,7 +97,7 @@ test('PostgreSQL closes accepted receipt claim into supplier credit, post-close 
 
     await assert.rejects(
       runtime.supplierRecovery.recordRecovery('cmd-recovery-credit-duplicate', 'brand-finance', resolution.id, {
-        supplierCode: 'SUP-RECOVERY', amount: 5, currency: 'EUR', fxRateSnapshotId: null, sku: 'SKU-RECOVERY',
+        supplierCode: 'SUP-RECOVERY', amount: 5, currency: 'EUR', fxRateSnapshotId: null,
         sourceRef: 'CREDIT-NOTE-RECOVERY-1', occurredAt: now, reason: 'Duplicate supplier credit source',
       }),
       (error) => error.code === 'SUPPLIER_RECOVERY_ALREADY_RECORDED',

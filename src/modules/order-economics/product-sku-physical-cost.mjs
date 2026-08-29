@@ -7,21 +7,23 @@ export function resolvePhysicalCostLine(shipment, input = {}) {
   const hasIdentity = requestedOrderLineNo !== null || requestedProductSkuId !== null || requestedSku !== null;
   if (!hasIdentity) return null;
 
+  invariant(
+    requestedOrderLineNo !== null && requestedProductSkuId !== null,
+    'PHYSICAL_ACTUAL_COST_EXACT_IDENTITY_REQUIRED',
+    'SKU-specific physical actual cost requires both immutable orderLineNo and productSkuId',
+    { orderLineNo: requestedOrderLineNo, productSkuId: requestedProductSkuId, sku: requestedSku },
+  );
   invariant(Array.isArray(shipment?.lines) && shipment.lines.length > 0, 'PHYSICAL_ACTUAL_COST_SHIPMENT_LINES_REQUIRED', 'Physical actual cost requires immutable shipment lines');
-  if (requestedOrderLineNo !== null) invariant(Number.isInteger(requestedOrderLineNo) && requestedOrderLineNo > 0, 'PHYSICAL_ACTUAL_COST_ORDER_LINE_NO_INVALID', 'Order line number must be a positive integer', { orderLineNo: requestedOrderLineNo });
-  if (requestedProductSkuId !== null) invariant(typeof requestedProductSkuId === 'string' && requestedProductSkuId.trim().length > 0, 'PHYSICAL_ACTUAL_COST_PRODUCT_SKU_ID_INVALID', 'ProductSku id must be a non-empty string', { productSkuId: requestedProductSkuId });
+  invariant(Number.isInteger(requestedOrderLineNo) && requestedOrderLineNo > 0, 'PHYSICAL_ACTUAL_COST_ORDER_LINE_NO_INVALID', 'Order line number must be a positive integer', { orderLineNo: requestedOrderLineNo });
+  invariant(typeof requestedProductSkuId === 'string' && requestedProductSkuId.trim().length > 0, 'PHYSICAL_ACTUAL_COST_PRODUCT_SKU_ID_INVALID', 'ProductSku id must be a non-empty string', { productSkuId: requestedProductSkuId });
   if (requestedSku !== null) invariant(typeof requestedSku === 'string' && requestedSku.trim().length > 0, 'PHYSICAL_ACTUAL_COST_SKU_INVALID', 'SKU must be a non-empty string', { sku: requestedSku });
 
   const lineages = uniqueShipmentLineages(shipment.lines);
-  let matches;
-  if (requestedOrderLineNo !== null) matches = lineages.filter((line) => line.orderLineNo === requestedOrderLineNo);
-  else if (requestedProductSkuId !== null) matches = lineages.filter((line) => line.productSkuId === requestedProductSkuId);
-  else matches = lineages.filter((line) => line.sku === requestedSku);
+  const matches = lineages.filter((line) =>
+    line.orderLineNo === requestedOrderLineNo && line.productSkuId === requestedProductSkuId,
+  );
 
-  const unknownCode = requestedOrderLineNo === null && requestedProductSkuId === null
-    ? 'PHYSICAL_ACTUAL_COST_SKU_NOT_SHIPPED'
-    : 'PHYSICAL_ACTUAL_COST_ORDER_LINE_UNKNOWN';
-  invariant(matches.length > 0, unknownCode, 'Physical actual cost does not match any immutable shipment order line', {
+  invariant(matches.length > 0, 'PHYSICAL_ACTUAL_COST_ORDER_LINE_UNKNOWN', 'Physical actual cost does not match the exact immutable ProductSku shipment order line', {
     shipmentNoticeSnapshotId: shipment.id,
     orderLineNo: requestedOrderLineNo,
     productSkuId: requestedProductSkuId,
@@ -36,8 +38,7 @@ export function resolvePhysicalCostLine(shipment, input = {}) {
   });
 
   const canonical = matches[0];
-  if (requestedProductSkuId !== null) invariant(canonical.productSkuId === requestedProductSkuId, 'PHYSICAL_ACTUAL_COST_PRODUCT_SKU_MISMATCH', 'Client ProductSku differs from immutable shipment lineage', { expectedProductSkuId: canonical.productSkuId, actualProductSkuId: requestedProductSkuId });
-  if (requestedSku !== null) invariant(canonical.sku === requestedSku, 'PHYSICAL_ACTUAL_COST_SKU_MISMATCH', 'Client SKU differs from immutable shipment lineage', { expectedSku: canonical.sku, actualSku: requestedSku });
+  if (requestedSku !== null) invariant(canonical.sku === requestedSku, 'PHYSICAL_ACTUAL_COST_SKU_MISMATCH', 'Client display SKU differs from immutable shipment lineage', { expectedSku: canonical.sku, actualSku: requestedSku });
   return canonical;
 }
 
@@ -66,9 +67,8 @@ function uniqueShipmentLineages(lines) {
     const productSkuId = typeof line.productSkuId === 'string' && line.productSkuId.trim().length > 0 ? line.productSkuId : null;
     invariant(productSkuId === null || rawOrderLineNo !== null, 'PHYSICAL_ACTUAL_COST_SHIPMENT_PRODUCT_SKU_LINEAGE_INCOMPLETE', 'Canonical shipment line must carry ProductSku and immutable order line number together', { lineId: line.lineId, orderLineNo: rawOrderLineNo, productSkuId });
 
-    // A transitional snapshot may already carry the immutable order line number while
-    // still lacking canonical ProductSku identity. It remains wholly on V1 lineage:
-    // do not promote or guess a partial ProductSku identity from textual SKU.
+    // Transitional snapshots that lack ProductSku remain wholly on V1 lineage and
+    // cannot be used for a new SKU-specific cost. We never infer ProductSku from SKU.
     const orderLineNo = productSkuId === null ? null : rawOrderLineNo;
     const lineage = Object.freeze({ orderLineNo, productSkuId, sku: line.sku });
     const key = `${orderLineNo ?? 'legacy'}\u001f${productSkuId ?? 'legacy'}\u001f${line.sku}`;

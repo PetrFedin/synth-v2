@@ -443,7 +443,7 @@ orderId
 
 ### 9.2 Canonical ActualCost write contract — IMPLEMENTED
 
-PR #111 closes the P0 new-write bypass with one contract across HTTP, OpenAPI, application resolution and PostgreSQL:
+PR #112 closes the P0 new-write bypass with one contract across HTTP, OpenAPI, application resolution and PostgreSQL:
 
 - `POST /v2/orders/:orderId/actual-costs` is aggregate-only. New generic request bodies do not accept `sku`;
 - `POST /v2/orders/:orderId/cost-close/adjustments` is also aggregate-only and cannot introduce SKU scope after close;
@@ -467,7 +467,7 @@ ActualCost corrections remain append-only reversal/replacement entries linked to
 
 ### 9.4 Landed cost / margin / close — IMPLEMENTED/PARTIAL next audit
 
-Economics architecture includes actual costs, allocation/margin/close concepts and immutable lineage. With the P0 ActualCost write-lineage gap closed in #111, the next economics audit must prove the exact chain:
+Economics architecture includes actual costs, allocation/margin/close concepts and immutable lineage. With the P0 ActualCost write-lineage gap closed in #112, the next economics audit must prove the exact chain:
 
 ```text
 ActualCost
@@ -745,7 +745,7 @@ Expand one business slice at a time, preserving explicit before/after invariants
 3. Readiness → Projection → Publication → BuyerCatalog — PLANNED.
 4. BuyerCatalog → Selection → OrderCommit — PLANNED.
 5. OrderCommit → Supply → Shipment — PLANNED.
-6. Shipment → SKU-specific ActualCost → MarginActualization — PLANNED; exact lineage gate implemented in #111, live public acceptance still required after preceding slices.
+6. Shipment → SKU-specific ActualCost → MarginActualization — PLANNED; exact lineage gate implemented in #112, live public acceptance still required after preceding slices.
 7. Full connected Product → Margin golden path — final P0 proof.
 
 A direct service test is not a substitute for a live public API acceptance gate. Aggregate legacy PostgreSQL flows may verify compatibility but do not count as proof of the ProductSku-specific acceptance slice.
@@ -776,7 +776,7 @@ This is the current high-level master status. Supporting detail is kept in this 
 | Inventory | IMPLEMENTED core | continuous reconciliation/golden-path proof |
 | Generic aggregate ActualCost | IMPLEMENTED | live economics acceptance; new generic/post-close writes remain aggregate-only |
 | SKU-specific ActualCost | IMPLEMENTED | live Shipment → ActualCost → Margin acceptance |
-| Landed cost / Margin / Close | IMPLEMENTED/PARTIAL | re-audit exact cost→margin→close/post-close chain after #111 |
+| Landed cost / Margin / Close | IMPLEMENTED/PARTIAL | re-audit exact cost→margin→close/post-close chain after #112 |
 | KPI governance/methodology | PARTIAL production connection | complete exact runtime/persistence/reconciliation |
 | ODS v1 | IMPLEMENTED with compatibility debt | burn legacy layers down; never add new dialect |
 | Full Product → Margin live acceptance | PLANNED | progressively extend after P0 lineage gates |
@@ -787,8 +787,8 @@ This is the current high-level master status. Supporting detail is kept in this 
 
 | ID | Priority | Gap | Required outcome | Status |
 |---|---|---|---|---|
-| `AC-LINEAGE-001` | P0 | Generic ActualCost accepted textual SKU without exact physical lineage | aggregate-only generic path; exact ProductSku physical path; DB fail-closed guard; preserve legacy corrections | CLOSED in #111 |
-| `AC-HTTP-002` | P0 | Physical ActualCost resolver supported exact IDs but HTTP/OpenAPI did not expose them | request + response include `orderLineNo` and `productSkuId`; generic SKU scope removed | CLOSED in #111 |
+| `AC-LINEAGE-001` | P0 | Generic ActualCost accepted textual SKU without exact physical lineage | aggregate-only generic path; exact ProductSku physical path; DB fail-closed guard; preserve legacy corrections | CLOSED in #112 |
+| `AC-HTTP-002` | P0 | Physical ActualCost resolver supported exact IDs but HTTP/OpenAPI did not expose them | request + response include `orderLineNo` and `productSkuId`; generic SKU scope removed | CLOSED in #112 |
 | `ECON-003` | P0 | ActualCost → landed/margin path not re-audited after physical lineage v2 | prove reproducible margin and close semantics from frozen lineage | OPEN — next economics audit |
 | `ACC-004` | P0 | Live acceptance proves only Campaign → Collection | progressively prove canonical Product → Margin spine | OPEN |
 | `PUB-005` | P0 | Some historical publication/catalog behavior remains flat-catalog oriented | projection-only variant-rich publication/buyer catalog | OPEN/PARTIAL |
@@ -863,7 +863,7 @@ Minimum frozen lineage fields for the current commercial spine include:
 | 2026-08 | #108 | Order currency frozen to submitted Selection lineage | 7.5 | merged; Verify/PostgreSQL CI |
 | 2026-08 | #109 / `4f5c452dede1ce9c8ffe518eddb8b6632cc89ad0` | Real supported runtime process smoke added to `verify:postgres` | 2.2, 15.2 | merged; Verify/MDM/PostgreSQL CI green |
 | 2026-08-28 | #110 | Establish one authoritative platform/UI/data/architecture specification and CI synchronization contract | entire document | merged; `ARCHITECTURE.md` authoritative |
-| 2026-08-29 | #111 | Close ActualCost textual-SKU bypass; require exact ProductSku physical and supplier-recovery identity; keep legacy pre-ProductSku physical/recovery fixtures aggregate-only; expose exact fields in authoritative OpenAPI 1.17.0 without version drift; add forward-only PostgreSQL guard and compatibility-safe tests | 1.2, 8, 9, 12, 13, 15, 16, 17, 19 | implementation + unit/HTTP/OpenAPI/PostgreSQL evidence in PR; required CI is merge gate |
+| 2026-08-29 | #112 | Close ActualCost textual-SKU bypass; require exact ProductSku physical and supplier-recovery identity; keep legacy pre-ProductSku physical/recovery fixtures aggregate-only; expose exact fields in authoritative OpenAPI 1.17.0 without version drift; add forward-only PostgreSQL guard and compatibility-safe tests | 1.2, 8, 9, 12, 13, 15, 16, 17, 19 | implementation + unit/HTTP/OpenAPI/PostgreSQL evidence in PR; required CI is merge gate; supersedes draft #111 |
 
 Future implementation PRs add a row here. The row is not a substitute for updating the affected detailed sections.
 

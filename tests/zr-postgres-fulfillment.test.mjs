@@ -13,7 +13,7 @@ import { createCostAllocationService } from '../src/application/cost-allocation-
 const databaseUrl = process.env.POSTGRES_TEST_URL;
 const now = '2026-08-10T00:00:00.000Z';
 
-test('PostgreSQL closes committed order -> fulfillment -> receipt inventory -> physical cost -> landed cost -> SKU allocation -> margin end to end', { skip: !databaseUrl }, async () => {
+test('PostgreSQL closes committed legacy order -> fulfillment -> receipt inventory -> aggregate physical cost -> landed cost -> SKU allocation -> margin end to end', { skip: !databaseUrl }, async () => {
   const { Pool } = await import('pg');
   const pool = new Pool({ connectionString: databaseUrl, max: 6 });
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -89,25 +89,31 @@ test('PostgreSQL closes committed order -> fulfillment -> receipt inventory -> p
     assert.equal(position.positions[0].availableQuantity, 1);
     assert.equal(position.positions[0].quarantineQuantity, 1);
 
+    // This fixture intentionally represents pre-ProductSku order lineage. It may
+    // continue to record aggregate physical costs, but it must not invent a
+    // ProductSku identity from the display SKU.
     const freight = await fulfillment.recordPhysicalActualCost('cmd-pg-freight', 'brand-finance', shipment.id, {
-      costType: 'freight', amount: 30, currency: 'EUR', sku: 'SKU-PG', sourceRef: 'DHL-INV-100', occurredAt: '2026-08-13T14:00:00.000Z',
+      costType: 'freight', amount: 30, currency: 'EUR', sourceRef: 'DHL-INV-100', occurredAt: '2026-08-13T14:00:00.000Z',
     });
     const quality = await fulfillment.recordPhysicalActualCost('cmd-pg-quality', 'brand-finance', shipment.id, {
-      costType: 'quality', amount: 10, currency: 'EUR', sku: 'SKU-PG', sourceRef: 'QC-CLAIM-100', occurredAt: '2026-08-13T15:00:00.000Z',
+      costType: 'quality', amount: 10, currency: 'EUR', sourceRef: 'QC-CLAIM-100', occurredAt: '2026-08-13T15:00:00.000Z',
       receiptDiscrepancySnapshotId: receiptResult.discrepancy.id,
     });
+    assert.equal(freight.sku, null);
+    assert.equal(freight.orderLineNo, null);
+    assert.equal(freight.productSkuId, null);
     assert.equal(quality.receiptSnapshotId, receiptResult.receipt.id);
     assert.equal(quality.receiptDiscrepancySnapshotId, receiptResult.discrepancy.id);
 
     await assert.rejects(
       economics.correctActualCost('cmd-pg-generic-physical-correction', 'brand-finance', 'order-pg', freight.id, {
-        reason: 'Wrong generic path', supplyCommitmentSnapshotId: 'supply-pg', costType: 'freight', amount: 25, currency: 'EUR', sku: 'SKU-PG', sourceRef: 'DHL-CREDIT-100', occurredAt: '2026-08-14T09:00:00.000Z',
+        reason: 'Wrong generic path', supplyCommitmentSnapshotId: 'supply-pg', costType: 'freight', amount: 25, currency: 'EUR', sourceRef: 'DHL-CREDIT-100', occurredAt: '2026-08-14T09:00:00.000Z',
       }),
-      (error) => error.code === 'P0001' && error.message === 'PHYSICAL_ACTUAL_COST_REQUIRES_SHIPMENT_CORRECTION',
+      (error) => error.code === 'ACTUAL_COST_PHYSICAL_CORRECTION_REQUIRES_PHYSICAL_PATH',
     );
 
     const correction = await fulfillment.correctPhysicalActualCost('cmd-pg-physical-correction', 'brand-finance', shipment.id, freight.id, {
-      reason: 'Carrier credit memo', costType: 'freight', amount: 25, currency: 'EUR', sku: 'SKU-PG', sourceRef: 'DHL-CREDIT-100', occurredAt: '2026-08-14T09:00:00.000Z',
+      reason: 'Carrier credit memo', costType: 'freight', amount: 25, currency: 'EUR', sourceRef: 'DHL-CREDIT-100', occurredAt: '2026-08-14T09:00:00.000Z',
     });
     assert.equal(correction.reversal.amount, -30);
     assert.equal(correction.replacement.amount, 25);
@@ -115,6 +121,9 @@ test('PostgreSQL closes committed order -> fulfillment -> receipt inventory -> p
       assert.equal(entry.physicalLineageVersion, 2);
       assert.equal(entry.shipmentNoticeSnapshotId, shipment.id);
       assert.equal(entry.fulfillmentPlanSnapshotId, plan.id);
+      assert.equal(entry.sku, null);
+      assert.equal(entry.orderLineNo, null);
+      assert.equal(entry.productSkuId, null);
     }
 
     const persistedPhysicalRows = await pool.query(

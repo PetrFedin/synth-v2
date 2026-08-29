@@ -20,7 +20,7 @@ function findRoute(routes, method, path) {
   return routes.find((route) => route.method === method && route.pattern.test(path));
 }
 
-test('fulfillment runtime routes cover plan, ASN, receipt, physical cost and discrepancy reads', async () => {
+test('fulfillment runtime routes cover plan, ASN, receipt, exact physical cost and discrepancy reads', async () => {
   const routes = createFulfillmentRoutes({ fulfillment });
   const planRoute = findRoute(routes, 'POST', '/v2/orders/ORDER-1/fulfillment-plans');
   assert.ok(planRoute?.mutation);
@@ -40,7 +40,10 @@ test('fulfillment runtime routes cover plan, ASN, receipt, physical cost and dis
   assert.ok(physicalCostRoute?.mutation);
   await physicalCostRoute.execute({
     actorId: 'finance-1', commandId: 'cmd-cost', params: ['ASN-1'], query: {},
-    body: { costType: 'freight', amount: 30, currency: 'EUR', sku: 'SKU-1', sourceRef: 'DHL-100', occurredAt: '2026-08-13T14:00:00.000Z' },
+    body: {
+      costType: 'freight', amount: 30, currency: 'EUR', orderLineNo: 1, productSkuId: 'product-sku-1', sku: 'SKU-1',
+      sourceRef: 'DHL-100', occurredAt: '2026-08-13T14:00:00.000Z',
+    },
   });
   assert.deepEqual(calls.at(-1).slice(0, 4), ['physical-cost', 'cmd-cost', 'finance-1', 'ASN-1']);
 
@@ -48,7 +51,10 @@ test('fulfillment runtime routes cover plan, ASN, receipt, physical cost and dis
   assert.ok(correctionRoute?.mutation);
   await correctionRoute.execute({
     actorId: 'finance-1', commandId: 'cmd-correct', params: ['ASN-1', 'COST-1'], query: {},
-    body: { reason: 'Credit note', costType: 'freight', amount: 25, currency: 'EUR', sku: 'SKU-1', sourceRef: 'DHL-CREDIT-100', occurredAt: '2026-08-14T09:00:00.000Z' },
+    body: {
+      reason: 'Credit note', costType: 'freight', amount: 25, currency: 'EUR', orderLineNo: 1, productSkuId: 'product-sku-1', sku: 'SKU-1',
+      sourceRef: 'DHL-CREDIT-100', occurredAt: '2026-08-14T09:00:00.000Z',
+    },
   });
   assert.deepEqual(calls.at(-1).slice(0, 5), ['physical-cost-correction', 'cmd-correct', 'finance-1', 'ASN-1', 'COST-1']);
 
@@ -60,7 +66,7 @@ test('fulfillment runtime routes cover plan, ASN, receipt, physical cost and dis
   ]) assert.ok(findRoute(routes, method, path), `missing route ${method} ${path}`);
 });
 
-test('authoritative OpenAPI exposes immutable fulfillment and physical-cost contracts without version drift', () => {
+test('authoritative OpenAPI exposes immutable fulfillment and exact physical-cost contracts without version drift', () => {
   assert.equal(wholesaleV2ExtendedOpenApi.info.version, '1.17.0');
   for (const path of [
     '/orders/{orderId}/fulfillment-plans',
@@ -81,9 +87,13 @@ test('authoritative OpenAPI exposes immutable fulfillment and physical-cost cont
     assert.ok(schema.required.includes('contentHash'), `${schemaName} must be content-addressed`);
   }
   const physicalEntry = wholesaleV2ExtendedOpenApi.components.schemas.PhysicalActualCostLedgerEntry;
-  for (const field of ['physicalLineageVersion', 'fulfillmentPlanSnapshotId', 'shipmentNoticeSnapshotId', 'receiptSnapshotId', 'receiptDiscrepancySnapshotId']) {
+  for (const field of ['physicalLineageVersion', 'fulfillmentPlanSnapshotId', 'shipmentNoticeSnapshotId', 'receiptSnapshotId', 'receiptDiscrepancySnapshotId', 'orderLineNo', 'productSkuId']) {
     assert.ok(physicalEntry.required.includes(field), `physical cost must require ${field}`);
   }
+  const physicalInput = wholesaleV2ExtendedOpenApi.components.schemas.PhysicalActualCostInput;
+  assert.ok(physicalInput.properties.orderLineNo);
+  assert.ok(physicalInput.properties.productSkuId);
+  assert.ok(Array.isArray(physicalInput.anyOf));
   assert.equal(wholesaleV2ExtendedOpenApi.components.schemas.PhysicalActualCostCorrectionInput.additionalProperties, false);
   assert.ok(!Object.hasOwn(wholesaleV2ExtendedOpenApi.components.schemas.PhysicalActualCostCorrectionInput.properties, 'receiptSnapshotId'), 'correction cannot rewrite receipt evidence');
   assert.ok(wholesaleV2ExtendedOpenApi.components.schemas.ShipmentNoticeSnapshot.required.includes('fulfillmentPlanSnapshotId'));
@@ -91,7 +101,7 @@ test('authoritative OpenAPI exposes immutable fulfillment and physical-cost cont
   assert.ok(wholesaleV2ExtendedOpenApi.components.schemas.ReceiptDiscrepancySnapshot.required.includes('latestReceiptSnapshotId'));
 });
 
-test('fulfillment route contracts reject unknown nested fields, duplicate lines and correction evidence rewrites', () => {
+test('fulfillment route contracts reject unknown nested fields, duplicate lines, incomplete physical identity and correction evidence rewrites', () => {
   const routes = createFulfillmentRoutes({ fulfillment });
   const planRoute = findRoute(routes, 'POST', '/v2/orders/ORDER-1/fulfillment-plans');
   assert.throws(() => planRoute.execute({
@@ -112,6 +122,12 @@ test('fulfillment route contracts reject unknown nested fields, duplicate lines 
       lines: [{ lineId: 'line-0001', quantity: 1 }, { lineId: 'line-0001', quantity: 1 }],
       shippedAt: '2026-08-11T00:00:00.000Z', expectedDeliveryAt: '2026-08-13T00:00:00.000Z',
     },
+  }), (error) => error.code === 'HTTP_BODY_FIELD_INVALID');
+
+  const physicalCostRoute = findRoute(routes, 'POST', '/v2/shipment-notices/ASN-1/actual-costs');
+  assert.throws(() => physicalCostRoute.execute({
+    actorId: 'finance-1', commandId: 'cmd-incomplete', params: ['ASN-1'], query: {},
+    body: { costType: 'freight', amount: 30, currency: 'EUR', sku: 'SKU-1', sourceRef: 'DHL-100', occurredAt: '2026-08-13T14:00:00.000Z' },
   }), (error) => error.code === 'HTTP_BODY_FIELD_INVALID');
 
   const correctionRoute = findRoute(routes, 'POST', '/v2/shipment-notices/ASN-1/actual-costs/COST-1/corrections');

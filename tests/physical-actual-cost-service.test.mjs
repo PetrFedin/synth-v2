@@ -12,13 +12,13 @@ function fixture() {
   const orderCommit = Object.freeze({
     id: 'commit-1', orderId: 'order-1', orderVersion: 2, brandId: 'brand-1', shopId: 'shop-1', currency: 'EUR', status: 'committed',
     commercialPublicationId: 'pub-1', priceListVersionId: 'price-1', buyerCatalogVersionId: 'catalog-1',
-    lines: Object.freeze([{ sku: 'SKU-1', quantity: 2, unitPrice: 100 }]),
+    lines: Object.freeze([{ orderLineNo: 1, productSkuId: 'product-sku-1', sku: 'SKU-1', quantity: 2, unitPrice: 100 }]),
   });
   const supply = Object.freeze({ id: 'supply-1', orderId: 'order-1', orderCommitSnapshotId: 'commit-1', brandId: 'brand-1', shopId: 'shop-1', currency: 'EUR', status: 'committed' });
   const shipment = Object.freeze({
     id: 'asn-1', orderId: 'order-1', orderCommitSnapshotId: 'commit-1', supplyCommitmentSnapshotId: 'supply-1', fulfillmentPlanSnapshotId: 'plan-1',
     brandId: 'brand-1', shopId: 'shop-1', status: 'shipped',
-    lines: Object.freeze([{ lineId: 'line-0001', sku: 'SKU-1', quantity: 2, sourceType: 'inventory', sourceRef: 'inventory-main' }]),
+    lines: Object.freeze([{ lineId: 'line-0001', orderLineNo: 1, productSkuId: 'product-sku-1', sku: 'SKU-1', quantity: 2, sourceType: 'inventory', sourceRef: 'inventory-main' }]),
   });
   const receipt = Object.freeze({
     id: 'receipt-1', shipmentNoticeSnapshotId: 'asn-1', fulfillmentPlanSnapshotId: 'plan-1', orderCommitSnapshotId: 'commit-1',
@@ -55,10 +55,10 @@ function fixture() {
 }
 
 const freight = Object.freeze({
-  costType: 'freight', amount: 30, currency: 'EUR', sku: 'SKU-1', sourceRef: 'DHL-INV-100', occurredAt: '2026-08-13T14:00:00.000Z',
+  costType: 'freight', amount: 30, currency: 'EUR', orderLineNo: 1, productSkuId: 'product-sku-1', sku: 'SKU-1', sourceRef: 'DHL-INV-100', occurredAt: '2026-08-13T14:00:00.000Z',
 });
 
-test('finance records shipment-linked cost into canonical actual-cost ledger shape', async () => {
+test('finance records shipment-linked cost into canonical exact ProductSku actual-cost ledger shape', async () => {
   const { state, service } = fixture();
   const entry = await service.recordPhysicalActualCost('cmd-1', 'finance-1', 'asn-1', freight);
   assert.equal(entry.orderCommitSnapshotId, 'commit-1');
@@ -66,6 +66,9 @@ test('finance records shipment-linked cost into canonical actual-cost ledger sha
   assert.equal(entry.physicalLineageVersion, 2);
   assert.equal(entry.fulfillmentPlanSnapshotId, 'plan-1');
   assert.equal(entry.shipmentNoticeSnapshotId, 'asn-1');
+  assert.equal(entry.orderLineNo, 1);
+  assert.equal(entry.productSkuId, 'product-sku-1');
+  assert.equal(entry.sku, 'SKU-1');
   assert.equal(entry.receiptSnapshotId, null);
   assert.equal(entry.amount, 30);
   assert.equal(state.entries.length, 1);
@@ -76,19 +79,21 @@ test('finance records shipment-linked cost into canonical actual-cost ledger sha
 test('quality cost derives exact receipt evidence from discrepancy snapshot', async () => {
   const { service } = fixture();
   const entry = await service.recordPhysicalActualCost('cmd-quality', 'finance-1', 'asn-1', {
-    costType: 'quality', amount: 12.5, currency: 'EUR', sku: 'SKU-1', sourceRef: 'QC-CLAIM-1', occurredAt: '2026-08-14T08:00:00.000Z',
+    costType: 'quality', amount: 12.5, currency: 'EUR', orderLineNo: 1, productSkuId: 'product-sku-1', sku: 'SKU-1', sourceRef: 'QC-CLAIM-1', occurredAt: '2026-08-14T08:00:00.000Z',
     receiptDiscrepancySnapshotId: 'disc-1',
   });
+  assert.equal(entry.orderLineNo, 1);
+  assert.equal(entry.productSkuId, 'product-sku-1');
   assert.equal(entry.receiptSnapshotId, 'receipt-1');
   assert.equal(entry.receiptDiscrepancySnapshotId, 'disc-1');
 });
 
-test('shipment-scoped correction preserves physical lineage in ledger result and events', async () => {
+test('shipment-scoped correction preserves exact physical lineage in ledger result and events', async () => {
   const { state, service } = fixture();
   const original = await service.recordPhysicalActualCost('cmd-original', 'finance-1', 'asn-1', freight);
   const result = await service.correctPhysicalActualCost('cmd-correct', 'finance-1', 'asn-1', original.id, {
     reason: 'Carrier credit memo',
-    costType: 'freight', amount: 25, currency: 'EUR', sku: 'SKU-1', sourceRef: 'DHL-CREDIT-100', occurredAt: '2026-08-14T09:00:00.000Z',
+    costType: 'freight', amount: 25, currency: 'EUR', orderLineNo: 1, productSkuId: 'product-sku-1', sku: 'SKU-1', sourceRef: 'DHL-CREDIT-100', occurredAt: '2026-08-14T09:00:00.000Z',
   });
 
   assert.equal(result.reversal.reversalOfEntryId, original.id);
@@ -98,6 +103,9 @@ test('shipment-scoped correction preserves physical lineage in ledger result and
     assert.equal(entry.physicalLineageVersion, 2);
     assert.equal(entry.fulfillmentPlanSnapshotId, 'plan-1');
     assert.equal(entry.shipmentNoticeSnapshotId, 'asn-1');
+    assert.equal(entry.orderLineNo, 1);
+    assert.equal(entry.productSkuId, 'product-sku-1');
+    assert.equal(entry.sku, 'SKU-1');
     assert.equal(entry.receiptSnapshotId, null);
   }
   assert.equal(state.entries.length, 3);
@@ -107,17 +115,28 @@ test('shipment-scoped correction preserves physical lineage in ledger result and
 
   const replay = await service.correctPhysicalActualCost('cmd-correct', 'finance-1', 'asn-1', original.id, {
     reason: 'Carrier credit memo',
-    costType: 'freight', amount: 25, currency: 'EUR', sku: 'SKU-1', sourceRef: 'DHL-CREDIT-100', occurredAt: '2026-08-14T09:00:00.000Z',
+    costType: 'freight', amount: 25, currency: 'EUR', orderLineNo: 1, productSkuId: 'product-sku-1', sku: 'SKU-1', sourceRef: 'DHL-CREDIT-100', occurredAt: '2026-08-14T09:00:00.000Z',
   });
   assert.equal(replay.correctionId, result.correctionId);
   assert.equal(state.entries.length, 3);
 });
 
-test('physical cost is finance-authorized, SKU-scoped and blocked after cost close', async () => {
+test('physical cost is finance-authorized, exact ProductSku-scoped and blocked after cost close', async () => {
   const { state, service } = fixture();
   await assert.rejects(service.recordPhysicalActualCost('cmd-sales', 'sales-1', 'asn-1', freight), (error) => error.code === 'CAPABILITY_DENIED');
   await assert.rejects(service.recordPhysicalActualCost('cmd-buyer', 'buyer-1', 'asn-1', freight), (error) => error.code === 'ACTIVE_MEMBERSHIP_REQUIRED');
-  await assert.rejects(service.recordPhysicalActualCost('cmd-sku', 'finance-1', 'asn-1', { ...freight, sku: 'SKU-X' }), (error) => error.code === 'PHYSICAL_ACTUAL_COST_SKU_NOT_SHIPPED');
+  await assert.rejects(
+    service.recordPhysicalActualCost('cmd-sku', 'finance-1', 'asn-1', { ...freight, sku: 'SKU-X' }),
+    (error) => error.code === 'PHYSICAL_ACTUAL_COST_SKU_MISMATCH',
+  );
+  await assert.rejects(
+    service.recordPhysicalActualCost('cmd-line', 'finance-1', 'asn-1', { ...freight, productSkuId: 'product-sku-x' }),
+    (error) => error.code === 'PHYSICAL_ACTUAL_COST_ORDER_LINE_UNKNOWN',
+  );
+  await assert.rejects(
+    service.recordPhysicalActualCost('cmd-incomplete', 'finance-1', 'asn-1', { ...freight, orderLineNo: undefined }),
+    (error) => error.code === 'PHYSICAL_ACTUAL_COST_EXACT_IDENTITY_REQUIRED',
+  );
   await assert.rejects(service.recordPhysicalActualCost('cmd-quality', 'finance-1', 'asn-1', { ...freight, costType: 'quality' }), (error) => error.code === 'PHYSICAL_ACTUAL_COST_RECEIPT_REQUIRED');
   state.costClose = { id: 'close-1' };
   await assert.rejects(service.recordPhysicalActualCost('cmd-closed', 'finance-1', 'asn-1', freight), (error) => error.code === 'COST_CLOSE_REQUIRES_POST_CLOSE_ADJUSTMENT');

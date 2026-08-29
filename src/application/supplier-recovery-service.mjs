@@ -27,7 +27,7 @@ export function createSupplierRecoveryService({ store, clock = () => new Date().
 
         const claim = requireEntity(await tx.getClaim(resolution.claimSnapshotId),'RECEIPT_CLAIM_NOT_FOUND',{claimSnapshotId:resolution.claimSnapshotId});
         invariant(claim.contentHash===resolution.claimContentHash,'SUPPLIER_RECOVERY_CLAIM_HASH_MISMATCH','Resolution does not pin the supplied immutable claim');
-        if (input.sku != null) invariant(claim.lines.some((line)=>line.sku===input.sku),'SUPPLIER_RECOVERY_SKU_NOT_CLAIMED','SKU recovery must reference an issue SKU in the immutable claim',{sku:input.sku});
+        const recoveryLine = resolveRecoveryClaimLine(claim,input);
         const supplier = requireEntity(await tx.getSupplierByCode(resolution.brandId,input.supplierCode),'SUPPLIER_NOT_FOUND',{supplierCode:input.supplierCode,brandId:resolution.brandId});
         invariant(supplier.brandId===resolution.brandId,'SUPPLIER_RECOVERY_SUPPLIER_MISMATCH','Supplier belongs to another brand',{supplierCode:input.supplierCode});
         invariant(supplier.status!=='draft','SUPPLIER_RECOVERY_SUPPLIER_UNESTABLISHED','Draft supplier cannot be used for recovery',{supplierCode:input.supplierCode});
@@ -39,7 +39,7 @@ export function createSupplierRecoveryService({ store, clock = () => new Date().
         const recordedAt = clock();
         const baseCost = createActualCostLedgerEntry({
           id: nextId('actual-cost'), order, orderCommit, supplyCommitment, costType:'quality', amount:-input.amount, currency:input.currency,
-          fxRateSnapshot, sku:input.sku??null, sourceRef:input.sourceRef, occurredAt:input.occurredAt, recordedAt,
+          fxRateSnapshot, sku:recoveryLine?.sku??null, sourceRef:input.sourceRef, occurredAt:input.occurredAt, recordedAt,
         });
         const actualCost = Object.freeze({
           ...baseCost, physicalLineageVersion:2,
@@ -47,6 +47,9 @@ export function createSupplierRecoveryService({ store, clock = () => new Date().
           shipmentNoticeSnapshotId:resolution.shipmentNoticeSnapshotId,
           receiptSnapshotId:resolution.latestReceiptSnapshotId,
           receiptDiscrepancySnapshotId:resolution.receiptDiscrepancySnapshotId,
+          orderLineNo:recoveryLine?.orderLineNo??null,
+          productSkuId:recoveryLine?.productSkuId??null,
+          sku:recoveryLine?.sku??null,
         });
         await tx.insertPhysicalActualCostEntry(actualCost);
         const entries = (await tx.listActualCostEntries(order.id)).filter((entry)=>entry.orderCommitSnapshotId===orderCommit.id);
@@ -72,11 +75,11 @@ export function createSupplierRecoveryService({ store, clock = () => new Date().
         const recovery = createSupplierRecoverySnapshot({id:nextId('supplier-recovery'),resolution,supplier,actualCost,landedCost,marginActualization,costClose,postCloseAdjustment,reason:input.reason,recordedAt});
         await tx.insertRecovery(recovery);
 
-        await append(tx,'actual-cost.recorded',actualCost.id,{orderId:actualCost.orderId,orderCommitSnapshotId:actualCost.orderCommitSnapshotId,supplyCommitmentSnapshotId:actualCost.supplyCommitmentSnapshotId,physicalLineageVersion:2,fulfillmentPlanSnapshotId:actualCost.fulfillmentPlanSnapshotId,shipmentNoticeSnapshotId:actualCost.shipmentNoticeSnapshotId,receiptSnapshotId:actualCost.receiptSnapshotId,receiptDiscrepancySnapshotId:actualCost.receiptDiscrepancySnapshotId,costType:actualCost.costType,amount:actualCost.amount,currency:actualCost.currency,sourceRef:actualCost.sourceRef},commandId,actorId);
+        await append(tx,'actual-cost.recorded',actualCost.id,{orderId:actualCost.orderId,orderCommitSnapshotId:actualCost.orderCommitSnapshotId,supplyCommitmentSnapshotId:actualCost.supplyCommitmentSnapshotId,physicalLineageVersion:2,fulfillmentPlanSnapshotId:actualCost.fulfillmentPlanSnapshotId,shipmentNoticeSnapshotId:actualCost.shipmentNoticeSnapshotId,receiptSnapshotId:actualCost.receiptSnapshotId,receiptDiscrepancySnapshotId:actualCost.receiptDiscrepancySnapshotId,orderLineNo:actualCost.orderLineNo,productSkuId:actualCost.productSkuId,sku:actualCost.sku,costType:actualCost.costType,amount:actualCost.amount,currency:actualCost.currency,sourceRef:actualCost.sourceRef},commandId,actorId);
         await append(tx,'landed-cost.actualized',landedCost.id,{orderId:landedCost.orderId,orderCommitSnapshotId:landedCost.orderCommitSnapshotId,totalCost:landedCost.totalCost,currency:landedCost.currency,contentHash:landedCost.contentHash,supplierRecoveryId:recovery.id},commandId,actorId);
         await append(tx,'margin.actualized',marginActualization.id,{orderId:marginActualization.orderId,orderCommitSnapshotId:marginActualization.orderCommitSnapshotId,landedCostSnapshotId:landedCost.id,netRevenue:marginActualization.netRevenue,landedCost:marginActualization.landedCost,contributionMarginAmount:marginActualization.contributionMarginAmount,contributionMarginPercent:marginActualization.contributionMarginPercent,contentHash:marginActualization.contentHash,supplierRecoveryId:recovery.id},commandId,actorId);
         if(postCloseAdjustment) await append(tx,'cost-close.adjustment-recorded',postCloseAdjustment.id,{orderId:postCloseAdjustment.orderId,orderCommitSnapshotId:postCloseAdjustment.orderCommitSnapshotId,costCloseSnapshotId:postCloseAdjustment.costCloseSnapshotId,actualCostEntryId:postCloseAdjustment.actualCostEntryId,costDeltaAmount:postCloseAdjustment.costDeltaAmount,marginDeltaAmount:postCloseAdjustment.marginDeltaAmount,supplierRecoveryId:recovery.id},commandId,actorId);
-        await append(tx,'supplier-recovery.recorded.v1',recovery.id,{claimResolutionSnapshotId:recovery.claimResolutionSnapshotId,claimSnapshotId:recovery.claimSnapshotId,supplierCode:recovery.supplierCode,sourceRef:recovery.sourceRef,recoveryAmount:recovery.recoveryAmount,currency:recovery.currency,actualCostEntryId:recovery.actualCostEntryId,landedCostSnapshotId:recovery.landedCostSnapshotId,marginActualizationSnapshotId:recovery.marginActualizationSnapshotId,costCloseSnapshotId:recovery.costCloseSnapshotId,postCloseAdjustmentId:recovery.postCloseAdjustmentId,contentHash:recovery.contentHash},commandId,actorId);
+        await append(tx,'supplier-recovery.recorded.v1',recovery.id,{claimResolutionSnapshotId:recovery.claimResolutionSnapshotId,claimSnapshotId:recovery.claimSnapshotId,supplierCode:recovery.supplierCode,sourceRef:recovery.sourceRef,recoveryAmount:recovery.recoveryAmount,currency:recovery.currency,actualCostEntryId:recovery.actualCostEntryId,landedCostSnapshotId:recovery.landedCostSnapshotId,marginActualizationSnapshotId:recovery.marginActualizationSnapshotId,costCloseSnapshotId:recovery.costCloseSnapshotId,postCloseAdjustmentId:recovery.postCloseAdjustmentId,orderLineNo:actualCost.orderLineNo,productSkuId:actualCost.productSkuId,sku:actualCost.sku,contentHash:recovery.contentHash},commandId,actorId);
         const result=Object.freeze({recovery,actualCost,landedCost,marginActualization,postCloseAdjustment});
         await tx.insertCommand(Object.freeze({id:commandId,fingerprint,actorId,result,completedAt:clock()}));
         return result;
@@ -85,6 +88,17 @@ export function createSupplierRecoveryService({ store, clock = () => new Date().
 
     getRecoveryForActor(actorId,recoveryId){ return store.transaction(async(tx)=>{ const recovery=requireEntity(await tx.getRecovery(recoveryId),'SUPPLIER_RECOVERY_NOT_FOUND',{recoveryId}); const membership=await tx.getMembership(recovery.brandId,actorId); assertCapability(membership,CAPABILITIES.MARGIN_READ); invariant(membership.organisationId===recovery.brandId,'SUPPLIER_RECOVERY_BRAND_MEMBERSHIP_REQUIRED','Supplier recovery is brand-internal economics',{brandId:recovery.brandId,actorId}); return recovery; }); },
   });
+}
+function resolveRecoveryClaimLine(claim,input){
+  const hasIdentity=input?.orderLineNo!=null||input?.productSkuId!=null||input?.sku!=null;
+  if(!hasIdentity)return null;
+  invariant(Number.isInteger(input.orderLineNo)&&input.orderLineNo>0,'SUPPLIER_RECOVERY_EXACT_PRODUCT_SKU_LINEAGE_REQUIRED','SKU-specific supplier recovery requires immutable orderLineNo and productSkuId',{orderLineNo:input.orderLineNo,productSkuId:input.productSkuId??null,sku:input.sku??null});
+  invariant(typeof input.productSkuId==='string'&&input.productSkuId.trim().length>0,'SUPPLIER_RECOVERY_EXACT_PRODUCT_SKU_LINEAGE_REQUIRED','SKU-specific supplier recovery requires immutable orderLineNo and productSkuId',{orderLineNo:input.orderLineNo,productSkuId:input.productSkuId??null,sku:input.sku??null});
+  const matches=(claim.lines??[]).filter((line)=>line?.orderLineNo===input.orderLineNo&&line?.productSkuId===input.productSkuId);
+  invariant(matches.length===1,'SUPPLIER_RECOVERY_PRODUCT_SKU_LINE_NOT_CLAIMED','Supplier recovery must resolve to exactly one immutable ProductSku issue line in the claim',{orderLineNo:input.orderLineNo,productSkuId:input.productSkuId,matches:matches.length});
+  const line=matches[0];
+  if(input.sku!=null) invariant(line.sku===input.sku,'SUPPLIER_RECOVERY_SKU_MISMATCH','Display SKU differs from immutable claim ProductSku lineage',{expectedSku:line.sku,actualSku:input.sku});
+  return Object.freeze({orderLineNo:line.orderLineNo,productSkuId:line.productSkuId,sku:line.sku});
 }
 function requireEntity(entity,code,details){ invariant(entity,code,'Entity not found',details); return entity; }
 function defaultIdGenerator(){let sequence=0;return(prefix)=>`${prefix}_${++sequence}`;}

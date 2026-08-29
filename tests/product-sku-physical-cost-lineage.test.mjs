@@ -12,7 +12,7 @@ function shipment(lines) {
   });
 }
 
-test('SKU-only physical cost is rejected when textual SKU maps to multiple immutable ProductSku order lines', () => {
+test('textual SKU alone cannot identify a new SKU-specific physical actual cost', () => {
   const value = shipment([
     { lineId: 'line-1', orderLineNo: 1, productSkuId: 'product-sku-red-38', sku: 'DUP-SKU', quantity: 1 },
     { lineId: 'line-2', orderLineNo: 2, productSkuId: 'product-sku-blue-38', sku: 'DUP-SKU', quantity: 1 },
@@ -20,17 +20,35 @@ test('SKU-only physical cost is rejected when textual SKU maps to multiple immut
 
   assert.throws(
     () => resolvePhysicalCostLine(value, { sku: 'DUP-SKU' }),
-    (error) => error.code === 'PHYSICAL_ACTUAL_COST_ORDER_LINE_AMBIGUOUS',
+    (error) => error.code === 'PHYSICAL_ACTUAL_COST_EXACT_IDENTITY_REQUIRED',
   );
 });
 
-test('immutable orderLineNo resolves exact ProductSku physical cost lineage', () => {
+test('orderLineNo or productSkuId alone cannot identify a physical actual cost', () => {
+  const value = shipment([
+    { lineId: 'line-1', orderLineNo: 1, productSkuId: 'product-sku-red-38', sku: 'SKU-1', quantity: 1 },
+  ]);
+
+  for (const input of [{ orderLineNo: 1 }, { productSkuId: 'product-sku-red-38' }]) {
+    assert.throws(
+      () => resolvePhysicalCostLine(value, input),
+      (error) => error.code === 'PHYSICAL_ACTUAL_COST_EXACT_IDENTITY_REQUIRED',
+    );
+  }
+});
+
+test('exact orderLineNo plus ProductSku resolves canonical physical cost lineage', () => {
   const value = shipment([
     { lineId: 'line-1', orderLineNo: 1, productSkuId: 'product-sku-red-38', sku: 'DUP-SKU', quantity: 1 },
     { lineId: 'line-2', orderLineNo: 2, productSkuId: 'product-sku-blue-38', sku: 'DUP-SKU', quantity: 1 },
   ]);
 
-  assert.deepEqual(resolvePhysicalCostLine(value, { orderLineNo: 1 }), {
+  assert.deepEqual(resolvePhysicalCostLine(value, { orderLineNo: 1, productSkuId: 'product-sku-red-38' }), {
+    orderLineNo: 1,
+    productSkuId: 'product-sku-red-38',
+    sku: 'DUP-SKU',
+  });
+  assert.deepEqual(resolvePhysicalCostLine(value, { orderLineNo: 1, productSkuId: 'product-sku-red-38', sku: 'DUP-SKU' }), {
     orderLineNo: 1,
     productSkuId: 'product-sku-red-38',
     sku: 'DUP-SKU',
@@ -44,35 +62,45 @@ test('client ProductSku cannot override immutable shipment order-line lineage', 
 
   assert.throws(
     () => resolvePhysicalCostLine(value, { orderLineNo: 1, productSkuId: 'forged-product-sku', sku: 'SKU-1' }),
-    (error) => error.code === 'PHYSICAL_ACTUAL_COST_PRODUCT_SKU_MISMATCH',
+    (error) => error.code === 'PHYSICAL_ACTUAL_COST_ORDER_LINE_UNKNOWN',
   );
 });
 
-test('multiple shipment lines for one immutable ProductSku identity do not create false ambiguity', () => {
+test('display SKU is only a consistency assertion after exact identity resolves', () => {
+  const value = shipment([
+    { lineId: 'line-1', orderLineNo: 1, productSkuId: 'product-sku-1', sku: 'SKU-1', quantity: 1 },
+  ]);
+
+  assert.throws(
+    () => resolvePhysicalCostLine(value, { orderLineNo: 1, productSkuId: 'product-sku-1', sku: 'WRONG-SKU' }),
+    (error) => error.code === 'PHYSICAL_ACTUAL_COST_SKU_MISMATCH',
+  );
+});
+
+test('multiple shipment rows for one exact immutable ProductSku identity do not create false ambiguity', () => {
   const value = shipment([
     { lineId: 'line-1-a', orderLineNo: 1, productSkuId: 'product-sku-1', sku: 'SKU-1', quantity: 1 },
     { lineId: 'line-1-b', orderLineNo: 1, productSkuId: 'product-sku-1', sku: 'SKU-1', quantity: 2 },
   ]);
 
-  assert.deepEqual(resolvePhysicalCostLine(value, { sku: 'SKU-1' }), {
+  assert.deepEqual(resolvePhysicalCostLine(value, { orderLineNo: 1, productSkuId: 'product-sku-1' }), {
     orderLineNo: 1,
     productSkuId: 'product-sku-1',
     sku: 'SKU-1',
   });
 });
 
-test('transitional shipment orderLineNo without ProductSku remains wholly on legacy physical cost lineage', () => {
+test('transitional shipment without ProductSku cannot accept a new SKU-specific physical cost', () => {
   const value = shipment([
     { lineId: 'line-legacy', orderLineNo: 1, sku: 'LEGACY-SKU', quantity: 1 },
   ]);
 
-  assert.deepEqual(resolvePhysicalCostLine(value, { sku: 'LEGACY-SKU' }), {
-    orderLineNo: null,
-    productSkuId: null,
-    sku: 'LEGACY-SKU',
-  });
   assert.throws(
-    () => resolvePhysicalCostLine(value, { orderLineNo: 1, sku: 'LEGACY-SKU' }),
+    () => resolvePhysicalCostLine(value, { sku: 'LEGACY-SKU' }),
+    (error) => error.code === 'PHYSICAL_ACTUAL_COST_EXACT_IDENTITY_REQUIRED',
+  );
+  assert.throws(
+    () => resolvePhysicalCostLine(value, { orderLineNo: 1, productSkuId: 'invented-product-sku', sku: 'LEGACY-SKU' }),
     (error) => error.code === 'PHYSICAL_ACTUAL_COST_ORDER_LINE_UNKNOWN',
   );
 });
@@ -83,7 +111,7 @@ test('ProductSku shipment lineage without immutable orderLineNo is rejected', ()
   ]);
 
   assert.throws(
-    () => resolvePhysicalCostLine(value, { sku: 'SKU-1' }),
+    () => resolvePhysicalCostLine(value, { orderLineNo: 1, productSkuId: 'product-sku-1' }),
     (error) => error.code === 'PHYSICAL_ACTUAL_COST_SHIPMENT_PRODUCT_SKU_LINEAGE_INCOMPLETE',
   );
 });

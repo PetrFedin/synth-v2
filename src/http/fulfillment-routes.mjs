@@ -22,6 +22,8 @@ const PHYSICAL_COST_BODY = bodyContract([
   'amount',
   'currency',
   'fxRateSnapshotId',
+  'orderLineNo',
+  'productSkuId',
   'sku',
   'sourceRef',
   'occurredAt',
@@ -34,6 +36,8 @@ const PHYSICAL_COST_CORRECTION_BODY = bodyContract([
   'amount',
   'currency',
   'fxRateSnapshotId',
+  'orderLineNo',
+  'productSkuId',
   'sku',
   'sourceRef',
   'occurredAt',
@@ -127,9 +131,18 @@ function validatePhysicalCostWriteFields(body) {
   requiredString(body.currency, 'currency', 3, 3);
   invariant(/^[A-Z]{3}$/.test(body.currency), 'HTTP_BODY_FIELD_INVALID', 'currency must be an ISO-4217 code', { field: 'currency' });
   optionalString(body.fxRateSnapshotId, 'fxRateSnapshotId', 200);
-  optionalString(body.sku, 'sku', 200);
+  validatePhysicalCostIdentity(body);
   requiredString(body.sourceRef, 'sourceRef', 1, 240);
   timestamp(body.occurredAt, 'occurredAt');
+}
+
+function validatePhysicalCostIdentity(body) {
+  const hasIdentity = body.orderLineNo !== undefined || body.productSkuId !== undefined || body.sku !== undefined;
+  if (!hasIdentity) return;
+  invariant(body.orderLineNo !== undefined && body.productSkuId !== undefined, 'HTTP_BODY_FIELD_INVALID', 'SKU-specific physical actual cost requires orderLineNo and productSkuId together', { field: 'orderLineNo' });
+  positiveInteger(body.orderLineNo, 'orderLineNo');
+  requiredString(body.productSkuId, 'productSkuId', 1, 200);
+  optionalString(body.sku, 'sku', 200);
 }
 
 function validateLocation(value, field) {

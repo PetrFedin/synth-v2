@@ -18,11 +18,17 @@ function schemas() {
     SupplierRecoveryInput: {
       type: 'object', additionalProperties: false,
       required: ['supplierCode', 'amount', 'currency', 'sourceRef', 'occurredAt', 'reason'],
+      anyOf: [
+        { required: ['orderLineNo', 'productSkuId'] },
+        { not: { anyOf: [{ required: ['orderLineNo'] }, { required: ['productSkuId'] }, { required: ['sku'] }] } },
+      ],
       properties: {
         supplierCode: { type: 'string', minLength: 2, maxLength: 64 },
         amount: money,
         currency,
         fxRateSnapshotId: nullableIdentifier,
+        orderLineNo: { type: 'integer', minimum: 1, maximum: 2147483647 },
+        productSkuId: identifier,
         sku: { oneOf: [{ type: 'string', minLength: 1, maxLength: 160 }, { type: 'null' }] },
         sourceRef: { type: 'string', minLength: 1, maxLength: 240 },
         occurredAt: { type: 'string', format: 'date-time' },

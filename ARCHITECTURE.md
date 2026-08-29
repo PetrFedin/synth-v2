@@ -1,7 +1,7 @@
 # Syntha V2 — Platform Master Specification
 
 > **Canonical living specification / architecture / product requirements / UI contract**  
-> Status date: **2026-08-28**  
+> Status date: **2026-08-29**  
 > Baseline when this master specification was established: `main@4f5c452dede1ce9c8ffe518eddb8b6632cc89ad0`  
 > Document status: **AUTHORITATIVE / LIVING**
 
@@ -196,7 +196,6 @@ Verification may create durable fixtures; it must never point at workspace or pr
 ---
 
 ## 3. Architecture invariants
-
 ### 3.1 One Product Master
 
 Product Identity V2 is the only canonical Style/StyleVersion/Colorway/Size/SKU hierarchy. `catalog_skus` is a temporary compatibility surface and must not receive new product semantics.
@@ -397,7 +396,6 @@ Showroom/linesheet is a buyer-facing commercial presentation of publication/cata
 Selection exists, but the target buyer matrix must preserve exact BuyerCatalogVersion, ProductSku, ordered size, price and commercial context. Draft context must not silently change when mutable catalog/master records change.
 
 ### 7.5 WholesaleOrder — IMPLEMENTED
-
 Order lifecycle and bilateral confirmation are executable. Order creation consumes frozen submitted Selection lineage. Currency is derived/validated against the frozen selection lines rather than accepted as an independent mutable client fact.
 
 ### 7.6 OrderCommitSnapshot — IMPLEMENTED
@@ -412,9 +410,9 @@ Immutable deal snapshot used by supply/economics. Physical/economic facts must r
 
 Supply allocations preserve committed order lineage. Canonical ProductSku supply lineage uses exact `orderLineNo + productSkuId + sku(display)` rather than textual SKU alone.
 
-### 8.2 Shipment / receipt — PARTIAL end-to-end depth
+### 8.2 Shipment / receipt / supplier recovery — PARTIAL end-to-end depth
 
-Shipment and physical recovery capabilities exist. Canonical shipment lines are expected to preserve exact committed order line/ProductSku identity. Receipt discrepancies/recovery must remain traceable to the same physical lineage.
+Shipment, receipt, claim resolution and supplier recovery capabilities exist. Canonical shipment/claim lines are expected to preserve exact committed order line/ProductSku identity. `POST /v2/receipt-claim-resolutions/:resolutionSnapshotId/supplier-recoveries` accepts either no line identity for aggregate recovery or the exact `orderLineNo + productSkuId` pair for SKU-specific recovery; optional `sku` is display/consistency only. The recovery service resolves the requested exact pair against immutable claim lines before creating the physical ActualCost entry and refuses textual-SKU-only inference. Legacy PostgreSQL fixtures whose committed order lineage predates ProductSku remain valid only for aggregate physical cost/recovery and must not synthesize a ProductSku from display SKU.
 
 ### 8.3 Inventory — IMPLEMENTED core
 
@@ -424,51 +422,52 @@ Canonical inventory model includes location, balance, reservation, allocation an
 
 ## 9. Actual cost, landed cost and margin
 
-### 9.1 Intended cost contract
+### 9.1 Canonical cost identity
 
 Order-level aggregate ActualCost is allowed without ProductSku. SKU-specific physical cost must resolve to exact physical lineage.
 
-Target canonical SKU-specific identity:
+Canonical SKU-specific cost lineage is:
 
 ```text
 orderId
 + orderCommitId
 + supplyCommitmentId
 + shipmentId
-+ shipmentLineId
 + orderLineNo
 + productSkuId
-+ sku (display/consistency)
++ sku (optional display/consistency)
 + physicalLineageVersion = 2
 ```
 
-### 9.2 Confirmed P0 gap at this baseline — GAP
+`shipmentLineId` remains shipment execution detail but is not a mandatory ActualCost identity component: one committed `orderLineNo + productSkuId` may be split across more than one shipment row inside the same shipment notice, and the cost scope deliberately resolves that exact immutable committed ProductSku line without inventing a second identity from textual SKU.
 
-At `main@4f5c452...`:
+### 9.2 Canonical ActualCost write contract — IMPLEMENTED
 
-- generic `POST /v2/orders/:orderId/actual-costs` still permits a new SKU-scoped cost with only textual `sku`;
-- the canonical physical resolver internally understands exact `orderLineNo + productSkuId`;
-- public physical ActualCost HTTP/OpenAPI does not yet expose those exact identifiers;
-- PostgreSQL lineage v2 validates exact physical rows, but a new legacy-lineage textual-SKU generic insert can still bypass the canonical path;
-- legacy immutable ledger rows and append-only correction/reversal must remain valid and must not be rewritten while closing this gap.
+PR #112 closes the P0 new-write bypass with one contract across HTTP, OpenAPI, application resolution and PostgreSQL:
 
-Required fix:
+- `POST /v2/orders/:orderId/actual-costs` is aggregate-only. New generic request bodies do not accept `sku`;
+- `POST /v2/orders/:orderId/cost-close/adjustments` is also aggregate-only and cannot introduce SKU scope after close;
+- `POST /v2/shipment-notices/:shipmentNoticeId/actual-costs` accepts either no line identity for an aggregate physical cost or the exact pair `orderLineNo + productSkuId` for a SKU-specific cost;
+- `POST /v2/receipt-claim-resolutions/:resolutionSnapshotId/supplier-recoveries` follows the same identity rule: aggregate recovery omits line identity; SKU-specific recovery requires exact `orderLineNo + productSkuId` pinned to one immutable claim issue line;
+- supplying only `sku`, only `orderLineNo`, or only `productSkuId` is invalid. Optional `sku`, when present with the exact pair, is only a display/consistency assertion and must match immutable shipment/claim lineage;
+- physical corrections may omit line identity and inherit the immutable original physical line; if a caller supplies identity, the exact pair is mandatory and correction cannot move to another ProductSku line or between aggregate and SKU-specific scope;
+- the composed authoritative `/v2` OpenAPI contract preserves version `1.17.0` without version drift while exposing `orderLineNo` and `productSkuId` on physical ActualCost and supplier-recovery inputs, removing `sku` from generic new-write/post-close inputs, and retaining it on historical correction input;
+- migration `073_actual_cost_exact_physical_lineage.sql` installs the forward-only `actual_cost_000_canonical_write_guard_trigger` before the existing physical lineage gate. It blocks fresh generic textual-SKU writes and incomplete physical-v2 SKU identity without rewriting historical rows;
+- generic correction of a historical legacy textual-SKU entry remains legal only as append-only reversal + replacement preserving the original SKU/order/commit/supply/brand/shop scope. It cannot introduce SKU scope onto an aggregate row, remove it from a legacy SKU row, move it to another SKU, or route a physical-v2 correction through the generic path;
+- legacy physical execution fixtures that lack canonical ProductSku lineage remain aggregate-only. A later exact path must be created from real ProductSku-bearing committed lineage rather than a guessed backfill from textual SKU;
+- permissions and organisation scope are unchanged: supported writes continue through the existing authenticated/capability-scoped route/application boundaries and database lineage checks.
 
-1. aggregate generic ActualCost remains legal only without SKU scope;
-2. new SKU-specific cost is routed through physical lineage;
-3. physical HTTP request accepts exact `orderLineNo` + `productSkuId` and optional display `sku` with conflict validation;
-4. physical OpenAPI request/response exposes exact lineage;
-5. PostgreSQL blocks fresh textual-SKU legacy bypass while preserving valid append-only correction/reversal of historical legacy rows;
-6. generic post-close adjustment cannot create a new SKU-specific bypass;
-7. service/HTTP/PostgreSQL tests prove the rules.
+Supported-path failures are fail-closed before persistence where possible (`HTTP_BODY_FIELD_UNKNOWN`, `HTTP_BODY_FIELD_INVALID`, `PHYSICAL_ACTUAL_COST_EXACT_IDENTITY_REQUIRED`, `SUPPLIER_RECOVERY_EXACT_PRODUCT_SKU_LINEAGE_REQUIRED`, `SUPPLIER_RECOVERY_PRODUCT_SKU_LINE_NOT_CLAIMED`, `SUPPLIER_RECOVERY_SKU_MISMATCH`); PostgreSQL independently protects bypasses with stable lineage errors including `ACTUAL_COST_LEGACY_SKU_NEW_WRITE_FORBIDDEN`, `ACTUAL_COST_EXACT_PRODUCT_SKU_IDENTITY_REQUIRED` and `ACTUAL_COST_LEGACY_CORRECTION_LINEAGE_MISMATCH`.
 
-### 9.3 Corrections — IMPLEMENTED legacy behavior to preserve
+Automated evidence includes `tests/product-sku-physical-cost-lineage.test.mjs`, `tests/actual-cost-canonical-lineage-contract.test.mjs`, `tests/supplier-recovery-routes-openapi.test.mjs`, `tests/postgres/actual-cost-canonical-lineage-integrity.test.mjs`, `tests/zr-postgres-fulfillment.test.mjs` and `tests/zt-postgres-supplier-recovery.test.mjs`. The latter two deliberately preserve their legacy pre-ProductSku fixtures as aggregate-only evidence. Live ProductSku-bearing Shipment → ActualCost → Margin acceptance remains a separate production-evidence gate and is not implied by these tests.
 
-Existing ledger corrections are append-only reversal/replacement entries linked to the original entry/correction identity. They may inherit the textual SKU of a historical legacy row. Closing the new-write loophole must not make historical legacy cost entries uncorrectable.
+### 9.3 Corrections — IMPLEMENTED
+
+ActualCost corrections remain append-only reversal/replacement entries linked to the original entry/correction identity. New physical-v2 SKU-specific corrections preserve exact `orderLineNo + productSkuId`; historical non-physical textual-SKU corrections preserve their original legacy scope exactly. No correction edits an immutable historical entry in place.
 
 ### 9.4 Landed cost / margin / close — IMPLEMENTED/PARTIAL next audit
 
-Economics architecture includes actual costs, allocation/margin/close concepts and immutable lineage. The next end-to-end audit after the P0 fix must prove the exact chain:
+Economics architecture includes actual costs, allocation/margin/close concepts and immutable lineage. With the P0 ActualCost write-lineage gap closed in #112, the next economics audit must prove the exact chain:
 
 ```text
 ActualCost
@@ -477,7 +476,7 @@ ActualCost
 → close/reopen/post-close adjustment
 ```
 
-and ensure margin is reproducible from frozen order + cost evidence without ambiguous ProductSku resolution.
+and ensure margin is reproducible from frozen order + cost evidence without ambiguous ProductSku resolution or a new post-close bypass.
 
 Supporting detail: `docs/architecture/order-supply-cost-margin-baseline.md`, `docs/architecture/order-margin-bridge.md`.
 
@@ -597,7 +596,6 @@ Structural meaning uses `data-ods-part` (page header, toolbar, tabs, pagination,
 - inspector/detail must not overlap the registry/table.
 
 ### 10.8 Status/alert behavior
-
 - status uses rounded pill (`999px`) and semantic tone;
 - success/warning/danger/info meaning must not change by locale;
 - alert/toast expands to full width of its containing semantic surface and supports multiline content;
@@ -684,6 +682,7 @@ Russian and English are mandatory. User-facing strings route through the shared 
 ### 12.1 General rules
 
 - API namespace: `/v2`.
+- The composed authoritative `/v2` OpenAPI `info.version` remains `1.17.0`; module/schema corrections inside the current v2 namespace must not independently create version drift.
 - Auth: bearer access token for protected routes.
 - Business mutation retries reuse the original idempotency key.
 - Transport failures may be retried according to client policy; domain HTTP errors must not be blindly retried with a new command.
@@ -706,6 +705,8 @@ Domain failures use stable semantic error codes. New fail-closed invariants shou
 - Referential/lineage invariants that must survive direct SQL/service bypass should be protected at the database boundary where practical.
 - Historical immutable rows are not rewritten just to conform to a newer lineage version; use versioned semantics and forward-only enforcement.
 - Append-only ledgers require corrections/reversals/adjustments rather than mutable overwrite.
+- ActualCost migration 073 is forward-only: generic fresh writes are aggregate-only; new SKU-specific physical writes require exact `order_line_no + product_sku_id`; historical non-physical textual-SKU rows remain immutable and may only be corrected by preserving their original lineage through reversal + replacement.
+- Legacy rows/tests that lack ProductSku remain legal only in aggregate cost scope. Neither migration 073 nor application compatibility code may infer/backfill ProductSku from textual SKU.
 
 ---
 
@@ -744,10 +745,10 @@ Expand one business slice at a time, preserving explicit before/after invariants
 3. Readiness → Projection → Publication → BuyerCatalog — PLANNED.
 4. BuyerCatalog → Selection → OrderCommit — PLANNED.
 5. OrderCommit → Supply → Shipment — PLANNED.
-6. Shipment → SKU-specific ActualCost → MarginActualization — PLANNED after P0 lineage fix.
+6. Shipment → SKU-specific ActualCost → MarginActualization — PLANNED; exact lineage gate implemented in #112, live public acceptance still required after preceding slices.
 7. Full connected Product → Margin golden path — final P0 proof.
 
-A direct service test is not a substitute for a live public API acceptance gate.
+A direct service test is not a substitute for a live public API acceptance gate. Aggregate legacy PostgreSQL flows may verify compatibility but do not count as proof of the ProductSku-specific acceptance slice.
 
 ---
 
@@ -771,11 +772,11 @@ This is the current high-level master status. Supporting detail is kept in this 
 | Color × Size matrix | PARTIAL | exact immutable buyer matrix completion |
 | WholesaleOrder/OrderCommit | IMPLEMENTED | expand live acceptance |
 | SupplyCommitment | IMPLEMENTED | expand physical acceptance |
-| Shipment/Receipt | PARTIAL | complete exact end-to-end recovery/receipt path |
+| Shipment/Receipt/Supplier Recovery | PARTIAL | exact ProductSku recovery contract implemented; live exact-lineage recovery acceptance remains |
 | Inventory | IMPLEMENTED core | continuous reconciliation/golden-path proof |
-| Generic aggregate ActualCost | IMPLEMENTED | must stay aggregate-only for new writes |
-| SKU-specific ActualCost | GAP at baseline | close textual-SKU bypass; expose exact physical IDs |
-| Landed cost / Margin / Close | IMPLEMENTED/PARTIAL | audit after ActualCost lineage fix |
+| Generic aggregate ActualCost | IMPLEMENTED | live economics acceptance; new generic/post-close writes remain aggregate-only |
+| SKU-specific ActualCost | IMPLEMENTED | live Shipment → ActualCost → Margin acceptance |
+| Landed cost / Margin / Close | IMPLEMENTED/PARTIAL | re-audit exact cost→margin→close/post-close chain after #112 |
 | KPI governance/methodology | PARTIAL production connection | complete exact runtime/persistence/reconciliation |
 | ODS v1 | IMPLEMENTED with compatibility debt | burn legacy layers down; never add new dialect |
 | Full Product → Margin live acceptance | PLANNED | progressively extend after P0 lineage gates |
@@ -786,13 +787,13 @@ This is the current high-level master status. Supporting detail is kept in this 
 
 | ID | Priority | Gap | Required outcome | Status |
 |---|---|---|---|---|
-| `AC-LINEAGE-001` | P0 | Generic ActualCost accepts textual SKU without exact physical lineage | aggregate-only generic path; exact ProductSku physical path; DB fail-closed guard; preserve legacy corrections | OPEN |
-| `AC-HTTP-002` | P0 | Physical ActualCost resolver supports exact IDs but HTTP/OpenAPI does not expose them | request + response include `orderLineNo` and `productSkuId` | OPEN |
-| `ECON-003` | P0 | ActualCost → landed/margin path not re-audited after physical lineage v2 | prove reproducible margin and close semantics from frozen lineage | OPEN |
+| `AC-LINEAGE-001` | P0 | Generic ActualCost accepted textual SKU without exact physical lineage | aggregate-only generic path; exact ProductSku physical path; DB fail-closed guard; preserve legacy corrections | CLOSED in #112 |
+| `AC-HTTP-002` | P0 | Physical ActualCost resolver supported exact IDs but HTTP/OpenAPI did not expose them | request + response include `orderLineNo` and `productSkuId`; generic SKU scope removed | CLOSED in #112 |
+| `ECON-003` | P0 | ActualCost → landed/margin path not re-audited after physical lineage v2 | prove reproducible margin and close semantics from frozen lineage | OPEN — next economics audit |
 | `ACC-004` | P0 | Live acceptance proves only Campaign → Collection | progressively prove canonical Product → Margin spine | OPEN |
 | `PUB-005` | P0 | Some historical publication/catalog behavior remains flat-catalog oriented | projection-only variant-rich publication/buyer catalog | OPEN/PARTIAL |
 | `UI-006` | P1 | Legacy Omnidata CSS/JS compatibility layers remain loaded | migrate semantics to ODS v1 and remove debt only after validation | OPEN/PARTIAL |
-| `SPEC-007` | P0 | Historical architecture/product/UI detail was fragmented across docs/code | this master spec + CI synchronization rule | IN PROGRESS in master-spec PR |
+| `SPEC-007` | P0 | Historical architecture/product/UI detail was fragmented across docs/code | authoritative `ARCHITECTURE.md` + CI synchronization rule | CLOSED in #110 |
 
 Every confirmed gap discovered during audit is added here before or with its implementation fix. Closed gaps remain in the table/change history or are moved to the closed section; they are not silently deleted.
 
@@ -847,7 +848,8 @@ Minimum frozen lineage fields for the current commercial spine include:
 | OrderCommitSnapshot | exact agreed order lines/terms/currency/commercial facts |
 | SupplyCommitment | exact order commit and physical line allocations |
 | ShipmentLine | exact committed order line + ProductSku for canonical lineage |
-| ActualCostLedgerEntry | order/commit/supply; exact shipment/orderLine/ProductSku when SKU-specific physical v2 |
+| ReceiptClaim issue line | exact shipment line facts; when canonical ProductSku lineage exists, preserves `orderLineNo + productSkuId + sku(display)` for downstream recovery |
+| ActualCostLedgerEntry | order/commit/supply; exact shipment/orderLine/ProductSku when SKU-specific physical v2; textual SKU is display/legacy compatibility only |
 | MarginActualization | exact committed revenue + governed cost evidence/version used for margin |
 
 ---
@@ -860,7 +862,8 @@ Minimum frozen lineage fields for the current commercial spine include:
 | 2026-08 | #107 | Repeatable owner bootstrap + isolated dev/test PostgreSQL clean-clone path | 2.3, 2.5 | merged; CI verified |
 | 2026-08 | #108 | Order currency frozen to submitted Selection lineage | 7.5 | merged; Verify/PostgreSQL CI |
 | 2026-08 | #109 / `4f5c452dede1ce9c8ffe518eddb8b6632cc89ad0` | Real supported runtime process smoke added to `verify:postgres` | 2.2, 15.2 | merged; Verify/MDM/PostgreSQL CI green |
-| 2026-08-28 | master-spec PR | Establish one authoritative platform/UI/data/architecture specification and CI synchronization contract | entire document | pending CI/merge |
+| 2026-08-28 | #110 | Establish one authoritative platform/UI/data/architecture specification and CI synchronization contract | entire document | merged; `ARCHITECTURE.md` authoritative |
+| 2026-08-29 | #112 | Close ActualCost textual-SKU bypass; require exact ProductSku physical and supplier-recovery identity; keep legacy pre-ProductSku physical/recovery fixtures aggregate-only; expose exact fields in authoritative OpenAPI 1.17.0 without version drift; add forward-only PostgreSQL guard and compatibility-safe tests | 1.2, 8, 9, 12, 13, 15, 16, 17, 19 | implementation + unit/HTTP/OpenAPI/PostgreSQL evidence in PR; required CI is merge gate; supersedes draft #111 |
 
 Future implementation PRs add a row here. The row is not a substitute for updating the affected detailed sections.
 

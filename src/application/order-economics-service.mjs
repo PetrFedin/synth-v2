@@ -160,6 +160,7 @@ export function createOrderEconomicsService({
         actorId,
         (tx) => executionBasisForCapability(tx, orderId, actorId, CAPABILITIES.COST_MANAGE),
         async (tx, { order, orderCommit }) => {
+          assertAggregateActualCostInput(input, 'ACTUAL_COST_GENERIC_SKU_SCOPE_FORBIDDEN');
           await assertCostOpen(tx, orderCommit);
           const { supplyCommitment, fxRateSnapshot } = await loadCostBasis(tx, input);
           const entry = createActualCostLedgerEntry({
@@ -171,7 +172,7 @@ export function createOrderEconomicsService({
             amount: input.amount,
             currency: input.currency,
             fxRateSnapshot,
-            sku: input.sku ?? null,
+            sku: null,
             sourceRef: input.sourceRef,
             occurredAt: input.occurredAt ?? clock(),
             recordedAt: clock(),
@@ -193,6 +194,10 @@ export function createOrderEconomicsService({
           await assertCostOpen(tx, orderCommit);
           const originalEntry = requireEntity(await tx.getActualCostEntry(originalEntryId), 'ACTUAL_COST_ENTRY_NOT_FOUND', { originalEntryId });
           invariant(originalEntry.orderId === orderId && originalEntry.orderCommitSnapshotId === orderCommit.id, 'ACTUAL_COST_CORRECTION_LINEAGE_MISMATCH', 'Actual cost entry belongs to another order commit', { originalEntryId, orderId, orderCommitSnapshotId: orderCommit.id });
+          invariant(Number(originalEntry.physicalLineageVersion ?? 1) !== 2, 'ACTUAL_COST_PHYSICAL_CORRECTION_REQUIRES_PHYSICAL_PATH', 'Physical ProductSku actual cost must be corrected through the shipment physical-cost path', { originalEntryId, physicalLineageVersion: originalEntry.physicalLineageVersion ?? null });
+          const originalSku = originalEntry.sku ?? null;
+          const requestedSku = Object.prototype.hasOwnProperty.call(input, 'sku') ? input.sku : originalSku;
+          invariant(requestedSku === originalSku, 'ACTUAL_COST_LEGACY_CORRECTION_LINEAGE_MISMATCH', 'Generic actual cost correction cannot introduce, remove or move SKU scope', { originalEntryId, originalSku, requestedSku });
           const existingReversal = await tx.getActualCostReversal(originalEntryId);
           invariant(!existingReversal, 'ACTUAL_COST_ALREADY_CORRECTED', 'Actual cost entry already has a reversal', { originalEntryId, reversalEntryId: existingReversal?.id });
 
@@ -208,6 +213,7 @@ export function createOrderEconomicsService({
             recordedAt,
           });
           const { supplyCommitment, fxRateSnapshot } = await loadCostBasis(tx, input);
+          invariant(supplyCommitment.id === originalEntry.supplyCommitmentSnapshotId, 'ACTUAL_COST_LEGACY_CORRECTION_LINEAGE_MISMATCH', 'Generic actual cost correction must preserve the original supply commitment lineage', { originalEntryId, expectedSupplyCommitmentSnapshotId: originalEntry.supplyCommitmentSnapshotId, actualSupplyCommitmentSnapshotId: supplyCommitment.id });
           const replacement = createActualCostLedgerEntry({
             id: nextId('actual-cost'),
             order,
@@ -217,7 +223,7 @@ export function createOrderEconomicsService({
             amount: input.amount,
             currency: input.currency,
             fxRateSnapshot,
-            sku: input.sku ?? null,
+            sku: originalSku,
             sourceRef: input.sourceRef,
             occurredAt: input.occurredAt ?? recordedAt,
             recordedAt,
@@ -373,6 +379,7 @@ export function createOrderEconomicsService({
         actorId,
         (tx) => executionBasisForCapability(tx, orderId, actorId, CAPABILITIES.COST_MANAGE),
         async (tx, { order, orderCommit }) => {
+          assertAggregateActualCostInput(input, 'POST_CLOSE_ADJUSTMENT_SKU_SCOPE_FORBIDDEN');
           const costClose = requireEntity(
             await tx.lockCostCloseByOrderCommitSnapshotId(orderCommit.id),
             'COST_CLOSE_REQUIRED_FOR_ADJUSTMENT',
@@ -394,7 +401,7 @@ export function createOrderEconomicsService({
             amount: input.amount,
             currency: input.currency,
             fxRateSnapshot,
-            sku: input.sku ?? null,
+            sku: null,
             sourceRef: input.sourceRef,
             occurredAt: input.occurredAt ?? recordedAt,
             recordedAt,
@@ -523,5 +530,13 @@ export function createOrderEconomicsService({
   }
 }
 
+function assertAggregateActualCostInput(input, code) {
+  invariant(
+    input?.sku == null,
+    code,
+    'Generic actual cost writes are aggregate-only; SKU-specific cost requires exact physical shipment lineage',
+    { sku: input?.sku ?? null },
+  );
+}
 function requireEntity(entity, code, details) { invariant(entity, code, 'Entity not found', details); return entity; }
 function defaultIdGenerator() { let sequence = 0; return (prefix) => `${prefix}_${++sequence}`; }

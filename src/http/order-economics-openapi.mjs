@@ -75,11 +75,13 @@ function schemas() {
     },
     ActualCostInput: {
       type: 'object', additionalProperties: false, required: ['supplyCommitmentSnapshotId', 'costType', 'amount', 'currency', 'sourceRef'],
-      properties: actualCostWriteProperties(),
+      description: 'Aggregate order actual cost. SKU-specific costs must use the physical shipment actual-cost endpoint.',
+      properties: aggregateActualCostWriteProperties(),
     },
     ActualCostCorrectionInput: {
       type: 'object', additionalProperties: false, required: ['reason', 'supplyCommitmentSnapshotId', 'costType', 'amount', 'currency', 'sourceRef'],
-      properties: { reason: reason(), ...actualCostWriteProperties() },
+      description: 'Append-only correction. sku is retained only to preserve a historical legacy SKU-scoped row; it cannot introduce or move SKU lineage.',
+      properties: { reason: reason(), ...legacyCorrectionActualCostWriteProperties() },
     },
     ActualCostLedgerEntry: {
       type: 'object', additionalProperties: false,
@@ -159,7 +161,8 @@ function schemas() {
     },
     PostCloseAdjustmentInput: {
       type: 'object', additionalProperties: false, required: ['reason', 'supplyCommitmentSnapshotId', 'costType', 'amount', 'currency', 'sourceRef'],
-      properties: { reason: reason(), ...actualCostWriteProperties() },
+      description: 'Aggregate late-cost adjustment. SKU-specific late costs must use the physical cost lineage path rather than this generic close adjustment.',
+      properties: { reason: reason(), ...aggregateActualCostWriteProperties() },
     },
     PostCloseAdjustment: {
       type: 'object', additionalProperties: false,
@@ -199,10 +202,10 @@ function paths() {
       post: mutation('createOrderFxRateSnapshot', '#/components/schemas/OrderFxRateSnapshotInput', '#/components/schemas/OrderFxRateSnapshot', 'Recorded immutable FX rate for order costing'),
     },
     '/orders/{orderId}/actual-costs': {
-      post: mutation('recordActualCost', '#/components/schemas/ActualCostInput', '#/components/schemas/ActualCostLedgerEntry', 'Recorded append-only actual cost'),
+      post: mutation('recordActualCost', '#/components/schemas/ActualCostInput', '#/components/schemas/ActualCostLedgerEntry', 'Recorded append-only aggregate actual cost; SKU-specific actual costs use the shipment physical-cost endpoint'),
     },
     '/orders/{orderId}/actual-costs/{actualCostEntryId}/corrections': {
-      post: mutationWithParameters('correctActualCost', [orderId, actualCostEntryId], '#/components/schemas/ActualCostCorrectionInput', '#/components/schemas/ActualCostCorrectionResult', 'Append-only actual cost reversal and replacement'),
+      post: mutationWithParameters('correctActualCost', [orderId, actualCostEntryId], '#/components/schemas/ActualCostCorrectionInput', '#/components/schemas/ActualCostCorrectionResult', 'Append-only actual cost reversal and replacement; legacy sku can only be preserved, never introduced or moved'),
     },
     '/orders/{orderId}/landed-cost/actualize': {
       post: mutation('actualizeLandedCost', '#/components/schemas/EmptyEconomicsInput', '#/components/schemas/LandedCostSnapshot', 'Actualized landed cost'),
@@ -214,7 +217,7 @@ function paths() {
       post: mutation('closeOrderCost', '#/components/schemas/CostCloseInput', '#/components/schemas/CostCloseSnapshot', 'Closed immutable order cost and margin basis'),
     },
     '/orders/{orderId}/cost-close/adjustments': {
-      post: mutation('recordPostCloseAdjustment', '#/components/schemas/PostCloseAdjustmentInput', '#/components/schemas/PostCloseAdjustmentResult', 'Recorded late cost and re-actualized landed cost and margin'),
+      post: mutation('recordPostCloseAdjustment', '#/components/schemas/PostCloseAdjustmentInput', '#/components/schemas/PostCloseAdjustmentResult', 'Recorded aggregate late cost and re-actualized landed cost and margin'),
     },
     '/margin-actualizations/{marginActualizationId}': {
       get: {
@@ -231,13 +234,18 @@ function paths() {
   };
 }
 
-function actualCostWriteProperties() {
+function aggregateActualCostWriteProperties() {
   return {
     supplyCommitmentSnapshotId: identifier,
     costType: costType(), amount: { ...money, not: { const: 0 } }, currency,
     fxRateSnapshotId: identifier,
-    sku: { oneOf: [{ type: 'string', pattern: SKU }, { type: 'null' }] },
     sourceRef: { type: 'string', minLength: 1, maxLength: 240 }, occurredAt: date(),
+  };
+}
+function legacyCorrectionActualCostWriteProperties() {
+  return {
+    ...aggregateActualCostWriteProperties(),
+    sku: { oneOf: [{ type: 'string', pattern: SKU }, { type: 'null' }] },
   };
 }
 function mutation(operationId, input, output, description) {

@@ -3,9 +3,9 @@ import { assertBodyContract, assertQueryContract, bodyContract } from './request
 
 const SUPPLY_BODY = bodyContract(['allocations'], {}, { allocations: ['sku', 'quantity', 'sourceType', 'sourceRef', 'expectedAvailabilityAt'] });
 const FX_BODY = bodyContract(['sourceCurrency', 'rate', 'rateType', 'sourceRef', 'effectiveAt']);
-const COST_BODY = bodyContract(['supplyCommitmentSnapshotId', 'costType', 'amount', 'currency', 'fxRateSnapshotId', 'sku', 'sourceRef', 'occurredAt']);
+const COST_BODY = bodyContract(['supplyCommitmentSnapshotId', 'costType', 'amount', 'currency', 'fxRateSnapshotId', 'sourceRef', 'occurredAt']);
 const COST_CORRECTION_BODY = bodyContract(['reason', 'supplyCommitmentSnapshotId', 'costType', 'amount', 'currency', 'fxRateSnapshotId', 'sku', 'sourceRef', 'occurredAt']);
-const POST_CLOSE_ADJUSTMENT_BODY = COST_CORRECTION_BODY;
+const POST_CLOSE_ADJUSTMENT_BODY = bodyContract(['reason', 'supplyCommitmentSnapshotId', 'costType', 'amount', 'currency', 'fxRateSnapshotId', 'sourceRef', 'occurredAt']);
 const EMPTY_BODY = bodyContract();
 const MARGIN_BODY = bodyContract(['landedCostSnapshotId']);
 const READINESS_BODY = bodyContract(

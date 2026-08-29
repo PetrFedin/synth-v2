@@ -1,5 +1,7 @@
 const SAFE_ID = '^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$';
 const identifier = { type: 'string', minLength: 1, maxLength: 200, pattern: SAFE_ID };
+const nullableIdentifier = { oneOf: [identifier, { type: 'null' }] };
+const nullableOrderLineNo = { oneOf: [{ type: 'integer', minimum: 1 }, { type: 'null' }] };
 const currency = { type: 'string', pattern: '^[A-Z]{3}$' };
 const money = { type: 'number', minimum: -900_719_925_474.0991, maximum: 900_719_925_474.0991, multipleOf: 0.0001 };
 const percent = { oneOf: [{ type: 'number', minimum: -1_000_000, maximum: 100, multipleOf: 0.0001 }, { type: 'null' }] };
@@ -35,31 +37,56 @@ function schemas() {
         status: { type: 'string', enum: ['approved'] }, createdAt: date(), contentHash: sha256(),
       },
     },
+    CostAllocationLineWeight: {
+      type: 'object', additionalProperties: false, required: ['orderLineNo', 'productSkuId', 'weight'],
+      properties: {
+        orderLineNo: { type: 'integer', minimum: 1 },
+        productSkuId: identifier,
+        sku: { type: 'string', minLength: 1, maxLength: 160, description: 'Optional display/consistency assertion; never used to resolve ProductSku identity.' },
+        weight: { type: 'number', minimum: 0 },
+      },
+    },
     CostAllocationRunInput: {
       type: 'object', additionalProperties: false, required: ['landedCostSnapshotId', 'policyVersionId'],
       properties: {
         landedCostSnapshotId: identifier,
         policyVersionId: identifier,
         customWeightsByCostEntryId: {
-          type: 'object', additionalProperties: {
+          type: 'object',
+          description: 'Legacy-only custom weights keyed by textual SKU. Canonical ProductSku order commits reject this field for custom allocation.',
+          additionalProperties: {
             type: 'object', additionalProperties: { type: 'number', minimum: 0 },
+          },
+        },
+        customLineWeightsByCostEntryId: {
+          type: 'object',
+          description: 'Canonical ProductSku custom weights keyed by cost entry; each row identifies the exact immutable orderLineNo + productSkuId.',
+          additionalProperties: {
+            type: 'array', minItems: 1, maxItems: 100_000, items: { $ref: '#/components/schemas/CostAllocationLineWeight' },
           },
         },
       },
     },
     CostAllocationRow: {
       type: 'object', additionalProperties: false,
-      required: ['costEntryId', 'costType', 'sku', 'basis', 'basisWeight', 'share', 'allocatedAmount', 'currency'],
+      required: ['costEntryId', 'costType', 'orderLineNo', 'productSkuId', 'sku', 'basis', 'basisWeight', 'share', 'allocatedAmount', 'currency'],
       properties: {
-        costEntryId: identifier, costType: { type: 'string', minLength: 1, maxLength: 80 }, sku: { type: 'string', minLength: 1, maxLength: 160 },
+        costEntryId: identifier,
+        costType: { type: 'string', minLength: 1, maxLength: 80 },
+        orderLineNo: nullableOrderLineNo,
+        productSkuId: nullableIdentifier,
+        sku: { type: 'string', minLength: 1, maxLength: 160 },
         basis: allocationBasis(), basisWeight: { type: 'number', minimum: 0 }, share: { type: 'number', minimum: 0, maximum: 1 },
         allocatedAmount: money, currency,
       },
     },
     SkuEconomics: {
       type: 'object', additionalProperties: false,
-      required: ['sku', 'quantity', 'netRevenue', 'allocatedLandedCost', 'contributionMarginAmount', 'contributionMarginPercent', 'currency'],
+      description: 'Compatibility schema name. Canonical rows are ProductSku order-line economics and carry exact orderLineNo + productSkuId; legacy pre-ProductSku rows carry null exact identifiers.',
+      required: ['orderLineNo', 'productSkuId', 'sku', 'quantity', 'netRevenue', 'allocatedLandedCost', 'contributionMarginAmount', 'contributionMarginPercent', 'currency'],
       properties: {
+        orderLineNo: nullableOrderLineNo,
+        productSkuId: nullableIdentifier,
         sku: { type: 'string', minLength: 1, maxLength: 160 }, quantity: { type: 'number', exclusiveMinimum: 0 },
         netRevenue: money, allocatedLandedCost: money, contributionMarginAmount: money, contributionMarginPercent: percent, currency,
       },
@@ -68,11 +95,12 @@ function schemas() {
       type: 'object', additionalProperties: false,
       required: [
         'id', 'orderId', 'orderVersion', 'orderCommitSnapshotId', 'landedCostSnapshotId', 'policyVersionId',
-        'brandId', 'shopId', 'currency', 'costEntryIds', 'allocations', 'skuEconomics', 'allocatedTotal', 'status', 'createdAt', 'contentHash',
+        'brandId', 'shopId', 'currency', 'lineageMode', 'costEntryIds', 'allocations', 'skuEconomics', 'allocatedTotal', 'status', 'createdAt', 'contentHash',
       ],
       properties: {
         id: identifier, orderId: identifier, orderVersion: { type: 'integer', minimum: 1 }, orderCommitSnapshotId: identifier,
         landedCostSnapshotId: identifier, policyVersionId: identifier, brandId: identifier, shopId: identifier, currency,
+        lineageMode: { type: 'string', enum: ['product-sku-v2', 'legacy'] },
         costEntryIds: { type: 'array', minItems: 1, maxItems: 100_000, uniqueItems: true, items: identifier },
         allocations: { type: 'array', minItems: 1, maxItems: 1_000_000, items: { $ref: '#/components/schemas/CostAllocationRow' } },
         skuEconomics: { type: 'array', minItems: 1, maxItems: 100_000, items: { $ref: '#/components/schemas/SkuEconomics' } },
@@ -99,7 +127,7 @@ function paths() {
       post: {
         operationId: 'allocateOrderLandedCost', security: [{ bearerAuth: [] }], parameters: [orderId, idempotency],
         requestBody: body('#/components/schemas/CostAllocationRunInput'),
-        responses: mutationResponses('Immutable SKU cost allocation run', '#/components/schemas/CostAllocationRunSnapshot'),
+        responses: mutationResponses('Immutable ProductSku-line cost allocation run; legacy commits remain explicitly textual-SKU scoped', '#/components/schemas/CostAllocationRunSnapshot'),
       },
     },
     '/cost-allocation-policies/{policyVersionId}': {

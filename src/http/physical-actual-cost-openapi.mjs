@@ -2,6 +2,7 @@ const SAFE_ID = '^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$';
 const SKU = '^[A-Z0-9][A-Z0-9._/-]{0,159}$';
 const identifier = { type: 'string', minLength: 1, maxLength: 200, pattern: SAFE_ID };
 const nullableIdentifier = { oneOf: [identifier, { type: 'null' }] };
+const nullableOrderLineNo = { oneOf: [{ type: 'integer', minimum: 1, maximum: 2_147_483_647 }, { type: 'null' }] };
 const currency = { type: 'string', pattern: '^[A-Z]{3}$' };
 const money = { type: 'number', minimum: -900_719_925_474.0991, maximum: 900_719_925_474.0991, multipleOf: 0.0001, not: { const: 0 } };
 const idempotency = { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 1, maxLength: 128, pattern: SAFE_ID } };
@@ -21,6 +22,8 @@ export function withPhysicalActualCostOpenApi(base) {
     shipmentNoticeSnapshotId: identifier,
     receiptSnapshotId: nullableIdentifier,
     receiptDiscrepancySnapshotId: nullableIdentifier,
+    orderLineNo: nullableOrderLineNo,
+    productSkuId: nullableIdentifier,
   };
   specification.components.schemas.ActualCostLedgerEntry = {
     ...actualCost,
@@ -44,6 +47,8 @@ export function withPhysicalActualCostOpenApi(base) {
       'shipmentNoticeSnapshotId',
       'receiptSnapshotId',
       'receiptDiscrepancySnapshotId',
+      'orderLineNo',
+      'productSkuId',
     ],
   };
   specification.components.schemas.PhysicalActualCostCorrectionResult = {
@@ -64,7 +69,7 @@ export function withPhysicalActualCostOpenApi(base) {
       [shipmentNoticeId, idempotency],
       '#/components/schemas/PhysicalActualCostInput',
       '#/components/schemas/PhysicalActualCostLedgerEntry',
-      'Append a physical execution cost to the canonical order actual-cost ledger while pinning the exact shipment/receipt execution lineage.',
+      'Append a physical execution cost. Aggregate costs omit line identity; SKU-specific costs require the exact immutable orderLineNo + productSkuId pair. sku is display-only and, when supplied, must match shipment lineage.',
     ),
   };
   specification.paths['/shipment-notices/{shipmentNoticeId}/actual-costs/{actualCostEntryId}/corrections'] = {
@@ -73,7 +78,7 @@ export function withPhysicalActualCostOpenApi(base) {
       [shipmentNoticeId, actualCostEntryId, idempotency],
       '#/components/schemas/PhysicalActualCostCorrectionInput',
       '#/components/schemas/PhysicalActualCostCorrectionResult',
-      'Append a reversal and replacement while preserving the original immutable shipment and receipt evidence lineage.',
+      'Append a reversal and replacement while preserving immutable physical lineage. A supplied line identity must be the exact orderLineNo + productSkuId pair; sku is only a consistency assertion.',
     ),
   };
   return deepFreeze(specification);
@@ -85,7 +90,9 @@ function physicalCostInputSchema({ receiptEvidence }) {
     amount: money,
     currency,
     fxRateSnapshotId: nullableIdentifier,
-    sku: { oneOf: [{ type: 'string', pattern: SKU }, { type: 'null' }] },
+    orderLineNo: { type: 'integer', minimum: 1, maximum: 2_147_483_647, description: 'Immutable committed order line number. Required together with productSkuId for SKU-specific cost.' },
+    productSkuId: { ...identifier, description: 'Canonical ProductSku identifier. Required together with orderLineNo for SKU-specific cost.' },
+    sku: { oneOf: [{ type: 'string', pattern: SKU }, { type: 'null' }], description: 'Optional display/consistency SKU. Never accepted as physical identity by itself.' },
     sourceRef: { type: 'string', minLength: 1, maxLength: 240 },
     occurredAt: { type: 'string', format: 'date-time' },
   };
@@ -97,6 +104,18 @@ function physicalCostInputSchema({ receiptEvidence }) {
     type: 'object',
     additionalProperties: false,
     required: ['costType', 'amount', 'currency', 'sourceRef', 'occurredAt'],
+    anyOf: [
+      { required: ['orderLineNo', 'productSkuId'] },
+      {
+        not: {
+          anyOf: [
+            { required: ['orderLineNo'] },
+            { required: ['productSkuId'] },
+            { required: ['sku'] },
+          ],
+        },
+      },
+    ],
     properties,
   };
 }

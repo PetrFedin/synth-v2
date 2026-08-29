@@ -87,6 +87,7 @@ export function createCostAllocationService({ store, clock = () => new Date().to
             costEntries,
             policy,
             customWeightsByCostEntryId: input.customWeightsByCostEntryId ?? {},
+            customLineWeightsByCostEntryId: input.customLineWeightsByCostEntryId ?? {},
             createdAt: clock(),
           });
           await tx.insertAllocationRun(run);
@@ -95,6 +96,7 @@ export function createCostAllocationService({ store, clock = () => new Date().to
             orderCommitSnapshotId: run.orderCommitSnapshotId,
             landedCostSnapshotId: run.landedCostSnapshotId,
             policyVersionId: run.policyVersionId,
+            lineageMode: run.lineageMode,
             allocatedTotal: run.allocatedTotal,
             currency: run.currency,
             skuCount: run.skuEconomics.length,

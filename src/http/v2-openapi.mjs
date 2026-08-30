@@ -4,6 +4,7 @@ import { withCollectionStyleVersionOpenApi } from './collection-style-version-op
 import { withCommercialPublicationOpenApi } from './commercial-publication-openapi.mjs';
 import { withCostAllocationOpenApi } from './cost-allocation-openapi.mjs';
 import { withCostCloseReadinessOpenApi } from './cost-close-readiness-openapi.mjs';
+import { withEcon003AllocationMarginOpenApi } from './econ003-allocation-margin-openapi.mjs';
 import { withFinalQualityOpenApi } from './final-quality-openapi.mjs';
 import { withFulfillmentOpenApi } from './fulfillment-openapi.mjs';
 import { withInventoryOpenApi } from './inventory-openapi.mjs';
@@ -30,34 +31,36 @@ import { wholesaleV2OpenApi } from './openapi.mjs';
 
 const AUTHORITATIVE_V2_CONTRACT_VERSION = '1.17.0';
 
-const composed = withApprovedDemandProductionOpenApi(
-  withSupplierEconomicPerformanceOpenApi(
-    withSupplierRecoveryOpenApi(
-      withReceiptClaimsOpenApi(
-        withInventoryOpenApi(
-          withPhysicalActualCostOpenApi(
-            withFulfillmentOpenApi(
-              withCostAllocationOpenApi(
-                withOrderMarginBridgeOpenApi(
-                  withCostCloseReadinessOpenApi(
-                    withOrderEconomicsOpenApi(
-                      withSelectionMatrixOpenApi(
-                        withRetailDoorOpenApi(
-                          withCommercialPublicationOpenApi(
-                            withCollectionStyleVersionOpenApi(
-                              withProductReadinessOpenApi(
-                                withProductIdentityOpenApi(
-                                  withFinalQualityOpenApi(
-                                    withProductionExecutionOpenApi(
-                                      withProductionOrderOpenApi(
-                                        withSourcingTechPackGateOpenApi(
-                                          withTechPackOpenApi(
-                                            withSourcingOpenApi(
-                                              withSampleOpenApi(
-                                                withMeasurementRevisionOpenApi(
-                                                  withMeasurementOpenApi(
-                                                    withBomOpenApi(
-                                                      withMaterialOpenApi(wholesaleV2OpenApi),
+const composed = withEcon003AllocationMarginOpenApi(
+  withApprovedDemandProductionOpenApi(
+    withSupplierEconomicPerformanceOpenApi(
+      withSupplierRecoveryOpenApi(
+        withReceiptClaimsOpenApi(
+          withInventoryOpenApi(
+            withPhysicalActualCostOpenApi(
+              withFulfillmentOpenApi(
+                withCostAllocationOpenApi(
+                  withOrderMarginBridgeOpenApi(
+                    withCostCloseReadinessOpenApi(
+                      withOrderEconomicsOpenApi(
+                        withSelectionMatrixOpenApi(
+                          withRetailDoorOpenApi(
+                            withCommercialPublicationOpenApi(
+                              withCollectionStyleVersionOpenApi(
+                                withProductReadinessOpenApi(
+                                  withProductIdentityOpenApi(
+                                    withFinalQualityOpenApi(
+                                      withProductionExecutionOpenApi(
+                                        withProductionOrderOpenApi(
+                                          withSourcingTechPackGateOpenApi(
+                                            withTechPackOpenApi(
+                                              withSourcingOpenApi(
+                                                withSampleOpenApi(
+                                                  withMeasurementRevisionOpenApi(
+                                                    withMeasurementOpenApi(
+                                                      withBomOpenApi(
+                                                        withMaterialOpenApi(wholesaleV2OpenApi),
+                                                      ),
                                                     ),
                                                   ),
                                                 ),

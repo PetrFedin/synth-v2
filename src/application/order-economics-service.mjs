@@ -6,15 +6,16 @@ import {
   createActualCostLedgerEntry,
   createActualCostReversalEntry,
   createLandedCostSnapshot,
-  createMarginActualizationSnapshot,
   createOrderFxRateSnapshot,
-  createPostCloseAdjustment,
 } from '../modules/order-economics/public.mjs';
 import { createProductSkuSupplyCommitmentSnapshot } from '../modules/order-economics/product-sku-supply.mjs';
 import {
-  createCostCloseReadinessSnapshot,
-  createReadinessBoundCostCloseSnapshot,
-} from '../modules/order-economics/cost-close-readiness.mjs';
+  createAllocationAwareCostCloseReadinessSnapshot,
+  createAllocationAwareMarginActualizationSnapshot,
+  createAllocationAwarePostCloseAdjustment,
+  createAllocationAwareReadinessBoundCostCloseSnapshot,
+  createPendingPostCloseMarginActualizationSnapshot,
+} from '../modules/order-economics/allocation-close-lineage.mjs';
 
 export function createOrderEconomicsService({
   economicsStore,
@@ -276,16 +277,19 @@ export function createOrderEconomicsService({
       );
     },
 
-    actualizeMargin(commandId, actorId, orderId, landedCostSnapshotId) {
+    actualizeMargin(commandId, actorId, orderId, landedCostSnapshotId, costAllocationRunSnapshotId = null) {
       return execute(
         commandId,
-        `actualizeMargin:${actorId}:${orderId}:${landedCostSnapshotId}`,
+        `actualizeMargin:${actorId}:${orderId}:${landedCostSnapshotId}:${costAllocationRunSnapshotId ?? 'none'}`,
         actorId,
         (tx) => executionBasisForCapability(tx, orderId, actorId, CAPABILITIES.COST_MANAGE),
         async (tx, { order, orderCommit }) => {
           await assertCostOpen(tx, orderCommit);
           const landedCost = requireEntity(await tx.getLandedCostSnapshot(landedCostSnapshotId), 'LANDED_COST_SNAPSHOT_NOT_FOUND', { landedCostSnapshotId });
-          const snapshot = createMarginActualizationSnapshot({ id: nextId('margin-actualization'), order, orderCommit, landedCost, createdAt: clock() });
+          const costAllocation = costAllocationRunSnapshotId
+            ? requireEntity(await tx.getCostAllocationRunSnapshot(costAllocationRunSnapshotId), 'COST_ALLOCATION_RUN_NOT_FOUND', { costAllocationRunSnapshotId })
+            : null;
+          const snapshot = createAllocationAwareMarginActualizationSnapshot({ id: nextId('margin-actualization'), order, orderCommit, landedCost, costAllocation, createdAt: clock() });
           await tx.insertMarginActualizationSnapshot(snapshot);
           await appendMarginActualized(tx, snapshot, commandId, actorId);
           return snapshot;
@@ -305,7 +309,7 @@ export function createOrderEconomicsService({
           const marginActualization = requireEntity(await tx.getMarginActualizationSnapshot(input.marginActualizationSnapshotId), 'MARGIN_ACTUALIZATION_NOT_FOUND', { marginActualizationSnapshotId: input.marginActualizationSnapshotId });
           const currentEntries = await currentCostEntriesForCommit(tx, orderId, orderCommit);
           assertLandedCostCurrent(landedCost, currentEntries);
-          const snapshot = createCostCloseReadinessSnapshot({
+          const snapshot = createAllocationAwareCostCloseReadinessSnapshot({
             id: nextId('cost-close-readiness'),
             order,
             orderCommit,
@@ -321,6 +325,10 @@ export function createOrderEconomicsService({
             orderCommitSnapshotId: snapshot.orderCommitSnapshotId,
             landedCostSnapshotId: snapshot.landedCostSnapshotId,
             marginActualizationSnapshotId: snapshot.marginActualizationSnapshotId,
+            allocationStatus: snapshot.allocationStatus,
+            costAllocationRunSnapshotId: snapshot.costAllocationRunSnapshotId,
+            costAllocationRunContentHash: snapshot.costAllocationRunContentHash,
+            costAllocationPolicyVersionId: snapshot.costAllocationPolicyVersionId,
             status: snapshot.status,
             blockingReasons: snapshot.blockingReasons,
             requirements: snapshot.requirements,
@@ -344,7 +352,7 @@ export function createOrderEconomicsService({
           const readiness = requireEntity(await tx.getCostCloseReadinessSnapshot(input.costCloseReadinessSnapshotId), 'COST_CLOSE_READINESS_NOT_FOUND', { costCloseReadinessSnapshotId: input.costCloseReadinessSnapshotId });
           const currentEntries = await currentCostEntriesForCommit(tx, orderId, orderCommit);
           assertLandedCostCurrent(landedCost, currentEntries);
-          const snapshot = createReadinessBoundCostCloseSnapshot({
+          const snapshot = createAllocationAwareReadinessBoundCostCloseSnapshot({
             id: nextId('cost-close'),
             order,
             orderCommit,
@@ -360,6 +368,10 @@ export function createOrderEconomicsService({
             costCloseReadinessSnapshotId: snapshot.costCloseReadinessSnapshotId,
             landedCostSnapshotId: snapshot.landedCostSnapshotId,
             marginActualizationSnapshotId: snapshot.marginActualizationSnapshotId,
+            allocationStatus: snapshot.allocationStatus,
+            costAllocationRunSnapshotId: snapshot.costAllocationRunSnapshotId,
+            costAllocationRunContentHash: snapshot.costAllocationRunContentHash,
+            costAllocationPolicyVersionId: snapshot.costAllocationPolicyVersionId,
             totalLandedCost: snapshot.totalLandedCost,
             netRevenue: snapshot.netRevenue,
             contributionMarginAmount: snapshot.contributionMarginAmount,
@@ -411,9 +423,9 @@ export function createOrderEconomicsService({
           const currentEntries = await currentCostEntriesForCommit(tx, orderId, orderCommit);
           const landedCost = createLandedCostSnapshot({ id: nextId('landed-cost'), order, orderCommit, costEntries: currentEntries, createdAt: recordedAt });
           await tx.insertLandedCostSnapshot(landedCost);
-          const marginActualization = createMarginActualizationSnapshot({ id: nextId('margin-actualization'), order, orderCommit, landedCost, createdAt: recordedAt });
+          const marginActualization = createPendingPostCloseMarginActualizationSnapshot({ id: nextId('margin-actualization'), order, orderCommit, landedCost, createdAt: recordedAt });
           await tx.insertMarginActualizationSnapshot(marginActualization);
-          const adjustment = createPostCloseAdjustment({
+          const adjustment = createAllocationAwarePostCloseAdjustment({
             id: nextId('post-close-adjustment'),
             order,
             orderCommit,
@@ -442,6 +454,10 @@ export function createOrderEconomicsService({
             landedCostSnapshotId: adjustment.landedCostSnapshotId,
             priorMarginActualizationSnapshotId: adjustment.priorMarginActualizationSnapshotId,
             marginActualizationSnapshotId: adjustment.marginActualizationSnapshotId,
+            previousAllocationStatus: adjustment.previousAllocationStatus,
+            resultingAllocationStatus: adjustment.resultingAllocationStatus,
+            closedCostAllocationRunSnapshotId: adjustment.closedCostAllocationRunSnapshotId,
+            closedCostAllocationRunContentHash: adjustment.closedCostAllocationRunContentHash,
             costDeltaAmount: adjustment.costDeltaAmount,
             marginDeltaAmount: adjustment.marginDeltaAmount,
             reason: adjustment.reason,
@@ -518,6 +534,11 @@ export function createOrderEconomicsService({
       landedCostSnapshotId: snapshot.landedCostSnapshotId,
       supplyCommitmentSnapshotIds: snapshot.supplyCommitmentSnapshotIds,
       supplyLineageComplete: snapshot.supplyLineageComplete,
+      allocationStatus: snapshot.allocationStatus,
+      costAllocationRunSnapshotId: snapshot.costAllocationRunSnapshotId,
+      costAllocationRunContentHash: snapshot.costAllocationRunContentHash,
+      costAllocationPolicyVersionId: snapshot.costAllocationPolicyVersionId,
+      costAllocationLineageMode: snapshot.costAllocationLineageMode,
       netRevenue: snapshot.netRevenue,
       landedCost: snapshot.landedCost,
       contributionMarginAmount: snapshot.contributionMarginAmount,

@@ -1,5 +1,5 @@
 {
-  "registry_version": "0.2.0",
+  "registry_version": "0.2.1",
   "policy": {
     "silent_production_update": false,
     "change_delivery": "pull_request",
@@ -101,7 +101,7 @@
       "cadence": "on_change",
       "licence": "SYNTHA internal operational master data; changes are governed through repository review and MDM versioning.",
       "adapter": null,
-      "affects": ["size.system", "size.size", "size.footwear_size", "measurement.unit", "measurement.point"]
+      "affects": ["size.system", "size.size", "size.footwear_size", "measurement.unit", "measurement.point", "assortment.category"]
     }
   ]
 }

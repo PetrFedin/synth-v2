@@ -7,7 +7,7 @@ const COST_BODY = bodyContract(['supplyCommitmentSnapshotId', 'costType', 'amoun
 const COST_CORRECTION_BODY = bodyContract(['reason', 'supplyCommitmentSnapshotId', 'costType', 'amount', 'currency', 'fxRateSnapshotId', 'sku', 'sourceRef', 'occurredAt']);
 const POST_CLOSE_ADJUSTMENT_BODY = bodyContract(['reason', 'supplyCommitmentSnapshotId', 'costType', 'amount', 'currency', 'fxRateSnapshotId', 'sourceRef', 'occurredAt']);
 const EMPTY_BODY = bodyContract();
-const MARGIN_BODY = bodyContract(['landedCostSnapshotId']);
+const MARGIN_BODY = bodyContract(['landedCostSnapshotId', 'costAllocationRunSnapshotId']);
 const READINESS_BODY = bodyContract(
   ['landedCostSnapshotId', 'marginActualizationSnapshotId', 'requirements'],
   {},
@@ -26,7 +26,7 @@ export function createOrderEconomicsRoutes({ orderEconomics } = {}) {
     mutate('POST', /^\/v2\/orders\/([^/]+)\/actual-costs$/, validateCostBody, ({ commandId, actorId, params, body }) => service.recordActualCost(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/orders\/([^/]+)\/actual-costs\/([^/]+)\/corrections$/, validateCostCorrectionBody, ({ commandId, actorId, params, body }) => service.correctActualCost(commandId, actorId, params[0], params[1], body)),
     mutate('POST', /^\/v2\/orders\/([^/]+)\/landed-cost\/actualize$/, (body) => assertBodyContract(body, EMPTY_BODY), ({ commandId, actorId, params }) => service.actualizeLandedCost(commandId, actorId, params[0])),
-    mutate('POST', /^\/v2\/orders\/([^/]+)\/margin\/actualize$/, validateMarginBody, ({ commandId, actorId, params, body }) => service.actualizeMargin(commandId, actorId, params[0], body.landedCostSnapshotId)),
+    mutate('POST', /^\/v2\/orders\/([^/]+)\/margin\/actualize$/, validateMarginBody, ({ commandId, actorId, params, body }) => service.actualizeMargin(commandId, actorId, params[0], body.landedCostSnapshotId, body.costAllocationRunSnapshotId ?? null)),
     mutate('POST', /^\/v2\/orders\/([^/]+)\/cost-close\/readiness$/, validateReadinessBody, ({ commandId, actorId, params, body }) => service.evaluateCostCloseReadiness(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/orders\/([^/]+)\/cost-close$/, validateCostCloseBody, ({ commandId, actorId, params, body }) => service.closeCost(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/orders\/([^/]+)\/cost-close\/adjustments$/, validatePostCloseAdjustmentBody, ({ commandId, actorId, params, body }) => service.recordPostCloseAdjustment(commandId, actorId, params[0], body)),
@@ -77,6 +77,7 @@ function validateCostFields(body) {
 function validateMarginBody(body) {
   assertBodyContract(body, MARGIN_BODY);
   invariant(typeof body.landedCostSnapshotId === 'string' && body.landedCostSnapshotId.length > 0, 'HTTP_BODY_FIELD_INVALID', 'landedCostSnapshotId is required', { field: 'landedCostSnapshotId' });
+  invariant(body.costAllocationRunSnapshotId === undefined || (typeof body.costAllocationRunSnapshotId === 'string' && body.costAllocationRunSnapshotId.length > 0), 'HTTP_BODY_FIELD_INVALID', 'costAllocationRunSnapshotId must be a non-empty string when supplied', { field: 'costAllocationRunSnapshotId' });
 }
 function validateReadinessBody(body) {
   assertBodyContract(body, READINESS_BODY);

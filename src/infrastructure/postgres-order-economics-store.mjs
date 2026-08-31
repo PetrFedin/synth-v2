@@ -11,6 +11,7 @@ export function createPostgresOrderEconomicsStore({ pool } = {}) {
     async getActualCostEntry(id) { return payloadOne(pool, 'SELECT payload FROM actual_cost_ledger_entries WHERE id = $1', [id]); },
     async getActualCostReversal(originalEntryId) { return payloadOne(pool, 'SELECT payload FROM actual_cost_ledger_entries WHERE reversal_of_entry_id = $1', [originalEntryId]); },
     async getLandedCostSnapshot(id) { return payloadOne(pool, 'SELECT payload FROM landed_cost_snapshots WHERE id = $1', [id]); },
+    async getCostAllocationRunSnapshot(id) { return payloadOne(pool, 'SELECT payload FROM cost_allocation_run_snapshots WHERE id = $1', [id]); },
     async getMarginActualizationSnapshot(id) { return payloadOne(pool, 'SELECT payload FROM margin_actualization_snapshots WHERE id = $1', [id]); },
     async getCostCloseReadinessSnapshot(id) { return payloadOne(pool, 'SELECT payload FROM cost_close_readiness_snapshots WHERE id = $1', [id]); },
     async getCostCloseSnapshot(id) { return payloadOne(pool, 'SELECT payload FROM cost_close_snapshots WHERE id = $1', [id]); },
@@ -90,6 +91,10 @@ function view(client) {
     },
     async getLandedCostSnapshot(id) {
       const result = await client.query('SELECT payload FROM landed_cost_snapshots WHERE id = $1 FOR SHARE', [id]);
+      return result.rows[0]?.payload;
+    },
+    async getCostAllocationRunSnapshot(id) {
+      const result = await client.query('SELECT payload FROM cost_allocation_run_snapshots WHERE id = $1 FOR SHARE', [id]);
       return result.rows[0]?.payload;
     },
     async insertMarginActualizationSnapshot(value) {

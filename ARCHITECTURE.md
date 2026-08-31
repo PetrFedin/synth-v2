@@ -347,6 +347,30 @@ Rules:
 - exact Product Identity/PLM source versions are retained;
 - blocked snapshots remain historical evidence and are not rewritten to READY later.
 
+#### ACC-004 Product Identity → Readiness acceptance harness — IMPLEMENTED / LIVE EVIDENCE PENDING
+
+PR #117 adds the next guarded acceptance slice without changing ProductReadiness business semantics. Entry point is `npm run acceptance:product-readiness`, which uses the same acceptance environment controls and authentication model as `acceptance:collection` and then performs supported public `/v2` mutations only.
+
+The harness creates one reserved acceptance graph:
+
+```text
+ProductStyle
+→ StyleVersion
+→ Colorway
+→ SizeScale
+→ SizeScaleVersion
+→ SizeValue
+→ ProductSku
+→ ProductMedia(hero)
+→ ProductReadinessSnapshot
+```
+
+The scenario deliberately uses `developmentRoute=READY_GOODS`, omits governed `StyleVersion.categoryRef`, and creates no canonical Measurement Chart. It supplies explicit immutable external evidence for `sourcing`, `purchase_or_production_commitment`, `quality` and `compliance`, plus valid commercial media/content/terms/availability. The expected readiness result is therefore **blocked**, with exactly two governed blockers: `category` and `measurements`. Any READY result, missing blocker, extra blocker or changed blocker count fails the acceptance run.
+
+Persistence proof joins the exact ProductStyle/StyleVersion/Colorway/SizeScaleVersion/SizeValue/ProductSku/ProductMedia/Readiness rows in the configured PostgreSQL target and verifies one-brand exact lineage. Before/after counters additionally require no changes to CommercialPublication, PriceListVersion, BuyerCatalogVersion, Selection/Order, ProductSku inventory, warehouse movement, SupplyCommitment or ActualCost state.
+
+This harness is automated by `tests/product-readiness-live-acceptance.test.mjs`, including exact SQL-lineage assertions, blocker-drift fail-closed behavior, idempotent authenticated HTTP contract and wrong-actor rejection before mutation. Those tests prove the acceptance harness contract; they do **not** by themselves make this boundary `PROD-PROVEN`. `PROD-PROVEN` requires a successful `acceptance:product-readiness` run against the intended live acceptance environment. The full Product → Margin `ACC-004` gate remains OPEN.
+
 ### 6.2 CommercialProductProjectionVersion — IMPLEMENTED
 
 Created only from an eligible ready snapshot. It is an immutable commercial projection, not a live PLM read model. Projection continuity/version lineage is preserved.
@@ -817,7 +841,7 @@ Business mutations that publish integration effects use the transactional outbox
 
 ### 15.3 Live acceptance
 
-Current live acceptance coverage is deliberately narrow:
+Operational `PROD-PROVEN` live acceptance coverage remains deliberately narrow:
 
 ```text
 Campaign → Collection
@@ -825,19 +849,27 @@ Campaign → Collection
 
 It uses public authenticated HTTP plus same-environment PostgreSQL verification. It is non-destructive outside its reserved acceptance namespace and compares downstream invariant counters.
 
+PR #117 additionally implements the next executable live harness:
+
+```text
+Product Identity → ProductReadinessSnapshot(blocked: category, measurements)
+```
+
+`npm run acceptance:product-readiness` creates the Product Identity graph through supported authenticated `/v2` mutations, verifies exact same-environment PostgreSQL lineage and requires downstream commercial/warehouse/economic invariant counters to remain unchanged. The controlled missing category MDM and Measurement Chart are intentional: the acceptance passes only when the immutable snapshot remains fail-closed with exactly those two blockers. Repository tests validate the harness and its failure semantics; until the command is executed successfully against the intended live acceptance environment, this slice is `IMPLEMENTED` but not `PROD-PROVEN`.
+
 ### 15.4 Required acceptance expansion order
 
 Expand one business slice at a time, preserving explicit before/after invariants:
 
-1. Campaign → Collection — IMPLEMENTED.
-2. Product Identity → Readiness — PLANNED next proof slice.
+1. Campaign → Collection — IMPLEMENTED / PROD-PROVEN.
+2. Product Identity → Readiness — acceptance harness IMPLEMENTED in #117; live environment evidence PENDING.
 3. Readiness → Projection → Publication → BuyerCatalog — PLANNED.
 4. BuyerCatalog → Selection → OrderCommit — PLANNED.
 5. OrderCommit → Supply → Shipment — PLANNED.
-6. Shipment → SKU-specific ActualCost → exact ProductSku allocation → MarginActualization → Cost Close → post-close adjustment/reconciliation — PLANNED live proof. Exact ActualCost is implemented in #112, exact allocation in #114, pre-close allocation→margin/close provenance in #115, and explicit exact post-close reconciliation in #116. PR #116 implementation head passed required repository Verify and Syntha V2 CI including PostgreSQL verification; the final documentation-sync head must revalidate before merge. Live public-API business proof remains under `ACC-004`.
+6. Shipment → SKU-specific ActualCost → exact ProductSku allocation → MarginActualization → Cost Close → post-close adjustment/reconciliation — PLANNED live proof. Exact ActualCost is implemented in #112, exact allocation in #114, pre-close allocation→margin/close provenance in #115, and explicit exact post-close reconciliation in #116. PR #116 implementation head passed required repository Verify and Syntha V2 CI including PostgreSQL verification. Live public-API business proof remains under `ACC-004`.
 7. Full connected Product → Margin golden path — final P0 proof.
 
-A direct service/domain test is not a substitute for a live public API acceptance gate. Aggregate legacy PostgreSQL flows may verify compatibility but do not count as proof of the ProductSku-specific acceptance slice.
+A direct service/domain test is not a substitute for a live public API acceptance gate. Aggregate legacy PostgreSQL flows may verify compatibility but do not count as proof of the ProductSku-specific acceptance slice. Likewise, a unit-tested acceptance harness is not `PROD-PROVEN` until the harness itself completes against the intended runtime/PostgreSQL acceptance environment.
 
 ---
 
@@ -849,12 +881,12 @@ This is the current high-level master status. Supporting detail is kept in this 
 |---|---|---|
 | Runtime clean-clone/start/readiness/shutdown | PROD-PROVEN | deployment-specific acceptance remains environment responsibility |
 | Authentication + organisation foundation | IMPLEMENTED | continue role/capability coverage audits |
-| Product Identity V2 | IMPLEMENTED | complete all UI/legacy catalog convergence |
+| Product Identity V2 | IMPLEMENTED | UI/legacy catalog convergence plus live #117 execution |
 | PLM Planning/Styles | PARTIAL | converge all semantics on Product Identity |
 | Materials/BOM/Measurements/Samples | IMPLEMENTED/PARTIAL | ODS debt + canonical readiness integration by workspace |
 | Sourcing/Tech Pack | IMPLEMENTED/PARTIAL | supplier/sourcing depth + ODS debt for Sourcing |
 | Production/Final Quality | IMPLEMENTED | continue physical lineage/readiness E2E proof |
-| ProductReadinessSnapshot | IMPLEMENTED | live acceptance slice |
+| ProductReadinessSnapshot | IMPLEMENTED | #117 harness exists; obtain live acceptance evidence, then continue to Projection |
 | CommercialProjection | IMPLEMENTED | publication-only canonical handoff completion |
 | CommercialPublication | IMPLEMENTED/PARTIAL | eliminate flat-catalog origin debt |
 | BuyerCatalog/Linesheet | IMPLEMENTED/PARTIAL | variant-rich ProductSku hierarchy |
@@ -869,7 +901,7 @@ This is the current high-level master status. Supporting detail is kept in this 
 | Landed cost / Margin / Close | IMPLEMENTED | pre-close allocation pin merged in #115; exact post-close reconciliation implemented and verified in #116; live Product → Margin proof remains `ACC-004` |
 | KPI governance/methodology | PARTIAL production connection | complete exact runtime/persistence/reconciliation |
 | ODS v1 | IMPLEMENTED with compatibility debt | burn legacy layers down; never add new dialect |
-| Full Product → Margin live acceptance | PLANNED | progressively extend after P0 lineage gates |
+| Full Product → Margin live acceptance | PLANNED | #117 starts Product-side acceptance; continue slices 3–7 and collect operational evidence |
 
 ---
 
@@ -880,7 +912,7 @@ This is the current high-level master status. Supporting detail is kept in this 
 | `AC-LINEAGE-001` | P0 | Generic ActualCost accepted textual SKU without exact physical lineage | aggregate-only generic path; exact ProductSku physical path; DB fail-closed guard; preserve legacy corrections | CLOSED in #112 |
 | `AC-HTTP-002` | P0 | Physical ActualCost resolver supported exact IDs but HTTP/OpenAPI did not expose them | request + response include `orderLineNo` and `productSkuId`; generic SKU scope removed | CLOSED in #112 |
 | `ECON-003` | P0 | ActualCost → landed/allocation/margin/close/post-close path could lose or leave unproven ProductSku lineage | exact allocation line identity plus reproducible aggregate margin/close and explicit exact post-close reconciliation from frozen lineage | CLOSED by #116 at code/runtime lineage level — #114 fixed exact allocation, #115 bound pre-close allocation→margin/readiness/close provenance, #116 adds latest-adjustment exact post-close reconciliation plus effective-position provenance; implementation-head Verify `33345573039` and Syntha V2 CI `33345572980` succeeded; live Product → Margin proof remains separately OPEN as `ACC-004` |
-| `ACC-004` | P0 | Live acceptance proves only Campaign → Collection | progressively prove canonical Product → Margin spine | OPEN |
+| `ACC-004` | P0 | Live acceptance does not yet prove the connected Product → Margin spine | progressively prove canonical Product → Margin spine through public runtime/PostgreSQL slices | OPEN/PARTIAL — #117 implements Product Identity → Readiness harness with exact fail-closed blocker/persistence/isolation contract; live environment evidence and downstream slices remain open |
 | `PUB-005` | P0 | Some historical publication/catalog behavior remains flat-catalog oriented | projection-only variant-rich publication/buyer catalog | OPEN/PARTIAL |
 | `UI-006` | P1 | Legacy Omnidata CSS/JS compatibility layers remain loaded | migrate semantics to ODS v1 and remove debt only after validation | OPEN/PARTIAL |
 | `SPEC-007` | P0 | Historical architecture/product/UI detail was fragmented across docs/code | authoritative `ARCHITECTURE.md` + CI synchronization rule | CLOSED in #110 |
@@ -963,6 +995,7 @@ Minimum frozen lineage fields for the current commercial spine include:
 | 2026-08-29 | #114 / `47b39f5930540f27fe6bebfbe3bceb0e2b114fdf` | Preserve exact `orderLineNo + productSkuId` through Cost Allocation; prohibit canonical textual-SKU direct/custom resolution; retain explicit legacy mode; expose exact HTTP/OpenAPI output and persist through existing JSONB snapshots | 9.4, 12.3, 13, 15, 16, 17, 19 | MERGED; Verify run `33249799746` success; Syntha V2 CI run `33249799764` success; supersedes closed draft #113; `ECON-003` remains OPEN/PARTIAL |
 | 2026-08-31 | #115 / `283c058eba5a83f39718e43aca3c9cc31205a120` | Bind immutable CostAllocationRunSnapshot into canonical MarginActualization → CostCloseReadiness → CostClose; preserve explicit legacy semantics; mark canonical post-close late-cost margin `pending-post-close`; expose allocation provenance in events/OpenAPI/store lookup | 1.2, 3.3, 9.4, 12.3, 13, 15, 16, 17, 19, 20 | MERGED; Verify run `33344377731` success; Syntha V2 CI run `33344377707` success; `ECON-003` remained OPEN/PARTIAL pending exact post-close reconciliation at that merge |
 | 2026-08-31 | #116 / `fix/econ003-post-close-reallocation` | Add immutable latest-adjustment post-close allocation reconciliation; bind exact new CostAllocationRunSnapshot to a new current margin without changing aggregate economics or rewriting CostClose/adjustment; persist via migration 074; expose effective reconciliation/allocation provenance in economics-position and OpenAPI | 1.2, 3.3, 3.7, 9.4, 12.3, 13, 15, 16, 17, 19, 20, 21 | implementation-head Verify run `33345573039` success; Syntha V2 CI run `33345572980` success including PostgreSQL verification; `ECON-003` code/runtime lineage gap CLOSED; live Product → Margin proof remains OPEN under `ACC-004` |
+| 2026-08-31 | #117 / `feat/acc004-product-readiness-live` | Add guarded Product Identity → ProductReadiness live acceptance harness: create exact ProductStyle/StyleVersion/Colorway/Size/ProductSku/media through authenticated idempotent `/v2`, require controlled READY_GOODS snapshot to remain blocked exactly on category + measurements, verify same-environment PostgreSQL lineage and prove unrelated downstream/warehouse/economic counters unchanged | 6.1, 15, 16, 17, 20, 22 | IMPLEMENTED harness; automated acceptance-contract tests added; PR CI and actual live acceptance environment evidence required before any `PROD-PROVEN` claim; `ACC-004` remains OPEN/PARTIAL |
 
 Future implementation PRs add a row here. The row is not a substitute for updating the affected detailed sections.
 

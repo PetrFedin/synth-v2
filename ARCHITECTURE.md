@@ -134,6 +134,18 @@ ProductStyle
 → CostCloseSnapshot
 ```
 
+When a late cost is recorded after close, the immutable continuation is explicit rather than a rewrite of the close:
+
+```text
+CostCloseSnapshot
+→ PostCloseAdjustment
+→ adjusted LandedCostSnapshot
+→ MarginActualizationSnapshot(allocationStatus=pending-post-close)
+→ exact new CostAllocationRunSnapshot
+→ PostCloseAllocationReconciliationSnapshot
+→ reconciled MarginActualizationSnapshot(allocationStatus=current)
+```
+
 Physical SKU identity after order commitment is not a display string. The canonical line identity is the exact immutable pair:
 
 ```text
@@ -218,7 +230,7 @@ Buyer/catalog/order code must not bypass this handoff by reading mutable live PL
 
 ### 3.3 Historical facts freeze versions
 
-Readiness, projection, publication, buyer catalog, selection, order commitment, supply, actual cost, allocation and margin records preserve exact source versions/IDs. Current master labels cannot retroactively redefine historical facts.
+Readiness, projection, publication, buyer catalog, selection, order commitment, supply, actual cost, allocation, margin, close, post-close adjustment and post-close allocation reconciliation records preserve exact source versions/IDs. Current master labels cannot retroactively redefine historical facts. A reconciliation adds a new immutable fact and a new current margin; it never edits the CostClose, PostCloseAdjustment, pending margin or prior allocation run.
 
 ### 3.4 Physical lineage
 
@@ -234,7 +246,7 @@ Pricing exposed to buyers is server-authoritative and snapshot/version based. Cl
 
 ### 3.7 Corrections, not rewrites
 
-Immutable commercial, physical and economic ledgers are corrected through append-only reversal/replacement/adjustment semantics. Historical records are not edited in place to make current totals look correct.
+Immutable commercial, physical and economic ledgers are corrected through append-only reversal/replacement/adjustment/reconciliation semantics. Historical records are not edited in place to make current totals look correct.
 
 ---
 
@@ -469,7 +481,7 @@ Automated evidence includes `tests/product-sku-physical-cost-lineage.test.mjs`, 
 
 ActualCost corrections remain append-only reversal/replacement entries linked to the original entry/correction identity. New physical-v2 SKU-specific corrections preserve exact `orderLineNo + productSkuId`; historical non-physical textual-SKU corrections preserve their original legacy scope exactly. No correction edits an immutable historical entry in place.
 
-### 9.4 Landed cost / allocation / margin / close — IMPLEMENTED/PARTIAL
+### 9.4 Landed cost / allocation / margin / close — IMPLEMENTED
 
 The order-level economics spine is immutable and version-pinned:
 
@@ -481,8 +493,11 @@ ActualCostLedgerEntry
 → CostCloseReadinessSnapshot
 → CostCloseSnapshot
 → PostCloseAdjustment
-→ new LandedCostSnapshot
-→ new MarginActualizationSnapshot
+→ adjusted LandedCostSnapshot
+→ MarginActualizationSnapshot(allocationStatus=pending-post-close)
+→ exact new CostAllocationRunSnapshot
+→ PostCloseAllocationReconciliationSnapshot
+→ reconciled MarginActualizationSnapshot(allocationStatus=current)
 ```
 
 `LandedCostSnapshot` remains the order-commit-level frozen total derived from the exact active ActualCost entry IDs. `MarginActualizationSnapshot` and Cost Close remain aggregate order-commit economics; exact ProductSku allocation is provenance and detailed economics evidence, not a silent conversion of those aggregate snapshots into per-SKU documents.
@@ -500,20 +515,35 @@ PR #114 closes the confirmed ProductSku-lineage loss inside Cost Allocation:
 - immutable allocation snapshots continue to persist the richer rows in existing `cost_allocation_run_snapshots.allocations`, `sku_economics` and full `payload` JSONB. No migration is required because the persistence envelope already stores the complete immutable JSON structure;
 - Cost Allocation authorization remains `COST_MANAGE` for mutation and `MARGIN_READ` for reads, with existing command/idempotency and transactional-outbox behavior unchanged.
 
-Current `ECON-003` pass binds that immutable allocation into downstream aggregate economics without changing aggregate arithmetic:
+PR #115 binds the immutable allocation run into downstream aggregate economics without changing aggregate arithmetic:
 
 - canonical ProductSku margin actualization requires an explicit immutable `costAllocationRunSnapshotId`; the application loads that run and the domain validates exact order, order version, OrderCommitSnapshot, LandedCostSnapshot, currency, active cost-entry set, allocation total and `lineageMode=product-sku-v2`;
-- a canonical `MarginActualizationSnapshot` records `allocationStatus=current`, `costAllocationRunSnapshotId`, `costAllocationRunContentHash`, `costAllocationPolicyVersionId`, `costAllocationLineageMode=product-sku-v2` and `aggregateContentHash`; its new `contentHash` commits to the previous aggregate hash plus the immutable allocation provenance;
+- a canonical `MarginActualizationSnapshot` records `allocationStatus=current`, `costAllocationRunSnapshotId`, `costAllocationRunContentHash`, `costAllocationPolicyVersionId`, `costAllocationLineageMode=product-sku-v2` and `aggregateContentHash`; its new `contentHash` commits to the previous aggregate hash plus immutable allocation provenance;
 - explicit pre-ProductSku legacy margin uses `allocationStatus=legacy-not-applicable` and null allocation pins. Legacy rows never receive inferred ProductSku identity;
 - `CostCloseReadinessSnapshot` and `CostCloseSnapshot` must pin the same allocation id/hash/policy/mode as their canonical margin basis. Missing, pending or mismatched canonical allocation lineage fails closed;
 - generic post-close ActualCost remains aggregate-only. Because a new exact allocation may require new approved custom weights, the late-cost path creates aggregate landed/margin facts with `allocationStatus=pending-post-close` rather than fabricating ProductSku economics; the adjustment preserves the allocation id/hash frozen by the original close;
-- `pending-post-close` is not close-ready and must be reconciled by a future explicit exact reallocation/reconciliation command before detailed ProductSku economics can again be called current;
-- existing immutable snapshot tables persist these new provenance fields in their full JSONB payloads; `postgres-order-economics-store` gains read-only lookup of `cost_allocation_run_snapshots` by immutable id. No SQL migration is required in this pass because existing scalar accounting columns and immutable JSONB envelopes remain valid;
-- outbox margin/readiness/close/post-close events expose allocation status and pin fields so projections can distinguish current, legacy-not-applicable and pending-post-close states.
+- `pending-post-close` is not close-ready and never reuses the closed allocation as if it described the new landed-cost basis;
+- existing immutable snapshot tables persist these provenance fields in their full JSONB payloads; the economics store reads immutable allocation runs by exact id for fail-closed validation;
+- outbox margin/readiness/close/post-close events expose allocation status and pin fields so projections can distinguish `current`, `legacy-not-applicable` and `pending-post-close` states.
 
-The composed `/v2` OpenAPI version remains `1.17.0`. `CostAllocationRunInput` exposes exact `customLineWeightsByCostEntryId`; `CostAllocationRow`, `SkuEconomics` and `CostAllocationRunSnapshot` expose exact lineage and `lineageMode`. Margin actualization exposes `costAllocationRunSnapshotId` within the same v2 namespace; canonical ProductSku requests require it by domain invariant while legacy requests may omit it.
+PR #116 completes the explicit exact post-close reconciliation contract:
 
-Automated evidence includes `tests/cost-allocation-product-sku-lineage.test.mjs` and `tests/econ003-allocation-margin-close-lineage.test.mjs` plus the existing default/PostgreSQL verification suites. `ECON-003` remains OPEN/PARTIAL until the supported post-close exact reallocation/reconciliation command exists and the full allocation→margin→close→post-close relation is proven through PostgreSQL/runtime/live acceptance. Live ProductSku-bearing economics acceptance also remains under `ACC-004`.
+- entry point: `POST /v2/orders/{orderId}/cost-close/adjustments/{postCloseAdjustmentId}/allocation-reconcile` with an exact `costAllocationRunSnapshotId` and normal command/idempotency identity;
+- the caller must first create a new immutable CostAllocationRunSnapshot for the exact adjusted LandedCostSnapshot. Reconciliation never searches for or auto-selects a “latest” allocation run;
+- only canonical `product-sku-v2` commits require this ProductSku reconciliation; legacy economics remains explicit and is not upgraded by guessed ProductSku IDs;
+- the requested PostCloseAdjustment must be the latest adjustment for that CostClose and must not already have a reconciliation. An older reconciled adjustment remains immutable history but cannot override a later adjustment in the effective economics position;
+- the exact CostClose, latest adjustment, adjusted LandedCostSnapshot, pending MarginActualizationSnapshot and supplied CostAllocationRunSnapshot must agree on order, order version, OrderCommitSnapshot, currency, active cost-entry set, allocation total and landed basis;
+- success creates one immutable `PostCloseAllocationReconciliationSnapshot` plus one new `MarginActualizationSnapshot(allocationStatus=current)` in the same economics transaction;
+- reconciliation is provenance-only for aggregate economics: `aggregateContentHash`, net revenue, landed cost, contribution margin amount and contribution margin percent must exactly equal the pending margin. A reconciliation that changes aggregate arithmetic fails closed;
+- `PostCloseAllocationReconciliationSnapshot` freezes close id, adjustment id, pending margin id, adjusted landed id, exact allocation run id/hash/policy/mode, new current margin id, previous/resulting allocation status, timestamp and content hash;
+- a later PostCloseAdjustment makes its own pending margin the effective economics basis until that newer adjustment receives its own exact allocation and reconciliation; earlier reconciliations are not rewritten or deleted;
+- `GET /v2/orders/{orderId}/economics-position` exposes `postCloseAllocationReconciliationSnapshotId`, `allocationStatus`, exact allocation id/hash/policy/mode and chooses provenance only from the latest effective close/adjustment/reconciliation chain. A pending latest adjustment returns null current allocation pins rather than falling back to the original close;
+- successful reconciliation emits `margin.actualized` for the new current margin and `cost-close.allocation-reconciled` for the immutable reconciliation fact;
+- authorization is `COST_MANAGE` for reconciliation and existing `MARGIN_READ` for the economics-position read model.
+
+The composed `/v2` OpenAPI version remains `1.17.0`. `CostAllocationRunInput` exposes exact `customLineWeightsByCostEntryId`; `CostAllocationRow`, `SkuEconomics` and `CostAllocationRunSnapshot` expose exact lineage and `lineageMode`. Margin actualization exposes `costAllocationRunSnapshotId`; PR #116 additionally exposes the post-close reconciliation route/schemas and effective economics-position allocation/reconciliation fields without creating a parallel API version.
+
+Automated evidence includes `tests/cost-allocation-product-sku-lineage.test.mjs`, `tests/econ003-allocation-margin-close-lineage.test.mjs`, `tests/econ003-post-close-allocation-reconciliation.test.mjs`, `tests/econ003-post-close-allocation-reconciliation-migration.test.mjs` and `tests/order-economics-position.test.mjs` plus the default/PostgreSQL verification suites. PR #116 implementation head passed repository Verify run `33345573039` and Syntha V2 CI run `33345572980`, including PostgreSQL verification. The known `ECON-003` code/runtime lineage gap is therefore CLOSED at the implementation-contract level; this documentation-sync head must still pass the same required gates before merge. Live ProductSku-bearing economics acceptance remains separately governed by `ACC-004` and is required for `PROD-PROVEN` status.
 
 Supporting detail: `docs/architecture/order-supply-cost-margin-baseline.md`, `docs/architecture/order-margin-bridge.md`, `docs/architecture/econ003-allocation-margin-close-lineage.md`.
 
@@ -731,7 +761,7 @@ Russian and English are mandatory. User-facing strings route through the shared 
 
 Domain failures use stable semantic error codes. New fail-closed invariants should surface a domain-level error before a raw database-trigger error whenever the supported application path can detect the condition. The database still protects direct/internal bypasses.
 
-### 12.3 Cost allocation and margin lineage API — IMPLEMENTED/PARTIAL downstream reconciliation
+### 12.3 Cost allocation and margin lineage API — IMPLEMENTED
 
 `POST /v2/orders/:orderId/cost-allocation-runs` accepts an exact `landedCostSnapshotId`, approved `policyVersionId`, optional legacy `customWeightsByCostEntryId`, and optional canonical `customLineWeightsByCostEntryId`.
 
@@ -742,7 +772,13 @@ Domain failures use stable semantic error codes. New fail-closed invariants shou
 
 `POST /v2/orders/:orderId/margin/actualize` accepts required `landedCostSnapshotId` and optional-at-transport `costAllocationRunSnapshotId`. For a canonical ProductSku OrderCommit the latter is domain-required and must identify the immutable allocation run matching the exact landed basis. For explicit legacy OrderCommit lineage the field is omitted and no ProductSku allocation reference is synthesized.
 
-Public version remains `/v2` / OpenAPI `1.17.0`; these are invariant corrections, not a new parallel API version.
+`POST /v2/orders/{orderId}/cost-close/adjustments/{postCloseAdjustmentId}/allocation-reconcile` accepts exactly one business field, required `costAllocationRunSnapshotId`, plus the normal `Idempotency-Key` header. It is the only supported mutation that promotes a canonical post-close `pending-post-close` margin back to `current` detailed ProductSku allocation provenance.
+
+The reconciliation route requires `COST_MANAGE`, the exact latest PostCloseAdjustment and an exact immutable allocation run for that adjustment's adjusted LandedCostSnapshot. It returns `{ reconciliation, marginActualization }`; duplicate reconciliation, non-latest adjustment, mismatched landed/allocation basis or changed aggregate economics fail closed. No route auto-selects an allocation run by timestamp.
+
+`GET /v2/orders/{orderId}/economics-position` exposes the effective `postCloseAllocationReconciliationSnapshotId`, `allocationStatus`, allocation run id/hash/policy/mode and effective landed/margin IDs. If the latest adjustment has no reconciliation, allocation status remains `pending-post-close` and current allocation pins are null; an older reconciliation cannot override a newer adjustment.
+
+Public version remains `/v2` / OpenAPI `1.17.0`; these are invariant corrections and completion of the existing economics contract, not a new parallel API version.
 
 ---
 
@@ -758,7 +794,8 @@ Public version remains `/v2` / OpenAPI `1.17.0`; these are invariant corrections
 - ActualCost migration 073 is forward-only: generic fresh writes are aggregate-only; new SKU-specific physical writes require exact `order_line_no + product_sku_id`; historical non-physical textual-SKU rows remain immutable and may only be corrected by preserving their original lineage through reversal + replacement.
 - Legacy rows/tests that lack ProductSku remain legal only in aggregate cost scope. Neither migration 073 nor application compatibility code may infer/backfill ProductSku from textual SKU.
 - Cost Allocation exact-lineage output requires no migration: `cost_allocation_run_snapshots` already persists `allocations`, `sku_economics` and the complete immutable snapshot `payload` as JSONB, so `orderLineNo`, `productSkuId` and `lineageMode` are retained without introducing redundant relational columns or rewriting prior snapshots.
-- Allocation→margin→readiness→close provenance in the current `ECON-003` pass also requires no migration: existing immutable economics tables already persist complete snapshot `payload` JSONB while their scalar accounting columns remain unchanged. The economics store reads an immutable `cost_allocation_run_snapshots.payload` by id for fail-closed validation; historical snapshots are not rewritten.
+- PR #115 allocation→margin→readiness→close provenance required no migration because existing immutable economics tables already persisted complete snapshot payload JSONB while scalar accounting columns remained unchanged. The economics store reads an immutable `cost_allocation_run_snapshots.payload` by id for fail-closed validation; historical snapshots are not rewritten.
+- Migration `074_post_close_allocation_reconciliation.sql` creates immutable `post_close_allocation_reconciliation_snapshots`. One row is allowed per `post_close_adjustment_id`; one reconciled margin is pinned per reconciliation. Exact foreign keys and the integrity trigger bind order/commit/close/adjustment/pending margin/adjusted landed/allocation policy/allocation run/new current margin; the trigger also validates pending→current allocation status, scalar↔payload identity, exact orderVersion, timestamps/content hash and unchanged aggregate economics. UPDATE/DELETE is rejected by the common economics immutability trigger.
 
 ---
 
@@ -797,7 +834,7 @@ Expand one business slice at a time, preserving explicit before/after invariants
 3. Readiness → Projection → Publication → BuyerCatalog — PLANNED.
 4. BuyerCatalog → Selection → OrderCommit — PLANNED.
 5. OrderCommit → Supply → Shipment — PLANNED.
-6. Shipment → SKU-specific ActualCost → exact ProductSku allocation → MarginActualization — PLANNED live proof; exact ActualCost is implemented in #112, exact allocation in #114, and the current `ECON-003` pass pins canonical allocation into pre-close margin/readiness/close. PostgreSQL/runtime/live proof and post-close exact reallocation remain outstanding.
+6. Shipment → SKU-specific ActualCost → exact ProductSku allocation → MarginActualization → Cost Close → post-close adjustment/reconciliation — PLANNED live proof. Exact ActualCost is implemented in #112, exact allocation in #114, pre-close allocation→margin/close provenance in #115, and explicit exact post-close reconciliation in #116. PR #116 implementation head passed required repository Verify and Syntha V2 CI including PostgreSQL verification; the final documentation-sync head must revalidate before merge. Live public-API business proof remains under `ACC-004`.
 7. Full connected Product → Margin golden path — final P0 proof.
 
 A direct service/domain test is not a substitute for a live public API acceptance gate. Aggregate legacy PostgreSQL flows may verify compatibility but do not count as proof of the ProductSku-specific acceptance slice.
@@ -828,8 +865,8 @@ This is the current high-level master status. Supporting detail is kept in this 
 | Inventory | IMPLEMENTED core | continuous reconciliation/golden-path proof |
 | Generic aggregate ActualCost | IMPLEMENTED | live economics acceptance; new generic/post-close writes remain aggregate-only |
 | SKU-specific ActualCost | IMPLEMENTED | live Shipment → ActualCost → Margin acceptance |
-| Cost Allocation | IMPLEMENTED | live ProductSku economics acceptance; post-close exact reallocation/reconciliation |
-| Landed cost / Margin / Close | IMPLEMENTED/PARTIAL | canonical pre-close allocation pin implemented in current ECON-003 pass; PostgreSQL/live proof + post-close reconciliation remain |
+| Cost Allocation | IMPLEMENTED | exact pre/post-close ProductSku allocation contracts and automated PostgreSQL verification complete; live acceptance remains `ACC-004` |
+| Landed cost / Margin / Close | IMPLEMENTED | pre-close allocation pin merged in #115; exact post-close reconciliation implemented and verified in #116; live Product → Margin proof remains `ACC-004` |
 | KPI governance/methodology | PARTIAL production connection | complete exact runtime/persistence/reconciliation |
 | ODS v1 | IMPLEMENTED with compatibility debt | burn legacy layers down; never add new dialect |
 | Full Product → Margin live acceptance | PLANNED | progressively extend after P0 lineage gates |
@@ -842,7 +879,7 @@ This is the current high-level master status. Supporting detail is kept in this 
 |---|---|---|---|---|
 | `AC-LINEAGE-001` | P0 | Generic ActualCost accepted textual SKU without exact physical lineage | aggregate-only generic path; exact ProductSku physical path; DB fail-closed guard; preserve legacy corrections | CLOSED in #112 |
 | `AC-HTTP-002` | P0 | Physical ActualCost resolver supported exact IDs but HTTP/OpenAPI did not expose them | request + response include `orderLineNo` and `productSkuId`; generic SKU scope removed | CLOSED in #112 |
-| `ECON-003` | P0 | ActualCost → landed/allocation/margin path can lose or leave unproven ProductSku lineage | exact allocation line identity plus reproducible aggregate margin/close semantics from frozen lineage | OPEN/PARTIAL — exact allocation fixed in #114; current pass pins exact allocation into canonical pre-close margin/readiness/close and marks post-close late-cost margin `pending-post-close`; explicit post-close reallocation/reconciliation + PostgreSQL/runtime/live proof remain |
+| `ECON-003` | P0 | ActualCost → landed/allocation/margin/close/post-close path could lose or leave unproven ProductSku lineage | exact allocation line identity plus reproducible aggregate margin/close and explicit exact post-close reconciliation from frozen lineage | CLOSED by #116 at code/runtime lineage level — #114 fixed exact allocation, #115 bound pre-close allocation→margin/readiness/close provenance, #116 adds latest-adjustment exact post-close reconciliation plus effective-position provenance; implementation-head Verify `33345573039` and Syntha V2 CI `33345572980` succeeded; live Product → Margin proof remains separately OPEN as `ACC-004` |
 | `ACC-004` | P0 | Live acceptance proves only Campaign → Collection | progressively prove canonical Product → Margin spine | OPEN |
 | `PUB-005` | P0 | Some historical publication/catalog behavior remains flat-catalog oriented | projection-only variant-rich publication/buyer catalog | OPEN/PARTIAL |
 | `UI-006` | P1 | Legacy Omnidata CSS/JS compatibility layers remain loaded | migrate semantics to ODS v1 and remove debt only after validation | OPEN/PARTIAL |
@@ -904,10 +941,12 @@ Minimum frozen lineage fields for the current commercial spine include:
 | ReceiptClaim issue line | exact shipment line facts; when canonical ProductSku lineage exists, preserves `orderLineNo + productSkuId + sku(display)` for downstream recovery |
 | ActualCostLedgerEntry | order/commit/supply; exact shipment/orderLine/ProductSku when SKU-specific physical v2; textual SKU is display/legacy compatibility only |
 | CostAllocationRunSnapshot | exact order commit + landed snapshot + policy + active cost entry IDs; `lineageMode`; canonical allocation/economics rows preserve `orderLineNo + productSkuId + sku(display)`, legacy rows keep exact IDs null |
-| MarginActualizationSnapshot | exact committed revenue + exact LandedCostSnapshot; canonical ProductSku lineage additionally freezes allocation status + exact CostAllocationRunSnapshot id/hash/policy/mode; legacy uses explicit `legacy-not-applicable`; canonical late-cost post-close uses `pending-post-close` until exact reallocation |
+| MarginActualizationSnapshot | exact committed revenue + exact LandedCostSnapshot; canonical ProductSku lineage additionally freezes allocation status + exact CostAllocationRunSnapshot id/hash/policy/mode; legacy uses explicit `legacy-not-applicable`; canonical late-cost post-close uses `pending-post-close` until exact reconciliation, after which a new immutable margin on the same aggregate basis becomes `current` |
 | CostCloseReadinessSnapshot | exact landed + margin basis and, for canonical ProductSku economics, the same immutable allocation run id/hash/policy/mode |
 | CostCloseSnapshot | exact readiness + landed + margin basis and the same canonical allocation pin frozen at close |
 | PostCloseAdjustment | immutable close baseline + new ActualCost/Landed/Margin chain; preserves closed allocation provenance and records resulting allocation status without inventing ProductSku allocation |
+| PostCloseAllocationReconciliationSnapshot | immutable exact link from latest PostCloseAdjustment/pending margin/adjusted landed basis to an explicit new CostAllocationRunSnapshot and new current MarginActualizationSnapshot; freezes allocation id/hash/policy/mode, pending/current status transition, timestamp and content hash; one per adjustment |
+| OrderEconomicsPosition | effective read model over one immutable OrderCommit: exposes close/latest-adjustment/latest-reconciliation IDs, effective landed/margin IDs and current/pending/legacy allocation provenance; an older reconciliation never overrides a newer adjustment |
 
 ---
 
@@ -922,7 +961,8 @@ Minimum frozen lineage fields for the current commercial spine include:
 | 2026-08-28 | #110 | Establish one authoritative platform/UI/data/architecture specification and CI synchronization contract | entire document | merged; `ARCHITECTURE.md` authoritative |
 | 2026-08-29 | #112 | Close ActualCost textual-SKU bypass; require exact ProductSku physical and supplier-recovery identity; keep legacy pre-ProductSku physical/recovery fixtures aggregate-only; expose exact fields in authoritative OpenAPI 1.17.0 without version drift; add forward-only PostgreSQL guard and compatibility-safe tests | 1.2, 8, 9, 12, 13, 15, 16, 17, 19 | merged; required Verify/PostgreSQL CI green; supersedes draft #111 |
 | 2026-08-29 | #114 / `47b39f5930540f27fe6bebfbe3bceb0e2b114fdf` | Preserve exact `orderLineNo + productSkuId` through Cost Allocation; prohibit canonical textual-SKU direct/custom resolution; retain explicit legacy mode; expose exact HTTP/OpenAPI output and persist through existing JSONB snapshots | 9.4, 12.3, 13, 15, 16, 17, 19 | MERGED; Verify run `33249799746` success; Syntha V2 CI run `33249799764` success; supersedes closed draft #113; `ECON-003` remains OPEN/PARTIAL |
-| 2026-08-31 | `fix/econ003-allocation-margin-close-lineage` / PR pending | Bind immutable CostAllocationRunSnapshot into canonical MarginActualization → CostCloseReadiness → CostClose; preserve explicit legacy semantics; mark canonical post-close late-cost margin `pending-post-close`; expose allocation provenance in events and store lookup | 1.2, 3.3, 9.4, 12.3, 13, 15, 16, 17, 19, 20 | implementation + focused regression in branch; OpenAPI synchronization and required CI are mandatory before PR/merge; `ECON-003` remains OPEN/PARTIAL until post-close exact reallocation + live proof |
+| 2026-08-31 | #115 / `283c058eba5a83f39718e43aca3c9cc31205a120` | Bind immutable CostAllocationRunSnapshot into canonical MarginActualization → CostCloseReadiness → CostClose; preserve explicit legacy semantics; mark canonical post-close late-cost margin `pending-post-close`; expose allocation provenance in events/OpenAPI/store lookup | 1.2, 3.3, 9.4, 12.3, 13, 15, 16, 17, 19, 20 | MERGED; Verify run `33344377731` success; Syntha V2 CI run `33344377707` success; `ECON-003` remained OPEN/PARTIAL pending exact post-close reconciliation at that merge |
+| 2026-08-31 | #116 / `fix/econ003-post-close-reallocation` | Add immutable latest-adjustment post-close allocation reconciliation; bind exact new CostAllocationRunSnapshot to a new current margin without changing aggregate economics or rewriting CostClose/adjustment; persist via migration 074; expose effective reconciliation/allocation provenance in economics-position and OpenAPI | 1.2, 3.3, 3.7, 9.4, 12.3, 13, 15, 16, 17, 19, 20, 21 | implementation-head Verify run `33345573039` success; Syntha V2 CI run `33345572980` success including PostgreSQL verification; `ECON-003` code/runtime lineage gap CLOSED; live Product → Margin proof remains OPEN under `ACC-004` |
 
 Future implementation PRs add a row here. The row is not a substitute for updating the affected detailed sections.
 
@@ -936,7 +976,7 @@ These files remain useful deep dives and evidence. They must be reconciled into 
 - `docs/architecture/product-readiness-commercial-projection-v2.md`
 - `docs/architecture/order-supply-cost-margin-baseline.md`
 - `docs/architecture/order-margin-bridge.md`
-- `docs/architecture/econ003-allocation-margin-close-lineage.md`
+- `docs/architecture/econ003-allocation-margin-close-lineage.md` — exact pre-close allocation provenance plus post-close pending/reconciliation semantics.
 - `docs/architecture/syntha-v2-live-capability-register.md`
 - `docs/commercial-execution-spine.md`
 - `docs/commercial-publication-linesheets.md`

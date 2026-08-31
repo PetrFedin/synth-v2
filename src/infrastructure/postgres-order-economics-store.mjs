@@ -16,6 +16,7 @@ export function createPostgresOrderEconomicsStore({ pool } = {}) {
     async getCostCloseReadinessSnapshot(id) { return payloadOne(pool, 'SELECT payload FROM cost_close_readiness_snapshots WHERE id = $1', [id]); },
     async getCostCloseSnapshot(id) { return payloadOne(pool, 'SELECT payload FROM cost_close_snapshots WHERE id = $1', [id]); },
     async getPostCloseAdjustment(id) { return payloadOne(pool, 'SELECT payload FROM post_close_adjustments WHERE id = $1', [id]); },
+    async getPostCloseAllocationReconciliation(id) { return payloadOne(pool, 'SELECT payload FROM post_close_allocation_reconciliation_snapshots WHERE id = $1', [id]); },
     async listActualCostEntries(orderId) {
       const result = await pool.query('SELECT payload FROM actual_cost_ledger_entries WHERE order_id = $1 ORDER BY recorded_at, id', [orderId]);
       return result.rows.map((row) => row.payload);
@@ -157,6 +158,10 @@ function view(client) {
         value.contributionMarginPercent, value.closedAt, value.contentHash, JSON.stringify(value)],
       'COST_CLOSE_ALREADY_EXISTS', { costCloseSnapshotId: value.id, orderCommitSnapshotId: value.orderCommitSnapshotId });
     },
+    async getPostCloseAdjustment(id) {
+      const result = await client.query('SELECT payload FROM post_close_adjustments WHERE id = $1 FOR SHARE', [id]);
+      return result.rows[0]?.payload;
+    },
     async getLatestPostCloseAdjustment(costCloseSnapshotId) {
       const result = await client.query(
         'SELECT payload FROM post_close_adjustments WHERE cost_close_snapshot_id = $1 ORDER BY recorded_at DESC, id DESC LIMIT 1 FOR SHARE',
@@ -176,6 +181,30 @@ function view(client) {
         value.priorMarginActualizationSnapshotId, value.marginActualizationSnapshotId,
         value.costDeltaAmount, value.marginDeltaAmount, value.reason, value.recordedAt, value.contentHash, JSON.stringify(value)],
       'POST_CLOSE_ADJUSTMENT_ALREADY_EXISTS', { postCloseAdjustmentId: value.id });
+    },
+    async getPostCloseAllocationReconciliationByAdjustmentId(postCloseAdjustmentId) {
+      const result = await client.query(
+        'SELECT payload FROM post_close_allocation_reconciliation_snapshots WHERE post_close_adjustment_id = $1 FOR SHARE',
+        [postCloseAdjustmentId],
+      );
+      return result.rows[0]?.payload;
+    },
+    async insertPostCloseAllocationReconciliation(value) {
+      await insertImmutable(client, `INSERT INTO post_close_allocation_reconciliation_snapshots
+        (id, order_id, order_commit_snapshot_id, cost_close_snapshot_id, post_close_adjustment_id,
+         pending_margin_actualization_snapshot_id, landed_cost_snapshot_id,
+         cost_allocation_run_snapshot_id, cost_allocation_run_content_hash,
+         cost_allocation_policy_version_id, cost_allocation_lineage_mode,
+         margin_actualization_snapshot_id, previous_allocation_status, resulting_allocation_status,
+         status, reconciled_at, content_hash, payload)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18::jsonb)`,
+      [value.id, value.orderId, value.orderCommitSnapshotId, value.costCloseSnapshotId, value.postCloseAdjustmentId,
+        value.pendingMarginActualizationSnapshotId, value.landedCostSnapshotId,
+        value.costAllocationRunSnapshotId, value.costAllocationRunContentHash,
+        value.costAllocationPolicyVersionId, value.costAllocationLineageMode,
+        value.marginActualizationSnapshotId, value.previousAllocationStatus, value.resultingAllocationStatus,
+        value.status, value.reconciledAt, value.contentHash, JSON.stringify(value)],
+      'POST_CLOSE_ALLOCATION_RECONCILIATION_ALREADY_EXISTS', { postCloseAdjustmentId: value.postCloseAdjustmentId, reconciliationSnapshotId: value.id });
     },
     getCommand: (id) => getRegisteredCommand(client, 'wholesale', id),
     insertCommand: (value) => insertRegisteredCommand(client, 'wholesale', value),

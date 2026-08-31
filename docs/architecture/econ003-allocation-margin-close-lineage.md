@@ -1,6 +1,6 @@
 # ECON-003 — Cost Allocation → Margin → Close lineage
 
-Status: IMPLEMENTED/PARTIAL on `fix/econ003-post-close-reallocation`; root `ARCHITECTURE.md` synchronization and GitHub CI remain mandatory PR gates.
+Status: IMPLEMENTED at code/runtime lineage level in PR #116 after repository Verify and PostgreSQL/Syntha V2 CI passed on the implementation head. Final merge still requires the documentation-sync head to pass the same required gates. Live Product → Margin business acceptance remains tracked separately by `ACC-004`.
 
 ## Purpose
 
@@ -180,13 +180,14 @@ Focused regressions:
 - `tests/econ003-post-close-allocation-reconciliation-migration.test.mjs`;
 - `tests/order-economics-position.test.mjs`.
 
-Required before merge:
+Implementation-head GitHub evidence on PR #116:
 
-- authoritative root `ARCHITECTURE.md` synchronized in the same PR;
-- repository Verify green;
-- PostgreSQL/Syntha V2 CI green;
-- PR diff audited for runtime and migration scope.
+- repository Verify run `33345573039` — success;
+- Syntha V2 CI run `33345572980`, including PostgreSQL verification — success;
+- PR diff audited for runtime, migration and authoritative ТЗ scope.
+
+The final documentation-sync head must pass the same required gates before merge; a green implementation head is evidence for code-level closure but is not permission to merge a later unverified head.
 
 ## Remaining acceptance boundary
 
-Once the current branch is green and merged, the known code/runtime gap for exact post-close ProductSku reallocation/reconciliation can be removed from `ECON-003`. Live Product → Margin business evidence remains governed separately by the production-acceptance backlog (including `ACC-004`) and must not be confused with code-level lineage completeness.
+The known code/runtime gap for exact post-close ProductSku reallocation/reconciliation is closed by PR #116 once the final PR head is green and merged. Live Product → Margin business evidence remains governed separately by `ACC-004` and must not be conflated with code-level lineage completeness or `PROD-PROVEN` status.

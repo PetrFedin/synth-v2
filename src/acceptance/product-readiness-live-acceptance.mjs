@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { snapshotAcceptanceIsolation, validateAcceptanceOrigin } from './collection-live-acceptance.mjs';
+import { assertBlockedReadinessProjectionBoundary } from './product-readiness-projection-boundary.mjs';
 import { PRODUCTION_ACCEPTANCE_REFERENCES } from './production-reference-bootstrap.mjs';
 
 const RUN_ID_PATTERN = /^[A-Za-z0-9_-]{1,80}$/;
@@ -281,6 +282,16 @@ export async function runProductReadinessLiveAcceptance({
     readinessSnapshotId: readiness.id,
     brandId: references.brand.id,
   });
+  const projectionBoundary = await assertBlockedReadinessProjectionBoundary({
+    baseUrl: target.url,
+    token,
+    pool,
+    readinessSnapshotId: readiness.id,
+    styleVersionId: styleVersion.id,
+    brandId: references.brand.id,
+    runId,
+    fetchImpl,
+  });
   const after = await snapshotAcceptanceIsolation(pool, references.brand.id);
   assertDownstreamIsolationUnchanged(before, after);
 
@@ -305,6 +316,7 @@ export async function runProductReadinessLiveAcceptance({
       blockedDimensions: Object.freeze(blockedDimensions),
       expectedBlockers: Object.freeze([...EXPECTED_BLOCKED_DIMENSIONS]),
     }),
+    projectionBoundary,
     persistence: Object.freeze({ ...persistence, verified: true }),
     isolation: Object.freeze({ before, after, unchanged: true }),
   });

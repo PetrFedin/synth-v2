@@ -4,6 +4,7 @@ import {
   assertProductReadinessPersistence,
   runProductReadinessLiveAcceptance,
 } from '../src/acceptance/product-readiness-live-acceptance.mjs';
+import { assertBlockedReadinessProjectionBoundary } from '../src/acceptance/product-readiness-projection-boundary.mjs';
 import { PRODUCTION_ACCEPTANCE_REFERENCES } from '../src/acceptance/production-reference-bootstrap.mjs';
 
 const BLOCKED_DIMENSIONS = Object.freeze([
@@ -61,13 +62,90 @@ test('Product Readiness persistence assertion fails closed when blocker semantic
   );
 });
 
-test('live Product Identity to Readiness acceptance uses public idempotent HTTP, proves SQL lineage and changes no downstream truth', async () => {
+test('blocked readiness projection boundary requires the exact domain rejection and zero persisted projection rows', async () => {
+  const queries = [];
+  const pool = {
+    query: async (sql, values) => {
+      queries.push({ sql, values });
+      return { rows: [{ projection_rows: 0 }] };
+    },
+  };
+  const requests = [];
+  const result = await assertBlockedReadinessProjectionBoundary({
+    baseUrl: 'http://127.0.0.1:4100',
+    token: 'opaque-test-token',
+    pool,
+    readinessSnapshotId: IDS.readinessSnapshotId,
+    styleVersionId: IDS.styleVersionId,
+    brandId: PRODUCTION_ACCEPTANCE_REFERENCES.brand.id,
+    runId: 'boundary-001',
+    fetchImpl: async (url, options) => {
+      requests.push({ url: String(url), options });
+      return response({ error: { code: 'COMMERCIAL_PROJECTION_READINESS_BLOCKED', message: 'blocked' } }, 422);
+    },
+  });
+
+  assert.deepEqual(result, {
+    rejected: true,
+    httpStatus: 422,
+    errorCode: 'COMMERCIAL_PROJECTION_READINESS_BLOCKED',
+    projectionRowsBefore: 0,
+    projectionRowsAfter: 0,
+  });
+  assert.equal(queries.length, 2);
+  for (const query of queries) {
+    assert.match(query.sql, /FROM commercial_product_projection_versions/);
+    assert.deepEqual(query.values, [IDS.styleVersionId, PRODUCTION_ACCEPTANCE_REFERENCES.brand.id]);
+  }
+  assert.equal(requests.length, 1);
+  assert.match(requests[0].url, new RegExp(`/v2/product/readiness/${IDS.readinessSnapshotId}/commercial-projection$`));
+  assert.equal(requests[0].options.method, 'POST');
+  assert.equal(requests[0].options.headers.authorization, 'Bearer opaque-test-token');
+  assert.equal(requests[0].options.headers['idempotency-key'], 'acceptance-boundary-001-blocked-projection-reject');
+  assert.deepEqual(JSON.parse(requests[0].options.body), { expectedLatestVersionNo: 0 });
+});
+
+test('blocked readiness projection boundary fails closed on unexpected error semantics or pre-existing projection state', async () => {
+  const zeroPool = { query: async () => ({ rows: [{ projection_rows: 0 }] }) };
+  await assert.rejects(
+    assertBlockedReadinessProjectionBoundary({
+      baseUrl: 'http://127.0.0.1:4100',
+      token: 'opaque-test-token',
+      pool: zeroPool,
+      readinessSnapshotId: IDS.readinessSnapshotId,
+      styleVersionId: IDS.styleVersionId,
+      brandId: PRODUCTION_ACCEPTANCE_REFERENCES.brand.id,
+      runId: 'boundary-wrong-error',
+      fetchImpl: async () => response({ error: { code: 'SOMETHING_ELSE' } }, 422),
+    }),
+    /unexpected contract/,
+  );
+
+  let attempted = false;
+  await assert.rejects(
+    assertBlockedReadinessProjectionBoundary({
+      baseUrl: 'http://127.0.0.1:4100',
+      token: 'opaque-test-token',
+      pool: { query: async () => ({ rows: [{ projection_rows: 1 }] }) },
+      readinessSnapshotId: IDS.readinessSnapshotId,
+      styleVersionId: IDS.styleVersionId,
+      brandId: PRODUCTION_ACCEPTANCE_REFERENCES.brand.id,
+      runId: 'boundary-dirty',
+      fetchImpl: async () => { attempted = true; return response({}, 200); },
+    }),
+    /acceptance namespace is not isolated/,
+  );
+  assert.equal(attempted, false);
+});
+
+test('live Product Identity to Readiness acceptance uses public idempotent HTTP, proves SQL lineage, rejects blocked projection and changes no downstream truth', async () => {
   const requests = [];
   const brandId = PRODUCTION_ACCEPTANCE_REFERENCES.brand.id;
   const snapshot = isolationSnapshot();
   const pool = {
     query: async (sql) => {
       if (sql.includes('FROM product_styles AS style')) return { rows: [persistenceRow(brandId)] };
+      if (sql.includes('FROM commercial_product_projection_versions')) return { rows: [{ projection_rows: 0 }] };
       return { rows: [{ ...snapshot }] };
     },
   };
@@ -78,6 +156,14 @@ test('live Product Identity to Readiness acceptance uses public idempotent HTTP,
     const request = { path: parsed.pathname, method, headers: { ...(options.headers ?? {}) }, body: options.body };
     requests.push(request);
     const key = `${method} ${parsed.pathname}`;
+    if (key === `POST /v2/product/readiness/${IDS.readinessSnapshotId}/commercial-projection`) {
+      return response({
+        error: {
+          code: 'COMMERCIAL_PROJECTION_READINESS_BLOCKED',
+          message: 'Commercial Product Projection requires a ready ProductReadinessSnapshot',
+        },
+      }, 422);
+    }
     const payloads = {
       'GET /health': { status: 'ok' },
       'GET /ready': { status: 'ready' },
@@ -118,11 +204,16 @@ test('live Product Identity to Readiness acceptance uses public idempotent HTTP,
   assert.equal(result.product.skuId, IDS.skuId);
   assert.equal(result.readiness.status, 'blocked');
   assert.deepEqual(result.readiness.blockedDimensions, ['category', 'measurements']);
+  assert.equal(result.projectionBoundary.rejected, true);
+  assert.equal(result.projectionBoundary.httpStatus, 422);
+  assert.equal(result.projectionBoundary.errorCode, 'COMMERCIAL_PROJECTION_READINESS_BLOCKED');
+  assert.equal(result.projectionBoundary.projectionRowsBefore, 0);
+  assert.equal(result.projectionBoundary.projectionRowsAfter, 0);
   assert.equal(result.persistence.verified, true);
   assert.equal(result.isolation.unchanged, true);
 
   const mutations = requests.filter((request) => request.method === 'POST');
-  assert.equal(mutations.length, 9);
+  assert.equal(mutations.length, 10);
   for (const request of mutations) {
     assert.match(request.headers['idempotency-key'], /^acceptance-run-002-/);
     assert.equal(request.headers.authorization, 'Bearer opaque-test-token');
@@ -134,6 +225,9 @@ test('live Product Identity to Readiness acceptance uses public idempotent HTTP,
   assert.equal(readinessBody.developmentRoute, 'READY_GOODS');
   assert.deepEqual(Object.keys(readinessBody.externalEvidence).sort(), ['compliance', 'purchase_or_production_commitment', 'quality', 'sourcing']);
   assert.equal(readinessBody.commercialPreparation.mediaIds[0], IDS.mediaId);
+
+  const projectionRequest = requests.find((request) => request.path.endsWith('/commercial-projection'));
+  assert.deepEqual(JSON.parse(projectionRequest.body), { expectedLatestVersionNo: 0 });
 });
 
 test('live Product Readiness acceptance rejects a token for the wrong actor before any Product mutation', async () => {

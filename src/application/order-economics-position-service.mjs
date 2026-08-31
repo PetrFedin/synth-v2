@@ -41,9 +41,15 @@ async function readinessPosition(tx, order, orderCommit, readiness) {
     costCloseReadinessSnapshotId: readiness.id,
     costCloseSnapshotId: null,
     latestPostCloseAdjustmentId: null,
+    postCloseAllocationReconciliationSnapshotId: null,
     blockingReasons: stale ? ['ledger_changed'] : [...readiness.blockingReasons],
     effectiveLandedCostSnapshotId: landed.id,
     effectiveMarginActualizationSnapshotId: margin.id,
+    allocationStatus: margin.allocationStatus ?? null,
+    costAllocationRunSnapshotId: margin.costAllocationRunSnapshotId ?? null,
+    costAllocationRunContentHash: margin.costAllocationRunContentHash ?? null,
+    costAllocationPolicyVersionId: margin.costAllocationPolicyVersionId ?? null,
+    costAllocationLineageMode: margin.costAllocationLineageMode ?? null,
     effectiveTotalLandedCost: landed.totalCost,
     effectiveContributionMarginAmount: margin.contributionMarginAmount,
     effectiveContributionMarginPercent: margin.contributionMarginPercent,
@@ -56,11 +62,28 @@ async function readinessPosition(tx, order, orderCommit, readiness) {
 
 async function closedPosition(tx, order, orderCommit, close) {
   const latestAdjustment = await tx.getLatestPostCloseAdjustment(close.id);
+  const reconciliation = latestAdjustment
+    ? await tx.getPostCloseAllocationReconciliationByAdjustmentId(latestAdjustment.id)
+    : null;
   const landedCostSnapshotId = latestAdjustment?.landedCostSnapshotId ?? close.landedCostSnapshotId;
-  const marginActualizationSnapshotId = latestAdjustment?.marginActualizationSnapshotId ?? close.marginActualizationSnapshotId;
+  const marginActualizationSnapshotId = reconciliation?.marginActualizationSnapshotId
+    ?? latestAdjustment?.marginActualizationSnapshotId
+    ?? close.marginActualizationSnapshotId;
   const landed = requireEntity(await tx.getLandedCostSnapshot(landedCostSnapshotId), 'LANDED_COST_SNAPSHOT_NOT_FOUND', { landedCostSnapshotId });
   const margin = requireEntity(await tx.getMarginActualizationSnapshot(marginActualizationSnapshotId), 'MARGIN_ACTUALIZATION_NOT_FOUND', { marginActualizationSnapshotId });
   invariant(landed.orderCommitSnapshotId === orderCommit.id && margin.orderCommitSnapshotId === orderCommit.id && margin.landedCostSnapshotId === landed.id, 'ORDER_ECONOMICS_POSITION_LINEAGE_MISMATCH', 'Effective economics snapshots do not belong to the closed order commit');
+  if (reconciliation) {
+    invariant(
+      reconciliation.costCloseSnapshotId === close.id
+        && reconciliation.postCloseAdjustmentId === latestAdjustment.id
+        && reconciliation.landedCostSnapshotId === landed.id
+        && reconciliation.marginActualizationSnapshotId === margin.id
+        && margin.allocationStatus === 'current'
+        && margin.costAllocationRunSnapshotId === reconciliation.costAllocationRunSnapshotId,
+      'ORDER_ECONOMICS_POSITION_RECONCILIATION_MISMATCH',
+      'Effective reconciliation does not match the latest post-close economics basis',
+    );
+  }
   return freezePosition({
     orderId: order.id,
     orderCommitSnapshotId: orderCommit.id,
@@ -69,9 +92,15 @@ async function closedPosition(tx, order, orderCommit, close) {
     costCloseReadinessSnapshotId: close.costCloseReadinessSnapshotId ?? null,
     costCloseSnapshotId: close.id,
     latestPostCloseAdjustmentId: latestAdjustment?.id ?? null,
+    postCloseAllocationReconciliationSnapshotId: reconciliation?.id ?? null,
     blockingReasons: [],
     effectiveLandedCostSnapshotId: landed.id,
     effectiveMarginActualizationSnapshotId: margin.id,
+    allocationStatus: margin.allocationStatus ?? close.allocationStatus ?? null,
+    costAllocationRunSnapshotId: margin.costAllocationRunSnapshotId ?? close.costAllocationRunSnapshotId ?? null,
+    costAllocationRunContentHash: margin.costAllocationRunContentHash ?? close.costAllocationRunContentHash ?? null,
+    costAllocationPolicyVersionId: margin.costAllocationPolicyVersionId ?? close.costAllocationPolicyVersionId ?? null,
+    costAllocationLineageMode: margin.costAllocationLineageMode ?? close.costAllocationLineageMode ?? null,
     effectiveTotalLandedCost: landed.totalCost,
     effectiveContributionMarginAmount: margin.contributionMarginAmount,
     effectiveContributionMarginPercent: margin.contributionMarginPercent,
@@ -91,9 +120,15 @@ function openPosition(order, orderCommit) {
     costCloseReadinessSnapshotId: null,
     costCloseSnapshotId: null,
     latestPostCloseAdjustmentId: null,
+    postCloseAllocationReconciliationSnapshotId: null,
     blockingReasons: ['readiness_not_evaluated'],
     effectiveLandedCostSnapshotId: null,
     effectiveMarginActualizationSnapshotId: null,
+    allocationStatus: null,
+    costAllocationRunSnapshotId: null,
+    costAllocationRunContentHash: null,
+    costAllocationPolicyVersionId: null,
+    costAllocationLineageMode: null,
     effectiveTotalLandedCost: null,
     effectiveContributionMarginAmount: null,
     effectiveContributionMarginPercent: null,

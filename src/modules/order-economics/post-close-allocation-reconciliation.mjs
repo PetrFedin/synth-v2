@@ -30,10 +30,11 @@ export function createPostCloseAllocationReconciliation({
   invariant(pendingMarginActualization.allocationStatus === 'pending-post-close', 'POST_CLOSE_ALLOCATION_PENDING_MARGIN_REQUIRED', 'Post-close reconciliation requires a pending-post-close margin basis');
   invariant(pendingMarginActualization.orderId === order.id && pendingMarginActualization.orderCommitSnapshotId === orderCommit.id && pendingMarginActualization.landedCostSnapshotId === landedCost.id, 'POST_CLOSE_ALLOCATION_PENDING_MARGIN_LINEAGE_MISMATCH', 'Pending margin belongs to another economics basis');
   invariant(typeof pendingMarginActualization.aggregateContentHash === 'string' && pendingMarginActualization.aggregateContentHash.length === 64, 'POST_CLOSE_ALLOCATION_PENDING_AGGREGATE_HASH_REQUIRED', 'Pending margin must preserve its aggregate economics hash');
+  invariant(typeof costAllocation?.createdAt === 'string' && Number.isFinite(Date.parse(costAllocation.createdAt)), 'POST_CLOSE_ALLOCATION_RUN_TIMESTAMP_INVALID', 'Exact cost allocation run must contain a valid creation timestamp');
 
   const timestamp = requireTimestamp(reconciledAt);
   invariant(Date.parse(timestamp) >= Date.parse(postCloseAdjustment.recordedAt), 'POST_CLOSE_ALLOCATION_RECONCILIATION_TIMESTAMP_INVALID', 'Reconciliation cannot predate the post-close adjustment');
-  invariant(Date.parse(timestamp) >= Date.parse(costAllocation?.createdAt ?? ''), 'POST_CLOSE_ALLOCATION_RECONCILIATION_TIMESTAMP_INVALID', 'Reconciliation cannot predate the exact allocation run');
+  invariant(Date.parse(timestamp) >= Date.parse(costAllocation.createdAt), 'POST_CLOSE_ALLOCATION_RECONCILIATION_TIMESTAMP_INVALID', 'Reconciliation cannot predate the exact allocation run');
 
   const marginActualization = createAllocationAwareMarginActualizationSnapshot({
     id: marginActualizationId,

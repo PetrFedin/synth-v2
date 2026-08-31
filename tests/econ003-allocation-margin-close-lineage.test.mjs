@@ -7,6 +7,7 @@ import {
   createPendingPostCloseMarginActualizationSnapshot,
 } from '../src/modules/order-economics/allocation-close-lineage.mjs';
 import { createOrderEconomicsRoutes } from '../src/http/order-economics-routes.mjs';
+import { wholesaleV2ExtendedOpenApi } from '../src/http/v2-openapi.mjs';
 
 function fixture({ canonical = true } = {}) {
   const order = Object.freeze({ id: 'order-1', brandId: 'brand-1', shopId: 'shop-1', currency: 'EUR', status: 'attached', version: 1, orderCommitSnapshotId: 'commit-1' });
@@ -84,4 +85,18 @@ test('margin HTTP route carries explicit costAllocationRunSnapshotId to the serv
   assert.ok(route);
   route.execute({ commandId: 'cmd-1', actorId: 'finance-1', params: ['order-1'], query: {}, body: { landedCostSnapshotId: 'landed-1', costAllocationRunSnapshotId: 'allocation-1' } });
   assert.deepEqual(received, ['cmd-1', 'finance-1', 'order-1', 'landed-1', 'allocation-1']);
+});
+
+test('authoritative OpenAPI exposes ECON-003 allocation provenance without version drift', () => {
+  assert.equal(wholesaleV2ExtendedOpenApi.info.version, '1.17.0');
+  const schemas = wholesaleV2ExtendedOpenApi.components.schemas;
+  assert.ok(schemas.MarginActualizationInput.properties.costAllocationRunSnapshotId);
+  assert.ok(schemas.MarginActualizationSnapshot.properties.allocationStatus);
+  assert.ok(schemas.MarginActualizationSnapshot.properties.costAllocationRunSnapshotId);
+  assert.ok(schemas.MarginActualizationSnapshot.properties.costAllocationRunContentHash);
+  assert.ok(schemas.CostCloseReadinessSnapshot.properties.costAllocationRunSnapshotId);
+  assert.ok(schemas.CostCloseSnapshot.properties.costAllocationRunSnapshotId);
+  assert.ok(schemas.PostCloseAdjustment.properties.previousAllocationStatus);
+  assert.ok(schemas.PostCloseAdjustment.properties.resultingAllocationStatus);
+  assert.ok(schemas.PostCloseAdjustment.properties.closedCostAllocationRunSnapshotId);
 });

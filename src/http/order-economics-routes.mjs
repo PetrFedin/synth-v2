@@ -6,6 +6,7 @@ const FX_BODY = bodyContract(['sourceCurrency', 'rate', 'rateType', 'sourceRef',
 const COST_BODY = bodyContract(['supplyCommitmentSnapshotId', 'costType', 'amount', 'currency', 'fxRateSnapshotId', 'sourceRef', 'occurredAt']);
 const COST_CORRECTION_BODY = bodyContract(['reason', 'supplyCommitmentSnapshotId', 'costType', 'amount', 'currency', 'fxRateSnapshotId', 'sku', 'sourceRef', 'occurredAt']);
 const POST_CLOSE_ADJUSTMENT_BODY = bodyContract(['reason', 'supplyCommitmentSnapshotId', 'costType', 'amount', 'currency', 'fxRateSnapshotId', 'sourceRef', 'occurredAt']);
+const POST_CLOSE_ALLOCATION_RECONCILIATION_BODY = bodyContract(['costAllocationRunSnapshotId']);
 const EMPTY_BODY = bodyContract();
 const MARGIN_BODY = bodyContract(['landedCostSnapshotId', 'costAllocationRunSnapshotId']);
 const READINESS_BODY = bodyContract(
@@ -30,6 +31,7 @@ export function createOrderEconomicsRoutes({ orderEconomics } = {}) {
     mutate('POST', /^\/v2\/orders\/([^/]+)\/cost-close\/readiness$/, validateReadinessBody, ({ commandId, actorId, params, body }) => service.evaluateCostCloseReadiness(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/orders\/([^/]+)\/cost-close$/, validateCostCloseBody, ({ commandId, actorId, params, body }) => service.closeCost(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/orders\/([^/]+)\/cost-close\/adjustments$/, validatePostCloseAdjustmentBody, ({ commandId, actorId, params, body }) => service.recordPostCloseAdjustment(commandId, actorId, params[0], body)),
+    mutate('POST', /^\/v2\/orders\/([^/]+)\/cost-close\/adjustments\/([^/]+)\/allocation-reconcile$/, validatePostCloseAllocationReconciliationBody, ({ commandId, actorId, params, body }) => service.reconcilePostCloseAllocation(commandId, actorId, params[0], params[1], body.costAllocationRunSnapshotId)),
     read('GET', /^\/v2\/orders\/([^/]+)\/economics-position$/, ({ actorId, params }) => service.getOrderEconomicsPositionForActor(actorId, params[0])),
     read('GET', /^\/v2\/margin-actualizations\/([^/]+)$/, ({ actorId, params }) => service.getMarginForActor(actorId, params[0])),
     read('GET', /^\/v2\/cost-close-readiness\/([^/]+)$/, ({ actorId, params }) => service.getCostCloseReadinessForActor(actorId, params[0])),
@@ -62,6 +64,10 @@ function validatePostCloseAdjustmentBody(body) {
   assertBodyContract(body, POST_CLOSE_ADJUSTMENT_BODY);
   validateReason(body.reason);
   validateCostFields(body);
+}
+function validatePostCloseAllocationReconciliationBody(body) {
+  assertBodyContract(body, POST_CLOSE_ALLOCATION_RECONCILIATION_BODY);
+  invariant(typeof body.costAllocationRunSnapshotId === 'string' && body.costAllocationRunSnapshotId.length > 0, 'HTTP_BODY_FIELD_INVALID', 'costAllocationRunSnapshotId is required', { field: 'costAllocationRunSnapshotId' });
 }
 function validateReason(reason) {
   invariant(typeof reason === 'string' && reason.trim().length > 0 && reason.trim().length <= 1000, 'HTTP_BODY_FIELD_INVALID', 'reason must contain 1 to 1000 characters', { field: 'reason' });
@@ -131,6 +137,7 @@ function unavailableOrderEconomics() {
     evaluateCostCloseReadiness: fail,
     closeCost: fail,
     recordPostCloseAdjustment: fail,
+    reconcilePostCloseAllocation: fail,
     getOrderEconomicsPositionForActor: fail,
     getMarginForActor: fail,
     getCostCloseReadinessForActor: fail,

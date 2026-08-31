@@ -37,6 +37,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $$
 DECLARE
+  committed order_commit_snapshots%ROWTYPE;
   closed cost_close_snapshots%ROWTYPE;
   adjustment post_close_adjustments%ROWTYPE;
   pending_margin margin_actualization_snapshots%ROWTYPE;
@@ -44,6 +45,16 @@ DECLARE
   landed landed_cost_snapshots%ROWTYPE;
   allocation cost_allocation_run_snapshots%ROWTYPE;
 BEGIN
+  SELECT * INTO committed
+  FROM order_commit_snapshots
+  WHERE id = NEW.order_commit_snapshot_id
+    AND order_id = NEW.order_id
+  FOR SHARE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'POST_CLOSE_ALLOCATION_ORDER_COMMIT_NOT_FOUND';
+  END IF;
+
   SELECT * INTO closed
   FROM cost_close_snapshots
   WHERE id = NEW.cost_close_snapshot_id
@@ -142,8 +153,9 @@ BEGIN
     RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'POST_CLOSE_ALLOCATION_RECONCILIATION_TIMESTAMP_INVALID';
   END IF;
 
-  IF COALESCE(NEW.payload ->> 'orderId', '') <> NEW.order_id
-     OR COALESCE((NEW.payload ->> 'orderVersion')::integer, 0) <= 0
+  IF COALESCE(NEW.payload ->> 'id', '') <> NEW.id
+     OR COALESCE(NEW.payload ->> 'orderId', '') <> NEW.order_id
+     OR COALESCE((NEW.payload ->> 'orderVersion')::integer, 0) <> committed.order_version
      OR COALESCE(NEW.payload ->> 'orderCommitSnapshotId', '') <> NEW.order_commit_snapshot_id
      OR COALESCE(NEW.payload ->> 'costCloseSnapshotId', '') <> NEW.cost_close_snapshot_id
      OR COALESCE(NEW.payload ->> 'postCloseAdjustmentId', '') <> NEW.post_close_adjustment_id
@@ -157,7 +169,8 @@ BEGIN
      OR COALESCE(NEW.payload ->> 'previousAllocationStatus', '') <> NEW.previous_allocation_status
      OR COALESCE(NEW.payload ->> 'resultingAllocationStatus', '') <> NEW.resulting_allocation_status
      OR COALESCE(NEW.payload ->> 'status', '') <> NEW.status
-     OR COALESCE((NEW.payload ->> 'reconciledAt')::timestamptz, '-infinity'::timestamptz) <> NEW.reconciled_at THEN
+     OR COALESCE((NEW.payload ->> 'reconciledAt')::timestamptz, '-infinity'::timestamptz) <> NEW.reconciled_at
+     OR COALESCE(NEW.payload ->> 'contentHash', '') <> NEW.content_hash THEN
     RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'POST_CLOSE_ALLOCATION_RECONCILIATION_PAYLOAD_MISMATCH';
   END IF;
 

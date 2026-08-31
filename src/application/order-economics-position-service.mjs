@@ -84,6 +84,7 @@ async function closedPosition(tx, order, orderCommit, close) {
       'Effective reconciliation does not match the latest post-close economics basis',
     );
   }
+  const allocationSource = latestAdjustment ? margin : close;
   return freezePosition({
     orderId: order.id,
     orderCommitSnapshotId: orderCommit.id,
@@ -96,11 +97,11 @@ async function closedPosition(tx, order, orderCommit, close) {
     blockingReasons: [],
     effectiveLandedCostSnapshotId: landed.id,
     effectiveMarginActualizationSnapshotId: margin.id,
-    allocationStatus: margin.allocationStatus ?? close.allocationStatus ?? null,
-    costAllocationRunSnapshotId: margin.costAllocationRunSnapshotId ?? close.costAllocationRunSnapshotId ?? null,
-    costAllocationRunContentHash: margin.costAllocationRunContentHash ?? close.costAllocationRunContentHash ?? null,
-    costAllocationPolicyVersionId: margin.costAllocationPolicyVersionId ?? close.costAllocationPolicyVersionId ?? null,
-    costAllocationLineageMode: margin.costAllocationLineageMode ?? close.costAllocationLineageMode ?? null,
+    allocationStatus: allocationSource.allocationStatus ?? null,
+    costAllocationRunSnapshotId: allocationSource.costAllocationRunSnapshotId ?? null,
+    costAllocationRunContentHash: allocationSource.costAllocationRunContentHash ?? null,
+    costAllocationPolicyVersionId: allocationSource.costAllocationPolicyVersionId ?? null,
+    costAllocationLineageMode: allocationSource.costAllocationLineageMode ?? null,
     effectiveTotalLandedCost: landed.totalCost,
     effectiveContributionMarginAmount: margin.contributionMarginAmount,
     effectiveContributionMarginPercent: margin.contributionMarginPercent,

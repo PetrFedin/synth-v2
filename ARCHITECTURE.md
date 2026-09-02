@@ -1,7 +1,7 @@
 # Syntha V2 — Platform Master Specification
 
 > **Canonical living specification / architecture / product requirements / UI contract**  
-> Status date: **2026-08-31**  
+> Status date: **2026-09-01**  
 > Baseline when this master specification was established: `main@4f5c452dede1ce9c8ffe518eddb8b6632cc89ad0`  
 > Document status: **AUTHORITATIVE / LIVING**
 
@@ -289,6 +289,8 @@ Stable product identity. Owns lifecycle identity; versioned technical content be
 #### StyleVersion
 Immutable exact technical version. It preserves predecessor/version continuity, bilingual title/content references, governed MDM references and content identity. Downstream readiness refers to one exact StyleVersion.
 
+`StyleVersion.categoryRef` is the canonical governed category reference for a new technical fact. The compatible dictionary family is exactly `assortment.category`; a new reference pins the exact MDM `(entryId, version)` and is accepted only when that exact version exists, is the current entry version for the new write, belongs to the compatible dictionary, is active, is approved when approval is required, is effective at the business write time, and is global or belongs to the permitted organisation scope. Unknown, stale-version, wrong-dictionary, inactive, unapproved or out-of-effect references fail closed before the StyleVersion is created. The resolved reference is frozen through the immutable MDM usage/version snapshot so later MDM changes cannot redefine historical Product Identity meaning.
+
 #### Colorway
 Immutable variant bound to exactly one StyleVersion and brand context; may pin an exact governed colour reference/version.
 
@@ -331,6 +333,41 @@ Current executable workspace assets include Planning, Styles, Materials, BOM, Me
 
 The master specification must be expanded whenever one of these workspaces gains/removes a field, action, state, panel or dependency. Existing module-specific docs remain supporting evidence; they are not permission to omit changes here.
 
+### 5.3 Operational MDM reference profile — IMPLEMENTED/PARTIAL taxonomy depth
+
+The source-controlled `mdm/reference/*.json` files form the bootstrap operational profile `RU_FASHION_CORE`. They are modular datasets, not independent copies of one monolithic reference file. A modular dataset must still declare RU market, RU/EN language coverage, a registered source, governed dictionary metadata and valid entry governance, but it is not required to duplicate unrelated size/unit dictionaries merely to exist.
+
+`npm run validate:mdm` loads all operational reference datasets first and then validates the required Russia-fashion core across the complete loaded profile. The required size-system codes are `RU_APPAREL_NUMERIC`, `INT_ALPHA` and `EU_FOOTWEAR`; required operational units are `CM`, `MM`, `M`, `G`, `KG` and `PCS`. Those mandatory profile checks are global across `mdm/reference`, while semantic cross-entry references that are deliberately dataset-local remain local: seeded size values/footwear sizes must resolve `size_system_entry_id` to a `size.system` entry in the same dataset, and a seeded `measurement.point` must resolve `default_unit_entry_id` to a `measurement.unit` entry in the same dataset. Universal size-conversion fields remain forbidden; explicit governed brand/market conversion records are required instead.
+
+PR #117 adds `mdm/reference/russia-fashion-assortment-core.json` as an operational governed category seed from registered source `syntha_operational_master`. It defines dictionary:
+
+```text
+id: mdm-dictionary:assortment-category
+code: assortment.category
+data_class: classifier
+scope_model: global
+hierarchy_enabled: true
+effective_dated: true
+approval_required: true
+```
+
+and the initial active entry:
+
+```text
+id: mdm-entry:assortment-category:apparel
+version: 1
+code: APPAREL
+RU: Одежда
+EN: Apparel
+effective_from: 2026-08-31T00:00:00.000Z
+hierarchy_level: category
+product_family: apparel
+```
+
+`APPAREL` is intentionally only the governed top-level apparel category. It does **not** stand in for a subcategory or `assortment.product_type`, and it must not be overloaded with gender, collection, season or arbitrary style attributes. More detailed category/product-type taxonomy is added only through separately governed MDM versions and registered source/effective-date semantics.
+
+This source-controlled seed makes an exact governed category reference available to the positive Product Readiness path; it does not by itself make Product Readiness or downstream commercialization `PROD-PROVEN`.
+
 ---
 
 ## 6. Product readiness and commercialization
@@ -365,13 +402,15 @@ ProductStyle
 → ProductReadinessSnapshot
 ```
 
-The scenario deliberately uses `developmentRoute=READY_GOODS`, omits governed `StyleVersion.categoryRef`, and creates no canonical Measurement Chart. It supplies explicit immutable external evidence for `sourcing`, `purchase_or_production_commitment`, `quality` and `compliance`, plus valid commercial media/content/terms/availability. The expected readiness result is therefore **blocked**, with exactly two governed blockers: `category` and `measurements`. Any READY result, missing blocker, extra blocker or changed blocker count fails the acceptance run.
+The scenario deliberately uses `developmentRoute=READY_GOODS`, omits governed `StyleVersion.categoryRef`, and creates no canonical Measurement Chart. This is a controlled negative fixture even though the source-controlled `RU_FASHION_CORE` operational profile now contains the exact governed `assortment.category / APPAREL` entry described in §5.3. The harness intentionally does not attach that category reference, because its purpose is to preserve the fail-closed boundary proof. It supplies explicit immutable external evidence for `sourcing`, `purchase_or_production_commitment`, `quality` and `compliance`, plus valid commercial media/content/terms/availability. The expected readiness result is therefore **blocked**, with exactly two governed blockers: `category` and `measurements`. Any READY result, missing blocker, extra blocker or changed blocker count fails the acceptance run.
+
+The positive canonical readiness scenario is a separate next slice: it must create a new StyleVersion that pins the exact governed `APPAREL` MDM entry/version and must supply canonical Measurement Chart evidence from the repository-authoritative measurement workflow. The negative #117 fixture must remain unchanged and must not be converted into a happy-path bypass.
 
 Persistence proof joins the exact ProductStyle/StyleVersion/Colorway/SizeScaleVersion/SizeValue/ProductSku/ProductMedia/Readiness rows in the configured PostgreSQL target and verifies one-brand exact lineage. Before/after counters additionally require no changes to CommercialPublication, PriceListVersion, BuyerCatalogVersion, Selection/Order, ProductSku inventory, warehouse movement, SupplyCommitment or ActualCost state.
 
 The same run now also proves the immediate **negative Readiness → Projection gate**. After PostgreSQL confirms the blocked snapshot, the harness calls `POST /v2/product/readiness/:readinessId/commercial-projection` with `expectedLatestVersionNo=0`. The only accepted outcome is HTTP `422` with domain code `COMMERCIAL_PROJECTION_READINESS_BLOCKED`; PostgreSQL must report zero `commercial_product_projection_versions` rows for the exact StyleVersion/brand both before and after the rejected command. A success response, another error contract, pre-existing projection row or post-rejection projection row fails closed. This is intentionally negative boundary evidence only: it does not prove the positive Ready → Projection → Publication → BuyerCatalog slice.
 
-This harness is automated by `tests/product-readiness-live-acceptance.test.mjs`, including exact SQL-lineage assertions, blocker-drift fail-closed behavior, the exact blocked-projection rejection/persistence contract, idempotent authenticated HTTP behavior and wrong-actor rejection before mutation. Those tests prove the acceptance harness contract; they do **not** by themselves make this boundary `PROD-PROVEN`. `PROD-PROVEN` requires a successful `acceptance:product-readiness` run against the intended live acceptance environment. The full Product → Margin `ACC-004` gate remains OPEN.
+This harness is automated by `tests/product-readiness-live-acceptance.test.mjs`, including exact SQL-lineage assertions, blocker-drift fail-closed behavior, the exact blocked-projection rejection/persistence contract, idempotent authenticated HTTP behavior and wrong-actor rejection before mutation. The operational category dataset/validator contract is additionally pinned by `tests/mdm-assortment-category-reference.test.mjs`. Those tests prove the acceptance/MDM contracts; they do **not** by themselves make this boundary `PROD-PROVEN`. `PROD-PROVEN` requires a successful `acceptance:product-readiness` run against the intended live acceptance environment. The full Product → Margin `ACC-004` gate remains OPEN.
 
 ### 6.2 CommercialProductProjectionVersion — IMPLEMENTED
 
@@ -858,14 +897,14 @@ Product Identity → ProductReadinessSnapshot(blocked: category, measurements)
 → rejected CommercialProductProjectionVersion attempt
 ```
 
-`npm run acceptance:product-readiness` creates the Product Identity graph through supported authenticated `/v2` mutations, verifies exact same-environment PostgreSQL lineage and requires downstream commercial/warehouse/economic invariant counters to remain unchanged. The controlled missing category MDM and Measurement Chart are intentional: the acceptance passes only when the immutable snapshot remains fail-closed with exactly those two blockers. It then makes an idempotent public projection command and requires the exact HTTP `422 / COMMERCIAL_PROJECTION_READINESS_BLOCKED` result with zero exact StyleVersion/brand projection rows before and after. Repository tests validate the harness and its failure semantics; until the command is executed successfully against the intended live acceptance environment, this slice is `IMPLEMENTED` but not `PROD-PROVEN`. The successful ready-product commercialization path remains unproven.
+`npm run acceptance:product-readiness` creates the Product Identity graph through supported authenticated `/v2` mutations, verifies exact same-environment PostgreSQL lineage and requires downstream commercial/warehouse/economic invariant counters to remain unchanged. The controlled missing category reference and Measurement Chart are intentional. The category blocker is no longer caused by absence of source-controlled category master data: `RU_FASHION_CORE` now contains exact governed `assortment.category / APPAREL` bootstrap data, but this negative acceptance intentionally omits `StyleVersion.categoryRef`. The acceptance passes only when the immutable snapshot remains fail-closed with exactly `category` and `measurements`; it then makes an idempotent public projection command and requires the exact HTTP `422 / COMMERCIAL_PROJECTION_READINESS_BLOCKED` result with zero exact StyleVersion/brand projection rows before and after. Repository tests validate the harness and its failure semantics; until the command is executed successfully against the intended live acceptance environment, this slice is `IMPLEMENTED` but not `PROD-PROVEN`. The successful ready-product commercialization path remains unproven.
 
 ### 15.4 Required acceptance expansion order
 
 Expand one business slice at a time, preserving explicit before/after invariants:
 
 1. Campaign → Collection — IMPLEMENTED / PROD-PROVEN.
-2. Product Identity → Readiness — acceptance harness IMPLEMENTED in #117; live environment evidence PENDING.
+2. Product Identity → Readiness — negative acceptance harness IMPLEMENTED in #117; source-controlled governed `APPAREL` category prerequisite is available; live negative-environment evidence PENDING; positive READY scenario still requires exact category pin plus canonical Measurement Chart evidence.
 3. Readiness → Projection → Publication → BuyerCatalog — positive path PLANNED; #117 covers only the fail-closed blocked Readiness → Projection boundary and deliberately creates no projection.
 4. BuyerCatalog → Selection → OrderCommit — PLANNED.
 5. OrderCommit → Supply → Shipment — PLANNED.
@@ -884,12 +923,13 @@ This is the current high-level master status. Supporting detail is kept in this 
 |---|---|---|
 | Runtime clean-clone/start/readiness/shutdown | PROD-PROVEN | deployment-specific acceptance remains environment responsibility |
 | Authentication + organisation foundation | IMPLEMENTED | continue role/capability coverage audits |
-| Product Identity V2 | IMPLEMENTED | UI/legacy catalog convergence plus live #117 execution |
+| Operational RU fashion MDM reference profile | IMPLEMENTED/PARTIAL taxonomy depth | governed `assortment.category / APPAREL` bootstrap and modular core validation implemented; expand category/product-type taxonomy only as canonical flows require it |
+| Product Identity V2 | IMPLEMENTED | exact governed category references supported; UI/legacy catalog convergence plus live #117 execution remain |
 | PLM Planning/Styles | PARTIAL | converge all semantics on Product Identity |
-| Materials/BOM/Measurements/Samples | IMPLEMENTED/PARTIAL | ODS debt + canonical readiness integration by workspace |
+| Materials/BOM/Measurements/Samples | IMPLEMENTED/PARTIAL | ODS debt + canonical readiness integration by workspace; canonical Measurement Chart is the next positive-readiness prerequisite |
 | Sourcing/Tech Pack | IMPLEMENTED/PARTIAL | supplier/sourcing depth + ODS debt for Sourcing |
 | Production/Final Quality | IMPLEMENTED | continue physical lineage/readiness E2E proof |
-| ProductReadinessSnapshot | IMPLEMENTED | #117 harness exists; obtain live acceptance evidence, then continue to positive Projection |
+| ProductReadinessSnapshot | IMPLEMENTED | #117 negative harness exists; obtain live acceptance evidence, then add exact-category + canonical-measurement positive READY slice |
 | CommercialProjection | IMPLEMENTED | blocked-readiness gate covered by #117; positive ready→projection→publication→buyer-catalog live proof remains |
 | CommercialPublication | IMPLEMENTED/PARTIAL | eliminate flat-catalog origin debt |
 | BuyerCatalog/Linesheet | IMPLEMENTED/PARTIAL | variant-rich ProductSku hierarchy |
@@ -915,7 +955,7 @@ This is the current high-level master status. Supporting detail is kept in this 
 | `AC-LINEAGE-001` | P0 | Generic ActualCost accepted textual SKU without exact physical lineage | aggregate-only generic path; exact ProductSku physical path; DB fail-closed guard; preserve legacy corrections | CLOSED in #112 |
 | `AC-HTTP-002` | P0 | Physical ActualCost resolver supported exact IDs but HTTP/OpenAPI did not expose them | request + response include `orderLineNo` and `productSkuId`; generic SKU scope removed | CLOSED in #112 |
 | `ECON-003` | P0 | ActualCost → landed/allocation/margin/close/post-close path could lose or leave unproven ProductSku lineage | exact allocation line identity plus reproducible aggregate margin/close and explicit exact post-close reconciliation from frozen lineage | CLOSED by #116 at code/runtime lineage level — #114 fixed exact allocation, #115 bound pre-close allocation→margin/readiness/close provenance, #116 adds latest-adjustment exact post-close reconciliation plus effective-position provenance; implementation-head Verify `33345573039` and Syntha V2 CI `33345572980` succeeded; live Product → Margin proof remains separately OPEN as `ACC-004` |
-| `ACC-004` | P0 | Live acceptance does not yet prove the connected Product → Margin spine | progressively prove canonical Product → Margin spine through public runtime/PostgreSQL slices | OPEN/PARTIAL — #117 implements Product Identity → blocked Readiness harness and the exact fail-closed blocked Readiness → Projection rejection with zero projection persistence; live environment evidence and the positive downstream slices remain open |
+| `ACC-004` | P0 | Live acceptance does not yet prove the connected Product → Margin spine | progressively prove canonical Product → Margin spine through public runtime/PostgreSQL slices | OPEN/PARTIAL — #117 implements Product Identity → blocked Readiness and exact blocked Readiness → Projection rejection; governed `APPAREL` category bootstrap is now available and documented, so next positive slice must pin it plus canonical Measurement Chart; live environment evidence and all positive downstream slices remain open |
 | `PUB-005` | P0 | Some historical publication/catalog behavior remains flat-catalog oriented | projection-only variant-rich publication/buyer catalog | OPEN/PARTIAL |
 | `UI-006` | P1 | Legacy Omnidata CSS/JS compatibility layers remain loaded | migrate semantics to ODS v1 and remove debt only after validation | OPEN/PARTIAL |
 | `SPEC-007` | P0 | Historical architecture/product/UI detail was fragmented across docs/code | authoritative `ARCHITECTURE.md` + CI synchronization rule | CLOSED in #110 |
@@ -962,7 +1002,7 @@ Minimum frozen lineage fields for the current commercial spine include:
 
 | Entity | Mandatory lineage meaning |
 |---|---|
-| StyleVersion | exact ProductStyle + predecessor/version/content identity + governed refs |
+| StyleVersion | exact ProductStyle + predecessor/version/content identity + governed refs; category is exact current/effective/active/approved `assortment.category` entry version at write time and is frozen thereafter |
 | Colorway | exact StyleVersion + brand + colour identity/ref |
 | ProductSku | exact StyleVersion + Colorway + SizeValue |
 | ProductReadinessSnapshot | exact StyleVersion + exact source/evidence versions + readiness result |
@@ -998,7 +1038,7 @@ Minimum frozen lineage fields for the current commercial spine include:
 | 2026-08-29 | #114 / `47b39f5930540f27fe6bebfbe3bceb0e2b114fdf` | Preserve exact `orderLineNo + productSkuId` through Cost Allocation; prohibit canonical textual-SKU direct/custom resolution; retain explicit legacy mode; expose exact HTTP/OpenAPI output and persist through existing JSONB snapshots | 9.4, 12.3, 13, 15, 16, 17, 19 | MERGED; Verify run `33249799746` success; Syntha V2 CI run `33249799764` success; supersedes closed draft #113; `ECON-003` remains OPEN/PARTIAL |
 | 2026-08-31 | #115 / `283c058eba5a83f39718e43aca3c9cc31205a120` | Bind immutable CostAllocationRunSnapshot into canonical MarginActualization → CostCloseReadiness → CostClose; preserve explicit legacy semantics; mark canonical post-close late-cost margin `pending-post-close`; expose allocation provenance in events/OpenAPI/store lookup | 1.2, 3.3, 9.4, 12.3, 13, 15, 16, 17, 19, 20 | MERGED; Verify run `33344377731` success; Syntha V2 CI run `33344377707` success; `ECON-003` remained OPEN/PARTIAL pending exact post-close reconciliation at that merge |
 | 2026-08-31 | #116 / `fix/econ003-post-close-reallocation` | Add immutable latest-adjustment post-close allocation reconciliation; bind exact new CostAllocationRunSnapshot to a new current margin without changing aggregate economics or rewriting CostClose/adjustment; persist via migration 074; expose effective reconciliation/allocation provenance in economics-position and OpenAPI | 1.2, 3.3, 3.7, 9.4, 12.3, 13, 15, 16, 17, 19, 20, 21 | implementation-head Verify run `33345573039` success; Syntha V2 CI run `33345572980` success including PostgreSQL verification; `ECON-003` code/runtime lineage gap CLOSED; live Product → Margin proof remains OPEN under `ACC-004` |
-| 2026-08-31 | #117 / `feat/acc004-product-readiness-live` | Add guarded Product Identity → ProductReadiness live acceptance harness: create exact ProductStyle/StyleVersion/Colorway/Size/ProductSku/media through authenticated idempotent `/v2`, require controlled READY_GOODS snapshot to remain blocked exactly on category + measurements, verify same-environment PostgreSQL lineage, attempt the immediate projection command and require exact `422 / COMMERCIAL_PROJECTION_READINESS_BLOCKED` with zero projection persistence, and prove unrelated downstream/warehouse/economic counters unchanged | 6.1, 6.2, 15, 16, 17, 20, 22 | IMPLEMENTED harness + blocked Readiness→Projection fail-closed boundary; automated acceptance-contract tests added; PR CI and actual live acceptance environment evidence required before any `PROD-PROVEN` claim; positive Ready→Projection→Publication→BuyerCatalog and remaining `ACC-004` slices stay OPEN |
+| 2026-09-01 | #117 / `feat/acc004-product-readiness-live` (implementation head before authoritative sync: `d5477aa417ee11fc5e6a241e1a2fb848775fdc0d`) | Add guarded Product Identity → ProductReadiness live acceptance harness and exact blocked Readiness→Projection negative gate; add governed source-controlled `assortment.category` bootstrap with `APPAREL`; register `syntha_operational_master` impact; correct MDM validation so mandatory RU size systems/units are enforced globally across modular `mdm/reference` datasets while local semantic references remain same-dataset; explicitly preserve the negative fixture’s category+measurements blockers and document the positive exact-category + Measurement Chart prerequisite | 5.1, 5.3, 6.1, 6.2, 15, 16, 17, 19, 20, 22 | IMPLEMENTED harness + MDM bootstrap/validator contract; authoritative documentation synchronization completed in this branch; CI must pass on the documentation-sync head; actual live acceptance environment evidence is still required before any `PROD-PROVEN` claim; positive Ready→Projection→Publication→BuyerCatalog and remaining `ACC-004` slices stay OPEN |
 
 Future implementation PRs add a row here. The row is not a substitute for updating the affected detailed sections.
 
@@ -1021,7 +1061,7 @@ These files remain useful deep dives and evidence. They must be reconciled into 
 - `docs/observability.md`
 - `docs/joor-retailer-cabinet-complete-map.md` — research/reference map, not proof that a Syntha capability is implemented.
 
-A supporting document can be more verbose, but it cannot redefine a canonical entity, lifecycle or visual token without the same change being made here.
+A supporting document can be more verbose, but it cannot redefine a canonical entity, lifecycle or visual token without the same change being made here. Supporting documents that contain stale “remaining gate” language must be corrected during the relevant audit pass; stale support text is never allowed to override the current status in this master specification.
 
 ---
 

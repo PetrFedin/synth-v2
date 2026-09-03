@@ -4,6 +4,7 @@ import { PRODUCTION_ACCEPTANCE_REFERENCES } from './production-reference-bootstr
 
 const RUN_ID_PATTERN = /^[A-Za-z0-9_-]{1,80}$/;
 const EVIDENCE_APPROVED_AT = '2026-08-31T00:00:00.000Z';
+const MAX_COMMAND_ID_LENGTH = 128;
 
 export const READY_PRODUCT_MDM_REFERENCES = Object.freeze({
   category: Object.freeze({ entryId: 'mdm-entry:assortment-category:apparel', version: 1 }),
@@ -253,12 +254,12 @@ export async function runReadyProductReadinessLiveAcceptance({
   const suffix = runId.slice(0, 18);
 
   const style = data(await requestJson(fetchImpl, target.url, '/v2/product/styles', {
-    method: 'POST', token, idempotencyKey: command(runId, 'ready-product-style-create'),
+    method: 'POST', token, idempotencyKey: command(runId, 'ready-style'),
     body: { brandId: references.brand.id, styleCode: `ACR.${code}` },
   }), 'READY Product Style creation');
 
   const styleVersion = data(await requestJson(fetchImpl, target.url, `/v2/product/styles/${encodeURIComponent(style.id)}/versions`, {
-    method: 'POST', token, idempotencyKey: command(runId, 'ready-product-style-version-create'),
+    method: 'POST', token, idempotencyKey: command(runId, 'ready-style-version'),
     body: {
       expectedLatestVersionNo: 0,
       titleRu: `Готовый приёмочный товар ${suffix}`,
@@ -269,7 +270,7 @@ export async function runReadyProductReadinessLiveAcceptance({
   }), 'READY Style Version creation');
 
   const colorway = data(await requestJson(fetchImpl, target.url, `/v2/product/style-versions/${encodeURIComponent(styleVersion.id)}/colorways`, {
-    method: 'POST', token, idempotencyKey: command(runId, 'ready-product-colorway-create'),
+    method: 'POST', token, idempotencyKey: command(runId, 'ready-colorway'),
     body: {
       colorwayCode: 'BASE',
       nameRu: 'Базовый',
@@ -280,7 +281,7 @@ export async function runReadyProductReadinessLiveAcceptance({
   }), 'READY Colorway creation');
 
   const sizeScale = data(await requestJson(fetchImpl, target.url, '/v2/product/size-scales', {
-    method: 'POST', token, idempotencyKey: command(runId, 'ready-product-size-scale-create'),
+    method: 'POST', token, idempotencyKey: command(runId, 'ready-scale'),
     body: {
       brandId: references.brand.id,
       scaleCode: `ACR-${code}`,
@@ -290,7 +291,7 @@ export async function runReadyProductReadinessLiveAcceptance({
   }), 'READY Size Scale creation');
 
   const sizeScaleVersion = data(await requestJson(fetchImpl, target.url, `/v2/product/size-scales/${encodeURIComponent(sizeScale.id)}/versions`, {
-    method: 'POST', token, idempotencyKey: command(runId, 'ready-product-size-scale-version-create'),
+    method: 'POST', token, idempotencyKey: command(runId, 'ready-scale-version'),
     body: {
       expectedLatestVersionNo: 0,
       sizeSystemRef: mdm.sizeSystem,
@@ -299,7 +300,7 @@ export async function runReadyProductReadinessLiveAcceptance({
   }), 'READY Size Scale Version creation');
 
   const sizeValue = data(await requestJson(fetchImpl, target.url, `/v2/product/size-scale-versions/${encodeURIComponent(sizeScaleVersion.id)}/values`, {
-    method: 'POST', token, idempotencyKey: command(runId, 'ready-product-size-value-create'),
+    method: 'POST', token, idempotencyKey: command(runId, 'ready-size'),
     body: {
       sizeCode: 'M',
       labelRu: 'M',
@@ -311,7 +312,7 @@ export async function runReadyProductReadinessLiveAcceptance({
   }), 'READY Size Value creation');
 
   const sku = data(await requestJson(fetchImpl, target.url, '/v2/product/skus', {
-    method: 'POST', token, idempotencyKey: command(runId, 'ready-product-sku-create'),
+    method: 'POST', token, idempotencyKey: command(runId, 'ready-sku'),
     body: {
       skuCode: `ACR_${code}_M`,
       styleVersionId: styleVersion.id,
@@ -322,7 +323,7 @@ export async function runReadyProductReadinessLiveAcceptance({
   }), 'READY Product SKU creation');
 
   const media = data(await requestJson(fetchImpl, target.url, `/v2/product/style-versions/${encodeURIComponent(styleVersion.id)}/media`, {
-    method: 'POST', token, idempotencyKey: command(runId, 'ready-product-media-create'),
+    method: 'POST', token, idempotencyKey: command(runId, 'ready-media'),
     body: {
       colorwayId: colorway.id,
       mediaType: 'image',
@@ -334,7 +335,7 @@ export async function runReadyProductReadinessLiveAcceptance({
   }), 'READY Product Media creation');
 
   const measurementDraft = data(await requestJson(fetchImpl, target.url, '/v2/measurements/canonical', {
-    method: 'POST', token, idempotencyKey: command(runId, 'ready-measurement-create'),
+    method: 'POST', token, idempotencyKey: command(runId, 'ready-measurement'),
     body: {
       styleVersionId: styleVersion.id,
       colorwayId: colorway.id,
@@ -357,7 +358,7 @@ export async function runReadyProductReadinessLiveAcceptance({
   }
 
   const measurement = data(await requestJson(fetchImpl, target.url, `/v2/measurements/canonical/${encodeURIComponent(measurementDraft.id)}/publish`, {
-    method: 'POST', token, idempotencyKey: command(runId, 'ready-measurement-publish'),
+    method: 'POST', token, idempotencyKey: command(runId, 'ready-measure-publish'),
     body: { expectedVersion: measurementDraft.version },
   }), 'canonical Measurement Chart publication');
   if (measurement.status !== 'published' || measurement.version !== measurementDraft.version + 1) {
@@ -389,7 +390,7 @@ export async function runReadyProductReadinessLiveAcceptance({
     compliance: evidence(runId, 'ready-compliance', references.actors.brandOwner),
   });
   const readiness = data(await requestJson(fetchImpl, target.url, `/v2/product/style-versions/${encodeURIComponent(styleVersion.id)}/readiness`, {
-    method: 'POST', token, idempotencyKey: command(runId, 'ready-product-readiness-assess'),
+    method: 'POST', token, idempotencyKey: command(runId, 'ready-readiness'),
     body: { developmentRoute: 'READY_GOODS', commercialPreparation, externalEvidence },
   }), 'READY Product Readiness assessment');
 
@@ -481,7 +482,11 @@ function data(payload, operation) {
   if (!payload?.data?.id) throw new Error(`Acceptance ${operation} did not return an entity id`);
   return payload.data;
 }
-function command(runId, operation) { return `acceptance-${runId}-${operation}`; }
+function command(runId, operation) {
+  const value = `acceptance-${runId}-${operation}`;
+  if (value.length > MAX_COMMAND_ID_LENGTH) throw new Error(`Acceptance command id exceeds ${MAX_COMMAND_ID_LENGTH} characters`);
+  return value;
+}
 
 async function requestJson(fetchImpl, baseUrl, pathname, { method = 'GET', token, body, idempotencyKey } = {}) {
   if (typeof fetchImpl !== 'function') throw new Error('Fetch implementation is required');

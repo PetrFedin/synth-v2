@@ -1,7 +1,7 @@
 # Syntha V2 — Platform Master Specification
 
 > **Canonical living specification / architecture / product requirements / UI contract**  
-> Status date: **2026-09-01**  
+> Status date: **2026-09-03**  
 > Baseline when this master specification was established: `main@4f5c452dede1ce9c8ffe518eddb8b6632cc89ad0`  
 > Document status: **AUTHORITATIVE / LIVING**
 
@@ -333,6 +333,49 @@ Current executable workspace assets include Planning, Styles, Materials, BOM, Me
 
 The master specification must be expanded whenever one of these workspaces gains/removes a field, action, state, panel or dependency. Existing module-specific docs remain supporting evidence; they are not permission to omit changes here.
 
+#### Canonical Measurement Chart — IMPLEMENTED / positive live readiness evidence pending
+
+The canonical Measurement Chart is repository-authoritative measurement evidence for Product Identity and Product Readiness. Its immutable identity context is the exact same-brand tuple `StyleVersion + Colorway + SizeScaleVersion`; it never derives canonical identity from a textual SKU. The chart pins the exact governed MDM version of its `measurement.unit` and every `measurement.point`, preserves the ordered Product `SizeValue` matrix, and is the only measurement-chart family eligible to satisfy the canonical Product Readiness `measurements` gate.
+
+Supported public API contract:
+
+```text
+POST  /v2/measurements/canonical
+GET   /v2/measurements/canonical/:chartId
+PATCH /v2/measurements/canonical/:chartId
+POST  /v2/measurements/canonical/:chartId/publish
+```
+
+There is deliberately no canonical collection `GET /v2/measurements/canonical` and no canonical `PUT` update route. OpenAPI must describe exactly the supported methods; introducing either absent route as documentation-only behavior is forbidden.
+
+Create accepts exactly these top-level fields and rejects unknown fields:
+
+```text
+styleVersionId
+colorwayId
+sizeScaleVersionId
+measurementUnitEntryId
+baseSizeValueId
+sizes
+points
+notes
+```
+
+Each `sizes` row is exactly `{ sizeValueId }`. Each `points` row is exactly `{ pointEntryId, description, toleranceMinus, tolerancePlus, measurements }`, and every measurement value is exactly `{ sizeValueId, value }`. `notes` is a required request key and may normalize to null/empty semantics according to the domain optional-text rule; callers may not omit the key. The update request is the exact editable set above without the three identity fields plus required optimistic-concurrency `expectedVersion`. Publication accepts exactly `{ expectedVersion }`.
+
+All three canonical mutations require authenticated actor context, the existing measurement-management capability/brand ownership checks and `Idempotency-Key`. The service resolves the exact StyleVersion, Colorway, SizeScaleVersion and SizeValues; resolves the current effective MDM entries for `measurementUnitEntryId` and each `pointEntryId`; and fails closed for missing/mismatched Product Identity, wrong brand, wrong dictionary, inactive/unapproved/not-effective MDM entries, unexpected fields, stale `expectedVersion`, duplicate size/point identities or invalid/incomplete matrices. Russia-first canonical garment measurement units must be governed `measurement.unit` length entries using the metric system.
+
+Lifecycle is append/history preserving:
+
+```text
+DRAFT → PUBLISHED
+PUBLISHED --PATCH with expectedVersion--> new DRAFT revision
+```
+
+A PATCH to a published chart archives the published revision before saving the new DRAFT revision; it never destructively mutates published historical evidence. Publication requires at least one governed point and a complete ordered value matrix for every selected Product SizeValue, including the base size. Readiness reads the latest exact PUBLISHED canonical chart for the Product Identity context and retains the exact chart/version/MDM evidence rather than reinterpreting it from current master data.
+
+The older SKU-oriented `/v2/measurements`, `/v2/measurements/:sku` and `/v2/measurements/:sku/publish` routes remain a **DEPRECATED compatibility surface for Product Identity/readiness semantics** until consumer/UI migration is audited. They must not be used as canonical evidence for new ProductReadiness writes and must not acquire new Product Identity semantics. PR #117 synchronizes the previously missing canonical runtime routes into the existing measurement OpenAPI module rather than creating a second API truth; `tests/measurement-canonical-openapi.test.mjs` pins exact methods, request fields, idempotency/auth, absence of canonical collection-GET/PUT and continued legacy compatibility. This contract is `IMPLEMENTED`; positive READY live acceptance remains pending and therefore is not `PROD-PROVEN`.
+
 ### 5.3 Operational MDM reference profile — IMPLEMENTED/PARTIAL taxonomy depth
 
 The source-controlled `mdm/reference/*.json` files form the bootstrap operational profile `RU_FASHION_CORE`. They are modular datasets, not independent copies of one monolithic reference file. A modular dataset must still declare RU market, RU/EN language coverage, a registered source, governed dictionary metadata and valid entry governance, but it is not required to duplicate unrelated size/unit dictionaries merely to exist.
@@ -404,13 +447,13 @@ ProductStyle
 
 The scenario deliberately uses `developmentRoute=READY_GOODS`, omits governed `StyleVersion.categoryRef`, and creates no canonical Measurement Chart. This is a controlled negative fixture even though the source-controlled `RU_FASHION_CORE` operational profile now contains the exact governed `assortment.category / APPAREL` entry described in §5.3. The harness intentionally does not attach that category reference, because its purpose is to preserve the fail-closed boundary proof. It supplies explicit immutable external evidence for `sourcing`, `purchase_or_production_commitment`, `quality` and `compliance`, plus valid commercial media/content/terms/availability. The expected readiness result is therefore **blocked**, with exactly two governed blockers: `category` and `measurements`. Any READY result, missing blocker, extra blocker or changed blocker count fails the acceptance run.
 
-The positive canonical readiness scenario is a separate next slice: it must create a new StyleVersion that pins the exact governed `APPAREL` MDM entry/version and must supply canonical Measurement Chart evidence from the repository-authoritative measurement workflow. The negative #117 fixture must remain unchanged and must not be converted into a happy-path bypass.
+The positive canonical readiness scenario is a separate next slice: it must create a new StyleVersion that pins the exact governed `APPAREL` MDM entry/version and must supply a PUBLISHED canonical Measurement Chart from the exact public Product Identity measurement workflow documented in §5.2. The negative #117 fixture must remain unchanged and must not be converted into a happy-path bypass.
 
 Persistence proof joins the exact ProductStyle/StyleVersion/Colorway/SizeScaleVersion/SizeValue/ProductSku/ProductMedia/Readiness rows in the configured PostgreSQL target and verifies one-brand exact lineage. Before/after counters additionally require no changes to CommercialPublication, PriceListVersion, BuyerCatalogVersion, Selection/Order, ProductSku inventory, warehouse movement, SupplyCommitment or ActualCost state.
 
 The same run now also proves the immediate **negative Readiness → Projection gate**. After PostgreSQL confirms the blocked snapshot, the harness calls `POST /v2/product/readiness/:readinessId/commercial-projection` with `expectedLatestVersionNo=0`. The only accepted outcome is HTTP `422` with domain code `COMMERCIAL_PROJECTION_READINESS_BLOCKED`; PostgreSQL must report zero `commercial_product_projection_versions` rows for the exact StyleVersion/brand both before and after the rejected command. A success response, another error contract, pre-existing projection row or post-rejection projection row fails closed. This is intentionally negative boundary evidence only: it does not prove the positive Ready → Projection → Publication → BuyerCatalog slice.
 
-This harness is automated by `tests/product-readiness-live-acceptance.test.mjs`, including exact SQL-lineage assertions, blocker-drift fail-closed behavior, the exact blocked-projection rejection/persistence contract, idempotent authenticated HTTP behavior and wrong-actor rejection before mutation. The operational category dataset/validator contract is additionally pinned by `tests/mdm-assortment-category-reference.test.mjs`. Those tests prove the acceptance/MDM contracts; they do **not** by themselves make this boundary `PROD-PROVEN`. `PROD-PROVEN` requires a successful `acceptance:product-readiness` run against the intended live acceptance environment. The full Product → Margin `ACC-004` gate remains OPEN.
+This harness is automated by `tests/product-readiness-live-acceptance.test.mjs`, including exact SQL-lineage assertions, blocker-drift fail-closed behavior, the exact blocked-projection rejection/persistence contract, idempotent authenticated HTTP behavior and wrong-actor rejection before mutation. The operational category dataset/validator contract is additionally pinned by `tests/mdm-assortment-category-reference.test.mjs`; the canonical Measurement HTTP/OpenAPI contract is pinned by `tests/measurement-canonical-openapi.test.mjs`. Those tests prove the acceptance/MDM/API contracts; they do **not** by themselves make this boundary `PROD-PROVEN`. `PROD-PROVEN` requires a successful `acceptance:product-readiness` run against the intended live acceptance environment. The full Product → Margin `ACC-004` gate remains OPEN.
 
 ### 6.2 CommercialProductProjectionVersion — IMPLEMENTED
 
@@ -904,7 +947,7 @@ Product Identity → ProductReadinessSnapshot(blocked: category, measurements)
 Expand one business slice at a time, preserving explicit before/after invariants:
 
 1. Campaign → Collection — IMPLEMENTED / PROD-PROVEN.
-2. Product Identity → Readiness — negative acceptance harness IMPLEMENTED in #117; source-controlled governed `APPAREL` category prerequisite is available; live negative-environment evidence PENDING; positive READY scenario still requires exact category pin plus canonical Measurement Chart evidence.
+2. Product Identity → Readiness — negative acceptance harness IMPLEMENTED in #117; source-controlled governed `APPAREL` category prerequisite and public canonical Measurement Chart API/OpenAPI contract are available; live negative-environment evidence PENDING; positive READY scenario still must create/publish exact category-pinned canonical measurement evidence and prove same-environment persistence.
 3. Readiness → Projection → Publication → BuyerCatalog — positive path PLANNED; #117 covers only the fail-closed blocked Readiness → Projection boundary and deliberately creates no projection.
 4. BuyerCatalog → Selection → OrderCommit — PLANNED.
 5. OrderCommit → Supply → Shipment — PLANNED.
@@ -926,10 +969,10 @@ This is the current high-level master status. Supporting detail is kept in this 
 | Operational RU fashion MDM reference profile | IMPLEMENTED/PARTIAL taxonomy depth | governed `assortment.category / APPAREL` bootstrap and modular core validation implemented; expand category/product-type taxonomy only as canonical flows require it |
 | Product Identity V2 | IMPLEMENTED | exact governed category references supported; UI/legacy catalog convergence plus live #117 execution remain |
 | PLM Planning/Styles | PARTIAL | converge all semantics on Product Identity |
-| Materials/BOM/Measurements/Samples | IMPLEMENTED/PARTIAL | ODS debt + canonical readiness integration by workspace; canonical Measurement Chart is the next positive-readiness prerequisite |
+| Materials/BOM/Measurements/Samples | IMPLEMENTED/PARTIAL | canonical Measurement Chart runtime/OpenAPI are synchronized on exact Product Identity + governed MDM; positive READY live persistence proof and ODS/remaining workspace convergence remain |
 | Sourcing/Tech Pack | IMPLEMENTED/PARTIAL | supplier/sourcing depth + ODS debt for Sourcing |
 | Production/Final Quality | IMPLEMENTED | continue physical lineage/readiness E2E proof |
-| ProductReadinessSnapshot | IMPLEMENTED | #117 negative harness exists; obtain live acceptance evidence, then add exact-category + canonical-measurement positive READY slice |
+| ProductReadinessSnapshot | IMPLEMENTED | #117 negative harness exists; next add exact `APPAREL` category + published canonical Measurement Chart positive READY scenario and live persistence proof |
 | CommercialProjection | IMPLEMENTED | blocked-readiness gate covered by #117; positive ready→projection→publication→buyer-catalog live proof remains |
 | CommercialPublication | IMPLEMENTED/PARTIAL | eliminate flat-catalog origin debt |
 | BuyerCatalog/Linesheet | IMPLEMENTED/PARTIAL | variant-rich ProductSku hierarchy |
@@ -944,7 +987,7 @@ This is the current high-level master status. Supporting detail is kept in this 
 | Landed cost / Margin / Close | IMPLEMENTED | pre-close allocation pin merged in #115; exact post-close reconciliation implemented and verified in #116; live Product → Margin proof remains `ACC-004` |
 | KPI governance/methodology | PARTIAL production connection | complete exact runtime/persistence/reconciliation |
 | ODS v1 | IMPLEMENTED with compatibility debt | burn legacy layers down; never add new dialect |
-| Full Product → Margin live acceptance | PLANNED | #117 proves Product-side fail-closed acceptance boundaries; continue positive slices 3–7 and collect operational evidence |
+| Full Product → Margin live acceptance | PLANNED | #117 proves Product-side fail-closed acceptance boundaries; continue positive slices 2–7 and collect operational evidence |
 
 ---
 
@@ -955,7 +998,7 @@ This is the current high-level master status. Supporting detail is kept in this 
 | `AC-LINEAGE-001` | P0 | Generic ActualCost accepted textual SKU without exact physical lineage | aggregate-only generic path; exact ProductSku physical path; DB fail-closed guard; preserve legacy corrections | CLOSED in #112 |
 | `AC-HTTP-002` | P0 | Physical ActualCost resolver supported exact IDs but HTTP/OpenAPI did not expose them | request + response include `orderLineNo` and `productSkuId`; generic SKU scope removed | CLOSED in #112 |
 | `ECON-003` | P0 | ActualCost → landed/allocation/margin/close/post-close path could lose or leave unproven ProductSku lineage | exact allocation line identity plus reproducible aggregate margin/close and explicit exact post-close reconciliation from frozen lineage | CLOSED by #116 at code/runtime lineage level — #114 fixed exact allocation, #115 bound pre-close allocation→margin/readiness/close provenance, #116 adds latest-adjustment exact post-close reconciliation plus effective-position provenance; implementation-head Verify `33345573039` and Syntha V2 CI `33345572980` succeeded; live Product → Margin proof remains separately OPEN as `ACC-004` |
-| `ACC-004` | P0 | Live acceptance does not yet prove the connected Product → Margin spine | progressively prove canonical Product → Margin spine through public runtime/PostgreSQL slices | OPEN/PARTIAL — #117 implements Product Identity → blocked Readiness and exact blocked Readiness → Projection rejection; governed `APPAREL` category bootstrap is now available and documented, so next positive slice must pin it plus canonical Measurement Chart; live environment evidence and all positive downstream slices remain open |
+| `ACC-004` | P0 | Live acceptance does not yet prove the connected Product → Margin spine | progressively prove canonical Product → Margin spine through public runtime/PostgreSQL slices | OPEN/PARTIAL — #117 implements Product Identity → blocked Readiness and exact blocked Readiness → Projection rejection; governed `APPAREL` category seed and canonical Measurement runtime/OpenAPI are now synchronized, so the immediate next slice is public create+publish of exact MDM-backed Measurement Chart plus same-environment READY proof; live environment evidence and downstream positive slices remain open |
 | `PUB-005` | P0 | Some historical publication/catalog behavior remains flat-catalog oriented | projection-only variant-rich publication/buyer catalog | OPEN/PARTIAL |
 | `UI-006` | P1 | Legacy Omnidata CSS/JS compatibility layers remain loaded | migrate semantics to ODS v1 and remove debt only after validation | OPEN/PARTIAL |
 | `SPEC-007` | P0 | Historical architecture/product/UI detail was fragmented across docs/code | authoritative `ARCHITECTURE.md` + CI synchronization rule | CLOSED in #110 |
@@ -1005,6 +1048,7 @@ Minimum frozen lineage fields for the current commercial spine include:
 | StyleVersion | exact ProductStyle + predecessor/version/content identity + governed refs; category is exact current/effective/active/approved `assortment.category` entry version at write time and is frozen thereafter |
 | Colorway | exact StyleVersion + brand + colour identity/ref |
 | ProductSku | exact StyleVersion + Colorway + SizeValue |
+| CanonicalMeasurementChart | exact same-brand StyleVersion + Colorway + SizeScaleVersion; exact ordered SizeValues; exact current/effective/active governed `measurement.unit` and `measurement.point` versions pinned into chart evidence; DRAFT/PUBLISHED revision history is immutable across publication replacement |
 | ProductReadinessSnapshot | exact StyleVersion + exact source/evidence versions + readiness result |
 | CommercialProductProjectionVersion | exact ready snapshot + immutable commercial projection version |
 | CommercialPublication | exact projection/source publication version/lifecycle |
@@ -1039,6 +1083,7 @@ Minimum frozen lineage fields for the current commercial spine include:
 | 2026-08-31 | #115 / `283c058eba5a83f39718e43aca3c9cc31205a120` | Bind immutable CostAllocationRunSnapshot into canonical MarginActualization → CostCloseReadiness → CostClose; preserve explicit legacy semantics; mark canonical post-close late-cost margin `pending-post-close`; expose allocation provenance in events/OpenAPI/store lookup | 1.2, 3.3, 9.4, 12.3, 13, 15, 16, 17, 19, 20 | MERGED; Verify run `33344377731` success; Syntha V2 CI run `33344377707` success; `ECON-003` remained OPEN/PARTIAL pending exact post-close reconciliation at that merge |
 | 2026-08-31 | #116 / `fix/econ003-post-close-reallocation` | Add immutable latest-adjustment post-close allocation reconciliation; bind exact new CostAllocationRunSnapshot to a new current margin without changing aggregate economics or rewriting CostClose/adjustment; persist via migration 074; expose effective reconciliation/allocation provenance in economics-position and OpenAPI | 1.2, 3.3, 3.7, 9.4, 12.3, 13, 15, 16, 17, 19, 20, 21 | implementation-head Verify run `33345573039` success; Syntha V2 CI run `33345572980` success including PostgreSQL verification; `ECON-003` code/runtime lineage gap CLOSED; live Product → Margin proof remains OPEN under `ACC-004` |
 | 2026-09-01 | #117 / `feat/acc004-product-readiness-live` (implementation head before authoritative sync: `d5477aa417ee11fc5e6a241e1a2fb848775fdc0d`) | Add guarded Product Identity → ProductReadiness live acceptance harness and exact blocked Readiness→Projection negative gate; add governed source-controlled `assortment.category` bootstrap with `APPAREL`; register `syntha_operational_master` impact; correct MDM validation so mandatory RU size systems/units are enforced globally across modular `mdm/reference` datasets while local semantic references remain same-dataset; explicitly preserve the negative fixture’s category+measurements blockers and document the positive exact-category + Measurement Chart prerequisite | 5.1, 5.3, 6.1, 6.2, 15, 16, 17, 19, 20, 22 | IMPLEMENTED harness + MDM bootstrap/validator contract; authoritative documentation synchronization completed in this branch; CI must pass on the documentation-sync head; actual live acceptance environment evidence is still required before any `PROD-PROVEN` claim; positive Ready→Projection→Publication→BuyerCatalog and remaining `ACC-004` slices stay OPEN |
+| 2026-09-03 | #117 / `9a8490a` + `c6f1662` | Resolve canonical Measurement runtime↔OpenAPI divergence: document exact Product Identity/MDM request-response contract and supported POST/GET/PATCH/publish routes, preserve legacy SKU routes only as readiness compatibility, and add anti-drift regression coverage | 5.2, 6.1, 15, 16, 17, 19, 20 | IMPLEMENTED contract; composed OpenAPI remains 1.17.0; CI pending on this documentation-sync head; positive ProductReadiness live proof remains OPEN and no `PROD-PROVEN` claim is made |
 
 Future implementation PRs add a row here. The row is not a substitute for updating the affected detailed sections.
 

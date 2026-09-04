@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
-import { Pool } from 'pg';
+import pg from 'pg';
 import { ensureAcceptanceActor } from '../src/acceptance/acceptance-auth.mjs';
 import {
   ensureAcceptanceBrandOwner,
@@ -17,6 +17,7 @@ import { bootstrapMdmReference } from '../src/infrastructure/mdm-reference-boots
 import { migratePostgres, waitForPostgres } from '../src/infrastructure/postgres-migrator.mjs';
 import { createPostgresWholesaleRuntime } from '../src/runtime/postgres-runtime.mjs';
 
+const { Pool } = pg;
 const databaseUrl = process.env.SYNTHA_V2_DATABASE_URL ?? process.env.DATABASE_URL;
 const baseUrl = process.env.SYNTHA_ACCEPTANCE_BASE_URL;
 if (!databaseUrl) throw new Error('SYNTHA_V2_DATABASE_URL or DATABASE_URL is required');

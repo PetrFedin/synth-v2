@@ -1,0 +1,57 @@
+{
+  "dataset_version": "1.0.0",
+  "profile": "RU_FASHION_CORE",
+  "markets": ["RU"],
+  "languages": ["ru", "en"],
+  "source": {
+    "system": "syntha_operational_master",
+    "version": "1.0.0",
+    "endpoint": "mdm/reference/russia-fashion-assortment-core.json",
+    "license": "SYNTHA internal operational master data",
+    "retrieved_at": "2026-08-31T00:00:00.000Z"
+  },
+  "dictionaries": [
+    {
+      "id": "mdm-dictionary:assortment-category",
+      "code": "assortment.category",
+      "data_class": "classifier",
+      "scope_model": "global",
+      "hierarchy_enabled": true,
+      "effective_dated": true,
+      "approval_required": true,
+      "name": {"ru": "Категория", "en": "Category"},
+      "description": {
+        "ru": "Минимальный управляемый корень товарной иерархии SYNTHA для одежды. Более детальная внутренняя категорийная структура расширяется только отдельными управляемыми версиями MDM.",
+        "en": "Minimal governed SYNTHA product-hierarchy root for apparel. More detailed internal category structure is added only through separately governed MDM versions."
+      },
+      "entries": [
+        {
+          "id": "mdm-entry:assortment-category:apparel",
+          "version": 1,
+          "domain": "assortment.category",
+          "code": "APPAREL",
+          "name_ru": "Одежда",
+          "name_en": "Apparel",
+          "description_ru": "Верхнеуровневая категория для предметов одежды. Не подменяет подкатегорию или тип товара.",
+          "description_en": "Top-level category for apparel products. It does not substitute for subcategory or product type.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-assortment-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-08-31T00:00:00.000Z"
+          },
+          "effective_from": "2026-08-31T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "hierarchy_level": "category",
+            "market_codes": ["RU"],
+            "product_family": "apparel"
+          }
+        }
+      ]
+    }
+  ]
+}

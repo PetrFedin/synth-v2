@@ -165,6 +165,8 @@ try {
   else errors.push(`mdm/reference: ${error.message}`);
 }
 
+validateRequiredRussiaFashionCore();
+
 function validateOperationalDataset(dataset, location) {
   if (!nonEmpty(dataset.dataset_version)) errors.push(`${location}: missing dataset_version`);
   if (dataset.profile !== 'RU_FASHION_CORE') errors.push(`${location}: operational profile must be RU_FASHION_CORE`);
@@ -225,7 +227,7 @@ function validateRussiaFashionSemantics(dataset, location) {
   for (const entry of [...entries('size.size'), ...entries('size.footwear_size')]) {
     const systemId = entry.attributes?.size_system_entry_id;
     const system = sizeSystems.get(systemId);
-    if (!system) errors.push(`${location}:${entry.code}: size_system_entry_id must resolve to a seeded size.system entry`);
+    if (!system) errors.push(`${location}:${entry.code}: size_system_entry_id must resolve to a seeded size.system entry in the same operational dataset`);
     if (system && entry.attributes?.size_system_code !== system.code) errors.push(`${location}:${entry.code}: size_system_code does not match size_system_entry_id`);
     const forbiddenConversionKeys = Object.keys(entry.attributes ?? {}).filter((key) => /equivalent|conversion|mapped_size/i.test(key));
     if (forbiddenConversionKeys.length) errors.push(`${location}:${entry.code}: universal size conversion is forbidden; use explicit brand/market conversion records`);
@@ -240,16 +242,17 @@ function validateRussiaFashionSemantics(dataset, location) {
 
   for (const entry of entries('measurement.point')) {
     const unit = units.get(entry.attributes?.default_unit_entry_id);
-    if (!unit) errors.push(`${location}:${entry.code}: default_unit_entry_id must resolve to a seeded measurement.unit entry`);
+    if (!unit) errors.push(`${location}:${entry.code}: default_unit_entry_id must resolve to a seeded measurement.unit entry in the same operational dataset`);
     if (unit && entry.attributes?.default_unit_code !== unit.code) errors.push(`${location}:${entry.code}: default_unit_code does not match default_unit_entry_id`);
   }
+}
 
-  const requiredSizeSystems = ['RU_APPAREL_NUMERIC', 'INT_ALPHA', 'EU_FOOTWEAR'];
-  for (const code of requiredSizeSystems) {
-    if (!operationalEntriesByDictionaryAndCode.has(`size.system:${code}`)) errors.push(`${location}: missing required Russia fashion size system ${code}`);
+function validateRequiredRussiaFashionCore() {
+  for (const code of ['RU_APPAREL_NUMERIC', 'INT_ALPHA', 'EU_FOOTWEAR']) {
+    if (!operationalEntriesByDictionaryAndCode.has(`size.system:${code}`)) errors.push(`mdm/reference: missing required Russia fashion size system ${code}`);
   }
   for (const code of ['CM', 'MM', 'M', 'G', 'KG', 'PCS']) {
-    if (!operationalEntriesByDictionaryAndCode.has(`measurement.unit:${code}`)) errors.push(`${location}: missing required operational unit ${code}`);
+    if (!operationalEntriesByDictionaryAndCode.has(`measurement.unit:${code}`)) errors.push(`mdm/reference: missing required operational unit ${code}`);
   }
 }
 

@@ -1,5 +1,6 @@
 name: Product Commercialization Acceptance
 
+# P0.3 exact-head gate: supported public runtime plus same-environment PostgreSQL proof.
 on:
   pull_request:
   push:

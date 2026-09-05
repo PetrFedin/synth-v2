@@ -2,6 +2,8 @@ import { invariant } from '../core/errors.mjs';
 import { createMembership } from '../modules/access-control/public.mjs';
 import { createOrganisation } from '../modules/organisations/public.mjs';
 
+const PRODUCTION_ACCEPTANCE_CREATED_AT = '2026-08-31T00:00:00.000Z';
+
 export const PRODUCTION_ACCEPTANCE_REFERENCES = deepFreeze({
   systemActorId: 'system',
   brand: { id: 'syntha-acceptance-brand', type: 'brand', name: 'Syntha Acceptance Brand' },
@@ -21,13 +23,16 @@ export const PRODUCTION_ACCEPTANCE_REFERENCES = deepFreeze({
  * collection, product, ProductSku, publication, buyer selection, order or physical
  * execution data: those records must be created through their production services
  * by the acceptance scenario itself.
+ *
+ * The bootstrap payload is intentionally time-stable. Command ids are durable
+ * idempotency identities, so a retry must present the exact same command payload;
+ * sampling the wall clock here would turn a safe replay into COMMAND_ID_CONFLICT.
  */
-export async function bootstrapProductionAcceptanceReferences({ platform, clock = () => new Date().toISOString() } = {}) {
+export async function bootstrapProductionAcceptanceReferences({ platform } = {}) {
   invariant(platform && typeof platform.registerOrganisation === 'function' && typeof platform.grantMembership === 'function', 'PRODUCTION_ACCEPTANCE_PLATFORM_REQUIRED', 'Production platform service is required');
-  invariant(typeof clock === 'function', 'PRODUCTION_ACCEPTANCE_CLOCK_REQUIRED', 'Acceptance bootstrap clock is required');
 
   const refs = PRODUCTION_ACCEPTANCE_REFERENCES;
-  const createdAt = iso(clock());
+  const createdAt = PRODUCTION_ACCEPTANCE_CREATED_AT;
   const brand = createOrganisation(refs.brand);
   const shop = createOrganisation(refs.shop);
 
@@ -87,11 +92,6 @@ export async function bootstrapProductionAcceptanceReferences({ platform, clock 
 }
 
 function command(name) { return `production-reference:${name}`; }
-function iso(value) {
-  const parsed = Date.parse(value);
-  invariant(typeof value === 'string' && Number.isFinite(parsed), 'PRODUCTION_ACCEPTANCE_CLOCK_INVALID', 'Acceptance bootstrap clock must return an ISO timestamp');
-  return new Date(parsed).toISOString();
-}
 function deepFreeze(value) {
   if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value;
   Object.freeze(value);

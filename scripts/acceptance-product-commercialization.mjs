@@ -3,13 +3,14 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
+import { ensureAcceptanceActor } from '../src/acceptance/acceptance-auth.mjs';
 import {
   ensureAcceptanceBrandOwner,
   loginAcceptanceSession,
   logoutAcceptanceSession,
   validateAcceptanceOrigin,
 } from '../src/acceptance/collection-live-acceptance.mjs';
-import { runProductReadinessLiveAcceptance } from '../src/acceptance/product-readiness-live-acceptance.mjs';
+import { runProductCommercializationLiveAcceptance } from '../src/acceptance/product-commercialization-live-acceptance.mjs';
 import { runReadyProductReadinessLiveAcceptance } from '../src/acceptance/product-readiness-ready-live-acceptance.mjs';
 import { bootstrapProductionAcceptanceReferences } from '../src/acceptance/production-reference-bootstrap.mjs';
 import { bootstrapMdmReference } from '../src/infrastructure/mdm-reference-bootstrap.mjs';
@@ -23,15 +24,17 @@ if (!databaseUrl) throw new Error('SYNTHA_V2_DATABASE_URL or DATABASE_URL is req
 
 const target = validateAcceptanceOrigin(baseUrl);
 if (!target.local && process.env.SYNTHA_ACCEPTANCE_ALLOW_REMOTE !== 'true') {
-  throw new Error('Remote Product Readiness acceptance is disabled. Set SYNTHA_ACCEPTANCE_ALLOW_REMOTE=true only for the intended acceptance environment.');
+  throw new Error('Remote Product commercialization acceptance is disabled. Set SYNTHA_ACCEPTANCE_ALLOW_REMOTE=true only for the intended acceptance environment.');
 }
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const migrationsDir = path.join(root, 'db', 'migrations');
 const referenceDir = path.join(root, 'mdm', 'reference');
 const pool = new Pool({ connectionString: databaseUrl, max: 4 });
-let createdSession = false;
-let token = process.env.SYNTHA_ACCEPTANCE_TOKEN?.trim() || '';
+let brandCreatedSession = false;
+let shopCreatedSession = false;
+let brandToken = process.env.SYNTHA_ACCEPTANCE_TOKEN?.trim() || '';
+let shopToken = process.env.SYNTHA_ACCEPTANCE_SHOP_TOKEN?.trim() || '';
 
 try {
   await waitForPostgres({
@@ -46,7 +49,7 @@ try {
   const runtime = createPostgresWholesaleRuntime({ pool, migrationsDir });
   const references = await bootstrapProductionAcceptanceReferences({ platform: runtime.platform });
 
-  if (!token) {
+  if (!brandToken) {
     const email = process.env.SYNTHA_ACCEPTANCE_EMAIL;
     const password = process.env.SYNTHA_ACCEPTANCE_PASSWORD;
     await ensureAcceptanceBrandOwner({
@@ -57,37 +60,60 @@ try {
       displayName: process.env.SYNTHA_ACCEPTANCE_NAME ?? 'Syntha Acceptance Brand Owner',
     });
     const session = await loginAcceptanceSession({ baseUrl: target.url.toString(), email, password });
-    token = session.token;
-    createdSession = true;
+    brandToken = session.token;
+    brandCreatedSession = true;
+  }
+
+  if (!shopToken) {
+    const email = process.env.SYNTHA_ACCEPTANCE_SHOP_EMAIL;
+    const password = process.env.SYNTHA_ACCEPTANCE_SHOP_PASSWORD;
+    await ensureAcceptanceActor({
+      pool,
+      auth: runtime.auth,
+      actorId: references.actors.shopOwner,
+      email,
+      password,
+      displayName: process.env.SYNTHA_ACCEPTANCE_SHOP_NAME ?? 'Syntha Acceptance Shop Owner',
+      envLabel: 'SYNTHA acceptance shop owner',
+    });
+    const session = await loginAcceptanceSession({ baseUrl: target.url.toString(), email, password });
+    shopToken = session.token;
+    shopCreatedSession = true;
   }
 
   const runId = process.env.SYNTHA_ACCEPTANCE_RUN_ID?.trim() || undefined;
-  const blocked = await runProductReadinessLiveAcceptance({
-    baseUrl: target.url.toString(),
-    token,
-    pool,
-    references,
-    ...(runId ? { runId } : {}),
-  });
   const ready = await runReadyProductReadinessLiveAcceptance({
     baseUrl: target.url.toString(),
-    token,
+    token: brandToken,
     pool,
     references,
     ...(runId ? { runId } : {}),
   });
-  process.stdout.write(`${JSON.stringify({ status: 'passed', blocked, ready }, null, 2)}\n`);
+  const commercialization = await runProductCommercializationLiveAcceptance({
+    baseUrl: target.url.toString(),
+    brandToken,
+    shopToken,
+    pool,
+    ready,
+    references,
+    ...(runId ? { runId } : {}),
+  });
+  process.stdout.write(`${JSON.stringify({ status: 'passed', ready, commercialization }, null, 2)}\n`);
 } finally {
-  if (createdSession && token) {
-    try { await logoutAcceptanceSession({ baseUrl: target.url.toString(), token }); }
-    catch (error) { console.error(`Acceptance session logout failed: ${error.message}`); }
+  if (shopCreatedSession && shopToken) {
+    try { await logoutAcceptanceSession({ baseUrl: target.url.toString(), token: shopToken }); }
+    catch (error) { console.error(`Acceptance shop session logout failed: ${error.message}`); }
+  }
+  if (brandCreatedSession && brandToken) {
+    try { await logoutAcceptanceSession({ baseUrl: target.url.toString(), token: brandToken }); }
+    catch (error) { console.error(`Acceptance brand session logout failed: ${error.message}`); }
   }
   await pool.end();
 }
 
 async function loadOperationalMdmDatasets(referenceDirectory) {
   const files = (await fs.readdir(referenceDirectory)).filter((name) => name.endsWith('.json')).sort();
-  if (!files.length) throw new Error('No operational MDM reference datasets found for Product Readiness acceptance');
+  if (!files.length) throw new Error('No operational MDM reference datasets found for Product commercialization acceptance');
   return Promise.all(files.map(async (file) => JSON.parse(await fs.readFile(path.join(referenceDirectory, file), 'utf8'))));
 }
 

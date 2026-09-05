@@ -54,7 +54,7 @@ curl -X POST http://127.0.0.1:4100/v2/auth/login \
 
 ## Cursor
 
-В `.vscode/tasks.json` находятся задачи lockfile-установки, запуска обеих PostgreSQL баз, миграций, повторяемого owner bootstrap, обычной проверки, PostgreSQL-backed проверки, отдельного runtime smoke, collection acceptance и dev-сервера. В `.vscode/launch.json` конфигурация `Syntha V2 API` запускает тот же `scripts/start.mjs`, что и поддерживаемый production entrypoint, поэтому Run and Debug и terminal-start не расходятся по загрузке окружения.
+В `.vscode/tasks.json` находятся задачи lockfile-установки, запуска обеих PostgreSQL баз, миграций, повторяемого owner bootstrap, обычной проверки, PostgreSQL-backed проверки, отдельного runtime smoke, collection acceptance и dev-сервера. Новые acceptance-команды также можно запускать из terminal после настройки переменных из `.env.example`. В `.vscode/launch.json` конфигурация `Syntha V2 API` запускает тот же `scripts/start.mjs`, что и поддерживаемый production entrypoint, поэтому Run and Debug и terminal-start не расходятся по загрузке окружения.
 
 Если Cursor/Cloud передаёт `SYNTHA_V2_DATABASE_URL` или `DATABASE_URL`, `PORT` и другие настройки напрямую, физический `.env` не требуется. При отсутствии `HOST` поддерживаемый startup adapter использует `0.0.0.0`; явный `HOST` имеет приоритет.
 
@@ -66,23 +66,51 @@ curl -X POST http://127.0.0.1:4100/v2/auth/login \
 
 Порт выбирается временный loopback, поэтому smoke не конфликтует с обычным dev-сервером на `4100`. По умолчанию startup должен уложиться в 30 секунд, graceful shutdown — в 15 секунд; при инфраструктурной необходимости эти пределы можно временно изменить через `SYNTHA_RUNTIME_SMOKE_STARTUP_TIMEOUT_MS` и `SYNTHA_RUNTIME_SMOKE_SHUTDOWN_TIMEOUT_MS`.
 
-Этот gate автоматически входит в `npm run verify:postgres`. Поэтому release-candidate проверка теперь доказывает не только модульные/PostgreSQL-контракты, но и то, что реальный поддерживаемый entrypoint действительно стартует и корректно завершается.
+Этот gate автоматически входит в `npm run verify:postgres`. Поэтому release-candidate проверка доказывает не только модульные/PostgreSQL-контракты, но и то, что реальный поддерживаемый entrypoint действительно стартует и корректно завершается.
 
-## Сквозная acceptance-проверка коллекции
+## Сквозные acceptance-проверки
 
-После запуска приложения можно проверить реальный HTTP + PostgreSQL контур без сброса базы и без создания заказа/складского движения:
+Все acceptance-команды работают с зарезервированными acceptance organisations/actors и выполняют бизнес-мутации только через аутентифицированный публичный `/v2` runtime. Прямой SQL не используется как замена бизнес-командам; PostgreSQL читается для bootstrap управляемых reference data и доказательства, что HTTP и база относятся к одному environment.
+
+После запуска приложения доступен базовый collection slice:
 
 ```bash
-# в .env задайте отдельный acceptance-пароль
-# SYNTHA_ACCEPTANCE_PASSWORD=...
 npm run acceptance:collection
 ```
 
-Команда идемпотентно устанавливает только зарезервированные acceptance organisation/membership reference records, создаёт или использует отдельного пользователя `syntha-acceptance-brand-owner`, проверяет `/health`, `/ready` и `/v2/auth/me`, а затем через тот же публичный `/v2` API выполняет:
+Он выполняет `Campaign draft → open → Collection draft → published` и доказывает, что downstream commercial/buyer/warehouse/economics состояние не изменилось.
 
-`Campaign draft → Campaign open → Collection draft → Collection published`.
+Для Product Readiness используйте:
 
-После HTTP-записи команда подтверждает созданные Campaign/Collection непосредственно в настроенной PostgreSQL-базе. Это защищает от опасной ситуации, когда `SYNTHA_ACCEPTANCE_BASE_URL` указывает на один environment, а `SYNTHA_V2_DATABASE_URL` — на другой. До и после сценария сравниваются downstream/warehouse/economics counters: CommercialPublication/PriceList/BuyerCatalog, Selection/Order, ProductSku inventory, warehouse movement ledger, SupplyCommitment и ActualCost должны остаться неизменными.
+```bash
+npm run acceptance:product-readiness
+```
+
+Одна независимая ветка намеренно создаёт READY_GOODS без `categoryRef` и canonical Measurement Chart, требует BLOCKED ровно по `category + measurements` и HTTP 422 на projection. Вторая создаёт governed `APPAREL`, размерный ряд и опубликованный canonical Measurement Chart и требует настоящий `ProductReadinessSnapshot READY` с нулём blockers. Отрицательный сценарий не заменяется happy path.
+
+Следующий коммерческий slice:
+
+```bash
+npm run acceptance:product-commercialization
+```
+
+Он сначала создаёт новый положительный READY-граф, затем через публичный runtime проходит:
+
+`READY → CommercialProductProjectionVersion → Collection exact StyleVersion assignment → CommercialPublication → PriceListVersion → BuyerCatalogVersion`.
+
+Для buyer-specific границы дополнительно создаются и проверяются open Showroom, активная связь brand↔shop и accepted showroom invitation. Используются два реальных actor context: `syntha-acceptance-brand-owner` и `syntha-acceptance-shop-owner`. Команда сверяет exact `StyleVersion`, `ProductSku`, readiness/projection IDs и hashes, валюту, wholesale/RRP/MOQ и immutable BuyerCatalog lineage с той же PostgreSQL; Selection, Order, SupplyCommitment, ActualCost и inventory movements в этом slice должны остаться неизменными.
+
+В `.env` для локального запуска задаются:
+
+```bash
+SYNTHA_ACCEPTANCE_BASE_URL=http://127.0.0.1:4100
+SYNTHA_ACCEPTANCE_EMAIL=acceptance@syntha.local
+SYNTHA_ACCEPTANCE_PASSWORD=...
+SYNTHA_ACCEPTANCE_SHOP_EMAIL=acceptance-shop@syntha.local
+SYNTHA_ACCEPTANCE_SHOP_PASSWORD=...
+```
+
+Вместо brand email/password можно передать короткоживущий `SYNTHA_ACCEPTANCE_TOKEN`, вместо shop credentials — `SYNTHA_ACCEPTANCE_SHOP_TOKEN`; токены обязаны соответствовать ровно зарезервированным acceptance actors. `SYNTHA_ACCEPTANCE_RUN_ID` задаёт детерминированные idempotency keys. Токены и пароли команды не выводят.
 
 Для удалённого environment acceptance заблокирован по умолчанию. Разрешайте его только намеренно и только для нужного acceptance/staging target:
 
@@ -92,10 +120,12 @@ SYNTHA_ACCEPTANCE_ALLOW_REMOTE=true \
 SYNTHA_V2_DATABASE_URL='postgresql://...' \
 SYNTHA_ACCEPTANCE_EMAIL='acceptance@example.com' \
 SYNTHA_ACCEPTANCE_PASSWORD='...' \
-npm run acceptance:collection
+SYNTHA_ACCEPTANCE_SHOP_EMAIL='acceptance-shop@example.com' \
+SYNTHA_ACCEPTANCE_SHOP_PASSWORD='...' \
+npm run acceptance:product-commercialization
 ```
 
-Вместо email/password можно передать короткоживущий `SYNTHA_ACCEPTANCE_TOKEN`, но он обязан аутентифицироваться именно как `syntha-acceptance-brand-owner`. Токены и пароли команда не выводит. `SYNTHA_ACCEPTANCE_RUN_ID` можно повторно использовать для проверки idempotency того же сценария; без него создаётся новый независимый acceptance run.
+Текущий commercialization gate доказывает существующий executable contract, в котором Projection, CommercialPublication, PriceListVersion и BuyerCatalogVersion создаются как immutable `published` snapshots. Он не является доказательством ещё не реализованного staged lifecycle `DRAFT → READY → PUBLISHED → SUPERSEDED/ARCHIVED` и не заменяет последующий pricing-depth pass с market/effective dates. Эти ограничения фиксируются в `ARCHITECTURE.md`, а не скрываются за зелёным acceptance.
 
 ## Правила миграций
 
@@ -118,4 +148,4 @@ npm run verify
 npm run verify:postgres
 ```
 
-После `cp .env.example .env && docker compose up -d` эта команда работает без ручного создания test database: `POSTGRES_TEST_URL` указывает на отдельный `postgres-test` service. Проверки покрывают архитектурные границы, изоляцию V2, PostgreSQL-контракт, migration ledger, standalone UI, тесты приложения и реальный `npm start`-совместимый process smoke с `/health`, `/ready` и graceful shutdown. Live acceptance не входит автоматически в `verify`, потому что требует запущенный HTTP target и намеренно создаёт только namespace-isolated acceptance Campaign/Collection records.
+После `cp .env.example .env && docker compose up -d` эта команда работает без ручного создания test database: `POSTGRES_TEST_URL` указывает на отдельный `postgres-test` service. Проверки покрывают архитектурные границы, изоляцию V2, PostgreSQL-контракт, migration ledger, standalone UI, тесты приложения и реальный `npm start`-совместимый process smoke с `/health`, `/ready` и graceful shutdown. Live acceptance не входит автоматически в `verify`, поскольку требует отдельного запущенного HTTP target и намеренно создаёт namespace-isolated acceptance data. Для P0.3 отдельный GitHub workflow `Product Commercialization Acceptance` поднимает поддерживаемый runtime и запускает тот же `npm run acceptance:product-commercialization` против той же PostgreSQL 17 базы.

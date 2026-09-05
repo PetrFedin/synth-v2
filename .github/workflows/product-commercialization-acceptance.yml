@@ -1,0 +1,128 @@
+name: Product Commercialization Acceptance
+
+# P0.3 exact-head gate: supported public runtime plus same-environment PostgreSQL proof.
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: product-commercialization-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  acceptance:
+    name: READY to BuyerCatalog public-runtime acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CI: true
+      NPM_CONFIG_AUDIT: "false"
+      NPM_CONFIG_FUND: "false"
+      NPM_CONFIG_IGNORE_SCRIPTS: "true"
+      SYNTHA_V2_DATABASE_URL: postgresql://syntha:syntha_test@127.0.0.1:5432/syntha_v2_acceptance
+      SYNTHA_ACCEPTANCE_BASE_URL: http://127.0.0.1:3210
+      SYNTHA_ACCEPTANCE_EMAIL: commercialization-brand@syntha.test
+      SYNTHA_ACCEPTANCE_PASSWORD: CommercializationBrandAcceptanceTest!
+      SYNTHA_ACCEPTANCE_SHOP_EMAIL: commercialization-shop@syntha.test
+      SYNTHA_ACCEPTANCE_SHOP_PASSWORD: CommercializationShopAcceptanceTest!
+      SYNTHA_ACCEPTANCE_RUN_ID: gha-${{ github.run_id }}-${{ github.run_attempt }}
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: syntha
+          POSTGRES_PASSWORD: syntha_test
+          POSTGRES_DB: syntha_v2_acceptance
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U syntha -d syntha_v2_acceptance"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Start supported Syntha runtime
+        shell: bash
+        env:
+          HOST: 127.0.0.1
+          PORT: "3210"
+          SYNTHA_OUTBOX_WEBHOOK_URL: ""
+          SYNTHA_OUTBOX_WEBHOOK_SECRET: ""
+          SYNTHA_METRICS_ENABLED: "false"
+          SYNTHA_METRICS_TOKEN: ""
+        run: |
+          set -euo pipefail
+          node scripts/start.mjs > product-commercialization-runtime.log 2>&1 &
+          echo "$!" > product-commercialization-runtime.pid
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error http://127.0.0.1:3210/ready > product-commercialization-ready.json; then
+              node -e "const fs=require('fs');const value=JSON.parse(fs.readFileSync('product-commercialization-ready.json','utf8'));if(value.status!=='ready')process.exit(1)"
+              exit 0
+            fi
+            if ! kill -0 "$(cat product-commercialization-runtime.pid)" 2>/dev/null; then
+              cat product-commercialization-runtime.log
+              exit 1
+            fi
+            sleep 1
+          done
+          cat product-commercialization-runtime.log
+          exit 1
+
+      - name: Execute Product commercialization acceptance
+        shell: bash
+        run: |
+          set +e
+          npm run acceptance:product-commercialization 2>&1 | tee product-commercialization-acceptance.log
+          status=${PIPESTATUS[0]}
+          echo "$status" > product-commercialization-acceptance-status.txt
+          exit "$status"
+
+      - name: Stop supported Syntha runtime
+        if: always()
+        shell: bash
+        run: |
+          if [ -f product-commercialization-runtime.pid ]; then
+            pid=$(cat product-commercialization-runtime.pid)
+            if kill -0 "$pid" 2>/dev/null; then
+              kill -TERM "$pid"
+              for attempt in $(seq 1 30); do
+                if ! kill -0 "$pid" 2>/dev/null; then exit 0; fi
+                sleep 1
+              done
+              kill -KILL "$pid" 2>/dev/null || true
+            fi
+          fi
+
+      - name: Upload Product commercialization diagnostics
+        if: always()
+        uses: actions/upload-artifact@615b319bd27bb32c3d64dca6b6ed6974d5fbe653 # v6.0.0
+        with:
+          name: product-commercialization-acceptance
+          path: |
+            product-commercialization-runtime.log
+            product-commercialization-ready.json
+            product-commercialization-acceptance.log
+            product-commercialization-acceptance-status.txt
+          if-no-files-found: warn
+          retention-days: 1

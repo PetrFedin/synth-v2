@@ -299,15 +299,12 @@ function normalizeCanonicalPoint({ point, position, sizes, selectedSizeIds, base
   const translations = snapshot.translations && typeof snapshot.translations === 'object' && !Array.isArray(snapshot.translations)
     ? snapshot.translations
     : {};
-  const russianTranslation = translations.ru && typeof translations.ru === 'object' && !Array.isArray(translations.ru)
-    ? translations.ru
+  const attributes = snapshot.attributes && typeof snapshot.attributes === 'object' && !Array.isArray(snapshot.attributes)
+    ? snapshot.attributes
     : {};
-  const englishTranslation = translations.en && typeof translations.en === 'object' && !Array.isArray(translations.en)
-    ? translations.en
-    : {};
-  const nameRu = requiredText(russianTranslation.name, 2, 120, 'MEASUREMENT_POINT_NAME_INVALID', 'Point of measure RU name');
-  const nameEn = requiredText(englishTranslation.name, 2, 120, 'MEASUREMENT_POINT_NAME_INVALID', 'Point of measure EN name');
-  const descriptionRu = optionalText(russianTranslation.description, 500, 'MEASUREMENT_POINT_DESCRIPTION_INVALID', 'Point of measure description');
+  const nameRu = requiredText(translations.ru, 2, 120, 'MEASUREMENT_POINT_NAME_INVALID', 'Point of measure RU name');
+  const nameEn = requiredText(translations.en, 2, 120, 'MEASUREMENT_POINT_NAME_INVALID', 'Point of measure EN name');
+  const descriptionRu = optionalText(attributes.descriptionRu, 500, 'MEASUREMENT_POINT_DESCRIPTION_INVALID', 'Point of measure description');
   return Object.freeze({
     pointEntryId,
     pointEntryVersion: pointRef.version,

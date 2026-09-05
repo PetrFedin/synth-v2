@@ -18,11 +18,12 @@ function mdmEntry({ entryId, dictionaryCode, code, nameRu, nameEn, attributes, s
     snapshot: {
       id: entryId,
       code,
-      name_ru: nameRu,
-      name_en: nameEn,
-      description_ru: `${nameRu}: метод измерения`,
-      description_en: `${nameEn}: measurement method`,
-      attributes,
+      translations: { ru: nameRu, en: nameEn },
+      attributes: {
+        ...attributes,
+        descriptionRu: `${nameRu}: метод измерения`,
+        descriptionEn: `${nameEn}: measurement method`,
+      },
     },
   };
 }

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   READY_PRODUCT_MDM_REFERENCES,
   assertReadyProductReadinessPersistence,
+  assertReadyProductInventoryIsolationDelta,
   runReadyProductReadinessLiveAcceptance,
 } from '../src/acceptance/product-readiness-ready-live-acceptance.mjs';
 import { PRODUCTION_ACCEPTANCE_REFERENCES } from '../src/acceptance/production-reference-bootstrap.mjs';
@@ -55,6 +56,13 @@ test('READY Product Readiness persistence assertion pins Product Identity, exact
   assert.deepEqual(persisted.categoryRef, READY_PRODUCT_MDM_REFERENCES.category);
   assert.deepEqual(persisted.measurementUnitRef, READY_PRODUCT_MDM_REFERENCES.measurementUnit);
   assert.deepEqual(persisted.measurementPointRef, READY_PRODUCT_MDM_REFERENCES.measurementPoint);
+  assert.deepEqual(persisted.inventoryBalance, {
+    productSkuId: IDS.skuId,
+    brandId,
+    availableQuantity: 0,
+    reservedQuantity: 0,
+    version: 1,
+  });
 
   await assert.rejects(
     assertReadyProductReadinessPersistence({ query: async () => ({ rows: [] }) }, {
@@ -91,14 +99,39 @@ test('READY Product Readiness persistence fails closed on MDM or published-chart
   );
 });
 
+test('READY isolation permits exactly one zero ProductSku inventory identity and no stock/movement/downstream mutation', () => {
+  const before = isolationSnapshot();
+  const after = { ...before, inventory_balance_rows: '1' };
+  assert.equal(assertReadyProductInventoryIsolationDelta(before, after), true);
+
+  assert.throws(
+    () => assertReadyProductInventoryIsolationDelta(before, { ...after, inventory_balance_rows: '2' }),
+    (error) => error?.code === 'ACCEPTANCE_ISOLATION_CHANGED' && error?.details?.inventory_balance_rows?.after === '2',
+  );
+  assert.throws(
+    () => assertReadyProductInventoryIsolationDelta(before, { ...after, inventory_available_quantity: '1' }),
+    (error) => error?.code === 'ACCEPTANCE_ISOLATION_CHANGED' && error?.details?.inventory_available_quantity?.after === '1',
+  );
+  assert.throws(
+    () => assertReadyProductInventoryIsolationDelta(before, { ...after, warehouse_ledger_rows: '1' }),
+    (error) => error?.code === 'ACCEPTANCE_ISOLATION_CHANGED' && error?.details?.warehouse_ledger_rows?.after === '1',
+  );
+  assert.throws(
+    () => assertReadyProductInventoryIsolationDelta(before, { ...after, commercial_publication_rows: '1' }),
+    (error) => error?.code === 'ACCEPTANCE_ISOLATION_CHANGED' && error?.details?.commercial_publication_rows?.after === '1',
+  );
+});
+
 test('positive Product Identity to Readiness acceptance creates governed category and canonical measurements only through public idempotent API', async () => {
   const requests = [];
   const brandId = PRODUCTION_ACCEPTANCE_REFERENCES.brand.id;
   const snapshot = isolationSnapshot();
+  let isolationReads = 0;
   const pool = {
     query: async (sql) => {
       if (sql.includes('category_usage.entry_id AS category_usage_entry_id')) return { rows: [readyPersistenceRow(brandId)] };
-      return { rows: [{ ...snapshot }] };
+      isolationReads += 1;
+      return { rows: [{ ...snapshot, inventory_balance_rows: isolationReads === 1 ? '0' : '1' }] };
     },
   };
 
@@ -174,7 +207,8 @@ test('positive Product Identity to Readiness acceptance creates governed categor
   assert.equal(result.readiness.status, 'ready');
   assert.deepEqual(result.readiness.blockedDimensions, []);
   assert.equal(result.persistence.verified, true);
-  assert.equal(result.isolation.unchanged, true);
+  assert.equal(result.isolation.inventoryBalanceIdentityDelta, 1);
+  assert.equal(result.isolation.downstreamUnchanged, true);
 
   const mutations = requests.filter((request) => request.method === 'POST');
   assert.equal(mutations.length, 11);
@@ -278,6 +312,11 @@ function readyPersistenceRow(brandId) {
     sku_colorway_id: IDS.colorwayId,
     sku_size_value_id: IDS.sizeValueId,
     sku_brand_id: brandId,
+    inventory_product_sku_id: IDS.skuId,
+    inventory_brand_id: brandId,
+    inventory_available_quantity: 0,
+    inventory_reserved_quantity: 0,
+    inventory_balance_version: 1,
     media_id: IDS.mediaId,
     media_style_version_id: IDS.styleVersionId,
     media_colorway_id: IDS.colorwayId,

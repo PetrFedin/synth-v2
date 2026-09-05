@@ -79,16 +79,20 @@ function input() {
   };
 }
 
-test('canonical Measurement Chart consumes localized names from the normalized versioned runtime MDM snapshot', () => {
+test('canonical Measurement Chart consumes localization from the immutable persisted MDM entry snapshot', () => {
   const chart = createCanonicalMeasurementChart({
     id: 'measurement-runtime-mdm-001',
     context: context(Object.freeze({
       code: 'CHEST_CIRC',
       translations: Object.freeze({
-        ru: Object.freeze({ name: 'Обхват груди', description: 'Измерить по наиболее выступающим точкам груди' }),
-        en: Object.freeze({ name: 'Chest circumference', description: 'Measure around the fullest part of the chest' }),
+        ru: 'Обхват груди',
+        en: 'Chest circumference',
       }),
-      attributes: Object.freeze({ dimension: 'length' }),
+      attributes: Object.freeze({
+        dimension: 'length',
+        descriptionRu: 'Измерить по наиболее выступающим точкам груди',
+        descriptionEn: 'Measure around the fullest part of the chest',
+      }),
     })),
     input: input(),
     createdAt,
@@ -99,11 +103,12 @@ test('canonical Measurement Chart consumes localized names from the normalized v
   assert.equal(chart.points[0].nameRu, 'Обхват груди');
   assert.equal(chart.points[0].nameEn, 'Chest circumference');
   assert.equal(chart.points[0].description, 'Измерить по наиболее выступающим точкам груди');
-  assert.equal(chart.points[0].pointRef.snapshot.translations.ru.name, 'Обхват груди');
-  assert.equal(chart.points[0].pointRef.snapshot.translations.en.name, 'Chest circumference');
+  assert.equal(chart.points[0].pointRef.snapshot.translations.ru, 'Обхват груди');
+  assert.equal(chart.points[0].pointRef.snapshot.translations.en, 'Chest circumference');
+  assert.equal(chart.points[0].pointRef.snapshot.attributes.descriptionRu, 'Измерить по наиболее выступающим точкам груди');
 });
 
-test('canonical Measurement Chart fails closed when only source-registry name aliases are present', () => {
+test('canonical Measurement Chart fails closed when only source-registry aliases are present', () => {
   assert.throws(
     () => createCanonicalMeasurementChart({
       id: 'measurement-source-alias-only-001',

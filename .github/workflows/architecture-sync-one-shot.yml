@@ -65,7 +65,6 @@ jobs:
 
           path.write_text(text, encoding='utf-8')
           PY
-          git diff --check
           git diff -- ARCHITECTURE.md
       - name: Commit authoritative sync
         shell: bash

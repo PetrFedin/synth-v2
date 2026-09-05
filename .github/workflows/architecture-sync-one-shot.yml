@@ -17,64 +17,76 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Patch authoritative ARCHITECTURE.md
+      - name: Patch runtime and authoritative architecture
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
 
-          path = Path('ARCHITECTURE.md')
-          text = path.read_text(encoding='utf-8')
-
-          replacements = [
-              (
-                  '> Status date: **2026-09-04**  ',
-                  '> Status date: **2026-09-05**  ',
-              ),
-              (
-                  'The acceptance setup may migrate the configured PostgreSQL target, bootstrap source-controlled governed MDM through the canonical MDM bootstrap, and ensure the reserved acceptance authentication identities. Business facts are then created only through authenticated `/v2` commands with `Idempotency-Key`.\n',
-                  'The acceptance setup may migrate the configured PostgreSQL target, bootstrap source-controlled governed MDM through the canonical MDM bootstrap, and ensure the reserved acceptance authentication identities. Business facts are then created only through authenticated `/v2` commands with `Idempotency-Key`.\n\nThe stable acceptance organisation/membership bootstrap is itself replay-safe command setup. Its durable command IDs always use the deterministic membership `createdAt=2026-08-31T00:00:00.000Z`; wall-clock time is forbidden from that command payload because replaying the same command ID with a different fingerprint must correctly fail with `COMMAND_ID_CONFLICT`. This deterministic timestamp is acceptance namespace metadata only and does not replace the real timestamps of business facts created through public `/v2` mutations. `tests/production-reference-bootstrap-replay.test.mjs` proves two consecutive bootstraps produce identical command fingerprints and references.\n',
-              ),
-              (
-                  'All three canonical mutations require authenticated actor context, the existing measurement-management capability/brand ownership checks and `Idempotency-Key`. The service resolves the exact StyleVersion, Colorway, SizeScaleVersion and SizeValues; resolves the current effective MDM entries for `measurementUnitEntryId` and each `pointEntryId`; and fails closed for missing/mismatched Product Identity, wrong brand, wrong dictionary, inactive/unapproved/not-effective MDM entries, unexpected fields, stale `expectedVersion`, duplicate size/point identities or invalid/incomplete matrices. Russia-first canonical garment measurement units must be governed `measurement.unit` length entries using the metric system.\n',
-                  'All three canonical mutations require authenticated actor context, the existing measurement-management capability/brand ownership checks and `Idempotency-Key`. The service resolves the exact StyleVersion, Colorway, SizeScaleVersion and SizeValues; resolves the current effective MDM entries for `measurementUnitEntryId` and each `pointEntryId`; and fails closed for missing/mismatched Product Identity, wrong brand, wrong dictionary, inactive/unapproved/not-effective MDM entries, unexpected fields, stale `expectedVersion`, duplicate size/point identities or invalid/incomplete matrices. Russia-first canonical garment measurement units must be governed `measurement.unit` length entries using the metric system.\n\nThe canonical runtime MDM truth is the exact version snapshot persisted by the MDM store, not the source-registry JSON shape used before bootstrap. Canonical Measurement point localization therefore reads `pointRef.snapshot.translations.ru.name`, `pointRef.snapshot.translations.en.name` and the RU description from `pointRef.snapshot.translations.ru.description`; semantic properties continue to come from the same versioned `snapshot.attributes`. Source dataset aliases such as `name_ru`, `name_en` and `description_ru` are bootstrap input only and are forbidden as runtime fallback fields. A runtime snapshot without the required normalized translation fails closed with `MEASUREMENT_POINT_NAME_INVALID` rather than silently consulting a second source truth. `tests/measurement-runtime-mdm-snapshot.test.mjs` pins both the normalized runtime success case and the source-alias-only rejection.\n',
-              ),
-              (
-                  'Automated evidence is split so one scenario cannot weaken the other: `tests/product-readiness-live-acceptance.test.mjs` pins Scenario A, `tests/product-readiness-ready-live-acceptance.test.mjs` pins Scenario B including wrong-actor and MDM/published-chart drift failures, `tests/mdm-assortment-category-reference.test.mjs` pins the operational category dataset/validator contract, and `tests/measurement-canonical-openapi.test.mjs` pins the canonical measurement API/OpenAPI contract. These tests and the executable harness establish `IMPLEMENTED` status, not `PROD-PROVEN`.',
-                  'Automated evidence is split so one scenario cannot weaken the other: `tests/product-readiness-live-acceptance.test.mjs` pins Scenario A, `tests/product-readiness-ready-live-acceptance.test.mjs` pins Scenario B including wrong-actor and MDM/published-chart drift failures, `tests/mdm-assortment-category-reference.test.mjs` pins the operational category dataset/validator contract, `tests/measurement-canonical-openapi.test.mjs` pins the canonical measurement API/OpenAPI contract, and `tests/measurement-runtime-mdm-snapshot.test.mjs` prevents source-registry localization aliases from reappearing as a second runtime MDM truth. These tests and the executable harness establish `IMPLEMENTED` status, not `PROD-PROVEN`.',
-              ),
-              (
-                  '| CanonicalMeasurementChart | exact same-brand StyleVersion + Colorway + SizeScaleVersion; exact ordered SizeValues; exact current/effective/active governed `measurement.unit` and `measurement.point` versions pinned into chart evidence; DRAFT/PUBLISHED revision history is immutable across publication replacement |',
-                  '| CanonicalMeasurementChart | exact same-brand StyleVersion + Colorway + SizeScaleVersion; exact ordered SizeValues; exact current/effective/active governed `measurement.unit` and `measurement.point` versions pinned into chart evidence; runtime point names/descriptions come only from that version snapshot `translations` structure, never source JSON aliases; DRAFT/PUBLISHED revision history is immutable across publication replacement |',
-              ),
-              (
-                  '| 2026-09-04 | `feat/acc004-ready-to-buyer-catalog-live` / implementation head before authoritative sync `937b58812844805b56a9dbe4588546299f0b1845` | Add P0.3 public-runtime READY→Projection→projection-native CommercialPublication→PriceListVersion→BuyerCatalogVersion acceptance with exact Collection assignment, Showroom, relationship/invitation, separate brand/shop actors and same-environment PostgreSQL proof; add dedicated supported-runtime workflow; correct stale architecture lifecycle claim and surface pricing gaps instead of hiding them | 2.6, 6.1–6.6, 15–17, 19–20, 22 | IMPLEMENTED harness/tests/workflow definition; exact-head CI/live evidence pending at this documentation commit; no `PROD-PROVEN` claim; `COMM-LC-008`, `PRICE-009`, `PUB-005` remain open |',
-                  '| 2026-09-05 | #118 / `feat/acc004-ready-to-buyer-catalog-live` | Add P0.3 public-runtime READY→Projection→projection-native CommercialPublication→PriceListVersion→BuyerCatalogVersion acceptance with exact Collection assignment, Showroom, relationship/invitation, separate brand/shop actors and same-environment PostgreSQL proof; dedicated supported-runtime workflow; correct stale publication lifecycle claim and surface pricing gaps; exact-head execution exposed and this branch fixes two real integration defects: canonical Measurement now consumes only normalized versioned runtime MDM `translations` instead of source JSON aliases, and stable acceptance reference commands use a deterministic timestamp so replay cannot produce `COMMAND_ID_CONFLICT`. Regression guards: `measurement-runtime-mdm-snapshot.test.mjs` and `production-reference-bootstrap-replay.test.mjs`. | 2.6, 5.2, 6.1–6.6, 15–17, 19–20, 22 | IMPLEMENTED harness/runtime fixes/tests; final exact-head Verify + MDM Reference Data + Syntha V2 CI + Product Commercialization Acceptance must all pass before merge; no `PROD-PROVEN` claim; `COMM-LC-008`, `PRICE-009`, `PUB-005` remain open |',
-              ),
-          ]
-
-          for old, new in replacements:
+          def replace_once(path, old, new):
+              text = path.read_text(encoding='utf-8')
               count = text.count(old)
-              if count == 0:
-                  if new in text:
-                      continue
-                  raise SystemExit(f'architecture sync anchor missing: {old[:120]!r}')
               if count != 1:
-                  raise SystemExit(f'architecture sync anchor is ambiguous ({count}): {old[:120]!r}')
-              text = text.replace(old, new, 1)
+                  raise SystemExit(f'expected exactly one anchor in {path}, found {count}: {old[:120]!r}')
+              path.write_text(text.replace(old, new, 1), encoding='utf-8')
 
-          path.write_text(text, encoding='utf-8')
+          module = Path('src/modules/measurements/public.mjs')
+          replace_once(
+              module,
+              """  const snapshot = pointRef.snapshot ?? {};
+  const translations = snapshot.translations && typeof snapshot.translations === 'object' && !Array.isArray(snapshot.translations)
+    ? snapshot.translations
+    : {};
+  const russianTranslation = translations.ru && typeof translations.ru === 'object' && !Array.isArray(translations.ru)
+    ? translations.ru
+    : {};
+  const englishTranslation = translations.en && typeof translations.en === 'object' && !Array.isArray(translations.en)
+    ? translations.en
+    : {};
+  const nameRu = requiredText(russianTranslation.name, 2, 120, 'MEASUREMENT_POINT_NAME_INVALID', 'Point of measure RU name');
+  const nameEn = requiredText(englishTranslation.name, 2, 120, 'MEASUREMENT_POINT_NAME_INVALID', 'Point of measure EN name');
+  const descriptionRu = optionalText(russianTranslation.description, 500, 'MEASUREMENT_POINT_DESCRIPTION_INVALID', 'Point of measure description');
+""",
+              """  const snapshot = pointRef.snapshot ?? {};
+  const translations = snapshot.translations && typeof snapshot.translations === 'object' && !Array.isArray(snapshot.translations)
+    ? snapshot.translations
+    : {};
+  const attributes = snapshot.attributes && typeof snapshot.attributes === 'object' && !Array.isArray(snapshot.attributes)
+    ? snapshot.attributes
+    : {};
+  const nameRu = requiredText(translations.ru, 2, 120, 'MEASUREMENT_POINT_NAME_INVALID', 'Point of measure RU name');
+  const nameEn = requiredText(translations.en, 2, 120, 'MEASUREMENT_POINT_NAME_INVALID', 'Point of measure EN name');
+  const descriptionRu = optionalText(attributes.descriptionRu, 500, 'MEASUREMENT_POINT_DESCRIPTION_INVALID', 'Point of measure description');
+""",
+          )
+
+          architecture = Path('ARCHITECTURE.md')
+          replace_once(
+              architecture,
+              "The canonical runtime MDM truth is the exact version snapshot persisted by the MDM store, not the source-registry JSON shape used before bootstrap. Canonical Measurement point localization therefore reads `pointRef.snapshot.translations.ru.name`, `pointRef.snapshot.translations.en.name` and the RU description from `pointRef.snapshot.translations.ru.description`; semantic properties continue to come from the same versioned `snapshot.attributes`. Source dataset aliases such as `name_ru`, `name_en` and `description_ru` are bootstrap input only and are forbidden as runtime fallback fields. A runtime snapshot without the required normalized translation fails closed with `MEASUREMENT_POINT_NAME_INVALID` rather than silently consulting a second source truth. `tests/measurement-runtime-mdm-snapshot.test.mjs` pins both the normalized runtime success case and the source-alias-only rejection.",
+              "The canonical runtime MDM truth is the exact immutable `mdm_entry_versions.snapshot` captured by PostgreSQL from the normalized `mdm_entries` row (`to_jsonb(NEW)`), not the source-registry JSON shape used before bootstrap. The operational bootstrap persists localized names as string values in `translations = { ru, en }` and localized descriptions inside the same versioned `attributes` object (`descriptionRu` / `descriptionEn`). Canonical Measurement point localization therefore reads `pointRef.snapshot.translations.ru`, `pointRef.snapshot.translations.en` and RU description from `pointRef.snapshot.attributes.descriptionRu`; semantic properties such as `dimension` come from that same `snapshot.attributes`. Source dataset aliases such as `name_ru`, `name_en` and `description_ru` are bootstrap inputs only and are forbidden as runtime fallbacks. Missing/invalid normalized runtime localization fails closed with `MEASUREMENT_POINT_NAME_INVALID` rather than consulting a second source truth. `tests/measurement-runtime-mdm-snapshot.test.mjs` pins the exact persisted snapshot shape and source-alias-only rejection.",
+          )
+          replace_once(
+              architecture,
+              "| CanonicalMeasurementChart | exact same-brand StyleVersion + Colorway + SizeScaleVersion; exact ordered SizeValues; exact current/effective/active governed `measurement.unit` and `measurement.point` versions pinned into chart evidence; runtime point names/descriptions come only from that version snapshot `translations` structure, never source JSON aliases; DRAFT/PUBLISHED revision history is immutable across publication replacement |",
+              "| CanonicalMeasurementChart | exact same-brand StyleVersion + Colorway + SizeScaleVersion; exact ordered SizeValues; exact current/effective/active governed `measurement.unit` and `measurement.point` versions pinned into chart evidence; runtime point names come from immutable snapshot `translations.ru/en`, localized descriptions/semantics from the same snapshot `attributes`, never source JSON aliases; DRAFT/PUBLISHED revision history is immutable across publication replacement |",
+          )
+          replace_once(
+              architecture,
+              "canonical Measurement now consumes only normalized versioned runtime MDM `translations` instead of source JSON aliases",
+              "canonical Measurement now consumes the exact persisted version snapshot shape (`translations.ru/en` strings plus versioned `attributes`) instead of source JSON aliases",
+          )
           PY
-          git diff -- ARCHITECTURE.md
-      - name: Commit authoritative sync
+          git diff -- src/modules/measurements/public.mjs ARCHITECTURE.md
+      - name: Commit runtime plus authoritative sync
         shell: bash
         run: |
-          if git diff --quiet -- ARCHITECTURE.md; then
-            echo 'ARCHITECTURE.md already synchronized.'
+          if git diff --quiet -- src/modules/measurements/public.mjs ARCHITECTURE.md; then
+            echo 'Runtime and architecture already synchronized.'
             exit 0
           fi
           git config user.name 'syntha-architecture-bot'
           git config user.email 'actions@users.noreply.github.com'
-          git add ARCHITECTURE.md
-          git commit -m 'docs(architecture): sync commercialization runtime fixes'
+          git add src/modules/measurements/public.mjs ARCHITECTURE.md
+          git commit -m 'fix(measurements): align canonical MDM snapshot runtime truth'
           git push origin "HEAD:${GITHUB_REF_NAME}"

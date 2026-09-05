@@ -295,17 +295,29 @@ function normalizeCanonicalPoint({ point, position, sizes, selectedSizeIds, base
       deltaFromPrevious: previousValue === null ? null : subtractDecimals(value, previousValue),
     }));
   }
-  const snapshot = pointRef.snapshot;
+  const snapshot = pointRef.snapshot ?? {};
+  const translations = snapshot.translations && typeof snapshot.translations === 'object' && !Array.isArray(snapshot.translations)
+    ? snapshot.translations
+    : {};
+  const russianTranslation = translations.ru && typeof translations.ru === 'object' && !Array.isArray(translations.ru)
+    ? translations.ru
+    : {};
+  const englishTranslation = translations.en && typeof translations.en === 'object' && !Array.isArray(translations.en)
+    ? translations.en
+    : {};
+  const nameRu = requiredText(russianTranslation.name, 2, 120, 'MEASUREMENT_POINT_NAME_INVALID', 'Point of measure RU name');
+  const nameEn = requiredText(englishTranslation.name, 2, 120, 'MEASUREMENT_POINT_NAME_INVALID', 'Point of measure EN name');
+  const descriptionRu = optionalText(russianTranslation.description, 500, 'MEASUREMENT_POINT_DESCRIPTION_INVALID', 'Point of measure description');
   return Object.freeze({
     pointEntryId,
     pointEntryVersion: pointRef.version,
     pointRef,
     pointCode,
     position,
-    name: requiredText(snapshot?.name_ru, 2, 120, 'MEASUREMENT_POINT_NAME_INVALID', 'Point of measure RU name'),
-    nameRu: requiredText(snapshot?.name_ru, 2, 120, 'MEASUREMENT_POINT_NAME_INVALID', 'Point of measure RU name'),
-    nameEn: requiredText(snapshot?.name_en, 2, 120, 'MEASUREMENT_POINT_NAME_INVALID', 'Point of measure EN name'),
-    description: optionalText(point.description, 500, 'MEASUREMENT_POINT_DESCRIPTION_INVALID', 'Point of measure method description') ?? optionalText(snapshot?.description_ru, 500, 'MEASUREMENT_POINT_DESCRIPTION_INVALID', 'Point of measure description'),
+    name: nameRu,
+    nameRu,
+    nameEn,
+    description: optionalText(point.description, 500, 'MEASUREMENT_POINT_DESCRIPTION_INVALID', 'Point of measure method description') ?? descriptionRu,
     toleranceMinus,
     tolerancePlus,
     baseValue: valueBySizeId.get(baseSizeValueId) ?? null,
@@ -335,7 +347,7 @@ function normalizePoint({ point, position, sizes, sizeCodes, baseSizeCode, point
   invariant(point && typeof point === 'object' && !Array.isArray(point), 'MEASUREMENT_POINT_INVALID', 'Point of measure must be an object', { position });
   assertAllowedFields(point, POINT_FIELDS, 'MEASUREMENT_POINT_FIELD_FORBIDDEN', 'Point of measure contains unsupported fields', { position });
   const pointCode = code(point.pointCode, POINT_CODE_PATTERN, 'MEASUREMENT_POINT_CODE_INVALID', 'Point of measure code');
-  invariant(!pointCodes.has(pointCode), 'MEASUREMENT_POINT_CODE_DUPLICATE', 'Point of measure code must be unique', { pointCode });
+  invariant(!pointCodes.has(pointCode), 'MEASUREMENT_POINT_CODE_DUPLICATE', 'Measurement point code must be unique', { pointCode });
   pointCodes.add(pointCode);
   const toleranceMinus = nonNegativeDecimal(point.toleranceMinus, 'MEASUREMENT_TOLERANCE_MINUS_INVALID', 'Negative tolerance');
   const tolerancePlus = nonNegativeDecimal(point.tolerancePlus, 'MEASUREMENT_TOLERANCE_PLUS_INVALID', 'Positive tolerance');
@@ -384,7 +396,7 @@ function assertCompleteCanonicalMatrix(chart) {
   for (const point of chart.points) {
     invariant(point.measurements.length === chart.sizes.length, 'MEASUREMENT_MATRIX_INCOMPLETE', 'Every governed point of measure must contain a value for every Product SizeValue', { pointEntryId: point.pointEntryId });
     invariant(point.measurements.every((measurement, index) => measurement.sizeValueId === chart.sizes[index].sizeValueId), 'MEASUREMENT_MATRIX_INCOMPLETE', 'Canonical measurement values must follow the complete Product SizeValue order', { pointEntryId: point.pointEntryId });
-    invariant(point.measurements.some((measurement) => measurement.sizeValueId === chart.baseSizeValueId), 'MEASUREMENT_BASE_VALUE_REQUIRED', 'Every governed point of measure must contain the base Product SizeValue', { pointEntryId: point.pointEntryId, baseSizeValueId: chart.baseSizeValueId });
+    invariant(point.measurements.some((measurement) => measurement.sizeValueId === chart.baseSizeValueId), 'MEASUREMENT_BASE_VALUE_REQUIRED', 'Every point of measure must contain the base Product SizeValue', { pointEntryId: point.pointEntryId, baseSizeValueId: chart.baseSizeValueId });
   }
 }
 

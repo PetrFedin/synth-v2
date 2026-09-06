@@ -72,15 +72,25 @@ Use `GET /health` as the process liveness probe and `GET /ready` as the traffic/
 
 Run `npm run verify:postgres` against the dedicated PostgreSQL verification database before promoting a release candidate. The gate includes a real runtime process smoke: it starts the production-compatible `scripts/start.mjs` entrypoint against `POSTGRES_TEST_URL`, verifies migrations plus `/health` and `/ready`, sends `SIGTERM`, and requires a clean HTTP/worker/PostgreSQL shutdown. It never substitutes the normal development/production database for the verification database. GitHub CI runs the same PostgreSQL-backed verification on pull requests.
 
-## Live acceptance gate
+## Live acceptance gates
 
-`npm run acceptance:collection` is the first non-destructive live acceptance scenario for a running Syntha environment. It uses reserved acceptance organisations and actor identities, checks liveness/readiness/authentication, and drives the real `/v2` HTTP surface through:
+Acceptance commands use reserved acceptance organisations and real authenticated `/v2` runtime mutations. They never use direct SQL for business mutation. PostgreSQL access is used for environment setup where explicitly governed and for same-environment persistence/lineage proof. Remote execution is fail-closed: non-local targets require HTTPS plus explicit `SYNTHA_ACCEPTANCE_ALLOW_REMOTE=true`.
+
+`npm run acceptance:collection` drives:
 
 `Campaign draft → Campaign open → Collection draft → Collection published`.
 
-The command then verifies that the exact Campaign/Collection are visible in the configured PostgreSQL database and that no downstream commercial publication, buyer catalog, selection/order, ProductSku inventory, warehouse movement, SupplyCommitment or ActualCost state changed during the collection-only flow. Reusing `SYNTHA_ACCEPTANCE_RUN_ID` replays the same mutation idempotency keys; omitting it creates a fresh isolated acceptance run.
+It verifies exact Campaign/Collection persistence and proves downstream commercial, buyer, inventory, supply and ActualCost state is unchanged.
 
-Remote execution is fail-closed: non-local targets require HTTPS plus explicit `SYNTHA_ACCEPTANCE_ALLOW_REMOTE=true`. The configured database URL must point to the same environment as `SYNTHA_ACCEPTANCE_BASE_URL`, otherwise the persistence check fails. Use dedicated acceptance credentials or a short-lived token for the reserved `syntha-acceptance-brand-owner`; credentials and tokens are never printed by the command. See [`CURSOR_START_HERE.md`](CURSOR_START_HERE.md) and `.env.example` for the exact variables.
+`npm run acceptance:product-readiness` runs two independent Product Identity scenarios. The negative scenario deliberately omits governed category and canonical Measurement evidence, requires a BLOCKED readiness snapshot with exactly `category + measurements`, then proves Commercial Projection is rejected. The positive scenario creates governed APPAREL/INT_ALPHA/INT_M Product Identity plus a published canonical Measurement Chart and requires a READY snapshot with zero blockers. Both scenarios prove the exact PostgreSQL lineage without replacing one another.
+
+`npm run acceptance:product-commercialization` continues a newly created positive READY graph through:
+
+`READY ProductReadinessSnapshot → CommercialProductProjectionVersion → projection-backed CommercialPublication → PriceListVersion → BuyerCatalogVersion`.
+
+The command also creates the exact Collection assortment assignment, open Showroom, active brand↔shop relationship and accepted showroom invitation required by the buyer-specific catalog boundary. It authenticates the reserved brand owner and shop owner as separate actors, verifies immutable ProductSku/projection/readiness/price lineage through public reads and same-environment PostgreSQL, and fails if the slice creates Selection, Order, SupplyCommitment, ActualCost or inventory movements. This gate proves the currently executable atomic-published commercial snapshot path; it does not imply that the planned staged CommercialPublication lifecycle or deeper effective-dated pricing contract is already implemented.
+
+All acceptance commands require `SYNTHA_ACCEPTANCE_BASE_URL` and a database URL pointing to the same environment. Brand authentication uses `SYNTHA_ACCEPTANCE_EMAIL` / `SYNTHA_ACCEPTANCE_PASSWORD` or optional `SYNTHA_ACCEPTANCE_TOKEN`. Product commercialization additionally uses `SYNTHA_ACCEPTANCE_SHOP_EMAIL` / `SYNTHA_ACCEPTANCE_SHOP_PASSWORD` or optional `SYNTHA_ACCEPTANCE_SHOP_TOKEN`. `SYNTHA_ACCEPTANCE_RUN_ID` can pin deterministic idempotency keys for replay. Credentials and tokens are never printed by the commands. See [`CURSOR_START_HERE.md`](CURSOR_START_HERE.md), `.env.example` and the authoritative acceptance sections in `ARCHITECTURE.md` for the exact contract and status.
 
 ## Operations
 

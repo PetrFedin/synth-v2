@@ -25,11 +25,12 @@ function mdmEntry({ entryId, dictionaryCode, code, nameRu, nameEn, attributes, v
     snapshot: {
       id: entryId,
       code,
-      name_ru: nameRu,
-      name_en: nameEn,
-      description_ru: `${nameRu}: метод измерения`,
-      description_en: `${nameEn}: measurement method`,
-      attributes,
+      translations: { ru: nameRu, en: nameEn },
+      attributes: {
+        ...attributes,
+        descriptionRu: `${nameRu}: метод измерения`,
+        descriptionEn: `${nameEn}: measurement method`,
+      },
     },
   };
 }
@@ -149,9 +150,9 @@ test('canonical chart freezes MDM snapshots and is immune to later source fixtur
   const source = context();
   const chart = create(source);
   source.measurementUnit.snapshot.code = 'M';
-  source.pointEntries[0].snapshot.name_ru = 'Изменённое имя';
+  source.pointEntries[0].snapshot.translations.ru = 'Изменённое имя';
   assert.equal(chart.measurementUnit.snapshot.code, 'CM');
-  assert.equal(chart.points[0].pointRef.snapshot.name_ru, 'Обхват груди');
+  assert.equal(chart.points[0].pointRef.snapshot.translations.ru, 'Обхват груди');
 });
 
 test('canonical draft/update/publish/revision uses contiguous immutable chart versions', () => {

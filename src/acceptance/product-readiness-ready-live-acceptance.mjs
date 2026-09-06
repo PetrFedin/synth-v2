@@ -71,6 +71,11 @@ export async function assertReadyProductReadinessPersistence(pool, {
             sku.colorway_id AS sku_colorway_id,
             sku.size_value_id AS sku_size_value_id,
             sku.brand_id AS sku_brand_id,
+            inventory_balance.product_sku_id AS inventory_product_sku_id,
+            inventory_balance.brand_id AS inventory_brand_id,
+            inventory_balance.available_quantity AS inventory_available_quantity,
+            inventory_balance.reserved_quantity AS inventory_reserved_quantity,
+            inventory_balance.version AS inventory_balance_version,
             media.id AS media_id,
             media.style_version_id AS media_style_version_id,
             media.colorway_id AS media_colorway_id,
@@ -105,6 +110,9 @@ export async function assertReadyProductReadinessPersistence(pool, {
         AND category_usage.field_path = 'categoryRef'
        JOIN product_colorways AS colorway ON colorway.style_version_id = version.id
        JOIN product_skus AS sku ON sku.style_version_id = version.id AND sku.colorway_id = colorway.id
+       JOIN product_sku_inventory_balances AS inventory_balance
+         ON inventory_balance.product_sku_id = sku.id
+        AND inventory_balance.brand_id = sku.brand_id
        JOIN product_size_values AS size_value ON size_value.id = sku.size_value_id
        JOIN product_size_scale_versions AS scale_version ON scale_version.id = size_value.size_scale_version_id
        JOIN product_size_scales AS scale ON scale.id = scale_version.size_scale_id
@@ -150,6 +158,7 @@ export async function assertReadyProductReadinessPersistence(pool, {
     row.size_scale_version_brand_id,
     row.size_value_brand_id,
     row.sku_brand_id,
+    row.inventory_brand_id,
     row.media_brand_id,
     row.measurement_brand_id,
     row.readiness_brand_id,
@@ -168,6 +177,7 @@ export async function assertReadyProductReadinessPersistence(pool, {
     && row.sku_style_version_id === styleVersionId
     && row.sku_colorway_id === colorwayId
     && row.sku_size_value_id === sizeValueId
+    && row.inventory_product_sku_id === skuId
     && row.media_id === mediaId
     && row.media_style_version_id === styleVersionId
     && row.media_colorway_id === colorwayId
@@ -195,6 +205,11 @@ export async function assertReadyProductReadinessPersistence(pool, {
 
   if (!sameBrand || !exactLineage || !exactMdm) {
     throw new Error('READY Product Readiness persisted Product Identity/MDM/Measurement lineage does not match the public HTTP result');
+  }
+  if (Number(row.inventory_available_quantity) !== 0
+      || Number(row.inventory_reserved_quantity) !== 0
+      || Number(row.inventory_balance_version) !== 1) {
+    throw new Error('READY ProductSku canonical inventory identity must be zero-initialized at version 1');
   }
   if (row.measurement_status !== 'published' || Number(row.measurement_version) !== measurementChartVersion || !row.measurement_published_at) {
     throw new Error('READY Product Readiness acceptance requires the exact published canonical Measurement Chart revision');
@@ -224,6 +239,13 @@ export async function assertReadyProductReadinessPersistence(pool, {
     categoryRef: Object.freeze({ ...mdm.category }),
     measurementUnitRef: Object.freeze({ ...mdm.measurementUnit }),
     measurementPointRef: Object.freeze({ ...mdm.measurementPoint }),
+    inventoryBalance: Object.freeze({
+      productSkuId: row.inventory_product_sku_id,
+      brandId: row.inventory_brand_id,
+      availableQuantity: Number(row.inventory_available_quantity),
+      reservedQuantity: Number(row.inventory_reserved_quantity),
+      version: Number(row.inventory_balance_version),
+    }),
   });
 }
 
@@ -415,7 +437,7 @@ export async function runReadyProductReadinessLiveAcceptance({
     mdm,
   });
   const after = await snapshotAcceptanceIsolation(pool, references.brand.id);
-  assertDownstreamIsolationUnchanged(before, after);
+  assertReadyProductInventoryIsolationDelta(before, after);
 
   return Object.freeze({
     status: 'passed',
@@ -441,7 +463,7 @@ export async function runReadyProductReadinessLiveAcceptance({
     }),
     readiness: Object.freeze({ id: readiness.id, status: readiness.readinessStatus, blockedDimensions: Object.freeze([]) }),
     persistence: Object.freeze({ ...persistence, verified: true }),
-    isolation: Object.freeze({ before, after, unchanged: true }),
+    isolation: Object.freeze({ before, after, inventoryBalanceIdentityDelta: 1, downstreamUnchanged: true }),
   });
 }
 
@@ -450,16 +472,29 @@ function blockedDimensionCodes(dimensions) {
   return dimensions.filter((dimension) => dimension?.status === 'blocked').map((dimension) => dimension.code).sort();
 }
 
-function assertDownstreamIsolationUnchanged(before, after) {
+export function assertReadyProductInventoryIsolationDelta(before, after) {
   const keys = Object.keys(before ?? {});
-  if (!keys.length || keys.length !== Object.keys(after ?? {}).length) throw new Error('Acceptance isolation snapshot shape changed');
-  const changed = keys.filter((key) => String(before[key]) !== String(after[key]));
-  if (changed.length) {
-    const error = new Error(`READY Product Readiness acceptance changed downstream/warehouse/economic state: ${changed.join(', ')}`);
+  if (!keys.length || keys.length !== Object.keys(after ?? {}).length || !keys.includes('inventory_balance_rows')) {
+    throw new Error('Acceptance isolation snapshot shape changed');
+  }
+  let beforeBalanceRows;
+  let afterBalanceRows;
+  try {
+    beforeBalanceRows = BigInt(String(before.inventory_balance_rows));
+    afterBalanceRows = BigInt(String(after.inventory_balance_rows));
+  } catch {
+    throw new Error('READY Product Readiness inventory balance counter is invalid');
+  }
+  const changed = keys.filter((key) => key !== 'inventory_balance_rows' && String(before[key]) !== String(after[key]));
+  const balanceIdentityDeltaValid = afterBalanceRows === beforeBalanceRows + 1n;
+  if (!balanceIdentityDeltaValid || changed.length) {
+    const changedKeys = [...(!balanceIdentityDeltaValid ? ['inventory_balance_rows'] : []), ...changed];
+    const error = new Error(`READY Product Readiness acceptance changed state outside the single zero ProductSku inventory identity: ${changedKeys.join(', ')}`);
     error.code = 'ACCEPTANCE_ISOLATION_CHANGED';
-    error.details = Object.freeze(Object.fromEntries(changed.map((key) => [key, Object.freeze({ before: before[key], after: after[key] })])));
+    error.details = Object.freeze(Object.fromEntries(changedKeys.map((key) => [key, Object.freeze({ before: before[key], after: after[key] })])));
     throw error;
   }
+  return true;
 }
 
 function evidence(runId, dimension, approvedBy) {

@@ -1,0 +1,109 @@
+ ## Current P0 acceptance ladder
+ 
+ 1. `Campaign → Collection` — existing live-accepted slice.
+ 2. Product Identity → Readiness — negative fail-closed and positive READY harnesses implemented in #117; intended-live evidence is still governed separately.
+-3. READY → Projection → projection-backed CommercialPublication → PriceListVersion → BuyerCatalogVersion — harness implemented on `feat/acc004-ready-to-buyer-catalog-live`; exact-head workflow/intended-live evidence pending; `COMM-LC-008` and `PRICE-009` keep the production contract PARTIAL.
++3. READY → Projection → projection-backed CommercialPublication → ProductSku-exact PriceListVersion → BuyerCatalogVersion — #118 harness merged with exact-head Verify/MDM/Syntha V2 CI/Product Commercialization Acceptance green. Current P0.4 blocks V1 commercial sources and textual-SKU pricing identity; intended-live evidence plus `COMM-LC-008`, remaining `PRICE-009` and downstream `PUB-005` seams keep the contract PARTIAL.
+ 4. BuyerCatalogVersion → Selection → OrderCommitSnapshot — next P0 boundary.
+ 5. OrderCommitSnapshot → Supply → Shipment/Receipt — subsequent P0 boundary.
+ 6. Shipment → SKU-specific ActualCost → Landed → exact allocation → Margin → Close → Post-close reconciliation — implementation contracts exist; live connected proof remains.
+diff --git a/docs/commercial-execution-spine.md b/docs/commercial-execution-spine.md
+index 97d139b..ed2bcf1 100644
+--- a/docs/commercial-execution-spine.md
++++ b/docs/commercial-execution-spine.md
+@@ -1,6 +1,6 @@
+ # SYNTH-V2 Commercial & Execution Spine
+ 
+-Status: supporting lineage summary aligned with authoritative `ARCHITECTURE.md` as of **2026-09-04**.
++Status: supporting lineage summary aligned with authoritative `ARCHITECTURE.md` as of **2026-09-08**.
+ 
+ Canonical immutable lineage:
+ 
+@@ -16,8 +16,8 @@ Operational rules:
+ - The only canonical technical-to-commerce handoff is `ProductReadinessSnapshot → CommercialProductProjectionVersion → CommercialPublication`.
+ - Buyer-visible Product/variant/price/MOQ facts come from immutable CommercialPublication / PriceListVersion / BuyerCatalogVersion snapshots, never from mutable PLM fields after freeze.
+ - Current V2 CommercialPublication is an immutable projection-backed `published` snapshot. The staged publication lifecycle is an open gap (`COMM-LC-008`), not current runtime truth.
+-- Current PriceListVersion freezes exact buyer/shop, currency and ProductSku commercial terms. Market/effective-period and exact override convergence remain `PRICE-009`.
+-- BuyerCatalogVersion freezes exact Publication + PriceListVersion + Showroom/access context and variant-rich ProductSku hierarchy.
++- Current PriceListVersion freezes exact buyer/shop, currency and ProductSku commercial terms. Buyer-specific override identity is exact `productSkuId + wholesalePriceMinor`; textual SKU is not pricing identity. Market/effective-period and any remaining policy depth remain `PRICE-009`.
++- Fresh BuyerCatalogVersion freezes exact projection-backed Publication + exact ProductSku PriceListVersion + Showroom/access context and variant-rich ProductSku hierarchy. Legacy V1 commercial snapshots remain immutable read-only history and cannot seed a fresh buyer catalog.
+ - Order creation consumes submitted Selection truth; OrderCommitSnapshot is the single frozen commercial deal truth for physical/economic downstream use.
+ - Canonical physical identity is exact `orderLineNo + productSkuId`; textual `sku` is display/consistency/legacy only.
+ - Inventory is a centralized dynamic state/ledger overlay around location, balance, reservation, allocation and movement. Buyer/order screens do not own a second balance.
+diff --git a/docs/commercial-publication-linesheets.md b/docs/commercial-publication-linesheets.md
+index 7289f03..6c4c0b5 100644
+--- a/docs/commercial-publication-linesheets.md
++++ b/docs/commercial-publication-linesheets.md
+@@ -1,6 +1,6 @@
+ # Commercial Publication → Linesheets
+ 
+-Status: supporting UI/read-model specification aligned with `ARCHITECTURE.md` as of **2026-09-04**. `ARCHITECTURE.md` remains authoritative.
++Status: supporting UI/read-model specification aligned with `ARCHITECTURE.md` as of **2026-09-08**. `ARCHITECTURE.md` remains authoritative.
+ 
+ Linesheets/Showroom is a read-only buyer presentation of immutable commercial snapshot truth. Browser code must not derive commercial prices, reconstruct current Product/PLM facts, fabricate variants/buyers, inject demo collections, or invent lifecycle states that the domain does not implement.
+ 
+@@ -22,7 +22,7 @@ The service authorizes the actor against the collection brand with `DEAL_READ`.
+ 
+ For canonical V2 publication rows, browser consumers should prefer the frozen projection-native payload: exact projection id/version/hash, readiness snapshot id, StyleVersion id, currency, ProductSku lines and variant-rich Style → Colorway → SizeValue/ProductSku hierarchy. A current PLM value must never overwrite or silently decorate a frozen commercial fact.
+ 
+-Legacy/formatVersion 1 rows remain compatibility history. Their flat fields are not permission to create new flat-catalog product/publication semantics.
++Legacy/formatVersion 1 rows remain immutable compatibility history. Their flat fields are not permission to create new flat-catalog product/publication semantics, and migration 075/domain validation now prevent those V1 publication/price snapshots from originating a fresh canonical PriceListVersion or BuyerCatalogVersion.
+ 
+ ## Buyer-specific catalog truth
+ 
+@@ -40,7 +40,7 @@ P0.3 acceptance reads the same BuyerCatalogVersion through brand-authorized, sho
+ 
+ ## Current pricing boundary
+ 
+-PriceListVersion currently freezes server-authored currency, wholesale price, RRP and MOQ per canonical ProductSku-bearing snapshot, but the full market/effective-period contract is incomplete and the buyer-catalog publication input still retains a textual-SKU price-override compatibility shape. This is `PRICE-009`; Linesheet UI must not turn that compatibility input into a second pricing master.
++PriceListVersion freezes server-authored currency plus ProductSku-exact wholesale/RRP/MOQ/delivery/availability terms. Optional buyer-specific pricing is keyed only by exact `productSkuId` with integer `wholesalePriceMinor`; the server derives the major-unit price and rejects textual `sku`/client `unitPrice`. The remaining `PRICE-009` gap is market/effective-period and any required policy depth, not pricing identity. Linesheet UI must render the frozen BuyerCatalogVersion and never create a second pricing master.
+ 
+ ## UX and localization
+ 
+diff --git a/src/acceptance/product-commercialization-live-acceptance.mjs b/src/acceptance/product-commercialization-live-acceptance.mjs
+index 8ff8ae4..87bd0d4 100644
+--- a/src/acceptance/product-commercialization-live-acceptance.mjs
++++ b/src/acceptance/product-commercialization-live-acceptance.mjs
+@@ -341,7 +341,7 @@ export async function runProductCommercializationLiveAcceptance({
+ 
+   const buyerCatalogPublish = payloadData(await requestJson(fetchImpl, target.url, `/v2/commercial-publications/${encodeURIComponent(publication.id)}/buyer-catalogs`, {
+     method: 'POST', token: brandToken, idempotencyKey: command(runId, 'buyer-catalog'),
+-    body: { showroomId: openedShowroom.id, shopId: references.shop.id, priceOverrides: [] },
++    body: { showroomId: openedShowroom.id, shopId: references.shop.id, priceOverrides: [{ productSkuId: ready.product.skuId, wholesalePriceMinor: 10000 }] },
+   }), 'PriceListVersion/BuyerCatalogVersion publication');
+   const priceListVersion = buyerCatalogPublish.priceListVersion;
+   const buyerCatalogVersion = buyerCatalogPublish.buyerCatalogVersion;
+diff --git a/src/application/commercial-publication-service.mjs b/src/application/commercial-publication-service.mjs
+index baaf5fb..7a02e98 100644
+--- a/src/application/commercial-publication-service.mjs
++++ b/src/application/commercial-publication-service.mjs
+@@ -130,12 +130,13 @@ export function createCommercialPublicationService({
+ 
+     async publishBuyerCatalog(commandId, actorId, publicationId, input) {
+       invariant(input && typeof input === 'object' && !Array.isArray(input), 'BUYER_CATALOG_PUBLICATION_INVALID', 'Buyer catalog publication request is invalid');
++      invariant(Object.keys(input).every((key) => ['showroomId', 'shopId', 'priceOverrides'].includes(key)), 'BUYER_CATALOG_PUBLICATION_FIELD_UNKNOWN', 'Buyer catalog publication contains unsupported fields');
+       const fingerprint = `publishBuyerCatalog:${actorId}:${publicationId}:${canonicalJson(input)}`;
+       const publication = requireEntity(await commercialStore.getCommercialPublication(publicationId), 'COMMERCIAL_PUBLICATION_NOT_FOUND', { publicationId });
+       const context = await buyerCatalogContext(actorId, publication, input.showroomId, input.shopId);
+       return execute(commandId, fingerprint, actorId, async (tx) => {
+         const publishedAt = clock();
+-        const priceListVersion = createPriceListVersion({ id: nextId('price-list-version'), publication, shopId: input.shopId, priceOverrides: input.priceOverrides ?? [], publishedAt });
++        const priceListVersion = createPriceListVersion({ id: nextId('price-list-version'), publication, shopId: input.shopId, priceOverrides: input.priceOverrides === undefined ? [] : input.priceOverrides, publishedAt });
+         const buyerCatalogVersion = createBuyerCatalogVersion({ id: nextId('buyer-catalog-version'), publication, priceListVersion, showroom: context.showroom, invitation: context.invitation, publishedAt });
+         await tx.insertPriceListVersion(priceListVersion);
+         await tx.insertBuyerCatalogVersion(buyerCatalogVersion);
+diff --git a/src/http/commercial-publication-openapi.mjs b/src/http/commercial-publication-openapi.mjs
+index b3c5bc9..ac28532 100644
+--- a/src/http/commercial-publication-openapi.mjs
++++ b/src/http/commercial-publication-openapi.mjs
+@@ -74,7 +74,7 @@ function schemas() {
+       },
+     },
+     CommercialPublicationPage: { type: 'object', additionalProperties: false, required: ['items', 'nextCursor'], properties: { items: { type: 'array', maxItems: 200, items: { $ref: '#/components/schemas/CommercialPublication' } }, nextCursor: { anyOf: [{ type: 'string', minLength: 1, maxLength: 512 }, { type: 'null' }] } } },
+-    PriceOverride: { type: 'object', additionalProperties: false, required: ['sku', 'unitPrice'], properties: { sku: { type: 'string', pattern: SKU }, unitPrice: money } },
++    PriceOverride: { type: 'object', additionalProperties: false, description: 'Brand-authorized ProductSku-exact buyer wholesale price. Textual SKU and client major-unit price are not canonical pricing identity.', required: ['productSkuId', 'wholesalePriceMinor'], properties: { productSkuId: identifier, wholesalePriceMinor: { type: 'integer', minimum: 1, maximum: 90071992547409 } } },
+     BuyerCatalogPublicationInput: { type: 'object', additionalProperties: false, required: ['showroomId', 'shopId'], properties: { showroomId: identifier, shopId: identifier, priceOverrides: { type: 'array', maxItems: 10_000, items: { $ref: '#/components/schemas/PriceOverride' } } } },
+     PriceListLine: { $ref: '#/components/schemas/CommercialPublicationLine' },
+     PriceListVersion: {
+@@ -96,7 +96,7 @@ function paths() {
+     '/commercial-publications': { post: { operationId: 'publishCommercialPublication', security: [{ bearerAuth: [] }], parameters: [idempotency], requestBody: body('#/components/schemas/CommercialPublicationInput'), responses: mutationResponses('Published projection-backed commercial snapshot', '#/components/schemas/CommercialPublication') } },

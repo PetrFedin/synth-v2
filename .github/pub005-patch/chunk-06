@@ -1,0 +1,163 @@
+diff --git a/tests/commercial-publication-domain.test.mjs b/tests/commercial-publication-domain.test.mjs
+index f1e319b..2c12683 100644
+--- a/tests/commercial-publication-domain.test.mjs
++++ b/tests/commercial-publication-domain.test.mjs
+@@ -14,30 +14,54 @@ const catalogSkus = Object.freeze([
+   Object.freeze({ sku: 'SKU-2', name: 'Trouser', status: 'published', collectionId: 'COL-1', brandId: 'BRAND-1', currency: 'EUR', wholesalePrice: 55, minimumOrderQuantity: 1, version: 1 }),
+ ]);
+ 
+-test('commercial publication freezes source catalog versions and buyer-specific prices', () => {
+-  const publication = createCommercialPublication({ id: 'PUB-1', collection, catalogSkus, publishedAt });
+-  const priceListVersion = createPriceListVersion({
+-    id: 'PRICE-1', publication, shopId: 'SHOP-1', priceOverrides: [{ sku: 'SKU-1', unitPrice: 72.5 }], publishedAt,
+-  });
+-  const showroom = Object.freeze({ id: 'SHOW-1', brandId: 'BRAND-1', collectionId: 'COL-1', status: 'open' });
+-  const invitation = Object.freeze({ id: 'INV-1', showroomId: 'SHOW-1', brandId: 'BRAND-1', shopId: 'SHOP-1', status: 'accepted' });
+-  const buyerCatalog = createBuyerCatalogVersion({ id: 'BUYER-CAT-1', publication, priceListVersion, showroom, invitation, publishedAt });
++// DEPRECATED V1 payloads below model already-persisted immutable history. They
++// are not created through today's buyer-commercial new-write API.
++const historicalPublication = createCommercialPublication({ id: 'PUB-1', collection, catalogSkus, publishedAt });
++const historicalPriceList = Object.freeze({
++  id: 'PRICE-1', publicationId: 'PUB-1', brandId: 'BRAND-1', shopId: 'SHOP-1', currency: 'EUR', status: 'published',
++  lines: Object.freeze([
++    Object.freeze({ sku: 'SKU-1', catalogVersion: 3, unitPrice: 72.5, currency: 'EUR', minimumOrderQuantity: 2 }),
++    Object.freeze({ sku: 'SKU-2', catalogVersion: 1, unitPrice: 55, currency: 'EUR', minimumOrderQuantity: 1 }),
++  ]),
++  contentHash: 'a'.repeat(64), publishedAt,
++});
++const historicalBuyerCatalog = Object.freeze({
++  ...historicalPriceList,
++  id: 'BUYER-CAT-1',
++  priceListVersionId: 'PRICE-1',
++  showroomId: 'SHOW-1',
++  accessGrantId: 'INV-1',
++  collectionId: 'COL-1',
++  contentHash: 'b'.repeat(64),
++});
++const showroom = Object.freeze({ id: 'SHOW-1', brandId: 'BRAND-1', collectionId: 'COL-1', status: 'open' });
++const invitation = Object.freeze({ id: 'INV-1', showroomId: 'SHOW-1', brandId: 'BRAND-1', shopId: 'SHOP-1', status: 'accepted' });
++
++test('historical flat commercial snapshots remain readable without synthesizing ProductSku identity', () => {
++  assert.equal(historicalPublication.lines[0].catalogVersion, 3);
++  assert.equal(historicalPublication.lines[0].unitPrice, 80);
++  assert.equal(Object.hasOwn(historicalPublication.lines[0], 'productSkuId'), false);
++  assert.equal(buyerCatalogLine(historicalBuyerCatalog, 'SKU-1').unitPrice, 72.5);
++  assert.equal(buyerCatalogLine(historicalBuyerCatalog, 'SKU-2').unitPrice, 55);
++  assert.match(historicalPublication.contentHash, /^[a-f0-9]{64}$/);
++  assert.ok(Object.isFrozen(historicalPublication));
++  assert.ok(Object.isFrozen(historicalBuyerCatalog));
++});
+ 
+-  assert.equal(publication.lines[0].catalogVersion, 3);
+-  assert.equal(buyerCatalogLine(buyerCatalog, 'SKU-1').unitPrice, 72.5);
+-  assert.equal(buyerCatalogLine(buyerCatalog, 'SKU-2').unitPrice, 55);
+-  assert.equal(buyerCatalog.priceListVersionId, 'PRICE-1');
+-  assert.equal(buyerCatalog.accessGrantId, 'INV-1');
+-  assert.match(publication.contentHash, /^[a-f0-9]{64}$/);
+-  assert.match(buyerCatalog.contentHash, /^[a-f0-9]{64}$/);
+-  assert.ok(Object.isFrozen(publication));
+-  assert.ok(Object.isFrozen(buyerCatalog));
++test('historical V1 publication cannot originate a new PriceListVersion', () => {
++  for (const priceOverrides of [[], [{ sku: 'SKU-1', unitPrice: 72.5 }]]) {
++    assert.throws(
++      () => createPriceListVersion({ id: 'PRICE-NEW', publication: historicalPublication, shopId: 'SHOP-1', priceOverrides, publishedAt }),
++      (error) => error?.code === 'PRICE_LIST_CANONICAL_PUBLICATION_REQUIRED',
++    );
++  }
+ });
+ 
+-test('buyer price list rejects unknown SKU overrides', () => {
+-  const publication = createCommercialPublication({ id: 'PUB-2', collection, catalogSkus, publishedAt });
++test('historical V1 publication and price list cannot originate a new BuyerCatalogVersion', () => {
++  const before = JSON.stringify({ historicalPublication, historicalPriceList });
+   assert.throws(
+-    () => createPriceListVersion({ id: 'PRICE-2', publication, shopId: 'SHOP-1', priceOverrides: [{ sku: 'UNKNOWN', unitPrice: 10 }], publishedAt }),
+-    (error) => error?.code === 'PRICE_LIST_OVERRIDE_SKU_UNKNOWN',
++    () => createBuyerCatalogVersion({ id: 'BUYER-NEW', publication: historicalPublication, priceListVersion: historicalPriceList, showroom, invitation, publishedAt }),
++    (error) => error?.code === 'PRICE_LIST_CANONICAL_PUBLICATION_REQUIRED',
+   );
++  assert.equal(JSON.stringify({ historicalPublication, historicalPriceList }), before);
+ });
+diff --git a/tests/commercial-publication-v2.test.mjs b/tests/commercial-publication-v2.test.mjs
+index 0917d1f..510bb98 100644
+--- a/tests/commercial-publication-v2.test.mjs
++++ b/tests/commercial-publication-v2.test.mjs
+@@ -2,27 +2,7 @@ import assert from 'node:assert/strict';
+ import test from 'node:test';
+ import { createBuyerCatalogVersion, createPriceListVersion, createProjectionBackedCommercialPublication } from '../src/modules/commercial-publication/public.mjs';
+ 
+-const at = '2026-08-12T12:00:00.000Z';
+-const hash = 'a'.repeat(64);
+-const collection = { id: 'collection:1', brandId: 'brand:1', currency: 'RUB', status: 'published' };
+-
+-function projection() {
+-  return {
+-    id: 'projection:1', styleVersionId: 'style-version:1', brandId: 'brand:1', readinessSnapshotId: 'readiness:1', versionNo: 1, status: 'published', contentHash: hash,
+-    payload: {
+-      commercialPreparation: { brandId: 'brand:1', titleRu: 'Платье', titleEn: 'Dress', descriptionRu: 'Описание', descriptionEn: 'Description', compositionRu: 'Хлопок', compositionEn: 'Cotton', countryOfOrigin: 'RU', currency: 'RUB', wholesalePriceMinor: 100000, rrpMinor: 200000, minimumOrderQuantity: 1, minimumOrderValueMinor: 0, packRatio: [1,1], deliveryStart: '2026-09-01T00:00:00.000Z', deliveryEnd: '2026-09-30T00:00:00.000Z', availability: { mode: 'available_to_sell', quantity: 10 }, mediaIds: ['media:hero','media:black'] },
+-      technicalSnapshot: {
+-        technicalEvidence: [{ productSkuId: 'psku:1', skuCode: 'SKU-1' }],
+-        product: {
+-          style: { id: 'style:1', styleCode: 'DRS-001', brandId: 'brand:1' },
+-          styleVersion: { id: 'style-version:1', versionNo: 1, contentHash: hash, categoryRef: { entryId: 'category:dress', version: 2 }, productTypeRef: null, genderRef: null },
+-          styleMedia: [{ id: 'media:hero', mediaType: 'image', mediaRole: 'hero', uri: 'https://cdn.example/hero.jpg', sortOrder: 0, colorwayId: null }], styleAttributes: [],
+-          colorways: [{ id: 'color:black', colorwayCode: 'BLK', nameRu: 'Черный', nameEn: 'Black', colorRef: { entryId: 'color:black', version: 1 }, swatchHex: '#000000', media: [{ id: 'media:black', mediaType: 'image', mediaRole: 'gallery', uri: 'https://cdn.example/black.jpg', sortOrder: 0, colorwayId: 'color:black' }], attributes: [], skus: [{ id: 'psku:1', skuCode: 'SKU-1', contentHash: hash, gtin: null, sizeValueId: 'size:m', attributes: [], size: { id: 'size:m', sizeScaleId: 'scale:1', sizeScaleVersionId: 'scale-version:1', sizeScaleVersionNo: 1, scaleCode: 'INT', scaleNameRu: 'Международный', scaleNameEn: 'International', code: 'M', labelRu: 'M', labelEn: 'M', sortOrder: 2, mdmRef: null } }] }],
+-        },
+-      },
+-    },
+-  };
+-}
++import { collection, projection, projectionHash as hash, publishedAt as at } from './fixtures/commercial-publication-v2.mjs';
+ 
+ test('V2 publication derives Style -> Colorway -> ordered Size/SKU and price only from immutable projection payload', () => {
+   const publication = createProjectionBackedCommercialPublication({ id: 'publication:1', collection, commercialProjection: projection(), publishedAt: at });
+@@ -57,7 +37,7 @@ test('projection-backed publication fails closed when canonical commercial whole
+ 
+ test('rich Style hierarchy and exact projection lineage survive PriceList and BuyerCatalog snapshots', () => {
+   const publication = createProjectionBackedCommercialPublication({ id: 'publication:1', collection, commercialProjection: projection(), publishedAt: at });
+-  const priceList = createPriceListVersion({ id: 'price:1', publication, shopId: 'shop:1', priceOverrides: [{ sku: 'SKU-1', unitPrice: 950 }], publishedAt: at });
++  const priceList = createPriceListVersion({ id: 'price:1', publication, shopId: 'shop:1', priceOverrides: [{ productSkuId: 'psku:1', wholesalePriceMinor: 95000 }], publishedAt: at });
+   assert.equal(priceList.styles[0].colorways[0].skus[0].buyerUnitPrice, 950);
+   assert.equal(priceList.commercialProjectionId, 'projection:1');
+   assert.equal(priceList.commercialProjectionVersionNo, 1);
+diff --git a/tests/postgres/product-commercialization-live-acceptance.test.mjs b/tests/postgres/product-commercialization-live-acceptance.test.mjs
+index a696dfd..52d040d 100644
+--- a/tests/postgres/product-commercialization-live-acceptance.test.mjs
++++ b/tests/postgres/product-commercialization-live-acceptance.test.mjs
+@@ -17,6 +17,7 @@ import { bootstrapProductionAcceptanceReferences } from '../../src/acceptance/pr
+ import { bootstrapMdmReference } from '../../src/infrastructure/mdm-reference-bootstrap.mjs';
+ import { migratePostgres } from '../../src/infrastructure/postgres-migrator.mjs';
+ import { createPostgresWholesaleRuntime } from '../../src/runtime/postgres-runtime.mjs';
++import { assertCanonicalCommercialWriteGuards } from './canonical-commercial-write-guards.mjs';
+ 
+ const { Pool } = pg;
+ const connectionString = process.env.POSTGRES_TEST_URL;
+@@ -113,6 +114,8 @@ test('READY Product reaches projection, projection-native publication, price lis
+     assert.equal(downstream.rows[0].supply_commitments, Number(result.isolation.before.supply_commitment_rows));
+     assert.equal(downstream.rows[0].actual_cost_entries, Number(result.isolation.before.actual_cost_rows));
+     assert.equal(downstream.rows[0].inventory_movements, Number(result.isolation.before.inventory_movement_rows));
++
++    await assertCanonicalCommercialWriteGuards({ pool, baseUrl, brandToken, shopToken, references, result });
+   } finally {
+     if (shopToken && baseUrl) {
+       try { await logoutAcceptanceSession({ baseUrl, token: shopToken }); }
+diff --git a/tests/product-commercialization-live-acceptance.test.mjs b/tests/product-commercialization-live-acceptance.test.mjs
+index ca02296..35a57bd 100644
+--- a/tests/product-commercialization-live-acceptance.test.mjs
++++ b/tests/product-commercialization-live-acceptance.test.mjs
+@@ -21,6 +21,7 @@ test('Product commercialization acceptance stays on canonical public runtime rou
+   assert.doesNotMatch(source, /\/v2\/catalog\/skus/, 'P0.3 acceptance must not reintroduce flat catalog_skus as product/commercial truth');
+   assert.match(source, /assertProductCommercializationPersistence/);
+   assert.match(source, /productSkuId/);
++  assert.match(source, /priceOverrides: \[\{ productSkuId: ready\.product\.skuId, wholesalePriceMinor: 10000 \}\]/, 'P0.4 acceptance must price by exact ProductSku + minor amount, never textual SKU');
+   assert.match(source, /commercialProjectionContentHash/);
+   assert.match(source, /expectedDeltasVerified/);
+   assert.match(script, /runReadyProductReadinessLiveAcceptance/);
+diff --git a/db/migrations/075_canonical_buyer_catalog_new_writes.sql b/db/migrations/075_canonical_buyer_catalog_new_writes.sql
+new file mode 100644
+index 0000000..34a58c9
+--- /dev/null
++++ b/db/migrations/075_canonical_buyer_catalog_new_writes.sql
+@@ -0,0 +1,296 @@
++BEGIN;
++

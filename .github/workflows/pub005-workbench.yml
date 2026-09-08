@@ -14,11 +14,16 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
-      - name: Archive tracked source only
-        run: git archive --format=tar HEAD > /tmp/synth-v2-source.tar
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+      - name: Install locked test dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Archive dependencies only
+        run: tar -czf /tmp/syntha-test-dependencies.tar.gz node_modules
       - uses: actions/upload-artifact@615b319bd27bb32c3d64dca6b6ed6974d5fbe653
         with:
-          name: pub005-source-workbench
-          path: /tmp/synth-v2-source.tar
+          name: pub005-test-dependencies
+          path: /tmp/syntha-test-dependencies.tar.gz
           retention-days: 1
           if-no-files-found: error

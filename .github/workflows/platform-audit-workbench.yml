@@ -1,0 +1,34 @@
+name: Platform audit source evidence
+on:
+  push:
+    branches: [audit/full-platform-e2e-20260909]
+    paths: [.github/workflows/platform-audit-workbench.yml]
+permissions:
+  contents: read
+jobs:
+  source-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Export pinned tracked sources only
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/syntha-audit
+          git archive --format=tar.gz --prefix=main/ 0048d10c410231055d13436d61d0cf33db3e95b7 > /tmp/syntha-audit/main.tar.gz
+          git archive --format=tar.gz --prefix=pr119/ 3d49175a8232ed2ba9ba1c39005e1de7be5a3278 > /tmp/syntha-audit/pr119.tar.gz
+          git ls-tree -r 0048d10c410231055d13436d61d0cf33db3e95b7 > /tmp/syntha-audit/main-tree.txt
+          git diff --stat 0048d10c410231055d13436d61d0cf33db3e95b7 3d49175a8232ed2ba9ba1c39005e1de7be5a3278 > /tmp/syntha-audit/pr119-diff-stat.txt
+          cd /tmp/syntha-audit
+          sha256sum main.tar.gz pr119.tar.gz > SHA256SUMS
+          echo 'Source export only. No verification or production-readiness claim.' > EVIDENCE-BOUNDARY.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: syntha-audit-pinned-sources
+          path: /tmp/syntha-audit/
+          retention-days: 7
+          if-no-files-found: error

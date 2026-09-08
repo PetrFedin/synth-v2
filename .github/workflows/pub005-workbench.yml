@@ -1,0 +1,24 @@
+name: PUB-005 isolated workbench
+on:
+  push:
+    branches: [fix/pub005-canonical-commercial-writes]
+    paths: [.github/workflows/pub005-workbench.yml]
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Archive tracked source only
+        run: git archive --format=tar HEAD > /tmp/synth-v2-source.tar
+      - uses: actions/upload-artifact@615b319bd27bb32c3d64dca6b6ed6974d5fbe653
+        with:
+          name: pub005-source-workbench
+          path: /tmp/synth-v2-source.tar
+          retention-days: 1
+          if-no-files-found: error

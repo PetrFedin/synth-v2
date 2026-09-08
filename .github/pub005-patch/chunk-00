@@ -1,0 +1,76 @@
+diff --git a/ARCHITECTURE.md b/ARCHITECTURE.md
+index d0bd578..ab58105 100644
+--- a/ARCHITECTURE.md
++++ b/ARCHITECTURE.md
+@@ -1,8 +1,8 @@
+ # Syntha V2 — Platform Master Specification
+ 
+-> **Canonical living specification / architecture / product requirements / UI contract**  
+-> Status date: **2026-09-05**  
+-> Baseline when this master specification was established: `main@4f5c452dede1ce9c8ffe518eddb8b6632cc89ad0`  
++> **Canonical living specification / architecture / product requirements / UI contract**
++> Status date: **2026-09-08**
++> Baseline when this master specification was established: `main@4f5c452dede1ce9c8ffe518eddb8b6632cc89ad0`
+ > Document status: **AUTHORITATIVE / LIVING**
+ 
+ This file is the single authoritative map of what Syntha V2 is, how it works, what is implemented, what is incomplete, how modules are connected, what users see, and what every future change must preserve or update. Detailed documents under `docs/` remain supporting evidence and deep dives; they may add rationale and implementation detail, but they must not contradict this file.
+@@ -222,14 +222,18 @@ Two real actor contexts are required:
+ - reserved brand owner `syntha-acceptance-brand-owner`, authenticated with `SYNTHA_ACCEPTANCE_EMAIL` / `SYNTHA_ACCEPTANCE_PASSWORD` or optional short-lived `SYNTHA_ACCEPTANCE_TOKEN`;
+ - reserved shop owner `syntha-acceptance-shop-owner`, authenticated with `SYNTHA_ACCEPTANCE_SHOP_EMAIL` / `SYNTHA_ACCEPTANCE_SHOP_PASSWORD` or optional short-lived `SYNTHA_ACCEPTANCE_SHOP_TOKEN`.
+ 
+-`SYNTHA_ACCEPTANCE_BASE_URL` and the configured database URL must refer to the same environment; PostgreSQL is read after HTTP mutations to prove exact persistence and immutable lineage. Non-local execution remains fail-closed unless the target is HTTPS and `SYNTHA_ACCEPTANCE_ALLOW_REMOTE=true` is explicitly set. The dedicated GitHub workflow `Product Commercialization Acceptance` starts the supported `scripts/start.mjs` process against PostgreSQL 17, waits for `/ready`, executes this same command, terminates the process with SIGTERM and retains diagnostics. Merely defining that workflow is not live evidence; `PROD-PROVEN` is forbidden until the intended acceptance environment actually completes the gate successfully.
++`SYNTHA_ACCEPTANCE_BASE_URL` and the configured database URL must refer to the same environment; PostgreSQL is read after HTTP mutations to prove exact persistence and immutable lineage. Non-local execution remains fail-closed unless the target is HTTPS and `SYNTHA_ACCEPTANCE_ALLOW_REMOTE=true` is explicitly set. The dedicated GitHub workflow `Product Commercialization Acceptance` starts the supported `scripts/start.mjs` process against PostgreSQL 17, waits for `/ready`, executes this same command, terminates the process with SIGTERM and retains diagnostics.
++
++PR #118 is merged as `main@0048d10c410231055d13436d61d0cf33db3e95b7`. Its exact pre-merge head `eb86a04b7ac9c6a0ba743882f59a6b33dfbfd113` passed Verify `33979864431`, Syntha V2 CI `33979864438`, MDM Reference Data `33979865154` and Product Commercialization Acceptance `33979864435`. That is repository/runtime CI evidence for the implemented slice; it is **not** an intended deployment-environment `PROD-PROVEN` claim. `PROD-PROVEN` remains forbidden until the specifically designated live acceptance environment completes the gate successfully.
+ 
+ ---
+ 
+ ## 3. Architecture invariants
+ ### 3.1 One Product Master
+ 
+-Product Identity V2 is the only canonical Style/StyleVersion/Colorway/Size/SKU hierarchy. `catalog_skus` is a temporary compatibility surface and must not receive new product semantics.
++Product Identity V2 is the only canonical Style/StyleVersion/Colorway/Size/SKU hierarchy. `catalog_skus` is **DEPRECATED compatibility state**, never a second Product Master. At the current P0.4 intermediate state some legacy technical/UI workspaces still have compatibility mutation/read paths, so it is inaccurate to claim that the table is already globally read-only. Those compatibility writes may preserve old workspace behavior only; they may not originate new Product semantics or new commercial truth.
++
++Canonical new commercial writes are exclusively `Product Identity → ProductReadinessSnapshot → CommercialProductProjectionVersion → projection-backed CommercialPublication → ProductSku-exact PriceListVersion → BuyerCatalogVersion`. Migration 075 and the domain/API contract fail closed if a historical V1 flat CommercialPublication/PriceList is used to mint a fresh PriceListVersion/BuyerCatalogVersion. Historical V1 snapshots remain readable exactly as stored and never receive guessed ProductSku IDs. `PUB-005` therefore remains OPEN/PARTIAL until `/v2/catalog/skus` legacy mutations/UI dependencies and the remaining Selection legacy fallback are retired or explicitly bounded as read-only history.
+ 
+ ### 3.2 Technical truth is not commercial truth
+ 
+@@ -523,20 +527,25 @@ No canonical V2 DRAFT/READY/SUPERSEDED/ARCHIVED CommercialPublication state tran
+ 
+ ### 6.4 PriceListVersion — IMPLEMENTED core / PARTIAL production pricing depth
+ 
+-The current V2 PriceListVersion is an immutable server-authored `published` snapshot created from one exact projection-backed CommercialPublication for one buyer shop. It freezes Publication id, exact commercial projection id/version/content hash, readiness snapshot id, StyleVersion id, brand/shop identity, currency and per-ProductSku wholesale price, RRP and MOQ. BuyerCatalogVersion pins this exact PriceListVersion, and downstream commercial truth must not read a later mutable price value after freeze.
++The current V2 PriceListVersion is an immutable server-authored `published` snapshot created from one exact projection-backed CommercialPublication for one buyer shop. It freezes Publication id, exact commercial projection id/version/content hash, readiness snapshot id, StyleVersion id, brand/shop identity, currency and per-ProductSku wholesale price, RRP, MOQ, delivery window and availability terms. BuyerCatalogVersion pins this exact PriceListVersion, and downstream commercial truth must not read a later mutable price value after freeze.
++
++Canonical buyer-specific price adjustment is now ProductSku-exact. `POST /v2/commercial-publications/:publicationId/buyer-catalogs` accepts optional `priceOverrides[]` rows with exactly `{ productSkuId, wholesalePriceMinor }`. Textual `sku` is not an override identity and client-supplied `unitPrice` is rejected. The server validates a unique ProductSku that exists in the frozen publication, validates a positive bounded integer minor amount, derives `unitPrice = wholesalePriceMinor / 100`, and preserves source RRP/MOQ/delivery/availability and exact projection lineage. Duplicate, unknown, malformed or textual-SKU override attempts fail closed before persistence.
+ 
+-Current gaps are explicit rather than hidden:
++A historical `formatVersion=1` CommercialPublication can still be read for compatibility but cannot originate a new PriceListVersion. A PriceListVersion used for a new BuyerCatalog must itself preserve exact projection-backed ProductSku lines and hierarchy. PostgreSQL migration 075 independently enforces these invariants for direct/internal insert bypasses without rewriting old rows.
++
++Current pricing-depth gaps are explicit rather than hidden:
+ 
+ - PriceListVersion has no canonical explicit `market` field at this boundary;
+ - it has no price-list-level `effective_from` / `effective_to` contract;
+-- the buyer-catalog publication command still exposes a compatibility `priceOverrides` shape keyed by textual `sku` plus `unitPrice`; P0.3 acceptance intentionally passes an empty override set and does not treat textual SKU as canonical pricing identity;
+-- a later pricing-depth pass must make any canonical override ProductSku-exact, add governed market/effective-period semantics, and retain server-side validation/immutable BuyerCatalog pinning.
++- governed tax-treatment/customer-eligibility depth beyond the already frozen shop/access context remains to be specified where the business contract requires it.
+ 
+-Until those gaps are closed, the core snapshot is IMPLEMENTED but the full production pricing contract is PARTIAL.
++The textual-SKU pricing identity seam is CLOSED in this P0.4 slice, but `PRICE-009` remains OPEN/PARTIAL until market/effective-period and any required tax/eligibility semantics are complete.
+ 
+ ### 6.5 BuyerCatalogVersion — IMPLEMENTED rich backend / PARTIAL buyer-facing depth
+ 
+-The V2 BuyerCatalogVersion is immutable and `published`. It freezes the exact CommercialPublication, exact PriceListVersion, projection/readiness/StyleVersion lineage, brand/shop identity, open Showroom context, accepted invitation/access grant and currency. Its rich payload preserves Style → Colorway → SizeValue/ProductSku hierarchy and exact ProductSku commercial lines rather than requiring a live PLM reconstruction.
++The V2 BuyerCatalogVersion is immutable and `published`. It freezes the exact projection-backed CommercialPublication, exact ProductSku-price PriceListVersion, projection/readiness/StyleVersion lineage, brand/shop identity, open Showroom context, accepted invitation/access grant and currency. Its rich payload preserves Style → Colorway → ordered SizeValue/ProductSku hierarchy and exact ProductSku commercial lines rather than requiring a live PLM reconstruction.
++
++Fresh BuyerCatalogVersion writes are fail-closed on non-V2/legacy publication sources, a PriceListVersion from another publication/brand/shop/currency/lineage, changed frozen non-price terms, changed rich hierarchy, closed/mismatched Showroom or invalid buyer access. Historical V1 BuyerCatalogVersion records remain readable as immutable compatibility history; they are not silently upgraded or allowed to seed a new canonical buyer catalog.
+ 
+ The P0.3 acceptance reads the same BuyerCatalogVersion as the brand actor, the authorized shop actor and through the Showroom access route, then joins the exact catalog/price/publication/projection/readiness chain in the same PostgreSQL environment. Browser Showroom/Linesheet and Color × Size UX remain PARTIAL and must consume this frozen rich truth rather than a flat mutable catalog.
+ 
+@@ -561,11 +570,11 @@ positive Product Identity + governed MDM + canonical Measurement Chart
+ 
+ Every business mutation is made through authenticated `/v2` routes and carries an idempotency key. The brand owner and shop owner are separate real actors so relationship and invitation acceptance cannot be silently performed under one unrestricted context. PostgreSQL is used only for governed setup/persistence proof, not to substitute a business mutation.
+ 
+-Acceptance requires exact continuity of `StyleVersion`, `ProductSku`, ProductReadinessSnapshot, CommercialProductProjectionVersion id/version/content hash, Collection assignment, CommercialPublication, PriceListVersion and BuyerCatalogVersion; it also verifies currency, wholesale price, RRP and MOQ from the frozen positive fixture. Brand read, shop read and Showroom buyer-catalog access must resolve the same immutable BuyerCatalogVersion.
++Acceptance requires exact continuity of `StyleVersion`, `ProductSku`, ProductReadinessSnapshot, CommercialProductProjectionVersion id/version/content hash, Collection assignment, CommercialPublication, PriceListVersion and BuyerCatalogVersion; it also verifies currency, wholesale price, RRP and MOQ from the frozen positive fixture. The buyer-catalog mutation now exercises the public ProductSku-exact price input `{ productSkuId, wholesalePriceMinor }` (using the same canonical amount so this slice tests identity without changing fixture economics). Brand read, shop read and Showroom buyer-catalog access must resolve the same immutable BuyerCatalogVersion.
+ 

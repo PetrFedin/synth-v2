@@ -34,24 +34,36 @@ jobs:
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: '22'
-      - name: Reconstruct and apply exact reviewed patch
+      - name: Reconstruct reviewed patch and cancel temporary staging files
         shell: bash
         run: |
           cat .github/pub005-patch/chunk-* > /tmp/pub005.patch
           echo '75d526f6c2624ea8dbd9c209e43c2bdbaef1bc06e853d6b1cf16000f599b6ea2  /tmp/pub005.patch' | sha256sum -c -
           git apply --check /tmp/pub005.patch
           git apply /tmp/pub005.patch
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('ARCHITECTURE.md')
+          text = path.read_text()
+          old = '`fix/pub005-canonical-commercial-writes` (PR pending)'
+          new = '#119 / `fix/pub005-canonical-commercial-writes`'
+          assert old in text and text.count(old) == 1
+          path.write_text(text.replace(old, new))
+          PY
+          rm -rf .github/pub005-patch
+          rm .github/workflows/pub005-workbench.yml
           git diff --check
+          git status --short
       - name: Install locked dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Verify full repository and PostgreSQL contract
+      - name: Verify final PR tree including PostgreSQL contract
         run: npm run verify:postgres
-      - name: Commit verified implementation to branch
+      - name: Commit verified final tree to PR branch
         shell: bash
         run: |
           git config user.name 'Syntha CI Workbench'
           git config user.email 'syntha-ci@users.noreply.github.com'
-          git add ARCHITECTURE.md docs src tests db/migrations/075_canonical_buyer_catalog_new_writes.sql
+          git add -A
           git diff --cached --check
           git commit -m 'fix(pub005): enforce canonical buyer commercial new writes'
           git push origin HEAD:fix/pub005-canonical-commercial-writes

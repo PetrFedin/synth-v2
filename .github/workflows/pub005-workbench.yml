@@ -4,26 +4,54 @@ on:
     branches: [fix/pub005-canonical-commercial-writes]
     paths: [.github/workflows/pub005-workbench.yml]
 permissions:
-  contents: read
+  contents: write
 jobs:
-  snapshot:
+  apply-and-verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: syntha
+          POSTGRES_PASSWORD: syntha_test
+          POSTGRES_DB: syntha_v2_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U syntha -d syntha_v2_test"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      POSTGRES_TEST_URL: postgresql://syntha:syntha_test@127.0.0.1:5432/syntha_v2_test
+      DATABASE_URL: postgresql://syntha:syntha_test@127.0.0.1:5432/syntha_v2_test
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          persist-credentials: false
+          persist-credentials: true
           fetch-depth: 0
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: '22'
-      - name: Install locked test dependencies without lifecycle scripts
+      - name: Reconstruct and apply exact reviewed patch
+        shell: bash
+        run: |
+          cat .github/pub005-patch/chunk-* > /tmp/pub005.patch
+          echo '75d526f6c2624ea8dbd9c209e43c2bdbaef1bc06e853d6b1cf16000f599b6ea2  /tmp/pub005.patch' | sha256sum -c -
+          git apply --check /tmp/pub005.patch
+          git apply /tmp/pub005.patch
+          git diff --check
+      - name: Install locked dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Archive dependencies only
-        run: tar -czf /tmp/syntha-test-dependencies.tar.gz node_modules
-      - uses: actions/upload-artifact@615b319bd27bb32c3d64dca6b6ed6974d5fbe653
-        with:
-          name: pub005-test-dependencies
-          path: /tmp/syntha-test-dependencies.tar.gz
-          retention-days: 1
-          if-no-files-found: error
+      - name: Verify full repository and PostgreSQL contract
+        run: npm run verify:postgres
+      - name: Commit verified implementation to branch
+        shell: bash
+        run: |
+          git config user.name 'Syntha CI Workbench'
+          git config user.email 'syntha-ci@users.noreply.github.com'
+          git add ARCHITECTURE.md docs src tests db/migrations/075_canonical_buyer_catalog_new_writes.sql
+          git diff --cached --check
+          git commit -m 'fix(pub005): enforce canonical buyer commercial new writes'
+          git push origin HEAD:fix/pub005-canonical-commercial-writes

@@ -60,9 +60,12 @@ jobs:
           git diff --cached --check
           git commit -m 'fix(pub005): enforce canonical buyer commercial new writes'
           git status --short
+          printf '%s\n' '{"before":"0048d10c410231055d13436d61d0cf33db3e95b7"}' > /tmp/pub005-event.json
       - name: Install locked dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Verify committed final PR tree including PostgreSQL contract
+        env:
+          GITHUB_EVENT_PATH: /tmp/pub005-event.json
         run: npm run verify:postgres
       - name: Push verified final tree to PR branch
         run: git push origin HEAD:fix/pub005-canonical-commercial-writes

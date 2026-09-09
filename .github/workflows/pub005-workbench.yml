@@ -37,6 +37,7 @@ jobs:
       - name: Build committed final PR tree from reviewed patch
         shell: bash
         run: |
+          set -euo pipefail
           cat .github/pub005-patch/chunk-* > /tmp/pub005.patch
           echo '75d526f6c2624ea8dbd9c209e43c2bdbaef1bc06e853d6b1cf16000f599b6ea2  /tmp/pub005.patch' | sha256sum -c -
           git apply --check /tmp/pub005.patch

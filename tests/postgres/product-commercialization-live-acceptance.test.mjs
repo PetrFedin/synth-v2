@@ -17,6 +17,7 @@ import { bootstrapProductionAcceptanceReferences } from '../../src/acceptance/pr
 import { bootstrapMdmReference } from '../../src/infrastructure/mdm-reference-bootstrap.mjs';
 import { migratePostgres } from '../../src/infrastructure/postgres-migrator.mjs';
 import { createPostgresWholesaleRuntime } from '../../src/runtime/postgres-runtime.mjs';
+import { assertCanonicalCommercialWriteGuards } from './canonical-commercial-write-guards.mjs';
 
 const { Pool } = pg;
 const connectionString = process.env.POSTGRES_TEST_URL;
@@ -113,6 +114,8 @@ test('READY Product reaches projection, projection-native publication, price lis
     assert.equal(downstream.rows[0].supply_commitments, Number(result.isolation.before.supply_commitment_rows));
     assert.equal(downstream.rows[0].actual_cost_entries, Number(result.isolation.before.actual_cost_rows));
     assert.equal(downstream.rows[0].inventory_movements, Number(result.isolation.before.inventory_movement_rows));
+
+    await assertCanonicalCommercialWriteGuards({ pool, baseUrl, brandToken, shopToken, references, result });
   } finally {
     if (shopToken && baseUrl) {
       try { await logoutAcceptanceSession({ baseUrl, token: shopToken }); }

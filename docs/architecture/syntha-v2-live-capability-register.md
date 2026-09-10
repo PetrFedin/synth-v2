@@ -1,6 +1,6 @@
 # SYNTH-V2 Live Capability Register
 
-Status date: **2026-09-04**  
+Status date: **2026-09-08**
 Authority: **supporting mirror only**. `ARCHITECTURE.md` is the single authoritative capability/gap/status register.
 
 The former 2026-08 capability matrix in this file was a consolidation checkpoint tied to an obsolete baseline. It contained statements such as “CommercialPublication still originates from the flat catalog”, “BuyerCatalog remains SKU-flat”, old migration-bridge claims and stale PR rescue instructions. Those statements are no longer allowed to compete with current runtime truth, so the old matrix is retired rather than preserved as a second status system.
@@ -23,10 +23,10 @@ This table intentionally mirrors only the current master status. If it diverges 
 | Product Identity V2 | IMPLEMENTED | browser/legacy convergence and broader live proof |
 | Canonical Measurement Chart | IMPLEMENTED | intended live Product Readiness evidence and remaining UI convergence |
 | ProductReadinessSnapshot | IMPLEMENTED | dual public-runtime acceptance harness exists; intended-live evidence pending |
-| CommercialProductProjectionVersion | IMPLEMENTED | positive P0.3 acceptance workflow/intended-live evidence pending |
-| CommercialPublication | IMPLEMENTED/PARTIAL | projection-native atomic published V2 snapshot exists; staged lifecycle is open `COMM-LC-008`; historical flat-catalog debt remains |
-| PriceListVersion | IMPLEMENTED/PARTIAL | market/effective-period and exact ProductSku override convergence under `PRICE-009` |
-| BuyerCatalogVersion | IMPLEMENTED/PARTIAL | rich ProductSku backend exists; buyer Showroom/Linesheet/Matrix UX remains partial |
+| CommercialProductProjectionVersion | IMPLEMENTED | #118 exact-head repository acceptance passed; intended-live evidence pending |
+| CommercialPublication | IMPLEMENTED/PARTIAL | projection-native atomic published V2 snapshot exists; legacy V1 cannot seed fresh PriceList/BuyerCatalog; staged lifecycle and remaining CatalogSku workspace debt remain |
+| PriceListVersion | IMPLEMENTED/PARTIAL | exact ProductSku minor-price override implemented; market/effective-period/policy depth remain `PRICE-009` |
+| BuyerCatalogVersion | IMPLEMENTED/PARTIAL | fresh writes require exact projection-backed ProductSku price truth; buyer Showroom/Linesheet/Selection UX remains partial |
 | Selection / Color × Size | PARTIAL | exact buyer matrix and live BuyerCatalog→OrderCommit proof |
 | WholesaleOrder / OrderCommit | IMPLEMENTED | expand live acceptance |
 | SupplyCommitment | IMPLEMENTED | expand physical acceptance |
@@ -36,13 +36,13 @@ This table intentionally mirrors only the current master status. If it diverges 
 | Cost Allocation / Margin / Close / Post-close reconciliation | IMPLEMENTED | full live ProductSku-bearing economics proof remains `ACC-004` |
 | KPI production connection | PARTIAL | exact operational source/persistence/reconciliation coverage |
 | ODS v1 | IMPLEMENTED with compatibility debt | remove legacy dialect dependencies module by module |
-| Full Product → Margin live acceptance | PARTIAL | P0.3 harness added; downstream P0 slices remain |
+| Full Product → Margin live acceptance | PARTIAL | #118 READY→BuyerCatalog repository acceptance passed; P0.4 convergence and downstream P0 slices remain |
 
 ## Current P0 acceptance ladder
 
 1. `Campaign → Collection` — existing live-accepted slice.
 2. Product Identity → Readiness — negative fail-closed and positive READY harnesses implemented in #117; intended-live evidence is still governed separately.
-3. READY → Projection → projection-backed CommercialPublication → PriceListVersion → BuyerCatalogVersion — harness implemented on `feat/acc004-ready-to-buyer-catalog-live`; exact-head workflow/intended-live evidence pending; `COMM-LC-008` and `PRICE-009` keep the production contract PARTIAL.
+3. READY → Projection → projection-backed CommercialPublication → ProductSku-exact PriceListVersion → BuyerCatalogVersion — #118 harness merged with exact-head Verify/MDM/Syntha V2 CI/Product Commercialization Acceptance green. Current P0.4 blocks V1 commercial sources and textual-SKU pricing identity; intended-live evidence plus `COMM-LC-008`, remaining `PRICE-009` and downstream `PUB-005` seams keep the contract PARTIAL.
 4. BuyerCatalogVersion → Selection → OrderCommitSnapshot — next P0 boundary.
 5. OrderCommitSnapshot → Supply → Shipment/Receipt — subsequent P0 boundary.
 6. Shipment → SKU-specific ActualCost → Landed → exact allocation → Margin → Close → Post-close reconciliation — implementation contracts exist; live connected proof remains.

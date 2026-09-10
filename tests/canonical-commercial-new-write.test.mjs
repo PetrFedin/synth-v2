@@ -1,0 +1,173 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { readFile } from 'node:fs/promises';
+import {
+  createBuyerCatalogVersion,
+  createPriceListVersion,
+  createProjectionBackedCommercialPublication,
+} from '../src/modules/commercial-publication/public.mjs';
+import { createCommercialPublicationRoutes } from '../src/http/commercial-publication-routes.mjs';
+import { wholesaleV2ExtendedOpenApi } from '../src/http/v2-openapi.mjs';
+import { collection, projection, publishedAt } from './fixtures/commercial-publication-v2.mjs';
+
+function publication() {
+  return createProjectionBackedCommercialPublication({ id: 'publication:1', collection, commercialProjection: projection(), publishedAt });
+}
+function price(source = publication(), priceOverrides = []) {
+  return createPriceListVersion({ id: 'price:1', publication: source, shopId: 'shop:1', priceOverrides, publishedAt });
+}
+function buyer(source, priceListVersion) {
+  return createBuyerCatalogVersion({
+    id: 'buyer:1',
+    publication: source,
+    priceListVersion,
+    showroom: { id: 'showroom:1', brandId: 'brand:1', collectionId: 'collection:1', status: 'open' },
+    invitation: { id: 'invite:1', showroomId: 'showroom:1', brandId: 'brand:1', shopId: 'shop:1', status: 'accepted' },
+    publishedAt,
+  });
+}
+
+test('buyer pricing changes only exact ProductSku wholesale price and derives major amount server-side', () => {
+  const source = publication();
+  const sourceJson = JSON.stringify(source);
+  const initial = price(source);
+  const changed = price(source, [{ productSkuId: 'psku:1', wholesalePriceMinor: 95001 }]);
+  const catalog = buyer(source, changed);
+
+  assert.equal(initial.lines[0].unitPrice, 1000);
+  assert.equal(changed.lines[0].wholesalePriceMinor, 95001);
+  assert.equal(changed.lines[0].unitPrice, 950.01);
+  assert.equal(changed.lines[0].rrpMinor, source.lines[0].rrpMinor);
+  assert.equal(changed.lines[0].minimumOrderQuantity, source.lines[0].minimumOrderQuantity);
+  assert.equal(changed.lines[0].deliveryStart, source.lines[0].deliveryStart);
+  assert.equal(changed.styles[0].colorways[0].skus[0].buyerUnitPrice, 950.01);
+  assert.equal(changed.styles[0].colorways[0].skus[0].commercialTerms.wholesalePriceMinor, 100000);
+  assert.deepEqual(catalog.lines, changed.lines);
+  assert.deepEqual(catalog.styles, changed.styles);
+  assert.equal(JSON.stringify(source), sourceJson);
+  assert.notEqual(changed.contentHash, initial.contentHash);
+});
+
+test('price identity remains ProductSku-exact even if display SKU text collides', () => {
+  const source = structuredClone(publication());
+  const secondSku = structuredClone(source.styles[0].colorways[0].skus[0]);
+  secondSku.productSkuId = 'psku:2';
+  secondSku.sizeValueId = 'size:l';
+  secondSku.size = { ...secondSku.size, id: 'size:l', code: 'L', labelRu: 'L', labelEn: 'L', sortOrder: 3 };
+  source.styles[0].colorways[0].skus.push(secondSku);
+  source.lines.push({ ...source.lines[0], productSkuId: 'psku:2', sizeValueId: 'size:l' });
+
+  const changed = price(source, [{ productSkuId: 'psku:2', wholesalePriceMinor: 90000 }]);
+  assert.deepEqual(changed.lines.map((line) => [line.productSkuId, line.sku, line.unitPrice]), [
+    ['psku:1', 'SKU-1', 1000],
+    ['psku:2', 'SKU-1', 900],
+  ]);
+  assert.deepEqual(changed.styles[0].colorways[0].skus.map((sku) => [sku.productSkuId, sku.buyerUnitPrice]), [
+    ['psku:1', 1000],
+    ['psku:2', 900],
+  ]);
+});
+
+test('new buyer pricing rejects textual SKU, client major price and malformed ProductSku overrides', () => {
+  const cases = [
+    [[{ sku: 'SKU-1', unitPrice: 1 }], 'PRICE_LIST_OVERRIDE_FIELD_UNKNOWN'],
+    [[{ productSkuId: 'psku:1', unitPrice: 1 }], 'PRICE_LIST_OVERRIDE_FIELD_UNKNOWN'],
+    [[{ wholesalePriceMinor: 1 }], 'PRICE_LIST_OVERRIDE_PRODUCT_SKU_REQUIRED'],
+    [[{ productSkuId: 'bad id', wholesalePriceMinor: 1 }], 'PRICE_LIST_OVERRIDE_PRODUCT_SKU_REQUIRED'],
+    [[{ productSkuId: 'psku:unknown', wholesalePriceMinor: 1 }], 'PRICE_LIST_OVERRIDE_PRODUCT_SKU_UNKNOWN'],
+    [[{ productSkuId: 'psku:1', wholesalePriceMinor: 1 }, { productSkuId: 'psku:1', wholesalePriceMinor: 2 }], 'PRICE_LIST_OVERRIDE_DUPLICATE'],
+  ];
+  for (const amount of [0, -1, 1.5, '123', null, Number.MAX_SAFE_INTEGER + 1]) {
+    cases.push([[{ productSkuId: 'psku:1', wholesalePriceMinor: amount }], 'PRICE_LIST_OVERRIDE_PRICE_INVALID']);
+  }
+  for (const [overrides, code] of cases) {
+    assert.throws(() => price(publication(), overrides), (error) => error?.code === code, `${code} expected`);
+  }
+});
+
+test('new PriceList fails closed when frozen ProductSku lineage or source terms diverge', () => {
+  const mutations = [
+    (value) => { delete value.commercialProjectionId; },
+    (value) => { value.commercialProjectionVersionNo = 0; },
+    (value) => { value.lines[0].catalogVersion = 99; },
+    (value) => { value.lines[0].productSkuId = 'psku:other'; },
+    (value) => { value.lines[0].colorwayId = 'color:other'; },
+    (value) => { value.lines.push(structuredClone(value.lines[0])); },
+    (value) => { value.styles[0].colorways[0].skus.push(structuredClone(value.styles[0].colorways[0].skus[0])); },
+    (value) => { value.lines[0].unitPrice = 1; },
+    (value) => { value.lines[0].currency = 'USD'; },
+  ];
+  for (const mutate of mutations) {
+    const value = structuredClone(publication());
+    mutate(value);
+    assert.throws(() => price(value), (error) => /^PRICE_LIST_/.test(error?.code ?? ''));
+  }
+});
+
+test('BuyerCatalog refuses forged price lineage, frozen terms or buyer hierarchy', () => {
+  const source = publication();
+  const mutations = [
+    (value) => { value.status = 'draft'; },
+    (value) => { value.brandId = 'brand:other'; },
+    (value) => { value.currency = 'USD'; },
+    (value) => { value.commercialProjectionContentHash = 'b'.repeat(64); },
+    (value) => { value.lines[0].unitPrice = 1; },
+    (value) => { value.lines[0].minimumOrderQuantity = 100; },
+    (value) => { value.lines[0].deliveryStart = '2099-01-01T00:00:00.000Z'; },
+    (value) => { value.lines[0].sizeValueId = 'size:other'; },
+    (value) => { value.styles[0].titleEn = 'Mutable live title'; },
+    (value) => { value.styles[0].colorways[0].skus[0].buyerUnitPrice = 1; },
+    (value) => { delete value.styles; },
+  ];
+  for (const mutate of mutations) {
+    const value = structuredClone(price(source));
+    mutate(value);
+    assert.throws(() => buyer(source, value), (error) => /^BUYER_CATALOG_/.test(error?.code ?? ''));
+  }
+});
+
+test('public route and composed OpenAPI 1.17 accept only ProductSku minor-price override input', () => {
+  let calls = 0;
+  const routes = createCommercialPublicationRoutes({
+    commercialPublication: {
+      publishBuyerCatalog(_commandId, _actorId, _publicationId, body) { calls += 1; return body; },
+    },
+  });
+  const path = '/v2/commercial-publications/publication:1/buyer-catalogs';
+  const route = routes.find((candidate) => candidate.method === 'POST' && candidate.pattern.test(path));
+  assert.ok(route);
+  const invoke = (priceOverrides) => route.execute({
+    commandId: 'cmd:1', actorId: 'owner:1', params: ['publication:1'], query: {},
+    body: { showroomId: 'showroom:1', shopId: 'shop:1', priceOverrides },
+  });
+
+  for (const invalid of [
+    [{ sku: 'SKU-1', unitPrice: 1 }],
+    [{ productSkuId: 'psku:1', unitPrice: 1 }],
+    [{}],
+    [{ productSkuId: 'bad id', wholesalePriceMinor: 1 }],
+    [{ productSkuId: 'psku:1', wholesalePriceMinor: 1.5 }],
+  ]) assert.throws(() => invoke(invalid), (error) => /^HTTP_BODY_/.test(error?.code ?? ''));
+  assert.equal(calls, 0);
+
+  const exact = [{ productSkuId: 'psku:1', wholesalePriceMinor: 95001 }];
+  assert.deepEqual(invoke(exact).priceOverrides, exact);
+  assert.equal(calls, 1);
+
+  const schema = wholesaleV2ExtendedOpenApi.components.schemas.PriceOverride;
+  assert.deepEqual(schema.required, ['productSkuId', 'wholesalePriceMinor']);
+  assert.deepEqual(Object.keys(schema.properties).sort(), ['productSkuId', 'wholesalePriceMinor']);
+  assert.equal(schema.additionalProperties, false);
+  assert.equal(wholesaleV2ExtendedOpenApi.info.version, '1.17.0');
+});
+
+test('migration 075 is forward-only and guards fresh price/catalog writes without flat/master joins', async () => {
+  const sql = await readFile(new URL('../db/migrations/075_canonical_buyer_catalog_new_writes.sql', import.meta.url), 'utf8');
+  assert.match(sql, /BEFORE INSERT ON price_list_versions/);
+  assert.match(sql, /BEFORE INSERT ON buyer_catalog_versions/);
+  assert.match(sql, /PRICE_LIST_CANONICAL_PUBLICATION_REQUIRED/);
+  assert.match(sql, /BUYER_CATALOG_PRICE_LINE_MISMATCH/);
+  assert.match(sql, /BUYER_CATALOG_CANONICAL_ROW_MISMATCH/);
+  assert.doesNotMatch(sql, /(?:UPDATE|DELETE FROM)\s+(?:commercial_publications|price_list_versions|buyer_catalog_versions)\b/i);
+  assert.doesNotMatch(sql, /(?:FROM|JOIN)\s+(?:catalog_skus|product_style_versions|product_skus)\b/i);
+});

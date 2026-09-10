@@ -2,12 +2,13 @@ import { createHash } from 'node:crypto';
 import { invariant } from '../../core/errors.mjs';
 import { normalizeMoney } from '../../core/money.mjs';
 import { canonicalJson } from '../../core/fingerprints.mjs';
+import { assertCanonicalPriceList, assertCanonicalPublication, applyBuyerPrices } from './canonical-source.mjs';
 export { assertBuyerCatalogQuantity, buyerCatalogProductSku, isRichBuyerCatalog } from './buyer-catalog-product.mjs';
 
 const MINOR_MONEY_FACTOR = 100;
 
-// Historical V1 constructor is preserved only for old immutable snapshots/tests.
-// New application writes use createProjectionBackedCommercialPublication.
+// DEPRECATED: historical V1 materialization only for immutable compatibility snapshots/tests.
+// New application writes must use createProjectionBackedCommercialPublication and V1 cannot originate fresh buyer pricing/catalog truth.
 export function createCommercialPublication({ id, collection, catalogSkus, publishedAt }) {
   invariant(id && collection?.id, 'COMMERCIAL_PUBLICATION_IDENTITY_REQUIRED', 'Publication id and collection are required');
   invariant(collection.status === 'published', 'COMMERCIAL_PUBLICATION_COLLECTION_NOT_PUBLISHED', 'Commercial publication requires a published collection');
@@ -93,42 +94,26 @@ export function createProjectionBackedCommercialPublication({ id, collection, co
 export function createPriceListVersion({ id, publication, shopId, priceOverrides = [], publishedAt }) {
   invariant(id && publication?.id && shopId, 'PRICE_LIST_VERSION_IDENTITY_REQUIRED', 'Price list version identity is required');
   invariant(publication.status === 'published', 'PRICE_LIST_PUBLICATION_NOT_PUBLISHED', 'Price list requires a published commercial publication');
-  invariant(Array.isArray(priceOverrides), 'PRICE_LIST_OVERRIDES_INVALID', 'Price overrides must be an array');
+  assertCanonicalPublication(publication);
+  invariant(Array.isArray(priceOverrides) && priceOverrides.length <= 10_000, 'PRICE_LIST_OVERRIDES_INVALID', 'Price overrides must be a bounded array');
   const overrides = new Map();
+  const publicationSkuIds = new Set(publication.lines.map((line) => line.productSkuId));
   for (const override of priceOverrides) {
-    invariant(override && typeof override.sku === 'string', 'PRICE_LIST_OVERRIDE_SKU_REQUIRED', 'Price override SKU is required');
-    invariant(!overrides.has(override.sku), 'PRICE_LIST_OVERRIDE_DUPLICATE', 'Price override SKU is duplicated', { sku: override.sku });
-    invariant(publication.lines.some((line) => line.sku === override.sku), 'PRICE_LIST_OVERRIDE_SKU_UNKNOWN', 'Price override SKU is not in publication', { sku: override.sku });
-    overrides.set(override.sku, normalizeMoney(override.unitPrice, {
-      invalidCode: 'PRICE_LIST_OVERRIDE_PRICE_INVALID', scaleCode: 'PRICE_LIST_OVERRIDE_PRICE_SCALE_INVALID',
-      overflowCode: 'PRICE_LIST_OVERRIDE_PRICE_TOO_LARGE', label: 'Price override',
-    }));
+    invariant(override && typeof override === 'object' && !Array.isArray(override), 'PRICE_LIST_OVERRIDE_INVALID', 'Price override must be an object');
+    invariant(Object.keys(override).every((key) => ['productSkuId', 'wholesalePriceMinor'].includes(key)), 'PRICE_LIST_OVERRIDE_FIELD_UNKNOWN', 'Price override accepts only ProductSku identity and integer wholesale minor amount');
+    invariant(typeof override.productSkuId === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/.test(override.productSkuId), 'PRICE_LIST_OVERRIDE_PRODUCT_SKU_REQUIRED', 'Price override requires an exact ProductSku id');
+    invariant(!overrides.has(override.productSkuId), 'PRICE_LIST_OVERRIDE_DUPLICATE', 'Price override ProductSku is duplicated', { productSkuId: override.productSkuId });
+    invariant(publicationSkuIds.has(override.productSkuId), 'PRICE_LIST_OVERRIDE_PRODUCT_SKU_UNKNOWN', 'Price override ProductSku is not in publication', { productSkuId: override.productSkuId });
+    invariant(Number.isSafeInteger(override.wholesalePriceMinor) && override.wholesalePriceMinor > 0, 'PRICE_LIST_OVERRIDE_PRICE_INVALID', 'Wholesale minor amount must be a positive safe integer');
+    const unitPrice = moneyFromMinor(override.wholesalePriceMinor, 'Buyer wholesale price');
+    overrides.set(override.productSkuId, Object.freeze({ wholesalePriceMinor: override.wholesalePriceMinor, unitPrice }));
   }
 
-  const projectionBacked = publication.formatVersion === 2 && Array.isArray(publication.styles);
   const lines = publication.lines.map((line) => {
-    const unitPrice = overrides.get(line.sku) ?? line.unitPrice;
-    if (projectionBacked) return Object.freeze({ ...line, unitPrice });
-    // Preserve the exact V1 immutable snapshot shape and therefore its hash basis.
-    return Object.freeze({
-      sku: line.sku,
-      catalogVersion: line.catalogVersion,
-      unitPrice,
-      currency: line.currency,
-      minimumOrderQuantity: line.minimumOrderQuantity,
-    });
+    const override = overrides.get(line.productSkuId);
+    if (!override) return Object.freeze({ ...line });
+    return Object.freeze({ ...line, wholesalePriceMinor: override.wholesalePriceMinor, unitPrice: override.unitPrice });
   });
-
-  if (!projectionBacked) {
-    const basis = Object.freeze({
-      publicationId: publication.id,
-      brandId: publication.brandId,
-      shopId,
-      currency: publication.currency,
-      lines: Object.freeze(lines),
-    });
-    return Object.freeze({ id, ...basis, status: 'published', contentHash: hashBasis(basis), publishedAt });
-  }
 
   const basis = deepFreeze({
     publicationId: publication.id,
@@ -149,6 +134,8 @@ export function createBuyerCatalogVersion({ id, publication, priceListVersion, s
   invariant(invitation.status === 'accepted', 'BUYER_CATALOG_ACCESS_NOT_ACCEPTED', 'Buyer catalog requires accepted showroom access');
   invariant(invitation.showroomId === showroom.id && invitation.brandId === publication.brandId && invitation.shopId === priceListVersion.shopId, 'BUYER_CATALOG_ACCESS_MISMATCH', 'Showroom invitation does not match buyer catalog');
   invariant(priceListVersion.publicationId === publication.id, 'BUYER_CATALOG_PRICE_LIST_MISMATCH', 'Price list does not belong to publication');
+  assertCanonicalPublication(publication);
+  assertCanonicalPriceList(publication, priceListVersion);
 
   const basis = deepFreeze({
     publicationId: publication.id,
@@ -280,21 +267,6 @@ function selectMedia(media, selectedIds) {
     .filter((item) => selectedIds.has(item.id))
     .sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0) || left.id.localeCompare(right.id))
     .map(deepCopy));
-}
-
-function applyBuyerPrices(styles, lines) {
-  const priceBySku = new Map(lines.map((line) => [line.sku, line]));
-  return deepFreeze(styles.map((style) => ({
-    ...deepCopy(style),
-    colorways: style.colorways.map((colorway) => ({
-      ...deepCopy(colorway),
-      skus: colorway.skus.map((sku) => {
-        const price = priceBySku.get(sku.skuCode);
-        invariant(price, 'PRICE_LIST_STYLE_SKU_MISSING', 'Rich publication SKU is missing from price list lines', { sku: sku.skuCode });
-        return { ...deepCopy(sku), buyerUnitPrice: price.unitPrice, buyerCurrency: price.currency, buyerMinimumOrderQuantity: price.minimumOrderQuantity };
-      }),
-    })),
-  })));
 }
 
 function compareSkuBySize(left, right) {

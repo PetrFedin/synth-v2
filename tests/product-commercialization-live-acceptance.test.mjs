@@ -21,6 +21,7 @@ test('Product commercialization acceptance stays on canonical public runtime rou
   assert.doesNotMatch(source, /\/v2\/catalog\/skus/, 'P0.3 acceptance must not reintroduce flat catalog_skus as product/commercial truth');
   assert.match(source, /assertProductCommercializationPersistence/);
   assert.match(source, /productSkuId/);
+  assert.match(source, /priceOverrides: \[\{ productSkuId: ready\.product\.skuId, wholesalePriceMinor: 10000 \}\]/, 'P0.4 acceptance must price by exact ProductSku + minor amount, never textual SKU');
   assert.match(source, /commercialProjectionContentHash/);
   assert.match(source, /expectedDeltasVerified/);
   assert.match(script, /runReadyProductReadinessLiveAcceptance/);

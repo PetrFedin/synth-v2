@@ -1,6 +1,6 @@
 # Commercial Publication → Linesheets
 
-Status: supporting UI/read-model specification aligned with `ARCHITECTURE.md` as of **2026-09-04**. `ARCHITECTURE.md` remains authoritative.
+Status: supporting UI/read-model specification aligned with `ARCHITECTURE.md` as of **2026-09-08**. `ARCHITECTURE.md` remains authoritative.
 
 Linesheets/Showroom is a read-only buyer presentation of immutable commercial snapshot truth. Browser code must not derive commercial prices, reconstruct current Product/PLM facts, fabricate variants/buyers, inject demo collections, or invent lifecycle states that the domain does not implement.
 
@@ -22,7 +22,7 @@ The service authorizes the actor against the collection brand with `DEAL_READ`. 
 
 For canonical V2 publication rows, browser consumers should prefer the frozen projection-native payload: exact projection id/version/hash, readiness snapshot id, StyleVersion id, currency, ProductSku lines and variant-rich Style → Colorway → SizeValue/ProductSku hierarchy. A current PLM value must never overwrite or silently decorate a frozen commercial fact.
 
-Legacy/formatVersion 1 rows remain compatibility history. Their flat fields are not permission to create new flat-catalog product/publication semantics.
+Legacy/formatVersion 1 rows remain immutable compatibility history. Their flat fields are not permission to create new flat-catalog product/publication semantics, and migration 075/domain validation now prevent those V1 publication/price snapshots from originating a fresh canonical PriceListVersion or BuyerCatalogVersion.
 
 ## Buyer-specific catalog truth
 
@@ -40,7 +40,7 @@ P0.3 acceptance reads the same BuyerCatalogVersion through brand-authorized, sho
 
 ## Current pricing boundary
 
-PriceListVersion currently freezes server-authored currency, wholesale price, RRP and MOQ per canonical ProductSku-bearing snapshot, but the full market/effective-period contract is incomplete and the buyer-catalog publication input still retains a textual-SKU price-override compatibility shape. This is `PRICE-009`; Linesheet UI must not turn that compatibility input into a second pricing master.
+PriceListVersion freezes server-authored currency plus ProductSku-exact wholesale/RRP/MOQ/delivery/availability terms. Optional buyer-specific pricing is keyed only by exact `productSkuId` with integer `wholesalePriceMinor`; the server derives the major-unit price and rejects textual `sku`/client `unitPrice`. The remaining `PRICE-009` gap is market/effective-period and any required policy depth, not pricing identity. Linesheet UI must render the frozen BuyerCatalogVersion and never create a second pricing master.
 
 ## UX and localization
 

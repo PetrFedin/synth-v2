@@ -1,6 +1,6 @@
 # SYNTH-V2 Commercial & Execution Spine
 
-Status: supporting lineage summary aligned with authoritative `ARCHITECTURE.md` as of **2026-09-04**.
+Status: supporting lineage summary aligned with authoritative `ARCHITECTURE.md` as of **2026-09-08**.
 
 Canonical immutable lineage:
 
@@ -16,8 +16,8 @@ Operational rules:
 - The only canonical technical-to-commerce handoff is `ProductReadinessSnapshot → CommercialProductProjectionVersion → CommercialPublication`.
 - Buyer-visible Product/variant/price/MOQ facts come from immutable CommercialPublication / PriceListVersion / BuyerCatalogVersion snapshots, never from mutable PLM fields after freeze.
 - Current V2 CommercialPublication is an immutable projection-backed `published` snapshot. The staged publication lifecycle is an open gap (`COMM-LC-008`), not current runtime truth.
-- Current PriceListVersion freezes exact buyer/shop, currency and ProductSku commercial terms. Market/effective-period and exact override convergence remain `PRICE-009`.
-- BuyerCatalogVersion freezes exact Publication + PriceListVersion + Showroom/access context and variant-rich ProductSku hierarchy.
+- Current PriceListVersion freezes exact buyer/shop, currency and ProductSku commercial terms. Buyer-specific override identity is exact `productSkuId + wholesalePriceMinor`; textual SKU is not pricing identity. Market/effective-period and any remaining policy depth remain `PRICE-009`.
+- Fresh BuyerCatalogVersion freezes exact projection-backed Publication + exact ProductSku PriceListVersion + Showroom/access context and variant-rich ProductSku hierarchy. Legacy V1 commercial snapshots remain immutable read-only history and cannot seed a fresh buyer catalog.
 - Order creation consumes submitted Selection truth; OrderCommitSnapshot is the single frozen commercial deal truth for physical/economic downstream use.
 - Canonical physical identity is exact `orderLineNo + productSkuId`; textual `sku` is display/consistency/legacy only.
 - Inventory is a centralized dynamic state/ledger overlay around location, balance, reservation, allocation and movement. Buyer/order screens do not own a second balance.

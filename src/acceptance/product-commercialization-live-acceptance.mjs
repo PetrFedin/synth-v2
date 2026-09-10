@@ -341,7 +341,7 @@ export async function runProductCommercializationLiveAcceptance({
 
   const buyerCatalogPublish = payloadData(await requestJson(fetchImpl, target.url, `/v2/commercial-publications/${encodeURIComponent(publication.id)}/buyer-catalogs`, {
     method: 'POST', token: brandToken, idempotencyKey: command(runId, 'buyer-catalog'),
-    body: { showroomId: openedShowroom.id, shopId: references.shop.id, priceOverrides: [] },
+    body: { showroomId: openedShowroom.id, shopId: references.shop.id, priceOverrides: [{ productSkuId: ready.product.skuId, wholesalePriceMinor: 10000 }] },
   }), 'PriceListVersion/BuyerCatalogVersion publication');
   const priceListVersion = buyerCatalogPublish.priceListVersion;
   const buyerCatalogVersion = buyerCatalogPublish.buyerCatalogVersion;

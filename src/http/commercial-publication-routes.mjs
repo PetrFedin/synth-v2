@@ -9,7 +9,7 @@ const PUBLICATION_BODY = bodyContract(['collectionId', 'commercialProjectionId']
 const BUYER_CATALOG_BODY = bodyContract(
   ['showroomId', 'shopId', 'priceOverrides'],
   {},
-  { priceOverrides: ['sku', 'unitPrice'] },
+  { priceOverrides: ['productSkuId', 'wholesalePriceMinor'] },
 );
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/;
 
@@ -36,9 +36,10 @@ function validateBuyerCatalogBody(body) {
   invariant(typeof body.showroomId === 'string' && body.showroomId.length > 0, 'HTTP_BODY_FIELD_INVALID', 'showroomId must be a non-empty string', { field: 'showroomId' });
   invariant(typeof body.shopId === 'string' && body.shopId.length > 0, 'HTTP_BODY_FIELD_INVALID', 'shopId must be a non-empty string', { field: 'shopId' });
   if (body.priceOverrides === undefined) return;
+  invariant(body.priceOverrides.length <= 10_000, 'HTTP_BODY_FIELD_INVALID', 'priceOverrides exceeds the allowed maximum of 10000 rows', { field: 'priceOverrides', maxItems: 10_000 });
   body.priceOverrides.forEach((override, index) => {
-    invariant(typeof override.sku === 'string' && override.sku.length > 0, 'HTTP_BODY_FIELD_INVALID', `priceOverrides[${index}].sku must be a non-empty string`, { index });
-    invariant(override.unitPrice !== undefined, 'HTTP_BODY_FIELD_INVALID', `priceOverrides[${index}].unitPrice is required`, { index });
+    invariant(typeof override.productSkuId === 'string' && SAFE_ID.test(override.productSkuId), 'HTTP_BODY_FIELD_INVALID', `priceOverrides[${index}].productSkuId must be a valid identifier`, { index, field: 'productSkuId' });
+    invariant(Number.isSafeInteger(override.wholesalePriceMinor) && override.wholesalePriceMinor > 0 && override.wholesalePriceMinor <= 90_071_992_547_409, 'HTTP_BODY_FIELD_INVALID', `priceOverrides[${index}].wholesalePriceMinor must be a positive safe minor-unit integer`, { index, field: 'wholesalePriceMinor' });
   });
 }
 

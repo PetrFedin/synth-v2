@@ -1,6 +1,6 @@
 # Product Readiness and Commercial Product Projection V2
 
-Status: **supporting specification aligned with `ARCHITECTURE.md` as of 2026-09-04**.  
+Status: **supporting specification aligned with `ARCHITECTURE.md` as of 2026-09-08**.
 Authority: `ARCHITECTURE.md` remains the only authoritative living platform contract. This file provides implementation rationale and must not redefine current status or lifecycle.
 
 ## Purpose
@@ -72,7 +72,7 @@ The old statement that CommercialPublication still had to be made projection-nat
 
 Projection-backed V2 CommercialPublication freezes exact projection id/version/hash, readiness snapshot, StyleVersion and ProductSku-rich hierarchy. PriceListVersion and BuyerCatalogVersion freeze the same upstream lineage.
 
-Historical flat-catalog records remain compatibility history; they are not a source for new V2 product semantics.
+Historical flat-catalog records remain compatibility history. Fresh V2 PriceListVersion/BuyerCatalogVersion writes now fail closed if their source is a legacy V1 CommercialPublication/PriceList; no ProductSku is guessed into old history.
 
 ## Current lifecycle limitation
 
@@ -84,7 +84,7 @@ is **not implemented at this baseline** and is tracked as `COMM-LC-008` in `ARCH
 
 ## Current pricing limitation
 
-PriceListVersion freezes exact buyer/shop, currency and ProductSku commercial terms, including wholesale/RRP/MOQ. Explicit market/effective-period semantics are still incomplete, and buyer-catalog publication retains a compatibility textual-SKU price-override input. These are tracked under `PRICE-009`; canonical pricing must converge on exact ProductSku identity.
+PriceListVersion freezes exact buyer/shop, currency and ProductSku commercial terms, including wholesale/RRP/MOQ/delivery/availability. Buyer-specific override identity is now exact `{ productSkuId, wholesalePriceMinor }`; textual SKU and client major-unit `unitPrice` are rejected and the server derives the major amount. `PRICE-009` remains PARTIAL for explicit market/effective-period and any required pricing-policy depth.
 
 ## Acceptance evidence
 
@@ -97,7 +97,7 @@ PriceListVersion freezes exact buyer/shop, currency and ProductSku commercial te
 
 ### READY → BuyerCatalog
 
-`npm run acceptance:product-commercialization` creates a fresh positive READY graph and continues it through exact Collection assortment assignment, Showroom/buyer access, CommercialProductProjectionVersion, projection-backed CommercialPublication, PriceListVersion and BuyerCatalogVersion using separate brand/shop actor contexts. The gate verifies the exact frozen lineage and proves Selection/Order/Supply/ActualCost/inventory movements are not created by this slice.
+`npm run acceptance:product-commercialization` creates a fresh positive READY graph and continues it through exact Collection assortment assignment, Showroom/buyer access, CommercialProductProjectionVersion, projection-backed CommercialPublication, ProductSku-exact PriceListVersion and BuyerCatalogVersion using separate brand/shop actor contexts. The buyer-catalog mutation itself uses exact `productSkuId + wholesalePriceMinor`. The gate verifies the exact frozen lineage and proves Selection/Order/Supply/ActualCost/inventory movements are not created by this slice. PR #118 exact-head repository workflows passed; intended-live `PROD-PROVEN` evidence remains separately governed by `ARCHITECTURE.md`.
 
 A harness or a green unit/PostgreSQL test is not `PROD-PROVEN`. The intended live acceptance environment must execute the supported runtime gate before the corresponding path receives that status.
 

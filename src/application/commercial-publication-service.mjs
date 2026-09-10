@@ -130,12 +130,13 @@ export function createCommercialPublicationService({
 
     async publishBuyerCatalog(commandId, actorId, publicationId, input) {
       invariant(input && typeof input === 'object' && !Array.isArray(input), 'BUYER_CATALOG_PUBLICATION_INVALID', 'Buyer catalog publication request is invalid');
+      invariant(Object.keys(input).every((key) => ['showroomId', 'shopId', 'priceOverrides'].includes(key)), 'BUYER_CATALOG_PUBLICATION_FIELD_UNKNOWN', 'Buyer catalog publication contains unsupported fields');
       const fingerprint = `publishBuyerCatalog:${actorId}:${publicationId}:${canonicalJson(input)}`;
       const publication = requireEntity(await commercialStore.getCommercialPublication(publicationId), 'COMMERCIAL_PUBLICATION_NOT_FOUND', { publicationId });
       const context = await buyerCatalogContext(actorId, publication, input.showroomId, input.shopId);
       return execute(commandId, fingerprint, actorId, async (tx) => {
         const publishedAt = clock();
-        const priceListVersion = createPriceListVersion({ id: nextId('price-list-version'), publication, shopId: input.shopId, priceOverrides: input.priceOverrides ?? [], publishedAt });
+        const priceListVersion = createPriceListVersion({ id: nextId('price-list-version'), publication, shopId: input.shopId, priceOverrides: input.priceOverrides === undefined ? [] : input.priceOverrides, publishedAt });
         const buyerCatalogVersion = createBuyerCatalogVersion({ id: nextId('buyer-catalog-version'), publication, priceListVersion, showroom: context.showroom, invitation: context.invitation, publishedAt });
         await tx.insertPriceListVersion(priceListVersion);
         await tx.insertBuyerCatalogVersion(buyerCatalogVersion);

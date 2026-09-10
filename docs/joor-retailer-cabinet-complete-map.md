@@ -1,7 +1,7 @@
 # Платформа Syntha / Syntha Fashion Platform — Product & Supply + Wholesale Commerce
 
 Статус / Status: единственная актуальная двуязычная продуктовая спецификация / the only current bilingual product source of truth for Syntha.  
-Версия / Version: 4.3, 6 августа 2026 года.  
+Версия / Version: 4.7, 19 августа 2026 года.  
 Основной рынок / Primary market: российские fashion-бренды, работающие с российскими и зарубежными фабриками, поставщиками материалов, готовых изделий и магазинами / Russian fashion brands working with domestic and international factories, material suppliers, finished-goods suppliers and retailers.  
 Назначение / Purpose: связать Product & Supply и Wholesale Commerce через единое версионное ядро товара, сохранив отдельные процессы, права, документы, статусы и системы учёта / connect Product & Supply and Wholesale Commerce through one versioned product core while preserving separate processes, permissions, documents, states and systems of record.
 
@@ -8412,3 +8412,2256 @@ Benchmark capability is not copied as a disconnected feature. It must map to:
 | Measured commercial result | connected data | analytics | source versions and coverage |
 
 The platform is operationally complete when every result above can be reached through explicit, testable and recoverable transitions in both Russian and English user journeys.
+
+
+---
+
+## 128. Дельта-аудит авторизованного кабинета JOOR Retailer / Authenticated JOOR Retailer Cabinet Delta Audit
+
+Дата наблюдения / Observation date: 17–18 августа 2026 года.  
+Среда / Environment: авторизованный retailer-аккаунт на плане LITE; идентифицирующие данные, контакты, адреса, история сообщений и коммерческие значения аккаунта намеренно исключены из этой спецификации / authenticated retailer account on the LITE plan; identifying data, contacts, addresses, message history and account-specific commercial values are intentionally excluded from this specification.
+
+### 128.1 Evidence boundary и правило недублирования
+
+Этот раздел содержит только подтверждённые детали живого интерфейса JOOR, отсутствовавшие в предыдущих разделах документа. Общие сущности RetailerProfile, Connection, CommercialAccessGrant, Linesheet, RetailerAssortment и WholesaleOrder здесь не переопределяются.
+
+This section records only live JOOR UI and behavior details that were not already present in the specification. It does not redefine the canonical Syntha entities documented earlier.
+
+Evidence labels:
+
+- **OBSERVED** — экран, поле, состояние или ограничение непосредственно показано в авторизованном интерфейсе;
+- **INFERRED** — вывод следует из нескольких наблюдаемых экранов, но серверный контракт не проверялся;
+- **NOT VALIDATED** — операция намеренно не завершалась из-за внешнего эффекта: подключение к бренду, создание заказа, сохранение профиля, установка интеграции, оплата или покупка подписки;
+- после выбора Reset password первый клик немедленно вызвал browser alert без предварительного экрана подтверждения; точный backend-эффект не проверялся;
+- никакие connection requests не принимались и не отклонялись, заказы не создавались, количества не вводились, настройки не сохранялись, интеграции не устанавливались и платежи не выполнялись.
+
+### 128.2 Фактическая информационная архитектура / Observed Information Architecture
+
+В живом retailer-интерфейсе одновременно существуют новая React-навигация и legacy-экраны.
+
+| Область | Наблюдаемые экраны и функции |
+|---|---|
+| Home | connected brands, быстрый View Orders, Shop, Brands Interested in You, Connection Requests, New to JOOR, профиль как источник discovery-сигналов |
+| Shop | Start an Order, Linesheets, Looks, Styleboards |
+| Orders & Visual Assortment | Manage Orders, Visual Assortment |
+| Explore Brands | current connections, brand outreach, inbound requests, outbound pending requests, Favorites, Find New Brands, Passport |
+| Account menu | current account, primary-account state, other accounts, Account Settings, Integration Settings, Premium Features, Manage Profile, Data Activity Center, language, Help Center, Log Out |
+| Messages | отдельный unread counter и inbox-подобный центр коммуникаций |
+
+Наблюдаемые маршруты / observed routes:
+
+- /ra/home — retailer home;
+- /accounts/settings — user and retailer account settings;
+- /ra/profile/{retailerId} — public retailer profile and edit mode;
+- /ra/shopify/retailer-product-sync/config — Shopify integration settings;
+- /ra/data-activity-center — background data jobs;
+- /ra/subscriptions — premium feature entitlements;
+- /matches/current — connected brands;
+- /matches/requests — inbound brand connection requests;
+- /matches/pending — pending outbound connection state;
+- /ra/submissions — Brands Interested In You outreach;
+- /ra/find_new_brands — discovery directory;
+- /r/passport/favorites — saved brands;
+- /r/passport — event and marketplace discovery;
+- /collections/shop — legacy linesheet registry;
+- /ra/products — modern catalog and quantity entry;
+- /orders/cart — active order cart;
+- /ra/showroom/collections — Looks;
+- /ra/showroom/styleboards — Styleboards;
+- /ra/visual-assortment — premium Visual Assortment gate.
+
+**Syntha decision:** one canonical retailer navigation must expose the same objects through one design system. Legacy registry pages and modern catalog/order pages must not coexist as separate interaction dialects.
+
+### 128.3 Пользовательские настройки / Personal User Settings
+
+Account Settings separates personal settings from retailer-organization settings.
+
+#### User profile
+
+OBSERVED fields and controls:
+
+- login email displayed separately from organization contact email;
+- password reset action;
+- full name;
+- job title;
+- phone;
+- profile photo upload;
+- opt-in checkbox to display the user on the company profile;
+- company-profile deep link.
+
+**Syntha requirement:** User, OrganizationMembership and public RetailerContactProjection remain separate. A user controls whether personal information is published; organization administrators cannot silently expose private user fields.
+
+#### Interface and email languages
+
+JOOR stores two independent language preferences:
+
+- default interface language;
+- email language.
+
+Account Settings offered English, Spanish, French, German, Italian, Japanese, Simplified Chinese, Russian and Korean. The live page language switcher exposed English, Arabic, German, Spanish, French, Italian, Japanese, Brazilian Portuguese, Russian and Simplified Chinese.
+
+**Observed inconsistency:** Korean appeared in settings but not in the live switcher; Arabic and Brazilian Portuguese appeared in the switcher but not in the settings form.
+
+**Syntha requirement:** one governed LanguageCapability registry must drive interface availability, email templates, translation status and fallback behavior. A language must not be selectable for a channel that cannot render it.
+
+#### Email preferences
+
+Independent Yes/No preferences were observed for:
+
+- forwarding JOOR inbox messages to email;
+- connection-request emails;
+- weekly updates from connections;
+- industry updates and news;
+- orders assigned to the user on the web;
+- orders assigned to the user on the iPad.
+
+**Syntha requirement:** notification preferences are channel- and event-specific, organization-policy-aware and auditable. Mandatory security or legal notifications cannot be disabled by ordinary marketing preferences.
+
+#### Connection-request template
+
+Observed controls:
+
+- Use default connect request message checkbox;
+- editable default message;
+- Save Changes.
+
+**Syntha requirement:** store a versioned user/organization message template with RU/EN variants. Applying the template to a request must create a snapshot; later edits must not rewrite already sent requests.
+
+#### Date format
+
+Observed values:
+
+- mm/dd/yyyy;
+- dd/mm/yyyy;
+- yyyy/mm/dd.
+
+**Syntha requirement:** date display is a user preference; persisted deadlines remain canonical timestamps or dates and never change semantics when the display format changes.
+
+#### Landing page
+
+Observed choices:
+
+- Home;
+- My Connections;
+- Orders;
+- Profile.
+
+**Syntha requirement:** configurable landing destinations must pass capability checks. A user cannot land on a page that the current account context or plan does not permit.
+
+#### Retail-price rounding
+
+Observed values:
+
+- none;
+- nearest 1.00;
+- nearest 5.00.
+
+**Syntha requirement:** rounding is an explicit presentation/calculation policy, scoped by currency and price-list context. It cannot silently overwrite source retail price or wholesale price. Preview must show original, rounded and effective values.
+
+#### Password reset safety
+
+OBSERVED: the first Reset password click produced an immediate browser alert instead of an explanatory form or confirmation step.
+
+**Syntha improvement:** password reset must use an explicit, rate-limited flow that states the destination channel, never reveals whether an unrelated account exists, records security audit evidence and requires confirmation before sending when the user is already authenticated.
+
+### 128.4 Retailer account settings и публичный профиль / Retailer Account Settings and Public Profile
+
+#### Retailer account information
+
+Observed editable fields:
+
+- profile name;
+- organization primary contact email used for connection requests and messages;
+- POS system;
+- POS version;
+- buyer name shown on purchase orders;
+- connection permission: whether any brand or retailer may connect;
+- privacy: Show in Search or Hide from Search.
+
+**Syntha requirement:** separate discoverability, inbound-request policy and commercial access. Hiding a profile from search must not delete existing connections or grants. Changing the buyer name must create a new display/contact version and must not rewrite historical order snapshots.
+
+#### Public retailer profile
+
+Observed profile-edit dimensions:
+
+- logo image;
+- Tax ID verification with country and Tax ID;
+- business description;
+- website;
+- Instagram, X and Facebook;
+- store photos, with up to 30 files selected at once and a 10 MB per-image limit shown by JOOR;
+- people section populated from user settings and per-user publication opt-in;
+- primary location and additional locations;
+- location name and type;
+- year established;
+- wholesale price minimum and maximum;
+- country, address lines, city, territory, postal code and phone;
+- category selection;
+- brands carried;
+- gender and age demographics;
+- up to three style descriptors;
+- up to three shopping-use cases;
+- add another location;
+- delete non-primary locations.
+
+Observed retailer descriptors include Sophisticated, Edgy, Casual, Feminine, Downtown, Active, Classic, Vintage and Bohemian. Shopping-use cases include Professional Looks, Day to Night, Cocktail and Events, Casual Sportswear, Resort/Beach/Swimwear and Gifts.
+
+The public view exposes verification state, people, primary location and expandable other locations. JOOR explicitly explains that profile quality affects whether brands show interest.
+
+**Syntha requirements:**
+
+- create a versioned RetailerPublicProfileProjection separate from private legal/account data;
+- implement field-level publication state and completeness scoring;
+- keep Tax ID evidence protected; expose only verification result and permitted country/legal-entity signals;
+- validate images, file size, MIME type, moderation status and publication rights;
+- model stores, warehouses, e-commerce destinations and billing addresses as typed locations rather than duplicating free-text blocks;
+- use profile categories and price positioning as explainable discovery features, not as opaque permanent labels;
+- preserve historical profile snapshots referenced by connection decisions.
+
+### 128.5 Мультиаккаунтность / Multi-Account Context
+
+JOOR supports one user associated with multiple retailer accounts.
+
+OBSERVED behavior:
+
+- current account card shows account identity, connected-brand summary and creation provenance/date;
+- current account can be marked as the primary account;
+- Other Accounts section can be expanded;
+- accounts can be searched by connected brand;
+- selecting another account changes the active retailer context;
+- account cards may show the creating brand or account creation date;
+- some account-brand relationships may be read-only or archived;
+- Manage Account Visibility opens a separate visibility settings screen;
+- checked accounts are hidden from discovery by new brands;
+- unchecked accounts remain visible;
+- JOOR warns that visibility changes may take up to 30 minutes;
+- All Accounts control can apply visibility at scale.
+
+**Syntha requirements:**
+
+- every request resolves an explicit active OrganizationMembership and tenant context;
+- UI must display the active account persistently;
+- primary account is a user preference, not a permission grant;
+- account switch invalidates tenant-scoped caches, drafts, search results and file handles;
+- cross-account search can use safe metadata only and must never leak private orders, prices or contacts;
+- visibility changes use a durable command, propagation status and completion timestamp;
+- pending visibility propagation must be shown; Syntha must not claim immediate completion;
+- archived/read-only relationships are explicit capabilities, not text decorations;
+- switching context while an unsaved order/profile form exists requires a clear save/discard decision.
+
+### 128.6 Discovery, outreach, favorites and connection direction
+
+JOOR exposes several distinct relationship surfaces that must not be collapsed into one ambiguous Pending state.
+
+#### Brands Interested In You
+
+Observed:
+
+- tabs New, Viewed and All;
+- brands can send personalized visual outreach after discovering the retailer profile;
+- outreach empty state links to Find New Brands.
+
+**Syntha requirement:** model BrandOutreach separately from ConnectionRequest. Outreach can be viewed, archived or converted into a connection action without becoming commercial access by itself.
+
+#### Inbound requests
+
+/matches/requests shows:
+
+- brand profile link;
+- request date;
+- message preview and full-message link;
+- Connect;
+- Not Now.
+
+#### Outbound pending
+
+/matches/pending represents a separate pending state initiated from the retailer side and exposes cancellation/removal.
+
+#### Connected brands
+
+/matches/current supports:
+
+- search by brand name or ID;
+- wholesale price range and category filters;
+- connected status;
+- brand profile;
+- direct message;
+- disconnect action.
+
+#### Storefront access states
+
+Three observable storefront states:
+
+| State | Primary action | Access behavior |
+|---|---|---|
+| Connected | Shop | catalog and order workflow available |
+| Inbound brand request | Accept | linesheets, orders and representative information remain hidden until retailer acceptance |
+| Not connected | Connect | retailer requests to do business; linesheets, orders and representative information remain hidden until brand acceptance |
+
+Unconnected storefronts may show teaser product names/images while stating that products are available only to selected retailers.
+
+**Syntha requirements:**
+
+- represent request direction explicitly: BRAND_TO_RETAILER and RETAILER_TO_BRAND;
+- use separate statuses for outreach, inbound request, outbound request, connection and commercial access;
+- Connect, Accept, Not Now, Withdraw and Disconnect require different permissions, reasons and events;
+- connection alone does not expose catalog, price, representative or ordering data until CommercialAccessGrant is effective;
+- each storefront must explain the current access state and next responsible party;
+- all connection mutations require confirmation where destructive or externally visible.
+
+#### Find New Brands
+
+Observed directory functions:
+
+- default sort by Newest Linesheets;
+- brand-name search;
+- wholesale price range with currency, minimum and maximum;
+- JOORPay availability filter;
+- category search and category checkboxes;
+- prompt to configure retailer-profile categories for more personalized results;
+- brand cards with image, name and categories;
+- brand quick-view modal with Connect, Favorite, Message, View Full Profile, profile summary and additional images;
+- Favorite is a separate non-connection action.
+
+**Syntha requirements:**
+
+- discovery ranking inputs must be explainable and must not override access/privacy rules;
+- filters use normalized category, currency and price-range values;
+- PaymentCapability is a filterable commercial capability, not a generic marketing badge;
+- Favorite must be private to the authorized user/account unless explicitly shared;
+- quick view and full profile resolve the same profile version.
+
+#### Favorites
+
+/r/passport/favorites displayed a Favorites title but, when empty, provided no useful empty-state explanation or discovery action.
+
+**Syntha improvement:** show a clear empty state, why favorites matter, and a link back to discovery; distinguish personal favorites from shared buyer-team lists.
+
+#### Passport
+
+JOOR Passport acts as a discovery and event layer:
+
+- featured events;
+- curated marketplaces;
+- retail-show browsing;
+- retailer registration to attend;
+- brand registration to exhibit;
+- partner presentation.
+
+**Syntha priority:** event marketplace registration is P2 unless it directly strengthens the canonical connection → catalog → order spine. It must not precede core wholesale execution.
+
+### 128.7 Storefront, legacy linesheets and modern catalog
+
+#### Storefront
+
+Observed connected storefront content:
+
+- logo;
+- page title/navigation;
+- Shop action;
+- year established;
+- categories;
+- wholesale and retail price ranges;
+- website and social links;
+- brand description;
+- editorial sections;
+- product, linesheet and document blocks.
+
+OBSERVED quality defect: some published storefronts exposed authoring placeholders such as Untitled Page, Overlay Text, Section Title, Linesheet Title, Document Title and Click to edit to the retailer.
+
+**Syntha requirement:** storefront publication is fail-closed. Placeholder, editor-only or incomplete blocks cannot enter the buyer projection. Preview, validation and publication must use the same resolved component tree.
+
+#### Legacy linesheet registry
+
+Observed functions not previously recorded at UI level:
+
+- brand selector;
+- delivery-date filters: all available, immediates or date range;
+- category filters;
+- search and clear filters;
+- linesheet switching within a brand;
+- delivery window and cut-off;
+- print;
+- Start Excel Order;
+- pagination and view-count controls;
+- grouping by Linesheet, Fabrication, Category, Division, Silhouette or Linesheet Group;
+- product cards with image count, style code/name, colors, wholesale and suggested retail price.
+
+#### Modern catalog
+
+The Shop action from a connected storefront opened a different modern catalog at /ra/products.
+
+Observed order context:
+
+- price type/currency;
+- order warehouse;
+- Styles Selected counter;
+- Orders Created counter;
+- View Order cart;
+- group by None, Linesheet Group, Silhouette or Badge;
+- sort by None, Price Low to High or Price High to Low;
+- filters for badges, categories, division, fabrication, inventory availability, linesheet, linesheet delivery window, price types, season, silhouette, style tags and wholesale price;
+- applied-filter count;
+- text search.
+
+Observed product-card data:
+
+- linesheet/group name and number of styles;
+- shipping delivery window, including Immediate;
+- image;
+- style name and code;
+- color count and color names/codes;
+- wholesale and suggested retail values;
+- availability source by warehouse;
+- Made to Order signal;
+- fabrication;
+- Preview;
+- View and Quantify.
+
+Preview opens an image drawer with style identity. View and Quantify opens a detailed quantity workspace with:
+
+- delivery window;
+- wholesale and suggested retail context;
+- color swatches;
+- custom size scale;
+- warehouse context;
+- Bulk and Sized modes;
+- color selection checkboxes;
+- size-by-color quantity inputs;
+- per-color quantity and value;
+- grand totals;
+- Back to Catalog;
+- Add to Order disabled until valid quantities exist.
+
+The empty cart showed a warning that changes must be saved but did not provide a strong empty-state explanation.
+
+**Syntha requirements and improvements:**
+
+- consolidate legacy linesheet browsing and modern catalog quantity entry into one buyer journey;
+- retain stable price-type, currency, warehouse and access context in the URL/session model;
+- quantity matrix supports keyboard navigation, paste, validation and accessible labels;
+- inventory source and Made to Order state remain distinct;
+- Add to Order becomes enabled only after server-compatible quantity validation;
+- cart drafts autosave durably or provide explicit dirty-state navigation protection;
+- empty cart links to the exact catalog context that created it;
+- product preview and quantify views resolve the same CommercialProductProjectionVersion.
+
+### 128.8 Order registry, order creation and order truth view
+
+#### Manage Orders registry
+
+Observed UI states and filters:
+
+- Draft;
+- Notes;
+- Pending;
+- Approved;
+- Shipped;
+- Cancelled;
+- quantities With or Without;
+- free-text search;
+- buyer filter;
+- date filter;
+- selection and bulk Actions;
+- Start an Order;
+- Import Orders;
+- Download Order Confirmation;
+- Export Data;
+- pagination and page-size control.
+
+Observed columns:
+
+- Brand;
+- PO number;
+- Status;
+- Units;
+- Total;
+- Linesheet;
+- Complete Ship;
+- Buyer;
+- Modified.
+
+The live account used a Note Order status in addition to conventional lifecycle states.
+
+**Syntha requirement:** Note/Notes must be defined as a non-binding commercial state or migrated to a typed Draft/OrderIntent model. It must not remain an unexplained string beside legally meaningful order states.
+
+#### Start an Order
+
+Observed staged form:
+
+1. search for a connected brand;
+2. after brand selection, Start an Order and More options become enabled;
+3. More options expose linesheet selection, price type/currency and door selection;
+4. the user may return to fewer options;
+5. order creation was not completed during this audit.
+
+**Syntha requirement:** opening or searching the modal must not create a draft. The first durable draft mutation must be explicit, idempotent and return the pinned brand/access/price/door context.
+
+#### Order truth view
+
+Observed functions:
+
+- Overview and Pay;
+- last-updated timestamp;
+- Share Order;
+- Visual Assortment link;
+- Comments;
+- Download;
+- order number, brand, linesheet, delivery window and price type;
+- order status and Submit for Approval;
+- shipping and billing blocks;
+- restriction message when retailer cannot edit address data;
+- Add Products and Edit;
+- products summarized by image, style, color, size, quantity, wholesale and retail price;
+- contacts with role, including buyer and sales representative;
+- financial summary with retail value, subtotal wholesale, product discounts, order discount, fees and grand total;
+- order details including created date, season, year and delivery window.
+
+The Pay action exists in the order UI, while Find New Brands separately supports a JOORPay filter.
+
+**Syntha requirement:** showing Pay requires active PaymentCapability, payable balance, supported currency/market and user authority. The button must never be a dead or marketing-only action.
+
+#### Shipping and billing control
+
+JOOR may prevent the retailer from editing address information and instruct the retailer to contact the brand.
+
+**Syntha improvement:** show source ownership, reason, effective address version and a structured change-request workflow instead of a dead-end restriction message.
+
+### 128.9 Looks, Styleboards, Visual Assortment and messages
+
+#### Looks
+
+Observed registry:
+
+- filters by collection name, brand name, creator, created date and last modified;
+- Current and Archived tabs/counters;
+- brand-shared collection name, creator, brand, date shared, created date and modified date.
+
+One Look detail remained in an indefinite loading state during the audit.
+
+**Syntha requirement:** failed detail loading must expose a recoverable error, correlation ID and retry; registry access does not guarantee detail authorization and the error must distinguish authorization from transport failure.
+
+#### Styleboards
+
+Observed registry and creation:
+
+- Current and Archived;
+- filters by styleboard name, brand name, creator, created date and last modified;
+- Create New;
+- a new styleboard must first be associated with a brand;
+- empty board shows product count;
+- share;
+- comments;
+- Add to Order disabled until products exist;
+- brand search and Assign;
+- Cancel.
+
+**Syntha requirements:**
+
+- Styleboard is brand-scoped unless a separately authorized cross-brand assortment mode exists;
+- brand assignment pins access and price context;
+- comments and share visibility use explicit participants;
+- archive is reversible and distinct from delete;
+- conversion to order preserves source board/version and selected delivery context.
+
+#### Visual Assortment entitlement
+
+On LITE, Visual Assortment was a paywall page rather than an active workspace. The page states that products ordered outside JOOR can be included.
+
+Observed time-sensitive plans:
+
+| Plan | Monthly | Yearly | Included limits shown |
+|---|---:|---:|---|
+| Standard | $159 USD | $1,599 USD | 2 users, 1 door, 1,000 products, 2 years of storage |
+| Premium | $299 USD | $3,199 USD | 5 users, 5 doors, 3,000 products, 3 years of storage |
+
+These prices are benchmark evidence as of the observation date, not Syntha pricing requirements.
+
+**Syntha requirement:** entitlements are server-authoritative by organization, plan and effective period. Locked pages explain value and limits but must not expose partially functional controls.
+
+#### Messages
+
+Observed inbox functions:
+
+- Inbox;
+- Invitation;
+- Sent;
+- Trash;
+- search;
+- Compose Mail;
+- bulk Delete;
+- Mark as Read;
+- Mark as Unread;
+- sortable From, Message and Date columns;
+- pagination.
+
+**Syntha improvement:** preserve a message center where required, but link communication to canonical business objects and required actions. High-volume broadcast messages must be separable from approvals, order changes and deadlines.
+
+### 128.10 Shopify integration, Data Activity Center and background work
+
+#### Shopify Retailer Product Sync
+
+When not connected:
+
+- Install on Shopify is the primary action;
+- Automatic Sync is visible but disabled;
+- field preferences are visible but disabled;
+- Expand All is disabled;
+- no sync has run.
+
+Observed automation description: approved orders from connected accounts can sync automatically, with per-account customization after expansion.
+
+Observed JOOR → Shopify field mapping:
+
+| JOOR field | Shopify field |
+|---|---|
+| Style Name | Title |
+| Brand Name + Style Name | Title |
+| Description | Description |
+| Photos | Media |
+| Category | Category |
+| Linesheet | Collections |
+| Silhouette | Type |
+| Brand Name | Vendor |
+| Suggested Retail Price | Price |
+| SKU Prices | Variant Price |
+| SKU Code | Variant SKU |
+| UPC Code | Variant Barcode |
+
+**Syntha requirements:**
+
+- integration installation, authorization and mapping activation are separate states;
+- mapping conflicts such as two possible Title sources require an explicit precedence rule and preview;
+- approved-order auto-sync is account-scoped and must preserve the exact order/product/price versions;
+- per-account overrides are versioned;
+- sync mutations are idempotent;
+- every run records source version, destination ID, status, counts, errors and reconciliation result;
+- disabling a field affects future runs only unless a controlled resync is requested;
+- sensitive credentials never appear in job output.
+
+#### Data Activity Center
+
+Observed job registry columns:
+
+- Job Ref #;
+- Created By;
+- Type;
+- Status;
+- Actions;
+- Start Date;
+- End Date;
+- Additional Info;
+- Refresh.
+
+The audited account displayed no rows.
+
+**Syntha requirements:**
+
+- all asynchronous import, export, sync and bulk jobs use one JobRun contract;
+- statuses include queued, running, succeeded, partially succeeded, failed and cancelled;
+- Actions are capability-based: view details, download result/error file, retry safe failures or cancel eligible jobs;
+- retry reuses the logical command/idempotency identity where required;
+- Additional Info is structured, localized and safe for the current tenant;
+- jobs expose progress and terminal timestamps;
+- a no-rows state explains which operations create jobs.
+
+### 128.11 Наблюдаемые UX и reliability gaps / Observed Gaps
+
+The following JOOR behaviors are benchmark lessons, not features to copy:
+
+1. modern and legacy design systems coexist across catalog, linesheets, connections, messages and orders;
+2. storefront authoring placeholders can leak into the retailer-visible page;
+3. inbound requests, outbound pending, outreach and home Connection Requests use overlapping or inconsistent labels;
+4. language choices differ between account settings and the live switcher;
+5. Favorites and empty cart have weak empty states;
+6. a Look detail remained indefinitely in Loading state;
+7. repeated Account Settings reloads produced a transient 500 Internal Server Error;
+8. Reset password produced an immediate alert without a clear pre-action confirmation;
+9. some restrictions tell the retailer to contact the brand without a structured change request;
+10. the platform exposes many raw messages without separating broadcasts from required actions;
+11. current screens may show editor-oriented text such as Click to edit to a buyer;
+12. premium marketing is prominent inside a plan-gated workflow.
+
+**Syntha improvement standard:**
+
+- one design system and one object vocabulary;
+- fail-closed publication;
+- explicit directional states;
+- resilient error states with retry and correlation;
+- no destructive or externally visible action on a first ambiguous click;
+- actionable empty states;
+- object-linked collaboration and work queues;
+- server-authoritative capability and entitlement checks.
+
+### 128.12 Дополнительные приоритеты Syntha / Additional Syntha Priorities
+
+#### P0 — required for the canonical wholesale spine
+
+- user settings separated from retailer organization settings;
+- active account/tenant context and safe account switching;
+- public-profile projection with discoverability and inbound-request policies;
+- directional connection requests and distinct outreach;
+- commercial-access gating before prices, representatives, linesheets or orders;
+- unified catalog/linesheet/quantity matrix;
+- explicit price type, currency, warehouse and door context;
+- durable order draft with idempotent creation;
+- order registry, truth view, approval and export;
+- background JobRun observability;
+- safe password-reset and visibility-change flows;
+- governed interface/email language capability.
+
+#### P1 — commercial differentiation
+
+- favorites and buyer-team saved lists;
+- profile-driven explainable discovery;
+- brand outreach New/Viewed/All;
+- Looks and Styleboards;
+- Shopify mapping with per-account overrides and reconciliation;
+- structured address-change request;
+- separated broadcast, task and approval inboxes;
+- POS identity/version for integration planning.
+
+#### P2 — scale or premium
+
+- cross-brand Visual Assortment;
+- external-order ingestion into assortment planning;
+- event marketplaces and registration;
+- advanced rollups across doors/accounts;
+- payment-capability discovery where commercially justified.
+
+### 128.13 Дополнительные UAT-сценарии / Additional Acceptance Scenarios
+
+1. User selects Russian UI and English email language; both channels render correctly and use one governed language registry.
+2. User changes date format; historical order deadlines remain semantically unchanged.
+3. Retail rounding preview shows source and rounded values without modifying the canonical price.
+4. User switches active retailer account; no draft, price, message, file or search result from the previous tenant remains accessible.
+5. User hides one account from discovery; UI shows propagation pending and later completion without breaking existing connections.
+6. User opts out of public people display; the public profile removes the contact while historical audit remains.
+7. Brand sends outreach; retailer views it without creating a connection request.
+8. Brand sends inbound request; retailer can Accept or Not Now, and access remains closed before acceptance and grant activation.
+9. Retailer sends outbound request; the screen clearly identifies the retailer as initiator and allows withdrawal.
+10. Unconnected storefront exposes permitted teaser content but no restricted prices, representatives, linesheets or order actions.
+11. Storefront containing placeholder/editor blocks fails publication.
+12. Buyer filters discovery by category, currency/price range and payment capability; results explain applied filters.
+13. Buyer favorites a brand without sending a connection request.
+14. Connected-brand Shop opens a catalog pinned to brand, price type/currency and warehouse.
+15. Buyer enters color/size quantities; totals recalculate, invalid values block Add to Order and the valid selection creates one durable draft.
+16. Opening Start an Order and searching for a brand creates no server-side draft until explicit confirmation.
+17. Buyer associates a new Styleboard with a brand; board access and price context cannot drift silently.
+18. Locked Visual Assortment route denies data operations server-side even if a client control is manipulated.
+19. Approved order syncs to Shopify once; mapping version, destination identifiers and reconciliation evidence appear in Data Activity Center.
+20. Failed background sync displays a localized error, downloadable evidence where permitted and a safe retry action.
+21. Password reset requires an explicit, rate-limited confirmation and records a security audit event.
+22. Look detail transport failure shows a recoverable error rather than an endless loading indicator.
+23. Storefront, catalog preview and quantity workspace resolve the same commercial product version.
+24. Read-only or archived account relationships block writes through both UI and API.
+25. Connection, profile visibility and Shopify mutations preserve durable command IDs and transactional outbox events.
+
+### 128.14 Source note / Примечание об источнике
+
+This delta is grounded in direct observation of the authenticated JOOR retailer web application. It is a product benchmark, not evidence of JOOR internal APIs or implementation. Time-sensitive prices, limits and UI labels must be revalidated before commercial decisions. Syntha requirements above are product decisions derived from the observed behavior and the canonical rules in this document.
+
+---
+
+## 129. Визуально-геометрический аудит личного кабинета JOOR / JOOR Retailer Cabinet Visual Geometry Audit
+
+### 129.1. Назначение и границы доказательств / Purpose and evidence boundary
+
+Этот раздел фиксирует фактически наблюдавшуюся геометрию авторизованного retailer-интерфейса JOOR: размеры контейнеров, карточек, изображений, иконок и контролов; координаты и интервалы; типографику; цвета; состояния фильтров, выпадающих списков, чекбоксов и hover-слоёв. Это **референс поведения JOOR, а не готовая дизайн-спецификация Syntha**.
+
+| Параметр | Зафиксированное значение |
+|---|---|
+| Дата наблюдения | 18 августа 2026 года |
+| Контекст | авторизованный кабинет retailer |
+| Desktop viewport | 1299 × 810 CSS px |
+| Device pixel ratio | 1 |
+| Фактическая ширина страницы при вертикальном scrollbar | преимущественно 1284 px |
+| Точность | DOM/CSS-замеры; округление до 0.01 px там, где браузер вернул дробное значение; визуальный допуск для UAT ±1 px |
+| Покрытые поверхности | глобальная шапка и account menu; Account Settings; Find New Brands; Products; Orders; Messages; публичный профиль; редактирование профиля |
+| Непокрытые доказательством состояния | другие viewport и мобильные брейкпоинты; реальные ошибки upload/save; наполненная фотогалерея публичного профиля |
+| Приватность | названия аккаунтов, e-mail, телефоны, адреса, сообщения, внутренние ID, бренды и товары намеренно не записаны |
+
+Все координаты ниже даны как \`x / y / width / height\` в CSS px относительно viewport либо явно указанного родителя. Дробные размеры — результат реального браузерного layout, а не рекомендация использовать дробные токены в Syntha.
+
+### 129.2. Глобальная оболочка / Global shell
+
+| Элемент | Наблюдение JOOR | Обязательное решение Syntha |
+|---|---|---|
+| Основная шапка | \`0 / 0 / 1284 / 53\`; fixed; фон \`#323E48\` | единая desktop-высота 56 px либо документированное исключение; sticky/fixed не должен перекрывать контент |
+| Логотип | SVG \`28 / 13 / 90 / 30\`; кликабельная зона \`106 × 53\`; padding \`13px 8px\` | изображение не меньше 90 × 30; кликабельная зона не меньше 44 × 44 |
+| Группа основной навигации | начало \`x=126\`; ширина \`708.56\`; flex gap 8 | gap-токен 8; доступная клавиатурная навигация |
+| Наблюдавшиеся nav-trigger | \`71.44 × 53\`, \`207.22 × 53\`, \`170.66 × 53\` | ширина по контенту, но без скачка layout при открытии |
+| Внутренний label навигации | высота 26–30; padding \`5px 8px\` | высота интерактивной зоны ≥40 px через внешний trigger |
+| Текст навигации | Montserrat 12/500; line-height 16 | сохранить читаемость; при локализации не обрезать текст |
+| Базовые иконки | преимущественно \`16 × 16\` | визуальный glyph 16–20, target ≥40 × 40 |
+| Utility-иконки | преимущественно \`24 × 24\` | target ≥40 × 40 |
+| Account trigger | \`300.78 × 53\`; начало \`x=883.22\`; placeholder/avatar \`20 × 20\`, radius 10 | имя допускает ellipsis; аватар 24–32; полная зона trigger доступна |
+| Language control | приблизительно \`40 × 25\` | target ≥40 × 40 |
+| Messages trigger | приблизительно \`52 × 53\` | badge не должен сдвигать иконку |
+| New/premium chip | \`51.38 × 20\`; padding \`2px 8px\`; radius 20; \`#008BAD\` | pill-компонент с семантическим label |
+| Unread badge | \`30.81 × 16\`; padding \`2.75px 5.5px\`; radius 20; \`#E7251A\`; Nunito Sans 11/700 | минимум 16 px по высоте; \`99+\` без переполнения |
+
+### 129.3. Account menu и popup-геометрия / Account dropdown
+
+| Элемент | Наблюдение JOOR |
+|---|---|
+| Dropdown-контейнер | \`806 / 53 / 360 / 497\` |
+| Фон / рамка | \`#EBEDF0\`; border 1 px \`#CDD4DA\` |
+| Padding / углы | 10 px; нижний radius 4 px |
+| Внутренний список | ширина 338 px |
+| Строка primary account | \`338 × 32\`; padding \`8px 0\`; gap 3 px |
+| Визуальная отметка checkbox | SVG приблизительно \`21.33 × 21.33\` |
+| Нативный checkbox | layout-size \`0 × 0\` в наблюдавшейся кастомной реализации |
+
+Требование Syntha: dropdown привязан к trigger, закрывается по \`Escape\`, клику вне и возврату фокуса; имеет \`role/menu\` или корректную listbox-семантику; не выходит за viewport; scroll применяется к списку, а не ко всей странице. Нативный input не должен терять focusability и accessible name из-за визуального размера \`0 × 0\`.
+
+### 129.4. Цветовые токены / Observed color tokens
+
+| Роль в JOOR | Значение | Использование в Syntha |
+|---|---:|---|
+| Dark shell / primary dark | \`#323E48\` | допустим как референс neutral-900 |
+| Teal accent / links | \`#008BAD\` | accent; проверить WCAG-контраст на белом |
+| Slate primary / selection | \`#5C7284\` | secondary action / selected state |
+| Strong text | \`#2D3439\` | основной текст |
+| Secondary text | \`#40515D\` | вторичный текст |
+| Legacy text | \`#515253\` | не вводить как новый дублирующий токен |
+| Muted / legacy heading | \`#82858A\` | только при достаточном контрасте |
+| Modern input border | \`#8C9BA8\` | border-default |
+| Light border | \`#CDD4DA\`, \`#CCCCCC\` | объединить в один канонический token, если семантика совпадает |
+| Divider | \`#EDEDED\` | divider/subtle border |
+| Surface | \`#FFFFFF\`, \`#F9F9F9\`, \`#F5F8F9\`, \`#EBEDF0\` | сократить до документированных surface levels |
+| Danger / unread | \`#E7251A\` | danger и badge; цвет не должен быть единственным признаком состояния |
+| Collection band | \`rgba(66,138,126,0.15)\` | отдельный informational surface token |
+| Hover image overlay | \`rgba(255,255,255,0.75)\` | текст поверх изображения обязан сохранять контраст |
+
+### 129.5. Типографика / Typography inventory
+
+| Контекст | Family | Size / weight / line-height | Letter spacing / цвет |
+|---|---|---|---|
+| Header/navigation | Montserrat | 12 / 500 / 16 | стандартный; white/light |
+| Discovery brand title | Montserrat | 16 / 500 / 24 | 1.4 px; \`#008BAD\` |
+| Discovery secondary text | Montserrat | 12 / 500 / 16 | 0.6 px |
+| Orders H1 | Nunito Sans | 24 / 200 / 30 | \`#5C7284\` |
+| Product-card body | Nunito Sans | 12 / 400 / 14 | neutral text |
+| Product-card heading / hover action | Montserrat | 13 / 600 / 14 | 1 px |
+| Public profile title | Montserrat | 48 / 300 / 60 | 2.4 px |
+| Account Settings title | Montserrat | 20 / 400 / 32 | 1.2 px; uppercase |
+| Modern profile-edit labels | Montserrat | 12 / 400 / 16 | 1 px |
+| Modern profile-edit controls | Montserrat | 14 / 500 / 16 | 0.6 px |
+| Legacy settings rows | generic sans-serif | 16 / 300 / 16 | legacy |
+| Legacy micro-labels | generic sans-serif | 10 / 400 / 12 | 1 px; uppercase |
+| Messages table cells | generic sans-serif | 12 / 400 / 14.4 | legacy |
+| Messages headers | generic sans-serif | 10 / 400 / 12 | uppercase; \`#82858A\` |
+| Отдельные legacy-участки | Georgia | 12 / normal / normal | не переносить в новую систему |
+
+Требование Syntha: одна каноническая пара семейств и ограниченная шкала \`12 / 14 / 16 / 20 / 24 / 32 / 48\`; legacy generic/Georgia не воспроизводятся. Вес 200 для H1 допускается только после проверки читаемости и реального наличия font-face.
+
+### 129.6. Account Settings / \`/accounts/settings\`
+
+| Элемент | Размер / расположение / стиль |
+|---|---|
+| Внешняя legacy-панель | \`129 / 80 / 1026 / 942\`; white; border 1 px \`#CDD4DA\`; radius \`10px 10px 0 0\` |
+| Основной контент | \`163 / 80 / 958\`; padding-top 20 |
+| Form | \`163 / 166 / 958\` |
+| Value grid | ширина 405; row height 71 |
+| Ссылка Edit | 13 наблюдавшихся ссылок; каждая приблизительно \`22.48 × 14.39\`; 12 px |
+| Landing Page native select | \`118 × 19\`; border 1 px black; браузерный font 13.333 px |
+| Close X | glyph приблизительно \`10.67 × 16\` |
+| Save Changes | \`126.53 × 34\`; padding \`8px 16px\`; radius 5; \`#323E48\`; Montserrat 12/500/16 |
+
+Функциональная фиксация: редактор Landing Page открывается inline. В ходе аудита значения не изменялись и сохранение не выполнялось. Для Syntha ссылки \`Edit\` и close-glyph должны получить hit area не меньше 40 × 40, видимый focus и точное имя редактируемого поля.
+
+### 129.7. Find New Brands / Discovery
+
+#### 129.7.1. Результаты без раскрытой панели фильтров
+
+| Элемент | Наблюдение JOOR |
+|---|---|
+| Колонки | две колонки по \`558.5\` px; \`x=68\` и \`x=658.5\` |
+| Горизонтальный gap | 32 px |
+| Первый ряд | \`y=240\`; card visual row height 332 |
+| Следующий ряд | \`y=604\`; вертикальный gap 32 |
+| Image/carousel area | \`558.5 × 240\` |
+| Обработка изображения | \`object-fit: cover\` для контентного фото либо \`contain\` и центрирование для logo/asset |
+| Footer | высота 48 либо 76; padding \`0 8px 16px\`; gap 12 |
+| Favorite action container | \`38 × 32\`; padding 4 |
+| Favorite SVG | приблизительно \`26.88 × 26.88\` |
+| Brand/logo avatar | \`52 × 52\` |
+
+#### 129.7.2. Раскрытая панель фильтров
+
+| Элемент | Наблюдение JOOR |
+|---|---|
+| Левая filter rail | \`x=69\`; ширина 298 |
+| Колонка результатов | \`x=400\`; ширина 817; gap около 33 |
+| Search section | ширина 298; padding \`16px 24px\` |
+| Search control | outer \`250 × 32\`; input \`248 × 30\`; padding \`0 34px 0 12px\`; radius 5; border \`#8C9BA8\`; Montserrat 14/500/16.1 |
+| Currency select | outer \`250 × 32\`; inner padding \`2px 8px\` |
+| Min / Max | каждый \`109 × 30\`; gap 8; padding \`4px 8px\`; radius 5 |
+| Price range block | \`250 × 118\`; gap 16 |
+| Checkbox row | ширина 250; label height 16; custom SVG около \`21.33 × 21.33\`; native input \`0 × 0\` |
+| Sort select | outer \`175 × 32\` |
+
+При открытии rail выдача становится одноколоночной шириной 817 px, а высота media-area остаётся 240 px. Это зафиксированное изменение layout JOOR, но **не целевой паттерн Syntha**: ширина карточки и плотность контента не должны скачком меняться без адаптивного media-ratio и max-width.
+
+### 129.8. Products / Catalog
+
+| Элемент | Размер / расположение |
+|---|---|
+| Main router region | \`0 / 78 / 1284\` |
+| Catalog header | \`-5 / 78 / 1294 / 58\` |
+| Filter row | \`-5 / 147 / 1294 / 60\` |
+| Filter list block | \`481 / 147 / 488 / 60\`; padding 10 |
+| Collection band | \`0 / 217 / 1284 / 60\`; padding \`10px 30px\`; margin-block 10; teal translucent surface |
+| Products main column | \`x=144\`; width 996 |
+| Product cards | три по 320 px; \`x=149 / 479 / 809\`; horizontal gap 10; \`y=296\`; height 661 |
+| Product image | \`220 × 300\`; \`object-fit: contain\`; 50 px бокового свободного пространства внутри карточки |
+| Breadcrumb/image wrapper | \`220 × 350\` |
+| Info block | \`320 × 303\`; margin-top 8 |
+| Name/comments row | \`320 × 60\` |
+| Note block | около \`320 × 64\` |
+| Search input | \`116 × 37\`; padding \`10px 14px\`; border 1 px \`#8C9BA8\`; radius 0 |
+| Typical dropdown | \`156 × 40\`; padding \`10px 35px 10px 12px\`; border 1 px \`#CCC\`; radius 0 |
+| Group By open menu | \`156 × 148.25\` |
+| Dropdown option | \`154 × 36.81\`; padding 10.92; font 14/400/14 |
+| Selected option | фон \`#5C7284\`; white text |
+| Наблюдавшиеся Group By options | None; Linesheet Group; Silhouette; Badge |
+
+Hover overlay над media: \`330 × 300\`, выступает на 5 px по бокам и на 6 px вверх относительно карточки; два слоя по \`330 × 150\`; фон \`rgba(255,255,255,0.75)\`; действие Montserrat 13/600/14 с letter-spacing 1 px.
+
+Требование Syntha: overlay не должен менять layout, закрывать focus-ring или быть единственным способом открыть действие. На touch и клавиатуре те же действия должны быть доступны без hover.
+
+### 129.9. Orders
+
+| Элемент | Размер / расположение / стиль |
+|---|---|
+| Content start | \`y=78\` |
+| H1 | \`123 × 60\`; Nunito Sans 24/200/30; \`#5C7284\` |
+| Top status/filter row | высота 85 |
+| Start an Order | \`154 × 38\`; \`x=1026, y=79\`; \`#5C7284\`; white; radius 0 |
+| Search & Filter outer | width 330 |
+| Bordered filter content | \`310 × 325\`; padding 15; border 1 px \`#5C7284\` |
+| Scrollable filter region | \`278 × 233\`; padding-right 5 |
+| Search input | \`233 × 37\`; parent 273; padding \`10px 14px\`; border \`#8C9BA8\` |
+| Table | \`1018 × 729\`; \`x=486.5, y=203.97\` |
+| Table header | height 44 |
+| Колонки | \`40 / 150 / 80 / 80 / 80 / 115 / 150 / 86 / 150 / 86\` |
+| Header type | Nunito Sans 12/700/15 |
+| Header padding | обычно \`7px 15px 7px 12px\`; checkbox-column \`7px 0 7px 12px\` |
+| Checkbox visual | \`20 × 20\` |
+| Apply Filters | \`154 × 38\` |
+| Import / Download / Export | каждый \`154 × 38\` |
+| Pagination | \`90 × 40\`; chevron glyph около \`6.44 × 18\` |
+| Search icon shell | \`40 × 37\`; фон \`#8C9BA8\` |
+| Filter-list icon | \`30 × 19\` |
+
+Критический факт: правая граница таблицы находится приблизительно на \`x=1504.5\`, то есть таблица выходит за viewport 1299 px и вызывает горизонтальное переполнение. Syntha не воспроизводит этот дефект: на desktop используются устойчивые колонки, pinning при необходимости и локальный horizontal scroll внутри table container; вся страница не должна расширяться.
+
+### 129.10. Messages
+
+| Элемент | Размер / стиль |
+|---|---|
+| Основной legacy-content | \`x=163\`; width 958 |
+| Таблица | width 958; начало \`y=201\` |
+| Header row | height 33 |
+| Data row | около 33.39 |
+| Колонки | \`246.75 / 37.73 / 531.25 / 37.73 / 104.53\` |
+| Header cells | padding-block 8; sans-serif 10/400/12; uppercase; \`#82858A\` |
+| Data cells | padding-block 8; sans-serif 12/400/14.4 |
+| Unread row | \`#F9F9F9\` |
+| Search native input | \`151 × 21\`; padding \`3px 2px\`; radius 0 |
+| Native checkbox | \`13 × 13\` |
+| Compose Mail | \`127.53 × 34\`; padding \`8px 16px\`; radius 5; \`#323E48\`; Montserrat 12/500/16 |
+| Delete | \`75.64 × 34\`; padding \`8px 15px\`; radius 5; light surface с dark border |
+| Mark read/unread | текстовые действия около 10 px |
+
+Syntha: row density может быть компактной, но все действия получают target ≥40 × 40; unread обозначается не только фоном, но и семантическим/типографическим признаком. Таблица должна поддерживать keyboard selection и ясное bulk-action состояние. Реальные темы и отправители сообщений в аудит не включены.
+
+### 129.11. Retailer public profile
+
+| Элемент | Наблюдение JOOR |
+|---|---|
+| Hero/header | \`1284 × 156\`; padding 32; flex gap 16 |
+| Основной title | Montserrat 48/300/60; letter-spacing 2.4 |
+| Action buttons | height 32; radius 5; padding-inline 16 |
+| Location/info card | приблизительно \`408.5 × 294\`; padding 16; gap 8 |
+| Фотогалерея | в исследованном аккаунте отсутствовало наполненное состояние |
+
+В документе фиксируется только empty-state публичного профиля; выводы о размерах опубликованных gallery tiles без наблюдения не делаются. Syntha обязана иметь явные empty/loading/error состояния и не раскрывать адресные данные в telemetry или документации.
+
+### 129.12. Retailer profile edit mode
+
+| Элемент | Размер / расположение / стиль |
+|---|---|
+| Полная высота страницы в наблюдении | около 3890 px |
+| Edit toolbar | \`y=53\`; height 50; фон \`#E9F4F6\`; padding \`0 16px\` |
+| Save and View | \`144.59 × 32\`; \`#323E48\`; padding \`0 16px\`; radius 5; Montserrat 14/500 |
+| Main edit grid | width 1284; padding 16; gap 16 |
+| Logo card | \`16 / 119 / 254.41 / 514\`; radius 8; inner padding \`24px 24px 32px\`; gap 24 |
+| Basic info card | width 398; height 764 |
+| Store photos card | \`700.41 / 119 / 567.59 / 764\`; radius 8; inner width 519.59; padding \`24px 24px 32px\` |
+| Gap между верхними cards | 16 |
+| Upload | \`81.55 × 32\`; border 1 px \`#5C7284\`; radius 5; light surface |
+| Browse Images | \`151.25 × 32\`; фон \`#323E48\` |
+| Button-row gap | 16 |
+| Basic single-column field | outer \`350 × 32\`; inner \`348 × 30\`; padding \`0 34px 0 12px\`; radius 5; border \`#8C9BA8\` |
+| Description textarea | outer \`350 × 102\`; inner \`348 × 100\`; padding \`6px 34px 6px 12px\`; radius 5 |
+| Locations content | \`x=40\`; width 1204 |
+| Locations grid | gap 48 |
+| Standard location field | outer \`277 × 32\`; inner \`275 × 30\` |
+| Two-column subsection | width 554; internal gap 36 |
+| Checkbox/tag zone | \`554 × 300\`; gap 8 |
+| Checkbox icons | off/on/indeterminate SVG по \`21.33 × 21.33\` |
+| Checkbox label row | height 16; native input layout-size \`0 × 0\` |
+
+В ходе аудита режим редактирования был открыт только для чтения геометрии: upload, изменение значения и Save and View не выполнялись.
+
+### 129.13. Сводная матрица контролов / Component geometry matrix
+
+| Компонент | Наблюдаемый диапазон JOOR | Каноническая цель Syntha |
+|---|---|---|
+| Primary button | 32–38 px height; padding-inline 16; radius 0 или 5 | 40 px desktop / 44 px touch; единый radius token |
+| Secondary button | 32–38 px height; border slate/dark | те же размеры и ясные hover/focus/disabled |
+| Icon-only action | от 16 до 40 px по контейнеру | target ≥40 × 40; glyph 16–20 |
+| Text action | иногда только 10–14 px по высоте | target ≥40 × 40 или строка целиком интерактивна |
+| Modern input/select | 30–32 px height; radius 5; border \`#8C9BA8\` | control height 40; padding-inline 12; end-icon zone 32–40 |
+| Catalog/search input | 37 px; radius 0 | привести к общему Input |
+| Legacy native input | 19–21 px | не переносить; заменить каноническим control |
+| Catalog dropdown | 40 px; menu option 36.81 px | trigger 40; option ≥40; целое кратное 4 |
+| Account dropdown | 360 px wide; 497 px high | responsive max-width \`min(360px, viewport - 32px)\` |
+| Checkbox glyph | 13, 20 или 21.33 px | visual 20; row target ≥40; native semantics сохранены |
+| Unread badge | height 16 | minimum 16; content-aware width |
+| Favorite action | container 38 × 32; glyph 26.88 | target 40 × 40; glyph 20–24 |
+| Data-table row | 33.39–44 px | compact 40 или comfortable 48 |
+| Product photo | 220 × 300; contain | ratio/box задаётся токеном; object-fit зависит от типа media |
+| Discovery media | 558.5 × 240 | responsive aspect-ratio и max-height; без деформации |
+| Brand avatar/logo | 52 × 52 | 48 или 56 token |
+| Profile upload card | до 567.59 × 764 | адаптивный grid; dropzone с состояниями empty/progress/error/success |
+
+### 129.14. Карточки, фото и media rules / Cards and images
+
+1. Product card: ширина 320, высота 661, media \`220 × 300\`, \`contain\`; текстовый блок 320 × 303.
+2. Discovery card: media \`558.5 × 240\`; footer 48/76; карточки идут с gap 32.
+3. Public info card: около \`408.5 × 294\`; padding 16.
+4. Profile edit cards: radius 8; внешний grid gap 16; внутренний padding 24/32.
+5. Для logo-asset используется \`contain\`; для editorial/store photo допустим \`cover\`. Выбор должен быть явным свойством media-компонента.
+6. Для Syntha обязательны \`alt\`/accessible name, фиксированный aspect-ratio для предотвращения layout shift, placeholder, broken-image и retry state.
+7. Upload/dropzone обязана показывать разрешённые форматы, лимит размера, прогресс, ошибку, preview, remove/replace и порядок фотографий. Эти состояния не были доказаны текущим наблюдением JOOR и поэтому являются продуктовым требованием Syntha, а не утверждением о JOOR.
+
+### 129.15. Сетка и интервалы / Spacing inventory
+
+В фактической геометрии JOOR повторяются \`4 / 5 / 8 / 10 / 12 / 16 / 24 / 30 / 32 / 36 / 48\` px. Дробные значения \`10.92\`, \`21.33\`, \`33.39\`, \`36.81\`, \`254.41\`, \`408.5\`, \`558.5\` и другие возникают из браузерного деления сетки/line-box и не становятся токенами Syntha.
+
+| Роль | JOOR reference | Syntha token |
+|---|---|---|
+| Micro gap | 3–5 | 4 |
+| Inline gap | 8–12 | 8 или 12 |
+| Control group | 16 | 16 |
+| Card inner padding | 16 или 24, иногда 32 снизу | 16 / 24 / 32 |
+| Grid gap | 10 / 16 / 32 / 36 / 48 | 16 / 24 / 32 / 48 |
+| Page side padding | 16 / 30 / 32 | 16 mobile; 24 tablet; 32 desktop |
+| Large section gap | 48 | 48 |
+
+Каноническая 4 px scale Syntha: \`4 / 8 / 12 / 16 / 24 / 32 / 48\`. Исключения должны быть результатом fluid grid, а не вручную созданным spacing token.
+
+### 129.16. Зафиксированные UI-риски JOOR и обязательные улучшения Syntha
+
+| Приоритет | Наблюдение / риск | Требование Syntha |
+|---|---|---|
+| P0 | Orders table расширяет страницу до ~1504.5 px при viewport 1299 | исключить page-level horizontal overflow; локальный table scroll / адаптивные колонки |
+| P0 | Кастомные checkbox имеют native input \`0 × 0\` | сохранить keyboard focus, accessible name и state; тестировать screen reader |
+| P0 | Text/icon actions имеют hit area 10–34 px | desktop ≥40 × 40; touch ≥44 × 44 |
+| P0 | Hover overlay содержит значимые действия | полная keyboard/touch альтернатива |
+| P0 | Цвет используется для unread/selected | добавить типографику, иконку или семантический state |
+| P1 | На одной платформе смешаны Montserrat, Nunito Sans, generic sans и Georgia | единая типографическая система и font loading |
+| P1 | Input/select heights 19–40 px, radius 0/5 | единый control API и size variants |
+| P1 | При раскрытии Discovery filters карточка скачком растёт до 817 px | responsive grid с устойчивым max-width/media ratio |
+| P1 | Слишком низкий контраст возможен у muted text/teal link | автоматический WCAG AA contrast check |
+| P1 | Длинная profile-edit page около 3890 px | sticky section navigation, autosave/draft либо предупреждение об уходе |
+| P1 | Upload состояния не доказаны | реализовать полный state machine: empty → selecting → uploading → processing → success/error |
+| P2 | Дублирующиеся border/surface цвета | сократить token set |
+| P2 | Дробные padding/row heights из legacy CSS | нормализовать на 4 px scale |
+| P2 | Разные button radii и плотности | единый Button с documented variants |
+
+### 129.17. Визуальные acceptance-сценарии Syntha / Visual UAT
+
+1. Desktop \`1299 × 810\`: shell не перекрывает content; ширина документа не превышает viewport.
+2. Desktop \`1440 × 900\` и \`1920 × 1080\`: карточки сохраняют max-width и media ratio, а не растягиваются бесконечно.
+3. Tablet \`1024 × 768\`: nav/account controls остаются доступны; overflow локализован.
+4. Mobile \`390 × 844\`: filters работают как drawer/sheet; закрытие возвращает focus к trigger.
+5. Масштаб браузера 200%: текст и controls не обрезаются.
+6. Навигация только клавиатурой: все trigger, checkbox, dropdown option, hover-action, table action и upload доступны последовательно.
+7. Account menu: \`Enter/Space\` открывает, \`Escape\` закрывает, focus возвращается.
+8. Dropdown: выбранное значение озвучивается, стрелки перемещают active option, menu не выходит за viewport.
+9. Checkbox: off/on/indeterminate имеют программное состояние и visible focus.
+10. Discovery filters: открытие не меняет непредсказуемо media ratio; Apply/Reset имеют результат и live region при обновлении выдачи.
+11. Product card: изображение \`contain\` не обрезается; editorial image \`cover\` не искажает пропорции.
+12. Product hover-actions доступны через focus и touch.
+13. Orders table: нет page-level horizontal scroll; заголовок, bulk selection и pagination остаются доступны.
+14. Messages: unread отличим без цвета; bulk actions активируются только при выборе.
+15. Profile edit: длинная форма предупреждает о несохранённых изменениях; Save имеет loading/success/error.
+16. Upload: keyboard selection, drag/drop, progress, cancellation, error, retry, remove и reorder покрыты тестами.
+17. Локализация: длинные русские и английские labels не обрезаются и не ломают nav/dropdown.
+18. Empty/loading/error: public profile, gallery, catalog, orders и messages имеют отдельные устойчивые состояния.
+19. Контраст: normal text ≥4.5:1, large text и non-text controls ≥3:1.
+20. Скриншотная регрессия: ключевые экраны проверяются с геометрическим допуском ±1 px для fixed components и разумным content tolerance.
+
+### 129.18. Реализационная нормализация для Syntha / Implementation baseline
+
+Рекомендуемый минимальный набор design tokens:
+
+- \`size.control.md = 40px\`, \`size.control.touch = 44px\`;
+- \`size.icon.sm = 16px\`, \`size.icon.md = 20px\`, \`size.icon.lg = 24px\`;
+- \`radius.control = 5px\`, \`radius.card = 8px\`, \`radius.pill = 999px\`;
+- \`space = 4, 8, 12, 16, 24, 32, 48\`;
+- \`page.padding = 16 / 24 / 32px\` по breakpoint;
+- \`table.row.compact = 40px\`, \`table.row.comfortable = 48px\`;
+- \`card.product.width = minmax(280px, 320px)\`;
+- \`dropdown.maxWidth = min(360px, calc(100vw - 32px))\`;
+- \`focus.ring = 2px\` с контрастом не ниже 3:1;
+- \`motion.fast = 120–160ms\`, с поддержкой \`prefers-reduced-motion\`.
+
+Это baseline для собственной системы Syntha. Он намеренно улучшает доступность и согласованность, не копируя legacy-несоответствия JOOR.
+
+### 129.19. Источник и воспроизводимость / Source and reproducibility
+
+Источник раздела — ручной DOM/CSS-аудит текущей авторизованной web-версии JOOR в Chrome при \`1299 × 810\`, DPR 1, выполненный 18 августа 2026 года. Структура и размеры сторонней платформы могут измениться; перед pixel-critical реализацией либо коммерческим сравнением замеры необходимо повторить на актуальной версии и на дополнительных breakpoint. В репозиторий сохранены только обезличенные функциональные и геометрические факты.
+
+---
+
+## 130. Продолженный gap-аудит кабинета JOOR: скрытый legacy-слой, незавершённые процессы и связи / Continued Cabinet Gap Audit
+
+### 130.1. Цель, метод и граница безопасности
+
+Раздел 130 содержит только новые наблюдения, которых не было в разделах 128–129. Проверялись доступные из авторизованного retailer-контекста маршруты, переходы и безопасные UI-состояния. Значения форм не изменялись, сообщения не отправлялись, connection-действия не выполнялись, аккаунт не переключался, покупка подписки не запускалась и Help Center SSO не открывался.
+
+| Класс действия | Что сделано | Что намеренно не сделано |
+|---|---|---|
+| Read-only navigation | открытие Home, subscriptions, outreach tabs, connection registries, Best Sellers, Messages compose | logout, account switch, purchase, Connect, Not Now, Withdraw, Disconnect |
+| UI state | переключение New / Viewed / All; открытие пустой Compose form | ввод получателей, текста, файла; Send |
+| Route inspection | проверка фактического destination и route aliases | вызов URL, похожих на mutation endpoint |
+| Privacy | записаны только обезличенные labels, route patterns и продуктовые выводы | account names, brand names, сообщения, контакты и реальные ID исключены |
+
+### 130.2. Новая карта доказательств / Newly inspected surface matrix
+
+| Поверхность | Маршрут / состояние | Новое наблюдение | Статус для Syntha |
+|---|---|---|---|
+| Home | \`/ra/home\` | operational feed объединяет connected brands, быстрые View Orders / Shop, profile prompt, inbound-looking requests, outreach и New to JOOR | спроектировать как Buyer Home, а не набор несвязанных carousel |
+| Brand outreach | \`/ra/submissions?tab=new|viewed|all\` | New и Viewed имеют разные empty states; All в наблюдаемом пустом состоянии не показал объяснения или CTA | унифицировать state model и empty-state contract |
+| Subscription catalog | \`/ra/subscriptions\` | доступны только purchase cards Standard/Premium с monthly/yearly CTA; жизненный цикл подписки и usage не виден | добавить полный subscription management |
+| Inbound connection requests | \`/matches/requests\` | legacy-страница сначала оставалась без содержимого и поздно отрисовала список; нет заметного skeleton/error/retry | обязательные loading/error/retry и SLA |
+| Outbound pending | \`/matches/pending\` | legacy navigation и self-links; route-shaped connection commands; отдельный PENDING registry | заменить единым relationship workbench |
+| Shop By Brand | \`/Matches/shop\` | фактически приводит в \`/matches/current\` — Manage Connections, а не в shopping surface | убрать misleading alias |
+| Best Sellers | \`/Styles/best_sellers\` | доступен из legacy Shop menu; показывает Best Sellers From My Brands и остаётся в Loading без recovery | удалить dead entry до готовности либо реализовать полноценный insight product |
+| Compose message | \`/messages\` inline compose | аудитория All Connections или Select Connections, subject, required body, одно optional JPG/PNG ≤4 MB | mass-send governance и object-linked communication |
+| Support | modern \`/ra/zendesk/sso\`; legacy \`/hc/en-us/\` | две разные точки входа в поддержку; SSO boundary не проверялся из-за передачи identity внешнему provider | единый SupportEntryPoint |
+| Legacy account/session links | \`/users/logIntoAccount/{accountId}\`, \`/Users/logout\` | session transitions представлены обычными links | POST command, CSRF/session protection, audit |
+
+### 130.3. Home как операционный центр покупателя / Buyer Home
+
+Новые детали Home:
+
+- Connected Brands имеет поиск по подключённым брендам;
+- каждая connected-brand карточка предлагает минимум два разных перехода: View Orders и Shop;
+- View Orders передаёт brand filter в order registry;
+- Shop открывает коммерческий storefront/catalog context;
+- premium upsell встроен до operational feed;
+- профиль объясняется как входной сигнал для brand discovery;
+- Home одновременно показывает Brands Interested in You, Connection Requests и New to JOOR;
+- в наблюдавшемся DOM ссылка See All у блока Connection Requests указывала на \`/matches/pending\`, хотя отдельный inbound registry существует на \`/matches/requests\`;
+- ссылка See All у New to JOOR также указывала на \`/matches/pending\`, что семантически не соответствует new-brand feed.
+
+Это не просто naming-дефект: неправильный destination меняет направление relationship state и может привести покупателя к исходящим pending requests вместо входящих запросов либо discovery.
+
+**Syntha Buyer Home contract:**
+
+| Widget | Источник данных | Обязательный destination | Основное действие |
+|---|---|---|---|
+| Required actions | \`WorkItem\` | object-specific task view | выполнить / делегировать / отложить |
+| Inbound connection requests | \`ConnectionRequest.direction=BRAND_TO_RETAILER\` | inbound queue | Accept / Not Now |
+| Sent requests | \`ConnectionRequest.direction=RETAILER_TO_BRAND\` | sent queue | View / Withdraw |
+| Brand outreach | \`BrandOutreach\` | outreach inbox | View / Archive / Request connection |
+| Connected brands | \`RelationshipState=CONNECTED\` | relationship registry | Open storefront / Orders / Message |
+| New brands | \`DiscoveryCandidate\` | discovery directory with retained filters | View / Favorite / Connect |
+| Order alerts | \`OrderWorkItem\` | exact order/version | Review / Approve / Resolve |
+| Integration failures | \`JobRun/ReconciliationCase\` | job detail | Retry / Download errors / Resolve |
+| Subscription/usage | \`EntitlementUsage\` | plan and usage center | Manage plan / Resolve limit |
+
+Каждый Home deep link обязан включать tenant, role, source widget, filter state и canonical object ID. Сервер повторно проверяет доступ; Home count и destination query используют один backend contract, чтобы badge не расходился со списком.
+
+### 130.4. Несогласованность маршрутов и legacy navigation
+
+На legacy-экранах обнаружен второй navigation dialect:
+
+- Shop menu содержит Shop By Brand, Shop By Linesheet и Best Sellers;
+- Shop By Brand через \`/Matches/shop\` открывает Manage Connections на \`/matches/current\`;
+- пункты Orders, Connections и Messages на нескольких legacy-страницах могут ссылаться обратно на текущий route вместо целевого модуля;
+- рядом с retailer navigation показывается upsell о функции, доступной только JOOR Brands;
+- встречаются route variants с разным регистром: \`/Matches\`, \`/Collections\`, \`/Styles\`, \`/Orders\`, \`/Users\`;
+- legacy browser/help menu всё ещё содержит устаревшие browser references, включая Internet Explorer;
+- modern Help route и legacy Help route различаются;
+- page labels и destinations не образуют надёжную one-to-one mapping.
+
+**Syntha requirement:** один canonical route registry генерирует global navigation, breadcrumbs, deep links, permissions и analytics. Alias допускается только как server redirect с telemetry и сроком удаления. UI label никогда не ведёт в объект другого типа.
+
+Минимальный route contract:
+
+\`RouteDefinition { routeId, objectType, canonicalPath, aliases[], capability, requiredPermission, tenantScope, sourceContext, analyticsEvent, deprecatedAt }\`.
+
+CI обязана проверять:
+
+1. уникальность \`routeId\` и canonical path;
+2. отсутствие case-only duplicates;
+3. соответствие menu label и destination object type;
+4. запрет self-link для пункта, который обещает другой модуль;
+5. наличие 404/403/error boundary;
+6. отсутствие mutation в navigation URL;
+7. удаление deprecated aliases после установленного срока.
+
+### 130.5. Command safety: connection, session и destructive links
+
+В legacy DOM были видны action links с route patterns вида:
+
+- \`/Matches/match/{brandId}\`;
+- \`/Matches/delete_by_account/{brandId}/.../PENDING\`;
+- \`/Matches/delete_by_account/{brandId}/.../CONNECTED-BRAND\`;
+- \`/users/logIntoAccount/{accountId}\`;
+- \`/Users/logout\`.
+
+Delete/disconnect-like action отображается как одиночный символ \`×\` без достаточного accessible name. Аудит **не активировал** эти ссылки, поэтому фактический HTTP method и наличие server confirmation не утверждаются. Сам факт представления потенциальной mutation как обычного navigational anchor — риск accidental activation, prefetch/crawler execution, CSRF и неполного audit trail.
+
+**Syntha command standard:**
+
+- navigation всегда GET/read-only;
+- state change использует typed command через POST/PATCH/DELETE;
+- CSRF/session binding и tenant scope обязательны;
+- \`Idempotency-Key\` обязателен для Connect, Accept, Withdraw, Disconnect, account switch, order creation и paid subscription command;
+- destructive/externally visible action имеет explicit label, consequence preview и подтверждение;
+- Disconnect требует reason, effect preview, active-draft impact и сохраняет historical orders;
+- account switch создаёт \`AccountContextChanged\`, очищает tenant-scoped caches и повторно проверяет current route;
+- logout аннулирует session server-side и не исполняется prefetch;
+- каждая команда пишет actor, active account, target, before/after state, source surface, timestamp и correlation ID.
+
+### 130.6. Best Sellers From My Brands: скрытый модуль и незавершённая реализация
+
+Best Sellers доступен только через legacy Shop menu. Наблюдавшаяся страница:
+
+- title: Best Sellers From My Brands;
+- page-size actions View 15, View 30 и View All;
+- после загрузки shell остаётся в состоянии Loading;
+- после дополнительного ожидания не появились данные, error explanation, retry или empty state;
+- переход и подключение к странице были существенно медленнее других разделов.
+
+Состояние не позволяет доказать, какой рейтинг, период или metric должен был отображаться. Поэтому Syntha не копирует экран, а формализует продуктовую развилку:
+
+**Option A — remove:** скрыть entry point, пока service health и data contract не готовы.
+
+**Option B — implement as Buyer Insight:**
+
+\`BestSellerSignal { brandId, commercialProductVersionId, rankingScope, metricType, metricValue, currency, periodStart, periodEnd, rank, inventoryContext, accessGrantId, generatedAt, expiresAt, confidence, provenance }\`.
+
+Обязательные функции:
+
+- time range и сравнение с предыдущим периодом;
+- явная metric definition: units, wholesale value, order count либо sell-through;
+- ranking scope: один brand, category, territory или connected portfolio;
+- freshness timestamp и source/provenance;
+- фильтры brand/category/season/delivery/price;
+- переход в доступный catalog/product context;
+- Favorite / Add to Styleboard / Add to assortment, но не мгновенный order без quantity validation;
+- скрытие данных, которые brand не разрешил агрегировать;
+- no-data, insufficient-sample, stale-data, access-revoked, loading и error states;
+- retry с correlation ID;
+- usage analytics без раскрытия cross-tenant sales.
+
+### 130.7. Outreach и connection direction: обнаруженные state gaps
+
+\`/ra/submissions\` сохраняет tab в URL:
+
+- New: информативный empty state и CTA Find New Brands;
+- Viewed: объясняет, что просмотренный outreach появится здесь;
+- All: в наблюдавшемся пустом состоянии отображал только tabs без объяснения и CTA.
+
+Одновременно Home называет один блок Connection Requests, но See All ведёт на outbound pending route. New to JOOR тоже может вести в тот же pending route. Эти факты подтверждают, что discovery, outreach и двунаправленные connection requests не собраны в одну state machine.
+
+**Syntha canonical relationship state:**
+
+\`DISCOVERED → FAVORITED? → OUTREACH_RECEIVED? → REQUESTED_INBOUND | REQUESTED_OUTBOUND → CONNECTED → ACCESS_PENDING? → COMMERCIAL_ACCESS_ACTIVE → SUSPENDED | DISCONNECTED\`.
+
+Outreach остаётся отдельной сущностью и не является connection state. Favorite остаётся приватным save-state. \`CONNECTED\` не гарантирует price/catalog/order access без effective \`CommercialAccessGrant\`.
+
+Обязательные state counters:
+
+- New outreach;
+- Viewed outreach;
+- Inbound requests awaiting retailer;
+- Sent requests awaiting brand;
+- Connected but access pending;
+- Commercially active;
+- Suspended/revoked;
+- Action overdue.
+
+Empty-state contract общий: title, meaning, why empty, primary next action, retained filters, support link при error. \`All\` никогда не остаётся пустым без объяснения.
+
+### 130.8. Subscription и entitlement lifecycle
+
+В LITE-контексте subscriptions page показывает две purchasable Visual Assortment tiers и monthly/yearly Purchase actions. На наблюдавшейся поверхности не были видны:
+
+- current usage по users, doors, products и storage;
+- comparison matrix;
+- trial;
+- effective date и renewal date;
+- proration;
+- upgrade/downgrade impact;
+- cancellation and grace period;
+- invoices, taxes и billing contact;
+- overage behavior;
+- permission required to purchase;
+- pending/failed payment;
+- subscription history.
+
+Purchase не активировался, поэтому checkout и платёжный flow не исследованы.
+
+**Syntha entities:**
+
+- \`PlanDefinition\` — immutable marketed limits and feature set;
+- \`SubscriptionContract\` — tenant, plan version, billing cycle, dates and commercial terms;
+- \`EntitlementGrant\` — server-authoritative feature access by effective interval;
+- \`UsageMeter\` — dimension, used, reserved, limit, measuredAt;
+- \`SubscriptionChange\` — upgrade/downgrade/cancel request with proration preview;
+- \`BillingAccount\`, \`Invoice\`, \`PaymentAttempt\`;
+- \`EntitlementDecision\` — allow/deny with reason and remediation.
+
+**Syntha requirements:**
+
+1. marketing catalog и active subscription разделены;
+2. checkout показывает exact plan version, currency, tax, renewal, cancellation and effective date;
+3. Purchase доступен только billing-authorized role;
+4. server grants entitlement only after confirmed commercial state;
+5. usage near limit creates warning; exceeded limit has deterministic read/write behavior;
+6. downgrade validates current users/doors/products/storage and proposes remediation;
+7. cancellation не удаляет business data и определяет export/retention window;
+8. payment failure has grace and recovery states;
+9. all plan changes are idempotent and auditable;
+10. locked feature surface объясняет current plan, required entitlement и next allowed action.
+
+### 130.9. Compose Message и массовая коммуникация
+
+Compose открывается inline на Messages и содержит:
+
+- radio option Send to All My Connections;
+- radio option Select Connections;
+- recipient text control для выбранной аудитории;
+- Subject;
+- required Message body;
+- optional single image upload: JPG/PNG, maximum 4 MB;
+- Send.
+
+На наблюдавшейся форме не было явной привязки к order, linesheet, product, styleboard, connection request или task. Также не были видны draft, preview, scheduled send, audience count, permission explanation, template, unsubscribe/compliance context, delivery estimate или idempotency state.
+
+**P0 mass-send safeguards Syntha:**
+
+- отдельное permission \`communication.broadcast.send\`;
+- точный recipient preview и count перед подтверждением;
+- immutable \`RecipientSnapshot\` с причиной включения;
+- автоматическое исключение disconnected, blocked и legally suppressed recipients;
+- rate limit, duplicate detection и idempotency;
+- subject/body validation и safe attachment scan;
+- allowed MIME types и content rights;
+- test send / preview;
+- scheduled/cancel window для broadcast;
+- delivery state: queued, sent, delivered, bounced, failed, suppressed;
+- per-recipient audit without exposing recipients cross-tenant;
+- structured opt-out/commercial-communication policy;
+- failure report and retry only eligible recipients.
+
+**Communication model Syntha:**
+
+\`ConversationThread\` связывается с \`BusinessObjectLink[]\` и участниками. \`Message\` — содержимое; \`Notification\` — delivery projection; \`WorkItem\` — обязательное действие; \`BroadcastCampaign\` — массовая коммуникация. Эти сущности не смешиваются в одном unread count.
+
+Attachment baseline должен поддерживать не только image, но и governed document types, если бизнес-процесс это требует; лимиты, retention, malware scan, download authorization и version binding обязательны.
+
+### 130.10. Support и external SSO boundary
+
+Новая и legacy оболочки ведут в поддержку разными путями: modern route \`/ra/zendesk/sso\` и legacy \`/hc/en-us/\`. SSO route не открывался, потому что переход способен передать identity/context внешнему support provider.
+
+**Syntha SupportEntryPoint:**
+
+- один canonical help route;
+- local help first: object-aware documentation и troubleshooting;
+- явное объяснение перед external SSO;
+- минимально необходимый identity payload;
+- tenant-safe context: routeId, correlation ID, application version, error class — без business data по умолчанию;
+- consent для передачи дополнительных diagnostics;
+- SupportCase ID возвращается в Syntha;
+- links из error state передают correlation, но не credentials/PII;
+- доступность Help не зависит от работоспособности основного business API;
+- support provider outage имеет fallback contact and status page.
+
+### 130.11. Новые проблемы JOOR → backlog Syntha
+
+| Priority | Наблюдение | Доработка Syntha |
+|---|---|---|
+| P0 | Home Connection Requests ведёт в outbound pending route | typed deep links и automated route-contract tests |
+| P0 | New to JOOR See All ведёт в pending connections | разделить DiscoveryCandidate и ConnectionRequest |
+| P0 | потенциальные mutation представлены anchors с route IDs | command API, CSRF, idempotency, confirm, audit |
+| P0 | disconnect/delete action обозначен только \`×\` | explicit action label, accessible name, consequence preview |
+| P0 | account switch/logout выглядят как GET navigation | protected session commands и cache isolation |
+| P0 | mass send всем connections доступен из обычной compose form | broadcast permission, audience preview, recipient snapshot, rate limit |
+| P0 | Best Sellers остаётся Loading без recovery | remove entry or error boundary/retry/SLA |
+| P0 | inbound registry долго не показывает meaningful loading/error | skeleton, timeout, retry, correlation |
+| P1 | Shop By Brand открывает Manage Connections | canonical naming and destination |
+| P1 | legacy Orders/Connections/Messages могут быть self-links | единый generated navigation |
+| P1 | All outreach state blank | shared empty-state contract |
+| P1 | subscription page не показывает usage и lifecycle | subscription/usage/billing center |
+| P1 | communication не привязана к business objects | object-linked collaboration |
+| P1 | modern и legacy Help используют разные routes | one SupportEntryPoint |
+| P1 | brand-only upsell смешан с retailer navigation | capability-aware navigation, без role noise |
+| P2 | Best Sellers concept не объясняет metric/provenance | governed Buyer Insight |
+| P2 | Home feed не объясняет ranking и source | explainable recommendation and freshness |
+| P2 | устаревшие browser references | supported-browser policy from current telemetry |
+
+### 130.12. Каноническая карта связей / Canonical relationship map
+
+\`TenantAccount\`
+→ имеет \`Membership[]\`
+→ активирует \`AccountContext\`
+→ определяет \`RoleAssignment[]\` и \`PermissionDecision\`.
+
+\`RetailerPrivateProfile\`
+→ публикует versioned \`RetailerPublicProfileProjection\`
+→ участвует в \`DiscoveryEligibility\`
+→ порождает \`DiscoveryCandidate\` для бренда
+→ может привести к \`BrandOutreach\` или \`ConnectionRequest\`.
+
+\`ConnectionRequest\`
+→ имеет direction, initiator, recipient, message, timestamps and state
+→ при acceptance создаёт/обновляет \`RelationshipState\`
+→ запускает \`CommercialAccessEvaluation\`
+→ только effective \`CommercialAccessGrant\` открывает price, representative, linesheet, catalog and order capabilities.
+
+\`BrandStorefrontProjection\`
+→ ссылается на approved \`CommercialProductProjectionVersion[]\`
+→ группирует \`LinesheetVersion[]\`
+→ открывает \`CatalogSession\`
+→ создаёт \`CartDraft\`
+→ pin-ит brand, access grant, price type, currency, warehouse, door and delivery context
+→ создаёт \`OrderDraft\`
+→ после validation/approval становится \`WholesaleOrder\`.
+
+\`HomeWidgetProjection\`
+→ агрегирует только typed \`WorkItem\`, \`RelationshipState\`, \`BrandOutreach\`, \`OrderAlert\`, \`JobRun\`, \`EntitlementUsage\`
+→ каждый item deep-link ведёт к тому же object/version.
+
+\`ConversationThread\`
+→ содержит \`BusinessObjectLink[]\`
+→ создаёт \`Message[]\`
+→ доставляется через \`NotificationDelivery[]\`
+→ при required action создаёт отдельный \`WorkItem\`.
+
+\`SubscriptionContract\`
+→ выдаёт \`EntitlementGrant[]\`
+→ ограничивается \`UsageMeter[]\`
+→ определяет FeatureGate для Visual Assortment и других premium capabilities.
+
+\`IntegrationRun\`
+→ является \`JobRun\`
+→ ссылается на source object versions и destination IDs
+→ при discrepancy создаёт \`ReconciliationCase\`
+→ на Home появляется как typed required action.
+
+### 130.13. Command/event matrix
+
+| Command | Preconditions | Event | Side effects / recovery |
+|---|---|---|---|
+| \`RequestConnection\` | discoverable target, permission, no active duplicate | \`ConnectionRequestedOutbound\` | sent queue; Withdraw allowed |
+| \`AcceptConnection\` | active inbound request, recipient authority | \`ConnectionAccepted\` | relationship update; access evaluation |
+| \`DeferConnection\` | active inbound request | \`ConnectionDeferred\` | remains recoverable; optional reminder |
+| \`WithdrawConnectionRequest\` | actor owns pending outbound | \`ConnectionRequestWithdrawn\` | no new access; audit preserved |
+| \`DisconnectRelationship\` | connected state, authority, impact preview | \`RelationshipDisconnected\` | revoke future access; preserve history; resolve active drafts |
+| \`SwitchAccountContext\` | active membership, account enabled | \`AccountContextChanged\` | clear caches, re-evaluate route and permissions |
+| \`StartSubscriptionCheckout\` | billing permission, eligible plan/version | \`CheckoutStarted\` | no entitlement yet |
+| \`ActivateSubscription\` | confirmed commercial state | \`SubscriptionActivated\` | effective entitlement grants |
+| \`SendBroadcast\` | permission, confirmed recipient snapshot, valid content | \`BroadcastQueued\` | per-recipient delivery; cancel/retry policy |
+| \`CreateOrderDraft\` | effective access, pinned commercial context | \`OrderDraftCreated\` | durable autosave and idempotent resume |
+
+### 130.14. Дополнительные acceptance scenarios
+
+1. Home Inbound Requests count и destination возвращают одну и ту же query population.
+2. Home Sent Requests никогда не смешивается с inbound.
+3. New Brands See All ведёт в discovery с сохранённым ranking/filter context.
+4. Connected brand View Orders открывает registry с однозначным brand ID, не с locale-dependent name-only filter.
+5. Connected brand Shop открывает effective catalog grant либо объясняет access denial.
+6. Любой legacy alias делает один redirect в canonical route и пишет deprecation telemetry.
+7. Case-only duplicate routes блокируются CI.
+8. Menu item с label Orders не может иметь self-link на unrelated current page.
+9. GET/HEAD никогда не меняет connection, account, session, subscription или message state.
+10. Prefetch/crawler не способен выполнить command.
+11. Disconnect требует explicit label, reason и impact preview.
+12. Disconnect сохраняет historical orders и comments, но блокирует новый catalog access.
+13. Account switch очищает tenant-scoped cache и не показывает данные предыдущего аккаунта.
+14. Logout инвалидирует server session и не запускается link prefetch.
+15. Outreach New, Viewed и All имеют loading, empty, data, error и retry.
+16. Best Sellers при timeout показывает error, correlation ID и retry; бесконечный Loading запрещён.
+17. Best Seller metric показывает definition, period, scope, freshness и provenance.
+18. Best Seller signal исчезает при revoked data-sharing/access без утраты audit.
+19. Subscription page показывает current plan, usage, limits, renewal and billing authority.
+20. Upgrade preview показывает price, tax, proration и effective date до confirmation.
+21. Downgrade с excess usage предлагает remediation и не удаляет data.
+22. Payment failure создаёт grace-state и required action.
+23. Feature gate проверяется server-side, а не только скрытием UI.
+24. Compose to All показывает exact audience count и sampled preview.
+25. Broadcast не включает disconnected/blocked/suppressed recipients.
+26. Double-click Send не создаёт duplicate campaign.
+27. Attachment проходит MIME/size/malware validation до send.
+28. Message, notification, broadcast и required task имеют разные counts.
+29. Message from order сохраняет object link и visible order version.
+30. Support SSO показывает external-provider disclosure до перехода.
+31. Support payload не содержит PII/business content без явного consent.
+32. Help остаётся доступным при outage основного API.
+33. Blank registry > defined timeout заменяется recovery state.
+34. Capability-inapplicable brand-only upsell не появляется в retailer navigation.
+35. Route analytics содержит source widget и target object type без private object label.
+
+### 130.15. Implementation epics и порядок работ
+
+| Epic | Priority | Result |
+|---|---|---|
+| E1 Canonical Routes & Navigation | P0 | единый route registry, typed deep links, alias migration, CI checks |
+| E2 Relationship State Machine | P0 | outreach/inbound/outbound/connected/access separated |
+| E3 Secure Command Gateway | P0 | POST commands, CSRF, idempotency, confirmation, audit |
+| E4 Buyer Home & Work Queue | P0 | object-linked actions, trustworthy counts, no misrouting |
+| E5 Communication Governance | P0 | threads, object links, broadcast safety, delivery audit |
+| E6 Loading/Error/Recovery Standard | P0 | timeout, retry, correlation, no infinite spinner |
+| E7 Subscription & Entitlements | P1 | plan, contract, usage, billing, changes, feature gates |
+| E8 Legacy Retirement | P1 | remove self-links, old routes, obsolete browser/help surfaces |
+| E9 Buyer Insights | P2 | governed BestSellerSignal and explainable recommendations |
+| E10 Support Boundary | P1 | one help entrypoint, safe SSO, context-aware cases |
+
+Порядок: E1 + E2 + E3 формируют platform spine; затем E4 + E5 + E6; после этого E7 и E8; E9 не начинается до готовности provenance/access controls.
+
+### 130.16. Definition of Done для этого gap-аудита
+
+- новые факты не дублируют разделы 128–129;
+- route и action patterns обезличены;
+- потенциально destructive actions не активировались;
+- Purchase, Send, Connect, Not Now, Withdraw, Disconnect, account switch, Help SSO и logout не выполнялись;
+- каждое наблюдение отделено от продуктового решения Syntha;
+- для каждого нового gap назначены entity/contract, priority и acceptance evidence;
+- никакие account names, brand names, message texts, e-mail, phone, address или реальные IDs не сохранены.
+
+### 130.17. Source note
+
+Источник — прямое read-only наблюдение авторизованной retailer web-версии JOOR 18 августа 2026 года. Legacy-route latency и Loading-состояния отражают конкретный сеанс и должны быть повторно проверены перед количественным SLA-сравнением. Отсутствие элемента означает «не виден на исследованной поверхности/в данном entitlement context», а не доказательство его полного отсутствия во всех тарифах JOOR.
+
+## 131. JOOR × NuORDER: полный buyer-commerce benchmark и целевая гибридная модель Syntha
+
+**Версия карты:** 4.7  
+**Дата исследования:** 19 августа 2026 года  
+**Фокус:** кабинет ритейлера/заказчика — от профиля и доступа к бренду до ассортимента, размерной матрицы, multi-door заказа, оплаты и повторного заказа.
+
+Этот раздел является дельтой к разделам 128–130. Уже описанные маршруты, геометрия JOOR, фильтры современного каталога, карточка View and Quantify, реестр заказов, Start Order, legacy-поверхности, ошибки навигации и дизайн-токены здесь не пересказываются. Ниже зафиксированы:
+
+1. функции NuORDER, которых ранее в карте не было или они были обозначены только общими принципами;
+2. более строгая предметная модель заказа;
+3. сопоставление сильных и слабых сторон JOOR и NuORDER;
+4. целевой вариант Syntha, который устраняет неоднозначность цен, размеров, поставок, дверей, прав доступа и статусов.
+
+### 131.1. Границы доказательств и безопасность исследования
+
+- JOOR проверялся в авторизованном retailer-контексте только чтением интерфейса. Товары не добавлялись, количество не менялось, заказы не создавались и не отправлялись.
+- При повторной проверке 19 августа 2026 года маршрут /ra/home дважды, включая полную перезагрузку, отобразил пустую страницу: body без текста, ссылок и изображений, один безымянный элемент button размером приблизительно 113 × 24 px; в журнале страницы зафиксирован Failed to fetch. Пользовательского error state, retry, fallback и диагностического идентификатора не было.
+- Детали JOOR, доступные в предыдущих сеансах, остаются в разделах 128–130. Текущий белый экран не отменяет эти наблюдения, но не позволил безопасно продолжить новый продуктовый drill-down.
+- NuORDER исследован по официальному NuORDER Help Desk. Наличие функций зависит от конфигурации бренда, роли, customer group, warehouse, price sheet, payment setup, тарифа, beta-доступа и иногда обращения к Account Manager/Support.
+- Частные названия компаний, покупателей, брендов, заказов, артикулов, адресов и цены исследуемого аккаунта в репозиторий не переносятся.
+
+### 131.2. Сквозной путь заказчика: сравнение и целевое поведение
+
+| Этап | JOOR, подтвержденное в карте | NuORDER, новая детализация | Цель Syntha |
+|---|---|---|---|
+| Вход и профиль | Retailer Home, connections, account/profile, subscription и legacy/modern переходы | Общий Retailer Profile организации, компания, locations, buyers, роли, Marketplace visibility, preferred currency | Organization workspace с явной ролью, capability manifest, completeness score, audit trail и без дублирующих профилей |
+| Поиск бренда | Connections, profiles, Discover Brands, Shop | Marketplace, категории, keyword, рекомендации, open/closed environment, connection request | Один каталог брендов с прозрачным Access state: public preview, request pending, connected, restricted, suspended |
+| Витрина | Storefront, linesheets, catalog, Best Sellers и media tiles | Brand page, Product Gallery, Linesheets/Custom Lists, Whiteboards | Storytelling и buying data в одном showroom: image/video/3D/360/hotspots без разрыва контекста заказа |
+| Поиск товара | Современный каталог с фильтрами, сортировкой, card grid и View and Quantify | Product Gallery; standard prefix search и expanded substring search; Panel/Small Tile/Large Tile/Card/Row | Единый быстрый полнотекстовый и facet search, saved filters/views, явная область поиска и отсутствие временного режима, который сбрасывается при закрытии браузера |
+| Карточка товара | style code, colors, wholesale/RRP, delivery, warehouse, MTO, fabrication, Bulk/Sized | Style/colorway data, department/division, season, category, stock per size, order close date, multiple media types | Style → Colorway → SKU; медиагалерея; explainable price, availability and delivery; compare/favorite/list; keyboard-accessible quantity grid |
+| Подборка | Linesheet, selection/order context | Lists, Linesheets, Whiteboards, Assortments, SMU/placeholders | Assortment как версия плана закупки, а не временный список; комментарии, цели, бюджет, двери, approval и conversion to order |
+| Размеры и количество | Bulk/Sized, матрица size-by-color, subtotal по цвету и общий total | Line Items/Sizing View, quantity by size × delivery × location, copy/paste, duplicate across locations, bulk order | Универсальный Allocation Matrix: SKU × delivery × door; paste, undo, formulas, validation, optimistic concurrency и сохраненные представления |
+| Поставки | delivery window и warehouse в каталоге/заказе | Immediate/Future/Prebook, min/default window, Inventory Arriving, apply delivery to multiple products | Delivery promise с типом, допустимым диапазоном, availability source, reserve policy, confidence и причиной недоступности |
+| Корзина | Active cart/order context, Start Order и order registry | Working Order/cart, autosave, drafts, grouping, warnings, duplicate product, export/import, Allocation Summary | Durable OrderDraft с immutable price snapshot, autosave status, version history, conflict handling, approval and recovery |
+| Двери | Door на старте заказа | Multi-location bulk order; All Locations Combined/By Location; split into orders per door | Явные OrderAllocation и ShipmentPlan; предсказуемый split preview до отправки; одна коммерческая сделка, несколько fulfillment orders |
+| Цена | Price type, currency, wholesale/RRP, financial summary | Customer price sheet, per-size price, company/order/line discount, promotion, surcharge, customization fee | Детальный Price Ledger с источником и приоритетом каждого adjustment, tax/FX/rounding policy и воспроизводимой формулой |
+| Проверка | Order details, summary, Pay restrictions | Product issues, min/max, missing qty, duplicates, order review, T&C, payment options | Validation Center: ошибки, предупреждения и рекомендации с переходом к конкретной ячейке; server-side revalidation перед submit |
+| После отправки | Orders registry/details/status/payment surfaces | Company orders, organization-wide visibility, re-order, payment/order history, CSV export; buyer не редактирует submitted order | Amendment/change request, audit timeline, reorder as new draft, shipment/invoice/payment reconciliation, role-based visibility |
+
+### 131.3. Профиль ритейлера как корпоративный объект
+
+В NuORDER Retailer Profile объединяет организацию, покупателей, locations и историю заказов. Заказы принадлежат организации, а не исчезают вместе с сотрудником. Настройки профиля включают:
+
+- General: company name, email, phone, primary address;
+- Retailer info: overview, store images, stocked brands, merchandise categories, business details, sales/revenue, verification, social accounts;
+- Marketplace settings: разрешение брендам находить ритейлера, скрытие контактной информации при отключении, preferred currency;
+- Locations: primary и дополнительные locations;
+- Buyers: invite/add/remove, назначение ролей;
+- onboarding: где компания продает, POS, website, год открытия, число магазинов, annual revenue, average product price, категории и текущие бренды.
+
+Сильная сторона — организационное владение заказами. Слабые стороны — чувствительные коммерческие поля смешаны с discoverability, joining another organization может архивировать прежний профиль, а подключение buyer к organization само по себе не дает подключение ко всем brand portals.
+
+**Требования Syntha:**
+
+1. Развести Organization, RetailerProfile, LegalEntity, Location/Door, User и Membership.
+2. У Membership хранить role, permissions, scopes, start/end date, invitedBy, status и lastAccessReview.
+3. Не архивировать рабочую организацию автоматически при последнем выходе пользователя; использовать owner transfer, recovery admin и retention policy.
+4. Разделить marketplace-public данные, shared-with-connected-brand данные и private verification данные.
+5. Дать предпросмотр: «что именно увидит бренд» до включения discoverability.
+6. Хранить заказы и assortment history на Organization/LegalEntity, сохраняя authorId и actor snapshot.
+7. Поддержать multiple legal entities, currencies, tax registrations, billing accounts и purchasing teams в одном workspace.
+8. Вывести Profile completeness не как блокирующую анкету целиком, а по capability: что необходимо для browse, request access, draft, submit, pay.
+
+### 131.4. Доступ к брендам и объяснимая видимость
+
+NuORDER различает:
+
+- open environment: до подключения можно просматривать весь бренд, но нельзя заказать;
+- fully closed: видна только marketplace brand page и Connect;
+- partially closed: preview плюс whitelisted products;
+- connected: каталог, назначенные цены и возможность заказа;
+- marketplace direct order: для открытых брендов заказ возможен сразу, а connection создается после submit;
+- customer/user groups: видимость продуктов, promotions, min/max rules, linesheets, widgets и availability types;
+- company price sheet и assigned warehouse дополнительно меняют видимые товары, цену и availability.
+
+Это мощно, но buyer не всегда понимает, почему товар, цена или действие отсутствует.
+
+**Целевой Syntha AccessDecision:**
+
+| Поле | Назначение |
+|---|---|
+| resourceType/resourceId | brand, collection, style, colorway, price, inventory, document |
+| subject | organization, membership, customer group |
+| decision | allow, preview, request, deny, temporarily unavailable |
+| reasons[] | connection required, region restricted, price book missing, warehouse not assigned, launch embargo, entitlement missing |
+| requestedAt/approvedAt/expiresAt | жизненный цикл доступа |
+| decisionSource | brand rule, marketplace rule, contract, manual override |
+| appeal/action | request access, contact rep, complete profile, select region |
+
+Любой закрытый товар или CTA должен показывать безопасную причину и допустимое следующее действие, не раскрывая чужие данные и внутренние правила.
+
+### 131.5. Предметная модель товара и медиа
+
+NuORDER определяет product как отдельный colorway стиля. Для одного colorway разрешено до 100 media items: standard images, 3D, 360 и video. Первое изображение является hero, второе может использоваться как hover, если оно не 3D/360/video; полная медиагалерея доступна в Product Details. Есть watermarking.
+
+Для Syntha недостаточно одной сущности Product. Каноническая иерархия:
+
+    Brand
+      └─ Style
+          ├─ Colorway
+          │   ├─ SKU (size / length / width / pack / barcode)
+          │   └─ MediaAsset[]
+          └─ ProductDocument[]
+
+**Style:**
+
+- styleId, styleNumber/article, name, description;
+- season, collection, department, division, category/subcategory, silhouette;
+- composition, care, country of origin, HS code;
+- carryOver/new/discontinued/cancelled state;
+- tags, custom attributes, certifications.
+
+**Colorway:**
+
+- colorwayId, colorCode, colorName, colorFamily, swatch;
+- launch/embargo dates, order close date;
+- color-specific wholesale/MSRP override;
+- image/video/3D/360 set;
+- fabric/material variation.
+
+**SKU:**
+
+- skuId, sizeCode, normalized size, width/length, barcode/UPC/EAN;
+- unitsPerPack, MOQ, multipleOf;
+- weight/dimensions;
+- active/sellable state.
+
+**MediaAsset:**
+
+- type: image, video, 3d, 360, CAD, look, document;
+- role: hero, hover, front, back, detail, scale, packaging, fit, runway;
+- locale, accessibility alt/caption/transcript;
+- colorway linkage, sort order, crop/focal point;
+- rendition metadata, duration, poster, codec, dimensions, file size;
+- rights owner, license territory, validFrom/validTo, watermark policy;
+- version, moderation state, checksum, source and audit fields.
+
+**Улучшения Syntha:**
+
+1. Показывать счетчик медиа и типы до открытия detail.
+2. Сохранять zoom/pan, full screen, side-by-side color comparison и synchronized zoom.
+3. Давать video speed, captions, mute state, poster, keyboard controls.
+4. Для 3D/360 показывать явный badge, drag hint и fallback image.
+5. Не использовать вторую позицию как неявную hover-семантику: роль hover хранится явно.
+6. Проверять alt text, разрешение, цветовой профиль, дубликаты и лицензию при публикации.
+7. Поддержать shoppable hotspots, но каждый hotspot должен открывать preview и не добавлять товар в заказ одним неявным кликом.
+
+### 131.6. Product Gallery, поиск, фильтры и представления
+
+NuORDER дает общий Product Gallery и тематические Linesheets/Catalogs. Возможны фильтры по season, color, availability, department и category; конкретный набор задает бренд. Поиск работает по name/style number/color. Standard search ищет по началу поля, Expanded search — по вхождению, медленнее и сбрасывается после закрытия браузера. Представления: Panel, Small Tile, Large Tile, Card и Row; Large Tile недоступен на mobile.
+
+Это показывает два анти-паттерна:
+
+- режим поиска является временной настройкой вместо явной части запроса;
+- доступность view меняется по устройству без сохраненного функционального эквивалента.
+
+**Цель Syntha Search:**
+
+- единый индекс styleNumber, name, color code/name/family, SKU/barcode, category, material, tags;
+- exact, prefix, fuzzy и semantic ranking в одном explainable запросе;
+- token highlighting и подсказка, где найдено совпадение;
+- filters из общей taxonomy, а brand custom facets подключаются дополнительно;
+- zero-result state с remove-last-filter, broaden search, show unavailable и request-access действиями;
+- saved searches, views и alert on new matches;
+- URL содержит запрос, sort, filters и view, поэтому результат воспроизводим и расшариваем;
+- browser/mobile view сохраняет те же действия, меняя плотность, а не функциональность;
+- bulk selection показывает точное число selected across pages и явный scope.
+
+### 131.7. Карточка товара: состав и критерии удобства
+
+Минимальный buyer product detail должен включать:
+
+1. identity: image/media, brand, style name, article/style number, color code/name;
+2. taxonomy: season, collection, department, division, category/subcategory;
+3. commercial: wholesale, MSRP/RRP, currency, price type/price book, applicable discounts/promotions;
+4. availability: warehouse, immediate/future/prebook, stock/reserved/available-to-sell per SKU, confidence timestamp;
+5. delivery: allowed windows, order close date, ship start/end, earliest/latest dates;
+6. order rules: MOQ, maximum, multipleOf, mandatory buy, pack composition, customization requirements;
+7. product facts: description, composition, care, country, certifications, dimensions;
+8. actions: favorite, compare, add to list/assortment, share, export, message, quantity entry;
+9. history: changed price, cancelled style, new color, changed delivery, replacement;
+10. trust: data owner, last updated, timezone and reason for unavailable/disabled controls.
+
+Удобство не должно зависеть от раскрытия десятка accordion. На desktop identity/media и buying panel остаются синхронно видимыми; на mobile нижняя sticky summary показывает selected units, value, validation state и Add/Update.
+
+### 131.8. Матрица количества: от Bulk/Sized к Allocation Matrix
+
+JOOR уже подтверждает Bulk/Sized и size-by-color. NuORDER добавляет Sizing View для больших заказов и нескольких deliveries/locations:
+
+- configurable columns, group/sort/filter/search;
+- group by delivery, затем location;
+- quantities на delivery или size level;
+- copy/paste quantities, paste by related size group, paste across cart;
+- duplicate quantities to locations;
+- hide/show sizes, bulk remove;
+- alerts по reservations, overstock, auto-adjustments и min/max;
+- required custom columns;
+- All Locations Combined или By Location;
+- saved views для columns/grouping/sorting, но filters/search не сохраняются.
+
+**Целевая Syntha Allocation Matrix:**
+
+| Ось/поле | Поведение |
+|---|---|
+| Row identity | Style + Colorway + optional delivery |
+| Columns | Door/Location × SKU/Size или переключаемая ориентация |
+| Cell | ordered quantity, pack quantity, available ATS, reserved, warning/error |
+| Header totals | units, packs, wholesale value, retail value, margin |
+| Group totals | collection, category, delivery, location, currency |
+| Editing | keyboard arrows/tab/enter, multi-cell paste, fill, copy, undo/redo |
+| Modes | All doors combined, By door, By delivery, compact Line Items |
+| Validation | inline and centralized, never color-only |
+| Persistence | autosave indicator, last saved time, offline queue, conflict banner |
+| Concurrency | row/cell versioning and merge, no silent last-write-wins |
+
+Правила ввода:
+
+- пусто означает not specified, 0 означает explicit zero;
+- отрицательные и дробные значения запрещены, кроме отдельно разрешенных измеряемых единиц;
+- paste предварительно показывает mapping и ошибки, затем применяется одной отменяемой транзакцией;
+- изменение unitsPerPack не должно молча менять pack count или заказанные units;
+- bulk fill требует preview затронутых ячеек;
+- inventory warning не заменяет server-side reservation;
+- при переключении combined ↔ by door система сохраняет распределение и показывает расхождение.
+
+### 131.9. Availability, warehouse и delivery windows
+
+NuORDER различает Immediate, Future и Prebook. Brand settings и inventory Period Start/End задают допустимые buyer ranges, также есть default/minimum length. В Product Details и Working Order можно выбрать delivery, применить ее к нескольким товарам и посмотреть Inventory Arriving. Prebook может не уменьшать inventory до перехода в обычное окно. Прошедший start date корректируется до current date.
+
+**Целевая модель:**
+
+    InventoryPosition = SKU + Warehouse + AvailabilityType + Period + OnHand + Reserved + ATS + UpdatedAt
+    DeliveryWindow = Brand + Warehouse + Type + EarliestStart + LatestEnd + MinDays + DefaultDays + CloseAt
+    SupplyPromise = OrderLine + Window + Quantity + State + Confidence + SourceVersion
+
+Обязательные правила:
+
+1. Выбранный warehouse всегда виден рядом с ценой и delivery.
+2. ATS имеет timestamp и timezone; stale data получает предупреждение.
+3. Для disabled delivery показывается причина: нет stock, не назначен warehouse, окно закрыто, регион недоступен, не выполнен minimum.
+4. Prebook, Future и Immediate имеют разные reserve/cancel policies.
+5. Apply to multiple сначала показывает eligible/ineligible товары и не меняет неподходящие строки молча.
+6. При изменении delivery автоматически пересчитываются price, promotion, inventory и min/max, но пользователю показывается diff.
+7. Заказ хранит snapshot обещания поставки; последующие изменения inventory не переписывают исторические условия.
+
+### 131.10. Multi-door и распределение по магазинам
+
+NuORDER Bulk Order позволяет одним действием создать отдельные orders по locations. Buyer выбирает shipping addresses, их порядок, delivery и quantities; ввод возможен All Locations Combined или By Location. При submit система добавляет suffix к номеру для каждого split order.
+
+**Что улучшить в Syntha:**
+
+- до ввода quantity определить hierarchy: LegalEntity → BuyingGroup → Region → Door/Location → Address;
+- shipping address не должна быть единственным идентификатором двери;
+- иметь reusable door clusters и allocation templates;
+- показывать Split Preview до submit: orders, doors, deliveries, currencies, totals, rules и PO numbers;
+- объяснять, где minimum применяется к whole draft, shipment, door или resulting split order;
+- не клонировать общие order notes/attachments без явной политики;
+- поддержать central buy с последующим allocation, прямой by-door buy и смешанный режим;
+- хранить parent CommercialOrder и child FulfillmentOrder, чтобы связь не терялась;
+- позволить rebalance between doors до cut-off с audit trail;
+- экспортировать door identifiers и выбранный display order без зависимости от визуального порядка строк.
+
+### 131.11. Working Order / Cart / Draft
+
+NuORDER Working Order содержит:
+
+- Order Details: company, buyer, sales rep, shipping/billing addresses, multiple doors, generated order number, optional Customer PO, discount, surcharge, CC emails, order tags, order type и notes;
+- Products: Line Items или Sizing View, grouping/sorting, missing quantities, stock issues, duplicates;
+- delivery type/range per product, apply to multiple, Add Product Again;
+- order-level и line-level discounts;
+- autosave изменений, Save Draft, повторное открытие draft;
+- экспорт/импорт order spreadsheet и Allocation Summary;
+- Order Review, T&C/payment в зависимости от конфигурации;
+- submit confirmation и email.
+
+Новая beta Cart добавляет отдельный интерфейс, filters, sort by delivery/recently added, review queues, inventory indicators, required fields и именованные drafts. Сосуществование classic Working Order и beta Cart означает риск разных правил и результатов.
+
+**Syntha OrderDraft:**
+
+| Группа | Поля |
+|---|---|
+| Identity | draftId, organization, brand, legalEntity, owner, collaborators, status, version |
+| Context | currency, priceBook, warehouse, orderType, salesRep, buyer, doors |
+| Commercial | customerPO, terms, tax mode, discounts, promotions, surcharges |
+| Fulfillment | shipping/billing, delivery windows, allocations, split policy |
+| Content | lines, SKUs, quantities, notes, attachments, customizations |
+| Safety | validation snapshot, price snapshot, inventory snapshot, lastSavedAt, conflict state |
+| Lifecycle | created, named, shared, approved, submitted, expired, abandoned |
+
+Требования:
+
+1. Autosave показывает Saving/Saved/Offline/Conflict и не маскирует ошибку.
+2. Clear products и Reset entire draft — разные команды; order metadata не удаляется вместе с cart без предупреждения.
+3. Opening another draft не заменяет текущую корзину до preview и выбора merge/replace/open separately.
+4. Один style/colorway может присутствовать несколько раз только при разных delivery/customization/door-group или по явному duplicate intent.
+5. Re-order создает новый draft с ссылкой sourceOrderId; данные повторно валидируются по текущим price, inventory и access.
+6. Submitted order нельзя silently edit; поддерживаются change request, amendment version и authorized brand revision.
+
+### 131.12. Прозрачная модель цен и расчетов
+
+NuORDER поддерживает customer-specific price sheets, default wholesale fallback, per-size wholesale, currencies, company/order/line discounts, promotions, surcharge, customization fees и units per pack. Product-level discount перекрывает order-level discount; surcharge применяется ко всему заказу. Цена pack рассчитывается через unit price × units per pack, при этом в NuORDER inventory для pack может уменьшаться на число pack, а отображаемые units и price — на содержимое pack. Это требует явного разделения commercial units и inventory units.
+
+**Приоритет определения base unit price в Syntha:**
+
+1. SKU/size price в назначенном customer price book;
+2. colorway/style price в customer price book;
+3. contract price;
+4. default wholesale price;
+5. если ничего нет — строка незаказываемая с причиной Price unavailable.
+
+**Базовые величины:**
+
+    orderedPacks = sum(packQuantity)
+    commercialUnits = sum(packQuantity × unitsPerPack) + sum(looseSkuQuantity)
+    inventoryUnits = sum(packInventoryQuantity) или sum(commercialUnits) согласно InventoryUomPolicy
+    grossLine = sum(quantityBasis × baseUnitPrice)
+
+Количество для цены и для inventory нельзя выводить из одного поля без InventoryUomPolicy.
+
+**Adjustment ledger:**
+
+    effectiveManualDiscount =
+      lineDiscount, если он задан,
+      иначе orderDiscount
+
+    netAfterManual = grossLine - manualDiscountAmount
+    netAfterPromotions = applyPromotionPolicy(netAfterManual, eligiblePromotions)
+    customizationTotal = sum(customizationQuantity × customizationUnitFee)
+    surchargeTotal = applySurchargePolicy(eligibleBase)
+    shippingTotal = ratedShipping or quotedShipping
+    taxTotal = taxEngine(taxableBase, jurisdiction, exemption)
+    grandTotal = netAfterPromotions
+                 + customizationTotal
+                 + surchargeTotal
+                 + shippingTotal
+                 + taxTotal
+
+Для каждой строки ledger обязательны:
+
+- type, label, amount/percent, currency;
+- source: price book, contract, promotion, user override, tax/shipping engine;
+- priority, stackable/exclusive group, eligibility explanation;
+- applied base и rounding result;
+- actor и permission для ручного override;
+- timestamp и snapshot version.
+
+**Непереговорные правила:**
+
+1. Денежные значения хранятся decimal/minor units, не float.
+2. Currency, tax inclusive/exclusive и rounding mode показываются явно.
+3. FX фиксируется rate, source, timestamp и base/quote currency; order snapshot неизменяем.
+4. MSRP/RRP является информационной величиной и не попадает в payable total.
+5. Средний discount не выдается за одинаковую скидку всех строк.
+6. Promotion stacking отображается пошагово; buyer может раскрыть причины применено/не применено.
+7. Любое изменение price book, company, currency, delivery, size или quantity вызывает детерминированный recalculation diff.
+8. Перед submit сервер повторяет расчет и просит подтвердить только реальные изменения.
+
+### 131.13. Min/max, multiples, mandatory buys и validation center
+
+NuORDER позволяет задавать Minimum, Maximum, Multiples Of и Mandatory Buys в units или currency, на order/line/size/custom group, для all customers/single company/customer groups. Возможна автоматическая подстановка valid sizes. Required custom fields, missing quantities, duplicate deliveries, inventory и customizations также блокируют submit.
+
+**Syntha Rule Engine:**
+
+| Поле | Пример |
+|---|---|
+| ruleType | min, max, multiple, mandatory, compatibility, exclusivity |
+| subject | order, split order, door, shipment, line, SKU, category, custom group |
+| measure | commercial units, packs, inventory units, wholesale value, retail value |
+| audience | organization, customer group, contract, region |
+| effective period | season/date/timezone |
+| expression | machine-readable predicate |
+| message | localized human explanation |
+| remediation | add N, remove N, choose delivery, complete field |
+| severity | info, warning, blocking |
+| version | snapshot used by draft/order |
+
+Validation Center группирует проблемы по:
+
+- Order details;
+- Price/currency;
+- Product and quantity;
+- Inventory/delivery;
+- Door/allocation;
+- Commercial rules;
+- Customization;
+- Payment/legal.
+
+Каждая проблема имеет count, affected rows/cells, reason, owner, fix action и scroll/focus target. Цвет никогда не является единственным индикатором. Проверка запускается при вводе, по запросу и обязательно server-side на submit.
+
+### 131.14. Customization, notes и product-specific data
+
+NuORDER может помечать product как customizable и требовать print type, text, color, upload или другие атрибуты; возможна fee/surcharge и применение настройки к similar products. Отсутствующая обязательная customization блокирует submit.
+
+Syntha должна хранить:
+
+- CustomizationDefinition с type, options, constraints, preview renderer, fee rule;
+- CustomizationSelection на конкретной order line/allocation;
+- generated preview и production-ready file как разные assets;
+- consent/rights для загружаемых buyer files;
+- proof approval status и approval actor;
+- effect on lead time, MOQ, cancellation and return policy.
+
+Order note, line note, door note, internal note и vendor-visible note — разные поля с явной видимостью. Нельзя сводить их к одному Notes.
+
+### 131.15. Checkout, платежи и после-заказный цикл
+
+NuORDER документирует credit card, ACH и choose payment later; multiple deliveries могут иметь раздельный payment. Payment methods управляются отдельно, платежи и status history доступны из Orders, если функция включена. Buyer после submit не редактирует заказ; изменение выполняет brand sales rep.
+
+**Syntha:**
+
+1. PaymentInstrument хранится у payment provider/token vault; PAN/bank credentials не попадают в Syntha.
+2. Checkout показывает amount due today, future schedule, currency, fees, authorization language и refund/cancel policy.
+3. Поддержать deposit, net terms, pay later, card/ACH, invoice, payment link и split payment — только как capability, разрешенную брендом/регионом.
+4. Разделить OrderStatus, FulfillmentStatus, InvoiceStatus и PaymentStatus.
+5. Timeline содержит actor, event, changed fields, documents and correlation ID.
+6. Buyer может создать change request; платформа показывает, влияет ли он на price, delivery или payment.
+7. Order Details всегда показывает quantities, totals, adjustments, shipments, invoices, payments и source draft.
+8. Export отражает тот же ledger, а не пересчитанную отдельной логикой сумму.
+
+### 131.16. Assortments, Whiteboards, Rollups и Targets
+
+NuORDER Assortment — live collaborative plan для doors: catalog data/images, selections, quantities и notes of intent. Есть placeholders/SMU, fields для cluster/style/allocator notes, XLS export и downstream conversion в retailer ordering system.
+
+Rollup объединяет несколько assortments и позволяет:
+
+- анализировать combined buy;
+- tile/grid views, search/filter/sort/group/pivot;
+- saved views и sharing;
+- totals по doors: units, products, average depth, cost, retail;
+- редактировать units, targets и notes, видеть real-time updates;
+- добавлять product в underlying assortment.
+
+Targets задают плановые metrics, загружаются/вставляются и сравниваются с working totals/variance. Whiteboards объединяют visual storytelling и shoppable products.
+
+**Целевая Syntha Buying Plan:**
+
+    AssortmentPlan
+      ├─ PlanVersion
+      ├─ DoorScope / Cluster
+      ├─ AssortmentItem (Style/Colorway/SKU or Placeholder/SMU)
+      ├─ TargetSet
+      ├─ Note / Decision / Approval
+      ├─ VisualBoard / Hotspot
+      └─ OrderConversion
+
+Улучшения:
+
+1. Assortment и OrderDraft используют одну product, price, delivery и allocation модель.
+2. Conversion показывает exact diff: planned vs ordered units/value/doors/delivery.
+3. Rollup не дублирует items; он является query/view над source plans.
+4. Target хранит metric definition, scope, period, currency, source и owner.
+5. Placeholder/SMU имеет lifecycle: proposed → linked to product → approved/rejected → ordered.
+6. Одновременное редактирование поддерживает presence, comments, cell history и conflict resolution.
+7. Visual Board hotspot открывает detail; Add создает явное действие с quantity/delivery, а не скрытый cart mutation.
+8. Approval gates доступны по budget, margin, category, region и door cluster.
+
+### 131.17. Что реализовано плохо или не до конца
+
+| Платформа | Наблюдаемая проблема | Риск | Исправление в Syntha |
+|---|---|---|---|
+| JOOR | /ra/home может остаться пустым после Failed to fetch без error/retry | Полная потеря рабочего кабинета | App shell, timeout, retry, cached safe state, incident ID, status page link |
+| JOOR | Смешение modern и legacy routes, anchor-команды и непоследовательные Loading states | Потеря контекста, непредсказуемый back/refresh | Единый router contract, route registry, loading/error spec |
+| JOOR | Entitlement/subscription может открывать legacy upgrade без ясного результата | Недоверие к доступу | Capability page с планом, причиной и owner |
+| NuORDER | Функции зависят от brand config/role/group/support и часто просто отсутствуют | Buyer не знает, почему UI отличается | Capability manifest + explanation для каждого скрытого/disabled действия |
+| NuORDER | Classic Working Order и beta Cart сосуществуют | Разная логика и обучение | Один domain engine и parity contract для любых UI |
+| NuORDER | Expanded search медленнее и сбрасывается при закрытии браузера | Невоспроизводимый поиск | Единый search grammar и URL state |
+| NuORDER | Sizing View требует включения через Account Manager; custom columns через Support | Медленное администрирование | Self-service schema/config с preview, validation и audit |
+| NuORDER | Saved views не сохраняют filters/search | Повторная ручная настройка | Saved view включает columns, grouping, sorting, filters, query и scope |
+| NuORDER | Clear cart может удалить order details | Потеря введенных данных | Отдельные clear products/reset draft, recycle history |
+| NuORDER | Line discount перекрывает order discount, promotions могут stack; итоговая последовательность сложна | Ошибки ожидания цены | Раскрываемый adjustment ledger и policy simulator |
+| NuORDER | Pack влияет на displayed units/price, но inventory может списываться pack-level | Ошибка units и availability | Раздельные commercialUom/inventoryUom и явная конверсия |
+| NuORDER | Bulk order превращается в несколько orders с suffix | Потеря общей коммерческой связи | Parent CommercialOrder + child FulfillmentOrders |
+| NuORDER | Buyer не может исправить submitted order, только rep | Медленные изменения и неявная ответственность | Change request/amendment workflow |
+| NuORDER | Видимость определяется многими слоями: connection, whitelist, groups, price sheet, warehouse | «Исчезающие» товары и цены | Explainable AccessDecision и visibility debug для authorized admins |
+| Обе | Spreadsheet export/import используется как обходной путь массового ввода | Версионные ошибки и silent overwrite | Безопасный grid paste/import preview, schema version и row-level error report |
+| Обе | Информация и функции меняются по бренду | Низкая обучаемость | Consistent shell, capability-aware onboarding и in-context help |
+
+### 131.18. Канонические связи Syntha
+
+| Source | Relation | Target | Кардинальность/ограничение |
+|---|---|---|---|
+| Organization | owns | RetailerProfile | 1:1 per marketplace identity |
+| Organization | contains | LegalEntity | 1:N |
+| Organization | has | Membership | 1:N, temporal |
+| Organization | operates | Door/Location | 1:N |
+| Organization | connectsTo | Brand | N:M через BrandConnection |
+| BrandConnection | grants | AccessPolicy/PriceBook/Warehouse | N:M, effective-dated |
+| Brand | owns | Style | 1:N |
+| Style | has | Colorway | 1:N |
+| Colorway | has | SKU | 1:N |
+| Colorway | has | MediaAsset | 1:N |
+| SKU | pricedBy | PriceBookEntry | 1:N by currency/size/customer |
+| SKU | stockedAt | InventoryPosition | 1:N by warehouse/period |
+| Brand | offers | DeliveryWindow | 1:N |
+| AssortmentPlan | contains | AssortmentItem | 1:N, versioned |
+| AssortmentPlan | measuredBy | TargetSet | N:M |
+| Rollup | queries | AssortmentPlan | N:M, no item duplication |
+| OrderDraft | contains | OrderLine | 1:N |
+| OrderLine | allocates | OrderAllocation | 1:N by SKU/door/delivery |
+| OrderDraft | calculatedBy | PriceLedger | 1:1 versioned snapshot |
+| OrderDraft | validatedBy | ValidationSnapshot | 1:N |
+| Submitted Order | derivesFrom | OrderDraftVersion | N:1 immutable |
+| CommercialOrder | splitsInto | FulfillmentOrder | 1:N |
+| FulfillmentOrder | produces | Shipment/Invoice | 1:N |
+| Invoice | settledBy | Payment | N:M |
+| Any aggregate | emits | DomainEvent/AuditEvent | 1:N |
+
+### 131.19. Capability manifest вместо скрытых функций
+
+API кабинета должен возвращать не только data, но и capabilities:
+
+    canBrowse
+    canViewWholesale
+    canViewInventory
+    canOrder
+    canUseSizingMatrix
+    canUseMultiDoor
+    canOverridePrice
+    canApplyDiscount
+    canUsePromotions
+    canCustomizeProduct
+    canPayByCard
+    canPayByAch
+    canPayLater
+    canExport
+    canImport
+    canCreateAssortment
+    canShareAssortment
+
+Каждая capability содержит enabled, reasonCode, message, remediation, source и expiresAt. UI не угадывает возможности по отсутствию данных и не прячет критическую причину.
+
+### 131.20. Надежность, пустые состояния и восстановление
+
+Новый дефект белого экрана JOOR делает этот блок P0.
+
+**Общий app shell обязан работать даже при отказе бизнес-API:**
+
+- logo/navigation minimal shell;
+- понятное состояние «не удалось загрузить кабинет»;
+- Retry, Go to safe home, Check connection;
+- correlation/incident ID и timestamp;
+- status page/help link;
+- last successful sync и read-only cached data, если это безопасно;
+- сохранение unsent draft в локальной encrypted queue;
+- exponential backoff с ограничением, а не бесконечный spinner;
+- отдельные ошибки auth, permission, network, validation, server and maintenance;
+- telemetry без private order/customer payload.
+
+Для catalog, product, cart, order, assortment и profile обязательны состояния loading, empty, filtered-empty, partial, stale, error, unauthorized, forbidden и offline.
+
+### 131.21. Приоритетный backlog Syntha
+
+**P0 — фундамент commerce и защита от потери работы**
+
+1. Organization/RetailerProfile/Membership/Location domain.
+2. Style/Colorway/SKU/MediaAsset schema.
+3. BrandConnection + explainable AccessDecision.
+4. Durable OrderDraft with autosave/version/conflict recovery.
+5. Allocation Matrix SKU × delivery × door.
+6. Deterministic Price Ledger, decimal currency, tax/FX/rounding policy.
+7. Rule Engine и Validation Center.
+8. InventoryPosition/DeliveryWindow/SupplyPromise.
+9. App shell with error/retry/cached safe state.
+10. Submit idempotency, server revalidation и immutable order snapshot.
+
+**P1 — сильнее JOOR/NuORDER для ежедневной работы**
+
+11. Customer price books, per-size price, promotions and stack simulator.
+12. Multi-door split preview и parent/child orders.
+13. Assortment Plan + Targets + Rollup.
+14. Whiteboard/showroom с media, 3D/360/video и safe hotspots.
+15. Product compare, favorites, lists and saved searches/views.
+16. Grid copy/paste/import preview, undo/redo, keyboard accessibility.
+17. Order amendment/change request and organization-wide history.
+18. Payments capability layer, invoice/payment timeline.
+19. Collaboration, comments, approvals and presence.
+20. Data freshness, audit and field-level provenance.
+
+**P2 — развитие и оптимизация**
+
+21. AI-assisted assortment suggestions с объяснимыми constraints и human approval.
+22. Door allocation optimizer по targets, capacity, history и delivery.
+23. Budget/margin/OTB scenario planning.
+24. Replenishment recommendations and anomaly detection.
+25. Substitute style/color suggestions при cancellation/stockout.
+26. Public API/webhooks/ERP/POS sync с idempotency and reconciliation.
+27. International tax, landed cost, duties and incoterms.
+28. Offline/mobile market mode.
+
+### 131.22. Acceptance criteria для реализации
+
+#### Профиль и доступ
+
+1. Уход сотрудника не удаляет и не скрывает organization order history.
+2. Пользователь видит, какие profile fields public, brand-shared и private.
+3. Для любого denied/preview ресурса доступен reasonCode и допустимое действие.
+4. Переключение legal entity/door/currency не сохраняет несовместимый order context молча.
+5. Изменение membership/role попадает в audit log.
+
+#### Каталог и медиа
+
+6. Один запрос находит style number, color, SKU и barcode, а UI показывает поле совпадения.
+7. Search/filter/view воспроизводимы из URL и saved view.
+8. Zero results различает отсутствие товаров, отсутствие доступа и слишком узкие filters.
+9. Hero/hover/detail media имеют явную role; 3D/360/video имеют fallback и accessibility.
+10. Product detail показывает источник и timestamp price/inventory.
+
+#### Количество и поставки
+
+11. Paste 1 000+ ячеек проходит preview, отображает invalid cells и отменяется одной командой.
+12. Combined-to-door allocation сохраняет total и показывает unallocated variance.
+13. Pack order отображает packs, commercial units, inventory units и расчет.
+14. Изменение delivery показывает price/inventory/rule diff до подтверждения.
+15. Stale inventory не выглядит как real-time availability.
+16. Apply delivery to multiple перечисляет skipped lines с причиной.
+17. Min/max/multiple message ведет к точной ячейке и предлагает допустимое значение.
+
+#### Цена
+
+18. Base price имеет source: price book/contract/default.
+19. Line discount override order discount отражен в ledger до submit.
+20. Promotion stacking показывает последовательность, eligibility и неиспользованные предложения.
+21. MSRP/RRP не влияет на payable total.
+22. Все суммы воспроизводятся сервером при одинаковом snapshot.
+23. FX и rounding неизменяемы после submit.
+24. Reprice на submit показывает only changed lines и требует явного подтверждения.
+
+#### Draft/order
+
+25. Ошибка autosave видна не позднее следующего изменения и не стирает локальную работу.
+26. Clear products сохраняет order details; Reset draft требует отдельного подтверждения.
+27. Открытие другого draft предлагает merge/replace/separate.
+28. Duplicate line без отличающего delivery/customization/door intent получает warning.
+29. Submit повторным запросом с тем же idempotency key не создает второй order.
+30. Submitted order связан с immutable draft, price, inventory и validation snapshots.
+31. Re-order создает новый draft и повторно проверяет доступ/цены/stock.
+32. Change request имеет status, owner, diff и влияние на payment/delivery.
+
+#### Multi-door и планы
+
+33. Split Preview совпадает с фактически созданными child orders.
+34. Rule scope явно различает whole draft, door, shipment и split order.
+35. Rollup totals равны сумме source assortments без дублирования.
+36. Planned-to-ordered conversion показывает units/value/door/delivery variance.
+37. Placeholder/SMU сохраняет историю после связывания с реальным product.
+38. Одновременное изменение одной ячейки создает merge/conflict flow, а не silent overwrite.
+
+#### Надежность и доступность
+
+39. Failed to fetch не приводит к пустому body: отображаются error, Retry и incident ID.
+40. App shell остается доступен при падении catalog/order API.
+41. Loading/empty/error/offline различаются семантически и для screen reader.
+42. Disabled action имеет reason, а не только серый цвет.
+43. Quantity matrix полностью управляется клавиатурой.
+44. Все destructive bulk commands имеют affected-count preview и undo/recovery, где возможно.
+
+### 131.23. Решение: какой гибрид строить
+
+Syntha должна взять:
+
+- у JOOR — connection-driven wholesale marketplace, современный catalog card, быстрый View and Quantify, price/currency/warehouse context и простой staged Start Order;
+- у NuORDER — organization-level retailer profile, rich media, Sizing View, delivery/availability model, multi-door, Working Order, price sheets, rules, Assortments/Rollups/Targets и Whiteboards;
+- не переносить — JOOR legacy/modern разрыв и белые экраны; NuORDER support-gated configuration, скрытую вариативность, temporary search mode, несохраненные filters, неоднозначность pack inventory и непрозрачное stacking.
+
+Конечная модель — не набор разрозненных страниц, а одна связанная цепочка:
+
+    Retailer Profile
+      → Brand Access
+      → Catalog / Showroom
+      → Product Detail
+      → Assortment Plan
+      → Allocation Matrix
+      → Validated OrderDraft
+      → Price Ledger + Split Preview
+      → Approval / Checkout
+      → CommercialOrder
+      → Fulfillment / Invoice / Payment / Amendment
+
+### 131.24. Официальные источники NuORDER
+
+Дата доступа ко всем источникам: 19 августа 2026 года.
+
+- Buyer dashboard: https://helpdesk.nuorder.com/hc/en-us/articles/360049930051-Buyer-dashboard
+- Retailer profile overview: https://helpdesk.nuorder.com/hc/en-us/articles/43537045658139-Retailer-profile-overview
+- Retailer settings: https://helpdesk.nuorder.com/hc/en-us/articles/360000748503-Retailer-settings-Edit-or-update-your-Retailer-info
+- Setting up retailer profile: https://helpdesk.nuorder.com/hc/en-us/articles/43537436072091-Setting-up-your-retailer-profile
+- Browse products: https://helpdesk.nuorder.com/hc/en-us/articles/201010833-Browse-products
+- Product images overview: https://helpdesk.nuorder.com/hc/en-us/articles/360040825432-Product-images-overview
+- Working Order overview: https://helpdesk.nuorder.com/hc/en-us/articles/202048009-Working-Order-overview
+- Cart overview for buyers, beta: https://helpdesk.nuorder.com/hc/en-us/articles/48766830188571-Cart-overview-for-buyers-beta
+- Sizing View: https://helpdesk.nuorder.com/hc/en-us/articles/17643170128795-Sizing-View-in-the-Working-Order
+- Multi-location bulk ordering: https://helpdesk.nuorder.com/hc/en-us/articles/17014177680539-Ship-to-multiple-locations-with-bulk-ordering
+- Delivery windows overview: https://helpdesk.nuorder.com/hc/en-us/articles/206501413-Delivery-windows-overview
+- Order min/max rules: https://helpdesk.nuorder.com/hc/en-us/articles/115005914466-Order-min-and-max-rules
+- Price sheet overview: https://helpdesk.nuorder.com/hc/en-us/articles/115005758446-Price-sheet-overview
+- Units per pack: https://helpdesk.nuorder.com/hc/en-us/articles/115005881623-Set-up-units-per-pack
+- Discounts and surcharges: https://helpdesk.nuorder.com/hc/en-us/articles/202850375-Order-discounts-and-surcharges
+- Promotions overview: https://helpdesk.nuorder.com/hc/en-us/articles/16009537894299-Promotions-overview
+- Price per size: https://helpdesk.nuorder.com/hc/en-us/articles/201674203-Price-per-size
+- Currency overview: https://helpdesk.nuorder.com/hc/en-us/articles/207482793-Currency-overview
+- Retail assortments: https://helpdesk.nuorder.com/hc/en-us/articles/18914001755419-Retail-assortments-overview
+- Rollups: https://helpdesk.nuorder.com/hc/en-us/articles/18410683909147-Rollups-Review-multiple-assortments-in-a-rollup
+- Targets in assortments: https://helpdesk.nuorder.com/hc/en-us/articles/18923106692379-Targets-in-assortments
+- Whiteboards for buyers: https://helpdesk.nuorder.com/hc/en-us/articles/15763978188443-Whiteboards-for-buyers
+- Orders page: https://helpdesk.nuorder.com/hc/en-us/articles/209205146-Orders-page-overview
+- Export/import Working Order: https://helpdesk.nuorder.com/hc/en-us/articles/203152425-Export-and-import-orders-into-the-Working-Order
+- Order checkout: https://helpdesk.nuorder.com/hc/en-us/articles/28203420398235-Order-checkout-overview
+- Product customizations: https://helpdesk.nuorder.com/hc/en-us/articles/13898584214939-Ordering-products-with-Customizations
+- Open vs. closed environment: https://helpdesk.nuorder.com/hc/en-us/articles/8503864082459-Open-vs-closed-environment
+
+Источники описывают доступный набор возможностей NuORDER, но не гарантируют включение каждой функции у любого бренда. Перед реализацией интеграционной совместимости необходимо дополнительно проверить конкретные API/exports, entitlement и regional/payment constraints.

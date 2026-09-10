@@ -44,38 +44,16 @@ jobs:
           git apply /tmp/pub005.patch
           python - <<'PY'
           from pathlib import Path
-
           architecture = Path('ARCHITECTURE.md')
           text = architecture.read_text()
           old = '`fix/pub005-canonical-commercial-writes` (PR pending)'
           new = '#119 / `fix/pub005-canonical-commercial-writes`'
           assert old in text and text.count(old) == 1
           architecture.write_text(text.replace(old, new))
-
           migration = Path('db/migrations/075_canonical_buyer_catalog_new_writes.sql')
           sql = migration.read_text()
-          old_guard = """  IF publication.id IS NULL OR price.id IS NULL OR showroom.id IS NULL OR invitation.id IS NULL THEN
-    RAISE EXCEPTION 'BUYER_CATALOG_CANONICAL_ROW_MISMATCH' USING ERRCODE = '23514';
-  END IF;
-
-  -- Revalidate the referenced PriceList even if it predates this migration: a
-  -- historical V1 PriceList is readable history, not a fresh BuyerCatalog seed.
-  PERFORM assert_canonical_commercial_price(publication.payload, price.payload);
-"""
-          new_guard = """  IF publication.id IS NULL OR price.id IS NULL THEN
-    RAISE EXCEPTION 'BUYER_CATALOG_CANONICAL_ROW_MISMATCH' USING ERRCODE = '23514';
-  END IF;
-
-  -- Revalidate the commercial source before validating buyer-access topology.
-  -- A historical V1 publication/PriceList remains readable history and cannot
-  -- be misclassified as a malformed fresh BuyerCatalog merely because its old
-  -- snapshot has no modern invitation row.
-  PERFORM assert_canonical_commercial_price(publication.payload, price.payload);
-
-  IF showroom.id IS NULL OR invitation.id IS NULL THEN
-    RAISE EXCEPTION 'BUYER_CATALOG_CANONICAL_ROW_MISMATCH' USING ERRCODE = '23514';
-  END IF;
-"""
+          old_guard = "  IF publication.id IS NULL OR price.id IS NULL OR showroom.id IS NULL OR invitation.id IS NULL THEN\n    RAISE EXCEPTION 'BUYER_CATALOG_CANONICAL_ROW_MISMATCH' USING ERRCODE = '23514';\n  END IF;\n\n  -- Revalidate the referenced PriceList even if it predates this migration: a\n  -- historical V1 PriceList is readable history, not a fresh BuyerCatalog seed.\n  PERFORM assert_canonical_commercial_price(publication.payload, price.payload);\n"
+          new_guard = "  IF publication.id IS NULL OR price.id IS NULL THEN\n    RAISE EXCEPTION 'BUYER_CATALOG_CANONICAL_ROW_MISMATCH' USING ERRCODE = '23514';\n  END IF;\n\n  -- Revalidate the commercial source before validating buyer-access topology.\n  -- A historical V1 publication/PriceList remains readable history and cannot\n  -- be misclassified as a malformed fresh BuyerCatalog merely because its old\n  -- snapshot has no modern invitation row.\n  PERFORM assert_canonical_commercial_price(publication.payload, price.payload);\n\n  IF showroom.id IS NULL OR invitation.id IS NULL THEN\n    RAISE EXCEPTION 'BUYER_CATALOG_CANONICAL_ROW_MISMATCH' USING ERRCODE = '23514';\n  END IF;\n"
           assert old_guard in sql and sql.count(old_guard) == 1
           migration.write_text(sql.replace(old_guard, new_guard))
           PY

@@ -54,11 +54,12 @@ export function createSelection({ id, cycle, showroom, commercialBasis = null, b
 export function upsertSelectionLine(selection, line, actorId, updatedAt) {
   invariant(selection.status === 'draft', 'SELECTION_NOT_DRAFT', 'Only a draft selection can be edited');
   const nextLine = normalizeSelectionLine(line, actorId, updatedAt);
-  const existingIndex = selection.lines.findIndex((candidate) => candidate.sku === nextLine.sku);
+  const nextIdentity = selectionLineIdentity(nextLine);
+  const existingIndex = selection.lines.findIndex((candidate) => selectionLineIdentity(candidate) === nextIdentity);
   const lines = [...selection.lines];
   if (existingIndex >= 0) lines[existingIndex] = nextLine;
   else lines.push(nextLine);
-  lines.sort((left, right) => left.sku.localeCompare(right.sku));
+  lines.sort(compareSelectionLines);
   return Object.freeze({ ...selection, lines: Object.freeze(lines), version: selection.version + 1, updatedAt });
 }
 
@@ -68,11 +69,15 @@ export function replaceSelectionLines(selection, lines, actorId, updatedAt) {
   const seen = new Set();
   const normalized = lines.map((line) => {
     const nextLine = normalizeSelectionLine(line, actorId, updatedAt);
-    invariant(!seen.has(nextLine.sku), 'SELECTION_MATRIX_SKU_DUPLICATE', 'Selection matrix contains duplicate SKU', { sku: nextLine.sku });
-    seen.add(nextLine.sku);
+    const identity = selectionLineIdentity(nextLine);
+    invariant(!seen.has(identity), 'SELECTION_MATRIX_LINE_DUPLICATE', 'Selection matrix contains duplicate ProductSku/SKU identity', {
+      sku: nextLine.sku,
+      productSkuId: nextLine.productSkuId ?? null,
+    });
+    seen.add(identity);
     return nextLine;
   });
-  normalized.sort((left, right) => left.sku.localeCompare(right.sku));
+  normalized.sort(compareSelectionLines);
   return Object.freeze({ ...selection, lines: Object.freeze(normalized), version: selection.version + 1, updatedAt });
 }
 
@@ -109,6 +114,14 @@ function normalizeSelectionLine(line, actorId, updatedAt) {
     updatedBy: actorId,
     updatedAt,
   });
+}
+
+function selectionLineIdentity(line) {
+  return line?.productSkuId ? `product-sku:${line.productSkuId}` : `legacy-sku:${line?.sku ?? ''}`;
+}
+
+function compareSelectionLines(left, right) {
+  return selectionLineIdentity(left).localeCompare(selectionLineIdentity(right)) || left.sku.localeCompare(right.sku);
 }
 
 function normalizeOptionalLineage(line) {

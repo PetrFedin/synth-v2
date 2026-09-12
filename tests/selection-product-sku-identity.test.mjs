@@ -144,7 +144,7 @@ test('rich selection keeps two ProductSku variants even when display SKU text co
 
   assert.throws(
     () => replaceSelectionLines(draftSelection(), [first, { ...first, sku: 'SKU-ALIAS' }], 'buyer-1', NOW),
-    (error) => error?.code === 'SELECTION_MATRIX_LINE_DUPLICATE',
+    (error) => error?.code === 'SELECTION_MATRIX_SKU_DUPLICATE',
   );
 });
 

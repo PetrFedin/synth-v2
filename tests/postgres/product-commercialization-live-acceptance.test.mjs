@@ -11,6 +11,7 @@ import {
   loginAcceptanceSession,
   logoutAcceptanceSession,
 } from '../../src/acceptance/collection-live-acceptance.mjs';
+import { runBuyerOrderLiveAcceptance } from '../../src/acceptance/buyer-order-live-acceptance.mjs';
 import { runProductCommercializationLiveAcceptance } from '../../src/acceptance/product-commercialization-live-acceptance.mjs';
 import { runReadyProductReadinessLiveAcceptance } from '../../src/acceptance/product-readiness-ready-live-acceptance.mjs';
 import { bootstrapProductionAcceptanceReferences } from '../../src/acceptance/production-reference-bootstrap.mjs';
@@ -18,6 +19,7 @@ import { bootstrapMdmReference } from '../../src/infrastructure/mdm-reference-bo
 import { migratePostgres } from '../../src/infrastructure/postgres-migrator.mjs';
 import { createPostgresWholesaleRuntime } from '../../src/runtime/postgres-runtime.mjs';
 import { assertCanonicalCommercialWriteGuards } from './canonical-commercial-write-guards.mjs';
+import { assertCanonicalSelectionOrderWriteGuards } from './canonical-selection-order-write-guards.mjs';
 
 const { Pool } = pg;
 const connectionString = process.env.POSTGRES_TEST_URL;
@@ -26,7 +28,7 @@ const brandPassword = 'CollectionAcceptanceTest!';
 const shopEmail = 'commercialization-shop@syntha.test';
 const shopPassword = 'CommercializationShopAcceptanceTest!';
 
-test('READY Product reaches projection, projection-native publication, price list and BuyerCatalog through real HTTP/PostgreSQL', async () => {
+test('READY Product reaches BuyerCatalog, canonical Selection and immutable OrderCommit through real HTTP/PostgreSQL', async () => {
   assert.ok(connectionString, 'POSTGRES_TEST_URL is required for PostgreSQL integration tests');
   const pool = new Pool({ connectionString, max: 4 });
   const migrationsDir = fileURLToPath(new URL('../../db/migrations/', import.meta.url));
@@ -116,6 +118,29 @@ test('READY Product reaches projection, projection-native publication, price lis
     assert.equal(downstream.rows[0].inventory_movements, Number(result.isolation.before.inventory_movement_rows));
 
     await assertCanonicalCommercialWriteGuards({ pool, baseUrl, brandToken, shopToken, references, result });
+
+    const buyerOrder = await runBuyerOrderLiveAcceptance({
+      baseUrl,
+      brandToken,
+      shopToken,
+      pool,
+      commercial: result,
+      references,
+      runId: 'postgres-live-commercialization',
+    });
+
+    assert.equal(buyerOrder.status, 'passed');
+    assert.equal(buyerOrder.selection.buyerCatalogVersionId, result.buyerCatalogVersion.id);
+    assert.equal(buyerOrder.selection.retailDoorId, buyerOrder.retailDoor.id);
+    assert.equal(buyerOrder.order.status, 'attached');
+    assert.equal(buyerOrder.orderCommit.status, 'committed');
+    assert.equal(buyerOrder.persistence.verified, true);
+    assert.equal(buyerOrder.persistence.productSkuId, result.product.skuId);
+    assert.equal(buyerOrder.persistence.buyerCatalogVersionId, result.buyerCatalogVersion.id);
+    assert.equal(buyerOrder.persistence.commitCount, 1);
+    assert.equal(buyerOrder.isolation.expectedDeltasVerified, true);
+
+    await assertCanonicalSelectionOrderWriteGuards({ pool, result: buyerOrder });
   } finally {
     if (shopToken && baseUrl) {
       try { await logoutAcceptanceSession({ baseUrl, token: shopToken }); }

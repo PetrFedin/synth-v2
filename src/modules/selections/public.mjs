@@ -149,18 +149,19 @@ function validateCommercialBasis(basis, cycle, showroom) {
   invariant(basis.brandId === cycle.brandId, 'SELECTION_COMMERCIAL_BRAND_MISMATCH', 'Buyer catalog brand does not match cycle');
   invariant(basis.shopId === cycle.shopId, 'SELECTION_COMMERCIAL_SHOP_MISMATCH', 'Buyer catalog shop does not match cycle');
   invariant(basis.showroomId === showroom.id, 'SELECTION_COMMERCIAL_SHOWROOM_MISMATCH', 'Buyer catalog showroom does not match selection showroom');
-  const projectionLineage = isRichCommercialBasis(basis) ? validateProjectionLineage(basis) : null;
+  invariant(isRichCommercialBasis(basis), 'SELECTION_CANONICAL_BUYER_CATALOG_REQUIRED', 'Fresh commercial selection requires a rich projection-backed BuyerCatalogVersion');
+  const projectionLineage = validateProjectionLineage(basis);
   return Object.freeze({
     publicationId: basis.publicationId,
     priceListVersionId: basis.priceListVersionId,
     buyerCatalogVersionId: basis.id,
     contentHash: basis.contentHash,
     accessGrantId: basis.accessGrantId,
-    commercialProjectionId: projectionLineage?.commercialProjectionId ?? null,
-    commercialProjectionVersionNo: projectionLineage?.commercialProjectionVersionNo ?? null,
-    commercialProjectionContentHash: projectionLineage?.commercialProjectionContentHash ?? null,
-    readinessSnapshotId: projectionLineage?.readinessSnapshotId ?? null,
-    styleVersionId: projectionLineage?.styleVersionId ?? null,
+    commercialProjectionId: projectionLineage.commercialProjectionId,
+    commercialProjectionVersionNo: projectionLineage.commercialProjectionVersionNo,
+    commercialProjectionContentHash: projectionLineage.commercialProjectionContentHash,
+    readinessSnapshotId: projectionLineage.readinessSnapshotId,
+    styleVersionId: projectionLineage.styleVersionId,
   });
 }
 

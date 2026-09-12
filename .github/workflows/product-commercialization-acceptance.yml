@@ -1,6 +1,7 @@
 name: Product Commercialization Acceptance
 
-# P0.3 exact-head gate: supported public runtime plus same-environment PostgreSQL proof.
+# ACC-004 P0 public-runtime gate: supported runtime plus same-environment PostgreSQL proof
+# from canonical READY Product truth through immutable OrderCommit.
 on:
   pull_request:
   push:
@@ -16,7 +17,7 @@ concurrency:
 
 jobs:
   acceptance:
-    name: READY to BuyerCatalog public-runtime acceptance
+    name: READY to OrderCommit public-runtime acceptance
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -89,7 +90,7 @@ jobs:
           cat product-commercialization-runtime.log
           exit 1
 
-      - name: Execute Product commercialization acceptance
+      - name: Execute Product commercialization acceptance through OrderCommit
         shell: bash
         run: |
           set +e

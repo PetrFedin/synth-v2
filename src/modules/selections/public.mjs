@@ -70,7 +70,7 @@ export function replaceSelectionLines(selection, lines, actorId, updatedAt) {
   const normalized = lines.map((line) => {
     const nextLine = normalizeSelectionLine(line, actorId, updatedAt);
     const identity = selectionLineIdentity(nextLine);
-    invariant(!seen.has(identity), 'SELECTION_MATRIX_LINE_DUPLICATE', 'Selection matrix contains duplicate ProductSku/SKU identity', {
+    invariant(!seen.has(identity), 'SELECTION_MATRIX_SKU_DUPLICATE', 'Selection matrix contains duplicate ProductSku/SKU identity', {
       sku: nextLine.sku,
       productSkuId: nextLine.productSkuId ?? null,
     });

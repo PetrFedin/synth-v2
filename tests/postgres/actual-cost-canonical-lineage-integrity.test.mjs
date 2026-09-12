@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import { inspectPostgresMigrations, migratePostgres } from '../../src/infrastructure/postgres-migrator.mjs';
+import { withLegacyCommercialInsertGuardsDisabled } from './legacy-commercial-fixture.mjs';
 
 const { Pool } = pg;
 const connectionString = process.env.POSTGRES_TEST_URL;
@@ -102,46 +103,49 @@ async function seedExecutionBasis(pool, ids, sku, now, suffix) {
      VALUES ($1, $2, $3, $4, $5, 'order', 1, $6::jsonb)`,
     [ids.cycle, ids.brand, ids.shop, ids.campaign, ids.collection, JSON.stringify({ id: ids.cycle, stage: 'order' })],
   );
-  await pool.query(
-    `INSERT INTO selections (id, cycle_id, showroom_id, collection_id, brand_id, shop_id, status, version, payload)
-     VALUES ($1, $2, $3, $4, $5, $6, 'submitted', 1, $7::jsonb)`,
-    [ids.selection, ids.cycle, ids.showroom, ids.collection, ids.brand, ids.shop, JSON.stringify({ id: ids.selection })],
-  );
 
-  const orderPayload = {
-    id: ids.order,
-    selectionId: ids.selection,
-    cycleId: ids.cycle,
-    brandId: ids.brand,
-    shopId: ids.shop,
-    status: 'attached',
-    currency: 'EUR',
-    totalAmount: 100,
-    lines: [{ sku, quantity: 2, unitPrice: 50 }],
-    version: 1,
-  };
-  await pool.query(
-    `INSERT INTO orders (
-       id, selection_id, cycle_id, brand_id, shop_id, status, currency, total_amount, version, payload
-     ) VALUES ($1, $2, $3, $4, $5, 'attached', 'EUR', 100, 1, $6::jsonb)`,
-    [ids.order, ids.selection, ids.cycle, ids.brand, ids.shop, JSON.stringify(orderPayload)],
-  );
+  await withLegacyCommercialInsertGuardsDisabled(pool, async (client) => {
+    await client.query(
+      `INSERT INTO selections (id, cycle_id, showroom_id, collection_id, brand_id, shop_id, status, version, payload)
+       VALUES ($1, $2, $3, $4, $5, $6, 'submitted', 1, $7::jsonb)`,
+      [ids.selection, ids.cycle, ids.showroom, ids.collection, ids.brand, ids.shop, JSON.stringify({ id: ids.selection })],
+    );
 
-  const commitPayload = {
-    id: ids.commit,
-    orderId: ids.order,
-    status: 'committed',
-    brandId: ids.brand,
-    shopId: ids.shop,
-    currency: 'EUR',
-    lines: [{ sku, quantity: 2, unitPrice: 50 }],
-  };
-  await pool.query(
-    `INSERT INTO order_commit_snapshots (
-       id, order_id, order_version, brand_id, shop_id, currency, committed_at, content_hash, payload
-     ) VALUES ($1, $2, 1, $3, $4, 'EUR', $5, $6, $7::jsonb)`,
-    [ids.commit, ids.order, ids.brand, ids.shop, now, `commit-hash-${suffix}`, JSON.stringify(commitPayload)],
-  );
+    const orderPayload = {
+      id: ids.order,
+      selectionId: ids.selection,
+      cycleId: ids.cycle,
+      brandId: ids.brand,
+      shopId: ids.shop,
+      status: 'attached',
+      currency: 'EUR',
+      totalAmount: 100,
+      lines: [{ sku, quantity: 2, unitPrice: 50 }],
+      version: 1,
+    };
+    await client.query(
+      `INSERT INTO orders (
+         id, selection_id, cycle_id, brand_id, shop_id, status, currency, total_amount, version, payload
+       ) VALUES ($1, $2, $3, $4, $5, 'attached', 'EUR', 100, 1, $6::jsonb)`,
+      [ids.order, ids.selection, ids.cycle, ids.brand, ids.shop, JSON.stringify(orderPayload)],
+    );
+
+    const commitPayload = {
+      id: ids.commit,
+      orderId: ids.order,
+      status: 'committed',
+      brandId: ids.brand,
+      shopId: ids.shop,
+      currency: 'EUR',
+      lines: [{ sku, quantity: 2, unitPrice: 50 }],
+    };
+    await client.query(
+      `INSERT INTO order_commit_snapshots (
+         id, order_id, order_version, brand_id, shop_id, currency, committed_at, content_hash, payload
+       ) VALUES ($1, $2, 1, $3, $4, 'EUR', $5, $6, $7::jsonb)`,
+      [ids.commit, ids.order, ids.brand, ids.shop, now, `commit-hash-${suffix}`, JSON.stringify(commitPayload)],
+    );
+  });
   await pool.query('UPDATE orders SET order_commit_snapshot_id = $2 WHERE id = $1', [ids.order, ids.commit]);
 
   const supplyPayload = {

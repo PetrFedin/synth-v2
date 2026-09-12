@@ -10,6 +10,7 @@ import {
   logoutAcceptanceSession,
   validateAcceptanceOrigin,
 } from '../src/acceptance/collection-live-acceptance.mjs';
+import { runBuyerOrderLiveAcceptance } from '../src/acceptance/buyer-order-live-acceptance.mjs';
 import { runProductCommercializationLiveAcceptance } from '../src/acceptance/product-commercialization-live-acceptance.mjs';
 import { runReadyProductReadinessLiveAcceptance } from '../src/acceptance/product-readiness-ready-live-acceptance.mjs';
 import { bootstrapProductionAcceptanceReferences } from '../src/acceptance/production-reference-bootstrap.mjs';
@@ -98,7 +99,16 @@ try {
     references,
     ...(runId ? { runId } : {}),
   });
-  process.stdout.write(`${JSON.stringify({ status: 'passed', ready, commercialization }, null, 2)}\n`);
+  const buyerOrder = await runBuyerOrderLiveAcceptance({
+    baseUrl: target.url.toString(),
+    brandToken,
+    shopToken,
+    pool,
+    commercial: commercialization,
+    references,
+    ...(runId ? { runId } : {}),
+  });
+  process.stdout.write(`${JSON.stringify({ status: 'passed', ready, commercialization, buyerOrder }, null, 2)}\n`);
 } finally {
   if (shopCreatedSession && shopToken) {
     try { await logoutAcceptanceSession({ baseUrl: target.url.toString(), token: shopToken }); }

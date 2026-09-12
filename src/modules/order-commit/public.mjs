@@ -95,24 +95,33 @@ function validateCommercialLines(order, selection, buyerCatalog) {
   if (richCatalog) assertCommercialProjectionLineage(order, selection, buyerCatalog);
 
   return Object.freeze(order.lines.map((orderLine, index) => {
-    const selectionLine = selection.lines.find((line) => line.sku === orderLine.sku);
-    const catalogLine = buyerCatalog.lines.find((line) => line.sku === orderLine.sku);
-    invariant(selectionLine && catalogLine, 'ORDER_COMMIT_SKU_MISSING', 'Committed SKU is missing from the submitted selection or buyer catalog', { sku: orderLine.sku });
-    invariant(orderLine.quantity === selectionLine.quantity, 'ORDER_COMMIT_QUANTITY_MISMATCH', 'Order quantity differs from submitted buyer intent', { sku: orderLine.sku });
-    invariant(orderLine.quantity >= catalogLine.minimumOrderQuantity, 'ORDER_COMMIT_MOQ_NOT_MET', 'Committed quantity is below buyer catalog MOQ', { sku: orderLine.sku, minimumOrderQuantity: catalogLine.minimumOrderQuantity });
+    const product = richCatalog
+      ? buyerCatalogProductSku(buyerCatalog, { productSkuId: orderLine.productSkuId ?? null, skuCode: orderLine.sku ?? null })
+      : null;
+    const selectionLine = richCatalog
+      ? selection.lines.find((line) => line.productSkuId === product.productSkuId)
+      : selection.lines.find((line) => line.sku === orderLine.sku);
+    const catalogLine = richCatalog
+      ? buyerCatalog.lines.find((line) => line.productSkuId === product.productSkuId)
+      : buyerCatalog.lines.find((line) => line.sku === orderLine.sku);
+    invariant(selectionLine && catalogLine, 'ORDER_COMMIT_SKU_MISSING', 'Committed ProductSku/SKU is missing from the submitted selection or buyer catalog', {
+      sku: orderLine.sku,
+      productSkuId: product?.productSkuId ?? orderLine.productSkuId ?? null,
+    });
+    invariant(orderLine.quantity === selectionLine.quantity, 'ORDER_COMMIT_QUANTITY_MISMATCH', 'Order quantity differs from submitted buyer intent', { sku: orderLine.sku, productSkuId: product?.productSkuId ?? null });
+    invariant(orderLine.quantity >= catalogLine.minimumOrderQuantity, 'ORDER_COMMIT_MOQ_NOT_MET', 'Committed quantity is below buyer catalog MOQ', { sku: orderLine.sku, productSkuId: product?.productSkuId ?? null, minimumOrderQuantity: catalogLine.minimumOrderQuantity });
     if (!richCatalog) {
       invariant(orderLine.catalogVersion === catalogLine.catalogVersion && selectionLine.catalogVersion === catalogLine.catalogVersion, 'ORDER_COMMIT_CATALOG_VERSION_MISMATCH', 'Committed catalog version differs from the pinned buyer catalog', { sku: orderLine.sku });
     }
     const committedPrice = normalizeMoney(orderLine.unitPrice, { label: 'Committed order line price' });
     const selectionPrice = normalizeMoney(selectionLine.unitPrice, { label: 'Submitted selection line price' });
     const catalogPrice = normalizeMoney(catalogLine.unitPrice, { label: 'Pinned buyer catalog price' });
-    invariant(committedPrice === selectionPrice && committedPrice === catalogPrice, 'ORDER_COMMIT_PRICE_MISMATCH', 'Committed price differs from the submitted selection or pinned buyer catalog', { sku: orderLine.sku });
+    invariant(committedPrice === selectionPrice && committedPrice === catalogPrice, 'ORDER_COMMIT_PRICE_MISMATCH', 'Committed price differs from the submitted selection or pinned buyer catalog', { sku: orderLine.sku, productSkuId: product?.productSkuId ?? null });
 
     if (!richCatalog) {
       return Object.freeze({ lineNo: index + 1, sku: orderLine.sku, quantity: orderLine.quantity, unitPrice: committedPrice, catalogVersion: orderLine.catalogVersion });
     }
 
-    const product = buyerCatalogProductSku(buyerCatalog, { skuCode: orderLine.sku });
     assertRichLineage(orderLine, product, 'ORDER_COMMIT_ORDER_LINEAGE_MISMATCH');
     assertRichLineage(selectionLine, product, 'ORDER_COMMIT_SELECTION_LINEAGE_MISMATCH');
     return Object.freeze({

@@ -26,6 +26,10 @@ function schemas() {
       type: 'object', additionalProperties: false, required: ['sku', 'quantity'],
       properties: {
         sku: { type: 'string', pattern: SKU },
+        productSkuId: {
+          ...identifier,
+          description: 'Canonical ProductSku identity. Supply it whenever textual SKU is not globally unique inside the pinned BuyerCatalogVersion.',
+        },
         quantity: { type: 'integer', minimum: 1, maximum: 2_147_483_647 },
         note: { type: 'string', maxLength: 2_000 },
       },

@@ -9,10 +9,16 @@ export function withRetailDoorOpenApi(base) {
   const specification = structuredClone(base);
   Object.assign(specification.components.schemas, schemas());
   Object.assign(specification.paths, paths());
+  if (specification.components.schemas.SelectionCreate?.properties) {
+    specification.components.schemas.SelectionCreate.properties.retailDoorId = {
+      ...identifier,
+      description: 'Retail door master id. Required for a new BuyerCatalog-backed canonical Selection; omitted only for legacy compatibility paths without a pinned BuyerCatalogVersion.',
+    };
+  }
   if (specification.components.schemas.OrderCreate?.properties) {
     specification.components.schemas.OrderCreate.properties.retailDoorId = {
       ...identifier,
-      description: 'Retail door master id. Required when selection is pinned to an immutable commercial publication/buyer catalog; omitted only for legacy unpinned orders.',
+      description: 'Retail door master id. When supplied it must equal the immutable Retail Door already pinned by Selection; omitted only for legacy unpinned orders.',
     };
   }
   return deepFreeze(specification);

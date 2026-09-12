@@ -19,22 +19,31 @@ export async function withLegacyCommercialInsertGuardsDisabled(pool, action) {
 
   const client = await pool.connect();
   const disabled = [];
+  let result;
+  let actionError = null;
+  let restoreError = null;
   try {
     for (const [table, trigger] of LEGACY_INSERT_GUARDS) {
       await client.query(`ALTER TABLE ${table} DISABLE TRIGGER ${trigger}`);
       disabled.push([table, trigger]);
     }
-    return await action(client);
+    try {
+      result = await action(client);
+    } catch (error) {
+      actionError = error;
+    }
   } finally {
     for (const [table, trigger] of disabled.reverse()) {
       try {
         await client.query(`ALTER TABLE ${table} ENABLE TRIGGER ${trigger}`);
-      } catch {
-        // Preserve the primary test failure. The ephemeral verification DB is
-        // discarded after the job; later migration inspection will also fail
-        // closed if the database is unusable.
+      } catch (error) {
+        restoreError ??= error;
       }
     }
     client.release();
   }
+
+  if (actionError) throw actionError;
+  if (restoreError) throw restoreError;
+  return result;
 }

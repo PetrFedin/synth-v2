@@ -3,6 +3,7 @@ import { DomainError, invariant } from '../core/errors.mjs';
 import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
 import { assertWholesaleStore } from './store-contract.mjs';
 import { CAPABILITIES, assertCapability, assertTradeCapability } from '../modules/access-control/public.mjs';
+import { assertBuyerCatalogQuantity, buyerCatalogProductSku, isRichBuyerCatalog } from '../modules/commercial-publication/public.mjs';
 import { assertActiveRelationship } from '../modules/counterparty-relationships/public.mjs';
 import { createOrderCommitSnapshot } from '../modules/order-commit/public.mjs';
 import {
@@ -39,6 +40,22 @@ const INVENTORY_ERROR_CODES = new Set([
   'PRODUCT_SKU_RELEASE_EXCEEDS_RESERVED',
 ]);
 
+const CANONICAL_LINE_FIELDS = Object.freeze([
+  'sku',
+  'productSkuId',
+  'gtin',
+  'styleId',
+  'styleVersionId',
+  'colorwayId',
+  'sizeValueId',
+  'sizeCode',
+  'sizeLabelRu',
+  'sizeLabelEn',
+  'sizeSortOrder',
+  'unitPrice',
+  'catalogVersion',
+]);
+
 export function createOrderBuilderService({
   store,
   commercialPublicationReader,
@@ -71,6 +88,86 @@ export function createOrderBuilderService({
     }));
   }
 
+  function assertCanonicalBasis(value, buyerCatalog, { showroomId = null } = {}) {
+    invariant(isRichBuyerCatalog(buyerCatalog), 'ORDER_CANONICAL_BUYER_CATALOG_REQUIRED', 'Canonical order flow requires a published rich BuyerCatalogVersion');
+    const buyerShopId = buyerCatalog.buyerShopId ?? buyerCatalog.shopId ?? null;
+    const expected = Object.freeze({
+      buyerCatalogVersionId: buyerCatalog.id,
+      commercialPublicationId: buyerCatalog.publicationId,
+      priceListVersionId: buyerCatalog.priceListVersionId,
+      commercialBasisHash: buyerCatalog.contentHash,
+      accessGrantId: buyerCatalog.accessGrantId,
+      brandId: buyerCatalog.brandId,
+      shopId: buyerShopId,
+      commercialProjectionId: buyerCatalog.commercialProjectionId,
+      commercialProjectionVersionNo: buyerCatalog.commercialProjectionVersionNo,
+      commercialProjectionContentHash: buyerCatalog.commercialProjectionContentHash,
+      readinessSnapshotId: buyerCatalog.readinessSnapshotId,
+      styleVersionId: buyerCatalog.styleVersionId,
+    });
+    for (const [field, expectedValue] of Object.entries(expected)) {
+      invariant(value[field] === expectedValue, 'ORDER_COMMERCIAL_BASIS_MISMATCH', 'Pinned order lineage does not match BuyerCatalogVersion', {
+        id: value.id,
+        buyerCatalogVersionId: value.buyerCatalogVersionId ?? null,
+        field,
+        expected: expectedValue,
+        actual: value[field] ?? null,
+      });
+    }
+    if (showroomId !== null) {
+      invariant(buyerCatalog.showroomId === showroomId, 'ORDER_SHOWROOM_LINEAGE_MISMATCH', 'BuyerCatalogVersion showroom does not match selection showroom', {
+        showroomId,
+        buyerCatalogShowroomId: buyerCatalog.showroomId ?? null,
+      });
+    }
+  }
+
+  function assertCanonicalLines(value, buyerCatalog) {
+    invariant(Array.isArray(value.lines) && value.lines.length > 0, 'ORDER_CANONICAL_LINES_REQUIRED', 'Canonical commercial flow requires frozen orderable lines');
+    for (const line of value.lines) {
+      const product = buyerCatalogProductSku(buyerCatalog, {
+        productSkuId: line.productSkuId ?? null,
+        skuCode: line.sku ?? null,
+      });
+      assertBuyerCatalogQuantity(product, line.quantity);
+      const expected = Object.freeze({
+        sku: product.sku,
+        productSkuId: product.productSkuId,
+        gtin: product.gtin,
+        styleId: product.styleId,
+        styleVersionId: product.styleVersionId,
+        colorwayId: product.colorwayId,
+        sizeValueId: product.sizeValueId,
+        sizeCode: product.sizeCode,
+        sizeLabelRu: product.sizeLabelRu,
+        sizeLabelEn: product.sizeLabelEn,
+        sizeSortOrder: product.sizeSortOrder,
+        unitPrice: product.unitPrice,
+        catalogVersion: product.catalogVersion,
+      });
+      for (const field of CANONICAL_LINE_FIELDS) {
+        invariant(line[field] === expected[field], 'ORDER_CANONICAL_LINE_MISMATCH', 'Commercial line does not match the frozen BuyerCatalogVersion', {
+          id: value.id,
+          sku: line.sku,
+          productSkuId: line.productSkuId ?? null,
+          field,
+          expected: expected[field] ?? null,
+          actual: line[field] ?? null,
+        });
+      }
+    }
+  }
+
+  async function canonicalBuyerCatalog(value, { showroomId = null } = {}) {
+    invariant(trustedCommercialReader, 'COMMERCIAL_PUBLICATION_READER_REQUIRED', 'Commercial publication reader is required for canonical order flow');
+    invariant(hasPinnedCommercialBasis(value), 'ORDER_CANONICAL_SELECTION_REQUIRED', 'Fresh order flow requires an immutable BuyerCatalogVersion-backed commercial basis');
+    invariant(value.commercialPublicationId && value.priceListVersionId && value.buyerCatalogVersionId && value.commercialBasisHash && value.accessGrantId, 'ORDER_COMMERCIAL_BASIS_INCOMPLETE', 'Commercial order lineage is incomplete');
+    const buyerCatalog = requireEntity(await trustedCommercialReader.getBuyerCatalogVersion(value.buyerCatalogVersionId), 'BUYER_CATALOG_NOT_FOUND', { buyerCatalogVersionId: value.buyerCatalogVersionId });
+    assertCanonicalBasis(value, buyerCatalog, { showroomId });
+    assertCanonicalLines(value, buyerCatalog);
+    return buyerCatalog;
+  }
+
   return Object.freeze({
     createOrderDraft(commandId, actorId, { selectionId, terms, retailDoorId = null }) {
       const requestedRetailDoorId = typeof retailDoorId === 'string' && retailDoorId.trim().length > 0 ? retailDoorId.trim() : null;
@@ -94,6 +191,9 @@ export function createOrderBuilderService({
 
           const pinnedCommercialBasis = hasPinnedCommercialBasis(selection);
           let buyerCommercialSnapshot = null;
+          if (trustedCommercialReader) {
+            await canonicalBuyerCatalog(selection, { showroomId: selection.showroomId });
+          }
           if (pinnedCommercialBasis) {
             invariant(selection.buyerCommercialSnapshot && selection.retailDoorId && selection.retailDoorVersion, 'ORDER_BUYER_CONTEXT_NOT_PINNED', 'Commercially pinned selection must already freeze its buyer Retail Door context');
             buyerCommercialSnapshot = assertBuyerCommercialSnapshot(selection.buyerCommercialSnapshot, { shopId: selection.shopId });
@@ -193,6 +293,9 @@ export function createOrderBuilderService({
           const cycle = requireEntity(await tx.getCycle(current.cycleId), 'CYCLE_NOT_FOUND', { cycleId: current.cycleId });
           authorizeOrderMutation(await tx.listMembershipsForTrade(cycle.brandId, cycle.shopId), actorId, cycle);
           const selection = requireEntity(await tx.getSelection(current.selectionId), 'SELECTION_NOT_FOUND', { selectionId: current.selectionId });
+          if (trustedCommercialReader) {
+            invariant(hasPinnedCommercialBasis(current), 'ORDER_CANONICAL_BASIS_REQUIRED', 'Fresh OrderCommit requires an immutable BuyerCatalogVersion-backed order');
+          }
           let buyerCatalog = null;
           if (hasPinnedCommercialBasis(current)) {
             invariant(current.commercialPublicationId && current.priceListVersionId && current.buyerCatalogVersionId && current.commercialBasisHash && current.accessGrantId, 'ORDER_COMMERCIAL_BASIS_INCOMPLETE', 'Commercial order lineage is incomplete');
@@ -204,7 +307,9 @@ export function createOrderBuilderService({
             invariant(showroom.status === 'open', 'ORDER_COMMIT_SHOWROOM_NOT_OPEN', 'Commercial order can be committed only while its showroom is open', { showroomId: showroom.id, status: showroom.status });
             const invitation = requireEntity(await tx.getShowroomInvitation(current.accessGrantId), 'SHOWROOM_INVITATION_NOT_FOUND', { invitationId: current.accessGrantId });
             assertAcceptedShowroomAccess(invitation, { showroomId: selection.showroomId, brandId: current.brandId, shopId: current.shopId, now: clock() });
-            buyerCatalog = requireEntity(await trustedCommercialReader.getBuyerCatalogVersion(current.buyerCatalogVersionId), 'BUYER_CATALOG_NOT_FOUND', { buyerCatalogVersionId: current.buyerCatalogVersionId });
+            buyerCatalog = await canonicalBuyerCatalog(current, { showroomId: selection.showroomId });
+            assertCanonicalBasis(selection, buyerCatalog, { showroomId: selection.showroomId });
+            assertCanonicalLines(selection, buyerCatalog);
           }
           return Object.freeze({ current, cycle, selection, buyerCatalog });
         },

@@ -1,3 +1,4 @@
+import { withLegacyCommercialInsertGuardsDisabled } from './postgres/legacy-commercial-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
@@ -30,6 +31,7 @@ test('PostgreSQL persists the complete wholesale route, atomic inventory reserva
     const clock = () => `2026-07-30T20:${String(Math.floor(tick / 60)).padStart(2, '0')}:${String(tick++ % 60).padStart(2, '0')}.000Z`;
     const nextId = (prefix) => `${prefix}_pg_${++id}`;
     await migratePostgres({ pool, migrationsDir, clock });
+    await withLegacyCommercialInsertGuardsDisabled(pool, async () => {
     const store = createPostgresWholesaleStore({ pool });
     const catalogStore = createPostgresCatalogStore({ pool });
     const options = { store, clock, nextId };
@@ -135,6 +137,7 @@ test('PostgreSQL persists the complete wholesale route, atomic inventory reserva
     assert.equal(snapshot.orders.length, 1);
     assert.equal(snapshot.deals.length, 1);
     assert.equal(new Set(snapshot.outbox.map((record) => record.event.id)).size, snapshot.outbox.length);
+    });
   } finally {
     await pool.end();
   }

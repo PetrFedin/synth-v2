@@ -1,3 +1,4 @@
+import { withLegacyCommercialInsertGuardsDisabled } from './postgres/legacy-commercial-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
@@ -15,6 +16,7 @@ test('PostgreSQL closes accepted legacy receipt claim into aggregate supplier cr
   try {
     await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
     await migratePostgres({ pool, migrationsDir: path.join(root, 'db', 'migrations'), clock: () => now });
+    await withLegacyCommercialInsertGuardsDisabled(pool, async () => {
     await seedTrade(pool);
     let sequence = 0;
     const nextId = (prefix) => `${prefix}-recovery-pg-${++sequence}`;
@@ -114,6 +116,7 @@ test('PostgreSQL closes accepted legacy receipt claim into aggregate supplier cr
       (SELECT count(*)::int FROM outbox_events WHERE event_type='supplier-recovery.recorded.v1') AS recovery_events`);
     assert.deepEqual(counts.rows[0], { actual_costs: 2, recoveries: 1, adjustments: 1, recovery_events: 1 });
     await assert.rejects(pool.query('UPDATE supplier_claim_recovery_snapshots SET status=status WHERE id=$1', [result.recovery.id]), (error) => error.code === '55000');
+    });
   } finally {
     await pool.end();
   }

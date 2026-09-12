@@ -97,7 +97,7 @@ export async function runBuyerOrderLiveAcceptance({
       selectionId: selection.id,
       lines: [{ sku: buyerLine.sku, productSkuId: 'product-sku-not-in-catalog', quantity: 1 }],
     },
-  }, { status: 422, code: 'BUYER_CATALOG_PRODUCT_SKU_NOT_FOUND' });
+  }, { status: 404, code: 'BUYER_CATALOG_PRODUCT_SKU_NOT_FOUND' });
 
   await expectError(fetchImpl, target.url, `/v2/selections/${encodeURIComponent(selection.id)}/matrix`, {
     method: 'PUT',

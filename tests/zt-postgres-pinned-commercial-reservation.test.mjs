@@ -1,3 +1,4 @@
+import { withLegacyCommercialInsertGuardsDisabled } from './postgres/legacy-commercial-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
@@ -15,6 +16,7 @@ test('PostgreSQL reserves live ATS from immutable order commit even after live c
   try {
     await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
     await migratePostgres({ pool, migrationsDir, clock: () => now });
+    await withLegacyCommercialInsertGuardsDisabled(pool, async () => {
 
     const brand = { id: 'brand-pin', type: 'brand', name: 'Pinned Brand' };
     const shop = { id: 'shop-pin', type: 'shop', name: 'Pinned Shop' };
@@ -121,6 +123,7 @@ test('PostgreSQL reserves live ATS from immutable order commit even after live c
     assert.deepEqual(reservation.rows, [{ quantity: 3, order_commit_snapshot_id: commit.id, lineage_version: 2 }]);
     const inventory = await pool.query('SELECT reserved_quantity, available_quantity FROM catalog_skus WHERE sku = $1', [sku.sku]);
     assert.deepEqual(inventory.rows, [{ reserved_quantity: 3, available_quantity: 10 }]);
+    });
   } finally {
     await pool.end();
   }

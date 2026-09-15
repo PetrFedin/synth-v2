@@ -2,11 +2,27 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import vm from 'node:vm';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { JSDOM, VirtualConsole } from 'jsdom';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const publicDir = path.join(repoRoot, 'public');
+
+let jsdomModule;
+try {
+  jsdomModule = await import('jsdom');
+} catch {
+  console.log('LOCAL_DIAGNOSTIC_INSTALLING_DEPS');
+  const result = spawnSync('npm', ['install', '--ignore-scripts', '--no-audit', '--no-fund'], {
+    cwd: repoRoot,
+    stdio: 'inherit',
+    env: { ...process.env, NODE_OPTIONS: '' },
+  });
+  if (result.status !== 0) process.exit(result.status || 40);
+  jsdomModule = await import('jsdom');
+}
+const { JSDOM, VirtualConsole } = jsdomModule;
+
 const html = await readFile(path.join(publicDir, 'index.html'), 'utf8');
 const refs = [...html.matchAll(/<script[^>]+src="([^"?#]+)[^"]*"[^>]*><\/script>/g)].map(match => match[1]);
 console.log(`LOCAL_DIAGNOSTIC_SCRIPT_COUNT ${refs.length}`);

@@ -6,39 +6,61 @@ const virtualConsole = new VirtualConsole();
 virtualConsole.on('jsdomError', error => errors.push(`jsdom: ${error.message}`));
 virtualConsole.on('error', (...args) => errors.push(`console.error: ${args.map(String).join(' ')}`));
 
-const root = await fetch(url, { redirect: 'follow' });
-if (!root.ok) throw new Error(`root returned ${root.status}`);
-const html = await root.text();
-if (!html.includes('Syntha V2') && !html.includes('Syntha - Fashion Operating System')) {
-  throw new Error('root HTML does not contain Syntha title');
+async function fetchText(target, timeoutMs = 15000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(target, { redirect: 'follow', signal: controller.signal });
+    if (!response.ok) throw new Error(`${target} returned ${response.status}`);
+    return await response.text();
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
-for (const asset of ['styles.css','modules/api.js','modules/app-core.js','modules/app-start.js']) {
-  const response = await fetch(new URL(asset, url), { redirect: 'follow' });
-  if (!response.ok) throw new Error(`${asset} returned ${response.status}`);
-  const text = await response.text();
-  if (text.length < 100) throw new Error(`${asset} unexpectedly small`);
-}
+console.log(`VERIFY_ROOT ${url}`);
+const html = await fetchText(url);
+if (!html.includes('Syntha V2') && !html.includes('SYNTHA V2')) throw new Error('root HTML does not contain Syntha title');
 
-const dom = await JSDOM.fromURL(url, {
-  resources: 'usable',
-  runScripts: 'dangerously',
+console.log('VERIFY_ASSETS');
+const appJsUrl = new URL('/app.js?v=20260916-1', url).href;
+const appCssUrl = new URL('/app.css?v=20260916-1', url).href;
+const [appJs, appCss] = await Promise.all([fetchText(appJsUrl), fetchText(appCssUrl)]);
+if (appJs.length < 10000) throw new Error('app.js unexpectedly small');
+if (appCss.length < 5000) throw new Error('app.css unexpectedly small');
+if (!appJs.includes('SYNTHA_PREVIEW_WORKSPACE')) throw new Error('app.js missing preview workspace');
+if (!appJs.includes('SynthaStrictLocaleAudit')) throw new Error('app.js missing app startup');
+
+console.log(`ASSET_SIZES js=${appJs.length} css=${appCss.length}`);
+
+const dom = new JSDOM(html, {
+  url,
+  runScripts: 'outside-only',
   pretendToBeVisual: true,
   virtualConsole,
-  beforeParse(window) {
-    if (!window.crypto?.randomUUID) {
-      Object.defineProperty(window, 'crypto', {
-        configurable: true,
-        value: { randomUUID: () => '00000000-0000-4000-8000-000000000000' },
-      });
-    }
-    if (!window.queueMicrotask) window.queueMicrotask = fn => Promise.resolve().then(fn);
-  },
 });
-
 const { window } = dom;
+
+if (!window.crypto?.randomUUID) {
+  Object.defineProperty(window, 'crypto', {
+    configurable: true,
+    value: { randomUUID: () => '00000000-0000-4000-8000-000000000000' },
+  });
+}
+if (!window.queueMicrotask) window.queueMicrotask = fn => Promise.resolve().then(fn);
+if (!window.fetch) window.fetch = globalThis.fetch.bind(globalThis);
+if (!window.AbortController) window.AbortController = globalThis.AbortController;
+if (!window.structuredClone && globalThis.structuredClone) window.structuredClone = globalThis.structuredClone;
+
+console.log('EXECUTE_APP_JS');
+try {
+  window.eval(appJs);
+} catch (error) {
+  throw new Error(`app.js evaluation failed: ${error?.stack || error}`);
+}
+
 await new Promise((resolve, reject) => {
-  const timeout = setTimeout(() => reject(new Error('UI render timeout')), 15000);
+  const timeout = setTimeout(() => reject(new Error(`UI render timeout; errors=${errors.join(' | ')}`)), 10000);
   const poll = () => {
     const shell = window.document.querySelector('.shell');
     const navItems = window.document.querySelectorAll('.nav-item');
@@ -47,7 +69,7 @@ await new Promise((resolve, reject) => {
       resolve();
       return;
     }
-    setTimeout(poll, 200);
+    setTimeout(poll, 100);
   };
   poll();
 });
@@ -58,10 +80,12 @@ if (!text.includes('Fashion Operating System')) throw new Error('Rendered page m
 if (!window.document.querySelector('.workspace-content')) throw new Error('Workspace content not rendered');
 
 const navItems = [...window.document.querySelectorAll('.nav-item')];
+console.log(`NAV_ITEMS ${navItems.length}`);
 for (const button of navItems.slice(0, Math.min(navItems.length, 8))) {
   button.click();
   await new Promise(resolve => setTimeout(resolve, 20));
-  if (!window.document.querySelector('.workspace-content')) {
+  const content = window.document.querySelector('.workspace-content');
+  if (!content || !(content.textContent || '').trim()) {
     throw new Error(`Navigation failed for ${button.textContent?.trim() || 'unknown item'}`);
   }
 }
@@ -70,6 +94,5 @@ const seriousErrors = errors.filter(message => !message.includes('Could not pars
 if (seriousErrors.length) throw new Error(`Browser errors: ${seriousErrors.join(' | ')}`);
 
 console.log(`NETLIFY_BROWSER_VERIFIED ${url}`);
-console.log(`NAV_ITEMS ${navItems.length}`);
 console.log(`BODY_TEXT_LENGTH ${text.length}`);
 window.close();

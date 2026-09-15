@@ -2,45 +2,91 @@ const API_TIMEOUT_MS = 15000;
 const API_RETRY_ATTEMPTS = 2;
 const SYNTHA_PREVIEW_TOKEN = 'syntha-v2-static-preview-token';
 const SYNTHA_PREVIEW_ORG_ID = 'org-syntha-preview';
+const SYNTHA_PREVIEW_SHOP_ID = 'org-buyer-preview';
 const SYNTHA_PREVIEW_USER_ID = 'user-syntha-preview';
 
 sessionStorage.setItem('syntha-v2-session', SYNTHA_PREVIEW_TOKEN);
 
+const SYNTHA_PREVIEW_NOTIFICATIONS = Object.freeze([
+  Object.freeze({
+    id: 'notification-demo-001',
+    title: 'Заказ подтверждён',
+    body: 'Заказ order-demo-001 перешёл в DealSpace.',
+    type: 'order_confirmed',
+    status: 'unread',
+    createdAt: '2026-09-15T18:00:00.000Z',
+  }),
+]);
+
 const SYNTHA_PREVIEW_WORKSPACE = Object.freeze({
   memberships: Object.freeze([
-    Object.freeze({
-      id: 'membership-syntha-preview',
-      userId: SYNTHA_PREVIEW_USER_ID,
-      organisationId: SYNTHA_PREVIEW_ORG_ID,
-      role: 'owner',
-      status: 'active',
-    }),
+    Object.freeze({ id: 'membership-brand-preview', userId: SYNTHA_PREVIEW_USER_ID, organisationId: SYNTHA_PREVIEW_ORG_ID, role: 'owner', status: 'active' }),
+    Object.freeze({ id: 'membership-shop-preview', userId: SYNTHA_PREVIEW_USER_ID, organisationId: SYNTHA_PREVIEW_SHOP_ID, role: 'owner', status: 'active' }),
   ]),
   organisations: Object.freeze([
+    Object.freeze({ id: SYNTHA_PREVIEW_ORG_ID, name: 'SYNTHA Brand', type: 'brand', status: 'active' }),
+    Object.freeze({ id: SYNTHA_PREVIEW_SHOP_ID, name: 'Mercury Preview Buyer', type: 'shop', status: 'active' }),
+  ]),
+  relationships: Object.freeze([
+    Object.freeze({ id: 'rel-demo-001', brandId: SYNTHA_PREVIEW_ORG_ID, shopId: SYNTHA_PREVIEW_SHOP_ID, requestedByOrganisationId: SYNTHA_PREVIEW_ORG_ID, status: 'active' }),
+  ]),
+  invitations: Object.freeze([
+    Object.freeze({ id: 'inv-demo-001', showroomId: 'showroom-fw26', brandId: SYNTHA_PREVIEW_ORG_ID, shopId: SYNTHA_PREVIEW_SHOP_ID, status: 'accepted', expiresAt: '2026-10-31T23:59:59.000Z' }),
+  ]),
+  campaigns: Object.freeze([
+    Object.freeze({ id: 'campaign-fw26', brandId: SYNTHA_PREVIEW_ORG_ID, name: 'FW 2026', season: 'FW26', startsAt: '2026-08-01T00:00:00.000Z', endsAt: '2027-02-28T23:59:59.000Z', status: 'open' }),
+  ]),
+  collections: Object.freeze([
+    Object.freeze({ id: 'collection-main-fw26', campaignId: 'campaign-fw26', brandId: SYNTHA_PREVIEW_ORG_ID, name: 'Main Collection FW26', currency: 'EUR', status: 'published' }),
+  ]),
+  productStyles: Object.freeze([]),
+  catalogSkus: Object.freeze([
     Object.freeze({
-      id: SYNTHA_PREVIEW_ORG_ID,
-      name: 'SYNTHA Preview',
-      type: 'brand',
-      status: 'active',
+      id: 'sku-demo-001',
+      sku: 'SYN-FW26-001',
+      name: 'Wool Double-Breasted Coat',
+      brandId: SYNTHA_PREVIEW_ORG_ID,
+      collectionId: 'collection-main-fw26',
+      status: 'published',
+      wholesalePrice: 620,
+      currency: 'EUR',
+      minimumOrderQuantity: 1,
+      availableQuantity: 48,
+      reservedQuantity: 12,
+      availableToSell: 36,
+      version: 3,
     }),
   ]),
-  relationships: Object.freeze([]),
-  invitations: Object.freeze([]),
-  campaigns: Object.freeze([]),
-  collections: Object.freeze([]),
-  productStyles: Object.freeze([]),
-  catalogSkus: Object.freeze([]),
-  showrooms: Object.freeze([]),
-  cycles: Object.freeze([]),
-  selections: Object.freeze([]),
-  orders: Object.freeze([]),
-  deals: Object.freeze([]),
-  calendar: Object.freeze([]),
-  pageInfo: Object.freeze({
-    hasMore: false,
-    truncatedSections: Object.freeze([]),
-    nextCursors: Object.freeze({}),
-  }),
+  showrooms: Object.freeze([
+    Object.freeze({ id: 'showroom-fw26', brandId: SYNTHA_PREVIEW_ORG_ID, collectionId: 'collection-main-fw26', name: 'FW26 Digital Showroom', status: 'open', opensAt: '2026-08-15T00:00:00.000Z', closesAt: '2026-10-31T23:59:59.000Z' }),
+  ]),
+  cycles: Object.freeze([
+    Object.freeze({ id: 'cycle-demo-001', brandId: SYNTHA_PREVIEW_ORG_ID, shopId: SYNTHA_PREVIEW_SHOP_ID, campaignId: 'campaign-fw26', collectionId: 'collection-main-fw26', stage: 'deal-space', updatedAt: '2026-09-15T18:00:00.000Z' }),
+  ]),
+  selections: Object.freeze([
+    Object.freeze({ id: 'selection-demo-001', brandId: SYNTHA_PREVIEW_ORG_ID, shopId: SYNTHA_PREVIEW_SHOP_ID, showroomId: 'showroom-fw26', status: 'submitted', lines: Object.freeze([Object.freeze({ sku: 'SYN-FW26-001', quantity: 8, unitPrice: 620 })]) }),
+  ]),
+  orders: Object.freeze([
+    Object.freeze({
+      id: 'order-demo-001',
+      brandId: SYNTHA_PREVIEW_ORG_ID,
+      shopId: SYNTHA_PREVIEW_SHOP_ID,
+      selectionId: 'selection-demo-001',
+      status: 'attached',
+      totalAmount: 4960,
+      currency: 'EUR',
+      terms: Object.freeze({ incoterm: 'DAP', paymentDays: 30 }),
+      acceptedOrganisationIds: Object.freeze([SYNTHA_PREVIEW_ORG_ID, SYNTHA_PREVIEW_SHOP_ID]),
+      version: 2,
+    }),
+  ]),
+  deals: Object.freeze([
+    Object.freeze({ id: 'deal-demo-001', orderId: 'order-demo-001', brandId: SYNTHA_PREVIEW_ORG_ID, shopId: SYNTHA_PREVIEW_SHOP_ID, totalAmount: 4960, currency: 'EUR', status: 'confirmed' }),
+  ]),
+  calendar: Object.freeze([
+    Object.freeze({ id: 'event-demo-001', title: 'Buyer review · FW26', type: 'buyer_review', visibility: 'shared', startsAt: '2026-09-22T10:00:00.000Z', ownerOrganisationId: SYNTHA_PREVIEW_ORG_ID }),
+  ]),
+  pageInfo: Object.freeze({ hasMore: false, truncatedSections: Object.freeze([]), nextCursors: Object.freeze({}) }),
 });
 
 async function mutate(path, body, method = 'POST') { return api(path, { method, body }); }
@@ -88,31 +134,18 @@ async function api(path, { method = 'GET', body, anonymous = false, signal } = {
 
 function previewResponse(path, method = 'GET') {
   const normalizedMethod = String(method || 'GET').toUpperCase();
-  if (path === '/v2/auth/login' && normalizedMethod === 'POST') {
-    return { handled: true, data: { accessToken: SYNTHA_PREVIEW_TOKEN } };
-  }
+  if (path === '/v2/auth/login' && normalizedMethod === 'POST') return { handled: true, data: { accessToken: SYNTHA_PREVIEW_TOKEN } };
   if (path === '/v2/auth/logout' && normalizedMethod === 'POST') {
     sessionStorage.setItem('syntha-v2-session', SYNTHA_PREVIEW_TOKEN);
     return { handled: true, data: { ok: true } };
   }
   if (path === '/v2/auth/me' && normalizedMethod === 'GET') {
-    return {
-      handled: true,
-      data: {
-        id: SYNTHA_PREVIEW_USER_ID,
-        email: 'owner@syntha.local',
-        displayName: 'Syntha Preview',
-      },
-    };
+    return { handled: true, data: { id: SYNTHA_PREVIEW_USER_ID, email: 'owner@syntha.local', displayName: 'Syntha Preview' } };
   }
-  if (path === '/v2/workspace' && normalizedMethod === 'GET') {
-    return { handled: true, data: SYNTHA_PREVIEW_WORKSPACE };
-  }
-  if (path.startsWith('/v2/workspace/') && path.includes('/page') && normalizedMethod === 'GET') {
-    return { handled: true, data: { items: [], nextCursor: null } };
-  }
+  if (path === '/v2/workspace' && normalizedMethod === 'GET') return { handled: true, data: SYNTHA_PREVIEW_WORKSPACE };
+  if (path.startsWith('/v2/workspace/') && path.includes('/page') && normalizedMethod === 'GET') return { handled: true, data: { items: [], nextCursor: null } };
   if (path.startsWith('/v2/notifications/page') && normalizedMethod === 'GET') {
-    return { handled: true, data: { items: [], nextCursor: null, unreadCount: 0 } };
+    return { handled: true, data: { items: SYNTHA_PREVIEW_NOTIFICATIONS, nextCursor: null, unreadCount: 1 } };
   }
   if (path.startsWith('/v2/') && !['GET','HEAD'].includes(normalizedMethod)) {
     const error = new Error('UI_PREVIEW_READ_ONLY: Public preview is read-only.');
@@ -135,10 +168,7 @@ async function fetchWithTimeout(path, options, timeoutMs, externalSignal) {
   let timedOut = false;
   const abortFromCaller = () => controller.abort();
   externalSignal?.addEventListener('abort', abortFromCaller, { once: true });
-  const timer = setTimeout(() => {
-    timedOut = true;
-    controller.abort();
-  }, timeoutMs);
+  const timer = setTimeout(() => { timedOut = true; controller.abort(); }, timeoutMs);
   try {
     return await fetch(path, { ...options, signal: controller.signal });
   } catch (error) {

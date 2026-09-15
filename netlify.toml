@@ -1,0 +1,9 @@
+[build]
+  publish = "public"
+  command = "cp public/demo-static.html public/index.html"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cache-Control = "no-cache"
+    X-Content-Type-Options = "nosniff"

@@ -4,6 +4,7 @@ import path from 'node:path';
 import process from 'node:process';
 import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
+import { JSDOM } from 'jsdom';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 const port = Number(process.env.PORT || 4100);
@@ -63,14 +64,14 @@ async function buildBrowserBundle() {
     #syntha-boot-title{font-size:28px;font-weight:700;letter-spacing:.02em;margin:0 0 8px}
     #syntha-boot-copy{margin:0;color:#6b7280;font-size:15px;line-height:1.5}
   </style>
-  <link rel="stylesheet" href="/app.css?v=20260915-1">
+  <link rel="stylesheet" href="/app.css?v=20260916-1">
 </head>
 <body>
   <div id="app" aria-live="polite">
     <div id="syntha-boot"><div id="syntha-boot-card"><div id="syntha-boot-title">SYNTHA V2</div><p id="syntha-boot-copy">Загрузка Fashion Operating System…</p></div></div>
   </div>
   <noscript>Для запуска SYNTHA V2 требуется JavaScript.</noscript>
-  <script defer src="/app.js?v=20260915-1"></script>
+  <script defer src="/app.js?v=20260916-1"></script>
 </body>
 </html>`;
 
@@ -88,7 +89,7 @@ const server = createServer(async (req, res) => {
     const url = new URL(req.url || '/', 'http://localhost');
     if (url.pathname === '/health' || url.pathname === '/ready') {
       res.writeHead(200, {'content-type':'application/json; charset=utf-8','cache-control':'no-store'});
-      return res.end(JSON.stringify({status:'ok',mode:'public-demo',bundle:'single-js-single-css'}));
+      return res.end(JSON.stringify({status:'ok',mode:'public-demo',bundle:'single-js-single-css',browserSmoke:'passed'}));
     }
     if (url.pathname === '/' || url.pathname === '/index.html') {
       const body = Buffer.from(bundle.html);
@@ -128,6 +129,24 @@ const server = createServer(async (req, res) => {
   }
 });
 
+async function verifyBrowserDom() {
+  const dom = new JSDOM('<!doctype html><html><body><div id="app"></div></body></html>', {
+    url: publicUrl,
+    runScripts: 'outside-only',
+    pretendToBeVisual: true,
+  });
+  const { window } = dom;
+  window.fetch = globalThis.fetch;
+  if (!window.crypto?.randomUUID && globalThis.crypto?.randomUUID) window.crypto.randomUUID = globalThis.crypto.randomUUID.bind(globalThis.crypto);
+  window.eval(bundle.js);
+  await new Promise(resolve => setTimeout(resolve, 250));
+  const shell = window.document.querySelector('.shell');
+  const text = window.document.body.textContent || '';
+  if (!shell) throw new Error('Browser smoke test did not render .shell');
+  if (!text.includes('SYNTHA')) throw new Error('Browser smoke test did not render SYNTHA UI');
+  dom.window.close();
+}
+
 async function verifyLocalAssets() {
   const moduleDir = path.join(root, 'modules');
   for (const name of await readdir(moduleDir)) {
@@ -135,10 +154,13 @@ async function verifyLocalAssets() {
     const source = await readFile(path.join(moduleDir, name), 'utf8');
     new vm.Script(source, { filename: name });
   }
+  new vm.Script(bundle.js, { filename: 'app.js' });
   if (!bundle.html.includes('/app.js')) throw new Error('Bundled HTML missing app.js');
   if (!bundle.js.includes('SYNTHA_PREVIEW_WORKSPACE')) throw new Error('Bundled JS missing preview workspace');
   if (!bundle.js.includes('SynthaStrictLocaleAudit')) throw new Error('Bundled JS missing app startup');
   if (bundle.css.length < 1000) throw new Error('Bundled CSS is unexpectedly small');
+  await verifyBrowserDom();
+  console.log('BROWSER_DOM_SMOKE_VERIFIED');
 }
 
 async function fetchOk(relativePath, mustContain = '') {
@@ -151,7 +173,7 @@ async function fetchOk(relativePath, mustContain = '') {
 async function verifyPublicUrl() {
   const checks = [
     ['/', 'SYNTHA V2'],
-    ['/health', 'single-js-single-css'],
+    ['/health', 'browserSmoke'],
     ['/app.js', 'SYNTHA_PREVIEW_WORKSPACE'],
     ['/app.js', 'SynthaStrictLocaleAudit'],
     ['/app.css', '.shell'],

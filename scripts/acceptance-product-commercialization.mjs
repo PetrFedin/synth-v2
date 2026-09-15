@@ -10,7 +10,12 @@ import {
   logoutAcceptanceSession,
   validateAcceptanceOrigin,
 } from '../src/acceptance/collection-live-acceptance.mjs';
+import { runBuyerOrderLiveAcceptance } from '../src/acceptance/buyer-order-live-acceptance.mjs';
 import { runProductCommercializationLiveAcceptance } from '../src/acceptance/product-commercialization-live-acceptance.mjs';
+import {
+  completeProductSkuInventoryLiveAcceptance,
+  prepareProductSkuInventoryLiveAcceptance,
+} from '../src/acceptance/product-sku-inventory-live-acceptance.mjs';
 import { runReadyProductReadinessLiveAcceptance } from '../src/acceptance/product-readiness-ready-live-acceptance.mjs';
 import { bootstrapProductionAcceptanceReferences } from '../src/acceptance/production-reference-bootstrap.mjs';
 import { bootstrapMdmReference } from '../src/infrastructure/mdm-reference-bootstrap.mjs';
@@ -98,7 +103,32 @@ try {
     references,
     ...(runId ? { runId } : {}),
   });
-  process.stdout.write(`${JSON.stringify({ status: 'passed', ready, commercialization }, null, 2)}\n`);
+  const inventoryPrepared = await prepareProductSkuInventoryLiveAcceptance({
+    pool,
+    commercial: commercialization,
+    runId: commercialization.runId,
+    references,
+  });
+  const buyerOrder = await runBuyerOrderLiveAcceptance({
+    baseUrl: target.url.toString(),
+    brandToken,
+    shopToken,
+    pool,
+    commercial: commercialization,
+    references,
+    ...(runId ? { runId } : {}),
+  });
+  const inventory = await completeProductSkuInventoryLiveAcceptance({
+    baseUrl: target.url.toString(),
+    shopToken,
+    pool,
+    commercial: commercialization,
+    buyerOrder,
+    prepared: inventoryPrepared,
+    runId: buyerOrder.runId,
+    references,
+  });
+  process.stdout.write(`${JSON.stringify({ status: 'passed', ready, commercialization, inventoryPrepared, buyerOrder, inventory }, null, 2)}\n`);
 } finally {
   if (shopCreatedSession && shopToken) {
     try { await logoutAcceptanceSession({ baseUrl: target.url.toString(), token: shopToken }); }

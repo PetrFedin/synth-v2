@@ -1,3 +1,4 @@
+import { withLegacyCommercialInsertGuardsDisabled } from './postgres/legacy-commercial-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
@@ -21,6 +22,7 @@ test('PostgreSQL closes committed legacy order -> fulfillment -> receipt invento
   try {
     await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
     await migratePostgres({ pool, migrationsDir, clock: () => now });
+    await withLegacyCommercialInsertGuardsDisabled(pool, async () => {
     await seedCommittedOrder(pool);
 
     let sequence = 0;
@@ -201,6 +203,7 @@ test('PostgreSQL closes committed legacy order -> fulfillment -> receipt invento
       pool.query('UPDATE actual_cost_ledger_entries SET amount = amount WHERE id = $1', [quality.id]),
       (error) => error.code === '55000',
     );
+    });
   } finally {
     await pool.end();
   }

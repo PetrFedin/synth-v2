@@ -1,7 +1,7 @@
 import { invariant } from '../core/errors.mjs';
 import { assertBodyContract, assertQueryContract, bodyContract } from './request-contract.mjs';
 
-const MATRIX_BODY = bodyContract(['selectionId', 'lines'], {}, { lines: ['sku', 'quantity', 'note'] });
+const MATRIX_BODY = bodyContract(['selectionId', 'lines'], {}, { lines: ['sku', 'productSkuId', 'quantity', 'note'] });
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/;
 const SKU = /^[A-Z0-9][A-Z0-9._-]{1,63}$/;
 const MAX_LINES = 5_000;
@@ -34,8 +34,15 @@ function validateMatrixBody(body, selectionId) {
   body.lines.forEach((line, index) => {
     invariant(line && typeof line === 'object' && !Array.isArray(line), 'HTTP_BODY_FIELD_INVALID', `lines[${index}] must be an object`, { field: 'lines', index });
     invariant(typeof line.sku === 'string' && SKU.test(line.sku), 'HTTP_BODY_FIELD_INVALID', `lines[${index}].sku must be a canonical Product Identity SKU code`, { field: 'lines.sku', index });
-    invariant(!seen.has(line.sku), 'HTTP_BODY_FIELD_INVALID', `lines[${index}].sku is duplicated`, { field: 'lines.sku', index, sku: line.sku });
-    seen.add(line.sku);
+    invariant(line.productSkuId === undefined || (typeof line.productSkuId === 'string' && SAFE_ID.test(line.productSkuId)), 'HTTP_BODY_FIELD_INVALID', `lines[${index}].productSkuId must be a valid canonical ProductSku identifier`, { field: 'lines.productSkuId', index });
+    const identity = line.productSkuId ? `product-sku:${line.productSkuId}` : `legacy-sku:${line.sku}`;
+    invariant(!seen.has(identity), 'HTTP_BODY_FIELD_INVALID', `lines[${index}] duplicates the same ProductSku/SKU identity`, {
+      field: line.productSkuId ? 'lines.productSkuId' : 'lines.sku',
+      index,
+      sku: line.sku,
+      productSkuId: line.productSkuId ?? null,
+    });
+    seen.add(identity);
     invariant(Number.isSafeInteger(line.quantity) && line.quantity >= 1 && line.quantity <= MAX_QUANTITY, 'HTTP_BODY_FIELD_INVALID', `lines[${index}].quantity must be a positive PostgreSQL integer`, { field: 'lines.quantity', index });
     invariant(line.note === undefined || (typeof line.note === 'string' && line.note.length <= MAX_NOTE), 'HTTP_BODY_FIELD_INVALID', `lines[${index}].note must not exceed ${MAX_NOTE} characters`, { field: 'lines.note', index });
   });

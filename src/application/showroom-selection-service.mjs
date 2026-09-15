@@ -3,8 +3,8 @@ import { invariant } from '../core/errors.mjs';
 import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
 import { assertWholesaleStore } from './store-contract.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
-import { assertCatalogAvailableToSell, assertCatalogQuantity, assertPublishedCatalogSku } from '../modules/catalog/public.mjs';
-import { assertBuyerCatalogQuantity, buyerCatalogLine, buyerCatalogProductSku, isRichBuyerCatalog } from '../modules/commercial-publication/public.mjs';
+import { assertCatalogQuantity, assertPublishedCatalogSku } from '../modules/catalog/public.mjs';
+import { assertBuyerCatalogQuantity, buyerCatalogProductSku, isRichBuyerCatalog } from '../modules/commercial-publication/public.mjs';
 import { assertActiveRelationship } from '../modules/counterparty-relationships/public.mjs';
 import { createBuyerCommercialSnapshot } from '../modules/retail-doors/public.mjs';
 import { assertAcceptedShowroomAccess } from '../modules/showroom-invitations/public.mjs';
@@ -13,6 +13,22 @@ import { createSelection, replaceSelectionLines, submitSelection, upsertSelectio
 import { advanceCommercialCycle } from '../modules/commercial-cycle/public.mjs';
 
 const MATRIX_MAX_LINES = 5_000;
+const FROZEN_LINE_FIELDS = Object.freeze([
+  'sku',
+  'productSkuId',
+  'gtin',
+  'styleId',
+  'styleVersionId',
+  'colorwayId',
+  'sizeValueId',
+  'sizeCode',
+  'sizeLabelRu',
+  'sizeLabelEn',
+  'sizeSortOrder',
+  'unitPrice',
+  'currency',
+  'catalogVersion',
+]);
 
 export function createShowroomSelectionService({
   store,
@@ -60,17 +76,49 @@ export function createShowroomSelectionService({
     invariant(line.unitPrice === undefined && line.currency === undefined && line.catalogVersion === undefined, 'SELECTION_CLIENT_PRICE_FORBIDDEN', 'Selection price and currency are controlled by the published commercial basis');
   }
 
+  function assertCanonicalSelectionBasis(current, buyerCatalog) {
+    invariant(isRichBuyerCatalog(buyerCatalog), 'SELECTION_CANONICAL_BUYER_CATALOG_REQUIRED', 'Canonical selection requires a published rich BuyerCatalogVersion');
+    const buyerShopId = buyerCatalog.buyerShopId ?? buyerCatalog.shopId ?? null;
+    const expected = Object.freeze({
+      buyerCatalogVersionId: buyerCatalog.id,
+      commercialPublicationId: buyerCatalog.publicationId,
+      priceListVersionId: buyerCatalog.priceListVersionId,
+      commercialBasisHash: buyerCatalog.contentHash,
+      accessGrantId: buyerCatalog.accessGrantId,
+      showroomId: buyerCatalog.showroomId,
+      collectionId: buyerCatalog.collectionId,
+      brandId: buyerCatalog.brandId,
+      shopId: buyerShopId,
+      commercialProjectionId: buyerCatalog.commercialProjectionId,
+      commercialProjectionVersionNo: buyerCatalog.commercialProjectionVersionNo,
+      commercialProjectionContentHash: buyerCatalog.commercialProjectionContentHash,
+      readinessSnapshotId: buyerCatalog.readinessSnapshotId,
+      styleVersionId: buyerCatalog.styleVersionId,
+    });
+    for (const [field, value] of Object.entries(expected)) {
+      invariant(current[field] === value, 'SELECTION_COMMERCIAL_BASIS_CHANGED', 'Pinned buyer catalog lineage does not match selection commercial basis', {
+        selectionId: current.id,
+        buyerCatalogVersionId: current.buyerCatalogVersionId,
+        field,
+        expected: value,
+        actual: current[field] ?? null,
+      });
+    }
+  }
+
   async function richBuyerCatalogForSelection(current) {
-    invariant(current.buyerCatalogVersionId, 'SELECTION_MATRIX_BUYER_CATALOG_REQUIRED', 'Selection matrix requires a pinned BuyerCatalogVersion');
+    invariant(current.buyerCatalogVersionId, 'SELECTION_CANONICAL_BUYER_CATALOG_REQUIRED', 'Canonical selection requires a pinned BuyerCatalogVersion');
     invariant(trustedCommercialReader, 'COMMERCIAL_PUBLICATION_READER_REQUIRED', 'Commercial publication reader is required for a pinned selection');
     const buyerCatalog = requireEntity(await trustedCommercialReader.getBuyerCatalogVersion(current.buyerCatalogVersionId), 'BUYER_CATALOG_NOT_FOUND', { buyerCatalogVersionId: current.buyerCatalogVersionId });
-    invariant(buyerCatalog.contentHash === current.commercialBasisHash, 'SELECTION_COMMERCIAL_BASIS_CHANGED', 'Pinned buyer catalog does not match selection commercial basis');
-    invariant(isRichBuyerCatalog(buyerCatalog), 'SELECTION_MATRIX_RICH_CATALOG_REQUIRED', 'Color and size matrix requires a rich BuyerCatalogVersion');
+    assertCanonicalSelectionBasis(current, buyerCatalog);
     return buyerCatalog;
   }
 
   function richTrustedLine(buyerCatalog, line) {
-    const product = buyerCatalogProductSku(buyerCatalog, { skuCode: line.sku });
+    const product = buyerCatalogProductSku(buyerCatalog, {
+      productSkuId: line.productSkuId ?? null,
+      skuCode: line.sku ?? null,
+    });
     const quantity = assertBuyerCatalogQuantity(product, line.quantity);
     return Object.freeze({
       sku: product.sku,
@@ -92,28 +140,28 @@ export function createShowroomSelectionService({
     });
   }
 
-  async function trustedLineForUpsert(current, line) {
-    if (current.buyerCatalogVersionId) {
-      invariant(trustedCommercialReader, 'COMMERCIAL_PUBLICATION_READER_REQUIRED', 'Commercial publication reader is required for a pinned selection');
-      const buyerCatalog = requireEntity(await trustedCommercialReader.getBuyerCatalogVersion(current.buyerCatalogVersionId), 'BUYER_CATALOG_NOT_FOUND', { buyerCatalogVersionId: current.buyerCatalogVersionId });
-      invariant(buyerCatalog.contentHash === current.commercialBasisHash, 'SELECTION_COMMERCIAL_BASIS_CHANGED', 'Pinned buyer catalog does not match selection commercial basis');
-
-      if (isRichBuyerCatalog(buyerCatalog)) return richTrustedLine(buyerCatalog, line);
-
-      const liveSku = await trustedCatalogReader.getSku(line.sku);
-      const commercialLine = buyerCatalogLine(buyerCatalog, line.sku);
-      invariant(line.quantity >= commercialLine.minimumOrderQuantity, 'BUYER_CATALOG_MOQ_NOT_MET', 'Selection quantity is below buyer catalog MOQ', { sku: line.sku, minimumOrderQuantity: commercialLine.minimumOrderQuantity });
-      assertCatalogAvailableToSell(liveSku, line.quantity, { sku: line.sku, collectionId: current.collectionId, brandId: current.brandId });
-      return Object.freeze({
-        sku: commercialLine.sku,
-        quantity: line.quantity,
-        unitPrice: commercialLine.unitPrice,
-        currency: commercialLine.currency,
-        catalogVersion: commercialLine.catalogVersion,
-        note: line.note,
+  function assertFrozenSelectionLine(buyerCatalog, line) {
+    const trustedLine = richTrustedLine(buyerCatalog, line);
+    for (const field of FROZEN_LINE_FIELDS) {
+      invariant(line[field] === trustedLine[field], 'SELECTION_FROZEN_LINE_MISMATCH', 'Submitted selection line no longer matches its pinned BuyerCatalogVersion', {
+        buyerCatalogVersionId: buyerCatalog.id,
+        sku: line.sku,
+        productSkuId: line.productSkuId ?? null,
+        field,
+        expected: trustedLine[field] ?? null,
+        actual: line[field] ?? null,
       });
     }
+    return trustedLine;
+  }
 
+  async function trustedLineForUpsert(current, line) {
+    if (trustedCommercialReader) {
+      const buyerCatalog = await richBuyerCatalogForSelection(current);
+      return richTrustedLine(buyerCatalog, line);
+    }
+
+    invariant(!current.buyerCatalogVersionId, 'COMMERCIAL_PUBLICATION_READER_REQUIRED', 'Commercial publication reader is required for a pinned selection');
     const liveSku = await trustedCatalogReader.getSku(line.sku);
     const publishedSku = assertPublishedCatalogSku(liveSku, { collectionId: current.collectionId, brandId: current.brandId });
     const catalogSku = assertCatalogQuantity(publishedSku, line.quantity);
@@ -189,6 +237,7 @@ export function createShowroomSelectionService({
             : null;
           let buyerCommercialSnapshot = null;
           if (buyerCatalog) {
+            invariant(isRichBuyerCatalog(buyerCatalog), 'SELECTION_CANONICAL_BUYER_CATALOG_REQUIRED', 'Fresh commercial selection requires a published rich BuyerCatalogVersion');
             invariant(normalizedRetailDoorId, 'SELECTION_RETAIL_DOOR_REQUIRED', 'Buyer Catalog selection requires a Retail Door');
             const buyer = requireEntity(await tx.getOrganisation(cycle.shopId), 'SHOP_NOT_FOUND', { shopId: cycle.shopId });
             const door = requireEntity(await tx.getRetailDoor(normalizedRetailDoorId), 'RETAIL_DOOR_NOT_FOUND', { retailDoorId: normalizedRetailDoorId });
@@ -302,6 +351,11 @@ export function createShowroomSelectionService({
           const collection = requireEntity(await tx.getCollection(current.collectionId), 'COLLECTION_NOT_FOUND', { collectionId: current.collectionId });
           invariant(cycle.stage === 'selection', 'SELECTION_CYCLE_STAGE_INVALID', 'Cycle must be at selection stage before submission', { stage: cycle.stage });
           invariant(current.lines.every((line) => line.currency === collection.currency), 'SELECTION_CURRENCY_MISMATCH', 'Selection line currency must match collection currency');
+          if (trustedCommercialReader) {
+            const buyerCatalog = await richBuyerCatalogForSelection(current);
+            invariant(buyerCatalog.currency === collection.currency, 'SELECTION_COMMERCIAL_CURRENCY_MISMATCH', 'Pinned BuyerCatalogVersion currency must match collection currency');
+            current.lines.forEach((line) => assertFrozenSelectionLine(buyerCatalog, line));
+          }
           const submitted = submitSelection(current, clock());
           const advanced = advanceCommercialCycle(cycle, 'order-builder', clock());
           await tx.saveSelection(submitted, current.version);

@@ -1,3 +1,4 @@
+import { withLegacyCommercialInsertGuardsDisabled } from './postgres/legacy-commercial-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
@@ -17,6 +18,7 @@ test('atomic inventory failure rolls back Order, Cycle, command and reservation'
   try {
     await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
     await migratePostgres({ pool, migrationsDir, clock: () => now });
+    await withLegacyCommercialInsertGuardsDisabled(pool, async () => {
 
     const brand = { id: 'brand-race', type: 'brand', name: 'Race Brand' };
     const shop = { id: 'shop-race', type: 'shop', name: 'Race Shop' };
@@ -123,6 +125,7 @@ test('atomic inventory failure rolls back Order, Cycle, command and reservation'
     assert.equal((await pool.query('SELECT count(*)::int AS count FROM order_inventory_reservations')).rows[0].count, 0);
     assert.equal((await pool.query("SELECT reserved_quantity FROM catalog_skus WHERE sku = 'SKU-RACE'")).rows[0].reserved_quantity, 2);
     assert.equal((await pool.query("SELECT count(*)::int AS count FROM commands WHERE id = 'attach-race'")).rows[0].count, 0);
+    });
   } finally {
     await pool.end();
   }

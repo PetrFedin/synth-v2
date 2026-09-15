@@ -1,3 +1,4 @@
+import { withLegacyCommercialInsertGuardsDisabled } from './postgres/legacy-commercial-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
@@ -18,6 +19,7 @@ test('PostgreSQL cancellation releases reservation atomically and blocks DealSpa
   try {
     await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
     await migratePostgres({ pool, migrationsDir, clock: () => now });
+    await withLegacyCommercialInsertGuardsDisabled(pool, async () => {
 
     const brand = { id: 'brand-cancel', type: 'brand', name: 'Cancel Brand' };
     const shop = { id: 'shop-cancel', type: 'shop', name: 'Cancel Shop' };
@@ -131,6 +133,7 @@ test('PostgreSQL cancellation releases reservation atomically and blocks DealSpa
       () => createWholesalePlatform({ store }).confirmAndOpenDeal('confirm-cancelled', 'buyer-cancel', cycle.id),
       (error) => error?.code === 'ORDER_NOT_CONFIRMABLE',
     );
+    });
   } finally {
     await pool.end();
   }

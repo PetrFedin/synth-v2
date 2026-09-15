@@ -1,10 +1,14 @@
 import { createServer } from 'node:http';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 import process from 'node:process';
+import { fileURLToPath } from 'node:url';
 import { createStandaloneHandler } from '../src/web/static-handler.mjs';
 
 const TOKEN = 'syntha-v2-ui-preview-token';
 const organisationId = 'org-syntha-preview';
 const userId = 'user-syntha-preview';
+const publicDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 
 const workspace = Object.freeze({
   memberships: Object.freeze([
@@ -43,17 +47,43 @@ const workspace = Object.freeze({
   }),
 });
 
-function sendJson(response, statusCode, data) {
-  const body = JSON.stringify(data);
-  response.statusCode = statusCode;
-  response.setHeader('content-type', 'application/json; charset=utf-8');
+function commonHeaders(response, contentType) {
+  response.setHeader('content-type', contentType);
   response.setHeader('cache-control', 'no-store');
+  response.setHeader('x-content-type-options', 'nosniff');
+  response.setHeader('x-frame-options', 'DENY');
+  response.setHeader('referrer-policy', 'no-referrer');
+  response.setHeader('cross-origin-opener-policy', 'same-origin');
+  response.setHeader('cross-origin-resource-policy', 'same-origin');
+  response.setHeader('permissions-policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+  response.setHeader('content-security-policy', "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
+}
+
+function sendBody(response, statusCode, body, contentType) {
+  response.statusCode = statusCode;
+  commonHeaders(response, contentType);
   response.setHeader('content-length', Buffer.byteLength(body));
   response.end(body);
 }
 
+function sendJson(response, statusCode, data) {
+  sendBody(response, statusCode, JSON.stringify(data), 'application/json; charset=utf-8');
+}
+
 function authorized(request) {
   return request.headers.authorization === `Bearer ${TOKEN}`;
+}
+
+async function previewIndex(response) {
+  const source = await readFile(path.join(publicDir, 'index.html'), 'utf8');
+  const marker = '<script defer src="/ui/app-start.js?v=visual-20260805-14-components-4"></script>';
+  const injected = source.replace(marker, `<script defer src="/ui/preview-session.js"></script>\n  ${marker}`);
+  sendBody(response, 200, injected, 'text/html; charset=utf-8');
+}
+
+function previewSession(response) {
+  const script = `sessionStorage.setItem('syntha-v2-session', ${JSON.stringify(TOKEN)});`;
+  sendBody(response, 200, script, 'text/javascript; charset=utf-8');
 }
 
 async function previewApi(request, response) {
@@ -115,12 +145,19 @@ async function previewApi(request, response) {
   });
 }
 
-const handler = createStandaloneHandler({ apiHandler: previewApi });
+const staticHandler = createStandaloneHandler({ apiHandler: previewApi });
 const port = Number(process.env.PORT || 4100);
 const host = process.env.HOST?.trim() || '0.0.0.0';
 
 const server = createServer((request, response) => {
-  Promise.resolve(handler(request, response)).catch((error) => {
+  const url = new URL(request.url ?? '/', 'http://syntha.preview');
+  const task = request.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')
+    ? previewIndex(response)
+    : request.method === 'GET' && url.pathname === '/ui/preview-session.js'
+      ? previewSession(response)
+      : staticHandler(request, response);
+
+  Promise.resolve(task).catch((error) => {
     console.error('Syntha V2 UI preview request failed', error);
     if (!response.headersSent) {
       sendJson(response, 500, {

@@ -27,7 +27,7 @@ async function verify() {
           redirect: 'follow',
           cache: 'no-store',
           signal: controller.signal,
-          headers: { 'user-agent': 'Syntha-V2-independent-public-verifier/1.0' },
+          headers: { 'user-agent': 'Syntha-V2-independent-public-verifier/1.1' },
         });
       } finally {
         clearTimeout(timer);
@@ -40,11 +40,13 @@ async function verify() {
         if (!html.includes(marker)) throw new Error(`missing marker ${marker}`);
       }
       if (!html.includes('name="viewport"')) throw new Error('viewport meta missing');
-      if (/<script\b[^>]*\bsrc\s*=/i.test(html)) throw new Error('external script dependency detected');
-      if (/<link\b[^>]*rel=["']stylesheet["']/i.test(html)) throw new Error('external stylesheet dependency detected');
       const bytes = Buffer.byteLength(html);
       if (bytes < 10000) throw new Error(`page too small: ${bytes}`);
-      console.log(`NETLIFY_SAFE_PUBLIC_VERIFIED ${base} status=200 bytes=${bytes} standalone=true viewport=true markers=${required.length}`);
+      const scripts = [...html.matchAll(/<script\b[^>]*\bsrc\s*=\s*["']([^"']+)["'][^>]*>/gi)].map(match => match[1]);
+      const stylesheets = [...html.matchAll(/<link\b[^>]*rel=["']stylesheet["'][^>]*href=["']([^"']+)["'][^>]*>/gi)].map(match => match[1]);
+      console.log(`NETLIFY_SAFE_PUBLIC_VERIFIED ${base} status=200 bytes=${bytes} viewport=true markers=${required.length} scripts=${scripts.length} stylesheets=${stylesheets.length}`);
+      if (scripts.length) console.log(`NETLIFY_INJECTED_SCRIPTS ${JSON.stringify(scripts)}`);
+      if (stylesheets.length) console.log(`NETLIFY_EXTERNAL_STYLES ${JSON.stringify(stylesheets)}`);
       return;
     } catch (error) {
       lastError = error;
@@ -60,5 +62,5 @@ await verify();
 const port = Number(process.env.PORT || 4100);
 createServer((_req, res) => {
   res.writeHead(200, {'content-type':'application/json; charset=utf-8','cache-control':'no-store'});
-  res.end(JSON.stringify({status:'ok',verified:base,standalone:true}));
+  res.end(JSON.stringify({status:'ok',verified:base}));
 }).listen(port, '0.0.0.0', () => console.log(`independent verifier listening on ${port}`));

@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import process from 'node:process';
 
-const base = 'https://synth-v2-app.netlify.app/';
+const base = process.env.VERIFY_TARGET || 'https://synth-v2-app.netlify.app/';
 const required = [
   'SYNTHA V2',
   'Fashion Operating System',

@@ -64,14 +64,14 @@ async function buildBrowserBundle() {
     #syntha-boot-title{font-size:28px;font-weight:700;letter-spacing:.02em;margin:0 0 8px}
     #syntha-boot-copy{margin:0;color:#6b7280;font-size:15px;line-height:1.5}
   </style>
-  <link rel="stylesheet" href="/app.css?v=20260916-1">
+  <link rel="stylesheet" href="/app.css?v=20260916-2">
 </head>
 <body>
   <div id="app" aria-live="polite">
     <div id="syntha-boot"><div id="syntha-boot-card"><div id="syntha-boot-title">SYNTHA V2</div><p id="syntha-boot-copy">Загрузка Fashion Operating System…</p></div></div>
   </div>
   <noscript>Для запуска SYNTHA V2 требуется JavaScript.</noscript>
-  <script defer src="/app.js?v=20260916-1"></script>
+  <script defer src="/app.js?v=20260916-2"></script>
 </body>
 </html>`;
 
@@ -137,9 +137,10 @@ async function verifyBrowserDom() {
   });
   const { window } = dom;
   window.fetch = globalThis.fetch;
+  window.structuredClone = globalThis.structuredClone || ((value) => JSON.parse(JSON.stringify(value)));
   if (!window.crypto?.randomUUID && globalThis.crypto?.randomUUID) window.crypto.randomUUID = globalThis.crypto.randomUUID.bind(globalThis.crypto);
   window.eval(bundle.js);
-  await new Promise(resolve => setTimeout(resolve, 250));
+  await new Promise(resolve => setTimeout(resolve, 350));
   const shell = window.document.querySelector('.shell');
   const text = window.document.body.textContent || '';
   if (!shell) throw new Error('Browser smoke test did not render .shell');

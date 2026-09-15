@@ -89,7 +89,7 @@ async function verifyPublicUrl() {
     ['/', 'Syntha - Fashion Operating System'],
     ['/health', 'public-demo'],
     ['/modules/api.js', 'SYNTHA_PREVIEW_WORKSPACE'],
-    ['/modules/app-core.js', 'Fashion Operating System'],
+    ['/modules/app-core.js', 'NAV_GROUPS'],
     ['/modules/app-start.js', 'SynthaStrictLocaleAudit'],
     ['/styles.css', ''],
     ['/omnidata-v14.css', ''],

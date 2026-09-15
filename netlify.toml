@@ -1,6 +1,6 @@
 [build]
-  publish = "public"
-  command = "cp public/demo-static.html public/index.html"
+  publish = "dist-public-demo"
+  command = "node scripts/build-public-demo.mjs"
 
 [[headers]]
   for = "/*"

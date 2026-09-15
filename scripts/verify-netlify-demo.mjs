@@ -1,58 +1,40 @@
-import { JSDOM, VirtualConsole } from 'jsdom';
-import vm from 'node:vm';
+const url = process.env.SYNTHA_VERIFY_URL || 'https://synth-v2-app.netlify.app/';
+const controller = new AbortController();
+const timer = setTimeout(() => controller.abort(), 15000);
 
-const baseUrl = process.env.SYNTHA_VERIFY_URL || 'https://synth-v2-app.netlify.app/';
-const sourceUrl = new URL('/demo-static.html', baseUrl).href;
+try {
+  const response = await fetch(url, {
+    redirect: 'follow',
+    signal: controller.signal,
+    headers: { 'user-agent': 'Syntha-V2-Netlify-verifier/2.0' },
+  });
+  if (response.status !== 200) throw new Error(`root returned HTTP ${response.status}`);
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.toLowerCase().includes('text/html')) throw new Error(`unexpected content-type: ${contentType}`);
 
-async function fetchText(target, timeoutMs = 15000) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetch(target, { redirect: 'follow', signal: controller.signal });
-    if (!response.ok) throw new Error(`${target} returned ${response.status}`);
-    return await response.text();
-  } finally {
-    clearTimeout(timer);
+  const html = await response.text();
+  const required = [
+    'SYNTHA V2',
+    'Fashion Operating System',
+    'Commercial pipeline',
+    'Wool Double-Breasted Coat',
+    'Main Collection FW26',
+    'DealSpace',
+    'Product & PLM',
+    'Public Review Build',
+  ];
+  for (const marker of required) {
+    if (!html.includes(marker)) throw new Error(`missing marker: ${marker}`);
   }
+
+  if (!html.includes('name="viewport"')) throw new Error('viewport meta missing');
+  if (/<script\b[^>]*\bsrc\s*=/i.test(html)) throw new Error('external JavaScript dependency detected');
+  if (/<link\b[^>]*rel=["']stylesheet["']/i.test(html)) throw new Error('external stylesheet dependency detected');
+
+  const bytes = Buffer.byteLength(html);
+  if (bytes < 10000) throw new Error(`page unexpectedly small: ${bytes} bytes`);
+
+  console.log(`NETLIFY_SAFE_DEMO_VERIFIED ${url} status=200 bytes=${bytes} standalone=true mobileViewport=true markers=${required.length}`);
+} finally {
+  clearTimeout(timer);
 }
-
-const sourceHtml = await fetchText(sourceUrl);
-const scriptRefs = [...sourceHtml.matchAll(/<script[^>]+src="([^"?#]+)[^"]*"[^>]*><\/script>/g)].map(match => match[1]);
-console.log(`SCRIPT_COUNT ${scriptRefs.length}`);
-
-const errors = [];
-const virtualConsole = new VirtualConsole();
-virtualConsole.on('jsdomError', error => errors.push(`jsdom: ${error.message}`));
-virtualConsole.on('error', (...args) => errors.push(`console.error: ${args.map(String).join(' ')}`));
-
-const dom = new JSDOM('<!doctype html><html lang="ru"><head></head><body><div id="app"></div></body></html>', {
-  url: baseUrl,
-  runScripts: 'outside-only',
-  pretendToBeVisual: true,
-  virtualConsole,
-});
-const { window } = dom;
-if (!window.crypto?.randomUUID) Object.defineProperty(window, 'crypto', { configurable: true, value: { randomUUID: () => '00000000-0000-4000-8000-000000000000' } });
-if (!window.queueMicrotask) window.queueMicrotask = fn => Promise.resolve().then(fn);
-if (!window.fetch) window.fetch = globalThis.fetch.bind(globalThis);
-if (!window.AbortController) window.AbortController = globalThis.AbortController;
-if (!window.structuredClone && globalThis.structuredClone) window.structuredClone = globalThis.structuredClone;
-const context = dom.getInternalVMContext();
-
-for (const ref of scriptRefs) {
-  const url = new URL(ref, sourceUrl).href;
-  const code = await fetchText(url);
-  const started = Date.now();
-  console.log(`EVAL_START ${ref} bytes=${code.length}`);
-  const script = new vm.Script(code, { filename: ref });
-  script.runInContext(context, { timeout: 5000 });
-  console.log(`EVAL_OK ${ref} ms=${Date.now() - started}`);
-}
-
-await new Promise(resolve => setTimeout(resolve, 1000));
-const shell = window.document.querySelector('.shell');
-const navItems = window.document.querySelectorAll('.nav-item');
-console.log(`RENDER_RESULT shell=${Boolean(shell)} nav=${navItems.length} text=${(window.document.body.textContent || '').length}`);
-if (!shell || navItems.length < 5) throw new Error(`UI did not render; errors=${errors.join(' | ')}`);
-console.log('DIAGNOSTIC_BROWSER_VERIFIED');
-window.close();

@@ -10,14 +10,30 @@ const checks = [
   ['/app.css', '.shell'],
 ];
 
-for (const [pathname, marker] of checks) {
-  const response = await fetch(new URL(pathname, base), { redirect: 'follow' });
-  if (!response.ok) throw new Error(`${pathname} returned ${response.status}`);
-  const text = await response.text();
-  if (!text.includes(marker)) throw new Error(`${pathname} missing marker ${marker}`);
+async function verify() {
+  let lastError;
+  for (let attempt = 1; attempt <= 20; attempt += 1) {
+    try {
+      for (const [pathname, marker] of checks) {
+        const url = new URL(pathname, base);
+        url.searchParams.set('verify', String(Date.now()));
+        const response = await fetch(url, { redirect: 'follow', cache: 'no-store' });
+        if (!response.ok) throw new Error(`${pathname} returned ${response.status}`);
+        const text = await response.text();
+        if (!text.includes(marker)) throw new Error(`${pathname} missing marker ${marker}`);
+      }
+      console.log(`STATIC_PUBLIC_VERIFIED ${base}`);
+      return;
+    } catch (error) {
+      lastError = error;
+      console.log(`STATIC_VERIFY_RETRY ${attempt}: ${error.message}`);
+      await new Promise(resolve => setTimeout(resolve, 1500));
+    }
+  }
+  throw lastError || new Error('Static public verification failed');
 }
 
-console.log(`STATIC_PUBLIC_VERIFIED ${base}`);
+await verify();
 
 const port = Number(process.env.PORT || 4100);
 createServer((_req, res) => {

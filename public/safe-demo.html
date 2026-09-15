@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#111827">
+  <meta name="color-scheme" content="light">
+  <title>SYNTHA V2 — Fashion Operating System</title>
+  <style>
+    :root{--bg:#f4f5f7;--surface:#fff;--ink:#16181d;--muted:#69707d;--line:#e5e7eb;--soft:#f8f9fb;--accent:#1f2937;--good:#176b4d;--goodbg:#eaf7f1;--warn:#8a5a0a;--warnbg:#fff6dc;--blue:#245ca6;--bluebg:#eef5ff;--radius:18px;--shadow:0 10px 30px rgba(17,24,39,.06)}
+    *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;line-height:1.45}
+    a{color:inherit;text-decoration:none}.shell{min-height:100vh;display:grid;grid-template-columns:250px minmax(0,1fr)}
+    aside{position:sticky;top:0;height:100vh;background:#171a21;color:#fff;padding:20px 14px;display:flex;flex-direction:column;gap:22px;overflow:auto}
+    .brand{display:flex;align-items:center;gap:11px;padding:4px 8px 10px}.mark{width:34px;height:34px;border:1px solid #6b7280;border-radius:10px;display:grid;place-items:center;font-weight:800;letter-spacing:-.08em}.brand strong{display:block;font-size:18px;letter-spacing:.12em}.brand small{display:block;color:#aeb4bf;font-size:11px;margin-top:2px}
+    .group{margin:5px 8px 8px;color:#777f8d;font-size:10px;font-weight:700;letter-spacing:.12em}.nav{display:grid;gap:4px}.nav a{display:flex;gap:10px;align-items:center;padding:10px 12px;border-radius:10px;color:#d9dde4;font-size:13px}.nav a:hover,.nav a:focus{background:#252a34;color:#fff;outline:none}.dot{width:7px;height:7px;border-radius:50%;background:#727b89;flex:0 0 auto}
+    .aside-footer{margin-top:auto;border-top:1px solid #2c313b;padding:14px 8px 0;color:#9097a4;font-size:11px}
+    main{min-width:0}.topbar{position:sticky;top:0;z-index:5;height:66px;background:rgba(255,255,255,.94);backdrop-filter:blur(12px);border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 28px}.topbar h1{font-size:16px;margin:0}.status{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--good);background:var(--goodbg);border:1px solid #cee8dc;padding:7px 10px;border-radius:999px}.status i{width:7px;height:7px;border-radius:50%;background:#29966d}
+    .content{max-width:1500px;margin:0 auto;padding:28px}.hero{display:grid;grid-template-columns:1.4fr .8fr;gap:18px;margin-bottom:18px}.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+    .hero-main{padding:28px}.eyebrow{font-size:11px;letter-spacing:.13em;color:#7b8290;font-weight:700;margin-bottom:10px}.hero-main h2{font-size:32px;line-height:1.12;margin:0 0 12px;letter-spacing:-.025em}.hero-main p{color:var(--muted);max-width:760px;margin:0}.badges{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}.badge{font-size:11px;padding:6px 9px;border-radius:999px;border:1px solid var(--line);background:var(--soft)}.badge.good{color:var(--good);background:var(--goodbg);border-color:#cfe8dd}.badge.blue{color:var(--blue);background:var(--bluebg);border-color:#d6e6fb}
+    .hero-side{padding:22px;display:grid;gap:12px;align-content:start}.metric{display:flex;align-items:flex-end;justify-content:space-between;padding:13px 0;border-bottom:1px solid var(--line)}.metric:last-child{border:0}.metric span{font-size:12px;color:var(--muted)}.metric strong{font-size:24px;line-height:1}.metric small{font-size:11px;color:var(--muted);margin-left:4px}
+    .section{scroll-margin-top:82px;margin-top:18px}.section-head{display:flex;justify-content:space-between;gap:14px;align-items:end;margin:0 2px 10px}.section-head h3{font-size:18px;margin:0}.section-head p{margin:3px 0 0;font-size:12px;color:var(--muted)}
+    .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.kpi{padding:17px 18px}.kpi label{display:block;color:var(--muted);font-size:11px;margin-bottom:10px}.kpi strong{font-size:25px;display:block}.kpi small{font-size:11px;color:var(--muted)}
+    .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.card{padding:18px}.card-top{display:flex;align-items:start;justify-content:space-between;gap:10px}.card h4{font-size:14px;margin:0}.card p{font-size:12px;color:var(--muted);margin:8px 0 0}.pill{white-space:nowrap;font-size:10px;padding:5px 7px;border-radius:999px;background:var(--goodbg);color:var(--good);border:1px solid #d2eadf}.pill.blue{background:var(--bluebg);color:var(--blue);border-color:#d6e5f7}.pill.warn{background:var(--warnbg);color:var(--warn);border-color:#f2e0aa}
+    .flow{padding:18px;overflow:auto}.pipeline{display:flex;min-width:880px;align-items:center;gap:7px}.step{flex:1;min-width:94px;border:1px solid var(--line);background:var(--soft);border-radius:12px;padding:12px 10px}.step b{display:block;font-size:11px}.step span{display:block;font-size:9px;color:var(--muted);margin-top:4px}.arrow{color:#a0a6b0}.step.done{background:var(--goodbg);border-color:#cde6db}.step.current{background:var(--bluebg);border-color:#cbdff8}
+    .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}.table-wrap{overflow:auto}.table{width:100%;border-collapse:collapse;min-width:620px}.table th,.table td{text-align:left;padding:12px 14px;border-bottom:1px solid var(--line);font-size:11px}.table th{color:var(--muted);font-weight:600;background:#fafbfc}.table tr:last-child td{border-bottom:0}.money{font-variant-numeric:tabular-nums}
+    details{border:1px solid var(--line);border-radius:12px;background:#fff;overflow:hidden}details+details{margin-top:8px}summary{list-style:none;cursor:pointer;padding:13px 14px;font-size:12px;font-weight:650;display:flex;align-items:center;justify-content:space-between;gap:10px}summary::-webkit-details-marker{display:none}summary:after{content:'+';color:#8b929e;font-size:18px;font-weight:400}details[open] summary:after{content:'–'}details .detail{border-top:1px solid var(--line);padding:12px 14px;color:var(--muted);font-size:11px;background:#fbfcfd}
+    .module-list{display:grid;gap:8px}.module{display:grid;grid-template-columns:1.25fr 2fr auto;gap:14px;align-items:center;padding:13px 14px;border:1px solid var(--line);border-radius:12px;background:#fff}.module b{font-size:12px}.module span{font-size:11px;color:var(--muted)}
+    .callout{padding:15px 17px;border-radius:14px;background:#f0f5fb;border:1px solid #dbe8f5;font-size:12px;color:#43556a}.footer{padding:30px 0 10px;color:#8a919c;font-size:11px;text-align:center}
+    @media(max-width:1050px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.hero{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @media(max-width:760px){.shell{display:block}aside{position:static;height:auto;padding:12px 12px 10px;overflow:visible}.brand{padding:2px 6px}.brand small{display:none}.group,.aside-footer{display:none}.nav{display:flex;overflow-x:auto;padding-bottom:4px;gap:6px}.nav a{white-space:nowrap;background:#222731;padding:8px 10px;font-size:11px}.dot{display:none}.topbar{height:58px;padding:0 16px}.topbar h1{font-size:14px}.status{font-size:10px;padding:6px 8px}.content{padding:16px}.hero-main{padding:20px}.hero-main h2{font-size:26px}.hero-side{padding:16px}.kpis,.grid,.two{grid-template-columns:1fr}.section{scroll-margin-top:66px}.module{grid-template-columns:1fr auto}.module span{grid-column:1/-1}.section-head{align-items:start}.section-head p{max-width:260px}.table{min-width:560px}}
+  </style>
+</head>
+<body>
+<div class="shell">
+  <aside>
+    <div class="brand"><div class="mark">S</div><div><strong>SYNTHA</strong><small>Fashion Operating System · V2</small></div></div>
+    <nav class="nav">
+      <a href="#overview"><span class="dot"></span>Обзор</a>
+      <div class="group">PLM / РАЗРАБОТКА</div>
+      <a href="#plm"><span class="dot"></span>Product & PLM</a>
+      <a href="#production"><span class="dot"></span>Производство</a>
+      <div class="group">ОПТОВАЯ КОММЕРЦИЯ</div>
+      <a href="#wholesale"><span class="dot"></span>Wholesale</a>
+      <a href="#order"><span class="dot"></span>Order → DealSpace</a>
+      <div class="group">УПРАВЛЕНИЕ</div>
+      <a href="#economics"><span class="dot"></span>Cost & Margin</a>
+      <a href="#control"><span class="dot"></span>Контроль</a>
+    </nav>
+    <div class="aside-footer">Public review build · read-only<br>Срез текущей архитектуры SYNTH‑V2</div>
+  </aside>
+
+  <main>
+    <header class="topbar"><h1>SYNTHA / WORKSPACE</h1><div class="status"><i></i>Публичная демо-версия</div></header>
+    <div class="content">
+      <section class="hero" id="overview">
+        <div class="panel hero-main">
+          <div class="eyebrow">FASHION OPERATING SYSTEM</div>
+          <h2>От продукта и готовности коллекции — до заказа, поставки и маржи</h2>
+          <p>Это стабильная публичная витрина текущего SYNTH‑V2. Она показывает уже собранные контуры PLM, коммерческой публикации, digital showroom, buyer selection, заказа, DealSpace, производства, качества и экономики.</p>
+          <div class="badges"><span class="badge good">Read-only demo</span><span class="badge blue">RU / EN architecture</span><span class="badge">PostgreSQL authoritative</span><span class="badge">RBAC</span><span class="badge">Immutable publication</span></div>
+        </div>
+        <div class="panel hero-side">
+          <div class="metric"><span>Контуров продукта</span><div><strong>10</strong><small>+</small></div></div>
+          <div class="metric"><span>Этапов commercial flow</span><div><strong>8</strong></div></div>
+          <div class="metric"><span>Демо SKU ATS</span><div><strong>36</strong></div></div>
+          <div class="metric"><span>Демо order value</span><div><strong>4 960</strong><small>EUR</small></div></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-head"><div><h3>Управленческая сводка</h3><p>Связанный тестовый коммерческий сценарий</p></div></div>
+        <div class="kpis">
+          <div class="panel kpi"><label>Активные отношения</label><strong>1</strong><small>SYNTHA Brand ↔ Mercury Preview Buyer</small></div>
+          <div class="panel kpi"><label>Коллекции опубликованы</label><strong>1</strong><small>Main Collection FW26</small></div>
+          <div class="panel kpi"><label>Заказы</label><strong>1</strong><small>attached / согласован</small></div>
+          <div class="panel kpi"><label>DealSpace</label><strong>1</strong><small>confirmed</small></div>
+        </div>
+      </section>
+
+      <section class="section" id="wholesale">
+        <div class="section-head"><div><h3>Commercial pipeline</h3><p>Основная цепочка B2B/wholesale, реализованная в платформе</p></div></div>
+        <div class="panel flow"><div class="pipeline">
+          <div class="step done"><b>Campaign</b><span>FW 2026</span></div><span class="arrow">→</span>
+          <div class="step done"><b>Collection</b><span>Published</span></div><span class="arrow">→</span>
+          <div class="step done"><b>Showroom</b><span>Open</span></div><span class="arrow">→</span>
+          <div class="step done"><b>Selection</b><span>Submitted</span></div><span class="arrow">→</span>
+          <div class="step done"><b>Order Builder</b><span>8 units</span></div><span class="arrow">→</span>
+          <div class="step done"><b>Order</b><span>Attached</span></div><span class="arrow">→</span>
+          <div class="step done"><b>Confirmation</b><span>2/2 parties</span></div><span class="arrow">→</span>
+          <div class="step current"><b>DealSpace</b><span>Confirmed</span></div>
+        </div></div>
+      </section>
+
+      <section class="section" id="plm">
+        <div class="section-head"><div><h3>Product & PLM</h3><p>Собранные функциональные контуры разработки продукта</p></div></div>
+        <div class="grid">
+          <div class="panel card"><div class="card-top"><h4>Product Master / Styles</h4><span class="pill">Готово</span></div><p>Карточка модели, SKU, атрибуты, версии и связь с коллекцией.</p></div>
+          <div class="panel card"><div class="card-top"><h4>Materials & Trims</h4><span class="pill">Готово</span></div><p>Материалы, фурнитура, параметры, поставщики и готовность.</p></div>
+          <div class="panel card"><div class="card-top"><h4>BOM & Costing</h4><span class="pill">Готово</span></div><p>Спецификация изделия, структура затрат и снимки себестоимости.</p></div>
+          <div class="panel card"><div class="card-top"><h4>Measurements / Fit</h4><span class="pill blue">Работает</span></div><p>Размерные таблицы, ревизии, градация и синхронизация с каталогом.</p></div>
+          <div class="panel card"><div class="card-top"><h4>Samples</h4><span class="pill blue">Работает</span></div><p>Образцы, статусы, ревизии и связь с коммерческой готовностью.</p></div>
+          <div class="panel card"><div class="card-top"><h4>Sourcing / RFQ</h4><span class="pill blue">Работает</span></div><p>Поставщики, запросы котировок, сравнение предложений и award.</p></div>
+          <div class="panel card"><div class="card-top"><h4>Tech Packs</h4><span class="pill">Готово</span></div><p>Контроль технических пакетов, версии и подтверждение.</p></div>
+          <div class="panel card"><div class="card-top"><h4>Linesheets</h4><span class="pill">Готово</span></div><p>Коммерческая матрица коллекции и buyer-order handoff.</p></div>
+          <div class="panel card"><div class="card-top"><h4>Readiness</h4><span class="pill warn">Контроль</span></div><p>Проверка готовности перед коммерческой публикацией и заказом.</p></div>
+        </div>
+      </section>
+
+      <section class="section" id="production">
+        <div class="section-head"><div><h3>Production & Quality</h3><p>Переход от технической готовности к фактическому исполнению</p></div></div>
+        <div class="module-list">
+          <div class="module"><b>Production Order</b><span>Создание, подтверждение, версия и привязка к продукту/поставщику.</span><span class="pill">Implemented</span></div>
+          <div class="module"><b>Production Execution</b><span>Milestones, фактический прогресс, блокировки и производственная готовность.</span><span class="pill">Implemented</span></div>
+          <div class="module"><b>Final Quality</b><span>Финальный QC, допустимые дефекты, согласование выпуска и статус Ready for QC.</span><span class="pill">Implemented</span></div>
+          <div class="module"><b>Supply / Fulfillment</b><span>Контур поставки, исполнения обязательств, приемки и дальнейшего движения заказа.</span><span class="pill blue">Architecture</span></div>
+        </div>
+      </section>
+
+      <section class="section" id="order">
+        <div class="section-head"><div><h3>Текущий demo order</h3><p>Один связанный сценарий от SKU до сделки</p></div></div>
+        <div class="two">
+          <div class="panel table-wrap"><table class="table">
+            <thead><tr><th>Параметр</th><th>Значение</th></tr></thead>
+            <tbody>
+              <tr><td>Campaign</td><td>FW 2026</td></tr>
+              <tr><td>Collection</td><td>Main Collection FW26</td></tr>
+              <tr><td>SKU</td><td>SYN-FW26-001</td></tr>
+              <tr><td>Product</td><td>Wool Double-Breasted Coat</td></tr>
+              <tr><td>Wholesale price</td><td class="money">620 EUR</td></tr>
+              <tr><td>MOQ / ATS</td><td>1 / 36</td></tr>
+              <tr><td>Buyer selection</td><td>8 units</td></tr>
+              <tr><td>Order</td><td class="money">4 960 EUR</td></tr>
+              <tr><td>Terms</td><td>DAP · 30 days</td></tr>
+              <tr><td>DealSpace</td><td><span class="pill">Confirmed</span></td></tr>
+            </tbody>
+          </table></div>
+          <div class="panel card">
+            <h4>Что проверяет Order flow</h4>
+            <p style="margin-bottom:12px">Коммерческий заказ не существует отдельно от продукта: он опирается на опубликованную коллекцию, доступный SKU, выбор покупателя и согласования сторон.</p>
+            <details open><summary>Buyer Selection</summary><div class="detail">Выбор SKU и количества внутри доступного digital showroom.</div></details>
+            <details><summary>Order Builder</summary><div class="detail">Формирование строк заказа, цены, количества и коммерческих условий.</div></details>
+            <details><summary>Confirmation</summary><div class="detail">Версионность и подтверждение обеими сторонами до фиксации сделки.</div></details>
+            <details><summary>DealSpace</summary><div class="detail">Подтвержденная коммерческая фиксация становится основой дальнейшего supply/fulfillment и экономики.</div></details>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="economics">
+        <div class="section-head"><div><h3>Cost, Margin & Supplier Economics</h3><p>Экономический слой платформы</p></div></div>
+        <div class="grid">
+          <div class="panel card"><div class="card-top"><h4>Order Commit Snapshot</h4><span class="pill blue">Immutable</span></div><p>Фиксация коммерческих параметров заказа для последующего расчета экономики.</p></div>
+          <div class="panel card"><div class="card-top"><h4>Landed Cost</h4><span class="pill blue">Model</span></div><p>Factory cost + freight + duty + credits и контроль готовности к закрытию.</p></div>
+          <div class="panel card"><div class="card-top"><h4>Contribution Margin</h4><span class="pill blue">Model</span></div><p>Фактическая маржа и post-close корректировки после изменения затрат.</p></div>
+        </div>
+      </section>
+
+      <section class="section" id="control">
+        <div class="section-head"><div><h3>Контроль и эксплуатационная архитектура</h3><p>Что уже заложено под промышленную работу</p></div></div>
+        <div class="two">
+          <div class="panel card">
+            <h4>Контроль данных</h4>
+            <div style="height:10px"></div>
+            <details open><summary>PostgreSQL authoritative</summary><div class="detail">Основные бизнес-сущности и транзакции проектируются с PostgreSQL как authoritative source.</div></details>
+            <details><summary>Idempotency / Outbox</summary><div class="detail">Защита повторных операций и надежная доставка доменных событий.</div></details>
+            <details><summary>RBAC / Partner access</summary><div class="detail">Роли owner/admin/sales/buyer/finance/viewer и capabilities по организации/торговой связи.</div></details>
+            <details><summary>RU / EN</summary><div class="detail">Двуязычный UI и слой нормализации терминологии.</div></details>
+          </div>
+          <div class="panel card">
+            <h4>Ключевые рабочие блоки</h4>
+            <div style="height:10px"></div>
+            <details open><summary>Calendar & Notifications</summary><div class="detail">Общий календарь событий и notification center.</div></details>
+            <details><summary>Inventory / Receipt / Claims</summary><div class="detail">Capabilities и доменные контуры приемки, запасов и претензионной работы.</div></details>
+            <details><summary>OpenAPI / Observability</summary><div class="detail">Контракт API и инфраструктурные требования для промышленного сопровождения.</div></details>
+            <details><summary>Commercial Publication</summary><div class="detail">Неизменяемая коммерческая публикация отделяет рабочий PLM от buyer-facing данных.</div></details>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="callout"><strong>Что это за версия:</strong> публичная review-витрина текущего SYNTH‑V2. Она специально не записывает данные в production-контур и не требует логина или базы данных. Цель — гарантированно открыть проект с телефона/браузера и пройти глазами по уже собранной архитектуре и end-to-end сценарию.</div>
+      </section>
+      <div class="footer">SYNTHA V2 · Public Review Build · 2026</div>
+    </div>
+  </main>
+</div>
+</body>
+</html>

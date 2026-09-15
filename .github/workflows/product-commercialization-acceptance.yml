@@ -1,7 +1,8 @@
 name: Product Commercialization Acceptance
 
-# ACC-004 P0 public-runtime gate: supported runtime plus same-environment PostgreSQL proof
-# from canonical READY Product truth through immutable OrderCommit.
+# ACC-004/P0 public-runtime gate: supported runtime plus same-environment PostgreSQL
+# proof from canonical READY Product truth through ProductSku availability,
+# Selection, WholesaleOrder, Reservation/Release and immutable OrderCommit.
 on:
   pull_request:
   push:
@@ -17,7 +18,7 @@ concurrency:
 
 jobs:
   acceptance:
-    name: READY to OrderCommit public-runtime acceptance
+    name: READY to ProductSku reservation public-runtime acceptance
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -63,6 +64,32 @@ jobs:
       - name: Install locked dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
 
+      - name: Create isolated ProductSku inventory acceptance database
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import pg from 'pg';
+          const client = new pg.Client({ connectionString: 'postgresql://syntha:syntha_test@127.0.0.1:5432/postgres' });
+          await client.connect();
+          try {
+            await client.query('DROP DATABASE IF EXISTS syntha_v2_inventory_acceptance WITH (FORCE)');
+            await client.query('CREATE DATABASE syntha_v2_inventory_acceptance');
+          } finally {
+            await client.end();
+          }
+          NODE
+
+      - name: Execute ProductSku availability rollback replay concurrency isolation acceptance
+        shell: bash
+        env:
+          POSTGRES_TEST_URL: postgresql://syntha:syntha_test@127.0.0.1:5432/syntha_v2_inventory_acceptance
+        run: |
+          set +e
+          node --import ./tests/register-pg-test-loader.mjs --test --test-concurrency=1 tests/zu-postgres-product-sku-availability-chain.test.mjs 2>&1 | tee product-sku-inventory-acceptance.log
+          status=${PIPESTATUS[0]}
+          exit "$status"
+
       - name: Start supported Syntha runtime
         shell: bash
         env:
@@ -90,7 +117,7 @@ jobs:
           cat product-commercialization-runtime.log
           exit 1
 
-      - name: Execute Product commercialization acceptance through OrderCommit
+      - name: Execute Product commercialization acceptance through Reservation and Release
         shell: bash
         run: |
           set +e
@@ -121,6 +148,7 @@ jobs:
         with:
           name: product-commercialization-acceptance
           path: |
+            product-sku-inventory-acceptance.log
             product-commercialization-runtime.log
             product-commercialization-ready.json
             product-commercialization-acceptance.log

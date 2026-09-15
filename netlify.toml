@@ -1,9 +1,9 @@
 [build]
-  publish = "dist-public-demo"
-  command = "node scripts/build-public-demo.mjs"
+  publish = "dist-safe"
+  command = "rm -rf dist-safe && mkdir -p dist-safe && cp public/safe-demo.html dist-safe/index.html && cp public/safe-demo.html dist-safe/404.html"
 
 [[headers]]
   for = "/*"
   [headers.values]
-    Cache-Control = "no-cache"
+    Cache-Control = "no-store"
     X-Content-Type-Options = "nosniff"

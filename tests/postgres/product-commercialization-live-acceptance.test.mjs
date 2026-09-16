@@ -13,6 +13,10 @@ import {
 } from '../../src/acceptance/collection-live-acceptance.mjs';
 import { runBuyerOrderLiveAcceptance } from '../../src/acceptance/buyer-order-live-acceptance.mjs';
 import { runProductCommercializationLiveAcceptance } from '../../src/acceptance/product-commercialization-live-acceptance.mjs';
+import {
+  completeProductSkuInventoryLiveAcceptance,
+  prepareProductSkuInventoryLiveAcceptance,
+} from '../../src/acceptance/product-sku-inventory-live-acceptance.mjs';
 import { runReadyProductReadinessLiveAcceptance } from '../../src/acceptance/product-readiness-ready-live-acceptance.mjs';
 import { bootstrapProductionAcceptanceReferences } from '../../src/acceptance/production-reference-bootstrap.mjs';
 import { bootstrapMdmReference } from '../../src/infrastructure/mdm-reference-bootstrap.mjs';
@@ -119,6 +123,16 @@ test('READY Product reaches BuyerCatalog, canonical Selection and immutable Orde
 
     await assertCanonicalCommercialWriteGuards({ pool, baseUrl, brandToken, shopToken, references, result });
 
+    const inventoryPrepared = await prepareProductSkuInventoryLiveAcceptance({
+      pool,
+      commercial: result,
+      runId: 'postgres-live-commercialization',
+      references,
+    });
+    assert.equal(inventoryPrepared.status, 'prepared');
+    assert.equal(inventoryPrepared.receiptReplayVerified, true);
+    assert.equal(inventoryPrepared.tenantIsolationVerified, true);
+
     const buyerOrder = await runBuyerOrderLiveAcceptance({
       baseUrl,
       brandToken,
@@ -141,6 +155,21 @@ test('READY Product reaches BuyerCatalog, canonical Selection and immutable Orde
     assert.equal(buyerOrder.isolation.expectedDeltasVerified, true);
 
     await assertCanonicalSelectionOrderWriteGuards({ pool, result: buyerOrder });
+
+    const inventory = await completeProductSkuInventoryLiveAcceptance({
+      baseUrl,
+      shopToken,
+      pool,
+      commercial: result,
+      buyerOrder,
+      prepared: inventoryPrepared,
+      runId: 'postgres-live-commercialization',
+      references,
+    });
+    assert.equal(inventory.status, 'passed');
+    assert.equal(inventory.attachReplayVerified, true);
+    assert.equal(inventory.cancelReplayVerified, true);
+    assert.equal(inventory.quantityReturnedOnCancel, true);
   } finally {
     if (shopToken && baseUrl) {
       try { await logoutAcceptanceSession({ baseUrl, token: shopToken }); }

@@ -51,7 +51,12 @@ export function createPostgresNotificationProjectionStore({ pool }) {
              WHERE notification_projection_claims.lease_expires_at <= $2
              RETURNING event_id, attempt_count
            )
-           SELECT source.event, source.status, source.published_at, claimed.attempt_count
+           SELECT source.id AS event_id,
+                  source.event_type,
+                  source.event,
+                  source.status,
+                  source.published_at,
+                  claimed.attempt_count
              FROM claimed
              JOIN outbox_events AS source ON source.id = claimed.event_id
             ORDER BY source.event->>'occurredAt', source.id`,
@@ -78,7 +83,11 @@ export function createPostgresNotificationProjectionStore({ pool }) {
     async readUnprojectedOutbox(limit) {
       validateBatchLimit(limit);
       const result = await pool.query(
-        `SELECT source.event, source.status, source.published_at
+        `SELECT source.id AS event_id,
+                source.event_type,
+                source.event,
+                source.status,
+                source.published_at
            FROM outbox_events AS source
           WHERE NOT EXISTS (
               SELECT 1
@@ -320,8 +329,11 @@ function emptyPage() {
 }
 
 function outboxRecordFromRow(row) {
+  const event = row.event && typeof row.event === 'object' && !Array.isArray(row.event) ? row.event : {};
+  const eventId = typeof row.event_id === 'string' && row.event_id.length > 0 ? row.event_id : event.id;
+  const eventType = typeof row.event_type === 'string' && row.event_type.length > 0 ? row.event_type : event.type;
   return Object.freeze({
-    event: row.event,
+    event: Object.freeze({ ...event, id: eventId, type: eventType }),
     status: row.status,
     publishedAt: row.published_at?.toISOString?.() ?? row.published_at ?? null,
     attemptCount: Number(row.attempt_count ?? 1),

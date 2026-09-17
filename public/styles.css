@@ -10,20 +10,20 @@
   --sidebar-hover: rgba(255,255,255,.065);
   --text: #252335;
   --text-soft: #5f6472;
-  --muted: #8a8f9d;
+  --muted: #676d7b;
   --line: #e3e5eb;
   --line-strong: #d5d8e2;
   --accent: #6f43db;
   --accent-hover: #5d35c4;
   --accent-soft: #f0ebff;
   --accent-ink: #ffffff;
-  --success: #168f5f;
+  --success: #11794f;
   --success-soft: #eaf8f2;
-  --warning: #ba7713;
+  --warning: #96600f;
   --warning-soft: #fff6e8;
-  --danger: #c64850;
+  --danger: #b03039;
   --danger-soft: #fff0f1;
-  --info: #3a6fcb;
+  --info: #2f5bab;
   --info-soft: #eef4ff;
   --radius-control: 5px;
   --radius-panel: 7px;
@@ -558,11 +558,11 @@ h3 { margin: 0; color: var(--text); font-size: 14px; line-height: 1.35; font-wei
 .button.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: #fff; }
 .button.danger { color: var(--danger); }
 .button.danger:hover { border-color: #e8b5ba; background: var(--danger-soft); color: var(--danger); }
-.button.small { min-height: 28px; padding: 0 10px; font-size: 10px; }
+.button.small { min-height: 32px; padding: 0 12px; font-size: 12px; }
 
 form { display: grid; gap: 14px; }
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 16px; }
-label { display: grid; gap: 6px; color: var(--text-soft); font-size: 10px; font-weight: 500; }
+label { display: grid; gap: 6px; color: var(--text-soft); font-size: 12px; font-weight: 500; }
 input, select, textarea {
   width: 100%;
   min-height: 38px;

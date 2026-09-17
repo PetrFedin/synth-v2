@@ -281,7 +281,7 @@
 .od-mini-table-wrap { margin: 0 14px 14px; border: 1px solid var(--line); border-radius: 5px; }
 .od-mini-table th { position: static; height: 31px; font-size: 7px; }
 .od-mini-table td { height: 36px; padding-block: 5px; font-size: 9px; }
-.od-empty { min-height: 140px; display: grid; place-items: center; padding: 24px; color: var(--muted); font-size: 11px; text-align: center; }
+.od-empty { min-height: 140px; display: grid; place-items: center; padding: 24px; color: var(--muted); font-size: 13px; text-align: center; }
 .od-progress { display: flex; align-items: center; gap: 3px; min-width: 112px; }
 .od-progress span {
   width: 15px;

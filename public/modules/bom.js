@@ -80,10 +80,17 @@
     }
   }
 
+  function nextLineId(lines) {
+    const used = new Set((lines || []).map((line) => line?.lineId));
+    let index = used.size + 1;
+    while (used.has(`LINE-${index}`)) index += 1;
+    return `LINE-${index}`;
+  }
+
   function moneyValue(value, currency) {
     const number = Number(value);
     if (!Number.isFinite(number)) return '—';
-    try { return new Intl.NumberFormat(currentLocale?.() === 'en' ? 'en-GB' : 'ru-RU', { style: 'currency', currency: currency || 'EUR', maximumFractionDigits: 4 }).format(number); }
+    try { return new Intl.NumberFormat(I18N?.locale?.() === 'en' ? 'en-GB' : 'ru-RU', { style: 'currency', currency: currency || 'EUR', maximumFractionDigits: 4 }).format(number); }
     catch { return `${number.toFixed(4)} ${currency || ''}`.trim(); }
   }
   function riskLabel(code) {
@@ -263,7 +270,7 @@
         field(text('Логистика', 'Logistics'), input('number', model.logisticsCost, (value) => { model.logisticsCost = value; }, { step: '0.0001', min: '0' })),
         field(text('Прочее', 'Other'), input('number', model.otherCost, (value) => { model.otherCost = value; }, { step: '0.0001', min: '0' })),
       ]),
-      h('div', { className: 'bom-editor-section-head' }, [h('h3', { text: text('Строки материалов', 'Material lines') }), h('button', { type: 'button', className: 'secondary', text: text('Добавить строку', 'Add line'), onclick: () => { model.lines.push({ lineId: `LINE-${model.lines.length + 1}`, component: '', materialCode: materials[0]?.code || '', quantity: 1, wastePercent: 0, exchangeRate: 1 }); renderLines(); } })]),
+      h('div', { className: 'bom-editor-section-head' }, [h('h3', { text: text('Строки материалов', 'Material lines') }), h('button', { type: 'button', className: 'secondary', text: text('Добавить строку', 'Add line'), onclick: () => { model.lines.push({ lineId: nextLineId(model.lines), component: '', materialCode: materials[0]?.code || '', quantity: 1, wastePercent: 0, exchangeRate: 1 }); renderLines(); } })]),
       linesRoot,
       field(text('Примечания', 'Notes'), textarea(model.notes, (value) => { model.notes = value; })),
       h('div', { className: 'bom-modal-actions' }, [h('button', { type: 'button', className: 'secondary', text: text('Отмена', 'Cancel'), onclick: () => overlay.remove() }), h('button', { type: 'submit', className: 'primary', text: text('Сохранить', 'Save') })]),

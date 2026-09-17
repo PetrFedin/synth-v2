@@ -76,10 +76,21 @@
     return normalized;
   }
 
+  // Binary floats make value * 10_000 inexact for many ordinary prices: 8.29 * 10_000 is
+  // 82899.99999999999, so comparing it to Math.round with !== rejected about one in eight
+  // two-decimal amounts. src/core/money.mjs accepts the same values with a tolerance; this
+  // mirrors it so the form and the server agree on what a valid amount is.
+  function withinMoneyScale(value) {
+    const scaled = Math.round(value * 10_000);
+    if (!Number.isSafeInteger(scaled)) return false;
+    const tolerance = Math.max(1e-12, Number.EPSILON * Math.max(1, Math.abs(value)) * 4);
+    return Math.abs(value - scaled / 10_000) <= tolerance;
+  }
+
   function decimal(values, field, label, { min = 0, allowZero = false } = {}) {
     const value = Number(values[field]);
     if (!Number.isFinite(value) || (allowZero ? value < min : value <= min)) throw new Error(`${label}: ${materialText('\u043d\u0435\u043a\u043e\u0440\u0440\u0435\u043a\u0442\u043d\u043e\u0435 \u0447\u0438\u0441\u043b\u043e', 'invalid number')}`);
-    if (Math.round(value * 10_000) !== value * 10_000) throw new Error(`${label}: ${materialText('\u043d\u0435 \u0431\u043e\u043b\u0435\u0435 4 \u0437\u043d\u0430\u043a\u043e\u0432 \u043f\u043e\u0441\u043b\u0435 \u0437\u0430\u043f\u044f\u0442\u043e\u0439', 'maximum 4 decimal places')}`);
+    if (!withinMoneyScale(value)) throw new Error(`${label}: ${materialText('\u043d\u0435 \u0431\u043e\u043b\u0435\u0435 4 \u0437\u043d\u0430\u043a\u043e\u0432 \u043f\u043e\u0441\u043b\u0435 \u0437\u0430\u043f\u044f\u0442\u043e\u0439', 'maximum 4 decimal places')}`);
     return value;
   }
 
@@ -170,7 +181,22 @@
         ...payloadFrom(values),
       }, 'PATCH');
       resetMaterials();
+      await loadMaterials({ reset: true });
     });
+  }
+
+  // Opens a dialog. The success toast and the registry reload belong to the dialog's own submit
+  // handler, so this button must not claim the operation is complete just because the form opened.
+  function materialDialogButton(label, open, variant = '') {
+    const button = el('button', { className: `button small ${variant}`.trim(), type: 'button', rawText: label });
+    button.addEventListener('click', async () => {
+      if (state.busy || button.disabled) return;
+      button.disabled = true;
+      try { await open(); }
+      catch (error) { toast(error.message, 'error'); }
+      finally { button.disabled = false; }
+    });
+    return button;
   }
 
   function materialMutationButton(label, action, variant = '') {
@@ -200,7 +226,7 @@
     if (!caps.hasForOrganisation(state.workspace, item.brandId, caps.CAPABILITIES.CATALOG_MANAGE)) return [];
     const actions = [];
     if (item.status === 'draft') {
-      actions.push(materialMutationButton(materialText('\u0420\u0435\u0434\u0430\u043a\u0442\u0438\u0440\u043e\u0432\u0430\u0442\u044c', 'Edit'), () => materialEditForm(item)));
+      actions.push(materialDialogButton(materialText('\u0420\u0435\u0434\u0430\u043a\u0442\u0438\u0440\u043e\u0432\u0430\u0442\u044c', 'Edit'), () => materialEditForm(item)));
       actions.push(materialMutationButton(materialText('\u041e\u043f\u0443\u0431\u043b\u0438\u043a\u043e\u0432\u0430\u0442\u044c', 'Publish'), () => mutate(`/v2/materials/${encodeURIComponent(item.code)}/publish`, { expectedVersion: item.version }), 'primary'));
     }
     return actions;

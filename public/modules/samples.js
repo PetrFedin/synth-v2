@@ -101,7 +101,7 @@
       ui.loaded = true;
       if (!ui.selectedCode && ui.items.length) ui.selectedCode = ui.items[0].sampleCode;
     } catch (error) {
-      if (generation === ui.generation) ui.error = error?.message || 'SAMPLE_LOAD_FAILED';
+      if (generation === ui.generation) ui.error = error?.message || I18N.t('common.requestError');
     } finally {
       if (generation === ui.generation) ui.loading = false;
       if (state.view === 'samples') renderApp();
@@ -138,7 +138,7 @@
         reset();
         queueMicrotask(() => { void loadSamples({ reset: true }); });
       }
-      toast(error?.message || 'SAMPLE_MUTATION_FAILED', 'error');
+      toast(error?.message || I18N.t('common.requestError'), 'error');
       return null;
     } finally {
       ui.busyCode = null;

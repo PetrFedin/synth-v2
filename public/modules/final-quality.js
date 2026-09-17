@@ -80,7 +80,7 @@
       const items = await fetchAll(); if (generation !== ui.generation) return;
       ui.items = [...items].sort((a, b) => String(a.inspectionCode).localeCompare(String(b.inspectionCode)));
       ui.loaded = true; if (!ui.selectedCode && ui.items.length) ui.selectedCode = ui.items[0].inspectionCode;
-    } catch (error) { if (generation === ui.generation) ui.error = error?.message || 'FINAL_QUALITY_LOAD_FAILED'; }
+    } catch (error) { if (generation === ui.generation) ui.error = error?.message || I18N.t('common.requestError'); }
     finally { if (generation === ui.generation) ui.loading = false; if (state.view === 'final-quality') renderApp(); }
   }
   function ensureLoaded() { if (!ui.loaded && !ui.loading) queueMicrotask(() => { void load({ reset: true }); }); }
@@ -104,7 +104,7 @@
       toast(t('Контур Final Quality обновлён.', 'Final Quality workflow updated.')); return value;
     } catch (error) {
       if (error?.code === 'QUALITY_CONCURRENCY_CONFLICT') queueMicrotask(() => { void load({ reset: true }); });
-      toast(error?.message || 'FINAL_QUALITY_MUTATION_FAILED', 'error'); return null;
+      toast(error?.message || I18N.t('common.requestError'), 'error'); return null;
     } finally { ui.busyCode = null; renderApp(); }
   }
   function metric(label, value, detail, tone = '') { return h('article', { className: `final-quality-kpi ${tone}` }, [h('span', { text: label }), h('strong', { text: value }), h('small', { text: detail })]); }

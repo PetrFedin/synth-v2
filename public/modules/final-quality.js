@@ -266,5 +266,19 @@
     if (!navigation.querySelector('[data-final-quality-nav]')) navigation.append(h('button', { type: 'button', 'data-final-quality-nav': 'true', text: t('Контроль качества', 'Final Quality'), onclick: () => { state.view = 'final-quality'; renderApp(); } }));
     return navigation;
   };
-  global.SynthaFinalQualityWorkspace = Object.freeze({ fetchAll, load, render: renderFinalQuality });
+  // Production Execution hands a ready-for-QC batch over by execution code. If an inspection for
+  // that execution already exists, open it; otherwise prefill the create panel with the code so the
+  // user does not have to retype it from the other screen.
+  function openForExecution(executionCode) {
+    const code = String(executionCode || '').trim().toUpperCase();
+    if (code) {
+      ui.executionCode = code;
+      const existing = ui.items.find((item) => item?.executionCode === code);
+      if (existing) ui.selectedCode = existing.inspectionCode;
+    }
+    state.view = 'final-quality';
+    renderApp();
+  }
+
+  global.SynthaFinalQualityWorkspace = Object.freeze({ fetchAll, load, render: renderFinalQuality, openForExecution });
 })(window);

@@ -51,7 +51,7 @@ export function createPostgresNotificationProjectionStore({ pool }) {
              WHERE notification_projection_claims.lease_expires_at <= $2
              RETURNING event_id, attempt_count
            )
-           SELECT source.event, source.status, source.published_at, claimed.attempt_count
+           SELECT source.id, source.event_type, source.event, source.status, source.published_at, claimed.attempt_count
              FROM claimed
              JOIN outbox_events AS source ON source.id = claimed.event_id
             ORDER BY source.event->>'occurredAt', source.id`,
@@ -78,7 +78,7 @@ export function createPostgresNotificationProjectionStore({ pool }) {
     async readUnprojectedOutbox(limit) {
       validateBatchLimit(limit);
       const result = await pool.query(
-        `SELECT source.event, source.status, source.published_at
+        `SELECT source.id, source.event_type, source.event, source.status, source.published_at
            FROM outbox_events AS source
           WHERE NOT EXISTS (
               SELECT 1
@@ -321,6 +321,11 @@ function emptyPage() {
 
 function outboxRecordFromRow(row) {
   return Object.freeze({
+    // The outbox row primary key is the projection key: it is NOT NULL, and it is what the reader's
+    // own anti-join against notification_projections and the claim table already use. Reaching into
+    // the event envelope instead only works for events whose JSON happens to carry a matching `id`.
+    eventId: row.id,
+    eventType: row.event_type,
     event: row.event,
     status: row.status,
     publishedAt: row.published_at?.toISOString?.() ?? row.published_at ?? null,

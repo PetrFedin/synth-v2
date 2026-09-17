@@ -25,6 +25,9 @@ function projectionStore() {
 }
 
 const record = Object.freeze({
+  // Records reaching the service always carry the outbox row key; the projection is keyed on it.
+  eventId: 'event-published',
+  eventType: 'selection.submitted',
   event: Object.freeze({
     id: 'event-published',
     type: 'selection.submitted',

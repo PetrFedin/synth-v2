@@ -166,6 +166,7 @@ Textual `sku` remains useful for human display and compatibility but must not re
 - Cross-module imports are allowed only through a module `public.mjs` boundary.
 - Applied SQL migrations are immutable and checksum-verified.
 - Business mutations use durable command/idempotency identity and transactional outbox discipline where the bounded context mutates durable business state.
+- Runtime dependencies stay minimal: `pg` only. Development dependencies are limited to the pinned type checker (`typescript`, `@types/node`) that backs the type contract gate.
 - Organisation isolation is mandatory.
 
 ### 2.2 Supported process path — PROD-PROVEN for startup lifecycle
@@ -1029,7 +1030,9 @@ Business mutations that publish integration effects use the transactional outbox
 
 ### 15.1 Default gate
 
-`npm run verify` includes architecture boundaries, PostgreSQL static contract, isolation, UI, ODS, i18n, MDM, governed KPI methodology and application tests.
+`npm run verify` includes architecture boundaries, PostgreSQL static contract, isolation, UI, ODS, i18n, MDM, governed KPI methodology, the type contract and application tests.
+
+The type contract (`npm run validate:types`, `scripts/validate-types.mjs`) runs TypeScript over the JavaScript sources with `checkJs` and compares the result against the per-file baseline in `ops/type-baseline.json`. It fails when a file gains type errors, and equally when a file loses them without the baseline being re-recorded, so the recorded debt can only ratchet down. `npm run validate:types -- --update` re-records it. The baseline exists because the codebase carries pre-existing findings that cannot be resolved in one change; it is a ratchet, not an accepted permanent state. TypeScript and `@types/node` are pinned exactly, since the baseline is only meaningful against a fixed compiler.
 
 ### 15.2 PostgreSQL release-candidate gate
 
@@ -1212,6 +1215,7 @@ Minimum frozen lineage fields for the current commercial spine include:
 | 2026-09-04 | #117 / `a960486c653666c7cd7da5dcb4f9d21c4a674d8e` | Final squash merge of governed assortment-category MDM, modular validation correction, canonical Measurement/OpenAPI synchronization and dual Product Readiness acceptance scenarios | 5.1–5.3, 6.1–6.2, 15–17, 19–20 | MERGED; exact pre-merge head `d92fd1e96ffd4b0a139cef82f23ce061af2d6c46`: Verify `33781485567` success, MDM Reference Data `33781485572` success, Syntha V2 CI `33781485600` success; no intended-live `PROD-PROVEN` claim |
 | 2026-09-05 | #118 / `eb86a04b7ac9c6a0ba743882f59a6b33dfbfd113` → `main@0048d10c410231055d13436d61d0cf33db3e95b7` | Add P0.3 public-runtime READY→Projection→projection-native CommercialPublication→PriceListVersion→BuyerCatalogVersion acceptance with exact Collection assignment, Showroom, relationship/invitation, separate brand/shop actors and same-environment PostgreSQL proof; fix canonical Measurement persisted MDM snapshot consumption and deterministic acceptance reference command timestamps. | 2.6, 3.5, 5.1–5.2, 6.1–6.6, 15–17, 19–20, 22 | MERGED; exact head: Verify `33979864431` success, Syntha V2 CI `33979864438` success, MDM Reference Data `33979865154` success, Product Commercialization Acceptance `33979864435` success; no intended-live `PROD-PROVEN` claim; `COMM-LC-008`, `PRICE-009`, `PUB-005` remain open |
 | 2026-09-08 | #119 / `fix/pub005-canonical-commercial-writes` | P0.4 convergence slice: forbid historical V1 CommercialPublication/PriceList from originating fresh buyer commercial truth; make price override exact `productSkuId + wholesalePriceMinor` with server-derived major price; validate exact frozen ProductSku line/hierarchy/terms; add migration 075 DB bypass guards and forward-only V1-history preservation tests; extend Product commercialization acceptance to exact ProductSku pricing. Legacy CatalogSku workspace writes and Selection fallback remain explicitly open rather than hidden. | 2.6, 3.1, 6.4–6.6, 7.4, 12.4, 13, 15–17, 19–20 | IMPLEMENTED locally; `npm run verify` green; PostgreSQL/PR exact-head CI pending; no `PROD-PROVEN` claim; `PUB-005` remains OPEN/PARTIAL |
+| 2026-09-17 | `chore/typescript-checkjs-baseline` | Add a type contract gate: TypeScript `checkJs` over the JavaScript sources with a per-file baseline in `ops/type-baseline.json`, wired into `npm run verify`; new type errors fail, and an improved file fails until the baseline is re-recorded, so recorded debt can only decrease | 2.1, 15.1, 20 | IMPLEMENTED; 575 known findings across 177 files recorded; validator self-tested against an introduced error and against an inflated baseline; `npm run verify` green |
 
 Future implementation PRs add a row here. The row is not a substitute for updating the affected detailed sections.
 

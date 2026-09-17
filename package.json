@@ -30,10 +30,15 @@
     "validate:i18n": "node scripts/validate-i18n.mjs",
     "validate:mdm": "node scripts/validate-mdm.mjs",
     "validate:kpi-methodology": "node scripts/validate-fashion-kpi.mjs",
-    "verify": "npm run validate:isolation && npm run validate:architecture && npm run validate:postgres && npm run validate:ui && npm run validate:design-system && npm run validate:ods-boundaries && npm run validate:i18n && npm run validate:mdm && npm run validate:kpi-methodology && npm test",
+    "validate:types": "node scripts/validate-types.mjs",
+    "verify": "npm run validate:isolation && npm run validate:architecture && npm run validate:postgres && npm run validate:ui && npm run validate:design-system && npm run validate:ods-boundaries && npm run validate:i18n && npm run validate:mdm && npm run validate:kpi-methodology && npm run validate:types && npm test",
     "verify:postgres": "npm run verify && npm run test:postgres && npm run smoke:runtime"
   },
   "dependencies": {
     "pg": "8.13.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.3",
+    "typescript": "7.0.2"
   }
 }

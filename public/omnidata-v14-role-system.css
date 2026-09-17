@@ -310,3 +310,17 @@ body.omnidata-role-system [data-ods-language-mismatch]{text-decoration:underline
   body.omnidata-role-system *::before,
   body.omnidata-role-system *::after{scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important;animation-iteration-count:1!important}
 }
+
+/* Navigation items carry the button role for semantics and audit, but they are
+   laid out by the navigation layer, not by the generic button chrome: they read
+   as a left-aligned icon+label row inside the dark sidebar, never as a bordered
+   control. Scoped to the navigation-item part, mirroring the icon-button and tab
+   part overrides above. */
+body.omnidata-design-system-v1 :is([data-ods-role="button"],[data-od14-unified-role="button"]):is([data-ods-part="navigation-item"],[data-od14-unified-part="navigation-item"]),
+body.omnidata-role-system :is([data-ods-role="button"],[data-od14-unified-role="button"]):is([data-ods-part="navigation-item"],[data-od14-unified-part="navigation-item"]){display:flex!important;justify-content:flex-start!important;border:0!important;font-family:inherit!important;line-height:1.25!important;text-align:left!important}
+body.omnidata-design-system-v1 .shell.sidebar-collapsed :is([data-ods-role="button"],[data-od14-unified-role="button"]):is([data-ods-part="navigation-item"],[data-od14-unified-part="navigation-item"]),
+body.omnidata-role-system .shell.sidebar-collapsed :is([data-ods-role="button"],[data-od14-unified-role="button"]):is([data-ods-part="navigation-item"],[data-od14-unified-part="navigation-item"]){justify-content:center!important}
+@media(max-width:820px){
+  body.omnidata-design-system-v1 :is([data-ods-role="button"],[data-od14-unified-role="button"]):is([data-ods-part="navigation-item"],[data-od14-unified-part="navigation-item"]),
+  body.omnidata-role-system :is([data-ods-role="button"],[data-od14-unified-role="button"]):is([data-ods-part="navigation-item"],[data-od14-unified-part="navigation-item"]){justify-content:center!important}
+}

@@ -889,13 +889,23 @@ Desktop inspector is sticky at `top:62px`, max-height `calc(100vh - 78px)` and s
 MutationObserver, so it must never leave the DOM dirty in a way that observer
 watches. Two invariants hold it:
 
-1. **A pass may not re-trigger itself.** `normalize()` detaches the observer for
-   the duration of the pass (`takeRecords()` then `disconnect()`, re-observing in
-   a `finally`), and adds only the body classes that are missing. A redundant
-   `classList.add` still queues a mutation record, and the observer watches
-   `class`; without both guards the pass re-schedules itself through
-   `queueMicrotask` and the microtask chain starves rendering — the page never
-   paints a frame.
+1. **A pass may not re-trigger itself.** Every observer-driven pass detaches its
+   own observer for the duration of the pass (`takeRecords()` then
+   `disconnect()`, re-observing in a `finally`), and writes an attribute or a
+   text node only when the value actually changes. A redundant `classList.add`
+   still queues a mutation record, and an unconditional `textContent =`
+   still replaces the text node; without both guards the pass re-schedules
+   itself through `queueMicrotask` and the microtask chain starves rendering —
+   the page never paints a frame.
+
+   This holds for all three observer-driven layers, each of which had the fault
+   independently:
+
+   | Layer | Observer watches | What re-dirtied it |
+   |---|---|---|
+   | `omnidata-v14-role-system.js` | `class` and five other attributes | `classList.add` of classes already present |
+   | `omnidata-v14-components.js` | `class`, `aria-selected`, `aria-pressed` | `classList.add('omnidata-v14')` already present |
+   | `omnidata-v14.js` | added nodes | `translateBrand()` / `translateRole()` assigning `textContent` unconditionally |
 2. **A button role is never assigned to a descendant of a button.** Buttons
    cannot nest. The heuristic class matcher would otherwise promote internals
    such as `.button-label` on the `button-` prefix, drawing a second control

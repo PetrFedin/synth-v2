@@ -159,11 +159,15 @@
     const role=document.querySelector('.topbar-user .user-copy small');
     if(!role)return;
     const raw=role.textContent?.trim()||'';
-    if(locale()==='ru'&&ROLE_RU[raw.toLowerCase()])role.textContent=ROLE_RU[raw.toLowerCase()];
+    if(locale()!=='ru')return;
+    const translated=ROLE_RU[raw.toLowerCase()];
+    if(translated&&role.textContent!==translated)role.textContent=translated;
   }
   function translateBrand(){
     const brand=document.querySelector('.brand-copy small');
-    if(brand)brand.textContent=text('Операционная система моды','Fashion Operating System');
+    if(!brand)return;
+    const value=text('Операционная система моды','Fashion Operating System');
+    if(brand.textContent!==value)brand.textContent=value;
   }
   function auditInterface(root=document){
     const roots=[];
@@ -196,19 +200,35 @@
     });
   }
   function apply(){
-    document.documentElement.lang=locale();
-    document.body.classList.add('omnidata-v14');
-    document.body.dataset.synthaVisual=BUILD;
-    const workspace=document.querySelector('.workspace-content');
-    if(workspace){buildUnifiedHeader(workspace);compactFilters(workspace)}
-    auditInterface(document);
-    diagnosticAudit();
+    stopObserving();
+    try{
+      const language=locale();
+      if(document.documentElement.lang!==language)document.documentElement.lang=language;
+      if(!document.body.classList.contains('omnidata-v14'))document.body.classList.add('omnidata-v14');
+      if(document.body.dataset.synthaVisual!==BUILD)document.body.dataset.synthaVisual=BUILD;
+      const workspace=document.querySelector('.workspace-content');
+      if(workspace){buildUnifiedHeader(workspace);compactFilters(workspace)}
+      auditInterface(document);
+      diagnosticAudit();
+    }finally{startObserving()}
   }
   function scheduleApply(){if(scheduled)return;scheduled=true;global.queueMicrotask(()=>{scheduled=false;apply()})}
+  let observing=false;
+  function startObserving(){
+    if(!observer||observing)return;
+    observing=true;
+    observer.observe(document.documentElement,{childList:true,subtree:true});
+  }
+  function stopObserving(){
+    if(!observer||!observing)return;
+    observer.takeRecords();
+    observer.disconnect();
+    observing=false;
+  }
   function installObserver(){
     if(observer||!global.MutationObserver)return;
     observer=new global.MutationObserver((mutations)=>{if(mutations.some((mutation)=>mutation.addedNodes.length))scheduleApply()});
-    observer.observe(document.documentElement,{childList:true,subtree:true});
+    startObserving();
   }
 
   const previousRenderApp=renderApp;

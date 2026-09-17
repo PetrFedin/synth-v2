@@ -6,6 +6,8 @@ const failedAt = '2026-08-02T00:00:00.000Z';
 
 function record(attemptCount = 1) {
   return Object.freeze({
+    eventId: 'event-1',
+    eventType: 'order.created',
     event: Object.freeze({
       id: 'event-1',
       type: 'order.created',

@@ -324,3 +324,44 @@ body.omnidata-role-system .shell.sidebar-collapsed :is([data-ods-role="button"],
   body.omnidata-design-system-v1 :is([data-ods-role="button"],[data-od14-unified-role="button"]):is([data-ods-part="navigation-item"],[data-od14-unified-part="navigation-item"]),
   body.omnidata-role-system :is([data-ods-role="button"],[data-od14-unified-role="button"]):is([data-ods-part="navigation-item"],[data-od14-unified-part="navigation-item"]){justify-content:center!important}
 }
+
+/* A search control is a field-group whose label wraps the input, but it reads as
+   one horizontal control — an icon and an input on a single baseline inside a
+   single border — not as the stacked label-above-input pair the generic
+   field-group describes. Without this the grid stacks the icon over the input
+   and the input overflows the wrapper it is supposed to sit inside. */
+body.omnidata-design-system-v1 :is([data-ods-role="field"],[data-od14-unified-role="field"]):is(.od-search,.global-search,.od14-compact-search),
+body.omnidata-role-system :is([data-ods-role="field"],[data-od14-unified-role="field"]):is(.od-search,.global-search,.od14-compact-search){display:flex!important;justify-content:flex-start!important;align-items:center!important;gap:7px!important;height:auto!important;min-height:var(--ods-control-height)!important}
+body.omnidata-design-system-v1 :is(.od-search,.global-search,.od14-compact-search) :is([data-ods-role="field"],[data-od14-unified-role="field"]),
+body.omnidata-role-system :is(.od-search,.global-search,.od14-compact-search) :is([data-ods-role="field"],[data-od14-unified-role="field"]){flex:1 1 auto!important;min-width:0!important;height:auto!important;min-height:0!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important;outline:0!important}
+
+/* Three elements sit inside a component's markup without being a component of
+   their own; the generic role chrome otherwise paints each of them as a visible
+   empty control. */
+
+/* A command-bar spacer is aria-hidden layout filler (flex:1). It must never paint. */
+body.omnidata-design-system-v1 :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]).od-commandbar-spacer,
+body.omnidata-role-system :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]).od-commandbar-spacer{min-height:0!important;padding:0!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important}
+
+/* A status dot encodes state in its border colour and is 9px across, not a pill. */
+body.omnidata-design-system-v1 :is([data-ods-role="status"],[data-od14-unified-role="status"]).od-status-dot,
+body.omnidata-role-system :is([data-ods-role="status"],[data-od14-unified-role="status"]).od-status-dot{width:9px!important;height:9px!important;min-height:0!important;flex:0 0 9px!important;padding:0!important;border:2px solid #7655d3!important;border-radius:50%!important;background:#fff!important}
+body.omnidata-design-system-v1 .od-status-card.success :is([data-ods-role="status"],[data-od14-unified-role="status"]).od-status-dot,
+body.omnidata-role-system .od-status-card.success :is([data-ods-role="status"],[data-od14-unified-role="status"]).od-status-dot{border-color:#40a879!important}
+body.omnidata-design-system-v1 .od-status-card.warning :is([data-ods-role="status"],[data-od14-unified-role="status"]).od-status-dot,
+body.omnidata-role-system .od-status-card.warning :is([data-ods-role="status"],[data-od14-unified-role="status"]).od-status-dot{border-color:#d5a34e!important}
+body.omnidata-design-system-v1 .od-status-card.info :is([data-ods-role="status"],[data-od14-unified-role="status"]).od-status-dot,
+body.omnidata-role-system .od-status-card.info :is([data-ods-role="status"],[data-od14-unified-role="status"]).od-status-dot{border-color:#6e93df!important}
+
+/* The toast host is a fixed, permanently mounted positioning container; the
+   .notice inside it carries the card. Chrome on the host draws an empty box in
+   the corner whenever no message is showing, and doubles the border when one is. */
+body.omnidata-design-system-v1 :is([data-ods-role="status"],[data-od14-unified-role="status"]).toast,
+body.omnidata-role-system :is([data-ods-role="status"],[data-od14-unified-role="status"]).toast{display:block!important;min-height:0!important;padding:0!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important}
+
+/* The 720px floor on the table role is meant for the wide data grids. The
+   dashboard mini-table carries two or three summary columns inside a half-width
+   panel, so the floor only forced a horizontal scrollbar and clipped the last
+   column; it fits its panel instead. */
+body.omnidata-design-system-v1 table:is([data-ods-role="table"],[data-od14-unified-role="table"]).od-mini-table,
+body.omnidata-role-system table:is([data-ods-role="table"],[data-od14-unified-role="table"]).od-mini-table{min-width:0!important}

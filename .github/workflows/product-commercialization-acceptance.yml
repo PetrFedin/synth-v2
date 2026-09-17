@@ -100,6 +100,8 @@ jobs:
 
       - name: Execute Collection acceptance
         shell: bash
+        env:
+          SYNTHA_ACCEPTANCE_RUN_ID: gha-${{ github.run_id }}-${{ github.run_attempt }}-collection
         run: |
           set +e
           npm run acceptance:collection 2>&1 | tee collection-acceptance.log
@@ -109,6 +111,8 @@ jobs:
 
       - name: Execute Product readiness acceptance
         shell: bash
+        env:
+          SYNTHA_ACCEPTANCE_RUN_ID: gha-${{ github.run_id }}-${{ github.run_attempt }}-readiness
         run: |
           set +e
           npm run acceptance:product-readiness 2>&1 | tee product-readiness-acceptance.log

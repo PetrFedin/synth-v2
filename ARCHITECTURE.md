@@ -1041,6 +1041,8 @@ All three acceptance commands are executable and are exercised by CI against the
 
 Creating a ProductSku legitimately initialises exactly one zero-quantity row in `product_sku_inventory_balances`. Both Product Readiness scenarios therefore permit that single identity delta and nothing else: every other counter, available and reserved quantities included, must be unchanged, which is what proves the new row carries no stock. The rule is defined once in `assertReadyProductInventoryIsolationDelta` and shared by both scenarios, because the BLOCKED scenario previously asserted strict equality and could never pass live.
 
+`SYNTHA_ACCEPTANCE_RUN_ID` pins idempotency keys, so two commands sharing one run id against one environment replay the same mutations instead of creating new state. The commercialization gate internally executes the READY readiness scenario, so a readiness command reusing its run id is a replay and legitimately creates no new ProductSku identity row. Acceptance steps that must prove fresh creation therefore require their own run id; CI gives each acceptance step a distinct one. This is a property of idempotent replay, not a reason to relax the single-identity-delta assertion.
+
 The commercialization scenario currently assumes a first run against its reserved organisations: replaying it against an environment that already holds an active acceptance brand↔shop relationship fails with `RELATIONSHIP_NOT_RENEWABLE`, which is the domain behaving correctly. Repeat-run support against a persistent environment is open work.
 
 

@@ -97,10 +97,22 @@
   function normalize(root=document){document.body?.classList?.add('omnidata-v14','omnidata-role-system','omnidata-design-system-v1');applyExplicit(root);applyComponents(root);applyNative(root);applyHeuristics(root);applyStructure(root);applyVariants(root);enforceLanguage(root);return audit(root)}
   let scheduled=false,retries=0,retryTimer=0,watchdog=0;
   function requestRetry(result){if(!result?.unclassified){retries=0;return}if(retries>=8)return;retries+=1;global.clearTimeout?.(retryTimer);retryTimer=global.setTimeout?.(()=>schedule(document),Math.min(80*retries,640))||0}
-  function schedule(root=document){if(scheduled)return;scheduled=true;(global.queueMicrotask||((fn)=>Promise.resolve().then(fn)))(()=>{scheduled=false;const result=normalize(root);requestRetry(result)})}
+  // Normalisation writes the very attributes this layer observes, so it must not run as a
+  // microtask: microtask checkpoints drain before the event loop regains control, and an observer
+  // callback that schedules another write re-arms itself inside the same checkpoint, starving the
+  // main thread indefinitely. Yield to the browser instead, and apply with the observer detached so
+  // the layer never reacts to its own mutations.
+  const yieldToBrowser=(fn)=>{if(typeof global.requestAnimationFrame==='function')return global.requestAnimationFrame(()=>fn());if(typeof global.setTimeout==='function')return global.setTimeout(fn,0);if(typeof global.queueMicrotask==='function')return global.queueMicrotask(fn);return fn()};
+  function applyDetached(root){
+    observer?.disconnect?.();
+    try{return normalize(root)}
+    finally{observer?.takeRecords?.();connectObserver()}
+  }
+  function schedule(root=document){if(scheduled)return;scheduled=true;yieldToBrowser(()=>{scheduled=false;const result=applyDetached(root);requestRetry(result)})}
   function startWatchdog(){if(watchdog||typeof global.setInterval!=='function')return;watchdog=global.setInterval(()=>{if(document.visibilityState!=='hidden')schedule(document)},4000);if(document.body)document.body.dataset.odsWatchdog='active'}
   const observer=typeof MutationObserver==='function'?new MutationObserver(()=>schedule(document)):null;
-  function boot(){const result=normalize(document);requestRetry(result);observer?.observe?.(document.body,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['class','role','aria-selected','aria-pressed','hidden','data-od14-component']});startWatchdog()}
+  function connectObserver(){if(!observer||!document.body)return;observer.observe(document.body,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['class','role','aria-selected','aria-pressed','hidden','data-od14-component']})}
+  function boot(){const result=applyDetached(document);requestRetry(result);connectObserver();startWatchdog()}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
   global.addEventListener?.('syntha:locale-changed',()=>schedule(document));global.addEventListener?.('popstate',()=>schedule(document));document.addEventListener?.('visibilitychange',()=>{if(document.visibilityState!=='hidden')schedule(document)});
   const api=Object.freeze({BUILD,build:BUILD,DESIGN_SYSTEM,VERSION,coreRoles:CORE_ROLES,componentToRole:COMPONENT_TO_ROLE,componentParts:COMPONENT_PART,explicitSelectors:EXPLICIT_SELECTORS,classRules:CLASS_RULES,roleFor,partFor,setRole,buttonVariant,statusTone,translateAlias,translateAliases,enforceLanguage,normalize,audit,schedule,startWatchdog,BUSINESS_DATA_SELECTOR});

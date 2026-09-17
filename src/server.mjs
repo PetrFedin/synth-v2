@@ -36,6 +36,10 @@ const settings = Object.freeze({
   dbPoolMax: integerSetting('SYNTHA_DB_POOL_MAX', 10, 1, 100),
   dbConnectTimeoutMs: integerSetting('SYNTHA_DB_CONNECT_TIMEOUT_MS', 5_000, 100, 60_000),
   dbIdleTimeoutMs: integerSetting('SYNTHA_DB_IDLE_TIMEOUT_MS', 30_000, 1_000, 600_000),
+  dbStatementTimeoutMs: integerSetting('SYNTHA_DB_STATEMENT_TIMEOUT_MS', 30_000, 0, 600_000),
+  dbLockTimeoutMs: integerSetting('SYNTHA_DB_LOCK_TIMEOUT_MS', 5_000, 0, 600_000),
+  dbIdleInTransactionTimeoutMs: integerSetting('SYNTHA_DB_IDLE_IN_TRANSACTION_TIMEOUT_MS', 60_000, 0, 600_000),
+  maintenanceStatementTimeoutMs: integerSetting('SYNTHA_DB_MAINTENANCE_STATEMENT_TIMEOUT_MS', 0, 0, 3_600_000),
   dbReadyAttempts: integerSetting('SYNTHA_DB_READY_ATTEMPTS', 30, 1, 300),
   dbReadyDelayMs: integerSetting('SYNTHA_DB_READY_DELAY_MS', 1_000, 10, 60_000),
   sessionTtlMs: integerSetting('SYNTHA_SESSION_TTL_MS', 43_200_000, 60_000, 31_536_000_000),
@@ -94,6 +98,9 @@ const pool = new pg.Pool({
   max: settings.dbPoolMax,
   connectionTimeoutMillis: settings.dbConnectTimeoutMs,
   idleTimeoutMillis: settings.dbIdleTimeoutMs,
+  statement_timeout: settings.dbStatementTimeoutMs,
+  lock_timeout: settings.dbLockTimeoutMs,
+  idle_in_transaction_session_timeout: settings.dbIdleInTransactionTimeoutMs,
 });
 pool.on('error', (error) => console.error('Unexpected idle PostgreSQL client error', error));
 
@@ -142,6 +149,7 @@ try {
     outboxPublicationMaxAttempts: settings.outboxPublicationMaxAttempts,
     maintenanceIntervalMs: settings.maintenanceIntervalMs,
     maintenanceRetryDelayMs: settings.maintenanceRetryDelayMs,
+    maintenanceStatementTimeoutMs: settings.maintenanceStatementTimeoutMs,
     commandRetentionMs: settings.commandRetentionMs,
     authAuditRetentionMs: settings.authAuditRetentionMs,
     throttleRetentionMs: settings.throttleRetentionMs,

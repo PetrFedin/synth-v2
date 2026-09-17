@@ -883,7 +883,31 @@ Structural meaning uses `data-ods-part` (page header, toolbar, tabs, pagination,
 
 Desktop inspector is sticky at `top:62px`, max-height `calc(100vh - 78px)` and scrolls internally. At `<=920px`, master-detail becomes one column and inspector becomes static. Content padding decreases at `<=1080px`; page header/filterbar/metrics reflow at smaller breakpoints including `620px`.
 
-### 10.10 Shell and navigation
+### 10.10 Role-system runtime invariants
+
+`normalize()` in `public/modules/omnidata-v14-role-system.js` runs under its own
+MutationObserver, so it must never leave the DOM dirty in a way that observer
+watches. Two invariants hold it:
+
+1. **A pass may not re-trigger itself.** `normalize()` detaches the observer for
+   the duration of the pass (`takeRecords()` then `disconnect()`, re-observing in
+   a `finally`), and adds only the body classes that are missing. A redundant
+   `classList.add` still queues a mutation record, and the observer watches
+   `class`; without both guards the pass re-schedules itself through
+   `queueMicrotask` and the microtask chain starves rendering — the page never
+   paints a frame.
+2. **A button role is never assigned to a descendant of a button.** Buttons
+   cannot nest. The heuristic class matcher would otherwise promote internals
+   such as `.button-label` on the `button-` prefix, drawing a second control
+   inside its parent; the audit likewise ignores button internals so they do not
+   count as unclassified and drive the retry timer.
+
+Navigation items carry the `button` role for semantics and audit, but are laid
+out by the `navigation-item` part, not by the generic button chrome: left
+aligned, no border, inherited typography, centred only when the sidebar is
+collapsed or at the narrow breakpoints.
+
+### 10.11 Shell and navigation
 
 Current main shell top-level navigation is generated from a single `NAV_GROUPS` structure:
 
@@ -915,11 +939,11 @@ Topbar contract:
 
 The sidebar collapsed preference is stored in `localStorage` under `syntha-v2-sidebar-collapsed` after the one-time readable-shell migration.
 
-### 10.11 Login/startup states
+### 10.12 Login/startup states
 
 Login screen contains locale switcher, brand block, description, email, password and Sign In action. Password field has a minimum client length of 12; server policy remains authoritative. Startup hydration failure shows an explicit error plus Retry and Sign out; it does not silently render a partial workspace.
 
-### 10.12 Required state coverage for every interactive screen
+### 10.13 Required state coverage for every interactive screen
 
 Every new/changed data screen must specify and implement as applicable:
 

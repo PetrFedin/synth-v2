@@ -1,10 +1,23 @@
-function toast(message,type=''){const host=document.querySelector('#toast');if(!host)return;clear(host);host.append(notice(message,type));setTimeout(()=>{if(host.isConnected)clear(host);},4500);}
+// A toast has to outlive a re-render: every mutation ends with renderApp(), which rebuilds the root
+// and with it an empty #toast host, so a message written before that call used to vanish in the same
+// tick and the user saw nothing at all. The live message is kept here and repainted after each render.
+let TOAST_LIVE=null; let TOAST_TIMER=0;
+function toast(message,type=''){TOAST_LIVE={message,type,until:Date.now()+4500};paintToast();}
+function paintToast(){const host=typeof document!=='undefined'?document.querySelector('#toast'):null;if(!host)return;clear(host);
+  if(!TOAST_LIVE||Date.now()>=TOAST_LIVE.until){TOAST_LIVE=null;return;}
+  host.append(notice(TOAST_LIVE.message,TOAST_LIVE.type));
+  clearTimeout(TOAST_TIMER);
+  TOAST_TIMER=setTimeout(()=>{TOAST_LIVE=null;const node=document.querySelector('#toast');if(node&&node.isConnected)clear(node);},Math.max(0,TOAST_LIVE.until-Date.now()));}
 function clearSession(){state.token='';state.user=null;state.workspace=emptyWorkspace();state.notifications=[];state.notificationUnreadCount=0;window.SynthaWorkspaceController?.reset(state.workspace);window.SynthaNotificationController?.reset({items:[],nextCursor:null,unreadCount:0});sessionStorage.removeItem(TOKEN_KEY);}
 function ownIds(){return state.workspace.memberships.map(x=>x.organisationId);} function ownOrganisations(type){return state.workspace.organisations.filter(x=>ownIds().includes(x.id)&&(!type||x.type===type));} function organisationsByType(type){return state.workspace.organisations.filter(x=>x.type===type);} function ownOrganisationNames(){return ownOrganisations().map(x=>x.name||x.id);} function orgName(id){return state.workspace.organisations.find(x=>x.id===id)?.name||id||'\u2014';} function nameById(group,id){return state.workspace[group].find(x=>x.id===id)?.name||id||'\u2014';}
 function pairName(brandId,shopId){return `${orgName(brandId)} \u2194 ${orgName(shopId)}`;} function counterpartyResponder(rel){return rel.requestedByOrganisationId===rel.brandId?rel.shopId:rel.brandId;}
 function isoDates(values,names){const result={...values};names.forEach(name=>result[name]=toIso(result[name]));return result;} function toIso(value){const parsed=new Date(value);return Number.isNaN(parsed.valueOf())?value:parsed.toISOString();}
 function formatDate(value){return I18N.formatDate(value);} function money(value){return I18N.formatNumber(value,{maximumFractionDigits:2});}
 function statusLabel(value){const key=`status.${value}`;const translated=I18N.t(key);return translated===key?stageLabel(value):translated;}
+// Identifiers here are prefixed by their kind: product-style_8390232a-…, selection_c49bce4f-….
+// Slicing the first characters showed the prefix and hid the part that tells two rows apart, so
+// every style read as the identical "product-…". The kind is dropped first.
+function shortId(value){const text=String(value||'');const tail=text.includes('_')?text.slice(text.lastIndexOf('_')+1):text;return tail.length>10?`${tail.slice(0,8)}\u2026`:(tail||'\u2014');}
 function stageLabel(value){const key=`stage.${value}`;const translated=I18N.t(key);return translated===key?String(value||'\u2014'):translated;}
 function viewTitle(view){const item=NAV.find(([id])=>id===view);return item?I18N.t(item[1]):I18N.t('nav.overview');}
 function translateDataText(value){
@@ -19,4 +32,4 @@ function translateDataText(value){
   for(const pair of prefixes){const source=text.startsWith(pair[0])?0:text.startsWith(pair[1])?1:-1;if(source>=0)return pair[target]+text.slice(pair[source].length);}
   return text==='\u043d\u0435\u0442'||text==='none'?I18N.translate(text):text;
 }
-function emptyWorkspace(){return{memberships:[],organisations:[],relationships:[],invitations:[],campaigns:[],collections:[],catalogSkus:[],showrooms:[],cycles:[],selections:[],orders:[],deals:[],calendar:[],pageInfo:{limit:0,hasMore:false,truncatedSections:[],nextCursors:{}}};}
+function emptyWorkspace(){return{memberships:[],organisations:[],relationships:[],invitations:[],campaigns:[],collections:[],productStyles:[],placeholders:[],colorways:[],media:[],catalogSkus:[],showrooms:[],cycles:[],selections:[],orders:[],deals:[],calendar:[],pageInfo:{limit:0,hasMore:false,truncatedSections:[],nextCursors:{}}};}

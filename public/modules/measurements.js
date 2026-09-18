@@ -111,8 +111,8 @@
   }
   function header(summary) {
     const actions = [];
-    if (canManageAny()) actions.push(h('button', { className: 'primary', type: 'button', text: text('Создать таблицу', 'Create chart'), onclick: () => { void openEditor(null); } }));
-    actions.push(h('button', { className: 'secondary', type: 'button', disabled: ui.loading, text: text('Обновить', 'Refresh'), onclick: () => { void loadCharts({ reset: true }); } }));
+    if (canManageAny()) actions.push(h('button', { className: 'primary', type: 'button', text: text('Создать таблицу', 'Create chart'), onclick: () => { openEditor(null).catch((error) => toast(error?.message || text('Не удалось открыть редактор.', 'The editor could not be opened.'), 'error')); } }));
+    actions.push(h('button', { className: 'secondary', type: 'button', disabled: ui.loading, text: text('Обновить', 'Refresh'), onclick: () => { loadCharts({ reset: true }).then(() => toast(text('\u0414\u0430\u043d\u043d\u044b\u0435 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u044b.', 'Data refreshed.'))).catch((error) => toast(error?.message || text('\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u0434\u0430\u043d\u043d\u044b\u0435.', 'The data could not be refreshed.'), 'error')); } }));
     return h('header', { className: 'measurement-header' }, [
       h('div', { className: 'measurement-title' }, [
         h('p', { className: 'eyebrow', text: 'PLM / FIT & GRADING' }),
@@ -237,6 +237,9 @@
     if (!confirm(text(`Опубликовать размерную таблицу ${item.chart.sku}?`, `Publish measurement chart ${item.chart.sku}?`))) return;
     await mutate(`/v2/measurements/${encodeURIComponent(item.chart.sku)}/publish`, { expectedVersion: item.chart.version });
     await loadCharts({ reset: true });
+    // The revision action beside this one reports itself; publishing, which is the less reversible of
+    // the two, did not.
+    toast(text(`\u0420\u0430\u0437\u043c\u0435\u0440\u043d\u0430\u044f \u0442\u0430\u0431\u043b\u0438\u0446\u0430 ${item.chart.sku} \u043e\u043f\u0443\u0431\u043b\u0438\u043a\u043e\u0432\u0430\u043d\u0430.`, `Measurement chart ${item.chart.sku} published.`));
   }
   async function fetchCatalogSkus() {
     const items = new Map();

@@ -15,6 +15,9 @@ const PAGE_SORT = Object.freeze({
   campaigns: Object.freeze([{ expression: "payload->>'startsAt'", direction: 'DESC' }, { expression: "payload->>'name'", direction: 'ASC' }, { expression: 'id', direction: 'ASC' }]),
   collections: Object.freeze([{ expression: "payload->>'name'", direction: 'ASC' }, { expression: 'id', direction: 'ASC' }]),
   productStyles: Object.freeze([{ expression: 'style_code', direction: 'ASC' }, { expression: 'id', direction: 'ASC' }]),
+  placeholders: Object.freeze([{ expression: "payload ->> 'placeholderCode'", direction: 'ASC' }, { expression: 'id', direction: 'ASC' }]),
+  colorways: Object.freeze([{ expression: "payload ->> 'article'", direction: 'ASC' }, { expression: 'id', direction: 'ASC' }]),
+  media: Object.freeze([{ expression: "payload ->> 'styleVersionId'", direction: 'ASC' }, { expression: "payload ->> 'colorwayId'", direction: 'ASC' }]),
   catalogSkus: Object.freeze([{ expression: 'sku', direction: 'ASC' }]),
   showrooms: Object.freeze([{ expression: "payload->>'opensAt'", direction: 'DESC' }, { expression: "payload->>'name'", direction: 'ASC' }, { expression: 'id', direction: 'ASC' }]),
   cycles: Object.freeze([{ expression: "payload->>'updatedAt'", direction: 'DESC' }, { expression: "payload->>'createdAt'", direction: 'DESC' }, { expression: 'id', direction: 'ASC' }]),
@@ -30,6 +33,9 @@ const ORDER_BY = Object.freeze({
   showroom_invitations: "payload->>'updatedAt' DESC NULLS LAST, payload->>'createdAt' DESC NULLS LAST, id ASC",
   campaigns: "payload->>'startsAt' DESC NULLS LAST, payload->>'name' ASC NULLS LAST, id ASC",
   collections: "payload->>'name' ASC NULLS LAST, id ASC",
+  assortment_plan_workspace: "payload->>'placeholderCode' ASC NULLS LAST, id ASC",
+  product_colorway_workspace: "payload->>'article' ASC NULLS LAST, id ASC",
+  product_media_workspace: "payload->>'styleVersionId' ASC NULLS LAST, payload->>'colorwayId' ASC NULLS LAST",
   product_master_workspace: 'style_code ASC, id ASC',
   catalog_skus: 'sku ASC',
   showrooms: "payload->>'opensAt' DESC NULLS LAST, payload->>'name' ASC NULLS LAST, id ASC",
@@ -68,12 +74,15 @@ export function createPostgresWorkspaceReader({ pool }) {
           tradePayloads(queryable, 'deals', scope.ownIds, fetchLimit),
           payloadAny(queryable, 'calendar_milestones', 'owner_organisation_id', scope.ownIds, fetchLimit),
         ]);
-        const [campaignRows, collectionRows, productStyleRows, showroomRows, catalogRows] = await Promise.all([
+        const [campaignRows, collectionRows, productStyleRows, showroomRows, catalogRows, placeholderRows, colorwayRows, mediaRows] = await Promise.all([
           payloadByIdsOrOwner(queryable, 'campaigns', scope.campaignIds, 'brand_id', scope.brandIds, fetchLimit),
           payloadByIdsOrOwner(queryable, 'collections', scope.collectionIds, 'brand_id', scope.brandIds, fetchLimit),
           payloadAny(queryable, 'product_master_workspace', 'brand_id', scope.brandIds, fetchLimit),
           payloadByIdsOrOwner(queryable, 'showrooms', scope.showroomIds, 'brand_id', scope.brandIds, fetchLimit),
           visibleCatalogSkus(queryable, scope.brandIds, scope.visibleCollectionIds, fetchLimit),
+          payloadAny(queryable, 'assortment_plan_workspace', 'brand_id', scope.brandIds, fetchLimit),
+          payloadAny(queryable, 'product_colorway_workspace', 'brand_id', scope.brandIds, fetchLimit),
+          payloadAny(queryable, 'product_media_workspace', 'brand_id', scope.brandIds, fetchLimit),
         ]);
 
         return {
@@ -84,6 +93,9 @@ export function createPostgresWorkspaceReader({ pool }) {
           campaigns: bounded('campaigns', campaignRows, limit, truncatedSections),
           collections: bounded('collections', collectionRows, limit, truncatedSections),
           productStyles: bounded('productStyles', productStyleRows, limit, truncatedSections),
+          placeholders: bounded('placeholders', placeholderRows, limit, truncatedSections),
+          colorways: bounded('colorways', colorwayRows, limit, truncatedSections),
+          media: bounded('media', mediaRows, limit, truncatedSections),
           catalogSkus: bounded('catalogSkus', catalogRows, limit, truncatedSections),
           showrooms: bounded('showrooms', showroomRows, limit, truncatedSections),
           cycles: bounded('cycles', cycleRows, limit, truncatedSections),
@@ -132,6 +144,18 @@ function pageSpecification(section, scope, actorId) {
     case 'productStyles':
       return scope.brandIds.length
         ? { table: 'product_master_workspace', where: 'brand_id = ANY($1::text[])', params: [scope.brandIds] }
+        : undefined;
+    case 'placeholders':
+      return scope.brandIds.length
+        ? { table: 'assortment_plan_workspace', where: 'brand_id = ANY($1::text[])', params: [scope.brandIds] }
+        : undefined;
+    case 'colorways':
+      return scope.brandIds.length
+        ? { table: 'product_colorway_workspace', where: 'brand_id = ANY($1::text[])', params: [scope.brandIds] }
+        : undefined;
+    case 'media':
+      return scope.brandIds.length
+        ? { table: 'product_media_workspace', where: 'brand_id = ANY($1::text[])', params: [scope.brandIds] }
         : undefined;
     case 'catalogSkus':
       return scope.brandIds.length || scope.visibleCollectionIds.length
@@ -306,6 +330,9 @@ function emptyWorkspace({ memberships = [], truncatedSections = [] } = {}) {
     invitations: [],
     campaigns: [],
     collections: [],
+    media: [],
+    colorways: [],
+    placeholders: [],
     productStyles: [],
     catalogSkus: [],
     showrooms: [],

@@ -149,6 +149,41 @@ export function upsertRfqQuote(rfq, { supplier, input, receivedAt }) {
   return freezeRfq({ ...rfq, status: 'quoted', quotes: Object.freeze(quotes), version: rfq.version + 1, updatedAt: at });
 }
 
+// A counter-offer. A quotation is the start of a negotiation, not the end of one: the buyer answers
+// with the quantity and the price they are prepared to place, and the supplier's next revision either
+// meets it or does not. The counter is recorded against the quotation it answers, so a later revision
+// can be read against what was actually asked for.
+export function counterRfqQuote(rfq, { supplier, input, offeredAt, offeredBy }) {
+  invariant(rfq?.status === 'quoted', 'RFQ_NOT_NEGOTIABLE', 'Only a quoted RFQ can be countered', { status: rfq?.status });
+  const at = timestamp(offeredAt, 'RFQ_COUNTER_OFFERED_AT_INVALID', 'Counter-offer time');
+  invariant(typeof offeredBy === 'string' && offeredBy.trim(), 'RFQ_COUNTER_ACTOR_REQUIRED', 'Counter-offer actor is required');
+  const quote = rfq.quotes.find((item) => item.supplierCode === supplier?.supplierCode);
+  invariant(quote, 'RFQ_QUOTE_NOT_FOUND', 'That supplier has no quotation to counter', { supplierCode: supplier?.supplierCode });
+  invariant(Date.parse(quote.validUntil) >= Date.parse(at), 'RFQ_QUOTE_EXPIRED', 'That quotation has expired', { validUntil: quote.validUntil });
+  invariant(input && typeof input === 'object' && !Array.isArray(input), 'RFQ_COUNTER_INPUT_INVALID', 'Counter-offer input is invalid');
+  assertAllowedFields(input, new Set(['quantity', 'unitPriceMinor', 'notes']), 'RFQ_COUNTER_FIELD_FORBIDDEN', 'Counter-offer contains unsupported fields');
+  const quantity = integer(input.quantity, 1, MAX_INTEGER, 'RFQ_COUNTER_QUANTITY_INVALID', 'Counter-offer quantity');
+  const unitPriceMinor = integer(input.unitPriceMinor, 1, Number.MAX_SAFE_INTEGER, 'RFQ_COUNTER_PRICE_INVALID', 'Counter-offer unit price');
+  // Countering above what the supplier already quoted for that quantity is not a negotiation, it is a
+  // mistake -- almost always a wrong unit or a wrong currency.
+  const quoted = quotedUnitPriceFor(quote, quantity);
+  invariant(quoted === null || unitPriceMinor <= quoted, 'RFQ_COUNTER_ABOVE_QUOTE',
+    'A counter-offer cannot be above the price already quoted for that quantity', { unitPriceMinor, quotedUnitPriceMinor: quoted, quantity });
+  const counterOffer = Object.freeze({
+    quantity,
+    unitPriceMinor,
+    totalCostMinor: unitPriceMinor * quantity,
+    notes: optionalText(input.notes, 1000, 'RFQ_COUNTER_NOTES_INVALID', 'Counter-offer notes'),
+    answersQuoteRevision: quote.revision,
+    offeredAt: at,
+    offeredBy,
+  });
+  const quotes = rfq.quotes.map((item) => (item.supplierCode === quote.supplierCode
+    ? Object.freeze({ ...item, counterOffer })
+    : item));
+  return freezeRfq({ ...rfq, quotes: Object.freeze(quotes), version: rfq.version + 1, updatedAt: at });
+}
+
 export function awardRfq(rfq, { supplier, awardedAt }) {
   invariant(rfq?.status === 'quoted', 'RFQ_NOT_AWARDABLE', 'RFQ must contain a quotation before award', { status: rfq?.status });
   const at = timestamp(awardedAt, 'RFQ_AWARDED_AT_INVALID', 'RFQ award time');
@@ -231,7 +266,9 @@ function normalizeSupplierInput(input, { requireCode }) {
 
 function normalizeRfqInput(input, suppliers, brandId, referenceTime) {
   invariant(input && typeof input === 'object' && !Array.isArray(input), 'RFQ_INPUT_INVALID', 'RFQ input is invalid');
-  const allowed = new Set(['rfqCode', 'sku', ...RFQ_EDITABLE_FIELDS]);
+  // Optional, so an RFQ written before they existed is still valid input. A factory quotes against a
+  // specification: naming the tech pack on the request is how both sides know which one.
+  const allowed = new Set(['rfqCode', 'sku', 'sampleRequested', 'techPackCode', ...RFQ_EDITABLE_FIELDS]);
   assertAllowedFields(input, allowed, 'RFQ_FIELD_FORBIDDEN', 'RFQ input contains unsupported fields');
   const missing = [...RFQ_EDITABLE_FIELDS].filter((field) => !Object.hasOwn(input, field));
   invariant(missing.length === 0, 'RFQ_FIELD_REQUIRED', 'RFQ input is missing required fields', { missingFields: missing });
@@ -252,12 +289,67 @@ function normalizeRfqInput(input, suppliers, brandId, referenceTime) {
     incoterm: enumValue(input.incoterm, SOURCING_INCOTERMS, 'RFQ_INCOTERM_INVALID', 'RFQ Incoterm'),
     supplierCodes,
     notes: optionalText(input.notes, 2000, 'RFQ_NOTES_INVALID', 'RFQ notes'),
+    sampleRequested: normalizeSampleRequested(input.sampleRequested),
+    techPackCode: input.techPackCode === null || input.techPackCode === undefined
+      ? null
+      : code(input.techPackCode, 'RFQ_TECH_PACK_CODE_INVALID', 'RFQ tech pack code'),
   });
+}
+
+function normalizeSampleRequested(value) {
+  if (value === null || value === undefined) return false;
+  invariant(typeof value === 'boolean', 'RFQ_SAMPLE_REQUESTED_INVALID', 'Sample request must be true or false', { value });
+  return value;
+}
+
+// A price ladder. A quotation may name several quantities, and the whole point of a break is that
+// buying more does not cost more per unit -- a ladder that rises is a mistake or a trap, and either
+// way it is refused here rather than compared against later.
+function normalizeQuoteTiers(input, rfq) {
+  if (input === null || input === undefined) return Object.freeze([]);
+  invariant(Array.isArray(input), 'RFQ_QUOTE_TIERS_INVALID', 'Quotation tiers must be a list');
+  invariant(input.length <= 10, 'RFQ_QUOTE_TIERS_TOO_MANY', 'A quotation may carry at most ten price breaks', { count: input.length });
+  const tiers = input.map((tier, index) => {
+    invariant(tier && typeof tier === 'object' && !Array.isArray(tier), 'RFQ_QUOTE_TIER_INVALID', 'Quotation tier is invalid', { index });
+    assertAllowedFields(tier, new Set(['quantity', 'unitPriceMinor']), 'RFQ_QUOTE_TIER_FIELD_FORBIDDEN', 'Quotation tier contains unsupported fields');
+    return Object.freeze({
+      quantity: integer(tier.quantity, 1, MAX_INTEGER, 'RFQ_QUOTE_TIER_QUANTITY_INVALID', 'Quotation tier quantity'),
+      unitPriceMinor: integer(tier.unitPriceMinor, 1, Number.MAX_SAFE_INTEGER, 'RFQ_QUOTE_TIER_PRICE_INVALID', 'Quotation tier unit price'),
+    });
+  }).sort((left, right) => left.quantity - right.quantity);
+  for (let index = 1; index < tiers.length; index += 1) {
+    invariant(tiers[index].quantity > tiers[index - 1].quantity, 'RFQ_QUOTE_TIER_QUANTITY_REPEATED',
+      'Two price breaks cannot name the same quantity', { quantity: tiers[index].quantity });
+    invariant(tiers[index].unitPriceMinor <= tiers[index - 1].unitPriceMinor, 'RFQ_QUOTE_TIER_PRICE_RISES',
+      'A larger quantity cannot cost more per unit', {
+        quantity: tiers[index].quantity,
+        unitPriceMinor: tiers[index].unitPriceMinor,
+        previousUnitPriceMinor: tiers[index - 1].unitPriceMinor,
+      });
+  }
+  if (tiers.length) {
+    invariant(tiers[0].quantity <= rfq.targetQuantity, 'RFQ_QUOTE_TIER_ABOVE_TARGET',
+      'The smallest price break is above the quantity the RFQ asks for', {
+        smallestBreak: tiers[0].quantity, targetQuantity: rfq.targetQuantity,
+      });
+  }
+  return Object.freeze(tiers);
+}
+
+// The price that applies to a quantity: the largest break at or below it, or the quotation's own unit
+// price when the ladder says nothing about quantities that small.
+export function quotedUnitPriceFor(quote, quantity) {
+  const tiers = Array.isArray(quote?.tiers) ? quote.tiers : [];
+  let price = quote?.unitPriceMinor ?? null;
+  for (const tier of tiers) {
+    if (tier.quantity <= quantity) price = tier.unitPriceMinor;
+  }
+  return price;
 }
 
 function normalizeQuote(input, supplier, rfq, receivedAt) {
   invariant(input && typeof input === 'object' && !Array.isArray(input), 'RFQ_QUOTE_INPUT_INVALID', 'Quotation input is invalid');
-  const allowed = new Set(['supplierCode', 'unitPriceMinor', 'fixedCostMinor', 'leadTimeDays', 'minimumOrderQuantity', 'validUntil', 'notes']);
+  const allowed = new Set(['supplierCode', 'unitPriceMinor', 'fixedCostMinor', 'leadTimeDays', 'minimumOrderQuantity', 'validUntil', 'notes', 'tiers']);
   assertAllowedFields(input, allowed, 'RFQ_QUOTE_FIELD_FORBIDDEN', 'Quotation contains unsupported fields');
   invariant(input.supplierCode === supplier.supplierCode, 'RFQ_QUOTE_SUPPLIER_MISMATCH', 'Quotation supplier does not match selected supplier');
   const unitPriceMinor = integer(input.unitPriceMinor, 1, Number.MAX_SAFE_INTEGER, 'RFQ_QUOTE_UNIT_PRICE_INVALID', 'Quotation unit price');
@@ -279,6 +371,7 @@ function normalizeQuote(input, supplier, rfq, receivedAt) {
     minimumOrderQuantity,
     validUntil,
     notes: optionalText(input.notes, 1000, 'RFQ_QUOTE_NOTES_INVALID', 'Quotation notes'),
+    tiers: normalizeQuoteTiers(input.tiers, rfq),
     receivedAt,
   });
 }

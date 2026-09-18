@@ -3,6 +3,14 @@ import { invariant } from './errors.mjs';
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/;
 
+/**
+ * Trims a value and asserts it carries between `min` and `max` characters.
+ * The options are documented so that callers passing an error `code` and a human `label` type-check;
+ * without this, the inferred option type is {min, max} and every code-carrying call is an error.
+ * @param {unknown} value
+ * @param {{ code?: string, label?: string, min?: number, max?: number }} [options]
+ * @returns {string}
+ */
 export function requiredText(value, { code, label, min = 2, max = 160 } = {}) {
   const normalized = typeof value === 'string' ? value.trim() : '';
   invariant(normalized.length >= min && normalized.length <= max, code ?? 'TEXT_INVALID', `${label ?? 'Text'} must contain ${min} to ${max} characters`, { min, max });

@@ -446,3 +446,61 @@ body.omnidata-role-system :is(span,strong,em,b,i,small,label):is([data-ods-role=
    slot into a 1160x16 hairline strip that reads as a broken toolbar. */
 body.omnidata-design-system-v1 :is([data-ods-role="card"],[data-od14-unified-role="card"],[data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):empty,
 body.omnidata-role-system :is([data-ods-role="card"],[data-od14-unified-role="card"],[data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):empty{min-height:0!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important}
+
+/* Attribute filter panel. Registries carry more columns than a single status select can serve, so
+   the Filters control opens a panel listing every filterable attribute with its values and how many
+   rows carry each. Choices apply as they are made; the panel closes on Apply. */
+body.omnidata-design-system-v1 :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]).od-filter-panel,
+body.omnidata-role-system :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]).od-filter-panel{position:absolute!important;top:0!important;left:0!important;z-index:40!important;display:flex!important;flex-direction:column!important;width:min(340px,86%)!important;max-height:100%!important;border:1px solid var(--ods-color-border)!important;border-radius:var(--ods-radius-sm)!important;background:var(--ods-color-surface)!important;box-shadow:0 10px 30px rgba(15,20,26,.14)!important;overflow:hidden!important}
+body.omnidata-design-system-v1 .od-master,
+body.omnidata-role-system .od-master{position:relative!important}
+body.omnidata-design-system-v1 .od-filter-panel-head,
+body.omnidata-role-system .od-filter-panel-head{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:8px!important;padding:12px 14px!important;border-bottom:1px solid var(--ods-color-border)!important}
+body.omnidata-design-system-v1 .od-filter-panel-title,
+body.omnidata-role-system .od-filter-panel-title{margin:0!important;font-size:13px!important;font-weight:700!important}
+body.omnidata-design-system-v1 .od-filter-panel-close,
+body.omnidata-role-system .od-filter-panel-close{display:inline-flex!important;align-items:center!important;justify-content:center!important;width:26px!important;height:26px!important;padding:0!important;border:0!important;border-radius:var(--ods-radius-sm)!important;background:transparent!important;cursor:pointer!important}
+body.omnidata-design-system-v1 .od-filter-panel-close:hover,
+body.omnidata-role-system .od-filter-panel-close:hover{background:var(--ods-color-surface-hover)!important}
+body.omnidata-design-system-v1 :is([data-ods-role="field"],[data-od14-unified-role="field"]).od-filter-panel-search,
+body.omnidata-role-system :is([data-ods-role="field"],[data-od14-unified-role="field"]).od-filter-panel-search{display:flex!important;align-items:center!important;gap:7px!important;margin:10px 14px!important;padding:0 10px!important;min-height:var(--ods-control-height)!important;border:1px solid var(--ods-color-border-strong)!important;border-radius:var(--ods-radius-sm)!important}
+body.omnidata-design-system-v1 .od-filter-panel-search input,
+body.omnidata-role-system .od-filter-panel-search input{flex:1 1 auto!important;min-width:0!important;border:0!important;background:transparent!important;outline:0!important;padding:0!important;font-size:12px!important}
+body.omnidata-design-system-v1 .od-filter-panel-body,
+body.omnidata-role-system .od-filter-panel-body{flex:1 1 auto!important;min-height:0!important;overflow-y:auto!important;padding:0 14px 8px!important}
+body.omnidata-design-system-v1 .od-filter-group,
+body.omnidata-role-system .od-filter-group{padding:8px 0!important;border-bottom:1px solid var(--ods-color-border)!important}
+body.omnidata-design-system-v1 .od-filter-group:last-child,
+body.omnidata-role-system .od-filter-group:last-child{border-bottom:0!important}
+body.omnidata-design-system-v1 .od-filter-group-title,
+body.omnidata-role-system .od-filter-group-title{margin:0 0 6px!important;font-size:10px!important;font-weight:700!important;letter-spacing:.06em!important;text-transform:uppercase!important;color:var(--ods-color-text-soft)!important}
+body.omnidata-design-system-v1 :is([data-ods-role="field"],[data-od14-unified-role="field"]).od-filter-option,
+body.omnidata-role-system :is([data-ods-role="field"],[data-od14-unified-role="field"]).od-filter-option{display:flex!important;align-items:center!important;gap:8px!important;min-height:26px!important;padding:2px 0!important;font-size:12px!important;cursor:pointer!important}
+body.omnidata-design-system-v1 .od-filter-option-label,
+body.omnidata-role-system .od-filter-option-label{flex:1 1 auto!important;min-width:0!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important}
+body.omnidata-design-system-v1 .od-filter-option-count,
+body.omnidata-role-system .od-filter-option-count{flex:0 0 auto!important;color:var(--ods-color-text-soft)!important;font-variant-numeric:tabular-nums!important;font-size:11px!important}
+body.omnidata-design-system-v1 .od-filter-panel-foot,
+body.omnidata-role-system .od-filter-panel-foot{display:flex!important;justify-content:flex-end!important;gap:8px!important;padding:10px 14px!important;border-top:1px solid var(--ods-color-border)!important}
+
+/* Applied filters stay visible above the table and each one can be taken off. */
+body.omnidata-design-system-v1 .od-filter-chips,
+body.omnidata-role-system .od-filter-chips{display:flex!important;flex-wrap:wrap!important;gap:6px!important;margin:0 0 10px!important}
+body.omnidata-design-system-v1 .od-filter-chip,
+body.omnidata-role-system .od-filter-chip{display:inline-flex!important;align-items:center!important;gap:6px!important;min-height:24px!important;padding:0 8px!important;border:1px solid var(--ods-color-border-strong)!important;border-radius:999px!important;background:var(--ods-color-surface)!important;color:var(--ods-color-text-soft)!important;font-size:11px!important;cursor:pointer!important}
+body.omnidata-design-system-v1 .od-filter-chip:hover,
+body.omnidata-role-system .od-filter-chip:hover{border-color:var(--ods-color-accent)!important;color:var(--ods-color-accent)!important}
+body.omnidata-design-system-v1 .od-filter-chip-remove,
+body.omnidata-role-system .od-filter-chip-remove{font-size:13px!important;line-height:1!important}
+body.omnidata-design-system-v1 .od-filter-button-count,
+body.omnidata-role-system .od-filter-button-count{display:inline-flex!important;align-items:center!important;justify-content:center!important;min-width:16px!important;height:16px!important;margin-left:6px!important;padding:0 4px!important;border-radius:999px!important;background:var(--ods-color-accent)!important;color:#fff!important;font-size:10px!important;font-weight:700!important}
+body.omnidata-design-system-v1 .od-filter-panel-close-mark,
+body.omnidata-role-system .od-filter-panel-close-mark{font-size:16px!important;line-height:1!important;color:var(--ods-color-text-soft)!important}
+
+/* The column chooser shares the filter panel's shell. */
+body.omnidata-design-system-v1 :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]).od-column-panel,
+body.omnidata-role-system :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]).od-column-panel{width:min(280px,80%)!important}
+body.omnidata-design-system-v1 :is([data-ods-role="field"],[data-od14-unified-role="field"]).od-column-option,
+body.omnidata-role-system :is([data-ods-role="field"],[data-od14-unified-role="field"]).od-column-option{display:flex!important;align-items:center!important;gap:8px!important;min-height:28px!important;padding:2px 0!important;font-size:12px!important;cursor:pointer!important}
+body.omnidata-design-system-v1 .od-column-option input:disabled,
+body.omnidata-role-system .od-column-option input:disabled{opacity:.5!important;cursor:not-allowed!important}

@@ -705,3 +705,33 @@ dialog::backdrop { background: rgba(20,23,36,.38); backdrop-filter: blur(3px); }
   .view-toolbar { display: grid; }
   .view-toolbar .button { width: 100%; }
 }
+
+/* Account and organisation menus in the topbar. Both elements used to carry a dropdown chevron and
+   open nothing; the chevron now points at a real popup. */
+.topbar-organisation,
+.topbar-user { position: relative; cursor: pointer; }
+.topbar-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 220px;
+  max-width: 320px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface, #fff);
+  box-shadow: 0 12px 32px rgba(15, 18, 24, 0.14);
+  cursor: default;
+  text-align: left;
+}
+.topbar-menu[hidden] { display: none; }
+.topbar-menu-title { margin: 0; color: var(--muted); font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; }
+.topbar-menu-list { display: flex; flex-direction: column; gap: 8px; }
+.topbar-menu-item { display: flex; flex-direction: column; gap: 2px; }
+.topbar-menu-item strong { font-size: 11px; }
+.topbar-menu-item small { color: var(--muted); font-size: 9px; }
+.topbar-menu-action { align-self: flex-start; }

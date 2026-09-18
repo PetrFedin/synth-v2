@@ -55,7 +55,7 @@
     if (!value) return '—';
     const parsed = new Date(value);
     return Number.isFinite(parsed.getTime())
-      ? new Intl.DateTimeFormat(undefined, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(parsed)
+      ? new Intl.DateTimeFormat(I18N.localeTag(), { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(parsed)
       : '—';
   }
   function can(brandId, capability) { return caps.hasForOrganisation(state.workspace, brandId, capability); }
@@ -152,7 +152,7 @@
         h('p', { className: 'muted', text: t('Фактическое прохождение партии от подтверждённого PO до допуска к контролю качества. Этапы выполняются строго последовательно.', 'Actual batch progress from a confirmed PO to the quality-control gate. Milestones are completed strictly in sequence.') }),
       ]),
       h('div', { className: 'production-execution-header-actions' }, [
-        h('button', { type: 'button', className: 'secondary', disabled: ui.loading, text: t('Обновить', 'Refresh'), onclick: () => { void load({ reset: true }); } }),
+        h('button', { type: 'button', className: 'secondary', disabled: ui.loading, text: t('Обновить', 'Refresh'), onclick: () => { load({ reset: true }).then(() => toast(t('Данные обновлены.', 'Data refreshed.'))).catch((error) => toast(error?.message || t('Не удалось обновить данные.', 'The data could not be refreshed.'), 'error')); } }),
       ]),
     ];
     if (canManageAny()) children.push(h('div', { className: 'production-execution-create' }, [
@@ -310,4 +310,7 @@
     return navigation;
   };
   global.SynthaProductionExecutionsWorkspace = Object.freeze({ fetchAll, load, render: renderProductionExecutions });
+// The V7 nav shim runs before this file, so it could not see the global above; the section
+// stayed marked as planned and could not be opened. Claim the entry now that it exists.
+global.SynthaOmnidataV7Nav?.activate('Production execution', 'production-executions', '\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434\u0441\u0442\u0432\u0435\u043d\u043d\u044b\u0439 \u043a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u044c', 'Production execution');
 })(window);

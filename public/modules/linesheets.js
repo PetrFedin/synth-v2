@@ -780,7 +780,13 @@
 
     const refresh = el('button', { className: 'ls9-filter-button', type: 'button' });
     refresh.append(icon('refresh'), el('span', { rawText: text('Обновить', 'Refresh') }));
-    refresh.addEventListener('click', () => { LS.loadedCollectionId = ''; LS.nextCursor = null; LS.selectedId = ''; void loadPublications(); renderApp(); });
+    refresh.addEventListener('click', () => {
+      LS.loadedCollectionId = ''; LS.nextCursor = null; LS.selectedId = '';
+      loadPublications()
+        .then(() => toast(text('\u0414\u0430\u043d\u043d\u044b\u0435 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u044b.', 'Data refreshed.')))
+        .catch((error) => toast(error?.message || text('\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u0434\u0430\u043d\u043d\u044b\u0435.', 'The data could not be refreshed.'), 'error'));
+      renderApp();
+    });
     bar.append(collectionLabel, searchLabel, refresh);
     return bar;
   }

@@ -7,6 +7,7 @@ import {
   allocateRfq as allocateRfqDomain,
   archiveSupplier as archiveSupplierDomain,
   awardRfq as awardRfqDomain,
+  counterRfqQuote as counterRfqQuoteDomain,
   cancelRfq as cancelRfqDomain,
   createRfq as createRfqDomain,
   createSupplier as createSupplierDomain,
@@ -24,9 +25,11 @@ const SUPPLIER_UPDATE_FIELDS = Object.freeze(new Set(['expectedVersion', ...SUPP
 const VERSION_FIELDS = Object.freeze(new Set(['expectedVersion']));
 const SUSPEND_FIELDS = Object.freeze(new Set(['expectedVersion', 'reason']));
 const RFQ_EDITABLE = Object.freeze(['targetQuantity', 'responseDueAt', 'deliveryDueAt', 'incoterm', 'supplierCodes', 'notes']);
-const RFQ_CREATE_FIELDS = Object.freeze(new Set(['rfqCode', 'sku', ...RFQ_EDITABLE]));
-const RFQ_UPDATE_FIELDS = Object.freeze(new Set(['expectedVersion', ...RFQ_EDITABLE]));
-const QUOTE_FIELDS = Object.freeze(new Set(['expectedVersion', 'supplierCode', 'unitPriceMinor', 'fixedCostMinor', 'leadTimeDays', 'minimumOrderQuantity', 'validUntil', 'notes']));
+const RFQ_OPTIONAL = Object.freeze(['sampleRequested', 'techPackCode']);
+const RFQ_CREATE_FIELDS = Object.freeze(new Set(['rfqCode', 'sku', ...RFQ_EDITABLE, ...RFQ_OPTIONAL]));
+const RFQ_UPDATE_FIELDS = Object.freeze(new Set(['expectedVersion', ...RFQ_EDITABLE, ...RFQ_OPTIONAL]));
+const QUOTE_FIELDS = Object.freeze(new Set(['expectedVersion', 'supplierCode', 'unitPriceMinor', 'fixedCostMinor', 'leadTimeDays', 'minimumOrderQuantity', 'validUntil', 'notes', 'tiers']));
+const COUNTER_FIELDS = Object.freeze(new Set(['expectedVersion', 'supplierCode', 'quantity', 'unitPriceMinor', 'notes']));
 const AWARD_FIELDS = Object.freeze(new Set(['expectedVersion', 'supplierCode']));
 const ALLOCATION_FIELDS = Object.freeze(new Set(['expectedVersion', 'purchaseOrderNumber', 'quantity', 'productionStartAt', 'deliveryDueAt', 'notes']));
 const CANCEL_FIELDS = Object.freeze(new Set(['expectedVersion', 'reason']));
@@ -223,6 +226,20 @@ export function createSourcingService({ sourcingStore, clock = () => new Date().
         commandName: 'upsertRfqQuote', eventType: () => 'rfq.quote-received', commandId, actorId, rfqCode, input, fields: QUOTE_FIELDS,
         prepare: async (tx, rfq, value) => ({ supplier: requireEntity(await tx.getSupplierByCode(value.supplierCode), 'SUPPLIER_NOT_FOUND', { supplierCode: value.supplierCode }) }),
         transform: (context, value) => upsertRfqQuoteDomain(context.rfq, { supplier: context.supplier, input: value, receivedAt: clock() }),
+      });
+    },
+
+    // A counter-offer answers a quotation with the quantity and price the buyer is prepared to place.
+    counterQuote(commandId, actorId, rfqCode, input) {
+      return rfqTransition({
+        commandName: 'counterRfqQuote', eventType: () => 'rfq.quote-countered', commandId, actorId, rfqCode, input, fields: COUNTER_FIELDS,
+        prepare: async (tx, rfq, value) => ({ supplier: requireEntity(await tx.getSupplierByCode(value.supplierCode), 'SUPPLIER_NOT_FOUND', { supplierCode: value.supplierCode }) }),
+        transform: (context, value) => counterRfqQuoteDomain(context.rfq, {
+          supplier: context.supplier,
+          input: { quantity: value.quantity, unitPriceMinor: value.unitPriceMinor, notes: value.notes },
+          offeredAt: clock(),
+          offeredBy: actorId,
+        }),
       });
     },
 

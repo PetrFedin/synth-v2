@@ -48,13 +48,13 @@
     return catalog().filter((sku) => sku.status === 'published' && bomSkus.has(sku.sku) && can(sku.brandId, caps.CAPABILITIES.SOURCING_MANAGE));
   }
   function qualifiedSuppliers(brandId) { return ui.suppliers.filter((supplier) => supplier.brandId === brandId && supplier.status === 'qualified'); }
-  function formatDate(value) { if (!value) return '—'; const date = new Date(value); return Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat(undefined, { day: '2-digit', month: 'short', year: 'numeric' }).format(date) : '—'; }
+  function formatDate(value) { if (!value) return '—'; const date = new Date(value); return Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat(I18N.localeTag(), { day: '2-digit', month: 'short', year: 'numeric' }).format(date) : '—'; }
   function formatMoneyMinor(value, currency) { const amount = Number(value) / 100; return Number.isFinite(amount) ? new Intl.NumberFormat(undefined, { style: 'currency', currency: currency || 'EUR', maximumFractionDigits: 2 }).format(amount) : '—'; }
   function badge(label, tone = 'neutral') { return h('span', { className: `sourcing-badge sourcing-${tone}`, text: label }); }
   function statusLabel(status) {
     const labels = {
       draft: ['Черновик', 'Draft'], qualified: ['Квалифицирован', 'Qualified'], suspended: ['Приостановлен', 'Suspended'], archived: ['Архив', 'Archived'],
-      issued: ['Отправлен', 'Issued'], quoted: ['Есть котировки', 'Quoted'], awarded: ['Победитель выбран', 'Awarded'], allocated: ['Размещено в производство', 'Allocated'], cancelled: ['Отменён', 'Cancelled'],
+      issued: ['Отправлен', 'Issued'], quoted: ['Есть котировки', 'Quoted'], awarded: ['Победитель выбран', 'Awarded'], allocated: ['В производстве', 'Allocated'], cancelled: ['Отменён', 'Cancelled'],
     };
     const pair = labels[status] || [status, status]; return text(pair[0], pair[1]);
   }
@@ -132,7 +132,7 @@
       h('div', { className: 'sourcing-header-actions' }, [
         canAny(caps.CAPABILITIES.SUPPLIER_MANAGE) ? h('button', { type: 'button', className: 'secondary', text: text('Новый поставщик', 'New supplier'), onclick: () => openSupplierDialog(null) }) : null,
         canAny(caps.CAPABILITIES.SOURCING_MANAGE) ? h('button', { type: 'button', className: 'primary', text: text('Новый RFQ', 'New RFQ'), onclick: () => openRfqDialog(null) }) : null,
-        h('button', { type: 'button', className: 'secondary', disabled: ui.loading, text: text('Обновить', 'Refresh'), onclick: () => { void loadSourcing({ reset: true }); } }),
+        h('button', { type: 'button', className: 'secondary', disabled: ui.loading, text: text('Обновить', 'Refresh'), onclick: () => { loadSourcing({ reset: true }).then(() => toast(text('\u0414\u0430\u043d\u043d\u044b\u0435 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u044b.', 'Data refreshed.'))).catch((error) => toast(error?.message || text('\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u0434\u0430\u043d\u043d\u044b\u0435.', 'The data could not be refreshed.'), 'error')); } }),
       ]),
       h('section', { className: 'sourcing-kpis' }, [
         metric(text('Поставщики', 'Suppliers'), summary.suppliers), metric(text('Квалифицировано', 'Qualified'), summary.qualified),
@@ -191,30 +191,81 @@
   }
 
   function rfqFilterValues(view) {
-    if (view === 'quotations') return ui.rfqs.filter((rfq) => rfq.quotes.length > 0 && ['quoted', 'awarded', 'allocated'].includes(rfq.status));
-    if (view === 'production') return ui.rfqs.filter((rfq) => ['awarded', 'allocated'].includes(rfq.status));
-    return ui.rfqs.filter((rfq) => ui.rfqStatus === 'all' || rfq.status === ui.rfqStatus);
+    // The status filter is shown on every tab now, so it has to apply on every tab.
+    const byStatus = (list) => list.filter((rfq) => ui.rfqStatus === 'all' || rfq.status === ui.rfqStatus);
+    if (view === 'quotations') return byStatus(ui.rfqs.filter((rfq) => rfq.quotes.length > 0 && ['quoted', 'awarded', 'allocated'].includes(rfq.status)));
+    if (view === 'production') return byStatus(ui.rfqs.filter((rfq) => ['awarded', 'allocated'].includes(rfq.status)));
+    return byStatus(ui.rfqs);
   }
   function renderRfqs() { return renderRfqRegistry('rfqs'); }
   function renderQuotations() { return renderRfqRegistry('quotations'); }
   function renderProduction() { return renderRfqRegistry('production'); }
+  // The three tabs used to render one identical table under three different headings: "Quotation
+  // comparison" showed no per-quote column and "Production allocations" no purchase order. Each view
+  // now has the columns its own question needs.
+  function rfqColumns(view) {
+    const codeCell = (rfq) => h('td', {}, [h('strong', { text: rfq.rfqCode }), h('small', { text: rfq.sku })]);
+    const statusCell = (rfq, ctx) => h('td', {}, [badge(statusLabel(rfq.status), statusTone(rfq.status)), ctx.overdue ? badge(text('\u041f\u0440\u043e\u0441\u0440\u043e\u0447\u0435\u043d\u043e', 'Overdue'), 'danger') : null]);
+    if (view === 'quotations') return [
+      { label: 'RFQ / SKU', cell: codeCell },
+      { label: text('\u041e\u0442\u0432\u0435\u0442\u043e\u0432', 'Quotes'), cell: (rfq) => h('td', { text: String(rfq.quotes.length) }) },
+      { label: text('\u041b\u0443\u0447\u0448\u0430\u044f \u0441\u0443\u043c\u043c\u0430', 'Best total'), cell: (rfq, ctx) => h('td', { text: ctx.best ? formatMoneyMinor(ctx.best.totalCostMinor, rfq.bomCurrency) : '\u2014' }) },
+      { label: text('\u0426\u0435\u043d\u0430 \u0437\u0430 \u0435\u0434.', 'Unit price'), cell: (rfq, ctx) => h('td', { text: ctx.best ? formatMoneyMinor(ctx.best.unitPriceMinor, rfq.bomCurrency) : '\u2014' }) },
+      { label: text('\u0420\u0430\u0437\u0431\u0440\u043e\u0441', 'Spread'), cell: (rfq, ctx) => h('td', { text: ctx.spread }) },
+      { label: text('\u043a BOM', 'vs BOM'), cell: (rfq, ctx) => h('td', { text: ctx.deltaText }) },
+      { label: text('\u0421\u0440\u043e\u043a', 'Lead time'), cell: (rfq, ctx) => h('td', { text: ctx.best ? `${ctx.best.leadTimeDays} ${text('\u0434\u043d.', 'days')}` : '\u2014' }) },
+      { label: text('\u041b\u0443\u0447\u0448\u0438\u0439 \u043f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a', 'Best supplier'), cell: (rfq, ctx) => h('td', { text: ctx.best ? ctx.best.supplierName || ctx.best.supplierCode : '\u2014' }) },
+      { label: text('\u0421\u0442\u0430\u0442\u0443\u0441', 'Status'), cell: statusCell },
+    ];
+    if (view === 'production') return [
+      { label: 'RFQ / SKU', cell: codeCell },
+      { label: text('\u041f\u0440\u043e\u0438\u0437\u0432. \u0437\u0430\u043a\u0430\u0437', 'Purchase order'), cell: (rfq) => h('td', { text: rfq.allocation?.purchaseOrderNumber || text('\u041d\u0435 \u0440\u0430\u0437\u043c\u0435\u0449\u0451\u043d', 'Not placed') }) },
+      { label: text('\u041f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a', 'Supplier'), cell: (rfq) => h('td', { text: rfq.allocation?.supplierCode || rfq.selectedSupplierCode || '\u2014' }) },
+      { label: text('\u041a\u043e\u043b-\u0432\u043e', 'Qty'), cell: (rfq) => h('td', { text: String(rfq.allocation?.quantity ?? rfq.targetQuantity) }) },
+      { label: text('\u0421\u0442\u0430\u0440\u0442 \u043f\u0440\u043e\u0438\u0437\u0432\u043e\u0434\u0441\u0442\u0432\u0430', 'Production start'), cell: (rfq) => h('td', { text: rfq.allocation ? formatDate(rfq.allocation.productionStartAt) : '\u2014' }) },
+      { label: text('\u0421\u0440\u043e\u043a \u043f\u043e\u0441\u0442\u0430\u0432\u043a\u0438', 'Delivery due'), cell: (rfq) => h('td', { text: rfq.allocation ? formatDate(rfq.allocation.deliveryDueAt) : formatDate(rfq.deliveryDueAt) }) },
+      { label: text('\u0421\u0443\u043c\u043c\u0430 \u0440\u0430\u0437\u043c\u0435\u0449\u0435\u043d\u0438\u044f', 'Awarded total'), cell: (rfq, ctx) => h('td', { text: ctx.best ? formatMoneyMinor(ctx.best.totalCostMinor, rfq.bomCurrency) : '\u2014' }) },
+      { label: text('\u0421\u0442\u0430\u0442\u0443\u0441', 'Status'), cell: statusCell },
+    ];
+    return [
+      { label: 'RFQ / SKU', cell: codeCell },
+      { label: text('\u041a\u043e\u043b-\u0432\u043e', 'Qty'), cell: (rfq) => h('td', { text: String(rfq.targetQuantity) }) },
+      { label: text('\u041f\u0440\u0438\u0433\u043b\u0430\u0448\u0435\u043d\u043e', 'Invited'), cell: (rfq) => h('td', { text: String(rfq.supplierCodes.length) }) },
+      { label: text('\u041e\u0442\u0432\u0435\u0442\u043e\u0432', 'Quotes'), cell: (rfq) => h('td', { text: String(rfq.quotes.length) }) },
+      { label: text('\u041b\u0443\u0447\u0448\u0430\u044f \u0441\u0443\u043c\u043c\u0430', 'Best total'), cell: (rfq, ctx) => h('td', { text: ctx.best ? formatMoneyMinor(ctx.best.totalCostMinor, rfq.bomCurrency) : '\u2014' }) },
+      { label: text('\u0421\u0442\u0430\u0442\u0443\u0441', 'Status'), cell: statusCell },
+      { label: text('\u041f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a', 'Supplier'), cell: (rfq) => h('td', { text: rfq.selectedSupplierCode || '\u2014' }) },
+      { label: text('\u041f\u043e\u0441\u0442\u0430\u0432\u043a\u0430', 'Delivery'), cell: (rfq) => h('td', { text: formatDate(rfq.deliveryDueAt) }) },
+    ];
+  }
+
   function renderRfqRegistry(view) {
     const values = rfqFilterValues(view);
-    const filter = h('select', { onchange: (event) => { ui.rfqStatus = event.target.value; renderApp(); } }, [h('option', { value: 'all', text: text('Все статусы', 'All statuses') }), ...RFQ_STATUSES.map((status) => h('option', { value: status, text: statusLabel(status) }))]); filter.value = ui.rfqStatus;
+    const columns = rfqColumns(view);
+    const filter = h('select', { onchange: (event) => { ui.rfqStatus = event.target.value; renderApp(); } }, [h('option', { value: 'all', text: text('\u0412\u0441\u0435 \u0441\u0442\u0430\u0442\u0443\u0441\u044b', 'All statuses') }), ...RFQ_STATUSES.map((status) => h('option', { value: status, text: statusLabel(status), selected: ui.rfqStatus === status }))]);
+    filter.value = ui.rfqStatus;
     const rows = values.map((rfq) => {
-      const overdue = core.isRfqOverdue(rfq, ui.referenceTime || new Date().toISOString());
-      const best = core.rankQuotes(rfq)[0];
-      const row = h('tr', { className: ui.selectedRfqCode === rfq.rfqCode ? 'selected' : '', tabindex: '0' }, [
-        h('td', {}, [h('strong', { text: rfq.rfqCode }), h('small', { text: rfq.sku })]), h('td', { text: String(rfq.targetQuantity) }), h('td', { text: `${rfq.supplierCodes.length}` }),
-        h('td', { text: String(rfq.quotes.length) }), h('td', { text: best ? formatMoneyMinor(best.totalCostMinor, rfq.bomCurrency) : '—' }),
-        h('td', {}, [badge(statusLabel(rfq.status), statusTone(rfq.status)), overdue ? badge(text('Просрочено', 'Overdue'), 'danger') : null]), h('td', { text: rfq.selectedSupplierCode || '—' }), h('td', { text: formatDate(rfq.deliveryDueAt) }),
-      ]);
+      const quotes = core.rankQuotes(rfq);
+      const best = quotes[0];
+      const worst = quotes.length > 1 ? quotes[quotes.length - 1] : null;
+      const comparison = best ? core.compareQuoteToBom(rfq, best) : null;
+      const ctx = {
+        best,
+        overdue: core.isRfqOverdue(rfq, ui.referenceTime || new Date().toISOString()),
+        spread: worst ? formatMoneyMinor(worst.totalCostMinor - best.totalCostMinor, rfq.bomCurrency) : '\u2014',
+        deltaText: comparison && comparison.deltaPercent !== null ? `${comparison.deltaPercent >= 0 ? '+' : ''}${comparison.deltaPercent.toFixed(1)}%` : '\u2014',
+      };
+      const row = h('tr', { className: ui.selectedRfqCode === rfq.rfqCode ? 'selected' : '', tabindex: '0' }, columns.map((column) => column.cell(rfq, ctx)));
       const select = () => { ui.selectedRfqCode = rfq.rfqCode; renderApp(); };
-      row.addEventListener('click', select); row.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); select(); } }); return row;
+      row.addEventListener('click', select);
+      row.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); select(); } });
+      return row;
     });
-    if (!rows.length) rows.push(h('tr', {}, [h('td', { colspan: '8', className: 'sourcing-empty', text: ui.loading ? text('Загрузка…', 'Loading…') : text('RFQ не найдены.', 'No RFQs found.') })]));
-    return h('div', { className: 'sourcing-grid' }, [h('section', { className: 'sourcing-panel' }, [h('div', { className: 'sourcing-toolbar' }, [h('h2', { text: view === 'quotations' ? text('Сравнение котировок', 'Quotation comparison') : view === 'production' ? text('Производственные размещения', 'Production allocations') : text('Реестр RFQ', 'RFQ register') }), view === 'rfqs' ? filter : null]), h('div', { className: 'sourcing-table-wrap' }, [h('table', { className: 'sourcing-table' }, [h('thead', {}, [h('tr', {}, [text('RFQ / SKU', 'RFQ / SKU'), text('Кол-во', 'Qty'), text('Приглашено', 'Invited'), text('Ответов', 'Quotes'), text('Лучшая сумма', 'Best total'), text('Статус', 'Status'), text('Поставщик', 'Supplier'), text('Поставка', 'Delivery')].map((value) => h('th', { text: value })))]), h('tbody', {}, rows)])])]), rfqInspector(selectedRfq())]);
+    if (!rows.length) rows.push(h('tr', {}, [h('td', { colspan: String(columns.length), className: 'sourcing-empty', text: ui.loading ? text('\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430\u2026', 'Loading\u2026') : text('RFQ \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u044b.', 'No RFQs found.') })]));
+    const heading = view === 'quotations' ? text('\u0421\u0440\u0430\u0432\u043d\u0435\u043d\u0438\u0435 \u043a\u043e\u0442\u0438\u0440\u043e\u0432\u043e\u043a', 'Quotation comparison') : view === 'production' ? text('\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434\u0441\u0442\u0432\u0435\u043d\u043d\u044b\u0435 \u0440\u0430\u0437\u043c\u0435\u0449\u0435\u043d\u0438\u044f', 'Production allocations') : text('\u0420\u0435\u0435\u0441\u0442\u0440 RFQ', 'RFQ register');
+    return h('div', { className: 'sourcing-grid' }, [h('section', { className: 'sourcing-panel' }, [h('div', { className: 'sourcing-toolbar' }, [h('h2', { text: heading }), filter]), h('div', { className: 'sourcing-table-wrap' }, [h('table', { className: 'sourcing-table' }, [h('thead', {}, [h('tr', {}, columns.map((column) => h('th', { text: column.label })))]), h('tbody', {}, rows)])])]), rfqInspector(selectedRfq())]);
   }
+
   function rfqInspector(rfq) {
     if (!rfq) return h('aside', { className: 'sourcing-inspector' }, [h('p', { className: 'muted', text: text('Выберите RFQ.', 'Select an RFQ.') })]);
     const permissions = { manage: can(rfq.brandId, caps.CAPABILITIES.SOURCING_MANAGE), award: can(rfq.brandId, caps.CAPABILITIES.SOURCING_AWARD), allocate: can(rfq.brandId, caps.CAPABILITIES.PRODUCTION_ALLOCATE) };
@@ -246,10 +297,20 @@
   function select(name, options, value, attrs = {}) { const node = h('select', { name, ...attrs }, options.map(([key, label]) => h('option', { value: key, text: label }))); node.value = value ?? options[0]?.[0] ?? ''; return node; }
   function field(label, input) { return h('label', { className: 'sourcing-field' }, [h('span', { text: label }), input]); }
   function localInput(value) { if (!value) return ''; const date = new Date(value); if (!Number.isFinite(date.getTime())) return ''; const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000); return local.toISOString().slice(0, 16); }
-  function iso(value) { const date = new Date(value); if (!Number.isFinite(date.getTime())) throw new Error('INVALID_DATE'); return date.toISOString(); }
+  function iso(value) { const date = new Date(value); if (!Number.isFinite(date.getTime())) throw new Error(text('\u0423\u043a\u0430\u0436\u0438\u0442\u0435 \u0434\u0430\u0442\u0443.', 'Enter a date.')); return date.toISOString(); }
   function daysFromNow(days) { return localInput(new Date(Date.now() + days * 86400000).toISOString()); }
   function list(value) { return String(value || '').split(',').map((item) => item.trim()).filter(Boolean); }
-  function decimalToMinor(value) { const normalized = String(value).trim(); if (!/^\d+(?:\.\d{1,2})?$/.test(normalized)) throw new Error('INVALID_MONEY'); const [whole, fraction = ''] = normalized.split('.'); const result = Number(whole) * 100 + Number(fraction.padEnd(2, '0')); if (!Number.isSafeInteger(result)) throw new Error('INVALID_MONEY'); return result; }
+  // This UI prints money as "21 250,00 €", so a Russian reader types 52,00 — and the form rejected it
+  // with the bare code INVALID_MONEY. A comma is a decimal separator here, spaces group thousands, and
+  // the message is a sentence.
+  function decimalToMinor(value) {
+    const normalized = String(value).trim().replace(/[\s\u00a0\u202f]/g, '').replace(',', '.');
+    if (!/^\d+(?:\.\d{1,2})?$/.test(normalized)) {
+      throw new Error(text('\u0423\u043a\u0430\u0436\u0438\u0442\u0435 \u0441\u0443\u043c\u043c\u0443, \u043d\u0430\u043f\u0440\u0438\u043c\u0435\u0440 52,00 \u0438\u043b\u0438 52.', 'Enter an amount, for example 52,00 or 52.'));
+    }
+    const [whole, fraction = ''] = normalized.split('.');
+    return Number(whole) * 100 + Number(fraction.padEnd(2, '0'));
+  }
   function dialog(title, fields, submitLabel, onSubmit, danger = false) {
     const modal = h('dialog', { className: 'sourcing-dialog' }); const form = h('form', { method: 'dialog' }, [h('header', {}, [h('h2', { text: title })]), h('div', { className: 'sourcing-form-grid' }, fields)]);
     const error = h('p', { className: 'sourcing-form-error', hidden: true });

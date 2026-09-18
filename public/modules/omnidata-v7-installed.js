@@ -23,8 +23,10 @@
     activate('Quotations', 'quotations', '\u041a\u043e\u0442\u0438\u0440\u043e\u0432\u043a\u0438', 'Quotations');
     activate('Production', 'production', '\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434\u0441\u0442\u0432\u043e', 'Production');
   }
-  if (window.SynthaProductionOrdersWorkspace) activate('Production orders', 'production-orders', '\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434\u0441\u0442\u0432\u0435\u043d\u043d\u044b\u0435 \u0437\u0430\u043a\u0430\u0437\u044b', 'Production orders');
-  if (window.SynthaProductionExecutionsWorkspace) activate('Production execution', 'production-executions', '\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434\u0441\u0442\u0432\u0435\u043d\u043d\u044b\u0439 \u043a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u044c', 'Production execution');
-  if (window.SynthaFinalQualityWorkspace) activate('Quality', 'final-quality', '\u041a\u0430\u0447\u0435\u0441\u0442\u0432\u043e', 'Quality');
+  // This layer has to run before measurements.js and samples.js, whose renderers wrap the view and
+  // need V7 navigation to be active first. Production Orders, Production Execution and Final Quality
+  // load after it, so their globals do not exist yet and the checks above would always miss them.
+  // They call activate themselves once they have registered, through the handle exported below.
+  window.SynthaOmnidataV7Nav = Object.freeze({ activate });
   if (window.SynthaLinesheetsWorkspace) activate('Linesheets', 'linesheets', '\u041b\u0438\u0441\u0442\u044b \u043a\u043e\u043b\u043b\u0435\u043a\u0446\u0438\u0439', 'Linesheets');
 })();

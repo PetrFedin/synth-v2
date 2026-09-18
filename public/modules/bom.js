@@ -122,7 +122,7 @@
   function header(summary) {
     const actions = [];
     if (canManageAnyBrand()) actions.push(h('button', { className: 'primary', type: 'button', text: text('Создать BOM', 'Create BOM'), onclick: () => openEditor(null) }));
-    actions.push(h('button', { className: 'secondary', type: 'button', text: text('Обновить', 'Refresh'), disabled: ui.loading, onclick: () => loadBoms({ reset: true }) }));
+    actions.push(h('button', { className: 'secondary', type: 'button', text: text('Обновить', 'Refresh'), disabled: ui.loading, onclick: () => { loadBoms({ reset: true }).then(() => toast(text('\u0414\u0430\u043d\u043d\u044b\u0435 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u044b.', 'Data refreshed.'))).catch((error) => toast(error?.message || text('\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u0434\u0430\u043d\u043d\u044b\u0435.', 'The data could not be refreshed.'), 'error')); } }));
     return h('header', { className: 'bom-header' }, [
       h('div', {}, [h('p', { className: 'eyebrow', text: 'PLM / COSTING' }), h('h1', { text: text('BOM и производственная себестоимость', 'BOM and production costing') }), h('p', { className: 'muted', text: text('Версионируемые спецификации материалов, snapshot цен, FX и полная воспроизводимая себестоимость изделия.', 'Versioned material specifications, price snapshots, FX and reproducible product cost.') })]),
       h('div', { className: 'bom-header-actions' }, actions),
@@ -206,6 +206,9 @@
     if (!confirm(text(`Опубликовать BOM ${bom.sku}? После публикации редактирование будет закрыто.`, `Publish BOM ${bom.sku}? Editing will be locked.`))) return;
     await mutate(`/v2/boms/${encodeURIComponent(bom.sku)}/publish`, { expectedVersion: bom.version });
     await loadBoms({ reset: true });
+    // Publishing closes the BOM for editing. Doing that silently leaves the reader unsure whether it
+    // happened at all, while the revision action next to it does say so.
+    toast(text(`\u0421\u043f\u0435\u0446\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u044f ${bom.sku} \u043e\u043f\u0443\u0431\u043b\u0438\u043a\u043e\u0432\u0430\u043d\u0430.`, `BOM ${bom.sku} published.`));
   }
 
   async function fetchPublishedMaterials() {
@@ -283,8 +286,15 @@
         lines: model.lines.map((line) => ({ lineId: String(line.lineId).trim().toUpperCase(), component: String(line.component).trim(), materialCode: line.materialCode, quantity: Number(line.quantity), wastePercent: Number(line.wastePercent), exchangeRate: Number(line.exchangeRate) })),
         laborCost: Number(model.laborCost), overheadCost: Number(model.overheadCost), logisticsCost: Number(model.logisticsCost), otherCost: Number(model.otherCost), notes: model.notes.trim() || null,
       };
-      if (existing) await mutate(`/v2/boms/${encodeURIComponent(existing.sku)}`, { expectedVersion: existing.version, ...payload }, 'PATCH');
-      else await mutate('/v2/boms', { sku: model.sku, ...payload });
+      // Without this the save failed as an unhandled rejection: the dialog stayed open, nothing was
+      // written, and the person was told nothing at all.
+      try {
+        if (existing) await mutate(`/v2/boms/${encodeURIComponent(existing.sku)}`, { expectedVersion: existing.version, ...payload }, 'PATCH');
+        else await mutate('/v2/boms', { sku: model.sku, ...payload });
+      } catch (error) {
+        toast(error?.message || text('Не удалось сохранить спецификацию.', 'The bill of materials could not be saved.'), 'error');
+        return;
+      }
       overlay.remove();
       await loadBoms({ reset: true });
     });

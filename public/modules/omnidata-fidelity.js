@@ -43,21 +43,61 @@ function odFidelityFilterButton() {
     odFidelityText('\u0424\u0438\u043b\u044c\u0442\u0440\u044b', 'Filters'),
     odFidelityText('\u0424\u0438\u043b\u044c\u0442\u0440\u044b', 'Filters'),
   );
+  // This used to move focus into the status select and call that filtering. It opens the attribute
+  // filter panel for the registry on screen, and carries the number of filters currently applied.
+  const scope = typeof OD_UI !== 'undefined' && OD_UI.registry ? Object.keys(OD_UI.registry).at(-1) : null;
+  const applied = scope && typeof odActiveFilterCount === 'function' ? odActiveFilterCount(scope) : 0;
+  if (applied > 0) {
+    button.classList.add('od-filter-button-active');
+    button.append(el('span', { className: 'od-filter-button-count', rawText: String(applied) }));
+  }
   button.addEventListener('click', () => {
-    const firstSelect = button.parentElement?.querySelector('.od-filter select');
-    firstSelect?.focus();
+    if (!scope) return;
+    OD_UI.filterPanel = OD_UI.filterPanel === scope ? null : scope;
+    OD_UI.columnPanel = null;
+    OD_UI.filterPanelQuery = '';
+    renderApp();
   });
   return button;
 }
 
 
 
+function odFidelityColumnButton() {
+  // (className, ariaLabel, visibleText) — the spoken name carries the detail, the face stays short.
+  const button = odFidelityButton(
+    'od-column-button',
+    odFidelityText('\u0412\u044b\u0431\u0440\u0430\u0442\u044c \u043a\u043e\u043b\u043e\u043d\u043a\u0438 \u0440\u0430\u0437\u0434\u0435\u043b\u0430', 'Choose the columns for this section'),
+    odFidelityText('\u041a\u043e\u043b\u043e\u043d\u043a\u0438', 'Columns'),
+  );
+  const scope = typeof OD_UI !== 'undefined' && OD_UI.registry ? Object.keys(OD_UI.registry).at(-1) : null;
+  const hidden = scope && typeof odHiddenColumnCount === 'function' ? odHiddenColumnCount(scope) : 0;
+  if (hidden > 0) {
+    button.classList.add('od-filter-button-active');
+    button.append(el('span', { className: 'od-filter-button-count', rawText: String(hidden) }));
+  }
+  button.addEventListener('click', () => {
+    if (!scope) return;
+    OD_UI.columnPanel = OD_UI.columnPanel === scope ? null : scope;
+    OD_UI.filterPanel = null;
+    renderApp();
+  });
+  return button;
+}
+
 function odFidelityCommandBars() {
   document.querySelectorAll('.od-commandbar').forEach((bar) => {
     if (!OD_FIDELITY.enhancedBars.has(bar)) {
       OD_FIDELITY.enhancedBars.add(bar);
       const search = bar.querySelector('.od-search');
-      if (search) search.after(odFidelityFilterButton());
+      // Both buttons act on the registry that sits below the bar. The dashboard has a command bar
+      // but no registry, so mounting them there produced two controls that could open nothing.
+      const hasRegistry = Boolean(bar.closest('.od-view')?.querySelector('.od-master .od-table'));
+      if (search && hasRegistry) {
+        const filters = odFidelityFilterButton();
+        search.after(filters);
+        filters.after(odFidelityColumnButton());
+      }
       const primary = bar.querySelector(':scope > .button');
       const spacer = el('span', { className: 'od-commandbar-spacer', ariaHidden: 'true' });
       bar.append(spacer);
@@ -75,6 +115,23 @@ function odFidelityNumberCell(index) {
 }
 
 
+
+// Every workspace table is laid out with table-layout:fixed against one min-width, so a nine-column
+// register squeezed each cell to 94px and silently clipped RFQ codes and status badges. The table
+// states how many columns it has and the stylesheet gives it the width those columns need; the wrap
+// scrolls when the viewport is narrower. Full values stay reachable through the cell's title.
+function odFidelityTableWidths() {
+  document.querySelectorAll('.od-table, .sourcing-table, .bom-table, .measurement-table, .sample-table, .ls9-table, .planning-table, .styles-table, .materials-table, .tech-pack-table, .production-orders-table, .production-execution-table, .final-quality-table').forEach((table) => {
+    const count = table.querySelectorAll('thead tr:first-child > th').length;
+    if (!count) return;
+    [...table.classList].filter((name) => name.startsWith('od-cols-')).forEach((name) => table.classList.remove(name));
+    table.classList.add(`od-cols-${Math.min(Math.max(count, 3), 14)}`);
+    table.querySelectorAll('tbody td').forEach((cell) => {
+      const value = (cell.textContent || '').trim();
+      if (value && !cell.title) cell.title = value;
+    });
+  });
+}
 
 function odFidelityTables() {
   document.querySelectorAll('.od-table').forEach((table) => {
@@ -110,9 +167,17 @@ function odFidelityInspectors() {
     const subtitle = title?.querySelector('p')?.textContent.trim() || '';
     if (head && title) {
       const main = el('div', { className: 'od-inspector-head-main' });
-      const code = el('span', { className: 'od-inspector-code', rawText: String(heading).slice(0, 12).toUpperCase() });
-      const kicker = title.querySelector('.od-inspector-kicker');
-      kicker?.after(code);
+      // Hard-truncating to 12 characters produced labels like "\u0412\u042b\u0411\u0415\u0420\u0418\u0422\u0415 \u0417\u0410\u041f"; the full text is kept and CSS decides where it ends.
+      // The chip is the object's code. When the inspector has no code of its own it repeats the
+      // heading in capitals directly above the heading, which reads as a rendering accident; the
+      // subtitle is used when it looks like a code, and otherwise nothing is added.
+      const looksLikeCode = subtitle && subtitle.length <= 48 && !/\s{2,}/.test(subtitle) && /[A-Z0-9]/.test(subtitle);
+      if (looksLikeCode) {
+        const code = el('span', { className: 'od-inspector-code', rawText: subtitle.toUpperCase() });
+        code.title = subtitle;
+        const kicker = title.querySelector('.od-inspector-kicker');
+        kicker?.after(code);
+      }
       main.append(title);
       const badge = head.querySelector('.badge');
       if (badge) {
@@ -122,10 +187,14 @@ function odFidelityInspectors() {
       }
       head.append(main);
     }
-    const tabs = inspector.querySelector(':scope > .od-inspector-tabs');
-    const description = odFidelityDescription(subtitle);
-    if (tabs) tabs.before(description);
-    else head?.after(description);
+    // The subtitle is already on screen, under the heading. Repeating it under a "Description"
+    // caption made every inspector state the same string twice, and called a code a description.
+    if (!subtitle) {
+      const tabs = inspector.querySelector(':scope > .od-inspector-tabs');
+      const description = odFidelityDescription('');
+      if (tabs) tabs.before(description);
+      else head?.after(description);
+    }
   });
 }
 
@@ -135,6 +204,7 @@ function applyOmnidataVisualFidelity() {
   odFidelityStatusStrip();
   odFidelityCommandBars();
   odFidelityTables();
+  odFidelityTableWidths();
   odFidelityInspectors();
 }
 

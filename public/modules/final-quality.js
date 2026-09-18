@@ -51,7 +51,7 @@
   function date(value) {
     if (!value) return '—';
     const parsed = new Date(value);
-    return Number.isFinite(parsed.getTime()) ? new Intl.DateTimeFormat(undefined, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(parsed) : '—';
+    return Number.isFinite(parsed.getTime()) ? new Intl.DateTimeFormat(I18N.localeTag(), { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(parsed) : '—';
   }
   function can(brandId, capability) { return caps.hasForOrganisation(state.workspace, brandId, capability); }
   function canManageAny() { return caps.hasAny(state.workspace, caps.CAPABILITIES.QUALITY_MANAGE, 'brand'); }
@@ -114,7 +114,7 @@
       h('p', { className: 'eyebrow', text: 'PLM / FINAL QUALITY' }),
       h('h1', { text: t('Финальный контроль качества', 'Final Quality') }),
       h('p', { className: 'muted', text: t('Инспекция партии, доработка, повторная проверка и неизменяемый допуск к отгрузке.', 'Lot inspection, rework, reinspection and an immutable shipment release.') }),
-    ]), h('button', { type: 'button', className: 'secondary', disabled: ui.loading, text: t('Обновить', 'Refresh'), onclick: () => { void load({ reset: true }); } })];
+    ]), h('button', { type: 'button', className: 'secondary', disabled: ui.loading, text: t('Обновить', 'Refresh'), onclick: () => { load({ reset: true }).then(() => toast(t('Данные обновлены.', 'Data refreshed.'))).catch((error) => toast(error?.message || t('Не удалось обновить данные.', 'The data could not be refreshed.'), 'error')); } })];
     if (canManageAny()) children.push(h('div', { className: 'final-quality-create' }, [
       h('input', { value: ui.executionCode, placeholder: t('Execution в статусе ready-for-qc', 'Ready-for-QC execution code'), oninput: (event) => { ui.executionCode = event.target.value.toUpperCase(); } }),
       h('button', { type: 'button', className: 'primary', disabled: Boolean(ui.busyCode), text: t('Создать инспекцию', 'Create inspection'), onclick: () => {
@@ -282,4 +282,7 @@
   }
 
   global.SynthaFinalQualityWorkspace = Object.freeze({ fetchAll, load, render: renderFinalQuality, openForExecution });
+// The V7 nav shim runs before this file, so it could not see the global above; the section
+// stayed marked as planned and could not be opened. Claim the entry now that it exists.
+global.SynthaOmnidataV7Nav?.activate('Quality', 'final-quality', '\u041a\u0430\u0447\u0435\u0441\u0442\u0432\u043e', 'Quality');
 })(window);

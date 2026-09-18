@@ -1,0 +1,532 @@
+{
+  "dataset_version": "1.0.0",
+  "profile": "RU_FASHION_CORE",
+  "markets": [
+    "RU"
+  ],
+  "languages": [
+    "ru",
+    "en"
+  ],
+  "source": {
+    "system": "syntha_operational_master",
+    "version": "1.0.0",
+    "endpoint": "mdm/reference/russia-fashion-colour-core.json",
+    "license": "SYNTHA internal operational master data",
+    "retrieved_at": "2026-09-18T00:00:00.000Z"
+  },
+  "dictionaries": [
+    {
+      "id": "mdm-dictionary:colour-family",
+      "code": "colour.family",
+      "data_class": "classifier",
+      "scope_model": "global",
+      "hierarchy_enabled": false,
+      "effective_dated": true,
+      "approval_required": true,
+      "name": {
+        "ru": "Цветовое семейство",
+        "en": "Colour family"
+      },
+      "description": {
+        "ru": "Группы оттенков, по которым цвет попадает в ассортиментную аналитику.",
+        "en": "The shade groups a colour is reported under."
+      },
+      "entries": [
+        {
+          "id": "mdm-entry:colour-family:black",
+          "version": 1,
+          "domain": "colour.family",
+          "code": "BLACK",
+          "name_ru": "Чёрный",
+          "name_en": "Black",
+          "description_ru": "Цветовое семейство «Чёрный»: группа оттенков, по которой цвет попадает в ассортиментную аналитику.",
+          "description_en": "The black colour family: the shade group a colour is reported under.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-colour-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-18T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-18T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ]
+          }
+        },
+        {
+          "id": "mdm-entry:colour-family:white",
+          "version": 1,
+          "domain": "colour.family",
+          "code": "WHITE",
+          "name_ru": "Белый",
+          "name_en": "White",
+          "description_ru": "Цветовое семейство «Белый»: группа оттенков, по которой цвет попадает в ассортиментную аналитику.",
+          "description_en": "The white colour family: the shade group a colour is reported under.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-colour-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-18T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-18T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ]
+          }
+        },
+        {
+          "id": "mdm-entry:colour-family:grey",
+          "version": 1,
+          "domain": "colour.family",
+          "code": "GREY",
+          "name_ru": "Серый",
+          "name_en": "Grey",
+          "description_ru": "Цветовое семейство «Серый»: группа оттенков, по которой цвет попадает в ассортиментную аналитику.",
+          "description_en": "The grey colour family: the shade group a colour is reported under.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-colour-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-18T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-18T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ]
+          }
+        },
+        {
+          "id": "mdm-entry:colour-family:blue",
+          "version": 1,
+          "domain": "colour.family",
+          "code": "BLUE",
+          "name_ru": "Синий",
+          "name_en": "Blue",
+          "description_ru": "Цветовое семейство «Синий»: группа оттенков, по которой цвет попадает в ассортиментную аналитику.",
+          "description_en": "The blue colour family: the shade group a colour is reported under.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-colour-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-18T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-18T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ]
+          }
+        },
+        {
+          "id": "mdm-entry:colour-family:green",
+          "version": 1,
+          "domain": "colour.family",
+          "code": "GREEN",
+          "name_ru": "Зелёный",
+          "name_en": "Green",
+          "description_ru": "Цветовое семейство «Зелёный»: группа оттенков, по которой цвет попадает в ассортиментную аналитику.",
+          "description_en": "The green colour family: the shade group a colour is reported under.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-colour-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-18T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-18T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ]
+          }
+        },
+        {
+          "id": "mdm-entry:colour-family:red",
+          "version": 1,
+          "domain": "colour.family",
+          "code": "RED",
+          "name_ru": "Красный",
+          "name_en": "Red",
+          "description_ru": "Цветовое семейство «Красный»: группа оттенков, по которой цвет попадает в ассортиментную аналитику.",
+          "description_en": "The red colour family: the shade group a colour is reported under.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-colour-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-18T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-18T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ]
+          }
+        },
+        {
+          "id": "mdm-entry:colour-family:brown",
+          "version": 1,
+          "domain": "colour.family",
+          "code": "BROWN",
+          "name_ru": "Коричневый",
+          "name_en": "Brown",
+          "description_ru": "Цветовое семейство «Коричневый»: группа оттенков, по которой цвет попадает в ассортиментную аналитику.",
+          "description_en": "The brown colour family: the shade group a colour is reported under.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-colour-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-18T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-18T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ]
+          }
+        },
+        {
+          "id": "mdm-entry:colour-family:violet",
+          "version": 1,
+          "domain": "colour.family",
+          "code": "VIOLET",
+          "name_ru": "Фиолетовый",
+          "name_en": "Violet",
+          "description_ru": "Цветовое семейство «Фиолетовый»: группа оттенков, по которой цвет попадает в ассортиментную аналитику.",
+          "description_en": "The violet colour family: the shade group a colour is reported under.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-colour-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-18T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-18T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ]
+          }
+        },
+        {
+          "id": "mdm-entry:colour-family:beige",
+          "version": 1,
+          "domain": "colour.family",
+          "code": "BEIGE",
+          "name_ru": "Бежевый",
+          "name_en": "Beige",
+          "description_ru": "Цветовое семейство «Бежевый»: группа оттенков, по которой цвет попадает в ассортиментную аналитику.",
+          "description_en": "The beige colour family: the shade group a colour is reported under.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-colour-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-18T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-18T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "mdm-dictionary:colour-colour",
+      "code": "colour.colour",
+      "data_class": "classifier",
+      "scope_model": "global",
+      "hierarchy_enabled": false,
+      "effective_dated": true,
+      "approval_required": true,
+      "name": {
+        "ru": "Цвет",
+        "en": "Colour"
+      },
+      "description": {
+        "ru": "Управляемая палитра: эталон Pantone, экранный HEX, внутренний код и цветовое семейство.",
+        "en": "The governed palette: a Pantone standard, a screen HEX, an internal code and a colour family."
+      },
+      "entries": [
+        {
+          "id": "mdm-entry:colour-colour:midnight-navy",
+          "version": 1,
+          "domain": "colour.colour",
+          "code": "MIDNIGHT_NAVY",
+          "name_ru": "Тёмно-синий",
+          "name_en": "Midnight Navy",
+          "description_ru": "Цвет «Тёмно-синий», эталон Pantone 19-4025 TCX, семейство «Синий».",
+          "description_en": "The Midnight Navy colour, Pantone 19-4025 TCX standard, blue family.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-colour-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-18T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-18T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ],
+            "hex": "#1B2430",
+            "pantone": "19-4025 TCX",
+            "colour_family_code": "BLUE",
+            "colour_code": "01"
+          }
+        },
+        {
+          "id": "mdm-entry:colour-colour:off-white",
+          "version": 1,
+          "domain": "colour.colour",
+          "code": "OFF_WHITE",
+          "name_ru": "Молочный",
+          "name_en": "Off White",
+          "description_ru": "Цвет «Молочный», эталон Pantone 11-0107 TCX, семейство «Белый».",
+          "description_en": "The Off White colour, Pantone 11-0107 TCX standard, white family.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-colour-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-18T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-18T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ],
+            "hex": "#F2EFE6",
+            "pantone": "11-0107 TCX",
+            "colour_family_code": "WHITE",
+            "colour_code": "02"
+          }
+        },
+        {
+          "id": "mdm-entry:colour-colour:jet-black",
+          "version": 1,
+          "domain": "colour.colour",
+          "code": "JET_BLACK",
+          "name_ru": "Чёрный",
+          "name_en": "Jet Black",
+          "description_ru": "Цвет «Чёрный», эталон Pantone 19-4005 TCX, семейство «Чёрный».",
+          "description_en": "The Jet Black colour, Pantone 19-4005 TCX standard, black family.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-colour-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-18T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-18T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ],
+            "hex": "#101014",
+            "pantone": "19-4005 TCX",
+            "colour_family_code": "BLACK",
+            "colour_code": "03"
+          }
+        },
+        {
+          "id": "mdm-entry:colour-colour:deep-forest",
+          "version": 1,
+          "domain": "colour.colour",
+          "code": "DEEP_FOREST",
+          "name_ru": "Тёмно-зелёный",
+          "name_en": "Deep Forest",
+          "description_ru": "Цвет «Тёмно-зелёный», эталон Pantone 19-5230 TCX, семейство «Зелёный».",
+          "description_en": "The Deep Forest colour, Pantone 19-5230 TCX standard, green family.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-colour-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-18T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-18T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ],
+            "hex": "#1E3A2F",
+            "pantone": "19-5230 TCX",
+            "colour_family_code": "GREEN",
+            "colour_code": "04"
+          }
+        },
+        {
+          "id": "mdm-entry:colour-colour:warm-sand",
+          "version": 1,
+          "domain": "colour.colour",
+          "code": "WARM_SAND",
+          "name_ru": "Песочный",
+          "name_en": "Warm Sand",
+          "description_ru": "Цвет «Песочный», эталон Pantone 14-1112 TCX, семейство «Бежевый».",
+          "description_en": "The Warm Sand colour, Pantone 14-1112 TCX standard, beige family.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-colour-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-18T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-18T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ],
+            "hex": "#D9C6A5",
+            "pantone": "14-1112 TCX",
+            "colour_family_code": "BEIGE",
+            "colour_code": "05"
+          }
+        },
+        {
+          "id": "mdm-entry:colour-colour:burgundy",
+          "version": 1,
+          "domain": "colour.colour",
+          "code": "BURGUNDY",
+          "name_ru": "Бордовый",
+          "name_en": "Burgundy",
+          "description_ru": "Цвет «Бордовый», эталон Pantone 19-1526 TCX, семейство «Красный».",
+          "description_en": "The Burgundy colour, Pantone 19-1526 TCX standard, red family.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-colour-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-18T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-18T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ],
+            "hex": "#5C1A2B",
+            "pantone": "19-1526 TCX",
+            "colour_family_code": "RED",
+            "colour_code": "06"
+          }
+        },
+        {
+          "id": "mdm-entry:colour-colour:charcoal",
+          "version": 1,
+          "domain": "colour.colour",
+          "code": "CHARCOAL",
+          "name_ru": "Графитовый",
+          "name_en": "Charcoal",
+          "description_ru": "Цвет «Графитовый», эталон Pantone 18-0201 TCX, семейство «Серый».",
+          "description_en": "The Charcoal colour, Pantone 18-0201 TCX standard, grey family.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-colour-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-18T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-18T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ],
+            "hex": "#3A3D42",
+            "pantone": "18-0201 TCX",
+            "colour_family_code": "GREY",
+            "colour_code": "07"
+          }
+        },
+        {
+          "id": "mdm-entry:colour-colour:cocoa",
+          "version": 1,
+          "domain": "colour.colour",
+          "code": "COCOA",
+          "name_ru": "Какао",
+          "name_en": "Cocoa",
+          "description_ru": "Цвет «Какао», эталон Pantone 19-1215 TCX, семейство «Коричневый».",
+          "description_en": "The Cocoa colour, Pantone 19-1215 TCX standard, brown family.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-colour-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-18T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-18T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ],
+            "hex": "#4A3428",
+            "pantone": "19-1215 TCX",
+            "colour_family_code": "BROWN",
+            "colour_code": "08"
+          }
+        }
+      ]
+    }
+  ]
+}

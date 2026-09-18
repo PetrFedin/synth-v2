@@ -32,7 +32,7 @@ export function createMemoryWholesaleStore() {
 function emptyState() {
   return {
     organisations: new Map(), memberships: new Map(), relationships: new Map(), showroomInvitations: new Map(), retailDoors: new Map(),
-    campaigns: new Map(), collections: new Map(), collectionStyleVersions: new Map(), showrooms: new Map(), selections: new Map(), orders: new Map(),
+    campaigns: new Map(), collections: new Map(), productPlaceholders: new Map(), productPlaceholderStyleLinks: new Map(), productResponsibilities: new Map(), collectionStyleVersions: new Map(), showrooms: new Map(), selections: new Map(), orders: new Map(),
     orderCommitSnapshots: new Map(), cycles: new Map(), deals: new Map(), calendar: new Map(), commands: new Map(), outbox: new Map(),
   };
 }
@@ -71,6 +71,35 @@ function transactionView(state) {
     getCampaign: (id) => state.campaigns.get(id),
     insertCampaign: (campaign) => insertUnique(state.campaigns, campaign.id, campaign, 'CAMPAIGN_ALREADY_EXISTS'),
     saveCampaign: (campaign, expectedVersion) => saveVersioned(state.campaigns, campaign, expectedVersion, 'CAMPAIGN_CONCURRENCY_CONFLICT'),
+    getProductResponsibility: (id) => state.productResponsibilities.get(id),
+    insertProductResponsibility: (value) => {
+      invariant(![...state.productResponsibilities.values()].some((item) => item.styleId === value.styleId
+        && item.role === value.role && item.userId === value.userId),
+        'PRODUCT_RESPONSIBILITY_ALREADY_ASSIGNED', 'This person already holds that desk on this style',
+        { styleId: value.styleId, role: value.role });
+      insertUnique(state.productResponsibilities, value.id, value, 'PRODUCT_RESPONSIBILITY_ALREADY_ASSIGNED');
+    },
+    deleteProductResponsibility: (id) => {
+      const value = state.productResponsibilities.get(id);
+      state.productResponsibilities.delete(id);
+      return value;
+    },
+    getProductPlaceholder: (id) => state.productPlaceholders.get(id),
+    insertProductPlaceholder: (value) => insertUnique(state.productPlaceholders, value.id, value, 'PLACEHOLDER_ALREADY_EXISTS'),
+    saveProductPlaceholder: (value, expectedVersion) => saveVersioned(state.productPlaceholders, value, expectedVersion, 'PLACEHOLDER_CONCURRENCY_CONFLICT'),
+    insertProductPlaceholderStyleLink: (value) => {
+      // One slot may be filled by several styles, but a style belongs to one slot.
+      invariant(![...state.productPlaceholderStyleLinks.values()].some((item) => item.styleId === value.styleId),
+        'PLACEHOLDER_STYLE_LINK_ALREADY_EXISTS', 'This style is already linked to a placeholder', { styleId: value.styleId });
+      insertUnique(state.productPlaceholderStyleLinks, value.id, value, 'PLACEHOLDER_STYLE_LINK_ALREADY_EXISTS');
+      const placeholder = state.productPlaceholders.get(value.placeholderId);
+      if (placeholder && placeholder.status === 'planned') {
+        state.productPlaceholders.set(placeholder.id, Object.freeze({
+          ...placeholder, status: 'in_development', version: placeholder.version + 1,
+          updatedAt: value.linkedAt, updatedBy: value.linkedBy,
+        }));
+      }
+    },
     getCollection: (id) => state.collections.get(id),
     getCollectionStyleVersion: (collectionId, styleVersionId) => state.collectionStyleVersions.get(collectionStyleVersionKey(collectionId, styleVersionId)),
     listCollectionStyleVersions: (collectionId) => [...state.collectionStyleVersions.values()]

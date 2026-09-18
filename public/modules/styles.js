@@ -61,6 +61,22 @@
     return list.map((person) => person.displayName || person.email || person.userId).join(', ');
   }
 
+  // Every governed attribute the style carries, labelled by the catalogue rather than by a hardcoded
+  // list here, so a card can show an attribute nobody thought to write a label for.
+  function dimensionLabel(product) {
+    return (I18N.getLocale?.() === 'en' ? product.categoryNameEn : product.categoryNameRu) || product.categoryCode || '—';
+  }
+  function categoryAttributes(product) {
+    const values = product?.dimensions || {};
+    return Object.entries(values).map(([code, item]) => ({
+      code,
+      label: (I18N.getLocale?.() === 'en' ? item.labelEn : item.labelRu) || code,
+      value: (I18N.getLocale?.() === 'en' ? item.nameEn : item.nameRu)
+        || (Array.isArray(item.value) ? item.value.join(', ') : item.value)
+        || '—',
+    })).sort((left, right) => left.label.localeCompare(right.label));
+  }
+
   function gender(product) {
     const name = I18N.getLocale?.() === 'en' ? product.genderNameEn : product.genderNameRu;
     return name || product.genderCode || '';
@@ -103,6 +119,20 @@
             { label: text('Связка с каталогом', 'Catalogue link'), value: `${item.legacyCatalogLinkCount}/${item.productSkuCount}` },
           ],
           content: [risks],
+        },
+        {
+          label: text('Атрибуты категории', 'Category attributes'),
+          fields: categoryAttributes(product).length
+            ? categoryAttributes(product).map((item) => ({ label: item.label, value: item.value }))
+            : [],
+          content: [
+            product.categoryAttributeExpected
+              ? notice(text(
+                `Заполнено ${categoryAttributes(product).length} из ${product.categoryAttributeExpected} полей, которые предполагает категория «${dimensionLabel(product)}».`,
+                `${categoryAttributes(product).length} of ${product.categoryAttributeExpected} fields expected by the ${dimensionLabel(product)} category are filled.`,
+              ), categoryAttributes(product).length ? 'success' : 'warning')
+              : notice(text('У модели не выбрана категория, поэтому набор полей ещё не определён.', 'This style has no category yet, so the field set is not decided.'), 'warning'),
+          ],
         },
         {
           label: text('Команда', 'Team'),

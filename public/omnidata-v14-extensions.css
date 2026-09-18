@@ -311,3 +311,18 @@ body .workspace-content table[class*="od-cols-"] td .sourcing-badge {
   height: auto !important;
   min-height: 0 !important;
 }
+
+/* The language switcher. The design-system layer sizes its options as standard controls (34px, with
+   !important), while an older layer still pins the container to a fixed 24px height, so the options
+   stood 5px proud of it top and bottom and the container's grey track showed as a band around the
+   active one. The container is no longer a segmented track — it is a pair of buttons — so it sizes to
+   what it holds and stops painting a background behind them. */
+body.omnidata-v14 .language-switcher {
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  gap: 4px !important;
+  align-items: center !important;
+}

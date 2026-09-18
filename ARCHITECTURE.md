@@ -930,6 +930,20 @@ part in the contract stylesheet — never by a module namespace, which
 | Status dot | `status` | A 9px dot whose border colour encodes state, not a pill |
 | Toast host | `status` / `toast` | A permanently mounted positioning container; the `.notice` inside carries the card |
 | Dashboard mini-table | `table` | Two or three summary columns in a half-width panel; the 720px grid floor only forces a scrollbar |
+| Status chip label and count | `status` | They sit inside a status card, so the pill was drawn again nested inside the chip they belong to; they are text |
+| Section count | `card` | A soft count pill beside a section title, not a card nested in a card |
+| Help button | `button` | A topbar control on the same baseline as the bell, not the full-height topbar tab the v7 layer sized it to |
+
+A nested role is not automatically wrong — a card list holds cards, a table wrap
+holds a table, a toast host holds a notice. What is wrong is an element that
+carries a role because of where it sits and then paints that role's chrome a
+second time inside its own parent. Check a suspect by comparing an element's
+role with the nearest ancestor carrying the same role, and by whether it paints
+a border or background of its own.
+
+The v12 rail tooltip (`.nav-item[data-v12-label]::after`) belongs to the
+icon-only rail and is shown only while the sidebar is collapsed; with labels
+visible it repeats the label beside it and covers the item above.
 
 
 ### 10.11 Shell and navigation

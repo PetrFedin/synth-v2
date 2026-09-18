@@ -366,4 +366,30 @@ body.omnidata-role-system :is([data-ods-role="status"],[data-od14-unified-role="
 body.omnidata-design-system-v1 table:is([data-ods-role="table"],[data-od14-unified-role="table"]).od-mini-table,
 body.omnidata-role-system table:is([data-ods-role="table"],[data-od14-unified-role="table"]).od-mini-table{min-width:0!important}
 
+/* A status chip is one pill: a dot, a label and a count inside a single border.
+   Its label and count carry the status role because they sit inside a status
+   card, so the pill chrome was drawn a second and third time, nested inside the
+   chip they belong to. They are text. */
+body.omnidata-design-system-v1 :is([data-ods-role="status"],[data-od14-unified-role="status"]):is(.od-status-label,.od-status-value),
+body.omnidata-role-system :is([data-ods-role="status"],[data-od14-unified-role="status"]):is(.od-status-label,.od-status-value){min-height:0!important;padding:0!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important}
+body.omnidata-design-system-v1 :is([data-ods-role="status"],[data-od14-unified-role="status"]).od-status-value,
+body.omnidata-role-system :is([data-ods-role="status"],[data-od14-unified-role="status"]).od-status-value{margin-left:auto!important;font-weight:700!important}
+
+/* A section count is a soft pill beside the section title, not a nested card. */
+body.omnidata-design-system-v1 :is([data-ods-role="card"],[data-od14-unified-role="card"]).section-count,
+body.omnidata-role-system :is([data-ods-role="card"],[data-od14-unified-role="card"]).section-count{display:inline-flex!important;min-width:22px!important;min-height:22px!important;height:22px!important;align-items:center!important;justify-content:center!important;padding:0 6px!important;border:0!important;border-radius:999px!important;background:#f0f1f2!important;color:#626871!important;font-size:9px!important}
+
+/* The help button is a topbar control, not a full-height topbar tab: the v7
+   layer sized it to the whole topbar, so it stood a head taller than the bell
+   and the language switcher beside it. */
+body.omnidata-design-system-v1 .topbar .od-v7-help-button,
+body.omnidata-role-system .topbar .od-v7-help-button{align-self:center!important;width:var(--ods-control-height)!important;min-width:var(--ods-control-height)!important;height:var(--ods-control-height)!important;min-height:var(--ods-control-height)!important;padding:0!important;border:1px solid var(--ods-color-border-strong)!important;border-radius:var(--ods-radius-sm)!important}
+
+/* The v12 rail tooltip repeats the label that is already visible beside it, and
+   covers the item above. It is only useful when the labels are hidden. */
+body.omnidata-design-system-v1 .nav-item[data-v12-label]:hover::after,
+body.omnidata-role-system .nav-item[data-v12-label]:hover::after{display:none!important}
+body.omnidata-design-system-v1 .shell.sidebar-collapsed .nav-item[data-v12-label]:hover::after,
+body.omnidata-role-system .shell.sidebar-collapsed .nav-item[data-v12-label]:hover::after{display:block!important}
+
 

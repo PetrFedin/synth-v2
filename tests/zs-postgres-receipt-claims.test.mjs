@@ -1,3 +1,4 @@
+import { withLegacyCommercialInsertGuardsDisabled } from './postgres/legacy-commercial-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
@@ -17,6 +18,7 @@ test('PostgreSQL executes receipt discrepancy -> inventory quarantine -> retaile
   try {
     await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
     await migratePostgres({ pool, migrationsDir: path.join(root, 'db', 'migrations'), clock: () => now });
+    await withLegacyCommercialInsertGuardsDisabled(pool, async () => {
     await seedTrade(pool);
     let sequence = 0;
     const nextId = (prefix) => `${prefix}-claim-pg-${++sequence}`;
@@ -82,6 +84,7 @@ test('PostgreSQL executes receipt discrepancy -> inventory quarantine -> retaile
     assert.deepEqual(counts.rows[0], { inventory_movements: 1, claims: 1, resolutions: 1, claim_events: 2 });
     await assert.rejects(pool.query('UPDATE receipt_discrepancy_claim_snapshots SET status = status WHERE id = $1', [claim.id]), (error) => error.code === '55000');
     await assert.rejects(pool.query('DELETE FROM receipt_claim_resolution_snapshots WHERE id = $1', [resolution.id]), (error) => error.code === '55000');
+    });
   } finally {
     await pool.end();
   }

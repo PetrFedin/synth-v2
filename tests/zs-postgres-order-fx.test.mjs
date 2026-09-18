@@ -1,3 +1,4 @@
+import { withLegacyCommercialInsertGuardsDisabled } from './postgres/legacy-commercial-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
@@ -17,6 +18,7 @@ test('PostgreSQL persists supply, FX, readiness, immutable cost close and post-c
   try {
     await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
     await migratePostgres({ pool, migrationsDir, clock: () => now });
+    await withLegacyCommercialInsertGuardsDisabled(pool, async () => {
 
     const brand = { id: 'brand-fx', type: 'brand', name: 'FX Brand' };
     const shop = { id: 'shop-fx', type: 'shop', name: 'FX Shop' };
@@ -284,6 +286,7 @@ test('PostgreSQL persists supply, FX, readiness, immutable cost close and post-c
       () => pool.query('UPDATE post_close_adjustments SET reason = reason || $2 WHERE id = $1', [late.adjustment.id, ' changed']),
       (error) => error?.code === '55000' && error?.message === 'immutable order economics record cannot be changed: post_close_adjustments',
     );
+    });
   } finally {
     await pool.end();
   }

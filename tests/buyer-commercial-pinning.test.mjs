@@ -11,7 +11,7 @@ import { createMemoryWholesaleStore } from '../src/infrastructure/memory-store.m
 
 const clock = () => '2026-08-09T00:00:00.000Z';
 
-async function fixture({ availableQuantity = 10 } = {}) {
+async function fixture({ liveAvailableQuantity = 10, frozenAvailableQuantity = 10 } = {}) {
   let id = 0;
   const nextId = (prefix) => `${prefix}_${++id}`;
   const store = createMemoryWholesaleStore();
@@ -49,18 +49,41 @@ async function fixture({ availableQuantity = 10 } = {}) {
   });
   const acceptedInvitation = await partners.acceptShowroomInvitation('invitation-accept', 'buyer-1', invitation.id);
 
+  const availability = Object.freeze({ mode: 'available_to_sell', quantity: frozenAvailableQuantity });
   const buyerCatalog = Object.freeze({
     id: 'BUYER-CAT-1', status: 'published', publicationId: 'PUB-1', priceListVersionId: 'PRICE-1',
     brandId: 'brand-1', shopId: 'shop-1', showroomId: showroom.id, accessGrantId: acceptedInvitation.id,
     collectionId: collection.id, currency: 'RUB', contentHash: 'a'.repeat(64),
+    commercialProjectionId: 'PROJECTION-1', commercialProjectionVersionNo: 1,
+    commercialProjectionContentHash: 'b'.repeat(64), readinessSnapshotId: 'READINESS-1', styleVersionId: 'STYLE-V1',
     lines: Object.freeze([
-      Object.freeze({ sku: 'SKU-1', catalogVersion: 7, unitPrice: 7500, currency: 'RUB', minimumOrderQuantity: 2 }),
+      Object.freeze({
+        sku: 'SKU-1', productSkuId: 'PRODUCT-SKU-1', styleVersionId: 'STYLE-V1', colorwayId: 'COLORWAY-1', sizeValueId: 'SIZE-M',
+        catalogVersion: 7, unitPrice: 7500, currency: 'RUB', minimumOrderQuantity: 2, availability,
+      }),
+    ]),
+    styles: Object.freeze([
+      Object.freeze({
+        styleId: 'STYLE-1', styleVersionId: 'STYLE-V1',
+        colorways: Object.freeze([
+          Object.freeze({
+            colorwayId: 'COLORWAY-1',
+            skus: Object.freeze([
+              Object.freeze({
+                productSkuId: 'PRODUCT-SKU-1', skuCode: 'SKU-1', gtin: '04601234567890', sizeValueId: 'SIZE-M',
+                size: Object.freeze({ id: 'SIZE-M', code: 'M', labelRu: 'M', labelEn: 'M', sortOrder: 1 }),
+                commercialTerms: Object.freeze({ availability }),
+              }),
+            ]),
+          }),
+        ]),
+      }),
     ]),
   });
   const liveSku = Object.freeze({
     id: 'SKU-1', sku: 'SKU-1', collectionId: collection.id, brandId: 'brand-1', name: 'Live PLM changed',
     wholesalePrice: 99900, currency: 'RUB', minimumOrderQuantity: 99,
-    availableQuantity, reservedQuantity: 0, availableToSell: availableQuantity,
+    availableQuantity: liveAvailableQuantity, reservedQuantity: 0, availableToSell: liveAvailableQuantity,
     status: 'draft', version: 99,
   });
   const commercialReader = Object.freeze({
@@ -81,20 +104,27 @@ async function fixture({ availableQuantity = 10 } = {}) {
   return { collaboration, selection, retailDoors, orderBuilder, door };
 }
 
-test('pinned buyer selection keeps published price, MOQ and version when live PLM/catalog fields later change', async () => {
+test('pinned buyer selection keeps immutable ProductSku price, MOQ and catalog compatibility version after live catalog changes', async () => {
   const { collaboration, selection } = await fixture();
-  const edited = await collaboration.upsertSelectionLine('line-valid', 'buyer-1', selection.id, { sku: 'SKU-1', quantity: 3 });
+  const edited = await collaboration.upsertSelectionLine('line-valid', 'buyer-1', selection.id, { sku: 'SKU-1', productSkuId: 'PRODUCT-SKU-1', quantity: 3 });
+  assert.equal(edited.lines.length, 1);
   assert.deepEqual(edited.lines[0], {
     sku: 'SKU-1', quantity: 3, unitPrice: 7500, currency: 'RUB', catalogVersion: 7,
+    productSkuId: 'PRODUCT-SKU-1', gtin: '04601234567890', styleId: 'STYLE-1', styleVersionId: 'STYLE-V1',
+    colorwayId: 'COLORWAY-1', sizeValueId: 'SIZE-M', sizeCode: 'M', sizeLabelRu: 'M', sizeLabelEn: 'M', sizeSortOrder: 1,
     note: '', updatedBy: 'buyer-1', updatedAt: clock(),
   });
 });
 
-test('pinned buyer selection still uses live inventory only as a dynamic availability overlay', async () => {
-  const { collaboration, selection } = await fixture({ availableQuantity: 2 });
+test('pinned buyer selection uses frozen BuyerCatalog availability rather than mutable live catalog ATS', async () => {
+  const { collaboration, selection } = await fixture({ liveAvailableQuantity: 2, frozenAvailableQuantity: 10 });
+  const edited = await collaboration.upsertSelectionLine('line-over-live-ats', 'buyer-1', selection.id, { sku: 'SKU-1', productSkuId: 'PRODUCT-SKU-1', quantity: 3 });
+  assert.equal(edited.lines[0].quantity, 3);
+
+  const blocked = await fixture({ liveAvailableQuantity: 100, frozenAvailableQuantity: 2 });
   await assert.rejects(
-    () => collaboration.upsertSelectionLine('line-over-ats', 'buyer-1', selection.id, { sku: 'SKU-1', quantity: 3 }),
-    (error) => error?.code === 'CATALOG_AVAILABILITY_EXCEEDED',
+    () => blocked.collaboration.upsertSelectionLine('line-over-frozen-ats', 'buyer-1', blocked.selection.id, { sku: 'SKU-1', productSkuId: 'PRODUCT-SKU-1', quantity: 3 }),
+    (error) => error?.code === 'BUYER_CATALOG_AVAILABILITY_EXCEEDED',
   );
 });
 
@@ -116,9 +146,9 @@ test('selection freezes buyer Retail Door version and addresses independently of
   assert.equal(selection.buyerCommercialSnapshot.shipToAddress.line1, 'Тверская улица, 1');
 });
 
-test('order draft inherits frozen Retail Door context from submitted Selection and cannot switch it', async () => {
+test('order draft inherits frozen Retail Door and canonical ProductSku context from submitted Selection and cannot switch it', async () => {
   const { collaboration, selection, retailDoors, orderBuilder, door } = await fixture();
-  await collaboration.upsertSelectionLine('line-order', 'buyer-1', selection.id, { sku: 'SKU-1', quantity: 3 });
+  await collaboration.upsertSelectionLine('line-order', 'buyer-1', selection.id, { sku: 'SKU-1', productSkuId: 'PRODUCT-SKU-1', quantity: 3 });
   await collaboration.submitSelection('selection-submit', 'buyer-1', selection.id);
 
   await retailDoors.updateRetailDoor('door-update-before-order', 'buyer-1', door.id, {
@@ -156,4 +186,6 @@ test('order draft inherits frozen Retail Door context from submitted Selection a
   assert.equal(order.buyerCommercialSnapshot.doorName, 'Москва Центральный');
   assert.equal(order.buyerCommercialSnapshot.shipToAddress.city, 'Москва');
   assert.equal(order.buyerCommercialSnapshot.shipToAddress.line1, 'Тверская улица, 1');
+  assert.equal(order.lines[0].productSkuId, 'PRODUCT-SKU-1');
+  assert.equal(order.lines[0].unitPrice, 7500);
 });

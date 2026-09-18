@@ -1,3 +1,4 @@
+import { withLegacyCommercialInsertGuardsDisabled } from './postgres/legacy-commercial-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
@@ -30,6 +31,7 @@ test('PostgreSQL uses one ProductSku reservation counter for rich V2 and linked 
   try {
     await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
     await migratePostgres({ pool, migrationsDir, clock: () => now });
+    await withLegacyCommercialInsertGuardsDisabled(pool, async () => {
 
     await pool.query(
       `INSERT INTO organisations (id, type, payload) VALUES
@@ -242,6 +244,7 @@ test('PostgreSQL uses one ProductSku reservation counter for rich V2 and linked 
     await assertBalance(pool, productSkuId, 5, 0);
     const mirroredAfterCancel = await pool.query('SELECT reserved_quantity FROM catalog_skus WHERE sku = $1', [sku]);
     assert.deepEqual(mirroredAfterCancel.rows, [{ reserved_quantity: 0 }]);
+    });
   } finally {
     await pool.end();
   }

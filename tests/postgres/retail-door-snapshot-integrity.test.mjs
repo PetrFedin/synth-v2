@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import { inspectPostgresMigrations, migratePostgres } from '../../src/infrastructure/postgres-migrator.mjs';
+import { withLegacyCommercialInsertGuardsDisabled } from './legacy-commercial-fixture.mjs';
 
 const { Pool } = pg;
 const connectionString = process.env.POSTGRES_TEST_URL;
@@ -93,11 +94,6 @@ test('PostgreSQL enforces frozen retailer door lineage from order through commit
        VALUES ($1, $2, $3, $4, $5, 'ordering', 1, $6::jsonb)`,
       [ids.cycle, ids.brand, ids.shop, ids.campaign, ids.collection, JSON.stringify({ id: ids.cycle })]
     );
-    await pool.query(
-      `INSERT INTO selections (id, cycle_id, showroom_id, collection_id, brand_id, shop_id, status, version, payload)
-       VALUES ($1, $2, $3, $4, $5, $6, 'submitted', 1, $7::jsonb)`,
-      [ids.selection, ids.cycle, ids.showroom, ids.collection, ids.brand, ids.shop, JSON.stringify({ id: ids.selection })]
-    );
 
     for (const [doorId, code] of [[ids.primaryDoor, 'PRIMARY'], [ids.alternateDoor, 'ALTERNATE']]) {
       await pool.query(
@@ -107,106 +103,115 @@ test('PostgreSQL enforces frozen retailer door lineage from order through commit
       );
     }
 
-    const frozenBuyer = buyerCommercialSnapshot({
-      shopId: ids.shop,
-      retailDoorId: ids.primaryDoor,
-      retailDoorVersion: 1
-    });
-    const orderPayload = {
-      id: ids.order,
-      status: 'submitted',
-      retailDoorId: ids.primaryDoor,
-      retailDoorVersion: 1,
-      buyerCommercialSnapshot: frozenBuyer,
-      lines: []
-    };
+    const stored = await withLegacyCommercialInsertGuardsDisabled(pool, async (client) => {
+      await client.query(
+        `INSERT INTO selections (id, cycle_id, showroom_id, collection_id, brand_id, shop_id, status, version, payload)
+         VALUES ($1, $2, $3, $4, $5, $6, 'submitted', 1, $7::jsonb)`,
+        [ids.selection, ids.cycle, ids.showroom, ids.collection, ids.brand, ids.shop, JSON.stringify({ id: ids.selection })]
+      );
 
-    await pool.query(
-      `INSERT INTO orders (
-         id, selection_id, cycle_id, brand_id, shop_id, status, currency,
-         total_amount, version, payload, retail_door_id, retail_door_version
-       ) VALUES ($1, $2, $3, $4, $5, 'submitted', 'GBP', 100, 1, $6::jsonb, $7, 1)`,
-      [ids.order, ids.selection, ids.cycle, ids.brand, ids.shop, JSON.stringify(orderPayload), ids.primaryDoor]
-    );
+      const frozenBuyer = buyerCommercialSnapshot({
+        shopId: ids.shop,
+        retailDoorId: ids.primaryDoor,
+        retailDoorVersion: 1
+      });
+      const orderPayload = {
+        id: ids.order,
+        status: 'submitted',
+        retailDoorId: ids.primaryDoor,
+        retailDoorVersion: 1,
+        buyerCommercialSnapshot: frozenBuyer,
+        lines: []
+      };
 
-    const wrongDoorPayload = {
-      ...orderPayload,
-      retailDoorId: ids.alternateDoor,
-      buyerCommercialSnapshot: {
-        ...frozenBuyer,
-        retailDoorId: ids.alternateDoor
-      }
-    };
-    await assert.rejects(
-      pool.query('UPDATE orders SET payload = $2::jsonb WHERE id = $1', [ids.order, JSON.stringify(wrongDoorPayload)]),
-      expectConstraint({ code: '23514', constraint: 'orders_retail_door_snapshot_integrity_check' })
-    );
+      await client.query(
+        `INSERT INTO orders (
+           id, selection_id, cycle_id, brand_id, shop_id, status, currency,
+           total_amount, version, payload, retail_door_id, retail_door_version
+         ) VALUES ($1, $2, $3, $4, $5, 'submitted', 'GBP', 100, 1, $6::jsonb, $7, 1)`,
+        [ids.order, ids.selection, ids.cycle, ids.brand, ids.shop, JSON.stringify(orderPayload), ids.primaryDoor]
+      );
 
-    const wrongOrganisationPayload = {
-      ...orderPayload,
-      buyerCommercialSnapshot: {
-        ...frozenBuyer,
-        organisationId: ids.brand
-      }
-    };
-    await assert.rejects(
-      pool.query('UPDATE orders SET payload = $2::jsonb WHERE id = $1', [ids.order, JSON.stringify(wrongOrganisationPayload)]),
-      expectConstraint({ code: '23514', constraint: 'orders_retail_door_snapshot_integrity_check' })
-    );
+      const wrongDoorPayload = {
+        ...orderPayload,
+        retailDoorId: ids.alternateDoor,
+        buyerCommercialSnapshot: {
+          ...frozenBuyer,
+          retailDoorId: ids.alternateDoor
+        }
+      };
+      await assert.rejects(
+        client.query('UPDATE orders SET payload = $2::jsonb WHERE id = $1', [ids.order, JSON.stringify(wrongDoorPayload)]),
+        expectConstraint({ code: '23514', constraint: 'orders_retail_door_snapshot_integrity_check' })
+      );
 
-    const wrongCommitBuyer = buyerCommercialSnapshot({
-      shopId: ids.shop,
-      retailDoorId: ids.alternateDoor,
-      retailDoorVersion: 1
-    });
-    const wrongCommitPayload = {
-      id: ids.commit,
-      orderId: ids.order,
-      status: 'committed',
-      retailDoorId: ids.alternateDoor,
-      retailDoorVersion: 1,
-      buyerCommercialSnapshot: wrongCommitBuyer,
-      lines: []
-    };
-    await assert.rejects(
-      pool.query(
+      const wrongOrganisationPayload = {
+        ...orderPayload,
+        buyerCommercialSnapshot: {
+          ...frozenBuyer,
+          organisationId: ids.brand
+        }
+      };
+      await assert.rejects(
+        client.query('UPDATE orders SET payload = $2::jsonb WHERE id = $1', [ids.order, JSON.stringify(wrongOrganisationPayload)]),
+        expectConstraint({ code: '23514', constraint: 'orders_retail_door_snapshot_integrity_check' })
+      );
+
+      const wrongCommitBuyer = buyerCommercialSnapshot({
+        shopId: ids.shop,
+        retailDoorId: ids.alternateDoor,
+        retailDoorVersion: 1
+      });
+      const wrongCommitPayload = {
+        id: ids.commit,
+        orderId: ids.order,
+        status: 'committed',
+        retailDoorId: ids.alternateDoor,
+        retailDoorVersion: 1,
+        buyerCommercialSnapshot: wrongCommitBuyer,
+        lines: []
+      };
+      await assert.rejects(
+        client.query(
+          `INSERT INTO order_commit_snapshots (
+             id, order_id, order_version, brand_id, shop_id, currency, committed_at,
+             content_hash, payload, retail_door_id, retail_door_version
+           ) VALUES ($1, $2, 1, $3, $4, 'GBP', CURRENT_TIMESTAMP, $5, $6::jsonb, $7, 1)`,
+          [ids.commit, ids.order, ids.brand, ids.shop, `invalid-${suffix}`, JSON.stringify(wrongCommitPayload), ids.alternateDoor]
+        ),
+        expectConstraint({ code: '23503', constraint: 'order_commit_order_retail_door_version_fk' })
+      );
+
+      const commitPayload = {
+        id: ids.commit,
+        orderId: ids.order,
+        status: 'committed',
+        retailDoorId: ids.primaryDoor,
+        retailDoorVersion: 1,
+        buyerCommercialSnapshot: frozenBuyer,
+        lines: []
+      };
+      await client.query(
         `INSERT INTO order_commit_snapshots (
            id, order_id, order_version, brand_id, shop_id, currency, committed_at,
            content_hash, payload, retail_door_id, retail_door_version
          ) VALUES ($1, $2, 1, $3, $4, 'GBP', CURRENT_TIMESTAMP, $5, $6::jsonb, $7, 1)`,
-        [ids.commit, ids.order, ids.brand, ids.shop, `invalid-${suffix}`, JSON.stringify(wrongCommitPayload), ids.alternateDoor]
-      ),
-      expectConstraint({ code: '23503', constraint: 'order_commit_order_retail_door_version_fk' })
-    );
+        [ids.commit, ids.order, ids.brand, ids.shop, `valid-${suffix}`, JSON.stringify(commitPayload), ids.primaryDoor]
+      );
 
-    const commitPayload = {
-      id: ids.commit,
-      orderId: ids.order,
-      status: 'committed',
-      retailDoorId: ids.primaryDoor,
-      retailDoorVersion: 1,
-      buyerCommercialSnapshot: frozenBuyer,
-      lines: []
-    };
-    await pool.query(
-      `INSERT INTO order_commit_snapshots (
-         id, order_id, order_version, brand_id, shop_id, currency, committed_at,
-         content_hash, payload, retail_door_id, retail_door_version
-       ) VALUES ($1, $2, 1, $3, $4, 'GBP', CURRENT_TIMESTAMP, $5, $6::jsonb, $7, 1)`,
-      [ids.commit, ids.order, ids.brand, ids.shop, `valid-${suffix}`, JSON.stringify(commitPayload), ids.primaryDoor]
-    );
+      return client.query(
+        `SELECT o.retail_door_id AS order_door_id,
+                o.retail_door_version AS order_door_version,
+                c.retail_door_id AS commit_door_id,
+                c.retail_door_version AS commit_door_version,
+                c.payload#>>'{buyerCommercialSnapshot,organisationId}' AS snapshot_shop_id
+           FROM orders o
+           JOIN order_commit_snapshots c ON c.order_id = o.id
+          WHERE o.id = $1`,
+        [ids.order]
+      );
+    });
 
-    const stored = await pool.query(
-      `SELECT o.retail_door_id AS order_door_id,
-              o.retail_door_version AS order_door_version,
-              c.retail_door_id AS commit_door_id,
-              c.retail_door_version AS commit_door_version,
-              c.payload#>>'{buyerCommercialSnapshot,organisationId}' AS snapshot_shop_id
-         FROM orders o
-         JOIN order_commit_snapshots c ON c.order_id = o.id
-        WHERE o.id = $1`,
-      [ids.order]
-    );
     assert.equal(stored.rowCount, 1);
     assert.deepEqual(stored.rows[0], {
       order_door_id: ids.primaryDoor,

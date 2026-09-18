@@ -41,6 +41,7 @@ export async function migratePostgres({
   invariant(Number.isInteger(lockDelayMs) && lockDelayMs >= 0, 'MIGRATION_LOCK_DELAY_INVALID', 'Migration lock delay must be a non-negative integer');
   invariant(typeof sleep === 'function', 'MIGRATION_LOCK_SLEEP_INVALID', 'Migration lock sleep must be a function');
   const client = await pool.connect();
+  await relaxMigrationSessionTimeouts(client);
   const applied = [];
   const skipped = [];
   let locked = false;
@@ -72,8 +73,14 @@ export async function migratePostgres({
     return Object.freeze({ applied: Object.freeze(applied), skipped: Object.freeze(skipped) });
   } finally {
     if (locked) await client.query('SELECT pg_advisory_unlock($1)', [MIGRATION_LOCK_KEY]).catch(() => undefined);
-    client.release();
+    client.release(true);
   }
+}
+
+async function relaxMigrationSessionTimeouts(client) {
+  await client.query('SET statement_timeout = 0');
+  await client.query('SET lock_timeout = 0');
+  await client.query('SET idle_in_transaction_session_timeout = 0');
 }
 
 async function acquireMigrationLock(client, { attempts, delayMs, sleep }) {

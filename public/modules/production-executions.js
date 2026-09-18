@@ -103,13 +103,14 @@
       ui.loaded = true;
       if (!ui.selectedCode && ui.items.length) ui.selectedCode = ui.items[0].executionCode;
     } catch (error) {
-      if (generation === ui.generation) ui.error = error?.message || 'PRODUCTION_EXECUTION_LOAD_FAILED';
+      if (generation === ui.generation) ui.error = error?.message || I18N.t('common.requestError');
     } finally {
       if (generation === ui.generation) ui.loading = false;
       if (state.view === 'production-executions') renderApp();
     }
   }
-  function ensureLoaded() { if (!ui.loaded && !ui.loading) queueMicrotask(() => { void load({ reset: true }); }); }
+  // See materials.js: retrying a failed load from render starves the event loop.
+  function ensureLoaded() { if (!ui.loaded && !ui.loading && !ui.error) queueMicrotask(() => { void load({ reset: true }); }); }
   function selected() { return ui.items.find((value) => value.executionCode === ui.selectedCode) || ui.items[0] || null; }
   function upsert(value) {
     const map = new Map(ui.items.map((item) => [item.executionCode, item]));
@@ -133,7 +134,7 @@
       return value;
     } catch (error) {
       if (error?.code === 'PRODUCTION_EXECUTION_CONCURRENCY_CONFLICT') queueMicrotask(() => { void load({ reset: true }); });
-      toast(error?.message || 'PRODUCTION_EXECUTION_MUTATION_FAILED', 'error');
+      toast(error?.message || I18N.t('common.requestError'), 'error');
       return null;
     } finally { ui.busyCode = null; renderApp(); }
   }

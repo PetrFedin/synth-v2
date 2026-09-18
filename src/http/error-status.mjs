@@ -54,6 +54,7 @@ export function normalizeHttpError(error) {
     'RFQ_NOT_DRAFT', 'RFQ_NOT_OPEN_FOR_QUOTES', 'RFQ_NOT_AWARDABLE', 'RFQ_NOT_ALLOCATABLE', 'RFQ_NOT_CANCELLABLE',
     'RFQ_RESPONSE_DEADLINE_PASSED', 'RFQ_QUOTE_EXPIRED', 'RFQ_SKU_SNAPSHOT_STALE', 'RFQ_BOM_SNAPSHOT_STALE',
   ].includes(code)) status = 409;
-  const retryAfterSeconds = code === 'AUTH_RATE_LIMITED' ? Math.max(1, Math.ceil(Number(error.details?.retryAfterSeconds) || 1)) : undefined;
+  const details = /** @type {Record<string, unknown>} */ (error.details ?? {});
+  const retryAfterSeconds = code === 'AUTH_RATE_LIMITED' ? Math.max(1, Math.ceil(Number(details.retryAfterSeconds) || 1)) : undefined;
   return { status, code, message: error.message, details: error.details ?? {}, retryAfterSeconds };
 }

@@ -57,18 +57,26 @@ test('the fidelity behavior creates dense registry and inspector controls withou
     'odFidelityCommandBars',
     'odFidelityTables',
     'odFidelityInspectors',
-    'odFidelitySystemFooter',
     'applyOmnidataVisualFidelity',
   ]) assert.match(js, new RegExp(`function ${primitive}\\(`));
 
-  for (const className of [
+  // These controls were rendered but wired to nothing: a select-all and row checkboxes with no bulk
+  // action, a row menu whose only handler stopped propagation, a pagination footer with inert page
+  // buttons that reported "Shown 1-N of N" over a list the workspace had already truncated, a
+  // preview gallery repeating one placeholder plus a hard-coded "+10", related tags built from
+  // field values, and a system footer showing the client clock labelled as server time. An
+  // interface must not present controls that do nothing or numbers it cannot stand behind.
+  for (const fabricated of [
     'od-select-control',
     'od-row-menu',
     'od-table-footer',
+    'od-pagination',
     'od-preview-gallery',
     'od-related-tag',
     'od-system-footer',
-  ]) assert.match(js, new RegExp(className));
+    'od-more-button',
+    'od-view-toggle',
+  ]) assert.doesNotMatch(js, new RegExp(fabricated), `${fabricated} must not be rendered`);
 
   assert.match(js, /renderApp\s*=\s*\(\.\.\.args\)/);
   assert.doesNotMatch(js, /\bstyle\s*=/);

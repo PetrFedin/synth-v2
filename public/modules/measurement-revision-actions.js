@@ -53,7 +53,7 @@
       toast(text('Новая draft-ревизия создана. Опубликованный snapshot сохранён.', 'A new draft revision was created and the published snapshot was preserved.'));
     } catch (error) {
       if (error?.code === 'MEASUREMENT_CONCURRENCY_CONFLICT') invalidateRegistry();
-      toast(error?.message || 'MEASUREMENT_REVISION_FAILED', 'error');
+      toast(error?.message || I18N.t('common.requestError'), 'error');
     } finally {
       operation.busySku = null;
       renderApp();

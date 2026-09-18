@@ -74,13 +74,14 @@
       ui.loaded = true;
       if (!ui.selectedCode && ui.items.length) ui.selectedCode = ui.items[0].techPackCode;
     } catch (error) {
-      if (generation === ui.generation) ui.error = error?.message || 'TECH_PACK_LOAD_FAILED';
+      if (generation === ui.generation) ui.error = error?.message || I18N.t('common.requestError');
     } finally {
       if (generation === ui.generation) ui.loading = false;
       if (state.view === 'tech-packs') renderApp();
     }
   }
-  function ensureLoaded() { if (!ui.loaded && !ui.loading) queueMicrotask(() => { void load({ reset: true }); }); }
+  // See materials.js: retrying a failed load from render starves the event loop.
+  function ensureLoaded() { if (!ui.loaded && !ui.loading && !ui.error) queueMicrotask(() => { void load({ reset: true }); }); }
   function upsert(value) {
     const map = new Map(ui.items.map((item) => [item.techPackCode, item]));
     map.set(value.techPackCode, value);
@@ -96,7 +97,7 @@
       upsert(result); toast(text('Изменения сохранены.', 'Changes saved.')); return result;
     } catch (error) {
       if (error?.code === 'TECH_PACK_CONCURRENCY_CONFLICT') queueMicrotask(() => { void load({ reset: true }); });
-      toast(error?.message || 'TECH_PACK_MUTATION_FAILED', 'error'); return null;
+      toast(error?.message || I18N.t('common.requestError'), 'error'); return null;
     } finally { ui.busyCode = null; renderApp(); }
   }
 

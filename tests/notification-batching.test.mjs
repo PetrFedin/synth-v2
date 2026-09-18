@@ -33,7 +33,9 @@ function projectionStore({ records = [] } = {}) {
 }
 
 function event(id, aggregateId = 'selection-1') {
-  return { event: { id, type: 'selection.submitted', aggregateId, payload: {} } };
+  // The store always supplies the outbox row key alongside the envelope; the projection is keyed
+  // on it rather than on a field inside the event JSON.
+  return { eventId: id, eventType: 'selection.submitted', event: { id, type: 'selection.submitted', aggregateId, payload: {} } };
 }
 
 test('projection reads one bounded batch and snapshots source only once', async () => {

@@ -101,13 +101,14 @@
       ui.loaded = true;
       if (!ui.selectedCode && ui.items.length) ui.selectedCode = ui.items[0].sampleCode;
     } catch (error) {
-      if (generation === ui.generation) ui.error = error?.message || 'SAMPLE_LOAD_FAILED';
+      if (generation === ui.generation) ui.error = error?.message || I18N.t('common.requestError');
     } finally {
       if (generation === ui.generation) ui.loading = false;
       if (state.view === 'samples') renderApp();
     }
   }
-  function ensureLoaded() { if (!ui.loaded && !ui.loading) queueMicrotask(() => { void loadSamples({ reset: true }); }); }
+  // See materials.js: retrying a failed load from render starves the event loop.
+  function ensureLoaded() { if (!ui.loaded && !ui.loading && !ui.error) queueMicrotask(() => { void loadSamples({ reset: true }); }); }
   function upsert(sample) {
     const byCode = new Map(ui.items.map((item) => [item.sampleCode, item]));
     byCode.set(sample.sampleCode, sample);
@@ -138,7 +139,7 @@
         reset();
         queueMicrotask(() => { void loadSamples({ reset: true }); });
       }
-      toast(error?.message || 'SAMPLE_MUTATION_FAILED', 'error');
+      toast(error?.message || I18N.t('common.requestError'), 'error');
       return null;
     } finally {
       ui.busyCode = null;

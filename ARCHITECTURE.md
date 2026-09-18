@@ -166,6 +166,7 @@ Textual `sku` remains useful for human display and compatibility but must not re
 - Cross-module imports are allowed only through a module `public.mjs` boundary.
 - Applied SQL migrations are immutable and checksum-verified.
 - Business mutations use durable command/idempotency identity and transactional outbox discipline where the bounded context mutates durable business state.
+- Runtime dependencies stay minimal: `pg` only. Development dependencies are limited to the pinned type checker (`typescript`, `@types/node`) that backs the type contract gate.
 - Organisation isolation is mandatory.
 
 ### 2.2 Supported process path — PROD-PROVEN for startup lifecycle
@@ -889,13 +890,23 @@ Desktop inspector is sticky at `top:62px`, max-height `calc(100vh - 78px)` and s
 MutationObserver, so it must never leave the DOM dirty in a way that observer
 watches. Two invariants hold it:
 
-1. **A pass may not re-trigger itself.** `normalize()` detaches the observer for
-   the duration of the pass (`takeRecords()` then `disconnect()`, re-observing in
-   a `finally`), and adds only the body classes that are missing. A redundant
-   `classList.add` still queues a mutation record, and the observer watches
-   `class`; without both guards the pass re-schedules itself through
-   `queueMicrotask` and the microtask chain starves rendering — the page never
-   paints a frame.
+1. **A pass may not re-trigger itself.** Every observer-driven pass detaches its
+   own observer for the duration of the pass (`takeRecords()` then
+   `disconnect()`, re-observing in a `finally`), and writes an attribute or a
+   text node only when the value actually changes. A redundant `classList.add`
+   still queues a mutation record, and an unconditional `textContent =`
+   still replaces the text node; without both guards the pass re-schedules
+   itself through `queueMicrotask` and the microtask chain starves rendering —
+   the page never paints a frame.
+
+   This holds for all three observer-driven layers, each of which had the fault
+   independently:
+
+   | Layer | Observer watches | What re-dirtied it |
+   |---|---|---|
+   | `omnidata-v14-role-system.js` | `class` and five other attributes | `classList.add` of classes already present |
+   | `omnidata-v14-components.js` | `class`, `aria-selected`, `aria-pressed` | `classList.add('omnidata-v14')` already present |
+   | `omnidata-v14.js` | added nodes | `translateBrand()` / `translateRole()` assigning `textContent` unconditionally |
 2. **A button role is never assigned to a descendant of a button.** Buttons
    cannot nest. The heuristic class matcher would otherwise promote internals
    such as `.button-label` on the `button-` prefix, drawing a second control
@@ -906,6 +917,34 @@ Navigation items carry the `button` role for semantics and audit, but are laid
 out by the `navigation-item` part, not by the generic button chrome: left
 aligned, no border, inherited typography, centred only when the sidebar is
 collapsed or at the narrow breakpoints.
+
+The same separation applies wherever an element carries a role for semantics but
+is not a standalone control of that role. Each of these is styled by role and
+part in the contract stylesheet — never by a module namespace, which
+`validate-design-system` rejects:
+
+| Element | Role it carries | Why the generic chrome is wrong |
+|---|---|---|
+| Search wrapper | `field` / `field-group` | It is one horizontal control (icon + input in one border), not a label stacked above an input |
+| Command-bar spacer | `filterbar` | `aria-hidden` layout filler (`flex:1`); it must never paint |
+| Status dot | `status` | A 9px dot whose border colour encodes state, not a pill |
+| Toast host | `status` / `toast` | A permanently mounted positioning container; the `.notice` inside carries the card |
+| Dashboard mini-table | `table` | Two or three summary columns in a half-width panel; the 720px grid floor only forces a scrollbar |
+| Status chip label and count | `status` | They sit inside a status card, so the pill was drawn again nested inside the chip they belong to; they are text |
+| Section count | `card` | A soft count pill beside a section title, not a card nested in a card |
+| Help button | `button` | A topbar control on the same baseline as the bell, not the full-height topbar tab the v7 layer sized it to |
+
+A nested role is not automatically wrong — a card list holds cards, a table wrap
+holds a table, a toast host holds a notice. What is wrong is an element that
+carries a role because of where it sits and then paints that role's chrome a
+second time inside its own parent. Check a suspect by comparing an element's
+role with the nearest ancestor carrying the same role, and by whether it paints
+a border or background of its own.
+
+The v12 rail tooltip (`.nav-item[data-v12-label]::after`) belongs to the
+icon-only rail and is shown only while the sidebar is collapsed; with labels
+visible it repeats the label beside it and covers the item above.
+
 
 ### 10.11 Shell and navigation
 
@@ -968,6 +1007,10 @@ A button without an implemented end-to-end handler is forbidden.
 ---
 
 ## 11. Browser loading and localization contract
+
+Visual layers that observe the DOM must not react to their own writes, and must not schedule that work as a microtask. Four layers (`omnidata-v13`, `omnidata-v14`, `omnidata-v14-components`, `omnidata-v14-role-system`) run a `MutationObserver` whose callback assigns the same attributes the observer watches — `class`, `role`, `aria-*`, `data-od14-*`. Their writes are unconditional, and writing an attribute with an unchanged value still queues a mutation record, so each pass re-arms the observer. Because observer callbacks are delivered as microtasks and the layers scheduled their work with `queueMicrotask`, the re-arm happened inside the same microtask checkpoint: the event loop never regained control and the workspace never became interactive.
+
+Each layer therefore applies with its observer detached, discards the records its own pass produced (`takeRecords`) before reconnecting, and schedules through `requestAnimationFrame`, falling back to `setTimeout` and only then to a microtask where neither exists. The observed option sets are unchanged, including `characterData` in the role system, because language enforcement depends on text changes.
 
 Static workspace assets are served with negotiated content encoding. Text responses above 1 KiB are compressed with Brotli, or gzip when Brotli is not acceptable, chosen from `Accept-Encoding` including its quality values; binary types and small responses are always served as identity. Every static response carries `Vary: Accept-Encoding`, and a compressed representation carries its own ETag, so a cache holding one representation can never answer a request that only accepts the other. A compression that fails to shrink the asset is discarded and the identity bytes are served instead, without an encoding header. Encoded bodies are memoised under the content hash that already backs the ETag, so a changed file misses the memo by construction.
 
@@ -1055,6 +1098,12 @@ The authoritative composed OpenAPI remains `/v2` version `1.17.0`; this is conve
 
 ## 14. Events, workers and side effects
 
+`outbox_events` carries more than one event envelope shape. Domain events written through `domainEvent()` expose `id` and `type` inside the JSON; MDM reference and Product Identity events expose `eventId` and `eventType` instead. The notification projection key is therefore the outbox row primary key, never a field read out of the envelope: the row id is `NOT NULL`, and it is already what the reader's anti-join against `notification_projections` and the claim table use. Records handed to the projection service carry `eventId` and `eventType` taken from the row, alongside the untouched envelope.
+
+Outbox publication follows the same rule and for the same reason: the claim query carries `outbox_events.id` and `event_type` onto the record, and the publisher identifies, acknowledges, reschedules and dead-letters by that row key. The HTTP publisher separately enforces its own wire contract — a delivered payload must carry `id` and `type` — so an event whose envelope cannot satisfy it becomes a bounded delivery failure that retries and then dead-letters under its own id. It must never become an exception thrown before the per-record try/catch, because `processInAggregateOrder` does not guard individual records and one such throw fails the entire batch, blocking delivery of every well-formed event behind it.
+
+Only `selection.submitted`, `order.terms-accepted` and `deal-space.opened` produce notifications. Every other event type is projected as a no-op that marks the row processed, so reference-data events neither create user-visible noise nor remain pending forever.
+
 Retention maintenance and startup migrations run outside the request-path PostgreSQL timeout policy defined in section 13; every other worker inherits it.
 
 Business mutations that publish integration effects use the transactional outbox pattern. Verification/runtime smoke disables external webhook side effects. A live acceptance scenario must identify what downstream state is allowed to change and explicitly prove important state that must remain unchanged.
@@ -1065,7 +1114,9 @@ Business mutations that publish integration effects use the transactional outbox
 
 ### 15.1 Default gate
 
-`npm run verify` includes architecture boundaries, PostgreSQL static contract, isolation, UI, ODS, i18n, MDM, governed KPI methodology and application tests.
+`npm run verify` includes architecture boundaries, PostgreSQL static contract, isolation, UI, ODS, i18n, MDM, governed KPI methodology, the type contract and application tests.
+
+The type contract (`npm run validate:types`, `scripts/validate-types.mjs`) runs TypeScript over the JavaScript sources with `checkJs` and compares the result against the per-file baseline in `ops/type-baseline.json`. It fails when a file gains type errors, and equally when a file loses them without the baseline being re-recorded, so the recorded debt can only ratchet down. `npm run validate:types -- --update` re-records it. The baseline exists because the codebase carries pre-existing findings that cannot be resolved in one change; it is a ratchet, not an accepted permanent state. TypeScript and `@types/node` are pinned exactly, since the baseline is only meaningful against a fixed compiler.
 
 ### 15.2 PostgreSQL release-candidate gate
 
@@ -1169,6 +1220,12 @@ This is the current high-level master status. Supporting detail is kept in this 
 | `COMM-LC-008` | P0 | `ARCHITECTURE.md` previously described a staged CommercialPublication lifecycle that the canonical V2 runtime does not actually implement | add one canonical fail-closed `DRAFT → READY → PUBLISHED → SUPERSEDED/ARCHIVED` lifecycle with API/DB/idempotency/tests, or formally revise the single lifecycle contract; no parallel publication truth | OPEN/GAP — runtime currently creates immutable V2 CommercialPublication directly as `published` |
 | `PRICE-009` | P0 | PriceListVersion still lacks explicit market/effective-period and any business-required tax/eligibility depth | canonical ProductSku-exact pricing, market, effective_from/effective_to, server validation and immutable BuyerCatalog pin | OPEN/PARTIAL — ProductSku-exact override, minor-unit server validation and immutable BuyerCatalog pin are implemented; market/effective-period/tax-depth remain |
 | `UI-006` | P1 | Legacy Omnidata CSS/JS compatibility layers remain loaded | migrate semantics to ODS v1 and remove debt only after validation | OPEN/PARTIAL |
+| `UI-013` | P0 | Four Omnidata layers observed the DOM, wrote the attributes they observed, and scheduled that work with `queueMicrotask`, so the feedback re-armed inside one microtask checkpoint and the workspace never became interactive | apply with the observer detached and schedule through the event loop | CLOSED — before the fix a screenshot of the shell timed out in two independent browsers with "page is busy"; after it the login view renders, exposes its controls and reports no console errors |
+
+| `NOTIF-011` | P0 | Notification projection read the projection key out of the event envelope, so every event whose JSON lacked `id` failed with PostgreSQL `23502`, could not be claimed, checkpointed, retried or dead-lettered, and reported `eventId: null` | key the projection on the outbox row primary key | CLOSED — proved live: 61 of 63 events were permanently unprojectable before the fix, 105 of 105 project afterwards with zero worker failures and zero notifications created |
+| `NOTIF-012` | P0 | Outbox publication identified records from the event envelope, so one event whose JSON lacked `id`/`type` threw before the per-record try/catch and failed the whole publication batch; no well-formed event behind it was ever delivered | identify publication records by the outbox row key so failures are bounded and attributable | CLOSED — proved live against a real webhook receiver: before the fix 63 events stayed pending with zero deliveries, after it the two domain events are delivered and the 61 foreign-envelope events dead-letter |
+
+
 | `ACC-REPLAY-010` | P1 | Commercialization acceptance cannot be replayed against an environment that already holds an active acceptance relationship | make the reserved-organisation setup converge on existing active state instead of requiring a first run | OPEN — surfaced by executing the gate twice against one live environment; the domain correctly rejects renewing an active relationship with `RELATIONSHIP_NOT_RENEWABLE` |
 | `ACC-REPLAY-010` | P1 | Commercialization acceptance could not be replayed against an environment that already holds an active acceptance relationship | converge on the existing relationship instead of requiring a first run | CLOSED — the gate now reads the existing relationship back and requires it to be active between exactly the two reserved organisations before continuing; proved by three consecutive runs against one environment |
 | `SPEC-007` | P0 | Historical architecture/product/UI detail was fragmented across docs/code | authoritative `ARCHITECTURE.md` + CI synchronization rule | CLOSED in #110 |
@@ -1259,12 +1316,19 @@ Minimum frozen lineage fields for the current commercial spine include:
 | 2026-09-04 | #117 / `a960486c653666c7cd7da5dcb4f9d21c4a674d8e` | Final squash merge of governed assortment-category MDM, modular validation correction, canonical Measurement/OpenAPI synchronization and dual Product Readiness acceptance scenarios | 5.1–5.3, 6.1–6.2, 15–17, 19–20 | MERGED; exact pre-merge head `d92fd1e96ffd4b0a139cef82f23ce061af2d6c46`: Verify `33781485567` success, MDM Reference Data `33781485572` success, Syntha V2 CI `33781485600` success; no intended-live `PROD-PROVEN` claim |
 | 2026-09-05 | #118 / `eb86a04b7ac9c6a0ba743882f59a6b33dfbfd113` → `main@0048d10c410231055d13436d61d0cf33db3e95b7` | Add P0.3 public-runtime READY→Projection→projection-native CommercialPublication→PriceListVersion→BuyerCatalogVersion acceptance with exact Collection assignment, Showroom, relationship/invitation, separate brand/shop actors and same-environment PostgreSQL proof; fix canonical Measurement persisted MDM snapshot consumption and deterministic acceptance reference command timestamps. | 2.6, 3.5, 5.1–5.2, 6.1–6.6, 15–17, 19–20, 22 | MERGED; exact head: Verify `33979864431` success, Syntha V2 CI `33979864438` success, MDM Reference Data `33979865154` success, Product Commercialization Acceptance `33979864435` success; no intended-live `PROD-PROVEN` claim; `COMM-LC-008`, `PRICE-009`, `PUB-005` remain open |
 | 2026-09-08 | #119 / `fix/pub005-canonical-commercial-writes` | P0.4 convergence slice: forbid historical V1 CommercialPublication/PriceList from originating fresh buyer commercial truth; make price override exact `productSkuId + wholesalePriceMinor` with server-derived major price; validate exact frozen ProductSku line/hierarchy/terms; add migration 075 DB bypass guards and forward-only V1-history preservation tests; extend Product commercialization acceptance to exact ProductSku pricing. Legacy CatalogSku workspace writes and Selection fallback remain explicitly open rather than hidden. | 2.6, 3.1, 6.4–6.6, 7.4, 12.4, 13, 15–17, 19–20 | IMPLEMENTED locally; `npm run verify` green; PostgreSQL/PR exact-head CI pending; no `PROD-PROVEN` claim; `PUB-005` remains OPEN/PARTIAL |
+| 2026-09-17 | `fix/omnidata-observer-feedback-loop` | Stop the Omnidata visual layers from reacting to their own DOM writes: apply with the observer detached, discard self-inflicted records before reconnecting, and schedule through `requestAnimationFrame` instead of `queueMicrotask` | 11, 17, 20 | IMPLEMENTED; the workspace shell was previously unusable — screenshots timed out in two browsers — and now renders and responds; no observed option set was narrowed |
+
+| 2026-09-17 | `fix/notification-projection-outbox-key` | Key the notification projection on the `outbox_events` row primary key instead of a field inside the event envelope, and carry the relational `event_type` with it; this restores projection, claim accounting, checkpointing, dead-lettering and failure diagnostics for every event whose JSON envelope uses `eventId`/`eventType` | 14, 17, 20 | IMPLEMENTED; live proof: before the fix 61 of 63 outbox events failed every worker run with `23502` and flipped readiness to 503; after it 105 of 105 project, 23 consecutive worker runs succeed, and no notifications are created because only three domain event types have recipients |
+| 2026-09-17 | `fix/outbox-publication-outbox-key` | Identify outbox publication records by the `outbox_events` row key instead of the event envelope, so an envelope the webhook wire contract rejects becomes a bounded per-event dead-letter rather than an exception that fails the whole batch and blocks every well-formed event behind it | 14, 17, 20 | IMPLEMENTED; live proof against a local webhook receiver — before: 63 pending, 0 delivered, worker failing in runWorker; after: 2 domain events delivered, 61 dead-lettered, queue drained |
+
 | 2026-09-17 | `fix/runtime-db-timeouts-and-dead-ui-layers` | Bound request-path PostgreSQL work with pool-level `statement_timeout`/`lock_timeout`/`idle_in_transaction_session_timeout` so a single stuck query can no longer hold a pooled connection indefinitely; explicitly exempt the two workloads that legitimately run long (startup migrations via session `SET` plus destroy-on-release, retention maintenance via transaction-scoped `SET LOCAL`); validate all timeout inputs as integers | 2.1, 13, 14, 20 | IMPLEMENTED; `npm run verify` green; `npm run verify:postgres` green against the dedicated verification database; no `PROD-PROVEN` claim |
 | 2026-09-17 | `refactor/http-transport-independent-pipeline` | Extract the duplicated node:http/Web Fetch request pipeline into one transport-independent `src/http/pipeline.mjs` and move status mapping to `src/http/error-status.mjs`; fix the resulting divergence where the Fetch adapter buffered an entire body before checking the size, so a request without `Content-Length` could exceed the limit in memory | 12, 20 | IMPLEMENTED; `npm run verify` green; `npm run verify:postgres` green; regression test fails against the pre-fix buffering behaviour |
 | 2026-09-17 | `fix/http-server-fault-status` | Answer platform-side `DomainError`s (reader contract violations, failed clock/RNG) with HTTP 500 instead of a 4xx that blames the caller; classify by suffix so new reader/result/clock codes are covered on arrival; preserve the contractual 422 default for unclassified domain validation | 12, 20 | IMPLEMENTED; `npm run verify` green; `npm run verify:postgres` green; depends on the pipeline extraction PR |
 | 2026-09-17 | `fix/acceptance-script-pg-import` | Make the live acceptance ladder actually executable: fix the load-time `pg` named-import crash in the Collection acceptance and production-reference bootstrap entry points, share the single zero ProductSku inventory identity delta between both Product Readiness scenarios so the BLOCKED scenario can pass live, correct the harness test fixture that modelled no balance-row delta, add a structural guard on the script import contract, and run Collection plus Product Readiness acceptance in the live-stack CI workflow | 15.3, 17, 20 | IMPLEMENTED; all three gates executed end to end against a live runtime and PostgreSQL: Collection passed, Product Readiness passed with `inventoryBalanceIdentityDelta: 1`, Product commercialization passed through READY → projection → publication → PriceListVersion → BuyerCatalogVersion |
 | 2026-09-17 | `fix/acceptance-replay-relationship` | Let the commercialization acceptance gate run repeatedly against one environment: when the domain correctly refuses to renew an already-active relationship, read it back and require it to be active between exactly the reserved brand and shop before continuing; attach the domain error code to acceptance request failures so callers converge on state instead of parsing messages | 15.3, 17, 20 | IMPLEMENTED; consecutive runs against one live environment passed; `ACC-REPLAY-010` CLOSED |
 | 2026-09-17 | `feat/static-asset-compression` | Serve static workspace assets with negotiated Brotli/gzip encoding, per-representation ETags, `Vary: Accept-Encoding`, an identity fallback when compression does not shrink the asset, and memoisation keyed by the existing content hash | 11, 20 | IMPLEMENTED; measured on the supported runtime: 96 blocking assets fall from 1165 KiB to 288 KiB with gzip and 272 KiB with Brotli; no new dependency, `node:zlib` only |
+| 2026-09-17 | `chore/typescript-checkjs-baseline` | Add a type contract gate: TypeScript `checkJs` over the JavaScript sources with a per-file baseline in `ops/type-baseline.json`, wired into `npm run verify`; new type errors fail, and an improved file fails until the baseline is re-recorded, so recorded debt can only decrease | 2.1, 15.1, 20 | IMPLEMENTED; 575 known findings across 177 files recorded; validator self-tested against an introduced error and against an inflated baseline; `npm run verify` green |
+| 2026-09-18 | `integration/ui-and-runtime-fixes` | Integrate the open runtime and UI fix branches onto one verified base: PostgreSQL request-path timeouts, the transport-independent HTTP pipeline, platform-fault status mapping, the type ratchet, the executable acceptance ladder, the two outbox key defects, negotiated static compression, the Omnidata observer feedback loops, the PLM form defects, the render/load retry loops, the fabricated controls, the contrast and type floor, the unreachable production and quality workspaces, user-facing error messages, and the ODS composite-wrapper, nested-chrome, topbar and tooltip corrections. Adds the missing render/load guard to `bom.js` and `production-orders.js`, without which every section after Specifications froze the tab | 10, 12, 13, 20 | IMPLEMENTED; `npm run verify` green (1246 passed); all 29 sidebar sections measured to open, where 23 of 27 previously froze the main thread |
 
 Future implementation PRs add a row here. The row is not a substitute for updating the affected detailed sections.
 

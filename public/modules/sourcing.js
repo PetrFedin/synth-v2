@@ -100,13 +100,14 @@
       ui.selectedSupplierCode ||= ui.suppliers[0]?.supplierCode || null;
       ui.selectedRfqCode ||= ui.rfqs[0]?.rfqCode || null;
     } catch (error) {
-      if (generation === ui.generation) ui.error = error?.message || 'SOURCING_LOAD_FAILED';
+      if (generation === ui.generation) ui.error = error?.message || I18N.t('common.requestError');
     } finally {
       if (generation === ui.generation) ui.loading = false;
       if (SOURCING_VIEWS.has(state.view)) renderApp();
     }
   }
-  function ensureLoaded() { if (!ui.loaded && !ui.loading) queueMicrotask(() => { void loadSourcing({ reset: true }); }); }
+  // See materials.js: retrying a failed load from render starves the event loop.
+  function ensureLoaded() { if (!ui.loaded && !ui.loading && !ui.error) queueMicrotask(() => { void loadSourcing({ reset: true }); }); }
   function upsertSupplier(supplier) { const map = new Map(ui.suppliers.map((item) => [item.supplierCode, item])); map.set(supplier.supplierCode, supplier); ui.suppliers = [...map.values()].sort((a, b) => a.supplierCode.localeCompare(b.supplierCode)); ui.selectedSupplierCode = supplier.supplierCode; }
   function upsertRfq(rfq) { const map = new Map(ui.rfqs.map((item) => [item.rfqCode, item])); map.set(rfq.rfqCode, rfq); ui.rfqs = [...map.values()].sort((a, b) => a.rfqCode.localeCompare(b.rfqCode)); ui.selectedRfqCode = rfq.rfqCode; }
   async function runMutation(key, path, body, method = 'POST', kind = 'rfq') {
@@ -119,7 +120,7 @@
       return result;
     } catch (error) {
       if (String(error?.code || '').includes('CONCURRENCY_CONFLICT')) { reset(); queueMicrotask(() => { void loadSourcing({ reset: true }); }); }
-      toast(error?.message || 'SOURCING_MUTATION_FAILED', 'error');
+      toast(error?.message || I18N.t('common.requestError'), 'error');
       return null;
     } finally { ui.busyKey = null; renderApp(); }
   }
@@ -255,7 +256,7 @@
     const cancel = h('button', { type: 'button', className: 'secondary', text: text('Закрыть', 'Close'), onclick: () => modal.close() });
     const submit = h('button', { type: 'submit', className: danger ? 'danger' : 'primary', text: submitLabel });
     form.append(error, h('footer', {}, [cancel, submit]));
-    form.addEventListener('submit', async (event) => { event.preventDefault(); submit.disabled = true; error.hidden = true; try { const values = Object.fromEntries(new FormData(form).entries()); const done = await onSubmit(values); if (done) modal.close(); } catch (submitError) { error.textContent = submitError?.message || 'INVALID_INPUT'; error.hidden = false; } finally { if (submit.isConnected) submit.disabled = false; } });
+    form.addEventListener('submit', async (event) => { event.preventDefault(); submit.disabled = true; error.hidden = true; try { const values = Object.fromEntries(new FormData(form).entries()); const done = await onSubmit(values); if (done) modal.close(); } catch (submitError) { error.textContent = submitError?.message || I18N.t('common.requestError'); error.hidden = false; } finally { if (submit.isConnected) submit.disabled = false; } });
     modal.addEventListener('close', () => modal.remove(), { once: true }); modal.append(form); document.body.append(modal); modal.showModal(); return modal;
   }
 

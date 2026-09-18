@@ -80,10 +80,11 @@
       const items = await fetchAll(); if (generation !== ui.generation) return;
       ui.items = [...items].sort((a, b) => String(a.inspectionCode).localeCompare(String(b.inspectionCode)));
       ui.loaded = true; if (!ui.selectedCode && ui.items.length) ui.selectedCode = ui.items[0].inspectionCode;
-    } catch (error) { if (generation === ui.generation) ui.error = error?.message || 'FINAL_QUALITY_LOAD_FAILED'; }
+    } catch (error) { if (generation === ui.generation) ui.error = error?.message || I18N.t('common.requestError'); }
     finally { if (generation === ui.generation) ui.loading = false; if (state.view === 'final-quality') renderApp(); }
   }
-  function ensureLoaded() { if (!ui.loaded && !ui.loading) queueMicrotask(() => { void load({ reset: true }); }); }
+  // See materials.js: retrying a failed load from render starves the event loop.
+  function ensureLoaded() { if (!ui.loaded && !ui.loading && !ui.error) queueMicrotask(() => { void load({ reset: true }); }); }
   function selected() { return ui.items.find((value) => value.inspectionCode === ui.selectedCode) || ui.items[0] || null; }
   function upsert(value) {
     const map = new Map(ui.items.map((item) => [item.inspectionCode, item])); map.set(value.inspectionCode, value);
@@ -104,7 +105,7 @@
       toast(t('Контур Final Quality обновлён.', 'Final Quality workflow updated.')); return value;
     } catch (error) {
       if (error?.code === 'QUALITY_CONCURRENCY_CONFLICT') queueMicrotask(() => { void load({ reset: true }); });
-      toast(error?.message || 'FINAL_QUALITY_MUTATION_FAILED', 'error'); return null;
+      toast(error?.message || I18N.t('common.requestError'), 'error'); return null;
     } finally { ui.busyCode = null; renderApp(); }
   }
   function metric(label, value, detail, tone = '') { return h('article', { className: `final-quality-kpi ${tone}` }, [h('span', { text: label }), h('strong', { text: value }), h('small', { text: detail })]); }
@@ -266,5 +267,19 @@
     if (!navigation.querySelector('[data-final-quality-nav]')) navigation.append(h('button', { type: 'button', 'data-final-quality-nav': 'true', text: t('Контроль качества', 'Final Quality'), onclick: () => { state.view = 'final-quality'; renderApp(); } }));
     return navigation;
   };
-  global.SynthaFinalQualityWorkspace = Object.freeze({ fetchAll, load, render: renderFinalQuality });
+  // Production Execution hands a ready-for-QC batch over by execution code. If an inspection for
+  // that execution already exists, open it; otherwise prefill the create panel with the code so the
+  // user does not have to retype it from the other screen.
+  function openForExecution(executionCode) {
+    const code = String(executionCode || '').trim().toUpperCase();
+    if (code) {
+      ui.executionCode = code;
+      const existing = ui.items.find((item) => item?.executionCode === code);
+      if (existing) ui.selectedCode = existing.inspectionCode;
+    }
+    state.view = 'final-quality';
+    renderApp();
+  }
+
+  global.SynthaFinalQualityWorkspace = Object.freeze({ fetchAll, load, render: renderFinalQuality, openForExecution });
 })(window);

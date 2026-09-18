@@ -172,9 +172,9 @@ export function createNotificationService({
     ]);
     const projected = new Set(projection.projections.map((item) => item.eventId));
     const uniqueRecords = new Map();
-    for (const record of [...pending, ...published]) uniqueRecords.set(record.event.id, record);
+    for (const record of [...pending, ...published]) uniqueRecords.set(record.eventId, record);
     return [...uniqueRecords.values()]
-      .filter((record) => !projected.has(record.event.id))
+      .filter((record) => !projected.has(record.eventId))
       .sort(compareOutboxRecords)
       .slice(0, limit);
   }
@@ -202,7 +202,7 @@ export function createNotificationService({
       try {
         const failedAt = validClockTimestamp(clock());
         rescheduled = await projectionStore.failProjectionClaim({
-          eventId: record.event.id,
+          eventId: record.eventId,
           workerId: projectionWorkerId,
           errorCode,
           retryAt: addMilliseconds(failedAt, projectionRetryDelayMs),
@@ -213,7 +213,7 @@ export function createNotificationService({
     }
 
     return Object.freeze({
-      eventId: record?.event?.id ?? null,
+      eventId: record?.eventId ?? null,
       status: 'failed',
       errorCode,
       attemptCount,
@@ -225,15 +225,16 @@ export function createNotificationService({
 
   async function projectRecord(record, source) {
     const event = record.event;
+    const eventId = record.eventId;
     return projectionStore.transaction(async (tx) => {
-      if (await tx.hasProjection(event.id)) {
-        await tx.deleteProjectionClaim?.(event.id);
-        return Object.freeze({ eventId: event.id, status: 'already-projected', notificationIds: Object.freeze([]) });
+      if (await tx.hasProjection(eventId)) {
+        await tx.deleteProjectionClaim?.(eventId);
+        return Object.freeze({ eventId, status: 'already-projected', notificationIds: Object.freeze([]) });
       }
       const candidates = notificationCandidates(source, event);
       const notificationIds = [];
       for (const candidate of candidates) {
-        const dedupeKey = notificationDedupeKey(event.id, candidate.recipientOrganisationId);
+        const dedupeKey = notificationDedupeKey(eventId, candidate.recipientOrganisationId);
         const existing = await tx.getNotificationByDedupeKey(dedupeKey);
         if (existing) {
           notificationIds.push(existing.id);
@@ -241,7 +242,7 @@ export function createNotificationService({
         }
         const notification = createNotification({
           id: nextId('notification'),
-          sourceEventId: event.id,
+          sourceEventId: eventId,
           createdAt: clock(),
           ...candidate,
         });
@@ -249,15 +250,15 @@ export function createNotificationService({
         notificationIds.push(notification.id);
       }
       await tx.insertProjection(Object.freeze({
-        eventId: event.id,
-        eventType: event.type,
+        eventId,
+        eventType: record.eventType,
         status: 'projected',
         attemptCount: record.attemptCount ?? 1,
         notificationIds: Object.freeze(notificationIds),
         projectedAt: clock(),
       }));
-      await tx.deleteProjectionClaim?.(event.id);
-      return Object.freeze({ eventId: event.id, status: 'projected', notificationIds: Object.freeze(notificationIds) });
+      await tx.deleteProjectionClaim?.(eventId);
+      return Object.freeze({ eventId, status: 'projected', notificationIds: Object.freeze(notificationIds) });
     });
   }
 }
@@ -360,8 +361,8 @@ function emptyNotificationPage() {
 }
 
 function compareOutboxRecords(left, right) {
-  const leftKey = `${left.event.occurredAt ?? ''}\u0000${left.event.id ?? ''}`;
-  const rightKey = `${right.event.occurredAt ?? ''}\u0000${right.event.id ?? ''}`;
+  const leftKey = `${left.event.occurredAt ?? ''}\u0000${left.eventId ?? ''}`;
+  const rightKey = `${right.event.occurredAt ?? ''}\u0000${right.eventId ?? ''}`;
   return leftKey.localeCompare(rightKey);
 }
 

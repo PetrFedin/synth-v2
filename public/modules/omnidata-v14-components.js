@@ -172,9 +172,22 @@
   }
   function decorateAbbreviations(root=document){const active=locale()==='en'?1:0;uiScopes(root).forEach((scope)=>{roots(scope,'*').forEach((node)=>{if(node.children?.length>0||node.closest?.(BUSINESS_SELECTOR))return;const value=node.textContent?.trim()||'';const codes=Object.keys(ABBREVIATIONS).filter((code)=>new RegExp(`(^|[^A-Za-z])${code}(?=$|[^A-Za-z])`).test(value));if(!codes.length)return;const explanation=codes.map((code)=>`${code}: ${ABBREVIATIONS[code][active]}`).join('\n');node.dataset.od14Tooltip=explanation;node.title=explanation})})}
   function auditLanguage(root=document){let unresolved=0;const marked=new Map();if(locale()==='ru'){uiScopes(root).forEach((scope)=>{roots(scope,'*').forEach((node)=>{if(node.children?.length>0||node.closest?.(BUSINESS_SELECTOR))return;const words=(node.textContent||'').match(/[A-Za-z][A-Za-z-]*/g)||[];const leaks=words.filter((word)=>!ALLOWED_LATIN.has(word)&&!ALLOWED_LATIN.has(word.toUpperCase()));if(leaks.length)marked.set(node,leaks.length)})});roots(root,'[data-od14-untranslated="true"]').forEach((node)=>node.removeAttribute('data-od14-untranslated'));marked.forEach((count,node)=>{node.setAttribute('data-od14-untranslated','true');unresolved+=count})}else roots(root,'[data-od14-untranslated="true"]').forEach((node)=>node.removeAttribute('data-od14-untranslated'));if(document.body?.dataset)document.body.dataset.od14LanguageAudit=String(unresolved);return unresolved}
-  function apply(root=document){document.body?.classList?.add('omnidata-v14');if(document.body?.dataset)document.body.dataset.synthaComponentSystem=BUILD;assignComponents(root);translateText(root);decorateAbbreviations(root);auditLanguage(root);auditComponents(root)}
-  function scheduleApply(){if(scheduled)return;scheduled=true;global.queueMicrotask(()=>{scheduled=false;apply(document)})}
-  function installObserver(){if(observer||!global.MutationObserver)return;observer=new global.MutationObserver((mutations)=>{if(mutations.some((mutation)=>mutation.addedNodes?.length||mutation.type==='attributes'))scheduleApply()});observer.observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['class','aria-selected','aria-pressed']})}
+  function ensureBodyClass(){const list=document.body?.classList;if(typeof list?.add!=='function')return;const has=typeof list.contains==='function'?list.contains('omnidata-v14'):false;if(!has)list.add('omnidata-v14')}
+  // apply() writes attributes this layer also observes, twice over: it must not re-dirty what it
+  // watches (so every write is compared first), and it must not react to its own mutations (so the
+  // observer is detached for the pass). Scheduling on a microtask would also let the feedback
+  // re-arm inside the same microtask checkpoint and never return control to the event loop, so the
+  // scheduler yields a frame to the browser instead.
+  const yieldToBrowser=(fn)=>{if(typeof global.requestAnimationFrame==='function')return global.requestAnimationFrame(()=>fn());if(typeof global.setTimeout==='function')return global.setTimeout(fn,0);if(typeof global.queueMicrotask==='function')return global.queueMicrotask(fn);return fn()};
+  function apply(root=document){stopObserving();try{ensureBodyClass();if(document.body?.dataset&&document.body.dataset.synthaComponentSystem!==BUILD)document.body.dataset.synthaComponentSystem=BUILD;assignComponents(root);translateText(root);decorateAbbreviations(root);auditLanguage(root);auditComponents(root)}finally{startObserving()}}
+  // apply() already detaches; the wrapper is kept so existing call sites stay stable.
+  function applyDetached(root){return apply(root)}
+  function scheduleApply(){if(scheduled)return;scheduled=true;yieldToBrowser(()=>{scheduled=false;applyDetached(document)})}
+  const OBSERVE_OPTIONS=Object.freeze({childList:true,subtree:true,attributes:true,attributeFilter:['class','aria-selected','aria-pressed']});
+  let observing=false;
+  function startObserving(){if(!observer||observing)return;observing=true;observer.observe(document.documentElement,OBSERVE_OPTIONS)}
+  function stopObserving(){if(!observer||!observing)return;observer.takeRecords();observer.disconnect();observing=false}
+  function installObserver(){if(observer||!global.MutationObserver)return;observer=new global.MutationObserver((mutations)=>{if(mutations.some((mutation)=>mutation.addedNodes?.length||mutation.type==='attributes'))scheduleApply()});startObserving()}
 
   if(typeof renderApp==='function'){const previousRenderApp=renderApp;renderApp=(...args)=>{const result=previousRenderApp(...args);apply(document);return result}}
   global.addEventListener('syntha:locale-changed',scheduleApply);

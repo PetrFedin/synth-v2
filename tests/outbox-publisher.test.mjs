@@ -15,6 +15,9 @@ function event(id, aggregateId = id) {
 
 function publicationRecord(id, aggregateId = id, attemptCount = 1) {
   return Object.freeze({
+    // Identity travels on the record from the outbox row, not read out of the envelope.
+    eventId: id,
+    eventType: 'order.created',
     event: event(id, aggregateId),
     status: 'pending',
     publishedAt: null,
@@ -45,6 +48,8 @@ test('PostgreSQL claims pending outbox rows with lease ownership and SKIP LOCKED
       if (/WITH candidates AS MATERIALIZED/.test(sql)) {
         return {
           rows: [{
+            id: 'event-1',
+            event_type: 'order.created',
             event: event('event-1'),
             status: 'pending',
             published_at: null,

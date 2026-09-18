@@ -444,7 +444,7 @@ body.omnidata-v14 .measurement-table,
 body.omnidata-v14 .measurement-matrix,
 body.omnidata-v14 .sample-table,
 body.omnidata-v14 .sourcing-table,
-body.omnidata-v14 .od-mini-table{width:100%!important;min-width:720px!important;border-collapse:separate!important;border-spacing:0!important;background:#fff!important}
+body.omnidata-v14 .od-mini-table{width:100%!important;min-width:0!important;border-collapse:separate!important;border-spacing:0!important;background:#fff!important}
 body.omnidata-v14 .od-table th,
 body.omnidata-v14 .bom-table th,
 body.omnidata-v14 .measurement-table th,

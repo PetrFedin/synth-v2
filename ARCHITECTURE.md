@@ -908,6 +908,20 @@ out by the `navigation-item` part, not by the generic button chrome: left
 aligned, no border, inherited typography, centred only when the sidebar is
 collapsed or at the narrow breakpoints.
 
+The same separation applies wherever an element carries a role for semantics but
+is not a standalone control of that role. Each of these is styled by role and
+part in the contract stylesheet — never by a module namespace, which
+`validate-design-system` rejects:
+
+| Element | Role it carries | Why the generic chrome is wrong |
+|---|---|---|
+| Search wrapper | `field` / `field-group` | It is one horizontal control (icon + input in one border), not a label stacked above an input |
+| Command-bar spacer | `filterbar` | `aria-hidden` layout filler (`flex:1`); it must never paint |
+| Status dot | `status` | A 9px dot whose border colour encodes state, not a pill |
+| Toast host | `status` / `toast` | A permanently mounted positioning container; the `.notice` inside carries the card |
+| Dashboard mini-table | `table` | Two or three summary columns in a half-width panel; the 720px grid floor only forces a scrollbar |
+
+
 ### 10.11 Shell and navigation
 
 Current main shell top-level navigation is generated from a single `NAV_GROUPS` structure:

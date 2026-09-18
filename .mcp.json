@@ -1,0 +1,22 @@
+{
+  "mcpServers": {
+    "postgres-dev": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres",
+               "postgresql://syntha:syntha_local@localhost:5434/syntha_v2"]
+    },
+    "postgres-test": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres",
+               "postgresql://syntha:syntha_test@localhost:5435/syntha_v2_test"]
+    },
+    "playwright": {
+      "command": "npx",
+      "args": ["@playwright/mcp@latest"]
+    },
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp"]
+    }
+  }
+}

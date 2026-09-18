@@ -496,3 +496,11 @@ body.omnidata-design-system-v1 .od-filter-button-count,
 body.omnidata-role-system .od-filter-button-count{display:inline-flex!important;align-items:center!important;justify-content:center!important;min-width:16px!important;height:16px!important;margin-left:6px!important;padding:0 4px!important;border-radius:999px!important;background:var(--ods-color-accent)!important;color:#fff!important;font-size:10px!important;font-weight:700!important}
 body.omnidata-design-system-v1 .od-filter-panel-close-mark,
 body.omnidata-role-system .od-filter-panel-close-mark{font-size:16px!important;line-height:1!important;color:var(--ods-color-text-soft)!important}
+
+/* The column chooser shares the filter panel's shell. */
+body.omnidata-design-system-v1 :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]).od-column-panel,
+body.omnidata-role-system :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]).od-column-panel{width:min(280px,80%)!important}
+body.omnidata-design-system-v1 :is([data-ods-role="field"],[data-od14-unified-role="field"]).od-column-option,
+body.omnidata-role-system :is([data-ods-role="field"],[data-od14-unified-role="field"]).od-column-option{display:flex!important;align-items:center!important;gap:8px!important;min-height:28px!important;padding:2px 0!important;font-size:12px!important;cursor:pointer!important}
+body.omnidata-design-system-v1 .od-column-option input:disabled,
+body.omnidata-role-system .od-column-option input:disabled{opacity:.5!important;cursor:not-allowed!important}

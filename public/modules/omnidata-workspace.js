@@ -2,7 +2,46 @@ const OD_UI = window.SynthaOmnidataUi || (window.SynthaOmnidataUi = {
   tabs: Object.create(null),
   selected: Object.create(null),
   filters: Object.create(null),
+  // Which columns each registry hides. Kept per section and remembered between visits: a person who
+  // works in sourcing every day should not have to hide the same four columns each morning.
+  hiddenColumns: Object.create(null),
 });
+
+const OD_COLUMN_STORAGE_KEY = 'syntha-v2-hidden-columns';
+function odLoadHiddenColumns() {
+  try {
+    const raw = window.localStorage?.getItem(OD_COLUMN_STORAGE_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') {
+      for (const [scope, labels] of Object.entries(parsed)) {
+        if (Array.isArray(labels)) OD_UI.hiddenColumns[scope] = labels.filter(label => typeof label === 'string');
+      }
+    }
+  } catch { /* a browser that refuses storage still gets every column */ }
+}
+function odSaveHiddenColumns() {
+  try { window.localStorage?.setItem(OD_COLUMN_STORAGE_KEY, JSON.stringify(OD_UI.hiddenColumns)); }
+  catch { /* the choice still holds for this session */ }
+}
+odLoadHiddenColumns();
+
+function odHiddenColumns(scope) { return new Set(OD_UI.hiddenColumns[scope] || []); }
+function odVisibleColumns(scope, columns) {
+  const hidden = odHiddenColumns(scope);
+  const visible = columns.filter(column => !hidden.has(column.label));
+  // Never leave a registry with nothing to read: the first column always survives.
+  return visible.length ? visible : columns.slice(0, 1);
+}
+function odToggleColumn(scope, label, columns) {
+  const hidden = odHiddenColumns(scope);
+  if (hidden.has(label)) hidden.delete(label);
+  else if (odVisibleColumns(scope, columns).length > 1) hidden.add(label);
+  else return false;
+  OD_UI.hiddenColumns[scope] = [...hidden];
+  odSaveHiddenColumns();
+  return true;
+}
 
 function odText(ru, en) { return localText(ru, en); }
 function odList(value) { return Array.isArray(value) ? value : []; }
@@ -122,6 +161,56 @@ function odAttributeValue(column, item) {
   if (raw instanceof Node || raw === null || raw === undefined) return '';
   if (typeof raw === 'object') return '';
   return String(raw).trim();
+}
+
+// The column chooser. A registry carries more columns than most people need at once; this decides
+// which ones the section shows, per section, and remembers it between visits.
+function odColumnPanel(scope) {
+  const registry = OD_UI.registry?.[scope];
+  const columns = registry?.columns || [];
+  const panel = el('aside', { className: 'od-filter-panel od-column-panel', role: 'dialog', ariaLabel: odText('\u041a\u043e\u043b\u043e\u043d\u043a\u0438', 'Columns') });
+  const head = el('header', { className: 'od-filter-panel-head' });
+  head.append(el('h2', { className: 'od-filter-panel-title', rawText: odText('\u041a\u043e\u043b\u043e\u043d\u043a\u0438', 'Columns') }));
+  const close = el('button', { className: 'od-filter-panel-close', type: 'button', ariaLabel: odText('\u0417\u0430\u043a\u0440\u044b\u0442\u044c', 'Close') });
+  close.append(el('span', { className: 'od-filter-panel-close-mark', rawText: '\u00d7' }));
+  close.addEventListener('click', () => { OD_UI.columnPanel = null; renderApp(); });
+  head.append(close);
+  panel.append(head);
+
+  const body = el('div', { className: 'od-filter-panel-body' });
+  const hidden = odHiddenColumns(scope);
+  const visibleCount = odVisibleColumns(scope, columns).length;
+  // A column with no heading is structural — a row number, a selection box — and is not the
+  // reader's to switch off.
+  columns.filter(column => String(column.label || '').trim()).forEach(column => {
+    const row = el('label', { className: 'od-filter-option od-column-option' });
+    const box = el('input', { type: 'checkbox' });
+    box.checked = !hidden.has(column.label);
+    // The last remaining column cannot be switched off, so the control says so instead of failing.
+    if (box.checked && visibleCount <= 1) {
+      box.disabled = true;
+      row.title = odText('\u041e\u0434\u043d\u0430 \u043a\u043e\u043b\u043e\u043d\u043a\u0430 \u0434\u043e\u043b\u0436\u043d\u0430 \u043e\u0441\u0442\u0430\u0442\u044c\u0441\u044f', 'One column must remain');
+    }
+    box.addEventListener('change', () => { odToggleColumn(scope, column.label, columns); renderApp(); });
+    row.append(box, el('span', { className: 'od-filter-option-label', rawText: column.label }));
+    body.append(row);
+  });
+  panel.append(body);
+
+  const footer = el('footer', { className: 'od-filter-panel-foot' });
+  const all = el('button', { className: 'button', type: 'button', rawText: odText('\u041f\u043e\u043a\u0430\u0437\u0430\u0442\u044c \u0432\u0441\u0435', 'Show all') });
+  all.addEventListener('click', () => { delete OD_UI.hiddenColumns[scope]; odSaveHiddenColumns(); renderApp(); });
+  const done = el('button', { className: 'button primary', type: 'button', rawText: odText('\u0413\u043e\u0442\u043e\u0432\u043e', 'Done') });
+  done.addEventListener('click', () => { OD_UI.columnPanel = null; renderApp(); });
+  footer.append(all, done);
+  panel.append(footer);
+  return panel;
+}
+
+function odHiddenColumnCount(scope) {
+  const columns = OD_UI.registry?.[scope]?.columns || [];
+  const hidden = odHiddenColumns(scope);
+  return columns.filter(column => hidden.has(column.label)).length;
 }
 
 // The filter panel. Omnidata lists the attribute names and asks you to pick one; this lists each
@@ -333,12 +422,13 @@ function odRegistry({ scope, rows, columns, inspector, filterScope = scope, rowK
   OD_UI.registry = OD_UI.registry || {};
   OD_UI.registry[filterScope] = { rows, columns, statusAccessor };
   const filtered = odFilter(rows, filterScope, statusAccessor);
-  const table = odTable(scope, filtered, columns, rowKey);
+  const table = odTable(scope, filtered, odVisibleColumns(filterScope, columns), rowKey);
   const layout = el('section', { className: 'od-master-detail' });
   const master = el('div', { className: 'od-master' });
   const chips = odFilterChips(filterScope);
   if (chips) master.append(chips);
   if (OD_UI.filterPanel === filterScope) master.append(odFilterPanel(filterScope));
+  if (OD_UI.columnPanel === filterScope) master.append(odColumnPanel(filterScope));
   master.append(table.node);
   layout.append(master, table.selected ? inspector(table.selected) : odInspector({ title: odText('\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0437\u0430\u043f\u0438\u0441\u044c', 'Select a record') }));
   return layout;

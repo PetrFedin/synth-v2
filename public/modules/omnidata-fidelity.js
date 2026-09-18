@@ -54,6 +54,7 @@ function odFidelityFilterButton() {
   button.addEventListener('click', () => {
     if (!scope) return;
     OD_UI.filterPanel = OD_UI.filterPanel === scope ? null : scope;
+    OD_UI.columnPanel = null;
     OD_UI.filterPanelQuery = '';
     renderApp();
   });
@@ -62,12 +63,38 @@ function odFidelityFilterButton() {
 
 
 
+function odFidelityColumnButton() {
+  // (className, ariaLabel, visibleText) — the spoken name carries the detail, the face stays short.
+  const button = odFidelityButton(
+    'od-column-button',
+    odFidelityText('\u0412\u044b\u0431\u0440\u0430\u0442\u044c \u043a\u043e\u043b\u043e\u043d\u043a\u0438 \u0440\u0430\u0437\u0434\u0435\u043b\u0430', 'Choose the columns for this section'),
+    odFidelityText('\u041a\u043e\u043b\u043e\u043d\u043a\u0438', 'Columns'),
+  );
+  const scope = typeof OD_UI !== 'undefined' && OD_UI.registry ? Object.keys(OD_UI.registry).at(-1) : null;
+  const hidden = scope && typeof odHiddenColumnCount === 'function' ? odHiddenColumnCount(scope) : 0;
+  if (hidden > 0) {
+    button.classList.add('od-filter-button-active');
+    button.append(el('span', { className: 'od-filter-button-count', rawText: String(hidden) }));
+  }
+  button.addEventListener('click', () => {
+    if (!scope) return;
+    OD_UI.columnPanel = OD_UI.columnPanel === scope ? null : scope;
+    OD_UI.filterPanel = null;
+    renderApp();
+  });
+  return button;
+}
+
 function odFidelityCommandBars() {
   document.querySelectorAll('.od-commandbar').forEach((bar) => {
     if (!OD_FIDELITY.enhancedBars.has(bar)) {
       OD_FIDELITY.enhancedBars.add(bar);
       const search = bar.querySelector('.od-search');
-      if (search) search.after(odFidelityFilterButton());
+      if (search) {
+        const filters = odFidelityFilterButton();
+        search.after(filters);
+        filters.after(odFidelityColumnButton());
+      }
       const primary = bar.querySelector(':scope > .button');
       const spacer = el('span', { className: 'od-commandbar-spacer', ariaHidden: 'true' });
       bar.append(spacer);

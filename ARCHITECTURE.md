@@ -884,7 +884,31 @@ Structural meaning uses `data-ods-part` (page header, toolbar, tabs, pagination,
 
 Desktop inspector is sticky at `top:62px`, max-height `calc(100vh - 78px)` and scrolls internally. At `<=920px`, master-detail becomes one column and inspector becomes static. Content padding decreases at `<=1080px`; page header/filterbar/metrics reflow at smaller breakpoints including `620px`.
 
-### 10.10 Shell and navigation
+### 10.10 Role-system runtime invariants
+
+`normalize()` in `public/modules/omnidata-v14-role-system.js` runs under its own
+MutationObserver, so it must never leave the DOM dirty in a way that observer
+watches. Two invariants hold it:
+
+1. **A pass may not re-trigger itself.** `normalize()` detaches the observer for
+   the duration of the pass (`takeRecords()` then `disconnect()`, re-observing in
+   a `finally`), and adds only the body classes that are missing. A redundant
+   `classList.add` still queues a mutation record, and the observer watches
+   `class`; without both guards the pass re-schedules itself through
+   `queueMicrotask` and the microtask chain starves rendering — the page never
+   paints a frame.
+2. **A button role is never assigned to a descendant of a button.** Buttons
+   cannot nest. The heuristic class matcher would otherwise promote internals
+   such as `.button-label` on the `button-` prefix, drawing a second control
+   inside its parent; the audit likewise ignores button internals so they do not
+   count as unclassified and drive the retry timer.
+
+Navigation items carry the `button` role for semantics and audit, but are laid
+out by the `navigation-item` part, not by the generic button chrome: left
+aligned, no border, inherited typography, centred only when the sidebar is
+collapsed or at the narrow breakpoints.
+
+### 10.11 Shell and navigation
 
 Current main shell top-level navigation is generated from a single `NAV_GROUPS` structure:
 
@@ -916,11 +940,11 @@ Topbar contract:
 
 The sidebar collapsed preference is stored in `localStorage` under `syntha-v2-sidebar-collapsed` after the one-time readable-shell migration.
 
-### 10.11 Login/startup states
+### 10.12 Login/startup states
 
 Login screen contains locale switcher, brand block, description, email, password and Sign In action. Password field has a minimum client length of 12; server policy remains authoritative. Startup hydration failure shows an explicit error plus Retry and Sign out; it does not silently render a partial workspace.
 
-### 10.12 Required state coverage for every interactive screen
+### 10.13 Required state coverage for every interactive screen
 
 Every new/changed data screen must specify and implement as applicable:
 
@@ -945,6 +969,11 @@ A button without an implemented end-to-end handler is forbidden.
 ---
 
 ## 11. Browser loading and localization contract
+
+Static workspace assets are served with negotiated content encoding. Text responses above 1 KiB are compressed with Brotli, or gzip when Brotli is not acceptable, chosen from `Accept-Encoding` including its quality values; binary types and small responses are always served as identity. Every static response carries `Vary: Accept-Encoding`, and a compressed representation carries its own ETag, so a cache holding one representation can never answer a request that only accepts the other. A compression that fails to shrink the asset is discarded and the identity bytes are served instead, without an encoding header. Encoded bodies are memoised under the content hash that already backs the ETag, so a changed file misses the memo by construction.
+
+The shell currently loads 96 blocking assets. Measured on the supported runtime: 1165 KiB as identity, 288 KiB with gzip, 272 KiB with Brotli. Because the visual layer is deliberately `no-store`, that transfer repeats on every navigation, which is what makes the encoding contract load-bearing rather than cosmetic.
+
 
 ### 11.1 Loading order
 
@@ -1047,6 +1076,15 @@ The type contract (`npm run validate:types`, `scripts/validate-types.mjs`) runs 
 
 ### 15.3 Live acceptance
 
+All three acceptance commands are executable and are exercised by CI against the live runtime stack. Two of them previously could not run at all: `scripts/acceptance-collection.mjs` and `scripts/bootstrap-production-reference.mjs` imported `pg` with a named binding, which throws at load time because `pg` is CommonJS and publishes no `exports` map. The test suite could not detect this, because tests resolve `pg` through `tests/pg-test-facade.mjs`, which re-exports the named bindings; operational entry points get no such facade. `tests/script-runtime-contract.test.mjs` now asserts the import contract directly.
+
+Creating a ProductSku legitimately initialises exactly one zero-quantity row in `product_sku_inventory_balances`. Both Product Readiness scenarios therefore permit that single identity delta and nothing else: every other counter, available and reserved quantities included, must be unchanged, which is what proves the new row carries no stock. The rule is defined once in `assertReadyProductInventoryIsolationDelta` and shared by both scenarios, because the BLOCKED scenario previously asserted strict equality and could never pass live.
+
+`SYNTHA_ACCEPTANCE_RUN_ID` pins idempotency keys, so two commands sharing one run id against one environment replay the same mutations instead of creating new state. The commercialization gate internally executes the READY readiness scenario, so a readiness command reusing its run id is a replay and legitimately creates no new ProductSku identity row. Acceptance steps that must prove fresh creation therefore require their own run id; CI gives each acceptance step a distinct one. This is a property of idempotent replay, not a reason to relax the single-identity-delta assertion.
+
+The commercialization scenario currently assumes a first run against its reserved organisations: replaying it against an environment that already holds an active acceptance brand↔shop relationship fails with `RELATIONSHIP_NOT_RENEWABLE`, which is the domain behaving correctly. Repeat-run support against a persistent environment is open work.
+
+
 Operational `PROD-PROVEN` live acceptance coverage remains deliberately narrow at the currently evidenced baseline:
 
 ```text
@@ -1134,6 +1172,8 @@ This is the current high-level master status. Supporting detail is kept in this 
 | `COMM-LC-008` | P0 | `ARCHITECTURE.md` previously described a staged CommercialPublication lifecycle that the canonical V2 runtime does not actually implement | add one canonical fail-closed `DRAFT → READY → PUBLISHED → SUPERSEDED/ARCHIVED` lifecycle with API/DB/idempotency/tests, or formally revise the single lifecycle contract; no parallel publication truth | OPEN/GAP — runtime currently creates immutable V2 CommercialPublication directly as `published` |
 | `PRICE-009` | P0 | PriceListVersion still lacks explicit market/effective-period and any business-required tax/eligibility depth | canonical ProductSku-exact pricing, market, effective_from/effective_to, server validation and immutable BuyerCatalog pin | OPEN/PARTIAL — ProductSku-exact override, minor-unit server validation and immutable BuyerCatalog pin are implemented; market/effective-period/tax-depth remain |
 | `UI-006` | P1 | Legacy Omnidata CSS/JS compatibility layers remain loaded | migrate semantics to ODS v1 and remove debt only after validation | OPEN/PARTIAL |
+| `ACC-REPLAY-010` | P1 | Commercialization acceptance cannot be replayed against an environment that already holds an active acceptance relationship | make the reserved-organisation setup converge on existing active state instead of requiring a first run | OPEN — surfaced by executing the gate twice against one live environment; the domain correctly rejects renewing an active relationship with `RELATIONSHIP_NOT_RENEWABLE` |
+| `ACC-REPLAY-010` | P1 | Commercialization acceptance could not be replayed against an environment that already holds an active acceptance relationship | converge on the existing relationship instead of requiring a first run | CLOSED — the gate now reads the existing relationship back and requires it to be active between exactly the two reserved organisations before continuing; proved by three consecutive runs against one environment |
 | `SPEC-007` | P0 | Historical architecture/product/UI detail was fragmented across docs/code | authoritative `ARCHITECTURE.md` + CI synchronization rule | CLOSED in #110 |
 
 Every confirmed gap discovered during audit is added here before or with its implementation fix. Closed gaps remain in the table/change history or are moved to the closed section; they are not silently deleted.
@@ -1225,6 +1265,9 @@ Minimum frozen lineage fields for the current commercial spine include:
 | 2026-09-17 | `fix/runtime-db-timeouts-and-dead-ui-layers` | Bound request-path PostgreSQL work with pool-level `statement_timeout`/`lock_timeout`/`idle_in_transaction_session_timeout` so a single stuck query can no longer hold a pooled connection indefinitely; explicitly exempt the two workloads that legitimately run long (startup migrations via session `SET` plus destroy-on-release, retention maintenance via transaction-scoped `SET LOCAL`); validate all timeout inputs as integers | 2.1, 13, 14, 20 | IMPLEMENTED; `npm run verify` green; `npm run verify:postgres` green against the dedicated verification database; no `PROD-PROVEN` claim |
 | 2026-09-17 | `refactor/http-transport-independent-pipeline` | Extract the duplicated node:http/Web Fetch request pipeline into one transport-independent `src/http/pipeline.mjs` and move status mapping to `src/http/error-status.mjs`; fix the resulting divergence where the Fetch adapter buffered an entire body before checking the size, so a request without `Content-Length` could exceed the limit in memory | 12, 20 | IMPLEMENTED; `npm run verify` green; `npm run verify:postgres` green; regression test fails against the pre-fix buffering behaviour |
 | 2026-09-17 | `fix/http-server-fault-status` | Answer platform-side `DomainError`s (reader contract violations, failed clock/RNG) with HTTP 500 instead of a 4xx that blames the caller; classify by suffix so new reader/result/clock codes are covered on arrival; preserve the contractual 422 default for unclassified domain validation | 12, 20 | IMPLEMENTED; `npm run verify` green; `npm run verify:postgres` green; depends on the pipeline extraction PR |
+| 2026-09-17 | `fix/acceptance-script-pg-import` | Make the live acceptance ladder actually executable: fix the load-time `pg` named-import crash in the Collection acceptance and production-reference bootstrap entry points, share the single zero ProductSku inventory identity delta between both Product Readiness scenarios so the BLOCKED scenario can pass live, correct the harness test fixture that modelled no balance-row delta, add a structural guard on the script import contract, and run Collection plus Product Readiness acceptance in the live-stack CI workflow | 15.3, 17, 20 | IMPLEMENTED; all three gates executed end to end against a live runtime and PostgreSQL: Collection passed, Product Readiness passed with `inventoryBalanceIdentityDelta: 1`, Product commercialization passed through READY → projection → publication → PriceListVersion → BuyerCatalogVersion |
+| 2026-09-17 | `fix/acceptance-replay-relationship` | Let the commercialization acceptance gate run repeatedly against one environment: when the domain correctly refuses to renew an already-active relationship, read it back and require it to be active between exactly the reserved brand and shop before continuing; attach the domain error code to acceptance request failures so callers converge on state instead of parsing messages | 15.3, 17, 20 | IMPLEMENTED; consecutive runs against one live environment passed; `ACC-REPLAY-010` CLOSED |
+| 2026-09-17 | `feat/static-asset-compression` | Serve static workspace assets with negotiated Brotli/gzip encoding, per-representation ETags, `Vary: Accept-Encoding`, an identity fallback when compression does not shrink the asset, and memoisation keyed by the existing content hash | 11, 20 | IMPLEMENTED; measured on the supported runtime: 96 blocking assets fall from 1165 KiB to 288 KiB with gzip and 272 KiB with Brotli; no new dependency, `node:zlib` only |
 | 2026-09-17 | `chore/typescript-checkjs-baseline` | Add a type contract gate: TypeScript `checkJs` over the JavaScript sources with a per-file baseline in `ops/type-baseline.json`, wired into `npm run verify`; new type errors fail, and an improved file fails until the baseline is re-recorded, so recorded debt can only decrease | 2.1, 15.1, 20 | IMPLEMENTED; 575 known findings across 177 files recorded; validator self-tested against an introduced error and against an inflated baseline; `npm run verify` green |
 
 Future implementation PRs add a row here. The row is not a substitute for updating the affected detailed sections.

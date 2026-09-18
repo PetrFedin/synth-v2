@@ -1,7 +1,7 @@
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
-import { Pool } from 'pg';
+import pg from 'pg';
 import {
   ensureAcceptanceBrandOwner,
   loginAcceptanceSession,
@@ -24,7 +24,7 @@ if (!target.local && process.env.SYNTHA_ACCEPTANCE_ALLOW_REMOTE !== 'true') {
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const migrationsDir = path.join(root, 'db', 'migrations');
-const pool = new Pool({ connectionString: databaseUrl, max: 4 });
+const pool = new pg.Pool({ connectionString: databaseUrl, max: 4 });
 let createdSession = false;
 let token = process.env.SYNTHA_ACCEPTANCE_TOKEN?.trim() || '';
 

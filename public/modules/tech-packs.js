@@ -80,7 +80,8 @@
       if (state.view === 'tech-packs') renderApp();
     }
   }
-  function ensureLoaded() { if (!ui.loaded && !ui.loading) queueMicrotask(() => { void load({ reset: true }); }); }
+  // See materials.js: retrying a failed load from render starves the event loop.
+  function ensureLoaded() { if (!ui.loaded && !ui.loading && !ui.error) queueMicrotask(() => { void load({ reset: true }); }); }
   function upsert(value) {
     const map = new Map(ui.items.map((item) => [item.techPackCode, item]));
     map.set(value.techPackCode, value);

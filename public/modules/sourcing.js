@@ -106,7 +106,8 @@
       if (SOURCING_VIEWS.has(state.view)) renderApp();
     }
   }
-  function ensureLoaded() { if (!ui.loaded && !ui.loading) queueMicrotask(() => { void loadSourcing({ reset: true }); }); }
+  // See materials.js: retrying a failed load from render starves the event loop.
+  function ensureLoaded() { if (!ui.loaded && !ui.loading && !ui.error) queueMicrotask(() => { void loadSourcing({ reset: true }); }); }
   function upsertSupplier(supplier) { const map = new Map(ui.suppliers.map((item) => [item.supplierCode, item])); map.set(supplier.supplierCode, supplier); ui.suppliers = [...map.values()].sort((a, b) => a.supplierCode.localeCompare(b.supplierCode)); ui.selectedSupplierCode = supplier.supplierCode; }
   function upsertRfq(rfq) { const map = new Map(ui.rfqs.map((item) => [item.rfqCode, item])); map.set(rfq.rfqCode, rfq); ui.rfqs = [...map.values()].sort((a, b) => a.rfqCode.localeCompare(b.rfqCode)); ui.selectedRfqCode = rfq.rfqCode; }
   async function runMutation(key, path, body, method = 'POST', kind = 'rfq') {

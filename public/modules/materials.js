@@ -66,7 +66,10 @@
   }
 
   function ensureMaterials() {
-    if (!materialState.loaded && !materialState.loading) queueMicrotask(() => { void loadMaterials({ reset: true }); });
+    // A failed load must not be retried straight from render: the finally block re-renders,
+    // render calls this again, and the microtask chain never yields, freezing the tab. The
+    // error state carries a Retry control, and reset() clears the error, so recovery stays manual.
+    if (!materialState.loaded && !materialState.loading && !materialState.error) queueMicrotask(() => { void loadMaterials({ reset: true }); });
   }
 
   function optionalText(value, label, maxLength) {

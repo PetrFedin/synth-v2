@@ -61,7 +61,9 @@ test('maintenance cleanup is advisory-locked transactional and returns deletion 
     catalogOutboxEvents: 8,
   });
   assert.equal(fixture.queries[0].sql, 'BEGIN');
-  assert.match(fixture.queries[1].sql, /pg_try_advisory_xact_lock\(hashtextextended\(\$1, 0\)\)/);
+  assert.equal(fixture.queries[1].sql, 'SET LOCAL statement_timeout = 0');
+  assert.equal(fixture.queries[2].sql, 'SET LOCAL lock_timeout = 0');
+  assert.match(fixture.queries[3].sql, /pg_try_advisory_xact_lock\(hashtextextended\(\$1, 0\)\)/);
   assert.equal(fixture.queries.at(-1).sql, 'COMMIT');
   assert.equal(fixture.released, 1);
   assert.equal(Object.isFrozen(result.counts), true);
@@ -123,6 +125,8 @@ test('lock contention commits without executing retention deletes', async () => 
   assert.deepEqual(result, { acquired: false, counts: {} });
   assert.deepEqual(queries.map((item) => item.sql), [
     'BEGIN',
+    'SET LOCAL statement_timeout = 0',
+    'SET LOCAL lock_timeout = 0',
     'SELECT pg_try_advisory_xact_lock(hashtextextended($1, 0)) AS acquired',
     'COMMIT',
   ]);

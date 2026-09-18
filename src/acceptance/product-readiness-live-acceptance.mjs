@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { snapshotAcceptanceIsolation, validateAcceptanceOrigin } from './collection-live-acceptance.mjs';
 import { assertBlockedReadinessProjectionBoundary } from './product-readiness-projection-boundary.mjs';
+import { assertReadyProductInventoryIsolationDelta } from './product-readiness-ready-live-acceptance.mjs';
 import { PRODUCTION_ACCEPTANCE_REFERENCES } from './production-reference-bootstrap.mjs';
 
 const RUN_ID_PATTERN = /^[A-Za-z0-9_-]{1,80}$/;
@@ -334,16 +335,13 @@ function assertExpectedBlockedDimensions(actual) {
   }
 }
 
+// The BLOCKED scenario creates its own Product Identity, and creating a ProductSku legitimately
+// initialises exactly one zero-quantity inventory balance row. That single identity row is the only
+// permitted delta: every other counter, available and reserved quantities included, must be
+// unchanged, which is what proves the new row carries no stock. The READY scenario already encoded
+// this rule; sharing it keeps the two scenarios from drifting apart again.
 function assertDownstreamIsolationUnchanged(before, after) {
-  const keys = Object.keys(before ?? {});
-  if (!keys.length || keys.length !== Object.keys(after ?? {}).length) throw new Error('Acceptance isolation snapshot shape changed');
-  const changed = keys.filter((key) => String(before[key]) !== String(after[key]));
-  if (changed.length) {
-    const error = new Error(`Product readiness acceptance changed downstream/warehouse/economic state: ${changed.join(', ')}`);
-    error.code = 'ACCEPTANCE_ISOLATION_CHANGED';
-    error.details = Object.freeze(Object.fromEntries(changed.map((key) => [key, Object.freeze({ before: before[key], after: after[key] })])));
-    throw error;
-  }
+  return assertReadyProductInventoryIsolationDelta(before, after, { label: 'Product readiness' });
 }
 
 function evidence(runId, dimension, approvedBy) {

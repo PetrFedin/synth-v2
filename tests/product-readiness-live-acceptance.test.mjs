@@ -142,11 +142,16 @@ test('live Product Identity to Readiness acceptance uses public idempotent HTTP,
   const requests = [];
   const brandId = PRODUCTION_ACCEPTANCE_REFERENCES.brand.id;
   const snapshot = isolationSnapshot();
+  // The scenario creates one Product Identity, and creating a ProductSku initialises exactly one
+  // zero-quantity inventory balance row. The isolation snapshot is taken before and after, so the
+  // second read must show that single identity row; every quantity stays at zero.
+  let isolationReads = 0;
   const pool = {
     query: async (sql) => {
       if (sql.includes('FROM product_styles AS style')) return { rows: [persistenceRow(brandId)] };
       if (sql.includes('FROM commercial_product_projection_versions')) return { rows: [{ projection_rows: 0 }] };
-      return { rows: [{ ...snapshot }] };
+      isolationReads += 1;
+      return { rows: [{ ...snapshot, inventory_balance_rows: isolationReads === 1 ? '0' : '1' }] };
     },
   };
 

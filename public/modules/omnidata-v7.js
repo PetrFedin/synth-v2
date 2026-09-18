@@ -29,6 +29,8 @@ const OD_V7_GROUPS = Object.freeze([
       { icon: 'selections', ru: '\u0417\u0430\u043f\u0440\u043e\u0441\u044b \u0446\u0435\u043d', en: 'Requests for quotation', planned: true },
       { icon: 'selections', ru: '\u041a\u043e\u0442\u0438\u0440\u043e\u0432\u043a\u0438', en: 'Quotations', planned: true },
       { icon: 'orders', ru: '\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434\u0441\u0442\u0432\u043e', en: 'Production', planned: true },
+      { icon: 'orders', ru: '\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434\u0441\u0442\u0432\u0435\u043d\u043d\u044b\u0435 \u0437\u0430\u043a\u0430\u0437\u044b', en: 'Production orders', planned: true },
+      { icon: 'orders', ru: '\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434\u0441\u0442\u0432\u0435\u043d\u043d\u044b\u0439 \u043a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u044c', en: 'Production execution', planned: true },
       { icon: 'selections', ru: '\u041a\u0430\u0447\u0435\u0441\u0442\u0432\u043e', en: 'Quality', planned: true },
       { icon: 'showrooms', ru: '\u041b\u043e\u0433\u0438\u0441\u0442\u0438\u043a\u0430', en: 'Logistics', planned: true },
     ],

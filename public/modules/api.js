@@ -2,6 +2,15 @@ const API_TIMEOUT_MS = 15000;
 const API_RETRY_ATTEMPTS = 2;
 
 async function mutate(path, body, method = 'POST') { return api(path, { method, body }); }
+// "SOME_CODE: A sentence." -> "A sentence." Only a leading SCREAMING_SNAKE token followed by a
+// colon is removed, so a message that merely contains an abbreviation is left alone.
+function stripDiagnosticPrefix(message) {
+  const value = String(message ?? '').trim();
+  if (!value) return '';
+  const match = value.match(/^([A-Z][A-Z0-9_]{3,}):\s+(\S.*)$/s);
+  return match ? match[2].trim() : value;
+}
+
 async function api(path, { method = 'GET', body, anonymous = false, signal } = {}) {
   const headers = { accept: 'application/json', 'accept-language': I18N.localeTag() };
   if (!anonymous && state.token) headers.authorization = `Bearer ${state.token}`;
@@ -19,9 +28,11 @@ async function api(path, { method = 'GET', body, anonymous = false, signal } = {
       if (!response.ok) {
         if (response.status === 401 && !anonymous) clearSession();
         const code = payload.error?.code || `HTTP_${response.status}`;
-        const message = payload.error?.message || I18N.t('common.requestError');
         // The code is diagnostic, not copy. It stays on the error for callers that branch on it
-        // and for logging; the message the user reads is a sentence.
+        // and for logging; the message the user reads is a sentence. Some services prefix their own
+        // message with the code — "UI_PREVIEW_READ_ONLY: Public preview is read-only." — which put
+        // the code back in front of the reader through every form and toast, so strip it here.
+        const message = stripDiagnosticPrefix(payload.error?.message) || I18N.t('common.requestError');
         const error = new Error(message);
         error.code = code;
         error.status = response.status;

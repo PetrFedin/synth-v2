@@ -31,22 +31,10 @@ function odV6StatusTones() {
 }
 
 function odV6Inspector() {
+  // Tab labels belong to the module that built the inspector, and each tab switches a real panel,
+  // so this layer only strips the leftover v5 section titles.
   document.querySelectorAll('.od-inspector').forEach((inspector) => {
     inspector.querySelectorAll('.od-v5-inspector-section-title').forEach((node) => node.remove());
-    const tabs = inspector.querySelector('.od-inspector-tabs');
-    if (tabs && tabs.children.length < 5) {
-      const labels = [
-        odV6Text('\u041e\u0431\u0437\u043e\u0440', 'Overview'),
-        odV6Text('\u0422\u043e\u0432\u0430\u0440\u044b', 'Products'),
-        odV6Text('\u041f\u0430\u0440\u0442\u043d\u0435\u0440\u044b', 'Partners'),
-        odV6Text('\u0421\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043a\u0430', 'Statistics'),
-        odV6Text('\u0418\u0441\u0442\u043e\u0440\u0438\u044f', 'History'),
-      ];
-      tabs.replaceChildren(...labels.map((label, index) => el('span', {
-        className: index === 0 ? 'active' : '',
-        rawText: label,
-      })));
-    }
   });
 }
 

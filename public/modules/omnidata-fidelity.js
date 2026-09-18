@@ -147,7 +147,9 @@ function odFidelityInspectors() {
     const subtitle = title?.querySelector('p')?.textContent.trim() || '';
     if (head && title) {
       const main = el('div', { className: 'od-inspector-head-main' });
-      const code = el('span', { className: 'od-inspector-code', rawText: String(heading).slice(0, 12).toUpperCase() });
+      // Hard-truncating to 12 characters produced labels like "\u0412\u042b\u0411\u0415\u0420\u0418\u0422\u0415 \u0417\u0410\u041f"; the full text is kept and CSS decides where it ends.
+      const code = el('span', { className: 'od-inspector-code', rawText: String(heading).toUpperCase() });
+      code.title = String(heading);
       const kicker = title.querySelector('.od-inspector-kicker');
       kicker?.after(code);
       main.append(title);

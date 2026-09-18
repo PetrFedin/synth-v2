@@ -275,18 +275,32 @@
       title: item.name,
       subtitle: item.code,
       status: item.status,
-      tabs: [materialText('\u041e\u0431\u0437\u043e\u0440', 'Overview'), materialText('\u041e\u0441\u0442\u0430\u0442\u043a\u0438', 'Inventory'), materialText('\u041a\u0430\u0447\u0435\u0441\u0442\u0432\u043e \u0434\u0430\u043d\u043d\u044b\u0445', 'Data quality')],
-      fields: [
-        { label: materialText('\u0422\u0438\u043f', 'Type'), value: item.type },
-        { label: materialText('\u041f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a', 'Supplier'), value: item.supplierName || '-' },
-        { label: materialText('\u0421\u043e\u0441\u0442\u0430\u0432', 'Composition'), value: item.composition || '-' },
-        { label: materialText('\u0426\u0435\u043d\u0430', 'Unit cost'), value: `${money(item.unitCost)} ${item.currency}/${item.unit}` },
-        { label: 'MOQ', value: `${item.minimumOrderQuantity} ${item.unit}` },
-        { label: materialText('\u0414\u043e\u0441\u0442\u0443\u043f\u043d\u043e', 'Available'), value: `${assessment.availableToUse} ${item.unit}` },
-        { label: materialText('\u0413\u043e\u0442\u043e\u0432\u043d\u043e\u0441\u0442\u044c', 'Readiness'), value: `${assessment.readiness}%` },
-        { label: materialText('\u0412\u0435\u0440\u0441\u0438\u044f', 'Version'), value: item.version || 1 },
+      tabs: [
+        {
+          label: materialText('\u041e\u0431\u0437\u043e\u0440', 'Overview'),
+          fields: [
+            { label: materialText('\u0422\u0438\u043f', 'Type'), value: item.type },
+            { label: materialText('\u041f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a', 'Supplier'), value: item.supplierName || '\u2014' },
+            { label: materialText('\u0421\u043e\u0441\u0442\u0430\u0432', 'Composition'), value: item.composition || '\u2014' },
+            { label: materialText('\u0426\u0435\u043d\u0430', 'Unit cost'), value: `${money(item.unitCost)} ${item.currency}/${item.unit}` },
+          ],
+        },
+        {
+          label: materialText('\u041e\u0441\u0442\u0430\u0442\u043a\u0438', 'Inventory'),
+          fields: [
+            { label: materialText('\u0414\u043e\u0441\u0442\u0443\u043f\u043d\u043e', 'Available'), value: `${assessment.availableToUse} ${item.unit}` },
+            { label: materialText('\u041c\u0438\u043d\u0438\u043c\u0430\u043b\u044c\u043d\u044b\u0439 \u0437\u0430\u043a\u0430\u0437', 'Minimum order'), value: `${item.minimumOrderQuantity} ${item.unit}` },
+          ],
+        },
+        {
+          label: materialText('\u041a\u0430\u0447\u0435\u0441\u0442\u0432\u043e \u0434\u0430\u043d\u043d\u044b\u0445', 'Data quality'),
+          fields: [
+            { label: materialText('\u0413\u043e\u0442\u043e\u0432\u043d\u043e\u0441\u0442\u044c', 'Readiness'), value: `${assessment.readiness}%` },
+            { label: materialText('\u0412\u0435\u0440\u0441\u0438\u044f', 'Version'), value: item.version || 1 },
+          ],
+          content: [risks],
+        },
       ],
-      content: [risks],
       actions: materialActions(assessment),
     });
   }

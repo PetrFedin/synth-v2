@@ -42,17 +42,29 @@
       title: item.campaign.name || item.campaign.id,
       subtitle: `${orgName(item.campaign.brandId)} - ${item.campaign.season || '-'}`,
       status: item.campaign.status,
-      tabs: [text('\u0413\u043e\u0442\u043e\u0432\u043d\u043e\u0441\u0442\u044c', 'Readiness'), text('\u0420\u0438\u0441\u043a\u0438', 'Risks'), text('\u0421\u0432\u044f\u0437\u0438', 'Dependencies')],
-      fields: [
-        { label: text('\u0413\u043e\u0442\u043e\u0432\u043d\u043e\u0441\u0442\u044c', 'Readiness'), value: `${item.readiness}%` },
-        { label: text('\u041f\u0435\u0440\u0438\u043e\u0434', 'Period'), value: `${formatDate(item.campaign.startsAt)} - ${formatDate(item.campaign.endsAt)}` },
-        { label: text('\u041a\u043e\u043b\u043b\u0435\u043a\u0446\u0438\u0438', 'Collections'), value: `${item.counts.publishedCollections}/${item.counts.collections}` },
-        { label: 'SKU', value: `${item.counts.publishedSkus}/${item.counts.skus}` },
-        { label: 'Linesheets', value: `${item.counts.openShowrooms}/${item.counts.showrooms}` },
-        { label: text('\u041e\u0442\u0431\u043e\u0440\u044b', 'Selections'), value: item.counts.selections },
-        { label: text('\u0417\u0430\u043a\u0430\u0437\u044b', 'Orders'), value: item.counts.orders },
+      tabs: [
+        {
+          label: text('\u0413\u043e\u0442\u043e\u0432\u043d\u043e\u0441\u0442\u044c', 'Readiness'),
+          fields: [
+            { label: text('\u0413\u043e\u0442\u043e\u0432\u043d\u043e\u0441\u0442\u044c', 'Readiness'), value: `${item.readiness}%` },
+            { label: text('\u041f\u0435\u0440\u0438\u043e\u0434', 'Period'), value: `${formatDate(item.campaign.startsAt)} \u2014 ${formatDate(item.campaign.endsAt)}` },
+            { label: text('\u041a\u043e\u043b\u043b\u0435\u043a\u0446\u0438\u0438', 'Collections'), value: `${item.counts.publishedCollections}/${item.counts.collections}` },
+            { label: text('SKU \u043e\u043f\u0443\u0431\u043b\u0438\u043a\u043e\u0432\u0430\u043d\u043e', 'SKU published'), value: `${item.counts.publishedSkus}/${item.counts.skus}` },
+          ],
+        },
+        {
+          label: text('\u0420\u0438\u0441\u043a\u0438', 'Risks'),
+          content: [risks],
+        },
+        {
+          label: text('\u0421\u0432\u044f\u0437\u0438', 'Dependencies'),
+          fields: [
+            { label: text('\u041b\u0438\u043d\u0448\u0438\u0442\u044b', 'Linesheets'), value: `${item.counts.openShowrooms}/${item.counts.showrooms}` },
+            { label: text('\u041e\u0442\u0431\u043e\u0440\u044b', 'Selections'), value: item.counts.selections },
+            { label: text('\u0417\u0430\u043a\u0430\u0437\u044b', 'Orders'), value: item.counts.orders },
+          ],
+        },
       ],
-      content: [risks],
       actions: [odCampaignAction(item.campaign)],
     });
   }

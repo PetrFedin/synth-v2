@@ -283,8 +283,15 @@
         lines: model.lines.map((line) => ({ lineId: String(line.lineId).trim().toUpperCase(), component: String(line.component).trim(), materialCode: line.materialCode, quantity: Number(line.quantity), wastePercent: Number(line.wastePercent), exchangeRate: Number(line.exchangeRate) })),
         laborCost: Number(model.laborCost), overheadCost: Number(model.overheadCost), logisticsCost: Number(model.logisticsCost), otherCost: Number(model.otherCost), notes: model.notes.trim() || null,
       };
-      if (existing) await mutate(`/v2/boms/${encodeURIComponent(existing.sku)}`, { expectedVersion: existing.version, ...payload }, 'PATCH');
-      else await mutate('/v2/boms', { sku: model.sku, ...payload });
+      // Without this the save failed as an unhandled rejection: the dialog stayed open, nothing was
+      // written, and the person was told nothing at all.
+      try {
+        if (existing) await mutate(`/v2/boms/${encodeURIComponent(existing.sku)}`, { expectedVersion: existing.version, ...payload }, 'PATCH');
+        else await mutate('/v2/boms', { sku: model.sku, ...payload });
+      } catch (error) {
+        toast(error?.message || text('Не удалось сохранить спецификацию.', 'The bill of materials could not be saved.'), 'error');
+        return;
+      }
       overlay.remove();
       await loadBoms({ reset: true });
     });

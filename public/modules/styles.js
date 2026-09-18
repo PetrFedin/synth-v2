@@ -51,18 +51,32 @@
       subtitle: `${product.styleCode} · v${product.styleVersionNo || '—'}`,
       status: product.lifecycleStatus,
       preview: true,
-      tabs: [text('Продукт', 'Product'), text('Готовность', 'Readiness'), text('Коммерция', 'Commercial')],
-      fields: [
-        { label: 'Style ID', value: product.id },
-        { label: 'StyleVersion', value: product.styleVersionId || '—' },
-        { label: text('Версия', 'Version'), value: product.styleVersionNo || '—' },
-        { label: text('Цвета', 'Colorways'), value: item.colorwayCount },
-        { label: 'Product SKU', value: item.productSkuCount },
-        { label: 'Product Readiness', value: product.readinessSnapshotId ? `${product.readinessStatus} · ${item.readinessPercent}%` : text('Не оценён', 'Not assessed') },
-        { label: 'Commercial Projection', value: product.commercialProjectionId ? `v${product.commercialProjectionVersionNo} · ${product.commercialProjectionStatus}` : text('Не опубликован', 'Not published') },
-        { label: 'Legacy SKU bridge', value: `${item.legacyCatalogLinkCount}/${item.productSkuCount}` },
+      tabs: [
+        {
+          label: text('Продукт', 'Product'),
+          fields: [
+            { label: text('Артикул', 'Style code'), value: product.styleCode || '—' },
+            { label: text('Идентификатор', 'Identifier'), value: shortId(product.id), title: product.id },
+            { label: text('Версия', 'Version'), value: product.styleVersionNo ? `v${product.styleVersionNo}` : '—', title: product.styleVersionId || '' },
+            { label: text('Цветовые решения', 'Colorways'), value: item.colorwayCount },
+            { label: text('Товарные SKU', 'Product SKU'), value: item.productSkuCount },
+          ],
+        },
+        {
+          label: text('Готовность', 'Readiness'),
+          fields: [
+            { label: text('Оценка готовности', 'Readiness'), value: product.readinessSnapshotId ? `${statusLabel(product.readinessStatus)} · ${item.readinessPercent}%` : text('Не оценён', 'Not assessed') },
+            { label: text('Связка с каталогом', 'Catalogue link'), value: `${item.legacyCatalogLinkCount}/${item.productSkuCount}` },
+          ],
+          content: [risks],
+        },
+        {
+          label: text('Коммерция', 'Commercial'),
+          fields: [
+            { label: text('Коммерческая проекция', 'Commercial projection'), value: product.commercialProjectionId ? `v${product.commercialProjectionVersionNo} · ${statusLabel(product.commercialProjectionStatus)}` : text('Не опубликована', 'Not published') },
+          ],
+        },
       ],
-      content: [risks],
       actions: [],
     });
   }
@@ -70,17 +84,17 @@
   function renderStyles() {
     const registry = core.buildRegistry(state.workspace);
     const header = odHeader('styles', [
-      { id: 'registry', label: 'Product Master' },
+      { id: 'registry', label: text('Реестр моделей', 'Product Master') },
       { id: 'readiness', label: text('Готовность', 'Readiness') },
       { id: 'publication', label: text('Коммерческая проекция', 'Commercial projection') },
       { id: 'exceptions', label: text('Исключения', 'Exceptions') },
     ], [
-      { label: text('Модели', 'Styles'), value: registry.summary.total, detail: `${registry.summary.productSkus} Product SKU` },
+      { label: text('Модели', 'Styles'), value: registry.summary.total, detail: `${registry.summary.productSkus} ${text('товарных SKU', 'product SKU')}` },
       { label: text('Готовы', 'Ready'), value: registry.summary.ready, detail: `${registry.summary.averageReadiness}% ${text('средняя готовность', 'average readiness')}` },
-      { label: text('Проекции', 'Projected'), value: registry.summary.projected, detail: 'immutable published' },
+      { label: text('Проекции', 'Projected'), value: registry.summary.projected, detail: text('опубликованы неизменяемо', 'immutable published') },
       { label: text('Заблокированы', 'Blocked'), value: registry.summary.blocked, detail: `${registry.summary.notAssessed} ${text('не оценено', 'not assessed')}` },
-      { label: 'Migration bridge', value: registry.summary.bridgeIncomplete, detail: text('неполные связи legacy SKU', 'incomplete legacy SKU links') },
-    ], [], text('Поиск модели или StyleVersion', 'Search style or StyleVersion'), null);
+      { label: text('Связка с каталогом', 'Catalogue bridge'), value: registry.summary.bridgeIncomplete, detail: text('неполные связи legacy SKU', 'incomplete legacy SKU links') },
+    ], [], text('Поиск модели или версии', 'Search style or version'), null);
 
     let rows = registry.styles;
     if (header.active === 'readiness') rows = rows.filter((item) => item.product.readinessStatus !== 'ready');
@@ -93,13 +107,13 @@
       columns: [
         { label: text('Код модели', 'Style code'), value: (item) => item.product.styleCode },
         { label: text('Название', 'Title'), value: (item) => title(item.product) },
-        { label: 'StyleVersion', value: (item) => `v${item.product.styleVersionNo || '—'}` },
+        { label: text('Версия', 'Version'), value: (item) => `v${item.product.styleVersionNo || '—'}` },
         { label: text('Статус', 'Lifecycle'), render: (item) => statusBadge(item.product.lifecycleStatus) },
         { label: text('Цвета', 'Colorways'), value: (item) => item.colorwayCount },
-        { label: 'Product SKU', value: (item) => item.productSkuCount },
-        { label: 'Readiness', render: readiness },
-        { label: 'Gate', render: readinessBadge },
-        { label: 'Projection', render: projectionBadge },
+        { label: text('Товарные SKU', 'Product SKU'), value: (item) => item.productSkuCount },
+        { label: text('Готовность', 'Readiness'), render: readiness },
+        { label: text('Проверка', 'Gate'), render: readinessBadge },
+        { label: text('Проекция', 'Projection'), render: projectionBadge },
       ],
       inspector,
     });

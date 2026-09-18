@@ -111,7 +111,7 @@
   }
   function header(summary) {
     const actions = [];
-    if (canManageAny()) actions.push(h('button', { className: 'primary', type: 'button', text: text('Создать таблицу', 'Create chart'), onclick: () => { void openEditor(null); } }));
+    if (canManageAny()) actions.push(h('button', { className: 'primary', type: 'button', text: text('Создать таблицу', 'Create chart'), onclick: () => { openEditor(null).catch((error) => toast(error?.message || text('Не удалось открыть редактор.', 'The editor could not be opened.'), 'error')); } }));
     actions.push(h('button', { className: 'secondary', type: 'button', disabled: ui.loading, text: text('Обновить', 'Refresh'), onclick: () => { void loadCharts({ reset: true }); } }));
     return h('header', { className: 'measurement-header' }, [
       h('div', { className: 'measurement-title' }, [

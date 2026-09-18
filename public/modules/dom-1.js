@@ -109,6 +109,9 @@ function actionButton(label, fn, variant = '', confirmText = '') {
     if (confirmText && !window.confirm(I18N.translate(confirmText))) return;
     runAction(async () => {
       await fn();
+      // Some actions only open a form; the work happens when that form is submitted. Reloading and
+      // re-rendering here would destroy the dialog, and the success toast would be a lie.
+      if (document.querySelector('dialog[open]')) return;
       await reload();
       renderApp();
       toast(I18N.t('common.operationComplete'), 'success');

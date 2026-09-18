@@ -214,20 +214,10 @@ function odV7Topbar() {
 }
 
 function odV7Inspector() {
-  const labels = [
-    ['\u041e\u0431\u0437\u043e\u0440', 'Overview'],
-    ['\u0422\u043e\u0432\u0430\u0440\u044b', 'Products'],
-    ['\u041f\u0430\u0440\u0442\u043d\u0451\u0440\u044b', 'Partners'],
-    ['\u0421\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043a\u0430', 'Statistics'],
-    ['\u0418\u0441\u0442\u043e\u0440\u0438\u044f', 'History'],
-  ];
+  // The tab strip carries the module's own tabs and each one switches a real panel, so this layer
+  // only strips the leftover v5 section titles instead of replacing the labels with generic ones.
   document.querySelectorAll('.od-inspector').forEach((inspector) => {
     inspector.querySelectorAll('.od-v5-inspector-section-title').forEach((node) => node.remove());
-    const tabs = inspector.querySelector('.od-inspector-tabs');
-    if (tabs) tabs.replaceChildren(...labels.map((pair, index) => el('span', {
-      className: index === 0 ? 'active' : '',
-      rawText: localText(pair[0], pair[1]),
-    })));
   });
 }
 

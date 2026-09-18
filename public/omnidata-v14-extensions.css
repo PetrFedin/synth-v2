@@ -361,3 +361,10 @@ body .od-lifecycle-actions {
   gap: 6px;
   padding: 0 14px 10px;
 }
+
+/* A colourway's swatch. The colour itself is data, so it is carried on the element and painted from
+   there rather than written into a stylesheet that cannot know the palette. */
+body .od-colour-swatch {
+  display: inline-block;
+  vertical-align: middle;
+}

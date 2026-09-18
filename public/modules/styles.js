@@ -120,6 +120,53 @@
     return [row];
   }
 
+  // Colourways of the style, with the governed colour resolved. The article is derived by the read
+  // model from the style code and the colourway code, which is how it is read off a label.
+  function colorwaysOf(item) {
+    const all = Array.isArray(state.workspace.colorways) ? state.workspace.colorways : [];
+    return all.filter((entry) => entry.styleVersionId === item.product.styleVersionId);
+  }
+  // The swatch is drawn as SVG with a fill attribute: the colour is data, and the loaded UI runtime is
+  // not allowed to write inline styles.
+  function swatch(entry) {
+    const cell = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    cell.setAttribute('class', 'od-colour-swatch');
+    cell.setAttribute('viewBox', '0 0 22 14');
+    cell.setAttribute('width', '22');
+    cell.setAttribute('height', '14');
+    cell.setAttribute('role', 'img');
+    const hex = /^#[0-9A-Fa-f]{6}$/.test(String(entry.swatchHex || '')) ? entry.swatchHex : '#F2F4F7';
+    cell.setAttribute('aria-label', entry.swatchHex || text('Цвет не задан', 'No colour set'));
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.setAttribute('x', '0.5');
+    rect.setAttribute('y', '0.5');
+    rect.setAttribute('width', '21');
+    rect.setAttribute('height', '13');
+    rect.setAttribute('rx', '2');
+    rect.setAttribute('fill', hex);
+    rect.setAttribute('stroke', '#E1E4E7');
+    cell.append(rect);
+    const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+    title.textContent = entry.swatchHex || '';
+    cell.append(title);
+    return cell;
+  }
+  function colorwayPanel(item) {
+    const rows = colorwaysOf(item);
+    if (!rows.length) return notice(text('У модели пока нет цветомоделей.', 'This style has no colourways yet.'));
+    return odMiniTable(
+      ['', text('Цветомодель', 'Colourway'), 'Pantone', text('Семейство', 'Family'), text('Артикул', 'Article'), 'SKU'],
+      rows.map((entry) => [
+        swatch(entry),
+        I18N.getLocale?.() === 'en' ? (entry.nameEn || entry.nameRu) : (entry.nameRu || entry.nameEn),
+        entry.pantone || '—',
+        (I18N.getLocale?.() === 'en' ? entry.familyNameEn : entry.familyNameRu) || '—',
+        entry.article,
+        String(entry.skuCount ?? 0),
+      ]),
+    );
+  }
+
   function dimensionLabel(product) {
     return (I18N.getLocale?.() === 'en' ? product.categoryNameEn : product.categoryNameRu) || product.categoryCode || '—';
   }
@@ -184,6 +231,14 @@
             { label: text('Связка с каталогом', 'Catalogue link'), value: `${item.legacyCatalogLinkCount}/${item.productSkuCount}` },
           ],
           content: [risks],
+        },
+        {
+          label: text('Цветомодели', 'Colourways'),
+          fields: [
+            { label: text('Цветомоделей', 'Colourways'), value: colorwaysOf(item).length },
+            { label: text('С управляемым цветом', 'With a governed colour'), value: colorwaysOf(item).filter((entry) => entry.pantone).length },
+          ],
+          content: [colorwayPanel(item)],
         },
         {
           label: text('Состояние', 'State'),

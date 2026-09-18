@@ -934,6 +934,24 @@ part in the contract stylesheet — never by a module namespace, which
 | Section count | `card` | A soft count pill beside a section title, not a card nested in a card |
 | Help button | `button` | A topbar control on the same baseline as the bell, not the full-height topbar tab the v7 layer sized it to |
 
+Neither classifier may give a box role to an inline element. A card, an inspector, a
+table or a filter bar is a box with a border and a ground; a `<span>`, `<label>` or
+`<small>` is text. Because the class matcher works by substring, `.ls9-metric-label`
+was read as another metric and drawn as a second bordered tile inside the tile it
+labels, the same height as its parent and hanging 13px below it. A badge and a
+control legitimately are inline, so `status` and `button` are excluded from the rule.
+
+A table cell keeps table layout: `display:grid` on a `<td>` voids its `colspan`, which
+collapsed a seven-column empty-state message into the first column.
+
+There is one more writer of the page name than the resolvers above: the v8 layer
+rewrites `.breadcrumb strong` after every render from its own context table, and for a
+view that table does not list it writes the dashboard's name. That is why five sections
+showed `Рабочий стол` as the page you were on even after the resolvers were corrected.
+It asks the navigation first now. A view that a bridge activates rather than the
+navigation declaring it must still name itself in the navigation data, or the path
+resolves one render late.
+
 Both classifiers enforce this. `omnidata-v14-components.js` refuses a container
 role to a descendant that already has it, and sweeps the tree once more after the
 last pass because assignment order across passes is not guaranteed; the role
@@ -1348,6 +1366,7 @@ Minimum frozen lineage fields for the current commercial spine include:
 | 2026-09-17 | `chore/typescript-checkjs-baseline` | Add a type contract gate: TypeScript `checkJs` over the JavaScript sources with a per-file baseline in `ops/type-baseline.json`, wired into `npm run verify`; new type errors fail, and an improved file fails until the baseline is re-recorded, so recorded debt can only decrease | 2.1, 15.1, 20 | IMPLEMENTED; 575 known findings across 177 files recorded; validator self-tested against an introduced error and against an inflated baseline; `npm run verify` green |
 | 2026-09-18 | `integration/ui-and-runtime-fixes` | Integrate the open runtime and UI fix branches onto one verified base: PostgreSQL request-path timeouts, the transport-independent HTTP pipeline, platform-fault status mapping, the type ratchet, the executable acceptance ladder, the two outbox key defects, negotiated static compression, the Omnidata observer feedback loops, the PLM form defects, the render/load retry loops, the fabricated controls, the contrast and type floor, the unreachable production and quality workspaces, user-facing error messages, and the ODS composite-wrapper, nested-chrome, topbar and tooltip corrections. Adds the missing render/load guard to `bom.js` and `production-orders.js`, without which every section after Specifications froze the tab | 10, 12, 13, 20 | IMPLEMENTED; `npm run verify` green (1246 passed); all 29 sidebar sections measured to open, where 23 of 27 previously froze the main thread |
 | 2026-09-18 | `fix/navigation-paths-and-nested-chrome` | Resolve a measurement publication rule that could not be satisfied: a chart must be published against a published SKU, but publishing the SKU bumps its version, so every chart drafted beforehand was rejected as a stale snapshot. Publication is not a change of definition and a published SKU can never be versioned again, so a snapshot exactly one version behind a published SKU is accepted; anything further behind is still refused. Unblocks tech-pack issue, RFQ allocation and the production order, which all gate on a published measurement chart | 10, 12 | IMPLEMENTED; `npm run verify` green (1247 passed); proved live against a running server during an end-to-end walk of two articles |
+| 2026-09-18 | `fix/navigation-paths-and-nested-chrome` | Close the findings of a measured visual audit of all 19 navigable sections: system footer text was white on white (contrast 1.00:1) after one layer repainted the ground and left the colour; the current-page breadcrumb was squeezed to 0px in four sections and to an ellipsis in eight; five sections showed the dashboard's name as their page because a fourth writer overrode the corrected resolvers; an inline label was classified as a metric tile and drawn as a box inside its own parent; a colspan empty-state cell was collapsed to one column by display:grid on a table cell; an always-empty actions slot rendered as a hairline strip | 10, 12 | IMPLEMENTED; `npm run verify` green (1247 passed); every claim measured in headless Chrome before and after |
 
 Future implementation PRs add a row here. The row is not a substitute for updating the affected detailed sections.
 

@@ -66,14 +66,22 @@
   function dimensionLabel(product) {
     return (I18N.getLocale?.() === 'en' ? product.categoryNameEn : product.categoryNameRu) || product.categoryCode || '—';
   }
+  function attributeValue(item) {
+    const named = I18N.getLocale?.() === 'en' ? item.nameEn : item.nameRu;
+    if (named) return named;
+    // A boolean false is an answer, not a missing value: showing it as a dash said "not filled in"
+    // about a field that said "no".
+    if (typeof item.value === 'boolean') return item.value ? text('Да', 'Yes') : text('Нет', 'No');
+    if (Array.isArray(item.value)) return item.value.length ? item.value.join(', ') : '—';
+    if (item.value === null || item.value === undefined || item.value === '') return '—';
+    return String(item.value);
+  }
   function categoryAttributes(product) {
     const values = product?.dimensions || {};
     return Object.entries(values).map(([code, item]) => ({
       code,
       label: (I18N.getLocale?.() === 'en' ? item.labelEn : item.labelRu) || code,
-      value: (I18N.getLocale?.() === 'en' ? item.nameEn : item.nameRu)
-        || (Array.isArray(item.value) ? item.value.join(', ') : item.value)
-        || '—',
+      value: attributeValue(item),
     })).sort((left, right) => left.label.localeCompare(right.label));
   }
 

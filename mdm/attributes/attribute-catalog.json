@@ -281,6 +281,158 @@
       "searchable": true
     },
     {
+      "code": "common.marketing_name",
+      "name": {
+        "ru": "Маркетинговое название",
+        "en": "Marketing name"
+      },
+      "description": {
+        "ru": "Название, под которым изделие показывают покупателю. Отличается от внутреннего наименования модели.",
+        "en": "The name the product is shown to a customer under. It differs from the internal style title."
+      },
+      "data_type": "text",
+      "applies_to": [
+        "apparel",
+        "footwear",
+        "bags_accessories",
+        "beauty",
+        "home"
+      ],
+      "searchable": true
+    },
+    {
+      "code": "common.capsule",
+      "name": {
+        "ru": "Капсула",
+        "en": "Capsule"
+      },
+      "description": {
+        "ru": "Капсула сезона, к которой отнесено изделие.",
+        "en": "The seasonal capsule the product belongs to."
+      },
+      "data_type": "text",
+      "applies_to": [
+        "apparel",
+        "footwear",
+        "bags_accessories",
+        "beauty",
+        "home"
+      ],
+      "searchable": true
+    },
+    {
+      "code": "common.drop",
+      "name": {
+        "ru": "Дроп",
+        "en": "Drop"
+      },
+      "description": {
+        "ru": "Волна поставки внутри сезона, в которой изделие выходит в продажу.",
+        "en": "The delivery wave within the season in which the product goes on sale."
+      },
+      "data_type": "text",
+      "applies_to": [
+        "apparel",
+        "footwear",
+        "bags_accessories",
+        "beauty",
+        "home"
+      ],
+      "searchable": true
+    },
+    {
+      "code": "common.analogue",
+      "name": {
+        "ru": "Аналог",
+        "en": "Analogue"
+      },
+      "description": {
+        "ru": "Артикул ранее выпущенной модели, на которую опирается разработка этой.",
+        "en": "The article of an earlier style this development is based on."
+      },
+      "data_type": "text",
+      "applies_to": [
+        "apparel",
+        "footwear",
+        "bags_accessories",
+        "beauty",
+        "home"
+      ],
+      "searchable": true
+    },
+    {
+      "code": "common.set_member",
+      "name": {
+        "ru": "В составе комплекта",
+        "en": "Part of a set"
+      },
+      "description": {
+        "ru": "Продаётся ли изделие как часть комплекта.",
+        "en": "Whether the product is sold as part of a set."
+      },
+      "data_type": "boolean",
+      "applies_to": [
+        "apparel",
+        "footwear",
+        "bags_accessories",
+        "beauty",
+        "home"
+      ],
+      "searchable": true
+    },
+    {
+      "code": "common.set_type",
+      "name": {
+        "ru": "Тип комплекта",
+        "en": "Set type"
+      },
+      "description": {
+        "ru": "Вид комплекта, в который входит изделие.",
+        "en": "The kind of set the product belongs to."
+      },
+      "data_type": "text",
+      "applies_to": [
+        "apparel",
+        "footwear",
+        "bags_accessories",
+        "beauty",
+        "home"
+      ],
+      "searchable": true
+    },
+    {
+      "code": "apparel.fabric_segment",
+      "name": {
+        "ru": "Сегмент ткани",
+        "en": "Fabric segment"
+      },
+      "description": {
+        "ru": "Ценовой и качественный сегмент основной ткани.",
+        "en": "The price and quality segment of the main fabric."
+      },
+      "data_type": "text",
+      "applies_to": [
+        "apparel"
+      ],
+      "searchable": true
+    },
+    {
+      "code": "apparel.fabric_type",
+      "name": {
+        "ru": "Тип ткани",
+        "en": "Fabric type"
+      },
+      "description": {
+        "ru": "Тип основной ткани изделия.",
+        "en": "The type of the main fabric of the product."
+      },
+      "data_type": "text",
+      "applies_to": [
+        "apparel"
+      ],
+      "searchable": true
+    },
+    {
       "code": "apparel.silhouette",
       "name": {
         "ru": "Силуэт",
@@ -1804,7 +1956,15 @@
         "apparel.hood",
         "apparel.lining",
         "apparel.insulation",
-        "apparel.construction_features"
+        "apparel.construction_features",
+        "common.marketing_name",
+        "common.capsule",
+        "common.drop",
+        "common.analogue",
+        "common.set_member",
+        "common.set_type",
+        "apparel.fabric_segment",
+        "apparel.fabric_type"
       ]
     },
     {
@@ -1843,7 +2003,13 @@
         "footwear.outsole_material",
         "footwear.sole_attachment_method",
         "footwear.water_resistance",
-        "footwear.pair_weight"
+        "footwear.pair_weight",
+        "common.marketing_name",
+        "common.capsule",
+        "common.drop",
+        "common.analogue",
+        "common.set_member",
+        "common.set_type"
       ]
     },
     {
@@ -1875,7 +2041,13 @@
         "bag.pockets",
         "bag.hardware_type",
         "bag.device_compatibility",
-        "bag.carry_method"
+        "bag.carry_method",
+        "common.marketing_name",
+        "common.capsule",
+        "common.drop",
+        "common.analogue",
+        "common.set_member",
+        "common.set_type"
       ]
     },
     {
@@ -1904,7 +2076,13 @@
         "beauty.skin_type",
         "beauty.purpose",
         "beauty.directions",
-        "beauty.packaging_type"
+        "beauty.packaging_type",
+        "common.marketing_name",
+        "common.capsule",
+        "common.drop",
+        "common.analogue",
+        "common.set_member",
+        "common.set_type"
       ]
     },
     {
@@ -1936,7 +2114,13 @@
         "home.fragility",
         "home.maximum_load",
         "home.flame_resistance",
-        "home.outdoor_suitability"
+        "home.outdoor_suitability",
+        "common.marketing_name",
+        "common.capsule",
+        "common.drop",
+        "common.analogue",
+        "common.set_member",
+        "common.set_type"
       ]
     },
     {

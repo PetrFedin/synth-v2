@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { translatePostgresDomainInvariant } from '../src/infrastructure/postgres-domain-invariants.mjs';
 import { DomainError } from '../src/core/errors.mjs';
@@ -8,7 +8,12 @@ import { DomainError } from '../src/core/errors.mjs';
 const read = (relativePath) => readFile(fileURLToPath(new URL(`../${relativePath}`, import.meta.url)), 'utf8');
 
 test('the attribute catalogue in the database has not drifted from the governed JSON', async () => {
-  const sql = await read('db/migrations/082_product_attribute_catalogue.sql');
+  // The catalogue is loaded by whichever migrations carry it: 082 seeded it and later ones add to it.
+  // The contract is that the database copy as a whole matches the JSON, not that one file does.
+  const directory = fileURLToPath(new URL('../db/migrations/', import.meta.url));
+  const files = (await readdir(directory)).filter((name) => name.endsWith('.sql')).sort();
+  const migrations = await Promise.all(files.map((name) => readFile(`${directory}${name}`, 'utf8')));
+  const sql = migrations.join('\n');
   const catalogue = JSON.parse(await read('mdm/attributes/attribute-catalog.json'));
 
   // Every governed attribute is loaded, with the families it applies to. If the JSON gains an

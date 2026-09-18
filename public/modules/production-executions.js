@@ -109,7 +109,8 @@
       if (state.view === 'production-executions') renderApp();
     }
   }
-  function ensureLoaded() { if (!ui.loaded && !ui.loading) queueMicrotask(() => { void load({ reset: true }); }); }
+  // See materials.js: retrying a failed load from render starves the event loop.
+  function ensureLoaded() { if (!ui.loaded && !ui.loading && !ui.error) queueMicrotask(() => { void load({ reset: true }); }); }
   function selected() { return ui.items.find((value) => value.executionCode === ui.selectedCode) || ui.items[0] || null; }
   function upsert(value) {
     const map = new Map(ui.items.map((item) => [item.executionCode, item]));

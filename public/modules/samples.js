@@ -107,7 +107,8 @@
       if (state.view === 'samples') renderApp();
     }
   }
-  function ensureLoaded() { if (!ui.loaded && !ui.loading) queueMicrotask(() => { void loadSamples({ reset: true }); }); }
+  // See materials.js: retrying a failed load from render starves the event loop.
+  function ensureLoaded() { if (!ui.loaded && !ui.loading && !ui.error) queueMicrotask(() => { void loadSamples({ reset: true }); }); }
   function upsert(sample) {
     const byCode = new Map(ui.items.map((item) => [item.sampleCode, item]));
     byCode.set(sample.sampleCode, sample);

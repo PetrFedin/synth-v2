@@ -74,7 +74,8 @@
     }
   }
   function ensureLoaded() {
-    if (!ui.loaded && !ui.loading) queueMicrotask(() => { void loadCharts({ reset: true }); });
+    // See materials.js: retrying a failed load from render starves the event loop.
+    if (!ui.loaded && !ui.loading && !ui.error) queueMicrotask(() => { void loadCharts({ reset: true }); });
   }
 
   function riskLabel(code) {

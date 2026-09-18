@@ -148,6 +148,19 @@ function transactionView(client) {
     insertCampaign: (value) => insert(client, 'campaigns', ['id', 'brand_id', 'status', 'version', 'payload'], [value.id, value.brandId, value.status, value.version, value], 'CAMPAIGN_ALREADY_EXISTS'),
     saveCampaign: (value, expectedVersion) => saveVersioned(client, 'campaigns', value, expectedVersion, ['status'], [value.status], 'CAMPAIGN_CONCURRENCY_CONFLICT'),
 
+    getProductResponsibility: (id) => getPayload(client, 'product_style_responsibilities', 'id', id),
+    insertProductResponsibility: (value) => insert(
+      client,
+      'product_style_responsibilities',
+      ['id', 'style_id', 'brand_id', 'role', 'user_id', 'assigned_at', 'assigned_by', 'payload'],
+      [value.id, value.styleId, value.brandId, value.role, value.userId, value.assignedAt, value.assignedBy, value],
+      'PRODUCT_RESPONSIBILITY_ALREADY_ASSIGNED',
+    ),
+    async deleteProductResponsibility(id) {
+      const result = await client.query('DELETE FROM product_style_responsibilities WHERE id = $1 RETURNING payload', [id]);
+      return result.rows[0]?.payload;
+    },
+
     getProductPlaceholder: (id) => getPayload(client, 'product_placeholders', 'id', id),
     insertProductPlaceholder: (value) => insert(
       client,

@@ -6,6 +6,7 @@ import { assertTradePair } from '../modules/organisations/public.mjs';
 import { CAPABILITIES, assertCapability, assertTradeCapability } from '../modules/access-control/public.mjs';
 import { assertActiveRelationship } from '../modules/counterparty-relationships/public.mjs';
 import { createCampaign, changeCampaignStatus } from '../modules/campaigns/public.mjs';
+import { createProductResponsibility } from '../modules/product-responsibility/public.mjs';
 import {
   createProductPlaceholder,
   createPlaceholderStyleLink,
@@ -244,6 +245,58 @@ export function createWholesalePlatform({
             styleId: link.styleId, campaignId: link.campaignId,
           }, commandId, actorId);
           return link;
+        },
+      );
+    },
+
+    // Desks on a style. Assignment is a recorded event, and the person has to be an active member of
+    // the brand that owns the style -- checked here and again by a database trigger.
+    assignProductResponsibility(commandId, actorId, styleId, input) {
+      return execute(
+        commandId,
+        `assignProductResponsibility:${actorId}:${styleId}:${canonicalJson(input)}`,
+        actorId,
+        async (tx) => {
+          const style = requireEntity(await loadStyle(styleId), 'PRODUCT_STYLE_NOT_FOUND', { styleId });
+          await assertOrganisationActor(tx, style.brandId, actorId, CAPABILITIES.CAMPAIGN_MANAGE);
+          const membership = await tx.getMembership(style.brandId, input?.userId);
+          return { style, membership };
+        },
+        async (tx, { style, membership }) => {
+          const responsibility = createProductResponsibility({
+            id: nextId('product-responsibility'),
+            style,
+            role: input?.role,
+            userId: input?.userId,
+            membership,
+            assignedAt: clock(),
+            assignedBy: actorId,
+          });
+          await tx.insertProductResponsibility(responsibility);
+          await append(tx, 'product.responsibility.assigned', responsibility.id, {
+            styleId: responsibility.styleId, role: responsibility.role, userId: responsibility.userId,
+          }, commandId, actorId);
+          return responsibility;
+        },
+      );
+    },
+
+    releaseProductResponsibility(commandId, actorId, responsibilityId) {
+      return execute(
+        commandId,
+        `releaseProductResponsibility:${actorId}:${responsibilityId}`,
+        actorId,
+        async (tx) => {
+          const current = requireEntity(await tx.getProductResponsibility(responsibilityId), 'PRODUCT_RESPONSIBILITY_NOT_FOUND', { responsibilityId });
+          await assertOrganisationActor(tx, current.brandId, actorId, CAPABILITIES.CAMPAIGN_MANAGE);
+          return current;
+        },
+        async (tx, current) => {
+          await tx.deleteProductResponsibility(responsibilityId);
+          await append(tx, 'product.responsibility.released', responsibilityId, {
+            styleId: current.styleId, role: current.role, userId: current.userId,
+          }, commandId, actorId);
+          return Object.freeze({ ...current, releasedAt: clock(), releasedBy: actorId });
         },
       );
     },

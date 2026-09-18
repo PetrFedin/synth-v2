@@ -32,7 +32,7 @@ export function createMemoryWholesaleStore() {
 function emptyState() {
   return {
     organisations: new Map(), memberships: new Map(), relationships: new Map(), showroomInvitations: new Map(), retailDoors: new Map(),
-    campaigns: new Map(), collections: new Map(), productPlaceholders: new Map(), productPlaceholderStyleLinks: new Map(), collectionStyleVersions: new Map(), showrooms: new Map(), selections: new Map(), orders: new Map(),
+    campaigns: new Map(), collections: new Map(), productPlaceholders: new Map(), productPlaceholderStyleLinks: new Map(), productResponsibilities: new Map(), collectionStyleVersions: new Map(), showrooms: new Map(), selections: new Map(), orders: new Map(),
     orderCommitSnapshots: new Map(), cycles: new Map(), deals: new Map(), calendar: new Map(), commands: new Map(), outbox: new Map(),
   };
 }
@@ -71,6 +71,19 @@ function transactionView(state) {
     getCampaign: (id) => state.campaigns.get(id),
     insertCampaign: (campaign) => insertUnique(state.campaigns, campaign.id, campaign, 'CAMPAIGN_ALREADY_EXISTS'),
     saveCampaign: (campaign, expectedVersion) => saveVersioned(state.campaigns, campaign, expectedVersion, 'CAMPAIGN_CONCURRENCY_CONFLICT'),
+    getProductResponsibility: (id) => state.productResponsibilities.get(id),
+    insertProductResponsibility: (value) => {
+      invariant(![...state.productResponsibilities.values()].some((item) => item.styleId === value.styleId
+        && item.role === value.role && item.userId === value.userId),
+        'PRODUCT_RESPONSIBILITY_ALREADY_ASSIGNED', 'This person already holds that desk on this style',
+        { styleId: value.styleId, role: value.role });
+      insertUnique(state.productResponsibilities, value.id, value, 'PRODUCT_RESPONSIBILITY_ALREADY_ASSIGNED');
+    },
+    deleteProductResponsibility: (id) => {
+      const value = state.productResponsibilities.get(id);
+      state.productResponsibilities.delete(id);
+      return value;
+    },
     getProductPlaceholder: (id) => state.productPlaceholders.get(id),
     insertProductPlaceholder: (value) => insertUnique(state.productPlaceholders, value.id, value, 'PLACEHOLDER_ALREADY_EXISTS'),
     saveProductPlaceholder: (value, expectedVersion) => saveVersioned(state.productPlaceholders, value, expectedVersion, 'PLACEHOLDER_CONCURRENCY_CONFLICT'),

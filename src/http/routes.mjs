@@ -17,6 +17,7 @@ const PLACEHOLDER_BODY = bodyContract(PLACEHOLDER_FIELDS, {
 });
 const PLACEHOLDER_TRANSITION_BODY = bodyContract(['expectedVersion', 'nextStatus']);
 const PLACEHOLDER_STYLE_LINK_BODY = bodyContract(['styleId']);
+const RESPONSIBILITY_BODY = bodyContract(['role', 'userId']);
 const CATALOG_SKU_BODY = bodyContract(['sku', 'collectionId', 'brandId', 'name', 'wholesalePrice', 'currency', 'minimumOrderQuantity', 'availableQuantity']);
 const CATALOG_SKU_UPDATE_BODY = bodyContract(['expectedVersion', 'name', 'wholesalePrice', 'minimumOrderQuantity', 'availableQuantity']);
 const CATALOG_SKU_PUBLISH_BODY = bodyContract(['expectedVersion']);
@@ -72,6 +73,8 @@ export function createWholesaleRoutes({ platform, catalog, materials, boms, meas
   return [
     mutate('POST', /^\/v2\/campaigns$/, CAMPAIGN_BODY, ({ commandId, actorId, body }) => platform.createCampaign(commandId, actorId, body)),
     mutate('POST', /^\/v2\/campaigns\/([^/]+)\/open$/, EMPTY_BODY, ({ commandId, actorId, params }) => platform.openCampaign(commandId, actorId, params[0])),
+    mutate('POST', /^\/v2\/product\/styles\/([^/]+)\/responsibilities$/, RESPONSIBILITY_BODY, ({ commandId, actorId, params, body }) => platform.assignProductResponsibility(commandId, actorId, decodePathParameter(params[0]), body)),
+    mutate('POST', /^\/v2\/product\/responsibilities\/([^/]+)\/release$/, EMPTY_BODY, ({ commandId, actorId, params }) => platform.releaseProductResponsibility(commandId, actorId, decodePathParameter(params[0]))),
     mutate('POST', /^\/v2\/assortment\/placeholders$/, PLACEHOLDER_BODY, ({ commandId, actorId, body }) => platform.createProductPlaceholder(commandId, actorId, body)),
     mutate('POST', /^\/v2\/assortment\/placeholders\/([^/]+)\/transition$/, PLACEHOLDER_TRANSITION_BODY, ({ commandId, actorId, params, body }) => platform.transitionProductPlaceholder(commandId, actorId, decodePathParameter(params[0]), body)),
     mutate('POST', /^\/v2\/assortment\/placeholders\/([^/]+)\/styles$/, PLACEHOLDER_STYLE_LINK_BODY, ({ commandId, actorId, params, body }) => platform.linkStyleToPlaceholder(commandId, actorId, decodePathParameter(params[0]), body)),

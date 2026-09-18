@@ -46,6 +46,21 @@
     const name = I18N.getLocale?.() === 'en' ? value.nameEn : value.nameRu;
     return name || value.code || '';
   }
+  // The desks that answer for a style. A register in this industry is read by asking "which of these
+  // are mine", so every role is a column of its own and therefore filterable like any other.
+  const ROLE_LABELS = [
+    ['buyer', 'Байер', 'Buyer'],
+    ['product_manager', 'Продуктовый менеджер', 'Product manager'],
+    ['fabric_manager', 'Менеджер по тканям', 'Fabric manager'],
+    ['technologist', 'Технолог', 'Technologist'],
+    ['designer', 'Дизайнер', 'Designer'],
+  ];
+  function people(product, role) {
+    const list = product?.responsibilities?.[role];
+    if (!Array.isArray(list) || !list.length) return '';
+    return list.map((person) => person.displayName || person.email || person.userId).join(', ');
+  }
+
   function gender(product) {
     const name = I18N.getLocale?.() === 'en' ? product.genderNameEn : product.genderNameRu;
     return name || product.genderCode || '';
@@ -90,6 +105,15 @@
           content: [risks],
         },
         {
+          label: text('Команда', 'Team'),
+          fields: ROLE_LABELS.map(([role, ru, en]) => ({ label: text(ru, en), value: people(product, role) || '—' })),
+          content: [
+            Object.keys(product.responsibilities || {}).length
+              ? null
+              : notice(text('Ответственные не назначены. Пока стол пуст, вопрос по модели некому адресовать.', 'No desks are assigned yet. While a desk is empty there is nobody to address a question about this style to.'), 'warning'),
+          ],
+        },
+        {
           label: text('Коммерция', 'Commercial'),
           fields: [
             { label: text('Коммерческая проекция', 'Commercial projection'), value: product.commercialProjectionId ? `v${product.commercialProjectionVersionNo} · ${statusLabel(product.commercialProjectionStatus)}` : text('Не опубликована', 'Not published') },
@@ -128,6 +152,11 @@
         { key: 'title', label: text('Название', 'Title'), value: (item) => title(item.product) },
         { key: 'version', label: text('Версия', 'Version'), value: (item) => `v${item.product.styleVersionNo || '—'}` },
         { key: 'lifecycle', label: text('Статус', 'Lifecycle'), render: (item) => statusBadge(item.product.lifecycleStatus) },
+        { key: 'placeholder', label: text('Плейсхолдер', 'Placeholder'), value: (item) => item.product.placeholderCode || '—', title: (item) => item.product.placeholderNameRu || '' },
+        { key: 'buyer', label: text('Байер', 'Buyer'), value: (item) => people(item.product, 'buyer') || '—' },
+        { key: 'productManager', label: text('Продуктовый менеджер', 'Product manager'), value: (item) => people(item.product, 'product_manager') || '—' },
+        { key: 'fabricManager', label: text('Менеджер по тканям', 'Fabric manager'), value: (item) => people(item.product, 'fabric_manager') || '—' },
+        { key: 'technologist', label: text('Технолог', 'Technologist'), value: (item) => people(item.product, 'technologist') || '—' },
         { key: 'fit', label: text('Посадка', 'Fit'), value: (item) => dimension(item.product, 'apparel.fit') || '—' },
         { key: 'novelty', label: text('Новизна', 'Novelty'), value: (item) => dimension(item.product, 'common.novelty') || '—' },
         { key: 'gender', label: text('Пол', 'Gender'), value: (item) => gender(item.product) || '—' },

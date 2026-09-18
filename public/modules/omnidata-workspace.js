@@ -32,7 +32,7 @@ function odColumnKey(column) { return column.key || column.label; }
 // Sections that carry more columns than anyone needs at once open with the secondary ones switched
 // off. The reader turns them on in the column chooser, and that choice then wins.
 const OD_COLUMN_DEFAULT_HIDDEN = Object.freeze({
-  styles: Object.freeze(['gender', 'ageGroup', 'season']),
+  styles: Object.freeze(['gender', 'ageGroup', 'season', 'productManager', 'fabricManager', 'technologist']),
   linePlan: Object.freeze(['ageGroup', 'fit', 'seasonality', 'colourways', 'plannedCost', 'actualCost']),
 });
 function odHiddenColumns(scope) {

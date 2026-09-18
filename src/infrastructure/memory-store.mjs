@@ -104,7 +104,7 @@ function transactionView(state) {
     insertCalendarMilestone: (milestone) => insertUnique(state.calendar, milestone.id, milestone, 'CALENDAR_MILESTONE_ALREADY_EXISTS'),
     getCommand: (id) => state.commands.get(id),
     insertCommand: (command) => insertUnique(state.commands, command.id, command, 'COMMAND_ALREADY_EXISTS'),
-    appendOutbox: (event) => insertUnique(state.outbox, event.id, Object.freeze({ event, status: 'pending', publishedAt: null }), 'OUTBOX_EVENT_ALREADY_EXISTS'),
+    appendOutbox: (event) => insertUnique(state.outbox, event.id, Object.freeze({ eventId: event.id, eventType: event.type, event, status: 'pending', publishedAt: null }), 'OUTBOX_EVENT_ALREADY_EXISTS'),
     markOutboxPublished: (eventId, publishedAt) => {
       const current = state.outbox.get(eventId);
       invariant(current, 'OUTBOX_EVENT_NOT_FOUND', 'Outbox event not found', { eventId });

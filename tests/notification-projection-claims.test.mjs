@@ -13,6 +13,10 @@ const sourceStore = Object.freeze({
 
 function outboxRecord(attemptCount = 1) {
   return Object.freeze({
+    // The outbox row key travels alongside the envelope: the projection is keyed on it, not on a
+    // field inside the event JSON.
+    eventId: 'event-1',
+    eventType: 'selection.submitted',
     event: Object.freeze({
       id: 'event-1',
       type: 'selection.submitted',
@@ -64,6 +68,8 @@ test('PostgreSQL claims one ordered batch with expiring leases and SKIP LOCKED',
       if (/WITH candidates AS MATERIALIZED/.test(sql)) {
         return {
           rows: [{
+            id: 'event-1',
+            event_type: 'selection.submitted',
             event: outboxRecord().event,
             status: 'pending',
             published_at: null,

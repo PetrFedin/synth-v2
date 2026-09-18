@@ -1,8 +1,21 @@
 import { DomainError } from '../core/errors.mjs';
 
+// A DomainError can describe a fault on our side rather than a bad request: a reader that broke its
+// contract, a clock or RNG that failed. Reporting those as 4xx blames the caller for a server
+// problem. Matched by suffix so a new reader/result/clock code is classified on arrival instead of
+// waiting to be enumerated. Codes raised only while services are constructed never reach this
+// mapper, so covering them here costs nothing.
+const SERVER_FAULT_SUFFIXES = Object.freeze(['_RESULT_INVALID', '_READER_REQUIRED', '_READER_UNAVAILABLE', '_CLOCK_INVALID']);
+const SERVER_FAULT_CODES = Object.freeze(['AUTH_RANDOM_SOURCE_INVALID']);
+
+export function isServerFaultCode(code) {
+  return SERVER_FAULT_CODES.includes(code) || SERVER_FAULT_SUFFIXES.some((suffix) => code.endsWith(suffix));
+}
+
 export function normalizeHttpError(error) {
   if (!(error instanceof DomainError)) return { status: 500, code: 'INTERNAL_ERROR', message: 'Unexpected server error', details: {} };
   const code = error.code; let status = 422;
+  if (isServerFaultCode(code)) return { status: 500, code, message: error.message, details: error.details ?? {} };
   if (code === 'HTTP_ROUTE_NOT_FOUND' || code.endsWith('_NOT_FOUND')) status = 404;
   else if (['HTTP_AUTH_REQUIRED', 'HTTP_AUTH_INVALID', 'AUTH_CREDENTIALS_INVALID'].includes(code)) status = 401;
   else if (code === 'AUTH_RATE_LIMITED') status = 429;

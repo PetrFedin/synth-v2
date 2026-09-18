@@ -199,7 +199,10 @@ function renderApp() {
   }
 
   const footer = el('div', { className: 'sidebar-footer' });
-  footer.append(languageSwitcher());
+  // The language control lives once, in the topbar beside the account: it is where people look for
+  // it, it stays reachable when the sidebar is collapsed, and a second copy in the sidebar footer
+  // only asked the same question twice. languageSwitcher() is unchanged and still builds the topbar
+  // control and the one on the sign-in card.
   const refresh = sidebarButton('refresh', I18N.t('common.refresh'));
   refresh.addEventListener('click', () => runAction(async () => { await reload(); renderApp(); }, refresh));
   const logout = sidebarButton('logout', I18N.t('common.logout'), 'danger');

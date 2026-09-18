@@ -883,7 +883,31 @@ Structural meaning uses `data-ods-part` (page header, toolbar, tabs, pagination,
 
 Desktop inspector is sticky at `top:62px`, max-height `calc(100vh - 78px)` and scrolls internally. At `<=920px`, master-detail becomes one column and inspector becomes static. Content padding decreases at `<=1080px`; page header/filterbar/metrics reflow at smaller breakpoints including `620px`.
 
-### 10.10 Shell and navigation
+### 10.10 Role-system runtime invariants
+
+`normalize()` in `public/modules/omnidata-v14-role-system.js` runs under its own
+MutationObserver, so it must never leave the DOM dirty in a way that observer
+watches. Two invariants hold it:
+
+1. **A pass may not re-trigger itself.** `normalize()` detaches the observer for
+   the duration of the pass (`takeRecords()` then `disconnect()`, re-observing in
+   a `finally`), and adds only the body classes that are missing. A redundant
+   `classList.add` still queues a mutation record, and the observer watches
+   `class`; without both guards the pass re-schedules itself through
+   `queueMicrotask` and the microtask chain starves rendering — the page never
+   paints a frame.
+2. **A button role is never assigned to a descendant of a button.** Buttons
+   cannot nest. The heuristic class matcher would otherwise promote internals
+   such as `.button-label` on the `button-` prefix, drawing a second control
+   inside its parent; the audit likewise ignores button internals so they do not
+   count as unclassified and drive the retry timer.
+
+Navigation items carry the `button` role for semantics and audit, but are laid
+out by the `navigation-item` part, not by the generic button chrome: left
+aligned, no border, inherited typography, centred only when the sidebar is
+collapsed or at the narrow breakpoints.
+
+### 10.11 Shell and navigation
 
 Current main shell top-level navigation is generated from a single `NAV_GROUPS` structure:
 
@@ -915,11 +939,11 @@ Topbar contract:
 
 The sidebar collapsed preference is stored in `localStorage` under `syntha-v2-sidebar-collapsed` after the one-time readable-shell migration.
 
-### 10.11 Login/startup states
+### 10.12 Login/startup states
 
 Login screen contains locale switcher, brand block, description, email, password and Sign In action. Password field has a minimum client length of 12; server policy remains authoritative. Startup hydration failure shows an explicit error plus Retry and Sign out; it does not silently render a partial workspace.
 
-### 10.12 Required state coverage for every interactive screen
+### 10.13 Required state coverage for every interactive screen
 
 Every new/changed data screen must specify and implement as applicable:
 
@@ -945,6 +969,11 @@ A button without an implemented end-to-end handler is forbidden.
 
 ## 11. Browser loading and localization contract
 
+Static workspace assets are served with negotiated content encoding. Text responses above 1 KiB are compressed with Brotli, or gzip when Brotli is not acceptable, chosen from `Accept-Encoding` including its quality values; binary types and small responses are always served as identity. Every static response carries `Vary: Accept-Encoding`, and a compressed representation carries its own ETag, so a cache holding one representation can never answer a request that only accepts the other. A compression that fails to shrink the asset is discarded and the identity bytes are served instead, without an encoding header. Encoded bodies are memoised under the content hash that already backs the ETag, so a changed file misses the memo by construction.
+
+The shell currently loads 96 blocking assets. Measured on the supported runtime: 1165 KiB as identity, 288 KiB with gzip, 272 KiB with Brotli. Because the visual layer is deliberately `no-store`, that transfer repeats on every navigation, which is what makes the encoding contract load-bearing rather than cosmetic.
+
+
 ### 11.1 Loading order
 
 The standalone shell loads localization first, then shared DOM/API/pagination/capability/validation foundations, then business workspace modules, then final ODS role/component runtimes, with `app-start.js` last. Changing this dependency order is an architecture change and must be documented here.
@@ -956,6 +985,10 @@ Russian and English are mandatory. User-facing strings route through the shared 
 ---
 
 ## 12. API and mutation contract
+
+A `DomainError` that describes a fault on the platform side — a reader that broke its contract, a failed clock or RNG — is answered with HTTP 500, not a 4xx that blames the caller. `src/http/error-status.mjs` classifies these by suffix (`_RESULT_INVALID`, `_READER_REQUIRED`, `_READER_UNAVAILABLE`, `_CLOCK_INVALID`) plus `AUTH_RANDOM_SOURCE_INVALID`, so a newly introduced reader/result/clock code is classified on arrival. Unclassified domain validation errors deliberately remain 422; that default is contractual and covered by test.
+
+Transport adapters carry no request policy of their own. `src/http/pipeline.mjs` owns routing, Bearer authentication, the `Idempotency-Key` requirement, body decoding/limits and error mapping once; `src/http/api.mjs` (node:http) and `src/http/fetch-api.mjs` (Web Fetch) only translate a transport request into the shared request view `{ method, url, header(name), readBody(limit) }` and render the returned result. A new request rule is therefore added in one place and cannot be present on one transport and missing on the other. `readBody` must enforce the limit while the body is consumed: a request without `Content-Length` is otherwise bounded only after it has been buffered in full. HTTP status mapping lives in `src/http/error-status.mjs`, re-exported from `src/http/api.mjs` for existing callers.
 
 ### 12.1 General rules
 
@@ -1015,11 +1048,14 @@ The authoritative composed OpenAPI remains `/v2` version `1.17.0`; this is conve
 - Cost Allocation exact-lineage output requires no migration: `cost_allocation_run_snapshots` already persists `allocations`, `sku_economics` and the complete immutable snapshot `payload` as JSONB, so `orderLineNo`, `productSkuId` and `lineageMode` are retained without introducing redundant relational columns or rewriting prior snapshots.
 - PR #115 allocation→margin→readiness→close provenance required no migration because existing immutable economics tables already persisted complete snapshot payload JSONB while scalar accounting columns remained unchanged. The economics store reads an immutable `cost_allocation_run_snapshots.payload` by id for fail-closed validation; historical snapshots are not rewritten.
 - Migration `074_post_close_allocation_reconciliation.sql` creates immutable `post_close_allocation_reconciliation_snapshots`. One row is allowed per `post_close_adjustment_id`; one reconciled margin is pinned per reconciliation. Exact foreign keys and the integrity trigger bind order/commit/close/adjustment/pending margin/adjusted landed/allocation policy/allocation run/new current margin; the trigger also validates pending→current allocation status, scalar↔payload identity, exact orderVersion, timestamps/content hash and unchanged aggregate economics. UPDATE/DELETE is rejected by the common economics immutability trigger.
+- Connection timeout policy is split by workload. The application pool binds request-path traffic with `statement_timeout`, `lock_timeout` and `idle_in_transaction_session_timeout` (`SYNTHA_DB_STATEMENT_TIMEOUT_MS`, `SYNTHA_DB_LOCK_TIMEOUT_MS`, `SYNTHA_DB_IDLE_IN_TRANSACTION_TIMEOUT_MS`; `0` leaves the server default). Two workloads legitimately exceed those bounds and opt out explicitly rather than inheriting them: startup migrations issue session-level `SET ... = 0` before touching the schema and release their connection with destroy so the relaxed session never returns to the pool, and retention maintenance issues transaction-scoped `SET LOCAL` (`SYNTHA_DB_MAINTENANCE_STATEMENT_TIMEOUT_MS`, default `0`) because its sweeps are unbounded bulk deletes. Timeout values are validated integers; they are never interpolated from unvalidated input.
 - Migration `075_canonical_buyer_catalog_new_writes.sql` is forward-only PUB-005 enforcement. BEFORE INSERT guards require every fresh PriceListVersion/BuyerCatalogVersion to originate from a projection-backed V2 CommercialPublication, preserve exact projection/readiness/StyleVersion/ProductSku line and rich hierarchy, keep non-price commercial terms frozen, keep server-derived major/minor price consistent, and match relational scalar columns to immutable payload identity. BuyerCatalog additionally validates exact PriceList/publication/brand/shop/currency/Showroom/accepted-unexpired access context. Historical V1 rows are neither updated nor deleted; the guard never joins `catalog_skus` or current Product Master tables to invent ProductSku identity.
 
 ---
 
 ## 14. Events, workers and side effects
+
+Retention maintenance and startup migrations run outside the request-path PostgreSQL timeout policy defined in section 13; every other worker inherits it.
 
 Business mutations that publish integration effects use the transactional outbox pattern. Verification/runtime smoke disables external webhook side effects. A live acceptance scenario must identify what downstream state is allowed to change and explicitly prove important state that must remain unchanged.
 
@@ -1036,6 +1072,15 @@ Business mutations that publish integration effects use the transactional outbox
 `npm run verify:postgres` adds PostgreSQL integration coverage and the real runtime process smoke.
 
 ### 15.3 Live acceptance
+
+All three acceptance commands are executable and are exercised by CI against the live runtime stack. Two of them previously could not run at all: `scripts/acceptance-collection.mjs` and `scripts/bootstrap-production-reference.mjs` imported `pg` with a named binding, which throws at load time because `pg` is CommonJS and publishes no `exports` map. The test suite could not detect this, because tests resolve `pg` through `tests/pg-test-facade.mjs`, which re-exports the named bindings; operational entry points get no such facade. `tests/script-runtime-contract.test.mjs` now asserts the import contract directly.
+
+Creating a ProductSku legitimately initialises exactly one zero-quantity row in `product_sku_inventory_balances`. Both Product Readiness scenarios therefore permit that single identity delta and nothing else: every other counter, available and reserved quantities included, must be unchanged, which is what proves the new row carries no stock. The rule is defined once in `assertReadyProductInventoryIsolationDelta` and shared by both scenarios, because the BLOCKED scenario previously asserted strict equality and could never pass live.
+
+`SYNTHA_ACCEPTANCE_RUN_ID` pins idempotency keys, so two commands sharing one run id against one environment replay the same mutations instead of creating new state. The commercialization gate internally executes the READY readiness scenario, so a readiness command reusing its run id is a replay and legitimately creates no new ProductSku identity row. Acceptance steps that must prove fresh creation therefore require their own run id; CI gives each acceptance step a distinct one. This is a property of idempotent replay, not a reason to relax the single-identity-delta assertion.
+
+The commercialization scenario currently assumes a first run against its reserved organisations: replaying it against an environment that already holds an active acceptance brand↔shop relationship fails with `RELATIONSHIP_NOT_RENEWABLE`, which is the domain behaving correctly. Repeat-run support against a persistent environment is open work.
+
 
 Operational `PROD-PROVEN` live acceptance coverage remains deliberately narrow at the currently evidenced baseline:
 
@@ -1124,6 +1169,8 @@ This is the current high-level master status. Supporting detail is kept in this 
 | `COMM-LC-008` | P0 | `ARCHITECTURE.md` previously described a staged CommercialPublication lifecycle that the canonical V2 runtime does not actually implement | add one canonical fail-closed `DRAFT → READY → PUBLISHED → SUPERSEDED/ARCHIVED` lifecycle with API/DB/idempotency/tests, or formally revise the single lifecycle contract; no parallel publication truth | OPEN/GAP — runtime currently creates immutable V2 CommercialPublication directly as `published` |
 | `PRICE-009` | P0 | PriceListVersion still lacks explicit market/effective-period and any business-required tax/eligibility depth | canonical ProductSku-exact pricing, market, effective_from/effective_to, server validation and immutable BuyerCatalog pin | OPEN/PARTIAL — ProductSku-exact override, minor-unit server validation and immutable BuyerCatalog pin are implemented; market/effective-period/tax-depth remain |
 | `UI-006` | P1 | Legacy Omnidata CSS/JS compatibility layers remain loaded | migrate semantics to ODS v1 and remove debt only after validation | OPEN/PARTIAL |
+| `ACC-REPLAY-010` | P1 | Commercialization acceptance cannot be replayed against an environment that already holds an active acceptance relationship | make the reserved-organisation setup converge on existing active state instead of requiring a first run | OPEN — surfaced by executing the gate twice against one live environment; the domain correctly rejects renewing an active relationship with `RELATIONSHIP_NOT_RENEWABLE` |
+| `ACC-REPLAY-010` | P1 | Commercialization acceptance could not be replayed against an environment that already holds an active acceptance relationship | converge on the existing relationship instead of requiring a first run | CLOSED — the gate now reads the existing relationship back and requires it to be active between exactly the two reserved organisations before continuing; proved by three consecutive runs against one environment |
 | `SPEC-007` | P0 | Historical architecture/product/UI detail was fragmented across docs/code | authoritative `ARCHITECTURE.md` + CI synchronization rule | CLOSED in #110 |
 
 Every confirmed gap discovered during audit is added here before or with its implementation fix. Closed gaps remain in the table/change history or are moved to the closed section; they are not silently deleted.
@@ -1212,6 +1259,12 @@ Minimum frozen lineage fields for the current commercial spine include:
 | 2026-09-04 | #117 / `a960486c653666c7cd7da5dcb4f9d21c4a674d8e` | Final squash merge of governed assortment-category MDM, modular validation correction, canonical Measurement/OpenAPI synchronization and dual Product Readiness acceptance scenarios | 5.1–5.3, 6.1–6.2, 15–17, 19–20 | MERGED; exact pre-merge head `d92fd1e96ffd4b0a139cef82f23ce061af2d6c46`: Verify `33781485567` success, MDM Reference Data `33781485572` success, Syntha V2 CI `33781485600` success; no intended-live `PROD-PROVEN` claim |
 | 2026-09-05 | #118 / `eb86a04b7ac9c6a0ba743882f59a6b33dfbfd113` → `main@0048d10c410231055d13436d61d0cf33db3e95b7` | Add P0.3 public-runtime READY→Projection→projection-native CommercialPublication→PriceListVersion→BuyerCatalogVersion acceptance with exact Collection assignment, Showroom, relationship/invitation, separate brand/shop actors and same-environment PostgreSQL proof; fix canonical Measurement persisted MDM snapshot consumption and deterministic acceptance reference command timestamps. | 2.6, 3.5, 5.1–5.2, 6.1–6.6, 15–17, 19–20, 22 | MERGED; exact head: Verify `33979864431` success, Syntha V2 CI `33979864438` success, MDM Reference Data `33979865154` success, Product Commercialization Acceptance `33979864435` success; no intended-live `PROD-PROVEN` claim; `COMM-LC-008`, `PRICE-009`, `PUB-005` remain open |
 | 2026-09-08 | #119 / `fix/pub005-canonical-commercial-writes` | P0.4 convergence slice: forbid historical V1 CommercialPublication/PriceList from originating fresh buyer commercial truth; make price override exact `productSkuId + wholesalePriceMinor` with server-derived major price; validate exact frozen ProductSku line/hierarchy/terms; add migration 075 DB bypass guards and forward-only V1-history preservation tests; extend Product commercialization acceptance to exact ProductSku pricing. Legacy CatalogSku workspace writes and Selection fallback remain explicitly open rather than hidden. | 2.6, 3.1, 6.4–6.6, 7.4, 12.4, 13, 15–17, 19–20 | IMPLEMENTED locally; `npm run verify` green; PostgreSQL/PR exact-head CI pending; no `PROD-PROVEN` claim; `PUB-005` remains OPEN/PARTIAL |
+| 2026-09-17 | `fix/runtime-db-timeouts-and-dead-ui-layers` | Bound request-path PostgreSQL work with pool-level `statement_timeout`/`lock_timeout`/`idle_in_transaction_session_timeout` so a single stuck query can no longer hold a pooled connection indefinitely; explicitly exempt the two workloads that legitimately run long (startup migrations via session `SET` plus destroy-on-release, retention maintenance via transaction-scoped `SET LOCAL`); validate all timeout inputs as integers | 2.1, 13, 14, 20 | IMPLEMENTED; `npm run verify` green; `npm run verify:postgres` green against the dedicated verification database; no `PROD-PROVEN` claim |
+| 2026-09-17 | `refactor/http-transport-independent-pipeline` | Extract the duplicated node:http/Web Fetch request pipeline into one transport-independent `src/http/pipeline.mjs` and move status mapping to `src/http/error-status.mjs`; fix the resulting divergence where the Fetch adapter buffered an entire body before checking the size, so a request without `Content-Length` could exceed the limit in memory | 12, 20 | IMPLEMENTED; `npm run verify` green; `npm run verify:postgres` green; regression test fails against the pre-fix buffering behaviour |
+| 2026-09-17 | `fix/http-server-fault-status` | Answer platform-side `DomainError`s (reader contract violations, failed clock/RNG) with HTTP 500 instead of a 4xx that blames the caller; classify by suffix so new reader/result/clock codes are covered on arrival; preserve the contractual 422 default for unclassified domain validation | 12, 20 | IMPLEMENTED; `npm run verify` green; `npm run verify:postgres` green; depends on the pipeline extraction PR |
+| 2026-09-17 | `fix/acceptance-script-pg-import` | Make the live acceptance ladder actually executable: fix the load-time `pg` named-import crash in the Collection acceptance and production-reference bootstrap entry points, share the single zero ProductSku inventory identity delta between both Product Readiness scenarios so the BLOCKED scenario can pass live, correct the harness test fixture that modelled no balance-row delta, add a structural guard on the script import contract, and run Collection plus Product Readiness acceptance in the live-stack CI workflow | 15.3, 17, 20 | IMPLEMENTED; all three gates executed end to end against a live runtime and PostgreSQL: Collection passed, Product Readiness passed with `inventoryBalanceIdentityDelta: 1`, Product commercialization passed through READY → projection → publication → PriceListVersion → BuyerCatalogVersion |
+| 2026-09-17 | `fix/acceptance-replay-relationship` | Let the commercialization acceptance gate run repeatedly against one environment: when the domain correctly refuses to renew an already-active relationship, read it back and require it to be active between exactly the reserved brand and shop before continuing; attach the domain error code to acceptance request failures so callers converge on state instead of parsing messages | 15.3, 17, 20 | IMPLEMENTED; consecutive runs against one live environment passed; `ACC-REPLAY-010` CLOSED |
+| 2026-09-17 | `feat/static-asset-compression` | Serve static workspace assets with negotiated Brotli/gzip encoding, per-representation ETags, `Vary: Accept-Encoding`, an identity fallback when compression does not shrink the asset, and memoisation keyed by the existing content hash | 11, 20 | IMPLEMENTED; measured on the supported runtime: 96 blocking assets fall from 1165 KiB to 288 KiB with gzip and 272 KiB with Brotli; no new dependency, `node:zlib` only |
 
 Future implementation PRs add a row here. The row is not a substitute for updating the affected detailed sections.
 

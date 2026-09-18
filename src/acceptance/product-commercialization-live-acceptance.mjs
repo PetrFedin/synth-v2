@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { validateAcceptanceOrigin } from './collection-live-acceptance.mjs';
 import { PRODUCTION_ACCEPTANCE_REFERENCES } from './production-reference-bootstrap.mjs';
 
+const ACCEPTANCE_RELATIONSHIP_PAGE_LIMIT = 20;
 const RUN_ID_PATTERN = /^[A-Za-z0-9_-]{1,80}$/;
 const MAX_COMMAND_ID_LENGTH = 128;
 const FIXED_CAMPAIGN_START = '2020-01-01T00:00:00.000Z';
@@ -289,16 +290,10 @@ export async function runProductCommercializationLiveAcceptance({
   }), 'showroom open');
   if (openedShowroom.status !== 'open') throw new Error('Commercial acceptance showroom did not reach open status');
 
-  const relationship = data(await requestJson(fetchImpl, target.url, '/v2/relationships', {
-    method: 'POST', token: brandToken, idempotencyKey: command(runId, 'relationship-request'),
-    body: { brandId: references.brand.id, shopId: references.shop.id },
-  }), 'counterparty relationship request');
-  const activeRelationship = relationship.status === 'active' ? relationship : data(await requestJson(
-    fetchImpl,
-    target.url,
-    `/v2/relationships/${encodeURIComponent(relationship.id)}/accept`,
-    { method: 'POST', token: shopToken, idempotencyKey: command(runId, 'relationship-accept'), body: {} },
-  ), 'counterparty relationship acceptance');
+  const activeRelationship = await establishActiveRelationship({
+    fetchImpl, target, brandToken, shopToken, runId,
+    brandId: references.brand.id, shopId: references.shop.id,
+  });
   if (activeRelationship.status !== 'active') throw new Error('Commercial acceptance relationship did not reach active status');
 
   const invitation = data(await requestJson(fetchImpl, target.url, `/v2/showrooms/${encodeURIComponent(openedShowroom.id)}/invitations`, {
@@ -500,6 +495,52 @@ function command(runId, operation) {
   return value;
 }
 
+// The reserved acceptance organisations persist between runs, and the domain correctly refuses to
+// re-request a relationship that is already active (RELATIONSHIP_NOT_RENEWABLE). Replaying the gate
+// against one environment must therefore converge on the existing relationship rather than fail.
+// Convergence is not an assumption: the existing relationship is read back and must be active
+// between exactly these two organisations before the gate continues.
+async function establishActiveRelationship({ fetchImpl, target, brandToken, shopToken, runId, brandId, shopId }) {
+  let requested;
+  try {
+    requested = data(await requestJson(fetchImpl, target.url, '/v2/relationships', {
+      method: 'POST', token: brandToken, idempotencyKey: command(runId, 'relationship-request'),
+      body: { brandId, shopId },
+    }), 'counterparty relationship request');
+  } catch (error) {
+    if (error?.code !== 'RELATIONSHIP_NOT_RENEWABLE') throw error;
+    return findActiveRelationship({ fetchImpl, target, brandToken, brandId, shopId });
+  }
+  if (requested.status === 'active') return requested;
+  return data(await requestJson(
+    fetchImpl,
+    target.url,
+    `/v2/relationships/${encodeURIComponent(requested.id)}/accept`,
+    { method: 'POST', token: shopToken, idempotencyKey: command(runId, 'relationship-accept'), body: {} },
+  ), 'counterparty relationship acceptance');
+}
+
+async function findActiveRelationship({ fetchImpl, target, brandToken, brandId, shopId }) {
+  let cursor;
+  for (let page = 0; page < ACCEPTANCE_RELATIONSHIP_PAGE_LIMIT; page += 1) {
+    const query = cursor ? `?limit=50&cursor=${encodeURIComponent(cursor)}` : '?limit=50';
+    const result = payloadData(await requestJson(fetchImpl, target.url, `/v2/workspace/relationships/page${query}`, {
+      method: 'GET', token: brandToken,
+    }), 'counterparty relationship lookup');
+    const items = Array.isArray(result?.items) ? result.items : [];
+    const match = items.find((item) => item?.brandId === brandId && item?.shopId === shopId);
+    if (match) {
+      if (match.status !== 'active') {
+        throw new Error(`Commercial acceptance relationship exists with status ${match.status}, not active`);
+      }
+      return match;
+    }
+    if (!result?.hasMore || !result?.nextCursor) break;
+    cursor = result.nextCursor;
+  }
+  throw new Error('Commercial acceptance relationship could not be renewed and no existing active relationship was found');
+}
+
 async function requestJson(fetchImpl, baseUrl, pathname, { method = 'GET', token, body, idempotencyKey } = {}) {
   if (typeof fetchImpl !== 'function') throw new Error('Fetch implementation is required');
   const headers = { accept: 'application/json' };
@@ -519,7 +560,12 @@ async function requestJson(fetchImpl, baseUrl, pathname, { method = 'GET', token
   }
   if (!response.ok) {
     const code = payload?.error?.code ? ` (${payload.error.code})` : '';
-    throw new Error(`Acceptance request failed: ${method} ${pathname} -> HTTP ${response.status}${code}`);
+    const error = new Error(`Acceptance request failed: ${method} ${pathname} -> HTTP ${response.status}${code}`);
+    // Surface the domain code so callers can converge on state that already exists instead of
+    // parsing the message. The message itself is unchanged.
+    error.code = payload?.error?.code;
+    error.status = response.status;
+    throw error;
   }
   return payload;
 }

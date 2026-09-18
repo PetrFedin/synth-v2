@@ -98,6 +98,28 @@ jobs:
           echo "$status" > product-commercialization-acceptance-status.txt
           exit "$status"
 
+      - name: Execute Collection acceptance
+        shell: bash
+        env:
+          SYNTHA_ACCEPTANCE_RUN_ID: gha-${{ github.run_id }}-${{ github.run_attempt }}-collection
+        run: |
+          set +e
+          npm run acceptance:collection 2>&1 | tee collection-acceptance.log
+          status=${PIPESTATUS[0]}
+          echo "$status" > collection-acceptance-status.txt
+          exit "$status"
+
+      - name: Execute Product readiness acceptance
+        shell: bash
+        env:
+          SYNTHA_ACCEPTANCE_RUN_ID: gha-${{ github.run_id }}-${{ github.run_attempt }}-readiness
+        run: |
+          set +e
+          npm run acceptance:product-readiness 2>&1 | tee product-readiness-acceptance.log
+          status=${PIPESTATUS[0]}
+          echo "$status" > product-readiness-acceptance-status.txt
+          exit "$status"
+
       - name: Stop supported Syntha runtime
         if: always()
         shell: bash
@@ -124,5 +146,9 @@ jobs:
             product-commercialization-ready.json
             product-commercialization-acceptance.log
             product-commercialization-acceptance-status.txt
+            collection-acceptance.log
+            collection-acceptance-status.txt
+            product-readiness-acceptance.log
+            product-readiness-acceptance-status.txt
           if-no-files-found: warn
           retention-days: 1

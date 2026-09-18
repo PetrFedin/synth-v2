@@ -43,9 +43,19 @@ function odFidelityFilterButton() {
     odFidelityText('\u0424\u0438\u043b\u044c\u0442\u0440\u044b', 'Filters'),
     odFidelityText('\u0424\u0438\u043b\u044c\u0442\u0440\u044b', 'Filters'),
   );
+  // This used to move focus into the status select and call that filtering. It opens the attribute
+  // filter panel for the registry on screen, and carries the number of filters currently applied.
+  const scope = typeof OD_UI !== 'undefined' && OD_UI.registry ? Object.keys(OD_UI.registry).at(-1) : null;
+  const applied = scope && typeof odActiveFilterCount === 'function' ? odActiveFilterCount(scope) : 0;
+  if (applied > 0) {
+    button.classList.add('od-filter-button-active');
+    button.append(el('span', { className: 'od-filter-button-count', rawText: String(applied) }));
+  }
   button.addEventListener('click', () => {
-    const firstSelect = button.parentElement?.querySelector('.od-filter select');
-    firstSelect?.focus();
+    if (!scope) return;
+    OD_UI.filterPanel = OD_UI.filterPanel === scope ? null : scope;
+    OD_UI.filterPanelQuery = '';
+    renderApp();
   });
   return button;
 }

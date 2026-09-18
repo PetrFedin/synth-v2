@@ -99,10 +99,153 @@ function odHeader(scope, tabs, metrics, statuses, placeholder, action) {
 function odFilter(items, scope, statusAccessor = item => item.status) {
   const query = String(OD_UI.filters[scope]?.query || '').trim().toLocaleLowerCase();
   const status = OD_UI.filters[scope]?.status || 'all';
+  const attributes = OD_UI.filters[scope]?.attributes || {};
+  const columns = OD_UI.registry?.[scope]?.columns || [];
+  const chosen = Object.entries(attributes).filter(([, values]) => Array.isArray(values) && values.length);
   return items.filter(item => {
     if (status !== 'all' && String(statusAccessor(item) || '') !== status) return false;
+    for (const [label, values] of chosen) {
+      const column = columns.find(candidate => candidate.label === label);
+      if (!column) continue;
+      if (!values.includes(odAttributeValue(column, item))) return false;
+    }
     return !query || JSON.stringify(item).toLocaleLowerCase().includes(query);
   });
+}
+
+// A column is filterable when its cell reads as a single value. Rendered cells (badges, progress
+// bars, nested tables) are shown, not compared.
+function odAttributeValue(column, item) {
+  if (typeof column?.value !== 'function') return '';
+  let raw;
+  try { raw = column.value(item); } catch { return ''; }
+  if (raw instanceof Node || raw === null || raw === undefined) return '';
+  if (typeof raw === 'object') return '';
+  return String(raw).trim();
+}
+
+// The filter panel. Omnidata lists the attribute names and asks you to pick one; this lists each
+// attribute with its values and how many rows carry each, so a choice takes one step instead of two
+// and you can see what the filter will do before applying it.
+function odFilterPanel(scope) {
+  const panel = el('aside', { className: 'od-filter-panel', role: 'dialog', ariaLabel: odText('\u0424\u0438\u043b\u044c\u0442\u0440\u044b', 'Filters') });
+  const head = el('header', { className: 'od-filter-panel-head' });
+  head.append(el('h2', { className: 'od-filter-panel-title', rawText: odText('\u0424\u0438\u043b\u044c\u0442\u0440\u044b', 'Filters') }));
+  // The icon set has no close glyph, and asking for one it does not have renders whichever icon the
+  // fallback happens to return. A multiplication sign is unambiguous and matches the filter chips.
+  const close = el('button', { className: 'od-filter-panel-close', type: 'button', ariaLabel: odText('\u0417\u0430\u043a\u0440\u044b\u0442\u044c', 'Close') });
+  close.append(el('span', { className: 'od-filter-panel-close-mark', rawText: '\u00d7' }));
+  close.addEventListener('click', () => { OD_UI.filterPanel = null; renderApp(); });
+  head.append(close);
+  panel.append(head);
+
+  const search = el('label', { className: 'od-filter-panel-search' });
+  search.append(icon('search'));
+  const searchInput = el('input', {
+    type: 'search',
+    value: OD_UI.filterPanelQuery || '',
+    placeholder: odText('\u041d\u0430\u0439\u0442\u0438 \u0430\u0442\u0440\u0438\u0431\u0443\u0442', 'Find an attribute'),
+    ariaLabel: odText('\u041d\u0430\u0439\u0442\u0438 \u0430\u0442\u0440\u0438\u0431\u0443\u0442', 'Find an attribute'),
+  });
+  searchInput.addEventListener('input', () => { OD_UI.filterPanelQuery = searchInput.value; renderApp(); });
+  search.append(searchInput);
+  panel.append(search);
+
+  const needle = String(OD_UI.filterPanelQuery || '').trim().toLocaleLowerCase();
+  const attributes = odFilterableAttributes(scope)
+    .filter(attribute => !needle || attribute.label.toLocaleLowerCase().includes(needle)
+      || attribute.values.some(entry => String(entry.value).toLocaleLowerCase().includes(needle)));
+
+  const body = el('div', { className: 'od-filter-panel-body' });
+  if (!attributes.length) {
+    body.append(el('p', { className: 'od-empty', rawText: needle
+      ? odText('\u041d\u0438\u0447\u0435\u0433\u043e \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u043e', 'Nothing found')
+      : odText('\u0412 \u044d\u0442\u043e\u043c \u0440\u0430\u0437\u0434\u0435\u043b\u0435 \u043d\u0435\u0447\u0435\u0433\u043e \u0444\u0438\u043b\u044c\u0442\u0440\u043e\u0432\u0430\u0442\u044c', 'Nothing to filter in this section') }));
+  }
+  const chosen = OD_UI.filters[scope]?.attributes || {};
+  attributes.forEach(attribute => {
+    const group = el('section', { className: 'od-filter-group' });
+    group.append(el('h3', { className: 'od-filter-group-title', rawText: attribute.label }));
+    attribute.values.forEach(entry => {
+      const row = el('label', { className: 'od-filter-option' });
+      const box = el('input', { type: 'checkbox' });
+      box.checked = (chosen[attribute.label] || []).includes(entry.value);
+      box.addEventListener('change', () => { odToggleAttribute(scope, attribute.label, entry.value); renderApp(); });
+      row.append(box, el('span', { className: 'od-filter-option-label', rawText: entry.value }));
+      row.append(el('span', { className: 'od-filter-option-count', rawText: String(entry.count) }));
+      group.append(row);
+    });
+    body.append(group);
+  });
+  panel.append(body);
+
+  const footer = el('footer', { className: 'od-filter-panel-foot' });
+  const reset = el('button', { className: 'button', type: 'button', rawText: odText('\u0421\u0431\u0440\u043e\u0441\u0438\u0442\u044c', 'Reset') });
+  reset.addEventListener('click', () => { odSetFilter(scope, 'attributes', {}); renderApp(); });
+  const apply = el('button', { className: 'button primary', type: 'button', rawText: odText('\u041f\u0440\u0438\u043c\u0435\u043d\u0438\u0442\u044c', 'Apply') });
+  // Choices already apply as they are made, so the rows behind the panel update live; this closes it.
+  apply.addEventListener('click', () => { OD_UI.filterPanel = null; renderApp(); });
+  footer.append(reset, apply);
+  panel.append(footer);
+  return panel;
+}
+
+// Applied filters stay visible and removable outside the panel, so nobody wonders why a registry
+// looks empty. Omnidata hides them once the panel closes.
+function odFilterChips(scope) {
+  const chosen = OD_UI.filters[scope]?.attributes || {};
+  const entries = Object.entries(chosen).flatMap(([label, values]) => (values || []).map(value => ({ label, value })));
+  if (!entries.length) return null;
+  const strip = el('div', { className: 'od-filter-chips' });
+  entries.forEach(entry => {
+    const chip = el('button', { className: 'od-filter-chip', type: 'button',
+      ariaLabel: `${odText('\u0423\u0431\u0440\u0430\u0442\u044c \u0444\u0438\u043b\u044c\u0442\u0440', 'Remove filter')}: ${entry.label} — ${entry.value}` });
+    chip.append(el('span', { className: 'od-filter-chip-label', rawText: `${entry.label}: ${entry.value}` }), el('span', { className: 'od-filter-chip-remove', rawText: '\u00d7' }));
+    chip.addEventListener('click', () => { odToggleAttribute(scope, entry.label, entry.value); renderApp(); });
+    strip.append(chip);
+  });
+  const clear = el('button', { className: 'od-filter-chip clear', type: 'button', rawText: odText('\u0421\u0431\u0440\u043e\u0441\u0438\u0442\u044c \u0432\u0441\u0451', 'Clear all') });
+  clear.addEventListener('click', () => { odSetFilter(scope, 'attributes', {}); renderApp(); });
+  strip.append(clear);
+  return strip;
+}
+
+function odFilterableAttributes(scope) {
+  const registry = OD_UI.registry?.[scope];
+  if (!registry) return [];
+  const byLabel = new Map();
+  for (const column of registry.columns || []) {
+    if (typeof column.value !== 'function') continue;
+    const counts = new Map();
+    for (const item of registry.rows || []) {
+      const value = odAttributeValue(column, item);
+      if (!value) continue;
+      counts.set(value, (counts.get(value) || 0) + 1);
+    }
+    // One value across every row filters nothing, and dozens of unique values is a search, not a
+    // filter. A column whose values are nearly all distinct is an identifier — a code, a title, a
+    // price — and belongs in the search box, not here.
+    const rowCount = (registry.rows || []).length;
+    if (counts.size < 2 || counts.size > 40) continue;
+    if (rowCount >= 4 && counts.size > rowCount * 0.7) continue;
+    byLabel.set(column.label, [...counts.entries()]
+      .sort((left, right) => right[1] - left[1] || String(left[0]).localeCompare(String(right[0])))
+      .map(([value, count]) => ({ value, count })));
+  }
+  return [...byLabel.entries()].map(([label, values]) => ({ label, values }));
+}
+
+function odActiveFilterCount(scope) {
+  const attributes = OD_UI.filters[scope]?.attributes || {};
+  return Object.values(attributes).reduce((total, values) => total + (Array.isArray(values) ? values.length : 0), 0);
+}
+
+function odToggleAttribute(scope, label, value) {
+  const current = { ...(OD_UI.filters[scope]?.attributes || {}) };
+  const chosen = new Set(current[label] || []);
+  if (chosen.has(value)) chosen.delete(value); else chosen.add(value);
+  if (chosen.size) current[label] = [...chosen]; else delete current[label];
+  odSetFilter(scope, 'attributes', current);
 }
 
 function odCell(value) {
@@ -185,10 +328,17 @@ function odInspector({ title, subtitle = '', status = '', preview = false, tabs 
 }
 
 function odRegistry({ scope, rows, columns, inspector, filterScope = scope, rowKey, statusAccessor }) {
+  // Remember what this registry is showing. The filter panel is built from the registry's own
+  // columns and rows, so every registry gains attribute filtering without being configured for it.
+  OD_UI.registry = OD_UI.registry || {};
+  OD_UI.registry[filterScope] = { rows, columns, statusAccessor };
   const filtered = odFilter(rows, filterScope, statusAccessor);
   const table = odTable(scope, filtered, columns, rowKey);
   const layout = el('section', { className: 'od-master-detail' });
   const master = el('div', { className: 'od-master' });
+  const chips = odFilterChips(filterScope);
+  if (chips) master.append(chips);
+  if (OD_UI.filterPanel === filterScope) master.append(odFilterPanel(filterScope));
   master.append(table.node);
   layout.append(master, table.selected ? inspector(table.selected) : odInspector({ title: odText('\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0437\u0430\u043f\u0438\u0441\u044c', 'Select a record') }));
   return layout;

@@ -39,9 +39,15 @@ test('allows incomplete drafts but blocks publication until every POM has every 
   assert.throws(() => publishMeasurementChart(draft, { catalogSku: sku, publishedAt: '2026-08-04T09:00:00.000Z' }), { code: 'MEASUREMENT_MATRIX_INCOMPLETE' });
 });
 
-test('publishes only against the exact current published SKU snapshot', () => {
+test('publishes against the published SKU snapshot, tolerating only the publication bump', () => {
   const draft = create();
-  assert.throws(() => publishMeasurementChart(draft, { catalogSku: { ...sku, version: 8 }, publishedAt: '2026-08-04T09:00:00.000Z' }), { code: 'MEASUREMENT_SKU_SNAPSHOT_STALE' });
+  // The chart is snapshotted at SKU version 7. Publishing the SKU takes it to 8 without altering
+  // the article, so a chart authored against the final draft must still publish; requiring an exact
+  // match made the natural authoring order impossible, because the SKU has to be published first.
+  const afterPublicationBump = publishMeasurementChart(draft, { catalogSku: { ...sku, version: 8 }, publishedAt: '2026-08-04T09:00:00.000Z' });
+  assert.equal(afterPublicationBump.status, 'published');
+  // Two or more versions behind is a genuinely stale snapshot and stays refused.
+  assert.throws(() => publishMeasurementChart(draft, { catalogSku: { ...sku, version: 9 }, publishedAt: '2026-08-04T09:00:00.000Z' }), { code: 'MEASUREMENT_SKU_SNAPSHOT_STALE' });
   assert.throws(() => publishMeasurementChart(draft, { catalogSku: { ...sku, status: 'draft' }, publishedAt: '2026-08-04T09:00:00.000Z' }), { code: 'MEASUREMENT_SKU_NOT_PUBLISHED' });
   const published = publishMeasurementChart(draft, { catalogSku: sku, publishedAt: '2026-08-04T09:00:00.000Z' });
   assert.equal(published.status, 'published');

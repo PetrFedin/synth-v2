@@ -20,7 +20,9 @@ async function api(path, { method = 'GET', body, anonymous = false, signal } = {
         if (response.status === 401 && !anonymous) clearSession();
         const code = payload.error?.code || `HTTP_${response.status}`;
         const message = payload.error?.message || I18N.t('common.requestError');
-        const error = new Error(`${code}: ${message}`);
+        // The code is diagnostic, not copy. It stays on the error for callers that branch on it
+        // and for logging; the message the user reads is a sentence.
+        const error = new Error(message);
         error.code = code;
         error.status = response.status;
         error.details = payload.error?.details || {};

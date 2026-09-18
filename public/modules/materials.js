@@ -58,7 +58,7 @@
       materialState.nextCursor = page.nextCursor || null;
       materialState.loaded = true;
     } catch (error) {
-      if (generation === materialState.generation) materialState.error = error.message || 'MATERIAL_LOAD_FAILED';
+      if (generation === materialState.generation) materialState.error = error.message || I18N.t('common.requestError');
     } finally {
       if (generation === materialState.generation) materialState.loading = false;
       if (state.view === 'materials') renderApp();

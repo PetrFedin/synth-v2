@@ -45,7 +45,7 @@
     }).catch((error) => {
       if (generation !== sync.generation) return;
       sync.status = 'error';
-      sync.error = error?.message || 'SAMPLE_CATALOG_LOAD_FAILED';
+      sync.error = error?.message || I18N.t('common.requestError');
       renderApp();
     });
   }

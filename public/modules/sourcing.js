@@ -100,7 +100,7 @@
       ui.selectedSupplierCode ||= ui.suppliers[0]?.supplierCode || null;
       ui.selectedRfqCode ||= ui.rfqs[0]?.rfqCode || null;
     } catch (error) {
-      if (generation === ui.generation) ui.error = error?.message || 'SOURCING_LOAD_FAILED';
+      if (generation === ui.generation) ui.error = error?.message || I18N.t('common.requestError');
     } finally {
       if (generation === ui.generation) ui.loading = false;
       if (SOURCING_VIEWS.has(state.view)) renderApp();
@@ -120,7 +120,7 @@
       return result;
     } catch (error) {
       if (String(error?.code || '').includes('CONCURRENCY_CONFLICT')) { reset(); queueMicrotask(() => { void loadSourcing({ reset: true }); }); }
-      toast(error?.message || 'SOURCING_MUTATION_FAILED', 'error');
+      toast(error?.message || I18N.t('common.requestError'), 'error');
       return null;
     } finally { ui.busyKey = null; renderApp(); }
   }
@@ -256,7 +256,7 @@
     const cancel = h('button', { type: 'button', className: 'secondary', text: text('Закрыть', 'Close'), onclick: () => modal.close() });
     const submit = h('button', { type: 'submit', className: danger ? 'danger' : 'primary', text: submitLabel });
     form.append(error, h('footer', {}, [cancel, submit]));
-    form.addEventListener('submit', async (event) => { event.preventDefault(); submit.disabled = true; error.hidden = true; try { const values = Object.fromEntries(new FormData(form).entries()); const done = await onSubmit(values); if (done) modal.close(); } catch (submitError) { error.textContent = submitError?.message || 'INVALID_INPUT'; error.hidden = false; } finally { if (submit.isConnected) submit.disabled = false; } });
+    form.addEventListener('submit', async (event) => { event.preventDefault(); submit.disabled = true; error.hidden = true; try { const values = Object.fromEntries(new FormData(form).entries()); const done = await onSubmit(values); if (done) modal.close(); } catch (submitError) { error.textContent = submitError?.message || I18N.t('common.requestError'); error.hidden = false; } finally { if (submit.isConnected) submit.disabled = false; } });
     modal.addEventListener('close', () => modal.remove(), { once: true }); modal.append(form); document.body.append(modal); modal.showModal(); return modal;
   }
 

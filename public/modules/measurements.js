@@ -67,7 +67,7 @@
       ui.loaded = true;
       if (!ui.selectedSku && ui.items.length) ui.selectedSku = ui.items[0].sku;
     } catch (error) {
-      if (generation === ui.generation) ui.error = error?.message || 'MEASUREMENT_LOAD_FAILED';
+      if (generation === ui.generation) ui.error = error?.message || I18N.t('common.requestError');
     } finally {
       if (generation === ui.generation) ui.loading = false;
       if (state.view === 'measurements') renderApp();

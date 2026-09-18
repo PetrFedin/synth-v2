@@ -56,7 +56,12 @@ test('domain HTTP errors are not retried', async () => {
     return { ok: false, status: 409, json: async () => ({ error: { code: 'COMMAND_ID_CONFLICT', message: 'Conflict' } }) };
   });
 
-  await assert.rejects(context.mutate('/v2/orders', {}), /COMMAND_ID_CONFLICT: Conflict/);
+  await assert.rejects(context.mutate('/v2/orders', {}), (error) => {
+    assert.equal(error.message, 'Conflict', 'the user-facing message must not carry the machine code');
+    assert.equal(error.code, 'COMMAND_ID_CONFLICT', 'the code must stay available to callers');
+    assert.equal(error.status, 409);
+    return true;
+  });
   assert.equal(calls, 1);
 });
 
@@ -67,7 +72,11 @@ test('401 clears the local session without retrying', async () => {
     return { ok: false, status: 401, json: async () => ({ error: { code: 'AUTH_REQUIRED', message: 'Sign in' } }) };
   });
 
-  await assert.rejects(context.api('/v2/workspace'), /AUTH_REQUIRED/);
+  await assert.rejects(context.api('/v2/workspace'), (error) => {
+    assert.equal(error.message, 'Sign in');
+    assert.equal(error.code, 'AUTH_REQUIRED');
+    return true;
+  });
   assert.equal(calls, 1);
   assert.equal(context.state.token, '');
 });

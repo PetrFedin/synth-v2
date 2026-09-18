@@ -1,8 +1,20 @@
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
+import { brotliCompress, constants as zlibConstants, gzip } from 'node:zlib';
+import { promisify } from 'node:util';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { invariant } from '../core/errors.mjs';
+
+const compressGzip = promisify(gzip);
+const compressBrotli = promisify(brotliCompress);
+// The workspace shell pulls 96 assets and most are marked no-store, so every navigation transfers
+// the whole set. Text assets are negotiated and compressed; the result is memoised under the
+// content hash that already backs the ETag, so a changed file misses the cache by construction.
+const COMPRESSIBLE = /^(?:text\/|application\/(?:javascript|json|manifest\+json)|image\/svg\+xml)/i;
+const MIN_COMPRESSION_BYTES = 1024;
+const MAX_ENCODED_ENTRIES = 512;
+const encodedAssets = new Map();
 
 const DEFAULT_PUBLIC_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'public');
 const JS = 'text/javascript; charset=utf-8';
@@ -128,12 +140,21 @@ export function createStandaloneHandler({ apiHandler, publicDir = DEFAULT_PUBLIC
     try {
       const [filename, contentType, cacheControl] = asset;
       const body = await readFile(path.join(publicDir, filename));
-      const etag = strongEtag(body);
+      const digest = contentDigest(body);
+      const candidate = negotiateEncoding(request.headers['accept-encoding'], contentType, body.length);
+      const encoded = candidate ? await encodeAsset(body, digest, candidate) : null;
+      // Falling back to identity must also drop the encoding from the headers and the ETag,
+      // otherwise the client is told the bytes are compressed when they are not.
+      const encoding = encoded ? candidate : null;
+      const payload = encoded ?? body;
+      const etag = representationEtag(digest, encoding);
       applyStaticHeaders(response, { contentType, cacheControl, etag });
+      response.setHeader('vary', 'accept-encoding');
+      if (encoding) response.setHeader('content-encoding', encoding);
       if (etagMatches(request.headers['if-none-match'], etag)) { response.statusCode = 304; return response.end(); }
       response.statusCode = 200;
-      response.setHeader('content-length', body.length);
-      if (request.method === 'HEAD') response.end(); else response.end(body);
+      response.setHeader('content-length', payload.length);
+      if (request.method === 'HEAD') response.end(); else response.end(payload);
     } catch {
       applyStaticHeaders(response, { contentType: 'application/json; charset=utf-8', cacheControl: 'no-store' });
       const body = JSON.stringify({ error: { code: 'STATIC_ASSET_UNAVAILABLE', message: 'Web workspace asset is unavailable' } });
@@ -151,7 +172,43 @@ function methodNotAllowed(response) {
   response.setHeader('content-length', Buffer.byteLength(body));
   response.end(body);
 }
-function strongEtag(body) { return `"${createHash('sha256').update(body).digest('base64url')}"`; }
+function contentDigest(body) { return createHash('sha256').update(body).digest('base64url'); }
+// A compressed response is a different representation of the same resource, so it must not share
+// the identity ETag: a cache holding one must not answer a request that can only accept the other.
+function representationEtag(digest, encoding) { return encoding ? `"${digest}-${encoding}"` : `"${digest}"`; }
+
+export function negotiateEncoding(header, contentType, byteLength) {
+  if (byteLength < MIN_COMPRESSION_BYTES || !COMPRESSIBLE.test(contentType ?? '')) return null;
+  const value = (Array.isArray(header) ? header.join(',') : header ?? '').toLowerCase();
+  if (!value) return null;
+  const accepted = new Map();
+  for (const part of value.split(',')) {
+    const [name, ...params] = part.trim().split(';');
+    const quality = params.map((item) => item.trim()).find((item) => item.startsWith('q='));
+    const weight = quality ? Number(quality.slice(2)) : 1;
+    if (!name || !Number.isFinite(weight)) continue;
+    accepted.set(name.trim(), weight);
+  }
+  for (const candidate of ['br', 'gzip']) {
+    const weight = accepted.get(candidate) ?? accepted.get('*');
+    if (weight !== undefined && weight > 0) return candidate;
+  }
+  return null;
+}
+
+async function encodeAsset(body, digest, encoding) {
+  const key = `${digest}:${encoding}`;
+  const cached = encodedAssets.get(key);
+  if (cached) return cached;
+  const encoded = encoding === 'br'
+    ? await compressBrotli(body, { params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 5 } })
+    : await compressGzip(body, { level: 6 });
+  // A compression that does not shrink the asset is discarded rather than shipped.
+  if (encoded.length >= body.length) return null;
+  if (encodedAssets.size >= MAX_ENCODED_ENTRIES) encodedAssets.delete(encodedAssets.keys().next().value);
+  encodedAssets.set(key, encoded);
+  return encoded;
+}
 function etagMatches(value, etag) {
   const header = Array.isArray(value) ? value.join(',') : value;
   if (!header) return false;

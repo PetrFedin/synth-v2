@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Pool } from 'pg';
+import pg from 'pg';
 import { bootstrapProductionAcceptanceReferences } from '../src/acceptance/production-reference-bootstrap.mjs';
 import { migratePostgres } from '../src/infrastructure/postgres-migrator.mjs';
 import { createPostgresWholesaleRuntime } from '../src/runtime/postgres-runtime.mjs';
@@ -10,7 +10,7 @@ if (!databaseUrl) throw new Error('DATABASE_URL is required');
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const migrationsDir = path.join(root, 'db', 'migrations');
-const pool = new Pool({ connectionString: databaseUrl, max: 4 });
+const pool = new pg.Pool({ connectionString: databaseUrl, max: 4 });
 
 try {
   await migratePostgres({ pool, migrationsDir });

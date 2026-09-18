@@ -204,9 +204,17 @@
     auditInterface(document);
     diagnosticAudit();
   }
-  function scheduleApply(){if(scheduled)return;scheduled=true;global.queueMicrotask(()=>{scheduled=false;apply()})}
-  function installObserver(){
-    if(observer||!global.MutationObserver)return;
+  // apply() writes attributes this layer also observes. Scheduling on a microtask lets that
+  // feedback re-arm inside the same microtask checkpoint, so the event loop never regains control.
+  // Yield to the browser, and detach the observer while applying so the layer never reacts to its
+  // own mutations.
+  const yieldToBrowser=(fn)=>{if(typeof global.requestAnimationFrame==='function')return global.requestAnimationFrame(()=>fn());if(typeof global.setTimeout==='function')return global.setTimeout(fn,0);if(typeof global.queueMicrotask==='function')return global.queueMicrotask(fn);return fn()};
+  function applyDetached(){observer?.disconnect?.();try{return apply()}finally{observer?.takeRecords?.();installObserver(true)}}
+  function scheduleApply(){if(scheduled)return;scheduled=true;yieldToBrowser(()=>{scheduled=false;applyDetached()})}
+  function installObserver(reconnect){
+    if(!global.MutationObserver)return;
+    if(observer&&!reconnect)return;
+    if(observer&&reconnect){observer.observe(document.documentElement,{childList:true,subtree:true});return}
     observer=new global.MutationObserver((mutations)=>{if(mutations.some((mutation)=>mutation.addedNodes.length))scheduleApply()});
     observer.observe(document.documentElement,{childList:true,subtree:true});
   }

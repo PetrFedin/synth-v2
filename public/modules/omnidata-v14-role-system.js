@@ -100,7 +100,18 @@
   function normalize(root=document){stopObserving();try{ensureBodyClasses();applyExplicit(root);applyComponents(root);applyNative(root);applyHeuristics(root);applyStructure(root);applyVariants(root);enforceLanguage(root);return audit(root)}finally{startObserving()}}
   let scheduled=false,retries=0,retryTimer=0,watchdog=0;
   function requestRetry(result){if(!result?.unclassified){retries=0;return}if(retries>=8)return;retries+=1;global.clearTimeout?.(retryTimer);retryTimer=global.setTimeout?.(()=>schedule(document),Math.min(80*retries,640))||0}
-  function schedule(root=document){if(scheduled)return;scheduled=true;(global.queueMicrotask||((fn)=>Promise.resolve().then(fn)))(()=>{scheduled=false;const result=normalize(root);requestRetry(result)})}
+  // Normalisation writes the very attributes this layer observes, so it must not run as a
+  // microtask: microtask checkpoints drain before the event loop regains control, and an observer
+  // callback that schedules another write re-arms itself inside the same checkpoint, starving the
+  // main thread indefinitely. Yield to the browser instead, and apply with the observer detached so
+  // the layer never reacts to its own mutations.
+  const yieldToBrowser=(fn)=>{if(typeof global.requestAnimationFrame==='function')return global.requestAnimationFrame(()=>fn());if(typeof global.setTimeout==='function')return global.setTimeout(fn,0);if(typeof global.queueMicrotask==='function')return global.queueMicrotask(fn);return fn()};
+  function applyDetached(root){
+    observer?.disconnect?.();
+    try{return normalize(root)}
+    finally{observer?.takeRecords?.();connectObserver()}
+  }
+  function schedule(root=document){if(scheduled)return;scheduled=true;yieldToBrowser(()=>{scheduled=false;const result=applyDetached(root);requestRetry(result)})}
   function startWatchdog(){if(watchdog||typeof global.setInterval!=='function')return;watchdog=global.setInterval(()=>{if(document.visibilityState!=='hidden')schedule(document)},4000);if(document.body)document.body.dataset.odsWatchdog='active'}
   const OBSERVE_OPTIONS=Object.freeze({subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['class','role','aria-selected','aria-pressed','hidden','data-od14-component']});
   const observer=typeof MutationObserver==='function'?new MutationObserver(()=>schedule(document)):null;

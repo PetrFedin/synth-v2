@@ -54,7 +54,7 @@
   function statusLabel(status) {
     const labels = {
       draft: ['Черновик', 'Draft'], qualified: ['Квалифицирован', 'Qualified'], suspended: ['Приостановлен', 'Suspended'], archived: ['Архив', 'Archived'],
-      issued: ['Отправлен', 'Issued'], quoted: ['Есть котировки', 'Quoted'], awarded: ['Победитель выбран', 'Awarded'], allocated: ['Размещено в производство', 'Allocated'], cancelled: ['Отменён', 'Cancelled'],
+      issued: ['Отправлен', 'Issued'], quoted: ['Есть котировки', 'Quoted'], awarded: ['Победитель выбран', 'Awarded'], allocated: ['В производстве', 'Allocated'], cancelled: ['Отменён', 'Cancelled'],
     };
     const pair = labels[status] || [status, status]; return text(pair[0], pair[1]);
   }
@@ -132,7 +132,7 @@
       h('div', { className: 'sourcing-header-actions' }, [
         canAny(caps.CAPABILITIES.SUPPLIER_MANAGE) ? h('button', { type: 'button', className: 'secondary', text: text('Новый поставщик', 'New supplier'), onclick: () => openSupplierDialog(null) }) : null,
         canAny(caps.CAPABILITIES.SOURCING_MANAGE) ? h('button', { type: 'button', className: 'primary', text: text('Новый RFQ', 'New RFQ'), onclick: () => openRfqDialog(null) }) : null,
-        h('button', { type: 'button', className: 'secondary', disabled: ui.loading, text: text('Обновить', 'Refresh'), onclick: () => { void loadSourcing({ reset: true }); } }),
+        h('button', { type: 'button', className: 'secondary', disabled: ui.loading, text: text('Обновить', 'Refresh'), onclick: () => { loadSourcing({ reset: true }).then(() => toast(text('\u0414\u0430\u043d\u043d\u044b\u0435 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u044b.', 'Data refreshed.'))).catch((error) => toast(error?.message || text('\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u0434\u0430\u043d\u043d\u044b\u0435.', 'The data could not be refreshed.'), 'error')); } }),
       ]),
       h('section', { className: 'sourcing-kpis' }, [
         metric(text('Поставщики', 'Suppliers'), summary.suppliers), metric(text('Квалифицировано', 'Qualified'), summary.qualified),
@@ -219,7 +219,7 @@
     ];
     if (view === 'production') return [
       { label: 'RFQ / SKU', cell: codeCell },
-      { label: text('\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434\u0441\u0442\u0432\u0435\u043d\u043d\u044b\u0439 \u0437\u0430\u043a\u0430\u0437', 'Purchase order'), cell: (rfq) => h('td', { text: rfq.allocation?.purchaseOrderNumber || text('\u041d\u0435 \u0440\u0430\u0437\u043c\u0435\u0449\u0451\u043d', 'Not placed') }) },
+      { label: text('\u041f\u0440\u043e\u0438\u0437\u0432. \u0437\u0430\u043a\u0430\u0437', 'Purchase order'), cell: (rfq) => h('td', { text: rfq.allocation?.purchaseOrderNumber || text('\u041d\u0435 \u0440\u0430\u0437\u043c\u0435\u0449\u0451\u043d', 'Not placed') }) },
       { label: text('\u041f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a', 'Supplier'), cell: (rfq) => h('td', { text: rfq.allocation?.supplierCode || rfq.selectedSupplierCode || '\u2014' }) },
       { label: text('\u041a\u043e\u043b-\u0432\u043e', 'Qty'), cell: (rfq) => h('td', { text: String(rfq.allocation?.quantity ?? rfq.targetQuantity) }) },
       { label: text('\u0421\u0442\u0430\u0440\u0442 \u043f\u0440\u043e\u0438\u0437\u0432\u043e\u0434\u0441\u0442\u0432\u0430', 'Production start'), cell: (rfq) => h('td', { text: rfq.allocation ? formatDate(rfq.allocation.productionStartAt) : '\u2014' }) },

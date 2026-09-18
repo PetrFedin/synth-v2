@@ -122,7 +122,7 @@
   function header(summary) {
     const actions = [];
     if (canManageAnyBrand()) actions.push(h('button', { className: 'primary', type: 'button', text: text('Создать BOM', 'Create BOM'), onclick: () => openEditor(null) }));
-    actions.push(h('button', { className: 'secondary', type: 'button', text: text('Обновить', 'Refresh'), disabled: ui.loading, onclick: () => loadBoms({ reset: true }) }));
+    actions.push(h('button', { className: 'secondary', type: 'button', text: text('Обновить', 'Refresh'), disabled: ui.loading, onclick: () => { loadBoms({ reset: true }).then(() => toast(text('\u0414\u0430\u043d\u043d\u044b\u0435 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u044b.', 'Data refreshed.'))).catch((error) => toast(error?.message || text('\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u0434\u0430\u043d\u043d\u044b\u0435.', 'The data could not be refreshed.'), 'error')); } }));
     return h('header', { className: 'bom-header' }, [
       h('div', {}, [h('p', { className: 'eyebrow', text: 'PLM / COSTING' }), h('h1', { text: text('BOM и производственная себестоимость', 'BOM and production costing') }), h('p', { className: 'muted', text: text('Версионируемые спецификации материалов, snapshot цен, FX и полная воспроизводимая себестоимость изделия.', 'Versioned material specifications, price snapshots, FX and reproducible product cost.') })]),
       h('div', { className: 'bom-header-actions' }, actions),

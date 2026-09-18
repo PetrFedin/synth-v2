@@ -90,7 +90,10 @@ function odFidelityCommandBars() {
     if (!OD_FIDELITY.enhancedBars.has(bar)) {
       OD_FIDELITY.enhancedBars.add(bar);
       const search = bar.querySelector('.od-search');
-      if (search) {
+      // Both buttons act on the registry that sits below the bar. The dashboard has a command bar
+      // but no registry, so mounting them there produced two controls that could open nothing.
+      const hasRegistry = Boolean(bar.closest('.od-view')?.querySelector('.od-master .od-table'));
+      if (search && hasRegistry) {
         const filters = odFidelityFilterButton();
         search.after(filters);
         filters.after(odFidelityColumnButton());
@@ -112,6 +115,23 @@ function odFidelityNumberCell(index) {
 }
 
 
+
+// Every workspace table is laid out with table-layout:fixed against one min-width, so a nine-column
+// register squeezed each cell to 94px and silently clipped RFQ codes and status badges. The table
+// states how many columns it has and the stylesheet gives it the width those columns need; the wrap
+// scrolls when the viewport is narrower. Full values stay reachable through the cell's title.
+function odFidelityTableWidths() {
+  document.querySelectorAll('.od-table, .sourcing-table, .bom-table, .measurement-table, .sample-table, .ls9-table, .planning-table, .styles-table, .materials-table').forEach((table) => {
+    const count = table.querySelectorAll('thead tr:first-child > th').length;
+    if (!count) return;
+    [...table.classList].filter((name) => name.startsWith('od-cols-')).forEach((name) => table.classList.remove(name));
+    table.classList.add(`od-cols-${Math.min(Math.max(count, 3), 14)}`);
+    table.querySelectorAll('tbody td').forEach((cell) => {
+      const value = (cell.textContent || '').trim();
+      if (value && !cell.title) cell.title = value;
+    });
+  });
+}
 
 function odFidelityTables() {
   document.querySelectorAll('.od-table').forEach((table) => {
@@ -174,6 +194,7 @@ function applyOmnidataVisualFidelity() {
   odFidelityStatusStrip();
   odFidelityCommandBars();
   odFidelityTables();
+  odFidelityTableWidths();
   odFidelityInspectors();
 }
 

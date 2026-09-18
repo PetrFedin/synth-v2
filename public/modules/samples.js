@@ -151,7 +151,7 @@
   function header(summary) {
     const actions = [];
     if (canManageAny()) actions.push(h('button', { type: 'button', className: 'primary', text: text('Создать образец', 'Create sample'), onclick: () => openDraftDialog(null) }));
-    actions.push(h('button', { type: 'button', className: 'secondary', disabled: ui.loading, text: text('Обновить', 'Refresh'), onclick: () => { void loadSamples({ reset: true }); } }));
+    actions.push(h('button', { type: 'button', className: 'secondary', disabled: ui.loading, text: text('Обновить', 'Refresh'), onclick: () => { loadSamples({ reset: true }).then(() => toast(text('\u0414\u0430\u043d\u043d\u044b\u0435 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u044b.', 'Data refreshed.'))).catch((error) => toast(error?.message || text('\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u0434\u0430\u043d\u043d\u044b\u0435.', 'The data could not be refreshed.'), 'error')); } }));
     return h('header', { className: 'sample-header' }, [
       h('div', { className: 'sample-title' }, [h('p', { className: 'eyebrow', text: 'PLM / SAMPLE MANAGEMENT' }), h('h1', { text: text('Образцы и согласования', 'Samples and approvals') }), h('p', { className: 'muted', text: text('Полный контроль раундов образцов от запроса фабрике до решения и следующей итерации.', 'End-to-end sample rounds from factory request through decision and the next iteration.') })]),
       h('div', { className: 'sample-header-actions' }, actions),

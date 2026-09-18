@@ -152,7 +152,7 @@
         h('p', { className: 'muted', text: t('Фактическое прохождение партии от подтверждённого PO до допуска к контролю качества. Этапы выполняются строго последовательно.', 'Actual batch progress from a confirmed PO to the quality-control gate. Milestones are completed strictly in sequence.') }),
       ]),
       h('div', { className: 'production-execution-header-actions' }, [
-        h('button', { type: 'button', className: 'secondary', disabled: ui.loading, text: t('Обновить', 'Refresh'), onclick: () => { void load({ reset: true }); } }),
+        h('button', { type: 'button', className: 'secondary', disabled: ui.loading, text: t('Обновить', 'Refresh'), onclick: () => { load({ reset: true }).then(() => toast(t('Данные обновлены.', 'Data refreshed.'))).catch((error) => toast(error?.message || t('Не удалось обновить данные.', 'The data could not be refreshed.'), 'error')); } }),
       ]),
     ];
     if (canManageAny()) children.push(h('div', { className: 'production-execution-create' }, [

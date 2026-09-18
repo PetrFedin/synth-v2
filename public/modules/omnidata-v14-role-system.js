@@ -106,11 +106,9 @@
   // main thread indefinitely. Yield to the browser instead, and apply with the observer detached so
   // the layer never reacts to its own mutations.
   const yieldToBrowser=(fn)=>{if(typeof global.requestAnimationFrame==='function')return global.requestAnimationFrame(()=>fn());if(typeof global.setTimeout==='function')return global.setTimeout(fn,0);if(typeof global.queueMicrotask==='function')return global.queueMicrotask(fn);return fn()};
-  function applyDetached(root){
-    observer?.disconnect?.();
-    try{return normalize(root)}
-    finally{observer?.takeRecords?.();connectObserver()}
-  }
+  // normalize() already detaches and re-attaches the observer around the pass;
+  // this wrapper is kept so the scheduler's call site stays stable.
+  function applyDetached(root){return normalize(root)}
   function schedule(root=document){if(scheduled)return;scheduled=true;yieldToBrowser(()=>{scheduled=false;const result=applyDetached(root);requestRetry(result)})}
   function startWatchdog(){if(watchdog||typeof global.setInterval!=='function')return;watchdog=global.setInterval(()=>{if(document.visibilityState!=='hidden')schedule(document)},4000);if(document.body)document.body.dataset.odsWatchdog='active'}
   const OBSERVE_OPTIONS=Object.freeze({subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['class','role','aria-selected','aria-pressed','hidden','data-od14-component']});

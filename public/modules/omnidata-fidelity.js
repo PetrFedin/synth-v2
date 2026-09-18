@@ -121,7 +121,7 @@ function odFidelityNumberCell(index) {
 // states how many columns it has and the stylesheet gives it the width those columns need; the wrap
 // scrolls when the viewport is narrower. Full values stay reachable through the cell's title.
 function odFidelityTableWidths() {
-  document.querySelectorAll('.od-table, .sourcing-table, .bom-table, .measurement-table, .sample-table, .ls9-table, .planning-table, .styles-table, .materials-table').forEach((table) => {
+  document.querySelectorAll('.od-table, .sourcing-table, .bom-table, .measurement-table, .sample-table, .ls9-table, .planning-table, .styles-table, .materials-table, .tech-pack-table, .production-orders-table, .production-execution-table, .final-quality-table').forEach((table) => {
     const count = table.querySelectorAll('thead tr:first-child > th').length;
     if (!count) return;
     [...table.classList].filter((name) => name.startsWith('od-cols-')).forEach((name) => table.classList.remove(name));

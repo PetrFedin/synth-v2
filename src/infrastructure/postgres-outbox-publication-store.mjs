@@ -46,7 +46,9 @@ export function createPostgresOutboxPublicationStore({ pool } = {}) {
                AND outbox_publication_claims.next_attempt_at <= $2
              RETURNING event_id, worker_id, claim_token, attempt_count
            )
-           SELECT source.event,
+           SELECT source.id,
+                  source.event_type,
+                  source.event,
                   source.status,
                   source.published_at,
                   claimed.worker_id,
@@ -278,6 +280,10 @@ function validateListLimit(limit) {
 
 function publicationRecordFromRow(row) {
   return Object.freeze({
+    // Identity comes from the outbox row, not from the event envelope: outbox_events carries more
+    // than one envelope shape and only the row key is guaranteed present.
+    eventId: row.id,
+    eventType: row.event_type,
     event: row.event,
     status: row.status,
     publishedAt: row.published_at?.toISOString?.() ?? row.published_at ?? null,

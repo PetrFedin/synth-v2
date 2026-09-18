@@ -70,9 +70,11 @@ export function createOutboxPublisherService({
 
   async function publishRecord(record) {
     const event = record?.event;
-    invariant(event?.id && event?.type, 'OUTBOX_EVENT_INVALID', 'Outbox publication record requires an event');
+    const eventId = record?.eventId;
+    const eventType = record?.eventType;
+    invariant(event && eventId && eventType, 'OUTBOX_EVENT_INVALID', 'Outbox publication record requires an event');
     const ownership = {
-      eventId: event.id,
+      eventId,
       workerId: record.workerId ?? workerId,
       claimToken: record.claimToken,
     };
@@ -89,8 +91,8 @@ export function createOutboxPublisherService({
       acknowledged = await store.acknowledgePublished({ ...ownership, publishedAt });
     } catch (error) {
       return Object.freeze({
-        eventId: event.id,
-        eventType: event.type,
+        eventId,
+        eventType,
         aggregateId: event.aggregateId ?? null,
         attemptCount: record.attemptCount,
         status: 'acknowledgement-failed',
@@ -103,8 +105,8 @@ export function createOutboxPublisherService({
 
     if (!acknowledged) {
       return Object.freeze({
-        eventId: event.id,
-        eventType: event.type,
+        eventId,
+        eventType,
         aggregateId: event.aggregateId ?? null,
         attemptCount: record.attemptCount,
         status: 'lease-lost',
@@ -116,8 +118,8 @@ export function createOutboxPublisherService({
     }
 
     return Object.freeze({
-      eventId: event.id,
-      eventType: event.type,
+      eventId,
+      eventType,
       aggregateId: event.aggregateId ?? null,
       attemptCount: record.attemptCount,
       status: 'published',
@@ -129,14 +131,15 @@ export function createOutboxPublisherService({
 
   async function publicationFailure(record, ownership, error) {
     const event = record.event;
+    const { eventId, eventType } = record;
     const errorCode = publicationErrorCode(error);
     const terminal = error?.retryable === false || record.attemptCount >= maxAttempts;
     if (terminal) {
       const failedAt = now();
       const checkpointed = await store.deadLetter({ ...ownership, errorCode, failedAt });
       return Object.freeze({
-        eventId: event.id,
-        eventType: event.type,
+        eventId,
+        eventType,
         aggregateId: event.aggregateId ?? null,
         attemptCount: record.attemptCount,
         status: checkpointed ? 'dead-letter' : 'lease-lost',
@@ -155,8 +158,8 @@ export function createOutboxPublisherService({
     const retryAt = addMilliseconds(failedAt, effectiveDelayMs);
     const rescheduled = await store.reschedule({ ...ownership, errorCode, retryAt });
     return Object.freeze({
-      eventId: event.id,
-      eventType: event.type,
+      eventId,
+      eventType,
       aggregateId: event.aggregateId ?? null,
       attemptCount: record.attemptCount,
       status: rescheduled ? 'failed' : 'lease-lost',

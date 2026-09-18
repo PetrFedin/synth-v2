@@ -112,7 +112,35 @@
   function roots(root,selector){const nodes=[];if(isElement(root)&&root.matches(selector))nodes.push(root);root?.querySelectorAll?.(selector).forEach((node)=>nodes.push(node));return unique(nodes)}
   function priority(source){return ROLE_PRIORITY[source]||0}
   function markExistingRoles(root=document){roots(root,'[data-od14-component]').forEach((node)=>{if(!node.dataset.od14RoleSource)node.dataset.od14RoleSource='adapter'})}
-  function assignRole(node,role,source='heuristic'){if(!node?.dataset||!role)return false;const currentSource=node.dataset.od14RoleSource||'';if(node.dataset.od14Component&&priority(currentSource)>priority(source))return false;if(node.dataset.od14Component===role&&currentSource===source)return false;node.dataset.od14Component=role;node.dataset.od14RoleSource=source;return true}
+  // A container role describes the whole component. Class matching is by substring, so every
+  // child whose class merely contains the keyword — .od-inspector-head, .od-inspector-title,
+  // .od-status-label — was classified as another component of the same kind and painted with the
+  // full container chrome, nested inside the component it belongs to. These roles cannot contain
+  // themselves; the ones that legitimately nest (card, surface, layout, and every container/item
+  // pair, which already use two different names) are deliberately absent.
+  const NON_NESTING_ROLES=Object.freeze(new Set(['inspector','filterbar','toolbar','tabs','pagination','breadcrumb','toast','alert','status','empty','form','button-group','global-search','segmented','section-head','metrics','timeline','progress','table','table-wrap','list','definition-grid','master-detail','entity']));
+  function nestedInSameRole(node,role){
+    if(!NON_NESTING_ROLES.has(role))return false;
+    try{return Boolean(node?.parentElement?.closest?.(`[data-od14-component="${role}"]`))}catch{return false}
+  }
+  // Clears a role that a later pass revealed to be nested; role assignment order across passes is
+  // not guaranteed, so the check runs again once the whole tree is classified.
+  function dropNestedRoles(root=document){
+    for(const role of NON_NESTING_ROLES)
+      for(const node of roots(root,`[data-od14-component="${role}"]`))
+        if(nestedInSameRole(node,role)){delete node.dataset.od14Component;delete node.dataset.od14RoleSource}
+    for(const role of BOX_ROLES)
+      for(const node of roots(root,`[data-od14-component="${role}"]`))
+        if(inlineCannotBeBox(node,role)){delete node.dataset.od14Component;delete node.dataset.od14RoleSource}
+  }
+  // A container role paints a box: border, ground, padding, radius. An inline element is text —
+  // a label inside a tile, a caption inside a row — and can never be one of these boxes. The class
+  // matcher works by substring, so .ls9-metric-label was read as another metric and drawn as a
+  // second bordered tile inside the tile it labels, hanging 13px below its own parent's edge.
+  const BOX_ROLES=Object.freeze(new Set(['card','surface','metric','metrics','inspector','list','list-item','definition-grid','definition-item','table','table-wrap','master-detail','layout','entity','timeline','timeline-item','form','empty']));
+  const INLINE_TAGS=Object.freeze(new Set(['SPAN','STRONG','EM','B','I','SMALL','LABEL','ABBR','CODE','A','TIME','DT','DD']));
+  function inlineCannotBeBox(node,role){return BOX_ROLES.has(role)&&INLINE_TAGS.has(String(node?.tagName||''))}
+  function assignRole(node,role,source='heuristic'){if(!node?.dataset||!role)return false;if(nestedInSameRole(node,role))return false;if(inlineCannotBeBox(node,role))return false;const currentSource=node.dataset.od14RoleSource||'';if(node.dataset.od14Component&&priority(currentSource)>priority(source))return false;if(node.dataset.od14Component===role&&currentSource===source)return false;node.dataset.od14Component=role;node.dataset.od14RoleSource=source;return true}
   function setRole(root,selector,role){roots(root,selector).forEach((node)=>assignRole(node,role,'explicit'))}
   function classNameOf(node){return String(node?.className&&typeof node.className==='string'?node.className:'').toLowerCase()}
   function contains(node,selector){try{return Boolean(node?.querySelector?.(selector))}catch{return false}}
@@ -159,7 +187,7 @@
   function assignComponents(root=document){
     markExistingRoles(root);
     setRole(root,COMPONENTS.card,'card');setRole(root,COMPONENTS.surface,'surface');setRole(root,COMPONENTS.sectionHead,'section-head');setRole(root,COMPONENTS.toolbar,'toolbar');setRole(root,COMPONENTS.filterbar,'filterbar');setRole(root,COMPONENTS.tabs,'tabs');setRole(root,COMPONENTS.tab,'tab');setRole(root,COMPONENTS.metrics,'metrics');setRole(root,COMPONENTS.metric,'metric');setRole(root,COMPONENTS.layout,'layout');setRole(root,COMPONENTS.masterDetail,'master-detail');setRole(root,COMPONENTS.tableWrap,'table-wrap');setRole(root,COMPONENTS.table,'table');setRole(root,COMPONENTS.inspector,'inspector');setRole(root,COMPONENTS.definitionGrid,'definition-grid');setRole(root,COMPONENTS.definitionItem,'definition-item');setRole(root,COMPONENTS.entity,'entity');setRole(root,COMPONENTS.list,'list');setRole(root,COMPONENTS.listItem,'list-item');setRole(root,COMPONENTS.empty,'empty');setRole(root,COMPONENTS.status,'status');setRole(root,COMPONENTS.alert,'alert');setRole(root,COMPONENTS.timeline,'timeline');setRole(root,COMPONENTS.timelineItem,'timeline-item');setRole(root,COMPONENTS.timelinePart,'timeline-part');setRole(root,COMPONENTS.progress,'progress');setRole(root,COMPONENTS.progressTrack,'progress-track');setRole(root,COMPONENTS.progressFill,'progress-fill');setRole(root,COMPONENTS.form,'form');setRole(root,COMPONENTS.buttonGroup,'button-group');setRole(root,COMPONENTS.pagination,'pagination');setRole(root,COMPONENTS.breadcrumb,'breadcrumb');setRole(root,COMPONENTS.toast,'toast');setRole(root,COMPONENTS.globalSearch,'global-search');setRole(root,COMPONENTS.segmented,'segmented');
-    classifyLegacyComponents(root);assignControls(root);decorateRoles(root);
+    classifyLegacyComponents(root);assignControls(root);decorateRoles(root);dropNestedRoles(root);
   }
   function auditComponents(root=document){const candidates=componentCandidates(root).filter((node)=>COMPONENT_LIKE.test(classNameOf(node))||['table','form','fieldset','progress'].includes(String(node.tagName||'').toLowerCase()));const unclassified=candidates.filter((node)=>!node.dataset.od14Component);candidates.forEach((node)=>node.toggleAttribute?.('data-od14-unclassified',!node.dataset.od14Component));if(document.body?.dataset){document.body.dataset.od14ComponentAudit=`${candidates.length-unclassified.length}/${candidates.length}`;document.body.dataset.od14UnclassifiedComponents=String(unclassified.length)}return Object.freeze({total:candidates.length,classified:candidates.length-unclassified.length,unclassified:unclassified.length})}
   function preserveWhitespace(original,replacement){const leading=original.match(/^\s*/)?.[0]||'';const trailing=original.match(/\s*$/)?.[0]||'';return`${leading}${replacement}${trailing}`}

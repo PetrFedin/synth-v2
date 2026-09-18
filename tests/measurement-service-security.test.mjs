@@ -72,14 +72,28 @@ test('update requires complete payloads and enforces optimistic versions', async
 test('publication blocks stale SKU snapshots until an authorized draft update rebases them', async () => {
   const fixture = store(); const measurements = service(fixture);
   const created = await measurements.createMeasurementChart('cmd-1', 'user-1', input());
-  fixture.state.sku = { ...fixture.state.sku, status: 'published', version: 2 };
+  // Three versions on: the article itself was edited after the chart was snapshotted, so the chart
+  // no longer describes it and must be rebased by an authorized draft update before it can publish.
+  fixture.state.sku = { ...fixture.state.sku, status: 'published', version: 4 };
   await assert.rejects(() => measurements.publishMeasurementChart('cmd-stale', 'user-1', created.sku, { expectedVersion: 1 }), { code: 'MEASUREMENT_SKU_SNAPSHOT_STALE' });
   const rebased = await measurements.updateMeasurementChart('cmd-2', 'user-1', created.sku, { expectedVersion: 1, ...editable() });
-  assert.equal(rebased.skuVersion, 2);
+  assert.equal(rebased.skuVersion, 4);
   const published = await measurements.publishMeasurementChart('cmd-3', 'user-1', created.sku, { expectedVersion: 2 });
   assert.equal(published.status, 'published');
   assert.equal(published.version, 3);
   assert.deepEqual(fixture.events.map((event) => event.type), ['measurement.created', 'measurement.updated', 'measurement.published']);
+});
+
+test('a chart drafted before the SKU was published still publishes against it', async () => {
+  const fixture = store(); const measurements = service(fixture);
+  const created = await measurements.createMeasurementChart('cmd-1', 'user-1', input());
+  // Publishing the SKU bumps its version without altering the article. Requiring an exact match made
+  // the natural authoring order impossible: the SKU must be published first, which immediately made
+  // every chart drafted against it stale.
+  fixture.state.sku = { ...fixture.state.sku, status: 'published', version: 2 };
+  const published = await measurements.publishMeasurementChart('cmd-publish', 'user-1', created.sku, { expectedVersion: 1 });
+  assert.equal(published.status, 'published');
+  assert.deepEqual(fixture.events.map((event) => event.type), ['measurement.created', 'measurement.published']);
 });
 
 test('updating a published chart atomically archives it and starts one idempotent draft revision', async () => {

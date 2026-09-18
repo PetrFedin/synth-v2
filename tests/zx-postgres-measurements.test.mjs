@@ -63,7 +63,18 @@ test('PostgreSQL Measurement Charts preserve matrix integrity, RBAC, revisions, 
     assert.equal((await measurements.createMeasurementChart('measurement-create', 'product-owner', initial)).id, created.id);
     await assert.rejects(() => measurements.createMeasurementChart('measurement-sales', 'sales-user', initial), { code: 'CAPABILITY_DENIED' });
 
-    const publishedSku = await catalog.publishSku('sku-publish', 'product-owner', skuDraft.sku, { expectedVersion: skuDraft.version });
+    // Edit the article before publishing it, so the chart's snapshot is genuinely behind the
+    // definition and not merely behind the publication bump — publishing a SKU changes only its
+    // status, so a chart drafted against the final draft still describes the same article and is
+    // allowed to publish. Two versions behind means the article itself moved on.
+    const revisedSku = await catalog.updateSku('sku-update', 'product-owner', skuDraft.sku, {
+      expectedVersion: skuDraft.version,
+      name: 'Graded Jacket II',
+      wholesalePrice: skuDraft.wholesalePrice,
+      minimumOrderQuantity: skuDraft.minimumOrderQuantity,
+      availableQuantity: skuDraft.availableQuantity,
+    });
+    const publishedSku = await catalog.publishSku('sku-publish', 'product-owner', skuDraft.sku, { expectedVersion: revisedSku.version });
     await assert.rejects(() => measurements.publishMeasurementChart('measurement-stale-publish', 'product-owner', created.sku, { expectedVersion: created.version }), { code: 'MEASUREMENT_SKU_SNAPSHOT_STALE' });
     const updateInput = chartInput(created.sku, { notes: 'Rebased after SKU publication', points: [{ ...initial.points[0], measurements: [{ sizeCode: 'S', value: 49 }, { sizeCode: 'M', value: 52.25 }, { sizeCode: 'L', value: 55.5 }] }, initial.points[1]] });
     const updated = await measurements.updateMeasurementChart('measurement-update', 'product-owner', created.sku, { expectedVersion: created.version, ...editable(updateInput) });

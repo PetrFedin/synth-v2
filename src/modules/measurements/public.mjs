@@ -70,7 +70,17 @@ export function publishMeasurementChart(chart, { catalogSku, publishedAt }) {
   invariant(chart?.status === 'draft', 'MEASUREMENT_NOT_DRAFT', 'Only a draft measurement chart can be published');
   invariant(catalogSku?.sku === chart.sku && catalogSku.brandId === chart.brandId, 'MEASUREMENT_SKU_MISMATCH', 'Measurement chart SKU context is invalid');
   invariant(catalogSku.status === 'published', 'MEASUREMENT_SKU_NOT_PUBLISHED', 'SKU must be published before measurement chart publication', { sku: chart.sku });
-  invariant(Number.isInteger(catalogSku.version) && chart.skuVersion === catalogSku.version, 'MEASUREMENT_SKU_SNAPSHOT_STALE', 'Measurement chart SKU snapshot is stale', {
+  // A chart drafted against the SKU and then published after it could never satisfy an exact
+  // version match: publishing the SKU bumps its version, so the snapshot taken while the SKU was
+  // still a draft is one behind by construction, and the two rules above and below could not both
+  // be met. Publication is not a change of definition — publishCatalogSku alters only status,
+  // version and publishedAt — and a published SKU can never be versioned again: updateDraftCatalogSku
+  // and publishCatalogSku are the only transitions that bump the version and both require a draft,
+  // while reserve/release leave it untouched. On a published SKU, therefore, a snapshot exactly one
+  // version behind can only be the publication bump, and the measurements still describe the same
+  // article. Anything further behind is a real stale snapshot and is still refused.
+  const publicationBump = chart.skuVersion === catalogSku.version - 1;
+  invariant(Number.isInteger(catalogSku.version) && (chart.skuVersion === catalogSku.version || publicationBump), 'MEASUREMENT_SKU_SNAPSHOT_STALE', 'Measurement chart SKU snapshot is stale', {
     sku: chart.sku,
     expectedVersion: chart.skuVersion,
     actualVersion: catalogSku.version,

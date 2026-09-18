@@ -283,13 +283,19 @@
   function patchViewResolvers(){
     if(global.SynthaOmnidataV13ResolversPatched)return;
     global.SynthaOmnidataV13ResolversPatched=true;
+    // These resolvers are installed on the first render, so they are the last word on what the
+    // breadcrumb and the page header call a view. The sidebar carries a bilingual name for every
+    // reachable view and its group; ask it first, so one navigation group cannot be named
+    // 'PLM / COSTING' here, 'PLM / Sourcing' there and 'ОПТОВАЯ ТОРГОВЛЯ' somewhere else. The maps
+    // below stay as the fallback for views the navigation does not list.
+    const navMeta=(view)=>global.SynthaOmnidataV7?.viewMeta?.(view)||null;
     if(typeof viewTitle==='function'){
       const previous=viewTitle;
-      viewTitle=function omnidataV13Title(view){return VIEW_TITLES[view]?localPair(VIEW_TITLES[view]):previous(view)};
+      viewTitle=function omnidataV13Title(view){return navMeta(view)?.title||(VIEW_TITLES[view]?localPair(VIEW_TITLES[view]):previous(view))};
     }
     if(typeof viewSectionName==='function'){
       const previous=viewSectionName;
-      viewSectionName=function omnidataV13Section(view){return VIEW_SECTIONS[view]?localPair(VIEW_SECTIONS[view]):previous(view)};
+      viewSectionName=function omnidataV13Section(view){return navMeta(view)?.section||(VIEW_SECTIONS[view]?localPair(VIEW_SECTIONS[view]):previous(view))};
     }
   }
   function ensureTooltip(){

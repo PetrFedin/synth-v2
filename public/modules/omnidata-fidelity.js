@@ -168,10 +168,16 @@ function odFidelityInspectors() {
     if (head && title) {
       const main = el('div', { className: 'od-inspector-head-main' });
       // Hard-truncating to 12 characters produced labels like "\u0412\u042b\u0411\u0415\u0420\u0418\u0422\u0415 \u0417\u0410\u041f"; the full text is kept and CSS decides where it ends.
-      const code = el('span', { className: 'od-inspector-code', rawText: String(heading).toUpperCase() });
-      code.title = String(heading);
-      const kicker = title.querySelector('.od-inspector-kicker');
-      kicker?.after(code);
+      // The chip is the object's code. When the inspector has no code of its own it repeats the
+      // heading in capitals directly above the heading, which reads as a rendering accident; the
+      // subtitle is used when it looks like a code, and otherwise nothing is added.
+      const looksLikeCode = subtitle && subtitle.length <= 48 && !/\s{2,}/.test(subtitle) && /[A-Z0-9]/.test(subtitle);
+      if (looksLikeCode) {
+        const code = el('span', { className: 'od-inspector-code', rawText: subtitle.toUpperCase() });
+        code.title = subtitle;
+        const kicker = title.querySelector('.od-inspector-kicker');
+        kicker?.after(code);
+      }
       main.append(title);
       const badge = head.querySelector('.badge');
       if (badge) {
@@ -181,10 +187,14 @@ function odFidelityInspectors() {
       }
       head.append(main);
     }
-    const tabs = inspector.querySelector(':scope > .od-inspector-tabs');
-    const description = odFidelityDescription(subtitle);
-    if (tabs) tabs.before(description);
-    else head?.after(description);
+    // The subtitle is already on screen, under the heading. Repeating it under a "Description"
+    // caption made every inspector state the same string twice, and called a code a description.
+    if (!subtitle) {
+      const tabs = inspector.querySelector(':scope > .od-inspector-tabs');
+      const description = odFidelityDescription('');
+      if (tabs) tabs.before(description);
+      else head?.after(description);
+    }
   });
 }
 

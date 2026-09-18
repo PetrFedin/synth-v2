@@ -3,13 +3,17 @@ import { withPostgresTransaction } from './postgres-transaction.mjs';
 
 const LOCK_NAME = 'syntha-v2-retention-maintenance';
 
-export function createPostgresMaintenanceStore({ pool } = {}) {
+export function createPostgresMaintenanceStore({ pool, statementTimeoutMs = 0, lockTimeoutMs = 0 } = {}) {
   invariant(pool && typeof pool.connect === 'function', 'POSTGRES_POOL_REQUIRED', 'PostgreSQL pool is required');
+  invariant(Number.isSafeInteger(statementTimeoutMs) && statementTimeoutMs >= 0, 'MAINTENANCE_STATEMENT_TIMEOUT_INVALID', 'Maintenance statement timeout must be a non-negative integer');
+  invariant(Number.isSafeInteger(lockTimeoutMs) && lockTimeoutMs >= 0, 'MAINTENANCE_LOCK_TIMEOUT_INVALID', 'Maintenance lock timeout must be a non-negative integer');
 
   return Object.freeze({
     async cleanup(cutoffs) {
       validateCutoffs(cutoffs);
       return withPostgresTransaction(pool, async (client) => {
+        await client.query(`SET LOCAL statement_timeout = ${statementTimeoutMs}`);
+        await client.query(`SET LOCAL lock_timeout = ${lockTimeoutMs}`);
         const lock = await client.query(
           'SELECT pg_try_advisory_xact_lock(hashtextextended($1, 0)) AS acquired',
           [LOCK_NAME],

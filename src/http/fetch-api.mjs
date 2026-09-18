@@ -1,100 +1,46 @@
-import { randomUUID } from 'node:crypto';
-import { invariant } from '../core/errors.mjs';
-import { normalizeHttpError } from './api.mjs';
-import { assertBodyContract, assertQueryContract, bodyContract } from './request-contract.mjs';
-import { createWholesaleRoutes, matchWholesaleRoute } from './all-routes.mjs';
-import {
-  apiResponseHeaders,
-  decodeJsonObject,
-  queryParameters,
-  requireIdempotencyKey,
-  resolveRequestId,
-  validateContentLength,
-} from './transport-contract.mjs';
-import { wholesaleV2ExtendedOpenApi } from './v2-openapi.mjs';
+import { assertBodyWithinLimit, createWholesaleRequestPipeline } from './pipeline.mjs';
+import { apiResponseHeaders } from './transport-contract.mjs';
 
-const EMPTY_BODY = bodyContract();
-const LOGIN_BODY = bodyContract(['email', 'password']);
-
-export function createWholesaleFetchHandler({ authenticate, auth, readiness, maxBodyBytes = 256 * 1024, nextRequestId = randomUUID, ...services } = {}) {
-  invariant(typeof authenticate === 'function', 'HTTP_AUTHENTICATOR_REQUIRED', 'HTTP authenticator is required');
-  invariant(Number.isSafeInteger(maxBodyBytes) && maxBodyBytes > 0, 'HTTP_BODY_LIMIT_INVALID', 'HTTP body limit must be a positive integer');
-  invariant(typeof nextRequestId === 'function', 'HTTP_REQUEST_ID_FACTORY_REQUIRED', 'Request id factory is required');
-  const routes = createWholesaleRoutes(services);
+export function createWholesaleFetchHandler(options = {}) {
+  const runRequest = createWholesaleRequestPipeline(options);
   return async function handleWholesaleFetchRequest(request) {
-    const requestId = resolveRequestId(request.headers.get('x-request-id'), nextRequestId);
-    try {
-      const url = new URL(request.url);
-      if (request.method === 'GET' && url.pathname === '/health') {
-        assertEmptyQuery(url);
-        return json(200, { status: 'ok', service: 'syntha-wholesale-v2', requestId }, requestId);
-      }
-      if (request.method === 'GET' && url.pathname === '/ready') {
-        assertEmptyQuery(url);
-        const result = readiness?.check ? await readiness.check() : readinessUnavailable();
-        return json(result.status === 'ready' ? 200 : 503, { ...result, requestId }, requestId);
-      }
-      if (request.method === 'GET' && url.pathname === '/openapi.json') {
-        assertEmptyQuery(url);
-        return json(200, wholesaleV2ExtendedOpenApi, requestId);
-      }
-      if (request.method === 'POST' && url.pathname === '/v2/auth/login') {
-        assertEmptyQuery(url);
-        invariant(auth?.login, 'AUTH_SERVICE_REQUIRED', 'Authentication service is required');
-        const body = assertBodyContract(await readJson(request, maxBodyBytes), LOGIN_BODY);
-        const data = await auth.login(body);
-        return json(200, { data, requestId }, requestId);
-      }
-      invariant(url.pathname.startsWith('/v2/'), 'HTTP_ROUTE_NOT_FOUND', 'Route not found', { method: request.method, path: url.pathname });
-      const identity = await authenticateBearer(request, authenticate);
-      if (request.method === 'GET' && url.pathname === '/v2/auth/me') {
-        assertEmptyQuery(url);
-        return json(200, { data: publicIdentity(identity.actor), requestId }, requestId);
-      }
-      if (request.method === 'POST' && url.pathname === '/v2/auth/logout') {
-        assertEmptyQuery(url);
-        invariant(auth?.logout, 'AUTH_SERVICE_REQUIRED', 'Authentication service is required');
-        assertBodyContract(await readJson(request, maxBodyBytes), EMPTY_BODY);
-        return json(200, { data: { revoked: await auth.logout(identity.token) }, requestId }, requestId);
-      }
-      const route = matchWholesaleRoute(routes, request.method, url.pathname);
-      invariant(route, 'HTTP_ROUTE_NOT_FOUND', 'Route not found', { method: request.method, path: url.pathname });
-      const commandId = route.mutation ? requireIdempotencyKey(request.headers.get('idempotency-key')) : undefined;
-      const body = route.mutation ? await readJson(request, maxBodyBytes) : {};
-      const data = await route.execute({ actorId: identity.actor.actorId, commandId, body, params: route.params, query: queryParameters(url) });
-      return json(200, { data, requestId }, requestId);
-    } catch (error) {
-      const normalized = normalizeHttpError(error);
-      const headers = normalized.retryAfterSeconds ? { 'retry-after': String(normalized.retryAfterSeconds) } : undefined;
-      return json(normalized.status, { error: { code: normalized.code, message: normalized.message, details: normalized.details }, requestId }, requestId, headers);
-    }
+    const { status, payload, requestId, headers } = await runRequest(fetchRequestView(request));
+    return Response.json(payload, { status, headers: apiResponseHeaders(requestId, headers ?? {}) });
   };
 }
 
-async function authenticateBearer(request, authenticate) {
-  const authorization = request.headers.get('authorization');
-  invariant(authorization?.startsWith('Bearer '), 'HTTP_AUTH_REQUIRED', 'Bearer authentication is required');
-  const token = authorization.slice(7).trim();
-  invariant(token, 'HTTP_AUTH_REQUIRED', 'Bearer authentication is required');
-  const actor = await authenticate(token);
-  invariant(actor?.actorId, 'HTTP_AUTH_INVALID', 'Authentication token is invalid');
-  return Object.freeze({ token, actor });
+function fetchRequestView(request) {
+  return {
+    method: request.method,
+    url: new URL(request.url),
+    header: (name) => request.headers.get(name) ?? undefined,
+    // Streamed for the same reason as the node adapter: reading the whole body first and checking
+    // its size afterwards would let a request without content-length buffer past the limit.
+    async readBody(limit) {
+      if (!request.body) {
+        const buffered = new Uint8Array(await request.arrayBuffer());
+        assertBodyWithinLimit(buffered.byteLength, limit);
+        return buffered;
+      }
+      const reader = request.body.getReader();
+      const chunks = [];
+      let size = 0;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        size += value.byteLength;
+        try {
+          assertBodyWithinLimit(size, limit);
+        } catch (error) {
+          await reader.cancel().catch(() => undefined);
+          throw error;
+        }
+        chunks.push(value);
+      }
+      const body = new Uint8Array(size);
+      let offset = 0;
+      for (const chunk of chunks) { body.set(chunk, offset); offset += chunk.byteLength; }
+      return body;
+    },
+  };
 }
-
-async function readJson(request, limit) {
-  validateContentLength(request.headers.get('content-length'), limit);
-  const buffer = await request.arrayBuffer();
-  invariant(buffer.byteLength <= limit, 'HTTP_BODY_TOO_LARGE', 'Request body exceeds configured limit', { maxBodyBytes: limit });
-  return decodeJsonObject(new Uint8Array(buffer), request.headers.get('content-type'));
-}
-
-function assertEmptyQuery(url) { return assertQueryContract(queryParameters(url), []); }
-function readinessUnavailable() {
-  return Object.freeze({
-    status: 'not-ready', service: 'syntha-wholesale-v2', checkedAt: new Date().toISOString(), reason: 'readiness-not-configured',
-    database: Object.freeze({ status: 'unknown' }),
-    migrations: Object.freeze({ status: 'unknown', totalCount: 0, appliedCount: 0, pending: Object.freeze([]), mismatched: Object.freeze([]), unknown: Object.freeze([]) }),
-  });
-}
-function publicIdentity(actor) { return Object.freeze({ actorId: actor.actorId, email: actor.email ?? null, displayName: actor.displayName ?? '' }); }
-function json(status, payload, requestId, extraHeaders = {}) { return Response.json(payload, { status, headers: apiResponseHeaders(requestId, extraHeaders) }); }

@@ -19,4 +19,7 @@ function render(){ensure();const visible=ui.items.filter(v=>(ui.status==='all'||
 const previousRenderView=renderView;renderView=(...args)=>state.view==='production-orders'?render():previousRenderView(...args);
 const previousRenderNavigation=renderNavigation;renderNavigation=(...args)=>{const nav=previousRenderNavigation(...args);if(!nav.querySelector('[data-production-orders-nav]')){const button=h('button',{type:'button','data-production-orders-nav':'true',text:t('Производственные заказы','Production Orders'),onclick:()=>{state.view='production-orders';renderApp()}});nav.append(button)}return nav};
 global.SynthaProductionOrdersWorkspace=Object.freeze({...ui,fetchAll,load,render});
+// The V7 nav shim runs before this file, so it could not see the global above; the section
+// stayed marked as planned and could not be opened. Claim the entry now that it exists.
+global.SynthaOmnidataV7Nav?.activate('Production orders', 'production-orders', '\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434\u0441\u0442\u0432\u0435\u043d\u043d\u044b\u0435 \u0437\u0430\u043a\u0430\u0437\u044b', 'Production orders');
 })(window);

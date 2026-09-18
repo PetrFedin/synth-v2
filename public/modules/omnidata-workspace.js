@@ -26,17 +26,29 @@ function odSaveHiddenColumns() {
 }
 odLoadHiddenColumns();
 
-function odHiddenColumns(scope) { return new Set(OD_UI.hiddenColumns[scope] || []); }
+// A column is remembered by its key, not by its heading: a heading is translated, and keying the
+// choice on it lost every hidden column the moment the reader switched language.
+function odColumnKey(column) { return column.key || column.label; }
+// Sections that carry more columns than anyone needs at once open with the secondary ones switched
+// off. The reader turns them on in the column chooser, and that choice then wins.
+const OD_COLUMN_DEFAULT_HIDDEN = Object.freeze({
+  styles: Object.freeze(['gender', 'ageGroup', 'season']),
+});
+function odHiddenColumns(scope) {
+  const stored = OD_UI.hiddenColumns[scope];
+  if (stored) return new Set(stored);
+  return new Set(OD_COLUMN_DEFAULT_HIDDEN[scope] || []);
+}
 function odVisibleColumns(scope, columns) {
   const hidden = odHiddenColumns(scope);
-  const visible = columns.filter(column => !hidden.has(column.label));
+  const visible = columns.filter(column => !hidden.has(odColumnKey(column)));
   // Never leave a registry with nothing to read: the first column always survives.
   return visible.length ? visible : columns.slice(0, 1);
 }
-function odToggleColumn(scope, label, columns) {
+function odToggleColumn(scope, key, columns) {
   const hidden = odHiddenColumns(scope);
-  if (hidden.has(label)) hidden.delete(label);
-  else if (odVisibleColumns(scope, columns).length > 1) hidden.add(label);
+  if (hidden.has(key)) hidden.delete(key);
+  else if (odVisibleColumns(scope, columns).length > 1) hidden.add(key);
   else return false;
   OD_UI.hiddenColumns[scope] = [...hidden];
   odSaveHiddenColumns();
@@ -185,13 +197,13 @@ function odColumnPanel(scope) {
   columns.filter(column => String(column.label || '').trim()).forEach(column => {
     const row = el('label', { className: 'od-filter-option od-column-option' });
     const box = el('input', { type: 'checkbox' });
-    box.checked = !hidden.has(column.label);
+    box.checked = !hidden.has(odColumnKey(column));
     // The last remaining column cannot be switched off, so the control says so instead of failing.
     if (box.checked && visibleCount <= 1) {
       box.disabled = true;
       row.title = odText('\u041e\u0434\u043d\u0430 \u043a\u043e\u043b\u043e\u043d\u043a\u0430 \u0434\u043e\u043b\u0436\u043d\u0430 \u043e\u0441\u0442\u0430\u0442\u044c\u0441\u044f', 'One column must remain');
     }
-    box.addEventListener('change', () => { odToggleColumn(scope, column.label, columns); renderApp(); });
+    box.addEventListener('change', () => { odToggleColumn(scope, odColumnKey(column), columns); renderApp(); });
     row.append(box, el('span', { className: 'od-filter-option-label', rawText: column.label }));
     body.append(row);
   });
@@ -199,7 +211,9 @@ function odColumnPanel(scope) {
 
   const footer = el('footer', { className: 'od-filter-panel-foot' });
   const all = el('button', { className: 'button', type: 'button', rawText: odText('\u041f\u043e\u043a\u0430\u0437\u0430\u0442\u044c \u0432\u0441\u0435', 'Show all') });
-  all.addEventListener('click', () => { delete OD_UI.hiddenColumns[scope]; odSaveHiddenColumns(); renderApp(); });
+  // An explicit empty list, not a deleted entry: deleting it would fall back to the section's
+  // default hidden columns, which is the opposite of "show all".
+  all.addEventListener('click', () => { OD_UI.hiddenColumns[scope] = []; odSaveHiddenColumns(); renderApp(); });
   const done = el('button', { className: 'button primary', type: 'button', rawText: odText('\u0413\u043e\u0442\u043e\u0432\u043e', 'Done') });
   done.addEventListener('click', () => { OD_UI.columnPanel = null; renderApp(); });
   footer.append(all, done);
@@ -210,7 +224,7 @@ function odColumnPanel(scope) {
 function odHiddenColumnCount(scope) {
   const columns = OD_UI.registry?.[scope]?.columns || [];
   const hidden = odHiddenColumns(scope);
-  return columns.filter(column => hidden.has(column.label)).length;
+  return columns.filter(column => hidden.has(odColumnKey(column))).length;
 }
 
 // The filter panel. Omnidata lists the attribute names and asks you to pick one; this lists each

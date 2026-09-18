@@ -310,4 +310,7 @@
     return navigation;
   };
   global.SynthaProductionExecutionsWorkspace = Object.freeze({ fetchAll, load, render: renderProductionExecutions });
+// The V7 nav shim runs before this file, so it could not see the global above; the section
+// stayed marked as planned and could not be opened. Claim the entry now that it exists.
+global.SynthaOmnidataV7Nav?.activate('Production execution', 'production-executions', '\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434\u0441\u0442\u0432\u0435\u043d\u043d\u044b\u0439 \u043a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u044c', 'Production execution');
 })(window);

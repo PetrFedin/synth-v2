@@ -282,4 +282,7 @@
   }
 
   global.SynthaFinalQualityWorkspace = Object.freeze({ fetchAll, load, render: renderFinalQuality, openForExecution });
+// The V7 nav shim runs before this file, so it could not see the global above; the section
+// stayed marked as planned and could not be opened. Claim the entry now that it exists.
+global.SynthaOmnidataV7Nav?.activate('Quality', 'final-quality', '\u041a\u0430\u0447\u0435\u0441\u0442\u0432\u043e', 'Quality');
 })(window);

@@ -37,6 +37,20 @@
     return statusBadge(item.product.readinessStatus);
   }
 
+  // Governed product dimensions. They are written as MDM-referenced attribute values on the style
+  // version and projected by product_master_workspace with both names resolved, so the section reads
+  // them without knowing anything about the dictionary they came from.
+  function dimension(product, attributeCode) {
+    const value = product?.dimensions?.[attributeCode];
+    if (!value) return '';
+    const name = I18N.getLocale?.() === 'en' ? value.nameEn : value.nameRu;
+    return name || value.code || '';
+  }
+  function gender(product) {
+    const name = I18N.getLocale?.() === 'en' ? product.genderNameEn : product.genderNameRu;
+    return name || product.genderCode || '';
+  }
+
   function projectionBadge(item) {
     return item.projected ? statusBadge('published') : statusBadge('not_published');
   }
@@ -60,6 +74,11 @@
             { label: text('Версия', 'Version'), value: product.styleVersionNo ? `v${product.styleVersionNo}` : '—', title: product.styleVersionId || '' },
             { label: text('Цветовые решения', 'Colorways'), value: item.colorwayCount },
             { label: text('Товарные SKU', 'Product SKU'), value: item.productSkuCount },
+            { label: text('Пол', 'Gender'), value: gender(product) || '—' },
+            { label: text('Возрастная группа', 'Age group'), value: dimension(product, 'common.age_group') || '—' },
+            { label: text('Посадка', 'Fit'), value: dimension(product, 'apparel.fit') || '—' },
+            { label: text('Новизна', 'Novelty'), value: dimension(product, 'common.novelty') || '—' },
+            { label: text('Сезон', 'Season'), value: dimension(product, 'common.operating_season') || '—' },
           ],
         },
         {
@@ -105,15 +124,20 @@
       scope: 'od-styles', filterScope: 'styles', rows, rowKey: (item) => item.product.id,
       statusAccessor: (item) => item.product.lifecycleStatus,
       columns: [
-        { label: text('Код модели', 'Style code'), value: (item) => item.product.styleCode },
-        { label: text('Название', 'Title'), value: (item) => title(item.product) },
-        { label: text('Версия', 'Version'), value: (item) => `v${item.product.styleVersionNo || '—'}` },
-        { label: text('Статус', 'Lifecycle'), render: (item) => statusBadge(item.product.lifecycleStatus) },
-        { label: text('Цвета', 'Colorways'), value: (item) => item.colorwayCount },
-        { label: text('Товарные SKU', 'Product SKU'), value: (item) => item.productSkuCount },
-        { label: text('Готовность', 'Readiness'), render: readiness },
-        { label: text('Проверка', 'Gate'), render: readinessBadge },
-        { label: text('Проекция', 'Projection'), render: projectionBadge },
+        { key: 'styleCode', label: text('Код модели', 'Style code'), value: (item) => item.product.styleCode },
+        { key: 'title', label: text('Название', 'Title'), value: (item) => title(item.product) },
+        { key: 'version', label: text('Версия', 'Version'), value: (item) => `v${item.product.styleVersionNo || '—'}` },
+        { key: 'lifecycle', label: text('Статус', 'Lifecycle'), render: (item) => statusBadge(item.product.lifecycleStatus) },
+        { key: 'fit', label: text('Посадка', 'Fit'), value: (item) => dimension(item.product, 'apparel.fit') || '—' },
+        { key: 'novelty', label: text('Новизна', 'Novelty'), value: (item) => dimension(item.product, 'common.novelty') || '—' },
+        { key: 'gender', label: text('Пол', 'Gender'), value: (item) => gender(item.product) || '—' },
+        { key: 'ageGroup', label: text('Возрастная группа', 'Age group'), value: (item) => dimension(item.product, 'common.age_group') || '—' },
+        { key: 'season', label: text('Сезон', 'Season'), value: (item) => dimension(item.product, 'common.operating_season') || '—' },
+        { key: 'colorways', label: text('Цвета', 'Colorways'), value: (item) => item.colorwayCount },
+        { key: 'productSkus', label: text('Товарные SKU', 'Product SKU'), value: (item) => item.productSkuCount },
+        { key: 'readiness', label: text('Готовность', 'Readiness'), render: readiness },
+        { key: 'gate', label: text('Проверка', 'Gate'), render: readinessBadge },
+        { key: 'projection', label: text('Проекция', 'Projection'), render: projectionBadge },
       ],
       inspector,
     });

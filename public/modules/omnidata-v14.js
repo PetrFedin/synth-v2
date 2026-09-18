@@ -243,5 +243,17 @@
   renderApp=(...args)=>{const result=previousRenderApp(...args);apply();return result};
   global.addEventListener('syntha:locale-changed',scheduleApply);
   installObserver();
+  // Four PLM modules each replaced viewSectionName with a string of their own — 'PLM / COSTING',
+  // 'PLM / Sourcing', 'PLM / FIT & GRADING', 'PLM / Planning' — and the linesheets layer writes a
+  // fifth directly into the breadcrumb. The result was one navigation group named several ways, in
+  // two languages, and five sections whose path read 'Рабочий стол' because the original eight-item
+  // NAV table has no entry for them. The sidebar already carries a bilingual name for every
+  // reachable view and its group; make that the authority. This layer loads after every module that
+  // patches these two, and each existing patch is preserved as the fallback.
+  const previousViewSectionName=typeof viewSectionName==='function'?viewSectionName:null;
+  const previousViewTitle=typeof viewTitle==='function'?viewTitle:null;
+  if(previousViewSectionName)viewSectionName=(view)=>global.SynthaOmnidataV7?.viewMeta?.(view)?.section||previousViewSectionName(view);
+  if(previousViewTitle)viewTitle=(view)=>global.SynthaOmnidataV7?.viewMeta?.(view)?.title||previousViewTitle(view);
+
   global.SynthaOmnidataV14=Object.freeze({build:BUILD,apply,buildUnifiedHeader,auditInterface,diagnosticAudit});
 })(window);

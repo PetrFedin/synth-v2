@@ -140,6 +140,10 @@ function odV7Navigation() {
         title: label,
         ariaPressed: active ? 'true' : 'false',
       });
+      // The rendered sidebar is the one place that knows every reachable view, whichever module
+      // contributed it. Naming the view on the button lets the breadcrumb and the page header read
+      // their labels from the navigation the user is actually looking at.
+      if (item.view) button.dataset.view = item.view;
       button.append(icon(item.icon || 'catalog'), el('span', { className: 'nav-label', rawText: label }));
       if (item.planned) button.append(el('span', { className: 'nav-plan-dot', ariaHidden: 'true' }));
       button.addEventListener('click', () => {
@@ -294,6 +298,31 @@ function applyOmnidataV7() {
 }
 
 const odV7RenderApp = renderApp;
+// The sidebar this layer installs carries every reachable view; the breadcrumb and the page title
+// still resolve names from the original eight-item NAV table, which is why five sections showed
+// "Рабочий стол" as their path. Publish the navigation's own names so those two can agree with it.
+function odV7ViewMeta(view) {
+  if (!view) return null;
+  const node = document.querySelector(`.sidebar .nav-item[data-view="${String(view).replace(/["\\]/g, '')}"]`);
+  if (node) {
+    const title = (node.querySelector('.nav-label')?.textContent || '').trim();
+    const section = (node.closest('.od-v7-nav-group')?.querySelector('.nav-group-label')?.textContent || '').trim();
+    if (title) return Object.freeze({ title, section: section || null, planned: node.classList.contains('planned') });
+  }
+  for (const group of OD_V7_GROUPS) {
+    for (const item of group.items) {
+      if (item.view !== view) continue;
+      return Object.freeze({
+        title: odV7Text(item),
+        section: group.label ? odV7Text(group.label) : null,
+        planned: Boolean(item.planned),
+      });
+    }
+  }
+  return null;
+}
+OD_V7.viewMeta = odV7ViewMeta;
+
 renderApp = (...args) => {
   const result = odV7RenderApp(...args);
   applyOmnidataV7();

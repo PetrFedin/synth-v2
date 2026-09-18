@@ -934,6 +934,24 @@ part in the contract stylesheet — never by a module namespace, which
 | Section count | `card` | A soft count pill beside a section title, not a card nested in a card |
 | Help button | `button` | A topbar control on the same baseline as the bell, not the full-height topbar tab the v7 layer sized it to |
 
+Both classifiers enforce this. `omnidata-v14-components.js` refuses a container
+role to a descendant that already has it, and sweeps the tree once more after the
+last pass because assignment order across passes is not guaranteed; the role
+system does the same for `button`, `filterbar` and `inspector`. Without both, one
+classifier re-creates what the other refused: an inspector panel was drawn seven
+deep, each `.od-inspector-*` child painted as another panel with its own border,
+white ground, 12px padding and scrollbar.
+
+The breadcrumb and the page header take a view's name from the rendered sidebar
+(`SynthaOmnidataV7.viewMeta`), which is the one place that knows every reachable
+view and its group, whichever module contributed it. Before that, four PLM modules
+each replaced `viewSectionName` with a string of their own and the linesheets layer
+wrote a fifth straight into the breadcrumb, so one group was named several ways in
+two languages, and five sections showed `Рабочий стол` as their path. A view that
+opens through a bridge rather than a nav entry must still name itself on the button
+(`dataset.view`), or it falls back the same way. A breadcrumb step that repeats the
+next one is dropped.
+
 A nested role is not automatically wrong — a card list holds cards, a table wrap
 holds a table, a toast host holds a notice. What is wrong is an element that
 carries a role because of where it sits and then paints that role's chrome a

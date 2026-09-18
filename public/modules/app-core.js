@@ -414,7 +414,7 @@ function filterCurrentView(value) {
     rows.forEach(row => {
       const matches = !query || row.textContent.toLocaleLowerCase().includes(query);
       row.hidden = !matches;
-      row.style.display = matches ? '' : 'none';
+      row.classList.toggle('od-row-hidden', !matches);
       if (matches) visible += 1;
     });
     const wrap = table.closest('.od-table-wrap');

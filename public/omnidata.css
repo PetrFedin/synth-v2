@@ -366,3 +366,6 @@
   .od-timeline-line::before { left: 6px; }
   .od-timeline-line::after { left: 2px; }
 }
+/* Rows the topbar search filtered out. A class, not an inline style: the loaded UI runtime is not
+   allowed to write element.style, and a table row needs display:none to actually disappear. */
+.od-table tbody tr.od-row-hidden { display: none; }

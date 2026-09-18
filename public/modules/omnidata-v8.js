@@ -162,7 +162,15 @@
     }
     const breadcrumb = document.querySelector('.breadcrumb');
     const current = breadcrumb?.querySelector('strong');
-    if (current) current.textContent = contextText(1);
+    // This layer's context table predates most of the sidebar, and for a view it does not list it
+    // returns the dashboard's name — which is how Поставщики, Запросы цен, Котировки, Производство
+    // and Технические пакеты all showed "Рабочий стол" as the page you were on. The rendered
+    // navigation knows every reachable view; ask it first and keep the table as the fallback.
+    const navTitle = window.SynthaOmnidataV7?.viewMeta?.(state.view)?.title || '';
+    if (current) {
+      const next = navTitle || contextText(1);
+      if (current.textContent !== next) current.textContent = next;
+    }
   }
 
   function applyLanguageControl() {

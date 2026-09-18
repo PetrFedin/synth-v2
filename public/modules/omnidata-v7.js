@@ -19,7 +19,7 @@ const OD_V7_GROUPS = Object.freeze([
       { icon: 'selections', ru: '\u0421\u043f\u0435\u0446\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u0438 \u0438 \u0441\u0435\u0431\u0435\u0441\u0442\u043e\u0438\u043c\u043e\u0441\u0442\u044c', en: 'BOM and costing', planned: true },
       { icon: 'selections', ru: '\u0422\u0430\u0431\u043b\u0438\u0446\u044b \u0438\u0437\u043c\u0435\u0440\u0435\u043d\u0438\u0439', en: 'Measurement charts', planned: true },
       { icon: 'catalog', ru: '\u041e\u0431\u0440\u0430\u0437\u0446\u044b', en: 'Samples', planned: true },
-      { icon: 'orders', ru: '\u0422\u0435\u0445\u043d\u0438\u0447\u0435\u0441\u043a\u0438\u0435 \u043f\u0430\u043a\u0435\u0442\u044b', en: 'Tech packs', planned: true },
+      { view: 'tech-packs', icon: 'orders', ru: '\u0422\u0435\u0445\u043d\u0438\u0447\u0435\u0441\u043a\u0438\u0435 \u043f\u0430\u043a\u0435\u0442\u044b', en: 'Tech packs', planned: true },
     ],
   },
   {

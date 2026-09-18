@@ -403,5 +403,46 @@ body.omnidata-design-system-v1 .topbar .breadcrumb,
 body.omnidata-role-system .topbar .breadcrumb{flex-wrap:nowrap!important;align-items:center!important;min-width:0!important;overflow:hidden!important}
 body.omnidata-design-system-v1 .topbar .breadcrumb > *,
 body.omnidata-role-system .topbar .breadcrumb > *{flex:0 0 auto!important}
+/* The page you are on is the one crumb that must survive. Let the group name give
+   up its width first — it ellipsizes, and the sidebar still shows it in full —
+   and keep a floor under the page name so it can never be squeezed to nothing. */
+body.omnidata-design-system-v1 .topbar .breadcrumb > .breadcrumb-muted:not(:first-of-type),
+body.omnidata-role-system .topbar .breadcrumb > .breadcrumb-muted:not(:first-of-type){flex:0 1 auto!important;min-width:2.5rem!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important}
 body.omnidata-design-system-v1 .topbar .breadcrumb > strong,
-body.omnidata-role-system .topbar .breadcrumb > strong{flex:0 1 auto!important;min-width:0!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important}
+body.omnidata-role-system .topbar .breadcrumb > strong{flex:1 1 auto!important;min-width:6rem!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important}
+/* The breadcrumb column was starved to 212px inside a 1208px header because the
+   trailing column was unbounded. Give the path room and bound the tail. */
+body.omnidata-design-system-v1 .topbar,
+body.omnidata-role-system .topbar{grid-template-columns:minmax(320px,1fr) minmax(200px,340px) minmax(220px,max-content)!important}
+
+/* The v11 layer painted the system footer dark and set a translucent white text
+   colour to match. A later layer repainted the ground almost white but left the
+   colour alone, so "Время сервера" and the build id were white on white — a
+   contrast ratio of 1.00:1, literally invisible. Restore a readable colour and a
+   legible size on the ground the footer actually has now. */
+body.omnidata-design-system-v1 .od-v7-system-footer,
+body.omnidata-role-system .od-v7-system-footer{color:var(--ods-color-text-soft,#56606a)!important;font-size:11px!important}
+body.omnidata-design-system-v1 .od-v7-system-footer :is(span,strong,small),
+body.omnidata-role-system .od-v7-system-footer :is(span,strong,small){color:inherit!important;font-size:11px!important}
+body.omnidata-design-system-v1 .od-v7-system-footer strong,
+body.omnidata-role-system .od-v7-system-footer strong{color:var(--ods-color-text,#1f242b)!important}
+
+/* A table cell must keep table layout. The empty-state message is a <td colspan="7">;
+   giving it display:grid voids the colspan, so "Поставщики не найдены." was squeezed
+   into the first column of a seven-column table and wrapped inside its own box. */
+body.omnidata-design-system-v1 :is(td,th):is([data-ods-part="empty"],[data-od14-unified-part="empty"]),
+body.omnidata-role-system :is(td,th):is([data-ods-part="empty"],[data-od14-unified-part="empty"]){display:table-cell!important;border:0!important;border-radius:0!important;background:transparent!important;text-align:center!important}
+
+/* A card is a block that holds content. An inline label or a table cell classified as
+   one is a misclassification of the substring matcher, and painting it drew a second
+   bordered box inside the tile or row it labels. */
+body.omnidata-design-system-v1 :is(span,strong,em,b,i,small,label,td,th):is([data-ods-role="card"],[data-od14-unified-role="card"]),
+body.omnidata-role-system :is(span,strong,em,b,i,small,label,td,th):is([data-ods-role="card"],[data-od14-unified-role="card"]){border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;min-height:0!important}
+body.omnidata-design-system-v1 :is(span,strong,em,b,i,small,label):is([data-ods-role="card"],[data-od14-unified-role="card"]),
+body.omnidata-role-system :is(span,strong,em,b,i,small,label):is([data-ods-role="card"],[data-od14-unified-role="card"]){padding:0!important}
+
+/* A container with nothing in it is not a control. The linesheets header appends an
+   actions slot whether or not there are actions, and the role chrome turned the empty
+   slot into a 1160x16 hairline strip that reads as a broken toolbar. */
+body.omnidata-design-system-v1 :is([data-ods-role="card"],[data-od14-unified-role="card"],[data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):empty,
+body.omnidata-role-system :is([data-ods-role="card"],[data-od14-unified-role="card"],[data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):empty{min-height:0!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important}

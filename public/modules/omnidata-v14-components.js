@@ -129,8 +129,18 @@
     for(const role of NON_NESTING_ROLES)
       for(const node of roots(root,`[data-od14-component="${role}"]`))
         if(nestedInSameRole(node,role)){delete node.dataset.od14Component;delete node.dataset.od14RoleSource}
+    for(const role of BOX_ROLES)
+      for(const node of roots(root,`[data-od14-component="${role}"]`))
+        if(inlineCannotBeBox(node,role)){delete node.dataset.od14Component;delete node.dataset.od14RoleSource}
   }
-  function assignRole(node,role,source='heuristic'){if(!node?.dataset||!role)return false;if(nestedInSameRole(node,role))return false;const currentSource=node.dataset.od14RoleSource||'';if(node.dataset.od14Component&&priority(currentSource)>priority(source))return false;if(node.dataset.od14Component===role&&currentSource===source)return false;node.dataset.od14Component=role;node.dataset.od14RoleSource=source;return true}
+  // A container role paints a box: border, ground, padding, radius. An inline element is text —
+  // a label inside a tile, a caption inside a row — and can never be one of these boxes. The class
+  // matcher works by substring, so .ls9-metric-label was read as another metric and drawn as a
+  // second bordered tile inside the tile it labels, hanging 13px below its own parent's edge.
+  const BOX_ROLES=Object.freeze(new Set(['card','surface','metric','metrics','inspector','list','list-item','definition-grid','definition-item','table','table-wrap','master-detail','layout','entity','timeline','timeline-item','form','empty']));
+  const INLINE_TAGS=Object.freeze(new Set(['SPAN','STRONG','EM','B','I','SMALL','LABEL','ABBR','CODE','A','TIME','DT','DD']));
+  function inlineCannotBeBox(node,role){return BOX_ROLES.has(role)&&INLINE_TAGS.has(String(node?.tagName||''))}
+  function assignRole(node,role,source='heuristic'){if(!node?.dataset||!role)return false;if(nestedInSameRole(node,role))return false;if(inlineCannotBeBox(node,role))return false;const currentSource=node.dataset.od14RoleSource||'';if(node.dataset.od14Component&&priority(currentSource)>priority(source))return false;if(node.dataset.od14Component===role&&currentSource===source)return false;node.dataset.od14Component=role;node.dataset.od14RoleSource=source;return true}
   function setRole(root,selector,role){roots(root,selector).forEach((node)=>assignRole(node,role,'explicit'))}
   function classNameOf(node){return String(node?.className&&typeof node.className==='string'?node.className:'').toLowerCase()}
   function contains(node,selector){try{return Boolean(node?.querySelector?.(selector))}catch{return false}}

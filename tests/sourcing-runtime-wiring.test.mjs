@@ -34,7 +34,7 @@ test('HTTP composition exposes sourcing, Tech Pack routes and guarded-allocation
   const [routes, openapi, api] = await Promise.all([
     readFile(path.join(root, 'src/http/all-routes.mjs'), 'utf8'),
     readFile(path.join(root, 'src/http/v2-openapi.mjs'), 'utf8'),
-    readFile(path.join(root, 'src/http/api.mjs'), 'utf8'),
+    readFile(path.join(root, 'src/http/error-status.mjs'), 'utf8'),
   ]);
   assert.ok(routes.includes('createSourcingRoutes'));
   assert.ok(routes.includes('...createSourcingRoutes({ sourcing: services.sourcing })'));

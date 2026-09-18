@@ -16,6 +16,9 @@ var renderNavigation = function renderNavigationFallback() {
       button.disabled = false;
       button.classList?.remove('planned', 'is-planned');
       button.setAttribute?.('aria-label', typeof localText === 'function' ? localText('Открыть технические пакеты', 'Open Tech Packs') : 'Open Tech Packs');
+      // The breadcrumb and the page header read a view's name from the button that opens it, so
+      // the bridge has to name the view it activates or the path falls back to the workspace.
+      if (button.dataset) button.dataset.view = 'tech-packs';
       if (button.dataset?.[MARKER] === 'true') continue;
       if (button.dataset) button.dataset[MARKER] = 'true';
       button.addEventListener?.('click', (event) => {

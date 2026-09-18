@@ -325,15 +325,17 @@ body.omnidata-role-system .shell.sidebar-collapsed :is([data-ods-role="button"],
   body.omnidata-role-system :is([data-ods-role="button"],[data-od14-unified-role="button"]):is([data-ods-part="navigation-item"],[data-od14-unified-part="navigation-item"]){justify-content:center!important}
 }
 
-/* A search control is a field-group whose label wraps the input, but it reads as
-   one horizontal control — an icon and an input on a single baseline inside a
-   single border — not as the stacked label-above-input pair the generic
-   field-group describes. Without this the grid stacks the icon over the input
-   and the input overflows the wrapper it is supposed to sit inside. */
-body.omnidata-design-system-v1 :is([data-ods-role="field"],[data-od14-unified-role="field"]):is(.od-search,.global-search,.od14-compact-search),
-body.omnidata-role-system :is([data-ods-role="field"],[data-od14-unified-role="field"]):is(.od-search,.global-search,.od14-compact-search){display:flex!important;justify-content:flex-start!important;align-items:center!important;gap:7px!important;height:auto!important;min-height:var(--ods-control-height)!important}
-body.omnidata-design-system-v1 :is(.od-search,.global-search,.od14-compact-search) :is([data-ods-role="field"],[data-od14-unified-role="field"]),
-body.omnidata-role-system :is(.od-search,.global-search,.od14-compact-search) :is([data-ods-role="field"],[data-od14-unified-role="field"]){flex:1 1 auto!important;min-width:0!important;height:auto!important;min-height:0!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important;outline:0!important}
+/* A command-bar control — a search field, a filter — is a field-group whose label
+   wraps the input, but it reads as one horizontal control: a caption or an icon
+   and the input on a single baseline inside a single border, not the stacked
+   label-above-input pair the generic field-group describes. Without this the grid
+   stacks them, and the input overflows the 32px wrapper it is supposed to sit
+   inside — which is the filter caption that appears detached from its own
+   control, floating over the row below. */
+body.omnidata-design-system-v1 :is([data-ods-role="field"],[data-od14-unified-role="field"]):is(.od-search,.od-filter,.global-search,.od14-compact-search),
+body.omnidata-role-system :is([data-ods-role="field"],[data-od14-unified-role="field"]):is(.od-search,.od-filter,.global-search,.od14-compact-search){display:flex!important;justify-content:flex-start!important;align-items:center!important;gap:7px!important;height:auto!important;min-height:var(--ods-control-height)!important}
+body.omnidata-design-system-v1 :is(.od-search,.od-filter,.global-search,.od14-compact-search) :is([data-ods-role="field"],[data-od14-unified-role="field"]),
+body.omnidata-role-system :is(.od-search,.od-filter,.global-search,.od14-compact-search) :is([data-ods-role="field"],[data-od14-unified-role="field"]){flex:1 1 auto!important;min-width:0!important;height:auto!important;min-height:0!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important;outline:0!important}
 
 /* Three elements sit inside a component's markup without being a component of
    their own; the generic role chrome otherwise paints each of them as a visible
@@ -393,3 +395,13 @@ body.omnidata-design-system-v1 .shell.sidebar-collapsed .nav-item[data-v12-label
 body.omnidata-role-system .shell.sidebar-collapsed .nav-item[data-v12-label]:hover::after{display:block!important}
 
 
+
+/* The breadcrumb sits in a fixed topbar column. Allowed to wrap it broke onto a
+   second line and left a separator dangling at the end of the first, so it stays
+   on one line and the current page ellipsizes instead. */
+body.omnidata-design-system-v1 .topbar .breadcrumb,
+body.omnidata-role-system .topbar .breadcrumb{flex-wrap:nowrap!important;align-items:center!important;min-width:0!important;overflow:hidden!important}
+body.omnidata-design-system-v1 .topbar .breadcrumb > *,
+body.omnidata-role-system .topbar .breadcrumb > *{flex:0 0 auto!important}
+body.omnidata-design-system-v1 .topbar .breadcrumb > strong,
+body.omnidata-role-system .topbar .breadcrumb > strong{flex:0 1 auto!important;min-width:0!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important}

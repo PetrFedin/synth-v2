@@ -234,14 +234,22 @@ function renderApp() {
 function renderTopbar() {
   const topbar = el('header', { className: 'topbar' });
   const breadcrumb = el('div', { className: 'breadcrumb' });
+  const crumbTitle = viewTitle(state.view);
+  const crumbSection = viewSectionName(state.view);
   breadcrumb.append(
     icon('back'),
     el('span', { className: 'breadcrumb-muted', rawText: 'SYNTHA' }),
     el('span', { className: 'breadcrumb-divider', rawText: '/' }),
-    el('span', { className: 'breadcrumb-muted', rawText: viewSectionName(state.view) }),
-    el('span', { className: 'breadcrumb-divider', rawText: '/' }),
-    el('strong', { text: viewTitle(state.view) }),
   );
+  // On the workspace the section and the page are the same place, and the path read
+  // "SYNTHA / Рабочий стол / Рабочий стол". A step that repeats the next one is not a step.
+  if (crumbSection && crumbSection.trim().toLowerCase() !== crumbTitle.trim().toLowerCase()) {
+    breadcrumb.append(
+      el('span', { className: 'breadcrumb-muted', rawText: crumbSection }),
+      el('span', { className: 'breadcrumb-divider', rawText: '/' }),
+    );
+  }
+  breadcrumb.append(el('strong', { text: crumbTitle }));
 
   const search = el('label', { className: 'global-search' });
   search.append(icon('search'));

@@ -6,6 +6,11 @@ import { assertTradePair } from '../modules/organisations/public.mjs';
 import { CAPABILITIES, assertCapability, assertTradeCapability } from '../modules/access-control/public.mjs';
 import { assertActiveRelationship } from '../modules/counterparty-relationships/public.mjs';
 import { createCampaign, changeCampaignStatus } from '../modules/campaigns/public.mjs';
+import {
+  createProductPlaceholder,
+  createPlaceholderStyleLink,
+  transitionProductPlaceholder,
+} from '../modules/assortment-planning/public.mjs';
 import { createCollection, createCollectionStyleVersionAssignment, publishCollection } from '../modules/collections/public.mjs';
 import { advanceCommercialCycle, attachOrder, createCommercialCycle } from '../modules/commercial-cycle/public.mjs';
 import { openDealSpace } from '../modules/deal-space/public.mjs';
@@ -51,6 +56,14 @@ export function createWholesalePlatform({
     return assertTradeCapability({
       memberships: await tx.listMembershipsForTrade(cycle.brandId, cycle.shopId), actorId,
       brandId: cycle.brandId, shopId: cycle.shopId, capability,
+    });
+  }
+
+  async function loadStyle(styleId) {
+    invariant(productIdentityStore && typeof productIdentityStore.transaction === 'function', 'PRODUCT_IDENTITY_STORE_REQUIRED', 'Product Identity store is required for assortment planning');
+    return productIdentityStore.transaction(async (tx) => {
+      invariant(typeof tx.getStyleForUpdate === 'function', 'PRODUCT_STYLE_READER_REQUIRED', 'Product Identity store must expose a style reader');
+      return tx.getStyleForUpdate(styleId);
     });
   }
 
@@ -142,6 +155,95 @@ export function createWholesalePlatform({
           await tx.saveCampaign(updated, current.version);
           await append(tx, 'campaign.opened', campaignId, { version: updated.version }, commandId, actorId);
           return updated;
+        },
+      );
+    },
+
+    // Assortment planning. A placeholder is planned against an open campaign before any style exists;
+    // the styles developed for it are linked back, which is what lets the season be read as plan
+    // versus fact instead of a list of what happened to get built.
+    createProductPlaceholder(commandId, actorId, input) {
+      return execute(
+        commandId,
+        `createProductPlaceholder:${actorId}:${canonicalJson(input)}`,
+        actorId,
+        async (tx) => {
+          const campaign = requireEntity(await tx.getCampaign(input?.campaignId), 'CAMPAIGN_NOT_FOUND', { campaignId: input?.campaignId });
+          await assertOrganisationActor(tx, campaign.brandId, actorId, CAPABILITIES.CAMPAIGN_MANAGE);
+          return campaign;
+        },
+        async (tx, campaign) => {
+          const placeholder = createProductPlaceholder({
+            id: nextId('product-placeholder'),
+            campaign,
+            brandId: campaign.brandId,
+            ...input,
+            createdAt: clock(),
+            createdBy: actorId,
+          });
+          await tx.insertProductPlaceholder(placeholder);
+          await append(tx, 'assortment.placeholder.planned', placeholder.id, {
+            campaignId: placeholder.campaignId,
+            placeholderCode: placeholder.placeholderCode,
+            plannedQuantity: placeholder.plannedQuantity,
+            plannedMarginBasisPoints: placeholder.plannedMarginBasisPoints,
+          }, commandId, actorId);
+          return placeholder;
+        },
+      );
+    },
+
+    transitionProductPlaceholder(commandId, actorId, placeholderId, input) {
+      return execute(
+        commandId,
+        `transitionProductPlaceholder:${actorId}:${placeholderId}:${canonicalJson(input)}`,
+        actorId,
+        async (tx) => {
+          const current = requireEntity(await tx.getProductPlaceholder(placeholderId), 'PLACEHOLDER_NOT_FOUND', { placeholderId });
+          await assertOrganisationActor(tx, current.brandId, actorId, CAPABILITIES.CAMPAIGN_MANAGE);
+          return current;
+        },
+        async (tx, current) => {
+          const updated = transitionProductPlaceholder(current, input?.nextStatus, {
+            updatedAt: clock(),
+            updatedBy: actorId,
+            expectedVersion: input?.expectedVersion,
+          });
+          await tx.saveProductPlaceholder(updated, current.version);
+          await append(tx, 'assortment.placeholder.transitioned', placeholderId, {
+            from: current.status, to: updated.status, version: updated.version,
+          }, commandId, actorId);
+          return updated;
+        },
+      );
+    },
+
+    linkStyleToPlaceholder(commandId, actorId, placeholderId, input) {
+      return execute(
+        commandId,
+        `linkStyleToPlaceholder:${actorId}:${placeholderId}:${canonicalJson(input)}`,
+        actorId,
+        async (tx) => {
+          const placeholder = requireEntity(await tx.getProductPlaceholder(placeholderId), 'PLACEHOLDER_NOT_FOUND', { placeholderId });
+          await assertOrganisationActor(tx, placeholder.brandId, actorId, CAPABILITIES.CAMPAIGN_MANAGE);
+          // Styles live in the Product Identity context, so they are read through its own store
+          // rather than joined here.
+          const style = requireEntity(await loadStyle(input?.styleId), 'PRODUCT_STYLE_NOT_FOUND', { styleId: input?.styleId });
+          return { placeholder, style };
+        },
+        async (tx, { placeholder, style }) => {
+          const link = createPlaceholderStyleLink({
+            id: nextId('placeholder-style-link'),
+            placeholder,
+            style,
+            linkedAt: clock(),
+            linkedBy: actorId,
+          });
+          await tx.insertProductPlaceholderStyleLink(link);
+          await append(tx, 'assortment.placeholder.style-linked', placeholder.id, {
+            styleId: link.styleId, campaignId: link.campaignId,
+          }, commandId, actorId);
+          return link;
         },
       );
     },

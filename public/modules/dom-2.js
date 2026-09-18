@@ -29,4 +29,4 @@ function translateDataText(value){
   for(const pair of prefixes){const source=text.startsWith(pair[0])?0:text.startsWith(pair[1])?1:-1;if(source>=0)return pair[target]+text.slice(pair[source].length);}
   return text==='\u043d\u0435\u0442'||text==='none'?I18N.translate(text):text;
 }
-function emptyWorkspace(){return{memberships:[],organisations:[],relationships:[],invitations:[],campaigns:[],collections:[],catalogSkus:[],showrooms:[],cycles:[],selections:[],orders:[],deals:[],calendar:[],pageInfo:{limit:0,hasMore:false,truncatedSections:[],nextCursors:{}}};}
+function emptyWorkspace(){return{memberships:[],organisations:[],relationships:[],invitations:[],campaigns:[],collections:[],productStyles:[],placeholders:[],catalogSkus:[],showrooms:[],cycles:[],selections:[],orders:[],deals:[],calendar:[],pageInfo:{limit:0,hasMore:false,truncatedSections:[],nextCursors:{}}};}

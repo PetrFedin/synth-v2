@@ -17,6 +17,7 @@ const SORT_FIELDS = Object.freeze({
   campaigns: Object.freeze([['startsAt', 'desc'], ['name', 'asc'], ['id', 'asc']]),
   collections: Object.freeze([['name', 'asc'], ['id', 'asc']]),
   productStyles: Object.freeze([['styleCode', 'asc'], ['id', 'asc']]),
+  placeholders: Object.freeze([['placeholderCode', 'asc'], ['id', 'asc']]),
   catalogSkus: Object.freeze([['sku', 'asc']]),
   showrooms: Object.freeze([['opensAt', 'desc'], ['name', 'asc'], ['id', 'asc']]),
   cycles: Object.freeze([['updatedAt', 'desc'], ['createdAt', 'desc'], ['id', 'asc']]),

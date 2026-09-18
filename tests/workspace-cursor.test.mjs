@@ -16,6 +16,7 @@ test('workspace cursor round-trips every section and freezes decoded state', () 
     campaigns: ['2026-01-01T00:00:00.000Z', 'AW26', 'campaign-1'],
     collections: ['Collection', 'collection-1'],
     productStyles: ['STYLE-001', 'style-1'],
+    placeholders: ['PH-001', 'placeholder-1'],
     catalogSkus: ['SKU-1'],
     showrooms: ['2026-01-01T00:00:00.000Z', 'Showroom', 'showroom-1'],
     cycles: ['2026-01-01T00:00:00.000Z', null, 'cycle-1'],

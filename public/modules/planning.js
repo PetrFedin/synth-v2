@@ -68,6 +68,119 @@
       actions: [odCampaignAction(item.campaign)],
     });
   }
+  // The line plan. A placeholder states what the season intends to contain and earn; the styles linked
+  // to it state what it became. Both sides are read from one projection, so the plan can be compared
+  // with the fact instead of being admired on its own.
+  function placeholderName(item) {
+    return I18N.getLocale?.() === 'en' ? (item.nameEn || item.nameRu) : (item.nameRu || item.nameEn);
+  }
+  function dimensionName(item, key) {
+    const value = I18N.getLocale?.() === 'en' ? item[`${key}NameEn`] : item[`${key}NameRu`];
+    return value || item[`${key}Code`] || '\u2014';
+  }
+  function minorMoney(value, currency) {
+    if (value === null || value === undefined) return '\u2014';
+    return `${money(value / 100)} ${currency || ''}`.trim();
+  }
+  function percentFromBasisPoints(value) {
+    return value === null || value === undefined ? '\u2014' : `${(value / 100).toFixed(1)}%`;
+  }
+  // The variance is the reason the plan is worth keeping: a slot that is being developed more
+  // expensively than it was planned for is visible while there is still time to act on it.
+  function marginVariance(item) {
+    if (item.plannedMarginBasisPoints === null || item.plannedMarginBasisPoints === undefined) return null;
+    if (item.actualMarginBasisPoints === null || item.actualMarginBasisPoints === undefined) return null;
+    return item.actualMarginBasisPoints - item.plannedMarginBasisPoints;
+  }
+  function varianceCell(item) {
+    const variance = marginVariance(item);
+    if (variance === null) return el('span', { className: 'muted', rawText: text('\u041d\u0435\u0442 \u0444\u0430\u043a\u0442\u0430', 'No fact yet') });
+    const tone = variance < -200 ? 'danger' : variance < 0 ? 'warning' : 'success';
+    const sign = variance > 0 ? '+' : '';
+    return el('span', { className: `badge ${tone}`, rawText: `${sign}${(variance / 100).toFixed(1)} \u043f.\u043f.` });
+  }
+  function placeholderInspector(item) {
+    return odInspector({
+      title: placeholderName(item),
+      subtitle: item.placeholderCode,
+      status: item.status,
+      tabs: [
+        {
+          label: text('\u041f\u043b\u0430\u043d', 'Plan'),
+          fields: [
+            { label: text('\u0420\u043e\u0437\u043d\u0438\u0447\u043d\u0430\u044f \u0446\u0435\u043d\u0430', 'Retail price'), value: minorMoney(item.recommendedRetailPriceMinor, item.currency) },
+            { label: text('\u041f\u043b\u0430\u043d\u043e\u0432\u0430\u044f \u0441\u0435\u0431\u0435\u0441\u0442\u043e\u0438\u043c\u043e\u0441\u0442\u044c', 'Planned unit cost'), value: minorMoney(item.plannedUnitCostMinor, item.currency) },
+            { label: text('\u041f\u043b\u0430\u043d\u043e\u0432\u0430\u044f \u043c\u0430\u0440\u0436\u0430', 'Planned margin'), value: percentFromBasisPoints(item.plannedMarginBasisPoints) },
+            { label: text('\u041f\u043b\u0430\u043d, \u0448\u0442', 'Planned units'), value: item.plannedQuantity ?? '\u2014' },
+            { label: text('\u0426\u0432\u0435\u0442\u043e\u043c\u043e\u0434\u0435\u043b\u0435\u0439', 'Colourways'), value: item.colourwayCount ?? '\u2014' },
+            { label: text('\u0414\u0430\u0442\u0430 \u0432\u0432\u043e\u0434\u0430', 'Launch'), value: item.launchAt ? formatDate(item.launchAt) : '\u2014' },
+          ],
+        },
+        {
+          label: text('\u0424\u0430\u043a\u0442', 'Fact'),
+          fields: [
+            { label: text('\u041c\u043e\u0434\u0435\u043b\u0435\u0439 \u0440\u0430\u0437\u0440\u0430\u0431\u043e\u0442\u0430\u043d\u043e', 'Styles developed'), value: item.linkedStyleCount ?? 0 },
+            { label: text('\u0418\u0437 \u043d\u0438\u0445 \u0441 \u043e\u043f\u0443\u0431\u043b\u0438\u043a\u043e\u0432\u0430\u043d\u043d\u043e\u0439 BOM', 'With a published BOM'), value: item.costedStyleCount ?? 0 },
+            { label: text('\u0424\u0430\u043a\u0442\u0438\u0447\u0435\u0441\u043a\u0430\u044f \u0441\u0435\u0431\u0435\u0441\u0442\u043e\u0438\u043c\u043e\u0441\u0442\u044c', 'Actual unit cost'), value: minorMoney(item.actualUnitCostMinor, item.currency) },
+            { label: text('\u0424\u0430\u043a\u0442\u0438\u0447\u0435\u0441\u043a\u0430\u044f \u043c\u0430\u0440\u0436\u0430', 'Actual margin'), value: percentFromBasisPoints(item.actualMarginBasisPoints) },
+          ],
+          content: [
+            item.costedStyleCount
+              ? notice(text('\u0424\u0430\u043a\u0442 \u0441\u0447\u0438\u0442\u0430\u0435\u0442\u0441\u044f \u043f\u043e \u043e\u043f\u0443\u0431\u043b\u0438\u043a\u043e\u0432\u0430\u043d\u043d\u044b\u043c \u0441\u043f\u0435\u0446\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u044f\u043c \u0441\u0432\u044f\u0437\u0430\u043d\u043d\u044b\u0445 \u043c\u043e\u0434\u0435\u043b\u0435\u0439 \u0438 \u0442\u043e\u043b\u044c\u043a\u043e \u0432 \u0442\u043e\u0439 \u0436\u0435 \u0432\u0430\u043b\u044e\u0442\u0435.', 'The fact is taken from the published BOMs of the linked styles, and only in the same currency.'), 'success')
+              : notice(text('\u0421\u0432\u044f\u0436\u0438\u0442\u0435 \u043c\u043e\u0434\u0435\u043b\u044c \u0441 \u043e\u043f\u0443\u0431\u043b\u0438\u043a\u043e\u0432\u0430\u043d\u043d\u043e\u0439 \u0441\u043f\u0435\u0446\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u0435\u0439, \u0447\u0442\u043e\u0431\u044b \u0443\u0432\u0438\u0434\u0435\u0442\u044c \u0444\u0430\u043a\u0442.', 'Link a style with a published BOM to see the fact.')),
+          ],
+        },
+        {
+          label: text('\u0410\u0442\u0440\u0438\u0431\u0443\u0442\u044b', 'Attributes'),
+          fields: [
+            { label: text('\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044f', 'Category'), value: dimensionName(item, 'category') },
+            { label: text('\u041f\u043e\u043b', 'Gender'), value: dimensionName(item, 'gender') },
+            { label: text('\u0412\u043e\u0437\u0440\u0430\u0441\u0442', 'Age group'), value: dimensionName(item, 'ageGroup') },
+            { label: text('\u041f\u043e\u0441\u0430\u0434\u043a\u0430', 'Fit'), value: dimensionName(item, 'fit') },
+            { label: text('\u041d\u043e\u0432\u0438\u0437\u043d\u0430', 'Novelty'), value: dimensionName(item, 'novelty') },
+            { label: text('\u0421\u0435\u0437\u043e\u043d\u043d\u043e\u0441\u0442\u044c', 'Seasonality'), value: dimensionName(item, 'seasonality') },
+            { label: text('\u041a\u0430\u043f\u0441\u0443\u043b\u0430', 'Capsule'), value: item.capsule || '\u2014' },
+            { label: text('\u0414\u0440\u043e\u043f', 'Drop'), value: item.drop || '\u2014' },
+          ],
+        },
+      ],
+    });
+  }
+  function renderLinePlan() {
+    const rows = Array.isArray(state.workspace.placeholders) ? state.workspace.placeholders : [];
+    if (!rows.length) {
+      return notice(text(
+        '\u0412 \u044d\u0442\u043e\u043c \u043f\u043e\u0440\u0442\u0444\u0435\u043b\u0435 \u0435\u0449\u0451 \u043d\u0435\u0442 \u043f\u043b\u0435\u0439\u0441\u0445\u043e\u043b\u0434\u0435\u0440\u043e\u0432. \u041f\u043b\u0435\u0439\u0441\u0445\u043e\u043b\u0434\u0435\u0440 \u2014 \u044d\u0442\u043e \u0437\u0430\u043f\u043b\u0430\u043d\u0438\u0440\u043e\u0432\u0430\u043d\u043d\u043e\u0435 \u043c\u0435\u0441\u0442\u043e \u0432 \u0430\u0441\u0441\u043e\u0440\u0442\u0438\u043c\u0435\u043d\u0442\u0435: \u0435\u0433\u043e \u0437\u0430\u0432\u043e\u0434\u044f\u0442 \u0434\u043e \u0442\u043e\u0433\u043e, \u043a\u0430\u043a \u043f\u043e\u044f\u0432\u0438\u0442\u0441\u044f \u043c\u043e\u0434\u0435\u043b\u044c.',
+        'This portfolio has no placeholders yet. A placeholder is a planned slot in the assortment: it is created before any style exists.',
+      ));
+    }
+    return odRegistry({
+      scope: 'od-line-plan', filterScope: 'linePlan', rows, rowKey: (item) => item.id,
+      statusAccessor: (item) => item.status,
+      columns: [
+        { key: 'code', label: text('\u041a\u043e\u0434', 'Code'), value: (item) => item.placeholderCode },
+        { key: 'name', label: text('\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435', 'Name'), value: (item) => placeholderName(item) },
+        { key: 'category', label: text('\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044f', 'Category'), value: (item) => dimensionName(item, 'category') },
+        { key: 'gender', label: text('\u041f\u043e\u043b', 'Gender'), value: (item) => dimensionName(item, 'gender') },
+        { key: 'ageGroup', label: text('\u0412\u043e\u0437\u0440\u0430\u0441\u0442', 'Age group'), value: (item) => dimensionName(item, 'ageGroup') },
+        { key: 'fit', label: text('\u041f\u043e\u0441\u0430\u0434\u043a\u0430', 'Fit'), value: (item) => dimensionName(item, 'fit') },
+        { key: 'novelty', label: text('\u041d\u043e\u0432\u0438\u0437\u043d\u0430', 'Novelty'), value: (item) => dimensionName(item, 'novelty') },
+        { key: 'seasonality', label: text('\u0421\u0435\u0437\u043e\u043d\u043d\u043e\u0441\u0442\u044c', 'Seasonality'), value: (item) => dimensionName(item, 'seasonality') },
+        { key: 'colourways', label: text('\u0426\u0432\u0435\u0442\u043e\u043c\u043e\u0434\u0435\u043b\u0435\u0439', 'Colourways'), value: (item) => item.colourwayCount ?? '\u2014' },
+        { key: 'plannedQuantity', label: text('\u041f\u043b\u0430\u043d, \u0448\u0442', 'Planned units'), value: (item) => item.plannedQuantity ?? '\u2014' },
+        { key: 'retailPrice', label: text('\u0420\u043e\u0437\u043d\u0438\u0447\u043d\u0430\u044f \u0446\u0435\u043d\u0430', 'Retail price'), value: (item) => minorMoney(item.recommendedRetailPriceMinor, item.currency) },
+        { key: 'plannedCost', label: text('\u041f\u043b\u0430\u043d \u0441\u0435\u0431\u0435\u0441\u0442\u043e\u0438\u043c\u043e\u0441\u0442\u0438', 'Planned cost'), value: (item) => minorMoney(item.plannedUnitCostMinor, item.currency) },
+        { key: 'plannedMargin', label: text('\u041f\u043b\u0430\u043d \u043c\u0430\u0440\u0436\u0438', 'Planned margin'), value: (item) => percentFromBasisPoints(item.plannedMarginBasisPoints) },
+        { key: 'styles', label: text('\u041c\u043e\u0434\u0435\u043b\u0435\u0439', 'Styles'), value: (item) => `${item.costedStyleCount ?? 0}/${item.linkedStyleCount ?? 0}` },
+        { key: 'actualCost', label: text('\u0424\u0430\u043a\u0442 \u0441\u0435\u0431\u0435\u0441\u0442\u043e\u0438\u043c\u043e\u0441\u0442\u0438', 'Actual cost'), value: (item) => minorMoney(item.actualUnitCostMinor, item.currency) },
+        { key: 'actualMargin', label: text('\u0424\u0430\u043a\u0442 \u043c\u0430\u0440\u0436\u0438', 'Actual margin'), value: (item) => percentFromBasisPoints(item.actualMarginBasisPoints) },
+        { key: 'variance', label: text('\u041e\u0442\u043a\u043b\u043e\u043d\u0435\u043d\u0438\u0435', 'Variance'), render: varianceCell },
+        { key: 'status', label: text('\u0421\u0442\u0430\u0442\u0443\u0441', 'Status'), render: (item) => statusBadge(item.status) },
+      ],
+      inspector: placeholderInspector,
+    });
+  }
+
   function renderPlanning() {
     const portfolio = core.buildPortfolio(state.workspace, new Date());
     const caps = window.SynthaUiCapabilities;
@@ -75,6 +188,7 @@
       { id: 'portfolio', label: text('\u041f\u043e\u0440\u0442\u0444\u0435\u043b\u044c', 'Portfolio') },
       { id: 'timeline', label: text('\u0422\u0430\u0439\u043c\u043b\u0430\u0439\u043d', 'Timeline') },
       { id: 'exceptions', label: text('\u0418\u0441\u043a\u043b\u044e\u0447\u0435\u043d\u0438\u044f', 'Exceptions') },
+      { id: 'line-plan', label: text('\u041b\u0438\u043d\u0435\u0439\u043d\u044b\u0439 \u043f\u043b\u0430\u043d', 'Line plan') },
     ], [
       { label: text('\u041a\u0430\u043c\u043f\u0430\u043d\u0438\u0438', 'Campaigns'), value: portfolio.summary.total, detail: `${portfolio.summary.active} ${text('\u0430\u043a\u0442\u0438\u0432\u043d\u044b\u0445', 'active')}` },
       { label: text('\u0421\u0440\u0435\u0434\u043d\u044f\u044f \u0433\u043e\u0442\u043e\u0432\u043d\u043e\u0441\u0442\u044c', 'Average readiness'), value: `${portfolio.summary.averageReadiness}%`, detail: text('\u043f\u043e \u043f\u043e\u0440\u0442\u0444\u0435\u043b\u044e', 'portfolio') },
@@ -82,6 +196,7 @@
       { label: text('\u041f\u0440\u043e\u0441\u0440\u043e\u0447\u0435\u043d\u044b', 'Overdue'), value: portfolio.summary.overdueCampaigns, detail: text('\u0442\u0440\u0435\u0431\u0443\u044e\u0442 \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u044f', 'need action') },
       { label: text('\u0421\u0442\u0430\u0440\u0442 \u0434\u043e 30 \u0434\u043d\u0435\u0439', 'Starts within 30 days'), value: portfolio.summary.upcoming30Days, detail: text('\u0431\u043b\u0438\u0436\u0430\u0439\u0448\u0438\u0435', 'upcoming') },
     ], ['draft', 'open', 'closed', 'cancelled'], text('\u041f\u043e\u0438\u0441\u043a \u043a\u0430\u043c\u043f\u0430\u043d\u0438\u0438 \u0438\u043b\u0438 \u0441\u0435\u0437\u043e\u043d\u0430', 'Search campaign or season'), caps.hasAny(state.workspace, caps.CAPABILITIES.CAMPAIGN_MANAGE, 'brand') ? odAction(text('\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u043a\u0430\u043c\u043f\u0430\u043d\u0438\u044e', 'Create campaign'), campaignForm) : null);
+    if (header.active === 'line-plan') return odPage(text('\u041f\u043b\u0430\u043d\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u0435 \u0430\u0441\u0441\u043e\u0440\u0442\u0438\u043c\u0435\u043d\u0442\u0430', 'Assortment planning'), header, renderLinePlan());
     let rows = portfolio.campaigns;
     if (header.active === 'timeline') rows = [...rows].sort((left, right) => String(left.campaign.startsAt || '').localeCompare(String(right.campaign.startsAt || '')));
     if (header.active === 'exceptions') rows = rows.filter((item) => item.risks.length);

@@ -169,13 +169,16 @@ test('migration lock polling does not leave a blocking server-side advisory lock
   assert.deepEqual(result.applied, ['001_base.sql']);
   assert.deepEqual(sleeps, [7, 7]);
   const sql = fixture.queries.map((query) => query.sql);
-  assert.deepEqual(sql.slice(0, 3), [
+  assert.deepEqual(sql.slice(0, 6), [
+    'SET statement_timeout = 0',
+    'SET lock_timeout = 0',
+    'SET idle_in_transaction_session_timeout = 0',
     'SELECT pg_try_advisory_lock($1) AS locked',
     'SELECT pg_try_advisory_lock($1) AS locked',
     'SELECT pg_try_advisory_lock($1) AS locked',
   ]);
   assert.equal(sql.includes('SELECT pg_advisory_lock($1)'), false);
-  assert.ok(sql.indexOf('BEGIN') > 2, 'no transaction may begin while a runner is waiting for the migration lock');
+  assert.ok(sql.indexOf('BEGIN') > 5, 'no transaction may begin while a runner is waiting for the migration lock');
 });
 
 test('migration lock timeout fails before schema or ledger mutation and releases the client', async () => {

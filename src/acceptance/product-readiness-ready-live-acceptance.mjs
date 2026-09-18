@@ -472,7 +472,7 @@ function blockedDimensionCodes(dimensions) {
   return dimensions.filter((dimension) => dimension?.status === 'blocked').map((dimension) => dimension.code).sort();
 }
 
-export function assertReadyProductInventoryIsolationDelta(before, after) {
+export function assertReadyProductInventoryIsolationDelta(before, after, { label = 'READY Product Readiness' } = {}) {
   const keys = Object.keys(before ?? {});
   if (!keys.length || keys.length !== Object.keys(after ?? {}).length || !keys.includes('inventory_balance_rows')) {
     throw new Error('Acceptance isolation snapshot shape changed');
@@ -483,13 +483,13 @@ export function assertReadyProductInventoryIsolationDelta(before, after) {
     beforeBalanceRows = BigInt(String(before.inventory_balance_rows));
     afterBalanceRows = BigInt(String(after.inventory_balance_rows));
   } catch {
-    throw new Error('READY Product Readiness inventory balance counter is invalid');
+    throw new Error(`${label} inventory balance counter is invalid`);
   }
   const changed = keys.filter((key) => key !== 'inventory_balance_rows' && String(before[key]) !== String(after[key]));
   const balanceIdentityDeltaValid = afterBalanceRows === beforeBalanceRows + 1n;
   if (!balanceIdentityDeltaValid || changed.length) {
     const changedKeys = [...(!balanceIdentityDeltaValid ? ['inventory_balance_rows'] : []), ...changed];
-    const error = new Error(`READY Product Readiness acceptance changed state outside the single zero ProductSku inventory identity: ${changedKeys.join(', ')}`);
+    const error = new Error(`${label} acceptance changed state outside the single zero ProductSku inventory identity: ${changedKeys.join(', ')}`);
     error.code = 'ACCEPTANCE_ISOLATION_CHANGED';
     error.details = Object.freeze(Object.fromEntries(changedKeys.map((key) => [key, Object.freeze({ before: before[key], after: after[key] })])));
     throw error;

@@ -159,11 +159,15 @@
     const role=document.querySelector('.topbar-user .user-copy small');
     if(!role)return;
     const raw=role.textContent?.trim()||'';
-    if(locale()==='ru'&&ROLE_RU[raw.toLowerCase()])role.textContent=ROLE_RU[raw.toLowerCase()];
+    if(locale()!=='ru')return;
+    const translated=ROLE_RU[raw.toLowerCase()];
+    if(translated&&role.textContent!==translated)role.textContent=translated;
   }
   function translateBrand(){
     const brand=document.querySelector('.brand-copy small');
-    if(brand)brand.textContent=text('Операционная система моды','Fashion Operating System');
+    if(!brand)return;
+    const value=text('Операционная система моды','Fashion Operating System');
+    if(brand.textContent!==value)brand.textContent=value;
   }
   function auditInterface(root=document){
     const roots=[];
@@ -196,27 +200,43 @@
     });
   }
   function apply(){
-    document.documentElement.lang=locale();
-    document.body.classList.add('omnidata-v14');
-    document.body.dataset.synthaVisual=BUILD;
-    const workspace=document.querySelector('.workspace-content');
-    if(workspace){buildUnifiedHeader(workspace);compactFilters(workspace)}
-    auditInterface(document);
-    diagnosticAudit();
+    stopObserving();
+    try{
+      const language=locale();
+      if(document.documentElement.lang!==language)document.documentElement.lang=language;
+      if(!document.body.classList.contains('omnidata-v14'))document.body.classList.add('omnidata-v14');
+      if(document.body.dataset.synthaVisual!==BUILD)document.body.dataset.synthaVisual=BUILD;
+      const workspace=document.querySelector('.workspace-content');
+      if(workspace){buildUnifiedHeader(workspace);compactFilters(workspace)}
+      auditInterface(document);
+      diagnosticAudit();
+    }finally{startObserving()}
   }
-  // apply() writes attributes this layer also observes. Scheduling on a microtask lets that
-  // feedback re-arm inside the same microtask checkpoint, so the event loop never regains control.
-  // Yield to the browser, and detach the observer while applying so the layer never reacts to its
-  // own mutations.
+  // apply() writes attributes and text this layer also observes, twice over: it must not re-dirty
+  // what it watches (so every write is compared first, and an unconditional textContent assignment
+  // replaces the text node), and it must not react to its own mutations (so the observer is
+  // detached for the pass). A microtask schedule would let that feedback re-arm inside the same
+  // checkpoint and never return control to the event loop, so the scheduler yields a frame instead.
   const yieldToBrowser=(fn)=>{if(typeof global.requestAnimationFrame==='function')return global.requestAnimationFrame(()=>fn());if(typeof global.setTimeout==='function')return global.setTimeout(fn,0);if(typeof global.queueMicrotask==='function')return global.queueMicrotask(fn);return fn()};
-  function applyDetached(){observer?.disconnect?.();try{return apply()}finally{observer?.takeRecords?.();installObserver(true)}}
+  // apply() already detaches; the wrapper is kept so existing call sites stay stable.
+  function applyDetached(){return apply()}
   function scheduleApply(){if(scheduled)return;scheduled=true;yieldToBrowser(()=>{scheduled=false;applyDetached()})}
-  function installObserver(reconnect){
-    if(!global.MutationObserver)return;
-    if(observer&&!reconnect)return;
-    if(observer&&reconnect){observer.observe(document.documentElement,{childList:true,subtree:true});return}
-    observer=new global.MutationObserver((mutations)=>{if(mutations.some((mutation)=>mutation.addedNodes.length))scheduleApply()});
+  let observing=false;
+  function startObserving(){
+    if(!observer||observing)return;
+    observing=true;
     observer.observe(document.documentElement,{childList:true,subtree:true});
+  }
+  function stopObserving(){
+    if(!observer||!observing)return;
+    observer.takeRecords();
+    observer.disconnect();
+    observing=false;
+  }
+  function installObserver(){
+    if(observer||!global.MutationObserver)return;
+    observer=new global.MutationObserver((mutations)=>{if(mutations.some((mutation)=>mutation.addedNodes.length))scheduleApply()});
+    startObserving();
   }
 
   const previousRenderApp=renderApp;

@@ -120,6 +120,50 @@
     return [row];
   }
 
+  // A register of garments that shows no garment is hard to read. The image is whatever the read model
+  // chose — the hero shot, else the technical sketch — and it has to survive a URI that does not load
+  // as well as one that is missing, because a broken-image icon in every row is worse than no image.
+  function mediaFor(item) {
+    const all = Array.isArray(state.workspace.media) ? state.workspace.media : [];
+    return all.find((entry) => entry.styleVersionId === item.product.styleVersionId && !entry.colorwayId) || null;
+  }
+  function initialsTile(product) {
+    const code = String(product.styleCode || '').replace(/[^A-Za-z0-9]/g, '');
+    const tile = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    tile.setAttribute('class', 'od-thumb od-thumb-empty');
+    tile.setAttribute('viewBox', '0 0 48 48');
+    tile.setAttribute('width', '48');
+    tile.setAttribute('height', '48');
+    tile.setAttribute('role', 'img');
+    tile.setAttribute('aria-label', text('Изображение не загружено', 'No image'));
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.setAttribute('x', '0.5'); rect.setAttribute('y', '0.5');
+    rect.setAttribute('width', '47'); rect.setAttribute('height', '47');
+    rect.setAttribute('rx', '4'); rect.setAttribute('fill', '#F6F7F8'); rect.setAttribute('stroke', '#E1E4E7');
+    const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    label.setAttribute('x', '24'); label.setAttribute('y', '29');
+    label.setAttribute('text-anchor', 'middle');
+    label.setAttribute('font-size', '13');
+    label.setAttribute('fill', '#98A2B3');
+    label.textContent = code.slice(0, 3).toUpperCase() || '—';
+    tile.append(rect, label);
+    return tile;
+  }
+  function productThumb(item) {
+    const media = mediaFor(item);
+    if (!media?.uri) return initialsTile(item.product);
+    const wrap = el('span', { className: 'od-thumb-wrap' });
+    const image = el('img', { className: 'od-thumb', src: media.uri, alt: title(item.product), loading: 'lazy' });
+    // A stored URI is not a promise that it resolves. When it does not, the row falls back to the
+    // same tile an image-less style gets instead of showing a broken picture.
+    image.addEventListener('error', () => {
+      if (!wrap.isConnected) return;
+      wrap.replaceChildren(initialsTile(item.product));
+    }, { once: true });
+    wrap.append(image);
+    return wrap;
+  }
+
   // Colourways of the style, with the governed colour resolved. The article is derived by the read
   // model from the style code and the colourway code, which is how it is read off a label.
   function colorwaysOf(item) {
@@ -307,6 +351,7 @@
       scope: 'od-styles', filterScope: 'styles', rows, rowKey: (item) => item.product.id,
       statusAccessor: (item) => item.product.lifecycleStatus,
       columns: [
+        { key: 'image', label: text('Изображение', 'Image'), className: 'od-thumb-cell', render: productThumb },
         { key: 'styleCode', label: text('Код модели', 'Style code'), value: (item) => item.product.styleCode },
         { key: 'title', label: text('Название', 'Title'), value: (item) => title(item.product) },
         { key: 'version', label: text('Версия', 'Version'), value: (item) => `v${item.product.styleVersionNo || '—'}` },

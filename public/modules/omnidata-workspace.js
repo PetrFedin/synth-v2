@@ -106,10 +106,33 @@ function odSearch(scope, placeholder) {
     placeholder,
     ariaLabel: placeholder,
   });
-  input.addEventListener('change', () => odSetFilter(scope, 'query', input.value.trim()));
-  input.addEventListener('keydown', event => {
-    if (event.key === 'Enter') odSetFilter(scope, 'query', input.value.trim());
+  // Filter as the reader types. Binding only change and Enter meant a search box that looked live and
+  // was not, while the filter panel's own "find an attribute" box in this same file filters on input.
+  // The re-render steals focus, so the caret is put back where it was.
+  let debounce = 0;
+  const apply = () => {
+    const query = input.value.trim();
+    if (query === String(OD_UI.filters[scope]?.query || '')) return;
+    OD_UI.focusSearch = scope;
+    odSetFilter(scope, 'query', query);
+  };
+  input.addEventListener('input', () => {
+    clearTimeout(debounce);
+    debounce = setTimeout(apply, 180);
   });
+  input.addEventListener('change', apply);
+  input.addEventListener('keydown', event => {
+    if (event.key === 'Enter') { clearTimeout(debounce); apply(); }
+  });
+  if (OD_UI.focusSearch === scope) {
+    OD_UI.focusSearch = null;
+    queueMicrotask(() => {
+      if (!input.isConnected) return;
+      input.focus();
+      const end = input.value.length;
+      try { input.setSelectionRange(end, end); } catch { /* a search input may refuse a range */ }
+    });
+  }
   field.append(input);
   return field;
 }
@@ -141,7 +164,9 @@ function odHeader(scope, tabs, metrics, statuses, placeholder, action) {
   const fragment = document.createDocumentFragment();
   fragment.append(tabState.node, odMetrics(metrics));
   const bar = el('section', { className: 'od-commandbar' });
-  bar.append(odSearch(scope, placeholder));
+  // A section with no register has nothing for a search box to filter. The dashboard carried one
+  // anyway, three hundred pixels from the topbar search that does work, and it did nothing at all.
+  if (placeholder) bar.append(odSearch(scope, placeholder));
   if (statuses.length) bar.append(odStatusFilter(scope, statuses));
   if (action) bar.append(action);
   fragment.append(bar);
@@ -161,8 +186,36 @@ function odFilter(items, scope, statusAccessor = item => item.status) {
       if (!column) continue;
       if (!values.includes(odAttributeValue(column, item))) return false;
     }
-    return !query || JSON.stringify(item).toLocaleLowerCase().includes(query);
+    return !query || odSearchHaystack(item).includes(query);
   });
+}
+
+// What the search box actually searches: the values in a row, never the names of its fields.
+// Matching the serialised object meant a query could land inside a key — "tee" sits inside
+// "categoryAttributeExpected" — and quietly return every row while looking like it had filtered.
+const OD_SEARCH_HAYSTACK = new WeakMap();
+function odSearchHaystack(item) {
+  if (item === null || typeof item !== 'object') return String(item ?? '').toLocaleLowerCase();
+  const cached = OD_SEARCH_HAYSTACK.get(item);
+  if (cached !== undefined) return cached;
+  const parts = [];
+  const seen = new Set();
+  const walk = (value, depth) => {
+    if (depth > 6 || parts.length > 400) return;
+    if (value === null || value === undefined) return;
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+      parts.push(String(value));
+      return;
+    }
+    if (typeof value !== 'object' || seen.has(value)) return;
+    seen.add(value);
+    if (Array.isArray(value)) { value.forEach((entry) => walk(entry, depth + 1)); return; }
+    Object.values(value).forEach((entry) => walk(entry, depth + 1));
+  };
+  walk(item, 0);
+  const haystack = parts.join(' ').toLocaleLowerCase();
+  OD_SEARCH_HAYSTACK.set(item, haystack);
+  return haystack;
 }
 
 // A column is filterable when its cell reads as a single value. Rendered cells (badges, progress
@@ -635,7 +688,7 @@ function renderOverview() {
     { label: 'Linesheets', value: w.showrooms.length, detail: `${w.showrooms.filter(item => item.status === 'open').length} ${odText('\u043e\u0442\u043a\u0440\u044b\u0442\u043e', 'open')}` },
     { label: odText('\u0417\u0430\u043a\u0430\u0437\u044b', 'Orders'), value: w.orders.length, detail: `${w.orders.filter(item => ['draft', 'ready'].includes(item.status)).length} ${odText('\u0442\u0440\u0435\u0431\u0443\u044e\u0442 \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u044f', 'need action')}` },
     { label: 'DealSpace', value: w.deals.length, detail: odText('\u043f\u043e\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u043d\u044b\u0435 \u0441\u0434\u0435\u043b\u043a\u0438', 'confirmed deals') },
-  ], [], odText('\u041f\u043e\u0438\u0441\u043a \u043f\u043e \u0440\u0430\u0431\u043e\u0447\u0435\u043c\u0443 \u0441\u0442\u043e\u043b\u0443', 'Search workspace'));
+  ], [], null);
   if (header.active === 'risks') {
     const grid = el('section', { className: 'od-risk-grid' });
     [[odText('\u0427\u0435\u0440\u043d\u043e\u0432\u0438\u043a\u0438 SKU', 'Draft SKUs'), w.catalogSkus.filter(item => item.status === 'draft').length], [odText('\u041d\u0438\u0437\u043a\u0438\u0439 ATS', 'Low ATS'), w.catalogSkus.filter(item => Number(item.availableToSell ?? item.availableQuantity ?? 0) <= Number(item.minimumOrderQuantity || 1)).length], [odText('\u041d\u0435\u043f\u043e\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u043d\u044b\u0435 \u0437\u0430\u043a\u0430\u0437\u044b', 'Unconfirmed orders'), w.orders.filter(item => ['draft', 'ready'].includes(item.status)).length], [odText('\u041e\u0436\u0438\u0434\u0430\u044e\u0449\u0438\u0435 \u043f\u0440\u0438\u0433\u043b\u0430\u0448\u0435\u043d\u0438\u044f', 'Pending invitations'), w.invitations.filter(item => item.status === 'pending').length]].forEach(([label, value]) => grid.append(odMetric(label, value, value ? odText('\u0442\u0440\u0435\u0431\u0443\u0435\u0442 \u043a\u043e\u043d\u0442\u0440\u043e\u043b\u044f', 'needs control') : odText('\u043e\u0442\u043a\u043b\u043e\u043d\u0435\u043d\u0438\u0439 \u043d\u0435\u0442', 'no exceptions'), value ? 'warning' : 'success')));

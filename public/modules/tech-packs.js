@@ -105,7 +105,7 @@
   function header(summary) {
     return h('header', { className: 'tech-pack-header' }, [
       h('div', {}, [h('p', { className: 'eyebrow', text: 'PLM / TECH PACK CONTROL' }), h('h1', { text: text('Технические пакеты', 'Tech Packs') }), h('p', { className: 'muted', text: text('Версионный производственный контракт: выпуск, подтверждение фабрики и допуск к размещению производства.', 'Versioned production contract: issue, supplier acknowledgement and production-allocation readiness.') })]),
-      h('div', { className: 'tech-pack-header-actions' }, [canManageAny() ? h('button', { type: 'button', className: 'primary', text: text('Создать техпак', 'Create Tech Pack'), onclick: () => openDraft(null) }) : null, h('button', { type: 'button', className: 'secondary', disabled: ui.loading, text: text('Обновить', 'Refresh'), onclick: () => { void load({ reset: true }); } })]),
+      h('div', { className: 'tech-pack-header-actions' }, [canManageAny() ? h('button', { type: 'button', className: 'primary', text: text('Создать техпак', 'Create Tech Pack'), onclick: () => openDraft(null) }) : null, h('button', { type: 'button', className: 'secondary', disabled: ui.loading, text: text('Обновить', 'Refresh'), onclick: () => { load({ reset: true }).then(() => toast(text('\u0414\u0430\u043d\u043d\u044b\u0435 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u044b.', 'Data refreshed.'))).catch((error) => toast(error?.message || text('\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u0434\u0430\u043d\u043d\u044b\u0435.', 'The data could not be refreshed.'), 'error')); } })]),
       h('section', { className: 'tech-pack-kpis' }, [
         metric(text('Всего', 'Total'), summary.total, text('Все редакции', 'All revisions')),
         metric(text('Выпущено', 'Issued'), summary.issued, text('Ждут фабрику', 'Awaiting supplier')),
@@ -192,7 +192,7 @@
     ensureLoaded();
     const summary = core.summarize(ui.items);
     const items = core.filter(ui.items, { status: ui.status, ready: ui.readiness, search: ui.search });
-    return h('section', { className: 'tech-pack-page' }, [header(summary), filters(), ui.error ? h('div', { className: 'tech-pack-error' }, [h('strong', { text: text('Не удалось загрузить техпаки', 'Could not load Tech Packs') }), h('span', { text: ui.error }), h('button', { type: 'button', className: 'secondary', text: text('Повторить', 'Retry'), onclick: () => { void load({ reset: true }); } })]) : null, h('div', { className: 'tech-pack-layout' }, [registry(items), inspector(selected())])]);
+    return h('section', { className: 'tech-pack-page' }, [header(summary), ui.error ? null : filters(), ui.error ? h('div', { className: 'tech-pack-error' }, [h('strong', { text: text('Не удалось загрузить техпаки', 'Could not load Tech Packs') }), h('span', { text: ui.error }), h('button', { type: 'button', className: 'secondary', text: text('Повторить', 'Retry'), onclick: () => { void load({ reset: true }); } })]) : null, ui.error ? null : h('div', { className: 'tech-pack-layout' }, [registry(items), inspector(selected())])]);
   }
 
   const previousRenderView = renderView;

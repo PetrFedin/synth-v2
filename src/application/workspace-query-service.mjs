@@ -19,6 +19,7 @@ const SORT_FIELDS = Object.freeze({
   productStyles: Object.freeze([['styleCode', 'asc'], ['id', 'asc']]),
   placeholders: Object.freeze([['placeholderCode', 'asc'], ['id', 'asc']]),
   colorways: Object.freeze([['article', 'asc'], ['id', 'asc']]),
+  media: Object.freeze([['styleVersionId', 'asc'], ['colorwayId', 'asc']]),
   catalogSkus: Object.freeze([['sku', 'asc']]),
   showrooms: Object.freeze([['opensAt', 'desc'], ['name', 'asc'], ['id', 'asc']]),
   cycles: Object.freeze([['updatedAt', 'desc'], ['createdAt', 'desc'], ['id', 'asc']]),

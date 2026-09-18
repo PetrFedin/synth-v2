@@ -208,7 +208,24 @@
     const sku = bySku.get(sample.sku);
     const assessment = core.assess(sample, sku, referenceTime);
     const actions = core.allowedActions(sample, { canManage: canManage(sample.brandId), catalogSku: sku, referenceTime }).map((action) => actionButton(action, sample, assessment));
-    const blockers = assessment.requestIssues.map((code) => badge(code, 'medium'));
+    // These are diagnostic codes from the domain, not copy. Printing them put SAMPLE_SUPPLIER_REQUIRED
+    // in front of the reader where a sentence belongs; the code stays available for support in the
+    // element's title.
+    const blockerLabels = {
+      SAMPLE_SKU_NOT_FOUND: ['SKU \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d \u0432 \u043a\u0430\u0442\u0430\u043b\u043e\u0433\u0435', 'The SKU is not in the catalogue'],
+      SAMPLE_SKU_NOT_PUBLISHED: ['SKU \u0435\u0449\u0451 \u043d\u0435 \u043e\u043f\u0443\u0431\u043b\u0438\u043a\u043e\u0432\u0430\u043d', 'The SKU is not published yet'],
+      SAMPLE_SKU_SNAPSHOT_STALE: ['\u0421\u043d\u0438\u043c\u043e\u043a SKU \u0443\u0441\u0442\u0430\u0440\u0435\u043b \u2014 \u043e\u0431\u043d\u043e\u0432\u0438\u0442\u0435 \u043e\u0431\u0440\u0430\u0437\u0435\u0446', 'The SKU snapshot is stale — refresh the sample'],
+      SAMPLE_SUPPLIER_REQUIRED: ['\u041d\u0435 \u0443\u043a\u0430\u0437\u0430\u043d \u043f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a', 'A supplier is required'],
+      SAMPLE_DUE_AT_REQUIRED: ['\u041d\u0435 \u0443\u043a\u0430\u0437\u0430\u043d \u0441\u0440\u043e\u043a', 'A due date is required'],
+      SAMPLE_DUE_AT_INVALID: ['\u0421\u0440\u043e\u043a \u0443\u043a\u0430\u0437\u0430\u043d \u043d\u0435\u0432\u0435\u0440\u043d\u043e', 'The due date is invalid'],
+      SAMPLE_DUE_AT_NOT_FUTURE: ['\u0421\u0440\u043e\u043a \u0434\u043e\u043b\u0436\u0435\u043d \u0431\u044b\u0442\u044c \u0432 \u0431\u0443\u0434\u0443\u0449\u0435\u043c', 'The due date must be in the future'],
+    };
+    const blockers = assessment.requestIssues.map((code) => {
+      const pair = blockerLabels[code];
+      const chip = badge(pair ? text(pair[0], pair[1]) : code, 'medium');
+      chip.title = code;
+      return chip;
+    });
     return h('aside', { className: 'sample-inspector' }, [
       h('div', { className: 'sample-inspector-head' }, [h('div', {}, [h('p', { className: 'eyebrow', text: sample.sampleCode }), h('h2', { text: sample.sku }), h('p', { className: 'muted', text: `${labelType(sample.sampleType)} · R${sample.round}` })]), badge(labelStatus(sample.status), assessment.overdue ? 'high' : sample.status === 'approved' ? 'ok' : 'neutral')]),
       h('div', { className: 'sample-inspector-actions' }, actions),

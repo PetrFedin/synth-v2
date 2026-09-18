@@ -206,6 +206,9 @@
     if (!confirm(text(`Опубликовать BOM ${bom.sku}? После публикации редактирование будет закрыто.`, `Publish BOM ${bom.sku}? Editing will be locked.`))) return;
     await mutate(`/v2/boms/${encodeURIComponent(bom.sku)}/publish`, { expectedVersion: bom.version });
     await loadBoms({ reset: true });
+    // Publishing closes the BOM for editing. Doing that silently leaves the reader unsure whether it
+    // happened at all, while the revision action next to it does say so.
+    toast(text(`\u0421\u043f\u0435\u0446\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u044f ${bom.sku} \u043e\u043f\u0443\u0431\u043b\u0438\u043a\u043e\u0432\u0430\u043d\u0430.`, `BOM ${bom.sku} published.`));
   }
 
   async function fetchPublishedMaterials() {

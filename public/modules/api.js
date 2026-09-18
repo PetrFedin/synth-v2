@@ -46,7 +46,26 @@ async function api(path, { method = 'GET', body, anonymous = false, signal } = {
     }
   }
 
-  throw lastError;
+  // A transport failure arrives as the browser's own TypeError ("Failed to fetch"), which is a
+  // diagnostic string, not something to show a person. Every section printed it verbatim in its
+  // error banner.
+  throw describeTransportError(lastError);
+}
+
+function describeTransportError(error) {
+  if (error?.code === 'REQUEST_TIMEOUT') {
+    const described = new Error(I18N.t('common.timeoutError'));
+    described.code = 'REQUEST_TIMEOUT';
+    described.cause = error;
+    return described;
+  }
+  if (error instanceof TypeError) {
+    const described = new Error(I18N.t('common.networkError'));
+    described.code = 'NETWORK_UNREACHABLE';
+    described.cause = error;
+    return described;
+  }
+  return error;
 }
 
 async function fetchWithTimeout(path, options, timeoutMs, externalSignal) {

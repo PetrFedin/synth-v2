@@ -18,6 +18,7 @@ test('workspace cursor round-trips every section and freezes decoded state', () 
     productStyles: ['STYLE-001', 'style-1'],
     placeholders: ['PH-001', 'placeholder-1'],
     colorways: ['ART-001', 'colorway-1'],
+    media: ['style-version-1', 'colorway-1'],
     catalogSkus: ['SKU-1'],
     showrooms: ['2026-01-01T00:00:00.000Z', 'Showroom', 'showroom-1'],
     cycles: ['2026-01-01T00:00:00.000Z', null, 'cycle-1'],

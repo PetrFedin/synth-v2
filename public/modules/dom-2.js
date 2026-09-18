@@ -14,7 +14,10 @@ function pairName(brandId,shopId){return `${orgName(brandId)} \u2194 ${orgName(s
 function isoDates(values,names){const result={...values};names.forEach(name=>result[name]=toIso(result[name]));return result;} function toIso(value){const parsed=new Date(value);return Number.isNaN(parsed.valueOf())?value:parsed.toISOString();}
 function formatDate(value){return I18N.formatDate(value);} function money(value){return I18N.formatNumber(value,{maximumFractionDigits:2});}
 function statusLabel(value){const key=`status.${value}`;const translated=I18N.t(key);return translated===key?stageLabel(value):translated;}
-function shortId(value){const text=String(value||'');return text.length>10?`${text.slice(0,8)}\u2026`:(text||'\u2014');}
+// Identifiers here are prefixed by their kind: product-style_8390232a-…, selection_c49bce4f-….
+// Slicing the first characters showed the prefix and hid the part that tells two rows apart, so
+// every style read as the identical "product-…". The kind is dropped first.
+function shortId(value){const text=String(value||'');const tail=text.includes('_')?text.slice(text.lastIndexOf('_')+1):text;return tail.length>10?`${tail.slice(0,8)}\u2026`:(tail||'\u2014');}
 function stageLabel(value){const key=`stage.${value}`;const translated=I18N.t(key);return translated===key?String(value||'\u2014'):translated;}
 function viewTitle(view){const item=NAV.find(([id])=>id===view);return item?I18N.t(item[1]):I18N.t('nav.overview');}
 function translateDataText(value){
@@ -29,4 +32,4 @@ function translateDataText(value){
   for(const pair of prefixes){const source=text.startsWith(pair[0])?0:text.startsWith(pair[1])?1:-1;if(source>=0)return pair[target]+text.slice(pair[source].length);}
   return text==='\u043d\u0435\u0442'||text==='none'?I18N.translate(text):text;
 }
-function emptyWorkspace(){return{memberships:[],organisations:[],relationships:[],invitations:[],campaigns:[],collections:[],productStyles:[],placeholders:[],colorways:[],catalogSkus:[],showrooms:[],cycles:[],selections:[],orders:[],deals:[],calendar:[],pageInfo:{limit:0,hasMore:false,truncatedSections:[],nextCursors:{}}};}
+function emptyWorkspace(){return{memberships:[],organisations:[],relationships:[],invitations:[],campaigns:[],collections:[],productStyles:[],placeholders:[],colorways:[],media:[],catalogSkus:[],showrooms:[],cycles:[],selections:[],orders:[],deals:[],calendar:[],pageInfo:{limit:0,hasMore:false,truncatedSections:[],nextCursors:{}}};}

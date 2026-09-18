@@ -237,6 +237,9 @@
     if (!confirm(text(`Опубликовать размерную таблицу ${item.chart.sku}?`, `Publish measurement chart ${item.chart.sku}?`))) return;
     await mutate(`/v2/measurements/${encodeURIComponent(item.chart.sku)}/publish`, { expectedVersion: item.chart.version });
     await loadCharts({ reset: true });
+    // The revision action beside this one reports itself; publishing, which is the less reversible of
+    // the two, did not.
+    toast(text(`\u0420\u0430\u0437\u043c\u0435\u0440\u043d\u0430\u044f \u0442\u0430\u0431\u043b\u0438\u0446\u0430 ${item.chart.sku} \u043e\u043f\u0443\u0431\u043b\u0438\u043a\u043e\u0432\u0430\u043d\u0430.`, `Measurement chart ${item.chart.sku} published.`));
   }
   async function fetchCatalogSkus() {
     const items = new Map();

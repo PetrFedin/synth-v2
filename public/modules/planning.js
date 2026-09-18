@@ -95,7 +95,9 @@
   function varianceCell(item) {
     const variance = marginVariance(item);
     if (variance === null) return el('span', { className: 'muted', rawText: text('\u041d\u0435\u0442 \u0444\u0430\u043a\u0442\u0430', 'No fact yet') });
-    const tone = variance < -200 ? 'danger' : variance < 0 ? 'warning' : 'success';
+    // A plan the fact beats by thirty points was not a triumph, it was a wrong plan: a variance that
+    // large in either direction says the two sides are not comparable and needs looking at.
+    const tone = variance < -200 || variance > 1000 ? 'danger' : variance < 0 || variance > 300 ? 'warning' : 'success';
     const sign = variance > 0 ? '+' : '';
     return el('span', { className: `badge ${tone}`, rawText: `${sign}${(variance / 100).toFixed(1)} \u043f.\u043f.` });
   }
@@ -146,6 +148,63 @@
       ],
     });
   }
+  // A tab called Таймлайн that re-sorted the same table by a date both campaigns share rendered the
+  // portfolio again, byte for byte. A timeline shows when things happen against each other.
+  function renderTimeline(portfolio) {
+    const rows = [...portfolio.campaigns]
+      .filter((item) => item.campaign.startsAt && item.campaign.endsAt)
+      .sort((left, right) => String(left.campaign.startsAt).localeCompare(String(right.campaign.startsAt)));
+    if (!rows.length) {
+      return notice(text('Ни у одной кампании не заданы даты начала и конца, поэтому таймлайн пуст.', 'No campaign has a start and an end date, so the timeline is empty.'));
+    }
+    const starts = rows.map((item) => Date.parse(item.campaign.startsAt));
+    const ends = rows.map((item) => Date.parse(item.campaign.endsAt));
+    const first = Math.min(...starts);
+    const last = Math.max(...ends);
+    const span = Math.max(last - first, 1);
+    const board = el('section', { className: 'od-timeline-board' });
+    rows.forEach((item) => {
+      const row = el('article', { className: 'od-timeline-line' });
+      const label = el('div', { className: 'od-timeline-label' });
+      label.append(
+        el('strong', { rawText: item.campaign.name || item.campaign.id }),
+        el('small', { rawText: `${formatDate(item.campaign.startsAt)} — ${formatDate(item.campaign.endsAt)}` }),
+      );
+      const track = el('div', { className: 'od-timeline-track' });
+      const start = Date.parse(item.campaign.startsAt);
+      const end = Date.parse(item.campaign.endsAt);
+      // The bar is positioned with an SVG so the runtime writes no inline styles.
+      const bar = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      bar.setAttribute('class', 'od-timeline-bar');
+      bar.setAttribute('viewBox', '0 0 1000 18');
+      bar.setAttribute('preserveAspectRatio', 'none');
+      bar.setAttribute('role', 'img');
+      bar.setAttribute('aria-label', `${formatDate(item.campaign.startsAt)} — ${formatDate(item.campaign.endsAt)}`);
+      const base = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      base.setAttribute('x', '0'); base.setAttribute('y', '7');
+      base.setAttribute('width', '1000'); base.setAttribute('height', '4');
+      base.setAttribute('fill', '#EEF0F3');
+      const span1 = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      const x = Math.round(((start - first) / span) * 1000);
+      const width = Math.max(Math.round(((end - start) / span) * 1000), 6);
+      span1.setAttribute('x', String(x)); span1.setAttribute('y', '2');
+      span1.setAttribute('width', String(Math.min(width, 1000 - x))); span1.setAttribute('height', '14');
+      span1.setAttribute('rx', '3');
+      span1.setAttribute('fill', item.risks.length ? '#F79009' : '#12B76A');
+      bar.append(base, span1);
+      track.append(bar);
+      row.append(label, track, el('span', { className: 'od-timeline-readiness', rawText: `${item.readiness}%` }));
+      board.append(row);
+    });
+    const scale = el('div', { className: 'od-timeline-scale' });
+    scale.append(
+      el('small', { rawText: formatDate(new Date(first).toISOString()) }),
+      el('small', { rawText: formatDate(new Date(last).toISOString()) }),
+    );
+    board.append(scale);
+    return board;
+  }
+
   function renderLinePlan() {
     const rows = Array.isArray(state.workspace.placeholders) ? state.workspace.placeholders : [];
     if (!rows.length) {
@@ -198,7 +257,9 @@
     ], ['draft', 'open', 'closed', 'cancelled'], text('\u041f\u043e\u0438\u0441\u043a \u043a\u0430\u043c\u043f\u0430\u043d\u0438\u0438 \u0438\u043b\u0438 \u0441\u0435\u0437\u043e\u043d\u0430', 'Search campaign or season'), caps.hasAny(state.workspace, caps.CAPABILITIES.CAMPAIGN_MANAGE, 'brand') ? odAction(text('\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u043a\u0430\u043c\u043f\u0430\u043d\u0438\u044e', 'Create campaign'), campaignForm) : null);
     if (header.active === 'line-plan') return odPage(text('\u041f\u043b\u0430\u043d\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u0435 \u0430\u0441\u0441\u043e\u0440\u0442\u0438\u043c\u0435\u043d\u0442\u0430', 'Assortment planning'), header, renderLinePlan());
     let rows = portfolio.campaigns;
-    if (header.active === 'timeline') rows = [...rows].sort((left, right) => String(left.campaign.startsAt || '').localeCompare(String(right.campaign.startsAt || '')));
+    if (header.active === 'timeline') {
+      return odPage(text('\u041f\u043b\u0430\u043d\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u0435 \u043a\u043e\u043b\u043b\u0435\u043a\u0446\u0438\u0439', 'Collection planning'), header, renderTimeline(portfolio));
+    }
     if (header.active === 'exceptions') rows = rows.filter((item) => item.risks.length);
     const registry = odRegistry({
       scope: 'od-planning', filterScope: 'planning', rows, rowKey: (item) => item.campaign.id,

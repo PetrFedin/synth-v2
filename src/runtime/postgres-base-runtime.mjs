@@ -69,7 +69,7 @@ export function createPostgresWholesaleRuntime({
   notificationProjectionRetryDelayMs, notificationProjectionMaxAttempts, outboxPublisher,
   outboxPublicationWorkerId, outboxPublicationLeaseMs, outboxPublicationRetryDelayMs,
   outboxPublicationMaxRetryDelayMs, outboxPublicationMaxAttempts, maintenanceIntervalMs,
-  maintenanceRetryDelayMs, commandRetentionMs, authAuditRetentionMs, throttleRetentionMs,
+  maintenanceRetryDelayMs, maintenanceStatementTimeoutMs, commandRetentionMs, authAuditRetentionMs, throttleRetentionMs,
   outboxRetentionMs, operationalReadiness,
 } = {}) {
   invariant(pool, 'POSTGRES_POOL_REQUIRED', 'PostgreSQL pool is required');
@@ -153,7 +153,7 @@ export function createPostgresWholesaleRuntime({
     ...(outboxPublicationMaxAttempts !== undefined ? { maxAttempts: outboxPublicationMaxAttempts } : {}),
   }) : undefined;
   const maintenance = createMaintenanceService({
-    store: createPostgresMaintenanceStore({ pool }), ...(clock ? { clock } : {}),
+    store: createPostgresMaintenanceStore({ pool, statementTimeoutMs: maintenanceStatementTimeoutMs }), ...(clock ? { clock } : {}),
     ...(maintenanceIntervalMs !== undefined ? { intervalMs: maintenanceIntervalMs } : {}),
     ...(maintenanceRetryDelayMs !== undefined ? { retryDelayMs: maintenanceRetryDelayMs } : {}),
     ...(commandRetentionMs !== undefined ? { commandRetentionMs } : {}),

@@ -326,3 +326,38 @@ body.omnidata-v14 .language-switcher {
   gap: 4px !important;
   align-items: center !important;
 }
+
+/* The lifecycle rail on a style card: where the style is on the main line of development, and the
+   steps it has already passed. States that are exits from the line rather than steps along it are
+   not drawn here — the card states them as the current state instead. */
+body .od-lifecycle-rail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0 0 10px;
+  padding: 0 14px;
+}
+body .od-lifecycle-step {
+  padding: 3px 8px;
+  border: 1px solid var(--od14-line, #e1e4e7);
+  border-radius: 999px;
+  color: var(--od14-text-soft, #6b7280);
+  font-size: 8.5px;
+  white-space: nowrap;
+}
+body .od-lifecycle-step.passed {
+  border-color: transparent;
+  background: var(--od14-surface-soft, #f2f4f7);
+}
+body .od-lifecycle-step.current {
+  border-color: var(--od14-accent, #ff5b22);
+  background: var(--od14-accent, #ff5b22);
+  color: #fff;
+  font-weight: 600;
+}
+body .od-lifecycle-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 14px 10px;
+}

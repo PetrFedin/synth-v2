@@ -1,5 +1,6 @@
 import { invariant } from '../core/errors.mjs';
 import { assertBodyContract, assertQueryContract, bodyContract } from './request-contract.mjs';
+import { STYLE_LIFECYCLE, styleLifecycleMap } from '../modules/product-identity/public.mjs';
 
 const MDM_REF_FIELDS = ['entryId', 'version'];
 const STYLE_CREATE = required(bodyContract(['brandId', 'styleCode']), ['brandId', 'styleCode']);
@@ -40,6 +41,12 @@ const CATALOG_LINK = required(bodyContract(['catalogSku']), ['catalogSku']);
 export function createProductIdentityRoutes({ productIdentity } = {}) {
   const service = productIdentity ?? unavailableProductIdentity();
   return Object.freeze([
+    // The lifecycle itself, so a screen offers exactly the steps the domain allows rather than
+    // keeping its own copy of the map. It is the same shape for everyone, so it needs no actor.
+    read('GET', /^\/v2\/product\/lifecycle$/, [], () => Object.freeze({
+      statuses: Object.freeze(Object.values(STYLE_LIFECYCLE)),
+      transitions: styleLifecycleMap(),
+    })),
     read('GET', /^\/v2\/product\/styles\/([^/]+)$/, ['versionNo'], ({ actorId, params, query }) => service.getStyleForActor(actorId, params[0], { versionNo: query.versionNo })),
     read('GET', /^\/v2\/product\/size-scales\/([^/]+)$/, ['versionNo'], ({ actorId, params, query }) => service.getSizeScaleForActor(actorId, params[0], { versionNo: query.versionNo })),
     mutate('POST', /^\/v2\/product\/styles$/, STYLE_CREATE, ({ commandId, actorId, body }) => service.createStyle(commandId, actorId, body)),

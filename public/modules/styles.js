@@ -63,6 +63,63 @@
 
   // Every governed attribute the style carries, labelled by the catalogue rather than by a hardcoded
   // list here, so a card can show an attribute nobody thought to write a label for.
+  // The lifecycle comes from the server so this screen offers exactly the steps the domain allows and
+  // cannot drift from them. It is the same for every style, so it is fetched once.
+  const lifecycle = { statuses: [], transitions: null, loading: false, error: '' };
+  // The main line of development, in order. The remaining states (on hold, rejected, superseded) are
+  // exits from it rather than steps along it, so they are shown as where the style is, not as a rail.
+  const LIFECYCLE_MAIN_LINE = [
+    'draft', 'in_development', 'sample_review', 'technically_approved', 'sourcing_approved',
+    'purchase_or_production_ready', 'compliance_ready', 'commercial_ready', 'active',
+  ];
+  function ensureLifecycle() {
+    if (lifecycle.transitions || lifecycle.loading) return;
+    lifecycle.loading = true;
+    api('/v2/product/lifecycle')
+      .then((result) => { lifecycle.statuses = result.statuses || []; lifecycle.transitions = result.transitions || {}; })
+      .catch((error) => { lifecycle.error = error?.message || ''; })
+      .finally(() => { lifecycle.loading = false; renderApp(); });
+  }
+  function lifecycleRail(product) {
+    const rail = el('div', { className: 'od-lifecycle-rail' });
+    const currentIndex = LIFECYCLE_MAIN_LINE.indexOf(product.lifecycleStatus);
+    LIFECYCLE_MAIN_LINE.forEach((status, index) => {
+      const step = el('span', {
+        className: `od-lifecycle-step${index === currentIndex ? ' current' : ''}${currentIndex >= 0 && index < currentIndex ? ' passed' : ''}`,
+        rawText: statusLabel(status),
+      });
+      step.title = statusLabel(status);
+      rail.append(step);
+    });
+    return rail;
+  }
+  function transitionButtons(item) {
+    const product = item.product;
+    const next = lifecycle.transitions?.[product.lifecycleStatus] || [];
+    if (!lifecycle.transitions) return [notice(text('Загрузка жизненного цикла…', 'Loading the lifecycle…'))];
+    if (!next.length) {
+      return [notice(text(
+        `Состояние «${statusLabel(product.lifecycleStatus)}» конечное: дальше модель не переводится.`,
+        `"${statusLabel(product.lifecycleStatus)}" is a final state: the style goes no further.`,
+      ))];
+    }
+    const row = el('div', { className: 'od-lifecycle-actions' });
+    next.forEach((status) => {
+      const button = el('button', { className: 'button small', type: 'button', rawText: statusLabel(status) });
+      button.addEventListener('click', () => runAction(async () => {
+        await mutate(`/v2/product/styles/${encodeURIComponent(product.id)}/transition`, {
+          expectedVersion: product.styleHeadVersion,
+          nextStatus: status,
+        });
+        await reload();
+        renderApp();
+        toast(text(`Модель переведена в «${statusLabel(status)}».`, `The style moved to "${statusLabel(status)}".`), 'success');
+      }, button));
+      row.append(button);
+    });
+    return [row];
+  }
+
   function dimensionLabel(product) {
     return (I18N.getLocale?.() === 'en' ? product.categoryNameEn : product.categoryNameRu) || product.categoryCode || '—';
   }
@@ -129,6 +186,14 @@
           content: [risks],
         },
         {
+          label: text('Состояние', 'State'),
+          fields: [
+            { label: text('Текущее состояние', 'Current state'), value: statusLabel(product.lifecycleStatus) },
+            { label: text('Версия карточки', 'Card version'), value: product.styleHeadVersion ?? '—' },
+          ],
+          content: [lifecycleRail(product), ...transitionButtons(item)],
+        },
+        {
           label: text('Атрибуты категории', 'Category attributes'),
           fields: categoryAttributes(product).length
             ? categoryAttributes(product).map((item) => ({ label: item.label, value: item.value }))
@@ -163,6 +228,7 @@
   }
 
   function renderStyles() {
+    ensureLifecycle();
     const registry = core.buildRegistry(state.workspace);
     const header = odHeader('styles', [
       { id: 'registry', label: text('Реестр моделей', 'Product Master') },

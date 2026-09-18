@@ -51,7 +51,7 @@
   function date(value) {
     if (!value) return '—';
     const parsed = new Date(value);
-    return Number.isFinite(parsed.getTime()) ? new Intl.DateTimeFormat(undefined, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(parsed) : '—';
+    return Number.isFinite(parsed.getTime()) ? new Intl.DateTimeFormat(I18N.localeTag(), { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(parsed) : '—';
   }
   function can(brandId, capability) { return caps.hasForOrganisation(state.workspace, brandId, capability); }
   function canManageAny() { return caps.hasAny(state.workspace, caps.CAPABILITIES.QUALITY_MANAGE, 'brand'); }

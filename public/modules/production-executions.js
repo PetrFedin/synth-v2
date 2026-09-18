@@ -55,7 +55,7 @@
     if (!value) return '—';
     const parsed = new Date(value);
     return Number.isFinite(parsed.getTime())
-      ? new Intl.DateTimeFormat(undefined, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(parsed)
+      ? new Intl.DateTimeFormat(I18N.localeTag(), { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(parsed)
       : '—';
   }
   function can(brandId, capability) { return caps.hasForOrganisation(state.workspace, brandId, capability); }

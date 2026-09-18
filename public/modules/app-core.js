@@ -204,7 +204,11 @@ function renderApp() {
   // only asked the same question twice. languageSwitcher() is unchanged and still builds the topbar
   // control and the one on the sign-in card.
   const refresh = sidebarButton('refresh', I18N.t('common.refresh'));
-  refresh.addEventListener('click', () => runAction(async () => { await reload(); renderApp(); }, refresh));
+  refresh.addEventListener('click', () => runAction(async () => {
+    await reload();
+    renderApp();
+    toast(localText('\u0414\u0430\u043d\u043d\u044b\u0435 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u044b.', 'Data refreshed.'));
+  }, refresh));
   const logout = sidebarButton('logout', I18N.t('common.logout'), 'danger');
   logout.addEventListener('click', () => runAction(async () => {
     await api('/v2/auth/logout', { method: 'POST' }).catch(() => null);
@@ -408,7 +412,10 @@ function filterCurrentView(value) {
   // Registries render as tables, not as .stack/.entity cards, so the topbar search used to match
   // nothing at all in every workspace section. Rows are hidden in place: re-rendering here would
   // take the focus away from the field on every keystroke.
-  host.querySelectorAll('.od-table').forEach(table => {
+  // Every module that renders its own table was invisible to this search: the sourcing, production,
+  // quality and linesheet screens do not use .od-table, so the box in the top bar promised "search
+  // this section" and did nothing in eight of them.
+  host.querySelectorAll('.od-table, .sourcing-table, .production-orders-table, .production-execution-table, .final-quality-table, .ls9-table, .bom-table, .measurement-table, .sample-table, .tech-pack-table').forEach(table => {
     const rows = [...table.querySelectorAll('tbody tr')];
     let visible = 0;
     rows.forEach(row => {
@@ -417,7 +424,7 @@ function filterCurrentView(value) {
       row.classList.toggle('od-row-hidden', !matches);
       if (matches) visible += 1;
     });
-    const wrap = table.closest('.od-table-wrap');
+    const wrap = table.closest('.od-table-wrap, .sourcing-table-wrap, .production-orders-registry, .production-execution-registry, .final-quality-registry, .ls9-table-wrap, .tech-pack-table-wrap');
     if (!wrap) return;
     const note = wrap.querySelector('.od-search-empty');
     if (query && rows.length && !visible) {

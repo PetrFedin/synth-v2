@@ -48,7 +48,7 @@
     return catalog().filter((sku) => sku.status === 'published' && bomSkus.has(sku.sku) && can(sku.brandId, caps.CAPABILITIES.SOURCING_MANAGE));
   }
   function qualifiedSuppliers(brandId) { return ui.suppliers.filter((supplier) => supplier.brandId === brandId && supplier.status === 'qualified'); }
-  function formatDate(value) { if (!value) return '—'; const date = new Date(value); return Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat(undefined, { day: '2-digit', month: 'short', year: 'numeric' }).format(date) : '—'; }
+  function formatDate(value) { if (!value) return '—'; const date = new Date(value); return Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat(I18N.localeTag(), { day: '2-digit', month: 'short', year: 'numeric' }).format(date) : '—'; }
   function formatMoneyMinor(value, currency) { const amount = Number(value) / 100; return Number.isFinite(amount) ? new Intl.NumberFormat(undefined, { style: 'currency', currency: currency || 'EUR', maximumFractionDigits: 2 }).format(amount) : '—'; }
   function badge(label, tone = 'neutral') { return h('span', { className: `sourcing-badge sourcing-${tone}`, text: label }); }
   function statusLabel(status) {
@@ -297,10 +297,20 @@
   function select(name, options, value, attrs = {}) { const node = h('select', { name, ...attrs }, options.map(([key, label]) => h('option', { value: key, text: label }))); node.value = value ?? options[0]?.[0] ?? ''; return node; }
   function field(label, input) { return h('label', { className: 'sourcing-field' }, [h('span', { text: label }), input]); }
   function localInput(value) { if (!value) return ''; const date = new Date(value); if (!Number.isFinite(date.getTime())) return ''; const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000); return local.toISOString().slice(0, 16); }
-  function iso(value) { const date = new Date(value); if (!Number.isFinite(date.getTime())) throw new Error('INVALID_DATE'); return date.toISOString(); }
+  function iso(value) { const date = new Date(value); if (!Number.isFinite(date.getTime())) throw new Error(text('\u0423\u043a\u0430\u0436\u0438\u0442\u0435 \u0434\u0430\u0442\u0443.', 'Enter a date.')); return date.toISOString(); }
   function daysFromNow(days) { return localInput(new Date(Date.now() + days * 86400000).toISOString()); }
   function list(value) { return String(value || '').split(',').map((item) => item.trim()).filter(Boolean); }
-  function decimalToMinor(value) { const normalized = String(value).trim(); if (!/^\d+(?:\.\d{1,2})?$/.test(normalized)) throw new Error('INVALID_MONEY'); const [whole, fraction = ''] = normalized.split('.'); const result = Number(whole) * 100 + Number(fraction.padEnd(2, '0')); if (!Number.isSafeInteger(result)) throw new Error('INVALID_MONEY'); return result; }
+  // This UI prints money as "21 250,00 €", so a Russian reader types 52,00 — and the form rejected it
+  // with the bare code INVALID_MONEY. A comma is a decimal separator here, spaces group thousands, and
+  // the message is a sentence.
+  function decimalToMinor(value) {
+    const normalized = String(value).trim().replace(/[\s\u00a0\u202f]/g, '').replace(',', '.');
+    if (!/^\d+(?:\.\d{1,2})?$/.test(normalized)) {
+      throw new Error(text('\u0423\u043a\u0430\u0436\u0438\u0442\u0435 \u0441\u0443\u043c\u043c\u0443, \u043d\u0430\u043f\u0440\u0438\u043c\u0435\u0440 52,00 \u0438\u043b\u0438 52.', 'Enter an amount, for example 52,00 or 52.'));
+    }
+    const [whole, fraction = ''] = normalized.split('.');
+    return Number(whole) * 100 + Number(fraction.padEnd(2, '0'));
+  }
   function dialog(title, fields, submitLabel, onSubmit, danger = false) {
     const modal = h('dialog', { className: 'sourcing-dialog' }); const form = h('form', { method: 'dialog' }, [h('header', {}, [h('h2', { text: title })]), h('div', { className: 'sourcing-form-grid' }, fields)]);
     const error = h('p', { className: 'sourcing-form-error', hidden: true });

@@ -18,6 +18,8 @@ const LOGIN_BODY = bodyContract(['email', 'password']);
  *
  * The request view is `{ method, url: URL, header(name), readBody(limit) }`, where `readBody` must
  * enforce `limit` while the body is being consumed rather than after it is fully buffered.
+ *
+ * @param {Record<string, any>} [options] Authenticator, readiness probe, limits and the service map.
  */
 export function createWholesaleRequestPipeline({ authenticate, auth, readiness, maxBodyBytes = 256 * 1024, nextRequestId = randomUUID, ...services } = {}) {
   invariant(typeof authenticate === 'function', 'HTTP_AUTHENTICATOR_REQUIRED', 'HTTP authenticator is required');

@@ -541,7 +541,8 @@ async function findActiveRelationship({ fetchImpl, target, brandToken, brandId, 
   throw new Error('Commercial acceptance relationship could not be renewed and no existing active relationship was found');
 }
 
-async function requestJson(fetchImpl, baseUrl, pathname, { method = 'GET', token, body, idempotencyKey } = {}) {
+async function requestJson(fetchImpl, baseUrl, pathname, options = {}) {
+  const { method = 'GET', token, body, idempotencyKey } = /** @type {Record<string, any>} */ (options);
   if (typeof fetchImpl !== 'function') throw new Error('Fetch implementation is required');
   const headers = { accept: 'application/json' };
   if (token) headers.authorization = `Bearer ${token}`;
@@ -560,7 +561,7 @@ async function requestJson(fetchImpl, baseUrl, pathname, { method = 'GET', token
   }
   if (!response.ok) {
     const code = payload?.error?.code ? ` (${payload.error.code})` : '';
-    const error = new Error(`Acceptance request failed: ${method} ${pathname} -> HTTP ${response.status}${code}`);
+    const error = /** @type {Error & { code?: string, status?: number }} */ (new Error(`Acceptance request failed: ${method} ${pathname} -> HTTP ${response.status}${code}`));
     // Surface the domain code so callers can converge on state that already exists instead of
     // parsing the message. The message itself is unchanged.
     error.code = payload?.error?.code;

@@ -191,7 +191,8 @@
   }
 
   function renderBoms() {
-    if (!ui.loaded && !ui.loading) queueMicrotask(() => loadBoms({ reset: true }));
+    // See materials.js: retrying a failed load from render starves the event loop.
+    if (!ui.loaded && !ui.loading && !ui.error) queueMicrotask(() => loadBoms({ reset: true }));
     const registry = core.buildRegistry(ui.items, state.workspace.catalogSkus || []);
     return h('section', { className: 'bom-page' }, [
       header(registry.summary),

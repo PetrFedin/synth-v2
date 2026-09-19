@@ -483,3 +483,41 @@ body .tp-doc-total { margin: 8px 0 0; font-size: 11px; font-weight: 600; }
   .od-import-controls { flex-direction: column; }
   .od-import-select { min-width: 0; width: 100%; }
 }
+
+/* The path's root is a control now, not a decoration. It carries no chrome of its own — a button that
+   looks like a button here would compete with the actions beside it — but it says so on hover and to
+   the keyboard, and it stops offering itself when there is nowhere to go. */
+body .breadcrumb .breadcrumb-root {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+body .breadcrumb .breadcrumb-root:hover:not(:disabled) { background: rgba(16, 24, 40, .06); }
+body .breadcrumb .breadcrumb-root:hover:not(:disabled) .breadcrumb-muted { color: var(--od14-text, #101828); }
+body .breadcrumb .breadcrumb-root:disabled { cursor: default; }
+body .breadcrumb .breadcrumb-root:focus-visible { outline: 2px solid var(--od14-accent, #ff5b22); outline-offset: 1px; }
+
+/* The shared confirmation. It borrows the proportions of the forms it interrupts rather than
+   inventing its own, so agreeing to something never feels like leaving the application. */
+.app-confirm {
+  width: min(460px, calc(100vw - 28px));
+  padding: 0;
+  border: 0;
+  border-radius: 14px;
+  background: var(--od14-surface, #fff);
+  color: var(--od14-text, #101828);
+  box-shadow: 0 24px 80px rgba(16, 24, 40, .28);
+}
+.app-confirm::backdrop { background: rgba(16, 24, 40, .56); }
+.app-confirm form { display: grid; gap: 14px; padding: 22px; }
+.app-confirm header h2 { margin: 0; font-size: 18px; }
+.app-confirm-question { margin: 0; color: var(--od14-text-soft, #475467); }
+.app-confirm footer { display: flex; justify-content: flex-end; gap: 8px; }

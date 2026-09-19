@@ -234,7 +234,12 @@
 
   async function publishChart(item) {
     if (!item.publishReady) return;
-    if (!confirm(text(`Опубликовать размерную таблицу ${item.chart.sku}?`, `Publish measurement chart ${item.chart.sku}?`))) return;
+    const accepted = await confirmAction({
+      title: text('Опубликовать размерную таблицу', 'Publish measurement chart'),
+      question: text(`${item.chart.sku}: опубликованная таблица становится неизменяемой.`, `${item.chart.sku}: a published chart becomes immutable.`),
+      confirmLabel: text('Опубликовать', 'Publish'),
+    });
+    if (!accepted) return;
     await mutate(`/v2/measurements/${encodeURIComponent(item.chart.sku)}/publish`, { expectedVersion: item.chart.version });
     await loadCharts({ reset: true });
     // The revision action beside this one reports itself; publishing, which is the less reversible of

@@ -70,19 +70,29 @@ function openForm(title, fields, submitAction) {
     event.preventDefault();
     event.returnValue = '';
   };
-  const requestClose = () => {
+  // Asking "discard your edits?" through the browser's own box was the last native dialog left in the
+  // application. Nobody reads the return value of this, so it can wait for a styled answer.
+  const requestClose = async () => {
     if (submitting) return false;
-    if (isDirty() && !window.confirm(I18N.t('common.unsavedChangesConfirm'))) return false;
+    if (isDirty()) {
+      const accepted = await confirmAction({
+        title: I18N.t('common.unsavedChangesTitle'),
+        question: I18N.t('common.unsavedChangesConfirm'),
+        confirmLabel: I18N.t('common.discardChanges'),
+        danger: true,
+      });
+      if (!accepted) return false;
+    }
     dialog.close();
     return true;
   };
   const cancelDialog = event => {
     if (!shouldBlockNavigation()) return;
     event.preventDefault();
-    requestClose();
+    void requestClose();
   };
 
-  close.addEventListener('click', requestClose);
+  close.addEventListener('click', () => { void requestClose(); });
   dialog.addEventListener('cancel', cancelDialog);
   dialog.addEventListener('close', cleanup, { once: true });
   window.addEventListener('beforeunload', beforeUnload);

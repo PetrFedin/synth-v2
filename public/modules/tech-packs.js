@@ -275,7 +275,14 @@
       return Boolean(await command(null, '/v2/tech-packs', { techPackCode: values.techPackCode, sku: values.sku, ...payload(values) }));
     });
   }
-  async function confirmIssue(value) { if (confirm(text(`Выпустить ${value.techPackCode}? После выпуска редакция неизменяема.`, `Issue ${value.techPackCode}? The revision becomes immutable.`))) await command(value, `/v2/tech-packs/${encodeURIComponent(value.techPackCode)}/issue`, { expectedVersion: value.version }); }
+  async function confirmIssue(value) {
+    const accepted = await confirmAction({
+      title: text('Выпустить технический пакет', 'Issue tech pack'),
+      question: text(`${value.techPackCode}: после выпуска редакция неизменяема.`, `${value.techPackCode}: the revision becomes immutable once issued.`),
+      confirmLabel: text('Выпустить', 'Issue'),
+    });
+    if (accepted) await command(value, `/v2/tech-packs/${encodeURIComponent(value.techPackCode)}/issue`, { expectedVersion: value.version });
+  }
   function openAcknowledgement(value) { dialog(text('Подтверждение фабрики', 'Supplier acknowledgement'), [field(text('Код фабрики', 'Supplier code'), input('supplierCode', value.supplierCode, { readonly: true, required: true })), field(text('Ссылка / номер подтверждения', 'Acknowledgement reference'), input('acknowledgementReference', '', { required: true, minlength: '2', maxlength: '160' })), field(text('Подтвердил', 'Acknowledged by'), input('acknowledgedBy', '', { required: true, minlength: '2', maxlength: '160' })), field(text('Комментарий', 'Notes'), textarea('notes', '', { rows: '4', maxlength: '1000' }))], async (values) => Boolean(await command(value, `/v2/tech-packs/${encodeURIComponent(value.techPackCode)}/acknowledge`, { expectedVersion: value.version, supplierCode: values.supplierCode, acknowledgementReference: values.acknowledgementReference, acknowledgedBy: values.acknowledgedBy, notes: values.notes || null })), text('Зафиксировать', 'Record'));
   }
   function openRevision(value) { dialog(text('Новая редакция', 'New revision'), [field(text('Код новой редакции', 'New revision code'), input('techPackCode', core.nextRevisionCode(value), { required: true, maxlength: '64' }))], async (values) => Boolean(await command(value, `/v2/tech-packs/${encodeURIComponent(value.techPackCode)}/revisions`, { expectedVersion: value.version, techPackCode: values.techPackCode })), text('Создать редакцию', 'Create revision'));

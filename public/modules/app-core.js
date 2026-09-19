@@ -244,11 +244,24 @@ function renderTopbar() {
   const breadcrumb = el('div', { className: 'breadcrumb' });
   const crumbTitle = viewTitle(state.view);
   const crumbSection = viewSectionName(state.view);
-  breadcrumb.append(
-    icon('back'),
-    el('span', { className: 'breadcrumb-muted', rawText: 'SYNTHA' }),
-    el('span', { className: 'breadcrumb-divider', rawText: '/' }),
-  );
+  // The path carried a back chevron and was a plain div: it looked like the way back out of a section
+  // and did nothing at all. The root is now the control it already appeared to be, and the chevron is
+  // drawn only when there is somewhere to go — on the workspace itself there is not.
+  const atRoot = state.view === 'overview';
+  const home = el('button', {
+    className: 'breadcrumb-root',
+    type: 'button',
+    title: localText('\u041d\u0430 \u0440\u0430\u0431\u043e\u0447\u0438\u0439 \u0441\u0442\u043e\u043b', 'Back to the workspace'),
+  });
+  if (!atRoot) home.append(icon('back'));
+  home.append(el('span', { className: 'breadcrumb-muted', rawText: 'SYNTHA' }));
+  home.disabled = atRoot;
+  home.addEventListener('click', () => {
+    if (state.view === 'overview') return;
+    state.view = 'overview';
+    renderApp();
+  });
+  breadcrumb.append(home, el('span', { className: 'breadcrumb-divider', rawText: '/' }));
   // On the workspace the section and the page are the same place, and the path read
   // "SYNTHA / Рабочий стол / Рабочий стол". A step that repeats the next one is not a step.
   if (crumbSection && crumbSection.trim().toLowerCase() !== crumbTitle.trim().toLowerCase()) {

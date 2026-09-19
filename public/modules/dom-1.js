@@ -103,10 +103,48 @@ function kpi(label, value) {
   return card;
 }
 
+// Asking somebody to confirm something is part of the product, so it looks like the product. A native
+// window.confirm cannot be translated, carries the browser's own chrome, blocks the page while it is
+// open, and looked nothing like the styled confirmations the rest of the application already used.
+// One helper, so no screen has to decide this for itself.
+function confirmAction({ title, question, confirmLabel, danger = false }) {
+  return new Promise((resolve) => {
+    const modal = el('dialog', { className: 'app-confirm' });
+    const form = el('form', { method: 'dialog' });
+    const heading = el('header');
+    heading.append(el('h2', { rawText: title }));
+    const body = el('p', { className: 'app-confirm-question', rawText: question });
+    const footer = el('footer');
+    const cancel = el('button', { className: 'button secondary', type: 'button', rawText: I18N.t('common.cancel') });
+    const accept = el('button', { className: `button ${danger ? 'danger' : 'primary'}`, type: 'submit', rawText: confirmLabel });
+    let answered = false;
+    const settle = (value) => { if (answered) return; answered = true; resolve(value); };
+    cancel.addEventListener('click', () => { settle(false); modal.close(); });
+    form.addEventListener('submit', (event) => { event.preventDefault(); settle(true); modal.close(); });
+    // Escape and the backdrop both mean "no", and both must answer the caller waiting on this.
+    modal.addEventListener('close', () => { settle(false); modal.remove(); }, { once: true });
+    footer.append(cancel, accept);
+    form.append(heading, body, footer);
+    modal.append(form);
+    document.body.append(modal);
+    modal.showModal();
+    accept.focus();
+  });
+}
+
 function actionButton(label, fn, variant = '', confirmText = '') {
   const button = el('button', { className: `button small ${variant}`.trim(), text: label, type: 'button' });
-  button.addEventListener('click', () => {
-    if (confirmText && !window.confirm(I18N.translate(confirmText))) return;
+  button.addEventListener('click', async () => {
+    if (confirmText) {
+      const question = I18N.translate(confirmText);
+      const accepted = await confirmAction({
+        title: label,
+        question,
+        confirmLabel: label,
+        danger: String(variant).includes('danger'),
+      });
+      if (!accepted) return;
+    }
     runAction(async () => {
       await fn();
       // Some actions only open a form; the work happens when that form is submitted. Reloading and

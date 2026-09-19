@@ -482,9 +482,42 @@
     const quotes = core.rankQuotes(rfq); if (!quotes.length) return;
     dialog(text('Выбор победителя RFQ', 'Award RFQ'), [field(text('Поставщик / сумма', 'Supplier / total'), select('supplierCode', quotes.map((quote) => [quote.supplierCode, `#${quote.rank} ${quote.supplierName} · ${formatMoneyMinor(quote.totalCostMinor, rfq.bomCurrency)}`]), quotes[0].supplierCode))], text('Подтвердить выбор', 'Confirm award'), async (values) => Boolean(await runMutation(rfq.rfqCode, `/v2/rfqs/${encodeURIComponent(rfq.rfqCode)}/award`, { expectedVersion: rfq.version, supplierCode: values.supplierCode })));
   }
+  // Allocating a request and opening the production order it allocates to are two commands, and they
+  // stay two: they need different standing, and the second is the factory's copy of the deal. What
+  // they are not is two screens. The wizard used to finish by saying "PO-… created", leave nothing in
+  // Производственные заказы, and require the buyer to retype that same code by hand into a bare text
+  // box in another section. So the allocation now opens the order in the same step, and when the
+  // actor may allocate but not open orders it says who has to.
   function openAllocationDialog(rfq) {
-    dialog(text('PO и размещение производства', 'PO and production allocation'), [field(text('Номер PO', 'PO number'), control('purchaseOrderNumber', 'text', `PO-${rfq.rfqCode}`, { required: true, maxlength: '80' })), field(text('Количество', 'Quantity'), control('quantity', 'number', rfq.targetQuantity, { min: '1', required: true, readonly: true })), field(text('Старт производства', 'Production start'), control('productionStartAt', 'datetime-local', daysFromNow(1), { required: true })), field(text('Поставка', 'Delivery due'), control('deliveryDueAt', 'datetime-local', localInput(rfq.deliveryDueAt), { required: true })), field(text('Комментарий', 'Notes'), textarea('notes', '', { maxlength: '1000', rows: '4' }))], text('Создать PO и разместить', 'Create PO and allocate'), async (values) => Boolean(await runMutation(rfq.rfqCode, `/v2/rfqs/${encodeURIComponent(rfq.rfqCode)}/allocate`, { expectedVersion: rfq.version, purchaseOrderNumber: values.purchaseOrderNumber.trim().toUpperCase(), quantity: Number(values.quantity), productionStartAt: iso(values.productionStartAt), deliveryDueAt: iso(values.deliveryDueAt), notes: values.notes.trim() || null })));
+    dialog(text('PO и размещение производства', 'PO and production allocation'), [field(text('Номер PO', 'PO number'), control('purchaseOrderNumber', 'text', `PO-${rfq.rfqCode}`, { required: true, maxlength: '80' })), field(text('Количество', 'Quantity'), control('quantity', 'number', rfq.targetQuantity, { min: '1', required: true, readonly: true })), field(text('Старт производства', 'Production start'), control('productionStartAt', 'datetime-local', daysFromNow(1), { required: true })), field(text('Поставка', 'Delivery due'), control('deliveryDueAt', 'datetime-local', localInput(rfq.deliveryDueAt), { required: true })), field(text('Комментарий', 'Notes'), textarea('notes', '', { maxlength: '1000', rows: '4' }))], text('Создать PO и разместить', 'Create PO and allocate'), async (values) => {
+      const allocated = await runMutation(rfq.rfqCode, `/v2/rfqs/${encodeURIComponent(rfq.rfqCode)}/allocate`, { expectedVersion: rfq.version, purchaseOrderNumber: values.purchaseOrderNumber.trim().toUpperCase(), quantity: Number(values.quantity), productionStartAt: iso(values.productionStartAt), deliveryDueAt: iso(values.deliveryDueAt), notes: values.notes.trim() || null });
+      if (!allocated) return false;
+      if (!can(rfq.brandId, caps.CAPABILITIES.PRODUCTION_ORDER_MANAGE)) {
+        toast(text(
+          `Размещение выполнено. Производственный заказ откроет тот, у кого есть право на производственные заказы — код запроса ${rfq.rfqCode}.`,
+          `Allocated. Someone with production-order rights opens the order itself — request code ${rfq.rfqCode}.`,
+        ));
+        return true;
+      }
+      await openProductionOrder(rfq.rfqCode);
+      return true;
+    });
   }
+
+  async function openProductionOrder(rfqCode) {
+    try {
+      const order = await mutate(`/v2/production-orders/from-allocation/${encodeURIComponent(rfqCode)}`, {}, 'POST');
+      toast(text(`Производственный заказ ${order.productionOrderNumber} открыт.`, `Production order ${order.productionOrderNumber} is open.`));
+    } catch (error) {
+      // The allocation succeeded and must not be reported as a failure; what failed is the step after
+      // it, and the message says which step and what to do about it.
+      toast(text(
+        `Размещение выполнено, но производственный заказ не открылся: ${errorMessage(error)} Откройте его в разделе «Производственные заказы» по коду ${rfqCode}.`,
+        `Allocated, but the production order did not open: ${errorMessage(error)} Open it in Production orders using code ${rfqCode}.`,
+      ), 'error');
+    }
+  }
+
   function openRfqCancelDialog(rfq) { dialog(text('Отменить RFQ', 'Cancel RFQ'), [field(text('Причина', 'Reason'), textarea('reason', '', { required: true, minlength: '5', maxlength: '500', rows: '4' }))], text('Отменить RFQ', 'Cancel RFQ'), async (values) => Boolean(await runMutation(rfq.rfqCode, `/v2/rfqs/${encodeURIComponent(rfq.rfqCode)}/cancel`, { expectedVersion: rfq.version, reason: values.reason })), true); }
 
   const previousRenderView = renderView;

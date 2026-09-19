@@ -44,7 +44,12 @@
   }
   async function startRevision(chart) {
     if (!canRevise(chart) || operation.busySku) return;
-    if (!confirm(text(`Создать новую ревизию таблицы ${chart.sku}? Опубликованная версия будет сохранена в архиве.`, `Start a new revision for ${chart.sku}? The published version will be preserved in the archive.`))) return;
+    const accepted = await confirmAction({
+      title: text('Новая ревизия таблицы', 'New chart revision'),
+      question: text(`${chart.sku}: опубликованная версия сохранится в архиве.`, `${chart.sku}: the published version is kept in the archive.`),
+      confirmLabel: text('Создать ревизию', 'Start revision'),
+    });
+    if (!accepted) return;
     operation.busySku = chart.sku;
     renderApp();
     try {

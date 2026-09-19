@@ -203,7 +203,12 @@
   }
 
   async function publish(bom) {
-    if (!confirm(text(`Опубликовать BOM ${bom.sku}? После публикации редактирование будет закрыто.`, `Publish BOM ${bom.sku}? Editing will be locked.`))) return;
+    const accepted = await confirmAction({
+      title: text('Опубликовать спецификацию', 'Publish BOM'),
+      question: text(`${bom.sku}: после публикации редактирование будет закрыто.`, `${bom.sku}: editing is locked once it is published.`),
+      confirmLabel: text('Опубликовать', 'Publish'),
+    });
+    if (!accepted) return;
     await mutate(`/v2/boms/${encodeURIComponent(bom.sku)}/publish`, { expectedVersion: bom.version });
     await loadBoms({ reset: true });
     // Publishing closes the BOM for editing. Doing that silently leaves the reader unsure whether it

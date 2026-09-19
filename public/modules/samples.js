@@ -301,7 +301,12 @@
 
   async function confirmAction(sample, action) {
     const pathByAction = { request: 'request', 'start-production': 'start-production' };
-    if (!confirm(text(`Подтвердить действие для ${sample.sampleCode}?`, `Confirm action for ${sample.sampleCode}?`))) return;
+    const accepted = await confirmAction({
+      title: text('Подтвердить действие', 'Confirm action'),
+      question: text(`Образец ${sample.sampleCode}.`, `Sample ${sample.sampleCode}.`),
+      confirmLabel: text('Подтвердить', 'Confirm'),
+    });
+    if (!accepted) return;
     await runMutation(sample.sampleCode, `/v2/samples/${encodeURIComponent(sample.sampleCode)}/${pathByAction[action]}`, { expectedVersion: sample.version });
   }
   function openReceiptDialog(sample) {

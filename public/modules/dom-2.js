@@ -18,6 +18,30 @@ function statusLabel(value){const key=`status.${value}`;const translated=I18N.t(
 // Slicing the first characters showed the prefix and hid the part that tells two rows apart, so
 // every style read as the identical "product-…". The kind is dropped first.
 function shortId(value){const text=String(value||'');const tail=text.includes('_')?text.slice(text.lastIndexOf('_')+1):text;return tail.length>10?`${tail.slice(0,8)}\u2026`:(tail||'\u2014');}
+// A reference a person can read out over the phone. Orders, selections and deal spaces are keyed by
+// generated identifiers, and the registers showed them raw: "order_8c22a11c-e886-4c9d-8078-bebb804f6a65"
+// is not a name, it cannot be quoted, and two of them side by side look identical.
+//
+// This is a display rule, not a new identity. The full identifier stays the key everywhere it matters
+// and is still shown in the inspector and on hover; what changes is that the column a person scans
+// carries something they can hold in their head.
+const OBJECT_REFERENCE_PREFIX={order:'ORD',selection:'SEL',deal:'DEAL',cycle:'CYC',showroom:'SHR',invitation:'INV'};
+function objectReference(value){
+  const text=String(value||'').trim();
+  if(!text) return '\u2014';
+  const underscore=text.indexOf('_');
+  const kind=underscore>0?text.slice(0,underscore):'';
+  const tail=(underscore>0?text.slice(underscore+1):text).replace(/-/g,'');
+  const prefix=OBJECT_REFERENCE_PREFIX[kind];
+  if(!prefix||tail.length<8) return text;
+  return `${prefix}-${tail.slice(0,8).toUpperCase()}`;
+}
+// The same rule applied inside a sentence somebody else wrote. Calendar events and notifications carry
+// server-written titles such as "Deal opened for order_8c22a11c-…", and the identifier in the middle of
+// them is the part nobody can read.
+function humaniseIdentifiers(value){
+  return String(value??'').replace(/\b(order|selection|deal|cycle|showroom|invitation)_[0-9a-f-]{8,}\b/gi,(match)=>objectReference(match));
+}
 function stageLabel(value){const key=`stage.${value}`;const translated=I18N.t(key);return translated===key?String(value||'\u2014'):translated;}
 function viewTitle(view){const item=NAV.find(([id])=>id===view);return item?I18N.t(item[1]):I18N.t('nav.overview');}
 function translateDataText(value){

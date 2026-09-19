@@ -197,6 +197,30 @@
     ) });
   }
 
+  // The materials section, and what it says when it has nothing. A document carries a bill only once
+  // that bill is published — an unpublished one is still being argued about, and a factory must not
+  // build from it — but an empty table under a heading says none of that.
+  function materialsBlock(doc, money) {
+    const lines = doc.materials || [];
+    if (lines.length) {
+      return documentTable(
+        [text('№', 'No.'), text('Компонент', 'Component'), text('Материал', 'Material'), text('Тип', 'Type'), text('Нетто', 'Net'), text('Отходы, %', 'Waste, %'), text('Брутто', 'Gross'), text('Цена за ед.', 'Unit cost')],
+        lines.map((line) => [line.position, line.component, line.materialCode, line.materialType,
+          `${line.quantity} ${line.unit}`, line.wastePercent, `${line.grossQuantity} ${line.unit}`, money(line.unitCost)]),
+      );
+    }
+    if (doc.bomStatus && doc.bomStatus !== 'published') {
+      return h('p', { className: 'tp-doc-note', text: text(
+        'Спецификация ещё в черновике. В документ она попадёт после публикации.',
+        'The bill of materials is still a draft. It reaches the document once it is published.',
+      ) });
+    }
+    return h('p', { className: 'tp-doc-note tp-doc-warning', text: text(
+      'У артикула нет спецификации — по этому документу шить нельзя.',
+      'This SKU has no bill of materials — do not build from this document.',
+    ) });
+  }
+
   function renderDocument(doc) {
     const en = I18N.getLocale?.() === 'en';
     const money = (value) => (value === null || value === undefined
@@ -234,10 +258,7 @@
         ),
         documentSection('tp-contents', '\u041e\u0433\u043b\u0430\u0432\u043b\u0435\u043d\u0438\u0435', 'Table of contents',
           h('ol', { className: 'tp-doc-contents' }, contents.map(([, ru, enTitle]) => h('li', { text: text(ru, enTitle) })))),
-        documentSection('tp-materials', '\u0421\u043f\u0435\u0446\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u044f \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u043e\u0432', 'Bill of materials', documentTable(
-          [text('\u2116', 'No.'), text('\u041a\u043e\u043c\u043f\u043e\u043d\u0435\u043d\u0442', 'Component'), text('\u041c\u0430\u0442\u0435\u0440\u0438\u0430\u043b', 'Material'), text('\u0422\u0438\u043f', 'Type'), text('\u041d\u0435\u0442\u0442\u043e', 'Net'), text('\u041e\u0442\u0445\u043e\u0434\u044b, %', 'Waste, %'), text('\u0411\u0440\u0443\u0442\u0442\u043e', 'Gross'), text('\u0426\u0435\u043d\u0430 \u0437\u0430 \u0435\u0434.', 'Unit cost')],
-          (doc.materials || []).map((line) => [line.position, line.component, line.materialCode, line.materialType,
-            `${line.quantity} ${line.unit}`, line.wastePercent, `${line.grossQuantity} ${line.unit}`, money(line.unitCost)]))),
+        documentSection('tp-materials', '\u0421\u043f\u0435\u0446\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u044f \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u043e\u0432', 'Bill of materials', materialsBlock(doc, money)),
         documentSection('tp-measurements', '\u0422\u0430\u0431\u043b\u0438\u0446\u0430 \u043c\u0435\u0440', 'Measurement chart', measurementBlock(doc)),
         documentSection('tp-construction', '\u041a\u043e\u043d\u0441\u0442\u0440\u0443\u043a\u0446\u0438\u044f, \u043a\u0430\u0447\u0435\u0441\u0442\u0432\u043e \u0438 \u0443\u043f\u0430\u043a\u043e\u0432\u043a\u0430', 'Construction, quality and packing',
           h('div', { className: 'tp-doc-notes' }, [

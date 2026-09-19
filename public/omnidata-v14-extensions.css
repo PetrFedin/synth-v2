@@ -672,3 +672,30 @@ body.omnidata-v14.omnidata-design-system-v1 :is(.od-inspector-tabs, .ls9-inspect
 .od-form-field input[type="color"] { padding: 3px; height: 38px; }
 .od-form-error { margin: 0; padding: 10px; border-radius: 8px; background: #fef3f2; color: #b42318; font-size: 12px; }
 .od-form-dialog footer { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* The shared create/edit dialog. The design system makes every direct <div> of a dialog's form a
+   full-width flex row, which is right for a header or a footer and wrong for the field grid: five
+   fields ended up on one line with the last wrapping underneath, and the save button stretched to
+   half the dialog. The grid keeps its two columns inside a dialog, and the actions sit in a footer
+   like every other dialog's. */
+body.omnidata-v14 dialog [data-ods-part="form"] > .form-grid,
+body.omnidata-v14 dialog [data-od14-component="form"] > .form-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: var(--ods-space-3, 10px) !important;
+}
+body.omnidata-v14 dialog .dialog-actions {
+  display: flex !important;
+  justify-content: flex-end !important;
+  gap: var(--ods-space-2, 8px) !important;
+}
+body.omnidata-v14 dialog .dialog-actions .button { flex: 0 0 auto !important; width: auto !important; }
+@media (max-width: 720px) {
+  body.omnidata-v14 dialog [data-ods-part="form"] > .form-grid,
+  body.omnidata-v14 dialog [data-od14-component="form"] > .form-grid { grid-template-columns: minmax(0, 1fr) !important; }
+}
+.bom-modal-error { margin: 0; padding: 10px 12px; border-radius: 8px; background: #fef3f2; color: #b42318; font-size: 12px; }
+.bom-modal-error[hidden] { display: none !important; }
+/* Why a control is not here. An absent button explains nothing on its own, and a person who has just
+   created something is exactly the person who needs the next step named. */
+.od-action-note { margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--od14-surface-subtle, #f8fafc); color: var(--od14-text-soft, #475467); font-size: 11.5px; }

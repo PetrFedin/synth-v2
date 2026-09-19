@@ -618,9 +618,17 @@ function odCampaignAction(item) {
 function odCollectionAction(item) {
   const caps = window.SynthaUiCapabilities;
   const campaign = state.workspace.campaigns.find(candidate => candidate.id === item.campaignId);
-  return item.status === 'draft' && campaign?.status === 'open' && caps.hasForOrganisation(state.workspace, item.brandId, caps.CAPABILITIES.COLLECTION_MANAGE)
-    ? actionButton(odText('\u041e\u043f\u0443\u0431\u043b\u0438\u043a\u043e\u0432\u0430\u0442\u044c', 'Publish'), () => mutate(`/v2/collections/${encodeURIComponent(item.id)}/publish`, {}), 'primary')
-    : null;
+  const manage = caps.hasForOrganisation(state.workspace, item.brandId, caps.CAPABILITIES.COLLECTION_MANAGE);
+  if (item.status !== 'draft' || !manage) return null;
+  if (campaign?.status === 'open') {
+    return actionButton(odText('\u041e\u043f\u0443\u0431\u043b\u0438\u043a\u043e\u0432\u0430\u0442\u044c', 'Publish'), () => mutate(`/v2/collections/${encodeURIComponent(item.id)}/publish`, {}), 'primary');
+  }
+  // The season opens before anything inside it can be published. Saying so turns a missing button
+  // into the next step; leaving it out left a reader with a draft they could not move.
+  return el('p', { className: 'od-action-note', rawText: odText(
+    `\u0421\u043d\u0430\u0447\u0430\u043b\u0430 \u043e\u0442\u043a\u0440\u043e\u0439\u0442\u0435 \u043a\u0430\u043c\u043f\u0430\u043d\u0438\u044e \u00ab${campaign?.name || '\u2014'}\u00bb \u2014 \u043a\u043e\u043b\u043b\u0435\u043a\u0446\u0438\u044f \u043f\u0443\u0431\u043b\u0438\u043a\u0443\u0435\u0442\u0441\u044f \u0432\u043d\u0443\u0442\u0440\u0438 \u043e\u0442\u043a\u0440\u044b\u0442\u043e\u0433\u043e \u0441\u0435\u0437\u043e\u043d\u0430.`,
+    `Open the "${campaign?.name || '\u2014'}" campaign first \u2014 a collection is published inside an open season.`,
+  ) });
 }
 
 function odSkuActions(item) {
@@ -634,6 +642,15 @@ function odSkuActions(item) {
     () => mutate(`/v2/catalog/skus/${encodeURIComponent(item.sku)}/publish`, { expectedVersion: item.version }),
     'primary',
   ));
+  // A SKU cannot be published before its collection is, which is right — but the button simply was
+  // not there, and a reader who had just created a SKU was left looking at «Редактировать» with no
+  // idea what came next. An absent control has to say why it is absent.
+  if (canManage && collection && collection.status !== 'published') {
+    actions.push(el('p', { className: 'od-action-note', rawText: odText(
+      `\u0421\u043d\u0430\u0447\u0430\u043b\u0430 \u043e\u043f\u0443\u0431\u043b\u0438\u043a\u0443\u0439\u0442\u0435 \u043a\u043e\u043b\u043b\u0435\u043a\u0446\u0438\u044e \u00ab${collection.name}\u00bb \u2014 \u0430\u0440\u0442\u0438\u043a\u0443\u043b \u043f\u0443\u0431\u043b\u0438\u043a\u0443\u0435\u0442\u0441\u044f \u0432\u043d\u0443\u0442\u0440\u0438 \u043d\u0435\u0451.`,
+      `Publish the "${collection.name}" collection first \u2014 a SKU is published inside one.`,
+    ) }));
+  }
   return actions;
 }
 

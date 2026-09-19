@@ -295,6 +295,7 @@
   function showEditor({ existing, skus, model, nextKey }) {
     const overlay = h('div', { className: 'measurement-modal-overlay' });
     const form = h('form', { className: 'measurement-modal', role: 'dialog', 'aria-modal': 'true' });
+    const problem = h('p', { className: 'bom-modal-error', hidden: true });
     const body = h('div', { className: 'measurement-editor-body' });
 
     function renderBody() {
@@ -309,8 +310,8 @@
       const sizeList = h('div', { className: 'measurement-size-list' });
       model.sizes.forEach((size) => {
         sizeList.append(h('div', { className: 'measurement-size-card' }, [
-          input('text', size.code, (value) => { size.code = value.toUpperCase(); }, { maxlength: '16', placeholder: 'M' }),
-          input('text', size.label, (value) => { size.label = value; }, { maxlength: '40', placeholder: text('Название', 'Label') }),
+          input('text', size.code, (value) => { size.code = value.toUpperCase(); }, { maxlength: '16', placeholder: 'M', required: true, pattern: '[A-Za-z0-9._-]{1,16}' }),
+          input('text', size.label, (value) => { size.label = value; }, { maxlength: '40', placeholder: text('Название', 'Label'), required: true }),
           h('button', { type: 'button', className: 'danger-link', disabled: model.sizes.length === 1, text: '×', 'aria-label': text('Удалить размер', 'Remove size'), onclick: () => {
             model.sizes = model.sizes.filter((candidate) => candidate.key !== size.key);
             model.points.forEach((point) => point.values.delete(size.key));
@@ -330,12 +331,12 @@
       tableHead.push(h('th', { text: '' }));
       const rows = model.points.map((point) => {
         const cells = [
-          h('td', {}, [input('text', point.pointCode, (value) => { point.pointCode = value.toUpperCase(); }, { maxlength: '32', placeholder: 'CHEST' })]),
-          h('td', {}, [input('text', point.name, (value) => { point.name = value; }, { maxlength: '120', placeholder: text('Название POM', 'POM name') }), input('text', point.description, (value) => { point.description = value; }, { maxlength: '500', placeholder: text('Метод измерения', 'Measuring method') })]),
-          h('td', {}, [input('number', point.toleranceMinus, (value) => { point.toleranceMinus = value; }, { step: '0.0001', min: '0' })]),
-          h('td', {}, [input('number', point.tolerancePlus, (value) => { point.tolerancePlus = value; }, { step: '0.0001', min: '0' })]),
+          h('td', {}, [input('text', point.pointCode, (value) => { point.pointCode = value.toUpperCase(); }, { maxlength: '32', placeholder: 'CHEST', required: true, pattern: '[A-Za-z0-9._-]{1,32}' })]),
+          h('td', {}, [input('text', point.name, (value) => { point.name = value; }, { maxlength: '120', placeholder: text('Название POM', 'POM name'), required: true, minlength: '2' }), input('text', point.description, (value) => { point.description = value; }, { maxlength: '500', placeholder: text('Метод измерения', 'Measuring method') })]),
+          h('td', {}, [input('number', point.toleranceMinus, (value) => { point.toleranceMinus = value; }, { step: '0.0001', min: '0', required: true })]),
+          h('td', {}, [input('number', point.tolerancePlus, (value) => { point.tolerancePlus = value; }, { step: '0.0001', min: '0', required: true })]),
         ];
-        model.sizes.forEach((size) => cells.push(h('td', { className: size.key === model.baseSizeKey ? 'base-size' : '' }, [input('number', point.values.get(size.key), (value) => { point.values.set(size.key, value); }, { step: '0.0001', min: '0.0001' })])));
+        model.sizes.forEach((size) => cells.push(h('td', { className: size.key === model.baseSizeKey ? 'base-size' : '' }, [input('number', point.values.get(size.key), (value) => { point.values.set(size.key, value); }, { step: '0.0001', min: '0.0001', required: true })])));
         cells.push(h('td', {}, [h('button', { type: 'button', className: 'danger-link', text: '×', 'aria-label': text('Удалить POM', 'Remove POM'), onclick: () => { model.points = model.points.filter((candidate) => candidate.key !== point.key); renderBody(); } })]));
         return h('tr', {}, cells);
       });
@@ -372,18 +373,52 @@
         })),
         notes: String(model.notes).trim() || null,
       };
-      if (existing) await mutate(`/v2/measurements/${encodeURIComponent(existing.sku)}`, { expectedVersion: existing.version, ...payload }, 'PATCH');
-      else await mutate('/v2/measurements', { sku: model.sku, ...payload });
+      // Without this a refusal was an unhandled rejection: the dialog stayed open, nothing was
+      // written, and the person was told nothing at all. The same hole the bill-of-materials editor
+      // had, in the editor beside it.
+      try {
+        if (existing) await mutate(`/v2/measurements/${encodeURIComponent(existing.sku)}`, { expectedVersion: existing.version, ...payload }, 'PATCH');
+        else await mutate('/v2/measurements', { sku: model.sku, ...payload });
+      } catch (error) {
+        problem.textContent = chartErrorMessage(error);
+        problem.hidden = false;
+        problem.scrollIntoView({ block: 'nearest' });
+        return;
+      }
       overlay.remove();
+      toast(existing
+        ? text('Размерная таблица сохранена.', 'The measurement chart is saved.')
+        : text('Размерная таблица создана.', 'The measurement chart is created.'), 'success');
       await loadCharts({ reset: true });
     });
+    form.append(problem);
     overlay.append(form);
     overlay.addEventListener('mousedown', (event) => { if (event.target === overlay) overlay.remove(); });
+    const escape = (event) => { if (event.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', escape); } };
+    document.addEventListener('keydown', escape);
     document.body.append(overlay);
     form.querySelector('input,select,button')?.focus();
   }
 
   function sectionHead(title, action) { return h('div', { className: 'measurement-editor-section-head' }, [h('h3', { text: title }), action]); }
+  const CHART_ERRORS = {
+    MEASUREMENT_ALREADY_EXISTS: ['У этого артикула уже есть размерная таблица — откройте её.', 'This SKU already has a measurement chart — open it instead.'],
+    MEASUREMENT_NOT_EDITABLE: ['Опубликованную таблицу нельзя изменить. Создайте новую ревизию.', 'A published chart cannot be changed. Start a new revision.'],
+    MEASUREMENT_BASE_SIZE_REQUIRED: ['Укажите базовый размер.', 'Choose a base size.'],
+    MEASUREMENT_POINT_DUPLICATE: ['Две точки измерения имеют одинаковый код.', 'Two points of measurement share a code.'],
+    MEASUREMENT_SIZE_DUPLICATE: ['Два размера имеют одинаковый код.', 'Two sizes share a code.'],
+    MEASUREMENT_CONCURRENCY_CONFLICT: ['Таблицу изменил кто-то ещё — обновите раздел и повторите.', 'Someone else changed this chart — refresh and try again.'],
+    MEASUREMENT_SIZE_CODE_INVALID: ['Код размера — латинские буквы, цифры, точка, дефис или подчёркивание, до 16 знаков.', 'A size code is latin letters, digits, dot, hyphen or underscore, up to 16 characters.'],
+    MEASUREMENT_POINT_CODE_INVALID: ['Код точки измерения — латинские буквы, цифры, точка, дефис или подчёркивание.', 'A point code is latin letters, digits, dot, hyphen or underscore.'],
+    MEASUREMENT_VALUE_INVALID: ['Значение измерения должно быть положительным числом.', 'A measurement value must be a positive number.'],
+    MEASUREMENT_TOLERANCE_INVALID: ['Допуск не может быть отрицательным.', 'A tolerance cannot be negative.'],
+    MEASUREMENT_BASE_SIZE_UNKNOWN: ['Базовый размер должен быть одним из перечисленных.', 'The base size must be one of the sizes listed.'],
+  };
+  function chartErrorMessage(error) {
+    const pair = CHART_ERRORS[String(error?.code || '')];
+    return pair ? text(pair[0], pair[1]) : (error?.message || text('Не удалось сохранить размерную таблицу.', 'The measurement chart could not be saved.'));
+  }
+
   function field(label, control) { return h('label', { className: 'measurement-field' }, [h('span', { text: label }), control]); }
   function input(type, value, setter, extra = {}) {
     const control = h('input', { type, ...extra });

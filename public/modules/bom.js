@@ -251,7 +251,32 @@
   async function openEditor(existing) {
     const materials = await fetchPublishedMaterials();
     const brandId = existing?.brandId || [...brandOrganisationIds()].find((id) => canManageBrand(id));
-    const skus = (state.workspace.catalogSkus || []).filter((item) => item.brandId === brandId && item.status === 'published');
+    const published = (state.workspace.catalogSkus || []).filter((item) => item.brandId === brandId && item.status === 'published');
+    // Every SKU in the register already had a bill of materials, so every choice this dialog offered
+    // ended at «BOM already exists for SKU» — a form that can only fail. It offers the SKUs that can
+    // actually take one, and says so plainly when there are none left.
+    const taken = new Set((ui.items || []).map((entry) => entry?.bom?.sku ?? entry?.sku).filter(Boolean));
+    const skus = existing ? published : published.filter((item) => !taken.has(item.sku));
+    if (!existing && !skus.length) {
+      // Two different situations end with nothing to choose from, and sending the reader to the same
+      // place for both wastes their time: one needs a SKU published, the other needs a SKU.
+      const drafts = (state.workspace.catalogSkus || []).filter((item) => item.brandId === brandId && item.status !== 'published').length;
+      toast(published.length
+        ? text(
+          'У каждого опубликованного артикула уже есть спецификация. Откройте существующую или опубликуйте новый артикул.',
+          'Every published SKU already has a bill of materials. Open an existing one, or publish another SKU.',
+        )
+        : drafts
+          ? text(
+            'Спецификация заводится на опубликованный артикул. Опубликуйте его в разделе «Коллекции».',
+            'A bill of materials is written against a published SKU. Publish one in Collections first.',
+          )
+          : text(
+            'Сначала создайте артикул в разделе «Коллекции».',
+            'Create a SKU in Collections first.',
+          ), 'error');
+      return;
+    }
     const model = {
       sku: existing?.sku || skus[0]?.sku || '', currency: existing?.currency || skus[0]?.currency || 'EUR',
       laborCost: existing?.laborCost ?? 0, overheadCost: existing?.overheadCost ?? 0, logisticsCost: existing?.logisticsCost ?? 0, otherCost: existing?.otherCost ?? 0,
@@ -261,8 +286,22 @@
     showEditor({ existing, materials, skus, model });
   }
 
+  const BOM_ERRORS = {
+    BOM_ALREADY_EXISTS: ['У этого артикула уже есть спецификация — откройте её и отредактируйте.', 'This SKU already has a bill of materials — open it and edit instead.'],
+    BOM_NOT_EDITABLE: ['Опубликованную спецификацию нельзя изменить. Заведите новую версию.', 'A published bill of materials cannot be changed. Start a new version.'],
+    BOM_LINE_ID_DUPLICATE: ['Два номера строки совпадают.', 'Two line numbers are the same.'],
+    MATERIAL_NOT_PUBLISHED: ['Материал не опубликован и не может войти в спецификацию.', 'That material is not published and cannot go into a bill of materials.'],
+    CATALOG_SKU_NOT_FOUND: ['Артикул не найден.', 'The SKU was not found.'],
+    BOM_CONCURRENCY_CONFLICT: ['Спецификацию изменил кто-то ещё — обновите раздел и повторите.', 'Someone else changed this bill of materials — refresh and try again.'],
+  };
+  function bomErrorMessage(error) {
+    const pair = BOM_ERRORS[String(error?.code || '')];
+    return pair ? text(pair[0], pair[1]) : (error?.message || text('Не удалось сохранить спецификацию.', 'The bill of materials could not be saved.'));
+  }
+
   function showEditor({ existing, materials, skus, model }) {
     const overlay = h('div', { className: 'bom-modal-overlay' });
+    const problem = h('p', { className: 'bom-modal-error', hidden: true });
     const dialog = h('form', { className: 'bom-modal', role: 'dialog', 'aria-modal': 'true' });
     const linesRoot = h('div', { className: 'bom-editor-lines' });
     function renderLines() {
@@ -270,10 +309,10 @@
       model.lines.forEach((line, index) => {
         const material = materials.find((item) => item.code === line.materialCode);
         const row = h('div', { className: 'bom-editor-line' }, [
-          field(text('ID строки', 'Line ID'), input('text', line.lineId, (value) => { line.lineId = value.toUpperCase(); })),
-          field(text('Компонент', 'Component'), input('text', line.component, (value) => { line.component = value; })),
+          field(text('ID строки', 'Line ID'), input('text', line.lineId, (value) => { line.lineId = value.toUpperCase(); }, { required: true, maxlength: '32', pattern: '[A-Za-z0-9._-]{1,32}' })),
+          field(text('Компонент', 'Component'), input('text', line.component, (value) => { line.component = value; }, { required: true, minlength: '2', maxlength: '120' })),
           field(text('Материал', 'Material'), select(materials.map((item) => [item.code, `${item.code} · ${item.name}`]), line.materialCode, (value) => { line.materialCode = value; renderLines(); })),
-          field(text('Количество', 'Quantity'), input('number', line.quantity, (value) => { line.quantity = value; }, { step: '0.0001', min: '0.0001' })),
+          field(text('Количество', 'Quantity'), input('number', line.quantity, (value) => { line.quantity = value; }, { step: '0.0001', min: '0.0001', required: true })),
           field(text('Отход, %', 'Waste, %'), input('number', line.wastePercent, (value) => { line.wastePercent = value; }, { step: '0.0001', min: '0', max: '1000' })),
           field(text('FX', 'FX'), input('number', line.exchangeRate, (value) => { line.exchangeRate = value; }, { step: '0.0001', min: '0.0001', disabled: material?.currency === model.currency })),
           h('button', { type: 'button', className: 'danger-link', text: text('Удалить', 'Remove'), disabled: model.lines.length === 1, onclick: () => { model.lines.splice(index, 1); renderLines(); } }),
@@ -285,16 +324,17 @@
     dialog.append(
       h('div', { className: 'bom-modal-head' }, [h('div', {}, [h('p', { className: 'eyebrow', text: 'BOM / COSTING' }), h('h2', { text: existing ? text(`Редактировать ${existing.sku}`, `Edit ${existing.sku}`) : text('Создать BOM', 'Create BOM') })]), h('button', { type: 'button', className: 'icon-button', 'aria-label': text('Закрыть', 'Close'), text: '×', onclick: () => overlay.remove() })]),
       h('div', { className: 'bom-editor-grid' }, [
-        field('SKU', select(skus.map((item) => [item.sku, `${item.sku} · ${item.name}`]), model.sku, (value) => { model.sku = value; }, { disabled: Boolean(existing) })),
-        field(text('Валюта', 'Currency'), input('text', model.currency, (value) => { model.currency = value.toUpperCase(); renderLines(); }, { maxlength: '3' })),
-        field(text('Труд', 'Labor'), input('number', model.laborCost, (value) => { model.laborCost = value; }, { step: '0.0001', min: '0' })),
-        field(text('Накладные', 'Overhead'), input('number', model.overheadCost, (value) => { model.overheadCost = value; }, { step: '0.0001', min: '0' })),
-        field(text('Логистика', 'Logistics'), input('number', model.logisticsCost, (value) => { model.logisticsCost = value; }, { step: '0.0001', min: '0' })),
-        field(text('Прочее', 'Other'), input('number', model.otherCost, (value) => { model.otherCost = value; }, { step: '0.0001', min: '0' })),
+        field('SKU', select(skus.map((item) => [item.sku, `${item.sku} · ${item.name}`]), model.sku, (value) => { model.sku = value; }, { disabled: Boolean(existing), required: true })),
+        field(text('Валюта', 'Currency'), input('text', model.currency, (value) => { model.currency = value.toUpperCase(); renderLines(); }, { maxlength: '3', minlength: '3', required: true, pattern: '[A-Za-z]{3}' })),
+        field(text('Труд', 'Labor'), input('number', model.laborCost, (value) => { model.laborCost = value; }, { step: '0.0001', min: '0', required: true })),
+        field(text('Накладные', 'Overhead'), input('number', model.overheadCost, (value) => { model.overheadCost = value; }, { step: '0.0001', min: '0', required: true })),
+        field(text('Логистика', 'Logistics'), input('number', model.logisticsCost, (value) => { model.logisticsCost = value; }, { step: '0.0001', min: '0', required: true })),
+        field(text('Прочее', 'Other'), input('number', model.otherCost, (value) => { model.otherCost = value; }, { step: '0.0001', min: '0', required: true })),
       ]),
       h('div', { className: 'bom-editor-section-head' }, [h('h3', { text: text('Строки материалов', 'Material lines') }), h('button', { type: 'button', className: 'secondary', text: text('Добавить строку', 'Add line'), onclick: () => { model.lines.push({ lineId: nextLineId(model.lines), component: '', materialCode: materials[0]?.code || '', quantity: 1, wastePercent: 0, exchangeRate: 1 }); renderLines(); } })]),
       linesRoot,
       field(text('Примечания', 'Notes'), textarea(model.notes, (value) => { model.notes = value; })),
+      problem,
       h('div', { className: 'bom-modal-actions' }, [h('button', { type: 'button', className: 'secondary', text: text('Отмена', 'Cancel'), onclick: () => overlay.remove() }), h('button', { type: 'submit', className: 'primary', text: text('Сохранить', 'Save') })]),
     );
     dialog.addEventListener('submit', async (event) => {
@@ -310,14 +350,26 @@
         if (existing) await mutate(`/v2/boms/${encodeURIComponent(existing.sku)}`, { expectedVersion: existing.version, ...payload }, 'PATCH');
         else await mutate('/v2/boms', { sku: model.sku, ...payload });
       } catch (error) {
-        toast(error?.message || text('Не удалось сохранить спецификацию.', 'The bill of materials could not be saved.'), 'error');
+        problem.textContent = bomErrorMessage(error);
+        problem.hidden = false;
+        problem.scrollIntoView({ block: 'nearest' });
         return;
       }
       overlay.remove();
+      // Saving said nothing at all here, while every other create action in the application
+      // confirms itself. A form that closes in silence leaves the reader checking the table to find
+      // out whether anything happened.
+      toast(existing
+        ? text('Спецификация сохранена.', 'The bill of materials is saved.')
+        : text('Спецификация создана.', 'The bill of materials is created.'), 'success');
       await loadBoms({ reset: true });
     });
     overlay.append(dialog);
     overlay.addEventListener('mousedown', (event) => { if (event.target === overlay) overlay.remove(); });
+    // A hand-rolled overlay gets none of a <dialog>'s behaviour for free, and Escape is the one a
+    // person reaches for without thinking.
+    const escape = (event) => { if (event.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', escape); } };
+    document.addEventListener('keydown', escape);
     document.body.append(overlay);
     dialog.querySelector('input,select,button')?.focus();
   }

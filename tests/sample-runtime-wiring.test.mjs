@@ -25,8 +25,11 @@ test('PostgreSQL base runtime exposes one Samples command/query service and wrap
   const [base, wrapper] = await Promise.all([source('src/runtime/postgres-base-runtime.mjs'), source('src/runtime/postgres-runtime.mjs')]);
   for (const symbol of ['createSampleService', 'createSampleQueryService', 'createPostgresSampleStore', 'createPostgresSampleReader']) assert.ok(base.includes(symbol), symbol);
   assert.match(base, /const samples = Object\.freeze/);
-  assert.match(base, /transport = \{[\s\S]*?measurements, samples, partners/);
+  // What matters is that the one Samples service reaches the transport and the export, not which
+  // service happens to be listed beside it: pinning the neighbour made the assertion fail the first
+  // time an unrelated service was added between them.
+  assert.match(base, /transport = \{[\s\S]*?\bsamples\b/);
   assert.match(base, /measurementStore, sampleStore/);
-  assert.match(base, /measurements, samples, partners/);
+  assert.match(base, /return Object\.freeze\(\{[\s\S]*?\bsamples\b/);
   assert.match(wrapper, /samples: base\.samples/);
 });

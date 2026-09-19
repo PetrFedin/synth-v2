@@ -1,0 +1,375 @@
+{
+  "dataset_version": "1.0.0",
+  "profile": "RU_FASHION_CORE",
+  "markets": [
+    "RU"
+  ],
+  "languages": [
+    "ru",
+    "en"
+  ],
+  "source": {
+    "system": "syntha_operational_master",
+    "version": "1.0.0",
+    "endpoint": "mdm/reference/russia-fashion-construction-core.json",
+    "license": "SYNTHA internal operational master data",
+    "retrieved_at": "2026-09-19T00:00:00.000Z"
+  },
+  "dictionaries": [
+    {
+      "id": "mdm-dictionary:design-construction-node",
+      "code": "design.construction_node",
+      "data_class": "classifier",
+      "scope_model": "global",
+      "hierarchy_enabled": false,
+      "effective_dated": true,
+      "approval_required": true,
+      "name": {
+        "ru": "Конструктивный узел",
+        "en": "Construction node"
+      },
+      "description": {
+        "ru": "Управляемая библиотека конструктивных узлов: как именно обработан участок изделия и на какой машине.",
+        "en": "The governed library of construction nodes: how a part of the garment is made and on which machine."
+      },
+      "entries": [
+        {
+          "id": "mdm-entry:design-construction-node:collar-set-in",
+          "version": 1,
+          "domain": "design.construction_node",
+          "code": "COLLAR_SET_IN",
+          "name_ru": "Воротник втачной",
+          "name_en": "Set-in collar",
+          "description_ru": "Воротник, втачанный в горловину по всему периметру.",
+          "description_en": "A collar sewn into the neckline around its whole edge.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-construction-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-19T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-19T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ],
+            "machine_class": "lockstitch",
+            "product_family": "apparel"
+          }
+        },
+        {
+          "id": "mdm-entry:design-construction-node:collar-shawl",
+          "version": 1,
+          "domain": "design.construction_node",
+          "code": "COLLAR_SHAWL",
+          "name_ru": "Воротник шалевый",
+          "name_en": "Shawl collar",
+          "description_ru": "Цельнокроеный воротник, переходящий в борт без шва по линии раскепа.",
+          "description_en": "A collar cut in one with the lapel, with no gorge seam.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-construction-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-19T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-19T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ],
+            "machine_class": "lockstitch",
+            "product_family": "apparel"
+          }
+        },
+        {
+          "id": "mdm-entry:design-construction-node:zip-centre-front",
+          "version": 1,
+          "domain": "design.construction_node",
+          "code": "ZIP_CENTRE_FRONT",
+          "name_ru": "Застёжка-молния по центру переда",
+          "name_en": "Centre-front zip",
+          "description_ru": "Разъёмная молния, втачанная в центральный шов переда.",
+          "description_en": "An open-ended zip set into the centre-front seam.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-construction-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-19T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-19T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ],
+            "machine_class": "lockstitch",
+            "product_family": "apparel"
+          }
+        },
+        {
+          "id": "mdm-entry:design-construction-node:placket-button",
+          "version": 1,
+          "domain": "design.construction_node",
+          "code": "PLACKET_BUTTON",
+          "name_ru": "Застёжка на планке с петлями",
+          "name_en": "Buttoned placket",
+          "description_ru": "Планка с обмётанными петлями и пуговицами.",
+          "description_en": "A placket with worked buttonholes and buttons.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-construction-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-19T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-19T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ],
+            "machine_class": "buttonhole",
+            "product_family": "apparel"
+          }
+        },
+        {
+          "id": "mdm-entry:design-construction-node:pocket-welt",
+          "version": 1,
+          "domain": "design.construction_node",
+          "code": "POCKET_WELT",
+          "name_ru": "Карман в рамку",
+          "name_en": "Welt pocket",
+          "description_ru": "Прорезной карман с одной или двумя обтачками.",
+          "description_en": "A cut pocket finished with one or two welts.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-construction-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-19T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-19T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ],
+            "machine_class": "lockstitch",
+            "product_family": "apparel"
+          }
+        },
+        {
+          "id": "mdm-entry:design-construction-node:pocket-patch",
+          "version": 1,
+          "domain": "design.construction_node",
+          "code": "POCKET_PATCH",
+          "name_ru": "Карман накладной",
+          "name_en": "Patch pocket",
+          "description_ru": "Карман, настрочённый на лицевую сторону детали.",
+          "description_en": "A pocket topstitched onto the face of the panel.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-construction-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-19T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-19T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ],
+            "machine_class": "lockstitch",
+            "product_family": "apparel"
+          }
+        },
+        {
+          "id": "mdm-entry:design-construction-node:vent-back",
+          "version": 1,
+          "domain": "design.construction_node",
+          "code": "VENT_BACK",
+          "name_ru": "Шлица спинки",
+          "name_en": "Back vent",
+          "description_ru": "Шлица в среднем шве спинки с закрепкой в верхней точке.",
+          "description_en": "A vent in the centre-back seam, bartacked at the top.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-construction-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-19T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-19T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ],
+            "machine_class": "bartack",
+            "product_family": "apparel"
+          }
+        },
+        {
+          "id": "mdm-entry:design-construction-node:cuff-buttoned",
+          "version": 1,
+          "domain": "design.construction_node",
+          "code": "CUFF_BUTTONED",
+          "name_ru": "Манжета на пуговице",
+          "name_en": "Buttoned cuff",
+          "description_ru": "Манжета, застёгивающаяся на одну или две пуговицы.",
+          "description_en": "A cuff fastening with one or two buttons.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-construction-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-19T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-19T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ],
+            "machine_class": "button_attach",
+            "product_family": "apparel"
+          }
+        },
+        {
+          "id": "mdm-entry:design-construction-node:waistband-elastic",
+          "version": 1,
+          "domain": "design.construction_node",
+          "code": "WAISTBAND_ELASTIC",
+          "name_ru": "Пояс на резинке",
+          "name_en": "Elasticated waistband",
+          "description_ru": "Пояс с продёрнутой эластичной лентой.",
+          "description_en": "A waistband with elastic threaded through it.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-construction-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-19T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-19T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ],
+            "machine_class": "coverstitch",
+            "product_family": "apparel"
+          }
+        },
+        {
+          "id": "mdm-entry:design-construction-node:hem-blind",
+          "version": 1,
+          "domain": "design.construction_node",
+          "code": "HEM_BLIND",
+          "name_ru": "Низ на потайном шве",
+          "name_en": "Blind hem",
+          "description_ru": "Подгибка низа, закреплённая потайной строчкой.",
+          "description_en": "A hem secured with a blind stitch.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-construction-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-19T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-19T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ],
+            "machine_class": "blindstitch",
+            "product_family": "apparel"
+          }
+        },
+        {
+          "id": "mdm-entry:design-construction-node:lining-bagged",
+          "version": 1,
+          "domain": "design.construction_node",
+          "code": "LINING_BAGGED",
+          "name_ru": "Подкладка мешком",
+          "name_en": "Bagged lining",
+          "description_ru": "Подкладка, соединённая с изделием по всем срезам и вывернутая через отверстие.",
+          "description_en": "A lining joined at every edge and turned through an opening.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-construction-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-19T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-19T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ],
+            "machine_class": "lockstitch",
+            "product_family": "apparel"
+          }
+        },
+        {
+          "id": "mdm-entry:design-construction-node:seam-french",
+          "version": 1,
+          "domain": "design.construction_node",
+          "code": "SEAM_FRENCH",
+          "name_ru": "Запошивочный шов",
+          "name_en": "French seam",
+          "description_ru": "Шов, закрывающий срезы внутри себя.",
+          "description_en": "A seam that encloses the raw edges within itself.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-construction-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-19T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-19T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ],
+            "machine_class": "lockstitch",
+            "product_family": "apparel"
+          }
+        }
+      ]
+    }
+  ]
+}

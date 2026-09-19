@@ -53,6 +53,7 @@ const OD_V7_GROUPS = Object.freeze([
     items: [
       { view: 'calendar', icon: 'calendar', ru: '\u041a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u044c', en: 'Calendar' },
       { view: 'notifications', icon: 'notifications', ru: '\u0423\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u044f', en: 'Notifications' },
+      { icon: 'catalog', ru: '\u0411\u0438\u0431\u043b\u0438\u043e\u0442\u0435\u043a\u0438', en: 'Libraries', planned: true },
       { icon: 'overview', ru: '\u0410\u043d\u0430\u043b\u0438\u0442\u0438\u043a\u0430', en: 'Analytics', planned: true },
       { icon: 'selections', ru: '\u0417\u0430\u0434\u0430\u0447\u0438', en: 'Tasks', planned: true },
     ],

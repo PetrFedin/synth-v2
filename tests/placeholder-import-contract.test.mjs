@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import {
   DICTIONARY_COLUMNS,
   findRepeatedCodes,
@@ -102,5 +103,43 @@ test('the published contract is the one the reader enforces', () => {
   for (const column of contract.columns) {
     const { mapped: byName } = mapHeaders([column.accepts[0]]);
     assert.equal(byName[column.field], 0, `${column.field} is advertised but not read`);
+  }
+});
+
+test('the reader refuses what the domain would refuse, not something looser', async () => {
+  // A check that passes a row the next step rejects is worse than no check: the author is told the
+  // file is fine and then told it is not, with no line and no column. The bounds here and the ones
+  // the domain enforces are the same rule, so they are compared rather than trusted.
+  const domain = await readFile(new URL('../src/modules/assortment-planning/public.mjs', import.meta.url), 'utf8');
+  const bounds = importContract().columns.filter((column) => column.length);
+  assert.ok(bounds.length >= 4, 'the contract publishes the lengths it enforces');
+  for (const column of bounds.filter((candidate) => candidate.field !== 'description')) {
+    const [, max] = column.length;
+    assert.match(domain, new RegExp(`max: ${max}`), `${column.field} max ${max} is not the domain's`);
+  }
+
+  const long = (n) => 'x'.repeat(n);
+  const problems = (cells) => readRow(cells, mapHeaders(['Код', 'Название RU', 'Название EN', 'Валюта', 'Капсула', 'Дроп']).mapped).problems;
+  assert.deepEqual(problems(['C1', 'А', 'A', 'EUR', '', '']).map((problem) => [problem.column, problem.reason]),
+    [['nameRu', 'tooShort'], ['nameEn', 'tooShort']]);
+  assert.deepEqual(problems(['C1', long(201), 'Name', 'EUR', '', '']).map((problem) => problem.reason), ['tooLong']);
+  assert.deepEqual(problems(['C1', 'Имя', 'Name', 'EUR', long(121), '']).map((problem) => [problem.column, problem.reason]),
+    [['capsule', 'tooLong']]);
+  assert.deepEqual(problems(['C1', 'Имя', 'Name', 'EUR', '', 'Д']).map((problem) => [problem.column, problem.reason]),
+    [['drop', 'tooShort']]);
+});
+
+test('the template the screen offers is one the import accepts', async () => {
+  // The application shipped an English template whose "Colourways" and "Launch date" columns its own
+  // reader did not know: a user filled them in and every value was dropped without a word.
+  const ui = await readFile(new URL('../public/modules/placeholder-import.js', import.meta.url), 'utf8');
+  const block = ui.slice(ui.indexOf('const COLUMN_LABEL'), ui.indexOf('// Why a row was refused'));
+  const labels = [...block.matchAll(/^\s{4}(\w+): \['([^']+)', '([^']+)'\]/gm)];
+  assert.ok(labels.length >= 18, `expected every column to carry a label, found ${labels.length}`);
+  for (const [, field, ru, en] of labels) {
+    for (const heading of [ru, en]) {
+      const { mapped } = mapHeaders([heading]);
+      assert.equal(mapped[field], 0, `the template heading "${heading}" is not read as ${field}`);
+    }
   }
 });

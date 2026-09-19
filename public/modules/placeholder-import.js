@@ -14,6 +14,8 @@
 
   function text(ru, en) { return typeof localText === 'function' ? localText(ru, en) : ru; }
 
+  const VERDICT_LIMIT = 200;
+
   const COLUMN_LABEL = {
     placeholderCode: ['Код слота', 'Code'],
     nameRu: ['Название RU', 'Name RU'],
@@ -49,7 +51,22 @@
     unknownValue: ['нет такого значения в справочнике', 'no such value in the dictionary'],
     ambiguousValue: ['в справочнике несколько таких значений', 'the dictionary holds several matches'],
     dictionaryMissing: ['справочник ещё не загружен', 'the dictionary is not loaded yet'],
+    tooShort: ['слишком коротко, минимум знаков', 'too short, minimum characters'],
+    tooLong: ['слишком длинно, максимум знаков', 'too long, maximum characters'],
+    repeatedColumn: ['такая колонка уже есть в файле — прочитана будет только первая', 'this column already appears in the file — only the first is read'],
   };
+
+  const ERROR_TEXT = {
+    PLACEHOLDER_IMPORT_EMPTY: ['В файле нет ни одной строки данных.', 'The file holds no data rows.'],
+    PLACEHOLDER_IMPORT_TOO_LARGE: ['За один раз можно загрузить не больше 1000 строк. Разделите файл.', 'At most 1000 rows can be loaded at once. Split the file.'],
+    CAMPAIGN_NOT_FOUND: ['Кампания не найдена.', 'The campaign was not found.'],
+    CAMPAIGN_CLOSED: ['Кампания закрыта: планировать в неё нельзя.', 'The campaign is closed and cannot be planned into.'],
+    CAPABILITY_DENIED: ['Недостаточно прав на планирование в этой кампании.', 'You do not have the rights to plan in this campaign.'],
+  };
+  function errorMessage(error) {
+    const pair = ERROR_TEXT[String(error?.code || '')];
+    return pair ? text(pair[0], pair[1]) : (error?.message || I18N.t('common.requestError'));
+  }
 
   function columnLabel(field) { const pair = COLUMN_LABEL[field]; return pair ? text(pair[0], pair[1]) : field; }
   function reasonLabel(problem) {
@@ -105,29 +122,43 @@
     const columns = ui.contract?.columns || [];
     const mapped = {};
     const unknown = [];
+    const repeated = [];
     headers.forEach((header, index) => {
       const key = normalizeHeader(header);
       if (!key) return;
       const column = columns.find((candidate) => candidate.accepts.includes(key));
       if (!column) { unknown.push(String(header).trim()); return; }
-      if (mapped[column.field] === undefined) mapped[column.field] = index;
+      // Two columns answering to the same field: only the first is read, and saying so is the point.
+      // A file with "Код слота" and "Код" lost the second one in silence.
+      if (mapped[column.field] !== undefined) { repeated.push(String(header).trim()); return; }
+      mapped[column.field] = index;
     });
     const missing = (ui.contract?.required || []).filter((field) => mapped[field] === undefined);
-    return { mapped, unknown, missing };
+    return { mapped, unknown, repeated, missing };
   }
 
   function readFile(source, fileName) {
     const table = parseDelimited(source);
     ui.fileName = fileName || '';
     ui.result = null;
+    ui.error = '';
+    if (!String(source || '').trim()) { ui.rows = []; ui.headerProblems = null; return; }
+    if (!table.length) {
+      ui.headerProblems = { mapped: {}, unknown: [], repeated: [], missing: [], empty: true };
+      ui.rows = [];
+      return;
+    }
     if (table.length < 2) {
-      ui.headerProblems = { mapped: {}, unknown: [], missing: ui.contract?.required || [], empty: true };
+      // The header is there; what is missing is the data. Listing the columns as absent as well was
+      // simply untrue, and it sent the author looking for the wrong problem.
+      const onlyHeaders = mapHeaders(table[0]);
+      ui.headerProblems = { ...onlyHeaders, empty: true };
       ui.rows = [];
       return;
     }
     const [headerRow, ...dataRows] = table;
     const headers = mapHeaders(headerRow);
-    ui.headerProblems = headers.missing.length || headers.unknown.length ? headers : null;
+    ui.headerProblems = headers.missing.length || headers.unknown.length || headers.repeated.length ? headers : null;
     ui.rows = dataRows.map((cells, index) => {
       const row = { line: index + 2 };
       for (const [field, position] of Object.entries(headers.mapped)) row[field] = String(cells[position] ?? '').trim();
@@ -138,21 +169,22 @@
   async function send(campaignId, mode) {
     if (ui.busy || !ui.rows.length) return;
     ui.busy = true; ui.error = '';
-    renderApp();
+    ui.onBusyChange?.();
     try {
       const result = await mutate('/v2/assortment/placeholders/import', { campaignId, mode, rows: ui.rows }, 'POST');
       ui.result = result;
       if (result.committed) {
-        toast(text(`Загружено слотов: ${result.summary.ready}.`, `${result.summary.ready} slots loaded.`), 'success');
+        const loaded = result.summary.ready;
+        toast(text(`Загружено слотов: ${loaded}.`, `${loaded} ${loaded === 1 ? 'slot' : 'slots'} loaded.`), 'success');
         await reloadWorkspace();
       } else if (mode === 'commit' && !result.summary.rejected && !result.summary.ready) {
         toast(text('Все слоты из файла уже есть в кампании.', 'Every slot in the file is already in the campaign.'));
       }
     } catch (error) {
-      ui.error = error?.message || I18N.t('common.requestError');
+      ui.error = errorMessage(error);
     } finally {
       ui.busy = false;
-      renderApp();
+      ui.onBusyChange?.();
     }
   }
 
@@ -201,7 +233,7 @@
 
   function resultTable() {
     const rows = ui.result?.rows || [];
-    const table = el('table', { className: 'od-table od-import-table' });
+    const table = el('table', { className: 'od-import-table' });
     const head = el('tr');
     [text('Строка', 'Line'), text('Код', 'Code'), text('Результат', 'Result'), text('Что не так', 'What is wrong')]
       .forEach((label) => head.append(el('th', { rawText: label })));
@@ -211,7 +243,11 @@
     const body = el('tbody');
     // Refused rows first: they are the only ones anybody has to do something about.
     const order = { rejected: 0, ready: 1, created: 1, skipped: 2 };
-    [...rows].sort((a, b) => (order[a.verdict] ?? 3) - (order[b.verdict] ?? 3) || a.line - b.line).forEach((row) => {
+    const sorted = [...rows].sort((a, b) => (order[a.verdict] ?? 3) - (order[b.verdict] ?? 3) || a.line - b.line);
+    // Refused rows are the ones somebody has to act on, and they are already first. Past a screenful
+    // of the rest there is nothing to read, so the table stops and says how many it stopped at.
+    const shown = sorted.length > VERDICT_LIMIT ? sorted.slice(0, VERDICT_LIMIT) : sorted;
+    shown.forEach((row) => {
       const tr = el('tr', { className: row.verdict === 'rejected' ? 'od-import-row-rejected' : '' });
       tr.append(el('td', { rawText: String(row.line) }));
       tr.append(el('td', { rawText: row.placeholderCode || '—' }));
@@ -234,6 +270,12 @@
     table.append(body);
     const wrap = el('div', { className: 'od-table-wrap' });
     wrap.append(table);
+    if (sorted.length > shown.length) {
+      wrap.append(el('p', { className: 'od-import-more', rawText: text(
+        `Показаны первые ${shown.length} строк из ${sorted.length}. Отклонённые строки всегда наверху.`,
+        `Showing the first ${shown.length} of ${sorted.length} rows. Rejected rows are always first.`,
+      ) }));
+    }
     return wrap;
   }
 
@@ -281,6 +323,11 @@
             'error',
           ));
         }
+        if (problems.repeated?.length) {
+          body.append(notice(
+            `${text('Эти колонки повторяются, прочитана будет только первая из каждой пары', 'These columns repeat; only the first of each pair is read')}: ${problems.repeated.join(', ')}`,
+          ));
+        }
         if (problems.unknown?.length) {
           // A column nobody reads is worse than a missing one: the data looks delivered.
           body.append(notice(
@@ -302,7 +349,13 @@
         body.append(resultTable());
       }
       check.disabled = ui.busy || !ui.rows.length;
-      load.disabled = ui.busy || !ui.result || ui.result.committed || ui.result.summary.rejected || !ui.result.summary.ready;
+      load.disabled = ui.busy || !ui.result || ui.result.committed || Boolean(ui.result.summary.rejected) || !ui.result.summary.ready;
+      // A button that still looks live while its request is in flight invites a second press that goes
+      // nowhere, so the wait is said rather than hidden.
+      check.textContent = ui.busy ? text('Проверяем…', 'Checking…') : text('Проверить', 'Check');
+      paste.disabled = ui.busy;
+      file.disabled = ui.busy;
+      campaign.disabled = ui.busy;
     }
 
     const check = el('button', { className: 'button secondary', type: 'button', rawText: text('Проверить', 'Check') });
@@ -317,7 +370,9 @@
       reader.addEventListener('load', () => { readFile(String(reader.result || ''), chosen.name); draw(); });
       reader.readAsText(chosen, 'utf-8');
     });
-    paste.addEventListener('change', () => { if (paste.value.trim()) { readFile(paste.value, ''); draw(); } });
+    // `input`, not `change`: the row count has to follow what is in the box, including when the box is
+    // emptied. Reading an empty paste clears the table rather than leaving the last one armed.
+    paste.addEventListener('input', () => { readFile(paste.value, ''); draw(); });
     template.addEventListener('click', downloadTemplate);
     check.addEventListener('click', async () => { await send(campaign.value, 'validate'); draw(); });
     load.addEventListener('click', async () => { await send(campaign.value, 'commit'); draw(); });
@@ -344,7 +399,8 @@
       body,
       footer,
     );
-    modal.addEventListener('close', () => modal.remove(), { once: true });
+    ui.onBusyChange = () => { if (modal.isConnected) draw(); };
+    modal.addEventListener('close', () => { ui.onBusyChange = null; modal.remove(); }, { once: true });
     document.body.append(modal);
     modal.showModal();
     draw();

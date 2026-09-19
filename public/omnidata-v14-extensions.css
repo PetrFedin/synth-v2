@@ -521,3 +521,4 @@ body .breadcrumb .breadcrumb-root:focus-visible { outline: 2px solid var(--od14-
 .app-confirm header h2 { margin: 0; font-size: 18px; }
 .app-confirm-question { margin: 0; color: var(--od14-text-soft, #475467); }
 .app-confirm footer { display: flex; justify-content: flex-end; gap: 8px; }
+.od-import-more { margin: 8px 0 0; color: var(--od14-muted, #667085); font-size: 12px; }

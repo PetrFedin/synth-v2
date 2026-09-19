@@ -24,16 +24,24 @@ const COLUMNS = Object.freeze({
   capsule: ['капсула', 'capsule'],
   drop: ['дроп', 'drop'],
   description: ['описание', 'description'],
-  colourwayCount: ['цветомоделей', 'количествоцветов', 'colourwaycount', 'colorwaycount'],
-  plannedQuantity: ['планколичество', 'количество', 'плановоеколичество', 'plannedquantity', 'quantity'],
-  launchAt: ['датазапуска', 'запуск', 'launchat', 'launch'],
+  colourwayCount: ['цветомоделей', 'количествоцветов', 'colourwaycount', 'colorwaycount', 'colourways', 'colorways'],
+  plannedQuantity: ['планколичество', 'количество', 'плановоеколичество', 'plannedquantity', 'quantity', 'plannedqty'],
+  launchAt: ['датазапуска', 'запуск', 'launchat', 'launch', 'launchdate'],
   currency: ['валюта', 'currency'],
-  recommendedRetailPrice: ['ррц', 'розничнаяцена', 'recommendedretailprice', 'retailprice', 'rrp'],
-  plannedUnitCost: ['плановаясебестоимость', 'себестоимость', 'plannedunitcost', 'unitcost', 'cost'],
+  recommendedRetailPrice: ['ррц', 'розничнаяцена', 'recommendedretailprice', 'retailprice', 'rrp', 'retail'],
+  plannedUnitCost: ['плановаясебестоимость', 'себестоимость', 'plannedunitcost', 'unitcost', 'cost', 'plannedcost'],
 });
 
 // The columns a row cannot do without. Everything else a plan may legitimately not know yet.
 const REQUIRED = Object.freeze(['placeholderCode', 'nameRu', 'nameEn', 'currency']);
+
+// The lengths the domain enforces, repeated here on purpose. A check that passes a row the next step
+// refuses is worse than no check: the author is told the file is fine, and then told it is not, with
+// no line and no column. These bounds and the ones in public.mjs are the same rule, and the contract
+// test holds them to each other.
+const LENGTH = Object.freeze({
+  nameRu: [2, 200], nameEn: [2, 200], capsule: [2, 120], drop: [2, 120], description: [0, 2000],
+});
 
 // Which governed dictionary each name column is looked up in. The caller resolves them; naming them
 // here keeps the file format and the governance in one place.
@@ -128,6 +136,12 @@ function cell(row, mapped, field) {
 export function readRow(row, mapped, { defaultCurrency = null } = {}) {
   const problems = [];
   const complain = (column, reason, value) => { problems.push({ column, reason, value: value ?? undefined }); };
+  const checkLength = (column, value) => {
+    const [min, max] = LENGTH[column];
+    if (!value) return;
+    if (value.length < min) complain(column, 'tooShort', String(min));
+    else if (value.length > max) complain(column, 'tooLong', String(max));
+  };
 
   const placeholderCode = cell(row, mapped, 'placeholderCode').toUpperCase();
   if (!placeholderCode) complain('placeholderCode', 'required');
@@ -137,6 +151,8 @@ export function readRow(row, mapped, { defaultCurrency = null } = {}) {
   const nameEn = cell(row, mapped, 'nameEn');
   if (!nameRu) complain('nameRu', 'required');
   if (!nameEn) complain('nameEn', 'required');
+  checkLength('nameRu', nameRu);
+  checkLength('nameEn', nameEn);
 
   const currency = (cell(row, mapped, 'currency') || defaultCurrency || '').toUpperCase();
   if (!currency) complain('currency', 'required');
@@ -159,6 +175,13 @@ export function readRow(row, mapped, { defaultCurrency = null } = {}) {
   const launchAt = parseDay(cell(row, mapped, 'launchAt'));
   if (!launchAt.ok) complain('launchAt', launchAt.reason, cell(row, mapped, 'launchAt'));
 
+  const capsule = cell(row, mapped, 'capsule');
+  const drop = cell(row, mapped, 'drop');
+  const description = cell(row, mapped, 'description');
+  checkLength('capsule', capsule);
+  checkLength('drop', drop);
+  checkLength('description', description);
+
   const lookups = {};
   for (const column of Object.keys(DICTIONARY_COLUMNS)) {
     const token = cell(row, mapped, column);
@@ -173,9 +196,9 @@ export function readRow(row, mapped, { defaultCurrency = null } = {}) {
       placeholderCode,
       nameRu: nameRu || null,
       nameEn: nameEn || null,
-      capsule: cell(row, mapped, 'capsule') || null,
-      drop: cell(row, mapped, 'drop') || null,
-      description: cell(row, mapped, 'description') || null,
+      capsule: capsule || null,
+      drop: drop || null,
+      description: description || null,
       colourwayCount: colourwayCount.ok ? colourwayCount.value : null,
       plannedQuantity: plannedQuantity.ok ? plannedQuantity.value : null,
       launchAt: launchAt.ok ? launchAt.value : null,
@@ -196,6 +219,7 @@ export function importContract() {
       field,
       required: REQUIRED.includes(field),
       dictionary: DICTIONARY_COLUMNS[field] ?? null,
+      length: LENGTH[field] ? Object.freeze([...LENGTH[field]]) : null,
       accepts: Object.freeze([...COLUMNS[field]]),
     }))),
   });

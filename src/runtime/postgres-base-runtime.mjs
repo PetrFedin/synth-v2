@@ -56,6 +56,8 @@ import { createPostgresTechPackReader } from '../infrastructure/postgres-tech-pa
 import { createPostgresLibraryReader } from '../infrastructure/postgres-library-reader.mjs';
 import { createPostgresHistoryReader } from '../infrastructure/postgres-history-reader.mjs';
 import { createHistoryQueryService } from '../application/history-query-service.mjs';
+import { createPostgresSupplierPortalReader } from '../infrastructure/postgres-supplier-portal-reader.mjs';
+import { createSupplierPortalQueryService } from '../application/supplier-portal-query-service.mjs';
 import { createLibraryQueryService } from '../application/library-query-service.mjs';
 import { createPostgresMaintenanceStore } from '../infrastructure/postgres-maintenance-store.mjs';
 import { createPostgresOutboxPublicationStore } from '../infrastructure/postgres-outbox-publication-store.mjs';
@@ -138,6 +140,7 @@ export function createPostgresWholesaleRuntime({
   // nothing else.
   const libraries = createLibraryQueryService({ reader: createPostgresLibraryReader({ pool }) });
   const history = createHistoryQueryService({ reader: createPostgresHistoryReader({ pool }) });
+  const supplierPortal = createSupplierPortalQueryService({ reader: createPostgresSupplierPortalReader({ pool }) });
   const partners = createPartnerAccessService(options);
   const retailDoors = createRetailDoorService(options);
   const collaboration = createShowroomSelectionService({ ...options, catalogReader: catalog, commercialPublicationReader: commercialPublication });
@@ -171,12 +174,12 @@ export function createPostgresWholesaleRuntime({
     ...(outboxRetentionMs !== undefined ? { outboxRetentionMs } : {}),
   });
   const workspace = createWorkspaceQueryService({ reader: createPostgresWorkspaceReader({ pool }) });
-  const transport = { authenticate: auth.authenticate, auth, readiness, platform, catalog, productIdentity, productReadiness, commercialPublication, orderEconomics, materials, boms, measurements, samples, libraries, history, partners, retailDoors, sourcing, techPacks, collaboration, orders, notifications, workspace };
+  const transport = { authenticate: auth.authenticate, auth, readiness, platform, catalog, productIdentity, productReadiness, commercialPublication, orderEconomics, materials, boms, measurements, samples, libraries, history, supplierPortal, partners, retailDoors, sourcing, techPacks, collaboration, orders, notifications, workspace };
   const handler = createWholesaleHttpHandler(transport);
   const fetchHandler = createWholesaleFetchHandler(transport);
   return Object.freeze({
     auth, readiness, maintenance, outboxPublication, store, catalogStore, productIdentityStore, productIdentityReader, productReadinessStore, productReadinessSourceReader, commercialPublicationStore, orderEconomicsStore, materialStore, bomStore, measurementStore, sampleStore, sourcingStore, techPackStore,
-    platform, catalog, productIdentity, productReadiness, commercialPublication, orderEconomics, materials, boms, measurements, samples, libraries, history, partners, retailDoors, sourcing, techPacks, collaboration, orders, notifications, workspace,
+    platform, catalog, productIdentity, productReadiness, commercialPublication, orderEconomics, materials, boms, measurements, samples, libraries, history, supplierPortal, partners, retailDoors, sourcing, techPacks, collaboration, orders, notifications, workspace,
     handler, fetchHandler,
   });
 }

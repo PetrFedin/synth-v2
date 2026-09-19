@@ -4,6 +4,7 @@ import { createEconomicsRouteBundle } from './economics-route-bundle.mjs';
 import { createFinalQualityRoutes } from './final-quality-routes.mjs';
 import { createLibraryRoutes } from './library-routes.mjs';
 import { createHistoryRoutes } from './history-routes.mjs';
+import { createSupplierPortalRoutes } from './supplier-portal-routes.mjs';
 import { createFulfillmentRoutes } from './fulfillment-routes.mjs';
 import { createInventoryRoutes } from './inventory-routes.mjs';
 import { createProductIdentityRoutes } from './product-identity-routes.mjs';
@@ -45,6 +46,7 @@ export function createWholesaleRoutes(services = {}) {
     ...createFinalQualityRoutes({ finalQuality: services.finalQuality }),
     ...createLibraryRoutes({ libraries: services.libraries }),
     ...createHistoryRoutes({ history: services.history }),
+    ...createSupplierPortalRoutes({ supplierPortal: services.supplierPortal }),
   ]);
 }
 

@@ -11,6 +11,28 @@ export function createPostgresSourcingReader({ pool } = {}) {
     supplierGetForActor(actorId, supplierCode) { return getForActor(pool, actorId, 'suppliers', 'supplier_code', supplierCode); },
     rfqPageForActor(actorId, options) { return withPostgresTransaction(pool, (queryable) => rfqPage(queryable, actorId, options), { begin: SNAPSHOT_BEGIN }); },
     rfqGetForActor(actorId, rfqCode) { return getForActor(pool, actorId, 'sourcing_rfqs', 'rfq_code', rfqCode); },
+    // Who at this supplier can sign in to the portal. Revoked grants are returned as well: the point of
+    // an access list is to answer "who can read our requests, and who used to", and a row that vanishes
+    // on revocation answers only half of that.
+    portalAccessForActor(actorId, supplierCode) {
+      return withPostgresTransaction(pool, async (queryable) => {
+        const result = await queryable.query(
+          `SELECT access.payload
+             FROM supplier_portal_grants AS access
+            WHERE access.supplier_code = $1
+              AND EXISTS (
+                SELECT 1 FROM memberships AS membership
+                 WHERE membership.user_id = $2
+                   AND membership.organisation_id = access.brand_id
+                   AND membership.status = 'active'
+                   AND membership.role = ANY($3::text[])
+              )
+            ORDER BY access.status ASC, access.granted_at DESC`,
+          [supplierCode, actorId, SOURCING_READ_ROLES],
+        );
+        return result.rows.map((row) => row.payload);
+      }, { begin: SNAPSHOT_BEGIN });
+    },
   });
 }
 

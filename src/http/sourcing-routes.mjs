@@ -16,6 +16,8 @@ const COUNTER_BODY = bodyContract(['expectedVersion', 'supplierCode', 'quantity'
 const AWARD_BODY = bodyContract(['expectedVersion', 'supplierCode']);
 const ALLOCATION_BODY = bodyContract(['expectedVersion', 'purchaseOrderNumber', 'quantity', 'productionStartAt', 'deliveryDueAt', 'notes']);
 const CANCEL_BODY = bodyContract(['expectedVersion', 'reason']);
+const PORTAL_GRANT_BODY = bodyContract(['email', 'contactName']);
+const PORTAL_REVOKE_BODY = bodyContract(['expectedVersion', 'userId']);
 const SUPPLIER_QUERY_FIELDS = Object.freeze(['limit', 'cursor', 'q', 'status', 'brandId', 'countryCode', 'category']);
 const RFQ_QUERY_FIELDS = Object.freeze(['limit', 'cursor', 'q', 'status', 'brandId', 'sku', 'supplierCode', 'overdue']);
 
@@ -29,6 +31,9 @@ export function createSourcingRoutes({ sourcing } = {}) {
     mutate('POST', /^\/v2\/suppliers\/([^/]+)\/qualify$/, VERSION_BODY, ({ commandId, actorId, params, body }) => service.qualifySupplier(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/suppliers\/([^/]+)\/suspend$/, SUPPLIER_SUSPEND_BODY, ({ commandId, actorId, params, body }) => service.suspendSupplier(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/suppliers\/([^/]+)\/archive$/, VERSION_BODY, ({ commandId, actorId, params, body }) => service.archiveSupplier(commandId, actorId, params[0], body)),
+    read('GET', /^\/v2\/suppliers\/([^/]+)\/portal-access$/, [], ({ actorId, params }) => service.portalAccessForActor(actorId, params[0])),
+    mutate('POST', /^\/v2\/suppliers\/([^/]+)\/portal-access$/, PORTAL_GRANT_BODY, ({ commandId, actorId, params, body }) => service.grantPortalAccess(commandId, actorId, params[0], body)),
+    mutate('POST', /^\/v2\/suppliers\/([^/]+)\/portal-access\/revoke$/, PORTAL_REVOKE_BODY, ({ commandId, actorId, params, body }) => service.revokePortalAccess(commandId, actorId, params[0], body)),
     read('GET', /^\/v2\/rfqs$/, RFQ_QUERY_FIELDS, ({ actorId, query }) => service.rfqPageForActor(actorId, query)),
     read('GET', /^\/v2\/rfqs\/([^/]+)$/, [], ({ actorId, params }) => service.rfqGetForActor(actorId, params[0])),
     mutate('POST', /^\/v2\/rfqs$/, RFQ_CREATE_BODY, ({ commandId, actorId, body }) => service.createRfq(commandId, actorId, body)),
@@ -89,5 +94,6 @@ function unavailableSourcing() {
     qualifySupplier: fail, suspendSupplier: fail, archiveSupplier: fail, rfqPageForActor: fail,
     rfqGetForActor: fail, createRfq: fail, createRfqFromProductionRequirement: fail, updateRfq: fail, issueRfq: fail, upsertQuote: fail,
     counterQuote: fail, awardRfq: fail, allocateRfq: fail, cancelRfq: fail,
+    portalAccessForActor: fail, grantPortalAccess: fail, revokePortalAccess: fail,
   });
 }

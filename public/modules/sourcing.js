@@ -9,6 +9,7 @@
   const ui = global.SynthaSourcingWorkspace || (global.SynthaSourcingWorkspace = {
     suppliers: [], rfqs: [], boms: [], loaded: false, loading: false, error: '', selectedSupplierCode: null,
     selectedRfqCode: null, busyKey: null, generation: 0, referenceTime: null, supplierStatus: 'all', rfqStatus: 'all',
+    portalAccess: [], portalAccessFor: null, portalAccessLoading: false,
   });
   const SUPPLIER_STATUSES = ['draft', 'qualified', 'suspended', 'archived'];
   const RFQ_STATUSES = ['draft', 'issued', 'quoted', 'awarded', 'allocated', 'cancelled'];
@@ -182,7 +183,88 @@
       h('dl', { className: 'sourcing-details' }, [detail(text('Бренд', 'Brand'), brandName(supplier.brandId)), detail('Email', supplier.email), detail(text('Валюта', 'Currency'), supplier.currency), detail('Incoterms', supplier.incoterms.join(', ')), detail(text('Условия оплаты', 'Payment terms'), `${supplier.paymentTermsDays} ${text('дн.', 'days')}`), detail(text('Аудит до', 'Audit valid until'), formatDate(supplier.auditExpiresAt))]),
       supplier.suspensionReason ? h('div', { className: 'sourcing-warning', text: supplier.suspensionReason }) : null,
       h('div', { className: 'sourcing-actions' }, actions.map((action) => supplierActionButton(action, supplier))),
+      portalAccessPanel(supplier),
     ]);
+  }
+
+  // Who at this supplier can sign in. Access is listed beside the supplier rather than in a settings
+  // screen of its own, because it is a fact about this counterparty: revoking it is the same decision
+  // as suspending them, taken one person at a time.
+  function portalAccessPanel(supplier) {
+    const manage = can(supplier.brandId, caps.CAPABILITIES.SUPPLIER_MANAGE);
+    if (ui.portalAccessFor !== supplier.supplierCode && !ui.portalAccessLoading) {
+      queueMicrotask(() => { void loadPortalAccess(supplier.supplierCode); });
+    }
+    const grants = ui.portalAccessFor === supplier.supplierCode ? ui.portalAccess : [];
+    const active = grants.filter((grant) => grant.status === 'active');
+    const rows = grants.map((grant) => h('tr', { className: grant.status === 'revoked' ? 'sourcing-row-muted' : '' }, [
+      h('td', { text: grant.contactName || grant.invitedEmail }),
+      h('td', { text: grant.invitedEmail || grant.userId }),
+      h('td', {}, [badge(grant.status === 'active' ? text('Доступ открыт', 'Active') : text('Отозван', 'Revoked'), grant.status === 'active' ? 'positive' : 'muted')]),
+      h('td', {}, grant.status === 'active' && manage
+        ? [h('button', { type: 'button', className: 'danger', disabled: ui.busyKey === supplier.supplierCode, text: text('Отозвать', 'Revoke'), onclick: () => openPortalRevokeDialog(supplier, grant) })]
+        : [h('span', { className: 'muted', text: grant.revokedAt ? formatDate(grant.revokedAt) : '—' })]),
+    ]));
+    if (!rows.length) {
+      rows.push(h('tr', {}, [h('td', {
+        colspan: '4', className: 'sourcing-empty',
+        text: ui.portalAccessLoading
+          ? text('Загрузка…', 'Loading…')
+          : text('Никто из этого поставщика пока не может войти в портал.', 'Nobody at this supplier can sign in to the portal yet.'),
+      })]));
+    }
+    return h('section', { className: 'sourcing-subpanel' }, [
+      h('div', { className: 'sourcing-toolbar' }, [
+        h('h3', { text: text('Доступ к порталу поставщика', 'Supplier portal access') }),
+        manage && supplier.status === 'qualified'
+          ? h('button', { type: 'button', className: 'secondary', text: text('Пригласить', 'Invite'), onclick: () => openPortalGrantDialog(supplier) })
+          : null,
+      ]),
+      h('p', { className: 'muted', text: active.length
+        ? text(`${active.length} чел. видят запросы и заказы, адресованные этому поставщику.`, `${active.length} people can see the requests and orders addressed to this supplier.`)
+        : text('Приглашённый видит только запросы и заказы этого поставщика — ни других поставщиков, ни их котировок.', 'An invited person sees only this supplier\u2019s requests and orders \u2014 no other supplier and no other quotation.') }),
+      h('div', { className: 'sourcing-table-wrap' }, [h('table', { className: 'sourcing-table' }, [
+        h('thead', {}, [h('tr', {}, [text('Контакт', 'Contact'), text('Учётная запись', 'Account'), text('Статус', 'Status'), ''].map((value) => h('th', { text: value })))]),
+        h('tbody', {}, rows),
+      ])]),
+    ]);
+  }
+
+  async function loadPortalAccess(supplierCode) {
+    if (ui.portalAccessLoading) return;
+    ui.portalAccessLoading = true;
+    try {
+      const result = await api(`/v2/suppliers/${encodeURIComponent(supplierCode)}/portal-access`);
+      ui.portalAccess = result.items || [];
+      ui.portalAccessFor = supplierCode;
+    } catch (error) {
+      ui.portalAccess = [];
+      ui.portalAccessFor = supplierCode;
+    } finally {
+      ui.portalAccessLoading = false;
+      renderApp();
+    }
+  }
+
+  function openPortalGrantDialog(supplier) {
+    dialog(text('Пригласить в портал поставщика', 'Invite to the supplier portal'), [
+      field(text('Учётная запись (email)', 'Account (email)'), control('email', 'email', '', { required: true, maxlength: '160' })),
+      field(text('Имя контакта', 'Contact name'), control('contactName', 'text', '', { maxlength: '160' })),
+    ], text('Открыть доступ', 'Grant access'), async (values) => {
+      const done = await runMutation(supplier.supplierCode, `/v2/suppliers/${encodeURIComponent(supplier.supplierCode)}/portal-access`, { email: values.email.trim(), contactName: values.contactName.trim() }, 'POST', 'supplier');
+      if (done) { ui.portalAccessFor = null; void loadPortalAccess(supplier.supplierCode); }
+      return Boolean(done);
+    });
+  }
+
+  function openPortalRevokeDialog(supplier, grant) {
+    dialog(text('Отозвать доступ', 'Revoke access'), [
+      h('p', { className: 'sourcing-confirm', text: text(`${grant.contactName || grant.invitedEmail} перестанет видеть запросы и заказы этого поставщика.`, `${grant.contactName || grant.invitedEmail} will stop seeing this supplier\u2019s requests and orders.`) }),
+    ], text('Отозвать', 'Revoke'), async () => {
+      const done = await runMutation(supplier.supplierCode, `/v2/suppliers/${encodeURIComponent(supplier.supplierCode)}/portal-access/revoke`, { expectedVersion: grant.version, userId: grant.userId }, 'POST', 'supplier');
+      if (done) { ui.portalAccessFor = null; void loadPortalAccess(supplier.supplierCode); }
+      return Boolean(done);
+    }, true);
   }
   function supplierActionButton(action, supplier) {
     const labels = { edit: [text('Редактировать', 'Edit'), 'secondary'], qualify: [text('Квалифицировать', 'Qualify'), 'primary'], suspend: [text('Приостановить', 'Suspend'), 'danger'], archive: [text('В архив', 'Archive'), 'danger'] };
@@ -336,9 +418,21 @@
       return Boolean(await runMutation(values.supplierCode.trim().toUpperCase(), '/v2/suppliers', { supplierCode: values.supplierCode.trim().toUpperCase(), brandId, ...editable }, 'POST', 'supplier'));
     });
   }
-  async function qualifySupplier(supplier) { if (!confirm(text(`Квалифицировать ${supplier.supplierCode}?`, `Qualify ${supplier.supplierCode}?`))) return; await runMutation(supplier.supplierCode, `/v2/suppliers/${encodeURIComponent(supplier.supplierCode)}/qualify`, { expectedVersion: supplier.version }, 'POST', 'supplier'); }
+  // Confirmation is a dialog, not window.confirm: a native box cannot be translated, carries the
+  // browser's own chrome and looked nothing like the styled confirmation every other destructive
+  // action in the app already opened.
+  function confirmDialog(title, question, submitLabel, run, danger = false) {
+    dialog(title, [h('p', { className: 'sourcing-confirm', text: question })], submitLabel, async () => { await run(); return true; }, danger);
+  }
+  function qualifySupplier(supplier) {
+    confirmDialog(text('Квалифицировать поставщика', 'Qualify supplier'), text(`${supplier.supplierCode} станет доступен для запросов цен.`, `${supplier.supplierCode} becomes available for requests for quotation.`), text('Квалифицировать', 'Qualify'),
+      () => runMutation(supplier.supplierCode, `/v2/suppliers/${encodeURIComponent(supplier.supplierCode)}/qualify`, { expectedVersion: supplier.version }, 'POST', 'supplier'));
+  }
   function openSupplierSuspendDialog(supplier) { dialog(text('Приостановить поставщика', 'Suspend supplier'), [field(text('Причина', 'Reason'), textarea('reason', '', { required: true, minlength: '5', maxlength: '500', rows: '4' }))], text('Приостановить', 'Suspend'), async (values) => Boolean(await runMutation(supplier.supplierCode, `/v2/suppliers/${encodeURIComponent(supplier.supplierCode)}/suspend`, { expectedVersion: supplier.version, reason: values.reason }, 'POST', 'supplier')), true); }
-  async function archiveSupplier(supplier) { if (!confirm(text(`Переместить ${supplier.supplierCode} в архив?`, `Archive ${supplier.supplierCode}?`))) return; await runMutation(supplier.supplierCode, `/v2/suppliers/${encodeURIComponent(supplier.supplierCode)}/archive`, { expectedVersion: supplier.version }, 'POST', 'supplier'); }
+  function archiveSupplier(supplier) {
+    confirmDialog(text('Переместить в архив', 'Archive supplier'), text(`${supplier.supplierCode} больше не появится в запросах цен.`, `${supplier.supplierCode} will no longer appear in requests for quotation.`), text('В архив', 'Archive'),
+      () => runMutation(supplier.supplierCode, `/v2/suppliers/${encodeURIComponent(supplier.supplierCode)}/archive`, { expectedVersion: supplier.version }, 'POST', 'supplier'), true);
+  }
 
   function openRfqDialog(rfq) {
     const skus = publishedSkuOptions(); if (!rfq && !skus.length) { toast(text('Нужен опубликованный SKU с опубликованной BOM.', 'A published SKU with a published BOM is required.'), 'error'); return; }
@@ -351,7 +445,10 @@
       return Boolean(await runMutation(values.rfqCode.trim().toUpperCase(), '/v2/rfqs', { rfqCode: values.rfqCode.trim().toUpperCase(), sku: values.sku, ...editable }));
     });
   }
-  async function issueRfq(rfq) { if (!confirm(text(`Отправить ${rfq.rfqCode} приглашённым поставщикам?`, `Issue ${rfq.rfqCode} to invited suppliers?`))) return; await runMutation(rfq.rfqCode, `/v2/rfqs/${encodeURIComponent(rfq.rfqCode)}/issue`, { expectedVersion: rfq.version }); }
+  function issueRfq(rfq) {
+    confirmDialog(text('Отправить запрос', 'Issue request'), text(`${rfq.rfqCode} будет отправлен приглашённым поставщикам и станет доступен им в портале.`, `${rfq.rfqCode} goes to the invited suppliers and becomes visible to them in the portal.`), text('Отправить', 'Issue'),
+      () => runMutation(rfq.rfqCode, `/v2/rfqs/${encodeURIComponent(rfq.rfqCode)}/issue`, { expectedVersion: rfq.version }));
+  }
   function openQuoteDialog(rfq) {
     const suppliers = rfq.supplierCodes.map(supplierByCode).filter(Boolean); if (!suppliers.length) { toast(text('Приглашённые поставщики не найдены.', 'Invited suppliers were not found.'), 'error'); return; }
     dialog(text('Полученная котировка', 'Received quotation'), [field(text('Поставщик', 'Supplier'), select('supplierCode', suppliers.map((item) => [item.supplierCode, `${item.supplierCode} · ${item.legalName}`]), suppliers[0].supplierCode)), field(text('Цена за единицу', 'Unit price'), control('unitPrice', 'text', '', { required: true, inputmode: 'decimal' })), field(text('Фиксированные затраты', 'Fixed cost'), control('fixedCost', 'text', '0', { required: true, inputmode: 'decimal' })), field('Lead time', control('leadTimeDays', 'number', suppliers[0].leadTimeDays, { min: '1', max: '730', required: true })), field('MOQ', control('minimumOrderQuantity', 'number', suppliers[0].minimumOrderQuantity, { min: '1', required: true })), field(text('Действует до', 'Valid until'), control('validUntil', 'datetime-local', daysFromNow(21), { required: true })), field(text('Комментарий', 'Notes'), textarea('notes', '', { maxlength: '1000', rows: '4' }))], text('Записать котировку', 'Record quotation'), async (values) => Boolean(await runMutation(rfq.rfqCode, `/v2/rfqs/${encodeURIComponent(rfq.rfqCode)}/quotes`, { expectedVersion: rfq.version, supplierCode: values.supplierCode, unitPriceMinor: decimalToMinor(values.unitPrice), fixedCostMinor: decimalToMinor(values.fixedCost), leadTimeDays: Number(values.leadTimeDays), minimumOrderQuantity: Number(values.minimumOrderQuantity), validUntil: iso(values.validUntil), notes: values.notes.trim() || null })));

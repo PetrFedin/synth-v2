@@ -18,6 +18,10 @@ import {
   updateSupplier as updateSupplierDomain,
   upsertRfqQuote as upsertRfqQuoteDomain,
 } from '../modules/sourcing/public.mjs';
+import {
+  createSupplierPortalGrant as createSupplierPortalGrantDomain,
+  revokeSupplierPortalGrant as revokeSupplierPortalGrantDomain,
+} from '../modules/supplier-portal/public.mjs';
 
 const SUPPLIER_EDITABLE = Object.freeze(['legalName', 'countryCode', 'email', 'currency', 'incoterms', 'categories', 'leadTimeDays', 'minimumOrderQuantity', 'paymentTermsDays', 'auditExpiresAt', 'notes']);
 const SUPPLIER_CREATE_FIELDS = Object.freeze(new Set(['supplierCode', 'brandId', ...SUPPLIER_EDITABLE]));
@@ -33,6 +37,8 @@ const COUNTER_FIELDS = Object.freeze(new Set(['expectedVersion', 'supplierCode',
 const AWARD_FIELDS = Object.freeze(new Set(['expectedVersion', 'supplierCode']));
 const ALLOCATION_FIELDS = Object.freeze(new Set(['expectedVersion', 'purchaseOrderNumber', 'quantity', 'productionStartAt', 'deliveryDueAt', 'notes']));
 const CANCEL_FIELDS = Object.freeze(new Set(['expectedVersion', 'reason']));
+const PORTAL_GRANT_FIELDS = Object.freeze(new Set(['email', 'contactName']));
+const PORTAL_REVOKE_FIELDS = Object.freeze(new Set(['expectedVersion', 'userId']));
 
 export function createSourcingService({ sourcingStore, clock = () => new Date().toISOString(), nextId = defaultIdGenerator() } = {}) {
   invariant(sourcingStore && typeof sourcingStore.transaction === 'function', 'SOURCING_STORE_REQUIRED', 'Sourcing store is required');
@@ -80,6 +86,17 @@ export function createSourcingService({ sourcingStore, clock = () => new Date().
       aggregateId: aggregate.id,
       occurredAt: clock(),
       payload,
+      metadata: { commandId, actorId },
+    }));
+  }
+
+  async function appendPortalEvent(tx, type, grant, commandId, actorId) {
+    await tx.appendOutbox(domainEvent({
+      id: nextId('event'),
+      type,
+      aggregateId: grant.id,
+      occurredAt: clock(),
+      payload: { supplierCode: grant.supplierCode, brandId: grant.brandId, userId: grant.userId, status: grant.status, version: grant.version },
       metadata: { commandId, actorId },
     }));
   }
@@ -177,6 +194,68 @@ export function createSourcingService({ sourcingStore, clock = () => new Date().
         commandName: 'archiveSupplier', eventType: 'supplier.archived', commandId, actorId, supplierCode, input, fields: VERSION_FIELDS,
         transform: (supplier) => archiveSupplierDomain(supplier, { archivedAt: clock() }),
       });
+    },
+
+    // Portal access to a supplier. The capability is SUPPLIER_MANAGE rather than a new one, because
+    // letting an outside person read the brand's requests to this factory is the same kind of decision
+    // as qualifying the factory in the first place.
+    grantPortalAccess(commandId, actorId, supplierCode, input) {
+      assertObject(input, 'SUPPLIER_PORTAL_COMMAND_INVALID', 'Portal command input is invalid');
+      assertAllowedFields(input, PORTAL_GRANT_FIELDS, 'SUPPLIER_PORTAL_FIELD_FORBIDDEN');
+      return execute(
+        commandId,
+        `grantSupplierPortalAccess:${actorId}:${supplierCode}:${canonicalJson(input)}`,
+        actorId,
+        async (tx) => {
+          const supplier = requireEntity(await tx.getSupplierByCode(supplierCode), 'SUPPLIER_NOT_FOUND', { supplierCode });
+          const granterMembership = await membership(tx, supplier.brandId, actorId, CAPABILITIES.SUPPLIER_MANAGE);
+          // Access is granted to somebody who can already sign in. Creating an account on their behalf
+          // would mean choosing a password for a person at another company; until invitations exist,
+          // the honest answer is to say the account is not there yet.
+          const account = await tx.getAccountByEmail(String(input.email ?? '').trim());
+          invariant(account, 'SUPPLIER_PORTAL_ACCOUNT_NOT_FOUND', 'That person has no Syntha account yet', { email: input.email });
+          return Object.freeze({ supplier, granterMembership, account, existing: await tx.getPortalGrant(supplierCode, account.id) });
+        },
+        async (tx, { supplier, granterMembership, account, existing }) => {
+          // Re-granting access to someone whose access was revoked is a new decision, not an edit of the
+          // old one: the record of the revocation stays readable.
+          invariant(!existing || existing.status === 'revoked', 'SUPPLIER_PORTAL_GRANT_EXISTS',
+            'This person already has portal access to that supplier', { supplierCode, email: input.email });
+          const grant = createSupplierPortalGrantDomain({
+            id: existing?.id ?? nextId('supplier-portal-grant'),
+            supplier, account, contactName: input.contactName,
+            grantedBy: actorId, granterMembership, grantedAt: clock(),
+          });
+          if (existing) await tx.savePortalGrant({ ...grant, version: existing.version + 1 }, existing.version);
+          else await tx.insertPortalGrant(grant);
+          const stored = existing ? { ...grant, version: existing.version + 1 } : grant;
+          await appendPortalEvent(tx, 'supplier.portal-access-granted', stored, commandId, actorId);
+          return stored;
+        },
+      );
+    },
+
+    revokePortalAccess(commandId, actorId, supplierCode, input) {
+      assertObject(input, 'SUPPLIER_PORTAL_COMMAND_INVALID', 'Portal command input is invalid');
+      assertAllowedFields(input, PORTAL_REVOKE_FIELDS, 'SUPPLIER_PORTAL_FIELD_FORBIDDEN');
+      const expectedVersion = expectedVersionOf(input, 'SUPPLIER_PORTAL_EXPECTED_VERSION_INVALID', 'Expected grant version');
+      return execute(
+        commandId,
+        `revokeSupplierPortalAccess:${actorId}:${supplierCode}:${canonicalJson(input)}`,
+        actorId,
+        async (tx) => {
+          const supplier = requireEntity(await tx.getSupplierByCode(supplierCode), 'SUPPLIER_NOT_FOUND', { supplierCode });
+          await membership(tx, supplier.brandId, actorId, CAPABILITIES.SUPPLIER_MANAGE);
+          return Object.freeze({ grant: requireEntity(await tx.getPortalGrant(supplierCode, String(input.userId ?? '').trim()), 'SUPPLIER_PORTAL_GRANT_NOT_FOUND', { supplierCode, userId: input.userId }) });
+        },
+        async (tx, { grant }) => {
+          assertExpectedVersion(grant, expectedVersion, 'SUPPLIER_PORTAL_GRANT_CONFLICT', { supplierCode });
+          const revoked = revokeSupplierPortalGrantDomain(grant, { revokedBy: actorId, revokedAt: clock() });
+          await tx.savePortalGrant(revoked, expectedVersion);
+          await appendPortalEvent(tx, 'supplier.portal-access-revoked', revoked, commandId, actorId);
+          return revoked;
+        },
+      );
     },
 
     createRfq(commandId, actorId, input) {

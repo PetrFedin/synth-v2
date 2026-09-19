@@ -147,6 +147,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
     sourcing,
     techPacks: base.techPacks,
     libraries: base.libraries,
+    history: base.history,
     productionOrders,
     productionExecutions,
     finalQuality,

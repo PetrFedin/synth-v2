@@ -164,6 +164,57 @@
     return wrap;
   }
 
+  // What the object has been through. Every mutation already recorded who did it and when; until now
+  // none of it could be read back, so the audit trail existed only for someone with a SQL prompt.
+  const HISTORY = { items: [], loading: false, loadedFor: null };
+  const HISTORY_LABELS = {
+    'ProductStyleCreated': ['\u041c\u043e\u0434\u0435\u043b\u044c \u0441\u043e\u0437\u0434\u0430\u043d\u0430', 'Style created'],
+    'ProductStyleChanged': ['\u0421\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u0435 \u043c\u043e\u0434\u0435\u043b\u0438 \u0438\u0437\u043c\u0435\u043d\u0435\u043d\u043e', 'Style state changed'],
+    'ProductStyleVersionCreated': ['\u0421\u043e\u0437\u0434\u0430\u043d\u0430 \u0432\u0435\u0440\u0441\u0438\u044f \u043c\u043e\u0434\u0435\u043b\u0438', 'Style version created'],
+    'ProductColorwayCreated': ['\u0414\u043e\u0431\u0430\u0432\u043b\u0435\u043d\u0430 \u0446\u0432\u0435\u0442\u043e\u043c\u043e\u0434\u0435\u043b\u044c', 'Colourway added'],
+    'ProductSkuCreated': ['\u0421\u043e\u0437\u0434\u0430\u043d \u0442\u043e\u0432\u0430\u0440\u043d\u044b\u0439 SKU', 'Product SKU created'],
+    'ProductAttributeValueCreated': ['\u0417\u0430\u0434\u0430\u043d \u0430\u0442\u0440\u0438\u0431\u0443\u0442', 'Attribute set'],
+    'ProductMediaCreated': ['\u0414\u043e\u0431\u0430\u0432\u043b\u0435\u043d\u043e \u0438\u0437\u043e\u0431\u0440\u0430\u0436\u0435\u043d\u0438\u0435', 'Image added'],
+    'ProductReadinessSnapshotCreated': ['\u041e\u0446\u0435\u043d\u0435\u043d\u0430 \u0433\u043e\u0442\u043e\u0432\u043d\u043e\u0441\u0442\u044c', 'Readiness assessed'],
+    'product.responsibility.assigned': ['\u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d \u043e\u0442\u0432\u0435\u0442\u0441\u0442\u0432\u0435\u043d\u043d\u044b\u0439', 'A desk was assigned'],
+    'product.responsibility.released': ['\u0421\u043d\u044f\u0442 \u043e\u0442\u0432\u0435\u0442\u0441\u0442\u0432\u0435\u043d\u043d\u044b\u0439', 'A desk was released'],
+    'assortment.placeholder.style-linked': ['\u041f\u0440\u0438\u0432\u044f\u0437\u0430\u043d\u0430 \u043a \u043f\u043b\u0435\u0439\u0441\u0445\u043e\u043b\u0434\u0435\u0440\u0443', 'Linked to a placeholder'],
+    'ProductCatalogSkuLinkCreated': ['\u0421\u0432\u044f\u0437\u0430\u043d\u0430 \u0441 \u043a\u0430\u0442\u0430\u043b\u043e\u0433\u043e\u043c', 'Linked to the catalogue'],
+  };
+  function historyLabel(type) {
+    const pair = HISTORY_LABELS[type];
+    return pair ? text(pair[0], pair[1]) : type;
+  }
+  async function loadHistory(subjectId) {
+    if (!subjectId || HISTORY.loading) return;
+    HISTORY.loading = true;
+    try {
+      const result = await api(`/v2/history/${encodeURIComponent(subjectId)}?limit=50`);
+      HISTORY.items = result.items || [];
+      HISTORY.loadedFor = subjectId;
+    } catch (error) {
+      HISTORY.items = [];
+      toast(error?.message || I18N.t('common.requestError'), 'error');
+    } finally {
+      HISTORY.loading = false;
+      if (state.view === 'styles') renderApp();
+    }
+  }
+  function historyPanel(item) {
+    const subjectId = item.product.id;
+    if (HISTORY.loadedFor !== subjectId && !HISTORY.loading) queueMicrotask(() => { void loadHistory(subjectId); });
+    if (HISTORY.loading || HISTORY.loadedFor !== subjectId) return notice(text('\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430 \u0438\u0441\u0442\u043e\u0440\u0438\u0438\u2026', 'Loading the history\u2026'));
+    if (!HISTORY.items.length) return notice(text('\u041f\u043e \u044d\u0442\u043e\u0439 \u043c\u043e\u0434\u0435\u043b\u0438 \u043f\u043e\u043a\u0430 \u043d\u0438\u0447\u0435\u0433\u043e \u043d\u0435 \u0437\u0430\u043f\u0438\u0441\u0430\u043d\u043e.', 'Nothing has been recorded for this style yet.'));
+    return odMiniTable(
+      [text('\u041a\u043e\u0433\u0434\u0430', 'When'), text('\u0427\u0442\u043e \u043f\u0440\u043e\u0438\u0437\u043e\u0448\u043b\u043e', 'What happened'), text('\u041a\u0442\u043e', 'Who')],
+      HISTORY.items.map((entry) => [
+        entry.occurredAt ? formatDate(entry.occurredAt) : '\u2014',
+        historyLabel(entry.type),
+        entry.actorName || entry.actorEmail || '\u2014',
+      ]),
+    );
+  }
+
   // Colourways of the style, with the governed colour resolved. The article is derived by the read
   // model from the style code and the colourway code, which is how it is read off a label.
   function colorwaysOf(item) {
@@ -305,6 +356,10 @@
               ), categoryAttributes(product).length ? 'success' : 'warning')
               : notice(text('У модели не выбрана категория, поэтому набор полей ещё не определён.', 'This style has no category yet, so the field set is not decided.'), 'warning'),
           ],
+        },
+        {
+          label: text('\u0418\u0441\u0442\u043e\u0440\u0438\u044f', 'History'),
+          content: [historyPanel(item)],
         },
         {
           label: text('Команда', 'Team'),

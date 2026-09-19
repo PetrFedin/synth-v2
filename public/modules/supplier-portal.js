@@ -84,10 +84,19 @@
     { view: ORDER_VIEW, icon: 'orders', ru: 'Заказ', en: 'Order' },
   ];
 
+  // Somebody who belongs to no organisation is not a brand user with two extra screens. Leaving the
+  // brand's registers in their sidebar showed them nothing — every one of those endpoints returns an
+  // empty list without a membership — but it showed them the shape of the brand's operation, its
+  // vocabulary and its action verbs, on screens that could never do anything. The portal is the whole
+  // of their navigation.
+  function portalOnly() { return ui.suppliers.length > 0 && !(state.workspace?.memberships || []).length; }
+
   function appendNavigation() {
     if (!ui.suppliers.length) return;
     const nav = document.querySelector('.sidebar .nav');
-    if (!nav || nav.querySelector('[data-view="' + RFQ_VIEW + '"]')) return;
+    if (!nav) return;
+    if (portalOnly()) nav.replaceChildren();
+    else if (nav.querySelector('[data-view="' + RFQ_VIEW + '"]')) return;
     const group = el('section', { className: 'od-v7-nav-group' });
     group.append(el('div', { className: 'nav-group-label', rawText: text('ПОРТАЛ ПОСТАВЩИКА', 'SUPPLIER PORTAL') }));
     PORTAL_ITEMS.forEach((item) => {
@@ -293,6 +302,9 @@
   renderApp = (...args) => {
     const actorId = state.user?.actorId || state.user?.id || null;
     if (actorId && ui.checkedFor !== actorId && !ui.checking) queueMicrotask(() => { void detectAccess(actorId); });
+    // A portal-only account has no workspace to land on, so the first screen is the first thing
+    // addressed to them rather than a brand dashboard with every tile at zero.
+    if (portalOnly() && state.view !== RFQ_VIEW && state.view !== ORDER_VIEW) state.view = RFQ_VIEW;
     const result = previousRenderApp(...args);
     appendNavigation();
     return result;

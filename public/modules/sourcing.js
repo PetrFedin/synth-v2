@@ -116,14 +116,34 @@
     ui.busyKey = key; renderApp();
     try {
       const result = await mutate(path, body, method);
-      if (kind === 'supplier') upsertSupplier(result); else upsertRfq(result);
+      // A command's response is the aggregate it changed. Portal access changes a grant, not the
+      // supplier: folding it into the supplier register replaced the supplier with the grant, and the
+      // next render threw on a field a grant does not have.
+      if (kind === 'supplier') upsertSupplier(result);
+      else if (kind === 'grant') { /* the access panel reloads itself */ }
+      else upsertRfq(result);
       toast(text('Изменения сохранены.', 'Changes saved.'));
       return result;
     } catch (error) {
       if (String(error?.code || '').includes('CONCURRENCY_CONFLICT')) { reset(); queueMicrotask(() => { void loadSourcing({ reset: true }); }); }
-      toast(error?.message || I18N.t('common.requestError'), 'error');
+      toast(errorMessage(error), 'error');
       return null;
     } finally { ui.busyKey = null; renderApp(); }
+  }
+
+  // A rule the server enforces has to be readable in the language the screen is in. Anything not
+  // listed here still falls back to the server's own sentence rather than to a generic apology.
+  const ERROR_TEXT = {
+    SUPPLIER_PORTAL_ACCOUNT_NOT_FOUND: ['У этого человека ещё нет учётной записи Syntha. Сначала он должен получить доступ к платформе.', 'That person has no Syntha account yet.'],
+    SUPPLIER_PORTAL_HOLDER_IS_GRANTER: ['Нельзя открыть доступ самому себе.', 'You cannot grant portal access to yourself.'],
+    SUPPLIER_PORTAL_HOLDER_IS_BRAND_MEMBER: ['Сотрудник бренда не может получить доступ к порталу его же поставщика.', 'A member of the brand cannot hold portal access to that brand\u2019s supplier.'],
+    SUPPLIER_PORTAL_GRANT_EXISTS: ['У этого человека уже есть доступ к порталу этого поставщика.', 'This person already has portal access to that supplier.'],
+    SUPPLIER_PORTAL_GRANT_NOT_FOUND: ['Такого доступа нет.', 'There is no such access.'],
+    SUPPLIER_PORTAL_SUPPLIER_NOT_QUALIFIED: ['Доступ к порталу открывают квалифицированному поставщику.', 'Portal access belongs to a qualified supplier.'],
+  };
+  function errorMessage(error) {
+    const pair = ERROR_TEXT[String(error?.code || '')];
+    return pair ? text(pair[0], pair[1]) : (error?.message || I18N.t('common.requestError'));
   }
 
   function metric(label, value, detail) { return h('article', { className: 'sourcing-kpi' }, [h('span', { text: label }), h('strong', { text: String(value) }), detail ? h('small', { text: detail }) : null]); }
@@ -221,7 +241,10 @@
           : null,
       ]),
       h('p', { className: 'muted', text: active.length
-        ? text(`${active.length} чел. видят запросы и заказы, адресованные этому поставщику.`, `${active.length} people can see the requests and orders addressed to this supplier.`)
+        ? text(
+          `${active.length} ${active.length === 1 ? 'человек видит' : 'чел. видят'} запросы и заказы, адресованные этому поставщику.`,
+          `${active.length} ${active.length === 1 ? 'person can' : 'people can'} see the requests and orders addressed to this supplier.`,
+        )
         : text('Приглашённый видит только запросы и заказы этого поставщика — ни других поставщиков, ни их котировок.', 'An invited person sees only this supplier\u2019s requests and orders \u2014 no other supplier and no other quotation.') }),
       h('div', { className: 'sourcing-table-wrap' }, [h('table', { className: 'sourcing-table' }, [
         h('thead', {}, [h('tr', {}, [text('Контакт', 'Contact'), text('Учётная запись', 'Account'), text('Статус', 'Status'), ''].map((value) => h('th', { text: value })))]),
@@ -251,7 +274,7 @@
       field(text('Учётная запись (email)', 'Account (email)'), control('email', 'email', '', { required: true, maxlength: '160' })),
       field(text('Имя контакта', 'Contact name'), control('contactName', 'text', '', { maxlength: '160' })),
     ], text('Открыть доступ', 'Grant access'), async (values) => {
-      const done = await runMutation(supplier.supplierCode, `/v2/suppliers/${encodeURIComponent(supplier.supplierCode)}/portal-access`, { email: values.email.trim(), contactName: values.contactName.trim() }, 'POST', 'supplier');
+      const done = await runMutation(supplier.supplierCode, `/v2/suppliers/${encodeURIComponent(supplier.supplierCode)}/portal-access`, { email: values.email.trim(), contactName: values.contactName.trim() }, 'POST', 'grant');
       if (done) { ui.portalAccessFor = null; void loadPortalAccess(supplier.supplierCode); }
       return Boolean(done);
     });
@@ -261,7 +284,7 @@
     dialog(text('Отозвать доступ', 'Revoke access'), [
       h('p', { className: 'sourcing-confirm', text: text(`${grant.contactName || grant.invitedEmail} перестанет видеть запросы и заказы этого поставщика.`, `${grant.contactName || grant.invitedEmail} will stop seeing this supplier\u2019s requests and orders.`) }),
     ], text('Отозвать', 'Revoke'), async () => {
-      const done = await runMutation(supplier.supplierCode, `/v2/suppliers/${encodeURIComponent(supplier.supplierCode)}/portal-access/revoke`, { expectedVersion: grant.version, userId: grant.userId }, 'POST', 'supplier');
+      const done = await runMutation(supplier.supplierCode, `/v2/suppliers/${encodeURIComponent(supplier.supplierCode)}/portal-access/revoke`, { expectedVersion: grant.version, userId: grant.userId }, 'POST', 'grant');
       if (done) { ui.portalAccessFor = null; void loadPortalAccess(supplier.supplierCode); }
       return Boolean(done);
     }, true);
@@ -422,7 +445,9 @@
   // browser's own chrome and looked nothing like the styled confirmation every other destructive
   // action in the app already opened.
   function confirmDialog(title, question, submitLabel, run, danger = false) {
-    dialog(title, [h('p', { className: 'sourcing-confirm', text: question })], submitLabel, async () => { await run(); return true; }, danger);
+    // The dialog closes when the command succeeded. Returning true unconditionally meant a refused
+    // action looked exactly like an accepted one.
+    dialog(title, [h('p', { className: 'sourcing-confirm', text: question })], submitLabel, async () => Boolean(await run()), danger);
   }
   function qualifySupplier(supplier) {
     confirmDialog(text('Квалифицировать поставщика', 'Qualify supplier'), text(`${supplier.supplierCode} станет доступен для запросов цен.`, `${supplier.supplierCode} becomes available for requests for quotation.`), text('Квалифицировать', 'Qualify'),

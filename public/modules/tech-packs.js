@@ -109,7 +109,7 @@
       h('section', { className: 'tech-pack-kpis' }, [
         metric(text('Всего', 'Total'), summary.total, text('Все редакции', 'All revisions')),
         metric(text('Выпущено', 'Issued'), summary.issued, text('Ждут фабрику', 'Awaiting supplier')),
-        metric(text('Готово', 'Ready'), summary.ready, text('Допуск к allocation', 'Allocation allowed')),
+        metric(text('Готово', 'Ready'), summary.ready, text('Допуск к размещению производства', 'Allocation allowed')),
         metric(text('Заблокировано', 'Blocked'), summary.blocked, text('Нет подтверждения', 'Not acknowledged')),
       ]),
     ]);

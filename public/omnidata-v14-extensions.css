@@ -406,3 +406,37 @@ body .od-timeline-track { min-width: 0; }
 body .od-timeline-bar { display: block; width: 100%; height: 18px; }
 body .od-timeline-readiness { color: var(--od14-text-soft, #6b7280); font-size: 9px; text-align: right; }
 body .od-timeline-scale { display: flex; justify-content: space-between; color: var(--od14-text-soft, #6b7280); font-size: 8.5px; padding-top: 2px; }
+
+/* The tech pack document. It is laid out for paper: a fixed measure, real headings and tables that
+   survive a page break. Printing hides the application around it, so what comes out is the document
+   and nothing else. */
+body .tp-doc { display: grid; gap: 12px; padding: 12px 14px; }
+body .tp-doc-toolbar { display: flex; gap: 8px; }
+body .tp-doc-page {
+  max-width: 900px;
+  padding: 24px 28px;
+  border: 1px solid var(--od14-line, #e1e4e7);
+  border-radius: 6px;
+  background: #fff;
+}
+body .tp-doc-kicker { margin: 0; color: var(--od14-text-soft, #6b7280); font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; }
+body .tp-doc-h1 { margin: 4px 0 2px; font-size: 20px; }
+body .tp-doc-sub { margin: 0 0 14px; color: var(--od14-text-soft, #6b7280); font-size: 11px; max-width: 60ch; }
+body .tp-doc-section { margin-top: 18px; }
+body .tp-doc-h2 { margin: 0 0 6px; font-size: 13px; }
+body .tp-doc-contents { margin: 0; padding-left: 18px; font-size: 11px; }
+body .tp-doc-table { width: 100%; border-collapse: collapse; font-size: 10px; }
+body .tp-doc-table th, body .tp-doc-table td { padding: 5px 7px; border: 1px solid var(--od14-line, #e1e4e7); text-align: left; vertical-align: top; }
+body .tp-doc-table th { background: var(--od14-surface-soft, #f6f7f8); font-weight: 600; }
+body .tp-doc-empty { color: var(--od14-text-soft, #6b7280); text-align: center; }
+body .tp-doc-notes h3 { margin: 10px 0 2px; font-size: 11px; }
+body .tp-doc-notes p { margin: 0; font-size: 11px; max-width: 70ch; white-space: pre-wrap; }
+body .tp-doc-total { margin: 8px 0 0; font-size: 11px; font-weight: 600; }
+
+@media print {
+  body .sidebar, body .topbar, body .page-header, body .tp-doc-toolbar, body #toast { display: none !important; }
+  body .tp-doc, body .tp-doc-page { padding: 0 !important; border: 0 !important; max-width: none !important; }
+  body .tp-doc-section { break-inside: avoid; }
+  body .tp-doc-table { break-inside: auto; }
+  body .tp-doc-table tr { break-inside: avoid; }
+}

@@ -11,6 +11,7 @@ import {
   updateDraftTechPack,
   withdrawTechPack as withdrawTechPackDomain,
 } from '../modules/tech-packs/public.mjs';
+import { createTechPackOperation as createTechPackOperationDomain } from '../modules/tech-pack-operations/public.mjs';
 
 const ACK_FIELDS = Object.freeze(new Set(['expectedVersion', 'supplierCode', 'acknowledgementReference', 'acknowledgedBy', 'notes']));
 
@@ -59,6 +60,32 @@ export function createTechPackService({ techPackStore, clock = () => new Date().
           invariant(!context.existing, 'TECH_PACK_ALREADY_EXISTS', 'Tech pack already exists', { techPackCode: input?.techPackCode });
           const value = createTechPackDomain({ id: nextId('tech-pack'), catalogSku: context.catalogSku, input, createdAt: clock() });
           await tx.insertTechPack(value); await append(tx, 'tech-pack.created', value, commandId, actorId); return value;
+        });
+    },
+
+    // An operation in the make sequence. The database refuses one on a tech pack that has left draft,
+    // so the document a factory quoted against cannot change under it.
+    addOperation(commandId, actorId, code, input) {
+      return execute(commandId, `addTechPackOperation:${actorId}:${code}:${canonicalJson(input)}`, actorId,
+        (tx) => contextForPack(tx, code, actorId),
+        async (tx, context) => {
+          const value = createTechPackOperationDomain({
+            id: nextId('tech-pack-operation'),
+            techPack: context.techPack,
+            sequence: input?.sequence,
+            operationCode: input?.operationCode,
+            nameRu: input?.nameRu,
+            nameEn: input?.nameEn,
+            equipment: input?.equipment ?? null,
+            machineClass: input?.machineClass,
+            standardMinutes: input?.standardMinutes,
+            notes: input?.notes ?? null,
+            createdAt: clock(),
+            createdBy: actorId,
+          });
+          await tx.insertTechPackOperation(value);
+          await append(tx, 'tech-pack.operation-added', context.techPack, commandId, actorId);
+          return value;
         });
     },
 

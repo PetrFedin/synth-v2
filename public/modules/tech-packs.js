@@ -7,7 +7,7 @@
   if (!caps) throw new Error('SynthaUiCapabilities must load before tech-packs.js');
 
   const ui = global.SynthaTechPacksWorkspace || (global.SynthaTechPacksWorkspace = {
-    items: [], loaded: false, loading: false, error: '', selectedCode: null, status: 'all', readiness: 'all', search: '', busyCode: null, generation: 0,
+    items: [], loaded: false, loading: false, error: '', selectedCode: null, status: 'all', readiness: 'all', search: '', busyCode: null, generation: 0, document: null, documentLoading: false,
   });
   const STATUSES = ['draft', 'issued', 'acknowledged', 'superseded', 'withdrawn'];
 
@@ -135,11 +135,106 @@
     return h('div', { className: 'tech-pack-table-wrap' }, [h('table', { className: 'tech-pack-table' }, [h('thead', {}, [h('tr', {}, [text('Техпак', 'Tech Pack'), 'SKU', text('Редакция', 'Revision'), text('Статус', 'Status'), text('Фабрика', 'Supplier'), text('Допуск', 'Readiness'), text('Обновлён', 'Updated')].map((item) => h('th', { text: item })))]), h('tbody', {}, rows)])]);
   }
   function pair(label, value) { return h('div', {}, [h('dt', { text: label }), h('dd', { text: value ?? '—' })]); }
+  // The document a factory receives. It is assembled by the read model in one go, so the pack, the
+  // bill of materials, the measurement chart and the operation sequence are read at the same instant
+  // and cannot contradict each other. The page is laid out for print; saving it as PDF is the
+  // browser's job, because writing a PDF with Cyrillic by hand means embedding a font.
+  async function openDocument(techPackCode) {
+    ui.documentLoading = true;
+    renderApp();
+    try {
+      ui.document = await api(`/v2/tech-packs/${encodeURIComponent(techPackCode)}/document`);
+    } catch (error) {
+      toast(error?.message || text('\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0441\u043e\u0431\u0440\u0430\u0442\u044c \u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442.', 'The document could not be built.'), 'error');
+    } finally {
+      ui.documentLoading = false;
+      renderApp();
+    }
+  }
+  function documentSection(id, titleRu, titleEn, body) {
+    return h('section', { className: 'tp-doc-section', id }, [
+      h('h2', { className: 'tp-doc-h2', text: text(titleRu, titleEn) }),
+      body,
+    ]);
+  }
+  function documentTable(headers, rows) {
+    return h('table', { className: 'tp-doc-table' }, [
+      h('thead', {}, [h('tr', {}, headers.map((label) => h('th', { text: label })))]),
+      h('tbody', {}, rows.length
+        ? rows.map((row) => h('tr', {}, row.map((cell) => h('td', { text: String(cell ?? '\u2014') }))))
+        : [h('tr', {}, [h('td', { colspan: String(headers.length), className: 'tp-doc-empty', text: text('\u0412 \u044d\u0442\u043e\u043c \u0440\u0430\u0437\u0434\u0435\u043b\u0435 \u043f\u043e\u043a\u0430 \u043f\u0443\u0441\u0442\u043e.', 'Nothing in this section yet.') })])]),
+    ]);
+  }
+  function renderDocument(doc) {
+    const en = I18N.getLocale?.() === 'en';
+    const money = (value) => (value === null || value === undefined ? '\u2014' : `${I18N.formatNumber(Number(value), { maximumFractionDigits: 2 })} ${doc.currency || ''}`.trim());
+    const contents = [
+      ['tp-sketch', '\u0418\u0437\u0434\u0435\u043b\u0438\u0435 \u0438 \u043f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a', 'Product and supplier'],
+      ['tp-materials', '\u0421\u043f\u0435\u0446\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u044f \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u043e\u0432', 'Bill of materials'],
+      ['tp-measurements', '\u0422\u0430\u0431\u043b\u0438\u0446\u0430 \u043c\u0435\u0440', 'Measurement chart'],
+      ['tp-construction', '\u041a\u043e\u043d\u0441\u0442\u0440\u0443\u043a\u0446\u0438\u044f, \u043a\u0430\u0447\u0435\u0441\u0442\u0432\u043e \u0438 \u0443\u043f\u0430\u043a\u043e\u0432\u043a\u0430', 'Construction, quality and packing'],
+      ['tp-operations', '\u0422\u0435\u0445\u043d\u043e\u043b\u043e\u0433\u0438\u0447\u0435\u0441\u043a\u0430\u044f \u043f\u043e\u0441\u043b\u0435\u0434\u043e\u0432\u0430\u0442\u0435\u043b\u044c\u043d\u043e\u0441\u0442\u044c', 'List of operations'],
+    ];
+    return h('section', { className: 'tp-doc' }, [
+      h('div', { className: 'tp-doc-toolbar' }, [
+        h('button', { type: 'button', className: 'primary', text: text('\u041f\u0435\u0447\u0430\u0442\u044c \u0438\u043b\u0438 \u0441\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u0438\u0435 \u0432 PDF', 'Print or save as PDF'), onclick: () => window.print() }),
+        h('button', { type: 'button', className: 'secondary', text: text('\u0417\u0430\u043a\u0440\u044b\u0442\u044c', 'Close'), onclick: () => { ui.document = null; renderApp(); } }),
+      ]),
+      h('article', { className: 'tp-doc-page' }, [
+        h('header', { className: 'tp-doc-head' }, [
+          h('p', { className: 'tp-doc-kicker', text: `${doc.techPackCode} \u00b7 ${text('\u0440\u0435\u0432\u0438\u0437\u0438\u044f', 'revision')} ${doc.revision}` }),
+          h('h1', { className: 'tp-doc-h1', text: doc.title || doc.skuName || doc.sku }),
+          h('p', { className: 'tp-doc-sub', text: doc.description || '' }),
+        ]),
+        documentTable(
+          [text('\u041f\u043e\u043b\u0435', 'Field'), text('\u0417\u043d\u0430\u0447\u0435\u043d\u0438\u0435', 'Value')],
+          [
+            [text('\u0410\u0440\u0442\u0438\u043a\u0443\u043b', 'Article'), doc.sku],
+            [text('\u0421\u0442\u0430\u0442\u0443\u0441', 'Status'), statusLabel(doc.status)],
+            [text('\u041f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a', 'Supplier'), `${doc.supplierName || '\u2014'} (${doc.supplierCode || '\u2014'})`],
+            [text('\u041a\u043e\u043d\u0442\u0430\u043a\u0442 \u043f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a\u0430', 'Supplier contact'), doc.supplierEmail],
+            [text('\u0412\u044b\u043f\u0443\u0449\u0435\u043d', 'Issued'), doc.issuedAt ? formatDate(doc.issuedAt) : text('\u043d\u0435 \u0432\u044b\u043f\u0443\u0449\u0435\u043d', 'not issued')],
+            [text('\u0418\u0442\u043e\u0433\u043e \u043f\u043e \u0441\u043f\u0435\u0446\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u0438', 'BOM total'), money(doc.bomTotalCost)],
+            [text('\u041d\u043e\u0440\u043c\u043e\u0432\u0440\u0435\u043c\u044f, \u043c\u0438\u043d', 'Standard time, minutes'), doc.standardMinutes],
+          ],
+        ),
+        documentSection('tp-contents', '\u041e\u0433\u043b\u0430\u0432\u043b\u0435\u043d\u0438\u0435', 'Table of contents',
+          h('ol', { className: 'tp-doc-contents' }, contents.map(([, ru, enTitle]) => h('li', { text: text(ru, enTitle) })))),
+        documentSection('tp-materials', '\u0421\u043f\u0435\u0446\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u044f \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u043e\u0432', 'Bill of materials', documentTable(
+          [text('\u2116', 'No.'), text('\u041a\u043e\u043c\u043f\u043e\u043d\u0435\u043d\u0442', 'Component'), text('\u041c\u0430\u0442\u0435\u0440\u0438\u0430\u043b', 'Material'), text('\u0422\u0438\u043f', 'Type'), text('\u041d\u0435\u0442\u0442\u043e', 'Net'), text('\u041e\u0442\u0445\u043e\u0434\u044b, %', 'Waste, %'), text('\u0411\u0440\u0443\u0442\u0442\u043e', 'Gross'), text('\u0426\u0435\u043d\u0430 \u0437\u0430 \u0435\u0434.', 'Unit cost')],
+          (doc.materials || []).map((line) => [line.position, line.component, line.materialCode, line.materialType,
+            `${line.quantity} ${line.unit}`, line.wastePercent, `${line.grossQuantity} ${line.unit}`, money(line.unitCost)]))),
+        documentSection('tp-measurements', '\u0422\u0430\u0431\u043b\u0438\u0446\u0430 \u043c\u0435\u0440', 'Measurement chart', documentTable(
+          [text('\u0422\u043e\u0447\u043a\u0430', 'Point'), text('\u041d\u0430\u0438\u043c\u0435\u043d\u043e\u0432\u0430\u043d\u0438\u0435', 'Name'), '\u2212', '+', ...(doc.measurementSizes || []).map((size) => size.label)],
+          (doc.measurementPoints || []).map((point) => [point.pointCode, point.name, point.toleranceMinus, point.tolerancePlus,
+            ...(doc.measurementSizes || []).map((size) => point.values?.[size.sizeCode] ?? '\u2014')]))),
+        documentSection('tp-construction', '\u041a\u043e\u043d\u0441\u0442\u0440\u0443\u043a\u0446\u0438\u044f, \u043a\u0430\u0447\u0435\u0441\u0442\u0432\u043e \u0438 \u0443\u043f\u0430\u043a\u043e\u0432\u043a\u0430', 'Construction, quality and packing',
+          h('div', { className: 'tp-doc-notes' }, [
+            h('h3', { text: text('\u041a\u043e\u043d\u0441\u0442\u0440\u0443\u043a\u0446\u0438\u044f', 'Construction') }), h('p', { text: doc.constructionNotes || '\u2014' }),
+            h('h3', { text: text('\u041a\u0430\u0447\u0435\u0441\u0442\u0432\u043e', 'Quality') }), h('p', { text: doc.qualityNotes || '\u2014' }),
+            h('h3', { text: text('\u0423\u043f\u0430\u043a\u043e\u0432\u043a\u0430', 'Packing') }), h('p', { text: doc.packingNotes || '\u2014' }),
+          ])),
+        documentSection('tp-operations', '\u0422\u0435\u0445\u043d\u043e\u043b\u043e\u0433\u0438\u0447\u0435\u0441\u043a\u0430\u044f \u043f\u043e\u0441\u043b\u0435\u0434\u043e\u0432\u0430\u0442\u0435\u043b\u044c\u043d\u043e\u0441\u0442\u044c', 'List of operations', h('div', {}, [
+          documentTable(
+            [text('\u2116', 'No.'), text('\u041a\u043e\u0434', 'Code'), text('\u041e\u043f\u0435\u0440\u0430\u0446\u0438\u044f', 'Operation'), text('\u041e\u0431\u043e\u0440\u0443\u0434\u043e\u0432\u0430\u043d\u0438\u0435', 'Equipment'), text('\u041a\u043b\u0430\u0441\u0441 \u043c\u0430\u0448\u0438\u043d\u044b', 'Machine class'), text('\u041c\u0438\u043d', 'Minutes')],
+            (doc.operations || []).map((operation) => [operation.sequence, operation.operationCode,
+              en ? operation.nameEn : operation.nameRu, operation.equipment, operation.machineClass, operation.standardMinutes])),
+          h('p', { className: 'tp-doc-total', text: `${text('\u0418\u0442\u043e\u0433\u043e \u043d\u043e\u0440\u043c\u043e\u0432\u0440\u0435\u043c\u044f', 'Total standard time')}: ${doc.standardMinutes} ${text('\u043c\u0438\u043d', 'min')}` }),
+        ])),
+      ]),
+    ]);
+  }
+
   function inspector(value) {
     if (!value) return h('aside', { className: 'tech-pack-inspector' }, [h('p', { className: 'muted', text: text('Выберите техпак.', 'Select a Tech Pack.') })]);
     const ready = core.isProductionReady(value);
     const actions = core.allowedActions(value, { canManage: can(value.brandId, caps.CAPABILITIES.TECH_PACK_MANAGE), canAcknowledge: can(value.brandId, caps.CAPABILITIES.TECH_PACK_ACKNOWLEDGE) });
     const buttons = actions.map((action) => actionButton(action, value));
+    buttons.unshift(h('button', {
+      type: 'button', className: 'secondary', disabled: ui.documentLoading,
+      text: ui.documentLoading ? text('\u0421\u0431\u043e\u0440\u043a\u0430\u2026', 'Building\u2026') : text('\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442', 'Document'),
+      onclick: () => { void openDocument(value.techPackCode); },
+    }));
     const snapshot = value.dependencySnapshot || {};
     return h('aside', { className: 'tech-pack-inspector' }, [
       h('div', { className: `tech-pack-readiness ${ready ? 'ready' : 'blocked'}` }, [h('strong', { text: ready ? text('Готов к размещению производства', 'Ready for production allocation') : text('Размещение производства заблокировано', 'Production allocation blocked') }), h('span', { text: ready ? text('Фабрика подтвердила текущую выпущенную версию.', 'Supplier acknowledged the current issued version.') : text('Нужен выпущенный и подтверждённый фабрикой техпак.', 'An issued and supplier-acknowledged Tech Pack is required.') })]),
@@ -192,7 +287,7 @@
     ensureLoaded();
     const summary = core.summarize(ui.items);
     const items = core.filter(ui.items, { status: ui.status, ready: ui.readiness, search: ui.search });
-    return h('section', { className: 'tech-pack-page' }, [header(summary), ui.error ? null : filters(), ui.error ? h('div', { className: 'tech-pack-error' }, [h('strong', { text: text('Не удалось загрузить техпаки', 'Could not load Tech Packs') }), h('span', { text: ui.error }), h('button', { type: 'button', className: 'secondary', text: text('Повторить', 'Retry'), onclick: () => { void load({ reset: true }); } })]) : null, ui.error ? null : h('div', { className: 'tech-pack-layout' }, [registry(items), inspector(selected())])]);
+    return ui.document ? renderDocument(ui.document) : h('section', { className: 'tech-pack-page' }, [header(summary), ui.error ? null : filters(), ui.error ? h('div', { className: 'tech-pack-error' }, [h('strong', { text: text('Не удалось загрузить техпаки', 'Could not load Tech Packs') }), h('span', { text: ui.error }), h('button', { type: 'button', className: 'secondary', text: text('Повторить', 'Retry'), onclick: () => { void load({ reset: true }); } })]) : null, ui.error ? null : h('div', { className: 'tech-pack-layout' }, [registry(items), inspector(selected())])]);
   }
 
   const previousRenderView = renderView;

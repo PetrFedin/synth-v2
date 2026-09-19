@@ -26,6 +26,28 @@ export function createPostgresTechPackReader({ pool } = {}) {
         return result.rows[0]?.payload;
       }, { begin: SNAPSHOT_BEGIN });
     },
+
+    // The document is the pack together with the bill of materials, the measurement chart and the
+    // operation sequence, assembled by the read model so the four parts are read at one instant and
+    // cannot disagree with each other.
+    getDocumentForActor(actorId, techPackCode) {
+      return withPostgresTransaction(pool, async (queryable) => {
+        const result = await queryable.query(
+          `SELECT document.payload
+             FROM tech_pack_document_workspace AS document
+            WHERE document.tech_pack_code = $1
+              AND EXISTS (
+                SELECT 1 FROM memberships AS membership
+                 WHERE membership.user_id = $2
+                   AND membership.organisation_id = document.brand_id
+                   AND membership.status = 'active'
+                   AND membership.role = ANY($3::text[])
+              )`,
+          [techPackCode, actorId, READ_ROLES],
+        );
+        return result.rows[0]?.payload;
+      }, { begin: SNAPSHOT_BEGIN });
+    },
   });
 }
 

@@ -50,7 +50,7 @@
   }
   function qualifiedSuppliers(brandId) { return ui.suppliers.filter((supplier) => supplier.brandId === brandId && supplier.status === 'qualified'); }
   function formatDate(value) { if (!value) return '—'; const date = new Date(value); return Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat(I18N.localeTag(), { day: '2-digit', month: 'short', year: 'numeric' }).format(date) : '—'; }
-  function formatMoneyMinor(value, currency) { const amount = Number(value) / 100; return Number.isFinite(amount) ? new Intl.NumberFormat(undefined, { style: 'currency', currency: currency || 'EUR', maximumFractionDigits: 2 }).format(amount) : '—'; }
+  function formatMoneyMinor(value, currency) { const amount = Number(value) / 100; return Number.isFinite(amount) ? new Intl.NumberFormat(I18N.localeTag(), { style: 'currency', currency: currency || 'EUR', maximumFractionDigits: 2 }).format(amount) : '—'; }
   function badge(label, tone = 'neutral') { return h('span', { className: `sourcing-badge sourcing-${tone}`, text: label }); }
   function statusLabel(status) {
     const labels = {

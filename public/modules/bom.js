@@ -87,11 +87,24 @@
     return `LINE-${index}`;
   }
 
-  function moneyValue(value, currency) {
+  // Two kinds of number wear the same currency sign and should not be printed the same way. A cost
+  // total is money — «43,58 €» — and printing it as «43,5808 €» makes a correct figure look like a
+  // rounding error nobody caught. A line's rate is not money but a price per metre or per piece, and
+  // its trailing digits are the reason the total is what it is, so it keeps them.
+  //
+  // The locale was also read through `I18N.locale()`, which does not exist: the call returned
+  // undefined, never matched 'en', and every amount in this section stayed Russian-formatted in the
+  // English interface.
+  function moneyValue(value, currency, { rate = false } = {}) {
     const number = Number(value);
     if (!Number.isFinite(number)) return '—';
-    try { return new Intl.NumberFormat(I18N?.locale?.() === 'en' ? 'en-GB' : 'ru-RU', { style: 'currency', currency: currency || 'EUR', maximumFractionDigits: 4 }).format(number); }
-    catch { return `${number.toFixed(4)} ${currency || ''}`.trim(); }
+    const digits = rate ? 4 : 2;
+    try {
+      return new Intl.NumberFormat(I18N.localeTag(), {
+        style: 'currency', currency: currency || 'EUR',
+        minimumFractionDigits: 2, maximumFractionDigits: digits,
+      }).format(number);
+    } catch { return `${number.toFixed(digits)} ${currency || ''}`.trim(); }
   }
   function riskLabel(code) {
     const labels = {
@@ -184,7 +197,7 @@
       h('div', { className: 'bom-inspector-head' }, [h('div', {}, [h('p', { className: 'eyebrow', text: item.bom.sku }), h('h2', { text: item.sku?.name || item.bom.sku })]), h('div', { className: 'bom-inspector-actions' }, actions)]),
       h('div', { className: 'bom-summary' }, [pair(text('Версия', 'Version'), item.bom.version), pair(text('Валюта', 'Currency'), item.bom.currency), pair(text('Строки', 'Lines'), item.bom.lines.length), pair(text('Полная себестоимость', 'Total cost'), moneyValue(item.bom.totalCost, item.bom.currency))]),
       h('h3', { text: text('Материалы и компоненты', 'Materials and components') }),
-      h('div', { className: 'bom-line-list' }, item.bom.lines.map((line) => h('div', { className: 'bom-line-view' }, [h('strong', { text: line.component }), h('span', { text: `${line.materialCode} · ${line.grossQuantity} ${line.unit}` }), h('span', { text: moneyValue(line.lineCost, item.bom.currency) })]))),
+      h('div', { className: 'bom-line-list' }, item.bom.lines.map((line) => h('div', { className: 'bom-line-view' }, [h('strong', { text: line.component }), h('span', { text: `${line.materialCode} · ${line.grossQuantity} ${line.unit}` }), h('span', { text: moneyValue(line.lineCost, item.bom.currency, { rate: true }) })]))),
       h('h3', { text: text('Контрольные исключения', 'Control exceptions') }),
       h('div', { className: 'bom-risk-list' }, item.risks.length ? item.risks.map((entry) => h('div', { className: `bom-risk bom-${entry.severity}` }, [badge(entry.severity, entry.severity), h('span', { text: riskLabel(entry.code) })])) : [h('p', { className: 'muted', text: text('Критических исключений нет.', 'No critical exceptions.') })]),
     ]);

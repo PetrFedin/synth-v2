@@ -522,3 +522,69 @@ body .breadcrumb .breadcrumb-root:focus-visible { outline: 2px solid var(--od14-
 .app-confirm-question { margin: 0; color: var(--od14-text-soft, #475467); }
 .app-confirm footer { display: flex; justify-content: flex-end; gap: 8px; }
 .od-import-more { margin: 8px 0 0; color: var(--od14-muted, #667085); font-size: 12px; }
+
+/* A warning is not decoration: a cell that reads «Артикул не опубли» has told the reader nothing and
+   cost them a hover to find out. The registers lay their columns out on a fixed grid, which is right
+   for scanning, but a status chip in one of those columns was being cut off rather than ellipsised —
+   `text-overflow` does nothing to an element child. Chips wrap instead, and the row grows to hold
+   them, because the height on a cell is a floor and not a ceiling. */
+body :is(.bom-table, .measurement-table, .styles-table, .materials-table, .sample-table, .sourcing-table, .planning-table, .ls9-table) td:has([data-od14-component="status"]) {
+  overflow: visible !important;
+  white-space: normal !important;
+  text-overflow: clip !important;
+}
+body :is(.bom-table, .measurement-table, .styles-table, .materials-table, .sample-table, .sourcing-table, .planning-table, .ls9-table) td [data-od14-component="status"] {
+  /* inline-block rather than inline-flex: a flex container lays its text out as one unbreakable item,
+     so the chip stayed at its content width and spilled past the column however wide the text was. */
+  display: inline-block !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+/* Sidebar entries said «Модели и цветовые…», «Спецификации и себестои…», «Производственный кален…».
+   Three of twenty-three needed a hover to read, and a navigation label is the one piece of text that
+   has to be legible without interaction. Long labels take a second line rather than an ellipsis; the
+   short ones are unaffected because nothing else about the row changed. */
+body .sidebar .nav-item {
+  height: auto !important;
+  min-height: 34px !important;
+  align-items: center !important;
+}
+body .sidebar .nav-item .nav-label {
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  line-height: 1.25 !important;
+  text-wrap: balance;
+}
+body .sidebar.collapsed .nav-item .nav-label,
+body .sidebar[data-collapsed="true"] .nav-item .nav-label { white-space: nowrap !important; }
+
+/* Column headings are the labels a reader needs most and the ones the fixed grid cut first: a column
+   headed «Публикация» read «Публика», and the reader had to infer the rest from the values under it.
+   A heading takes a second line rather than losing its end; the row of headings grows once for the
+   whole table, which costs a few pixels and nothing else. */
+body .workspace-content :is(.bom-table, .measurement-table, .styles-table, .materials-table, .sample-table, .sourcing-table, .planning-table, .ls9-table, .od-table) th {
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  line-height: 1.25 !important;
+  height: auto !important;
+  padding-top: 8px !important;
+  padding-bottom: 8px !important;
+  vertical-align: bottom !important;
+}
+
+/* The linesheet register's columns were pinned by position — 37px, then 32px, then 230px — for a
+   table whose first two columns were a checkbox and an icon. That table is not the one rendered here
+   any more: the first two columns are «Публикация» and «Статус», and they were given a checkbox's
+   width, so both headings were cut and a cell reading «Опубликовано» had 46 pixels to say it in.
+   The widths are left where they are rather than removed, in case something still renders the shape
+   they were written for; the two tables that exist today are told to divide the row evenly instead,
+   which is what a fixed layout does when nobody overrides it. */
+body .workspace-content :is(.ls9-registry-table, .ls9-line-table, .ls9-table.od-cols-3, .ls9-table.od-cols-4, .ls9-table.od-cols-5, .ls9-table.od-cols-6, .ls9-table.od-cols-7, .ls9-table.od-cols-8) th {
+  width: auto !important;
+}

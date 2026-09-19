@@ -62,8 +62,10 @@
     const number = Number(amount);
     if (!Number.isFinite(number)) return '—';
     try {
-      return new Intl.NumberFormat(I18N.getLocale() === 'en' ? 'en-GB' : 'ru-RU', {
-        style: 'currency', currency: value(currency) || 'USD', maximumFractionDigits: 4,
+      // A published price is money, and a buyer reads it as money: two decimals, in their locale.
+      return new Intl.NumberFormat(I18N.localeTag(), {
+        style: 'currency', currency: value(currency) || 'EUR',
+        minimumFractionDigits: 2, maximumFractionDigits: 2,
       }).format(number);
     } catch { return `${number.toFixed(2)} ${value(currency)}`.trim(); }
   }

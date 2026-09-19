@@ -119,6 +119,29 @@ function odV7RemoveLegacy() {
   ].join(',')).forEach((node) => node.remove());
 }
 
+// Product development belongs to the brand. A retailer signing in was shown eleven registers of the
+// brand's own work — models, materials, bills of materials, suppliers, tech packs, quality — every one
+// of them reading zero, because a shop has no styles and never will. That is not an empty state, it is
+// somebody else's desk.
+//
+// The filter is deliberately narrow: an item is hidden only from an account with no brand membership
+// at all, and only for the sections whose data a shop cannot hold. Anyone in a brand sees exactly what
+// they saw before, and an account in both sees everything.
+const OD_V7_BRAND_ONLY_VIEWS = new Set([
+  'planning', 'styles', 'materials', 'boms', 'measurements', 'samples', 'tech-packs',
+  'suppliers', 'rfqs', 'quotations', 'production', 'production-orders', 'production-executions',
+  'final-quality',
+]);
+
+function odV7ItemApplies(item) {
+  if (!item?.view || !OD_V7_BRAND_ONLY_VIEWS.has(item.view)) return true;
+  const memberships = state.workspace?.memberships;
+  // Before the workspace has loaded there is nothing to judge by, and hiding on a guess would make
+  // the sidebar flicker for the brand's own staff.
+  if (!Array.isArray(memberships) || memberships.length === 0) return true;
+  return memberships.some((membership) => membership.organisationType === 'brand' && membership.status === 'active');
+}
+
 function odV7Navigation() {
   const nav = document.querySelector('.sidebar .nav');
   if (!nav) return;
@@ -126,13 +149,15 @@ function odV7Navigation() {
   nav.className = 'nav od-v7-nav';
 
   OD_V7_GROUPS.forEach((group) => {
+    const items = group.items.filter(odV7ItemApplies);
+    if (!items.length) return;
     const groupNode = el('section', { className: 'od-v7-nav-group' });
     if (group.label) groupNode.append(el('div', {
       className: 'nav-group-label',
       rawText: odV7Text(group.label),
     }));
 
-    group.items.forEach((item) => {
+    items.forEach((item) => {
       const active = Boolean(item.view && item.view === state.view && !item.planned);
       const label = odV7Text(item);
       const button = el('button', {

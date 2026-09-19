@@ -74,7 +74,7 @@ async function orderForm(preferredSelectionId = '') {
     const doorEntries = await Promise.all(shopIds.map(async shopId => [shopId, await api(`/v2/shops/${encodeURIComponent(shopId)}/doors`)]));
     const doorsByShop = Object.fromEntries(doorEntries.map(([shopId, doors]) => [shopId, Array.isArray(doors) ? doors : []]));
     openForm('Создать заказ', [
-      selectDef('selectionId', 'Selection', selections, selection => `${orgName(selection.shopId)} · ${selection.id}`, selectedSelectionId),
+      selectDef('selectionId', localText('\u0410\u0441\u0441\u043e\u0440\u0442\u0438\u043c\u0435\u043d\u0442', 'Selection'), selections, selection => `${orgName(selection.shopId)} \u00b7 ${objectReference(selection.id)}`, selectedSelectionId),
       dependentSelectDef(
         'retailDoorId',
         'Торговая точка / Retail Door',

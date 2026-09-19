@@ -36,6 +36,42 @@ function objectReference(value){
   if(!prefix||tail.length<8) return text;
   return `${prefix}-${tail.slice(0,8).toUpperCase()}`;
 }
+// What a notification says, written where the reader's language is known.
+//
+// The projection used to store a finished English sentence, so a Russian reader saw English and could
+// never see anything else. It now stores what happened and the facts of it as well; the sentence is
+// composed here. A notification written before that change still has only its English text, so that
+// text is the fallback rather than a blank line.
+const NOTIFICATION_TEXT = {
+  'selection-submitted': {
+    title: ['\u0410\u0441\u0441\u043e\u0440\u0442\u0438\u043c\u0435\u043d\u0442 \u043e\u0442\u043f\u0440\u0430\u0432\u043b\u0435\u043d', 'Selection submitted'],
+    body: (p) => [`\u041c\u0430\u0433\u0430\u0437\u0438\u043d \u043e\u0442\u043f\u0440\u0430\u0432\u0438\u043b \u0430\u0441\u0441\u043e\u0440\u0442\u0438\u043c\u0435\u043d\u0442 ${objectReference(p.selectionId)}: \u043f\u043e\u0437\u0438\u0446\u0438\u0439 \u2014 ${p.lineCount}.`,
+      `The shop submitted selection ${objectReference(p.selectionId)} with ${p.lineCount} line(s).`],
+  },
+  'order-terms-accepted': {
+    title: ['\u0423\u0441\u043b\u043e\u0432\u0438\u044f \u0437\u0430\u043a\u0430\u0437\u0430 \u043f\u0440\u0438\u043d\u044f\u0442\u044b', 'Order terms accepted'],
+    body: (p) => [`\u0423\u0441\u043b\u043e\u0432\u0438\u044f \u0437\u0430\u043a\u0430\u0437\u0430 ${objectReference(p.orderId)} \u043f\u0440\u0438\u043d\u044f\u0442\u044b \u0432\u0442\u043e\u0440\u043e\u0439 \u0441\u0442\u043e\u0440\u043e\u043d\u043e\u0439.`,
+      `The other side accepted the terms of order ${objectReference(p.orderId)}.`],
+  },
+  'deal-opened': {
+    title: ['\u041f\u0440\u043e\u0441\u0442\u0440\u0430\u043d\u0441\u0442\u0432\u043e \u0441\u0434\u0435\u043b\u043a\u0438 \u043e\u0442\u043a\u0440\u044b\u0442\u043e', 'Deal space opened'],
+    body: (p) => [`\u041f\u043e \u0437\u0430\u043a\u0430\u0437\u0443 ${objectReference(p.orderId)} \u043e\u0442\u043a\u0440\u044b\u0442\u043e \u043f\u0440\u043e\u0441\u0442\u0440\u0430\u043d\u0441\u0442\u0432\u043e \u0441\u0434\u0435\u043b\u043a\u0438.`,
+      `A deal space is open on order ${objectReference(p.orderId)}.`],
+  },
+};
+function notificationTitle(item){
+  const entry=NOTIFICATION_TEXT[item?.type];
+  if(!entry) return humaniseIdentifiers(item?.title||item?.type||'');
+  return I18N.getLocale()==='en'?entry.title[1]:entry.title[0];
+}
+function notificationBody(item){
+  const entry=NOTIFICATION_TEXT[item?.type];
+  const params=item?.params;
+  if(!entry||!params||!Object.keys(params).length) return humaniseIdentifiers(item?.body||item?.message||'\u2014');
+  const pair=entry.body(params);
+  return I18N.getLocale()==='en'?pair[1]:pair[0];
+}
+
 // The same rule applied inside a sentence somebody else wrote. Calendar events and notifications carry
 // server-written titles such as "Deal opened for order_8c22a11c-…", and the identifier in the middle of
 // them is the part nobody can read.

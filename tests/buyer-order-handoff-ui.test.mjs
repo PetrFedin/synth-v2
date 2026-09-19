@@ -20,7 +20,9 @@ test('buyer Linesheets keeps Selection -> Order -> Confirmation -> DealSpace in 
     "text('Подборка', 'Selection')",
     "text('Заказ', 'Order')",
     "text('Подтверждение', 'Confirmation')",
-    "label: 'DealSpace'",
+    // The last step of the handoff is still named in the strip; it is now named in the reader's
+    // language rather than as the English product word.
+    "label: text('Пространство сделки', 'Deal space')",
   ]) assert.ok(handoff.includes(token), `Missing buyer order handoff contract: ${token}`);
 
   assert.doesNotMatch(handoff, /\.style\./);
@@ -30,7 +32,11 @@ test('buyer Linesheets keeps Selection -> Order -> Confirmation -> DealSpace in 
 test('order creation can be opened from the exact submitted Selection', () => {
   assert.match(forms, /async function orderForm\(preferredSelectionId = ''\)/);
   assert.match(forms, /selections\.some\(selection => selection\.id === preferredSelectionId\)/);
-  assert.match(forms, /selectDef\('selectionId', 'Selection',[\s\S]*selectedSelectionId\)/);
+  // The field is still the selection picker, preselected on the submitted selection; its label is now
+  // localised and its options name the selection by a reference a person can read rather than by a
+  // generated identifier.
+  assert.match(forms, /selectDef\('selectionId', localText\([^)]*'Selection'\),[\s\S]*selectedSelectionId\)/);
+  assert.match(forms, /objectReference\(selection\.id\)/);
 });
 
 test('buyer order and retail door browser assets are loaded and served by standalone runtime', () => {

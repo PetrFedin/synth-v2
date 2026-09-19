@@ -28,10 +28,10 @@
     const order = context.order;
     const cycleStage = context.cycle.stage;
     return [
-      Object.freeze({ label: text('Подборка', 'Selection'), state: context.selection.status === 'submitted' ? 'complete' : 'active', detail: context.selection.status }),
-      Object.freeze({ label: text('Заказ', 'Order'), state: order ? (order.status === 'attached' ? 'complete' : 'active') : 'pending', detail: order?.status || text('Не создан', 'Not created') }),
+      Object.freeze({ label: text('Подборка', 'Selection'), state: context.selection.status === 'submitted' ? 'complete' : 'active', detail: statusLabel(context.selection.status) }),
+      Object.freeze({ label: text('Заказ', 'Order'), state: order ? (order.status === 'attached' ? 'complete' : 'active') : 'pending', detail: order ? statusLabel(order.status) : text('Не создан', 'Not created') }),
       Object.freeze({ label: text('Подтверждение', 'Confirmation'), state: cycleStage === 'deal-space' ? 'complete' : (cycleStage === 'order' && order?.status === 'attached' ? 'active' : 'pending'), detail: cycleStage === 'deal-space' ? text('Подтверждено', 'Confirmed') : text('Ожидается', 'Pending') }),
-      Object.freeze({ label: 'DealSpace', state: cycleStage === 'deal-space' ? 'complete' : 'pending', detail: cycleStage === 'deal-space' ? text('Открыт', 'Open') : text('Ожидается', 'Pending') }),
+      Object.freeze({ label: text('Пространство сделки', 'Deal space'), state: cycleStage === 'deal-space' ? 'complete' : 'pending', detail: cycleStage === 'deal-space' ? text('Открыт', 'Open') : text('Ожидается', 'Pending') }),
     ];
   }
 
@@ -47,7 +47,7 @@
     copy.append(
       el('span', { className: 'muted', rawText: text('Единый коммерческий путь', 'Unified commercial journey') }),
       el('h3', { rawText: text('От матрицы к подтверждённому заказу', 'From matrix to confirmed order') }),
-      el('p', { className: 'muted', rawText: text('Продолжайте работу здесь: заказ, двустороннее согласование и DealSpace используют тот же зафиксированный коммерческий контекст.', 'Continue here: order creation, bilateral approval and DealSpace use the same pinned commercial context.') }),
+      el('p', { className: 'muted', rawText: text('Продолжайте работу здесь: заказ, двустороннее согласование и пространство сделки используют тот же зафиксированный коммерческий контекст.', 'Continue here: order creation, bilateral approval and the deal space use the same pinned commercial context.') }),
     );
     head.append(copy);
     card.append(head);

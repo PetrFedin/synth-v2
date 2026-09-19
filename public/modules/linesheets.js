@@ -323,7 +323,7 @@
       resetBuyerDoor();
       renderApp();
     }));
-    bar.append(selectField(text('Коммерческий цикл', 'Commercial cycle'), context.cycles, context.cycle?.id || '', cycle => `${value(cycle.id)} · ${stageText(cycle.stage)}`, next => {
+    bar.append(selectField(text('Коммерческий цикл', 'Commercial cycle'), context.cycles, context.cycle?.id || '', cycle => `${objectReference(cycle.id)} · ${stageText(cycle.stage)}`, next => {
       LS.cycleId = next;
       resetBuyerCatalog();
       renderApp();
@@ -391,7 +391,7 @@
   function stageText(stage) {
     const labels = {
       showroom: ['Шоурум', 'Showroom'], selection: ['Подборка', 'Selection'], 'order-builder': ['Сборка заказа', 'Order builder'],
-      order: ['Заказ', 'Order'], confirmation: ['Подтверждение', 'Confirmation'], 'deal-space': ['DealSpace', 'DealSpace'], collection: ['Коллекция', 'Collection'],
+      order: ['Заказ', 'Order'], confirmation: ['Подтверждение', 'Confirmation'], 'deal-space': ['Пространство сделки', 'Deal space'], collection: ['Коллекция', 'Collection'],
     };
     const pair = labels[stage];
     return pair ? text(pair[0], pair[1]) : value(stage) || '—';

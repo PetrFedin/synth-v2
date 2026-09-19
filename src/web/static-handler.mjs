@@ -129,6 +129,7 @@ const ASSETS = Object.freeze({
   '/ui/final-quality.js': ['modules/final-quality.js', JS, VISUAL_CACHE],
   '/ui/libraries.js': ['modules/libraries.js', JS, VISUAL_CACHE],
   '/ui/supplier-portal.js': ['modules/supplier-portal.js', JS, VISUAL_CACHE],
+  '/ui/placeholder-import.js': ['modules/placeholder-import.js', JS, VISUAL_CACHE],
   '/ui/app-start.js': ['modules/app-start.js', JS, CACHE],
 });
 

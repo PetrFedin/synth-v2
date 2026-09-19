@@ -12,10 +12,28 @@ import {
   createPlaceholderStyleLink,
   transitionProductPlaceholder,
 } from '../modules/assortment-planning/public.mjs';
+import {
+  DICTIONARY_COLUMNS,
+  findRepeatedCodes,
+  importContract,
+  readRow,
+  referenceField,
+} from '../modules/assortment-planning/import.mjs';
 import { createCollection, createCollectionStyleVersionAssignment, publishCollection } from '../modules/collections/public.mjs';
 import { advanceCommercialCycle, attachOrder, createCommercialCycle } from '../modules/commercial-cycle/public.mjs';
 import { openDealSpace } from '../modules/deal-space/public.mjs';
 import { createCalendarMilestone } from '../modules/calendar/public.mjs';
+
+// The import speaks the payload's own field names: the browser has already matched the spreadsheet's
+// headers to them, and the server reads the row through the same reader so a hand-written request is
+// held to exactly the same rules as an uploaded file.
+const ROW_FIELDS = Object.freeze([
+  'placeholderCode', 'nameRu', 'nameEn', 'category', 'gender', 'ageGroup', 'novelty', 'seasonality',
+  'fit', 'capsule', 'drop', 'description', 'colourwayCount', 'plannedQuantity', 'launchAt', 'currency',
+  'recommendedRetailPrice', 'plannedUnitCost',
+]);
+const ROW_COLUMNS = Object.freeze(Object.fromEntries(ROW_FIELDS.map((field, index) => [field, index])));
+function rowValues(row) { return ROW_FIELDS.map((field) => row?.[field] ?? ''); }
 
 export function createWholesalePlatform({
   store,
@@ -192,6 +210,122 @@ export function createWholesalePlatform({
           return placeholder;
         },
       );
+    },
+
+    // The spreadsheet contract, so the screen that builds the template and the server that checks it
+    // cannot describe different files.
+    placeholderImportContract() { return importContract(); },
+
+    // Import a season plan.
+    //
+    // Two things decide the shape of this. It runs twice — once to say what would happen, once to do
+    // it — because a plan is read by a person before it is committed, and an import that reports its
+    // mistakes one at a time is an import that takes a morning. And a commit is all or nothing: a
+    // season half-loaded looks exactly like a season, and the gap is found weeks later by someone
+    // wondering why a category is thin. The one exception is a slot that already exists, which is
+    // skipped rather than refused, so a corrected file can simply be sent again.
+    // Async so the guards below reject rather than throw synchronously: a caller awaiting a command
+    // should not have to also wrap it in a try block for the cheap checks.
+    async importProductPlaceholders(commandId, actorId, input) {
+      const mode = input?.mode === 'commit' ? 'commit' : 'validate';
+      const rows = Array.isArray(input?.rows) ? input.rows : [];
+      invariant(rows.length > 0, 'PLACEHOLDER_IMPORT_EMPTY', 'An import needs at least one row');
+      invariant(rows.length <= 1000, 'PLACEHOLDER_IMPORT_TOO_LARGE', 'An import is limited to 1000 rows', { rows: rows.length });
+
+      const run = async (tx) => {
+        const campaign = requireEntity(await tx.getCampaign(input?.campaignId), 'CAMPAIGN_NOT_FOUND', { campaignId: input?.campaignId });
+        await assertOrganisationActor(tx, campaign.brandId, actorId, CAPABILITIES.CAMPAIGN_MANAGE);
+
+        const existing = new Set(await tx.getPlaceholderCodesForCampaign(campaign.id));
+        const repeated = findRepeatedCodes(rows.map((row, index) => ({
+          code: String(row?.placeholderCode ?? '').trim().toUpperCase(),
+          line: Number.isInteger(row?.line) ? row.line : index + 1,
+        })));
+        const dictionaries = new Map();
+        const resolved = new Map();
+
+        const verdicts = [];
+        for (const [index, row] of rows.entries()) {
+          const line = Number.isInteger(row?.line) ? row.line : index + 1;
+          const read = readRow(rowValues(row), ROW_COLUMNS, { defaultCurrency: input?.defaultCurrency ?? null });
+          const problems = [...read.problems];
+
+          if (read.placeholderCode && repeated.has(read.placeholderCode)) {
+            problems.push({ column: 'placeholderCode', reason: 'repeatedInFile', value: repeated.get(read.placeholderCode).join(', ') });
+          }
+
+          const references = {};
+          for (const [column, token] of Object.entries(read.lookups)) {
+            const dictionaryCode = DICTIONARY_COLUMNS[column];
+            const key = `${dictionaryCode}:${token.toLowerCase()}`;
+            if (!dictionaries.has(dictionaryCode)) dictionaries.set(dictionaryCode, await tx.mdmDictionaryExists(dictionaryCode));
+            if (!dictionaries.get(dictionaryCode)) {
+              problems.push({ column, reason: 'dictionaryMissing', value: dictionaryCode });
+              continue;
+            }
+            if (!resolved.has(key)) resolved.set(key, await tx.findMdmEntryByToken(dictionaryCode, token));
+            const entry = resolved.get(key);
+            if (!entry) problems.push({ column, reason: 'unknownValue', value: token });
+            else if (entry.ambiguous) problems.push({ column, reason: 'ambiguousValue', value: token });
+            else references[referenceField(column)] = { entryId: entry.entryId, version: entry.version };
+          }
+
+          if (problems.length) {
+            verdicts.push({ line, placeholderCode: read.placeholderCode || null, verdict: 'rejected', problems });
+            continue;
+          }
+          if (existing.has(read.placeholderCode)) {
+            verdicts.push({ line, placeholderCode: read.placeholderCode, verdict: 'skipped', problems: [] });
+            continue;
+          }
+          verdicts.push({ line, placeholderCode: read.placeholderCode, verdict: 'ready', problems: [], input: { ...read.draft, ...references } });
+        }
+
+        const rejected = verdicts.filter((verdict) => verdict.verdict === 'rejected');
+        const ready = verdicts.filter((verdict) => verdict.verdict === 'ready');
+        const summary = {
+          total: verdicts.length,
+          ready: ready.length,
+          skipped: verdicts.filter((verdict) => verdict.verdict === 'skipped').length,
+          rejected: rejected.length,
+        };
+        if (mode === 'validate' || rejected.length || !ready.length) {
+          return Object.freeze({
+            mode, campaignId: campaign.id, committed: false, summary,
+            rows: Object.freeze(verdicts.map((verdict) => Object.freeze({ ...verdict, problems: Object.freeze(verdict.problems) }))),
+          });
+        }
+
+        const created = [];
+        for (const verdict of ready) {
+          const placeholder = createProductPlaceholder({
+            id: nextId('product-placeholder'),
+            campaign,
+            brandId: campaign.brandId,
+            ...verdict.input,
+            createdAt: clock(),
+            createdBy: actorId,
+          });
+          await tx.insertProductPlaceholder(placeholder);
+          created.push(placeholder.placeholderCode);
+          verdict.verdict = 'created';
+          delete verdict.input;
+        }
+        // One event for the import, not one per slot: what happened is that a plan was loaded, and a
+        // reader of the history wants to see that, not four hundred identical lines.
+        await append(tx, 'assortment.placeholders.imported', campaign.id, {
+          campaignId: campaign.id, created: created.length, skipped: summary.skipped, placeholderCodes: created,
+        }, commandId, actorId);
+        return Object.freeze({
+          mode, campaignId: campaign.id, committed: true, summary,
+          rows: Object.freeze(verdicts.map((verdict) => Object.freeze({ ...verdict, problems: Object.freeze(verdict.problems) }))),
+        });
+      };
+
+      // A dry run changes nothing, so it must not consume the caller's command id either: the same id
+      // is what commits the import a moment later.
+      if (mode === 'validate') return store.transaction(run);
+      return execute(commandId, `importProductPlaceholders:${actorId}:${canonicalJson(input)}`, actorId, run, (tx, result) => result);
     },
 
     transitionProductPlaceholder(commandId, actorId, placeholderId, input) {

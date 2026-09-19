@@ -161,6 +161,48 @@ function transactionView(client) {
       return result.rows[0]?.payload;
     },
 
+    // Which slots this campaign already holds. An import re-run after a correction must not create a
+    // second copy of everything that was already right, so the codes are read once up front rather
+    // than probed row by row.
+    async getPlaceholderCodesForCampaign(campaignId) {
+      const result = await client.query('SELECT placeholder_code FROM product_placeholders WHERE campaign_id = $1', [campaignId]);
+      return result.rows.map((row) => row.placeholder_code);
+    },
+    // Resolve the word a person wrote to the governed entry it names. A file says "Одежда" or
+    // "APPAREL" or "Apparel"; all three are the same entry, and none of them is its id.
+    async findMdmEntryByToken(dictionaryCode, token) {
+      const result = await client.query(
+        `SELECT entry.id, entry.version, entry.code, entry.name
+           FROM mdm_entries AS entry
+           JOIN mdm_dictionaries AS dictionary ON dictionary.id = entry.dictionary_id
+          WHERE dictionary.code = $1
+            AND entry.status = 'active'
+            AND (
+              lower(entry.code) = lower($2)
+              OR lower(entry.name) = lower($2)
+              OR EXISTS (
+                SELECT 1 FROM jsonb_each_text(entry.translations) AS translation(language, value)
+                 WHERE lower(translation.value) = lower($2)
+              )
+              OR EXISTS (
+                SELECT 1 FROM jsonb_array_elements_text(entry.aliases) AS alias(value)
+                 WHERE lower(alias.value) = lower($2)
+              )
+            )
+          ORDER BY entry.code
+          LIMIT 2`,
+        [dictionaryCode, token],
+      );
+      // Two entries answering to the same word is a governance problem, not an import problem, and
+      // guessing between them would put the wrong one in a plan.
+      if (result.rowCount !== 1) return result.rowCount > 1 ? { ambiguous: true } : undefined;
+      const row = result.rows[0];
+      return { entryId: row.id, version: row.version, code: row.code, name: row.name };
+    },
+    async mdmDictionaryExists(dictionaryCode) {
+      const result = await client.query('SELECT 1 FROM mdm_dictionaries WHERE code = $1', [dictionaryCode]);
+      return result.rowCount === 1;
+    },
     getProductPlaceholder: (id) => getPayload(client, 'product_placeholders', 'id', id),
     insertProductPlaceholder: (value) => insert(
       client,

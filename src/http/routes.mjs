@@ -15,6 +15,12 @@ const PLACEHOLDER_BODY = bodyContract(PLACEHOLDER_FIELDS, {
   categoryRef: MDM_REF, genderRef: MDM_REF, ageGroupRef: MDM_REF,
   noveltyRef: MDM_REF, seasonalityRef: MDM_REF, fitRef: MDM_REF,
 });
+const PLACEHOLDER_IMPORT_ROW = [
+  'line', 'placeholderCode', 'nameRu', 'nameEn', 'category', 'gender', 'ageGroup', 'novelty',
+  'seasonality', 'fit', 'capsule', 'drop', 'description', 'colourwayCount', 'plannedQuantity',
+  'launchAt', 'currency', 'recommendedRetailPrice', 'plannedUnitCost',
+];
+const PLACEHOLDER_IMPORT_BODY = bodyContract(['campaignId', 'mode', 'defaultCurrency', 'rows'], {}, { rows: PLACEHOLDER_IMPORT_ROW });
 const PLACEHOLDER_TRANSITION_BODY = bodyContract(['expectedVersion', 'nextStatus']);
 const PLACEHOLDER_STYLE_LINK_BODY = bodyContract(['styleId']);
 const RESPONSIBILITY_BODY = bodyContract(['role', 'userId']);
@@ -76,6 +82,8 @@ export function createWholesaleRoutes({ platform, catalog, materials, boms, meas
     mutate('POST', /^\/v2\/product\/styles\/([^/]+)\/responsibilities$/, RESPONSIBILITY_BODY, ({ commandId, actorId, params, body }) => platform.assignProductResponsibility(commandId, actorId, decodePathParameter(params[0]), body)),
     mutate('POST', /^\/v2\/product\/responsibilities\/([^/]+)\/release$/, EMPTY_BODY, ({ commandId, actorId, params }) => platform.releaseProductResponsibility(commandId, actorId, decodePathParameter(params[0]))),
     mutate('POST', /^\/v2\/assortment\/placeholders$/, PLACEHOLDER_BODY, ({ commandId, actorId, body }) => platform.createProductPlaceholder(commandId, actorId, body)),
+    read('GET', /^\/v2\/assortment\/placeholders\/import\/template$/, [], () => platform.placeholderImportContract()),
+    mutate('POST', /^\/v2\/assortment\/placeholders\/import$/, PLACEHOLDER_IMPORT_BODY, ({ commandId, actorId, body }) => platform.importProductPlaceholders(commandId, actorId, body)),
     mutate('POST', /^\/v2\/assortment\/placeholders\/([^/]+)\/transition$/, PLACEHOLDER_TRANSITION_BODY, ({ commandId, actorId, params, body }) => platform.transitionProductPlaceholder(commandId, actorId, decodePathParameter(params[0]), body)),
     mutate('POST', /^\/v2\/assortment\/placeholders\/([^/]+)\/styles$/, PLACEHOLDER_STYLE_LINK_BODY, ({ commandId, actorId, params, body }) => platform.linkStyleToPlaceholder(commandId, actorId, decodePathParameter(params[0]), body)),
     mutate('POST', /^\/v2\/collections$/, COLLECTION_BODY, ({ commandId, actorId, body }) => platform.createCollection(commandId, actorId, body)),

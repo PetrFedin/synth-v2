@@ -440,3 +440,46 @@ body .tp-doc-total { margin: 8px 0 0; font-size: 11px; font-weight: 600; }
   body .tp-doc-table { break-inside: auto; }
   body .tp-doc-table tr { break-inside: avoid; }
 }
+
+/* The placeholder import. It reuses the dialog proportions and the table rhythm the rest of the
+   application already uses, so a screen a buyer meets once a season does not feel like another
+   product. The only thing it adds is a way to read a verdict quickly: refused rows carry a tint, and
+   the reasons under them are a list rather than a sentence, because a row can be wrong in four ways
+   at once and each of them is a separate thing to fix. */
+.od-import-dialog {
+  width: min(1040px, calc(100vw - 28px));
+  max-height: calc(100vh - 28px);
+  padding: 22px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--od14-surface, #fff);
+  color: var(--od14-text, #101828);
+  box-shadow: 0 24px 80px rgba(16, 24, 40, .28);
+  overflow: auto;
+}
+.od-import-dialog::backdrop { background: rgba(16, 24, 40, .56); }
+.od-import-dialog > header h2 { margin: 0 0 4px; font-size: 20px; }
+.od-import-dialog > p.muted { margin: 0 0 14px; max-width: 72ch; }
+.od-import-controls { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 12px; }
+.od-import-field { display: grid; gap: 6px; font-size: 12px; font-weight: 600; color: var(--od14-muted, #667085); }
+.od-import-field select,
+.od-import-field input { padding: 9px 11px; border: 1px solid var(--od14-line-strong, #d0d5dd); border-radius: 8px; background: #fff; font: inherit; font-weight: 400; }
+.od-import-select { min-width: 280px; }
+.od-import-paste { width: 100%; box-sizing: border-box; padding: 10px 11px; border: 1px solid var(--od14-line-strong, #d0d5dd); border-radius: 8px; font: inherit; font-weight: 400; resize: vertical; }
+.od-import-body { display: grid; gap: 12px; margin-top: 14px; }
+.od-import-summary { margin: 0; font-variant-numeric: tabular-nums; font-weight: 600; }
+.od-import-summary.danger { color: #b42318; }
+.od-import-dialog > footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.od-import-dialog > footer .button:first-child { margin-right: auto; }
+.od-import-table { width: 100%; border-collapse: collapse; }
+.od-import-table th,
+.od-import-table td { padding: 10px 12px; border-bottom: 1px solid var(--od14-line, #e4e7ec); text-align: left; vertical-align: top; }
+.od-import-table th { font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--od14-muted, #667085); background: var(--od14-surface-subtle, #f8fafc); }
+.od-import-table td:first-child { font-variant-numeric: tabular-nums; }
+.od-import-row-rejected { background: #fef6f5; }
+.od-import-problems { margin: 0; padding-left: 16px; display: grid; gap: 3px; }
+.od-import-problems li { font-size: 12px; }
+@media (max-width: 720px) {
+  .od-import-controls { flex-direction: column; }
+  .od-import-select { min-width: 0; width: 100%; }
+}

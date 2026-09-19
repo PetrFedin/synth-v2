@@ -240,6 +240,19 @@
     });
   }
 
+  // The command bar's action belongs to the tab a person is looking at. On the line plan, the thing
+  // they came to do is load the season they already planned elsewhere, not create another campaign.
+  function planningAction(caps) {
+    const manage = caps.hasAny(state.workspace, caps.CAPABILITIES.CAMPAIGN_MANAGE, 'brand');
+    if (!manage) return null;
+    const onLinePlan = (OD_UI.tabs.planning || 'portfolio') === 'line-plan';
+    const importer = window.SynthaPlaceholderImport;
+    if (onLinePlan && importer?.open) {
+      return odAction(text('\u0418\u043c\u043f\u043e\u0440\u0442 \u043f\u043b\u0435\u0439\u0441\u0445\u043e\u043b\u0434\u0435\u0440\u043e\u0432', 'Import placeholders'), () => importer.open());
+    }
+    return odAction(text('\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u043a\u0430\u043c\u043f\u0430\u043d\u0438\u044e', 'Create campaign'), campaignForm);
+  }
+
   function renderPlanning() {
     const portfolio = core.buildPortfolio(state.workspace, new Date());
     const caps = window.SynthaUiCapabilities;
@@ -254,7 +267,7 @@
       { label: text('\u041a\u0440\u0438\u0442\u0438\u0447\u0435\u0441\u043a\u0438\u0435', 'Critical'), value: portfolio.summary.criticalCampaigns, detail: `${portfolio.summary.riskCount} ${text('\u0440\u0438\u0441\u043a\u043e\u0432', 'risks')}` },
       { label: text('\u041f\u0440\u043e\u0441\u0440\u043e\u0447\u0435\u043d\u044b', 'Overdue'), value: portfolio.summary.overdueCampaigns, detail: text('\u0442\u0440\u0435\u0431\u0443\u044e\u0442 \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u044f', 'need action') },
       { label: text('\u0421\u0442\u0430\u0440\u0442 \u0434\u043e 30 \u0434\u043d\u0435\u0439', 'Starts within 30 days'), value: portfolio.summary.upcoming30Days, detail: text('\u0431\u043b\u0438\u0436\u0430\u0439\u0448\u0438\u0435', 'upcoming') },
-    ], ['draft', 'open', 'closed', 'cancelled'], text('\u041f\u043e\u0438\u0441\u043a \u043a\u0430\u043c\u043f\u0430\u043d\u0438\u0438 \u0438\u043b\u0438 \u0441\u0435\u0437\u043e\u043d\u0430', 'Search campaign or season'), caps.hasAny(state.workspace, caps.CAPABILITIES.CAMPAIGN_MANAGE, 'brand') ? odAction(text('\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u043a\u0430\u043c\u043f\u0430\u043d\u0438\u044e', 'Create campaign'), campaignForm) : null);
+    ], ['draft', 'open', 'closed', 'cancelled'], text('\u041f\u043e\u0438\u0441\u043a \u043a\u0430\u043c\u043f\u0430\u043d\u0438\u0438 \u0438\u043b\u0438 \u0441\u0435\u0437\u043e\u043d\u0430', 'Search campaign or season'), planningAction(caps));
     if (header.active === 'line-plan') return odPage(text('\u041f\u043b\u0430\u043d\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u0435 \u0430\u0441\u0441\u043e\u0440\u0442\u0438\u043c\u0435\u043d\u0442\u0430', 'Assortment planning'), header, renderLinePlan());
     let rows = portfolio.campaigns;
     if (header.active === 'timeline') {

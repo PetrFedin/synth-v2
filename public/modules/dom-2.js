@@ -12,7 +12,9 @@ function clearSession(){state.token='';state.user=null;state.workspace=emptyWork
 function ownIds(){return state.workspace.memberships.map(x=>x.organisationId);} function ownOrganisations(type){return state.workspace.organisations.filter(x=>ownIds().includes(x.id)&&(!type||x.type===type));} function organisationsByType(type){return state.workspace.organisations.filter(x=>x.type===type);} function ownOrganisationNames(){return ownOrganisations().map(x=>x.name||x.id);} function orgName(id){return state.workspace.organisations.find(x=>x.id===id)?.name||id||'\u2014';} function nameById(group,id){return state.workspace[group].find(x=>x.id===id)?.name||id||'\u2014';}
 function pairName(brandId,shopId){return `${orgName(brandId)} \u2194 ${orgName(shopId)}`;} function counterpartyResponder(rel){return rel.requestedByOrganisationId===rel.brandId?rel.shopId:rel.brandId;}
 function isoDates(values,names){const result={...values};names.forEach(name=>result[name]=toIso(result[name]));return result;} function toIso(value){const parsed=new Date(value);return Number.isNaN(parsed.valueOf())?value:parsed.toISOString();}
-function formatDate(value){return I18N.formatDate(value);} function money(value){return I18N.formatNumber(value,{maximumFractionDigits:2});}
+function formatDate(value){return I18N.formatDate(value);} // Money keeps both decimals. Without a minimum, 4.10 printed as «4,1» and 189.00 as «189», which
+// reads as a quantity rather than a price.
+function money(value){return I18N.formatNumber(value,{minimumFractionDigits:2,maximumFractionDigits:2});}
 function statusLabel(value){const key=`status.${value}`;const translated=I18N.t(key);return translated===key?stageLabel(value):translated;}
 // Identifiers here are prefixed by their kind: product-style_8390232a-…, selection_c49bce4f-….
 // Slicing the first characters showed the prefix and hid the part that tells two rows apart, so

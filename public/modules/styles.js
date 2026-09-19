@@ -381,6 +381,21 @@
     });
   }
 
+  // Worst first: blocked, then not yet assessed, then ready. A person opening a readiness view is
+  // looking for what is holding the season up, not for an alphabet.
+  function readinessRank(item) {
+    const status = item.product?.readinessStatus;
+    if (item.risks?.length) return 0;
+    if (status === 'blocked') return 1;
+    if (status !== 'ready') return 2;
+    return 3;
+  }
+  function projectionRank(item) {
+    if (!item.readinessReady) return 0;
+    if (!item.projected) return 1;
+    return 2;
+  }
+
   function renderStyles() {
     ensureLifecycle();
     const registry = core.buildRegistry(state.workspace);
@@ -397,9 +412,24 @@
       { label: text('Связка с каталогом', 'Catalogue bridge'), value: registry.summary.bridgeIncomplete, detail: text('неполные связи legacy SKU', 'incomplete legacy SKU links') },
     ], [], text('Поиск модели или версии', 'Search style or version'), null);
 
+    // The two middle tabs are named for a view and were built as exception lists: «Готовность» kept
+    // only the styles that are not ready, «Коммерческая проекция» only those without one. With a
+    // season in good shape both are empty by construction, so a tab promising a readiness view showed
+    // a blank table under the register's own headers — and the screen's own KPI strip said «Готовы 14»
+    // three inches above it.
+    //
+    // They show every style now, ordered so that whatever needs attention is at the top. An empty
+    // readiness view then means there are no styles, not that everything is fine, which is the only
+    // reading that cannot mislead. «Исключения» stays a filter, because that is what it is called.
     let rows = registry.styles;
-    if (header.active === 'readiness') rows = rows.filter((item) => item.product.readinessStatus !== 'ready');
-    if (header.active === 'publication') rows = rows.filter((item) => item.readinessReady && !item.projected);
+    if (header.active === 'readiness') {
+      rows = [...rows].sort((left, right) => readinessRank(left) - readinessRank(right)
+        || String(left.product.styleCode).localeCompare(String(right.product.styleCode)));
+    }
+    if (header.active === 'publication') {
+      rows = [...rows].sort((left, right) => projectionRank(left) - projectionRank(right)
+        || String(left.product.styleCode).localeCompare(String(right.product.styleCode)));
+    }
     if (header.active === 'exceptions') rows = rows.filter((item) => item.risks.length);
 
     const content = odRegistry({

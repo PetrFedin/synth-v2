@@ -50,7 +50,7 @@
     return text(pair[0], pair[1]);
   }
   function badge(value, tone = 'neutral') { return h('span', { className: `sample-badge sample-${tone}`, text: value }); }
-  function formatDate(value) { if (!value) return '—'; const date = new Date(value); return Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat(undefined, { day: '2-digit', month: 'short', year: 'numeric' }).format(date) : '—'; }
+  function formatDate(value) { if (!value) return '—'; const date = new Date(value); return Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat(I18N.localeTag(), { day: '2-digit', month: 'short', year: 'numeric' }).format(date) : '—'; }
   function pair(label, value) { return h('div', {}, [h('dt', { text: label }), h('dd', { text: value ?? '—' })]); }
 
   function reset() {

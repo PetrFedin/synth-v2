@@ -173,6 +173,16 @@ function odHeader(scope, tabs, metrics, statuses, placeholder, action) {
   return { fragment, active: tabState.active };
 }
 
+// Whether anything is narrowing this register right now: a search, a status other than "all", or a
+// chosen attribute value.
+function odFilterIsActive(scope) {
+  const filters = OD_UI.filters?.[scope];
+  if (!filters) return false;
+  if (String(filters.query || '').trim()) return true;
+  if (filters.status && filters.status !== 'all') return true;
+  return Object.values(filters.attributes || {}).some(values => Array.isArray(values) && values.length);
+}
+
 function odFilter(items, scope, statusAccessor = item => item.status) {
   const query = String(OD_UI.filters[scope]?.query || '').trim().toLocaleLowerCase();
   const status = OD_UI.filters[scope]?.status || 'all';
@@ -419,7 +429,7 @@ function odPreview(title, subtitle = '') {
   return node;
 }
 
-function odTable(scope, rows, columns, rowKey = item => item.id) {
+function odTable(scope, rows, columns, rowKey = item => item.id, filterScope = scope) {
   const selectedKey = OD_UI.selected[scope] || (rows[0] ? rowKey(rows[0]) : '');
   if (selectedKey && !OD_UI.selected[scope]) OD_UI.selected[scope] = selectedKey;
   const wrap = el('div', { className: 'od-table-wrap' });
@@ -448,7 +458,12 @@ function odTable(scope, rows, columns, rowKey = item => item.id) {
   });
   table.append(thead, tbody);
   wrap.append(table);
-  if (!rows.length) wrap.append(el('div', { className: 'od-empty', rawText: odText('\u041d\u0435\u0442 \u0434\u0430\u043d\u043d\u044b\u0445 \u043f\u043e \u0437\u0430\u0434\u0430\u043d\u043d\u044b\u043c \u0444\u0438\u043b\u044c\u0442\u0440\u0430\u043c', 'No data matches the filters') }));
+  // "No data matches the filters" was printed whenever the table was empty, including on a tab a
+  // person had just opened with nothing filtered — which sends them to clear a filter that is not
+  // there. An empty register and a filter that excluded everything are different facts.
+  if (!rows.length) wrap.append(el('div', { className: 'od-empty', rawText: odFilterIsActive(filterScope || scope)
+    ? odText('\u041d\u0435\u0442 \u0434\u0430\u043d\u043d\u044b\u0445 \u043f\u043e \u0437\u0430\u0434\u0430\u043d\u043d\u044b\u043c \u0444\u0438\u043b\u044c\u0442\u0440\u0430\u043c', 'No data matches the filters')
+    : odText('\u0417\u0434\u0435\u0441\u044c \u043f\u043e\u043a\u0430 \u043f\u0443\u0441\u0442\u043e', 'Nothing here yet') }));
   return { node: wrap, selected: rows.find(item => rowKey(item) === selectedKey) || rows[0] || null };
 }
 
@@ -525,7 +540,7 @@ function odRegistry({ scope, rows, columns, inspector, filterScope = scope, rowK
   OD_UI.registry = OD_UI.registry || {};
   OD_UI.registry[filterScope] = { rows, columns, statusAccessor };
   const filtered = odFilter(rows, filterScope, statusAccessor);
-  const table = odTable(scope, filtered, odVisibleColumns(filterScope, columns), rowKey);
+  const table = odTable(scope, filtered, odVisibleColumns(filterScope, columns), rowKey, filterScope);
   const layout = el('section', { className: 'od-master-detail' });
   const master = el('div', { className: 'od-master' });
   const chips = odFilterChips(filterScope);

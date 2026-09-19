@@ -83,7 +83,10 @@
     return `${money(value / 100)} ${currency || ''}`.trim();
   }
   function percentFromBasisPoints(value) {
-    return value === null || value === undefined ? '\u2014' : `${(value / 100).toFixed(1)}%`;
+    // toFixed always writes a dot, so a Russian screen showed «71.4%» beside «189,00 €».
+    return value === null || value === undefined
+      ? '\u2014'
+      : `${I18N.formatNumber(value / 100, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
   }
   // The variance is the reason the plan is worth keeping: a slot that is being developed more
   // expensively than it was planned for is visible while there is still time to act on it.

@@ -588,3 +588,45 @@ body .workspace-content :is(.bom-table, .measurement-table, .styles-table, .mate
 body .workspace-content :is(.ls9-registry-table, .ls9-line-table, .ls9-table.od-cols-3, .ls9-table.od-cols-4, .ls9-table.od-cols-5, .ls9-table.od-cols-6, .ls9-table.od-cols-7, .ls9-table.od-cols-8) th {
   width: auto !important;
 }
+
+/* A note in the tech pack document that explains an absence or qualifies what is shown. The warning
+   variant is the one a factory must not build from, so it does not look like a caption. */
+.tp-doc-note { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--od14-surface-subtle, #f8fafc); color: var(--od14-text-soft, #475467); font-size: 12px; }
+.tp-doc-note + table { margin-top: 10px; }
+.tp-doc-warning { background: #fef3f2; color: #b42318; font-weight: 600; }
+
+/* Inspector tabs were one unbreakable row in a 326px column: with eight tabs, five of them sat past
+   the right edge — «Состояние» began 13px outside the panel and «Коммерция» ended 611px outside it.
+   The strip scrolled, but nothing said so: there is no arrow, no shadow, and macOS hides the
+   scrollbar until a gesture, so more than half the inspector looked like it did not exist.
+   They wrap now. A second row of tabs costs twenty pixels; a hidden tab costs the feature. */
+
+/* An inspector's tab strip is not a page filter bar, and the difference is the width it lives in.
+   The design-system layer styles both through the same `[data-ods-part="tabs"]` rule — one line, no
+   wrap, horizontal scroll — which is right for a bar that spans the workspace and wrong for a 326px
+   column. With eight tabs, five sat past the inspector's right edge: «Состояние» began 13px outside
+   it and «Коммерция» ended 611px outside. The strip did scroll, but nothing said so — no arrow, no
+   shadow, and macOS hides the scrollbar until a gesture — so more than half the inspector looked
+   like it did not exist.
+
+   The override lives here rather than in the ODS stylesheet because it names module classes, and
+   that stylesheet is deliberately kept free of them. It carries the part attribute as well so it
+   outranks the generic rule, which loads after this file. */
+body.omnidata-v14.omnidata-design-system-v1 :is(.od-inspector-tabs, .ls9-inspector-tabs, .bom-inspector-tabs, .measurement-inspector-tabs, .sample-inspector-tabs, .tech-pack-inspector-tabs)[data-ods-part="tabs"],
+body.omnidata-v14.omnidata-design-system-v1 :is(.od-inspector-tabs, .ls9-inspector-tabs, .bom-inspector-tabs, .measurement-inspector-tabs, .sample-inspector-tabs, .tech-pack-inspector-tabs)[data-od14-unified-part="tabs"] {
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  gap: 0 var(--ods-space-4, 14px) !important;
+  row-gap: 0 !important;
+  min-height: 0 !important;
+  height: auto !important;
+  padding: 2px var(--ods-space-2, 8px) !important;
+  overflow-x: visible !important;
+}
+body.omnidata-v14.omnidata-design-system-v1 :is(.od-inspector-tabs, .ls9-inspector-tabs, .bom-inspector-tabs, .measurement-inspector-tabs, .sample-inspector-tabs, .tech-pack-inspector-tabs) button[data-ods-part="tab"],
+body.omnidata-v14.omnidata-design-system-v1 :is(.od-inspector-tabs, .ls9-inspector-tabs, .bom-inspector-tabs, .measurement-inspector-tabs, .sample-inspector-tabs, .tech-pack-inspector-tabs) button[data-od14-unified-part="tab"] {
+  min-height: 26px !important;
+  height: 26px !important;
+  flex: 0 0 auto !important;
+  white-space: nowrap !important;
+}

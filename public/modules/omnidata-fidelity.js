@@ -73,8 +73,17 @@ function odFidelityColumnButton() {
   const scope = typeof OD_UI !== 'undefined' && OD_UI.registry ? Object.keys(OD_UI.registry).at(-1) : null;
   const hidden = scope && typeof odHiddenColumnCount === 'function' ? odHiddenColumnCount(scope) : 0;
   if (hidden > 0) {
+    // The badge counts columns that are hidden, and beside the word «Колонки» a bare «6» reads as
+    // "six columns" — on a table showing twenty-four of them. Hiding one more took it to 7, which
+    // looked like the table had grown. A minus sign says which direction the number goes in, and the
+    // spoken name says it in words.
     button.classList.add('od-filter-button-active');
-    button.append(el('span', { className: 'od-filter-button-count', rawText: String(hidden) }));
+    button.append(el('span', { className: 'od-filter-button-count', rawText: `\u2212${hidden}` }));
+    button.setAttribute('aria-label', odFidelityText(
+      `\u0412\u044b\u0431\u0440\u0430\u0442\u044c \u043a\u043e\u043b\u043e\u043d\u043a\u0438 \u0440\u0430\u0437\u0434\u0435\u043b\u0430: \u0441\u043a\u0440\u044b\u0442\u043e ${hidden}`,
+      `Choose the columns for this section: ${hidden} hidden`,
+    ));
+    button.setAttribute('title', button.getAttribute('aria-label') || '');
   }
   button.addEventListener('click', () => {
     if (!scope) return;

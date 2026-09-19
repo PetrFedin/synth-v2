@@ -12,6 +12,21 @@
   });
 
   function text(ru, en) { return typeof localText === 'function' ? localText(ru, en) : ru; }
+
+  // A dictionary's data class and scope are governance vocabulary, and the grid printed them as the
+  // machine words they are stored as — `classifier`, `master`, `global` — next to a Статус column
+  // that was properly translated, which made the inconsistency the first thing a reader noticed.
+  const DATA_CLASS = {
+    classifier: ['классификатор', 'classifier'], master: ['мастер-данные', 'master data'],
+    register: ['реестр', 'register'], template: ['шаблон', 'template'],
+    transaction: ['транзакционные', 'transactional'], snapshot: ['снимок', 'snapshot'],
+  };
+  const SCOPE_MODEL = {
+    global: ['глобальная', 'global'], tenant: ['арендатор', 'tenant'], brand: ['бренд', 'brand'],
+    market: ['рынок', 'market'], account: ['аккаунт', 'account'], door: ['точка продаж', 'door'],
+    transaction: ['транзакция', 'transaction'],
+  };
+  const fromTable = (table, key) => { const pair = table[key]; return pair ? text(pair[0], pair[1]) : (key || '—'); };
   function name(item) { return I18N.getLocale?.() === 'en' ? (item.nameEn || item.nameRu) : (item.nameRu || item.nameEn); }
 
   async function loadLibraries() {
@@ -70,8 +85,8 @@
       status: item.status,
       fields: [
         { label: text('Записей', 'Entries'), value: `${item.activeEntryCount}/${item.entryCount}` },
-        { label: text('Класс данных', 'Data class'), value: item.dataClass },
-        { label: text('Область', 'Scope'), value: item.scopeModel },
+        { label: text('Класс данных', 'Data class'), value: fromTable(DATA_CLASS, item.dataClass) },
+        { label: text('Область', 'Scope'), value: fromTable(SCOPE_MODEL, item.scopeModel) },
         { label: text('Требует согласования', 'Approval required'), value: item.approvalRequired ? text('Да', 'Yes') : text('Нет', 'No') },
       ],
       content: [
@@ -115,8 +130,8 @@
       columns: [
         { key: 'code', label: text('Код', 'Code'), value: (item) => item.code },
         { key: 'name', label: text('Наименование', 'Name'), value: (item) => name(item) },
-        { key: 'dataClass', label: text('Класс данных', 'Data class'), value: (item) => item.dataClass },
-        { key: 'scope', label: text('Область', 'Scope'), value: (item) => item.scopeModel },
+        { key: 'dataClass', label: text('Класс данных', 'Data class'), value: (item) => fromTable(DATA_CLASS, item.dataClass) },
+        { key: 'scope', label: text('Область', 'Scope'), value: (item) => fromTable(SCOPE_MODEL, item.scopeModel) },
         { key: 'entries', label: text('Записей', 'Entries'), value: (item) => item.entryCount },
         { key: 'status', label: text('Статус', 'Status'), render: (item) => statusBadge(item.status) },
       ],

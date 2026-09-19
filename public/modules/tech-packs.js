@@ -34,7 +34,7 @@
     const labels = { draft: ['Черновик', 'Draft'], issued: ['Выпущен', 'Issued'], acknowledged: ['Подтверждён фабрикой', 'Supplier acknowledged'], superseded: ['Заменён редакцией', 'Superseded'], withdrawn: ['Отозван', 'Withdrawn'] };
     return text(...(labels[status] || [status, status]));
   }
-  function date(value) { if (!value) return '—'; const parsed = new Date(value); return Number.isFinite(parsed.getTime()) ? new Intl.DateTimeFormat(undefined, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(parsed) : '—'; }
+  function date(value) { if (!value) return '—'; const parsed = new Date(value); return Number.isFinite(parsed.getTime()) ? new Intl.DateTimeFormat(I18N.localeTag(), { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(parsed) : '—'; }
   function badge(value, tone = 'neutral') { return h('span', { className: `tech-pack-badge tech-pack-${tone}`, text: value }); }
   function can(brandId, capability) { return caps.hasForOrganisation(state.workspace, brandId, capability); }
   function canManageAny() { return caps.hasAny(state.workspace, caps.CAPABILITIES.TECH_PACK_MANAGE, 'brand'); }
@@ -165,9 +165,43 @@
         : [h('tr', {}, [h('td', { colspan: String(headers.length), className: 'tp-doc-empty', text: text('\u0412 \u044d\u0442\u043e\u043c \u0440\u0430\u0437\u0434\u0435\u043b\u0435 \u043f\u043e\u043a\u0430 \u043f\u0443\u0441\u0442\u043e.', 'Nothing in this section yet.') })])]),
     ]);
   }
+  // What the measurement section shows, and what it says when it shows nothing. An empty table under
+  // a heading reads as "this garment has no measurements"; the three reasons it can be empty are
+  // different enough that a factory has to be told which one it is.
+  function measurementBlock(doc) {
+    const points = doc.measurementPoints || [];
+    if (points.length) {
+      const table = documentTable(
+        [text('Точка', 'Point'), text('Наименование', 'Name'), '\u2212', '+', ...(doc.measurementSizes || []).map((size) => size.label)],
+        points.map((point) => [point.pointCode, point.name, point.toleranceMinus, point.tolerancePlus,
+          ...(doc.measurementSizes || []).map((size) => point.values?.[size.sizeCode] ?? '\u2014')]),
+      );
+      if (doc.measurementSource !== 'archived') return table;
+      // The chart has moved on since the pack was acknowledged. The document deliberately keeps the
+      // version the factory agreed to, and says so rather than letting a reader assume it is current.
+      const note = h('p', { className: 'tp-doc-note', text: text(
+        `Показана редакция ${doc.measurementChartVersion} — та, против которой пакет подтверждён. Таблица мер с тех пор изменилась.`,
+        `Showing revision ${doc.measurementChartVersion} — the one this pack was acknowledged against. The chart has changed since.`,
+      ) });
+      return h('div', {}, [note, table]);
+    }
+    if (!doc.measurementChartId) {
+      return h('p', { className: 'tp-doc-note', text: text(
+        'Таблица мер будет зафиксирована при выпуске пакета.',
+        'The measurement chart is frozen when the pack is issued.',
+      ) });
+    }
+    return h('p', { className: 'tp-doc-note tp-doc-warning', text: text(
+      `Зафиксированная редакция ${doc.measurementChartVersion} таблицы мер не найдена — по этому документу шить нельзя.`,
+      `The frozen measurement chart revision ${doc.measurementChartVersion} cannot be found — do not build from this document.`,
+    ) });
+  }
+
   function renderDocument(doc) {
     const en = I18N.getLocale?.() === 'en';
-    const money = (value) => (value === null || value === undefined ? '\u2014' : `${I18N.formatNumber(Number(value), { maximumFractionDigits: 2 })} ${doc.currency || ''}`.trim());
+    const money = (value) => (value === null || value === undefined
+      ? '\u2014'
+      : I18N.formatNumber(Number(value), { style: 'currency', currency: doc.currency || 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 }));
     const contents = [
       ['tp-sketch', '\u0418\u0437\u0434\u0435\u043b\u0438\u0435 \u0438 \u043f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a', 'Product and supplier'],
       ['tp-materials', '\u0421\u043f\u0435\u0446\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u044f \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u043e\u0432', 'Bill of materials'],
@@ -204,10 +238,7 @@
           [text('\u2116', 'No.'), text('\u041a\u043e\u043c\u043f\u043e\u043d\u0435\u043d\u0442', 'Component'), text('\u041c\u0430\u0442\u0435\u0440\u0438\u0430\u043b', 'Material'), text('\u0422\u0438\u043f', 'Type'), text('\u041d\u0435\u0442\u0442\u043e', 'Net'), text('\u041e\u0442\u0445\u043e\u0434\u044b, %', 'Waste, %'), text('\u0411\u0440\u0443\u0442\u0442\u043e', 'Gross'), text('\u0426\u0435\u043d\u0430 \u0437\u0430 \u0435\u0434.', 'Unit cost')],
           (doc.materials || []).map((line) => [line.position, line.component, line.materialCode, line.materialType,
             `${line.quantity} ${line.unit}`, line.wastePercent, `${line.grossQuantity} ${line.unit}`, money(line.unitCost)]))),
-        documentSection('tp-measurements', '\u0422\u0430\u0431\u043b\u0438\u0446\u0430 \u043c\u0435\u0440', 'Measurement chart', documentTable(
-          [text('\u0422\u043e\u0447\u043a\u0430', 'Point'), text('\u041d\u0430\u0438\u043c\u0435\u043d\u043e\u0432\u0430\u043d\u0438\u0435', 'Name'), '\u2212', '+', ...(doc.measurementSizes || []).map((size) => size.label)],
-          (doc.measurementPoints || []).map((point) => [point.pointCode, point.name, point.toleranceMinus, point.tolerancePlus,
-            ...(doc.measurementSizes || []).map((size) => point.values?.[size.sizeCode] ?? '\u2014')]))),
+        documentSection('tp-measurements', '\u0422\u0430\u0431\u043b\u0438\u0446\u0430 \u043c\u0435\u0440', 'Measurement chart', measurementBlock(doc)),
         documentSection('tp-construction', '\u041a\u043e\u043d\u0441\u0442\u0440\u0443\u043a\u0446\u0438\u044f, \u043a\u0430\u0447\u0435\u0441\u0442\u0432\u043e \u0438 \u0443\u043f\u0430\u043a\u043e\u0432\u043a\u0430', 'Construction, quality and packing',
           h('div', { className: 'tp-doc-notes' }, [
             h('h3', { text: text('\u041a\u043e\u043d\u0441\u0442\u0440\u0443\u043a\u0446\u0438\u044f', 'Construction') }), h('p', { text: doc.constructionNotes || '\u2014' }),
@@ -240,7 +271,7 @@
       h('div', { className: `tech-pack-readiness ${ready ? 'ready' : 'blocked'}` }, [h('strong', { text: ready ? text('Готов к размещению производства', 'Ready for production allocation') : text('Размещение производства заблокировано', 'Production allocation blocked') }), h('span', { text: ready ? text('Фабрика подтвердила текущую выпущенную версию.', 'Supplier acknowledged the current issued version.') : text('Нужен выпущенный и подтверждённый фабрикой техпак.', 'An issued and supplier-acknowledged Tech Pack is required.') })]),
       h('div', { className: 'tech-pack-inspector-head' }, [h('div', {}, [h('p', { className: 'eyebrow', text: value.techPackCode }), h('h2', { text: value.title })]), h('div', { className: 'tech-pack-actions' }, buttons)]),
       h('dl', { className: 'tech-pack-facts' }, [pair('SKU', value.sku), pair(text('Редакция', 'Revision'), value.revision), pair(text('Фабрика', 'Supplier'), `${value.supplierCode || '—'} · ${value.supplierName || '—'}`), pair(text('Выпущен', 'Issued'), date(value.issuedAt)), pair(text('Подтверждён', 'Acknowledged'), date(value.acknowledgedAt)), pair(text('Ссылка подтверждения', 'Acknowledgement reference'), value.acknowledgement?.acknowledgementReference)]),
-      h('section', { className: 'tech-pack-card' }, [h('h3', { text: text('Зафиксированные зависимости', 'Immutable dependencies') }), h('dl', { className: 'tech-pack-facts' }, [pair(text('Версия SKU', 'SKU version'), snapshot.skuVersion), pair(text('Версия BOM', 'BOM version'), snapshot.bomVersion), pair(text('Версия Measurement Chart', 'Measurement version'), snapshot.measurementChartVersion), pair(text('Одобренный PPS', 'Approved PPS'), snapshot.sampleCode)])]),
+      h('section', { className: 'tech-pack-card' }, [h('h3', { text: text('Зафиксированные зависимости', 'Immutable dependencies') }), h('dl', { className: 'tech-pack-facts' }, [pair(text('Версия SKU', 'SKU version'), snapshot.skuVersion), pair(text('Версия BOM', 'BOM version'), snapshot.bomVersion), pair(text('Версия таблицы мер', 'Measurement chart version'), snapshot.measurementChartVersion), pair(text('Одобренный PPS', 'Approved PPS'), snapshot.sampleCode)])]),
       h('section', { className: 'tech-pack-card' }, [h('h3', { text: text('Производственные указания', 'Production instructions') }), h('p', { text: value.constructionNotes || '—' }), h('p', { text: value.qualityNotes || '—' }), h('p', { text: value.packingNotes || '—' })]),
     ]);
   }

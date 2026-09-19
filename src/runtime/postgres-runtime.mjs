@@ -149,6 +149,8 @@ export function createPostgresWholesaleRuntime(options = {}) {
     libraries: base.libraries,
     history: base.history,
     supplierPortal: base.supplierPortal,
+    categoryAttributes: base.categoryAttributes,
+    organisationMembers: base.organisationMembers,
     productionOrders,
     productionExecutions,
     finalQuality,

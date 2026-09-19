@@ -502,6 +502,17 @@ function odInspector({ title, subtitle = '', status = '', preview = false, tabs 
   if (fields.length) node.append(odDefinitionGrid(fields));
   content.filter(Boolean).forEach(item => node.append(item));
   if (panelled.length) {
+    // Which tab was open survives a re-render. It did not before: the active tab lived only in the
+    // DOM, so anything that redrew the workspace — a save, a refresh, picking another row — put the
+    // reader back on the first tab. Filling in a field meant losing your place every time.
+    //
+    // The memory is keyed on the set of tab labels, which identifies the kind of inspector without
+    // needing every caller to invent a name, and it survives moving between rows of the same
+    // register, which is what a person expects.
+    const tabKey = panelled.map(tab => tab.label).join('|');
+    OD_UI.inspectorTab = OD_UI.inspectorTab || {};
+    const remembered = OD_UI.inspectorTab[tabKey];
+    const activeIndex = Number.isInteger(remembered) && remembered >= 0 && remembered < panelled.length ? remembered : 0;
     const nav = el('div', { className: 'od-inspector-tabs' });
     nav.setAttribute('role', 'tablist');
     const panels = [];
@@ -509,12 +520,13 @@ function odInspector({ title, subtitle = '', status = '', preview = false, tabs 
       const panel = el('div', { className: 'od-inspector-panel' });
       if ((tab.fields || []).length) panel.append(odDefinitionGrid(tab.fields));
       (tab.content || []).filter(Boolean).forEach(item => panel.append(item));
-      panel.hidden = index !== 0;
+      panel.hidden = index !== activeIndex;
       panels.push(panel);
-      const button = el('button', { className: index === 0 ? 'active' : '', type: 'button', rawText: tab.label });
+      const button = el('button', { className: index === activeIndex ? 'active' : '', type: 'button', rawText: tab.label });
       button.setAttribute('role', 'tab');
-      button.setAttribute('aria-selected', index === 0 ? 'true' : 'false');
+      button.setAttribute('aria-selected', index === activeIndex ? 'true' : 'false');
       button.addEventListener('click', () => {
+        OD_UI.inspectorTab[tabKey] = index;
         panels.forEach((item, position) => { item.hidden = position !== index; });
         Array.from(nav.children).forEach((item, position) => {
           item.classList.toggle('active', position === index);

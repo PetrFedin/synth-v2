@@ -293,6 +293,364 @@
     return item.projected ? statusBadge('published') : statusBadge('not_published');
   }
 
+
+  // ---------------------------------------------------------------------------------------------
+  // Writing.
+  //
+  // This register is the core of the product model and until now it could only be read. The card
+  // announced its own gaps — «Ответственные не назначены», «Заполнено 0 из 40 полей» — with nothing
+  // to press: every command existed in the API and none of them had a control. A screen that states
+  // a gap and offers no way to close it is worse than one that says nothing, because it teaches the
+  // reader that the gap is permanent.
+  //
+  // Each form below writes through the command the domain already exposes, so the rules that refuse
+  // a bad value are the same ones a script would meet.
+
+  function field(labelText, control) {
+    const label = el('label', { className: 'od-form-field' });
+    label.append(el('span', { rawText: labelText }), control);
+    return label;
+  }
+
+  function input(name, type, attrs = {}) {
+    const node = el('input', { name, type, ...attrs });
+    return node;
+  }
+
+  function select(name, options, attrs = {}) {
+    const node = el('select', { name, ...attrs });
+    options.forEach(([value, label]) => node.append(el('option', { value, rawText: label })));
+    return node;
+  }
+
+  // One dialog shape for this section, so filling a field, adding a colourway and assigning a desk
+  // all feel like the same act. It borrows the geometry the rest of the application already uses.
+  function openForm({ title: heading, hint, fields, submitLabel, onSubmit }) {
+    const modal = el('dialog', { className: 'od-form-dialog' });
+    const form = el('form', { method: 'dialog' });
+    const head = el('header');
+    head.append(el('h2', { rawText: heading }));
+    if (hint) head.append(el('p', { className: 'muted', rawText: hint }));
+    // The design system lays a dialog's form out as a two-column grid and forces every direct <div>
+    // to span both columns as a flex row. Wrapping the fields in a grid of my own therefore made one
+    // flex row of them and squeezed a number field to 147 pixels. The fields are direct children of
+    // the form instead, which is the shape the rest of the application's dialogs already have.
+    const error = el('div', { className: 'od-form-error', hidden: true });
+    const footer = el('footer');
+    const cancel = el('button', { className: 'button secondary', type: 'button', rawText: I18N.t('common.cancel') });
+    const submit = el('button', { className: 'button primary', type: 'submit', rawText: submitLabel });
+    cancel.addEventListener('click', () => modal.close());
+    footer.append(cancel, submit);
+    form.append(head, ...fields, error, footer);
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (!form.reportValidity()) return;
+      submit.disabled = true;
+      error.hidden = true;
+      try {
+        await onSubmit(Object.fromEntries(new FormData(form).entries()));
+        modal.close();
+        await reload();
+        renderApp();
+      } catch (problem) {
+        // The refusal belongs beside the field that caused it, not in a toast that has moved on by
+        // the time the reader looks up.
+        error.textContent = styleErrorMessage(problem);
+        error.hidden = false;
+      } finally {
+        if (submit.isConnected) submit.disabled = false;
+      }
+    });
+    modal.addEventListener('close', () => modal.remove(), { once: true });
+    modal.append(form);
+    document.body.append(modal);
+    modal.showModal();
+    return modal;
+  }
+
+  const STYLE_ERRORS = {
+    PRODUCT_RESPONSIBILITY_NOT_A_MEMBER: ['Ответственным может быть только сотрудник бренда, которому принадлежит модель.', 'Only a member of the brand that owns the style can take a desk.'],
+    PRODUCT_RESPONSIBILITY_ALREADY_ASSIGNED: ['Этот человек уже отвечает за этот стол.', 'This person already holds that desk.'],
+    PRODUCT_ATTRIBUTE_NOT_IN_CATALOGUE: ['Такого поля нет в каталоге атрибутов.', 'That field is not in the attribute catalogue.'],
+    PRODUCT_ATTRIBUTE_CATEGORY_MISMATCH: ['Это поле не относится к категории модели.', 'That field does not belong to this style\u2019s category.'],
+    PRODUCT_COLORWAY_CODE_TAKEN: ['Такой код цветомодели уже есть у этой версии.', 'That colourway code already exists on this version.'],
+    PRODUCT_IDENTITY_SNAPSHOT_IMMUTABLE: ['Значение уже зафиксировано и не меняется — заведите новую версию модели.', 'The value is frozen and cannot be changed \u2014 open a new style version.'],
+  };
+  function styleErrorMessage(problem) {
+    const pair = STYLE_ERRORS[String(problem?.code || '')];
+    return pair ? text(pair[0], pair[1]) : (problem?.message || I18N.t('common.requestError'));
+  }
+
+  // The brand's roster, fetched once per brand. The workspace carries only the reader's own
+  // membership, so the only colleague the assignment form could name was the reader — and it named
+  // them by their generated user id, because that was all a membership payload holds.
+  const ROSTER = { byBrand: new Map(), loading: new Set() };
+  function brandRoster(brandId) {
+    if (!brandId) return null;
+    if (ROSTER.byBrand.has(brandId)) return ROSTER.byBrand.get(brandId);
+    if (!ROSTER.loading.has(brandId)) {
+      ROSTER.loading.add(brandId);
+      queueMicrotask(async () => {
+        try {
+          const loaded = await api(`/v2/organisations/${encodeURIComponent(brandId)}/members`);
+          ROSTER.byBrand.set(brandId, loaded.items || []);
+        } catch (problem) {
+          ROSTER.byBrand.set(brandId, []);
+        } finally {
+          ROSTER.loading.delete(brandId);
+          if (state.view === 'styles') renderApp();
+        }
+      });
+    }
+    return null;
+  }
+  function personName(member) { return member.displayName || member.email || member.userId; }
+
+  function assignDesk(product, role, roleLabel) {
+    const roster = brandRoster(product.brandId);
+    if (!roster) {
+      toast(text('Загружаем состав бренда…', 'Loading the brand roster…'));
+      return;
+    }
+    if (!roster.length) {
+      toast(text('В бренде нет активных участников, которым можно передать стол.', 'The brand has no active members to hand the desk to.'), 'error');
+      return;
+    }
+    const person = select('userId', roster.map((member) => [member.userId, `${personName(member)} · ${statusLabel(member.role)}`]), { required: true });
+    openForm({
+      title: text(`Назначить: ${roleLabel}`, `Assign: ${roleLabel}`),
+      hint: text('Стол закрепляется за сотрудником бренда, которому принадлежит модель.', 'A desk is held by a member of the brand that owns the style.'),
+      fields: [field(text('Кто', 'Who'), person)],
+      submitLabel: text('Назначить', 'Assign'),
+      onSubmit: async (values) => {
+        await mutate(`/v2/product/styles/${encodeURIComponent(product.id)}/responsibilities`, { role, userId: values.userId });
+        toast(text('Стол закреплён.', 'The desk is assigned.'), 'success');
+      },
+    });
+  }
+
+  async function releaseDesk(person, roleLabel) {
+    const accepted = await confirmAction({
+      title: text('Освободить стол', 'Release desk'),
+      question: text(
+        `${person.displayName || person.email || person.userId} перестанет отвечать за «${roleLabel}».`,
+        `${person.displayName || person.email || person.userId} will no longer answer for "${roleLabel}".`,
+      ),
+      confirmLabel: text('Освободить', 'Release'),
+      danger: true,
+    });
+    if (!accepted) return;
+    try {
+      await mutate(`/v2/product/responsibilities/${encodeURIComponent(person.id)}/release`, {});
+      await reload();
+      renderApp();
+      toast(text('Стол освобождён.', 'The desk is free.'), 'success');
+    } catch (problem) { toast(styleErrorMessage(problem), 'error'); }
+  }
+
+  function teamPanel(product) {
+    // Warm the roster while the tab is open, so pressing «Назначить» opens a filled form rather than
+    // asking the reader to press it twice.
+    brandRoster(product.brandId);
+    const manage = window.SynthaUiCapabilities?.hasForOrganisation(state.workspace, product.brandId, window.SynthaUiCapabilities.CAPABILITIES.PRODUCT_MANAGE);
+    const list = el('div', { className: 'od-desk-list' });
+    ROLE_LABELS.forEach(([role, ru, en]) => {
+      const roleLabel = text(ru, en);
+      const row = el('div', { className: 'od-desk-row' });
+      const held = Array.isArray(product.responsibilities?.[role]) ? product.responsibilities[role] : [];
+      const names = el('div', { className: 'od-desk-people' });
+      names.append(el('strong', { rawText: roleLabel }));
+      if (held.length) {
+        held.forEach((person) => {
+          const chip = el('span', { className: 'od-desk-person' });
+          chip.append(el('span', { rawText: person.displayName || person.email || person.userId }));
+          if (manage && person.id) {
+            const drop = el('button', { className: 'od-desk-release', type: 'button', title: text('Освободить стол', 'Release desk'), rawText: '\u00d7' });
+            drop.addEventListener('click', () => { void releaseDesk(person, roleLabel); });
+            chip.append(drop);
+          }
+          names.append(chip);
+        });
+      } else names.append(el('span', { className: 'muted', rawText: text('стол пуст', 'no one yet') }));
+      row.append(names);
+      if (manage) {
+        const assign = el('button', { className: 'button small', type: 'button', rawText: text('Назначить', 'Assign') });
+        assign.addEventListener('click', () => assignDesk(product, role, roleLabel));
+        row.append(assign);
+      }
+      list.append(row);
+    });
+    return list;
+  }
+
+  function addColorway(item) {
+    const product = item.product;
+    if (!product.styleVersionId) {
+      toast(text('У модели ещё нет версии, к которой можно добавить цвет.', 'This style has no version to add a colour to yet.'), 'error');
+      return;
+    }
+    openForm({
+      title: text('Добавить цветомодель', 'Add a colourway'),
+      hint: text('Артикул цветомодели складывается из кода модели и кода цвета.', 'The colourway article is the style code joined to the colour code.'),
+      fields: [
+        field(text('Код цвета', 'Colour code'), input('colorwayCode', 'text', { required: true, maxlength: '32', pattern: '[A-Za-z0-9._-]{2,32}' })),
+        field(text('Название RU', 'Name RU'), input('nameRu', 'text', { required: true, minlength: '2', maxlength: '160' })),
+        field(text('Название EN', 'Name EN'), input('nameEn', 'text', { required: true, minlength: '2', maxlength: '160' })),
+        field(text('Образец цвета', 'Swatch'), input('swatchHex', 'color', { value: '#1d2939' })),
+      ],
+      submitLabel: text('Добавить', 'Add'),
+      onSubmit: async (values) => {
+        await mutate(`/v2/product/style-versions/${encodeURIComponent(product.styleVersionId)}/colorways`, {
+          colorwayCode: values.colorwayCode.trim().toUpperCase(),
+          nameRu: values.nameRu.trim(),
+          nameEn: values.nameEn.trim(),
+          swatchHex: values.swatchHex,
+        });
+        toast(text('Цветомодель добавлена.', 'The colourway is added.'), 'success');
+      },
+    });
+  }
+
+  function addMedia(item) {
+    const product = item.product;
+    const colorways = colorwaysOf(item);
+    openForm({
+      title: text('Добавить изображение', 'Add an image'),
+      hint: text('Ссылка на изображение. Изображение без цветомодели становится общим для всей версии.', 'A link to the image. One with no colourway belongs to the whole version.'),
+      fields: [
+        field(text('Цветомодель', 'Colourway'), select('colorwayId', [['', text('— вся версия —', '\u2014 the whole version \u2014')], ...colorways.map((entry) => [entry.id, `${entry.colorwayCode} · ${entry.nameRu || entry.nameEn}`])])),
+        field(text('Ссылка', 'Link'), input('uri', 'url', { required: true, maxlength: '2000', placeholder: 'https://…' })),
+        field(text('Роль', 'Role'), select('mediaRole', [['hero', text('Основное фото', 'Hero shot')], ['sketch', text('Технический эскиз', 'Technical sketch')], ['detail', text('Деталь', 'Detail')], ['flat', text('Раскладка', 'Flat')]])),
+        field(text('Порядок', 'Order'), input('sortOrder', 'number', { required: true, min: '1', max: '999', value: String(mediaCountFor(item) + 1) })),
+      ],
+      submitLabel: text('Добавить', 'Add'),
+      onSubmit: async (values) => {
+        await mutate(`/v2/product/style-versions/${encodeURIComponent(product.styleVersionId)}/media`, {
+          ...(values.colorwayId ? { colorwayId: values.colorwayId } : {}),
+          mediaType: 'image',
+          mediaRole: values.mediaRole,
+          uri: values.uri.trim(),
+          sortOrder: Number(values.sortOrder),
+        });
+        toast(text('Изображение добавлено.', 'The image is added.'), 'success');
+      },
+    });
+  }
+
+  function mediaCountFor(item) {
+    const all = Array.isArray(state.workspace.media) ? state.workspace.media : [];
+    return all.filter((entry) => entry.styleVersionId === item.product.styleVersionId).length;
+  }
+
+  // The expected field set for the style's category, fetched when the tab is opened. The register
+  // knew only how many fields were expected, which is a number nobody can fill in.
+  const ATTR = { byVersion: new Map(), loading: new Set() };
+  function categoryCatalogue(styleVersionId) {
+    if (!styleVersionId) return null;
+    if (ATTR.byVersion.has(styleVersionId)) return ATTR.byVersion.get(styleVersionId);
+    if (!ATTR.loading.has(styleVersionId)) {
+      ATTR.loading.add(styleVersionId);
+      queueMicrotask(async () => {
+        try {
+          const loaded = await api(`/v2/product/style-versions/${encodeURIComponent(styleVersionId)}/category-attributes`);
+          ATTR.byVersion.set(styleVersionId, loaded);
+        } catch (problem) {
+          ATTR.byVersion.set(styleVersionId, { items: [], catalogVersion: null, error: styleErrorMessage(problem) });
+        } finally {
+          ATTR.loading.delete(styleVersionId);
+          if (state.view === 'styles') renderApp();
+        }
+      });
+    }
+    return null;
+  }
+
+  function fillAttribute(product, definition, catalogVersion) {
+    const dictionary = definition.dictionary;
+    const control = definition.dataType === 'number' || definition.dataType === 'quantity'
+      ? input('value', 'number', { required: true, step: 'any' })
+      : input('value', 'text', { required: true, maxlength: '400' });
+    openForm({
+      title: text(`Заполнить: ${definition.nameRu}`, `Fill in: ${definition.nameEn}`),
+      hint: dictionary
+        ? text(`Значение берётся из справочника «${dictionary}».`, `The value comes from the "${dictionary}" dictionary.`)
+        : text('Значение фиксируется вместе с версией модели и после этого не меняется.', 'The value is frozen with the style version and does not change afterwards.'),
+      fields: [field(text(definition.nameRu, definition.nameEn), control)],
+      submitLabel: text('Сохранить', 'Save'),
+      onSubmit: async (values) => {
+        const raw = String(values.value).trim();
+        const numeric = definition.dataType === 'number' || definition.dataType === 'quantity';
+        await mutate('/v2/product/attributes', {
+          ownerType: 'style_version',
+          ownerId: product.styleVersionId,
+          attributeCode: definition.code,
+          attributeCatalogVersion: catalogVersion,
+          value: numeric ? Number(raw) : raw,
+        });
+        ATTR.byVersion.delete(product.styleVersionId);
+        toast(text('Поле заполнено.', 'The field is filled.'), 'success');
+      },
+    });
+  }
+
+  function attributePanel(item) {
+    const product = item.product;
+    const manage = window.SynthaUiCapabilities?.hasForOrganisation(state.workspace, product.brandId, window.SynthaUiCapabilities.CAPABILITIES.PRODUCT_MANAGE);
+    const catalogue = categoryCatalogue(product.styleVersionId);
+    if (!product.categoryEntryId) {
+      return notice(text('У модели не выбрана категория, поэтому набор полей ещё не определён.', 'This style has no category yet, so the field set is not decided.'), 'warning');
+    }
+    if (!catalogue) return notice(text('Загрузка полей категории…', 'Loading the category fields…'));
+    if (catalogue.error) return notice(catalogue.error, 'error');
+    const items = catalogue.items || [];
+    if (!items.length) return notice(text('Категория не требует дополнительных полей.', 'This category expects no extra fields.'));
+    const filled = items.filter((entry) => entry.value !== null && entry.value !== undefined);
+    const list = el('div', { className: 'od-attribute-list' });
+    items.forEach((definition) => {
+      const row = el('div', { className: `od-attribute-row ${definition.value === null || definition.value === undefined ? 'empty' : ''}`.trim() });
+      const name = el('div', { className: 'od-attribute-name' });
+      name.append(el('strong', { rawText: I18N.getLocale?.() === 'en' ? definition.nameEn : definition.nameRu }));
+      name.append(el('small', { rawText: definition.code }));
+      const value = el('div', { className: 'od-attribute-value' });
+      const shown = definition.entryNameRu || definition.entryNameEn
+        ? (I18N.getLocale?.() === 'en' ? definition.entryNameEn : definition.entryNameRu)
+        : formatAttributeValue(definition.value);
+      value.append(el('span', { rawText: shown ?? '\u2014' }));
+      row.append(name, value);
+      if (manage && (definition.value === null || definition.value === undefined)) {
+        const fill = el('button', { className: 'button small', type: 'button', rawText: text('Заполнить', 'Fill in') });
+        fill.addEventListener('click', () => fillAttribute(product, definition, catalogue.catalogVersion));
+        row.append(fill);
+      }
+      list.append(row);
+    });
+    const summary = notice(text(
+      `Заполнено ${filled.length} из ${items.length} полей, которые предполагает категория «${dimensionLabel(product)}».`,
+      `${filled.length} of ${items.length} fields expected by the ${dimensionLabel(product)} category are filled.`,
+    ), filled.length === items.length ? 'success' : filled.length ? '' : 'warning');
+    const wrap = document.createDocumentFragment();
+    wrap.append(summary, list);
+    return wrap;
+  }
+
+  function formatAttributeValue(value) {
+    if (value === null || value === undefined) return null;
+    if (typeof value === 'object') return Object.entries(value).map(([key, part]) => `${key}: ${part}`).join(', ');
+    return String(value);
+  }
+
+  function colorwayActions(item) {
+    const manage = window.SynthaUiCapabilities?.hasForOrganisation(state.workspace, item.product.brandId, window.SynthaUiCapabilities.CAPABILITIES.PRODUCT_MANAGE);
+    if (!manage) return null;
+    const row = el('div', { className: 'od-inline-actions' });
+    const colour = el('button', { className: 'button small primary', type: 'button', rawText: text('Добавить цветомодель', 'Add a colourway') });
+    colour.addEventListener('click', () => addColorway(item));
+    const image = el('button', { className: 'button small', type: 'button', rawText: text('Добавить изображение', 'Add an image') });
+    image.addEventListener('click', () => addMedia(item));
+    row.append(colour, image);
+    return row;
+  }
+
   function inspector(item) {
     const product = item.product;
     const risks = item.risks.length
@@ -333,7 +691,7 @@
             { label: text('Цветомоделей', 'Colourways'), value: colorwaysOf(item).length },
             { label: text('С управляемым цветом', 'With a governed colour'), value: colorwaysOf(item).filter((entry) => entry.pantone).length },
           ],
-          content: [colorwayPanel(item)],
+          content: [colorwayActions(item), colorwayPanel(item)],
         },
         {
           label: text('Состояние', 'State'),
@@ -345,17 +703,7 @@
         },
         {
           label: text('Атрибуты категории', 'Category attributes'),
-          fields: categoryAttributes(product).length
-            ? categoryAttributes(product).map((item) => ({ label: item.label, value: item.value }))
-            : [],
-          content: [
-            product.categoryAttributeExpected
-              ? notice(text(
-                `Заполнено ${categoryAttributes(product).length} из ${product.categoryAttributeExpected} полей, которые предполагает категория «${dimensionLabel(product)}».`,
-                `${categoryAttributes(product).length} of ${product.categoryAttributeExpected} fields expected by the ${dimensionLabel(product)} category are filled.`,
-              ), categoryAttributes(product).length ? 'success' : 'warning')
-              : notice(text('У модели не выбрана категория, поэтому набор полей ещё не определён.', 'This style has no category yet, so the field set is not decided.'), 'warning'),
-          ],
+          content: [attributePanel(item)],
         },
         {
           label: text('\u0418\u0441\u0442\u043e\u0440\u0438\u044f', 'History'),
@@ -363,11 +711,11 @@
         },
         {
           label: text('Команда', 'Team'),
-          fields: ROLE_LABELS.map(([role, ru, en]) => ({ label: text(ru, en), value: people(product, role) || '—' })),
           content: [
             Object.keys(product.responsibilities || {}).length
               ? null
               : notice(text('Ответственные не назначены. Пока стол пуст, вопрос по модели некому адресовать.', 'No desks are assigned yet. While a desk is empty there is nobody to address a question about this style to.'), 'warning'),
+            teamPanel(product),
           ],
         },
         {

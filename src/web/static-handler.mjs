@@ -18,7 +18,12 @@ const encodedAssets = new Map();
 
 const DEFAULT_PUBLIC_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'public');
 const JS = 'text/javascript; charset=utf-8';
-const CACHE = 'public, max-age=300';
+// `no-cache` means "keep it, but ask me first", not "do not keep it". Thirty of these assets carry
+// no version in their URL, so a five-minute window let a returning browser run five-minute-old
+// scripts beside freshly deployed ones — the state that produces bug reports nobody can reproduce.
+// The ETag is already a content hash, so asking costs a 304 and the body is sent only when it
+// actually changed.
+const CACHE = 'no-cache';
 const VISUAL_CACHE = 'no-store';
 const ASSETS = Object.freeze({
   '/': ['index.html', 'text/html; charset=utf-8', 'no-store'],

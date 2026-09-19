@@ -437,7 +437,11 @@ function filterCurrentView(value) {
       row.classList.toggle('od-row-hidden', !matches);
       if (matches) visible += 1;
     });
-    const wrap = table.closest('.od-table-wrap, .sourcing-table-wrap, .production-orders-registry, .production-execution-registry, .final-quality-registry, .ls9-table-wrap, .tech-pack-table-wrap');
+    // Where the "nothing found" line is hung. A search that empties a table and says nothing looks
+    // like a table that broke: three sections — bills of materials, measurement charts and samples —
+    // filtered correctly and reported it to nobody, because their wrapper was not in this list.
+    const wrap = table.closest('.od-table-wrap, .sourcing-table-wrap, .production-orders-registry, .production-execution-registry, .final-quality-registry, .ls9-table-wrap, .tech-pack-table-wrap, .bom-table-wrap, .measurement-table-wrap, .sample-table-wrap, .planning-table-wrap, .styles-table-wrap, .materials-table-wrap')
+      || table.parentElement;
     if (!wrap) return;
     const note = wrap.querySelector('.od-search-empty');
     if (query && rows.length && !visible) {

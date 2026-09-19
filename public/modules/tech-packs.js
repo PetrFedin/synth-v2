@@ -151,9 +151,16 @@
       renderApp();
     }
   }
+  // Headings carry both languages at once, the way the packs a factory actually receives do —
+  // «Bill of Materials / Список материалов». A Russian technologist and a factory abroad read the
+  // same printed sheet, and a document that picks one of them makes the other guess. The reader's
+  // own language comes first; the other follows it.
+  function bilingual(ru, en) {
+    return I18N.getLocale?.() === 'en' ? `${en} / ${ru}` : `${ru} / ${en}`;
+  }
   function documentSection(id, titleRu, titleEn, body) {
     return h('section', { className: 'tp-doc-section', id }, [
-      h('h2', { className: 'tp-doc-h2', text: text(titleRu, titleEn) }),
+      h('h2', { className: 'tp-doc-h2', text: bilingual(titleRu, titleEn) }),
       body,
     ]);
   }
@@ -257,7 +264,7 @@
           ],
         ),
         documentSection('tp-contents', '\u041e\u0433\u043b\u0430\u0432\u043b\u0435\u043d\u0438\u0435', 'Table of contents',
-          h('ol', { className: 'tp-doc-contents' }, contents.map(([, ru, enTitle]) => h('li', { text: text(ru, enTitle) })))),
+          h('ol', { className: 'tp-doc-contents' }, contents.map(([, ru, enTitle]) => h('li', { text: bilingual(ru, enTitle) })))),
         documentSection('tp-materials', '\u0421\u043f\u0435\u0446\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u044f \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u043e\u0432', 'Bill of materials', materialsBlock(doc, money)),
         documentSection('tp-measurements', '\u0422\u0430\u0431\u043b\u0438\u0446\u0430 \u043c\u0435\u0440', 'Measurement chart', measurementBlock(doc)),
         documentSection('tp-construction', '\u041a\u043e\u043d\u0441\u0442\u0440\u0443\u043a\u0446\u0438\u044f, \u043a\u0430\u0447\u0435\u0441\u0442\u0432\u043e \u0438 \u0443\u043f\u0430\u043a\u043e\u0432\u043a\u0430', 'Construction, quality and packing',

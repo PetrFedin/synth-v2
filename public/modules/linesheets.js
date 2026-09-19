@@ -435,6 +435,13 @@
     if (!LS.buyerCatalog) return statePanel('ls9-empty', text('Каталог покупателя не загружен', 'Buyer catalog not loaded'), text('Выберите доступ и коммерческий цикл.', 'Select buyer access and a commercial cycle.'));
 
     const wrapper = el('div', { className: 'stack' });
+    // What the brand composed comes before the grid. A buyer opening a season should meet the
+    // collection first and the spreadsheet second; until now they only ever met the spreadsheet.
+    const looks = window.SynthaShowroomLooks;
+    if (looks?.panel && context.access?.showroomId) {
+      const showroom = list(workspace().showrooms).find(item => item.id === context.access.showroomId);
+      if (showroom) wrapper.append(looks.panel(showroom, { manage: false }));
+    }
     if (!context.cycle) wrapper.append(noticePanel(text('Матрица доступна для просмотра, но подборку нельзя создать без коммерческого цикла этой коллекции.', 'The matrix is available for viewing, but a selection cannot be created without a commercial cycle for this collection.')));
     if (!context.selection && LS.buyerDoorLoading) wrapper.append(noticePanel(text('Загружаем активные торговые точки покупателя…', 'Loading active buyer Retail Doors...')));
     if (!context.selection && LS.buyerDoorError) wrapper.append(noticePanel(LS.buyerDoorError, 'warning'));

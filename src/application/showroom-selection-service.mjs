@@ -9,6 +9,7 @@ import { assertActiveRelationship } from '../modules/counterparty-relationships/
 import { createBuyerCommercialSnapshot } from '../modules/retail-doors/public.mjs';
 import { assertAcceptedShowroomAccess } from '../modules/showroom-invitations/public.mjs';
 import { createShowroom, openShowroom } from '../modules/showrooms/public.mjs';
+import { createShowroomLook, updateShowroomLook as updateShowroomLookDomain } from '../modules/showroom-looks/public.mjs';
 import { createSelection, replaceSelectionLines, submitSelection, upsertSelectionLine } from '../modules/selections/public.mjs';
 import { advanceCommercialCycle } from '../modules/commercial-cycle/public.mjs';
 
@@ -48,6 +49,21 @@ export function createShowroomSelectionService({
   async function append(tx, type, aggregateId, payload, commandId, actorId) {
     const event = domainEvent({ id: nextId('event'), type, aggregateId, occurredAt: clock(), payload, metadata: { commandId, actorId } });
     await tx.appendOutbox(event);
+  }
+
+  // A showroom's looks are read by the brand that composed them and by the shops it invited. The
+  // invitation is the same one that already decides what a buyer may see, so presentation opens no
+  // new door.
+  async function assertShowroomAudience(tx, showroom, actorId) {
+    const brandMembership = await tx.getMembership(showroom.brandId, actorId);
+    if (brandMembership?.status === 'active') return;
+    const memberships = await tx.listMembershipsForActor?.(actorId) ?? [];
+    for (const membership of memberships) {
+      if (membership.status !== 'active') continue;
+      const invitation = await tx.getShowroomInvitationByAccess(showroom.id, membership.organisationId);
+      if (invitation?.status === 'accepted') return;
+    }
+    invariant(false, 'SHOWROOM_ACCESS_DENIED', 'This showroom has not been shared with you', { showroomId: showroom.id });
   }
 
   async function assertOrganisationActor(tx, organisationId, actorId, capability) {
@@ -128,6 +144,80 @@ export function createShowroomSelectionService({
   }
 
   return Object.freeze({
+    // Composing the showroom. A brand writes its looks here; the buyer reads them through the same
+    // invitation that already governs what they may see, so presentation adds no new way in.
+    listShowroomLooks(actorId, showroomId) {
+      return store.transaction(async (tx) => {
+        const showroom = requireEntity(await tx.getShowroom(showroomId), 'SHOWROOM_NOT_FOUND', { showroomId });
+        await assertShowroomAudience(tx, showroom, actorId);
+        return Object.freeze({ items: Object.freeze(await tx.listShowroomLooks(showroomId)) });
+      });
+    },
+
+    addShowroomLook(commandId, actorId, showroomId, input) {
+      return execute(
+        commandId,
+        `addShowroomLook:${actorId}:${showroomId}:${canonicalJson(input)}`,
+        actorId,
+        async (tx) => {
+          const showroom = requireEntity(await tx.getShowroom(showroomId), 'SHOWROOM_NOT_FOUND', { showroomId });
+          await assertOrganisationActor(tx, showroom.brandId, actorId, CAPABILITIES.SHOWROOM_MANAGE);
+          const collection = requireEntity(await tx.getCollection(showroom.collectionId), 'COLLECTION_NOT_FOUND', { collectionId: showroom.collectionId });
+          const existing = await tx.listShowroomLooks(showroomId);
+          return Object.freeze({ showroom, collection, existing });
+        },
+        async (tx, { showroom, collection, existing }) => {
+          // A new look goes to the end unless the brand says where. Asking for a position every time
+          // would make adding the second look harder than adding the first.
+          const position = Number.isInteger(input?.position) ? input.position : (existing.reduce((last, look) => Math.max(last, look.position), 0) + 1);
+          const look = createShowroomLook({
+            id: nextId('showroom-look'), showroom, collection, ...input, position,
+            createdAt: clock(), createdBy: actorId,
+          });
+          await tx.insertShowroomLook(look);
+          await append(tx, 'showroom.look-added', look.id, { showroomId, collectionId: collection.id, position: look.position, skus: look.skus }, commandId, actorId);
+          return look;
+        },
+      );
+    },
+
+    updateShowroomLook(commandId, actorId, lookId, input) {
+      return execute(
+        commandId,
+        `updateShowroomLook:${actorId}:${lookId}:${canonicalJson(input)}`,
+        actorId,
+        async (tx) => {
+          const look = requireEntity(await tx.getShowroomLook(lookId), 'SHOWROOM_LOOK_NOT_FOUND', { lookId });
+          await assertOrganisationActor(tx, look.brandId, actorId, CAPABILITIES.SHOWROOM_MANAGE);
+          return look;
+        },
+        async (tx, look) => {
+          const changed = updateShowroomLookDomain(look, { ...input, updatedAt: clock(), updatedBy: actorId, expectedVersion: input?.expectedVersion });
+          await tx.saveShowroomLook(changed, look.version);
+          await append(tx, 'showroom.look-changed', changed.id, { showroomId: changed.showroomId, position: changed.position, skus: changed.skus }, commandId, actorId);
+          return changed;
+        },
+      );
+    },
+
+    removeShowroomLook(commandId, actorId, lookId) {
+      return execute(
+        commandId,
+        `removeShowroomLook:${actorId}:${lookId}`,
+        actorId,
+        async (tx) => {
+          const look = requireEntity(await tx.getShowroomLook(lookId), 'SHOWROOM_LOOK_NOT_FOUND', { lookId });
+          await assertOrganisationActor(tx, look.brandId, actorId, CAPABILITIES.SHOWROOM_MANAGE);
+          return look;
+        },
+        async (tx, look) => {
+          await tx.deleteShowroomLook(look.id);
+          await append(tx, 'showroom.look-removed', look.id, { showroomId: look.showroomId, position: look.position }, commandId, actorId);
+          return Object.freeze({ id: look.id, showroomId: look.showroomId, removed: true });
+        },
+      );
+    },
+
     createShowroom(commandId, actorId, input) {
       return execute(
         commandId,

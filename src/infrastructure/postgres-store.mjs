@@ -70,6 +70,12 @@ function transactionView(client) {
 
     getMembership: (organisationId, userId) => getPayloadBy(client, 'memberships', ['organisation_id', 'user_id'], [organisationId, userId], 'FOR SHARE'),
     listMembershipsByOrganisation: (organisationId) => listPayloadBy(client, 'memberships', 'organisation_id', organisationId, 'FOR SHARE'),
+    // Every organisation this person belongs to. Needed wherever a screen must decide what somebody
+    // may see without being told which organisation to ask about first.
+    listMembershipsForActor: async (actorId) => {
+      const result = await client.query('SELECT payload FROM memberships WHERE user_id = $1 FOR SHARE', [actorId]);
+      return result.rows.map((row) => row.payload);
+    },
     listMembershipsForTrade: async (brandId, shopId) => {
       const result = await client.query(
         'SELECT payload FROM memberships WHERE organisation_id = ANY($1::text[]) FOR SHARE',
@@ -272,6 +278,38 @@ function transactionView(client) {
     ),
     saveCollection: (value, expectedVersion) => saveVersioned(client, 'collections', value, expectedVersion, ['status', 'currency'], [value.status, value.currency], 'COLLECTION_CONCURRENCY_CONFLICT'),
 
+    // The looks a showroom is composed of.
+    getShowroomLook: (id) => getPayloadBy(client, 'showroom_looks', ['id'], [id], 'FOR UPDATE'),
+    // Read through the workspace view, not the stored row: the row holds the SKU codes a brand
+    // chose, and what a buyer needs is the pieces with their prices and minimums. The stored payload
+    // alone showed a look with no products under it.
+    async listShowroomLooks(showroomId) {
+      const result = await client.query('SELECT payload FROM showroom_look_workspace WHERE showroom_id = $1 ORDER BY position', [showroomId]);
+      return result.rows.map((row) => row.payload);
+    },
+    insertShowroomLook: (value) => insert(
+      client,
+      'showroom_looks',
+      ['id', 'showroom_id', 'brand_id', 'collection_id', 'position', 'title_ru', 'title_en', 'story_ru', 'story_en', 'image_uri', 'version', 'payload', 'created_at', 'created_by', 'updated_at', 'updated_by'],
+      [value.id, value.showroomId, value.brandId, value.collectionId, value.position, value.titleRu, value.titleEn, value.storyRu, value.storyEn, value.imageUri, value.version, value, value.createdAt, value.createdBy, value.updatedAt, value.updatedBy],
+      'SHOWROOM_LOOK_ALREADY_EXISTS',
+    ),
+    async saveShowroomLook(value, expectedVersion) {
+      invariant(value.version === expectedVersion + 1, 'VERSION_INCREMENT_INVALID', 'Look version must increment exactly once');
+      const result = await client.query(
+        `UPDATE showroom_looks
+            SET position = $2, title_ru = $3, title_en = $4, story_ru = $5, story_en = $6, image_uri = $7,
+                version = $8, payload = $9::jsonb, updated_at = $10::timestamptz, updated_by = $11
+          WHERE id = $1 AND version = $12`,
+        [value.id, value.position, value.titleRu, value.titleEn, value.storyRu, value.storyEn, value.imageUri,
+          value.version, JSON.stringify(value), value.updatedAt, value.updatedBy, expectedVersion],
+      );
+      invariant(result.rowCount === 1, 'SHOWROOM_LOOK_CONCURRENCY_CONFLICT', 'The look was changed by someone else', { id: value.id, expectedVersion });
+    },
+    async deleteShowroomLook(id) {
+      const result = await client.query('DELETE FROM showroom_looks WHERE id = $1 RETURNING payload', [id]);
+      return result.rows[0]?.payload;
+    },
     getShowroom: (id) => getPayloadBy(client, 'showrooms', ['id'], [id], 'FOR SHARE'),
     insertShowroom: (value) => insert(client, 'showrooms', ['id', 'collection_id', 'brand_id', 'status', 'version', 'payload'], [value.id, value.collectionId, value.brandId, value.status, value.version, value], 'SHOWROOM_ALREADY_EXISTS'),
     saveShowroom: (value, expectedVersion) => saveVersioned(client, 'showrooms', value, expectedVersion, ['status'], [value.status], 'SHOWROOM_CONCURRENCY_CONFLICT'),

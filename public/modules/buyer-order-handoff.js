@@ -42,7 +42,10 @@
       'data-ods-part': 'surface',
       'data-buyer-order-handoff': 'true',
     });
-    const head = el('div', { className: 'toolbar', 'data-ods-part': 'section-head' });
+    // These rows were given the "toolbar" class, which the shell right-aligns — correct for a
+    // row of buttons, wrong for a heading and for a label/state pair. The whole card sat pushed
+    // against its right edge with half of it empty.
+    const head = el('div', { className: 'od-handoff-head', 'data-ods-part': 'section-head' });
     const copy = el('div');
     copy.append(
       el('span', { className: 'muted', rawText: text('Единый коммерческий путь', 'Unified commercial journey') }),
@@ -54,7 +57,7 @@
 
     const progress = el('div', { className: 'stack', 'data-ods-part': 'progress' });
     progressState(context).forEach(step => {
-      const row = el('div', { className: 'toolbar', 'data-ods-part': 'progress-step' });
+      const row = el('div', { className: 'od-handoff-step' });
       row.append(
         el('strong', { rawText: step.label }),
         el('span', { className: `badge ${step.state}`.trim(), rawText: step.detail }),
@@ -63,7 +66,7 @@
     });
     card.append(progress);
 
-    const actions = el('div', { className: 'toolbar', 'data-ods-part': 'actions' });
+    const actions = el('div', { className: 'toolbar od-handoff-actions', 'data-ods-part': 'actions' });
     if (canCreateOrder(context)) {
       const create = el('button', { className: 'button primary', type: 'button', rawText: text('Создать заказ из этой подборки', 'Create order from this selection') });
       create.addEventListener('click', () => runAction(() => global.orderForm(context.selection.id), create));

@@ -98,7 +98,10 @@ body.omnidata-v14 [data-od14-component="toolbar"] .view-toolbar-copy p{margin:0!
 body.omnidata-v14 [data-od14-component="filterbar"]{display:grid!important;grid-template-columns:minmax(220px,360px) repeat(3,minmax(140px,190px)) max-content!important;justify-content:start!important;align-items:center!important;gap:7px!important;width:100%!important;min-width:0!important;margin:8px 0!important;padding:8px 10px!important;border:1px solid var(--od14-line)!important;border-radius:var(--od14-radius)!important;background:#fff!important;box-shadow:none!important}
 body.omnidata-v14 [data-od14-component="filterbar"]>*{min-width:0!important;margin:0!important}
 body.omnidata-v14 [data-od14-component="filterbar"] [data-od14-component="field"]:first-of-type{width:100%!important;max-width:360px!important}
-body.omnidata-v14 [data-od14-component="filterbar"] select{width:100%!important;min-width:140px!important;max-width:190px!important}
+/* A pinned value — the retail door a catalogue is written against — is shown in a
+   disabled select, and a select cannot ellipsize: at 190px "BER-MITTE · Nordhaus
+   Berlin Mitte" was simply cut mid-word. Give it the width the names actually need. */
+body.omnidata-v14 [data-od14-component="filterbar"] select{width:auto!important;min-width:140px!important;max-width:280px!important}
 body.omnidata-v14 [data-od14-component="filterbar"] [data-od14-component="button"],body.omnidata-v14 [data-od14-component="filterbar"] [data-od14-component="icon-button"]{width:auto!important;justify-self:start!important}
 
 /* Tabs share one height and active state. */
@@ -262,6 +265,10 @@ body.omnidata-v14 [data-od14-tooltip]{cursor:help!important}
 
 /* Column-count widths. table-layout:fixed divides one min-width between every column, so a wide
    register has to declare a wider table instead of clipping each cell. */
+body .workspace-content table.od-cols-1,
+body.omnidata-design-system-v1 .workspace-content table.od-cols-1 { min-width: 0 !important; }
+body .workspace-content table.od-cols-2,
+body.omnidata-design-system-v1 .workspace-content table.od-cols-2 { min-width: 240px !important; }
 body .workspace-content table.od-cols-3,
 body.omnidata-design-system-v1 .workspace-content table.od-cols-3 { min-width: 344px !important; }
 body .workspace-content table.od-cols-4,
@@ -722,9 +729,13 @@ body.omnidata-v14 dialog .dialog-actions .button { flex: 0 0 auto !important; wi
 
 /* The showroom presentation. A buyer meets a season here, so the looks get the room a photograph
    needs and the pieces sit under it as a readable list rather than another table. */
-.od-look-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; margin-top: 12px; }
+/* A look card is one object, and it is the same size whether the showroom holds one
+   or twelve. With 1fr a single look stretched to the full 807px row, and the 3/4
+   figure above it then stood 1076px tall — a screen and a half of grey placeholder
+   that pushed the order grid out of sight entirely. */
+.od-look-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 300px)); justify-content: start; gap: 14px; margin-top: 12px; }
 .od-look-card { display: grid; grid-template-rows: auto 1fr; border: 1px solid var(--od14-line, #e4e7ec); border-radius: 12px; background: var(--od14-surface, #fff); overflow: hidden; }
-.od-look-figure { display: flex; align-items: center; justify-content: center; aspect-ratio: 3 / 4; background: var(--od14-surface-subtle, #f2f4f7); overflow: hidden; }
+.od-look-figure { display: flex; align-items: center; justify-content: center; aspect-ratio: 3 / 4; max-height: 400px; background: var(--od14-surface-subtle, #f2f4f7); overflow: hidden; }
 .od-look-figure img { width: 100%; height: 100%; object-fit: cover; }
 .od-look-placeholder { color: var(--od14-muted, #98a2b3); font-size: 28px; font-weight: 700; }
 .od-look-body { display: grid; gap: 6px; padding: 12px 14px 14px; align-content: start; }

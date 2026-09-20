@@ -589,3 +589,25 @@ body.omnidata-role-system :is([data-ods-role="card"],[data-od14-unified-role="ca
    anything can be caught by it. */
 body.omnidata-design-system-v1 :is([data-ods-part="toolbar"],[data-od14-unified-part="toolbar"],[data-od14-component="toolbar"],[data-ods-part="header-toolbar"],[data-od14-unified-part="header-toolbar"],[data-ods-part="button-group"],[data-od14-unified-part="button-group"]):empty,
 body.omnidata-role-system :is([data-ods-part="toolbar"],[data-od14-unified-part="toolbar"],[data-od14-component="toolbar"],[data-ods-part="header-toolbar"],[data-od14-unified-part="header-toolbar"],[data-ods-part="button-group"],[data-od14-unified-part="button-group"]):empty{display:none!important}
+
+/* The showroom's looks are a rack of cards of one size, not a responsive layout.
+   The role system classifies the container as a "layout" and lays it out with
+   repeat(auto-fit, minmax(280px, 1fr)), which is right for panels and wrong for
+   cards: with a single look in the showroom, auto-fit collapsed to one track and
+   1fr stretched that one card across the whole 807px row, so its 3/4 figure stood
+   over a thousand pixels tall and the buyer's order grid was pushed off the page.
+   auto-fill with a bounded track keeps a card the same size whether the showroom
+   holds one look or twelve. */
+body.omnidata-design-system-v1 .od-look-grid,
+body.omnidata-role-system .od-look-grid{grid-template-columns:repeat(auto-fill,minmax(240px,300px))!important;justify-content:start!important}
+
+/* The buyer's "from matrix to confirmed order" card. Its heading and its progress
+   rows had been built with the toolbar class, which the shell right-aligns; the
+   card read as a ragged column hugging its right edge with the whole left half
+   empty. A step is a label and the state it is in, at opposite ends of one row. */
+body.omnidata-design-system-v1 .od-handoff-head,
+body.omnidata-role-system .od-handoff-head{display:block!important;text-align:left!important}
+body.omnidata-design-system-v1 .od-handoff-step,
+body.omnidata-role-system .od-handoff-step{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:var(--ods-space-3)!important;min-height:32px!important;padding:var(--ods-space-2) 0!important;border-bottom:1px solid var(--ods-color-border)!important}
+body.omnidata-design-system-v1 .od-handoff-step:last-child,
+body.omnidata-role-system .od-handoff-step:last-child{border-bottom:0!important}

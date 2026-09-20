@@ -221,30 +221,9 @@
     const all = Array.isArray(state.workspace.colorways) ? state.workspace.colorways : [];
     return all.filter((entry) => entry.styleVersionId === item.product.styleVersionId);
   }
-  // The swatch is drawn as SVG with a fill attribute: the colour is data, and the loaded UI runtime is
-  // not allowed to write inline styles.
+  // One swatch for the product, shared from the DOM helpers.
   function swatch(entry) {
-    const cell = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    cell.setAttribute('class', 'od-colour-swatch');
-    cell.setAttribute('viewBox', '0 0 22 14');
-    cell.setAttribute('width', '22');
-    cell.setAttribute('height', '14');
-    cell.setAttribute('role', 'img');
-    const hex = /^#[0-9A-Fa-f]{6}$/.test(String(entry.swatchHex || '')) ? entry.swatchHex : '#F2F4F7';
-    cell.setAttribute('aria-label', entry.swatchHex || text('Цвет не задан', 'No colour set'));
-    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-    rect.setAttribute('x', '0.5');
-    rect.setAttribute('y', '0.5');
-    rect.setAttribute('width', '21');
-    rect.setAttribute('height', '13');
-    rect.setAttribute('rx', '2');
-    rect.setAttribute('fill', hex);
-    rect.setAttribute('stroke', '#E1E4E7');
-    cell.append(rect);
-    const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
-    title.textContent = entry.swatchHex || '';
-    cell.append(title);
-    return cell;
+    return colourSwatch(entry.swatchHex, entry.swatchHex || text('\u0426\u0432\u0435\u0442 \u043d\u0435 \u0437\u0430\u0434\u0430\u043d', 'No colour set'));
   }
   function colorwayPanel(item) {
     const rows = colorwaysOf(item);

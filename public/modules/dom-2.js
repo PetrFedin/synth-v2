@@ -19,7 +19,33 @@ function statusLabel(value){const key=`status.${value}`;const translated=I18N.t(
 // Identifiers here are prefixed by their kind: product-style_8390232a-…, selection_c49bce4f-….
 // Slicing the first characters showed the prefix and hid the part that tells two rows apart, so
 // every style read as the identical "product-…". The kind is dropped first.
+const SVG_NS='http://www.w3.org/2000/svg';
 function shortId(value){const text=String(value||'');const tail=text.includes('_')?text.slice(text.lastIndexOf('_')+1):text;return tail.length>10?`${tail.slice(0,8)}\u2026`:(tail||'\u2014');}
+// One colour swatch for the whole product. A colour is data, and the loaded UI runtime is not
+// allowed to write inline styles, so it is drawn as an SVG with a fill attribute. The model
+// register and the buyer's catalogue had each grown their own: the buyer's was a disabled
+// <input type="color">, which the design system paints as a disabled form field -- grey ground,
+// heavy border, and a pale colour all but invisible inside it.
+function colourSwatch(hex, label) {
+  const valid = /^#[0-9A-Fa-f]{6}$/.test(String(hex || '')) ? String(hex) : '#F2F4F7';
+  const cell = document.createElementNS(SVG_NS, 'svg');
+  cell.setAttribute('class', 'od-colour-swatch');
+  cell.setAttribute('viewBox', '0 0 22 14');
+  cell.setAttribute('width', '22');
+  cell.setAttribute('height', '14');
+  cell.setAttribute('role', 'img');
+  cell.setAttribute('aria-label', String(label || valid));
+  const rect = document.createElementNS(SVG_NS, 'rect');
+  rect.setAttribute('x', '0.5'); rect.setAttribute('y', '0.5');
+  rect.setAttribute('width', '21'); rect.setAttribute('height', '13');
+  rect.setAttribute('rx', '2'); rect.setAttribute('fill', valid); rect.setAttribute('stroke', '#E1E4E7');
+  cell.append(rect);
+  const title = document.createElementNS(SVG_NS, 'title');
+  title.textContent = String(hex || '');
+  cell.append(title);
+  return cell;
+}
+
 // A reference a person can read out over the phone. Orders, selections and deal spaces are keyed by
 // generated identifiers, and the registers showed them raw: "order_8c22a11c-e886-4c9d-8078-bebb804f6a65"
 // is not a name, it cannot be quoted, and two of them side by side look identical.

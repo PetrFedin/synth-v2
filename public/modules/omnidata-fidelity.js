@@ -130,11 +130,16 @@ function odFidelityNumberCell(index) {
 // states how many columns it has and the stylesheet gives it the width those columns need; the wrap
 // scrolls when the viewport is narrower. Full values stay reachable through the cell's title.
 function odFidelityTableWidths() {
-  document.querySelectorAll('.od-table, .sourcing-table, .bom-table, .measurement-table, .sample-table, .ls9-table, .planning-table, .styles-table, .materials-table, .tech-pack-table, .production-orders-table, .production-execution-table, .final-quality-table').forEach((table) => {
+  // Selecting by a hand-kept list of class names meant any table that did not carry one of them
+  // fell back to the blanket 720px floor. The buyer's Colour x Size order matrix has no class at
+  // all, and with a single size it was two columns held open to 720px inside a 362px card -- the
+  // one grid a buyer actually writes an order in, permanently scrolled sideways. Every table in
+  // the workspace is measured now, and the floor follows its real column count down to one.
+  document.querySelectorAll('.workspace-content table, .od-table, .sourcing-table, .bom-table, .measurement-table, .sample-table, .ls9-table, .planning-table, .styles-table, .materials-table, .tech-pack-table, .production-orders-table, .production-execution-table, .final-quality-table').forEach((table) => {
     const count = table.querySelectorAll('thead tr:first-child > th').length;
     if (!count) return;
     [...table.classList].filter((name) => name.startsWith('od-cols-')).forEach((name) => table.classList.remove(name));
-    table.classList.add(`od-cols-${Math.min(Math.max(count, 3), 14)}`);
+    table.classList.add(`od-cols-${Math.min(Math.max(count, 1), 14)}`);
     table.querySelectorAll('tbody td').forEach((cell) => {
       const value = (cell.textContent || '').trim();
       if (value && !cell.title) cell.title = value;

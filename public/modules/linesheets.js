@@ -75,6 +75,19 @@
     return normalized ? `${normalized.slice(0, 10)}…${normalized.slice(-6)}` : '—';
   }
 
+  // The buyer's catalogue is the most customer-facing screen in the product, and it was printing
+  // raw aggregate keys — "buyer-catalog-version_72842dd6-41a7-4795-95a3-f736d510a1de" — under
+  // labels that were class names. These are pinned commercial facts a buyer may genuinely need to
+  // quote in an audit, so the value stays reachable: the tail that tells two of them apart is
+  // shown, and the whole key is on hover, which is what every other register here already does.
+  function shortRef(id) {
+    const normalized = value(id);
+    if (!normalized) return '—';
+    const tail = normalized.includes('_') ? normalized.slice(normalized.lastIndexOf('_') + 1) : normalized;
+    const compact = tail.replace(/-/g, '');
+    return compact.length >= 8 ? compact.slice(0, 8).toUpperCase() : normalized;
+  }
+
   function statePanel(className, title, description, action) {
     const panel = el('section', { className: `ls9-state ${className}`.trim(), 'data-od14-component': className.includes('error') ? 'alert' : 'empty' });
     panel.append(el('h3', { rawText: title }), el('p', { rawText: description }));
@@ -426,7 +439,7 @@
 
   function buyerContent(context) {
     if (!context.accesses.length) return statePanel('ls9-empty', text('Нет активного доступа покупателя', 'No buyer access'), text('Примите приглашение в шоурум, чтобы открыть зафиксированный каталог покупателя.', 'Accept a showroom invitation to open the pinned buyer catalog.'));
-    if (LS.buyerLoading && !LS.buyerCatalog) return statePanel('ls9-loading', text('Загрузка каталога покупателя…', 'Loading buyer catalog...'), text('Читаем опубликованную BuyerCatalogVersion без обращения к изменяемому Product Master.', 'Reading the published BuyerCatalogVersion without consulting mutable Product Master data.'));
+    if (LS.buyerLoading && !LS.buyerCatalog) return statePanel('ls9-loading', text('Загрузка каталога покупателя…', 'Loading buyer catalog...'), text('Читаем опубликованную версию каталога — рабочие данные моделей не затрагиваются.', 'Reading the published catalogue version without consulting mutable product data.'));
     if (LS.buyerError && !LS.buyerCatalog) {
       const retry = el('button', { className: 'button', type: 'button', rawText: text('Повторить', 'Retry') });
       retry.addEventListener('click', () => { LS.buyerLoadedKey = ''; LS.buyerError = ''; renderApp(); });
@@ -463,9 +476,9 @@
     const info = el('dl', { className: 'ls9-info-grid', 'data-od14-component': 'definition-grid' });
     const door = context.retailDoor;
     const values = [
-      [text('BuyerCatalogVersion', 'BuyerCatalogVersion'), value(LS.buyerCatalog.id) || '—'],
-      [text('Публикация', 'Publication'), value(LS.buyerCatalog.publicationId) || '—'],
-      [text('Прайс-лист', 'Price list'), value(LS.buyerCatalog.priceListVersionId) || '—'],
+      [text('Версия каталога', 'Catalogue version'), shortRef(LS.buyerCatalog.id), value(LS.buyerCatalog.id)],
+      [text('Публикация', 'Publication'), shortRef(LS.buyerCatalog.publicationId), value(LS.buyerCatalog.publicationId)],
+      [text('Прайс-лист', 'Price list'), shortRef(LS.buyerCatalog.priceListVersionId), value(LS.buyerCatalog.priceListVersionId)],
       [text('Шоурум', 'Showroom'), showroomName(context.access.showroomId)],
       [text('Магазин', 'Shop'), organisationName(context.access.shopId)],
       [text('Retail Door', 'Retail Door'), retailDoorLabel(door)],
@@ -473,9 +486,11 @@
       [text('Адрес поставки', 'Ship-to'), retailDoorAddressLabel(door?.shipToAddress)],
       [text('Контрольная сумма', 'Checksum'), shortHash(LS.buyerCatalog.contentHash)],
     ];
-    values.forEach(([label, content]) => {
+    values.forEach(([label, content, hover]) => {
       const item = el('div', { className: 'ls9-info-item', 'data-od14-component': 'definition-item' });
-      item.append(el('dt', { rawText: label }), el('dd', { rawText: content }));
+      const definition = el('dd', { rawText: content });
+      if (hover) definition.title = String(hover);
+      item.append(el('dt', { rawText: label }), definition);
       info.append(item);
     });
     card.append(info);
@@ -513,13 +528,15 @@
     if (description) card.append(el('p', { rawText: description }));
     const facts = el('dl', { className: 'ls9-info-grid', 'data-od14-component': 'definition-grid' });
     [
-      [text('StyleVersion', 'StyleVersion'), style.styleVersionNo == null ? style.styleVersionId : `${style.styleVersionNo} · ${style.styleVersionId}`],
+      [text('Версия модели', 'Style version'), style.styleVersionNo == null ? shortRef(style.styleVersionId) : `v${style.styleVersionNo}`, style.styleVersionId],
       [text('Состав', 'Composition'), localized(style.compositionRu, style.compositionEn) || '—'],
       [text('Страна происхождения', 'Country of origin'), style.countryOfOrigin || '—'],
       [text('Цветов', 'Colorways'), String(style.rows.length)],
-    ].forEach(([label, content]) => {
+    ].forEach(([label, content, hover]) => {
       const item = el('div', { className: 'ls9-info-item', 'data-od14-component': 'definition-item' });
-      item.append(el('dt', { rawText: label }), el('dd', { rawText: content })); facts.append(item);
+      const definition = el('dd', { rawText: content });
+      if (hover) definition.title = String(hover);
+      item.append(el('dt', { rawText: label }), definition); facts.append(item);
     });
     card.append(facts);
     return card;
@@ -545,13 +562,34 @@
     } catch { return ''; }
   }
 
+  // The catalogue stores a media role as a token. "hero" under a photograph is a word from our
+  // schema, not from the reader's trade.
+  function mediaRoleLabel(role) {
+    const labels = {
+      hero: ['Основное фото', 'Hero'], front: ['Вид спереди', 'Front'], back: ['Вид сзади', 'Back'],
+      side: ['Вид сбоку', 'Side'], detail: ['Деталь', 'Detail'], flat: ['Выкладка', 'Flat'],
+      sketch: ['Эскиз', 'Sketch'], fabric: ['Ткань', 'Fabric'],
+    };
+    const key = value(role);
+    if (!key) return '';
+    const pair = labels[key.toLowerCase()];
+    return pair ? text(pair[0], pair[1]) : key;
+  }
+
   function mediaNode(media, alt) {
     const uri = safeMediaUri(media);
     if (!uri) return el('div', { className: 'muted', rawText: text('Медиа недоступно', 'Media unavailable') });
-    const figure = el('figure', { 'data-od14-component': 'card' });
+    const figure = el('figure', { className: 'ls9-media', 'data-od14-component': 'card' });
     const image = el('img', { src: uri, alt: value(alt) || text('Изображение модели', 'Style image'), loading: 'lazy', decoding: 'async', width: '220' });
+    // A link that does not resolve left the browser's broken-image glyph with the alt text
+    // spilling out beside it, on the buyer's own product card. Say what happened instead, the
+    // way the showroom's look cards already do.
+    image.addEventListener('error', () => {
+      if (!image.isConnected) return;
+      image.replaceWith(el('span', { className: 'ls9-media-missing muted', rawText: text('Изображение не загрузилось', 'Image did not load'), title: uri }));
+    }, { once: true });
     figure.append(image);
-    if (media.mediaRole || media.id) figure.append(el('figcaption', { className: 'muted', rawText: [media.mediaRole, media.id].filter(Boolean).join(' · ') }));
+    if (media.mediaRole || media.id) figure.append(el('figcaption', { className: 'muted', rawText: mediaRoleLabel(media.mediaRole) || shortRef(media.id), title: value(media.id) }));
     return figure;
   }
 
@@ -559,7 +597,7 @@
     const surface = el('section', { 'data-od14-component': 'surface' });
     const head = el('div', { 'data-od14-component': 'section-head' });
     const copy = el('div');
-    copy.append(el('h3', { rawText: text('Матрица заказа Color × Size', 'Color × Size order matrix') }), el('p', { className: 'muted', rawText: text('Каждая ячейка — точный SKU из неизменяемой BuyerCatalogVersion. Цена и товарная иерархия повторно проверяются сервером.', 'Every cell is an exact SKU from immutable BuyerCatalogVersion. Price and product lineage are revalidated by the server.') }));
+    copy.append(el('h3', { rawText: text('Матрица заказа: цвет × размер', 'Colour × size order matrix') }), el('p', { className: 'muted', rawText: text('Каждая ячейка — точный SKU из неизменяемой версии каталога. Цену и товарную иерархию сервер проверяет заново.', 'Every cell is an exact SKU from the immutable catalogue version. Price and product lineage are revalidated by the server.') }));
     head.append(copy, matrixActions(context));
     surface.append(head, orderMatrixTable(style, context));
     return surface;
@@ -627,15 +665,9 @@
     const name = localized(row.nameRu, row.nameEn) || row.code;
     const firstLine = el('strong', { rawText: name });
     if (/^#[0-9A-Fa-f]{6}$/.test(row.swatchHex || '')) {
-      const swatch = el('input', {
-        type: 'color', value: row.swatchHex, disabled: true,
-        ariaLabel: `${text('Цвет', 'Color')} ${row.swatchHex}`,
-        title: row.swatchHex,
-        'data-od14-component': 'field',
-      });
-      firstLine.append(' ', swatch);
+      firstLine.append(' ', colourSwatch(row.swatchHex, `${text('Цвет', 'Color')} ${row.swatchHex}`));
     }
-    block.append(firstLine, el('small', { rawText: `${row.code} · ${row.id}` }));
+    block.append(firstLine, el('small', { rawText: row.code, title: row.id }));
     return block;
   }
 
@@ -656,8 +688,11 @@
       LS.dirty = true;
     });
     block.append(input);
-    const availability = cell.availableToSell === null ? text('Доступность: по условиям', 'Availability: per terms') : `${text('ATS', 'ATS')}: ${cell.availableToSell}`;
-    block.append(el('small', { rawText: `${formatMoney(cell.unitPrice, cell.currency)} · MOQ ${cell.minimumOrderQuantity} · ${availability}` }));
+    // "MOQ 12 · ATS: 600" is trade shorthand a brand's own planner reads fluently and a shop
+    // assistant does not. The showroom's look cards already say «мин. 6» in words; the cell the
+    // order is actually written in says the same.
+    const availability = cell.availableToSell === null ? text('доступность по условиям', 'availability per terms') : `${text('доступно', 'available')} ${cell.availableToSell}`;
+    block.append(el('small', { rawText: `${formatMoney(cell.unitPrice, cell.currency)} · ${text('мин.', 'min.')} ${cell.minimumOrderQuantity} · ${availability}` }));
     return block;
   }
 
@@ -906,7 +941,7 @@
     copy.append(el('span', { className: 'ls9-eyebrow', rawText: LS.mode === 'buyer' ? text('Wholesale / Buyer Experience', 'Wholesale / Buyer Experience') : text('Коммерческая публикация', 'Commercial Publication') }),
       el('h2', { rawText: text('Листы коллекций', 'Linesheets') }),
       el('p', { rawText: LS.mode === 'buyer'
-        ? text('Buyer Catalog, Retail Door и Color × Size матрица работают как единый коммерческий контекст: точка фиксируется до Selection и дальше наследуется заказом.', 'Buyer Catalog, Retail Door, and the Color × Size matrix operate as one commercial context: the door is pinned before Selection and then inherited by the order.')
+        ? text('Каталог покупателя, торговая точка и матрица «цвет × размер» работают как единый коммерческий контекст: точка фиксируется до подборки и дальше наследуется заказом.', 'Buyer Catalog, Retail Door, and the colour × size matrix operate as one commercial context: the door is pinned before Selection and then inherited by the order.')
         : text('Реестр неизменяемых коммерческих публикаций коллекции. Данные только для чтения и не вычисляются в браузере.', 'Registry of immutable commercial collection publications. Data is read-only and is never derived in the browser.') }));
     header.append(copy, el('div', { className: 'ls9-header-actions' }));
     page.append(header, modeTabs(accesses.length > 0));

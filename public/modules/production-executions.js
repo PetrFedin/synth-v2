@@ -167,7 +167,7 @@
       metric(t('В производстве', 'Active'), summary.active, t('Текущие партии', 'Current batches')),
       metric(t('Блокировки', 'Blocked'), summary.blocked, t('Требуют решения', 'Need resolution'), summary.blocked ? 'risk' : ''),
       metric(t('Просрочено', 'Overdue'), summary.overdue, t('Текущий этап', 'Current milestone'), summary.overdue ? 'risk' : ''),
-      metric(t('Готово к QC', 'Ready for QC'), summary.ready, t('Закрыт production gate', 'Production gate closed'), 'ok'),
+      metric(t('Готово к QC', 'Ready for QC'), summary.ready, t('Производственный контур закрыт', 'Production gate closed'), 'ok'),
     ]));
     return h('header', { className: 'production-execution-header' }, children);
   }
@@ -275,7 +275,7 @@
     const current = core.currentMilestone(value);
     const headerActions = [];
     if (actions.includes('start')) headerActions.push(h('button', { type: 'button', className: 'primary', disabled: Boolean(ui.busyCode), text: t('Запустить производство', 'Start production'), onclick: () => { void command(value.executionCode, `/v2/production-executions/${encodeURIComponent(value.executionCode)}/start`, { expectedVersion: value.version }); } }));
-    if (value.status === 'ready-for-qc' && qualityManage) headerActions.push(h('button', { type: 'button', className: 'primary', 'data-final-quality-handoff': value.executionCode, text: t('Перейти к Final Quality', 'Open Final Quality'), onclick: () => { openFinalQuality(value); } }));
+    if (value.status === 'ready-for-qc' && qualityManage) headerActions.push(h('button', { type: 'button', className: 'primary', 'data-final-quality-handoff': value.executionCode, text: t('Перейти к финальному контролю', 'Open Final Quality'), onclick: () => { openFinalQuality(value); } }));
     const children = [
       h('div', { className: 'production-execution-inspector-head' }, [
         h('div', {}, [h('p', { className: 'eyebrow', text: value.executionCode }), h('h2', { text: statusLabel(value.status) })]),

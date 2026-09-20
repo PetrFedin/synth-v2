@@ -89,7 +89,7 @@
   function markSourceLayouts(workspace){
     workspace.querySelectorAll('.view-toolbar').forEach((node)=>node.classList.add('od14-source-toolbar'));
     workspace.querySelectorAll('.bom-header,.measurement-header,.sample-header,.sourcing-header').forEach((node)=>node.classList.add('od14-source-header'));
-    workspace.querySelectorAll('.od-commandbar').forEach((node)=>node.classList.toggle('od14-no-action',!node.querySelector(':scope > button,:scope > .button')));
+    workspace.querySelectorAll('.od-commandbar').forEach((node)=>{node.classList.toggle('od14-no-action',!node.querySelector(':scope > button,:scope > .button'));node.classList.toggle('od14-empty-bar',!node.querySelector('button,.button,input,select,textarea,a[href]'))});
   }
   function buildUnifiedHeader(workspace){
     const view=currentView();
@@ -197,7 +197,7 @@
     });
   }
   function compactFilters(workspace){
-    workspace.querySelectorAll('.od-commandbar').forEach((bar)=>bar.classList.toggle('od14-no-action',!bar.querySelector(':scope > button,:scope > .button')));
+    workspace.querySelectorAll('.od-commandbar').forEach((bar)=>{bar.classList.toggle('od14-no-action',!bar.querySelector(':scope > button,:scope > .button'));bar.classList.toggle('od14-empty-bar',!bar.querySelector('button,.button,input,select,textarea,a[href]'))});
     workspace.querySelectorAll('input[type="search"]').forEach((input)=>{
       const parent=input.closest('.od-search,.ls9-search,.global-search');
       if(parent)parent.classList.add('od14-compact-search');

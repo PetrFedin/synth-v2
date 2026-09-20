@@ -273,8 +273,17 @@ body.omnidata-role-system :is([data-ods-role="inspector"],[data-od14-unified-rol
 body.omnidata-design-system-v1 :is([data-ods-role="inspector"],[data-od14-unified-role="inspector"]) dl>div,
 body.omnidata-role-system :is([data-ods-role="inspector"],[data-od14-unified-role="inspector"]) dl>div{padding:var(--ods-space-2)!important;border:1px solid #e8eaec!important;border-radius:var(--ods-radius-sm)!important;background:#fafbfb!important}
 
-body.omnidata-design-system-v1 [data-ods-language-mismatch],
-body.omnidata-role-system [data-ods-language-mismatch]{text-decoration:underline dotted var(--ods-color-danger)!important;text-underline-offset:3px!important}
+/* The language audit is a development instrument, not a label for the client.
+   It marks every node that holds a Latin word the interface dictionary does not
+   know, and business data is full of them: SKU codes, style names, supplier
+   names, order numbers, retail door codes. Painted unconditionally, it drew a
+   red dotted underline under "SS27 Paris Showroom DEMO" and under the colourway
+   code on the product card, and the product read as though it were full of
+   spelling mistakes. The attribute still lands on the node and the counter still
+   reaches body.dataset, so the audit keeps working for us; only the paint is now
+   opt-in, through data-ods-language-audit-visible on the document element. */
+html[data-ods-language-audit-visible="true"] body.omnidata-design-system-v1 [data-ods-language-mismatch],
+html[data-ods-language-audit-visible="true"] body.omnidata-role-system [data-ods-language-mismatch]{text-decoration:underline dotted var(--ods-color-danger)!important;text-underline-offset:3px!important}
 
 @media (max-width:1080px){
   body.omnidata-design-system-v1 .workspace-content,
@@ -413,7 +422,23 @@ body.omnidata-role-system .topbar .breadcrumb > strong{flex:1 1 auto!important;m
 /* The breadcrumb column was starved to 212px inside a 1208px header because the
    trailing column was unbounded. Give the path room and bound the tail. */
 body.omnidata-design-system-v1 .topbar,
-body.omnidata-role-system .topbar{grid-template-columns:minmax(320px,1fr) minmax(200px,340px) minmax(220px,max-content)!important}
+body.omnidata-role-system .topbar{grid-template-columns:minmax(360px,1fr) minmax(200px,300px) minmax(220px,max-content)!important}
+/* Those three floors add up to 740px before gaps and padding, and this rule had
+   no breakpoint, so below roughly 1100px it overrode the responsive ladder the
+   earlier layers set and the header burst: the search box landed on top of the
+   page content, the organisation and user chips were clipped to an empty white
+   rectangle, and with them went the way out of the application. Step the floors
+   down, then drop to two columns and give the search a row of its own. */
+@media (max-width:1180px){
+  body.omnidata-design-system-v1 .topbar,
+  body.omnidata-role-system .topbar{grid-template-columns:minmax(0,1fr) minmax(180px,300px) minmax(0,max-content)!important;gap:var(--ods-space-2)!important;padding:0 var(--ods-space-3)!important}
+}
+@media (max-width:980px){
+  body.omnidata-design-system-v1 .topbar,
+  body.omnidata-role-system .topbar{height:auto!important;min-height:0!important;grid-template-columns:minmax(0,1fr) minmax(0,max-content)!important;align-items:center!important;row-gap:var(--ods-space-2)!important;padding:var(--ods-space-2) var(--ods-space-3)!important}
+  body.omnidata-design-system-v1 .topbar .global-search,
+  body.omnidata-role-system .topbar .global-search{grid-column:1/-1!important;grid-row:2!important;width:100%!important;max-width:none!important}
+}
 
 /* The v11 layer painted the system footer dark and set a translucent white text
    colour to match. A later layer repainted the ground almost white but left the
@@ -504,3 +529,63 @@ body.omnidata-design-system-v1 :is([data-ods-role="field"],[data-od14-unified-ro
 body.omnidata-role-system :is([data-ods-role="field"],[data-od14-unified-role="field"]).od-column-option{display:flex!important;align-items:center!important;gap:8px!important;min-height:28px!important;padding:2px 0!important;font-size:12px!important;cursor:pointer!important}
 body.omnidata-design-system-v1 .od-column-option input:disabled,
 body.omnidata-role-system .od-column-option input:disabled{opacity:.5!important;cursor:not-allowed!important}
+
+/* ------------------------------------------------------------------
+   A control bar holds as many controls as its screen has
+   ------------------------------------------------------------------
+   The filter bar was a fixed five-track grid: one wide track for the
+   search and three equal tracks after it. Every view puts a different
+   number of controls in that bar, so on a view with four the last one
+   dropped to a second row, and on a view with two buttons they sat
+   marooned in the middle of 190px tracks with a hundred-pixel hole
+   between them. Lay the bar out as a row that wraps: the search takes
+   the slack, everything else is its own width, and the bar reads the
+   same whether it carries two controls or six. */
+body.omnidata-design-system-v1 :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="filterbar"],[data-od14-unified-part="filterbar"]),
+body.omnidata-role-system :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="filterbar"],[data-od14-unified-part="filterbar"]){display:flex!important;align-items:center!important;flex-wrap:wrap!important;grid-template-columns:none!important;gap:var(--ods-space-2)!important;width:100%!important;min-width:0!important;margin:var(--ods-space-3) 0!important;padding:var(--ods-space-2)!important;border:1px solid var(--ods-color-border)!important;border-radius:var(--ods-radius-md)!important;background:var(--ods-color-surface)!important;box-shadow:var(--ods-shadow-surface)!important}
+body.omnidata-design-system-v1 :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="filterbar"],[data-od14-unified-part="filterbar"])>*,
+body.omnidata-role-system :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="filterbar"],[data-od14-unified-part="filterbar"])>*{flex:0 0 auto!important;min-width:0!important;max-width:100%!important;margin:0!important}
+/* The search is the one control that should drink the leftover width. */
+body.omnidata-design-system-v1 :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="filterbar"],[data-od14-unified-part="filterbar"])>:is(label,.od-search,.od-filter),
+body.omnidata-role-system :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="filterbar"],[data-od14-unified-part="filterbar"])>:is(label,.od-search,.od-filter){flex:1 1 220px!important;max-width:360px!important}
+/* The legacy flex spacer means nothing once the bar wraps; it used to hold
+   open a whole empty track. */
+body.omnidata-design-system-v1 .od-commandbar-spacer,
+body.omnidata-role-system .od-commandbar-spacer{display:none!important}
+/* And a bar that ended up carrying no control at all is not a bar. The
+   workspace overview painted one as a bordered white rectangle 56px tall,
+   directly under the page title, holding nothing. */
+body.omnidata-design-system-v1 .od-commandbar.od14-empty-bar,
+body.omnidata-role-system .od-commandbar.od14-empty-bar{display:none!important}
+
+/* ------------------------------------------------------------------
+   A metric tile names the thing it measures
+   ------------------------------------------------------------------
+   The tile was a two-column grid, "label value", with the label in a
+   1fr track and the value in an auto track. A numeric value left the
+   label alone; a worded one — "Только чтение", "BER-MITTE",
+   "Отправлена" — took the width it needed and squeezed the label out
+   of existence, so the client read "Ре…", "R…" and a bare "П". Stack
+   them instead: the label above, the value below, the way every other
+   figure in the product is presented. Nothing competes, and a long
+   value wraps rather than evicting its own caption. */
+body.omnidata-design-system-v1 :is([data-ods-role="card"],[data-od14-unified-role="card"]):is([data-ods-part="metric"],[data-od14-unified-part="metric"]),
+body.omnidata-role-system :is([data-ods-role="card"],[data-od14-unified-role="card"]):is([data-ods-part="metric"],[data-od14-unified-part="metric"]){display:grid!important;grid-template-columns:minmax(0,1fr)!important;grid-template-areas:"label" "value" "detail"!important;align-content:start!important;justify-items:start!important;gap:var(--ods-space-1)!important;min-height:82px!important;padding:var(--ods-space-3)!important;overflow:hidden!important}
+body.omnidata-design-system-v1 :is([data-ods-role="card"],[data-od14-unified-role="card"]):is([data-ods-part="metric"],[data-od14-unified-part="metric"])>*,
+body.omnidata-role-system :is([data-ods-role="card"],[data-od14-unified-role="card"]):is([data-ods-part="metric"],[data-od14-unified-part="metric"])>*{max-width:100%!important;min-width:0!important;margin:0!important;justify-self:start!important}
+body.omnidata-design-system-v1 :is([data-ods-role="card"],[data-od14-unified-role="card"]):is([data-ods-part="metric"],[data-od14-unified-part="metric"])>:is(span,.muted,[class*="label"]),
+body.omnidata-role-system :is([data-ods-role="card"],[data-od14-unified-role="card"]):is([data-ods-part="metric"],[data-od14-unified-part="metric"])>:is(span,.muted,[class*="label"]){grid-area:label!important;color:var(--ods-color-text-soft)!important;font-size:var(--ods-font-size-xs)!important;line-height:1.3!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important}
+body.omnidata-design-system-v1 :is([data-ods-role="card"],[data-od14-unified-role="card"]):is([data-ods-part="metric"],[data-od14-unified-part="metric"]) strong,
+body.omnidata-role-system :is([data-ods-role="card"],[data-od14-unified-role="card"]):is([data-ods-part="metric"],[data-od14-unified-part="metric"]) strong{grid-area:value!important;color:var(--ods-color-text)!important;font-size:20px!important;font-weight:600!important;font-variant-numeric:tabular-nums!important;line-height:1.15!important;white-space:normal!important;overflow-wrap:anywhere!important}
+body.omnidata-design-system-v1 :is([data-ods-role="card"],[data-od14-unified-role="card"]):is([data-ods-part="metric"],[data-od14-unified-part="metric"]) small,
+body.omnidata-role-system :is([data-ods-role="card"],[data-od14-unified-role="card"]):is([data-ods-part="metric"],[data-od14-unified-part="metric"]) small{grid-area:detail!important;color:var(--ods-color-muted)!important;font-size:var(--ods-font-size-xs)!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important}
+
+/* A container that ended up with nothing in it is not a panel.
+   The Production Order inspector renders its action row unconditionally, so a
+   confirmed order — which has no action left — showed a bordered 74px box under
+   the status with nothing inside. The same shape appears wherever a toolbar or
+   an action row is built before its contents are known. :empty is exact: it
+   matches only a box with no child and no text, so nothing that carries
+   anything can be caught by it. */
+body.omnidata-design-system-v1 :is([data-ods-part="toolbar"],[data-od14-unified-part="toolbar"],[data-od14-component="toolbar"],[data-ods-part="header-toolbar"],[data-od14-unified-part="header-toolbar"],[data-ods-part="button-group"],[data-od14-unified-part="button-group"]):empty,
+body.omnidata-role-system :is([data-ods-part="toolbar"],[data-od14-unified-part="toolbar"],[data-od14-component="toolbar"],[data-ods-part="header-toolbar"],[data-od14-unified-part="header-toolbar"],[data-ods-part="button-group"],[data-od14-unified-part="button-group"]):empty{display:none!important}

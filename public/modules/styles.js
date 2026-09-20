@@ -655,7 +655,7 @@
     const product = item.product;
     const risks = item.risks.length
       ? odMiniTable([text('Проверка', 'Gate'), text('Уровень', 'Severity')], item.risks.map((risk) => [riskLabel(risk.code), statusBadge(risk.severity)]))
-      : notice(text('Цепочка Product Master → Readiness → Commercial Projection замкнута.', 'Product Master → Readiness → Commercial Projection chain is complete.'), 'success');
+      : notice(text('Цепочка «Модель → Готовность → Коммерческая проекция» замкнута.', 'Product Master → Readiness → Commercial Projection chain is complete.'), 'success');
     return odInspector({
       title: title(product),
       subtitle: `${product.styleCode} · v${product.styleVersionNo || '—'}`,

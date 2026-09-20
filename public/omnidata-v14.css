@@ -576,7 +576,8 @@ body.omnidata-v14 .sample-high,
 body.omnidata-v14 .sourcing-danger{border-color:#e7c6c8!important;background:#fff5f5!important;color:var(--od14-danger)!important}
 
 body.omnidata-v14 .od13-abbr{border-bottom:1px dotted currentColor!important;text-decoration:none!important;cursor:help!important}
-body.omnidata-v14 [data-od14-untranslated="true"]{text-decoration:underline dotted rgba(173,70,75,.7)!important;text-underline-offset:3px!important}
+/* Same instrument, earlier layer: shown only when the audit is switched on. */
+html[data-ods-language-audit-visible="true"] body.omnidata-v14 [data-od14-untranslated="true"]{text-decoration:underline dotted rgba(173,70,75,.7)!important;text-underline-offset:3px!important}
 
 @media(max-width:1180px){
   body.omnidata-v14 .od-master-detail,

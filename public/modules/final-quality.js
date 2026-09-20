@@ -48,6 +48,13 @@
     const labels = { pass: ['Соответствует', 'Pass'], rework: ['Доработка', 'Rework'], reject: ['Отклонить', 'Reject'] };
     return value ? t(...(labels[value] || [value, value])) : '—';
   }
+  // The decision the approver took, in the words the buttons used to take it. The run history
+  // printed the stored enum, so a Russian reader met "Решение: release" — the one English word
+  // on the page, and the only place in the module where a domain value was shown raw.
+  function dispositionLabel(value) {
+    const labels = { release: ['Отгрузка разрешена', 'Shipment released'], rework: ['Назначена доработка', 'Rework required'], reject: ['Партия отклонена', 'Lot rejected'] };
+    return value ? t(...(labels[value] || [value, value])) : '—';
+  }
   function date(value) {
     if (!value) return '—';
     const parsed = new Date(value);
@@ -125,7 +132,7 @@
     children.push(h('section', { className: 'final-quality-kpis' }, [
       metric(t('Всего', 'Total'), summary.total, t('Все партии', 'All lots')),
       metric(t('На проверке', 'In progress'), summary.inProgress, t('Активные прогоны', 'Active runs')),
-      metric(t('Решение', 'Review'), summary.reviewPending, t('Нужен approver', 'Needs approver'), summary.reviewPending ? 'attention' : ''),
+      metric(t('Решение', 'Review'), summary.reviewPending, t('Требуется согласующий', 'Needs approver'), summary.reviewPending ? 'attention' : ''),
       metric(t('Доработка', 'Rework'), summary.rework, t('Нужна повторная проверка', 'Needs reinspection'), summary.rework ? 'risk' : ''),
       metric(t('Допущено', 'Released'), summary.released, t('Можно отгружать', 'Ready to ship'), 'ok'),
     ]));
@@ -233,9 +240,9 @@
     if (!value.runs.length) return h('p', { className: 'muted', text: t('Инспекция ещё не запускалась.', 'Inspection has not started.') });
     return h('ol', { className: 'final-quality-runs' }, value.runs.map((run) => h('li', { className: `final-quality-run ${run.status}` }, [
       h('strong', { text: `${t('Прогон', 'Run')} ${run.runNumber}` }), h('small', { text: `${run.inspectorName} · ${date(run.startedAt)}` }),
-      run.defectCounts ? h('small', { text: `C/M/m ${run.defectCounts.critical}/${run.defectCounts.major}/${run.defectCounts.minor}` }) : null,
+      run.defectCounts ? h('small', { text: `${t('Крит./знач./незнач.', 'Critical/major/minor')} ${run.defectCounts.critical}/${run.defectCounts.major}/${run.defectCounts.minor}` }) : null,
       run.recommendation ? h('small', { text: `${t('Рекомендация', 'Recommendation')}: ${recommendationLabel(run.recommendation)}` }) : null,
-      run.disposition ? h('small', { text: `${t('Решение', 'Disposition')}: ${run.disposition}` }) : null,
+      run.disposition ? h('small', { text: `${t('Решение', 'Disposition')}: ${dispositionLabel(run.disposition)}` }) : null,
       run.reworkReference ? h('small', { text: `${t('Доработка', 'Rework')}: ${run.reworkReference}` }) : null,
     ])));
   }
@@ -244,7 +251,7 @@
     if (!value) return h('aside', { className: 'final-quality-inspector' }, [h('p', { className: 'muted', text: t('Выберите инспекцию.', 'Select an inspection.') })]);
     const manage = can(value.brandId, caps.CAPABILITIES.QUALITY_MANAGE); const approve = can(value.brandId, caps.CAPABILITIES.QUALITY_APPROVE); const actions = core.allowedActions(value, { canManage: manage, canApprove: approve });
     const children = [h('div', { className: 'final-quality-inspector-head' }, [h('div', {}, [h('p', { className: 'eyebrow', text: value.inspectionCode }), h('h2', { text: statusLabel(value.status) })]), value.shipmentRelease ? h('span', { className: 'final-quality-release', text: value.shipmentRelease.releaseCode }) : null]),
-      h('dl', { className: 'final-quality-facts' }, [pair('Execution', value.executionCode), pair('PO', value.productionOrderNumber), pair('SKU', value.sku), pair(t('Фабрика', 'Supplier'), value.supplierCode), pair(t('Партия', 'Lot quantity'), value.quantity), pair(t('Техпак', 'Tech Pack'), `${value.sourceSnapshot.techPackCode} · v${value.sourceSnapshot.techPackVersion}`), pair(t('Готово к QC', 'Ready for QC'), date(value.sourceSnapshot.readyForQcAt)), pair(t('Версия execution', 'Execution version'), value.sourceSnapshot.executionVersion)]),
+      h('dl', { className: 'final-quality-facts' }, [pair(t('Исполнение', 'Execution'), value.executionCode), pair('PO', value.productionOrderNumber), pair('SKU', value.sku), pair(t('Фабрика', 'Supplier'), value.supplierCode), pair(t('Партия', 'Lot quantity'), value.quantity), pair(t('Техпак', 'Tech Pack'), `${value.sourceSnapshot.techPackCode} · v${value.sourceSnapshot.techPackVersion}`), pair(t('Готово к QC', 'Ready for QC'), date(value.sourceSnapshot.readyForQcAt)), pair(t('Версия исполнения', 'Execution version'), value.sourceSnapshot.executionVersion)]),
       h('section', { className: 'final-quality-card' }, [h('h3', { text: t('История инспекций', 'Inspection history') }), runHistory(value)]),
     ];
     if (actions.includes('start')) children.push(startPanel(value, false));

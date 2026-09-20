@@ -181,8 +181,8 @@ body.omnidata-design-system-v1 :is([data-ods-role="filterbar"],[data-od14-unifie
 body.omnidata-role-system :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]){min-width:0!important;color:var(--ods-color-text)!important}
 body.omnidata-design-system-v1 :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="filterbar"],[data-od14-unified-part="filterbar"]),
 body.omnidata-role-system :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="filterbar"],[data-od14-unified-part="filterbar"]){display:grid!important;grid-template-columns:minmax(220px,1.4fr) repeat(3,minmax(140px,.7fr)) auto!important;align-items:end!important;gap:var(--ods-space-2)!important;width:100%!important;margin:var(--ods-space-3) 0!important;padding:var(--ods-space-2)!important;border:1px solid var(--ods-color-border)!important;border-radius:var(--ods-radius-md)!important;background:var(--ods-color-surface)!important;box-shadow:var(--ods-shadow-surface)!important}
-body.omnidata-design-system-v1 :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="toolbar"],[data-ods-part="header-toolbar"],[data-ods-part="section-head"],[data-od14-unified-part="toolbar"],[data-od14-unified-part="header-toolbar"],[data-od14-unified-part="section-head"]),
-body.omnidata-role-system :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="toolbar"],[data-ods-part="header-toolbar"],[data-ods-part="section-head"],[data-od14-unified-part="toolbar"],[data-od14-unified-part="header-toolbar"],[data-od14-unified-part="section-head"]){display:flex!important;min-height:var(--ods-control-height)!important;align-items:center!important;justify-content:flex-end!important;flex-wrap:wrap!important;gap:var(--ods-space-2)!important;margin:0!important;padding:0!important;border:0!important;background:transparent!important}
+body.omnidata-design-system-v1 :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="toolbar"],[data-ods-part="header-toolbar"],[data-ods-part="section-head"],[data-od14-unified-part="toolbar"],[data-od14-unified-part="header-toolbar"],[data-od14-unified-part="section-head"]):not(.topbar-actions),
+body.omnidata-role-system :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="toolbar"],[data-ods-part="header-toolbar"],[data-ods-part="section-head"],[data-od14-unified-part="toolbar"],[data-od14-unified-part="header-toolbar"],[data-od14-unified-part="section-head"]):not(.topbar-actions){display:flex!important;min-height:var(--ods-control-height)!important;align-items:center!important;justify-content:flex-end!important;flex-wrap:wrap!important;gap:var(--ods-space-2)!important;margin:0!important;padding:0!important;border:0!important;background:transparent!important}
 body.omnidata-design-system-v1 :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="section-head"],[data-od14-unified-part="section-head"]),
 body.omnidata-role-system :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="section-head"],[data-od14-unified-part="section-head"]){justify-content:space-between!important;padding-bottom:var(--ods-space-2)!important;border-bottom:1px solid var(--ods-color-border)!important}
 body.omnidata-design-system-v1 :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="tabs"],[data-od14-unified-part="tabs"]),
@@ -431,11 +431,11 @@ body.omnidata-role-system .topbar{grid-template-columns:minmax(360px,1fr) minmax
    down, then drop to two columns and give the search a row of its own. */
 @media (max-width:1180px){
   body.omnidata-design-system-v1 .topbar,
-  body.omnidata-role-system .topbar{grid-template-columns:minmax(0,1fr) minmax(180px,300px) minmax(0,max-content)!important;gap:var(--ods-space-2)!important;padding:0 var(--ods-space-3)!important}
+  body.omnidata-role-system .topbar{grid-template-columns:minmax(0,1fr) minmax(160px,300px) max-content!important;gap:var(--ods-space-2)!important;padding:0 var(--ods-space-3)!important}
 }
 @media (max-width:980px){
   body.omnidata-design-system-v1 .topbar,
-  body.omnidata-role-system .topbar{height:auto!important;min-height:0!important;grid-template-columns:minmax(0,1fr) minmax(0,max-content)!important;align-items:center!important;row-gap:var(--ods-space-2)!important;padding:var(--ods-space-2) var(--ods-space-3)!important}
+  body.omnidata-role-system .topbar{height:auto!important;min-height:0!important;grid-template-columns:minmax(0,1fr) max-content!important;align-items:center!important;row-gap:var(--ods-space-2)!important;padding:var(--ods-space-2) var(--ods-space-3)!important}
   body.omnidata-design-system-v1 .topbar .global-search,
   body.omnidata-role-system .topbar .global-search{grid-column:1/-1!important;grid-row:2!important;width:100%!important;max-width:none!important}
 }
@@ -541,13 +541,17 @@ body.omnidata-role-system .od-column-option input:disabled{opacity:.5!important;
    between them. Lay the bar out as a row that wraps: the search takes
    the slack, everything else is its own width, and the bar reads the
    same whether it carries two controls or six. */
-body.omnidata-design-system-v1 :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="filterbar"],[data-od14-unified-part="filterbar"]),
-body.omnidata-role-system :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="filterbar"],[data-od14-unified-part="filterbar"]){display:flex!important;align-items:center!important;flex-wrap:wrap!important;grid-template-columns:none!important;gap:var(--ods-space-2)!important;width:100%!important;min-width:0!important;margin:var(--ods-space-3) 0!important;padding:var(--ods-space-2)!important;border:1px solid var(--ods-color-border)!important;border-radius:var(--ods-radius-md)!important;background:var(--ods-color-surface)!important;box-shadow:var(--ods-shadow-surface)!important}
+/* The header's action cluster carries the filterbar role too, so it was being
+   given a filter bar's border, padding and wrapping: at 1440 the user chip
+   wrapped onto a second row inside a 50px header. The header is not a filter
+   bar, and says so here. */
+body.omnidata-design-system-v1 :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="filterbar"],[data-od14-unified-part="filterbar"]):not(.topbar-actions),
+body.omnidata-role-system :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="filterbar"],[data-od14-unified-part="filterbar"]):not(.topbar-actions){display:flex!important;align-items:flex-end!important;flex-wrap:wrap!important;grid-template-columns:none!important;gap:var(--ods-space-2)!important;width:100%!important;min-width:0!important;margin:var(--ods-space-3) 0!important;padding:var(--ods-space-2)!important;border:1px solid var(--ods-color-border)!important;border-radius:var(--ods-radius-md)!important;background:var(--ods-color-surface)!important;box-shadow:var(--ods-shadow-surface)!important}
 body.omnidata-design-system-v1 :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="filterbar"],[data-od14-unified-part="filterbar"])>*,
-body.omnidata-role-system :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="filterbar"],[data-od14-unified-part="filterbar"])>*{flex:0 0 auto!important;min-width:0!important;max-width:100%!important;margin:0!important}
+body.omnidata-role-system :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="filterbar"],[data-od14-unified-part="filterbar"]):not(.topbar-actions)>*{flex:0 0 auto!important;min-width:0!important;max-width:100%!important;margin:0!important}
 /* The search is the one control that should drink the leftover width. */
 body.omnidata-design-system-v1 :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="filterbar"],[data-od14-unified-part="filterbar"])>:is(label,.od-search,.od-filter),
-body.omnidata-role-system :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="filterbar"],[data-od14-unified-part="filterbar"])>:is(label,.od-search,.od-filter){flex:1 1 220px!important;max-width:360px!important}
+body.omnidata-role-system :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="filterbar"],[data-od14-unified-part="filterbar"]):not(.topbar-actions)>:is(label,.od-search,.od-filter){flex:1 1 220px!important;max-width:360px!important}
 /* The legacy flex spacer means nothing once the bar wraps; it used to hold
    open a whole empty track. */
 body.omnidata-design-system-v1 .od-commandbar-spacer,
@@ -611,3 +615,106 @@ body.omnidata-design-system-v1 .od-handoff-step,
 body.omnidata-role-system .od-handoff-step{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:var(--ods-space-3)!important;min-height:32px!important;padding:var(--ods-space-2) 0!important;border-bottom:1px solid var(--ods-color-border)!important}
 body.omnidata-design-system-v1 .od-handoff-step:last-child,
 body.omnidata-role-system .od-handoff-step:last-child{border-bottom:0!important}
+
+/* One height for everything in the header's action cluster.
+   The language toggle, the notification bell and the help button stood 34px
+   tall while the organisation and user chips beside them stood 59px — taller
+   than the 50px header itself, so they bled past its rule at the top and the
+   bottom and the row read as two different toolbars pushed together. */
+body.omnidata-design-system-v1 .topbar-actions,
+body.omnidata-role-system .topbar-actions{display:flex!important;align-items:center!important;flex-wrap:nowrap!important;gap:var(--ods-space-2)!important}
+body.omnidata-design-system-v1 .topbar-actions > *,
+body.omnidata-role-system .topbar-actions > *{min-height:36px!important;height:36px!important;flex:0 0 auto!important;align-self:center!important}
+body.omnidata-design-system-v1 .topbar-actions > :is(button,a,.button),
+body.omnidata-role-system .topbar-actions > :is(button,a,.button){min-height:36px!important;height:36px!important}
+body.omnidata-design-system-v1 .topbar-actions > div > button,
+body.omnidata-role-system .topbar-actions > div > button{min-height:36px!important;height:36px!important}
+body.omnidata-design-system-v1 .topbar-actions :is(.topbar-organisation,.topbar-user),
+body.omnidata-role-system .topbar-actions :is(.topbar-organisation,.topbar-user){display:flex!important;align-items:center!important;gap:var(--ods-space-2)!important;padding:0 var(--ods-space-2)!important;overflow:hidden!important}
+/* The user chip carries a name over a role. At 36px the two lines have to be
+   tight, and neither may push the chip open. */
+body.omnidata-design-system-v1 .topbar-actions :is(.topbar-organisation,.topbar-user) .user-copy,
+body.omnidata-role-system .topbar-actions :is(.topbar-organisation,.topbar-user) .user-copy{display:grid!important;min-width:0!important;gap:0!important}
+body.omnidata-design-system-v1 .topbar-actions .user-copy strong,
+body.omnidata-role-system .topbar-actions .user-copy strong{font-size:10.5px!important;line-height:1.25!important}
+body.omnidata-design-system-v1 .topbar-actions .user-copy small,
+body.omnidata-role-system .topbar-actions .user-copy small{font-size:9.5px!important;line-height:1.25!important}
+
+/* ------------------------------------------------------------------
+   The shell below 700px
+   ------------------------------------------------------------------
+   The base stylesheet turns the shell into a block and the sidebar into a
+   horizontal scrolling strip at phone width. Nine later layers then pin the
+   sidebar back to a vertical column with a fixed width, so what actually
+   rendered was a 550px-tall rail sitting in a full-width block with an empty
+   grey rectangle beside it, and the workspace pushed below all of it. The
+   two-column rail already works between 700 and 980; it works at 360 too, and
+   it is the layout this product is actually built for. */
+@media (max-width:700px){
+  body.omnidata-design-system-v1 .shell,
+  body.omnidata-role-system .shell,
+  body.omnidata-design-system-v1 .shell.sidebar-collapsed,
+  body.omnidata-role-system .shell.sidebar-collapsed{display:grid!important;grid-template-columns:60px minmax(0,1fr)!important;align-items:stretch!important}
+  body.omnidata-v14.omnidata-design-system-v1 .sidebar,
+  body.omnidata-design-system-v1 .sidebar,
+  body.omnidata-role-system .sidebar{position:sticky!important;top:0!important;height:100vh!important;max-height:100vh!important;min-height:100vh!important;flex-direction:column!important;align-items:stretch!important;padding:0!important;border-right:1px solid rgba(0,0,0,.15)!important;border-bottom:0!important}
+  body.omnidata-design-system-v1 .sidebar .nav,
+  body.omnidata-role-system .sidebar .nav{flex:1 1 auto!important;flex-direction:column!important;overflow-x:hidden!important;overflow-y:auto!important}
+  body.omnidata-design-system-v1 .sidebar .nav-item,
+  body.omnidata-role-system .sidebar .nav-item{width:100%!important;flex:0 0 auto!important;justify-content:center!important;padding-inline:0!important}
+  body.omnidata-design-system-v1 .sidebar-footer,
+  body.omnidata-role-system .sidebar-footer{display:flex!important}
+  /* The system footer is fixed, and in the block layout it sat on top of the
+     page's last rows. */
+  /* The system footer is a child of the shell grid. Left static it dropped into
+     the 60px rail column and squeezed its three fields into a stack of single
+     letters; left fixed it sat on top of the page's last rows. It spans the
+     grid instead. */
+  body.omnidata-v14.omnidata-design-system-v1 .od-v7-system-footer,
+  body.omnidata-design-system-v1 .od-v7-system-footer,
+  body.omnidata-role-system .od-v7-system-footer{position:static!important;left:auto!important;width:auto!important;grid-column:1/-1!important}
+  /* At 390 the header could not hold the path and six controls on one row: the
+     action cluster is sized to its content, so the breadcrumb's 1fr collapsed
+     to nine pixels and the path rendered as an empty white sliver with its own
+     text hidden outside the box. Below 700 each part gets a row of its own. */
+  body.omnidata-v14.omnidata-design-system-v1 .topbar,
+  body.omnidata-design-system-v1 .topbar,
+  body.omnidata-role-system .topbar{grid-template-columns:minmax(0,1fr)!important}
+  body.omnidata-design-system-v1 .topbar .breadcrumb,
+  body.omnidata-role-system .topbar .breadcrumb{grid-area:1/1!important;min-width:0!important}
+  body.omnidata-design-system-v1 .topbar-actions,
+  body.omnidata-role-system .topbar-actions{grid-area:2/1!important;justify-content:flex-start!important;overflow-x:auto!important}
+  body.omnidata-design-system-v1 .topbar .global-search,
+  body.omnidata-role-system .topbar .global-search{grid-area:3/1!important}
+}
+/* An icon must not be cropped to fit its rail. */
+body.omnidata-design-system-v1 .sidebar .nav-item .icon,
+body.omnidata-role-system .sidebar .nav-item .icon{flex:0 0 18px!important;width:18px!important;height:18px!important;overflow:visible!important}
+body.omnidata-design-system-v1 .sidebar .nav-item .icon svg,
+body.omnidata-role-system .sidebar .nav-item .icon svg{width:18px!important;height:18px!important;display:block!important}
+
+/* Below 980 the header's action cluster keeps its controls but drops the two
+   text blocks; their marks still say which organisation and who is signed in,
+   and the breadcrumb gets the room it was being starved of. */
+@media (max-width:1180px){
+  /* Below 1180 the path cannot hold three crumbs: it needed 270px and had 171,
+     so the page name — the one crumb that must survive — was clipped away and
+     the header ended on a dangling separator. The group name goes instead; the
+     sidebar shows it in full, highlighted, at every width. */
+  body.omnidata-design-system-v1 .topbar .breadcrumb > .breadcrumb-muted:nth-of-type(2),
+  body.omnidata-role-system .topbar .breadcrumb > .breadcrumb-muted:nth-of-type(2),
+  body.omnidata-design-system-v1 .topbar .breadcrumb > .breadcrumb-muted:nth-of-type(3),
+  body.omnidata-role-system .topbar .breadcrumb > .breadcrumb-muted:nth-of-type(3){display:none!important}
+  /* With the group gone its separator is a dangling slash, and the root button
+     keeps the mark that says what it does without the word beside it. */
+  body.omnidata-design-system-v1 .topbar .breadcrumb > .breadcrumb-muted + .breadcrumb-divider,
+  body.omnidata-role-system .topbar .breadcrumb > .breadcrumb-muted + .breadcrumb-divider{display:none!important}
+  body.omnidata-design-system-v1 .topbar .breadcrumb-root > :not(.icon),
+  body.omnidata-role-system .topbar .breadcrumb-root > :not(.icon){display:none!important}
+  body.omnidata-design-system-v1 .topbar .breadcrumb-root,
+  body.omnidata-role-system .topbar .breadcrumb-root{padding:0 var(--ods-space-2)!important}
+  body.omnidata-design-system-v1 .topbar .breadcrumb > strong,
+  body.omnidata-role-system .topbar .breadcrumb > strong{min-width:5rem!important}
+  body.omnidata-design-system-v1 .topbar-actions :is(.topbar-organisation,.topbar-user) :is(.user-copy,span:not(.icon):not([class*="avatar"])),
+  body.omnidata-role-system .topbar-actions :is(.topbar-organisation,.topbar-user) :is(.user-copy,span:not(.icon):not([class*="avatar"])){display:none!important}
+}

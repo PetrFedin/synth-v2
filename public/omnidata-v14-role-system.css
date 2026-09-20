@@ -157,7 +157,7 @@ body.omnidata-role-system :is([data-ods-role="card"],[data-od14-unified-role="ca
 body.omnidata-design-system-v1 :is([data-ods-role="card"],[data-od14-unified-role="card"]):is([data-ods-part="list-item"],[data-od14-unified-part="list-item"]):hover,
 body.omnidata-role-system :is([data-ods-role="card"],[data-od14-unified-role="card"]):is([data-ods-part="list-item"],[data-od14-unified-part="list-item"]):hover{border-color:#efb59d!important;background:var(--ods-color-surface-hover)!important}
 body.omnidata-design-system-v1 :is([data-ods-role="card"],[data-od14-unified-role="card"]):is([data-ods-part="definition-grid"],[data-od14-unified-part="definition-grid"]),
-body.omnidata-role-system :is([data-ods-role="card"],[data-od14-unified-role="card"]):is([data-ods-part="definition-grid"],[data-od14-unified-part="definition-grid"]){display:grid!important;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))!important;gap:var(--ods-space-2)!important;padding:0!important;border:0!important;background:transparent!important}
+body.omnidata-role-system :is([data-ods-role="card"],[data-od14-unified-role="card"]):is([data-ods-part="definition-grid"],[data-od14-unified-part="definition-grid"]){display:grid!important;grid-template-columns:repeat(auto-fit,minmax(210px,1fr))!important;gap:var(--ods-space-2)!important;padding:0!important;border:0!important;background:transparent!important}
 body.omnidata-design-system-v1 :is([data-ods-role="card"],[data-od14-unified-role="card"]):is([data-ods-part="definition-item"],[data-od14-unified-part="definition-item"]) dt,
 body.omnidata-role-system :is([data-ods-role="card"],[data-od14-unified-role="card"]):is([data-ods-part="definition-item"],[data-od14-unified-part="definition-item"]) dt{margin:0 0 var(--ods-space-1)!important;color:var(--ods-color-muted)!important;font-size:10px!important;font-weight:700!important;letter-spacing:.05em!important;text-transform:uppercase!important}
 body.omnidata-design-system-v1 :is([data-ods-role="card"],[data-od14-unified-role="card"]):is([data-ods-part="definition-item"],[data-od14-unified-part="definition-item"]) dd,
@@ -718,3 +718,12 @@ body.omnidata-role-system .sidebar .nav-item .icon svg{width:18px!important;heig
   body.omnidata-design-system-v1 .topbar-actions :is(.topbar-organisation,.topbar-user) :is(.user-copy,span:not(.icon):not([class*="avatar"])),
   body.omnidata-role-system .topbar-actions :is(.topbar-organisation,.topbar-user) :is(.user-copy,span:not(.icon):not([class*="avatar"])){display:none!important}
 }
+
+/* The look rack, again, and properly this time. The previous override lost on
+   specificity to the role system's "layout" rule, so at 1920 a single look was
+   still one 1640px card with a 600px picture and a thousand pixels of white
+   paper beside it. Matching on the part as well as the class outranks it. */
+body.omnidata-design-system-v1 :is([data-ods-part="layout"],[data-od14-unified-part="layout"]).od-look-grid,
+body.omnidata-role-system :is([data-ods-part="layout"],[data-od14-unified-part="layout"]).od-look-grid,
+body.omnidata-design-system-v1 .od-look-grid,
+body.omnidata-role-system .od-look-grid{grid-template-columns:repeat(auto-fill,minmax(240px,300px))!important;justify-content:start!important}

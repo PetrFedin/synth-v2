@@ -106,6 +106,22 @@ try {
   const selection = await ensureSelection(runtime, pool, cycle, showroom.id, collection.id, accounts.buyer, door.id);
   await ensureOrder(runtime, pool, cycle, selection, accounts.buyer, accounts.owner);
 
+  // --- A season still being written -----------------------------------------------------------
+  // One finished order is a story with an ending, and an investor asks what the buyer actually
+  // does. The order grid — paste from a spreadsheet, totals, minimum-order feedback, undo — only
+  // exists on a selection that is still a draft, and the demonstration had none: every selection
+  // was submitted, so every grid was read-only and none of that could be touched. This carries a
+  // second published collection to an open showroom with a draft selection waiting on it.
+  const second = await pickDraftCollection(pool, brandId, collection.id);
+  if (second) {
+    note('second season', `${second.id} (${second.campaignName})`);
+    const draftShowroom = await ensureShowroom(runtime, pool, second, brandId, accounts.owner);
+    await ensureInvitation(runtime, pool, draftShowroom.id, accounts.owner, accounts.buyer);
+    await ensureBuyerCatalog(runtime, pool, second.id, draftShowroom.id, accounts.owner);
+    const draftCycle = await ensureCycle(runtime, pool, { brandId, shopId: SHOP_ID, campaignId: second.campaignId, collectionId: second.id }, accounts.buyer);
+    await ensureDraftSelection(runtime, pool, draftCycle, draftShowroom.id, accounts.buyer, door.id);
+  } else note('second season', 'no second published collection to open');
+
   // --- Quality ------------------------------------------------------------------------------
   // Inspections sat at review-pending because the only account in the brand was the one that ran
   // them, and a run's inspector may not sign off its own disposition. That rule is a feature, and a
@@ -300,6 +316,53 @@ async function ensureSelection(runtime, pool, cycle, showroomId, collectionId, b
   }
   await runtime.collaboration.submitSelection(command('selection-submit'), buyerId, selection.id);
   note('selection', 'submitted to the brand');
+  return selection;
+}
+
+// A second published collection, not the one the finished season already used.
+async function pickDraftCollection(pool, brandId, exceptId) {
+  const result = await pool.query(
+    `SELECT c.id, c.campaign_id, campaign.payload ->> 'name' AS campaign_name,
+            (SELECT count(*) FROM catalog_skus s WHERE s.collection_id = c.id AND s.status = 'published') AS published
+       FROM collections c
+       JOIN campaigns campaign ON campaign.id = c.campaign_id
+      WHERE c.brand_id = $1 AND c.status = 'published' AND c.id <> $2
+      ORDER BY published DESC, c.id
+      LIMIT 1`,
+    [brandId, exceptId],
+  );
+  const row = result.rows[0];
+  if (!row || Number(row.published) === 0) return null;
+  return { id: row.id, campaignId: row.campaign_id, campaignName: row.campaign_name };
+}
+
+// A selection that stays a draft on purpose. One line is left deliberately empty so the grid has
+// something to be typed into, and the cycle is held at the showroom stage where a buyer writes.
+async function ensureDraftSelection(runtime, pool, cycle, showroomId, buyerId, retailDoorId) {
+  await advanceCycleTo(runtime, pool, cycle.id, 'showroom', buyerId);
+  const existing = await pool.query('SELECT id, status FROM selections WHERE cycle_id = $1 LIMIT 1', [cycle.id]);
+  if (existing.rowCount) { note('draft selection', `${existing.rows[0].id} already ${existing.rows[0].status}`); return existing.rows[0]; }
+  const result = await runtime.collaboration.createSelection(command('draft-selection'), buyerId, { cycleId: cycle.id, showroomId, retailDoorId });
+  const selection = result.selection ?? result;
+  note('draft selection', `${selection.id} created and left open`);
+  const catalogue = await pool.query(
+    `SELECT line ->> 'sku' AS sku,
+            COALESCE((line ->> 'minimumOrderQuantity')::integer, 1) AS moq,
+            COALESCE((line -> 'availability' ->> 'quantity')::integer, 0) AS available
+       FROM buyer_catalog_versions AS catalogue,
+            LATERAL jsonb_array_elements(catalogue.payload -> 'lines') AS line
+      WHERE catalogue.showroom_id = $1 AND catalogue.shop_id = $2
+      ORDER BY catalogue.published_at DESC, line ->> 'sku'`,
+    [showroomId, SHOP_ID],
+  );
+  // The first line is filled so the grid has a number in it; the rest stay empty so there is
+  // somewhere to type, paste and undo.
+  const first = catalogue.rows[0];
+  if (first) {
+    const quantity = Math.max(Number(first.moq), Math.min(96, Number(first.available) || 96));
+    await runtime.collaboration.upsertSelectionLine(command('draft-selection-line'), buyerId, selection.id, { sku: first.sku, quantity });
+    note('draft selection line', `${first.sku} \u00d7 ${quantity}`);
+  }
   return selection;
 }
 

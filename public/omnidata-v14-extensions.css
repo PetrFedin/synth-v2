@@ -754,3 +754,42 @@ body.omnidata-v14 dialog .dialog-actions .button { flex: 0 0 auto !important; wi
 .od-look-pick { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 6px; font-weight: 400; font-size: 12px; cursor: pointer; }
 .od-look-pick:hover { background: var(--od14-surface-subtle, #f8fafc); }
 .od-look-pick input { width: auto !important; }
+
+/* A status on its own is a statement, not a row of controls: no border, no
+   padding, no second rounded box around the pill. */
+body.omnidata-v14 .ls9-standing{display:flex!important;align-items:center!important;gap:6px!important;margin:0!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important}
+
+/* ------------------------------------------------------------------
+   The buyer's order grid (JOOR §64.2)
+   ------------------------------------------------------------------ */
+body.omnidata-v14 .ls9-grid{display:grid!important;gap:8px!important;min-width:0!important}
+body.omnidata-v14 .ls9-cell{display:grid!important;grid-auto-flow:row!important;grid-template-columns:minmax(0,1fr)!important;gap:3px!important;min-width:0!important;justify-items:stretch!important}
+body.omnidata-v14 .ls9-cell input{width:100%!important;min-width:56px!important;text-align:right!important;font-variant-numeric:tabular-nums!important}
+body.omnidata-v14 .ls9-cell-filled input{border-color:#9bb3cb!important;background:#f7fafd!important;font-weight:600!important}
+/* A refused cell says so where it happened, in the colour the rest of the product uses for a
+   refusal, and keeps the value so the reader can correct it rather than retype it. */
+body.omnidata-v14 .ls9-cell-error input{border-color:var(--od14-danger,#ad464b)!important;background:#fff6f6!important;color:var(--od14-danger,#ad464b)!important}
+body.omnidata-v14 .ls9-cell-note{color:var(--od14-danger,#ad464b)!important;font-size:9px!important;line-height:1.25!important}
+body.omnidata-v14 .ls9-cell-removed input{color:#8d949c!important;background:#f4f5f6!important}
+body.omnidata-v14 .ls9-cell-removed .ls9-cell-note{color:#8d949c!important}
+body.omnidata-v14 .ls9-cell-closed{color:#8d949c!important;font-size:9px!important}
+/* Totals are read down a column and along a row, so they line up on their digits. */
+body.omnidata-v14 .ls9-matrix .ls9-total-cell,body.omnidata-v14 .ls9-matrix .ls9-total-head{text-align:right!important;font-variant-numeric:tabular-nums!important;font-weight:600!important;white-space:nowrap!important}
+body.omnidata-v14 .ls9-matrix tfoot td,body.omnidata-v14 .ls9-matrix tfoot th{border-top:2px solid var(--od14-line-strong,#cfd4d9)!important;background:var(--od14-surface-subtle,#f6f7f8)!important;font-weight:600!important}
+body.omnidata-v14 .ls9-matrix .ls9-total-zero{color:#a6acb3!important;font-weight:400!important}
+body.omnidata-v14 .ls9-matrix .ls9-total-grand{color:var(--od14-text,#1f242b)!important;font-size:13px!important}
+body.omnidata-v14 .ls9-gridfoot{display:flex!important;grid-template-columns:none!important;align-items:center!important;flex-wrap:wrap!important;gap:6px 16px!important;padding:8px 10px!important;border:1px solid var(--od14-line,#e4e7ec)!important;border-radius:var(--od14-radius,5px)!important;background:var(--od14-surface,#fff)!important;font-size:11px!important}
+body.omnidata-v14 .ls9-gridfoot-figure{color:var(--od14-text-soft,#5e646d)!important;font-variant-numeric:tabular-nums!important}
+body.omnidata-v14 .ls9-gridfoot-amount{color:var(--od14-text,#1f242b)!important;font-weight:600!important;font-size:12px!important}
+body.omnidata-v14 .ls9-gridfoot-tail{display:flex!important;border:0!important;padding:0!important;background:transparent!important;box-shadow:none!important;align-items:center!important;flex-wrap:wrap!important;gap:10px!important;margin-left:auto!important}
+body.omnidata-v14 .ls9-gridfoot-hint{font-size:10px!important}
+body.omnidata-v14 .ls9-save-state{font-size:10.5px!important;color:var(--od14-muted,#8d949c)!important;white-space:nowrap!important}
+body.omnidata-v14 .ls9-save-state[data-state="saving"]{color:var(--od14-text-soft,#5e646d)!important}
+body.omnidata-v14 .ls9-save-state[data-state="dirty"]{color:var(--od14-warning,#9a6a1f)!important}
+body.omnidata-v14 .ls9-save-state[data-state="error"]{color:var(--od14-danger,#ad464b)!important;font-weight:600!important}
+/* The preview is a table of what would change, and it has to stay readable when a paste covers
+   a whole colour card, so the list scrolls inside the dialog rather than the dialog growing. */
+body.omnidata-v14 dialog.ls9-paste-preview{width:min(760px,94vw)!important;max-width:min(760px,94vw)!important}
+body.omnidata-v14 dialog.ls9-paste-preview .ls9-paste-rows{max-height:46vh!important;overflow:auto!important;border:1px solid var(--od14-line,#e4e7ec)!important;border-radius:var(--od14-radius,5px)!important}
+body.omnidata-v14 dialog.ls9-paste-preview table{min-width:0!important;width:100%!important}
+body.omnidata-v14 dialog.ls9-paste-preview .ls9-paste-refused td{background:#fff6f6!important;color:var(--od14-danger,#ad464b)!important}

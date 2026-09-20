@@ -3,6 +3,8 @@
 
   const Matrix = global.SynthaLinesheetMatrix;
   if (!Matrix) throw new Error('LINESHEET_MATRIX_CORE_REQUIRED: Buyer order matrix core must load before linesheets');
+  const Grid = global.SynthaOrderGrid;
+  if (!Grid) throw new Error('ORDER_GRID_CORE_REQUIRED: Order grid core must load before linesheets');
 
   const LS = global.SynthaLinesheets || (global.SynthaLinesheets = {});
   const defaults = {
@@ -12,6 +14,7 @@
     buyerAccessKey: '', cycleId: '', buyerCatalog: null, matrices: [], buyerLoadedKey: '', buyerLoading: false, buyerError: '', buyerRequestToken: 0,
     buyerDoorId: '', buyerDoors: [], buyerDoorShopId: '', buyerDoorLoading: false, buyerDoorError: '', buyerDoorRequestToken: 0,
     selectedStyleId: '', quantities: {}, quantityCatalogId: '', quantitySelectionId: '', dirty: false,
+    lastPaste: null, saveState: '', savedAt: '', autosave: true,
   };
   for (const [key, fallback] of Object.entries(defaults)) if (LS[key] === undefined) LS[key] = structuredClone(fallback);
 
@@ -612,9 +615,7 @@
       return actions;
     }
     if (!context.selection && context.cycle?.stage === 'showroom' && LS.buyerCatalog && !context.retailDoor) {
-      const badge = el('span', { className: 'badge', rawText: text('Выберите Retail Door', 'Select Retail Door') });
-      actions.append(badge);
-      return actions;
+      return statusLine(el('span', { className: 'badge', rawText: text('Выберите торговую точку', 'Select a retail door') }));
     }
     if (canEditMatrix(context)) {
       const save = el('button', { className: 'button primary', type: 'button', rawText: text('Сохранить матрицу', 'Save matrix') });
@@ -626,38 +627,164 @@
       actions.append(save, submit);
       return actions;
     }
-    const badge = el('span', { className: 'badge', rawText: context.selection ? selectionStatusText(context.selection.status) : text('Только просмотр', 'Read only') });
-    actions.append(badge);
-    return actions;
+    return statusLine(el('span', { className: 'badge', rawText: context.selection ? selectionStatusText(context.selection.status) : text('Только просмотр', 'Read only') }));
   }
 
+  // When there is nothing to press, the row is a statement, not a toolbar. Returning it as one
+  // drew a bordered, padded, rounded box around a single rounded pill — two nested containers
+  // for one word.
+  function statusLine(badge) {
+    const line = el('div', { className: 'ls9-standing' });
+    line.append(badge);
+    return line;
+  }
+
+  // The grid an order is actually written in (JOOR §64.2). It is the one surface in the product
+  // where a person types a hundred numbers in a row, so it earns: totals down every column and
+  // along every row, a paste from a spreadsheet that is shown before it is applied, an undo for
+  // that paste, cells that go red for the same reasons the server would refuse them, arrow keys
+  // that move between cells, and a save status that is always on screen.
   function orderMatrixTable(style, context) {
     const wrap = el('div', { 'data-od14-component': 'table-wrap' });
-    const table = el('table', { 'data-od14-component': 'table', ariaLabel: text('Матрица количества по цветам и размерам', 'Color and size quantity matrix') });
+    const table = el('table', { className: 'ls9-matrix', 'data-od14-component': 'table', ariaLabel: text('Матрица количества по цветам и размерам', 'Colour and size quantity matrix') });
     const thead = el('thead');
     const headRow = el('tr');
-    headRow.append(el('th', { rawText: text('Цвет', 'Color') }));
+    headRow.append(el('th', { rawText: text('Цвет', 'Colour') }));
     style.sizes.forEach(size => headRow.append(el('th', { rawText: localized(size.labelRu, size.labelEn) || size.code, title: `${size.code} · ${size.id}` })));
+    headRow.append(el('th', { className: 'ls9-total-head', rawText: text('Итого', 'Total') }));
     thead.append(headRow);
     const tbody = el('tbody');
     const editable = canEditMatrix(context) || canCreateSelection(context);
-    style.rows.forEach(row => {
+    style.rows.forEach((row, rowIndex) => {
       const tr = el('tr');
       const color = el('td');
       color.append(colorLabel(row));
       tr.append(color);
-      style.sizes.forEach(size => {
+      style.sizes.forEach((size, sizeIndex) => {
         const cell = row.cells[size.key];
         const td = el('td');
         if (!cell) td.append(el('span', { className: 'muted', rawText: '—' }));
-        else td.append(matrixCell(cell, editable));
+        else td.append(matrixCell(cell, editable, style, rowIndex, sizeIndex));
         tr.append(td);
       });
+      tr.append(el('td', { className: 'ls9-total-cell', 'data-row-total': String(rowIndex), rawText: '0' }));
       tbody.append(tr);
     });
-    table.append(thead, tbody);
+    const tfoot = el('tfoot');
+    const footRow = el('tr');
+    footRow.append(el('th', { rawText: text('Всего по размеру', 'Per size') }));
+    style.sizes.forEach((size, sizeIndex) => footRow.append(el('td', { className: 'ls9-total-cell', 'data-column-total': String(sizeIndex), rawText: '0' })));
+    footRow.append(el('td', { className: 'ls9-total-cell ls9-total-grand', 'data-grand-total': 'units', rawText: '0' }));
+    tfoot.append(footRow);
+    table.append(thead, tbody, tfoot);
     wrap.append(table);
-    return wrap;
+    const frame = el('div', { className: 'ls9-grid' });
+    frame.append(wrap, gridSummary(style, editable));
+    refreshTotals(style, frame);
+    return frame;
+  }
+
+  // Units, lines and money for the style, plus the save state and the undo. Everything a person
+  // needs to know they are done is on one line under the grid.
+  function gridSummary(style, editable) {
+    const summary = el('div', { className: 'ls9-gridfoot' });
+    summary.append(el('span', { className: 'ls9-gridfoot-figure', 'data-summary': 'units' }));
+    summary.append(el('span', { className: 'ls9-gridfoot-figure', 'data-summary': 'lines' }));
+    summary.append(el('span', { className: 'ls9-gridfoot-figure ls9-gridfoot-amount', 'data-summary': 'amount' }));
+    const tail = el('div', { className: 'ls9-gridfoot-tail' });
+    if (editable) {
+      tail.append(el('span', { className: 'muted ls9-gridfoot-hint', rawText: text('Вставьте блок из таблицы прямо в ячейку — сначала покажем, что изменится.', 'Paste a block from a spreadsheet straight into a cell — we show what would change first.') }));
+      const undo = el('button', { className: 'button small', type: 'button', rawText: text('Отменить вставку', 'Undo paste'), 'data-summary': 'undo' });
+      undo.hidden = !LS.lastPaste;
+      undo.addEventListener('click', () => undoLastPaste(style));
+      tail.append(undo);
+    }
+    tail.append(el('span', { className: 'ls9-save-state', 'data-summary': 'save' }));
+    summary.append(tail);
+    return summary;
+  }
+
+  function saveStateText() {
+    if (LS.saveState === 'saving') return text('Сохраняется…', 'Saving…');
+    if (LS.saveState === 'error') return text('Не сохранено', 'Not saved');
+    if (LS.dirty) return text('Есть несохранённые изменения', 'Unsaved changes');
+    if (LS.savedAt) return `${text('Сохранено', 'Saved')} ${LS.savedAt}`;
+    return '';
+  }
+
+  // Redrawn in place after every keystroke and every paste, because re-rendering the whole view
+  // would take the caret out of the cell the person is typing in.
+  function refreshTotals(style, root) {
+    const frame = root || document.querySelector('.ls9-grid');
+    if (!frame) return;
+    const totals = Grid.styleTotals(style, LS.quantities);
+    totals.rows.forEach((row, index) => {
+      const node = frame.querySelector(`[data-row-total="${index}"]`);
+      if (node) { node.textContent = String(row.units); node.classList.toggle('ls9-total-zero', row.units === 0); }
+    });
+    totals.columns.forEach((column, index) => {
+      const node = frame.querySelector(`[data-column-total="${index}"]`);
+      if (node) { node.textContent = String(column.units); node.classList.toggle('ls9-total-zero', column.units === 0); }
+    });
+    const grand = frame.querySelector('[data-grand-total="units"]');
+    if (grand) grand.textContent = String(totals.units);
+    const units = frame.querySelector('[data-summary="units"]');
+    if (units) units.textContent = `${text('Единиц', 'Units')}: ${totals.units}`;
+    const lines = frame.querySelector('[data-summary="lines"]');
+    if (lines) lines.textContent = `${text('Позиций', 'Lines')}: ${totals.lines}`;
+    const amount = frame.querySelector('[data-summary="amount"]');
+    if (amount) amount.textContent = `${text('Сумма', 'Value')}: ${formatMoney(totals.amountMinor, totals.currency || LS.buyerCatalog?.currency)}`;
+    const save = frame.querySelector('[data-summary="save"]');
+    if (save) {
+      save.textContent = saveStateText();
+      save.dataset.state = LS.saveState || (LS.dirty ? 'dirty' : 'clean');
+    }
+    const undo = frame.querySelector('[data-summary="undo"]');
+    if (undo) undo.hidden = !LS.lastPaste;
+  }
+
+  const CELL_MESSAGE = Object.freeze({
+    MOQ_NOT_MET: (cell) => text(`Минимум ${cell.minimumOrderQuantity}`, `Minimum ${cell.minimumOrderQuantity}`),
+    AVAILABILITY_EXCEEDED: (cell) => text(`Доступно ${cell.availableToSell}`, `Available ${cell.availableToSell}`),
+    QUANTITY_INVALID: () => text('Целое число', 'Whole number'),
+    REMOVED: () => text('Не заказываем', 'Not ordered'),
+    SKU_UNKNOWN: () => text('Нет такого SKU', 'Unknown SKU'),
+  });
+
+  const CLOSED_MESSAGE = Object.freeze({
+    SOLD_OUT: () => text('Распродано', 'Sold out'),
+    BELOW_MOQ_STOCK: (cell) => text(`Остаток меньше минимума ${cell.minimumOrderQuantity}`, `Stock below the minimum of ${cell.minimumOrderQuantity}`),
+    NO_SKU: () => text('Нет SKU', 'No SKU'),
+  });
+
+  // Mark one cell against its own price line, and say why in the cell rather than at save time.
+  function markCell(block, cell, raw) {
+    const verdict = Grid.evaluateCell(cell, raw);
+    const note = block.querySelector('[data-cell-note]');
+    block.classList.toggle('ls9-cell-error', verdict.level === 'error');
+    block.classList.toggle('ls9-cell-removed', verdict.code === 'REMOVED');
+    block.classList.toggle('ls9-cell-filled', verdict.kind === 'number');
+    if (note) {
+      const message = CELL_MESSAGE[verdict.code];
+      note.textContent = message ? message(cell) : '';
+      note.hidden = !message;
+    }
+    return verdict;
+  }
+
+  function quantityInputs(root) {
+    return [...(root || document).querySelectorAll('.ls9-grid input[data-sku]:not([disabled])')];
+  }
+
+  // Arrow keys, Enter and Tab move between cells. A grid you have to reach for the mouse in is
+  // not a grid anybody enters a season's buy into.
+  function moveFocus(input, rowDelta, columnDelta) {
+    const table = input.closest('table');
+    if (!table) return;
+    const row = Number(input.dataset.gridRow);
+    const column = Number(input.dataset.gridColumn);
+    const target = table.querySelector(`input[data-grid-row="${row + rowDelta}"][data-grid-column="${column + columnDelta}"]:not([disabled])`);
+    if (target) { target.focus(); target.select?.(); }
   }
 
   function colorLabel(row) {
@@ -671,29 +798,183 @@
     return block;
   }
 
-  function matrixCell(cell, editable) {
-    const block = el('div');
+  function matrixCell(cell, editable, style, rowIndex, sizeIndex) {
+    const block = el('div', { className: 'ls9-cell' });
     block.append(el('small', { rawText: cell.sku, title: `${cell.productSkuId} · ${cell.sizeValueId}` }));
     const input = el('input', {
-      type: 'number', min: String(cell.minimumOrderQuantity), step: '1', value: LS.quantities[cell.sku] ?? '',
+      // A quantity is a whole number of garments, so the cell accepts text and judges it here.
+      // A number input silently swallows what a spreadsheet pastes — "1 200", "12,00" — and
+      // reports an empty string for it, which is how a pasted column used to vanish.
+      type: 'text', inputmode: 'numeric', autocomplete: 'off', value: LS.quantities[cell.sku] ?? '',
       ariaLabel: `${cell.sku} · ${text('Количество', 'Quantity')}`,
       placeholder: String(cell.minimumOrderQuantity),
       'data-sku': cell.sku,
+      'data-grid-row': String(rowIndex),
+      'data-grid-column': String(sizeIndex),
       'data-od14-component': 'field',
     });
-    if (cell.availableToSell !== null) input.max = String(cell.availableToSell);
-    if (!editable || cell.availableToSell === 0 || (cell.availableToSell !== null && cell.availableToSell < cell.minimumOrderQuantity)) input.disabled = true;
+    const closed = Grid.cellClosedReason(cell);
+    if (!editable || closed) input.disabled = true;
     input.addEventListener('input', () => {
       LS.quantities[cell.sku] = input.value;
       LS.dirty = true;
+      LS.saveState = '';
+      markCell(block, cell, input.value);
+      refreshTotals(style);
+      scheduleAutosave();
+    });
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'ArrowDown' || event.key === 'Enter') { event.preventDefault(); moveFocus(input, 1, 0); }
+      else if (event.key === 'ArrowUp') { event.preventDefault(); moveFocus(input, -1, 0); }
+      else if (event.key === 'ArrowRight' && input.selectionStart === input.value.length) { event.preventDefault(); moveFocus(input, 0, 1); }
+      else if (event.key === 'ArrowLeft' && input.selectionStart === 0) { event.preventDefault(); moveFocus(input, 0, -1); }
+    });
+    input.addEventListener('paste', (event) => {
+      const clipboard = event.clipboardData?.getData('text/plain') ?? '';
+      if (!/[\t\n\r]/.test(clipboard)) return;
+      event.preventDefault();
+      const grid = Grid.parseClipboardGrid(clipboard);
+      if (!grid.length) return;
+      void openPastePreview(style, cell.sku, grid);
     });
     block.append(input);
+    block.append(el('small', { className: 'ls9-cell-note', 'data-cell-note': 'true', hidden: true }));
+    if (closed) {
+      const reason = CLOSED_MESSAGE[closed];
+      block.append(el('small', { className: 'ls9-cell-closed', rawText: reason ? reason(cell) : '' }));
+    }
     // "MOQ 12 · ATS: 600" is trade shorthand a brand's own planner reads fluently and a shop
     // assistant does not. The showroom's look cards already say «мин. 6» in words; the cell the
     // order is actually written in says the same.
     const availability = cell.availableToSell === null ? text('доступность по условиям', 'availability per terms') : `${text('доступно', 'available')} ${cell.availableToSell}`;
     block.append(el('small', { rawText: `${formatMoney(cell.unitPrice, cell.currency)} · ${text('мин.', 'min.')} ${cell.minimumOrderQuantity} · ${availability}` }));
+    markCell(block, cell, LS.quantities[cell.sku] ?? '');
     return block;
+  }
+
+  // A paste is shown before it is applied.
+  //
+  // A spreadsheet pasted one column out of line silently rewrites a season's buy, and the person
+  // who did it finds out at the brand's confirmation. So: what lands where, what each cell was
+  // and becomes, which cells the brand's own rules would refuse, and how much of the block fell
+  // off the edge of the style. Nothing is written until the reader says so.
+  function openPastePreview(style, anchorSku, grid) {
+    const plan = Grid.planPaste({ style, anchorSku, grid, quantities: LS.quantities });
+    if (!plan.anchor) return;
+    if (!plan.changes.length) {
+      toast(plan.unchanged
+        ? text('Вставка ничего не меняет: значения совпадают.', 'The paste changes nothing: the values already match.')
+        : text('В буфере нет значений для этой матрицы.', 'The clipboard holds nothing this matrix can take.'), 'info');
+      return;
+    }
+    const modal = el('dialog', { className: 'app-confirm ls9-paste-preview' });
+    const form = el('form', { method: 'dialog' });
+    const heading = el('header');
+    heading.append(el('h2', { rawText: text('Проверьте вставку', 'Review the paste') }));
+    const ok = plan.changes.length - plan.errors;
+    const counts = [
+      text(`Изменится ячеек: ${ok}`, `Cells to change: ${ok}`),
+      plan.errors ? text(`Отклонено правилами: ${plan.errors}`, `Refused by the rules: ${plan.errors}`) : '',
+      plan.unchanged ? text(`Без изменений: ${plan.unchanged}`, `Unchanged: ${plan.unchanged}`) : '',
+      plan.outside ? text(`Не поместилось в матрицу: ${plan.outside}`, `Fell outside the matrix: ${plan.outside}`) : '',
+    ].filter(Boolean).join(' · ');
+    heading.append(el('p', { className: 'muted', rawText: counts }));
+
+    const wrap = el('div', { className: 'ls9-paste-rows' });
+    const table = el('table', { 'data-od14-component': 'table' });
+    const thead = el('thead');
+    const headRow = el('tr');
+    [text('Цвет', 'Colour'), text('Размер', 'Size'), 'SKU', text('Было', 'Was'), text('Станет', 'Becomes'), text('Примечание', 'Note')]
+      .forEach(label => headRow.append(el('th', { rawText: label })));
+    thead.append(headRow);
+    const tbody = el('tbody');
+    plan.changes.forEach(change => {
+      const tr = el('tr', { className: change.level === 'error' ? 'ls9-paste-refused' : '' });
+      tr.append(el('td', { rawText: change.rowLabel || '—' }));
+      tr.append(el('td', { rawText: change.sizeLabel || '—' }));
+      tr.append(el('td', { rawText: change.sku }));
+      tr.append(el('td', { rawText: change.before === '' ? '—' : change.before }));
+      tr.append(el('td', { rawText: change.kind === 'remove' ? text('убрать', 'remove') : (change.after === '' ? '—' : change.after) }));
+      const note = change.level === 'error'
+        ? (CELL_MESSAGE[change.code] ? CELL_MESSAGE[change.code]({ minimumOrderQuantity: change.minimumOrderQuantity, availableToSell: change.availableToSell }) : change.code)
+        : '';
+      tr.append(el('td', { className: 'muted', rawText: note }));
+      tbody.append(tr);
+    });
+    table.append(thead, tbody);
+    wrap.append(table);
+
+    const footer = el('footer');
+    const cancel = el('button', { className: 'button secondary', type: 'button', rawText: text('Отмена', 'Cancel') });
+    const accept = el('button', { className: 'button primary', type: 'submit', rawText: ok
+      ? text(`Вставить ${ok}`, `Paste ${ok}`)
+      : text('Нечего вставлять', 'Nothing to paste') });
+    accept.disabled = ok === 0;
+    cancel.addEventListener('click', () => modal.close());
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const applied = Grid.applyPlan(LS.quantities, plan);
+      LS.quantities = applied.next;
+      LS.lastPaste = { previous: applied.previous, applied: applied.applied };
+      LS.dirty = true;
+      LS.saveState = '';
+      modal.close();
+      renderApp();
+      toast(text(`Вставлено ячеек: ${applied.applied}. Можно отменить одной кнопкой.`, `${applied.applied} cell(s) pasted. One button undoes it.`), 'success');
+      scheduleAutosave();
+    });
+    modal.addEventListener('close', () => modal.remove(), { once: true });
+    footer.append(cancel, accept);
+    form.append(heading, wrap, footer);
+    modal.append(form);
+    document.body.append(modal);
+    modal.showModal();
+    accept.focus();
+    return modal;
+  }
+
+  // Undo restores the map the paste replaced, rather than trying to reverse each cell.
+  function undoLastPaste() {
+    if (!LS.lastPaste) return;
+    LS.quantities = { ...LS.lastPaste.previous };
+    LS.lastPaste = null;
+    LS.dirty = true;
+    LS.saveState = '';
+    renderApp();
+    toast(text('Вставка отменена.', 'The paste has been undone.'), 'info');
+    scheduleAutosave();
+  }
+
+  // Autosave, with the state always on screen. It only ever runs on a draft selection the reader
+  // may edit, it waits for them to stop typing, and it never runs while another save is in
+  // flight; a failure leaves the work in the grid and says so rather than discarding it.
+  let autosaveTimer = null;
+  function scheduleAutosave() {
+    if (!LS.autosave) { refreshTotals(currentStyle()); return; }
+    if (autosaveTimer) clearTimeout(autosaveTimer);
+    autosaveTimer = setTimeout(() => { autosaveTimer = null; void runAutosave(); }, 2000);
+    refreshTotals(currentStyle());
+  }
+
+  function currentStyle() {
+    return list(LS.matrices).find(item => item.styleId === LS.selectedStyleId) || list(LS.matrices)[0] || null;
+  }
+
+  async function runAutosave() {
+    const context = currentContext?.();
+    if (!context || !LS.dirty || LS.saveState === 'saving') return;
+    if (!canEditMatrix(context)) return;
+    // A cell the rules refuse is not sent. The reader keeps it on screen, in red, and the rest
+    // of their work is still saved.
+    LS.saveState = 'saving';
+    refreshTotals(currentStyle());
+    try {
+      await saveBuyerMatrix(context, { silent: true });
+    } catch (error) {
+      LS.saveState = 'error';
+      refreshTotals(currentStyle());
+      toast(error?.message || text('Автосохранение не прошло. Нажмите «Сохранить матрицу».', 'Autosave did not go through. Use “Save matrix”.'), 'error');
+    }
   }
 
   async function createBuyerSelection(context) {
@@ -724,19 +1005,43 @@
     toast(text('Подборка создана. Retail Door зафиксирован; теперь сохраните количества матрицы.', 'Selection created with the Retail Door pinned. Save the matrix quantities next.'), 'success');
   }
 
-  async function saveBuyerMatrix(context) {
+  async function saveBuyerMatrix(context, { silent = false } = {}) {
     const selection = context.selection;
     if (!selection || !LS.buyerCatalog) throw uiError('BUYER_MATRIX_SELECTION_REQUIRED', text('Сначала создайте подборку.', 'Create a selection first.'));
-    const request = Matrix.selectionMatrixRequest(selection.id, LS.matrices, LS.quantities);
+    // A cell the rules refuse never reaches the server: the grid already says why, in red, in
+    // the cell. Sending it would trade a precise complaint for a single error at the top of the
+    // page and lose the rest of the buy with it.
+    const cells = new Map();
+    list(LS.matrices).forEach(style => list(style.rows).forEach(row => Object.values(row.cells || {}).forEach(cell => { if (cell?.sku) cells.set(cell.sku, cell); })));
+    const sendable = {};
+    let refused = 0;
+    Object.entries(LS.quantities).forEach(([sku, raw]) => {
+      const verdict = Grid.evaluateCell(cells.get(sku), raw);
+      if (verdict.level === 'error') { refused += 1; return; }
+      if (verdict.kind === 'number') sendable[sku] = String(verdict.quantity);
+    });
+    const request = Matrix.selectionMatrixRequest(selection.id, LS.matrices, sendable);
     const updated = await mutate(request.path, request.body, request.method);
     if (updated?.buyerCatalogVersionId !== LS.buyerCatalog.id || updated?.commercialBasisHash !== LS.buyerCatalog.contentHash) throw uiError('BUYER_MATRIX_CATALOG_CHANGED', text('Сервер вернул подборку с другим коммерческим снимком.', 'Server returned a selection bound to a different commercial snapshot.'));
-    LS.quantities = Object.fromEntries(list(updated.lines).map(line => [line.sku, String(line.quantity)]));
+    // What the grid shows after a save is what the server stored, plus the cells it refused,
+    // which stay on screen in red so the reader can fix them rather than lose them.
+    const stored = Object.fromEntries(list(updated.lines).map(line => [line.sku, String(line.quantity)]));
+    Object.entries(LS.quantities).forEach(([sku, raw]) => {
+      const verdict = Grid.evaluateCell(cells.get(sku), raw);
+      if (verdict.level === 'error') stored[sku] = String(raw);
+    });
+    LS.quantities = stored;
     LS.quantityCatalogId = updated.buyerCatalogVersionId;
     LS.quantitySelectionId = updated.id;
-    LS.dirty = false;
+    LS.dirty = refused > 0;
+    LS.saveState = refused > 0 ? 'error' : '';
+    LS.savedAt = new Intl.DateTimeFormat(I18N.localeTag(), { hour: '2-digit', minute: '2-digit' }).format(new Date());
     await reload();
     renderApp();
-    toast(text('Матрица сохранена атомарно.', 'Matrix saved atomically.'), 'success');
+    if (silent) return;
+    toast(refused
+      ? text(`Сохранено. Не принято ячеек: ${refused} — они остались в сетке красными.`, `Saved. ${refused} cell(s) were not accepted and remain in the grid in red.`)
+      : text('Матрица сохранена атомарно.', 'Matrix saved atomically.'), refused ? 'info' : 'success');
   }
 
   async function submitBuyerSelection(context) {

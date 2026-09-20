@@ -115,6 +115,7 @@ const ASSETS = Object.freeze({
   '/ui/omnidata-v14-components.js': ['modules/omnidata-v14-components.js', JS, VISUAL_CACHE],
   '/ui/omnidata-v14-role-system.js': ['modules/omnidata-v14-role-system.js', JS, VISUAL_CACHE],
   '/ui/linesheet-matrix-core.js': ['modules/linesheet-matrix-core.js', JS, VISUAL_CACHE],
+  '/ui/order-grid-core.js': ['modules/order-grid-core.js', JS, VISUAL_CACHE],
   '/ui/linesheets.js': ['modules/linesheets.js', JS, VISUAL_CACHE],
   '/ui/buyer-order-handoff.js': ['modules/buyer-order-handoff.js', JS, VISUAL_CACHE],
   '/ui/planning.js': ['modules/planning.js', JS, VISUAL_CACHE],

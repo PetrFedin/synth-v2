@@ -43,7 +43,19 @@ test('Linesheets keeps immutable publication truth and pins the buyer matrix to 
     '/v2/buyer-catalog-versions/${encodeURIComponent(pinned)}',
     '/v2/showrooms/${encodeURIComponent(context.access.showroomId)}/buyer-catalog?shopId=${encodeURIComponent(context.access.shopId)}',
     'Matrix.buildStyleMatrices(catalog)',
-    'Matrix.selectionMatrixRequest(selection.id, LS.matrices, LS.quantities)',
+    // The save is still built from the rendered immutable matrices and from the reader's own
+    // quantities — never from anything improvised. What changed with the JOOR §64.2 grid is that
+    // a cell the rules already refuse is held back rather than failing the whole buy: the grid
+    // has said why, in that cell, in red, and the rest of the season still saves.
+    'Matrix.selectionMatrixRequest(selection.id, LS.matrices, sendable)',
+    'Object.entries(LS.quantities).forEach',
+    "Grid.evaluateCell(cells.get(sku), raw)",
+    'Grid.planPaste',
+    'Grid.applyPlan',
+    'Grid.styleTotals',
+    'openPastePreview',
+    'undoLastPaste',
+    'scheduleAutosave',
     'loadPublications',
     'filteredPublications',
     'publicationTable',

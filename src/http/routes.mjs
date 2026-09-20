@@ -41,7 +41,7 @@ const BOM_UPDATE_BODY = bodyContract(['expectedVersion', ...BOM_EDITABLE_FIELDS]
 const BOM_PUBLISH_BODY = bodyContract(['expectedVersion']);
 const MEASUREMENT_EDITABLE_FIELDS = ['unit', 'baseSizeCode', 'sizes', 'points', 'notes'];
 const MEASUREMENT_SIZE_FIELDS = ['code', 'label'];
-const MEASUREMENT_POINT_FIELDS = ['pointCode', 'name', 'description', 'toleranceMinus', 'tolerancePlus', 'measurements'];
+const MEASUREMENT_POINT_FIELDS = ['pointCode', 'name', 'description', 'toleranceMinus', 'tolerancePlus', 'measurements', 'gradeSteps'];
 const MEASUREMENT_VALUE_FIELDS = ['sizeCode', 'value'];
 const MEASUREMENT_BODY = measurementBody(bodyContract(['sku', ...MEASUREMENT_EDITABLE_FIELDS], {}, { sizes: MEASUREMENT_SIZE_FIELDS, points: MEASUREMENT_POINT_FIELDS }), MEASUREMENT_VALUE_FIELDS);
 const MEASUREMENT_UPDATE_BODY = measurementBody(bodyContract(['expectedVersion', ...MEASUREMENT_EDITABLE_FIELDS], {}, { sizes: MEASUREMENT_SIZE_FIELDS, points: MEASUREMENT_POINT_FIELDS }), MEASUREMENT_VALUE_FIELDS);
@@ -49,7 +49,7 @@ const MEASUREMENT_PUBLISH_BODY = bodyContract(['expectedVersion']);
 const CANONICAL_MEASUREMENT_IDENTITY_FIELDS = ['styleVersionId', 'colorwayId', 'sizeScaleVersionId'];
 const CANONICAL_MEASUREMENT_EDITABLE_FIELDS = ['measurementUnitEntryId', 'baseSizeValueId', 'sizes', 'points', 'notes'];
 const CANONICAL_MEASUREMENT_SIZE_FIELDS = ['sizeValueId'];
-const CANONICAL_MEASUREMENT_POINT_FIELDS = ['pointEntryId', 'description', 'toleranceMinus', 'tolerancePlus', 'measurements'];
+const CANONICAL_MEASUREMENT_POINT_FIELDS = ['pointEntryId', 'description', 'toleranceMinus', 'tolerancePlus', 'measurements', 'gradeSteps'];
 const CANONICAL_MEASUREMENT_VALUE_FIELDS = ['sizeValueId', 'value'];
 const CANONICAL_MEASUREMENT_BODY = measurementBody(
   bodyContract([...CANONICAL_MEASUREMENT_IDENTITY_FIELDS, ...CANONICAL_MEASUREMENT_EDITABLE_FIELDS], {}, { sizes: CANONICAL_MEASUREMENT_SIZE_FIELDS, points: CANONICAL_MEASUREMENT_POINT_FIELDS }),

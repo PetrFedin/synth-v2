@@ -27,7 +27,14 @@ test('creates an immutable ordered size matrix and derives exact adjacent gradin
   assert.equal(chart.version, 1);
   assert.equal(chart.skuVersion, 7);
   assert.deepEqual(chart.sizes.map(({ code, position }) => ({ code, position })), [{ code: 'S', position: 1 }, { code: 'M', position: 2 }, { code: 'L', position: 3 }]);
-  assert.deepEqual(chart.points[0].measurements, [{ sizeCode: 'S', value: 48.25, deltaFromPrevious: null }, { sizeCode: 'M', value: 51.25, deltaFromPrevious: 3 }, { sizeCode: 'L', value: 54.25, deltaFromPrevious: 3 }]);
+  // Every value now says where it came from. With no grade rule on the point nothing can depart
+  // from a rule, so each is plainly 'derived'; an 'override' appears only where a person typed a
+  // number that differs from what the rule produced.
+  assert.deepEqual(chart.points[0].measurements, [
+    { sizeCode: 'S', value: 48.25, deltaFromPrevious: null, source: 'derived' },
+    { sizeCode: 'M', value: 51.25, deltaFromPrevious: 3, source: 'derived' },
+    { sizeCode: 'L', value: 54.25, deltaFromPrevious: 3, source: 'derived' },
+  ]);
   assert.equal(chart.points[0].baseValue, 51.25);
   assert.ok(Object.isFrozen(chart));
   assert.ok(Object.isFrozen(chart.points[0].measurements));
@@ -35,7 +42,7 @@ test('creates an immutable ordered size matrix and derives exact adjacent gradin
 
 test('allows incomplete drafts but blocks publication until every POM has every size', () => {
   const draft = create({ ...completeInput, points: [{ ...completeInput.points[0], measurements: [{ sizeCode: 'M', value: 51.25 }] }] });
-  assert.deepEqual(draft.points[0].measurements, [{ sizeCode: 'M', value: 51.25, deltaFromPrevious: null }]);
+  assert.deepEqual(draft.points[0].measurements, [{ sizeCode: 'M', value: 51.25, deltaFromPrevious: null, source: 'derived' }]);
   assert.throws(() => publishMeasurementChart(draft, { catalogSku: sku, publishedAt: '2026-08-04T09:00:00.000Z' }), { code: 'MEASUREMENT_MATRIX_INCOMPLETE' });
 });
 

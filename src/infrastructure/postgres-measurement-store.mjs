@@ -306,25 +306,25 @@ async function insertMatrix(client, chart) {
        FROM jsonb_to_recordset($2::jsonb) AS size(size_code text, label text, position integer)`,
     [chart.id, JSON.stringify(sizes)],
   );
-  const points = chart.points.map((point) => ({ point_code: point.pointCode, position: point.position, name: point.name, description: point.description, tolerance_minus: point.toleranceMinus, tolerance_plus: point.tolerancePlus, base_value: point.baseValue, payload: point }));
+  const points = chart.points.map((point) => ({ point_code: point.pointCode, position: point.position, name: point.name, description: point.description, tolerance_minus: point.toleranceMinus, tolerance_plus: point.tolerancePlus, base_value: point.baseValue, grade_steps: point.gradeSteps ? JSON.stringify(point.gradeSteps) : null, payload: point }));
   await client.query(
     `INSERT INTO measurement_points
-       (chart_id, point_code, position, name, description, tolerance_minus, tolerance_plus, base_value, payload)
+       (chart_id, point_code, position, name, description, tolerance_minus, tolerance_plus, base_value, grade_steps, payload)
      SELECT $1, point.point_code, point.position, point.name, point.description,
-            point.tolerance_minus, point.tolerance_plus, point.base_value, point.payload
+            point.tolerance_minus, point.tolerance_plus, point.base_value, point.grade_steps::jsonb, point.payload
        FROM jsonb_to_recordset($2::jsonb) AS point(
          point_code text, position integer, name text, description text,
          tolerance_minus numeric(20, 4), tolerance_plus numeric(20, 4),
-         base_value numeric(20, 4), payload jsonb
+         base_value numeric(20, 4), grade_steps text, payload jsonb
        )`,
     [chart.id, JSON.stringify(points)],
   );
-  const values = chart.points.flatMap((point) => point.measurements.map((measurement) => ({ point_code: point.pointCode, size_code: measurement.sizeCode, value: measurement.value, delta_from_previous: measurement.deltaFromPrevious })));
+  const values = chart.points.flatMap((point) => point.measurements.map((measurement) => ({ point_code: point.pointCode, size_code: measurement.sizeCode, value: measurement.value, delta_from_previous: measurement.deltaFromPrevious, source: measurement.source || 'derived' })));
   await client.query(
-    `INSERT INTO measurement_values (chart_id, point_code, size_code, value, delta_from_previous)
-     SELECT $1, measurement.point_code, measurement.size_code, measurement.value, measurement.delta_from_previous
+    `INSERT INTO measurement_values (chart_id, point_code, size_code, value, delta_from_previous, source)
+     SELECT $1, measurement.point_code, measurement.size_code, measurement.value, measurement.delta_from_previous, measurement.source
        FROM jsonb_to_recordset($2::jsonb) AS measurement(
-         point_code text, size_code text, value numeric(20, 4), delta_from_previous numeric(20, 4)
+         point_code text, size_code text, value numeric(20, 4), delta_from_previous numeric(20, 4), source text
        )`,
     [chart.id, JSON.stringify(values)],
   );
@@ -360,20 +360,21 @@ async function insertCanonicalMatrix(client, chart) {
     tolerance_minus: point.toleranceMinus,
     tolerance_plus: point.tolerancePlus,
     base_value: point.baseValue,
+    grade_steps: point.gradeSteps ? JSON.stringify(point.gradeSteps) : null,
     payload: point,
   }));
   await client.query(
     `INSERT INTO measurement_points
        (chart_id, point_code, point_entry_id, point_entry_version, position, name, name_ru, name_en, description,
-        tolerance_minus, tolerance_plus, base_value, payload)
+        tolerance_minus, tolerance_plus, base_value, grade_steps, payload)
      SELECT $1, point.point_code, point.point_entry_id, point.point_entry_version, point.position,
             point.name, point.name_ru, point.name_en, point.description,
-            point.tolerance_minus, point.tolerance_plus, point.base_value, point.payload
+            point.tolerance_minus, point.tolerance_plus, point.base_value, point.grade_steps::jsonb, point.payload
        FROM jsonb_to_recordset($2::jsonb) AS point(
          point_code text, point_entry_id text, point_entry_version integer, position integer,
          name text, name_ru text, name_en text, description text,
          tolerance_minus numeric(20, 4), tolerance_plus numeric(20, 4),
-         base_value numeric(20, 4), payload jsonb
+         base_value numeric(20, 4), grade_steps text, payload jsonb
        )`,
     [chart.id, JSON.stringify(points)],
   );
@@ -384,12 +385,13 @@ async function insertCanonicalMatrix(client, chart) {
     size_value_id: measurement.sizeValueId,
     value: measurement.value,
     delta_from_previous: measurement.deltaFromPrevious,
+    source: measurement.source || 'derived',
   })));
   await client.query(
-    `INSERT INTO measurement_values (chart_id, point_code, size_code, size_value_id, value, delta_from_previous)
-     SELECT $1, measurement.point_code, measurement.size_code, measurement.size_value_id, measurement.value, measurement.delta_from_previous
+    `INSERT INTO measurement_values (chart_id, point_code, size_code, size_value_id, value, delta_from_previous, source)
+     SELECT $1, measurement.point_code, measurement.size_code, measurement.size_value_id, measurement.value, measurement.delta_from_previous, measurement.source
        FROM jsonb_to_recordset($2::jsonb) AS measurement(
-         point_code text, size_code text, size_value_id text, value numeric(20, 4), delta_from_previous numeric(20, 4)
+         point_code text, size_code text, size_value_id text, value numeric(20, 4), delta_from_previous numeric(20, 4), source text
        )`,
     [chart.id, JSON.stringify(values)],
   );

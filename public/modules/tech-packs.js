@@ -181,22 +181,53 @@
   // What the measurement section shows, and what it says when it shows nothing. An empty table under
   // a heading reads as "this garment has no measurements"; the three reasons it can be empty are
   // different enough that a factory has to be told which one it is.
+  // «Межразмерная разница» as the chart states it: one step per interval. A rule that is the same
+  // everywhere is written once; one that changes across the range is written out, because that is
+  // exactly the thing a reader would otherwise have to work out from the row.
+  function gradeRule(point) {
+    const steps = Array.isArray(point.gradeSteps) ? point.gradeSteps : null;
+    if (!steps || !steps.length) return text('вручную', 'by hand');
+    const unique = [...new Set(steps.map((step) => Number(step)))];
+    if (unique.length === 1) return `${unique[0] >= 0 ? '+' : ''}${unique[0]}`;
+    return steps.map((step) => `${Number(step) >= 0 ? '+' : ''}${Number(step)}`).join(' / ');
+  }
+  function measurementCell(point, size) {
+    const value = point.values?.[size.sizeCode];
+    if (value === undefined || value === null) return '\u2014';
+    const overrides = Array.isArray(point.overrides) ? point.overrides : [];
+    return overrides.includes(size.sizeCode) ? `${value} *` : String(value);
+  }
+  function hasOverrides(points) {
+    return points.some((point) => Array.isArray(point.overrides) && point.overrides.length > 0);
+  }
+
   function measurementBlock(doc) {
     const points = doc.measurementPoints || [];
     if (points.length) {
+      // The grade rule travels with the numbers, because a factory grading a pattern works from the
+      // rule; and a cell typed over the rule is marked, because an exception nobody can see is a
+      // rule nobody can trust.
       const table = documentTable(
-        [text('Точка', 'Point'), text('Наименование', 'Name'), '\u2212', '+', ...(doc.measurementSizes || []).map((size) => size.label)],
+        [text('Точка', 'Point'), text('Наименование', 'Name'), '\u2212', '+', text('Градация', 'Grade'),
+          ...(doc.measurementSizes || []).map((size) => size.label)],
         points.map((point) => [point.pointCode, point.name, point.toleranceMinus, point.tolerancePlus,
-          ...(doc.measurementSizes || []).map((size) => point.values?.[size.sizeCode] ?? '\u2014')]),
+          gradeRule(point),
+          ...(doc.measurementSizes || []).map((size) => measurementCell(point, size))]),
       );
-      if (doc.measurementSource !== 'archived') return table;
+      const legend = hasOverrides(points)
+        ? h('p', { className: 'tp-doc-note', text: text(
+          '* — значение задано вручную и отличается от межразмерной разницы для этой точки.',
+          '* — this value was set by hand and departs from the grade rule for its point.',
+        ) })
+        : null;
+      if (doc.measurementSource !== 'archived') return legend ? h('div', {}, [table, legend]) : table;
       // The chart has moved on since the pack was acknowledged. The document deliberately keeps the
       // version the factory agreed to, and says so rather than letting a reader assume it is current.
       const note = h('p', { className: 'tp-doc-note', text: text(
         `Показана редакция ${doc.measurementChartVersion} — та, против которой пакет подтверждён. Таблица мер с тех пор изменилась.`,
         `Showing revision ${doc.measurementChartVersion} — the one this pack was acknowledged against. The chart has changed since.`,
       ) });
-      return h('div', {}, [note, table]);
+      return h('div', {}, legend ? [note, table, legend] : [note, table]);
     }
     if (!doc.measurementChartId) {
       return h('p', { className: 'tp-doc-note', text: text(

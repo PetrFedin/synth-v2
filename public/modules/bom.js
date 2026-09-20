@@ -185,6 +185,55 @@
   }
   function pair(label, value) { return h('div', {}, [h('dt', { text: label }), h('dd', { text: value })]); }
 
+  // A bill read the way a factory reads it: by kind, with the count of each, the principal material
+  // of its kind called out, and every line saying where on the garment it goes.
+  //
+  // A flat list of eleven lines is a list of eleven lines. Omnidata groups them — Fabric : 3,
+  // Trims : 1, Labels : 1, Packaging : 2 — and the count is the thing a person checks first,
+  // because "three fabrics" is either right or obviously wrong at a glance.
+  const MATERIAL_GROUPS = [
+    ['fabric', ['Ткани', 'Fabric']],
+    ['trim', ['Фурнитура', 'Trims']],
+    ['packaging', ['Упаковка', 'Packaging']],
+    ['other', ['Прочее', 'Other']],
+  ];
+  function materialGroupLabel(type) {
+    const found = MATERIAL_GROUPS.find(([key]) => key === type);
+    return found ? text(found[1][0], found[1][1]) : type;
+  }
+  function lineGroups(item) {
+    const lines = Array.isArray(item.bom.lines) ? item.bom.lines : [];
+    const known = MATERIAL_GROUPS.map(([key]) => key);
+    const order = [...known, ...[...new Set(lines.map((line) => line.materialType))].filter((type) => !known.includes(type))];
+    const root = h('div', { className: 'bom-line-list' });
+    order.forEach((type) => {
+      const group = lines.filter((line) => line.materialType === type);
+      if (!group.length) return;
+      root.append(h('div', { className: 'bom-line-group' }, [
+        h('span', { className: 'bom-line-group-name', text: materialGroupLabel(type) }),
+        h('span', { className: 'bom-line-group-count', text: String(group.length) }),
+      ]));
+      group.forEach((line) => root.append(lineView(line, item.bom.currency)));
+    });
+    if (!lines.length) root.append(h('p', { className: 'muted', text: text('В спецификации нет строк.', 'This bill has no lines.') }));
+    return root;
+  }
+  function lineView(line, currency) {
+    const head = h('div', { className: 'bom-line-head' }, [h('strong', { text: line.component })]);
+    // The principal material of its kind, which is what a care label, a customs declaration and a
+    // composition statement each name. At most one per kind, and the database holds that rule.
+    if (line.isMain) head.append(h('span', { className: 'bom-line-main', text: text('основной', 'main') }));
+    const view = h('div', { className: 'bom-line-view' }, [
+      head,
+      h('span', { text: `${line.materialCode} · ${line.grossQuantity} ${line.unit}` }),
+      h('span', { text: moneyValue(line.lineCost, currency, { rate: true }) }),
+    ]);
+    // Where it goes on the garment. Without it a bill is a shopping list: it says a shell and a
+    // lining are needed and leaves the factory to guess which goes where.
+    if (line.placement) view.append(h('small', { className: 'bom-line-placement', text: line.placement }));
+    return view;
+  }
+
   function inspector(registry) {
     const item = registry.items.find((candidate) => candidate.bom.sku === ui.selectedSku) || registry.items[0];
     if (!item) return h('aside', { className: 'bom-inspector' }, [h('p', { className: 'muted', text: text('Выберите BOM для просмотра деталей.', 'Select a BOM to inspect.') })]);
@@ -197,7 +246,7 @@
       h('div', { className: 'bom-inspector-head' }, [h('div', {}, [h('p', { className: 'eyebrow', text: item.bom.sku }), h('h2', { text: item.sku?.name || item.bom.sku })]), h('div', { className: 'bom-inspector-actions' }, actions)]),
       h('div', { className: 'bom-summary' }, [pair(text('Версия', 'Version'), item.bom.version), pair(text('Валюта', 'Currency'), item.bom.currency), pair(text('Строки', 'Lines'), item.bom.lines.length), pair(text('Полная себестоимость', 'Total cost'), moneyValue(item.bom.totalCost, item.bom.currency))]),
       h('h3', { text: text('Материалы и компоненты', 'Materials and components') }),
-      h('div', { className: 'bom-line-list' }, item.bom.lines.map((line) => h('div', { className: 'bom-line-view' }, [h('strong', { text: line.component }), h('span', { text: `${line.materialCode} · ${line.grossQuantity} ${line.unit}` }), h('span', { text: moneyValue(line.lineCost, item.bom.currency, { rate: true }) })]))),
+      lineGroups(item),
       h('h3', { text: text('Контрольные исключения', 'Control exceptions') }),
       h('div', { className: 'bom-risk-list' }, item.risks.length ? item.risks.map((entry) => h('div', { className: `bom-risk bom-${entry.severity}` }, [badge(entry.severity, entry.severity), h('span', { text: riskLabel(entry.code) })])) : [h('p', { className: 'muted', text: text('Критических исключений нет.', 'No critical exceptions.') })]),
     ]);
@@ -304,6 +353,26 @@
     const problem = h('p', { className: 'bom-modal-error', hidden: true });
     const dialog = h('form', { className: 'bom-modal', role: 'dialog', 'aria-modal': 'true' });
     const linesRoot = h('div', { className: 'bom-editor-lines' });
+    // Naming the principal material is a choice between the lines of one kind, so the control
+    // clears the others of that kind rather than letting a person set two and be refused on save.
+    // The rule is the database's; this only keeps the form from being able to break it.
+    function materialTypeOf(line) {
+      const found = materials.find((item) => item.code === line.materialCode);
+      return found?.type || null;
+    }
+    function mainToggle(line, material, redraw) {
+      const wrap = h('label', { className: 'bom-main-toggle' });
+      const box = h('input', { type: 'checkbox' });
+      box.checked = line.isMain === true;
+      box.addEventListener('change', () => {
+        const type = material?.type || null;
+        if (box.checked && type) model.lines.forEach((other) => { if (other !== line && materialTypeOf(other) === type) other.isMain = false; });
+        line.isMain = box.checked;
+        redraw();
+      });
+      wrap.append(box, h('span', { text: text('Основной', 'Main') }));
+      return wrap;
+    }
     function renderLines() {
       linesRoot.replaceChildren();
       model.lines.forEach((line, index) => {
@@ -315,6 +384,8 @@
           field(text('Количество', 'Quantity'), input('number', line.quantity, (value) => { line.quantity = value; }, { step: '0.0001', min: '0.0001', required: true })),
           field(text('Отход, %', 'Waste, %'), input('number', line.wastePercent, (value) => { line.wastePercent = value; }, { step: '0.0001', min: '0', max: '1000' })),
           field(text('FX', 'FX'), input('number', line.exchangeRate, (value) => { line.exchangeRate = value; }, { step: '0.0001', min: '0.0001', disabled: material?.currency === model.currency })),
+          field(text('Где применён', 'Placement'), input('text', line.placement || '', (value) => { line.placement = value; }, { maxlength: '400', placeholder: text('Рукава, планка, воротник', 'Sleeves, placket, collar') })),
+          mainToggle(line, material, renderLines),
           h('button', { type: 'button', className: 'danger-link', text: text('Удалить', 'Remove'), disabled: model.lines.length === 1, onclick: () => { model.lines.splice(index, 1); renderLines(); } }),
         ]);
         linesRoot.append(row);
@@ -331,7 +402,7 @@
         field(text('Логистика', 'Logistics'), input('number', model.logisticsCost, (value) => { model.logisticsCost = value; }, { step: '0.0001', min: '0', required: true })),
         field(text('Прочее', 'Other'), input('number', model.otherCost, (value) => { model.otherCost = value; }, { step: '0.0001', min: '0', required: true })),
       ]),
-      h('div', { className: 'bom-editor-section-head' }, [h('h3', { text: text('Строки материалов', 'Material lines') }), h('button', { type: 'button', className: 'secondary', text: text('Добавить строку', 'Add line'), onclick: () => { model.lines.push({ lineId: nextLineId(model.lines), component: '', materialCode: materials[0]?.code || '', quantity: 1, wastePercent: 0, exchangeRate: 1 }); renderLines(); } })]),
+      h('div', { className: 'bom-editor-section-head' }, [h('h3', { text: text('Строки материалов', 'Material lines') }), h('button', { type: 'button', className: 'secondary', text: text('Добавить строку', 'Add line'), onclick: () => { model.lines.push({ lineId: nextLineId(model.lines), component: '', materialCode: materials[0]?.code || '', quantity: 1, wastePercent: 0, exchangeRate: 1, placement: '', isMain: false }); renderLines(); } })]),
       linesRoot,
       field(text('Примечания', 'Notes'), textarea(model.notes, (value) => { model.notes = value; })),
       problem,

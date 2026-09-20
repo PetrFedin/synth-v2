@@ -811,3 +811,6 @@ body.omnidata-v14 .od-change-filters{display:flex!important;align-items:flex-end
 body.omnidata-v14 .od-change-filters .od-filter{display:grid!important;gap:3px!important;min-width:0!important;flex:1 1 120px!important}
 body.omnidata-v14 .od-change-filters .od-filter > span{color:var(--od14-text-soft,#5e646d)!important;font-size:9px!important;font-weight:600!important;text-transform:uppercase!important;letter-spacing:.04em!important}
 body.omnidata-v14 .od-change-filters :is(select,input){width:100%!important;min-width:0!important}
+/* The page keeps its measure; a table too wide for it scrolls inside its own frame. */
+body.omnidata-v14 .tp-doc-page{overflow-x:hidden!important}
+body.omnidata-v14 .tp-doc-table-wrap{width:100%!important;max-width:100%!important;overflow-x:auto!important}

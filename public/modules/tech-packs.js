@@ -164,7 +164,13 @@
       body,
     ]);
   }
+  // A document table that will not fit the page scrolls inside its own frame. The page itself must
+  // not: a printed sheet that slides sideways under the reader is how the list of operations was
+  // permanently cut off before, and a wide materials table would have brought that back.
   function documentTable(headers, rows) {
+    return h('div', { className: 'tp-doc-table-wrap' }, [documentTableElement(headers, rows)]);
+  }
+  function documentTableElement(headers, rows) {
     return h('table', { className: 'tp-doc-table' }, [
       h('thead', {}, [h('tr', {}, headers.map((label) => h('th', { text: label })))]),
       h('tbody', {}, rows.length
@@ -210,9 +216,14 @@
   function materialsBlock(doc, money) {
     const lines = doc.materials || [];
     if (lines.length) {
+      // The two columns a cutting room asks for and a shopping list cannot answer: which material
+      // is the principal of its kind, and where on the garment each one goes.
       return documentTable(
-        [text('№', 'No.'), text('Компонент', 'Component'), text('Материал', 'Material'), text('Тип', 'Type'), text('Нетто', 'Net'), text('Отходы, %', 'Waste, %'), text('Брутто', 'Gross'), text('Цена за ед.', 'Unit cost')],
+        [text('№', 'No.'), text('Компонент', 'Component'), text('Материал', 'Material'), text('Тип', 'Type'),
+          text('Осн.', 'Main'), text('Где применён', 'Placement'),
+          text('Нетто', 'Net'), text('Отходы, %', 'Waste, %'), text('Брутто', 'Gross'), text('Цена за ед.', 'Unit cost')],
         lines.map((line) => [line.position, line.component, line.materialCode, line.materialType,
+          line.isMain ? text('да', 'yes') : '', line.placement || '—',
           `${line.quantity} ${line.unit}`, line.wastePercent, `${line.grossQuantity} ${line.unit}`, money(line.unitCost)]),
       );
     }

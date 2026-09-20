@@ -10,7 +10,7 @@ const PERCENT_DENOMINATOR = 1_000_000n;
 const COST_DENOMINATOR = 100_000_000n;
 const MAX_SCALED = BigInt(Number.MAX_SAFE_INTEGER);
 const BOM_FIELDS = Object.freeze(new Set(['sku', 'currency', 'lines', 'laborCost', 'overheadCost', 'logisticsCost', 'otherCost', 'notes']));
-const LINE_FIELDS = Object.freeze(new Set(['lineId', 'component', 'materialCode', 'quantity', 'wastePercent', 'exchangeRate']));
+const LINE_FIELDS = Object.freeze(new Set(['lineId', 'component', 'materialCode', 'quantity', 'wastePercent', 'exchangeRate', 'placement', 'isMain']));
 
 export function createBom({ id, catalogSku, materials, input, createdAt }) {
   invariant(typeof id === 'string' && id.length >= 1 && id.length <= 160, 'BOM_ID_REQUIRED', 'BOM id is required');
@@ -64,6 +64,11 @@ function normalizeBomInput({ catalogSku, materials, input }) {
   const materialByCode = materialMap(materials);
   const lineIds = new Set();
   const lines = input.lines.map((line, index) => normalizeLine({ line, position: index + 1, brandId: catalogSku.brandId, bomCurrency: currency, materialByCode, lineIds }));
+  // One principal material per kind. Two principal fabrics is not a strong opinion, it is an
+  // unanswered question, and the answer is what the care label prints. The database holds the same
+  // rule in a partial unique index; it is here as well so the refusal names the two lines that
+  // disagree rather than arriving as a constraint violation.
+  assertOneMainPerType(lines);
   const laborCost = nonNegativeMoney(input.laborCost, 'BOM_LABOR_COST_INVALID', 'Labor cost');
   const overheadCost = nonNegativeMoney(input.overheadCost, 'BOM_OVERHEAD_COST_INVALID', 'Overhead cost');
   const logisticsCost = nonNegativeMoney(input.logisticsCost, 'BOM_LOGISTICS_COST_INVALID', 'Logistics cost');
@@ -117,7 +122,37 @@ function normalizeLine({ line, position, brandId, bomCurrency, materialByCode, l
     unitCostSnapshot: snapshot.unitCost,
     exchangeRate,
     lineCost: fromScaled(lineCostScaled, 'BOM_LINE_COST_TOO_LARGE'),
+    // Where the material goes on the garment, as the tech pack prints it, and whether this is the
+    // principal material of its kind. Neither touches the costing; both are what a factory and a
+    // care label need and a shopping list cannot give them.
+    placement: optionalSentence(line.placement, 2, 400, 'BOM_LINE_PLACEMENT_INVALID', 'BOM line placement'),
+    isMain: booleanFlag(line.isMain, 'BOM_LINE_MAIN_INVALID', 'BOM line main flag'),
   });
+}
+
+function assertOneMainPerType(lines) {
+  const mainByType = new Map();
+  for (const line of lines) {
+    if (!line.isMain) continue;
+    const existing = mainByType.get(line.materialType);
+    invariant(!existing, 'BOM_MULTIPLE_MAIN_LINES', 'A bill of materials may name only one principal material of each kind',
+      { materialType: line.materialType, lineId: line.lineId, conflictingLineId: existing });
+    mainByType.set(line.materialType, line.lineId);
+  }
+}
+
+// The module's own optionalText allows a single character, and the column allows two or more. A
+// placement of one character is not a placement, so the stricter rule is the right one — and a
+// domain that accepts what the database refuses turns a clear refusal into a constraint violation.
+function optionalSentence(value, minimum, maximum, code, label) {
+  if (value === undefined || value === null || value === '') return null;
+  return requiredText(value, minimum, maximum, code, label);
+}
+
+function booleanFlag(value, code, label) {
+  if (value === undefined || value === null || value === '') return false;
+  invariant(typeof value === 'boolean', code, `${label} must be true or false`, { value });
+  return value;
 }
 
 function materialSnapshot(material, brandId, expectedCode) {

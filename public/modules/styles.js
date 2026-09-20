@@ -167,6 +167,9 @@
   // What the object has been through. Every mutation already recorded who did it and when; until now
   // none of it could be read back, so the audit trail existed only for someone with a SQL prompt.
   const HISTORY = { items: [], loading: false, loadedFor: null };
+  // The attribute stream is loaded and filtered on its own, because an auditor narrows it and a
+  // reader of the event feed does not.
+  const CHANGES = { items: [], loading: false, loadedFor: null, attribute: '', actor: '', from: '', to: '' };
   const HISTORY_LABELS = {
     'ProductStyleCreated': ['\u041c\u043e\u0434\u0435\u043b\u044c \u0441\u043e\u0437\u0434\u0430\u043d\u0430', 'Style created'],
     'ProductStyleChanged': ['\u0421\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u0435 \u043c\u043e\u0434\u0435\u043b\u0438 \u0438\u0437\u043c\u0435\u043d\u0435\u043d\u043e', 'Style state changed'],
@@ -200,6 +203,152 @@
       if (state.view === 'styles') renderApp();
     }
   }
+  // What an attribute is called, said the way the interface says it everywhere else. A column name
+  // is our word, not the reader's: nobody outside the schema calls it lifecycle_status.
+  const ATTRIBUTE_LABELS = {
+    lifecycle_status: ['Состояние', 'Lifecycle status'],
+    style_code: ['Код модели', 'Style code'],
+    title_ru: ['Название (RU)', 'Title (RU)'],
+    title_en: ['Название (EN)', 'Title (EN)'],
+    description_ru: ['Описание (RU)', 'Description (RU)'],
+    description_en: ['Описание (EN)', 'Description (EN)'],
+    category_entry_id: ['Категория', 'Category'],
+    gender_entry_id: ['Пол', 'Gender'],
+    season_entry_id: ['Сезон', 'Season'],
+    colorway_code: ['Код цветомодели', 'Colourway code'],
+    swatch_hex: ['Образец цвета', 'Swatch'],
+    name_ru: ['Название (RU)', 'Name (RU)'],
+    name_en: ['Название (EN)', 'Name (EN)'],
+    version_no: ['Номер версии', 'Version number'],
+    media_role: ['Роль изображения', 'Media role'],
+    uri: ['Ссылка', 'Link'],
+    payload: ['Дополнительные поля', 'Extra fields'],
+  };
+  function changedAttributeLabel(name) {
+    const pair = ATTRIBUTE_LABELS[name];
+    return pair ? text(pair[0], pair[1]) : name;
+  }
+  // A value as a person reads it. A JSON null is "not set", not the word null; an object is shown
+  // compactly rather than as [object Object], which is what a raw template literal would print.
+  //
+  // Named for what it is rather than the obvious `attributeValue`, which this file already declares
+  // further down for the category-attribute panel. Two function declarations of one name in one
+  // scope do not collide loudly: the later simply wins, and every caller of the earlier one gets
+  // the wrong function. Here that showed as a column of dashes where the old and new values belong.
+  // The stored enums are our words. The interface already says them in the reader's language
+  // everywhere else, and an audit line reading "draft -> in_development" beside a badge reading
+  // «черновик» is two names for one thing.
+  const CHANGED_VALUES = {
+    draft: ['черновик', 'draft'],
+    in_development: ['в разработке', 'in development'],
+    approved: ['утверждена', 'approved'],
+    published: ['опубликована', 'published'],
+    archived: ['в архиве', 'archived'],
+    cancelled: ['отменена', 'cancelled'],
+    active: ['активна', 'active'],
+  };
+  function changedValue(raw) {
+    if (raw === null || raw === undefined || raw === '') return '—';
+    if (typeof raw === 'object') { try { return JSON.stringify(raw); } catch { return '—'; } }
+    const value = String(raw);
+    if (value.trim() === '') return '—';
+    const known = CHANGED_VALUES[value];
+    return known ? text(known[0], known[1]) : value;
+  }
+
+  async function loadChanges(subjectId) {
+    if (!subjectId || CHANGES.loading) return;
+    CHANGES.loading = true;
+    try {
+      const query = new URLSearchParams({ limit: '100' });
+      if (CHANGES.attribute) query.set('attribute', CHANGES.attribute);
+      if (CHANGES.actor) query.set('actor', CHANGES.actor);
+      if (CHANGES.from) query.set('from', CHANGES.from);
+      if (CHANGES.to) query.set('to', CHANGES.to);
+      const result = await api(`/v2/history/${encodeURIComponent(subjectId)}/attributes?${query}`);
+      CHANGES.items = result.items || [];
+      CHANGES.loadedFor = subjectId;
+    } catch (error) {
+      CHANGES.items = [];
+      toast(error?.message || I18N.t('common.requestError'), 'error');
+    } finally {
+      CHANGES.loading = false;
+      if (state.view === 'styles') renderApp();
+    }
+  }
+
+  // Omnidata's change history puts three streams side by side: state, version, and the value of
+  // each attribute before and after. The first two are the event feed above; this is the third, and
+  // it is the one an audit, a supplier dispute and a post-season review are actually made of.
+  function changesPanel(item) {
+    const subjectId = item.product.id;
+    if (CHANGES.loadedFor !== subjectId && !CHANGES.loading) queueMicrotask(() => { void loadChanges(subjectId); });
+    const block = el('div', { className: 'stack' });
+    // Not `.od-commandbar`: that class means "this view's registry command bar", and the fidelity
+    // layer moves every one of them into the registry column. A filter row that belongs to a panel
+    // inside the inspector has to carry its own name or it silently teleports out of the panel.
+    const filters = el('div', { className: 'od-change-filters', 'data-od14-component': 'filterbar' });
+    const names = [...new Set(CHANGES.items.map((entry) => entry.attribute))].sort();
+    const people = [...new Map(CHANGES.items.filter((entry) => entry.actorId)
+      .map((entry) => [entry.actorId, entry.actorName || entry.actorEmail || entry.actorId])).entries()];
+    filters.append(
+      changeFilter(text('Атрибут', 'Attribute'), 'attribute', subjectId,
+        [['', text('Все', 'All')], ...names.map((name) => [name, changedAttributeLabel(name)])]),
+      changeFilter(text('Кто', 'Who'), 'actor', subjectId,
+        [['', text('Все', 'All')], ...people.map(([id, name]) => [id, name])]),
+      changeDate(text('С', 'From'), 'from', subjectId),
+      changeDate(text('По', 'To'), 'to', subjectId),
+    );
+    block.append(filters);
+    if (CHANGES.loading || CHANGES.loadedFor !== subjectId) {
+      block.append(notice(text('Загрузка изменений…', 'Loading the changes…')));
+      return block;
+    }
+    if (!CHANGES.items.length) {
+      // An empty list means one of two different things, and saying which is the difference between
+      // "nothing happened" and "your filter hid it".
+      const filtered = CHANGES.attribute || CHANGES.actor || CHANGES.from || CHANGES.to;
+      block.append(notice(filtered
+        ? text('По заданным фильтрам изменений нет.', 'No changes match these filters.')
+        : text('Значения атрибутов ещё не менялись — модель только создана.', 'No attribute has changed yet — the style has only been created.')));
+      return block;
+    }
+    block.append(odMiniTable(
+      [text('Когда', 'When'), text('Атрибут', 'Attribute'), text('Было', 'Was'), text('Стало', 'Became'), text('Кто', 'Who')],
+      CHANGES.items.map((entry) => [
+        entry.occurredAt ? formatDate(entry.occurredAt) : '—',
+        changedAttributeLabel(entry.attribute),
+        changedValue(entry.before),
+        changedValue(entry.after),
+        entry.actorName || entry.actorEmail || '—',
+      ]),
+    ));
+    return block;
+  }
+
+  function changeFilter(label, key, subjectId, options) {
+    const field = el('label', { className: 'od-filter' });
+    field.append(el('span', { rawText: label }));
+    const select = el('select', { 'data-od14-component': 'field' });
+    options.forEach(([value, caption]) => {
+      const option = el('option', { value: String(value), rawText: String(caption) });
+      if (String(value) === String(CHANGES[key] || '')) option.selected = true;
+      select.append(option);
+    });
+    select.addEventListener('change', () => { CHANGES[key] = select.value; CHANGES.loadedFor = null; void loadChanges(subjectId); });
+    field.append(select);
+    return field;
+  }
+
+  function changeDate(label, key, subjectId) {
+    const field = el('label', { className: 'od-filter' });
+    field.append(el('span', { rawText: label }));
+    const input = el('input', { type: 'date', value: CHANGES[key] || '', 'data-od14-component': 'field' });
+    input.addEventListener('change', () => { CHANGES[key] = input.value; CHANGES.loadedFor = null; void loadChanges(subjectId); });
+    field.append(input);
+    return field;
+  }
+
   function historyPanel(item) {
     const subjectId = item.product.id;
     if (HISTORY.loadedFor !== subjectId && !HISTORY.loading) queueMicrotask(() => { void loadHistory(subjectId); });
@@ -687,6 +836,10 @@
         {
           label: text('\u0418\u0441\u0442\u043e\u0440\u0438\u044f', 'History'),
           content: [historyPanel(item)],
+        },
+        {
+          label: text('\u0418\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u044f \u0430\u0442\u0440\u0438\u0431\u0443\u0442\u043e\u0432', 'Attribute changes'),
+          content: [changesPanel(item)],
         },
         {
           label: text('Команда', 'Team'),

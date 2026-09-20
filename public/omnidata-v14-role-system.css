@@ -727,3 +727,19 @@ body.omnidata-design-system-v1 :is([data-ods-part="layout"],[data-od14-unified-p
 body.omnidata-role-system :is([data-ods-part="layout"],[data-od14-unified-part="layout"]).od-look-grid,
 body.omnidata-design-system-v1 .od-look-grid,
 body.omnidata-role-system .od-look-grid{grid-template-columns:repeat(auto-fill,minmax(240px,300px))!important;justify-content:start!important}
+
+/* The system footer is fixed, so the page's last rows ran underneath it. The
+   workspace reserves its height instead of pretending it is not there. */
+body.omnidata-design-system-v1 .workspace-content,
+body.omnidata-role-system .workspace-content{padding-bottom:48px!important}
+
+/* The brand block and the header are two halves of one band, so they are the
+   same height. The block stood 58px against the header's 56, which put its
+   dark ground two pixels below the header's rule — the notch that appears to
+   cut the corner off the mark. */
+body.omnidata-design-system-v1 .topbar,
+body.omnidata-role-system .topbar{min-height:56px!important}
+body.omnidata-design-system-v1 .sidebar .brand,
+body.omnidata-role-system .sidebar .brand{height:56px!important;min-height:56px!important;box-sizing:border-box!important}
+body.omnidata-v14.omnidata-design-system-v1 .sidebar .brand,
+body.omnidata-v14.omnidata-role-system .sidebar .brand{flex:0 0 56px!important;height:56px!important;min-height:56px!important}

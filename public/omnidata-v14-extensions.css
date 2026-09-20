@@ -793,3 +793,14 @@ body.omnidata-v14 dialog.ls9-paste-preview{width:min(760px,94vw)!important;max-w
 body.omnidata-v14 dialog.ls9-paste-preview .ls9-paste-rows{max-height:46vh!important;overflow:auto!important;border:1px solid var(--od14-line,#e4e7ec)!important;border-radius:var(--od14-radius,5px)!important}
 body.omnidata-v14 dialog.ls9-paste-preview table{min-width:0!important;width:100%!important}
 body.omnidata-v14 dialog.ls9-paste-preview .ls9-paste-refused td{background:#fff6f6!important;color:var(--od14-danger,#ad464b)!important}
+
+/* The tech pack document is a printed page, and a printed page does not scroll
+   sideways. Its tables were given the same column-count floor as a workspace
+   register — 780px for six columns — inside a 458px document column, so the
+   list of operations was permanently cut off and the reader had to drag a
+   scrollbar across a document they were about to hand to a factory. A document
+   table fits its page and wraps its cells instead. */
+body.omnidata-v14 .tp-doc-page table,
+body.omnidata-v14 .workspace-content .tp-doc-page table.od-cols-6,
+body.omnidata-v14 .workspace-content .tp-doc-page table[class*="od-cols-"]{min-width:0!important;width:100%!important;table-layout:auto!important}
+body.omnidata-v14 .tp-doc-page :is(td,th){overflow:visible!important;white-space:normal!important;overflow-wrap:anywhere!important;text-overflow:clip!important}

@@ -233,7 +233,7 @@
       LS.buyerDoors = [];
       LS.buyerDoorId = '';
       LS.buyerDoorShopId = request.key;
-      LS.buyerDoorError = value(error?.message) || text('Не удалось загрузить торговые точки покупателя.', 'Could not load buyer Retail Doors.');
+      LS.buyerDoorError = value(error?.message) || text('Не удалось загрузить торговые точки покупателя.', 'Could not load the buyer’s retail doors.');
     } finally {
       if (requestToken === LS.buyerDoorRequestToken) {
         LS.buyerDoorLoading = false;
@@ -355,7 +355,7 @@
   }
 
   function retailDoorField(context) {
-    const labelText = text('Торговая точка / Retail Door', 'Retail Door');
+    const labelText = text('Торговая точка', 'Retail door');
     const label = el('label', { className: 'ls9-field', 'data-od14-component': 'field-group' });
     label.append(el('span', { className: 'ls9-field-label', rawText: labelText }));
     const select = el('select', { className: 'ls9-select', ariaLabel: labelText, 'data-od14-component': 'field' });
@@ -364,10 +364,10 @@
       select.disabled = true;
     } else {
       const placeholder = LS.buyerDoorLoading
-        ? text('Загрузка торговых точек…', 'Loading Retail Doors...')
+        ? text('Загрузка торговых точек…', 'Loading retail doors…')
         : context.retailDoors.length
-          ? text('Выберите торговую точку', 'Select Retail Door')
-          : text('Нет активных торговых точек', 'No active Retail Doors');
+          ? text('Выберите торговую точку', 'Select a retail door')
+          : text('Нет активных торговых точек', 'No active retail doors');
       const emptyOption = el('option', { value: '', rawText: placeholder });
       if (!LS.buyerDoorId) emptyOption.selected = true;
       select.append(emptyOption);
@@ -424,7 +424,7 @@
       [text('Модели', 'Styles'), matrices.length],
       [text('SKU', 'SKUs'), skuCount],
       [text('Валюта', 'Currency'), value(LS.buyerCatalog?.currency) || '—'],
-      [text('Retail Door', 'Retail Door'), value(context.retailDoor?.code) || text('Не выбрана', 'Not selected')],
+      [text('Торговая точка', 'Retail door'), value(context.retailDoor?.code) || text('Не выбрана', 'Not selected')],
       [text('Подборка', 'Selection'), selectionStatus],
     ].forEach(([label, metric]) => {
       const card = el('div', { className: 'ls9-metric', 'data-od14-component': 'metric' });
@@ -461,8 +461,8 @@
     if (!context.cycle) wrapper.append(noticePanel(text('Матрица доступна для просмотра, но подборку нельзя создать без коммерческого цикла этой коллекции.', 'The matrix is available for viewing, but a selection cannot be created without a commercial cycle for this collection.')));
     if (!context.selection && LS.buyerDoorLoading) wrapper.append(noticePanel(text('Загружаем активные торговые точки покупателя…', 'Loading active buyer Retail Doors...')));
     if (!context.selection && LS.buyerDoorError) wrapper.append(noticePanel(LS.buyerDoorError, 'warning'));
-    if (!context.selection && !LS.buyerDoorLoading && !LS.buyerDoorError && !context.retailDoors.length) wrapper.append(noticePanel(text('Для магазина нет активной торговой точки. Сначала добавьте или активируйте Retail Door — без неё коммерческий контекст не будет зафиксирован.', 'This shop has no active Retail Door. Add or reactivate one before Selection so the commercial context can be frozen.'), 'warning'));
-    if (!context.selection && context.retailDoors.length > 1 && !context.retailDoor) wrapper.append(noticePanel(text('Выберите торговую точку в верхней панели. Она будет зафиксирована в Selection и унаследована заказом без повторного выбора.', 'Select a Retail Door in the toolbar. It will be frozen in Selection and inherited by the order without another choice.')));
+    if (!context.selection && !LS.buyerDoorLoading && !LS.buyerDoorError && !context.retailDoors.length) wrapper.append(noticePanel(text('Для магазина нет активной торговой точки. Сначала добавьте или активируйте её — без точки коммерческий контекст не будет зафиксирован.', 'This shop has no active Retail Door. Add or reactivate one before Selection so the commercial context can be frozen.'), 'warning'));
+    if (!context.selection && context.retailDoors.length > 1 && !context.retailDoor) wrapper.append(noticePanel(text('Выберите торговую точку в верхней панели. Она будет зафиксирована в подборке и унаследована заказом без повторного выбора.', 'Select a Retail Door in the toolbar. It will be frozen in Selection and inherited by the order without another choice.')));
     if (context.selection && !context.selection.buyerCatalogVersionId) wrapper.append(noticePanel(text('Текущая подборка создана по legacy-каталогу. Она доступна только для просмотра в новом rich-каталоге и не может быть перепривязана молча.', 'The current selection was created from a legacy catalog. It is read-only in the new rich catalog and cannot be silently rebound.'), 'warning'));
     if (LS.buyerError) wrapper.append(noticePanel(LS.buyerError, 'warning'));
     wrapper.append(buyerCatalogIdentity(context), styleTabs(), styleWorkspace(context));
@@ -484,7 +484,7 @@
       [text('Прайс-лист', 'Price list'), shortRef(LS.buyerCatalog.priceListVersionId), value(LS.buyerCatalog.priceListVersionId)],
       [text('Шоурум', 'Showroom'), showroomName(context.access.showroomId)],
       [text('Магазин', 'Shop'), organisationName(context.access.shopId)],
-      [text('Retail Door', 'Retail Door'), retailDoorLabel(door)],
+      [text('Торговая точка', 'Retail door'), retailDoorLabel(door)],
       [text('Версия точки', 'Door version'), door?.version ? `v${door.version}` : '—'],
       [text('Адрес поставки', 'Ship-to'), retailDoorAddressLabel(door?.shipToAddress)],
       [text('Контрольная сумма', 'Checksum'), shortHash(LS.buyerCatalog.contentHash)],
@@ -980,13 +980,13 @@
   async function createBuyerSelection(context) {
     const catalog = LS.buyerCatalog;
     if (!catalog || !context.cycle || !context.access) throw uiError('BUYER_MATRIX_CONTEXT_REQUIRED', text('Не выбран коммерческий контекст.', 'Commercial context is not selected.'));
-    if (!context.retailDoor?.id) throw uiError('BUYER_MATRIX_RETAIL_DOOR_REQUIRED', text('Выберите Retail Door до создания подборки.', 'Select a Retail Door before creating the selection.'));
+    if (!context.retailDoor?.id) throw uiError('BUYER_MATRIX_RETAIL_DOOR_REQUIRED', text('Выберите торговую точку до создания подборки.', 'Select a retail door before creating the selection.'));
     const pinnedRetailDoorId = context.retailDoor.id;
     const request = Matrix.createSelectionRequest(context.cycle.id, context.access.showroomId, pinnedRetailDoorId);
     const result = await mutate(request.path, request.body, request.method);
     const created = result?.selection;
     if (!created?.id) throw uiError('BUYER_MATRIX_SELECTION_CREATE_FAILED', text('Сервер не вернул созданную подборку.', 'Server did not return the created selection.'));
-    if (created.retailDoorId !== pinnedRetailDoorId || !created.buyerCommercialSnapshot) throw uiError('BUYER_MATRIX_RETAIL_DOOR_PIN_FAILED', text('Сервер не зафиксировал выбранную торговую точку в подборке.', 'Server did not freeze the selected Retail Door in the selection.'));
+    if (created.retailDoorId !== pinnedRetailDoorId || !created.buyerCommercialSnapshot) throw uiError('BUYER_MATRIX_RETAIL_DOOR_PIN_FAILED', text('Сервер не зафиксировал выбранную торговую точку в подборке.', 'The server did not freeze the selected retail door in the selection.'));
     if (created.buyerCatalogVersionId !== catalog.id || created.commercialBasisHash !== catalog.contentHash) {
       LS.quantities = {};
       LS.quantityCatalogId = '';
@@ -1002,7 +1002,7 @@
     await reload();
     LS.buyerLoadedKey = '';
     renderApp();
-    toast(text('Подборка создана. Retail Door зафиксирован; теперь сохраните количества матрицы.', 'Selection created with the Retail Door pinned. Save the matrix quantities next.'), 'success');
+    toast(text('Подборка создана. Торговая точка зафиксирована; теперь сохраните количества матрицы.', 'Selection created with the Retail Door pinned. Save the matrix quantities next.'), 'success');
   }
 
   async function saveBuyerMatrix(context, { silent = false } = {}) {

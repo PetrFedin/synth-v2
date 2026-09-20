@@ -247,12 +247,30 @@ function odV7Inspector() {
   });
 }
 
+  // A colour on a counter is a claim about the number, so it follows the number.
+  //
+  // The tone used to be assigned by position: the second chip green, the third amber, the fourth
+  // blue, on every screen in the product, whatever they counted. So «Черновики 0» was painted as
+  // a warning — an alarm about an empty bucket — while a real backlog three chips along was grey.
+  // Now a count of nothing is calm, a bucket that wants somebody's attention is amber only when
+  // it holds something, and a bucket that means the work is done is green.
+  const OD7_ATTENTION = /(\u0447\u0435\u0440\u043d\u043e\u0432\u0438\u043a|\u043e\u0436\u0438\u0434\u0430|\u0442\u0440\u0435\u0431\u0443|\u0437\u0430\u0431\u043b\u043e\u043a\u0438\u0440|\u043f\u0440\u043e\u0441\u0440\u043e\u0447|\u043d\u0435 \u043f\u0440\u043e\u0447\u0438\u0442|\u043e\u0442\u043a\u043b\u043e\u043d|\u0440\u0438\u0441\u043a|draft|pending|awaiting|blocked|overdue|unread|rejected|risk)/i;
+  const OD7_SETTLED = /(\u043e\u0442\u043a\u0440\u044b\u0442|\u0433\u043e\u0442\u043e\u0432|\u043f\u043e\u0434\u0442\u0432\u0435\u0440\u0436\u0434|\u0430\u043a\u0442\u0438\u0432\u043d|\u043e\u043f\u0443\u0431\u043b\u0438\u043a\u043e\u0432|\u0432\u044b\u043f\u0443\u0449|\u0434\u043e\u043f\u0443\u0449|open|ready|confirmed|active|published|released|accepted)/i;
+  function od7StatusToneFor(card) {
+    const label = (card.textContent || '').replace(/\s+/g, ' ').trim();
+    const digits = label.match(/(\d[\d\u00a0\u202f ]*)\s*$/);
+    const count = digits ? Number(digits[1].replace(/[^\d]/g, '')) : null;
+    if (count === 0) return '';
+    if (OD7_ATTENTION.test(label)) return 'warning';
+    if (OD7_SETTLED.test(label)) return 'success';
+    return '';
+  }
+
 function odV7StatusTones() {
-  document.querySelectorAll('.od-status-card').forEach((card, index) => {
+  document.querySelectorAll('.od-status-card').forEach((card) => {
     card.classList.remove('success', 'warning', 'info');
-    if (index === 1) card.classList.add('success');
-    if (index === 2) card.classList.add('warning');
-    if (index === 3) card.classList.add('info');
+    const tone = od7StatusToneFor(card);
+    if (tone) card.classList.add(tone);
   });
 }
 

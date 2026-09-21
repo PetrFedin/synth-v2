@@ -18,6 +18,9 @@
     // Прослеживаемость стоит здесь же и выше пооперационного контроля: рулон приходит в партию
     // раньше, чем на ней что-то проверяют, и порядок панелей должен это повторять.
     traceByExecution: {}, traceLoading: '',
+    // Раскрой читается отдельным запросом и стоит между материалами и операциями: рулон приходит,
+    // из него настилают, и только потом проверяют детали.
+    cutByExecution: {}, cutLoading: '',
     qcCheckedQuantity: '', qcInspectorName: '', qcDefectCode: '', qcDefectQuantity: '1',
     qcDefects: [], qcNotes: '', qcDispositionNotes: '',
   };
@@ -157,6 +160,75 @@
     const number = Number(value);
     if (!Number.isFinite(number)) return '—';
     return `${number.toFixed(number % 1 ? 2 : 0).replace('.', ',')} ${unit || ''}`.trim();
+  }
+
+  async function loadCutting(executionCode, request = api) {
+    if (!executionCode || ui.cutLoading === executionCode) return;
+    ui.cutLoading = executionCode;
+    try { ui.cutByExecution[executionCode] = await request(`/v2/production-executions/${encodeURIComponent(executionCode)}/cutting`); }
+    catch (error) { ui.cutByExecution[executionCode] = { materials: [], overConsuming: [], error: error?.message || '' }; }
+    finally { ui.cutLoading = ''; if (state.view === 'production-executions') renderApp(); }
+  }
+  function ensureCutting(value) {
+    if (value && ui.cutByExecution[value.executionCode] === undefined) queueMicrotask(() => { void loadCutting(value.executionCode); });
+  }
+  // Величину расхождения показываем без знака: направление уже сказано словом «перерасход» или
+  // «экономия», и знак рядом с ним читается как второе отрицание.
+  function magnitude(value, unit, decimals) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return '—';
+    const shown = Math.abs(number).toFixed(decimals).replace(/0+$/, '').replace(/[.,]$/, '').replace('.', ',');
+    return `${shown} ${unit || ''}`.trim();
+  }
+  // Норма и факт расхода сравниваются третьим знаком — округлять их до второго значит стирать ровно
+  // ту разницу, ради которой их и поставили рядом.
+  function perGarment(value, unit) { return magnitude(value, unit, 3); }
+
+  // Раскрой: сколько настелено, сколько раскроено и укладывается ли расход в ведомость.
+  //
+  // Расход на изделие — это длина раскладки, делённая на число изделий в слое, и он не зависит от
+  // числа слоёв. Поэтому его и можно поставить рядом с нормой из ведомости: сравниваются две цифры
+  // об одном и том же, а не две разные величины.
+  function cuttingPanel(value) {
+    const cut = ui.cutByExecution[value.executionCode];
+    const children = [h('h3', { text: t('Раскрой', 'Cutting') })];
+    if (!cut) { children.push(h('p', { className: 'muted', text: t('Загрузка…', 'Loading…') })); return h('section', { className: 'production-execution-card' }, children); }
+    if (cut.error) children.push(h('p', { className: 'production-execution-warn', text: cut.error }));
+    if (!cut.materials || !cut.materials.length) {
+      children.push(h('p', { className: 'muted', text: t('Настилов по этой партии пока нет.', 'No spreads have been laid for this lot yet.') }));
+      return h('section', { className: 'production-execution-card' }, children);
+    }
+
+    children.push(h('p', { className: 'muted', text: t(
+      `Раскроено ${cut.garmentsCut} из ${cut.orderedQuantity} изделий.`,
+      `${cut.garmentsCut} of ${cut.orderedQuantity} garments cut.`) }));
+    // Недокрой посреди раскроя — обычное состояние, поэтому он назван, но не выделен тревогой.
+    if (cut.overcut > 0) children.push(h('p', { className: 'production-execution-warn', text: t(
+      `Раскроено на ${cut.overcut} изделий больше заказанного.`,
+      `${cut.overcut} garments cut above the order.`) }));
+
+    for (const material of cut.materials) {
+      const lines = [
+        h('strong', { text: material.materialCode }),
+        h('p', { className: 'muted', text: t(
+          `Норма по ведомости ${perGarment(material.plannedPerGarment, material.unit)} на изделие, факт ${perGarment(material.actualPerGarment, material.unit)}`,
+          `Bill allows ${perGarment(material.plannedPerGarment, material.unit)} per garment, actual ${perGarment(material.actualPerGarment, material.unit)}`) }),
+      ];
+      if (material.variancePerGarment !== null && material.variancePerGarment !== undefined) {
+        // Знак важнее величины: он сразу говорит, в какую сторону фабрика разошлась с нормой.
+        const over = material.variancePerGarment > 0;
+        lines.push(h('p', { className: over ? 'production-execution-warn' : 'muted', text: t(
+          `${over ? 'Перерасход' : 'Экономия'} ${perGarment(material.variancePerGarment, material.unit)} на изделие (${magnitude(material.variancePercent, '%', 1)})`,
+          `${over ? 'Over' : 'Under'} by ${perGarment(material.variancePerGarment, material.unit)} per garment (${magnitude(material.variancePercent, '%', 1)})`) }));
+      }
+      for (const spread of material.spreads) {
+        lines.push(h('p', { className: 'muted', text: t(
+          `${spread.spreadReference}: ${perGarment(spread.markerLength, material.unit)} × ${spread.plies} сл. — ${spread.garmentsCut} изд., ${amount(spread.clothUsed, material.unit)}${spread.lots.length ? ` · ${spread.lots.join(', ')}` : ''}`,
+          `${spread.spreadReference}: ${perGarment(spread.markerLength, material.unit)} × ${spread.plies} plies — ${spread.garmentsCut} garments, ${amount(spread.clothUsed, material.unit)}${spread.lots.length ? ` · ${spread.lots.join(', ')}` : ''}`) }));
+      }
+      children.push(h('div', { className: 'production-execution-check closed' }, lines));
+    }
+    return h('section', { className: 'production-execution-card' }, children);
   }
 
   // Из какого рулона сшита эта партия.
@@ -531,6 +603,8 @@
     ];
     // Материалы раньше операций: рулон приходит в партию до того, как на ней что-то проверяют.
     if (qualityManage || manage) { ensureTraceability(value); children.push(traceabilityPanel(value)); }
+    // Раскрой между материалами и операциями: из рулона настилают, и только потом проверяют детали.
+    if (manage || qualityManage) { ensureCutting(value); children.push(cuttingPanel(value)); }
     if (qualityManage) { ensureInlineQuality(value); children.push(inlineQualityPanel(value, current, qualityManage)); }
     if (value.status === 'active' && current && manage) children.push(actionPanel(value, current, actions));
     if (['planned', 'active'].includes(value.status) && manage) children.push(cancelPanel(value));

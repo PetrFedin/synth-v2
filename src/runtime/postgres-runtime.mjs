@@ -20,6 +20,9 @@ import { createSupplierPaymentService, createSupplierPaymentQueryService } from 
 import { createPostgresMaterialLotStore } from '../infrastructure/postgres-material-lot-store.mjs';
 import { createPostgresMaterialLotReader } from '../infrastructure/postgres-material-lot-reader.mjs';
 import { createMaterialLotService, createMaterialLotQueryService } from '../application/material-lot-service.mjs';
+import { createPostgresCuttingStore } from '../infrastructure/postgres-cutting-store.mjs';
+import { createPostgresCuttingReader } from '../infrastructure/postgres-cutting-reader.mjs';
+import { createCuttingService, createCuttingQueryService } from '../application/cutting-service.mjs';
 import { createPostgresFinalQualityStore } from '../infrastructure/postgres-final-quality-store.mjs';
 import { createPostgresOrderMarginBridgeReader } from '../infrastructure/postgres-order-margin-bridge-reader.mjs';
 import { createPostgresProductionExecutionReader } from '../infrastructure/postgres-production-execution-reader.mjs';
@@ -171,6 +174,18 @@ export function createPostgresWholesaleRuntime(options = {}) {
   const materialLotQueries = createMaterialLotQueryService({ reader: materialLotReader });
   const materialLots = Object.freeze({ ...materialLotQueries, ...materialLotCommands });
 
+  // Раскрой стоит сразу за партиями материала: настил делается из выданных рулонов, поэтому его
+  // сборка следует за ними и предшествует пооперационному контролю, который проверяет уже детали.
+  const cuttingStore = createPostgresCuttingStore({ pool: options.pool });
+  const cuttingReader = createPostgresCuttingReader({ pool: options.pool });
+  const cuttingCommands = createCuttingService({
+    store: cuttingStore,
+    ...(options.clock ? { clock: options.clock } : {}),
+    ...(options.nextId ? { nextId: options.nextId } : {}),
+  });
+  const cuttingQueries = createCuttingQueryService({ reader: cuttingReader });
+  const cutting = Object.freeze({ ...cuttingQueries, ...cuttingCommands });
+
   const transport = {
     authenticate: base.auth.authenticate,
     auth: base.auth,
@@ -207,6 +222,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
     inlineQuality,
     supplierPayments,
     materialLots,
+    cutting,
     collaboration: base.collaboration,
     orders: base.orders,
     notifications: base.notifications,
@@ -241,6 +257,9 @@ export function createPostgresWholesaleRuntime(options = {}) {
     productionExecutionStore,
     productionExecutionReader,
     productionExecutions,
+    cuttingStore,
+    cuttingReader,
+    cutting,
     materialLotStore,
     materialLotReader,
     materialLots,

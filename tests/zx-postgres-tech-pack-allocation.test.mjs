@@ -24,6 +24,9 @@ import { createPostgresSupplierPaymentReader } from '../src/infrastructure/postg
 import { createMaterialLotService, createMaterialLotQueryService } from '../src/application/material-lot-service.mjs';
 import { createPostgresMaterialLotStore } from '../src/infrastructure/postgres-material-lot-store.mjs';
 import { createPostgresMaterialLotReader } from '../src/infrastructure/postgres-material-lot-reader.mjs';
+import { createCuttingService, createCuttingQueryService } from '../src/application/cutting-service.mjs';
+import { createPostgresCuttingStore } from '../src/infrastructure/postgres-cutting-store.mjs';
+import { createPostgresCuttingReader } from '../src/infrastructure/postgres-cutting-reader.mjs';
 import { createPostgresWholesaleStore } from '../src/infrastructure/postgres-store.mjs';
 import { createPostgresCatalogStore } from '../src/infrastructure/postgres-catalog-store.mjs';
 import { createPostgresMaterialStore } from '../src/infrastructure/postgres-material-store.mjs';
@@ -65,6 +68,7 @@ test('PostgreSQL closes approved PPS through production, rework, reinspection an
     const inlineQualityStore = createPostgresInlineQualityStore({ pool });
     const supplierPaymentStore = createPostgresSupplierPaymentStore({ pool });
     const materialLotStore = createPostgresMaterialLotStore({ pool });
+    const cuttingStore = createPostgresCuttingStore({ pool });
     const finalQualityStore = createPostgresFinalQualityStore({ pool });
     const platform = createWholesalePlatform({ store: wholesaleStore, clock, nextId });
     const catalog = createCatalogService({ wholesaleStore, catalogStore, clock, nextId });
@@ -81,6 +85,8 @@ test('PostgreSQL closes approved PPS through production, rework, reinspection an
     const supplierPayments = createSupplierPaymentService({ store: supplierPaymentStore, clock, nextId });
     const materialLots = createMaterialLotService({ store: materialLotStore, clock, nextId });
     const materialLotQueries = createMaterialLotQueryService({ reader: createPostgresMaterialLotReader({ pool }) });
+    const cutting = createCuttingService({ store: cuttingStore, clock, nextId });
+    const cuttingQueries = createCuttingQueryService({ reader: createPostgresCuttingReader({ pool }) });
     const supplierPaymentQueries = createSupplierPaymentQueryService({ reader: createPostgresSupplierPaymentReader({ pool }), clock });
     const finalQuality = createFinalQualityService({ store: finalQualityStore, clock, nextId });
 
@@ -238,6 +244,67 @@ test('PostgreSQL closes approved PPS through production, rework, reinspection an
     assert.deepEqual([...shell.dyeLots], ['DYE-A', 'DYE-B']);
     assert.deepEqual([...trace.mixedDyeLots], ['FAB-TECH-GATE'], 'each roll passed its own inspection; the fault is in the pairing');
     assert.ok(shell.requiredQuantity > 0, 'the requirement comes from the published bill, not from a second opinion');
+
+    // --- Раскрой: настил, раскладка и выход --------------------------------------------------------
+    //
+    // Ткань не берётся ниоткуда: снято с рулонов ровно столько, сколько настелено, и только из тех
+    // рулонов, что выданы в эту партию. Оба правила проверяются против живой базы, включая писателя
+    // в обход модуля.
+    const spread = await cutting.laySpread('cutting-lay-1', 'product-owner', {
+      materialCode: 'FAB-TECH-GATE', spreadReference: 'LAY-TECH-001',
+      markerLength: 4, plies: 100, fabricWidth: 150,
+      marker: [{ executionCode: execution.executionCode, garmentsPerPly: 1 }],
+      lots: [{ lotReference: 'ROLL-A-001', quantity: 400 }],
+      notes: 'Первый настил партии',
+    });
+    assert.equal(spread.clothLaid, 400, '4 м раскладки в 100 слоёв');
+    assert.equal(spread.consumptionPerGarment, 4, 'расход на изделие — длина раскладки на изделий в слое');
+    assert.equal(spread.marker[0].sku, execution.sku);
+
+    // Настелить из рулона, выданного в другую партию (или не выданного вовсе), нельзя.
+    await assert.rejects(() => cutting.laySpread('cutting-lay-bad', 'product-owner', {
+      materialCode: 'FAB-TECH-GATE', spreadReference: 'LAY-TECH-BAD', markerLength: 4, plies: 10,
+      marker: [{ executionCode: execution.executionCode, garmentsPerPly: 1 }],
+      lots: [{ lotReference: 'ROLL-NOT-ISSUED', quantity: 40 }],
+    }), { code: 'CUTTING_LOT_NOT_ISSUED_HERE' });
+    // И это же правило стоит в базе. Нужен рулон, который в эту партию не выдавали: ROLL-B-002 как
+    // раз выдан, поэтому он проверяет не то — берём принятый, но не выданный третий рулон.
+    const unissued = await materialLots.receiveLot('lot-receive-3', 'product-owner', {
+      materialCode: 'FAB-TECH-GATE', lotReference: 'ROLL-C-003', dyeLot: 'DYE-C', receivedQuantity: 200,
+    });
+    await assert.rejects(
+      () => pool.query(`INSERT INTO cutting_spread_lots (id,spread_id,lot_id,lot_reference,quantity,payload)
+                        VALUES ('bypass-lot', $1, $2, 'ROLL-C-003', 10, '{"lotReference":"ROLL-C-003","quantity":10}'::jsonb)`,
+        [spread.id, unissued.id]),
+      /CUTTING_LOT_NOT_ISSUED_HERE/,
+    );
+    // Баланс ткани держится отложенным триггером: снято обязано равняться настеленному.
+    await assert.rejects(
+      () => pool.query(`UPDATE cutting_spread_lots
+                           SET quantity = 390, payload = jsonb_set(payload, '{quantity}', '390')
+                         WHERE spread_id = $1`, [spread.id]),
+      /CUTTING_CLOTH_DOES_NOT_BALANCE/,
+    );
+    // Настил без раскладки — испорченная ткань, а не раскрой.
+    await assert.rejects(
+      () => pool.query('DELETE FROM cutting_spread_outputs WHERE spread_id = $1', [spread.id]),
+      /CUTTING_MARKER_EMPTY/,
+    );
+
+    const cutSummary = await cuttingQueries.cuttingSummaryForActor('product-owner', execution.executionCode);
+    assert.equal(cutSummary.garmentsCut, 100);
+    const cutShell = cutSummary.materials.find((row) => row.materialCode === 'FAB-TECH-GATE');
+    assert.equal(cutShell.clothUsed, 400);
+    assert.equal(cutShell.actualPerGarment, 4);
+    assert.ok(cutShell.plannedPerGarment > 0, 'план берётся из опубликованной ведомости');
+    assert.equal(cutSummary.shortfall, execution.quantity - 100, 'недокрой посреди раскроя назван, а не выдан за ошибку');
+
+    const cutSpread = await cutting.markCut('cutting-cut-1', 'product-owner', spread.id, { expectedVersion: spread.version });
+    assert.equal(cutSpread.status, 'cut');
+    // Раскроенный настил не отменяется: детали уже вырезаны.
+    await assert.rejects(() => cutting.cancel('cutting-cancel-1', 'product-owner', spread.id, {
+      expectedVersion: cutSpread.version, reason: 'Ошиблись раскладкой',
+    }), { code: 'CUTTING_SPREAD_NOT_LAID' });
 
     // --- Пооперационный контроль на раскрое ------------------------------------------------------
     //

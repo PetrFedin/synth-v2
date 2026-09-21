@@ -9,6 +9,7 @@ import { withFinalQualityOpenApi } from './final-quality-openapi.mjs';
 import { withInlineQualityOpenApi } from './inline-quality-openapi.mjs';
 import { withSupplierPaymentOpenApi } from './supplier-payment-openapi.mjs';
 import { withMaterialLotOpenApi } from './material-lot-openapi.mjs';
+import { withCuttingOpenApi } from './cutting-openapi.mjs';
 import { withFulfillmentOpenApi } from './fulfillment-openapi.mjs';
 import { withInventoryOpenApi } from './inventory-openapi.mjs';
 import { withProductIdentityOpenApi } from './product-identity-openapi.mjs';
@@ -34,7 +35,8 @@ import { wholesaleV2OpenApi } from './openapi.mjs';
 
 const AUTHORITATIVE_V2_CONTRACT_VERSION = '1.17.0';
 
-const composed = withMaterialLotOpenApi(
+const composed = withCuttingOpenApi(
+  withMaterialLotOpenApi(
   withSupplierPaymentOpenApi(
   withInlineQualityOpenApi(
   withEcon003AllocationMarginOpenApi(
@@ -92,6 +94,7 @@ const composed = withMaterialLotOpenApi(
         ),
       ),
     ),
+  ),
   ),
   ),
   ),

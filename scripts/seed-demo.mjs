@@ -178,6 +178,7 @@ try {
   await ensureDefectCatalogue(runtime, pool, brandId, accounts.owner);
   await ensureLotInProduction(runtime, pool, brandId, accounts.owner);
   await ensureMaterialLots(runtime, pool, brandId, accounts.owner, accounts.quality);
+  await ensureCuttingSpread(runtime, pool, brandId, accounts.owner);
   await ensurePaymentSchedules(runtime, pool, brandId, accounts.owner);
 
   // Inspections sat at review-pending because the only account in the brand was the one that ran
@@ -740,6 +741,59 @@ async function ensureMaterialLots(runtime, pool, brandId, warehouseActorId, qual
     }
   }
   note('material lots', received > 0 ? `${received} рулонов принято, ${issued} выдано в раскрой` : 'рулоны уже приняты');
+}
+
+// Настил на партии, которая сейчас в производстве.
+//
+// Ткань уже выдана в раскрой двумя рулонами. Настил берёт её и кладёт раскладку: 2,2 м в 200 слоёв
+// по одному изделию в слое — 200 изделий из 440 метров. Расход на изделие выходит 2,2 м против
+// 2,247 по ведомости, то есть фабрика уложилась в норму, и экран показывает это знаком, а не
+// объяснением.
+async function ensureCuttingSpread(runtime, pool, brandId, actorId) {
+  const execution = (await pool.query(
+    "SELECT payload FROM production_executions WHERE production_order_number = $1 AND status = 'active'",
+    [DEMO_LOT_PO],
+  )).rows[0]?.payload;
+  if (!execution) { note('cutting', 'нет партии в производстве — настилать не на что'); return; }
+  const existing = await pool.query('SELECT count(*)::integer AS count FROM cutting_spreads WHERE brand_id = $1', [brandId]);
+  if (existing.rows[0].count > 0) { note('cutting', 'настилы уже записаны'); return; }
+
+  const issues = (await pool.query(
+    `SELECT issue.payload FROM material_lot_issues AS issue
+      WHERE issue.execution_id = $1 ORDER BY issue.issued_at`,
+    [execution.id],
+  )).rows.map((row) => row.payload);
+  if (!issues.length) { note('cutting', 'в партию не выдано ни одного рулона'); return; }
+
+  // Берём столько, сколько настелено, и не больше, чем выдано с каждого рулона.
+  const plies = 200;
+  const markerLength = 2.2;
+  const needed = markerLength * plies;
+  const lots = [];
+  let remaining = needed;
+  for (const issue of issues) {
+    if (remaining <= 0) break;
+    const take = Math.min(remaining, Number(issue.quantity));
+    if (take <= 0) continue;
+    lots.push({ lotReference: issue.lotReference, quantity: Math.round(take * 10_000) / 10_000 });
+    remaining = Math.round((remaining - take) * 10_000) / 10_000;
+  }
+  if (remaining > 0) { note('cutting', `выданной ткани не хватает на настил (${remaining} не покрыто)`); return; }
+
+  try {
+    const spread = await runtime.cutting.laySpread(command('cutting-lay'), actorId, {
+      materialCode: issues[0].materialCode,
+      spreadReference: `LAY-${execution.sku}-001`,
+      markerLength, plies, fabricWidth: 150,
+      marker: [{ executionCode: execution.executionCode, garmentsPerPly: 1 }],
+      lots,
+      notes: 'Первый настил партии.',
+    });
+    await runtime.cutting.markCut(command('cutting-cut'), actorId, spread.id, { expectedVersion: spread.version });
+    note('cutting', `${spread.spreadReference}: ${spread.clothLaid} м в ${plies} слоёв — ${plies} изделий, расход ${spread.consumptionPerGarment} м/изд.`);
+  } catch (error) {
+    note('cutting', `настил не записан (${error.code ?? error.message})`);
+  }
 }
 
 async function ensurePaymentSchedules(runtime, pool, brandId, actorId) {

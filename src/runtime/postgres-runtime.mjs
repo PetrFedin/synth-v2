@@ -17,6 +17,9 @@ import { createInlineQualityQueryService } from '../application/inline-quality-q
 import { createPostgresSupplierPaymentStore } from '../infrastructure/postgres-supplier-payment-store.mjs';
 import { createPostgresSupplierPaymentReader } from '../infrastructure/postgres-supplier-payment-reader.mjs';
 import { createSupplierPaymentService, createSupplierPaymentQueryService } from '../application/supplier-payment-service.mjs';
+import { createPostgresMaterialLotStore } from '../infrastructure/postgres-material-lot-store.mjs';
+import { createPostgresMaterialLotReader } from '../infrastructure/postgres-material-lot-reader.mjs';
+import { createMaterialLotService, createMaterialLotQueryService } from '../application/material-lot-service.mjs';
 import { createPostgresFinalQualityStore } from '../infrastructure/postgres-final-quality-store.mjs';
 import { createPostgresOrderMarginBridgeReader } from '../infrastructure/postgres-order-margin-bridge-reader.mjs';
 import { createPostgresProductionExecutionReader } from '../infrastructure/postgres-production-execution-reader.mjs';
@@ -156,6 +159,18 @@ export function createPostgresWholesaleRuntime(options = {}) {
   });
   const supplierPayments = Object.freeze({ ...supplierPaymentQueries, ...supplierPaymentCommands });
 
+  // Партии материала стоят перед производством: рулон принимают, выпускают из карантина и только
+  // потом выдают в раскрой, поэтому и собираются они до исполнения, а не после него.
+  const materialLotStore = createPostgresMaterialLotStore({ pool: options.pool });
+  const materialLotReader = createPostgresMaterialLotReader({ pool: options.pool });
+  const materialLotCommands = createMaterialLotService({
+    store: materialLotStore,
+    ...(options.clock ? { clock: options.clock } : {}),
+    ...(options.nextId ? { nextId: options.nextId } : {}),
+  });
+  const materialLotQueries = createMaterialLotQueryService({ reader: materialLotReader });
+  const materialLots = Object.freeze({ ...materialLotQueries, ...materialLotCommands });
+
   const transport = {
     authenticate: base.auth.authenticate,
     auth: base.auth,
@@ -191,6 +206,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
     finalQuality,
     inlineQuality,
     supplierPayments,
+    materialLots,
     collaboration: base.collaboration,
     orders: base.orders,
     notifications: base.notifications,
@@ -225,6 +241,9 @@ export function createPostgresWholesaleRuntime(options = {}) {
     productionExecutionStore,
     productionExecutionReader,
     productionExecutions,
+    materialLotStore,
+    materialLotReader,
+    materialLots,
     supplierPaymentStore,
     supplierPaymentReader,
     supplierPayments,

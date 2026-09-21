@@ -21,6 +21,9 @@ import { createPostgresInlineQualityStore } from '../src/infrastructure/postgres
 import { createSupplierPaymentService, createSupplierPaymentQueryService } from '../src/application/supplier-payment-service.mjs';
 import { createPostgresSupplierPaymentStore } from '../src/infrastructure/postgres-supplier-payment-store.mjs';
 import { createPostgresSupplierPaymentReader } from '../src/infrastructure/postgres-supplier-payment-reader.mjs';
+import { createMaterialLotService, createMaterialLotQueryService } from '../src/application/material-lot-service.mjs';
+import { createPostgresMaterialLotStore } from '../src/infrastructure/postgres-material-lot-store.mjs';
+import { createPostgresMaterialLotReader } from '../src/infrastructure/postgres-material-lot-reader.mjs';
 import { createPostgresWholesaleStore } from '../src/infrastructure/postgres-store.mjs';
 import { createPostgresCatalogStore } from '../src/infrastructure/postgres-catalog-store.mjs';
 import { createPostgresMaterialStore } from '../src/infrastructure/postgres-material-store.mjs';
@@ -61,6 +64,7 @@ test('PostgreSQL closes approved PPS through production, rework, reinspection an
     const productionExecutionStore = createPostgresProductionExecutionStore({ pool });
     const inlineQualityStore = createPostgresInlineQualityStore({ pool });
     const supplierPaymentStore = createPostgresSupplierPaymentStore({ pool });
+    const materialLotStore = createPostgresMaterialLotStore({ pool });
     const finalQualityStore = createPostgresFinalQualityStore({ pool });
     const platform = createWholesalePlatform({ store: wholesaleStore, clock, nextId });
     const catalog = createCatalogService({ wholesaleStore, catalogStore, clock, nextId });
@@ -75,6 +79,8 @@ test('PostgreSQL closes approved PPS through production, rework, reinspection an
     const productionExecutions = createProductionExecutionService({ store: productionExecutionStore, clock, nextId });
     const inlineQuality = createInlineQualityService({ store: inlineQualityStore, clock, nextId });
     const supplierPayments = createSupplierPaymentService({ store: supplierPaymentStore, clock, nextId });
+    const materialLots = createMaterialLotService({ store: materialLotStore, clock, nextId });
+    const materialLotQueries = createMaterialLotQueryService({ reader: createPostgresMaterialLotReader({ pool }) });
     const supplierPaymentQueries = createSupplierPaymentQueryService({ reader: createPostgresSupplierPaymentReader({ pool }), clock });
     const finalQuality = createFinalQualityService({ store: finalQualityStore, clock, nextId });
 
@@ -176,6 +182,62 @@ test('PostgreSQL closes approved PPS through production, rework, reinspection an
     assert.equal(execution.milestones[0].resolutionNotes, 'Certificate received and approved by quality team');
 
     execution = await productionExecutions.completeMilestone('production-execution-complete-materials', 'product-owner', execution.executionCode, { expectedVersion: execution.version, milestoneCode: 'materials-ready', notes: 'Materials released to cutting' });
+
+    // --- Прослеживаемость: из какого рулона ------------------------------------------------------
+    //
+    // Материал приезжает в карантин, выпускается после входного контроля и только потом уходит в
+    // раскрой. Этот порядок и есть смысл всей таблицы, поэтому он проверяется против живой базы.
+    const roll = await materialLots.receiveLot('lot-receive-1', 'product-owner', {
+      materialCode: 'FAB-TECH-GATE', lotReference: 'ROLL-A-001', dyeLot: 'DYE-A',
+      receivedQuantity: 600, certificateReference: 'CERT-ATM-1', notes: 'Первый рулон партии',
+    });
+    assert.equal(roll.status, 'quarantine');
+    assert.equal(roll.unit, 'm', 'the unit comes from the material record');
+    await assert.rejects(() => materialLots.issueLot('lot-issue-too-early', 'product-owner', roll.id, {
+      expectedVersion: roll.version, executionCode: execution.executionCode, quantity: 100,
+    }), { code: 'MATERIAL_LOT_NOT_RELEASED' });
+    // И то же правило стоит в базе, против писателя в обход модуля.
+    await assert.rejects(
+      () => pool.query(`INSERT INTO material_lot_issues (id,lot_id,execution_id,execution_code,quantity,issued_at,issued_by,payload)
+                        VALUES ('bypass', $1, $2, $3, 10, now(), 'x', '{"executionCode":"${execution.executionCode}","quantity":10}'::jsonb)`,
+        [roll.id, execution.id, execution.executionCode]),
+      /MATERIAL_LOT_NOT_RELEASED/,
+    );
+
+    const releasedRoll = await materialLots.releaseLot('lot-release-1', 'quality-approver', roll.id, { expectedVersion: roll.version, notes: 'Входной контроль пройден' });
+    assert.equal(releasedRoll.status, 'released');
+    const issuedRoll = await materialLots.issueLot('lot-issue-1', 'product-owner', releasedRoll.id, {
+      expectedVersion: releasedRoll.version, executionCode: execution.executionCode, quantity: 500,
+    });
+    assert.equal(issuedRoll.issuedQuantity, 500);
+    // Выданное ведёт триггер по самим выдачам, а не заявление рядом с ними.
+    const storedRoll = (await pool.query('SELECT issued_quantity, (payload ->> \'issuedQuantity\')::numeric AS projected FROM material_lots WHERE id = $1', [roll.id])).rows[0];
+    assert.equal(Number(storedRoll.issued_quantity), 500);
+    assert.equal(Number(storedRoll.projected), 500, 'and the payload says the same thing the column does');
+    // Больше, чем приехало, рулон не отдаёт — это держит и домен, и CHECK.
+    await assert.rejects(() => materialLots.issueLot('lot-issue-over', 'product-owner', issuedRoll.id, {
+      expectedVersion: issuedRoll.version, executionCode: execution.executionCode, quantity: 700,
+    }), { code: 'MATERIAL_LOT_INSUFFICIENT' });
+    // Партию, которая уже в изделиях, отклонить нельзя: это претензия мельнице, а не смена статуса.
+    await assert.rejects(() => materialLots.rejectLot('lot-reject', 'quality-approver', issuedRoll.id, {
+      expectedVersion: issuedRoll.version, reason: 'Разнооттеночность по всему рулону',
+    }), { code: 'MATERIAL_LOT_ALREADY_IN_PRODUCTION' });
+
+    // Второй рулон другой крашеной партии — и тогда из этого материала нельзя шить одну вещь.
+    const second = await materialLots.receiveLot('lot-receive-2', 'product-owner', {
+      materialCode: 'FAB-TECH-GATE', lotReference: 'ROLL-B-002', dyeLot: 'DYE-B', receivedQuantity: 400,
+    });
+    const secondReleased = await materialLots.releaseLot('lot-release-2', 'quality-approver', second.id, { expectedVersion: second.version });
+    await materialLots.issueLot('lot-issue-2', 'product-owner', secondReleased.id, {
+      expectedVersion: secondReleased.version, executionCode: execution.executionCode, quantity: 300,
+    });
+
+    const trace = await materialLotQueries.executionTraceabilityForActor('product-owner', execution.executionCode);
+    const shell = trace.materials.find((row) => row.materialCode === 'FAB-TECH-GATE');
+    assert.equal(shell.issuedQuantity, 800);
+    assert.deepEqual([...shell.dyeLots], ['DYE-A', 'DYE-B']);
+    assert.deepEqual([...trace.mixedDyeLots], ['FAB-TECH-GATE'], 'each roll passed its own inspection; the fault is in the pairing');
+    assert.ok(shell.requiredQuantity > 0, 'the requirement comes from the published bill, not from a second opinion');
 
     // --- Пооперационный контроль на раскрое ------------------------------------------------------
     //

@@ -6,6 +6,9 @@
 
   const materialState = window.SynthaMaterialWorkspace || (window.SynthaMaterialWorkspace = {
     items: [], nextCursor: null, loaded: false, loading: false, error: '', generation: 0,
+    // Партии материала лежат рядом с самим материалом: «куда ушёл этот рулон» — вопрос про
+    // материал, а не про отдельный экран, и отвечать на него надо там, где на материал и смотрят.
+    lots: [], lotsLoaded: false, lotsLoading: false,
   });
 
   const materialNav = OD_V5_GROUPS.flatMap((group) => group.items)
@@ -266,6 +269,61 @@
     return wrap;
   }
 
+  // Рулоны этого материала и то, куда они ушли.
+  //
+  // This is the answer to a recall: when a mill reports a fault in a dye batch, the question is which
+  // production orders carry it, and without this the answer is «probably all of them». The lots are
+  // fetched once — they change when the warehouse receives or issues, not when a reader opens
+  // another material — and a failure leaves the rest of the card readable rather than blanking it.
+  async function ensureMaterialLots() {
+    if (materialState.lotsLoaded || materialState.lotsLoading) return;
+    materialState.lotsLoading = true;
+    try { materialState.lots = await api('/v2/material-lots') || []; }
+    catch (error) { materialState.lots = []; }
+    finally { materialState.lotsLoaded = true; materialState.lotsLoading = false; renderApp(); }
+  }
+  function lotStatusLabel(status) {
+    return {
+      quarantine: materialText('\u043a\u0430\u0440\u0430\u043d\u0442\u0438\u043d', 'quarantine'),
+      released: materialText('\u0432\u044b\u043f\u0443\u0449\u0435\u043d', 'released'),
+      rejected: materialText('\u043e\u0442\u043a\u043b\u043e\u043d\u0451\u043d', 'rejected'),
+    }[status] || status;
+  }
+  function materialLotsContent(item) {
+    void ensureMaterialLots();
+    const lots = materialState.lots.filter((lot) => lot.materialCode === item.code);
+    if (!lots.length) {
+      return [notice(materialState.lotsLoading
+        ? materialText('\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430\u2026', 'Loading\u2026')
+        : materialText('\u041f\u0430\u0440\u0442\u0438\u0438 \u044d\u0442\u043e\u0433\u043e \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u0430 \u043d\u0435 \u043f\u0440\u0438\u043d\u0438\u043c\u0430\u043b\u0438\u0441\u044c.', 'No lots of this material have been received.'))];
+    }
+    const table = odMiniTable([
+      materialText('\u041f\u0430\u0440\u0442\u0438\u044f', 'Lot'),
+      materialText('\u041a\u0440\u0430\u0448\u0435\u043d\u0438\u0435', 'Dye lot'),
+      materialText('\u041f\u0440\u0438\u043d\u044f\u0442\u043e', 'Received'),
+      materialText('\u0412\u044b\u0434\u0430\u043d\u043e', 'Issued'),
+      materialText('\u041e\u0441\u0442\u0430\u0442\u043e\u043a', 'Remaining'),
+      materialText('\u0421\u0442\u0430\u0442\u0443\u0441', 'Status'),
+    ], lots.map((lot) => [
+      lot.lotReference,
+      lot.dyeLot || '\u2014',
+      `${lot.receivedQuantity} ${lot.unit}`,
+      `${lot.issuedQuantity} ${lot.unit}`,
+      `${lot.remainingQuantity} ${lot.unit}`,
+      lotStatusLabel(lot.status),
+    ]));
+    const nodes = [table];
+    // Куда ушёл каждый рулон — отдельными строками под таблицей, потому что это и есть ответ на
+    // отзыв, и он должен читаться, а не помещаться в ячейку.
+    for (const lot of lots) {
+      if (!lot.issues || !lot.issues.length) continue;
+      const line = el('p', { className: 'muted' });
+      line.textContent = `${lot.lotReference} \u2192 ${lot.issues.map((issue) => `${issue.executionCode} (${issue.quantity} ${lot.unit})`).join(', ')}`;
+      nodes.push(line);
+    }
+    return nodes;
+  }
+
   function materialInspector(assessment) {
     const item = assessment.material;
     const risks = assessment.risks.length
@@ -299,6 +357,11 @@
             { label: materialText('\u0412\u0435\u0440\u0441\u0438\u044f', 'Version'), value: item.version || 1 },
           ],
           content: [risks],
+        },
+        {
+          label: materialText('\u041f\u0430\u0440\u0442\u0438\u0438', 'Lots'),
+          fields: [],
+          content: materialLotsContent(item),
         },
       ],
       actions: materialActions(assessment),

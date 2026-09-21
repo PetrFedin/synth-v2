@@ -15,6 +15,9 @@
     // относится к конкретной вехе, и разносить их означало бы заставить человека держать две
     // страницы рядом, чтобы понять одну партию.
     catalogue: [], catalogueLoaded: false, checksByExecution: {}, checksLoading: '',
+    // Прослеживаемость стоит здесь же и выше пооперационного контроля: рулон приходит в партию
+    // раньше, чем на ней что-то проверяют, и порядок панелей должен это повторять.
+    traceByExecution: {}, traceLoading: '',
     qcCheckedQuantity: '', qcInspectorName: '', qcDefectCode: '', qcDefectQuantity: '1',
     qcDefects: [], qcNotes: '', qcDispositionNotes: '',
   };
@@ -140,6 +143,59 @@
       if (state.view === 'production-executions') renderApp();
     }
   }
+  async function loadTraceability(executionCode, request = api) {
+    if (!executionCode || ui.traceLoading === executionCode) return;
+    ui.traceLoading = executionCode;
+    try { ui.traceByExecution[executionCode] = await request(`/v2/production-executions/${encodeURIComponent(executionCode)}/material-traceability`); }
+    catch (error) { ui.traceByExecution[executionCode] = { materials: [], shortfalls: [], mixedDyeLots: [], error: error?.message || '' }; }
+    finally { ui.traceLoading = ''; if (state.view === 'production-executions') renderApp(); }
+  }
+  function ensureTraceability(value) {
+    if (value && ui.traceByExecution[value.executionCode] === undefined) queueMicrotask(() => { void loadTraceability(value.executionCode); });
+  }
+  function amount(value, unit) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return '—';
+    return `${number.toFixed(number % 1 ? 2 : 0).replace('.', ',')} ${unit || ''}`.trim();
+  }
+
+  // Из какого рулона сшита эта партия.
+  //
+  // Две находки здесь — сравнения, а не записи: недостача (ведомость требует больше, чем выдано) и
+  // разнооттеночность (один материал выдан из разных крашеных партий). Каждый рулон прошёл свой
+  // входной контроль по отдельности; дефект — в сочетании, и увидеть сочетание может только это.
+  function traceabilityPanel(value) {
+    const trace = ui.traceByExecution[value.executionCode];
+    const children = [h('h3', { text: t('Материалы партии', 'Materials in this lot') })];
+    if (!trace) { children.push(h('p', { className: 'muted', text: t('Загрузка…', 'Loading…') })); return h('section', { className: 'production-execution-card' }, children); }
+    if (trace.error) children.push(h('p', { className: 'production-execution-warn', text: trace.error }));
+    if (!trace.materials || !trace.materials.length) {
+      children.push(h('p', { className: 'muted', text: t('В эту партию ещё не выдан ни один рулон.', 'No material has been issued to this lot yet.') }));
+      return h('section', { className: 'production-execution-card' }, children);
+    }
+    for (const material of trace.materials) {
+      const lines = [
+        h('strong', { text: material.materialCode }),
+        h('p', { className: 'muted', text: t(
+          `Нужно по ведомости ${amount(material.requiredQuantity, material.unit)}, выдано ${amount(material.issuedQuantity, material.unit)}`,
+          `Bill needs ${amount(material.requiredQuantity, material.unit)}, issued ${amount(material.issuedQuantity, material.unit)}`) }),
+      ];
+      for (const lot of material.lots) {
+        lines.push(h('p', { className: 'muted', text: `${lot.lotReference}${lot.dyeLot ? ` · ${t('крашение', 'dye lot')} ${lot.dyeLot}` : ''} — ${amount(lot.quantity, material.unit)} · ${date(lot.issuedAt)}` }));
+      }
+      // Разнооттеночность названа отдельно, потому что это не «чего-то не хватает», а «из этого
+      // нельзя сшить одну вещь».
+      if (material.multipleDyeLots) lines.push(h('p', { className: 'production-execution-warn', text: t(
+        `Выдано из разных крашеных партий (${material.dyeLots.join(', ')}) — детали одного изделия могут отличаться по оттенку.`,
+        `Issued from more than one dye lot (${material.dyeLots.join(', ')}) — panels of one garment may differ in shade.`) }));
+      if (material.shortfallQuantity > 0) lines.push(h('p', { className: 'production-execution-warn', text: t(
+        `Не хватает ${amount(material.shortfallQuantity, material.unit)} до потребности партии.`,
+        `${amount(material.shortfallQuantity, material.unit)} short of what the lot needs.`) }));
+      children.push(h('div', { className: 'production-execution-check closed' }, lines));
+    }
+    return h('section', { className: 'production-execution-card' }, children);
+  }
+
   function ensureInlineQuality(value) {
     if (!value) return;
     if (!ui.catalogueLoaded || ui.checksByExecution[value.executionCode] === undefined) {
@@ -473,6 +529,8 @@
       h('dl', { className: 'production-execution-facts' }, [pair('PO', value.productionOrderNumber), pair('SKU', value.sku), pair(t('Фабрика', 'Supplier'), value.supplierCode), pair(t('Количество', 'Quantity'), value.quantity), pair(t('Начало окна', 'Window start'), date(value.productionStartAt)), pair(t('Срок поставки', 'Delivery due'), date(value.deliveryDueAt)), pair(t('Подтверждение фабрики', 'Supplier confirmation'), value.sourceSnapshot?.confirmationReference), pair(t('Техпак', 'Tech Pack'), `${value.sourceSnapshot?.techPackCode || '—'} · v${value.sourceSnapshot?.techPackVersion || '—'}`)]),
       h('section', { className: 'production-execution-card' }, [h('h3', { text: t('Контрольные точки', 'Milestones') }), timeline(value)]),
     ];
+    // Материалы раньше операций: рулон приходит в партию до того, как на ней что-то проверяют.
+    if (qualityManage || manage) { ensureTraceability(value); children.push(traceabilityPanel(value)); }
     if (qualityManage) { ensureInlineQuality(value); children.push(inlineQualityPanel(value, current, qualityManage)); }
     if (value.status === 'active' && current && manage) children.push(actionPanel(value, current, actions));
     if (['planned', 'active'].includes(value.status) && manage) children.push(cancelPanel(value));

@@ -68,6 +68,17 @@ const DEMO_DEFECT_TYPES = [
 // Аванс и остаток — обычное для этой торговли деление, и оно здесь данные, а не соглашение,
 // зашитое в код: бывает и сто процентов по выпуску, и платёж третями. Сумма долей обязана быть
 // целым, и это правило стоит и в домене, и в базе.
+// Рулоны для партии, которая сейчас в производстве.
+//
+// Two rolls of the same cloth from two dye batches, and a third still in quarantine. That is not a
+// contrived example: fabric is dyed in batches, a lot of garments regularly needs more than one, and
+// the platform is supposed to notice — each roll passed its own incoming inspection, so the fault is
+// in the pairing and nothing but a record of what went where can see a pairing.
+const DEMO_MATERIAL_LOTS = [
+  { lotReference: 'ROLL-R3-A-001', dyeLot: 'DYE-2609-A', receivedQuantity: 600, certificateReference: 'CERT-ATM-2609-A', release: true, issue: 600, notes: 'Первый рулон поставки' },
+  { lotReference: 'ROLL-R3-B-002', dyeLot: 'DYE-2609-B', receivedQuantity: 500, certificateReference: 'CERT-ATM-2609-B', release: true, issue: 300, notes: 'Догруз другой крашеной партии' },
+  { lotReference: 'ROLL-R3-C-003', dyeLot: 'DYE-2610-A', receivedQuantity: 450, release: false, issue: 0, notes: 'Приехал, входной контроль не пройден' },
+];
 const DEMO_PAYMENT_SPLIT = [
   { triggerEvent: 'order-confirmed', shareBasisPoints: 3000, labelRu: 'Аванс при подтверждении заказа', labelEn: 'Deposit on order confirmation' },
   { triggerEvent: 'shipment-released', shareBasisPoints: 7000, labelRu: 'Остаток после допуска к отгрузке', labelEn: 'Balance after shipment release' },
@@ -166,6 +177,7 @@ try {
   await ensureSamplingPlans(pool, brandId, accounts.owner);
   await ensureDefectCatalogue(runtime, pool, brandId, accounts.owner);
   await ensureLotInProduction(runtime, pool, brandId, accounts.owner);
+  await ensureMaterialLots(runtime, pool, brandId, accounts.owner, accounts.quality);
   await ensurePaymentSchedules(runtime, pool, brandId, accounts.owner);
 
   // Inspections sat at review-pending because the only account in the brand was the one that ran
@@ -679,6 +691,57 @@ async function ensureLotInProduction(runtime, pool, brandId, actorId) {
 // fallen due — the deposit, whose trigger is the confirmation that already happened — and leaves the
 // balance alone, because on a lot still in production it has not fallen due and paying it would be
 // money out for goods that never shipped.
+// Приёмка рулонов и выдача их в раскрой.
+//
+// The order is the point: a roll arrives in quarantine, incoming inspection releases it, and only
+// then does it go to cutting. The seed follows that order through the services, so a rule it forgot
+// about would stop it rather than be quietly skipped.
+async function ensureMaterialLots(runtime, pool, brandId, warehouseActorId, qualityActorId) {
+  const execution = (await pool.query(
+    "SELECT payload FROM production_executions WHERE production_order_number = $1 AND status = 'active'",
+    [DEMO_LOT_PO],
+  )).rows[0]?.payload;
+  if (!execution) { note('material lots', 'нет партии в производстве — выдавать не во что'); return; }
+  const materialCode = (await pool.query(
+    `SELECT line.material_code FROM bom_lines AS line
+       JOIN boms AS bom ON bom.id = line.bom_id
+      WHERE bom.sku = $1 AND bom.status = 'published'
+      ORDER BY line.position LIMIT 1`,
+    [execution.sku],
+  )).rows[0]?.material_code;
+  if (!materialCode) { note('material lots', `у ${execution.sku} нет опубликованной ведомости`); return; }
+
+  let received = 0;
+  let issued = 0;
+  for (const definition of DEMO_MATERIAL_LOTS) {
+    const existing = (await pool.query('SELECT payload FROM material_lots WHERE brand_id = $1 AND material_code = $2 AND lot_reference = $3', [brandId, materialCode, definition.lotReference])).rows[0]?.payload;
+    if (existing) continue;
+    try {
+      let lot = await runtime.materialLots.receiveLot(command('material-lot'), warehouseActorId, {
+        materialCode, lotReference: definition.lotReference, dyeLot: definition.dyeLot,
+        receivedQuantity: definition.receivedQuantity, notes: definition.notes,
+        ...(definition.certificateReference ? { certificateReference: definition.certificateReference } : {}),
+      });
+      received += 1;
+      if (!definition.release) continue;
+      // Выпускает из карантина контроль качества, а не склад: решение «годится» принимает не тот,
+      // кто принял груз.
+      lot = await runtime.materialLots.releaseLot(command('material-lot-release'), qualityActorId, lot.id, {
+        expectedVersion: lot.version, notes: 'Входной контроль пройден.',
+      });
+      if (definition.issue > 0) {
+        await runtime.materialLots.issueLot(command('material-lot-issue'), warehouseActorId, lot.id, {
+          expectedVersion: lot.version, executionCode: execution.executionCode, quantity: definition.issue,
+        });
+        issued += 1;
+      }
+    } catch (error) {
+      note('material lots', `${definition.lotReference} skipped (${error.code ?? error.message})`);
+    }
+  }
+  note('material lots', received > 0 ? `${received} рулонов принято, ${issued} выдано в раскрой` : 'рулоны уже приняты');
+}
+
 async function ensurePaymentSchedules(runtime, pool, brandId, actorId) {
   const orders = await pool.query(
     `SELECT production_order.production_order_number AS number

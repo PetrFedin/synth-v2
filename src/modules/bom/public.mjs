@@ -1,4 +1,9 @@
 import { invariant } from '../../core/errors.mjs';
+
+// Разбор ведомости и её размерный ряд — часть публичного лица спецификации: ими пользуются экран
+// материалов и сводка по стилю. Ходить за ними в приватный файл значило бы обойти ту границу,
+// ради которой модули и разделены.
+export { SIZE_LINE_EXCEPTIONS, bomComposition, efficiencyBasisPoints, styleSizeLine } from './size-line.mjs';
 import { normalizeMoney } from '../../core/money.mjs';
 
 const CODE_PATTERN = /^[A-Z0-9][A-Z0-9._-]{1,63}$/;

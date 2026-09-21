@@ -779,6 +779,89 @@
     return row;
   }
 
+  // \u0420\u044f\u0434 \u0433\u0440\u0443\u0437\u0438\u0442\u0441\u044f \u043e\u0442\u0434\u0435\u043b\u044c\u043d\u044b\u043c \u0437\u0430\u043f\u0440\u043e\u0441\u043e\u043c: \u043e\u043d \u0441\u043e\u0431\u0438\u0440\u0430\u0435\u0442\u0441\u044f \u0438\u0437 \u0432\u0435\u0434\u043e\u043c\u043e\u0441\u0442\u0435\u0439 \u0432\u0441\u0435\u0445 \u0440\u0430\u0437\u043c\u0435\u0440\u043e\u0432 \u0441\u0442\u0438\u043b\u044f, \u0438 \u0442\u044f\u043d\u0443\u0442\u044c
+  // \u0435\u0433\u043e \u0434\u043b\u044f \u043a\u0430\u0436\u0434\u043e\u0439 \u0441\u0442\u0440\u043e\u043a\u0438 \u0440\u0435\u0435\u0441\u0442\u0440\u0430 \u0440\u0430\u0434\u0438 \u043e\u0434\u043d\u043e\u0439 \u043e\u0442\u043a\u0440\u044b\u0442\u043e\u0439 \u043a\u0430\u0440\u0442\u043e\u0447\u043a\u0438 \u0431\u044b\u043b\u043e \u0431\u044b \u0440\u0430\u0441\u0442\u043e\u0447\u0438\u0442\u0435\u043b\u044c\u043d\u043e.
+  const sizeLineState = window.SynthaBomSizeLineState
+    || (window.SynthaBomSizeLineState = { data: {}, loading: {}, failed: {} });
+
+  function loadSizeLine(styleId) {
+    if (sizeLineState.data[styleId] || sizeLineState.loading[styleId] || sizeLineState.failed[styleId]) return;
+    sizeLineState.loading[styleId] = true;
+    api(`/v2/product/styles/${encodeURIComponent(styleId)}/bom-size-line`)
+      .then((value) => { sizeLineState.data[styleId] = value; })
+      .catch(() => { sizeLineState.failed[styleId] = true; })
+      .finally(() => { sizeLineState.loading[styleId] = false; if (state.view === 'styles') renderApp(); });
+  }
+
+  function sizeLineExceptionLabel(code) {
+    const labels = {
+      'size-without-published-bom': ['\u0420\u0430\u0437\u043c\u0435\u0440 \u0431\u0435\u0437 \u043e\u043f\u0443\u0431\u043b\u0438\u043a\u043e\u0432\u0430\u043d\u043d\u043e\u0439 \u0432\u0435\u0434\u043e\u043c\u043e\u0441\u0442\u0438', 'Size without a published bill'],
+      'material-missing-in-size': ['\u041c\u0430\u0442\u0435\u0440\u0438\u0430\u043b \u043f\u0440\u043e\u043f\u0430\u043b \u0432 \u0440\u0430\u0437\u043c\u0435\u0440\u0435', 'Material missing in a size'],
+      'consumption-not-graded': ['\u0420\u0430\u0441\u0445\u043e\u0434 \u043d\u0435 \u0440\u0430\u0441\u0442\u0451\u0442 \u0441 \u0440\u0430\u0437\u043c\u0435\u0440\u043e\u043c', 'Consumption does not grow with size'],
+    };
+    const pair = labels[code];
+    return pair ? text(pair[0], pair[1]) : code;
+  }
+
+  function sizeLinePanel(product) {
+    const styleId = product.id;
+    loadSizeLine(styleId);
+    const view = sizeLineState.data[styleId];
+    if (sizeLineState.failed[styleId]) return notice(text('\u0420\u044f\u0434 \u0432\u0435\u0434\u043e\u043c\u043e\u0441\u0442\u0438 \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d.', 'The bill size line is unavailable.'));
+    if (!view) return notice(text('\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430\u2026', 'Loading\u2026'));
+    if (!view.sizes.length) {
+      return notice(text('\u0423 \u0441\u0442\u0438\u043b\u044f \u043d\u0435\u0442 SKU \u0441 \u0440\u0430\u0437\u043c\u0435\u0440\u0430\u043c\u0438, \u043f\u043e\u044d\u0442\u043e\u043c\u0443 \u0440\u044f\u0434\u0430 \u0432\u0435\u0434\u043e\u043c\u043e\u0441\u0442\u0438 \u043d\u0435\u0442.',
+        'This style has no sized SKU, so there is no size line.'));
+    }
+
+    const holder = document.createDocumentFragment();
+    holder.append(odMiniTable(
+      [text('\u041c\u0430\u0442\u0435\u0440\u0438\u0430\u043b', 'Material'), text('\u041a\u043e\u043c\u043f\u043e\u043d\u0435\u043d\u0442', 'Component'), ...view.sizes.map((size) => size.sizeCode), text('\u0420\u0430\u0437\u0431\u0440\u043e\u0441', 'Spread')],
+      view.materials.map((material) => [
+        material.isMain ? `${material.materialCode} \u2605` : material.materialCode,
+        material.component || '\u2014',
+        ...material.consumption.map((cell) => (cell && cell.quantity !== null
+          ? `${I18N.formatNumber(cell.quantity, { maximumFractionDigits: 4 })} ${material.unit}`
+          : '\u2014')),
+        material.graded
+          ? `${I18N.formatNumber(material.minQuantity, { maximumFractionDigits: 4 })}\u2013${I18N.formatNumber(material.maxQuantity, { maximumFractionDigits: 4 })}`
+          : text('\u043e\u0434\u043d\u0430 \u0446\u0438\u0444\u0440\u0430', 'one figure'),
+      ]),
+    ));
+
+    holder.append(odMiniTable(
+      [text('\u0420\u0430\u0437\u043c\u0435\u0440', 'Size'), text('\u0412\u0435\u0434\u043e\u043c\u043e\u0441\u0442\u044c', 'Bill'), text('\u0418\u0442\u043e\u0433', 'Total')],
+      view.sizes.map((size) => [
+        size.sizeCode,
+        size.bomStatus === 'published' ? text('\u043e\u043f\u0443\u0431\u043b\u0438\u043a\u043e\u0432\u0430\u043d\u0430', 'published') : (size.bomStatus || text('\u043d\u0435\u0442', 'none')),
+        size.bomTotalCost === null ? '\u2014' : `${I18N.formatNumber(size.bomTotalCost, { maximumFractionDigits: 2 })} ${view.currency || ''}`,
+      ]),
+    ));
+
+    if (view.exceptions.length) {
+      holder.append(odMiniTable(
+        [text('\u0420\u0430\u0441\u0445\u043e\u0436\u0434\u0435\u043d\u0438\u0435', 'Exception'), text('\u0420\u0430\u0437\u043c\u0435\u0440', 'Size'), text('\u041c\u0430\u0442\u0435\u0440\u0438\u0430\u043b', 'Material'), text('\u041f\u043e\u0434\u0440\u043e\u0431\u043d\u043e\u0441\u0442\u044c', 'Detail')],
+        view.exceptions.map((exception) => [
+          sizeLineExceptionLabel(exception.code), exception.sizeCode, exception.materialCode || '\u2014', exception.detail,
+        ]),
+      ));
+      // \u0420\u0430\u0441\u0445\u043e\u0436\u0434\u0435\u043d\u0438\u044f \u043d\u0430\u0437\u0432\u0430\u043d\u044b, \u043d\u043e \u043d\u0438 \u043e\u0434\u043d\u043e \u0438\u0437 \u043d\u0438\u0445 \u043d\u0435 \u043e\u0442\u043a\u0430\u0437: \u0440\u0430\u0441\u0445\u043e\u0434 \u043c\u043e\u0436\u0435\u0442 \u043d\u0435 \u0440\u0430\u0441\u0442\u0438 \u0441 \u0440\u0430\u0437\u043c\u0435\u0440\u043e\u043c \u0437\u0430\u043a\u043e\u043d\u043d\u043e \u2014
+      // \u0440\u0430\u0441\u043a\u043b\u0430\u0434\u043a\u0430 \u043d\u0430 \u0440\u0430\u0437\u043d\u044b\u0445 \u0440\u0430\u0437\u043c\u0435\u0440\u0430\u0445 \u043b\u043e\u0436\u0438\u0442\u0441\u044f \u043f\u043e-\u0440\u0430\u0437\u043d\u043e\u043c\u0443, \u2014 \u0438 \u0437\u0430\u043f\u0440\u0435\u0449\u0430\u0442\u044c \u044d\u0442\u043e \u0437\u043d\u0430\u0447\u0438\u043b\u043e \u0431\u044b \u0437\u0430\u043f\u0440\u0435\u0442\u0438\u0442\u044c
+      // \u043f\u0440\u0430\u0432\u0434\u0443. \u0420\u0435\u0448\u0430\u0435\u0442 \u0447\u0435\u043b\u043e\u0432\u0435\u043a, \u0430 \u044d\u043a\u0440\u0430\u043d \u043f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u0442.
+      holder.append(notice(text(
+        '\u042d\u0442\u043e \u043f\u043e\u0434\u043e\u0437\u0440\u0438\u0442\u0435\u043b\u044c\u043d\u044b\u0435 \u043c\u0435\u0441\u0442\u0430, \u0430 \u043d\u0435 \u043e\u0448\u0438\u0431\u043a\u0438: \u043a\u0430\u0436\u0434\u043e\u0435 \u0438\u0437 \u043d\u0438\u0445 \u0431\u044b\u0432\u0430\u0435\u0442 \u0438 \u043d\u0430\u043c\u0435\u0440\u0435\u043d\u043d\u044b\u043c. \u0420\u0435\u0448\u0430\u0435\u0442 \u0430\u0432\u0442\u043e\u0440 \u0432\u0435\u0434\u043e\u043c\u043e\u0441\u0442\u0438.',
+        'These are suspicious, not wrong: each can be deliberate. The bill author decides.'), 'warning'));
+    } else if (view.sizes.length === 1) {
+      holder.append(notice(text(
+        '\u0423 \u0441\u0442\u0438\u043b\u044f \u043e\u0434\u0438\u043d \u0440\u0430\u0437\u043c\u0435\u0440, \u043f\u043e\u044d\u0442\u043e\u043c\u0443 \u0441\u0440\u0430\u0432\u043d\u0438\u0432\u0430\u0442\u044c \u0440\u044f\u0434 \u043d\u0435 \u0441 \u0447\u0435\u043c: \u0433\u0440\u0430\u0434\u0430\u0446\u0438\u044f \u0440\u0430\u0441\u0445\u043e\u0434\u0430 \u0432\u0438\u0434\u043d\u0430 \u043d\u0430\u0447\u0438\u043d\u0430\u044f \u0441 \u0434\u0432\u0443\u0445 \u0440\u0430\u0437\u043c\u0435\u0440\u043e\u0432.',
+        'This style has one size, so there is nothing to compare: grading shows from two sizes upward.')));
+    } else {
+      holder.append(notice(text('\u0420\u044f\u0434 \u0441\u0445\u043e\u0434\u0438\u0442\u0441\u044f: \u0440\u0430\u0441\u0445\u043e\u0434 \u0440\u0430\u0441\u0442\u0451\u0442 \u0441 \u0440\u0430\u0437\u043c\u0435\u0440\u043e\u043c, \u043f\u0440\u043e\u043f\u0443\u0441\u043a\u043e\u0432 \u043d\u0435\u0442.',
+        'The size line is consistent: consumption grows with size and nothing is missing.'), 'success'));
+    }
+    return holder;
+  }
+
   function inspector(item) {
     const product = item.product;
     const risks = item.risks.length
@@ -791,7 +874,14 @@
       preview: true,
       tabs: [
         {
-          label: text('Продукт', 'Product'),
+          // \u0420\u0430\u0437\u043c\u0435\u0440\u043d\u044b\u0439 \u0440\u044f\u0434 \u0432\u0435\u0434\u043e\u043c\u043e\u0441\u0442\u0438. \u0421\u043f\u0435\u0446\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u044f \u0432\u0435\u0434\u0451\u0442\u0441\u044f \u043d\u0430 \u043a\u0430\u0436\u0434\u044b\u0439 \u0440\u0430\u0437\u043c\u0435\u0440 \u043e\u0442\u0434\u0435\u043b\u044c\u043d\u043e \u2014 \u044d\u0442\u043e \u0432\u0435\u0440\u043d\u043e,
+          // \u0440\u0430\u0441\u0445\u043e\u0434 \u043d\u0430 48-\u0439 \u0431\u043e\u043b\u044c\u0448\u0435, \u0447\u0435\u043c \u043d\u0430 40-\u0439, \u2014 \u043d\u043e \u0431\u0435\u0437 \u0440\u044f\u0434\u0430 \u0430\u0432\u0442\u043e\u0440 \u043d\u0435 \u043c\u043e\u0436\u0435\u0442 \u0441\u0440\u0430\u0432\u043d\u0438\u0442\u044c \u0438\u0445 \u043c\u0435\u0436\u0434\u0443
+          // \u0441\u043e\u0431\u043e\u0439, \u0430 \u043e\u043f\u0435\u0447\u0430\u0442\u043a\u0443 \u043f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u0442 \u0438\u043c\u0435\u043d\u043d\u043e \u0441\u0440\u0430\u0432\u043d\u0435\u043d\u0438\u0435.
+          label: text('\u0420\u044f\u0434 \u0432\u0435\u0434\u043e\u043c\u043e\u0441\u0442\u0438', 'Bill size line'),
+          content: [sizeLinePanel(product)],
+        },
+        {
+          label: text('\u041f\u0440\u043e\u0434\u0443\u043a\u0442', 'Product'),
           fields: [
             { label: text('Артикул', 'Style code'), value: product.styleCode || '—' },
             { label: text('Идентификатор', 'Identifier'), value: shortId(product.id), title: product.id },

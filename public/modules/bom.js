@@ -218,6 +218,17 @@
     if (!lines.length) root.append(h('p', { className: 'muted', text: text('В спецификации нет строк.', 'This bill has no lines.') }));
     return root;
   }
+  function efficiencyText(line) {
+    const efficiency = core.efficiencyBasisPoints(line);
+    if (efficiency === null) return '';
+    // \u0412\u0441\u0435 \u0442\u0440\u0438 \u0447\u0438\u0441\u043b\u0430 \u043f\u0440\u043e\u0445\u043e\u0434\u044f\u0442 \u0447\u0435\u0440\u0435\u0437 \u043e\u0434\u0438\u043d \u0444\u043e\u0440\u043c\u0430\u0442\u0442\u0435\u0440: \u0441\u044b\u0440\u043e\u0435 \u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043f\u0435\u0447\u0430\u0442\u0430\u0435\u0442 \u0442\u043e\u0447\u043a\u0443, \u0438 \u00ab2.1 m\u00bb
+    // \u0432\u0441\u0442\u0430\u0432\u0430\u043b\u043e \u0440\u044f\u0434\u043e\u043c \u0441 \u00ab93,5 %\u00bb \u043d\u0430 \u043e\u0434\u043d\u043e\u043c \u044d\u043a\u0440\u0430\u043d\u0435.
+    const number = (value, digits) => I18N.formatNumber(value, { maximumFractionDigits: digits });
+    return text(
+      `\u043d\u0435\u0442\u0442\u043e ${number(line.quantity, 4)} ${line.unit} \u00b7 \u043e\u0442\u0445\u043e\u0434\u044b ${number(line.wastePercent, 2)} % \u00b7 \u0432\u044b\u0445\u043e\u0434 ${I18N.formatNumber(efficiency / 100, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %`,
+      `net ${number(line.quantity, 4)} ${line.unit} \u00b7 waste ${number(line.wastePercent, 2)} % \u00b7 yield ${I18N.formatNumber(efficiency / 100, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %`);
+  }
+
   function lineView(line, currency) {
     const head = h('div', { className: 'bom-line-head' }, [h('strong', { text: line.component })]);
     // The principal material of its kind, which is what a care label, a customs declaration and a
@@ -225,7 +236,10 @@
     if (line.isMain) head.append(h('span', { className: 'bom-line-main', text: text('основной', 'main') }));
     const view = h('div', { className: 'bom-line-view' }, [
       head,
-      h('span', { text: `${line.materialCode} · ${line.grossQuantity} ${line.unit}` }),
+      h('span', { text: `${line.materialCode} \u00b7 ${I18N.formatNumber(line.grossQuantity, { maximumFractionDigits: 4 })} ${line.unit}` }),
+      // \u041d\u0435\u0442\u0442\u043e, \u0431\u0440\u0443\u0442\u0442\u043e \u0438 \u0432\u044b\u0445\u043e\u0434 \u0440\u044f\u0434\u043e\u043c: \u043e\u0434\u043d\u0430 \u0446\u0438\u0444\u0440\u0430 \u0431\u0440\u0443\u0442\u0442\u043e \u043d\u0435 \u0433\u043e\u0432\u043e\u0440\u0438\u0442, \u0441\u043a\u043e\u043b\u044c\u043a\u043e \u0438\u0437 \u043d\u0435\u0451 \u0441\u0442\u0430\u043d\u0435\u0442 \u0438\u0437\u0434\u0435\u043b\u0438\u0435\u043c,
+      // \u0430 \u0438\u043c\u0435\u043d\u043d\u043e \u044d\u0442\u043e \u0447\u0438\u0441\u043b\u043e \u0437\u0430\u043a\u0443\u043f\u043a\u0430 \u0438 \u0441\u0440\u0430\u0432\u043d\u0438\u0432\u0430\u0435\u0442 \u0441 \u0444\u0430\u043a\u0442\u043e\u043c \u0440\u0430\u0441\u043a\u0440\u043e\u044f.
+      efficiencyText(line) ? h('small', { className: 'bom-line-efficiency', text: efficiencyText(line) }) : null,
       h('span', { text: moneyValue(line.lineCost, currency, { rate: true }) }),
     ]);
     // Where it goes on the garment. Without it a bill is a shopping list: it says a shell and a

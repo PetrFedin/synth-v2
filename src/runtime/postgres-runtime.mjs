@@ -34,6 +34,8 @@ import { createSeasonEconomicsQueryService } from '../application/season-economi
 import { createPostgresMaterialColourStore } from '../infrastructure/postgres-material-colour-store.mjs';
 import { createPostgresMaterialColourReader } from '../infrastructure/postgres-material-colour-reader.mjs';
 import { createMaterialColourService, createMaterialColourQueryService } from '../application/material-colour-service.mjs';
+import { createPostgresBomSizeLineReader } from '../infrastructure/postgres-bom-size-line-reader.mjs';
+import { createBomSizeLineQueryService } from '../application/bom-size-line-service.mjs';
 import { createPostgresFinalQualityStore } from '../infrastructure/postgres-final-quality-store.mjs';
 import { createPostgresOrderMarginBridgeReader } from '../infrastructure/postgres-order-margin-bridge-reader.mjs';
 import { createPostgresProductionExecutionReader } from '../infrastructure/postgres-production-execution-reader.mjs';
@@ -237,6 +239,12 @@ export function createPostgresWholesaleRuntime(options = {}) {
   });
   const materialColours = Object.freeze({ ...materialColourQueries, ...materialColourCommands });
 
+  // Размерный ряд ведомости читается стилем целиком: автор заполняет ведомость на каждый размер
+  // отдельно и без ряда не может сравнить их между собой, а опечатку показывает именно сравнение.
+  const bomSizeLine = createBomSizeLineQueryService({
+    reader: createPostgresBomSizeLineReader({ pool: options.pool }),
+  });
+
   const seasonEconomics = createSeasonEconomicsQueryService({
     reader: createPostgresSeasonEconomicsReader({ pool: options.pool }),
   });
@@ -282,6 +290,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
     targetPricing,
     seasonEconomics,
     materialColours,
+    bomSizeLine,
     collaboration: base.collaboration,
     orders: base.orders,
     notifications: base.notifications,
@@ -321,6 +330,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
     targetPricing,
     seasonEconomics,
     materialColours,
+    bomSizeLine,
     operationSequenceStore,
     operationSequenceReader,
     operationSequences,

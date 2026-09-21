@@ -31,6 +31,9 @@ import { createPostgresTargetPricingReader } from '../infrastructure/postgres-ta
 import { createTargetPricingService, createTargetPricingQueryService } from '../application/target-pricing-service.mjs';
 import { createPostgresSeasonEconomicsReader } from '../infrastructure/postgres-season-economics-reader.mjs';
 import { createSeasonEconomicsQueryService } from '../application/season-economics-service.mjs';
+import { createPostgresMaterialColourStore } from '../infrastructure/postgres-material-colour-store.mjs';
+import { createPostgresMaterialColourReader } from '../infrastructure/postgres-material-colour-reader.mjs';
+import { createMaterialColourService, createMaterialColourQueryService } from '../application/material-colour-service.mjs';
 import { createPostgresFinalQualityStore } from '../infrastructure/postgres-final-quality-store.mjs';
 import { createPostgresOrderMarginBridgeReader } from '../infrastructure/postgres-order-margin-bridge-reader.mjs';
 import { createPostgresProductionExecutionReader } from '../infrastructure/postgres-production-execution-reader.mjs';
@@ -221,6 +224,19 @@ export function createPostgresWholesaleRuntime(options = {}) {
   // Плановая экономика сезона замыкает ту же цепочку сверху: слот линейного плана, целевая цена по
   // нему и цена из подтверждённого заказа сводятся в одну маржу. Читается и только читается —
   // ни одно из сведённых чисел не хранится.
+  // Цвет материала и его утверждение стоят раньше закупки: пока лабораторный образец не принят,
+  // красить тираж нельзя — перекрасить принятую партию невозможно, её можно только не принять.
+  const materialColourCommands = createMaterialColourService({
+    store: createPostgresMaterialColourStore({ pool: options.pool }),
+    ...(options.clock ? { clock: options.clock } : {}),
+    ...(options.nextId ? { nextId: options.nextId } : {}),
+  });
+  const materialColourQueries = createMaterialColourQueryService({
+    reader: createPostgresMaterialColourReader({ pool: options.pool }),
+    ...(options.clock ? { clock: options.clock } : {}),
+  });
+  const materialColours = Object.freeze({ ...materialColourQueries, ...materialColourCommands });
+
   const seasonEconomics = createSeasonEconomicsQueryService({
     reader: createPostgresSeasonEconomicsReader({ pool: options.pool }),
   });
@@ -265,6 +281,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
     operationSequences,
     targetPricing,
     seasonEconomics,
+    materialColours,
     collaboration: base.collaboration,
     orders: base.orders,
     notifications: base.notifications,
@@ -303,6 +320,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
     targetPricingReader,
     targetPricing,
     seasonEconomics,
+    materialColours,
     operationSequenceStore,
     operationSequenceReader,
     operationSequences,

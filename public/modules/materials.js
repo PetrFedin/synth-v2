@@ -326,6 +326,99 @@
 
 // \u0421\u043e\u0441\u0442\u0430\u0432 \u043f\u0435\u0447\u0430\u0442\u0430\u0435\u0442\u0441\u044f \u0441\u0442\u0440\u043e\u043a\u0430\u043c\u0438: \u043f\u0440\u043e\u0446\u0435\u043d\u0442\u044b, \u043a\u043e\u0442\u043e\u0440\u044b\u0435 \u043d\u0435\u043b\u044c\u0437\u044f \u0441\u043b\u043e\u0436\u0438\u0442\u044c, \u043d\u0435\u043b\u044c\u0437\u044f \u0438 \u043f\u0440\u043e\u0432\u0435\u0440\u0438\u0442\u044c, \u0430 \u0441 \u044d\u0442\u0438\u043a\u0435\u0442\u043a\u0438
   // \u0438\u0445 \u0447\u0438\u0442\u0430\u0435\u0442 \u043f\u043e\u043a\u0443\u043f\u0430\u0442\u0435\u043b\u044c.
+// \u041f\u0430\u043b\u0438\u0442\u0440\u0430 \u043f\u043e\u043b\u043e\u0442\u043d\u0430 \u0441 \u0441\u0443\u0434\u044c\u0431\u043e\u0439 \u043a\u0430\u0436\u0434\u043e\u0433\u043e \u043e\u0431\u0440\u0430\u0437\u0446\u0430. \u0413\u0440\u0443\u0437\u0438\u0442\u0441\u044f \u043e\u0442\u0434\u0435\u043b\u044c\u043d\u044b\u043c \u0437\u0430\u043f\u0440\u043e\u0441\u043e\u043c: \u0446\u0432\u0435\u0442\u0430 \u0438 \u0438\u0445 \u043e\u0431\u0440\u0430\u0437\u0446\u044b
+// \u0436\u0438\u0432\u0443\u0442 \u0441\u0432\u043e\u0438\u043c\u0438 \u0442\u0430\u0431\u043b\u0438\u0446\u0430\u043c\u0438, \u0438 \u043a\u043b\u0430\u0441\u0442\u044c \u0438\u0445 \u0432 \u043e\u0431\u0449\u0438\u0439 \u0441\u043f\u0438\u0441\u043e\u043a \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u043e\u0432 \u0437\u043d\u0430\u0447\u0438\u043b\u043e \u0431\u044b \u0442\u044f\u043d\u0443\u0442\u044c \u0438\u0445 \u0434\u043b\u044f \u0432\u0441\u0435\u0445
+// \u0447\u0435\u0442\u044b\u0440\u043d\u0430\u0434\u0446\u0430\u0442\u0438 \u0441\u0442\u0440\u043e\u043a \u0440\u0435\u0435\u0441\u0442\u0440\u0430 \u0440\u0430\u0434\u0438 \u043e\u0434\u043d\u043e\u0439 \u043e\u0442\u043a\u0440\u044b\u0442\u043e\u0439 \u043a\u0430\u0440\u0442\u043e\u0447\u043a\u0438.
+const paletteState = window.SynthaMaterialPaletteState
+  || (window.SynthaMaterialPaletteState = { data: {}, loading: {}, failed: {} });
+
+function loadPalette(code) {
+  if (paletteState.data[code] || paletteState.loading[code] || paletteState.failed[code]) return;
+  paletteState.loading[code] = true;
+  api(`/v2/materials/${encodeURIComponent(code)}/palette`)
+    .then((value) => { paletteState.data[code] = Array.isArray(value) ? value : []; })
+    .catch(() => { paletteState.failed[code] = true; })
+    .finally(() => { paletteState.loading[code] = false; if (state.view === 'materials') renderApp(); });
+}
+
+function paletteOf(item) {
+  loadPalette(item.code);
+  return paletteState.data[item.code] || [];
+}
+
+function averageRounds(item) {
+  const rows = paletteOf(item).filter((colour) => colour.performance && colour.performance.averageRounds !== null && colour.performance.averageRounds !== undefined);
+  if (rows.length === 0) return '\u2014';
+  const average = rows.reduce((sum, colour) => sum + colour.performance.averageRounds, 0) / rows.length;
+  return I18N.formatNumber(Math.round(average * 100) / 100, { maximumFractionDigits: 2 });
+}
+
+function labDipStatusLabel(status) {
+  const labels = {
+    requested: ['\u0417\u0430\u043f\u0440\u043e\u0448\u0435\u043d', 'Requested'],
+    submitted: ['\u041f\u0440\u0438\u0441\u043b\u0430\u043d, \u0436\u0434\u0451\u0442 \u0440\u0435\u0448\u0435\u043d\u0438\u044f', 'Submitted for review'],
+    approved: ['\u0423\u0442\u0432\u0435\u0440\u0436\u0434\u0451\u043d', 'Approved'],
+    conditionally_approved: ['\u0423\u0442\u0432\u0435\u0440\u0436\u0434\u0451\u043d \u0443\u0441\u043b\u043e\u0432\u043d\u043e', 'Conditionally approved'],
+    rejected_resubmit: ['\u041e\u0442\u043a\u043b\u043e\u043d\u0451\u043d, \u043f\u0435\u0440\u0435\u0441\u0434\u0430\u0447\u0430', 'Rejected, re-submit'],
+    rejected_cancelled: ['\u041e\u0442\u043a\u043b\u043e\u043d\u0451\u043d \u043e\u043a\u043e\u043d\u0447\u0430\u0442\u0435\u043b\u044c\u043d\u043e', 'Rejected, cancelled'],
+    cancelled: ['\u041e\u0442\u043c\u0435\u043d\u0451\u043d', 'Cancelled'],
+  };
+  const pair = labels[status];
+  return pair ? materialText(pair[0], pair[1]) : status;
+}
+
+function dipRoundOf(colour) {
+  const dips = Array.isArray(colour.labDips) ? colour.labDips : [];
+  if (dips.length === 0) return 0;
+  const last = colour.effectiveStandard || dips[dips.length - 1];
+  return last.submissionRound || 0;
+}
+
+function latestDipLabel(colour) {
+  const dips = Array.isArray(colour.labDips) ? colour.labDips : [];
+  if (dips.length === 0) return materialText('\u041d\u0435 \u0437\u0430\u043f\u0440\u0430\u0448\u0438\u0432\u0430\u043b\u0441\u044f', 'Not requested');
+  const last = dips[dips.length - 1];
+  return `${labDipStatusLabel(last.status)} \u00b7 ${last.dipReference}`;
+}
+
+function palettePanel(item) {
+  const rows = paletteOf(item);
+  if (paletteState.failed[item.code]) return notice(materialText('\u041f\u0430\u043b\u0438\u0442\u0440\u0430 \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u043d\u0430.', 'The palette is unavailable.'));
+  if (rows.length === 0) {
+    return notice(paletteState.loading[item.code]
+      ? materialText('\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430\u2026', 'Loading\u2026')
+      : materialText('\u041f\u0430\u043b\u0438\u0442\u0440\u0430 \u043d\u0435 \u0437\u0430\u0432\u0435\u0434\u0435\u043d\u0430: \u0443 \u043f\u043e\u043b\u043e\u0442\u043d\u0430 \u043d\u0435\u0442 \u043d\u0438 \u043e\u0434\u043d\u043e\u0433\u043e \u0446\u0432\u0435\u0442\u0430 \u0438\u0437 \u0441\u043f\u0440\u0430\u0432\u043e\u0447\u043d\u0438\u043a\u0430, \u043f\u043e\u044d\u0442\u043e\u043c\u0443 \u043f\u0430\u0440\u0442\u0438\u044e \u0432 \u0446\u0432\u0435\u0442\u0435 \u043f\u0440\u0438\u043d\u044f\u0442\u044c \u043d\u0435\u043b\u044c\u0437\u044f.',
+        'No palette: the cloth has no governed colour, so a lot cannot be received in a colour.'));
+  }
+  const holder = document.createDocumentFragment();
+  holder.append(odMiniTable(
+    [materialText('\u0426\u0432\u0435\u0442', 'Colour'), materialText('\u0410\u0440\u0442\u0438\u043a\u0443\u043b \u0444\u0430\u0431\u0440\u0438\u043a\u0438', 'Mill reference'), materialText('\u041e\u0431\u0440\u0430\u0437\u0435\u0446', 'Lab dip'), materialText('\u0420\u0430\u0443\u043d\u0434\u043e\u0432', 'Rounds')],
+    rows.map((colour) => [
+      colour.colourCode,
+      colour.supplierColourReference || '\u2014',
+      colour.effectiveStandard
+        ? `${labDipStatusLabel(colour.effectiveStandard.status)} \u00b7 ${colour.effectiveStandard.dipReference}`
+        : latestDipLabel(colour),
+      // \u0420\u0430\u0443\u043d\u0434 \u0441\u0442\u0440\u043e\u043a\u0438 \u2014 \u044d\u0442\u043e \u0440\u0430\u0443\u043d\u0434 \u0435\u0451 \u0441\u043e\u0431\u0441\u0442\u0432\u0435\u043d\u043d\u043e\u0433\u043e \u043e\u0431\u0440\u0430\u0437\u0446\u0430, \u0430 \u043d\u0435 \u0441\u0432\u043e\u0434\u043a\u0430 \u043f\u043e \u0437\u0430\u043a\u0440\u044b\u0442\u044b\u043c: \u043f\u0440\u0438\u0441\u043b\u0430\u043d\u043d\u044b\u0439 \u0438
+      // \u0436\u0434\u0443\u0449\u0438\u0439 \u0440\u0435\u0448\u0435\u043d\u0438\u044f \u043f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u043b \u0431\u044b \u043d\u043e\u043b\u044c \u0438 \u0447\u0438\u0442\u0430\u043b\u0441\u044f \u0431\u044b \u043a\u0430\u043a \u00ab\u043d\u0435 \u043f\u0440\u0438\u0441\u044b\u043b\u0430\u043b\u0438\u00bb.
+      String(dipRoundOf(colour)),
+    ]),
+  ));
+  const blocked = rows.filter((colour) => !colour.approvedForBulk);
+  const ambiguous = rows.filter((colour) => colour.standardAmbiguous);
+  if (ambiguous.length) {
+    holder.append(notice(materialText(
+      `\u041d\u0430 ${ambiguous.map((c) => c.colourCode).join(', ')} \u0434\u0435\u0439\u0441\u0442\u0432\u0443\u0435\u0442 \u0431\u043e\u043b\u044c\u0448\u0435 \u043e\u0434\u043d\u043e\u0433\u043e \u0443\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u0438\u044f \u2014 \u043a\u0430\u043a\u043e\u0439 \u043e\u0442\u0442\u0435\u043d\u043e\u043a \u043f\u0440\u0430\u0432\u0438\u043b\u044c\u043d\u044b\u0439, \u0440\u0435\u0448\u0430\u0435\u0442 \u0447\u0435\u043b\u043e\u0432\u0435\u043a.`,
+      `More than one approved standard is effective for ${ambiguous.map((c) => c.colourCode).join(', ')}.`), 'warning'));
+  }
+  holder.append(blocked.length
+    ? notice(materialText(
+      `\u041f\u0430\u0440\u0442\u0438\u044e \u043d\u0435\u043b\u044c\u0437\u044f \u0432\u044b\u043f\u0443\u0441\u0442\u0438\u0442\u044c \u0432 \u0446\u0432\u0435\u0442\u0430\u0445: ${blocked.map((c) => c.colourCode).join(', ')} \u2014 \u043f\u043e \u043d\u0438\u043c \u043d\u0435\u0442 \u0434\u0435\u0439\u0441\u0442\u0432\u0443\u044e\u0449\u0435\u0433\u043e \u0443\u0442\u0432\u0435\u0440\u0436\u0434\u0451\u043d\u043d\u043e\u0433\u043e \u043e\u0431\u0440\u0430\u0437\u0446\u0430.`,
+      `Bulk cannot be released in ${blocked.map((c) => c.colourCode).join(', ')}: no effective approved lab dip.`))
+    : notice(materialText('\u0412\u0441\u0435 \u0446\u0432\u0435\u0442\u0430 \u043f\u0430\u043b\u0438\u0442\u0440\u044b \u0443\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u044b \u043a \u0442\u0438\u0440\u0430\u0436\u0443.', 'Every colour in the palette is approved for bulk.'), 'success'));
+  return holder;
+}
+
   function compositionPanel(item) {
     const lines = Array.isArray(item.compositionLines) ? item.compositionLines : [];
     if (lines.length === 0) {
@@ -409,6 +502,17 @@
             { label: materialText('\u0412\u044b\u0445\u043e\u0434 \u0438\u0437 \u0435\u0434\u0438\u043d\u0438\u0446\u044b \u0437\u0430\u043a\u0443\u043f\u043a\u0438', 'Conversion factor'), value: conversionLine(item) },
           ],
           content: [compositionPanel(item), widthNote(item)],
+        },
+        {
+          // \u0426\u0432\u0435\u0442 \u043f\u043e\u043b\u043e\u0442\u043d\u0430 \u0438 \u0435\u0433\u043e \u0443\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u0438\u0435. \u041f\u043e\u043a\u0430 \u043b\u0430\u0431\u043e\u0440\u0430\u0442\u043e\u0440\u043d\u044b\u0439 \u043e\u0431\u0440\u0430\u0437\u0435\u0446 \u043d\u0435 \u043f\u0440\u0438\u043d\u044f\u0442, \u043a\u0440\u0430\u0441\u0438\u0442\u044c \u0442\u0438\u0440\u0430\u0436
+          // \u043d\u0435\u043b\u044c\u0437\u044f: \u043f\u0435\u0440\u0435\u043a\u0440\u0430\u0441\u0438\u0442\u044c \u043f\u0440\u0438\u043d\u044f\u0442\u0443\u044e \u043f\u0430\u0440\u0442\u0438\u044e \u043d\u0435\u0432\u043e\u0437\u043c\u043e\u0436\u043d\u043e, \u0435\u0451 \u043c\u043e\u0436\u043d\u043e \u0442\u043e\u043b\u044c\u043a\u043e \u043d\u0435 \u043f\u0440\u0438\u043d\u044f\u0442\u044c.
+          label: materialText('\u0426\u0432\u0435\u0442 \u0438 \u043e\u0431\u0440\u0430\u0437\u0446\u044b', 'Colour and lab dips'),
+          fields: [
+            { label: materialText('\u0426\u0432\u0435\u0442\u043e\u0432 \u0432 \u043f\u0430\u043b\u0438\u0442\u0440\u0435', 'Colours in palette'), value: paletteOf(item).length || '\u2014' },
+            { label: materialText('\u0423\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u043e \u043a \u0442\u0438\u0440\u0430\u0436\u0443', 'Approved for bulk'), value: paletteOf(item).filter((c) => c.approvedForBulk).length },
+            { label: materialText('\u0421\u0440\u0435\u0434\u043d\u0435 \u0440\u0430\u0443\u043d\u0434\u043e\u0432 \u0434\u043e \u043f\u0440\u0438\u043d\u044f\u0442\u0438\u044f', 'Average rounds to approval'), value: averageRounds(item) },
+          ],
+          content: [palettePanel(item)],
         },
         {
           label: materialText('\u041e\u0441\u0442\u0430\u0442\u043a\u0438', 'Inventory'),

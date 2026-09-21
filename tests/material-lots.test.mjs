@@ -31,6 +31,31 @@ function lot(overrides = {}, id = 'lot-1') {
 const released = (overrides, id) => releaseMaterialLot(lot(overrides, id), { at: AT, actorId: 'quality' });
 function codeOf(fn) { try { fn(); } catch (error) { return error.code; } return 'NO_ERROR'; }
 
+// Цвет партии замыкает её на утверждение оттенка: перекрасить принятую партию невозможно, её
+// можно только не принять.
+const COLOUR = Object.freeze({ entryId: 'mdm-entry:colour:burgundy', version: 1, code: 'BURGUNDY' });
+const approvedDip = Object.freeze({
+  dipReference: 'LD-001', materialCode: 'MAT-SHELL-R1', colourCode: 'BURGUNDY',
+  status: 'approved', validFrom: null, validTo: null,
+});
+
+test('Партия в названном цвете не выпускается без действующего утверждения оттенка', () => {
+  const coloured = lot({ colour: COLOUR }, 'lot-colour');
+  assert.equal(coloured.colourCode, 'BURGUNDY');
+  assert.equal(
+    codeOf(() => releaseMaterialLot(coloured, { at: AT, actorId: 'quality', labDips: [] })),
+    'MATERIAL_LOT_COLOUR_NOT_APPROVED',
+  );
+
+  const release = releaseMaterialLot(coloured, { at: AT, actorId: 'quality', labDips: [approvedDip] });
+  assert.equal(release.status, 'released');
+  // По какому эталону выпущена партия — записано: приёмка читает именно его.
+  assert.equal(release.releasedAgainstLabDip, 'LD-001');
+
+  // Партия без цвета проходит: фурнитура оттенка не несёт.
+  assert.equal(releaseMaterialLot(lot({}, 'lot-plain'), { at: AT, actorId: 'quality' }).releasedAgainstLabDip, null);
+});
+
 test('Материал приезжает в карантин, и это не формальность', () => {
   const received = lot();
   assert.equal(received.status, 'quarantine');

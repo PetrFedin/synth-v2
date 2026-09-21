@@ -32,11 +32,12 @@ function view(client) {
     async insertLot(value) {
       try {
         await client.query(
-          `INSERT INTO material_lots (id,brand_id,material_code,material_version,lot_reference,dye_lot,supplier_code,unit,received_quantity,issued_quantity,status,received_at,certificate_reference,notes,version,created_at,created_by,updated_at,payload)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::timestamptz,$13,$14,$15,$16::timestamptz,$17,$18::timestamptz,$19::jsonb)`,
+          `INSERT INTO material_lots (id,brand_id,material_code,material_version,lot_reference,dye_lot,supplier_code,unit,received_quantity,issued_quantity,status,received_at,certificate_reference,notes,version,created_at,created_by,updated_at,payload,colour_entry_id,colour_entry_version,colour_code)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::timestamptz,$13,$14,$15,$16::timestamptz,$17,$18::timestamptz,$19::jsonb,$20,$21,$22)`,
           [value.id, value.brandId, value.materialCode, value.materialVersion, value.lotReference, value.dyeLot, value.supplierCode, value.unit,
             value.receivedQuantity, value.issuedQuantity, value.status, value.receivedAt, value.certificateReference, value.notes,
-            value.version, value.createdAt, value.createdBy, value.updatedAt, JSON.stringify(value)],
+            value.version, value.createdAt, value.createdBy, value.updatedAt, JSON.stringify(value),
+            value.colourEntryId ?? null, value.colourEntryVersion ?? null, value.colourCode ?? null],
         );
       } catch (error) {
         if (error?.code === '23505') invariant(false, 'MATERIAL_LOT_ALREADY_RECEIVED', 'This lot reference is already recorded for this material', { materialCode: value.materialCode, lotReference: value.lotReference });
@@ -66,6 +67,30 @@ function view(client) {
         [id, issue.lotId, issue.executionId, issue.executionCode, issue.quantity, issue.issuedAt, issue.issuedBy, issue.notes, JSON.stringify(issue)],
       );
     },
+    // Цвет разрешается по палитре самого полотна: код, которого у этого материала нет, — не цвет,
+    // а опечатка, и подставлять по нему запись справочника нельзя.
+    async resolveMaterialColour(materialCode, colourCode) {
+      const result = await client.query(
+        `SELECT colour_entry_id AS "entryId", colour_entry_version AS version, colour_code AS code, status
+           FROM material_colours WHERE material_code = $1 AND colour_code = $2`,
+        [materialCode, String(colourCode ?? '').trim().toUpperCase()],
+      );
+      const row = result.rows[0];
+      invariant(row, 'MATERIAL_COLOUR_NOT_FOUND', 'This colour is not in the material palette', { materialCode, colourCode });
+      invariant(row.status === 'active', 'MATERIAL_COLOUR_RETIRED', 'This colour is retired', { materialCode, colourCode });
+      return Object.freeze({ entryId: row.entryId, version: Number(row.version), code: row.code });
+    },
+
+    // Образцы читаются тем же снимком, что и партия: прочитанные порознь, они могли бы прийти из
+    // разных моментов, и партия выпустилась бы по эталону, который к этому времени уже отозвали.
+    async listLabDipsForMaterial(materialCode) {
+      const result = await client.query(
+        `SELECT payload FROM lab_dips WHERE material_code = $1 AND status IN ('approved', 'conditionally_approved')`,
+        [materialCode],
+      );
+      return result.rows.map((row) => row.payload);
+    },
+
     getCommand: (id) => getRegisteredCommand(client, 'catalog', id),
     insertCommand: (value) => insertRegisteredCommand(client, 'catalog', value),
     async appendOutbox(event) {

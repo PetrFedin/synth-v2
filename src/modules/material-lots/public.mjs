@@ -1,4 +1,5 @@
 import { invariant } from '../../core/errors.mjs';
+import { assertLotColourIsApproved } from '../material-colours/public.mjs';
 
 // Из какого рулона сшита эта партия.
 //
@@ -35,6 +36,9 @@ export function receiveMaterialLot({ id, material, input, receivedAt, actorId })
     // Красильная партия есть не у всего: пуговицы и нитки её не имеют, и пустое поле здесь честнее
     // выдуманного номера.
     dyeLot: optional(input?.dyeLot, 64, 'MATERIAL_LOT_DYE_LOT_INVALID', 'Dye lot'),
+    // Цвет партии — ссылка на governed-справочник, а не подпись: по номеру крашения нельзя сказать,
+    // какой это оттенок и утверждён ли он. Фурнитура цвета не несёт, и это законно.
+    ...lotColour(input?.colour),
     supplierCode: optional(input?.supplierCode, 64, 'MATERIAL_LOT_SUPPLIER_INVALID', 'Supplier code'),
     receivedQuantity: quantity(input?.receivedQuantity, 'MATERIAL_LOT_QUANTITY_INVALID', 'Received quantity'),
     issuedQuantity: 0,
@@ -50,12 +54,18 @@ export function receiveMaterialLot({ id, material, input, receivedAt, actorId })
 }
 
 /** Выпустить из карантина после входного контроля. */
-export function releaseMaterialLot(lot, { certificateReference, notes, at, actorId }) {
+export function releaseMaterialLot(lot, { certificateReference, notes, at, actorId, labDips = [] }) {
   invariant(lot?.status === 'quarantine', 'MATERIAL_LOT_NOT_IN_QUARANTINE', 'Only a quarantined lot can be released', { lotReference: lot?.lotReference, status: lot?.status });
+  // Замок на цвет: перекрасить принятую партию невозможно, её можно только не принять. Партия без
+  // названного цвета проходит — требовать его задним числом значило бы остановить склад.
+  const standard = assertLotColourIsApproved(lot, { dips: labDips, at });
   return transition(lot, {
     status: 'released',
     certificateReference: certificateReference === undefined ? lot.certificateReference : optional(certificateReference, 200, 'MATERIAL_LOT_CERTIFICATE_INVALID', 'Certificate reference'),
     releaseNotes: optional(notes, 1000, 'MATERIAL_LOT_NOTES_INVALID', 'Notes'),
+    // По какому эталону выпущена партия — записывается вместе с выпуском: приёмка читает именно
+    // его, и «утверждено условно» без ссылки на условие ей ничего не говорит.
+    releasedAgainstLabDip: standard === null ? null : standard.dipReference,
   }, at, actorId, 'MATERIAL_LOT_RELEASED_BY_REQUIRED');
 }
 
@@ -247,4 +257,15 @@ function optional(value, maximum, code, label) {
 function timestamp(value, code, label) {
   invariant(typeof value === 'string' && !Number.isNaN(Date.parse(value)), code, `${label} is invalid`);
   return new Date(value).toISOString();
+}
+
+function lotColour(colour) {
+  if (colour === null || colour === undefined) {
+    return { colourEntryId: null, colourEntryVersion: null, colourCode: null };
+  }
+  invariant(typeof colour === 'object' && typeof colour.entryId === 'string' && colour.entryId.trim()
+    && Number.isInteger(colour.version) && colour.version > 0
+    && typeof colour.code === 'string' && /^[A-Z0-9][A-Z0-9_.:/-]{0,127}$/.test(colour.code),
+    'MATERIAL_LOT_COLOUR_INVALID', 'A lot colour references a governed colour entry with its version', { colour });
+  return { colourEntryId: colour.entryId.trim(), colourEntryVersion: colour.version, colourCode: colour.code };
 }

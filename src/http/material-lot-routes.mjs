@@ -1,7 +1,7 @@
 import { invariant } from '../core/errors.mjs';
 import { assertBodyContract, assertQueryContract, bodyContract } from './request-contract.mjs';
 
-const RECEIVE_BODY = bodyContract(['materialCode', 'lotReference', 'dyeLot', 'supplierCode', 'receivedQuantity', 'certificateReference', 'notes']);
+const RECEIVE_BODY = bodyContract(['materialCode', 'lotReference', 'dyeLot', 'supplierCode', 'receivedQuantity', 'certificateReference', 'notes', 'colourCode']);
 const VERDICT_BODY = bodyContract(['expectedVersion', 'reason', 'certificateReference', 'notes']);
 const ISSUE_BODY = bodyContract(['expectedVersion', 'executionCode', 'quantity', 'notes']);
 

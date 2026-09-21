@@ -12,7 +12,7 @@ import {
   releaseMaterialLot,
 } from '../modules/material-lots/public.mjs';
 
-const RECEIVE_FIELDS = Object.freeze(new Set(['materialCode', 'lotReference', 'dyeLot', 'supplierCode', 'receivedQuantity', 'certificateReference', 'notes']));
+const RECEIVE_FIELDS = Object.freeze(new Set(['materialCode', 'lotReference', 'dyeLot', 'supplierCode', 'receivedQuantity', 'certificateReference', 'notes', 'colourCode']));
 const VERDICT_FIELDS = Object.freeze(new Set(['expectedVersion', 'reason', 'certificateReference', 'notes']));
 const ISSUE_FIELDS = Object.freeze(new Set(['expectedVersion', 'executionCode', 'quantity', 'notes']));
 
@@ -63,10 +63,13 @@ export function createMaterialLotService({ store, clock = () => new Date().toISO
         async (tx) => {
           const material = requireEntity(await tx.getMaterialByCode(input.materialCode), 'MATERIAL_NOT_FOUND', { materialCode: input.materialCode });
           await authorize(tx, material.brandId, actorId, CAPABILITIES.INVENTORY_MANAGE);
-          return material;
+          // Цвет называют кодом, а ссылку на governed-запись с её версией подставляет система:
+          // принимать ссылку от клиента значило бы позволить назвать цвет, которого у полотна нет.
+          const colour = input.colourCode ? await tx.resolveMaterialColour(material.code, input.colourCode) : null;
+          return Object.freeze({ material, colour });
         },
-        async (tx, material) => {
-          const value = receiveMaterialLot({ id: nextId('material-lot'), material, input, receivedAt: clock(), actorId });
+        async (tx, { material, colour }) => {
+          const value = receiveMaterialLot({ id: nextId('material-lot'), material, input: { ...input, colour }, receivedAt: clock(), actorId });
           await tx.insertLot(value);
           await tx.appendOutbox(domainEvent({
             id: nextId('event'), type: 'material-lot.received', aggregateId: value.id, occurredAt: clock(),
@@ -81,10 +84,16 @@ export function createMaterialLotService({ store, clock = () => new Date().toISO
       validateInput(input, VERDICT_FIELDS, 'MATERIAL_LOT_INPUT_INVALID');
       const expectedVersion = versionOf(input);
       return execute(commandId, `releaseMaterialLot:${actorId}:${lotId}:${canonicalJson(input)}`, actorId,
-        (tx) => lotContext(tx, lotId, actorId, CAPABILITIES.QUALITY_MANAGE),
-        (tx, lot) => {
+        async (tx) => {
+          const lot = await lotContext(tx, lotId, actorId, CAPABILITIES.QUALITY_MANAGE);
+          // Утверждённые образцы читаются тем же снимком, что и партия: прочитанные порознь, они
+          // могли бы прийти из разных моментов, и партия выпустилась бы по эталону, который к
+          // этому времени уже отозвали.
+          return Object.freeze({ lot, labDips: await tx.listLabDipsForMaterial(lot.materialCode) });
+        },
+        (tx, { lot, labDips }) => {
           assertVersion(lot, expectedVersion);
-          return saveVerdict(tx, releaseMaterialLot(lot, { certificateReference: input.certificateReference, notes: input.notes, at: clock(), actorId }), expectedVersion, 'material-lot.released', commandId, actorId);
+          return saveVerdict(tx, releaseMaterialLot(lot, { certificateReference: input.certificateReference, notes: input.notes, at: clock(), actorId, labDips }), expectedVersion, 'material-lot.released', commandId, actorId);
         });
     },
 

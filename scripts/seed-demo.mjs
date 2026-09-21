@@ -113,10 +113,32 @@ const DEMO_MATERIAL_SPECS = [
     composition: [{ fibreCode: 'COTTON', percentage: 95 }, { fibreCode: 'ELASTANE', percentage: 5 }],
   },
 ];
+// Палитра полотна и судьба каждого лабораторного образца. Демонстрация показывает три разных
+// состояния, потому что в сезоне они и встречаются все три одновременно.
+const DEMO_MATERIAL_COLOURS = [
+  {
+    match: 'SHELL',
+    colours: [
+      // Цвет тиража: принят с первого раза — по нему партия и выпускается из карантина.
+      { colourCode: 'MIDNIGHT_NAVY', supplierReference: 'ATM-NAVY-19-4025', dip: 'approve-first' },
+      // Фабрика дважды не попала в оттенок. Раунды записаны — это тот же факт о поставщике, что и
+      // срыв срока.
+      { colourCode: 'CHARCOAL', supplierReference: 'ATM-CHAR-18-0201', dip: 'approve-second' },
+    ],
+  },
+  {
+    match: 'JERSEY',
+    colours: [
+      { colourCode: 'OFF_WHITE', supplierReference: 'ATM-OFFW-11-0601', dip: 'approve-first' },
+      // Прислан и ждёт решения: так выглядит сезон в середине работы.
+      { colourCode: 'BURGUNDY', supplierReference: 'ATM-BURG-19-1526', dip: 'submitted' },
+    ],
+  },
+];
 const DEMO_MATERIAL_LOTS = [
-  { lotReference: 'ROLL-R3-A-001', dyeLot: 'DYE-2609-A', receivedQuantity: 600, certificateReference: 'CERT-ATM-2609-A', release: true, issue: 600, notes: 'Первый рулон поставки' },
-  { lotReference: 'ROLL-R3-B-002', dyeLot: 'DYE-2609-B', receivedQuantity: 500, certificateReference: 'CERT-ATM-2609-B', release: true, issue: 300, notes: 'Догруз другой крашеной партии' },
-  { lotReference: 'ROLL-R3-C-003', dyeLot: 'DYE-2610-A', receivedQuantity: 450, release: false, issue: 0, notes: 'Приехал, входной контроль не пройден' },
+  { lotReference: 'ROLL-R3-A-001', dyeLot: 'DYE-2609-A', colourCode: 'MIDNIGHT_NAVY', receivedQuantity: 600, certificateReference: 'CERT-ATM-2609-A', release: true, issue: 600, notes: 'Первый рулон поставки' },
+  { lotReference: 'ROLL-R3-B-002', dyeLot: 'DYE-2609-B', colourCode: 'MIDNIGHT_NAVY', receivedQuantity: 500, certificateReference: 'CERT-ATM-2609-B', release: true, issue: 300, notes: 'Догруз другой крашеной партии' },
+  { lotReference: 'ROLL-R3-C-003', dyeLot: 'DYE-2610-A', colourCode: 'MIDNIGHT_NAVY', receivedQuantity: 450, release: false, issue: 0, notes: 'Приехал, входной контроль не пройден' },
 ];
 const DEMO_PAYMENT_SPLIT = [
   { triggerEvent: 'order-confirmed', shareBasisPoints: 3000, labelRu: 'Аванс при подтверждении заказа', labelEn: 'Deposit on order confirmation' },
@@ -245,12 +267,15 @@ try {
   await ensureSamplingPlans(pool, brandId, accounts.owner);
   await ensureDefectCatalogue(runtime, pool, brandId, accounts.owner);
   await ensureLotInProduction(runtime, pool, brandId, accounts.owner);
+  // Свойства полотна и утверждение цвета идут раньше приёмки: партию в неутверждённом цвете
+  // выпустить нельзя, и порядок здесь — не косметика, а та же цепочка.
+  await ensureMaterialSpecifications(runtime, pool, brandId, accounts.owner);
+  await ensureMaterialColours(runtime, pool, brandId, accounts.owner, accounts.quality);
   await ensureMaterialLots(runtime, pool, brandId, accounts.owner, accounts.quality);
   await ensureOperationSequence(runtime, pool, brandId, accounts.owner);
   await ensureCuttingSpread(runtime, pool, brandId, accounts.owner);
   await ensureTargetPricing(runtime, pool, brandId, accounts.owner);
   await ensureAssortmentPlan(runtime, pool, brandId, accounts.owner);
-  await ensureMaterialSpecifications(runtime, pool, brandId, accounts.owner);
   await ensurePaymentSchedules(runtime, pool, brandId, accounts.owner);
 
   // Inspections sat at review-pending because the only account in the brand was the one that ran
@@ -323,7 +348,15 @@ async function ensureRelationship(runtime, pool, brandId, ownerId, buyerId) {
     id = created.id;
     note('relationship', 'requested by the brand');
   } else note('relationship', `already ${existing.rows[0].status}`);
-  const status = (await pool.query('SELECT status FROM counterparty_relationships WHERE id = $1', [id])).rows[0]?.status;
+  let status = (await pool.query('SELECT status FROM counterparty_relationships WHERE id = $1', [id])).rows[0]?.status;
+  // Отозванную или отклонённую связь принять нельзя — её сначала запрашивают заново. Без этого
+  // демонстрация переставала засеваться навсегда после одного отзыва: сид пытался принять то, что
+  // принимать не разрешено, и падал на середине.
+  if (status === 'revoked' || status === 'rejected') {
+    await runtime.partners.requestRelationship(command('relationship-renew'), ownerId, { brandId, shopId: SHOP_ID });
+    note('relationship', `renewed after ${status}`);
+    status = 'pending';
+  }
   // Only the shop can accept a request addressed to it, which is exactly why the buyer is a real
   // account rather than a row.
   if (status !== 'active') {
@@ -793,6 +826,7 @@ async function ensureMaterialLots(runtime, pool, brandId, warehouseActorId, qual
       let lot = await runtime.materialLots.receiveLot(command('material-lot'), warehouseActorId, {
         materialCode, lotReference: definition.lotReference, dyeLot: definition.dyeLot,
         receivedQuantity: definition.receivedQuantity, notes: definition.notes,
+        ...(definition.colourCode ? { colourCode: definition.colourCode } : {}),
         ...(definition.certificateReference ? { certificateReference: definition.certificateReference } : {}),
       });
       received += 1;
@@ -997,6 +1031,73 @@ async function ensureTeeTargetPrice(runtime, pool, brandId, actorId, campaignId)
   } catch (error) {
     note('target price', `цель по футболке не составлена (${error.code ?? error.message})`);
   }
+}
+
+async function ensureMaterialColours(runtime, pool, brandId, paletteActorId, qualityActorId) {
+  for (const definition of DEMO_MATERIAL_COLOURS) {
+    const materials = (await pool.query(
+      `SELECT code FROM materials WHERE brand_id = $1 AND material_type = 'fabric' AND code LIKE $2 ORDER BY code`,
+      [brandId, `%${definition.match}%`],
+    )).rows;
+    if (materials.length === 0) continue;
+
+    for (const material of materials) {
+      for (const colour of definition.colours) {
+        const listed = await pool.query('SELECT id FROM material_colours WHERE material_code = $1 AND colour_code = $2', [material.code, colour.colourCode]);
+        let materialColourId = listed.rows[0]?.id ?? null;
+        if (!materialColourId) {
+          try {
+            const added = await runtime.materialColours.addMaterialColour(command('material-colour'), paletteActorId, {
+              materialCode: material.code, colourCode: colour.colourCode, supplierColourReference: colour.supplierReference,
+            });
+            materialColourId = added.id;
+          } catch (error) {
+            note('lab dip', `${material.code}/${colour.colourCode}: цвет не заведён (${error.code ?? error.message})`);
+            continue;
+          }
+        }
+
+        const existing = await pool.query('SELECT 1 FROM lab_dips WHERE material_colour_id = $1', [materialColourId]);
+        if (existing.rowCount) continue;
+        try {
+          await runLabDip(runtime, materialColourId, material.code, colour, paletteActorId, qualityActorId);
+        } catch (error) {
+          note('lab dip', `${material.code}/${colour.colourCode}: образец не проведён (${error.code ?? error.message})`);
+        }
+      }
+    }
+  }
+
+  const palette = await pool.query('SELECT count(*)::integer AS total FROM material_colours WHERE brand_id = $1', [brandId]);
+  const dips = await pool.query(
+    `SELECT status, count(*)::integer AS total FROM lab_dips WHERE brand_id = $1 GROUP BY status ORDER BY status`,
+    [brandId],
+  );
+  note('lab dip', `палитра: ${palette.rows[0].total} цветов; образцы: ${dips.rows.map((row) => `${row.status} — ${row.total}`).join(', ') || 'нет'}`);
+}
+
+// Один образец проживает свою историю целиком: запрошен → прислан → решение. «Принят со второго
+// раза» проводится именно как два раунда, а не записывается сразу принятым: иначе раунд, по
+// которому считают поставщика, был бы выдуман.
+async function runLabDip(runtime, materialColourId, materialCode, colour, paletteActorId, qualityActorId) {
+  const reference = `LD-${materialCode.replace(/[^A-Z0-9]/g, '')}-${colour.colourCode.replace(/[^A-Z0-9]/g, '')}`.slice(0, 60);
+  let dip = await runtime.materialColours.requestLabDip(command('lab-dip'), paletteActorId, {
+    materialColourId, dipReference: reference, supplierCode: 'ATM',
+    notes: `Эталон на цвет ${colour.colourCode}`,
+  });
+  dip = await runtime.materialColours.submitLabDip(command('lab-dip-submit'), paletteActorId, dip.id, { expectedVersion: dip.version });
+  if (colour.dip === 'submitted') return;
+
+  if (colour.dip === 'approve-second') {
+    dip = await runtime.materialColours.decideLabDip(command('lab-dip-reject'), qualityActorId, dip.id, {
+      expectedVersion: dip.version, verdict: 'rejected_resubmit', note: 'Уходит в синеву относительно эталона',
+    });
+    dip = await runtime.materialColours.submitLabDip(command('lab-dip-resubmit'), paletteActorId, dip.id, { expectedVersion: dip.version });
+  }
+
+  await runtime.materialColours.decideLabDip(command('lab-dip-approve'), qualityActorId, dip.id, {
+    expectedVersion: dip.version, verdict: 'approved',
+  });
 }
 
 async function ensureMaterialSpecifications(runtime, pool, brandId, actorId) {

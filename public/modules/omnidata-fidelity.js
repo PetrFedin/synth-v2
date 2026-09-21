@@ -55,6 +55,9 @@ function odFidelityFilterButton() {
     if (!scope) return;
     OD_UI.filterPanel = OD_UI.filterPanel === scope ? null : scope;
     OD_UI.columnPanel = null;
+    // Три панели живут в одной колонке над таблицей: открытые разом они оставляют от реестра
+    // полосу. Каждая кнопка гасит две другие.
+    OD_UI.hierarchyPanel = null;
     OD_UI.filterPanelQuery = '';
     renderApp();
   });
@@ -67,8 +70,10 @@ function odFidelityColumnButton() {
   // (className, ariaLabel, visibleText) — the spoken name carries the detail, the face stays short.
   const button = odFidelityButton(
     'od-column-button',
-    odFidelityText('\u0412\u044b\u0431\u0440\u0430\u0442\u044c \u043a\u043e\u043b\u043e\u043d\u043a\u0438 \u0440\u0430\u0437\u0434\u0435\u043b\u0430', 'Choose the columns for this section'),
-    odFidelityText('\u041a\u043e\u043b\u043e\u043d\u043a\u0438', 'Columns'),
+    // Подпись названа по работе, а не по одной из трёх её частей: панель управляет видимостью
+    // колонок, их порядком и тем, докуда реестр закреплён при горизонтальной прокрутке.
+    odFidelityText('\u0412\u0438\u0434\u0438\u043c\u043e\u0441\u0442\u044c, \u043f\u043e\u0440\u044f\u0434\u043e\u043a \u0438 \u0437\u0430\u043a\u0440\u0435\u043f\u043b\u0435\u043d\u0438\u0435 \u043a\u043e\u043b\u043e\u043d\u043e\u043a', 'Column visibility, order and freezing'),
+    'Freeze Line',
   );
   const scope = typeof OD_UI !== 'undefined' && OD_UI.registry ? Object.keys(OD_UI.registry).at(-1) : null;
   const hidden = scope && typeof odHiddenColumnCount === 'function' ? odHiddenColumnCount(scope) : 0;
@@ -89,6 +94,31 @@ function odFidelityColumnButton() {
     if (!scope) return;
     OD_UI.columnPanel = OD_UI.columnPanel === scope ? null : scope;
     OD_UI.filterPanel = null;
+    OD_UI.hierarchyPanel = null;
+    renderApp();
+  });
+  return button;
+}
+
+// Навигатор по иерархии раздела. Значок на кнопке — глубина открытой ветви, а не число уровней:
+// сужает реестр именно ветвь, и именно о ней человеку нужно знать, когда панель закрыта.
+function odFidelityHierarchyButton() {
+  const button = odFidelityButton(
+    'od-hierarchy-button',
+    odFidelityText('\u0421\u0442\u0440\u0443\u043a\u0442\u0443\u0440\u0430 \u0438\u0435\u0440\u0430\u0440\u0445\u0438\u0438 \u0440\u0430\u0437\u0434\u0435\u043b\u0430', 'Hierarchy structure for this section'),
+    odFidelityText('\u0418\u0435\u0440\u0430\u0440\u0445\u0438\u044f', 'Hierarchy'),
+  );
+  const scope = typeof OD_UI !== 'undefined' && OD_UI.registry ? Object.keys(OD_UI.registry).at(-1) : null;
+  const depth = scope && typeof odHierarchyDepth === 'function' ? odHierarchyDepth(scope) : 0;
+  if (depth > 0) {
+    button.classList.add('od-filter-button-active');
+    button.append(el('span', { className: 'od-filter-button-count', rawText: String(depth) }));
+  }
+  button.addEventListener('click', () => {
+    if (!scope) return;
+    OD_UI.hierarchyPanel = OD_UI.hierarchyPanel === scope ? null : scope;
+    OD_UI.filterPanel = null;
+    OD_UI.columnPanel = null;
     renderApp();
   });
   return button;
@@ -105,7 +135,9 @@ function odFidelityCommandBars() {
       if (search && hasRegistry) {
         const filters = odFidelityFilterButton();
         search.after(filters);
-        filters.after(odFidelityColumnButton());
+        const columns = odFidelityColumnButton();
+        filters.after(columns);
+        columns.after(odFidelityHierarchyButton());
       }
       const primary = bar.querySelector(':scope > .button');
       const spacer = el('span', { className: 'od-commandbar-spacer', ariaHidden: 'true' });

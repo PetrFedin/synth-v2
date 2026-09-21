@@ -743,3 +743,141 @@ body.omnidata-design-system-v1 .sidebar .brand,
 body.omnidata-role-system .sidebar .brand{height:56px!important;min-height:56px!important;box-sizing:border-box!important}
 body.omnidata-v14.omnidata-design-system-v1 .sidebar .brand,
 body.omnidata-v14.omnidata-role-system .sidebar .brand{flex:0 0 56px!important;height:56px!important;min-height:56px!important}
+
+/* Freeze Line: видимость, порядок и закрепление колонок реестра.
+
+   Закрепление — не украшение. Реестр моделей несёт двадцать колонок, и при горизонтальной
+   прокрутке до «Технолога» первая колонка уезжает: значения видны, а чьи они — нет.
+
+   Смещения перечислены здесь, а не считаются скриптом, потому что дизайн-система запрещает
+   динамическую стилизацию из рантайма. Цена этого решения названа прямо: закреплённая колонка
+   получает **предсказуемую ширину**, иначе смещение следующей нечем вычислить. Для колонок
+   идентичности — номер, изображение, артикул — это скорее плюс: они перестают прыгать от длины
+   содержимого. Закрепить можно не больше шести: дальше не остаётся места прокручиваемой части,
+   и сам приём теряет смысл. */
+body.omnidata-design-system-v1 .od-table th.od-frozen-column,
+body.omnidata-design-system-v1 .od-table td.od-frozen-column,
+body.omnidata-role-system .od-table th.od-frozen-column,
+body.omnidata-role-system .od-table td.od-frozen-column{position:sticky!important;z-index:2!important;background:var(--ods-color-surface,#fff)!important;width:150px!important;min-width:150px!important;max-width:150px!important}
+body.omnidata-design-system-v1 .od-table thead th.od-frozen-column,
+body.omnidata-role-system .od-table thead th.od-frozen-column{z-index:3!important}
+
+/* Номер строки дописывает слой достоверности, он всегда первый и узкий. Когда что-то закреплено,
+   он закрепляется вместе с ними: уехавший номер делает закрепление бессмысленным. */
+body.omnidata-design-system-v1 .od-table.od-table-frozen .od-number-cell,
+body.omnidata-role-system .od-table.od-table-frozen .od-number-cell{position:sticky!important;left:0!important;z-index:3!important;background:var(--ods-color-surface,#fff)!important;width:36px!important;min-width:36px!important;max-width:36px!important}
+
+/* Смещения: номер 36px, каждая следующая закреплённая — 150px. */
+body.omnidata-design-system-v1 .od-table tr > .od-frozen-column:nth-child(2),
+body.omnidata-role-system .od-table tr > .od-frozen-column:nth-child(2){left:36px!important}
+body.omnidata-design-system-v1 .od-table tr > .od-frozen-column:nth-child(3),
+body.omnidata-role-system .od-table tr > .od-frozen-column:nth-child(3){left:186px!important}
+body.omnidata-design-system-v1 .od-table tr > .od-frozen-column:nth-child(4),
+body.omnidata-role-system .od-table tr > .od-frozen-column:nth-child(4){left:336px!important}
+body.omnidata-design-system-v1 .od-table tr > .od-frozen-column:nth-child(5),
+body.omnidata-role-system .od-table tr > .od-frozen-column:nth-child(5){left:486px!important}
+body.omnidata-design-system-v1 .od-table tr > .od-frozen-column:nth-child(6),
+body.omnidata-role-system .od-table tr > .od-frozen-column:nth-child(6){left:636px!important}
+body.omnidata-design-system-v1 .od-table tr > .od-frozen-column:nth-child(7),
+body.omnidata-role-system .od-table tr > .od-frozen-column:nth-child(7){left:786px!important}
+
+body.omnidata-design-system-v1 .od-table .od-frozen-edge,
+body.omnidata-role-system .od-table .od-frozen-edge{box-shadow:1px 0 0 0 var(--ods-color-border)!important}
+body.omnidata-design-system-v1 .od-table-row.selected td.od-frozen-column,
+body.omnidata-role-system .od-table-row.selected td.od-frozen-column{background:var(--ods-color-surface-selected,#fff4ee)!important}
+
+body.omnidata-design-system-v1 .od-column-row,
+body.omnidata-role-system .od-column-row{display:flex!important;align-items:center!important;gap:8px!important;min-height:28px!important;padding:2px 0!important;font-size:12px!important}
+body.omnidata-design-system-v1 .od-column-row .od-filter-option-label,
+body.omnidata-role-system .od-column-row .od-filter-option-label{flex:1 1 auto!important}
+body.omnidata-design-system-v1 .od-column-row.od-column-frozen .od-filter-option-label,
+body.omnidata-role-system .od-column-row.od-column-frozen .od-filter-option-label{font-weight:600!important}
+body.omnidata-design-system-v1 .od-column-move,
+body.omnidata-role-system .od-column-move{width:22px!important;height:22px!important;padding:0!important;border:1px solid var(--ods-color-border)!important;border-radius:4px!important;background:transparent!important;font-size:11px!important;line-height:1!important;cursor:pointer!important}
+body.omnidata-design-system-v1 .od-column-move:disabled,
+body.omnidata-role-system .od-column-move:disabled{opacity:.35!important;cursor:default!important}
+
+/* Сама линия. В покое это тонкая разделительная полоса с неброской подписью; активная —
+   сплошная линия акцентом, потому что именно она отвечает на вопрос «докуда закреплено». */
+body.omnidata-design-system-v1 .od-freeze-line,
+body.omnidata-role-system .od-freeze-line{display:flex!important;align-items:center!important;gap:8px!important;margin:1px 0!important}
+body.omnidata-design-system-v1 .od-freeze-line::after,
+body.omnidata-role-system .od-freeze-line::after{content:''!important;flex:1 1 auto!important;height:1px!important;background:var(--ods-color-border)!important}
+body.omnidata-design-system-v1 .od-freeze-line.active::after,
+body.omnidata-role-system .od-freeze-line.active::after{height:2px!important;background:var(--ods-color-accent,#ff5b22)!important}
+body.omnidata-design-system-v1 .od-freeze-line-handle,
+body.omnidata-role-system .od-freeze-line-handle{padding:0!important;border:0!important;background:transparent!important;color:var(--ods-color-text-muted,#656c79)!important;font-size:10px!important;text-transform:uppercase!important;letter-spacing:.04em!important;cursor:pointer!important;opacity:0!important}
+body.omnidata-design-system-v1 .od-freeze-line:hover .od-freeze-line-handle,
+body.omnidata-design-system-v1 .od-freeze-line-handle:focus-visible,
+body.omnidata-design-system-v1 .od-freeze-line.active .od-freeze-line-handle,
+body.omnidata-role-system .od-freeze-line:hover .od-freeze-line-handle,
+body.omnidata-role-system .od-freeze-line-handle:focus-visible,
+body.omnidata-role-system .od-freeze-line.active .od-freeze-line-handle{opacity:1!important}
+body.omnidata-design-system-v1 .od-freeze-line.active .od-freeze-line-handle,
+body.omnidata-role-system .od-freeze-line.active .od-freeze-line-handle{color:var(--ods-color-accent,#ff5b22)!important}
+
+/* Тело панели Freeze Line раскладывается сверху вниз. Панель несёт роль filterbar, чья раскладка —
+   строка, и без этого двадцать колонок уходили за её правый край. */
+/* Панель Freeze Line не переносит содержимое в соседнюю колонку.
+   Общее правило filterbar (строка 549) задаёт перенос селекторами по атрибутам, и при равном
+   !important побеждает специфичность — поэтому здесь те же атрибуты плюс класс панели. Высота
+   ограничена окном, иначе телу нечего прокручивать и длинный список просто переносится. */
+body.omnidata-design-system-v1 :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="filterbar"],[data-od14-unified-part="filterbar"]).od-column-panel,
+body.omnidata-role-system :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="filterbar"],[data-od14-unified-part="filterbar"]).od-column-panel{flex-wrap:nowrap!important;flex-direction:column!important;align-items:stretch!important;max-height:min(80vh,100%)!important}
+/* Тело прокручивается, а не переносится. Панель — колоночный флекс с переносом, и длинный список
+   колонок не помещался по высоте: он переносился в соседнюю колонку и утаскивал за собой подвал,
+   так что и список, и кнопки уезжали за правый край. */
+body.omnidata-design-system-v1 :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]).od-column-panel .od-filter-panel-body,
+body.omnidata-role-system :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]).od-column-panel .od-filter-panel-body{display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:0!important;flex:1 1 auto!important;min-height:0!important;overflow-y:auto!important}
+body.omnidata-design-system-v1 .od-column-panel .od-column-row,
+body.omnidata-role-system .od-column-panel .od-column-row{width:100%!important}
+
+/* Навигатор по иерархии раздела. Панель раскладывается так же, как Freeze Line: колонкой, с
+   прокручиваемым телом — список веток длиннее списка колонок, и уехать он может ещё дальше. */
+body.omnidata-design-system-v1 :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]).od-hierarchy-panel,
+body.omnidata-role-system :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]).od-hierarchy-panel{width:min(300px,86%)!important}
+body.omnidata-design-system-v1 :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="filterbar"],[data-od14-unified-part="filterbar"]).od-hierarchy-panel,
+body.omnidata-role-system :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="filterbar"],[data-od14-unified-part="filterbar"]).od-hierarchy-panel{flex-wrap:nowrap!important;flex-direction:column!important;align-items:stretch!important;max-height:min(80vh,100%)!important}
+body.omnidata-design-system-v1 :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]).od-hierarchy-panel .od-filter-panel-body,
+body.omnidata-role-system :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]).od-hierarchy-panel .od-filter-panel-body{display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:0!important;flex:1 1 auto!important;min-height:0!important;overflow-y:auto!important}
+body.omnidata-design-system-v1 .od-hierarchy-panel .od-column-row,
+body.omnidata-role-system .od-hierarchy-panel .od-column-row{width:100%!important}
+body.omnidata-design-system-v1 .od-hierarchy-panel .od-filter-group-title,
+body.omnidata-role-system .od-hierarchy-panel .od-filter-group-title{margin:10px 0 4px!important;font-size:10px!important;text-transform:uppercase!important;letter-spacing:.06em!important;color:var(--ods-color-text-muted,#656c79)!important}
+
+/* Порядковый номер уровня: иерархия — это последовательность, и её шаг виден числом, а не только
+   положением строки, которое при прокрутке теряется. */
+body.omnidata-design-system-v1 .od-hierarchy-level-mark,
+body.omnidata-role-system .od-hierarchy-level-mark{display:inline-flex!important;align-items:center!important;justify-content:center!important;width:16px!important;height:16px!important;border-radius:999px!important;background:var(--ods-color-accent,#ff5b22)!important;color:#fff!important;font-size:9px!important;font-weight:700!important}
+
+/* Узел дерева. Отступ говорит про глубину, вес — про выбранную ветвь. */
+body.omnidata-design-system-v1 .od-hierarchy-node,
+body.omnidata-role-system .od-hierarchy-node{display:flex!important;align-items:center!important;gap:8px!important;width:100%!important;min-height:26px!important;padding:2px 6px!important;border:0!important;border-radius:4px!important;background:transparent!important;color:inherit!important;font-size:12px!important;text-align:left!important;cursor:pointer!important}
+body.omnidata-design-system-v1 .od-hierarchy-node .od-filter-option-label,
+body.omnidata-role-system .od-hierarchy-node .od-filter-option-label{flex:1 1 auto!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important}
+body.omnidata-design-system-v1 .od-hierarchy-node:hover,
+body.omnidata-role-system .od-hierarchy-node:hover{background:var(--ods-color-surface-muted,#f5f6f8)!important}
+body.omnidata-design-system-v1 .od-hierarchy-node.selected,
+body.omnidata-role-system .od-hierarchy-node.selected{background:var(--ods-color-surface-muted,#f5f6f8)!important;color:var(--ods-color-accent,#ff5b22)!important;font-weight:600!important}
+body.omnidata-design-system-v1 .od-hierarchy-depth-1,
+body.omnidata-role-system .od-hierarchy-depth-1{padding-left:18px!important}
+body.omnidata-design-system-v1 .od-hierarchy-depth-2,
+body.omnidata-role-system .od-hierarchy-depth-2{padding-left:30px!important}
+body.omnidata-design-system-v1 .od-hierarchy-depth-3,
+body.omnidata-role-system .od-hierarchy-depth-3{padding-left:42px!important}
+body.omnidata-design-system-v1 .od-hierarchy-depth-4,
+body.omnidata-role-system .od-hierarchy-depth-4{padding-left:54px!important}
+
+/* Счётчик: он меняется вместе с выбранной ветвью, поэтому стоит под деревом, а не в шапке. */
+body.omnidata-design-system-v1 .od-hierarchy-total,
+body.omnidata-role-system .od-hierarchy-total{margin:10px 0 0!important;padding-top:8px!important;border-top:1px solid var(--ods-color-border)!important;font-size:11px!important;font-weight:600!important;color:var(--ods-color-text-muted,#656c79)!important}
+
+/* Кнопки порядка (↑ ↓ ×) в панелях Freeze Line и «Структура иерархии».
+   Заявленные 22×22 не доезжали: ODS задаёт кнопке `min-height: var(--ods-control-height)` и
+   `width:auto` селекторами по ролевым атрибутам, а они специфичнее одного класса — стрелка
+   схлопывалась до семи пикселей ширины при высоте в тридцать четыре, а «×», опознанный
+   как icon-button, оставался на полторы высоты выше соседей. Правило повторяет форму
+   конкурирующего селектора, поэтому размер задан здесь, а не разнесён между двумя слоями. */
+body.omnidata-v14 [data-od14-component="filterbar"] :is([data-od14-component="button"],[data-od14-component="icon-button"]).od-column-move,
+body.omnidata-role-system [data-ods-role="filterbar"] [data-ods-role="button"]:is([data-ods-part="button"],[data-ods-part="icon-button"]).od-column-move,
+body.omnidata-design-system-v1 [data-ods-role="filterbar"] [data-ods-role="button"]:is([data-ods-part="button"],[data-ods-part="icon-button"]).od-column-move{flex:0 0 22px!important;width:22px!important;min-width:22px!important;height:22px!important;min-height:22px!important;padding:0!important;line-height:1!important}

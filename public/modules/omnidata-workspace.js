@@ -5,7 +5,23 @@ const OD_UI = window.SynthaOmnidataUi || (window.SynthaOmnidataUi = {
   // Which columns each registry hides. Kept per section and remembered between visits: a person who
   // works in sourcing every day should not have to hide the same four columns each morning.
   hiddenColumns: Object.create(null),
+  // \u041f\u043e\u0440\u044f\u0434\u043e\u043a \u043a\u043e\u043b\u043e\u043d\u043e\u043a \u0438 \u0433\u0440\u0430\u043d\u0438\u0446\u0430 \u0437\u0430\u043a\u0440\u0435\u043f\u043b\u0435\u043d\u0438\u044f \u2014 \u0442\u0430\u043c \u0436\u0435, \u0433\u0434\u0435 \u0438\u0445 \u0432\u0438\u0434\u0438\u043c\u043e\u0441\u0442\u044c: \u044d\u0442\u043e \u043e\u0434\u043d\u043e \u0440\u0435\u0448\u0435\u043d\u0438\u0435 \u0447\u0438\u0442\u0430\u0442\u0435\u043b\u044f \u043e
+  // \u0442\u043e\u043c, \u043a\u0430\u043a \u0432\u044b\u0433\u043b\u044f\u0434\u0438\u0442 \u0435\u0433\u043e \u0440\u0435\u0435\u0441\u0442\u0440, \u0438 \u0440\u0430\u0437\u043d\u043e\u0441\u0438\u0442\u044c \u0435\u0433\u043e \u043f\u043e \u0442\u0440\u0451\u043c \u043c\u0435\u0445\u0430\u043d\u0438\u0437\u043c\u0430\u043c \u0437\u043d\u0430\u0447\u0438\u043b\u043e \u0431\u044b \u043f\u043e\u043b\u0443\u0447\u0438\u0442\u044c \u0442\u0440\u0438 \u043c\u0435\u0441\u0442\u0430,
+  // \u043a\u043e\u0442\u043e\u0440\u044b\u0435 \u0440\u0430\u0441\u0445\u043e\u0434\u044f\u0442\u0441\u044f.
+  columnOrder: Object.create(null),
+  frozenColumns: Object.create(null),
+  // \u0412\u0438\u0434, \u043e\u0431\u044a\u044f\u0432\u043b\u0435\u043d\u043d\u044b\u0439 \u0438\u0441\u0445\u043e\u0434\u043d\u044b\u043c \u0434\u043b\u044f \u0440\u0430\u0437\u0434\u0435\u043b\u0430. \u00ab\u0421\u0431\u0440\u043e\u0441\u0438\u0442\u044c\u00bb \u0432\u043e\u0437\u0432\u0440\u0430\u0449\u0430\u0435\u0442 \u043a \u043d\u0435\u043c\u0443, \u0430 \u043d\u0435 \u043a \u0437\u0430\u0432\u043e\u0434\u0441\u043a\u043e\u043c\u0443: \u0438\u043d\u0430\u0447\u0435
+  // \u043d\u0430\u0441\u0442\u0440\u043e\u0435\u043d\u043d\u044b\u0439 \u043e\u0434\u043d\u0430\u0436\u0434\u044b \u0440\u0435\u0435\u0441\u0442\u0440 \u043f\u0440\u0438\u0448\u043b\u043e\u0441\u044c \u0431\u044b \u0441\u043e\u0431\u0438\u0440\u0430\u0442\u044c \u0437\u0430\u043d\u043e\u0432\u043e \u043f\u043e\u0441\u043b\u0435 \u043a\u0430\u0436\u0434\u043e\u0433\u043e \u0441\u0431\u0440\u043e\u0441\u0430.
+  defaultView: Object.create(null),
+  // Иерархия раздела: по каким атрибутам реестр разложен на уровни и какая ветвь сейчас открыта.
+  // Уровни — решение читателя о том, как он смотрит на раздел, и переживают визит; открытая ветвь —
+  // положение внутри обхода, и переживать его не должна: вернуться в раздел и увидеть его пустым,
+  // потому что месяц назад была выбрана ветвь, которой больше нет, — худший из возможных приёмов.
+  hierarchy: Object.create(null),
+  hierarchyPath: Object.create(null),
 });
+OD_UI.hierarchy = OD_UI.hierarchy || Object.create(null);
+OD_UI.hierarchyPath = OD_UI.hierarchyPath || Object.create(null);
 
 const OD_COLUMN_STORAGE_KEY = 'syntha-v2-hidden-columns';
 function odLoadHiddenColumns() {
@@ -26,6 +42,131 @@ function odSaveHiddenColumns() {
 }
 odLoadHiddenColumns();
 
+// \u0412\u0438\u0434 \u0440\u0435\u0435\u0441\u0442\u0440\u0430: \u043f\u043e\u0440\u044f\u0434\u043e\u043a \u043a\u043e\u043b\u043e\u043d\u043e\u043a \u0438 \u0441\u043a\u043e\u043b\u044c\u043a\u043e \u043f\u0435\u0440\u0432\u044b\u0445 \u0438\u0437 \u043d\u0438\u0445 \u0437\u0430\u043a\u0440\u0435\u043f\u043b\u0435\u043d\u043e.
+//
+// \u0417\u0430\u043a\u0440\u0435\u043f\u043b\u0435\u043d\u0438\u0435 \u2014 \u044d\u0442\u043e \u043d\u0435 \u0443\u043a\u0440\u0430\u0448\u0435\u043d\u0438\u0435. \u0420\u0435\u0435\u0441\u0442\u0440 \u043c\u043e\u0434\u0435\u043b\u0435\u0439 \u043d\u0435\u0441\u0451\u0442 \u0434\u0432\u0430\u0434\u0446\u0430\u0442\u044c \u043a\u043e\u043b\u043e\u043d\u043e\u043a, \u0438 \u043f\u0440\u0438 \u0433\u043e\u0440\u0438\u0437\u043e\u043d\u0442\u0430\u043b\u044c\u043d\u043e\u0439
+// \u043f\u0440\u043e\u043a\u0440\u0443\u0442\u043a\u0435 \u0434\u043e \u00ab\u0422\u0435\u0445\u043d\u043e\u043b\u043e\u0433\u0430\u00bb \u043f\u0435\u0440\u0432\u0430\u044f \u043a\u043e\u043b\u043e\u043d\u043a\u0430 \u2014 \u0430\u0440\u0442\u0438\u043a\u0443\u043b \u2014 \u0443\u0435\u0437\u0436\u0430\u0435\u0442, \u043f\u043e\u0441\u043b\u0435 \u0447\u0435\u0433\u043e \u0441\u0442\u0440\u043e\u043a\u0430 \u043f\u0435\u0440\u0435\u0441\u0442\u0430\u0451\u0442 \u0431\u044b\u0442\u044c
+// \u0447\u0438\u0442\u0430\u0435\u043c\u043e\u0439: \u0432\u0438\u0434\u043d\u043e \u0437\u043d\u0430\u0447\u0435\u043d\u0438\u044f, \u043d\u043e \u043d\u0435 \u0432\u0438\u0434\u043d\u043e, \u0447\u044c\u0438 \u043e\u043d\u0438. \u0417\u0430\u043a\u0440\u0435\u043f\u043b\u0451\u043d\u043d\u044b\u0435 \u043a\u043e\u043b\u043e\u043d\u043a\u0438 \u043e\u0441\u0442\u0430\u044e\u0442\u0441\u044f \u043d\u0430 \u043c\u0435\u0441\u0442\u0435.
+//
+// \u0413\u0440\u0430\u043d\u0438\u0446\u0430 \u0445\u0440\u0430\u043d\u0438\u0442\u0441\u044f \u0447\u0438\u0441\u043b\u043e\u043c, \u0430 \u043d\u0435 \u0441\u043f\u0438\u0441\u043a\u043e\u043c: \u0437\u0430\u043a\u0440\u0435\u043f\u0438\u0442\u044c \u043c\u043e\u0436\u043d\u043e \u0442\u043e\u043b\u044c\u043a\u043e **\u043f\u0435\u0440\u0432\u044b\u0435** \u043a\u043e\u043b\u043e\u043d\u043a\u0438 \u043f\u043e\u0434\u0440\u044f\u0434 \u2014
+// \u0437\u0430\u043a\u0440\u0435\u043f\u043b\u0451\u043d\u043d\u0430\u044f \u043a\u043e\u043b\u043e\u043d\u043a\u0430 \u043f\u043e\u0441\u0440\u0435\u0434\u0438 \u043f\u0440\u043e\u043a\u0440\u0443\u0447\u0438\u0432\u0430\u0435\u043c\u044b\u0445 \u043e\u0441\u0442\u0430\u0432\u043b\u044f\u043b\u0430 \u0431\u044b \u0440\u0430\u0437\u0440\u044b\u0432 \u0432 \u0441\u0442\u0440\u043e\u043a\u0435.
+const OD_VIEW_STORAGE_KEY = 'syntha-v2-registry-view';
+function odLoadRegistryView() {
+  try {
+    const raw = window.localStorage?.getItem(OD_VIEW_STORAGE_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return;
+    for (const [scope, view] of Object.entries(parsed)) {
+      if (!view || typeof view !== 'object') continue;
+      if (Array.isArray(view.order)) OD_UI.columnOrder[scope] = view.order.filter((key) => typeof key === 'string');
+      if (Number.isInteger(view.frozen) && view.frozen >= 0) OD_UI.frozenColumns[scope] = view.frozen;
+    }
+  } catch { /* \u0431\u0440\u0430\u0443\u0437\u0435\u0440 \u0431\u0435\u0437 \u0445\u0440\u0430\u043d\u0438\u043b\u0438\u0449\u0430 \u043f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u0442 \u0440\u0435\u0435\u0441\u0442\u0440 \u0432 \u0438\u0441\u0445\u043e\u0434\u043d\u043e\u043c \u0432\u0438\u0434\u0435 */ }
+}
+function odSaveRegistryView() {
+  try {
+    const scopes = new Set([...Object.keys(OD_UI.columnOrder), ...Object.keys(OD_UI.frozenColumns)]);
+    const value = {};
+    for (const scope of scopes) {
+      value[scope] = { order: OD_UI.columnOrder[scope] || [], frozen: OD_UI.frozenColumns[scope] ?? 0 };
+    }
+    window.localStorage?.setItem(OD_VIEW_STORAGE_KEY, JSON.stringify(value));
+  } catch { /* \u0432\u044b\u0431\u043e\u0440 \u0432\u0441\u0451 \u0440\u0430\u0432\u043d\u043e \u0434\u0435\u0440\u0436\u0438\u0442\u0441\u044f \u043d\u0430 \u0432\u0440\u0435\u043c\u044f \u0441\u0435\u0441\u0441\u0438\u0438 */ }
+}
+odLoadRegistryView();
+
+const OD_DEFAULT_VIEW_STORAGE_KEY = 'syntha-v2-registry-default-view';
+function odLoadDefaultView() {
+  try {
+    const raw = window.localStorage?.getItem(OD_DEFAULT_VIEW_STORAGE_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') Object.assign(OD_UI.defaultView, parsed);
+  } catch { /* \u0431\u0435\u0437 \u0445\u0440\u0430\u043d\u0438\u043b\u0438\u0449\u0430 \u0440\u0430\u0437\u0434\u0435\u043b \u043e\u0442\u043a\u0440\u044b\u0432\u0430\u0435\u0442\u0441\u044f \u0437\u0430\u0432\u043e\u0434\u0441\u043a\u0438\u043c \u0432\u0438\u0434\u043e\u043c */ }
+}
+function odSaveDefaultView() {
+  try { window.localStorage?.setItem(OD_DEFAULT_VIEW_STORAGE_KEY, JSON.stringify(OD_UI.defaultView)); }
+  catch { /* \u0432\u044b\u0431\u043e\u0440 \u0434\u0435\u0440\u0436\u0438\u0442\u0441\u044f \u043d\u0430 \u0432\u0440\u0435\u043c\u044f \u0441\u0435\u0441\u0441\u0438\u0438 */ }
+}
+odLoadDefaultView();
+
+const OD_HIERARCHY_STORAGE_KEY = 'syntha-v2-registry-hierarchy';
+function odLoadHierarchy() {
+  try {
+    const raw = window.localStorage?.getItem(OD_HIERARCHY_STORAGE_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return;
+    for (const [scope, levels] of Object.entries(parsed)) {
+      if (Array.isArray(levels)) OD_UI.hierarchy[scope] = levels.filter((label) => typeof label === 'string');
+    }
+  } catch { /* браузер без хранилища показывает раздел плоским списком */ }
+}
+function odSaveHierarchy() {
+  try { window.localStorage?.setItem(OD_HIERARCHY_STORAGE_KEY, JSON.stringify(OD_UI.hierarchy)); }
+  catch { /* уровни держатся на время сессии */ }
+}
+odLoadHierarchy();
+
+/**
+ * \u0412\u0435\u0440\u043d\u0443\u0442\u044c \u0440\u0430\u0437\u0434\u0435\u043b \u043a \u0435\u0433\u043e \u0438\u0441\u0445\u043e\u0434\u043d\u043e\u043c\u0443 \u0432\u0438\u0434\u0443.
+ *
+ * \u0415\u0441\u043b\u0438 \u0447\u0438\u0442\u0430\u0442\u0435\u043b\u044c \u0441\u0432\u043e\u0439 \u0432\u0438\u0434 \u043d\u0435 \u043e\u0431\u044a\u044f\u0432\u043b\u044f\u043b \u2014 \u043a \u0437\u0430\u0432\u043e\u0434\u0441\u043a\u043e\u043c\u0443: \u0432\u0438\u0434\u0438\u043c\u043e\u0441\u0442\u044c \u043f\u043e \u0443\u043c\u043e\u043b\u0447\u0430\u043d\u0438\u044e \u0440\u0430\u0437\u0434\u0435\u043b\u0430, \u043f\u043e\u0440\u044f\u0434\u043e\u043a \u043a\u0430\u043a
+ * \u043e\u043d \u0437\u0430\u0434\u0430\u043d \u0432 \u0440\u0435\u0435\u0441\u0442\u0440\u0435, \u043d\u0438\u0447\u0435\u0433\u043e \u043d\u0435 \u0437\u0430\u043a\u0440\u0435\u043f\u043b\u0435\u043d\u043e.
+ */
+function odResetToDefaultView(scope) {
+  const saved = OD_UI.defaultView[scope];
+  if (saved && typeof saved === 'object') {
+    OD_UI.hiddenColumns[scope] = Array.isArray(saved.hidden) ? [...saved.hidden] : [];
+    OD_UI.columnOrder[scope] = Array.isArray(saved.order) ? [...saved.order] : [];
+    OD_UI.frozenColumns[scope] = Number.isInteger(saved.frozen) ? saved.frozen : 0;
+  } else {
+    delete OD_UI.hiddenColumns[scope];
+    delete OD_UI.columnOrder[scope];
+    delete OD_UI.frozenColumns[scope];
+  }
+  odSaveHiddenColumns();
+  odSaveRegistryView();
+}
+
+function odFrozenCount(scope) {
+  const value = OD_UI.frozenColumns[scope];
+  return Number.isInteger(value) && value >= 0 ? value : 0;
+}
+
+/**
+ * \u041a\u043e\u043b\u043e\u043d\u043a\u0438 \u0432 \u0442\u043e\u043c \u043f\u043e\u0440\u044f\u0434\u043a\u0435, \u0432 \u043a\u0430\u043a\u043e\u043c \u0438\u0445 \u043f\u043e\u0441\u0442\u0430\u0432\u0438\u043b \u0447\u0438\u0442\u0430\u0442\u0435\u043b\u044c.
+ *
+ * \u0421\u043e\u0445\u0440\u0430\u043d\u0451\u043d\u043d\u044b\u0439 \u043f\u043e\u0440\u044f\u0434\u043e\u043a \u2014 \u044d\u0442\u043e \u0441\u043f\u0438\u0441\u043e\u043a \u043a\u043b\u044e\u0447\u0435\u0439, \u0430 \u043d\u0435 \u0441\u0430\u043c\u0438 \u043a\u043e\u043b\u043e\u043d\u043a\u0438: \u0440\u0435\u0435\u0441\u0442\u0440 \u043c\u043e\u0436\u0435\u0442 \u043f\u043e\u043b\u0443\u0447\u0438\u0442\u044c \u043d\u043e\u0432\u0443\u044e \u043a\u043e\u043b\u043e\u043d\u043a\u0443
+ * \u0432 \u0441\u043b\u0435\u0434\u0443\u044e\u0449\u0435\u0439 \u0432\u0435\u0440\u0441\u0438\u0438, \u0438 \u043e\u043d\u0430 \u0432\u0441\u0442\u0430\u043d\u0435\u0442 \u0432 \u043a\u043e\u043d\u0435\u0446, \u0430 \u043d\u0435 \u043f\u043e\u0442\u0435\u0440\u044f\u0435\u0442\u0441\u044f. \u041a\u043b\u044e\u0447\u0438, \u043a\u043e\u0442\u043e\u0440\u044b\u0445 \u0432 \u0440\u0435\u0435\u0441\u0442\u0440\u0435 \u0431\u043e\u043b\u044c\u0448\u0435 \u043d\u0435\u0442,
+ * \u043c\u043e\u043b\u0447\u0430 \u043e\u0442\u0431\u0440\u0430\u0441\u044b\u0432\u0430\u044e\u0442\u0441\u044f \u2014 \u0438\u043d\u0430\u0447\u0435 \u043f\u043e\u0440\u044f\u0434\u043e\u043a \u043b\u043e\u043c\u0430\u043b\u0441\u044f \u0431\u044b \u043f\u0440\u0438 \u043a\u0430\u0436\u0434\u043e\u043c \u043f\u0435\u0440\u0435\u0438\u043c\u0435\u043d\u043e\u0432\u0430\u043d\u0438\u0438.
+ */
+function odOrderedColumns(scope, columns) {
+  const order = OD_UI.columnOrder[scope];
+  if (!Array.isArray(order) || order.length === 0) return columns;
+  const byKey = new Map(columns.map((column) => [odColumnKey(column), column]));
+  const ordered = [];
+  for (const key of order) {
+    const column = byKey.get(key);
+    if (column) { ordered.push(column); byKey.delete(key); }
+  }
+  // \u041d\u043e\u0432\u044b\u0435 \u043a\u043e\u043b\u043e\u043d\u043a\u0438, \u043a\u043e\u0442\u043e\u0440\u044b\u0445 \u0447\u0438\u0442\u0430\u0442\u0435\u043b\u044c \u0435\u0449\u0451 \u043d\u0435 \u0432\u0438\u0434\u0435\u043b, \u0438\u0434\u0443\u0442 \u0441\u043b\u0435\u0434\u043e\u043c \u0432 \u0438\u0445 \u0438\u0441\u0445\u043e\u0434\u043d\u043e\u043c \u043f\u043e\u0440\u044f\u0434\u043a\u0435.
+  for (const column of columns) if (byKey.has(odColumnKey(column))) ordered.push(column);
+  return ordered;
+}
+
+function odMoveColumn(scope, columns, key, direction) {
+  const ordered = odOrderedColumns(scope, columns).map(odColumnKey);
+  const from = ordered.indexOf(key);
+  const to = from + direction;
+  if (from < 0 || to < 0 || to >= ordered.length) return false;
+  ordered.splice(to, 0, ordered.splice(from, 1)[0]);
+  OD_UI.columnOrder[scope] = ordered;
+  odSaveRegistryView();
+  return true;
+}
+
 // A column is remembered by its key, not by its heading: a heading is translated, and keying the
 // choice on it lost every hidden column the moment the reader switched language.
 function odColumnKey(column) { return column.key || column.label; }
@@ -42,7 +183,8 @@ function odHiddenColumns(scope) {
 }
 function odVisibleColumns(scope, columns) {
   const hidden = odHiddenColumns(scope);
-  const visible = columns.filter(column => !hidden.has(odColumnKey(column)));
+  // Порядок применяется до скрытия: читатель расставляет все колонки, а видит те, что оставил.
+  const visible = odOrderedColumns(scope, columns).filter(column => !hidden.has(odColumnKey(column)));
   // Never leave a registry with nothing to read: the first column always survives.
   return visible.length ? visible : columns.slice(0, 1);
 }
@@ -176,6 +318,9 @@ function odHeader(scope, tabs, metrics, statuses, placeholder, action) {
 // Whether anything is narrowing this register right now: a search, a status other than "all", or a
 // chosen attribute value.
 function odFilterIsActive(scope) {
+  // Открытая ветвь иерархии сужает реестр так же, как фильтр, и живёт отдельно от `filters` —
+  // поэтому проверяется до выхода по их отсутствию.
+  if ((OD_UI.hierarchyPath[scope] || []).length) return true;
   const filters = OD_UI.filters?.[scope];
   if (!filters) return false;
   if (String(filters.query || '').trim()) return true;
@@ -183,14 +328,29 @@ function odFilterIsActive(scope) {
   return Object.values(filters.attributes || {}).some(values => Array.isArray(values) && values.length);
 }
 
-function odFilter(items, scope, statusAccessor = item => item.status) {
+/**
+ * Отобрать строки реестра по всему, что его сейчас сужает.
+ *
+ * `includeBranch` выключается ровно в одном месте — при построении дерева иерархии: дерево должно
+ * показывать и соседние ветви с их количествами, иначе из выбранной ветви некуда перейти.
+ *
+ * @param {any[]} items
+ * @param {string} scope
+ * @param {(item: any) => any} [statusAccessor]
+ * @param {boolean} [includeBranch]
+ */
+function odFilter(items, scope, statusAccessor = item => item.status, includeBranch = true) {
   const query = String(OD_UI.filters[scope]?.query || '').trim().toLocaleLowerCase();
   const status = OD_UI.filters[scope]?.status || 'all';
   const attributes = OD_UI.filters[scope]?.attributes || {};
   const columns = OD_UI.registry?.[scope]?.columns || [];
   const chosen = Object.entries(attributes).filter(([, values]) => Array.isArray(values) && values.length);
+  const branch = includeBranch ? odHierarchyBranch(scope) : [];
   return items.filter(item => {
     if (status !== 'all' && String(statusAccessor(item) || '') !== status) return false;
+    for (const step of branch) {
+      if (odHierarchyValue(step.column, item) !== step.value) return false;
+    }
     for (const [label, values] of chosen) {
       const column = columns.find(candidate => candidate.label === label);
       if (!column) continue;
@@ -244,9 +404,12 @@ function odAttributeValue(column, item) {
 function odColumnPanel(scope) {
   const registry = OD_UI.registry?.[scope];
   const columns = registry?.columns || [];
-  const panel = el('aside', { className: 'od-filter-panel od-column-panel', role: 'dialog', ariaLabel: odText('\u041a\u043e\u043b\u043e\u043d\u043a\u0438', 'Columns') });
+  const panel = el('aside', { className: 'od-filter-panel od-column-panel', role: 'dialog', ariaLabel: 'Freeze Line' });
   const head = el('header', { className: 'od-filter-panel-head' });
-  head.append(el('h2', { className: 'od-filter-panel-title', rawText: odText('\u041a\u043e\u043b\u043e\u043d\u043a\u0438', 'Columns') }));
+  // \u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435 \u0432\u0437\u044f\u0442\u043e \u0438\u0437 \u043f\u0440\u0435\u0434\u043c\u0435\u0442\u043d\u043e\u0439 \u043e\u0431\u043b\u0430\u0441\u0442\u0438, \u0430 \u043d\u0435 \u043f\u0435\u0440\u0435\u0432\u0435\u0434\u0435\u043d\u043e: \u00abFreeze Line\u00bb \u2014 \u044d\u0442\u043e \u043b\u0438\u043d\u0438\u044f, \u0432\u044b\u0448\u0435 \u043a\u043e\u0442\u043e\u0440\u043e\u0439
+  // \u043a\u043e\u043b\u043e\u043d\u043a\u0438 \u0437\u0430\u043a\u0440\u0435\u043f\u043b\u0435\u043d\u044b, \u0438 \u043e\u043d\u0430 \u0436\u0435 \u0443\u043f\u0440\u0430\u0432\u043b\u044f\u0435\u0442 \u0432\u0438\u0434\u0438\u043c\u043e\u0441\u0442\u044c\u044e \u0438 \u043f\u043e\u0440\u044f\u0434\u043a\u043e\u043c. \u041f\u0435\u0440\u0435\u0432\u043e\u0434 \u00ab\u041b\u0438\u043d\u0438\u044f \u0437\u0430\u043a\u0440\u0435\u043f\u043b\u0435\u043d\u0438\u044f\u00bb
+  // \u043e\u043f\u0438\u0441\u044b\u0432\u0430\u043b \u0431\u044b \u0442\u043e\u043b\u044c\u043a\u043e \u043e\u0434\u043d\u0443 \u0438\u0437 \u0442\u0440\u0451\u0445 \u0435\u0451 \u0440\u0430\u0431\u043e\u0442.
+  head.append(el('h2', { className: 'od-filter-panel-title', rawText: 'Freeze Line' }));
   const close = el('button', { className: 'od-filter-panel-close', type: 'button', ariaLabel: odText('\u0417\u0430\u043a\u0440\u044b\u0442\u044c', 'Close') });
   close.append(el('span', { className: 'od-filter-panel-close-mark', rawText: '\u00d7' }));
   close.addEventListener('click', () => { OD_UI.columnPanel = null; renderApp(); });
@@ -256,31 +419,82 @@ function odColumnPanel(scope) {
   const body = el('div', { className: 'od-filter-panel-body' });
   const hidden = odHiddenColumns(scope);
   const visibleCount = odVisibleColumns(scope, columns).length;
-  // A column with no heading is structural — a row number, a selection box — and is not the
-  // reader's to switch off.
-  columns.filter(column => String(column.label || '').trim()).forEach(column => {
-    const row = el('label', { className: 'od-filter-option od-column-option' });
-    const box = el('input', { type: 'checkbox' });
-    box.checked = !hidden.has(odColumnKey(column));
-    // The last remaining column cannot be switched off, so the control says so instead of failing.
+  const ordered = odOrderedColumns(scope, columns).filter(column => String(column.label || '').trim());
+  const frozen = Math.min(odFrozenCount(scope), Math.max(ordered.length - 1, 0));
+
+  ordered.forEach((column, index) => {
+    const key = odColumnKey(column);
+    // Классы уже существующей строки выбора сохранены: оформление и роль для них в дизайн-системе
+    // определены, а новый собственный класс панель раскладывала бы по правилам filterbar — в
+    // строку, и все двадцать колонок уезжали за её край.
+    const row = el('label', { className: 'od-filter-option od-column-option od-column-row' });
+
+    const box = el('input', { type: 'checkbox', ariaLabel: column.label });
+    box.checked = !hidden.has(key);
+    // \u041f\u043e\u0441\u043b\u0435\u0434\u043d\u044e\u044e \u043e\u0441\u0442\u0430\u0432\u0448\u0443\u044e\u0441\u044f \u043a\u043e\u043b\u043e\u043d\u043a\u0443 \u0432\u044b\u043a\u043b\u044e\u0447\u0438\u0442\u044c \u043d\u0435\u043b\u044c\u0437\u044f, \u0438 \u044d\u043b\u0435\u043c\u0435\u043d\u0442 \u0433\u043e\u0432\u043e\u0440\u0438\u0442 \u043e\u0431 \u044d\u0442\u043e\u043c, \u0430 \u043d\u0435 \u043e\u0442\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u0442 \u043c\u043e\u043b\u0447\u0430.
     if (box.checked && visibleCount <= 1) {
       box.disabled = true;
       row.title = odText('\u041e\u0434\u043d\u0430 \u043a\u043e\u043b\u043e\u043d\u043a\u0430 \u0434\u043e\u043b\u0436\u043d\u0430 \u043e\u0441\u0442\u0430\u0442\u044c\u0441\u044f', 'One column must remain');
     }
-    box.addEventListener('change', () => { odToggleColumn(scope, odColumnKey(column), columns); renderApp(); });
-    row.append(box, el('span', { className: 'od-filter-option-label', rawText: column.label }));
+    box.addEventListener('change', () => { odToggleColumn(scope, key, columns); renderApp(); });
+
+    const label = el('span', { className: 'od-filter-option-label', rawText: column.label });
+
+    // \u041f\u043e\u0440\u044f\u0434\u043e\u043a \u043c\u0435\u043d\u044f\u0435\u0442\u0441\u044f \u043a\u043d\u043e\u043f\u043a\u0430\u043c\u0438, \u0430 \u043d\u0435 \u043f\u0435\u0440\u0435\u0442\u0430\u0441\u043a\u0438\u0432\u0430\u043d\u0438\u0435\u043c \u043c\u044b\u0448\u044c\u044e: \u043f\u0435\u0440\u0435\u0442\u0430\u0441\u043a\u0438\u0432\u0430\u043d\u0438\u0435 \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u043d\u043e \u0441 \u043a\u043b\u0430\u0432\u0438\u0430\u0442\u0443\u0440\u044b,
+    // \u0430 \u0440\u0435\u0435\u0441\u0442\u0440\u043e\u043c \u043f\u043e\u043b\u044c\u0437\u0443\u044e\u0442\u0441\u044f \u0438 \u0442\u0435, \u043a\u0442\u043e \u043c\u044b\u0448\u044c\u044e \u043d\u0435 \u0440\u0430\u0431\u043e\u0442\u0430\u0435\u0442. \u041a\u043d\u043e\u043f\u043a\u0438 \u0434\u0435\u043b\u0430\u044e\u0442 \u0442\u0443 \u0436\u0435 \u0440\u0430\u0431\u043e\u0442\u0443 \u0438 \u0447\u0438\u0442\u0430\u044e\u0442\u0441\u044f
+    // \u0432\u0441\u043f\u043e\u043c\u043e\u0433\u0430\u0442\u0435\u043b\u044c\u043d\u044b\u043c\u0438 \u0442\u0435\u0445\u043d\u043e\u043b\u043e\u0433\u0438\u044f\u043c\u0438.
+    const moveUp = el('button', { className: 'od-column-move', type: 'button', rawText: '\u2191', ariaLabel: odText(`\u041f\u043e\u0434\u043d\u044f\u0442\u044c \u00ab${column.label}\u00bb`, `Move \u00ab${column.label}\u00bb up`) });
+    moveUp.disabled = index === 0;
+    moveUp.addEventListener('click', () => { if (odMoveColumn(scope, columns, key, -1)) renderApp(); });
+    const moveDown = el('button', { className: 'od-column-move', type: 'button', rawText: '\u2193', ariaLabel: odText(`\u041e\u043f\u0443\u0441\u0442\u0438\u0442\u044c \u00ab${column.label}\u00bb`, `Move \u00ab${column.label}\u00bb down`) });
+    moveDown.disabled = index === ordered.length - 1;
+    moveDown.addEventListener('click', () => { if (odMoveColumn(scope, columns, key, 1)) renderApp(); });
+
+    row.append(box, label, moveUp, moveDown);
+    if (index < frozen) row.classList.add('od-column-frozen');
     body.append(row);
+
+    // \u0421\u0430\u043c\u0430 \u043b\u0438\u043d\u0438\u044f: \u0432\u0441\u0451, \u0447\u0442\u043e \u0432\u044b\u0448\u0435 \u043d\u0435\u0451, \u043e\u0441\u0442\u0430\u0451\u0442\u0441\u044f \u043d\u0430 \u043c\u0435\u0441\u0442\u0435 \u043f\u0440\u0438 \u0433\u043e\u0440\u0438\u0437\u043e\u043d\u0442\u0430\u043b\u044c\u043d\u043e\u0439 \u043f\u0440\u043e\u043a\u0440\u0443\u0442\u043a\u0435.
+    const boundary = el('div', { className: `od-filter-option od-freeze-line ${index + 1 === frozen ? 'active' : ''}`.trim() });
+    const set = el('button', {
+      className: 'od-freeze-line-handle', type: 'button',
+      rawText: index + 1 === frozen ? odText('\u041b\u0438\u043d\u0438\u044f \u0437\u0430\u043a\u0440\u0435\u043f\u043b\u0435\u043d\u0438\u044f', 'Freeze line') : odText('\u0417\u0430\u043a\u0440\u0435\u043f\u0438\u0442\u044c \u043f\u043e \u044d\u0442\u0443 \u0441\u0442\u0440\u043e\u043a\u0443', 'Freeze up to here'),
+    });
+    set.addEventListener('click', () => {
+      OD_UI.frozenColumns[scope] = index + 1 === frozen ? 0 : index + 1;
+      odSaveRegistryView();
+      renderApp();
+    });
+    boundary.append(set);
+    body.append(boundary);
   });
   panel.append(body);
 
   const footer = el('footer', { className: 'od-filter-panel-foot' });
   const all = el('button', { className: 'button', type: 'button', rawText: odText('\u041f\u043e\u043a\u0430\u0437\u0430\u0442\u044c \u0432\u0441\u0435', 'Show all') });
-  // An explicit empty list, not a deleted entry: deleting it would fall back to the section's
-  // default hidden columns, which is the opposite of "show all".
+  // \u042f\u0432\u043d\u044b\u0439 \u043f\u0443\u0441\u0442\u043e\u0439 \u0441\u043f\u0438\u0441\u043e\u043a, \u0430 \u043d\u0435 \u0443\u0434\u0430\u043b\u0435\u043d\u0438\u0435 \u0437\u0430\u043f\u0438\u0441\u0438: \u0443\u0434\u0430\u043b\u0435\u043d\u0438\u0435 \u0432\u0435\u0440\u043d\u0443\u043b\u043e \u0431\u044b \u043a\u043e\u043b\u043e\u043d\u043a\u0438, \u0441\u043a\u0440\u044b\u0442\u044b\u0435 \u0440\u0430\u0437\u0434\u0435\u043b\u043e\u043c \u043f\u043e
+  // \u0443\u043c\u043e\u043b\u0447\u0430\u043d\u0438\u044e, \u0442\u043e \u0435\u0441\u0442\u044c \u043e\u0431\u0440\u0430\u0442\u043d\u043e\u0435 \u0442\u043e\u043c\u0443, \u043e \u0447\u0451\u043c \u043f\u0440\u043e\u0441\u044f\u0442.
   all.addEventListener('click', () => { OD_UI.hiddenColumns[scope] = []; odSaveHiddenColumns(); renderApp(); });
+
+  // \u00ab\u0423\u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442\u044c \u0432\u0438\u0434 \u043f\u043e \u0443\u043c\u043e\u043b\u0447\u0430\u043d\u0438\u044e\u00bb \u2014 \u044d\u0442\u043e \u043e\u0442\u0432\u0435\u0442 \u043d\u0430 \u0432\u043e\u043f\u0440\u043e\u0441 \u00ab\u043a \u0447\u0435\u043c\u0443 \u0432\u043e\u0437\u0432\u0440\u0430\u0449\u0430\u0435\u0442 \u0421\u0431\u0440\u043e\u0441\u0438\u0442\u044c\u00bb. \u0411\u0435\u0437 \u043d\u0435\u0433\u043e
+  // \u0441\u0431\u0440\u043e\u0441 \u0432\u043e\u0437\u0432\u0440\u0430\u0449\u0430\u043b \u0431\u044b \u043a \u0442\u043e\u043c\u0443, \u0441 \u0447\u0435\u043c \u0440\u0430\u0437\u0434\u0435\u043b \u0432\u044b\u0448\u0435\u043b \u0441 \u0437\u0430\u0432\u043e\u0434\u0430, \u0438 \u043d\u0430\u0441\u0442\u0440\u043e\u0435\u043d\u043d\u044b\u0439 \u0432\u0438\u0434 \u0442\u0435\u0440\u044f\u043b\u0441\u044f \u0431\u044b \u043a\u0430\u0436\u0434\u044b\u0439 \u0440\u0430\u0437.
+  const asDefault = el('button', { className: 'button', type: 'button', rawText: odText('\u0423\u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442\u044c \u0432\u0438\u0434 \u043f\u043e \u0443\u043c\u043e\u043b\u0447\u0430\u043d\u0438\u044e', 'Set as default view') });
+  asDefault.addEventListener('click', () => {
+    OD_UI.defaultView[scope] = {
+      hidden: [...odHiddenColumns(scope)],
+      order: odOrderedColumns(scope, columns).map(odColumnKey),
+      frozen: odFrozenCount(scope),
+    };
+    odSaveDefaultView();
+    toast(odText('\u0412\u0438\u0434 \u0441\u043e\u0445\u0440\u0430\u043d\u0451\u043d \u043a\u0430\u043a \u0438\u0441\u0445\u043e\u0434\u043d\u044b\u0439 \u0434\u043b\u044f \u044d\u0442\u043e\u0433\u043e \u0440\u0430\u0437\u0434\u0435\u043b\u0430.', 'Saved as this section\'s default view.'));
+  });
+
+  const reset = el('button', { className: 'button', type: 'button', rawText: odText('\u0421\u0431\u0440\u043e\u0441\u0438\u0442\u044c', 'Reset') });
+  reset.addEventListener('click', () => { odResetToDefaultView(scope); renderApp(); });
+
   const done = el('button', { className: 'button primary', type: 'button', rawText: odText('\u0413\u043e\u0442\u043e\u0432\u043e', 'Done') });
   done.addEventListener('click', () => { OD_UI.columnPanel = null; renderApp(); });
-  footer.append(all, done);
+  footer.append(all, asDefault, reset, done);
   panel.append(footer);
   return panel;
 }
@@ -425,6 +639,243 @@ function odToggleAttribute(scope, label, value) {
   odSetFilter(scope, 'attributes', current);
 }
 
+// —— Иерархия раздела ——
+//
+// Фильтр отвечает на вопрос «покажи только это». Иерархия отвечает на другой: «из чего вообще
+// состоит этот раздел». Поэтому дерево строится по строкам без учёта открытой ветви: иначе после
+// первого же выбора соседние ветви исчезли бы и из неё некуда было бы вернуться.
+//
+// Остальные сужения — поиск, статус, выбранные атрибуты — дерево учитывает: его количества
+// должны совпадать с тем, что человек увидит в таблице, если перейдёт в ветвь.
+
+// Значение атрибута для узла дерева. Строка без значения — тоже ветвь: пропустить её значило бы,
+// что сумма ветвей не сошлась бы с числом экземпляров, а часть строк стала бы недостижима обходом.
+const OD_HIERARCHY_BLANK = '\u2014';
+function odHierarchyValue(column, item) {
+  return odAttributeValue(column, item) || OD_HIERARCHY_BLANK;
+}
+
+function odHierarchyLevels(scope) {
+  const stored = OD_UI.hierarchy[scope];
+  return Array.isArray(stored) ? stored : [];
+}
+
+// Уровни, разрешённые в колонки того реестра, который на экране сейчас. Уровень, колонки
+// которого больше нет, обрывает цепочку: всё, что ниже него, описывает разбиение, которого уже не существует.
+function odHierarchyColumns(scope) {
+  const columns = OD_UI.registry?.[scope]?.columns || [];
+  const resolved = [];
+  for (const label of odHierarchyLevels(scope)) {
+    const column = columns.find(candidate => candidate.label === label && typeof candidate.value === 'function');
+    if (!column) break;
+    resolved.push(column);
+  }
+  return resolved;
+}
+
+// Открытая ветвь как список шагов «колонка → значение».
+function odHierarchyBranch(scope) {
+  const columns = odHierarchyColumns(scope);
+  const path = OD_UI.hierarchyPath[scope] || [];
+  const branch = [];
+  for (let index = 0; index < path.length && index < columns.length; index += 1) {
+    branch.push({ column: columns[index], value: path[index] });
+  }
+  return branch;
+}
+
+function odHierarchyDepth(scope) {
+  return odHierarchyBranch(scope).length;
+}
+
+function odSetHierarchyLevels(scope, labels) {
+  OD_UI.hierarchy[scope] = [...labels];
+  // Перестроенное дерево — другое дерево, и прежняя ветвь в нём ничего не значит. Оставить её
+  // значило бы показать пустой реестр без видимой причины.
+  OD_UI.hierarchyPath[scope] = [];
+  odSaveHierarchy();
+}
+
+/**
+ * Дерево раздела: узлы по уровням с числом экземпляров в каждом.
+ *
+ * @param {string} scope
+ */
+function odHierarchyTree(scope) {
+  const registry = OD_UI.registry?.[scope];
+  const columns = odHierarchyColumns(scope);
+  const rows = registry ? odFilter(registry.rows || [], scope, registry.statusAccessor || (item => item.status), false) : [];
+  const root = { value: '', count: rows.length, children: new Map() };
+  if (!columns.length) return root;
+  for (const item of rows) {
+    let node = root;
+    for (const column of columns) {
+      const value = odHierarchyValue(column, item);
+      let child = node.children.get(value);
+      if (!child) { child = { value, count: 0, children: new Map() }; node.children.set(value, child); }
+      child.count += 1;
+      node = child;
+    }
+  }
+  return root;
+}
+
+// Узел, в котором человек сейчас стоит. От него считается «Всего экземпляров».
+function odHierarchyNodeAt(root, path) {
+  let node = root;
+  for (const value of path) {
+    const child = node.children.get(value);
+    if (!child) return node;
+    node = child;
+  }
+  return node;
+}
+
+function odHierarchySortedChildren(node) {
+  return [...node.children.values()]
+    .sort((left, right) => right.count - left.count || String(left.value).localeCompare(String(right.value)));
+}
+
+// Навигатор по иерархии. Сверху — из чего собрана иерархия и как её пересобрать, снизу — само
+// дерево с числом экземпляров в каждой ветви.
+function odHierarchyPanel(scope) {
+  const panel = el('aside', { className: 'od-filter-panel od-hierarchy-panel', role: 'dialog', ariaLabel: odText('\u0421\u0442\u0440\u0443\u043a\u0442\u0443\u0440\u0430 \u0438\u0435\u0440\u0430\u0440\u0445\u0438\u0438', 'Hierarchy structure') });
+  const head = el('header', { className: 'od-filter-panel-head' });
+  head.append(el('h2', { className: 'od-filter-panel-title', rawText: odText('\u0421\u0442\u0440\u0443\u043a\u0442\u0443\u0440\u0430 \u0438\u0435\u0440\u0430\u0440\u0445\u0438\u0438', 'Hierarchy structure') }));
+  const close = el('button', { className: 'od-filter-panel-close', type: 'button', ariaLabel: odText('\u0417\u0430\u043a\u0440\u044b\u0442\u044c', 'Close') });
+  close.append(el('span', { className: 'od-filter-panel-close-mark', rawText: '\u00d7' }));
+  close.addEventListener('click', () => { OD_UI.hierarchyPanel = null; renderApp(); });
+  head.append(close);
+  panel.append(head);
+
+  const body = el('div', { className: 'od-filter-panel-body' });
+  const levels = odHierarchyLevels(scope);
+  const attributes = odFilterableAttributes(scope);
+  const available = attributes.filter(attribute => !levels.includes(attribute.label));
+
+  body.append(el('h3', { className: 'od-filter-group-title', rawText: odText('\u0423\u0440\u043e\u0432\u043d\u0438', 'Levels') }));
+  if (!levels.length) {
+    body.append(el('p', { className: 'od-empty', rawText: odText(
+      '\u0423\u0440\u043e\u0432\u043d\u0438 \u043d\u0435 \u0437\u0430\u0434\u0430\u043d\u044b \u2014 \u0440\u0430\u0437\u0434\u0435\u043b \u043f\u043e\u043a\u0430\u0437\u0430\u043d \u043f\u043b\u043e\u0441\u043a\u0438\u043c \u0441\u043f\u0438\u0441\u043a\u043e\u043c',
+      'No levels chosen \u2014 the section is shown as a flat list') }));
+  }
+  levels.forEach((label, index) => {
+    const row = el('div', { className: 'od-filter-option od-column-option od-column-row od-hierarchy-level' });
+    row.append(el('span', { className: 'od-hierarchy-level-mark', rawText: String(index + 1) }));
+    row.append(el('span', { className: 'od-filter-option-label', rawText: label }));
+    const up = el('button', { className: 'od-column-move', type: 'button', rawText: '\u2191', ariaLabel: odText(`\u041f\u043e\u0434\u043d\u044f\u0442\u044c \u00ab${label}\u00bb`, `Move \u00ab${label}\u00bb up`) });
+    up.disabled = index === 0;
+    up.addEventListener('click', () => {
+      const next = [...levels];
+      [next[index - 1], next[index]] = [next[index], next[index - 1]];
+      odSetHierarchyLevels(scope, next);
+      renderApp();
+    });
+    const down = el('button', { className: 'od-column-move', type: 'button', rawText: '\u2193', ariaLabel: odText(`\u041e\u043f\u0443\u0441\u0442\u0438\u0442\u044c \u00ab${label}\u00bb`, `Move \u00ab${label}\u00bb down`) });
+    down.disabled = index === levels.length - 1;
+    down.addEventListener('click', () => {
+      const next = [...levels];
+      [next[index], next[index + 1]] = [next[index + 1], next[index]];
+      odSetHierarchyLevels(scope, next);
+      renderApp();
+    });
+    const drop = el('button', { className: 'od-column-move', type: 'button', rawText: '\u00d7', ariaLabel: odText(`\u0423\u0431\u0440\u0430\u0442\u044c \u0443\u0440\u043e\u0432\u0435\u043d\u044c \u00ab${label}\u00bb`, `Remove level \u00ab${label}\u00bb`) });
+    drop.addEventListener('click', () => {
+      odSetHierarchyLevels(scope, levels.filter(entry => entry !== label));
+      renderApp();
+    });
+    row.append(up, down, drop);
+    body.append(row);
+  });
+
+  if (available.length) {
+    body.append(el('h3', { className: 'od-filter-group-title', rawText: odText('\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c \u0443\u0440\u043e\u0432\u0435\u043d\u044c', 'Add a level') }));
+    available.forEach(attribute => {
+      const row = el('div', { className: 'od-filter-option od-column-option od-column-row od-hierarchy-add' });
+      row.append(el('span', { className: 'od-filter-option-label', rawText: attribute.label }));
+      row.append(el('span', { className: 'od-filter-option-count', rawText: String(attribute.values.length) }));
+      const add = el('button', { className: 'od-column-move', type: 'button', rawText: '+', ariaLabel: odText(`\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c \u0443\u0440\u043e\u0432\u0435\u043d\u044c \u00ab${attribute.label}\u00bb`, `Add level \u00ab${attribute.label}\u00bb`) });
+      add.addEventListener('click', () => { odSetHierarchyLevels(scope, [...levels, attribute.label]); renderApp(); });
+      row.append(add);
+      body.append(row);
+    });
+  }
+
+  const columns = odHierarchyColumns(scope);
+  if (columns.length) {
+    const root = odHierarchyTree(scope);
+    const path = (OD_UI.hierarchyPath[scope] || []).slice(0, columns.length);
+    body.append(el('h3', { className: 'od-filter-group-title', rawText: odText('\u041e\u0431\u0445\u043e\u0434', 'Browse') }));
+
+    // «Всё» — вершина дерева: с неё начинается обход и на неё же возвращаются.
+    const top = el('button', { className: `od-filter-option od-hierarchy-node ${path.length ? '' : 'selected'}`.trim(), type: 'button' });
+    top.append(el('span', { className: 'od-filter-option-label', rawText: odText('\u0412\u0441\u0451', 'Everything') }));
+    top.append(el('span', { className: 'od-filter-option-count', rawText: String(root.count) }));
+    top.addEventListener('click', () => { OD_UI.hierarchyPath[scope] = []; renderApp(); });
+    body.append(top);
+
+    // Раскрыта только выбранная ветвь и её ближайшие дети: полностью развёрнутое дерево на трёх
+    // уровнях — это сотни строк в панели шириной в двести восемьдесят пикселей.
+    let node = root;
+    for (let depth = 0; depth < columns.length; depth += 1) {
+      const children = odHierarchySortedChildren(node);
+      if (!children.length) break;
+      children.forEach(child => {
+        const chosen = path[depth] === child.value;
+        const button = el('button', {
+          className: `od-filter-option od-hierarchy-node od-hierarchy-depth-${Math.min(depth + 1, 4)} ${chosen ? 'selected' : ''}`.trim(),
+          type: 'button',
+        });
+        button.append(el('span', { className: 'od-filter-option-label', rawText: child.value }));
+        button.append(el('span', { className: 'od-filter-option-count', rawText: String(child.count) }));
+        button.addEventListener('click', () => {
+          // Повторный щелчок по выбранному узлу закрывает его — иначе выйти на уровень выше
+          // можно было бы только через «Всё».
+          OD_UI.hierarchyPath[scope] = chosen ? path.slice(0, depth) : [...path.slice(0, depth), child.value];
+          renderApp();
+        });
+        body.append(button);
+      });
+      const next = path[depth] !== undefined ? node.children.get(path[depth]) : undefined;
+      if (!next) break;
+      node = next;
+    }
+
+    const total = odHierarchyNodeAt(root, path).count;
+    body.append(el('p', { className: 'od-hierarchy-total', rawText:
+      `${odText('\u0412\u0441\u0435\u0433\u043e \u044d\u043a\u0437\u0435\u043c\u043f\u043b\u044f\u0440\u043e\u0432', 'Instances in total')}: ${total}` }));
+  }
+  panel.append(body);
+
+  const footer = el('footer', { className: 'od-filter-panel-foot' });
+  const reset = el('button', { className: 'button', type: 'button', rawText: odText('\u0421\u0431\u0440\u043e\u0441\u0438\u0442\u044c', 'Reset') });
+  reset.addEventListener('click', () => { odSetHierarchyLevels(scope, []); renderApp(); });
+  const done = el('button', { className: 'button primary', type: 'button', rawText: odText('\u0413\u043e\u0442\u043e\u0432\u043e', 'Done') });
+  done.addEventListener('click', () => { OD_UI.hierarchyPanel = null; renderApp(); });
+  footer.append(reset, done);
+  panel.append(footer);
+  return panel;
+}
+
+// Открытая ветвь видна и снимается снаружи панели — так же, как выбранные значения фильтра.
+function odHierarchyCrumbs(scope) {
+  const branch = odHierarchyBranch(scope);
+  if (!branch.length) return null;
+  const strip = el('div', { className: 'od-filter-chips od-hierarchy-crumbs' });
+  branch.forEach((step, index) => {
+    const chip = el('button', { className: 'od-filter-chip', type: 'button',
+      ariaLabel: `${odText('\u0412\u0435\u0440\u043d\u0443\u0442\u044c\u0441\u044f \u043a', 'Back to')}: ${step.column.label} \u2014 ${step.value}` });
+    chip.append(el('span', { className: 'od-filter-chip-label', rawText: `${step.column.label}: ${step.value}` }));
+    // Щелчок по крошке обрезает ветвь по неё включительно — то есть возвращает на этот уровень.
+    chip.addEventListener('click', () => { OD_UI.hierarchyPath[scope] = branch.slice(0, index).map(entry => entry.value); renderApp(); });
+    strip.append(chip);
+  });
+  const clear = el('button', { className: 'od-filter-chip clear', type: 'button', rawText: odText('\u0412\u0435\u0441\u044c \u0440\u0430\u0437\u0434\u0435\u043b', 'Whole section') });
+  clear.addEventListener('click', () => { OD_UI.hierarchyPath[scope] = []; renderApp(); });
+  strip.append(clear);
+  return strip;
+}
+
 function odCell(value) {
   if (value instanceof Node) return value;
   return el('span', { rawText: odValue(value) || '\u2014' });
@@ -443,10 +894,29 @@ function odTable(scope, rows, columns, rowKey = item => item.id, filterScope = s
   const selectedKey = OD_UI.selected[scope] || (rows[0] ? rowKey(rows[0]) : '');
   if (selectedKey && !OD_UI.selected[scope]) OD_UI.selected[scope] = selectedKey;
   const wrap = el('div', { className: 'od-table-wrap' });
+  // \u041e\u0442\u0441\u0442\u0443\u043f\u044b \u0437\u0430\u043a\u0440\u0435\u043f\u043b\u0451\u043d\u043d\u044b\u0445 \u043a\u043e\u043b\u043e\u043d\u043e\u043a \u043f\u0440\u043e\u0441\u0442\u0430\u0432\u043b\u044f\u044e\u0442\u0441\u044f \u043f\u043e\u0441\u043b\u0435 \u0432\u0441\u0442\u0430\u0432\u043a\u0438 \u0432 \u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442: \u0434\u043e \u043d\u0435\u0451 \u0443 \u044f\u0447\u0435\u0435\u043a \u043d\u0435\u0442 \u0448\u0438\u0440\u0438\u043d\u044b,
+  // \u0438 `offsetWidth` \u0432\u0435\u0440\u043d\u0443\u043b \u0431\u044b \u043d\u043e\u043b\u044c \u2014 \u0432\u0441\u0435 \u0437\u0430\u043a\u0440\u0435\u043f\u043b\u0451\u043d\u043d\u044b\u0435 \u043a\u043e\u043b\u043e\u043d\u043a\u0438 \u043b\u0435\u0433\u043b\u0438 \u0431\u044b \u0434\u0440\u0443\u0433 \u043d\u0430 \u0434\u0440\u0443\u0433\u0430.
+  // \u041e\u0442\u0441\u0442\u0443\u043f\u044b \u0437\u0430\u043a\u0440\u0435\u043f\u043b\u0451\u043d\u043d\u044b\u0445 \u043a\u043e\u043b\u043e\u043d\u043e\u043a \u0437\u0430\u0434\u0430\u0451\u0442 \u0442\u0430\u0431\u043b\u0438\u0446\u0430 \u0441\u0442\u0438\u043b\u0435\u0439, \u0430 \u043d\u0435 \u0441\u043a\u0440\u0438\u043f\u0442: \u0434\u0438\u0437\u0430\u0439\u043d-\u0441\u0438\u0441\u0442\u0435\u043c\u0430 \u0437\u0430\u043f\u0440\u0435\u0449\u0430\u0435\u0442
+  // \u0434\u0438\u043d\u0430\u043c\u0438\u0447\u0435\u0441\u043a\u0443\u044e \u0441\u0442\u0438\u043b\u0438\u0437\u0430\u0446\u0438\u044e \u0438\u0437 \u0440\u0430\u043d\u0442\u0430\u0439\u043c\u0430, \u0438 \u0437\u0430\u043f\u0440\u0435\u0442 \u0432\u0435\u0440\u043d\u044b\u0439 \u2014 \u043e\u0444\u043e\u0440\u043c\u043b\u0435\u043d\u0438\u0435, \u0440\u0430\u0437\u043b\u043e\u0436\u0435\u043d\u043d\u043e\u0435 \u043c\u0435\u0436\u0434\u0443 CSS \u0438
+  // \u043e\u0431\u0440\u0430\u0431\u043e\u0442\u0447\u0438\u043a\u043e\u043c, \u0440\u0430\u0441\u0445\u043e\u0434\u0438\u0442\u0441\u044f \u043f\u0440\u0438 \u043f\u0435\u0440\u0432\u043e\u0439 \u043f\u0440\u0430\u0432\u043a\u0435. \u041f\u043e\u044d\u0442\u043e\u043c\u0443 \u0437\u0430\u043a\u0440\u0435\u043f\u043b\u0451\u043d\u043d\u044b\u0435 \u043a\u043e\u043b\u043e\u043d\u043a\u0438 \u0438\u043c\u0435\u044e\u0442 \u043f\u0440\u0435\u0434\u0441\u043a\u0430\u0437\u0443\u0435\u043c\u0443\u044e
+  // \u0448\u0438\u0440\u0438\u043d\u0443, \u0430 \u0438\u0445 \u0441\u043c\u0435\u0449\u0435\u043d\u0438\u044f \u043f\u0435\u0440\u0435\u0447\u0438\u0441\u043b\u0435\u043d\u044b \u0432 CSS.
   const table = el('table', { className: 'od-table' });
   const thead = el('thead');
   const head = el('tr');
-  columns.forEach(column => head.append(el('th', { rawText: column.label })));
+  // \u0417\u0430\u043a\u0440\u0435\u043f\u043b\u0451\u043d\u043d\u044b\u0435 \u043a\u043e\u043b\u043e\u043d\u043a\u0438 \u043e\u0441\u0442\u0430\u044e\u0442\u0441\u044f \u043d\u0430 \u043c\u0435\u0441\u0442\u0435 \u043f\u0440\u0438 \u0433\u043e\u0440\u0438\u0437\u043e\u043d\u0442\u0430\u043b\u044c\u043d\u043e\u0439 \u043f\u0440\u043e\u043a\u0440\u0443\u0442\u043a\u0435. \u041e\u0442\u0441\u0442\u0443\u043f \u043a\u0430\u0436\u0434\u043e\u0439 \u0441\u043b\u0435\u0434\u0443\u044e\u0449\u0435\u0439
+  // \u0441\u043a\u043b\u0430\u0434\u044b\u0432\u0430\u0435\u0442\u0441\u044f \u0438\u0437 \u0448\u0438\u0440\u0438\u043d \u043f\u0440\u0435\u0434\u044b\u0434\u0443\u0449\u0438\u0445, \u043f\u043e\u044d\u0442\u043e\u043c\u0443 \u043e\u043d \u0441\u0447\u0438\u0442\u0430\u0435\u0442\u0441\u044f \u043f\u043e\u0441\u043b\u0435 \u043e\u0442\u0440\u0438\u0441\u043e\u0432\u043a\u0438 \u2014 \u0434\u043e \u043d\u0435\u0451 \u0448\u0438\u0440\u0438\u043d\u044b \u0435\u0449\u0451 \u043d\u0435\u0442.
+  // \u041d\u0435 \u0431\u043e\u043b\u044c\u0448\u0435 \u0448\u0435\u0441\u0442\u0438: \u0441\u043c\u0435\u0449\u0435\u043d\u0438\u044f \u043f\u0435\u0440\u0435\u0447\u0438\u0441\u043b\u0435\u043d\u044b \u0432 \u0442\u0430\u0431\u043b\u0438\u0446\u0435 \u0441\u0442\u0438\u043b\u0435\u0439, \u0438 \u0437\u0430\u043a\u0440\u0435\u043f\u0438\u0442\u044c \u043f\u043e\u043b\u043e\u0432\u0438\u043d\u0443 \u0448\u0438\u0440\u043e\u043a\u043e\u0433\u043e \u0440\u0435\u0435\u0441\u0442\u0440\u0430
+  // \u0432\u0441\u0451 \u0440\u0430\u0432\u043d\u043e \u0437\u043d\u0430\u0447\u0438\u043b\u043e \u0431\u044b \u043d\u0435 \u043e\u0441\u0442\u0430\u0432\u0438\u0442\u044c \u043c\u0435\u0441\u0442\u0430 \u043f\u0440\u043e\u043a\u0440\u0443\u0447\u0438\u0432\u0430\u0435\u043c\u043e\u0439 \u0447\u0430\u0441\u0442\u0438.
+  const frozen = Math.min(odFrozenCount(filterScope), 6, Math.max(columns.length - 1, 0));
+  // \u041a\u043b\u0430\u0441\u0441 \u043d\u0430 \u0442\u0430\u0431\u043b\u0438\u0446\u0435, \u0430 \u043d\u0435 \u0441\u0435\u043b\u0435\u043a\u0442\u043e\u0440 :has(): \u0434\u0438\u0437\u0430\u0439\u043d-\u0441\u0438\u0441\u0442\u0435\u043c\u0430 \u0435\u0433\u043e \u0437\u0430\u043f\u0440\u0435\u0449\u0430\u0435\u0442, \u0430 \u0434\u043e\u0431\u0430\u0432\u0438\u0442\u044c \u043a\u043b\u0430\u0441\u0441 \u0438\u0437
+  // \u0440\u0430\u043d\u0442\u0430\u0439\u043c\u0430 \u043c\u043e\u0436\u043d\u043e \u2014 \u0437\u0430\u043f\u0440\u0435\u0449\u0435\u043d\u0430 \u0441\u0442\u0438\u043b\u0438\u0437\u0430\u0446\u0438\u044f, \u043d\u0435 \u0440\u0430\u0437\u043c\u0435\u0442\u043a\u0430.
+  if (frozen > 0) table.classList.add('od-table-frozen');
+  columns.forEach((column, index) => {
+    const cell = el('th', { rawText: column.label });
+    if (index < frozen) cell.classList.add('od-frozen-column');
+    if (index === frozen - 1) cell.classList.add('od-frozen-edge');
+    head.append(cell);
+  });
   thead.append(head);
   const tbody = el('tbody');
   rows.forEach(item => {
@@ -457,8 +927,10 @@ function odTable(scope, rows, columns, rowKey = item => item.id, filterScope = s
     row.addEventListener('keydown', event => {
       if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); select(); }
     });
-    columns.forEach(column => {
+    columns.forEach((column, index) => {
       const cell = el('td', { className: column.className || '' });
+      if (index < frozen) cell.classList.add('od-frozen-column');
+      if (index === frozen - 1) cell.classList.add('od-frozen-edge');
       // A column may shorten what it prints and keep the full value on the cell for hovering.
       if (typeof column.title === 'function') cell.title = String(column.title(item) ?? '');
       cell.append(odCell(column.render ? column.render(item) : column.value(item)));
@@ -565,10 +1037,13 @@ function odRegistry({ scope, rows, columns, inspector, filterScope = scope, rowK
   const table = odTable(scope, filtered, odVisibleColumns(filterScope, columns), rowKey, filterScope);
   const layout = el('section', { className: 'od-master-detail' });
   const master = el('div', { className: 'od-master' });
+  const crumbs = odHierarchyCrumbs(filterScope);
+  if (crumbs) master.append(crumbs);
   const chips = odFilterChips(filterScope);
   if (chips) master.append(chips);
   if (OD_UI.filterPanel === filterScope) master.append(odFilterPanel(filterScope));
   if (OD_UI.columnPanel === filterScope) master.append(odColumnPanel(filterScope));
+  if (OD_UI.hierarchyPanel === filterScope) master.append(odHierarchyPanel(filterScope));
   master.append(table.node);
   layout.append(master, table.selected ? inspector(table.selected) : odInspector({ title: odText('\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0437\u0430\u043f\u0438\u0441\u044c', 'Select a record') }));
   return layout;

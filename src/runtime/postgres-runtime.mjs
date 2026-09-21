@@ -23,6 +23,9 @@ import { createMaterialLotService, createMaterialLotQueryService } from '../appl
 import { createPostgresCuttingStore } from '../infrastructure/postgres-cutting-store.mjs';
 import { createPostgresCuttingReader } from '../infrastructure/postgres-cutting-reader.mjs';
 import { createCuttingService, createCuttingQueryService } from '../application/cutting-service.mjs';
+import { createPostgresOperationSequenceStore } from '../infrastructure/postgres-operation-sequence-store.mjs';
+import { createPostgresOperationSequenceReader } from '../infrastructure/postgres-operation-sequence-reader.mjs';
+import { createOperationSequenceService, createOperationSequenceQueryService } from '../application/operation-sequence-service.mjs';
 import { createPostgresFinalQualityStore } from '../infrastructure/postgres-final-quality-store.mjs';
 import { createPostgresOrderMarginBridgeReader } from '../infrastructure/postgres-order-margin-bridge-reader.mjs';
 import { createPostgresProductionExecutionReader } from '../infrastructure/postgres-production-execution-reader.mjs';
@@ -186,6 +189,18 @@ export function createPostgresWholesaleRuntime(options = {}) {
   const cuttingQueries = createCuttingQueryService({ reader: cuttingReader });
   const cutting = Object.freeze({ ...cuttingQueries, ...cuttingCommands });
 
+  // Технологическая последовательность описывает изделие, а не партию, поэтому собирается рядом с
+  // техпаком: печатный пакет ссылается на неё, а пооперационный контроль называет по ней операцию.
+  const operationSequenceStore = createPostgresOperationSequenceStore({ pool: options.pool });
+  const operationSequenceReader = createPostgresOperationSequenceReader({ pool: options.pool });
+  const operationSequenceCommands = createOperationSequenceService({
+    store: operationSequenceStore,
+    ...(options.clock ? { clock: options.clock } : {}),
+    ...(options.nextId ? { nextId: options.nextId } : {}),
+  });
+  const operationSequenceQueries = createOperationSequenceQueryService({ reader: operationSequenceReader });
+  const operationSequences = Object.freeze({ ...operationSequenceQueries, ...operationSequenceCommands });
+
   const transport = {
     authenticate: base.auth.authenticate,
     auth: base.auth,
@@ -223,6 +238,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
     supplierPayments,
     materialLots,
     cutting,
+    operationSequences,
     collaboration: base.collaboration,
     orders: base.orders,
     notifications: base.notifications,
@@ -257,6 +273,9 @@ export function createPostgresWholesaleRuntime(options = {}) {
     productionExecutionStore,
     productionExecutionReader,
     productionExecutions,
+    operationSequenceStore,
+    operationSequenceReader,
+    operationSequences,
     cuttingStore,
     cuttingReader,
     cutting,

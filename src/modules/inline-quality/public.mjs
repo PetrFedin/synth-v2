@@ -1,6 +1,7 @@
 import { invariant } from '../../core/errors.mjs';
 import { PRODUCTION_MILESTONE_CODES } from '../production-execution/public.mjs';
 import { QUALITY_DEFECT_SEVERITIES } from '../final-quality/public.mjs';
+import { assertOperationFitsCheck } from '../operation-sequences/public.mjs';
 
 // Пооперационный контроль.
 //
@@ -91,6 +92,15 @@ export function recordInlineCheck({ id, execution, catalogue, input, recordedAt,
   const checkedQuantity = positiveInteger(input?.checkedQuantity, 'INLINE_QC_CHECKED_QUANTITY_INVALID', 'Checked quantity');
   invariant(checkedQuantity <= execution.quantity, 'INLINE_QC_CHECKED_EXCEEDS_LOT', 'A check cannot inspect more pieces than the lot holds', { checkedQuantity, quantity: execution.quantity });
 
+  // Проверка может назвать операцию, а не только веху: «нашли на притачивании воротника» вместо
+  // «нашли на пошиве». Операция обязана принадлежать этому изделию и этой вехе — иначе ссылка
+  // сообщала бы не больше, чем её отсутствие.
+  const operationId = input?.operationId ?? null;
+  if (operationId) {
+    assertOperationFitsCheck(input?.operation, { milestoneCode, sku: execution.sku });
+    invariant(input.operation.id === operationId, 'INLINE_QC_OPERATION_NOT_FOUND', 'This operation does not exist', { operationId });
+  }
+
   const defects = normalizeDefects(input?.defects, catalogue, execution.brandId);
   const defectiveQuantity = defects.reduce((total, defect) => total + defect.quantity, 0);
   invariant(defectiveQuantity <= checkedQuantity, 'INLINE_QC_DEFECTIVE_EXCEEDS_CHECKED', 'A check cannot find more defective pieces than it inspected', { defectiveQuantity, checkedQuantity });
@@ -104,6 +114,9 @@ export function recordInlineCheck({ id, execution, catalogue, input, recordedAt,
     sku: execution.sku,
     lotQuantity: execution.quantity,
     milestoneCode,
+    operationId,
+    operationCode: operationId ? input.operation.operationCode ?? null : null,
+    operationName: operationId ? input.operation.nameRu ?? null : null,
     checkNumber: positiveInteger(input?.checkNumber, 'INLINE_QC_CHECK_NUMBER_INVALID', 'Check number'),
     checkedQuantity,
     defectiveQuantity,

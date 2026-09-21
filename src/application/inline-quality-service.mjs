@@ -11,7 +11,7 @@ import {
 } from '../modules/inline-quality/public.mjs';
 
 const DEFECT_TYPE_FIELDS = Object.freeze(new Set(['brandId', 'code', 'severity', 'originStage', 'nameRu', 'nameEn']));
-const CHECK_FIELDS = Object.freeze(new Set(['milestoneCode', 'checkedQuantity', 'inspectorName', 'defects', 'notes']));
+const CHECK_FIELDS = Object.freeze(new Set(['milestoneCode', 'checkedQuantity', 'inspectorName', 'defects', 'notes', 'operationId']));
 const DISPOSITION_FIELDS = Object.freeze(new Set(['expectedVersion', 'disposition', 'notes']));
 
 export function createInlineQualityService({ store, clock = () => new Date().toISOString(), nextId = defaultIdGenerator() } = {}) {
@@ -76,13 +76,16 @@ export function createInlineQualityService({ store, clock = () => new Date().toI
           // between the two cannot be recorded against.
           const catalogue = await tx.listDefectTypes(execution.brandId);
           const checkNumber = await tx.nextCheckNumber(execution.id, input.milestoneCode);
-          return Object.freeze({ execution, catalogue, checkNumber });
+          // Операция читается в той же транзакции: она должна принадлежать этому изделию и этой
+          // вехе, и проверять это по данным, прочитанным раньше, значило бы проверять прошлое.
+          const operation = input.operationId ? await tx.getOperationById(input.operationId) : null;
+          return Object.freeze({ execution, catalogue, checkNumber, operation });
         },
-        async (tx, { execution, catalogue, checkNumber }) => {
-          const value = recordInlineCheck({ id: nextId('inline-check'), execution, catalogue, input: { ...input, checkNumber }, recordedAt: clock(), actorId });
+        async (tx, { execution, catalogue, checkNumber, operation }) => {
+          const value = recordInlineCheck({ id: nextId('inline-check'), execution, catalogue, input: { ...input, checkNumber, operation }, recordedAt: clock(), actorId });
           await tx.insertCheck(value);
           await append(tx, value.status === 'open' ? 'inline-quality.defects-found' : 'inline-quality.check-recorded', value.id, {
-            executionCode: value.executionCode, milestoneCode: value.milestoneCode, checkNumber: value.checkNumber,
+            executionCode: value.executionCode, milestoneCode: value.milestoneCode, operationCode: value.operationCode, checkNumber: value.checkNumber,
             brandId: value.brandId, supplierCode: value.supplierCode, sku: value.sku,
             checkedQuantity: value.checkedQuantity, defectiveQuantity: value.defectiveQuantity, defectRate: value.defectRate, status: value.status,
           }, commandId, actorId);

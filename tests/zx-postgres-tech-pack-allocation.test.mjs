@@ -27,6 +27,9 @@ import { createPostgresMaterialLotReader } from '../src/infrastructure/postgres-
 import { createCuttingService, createCuttingQueryService } from '../src/application/cutting-service.mjs';
 import { createPostgresCuttingStore } from '../src/infrastructure/postgres-cutting-store.mjs';
 import { createPostgresCuttingReader } from '../src/infrastructure/postgres-cutting-reader.mjs';
+import { createOperationSequenceService, createOperationSequenceQueryService } from '../src/application/operation-sequence-service.mjs';
+import { createPostgresOperationSequenceStore } from '../src/infrastructure/postgres-operation-sequence-store.mjs';
+import { createPostgresOperationSequenceReader } from '../src/infrastructure/postgres-operation-sequence-reader.mjs';
 import { createPostgresWholesaleStore } from '../src/infrastructure/postgres-store.mjs';
 import { createPostgresCatalogStore } from '../src/infrastructure/postgres-catalog-store.mjs';
 import { createPostgresMaterialStore } from '../src/infrastructure/postgres-material-store.mjs';
@@ -69,6 +72,7 @@ test('PostgreSQL closes approved PPS through production, rework, reinspection an
     const supplierPaymentStore = createPostgresSupplierPaymentStore({ pool });
     const materialLotStore = createPostgresMaterialLotStore({ pool });
     const cuttingStore = createPostgresCuttingStore({ pool });
+    const operationSequenceStore = createPostgresOperationSequenceStore({ pool });
     const finalQualityStore = createPostgresFinalQualityStore({ pool });
     const platform = createWholesalePlatform({ store: wholesaleStore, clock, nextId });
     const catalog = createCatalogService({ wholesaleStore, catalogStore, clock, nextId });
@@ -87,6 +91,8 @@ test('PostgreSQL closes approved PPS through production, rework, reinspection an
     const materialLotQueries = createMaterialLotQueryService({ reader: createPostgresMaterialLotReader({ pool }) });
     const cutting = createCuttingService({ store: cuttingStore, clock, nextId });
     const cuttingQueries = createCuttingQueryService({ reader: createPostgresCuttingReader({ pool }) });
+    const operationSequences = createOperationSequenceService({ store: operationSequenceStore, clock, nextId });
+    const operationSequenceQueries = createOperationSequenceQueryService({ reader: createPostgresOperationSequenceReader({ pool }) });
     const supplierPaymentQueries = createSupplierPaymentQueryService({ reader: createPostgresSupplierPaymentReader({ pool }), clock });
     const finalQuality = createFinalQualityService({ store: finalQualityStore, clock, nextId });
 
@@ -245,6 +251,57 @@ test('PostgreSQL closes approved PPS through production, rework, reinspection an
     assert.deepEqual([...trace.mixedDyeLots], ['FAB-TECH-GATE'], 'each roll passed its own inspection; the fault is in the pairing');
     assert.ok(shell.requiredQuantity > 0, 'the requirement comes from the published bill, not from a second opinion');
 
+    // --- Технологическая последовательность -------------------------------------------------------
+    //
+    // Шаблон для категории, из него — последовательность изделия, и уже она даёт пооперационному
+    // контролю операцию вместо одной только вехи.
+    const bolTemplate = await operationSequences.createTemplate('bol-template', 'product-owner', {
+      brandId: 'brand-tech-gate', templateCode: 'TPL-COAT', category: 'Верхняя одежда',
+      nameRu: 'Пальто, базовая последовательность', nameEn: 'Coat, base sequence',
+    });
+    const withOperations = await operationSequences.replaceOperations('bol-ops', 'product-owner', bolTemplate.id, {
+      expectedVersion: bolTemplate.version,
+      operations: [
+        { operationCode: 'CUT-PARTS', nameRu: 'Раскрой деталей', nameEn: 'Cut parts', stage: 'cutting-complete', standardMinutes: 4.5, equipment: 'Раскройный нож' },
+        { operationCode: 'JOIN-SHOULDER', nameRu: 'Стачать плечевые швы', nameEn: 'Join shoulders', stage: 'assembly-complete', standardMinutes: 2.25, equipment: 'Оверлок' },
+        { operationCode: 'SET-COLLAR', nameRu: 'Втачать воротник', nameEn: 'Set collar', stage: 'assembly-complete', standardMinutes: 6, constructionNode: 'COLLAR_SET_IN' },
+      ],
+    });
+    assert.deepEqual(withOperations.operations.map((operation) => operation.position), [1, 2, 3]);
+    const publishedTemplate = await operationSequences.publish('bol-publish', 'product-owner', bolTemplate.id, { expectedVersion: withOperations.version });
+
+    const productSequence = await operationSequences.createForProduct('bol-product', 'product-owner', {
+      brandId: 'brand-tech-gate', sku: 'TECH-GATE-1', templateCode: 'TPL-COAT',
+    });
+    assert.equal(productSequence.operations.length, 3, 'из шаблона операции копируются целиком');
+    assert.equal(productSequence.sourceTemplateCode, 'TPL-COAT');
+    await operationSequences.publish('bol-product-publish', 'product-owner', productSequence.id, { expectedVersion: productSequence.version });
+    // Одна действующая последовательность на изделие.
+    await assert.rejects(() => operationSequences.createForProduct('bol-product-again', 'product-owner', {
+      brandId: 'brand-tech-gate', sku: 'TECH-GATE-1', templateCode: 'TPL-COAT',
+    }), { code: 'BOL_PRODUCT_SEQUENCE_EXISTS' });
+
+    const forSku = await operationSequenceQueries.operationSequenceForSku('product-owner', 'TECH-GATE-1');
+    assert.equal(forSku.workload.totalStandardMinutes, 12.75, 'трудоёмкость — сумма, а не хранимое число');
+    assert.deepEqual(forSku.workload.byStage.map((row) => [row.stage, row.standardMinutes]), [['cutting-complete', 4.5], ['assembly-complete', 8.25]]);
+
+    // Дыра в нумерации не проходит и в базе.
+    await assert.rejects(
+      () => pool.query('DELETE FROM bol_operations WHERE sequence_id = $1 AND position = 2', [publishedTemplate.id]),
+      /BOL_POSITIONS_NOT_CONSECUTIVE/,
+    );
+
+    const cuttingOperation = (await pool.query(
+      `SELECT operation.id FROM bol_operations AS operation
+         JOIN bol_sequences AS sequence ON sequence.id = operation.sequence_id
+        WHERE sequence.sku = 'TECH-GATE-1' AND operation.stage = 'cutting-complete'`,
+    )).rows[0].id;
+    const assemblyOperation = (await pool.query(
+      `SELECT operation.id FROM bol_operations AS operation
+         JOIN bol_sequences AS sequence ON sequence.id = operation.sequence_id
+        WHERE sequence.sku = 'TECH-GATE-1' AND operation.stage = 'assembly-complete' LIMIT 1`,
+    )).rows[0].id;
+
     // --- Раскрой: настил, раскладка и выход --------------------------------------------------------
     //
     // Ткань не берётся ниоткуда: снято с рулонов ровно столько, сколько настелено, и только из тех
@@ -327,11 +384,23 @@ test('PostgreSQL closes approved PPS through production, rework, reinspection an
       defects: [{ defectCode: 'NOT-REGISTERED', quantity: 1 }],
     }), { code: 'INLINE_QC_DEFECT_TYPE_NOT_FOUND' });
 
+    // Операция обязана принадлежать этой вехе: «нашли на пошиве при раскрое» записываемым не будет.
+    await assert.rejects(() => inlineQuality.recordCheck('inline-wrong-stage', 'product-owner', execution.executionCode, {
+      milestoneCode: 'cutting-complete', checkedQuantity: 10, inspectorName: 'Павел Дорохов',
+      defects: [], operationId: assemblyOperation,
+    }), { code: 'INLINE_QC_OPERATION_WRONG_STAGE' });
+
     const check = await inlineQuality.recordCheck('inline-cutting', 'product-owner', execution.executionCode, {
       milestoneCode: 'cutting-complete', checkedQuantity: 40, inspectorName: 'Павел Дорохов',
       defects: [{ defectCode: 'SEAM-OPEN', quantity: 3, notes: 'Три изделия из одной пачки' }],
-      notes: 'Контроль после раскроя',
+      notes: 'Контроль после раскроя', operationId: cuttingOperation,
     });
+    assert.equal(check.operationCode, 'CUT-PARTS', 'проверка называет операцию, а не только веху');
+    // И то же правило стоит в базе, против писателя в обход модуля.
+    await assert.rejects(
+      () => pool.query('UPDATE inline_quality_checks SET operation_id = $2 WHERE id = $1', [check.id, assemblyOperation]),
+      /INLINE_QC_OPERATION_WRONG_STAGE/,
+    );
     assert.equal(check.status, 'open');
     assert.equal(check.defectiveQuantity, 3);
     assert.equal(check.defects[0].severity, 'major', 'severity comes from the catalogue, never from the caller');

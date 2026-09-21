@@ -8,6 +8,9 @@
 
   const ui = global.SynthaTechPacksWorkspace || (global.SynthaTechPacksWorkspace = {
     items: [], loaded: false, loading: false, error: '', selectedCode: null, status: 'all', readiness: 'all', search: '', busyCode: null, generation: 0, document: null, documentLoading: false,
+    // Технологическая последовательность описывает изделие, а техпак её печатает — поэтому она
+    // читается по SKU выбранного пакета, а не хранится в нём второй раз.
+    sequenceBySku: {}, sequenceLoading: '',
   });
   const STATUSES = ['draft', 'issued', 'acknowledged', 'superseded', 'withdrawn'];
 
@@ -342,9 +345,62 @@
       h('div', { className: 'tech-pack-inspector-head' }, [h('div', {}, [h('p', { className: 'eyebrow', text: value.techPackCode }), h('h2', { text: value.title })]), h('div', { className: 'tech-pack-actions' }, buttons)]),
       h('dl', { className: 'tech-pack-facts' }, [pair('SKU', value.sku), pair(text('Редакция', 'Revision'), value.revision), pair(text('Фабрика', 'Supplier'), `${value.supplierCode || '—'} · ${value.supplierName || '—'}`), pair(text('Выпущен', 'Issued'), date(value.issuedAt)), pair(text('Подтверждён', 'Acknowledged'), date(value.acknowledgedAt)), pair(text('Ссылка подтверждения', 'Acknowledgement reference'), value.acknowledgement?.acknowledgementReference)]),
       h('section', { className: 'tech-pack-card' }, [h('h3', { text: text('Зафиксированные зависимости', 'Immutable dependencies') }), h('dl', { className: 'tech-pack-facts' }, [pair(text('Версия SKU', 'SKU version'), snapshot.skuVersion), pair(text('Версия BOM', 'BOM version'), snapshot.bomVersion), pair(text('Версия таблицы мер', 'Measurement chart version'), snapshot.measurementChartVersion), pair(text('Одобренный PPS', 'Approved PPS'), snapshot.sampleCode)])]),
+      operationSequencePanel(value),
       h('section', { className: 'tech-pack-card' }, [h('h3', { text: text('Производственные указания', 'Production instructions') }), h('p', { text: value.constructionNotes || '—' }), h('p', { text: value.qualityNotes || '—' }), h('p', { text: value.packingNotes || '—' })]),
     ]);
   }
+  async function loadSequence(sku, request = api) {
+    if (!sku || ui.sequenceLoading === sku) return;
+    ui.sequenceLoading = sku;
+    try { ui.sequenceBySku[sku] = await request(`/v2/catalog-skus/${encodeURIComponent(sku)}/operation-sequence`); }
+    catch (error) { ui.sequenceBySku[sku] = null; }
+    finally { ui.sequenceLoading = ''; if (state.view === 'tech-packs') renderApp(); }
+  }
+  function stageName(code) {
+    const labels = {
+      'materials-ready': ['Материалы', 'Materials'], 'cutting-complete': ['Раскрой', 'Cutting'],
+      'assembly-complete': ['Пошив', 'Assembly'], 'finishing-complete': ['Отделка', 'Finishing'],
+      'packing-complete': ['Упаковка', 'Packing'], 'ready-for-qc': ['Передача на контроль', 'Handover to QC'],
+    };
+    return text(...(labels[code] || [code, code]));
+  }
+  function minutes(value) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return '—';
+    return `${number.toFixed(2).replace(/0+$/, '').replace(/[.,]$/, '').replace('.', ',')} ${text('мин', 'min')}`;
+  }
+
+  // Технологическая последовательность — тот самый раздел, который печатный техпак обещает и
+  // которому до сих пор нечего было показать.
+  //
+  // Трудоёмкость считается при чтении: это сумма норм по операциям. Стоимости труда здесь нет
+  // намеренно — для неё нужна ставка, а ставка это отдельный договор с фабрикой.
+  function operationSequencePanel(value) {
+    if (ui.sequenceBySku[value.sku] === undefined) queueMicrotask(() => { void loadSequence(value.sku); });
+    const sequence = ui.sequenceBySku[value.sku];
+    const children = [h('h3', { text: text('Технологическая последовательность', 'List of operations') })];
+    if (sequence === undefined) { children.push(h('p', { className: 'muted', text: text('Загрузка…', 'Loading…') })); return h('section', { className: 'tech-pack-card' }, children); }
+    if (!sequence) {
+      children.push(h('p', { className: 'muted', text: text('Последовательность для этого изделия не составлена.', 'No operation sequence has been drawn for this product.') }));
+      return h('section', { className: 'tech-pack-card' }, children);
+    }
+    const workload = sequence.workload || { operationCount: 0, totalStandardMinutes: 0, byStage: [] };
+    children.push(h('p', { className: 'muted', text: text(
+      `${workload.operationCount} операций, трудоёмкость ${minutes(workload.totalStandardMinutes)} на изделие.`,
+      `${workload.operationCount} operations, ${minutes(workload.totalStandardMinutes)} per garment.`) }));
+    for (const stage of workload.byStage) {
+      // «2 × 10,5 мин» прочиталось бы как «дважды по десять с половиной», хотя это две операции и
+      // десять с половиной в сумме.
+      children.push(h('p', { className: 'muted', text: text(
+        `${stageName(stage.stage)}: ${stage.operations} оп., всего ${minutes(stage.standardMinutes)}`,
+        `${stageName(stage.stage)}: ${stage.operations} ops, ${minutes(stage.standardMinutes)} in total`) }));
+    }
+    for (const operation of sequence.operations) {
+      children.push(h('p', { text: `${operation.position}. ${text(operation.nameRu, operation.nameEn)} — ${stageName(operation.stage)} · ${minutes(operation.standardMinutes)}${operation.constructionNode ? ` · ${operation.constructionNode}` : ''}${operation.equipment ? ` · ${operation.equipment}` : ''}` }));
+    }
+    return h('section', { className: 'tech-pack-card' }, children);
+  }
+
   function actionButton(action, value) {
     const labels = { edit: [text('Редактировать', 'Edit'), 'secondary'], issue: [text('Выпустить', 'Issue'), 'primary'], acknowledge: [text('Зафиксировать подтверждение', 'Record acknowledgement'), 'primary'], revision: [text('Новая редакция', 'New revision'), 'secondary'], withdraw: [text('Отозвать', 'Withdraw'), 'danger'] };
     const handlers = { edit: () => openDraft(value), issue: () => confirmIssue(value), acknowledge: () => openAcknowledgement(value), revision: () => openRevision(value), withdraw: () => openWithdraw(value) };

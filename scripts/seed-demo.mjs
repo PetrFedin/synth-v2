@@ -74,6 +74,23 @@ const DEMO_DEFECT_TYPES = [
 // contrived example: fabric is dyed in batches, a lot of garments regularly needs more than one, and
 // the platform is supposed to notice — each roll passed its own incoming inspection, so the fault is
 // in the pairing and nothing but a record of what went where can see a pairing.
+// Технологическая последовательность верхней одежды.
+//
+// Операции расписаны по тем же вехам, что и производство, а узлы взяты из справочника — иначе по ним
+// нечего было бы складывать. Нормы времени условны, но правдоподобны: важна не точность цифры, а то,
+// что трудоёмкость изделия складывается из операций, а не набирается отдельным числом.
+const DEMO_OPERATIONS = [
+  { operationCode: 'CUT-PARTS', nameRu: 'Раскрой деталей верха', nameEn: 'Cut shell parts', stage: 'cutting-complete', standardMinutes: 6.5, equipment: 'Раскройный нож' },
+  { operationCode: 'CUT-LINING', nameRu: 'Раскрой подкладки', nameEn: 'Cut lining', stage: 'cutting-complete', standardMinutes: 4, equipment: 'Раскройный нож' },
+  { operationCode: 'JOIN-SHOULDER', nameRu: 'Стачать плечевые швы', nameEn: 'Join shoulder seams', stage: 'assembly-complete', standardMinutes: 3.2, equipment: 'Оверлок' },
+  { operationCode: 'SET-SLEEVE', nameRu: 'Втачать рукава', nameEn: 'Set sleeves', stage: 'assembly-complete', standardMinutes: 8.4, equipment: 'Универсальная' },
+  { operationCode: 'SET-COLLAR', nameRu: 'Втачать воротник', nameEn: 'Set collar', stage: 'assembly-complete', standardMinutes: 7.1, constructionNode: 'COLLAR_SET_IN', equipment: 'Универсальная' },
+  { operationCode: 'BAG-LINING', nameRu: 'Собрать подкладку мешком', nameEn: 'Bag the lining', stage: 'assembly-complete', standardMinutes: 5.6, constructionNode: 'LINING_BAGGED' },
+  { operationCode: 'HEM-BOTTOM', nameRu: 'Подшить низ потайным швом', nameEn: 'Blind-hem the bottom', stage: 'finishing-complete', standardMinutes: 4.8, constructionNode: 'HEM_BLIND' },
+  { operationCode: 'PRESS-FINAL', nameRu: 'Окончательная влажно-тепловая обработка', nameEn: 'Final pressing', stage: 'finishing-complete', standardMinutes: 5.5, equipment: 'Пресс' },
+  { operationCode: 'ATTACH-LABELS', nameRu: 'Пришить ярлыки', nameEn: 'Attach labels', stage: 'finishing-complete', standardMinutes: 2.3 },
+  { operationCode: 'PACK-UNIT', nameRu: 'Упаковать изделие', nameEn: 'Pack the garment', stage: 'packing-complete', standardMinutes: 1.9 },
+];
 const DEMO_MATERIAL_LOTS = [
   { lotReference: 'ROLL-R3-A-001', dyeLot: 'DYE-2609-A', receivedQuantity: 600, certificateReference: 'CERT-ATM-2609-A', release: true, issue: 600, notes: 'Первый рулон поставки' },
   { lotReference: 'ROLL-R3-B-002', dyeLot: 'DYE-2609-B', receivedQuantity: 500, certificateReference: 'CERT-ATM-2609-B', release: true, issue: 300, notes: 'Догруз другой крашеной партии' },
@@ -178,6 +195,7 @@ try {
   await ensureDefectCatalogue(runtime, pool, brandId, accounts.owner);
   await ensureLotInProduction(runtime, pool, brandId, accounts.owner);
   await ensureMaterialLots(runtime, pool, brandId, accounts.owner, accounts.quality);
+  await ensureOperationSequence(runtime, pool, brandId, accounts.owner);
   await ensureCuttingSpread(runtime, pool, brandId, accounts.owner);
   await ensurePaymentSchedules(runtime, pool, brandId, accounts.owner);
 
@@ -749,6 +767,47 @@ async function ensureMaterialLots(runtime, pool, brandId, warehouseActorId, qual
 // по одному изделию в слое — 200 изделий из 440 метров. Расход на изделие выходит 2,2 м против
 // 2,247 по ведомости, то есть фабрика уложилась в норму, и экран показывает это знаком, а не
 // объяснением.
+// Шаблон последовательности и последовательность изделия, которое сейчас шьют.
+//
+// Сначала шаблон категории, потом копия под изделие — именно так это и делают: рубашку шьют
+// примерно одинаково, а различия дописывают после. Копия нужна копией: правка шаблона в следующем
+// сезоне не должна менять то, по чему уже шьют.
+async function ensureOperationSequence(runtime, pool, brandId, actorId) {
+  const execution = (await pool.query(
+    "SELECT payload FROM production_executions WHERE production_order_number = $1 AND status = 'active'",
+    [DEMO_LOT_PO],
+  )).rows[0]?.payload;
+  if (!execution) { note('operations', 'нет партии в производстве'); return; }
+
+  const existing = await pool.query("SELECT count(*)::integer AS count FROM bol_sequences WHERE brand_id = $1 AND kind = 'product' AND sku = $2 AND status <> 'retired'", [brandId, execution.sku]);
+  if (existing.rows[0].count > 0) { note('operations', 'последовательность изделия уже есть'); return; }
+
+  try {
+    let template = (await pool.query("SELECT payload FROM bol_sequences WHERE brand_id = $1 AND template_code = 'TPL-OUTERWEAR'", [brandId])).rows[0]?.payload;
+    if (!template) {
+      template = await runtime.operationSequences.createTemplate(command('bol-template'), actorId, {
+        brandId, templateCode: 'TPL-OUTERWEAR', category: 'Верхняя одежда',
+        nameRu: 'Верхняя одежда, базовая последовательность', nameEn: 'Outerwear, base sequence',
+        notes: 'Базовый набор операций для верхней одежды.',
+      });
+      template = await runtime.operationSequences.replaceOperations(command('bol-ops'), actorId, template.id, {
+        expectedVersion: template.version, operations: DEMO_OPERATIONS,
+      });
+      template = await runtime.operationSequences.publish(command('bol-publish'), actorId, template.id, { expectedVersion: template.version });
+      note('operations', `шаблон ${template.templateCode}: ${template.operations.length} операций`);
+    }
+
+    let sequence = await runtime.operationSequences.createForProduct(command('bol-product'), actorId, {
+      brandId, sku: execution.sku, templateCode: 'TPL-OUTERWEAR',
+    });
+    sequence = await runtime.operationSequences.publish(command('bol-product-publish'), actorId, sequence.id, { expectedVersion: sequence.version });
+    const minutes = sequence.operations.reduce((total, operation) => total + Number(operation.standardMinutes), 0);
+    note('operations', `${execution.sku}: ${sequence.operations.length} операций, трудоёмкость ${Math.round(minutes * 100) / 100} мин.`);
+  } catch (error) {
+    note('operations', `последовательность не записана (${error.code ?? error.message})`);
+  }
+}
+
 async function ensureCuttingSpread(runtime, pool, brandId, actorId) {
   const execution = (await pool.query(
     "SELECT payload FROM production_executions WHERE production_order_number = $1 AND status = 'active'",

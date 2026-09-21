@@ -57,15 +57,27 @@ function view(client) {
       );
       return Number(result.rows[0].next);
     },
+    // Операция технологической последовательности, если проверка её называет.
+    async getOperationById(operationId) {
+      const result = await client.query(
+        `SELECT operation.id, operation.operation_code AS "operationCode", operation.name_ru AS "nameRu",
+                operation.stage, sequence.sku
+           FROM bol_operations AS operation
+           JOIN bol_sequences AS sequence ON sequence.id = operation.sequence_id
+          WHERE operation.id = $1 FOR SHARE`,
+        [operationId],
+      );
+      return result.rows[0] ?? null;
+    },
     async insertCheck(value) {
       await client.query(
         `INSERT INTO inline_quality_checks (
            id,brand_id,execution_id,execution_code,milestone_code,check_number,checked_quantity,defective_quantity,
-           status,disposition,disposition_notes,inspector_name,version,recorded_at,recorded_by,payload
-         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NULL,NULL,$10,$11,$12::timestamptz,$13,$14::jsonb)`,
+           status,disposition,disposition_notes,inspector_name,version,recorded_at,recorded_by,operation_id,payload
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NULL,NULL,$10,$11,$12::timestamptz,$13,$14,$15::jsonb)`,
         [value.id, value.brandId, value.executionId, value.executionCode, value.milestoneCode, value.checkNumber,
           value.checkedQuantity, value.defectiveQuantity, value.status, value.inspectorName, value.version,
-          value.recordedAt, value.recordedBy, JSON.stringify(value)],
+          value.recordedAt, value.recordedBy, value.operationId ?? null, JSON.stringify(value)],
       );
       for (const [index, defect] of value.defects.entries()) {
         // The code and the severity written here are overwritten by the catalogue trigger. They are

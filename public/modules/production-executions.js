@@ -21,6 +21,8 @@
     // Раскрой читается отдельным запросом и стоит между материалами и операциями: рулон приходит,
     // из него настилают, и только потом проверяют детали.
     cutByExecution: {}, cutLoading: '',
+    // Операции изделия читаются по SKU партии: проверка называет операцию, а не только веху.
+    operationsBySku: {}, operationsLoading: '', qcOperationId: '',
     qcCheckedQuantity: '', qcInspectorName: '', qcDefectCode: '', qcDefectQuantity: '1',
     qcDefects: [], qcNotes: '', qcDispositionNotes: '',
   };
@@ -160,6 +162,22 @@
     const number = Number(value);
     if (!Number.isFinite(number)) return '—';
     return `${number.toFixed(number % 1 ? 2 : 0).replace('.', ',')} ${unit || ''}`.trim();
+  }
+
+  async function loadOperations(sku, request = api) {
+    if (!sku || ui.operationsLoading === sku) return;
+    ui.operationsLoading = sku;
+    try { const sequence = await request(`/v2/catalog-skus/${encodeURIComponent(sku)}/operation-sequence`); ui.operationsBySku[sku] = sequence?.operations || []; }
+    catch (error) { ui.operationsBySku[sku] = []; }
+    finally { ui.operationsLoading = ''; if (state.view === 'production-executions') renderApp(); }
+  }
+  function ensureOperations(value) {
+    if (value && ui.operationsBySku[value.sku] === undefined) queueMicrotask(() => { void loadOperations(value.sku); });
+  }
+  // Операции только той вехи, на которой идёт проверка: предложить остальные значило бы предложить
+  // записать «нашли на пошиве при упаковке».
+  function operationsForStage(value, stageCode) {
+    return (ui.operationsBySku[value.sku] || []).filter((operation) => operation.stage === stageCode);
   }
 
   async function loadCutting(executionCode, request = api) {
@@ -485,7 +503,7 @@
     for (const check of page.items) {
       const lines = [
         h('strong', { text: `${stageLabel(check.milestoneCode)} · ${t('проверка', 'check')} ${check.checkNumber}` }),
-        h('p', { className: 'muted', text: `${check.inspectorName} · ${date(check.recordedAt)}` }),
+        h('p', { className: 'muted', text: `${check.inspectorName} · ${date(check.recordedAt)}${check.operationName ? ` · ${check.operationName}` : ''}` }),
         h('p', { className: 'muted', text: t(
           `Проверено ${check.checkedQuantity}, дефектных ${check.defectiveQuantity} (${percent(check.defectRate)})`,
           `${check.checkedQuantity} checked, ${check.defectiveQuantity} defective (${percent(check.defectRate)})`) }),
@@ -527,6 +545,19 @@
     ]);
   }
 
+  function operationField(value, current) {
+    ensureOperations(value);
+    const options = operationsForStage(value, current.code);
+    if (!options.length) return null;
+    const select = h('select', { onchange: (event) => { ui.qcOperationId = event.target.value; } }, [
+      // Проверка этапа целиком тоже никто не отменял, поэтому пустой вариант первый.
+      h('option', { value: '', text: t('Этап целиком', 'The whole stage') }),
+      ...options.map((operation) => h('option', { value: operation.id || `${operation.position}`, text: `${operation.position}. ${t(operation.nameRu, operation.nameEn)}` })),
+    ]);
+    select.value = ui.qcOperationId;
+    return h('label', {}, [h('span', { text: t('Операция', 'Operation') }), select]);
+  }
+
   function recordCheckForm(value, current) {
     const catalogue = activeCatalogue();
     if (!catalogue.length) return h('p', { className: 'muted', text: t('Каталог дефектов пуст — зарегистрируйте типы дефектов, чтобы записывать проверки.', 'The defect catalogue is empty — register defect types to record checks.') });
@@ -540,6 +571,7 @@
       h('h4', { text: t(`Записать проверку на этапе «${stageLabel(current.code)}»`, `Record a check at «${stageLabel(current.code)}»`) }),
       h('input', { value: ui.qcInspectorName, placeholder: t('Имя инспектора', 'Inspector name'), oninput: (event) => { ui.qcInspectorName = event.target.value; } }),
       h('input', { type: 'number', min: 1, value: ui.qcCheckedQuantity, placeholder: t(`Сколько изделий проверено (в партии ${value.quantity})`, `Pieces checked (lot of ${value.quantity})`), oninput: (event) => { ui.qcCheckedQuantity = event.target.value; } }),
+      operationField(value, current),
       h('div', { className: 'production-execution-actions' }, [
         codeSelect,
         h('input', { type: 'number', min: 1, value: ui.qcDefectQuantity, oninput: (event) => { ui.qcDefectQuantity = event.target.value; } }),
@@ -564,8 +596,9 @@
         if (defective > checkedQuantity) { toast(t('Дефектных изделий больше, чем проверено.', 'More defective pieces than were checked.'), 'error'); return; }
         const notes = String(ui.qcNotes || '').trim();
         void commandAndReload(value, `/v2/production-executions/${encodeURIComponent(value.executionCode)}/inline-quality-checks`, {
-          milestoneCode: current.code, checkedQuantity, inspectorName, defects: ui.qcDefects.map((defect) => ({ ...defect })), ...(notes.length >= 2 ? { notes } : {}),
-        }, () => { ui.qcDefects = []; ui.qcNotes = ''; ui.qcCheckedQuantity = ''; });
+          milestoneCode: current.code, checkedQuantity, inspectorName, defects: ui.qcDefects.map((defect) => ({ ...defect })),
+          ...(notes.length >= 2 ? { notes } : {}), ...(ui.qcOperationId ? { operationId: ui.qcOperationId } : {}),
+        }, () => { ui.qcDefects = []; ui.qcNotes = ''; ui.qcCheckedQuantity = ''; ui.qcOperationId = ''; });
       } }),
     ]);
   }

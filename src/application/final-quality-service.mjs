@@ -13,7 +13,11 @@ import {
   startQualityReinspection,
 } from '../modules/final-quality/public.mjs';
 
-const START_FIELDS = Object.freeze(new Set(['expectedVersion','inspectorName','sampleSize','allowedMajorDefects','allowedMinorDefects']));
+// A run states the criterion it is judged by. Either it names the standard, the inspection level
+// and the two accepted quality limits — and the plan is read off the rows the brand holds — or it
+// carries an explicitly agreed sample and limits, which are recorded as agreed rather than dressed
+// up as a standard.
+const START_FIELDS = Object.freeze(new Set(['expectedVersion','inspectorName','sampleSize','allowedMajorDefects','allowedMinorDefects','standardCode','inspectionLevel','aqlMajor','aqlMinor','samplingNote']));
 const REINSPECTION_FIELDS = Object.freeze(new Set([...START_FIELDS,'reworkReference','resolutionNotes']));
 const COMPLETE_FIELDS = Object.freeze(new Set(['expectedVersion','inspectedQuantity','defects','measurementFailures','checkpoints','evidenceReferences','notes']));
 const REVIEW_FIELDS = Object.freeze(new Set(['expectedVersion','decision','releaseCode','notes']));
@@ -45,6 +49,18 @@ export function createFinalQualityService({ store, clock = () => new Date().toIS
     const current = requireEntity(await tx.getInspectionByCode(inspectionCode), 'QUALITY_INSPECTION_NOT_FOUND', { inspectionCode });
     await authorize(tx, current.brandId, actorId, capability);
     return current;
+  }
+
+  // A run's plan is resolved against the rows the brand actually holds, read inside the same
+  // transaction that will write the run. Loading them outside it would let the table change between
+  // the criterion being read and the run recording that it was applied.
+  async function contextWithSamplingPlans(tx, inspectionCode, actorId, input) {
+    const current = await contextForInspection(tx, inspectionCode, actorId, CAPABILITIES.QUALITY_MANAGE);
+    const named = typeof input?.standardCode === 'string' && input.standardCode !== '';
+    const samplingPlans = named
+      ? await tx.listSamplingPlans(current.brandId, input.standardCode, input.inspectionLevel)
+      : [];
+    return Object.freeze({ current, samplingPlans });
   }
 
   async function append(tx, type, inspection, commandId, actorId, extra = {}) {
@@ -91,10 +107,10 @@ export function createFinalQualityService({ store, clock = () => new Date().toIS
       validateInput(input, START_FIELDS, 'QUALITY_START_INPUT_INVALID');
       const expectedVersion = versionOf(input);
       return execute(commandId, `startFinalQuality:${actorId}:${inspectionCode}:${canonicalJson(input)}`, actorId,
-        (tx) => contextForInspection(tx, inspectionCode, actorId, CAPABILITIES.QUALITY_MANAGE),
-        async (tx, current) => {
+        (tx) => contextWithSamplingPlans(tx, inspectionCode, actorId, input),
+        async (tx, { current, samplingPlans }) => {
           assertQualityInspectionVersion(current, expectedVersion);
-          const value = startQualityInspection(current, { ...withoutExpectedVersion(input), actorId, startedAt: clock() });
+          const value = startQualityInspection(current, { ...withoutExpectedVersion(input), samplingPlans, actorId, startedAt: clock() });
           await tx.saveInspection(value, expectedVersion);
           await append(tx, 'final-quality.run-started', value, commandId, actorId, { runNumber: value.currentRun });
           return value;
@@ -149,10 +165,13 @@ export function createFinalQualityService({ store, clock = () => new Date().toIS
       validateInput(input, REINSPECTION_FIELDS, 'QUALITY_REINSPECTION_INPUT_INVALID');
       const expectedVersion = versionOf(input);
       return execute(commandId, `startFinalQualityReinspection:${actorId}:${inspectionCode}:${canonicalJson(input)}`, actorId,
-        (tx) => contextForInspection(tx, inspectionCode, actorId, CAPABILITIES.QUALITY_MANAGE),
-        async (tx, current) => {
+        (tx) => contextWithSamplingPlans(tx, inspectionCode, actorId, input),
+        async (tx, { current, samplingPlans }) => {
           assertQualityInspectionVersion(current, expectedVersion);
-          const value = startQualityReinspection(current, { ...withoutExpectedVersion(input), actorId, startedAt: clock() });
+          // A re-inspection states its criterion afresh rather than inheriting the first run's: the
+          // lot presented again is not always the lot that failed, and a run that silently reused an
+          // older plan would record a criterion nobody chose for it.
+          const value = startQualityReinspection(current, { ...withoutExpectedVersion(input), samplingPlans, actorId, startedAt: clock() });
           await tx.saveInspection(value, expectedVersion);
           await append(tx, 'final-quality.reinspection-started', value, commandId, actorId, { runNumber: value.currentRun, reworkReference: value.runs.at(-1).reworkReference });
           return value;

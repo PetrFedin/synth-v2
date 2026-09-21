@@ -25,6 +25,18 @@ function view(client) {
       const result = await client.query('SELECT payload FROM quality_inspections WHERE execution_code = $1 FOR UPDATE', [executionCode]);
       return result.rows[0]?.payload;
     },
+    // The plan set a run is judged by. Only the rows for one standard and one level are read: a run
+    // names both, and loading the brand's whole table to filter it in memory would let a row from
+    // another standard reach a resolver that decides whether goods ship.
+    async listSamplingPlans(brandId, standardCode, inspectionLevel) {
+      const result = await client.query(
+        `SELECT payload FROM aql_sampling_plans
+          WHERE brand_id = $1 AND standard_code = $2 AND inspection_level = $3
+          ORDER BY aql, lot_from`,
+        [brandId, standardCode, inspectionLevel],
+      );
+      return result.rows.map((row) => row.payload);
+    },
     async insertInspection(value) {
       try {
         await client.query(

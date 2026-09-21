@@ -2,8 +2,9 @@ import { invariant } from '../core/errors.mjs';
 import { assertBodyContract, assertQueryContract, bodyContract } from './request-contract.mjs';
 
 const EMPTY_BODY = bodyContract();
-const START_BODY = bodyContract(['expectedVersion','inspectorName','sampleSize','allowedMajorDefects','allowedMinorDefects']);
-const REINSPECTION_BODY = bodyContract(['expectedVersion','inspectorName','sampleSize','allowedMajorDefects','allowedMinorDefects','reworkReference','resolutionNotes']);
+const SAMPLING_FIELDS = ['sampleSize','allowedMajorDefects','allowedMinorDefects','standardCode','inspectionLevel','aqlMajor','aqlMinor','samplingNote'];
+const START_BODY = bodyContract(['expectedVersion','inspectorName',...SAMPLING_FIELDS]);
+const REINSPECTION_BODY = bodyContract(['expectedVersion','inspectorName',...SAMPLING_FIELDS,'reworkReference','resolutionNotes']);
 const COMPLETE_BODY = bodyContract(['expectedVersion','inspectedQuantity','defects','measurementFailures','checkpoints','evidenceReferences','notes']);
 const REVIEW_BODY = bodyContract(['expectedVersion','decision','releaseCode','notes']);
 const CANCEL_BODY = bodyContract(['expectedVersion','reason']);
@@ -14,6 +15,7 @@ export function createFinalQualityRoutes({ finalQuality } = {}) {
   return Object.freeze([
     read('GET', /^\/v2\/final-quality-inspections$/, QUERY_FIELDS, ({ actorId, query }) => service.pageForActor(actorId, query)),
     read('GET', /^\/v2\/final-quality-inspections\/([^/]+)$/, [], ({ actorId, params }) => service.getForActor(actorId, params[0])),
+    read('GET', /^\/v2\/aql-sampling-plans$/, [], ({ actorId }) => service.samplingPlanSetsForActor(actorId)),
     read('GET', /^\/v2\/final-quality-shipment-releases\/([^/]+)$/, [], ({ actorId, params }) => service.getShipmentReleaseForActor(actorId, params[0])),
     mutate('POST', /^\/v2\/final-quality-inspections\/from-execution\/([^/]+)$/, EMPTY_BODY, ({ commandId, actorId, params }) => service.createFromExecution(commandId, actorId, params[0])),
     mutate('POST', /^\/v2\/final-quality-inspections\/([^/]+)\/start$/, START_BODY, ({ commandId, actorId, params, body }) => service.start(commandId, actorId, params[0], body)),
@@ -32,5 +34,5 @@ function read(method, pattern, fields, execute) {
 }
 function unavailable() {
   const fail = () => invariant(false, 'QUALITY_SERVICE_REQUIRED', 'Final Quality service is required');
-  return Object.freeze({ pageForActor: fail, getForActor: fail, getShipmentReleaseForActor: fail, createFromExecution: fail, start: fail, completeRun: fail, review: fail, startReinspection: fail, cancel: fail });
+  return Object.freeze({ pageForActor: fail, getForActor: fail, getShipmentReleaseForActor: fail, samplingPlanSetsForActor: fail, createFromExecution: fail, start: fail, completeRun: fail, review: fail, startReinspection: fail, cancel: fail });
 }

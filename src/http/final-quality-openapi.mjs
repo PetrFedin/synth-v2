@@ -6,13 +6,14 @@ const RECOMMENDATIONS = ['pass','rework','reject'];
 const DECISIONS = ['release','rework','reject'];
 const SEVERITIES = ['critical','major','minor'];
 const CHECKPOINT_RESULTS = ['pass','fail','not-applicable'];
+const PLAN_SOURCES = ['standard','agreed'];
 const errorResponse = { description: 'Domain or transport error', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } };
 const idempotency = { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 1, maxLength: 128, pattern: SAFE_ID } };
 const inspectionParameter = { name: 'inspectionCode', in: 'path', required: true, schema: { type: 'string', pattern: CODE } };
 
 export function withFinalQualityOpenApi(base) {
   const specification = structuredClone(base);
-  specification.info.version = '1.17.0';
+  specification.info.version = '1.18.0';
   Object.assign(specification.components.schemas, schemas());
   Object.assign(specification.paths, paths());
   return deepFreeze(specification);
@@ -21,15 +22,36 @@ export function withFinalQualityOpenApi(base) {
 function schemas() {
   return {
     FinalQualityEmptyInput: { type: 'object', additionalProperties: false, maxProperties: 0 },
+    // The criterion the run was judged by, and where it came from. The four original fields stay
+    // required so inspections recorded before plans were resolvable still read; the provenance
+    // fields are optional for the same reason, and every new run carries them.
     FinalQualitySamplingPlan: { type: 'object', additionalProperties: false, required: ['sampleSize','allowedMajorDefects','allowedMinorDefects','criticalTolerance'], properties: {
       sampleSize: quantity(), allowedMajorDefects: nonNegative(), allowedMinorDefects: nonNegative(), criticalTolerance: { type: 'integer', enum: [0] },
+      source: { type: 'string', enum: PLAN_SOURCES }, standardCode: nullableText(64), inspectionLevel: nullableText(16),
+      aqlMajor: nullableNumber(), aqlMinor: nullableNumber(), lotSize: quantity(),
+      rejectMajorAt: quantity(), rejectMinorAt: quantity(), note: nullableText(400),
     } },
-    FinalQualityStartInput: { type: 'object', additionalProperties: false, required: ['expectedVersion','inspectorName','sampleSize','allowedMajorDefects','allowedMinorDefects'], properties: {
+    // A run states its criterion one of two ways: it names the standard, the level and the two
+    // accepted quality limits, and the plan is read off the rows the brand holds — or it carries an
+    // explicitly agreed sample and limits. Which of the two is being used is decided in the domain,
+    // where each path validates its own fields in full; the contract admits both shapes rather than
+    // demanding the fields of one path from a request using the other.
+    FinalQualityStartInput: { type: 'object', additionalProperties: false, required: ['expectedVersion','inspectorName'], properties: {
       expectedVersion: version(), inspectorName: text(2,160), sampleSize: quantity(), allowedMajorDefects: nonNegative(), allowedMinorDefects: nonNegative(),
+      standardCode: text(2,64), inspectionLevel: text(1,16), aqlMajor: aql(), aqlMinor: aql(), samplingNote: text(2,400),
     } },
-    FinalQualityReinspectionInput: { type: 'object', additionalProperties: false, required: ['expectedVersion','inspectorName','sampleSize','allowedMajorDefects','allowedMinorDefects','reworkReference','resolutionNotes'], properties: {
+    FinalQualityReinspectionInput: { type: 'object', additionalProperties: false, required: ['expectedVersion','inspectorName','reworkReference','resolutionNotes'], properties: {
       expectedVersion: version(), inspectorName: text(2,160), sampleSize: quantity(), allowedMajorDefects: nonNegative(), allowedMinorDefects: nonNegative(), reworkReference: text(2,120), resolutionNotes: text(5,2000),
+      standardCode: text(2,64), inspectionLevel: text(1,16), aqlMajor: aql(), aqlMinor: aql(), samplingNote: text(2,400),
     } },
+    // What an inspector legitimately chooses between: which plan set, and the two limits. The sample
+    // size is absent by design — it follows from the lot and the level, and the run resolves it.
+    FinalQualitySamplingPlanSet: { type: 'object', additionalProperties: false, required: ['standardCode','inspectionLevel','aqls','lotFrom','lotTo','rows','sourceNote'], properties: {
+      standardCode: text(2,64), inspectionLevel: text(1,16),
+      aqls: { type: 'array', minItems: 1, maxItems: 40, uniqueItems: true, items: aql() },
+      lotFrom: quantity(), lotTo: quantity(), rows: quantity(), sourceNote: nullableText(400),
+    } },
+    FinalQualitySamplingPlanSets: { type: 'array', maxItems: 200, items: { $ref: '#/components/schemas/FinalQualitySamplingPlanSet' } },
     FinalQualityDefect: { type: 'object', additionalProperties: false, required: ['defectCode','severity','category','description','quantity','evidenceReferences'], properties: {
       defectCode: text(2,80), severity: { type: 'string', enum: SEVERITIES }, category: text(2,120), description: text(3,1000), quantity: quantity(), evidenceReferences: references(),
     } },
@@ -71,6 +93,7 @@ function paths() {
       { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 200, default: 50 } }, { name: 'cursor', in: 'query', schema: { type: 'string', maxLength: 2048 } }, { name: 'q', in: 'query', schema: { type: 'string', minLength: 1, maxLength: 80 } }, { name: 'status', in: 'query', schema: { type: 'string', enum: STATUSES } }, { name: 'brandId', in: 'query', schema: { type: 'string', minLength: 1, maxLength: 200 } }, { name: 'supplierCode', in: 'query', schema: { type: 'string', pattern: CODE } }, { name: 'sku', in: 'query', schema: { type: 'string', pattern: CODE } },
     ], responses: { 200: dataResponse('Final Quality inspection page', '#/components/schemas/FinalQualityPage'), 400: errorResponse, 401: errorResponse, 403: errorResponse } } },
     '/final-quality-inspections/{inspectionCode}': { get: { operationId: 'getFinalQualityInspection', security: [{ bearerAuth: [] }], parameters: [inspectionParameter], responses: { 200: dataResponse('Final Quality inspection', '#/components/schemas/FinalQualityInspection'), 400: errorResponse, 401: errorResponse, 403: errorResponse, 404: errorResponse } } },
+    '/aql-sampling-plans': { get: { operationId: 'listAqlSamplingPlanSets', security: [{ bearerAuth: [] }], responses: { 200: dataResponse('Sampling plan sets the actor\'s brands work to', '#/components/schemas/FinalQualitySamplingPlanSets'), 400: errorResponse, 401: errorResponse, 403: errorResponse } } },
     '/final-quality-shipment-releases/{releaseCode}': { get: { operationId: 'getFinalQualityShipmentRelease', security: [{ bearerAuth: [] }], parameters: [{ name: 'releaseCode', in: 'path', required: true, schema: { type: 'string', pattern: CODE } }], responses: { 200: dataResponse('Shipment release', '#/components/schemas/FinalQualityShipmentRelease'), 400: errorResponse, 401: errorResponse, 403: errorResponse, 404: errorResponse } } },
     '/final-quality-inspections/from-execution/{executionCode}': { post: { operationId: 'createFinalQualityInspectionFromExecution', security: [{ bearerAuth: [] }], parameters: [{ name: 'executionCode', in: 'path', required: true, schema: { type: 'string', pattern: CODE } }, idempotency], requestBody: body('#/components/schemas/FinalQualityEmptyInput'), responses: mutationResponses('Created Final Quality inspection') } },
     '/final-quality-inspections/{inspectionCode}/start': { post: mutation('startFinalQualityInspection', '#/components/schemas/FinalQualityStartInput', 'Started Final Quality inspection') },
@@ -84,6 +107,8 @@ function version() { return { type: 'integer', minimum: 1, maximum: 2_147_483_64
 function quantity() { return { type: 'integer', minimum: 1, maximum: 2_147_483_647 }; }
 function nonNegative() { return { type: 'integer', minimum: 0, maximum: 2_147_483_647 }; }
 function nullableInteger() { return { oneOf: [nonNegative(), { type: 'null' }] }; }
+function aql() { return { type: 'number', exclusiveMinimum: 0, maximum: 100 }; }
+function nullableNumber() { return { oneOf: [{ type: 'number', minimum: -1_000_000_000, maximum: 1_000_000_000 }, { type: 'null' }] }; }
 function number() { return { type: 'number', minimum: -1_000_000_000, maximum: 1_000_000_000 }; }
 function text(minLength, maxLength) { return { type: 'string', minLength, maxLength }; }
 function nullableText(maxLength) { return { oneOf: [text(1, maxLength), { type: 'null' }] }; }

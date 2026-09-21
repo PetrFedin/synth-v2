@@ -11,7 +11,7 @@ const readyExecution = Object.freeze({
 });
 
 function fixture() {
-  const state = { inspection: null, commands: new Map(), outbox: [], releases: [] };
+  const state = { inspection: null, commands: new Map(), outbox: [], releases: [], plans: demoPlans() };
   const memberships = new Map([
     ['brand-1:owner', { organisationId: 'brand-1', organisationType: 'brand', userId: 'owner', role: 'owner', status: 'active' }],
     ['brand-1:admin', { organisationId: 'brand-1', organisationType: 'brand', userId: 'admin', role: 'admin', status: 'active' }],
@@ -29,11 +29,24 @@ function fixture() {
     getCommand: async (id) => state.commands.get(id),
     insertCommand: async (value) => { state.commands.set(value.id, value); },
     appendOutbox: async (event) => { state.outbox.push(event); },
+    // The rows a brand holds. The lot in this fixture is 100 pieces, so the 91–150 range is the one
+    // a run resolves to; the wider ranges are here so that resolving is a choice and not the only
+    // row present.
+    listSamplingPlans: async (brandId, standardCode, inspectionLevel) => state.plans
+      .filter((plan) => plan.brandId === brandId && plan.standardCode === standardCode && plan.inspectionLevel === inspectionLevel),
   };
   let tick = 0; let id = 0;
   const clock = () => new Date(Date.parse('2026-08-20T10:01:00.000Z') + tick++ * 60_000).toISOString();
   const nextId = (prefix) => `${prefix}_${++id}`;
   return { state, service: createFinalQualityService({ store: { transaction: (work) => work(tx) }, clock, nextId }) };
+}
+
+// A plan set shaped like a real one: the sample follows the lot and the level, the looser limit
+// tolerates more from that same sample, and rejection is acceptance plus one.
+function demoPlans() {
+  const rows = [[51, 90, 13, 0, 1], [91, 150, 20, 1, 2], [151, 280, 32, 2, 3]];
+  return rows.flatMap(([lotFrom, lotTo, sampleSize, major, minor]) => [[2.5, major], [4, minor]]
+    .map(([aql, acceptAt]) => ({ brandId: 'brand-1', standardCode: 'DEMO-AQL-2026', inspectionLevel: 'II', aql, lotFrom, lotTo, sampleSize, acceptAt, rejectAt: acceptAt + 1 })));
 }
 
 async function completePassingRun(service, actorId = 'sales') {
@@ -107,4 +120,72 @@ test('Final Quality forbids an approver from reviewing a run they inspected or c
 test('Finance can read but cannot mutate Final Quality', async () => {
   const { service } = fixture();
   await assert.rejects(() => service.createFromExecution('finance-create', 'finance', readyExecution.executionCode), { code: 'CAPABILITY_DENIED' });
+});
+test('A run records which criterion judged the lot, not three numbers somebody typed', async () => {
+  const { service } = fixture();
+  let inspection = await service.createFromExecution('aql-create', 'sales', readyExecution.executionCode);
+  inspection = await service.start('aql-start', 'sales', inspection.inspectionCode, {
+    expectedVersion: inspection.version, inspectorName: 'Factory Quality Inspector',
+    standardCode: 'DEMO-AQL-2026', inspectionLevel: 'II', aqlMajor: 2.5, aqlMinor: 4,
+  });
+  const plan = inspection.runs.at(-1).samplingPlan;
+  // The lot is 100 pieces, so the 91–150 row applies: twenty inspected, accepted at one major and
+  // at two minor. Nobody chose those numbers at the moment of inspecting.
+  assert.equal(plan.source, 'standard');
+  assert.equal(plan.standardCode, 'DEMO-AQL-2026');
+  assert.equal(plan.inspectionLevel, 'II');
+  assert.deepEqual([plan.lotSize, plan.sampleSize], [100, 20]);
+  assert.deepEqual([plan.allowedMajorDefects, plan.allowedMinorDefects], [1, 2]);
+  assert.deepEqual([plan.rejectMajorAt, plan.rejectMinorAt], [2, 3]);
+  assert.deepEqual([plan.aqlMajor, plan.aqlMinor], [2.5, 4]);
+
+  // And the decision follows that plan: two major defects is the rejection number, not a judgement
+  // call made afterwards.
+  const completed = await service.completeRun('aql-complete', 'sales', inspection.inspectionCode, {
+    expectedVersion: inspection.version, inspectedQuantity: 20,
+    defects: [{ defectCode: 'SEAM-OPEN', severity: 'major', category: 'Пошив', description: 'Разошёлся боковой шов', quantity: 2, evidenceReferences: ['evidence://quality/seam'] }],
+    measurementFailures: [], checkpoints: [{ checkpointCode: 'WORKMANSHIP', name: 'Workmanship', result: 'pass', severity: null, notes: 'Остальное в норме' }],
+    evidenceReferences: ['evidence://quality/run'], notes: 'Две значительные несоответствия на выборке',
+  });
+  assert.equal(completed.runs.at(-1).recommendation, 'rework');
+});
+
+test('A run that names a standard nobody loaded is refused rather than judged by something else', async () => {
+  const { service } = fixture();
+  const inspection = await service.createFromExecution('aql-missing-create', 'sales', readyExecution.executionCode);
+  await assert.rejects(() => service.start('aql-missing-start', 'sales', inspection.inspectionCode, {
+    expectedVersion: inspection.version, inspectorName: 'Factory Quality Inspector',
+    standardCode: 'GOST-R-ISO-2859-1', inspectionLevel: 'II', aqlMajor: 2.5, aqlMinor: 4,
+  }), { code: 'QUALITY_SAMPLING_PLAN_SET_MISSING' });
+
+  // A level the brand holds no rows for is the same kind of refusal, and must not quietly fall back
+  // to the level that does exist.
+  await assert.rejects(() => service.start('aql-level-start', 'sales', inspection.inspectionCode, {
+    expectedVersion: inspection.version, inspectorName: 'Factory Quality Inspector',
+    standardCode: 'DEMO-AQL-2026', inspectionLevel: 'III', aqlMajor: 2.5, aqlMinor: 4,
+  }), { code: 'QUALITY_SAMPLING_PLAN_SET_MISSING' });
+});
+
+test('A plan agreed with one factory is allowed, and says so', async () => {
+  const { service } = fixture();
+  let inspection = await service.createFromExecution('aql-agreed-create', 'sales', readyExecution.executionCode);
+  inspection = await service.start('aql-agreed-start', 'sales', inspection.inspectionCode, {
+    expectedVersion: inspection.version, inspectorName: 'Factory Quality Inspector',
+    sampleSize: 25, allowedMajorDefects: 1, allowedMinorDefects: 3,
+    samplingNote: 'Согласовано с фабрикой на сезон SS27',
+  });
+  const plan = inspection.runs.at(-1).samplingPlan;
+  assert.equal(plan.source, 'agreed');
+  assert.equal(plan.standardCode, null, 'a bespoke plan does not borrow the name of a standard');
+  assert.equal(plan.note, 'Согласовано с фабрикой на сезон SS27');
+  assert.deepEqual([plan.rejectMajorAt, plan.rejectMinorAt], [2, 4]);
+
+  // Even agreed, it has to be a plan: tolerating major defects more readily than minor ones is not
+  // a bespoke arrangement, it is upside down.
+  const inverted = fixture();
+  const second = await inverted.service.createFromExecution('aql-agreed-create-2', 'owner', readyExecution.executionCode);
+  await assert.rejects(() => inverted.service.start('aql-inverted-start', 'owner', second.inspectionCode, {
+    expectedVersion: second.version, inspectorName: 'Factory Quality Inspector',
+    sampleSize: 25, allowedMajorDefects: 4, allowedMinorDefects: 1,
+  }), { code: 'QUALITY_SAMPLING_PLAN_LIMITS_INVERTED' });
 });

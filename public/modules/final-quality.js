@@ -10,6 +10,9 @@
     items: [], loaded: false, loading: false, error: '', selectedCode: null,
     status: 'all', risk: 'all', search: '', executionCode: '', busyCode: null, generation: 0,
     inspectorName: '', sampleSize: '32', allowedMajor: '2', allowedMinor: '4',
+    // Which criterion the run will be judged by. 'standard' resolves the plan from the rows the
+    // brand holds; 'agreed' records a plan agreed with one factory, as agreed.
+    planSource: 'standard', planSets: [], planSetsLoaded: false, planSetKey: '', aqlMajor: '', aqlMinor: '', samplingNote: '',
     criticalCount: '0', majorCount: '0', minorCount: '0', defectDescription: '',
     measurementPoint: '', measurementSize: '', measuredValue: '', lowerLimit: '', upperLimit: '',
     workmanshipResult: 'pass', measurementsResult: 'pass', packingResult: 'pass', checkpointSeverity: 'major',
@@ -85,11 +88,37 @@
     const generation = ui.generation;
     try {
       const items = await fetchAll(); if (generation !== ui.generation) return;
+      await loadPlanSets();
       ui.items = [...items].sort((a, b) => String(a.inspectionCode).localeCompare(String(b.inspectionCode)));
       ui.loaded = true; if (!ui.selectedCode && ui.items.length) ui.selectedCode = ui.items[0].inspectionCode;
     } catch (error) { if (generation === ui.generation) ui.error = error?.message || I18N.t('common.requestError'); }
     finally { if (generation === ui.generation) ui.loading = false; if (state.view === 'final-quality') renderApp(); }
   }
+  // The plan sets the brand holds. A brand that has loaded none is not broken — it agrees plans with
+  // its factories instead — so a failure here leaves the workspace usable on the agreed path rather
+  // than failing the whole screen for a list that is an aid, not a prerequisite.
+  async function loadPlanSets(request = api) {
+    try {
+      const sets = await request('/v2/aql-sampling-plans');
+      ui.planSets = Array.isArray(sets) ? sets : [];
+      ui.planSetsLoaded = true;
+      if (!ui.planSets.length) { ui.planSource = 'agreed'; return; }
+      if (!ui.planSets.some((set) => planSetKey(set) === ui.planSetKey)) applyPlanSet(ui.planSets[0]);
+    } catch (error) {
+      ui.planSets = []; ui.planSetsLoaded = true; ui.planSource = 'agreed';
+    }
+  }
+  function planSetKey(set) { return `${set.standardCode}|${set.inspectionLevel}`; }
+  function currentPlanSet() { return ui.planSets.find((set) => planSetKey(set) === ui.planSetKey) || null; }
+  // Choosing a set chooses the limits it actually offers. Carrying an AQL across to a set that has
+  // no rows at it would produce a refusal the inspector could not have predicted from the screen.
+  function applyPlanSet(set) {
+    ui.planSetKey = planSetKey(set);
+    const limits = Array.isArray(set.aqls) ? set.aqls : [];
+    ui.aqlMajor = String(limits[0] ?? '');
+    ui.aqlMinor = String(limits.length > 1 ? limits[limits.length - 1] : (limits[0] ?? ''));
+  }
+
   // See materials.js: retrying a failed load from render starves the event loop.
   function ensureLoaded() { if (!ui.loaded && !ui.loading && !ui.error) queueMicrotask(() => { void load({ reset: true }); }); }
   function selected() { return ui.items.find((value) => value.inspectionCode === ui.selectedCode) || ui.items[0] || null; }
@@ -162,17 +191,74 @@
   }
   function pair(label, value) { return h('div', {}, [h('dt', { text: label }), h('dd', { text: value ?? '—' })]); }
   function numericInput(label, key, min = 0) { return h('label', {}, [h('span', { text: label }), h('input', { type: 'number', min, value: ui[key], oninput: (event) => { ui[key] = event.target.value; } })]); }
+  function planSourceField() {
+    const usable = ui.planSets.length > 0;
+    const select = h('select', { onchange: (event) => { ui.planSource = event.target.value; renderApp(); } }, [
+      h('option', { value: 'standard', text: t('По стандарту', 'By standard'), disabled: !usable }),
+      h('option', { value: 'agreed', text: t('Согласован с фабрикой', 'Agreed with the factory') }),
+    ]);
+    select.value = usable ? ui.planSource : 'agreed';
+    return h('label', {}, [h('span', { text: t('Критерий приёмки', 'Acceptance criterion') }), select]);
+  }
+  function planSetField() {
+    const select = h('select', { onchange: (event) => { const set = ui.planSets.find((candidate) => planSetKey(candidate) === event.target.value); if (set) applyPlanSet(set); renderApp(); } },
+      ui.planSets.map((set) => h('option', { value: planSetKey(set), text: `${set.standardCode} · ${t('уровень', 'level')} ${set.inspectionLevel}` })));
+    select.value = ui.planSetKey;
+    return h('label', {}, [h('span', { text: t('Набор планов', 'Plan set') }), select]);
+  }
+  function aqlField(label, key) {
+    const set = currentPlanSet();
+    const select = h('select', { onchange: (event) => { ui[key] = event.target.value; } },
+      (set?.aqls ?? []).map((limit) => h('option', { value: String(limit), text: `AQL ${limit}` })));
+    select.value = ui[key];
+    return h('label', {}, [h('span', { text: label }), select]);
+  }
+  // What the chosen set covers, so a lot outside its ranges is visible before the run is refused
+  // rather than after.
+  function planSetCoverage(value) {
+    const set = currentPlanSet();
+    if (!set) return null;
+    const covered = value.quantity >= set.lotFrom && value.quantity <= set.lotTo;
+    // Каждая подпись — отдельной строкой: <small> строчный, и два подряд склеиваются в одну.
+    const lines = [h('p', { className: 'muted', text: t(`Партии ${set.lotFrom}–${set.lotTo} шт., строк: ${set.rows}`, `Lots ${set.lotFrom}–${set.lotTo} pcs, ${set.rows} rows`) })];
+    if (!covered) lines.push(h('p', { className: 'final-quality-warn', text: t(`Партия ${value.quantity} шт. не покрыта этим набором — выберите другой или согласуйте план.`, `A lot of ${value.quantity} pcs is not covered by this set — choose another or agree a plan.`) }));
+    if (set.sourceNote) lines.push(h('p', { className: 'muted', text: set.sourceNote }));
+    return h('div', {}, lines);
+  }
   function startPanel(value, reinspection) {
+    const byStandard = ui.planSets.length > 0 && ui.planSource === 'standard';
     return h('section', { className: 'final-quality-card final-quality-command' }, [
       h('h3', { text: reinspection ? t('Повторная инспекция', 'Reinspection') : t('План выборки', 'Sampling plan') }),
       h('input', { value: ui.inspectorName, placeholder: t('Имя инспектора', 'Inspector name'), oninput: (event) => { ui.inspectorName = event.target.value; } }),
-      h('div', { className: 'final-quality-grid' }, [numericInput(t('Размер выборки', 'Sample size'), 'sampleSize', 1), numericInput(t('Допустимо major', 'Allowed major'), 'allowedMajor'), numericInput(t('Допустимо minor', 'Allowed minor'), 'allowedMinor')]),
+      h('div', { className: 'final-quality-grid' }, [planSourceField()]),
+      // По стандарту объём выборки не набирается: он следует из размера партии и уровня контроля.
+      byStandard ? h('div', { className: 'final-quality-grid' }, [planSetField(), aqlField(t('AQL значительные', 'AQL major'), 'aqlMajor'), aqlField(t('AQL незначительные', 'AQL minor'), 'aqlMinor')]) : null,
+      byStandard ? planSetCoverage(value) : null,
+      byStandard ? h('p', { className: 'muted', text: t('Объём выборки и приёмочные числа определит план — их не нужно вводить.', 'The plan fixes the sample size and the acceptance numbers — they are not typed in.') }) : null,
+      byStandard ? null : h('div', { className: 'final-quality-grid' }, [numericInput(t('Размер выборки', 'Sample size'), 'sampleSize', 1), numericInput(t('Допустимо major', 'Allowed major'), 'allowedMajor'), numericInput(t('Допустимо minor', 'Allowed minor'), 'allowedMinor')]),
+      byStandard ? null : h('input', { value: ui.samplingNote, placeholder: t('Чем согласован план (необязательно)', 'How the plan was agreed (optional)'), oninput: (event) => { ui.samplingNote = event.target.value; } }),
       reinspection ? h('input', { value: ui.reworkReference, placeholder: t('Ссылка на доработку', 'Rework reference'), oninput: (event) => { ui.reworkReference = event.target.value; } }) : null,
       reinspection ? h('textarea', { value: ui.resolutionNotes, placeholder: t('Что исправлено', 'What was corrected'), oninput: (event) => { ui.resolutionNotes = event.target.value; } }) : null,
       h('button', { type: 'button', className: 'primary', disabled: Boolean(ui.busyCode), text: reinspection ? t('Начать повторную инспекцию', 'Start reinspection') : t('Начать инспекцию', 'Start inspection'), onclick: () => {
-        const inspectorName = requireText(ui.inspectorName, 2, t('Укажите инспектора.', 'Enter the inspector name.')); const sampleSize = integer(ui.sampleSize, 1, t('Некорректный размер выборки.', 'Invalid sample size.')); const allowedMajorDefects = integer(ui.allowedMajor, 0, t('Некорректный major threshold.', 'Invalid major threshold.')); const allowedMinorDefects = integer(ui.allowedMinor, 0, t('Некорректный minor threshold.', 'Invalid minor threshold.'));
-        if (inspectorName === null || sampleSize === null || allowedMajorDefects === null || allowedMinorDefects === null) return;
-        const body = { expectedVersion: value.version, inspectorName, sampleSize, allowedMajorDefects, allowedMinorDefects };
+        const inspectorName = requireText(ui.inspectorName, 2, t('Укажите инспектора.', 'Enter the inspector name.'));
+        if (inspectorName === null) return;
+        const body = { expectedVersion: value.version, inspectorName };
+        if (byStandard) {
+          const set = currentPlanSet();
+          if (!set) { toast(t('Выберите набор планов.', 'Choose a plan set.'), 'error'); return; }
+          const aqlMajor = Number(ui.aqlMajor); const aqlMinor = Number(ui.aqlMinor);
+          if (!Number.isFinite(aqlMajor) || !Number.isFinite(aqlMinor)) { toast(t('Выберите пределы AQL.', 'Choose both AQL limits.'), 'error'); return; }
+          if (aqlMajor > aqlMinor) { toast(t('Предел для значительных дефектов не может быть мягче, чем для незначительных.', 'The major limit cannot be looser than the minor one.'), 'error'); return; }
+          Object.assign(body, { standardCode: set.standardCode, inspectionLevel: set.inspectionLevel, aqlMajor, aqlMinor });
+        } else {
+          const sampleSize = integer(ui.sampleSize, 1, t('Некорректный размер выборки.', 'Invalid sample size.'));
+          const allowedMajorDefects = integer(ui.allowedMajor, 0, t('Некорректный major threshold.', 'Invalid major threshold.'));
+          const allowedMinorDefects = integer(ui.allowedMinor, 0, t('Некорректный minor threshold.', 'Invalid minor threshold.'));
+          if (sampleSize === null || allowedMajorDefects === null || allowedMinorDefects === null) return;
+          Object.assign(body, { sampleSize, allowedMajorDefects, allowedMinorDefects });
+          const samplingNote = String(ui.samplingNote || '').trim();
+          if (samplingNote.length >= 2) body.samplingNote = samplingNote;
+        }
         if (reinspection) { const reworkReference = requireText(ui.reworkReference, 2, t('Укажите ссылку на доработку.', 'Enter a rework reference.')); const resolutionNotes = requireText(ui.resolutionNotes, 5, t('Опишите выполненную доработку.', 'Describe the completed rework.')); if (!reworkReference || !resolutionNotes) return; Object.assign(body, { reworkReference, resolutionNotes }); }
         void command(value.inspectionCode, `/v2/final-quality-inspections/${encodeURIComponent(value.inspectionCode)}/${reinspection ? 'reinspect' : 'start'}`, body);
       } }),
@@ -236,14 +322,33 @@
       ]),
     ]);
   }
+  // Каким критерием судили партию. A run recorded before plans were resolvable carries the three
+  // numbers and no provenance; it is shown as what it is rather than relabelled as something it did
+  // not record.
+  function samplingPlanLabel(plan) {
+    if (!plan) return '—';
+    const limits = t(`выборка ${plan.sampleSize}, приёмка ${plan.allowedMajorDefects}/${plan.allowedMinorDefects}`, `sample ${plan.sampleSize}, accept ${plan.allowedMajorDefects}/${plan.allowedMinorDefects}`);
+    if (plan.source === 'standard') return `${plan.standardCode} · ${t('уровень', 'level')} ${plan.inspectionLevel} · AQL ${plan.aqlMajor}/${plan.aqlMinor} · ${limits}`;
+    if (plan.source === 'agreed') return `${t('Согласованный план', 'Agreed plan')} · ${limits}${plan.note ? ` · ${plan.note}` : ''}`;
+    return `${t('Пороги заданы вручную', 'Thresholds entered by hand')} · ${limits}`;
+  }
   function runHistory(value) {
     if (!value.runs.length) return h('p', { className: 'muted', text: t('Инспекция ещё не запускалась.', 'Inspection has not started.') });
+    // Каждая строка прогона — блок, а не <small>.
+    //
+    // A run's class carries its status, and one of those statuses is `in-progress`. The role system
+    // matches component heuristics on class-name tokens, so the token `progress` gave the active run
+    // a block layout that completed runs never got: the same list rendered its items two different
+    // ways depending on which word happened to be in the status. The lines are blocks here, so the
+    // geometry no longer depends on which heuristic fired.
     return h('ol', { className: 'final-quality-runs' }, value.runs.map((run) => h('li', { className: `final-quality-run ${run.status}` }, [
-      h('strong', { text: `${t('Прогон', 'Run')} ${run.runNumber}` }), h('small', { text: `${run.inspectorName} · ${date(run.startedAt)}` }),
-      run.defectCounts ? h('small', { text: `${t('Крит./знач./незнач.', 'Critical/major/minor')} ${run.defectCounts.critical}/${run.defectCounts.major}/${run.defectCounts.minor}` }) : null,
-      run.recommendation ? h('small', { text: `${t('Рекомендация', 'Recommendation')}: ${recommendationLabel(run.recommendation)}` }) : null,
-      run.disposition ? h('small', { text: `${t('Решение', 'Disposition')}: ${dispositionLabel(run.disposition)}` }) : null,
-      run.reworkReference ? h('small', { text: `${t('Доработка', 'Rework')}: ${run.reworkReference}` }) : null,
+      h('strong', { text: `${t('Прогон', 'Run')} ${run.runNumber}` }),
+      h('p', { className: 'muted', text: `${run.inspectorName} · ${date(run.startedAt)}` }),
+      h('p', { className: 'muted', text: samplingPlanLabel(run.samplingPlan) }),
+      run.defectCounts ? h('p', { className: 'muted', text: `${t('Крит./знач./незнач.', 'Critical/major/minor')} ${run.defectCounts.critical}/${run.defectCounts.major}/${run.defectCounts.minor}` }) : null,
+      run.recommendation ? h('p', { className: 'muted', text: `${t('Рекомендация', 'Recommendation')}: ${recommendationLabel(run.recommendation)}` }) : null,
+      run.disposition ? h('p', { className: 'muted', text: `${t('Решение', 'Disposition')}: ${dispositionLabel(run.disposition)}` }) : null,
+      run.reworkReference ? h('p', { className: 'muted', text: `${t('Доработка', 'Rework')}: ${run.reworkReference}` }) : null,
     ])));
   }
   function cancelPanel(value) { return h('section', { className: 'final-quality-card' }, [h('h3', { text: t('Отмена инспекции', 'Cancel inspection') }), h('input', { value: ui.cancelReason, placeholder: t('Причина отмены', 'Cancellation reason'), oninput: (event) => { ui.cancelReason = event.target.value; } }), h('button', { type: 'button', className: 'danger', disabled: Boolean(ui.busyCode), text: t('Отменить', 'Cancel'), onclick: () => { const reason = requireText(ui.cancelReason, 5, t('Укажите причину отмены.', 'Enter a cancellation reason.')); if (reason) void command(value.inspectionCode, `/v2/final-quality-inspections/${encodeURIComponent(value.inspectionCode)}/cancel`, { expectedVersion: value.version, reason }); } })]); }

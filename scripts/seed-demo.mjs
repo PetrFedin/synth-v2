@@ -38,6 +38,13 @@ const migrationsDir = path.join(root, 'db', 'migrations');
 const PEOPLE = Object.freeze({
   owner: { email: 'owner@syntha.local', password: process.env.SYNTHA_DEMO_OWNER_PASSWORD ?? 'local-owner-password-2026', name: 'Syntha Owner' },
   quality: { email: 'quality@syntha.local', password: process.env.SYNTHA_DEMO_QUALITY_PASSWORD ?? 'local-quality-password-2026', name: 'Ирина Соколова' },
+  // Приёмку подписывает третий человек — и это не избыточность.
+  //
+  // A run may not be approved by the person who started it, nor by the person who completed it. With
+  // only two people in the brand, one starting a run and the other completing it leaves an
+  // inspection that nobody in the brand can decide — a dead end reachable from ordinary use, not
+  // from misuse. A third member is what makes the rule satisfiable in every division of the work.
+  inspector: { email: 'inspector@syntha.local', password: process.env.SYNTHA_DEMO_INSPECTOR_PASSWORD ?? 'local-inspector-password-2026', name: 'Павел Дорохов' },
   buyer: { email: 'buyer@nordhaus.example', password: process.env.SYNTHA_DEMO_BUYER_PASSWORD ?? 'local-buyer-password-2026', name: 'Jonas Herrmann' },
   supplier: { email: 'rep@atmosphere.example', password: process.env.SYNTHA_DEMO_SUPPLIER_PASSWORD ?? 'local-supplier-password-2026', name: 'Mei Lin' },
 });
@@ -47,6 +54,16 @@ const SHOP_NAME = 'Nordhaus Retail';
 
 const pool = new pg.Pool({ connectionString: databaseUrl, max: 4 });
 const log = [];
+const DEMO_SAMPLING_STANDARD = 'DEMO-AQL-2026';
+const DEMO_SAMPLING_ROWS = [
+  // lotFrom, lotTo, sampleSize, acceptAt at AQL 2.5, acceptAt at AQL 4.0
+  [91, 150, 20, 1, 2],
+  [151, 280, 32, 2, 3],
+  [281, 500, 50, 3, 5],
+  [501, 1200, 80, 5, 7],
+  [1201, 3200, 125, 7, 10],
+];
+
 const note = (step, detail) => { log.push({ step, detail }); process.stdout.write(`  ${step}: ${detail}\n`); };
 
 let sequence = 0;
@@ -77,6 +94,7 @@ try {
   // The quality approver. A run's inspector may not sign off their own disposition, so a second
   // person in the brand is not a nicety here — without one the quality chain cannot be finished.
   await ensureMembership(runtime, brandId, accounts.quality, 'admin', accounts.owner, 'brand');
+  await ensureMembership(runtime, brandId, accounts.inspector, 'admin', accounts.owner, 'brand');
 
   // --- The retailer -------------------------------------------------------------------------
   const shopExists = await pool.query('SELECT id FROM organisations WHERE id = $1', [SHOP_ID]);
@@ -123,10 +141,14 @@ try {
   } else note('second season', 'no second published collection to open');
 
   // --- Quality ------------------------------------------------------------------------------
+  // The criterion before the inspection. Without a plan set loaded, the only way to start a run is
+  // to type the sample size and the two limits by hand, which is the thing the AQL work replaced.
+  await ensureSamplingPlans(pool, brandId, accounts.owner);
+
   // Inspections sat at review-pending because the only account in the brand was the one that ran
   // them, and a run's inspector may not sign off its own disposition. That rule is a feature, and a
   // demonstration should show it being satisfied rather than tripped over.
-  await releaseQuality(runtime, pool, brandId, accounts.quality);
+  await releaseQuality(runtime, pool, brandId, [accounts.quality, accounts.inspector, accounts.owner]);
 
   // --- The supplier's side of the table -------------------------------------------------------
   await ensurePortalAccess(runtime, pool, brandId, accounts.owner);
@@ -145,6 +167,7 @@ function describeRole(key) {
   return {
     owner: 'бренд — владелец',
     quality: 'бренд — приёмка качества',
+    inspector: 'бренд — инспектор партий',
     buyer: `${SHOP_NAME} — байер`,
     supplier: 'портал поставщика',
   }[key] ?? key;
@@ -419,7 +442,36 @@ async function ensureOrder(runtime, pool, cycle, selection, buyerId, ownerId) {
   return order;
 }
 
-async function releaseQuality(runtime, pool, brandId, approverId) {
+// Демонстрационный план приёмочного контроля.
+//
+// This is NOT ГОСТ Р ИСО 2859-1 and does not claim to be. The coefficients of a published standard
+// are not something to recite from memory into the table that decides whether goods ship, so the
+// demonstration carries a set of its own, named and annotated as a demonstration one, and a brand
+// loads the table it actually works to. Every rule the real thing obeys is obeyed here — the sample
+// fits the smallest lot in its range, rejection is acceptance plus one, ranges do not overlap, and
+// the looser limit tolerates more than the tighter one from the same sample — so the demonstration
+// exercises the real resolver rather than a relaxed version of it.
+
+async function ensureSamplingPlans(pool, brandId, createdBy) {
+  const existing = await pool.query('SELECT count(*)::integer AS count FROM aql_sampling_plans WHERE brand_id = $1 AND standard_code = $2', [brandId, DEMO_SAMPLING_STANDARD]);
+  if (existing.rows[0].count > 0) { note('sampling plans', `${DEMO_SAMPLING_STANDARD} already loaded (${existing.rows[0].count} rows)`); return; }
+  const note_ = 'Демонстрационный набор. Не является ГОСТ Р ИСО 2859-1 — бренд загружает таблицу, к которой он присоединился.';
+  let inserted = 0;
+  for (const [lotFrom, lotTo, sampleSize, acceptMajor, acceptMinor] of DEMO_SAMPLING_ROWS) {
+    for (const [aql, acceptAt] of [[2.5, acceptMajor], [4, acceptMinor]]) {
+      const payload = { standardCode: DEMO_SAMPLING_STANDARD, inspectionLevel: 'II', aql, lotFrom, lotTo, sampleSize, acceptAt, rejectAt: acceptAt + 1, sourceNote: note_ };
+      await pool.query(
+        `INSERT INTO aql_sampling_plans (id,brand_id,standard_code,inspection_level,aql,lot_from,lot_to,sample_size,accept_at,reject_at,source_note,created_at,created_by,payload)
+         VALUES ($1,$2,$3,'II',$4,$5,$6,$7,$8,$9,$10,now(),$11,$12::jsonb)`,
+        [`aql-plan_${DEMO_SAMPLING_STANDARD}_II_${String(aql).replace('.', '-')}_${lotFrom}`.toLowerCase(), brandId, DEMO_SAMPLING_STANDARD, aql, lotFrom, lotTo, sampleSize, acceptAt, acceptAt + 1, note_, createdBy, JSON.stringify(payload)],
+      );
+      inserted += 1;
+    }
+  }
+  note('sampling plans', `${DEMO_SAMPLING_STANDARD}, уровень II, AQL 2.5 и 4.0 — ${inserted} строк`);
+}
+
+async function releaseQuality(runtime, pool, brandId, approvers) {
   const pending = await pool.query(
     `SELECT payload ->> 'inspectionCode' AS code, version, payload
        FROM quality_inspections
@@ -435,6 +487,11 @@ async function releaseQuality(runtime, pool, brandId, approverId) {
     // The run computes a recommendation — pass, rework or reject — and the decision may be stricter
     // than it but never more lenient. The seed follows the run rather than releasing on principle.
     const decision = { pass: 'release', rework: 'rework', reject: 'reject' }[run?.recommendation] ?? 'reject';
+    // Who may sign this one. The person who ran the inspection and the person who completed it are
+    // both excluded, so the approver is chosen per inspection rather than fixed in advance — with a
+    // fixed approver, an ordinary division of the work leaves the lot undecidable.
+    const approverId = approvers.find((candidate) => candidate !== run?.inspectorId && candidate !== run?.completedBy);
+    if (!approverId) { note('quality', `${row.code} has no eligible approver in the brand`); continue; }
     try {
       await runtime.finalQuality.review(command('quality-review'), approverId, row.code, {
         expectedVersion: row.version,

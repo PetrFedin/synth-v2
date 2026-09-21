@@ -8,7 +8,7 @@ const CODE_PATTERN = /^[A-Z0-9][A-Z0-9._/-]{2,159}$/;
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/;
 
 export function createFinalQualityQueryService({ reader } = {}) {
-  invariant(reader && typeof reader.pageForActor === 'function' && typeof reader.getForActor === 'function' && typeof reader.getShipmentReleaseForActor === 'function', 'QUALITY_READER_REQUIRED', 'Final Quality reader is required');
+  invariant(reader && typeof reader.pageForActor === 'function' && typeof reader.getForActor === 'function' && typeof reader.getShipmentReleaseForActor === 'function' && typeof reader.samplingPlanSetsForActor === 'function', 'QUALITY_READER_REQUIRED', 'Final Quality reader is required');
   return Object.freeze({
     async pageForActor(actorId, options = {}) {
       validateActor(actorId);
@@ -35,6 +35,20 @@ export function createFinalQualityQueryService({ reader } = {}) {
       const value = await reader.getForActor(actorId, inspectionCode);
       invariant(value, 'QUALITY_INSPECTION_NOT_FOUND', 'Final Quality inspection not found', { inspectionCode });
       return immutableCopy(value);
+    },
+    async samplingPlanSetsForActor(actorId) {
+      validateActor(actorId);
+      const sets = await reader.samplingPlanSetsForActor(actorId);
+      invariant(Array.isArray(sets), 'QUALITY_SAMPLING_PLAN_SETS_INVALID', 'Sampling plan set listing is invalid');
+      return Object.freeze(sets.map((set) => immutableCopy({
+        standardCode: set.standardCode,
+        inspectionLevel: set.inspectionLevel,
+        aqls: set.aqls,
+        lotFrom: set.lotFrom,
+        lotTo: set.lotTo,
+        rows: set.rows,
+        sourceNote: set.sourceNote ?? null,
+      })));
     },
     async getShipmentReleaseForActor(actorId, releaseCode) {
       validateActor(actorId);

@@ -65,6 +65,8 @@ const DEMO_DEFECT_TYPES = [
   { code: 'BUTTON-LOOSE', severity: 'minor', originStage: 'finishing-complete', nameRu: 'Слабо пришита пуговица', nameEn: 'Loose button' },
 ];
 
+const DEMO_LOT_RFQ = 'RFQ-SYN_JKT_R3_MID_M';
+const DEMO_LOT_PO = 'PO-SYN_JKT_R3_MID_M';
 const DEMO_SAMPLING_STANDARD = 'DEMO-AQL-2026';
 const DEMO_SAMPLING_ROWS = [
   // lotFrom, lotTo, sampleSize, acceptAt at AQL 2.5, acceptAt at AQL 4.0
@@ -156,6 +158,7 @@ try {
   // to type the sample size and the two limits by hand, which is the thing the AQL work replaced.
   await ensureSamplingPlans(pool, brandId, accounts.owner);
   await ensureDefectCatalogue(runtime, pool, brandId, accounts.owner);
+  await ensureLotInProduction(runtime, pool, brandId, accounts.owner);
 
   // Inspections sat at review-pending because the only account in the brand was the one that ran
   // them, and a run's inspector may not sign off its own disposition. That rule is a feature, and a
@@ -505,6 +508,160 @@ async function ensureDefectCatalogue(runtime, pool, brandId, actorId) {
     }
   }
   note('defect catalogue', added > 0 ? `${added} типов дефектов зарегистрировано` : `${known.size} типов уже в каталоге`);
+}
+
+// Партия в середине производства.
+//
+// Every lot in the demonstration had been walked to the end, which meant the middle of production —
+// the part the platform actually spends months in — was never on screen, and inline quality control
+// had nothing to attach to. This takes one awarded RFQ the whole way: allocation, order,
+// confirmation, execution, and then stops it in the middle, on purpose.
+//
+// It runs through the same services a person uses, not through INSERTs. A seed that writes rows
+// directly demonstrates the database; a seed that calls the services demonstrates the product, and
+// it also fails loudly when a rule it forgot about says no.
+//
+// Where it stops is the point. The lot sits at assembly with a check whose defects nobody has
+// decided about, so the stage is visibly held shut by the rule rather than by a missing button, and
+// the disposition controls have something real to act on.
+
+// Техпак, подтверждённый фабрикой.
+//
+// Issue needs an approved pre-production sample from that same supplier, and allocation needs the
+// factory to have acknowledged the issued pack. Both are gates worth having: they are what stops a
+// lot going into production against a document nobody on the other side has seen.
+async function ensureAcknowledgedTechPack(runtime, pool, sku, supplierCode, actorId) {
+  const row = await pool.query('SELECT payload FROM tech_packs WHERE sku = $1 ORDER BY version DESC LIMIT 1', [sku]);
+  if (!row.rowCount) { note('tech pack', `${sku}: техпака нет`); return; }
+  let techPack = row.rows[0].payload;
+  // Техпак нельзя выпустить на неопубликованной таблице мер: фабрика получила бы документ, который
+  // ещё правят. Публикуем её тем же сервисом, а не переписываем статус.
+  const chart = (await pool.query('SELECT payload FROM measurement_charts WHERE sku = $1', [sku])).rows[0]?.payload;
+  if (chart && chart.status === 'draft') {
+    await runtime.measurements.publishMeasurementChart(command('chart-publish'), actorId, sku, { expectedVersion: chart.version });
+    note('tech pack', `таблица мер ${sku} опубликована`);
+  }
+  if (techPack.status === 'draft') {
+    techPack = await runtime.techPacks.issueTechPack(command('tp-issue'), actorId, techPack.techPackCode, { expectedVersion: techPack.version });
+    note('tech pack', `${techPack.techPackCode} выпущен фабрике ${supplierCode}`);
+  }
+  if (techPack.status === 'issued') {
+    techPack = await runtime.techPacks.acknowledgeTechPack(command('tp-ack'), actorId, techPack.techPackCode, {
+      expectedVersion: techPack.version,
+      supplierCode,
+      acknowledgementReference: `ACK-${techPack.techPackCode}`,
+      acknowledgedBy: 'Mei Lin',
+      notes: 'Фабрика подтвердила комплект документации.',
+    });
+    note('tech pack', `${techPack.techPackCode} подтверждён фабрикой`);
+  }
+}
+
+async function ensureLotInProduction(runtime, pool, brandId, actorId) {
+  const rfqRow = await pool.query('SELECT payload FROM sourcing_rfqs WHERE rfq_code = $1 AND brand_id = $2', [DEMO_LOT_RFQ, brandId]);
+  if (!rfqRow.rowCount) { note('lot in production', `${DEMO_LOT_RFQ} not in this database`); return; }
+  let rfq = rfqRow.rows[0].payload;
+
+  // Техпак должен быть выпущен и подтверждён фабрикой — без этого размещать в производство нечего.
+  // Правило поймало сид на первом же прогоне, и это ровно то, ради чего сид ходит через сервисы.
+  if (rfq.status === 'awarded') {
+    await ensureAcknowledgedTechPack(runtime, pool, rfq.sku, rfq.selectedSupplierCode, actorId);
+    const startAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    rfq = await runtime.sourcing.allocateRfq(command('rfq-allocate'), actorId, DEMO_LOT_RFQ, {
+      expectedVersion: rfq.version,
+      purchaseOrderNumber: DEMO_LOT_PO,
+      quantity: rfq.targetQuantity,
+      productionStartAt: startAt,
+      deliveryDueAt: rfq.deliveryDueAt,
+      notes: 'Размещение в производство по итогам конкурса.',
+    });
+    note('lot in production', `${DEMO_LOT_RFQ} размещён на ${rfq.allocation.supplierCode}`);
+  }
+  if (rfq.status !== 'allocated') { note('lot in production', `${DEMO_LOT_RFQ} is ${rfq.status}`); return; }
+
+  let order = (await pool.query('SELECT payload FROM production_orders WHERE production_order_number = $1', [DEMO_LOT_PO])).rows[0]?.payload;
+  if (!order) {
+    order = await runtime.productionOrders.createFromAllocation(command('po-create'), actorId, DEMO_LOT_RFQ);
+    note('lot in production', `заказ ${order.productionOrderNumber} создан`);
+  }
+  if (order.status === 'draft') {
+    order = await runtime.productionOrders.issue(command('po-issue'), actorId, DEMO_LOT_PO, { expectedVersion: order.version });
+  }
+  if (order.status === 'issued') {
+    order = await runtime.productionOrders.confirm(command('po-confirm'), actorId, DEMO_LOT_PO, {
+      expectedVersion: order.version,
+      supplierCode: order.supplierCode,
+      confirmationReference: `CONF-${DEMO_LOT_PO}`,
+      confirmedBy: 'Mei Lin',
+      notes: 'Фабрика подтвердила объём и сроки.',
+    });
+    note('lot in production', `заказ подтверждён фабрикой ${order.supplierCode}`);
+  }
+  if (order.status !== 'confirmed') { note('lot in production', `order is ${order.status}`); return; }
+
+  let execution = (await pool.query('SELECT payload FROM production_executions WHERE production_order_number = $1', [DEMO_LOT_PO])).rows[0]?.payload;
+  if (!execution) {
+    execution = await runtime.productionExecutions.createFromProductionOrder(command('exec-create'), actorId, DEMO_LOT_PO);
+    note('lot in production', `исполнение ${execution.executionCode} создано`);
+  }
+  if (execution.status === 'planned') {
+    execution = await runtime.productionExecutions.start(command('exec-start'), actorId, execution.executionCode, { expectedVersion: execution.version });
+  }
+  if (execution.status !== 'active') { note('lot in production', `execution is ${execution.status}`); return; }
+
+  const done = (code) => execution.milestones.find((milestone) => milestone.code === code)?.status === 'completed';
+  const checked = async (milestoneCode) => (await pool.query(
+    'SELECT count(*)::integer AS count FROM inline_quality_checks WHERE execution_id = $1 AND milestone_code = $2',
+    [execution.id, milestoneCode],
+  )).rows[0].count > 0;
+
+  // Материалы: посмотрели и ничего не нашли. Чистая проверка тоже запись — она говорит, что
+  // смотрели, а это не то же самое, что «дефектов нет».
+  if (!done('materials-ready') && !(await checked('materials-ready'))) {
+    await runtime.inlineQuality.recordCheck(command('iqc-materials'), actorId, execution.executionCode, {
+      milestoneCode: 'materials-ready', checkedQuantity: 40, inspectorName: 'Павел Дорохов',
+      defects: [], notes: 'Входной контроль полотна: отклонений не найдено.',
+    });
+    note('lot in production', 'входной контроль — без замечаний');
+  }
+  if (!done('materials-ready')) {
+    execution = await runtime.productionExecutions.completeMilestone(command('exec-materials'), actorId, execution.executionCode, {
+      expectedVersion: execution.version, milestoneCode: 'materials-ready', notes: 'Полотно принято и передано в раскрой.',
+    });
+  }
+
+  // Раскрой: нашли, разобрали, закрыли. Так этап и закрывается — не потому что о находке забыли.
+  if (!done('cutting-complete') && !(await checked('cutting-complete'))) {
+    const cutting = await runtime.inlineQuality.recordCheck(command('iqc-cutting'), actorId, execution.executionCode, {
+      milestoneCode: 'cutting-complete', checkedQuantity: 60, inspectorName: 'Павел Дорохов',
+      defects: [{ defectCode: 'CUT-OFF-GRAIN', quantity: 2, notes: 'Две детали из одной настилки' }],
+      notes: 'Контроль после раскроя.',
+    });
+    await runtime.inlineQuality.disposition(command('iqc-cutting-decide'), actorId, cutting.id, {
+      expectedVersion: cutting.version, disposition: 'rework', notes: 'Детали перекроены из того же рулона.',
+    });
+    note('lot in production', 'раскрой: 2 детали не по долевой — перекроены');
+  }
+  if (!done('cutting-complete')) {
+    execution = await runtime.productionExecutions.completeMilestone(command('exec-cutting'), actorId, execution.executionCode, {
+      expectedVersion: execution.version, milestoneCode: 'cutting-complete', notes: 'Раскрой завершён, детали переданы на пошив.',
+    });
+  }
+
+  // Пошив: нашли и ещё не решили. Здесь партия и остаётся — этап держится правилом, а не тем, что
+  // до него не дошли руки.
+  if (!(await checked('assembly-complete'))) {
+    await runtime.inlineQuality.recordCheck(command('iqc-assembly'), actorId, execution.executionCode, {
+      milestoneCode: 'assembly-complete', checkedQuantity: 80, inspectorName: 'Ирина Соколова',
+      defects: [
+        { defectCode: 'SEAM-OPEN', quantity: 3, notes: 'Боковой шов, одна бригада' },
+        { defectCode: 'STITCH-LOOSE', quantity: 5 },
+      ],
+      notes: 'Контроль на пошиве: требуется решение по найденному.',
+    });
+    note('lot in production', 'пошив: 8 изделий с замечаниями — решение не принято, этап закрыт не будет');
+  }
+  note('lot in production', `${execution.executionCode} остаётся в производстве на этапе пошива`);
 }
 
 async function releaseQuality(runtime, pool, brandId, approvers) {

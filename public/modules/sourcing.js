@@ -269,7 +269,9 @@
   // смотрели и не нашли, а мы не смотрели.
   function share(percentValue, detailText) {
     if (percentValue === null || percentValue === undefined) return text(`— (${detailText})`, `— (${detailText})`);
-    return `${String(percentValue).replace('.', ',')} % (${detailText})`;
+    // Доля показывается с одним знаком: контракт отдаёт четыре, потому что там это точность
+    // вычисления, а на экране это шум — «5,5556 %» не значит ничего сверх «5,6 %».
+    return `${percentValue.toFixed(1).replace('.', ',')} % (${detailText})`;
   }
   async function loadPerformance(supplierCode) {
     if (ui.performanceLoading) return;

@@ -158,6 +158,23 @@
   function dispositionLabel(disposition) {
     return { rework: t('на доработку', 'rework'), scrap: t('в брак', 'scrap'), accepted: t('принято с отклонением', 'accepted') }[disposition] || '—';
   }
+  // Веха и этап — не одно и то же слово.
+  //
+  // A milestone is named after the event that ends it — «Раскрой завершён» — which is right in the
+  // timeline, where the reader is looking at what has been signed off. An inline check happens
+  // DURING that work, so the same label there reads as «проверка на этапе „Раскрой завершён“», which
+  // says the check came after the stage it belongs to. The stage keeps a name of its own.
+  function stageLabel(code) {
+    const labels = {
+      'materials-ready': ['Материалы', 'Materials'],
+      'cutting-complete': ['Раскрой', 'Cutting'],
+      'assembly-complete': ['Пошив', 'Assembly'],
+      'finishing-complete': ['Отделка', 'Finishing'],
+      'packing-complete': ['Упаковка', 'Packing'],
+      'ready-for-qc': ['Передача на контроль', 'Handover to QC'],
+    };
+    return t(...(labels[code] || [code, code]));
+  }
   function percent(rate) { return `${(Number(rate || 0) * 100).toFixed(1).replace('.', ',')} %`; }
 
   function ensureLoaded() { if (!ui.loaded && !ui.loading && !ui.error) queueMicrotask(() => { void load({ reset: true }); }); }
@@ -339,7 +356,7 @@
 
     for (const check of page.items) {
       const lines = [
-        h('strong', { text: `${milestoneLabel(check.milestoneCode)} · ${t('проверка', 'check')} ${check.checkNumber}` }),
+        h('strong', { text: `${stageLabel(check.milestoneCode)} · ${t('проверка', 'check')} ${check.checkNumber}` }),
         h('p', { className: 'muted', text: `${check.inspectorName} · ${date(check.recordedAt)}` }),
         h('p', { className: 'muted', text: t(
           `Проверено ${check.checkedQuantity}, дефектных ${check.defectiveQuantity} (${percent(check.defectRate)})`,
@@ -359,7 +376,7 @@
     if (page.pareto && page.pareto.length > 1) {
       children.push(h('h4', { text: t('Чаще всего', 'Most frequent') }));
       for (const row of page.pareto.slice(0, 5)) {
-        children.push(h('p', { className: 'muted', text: `${defectTypeLabel(row.defectCode)} — ${row.quantity} ${t('шт.', 'pcs')}${row.originStage ? ` · ${t('возникает на этапе', 'originates at')} ${milestoneLabel(row.originStage)}` : ''}` }));
+        children.push(h('p', { className: 'muted', text: `${defectTypeLabel(row.defectCode)} — ${row.quantity} ${t('шт.', 'pcs')}${row.originStage ? ` · ${t('возникает на этапе', 'originates at')} ${stageLabel(row.originStage)}` : ''}` }));
       }
     }
 
@@ -392,7 +409,7 @@
     const staged = ui.qcDefects.map((defect, index) => h('p', { className: 'muted', text: `${defectTypeLabel(defect.defectCode)} — ${defect.quantity} ${t('шт.', 'pcs')}`, onclick: () => { ui.qcDefects.splice(index, 1); renderApp(); } }));
 
     return h('div', {}, [
-      h('h4', { text: t(`Записать проверку на этапе «${milestoneLabel(current.code)}»`, `Record a check at «${milestoneLabel(current.code)}»`) }),
+      h('h4', { text: t(`Записать проверку на этапе «${stageLabel(current.code)}»`, `Record a check at «${stageLabel(current.code)}»`) }),
       h('input', { value: ui.qcInspectorName, placeholder: t('Имя инспектора', 'Inspector name'), oninput: (event) => { ui.qcInspectorName = event.target.value; } }),
       h('input', { type: 'number', min: 1, value: ui.qcCheckedQuantity, placeholder: t(`Сколько изделий проверено (в партии ${value.quantity})`, `Pieces checked (lot of ${value.quantity})`), oninput: (event) => { ui.qcCheckedQuantity = event.target.value; } }),
       h('div', { className: 'production-execution-actions' }, [

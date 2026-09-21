@@ -10,6 +10,9 @@
     suppliers: [], rfqs: [], boms: [], loaded: false, loading: false, error: '', selectedSupplierCode: null,
     selectedRfqCode: null, busyKey: null, generation: 0, referenceTime: null, supplierStatus: 'all', rfqStatus: 'all',
     portalAccess: [], portalAccessFor: null, portalAccessLoading: false,
+    // Карточка поставщика считалась целиком и не была видна нигде. Она живёт рядом с поставщиком по
+    // той же причине, что и доступ к порталу: это факт об этом контрагенте.
+    performance: null, performanceFor: null, performanceLoading: false,
   });
   const SUPPLIER_STATUSES = ['draft', 'qualified', 'suspended', 'archived'];
   const RFQ_STATUSES = ['draft', 'issued', 'quoted', 'awarded', 'allocated', 'cancelled'];
@@ -203,8 +206,83 @@
       h('dl', { className: 'sourcing-details' }, [detail(text('Бренд', 'Brand'), brandName(supplier.brandId)), detail('Email', supplier.email), detail(text('Валюта', 'Currency'), supplier.currency), detail('Incoterms', supplier.incoterms.join(', ')), detail(text('Условия оплаты', 'Payment terms'), `${supplier.paymentTermsDays} ${text('дн.', 'days')}`), detail(text('Аудит до', 'Audit valid until'), formatDate(supplier.auditExpiresAt))]),
       supplier.suspensionReason ? h('div', { className: 'sourcing-warning', text: supplier.suspensionReason }) : null,
       h('div', { className: 'sourcing-actions' }, actions.map((action) => supplierActionButton(action, supplier))),
+      performancePanel(supplier),
       portalAccessPanel(supplier),
     ]);
+  }
+
+  // Как эта фабрика работает — по нашим собственным данным, а не по нашему впечатлению.
+  //
+  // Every figure here is measured from what the platform already recorded: orders, delivery dates,
+  // final inspections and, since inline control exists, what was found during production. Each share
+  // states its own denominator and there is no overall score, because a single number over
+  // measurements this different would hide the thing worth looking at.
+  function performancePanel(supplier) {
+    if (!can(supplier.brandId, caps.CAPABILITIES.MARGIN_READ)) return null;
+    if (ui.performanceFor !== supplier.supplierCode && !ui.performanceLoading) {
+      queueMicrotask(() => { void loadPerformance(supplier.supplierCode); });
+    }
+    const body = [];
+    const value = ui.performanceFor === supplier.supplierCode ? ui.performance : null;
+    if (!value) {
+      body.push(h('p', { className: 'muted', text: ui.performanceLoading ? text('Загрузка…', 'Loading…') : text('Показатели пока недоступны.', 'Performance figures are not available yet.') }));
+    } else {
+      const operations = value.operations;
+      const quality = value.quality;
+      const inline = quality.inline;
+      body.push(h('dl', { className: 'sourcing-details' }, [
+        detail(text('Заказов размещено', 'Orders placed'), `${operations.productionOrderCount} · ${operations.orderedUnits} ${text('ед.', 'units')}`),
+        detail(text('В срок к контролю', 'On time to QC'), share(operations.onTimeQcPercent, `${operations.onTimeReadyForQcCount}/${operations.readyForQcCount}`)),
+        detail(text('Принято с первого раза', 'First-pass yield'), share(quality.firstPassYieldPercent, `${quality.firstPassReleaseCount}/${quality.reviewedFirstRunCount}`)),
+        detail(text('Ушло на доработку', 'Rework incidence'), share(quality.reworkIncidencePercent, `${quality.reworkInspectionCount}/${quality.inspectionCount}`)),
+        detail(text('Отклонено', 'Rejected'), share(quality.rejectionRatePercent, `${quality.rejectedInspectionCount}/${quality.inspectionCount}`)),
+        detail(text('Дефекты на приёмке', 'Defects at the gate'), `${quality.defectCounts.critical} / ${quality.defectCounts.major} / ${quality.defectCounts.minor}`),
+      ]));
+      body.push(h('h4', { text: text('Пооперационный контроль', 'Inline quality control') }));
+      body.push(h('dl', { className: 'sourcing-details' }, [
+        // Охват — это про то, смотрели ли в партию вообще: фабрика без проверок не фабрика без
+        // дефектов, а фабрика, в которую не смотрели.
+        detail(text('Партий под контролем', 'Lots under inline control'), share(inline.coveragePercent, `${inline.executionsWithChecks}/${operations.executionCount}`)),
+        detail(text('Доля дефектных в производстве', 'Defect rate in production'), share(inline.defectRatePercent, `${inline.defectiveUnits}/${inline.checkedUnits}`)),
+        detail(text('Дефекты в производстве', 'Defects in production'), `${inline.defectCounts.critical} / ${inline.defectCounts.major} / ${inline.defectCounts.minor}`),
+        detail(text('Доработка / брак / принято', 'Rework / scrap / accepted'), `${inline.dispositions.rework} / ${inline.dispositions.scrap} / ${inline.dispositions.accepted}`),
+        // Если мы соглашаемся с тем, что находим, находки ничего не меняют.
+        detail(text('Принято с известным браком', 'Accepted with known defects'), share(inline.dispositions.acceptedSharePercent, String(inline.dispositions.accepted))),
+      ]));
+      if (inline.openCheckCount > 0) {
+        body.push(h('div', { className: 'sourcing-warning', text: text(
+          `Не разобрано проверок: ${inline.openCheckCount}. Пока по ним нет решения, соответствующие этапы не закроются.`,
+          `${inline.openCheckCount} inline check(s) undecided. The matching stages cannot close until they are.`) }));
+      }
+      for (const row of value.economicsByCurrency || []) {
+        body.push(h('p', { className: 'muted', text: text(
+          `Подтверждённые потери ${row.confirmedFailureCost} ${row.currency}, возмещено ${row.recoveryCreditAmount} ${row.currency}, итого ${row.netConfirmedFailureCost} ${row.currency}.`,
+          `Confirmed failure cost ${row.confirmedFailureCost} ${row.currency}, recovered ${row.recoveryCreditAmount} ${row.currency}, net ${row.netConfirmedFailureCost} ${row.currency}.`) }));
+      }
+    }
+    return h('section', { className: 'sourcing-subpanel' }, [
+      h('div', { className: 'sourcing-toolbar' }, [h('h3', { text: text('Как работает эта фабрика', 'How this factory performs') })]),
+      ...body,
+    ]);
+  }
+  // Доля, которую не на чем считать, — это «—», а не ноль: нулевой процент утверждает, что мы
+  // смотрели и не нашли, а мы не смотрели.
+  function share(percentValue, detailText) {
+    if (percentValue === null || percentValue === undefined) return text(`— (${detailText})`, `— (${detailText})`);
+    return `${String(percentValue).replace('.', ',')} % (${detailText})`;
+  }
+  async function loadPerformance(supplierCode) {
+    if (ui.performanceLoading) return;
+    ui.performanceLoading = true;
+    try {
+      ui.performance = await api(`/v2/suppliers/${encodeURIComponent(supplierCode)}/economic-performance`);
+    } catch (error) {
+      ui.performance = null;
+    } finally {
+      ui.performanceFor = supplierCode;
+      ui.performanceLoading = false;
+      renderApp();
+    }
   }
 
   // Who at this supplier can sign in. Access is listed beside the supplier rather than in a settings

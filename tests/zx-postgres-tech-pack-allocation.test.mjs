@@ -21,6 +21,9 @@ import { createPostgresInlineQualityStore } from '../src/infrastructure/postgres
 import { createSupplierPaymentService, createSupplierPaymentQueryService } from '../src/application/supplier-payment-service.mjs';
 import { createPostgresSupplierPaymentStore } from '../src/infrastructure/postgres-supplier-payment-store.mjs';
 import { createPostgresSupplierPaymentReader } from '../src/infrastructure/postgres-supplier-payment-reader.mjs';
+import { createTargetPricingService, createTargetPricingQueryService } from '../src/application/target-pricing-service.mjs';
+import { createPostgresTargetPricingStore } from '../src/infrastructure/postgres-target-pricing-store.mjs';
+import { createPostgresTargetPricingReader } from '../src/infrastructure/postgres-target-pricing-reader.mjs';
 import { createMaterialLotService, createMaterialLotQueryService } from '../src/application/material-lot-service.mjs';
 import { createPostgresMaterialLotStore } from '../src/infrastructure/postgres-material-lot-store.mjs';
 import { createPostgresMaterialLotReader } from '../src/infrastructure/postgres-material-lot-reader.mjs';
@@ -70,6 +73,7 @@ test('PostgreSQL closes approved PPS through production, rework, reinspection an
     const productionExecutionStore = createPostgresProductionExecutionStore({ pool });
     const inlineQualityStore = createPostgresInlineQualityStore({ pool });
     const supplierPaymentStore = createPostgresSupplierPaymentStore({ pool });
+    const targetPricingStore = createPostgresTargetPricingStore({ pool });
     const materialLotStore = createPostgresMaterialLotStore({ pool });
     const cuttingStore = createPostgresCuttingStore({ pool });
     const operationSequenceStore = createPostgresOperationSequenceStore({ pool });
@@ -94,6 +98,8 @@ test('PostgreSQL closes approved PPS through production, rework, reinspection an
     const operationSequences = createOperationSequenceService({ store: operationSequenceStore, clock, nextId });
     const operationSequenceQueries = createOperationSequenceQueryService({ reader: createPostgresOperationSequenceReader({ pool }) });
     const supplierPaymentQueries = createSupplierPaymentQueryService({ reader: createPostgresSupplierPaymentReader({ pool }), clock });
+    const targetPricing = createTargetPricingService({ store: targetPricingStore, clock, nextId });
+    const targetPricingQueries = createTargetPricingQueryService({ reader: createPostgresTargetPricingReader({ pool }) });
     const finalQuality = createFinalQualityService({ store: finalQualityStore, clock, nextId });
 
     await platform.registerOrganisation('org-create', 'system', createOrganisation({ id: 'brand-tech-gate', type: 'brand', name: 'Tech Gate Brand' }));
@@ -620,6 +626,61 @@ test('PostgreSQL closes approved PPS through production, rework, reinspection an
       () => pool.query("UPDATE payment_milestones SET paid_at = '2020-01-01T00:00:00Z', paid_by = 'x', payment_reference = 'BACKDATED' WHERE schedule_id = $1 AND sequence = 2", [schedule.id]),
       /PAYMENT_BEFORE_ITS_TRIGGER/,
     );
+
+    // --- Целевая цена ------------------------------------------------------------------------------
+    //
+    // Обратный вопрос к себестоимости: сколько можно платить фабрике, чтобы розница сошлась с
+    // наценкой. Цель считается от розницы вниз и сравнивается с тем, что фабрика уже запросила.
+    await targetPricing.recordSeasonRate('season-rate-1', 'product-owner', {
+      brandId: 'brand-tech-gate', campaignId: campaign.id,
+      fromCurrency: 'EUR', toCurrency: 'RUB', rate: 92.1, effectiveOn: '2028-01-05',
+      sourceNote: 'Курс на начало сезона',
+    });
+    // Один курс одной пары на одну дату.
+    await assert.rejects(() => targetPricing.recordSeasonRate('season-rate-again', 'product-owner', {
+      brandId: 'brand-tech-gate', campaignId: campaign.id,
+      fromCurrency: 'EUR', toCurrency: 'RUB', rate: 95, effectiveOn: '2028-01-05',
+    }), { code: 'SEASON_RATE_EXISTS' });
+
+    // Курса на более раннюю дату нет — «примерно такого» курса не бывает.
+    await assert.rejects(() => targetPricing.createPlan('target-too-early', 'product-owner', {
+      brandId: 'brand-tech-gate', sku: 'TECH-GATE-1', targetRrpMinor: 3_000_000, rrpCurrency: 'RUB',
+      retailMarkup: 2.6, countryCoefficient: 1.18, categoryCoefficient: 1.04, fobCurrency: 'EUR', asOf: '2027-12-01',
+    }), { code: 'TARGET_PRICE_RATE_NOT_IN_SEASON' });
+
+    // Перевозка и растаможка только добавляют: коэффициент меньше единицы не берём. Ровно этот
+    // случай даёт исходная система, где FOB выходит выше себестоимости на складе.
+    await assert.rejects(() => targetPricing.createPlan('target-bad-coefficient', 'product-owner', {
+      brandId: 'brand-tech-gate', sku: 'TECH-GATE-1', targetRrpMinor: 3_000_000, rrpCurrency: 'RUB',
+      retailMarkup: 2.6, countryCoefficient: 1.3, categoryCoefficient: 0.3, fobCurrency: 'EUR', asOf: '2028-02-01',
+    }), { code: 'TARGET_PRICE_CATEGORY_COEFFICIENT_INVALID' });
+
+    const targetPlan = await targetPricing.createPlan('target-plan', 'product-owner', {
+      brandId: 'brand-tech-gate', sku: 'TECH-GATE-1', targetRrpMinor: 3_000_000, rrpCurrency: 'RUB',
+      retailMarkup: 2.6, sourcingCountryCode: 'TR', countryCoefficient: 1.18, categoryCoefficient: 1.04,
+      fobCurrency: 'EUR', asOf: '2028-02-01', notes: 'Цель на сезон',
+    });
+    assert.equal(targetPlan.fxRate, 92.1);
+    assert.equal(targetPlan.fxEffectiveOn, '2028-01-05', 'курс заморожен вместе с датой');
+    await targetPricing.publish('target-publish', 'product-owner', targetPlan.id, { expectedVersion: targetPlan.version });
+
+    // План обязан ссылаться на курс, который действительно был: иначе «курс 92,1» — число, которое
+    // никто не может проверить.
+    await assert.rejects(
+      () => pool.query('UPDATE target_price_plans SET fx_rate = 60 WHERE id = $1', [targetPlan.id]),
+      /TARGET_PRICE_RATE_DISAGREES/,
+    );
+    await assert.rejects(
+      () => pool.query("UPDATE target_price_plans SET fx_effective_on = '2028-03-03' WHERE id = $1", [targetPlan.id]),
+      /TARGET_PRICE_RATE_NOT_IN_SEASON/,
+    );
+
+    const targetView = await targetPricingQueries.targetPricePlanForSku('product-owner', 'TECH-GATE-1');
+    assert.equal(targetView.targetLandedMinor, Math.round(3_000_000 / 2.6));
+    assert.ok(targetView.targetFobInRrpMinor < targetView.targetLandedMinor, 'цена у фабрики ниже себестоимости на складе');
+    assert.equal(targetView.quotedCurrency, productionOrder.commercialSnapshot.currency);
+    assert.equal(targetView.quotedFobMinor, productionOrder.commercialSnapshot.unitPriceMinor, 'сравниваем с тем, о чём договорились в заказе');
+    assert.equal(typeof targetView.withinTarget, 'boolean');
 
     assert.equal(pps.status, 'approved');
     assert.equal(chart.status, 'published');

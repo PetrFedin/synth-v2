@@ -197,6 +197,7 @@ try {
   await ensureMaterialLots(runtime, pool, brandId, accounts.owner, accounts.quality);
   await ensureOperationSequence(runtime, pool, brandId, accounts.owner);
   await ensureCuttingSpread(runtime, pool, brandId, accounts.owner);
+  await ensureTargetPricing(runtime, pool, brandId, accounts.owner);
   await ensurePaymentSchedules(runtime, pool, brandId, accounts.owner);
 
   // Inspections sat at review-pending because the only account in the brand was the one that ran
@@ -852,6 +853,62 @@ async function ensureCuttingSpread(runtime, pool, brandId, actorId) {
     note('cutting', `${spread.spreadReference}: ${spread.clothLaid} м в ${plies} слоёв — ${plies} изделий, расход ${spread.consumptionPerGarment} м/изд.`);
   } catch (error) {
     note('cutting', `настил не записан (${error.code ?? error.message})`);
+  }
+}
+
+// Курсы сезона и целевая цена.
+//
+// Вопрос «во что обошлось» проект умел задавать всегда. Этот — обратный: какая цена у фабрики ещё
+// сходится с розничной ценой и плановой наценкой. Цель считается от розницы вниз, а сравнивается с
+// тем, что фабрика уже запросила в подтверждённом заказе, — то есть с фактом, а не с ожиданием.
+async function ensureTargetPricing(runtime, pool, brandId, actorId) {
+  const row = (await pool.query(
+    `SELECT catalog_sku.sku, collection.campaign_id AS campaign
+       FROM production_orders AS production_order
+       JOIN catalog_skus AS catalog_sku ON catalog_sku.sku = production_order.sku
+       JOIN collections AS collection ON collection.id = catalog_sku.collection_id
+      WHERE production_order.production_order_number = $1`,
+    [DEMO_LOT_PO],
+  )).rows[0];
+  if (!row) { note('target price', 'нет заказа, от которого считать'); return; }
+
+  const rates = [
+    { fromCurrency: 'EUR', toCurrency: 'RUB', rate: 88.4, effectiveOn: '2026-01-15', sourceNote: 'Курс на начало сезона' },
+    { fromCurrency: 'EUR', toCurrency: 'RUB', rate: 92.1, effectiveOn: '2026-08-01', sourceNote: 'Курс на размещение производства' },
+  ];
+  for (const rate of rates) {
+    const exists = await pool.query(
+      'SELECT 1 FROM season_fx_rates WHERE brand_id = $1 AND campaign_id = $2 AND from_currency = $3 AND to_currency = $4 AND effective_on = $5::date',
+      [brandId, row.campaign, rate.fromCurrency, rate.toCurrency, rate.effectiveOn],
+    );
+    if (exists.rowCount) continue;
+    try {
+      await runtime.targetPricing.recordSeasonRate(command('season-rate'), actorId, { brandId, campaignId: row.campaign, ...rate });
+    } catch (error) {
+      note('target price', `курс ${rate.effectiveOn} не записан (${error.code ?? error.message})`);
+    }
+  }
+
+  const planned = await pool.query("SELECT 1 FROM target_price_plans WHERE brand_id = $1 AND sku = $2 AND status <> 'superseded'", [brandId, row.sku]);
+  if (planned.rowCount) { note('target price', 'цель по цене уже составлена'); return; }
+  try {
+    let plan = await runtime.targetPricing.createPlan(command('target-price'), actorId, {
+      brandId, sku: row.sku,
+      // 24 900 ₽ в рознице при наценке 2,6 — обычная для этой категории экономика.
+      targetRrpMinor: 2_490_000, rrpCurrency: 'RUB', retailMarkup: 2.6,
+      sourcingCountryCode: 'TR',
+      // Фрахт и растаможка из Турции и обработка по категории: оба множителя больше единицы, потому
+      // что дорога только добавляет к цене у ворот фабрики.
+      countryCoefficient: 1.18, categoryCoefficient: 1.04,
+      fobCurrency: 'EUR', asOf: '2026-09-01',
+      notes: 'Цель на сезон: считаем от розницы вниз.',
+    });
+    plan = await runtime.targetPricing.publish(command('target-price-publish'), actorId, plan.id, { expectedVersion: plan.version });
+    const view = await runtime.targetPricing.targetPricePlanForSku(actorId, row.sku);
+    const money = (minor) => (minor / 100).toFixed(2);
+    note('target price', `${row.sku}: цель ${money(view.targetFobMinor)} ${view.fobCurrency} FOB, фабрика запросила ${view.quotedFobMinor === null ? '—' : money(view.quotedFobMinor)} ${view.quotedCurrency ?? ''} — ${view.withinTarget === null ? 'сравнить не с чем' : view.withinTarget ? 'укладываемся' : 'выходим за цель'}`);
+  } catch (error) {
+    note('target price', `цель не составлена (${error.code ?? error.message})`);
   }
 }
 

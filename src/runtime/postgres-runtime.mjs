@@ -26,6 +26,9 @@ import { createCuttingService, createCuttingQueryService } from '../application/
 import { createPostgresOperationSequenceStore } from '../infrastructure/postgres-operation-sequence-store.mjs';
 import { createPostgresOperationSequenceReader } from '../infrastructure/postgres-operation-sequence-reader.mjs';
 import { createOperationSequenceService, createOperationSequenceQueryService } from '../application/operation-sequence-service.mjs';
+import { createPostgresTargetPricingStore } from '../infrastructure/postgres-target-pricing-store.mjs';
+import { createPostgresTargetPricingReader } from '../infrastructure/postgres-target-pricing-reader.mjs';
+import { createTargetPricingService, createTargetPricingQueryService } from '../application/target-pricing-service.mjs';
 import { createPostgresFinalQualityStore } from '../infrastructure/postgres-final-quality-store.mjs';
 import { createPostgresOrderMarginBridgeReader } from '../infrastructure/postgres-order-margin-bridge-reader.mjs';
 import { createPostgresProductionExecutionReader } from '../infrastructure/postgres-production-execution-reader.mjs';
@@ -201,6 +204,18 @@ export function createPostgresWholesaleRuntime(options = {}) {
   const operationSequenceQueries = createOperationSequenceQueryService({ reader: operationSequenceReader });
   const operationSequences = Object.freeze({ ...operationSequenceQueries, ...operationSequenceCommands });
 
+  // Целевая цена стоит раньше закупки: она отвечает, сколько можно платить, и её сравнивают с тем,
+  // что фабрика запросила в подтверждённом заказе.
+  const targetPricingStore = createPostgresTargetPricingStore({ pool: options.pool });
+  const targetPricingReader = createPostgresTargetPricingReader({ pool: options.pool });
+  const targetPricingCommands = createTargetPricingService({
+    store: targetPricingStore,
+    ...(options.clock ? { clock: options.clock } : {}),
+    ...(options.nextId ? { nextId: options.nextId } : {}),
+  });
+  const targetPricingQueries = createTargetPricingQueryService({ reader: targetPricingReader });
+  const targetPricing = Object.freeze({ ...targetPricingQueries, ...targetPricingCommands });
+
   const transport = {
     authenticate: base.auth.authenticate,
     auth: base.auth,
@@ -239,6 +254,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
     materialLots,
     cutting,
     operationSequences,
+    targetPricing,
     collaboration: base.collaboration,
     orders: base.orders,
     notifications: base.notifications,
@@ -273,6 +289,9 @@ export function createPostgresWholesaleRuntime(options = {}) {
     productionExecutionStore,
     productionExecutionReader,
     productionExecutions,
+    targetPricingStore,
+    targetPricingReader,
+    targetPricing,
     operationSequenceStore,
     operationSequenceReader,
     operationSequences,

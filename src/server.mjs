@@ -117,6 +117,10 @@ let unregisterNotificationHealth;
 let unregisterOutboxHealth;
 let unregisterNotificationMetrics;
 let unregisterOutboxMetrics;
+// Последнее известное состояние очереди. Снимок, а не запрос на каждый `/ready`: проверка
+// готовности вызывается балансировщиком часто, и счёт по растущей таблице на каждый её запрос сам стал бы
+// нагрузкой. Возраст самого снимка тоже сообщается — устаревшие цифры должны быть видны как устаревшие.
+let outboxBacklog = null;
 try {
   const migrationsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'db', 'migrations');
   await waitForPostgres({ pool, attempts: settings.dbReadyAttempts, delayMs: settings.dbReadyDelayMs });
@@ -156,6 +160,28 @@ try {
     outboxRetentionMs: settings.outboxRetentionMs,
     operationalReadiness: () => healthRegistry.check(),
   });
+  // Один замер на старте и дальше по циклу обслуживания. Без него запуск с тысячей ждущих событий
+  // и запуск с пустой очередью выглядят в журнале одинаково.
+  const refreshOutboxBacklog = async () => {
+    try {
+      const backlog = await runtime.outboxPublicationStore.readBacklog();
+      outboxBacklog = Object.freeze({ ...backlog, observedAt: new Date().toISOString() });
+    } catch (error) {
+      console.warn('Outbox backlog could not be measured', error?.message || error);
+    }
+    return outboxBacklog;
+  };
+  await refreshOutboxBacklog();
+  if (outboxBacklog?.pending > 0) {
+    const waitedMs = outboxBacklog.oldestQueuedAt ? Date.now() - Date.parse(outboxBacklog.oldestQueuedAt) : 0;
+    const waitedDays = Math.floor(waitedMs / DAY_MS);
+    console.log(settings.outboxWebhookUrl
+      ? `Syntha V2 outbox: ${outboxBacklog.pending} event(s) pending, oldest queued ${waitedDays} day(s) ago`
+      : `Syntha V2 outbox: ${outboxBacklog.pending} event(s) pending and no subscriber is configured (SYNTHA_OUTBOX_WEBHOOK_URL is unset), oldest queued ${waitedDays} day(s) ago`);
+  } else if (!settings.outboxWebhookUrl) {
+    console.log('Syntha V2 outbox: no subscriber is configured (SYNTHA_OUTBOX_WEBHOOK_URL is unset); events accumulate as pending');
+  }
+
   const applicationHandler = createStandaloneHandler({ apiHandler: runtime.handler });
   const handler = createOperationalMetricsHandler({ next: applicationHandler, metrics: operationalMetrics });
   server = configureHttpServer(createServer(handler), settings);
@@ -179,6 +205,10 @@ try {
       if (maintenance.status === 'completed') {
         const deleted = Object.values(maintenance.counts).reduce((sum, value) => sum + Number(value || 0), 0);
         if (deleted > 0) console.log(`Syntha V2 maintenance removed ${deleted} expired record(s)`);
+        // Обслуживание удаляет только доставленные и похороненные события — ждущие оно не трогает,
+        // и правильно делает. Поэтому ровно здесь и надо пересматривать остаток: число, которое никто не
+        // уменьшает, единственное, что может расти без предела.
+        await refreshOutboxBacklog();
       }
 
       const retryableFailures = results.filter((result) => result.status === 'failed' && result.retryable);
@@ -196,6 +226,20 @@ try {
   });
   unregisterNotificationHealth = healthRegistry.register('notification-projection', notificationHealth);
   unregisterNotificationMetrics = operationalMetrics.registerWorker('notification-projection', notificationHealth);
+
+  if (!runtime.outboxPublication) {
+    // Отсутствие подписчика не делает узел неготовым: работа без внешнего потребителя событий —
+    // законная настройка, и платформа не вправе решать за эксплуатацию, нужен ли он. Но проверка
+    // готовности больше не молчит об этом: раньше `/ready` отвечал 200 и не упоминал очередь вовсе,
+    // потому что проверял живость **зарегистрированных** работников, а этот не регистрировался.
+    unregisterOutboxHealth = healthRegistry.register('outbox-publication', () => Object.freeze({
+      status: 'ready',
+      publisher: 'not-configured',
+      pending: outboxBacklog?.pending ?? null,
+      oldestQueuedAt: outboxBacklog?.oldestQueuedAt ?? null,
+      observedAt: outboxBacklog?.observedAt ?? null,
+    }));
+  }
 
   if (runtime.outboxPublication) {
     outboxWorker = createBackgroundWorker({

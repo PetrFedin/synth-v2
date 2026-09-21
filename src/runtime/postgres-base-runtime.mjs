@@ -161,8 +161,13 @@ export function createPostgresWholesaleRuntime({
     ...(notificationProjectionMaxAttempts !== undefined ? { maxProjectionAttempts: notificationProjectionMaxAttempts } : {}),
   });
   const notifications = withNotificationPageMetadata({ service: notificationCore, reader: notificationReader });
+  // Хранилище очереди создаётся всегда, а служба публикации — только когда есть кому публиковать.
+  // Раньше без адреса вебхука не создавалось ничего, и вместе со службой исчезала возможность
+  // **посмотреть на очередь**: тысяча событий копилась месяц, и спросить об этом было некого. Отсутствие
+  // подписчика — законная настройка; молчание о накопленном остатке — нет.
+  const outboxPublicationStore = createPostgresOutboxPublicationStore({ pool });
   const outboxPublication = outboxPublisher ? createOutboxPublisherService({
-    store: createPostgresOutboxPublicationStore({ pool }), publisher: outboxPublisher,
+    store: outboxPublicationStore, publisher: outboxPublisher,
     ...(clock ? { clock } : {}), ...(outboxPublicationWorkerId ? { workerId: outboxPublicationWorkerId } : {}),
     ...(outboxPublicationLeaseMs !== undefined ? { leaseMs: outboxPublicationLeaseMs } : {}),
     ...(outboxPublicationRetryDelayMs !== undefined ? { retryDelayMs: outboxPublicationRetryDelayMs } : {}),
@@ -184,7 +189,7 @@ export function createPostgresWholesaleRuntime({
   const handler = createWholesaleHttpHandler(transport);
   const fetchHandler = createWholesaleFetchHandler(transport);
   return Object.freeze({
-    auth, readiness, maintenance, outboxPublication, store, catalogStore, productIdentityStore, productIdentityReader, productReadinessStore, productReadinessSourceReader, commercialPublicationStore, orderEconomicsStore, materialStore, bomStore, measurementStore, sampleStore, sourcingStore, techPackStore,
+    auth, readiness, maintenance, outboxPublication, outboxPublicationStore, store, catalogStore, productIdentityStore, productIdentityReader, productReadinessStore, productReadinessSourceReader, commercialPublicationStore, orderEconomicsStore, materialStore, bomStore, measurementStore, sampleStore, sourcingStore, techPackStore,
     platform, catalog, productIdentity, productReadiness, commercialPublication, orderEconomics, materials, boms, measurements, samples, libraries, history, supplierPortal, categoryAttributes, organisationMembers, partners, retailDoors, sourcing, techPacks, collaboration, orders, notifications, workspace,
     handler, fetchHandler,
   });

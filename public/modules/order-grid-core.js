@@ -47,6 +47,14 @@
     if (entry.quantity < cell.minimumOrderQuantity) {
       return Object.freeze({ ...entry, level: 'error', code: 'MOQ_NOT_MET' });
     }
+    // Кратность упаковки. The one piece of §64.2 that could not be built before, because the frozen
+    // price line said how few may be ordered and nothing about the box the goods travel in. A
+    // quantity between two boxes is refused in the cell it was typed in, with the next whole box
+    // named, rather than at save time with arithmetic the reader has to do themselves.
+    const packSize = cell.packSize ?? null;
+    if (packSize !== null && packSize !== undefined && entry.quantity % packSize !== 0) {
+      return Object.freeze({ ...entry, level: 'error', code: 'PACK_MULTIPLE_NOT_MET' });
+    }
     if (cell.availableToSell !== null && cell.availableToSell !== undefined && entry.quantity > cell.availableToSell) {
       return Object.freeze({ ...entry, level: 'error', code: 'AVAILABILITY_EXCEEDED' });
     }
@@ -59,6 +67,9 @@
     if (!cell) return 'NO_SKU';
     if (cell.availableToSell === 0) return 'SOLD_OUT';
     if (cell.availableToSell !== null && cell.availableToSell !== undefined && cell.availableToSell < cell.minimumOrderQuantity) return 'BELOW_MOQ_STOCK';
+    // A pack that cannot fit under what is left is the same dead end as no stock at all: the
+    // smallest orderable quantity is one box, and one box does not fit.
+    if (cell.packSize && cell.availableToSell !== null && cell.availableToSell !== undefined && cell.availableToSell < cell.packSize) return 'BELOW_PACK_STOCK';
     return '';
   }
 
@@ -147,6 +158,7 @@
           code: verdict.code,
           minimumOrderQuantity: cell.minimumOrderQuantity,
           availableToSell: cell.availableToSell ?? null,
+          packSize: cell.packSize ?? null,
         }));
       });
     });

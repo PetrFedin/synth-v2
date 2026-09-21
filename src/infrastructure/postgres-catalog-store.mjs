@@ -38,11 +38,11 @@ function view(client) {
       try {
         await client.query(
           `INSERT INTO catalog_skus
-             (sku, collection_id, brand_id, status, currency, wholesale_price, minimum_order_quantity, available_quantity, reserved_quantity, version, payload)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb)`,
+             (sku, collection_id, brand_id, status, currency, wholesale_price, minimum_order_quantity, available_quantity, reserved_quantity, pack_size, version, payload)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb)`,
           [
             value.sku, value.collectionId, value.brandId, value.status, value.currency, value.wholesalePrice,
-            value.minimumOrderQuantity, value.availableQuantity, value.reservedQuantity, value.version, JSON.stringify(value),
+            value.minimumOrderQuantity, value.availableQuantity, value.reservedQuantity, value.packSize ?? null, value.version, JSON.stringify(value),
           ],
         );
       } catch (error) {
@@ -60,12 +60,13 @@ function view(client) {
                 minimum_order_quantity = $5,
                 available_quantity = $6,
                 reserved_quantity = $7,
-                version = $8,
-                payload = $9::jsonb
-          WHERE sku = $1 AND version = $10`,
+                pack_size = $8,
+                version = $9,
+                payload = $10::jsonb
+          WHERE sku = $1 AND version = $11`,
         [
           value.sku, value.status, value.currency, value.wholesalePrice, value.minimumOrderQuantity,
-          value.availableQuantity, value.reservedQuantity, value.version, JSON.stringify(value), expectedVersion,
+          value.availableQuantity, value.reservedQuantity, value.packSize ?? null, value.version, JSON.stringify(value), expectedVersion,
         ],
       );
       invariant(result.rowCount === 1, 'CATALOG_SKU_CONCURRENCY_CONFLICT', 'Catalog SKU concurrency conflict', { sku: value.sku, expectedVersion });

@@ -12,6 +12,7 @@ export function createCatalogSku({
   currency,
   minimumOrderQuantity,
   availableQuantity,
+  packSize,
   createdAt,
 }) {
   invariant(SKU_PATTERN.test(sku ?? ''), 'CATALOG_SKU_INVALID', 'SKU must contain 2-64 uppercase letters, numbers, dots, underscores or dashes');
@@ -27,6 +28,7 @@ export function createCatalogSku({
   invariant(currency === collection.currency, 'CATALOG_CURRENCY_MISMATCH', 'Catalog currency must match collection currency');
   const normalizedMoq = assertPostgresInteger(minimumOrderQuantity, { code: 'CATALOG_MOQ_INVALID', label: 'Minimum order quantity', min: 1 });
   const normalizedAvailable = assertPostgresInteger(availableQuantity, { code: 'CATALOG_AVAILABLE_QUANTITY_INVALID', label: 'Available quantity', min: 0 });
+  const normalizedPack = normalizePackSize(packSize, normalizedMoq);
   return freezeAvailability({
     id: sku,
     sku,
@@ -37,6 +39,7 @@ export function createCatalogSku({
     currency,
     minimumOrderQuantity: normalizedMoq,
     availableQuantity: normalizedAvailable,
+    packSize: normalizedPack,
     reservedQuantity: 0,
     status: 'draft',
     version: 1,
@@ -61,17 +64,22 @@ export function updateDraftCatalogSku(catalogSku, collection, input, updatedAt) 
   });
   const minimumOrderQuantity = assertPostgresInteger(input.minimumOrderQuantity, { code: 'CATALOG_MOQ_INVALID', label: 'Minimum order quantity', min: 1 });
   const availableQuantity = assertPostgresInteger(input.availableQuantity, { code: 'CATALOG_AVAILABLE_QUANTITY_INVALID', label: 'Available quantity', min: 0 });
+  // An edit that leaves the pack out keeps the one the SKU already has: a field a caller did not
+  // mention is not a field they asked to clear.
+  const packSize = normalizePackSize(input.packSize === undefined ? catalogSku.packSize : input.packSize, minimumOrderQuantity);
   const next = {
     ...catalogSku,
     name: input.name.trim(),
     wholesalePrice,
     minimumOrderQuantity,
     availableQuantity,
+    packSize,
   };
   if (next.name === catalogSku.name
     && next.wholesalePrice === catalogSku.wholesalePrice
     && next.minimumOrderQuantity === catalogSku.minimumOrderQuantity
-    && next.availableQuantity === catalogSku.availableQuantity) return catalogSku;
+    && next.availableQuantity === catalogSku.availableQuantity
+    && next.packSize === (catalogSku.packSize ?? null)) return catalogSku;
   return freezeAvailability({ ...next, version: catalogSku.version + 1, updatedAt });
 }
 
@@ -163,6 +171,22 @@ export function normalizeAvailability(catalogSku) {
     label: 'Wholesale price',
   });
   return freezeAvailability({ ...catalogSku, wholesalePrice, minimumOrderQuantity, availableQuantity, reservedQuantity });
+}
+
+// Кратность упаковки, and the one rule that keeps it from contradicting the minimum.
+//
+// A minimum of twelve with a pack of five is not two rules, it is a contradiction: the smallest
+// orderable quantity at or above twelve is fifteen, so the stated minimum is a number nobody can
+// order. The brand is told at the moment they set it, rather than the buyer being refused later by
+// arithmetic nobody explained. The database holds the same rule; it is here so the refusal has a
+// sentence attached to it.
+function normalizePackSize(value, minimumOrderQuantity) {
+  if (value === undefined || value === null || value === '') return null;
+  const packSize = assertPostgresInteger(value, { code: 'CATALOG_PACK_SIZE_INVALID', label: 'Pack size', min: 1 });
+  invariant(minimumOrderQuantity % packSize === 0, 'CATALOG_PACK_SIZE_CONFLICTS_MOQ',
+    'Minimum order quantity must be a multiple of the pack size, or no quantity can satisfy both',
+    { packSize, minimumOrderQuantity });
+  return packSize;
 }
 
 function freezeAvailability(value) {

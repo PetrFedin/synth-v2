@@ -181,6 +181,7 @@ export function applyBuyerPrices(styles, lines) {
           buyerUnitPrice: price.unitPrice,
           buyerCurrency: price.currency,
           buyerMinimumOrderQuantity: price.minimumOrderQuantity,
+          buyerPackSize: price.packSize ?? null,
         };
       }),
     })),

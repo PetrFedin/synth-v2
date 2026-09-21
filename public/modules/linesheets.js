@@ -745,6 +745,12 @@
 
   const CELL_MESSAGE = Object.freeze({
     MOQ_NOT_MET: (cell) => text(`Минимум ${cell.minimumOrderQuantity}`, `Minimum ${cell.minimumOrderQuantity}`),
+    // The next whole box is named, because "not a multiple of six" leaves the reader to divide.
+    PACK_MULTIPLE_NOT_MET: (cell, quantity) => {
+      const pack = cell.packSize;
+      const next = Number.isFinite(quantity) && quantity > 0 ? Math.ceil(quantity / pack) * pack : pack;
+      return text(`Кратно ${pack} — ближайшее ${next}`, `Packs of ${pack} — nearest ${next}`);
+    },
     AVAILABILITY_EXCEEDED: (cell) => text(`Доступно ${cell.availableToSell}`, `Available ${cell.availableToSell}`),
     QUANTITY_INVALID: () => text('Целое число', 'Whole number'),
     REMOVED: () => text('Не заказываем', 'Not ordered'),
@@ -754,6 +760,7 @@
   const CLOSED_MESSAGE = Object.freeze({
     SOLD_OUT: () => text('Распродано', 'Sold out'),
     BELOW_MOQ_STOCK: (cell) => text(`Остаток меньше минимума ${cell.minimumOrderQuantity}`, `Stock below the minimum of ${cell.minimumOrderQuantity}`),
+    BELOW_PACK_STOCK: (cell) => text(`Остаток меньше упаковки ${cell.packSize}`, `Stock below one pack of ${cell.packSize}`),
     NO_SKU: () => text('Нет SKU', 'No SKU'),
   });
 
@@ -766,7 +773,7 @@
     block.classList.toggle('ls9-cell-filled', verdict.kind === 'number');
     if (note) {
       const message = CELL_MESSAGE[verdict.code];
-      note.textContent = message ? message(cell) : '';
+      note.textContent = message ? message(cell, verdict.quantity) : '';
       note.hidden = !message;
     }
     return verdict;
@@ -847,7 +854,8 @@
     // assistant does not. The showroom's look cards already say «мин. 6» in words; the cell the
     // order is actually written in says the same.
     const availability = cell.availableToSell === null ? text('доступность по условиям', 'availability per terms') : `${text('доступно', 'available')} ${cell.availableToSell}`;
-    block.append(el('small', { rawText: `${formatMoney(cell.unitPrice, cell.currency)} · ${text('мин.', 'min.')} ${cell.minimumOrderQuantity} · ${availability}` }));
+    const pack = cell.packSize ? ` · ${text('кратно', 'packs of')} ${cell.packSize}` : '';
+    block.append(el('small', { rawText: `${formatMoney(cell.unitPrice, cell.currency)} · ${text('мин.', 'min.')} ${cell.minimumOrderQuantity}${pack} · ${availability}` }));
     markCell(block, cell, LS.quantities[cell.sku] ?? '');
     return block;
   }
@@ -896,7 +904,7 @@
       tr.append(el('td', { rawText: change.before === '' ? '—' : change.before }));
       tr.append(el('td', { rawText: change.kind === 'remove' ? text('убрать', 'remove') : (change.after === '' ? '—' : change.after) }));
       const note = change.level === 'error'
-        ? (CELL_MESSAGE[change.code] ? CELL_MESSAGE[change.code]({ minimumOrderQuantity: change.minimumOrderQuantity, availableToSell: change.availableToSell }) : change.code)
+        ? (CELL_MESSAGE[change.code] ? CELL_MESSAGE[change.code]({ minimumOrderQuantity: change.minimumOrderQuantity, availableToSell: change.availableToSell, packSize: change.packSize }, Number(change.after)) : change.code)
         : '';
       tr.append(el('td', { className: 'muted', rawText: note }));
       tbody.append(tr);

@@ -40,9 +40,10 @@ function view(client) {
     async insertSpread(value) {
       try {
         await client.query(
-          `INSERT INTO cutting_spreads (id,brand_id,material_code,spread_reference,marker_length,plies,fabric_width,unit,status,laid_at,laid_by,notes,version,created_at,updated_at,payload)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::timestamptz,$11,$12,$13,$14::timestamptz,$15::timestamptz,$16::jsonb)`,
+          `INSERT INTO cutting_spreads (id,brand_id,material_code,spread_reference,marker_length,plies,fabric_width,fabric_width_unit,unit,status,laid_at,laid_by,notes,version,created_at,updated_at,payload)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::timestamptz,$12,$13,$14,$15::timestamptz,$16::timestamptz,$17::jsonb)`,
           [value.id, value.brandId, value.materialCode, value.spreadReference, value.markerLength, value.plies, value.fabricWidth,
+            value.fabricWidthUnit ?? null,
             value.unit, value.status, value.laidAt, value.laidBy, value.notes, value.version, value.createdAt, value.updatedAt, JSON.stringify(value)],
         );
       } catch (error) {

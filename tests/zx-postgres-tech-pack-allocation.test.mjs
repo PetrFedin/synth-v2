@@ -318,7 +318,7 @@ test('PostgreSQL closes approved PPS through production, rework, reinspection an
     // в обход модуля.
     const spread = await cutting.laySpread('cutting-lay-1', 'product-owner', {
       materialCode: 'FAB-TECH-GATE', spreadReference: 'LAY-TECH-001',
-      markerLength: 4, plies: 100, fabricWidth: 150,
+      markerLength: 4, plies: 100, fabricWidth: 150, fabricWidthUnit: 'cm',
       marker: [{ executionCode: execution.executionCode, garmentsPerPly: 1 }],
       lots: [{ lotReference: 'ROLL-A-001', quantity: 400 }],
       notes: 'Первый настил партии',

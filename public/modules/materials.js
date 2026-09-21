@@ -324,6 +324,59 @@
     return nodes;
   }
 
+// \u0421\u043e\u0441\u0442\u0430\u0432 \u043f\u0435\u0447\u0430\u0442\u0430\u0435\u0442\u0441\u044f \u0441\u0442\u0440\u043e\u043a\u0430\u043c\u0438: \u043f\u0440\u043e\u0446\u0435\u043d\u0442\u044b, \u043a\u043e\u0442\u043e\u0440\u044b\u0435 \u043d\u0435\u043b\u044c\u0437\u044f \u0441\u043b\u043e\u0436\u0438\u0442\u044c, \u043d\u0435\u043b\u044c\u0437\u044f \u0438 \u043f\u0440\u043e\u0432\u0435\u0440\u0438\u0442\u044c, \u0430 \u0441 \u044d\u0442\u0438\u043a\u0435\u0442\u043a\u0438
+  // \u0438\u0445 \u0447\u0438\u0442\u0430\u0435\u0442 \u043f\u043e\u043a\u0443\u043f\u0430\u0442\u0435\u043b\u044c.
+  function compositionPanel(item) {
+    const lines = Array.isArray(item.compositionLines) ? item.compositionLines : [];
+    if (lines.length === 0) {
+      return notice(item.composition
+        ? materialText(`\u0421\u043e\u0441\u0442\u0430\u0432 \u0437\u0430\u043f\u0438\u0441\u0430\u043d \u0442\u0435\u043a\u0441\u0442\u043e\u043c: \u00ab${item.composition}\u00bb. \u0420\u0430\u0437\u0431\u0435\u0440\u0438\u0442\u0435 \u0435\u0433\u043e \u043d\u0430 \u0441\u0442\u0440\u043e\u043a\u0438, \u0447\u0442\u043e\u0431\u044b \u043f\u0440\u043e\u0446\u0435\u043d\u0442\u044b \u043c\u043e\u0436\u043d\u043e \u0431\u044b\u043b\u043e \u0441\u043b\u043e\u0436\u0438\u0442\u044c.`,
+          `Composition is kept as text: "${item.composition}". Break it into rows so the percentages can be added up.`)
+        : materialText('\u0421\u043e\u0441\u0442\u0430\u0432 \u043d\u0435 \u0443\u043a\u0430\u0437\u0430\u043d.', 'No composition stated.'));
+    }
+    const total = lines.reduce((sum, line) => sum + Number(line.percentage), 0);
+    const table = odMiniTable(
+      [materialText('\u0412\u043e\u043b\u043e\u043a\u043d\u043e', 'Fibre'), materialText('\u0414\u043e\u043b\u044f', 'Share'), materialText('\u041a\u043b\u0430\u0441\u0441', 'Class')],
+      lines.map((line) => [
+        (I18N.getLocale?.() === 'en' ? line.nameEn : line.nameRu) || line.fibreCode,
+        `${I18N.formatNumber(Number(line.percentage), { maximumFractionDigits: 3 })}%`,
+        originClassLabel(line.originClassCode),
+      ]),
+    );
+    const holder = document.createDocumentFragment();
+    holder.append(table, notice(materialText(
+      `\u0421\u0443\u043c\u043c\u0430 \u2014 ${I18N.formatNumber(total, { maximumFractionDigits: 3 })}%.`,
+      `Adds up to ${I18N.formatNumber(total, { maximumFractionDigits: 3 })}%.`), total === 100 ? 'success' : 'warning'));
+    return holder;
+  }
+  
+  function originClassLabel(code) {
+    const labels = {
+      NATURAL: ['\u041d\u0430\u0442\u0443\u0440\u0430\u043b\u044c\u043d\u043e\u0435', 'Natural'],
+      ARTIFICIAL: ['\u0418\u0441\u043a\u0443\u0441\u0441\u0442\u0432\u0435\u043d\u043d\u043e\u0435', 'Artificial'],
+      SYNTHETIC: ['\u0421\u0438\u043d\u0442\u0435\u0442\u0438\u0447\u0435\u0441\u043a\u043e\u0435', 'Synthetic'],
+    };
+    const pair = labels[code];
+    return pair ? materialText(pair[0], pair[1]) : (code || '\u2014');
+  }
+  
+  function conversionLine(item) {
+    const specification = item.specification ?? null;
+    if (!specification?.conversionFactor) return '\u2014';
+    return materialText(
+      `1 ${specification.purchaseUnit} \u2192 ${I18N.formatNumber(specification.conversionFactor, { maximumFractionDigits: 4 })} ${item.unit}`,
+      `1 ${specification.purchaseUnit} yields ${I18N.formatNumber(specification.conversionFactor, { maximumFractionDigits: 4 })} ${item.unit}`);
+  }
+  
+  function widthNote(item) {
+    return item.specification?.cuttableWidth
+      ? notice(materialText(
+        '\u041d\u0430\u0441\u0442\u0438\u043b \u0448\u0438\u0440\u0435 \u044d\u0442\u043e\u0439 \u0448\u0438\u0440\u0438\u043d\u044b \u043d\u0435 \u043a\u043b\u0430\u0434\u0451\u0442\u0441\u044f: \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0430 \u0441\u0442\u043e\u0438\u0442 \u0438 \u0432 \u0440\u0430\u0441\u043a\u0440\u043e\u0435, \u0438 \u0432 \u0431\u0430\u0437\u0435.',
+        'A spread wider than this cannot be laid: the rule is enforced both in cutting and in the database.'), 'success')
+      : notice(materialText(
+        '\u0428\u0438\u0440\u0438\u043d\u0430 \u0440\u0430\u0441\u043a\u0440\u043e\u044f \u043d\u0435 \u0443\u043a\u0430\u0437\u0430\u043d\u0430, \u043f\u043e\u044d\u0442\u043e\u043c\u0443 \u043d\u0430\u0441\u0442\u0438\u043b\u044b \u043f\u043e \u044d\u0442\u043e\u043c\u0443 \u043f\u043e\u043b\u043e\u0442\u043d\u0443 \u043d\u0438\u0447\u0435\u043c \u043d\u0435 \u043e\u0433\u0440\u0430\u043d\u0438\u0447\u0435\u043d\u044b.',
+        'No cuttable width is stated, so spreads on this cloth are unchecked.'));
+  }
   function materialInspector(assessment) {
     const item = assessment.material;
     const risks = assessment.risks.length
@@ -342,6 +395,20 @@
             { label: materialText('\u0421\u043e\u0441\u0442\u0430\u0432', 'Composition'), value: item.composition || '\u2014' },
             { label: materialText('\u0426\u0435\u043d\u0430', 'Unit cost'), value: `${money(item.unitCost)} ${item.currency}/${item.unit}` },
           ],
+        },
+        {
+          // \u041f\u043e\u043b\u043e\u0442\u043d\u043e \u043a\u0430\u043a \u0438\u0437\u043c\u0435\u0440\u0438\u043c\u0430\u044f \u0432\u0435\u0449\u044c. \u0414\u043e \u044d\u0442\u043e\u0433\u043e \u043f\u043b\u043e\u0442\u043d\u043e\u0441\u0442\u044c \u0436\u0438\u043b\u0430 \u0432\u043d\u0443\u0442\u0440\u0438 \u043d\u0430\u0437\u0432\u0430\u043d\u0438\u044f \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u0430, \u0448\u0438\u0440\u0438\u043d\u044b
+          // \u0440\u0430\u0441\u043a\u0440\u043e\u044f \u043d\u0435 \u0431\u044b\u043b\u043e \u0432\u043e\u0432\u0441\u0435, \u0430 \u0441\u043e\u0441\u0442\u0430\u0432 \u0431\u044b\u043b \u0441\u0442\u0440\u043e\u043a\u043e\u0439 \u0442\u0435\u043a\u0441\u0442\u0430 \u2014 \u043d\u0438 \u043e\u0434\u043d\u043e \u0438\u0437 \u0442\u0440\u0451\u0445 \u043d\u0435 \u043f\u0440\u043e\u0432\u0435\u0440\u044f\u043b\u043e\u0441\u044c.
+          label: materialText('\u041f\u043e\u043b\u043e\u0442\u043d\u043e', 'Cloth'),
+          fields: [
+            { label: materialText('\u041f\u043b\u043e\u0442\u043d\u043e\u0441\u0442\u044c', 'Weight'), value: item.specification?.weightGsm ? `${item.specification.weightGsm} \u0433/\u043c\u00b2` : '\u2014' },
+            { label: materialText('\u0428\u0438\u0440\u0438\u043d\u0430 \u0440\u0430\u0441\u043a\u0440\u043e\u044f', 'Cuttable width'), value: item.specification?.cuttableWidth ? `${item.specification.cuttableWidth} ${item.specification.cuttableWidthUnit}` : '\u2014' },
+            { label: materialText('\u041f\u043e\u0434\u0442\u0438\u043f', 'Subtype'), value: item.specification?.materialSubtype || '\u2014' },
+            { label: materialText('\u0421\u0442\u0440\u0430\u043d\u0430 \u043f\u0440\u043e\u0438\u0441\u0445\u043e\u0436\u0434\u0435\u043d\u0438\u044f', 'Country of origin'), value: item.specification?.countryOfOrigin || '\u2014' },
+            { label: materialText('\u0417\u0430\u043a\u0443\u043f\u0430\u0435\u0442\u0441\u044f \u0432', 'Purchased in'), value: item.specification?.purchaseUnit || '\u2014' },
+            { label: materialText('\u0412\u044b\u0445\u043e\u0434 \u0438\u0437 \u0435\u0434\u0438\u043d\u0438\u0446\u044b \u0437\u0430\u043a\u0443\u043f\u043a\u0438', 'Conversion factor'), value: conversionLine(item) },
+          ],
+          content: [compositionPanel(item), widthNote(item)],
         },
         {
           label: materialText('\u041e\u0441\u0442\u0430\u0442\u043a\u0438', 'Inventory'),

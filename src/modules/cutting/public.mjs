@@ -1,4 +1,5 @@
 import { invariant } from '../../core/errors.mjs';
+import { assertSpreadFitsCloth } from '../materials/public.mjs';
 
 // Раскройный стол.
 //
@@ -41,6 +42,10 @@ export function laySpread({ id, material, executions, issues, input, laidAt, act
     'What was taken off the rolls must equal what was laid on the table',
     { clothTaken, clothLaid, markerLength, plies });
 
+  // Настил шире полотна невозможен. Ширина у настила записывалась и раньше, но сверять её было
+  // не с чем, поэтому никто и не отказывал.
+  const fabric = spreadFabric(input, material);
+
   return Object.freeze({
     id: required(id, 'CUTTING_SPREAD_ID_REQUIRED', 'Spread id'),
     brandId: material.brandId,
@@ -49,7 +54,11 @@ export function laySpread({ id, material, executions, issues, input, laidAt, act
     spreadReference: spreadReference(input?.spreadReference),
     markerLength,
     plies,
-    fabricWidth: optionalQuantity(input?.fabricWidth, 'CUTTING_FABRIC_WIDTH_INVALID', 'Fabric width'),
+    fabricWidth: fabric.fabricWidth,
+    // Ширина носит свою единицу: до этого она молча наследовала единицу расхода материала, и в
+    // данных стояло «полотно шириной 150 m».
+    fabricWidthUnit: fabric.fabricWidthUnit,
+    clothSlackMillimetres: fabric.slackMillimetres,
     marker: outputs,
     lots,
     status: 'laid',
@@ -247,4 +256,24 @@ function optionalText(value, maximum, code, label) {
 function timestamp(value, code, label) {
   invariant(typeof value === 'string' && !Number.isNaN(Date.parse(value)), code, `${label} is invalid`);
   return new Date(value).toISOString();
+}
+
+function spreadFabric(input, material) {
+  const fabricWidth = optionalQuantity(input?.fabricWidth, 'CUTTING_FABRIC_WIDTH_INVALID', 'Fabric width');
+  if (fabricWidth === null) {
+    invariant(input?.fabricWidthUnit === undefined || input?.fabricWidthUnit === null,
+      'CUTTING_FABRIC_WIDTH_REQUIRED', 'A width unit without a width states nothing');
+    return Object.freeze({ fabricWidth: null, fabricWidthUnit: null, slackMillimetres: null });
+  }
+  const fabricWidthUnit = input?.fabricWidthUnit ?? null;
+  invariant(fabricWidthUnit !== null, 'CUTTING_FABRIC_WIDTH_UNIT_REQUIRED',
+    'A fabric width is stated with its unit', { fabricWidth });
+  const specification = material?.specification ?? null;
+  const fit = assertSpreadFitsCloth({
+    fabricWidth,
+    fabricWidthUnit,
+    cuttableWidth: specification?.cuttableWidth ?? null,
+    cuttableWidthUnit: specification?.cuttableWidthUnit ?? null,
+  });
+  return Object.freeze({ fabricWidth, fabricWidthUnit, slackMillimetres: fit?.slackMillimetres ?? null });
 }

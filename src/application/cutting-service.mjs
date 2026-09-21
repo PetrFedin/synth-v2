@@ -5,7 +5,7 @@ import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
 import { cancelSpread, cuttingSummary, laySpread, markSpreadCut } from '../modules/cutting/public.mjs';
 
-const LAY_FIELDS = Object.freeze(new Set(['materialCode', 'spreadReference', 'markerLength', 'plies', 'fabricWidth', 'marker', 'lots', 'notes']));
+const LAY_FIELDS = Object.freeze(new Set(['materialCode', 'spreadReference', 'markerLength', 'plies', 'fabricWidth', 'fabricWidthUnit', 'marker', 'lots', 'notes']));
 const VERDICT_FIELDS = Object.freeze(new Set(['expectedVersion', 'reason']));
 
 export function createCuttingService({ store, clock = () => new Date().toISOString(), nextId = defaultIdGenerator() } = {}) {

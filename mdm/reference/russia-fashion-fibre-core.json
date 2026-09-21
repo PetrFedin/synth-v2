@@ -1,0 +1,500 @@
+{
+  "dataset_version": "1.0.0",
+  "profile": "RU_FASHION_CORE",
+  "markets": [
+    "RU"
+  ],
+  "languages": [
+    "ru",
+    "en"
+  ],
+  "source": {
+    "system": "syntha_operational_master",
+    "version": "1.0.0",
+    "endpoint": "mdm/reference/russia-fashion-fibre-core.json",
+    "license": "SYNTHA internal operational master data",
+    "retrieved_at": "2026-09-21T00:00:00.000Z"
+  },
+  "dictionaries": [
+    {
+      "id": "mdm-dictionary:material-fibre-origin-class",
+      "code": "material.fibre_origin_class",
+      "data_class": "classifier",
+      "scope_model": "global",
+      "hierarchy_enabled": false,
+      "effective_dated": true,
+      "approval_required": true,
+      "name": {
+        "ru": "Класс происхождения волокна",
+        "en": "Fibre origin class"
+      },
+      "description": {
+        "ru": "Натуральное, искусственное или синтетическое — деление, по которому состав читается на этикетке и в отчётности.",
+        "en": "Natural, artificial or synthetic: the division a composition is read by on the label and in reporting."
+      },
+      "entries": [
+        {
+          "id": "mdm-entry:fibre-origin-class:natural",
+          "version": 1,
+          "domain": "material.fibre_origin_class",
+          "code": "NATURAL",
+          "name_ru": "Натуральное",
+          "name_en": "Natural",
+          "description_ru": "Волокно природного происхождения: растительное или животное.",
+          "description_en": "A fibre of natural origin, plant or animal.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-fibre-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-21T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-21T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ]
+          }
+        },
+        {
+          "id": "mdm-entry:fibre-origin-class:artificial",
+          "version": 1,
+          "domain": "material.fibre_origin_class",
+          "code": "ARTIFICIAL",
+          "name_ru": "Искусственное",
+          "name_en": "Artificial",
+          "description_ru": "Волокно, полученное переработкой природного полимера — прежде всего целлюлозы.",
+          "description_en": "A fibre regenerated from a natural polymer, chiefly cellulose.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-fibre-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-21T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-21T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ]
+          }
+        },
+        {
+          "id": "mdm-entry:fibre-origin-class:synthetic",
+          "version": 1,
+          "domain": "material.fibre_origin_class",
+          "code": "SYNTHETIC",
+          "name_ru": "Синтетическое",
+          "name_en": "Synthetic",
+          "description_ru": "Волокно, синтезированное из продуктов нефтехимии.",
+          "description_en": "A fibre synthesised from petrochemical feedstock.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-fibre-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-21T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-21T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "mdm-dictionary:material-fibre",
+      "code": "material.fibre",
+      "data_class": "classifier",
+      "scope_model": "global",
+      "hierarchy_enabled": false,
+      "effective_dated": true,
+      "approval_required": true,
+      "name": {
+        "ru": "Волокно",
+        "en": "Fibre"
+      },
+      "description": {
+        "ru": "Волокна, из которых складывается состав материала. Состав ведётся строками по этому справочнику, а не строкой текста: проценты, которые нельзя сложить, нельзя и проверить.",
+        "en": "The fibres a material composition is built from. Composition is kept as rows against this dictionary rather than as a line of text: percentages that cannot be summed cannot be checked."
+      },
+      "entries": [
+        {
+          "id": "mdm-entry:fibre:cotton",
+          "version": 1,
+          "domain": "material.fibre",
+          "code": "COTTON",
+          "name_ru": "Хлопок",
+          "name_en": "Cotton",
+          "description_ru": "Волокно «Хлопок», класс происхождения — натуральное.",
+          "description_en": "The Cotton fibre, natural in origin.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-fibre-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-21T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-21T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ],
+            "origin_class_entry_id": "mdm-entry:fibre-origin-class:natural",
+            "origin_class_code": "NATURAL"
+          }
+        },
+        {
+          "id": "mdm-entry:fibre:wool",
+          "version": 1,
+          "domain": "material.fibre",
+          "code": "WOOL",
+          "name_ru": "Шерсть",
+          "name_en": "Wool",
+          "description_ru": "Волокно «Шерсть», класс происхождения — натуральное.",
+          "description_en": "The Wool fibre, natural in origin.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-fibre-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-21T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-21T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ],
+            "origin_class_entry_id": "mdm-entry:fibre-origin-class:natural",
+            "origin_class_code": "NATURAL"
+          }
+        },
+        {
+          "id": "mdm-entry:fibre:linen",
+          "version": 1,
+          "domain": "material.fibre",
+          "code": "LINEN",
+          "name_ru": "Лён",
+          "name_en": "Linen",
+          "description_ru": "Волокно «Лён», класс происхождения — натуральное.",
+          "description_en": "The Linen fibre, natural in origin.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-fibre-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-21T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-21T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ],
+            "origin_class_entry_id": "mdm-entry:fibre-origin-class:natural",
+            "origin_class_code": "NATURAL"
+          }
+        },
+        {
+          "id": "mdm-entry:fibre:silk",
+          "version": 1,
+          "domain": "material.fibre",
+          "code": "SILK",
+          "name_ru": "Шёлк",
+          "name_en": "Silk",
+          "description_ru": "Волокно «Шёлк», класс происхождения — натуральное.",
+          "description_en": "The Silk fibre, natural in origin.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-fibre-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-21T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-21T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ],
+            "origin_class_entry_id": "mdm-entry:fibre-origin-class:natural",
+            "origin_class_code": "NATURAL"
+          }
+        },
+        {
+          "id": "mdm-entry:fibre:cashmere",
+          "version": 1,
+          "domain": "material.fibre",
+          "code": "CASHMERE",
+          "name_ru": "Кашемир",
+          "name_en": "Cashmere",
+          "description_ru": "Волокно «Кашемир», класс происхождения — натуральное.",
+          "description_en": "The Cashmere fibre, natural in origin.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-fibre-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-21T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-21T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ],
+            "origin_class_entry_id": "mdm-entry:fibre-origin-class:natural",
+            "origin_class_code": "NATURAL"
+          }
+        },
+        {
+          "id": "mdm-entry:fibre:viscose",
+          "version": 1,
+          "domain": "material.fibre",
+          "code": "VISCOSE",
+          "name_ru": "Вискоза",
+          "name_en": "Viscose",
+          "description_ru": "Волокно «Вискоза», класс происхождения — искусственное.",
+          "description_en": "The Viscose fibre, artificial in origin.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-fibre-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-21T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-21T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ],
+            "origin_class_entry_id": "mdm-entry:fibre-origin-class:artificial",
+            "origin_class_code": "ARTIFICIAL"
+          }
+        },
+        {
+          "id": "mdm-entry:fibre:modal",
+          "version": 1,
+          "domain": "material.fibre",
+          "code": "MODAL",
+          "name_ru": "Модал",
+          "name_en": "Modal",
+          "description_ru": "Волокно «Модал», класс происхождения — искусственное.",
+          "description_en": "The Modal fibre, artificial in origin.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-fibre-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-21T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-21T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ],
+            "origin_class_entry_id": "mdm-entry:fibre-origin-class:artificial",
+            "origin_class_code": "ARTIFICIAL"
+          }
+        },
+        {
+          "id": "mdm-entry:fibre:lyocell",
+          "version": 1,
+          "domain": "material.fibre",
+          "code": "LYOCELL",
+          "name_ru": "Лиоцелл",
+          "name_en": "Lyocell",
+          "description_ru": "Волокно «Лиоцелл», класс происхождения — искусственное.",
+          "description_en": "The Lyocell fibre, artificial in origin.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-fibre-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-21T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-21T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ],
+            "origin_class_entry_id": "mdm-entry:fibre-origin-class:artificial",
+            "origin_class_code": "ARTIFICIAL"
+          }
+        },
+        {
+          "id": "mdm-entry:fibre:polyester",
+          "version": 1,
+          "domain": "material.fibre",
+          "code": "POLYESTER",
+          "name_ru": "Полиэстер",
+          "name_en": "Polyester",
+          "description_ru": "Волокно «Полиэстер», класс происхождения — синтетическое.",
+          "description_en": "The Polyester fibre, synthetic in origin.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-fibre-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-21T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-21T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ],
+            "origin_class_entry_id": "mdm-entry:fibre-origin-class:synthetic",
+            "origin_class_code": "SYNTHETIC"
+          }
+        },
+        {
+          "id": "mdm-entry:fibre:polyamide",
+          "version": 1,
+          "domain": "material.fibre",
+          "code": "POLYAMIDE",
+          "name_ru": "Полиамид",
+          "name_en": "Polyamide",
+          "description_ru": "Волокно «Полиамид», класс происхождения — синтетическое.",
+          "description_en": "The Polyamide fibre, synthetic in origin.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-fibre-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-21T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-21T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ],
+            "origin_class_entry_id": "mdm-entry:fibre-origin-class:synthetic",
+            "origin_class_code": "SYNTHETIC"
+          }
+        },
+        {
+          "id": "mdm-entry:fibre:elastane",
+          "version": 1,
+          "domain": "material.fibre",
+          "code": "ELASTANE",
+          "name_ru": "Эластан",
+          "name_en": "Elastane",
+          "description_ru": "Волокно «Эластан», класс происхождения — синтетическое.",
+          "description_en": "The Elastane fibre, synthetic in origin.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-fibre-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-21T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-21T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ],
+            "origin_class_entry_id": "mdm-entry:fibre-origin-class:synthetic",
+            "origin_class_code": "SYNTHETIC"
+          }
+        },
+        {
+          "id": "mdm-entry:fibre:acrylic",
+          "version": 1,
+          "domain": "material.fibre",
+          "code": "ACRYLIC",
+          "name_ru": "Акрил",
+          "name_en": "Acrylic",
+          "description_ru": "Волокно «Акрил», класс происхождения — синтетическое.",
+          "description_en": "The Acrylic fibre, synthetic in origin.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-fibre-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-21T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-21T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ],
+            "origin_class_entry_id": "mdm-entry:fibre-origin-class:synthetic",
+            "origin_class_code": "SYNTHETIC"
+          }
+        },
+        {
+          "id": "mdm-entry:fibre:polypropylene",
+          "version": 1,
+          "domain": "material.fibre",
+          "code": "POLYPROPYLENE",
+          "name_ru": "Полипропилен",
+          "name_en": "Polypropylene",
+          "description_ru": "Волокно «Полипропилен», класс происхождения — синтетическое.",
+          "description_en": "The Polypropylene fibre, synthetic in origin.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-fibre-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-21T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-21T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ],
+            "origin_class_entry_id": "mdm-entry:fibre-origin-class:synthetic",
+            "origin_class_code": "SYNTHETIC"
+          }
+        }
+      ]
+    }
+  ]
+}

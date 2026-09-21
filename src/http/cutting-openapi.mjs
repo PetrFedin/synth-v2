@@ -29,11 +29,13 @@ function schemas() {
     // читателю, чтобы он не повторял деление, которое легко сделать иначе; в базе их нет.
     CuttingSpread: {
       type: 'object', additionalProperties: false,
-      required: ['id', 'brandId', 'materialCode', 'unit', 'spreadReference', 'markerLength', 'plies', 'fabricWidth', 'marker', 'lots', 'status', 'laidAt', 'laidBy', 'notes', 'version', 'createdAt', 'updatedAt', 'garmentsPerPly', 'clothLaid', 'consumptionPerGarment'],
+      required: ['id', 'brandId', 'materialCode', 'unit', 'spreadReference', 'markerLength', 'plies', 'fabricWidth', 'fabricWidthUnit', 'marker', 'lots', 'status', 'laidAt', 'laidBy', 'notes', 'version', 'createdAt', 'updatedAt', 'garmentsPerPly', 'clothLaid', 'consumptionPerGarment'],
       properties: {
         id: text(1, 200), brandId: text(1, 200), materialCode: text(1, 200), unit: text(1, 32),
         spreadReference: { type: 'string', pattern: REFERENCE }, markerLength: quantity(), plies: count(),
         fabricWidth: { oneOf: [quantity(), { type: 'null' }] },
+        // Ширина — длина и носит свою единицу, а не наследует единицу расхода материала.
+        fabricWidthUnit: { oneOf: [{ type: 'string', enum: ['mm', 'cm', 'm'] }, { type: 'null' }] },
         marker: { type: 'array', minItems: 1, maxItems: 40, items: { $ref: '#/components/schemas/CuttingMarkerEntry' } },
         lots: { type: 'array', minItems: 1, maxItems: 40, items: { $ref: '#/components/schemas/CuttingSpreadLot' } },
         status: { type: 'string', enum: STATUSES }, laidAt: date(), laidBy: text(1, 200), notes: nullableText(1000),
@@ -48,7 +50,7 @@ function schemas() {
       type: 'object', additionalProperties: false, required: ['materialCode', 'spreadReference', 'markerLength', 'plies', 'marker', 'lots'],
       properties: {
         materialCode: text(1, 200), spreadReference: { type: 'string', pattern: REFERENCE },
-        markerLength: quantity(), plies: count(), fabricWidth: quantity(),
+        markerLength: quantity(), plies: count(), fabricWidth: quantity(), fabricWidthUnit: { type: 'string', enum: ['mm', 'cm', 'm'] },
         marker: { type: 'array', minItems: 1, maxItems: 40, items: {
           type: 'object', additionalProperties: false, required: ['executionCode', 'garmentsPerPly'],
           properties: { executionCode: { type: 'string', pattern: CODE }, garmentsPerPly: count() },

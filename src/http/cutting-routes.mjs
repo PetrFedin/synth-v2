@@ -2,7 +2,7 @@ import { invariant } from '../core/errors.mjs';
 import { assertBodyContract, assertQueryContract, bodyContract } from './request-contract.mjs';
 
 const LAY_BODY = bodyContract(
-  ['materialCode', 'spreadReference', 'markerLength', 'plies', 'fabricWidth', 'marker', 'lots', 'notes'],
+  ['materialCode', 'spreadReference', 'markerLength', 'plies', 'fabricWidth', 'fabricWidthUnit', 'marker', 'lots', 'notes'],
   {},
   { marker: ['executionCode', 'garmentsPerPly'], lots: ['lotReference', 'quantity'] },
 );

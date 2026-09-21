@@ -21,7 +21,7 @@ function spread(overrides = {}, id = 'spread-1') {
   return laySpread({
     id, material, executions: [execM, execL], issues, laidAt: AT, actorId: 'cutter',
     input: {
-      spreadReference: 'LAY-001', markerLength: 4.4, plies: 50, fabricWidth: 146,
+      spreadReference: 'LAY-001', markerLength: 4.4, plies: 50, fabricWidth: 146, fabricWidthUnit: 'cm',
       marker: [{ executionCode: 'EXEC-M', garmentsPerPly: 1 }, { executionCode: 'EXEC-L', garmentsPerPly: 1 }],
       lots: [{ lotReference: 'ROLL-A', quantity: 120 }, { lotReference: 'ROLL-B', quantity: 100 }],
       ...overrides,
@@ -29,6 +29,41 @@ function spread(overrides = {}, id = 'spread-1') {
   });
 }
 function codeOf(fn) { try { fn(); } catch (error) { return error.code; } return 'NO_ERROR'; }
+
+// Полотно с заявленной шириной раскроя. До этой правки ширина настила записывалась, но сверять её
+// было не с чем, и настил шире полотна проходил молча.
+const clothMaterial = Object.freeze({
+  ...material,
+  specification: Object.freeze({ cuttableWidth: 150, cuttableWidthUnit: 'cm' }),
+});
+function spreadOnCloth(overrides = {}) {
+  return laySpread({
+    id: 'spread-cloth', material: clothMaterial, executions: [execM, execL], issues, laidAt: AT, actorId: 'cutter',
+    input: {
+      spreadReference: 'LAY-002', markerLength: 4.4, plies: 50, fabricWidth: 146, fabricWidthUnit: 'cm',
+      marker: [{ executionCode: 'EXEC-M', garmentsPerPly: 1 }, { executionCode: 'EXEC-L', garmentsPerPly: 1 }],
+      lots: [{ lotReference: 'ROLL-A', quantity: 120 }, { lotReference: 'ROLL-B', quantity: 100 }],
+      ...overrides,
+    },
+  });
+}
+
+test('Настил шире полотна не кладётся, а запас по ширине считается', () => {
+  const laid = spreadOnCloth();
+  assert.equal(laid.clothSlackMillimetres, 40, 'четыре сантиметра запаса на кромки');
+  assert.equal(codeOf(() => spreadOnCloth({ fabricWidth: 160 })), 'CUTTING_SPREAD_WIDER_THAN_CLOTH');
+  // Единицы приводятся к одной линейке: 1,6 м — это те же 160 см, и отказ тот же.
+  assert.equal(codeOf(() => spreadOnCloth({ fabricWidth: 1.6, fabricWidthUnit: 'm' })), 'CUTTING_SPREAD_WIDER_THAN_CLOTH');
+});
+
+test('Ширина называется вместе с единицей, иначе она ничего не значит', () => {
+  assert.equal(codeOf(() => spreadOnCloth({ fabricWidthUnit: null })), 'CUTTING_FABRIC_WIDTH_UNIT_REQUIRED');
+  // Единица без ширины — тоже ничего не значит.
+  assert.equal(codeOf(() => spreadOnCloth({ fabricWidth: null })), 'CUTTING_FABRIC_WIDTH_REQUIRED');
+  // Полотно без заявленной ширины раскроя укладку не останавливает: старые материалы её не несут.
+  const unknown = spread();
+  assert.equal(unknown.clothSlackMillimetres, null);
+});
 
 test('Расход настила — это длина на слои, и ткань не берётся ниоткуда', () => {
   const laid = spread();

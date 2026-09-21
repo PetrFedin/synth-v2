@@ -30,10 +30,15 @@ const LOOK_UPDATE_BODY = bodyContract(['expectedVersion', ...LOOK_FIELDS]);
 const CATALOG_SKU_BODY = bodyContract(['sku', 'collectionId', 'brandId', 'name', 'wholesalePrice', 'currency', 'minimumOrderQuantity', 'availableQuantity', 'packSize']);
 const CATALOG_SKU_UPDATE_BODY = bodyContract(['expectedVersion', 'name', 'wholesalePrice', 'minimumOrderQuantity', 'availableQuantity', 'packSize']);
 const CATALOG_SKU_PUBLISH_BODY = bodyContract(['expectedVersion']);
-const MATERIAL_FIELDS = ['name', 'type', 'unit', 'supplierName', 'supplierReference', 'composition', 'color', 'currency', 'unitCost', 'minimumOrderQuantity', 'availableQuantity'];
+const MATERIAL_FIELDS = ['name', 'type', 'unit', 'supplierName', 'supplierReference', 'composition', 'color', 'currency', 'unitCost', 'minimumOrderQuantity', 'availableQuantity',
+  // Измеримые свойства полотна: плотность, ширина раскроя с её единицей, страна происхождения
+  // и пересчёт из единицы закупки в единицу расхода.
+  'weightGsm', 'cuttableWidth', 'cuttableWidthUnit', 'countryOfOrigin', 'purchaseUnit', 'conversionFactor', 'materialSubtype'];
 const MATERIAL_BODY = bodyContract(['code', 'brandId', ...MATERIAL_FIELDS]);
 const MATERIAL_UPDATE_BODY = bodyContract(['expectedVersion', ...MATERIAL_FIELDS]);
 const MATERIAL_PUBLISH_BODY = bodyContract(['expectedVersion']);
+const MATERIAL_COMPOSITION_BODY = bodyContract(['expectedVersion', 'lines']);
+const MATERIAL_SPECIFICATION_BODY = bodyContract(['expectedVersion', 'weightGsm', 'cuttableWidth', 'cuttableWidthUnit', 'countryOfOrigin', 'purchaseUnit', 'conversionFactor', 'materialSubtype']);
 const BOM_EDITABLE_FIELDS = ['currency', 'lines', 'laborCost', 'overheadCost', 'logisticsCost', 'otherCost', 'notes'];
 const BOM_LINE_FIELDS = ['lineId', 'component', 'materialCode', 'quantity', 'wastePercent', 'exchangeRate', 'placement', 'isMain'];
 const BOM_BODY = bodyContract(['sku', ...BOM_EDITABLE_FIELDS], {}, { lines: BOM_LINE_FIELDS });
@@ -99,6 +104,12 @@ export function createWholesaleRoutes({ platform, catalog, materials, boms, meas
     read('GET', /^\/v2\/materials$/, ['limit', 'cursor', 'q', 'status', 'type', 'brandId'], ({ actorId, query }) => materialService.pageForActor(actorId, query)),
     read('GET', /^\/v2\/materials\/([^/]+)$/, [], ({ actorId, params }) => materialService.getForActor(actorId, params[0])),
     mutate('POST', /^\/v2\/materials$/, MATERIAL_BODY, ({ commandId, actorId, body }) => materialService.createMaterial(commandId, actorId, body)),
+    // Состав задаётся целиком: правка по одной строке провела бы материал через сумму, которая ни
+    // во что не складывается, и отложенная проверка базы отвергла бы её на COMMIT.
+    // Физические свойства уточняются и после публикации: полезная ширина рулона выясняется, когда
+    // рулон приезжает. Посчитанные ведомости от этого не меняются — цена в строке снята снимком.
+    mutate('PUT', /^\/v2\/materials\/([^/]+)\/specification$/, MATERIAL_SPECIFICATION_BODY, ({ commandId, actorId, params, body }) => materialService.amendMaterialSpecification(commandId, actorId, decodePathParameter(params[0]), body)),
+    mutate('PUT', /^\/v2\/materials\/([^/]+)\/composition$/, MATERIAL_COMPOSITION_BODY, ({ commandId, actorId, params, body }) => materialService.setMaterialComposition(commandId, actorId, decodePathParameter(params[0]), body)),
     mutate('PATCH', /^\/v2\/materials\/([^/]+)$/, MATERIAL_UPDATE_BODY, ({ commandId, actorId, params, body }) => materialService.updateMaterial(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/materials\/([^/]+)\/publish$/, MATERIAL_PUBLISH_BODY, ({ commandId, actorId, params, body }) => materialService.publishMaterial(commandId, actorId, params[0], body)),
     read('GET', /^\/v2\/boms$/, ['limit', 'cursor', 'q', 'status', 'brandId'], ({ actorId, query }) => bomService.pageForActor(actorId, query)),
@@ -196,7 +207,7 @@ function measurementBody(contract, valueFields) {
 }
 function sameId(bodyValue, routeValue, field) { invariant(bodyValue === undefined || bodyValue === routeValue, 'HTTP_IDENTIFIER_MISMATCH', 'Body identifier does not match route identifier', { field, routeValue, bodyValue }); }
 function unavailableCatalog() { const fail = () => invariant(false, 'CATALOG_SERVICE_REQUIRED', 'Catalog service is required'); return Object.freeze({ createSku: fail, updateSku: fail, publishSku: fail, pageForActor: fail, getForActor: fail }); }
-function unavailableMaterials() { const fail = () => invariant(false, 'MATERIAL_SERVICE_REQUIRED', 'Material service is required'); return Object.freeze({ createMaterial: fail, updateMaterial: fail, publishMaterial: fail, pageForActor: fail, getForActor: fail }); }
+function unavailableMaterials() { const fail = () => invariant(false, 'MATERIAL_SERVICE_REQUIRED', 'Material service is required'); return Object.freeze({ createMaterial: fail, updateMaterial: fail, publishMaterial: fail, amendMaterialSpecification: fail, setMaterialComposition: fail, pageForActor: fail, getForActor: fail }); }
 function unavailableBoms() { const fail = () => invariant(false, 'BOM_SERVICE_REQUIRED', 'BOM service is required'); return Object.freeze({ createBom: fail, updateBom: fail, publishBom: fail, pageForActor: fail, getForActor: fail }); }
 function unavailableMeasurements() {
   const fail = () => invariant(false, 'MEASUREMENT_SERVICE_REQUIRED', 'Measurement chart service is required');

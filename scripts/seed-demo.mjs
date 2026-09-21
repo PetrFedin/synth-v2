@@ -91,6 +91,28 @@ const DEMO_OPERATIONS = [
   { operationCode: 'ATTACH-LABELS', nameRu: 'Пришить ярлыки', nameEn: 'Attach labels', stage: 'finishing-complete', standardMinutes: 2.3 },
   { operationCode: 'PACK-UNIT', nameRu: 'Упаковать изделие', nameEn: 'Pack the garment', stage: 'packing-complete', standardMinutes: 1.9 },
 ];
+// Физические свойства полотна и состав строками. Ключ — фрагмент кода материала: демонстрация
+// обогащает те материалы, которые в базе уже есть, кто бы их ни завёл.
+const DEMO_MATERIAL_SPECS = [
+  {
+    match: 'SHELL',
+    specification: {
+      weightGsm: 60, cuttableWidth: 148, cuttableWidthUnit: 'cm', countryOfOrigin: 'TR',
+      // Рипстоп покупают в килограммах, а расходуют в метрах: из килограмма выходит 6,4 метра.
+      purchaseUnit: 'kg', conversionFactor: 6.4, materialSubtype: 'Рипстоп',
+    },
+    composition: [{ fibreCode: 'POLYESTER', percentage: 100 }],
+  },
+  {
+    match: 'JERSEY',
+    specification: {
+      weightGsm: 220, cuttableWidth: 180, cuttableWidthUnit: 'cm', countryOfOrigin: 'TR',
+      purchaseUnit: 'kg', conversionFactor: 3.2, materialSubtype: 'Кулирная гладь',
+    },
+    // Состав, который сходится ровно в сто: на этикетке он будет напечатан именно так.
+    composition: [{ fibreCode: 'COTTON', percentage: 95 }, { fibreCode: 'ELASTANE', percentage: 5 }],
+  },
+];
 const DEMO_MATERIAL_LOTS = [
   { lotReference: 'ROLL-R3-A-001', dyeLot: 'DYE-2609-A', receivedQuantity: 600, certificateReference: 'CERT-ATM-2609-A', release: true, issue: 600, notes: 'Первый рулон поставки' },
   { lotReference: 'ROLL-R3-B-002', dyeLot: 'DYE-2609-B', receivedQuantity: 500, certificateReference: 'CERT-ATM-2609-B', release: true, issue: 300, notes: 'Догруз другой крашеной партии' },
@@ -228,6 +250,7 @@ try {
   await ensureCuttingSpread(runtime, pool, brandId, accounts.owner);
   await ensureTargetPricing(runtime, pool, brandId, accounts.owner);
   await ensureAssortmentPlan(runtime, pool, brandId, accounts.owner);
+  await ensureMaterialSpecifications(runtime, pool, brandId, accounts.owner);
   await ensurePaymentSchedules(runtime, pool, brandId, accounts.owner);
 
   // Inspections sat at review-pending because the only account in the brand was the one that ran
@@ -874,7 +897,7 @@ async function ensureCuttingSpread(runtime, pool, brandId, actorId) {
     const spread = await runtime.cutting.laySpread(command('cutting-lay'), actorId, {
       materialCode: issues[0].materialCode,
       spreadReference: `LAY-${execution.sku}-001`,
-      markerLength, plies, fabricWidth: 150,
+      markerLength, plies, fabricWidth: 146, fabricWidthUnit: 'cm',
       marker: [{ executionCode: execution.executionCode, garmentsPerPly: 1 }],
       lots,
       notes: 'Первый настил партии.',
@@ -973,6 +996,48 @@ async function ensureTeeTargetPrice(runtime, pool, brandId, actorId, campaignId)
     await runtime.targetPricing.publish(command('target-price-tee-publish'), actorId, plan.id, { expectedVersion: plan.version });
   } catch (error) {
     note('target price', `цель по футболке не составлена (${error.code ?? error.message})`);
+  }
+}
+
+async function ensureMaterialSpecifications(runtime, pool, brandId, actorId) {
+  for (const definition of DEMO_MATERIAL_SPECS) {
+    // Обогащаются все полотна этого типа, а не первое попавшееся: демонстрация режет не тот рулон,
+    // который стоит первым по алфавиту, и проверка ширины осталась бы непоказанной.
+    const materials = (await pool.query(
+      `SELECT code, version, cuttable_width FROM materials
+        WHERE brand_id = $1 AND material_type = 'fabric' AND code LIKE $2
+        ORDER BY code`,
+      [brandId, `%${definition.match}%`],
+    )).rows;
+    if (materials.length === 0) { note('material spec', `нет полотна по образцу ${definition.match}`); continue; }
+
+    for (const material of materials) {
+      if (material.cuttable_width === null) {
+        try {
+          await runtime.materials.amendMaterialSpecification(command('material-spec'), actorId, material.code, {
+            expectedVersion: Number(material.version), ...definition.specification,
+          });
+          note('material spec', `${material.code}: ${definition.specification.weightGsm} г/м², ширина раскроя ${definition.specification.cuttableWidth} ${definition.specification.cuttableWidthUnit}`);
+        } catch (error) {
+          note('material spec', `${material.code}: свойства не записаны (${error.code ?? error.message})`);
+          continue;
+        }
+      }
+
+      const composed = await pool.query('SELECT 1 FROM material_compositions WHERE material_code = $1', [material.code]);
+      if (composed.rowCount) continue;
+      // Версия перечитывается: уточнение свойств только что её подняло, и старое значение
+      // столкнулось бы с проверкой одновременного изменения.
+      const current = (await pool.query('SELECT version FROM materials WHERE code = $1', [material.code])).rows[0];
+      try {
+        await runtime.materials.setMaterialComposition(command('material-composition'), actorId, material.code, {
+          expectedVersion: Number(current.version), lines: definition.composition,
+        });
+        note('material spec', `${material.code}: состав — ${definition.composition.map((line) => `${line.percentage}% ${line.fibreCode}`).join(', ')}`);
+      } catch (error) {
+        note('material spec', `${material.code}: состав не записан (${error.code ?? error.message})`);
+      }
+    }
   }
 }
 

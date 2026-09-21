@@ -134,7 +134,7 @@
 
   function header(summary) {
     const actions = [];
-    if (canManageAnyBrand()) actions.push(h('button', { className: 'primary', type: 'button', text: text('Создать BOM', 'Create BOM'), onclick: () => openEditor(null) }));
+    if (canManageAnyBrand()) actions.push(h('button', { className: 'primary', type: 'button', text: text('Создать BOM', 'Create BOM'), onclick: () => openEditorReporting(null) }));
     actions.push(h('button', { className: 'secondary', type: 'button', text: text('Обновить', 'Refresh'), disabled: ui.loading, onclick: () => { loadBoms({ reset: true }).then(() => toast(text('\u0414\u0430\u043d\u043d\u044b\u0435 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u044b.', 'Data refreshed.'))).catch((error) => toast(error?.message || text('\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u0434\u0430\u043d\u043d\u044b\u0435.', 'The data could not be refreshed.'), 'error')); } }));
     return h('header', { className: 'bom-header' }, [
       h('div', {}, [h('p', { className: 'eyebrow', text: 'PLM / COSTING' }), h('h1', { text: text('BOM и производственная себестоимость', 'BOM and production costing') }), h('p', { className: 'muted', text: text('Версионируемые спецификации материалов, snapshot цен, FX и полная воспроизводимая себестоимость изделия.', 'Versioned material specifications, price snapshots, FX and reproducible product cost.') })]),
@@ -253,7 +253,7 @@
     if (!item) return h('aside', { className: 'bom-inspector' }, [h('p', { className: 'muted', text: text('Выберите BOM для просмотра деталей.', 'Select a BOM to inspect.') })]);
     const actions = [];
     if (canManageBrand(item.bom.brandId) && item.bom.status === 'draft') {
-      actions.push(h('button', { type: 'button', className: 'secondary', text: text('Редактировать', 'Edit'), onclick: () => openEditor(item.bom) }));
+      actions.push(h('button', { type: 'button', className: 'secondary', text: text('Редактировать', 'Edit'), onclick: () => openEditorReporting(item.bom) }));
       actions.push(h('button', { type: 'button', className: 'primary', text: text('Опубликовать', 'Publish'), disabled: !item.publishReady, onclick: () => publish(item.bom) }));
     }
     return h('aside', { className: 'bom-inspector' }, [
@@ -361,6 +361,14 @@
     showEditor({ existing, materials, skus, model });
   }
 
+  // Открытие редактора читает справочник материалов и каталог, и обе загрузки могут отказать.
+  // Обработчик `onclick` возвращённый промис не ждёт, поэтому отказ уходил в необработанное
+  // отклонение: кнопка нажата, не происходит ничего, причина не названа.
+  function openEditorReporting(existing) {
+    return openEditor(existing).catch((error) => toast(
+      error?.message || text('Не удалось открыть редактор.', 'The editor could not be opened.'), 'error'));
+  }
+
   const BOM_ERRORS = {
     BOM_ALREADY_EXISTS: ['У этого артикула уже есть спецификация — откройте её и отредактируйте.', 'This SKU already has a bill of materials — open it and edit instead.'],
     BOM_NOT_EDITABLE: ['Опубликованную спецификацию нельзя изменить. Заведите новую версию.', 'A published bill of materials cannot be changed. Start a new version.'],
@@ -376,6 +384,13 @@
 
   function showEditor({ existing, materials, skus, model }) {
     const overlay = h('div', { className: 'bom-modal-overlay' });
+    // Оверлей закрывается четырьмя путями: крестик, «Отмена», щелчок мимо и успешное сохранение, а
+    // обработчик Escape снимал себя только на пятом — на самом Escape. Каждое закрытие любым из остальных
+    // оставляло на `document` ещё один слушатель, держащий ссылку на весь оторванный диалог. Закрытие теперь
+    // одно для всех путей.
+    function onEscape(event) { if (event.key === 'Escape') closeEditor(); }
+    function closeEditor() { overlay.remove(); document.removeEventListener('keydown', onEscape); }
+
     const problem = h('p', { className: 'bom-modal-error', hidden: true });
     const dialog = h('form', { className: 'bom-modal', role: 'dialog', 'aria-modal': 'true' });
     const linesRoot = h('div', { className: 'bom-editor-lines' });
@@ -419,7 +434,7 @@
     }
     renderLines();
     dialog.append(
-      h('div', { className: 'bom-modal-head' }, [h('div', {}, [h('p', { className: 'eyebrow', text: 'BOM / COSTING' }), h('h2', { text: existing ? text(`Редактировать ${existing.sku}`, `Edit ${existing.sku}`) : text('Создать BOM', 'Create BOM') })]), h('button', { type: 'button', className: 'icon-button', 'aria-label': text('Закрыть', 'Close'), text: '×', onclick: () => overlay.remove() })]),
+      h('div', { className: 'bom-modal-head' }, [h('div', {}, [h('p', { className: 'eyebrow', text: 'BOM / COSTING' }), h('h2', { text: existing ? text(`Редактировать ${existing.sku}`, `Edit ${existing.sku}`) : text('Создать BOM', 'Create BOM') })]), h('button', { type: 'button', className: 'icon-button', 'aria-label': text('Закрыть', 'Close'), text: '×', onclick: () => closeEditor() })]),
       h('div', { className: 'bom-editor-grid' }, [
         field('SKU', select(skus.map((item) => [item.sku, `${item.sku} · ${item.name}`]), model.sku, (value) => { model.sku = value; }, { disabled: Boolean(existing), required: true })),
         field(text('Валюта', 'Currency'), input('text', model.currency, (value) => { model.currency = value.toUpperCase(); renderLines(); }, { maxlength: '3', minlength: '3', required: true, pattern: '[A-Za-z]{3}' })),
@@ -432,7 +447,7 @@
       linesRoot,
       field(text('Примечания', 'Notes'), textarea(model.notes, (value) => { model.notes = value; })),
       problem,
-      h('div', { className: 'bom-modal-actions' }, [h('button', { type: 'button', className: 'secondary', text: text('Отмена', 'Cancel'), onclick: () => overlay.remove() }), h('button', { type: 'submit', className: 'primary', text: text('Сохранить', 'Save') })]),
+      h('div', { className: 'bom-modal-actions' }, [h('button', { type: 'button', className: 'secondary', text: text('Отмена', 'Cancel'), onclick: () => closeEditor() }), h('button', { type: 'submit', className: 'primary', text: text('Сохранить', 'Save') })]),
     );
     dialog.addEventListener('submit', async (event) => {
       event.preventDefault();
@@ -452,7 +467,7 @@
         problem.scrollIntoView({ block: 'nearest' });
         return;
       }
-      overlay.remove();
+      closeEditor();
       // Saving said nothing at all here, while every other create action in the application
       // confirms itself. A form that closes in silence leaves the reader checking the table to find
       // out whether anything happened.
@@ -462,11 +477,10 @@
       await loadBoms({ reset: true });
     });
     overlay.append(dialog);
-    overlay.addEventListener('mousedown', (event) => { if (event.target === overlay) overlay.remove(); });
+    overlay.addEventListener('mousedown', (event) => { if (event.target === overlay) closeEditor(); });
     // A hand-rolled overlay gets none of a <dialog>'s behaviour for free, and Escape is the one a
     // person reaches for without thinking.
-    const escape = (event) => { if (event.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', escape); } };
-    document.addEventListener('keydown', escape);
+    document.addEventListener('keydown', onEscape);
     document.body.append(overlay);
     dialog.querySelector('input,select,button')?.focus();
   }

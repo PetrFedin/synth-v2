@@ -91,3 +91,39 @@ test('The rule and the source are carried by the schema and the transport', asyn
   assert.ok(routes.includes("'measurements', 'gradeSteps'"), 'the free chart accepts a rule');
   assert.ok(routes.includes("'tolerancePlus', 'measurements', 'gradeSteps']"), 'the governed chart accepts one too');
 });
+
+// Ревизия опубликованной таблицы — это её собственные точки, отправленные обратно. Проверяется
+// именно то, что делает экран: взять построенную таблицу, собрать из неё вход и построить заново.
+function reviseFrom(built, { carryGrade = true } = {}) {
+  return chart(built.points.map((builtPoint) => ({
+    pointCode: builtPoint.pointCode,
+    name: builtPoint.name,
+    description: builtPoint.description,
+    toleranceMinus: builtPoint.toleranceMinus,
+    tolerancePlus: builtPoint.tolerancePlus,
+    ...(carryGrade ? { gradeSteps: builtPoint.gradeSteps } : {}),
+    measurements: builtPoint.measurements.map((entry) => ({ sizeCode: entry.sizeCode, value: entry.value })),
+  })));
+}
+
+test('A revision that carries the rule reproduces the chart exactly, exceptions included', () => {
+  // 50 набрано вручную поверх правила: 110 вместо выведенных 108. После ревизии правило на месте,
+  // значения те же, и исключение осталось исключением, а не стало новой нормой.
+  const built = chart([point({ gradeSteps: [4, 4, 4], measurements: [{ sizeCode: '46', value: 100 }, { sizeCode: '50', value: 110 }] })]);
+  assert.deepEqual(built.points[0].measurements.map((entry) => entry.source), ['derived', 'derived', 'derived', 'override']);
+
+  const revised = reviseFrom(built);
+  assert.deepEqual(revised.points[0].gradeSteps, [4, 4, 4]);
+  assert.deepEqual(revised.points[0].measurements.map((entry) => entry.value), built.points[0].measurements.map((entry) => entry.value));
+  assert.deepEqual(revised.points[0].measurements.map((entry) => entry.source), ['derived', 'derived', 'derived', 'override']);
+});
+
+test('A revision that drops the rule keeps the numbers and loses what they were derived from', () => {
+  // Это и был дефект экрана ревизии: посылка не несла `gradeSteps`, домен читал отсутствие поля как
+  // «правила нет», и градуированная таблица молча становилась набранной вручную. Числа при этом
+  // совпадают, поэтому глазом потеря не видна — её видно только по исчезнувшему правилу.
+  const built = chart([point({ gradeSteps: [4, 4, 4] })]);
+  const stripped = reviseFrom(built, { carryGrade: false });
+  assert.equal(stripped.points[0].gradeSteps, null);
+  assert.deepEqual(stripped.points[0].measurements.map((entry) => entry.value), [96, 100, 104, 108]);
+});

@@ -213,7 +213,7 @@
     if (!item) return h('aside', { className: 'measurement-inspector' }, [h('p', { className: 'muted', text: text('Выберите запись для просмотра.', 'Select a record to inspect.') })]);
     const actions = [];
     if (canManage(item.chart.brandId) && item.chart.status === 'draft') {
-      actions.push(h('button', { type: 'button', className: 'secondary', text: text('Редактировать', 'Edit'), onclick: () => { void openEditor(item.chart); } }));
+      actions.push(h('button', { type: 'button', className: 'secondary', text: text('Редактировать', 'Edit'), onclick: () => { openEditor(item.chart).catch((error) => toast(error?.message || text('Не удалось открыть редактор.', 'The editor could not be opened.'), 'error')); } }));
       actions.push(h('button', { type: 'button', className: 'primary', disabled: !item.publishReady, text: text('Опубликовать', 'Publish'), onclick: () => { void publishChart(item); } }));
     }
     const risks = item.risks.length
@@ -339,6 +339,13 @@
 
   function showEditor({ existing, skus, model, nextKey }) {
     const overlay = h('div', { className: 'measurement-modal-overlay' });
+    // Оверлей закрывается четырьмя путями: крестик, «Отмена», щелчок мимо и успешное сохранение, а
+    // обработчик Escape снимал себя только на пятом — на самом Escape. Каждое закрытие любым из остальных
+    // оставляло на `document` ещё один слушатель, держащий ссылку на весь оторванный диалог. Закрытие теперь
+    // одно для всех путей.
+    function onEscape(event) { if (event.key === 'Escape') closeEditor(); }
+    function closeEditor() { overlay.remove(); document.removeEventListener('keydown', onEscape); }
+
     const form = h('form', { className: 'measurement-modal', role: 'dialog', 'aria-modal': 'true' });
     const problem = h('p', { className: 'bom-modal-error', hidden: true });
     const body = h('div', { className: 'measurement-editor-body' });
@@ -394,17 +401,28 @@
     }
 
     form.append(
-      h('div', { className: 'measurement-modal-head' }, [h('div', {}, [h('p', { className: 'eyebrow', text: 'MEASUREMENT CHART' }), h('h2', { text: existing ? text(`Редактировать ${existing.sku}`, `Edit ${existing.sku}`) : text('Создать размерную таблицу', 'Create measurement chart') })]), h('button', { type: 'button', className: 'icon-button', text: '×', 'aria-label': text('Закрыть', 'Close'), onclick: () => overlay.remove() })]),
+      h('div', { className: 'measurement-modal-head' }, [h('div', {}, [h('p', { className: 'eyebrow', text: 'MEASUREMENT CHART' }), h('h2', { text: existing ? text(`Редактировать ${existing.sku}`, `Edit ${existing.sku}`) : text('Создать размерную таблицу', 'Create measurement chart') })]), h('button', { type: 'button', className: 'icon-button', text: '×', 'aria-label': text('Закрыть', 'Close'), onclick: () => closeEditor() })]),
       body,
-      h('div', { className: 'measurement-modal-actions' }, [h('button', { type: 'button', className: 'secondary', text: text('Отмена', 'Cancel'), onclick: () => overlay.remove() }), h('button', { type: 'submit', className: 'primary', text: text('Сохранить', 'Save') })]),
+      h('div', { className: 'measurement-modal-actions' }, [h('button', { type: 'button', className: 'secondary', text: text('Отмена', 'Cancel'), onclick: () => closeEditor() }), h('button', { type: 'submit', className: 'primary', text: text('Сохранить', 'Save') })]),
     );
     renderBody();
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
+      // Обе проверки раньше бросали исключение **до** try-блока, то есть в асинхронном
+      // обработчике события: отказ уходил в необработанное отклонение, форма не закрывалась и
+      // ничего не говорила. Сообщение показывается там же, где сообщения сервера, — иначе
+      // проверка формы и отказ домена ведут себя по-разному на одной и той же кнопке.
+      const refuse = (message) => { problem.textContent = message; problem.hidden = false; problem.scrollIntoView({ block: 'nearest' }); };
       const sizeCodes = model.sizes.map((size) => String(size.code).trim().toUpperCase());
-      if (sizeCodes.some((code) => !code) || new Set(sizeCodes).size !== sizeCodes.length) throw new Error(text('Коды размеров должны быть заполнены и уникальны.', 'Size codes must be present and unique.'));
+      if (sizeCodes.some((code) => !code) || new Set(sizeCodes).size !== sizeCodes.length) {
+        refuse(text('Коды размеров должны быть заполнены и уникальны.', 'Size codes must be present and unique.'));
+        return;
+      }
       const baseSize = model.sizes.find((size) => size.key === model.baseSizeKey);
-      if (!baseSize) throw new Error(text('Выберите базовый размер.', 'Select a base size.'));
+      if (!baseSize) {
+        refuse(text('Выберите базовый размер.', 'Select a base size.'));
+        return;
+      }
       const payload = {
         unit: model.unit,
         baseSizeCode: String(baseSize.code).trim().toUpperCase(),
@@ -432,7 +450,7 @@
         problem.scrollIntoView({ block: 'nearest' });
         return;
       }
-      overlay.remove();
+      closeEditor();
       toast(existing
         ? text('Размерная таблица сохранена.', 'The measurement chart is saved.')
         : text('Размерная таблица создана.', 'The measurement chart is created.'), 'success');
@@ -440,9 +458,8 @@
     });
     form.append(problem);
     overlay.append(form);
-    overlay.addEventListener('mousedown', (event) => { if (event.target === overlay) overlay.remove(); });
-    const escape = (event) => { if (event.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', escape); } };
-    document.addEventListener('keydown', escape);
+    overlay.addEventListener('mousedown', (event) => { if (event.target === overlay) closeEditor(); });
+    document.addEventListener('keydown', onEscape);
     document.body.append(overlay);
     form.querySelector('input,select,button')?.focus();
   }

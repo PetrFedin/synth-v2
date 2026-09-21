@@ -80,7 +80,7 @@ export function completeQualityInspectionRun(inspection, input) {
   invariant(run?.status === 'in-progress' && run.runNumber === inspection.currentRun, 'QUALITY_CURRENT_RUN_INVALID', 'Current Final Quality run is invalid');
   const inspectedQuantity = positiveInteger(input.inspectedQuantity, 'QUALITY_INSPECTED_QUANTITY_INVALID', 'Inspected quantity');
   invariant(inspectedQuantity === run.samplingPlan.sampleSize, 'QUALITY_SAMPLE_NOT_COMPLETED', 'The full approved sample must be inspected', { sampleSize: run.samplingPlan.sampleSize, inspectedQuantity });
-  const defects = normalizeDefects(input.defects);
+  const defects = normalizeDefects(input.defects, input.defectCatalogue);
   const measurements = normalizeMeasurementFailures(input.measurementFailures);
   const checkpoints = normalizeCheckpointResults(input.checkpoints);
   const evidenceReferences = normalizeReferences(input.evidenceReferences, 'QUALITY_EVIDENCE_REFERENCES_INVALID');
@@ -281,17 +281,32 @@ function runSamplingPlan(inspection, input) {
   });
 }
 
-function normalizeDefects(value) {
+// Один код — одна тяжесть, где бы он ни был записан.
+//
+// Inline control and final inspection name the same faults, and a code that is major at the
+// operation and minor at the gate is two vocabularies pretending to be one: nothing can be counted
+// across them, which is the whole reason the brand keeps a catalogue at all.
+//
+// A code the brand has not registered is still accepted. A brand that has not yet built a catalogue
+// must keep inspecting, and refusing its inspections would make the catalogue a precondition for
+// quality control rather than an improvement to it.
+function normalizeDefects(value, catalogue) {
   invariant(Array.isArray(value) && value.length <= 500, 'QUALITY_DEFECTS_INVALID', 'Defects must be an array with at most 500 records');
+  const registered = new Map((Array.isArray(catalogue) ? catalogue : []).map((type) => [type.code, type]));
   const codes = new Set();
   return Object.freeze(value.map((defect, index) => {
     invariant(defect && typeof defect === 'object' && !Array.isArray(defect), 'QUALITY_DEFECT_INVALID', 'Defect record is invalid', { index });
     const defectCode = text(defect.defectCode, 2, 80, 'QUALITY_DEFECT_CODE_INVALID', 'Defect code');
     invariant(!codes.has(defectCode), 'QUALITY_DEFECT_CODE_DUPLICATE', 'Defect codes must be unique within a run', { defectCode });
     codes.add(defectCode);
+    const severity = enumValue(defect.severity, QUALITY_DEFECT_SEVERITIES, 'QUALITY_DEFECT_SEVERITY_INVALID', 'Defect severity');
+    const known = registered.get(defectCode);
+    invariant(!known || known.severity === severity, 'QUALITY_DEFECT_SEVERITY_DISAGREES_WITH_CATALOGUE',
+      'This defect code is registered with a different severity, and one code cannot mean two things',
+      { defectCode, severity, registeredSeverity: known?.severity });
     return Object.freeze({
       defectCode,
-      severity: enumValue(defect.severity, QUALITY_DEFECT_SEVERITIES, 'QUALITY_DEFECT_SEVERITY_INVALID', 'Defect severity'),
+      severity,
       category: text(defect.category, 2, 120, 'QUALITY_DEFECT_CATEGORY_INVALID', 'Defect category'),
       description: text(defect.description, 3, 1000, 'QUALITY_DEFECT_DESCRIPTION_INVALID', 'Defect description'),
       quantity: positiveInteger(defect.quantity, 'QUALITY_DEFECT_QUANTITY_INVALID', 'Defect quantity'),

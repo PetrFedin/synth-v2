@@ -37,6 +37,12 @@ function view(client) {
       );
       return result.rows.map((row) => row.payload);
     },
+    // Каталог дефектов бренда. Shared with inline control rather than duplicated: one catalogue is
+    // what makes a fault countable across the two places it is found.
+    async listDefectTypes(brandId) {
+      const result = await client.query('SELECT payload FROM defect_types WHERE brand_id = $1 ORDER BY code', [brandId]);
+      return result.rows.map((row) => row.payload);
+    },
     async insertInspection(value) {
       try {
         await client.query(

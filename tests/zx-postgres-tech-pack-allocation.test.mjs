@@ -16,6 +16,8 @@ import { createSourcingTechPackAllocationService } from '../src/application/sour
 import { createProductionOrderService } from '../src/application/production-order-service.mjs';
 import { createProductionExecutionService } from '../src/application/production-execution-service.mjs';
 import { createFinalQualityService } from '../src/application/final-quality-service.mjs';
+import { createInlineQualityService } from '../src/application/inline-quality-service.mjs';
+import { createPostgresInlineQualityStore } from '../src/infrastructure/postgres-inline-quality-store.mjs';
 import { createPostgresWholesaleStore } from '../src/infrastructure/postgres-store.mjs';
 import { createPostgresCatalogStore } from '../src/infrastructure/postgres-catalog-store.mjs';
 import { createPostgresMaterialStore } from '../src/infrastructure/postgres-material-store.mjs';
@@ -54,6 +56,7 @@ test('PostgreSQL closes approved PPS through production, rework, reinspection an
     const allocationStore = createPostgresSourcingTechPackAllocationStore({ pool });
     const productionOrderStore = createPostgresProductionOrderStore({ pool });
     const productionExecutionStore = createPostgresProductionExecutionStore({ pool });
+    const inlineQualityStore = createPostgresInlineQualityStore({ pool });
     const finalQualityStore = createPostgresFinalQualityStore({ pool });
     const platform = createWholesalePlatform({ store: wholesaleStore, clock, nextId });
     const catalog = createCatalogService({ wholesaleStore, catalogStore, clock, nextId });
@@ -66,6 +69,7 @@ test('PostgreSQL closes approved PPS through production, rework, reinspection an
     const allocation = createSourcingTechPackAllocationService({ store: allocationStore, clock, nextId });
     const productionOrders = createProductionOrderService({ store: productionOrderStore, clock, nextId });
     const productionExecutions = createProductionExecutionService({ store: productionExecutionStore, clock, nextId });
+    const inlineQuality = createInlineQualityService({ store: inlineQualityStore, clock, nextId });
     const finalQuality = createFinalQualityService({ store: finalQualityStore, clock, nextId });
 
     await platform.registerOrganisation('org-create', 'system', createOrganisation({ id: 'brand-tech-gate', type: 'brand', name: 'Tech Gate Brand' }));
@@ -166,6 +170,58 @@ test('PostgreSQL closes approved PPS through production, rework, reinspection an
     assert.equal(execution.milestones[0].resolutionNotes, 'Certificate received and approved by quality team');
 
     execution = await productionExecutions.completeMilestone('production-execution-complete-materials', 'product-owner', execution.executionCode, { expectedVersion: execution.version, milestoneCode: 'materials-ready', notes: 'Materials released to cutting' });
+
+    // --- Пооперационный контроль на раскрое ------------------------------------------------------
+    //
+    // A fault found at the operation that made it costs one piece; the same fault found after
+    // packing costs the lot. This is that, end to end and against the real database: the catalogue,
+    // the check, the gate that holds the stage shut, and the disposition that opens it again.
+    const seamOpen = await inlineQuality.registerDefectType('defect-type-seam', 'product-owner', {
+      brandId: 'brand-tech-gate', code: 'SEAM-OPEN', severity: 'major', originStage: 'cutting-complete',
+      nameRu: 'Разошёлся шов', nameEn: 'Open seam',
+    });
+    assert.equal(seamOpen.status, 'active');
+    // Один код — одна тяжесть. Registering it again is a divergence in the catalogue, not a typo.
+    await assert.rejects(() => inlineQuality.registerDefectType('defect-type-seam-again', 'product-owner', {
+      brandId: 'brand-tech-gate', code: 'SEAM-OPEN', severity: 'minor', originStage: 'cutting-complete',
+      nameRu: 'Разошёлся шов', nameEn: 'Open seam',
+    }), { code: 'DEFECT_TYPE_ALREADY_REGISTERED' });
+    // Свободного текста больше нет: код либо в каталоге, либо строки нет.
+    await assert.rejects(() => inlineQuality.recordCheck('inline-unknown', 'product-owner', execution.executionCode, {
+      milestoneCode: 'cutting-complete', checkedQuantity: 40, inspectorName: 'Павел Дорохов',
+      defects: [{ defectCode: 'NOT-REGISTERED', quantity: 1 }],
+    }), { code: 'INLINE_QC_DEFECT_TYPE_NOT_FOUND' });
+
+    const check = await inlineQuality.recordCheck('inline-cutting', 'product-owner', execution.executionCode, {
+      milestoneCode: 'cutting-complete', checkedQuantity: 40, inspectorName: 'Павел Дорохов',
+      defects: [{ defectCode: 'SEAM-OPEN', quantity: 3, notes: 'Три изделия из одной пачки' }],
+      notes: 'Контроль после раскроя',
+    });
+    assert.equal(check.status, 'open');
+    assert.equal(check.defectiveQuantity, 3);
+    assert.equal(check.defects[0].severity, 'major', 'severity comes from the catalogue, never from the caller');
+
+    // The database holds the derived count and the open state, not the caller's word for them.
+    const stored = await pool.query('SELECT defective_quantity, status FROM inline_quality_checks WHERE id = $1', [check.id]);
+    assert.deepEqual(stored.rows[0], { defective_quantity: 3, status: 'open' });
+
+    // Веха не закрывается, пока найденный на ней брак не разобран — и это правило стоит и в БД.
+    await assert.rejects(
+      () => productionExecutions.completeMilestone('production-execution-blocked-by-inline', 'product-owner', execution.executionCode, { expectedVersion: execution.version, milestoneCode: 'cutting-complete', notes: 'Should not pass with undecided defects' }),
+      { code: 'PRODUCTION_MILESTONE_HAS_OPEN_INLINE_CHECK' },
+    );
+    await assert.rejects(
+      () => pool.query("UPDATE production_executions SET payload = jsonb_set(payload, '{milestones,1,status}', '\"completed\"') WHERE id = $1", [execution.id]),
+      /PRODUCTION_MILESTONE_HAS_OPEN_INLINE_CHECK/,
+      'the gate holds against a writer that goes around the module',
+    );
+
+    // Принять известный брак можно, но только объяснив почему.
+    await assert.rejects(() => inlineQuality.disposition('inline-accept-bare', 'product-owner', check.id, { expectedVersion: check.version, disposition: 'accepted', notes: 'ok' }), { code: 'INLINE_QC_ACCEPTANCE_REASON_REQUIRED' });
+    const decided = await inlineQuality.disposition('inline-rework', 'product-owner', check.id, { expectedVersion: check.version, disposition: 'rework', notes: 'Три изделия перекроены из того же рулона' });
+    assert.equal(decided.status, 'closed');
+    assert.equal(decided.disposition, 'rework');
+
     for (const milestoneCode of ['cutting-complete', 'assembly-complete', 'finishing-complete', 'packing-complete']) {
       execution = await productionExecutions.completeMilestone(`production-execution-complete-${milestoneCode}`, 'product-owner', execution.executionCode, { expectedVersion: execution.version, milestoneCode, notes: `${milestoneCode} verified` });
     }

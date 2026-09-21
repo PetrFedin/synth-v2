@@ -17,6 +17,15 @@ function view(client) {
       const result = await client.query('SELECT payload FROM production_orders WHERE production_order_number = $1 FOR SHARE', [productionOrderNumber]);
       return result.rows[0]?.payload;
     },
+    // Открытые проверки этого исполнения. Only the open ones: a closed check has had its verdict
+    // and says nothing about whether a stage may be signed off.
+    async listOpenInlineChecks(executionId) {
+      const result = await client.query(
+        "SELECT payload FROM inline_quality_checks WHERE execution_id = $1 AND status = 'open' ORDER BY milestone_code, check_number FOR SHARE",
+        [executionId],
+      );
+      return result.rows.map((row) => row.payload);
+    },
     async getExecutionByCode(executionCode) {
       const result = await client.query('SELECT payload FROM production_executions WHERE execution_code = $1 FOR UPDATE', [executionCode]);
       return result.rows[0]?.payload;

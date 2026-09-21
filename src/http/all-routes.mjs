@@ -2,6 +2,7 @@ import { createCollectionStyleVersionRoutes } from './collection-style-version-r
 import { createCommercialPublicationRoutes } from './commercial-publication-routes.mjs';
 import { createEconomicsRouteBundle } from './economics-route-bundle.mjs';
 import { createFinalQualityRoutes } from './final-quality-routes.mjs';
+import { createInlineQualityRoutes } from './inline-quality-routes.mjs';
 import { createLibraryRoutes } from './library-routes.mjs';
 import { createHistoryRoutes } from './history-routes.mjs';
 import { createSupplierPortalRoutes } from './supplier-portal-routes.mjs';
@@ -46,6 +47,7 @@ export function createWholesaleRoutes(services = {}) {
     ...createProductionOrderRoutes({ productionOrders: services.productionOrders }),
     ...createProductionExecutionRoutes({ productionExecutions: services.productionExecutions }),
     ...createFinalQualityRoutes({ finalQuality: services.finalQuality }),
+    ...createInlineQualityRoutes({ inlineQuality: services.inlineQuality }),
     ...createLibraryRoutes({ libraries: services.libraries }),
     ...createHistoryRoutes({ history: services.history }),
     ...createSupplierPortalRoutes({ supplierPortal: services.supplierPortal }),

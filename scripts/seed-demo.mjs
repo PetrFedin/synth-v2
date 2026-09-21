@@ -54,6 +54,17 @@ const SHOP_NAME = 'Nordhaus Retail';
 
 const pool = new pg.Pool({ connectionString: databaseUrl, max: 4 });
 const log = [];
+const DEMO_DEFECT_TYPES = [
+  { code: 'SEAM-OPEN', severity: 'major', originStage: 'assembly-complete', nameRu: 'Разошёлся шов', nameEn: 'Open seam' },
+  { code: 'PRINT-OFF', severity: 'major', originStage: 'finishing-complete', nameRu: 'Смещение принта', nameEn: 'Print misaligned' },
+  { code: 'STITCH-LOOSE', severity: 'minor', originStage: 'assembly-complete', nameRu: 'Слабая строчка', nameEn: 'Loose stitching' },
+  { code: 'FABRIC-HOLE', severity: 'critical', originStage: 'materials-ready', nameRu: 'Дыра в полотне', nameEn: 'Hole in fabric' },
+  { code: 'CUT-OFF-GRAIN', severity: 'major', originStage: 'cutting-complete', nameRu: 'Раскрой не по долевой', nameEn: 'Cut off grain' },
+  { code: 'SHADE-MISMATCH', severity: 'major', originStage: 'materials-ready', nameRu: 'Разнооттеночность', nameEn: 'Shade mismatch' },
+  { code: 'LABEL-MISSING', severity: 'minor', originStage: 'packing-complete', nameRu: 'Нет ярлыка', nameEn: 'Label missing' },
+  { code: 'BUTTON-LOOSE', severity: 'minor', originStage: 'finishing-complete', nameRu: 'Слабо пришита пуговица', nameEn: 'Loose button' },
+];
+
 const DEMO_SAMPLING_STANDARD = 'DEMO-AQL-2026';
 const DEMO_SAMPLING_ROWS = [
   // lotFrom, lotTo, sampleSize, acceptAt at AQL 2.5, acceptAt at AQL 4.0
@@ -144,6 +155,7 @@ try {
   // The criterion before the inspection. Without a plan set loaded, the only way to start a run is
   // to type the sample size and the two limits by hand, which is the thing the AQL work replaced.
   await ensureSamplingPlans(pool, brandId, accounts.owner);
+  await ensureDefectCatalogue(runtime, pool, brandId, accounts.owner);
 
   // Inspections sat at review-pending because the only account in the brand was the one that ran
   // them, and a run's inspector may not sign off its own disposition. That rule is a feature, and a
@@ -469,6 +481,30 @@ async function ensureSamplingPlans(pool, brandId, createdBy) {
     }
   }
   note('sampling plans', `${DEMO_SAMPLING_STANDARD}, уровень II, AQL 2.5 и 4.0 — ${inserted} строк`);
+}
+
+// Каталог дефектов бренда.
+//
+// The codes below are not invented for the demonstration: the three that already appear in recorded
+// inspections — SEAM-OPEN, PRINT-OFF, STITCH-LOOSE — are adopted with the severities those
+// inspections used, so registering the catalogue explains the existing records rather than
+// contradicting them. The rest name faults at the other stages, because a catalogue whose every
+// entry originates at one operation cannot say where the work goes wrong.
+
+async function ensureDefectCatalogue(runtime, pool, brandId, actorId) {
+  const existing = await pool.query('SELECT code FROM defect_types WHERE brand_id = $1', [brandId]);
+  const known = new Set(existing.rows.map((row) => row.code));
+  let added = 0;
+  for (const type of DEMO_DEFECT_TYPES) {
+    if (known.has(type.code)) continue;
+    try {
+      await runtime.inlineQuality.registerDefectType(command('defect-type'), actorId, { brandId, ...type });
+      added += 1;
+    } catch (error) {
+      note('defect catalogue', `${type.code} skipped (${error.code ?? error.message})`);
+    }
+  }
+  note('defect catalogue', added > 0 ? `${added} типов дефектов зарегистрировано` : `${known.size} типов уже в каталоге`);
 }
 
 async function releaseQuality(runtime, pool, brandId, approvers) {

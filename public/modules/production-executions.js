@@ -11,6 +11,12 @@
     status: 'all', risk: 'all', search: '', productionOrderNumber: '',
     completionNotes: '', blockReason: '', resolutionNotes: '', cancelReason: '',
     busyCode: null, generation: 0,
+    // Пооперационный контроль живёт здесь же, где вехи, а не на отдельном экране: проверка
+    // относится к конкретной вехе, и разносить их означало бы заставить человека держать две
+    // страницы рядом, чтобы понять одну партию.
+    catalogue: [], catalogueLoaded: false, checksByExecution: {}, checksLoading: '',
+    qcCheckedQuantity: '', qcInspectorName: '', qcDefectCode: '', qcDefectQuantity: '1',
+    qcDefects: [], qcNotes: '', qcDispositionNotes: '',
   };
   const STATUSES = ['planned', 'active', 'ready-for-qc', 'cancelled'];
 
@@ -110,6 +116,50 @@
     }
   }
   // See materials.js: retrying a failed load from render starves the event loop.
+  // Каталог дефектов и проверки выбранной партии.
+  //
+  // The catalogue is fetched once — it changes when a brand edits it, not when a reader looks at
+  // another lot — and the checks are fetched per lot, because that is the thing being looked at.
+  // Neither failure empties the screen: a lot's milestones and its dates are still worth reading
+  // when its inline history could not be loaded, and saying so is better than an error page.
+  async function loadCatalogue(request = api) {
+    if (ui.catalogueLoaded) return;
+    try { ui.catalogue = await request('/v2/defect-types') || []; } catch (error) { ui.catalogue = []; }
+    ui.catalogueLoaded = true;
+  }
+  async function loadChecks(executionCode, request = api) {
+    if (!executionCode || ui.checksLoading === executionCode) return;
+    ui.checksLoading = executionCode;
+    try {
+      const page = await request(`/v2/production-executions/${encodeURIComponent(executionCode)}/inline-quality-checks`);
+      ui.checksByExecution[executionCode] = page && Array.isArray(page.items) ? page : { items: [], summary: null, pareto: [] };
+    } catch (error) {
+      ui.checksByExecution[executionCode] = { items: [], summary: null, pareto: [], error: error?.message || '' };
+    } finally {
+      ui.checksLoading = '';
+      if (state.view === 'production-executions') renderApp();
+    }
+  }
+  function ensureInlineQuality(value) {
+    if (!value) return;
+    if (!ui.catalogueLoaded || ui.checksByExecution[value.executionCode] === undefined) {
+      queueMicrotask(async () => { await loadCatalogue(); await loadChecks(value.executionCode); });
+    }
+  }
+  function activeCatalogue() { return ui.catalogue.filter((type) => type.status === 'active'); }
+  function defectTypeLabel(code) {
+    const type = ui.catalogue.find((candidate) => candidate.code === code);
+    if (!type) return code;
+    return `${code} · ${t(type.nameRu, type.nameEn)}`;
+  }
+  function severityLabel(severity) {
+    return { critical: t('критический', 'critical'), major: t('значительный', 'major'), minor: t('незначительный', 'minor') }[severity] || severity;
+  }
+  function dispositionLabel(disposition) {
+    return { rework: t('на доработку', 'rework'), scrap: t('в брак', 'scrap'), accepted: t('принято с отклонением', 'accepted') }[disposition] || '—';
+  }
+  function percent(rate) { return `${(Number(rate || 0) * 100).toFixed(1).replace('.', ',')} %`; }
+
   function ensureLoaded() { if (!ui.loaded && !ui.loading && !ui.error) queueMicrotask(() => { void load({ reset: true }); }); }
   function selected() { return ui.items.find((value) => value.executionCode === ui.selectedCode) || ui.items[0] || null; }
   function upsert(value) {
@@ -267,6 +317,128 @@
       } }),
     ]);
   }
+  // Пооперационный контроль партии: что нашли, где и что с этим решили.
+  function inlineQualityPanel(value, current, manage) {
+    const page = ui.checksByExecution[value.executionCode];
+    const children = [h('h3', { text: t('Пооперационный контроль', 'Inline quality control') })];
+    if (!page) { children.push(h('p', { className: 'muted', text: t('Загрузка…', 'Loading…') })); return h('section', { className: 'production-execution-card' }, children); }
+    if (page.error) children.push(h('p', { className: 'production-execution-warn', text: page.error }));
+
+    const summary = page.summary;
+    if (summary && summary.checks > 0) {
+      const counts = summary.severityCounts || { critical: 0, major: 0, minor: 0 };
+      children.push(h('p', { className: 'muted', text: t(
+        `Проверено ${summary.checkedQuantity} из ${value.quantity}, дефектных ${summary.defectiveQuantity} (${percent(summary.defectRate)}). Критических ${counts.critical}, значительных ${counts.major}, незначительных ${counts.minor}.`,
+        `${summary.checkedQuantity} of ${value.quantity} checked, ${summary.defectiveQuantity} defective (${percent(summary.defectRate)}). Critical ${counts.critical}, major ${counts.major}, minor ${counts.minor}.`) }));
+      if (summary.open > 0) children.push(h('p', { className: 'production-execution-warn', text: t(
+        `Не разобрано проверок: ${summary.open}. Веха не закроется, пока по ним нет решения.`,
+        `${summary.open} check(s) undecided. The milestone will not close until they are.`) }));
+    } else {
+      children.push(h('p', { className: 'muted', text: t('Проверок на этой партии пока нет.', 'No inline checks on this lot yet.') }));
+    }
+
+    for (const check of page.items) {
+      const lines = [
+        h('strong', { text: `${milestoneLabel(check.milestoneCode)} · ${t('проверка', 'check')} ${check.checkNumber}` }),
+        h('p', { className: 'muted', text: `${check.inspectorName} · ${date(check.recordedAt)}` }),
+        h('p', { className: 'muted', text: t(
+          `Проверено ${check.checkedQuantity}, дефектных ${check.defectiveQuantity} (${percent(check.defectRate)})`,
+          `${check.checkedQuantity} checked, ${check.defectiveQuantity} defective (${percent(check.defectRate)})`) }),
+      ];
+      for (const defect of check.defects || []) {
+        lines.push(h('p', { className: 'muted', text: `${defectTypeLabel(defect.defectCode)} — ${defect.quantity} ${t('шт.', 'pcs')} · ${severityLabel(defect.severity)}${defect.notes ? ` · ${defect.notes}` : ''}` }));
+      }
+      if (check.status === 'closed' && check.disposition) {
+        lines.push(h('p', { className: 'muted', text: `${t('Решение', 'Disposition')}: ${dispositionLabel(check.disposition)}${check.dispositionNotes ? ` · ${check.dispositionNotes}` : ''}` }));
+      }
+      if (check.status === 'open' && manage) lines.push(dispositionControls(value, check));
+      children.push(h('div', { className: `production-execution-check ${check.status}` }, lines));
+    }
+
+    // Где работа идёт не так, а не только что она пошла не так.
+    if (page.pareto && page.pareto.length > 1) {
+      children.push(h('h4', { text: t('Чаще всего', 'Most frequent') }));
+      for (const row of page.pareto.slice(0, 5)) {
+        children.push(h('p', { className: 'muted', text: `${defectTypeLabel(row.defectCode)} — ${row.quantity} ${t('шт.', 'pcs')}${row.originStage ? ` · ${t('возникает на этапе', 'originates at')} ${milestoneLabel(row.originStage)}` : ''}` }));
+      }
+    }
+
+    if (value.status === 'active' && current && manage) children.push(recordCheckForm(value, current));
+    return h('section', { className: 'production-execution-card' }, children);
+  }
+
+  function dispositionControls(value, check) {
+    const buttons = [['rework', t('На доработку', 'Rework')], ['scrap', t('В брак', 'Scrap')], ['accepted', t('Принять с отклонением', 'Accept')]]
+      .map(([disposition, label]) => h('button', { type: 'button', className: disposition === 'accepted' ? 'secondary' : 'primary', disabled: Boolean(ui.busyCode), text: label, onclick: () => {
+        const notes = String(ui.qcDispositionNotes || '').trim();
+        // Принять известный брак можно, но только объяснив почему — и сказать об этом здесь, а не
+        // дать серверу отказать после нажатия.
+        if (disposition === 'accepted' && notes.length < 10) { toast(t('Опишите, почему партия принимается с известным браком.', 'Explain why the lot is accepted with known defects.'), 'error'); return; }
+        void commandAndReload(value, `/v2/inline-quality-checks/${encodeURIComponent(check.id)}/disposition`, { expectedVersion: check.version, disposition, ...(notes.length >= 2 ? { notes } : {}) });
+      } }));
+    return h('div', {}, [
+      h('input', { value: ui.qcDispositionNotes, placeholder: t('Что сделано с дефектными изделиями', 'What happens to the defective pieces'), oninput: (event) => { ui.qcDispositionNotes = event.target.value; } }),
+      h('div', { className: 'production-execution-actions' }, buttons),
+    ]);
+  }
+
+  function recordCheckForm(value, current) {
+    const catalogue = activeCatalogue();
+    if (!catalogue.length) return h('p', { className: 'muted', text: t('Каталог дефектов пуст — зарегистрируйте типы дефектов, чтобы записывать проверки.', 'The defect catalogue is empty — register defect types to record checks.') });
+    const codeSelect = h('select', { onchange: (event) => { ui.qcDefectCode = event.target.value; } }, catalogue.map((type) => h('option', { value: type.code, text: `${type.code} · ${t(type.nameRu, type.nameEn)} · ${severityLabel(type.severity)}` })));
+    codeSelect.value = ui.qcDefectCode || catalogue[0].code;
+    ui.qcDefectCode = codeSelect.value;
+
+    const staged = ui.qcDefects.map((defect, index) => h('p', { className: 'muted', text: `${defectTypeLabel(defect.defectCode)} — ${defect.quantity} ${t('шт.', 'pcs')}`, onclick: () => { ui.qcDefects.splice(index, 1); renderApp(); } }));
+
+    return h('div', {}, [
+      h('h4', { text: t(`Записать проверку на этапе «${milestoneLabel(current.code)}»`, `Record a check at «${milestoneLabel(current.code)}»`) }),
+      h('input', { value: ui.qcInspectorName, placeholder: t('Имя инспектора', 'Inspector name'), oninput: (event) => { ui.qcInspectorName = event.target.value; } }),
+      h('input', { type: 'number', min: 1, value: ui.qcCheckedQuantity, placeholder: t(`Сколько изделий проверено (в партии ${value.quantity})`, `Pieces checked (lot of ${value.quantity})`), oninput: (event) => { ui.qcCheckedQuantity = event.target.value; } }),
+      h('div', { className: 'production-execution-actions' }, [
+        codeSelect,
+        h('input', { type: 'number', min: 1, value: ui.qcDefectQuantity, oninput: (event) => { ui.qcDefectQuantity = event.target.value; } }),
+        h('button', { type: 'button', className: 'secondary', text: t('Добавить дефект', 'Add defect'), onclick: () => {
+          const quantity = Number(ui.qcDefectQuantity);
+          if (!Number.isSafeInteger(quantity) || quantity < 1) { toast(t('Некорректное количество дефектных изделий.', 'Invalid defect quantity.'), 'error'); return; }
+          // Два вхождения одного типа — ошибка сложения, а не две находки; складываем здесь же.
+          const existing = ui.qcDefects.find((defect) => defect.defectCode === ui.qcDefectCode);
+          if (existing) existing.quantity += quantity; else ui.qcDefects.push({ defectCode: ui.qcDefectCode, quantity });
+          renderApp();
+        } }),
+      ]),
+      ...(staged.length ? [h('p', { className: 'muted', text: t('Нажмите на строку, чтобы убрать её:', 'Click a line to remove it:') }), ...staged] : []),
+      h('input', { value: ui.qcNotes, placeholder: t('Комментарий (необязательно)', 'Notes (optional)'), oninput: (event) => { ui.qcNotes = event.target.value; } }),
+      h('button', { type: 'button', className: 'primary', disabled: Boolean(ui.busyCode), text: t('Записать проверку', 'Record check'), onclick: () => {
+        const inspectorName = requireText(ui.qcInspectorName, 2, t('Укажите инспектора.', 'Enter the inspector name.'));
+        if (!inspectorName) return;
+        const checkedQuantity = Number(ui.qcCheckedQuantity);
+        if (!Number.isSafeInteger(checkedQuantity) || checkedQuantity < 1) { toast(t('Укажите, сколько изделий проверено.', 'Enter how many pieces were checked.'), 'error'); return; }
+        if (checkedQuantity > value.quantity) { toast(t(`В партии ${value.quantity} изделий — проверить больше нельзя.`, `The lot holds ${value.quantity} pieces — you cannot check more.`), 'error'); return; }
+        const defective = ui.qcDefects.reduce((total, defect) => total + defect.quantity, 0);
+        if (defective > checkedQuantity) { toast(t('Дефектных изделий больше, чем проверено.', 'More defective pieces than were checked.'), 'error'); return; }
+        const notes = String(ui.qcNotes || '').trim();
+        void commandAndReload(value, `/v2/production-executions/${encodeURIComponent(value.executionCode)}/inline-quality-checks`, {
+          milestoneCode: current.code, checkedQuantity, inspectorName, defects: ui.qcDefects.map((defect) => ({ ...defect })), ...(notes.length >= 2 ? { notes } : {}),
+        }, () => { ui.qcDefects = []; ui.qcNotes = ''; ui.qcCheckedQuantity = ''; });
+      } }),
+    ]);
+  }
+
+  // Проверки не входят в агрегат исполнения, поэтому после записи перечитываются они, а не он.
+  async function commandAndReload(value, path, body, after) {
+    if (ui.busyCode) return; ui.busyCode = value.executionCode; renderApp();
+    try {
+      await mutate(path, body, 'POST');
+      if (after) after();
+      ui.checksLoading = '';
+      delete ui.checksByExecution[value.executionCode];
+      toast(t('Пооперационный контроль обновлён.', 'Inline quality control updated.'));
+    } catch (error) {
+      toast(error?.message || I18N.t('common.requestError'), 'error');
+    } finally { ui.busyCode = null; renderApp(); }
+  }
+
   function inspector(value) {
     if (!value) return h('aside', { className: 'production-execution-inspector' }, [h('p', { className: 'muted', text: t('Выберите производственный календарь.', 'Select a production calendar.') })]);
     const manage = can(value.brandId, caps.CAPABILITIES.PRODUCTION_EXECUTION_MANAGE);
@@ -284,6 +456,7 @@
       h('dl', { className: 'production-execution-facts' }, [pair('PO', value.productionOrderNumber), pair('SKU', value.sku), pair(t('Фабрика', 'Supplier'), value.supplierCode), pair(t('Количество', 'Quantity'), value.quantity), pair(t('Начало окна', 'Window start'), date(value.productionStartAt)), pair(t('Срок поставки', 'Delivery due'), date(value.deliveryDueAt)), pair(t('Подтверждение фабрики', 'Supplier confirmation'), value.sourceSnapshot?.confirmationReference), pair(t('Техпак', 'Tech Pack'), `${value.sourceSnapshot?.techPackCode || '—'} · v${value.sourceSnapshot?.techPackVersion || '—'}`)]),
       h('section', { className: 'production-execution-card' }, [h('h3', { text: t('Контрольные точки', 'Milestones') }), timeline(value)]),
     ];
+    if (qualityManage) { ensureInlineQuality(value); children.push(inlineQualityPanel(value, current, qualityManage)); }
     if (value.status === 'active' && current && manage) children.push(actionPanel(value, current, actions));
     if (['planned', 'active'].includes(value.status) && manage) children.push(cancelPanel(value));
     return h('aside', { className: 'production-execution-inspector' }, children);

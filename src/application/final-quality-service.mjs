@@ -121,10 +121,15 @@ export function createFinalQualityService({ store, clock = () => new Date().toIS
       validateInput(input, COMPLETE_FIELDS, 'QUALITY_COMPLETE_INPUT_INVALID');
       const expectedVersion = versionOf(input);
       return execute(commandId, `completeFinalQualityRun:${actorId}:${inspectionCode}:${canonicalJson(input)}`, actorId,
-        (tx) => contextForInspection(tx, inspectionCode, actorId, CAPABILITIES.QUALITY_MANAGE),
-        async (tx, current) => {
+        async (tx) => {
+          const current = await contextForInspection(tx, inspectionCode, actorId, CAPABILITIES.QUALITY_MANAGE);
+          // Каталог дефектов бренда — тот же, что у пооперационного контроля. Read here so that a
+          // code cannot be major at the operation and minor at the gate.
+          return Object.freeze({ current, defectCatalogue: await tx.listDefectTypes(current.brandId) });
+        },
+        async (tx, { current, defectCatalogue }) => {
           assertQualityInspectionVersion(current, expectedVersion);
-          const value = completeQualityInspectionRun(current, { ...withoutExpectedVersion(input), actorId, completedAt: clock() });
+          const value = completeQualityInspectionRun(current, { ...withoutExpectedVersion(input), defectCatalogue, actorId, completedAt: clock() });
           await tx.saveInspection(value, expectedVersion);
           await append(tx, 'final-quality.run-completed', value, commandId, actorId, { runNumber: value.currentRun, recommendation: value.runs.at(-1).recommendation, defectCounts: value.runs.at(-1).defectCounts });
           return value;

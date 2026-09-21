@@ -12,6 +12,7 @@ import {
   resolveProductionMilestoneBlock,
   startProductionExecution,
 } from '../modules/production-execution/public.mjs';
+import { assertMilestoneClearOfOpenChecks } from '../modules/inline-quality/public.mjs';
 
 const COMPLETE_FIELDS = Object.freeze(new Set(['expectedVersion','milestoneCode','notes']));
 const BLOCK_FIELDS = Object.freeze(new Set(['expectedVersion','milestoneCode','reason']));
@@ -101,6 +102,13 @@ export function createProductionExecutionService({ store, clock = () => new Date
         (tx) => contextForExecution(tx, executionCode, actorId),
         async (tx, current) => {
           assertProductionExecutionVersion(current, expectedVersion);
+          // Веха не закрывается, пока найденный на ней брак не разобран.
+          //
+          // The inline checks are read in the same transaction that writes the completion, so a
+          // check opened between the read and the write cannot slip through. The database holds the
+          // same rule, because this one crosses two aggregates and the module that happens to be
+          // writing is not the only writer.
+          assertMilestoneClearOfOpenChecks(await tx.listOpenInlineChecks(current.id), input.milestoneCode);
           const value = completeProductionMilestone(current, { milestoneCode: input.milestoneCode, actorId, notes: input.notes, completedAt: clock() });
           await tx.saveExecution(value, expectedVersion);
           await append(tx, value.status === 'ready-for-qc' ? 'production-execution.ready-for-qc' : 'production-milestone.completed', value, commandId, actorId, { milestoneCode: input.milestoneCode });

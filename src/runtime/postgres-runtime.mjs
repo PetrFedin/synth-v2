@@ -10,6 +10,10 @@ import { createProductionSourcingService } from '../application/production-sourc
 import { createSourcingTechPackAllocationService } from '../application/sourcing-tech-pack-allocation-service.mjs';
 import { createSupplierEconomicPerformanceService } from '../application/supplier-economic-performance-service.mjs';
 import { createPostgresFinalQualityReader } from '../infrastructure/postgres-final-quality-reader.mjs';
+import { createPostgresInlineQualityReader } from '../infrastructure/postgres-inline-quality-reader.mjs';
+import { createPostgresInlineQualityStore } from '../infrastructure/postgres-inline-quality-store.mjs';
+import { createInlineQualityService } from '../application/inline-quality-service.mjs';
+import { createInlineQualityQueryService } from '../application/inline-quality-query-service.mjs';
 import { createPostgresFinalQualityStore } from '../infrastructure/postgres-final-quality-store.mjs';
 import { createPostgresOrderMarginBridgeReader } from '../infrastructure/postgres-order-margin-bridge-reader.mjs';
 import { createPostgresProductionExecutionReader } from '../infrastructure/postgres-production-execution-reader.mjs';
@@ -121,6 +125,19 @@ export function createPostgresWholesaleRuntime(options = {}) {
   const finalQualityQueries = createFinalQualityQueryService({ reader: finalQualityReader });
   const finalQuality = Object.freeze({ ...finalQualityQueries, ...finalQualityCommands });
 
+  // Пооперационный контроль стоит рядом с финальным, а не внутри него: одна проверка относится к
+  // вехе производства, другая — к партии целиком, и смешивать их означало бы, что запись не может
+  // сказать, на каком этапе брак был найден.
+  const inlineQualityStore = createPostgresInlineQualityStore({ pool: options.pool });
+  const inlineQualityReader = createPostgresInlineQualityReader({ pool: options.pool });
+  const inlineQualityCommands = createInlineQualityService({
+    store: inlineQualityStore,
+    ...(options.clock ? { clock: options.clock } : {}),
+    ...(options.nextId ? { nextId: options.nextId } : {}),
+  });
+  const inlineQualityQueries = createInlineQualityQueryService({ reader: inlineQualityReader });
+  const inlineQuality = Object.freeze({ ...inlineQualityQueries, ...inlineQualityCommands });
+
   const transport = {
     authenticate: base.auth.authenticate,
     auth: base.auth,
@@ -154,6 +171,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
     productionOrders,
     productionExecutions,
     finalQuality,
+    inlineQuality,
     collaboration: base.collaboration,
     orders: base.orders,
     notifications: base.notifications,
@@ -188,6 +206,9 @@ export function createPostgresWholesaleRuntime(options = {}) {
     productionExecutionStore,
     productionExecutionReader,
     productionExecutions,
+    inlineQualityStore,
+    inlineQualityReader,
+    inlineQuality,
     finalQualityStore,
     finalQualityReader,
     finalQuality,

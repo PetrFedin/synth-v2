@@ -11,7 +11,7 @@ const readyExecution = Object.freeze({
 });
 
 function fixture() {
-  const state = { inspection: null, commands: new Map(), outbox: [], releases: [], plans: demoPlans() };
+  const state = { inspection: null, commands: new Map(), outbox: [], releases: [], plans: demoPlans(), defectTypes: [] };
   const memberships = new Map([
     ['brand-1:owner', { organisationId: 'brand-1', organisationType: 'brand', userId: 'owner', role: 'owner', status: 'active' }],
     ['brand-1:admin', { organisationId: 'brand-1', organisationType: 'brand', userId: 'admin', role: 'admin', status: 'active' }],
@@ -29,6 +29,7 @@ function fixture() {
     getCommand: async (id) => state.commands.get(id),
     insertCommand: async (value) => { state.commands.set(value.id, value); },
     appendOutbox: async (event) => { state.outbox.push(event); },
+    listDefectTypes: async (brandId) => state.defectTypes.filter((type) => type.brandId === brandId),
     // The rows a brand holds. The lot in this fixture is 100 pieces, so the 91–150 range is the one
     // a run resolves to; the wider ranges are here so that resolving is a choice and not the only
     // row present.
@@ -188,4 +189,31 @@ test('A plan agreed with one factory is allowed, and says so', async () => {
     expectedVersion: second.version, inspectorName: 'Factory Quality Inspector',
     sampleSize: 25, allowedMajorDefects: 4, allowedMinorDefects: 1,
   }), { code: 'QUALITY_SAMPLING_PLAN_LIMITS_INVERTED' });
+});
+
+test('One defect code cannot mean two things', async () => {
+  const { state, service } = fixture();
+  // The brand has registered this fault as major. An inspection that calls the same code minor is
+  // not a difference of opinion, it is a code that cannot be counted.
+  state.defectTypes.push({ id: 'defect-type_SEAM-OPEN', brandId: 'brand-1', code: 'SEAM-OPEN', severity: 'major', status: 'active' });
+  let inspection = await service.createFromExecution('cat-create', 'sales', readyExecution.executionCode);
+  inspection = await service.start('cat-start', 'sales', inspection.inspectionCode, {
+    expectedVersion: inspection.version, inspectorName: 'Factory Quality Inspector', sampleSize: 20, allowedMajorDefects: 1, allowedMinorDefects: 2,
+  });
+  const defect = (severity) => ([{ defectCode: 'SEAM-OPEN', severity, category: 'Пошив', description: 'Разошёлся шов', quantity: 1, evidenceReferences: ['evidence://q/1'] }]);
+  await assert.rejects(() => service.completeRun('cat-bad', 'sales', inspection.inspectionCode, {
+    expectedVersion: inspection.version, inspectedQuantity: 20, defects: defect('minor'), measurementFailures: [],
+    checkpoints: [{ checkpointCode: 'WORKMANSHIP', name: 'Workmanship', result: 'pass', severity: null, notes: 'ok' }],
+    evidenceReferences: ['evidence://q/run'], notes: 'Одно несоответствие',
+  }), { code: 'QUALITY_DEFECT_SEVERITY_DISAGREES_WITH_CATALOGUE' });
+
+  // Agreeing with the catalogue passes, and so does a code the brand has not registered: a brand
+  // without a catalogue must still be able to inspect.
+  const completed = await service.completeRun('cat-good', 'sales', inspection.inspectionCode, {
+    expectedVersion: inspection.version, inspectedQuantity: 20,
+    defects: [...defect('major'), { defectCode: 'NOT-IN-CATALOGUE', severity: 'minor', category: 'Прочее', description: 'Пока не в каталоге', quantity: 1, evidenceReferences: ['evidence://q/2'] }],
+    measurementFailures: [], checkpoints: [{ checkpointCode: 'WORKMANSHIP', name: 'Workmanship', result: 'pass', severity: null, notes: 'ok' }],
+    evidenceReferences: ['evidence://q/run'], notes: 'Два несоответствия',
+  });
+  assert.equal(completed.runs.at(-1).defectCounts.major, 1);
 });

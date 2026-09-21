@@ -83,6 +83,10 @@ test('PostgreSQL migration ledger serializes runners and rejects changed history
     ]);
     assert.deepEqual((await pool.query("SELECT tgname FROM pg_trigger WHERE tgrelid = 'public.production_executions'::regclass AND NOT tgisinternal ORDER BY tgname")).rows, [
       { tgname: 'production_executions_immutable_source_gate' },
+      // Веха не закрывается, пока найденный на ней брак не разобран. The rule crosses two
+      // aggregates — the execution owns the milestone, the inline check owns the defects — so it is
+      // held in the database as well as in the module that happens to be writing.
+      { tgname: 'production_executions_inline_check_gate' },
       { tgname: 'production_executions_integrity_gate' },
       { tgname: 'production_executions_source_gate' },
     ]);

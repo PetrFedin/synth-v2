@@ -129,11 +129,14 @@ export function createMaterialLotService({ store, clock = () => new Date().toISO
           // Уже выданное в эту же партию читается здесь, чтобы правка выдачи считала остаток без
           // самой себя — иначе исправить однажды выданное было бы нельзя.
           const existing = await tx.getIssue(lot.id, execution.id);
-          return Object.freeze({ lot, execution, alreadyIssuedToExecution: existing ? Number(existing.quantity) : 0 });
+          // Ведомость изделия — ответ на вопрос «из чего это шьётся», и без неё выдача не может
+          // сказать, нужен ли этот материал вообще.
+          const bom = await tx.getPublishedBomForSku(execution.sku);
+          return Object.freeze({ lot, execution, bom, alreadyIssuedToExecution: existing ? Number(existing.quantity) : 0 });
         },
-        async (tx, { lot, execution, alreadyIssuedToExecution }) => {
+        async (tx, { lot, execution, bom, alreadyIssuedToExecution }) => {
           assertVersion(lot, expectedVersion);
-          const { lot: value, issue } = issueMaterialLot(lot, { execution, quantity: input.quantity, notes: input.notes, issuedAt: clock(), actorId, alreadyIssuedToExecution });
+          const { lot: value, issue } = issueMaterialLot(lot, { execution, bom, quantity: input.quantity, notes: input.notes, issuedAt: clock(), actorId, alreadyIssuedToExecution });
           await tx.upsertIssue(nextId('material-issue'), issue);
           await tx.saveLot(value, expectedVersion);
           await tx.appendOutbox(domainEvent({

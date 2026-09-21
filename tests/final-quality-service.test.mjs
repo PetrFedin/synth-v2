@@ -16,6 +16,10 @@ function fixture() {
     ['brand-1:owner', { organisationId: 'brand-1', organisationType: 'brand', userId: 'owner', role: 'owner', status: 'active' }],
     ['brand-1:admin', { organisationId: 'brand-1', organisationType: 'brand', userId: 'admin', role: 'admin', status: 'active' }],
     ['brand-1:sales', { organisationId: 'brand-1', organisationType: 'brand', userId: 'sales', role: 'sales', status: 'active' }],
+    // Контроль ведёт качество, а не продажи: тот, кто продаёт партию, не подписывает её годность.
+    // Раньше эти тесты гоняли инспекцию от имени продаж и тем закрепляли отсутствие разделения
+    // обязанностей — то самое, о котором аудитор спрашивает первым.
+    ['brand-1:quality', { organisationId: 'brand-1', organisationType: 'brand', userId: 'quality', role: 'quality', status: 'active' }],
     ['brand-1:finance', { organisationId: 'brand-1', organisationType: 'brand', userId: 'finance', role: 'finance', status: 'active' }],
   ]);
   const tx = {
@@ -50,7 +54,7 @@ function demoPlans() {
     .map(([aql, acceptAt]) => ({ brandId: 'brand-1', standardCode: 'DEMO-AQL-2026', inspectionLevel: 'II', aql, lotFrom, lotTo, sampleSize, acceptAt, rejectAt: acceptAt + 1 })));
 }
 
-async function completePassingRun(service, actorId = 'sales') {
+async function completePassingRun(service, actorId = 'quality') {
   let inspection = await service.createFromExecution(`quality-create-${actorId}`, actorId, readyExecution.executionCode);
   inspection = await service.start(`quality-start-${actorId}`, actorId, inspection.inspectionCode, {
     expectedVersion: inspection.version, inspectorName: 'Factory Quality Inspector', sampleSize: 20,
@@ -65,21 +69,23 @@ async function completePassingRun(service, actorId = 'sales') {
 
 test('Final Quality separates execution from approval and creates release atomically', async () => {
   const { state, service } = fixture();
-  let inspection = await service.createFromExecution('quality-create', 'sales', readyExecution.executionCode);
+  let inspection = await service.createFromExecution('quality-create', 'quality', readyExecution.executionCode);
   assert.equal(inspection.status, 'planned');
-  const replay = await service.createFromExecution('quality-create', 'sales', readyExecution.executionCode);
+  const replay = await service.createFromExecution('quality-create', 'quality', readyExecution.executionCode);
   assert.deepEqual(replay, inspection);
   assert.equal(state.outbox.length, 1);
 
-  inspection = await service.start('quality-start', 'sales', inspection.inspectionCode, {
+  inspection = await service.start('quality-start', 'quality', inspection.inspectionCode, {
     expectedVersion: inspection.version, inspectorName: 'Factory Quality Inspector', sampleSize: 20,
     allowedMajorDefects: 1, allowedMinorDefects: 2,
   });
-  inspection = await service.completeRun('quality-complete', 'sales', inspection.inspectionCode, {
+  inspection = await service.completeRun('quality-complete', 'quality', inspection.inspectionCode, {
     expectedVersion: inspection.version, inspectedQuantity: 20, defects: [], measurementFailures: [],
     checkpoints: [{ checkpointCode: 'WORKMANSHIP', name: 'Workmanship', result: 'pass', severity: null, notes: 'Accepted' }],
     evidenceReferences: ['evidence://quality/pass'], notes: 'Inspection sample accepted',
   });
+  // Выпускает тот, у кого есть право подписи. Продажи его не имеют — и именно поэтому стоят здесь:
+  // проверяется отказ по правам, а не самоутверждение.
   await assert.rejects(() => service.review('quality-review-denied', 'sales', inspection.inspectionCode, {
     expectedVersion: inspection.version, decision: 'release', releaseCode: 'SHIP-REL-QUALITY-1', notes: 'Release requested by non-approver',
   }), { code: 'CAPABILITY_DENIED' });
@@ -124,8 +130,8 @@ test('Finance can read but cannot mutate Final Quality', async () => {
 });
 test('A run records which criterion judged the lot, not three numbers somebody typed', async () => {
   const { service } = fixture();
-  let inspection = await service.createFromExecution('aql-create', 'sales', readyExecution.executionCode);
-  inspection = await service.start('aql-start', 'sales', inspection.inspectionCode, {
+  let inspection = await service.createFromExecution('aql-create', 'quality', readyExecution.executionCode);
+  inspection = await service.start('aql-start', 'quality', inspection.inspectionCode, {
     expectedVersion: inspection.version, inspectorName: 'Factory Quality Inspector',
     standardCode: 'DEMO-AQL-2026', inspectionLevel: 'II', aqlMajor: 2.5, aqlMinor: 4,
   });
@@ -142,7 +148,7 @@ test('A run records which criterion judged the lot, not three numbers somebody t
 
   // And the decision follows that plan: two major defects is the rejection number, not a judgement
   // call made afterwards.
-  const completed = await service.completeRun('aql-complete', 'sales', inspection.inspectionCode, {
+  const completed = await service.completeRun('aql-complete', 'quality', inspection.inspectionCode, {
     expectedVersion: inspection.version, inspectedQuantity: 20,
     defects: [{ defectCode: 'SEAM-OPEN', severity: 'major', category: 'Пошив', description: 'Разошёлся боковой шов', quantity: 2, evidenceReferences: ['evidence://quality/seam'] }],
     measurementFailures: [], checkpoints: [{ checkpointCode: 'WORKMANSHIP', name: 'Workmanship', result: 'pass', severity: null, notes: 'Остальное в норме' }],
@@ -153,15 +159,15 @@ test('A run records which criterion judged the lot, not three numbers somebody t
 
 test('A run that names a standard nobody loaded is refused rather than judged by something else', async () => {
   const { service } = fixture();
-  const inspection = await service.createFromExecution('aql-missing-create', 'sales', readyExecution.executionCode);
-  await assert.rejects(() => service.start('aql-missing-start', 'sales', inspection.inspectionCode, {
+  const inspection = await service.createFromExecution('aql-missing-create', 'quality', readyExecution.executionCode);
+  await assert.rejects(() => service.start('aql-missing-start', 'quality', inspection.inspectionCode, {
     expectedVersion: inspection.version, inspectorName: 'Factory Quality Inspector',
     standardCode: 'GOST-R-ISO-2859-1', inspectionLevel: 'II', aqlMajor: 2.5, aqlMinor: 4,
   }), { code: 'QUALITY_SAMPLING_PLAN_SET_MISSING' });
 
   // A level the brand holds no rows for is the same kind of refusal, and must not quietly fall back
   // to the level that does exist.
-  await assert.rejects(() => service.start('aql-level-start', 'sales', inspection.inspectionCode, {
+  await assert.rejects(() => service.start('aql-level-start', 'quality', inspection.inspectionCode, {
     expectedVersion: inspection.version, inspectorName: 'Factory Quality Inspector',
     standardCode: 'DEMO-AQL-2026', inspectionLevel: 'III', aqlMajor: 2.5, aqlMinor: 4,
   }), { code: 'QUALITY_SAMPLING_PLAN_SET_MISSING' });
@@ -169,8 +175,8 @@ test('A run that names a standard nobody loaded is refused rather than judged by
 
 test('A plan agreed with one factory is allowed, and says so', async () => {
   const { service } = fixture();
-  let inspection = await service.createFromExecution('aql-agreed-create', 'sales', readyExecution.executionCode);
-  inspection = await service.start('aql-agreed-start', 'sales', inspection.inspectionCode, {
+  let inspection = await service.createFromExecution('aql-agreed-create', 'quality', readyExecution.executionCode);
+  inspection = await service.start('aql-agreed-start', 'quality', inspection.inspectionCode, {
     expectedVersion: inspection.version, inspectorName: 'Factory Quality Inspector',
     sampleSize: 25, allowedMajorDefects: 1, allowedMinorDefects: 3,
     samplingNote: 'Согласовано с фабрикой на сезон SS27',
@@ -196,12 +202,12 @@ test('One defect code cannot mean two things', async () => {
   // The brand has registered this fault as major. An inspection that calls the same code minor is
   // not a difference of opinion, it is a code that cannot be counted.
   state.defectTypes.push({ id: 'defect-type_SEAM-OPEN', brandId: 'brand-1', code: 'SEAM-OPEN', severity: 'major', status: 'active' });
-  let inspection = await service.createFromExecution('cat-create', 'sales', readyExecution.executionCode);
-  inspection = await service.start('cat-start', 'sales', inspection.inspectionCode, {
+  let inspection = await service.createFromExecution('cat-create', 'quality', readyExecution.executionCode);
+  inspection = await service.start('cat-start', 'quality', inspection.inspectionCode, {
     expectedVersion: inspection.version, inspectorName: 'Factory Quality Inspector', sampleSize: 20, allowedMajorDefects: 1, allowedMinorDefects: 2,
   });
   const defect = (severity) => ([{ defectCode: 'SEAM-OPEN', severity, category: 'Пошив', description: 'Разошёлся шов', quantity: 1, evidenceReferences: ['evidence://q/1'] }]);
-  await assert.rejects(() => service.completeRun('cat-bad', 'sales', inspection.inspectionCode, {
+  await assert.rejects(() => service.completeRun('cat-bad', 'quality', inspection.inspectionCode, {
     expectedVersion: inspection.version, inspectedQuantity: 20, defects: defect('minor'), measurementFailures: [],
     checkpoints: [{ checkpointCode: 'WORKMANSHIP', name: 'Workmanship', result: 'pass', severity: null, notes: 'ok' }],
     evidenceReferences: ['evidence://q/run'], notes: 'Одно несоответствие',
@@ -209,7 +215,7 @@ test('One defect code cannot mean two things', async () => {
 
   // Agreeing with the catalogue passes, and so does a code the brand has not registered: a brand
   // without a catalogue must still be able to inspect.
-  const completed = await service.completeRun('cat-good', 'sales', inspection.inspectionCode, {
+  const completed = await service.completeRun('cat-good', 'quality', inspection.inspectionCode, {
     expectedVersion: inspection.version, inspectedQuantity: 20,
     defects: [...defect('major'), { defectCode: 'NOT-IN-CATALOGUE', severity: 'minor', category: 'Прочее', description: 'Пока не в каталоге', quantity: 1, evidenceReferences: ['evidence://q/2'] }],
     measurementFailures: [], checkpoints: [{ checkpointCode: 'WORKMANSHIP', name: 'Workmanship', result: 'pass', severity: null, notes: 'ok' }],

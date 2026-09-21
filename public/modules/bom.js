@@ -278,6 +278,11 @@
     ]);
   }
 
+  function errorText(error) {
+    const code = error && error.code ? riskLabel(error.code) : '';
+    return (error && error.message) || code || text('\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0432\u044b\u043f\u043e\u043b\u043d\u0438\u0442\u044c \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0435.', 'The action failed.');
+  }
+
   async function publish(bom) {
     const accepted = await confirmAction({
       title: text('Опубликовать спецификацию', 'Publish BOM'),
@@ -285,7 +290,14 @@
       confirmLabel: text('Опубликовать', 'Publish'),
     });
     if (!accepted) return;
-    await mutate(`/v2/boms/${encodeURIComponent(bom.sku)}/publish`, { expectedVersion: bom.version });
+    // \u041f\u0443\u0431\u043b\u0438\u043a\u0430\u0446\u0438\u044f \u2014 \u0441\u0430\u043c\u043e\u0435 \u043d\u0435\u043e\u0431\u0440\u0430\u0442\u0438\u043c\u043e\u0435 \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0435 \u0432 \u043c\u043e\u0434\u0443\u043b\u0435, \u0438 \u0434\u043e \u044d\u0442\u043e\u0439 \u043f\u0440\u0430\u0432\u043a\u0438 \u0435\u0451 \u043e\u0442\u043a\u0430\u0437 \u0443\u0445\u043e\u0434\u0438\u043b \u0432
+    // \u043d\u0435\u043e\u0431\u0440\u0430\u0431\u043e\u0442\u0430\u043d\u043d\u043e\u0435 \u043e\u0442\u043a\u043b\u043e\u043d\u0435\u043d\u0438\u0435 \u043f\u0440\u043e\u043c\u0438\u0441\u0430: \u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044c \u043d\u0435 \u0443\u0437\u043d\u0430\u0432\u0430\u043b \u043d\u0438 \u043e\u0431 \u0443\u0441\u043f\u0435\u0445\u0435, \u043d\u0438 \u043e \u043f\u0440\u043e\u0432\u0430\u043b\u0435.
+    try {
+      await mutate(`/v2/boms/${encodeURIComponent(bom.sku)}/publish`, { expectedVersion: bom.version });
+    } catch (error) {
+      toast(errorText(error), 'error');
+      return;
+    }
     await loadBoms({ reset: true });
     // Publishing closes the BOM for editing. Doing that silently leaves the reader unsure whether it
     // happened at all, while the revision action next to it does say so.

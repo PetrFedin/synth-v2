@@ -148,6 +148,20 @@ test('сезон целиком подтверждён — охват сто п�
   assert.equal(whole.actualCostMinor, 587_731 * 1200);
 });
 
+test('слот без плановой себестоимости не входит в деньги сезона', () => {
+  const costed = placeholderReconciliation(placeholder(), []);
+  const uncosted = placeholderReconciliation(
+    placeholder({ id: 'ph-nocost', placeholderCode: 'SS27-X', plannedUnitCostMinor: null }), []);
+
+  const season = seasonEconomics([costed, uncosted]);
+  // Выручка только от посчитанного слота: иначе сезон получил бы доход без затрат и завысил маржу.
+  assert.equal(season.plannedRevenueMinor, 2_490_000 * 1200);
+  assert.equal(season.plannedCostMinor, 957_692 * 1200);
+  assert.equal(season.quantifiedSlotCount, 1, 'в деньгах учтён один слот');
+  assert.equal(season.slotCount, 2, 'а всего их два — разница и говорит, что сезон неполон');
+  assert.equal(season.plannedMarginBasisPoints, marginBasisPoints(2_490_000 * 1200, 957_692 * 1200));
+});
+
 test('сезон отказывается складывать разные розничные валюты', () => {
   const rub = placeholderReconciliation(placeholder(), []);
   const eur = placeholderReconciliation(placeholder({ id: 'ph-eur', currency: 'EUR' }), []);

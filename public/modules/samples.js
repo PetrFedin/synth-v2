@@ -195,7 +195,7 @@
       receive: ['Принять образец', 'Receive'], approve: ['Одобрить', 'Approve'], reject: ['Отклонить', 'Reject'], cancel: ['Отменить', 'Cancel'], 'next-round': ['Создать следующий раунд', 'Create next round'],
     };
     const handler = {
-      edit: () => openDraftDialog(sample), request: () => confirmAction(sample, 'request'), 'start-production': () => confirmAction(sample, 'start-production'),
+      edit: () => openDraftDialog(sample), request: () => runSampleTransition(sample, 'request'), 'start-production': () => runSampleTransition(sample, 'start-production'),
       receive: () => openReceiptDialog(sample), approve: () => openDecisionDialog(sample, 'approved'), reject: () => openDecisionDialog(sample, 'rejected'),
       cancel: () => openCancellationDialog(sample), 'next-round': () => openNextRoundDialog(sample),
     }[action];
@@ -299,15 +299,20 @@
     });
   }
 
-  async function confirmAction(sample, action) {
+  // \u041b\u043e\u043a\u0430\u043b\u044c\u043d\u0430\u044f \u0444\u0443\u043d\u043a\u0446\u0438\u044f \u043d\u0430\u0437\u044b\u0432\u0430\u043b\u0430\u0441\u044c \u0442\u0430\u043a \u0436\u0435, \u043a\u0430\u043a \u0433\u043b\u043e\u0431\u0430\u043b\u044c\u043d\u0430\u044f (`dom-1.js:138`), \u0437\u0430\u0442\u0435\u043d\u044f\u043b\u0430 \u0435\u0451 \u0438 \u0432\u044b\u0437\u044b\u0432\u0430\u043b\u0430
+  // \u0441\u0430\u043c\u0443 \u0441\u0435\u0431\u044f: \u00ab\u0417\u0430\u043f\u0440\u043e\u0441\u0438\u0442\u044c \u0443 \u0444\u0430\u0431\u0440\u0438\u043a\u0438\u00bb \u0438 \u00ab\u0417\u0430\u043f\u0443\u0441\u0442\u0438\u0442\u044c \u043f\u0440\u043e\u0438\u0437\u0432\u043e\u0434\u0441\u0442\u0432\u043e\u00bb \u0443\u0445\u043e\u0434\u0438\u043b\u0438 \u0432 \u0431\u0435\u0441\u043a\u043e\u043d\u0435\u0447\u043d\u0443\u044e \u0440\u0435\u043a\u0443\u0440\u0441\u0438\u044e \u0438
+  // \u043d\u0438\u043a\u043e\u0433\u0434\u0430 \u043d\u0435 \u0434\u043e\u0445\u043e\u0434\u0438\u043b\u0438 \u0434\u043e \u043c\u0443\u0442\u0430\u0446\u0438\u0438. \u0418\u043c\u044f \u0440\u0430\u0437\u0432\u0435\u0434\u0435\u043d\u043e, \u0432\u044b\u0437\u043e\u0432 \u0438\u0434\u0451\u0442 \u043a \u0433\u043b\u043e\u0431\u0430\u043b\u044c\u043d\u043e\u043c\u0443 \u043f\u043e\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u0438\u044e.
+  async function runSampleTransition(sample, action) {
     const pathByAction = { request: 'request', 'start-production': 'start-production' };
+    const path = pathByAction[action];
+    if (!path) return;
     const accepted = await confirmAction({
-      title: text('Подтвердить действие', 'Confirm action'),
-      question: text(`Образец ${sample.sampleCode}.`, `Sample ${sample.sampleCode}.`),
-      confirmLabel: text('Подтвердить', 'Confirm'),
+      title: text('\u041f\u043e\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u044c \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0435', 'Confirm action'),
+      question: text(`\u041e\u0431\u0440\u0430\u0437\u0435\u0446 ${sample.sampleCode}.`, `Sample ${sample.sampleCode}.`),
+      confirmLabel: text('\u041f\u043e\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u044c', 'Confirm'),
     });
     if (!accepted) return;
-    await runMutation(sample.sampleCode, `/v2/samples/${encodeURIComponent(sample.sampleCode)}/${pathByAction[action]}`, { expectedVersion: sample.version });
+    await runMutation(sample.sampleCode, `/v2/samples/${encodeURIComponent(sample.sampleCode)}/${path}`, { expectedVersion: sample.version });
   }
   function openReceiptDialog(sample) {
     dialog(text('Приёмка образца', 'Receive sample'), [field(text('Получено, шт.', 'Received quantity'), input('receivedQuantity', 'number', sample.quantity, { min: '1', max: '100', required: true })), field(text('Состояние', 'Condition'), select('condition', [['accepted', text('Принят', 'Accepted')], ['damaged', text('Повреждён', 'Damaged')], ['incomplete', text('Неполная комплектация', 'Incomplete')]], 'accepted')), field(text('Трекинг', 'Tracking'), input('trackingReference', 'text', '', { maxlength: '120' })), field(text('Комментарий', 'Notes'), textarea('notes', '', { maxlength: '1000', rows: '4' }))], async (values) => Boolean(await runMutation(sample.sampleCode, `/v2/samples/${encodeURIComponent(sample.sampleCode)}/receive`, { expectedVersion: sample.version, receivedQuantity: Number(values.receivedQuantity), condition: values.condition, trackingReference: values.trackingReference || null, notes: values.notes || null })));

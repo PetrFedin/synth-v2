@@ -39,6 +39,31 @@ const approvedDip = Object.freeze({
   status: 'approved', validFrom: null, validTo: null,
 });
 
+test('Материал, которого нет в ведомости изделия, в производство не уходит', () => {
+  const released = releaseMaterialLot(lot({}, 'lot-bill'), { at: AT, actorId: 'quality' });
+  const execution = { id: 'execution-1', executionCode: 'EXEC-1', brandId: 'brand-1', status: 'active', sku: 'SKU-1' };
+
+  // Ведомость знает только плащёвку; рулон плащёвки проходит.
+  const ok = issueMaterialLot(released, { execution, bom, quantity: 100, issuedAt: AT, actorId: 'warehouse' });
+  assert.equal(ok.issue.quantity, 100);
+
+  // Джерси в этом изделии нет — списание со склада не состоится.
+  const jersey = releaseMaterialLot(
+    receiveMaterialLot({
+      id: 'lot-jersey', material: { ...material, code: 'MAT-JERSEY-R1' }, receivedAt: AT, actorId: 'warehouse',
+      input: { lotReference: 'ROLL-J', receivedQuantity: 200 },
+    }),
+    { at: AT, actorId: 'quality' },
+  );
+  assert.equal(
+    codeOf(() => issueMaterialLot(jersey, { execution, bom, quantity: 10, issuedAt: AT, actorId: 'warehouse' })),
+    'MATERIAL_LOT_NOT_IN_BILL',
+  );
+
+  // Ведомости ещё нет — судить не по чему, и склад из-за недостающего документа не стоит.
+  assert.equal(issueMaterialLot(jersey, { execution, bom: null, quantity: 10, issuedAt: AT, actorId: 'warehouse' }).issue.quantity, 10);
+});
+
 test('Партия в названном цвете не выпускается без действующего утверждения оттенка', () => {
   const coloured = lot({ colour: COLOUR }, 'lot-colour');
   assert.equal(coloured.colourCode, 'BURGUNDY');

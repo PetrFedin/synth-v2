@@ -63,8 +63,9 @@ export function releaseMaterialLot(lot, { certificateReference, notes, at, actor
     status: 'released',
     certificateReference: certificateReference === undefined ? lot.certificateReference : optional(certificateReference, 200, 'MATERIAL_LOT_CERTIFICATE_INVALID', 'Certificate reference'),
     releaseNotes: optional(notes, 1000, 'MATERIAL_LOT_NOTES_INVALID', 'Notes'),
-    // По какому эталону выпущена партия — записывается вместе с выпуском: приёмка читает именно
-    // его, и «утверждено условно» без ссылки на условие ей ничего не говорит.
+    // По какому эталону выпущена партия — записывается вместе с выпуском. Утверждение цвета может
+    // быть позже заменено или истечь, а эта партия принята против того, что действовало в день
+    // выпуска; без ссылки «утверждено условно» не сказало бы, какое именно условие проверять.
     releasedAgainstLabDip: standard === null ? null : standard.dipReference,
   }, at, actorId, 'MATERIAL_LOT_RELEASED_BY_REQUIRED');
 }
@@ -106,8 +107,17 @@ export function rejectMaterialLot(lot, { reason, at, actorId }) {
  * Остаток — это полученное минус выданное, и никакого третьего числа. A lot cannot give more than it
  * holds, and a quarantined one gives nothing at all, which is what quarantine means.
  */
-export function issueMaterialLot(lot, { execution, quantity: requested, notes, issuedAt, actorId, alreadyIssuedToExecution = 0 }) {
+export function issueMaterialLot(lot, { execution, bom = null, quantity: requested, notes, issuedAt, actorId, alreadyIssuedToExecution = 0 }) {
   invariant(lot?.status === 'released', 'MATERIAL_LOT_NOT_RELEASED', 'Only a released lot can go into production', { lotReference: lot?.lotReference, status: lot?.status });
+  // Материал обязан входить в изделие, которое шьют.
+  //
+  // Проверялись статус партии, бренд, активность исполнения, остаток и дата — и не проверялось
+  // главное: что этот материал вообще нужен этой партии. Рулон джерси уходил в исполнение, чья
+  // ведомость знает только плащёвку, и в прослеживаемости появлялась строка-сирота с пустой
+  // потребностью: списано со склада, к изделию отношения не имеет, недостачу по ней посчитать не из
+  // чего. Шагом позже, при раскрое, такая проверка уже стоит — но к тому времени ткань со склада
+  // уже ушла.
+  assertMaterialBelongsToGarment(lot, { execution, bom });
   invariant(execution?.brandId === lot.brandId, 'MATERIAL_LOT_FOREIGN_EXECUTION', 'This lot belongs to another brand than the production execution', { lotReference: lot.lotReference });
   invariant(execution.status === 'active', 'MATERIAL_LOT_EXECUTION_NOT_ACTIVE', 'Material goes into an active production execution', { executionCode: execution?.executionCode, status: execution?.status });
   const amount = quantity(requested, 'MATERIAL_LOT_ISSUE_QUANTITY_INVALID', 'Issued quantity');
@@ -268,4 +278,26 @@ function lotColour(colour) {
     && typeof colour.code === 'string' && /^[A-Z0-9][A-Z0-9_.:/-]{0,127}$/.test(colour.code),
     'MATERIAL_LOT_COLOUR_INVALID', 'A lot colour references a governed colour entry with its version', { colour });
   return { colourEntryId: colour.entryId.trim(), colourEntryVersion: colour.version, colourCode: colour.code };
+}
+
+/**
+ * Материал есть в опубликованной ведомости изделия.
+ *
+ * Ведомость, которой ещё нет, судить не может: исполнение без опубликованной спецификации
+ * встречается, и отказывать из-за недостающего документа значило бы остановить склад по причине,
+ * которая к самой выдаче отношения не имеет. Когда ведомость есть — она и есть ответ на вопрос,
+ * из чего шьётся вещь.
+ */
+export function assertMaterialBelongsToGarment(lot, { execution, bom }) {
+  const lines = Array.isArray(bom?.lines) ? bom.lines : null;
+  if (lines === null || lines.length === 0) return null;
+  const listed = lines.some((line) => line?.materialCode === lot.materialCode);
+  invariant(listed, 'MATERIAL_LOT_NOT_IN_BILL',
+    'This material is not in the bill of materials of the garment being made',
+    {
+      materialCode: lot.materialCode,
+      executionCode: execution?.executionCode ?? null,
+      billed: lines.map((line) => line?.materialCode).filter(Boolean),
+    });
+  return lot.materialCode;
 }

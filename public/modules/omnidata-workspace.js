@@ -603,7 +603,13 @@ function odSection(title, child, count) {
 
 function odPage(title, header, content) {
   const node = el('div', { className: 'od-view' });
-  node.append(toolbar(title), header.fragment, content);
+  node.append(toolbar(title));
+  // Заголовка может не быть: экраны справочников и портала поставщика намеренно передают сюда
+  // `null` **на пути ошибки** — когда данные не пришли и шапку строить не из чего. Безусловное
+  // разыменование давало TypeError и белый экран ровно в том сценарии, ради которого этот код и
+  // написан: пользователь вместо сообщения об ошибке получал пустоту.
+  if (header && header.fragment) node.append(header.fragment);
+  if (content) node.append(content);
   return node;
 }
 

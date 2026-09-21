@@ -1,4 +1,5 @@
 import { invariant } from '../core/errors.mjs';
+import { projectCatalogSkusForActor } from './catalog-counterparty-projection.mjs';
 import { WORKSPACE_CURSOR_POSITION_LENGTHS, WORKSPACE_SECTION_NAMES } from '../core/workspace-cursor.mjs';
 import { withPostgresTransaction } from './postgres-transaction.mjs';
 import { loadPostgresVisibilityScope } from './postgres-visibility-scope.mjs';
@@ -115,7 +116,7 @@ export function createPostgresWorkspaceReader({ pool }) {
         const scope = await loadPostgresVisibilityScope(queryable, actorId);
         const specification = pageSpecification(section, scope, actorId);
         if (!specification) return emptyPage();
-        return readSectionPage(queryable, { section, limit, after, ...specification });
+        return readSectionPage(queryable, { section, limit, after, brandIds: scope.brandIds, ...specification });
       });
     },
   });
@@ -196,7 +197,11 @@ function idsOrOwnerPage(table, ids, ownerColumn, ownerIds) {
     : undefined;
 }
 
-async function readSectionPage(queryable, { section, table, where, params: visibilityParams, limit, after }) {
+/**
+ * @param {any} queryable
+ * @param {{ section: string, table: string, where: string, params: any[], limit: number, after?: any, brandIds?: readonly string[] }} request
+ */
+async function readSectionPage(queryable, { section, table, where, params: visibilityParams, limit, after, brandIds = [] }) {
   const sort = PAGE_SORT[section];
   const params = [...visibilityParams];
   const clauses = [`(${where})`];
@@ -211,8 +216,13 @@ async function readSectionPage(queryable, { section, table, where, params: visib
   );
   const rows = result.rows.slice(0, limit);
   const hasMore = result.rows.length > limit;
+  // Постраничное чтение идёт тем же правилом, что и первая загрузка: внутренний склад бренда
+  // контрагенту не отдаётся ни на первой странице, ни на любой следующей.
+  const payloads = section === 'catalogSkus'
+    ? projectCatalogSkusForActor(rows.map((row) => row.payload), brandIds)
+    : rows.map((row) => row.payload);
   return Object.freeze({
-    items: Object.freeze(rows.map((row) => row.payload)),
+    items: Object.freeze(payloads),
     hasMore,
     ...(hasMore ? { nextPosition: Object.freeze(sort.map((_, index) => cursorValue(rows.at(-1)?.[`cursor_${index}`]))) } : {}),
   });
@@ -302,13 +312,16 @@ async function payloadByIdsOrOwner(queryable, table, ids, ownerColumn, ownerIds,
 }
 async function visibleCatalogSkus(queryable, brandIds, collectionIds, fetchLimit) {
   if (!brandIds.length && !collectionIds.length) return [];
-  return payloadWhere(
+  const rows = await payloadWhere(
     queryable,
     'catalog_skus',
     "brand_id = ANY($1::text[]) OR (collection_id = ANY($2::text[]) AND status = 'published')",
     [brandIds, collectionIds],
     fetchLimit,
   );
+  // Контрагент видит опубликованную витрину, но не внутренний склад: резерв складывается из
+  // обязательств перед другими покупателями.
+  return projectCatalogSkusForActor(rows, brandIds);
 }
 function bounded(section, values, limit, truncatedSections) {
   if (values.length > limit) truncatedSections.push(section);

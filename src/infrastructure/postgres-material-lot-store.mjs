@@ -67,6 +67,17 @@ function view(client) {
         [id, issue.lotId, issue.executionId, issue.executionCode, issue.quantity, issue.issuedAt, issue.issuedBy, issue.notes, JSON.stringify(issue)],
       );
     },
+    // Ведомость читается тем же снимком, что и партия с исполнением: прочитанная отдельно, она
+    // могла бы прийти из другого момента, и «материала нет в изделии» оказалось бы следом чужой
+    // правки, а не фактом.
+    async getPublishedBomForSku(sku) {
+      const result = await client.query(
+        "SELECT payload FROM boms WHERE sku = $1 AND status = 'published' LIMIT 1",
+        [sku],
+      );
+      return result.rows[0]?.payload ?? null;
+    },
+
     // Цвет разрешается по палитре самого полотна: код, которого у этого материала нет, — не цвет,
     // а опечатка, и подставлять по нему запись справочника нельзя.
     async resolveMaterialColour(materialCode, colourCode) {

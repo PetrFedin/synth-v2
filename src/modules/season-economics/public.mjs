@@ -137,21 +137,29 @@ export function seasonEconomics(reconciliations = []) {
   for (const slot of slots) {
     const quantity = slot.plannedQuantity;
     if (!quantity || slot.recommendedRetailPriceMinor === null) continue;
-    const revenue = slot.recommendedRetailPriceMinor * quantity;
     const plannedCost = slot.plannedUnitCostMinor === null ? null : slot.plannedUnitCostMinor * quantity;
+    // Слот без плановой себестоимости в итог сезона не входит вовсе.
+    //
+    // Раньше его выручка прибавлялась, а затраты — нет, потому что их не было: слот с розничной
+    // ценой и без себестоимости давал сезону чистую выручку с нулевыми затратами и завышал маржу.
+    // Считать такой слот наполовину — хуже, чем не считать: половина оказывается в пользу
+    // приятного ответа. Он попадает в `slotCount`, но не в деньги, и разница между двумя числами
+    // сама говорит, что сезон посчитан не целиком.
+    if (plannedCost === null) continue;
+    const revenue = slot.recommendedRetailPriceMinor * quantity;
     whole.slots += 1;
     whole.revenue += revenue;
-    if (plannedCost !== null) whole.cost += plannedCost;
+    whole.cost += plannedCost;
 
     // Цель и факт пересчитываются на плановое количество, а не на заказанное: иначе «стало
     // дешевле» означало бы всего лишь «заказали меньше».
-    if (slot.targetLandedMinor !== null && plannedCost !== null) {
+    if (slot.targetLandedMinor !== null) {
       targeted.slots += 1;
       targeted.revenue += revenue;
       targeted.cost += slot.targetLandedMinor * quantity;
       targeted.plannedCost += plannedCost;
     }
-    if (slot.actualLandedMinor !== null && plannedCost !== null) {
+    if (slot.actualLandedMinor !== null) {
       confirmed.slots += 1;
       confirmed.revenue += revenue;
       confirmed.cost += slot.actualLandedMinor * quantity;

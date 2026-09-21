@@ -9,7 +9,14 @@ const READ_ROLES = Object.freeze(['owner', 'admin', 'finance']);
 // разных моментов, и «не укладываемся» оказалось бы выдуманным.
 const SELECT_PLAN = `
   SELECT plan.payload AS plan,
-         (SELECT (production_order.payload -> 'commercialSnapshot' ->> 'unitPriceMinor')::bigint
+         -- Цена за единицу — это **итог заказа**, делённый на количество, а не строчная цена.
+         -- Фабрика берёт unitPrice × количество **плюс** постоянную часть: оснастку, образцы,
+         -- приладку. Она лежит в том же снимке, и пока она не входила в сравнение, запас до цели
+         -- был завышен, а маржа сезона систематически оптимистична. Итог снимка уже содержит обе
+         -- части, поэтому делится именно он.
+         (SELECT ROUND(
+                   (production_order.payload -> 'commercialSnapshot' ->> 'totalCostMinor')::numeric
+                   / NULLIF(production_order.quantity, 0))::bigint
             FROM production_orders AS production_order
            WHERE production_order.sku = plan.sku AND production_order.status = 'confirmed'
            ORDER BY production_order.confirmed_at DESC LIMIT 1) AS "quotedFobMinor",

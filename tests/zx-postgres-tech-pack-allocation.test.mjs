@@ -682,7 +682,13 @@ test('PostgreSQL closes approved PPS through production, rework, reinspection an
     assert.equal(targetView.targetLandedMinor, Math.round(3_000_000 / 2.6));
     assert.ok(targetView.targetFobInRrpMinor < targetView.targetLandedMinor, 'цена у фабрики ниже себестоимости на складе');
     assert.equal(targetView.quotedCurrency, productionOrder.commercialSnapshot.currency);
-    assert.equal(targetView.quotedFobMinor, productionOrder.commercialSnapshot.unitPriceMinor, 'сравниваем с тем, о чём договорились в заказе');
+    // Сравниваем с тем, что реально платим за единицу: цена за штуку **плюс** постоянная часть
+    // заказа (оснастка, образцы, приладку), приходящаяся на изделие. Раньше здесь стояла голая
+    // `unitPriceMinor`, и этот тест закреплял занижение — запас до цели выходил больше, чем есть.
+    const snapshot = productionOrder.commercialSnapshot;
+    const effectiveUnitPriceMinor = Math.round(snapshot.totalCostMinor / productionOrder.quantity);
+    assert.ok(effectiveUnitPriceMinor > snapshot.unitPriceMinor, 'постоянная часть заказа ложится на единицу');
+    assert.equal(targetView.quotedFobMinor, effectiveUnitPriceMinor);
     assert.equal(typeof targetView.withinTarget, 'boolean');
 
     // --- Плановая экономика сезона -------------------------------------------------------------

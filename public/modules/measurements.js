@@ -255,7 +255,14 @@
       confirmLabel: text('Опубликовать', 'Publish'),
     });
     if (!accepted) return;
-    await mutate(`/v2/measurements/${encodeURIComponent(item.chart.sku)}/publish`, { expectedVersion: item.chart.version });
+    // \u041e\u0442\u043a\u0430\u0437 \u043f\u0443\u0431\u043b\u0438\u043a\u0430\u0446\u0438\u0438 (\u0443\u0441\u0442\u0430\u0440\u0435\u0432\u0448\u0438\u0439 \u0441\u043d\u0438\u043c\u043e\u043a SKU, \u043d\u0435\u043e\u043f\u0443\u0431\u043b\u0438\u043a\u043e\u0432\u0430\u043d\u043d\u044b\u0439 SKU) \u0434\u043e \u044d\u0442\u043e\u0439 \u043f\u0440\u0430\u0432\u043a\u0438 \u0443\u0445\u043e\u0434\u0438\u043b \u0432
+    // \u043d\u0435\u043e\u0431\u0440\u0430\u0431\u043e\u0442\u0430\u043d\u043d\u043e\u0435 \u043e\u0442\u043a\u043b\u043e\u043d\u0435\u043d\u0438\u0435 \u043f\u0440\u043e\u043c\u0438\u0441\u0430 \u0438 \u043d\u0435 \u0434\u043e\u0445\u043e\u0434\u0438\u043b \u0434\u043e \u0447\u0435\u043b\u043e\u0432\u0435\u043a\u0430.
+    try {
+      await mutate(`/v2/measurements/${encodeURIComponent(item.chart.sku)}/publish`, { expectedVersion: item.chart.version });
+    } catch (error) {
+      toast((error && error.message) || text('\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043e\u043f\u0443\u0431\u043b\u0438\u043a\u043e\u0432\u0430\u0442\u044c \u0442\u0430\u0431\u043b\u0438\u0446\u0443.', 'The chart could not be published.'), 'error');
+      return;
+    }
     await loadCharts({ reset: true });
     // The revision action beside this one reports itself; publishing, which is the less reversible of
     // the two, did not.

@@ -214,8 +214,12 @@ try {
 
   // The quality approver. A run's inspector may not sign off their own disposition, so a second
   // person in the brand is not a nicety here — without one the quality chain cannot be finished.
-  await ensureMembership(runtime, brandId, accounts.quality, 'admin', accounts.owner, 'brand');
-  await ensureMembership(runtime, brandId, accounts.inspector, 'admin', accounts.owner, 'brand');
+  // Качество сидит на роли качества, а не на администраторе. Пока роли не существовало, обе
+  // персоны получали все 53 способности, и инспектор по качеству мог завести каталожный SKU,
+  // кампанию и коллекцию — то есть демонстрация показывала разделение обязанностей, которого в
+  // системе не было.
+  await ensureMembership(runtime, brandId, accounts.quality, 'quality', accounts.owner, 'brand');
+  await ensureMembership(runtime, brandId, accounts.inspector, 'quality', accounts.owner, 'brand');
 
   // --- The retailer -------------------------------------------------------------------------
   const shopExists = await pool.query('SELECT id FROM organisations WHERE id = $1', [SHOP_ID]);
@@ -308,7 +312,18 @@ function describeRole(key) {
 
 async function ensureMembership(runtime, organisationId, userId, role, actorId, organisationType) {
   const existing = await runtime.store.transaction(async (tx) => tx.getMembership(organisationId, userId));
-  if (existing) { note('membership', `${userId} already ${existing.role} of ${organisationId}`); return; }
+  if (existing) {
+    // Расхождение называется вслух. Раньше сид отвечал «уже admin» одинаково и когда роль верна, и
+    // когда она разошлась с объявленной, — а именно на этой тишине демонстрация полгода показывала
+    // инспектора по качеству с правами администратора. Операции смены роли в системе пока нет,
+    // поэтому исправить это сид не может; сказать — обязан.
+    if (existing.role !== role) {
+      note('membership', `РАСХОЖДЕНИЕ: ${userId} имеет роль ${existing.role}, а объявлена ${role}. Смена роли через API не реализована — требуется вмешательство.`);
+    } else {
+      note('membership', `${userId} already ${existing.role} of ${organisationId}`);
+    }
+    return;
+  }
   const membership = createMembership({
     id: `demo-membership-${organisationId}-${userId}`.replace(/[^\w-]/g, '-'),
     organisationId, organisationType, userId, role, createdAt: new Date().toISOString(),

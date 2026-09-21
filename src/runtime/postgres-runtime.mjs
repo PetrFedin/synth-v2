@@ -14,6 +14,9 @@ import { createPostgresInlineQualityReader } from '../infrastructure/postgres-in
 import { createPostgresInlineQualityStore } from '../infrastructure/postgres-inline-quality-store.mjs';
 import { createInlineQualityService } from '../application/inline-quality-service.mjs';
 import { createInlineQualityQueryService } from '../application/inline-quality-query-service.mjs';
+import { createPostgresSupplierPaymentStore } from '../infrastructure/postgres-supplier-payment-store.mjs';
+import { createPostgresSupplierPaymentReader } from '../infrastructure/postgres-supplier-payment-reader.mjs';
+import { createSupplierPaymentService, createSupplierPaymentQueryService } from '../application/supplier-payment-service.mjs';
 import { createPostgresFinalQualityStore } from '../infrastructure/postgres-final-quality-store.mjs';
 import { createPostgresOrderMarginBridgeReader } from '../infrastructure/postgres-order-margin-bridge-reader.mjs';
 import { createPostgresProductionExecutionReader } from '../infrastructure/postgres-production-execution-reader.mjs';
@@ -138,6 +141,21 @@ export function createPostgresWholesaleRuntime(options = {}) {
   const inlineQualityQueries = createInlineQualityQueryService({ reader: inlineQualityReader });
   const inlineQuality = Object.freeze({ ...inlineQualityQueries, ...inlineQualityCommands });
 
+  // Деньги фабрике стоят после приёмки, а не рядом с ней: веха оплаты наступает от события, которое
+  // порождает контроль качества, поэтому платежи собираются последними в этой цепочке.
+  const supplierPaymentStore = createPostgresSupplierPaymentStore({ pool: options.pool });
+  const supplierPaymentReader = createPostgresSupplierPaymentReader({ pool: options.pool });
+  const supplierPaymentCommands = createSupplierPaymentService({
+    store: supplierPaymentStore,
+    ...(options.clock ? { clock: options.clock } : {}),
+    ...(options.nextId ? { nextId: options.nextId } : {}),
+  });
+  const supplierPaymentQueries = createSupplierPaymentQueryService({
+    reader: supplierPaymentReader,
+    ...(options.clock ? { clock: options.clock } : {}),
+  });
+  const supplierPayments = Object.freeze({ ...supplierPaymentQueries, ...supplierPaymentCommands });
+
   const transport = {
     authenticate: base.auth.authenticate,
     auth: base.auth,
@@ -172,6 +190,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
     productionExecutions,
     finalQuality,
     inlineQuality,
+    supplierPayments,
     collaboration: base.collaboration,
     orders: base.orders,
     notifications: base.notifications,
@@ -206,6 +225,9 @@ export function createPostgresWholesaleRuntime(options = {}) {
     productionExecutionStore,
     productionExecutionReader,
     productionExecutions,
+    supplierPaymentStore,
+    supplierPaymentReader,
+    supplierPayments,
     inlineQualityStore,
     inlineQualityReader,
     inlineQuality,

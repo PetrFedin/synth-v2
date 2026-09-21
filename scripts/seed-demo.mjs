@@ -65,6 +65,13 @@ const DEMO_DEFECT_TYPES = [
   { code: 'BUTTON-LOOSE', severity: 'minor', originStage: 'finishing-complete', nameRu: 'Слабо пришита пуговица', nameEn: 'Loose button' },
 ];
 
+// Аванс и остаток — обычное для этой торговли деление, и оно здесь данные, а не соглашение,
+// зашитое в код: бывает и сто процентов по выпуску, и платёж третями. Сумма долей обязана быть
+// целым, и это правило стоит и в домене, и в базе.
+const DEMO_PAYMENT_SPLIT = [
+  { triggerEvent: 'order-confirmed', shareBasisPoints: 3000, labelRu: 'Аванс при подтверждении заказа', labelEn: 'Deposit on order confirmation' },
+  { triggerEvent: 'shipment-released', shareBasisPoints: 7000, labelRu: 'Остаток после допуска к отгрузке', labelEn: 'Balance after shipment release' },
+];
 const DEMO_LOT_RFQ = 'RFQ-SYN_JKT_R3_MID_M';
 const DEMO_LOT_PO = 'PO-SYN_JKT_R3_MID_M';
 const DEMO_SAMPLING_STANDARD = 'DEMO-AQL-2026';
@@ -159,6 +166,7 @@ try {
   await ensureSamplingPlans(pool, brandId, accounts.owner);
   await ensureDefectCatalogue(runtime, pool, brandId, accounts.owner);
   await ensureLotInProduction(runtime, pool, brandId, accounts.owner);
+  await ensurePaymentSchedules(runtime, pool, brandId, accounts.owner);
 
   // Inspections sat at review-pending because the only account in the brand was the one that ran
   // them, and a run's inspector may not sign off its own disposition. That rule is a feature, and a
@@ -662,6 +670,59 @@ async function ensureLotInProduction(runtime, pool, brandId, actorId) {
     note('lot in production', 'пошив: 8 изделий с замечаниями — решение не принято, этап закрыт не будет');
   }
   note('lot in production', `${execution.executionCode} остаётся в производстве на этапе пошива`);
+}
+
+// Графики платежей по подтверждённым заказам.
+//
+// Nothing is typed: the amount is the order's own frozen commercial snapshot, the currency comes
+// with it, and the term in days is the supplier's. The demonstration then pays what has genuinely
+// fallen due — the deposit, whose trigger is the confirmation that already happened — and leaves the
+// balance alone, because on a lot still in production it has not fallen due and paying it would be
+// money out for goods that never shipped.
+async function ensurePaymentSchedules(runtime, pool, brandId, actorId) {
+  const orders = await pool.query(
+    `SELECT production_order.production_order_number AS number
+       FROM production_orders AS production_order
+       LEFT JOIN payment_schedules AS schedule
+         ON schedule.production_order_number = production_order.production_order_number
+      WHERE production_order.brand_id = $1
+        AND production_order.status = 'confirmed'
+        AND schedule.id IS NULL
+      ORDER BY production_order.production_order_number`,
+    [brandId],
+  );
+  let drawn = 0;
+  for (const row of orders.rows) {
+    try {
+      await runtime.supplierPayments.createSchedule(command('payment-schedule'), actorId, row.number, { split: DEMO_PAYMENT_SPLIT });
+      drawn += 1;
+    } catch (error) {
+      note('payments', `${row.number} skipped (${error.code ?? error.message})`);
+    }
+  }
+  note('payments', drawn > 0 ? `${drawn} графиков платежей составлено` : 'графики платежей уже составлены');
+
+  // Платим то, что действительно наступило, и ничего сверх.
+  const schedules = await runtime.supplierPayments.paymentSchedulesForActor(actorId);
+  let paid = 0;
+  for (const schedule of schedules) {
+    for (const milestone of schedule.milestones) {
+      if (milestone.status !== 'due' && milestone.status !== 'overdue') continue;
+      // Остаток оставляем неоплаченным там, где он только что наступил: демонстрация должна
+      // показывать и «оплачено», и «причитается», иначе экран рассказывает только одну половину.
+      if (milestone.triggerEvent === 'shipment-released') continue;
+      try {
+        await runtime.supplierPayments.recordPayment(command('payment-pay'), actorId, schedule.productionOrderNumber, {
+          expectedVersion: schedule.version, sequence: milestone.sequence,
+          reference: `PP-${schedule.productionOrderNumber}-${milestone.sequence}`,
+        });
+        paid += 1;
+      } catch (error) {
+        note('payments', `${schedule.productionOrderNumber}/${milestone.sequence} not paid (${error.code ?? error.message})`);
+      }
+    }
+  }
+  if (paid > 0) note('payments', `${paid} авансов оплачено`);
 }
 
 async function releaseQuality(runtime, pool, brandId, approvers) {

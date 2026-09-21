@@ -18,6 +18,9 @@ import { createProductionExecutionService } from '../src/application/production-
 import { createFinalQualityService } from '../src/application/final-quality-service.mjs';
 import { createInlineQualityService } from '../src/application/inline-quality-service.mjs';
 import { createPostgresInlineQualityStore } from '../src/infrastructure/postgres-inline-quality-store.mjs';
+import { createSupplierPaymentService, createSupplierPaymentQueryService } from '../src/application/supplier-payment-service.mjs';
+import { createPostgresSupplierPaymentStore } from '../src/infrastructure/postgres-supplier-payment-store.mjs';
+import { createPostgresSupplierPaymentReader } from '../src/infrastructure/postgres-supplier-payment-reader.mjs';
 import { createPostgresWholesaleStore } from '../src/infrastructure/postgres-store.mjs';
 import { createPostgresCatalogStore } from '../src/infrastructure/postgres-catalog-store.mjs';
 import { createPostgresMaterialStore } from '../src/infrastructure/postgres-material-store.mjs';
@@ -57,6 +60,7 @@ test('PostgreSQL closes approved PPS through production, rework, reinspection an
     const productionOrderStore = createPostgresProductionOrderStore({ pool });
     const productionExecutionStore = createPostgresProductionExecutionStore({ pool });
     const inlineQualityStore = createPostgresInlineQualityStore({ pool });
+    const supplierPaymentStore = createPostgresSupplierPaymentStore({ pool });
     const finalQualityStore = createPostgresFinalQualityStore({ pool });
     const platform = createWholesalePlatform({ store: wholesaleStore, clock, nextId });
     const catalog = createCatalogService({ wholesaleStore, catalogStore, clock, nextId });
@@ -70,6 +74,8 @@ test('PostgreSQL closes approved PPS through production, rework, reinspection an
     const productionOrders = createProductionOrderService({ store: productionOrderStore, clock, nextId });
     const productionExecutions = createProductionExecutionService({ store: productionExecutionStore, clock, nextId });
     const inlineQuality = createInlineQualityService({ store: inlineQualityStore, clock, nextId });
+    const supplierPayments = createSupplierPaymentService({ store: supplierPaymentStore, clock, nextId });
+    const supplierPaymentQueries = createSupplierPaymentQueryService({ reader: createPostgresSupplierPaymentReader({ pool }), clock });
     const finalQuality = createFinalQualityService({ store: finalQualityStore, clock, nextId });
 
     await platform.registerOrganisation('org-create', 'system', createOrganisation({ id: 'brand-tech-gate', type: 'brand', name: 'Tech Gate Brand' }));
@@ -359,6 +365,62 @@ test('PostgreSQL closes approved PPS through production, rework, reinspection an
     await assert.rejects(
       () => pool.query("UPDATE quality_shipment_releases SET released_by = 'product-owner' WHERE inspection_code = $1", [quality.inspectionCode]),
       (error) => error?.code === '23514' && error?.constraint === 'quality_shipment_releases_immutable',
+    );
+
+    // --- Платёжные вехи --------------------------------------------------------------------------
+    //
+    // The money follows the same events the rest of the chain already produced: the factory's
+    // confirmation and Final Quality's release. Nothing here is typed, and due-ness is never stored.
+    const split = [
+      { triggerEvent: 'order-confirmed', shareBasisPoints: 3000, labelRu: 'Аванс', labelEn: 'Deposit' },
+      { triggerEvent: 'shipment-released', shareBasisPoints: 7000, labelRu: 'Остаток', labelEn: 'Balance' },
+    ];
+    const schedule = await supplierPayments.createSchedule('payment-schedule', 'product-owner', productionOrder.productionOrderNumber, { split });
+    assert.equal(schedule.currency, productionOrder.commercialSnapshot.currency);
+    assert.equal(schedule.totalAmountMinor, productionOrder.commercialSnapshot.totalCostMinor, 'the schedule bills the order, it does not restate it');
+    assert.equal(schedule.milestones.reduce((total, milestone) => total + milestone.amountMinor, 0), schedule.totalAmountMinor);
+    // Один заказ — один график: второй был бы вторым мнением о том, сколько мы должны.
+    await assert.rejects(() => supplierPayments.createSchedule('payment-schedule-again', 'product-owner', productionOrder.productionOrderNumber, { split }), { code: 'PAYMENT_SCHEDULE_EXISTS' });
+
+    // Части обязаны складываться в целое, и это стоит в базе, а не только в модуле.
+    // The payload projection refuses a row whose columns and payload disagree, so a writer going
+    // around the module has to change both — and then the sum rule is what stops it.
+    await assert.rejects(
+      () => pool.query(`UPDATE payment_milestones
+                           SET amount_minor = amount_minor - 1,
+                               payload = jsonb_set(payload, '{amountMinor}', to_jsonb(amount_minor - 1))
+                         WHERE schedule_id = $1 AND sequence = 1`, [schedule.id]),
+      /PAYMENT_AMOUNTS_MUST_TOTAL_ORDER/,
+    );
+    await assert.rejects(
+      () => pool.query(`UPDATE payment_milestones
+                           SET share_basis_points = 2000,
+                               payload = jsonb_set(payload, '{shareBasisPoints}', to_jsonb(2000))
+                         WHERE schedule_id = $1 AND sequence = 1`, [schedule.id]),
+      /PAYMENT_SHARES_MUST_TOTAL_WHOLE/,
+    );
+
+    // Обе вехи наступили: заказ подтверждён и партия выпущена, так что срок считается от событий.
+    const view = await supplierPaymentQueries.paymentScheduleForActor('product-owner', productionOrder.productionOrderNumber);
+    // Оба события произошли, поэтому обе вехи наступили — и ни одна не просрочена, потому что срок
+    // считается от события плюс отсрочка, а часы теста ушли от событий совсем недалеко.
+    assert.deepEqual(view.milestones.map((milestone) => milestone.status), ['due', 'due']);
+    assert.equal(view.overdueAmountMinor, 0);
+    assert.equal(view.outstandingAmountMinor, schedule.totalAmountMinor);
+    assert.equal(view.milestones[1].triggerOccurredAt, releaseRow.payload.releasedAt, 'the balance dates from the release, not from the order');
+
+    const afterDeposit = await supplierPayments.recordPayment('payment-deposit', 'product-owner', productionOrder.productionOrderNumber, {
+      expectedVersion: schedule.version, sequence: 1, reference: 'PP-DEPOSIT-1',
+    });
+    assert.equal(afterDeposit.milestones[0].paymentReference, 'PP-DEPOSIT-1');
+    const paidView = await supplierPaymentQueries.paymentScheduleForActor('product-owner', productionOrder.productionOrderNumber);
+    assert.equal(paidView.paidAmountMinor, afterDeposit.milestones[0].amountMinor);
+    assert.equal(paidView.outstandingAmountMinor, schedule.totalAmountMinor - afterDeposit.milestones[0].amountMinor);
+
+    // Деньги не уходят за товар, который не отгружали — и это тоже держит база.
+    await assert.rejects(
+      () => pool.query("UPDATE payment_milestones SET paid_at = '2020-01-01T00:00:00Z', paid_by = 'x', payment_reference = 'BACKDATED' WHERE schedule_id = $1 AND sequence = 2", [schedule.id]),
+      /PAYMENT_BEFORE_ITS_TRIGGER/,
     );
 
     assert.equal(pps.status, 'approved');

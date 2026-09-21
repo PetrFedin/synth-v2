@@ -13,18 +13,19 @@ import {
 } from '../../src/acceptance/collection-live-acceptance.mjs';
 import { runProductCommercializationLiveAcceptance } from '../../src/acceptance/product-commercialization-live-acceptance.mjs';
 import { runReadyProductReadinessLiveAcceptance } from '../../src/acceptance/product-readiness-ready-live-acceptance.mjs';
-import { bootstrapProductionAcceptanceReferences } from '../../src/acceptance/production-reference-bootstrap.mjs';
+import { PRODUCTION_ACCEPTANCE_REFERENCES, bootstrapProductionAcceptanceReferences } from '../../src/acceptance/production-reference-bootstrap.mjs';
 import { bootstrapMdmReference } from '../../src/infrastructure/mdm-reference-bootstrap.mjs';
 import { migratePostgres } from '../../src/infrastructure/postgres-migrator.mjs';
 import { createPostgresWholesaleRuntime } from '../../src/runtime/postgres-runtime.mjs';
 import { assertCanonicalCommercialWriteGuards } from './canonical-commercial-write-guards.mjs';
+import { ACCEPTANCE_BRAND_OWNER, ACCEPTANCE_SHOP_OWNER } from './acceptance-actors.mjs';
 
 const { Pool } = pg;
 const connectionString = process.env.POSTGRES_TEST_URL;
-const brandEmail = 'collection-acceptance@syntha.test';
-const brandPassword = 'CollectionAcceptanceTest!';
-const shopEmail = 'commercialization-shop@syntha.test';
-const shopPassword = 'CommercializationShopAcceptanceTest!';
+const brandEmail = ACCEPTANCE_BRAND_OWNER.email;
+const brandPassword = ACCEPTANCE_BRAND_OWNER.password;
+const shopEmail = ACCEPTANCE_SHOP_OWNER.email;
+const shopPassword = ACCEPTANCE_SHOP_OWNER.password;
 
 test('READY Product reaches projection, projection-native publication, price list and BuyerCatalog through real HTTP/PostgreSQL', async () => {
   assert.ok(connectionString, 'POSTGRES_TEST_URL is required for PostgreSQL integration tests');
@@ -40,18 +41,20 @@ test('READY Product reaches projection, projection-native publication, price lis
     await migratePostgres({ pool, migrationsDir });
     await bootstrapMdmReference({ pool, datasets: await loadOperationalMdmDatasets(referenceDir) });
     const runtime = createPostgresWholesaleRuntime({ pool, migrationsDir });
-    const references = await bootstrapProductionAcceptanceReferences({ platform: runtime.platform });
-
+    // Порядок обязателен: оба владельца входят в систему своими почтой и паролем, поэтому их
+    // учётные записи заводятся до бутстрапа. Он найдёт их и не тронет, а трём актёрам, которые
+    // никогда не входят, заведёт отключённые личности — членство обязано называть существующую.
     await ensureAcceptanceBrandOwner({ pool, auth: runtime.auth, email: brandEmail, password: brandPassword });
     await ensureAcceptanceActor({
       pool,
       auth: runtime.auth,
-      actorId: references.actors.shopOwner,
+      actorId: PRODUCTION_ACCEPTANCE_REFERENCES.actors.shopOwner,
       email: shopEmail,
       password: shopPassword,
       displayName: 'Syntha Acceptance Shop Owner',
       envLabel: 'PostgreSQL acceptance shop owner',
     });
+    const references = await bootstrapProductionAcceptanceReferences({ platform: runtime.platform, auth: runtime.auth, pool });
 
     server = createServer(runtime.handler);
     baseUrl = await listenLocal(server);

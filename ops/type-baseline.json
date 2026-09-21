@@ -14,7 +14,6 @@
   "src/acceptance/product-readiness-live-acceptance.mjs": 27,
   "src/acceptance/product-readiness-projection-boundary.mjs": 7,
   "src/acceptance/product-readiness-ready-live-acceptance.mjs": 33,
-  "src/acceptance/production-reference-bootstrap.mjs": 1,
   "src/application/auth-service.mjs": 1,
   "src/application/bom-query-service.mjs": 1,
   "src/application/bom-service.mjs": 1,

@@ -29,7 +29,18 @@ export function createAuthService({
   invariant(Number.isInteger(revokedSessionRetentionMs) && revokedSessionRetentionMs >= 60_000, 'AUTH_SESSION_RETENTION_INVALID', 'Revoked session retention must be at least one minute');
 
   return Object.freeze({
-    async bootstrapUser({ id = nextId('user'), email, password, displayName = '' }) {
+    /**
+     * Завести личность.
+     *
+     * `status` — это ответ на вопрос «может ли этот человек действовать», и он уже есть в схеме:
+     * и вход, и проверка сессии отказывают всем, кроме `active`. Завести личность сразу
+     * отключённой нужно там, где её идентификатор должен существовать и быть занят, а войти под
+     * ним было бы неверно.
+     *
+     * @param {{ id?: string, email: string, password: string, displayName?: string, status?: 'active' | 'disabled' }} input
+     */
+    async bootstrapUser({ id = nextId('user'), email, password, displayName = '', status = 'active' }) {
+      invariant(status === 'active' || status === 'disabled', 'AUTH_USER_STATUS_INVALID', 'User status must be active or disabled', { status });
       const emailNormalized = normalizeEmail(email);
       const passwordHash = await hashPassword(password, { randomBytesImpl });
       const now = currentTimestamp(clock);
@@ -39,7 +50,7 @@ export function createAuthService({
         emailNormalized,
         displayName: String(displayName).trim(),
         passwordHash,
-        status: 'active',
+        status,
         createdAt: now,
         updatedAt: now,
       });

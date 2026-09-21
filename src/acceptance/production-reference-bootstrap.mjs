@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { invariant } from '../core/errors.mjs';
 import { createMembership } from '../modules/access-control/public.mjs';
 import { createOrganisation } from '../modules/organisations/public.mjs';
@@ -27,11 +28,15 @@ export const PRODUCTION_ACCEPTANCE_REFERENCES = deepFreeze({
  * The bootstrap payload is intentionally time-stable. Command ids are durable
  * idempotency identities, so a retry must present the exact same command payload;
  * sampling the wall clock here would turn a safe replay into COMMAND_ID_CONFLICT.
+ *
+ * @param {{ platform?: any, auth?: any, pool?: any }} [options] `auth` and `pool` are optional: with
+ *   both, the bootstrap makes sure every actor it grants a role to exists as an identity first.
  */
-export async function bootstrapProductionAcceptanceReferences({ platform } = {}) {
+export async function bootstrapProductionAcceptanceReferences({ platform, auth, pool } = {}) {
   invariant(platform && typeof platform.registerOrganisation === 'function' && typeof platform.grantMembership === 'function', 'PRODUCTION_ACCEPTANCE_PLATFORM_REQUIRED', 'Production platform service is required');
 
   const refs = PRODUCTION_ACCEPTANCE_REFERENCES;
+  await ensureAcceptanceIdentities({ auth, pool, refs });
   const createdAt = PRODUCTION_ACCEPTANCE_CREATED_AT;
   const brand = createOrganisation(refs.brand);
   const shop = createOrganisation(refs.shop);
@@ -89,6 +94,44 @@ export async function bootstrapProductionAcceptanceReferences({ platform } = {})
       shopBuyer: grantedShopBuyer,
     },
   });
+}
+
+/**
+ * Завести личности приёмочных актёров прежде, чем им выдаются роли.
+ *
+ * Членство называет человека, который может действовать, — это не приглашение, и во всех
+ * настоящих путях учётная запись создаётся раньше членства (см. `bootstrap-counterparty-user`).
+ * Приёмочный бутстрап был единственным исключением: он выдавал роли, включая `owner`, пяти
+ * идентификаторам, для которых пользователей не существовало. Войти под ними было нельзя, но
+ * идентификатор оставался свободным — и тот, кто позже завёл бы пользователя с таким же
+ * идентификатором, молча получил бы владельца чужой организации.
+ *
+ * Актёры, которые **не входят** в систему, заводятся сразу отключёнными: идентификатор занят,
+ * членство называет существующую личность, а действовать под ней нельзя — ни вход, ни проверка
+ * сессии не пропускают ничего, кроме `active`. Пароль случайный и никуда не возвращается:
+ * личность существует, входа у неё нет.
+ *
+ * Тем, кто входит — владельцы бренда и магазина, — учётные записи создаёт сам приёмочный прогон
+ * своими почтой и паролем **до** вызова бутстрапа; здесь они уже найдутся и не трогаются.
+ *
+ * Без `auth` и `pool` шаг пропускается: таков путь тестов с поддельной платформой, у которой нет
+ * ни таблицы пользователей, ни внешнего ключа, который она держит.
+ */
+async function ensureAcceptanceIdentities({ auth, pool, refs }) {
+  if (!auth || typeof auth.bootstrapUser !== 'function') return;
+  if (!pool || typeof pool.query !== 'function') return;
+  for (const actorId of Object.values(refs.actors)) {
+    const existing = await pool.query('SELECT id FROM auth_users WHERE id = $1', [actorId]);
+    if (existing.rowCount > 0) continue;
+    await auth.bootstrapUser({
+      id: actorId,
+      // Зарезервированный домен верхнего уровня: почта, на которую заведомо нельзя написать.
+      email: `${actorId}@acceptance.invalid`,
+      password: randomBytes(32).toString('hex'),
+      displayName: 'Syntha Acceptance Actor',
+      status: 'disabled',
+    });
+  }
 }
 
 function command(name) { return `production-reference:${name}`; }

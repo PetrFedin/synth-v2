@@ -81,14 +81,17 @@ async function seed(pool) {
   const brand = { id: 'brand-portal-pg', type: 'brand', name: 'Portal Brand' };
   await pool.query('INSERT INTO organisations (id, type, payload) VALUES ($1,$2,$3::jsonb)', [brand.id, 'brand', JSON.stringify(brand)]);
   const owner = { id: 'm-owner-portal', organisationId: brand.id, organisationType: 'brand', userId: 'brand-owner', role: 'owner', status: 'active' };
-  await pool.query('INSERT INTO memberships (id,organisation_id,user_id,organisation_type,role,status,payload) VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb)',
-    [owner.id, brand.id, owner.userId, 'brand', 'owner', 'active', JSON.stringify(owner)]);
+  // Сначала личности, потом роли — тот же порядок, что и во всех настоящих путях заведения.
+  // Обратный порядок база теперь отвергает: занять идентификатор, за которым уже закреплены роли,
+  // значило бы получить их вместе с ним.
   await pool.query(
     `INSERT INTO auth_users (id, email, email_normalized, display_name, password_hash, status, created_at, updated_at)
      VALUES ('user-rep','rep@one.example','rep@one.example','Mei Lin','x','active',$1,$1),
             ('brand-owner','owner@brand.example','owner@brand.example','Owner','x','active',$1,$1)`,
     [now],
   );
+  await pool.query('INSERT INTO memberships (id,organisation_id,user_id,organisation_type,role,status,payload) VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb)',
+    [owner.id, brand.id, owner.userId, 'brand', 'owner', 'active', JSON.stringify(owner)]);
 
   for (const [id, code] of [['supplier-one', 'SUP-ONE'], ['supplier-two', 'SUP-TWO']]) {
     const supplier = {

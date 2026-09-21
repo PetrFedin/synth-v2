@@ -9,7 +9,9 @@ import {
   logoutAcceptanceSession,
   runCollectionLiveAcceptance,
 } from '../../src/acceptance/collection-live-acceptance.mjs';
-import { bootstrapProductionAcceptanceReferences } from '../../src/acceptance/production-reference-bootstrap.mjs';
+import { PRODUCTION_ACCEPTANCE_REFERENCES, bootstrapProductionAcceptanceReferences } from '../../src/acceptance/production-reference-bootstrap.mjs';
+import { ensureAcceptanceActor } from '../../src/acceptance/acceptance-auth.mjs';
+import { ACCEPTANCE_SHOP_OWNER } from './acceptance-actors.mjs';
 import { migratePostgres } from '../../src/infrastructure/postgres-migrator.mjs';
 import { createPostgresWholesaleRuntime } from '../../src/runtime/postgres-runtime.mjs';
 
@@ -29,8 +31,22 @@ test('collection live acceptance crosses the real HTTP and PostgreSQL boundary w
   try {
     await migratePostgres({ pool, migrationsDir });
     const runtime = createPostgresWholesaleRuntime({ pool, migrationsDir });
-    const references = await bootstrapProductionAcceptanceReferences({ platform: runtime.platform });
+    // Порядок обязателен: владелец бренда входит в систему своими почтой и паролем, поэтому его
+    // учётная запись заводится первой. Бутстрап после этого найдёт её и не тронет, а остальным
+    // актёрам заведёт отключённые личности — членство обязано называть существующую личность.
     await ensureAcceptanceBrandOwner({ pool, auth: runtime.auth, email, password });
+    // Этот набор владельцем магазина не пользуется, но членство ему выдаёт — значит и личность
+    // заводит он же, теми же данными, что и соседний набор: база у них одна.
+    await ensureAcceptanceActor({
+      pool,
+      auth: runtime.auth,
+      actorId: PRODUCTION_ACCEPTANCE_REFERENCES.actors.shopOwner,
+      email: ACCEPTANCE_SHOP_OWNER.email,
+      password: ACCEPTANCE_SHOP_OWNER.password,
+      displayName: ACCEPTANCE_SHOP_OWNER.displayName,
+      envLabel: 'PostgreSQL acceptance shop owner',
+    });
+    const references = await bootstrapProductionAcceptanceReferences({ platform: runtime.platform, auth: runtime.auth, pool });
 
     server = createServer(runtime.handler);
     baseUrl = await listenLocal(server);

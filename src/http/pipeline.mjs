@@ -21,7 +21,7 @@ const LOGIN_BODY = bodyContract(['email', 'password']);
  *
  * @param {Record<string, any>} [options] Authenticator, readiness probe, limits and the service map.
  */
-export function createWholesaleRequestPipeline({ authenticate, auth, readiness, maxBodyBytes = 256 * 1024, nextRequestId = randomUUID, ...services } = {}) {
+export function createWholesaleRequestPipeline({ authenticate, auth, readiness, maxBodyBytes = 256 * 1024, nextRequestId = randomUUID, logger = console, ...services } = {}) {
   invariant(typeof authenticate === 'function', 'HTTP_AUTHENTICATOR_REQUIRED', 'HTTP authenticator is required');
   invariant(Number.isSafeInteger(maxBodyBytes) && maxBodyBytes > 0, 'HTTP_BODY_LIMIT_INVALID', 'HTTP body limit must be a positive integer');
   invariant(typeof nextRequestId === 'function', 'HTTP_REQUEST_ID_FACTORY_REQUIRED', 'HTTP request id factory is required');
@@ -33,6 +33,7 @@ export function createWholesaleRequestPipeline({ authenticate, auth, readiness, 
       return { requestId, ...await dispatch(request, requestId) };
     } catch (error) {
       const normalized = normalizeHttpError(error);
+      if (normalized.status >= 500) reportServerFailure({ logger, requestId, request, normalized, error });
       return {
         requestId,
         status: normalized.status,
@@ -98,6 +99,52 @@ export function createWholesaleRequestPipeline({ authenticate, auth, readiness, 
     const bytes = await request.readBody(maxBodyBytes);
     return decodeJsonObject(bytes, request.header('content-type'));
   }
+}
+
+/**
+ * Записать отказ, за который отвечаем мы.
+ *
+ * До этого HTTP-слой не писал **ничего**, включая пятисотые: на сервере не оставалось ни стека, ни
+ * SQLSTATE, ни идентификатора запроса, и отладить пятисотку было нечем — оставалось воспроизводить
+ * её вручную. Идентификатор запроса уже уходил в ответ, но нигде не сохранялся, то есть жалоба
+ * «получил 500, вот requestId» ни с чем не сопоставлялась.
+ *
+ * Пишется только 5xx. Четырёхсотые — обычный разговор с клиентом, и журнал из них состоял бы на
+ * девяносто девять процентов, после чего перестал бы читаться.
+ *
+ * **Тело запроса, заголовки и параметры не пишутся.** Там пароли, токены и персональные данные, а
+ * журнал живёт дольше и читается шире, чем сам запрос. Путь берётся без строки запроса по той же
+ * причине. Из ошибки PostgreSQL берутся `constraint`, `table`, `column` и SQLSTATE — этого хватает,
+ * чтобы найти правило, — но не `detail`, потому что он содержит значения самой строки.
+ */
+function reportServerFailure({ logger, requestId, request, normalized, error }) {
+  if (typeof logger?.error !== 'function') return;
+  const cause = error?.cause ?? error;
+  const report = {
+    requestId,
+    method: request?.method,
+    path: request?.url?.pathname,
+    status: normalized.status,
+    code: normalized.code,
+    error: errorSummary(error),
+  };
+  if (cause !== error) report.cause = errorSummary(cause);
+  try {
+    logger.error('Syntha V2 request failed', report);
+  } catch {
+    // Журнал не имеет права уронить ответ: отказ уже произошёл, и второй поверх него ничего не лечит.
+  }
+}
+
+function errorSummary(error) {
+  if (!error || typeof error !== 'object') return { message: String(error ?? '') };
+  const summary = { name: error.name, message: error.message };
+  // SQLSTATE и то, какое именно правило схемы сработало. Значения строки (`detail`) не берутся.
+  for (const field of ['code', 'constraint', 'table', 'column', 'schema', 'routine']) {
+    if (error[field] !== undefined && error[field] !== null) summary[field] = error[field];
+  }
+  if (typeof error.stack === 'string') summary.stack = error.stack;
+  return summary;
 }
 
 export function assertBodyWithinLimit(size, limit) {

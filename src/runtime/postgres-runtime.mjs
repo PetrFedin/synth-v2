@@ -29,6 +29,8 @@ import { createOperationSequenceService, createOperationSequenceQueryService } f
 import { createPostgresTargetPricingStore } from '../infrastructure/postgres-target-pricing-store.mjs';
 import { createPostgresTargetPricingReader } from '../infrastructure/postgres-target-pricing-reader.mjs';
 import { createTargetPricingService, createTargetPricingQueryService } from '../application/target-pricing-service.mjs';
+import { createPostgresSeasonEconomicsReader } from '../infrastructure/postgres-season-economics-reader.mjs';
+import { createSeasonEconomicsQueryService } from '../application/season-economics-service.mjs';
 import { createPostgresFinalQualityStore } from '../infrastructure/postgres-final-quality-store.mjs';
 import { createPostgresOrderMarginBridgeReader } from '../infrastructure/postgres-order-margin-bridge-reader.mjs';
 import { createPostgresProductionExecutionReader } from '../infrastructure/postgres-production-execution-reader.mjs';
@@ -216,6 +218,13 @@ export function createPostgresWholesaleRuntime(options = {}) {
   const targetPricingQueries = createTargetPricingQueryService({ reader: targetPricingReader });
   const targetPricing = Object.freeze({ ...targetPricingQueries, ...targetPricingCommands });
 
+  // Плановая экономика сезона замыкает ту же цепочку сверху: слот линейного плана, целевая цена по
+  // нему и цена из подтверждённого заказа сводятся в одну маржу. Читается и только читается —
+  // ни одно из сведённых чисел не хранится.
+  const seasonEconomics = createSeasonEconomicsQueryService({
+    reader: createPostgresSeasonEconomicsReader({ pool: options.pool }),
+  });
+
   const transport = {
     authenticate: base.auth.authenticate,
     auth: base.auth,
@@ -255,6 +264,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
     cutting,
     operationSequences,
     targetPricing,
+    seasonEconomics,
     collaboration: base.collaboration,
     orders: base.orders,
     notifications: base.notifications,
@@ -292,6 +302,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
     targetPricingStore,
     targetPricingReader,
     targetPricing,
+    seasonEconomics,
     operationSequenceStore,
     operationSequenceReader,
     operationSequences,

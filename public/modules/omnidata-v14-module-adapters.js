@@ -26,7 +26,7 @@
     ['.sample-summary,.tech-pack-facts,.production-orders-facts,.production-execution-facts,.final-quality-facts,.ls9-info-grid','definition-grid'],
     ['.sample-summary>div,.tech-pack-facts>div,.production-orders-facts>div,.production-execution-facts>div,.final-quality-facts>div,.ls9-info-item','definition-item'],
     ['.tech-pack-readiness,.ls9-registry','surface'],
-    ['.sample-detail-card,.tech-pack-card,.production-orders-card,.production-execution-card,.final-quality-card','card'],
+    ['.sample-detail-card,.tech-pack-card,.production-orders-card,.production-execution-card,.final-quality-card,.od-season-economics','card'],
     ['.sample-badge,.tech-pack-badge,.production-order-badge,.production-execution-badge,.final-quality-badge,.ls9-status','status'],
     ['.sample-empty,.sample-sync-state,.tech-pack-empty,.production-orders-empty,.production-execution-empty,.final-quality-empty,.ls9-empty,.ls9-loading','empty'],
     ['.sample-error,.sample-blockers,.tech-pack-error,.production-orders-error,.production-execution-error,.final-quality-error,.ls9-error,.ls9-inline-error','alert'],

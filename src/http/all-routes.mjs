@@ -8,6 +8,7 @@ import { createMaterialLotRoutes } from './material-lot-routes.mjs';
 import { createCuttingRoutes } from './cutting-routes.mjs';
 import { createOperationSequenceRoutes } from './operation-sequence-routes.mjs';
 import { createTargetPricingRoutes } from './target-pricing-routes.mjs';
+import { createSeasonEconomicsRoutes } from './season-economics-routes.mjs';
 import { createLibraryRoutes } from './library-routes.mjs';
 import { createHistoryRoutes } from './history-routes.mjs';
 import { createSupplierPortalRoutes } from './supplier-portal-routes.mjs';
@@ -58,6 +59,7 @@ export function createWholesaleRoutes(services = {}) {
     ...createCuttingRoutes({ cutting: services.cutting }),
     ...createOperationSequenceRoutes({ operationSequences: services.operationSequences }),
     ...createTargetPricingRoutes({ targetPricing: services.targetPricing }),
+    ...createSeasonEconomicsRoutes({ seasonEconomics: services.seasonEconomics }),
     ...createLibraryRoutes({ libraries: services.libraries }),
     ...createHistoryRoutes({ history: services.history }),
     ...createSupplierPortalRoutes({ supplierPortal: services.supplierPortal }),

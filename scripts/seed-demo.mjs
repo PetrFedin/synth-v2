@@ -102,6 +102,35 @@ const DEMO_PAYMENT_SPLIT = [
 ];
 const DEMO_LOT_RFQ = 'RFQ-SYN_JKT_R3_MID_M';
 const DEMO_LOT_PO = 'PO-SYN_JKT_R3_MID_M';
+// Линейный план сезона. Цены — в рублях, той же валюте, в которой назначена целевая цена: план и
+// цель, назначенные в разных валютах, планировали бы разный бизнес.
+//
+// Плановая себестоимость намеренно не равна целевой: планировщик считает от наценки, которую
+// заложил в линейный план ещё до того, как известны страна пошива и логистика, а целевая цена
+// добавляет коэффициенты поверх. Небольшое расхождение между ними — обычное состояние сезона, и
+// демонстрация показывает его, а не подогнанное совпадение.
+const DEMO_PLACEHOLDERS = [
+  {
+    code: 'SS27-OUT-001', nameRu: 'Куртка-ветровка', nameEn: 'Windbreaker jacket',
+    // 24 900 ₽ при плановой наценке 2,7 — 9 222,22 ₽ себестоимости.
+    retailMinor: 2_490_000, costMinor: 922_222, quantity: 1200, colourways: 3,
+    drop: 'Drop 1', capsule: 'Городская верхняя одежда', sku: 'SYN_JKT_R3_MID_M',
+  },
+  {
+    code: 'SS27-TOP-002', nameRu: 'Футболка базовая', nameEn: 'Basic tee',
+    // 3 900 ₽ при плановой наценке 2,9 — 1 344,83 ₽ себестоимости.
+    retailMinor: 390_000, costMinor: 134_483, quantity: 5000, colourways: 4,
+    drop: 'Drop 1', capsule: 'База', sku: 'SYN_TEE_R3_OFW_M',
+  },
+  {
+    // Слот, под который ещё ничего не разработано: так выглядит сезон в работе, и свод честно
+    // показывает, какую долю выручки он пока не покрывает.
+    code: 'SS27-DRS-003', nameRu: 'Платье миди', nameEn: 'Midi dress',
+    retailMinor: 1_290_000, costMinor: 478_000, quantity: 800, colourways: 2,
+    drop: 'Drop 2', capsule: 'Городская верхняя одежда', sku: null,
+  },
+];
+
 const DEMO_SAMPLING_STANDARD = 'DEMO-AQL-2026';
 const DEMO_SAMPLING_ROWS = [
   // lotFrom, lotTo, sampleSize, acceptAt at AQL 2.5, acceptAt at AQL 4.0
@@ -198,6 +227,7 @@ try {
   await ensureOperationSequence(runtime, pool, brandId, accounts.owner);
   await ensureCuttingSpread(runtime, pool, brandId, accounts.owner);
   await ensureTargetPricing(runtime, pool, brandId, accounts.owner);
+  await ensureAssortmentPlan(runtime, pool, brandId, accounts.owner);
   await ensurePaymentSchedules(runtime, pool, brandId, accounts.owner);
 
   // Inspections sat at review-pending because the only account in the brand was the one that ran
@@ -889,6 +919,11 @@ async function ensureTargetPricing(runtime, pool, brandId, actorId) {
     }
   }
 
+  // Цель ставится и на футболку: под неё ещё нет размещённого заказа, и слот линейного плана
+  // остаётся «нацелен, но не закуплен». Это обычное состояние сезона в середине работы, и свод
+  // должен уметь его показывать, а не только законченные слоты.
+  await ensureTeeTargetPrice(runtime, pool, brandId, actorId, row.campaign);
+
   const planned = await pool.query("SELECT 1 FROM target_price_plans WHERE brand_id = $1 AND sku = $2 AND status <> 'superseded'", [brandId, row.sku]);
   if (planned.rowCount) { note('target price', 'цель по цене уже составлена'); return; }
   try {
@@ -909,6 +944,108 @@ async function ensureTargetPricing(runtime, pool, brandId, actorId) {
     note('target price', `${row.sku}: цель ${money(view.targetFobMinor)} ${view.fobCurrency} FOB, фабрика запросила ${view.quotedFobMinor === null ? '—' : money(view.quotedFobMinor)} ${view.quotedCurrency ?? ''} — ${view.withinTarget === null ? 'сравнить не с чем' : view.withinTarget ? 'укладываемся' : 'выходим за цель'}`);
   } catch (error) {
     note('target price', `цель не составлена (${error.code ?? error.message})`);
+  }
+}
+
+async function ensureTeeTargetPrice(runtime, pool, brandId, actorId, campaignId) {
+  const sku = (await pool.query(
+    `SELECT catalog_sku.sku
+       FROM catalog_skus AS catalog_sku
+       JOIN collections AS collection ON collection.id = catalog_sku.collection_id
+      WHERE collection.campaign_id = $1 AND catalog_sku.sku LIKE 'SYN_TEE%'
+      LIMIT 1`,
+    [campaignId],
+  )).rows[0];
+  if (!sku) return;
+  const planned = await pool.query("SELECT 1 FROM target_price_plans WHERE brand_id = $1 AND sku = $2 AND status <> 'superseded'", [brandId, sku.sku]);
+  if (planned.rowCount) return;
+  try {
+    let plan = await runtime.targetPricing.createPlan(command('target-price-tee'), actorId, {
+      brandId, sku: sku.sku,
+      // 3 900 ₽ в рознице при наценке 2,8 — обычная экономика базовой футболки.
+      targetRrpMinor: 390_000, rrpCurrency: 'RUB', retailMarkup: 2.8,
+      sourcingCountryCode: 'TR',
+      // Та же дорога, но более лёгкий товар: категорийный коэффициент ниже, чем у верхней одежды.
+      countryCoefficient: 1.18, categoryCoefficient: 1.02,
+      fobCurrency: 'EUR', asOf: '2026-09-01',
+      notes: 'Цель на сезон по базе.',
+    });
+    await runtime.targetPricing.publish(command('target-price-tee-publish'), actorId, plan.id, { expectedVersion: plan.version });
+  } catch (error) {
+    note('target price', `цель по футболке не составлена (${error.code ?? error.message})`);
+  }
+}
+
+async function ensureAssortmentPlan(runtime, pool, brandId, actorId) {
+  const season = (await pool.query(
+    `SELECT collection.campaign_id AS campaign
+       FROM production_orders AS production_order
+       JOIN catalog_skus AS catalog_sku ON catalog_sku.sku = production_order.sku
+       JOIN collections AS collection ON collection.id = catalog_sku.collection_id
+      WHERE production_order.production_order_number = $1`,
+    [DEMO_LOT_PO],
+  )).rows[0];
+  if (!season) { note('assortment plan', 'нет сезона, под который планировать'); return; }
+
+  for (const slot of DEMO_PLACEHOLDERS) {
+    const existing = await pool.query(
+      'SELECT id FROM product_placeholders WHERE campaign_id = $1 AND placeholder_code = $2',
+      [season.campaign, slot.code],
+    );
+    let placeholderId = existing.rows[0]?.id ?? null;
+    if (!placeholderId) {
+      try {
+        const created = await runtime.platform.createProductPlaceholder(command('placeholder'), actorId, {
+          campaignId: season.campaign,
+          placeholderCode: slot.code,
+          nameRu: slot.nameRu,
+          nameEn: slot.nameEn,
+          capsule: slot.capsule,
+          drop: slot.drop,
+          colourwayCount: slot.colourways,
+          plannedQuantity: slot.quantity,
+          currency: 'RUB',
+          recommendedRetailPriceMinor: slot.retailMinor,
+          plannedUnitCostMinor: slot.costMinor,
+        });
+        placeholderId = created.id;
+      } catch (error) {
+        note('assortment plan', `слот ${slot.code} не заведён (${error.code ?? error.message})`);
+        continue;
+      }
+    }
+
+    if (!slot.sku) continue;
+    // Стиль связывается со слотом через свой каталожный SKU: связь по одному концу цепочки
+    // оставила бы план без факта, а факт — без плана.
+    const style = (await pool.query(
+      `SELECT style_version.style_id AS id
+         FROM product_catalog_sku_links AS catalog_link
+         JOIN product_skus AS product_sku ON product_sku.id = catalog_link.product_sku_id
+         JOIN product_style_versions AS style_version ON style_version.id = product_sku.style_version_id
+        WHERE catalog_link.catalog_sku = $1 AND catalog_link.brand_id = $2
+        LIMIT 1`,
+      [slot.sku, brandId],
+    )).rows[0];
+    if (!style) { note('assortment plan', `под ${slot.code} нет стиля с SKU ${slot.sku}`); continue; }
+
+    const linked = await pool.query('SELECT 1 FROM product_placeholder_style_links WHERE style_id = $1', [style.id]);
+    if (linked.rowCount) continue;
+    try {
+      await runtime.platform.linkStyleToPlaceholder(command('placeholder-link'), actorId, placeholderId, { styleId: style.id });
+    } catch (error) {
+      note('assortment plan', `${slot.code} ↔ ${slot.sku} не связаны (${error.code ?? error.message})`);
+    }
+  }
+
+  try {
+    const view = await runtime.seasonEconomics.seasonEconomicsForCampaign(actorId, season.campaign);
+    const roubles = (minor) => (minor === null ? '—' : (minor / 100).toLocaleString('ru-RU', { maximumFractionDigits: 0 }));
+    const percent = (bp) => (bp === null ? '—' : `${(bp / 100).toFixed(1)} %`);
+    note('assortment plan', `сезон: выручка ${roubles(view.season.plannedRevenueMinor)} ₽, плановая маржа ${percent(view.season.plannedMarginBasisPoints)}`);
+    note('assortment plan', `подтверждено ${view.season.confirmedSlotCount} из ${view.season.quantifiedSlotCount} слотов (${percent(view.season.confirmedRevenueShareBasisPoints)} выручки), маржа по ним ${percent(view.season.actualMarginBasisPoints)} против плановых ${percent(view.season.plannedMarginOfConfirmedBasisPoints)}`);
+  } catch (error) {
+    note('assortment plan', `свод не посчитан (${error.code ?? error.message})`);
   }
 }
 

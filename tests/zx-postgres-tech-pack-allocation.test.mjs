@@ -24,6 +24,8 @@ import { createPostgresSupplierPaymentReader } from '../src/infrastructure/postg
 import { createTargetPricingService, createTargetPricingQueryService } from '../src/application/target-pricing-service.mjs';
 import { createPostgresTargetPricingStore } from '../src/infrastructure/postgres-target-pricing-store.mjs';
 import { createPostgresTargetPricingReader } from '../src/infrastructure/postgres-target-pricing-reader.mjs';
+import { createPostgresSeasonEconomicsReader } from '../src/infrastructure/postgres-season-economics-reader.mjs';
+import { createSeasonEconomicsQueryService } from '../src/application/season-economics-service.mjs';
 import { createMaterialLotService, createMaterialLotQueryService } from '../src/application/material-lot-service.mjs';
 import { createPostgresMaterialLotStore } from '../src/infrastructure/postgres-material-lot-store.mjs';
 import { createPostgresMaterialLotReader } from '../src/infrastructure/postgres-material-lot-reader.mjs';
@@ -100,6 +102,7 @@ test('PostgreSQL closes approved PPS through production, rework, reinspection an
     const supplierPaymentQueries = createSupplierPaymentQueryService({ reader: createPostgresSupplierPaymentReader({ pool }), clock });
     const targetPricing = createTargetPricingService({ store: targetPricingStore, clock, nextId });
     const targetPricingQueries = createTargetPricingQueryService({ reader: createPostgresTargetPricingReader({ pool }) });
+    const seasonEconomicsQueries = createSeasonEconomicsQueryService({ reader: createPostgresSeasonEconomicsReader({ pool }) });
     const finalQuality = createFinalQualityService({ store: finalQualityStore, clock, nextId });
 
     await platform.registerOrganisation('org-create', 'system', createOrganisation({ id: 'brand-tech-gate', type: 'brand', name: 'Tech Gate Brand' }));
@@ -681,6 +684,59 @@ test('PostgreSQL closes approved PPS through production, rework, reinspection an
     assert.equal(targetView.quotedCurrency, productionOrder.commercialSnapshot.currency);
     assert.equal(targetView.quotedFobMinor, productionOrder.commercialSnapshot.unitPriceMinor, 'сравниваем с тем, о чём договорились в заказе');
     assert.equal(typeof targetView.withinTarget, 'boolean');
+
+    // --- Плановая экономика сезона -------------------------------------------------------------
+    //
+    // Слот линейного плана заводится в том же сезоне и в той же розничной валюте, что и целевая
+    // цена. Здесь проверяется то, чего доменные тесты достать не могут: что представление
+    // читается, что читатель приводит bigint к целым, и что база держит плановую маржу связанной
+    // с ценой и себестоимостью, даже если запись пойдёт мимо модуля.
+    const slot = await platform.createProductPlaceholder('placeholder-create', 'product-owner', {
+      campaignId: campaign.id,
+      placeholderCode: 'AW28-GATE-001',
+      nameRu: 'Слот линейного плана',
+      nameEn: 'Line plan slot',
+      currency: 'RUB',
+      // 30 000 ₽ при плановой наценке 2,5 — 12 000 ₽ себестоимости.
+      recommendedRetailPriceMinor: 3_000_000,
+      plannedUnitCostMinor: 1_200_000,
+      plannedQuantity: 500,
+      colourwayCount: 2,
+    });
+    assert.equal(slot.plannedMarginBasisPoints, 6000, 'маржа выводится из цены и себестоимости');
+
+    // Маржа, разъехавшаяся с ценой и себестоимостью, — это план, переставший что-либо значить.
+    await assert.rejects(
+      () => pool.query('UPDATE product_placeholders SET planned_margin_basis_points = 9000 WHERE id = $1', [slot.id]),
+      /product_placeholders_margin_consistent/,
+    );
+    // Себестоимость выше розницы — не «отрицательная маржа», а опечатка, и база её не принимает.
+    await assert.rejects(
+      () => pool.query('UPDATE product_placeholders SET planned_unit_cost_minor = 4000000 WHERE id = $1', [slot.id]),
+      /product_placeholders_margin_consistent/,
+    );
+
+    const seasonView = await seasonEconomicsQueries.seasonEconomicsForCampaign('product-owner', campaign.id);
+    assert.equal(seasonView.placeholders.length, 1);
+    const [plannedSlot] = seasonView.placeholders;
+    assert.equal(plannedSlot.coverage, 'planned-only', 'под слот ещё ничего не разработано');
+    assert.equal(plannedSlot.plannedMarkup, 2.5, 'наценка выводится, а не хранится');
+    assert.equal(plannedSlot.targetLandedMinor, null);
+    assert.equal(plannedSlot.actualLandedMinor, null);
+    assert.equal(plannedSlot.targetToActualMinor, null, 'сравнивать не с чем — это не «ноль расхождения»');
+
+    assert.equal(seasonView.season.currency, 'RUB');
+    assert.equal(seasonView.season.plannedRevenueMinor, 3_000_000 * 500);
+    assert.equal(seasonView.season.plannedCostMinor, 1_200_000 * 500);
+    assert.equal(seasonView.season.plannedMarginBasisPoints, 6000);
+    assert.equal(seasonView.season.confirmedSlotCount, 0);
+    assert.equal(seasonView.season.actualCostMinor, null);
+    assert.equal(seasonView.season.complete, false, 'сезон без единой закупки не может быть сведён');
+
+    // Представление реализаций соединяет слот со стилями; пока стилей нет, оно пусто — и это
+    // ровно то, что должно быть, а не ошибка соединения.
+    const realisations = await pool.query('SELECT count(*)::integer AS total FROM placeholder_realisation_workspace WHERE placeholder_id = $1', [slot.id]);
+    assert.equal(realisations.rows[0].total, 0);
 
     assert.equal(pps.status, 'approved');
     assert.equal(chart.status, 'published');

@@ -4,7 +4,7 @@
   const BUILD='visual-20260805-14-components-4';
   const ROLE_PRIORITY=Object.freeze({heuristic:10,structure:20,explicit:30,adapter:40,native:50});
   const COMPONENTS=Object.freeze({
-    card:'.card:not(.kpi),.panel,.tile,.widget,.box,.tech-pack-card,.production-orders-card,.production-execution-card,.info-card,.summary-card',
+    card:'.card:not(.kpi),.panel,.tile,.widget,.box,.tech-pack-card,.production-orders-card,.production-execution-card,.info-card,.summary-card,.od-season-economics',
     surface:'.section,.od-section,.sourcing-panel,.measurement-matrix-panel,.bom-cost-card,.ls9-master,.workspace-panel',
     sectionHead:'.section-toolbar,.od-section-head,.card-header,.panel-header,.section-header,.bom-section-header,.measurement-section-header,.sample-section-header,.sourcing-section-header',
     toolbar:'.toolbar:not(.section-toolbar),.bom-toolbar,.measurement-toolbar,.sample-toolbar,.sourcing-toolbar-actions,.table-toolbar,.action-bar,.actions-bar,.command-actions',

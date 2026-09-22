@@ -57,6 +57,15 @@
       && typeof window.orderEconomicsDialog === 'function') {
       actions.push(actionButton(localized('Экономика', 'Economics'), () => window.orderEconomicsDialog(item)));
     }
+
+    // «Где товар сейчас» — вопрос, который задают сразу после маржи. Цепочку вправе видеть обе
+    // стороны сделки: бренд отгружает, магазин принимает, и право спрашивается у той организации,
+    // в которой состоит спрашивающий.
+    const seesLogistics = caps.hasForOrganisation(state.workspace, item.brandId, caps.CAPABILITIES.LOGISTICS_READ)
+      || caps.hasForOrganisation(state.workspace, item.shopId, caps.CAPABILITIES.LOGISTICS_READ);
+    if (item.orderCommitSnapshotId && seesLogistics && typeof window.orderFulfillmentDialog === 'function') {
+      actions.push(actionButton(localized('Поставка', 'Fulfillment'), () => window.orderFulfillmentDialog(item)));
+    }
     return actions;
   };
 

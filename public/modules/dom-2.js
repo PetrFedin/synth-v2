@@ -14,7 +14,11 @@ function pairName(brandId,shopId){return `${orgName(brandId)} \u2194 ${orgName(s
 function isoDates(values,names){const result={...values};names.forEach(name=>result[name]=toIso(result[name]));return result;} function toIso(value){const parsed=new Date(value);return Number.isNaN(parsed.valueOf())?value:parsed.toISOString();}
 function formatDate(value){return I18N.formatDate(value);} // Money keeps both decimals. Without a minimum, 4.10 printed as «4,1» and 189.00 as «189», which
 // reads as a quantity rather than a price.
-function money(value){return I18N.formatNumber(value,{minimumFractionDigits:2,maximumFractionDigits:2});}
+// Деньги и единицы форматирует рантайм i18n — одно место на всё приложение. Здесь остаются только
+// короткие имена, которыми пользуются экраны: валюту можно не передавать там, где её печатают
+// отдельной колонкой, и тогда выводится голое число, как и раньше.
+function money(value,currency,options){return I18N.formatMoney(value,currency,options);}
+function unitAmount(value,unit,options){return I18N.formatUnit(value,unit,options);}
 function statusLabel(value){const key=`status.${value}`;const translated=I18N.t(key);return translated===key?stageLabel(value):translated;}
 // Identifiers here are prefixed by their kind: product-style_8390232a-…, selection_c49bce4f-….
 // Slicing the first characters showed the prefix and hid the part that tells two rows apart, so

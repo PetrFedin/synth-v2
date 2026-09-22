@@ -258,7 +258,7 @@
           text('Нетто', 'Net'), text('Отходы, %', 'Waste, %'), text('Брутто', 'Gross'), text('Цена за ед.', 'Unit cost')],
         lines.map((line) => [line.position, line.component, line.materialCode, line.materialType,
           line.isMain ? text('да', 'yes') : '', line.placement || '—',
-          `${line.quantity} ${line.unit}`, line.wastePercent, `${line.grossQuantity} ${line.unit}`, money(line.unitCost)]),
+          `${unitAmount(line.quantity, line.unit)}`, line.wastePercent, `${unitAmount(line.grossQuantity, line.unit)}`, money(line.unitCost)]),
       );
     }
     if (doc.bomStatus && doc.bomStatus !== 'published') {
@@ -277,7 +277,7 @@
     const en = I18N.getLocale?.() === 'en';
     const money = (value) => (value === null || value === undefined
       ? '\u2014'
-      : I18N.formatNumber(Number(value), { style: 'currency', currency: doc.currency || 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+      : I18N.formatMoney(value, doc.currency || 'EUR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
     const contents = [
       ['tp-sketch', '\u0418\u0437\u0434\u0435\u043b\u0438\u0435 \u0438 \u043f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a', 'Product and supplier'],
       ['tp-materials', '\u0421\u043f\u0435\u0446\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u044f \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u043e\u0432', 'Bill of materials'],

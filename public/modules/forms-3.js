@@ -51,7 +51,7 @@ async function selectionLineForm(selection) {
   if (!catalogLines.length) throw new Error(I18N.translate('Доступных SKU пока нет.'));
 
   openForm('Добавить или обновить SKU', [
-    selectDef('sku','SKU',catalogLines,line => `${line.sku} · ${money(line.unitPrice)} ${line.currency} · MOQ ${line.minimumOrderQuantity || 1}`),
+    selectDef('sku','SKU',catalogLines,line => `${line.sku} · ${money(line.unitPrice, line.currency)} · MOQ ${line.minimumOrderQuantity || 1}`),
     numberDef('quantity','Количество',1,true,1),
   ], values => {
     const line = catalogLines.find(item => item.sku === values.sku || item.id === values.sku);

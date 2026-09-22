@@ -157,10 +157,53 @@
   function localeTag() { return current === 'ru' ? 'ru-RU' : 'en-GB'; }
   function formatDate(value) { if (!value) return '\u2014'; const date = new Date(value); if (Number.isNaN(date.valueOf())) return String(value); return new Intl.DateTimeFormat(localeTag(), { dateStyle: 'medium', timeStyle: String(value).includes('T') ? 'short' : undefined }).format(date); }
   function formatNumber(value, options = {}) { return new Intl.NumberFormat(localeTag(), options).format(Number(value || 0)); }
+
+  // Деньги и единицы форматируются здесь, в одном месте на всё приложение.
+  //
+  // Шесть модулей держали по своему форматтеру денег, и две разные договорённости о копейках:
+  // три делили на сто, три нет. Сегодня ни одно значение не проходит через неверный — проверено, —
+  // но ничем это и не удержано: достаточно передать минорную сумму туда, где деления нет, и экран
+  // покажет число в сто раз больше, молча. Единственный способ не держать такую возможность — не
+  // иметь шести форматтеров.
+  //
+  // Валюта печаталась кодом рядом с числом: русский экран показывал «4,10 EUR» там, где `Intl`
+  // даёт «4,10 €». Код валюты — это то, чем она названа в договоре, а не то, как её читают.
+  const CURRENCY_PATTERN = /^[A-Za-z]{3}$/;
+  function formatMoney(value, currency, { minor = false, ...options } = {}) {
+    const raw = Number(value);
+    if (!Number.isFinite(raw)) return '\u2014';
+    const amount = minor ? raw / 100 : raw;
+    const code = typeof currency === 'string' && CURRENCY_PATTERN.test(currency) ? currency.toUpperCase() : null;
+    if (code) {
+      try { return new Intl.NumberFormat(localeTag(), { style: 'currency', currency: code, ...options }).format(amount); }
+      catch { /* неизвестный код — ниже он допечатается как есть, а не потеряется */ }
+    }
+    const number = formatNumber(amount, { minimumFractionDigits: 2, maximumFractionDigits: 2, ...options });
+    return code ? `${number} ${code}` : number;
+  }
+
+  // Единицы печатались латинским кодом: раскройный цех читал «100 m» вместо «100 м». У `Intl` для
+  // длины и веса есть собственные названия по локали; штуки он не знает, поэтому для них — слово.
+  const UNIT_INTL = Object.freeze({ m: 'meter', cm: 'centimeter', kg: 'kilogram', yd: 'yard', in: 'inch' });
+  const UNIT_WORD = Object.freeze({ pc: ['\u0448\u0442.', 'pcs'], pcs: ['\u0448\u0442.', 'pcs'] });
+  function formatUnit(value, unit, options = {}) {
+    const raw = Number(value);
+    if (!Number.isFinite(raw)) return '\u2014';
+    const code = typeof unit === 'string' ? unit.trim().toLowerCase() : '';
+    const intlUnit = UNIT_INTL[code];
+    if (intlUnit) {
+      try { return new Intl.NumberFormat(localeTag(), { style: 'unit', unit: intlUnit, unitDisplay: 'short', ...options }).format(raw); }
+      catch { /* локаль без поддержки единицы — ниже число и код, а не пустота */ }
+    }
+    const word = UNIT_WORD[code];
+    const suffix = word ? word[localeTag().startsWith('ru') ? 0 : 1] : (typeof unit === 'string' ? unit.trim() : '');
+    const number = formatNumber(raw, options);
+    return suffix ? `${number}\u00a0${suffix}` : number;
+  }
   function applyDocument() { if (global.document?.documentElement) global.document.documentElement.lang = current; if (global.document) global.document.title = t('document.title'); }
   function setLocale(value) { const next = normalize(value); const changed = next !== current; current = next; try { global.localStorage?.setItem(STORAGE_KEY, current); } catch {} applyDocument(); if (changed && typeof global.dispatchEvent === 'function') { const event = typeof global.CustomEvent === 'function' ? new global.CustomEvent('syntha:locale-changed', { detail: { locale: current } }) : { type: 'syntha:locale-changed', detail: { locale: current } }; global.dispatchEvent(event); } return current; }
   function diagnostics() { return Object.freeze({ locales: [...SUPPORTED], locale: current, messageCount: Object.keys(messages).length, phraseCount: pairs.length, invalidMessageKeys: Object.entries(messages).filter(([, pair]) => !Array.isArray(pair) || pair.length !== 2).map(([key]) => key), invalidPhraseCount: pairs.filter(pair => !Array.isArray(pair) || pair.length !== 2).length }); }
 
-  global.SynthaI18n = Object.freeze({ getLocale: () => current, setLocale, t, translate, formatDate, formatNumber, localeTag, diagnostics });
+  global.SynthaI18n = Object.freeze({ getLocale: () => current, setLocale, t, translate, formatDate, formatNumber, formatMoney, formatUnit, localeTag, diagnostics });
   applyDocument();
 })(window);

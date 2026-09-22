@@ -186,7 +186,7 @@
     for (const size of item.chart.sizes) head.push(h('th', { text: `${size.code} · ${size.label}` }));
     const rows = item.chart.points.map((point) => {
       const bySize = new Map(point.measurements.map((measurement) => [measurement.sizeCode, measurement]));
-      const head = h('td', {}, [h('strong', { text: point.pointCode }), h('span', { text: point.name }), h('small', { text: `−${point.toleranceMinus} / +${point.tolerancePlus} ${item.chart.unit}` })]);
+      const head = h('td', {}, [h('strong', { text: point.pointCode }), h('span', { text: point.name }), h('small', { text: `−${point.toleranceMinus} / +${unitAmount(point.tolerancePlus, item.chart.unit)}` })]);
       // The rule the row follows, stated once beside the row it governs.
       head.append(h('small', { className: 'measurement-grade-rule', text: `${text('градация', 'grade')}: ${gradeRuleText(point)}` }));
       const cells = [head];

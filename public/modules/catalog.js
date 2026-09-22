@@ -52,7 +52,7 @@ function catalogSkuEntity(item) {
     : Math.max(0, Number(item.availableQuantity || 0) - Number(item.reservedQuantity || 0));
   return entity(item.name, item.status, [
     item.sku,
-    `${money(item.wholesalePrice)} ${item.currency}`,
+    `${money(item.wholesalePrice, item.currency)}`,
     `MOQ: ${item.minimumOrderQuantity || 1}`,
     `ATS: ${ats} / ${item.availableQuantity || 0}`,
     `\u041a\u043e\u043b\u043b\u0435\u043a\u0446\u0438\u044f: ${nameById('collections', item.collectionId)}`,

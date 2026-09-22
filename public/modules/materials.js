@@ -309,9 +309,9 @@
     ], lots.map((lot) => [
       lot.lotReference,
       lot.dyeLot || '\u2014',
-      `${lot.receivedQuantity} ${lot.unit}`,
-      `${lot.issuedQuantity} ${lot.unit}`,
-      `${lot.remainingQuantity} ${lot.unit}`,
+      `${unitAmount(lot.receivedQuantity, lot.unit)}`,
+      `${unitAmount(lot.issuedQuantity, lot.unit)}`,
+      `${unitAmount(lot.remainingQuantity, lot.unit)}`,
       lot.colourCode || '\u2014',
       lotStatusLabel(lot.status),
       // \u041a\u0430\u043a\u043e\u0439 \u0443\u0442\u0432\u0435\u0440\u0436\u0434\u0451\u043d\u043d\u044b\u0439 \u043e\u0431\u0440\u0430\u0437\u0435\u0446 \u0440\u0430\u0437\u0440\u0435\u0448\u0438\u043b \u0432\u044b\u043f\u0443\u0441\u043a \u044d\u0442\u043e\u0439 \u043f\u0430\u0440\u0442\u0438\u0438. \u0423\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u0438\u0435 \u043c\u043e\u0436\u0435\u0442 \u0431\u044b\u0442\u044c \u043f\u043e\u0437\u0436\u0435
@@ -325,7 +325,7 @@
     for (const lot of lots) {
       if (!lot.issues || !lot.issues.length) continue;
       const line = el('p', { className: 'muted' });
-      line.textContent = `${lot.lotReference} \u2192 ${lot.issues.map((issue) => `${issue.executionCode} (${issue.quantity} ${lot.unit})`).join(', ')}`;
+      line.textContent = `${lot.lotReference} \u2192 ${lot.issues.map((issue) => `${issue.executionCode} (${unitAmount(issue.quantity, lot.unit)})`).join(', ')}`;
       nodes.push(line);
     }
     return nodes;
@@ -493,7 +493,7 @@ function palettePanel(item) {
             { label: materialText('\u0422\u0438\u043f', 'Type'), value: item.type },
             { label: materialText('\u041f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a', 'Supplier'), value: item.supplierName || '\u2014' },
             { label: materialText('\u0421\u043e\u0441\u0442\u0430\u0432', 'Composition'), value: item.composition || '\u2014' },
-            { label: materialText('\u0426\u0435\u043d\u0430', 'Unit cost'), value: `${money(item.unitCost)} ${item.currency}/${item.unit}` },
+            { label: materialText('\u0426\u0435\u043d\u0430', 'Unit cost'), value: `${money(item.unitCost, item.currency)}/${item.unit}` },
           ],
         },
         {
@@ -524,8 +524,8 @@ function palettePanel(item) {
         {
           label: materialText('\u041e\u0441\u0442\u0430\u0442\u043a\u0438', 'Inventory'),
           fields: [
-            { label: materialText('\u0414\u043e\u0441\u0442\u0443\u043f\u043d\u043e', 'Available'), value: `${assessment.availableToUse} ${item.unit}` },
-            { label: materialText('\u041c\u0438\u043d\u0438\u043c\u0430\u043b\u044c\u043d\u044b\u0439 \u0437\u0430\u043a\u0430\u0437', 'Minimum order'), value: `${item.minimumOrderQuantity} ${item.unit}` },
+            { label: materialText('\u0414\u043e\u0441\u0442\u0443\u043f\u043d\u043e', 'Available'), value: `${unitAmount(assessment.availableToUse, item.unit)}` },
+            { label: materialText('\u041c\u0438\u043d\u0438\u043c\u0430\u043b\u044c\u043d\u044b\u0439 \u0437\u0430\u043a\u0430\u0437', 'Minimum order'), value: `${unitAmount(item.minimumOrderQuantity, item.unit)}` },
           ],
         },
         {
@@ -603,9 +603,9 @@ function palettePanel(item) {
         { label: materialText('\u0422\u0438\u043f', 'Type'), value: (assessment) => assessment.material.type },
         { label: materialText('\u041f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a', 'Supplier'), value: (assessment) => assessment.material.supplierName || '-' },
         { label: materialText('\u0421\u0442\u0430\u0442\u0443\u0441', 'Status'), render: (assessment) => statusBadge(assessment.material.status) },
-        { label: materialText('\u0426\u0435\u043d\u0430', 'Unit cost'), value: (assessment) => `${money(assessment.material.unitCost)} ${assessment.material.currency}` },
-        { label: 'MOQ', value: (assessment) => `${assessment.material.minimumOrderQuantity} ${assessment.material.unit}` },
-        { label: 'ATS', value: (assessment) => `${assessment.availableToUse} ${assessment.material.unit}` },
+        { label: materialText('\u0426\u0435\u043d\u0430', 'Unit cost'), value: (assessment) => `${money(assessment.material.unitCost, assessment.material.currency)}` },
+        { label: 'MOQ', value: (assessment) => `${unitAmount(assessment.material.minimumOrderQuantity, assessment.material.unit)}` },
+        { label: 'ATS', value: (assessment) => `${unitAmount(assessment.availableToUse, assessment.material.unit)}` },
         { label: materialText('\u0413\u043e\u0442\u043e\u0432\u043d\u043e\u0441\u0442\u044c', 'Readiness'), render: readinessCell },
         { label: materialText('\u0420\u0438\u0441\u043a', 'Risk'), render: riskBadge },
       ],

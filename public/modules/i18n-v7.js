@@ -131,6 +131,11 @@
     translate: strictTranslate,
     formatDate: base.formatDate,
     formatNumber: base.formatNumber,
+    // Поверхность перечисляется здесь поимённо, и это осознанно: v7 оборачивает часть базы своими
+    // правилами. Цена такого перечня в том, что добавленное в базу и не названное тут просто
+    // исчезает — молча, без ошибки. Деньги и единицы форматируются базой, поэтому передаются как есть.
+    formatMoney: base.formatMoney,
+    formatUnit: base.formatUnit,
     localeTag: base.localeTag,
     diagnostics,
   });

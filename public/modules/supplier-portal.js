@@ -43,7 +43,7 @@
 
   function formatMoney(minor, currency) {
     if (!Number.isInteger(minor)) return '—';
-    return new Intl.NumberFormat(I18N.localeTag(), { style: 'currency', currency: currency || 'EUR' }).format(minor / 100);
+    return I18N.formatMoney(minor, currency || 'EUR', { minor: true });
   }
 
   // A deadline a supplier has already missed is the one number on this screen they act on, so it is

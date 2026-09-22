@@ -38,7 +38,7 @@ function orderEntity(item) {
   if (item.orderCommitSnapshotId && canReadMargin) actions.push(formActionButton(economicsText('Экономика', 'Economics'), () => orderEconomicsDialog(item)));
   if (item.status === 'attached' && canWrite) actions.push(actionButton('Отменить заказ', () => orderCancellationForm(item)));
   const details = [
-    `${money(item.totalAmount)} ${item.currency}`,
+    `${money(item.totalAmount, item.currency)}`,
     `${item.terms?.incoterm || ''}, оплата ${item.terms?.paymentDays ?? 0} дн.`,
     `Согласовано: ${(item.acceptedOrganisationIds || []).map(orgName).join(', ') || 'нет'}`,
   ];

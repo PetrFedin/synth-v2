@@ -95,16 +95,10 @@
   // The locale was also read through `I18N.locale()`, which does not exist: the call returned
   // undefined, never matched 'en', and every amount in this section stayed Russian-formatted in the
   // English interface.
+  // Форматирование — в рантайме i18n, одно на всё приложение. Здесь остаётся только то, что
+  // свойственно ведомости: курс показывается с четырьмя знаками, деньги — с двумя.
   function moneyValue(value, currency, { rate = false } = {}) {
-    const number = Number(value);
-    if (!Number.isFinite(number)) return '—';
-    const digits = rate ? 4 : 2;
-    try {
-      return new Intl.NumberFormat(I18N.localeTag(), {
-        style: 'currency', currency: currency || 'EUR',
-        minimumFractionDigits: 2, maximumFractionDigits: digits,
-      }).format(number);
-    } catch { return `${number.toFixed(digits)} ${currency || ''}`.trim(); }
+    return I18N.formatMoney(value, currency || 'EUR', { minimumFractionDigits: 2, maximumFractionDigits: rate ? 4 : 2 });
   }
   function riskLabel(code) {
     const labels = {

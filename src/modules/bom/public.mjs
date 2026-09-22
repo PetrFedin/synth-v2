@@ -4,7 +4,7 @@ import { invariant } from '../../core/errors.mjs';
 // материалов и сводка по стилю. Ходить за ними в приватный файл значило бы обойти ту границу,
 // ради которой модули и разделены.
 export { SIZE_LINE_EXCEPTIONS, bomComposition, efficiencyBasisPoints, styleSizeLine } from './size-line.mjs';
-import { normalizeMoney } from '../../core/money.mjs';
+import { normalizeMoney, normalizeFxRate } from '../../core/money.mjs';
 
 const CODE_PATTERN = /^[A-Z0-9][A-Z0-9._-]{1,63}$/;
 const LINE_ID_PATTERN = /^[A-Z0-9][A-Z0-9._-]{0,63}$/;
@@ -13,6 +13,13 @@ const MATERIAL_UNITS = Object.freeze(['m', 'kg', 'pc', 'yd']);
 const SCALE = 10_000n;
 const PERCENT_DENOMINATOR = 1_000_000n;
 const COST_DENOMINATOR = 100_000_000n;
+// Курс входит в счёт своим множителем, а не денежным. Со SCALE в 10 000 курс 0,01085776
+// превращался в 0,0109 **до умножения**, и строка стоила 8,0050 € вместо 7,9739 € — ошибка
+// тихая, systematic и всегда в одну сторону. Знаменатель стоимости соответственно вырастает на
+// столько же порядков: количество (1e4) × цена (1e4) × курс (1e8) → делим на 1e12, чтобы вернуться
+// к денежной шкале.
+const FX_SCALE = 100_000_000n;
+const FX_COST_DENOMINATOR = COST_DENOMINATOR * (FX_SCALE / SCALE);
 const MAX_SCALED = BigInt(Number.MAX_SAFE_INTEGER);
 const BOM_FIELDS = Object.freeze(new Set(['sku', 'currency', 'lines', 'laborCost', 'overheadCost', 'logisticsCost', 'otherCost', 'notes']));
 const LINE_FIELDS = Object.freeze(new Set(['lineId', 'component', 'materialCode', 'quantity', 'wastePercent', 'exchangeRate', 'placement', 'isMain']));
@@ -110,7 +117,7 @@ function normalizeLine({ line, position, brandId, bomCurrency, materialByCode, l
   invariant(wastePercent <= 1000, 'BOM_LINE_WASTE_INVALID', 'BOM line waste percent cannot exceed 1000', { lineId, wastePercent });
   const exchangeRate = exchangeRateFor(line.exchangeRate, snapshot.currency, bomCurrency, lineId);
   const grossQuantityScaled = roundDivide(toScaled(quantity) * (PERCENT_DENOMINATOR + toScaled(wastePercent)), PERCENT_DENOMINATOR);
-  const lineCostScaled = roundDivide(grossQuantityScaled * toScaled(snapshot.unitCost) * toScaled(exchangeRate), COST_DENOMINATOR);
+  const lineCostScaled = roundDivide(grossQuantityScaled * toScaled(snapshot.unitCost) * toFxScaled(exchangeRate), FX_COST_DENOMINATOR);
   return Object.freeze({
     lineId,
     position,
@@ -179,15 +186,20 @@ function materialSnapshot(material, brandId, expectedCode) {
   });
 }
 
+// Курс проверяется курсовой шкалой, а не денежной. Денежные четыре знака на слабой паре
+// обесценивают курс до бессмыслицы: RUB→EUR это 0,010858, а четыре знака позволяют записать
+// только 0,0109 — систематическая ошибка около 0,4 % на каждой рублёвой строке, которую никто
+// бы не заметил. Оба реестра курсов платформы хранят восемь знаков, и экономика заказа давно
+// требует того же; ведомость была единственным местом, где курс считался деньгами.
 function exchangeRateFor(value, materialCurrency, bomCurrency, lineId) {
   if (materialCurrency === bomCurrency) {
     if (value === undefined || value === null || value === '') return 1;
-    const rate = positiveMoney(value, 'BOM_EXCHANGE_RATE_INVALID', 'Exchange rate');
+    const rate = normalizeFxRate(value, { invalidCode: 'BOM_EXCHANGE_RATE_INVALID', scaleCode: 'BOM_EXCHANGE_RATE_INVALID_SCALE', overflowCode: 'BOM_EXCHANGE_RATE_TOO_LARGE', label: 'Exchange rate' });
     invariant(rate === 1, 'BOM_EXCHANGE_RATE_INVALID', 'Exchange rate must be 1 when material and BOM currencies match', { lineId });
     return 1;
   }
   invariant(value !== undefined && value !== null && value !== '', 'BOM_EXCHANGE_RATE_REQUIRED', 'Exchange rate is required for cross-currency material', { lineId, materialCurrency, bomCurrency });
-  return positiveMoney(value, 'BOM_EXCHANGE_RATE_INVALID', 'Exchange rate');
+  return normalizeFxRate(value, { invalidCode: 'BOM_EXCHANGE_RATE_INVALID', scaleCode: 'BOM_EXCHANGE_RATE_INVALID_SCALE', overflowCode: 'BOM_EXCHANGE_RATE_TOO_LARGE', label: 'Exchange rate' });
 }
 
 function materialMap(materials) {
@@ -208,6 +220,7 @@ function nonNegativeMoney(value, codeValue, label) {
   return normalizeMoney(normalized, { invalidCode: codeValue, scaleCode: `${codeValue}_SCALE`, overflowCode: `${codeValue}_TOO_LARGE`, label, allowZero: true });
 }
 function toScaled(value) { return BigInt(Math.round(value * Number(SCALE))); }
+function toFxScaled(value) { return BigInt(Math.round(value * Number(FX_SCALE))); }
 function fromScaled(value, errorCode) {
   invariant(value >= 0n && value <= MAX_SCALED, errorCode, 'Calculated BOM value exceeds supported precision');
   return Number(value) / Number(SCALE);

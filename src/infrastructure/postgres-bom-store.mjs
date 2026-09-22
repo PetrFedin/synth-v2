@@ -113,7 +113,7 @@ async function insertBomLines(client, bom) {
          line_id text, position integer, component text, material_code text, material_version integer,
          material_type text, unit text, quantity numeric(20, 4), waste_percent numeric(20, 4),
          gross_quantity numeric(20, 4), material_currency char(3), unit_cost_snapshot numeric(20, 4),
-         exchange_rate numeric(20, 4), line_cost numeric(20, 4), placement text, is_main boolean, payload jsonb
+         exchange_rate numeric(20, 8), line_cost numeric(20, 4), placement text, is_main boolean, payload jsonb
        )`,
     [bom.id, JSON.stringify(records)],
   );

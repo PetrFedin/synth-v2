@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { invariant } from '../../core/errors.mjs';
-import { assertPostgresInteger, calculateMoneyPercentage, normalizeMoney, roundAwayFromZero } from '../../core/money.mjs';
+import { assertPostgresInteger, calculateMoneyPercentage, normalizeMoney, roundAwayFromZero, normalizeFxRate as normalizeSharedFxRate } from '../../core/money.mjs';
 import { canonicalJson } from '../../core/fingerprints.mjs';
 
 const SUPPLY_SOURCES = Object.freeze(['inventory', 'inbound', 'production', 'drop-ship']);
@@ -431,14 +431,10 @@ function normalizeSignedMoney(value) {
   invariant(Math.abs(value - normalized) <= tolerance, 'ACTUAL_COST_AMOUNT_SCALE_INVALID', 'Actual cost amount must use at most 4 decimal places');
   return normalized;
 }
+// Правило о восьми знаках живёт в одном месте — в денежном ядре, рядом с денежной шкалой.
+// Здесь остаётся только длинная арифметика, ради которой множитель и нужен.
 function normalizeFxRate(value) {
-  invariant(Number.isFinite(value) && value > 0, 'FX_RATE_INVALID', 'FX rate must be positive');
-  const scaled = Math.round(value * FX_RATE_FACTOR);
-  invariant(Number.isSafeInteger(scaled), 'FX_RATE_TOO_LARGE', 'FX rate exceeds safe fixed-point range');
-  const normalized = scaled / FX_RATE_FACTOR;
-  const tolerance = Math.max(1e-12, Number.EPSILON * Math.max(1, Math.abs(value)) * 4);
-  invariant(Math.abs(value - normalized) <= tolerance, 'FX_RATE_SCALE_INVALID', 'FX rate must use at most 8 decimal places');
-  return normalized;
+  return normalizeSharedFxRate(value, { overflowCode: 'FX_RATE_TOO_LARGE', label: 'FX rate' });
 }
 function convertSignedMoney(amount, rate) {
   const amountScaled = BigInt(Math.round(amount * MONEY_FACTOR));

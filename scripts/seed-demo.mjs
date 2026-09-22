@@ -181,6 +181,29 @@ const DEMO_PAYMENT_SPLIT = [
 // все девять демонстрационных графиков вышли одинаковыми 30/70, потому что третью веху было не на
 // что повесить. Этот график ставится на заказ, выросший из потребности, и не переписывает прежние:
 // договорённость, по которой уже платили, задним числом не меняют.
+// Кросс-валютная строка ведомости: российская фурнитура в счёте, который ведётся в евро.
+//
+// Возможность была в коде и ни разу не исполнена: все пятнадцать строк демонстрации стояли в одной
+// валюте с курсом 1, а курс хранился денежной шкалой в четыре знака — на паре RUB→EUR это
+// округляло 0,01085776 до 0,0109 и завышало строку на 0,39 %, тихо и всегда в одну сторону.
+// Поэтому демонстрация теперь **исполняет** этот путь, а не заявляет о нём.
+const DEMO_IMPORT_MATERIAL = Object.freeze({
+  code: 'MAT-TRIM-RU',
+  name: 'Фурнитура российская',
+  type: 'trim',
+  unit: 'pc',
+  unitCost: 120,
+  currency: 'RUB',
+  supplierName: 'Атмосфера Трим',
+  supplierReference: 'ATM-TRIM-RU-01',
+  minimumOrderQuantity: 100,
+  availableQuantity: 5000,
+  countryOfOrigin: 'RU',
+});
+// Курс берётся из реестра сезона, а не выдумывается: EUR→RUB на размещение производства — 92,10,
+// значит обратный курс RUB→EUR это 1/92,10 = 0,01085776 с точностью до восьми знаков.
+const DEMO_IMPORT_EXCHANGE_RATE = 0.01085776;
+
 const DEMO_STAGED_PAYMENT_SPLIT = [
   { triggerEvent: 'order-confirmed', shareBasisPoints: 2000, labelRu: 'Задаток при подтверждении заказа', labelEn: 'Deposit on order confirmation' },
   { triggerEvent: 'production-started', shareBasisPoints: 3000, labelRu: 'Платёж при запуске в работу', labelEn: 'Payment on production start' },
@@ -384,6 +407,7 @@ try {
   // Свойства полотна и утверждение цвета идут раньше приёмки: партию в неутверждённом цвете
   // выпустить нельзя, и порядок здесь — не косметика, а та же цепочка.
   await ensureMaterialSpecifications(runtime, pool, brandId, accounts.owner);
+  await ensureCrossCurrencyBomLine(runtime, pool, brandId, accounts.owner);
   await ensureMaterialColours(runtime, pool, brandId, accounts.owner, accounts.quality);
   await ensureMaterialLots(runtime, pool, brandId, accounts.owner, accounts.quality);
   await ensureOperationSequence(runtime, pool, brandId, accounts.owner);
@@ -1238,6 +1262,55 @@ async function runLabDip(runtime, materialColourId, materialCode, colour, palett
   await runtime.materialColours.decideLabDip(command('lab-dip-approve'), qualityActorId, dip.id, {
     expectedVersion: dip.version, verdict: 'approved',
   });
+}
+
+async function ensureCrossCurrencyBomLine(runtime, pool, brandId, actorId) {
+  const existing = (await pool.query('SELECT payload FROM materials WHERE brand_id = $1 AND code = $2', [brandId, DEMO_IMPORT_MATERIAL.code])).rows[0]?.payload;
+  let material = existing;
+  if (!material) {
+    try {
+      material = await runtime.materials.createMaterial(command('import-material'), actorId, { brandId, ...DEMO_IMPORT_MATERIAL });
+      note('cross-currency', `${DEMO_IMPORT_MATERIAL.code} заведён в ${DEMO_IMPORT_MATERIAL.currency}`);
+    } catch (error) {
+      note('cross-currency', `материал не заведён (${error.code ?? error.message})`);
+      return;
+    }
+  }
+  if (material.status !== 'published') {
+    try {
+      material = await runtime.materials.publishMaterial(command('import-material-publish'), actorId, DEMO_IMPORT_MATERIAL.code, { expectedVersion: material.version });
+    } catch (error) {
+      note('cross-currency', `материал не опубликован (${error.code ?? error.message})`);
+      return;
+    }
+  }
+
+  // Ставится в черновую ведомость: опубликованную задним числом не правят.
+  const bom = (await pool.query("SELECT payload FROM boms WHERE brand_id = $1 AND status = 'draft' ORDER BY sku LIMIT 1", [brandId])).rows[0]?.payload;
+  if (!bom) { note('cross-currency', 'нет черновой ведомости — строку ставить некуда'); return; }
+  if (bom.lines.some((line) => line.materialCode === DEMO_IMPORT_MATERIAL.code)) {
+    note('cross-currency', `${bom.sku}: кросс-валютная строка уже стоит`);
+    return;
+  }
+  const lines = [
+    ...bom.lines.map((line) => ({
+      lineId: line.lineId, component: line.component, materialCode: line.materialCode,
+      quantity: line.quantity, wastePercent: line.wastePercent,
+      ...(line.materialCurrency === bom.currency ? {} : { exchangeRate: line.exchangeRate }),
+    })),
+    { lineId: 'TRIM-RU', component: 'Фурнитура', materialCode: DEMO_IMPORT_MATERIAL.code, quantity: 6, wastePercent: 2, exchangeRate: DEMO_IMPORT_EXCHANGE_RATE },
+  ];
+  try {
+    const updated = await runtime.boms.updateBom(command('cross-currency-bom'), actorId, bom.sku, {
+      expectedVersion: bom.version, currency: bom.currency, lines,
+      laborCost: bom.laborCost, overheadCost: bom.overheadCost, logisticsCost: bom.logisticsCost,
+      otherCost: bom.otherCost, notes: bom.notes ?? null,
+    });
+    const line = updated.lines.find((candidate) => candidate.materialCode === DEMO_IMPORT_MATERIAL.code);
+    note('cross-currency', `${bom.sku}: ${line.materialCurrency} по курсу ${line.exchangeRate} → ${line.lineCost} ${updated.currency}`);
+  } catch (error) {
+    note('cross-currency', `строка не поставлена (${error.code ?? error.message})`);
+  }
 }
 
 async function ensureMaterialSpecifications(runtime, pool, brandId, actorId) {

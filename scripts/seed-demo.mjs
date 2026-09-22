@@ -219,6 +219,31 @@ const DEMO_MONEY_CHAIN = Object.freeze([
   },
 ]);
 
+// Отгрузочный хвост: план отгрузки → уведомление → приёмка → расхождение.
+//
+// Семь таблиц за обязательством поставки стояли пустыми, и на вопрос «а где товар сейчас» —
+// первый, который задают сразу после маржи, — показать было нечего.
+//
+// Разделение сторон настоящее: план и уведомление заводит бренд (`fulfillment.manage`), приёмку
+// записывает магазин (`receipt.manage`), и служба прямо отказывает любому, кто не состоит в
+// принимающей организации. Один аккаунт на обе стороны прошёл бы, но показывал бы не ту систему.
+//
+// **Одна поставка приходит целой, вторая — с недостачей.** Приёмка «всё сошлось» доказывает только
+// счастливый путь; расхождение — то, ради чего приёмку и ведут. Три повреждённые штуки из
+// шестидесяти дают снимок расхождения, с которого начинается претензия.
+const DEMO_SHIPMENTS = Object.freeze([
+  {
+    quantity: 180,
+    shipment: { shipmentNumber: 'SHP-2026-0114', carrier: 'DHL Global Forwarding', serviceLevel: 'air-economy', trackingNumber: 'DHL884213' },
+    receipt: { receiptReference: 'GRN-NORD-2026-311', receivedBy: 'Jonas Herrmann', received: 180, damaged: 0, rejected: 0 },
+  },
+  {
+    quantity: 60,
+    shipment: { shipmentNumber: 'SHP-2026-0118', carrier: 'DHL Global Forwarding', serviceLevel: 'air-economy', trackingNumber: 'DHL884219' },
+    receipt: { receiptReference: 'GRN-NORD-2026-317', receivedBy: 'Jonas Herrmann', received: 57, damaged: 3, rejected: 0 },
+  },
+]);
+
 const DEMO_SAMPLING_STANDARD = 'DEMO-AQL-2026';
 const DEMO_SAMPLING_ROWS = [
   // lotFrom, lotTo, sampleSize, acceptAt at AQL 2.5, acceptAt at AQL 4.0
@@ -334,6 +359,9 @@ try {
 
   // --- What the season actually cost and actually earned ---------------------------------------
   await ensureMoneyChain(runtime, pool, accounts);
+
+  // --- Где товар сейчас -------------------------------------------------------------------------
+  await ensureShipmentChain(runtime, pool, accounts);
 
   // --- The supplier's side of the table -------------------------------------------------------
   await ensurePortalAccess(runtime, pool, brandId, accounts.owner);
@@ -1366,6 +1394,110 @@ async function releaseQuality(runtime, pool, brandId, approvers) {
 // Политика разнесения затрат бренда. Прямые затраты ложатся на строку, к которой относятся;
 // перевозка и пошлина — по стоимости строки, потому что дорогая строка занимает больше денег в
 // партии, а не больше места в коробке.
+async function ensureShipmentChain(runtime, pool, accounts) {
+  const commitments = await pool.query(
+    `SELECT supply.id AS supply_id, supply.order_id, commit.id AS commit_id,
+            (commit.payload -> 'lines' -> 0 ->> 'quantity')::integer AS quantity
+       FROM supply_commitment_snapshots AS supply
+       JOIN order_commit_snapshots AS commit ON commit.id = supply.order_commit_snapshot_id
+      ORDER BY (commit.payload ->> 'totalAmount')::numeric DESC`,
+  );
+  if (!commitments.rowCount) { note('shipment', 'нет обязательств поставки — отгрузка пропущена'); return; }
+
+  for (const [index, row] of commitments.rows.entries()) {
+    const plan = DEMO_SHIPMENTS[index];
+    if (!plan) { note('shipment', `${row.order_id}: сценарий отгрузки не описан, пропущено`); continue; }
+    if (plan.quantity !== row.quantity) {
+      note('shipment', `${row.order_id}: в заказе ${row.quantity} шт., в сценарии ${plan.quantity} — пропущено`);
+      continue;
+    }
+
+    const shipAt = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString();
+    const deliverAt = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+
+    // План и уведомление — бренд.
+    const fulfillment = await reuseOrCreate(
+      pool, 'SELECT id FROM fulfillment_plan_snapshots WHERE order_commit_snapshot_id = $1 LIMIT 1', [row.commit_id],
+      () => runtime.fulfillment.createFulfillmentPlan(command(`fulfillment-${index}`), accounts.owner, row.order_id, {
+        supplyCommitmentSnapshotId: row.supply_id,
+        shipFrom: { locationId: 'atmosphere-factory', name: 'Atmosphere Textiles', countryCode: 'PT', city: 'Porto', addressLine1: 'Rua da Fábrica 12', addressLine2: null, postalCode: '4000-123' },
+        shipTo: { locationId: 'nordhaus-dc', name: 'Nordhaus Retail DC', countryCode: 'DE', city: 'Hamburg', addressLine1: 'Speicherstadt 8', addressLine2: null, postalCode: '20457' },
+        plannedShipAt: shipAt,
+        expectedDeliveryAt: deliverAt,
+      }),
+      () => note('shipment', `${row.order_id}: план отгрузки Porto → Hamburg`),
+    );
+
+    const planLines = (await pool.query('SELECT payload FROM fulfillment_plan_snapshots WHERE id = $1', [fulfillment.id])).rows[0]?.payload?.lines ?? [];
+    if (!planLines.length) { note('shipment', `${row.order_id}: у плана нет строк — уведомление пропущено`); continue; }
+
+    const notice = await reuseOrCreate(
+      pool, 'SELECT id FROM shipment_notice_snapshots WHERE fulfillment_plan_snapshot_id = $1 LIMIT 1', [fulfillment.id],
+      () => runtime.fulfillment.createShipmentNotice(command(`shipment-${index}`), accounts.owner, fulfillment.id, {
+        ...plan.shipment,
+        lines: planLines.map((line) => ({ lineId: line.lineId, quantity: line.quantity })),
+        shippedAt: shipAt,
+        expectedDeliveryAt: deliverAt,
+      }),
+      () => note('shipment', `${row.order_id}: отгружено ${plan.shipment.shipmentNumber} (${plan.shipment.carrier})`),
+    );
+
+    // Приёмку записывает магазин: служба прямо отказывает тому, кто не состоит в принимающей
+    // организации, и это правило демонстрация обязана показывать, а не обходить.
+    const received = await pool.query('SELECT id FROM receipt_snapshots WHERE shipment_notice_snapshot_id = $1 LIMIT 1', [notice.id]);
+    if (received.rowCount) note('shipment', `${row.order_id}: приёмка уже записана`);
+    else await runtime.fulfillment.recordReceipt(command(`receipt-${index}`), accounts.buyer, notice.id, {
+      receiptReference: plan.receipt.receiptReference,
+      receivedBy: plan.receipt.receivedBy,
+      receiptComplete: true,
+      lines: planLines.map((line) => ({
+        lineId: line.lineId,
+        receivedQuantity: plan.receipt.received,
+        damagedQuantity: plan.receipt.damaged,
+        rejectedQuantity: plan.receipt.rejected,
+      })),
+      receivedAt: deliverAt,
+    });
+    const shortfall = plan.quantity - plan.receipt.received;
+    if (!received.rowCount) note('shipment', shortfall === 0
+      ? `${row.order_id}: принято ${plan.receipt.received} из ${plan.quantity} — сошлось`
+      : `${row.order_id}: принято ${plan.receipt.received} из ${plan.quantity}, повреждено ${plan.receipt.damaged} — расхождение ${shortfall}`);
+
+    const receipt = (await pool.query('SELECT id FROM receipt_snapshots WHERE shipment_notice_snapshot_id = $1 LIMIT 1', [notice.id])).rows[0];
+    if (!receipt) continue;
+
+    // Принятое ложится на склад магазина. Приходует тот же, кто принимал: `inventory.manage`.
+    // Повреждённое на склад не попадает — на него пишут претензию, а не ставят в продажу.
+    const posted = await pool.query('SELECT id FROM inventory_movement_ledger_entries WHERE receipt_snapshot_id = $1 LIMIT 1', [receipt.id]);
+    if (!posted.rowCount) {
+      await runtime.inventory.postReceipt(command(`inventory-${index}`), accounts.buyer, receipt.id);
+      note('shipment', `${row.order_id}: принятое оприходовано на склад`);
+    }
+
+    if (plan.receipt.damaged === 0 && plan.receipt.rejected === 0) continue;
+
+    // Претензию подаёт магазин, решает бренд. Это две стороны одного разговора, и служба не
+    // позволит одной из них сыграть за обе: подать может только принимающая организация,
+    // решить — только та, что отгрузила.
+    const discrepancy = (await pool.query('SELECT id FROM receipt_discrepancy_snapshots WHERE shipment_notice_snapshot_id = $1 ORDER BY created_at DESC LIMIT 1', [notice.id])).rows[0];
+    if (!discrepancy) continue;
+    const claimed = await pool.query('SELECT id, payload FROM receipt_discrepancy_claim_snapshots WHERE receipt_discrepancy_snapshot_id = $1 LIMIT 1', [discrepancy.id]);
+    if (claimed.rowCount) { note('shipment', `${row.order_id}: претензия уже подана`); continue; }
+    const claim = await runtime.receiptClaims.submitClaim(command(`claim-${index}`), accounts.buyer, discrepancy.id, {
+      claimReference: `CLM-NORD-2026-${String(index + 1).padStart(3, '0')}`,
+      reason: `Повреждено при перевозке: ${plan.receipt.damaged} шт. из ${plan.quantity}`,
+      requestedRemedy: 'credit',
+    });
+    note('shipment', `${row.order_id}: магазин подал претензию ${claim.claimReference} (возмещение)`);
+
+    await runtime.receiptClaims.resolveClaim(command(`claim-resolve-${index}`), accounts.owner, claim.id, {
+      resolutionType: 'accepted-for-credit',
+      resolutionReason: 'Повреждение подтверждено фотографиями приёмки; кредит-нота на повреждённые единицы',
+    });
+    note('shipment', `${row.order_id}: бренд принял претензию к возмещению`);
+  }
+}
+
 async function ensureAllocationPolicy(runtime, pool, brandId, actorId) {
   const existing = await pool.query('SELECT id FROM cost_allocation_policy_versions WHERE brand_id = $1 ORDER BY created_at DESC LIMIT 1', [brandId]);
   if (existing.rowCount) return { id: existing.rows[0].id };

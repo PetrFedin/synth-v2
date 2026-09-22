@@ -77,6 +77,10 @@ const PEOPLE = Object.freeze({
   // `cost.manage` есть у финансов и у владельца, право `supply.manage` — у владельца и у продаж, и
   // демонстрация должна показывать это разделение, а не обходить его одним аккаунтом на всё.
   finance: { email: 'finance@syntha.local', password: process.env.SYNTHA_DEMO_FINANCE_PASSWORD ?? 'local-finance-password-2026', name: 'Анна Ковалевская' },
+  // Роль, чьи границы и есть предмет: у `viewer` нет ни одной денежной способности, и
+  // демонстрация должна это **показывать**, а не утверждать. Без такого аккаунта нельзя увидеть,
+  // что себестоимость материала изымается из ответа, а название, единица и остаток остаются.
+  viewer: { email: 'viewer@syntha.local', password: process.env.SYNTHA_DEMO_VIEWER_PASSWORD ?? 'local-viewer-password-2026', name: 'Ольга Наблюдатель' },
   buyer: { email: 'buyer@nordhaus.example', password: process.env.SYNTHA_DEMO_BUYER_PASSWORD ?? 'local-buyer-password-2026', name: 'Jonas Herrmann' },
   supplier: { email: 'rep@atmosphere.example', password: process.env.SYNTHA_DEMO_SUPPLIER_PASSWORD ?? 'local-supplier-password-2026', name: 'Mei Lin' },
 });
@@ -353,6 +357,7 @@ try {
   await ensureMembership(runtime, brandId, accounts.quality, 'quality', accounts.owner, 'brand');
   await ensureMembership(runtime, brandId, accounts.inspector, 'quality', accounts.owner, 'brand');
   await ensureMembership(runtime, brandId, accounts.finance, 'finance', accounts.owner, 'brand');
+  await ensureMembership(runtime, brandId, accounts.viewer, 'viewer', accounts.owner, 'brand');
 
   // --- The retailer -------------------------------------------------------------------------
   const shopExists = await pool.query('SELECT id FROM organisations WHERE id = $1', [SHOP_ID]);
@@ -454,6 +459,7 @@ function describeRole(key) {
     quality: 'бренд — приёмка качества',
     inspector: 'бренд — инспектор партий',
     finance: 'бренд — финансы',
+    viewer: 'бренд — наблюдатель (без прав на себестоимость)',
     buyer: `${SHOP_NAME} — байер`,
     supplier: 'портал поставщика',
   }[key] ?? key;

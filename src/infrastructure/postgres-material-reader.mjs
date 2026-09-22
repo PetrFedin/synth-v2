@@ -1,4 +1,5 @@
 import { invariant } from '../core/errors.mjs';
+import { projectMaterialForRole } from './material-cost-projection.mjs';
 import { withPostgresTransaction } from './postgres-transaction.mjs';
 
 const SNAPSHOT_BEGIN = 'BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY';
@@ -12,7 +13,13 @@ export function createPostgresMaterialReader({ pool } = {}) {
     getForActor(actorId, code) {
       return withPostgresTransaction(pool, async (queryable) => {
         const result = await queryable.query(
-          `SELECT m.payload, ${COMPOSITION_LATERAL}
+          `SELECT m.payload, ${COMPOSITION_LATERAL},
+                  -- Роль читателя берётся тем же запросом: прочитать права в один момент, а
+                  -- материал в другой — значит однажды показать цену тому, у кого её только что
+                  -- отобрали.
+                  (SELECT mem.role FROM memberships mem
+                    WHERE mem.user_id = $2 AND mem.organisation_id = m.brand_id AND mem.status = 'active'
+                    LIMIT 1) AS actor_role
              FROM materials m
             WHERE m.code = $1
               AND EXISTS (
@@ -21,7 +28,8 @@ export function createPostgresMaterialReader({ pool } = {}) {
               )`,
           [code, actorId],
         );
-        return result.rows[0] ? withComposition(result.rows[0]) : undefined;
+        const row = result.rows[0];
+        return row ? projectMaterialForRole(withComposition(row), row.actor_role) : undefined;
       }, { begin: SNAPSHOT_BEGIN });
     },
   });
@@ -45,7 +53,10 @@ async function page(queryable, actorId, { limit, afterCode, filters }) {
   if (afterCode) { params.push(afterCode); clauses.push(`m.code > $${params.length}`); }
   params.push(limit + 1);
   const result = await queryable.query(
-    `SELECT m.payload, m.code, ${COMPOSITION_LATERAL}
+    `SELECT m.payload, m.code, ${COMPOSITION_LATERAL},
+            (SELECT mem.role FROM memberships mem
+              WHERE mem.user_id = $1 AND mem.organisation_id = m.brand_id AND mem.status = 'active'
+              LIMIT 1) AS actor_role
        FROM materials m
       WHERE ${clauses.join(' AND ')}
       ORDER BY m.code ASC
@@ -53,8 +64,10 @@ async function page(queryable, actorId, { limit, afterCode, filters }) {
     params,
   );
   const rows = result.rows.slice(0, limit);
+  // Роль одна и та же для всех строк одного бренда, но у страницы могут быть материалы разных
+  // брендов, поэтому изъятие идёт построчно, по роли этой строки.
   return Object.freeze({
-    items: Object.freeze(rows.map(withComposition)),
+    items: Object.freeze(rows.map((row) => projectMaterialForRole(withComposition(row), row.actor_role))),
     hasMore: result.rows.length > limit,
     ...(result.rows.length > limit ? { nextCode: rows.at(-1).code } : {}),
   });

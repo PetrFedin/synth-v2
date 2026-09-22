@@ -118,6 +118,9 @@ export function createWholesaleRoutes({ platform, catalog, materials, boms, meas
     mutate('PATCH', /^\/v2\/boms\/([^/]+)$/, BOM_UPDATE_BODY, ({ commandId, actorId, params, body }) => bomService.updateBom(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/boms\/([^/]+)\/publish$/, BOM_PUBLISH_BODY, ({ commandId, actorId, params, body }) => bomService.publishBom(commandId, actorId, params[0], body)),
     read('GET', /^\/v2\/measurements$/, ['limit', 'cursor', 'q', 'status', 'unit', 'brandId'], ({ actorId, query }) => measurementService.pageForActor(actorId, query)),
+    // Стоит **до** чтения по идентификатору: иначе слово `canonical` было бы принято за
+    // идентификатор таблицы, и список остался бы недостижим тем же способом, что и сами таблицы.
+    read('GET', /^\/v2\/measurements\/canonical$/, ['limit', 'cursor', 'status', 'unit', 'brandId', 'styleVersionId', 'colorwayId'], ({ actorId, query }) => measurementService.pageCanonicalForActor(actorId, query)),
     read('GET', /^\/v2\/measurements\/canonical\/([^/]+)$/, [], ({ actorId, params }) => measurementService.getCanonicalForActor(actorId, params[0])),
     mutate('POST', /^\/v2\/measurements\/canonical$/, CANONICAL_MEASUREMENT_BODY, ({ commandId, actorId, body }) => measurementService.createCanonicalMeasurementChart(commandId, actorId, body)),
     mutate('PATCH', /^\/v2\/measurements\/canonical\/([^/]+)$/, CANONICAL_MEASUREMENT_UPDATE_BODY, ({ commandId, actorId, params, body }) => measurementService.updateCanonicalMeasurementChart(commandId, actorId, params[0], body)),

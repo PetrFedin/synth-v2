@@ -28,7 +28,7 @@ export function createMeasurementQueryService({ reader } = {}) {
       const scope = JSON.stringify([filters.q ?? null, filters.status ?? null, filters.unit ?? null, filters.brandId ?? null]);
       const afterSku = options.cursor === undefined || options.cursor === null || options.cursor === ''
         ? undefined
-        : decodeMeasurementCursor(options.cursor, { scope }).sku;
+        : decodeMeasurementCursor(options.cursor, { scope }).position;
       const page = await reader.pageForActor(actorId, { limit, afterSku, filters });
       return freezePage(page, { limit, scope });
     },
@@ -38,6 +38,35 @@ export function createMeasurementQueryService({ reader } = {}) {
       const item = await reader.getForActor(actorId, sku);
       invariant(item, 'MEASUREMENT_NOT_FOUND', 'Measurement chart not found', { sku });
       return immutableCopy(item);
+    },
+    // Авторитетный реестр обмеров нельзя было прочитать, не зная идентификатора: канонических
+    // таблиц не было ни в списке (`GET /v2/measurements` намеренно отдаёт только те, что заведены
+    // на текстовый SKU), ни в ответе по стилю, ни в рабочем пространстве. При этом именно
+    // каноническая таблица — единственная, что удовлетворяет гейт готовности продукта. Список
+    // повторяет форму соседнего: те же страницы, те же фильтры, то же ограничение по членству;
+    // разница одна — позиция страницы ведётся по идентификатору, потому что SKU здесь нет.
+    async pageCanonicalForActor(actorId, options = {}) {
+      validateActor(actorId);
+      invariant(
+        typeof reader.pageCanonicalForActor === 'function',
+        'MEASUREMENT_CANONICAL_READER_REQUIRED',
+        'Canonical Measurement chart reader is required',
+      );
+      const limit = pageLimit(options.limit);
+      const filters = Object.freeze({
+        status: optionalEnum(options.status, MEASUREMENT_STATUSES, 'MEASUREMENT_STATUS_FILTER_INVALID', 'Measurement chart status filter'),
+        unit: optionalEnum(options.unit, MEASUREMENT_UNITS, 'MEASUREMENT_UNIT_FILTER_INVALID', 'Measurement chart unit filter'),
+        brandId: optionalIdentifier(options.brandId),
+        // Фильтр, ради которого список и нужен: человек смотрит на версию модели и хочет её обмеры.
+        styleVersionId: optionalCanonicalId(options.styleVersionId, 'MEASUREMENT_STYLE_VERSION_FILTER_INVALID', 'Measurement chart style version filter is invalid'),
+        colorwayId: optionalCanonicalId(options.colorwayId, 'MEASUREMENT_COLORWAY_FILTER_INVALID', 'Measurement chart colorway filter is invalid'),
+      });
+      const scope = JSON.stringify(['canonical', filters.status ?? null, filters.unit ?? null, filters.brandId ?? null, filters.styleVersionId ?? null, filters.colorwayId ?? null]);
+      const afterId = options.cursor === undefined || options.cursor === null || options.cursor === ''
+        ? undefined
+        : decodeMeasurementCursor(options.cursor, { scope }).position;
+      const page = await reader.pageCanonicalForActor(actorId, { limit, afterId, filters });
+      return freezeCanonicalPage(page, { limit, scope });
     },
     async getCanonicalForActor(actorId, requestedChartId) {
       validateActor(actorId);
@@ -62,7 +91,21 @@ function freezePage(page, { limit, scope }) {
   const items = Object.freeze(page.items.map(immutableCopy));
   const nextSku = page.nextSku ?? items.at(-1)?.sku;
   invariant(!page.hasMore || SKU_PATTERN.test(nextSku ?? ''), 'MEASUREMENT_PAGE_RESULT_INVALID', 'Measurement chart page continuation SKU is invalid');
-  return Object.freeze({ items, nextCursor: page.hasMore ? encodeMeasurementCursor({ scope, sku: nextSku }) : null });
+  return Object.freeze({ items, nextCursor: page.hasMore ? encodeMeasurementCursor({ scope, position: nextSku }) : null });
+}
+function freezeCanonicalPage(page, { limit, scope }) {
+  invariant(page && typeof page === 'object' && !Array.isArray(page), 'MEASUREMENT_PAGE_RESULT_INVALID', 'Measurement reader must return a page object');
+  invariant(Array.isArray(page.items) && page.items.length <= limit, 'MEASUREMENT_PAGE_RESULT_INVALID', 'Canonical Measurement chart page items are invalid', { limit });
+  invariant(typeof page.hasMore === 'boolean', 'MEASUREMENT_PAGE_RESULT_INVALID', 'Canonical Measurement chart page hasMore flag is invalid');
+  invariant(!page.hasMore || page.items.length > 0, 'MEASUREMENT_PAGE_RESULT_INVALID', 'Canonical Measurement chart page cannot continue without items');
+  const items = Object.freeze(page.items.map(immutableCopy));
+  const nextId = page.nextId ?? items.at(-1)?.id;
+  invariant(!page.hasMore || IDENTIFIER_PATTERN.test(nextId ?? ''), 'MEASUREMENT_PAGE_RESULT_INVALID', 'Canonical Measurement chart page continuation id is invalid');
+  return Object.freeze({ items, nextCursor: page.hasMore ? encodeMeasurementCursor({ scope, position: nextId }) : null });
+}
+function optionalCanonicalId(value, code, message) {
+  if (value === undefined || value === null || value === '') return undefined;
+  return normalizeIdentifier(value, code, message);
 }
 function validateActor(actorId) {
   invariant(typeof actorId === 'string' && actorId.length >= 1 && actorId.length <= 160, 'MEASUREMENT_ACTOR_INVALID', 'Measurement chart actor is invalid');

@@ -5,11 +5,16 @@ const CURSOR_VERSION = 1;
 const MAX_CURSOR_LENGTH = 2048;
 const MAX_SCOPE_LENGTH = 512;
 const BASE64URL_PATTERN = /^[A-Za-z0-9_-]+$/;
-const SKU_PATTERN = /^[A-Z0-9][A-Z0-9._-]{1,63}$/;
+// Позиция страницы — это последняя прочитанная запись, а называется она по-разному: у таблицы по
+// SKU это SKU, у канонической — её идентификатор, потому что SKU у канонической нет вовсе. Курсор
+// один на оба списка: заводить второй ради другого имени поля значило бы держать две копии одного
+// и того же разбора. На проводе форма не меняется — как был [версия, область, значение], так и
+// остался.
+const POSITION_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{1,159}$/;
 
-export function encodeMeasurementCursor({ scope, sku }) {
-  const normalized = validatePayload({ scope, sku });
-  return Buffer.from(JSON.stringify([CURSOR_VERSION, normalized.scope, normalized.sku]), 'utf8').toString('base64url');
+export function encodeMeasurementCursor({ scope, position }) {
+  const normalized = validatePayload({ scope, position });
+  return Buffer.from(JSON.stringify([CURSOR_VERSION, normalized.scope, normalized.position]), 'utf8').toString('base64url');
 }
 
 export function decodeMeasurementCursor(cursor, { scope } = {}) {
@@ -25,13 +30,13 @@ export function decodeMeasurementCursor(cursor, { scope } = {}) {
     invariant(false, 'MEASUREMENT_CURSOR_INVALID', 'Measurement chart cursor payload is invalid');
   }
   invariant(Array.isArray(decoded) && decoded.length === 3 && decoded[0] === CURSOR_VERSION, 'MEASUREMENT_CURSOR_INVALID', 'Measurement chart cursor version or shape is invalid');
-  const normalized = validatePayload({ scope: decoded[1], sku: decoded[2] });
+  const normalized = validatePayload({ scope: decoded[1], position: decoded[2] });
   invariant(scope === undefined || scope === normalized.scope, 'MEASUREMENT_CURSOR_INVALID', 'Measurement chart cursor belongs to another filter set');
   return normalized;
 }
 
-function validatePayload({ scope, sku }) {
+function validatePayload({ scope, position }) {
   invariant(typeof scope === 'string' && scope.length >= 1 && scope.length <= MAX_SCOPE_LENGTH, 'MEASUREMENT_CURSOR_INVALID', 'Measurement chart cursor scope is invalid');
-  invariant(SKU_PATTERN.test(sku ?? ''), 'MEASUREMENT_CURSOR_INVALID', 'Measurement chart cursor SKU is invalid');
-  return Object.freeze({ scope, sku });
+  invariant(POSITION_PATTERN.test(position ?? ''), 'MEASUREMENT_CURSOR_INVALID', 'Measurement chart cursor position is invalid');
+  return Object.freeze({ scope, position });
 }

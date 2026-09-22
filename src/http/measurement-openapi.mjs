@@ -118,6 +118,10 @@ function schemas() {
       type: 'object', additionalProperties: false, required: ['items', 'nextCursor'],
       properties: { items: { type: 'array', maxItems: 200, items: { $ref: '#/components/schemas/MeasurementChart' } }, nextCursor: { oneOf: [{ type: 'string', minLength: 1, maxLength: 2048 }, { type: 'null' }] } },
     },
+    CanonicalMeasurementChartPage: {
+      type: 'object', additionalProperties: false, required: ['items', 'nextCursor'],
+      properties: { items: { type: 'array', maxItems: 200, items: { $ref: '#/components/schemas/CanonicalMeasurementChart' } }, nextCursor: { oneOf: [{ type: 'string', minLength: 1, maxLength: 2048 }, { type: 'null' }] } },
+    },
     CanonicalMeasurementSizeInput: canonicalSizeInput,
     CanonicalMeasurementValueInput: canonicalValueInput,
     CanonicalMeasurementPointInput: canonicalPointInput,
@@ -190,6 +194,19 @@ function paths() {
       post: { operationId: 'createMeasurementChart', security: [{ bearerAuth: [] }], parameters: [idempotencyHeader], requestBody: body('#/components/schemas/MeasurementChartCreate'), responses: mutationResponses('Created measurement chart') },
     },
     '/measurements/canonical': {
+      get: {
+        operationId: 'listCanonicalMeasurementCharts', security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 200, default: 50 } },
+          { name: 'cursor', in: 'query', schema: { type: 'string', minLength: 1, maxLength: 2048 } },
+          { name: 'status', in: 'query', schema: { type: 'string', enum: ['draft', 'published'] } },
+          { name: 'unit', in: 'query', schema: { type: 'string', enum: ['cm', 'in'] } },
+          { name: 'brandId', in: 'query', schema: { type: 'string', minLength: 1, maxLength: 160 } },
+          { name: 'styleVersionId', in: 'query', schema: canonicalId() },
+          { name: 'colorwayId', in: 'query', schema: canonicalId() },
+        ],
+        responses: { 200: dataResponse('Canonical Measurement Chart page', '#/components/schemas/CanonicalMeasurementChartPage'), 400: errorResponse, 401: errorResponse, 403: errorResponse },
+      },
       post: { operationId: 'createCanonicalMeasurementChart', security: [{ bearerAuth: [] }], parameters: [idempotencyHeader], requestBody: body('#/components/schemas/CanonicalMeasurementChartCreate'), responses: canonicalMutationResponses('Created canonical Measurement Chart') },
     },
     '/measurements/canonical/{chartId}': {

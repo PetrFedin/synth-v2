@@ -30,6 +30,7 @@ function harness() {
     updateMeasurementChart: async () => null,
     publishMeasurementChart: async () => null,
     getCanonicalForActor: async (...args) => { calls.push(['get', ...args]); return { id: args[1] }; },
+    pageCanonicalForActor: async (...args) => { calls.push(['page-canonical', ...args]); return { items: [], nextCursor: null }; },
     createCanonicalMeasurementChart: async (...args) => { calls.push(['create', ...args]); return { id: 'measurement:1' }; },
     updateCanonicalMeasurementChart: async (...args) => { calls.push(['update', ...args]); return { id: args[2] }; },
     publishCanonicalMeasurementChart: async (...args) => { calls.push(['publish', ...args]); return { id: args[2], status: 'published' }; },
@@ -101,11 +102,23 @@ test('canonical HTTP contract rejects free-form unit, POM code/name and legacy s
   );
 });
 
-test('canonical route does not get swallowed by legacy /measurements/:sku route', () => {
+test('canonical route does not get swallowed by legacy /measurements/:sku route', async () => {
+  // Раньше здесь закреплялось обратное тому, что говорит название: `GET /v2/measurements/canonical`
+  // попадал в маршрут по SKU и слово «canonical» уезжало в параметры как код товара. Пока у
+  // канонического реестра не было списка, это выглядело безобидно; теперь список есть, и путь
+  // обязан вести к нему.
   const h = harness();
   const canonical = route(h.routes, 'POST', '/v2/measurements/canonical');
-  const legacy = route(h.routes, 'GET', '/v2/measurements/canonical');
+  const list = route(h.routes, 'GET', '/v2/measurements/canonical');
   assert.equal(canonical.mutation, true);
-  assert.equal(legacy.mutation, false);
-  assert.deepEqual(legacy.params, ['canonical']);
+  assert.equal(list.mutation, false);
+  assert.deepEqual(list.params, []);
+
+  await list.execute({ actorId: 'user:1', query: { styleVersionId: 'style-version:1' }, params: list.params });
+  assert.deepEqual(h.calls.at(-1), ['page-canonical', 'user:1', { styleVersionId: 'style-version:1' }]);
+
+  // Чтение по идентификатору осталось на своём месте и не перехвачено списком.
+  const one = route(h.routes, 'GET', '/v2/measurements/canonical/measurement:1');
+  await one.execute({ actorId: 'user:1', query: {}, params: one.params });
+  assert.deepEqual(h.calls.at(-1), ['get', 'user:1', 'measurement:1']);
 });

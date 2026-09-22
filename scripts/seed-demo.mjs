@@ -360,6 +360,9 @@ try {
   // --- What the season actually cost and actually earned ---------------------------------------
   await ensureMoneyChain(runtime, pool, accounts);
 
+  // --- Потребность, из которой вырос производственный заказ --------------------------------------
+  await ensureApprovedDemandChain(runtime, pool, accounts);
+
   // --- Где товар сейчас -------------------------------------------------------------------------
   await ensureShipmentChain(runtime, pool, accounts);
 
@@ -1394,6 +1397,66 @@ async function releaseQuality(runtime, pool, brandId, approvers) {
 // Политика разнесения затрат бренда. Прямые затраты ложатся на строку, к которой относятся;
 // перевозка и пошлина — по стоимости строки, потому что дорогая строка занимает больше денег в
 // партии, а не больше места в коробке.
+// Потребность → запрос цен → размещение → производственный заказ.
+//
+// Снимки потребности стояли пустыми, и из-за этого **проверка происхождения производственного
+// заказа не выполнялась ни разу**. Она написана как «либо унаследованный заказ первой версии, у
+// которого происхождения нет, либо заказ второй версии — и тогда обязаны быть снимок потребности,
+// номер строки, хеш содержимого и ProductSku». Пока все девять заказов оставались первой версии,
+// вторая ветвь не проверялась никогда: проверка была и была выключена.
+//
+// Теперь по демонстрации проходит заказ второй версии, и ветвь исполняется по-настоящему. **Первая
+// версия при этом остаётся законной**: бренд шьёт и без подтверждённого оптового заказа — на склад,
+// на образцы, на допоставку, — и запрещать это значило бы запретить половину работы отрасли.
+// Разница в том, что теперь видно, какой заказ вырос из чужого обязательства, а какой — из решения
+// бренда.
+async function ensureApprovedDemandChain(runtime, pool, accounts) {
+  const existing = await pool.query('SELECT production_order_number FROM production_orders WHERE lineage_version = 2 LIMIT 1');
+  if (existing.rowCount) { note('approved demand', `${existing.rows[0].production_order_number} уже вырос из потребности`); return; }
+
+  const commitment = (await pool.query(
+    `SELECT supply.id, supply.order_id
+       FROM supply_commitment_snapshots AS supply
+       JOIN order_commit_snapshots AS commit ON commit.id = supply.order_commit_snapshot_id
+      ORDER BY (commit.payload ->> 'totalAmount')::numeric DESC LIMIT 1`,
+  )).rows[0];
+  if (!commitment) { note('approved demand', 'нет обязательств поставки — потребности не из чего вывести'); return; }
+
+  const supplier = (await pool.query("SELECT supplier_code FROM suppliers WHERE status = 'qualified' ORDER BY supplier_code LIMIT 1")).rows[0];
+  if (!supplier) { note('approved demand', 'нет квалифицированного поставщика — запрос цен некому послать'); return; }
+
+  const requirement = await runtime.productionRequirements.createFromSupplyCommitment(
+    command('production-requirement'), accounts.owner, commitment.order_id, commitment.id,
+  );
+  note('approved demand', `потребность выведена из обязательства поставки: ${requirement.lines.length} строк(и)`);
+
+  const rfqCode = 'RFQ-DEMAND-001';
+  let rfq = await runtime.sourcing.createRfqFromProductionRequirement(command('demand-rfq'), accounts.owner, {
+    productionRequirementSnapshotId: requirement.id,
+    orderLineNo: requirement.lines[0].orderLineNo,
+    rfqCode,
+    responseDueAt: '2026-10-10',
+    deliveryDueAt: '2026-11-30',
+    incoterm: 'FOB',
+    supplierCodes: [supplier.supplier_code],
+    notes: 'Потребность из подтверждённого оптового заказа',
+  });
+  rfq = await runtime.sourcing.issueRfq(command('demand-issue'), accounts.owner, rfqCode, { expectedVersion: rfq.version });
+  rfq = await runtime.sourcing.upsertQuote(command('demand-quote'), accounts.owner, rfqCode, {
+    expectedVersion: rfq.version, supplierCode: supplier.supplier_code,
+    unitPriceMinor: 980, fixedCostMinor: 25_000, leadTimeDays: 45, minimumOrderQuantity: 100, validUntil: '2026-11-01',
+  });
+  rfq = await runtime.sourcing.awardRfq(command('demand-award'), accounts.owner, rfqCode, {
+    expectedVersion: rfq.version, supplierCode: supplier.supplier_code,
+  });
+  rfq = await runtime.sourcing.allocateRfq(command('demand-allocate'), accounts.owner, rfqCode, {
+    expectedVersion: rfq.version, purchaseOrderNumber: 'PO-DEMAND-001', quantity: requirement.lines[0].quantity,
+    productionStartAt: '2026-10-15', deliveryDueAt: '2026-11-30',
+  });
+  const order = await runtime.productionOrders.createFromAllocation(command('demand-production-order'), accounts.owner, rfqCode);
+  note('approved demand', `${order.productionOrderNumber}: заказ второй версии — происхождение из потребности записано и проверено`);
+}
+
 async function ensureShipmentChain(runtime, pool, accounts) {
   const commitments = await pool.query(
     `SELECT supply.id AS supply_id, supply.order_id, commit.id AS commit_id,

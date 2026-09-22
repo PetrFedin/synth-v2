@@ -60,6 +60,30 @@ export function calculateMoneyPercentage(numerator, denominator, {
   return Number(scaledPercentage) / MONEY_PERCENTAGE_FACTOR;
 }
 
+/**
+ * Округлить сумму до денежной шкалы **так же, как это делает PostgreSQL**.
+ *
+ * `Math.round` округляет половину к плюс бесконечности: у положительных это «от нуля», а у
+ * отрицательных — «к нулю». PostgreSQL у `numeric` округляет половину **от нуля при любом знаке**.
+ * Пока числа положительные, разницы нет, и её не было видно годами; на отрицательной величине —
+ * убыточной марже, стоимостной коррекции, кредите поставщика — два округления расходятся на одну
+ * единицу последнего разряда. Там, где то же число пересчитывает триггер целостности, это не
+ * расхождение в копейке, а отказ записи.
+ *
+ * Поправка `Number.EPSILON` вносится в **модуль** числа, а не в само значение: прибавленная к
+ * значению, она сдвигает отрицательные и положительные в разные стороны — то есть чинит
+ * представление ценой той самой симметрии, ради которой всё и делается.
+ *
+ * Минус ноль приводится к нулю: в JSON он неотличим от нуля, а в сравнении — отличим.
+ *
+ * @param {number} value
+ * @param {number} [factor] Множитель шкалы; по умолчанию денежная.
+ */
+export function roundAwayFromZero(value, factor = MONEY_FACTOR) {
+  const magnitude = Math.round((Math.abs(value) + Number.EPSILON) * factor);
+  return (value < 0 ? -magnitude : magnitude) / factor + 0;
+}
+
 export function calculateMoneyTotal(lines, {
   priceInvalidCode = 'MONEY_INVALID',
   priceScaleCode = 'MONEY_SCALE_INVALID',

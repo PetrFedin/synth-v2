@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { invariant } from '../../core/errors.mjs';
-import { calculateMoneyPercentage } from '../../core/money.mjs';
+import { calculateMoneyPercentage, roundAwayFromZero } from '../../core/money.mjs';
 import { canonicalJson } from '../../core/fingerprints.mjs';
 
 const BASES = Object.freeze(['direct', 'unit', 'net_value', 'custom']);
@@ -309,6 +309,9 @@ function requiredTimestamp(value, code) {
   return new Date(parsed).toISOString();
 }
 function hashBasis(value) { return createHash('sha256').update(canonicalJson(value)).digest('hex'); }
-function roundMoney(value) { return Math.round((value + Number.EPSILON) * 10_000) / 10_000; }
+// Три разных «округлить деньги» в одном модуле расходились не только знаком: здесь поправка
+// прибавлялась к значению, а не к его модулю, то есть отрицательные и положительные сдвигались в
+// разные стороны. Правило теперь одно и совпадает с базой.
+function roundMoney(value) { return roundAwayFromZero(value, 10_000); }
 function roundMeasure(value) { return Math.round((value + Number.EPSILON) * 1_000_000) / 1_000_000; }
 function roundShare(value) { return Math.round((value + Number.EPSILON) * 100_000_000) / 100_000_000; }

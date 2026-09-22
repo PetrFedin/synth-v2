@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { invariant } from '../../core/errors.mjs';
-import { assertPostgresInteger, normalizeMoney } from '../../core/money.mjs';
+import { assertPostgresInteger, calculateMoneyPercentage, normalizeMoney, roundAwayFromZero } from '../../core/money.mjs';
 import { canonicalJson } from '../../core/fingerprints.mjs';
 
 const SUPPLY_SOURCES = Object.freeze(['inventory', 'inbound', 'production', 'drop-ship']);
@@ -220,7 +220,24 @@ export function createMarginActualizationSnapshot({ id, order, orderCommit, land
   invariant(landedCost.currency === orderCommit.currency, 'MARGIN_ACTUALIZATION_CURRENCY_MISMATCH', 'Landed cost currency does not match committed order currency');
   const netRevenue = normalizeMoney(orderCommit.totalAmount, { label: 'Committed order revenue' });
   const contributionMarginAmount = roundMoney(netRevenue - landedCost.totalCost);
-  const contributionMarginPercent = roundMetric((contributionMarginAmount / netRevenue) * 100);
+  // Доля считается общим помощником, а не своей арифметикой на числах с плавающей точкой.
+  //
+  // `Math.round` округляет половину к **плюс бесконечности**, то есть у отрицательных значений — к
+  // нулю, а PostgreSQL округляет половину **от нуля**. На −1755,84375 это давало −1755,8437 против
+  // −1755,8438, и триггер целостности, который пересчитывает то же число сам, отверг бы
+  // актуализацию маржи. Срабатывало это ровно на убыточном заказе — в том случае, ради которого
+  // маржу и считают.
+  //
+  // Помощник делит в целых числах BigInt и округляет половину от нуля, то есть совпадает с базой
+  // при любом знаке; в этом же модуле построчная аллокация уже считала долю им. Двух мнений об
+  // одном числе быть не должно.
+  const contributionMarginPercent = calculateMoneyPercentage(contributionMarginAmount, netRevenue, {
+    invalidCode: 'MARGIN_ACTUALIZATION_PERCENT_INVALID',
+    scaleCode: 'MARGIN_ACTUALIZATION_PERCENT_SCALE_INVALID',
+    overflowCode: 'MARGIN_ACTUALIZATION_PERCENT_TOO_LARGE',
+    numeratorLabel: 'Contribution margin',
+    denominatorLabel: 'Committed order revenue',
+  });
   const basis = Object.freeze({
     orderId: orderCommit.orderId,
     orderVersion: orderCommit.orderVersion,
@@ -437,8 +454,8 @@ function convertSignedMoney(amount, rate) {
   return converted;
 }
 function isCurrency(value) { return typeof value === 'string' && /^[A-Z]{3}$/.test(value); }
-function roundMoney(value) { return Math.round(value * MONEY_FACTOR) / MONEY_FACTOR; }
-function roundMetric(value) { return Math.round(value * 10_000) / 10_000; }
+// Правило округления — общее и совпадающее с PostgreSQL; см. `roundAwayFromZero`.
+function roundMoney(value) { return roundAwayFromZero(value, MONEY_FACTOR); }
 function requiredTimestamp(value, code) { const parsed = Date.parse(value); invariant(typeof value === 'string' && Number.isFinite(parsed), code, 'Timestamp must be a valid ISO date-time'); return new Date(parsed).toISOString(); }
 function optionalTimestamp(value, code) { return value === null || value === undefined || value === '' ? null : requiredTimestamp(value, code); }
 function hashBasis(value) { return createHash('sha256').update(canonicalJson(value)).digest('hex'); }

@@ -45,6 +45,10 @@ const PEOPLE = Object.freeze({
   // inspection that nobody in the brand can decide — a dead end reachable from ordinary use, not
   // from misuse. A third member is what makes the rule satisfiable in every division of the work.
   inspector: { email: 'inspector@syntha.local', password: process.env.SYNTHA_DEMO_INSPECTOR_PASSWORD ?? 'local-inspector-password-2026', name: 'Павел Дорохов' },
+  // Деньги ведёт отдельный человек. Себестоимость записывает не тот, кто обязался поставить: право
+  // `cost.manage` есть у финансов и у владельца, право `supply.manage` — у владельца и у продаж, и
+  // демонстрация должна показывать это разделение, а не обходить его одним аккаунтом на всё.
+  finance: { email: 'finance@syntha.local', password: process.env.SYNTHA_DEMO_FINANCE_PASSWORD ?? 'local-finance-password-2026', name: 'Анна Ковалевская' },
   buyer: { email: 'buyer@nordhaus.example', password: process.env.SYNTHA_DEMO_BUYER_PASSWORD ?? 'local-buyer-password-2026', name: 'Jonas Herrmann' },
   supplier: { email: 'rep@atmosphere.example', password: process.env.SYNTHA_DEMO_SUPPLIER_PASSWORD ?? 'local-supplier-password-2026', name: 'Mei Lin' },
 });
@@ -175,6 +179,46 @@ const DEMO_PLACEHOLDERS = [
   },
 ];
 
+// Денежный контур заказа: чем обязались поставить, во что это обошлось и что осталось.
+//
+// До этого одиннадцать таблиц фактических денег стояли пустыми — при трёх десятках файлов тестов.
+// Код был написан и ни разу не прошёл по живому заказу, то есть никто не видел ни одной цифры,
+// ради которых половина платформы и существует, а показать их инвестору было нечем.
+//
+// Цепочка идёт **через те же службы, что и прод**, а не вставками в таблицы: обязательство поставки,
+// курс, строки затрат, свод landed cost, актуализация маржи. Каждый шаг проверяется теми же
+// правилами и теми же триггерами целостности.
+//
+// **Два заказа намеренно кончаются по-разному.** Большой выходит в прибыль, малый — в убыток:
+// партия в 60 штук несёт ту же оснастку и ту же перевозку, что и партия в 180, и на малой они
+// съедают маржу. Система, которая умеет показывать только прибыль, — это брошюра; экран маржи
+// затем и нужен, чтобы убыток было видно. Заодно это единственный способ увидеть на живых данных
+// отрицательную маржу, на которой округление JS и PostgreSQL расходилось.
+const DEMO_MONEY_CHAIN = Object.freeze([
+  {
+    // 180 штук по 24 € — 4320 €. Фабрика выставляет в долларах, поэтому нужен курс.
+    quantity: 180,
+    source: { sourceType: 'production', sourceRef: 'PO-SYN_TEE_DEMO_OFW_M' },
+    fx: { sourceCurrency: 'USD', rate: 0.92, rateType: 'invoice', sourceRef: 'INV-ATM-2026-114' },
+    costs: [
+      { costType: 'factory', amount: 1950, currency: 'USD', sourceRef: 'INV-ATM-2026-114', crossCurrency: true },
+      { costType: 'freight', amount: 210, currency: 'EUR', sourceRef: 'FRT-DHL-884213' },
+      { costType: 'duty', amount: 160, currency: 'EUR', sourceRef: 'CUS-DE-2026-5510' },
+    ],
+  },
+  {
+    // 60 штук по 24 € — 1440 €. Та же оснастка и та же перевозка на втрое меньшей партии.
+    quantity: 60,
+    source: { sourceType: 'production', sourceRef: 'PO-SYN_TEE_DEMO_OFW_M-R2' },
+    fx: { sourceCurrency: 'USD', rate: 0.92, rateType: 'invoice', sourceRef: 'INV-ATM-2026-118' },
+    costs: [
+      { costType: 'factory', amount: 1500, currency: 'USD', sourceRef: 'INV-ATM-2026-118', crossCurrency: true },
+      { costType: 'freight', amount: 190, currency: 'EUR', sourceRef: 'FRT-DHL-884219' },
+      { costType: 'duty', amount: 140, currency: 'EUR', sourceRef: 'CUS-DE-2026-5514' },
+    ],
+  },
+]);
+
 const DEMO_SAMPLING_STANDARD = 'DEMO-AQL-2026';
 const DEMO_SAMPLING_ROWS = [
   // lotFrom, lotTo, sampleSize, acceptAt at AQL 2.5, acceptAt at AQL 4.0
@@ -220,6 +264,7 @@ try {
   // системе не было.
   await ensureMembership(runtime, brandId, accounts.quality, 'quality', accounts.owner, 'brand');
   await ensureMembership(runtime, brandId, accounts.inspector, 'quality', accounts.owner, 'brand');
+  await ensureMembership(runtime, brandId, accounts.finance, 'finance', accounts.owner, 'brand');
 
   // --- The retailer -------------------------------------------------------------------------
   const shopExists = await pool.query('SELECT id FROM organisations WHERE id = $1', [SHOP_ID]);
@@ -287,6 +332,9 @@ try {
   // demonstration should show it being satisfied rather than tripped over.
   await releaseQuality(runtime, pool, brandId, [accounts.quality, accounts.inspector, accounts.owner]);
 
+  // --- What the season actually cost and actually earned ---------------------------------------
+  await ensureMoneyChain(runtime, pool, accounts);
+
   // --- The supplier's side of the table -------------------------------------------------------
   await ensurePortalAccess(runtime, pool, brandId, accounts.owner);
 
@@ -305,6 +353,7 @@ function describeRole(key) {
     owner: 'бренд — владелец',
     quality: 'бренд — приёмка качества',
     inspector: 'бренд — инспектор партий',
+    finance: 'бренд — финансы',
     buyer: `${SHOP_NAME} — байер`,
     supplier: 'портал поставщика',
   }[key] ?? key;
@@ -1310,6 +1359,132 @@ async function releaseQuality(runtime, pool, brandId, approvers) {
     } catch (error) {
       note('quality', `${row.code} left as is (${error.code ?? error.message})`);
     }
+  }
+}
+
+// Неизменяемая запись заводится один раз. Если она уже есть — берётся та, что есть.
+// Политика разнесения затрат бренда. Прямые затраты ложатся на строку, к которой относятся;
+// перевозка и пошлина — по стоимости строки, потому что дорогая строка занимает больше денег в
+// партии, а не больше места в коробке.
+async function ensureAllocationPolicy(runtime, pool, brandId, actorId) {
+  const existing = await pool.query('SELECT id FROM cost_allocation_policy_versions WHERE brand_id = $1 ORDER BY created_at DESC LIMIT 1', [brandId]);
+  if (existing.rowCount) return { id: existing.rows[0].id };
+  const policy = await runtime.costAllocation.createPolicyVersion(command('allocation-policy'), actorId, brandId, {
+    name: 'Демонстрационная политика разнесения',
+    version: 1,
+    defaultBasis: 'net_value',
+    rules: [
+      { costType: 'factory', basis: 'unit' },
+      { costType: 'freight', basis: 'net_value' },
+      { costType: 'duty', basis: 'net_value' },
+    ],
+  });
+  note('money', `политика разнесения затрат заведена (${policy.defaultBasis} по умолчанию)`);
+  return policy;
+}
+
+async function reuseOrCreate(pool, sql, parameters, create, announce) {
+  const existing = await pool.query(sql, parameters);
+  if (existing.rowCount) return { id: existing.rows[0].id };
+  const created = await create();
+  announce?.(created);
+  return created;
+}
+
+async function ensureMoneyChain(runtime, pool, accounts) {
+  const commits = await pool.query(
+    `SELECT id, order_id, brand_id, (payload ->> 'totalAmount')::numeric AS total, payload ->> 'currency' AS currency,
+            payload -> 'lines' -> 0 ->> 'sku' AS sku,
+            (payload -> 'lines' -> 0 ->> 'quantity')::integer AS quantity
+       FROM order_commit_snapshots
+      ORDER BY (payload ->> 'totalAmount')::numeric DESC`,
+  );
+  if (!commits.rowCount) { note('money', 'ни одного подтверждённого заказа — цепочка затрат пропущена'); return; }
+
+  for (const [index, commit] of commits.rows.entries()) {
+    const plan = DEMO_MONEY_CHAIN[index];
+    if (!plan) { note('money', `${commit.order_id}: сценарий затрат не описан, пропущено`); continue; }
+    if (plan.quantity !== commit.quantity) {
+      // Числа сценария сочинены под конкретную партию. Если заказ изменился, молча посчитать по
+      // старым — значит показать инвестору цифру, которая ни из чего не следует.
+      note('money', `${commit.order_id}: в заказе ${commit.quantity} шт., в сценарии ${plan.quantity} — пропущено`);
+      continue;
+    }
+
+    const existing = await pool.query('SELECT id FROM margin_actualization_snapshots WHERE order_commit_snapshot_id = $1 LIMIT 1', [commit.id]);
+    if (existing.rowCount) { note('money', `${commit.order_id}: маржа уже актуализирована`); continue; }
+
+    // Каждый шаг проверяется отдельно. Записи этого контура неизменяемы: повторная попытка завести
+    // второе обязательство поставки на тот же подтверждённый заказ — не повтор, а отказ. Сид,
+    // прерванный на середине, обязан дойти оттуда, где остановился, а не начинать заново.
+
+    // Обязуется поставить — владелец: `supply.manage` есть у него и у продаж, но не у финансов.
+    const supply = await reuseOrCreate(
+      pool, 'SELECT id FROM supply_commitment_snapshots WHERE order_commit_snapshot_id = $1 LIMIT 1', [commit.id],
+      () => runtime.orderEconomics.createSupplyCommitment(
+        command(`supply-${index}`), accounts.owner, commit.order_id,
+        { allocations: [{ sku: commit.sku, quantity: commit.quantity, ...plan.source, expectedAvailabilityAt: null }] },
+      ),
+      (created) => note('money', `${commit.order_id}: обязательство поставки ${commit.quantity} шт. из «${plan.source.sourceType}»`),
+    );
+
+    // Курс и затраты ведут финансы: `cost.manage` есть у них и у владельца, но не у продаж.
+    const fx = await reuseOrCreate(
+      pool, 'SELECT id FROM order_fx_rate_snapshots WHERE order_commit_snapshot_id = $1 LIMIT 1', [commit.id],
+      () => runtime.orderEconomics.createFxRateSnapshot(
+        command(`fx-${index}`), accounts.finance, commit.order_id,
+        { ...plan.fx, effectiveAt: new Date().toISOString() },
+      ),
+      () => note('money', `${commit.order_id}: курс ${plan.fx.sourceCurrency}/${commit.currency} = ${plan.fx.rate} (${plan.fx.rateType})`),
+    );
+
+    let recorded = 0;
+    for (const [position, cost] of plan.costs.entries()) {
+      const already = await pool.query(
+        'SELECT id FROM actual_cost_ledger_entries WHERE order_commit_snapshot_id = $1 AND source_ref = $2 AND cost_type = $3 LIMIT 1',
+        [commit.id, cost.sourceRef, cost.costType],
+      );
+      if (already.rowCount) continue;
+      await runtime.orderEconomics.recordActualCost(
+        command(`cost-${index}-${position}`), accounts.finance, commit.order_id,
+        {
+          supplyCommitmentSnapshotId: supply.id,
+          costType: cost.costType,
+          amount: cost.amount,
+          currency: cost.currency,
+          // Курс прикладывается только к затрате в чужой валюте: у затраты в валюте заказа его
+          // быть не должно, и правило это прямо запрещает.
+          fxRateSnapshotId: cost.crossCurrency ? fx.id : null,
+          sourceRef: cost.sourceRef,
+          occurredAt: new Date().toISOString(),
+        },
+      );
+      recorded += 1;
+    }
+    note('money', `${commit.order_id}: ${recorded} новых строк(и) фактических затрат из ${plan.costs.length}`);
+
+    const landed = await reuseOrCreate(
+      pool, 'SELECT id FROM landed_cost_snapshots WHERE order_commit_snapshot_id = $1 LIMIT 1', [commit.id],
+      () => runtime.orderEconomics.actualizeLandedCost(command(`landed-${index}`), accounts.finance, commit.order_id),
+      () => note('money', `${commit.order_id}: landed cost сведён`),
+    );
+    // Канонический заказ обязан нести распределение затрат по строкам: иначе маржа знает итог и не
+    // знает, какая строка его принесла, — а вопрос «что именно убыточно» и есть смысл этого экрана.
+    const policy = await ensureAllocationPolicy(runtime, pool, commit.brand_id, accounts.finance);
+    const run = await reuseOrCreate(
+      pool, 'SELECT id FROM cost_allocation_run_snapshots WHERE order_commit_snapshot_id = $1 LIMIT 1', [commit.id],
+      () => runtime.costAllocation.allocateLandedCost(command(`allocation-${index}`), accounts.finance, commit.order_id, {
+        landedCostSnapshotId: landed.id,
+        policyVersionId: policy.id,
+        customWeightsByCostEntryId: null,
+        customLineWeightsByCostEntryId: null,
+      }),
+      () => note('money', `${commit.order_id}: затраты разнесены по строкам заказа`),
+    );
+
+    const margin = await runtime.orderEconomics.actualizeMargin(command(`margin-${index}`), accounts.finance, commit.order_id, landed.id, run.id);
+    const verdict = margin.contributionMarginAmount >= 0 ? 'прибыль' : 'убыток';
+    note('money', `${commit.order_id}: выручка ${margin.netRevenue} ${commit.currency}, landed ${margin.landedCost}, маржа ${margin.contributionMarginAmount} (${margin.contributionMarginPercent} %) — ${verdict}`);
   }
 }
 

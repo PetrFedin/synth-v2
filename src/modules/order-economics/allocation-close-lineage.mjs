@@ -5,6 +5,7 @@ import {
   createMarginActualizationSnapshot,
   createPostCloseAdjustment,
 } from './public.mjs';
+import { commitLineNo } from './product-sku-lineage.mjs';
 import {
   createCostCloseReadinessSnapshot,
   createReadinessBoundCostCloseSnapshot,
@@ -16,10 +17,13 @@ const PENDING_POST_CLOSE = 'pending-post-close';
 
 export function resolveOrderEconomicsLineageMode(orderCommit) {
   invariant(Array.isArray(orderCommit?.lines) && orderCommit.lines.length > 0, 'ORDER_COMMIT_LINES_REQUIRED', 'Order commit lines are required to resolve economics lineage');
-  const identities = orderCommit.lines.map((line) => ({
-    hasOrderLineNo: Number.isInteger(line?.orderLineNo) && line.orderLineNo > 0,
-    hasProductSkuId: typeof line?.productSkuId === 'string' && line.productSkuId.trim().length > 0,
-  }));
+  const identities = orderCommit.lines.map((line) => {
+    const lineNo = commitLineNo(line);
+    return {
+      hasOrderLineNo: Number.isInteger(lineNo) && lineNo > 0,
+      hasProductSkuId: typeof line?.productSkuId === 'string' && line.productSkuId.trim().length > 0,
+    };
+  });
   if (identities.every(({ hasOrderLineNo, hasProductSkuId }) => hasOrderLineNo && hasProductSkuId)) return 'product-sku-v2';
   if (identities.every(({ hasOrderLineNo, hasProductSkuId }) => !hasOrderLineNo && !hasProductSkuId)) return 'legacy';
   invariant(false, 'ORDER_COMMIT_ECONOMICS_LINEAGE_MIXED', 'Order commit cannot mix canonical ProductSku line identity with legacy textual-SKU identity');

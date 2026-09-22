@@ -1,5 +1,20 @@
 import { invariant } from '../../core/errors.mjs';
 
+/**
+ * Номер строки подтверждённого заказа.
+ *
+ * Писатель снимка (`order-commit`) кладёт его как `lineNo`; экономика заказа читала `orderLineNo` —
+ * имя, которого в базе нет ни у одной строки. Из-за этого **любой** канонический заказ выглядел для
+ * денежного контура как смесь двух моделей идентичности и отвергался, а фикстуры тестов подавали
+ * `orderLineNo` напрямую и проходили. Отсюда и одиннадцать пустых таблиц при трёх десятках зелёных
+ * файлов тестов: контур был написан и ни разу не проходил по настоящему заказу.
+ *
+ * Имя разрешается в одном месте, чтобы «как называется номер строки» не расходилось снова.
+ */
+export function commitLineNo(line) {
+  return line?.orderLineNo ?? line?.lineNo ?? null;
+}
+
 export function canonicalOrderCommitLines(orderCommit) {
   invariant(Array.isArray(orderCommit?.lines) && orderCommit.lines.length > 0, 'ORDER_COMMIT_LINES_REQUIRED', 'Immutable order commit lines are required');
   return Object.freeze(orderCommit.lines.map((line, index) => Object.freeze({

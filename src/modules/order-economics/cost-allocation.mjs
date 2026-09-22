@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { invariant } from '../../core/errors.mjs';
 import { calculateMoneyPercentage, roundAwayFromZero } from '../../core/money.mjs';
+import { commitLineNo } from './product-sku-lineage.mjs';
 import { canonicalJson } from '../../core/fingerprints.mjs';
 
 const BASES = Object.freeze(['direct', 'unit', 'net_value', 'custom']);
@@ -225,13 +226,16 @@ function normalizeOrderLine(line) {
   invariant(typeof line?.sku === 'string' && line.sku.length > 0, 'COST_ALLOCATION_SKU_REQUIRED', 'Every committed order line requires SKU');
   invariant(Number.isFinite(line.quantity) && line.quantity > 0, 'COST_ALLOCATION_QUANTITY_INVALID', 'Every committed order line requires positive quantity', { sku: line.sku, quantity: line.quantity });
   invariant(Number.isFinite(line.unitPrice) && line.unitPrice >= 0, 'COST_ALLOCATION_UNIT_PRICE_INVALID', 'Every committed order line requires non-negative unit price', { sku: line.sku, unitPrice: line.unitPrice });
-  const hasOrderLineNo = line.orderLineNo != null;
+  // Номер строки приходит под тем именем, под каким его записал снимок заказа: `lineNo`.
+  // Читать только `orderLineNo` значило считать каждый настоящий канонический заказ неполным.
+  const orderLineNo = commitLineNo(line);
+  const hasOrderLineNo = orderLineNo != null;
   const hasProductSkuId = line.productSkuId != null;
-  invariant(hasOrderLineNo === hasProductSkuId, 'COST_ALLOCATION_ORDER_LINE_IDENTITY_INCOMPLETE', 'Canonical committed order line requires orderLineNo and productSkuId together', { orderLineNo: line.orderLineNo ?? null, productSkuId: line.productSkuId ?? null, sku: line.sku });
+  invariant(hasOrderLineNo === hasProductSkuId, 'COST_ALLOCATION_ORDER_LINE_IDENTITY_INCOMPLETE', 'Canonical committed order line requires orderLineNo and productSkuId together', { orderLineNo: orderLineNo ?? null, productSkuId: line.productSkuId ?? null, sku: line.sku });
   if (!hasOrderLineNo) return Object.freeze({ orderLineNo: null, productSkuId: null, sku: line.sku, quantity: line.quantity, unitPrice: line.unitPrice });
-  invariant(Number.isInteger(line.orderLineNo) && line.orderLineNo > 0, 'COST_ALLOCATION_ORDER_LINE_NO_INVALID', 'Canonical committed order line requires a positive immutable orderLineNo', { orderLineNo: line.orderLineNo });
+  invariant(Number.isInteger(orderLineNo) && orderLineNo > 0, 'COST_ALLOCATION_ORDER_LINE_NO_INVALID', 'Canonical committed order line requires a positive immutable orderLineNo', { orderLineNo });
   invariant(typeof line.productSkuId === 'string' && line.productSkuId.length > 0, 'COST_ALLOCATION_PRODUCT_SKU_ID_INVALID', 'Canonical committed order line requires productSkuId', { productSkuId: line.productSkuId });
-  return Object.freeze({ orderLineNo: line.orderLineNo, productSkuId: line.productSkuId, sku: line.sku, quantity: line.quantity, unitPrice: line.unitPrice });
+  return Object.freeze({ orderLineNo, productSkuId: line.productSkuId, sku: line.sku, quantity: line.quantity, unitPrice: line.unitPrice });
 }
 
 function actualCostExactIdentity(entry) {

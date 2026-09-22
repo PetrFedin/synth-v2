@@ -32,6 +32,34 @@ import { createPostgresWholesaleRuntime } from '../src/runtime/postgres-runtime.
 const databaseUrl = process.env.SYNTHA_V2_DATABASE_URL ?? process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error('SYNTHA_V2_DATABASE_URL is required');
 
+// В базе лежало 102 определения атрибутов и **одна** строка значений, причём готовность продукта
+// по измерению «атрибуты» приходила подтверждением из тела запроса и поэтому проходила при нулях.
+// Подтверждение больше не обгоняет реестр, а значит демо обязано нести настоящие значения —
+// иначе экран честно показывал бы заблокированное измерение там, где показывать нечего.
+//
+// Атрибуты берутся из управляемого набора семейства «одежда» (`product.apparel.core`) и пишутся
+// через службу, то есть проходят те же правила базы, что и любая живая запись: атрибут обязан
+// быть в каталоге и применяться к семейству товара (миграция 082).
+const DEMO_STYLE_ATTRIBUTES = Object.freeze({
+  'SYN.JKT': Object.freeze([
+    ['common.marketing_name', 'Aurora Quilted Jacket'],
+    ['common.capsule', 'SS27 Outerwear'],
+    ['apparel.fabric_segment', 'Техничный верх'],
+    ['apparel.fabric_type', 'Стёганый нейлон 40D'],
+    ['apparel.insulation', { present: true, type: 'synthetic', grams_per_square_metre: 120 }],
+    ['apparel.lining', { present: true, material: 'taffeta', full: true }],
+    ['apparel.pocket', { count: 3, kinds: ['welt', 'welt', 'inner'] }],
+  ]),
+  'SYN.TEE': Object.freeze([
+    ['common.marketing_name', 'Meridian Heavy Cotton Tee'],
+    ['common.capsule', 'SS27 Essentials'],
+    ['apparel.fabric_segment', 'Джерси'],
+    ['apparel.fabric_type', 'Кулирка 240 г/м²'],
+    ['apparel.pocket', { count: 0, kinds: [] }],
+    ['common.set_member', false],
+  ]),
+});
+
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const migrationsDir = path.join(root, 'db', 'migrations');
 
@@ -362,6 +390,7 @@ try {
 
   // --- Чем сезону разрешено рисовать ------------------------------------------------------------
   await ensureSeasonPalette(runtime, pool, accounts);
+  await ensureProductAttributes(runtime, pool, accounts);
 
   // --- Потребность, из которой вырос производственный заказ --------------------------------------
   await ensureApprovedDemandChain(runtime, pool, accounts);
@@ -1419,6 +1448,43 @@ async function releaseQuality(runtime, pool, brandId, approvers) {
 // вопрос «что вообще в этом сезоне» задать было некому. Палитра собирается из тех же
 // governed-записей справочника цветов, которыми уже покрашено полотно: сезон и склад говорят об
 // одном цвете одним идентификатором, а не двумя похожими строками.
+async function ensureProductAttributes(runtime, pool, accounts) {
+  const existing = await pool.query("SELECT count(*)::int AS total FROM product_attribute_values WHERE owner_type = 'style_version'");
+  const versions = (await pool.query(
+    `SELECT version.id, style.style_code
+       FROM product_style_versions version
+       JOIN product_styles style ON style.id = version.style_id
+      ORDER BY style.style_code`,
+  )).rows;
+  if (!versions.length) { note('attributes', 'нет версий моделей — атрибуты не к чему привязать'); return; }
+
+  let written = 0;
+  let skipped = 0;
+  for (const version of versions) {
+    const family = Object.keys(DEMO_STYLE_ATTRIBUTES).find((prefix) => String(version.style_code).startsWith(prefix));
+    if (!family) continue;
+    for (const [attributeCode, value] of DEMO_STYLE_ATTRIBUTES[family]) {
+      const already = await pool.query(
+        `SELECT 1 FROM product_attribute_values WHERE owner_type = 'style_version' AND owner_id = $1 AND attribute_code = $2`,
+        [version.id, attributeCode],
+      );
+      if (already.rowCount) { skipped += 1; continue; }
+      try {
+        await runtime.productIdentity.createAttributeValue(
+          command(`attribute-${version.id}-${attributeCode}`),
+          accounts.owner,
+          { ownerType: 'style_version', ownerId: version.id, attributeCode, attributeCatalogVersion: '1.0.0', value },
+        );
+        written += 1;
+      } catch (error) {
+        note('attributes', `${version.style_code} / ${attributeCode} пропущен (${error.code ?? error.message})`);
+      }
+    }
+  }
+  if (!written) { note('attributes', `значения уже заведены (${existing.rows[0].total} строк)`); return; }
+  note('attributes', `заведено ${written} значений атрибутов, ${skipped} уже были`);
+}
+
 async function ensureSeasonPalette(runtime, pool, accounts) {
   const campaign = (await pool.query(
     "SELECT id FROM campaigns WHERE payload ->> 'name' LIKE '%DEMO%' ORDER BY id LIMIT 1",

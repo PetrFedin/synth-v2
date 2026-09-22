@@ -291,6 +291,20 @@ export async function runReadyProductReadinessLiveAcceptance({
     },
   }), 'READY Style Version creation');
 
+  // Готовность по измерению «атрибуты» больше не принимается на слово: подтверждение в теле
+  // запроса обязано совпадать с реестром. Приёмка поэтому заводит настоящее управляемое значение —
+  // база проверит, что атрибут есть в каталоге и применим к семейству «одежда» (миграция 082).
+  data(await requestJson(fetchImpl, target.url, '/v2/product/attributes', {
+    method: 'POST', token, idempotencyKey: command(runId, 'ready-attribute'),
+    body: {
+      ownerType: 'style_version',
+      ownerId: styleVersion.id,
+      attributeCode: 'apparel.fabric_type',
+      attributeCatalogVersion: '1.0.0',
+      value: 'Приёмочное полотно',
+    },
+  }), 'READY Product governed attribute value');
+
   const colorway = data(await requestJson(fetchImpl, target.url, `/v2/product/style-versions/${encodeURIComponent(styleVersion.id)}/colorways`, {
     method: 'POST', token, idempotencyKey: command(runId, 'ready-colorway'),
     body: {

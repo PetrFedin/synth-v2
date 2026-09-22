@@ -13,7 +13,17 @@ import { invariant } from '../../core/errors.mjs';
 // at the gate simply never releases, and the balance never falls due. Only the payment is stored,
 // because only the payment is a new fact about the world.
 
-export const PAYMENT_TRIGGERS = Object.freeze(['order-confirmed', 'shipment-released']);
+// Вехи вешаются на события, которые платформа уже записывает по тому же производственному заказу,
+// и перечислены они в порядке наступления. Пока событий было два, «до двенадцати вех» оставалось
+// словами: все девять графиков демонстрации вышли одинаковыми 30/70, потому что повесить третью
+// веху было не на что. Настоящий график пошива — задаток при подтверждении, платёж при запуске в
+// работу, платёж по готовности к контролю и остаток при выпуске отгрузки — теперь выразим.
+export const PAYMENT_TRIGGERS = Object.freeze([
+  'order-confirmed',
+  'production-started',
+  'ready-for-quality-control',
+  'shipment-released',
+]);
 export const PAYMENT_MILESTONE_STATUSES = Object.freeze(['planned', 'due', 'overdue', 'paid']);
 const BASIS_POINTS = 10_000;
 
@@ -88,9 +98,9 @@ export function recordPayment(schedule, { sequence, paidAt, reference, evidence,
  * Status is computed here and stored nowhere. A milestone whose trigger has not happened is
  * `planned` and has no date at all — offering one would invite paying against it.
  */
-export function paymentScheduleView(schedule, { confirmedAt, releasedAt, asOf }) {
+export function paymentScheduleView(schedule, { confirmedAt, startedAt, readyForQcAt, releasedAt, asOf }) {
   const now = timestamp(asOf, 'PAYMENT_AS_OF_INVALID', 'Reference time');
-  const evidence = { confirmedAt, releasedAt };
+  const evidence = { confirmedAt, startedAt, readyForQcAt, releasedAt };
   const milestones = schedule.milestones.map((milestone) => {
     const occurredAt = triggerOccurredAt(milestone.triggerEvent, evidence);
     const dueAt = occurredAt ? addDays(occurredAt, schedule.paymentTermsDays) : null;
@@ -145,8 +155,15 @@ function buildMilestones(split, totalAmountMinor) {
   return Object.freeze(milestones);
 }
 
+const TRIGGER_EVIDENCE = Object.freeze({
+  'order-confirmed': 'confirmedAt',
+  'production-started': 'startedAt',
+  'ready-for-quality-control': 'readyForQcAt',
+  'shipment-released': 'releasedAt',
+});
+
 function triggerOccurredAt(triggerEvent, evidence) {
-  const at = triggerEvent === 'order-confirmed' ? evidence?.confirmedAt : evidence?.releasedAt;
+  const at = evidence?.[TRIGGER_EVIDENCE[triggerEvent]];
   return typeof at === 'string' && Number.isFinite(Date.parse(at)) ? new Date(at).toISOString() : null;
 }
 function addDays(at, days) { return new Date(Date.parse(at) + days * 86_400_000).toISOString(); }

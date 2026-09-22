@@ -537,6 +537,18 @@ function command(runId, operation) {
   return value;
 }
 
+/**
+ * Единственный способ, которым приёмка говорит с платформой, — настоящий HTTP.
+ *
+ * Аннотация здесь не косметика: без неё TypeScript выводит тип параметра из одного лишь `method`,
+ * у которого есть значение по умолчанию, и каждый вызов с `token` считает ошибкой. Таких жалоб в
+ * этом файле накопилось три десятка, и все они об одном и том же.
+ *
+ * @param {typeof globalThis.fetch} fetchImpl
+ * @param {string} baseUrl
+ * @param {string} pathname
+ * @param {{ method?: string, token?: string, body?: unknown, idempotencyKey?: string }} [options]
+ */
 async function requestJson(fetchImpl, baseUrl, pathname, { method = 'GET', token, body, idempotencyKey } = {}) {
   if (typeof fetchImpl !== 'function') throw new Error('Fetch implementation is required');
   const headers = { accept: 'application/json' };

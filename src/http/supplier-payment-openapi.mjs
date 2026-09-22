@@ -1,6 +1,6 @@
 const SAFE_ID = '^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$';
 const CODE = '^[A-Z0-9][A-Z0-9._/-]{2,159}$';
-const TRIGGERS = ['order-confirmed', 'shipment-released'];
+const TRIGGERS = ['order-confirmed', 'production-started', 'ready-for-quality-control', 'shipment-released'];
 const STATUSES = ['planned', 'due', 'overdue', 'paid'];
 const errorResponse = { description: 'Domain or transport error', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } };
 const idempotency = { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 1, maxLength: 128, pattern: SAFE_ID } };

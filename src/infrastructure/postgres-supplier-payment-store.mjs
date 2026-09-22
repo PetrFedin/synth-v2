@@ -31,6 +31,21 @@ function view(client) {
       const row = result.rows[0];
       return row ? { releasedAt: new Date(row.releasedAt).toISOString(), releaseCode: row.releaseCode } : null;
     },
+    // Запуск в работу и готовность к контролю — события исполнения производства, и читаются они
+    // оттуда же, где живут: график их не копирует, иначе он мог бы утверждать, что пошив начат,
+    // когда он отменён.
+    async getProductionExecution(productionOrderNumber) {
+      const result = await client.query(
+        'SELECT started_at AS "startedAt", ready_for_qc_at AS "readyForQcAt" FROM production_executions WHERE production_order_number = $1',
+        [productionOrderNumber],
+      );
+      const row = result.rows[0];
+      if (!row) return null;
+      return {
+        startedAt: row.startedAt ? new Date(row.startedAt).toISOString() : null,
+        readyForQcAt: row.readyForQcAt ? new Date(row.readyForQcAt).toISOString() : null,
+      };
+    },
     async getScheduleByOrderNumber(productionOrderNumber) {
       const result = await client.query('SELECT payload FROM payment_schedules WHERE production_order_number = $1 FOR UPDATE', [productionOrderNumber]);
       return result.rows[0]?.payload;

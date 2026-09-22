@@ -6,17 +6,26 @@ const READ_ROLES = Object.freeze(['owner', 'admin', 'finance']);
 
 // График вместе с доказательствами наступления.
 //
-// The two events a milestone can follow are read alongside the schedule in one snapshot, because a
-// schedule read now and its evidence read a moment later can disagree — and the disagreement would
-// show as money owed for a lot that had just been rejected.
+// Все события, на которые может опираться веха, читаются рядом с графиком одним снимком: график,
+// прочитанный сейчас, и доказательство, прочитанное мгновением позже, могут разойтись — и
+// расхождение покажется как деньги, причитающиеся за партию, которую только что забраковали.
+//
+// Событий четыре, и каждое уже живёт в своей таблице: подтверждение заказа, запуск в работу и
+// готовность к контролю — в исполнении производства, выпуск отгрузки — в решении качества.
+// Копий график не держит: собственная копия события могла бы утверждать, что партия отгружена,
+// когда она не отгружена.
 const SELECT_SCHEDULE = `
   SELECT schedule.payload AS schedule,
          production_order.confirmed_at AS "confirmedAt",
+         execution.started_at AS "startedAt",
+         execution.ready_for_qc_at AS "readyForQcAt",
          (SELECT min(release.released_at) FROM quality_shipment_releases AS release
            WHERE release.production_order_number = schedule.production_order_number) AS "releasedAt"
     FROM payment_schedules AS schedule
     JOIN production_orders AS production_order
-      ON production_order.production_order_number = schedule.production_order_number`;
+      ON production_order.production_order_number = schedule.production_order_number
+    LEFT JOIN production_executions AS execution
+      ON execution.production_order_number = schedule.production_order_number`;
 
 export function createPostgresSupplierPaymentReader({ pool } = {}) {
   invariant(pool && typeof pool.connect === 'function', 'POSTGRES_POOL_REQUIRED', 'PostgreSQL pool is required');
@@ -59,6 +68,8 @@ function normalize(row) {
   return {
     schedule: row.schedule,
     confirmedAt: row.confirmedAt ? new Date(row.confirmedAt).toISOString() : null,
+    startedAt: row.startedAt ? new Date(row.startedAt).toISOString() : null,
+    readyForQcAt: row.readyForQcAt ? new Date(row.readyForQcAt).toISOString() : null,
     releasedAt: row.releasedAt ? new Date(row.releasedAt).toISOString() : null,
   };
 }

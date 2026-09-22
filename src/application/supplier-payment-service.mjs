@@ -37,7 +37,13 @@ export function createSupplierPaymentService({ store, clock = () => new Date().t
   // a schedule holding its own copy of them could say a lot shipped when it did not.
   async function evidenceFor(tx, order) {
     const release = await tx.getEarliestShipmentRelease(order.productionOrderNumber);
-    return Object.freeze({ confirmedAt: order.confirmedAt ?? null, releasedAt: release?.releasedAt ?? null });
+    const execution = await tx.getProductionExecution?.(order.productionOrderNumber) ?? null;
+    return Object.freeze({
+      confirmedAt: order.confirmedAt ?? null,
+      startedAt: execution?.startedAt ?? null,
+      readyForQcAt: execution?.readyForQcAt ?? null,
+      releasedAt: release?.releasedAt ?? null,
+    });
   }
 
   return Object.freeze({
@@ -97,13 +103,13 @@ export function createSupplierPaymentQueryService({ reader, clock = () => new Da
     async paymentScheduleForActor(actorId, productionOrderNumber) {
       const found = await reader.scheduleForActor(actorId, productionOrderNumber);
       invariant(found, 'PAYMENT_SCHEDULE_NOT_FOUND', 'Payment schedule not found', { productionOrderNumber });
-      return paymentScheduleView(found.schedule, { confirmedAt: found.confirmedAt, releasedAt: found.releasedAt, asOf: clock() });
+      return paymentScheduleView(found.schedule, { confirmedAt: found.confirmedAt, startedAt: found.startedAt, readyForQcAt: found.readyForQcAt, releasedAt: found.releasedAt, asOf: clock() });
     },
     async paymentSchedulesForActor(actorId) {
       const rows = await reader.schedulesForActor(actorId);
       invariant(Array.isArray(rows), 'PAYMENT_SCHEDULES_INVALID', 'Payment schedule listing is invalid');
       const asOf = clock();
-      return Object.freeze(rows.map((row) => paymentScheduleView(row.schedule, { confirmedAt: row.confirmedAt, releasedAt: row.releasedAt, asOf })));
+      return Object.freeze(rows.map((row) => paymentScheduleView(row.schedule, { confirmedAt: row.confirmedAt, startedAt: row.startedAt, readyForQcAt: row.readyForQcAt, releasedAt: row.releasedAt, asOf })));
     },
   });
 }

@@ -176,6 +176,18 @@ const DEMO_PAYMENT_SPLIT = [
   { triggerEvent: 'order-confirmed', shareBasisPoints: 3000, labelRu: 'Аванс при подтверждении заказа', labelEn: 'Deposit on order confirmation' },
   { triggerEvent: 'shipment-released', shareBasisPoints: 7000, labelRu: 'Остаток после допуска к отгрузке', labelEn: 'Balance after shipment release' },
 ];
+// Настоящий график пошива — четыре вехи на четырёх разных событиях, а не две на двух. Пока
+// платформа знала только подтверждение и выпуск отгрузки, «до двенадцати вех» оставалось словами:
+// все девять демонстрационных графиков вышли одинаковыми 30/70, потому что третью веху было не на
+// что повесить. Этот график ставится на заказ, выросший из потребности, и не переписывает прежние:
+// договорённость, по которой уже платили, задним числом не меняют.
+const DEMO_STAGED_PAYMENT_SPLIT = [
+  { triggerEvent: 'order-confirmed', shareBasisPoints: 2000, labelRu: 'Задаток при подтверждении заказа', labelEn: 'Deposit on order confirmation' },
+  { triggerEvent: 'production-started', shareBasisPoints: 3000, labelRu: 'Платёж при запуске в работу', labelEn: 'Payment on production start' },
+  { triggerEvent: 'ready-for-quality-control', shareBasisPoints: 3000, labelRu: 'Платёж по готовности к контролю', labelEn: 'Payment on readiness for inspection' },
+  { triggerEvent: 'shipment-released', shareBasisPoints: 2000, labelRu: 'Остаток после допуска к отгрузке', labelEn: 'Balance after shipment release' },
+];
+const DEMO_STAGED_PAYMENT_PO = 'PO-DEMAND-001';
 const DEMO_LOT_RFQ = 'RFQ-SYN_JKT_R3_MID_M';
 const DEMO_LOT_PO = 'PO-SYN_JKT_R3_MID_M';
 // Линейный план сезона. Цены — в рублях, той же валюте, в которой назначена целевая цена: план и
@@ -378,6 +390,7 @@ try {
   await ensureCuttingSpread(runtime, pool, brandId, accounts.owner);
   await ensureTargetPricing(runtime, pool, brandId, accounts.owner);
   await ensureAssortmentPlan(runtime, pool, brandId, accounts.owner);
+  await ensureStagedPaymentSchedule(runtime, pool, brandId, accounts.owner);
   await ensurePaymentSchedules(runtime, pool, brandId, accounts.owner);
 
   // Inspections sat at review-pending because the only account in the brand was the one that ran
@@ -1342,6 +1355,61 @@ async function ensureAssortmentPlan(runtime, pool, brandId, actorId) {
   }
 }
 
+// Заказ, выросший из подтверждённой потребности, проводится до запуска в работу и получает график
+// из четырёх вех. Смысл именно в разных состояниях: подтверждение и запуск уже наступили, а
+// готовность к контролю и выпуск отгрузки — ещё нет, поэтому финансист видит на одном экране и
+// «причитается», и «запланировано». График из двух вех такого показать не может.
+async function ensureStagedPaymentSchedule(runtime, pool, brandId, actorId) {
+  const row = (await pool.query(
+    'SELECT payload FROM production_orders WHERE production_order_number = $1 AND brand_id = $2',
+    [DEMO_STAGED_PAYMENT_PO, brandId],
+  )).rows[0];
+  if (!row) { note('staged payments', `${DEMO_STAGED_PAYMENT_PO} не найден — этапный график ставить не на что`); return; }
+
+  let order = row.payload;
+  try {
+    if (order.status === 'draft') {
+      order = await runtime.productionOrders.issue(command('staged-po-issue'), actorId, DEMO_STAGED_PAYMENT_PO, { expectedVersion: order.version });
+    }
+    if (order.status === 'issued') {
+      order = await runtime.productionOrders.confirm(command('staged-po-confirm'), actorId, DEMO_STAGED_PAYMENT_PO, {
+        expectedVersion: order.version,
+        supplierCode: order.supplierCode,
+        confirmationReference: `CONF-${DEMO_STAGED_PAYMENT_PO}`,
+        confirmedBy: 'Mei Lin',
+        notes: 'Фабрика подтвердила объём и сроки по потребности сезона.',
+      });
+      note('staged payments', `${DEMO_STAGED_PAYMENT_PO} подтверждён фабрикой ${order.supplierCode}`);
+    }
+  } catch (error) {
+    note('staged payments', `${DEMO_STAGED_PAYMENT_PO} не проведён (${error.code ?? error.message})`);
+    return;
+  }
+  if (order.status !== 'confirmed') { note('staged payments', `${DEMO_STAGED_PAYMENT_PO} в состоянии ${order.status}`); return; }
+
+  let execution = (await pool.query('SELECT payload FROM production_executions WHERE production_order_number = $1', [DEMO_STAGED_PAYMENT_PO])).rows[0]?.payload;
+  try {
+    if (!execution) {
+      execution = await runtime.productionExecutions.createFromProductionOrder(command('staged-exec-create'), actorId, DEMO_STAGED_PAYMENT_PO);
+    }
+    if (execution.status === 'planned') {
+      execution = await runtime.productionExecutions.start(command('staged-exec-start'), actorId, execution.executionCode, { expectedVersion: execution.version });
+      note('staged payments', `исполнение ${execution.executionCode} запущено`);
+    }
+  } catch (error) {
+    note('staged payments', `исполнение не запущено (${error.code ?? error.message})`);
+  }
+
+  const existing = await pool.query('SELECT 1 FROM payment_schedules WHERE production_order_number = $1', [DEMO_STAGED_PAYMENT_PO]);
+  if (existing.rowCount) { note('staged payments', 'этапный график уже составлен'); return; }
+  try {
+    await runtime.supplierPayments.createSchedule(command('staged-payment-schedule'), actorId, DEMO_STAGED_PAYMENT_PO, { split: DEMO_STAGED_PAYMENT_SPLIT });
+    note('staged payments', `${DEMO_STAGED_PAYMENT_PO}: график из ${DEMO_STAGED_PAYMENT_SPLIT.length} вех составлен`);
+  } catch (error) {
+    note('staged payments', `график не составлен (${error.code ?? error.message})`);
+  }
+}
+
 async function ensurePaymentSchedules(runtime, pool, brandId, actorId) {
   const orders = await pool.query(
     `SELECT production_order.production_order_number AS number
@@ -1351,8 +1419,10 @@ async function ensurePaymentSchedules(runtime, pool, brandId, actorId) {
       WHERE production_order.brand_id = $1
         AND production_order.status = 'confirmed'
         AND schedule.id IS NULL
+        -- У заказа из потребности свой, этапный график: общий 30/70 его бы перехватил.
+        AND production_order.production_order_number <> $2
       ORDER BY production_order.production_order_number`,
-    [brandId],
+    [brandId, DEMO_STAGED_PAYMENT_PO],
   );
   let drawn = 0;
   for (const row of orders.rows) {
@@ -1368,12 +1438,17 @@ async function ensurePaymentSchedules(runtime, pool, brandId, actorId) {
   // Платим то, что действительно наступило, и ничего сверх.
   const schedules = await runtime.supplierPayments.paymentSchedulesForActor(actorId);
   let paid = 0;
-  for (const schedule of schedules) {
-    for (const milestone of schedule.milestones) {
-      if (milestone.status !== 'due' && milestone.status !== 'overdue') continue;
+  for (const listed of schedules) {
+    // График перечитывается перед каждой оплатой: каждая поднимает его версию, и вторая оплата по
+    // снимку падала бы конфликтом версий. На графике из двух вех это не проявлялось — наступившая
+    // веха там бывала одна, — и всплыло ровно тогда, когда вех стало четыре.
+    for (const listedMilestone of listed.milestones) {
+      if (listedMilestone.triggerEvent === 'shipment-released') continue;
+      const schedule = await runtime.supplierPayments.paymentScheduleForActor(actorId, listed.productionOrderNumber);
+      const milestone = schedule.milestones.find((candidate) => candidate.sequence === listedMilestone.sequence);
+      if (!milestone || (milestone.status !== 'due' && milestone.status !== 'overdue')) continue;
       // Остаток оставляем неоплаченным там, где он только что наступил: демонстрация должна
       // показывать и «оплачено», и «причитается», иначе экран рассказывает только одну половину.
-      if (milestone.triggerEvent === 'shipment-released') continue;
       try {
         await runtime.supplierPayments.recordPayment(command('payment-pay'), actorId, schedule.productionOrderNumber, {
           expectedVersion: schedule.version, sequence: milestone.sequence,

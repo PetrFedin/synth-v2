@@ -104,3 +104,60 @@ test('The database holds the two rules that money cannot be trusted to code alon
   // Наступление срока не хранится: нет ни колонки статуса, ни колонки due_at.
   assert.ok(!/due_at|milestone_status/.test(sql), 'due-ness is derived from the event, never stored beside it');
 });
+
+test('A schedule can follow four events, because four events are what the platform records', async () => {
+  // «До двенадцати вех» оставалось словами: платформа знала два события, поэтому все девять
+  // графиков демонстрации вышли одинаковыми 30/70 — третью веху было не на что повесить.
+  const STARTED_AT = '2026-10-05T10:00:00.000Z';
+  const READY_AT = '2026-12-01T10:00:00.000Z';
+  const staged = [
+    { triggerEvent: 'order-confirmed', shareBasisPoints: 2000, labelRu: 'Задаток', labelEn: 'Deposit' },
+    { triggerEvent: 'production-started', shareBasisPoints: 3000, labelRu: 'Запуск', labelEn: 'Start' },
+    { triggerEvent: 'ready-for-quality-control', shareBasisPoints: 3000, labelRu: 'Готовность', labelEn: 'Ready' },
+    { triggerEvent: 'shipment-released', shareBasisPoints: 2000, labelRu: 'Остаток', labelEn: 'Balance' },
+  ];
+  const value = createPaymentSchedule({ id: 'schedule-4', productionOrder: order, supplier, split: staged, createdAt: CONFIRMED_AT, actorId: 'finance' });
+  assert.equal(value.milestones.length, 4);
+  // Доли делятся без потери копейки: остаток лежит на последней вехе.
+  assert.equal(value.milestones.reduce((total, milestone) => total + milestone.amountMinor, 0), 2_125_000);
+
+  // Каждое событие смотрит в собственное доказательство, а не «всё, что не подтверждение».
+  const view = paymentScheduleView(value, {
+    confirmedAt: CONFIRMED_AT, startedAt: STARTED_AT, readyForQcAt: null, releasedAt: null,
+    asOf: '2026-10-06T10:00:00.000Z',
+  });
+  assert.deepEqual(view.milestones.map((milestone) => milestone.status), ['due', 'due', 'planned', 'planned']);
+  assert.equal(view.milestones[1].triggerOccurredAt, STARTED_AT);
+  assert.equal(view.milestones[2].triggerOccurredAt, null);
+
+  // Наступившее событие открывает свою веху и не открывает соседнюю.
+  const later = paymentScheduleView(value, {
+    confirmedAt: CONFIRMED_AT, startedAt: STARTED_AT, readyForQcAt: READY_AT, releasedAt: null,
+    asOf: '2026-12-02T10:00:00.000Z',
+  });
+  // К этому дню отсрочка в 45 дней по первым двум вехам уже вышла — они просрочены, а не просто
+  // причитаются; третья только что наступила, четвёртой ещё не на чем наступить.
+  assert.deepEqual(later.milestones.map((milestone) => milestone.status), ['overdue', 'overdue', 'due', 'planned']);
+
+  // Платить за то, чего не произошло, по-прежнему нельзя — на каждом из новых событий тоже.
+  assert.equal(
+    codeOf(() => recordPayment(value, {
+      sequence: 3, paidAt: '2026-10-06T10:00:00.000Z', reference: 'PP-3', actorId: 'finance',
+      evidence: { confirmedAt: CONFIRMED_AT, startedAt: STARTED_AT, readyForQcAt: null, releasedAt: null },
+    })),
+    'PAYMENT_TRIGGER_HAS_NOT_HAPPENED',
+  );
+});
+
+test('The database witnesses each of the four events in its own register', async () => {
+  // Правило живёт и в домене, и в базе — и именно поэтому расхождение нашлось живой оплатой:
+  // ветка ELSE в триггере считала допуском к отгрузке всё, что не подтверждение заказа, поэтому
+  // веха «запуск в работу» искала дату в выпусках отгрузки и отвергалась, хотя чтение показывало
+  // её наступившей.
+  const migration = await readFile(path.join(root, 'db/migrations/131_payment_milestones_know_four_events.sql'), 'utf8');
+  assert.match(migration, /NEW\.trigger_event = 'production-started'[\s\S]*?SELECT started_at INTO occurred FROM production_executions/);
+  assert.match(migration, /NEW\.trigger_event = 'ready-for-quality-control'[\s\S]*?SELECT ready_for_qc_at INTO occurred FROM production_executions/);
+  // Неизвестное событие отвергается, а не молча приравнивается к отгрузке: следующее добавленное
+  // событие сломает оплату громко, а не тихо.
+  assert.match(migration, /PAYMENT_TRIGGER_UNKNOWN/);
+});

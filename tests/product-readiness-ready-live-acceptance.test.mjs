@@ -175,6 +175,18 @@ test('positive Product Identity to Readiness acceptance creates governed categor
           version: 2,
         },
       },
+      // Готовность по атрибутам больше не принимается на слово, поэтому приёмка заводит настоящее
+      // управляемое значение — и двойник обязан знать об этом запросе, иначе он проверяет не тот
+      // маршрут, которым платформа теперь идёт.
+      ['POST /v2/product/attributes']: {
+        data: {
+          id: 'product-attribute-value:ready-acceptance',
+          brandId,
+          ownerType: 'style_version',
+          ownerId: IDS.styleVersionId,
+          attributeCode: 'apparel.fabric_type',
+        },
+      },
       [`POST /v2/product/style-versions/${IDS.styleVersionId}/readiness`]: {
         data: {
           id: IDS.readinessSnapshotId,
@@ -211,7 +223,9 @@ test('positive Product Identity to Readiness acceptance creates governed categor
   assert.equal(result.isolation.downstreamUnchanged, true);
 
   const mutations = requests.filter((request) => request.method === 'POST');
-  assert.equal(mutations.length, 11);
+  // Двенадцатая мутация — управляемое значение атрибута: измерение «атрибуты» больше не проходит
+  // подтверждением в теле запроса, и приёмка обязана завести то, что подтверждает.
+  assert.equal(mutations.length, 12);
   for (const request of mutations) {
     assert.match(request.headers['idempotency-key'], /^acceptance-ready-002-/);
     assert.equal(request.headers.authorization, 'Bearer opaque-test-token');

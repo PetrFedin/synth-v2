@@ -36,7 +36,7 @@ export const WORKSPACE_CURSOR_POSITION_LENGTHS = Object.freeze({
   productStyles: 2,
   placeholders: 2,
   colorways: 2,
-  media: 2,
+  media: 1,
   catalogSkus: 1,
   showrooms: 3,
   cycles: 3,

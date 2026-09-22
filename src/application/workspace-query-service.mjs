@@ -19,7 +19,10 @@ const SORT_FIELDS = Object.freeze({
   productStyles: Object.freeze([['styleCode', 'asc'], ['id', 'asc']]),
   placeholders: Object.freeze([['placeholderCode', 'asc'], ['id', 'asc']]),
   colorways: Object.freeze([['article', 'asc'], ['id', 'asc']]),
-  media: Object.freeze([['styleVersionId', 'asc'], ['colorwayId', 'asc']]),
+  // Единственный раздел без собственного «замка»: пара (styleVersionId, colorwayId) не ключ, и
+  // у строки уровня стиля colorwayId пуст, из-за чего курсор не выпускался вовсе. Вьюха строит
+  // уникальный id из этой же пары — по нему и листаем, как catalogSkus по sku.
+  media: Object.freeze([['id', 'asc']]),
   catalogSkus: Object.freeze([['sku', 'asc']]),
   showrooms: Object.freeze([['opensAt', 'desc'], ['name', 'asc'], ['id', 'asc']]),
   cycles: Object.freeze([['updatedAt', 'desc'], ['createdAt', 'desc'], ['id', 'asc']]),

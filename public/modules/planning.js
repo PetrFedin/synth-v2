@@ -329,11 +329,10 @@
 
   function renderLinePlan() {
     const rows = Array.isArray(state.workspace.placeholders) ? state.workspace.placeholders : [];
-    // The workspace stops at a page, and placeholders are not one of the sections that can be paged
-    // further yet. A register that quietly shows the first two hundred of a thousand-slot season is
-    // worse than one that shows nothing: the count looks like the plan. Until placeholders can be
-    // paged, the screen says what it is holding back.
-    const truncated = state.workspace.pageInfo?.truncatedSections?.includes('placeholders');
+    // Реестр, показывающий первые двести слотов тысячного сезона, опаснее пустого: счётчик выглядит
+    // как план. Раньше экран мог только сказать об этом — плейсхолдеры не листались на клиенте.
+    // Теперь листаются, и полоса продолжения внутри самого реестра и говорит, и даёт дочитать, так
+    // что отдельная плашка со своим советом «сузьте фильтр» здесь больше не нужна и не повторяется.
     if (!rows.length) {
       return notice(text(
         '\u0412 \u044d\u0442\u043e\u043c \u043f\u043e\u0440\u0442\u0444\u0435\u043b\u0435 \u0435\u0449\u0451 \u043d\u0435\u0442 \u043f\u043b\u0435\u0439\u0441\u0445\u043e\u043b\u0434\u0435\u0440\u043e\u0432. \u041f\u043b\u0435\u0439\u0441\u0445\u043e\u043b\u0434\u0435\u0440 \u2014 \u044d\u0442\u043e \u0437\u0430\u043f\u043b\u0430\u043d\u0438\u0440\u043e\u0432\u0430\u043d\u043d\u043e\u0435 \u043c\u0435\u0441\u0442\u043e \u0432 \u0430\u0441\u0441\u043e\u0440\u0442\u0438\u043c\u0435\u043d\u0442\u0435: \u0435\u0433\u043e \u0437\u0430\u0432\u043e\u0434\u044f\u0442 \u0434\u043e \u0442\u043e\u0433\u043e, \u043a\u0430\u043a \u043f\u043e\u044f\u0432\u0438\u0442\u0441\u044f \u043c\u043e\u0434\u0435\u043b\u044c.',
@@ -376,17 +375,9 @@
     const summary = document.createDocumentFragment();
     for (const campaign of campaigns) summary.append(seasonCard(campaign.id, campaign.name));
 
-    if (!truncated) {
-      const page = document.createDocumentFragment();
-      page.append(summary, registry);
-      return page;
-    }
-    const panel = document.createDocumentFragment();
-    panel.append(notice(text(
-      `Показаны первые ${rows.length} слотов — в кампании их больше. Сузьте фильтр или откройте конкретную кампанию.`,
-      `Showing the first ${rows.length} slots — the campaign holds more. Narrow the filter or open one campaign.`,
-    )), summary, registry);
-    return panel;
+    const page = document.createDocumentFragment();
+    page.append(summary, registry);
+    return page;
   }
 
   // The command bar's action belongs to the tab a person is looking at. On the line plan, the thing

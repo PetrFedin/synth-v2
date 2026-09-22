@@ -1,9 +1,15 @@
 (function initializeWorkspacePagination(global) {
   'use strict';
 
+  // Порядок и состав повторяют WORKSPACE_SECTION_NAMES на сервере. Это не стилистика: `reset()`
+  // отбрасывает всё, чего нет в этом списке, — молча, без ошибки. Пока здесь не было
+  // `placeholders`, `colorways` и `media`, сервер объявлял их обрезанными и выдавал курсор, а
+  // клиент выбрасывал его и показывал первую сотню как всё, что есть. Тест держит оба списка
+  // равными, чтобы следующий добавленный раздел не пропал тем же способом.
   const SECTIONS = Object.freeze([
     'memberships', 'organisations', 'relationships', 'invitations', 'campaigns', 'collections',
-    'productStyles', 'catalogSkus', 'showrooms', 'cycles', 'selections', 'orders', 'deals', 'calendar',
+    'productStyles', 'placeholders', 'colorways', 'media', 'catalogSkus', 'showrooms', 'cycles',
+    'selections', 'orders', 'deals', 'calendar',
   ]);
   const SECTION_SET = new Set(SECTIONS);
   const DEFAULT_PAGE_LIMIT = 100;

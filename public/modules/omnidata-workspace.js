@@ -1028,6 +1028,54 @@ function odInspector({ title, subtitle = '', status = '', preview = false, tabs 
   return node;
 }
 
+// Какой реестр каким разделом рабочего пространства продолжается — одна таблица на весь интерфейс.
+// Реестры со своим источником чтения (материалы, библиотеки, портал поставщика, сводка планирования)
+// сюда не входят: их продолжает их собственный модуль, а не постраничное чтение рабочего стола.
+const OD_REGISTRY_SECTIONS = Object.freeze({
+  'od-campaigns': 'campaigns',
+  'od-collections': 'collections',
+  'od-sku': 'catalogSkus',
+  'od-styles': 'productStyles',
+  'od-line-plan': 'placeholders',
+  'od-invitations': 'invitations',
+  'od-partner-invitations': 'invitations',
+  'od-cycles': 'cycles',
+  'od-linesheets': 'showrooms',
+  'od-roles': 'memberships',
+  'od-relationships': 'relationships',
+  'od-selections': 'selections',
+  'od-orders': 'orders',
+  'od-deals': 'deals',
+  'od-calendar': 'calendar',
+});
+
+// Реестр, прочитанный наполовину, опаснее пустого: счётчик выглядит как итог, а фильтр и поиск
+// честно работают — но по загруженному. Полоса говорит об этом прямо и даёт дочитать: страницу или
+// всё. Она собрана из готовых элементов системы (`od-filter-chips`, `od-filter-chip`), поэтому не
+// заводит нового слоя стилей и не сдвигает ключ кеша.
+function odContinuation(scope, shown) {
+  const section = OD_REGISTRY_SECTIONS[scope];
+  const paging = window.SynthaWorkspaceController;
+  if (!section || !paging?.hasMore(section)) return null;
+  const status = paging.status(section);
+  const strip = el('div', { className: 'od-filter-chips od-continuation' });
+  strip.append(el('span', { className: 'muted', rawText: status.state === 'error'
+    ? odText(`\u041f\u043e\u043a\u0430\u0437\u0430\u043d\u043e ${shown} \u2014 \u0434\u043e\u0447\u0438\u0442\u0430\u0442\u044c \u043e\u0441\u0442\u0430\u043b\u044c\u043d\u043e\u0435 \u043d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c.`, `Showing ${shown} — the rest could not be read.`)
+    : odText(`\u041f\u043e\u043a\u0430\u0437\u0430\u043d\u043e ${shown} \u2014 \u0440\u0435\u0435\u0441\u0442\u0440 \u043f\u0440\u043e\u0447\u0438\u0442\u0430\u043d \u043d\u0435 \u0434\u043e \u043a\u043e\u043d\u0446\u0430. \u0424\u0438\u043b\u044c\u0442\u0440 \u0438 \u043f\u043e\u0438\u0441\u043a \u0438\u0434\u0443\u0442 \u043f\u043e \u043f\u0440\u043e\u0447\u0438\u0442\u0430\u043d\u043d\u043e\u043c\u0443.`, `Showing ${shown} — the register is not read to the end. Filter and search cover what is read.`) }));
+  if (status.state === 'loading') {
+    strip.append(el('span', { className: 'od-filter-chip', rawText: odText('\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430\u2026', 'Loading\u2026') }));
+    return strip;
+  }
+  const more = el('button', { className: 'od-filter-chip', type: 'button', rawText: status.state === 'error'
+    ? odText('\u041f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u044c', 'Retry')
+    : odText('\u0417\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c \u0435\u0449\u0451', 'Load more') });
+  more.addEventListener('click', () => { void paging.loadNext(section); });
+  const all = el('button', { className: 'od-filter-chip clear', type: 'button', rawText: odText('\u0414\u043e\u0447\u0438\u0442\u0430\u0442\u044c \u0432\u0441\u0451', 'Read all') });
+  all.addEventListener('click', () => { void paging.drain(section); });
+  strip.append(more, all);
+  return strip;
+}
+
 function odRegistry({ scope, rows, columns, inspector, filterScope = scope, rowKey, statusAccessor }) {
   // Remember what this registry is showing. The filter panel is built from the registry's own
   // columns and rows, so every registry gains attribute filtering without being configured for it.
@@ -1041,6 +1089,8 @@ function odRegistry({ scope, rows, columns, inspector, filterScope = scope, rowK
   if (crumbs) master.append(crumbs);
   const chips = odFilterChips(filterScope);
   if (chips) master.append(chips);
+  const continuation = odContinuation(scope, filtered.length);
+  if (continuation) master.append(continuation);
   if (OD_UI.filterPanel === filterScope) master.append(odFilterPanel(filterScope));
   if (OD_UI.columnPanel === filterScope) master.append(odColumnPanel(filterScope));
   if (OD_UI.hierarchyPanel === filterScope) master.append(odHierarchyPanel(filterScope));

@@ -10,6 +10,11 @@ import { createPostgresProductIdentityStore } from '../../src/infrastructure/pos
 const { Pool } = pg;
 const connectionString = process.env.POSTGRES_TEST_URL;
 const dataset = JSON.parse(await fs.readFile(new URL('../../mdm/reference/russia-fashion-core.json', import.meta.url), 'utf8'));
+// Ожидания считаются по самому набору, а не вписаны числом: когда в него добавили справочник,
+// тест упал на «6 !== 5», хотя загрузчик отработал верно. Проверять надо, что загружено ровно
+// то, что описано, — это остаётся правдой при любом размере набора.
+const EXPECTED_DICTIONARIES = dataset.dictionaries.length;
+const EXPECTED_ENTRIES = dataset.dictionaries.reduce((total, dictionary) => total + (dictionary.entries?.length ?? 0), 0);
 
 test('Russia fashion reference core bootstraps idempotently and is readable by Product Identity', async () => {
   assert.ok(connectionString, 'POSTGRES_TEST_URL is required for PostgreSQL integration tests');
@@ -19,14 +24,14 @@ test('Russia fashion reference core bootstraps idempotently and is readable by P
     await migratePostgres({ pool, migrationsDir });
 
     const first = await bootstrapMdmReference({ pool, datasets: [dataset], actorId: 'test:mdm-bootstrap' });
-    assert.equal(first.insertedDictionaries + first.existingDictionaries + first.evolvedDictionaries, 5);
-    assert.equal(first.insertedEntries + first.existingEntries + first.evolvedEntries, 54);
+    assert.equal(first.insertedDictionaries + first.existingDictionaries + first.evolvedDictionaries, EXPECTED_DICTIONARIES);
+    assert.equal(first.insertedEntries + first.existingEntries + first.evolvedEntries, EXPECTED_ENTRIES);
 
     const second = await bootstrapMdmReference({ pool, datasets: [dataset], actorId: 'test:mdm-bootstrap-replay' });
     assert.equal(second.insertedDictionaries, 0);
     assert.equal(second.insertedEntries, 0);
-    assert.equal(second.existingDictionaries + second.evolvedDictionaries, 5);
-    assert.equal(second.existingEntries + second.evolvedEntries, 54);
+    assert.equal(second.existingDictionaries + second.evolvedDictionaries, EXPECTED_DICTIONARIES);
+    assert.equal(second.existingEntries + second.evolvedEntries, EXPECTED_ENTRIES);
 
     const store = createPostgresProductIdentityStore({ pool });
     const resolved = await store.transaction(async (tx) => ({

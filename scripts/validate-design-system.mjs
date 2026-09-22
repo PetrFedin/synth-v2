@@ -12,7 +12,9 @@ const adapterRuntime=await source('public/modules/omnidata-v14-module-adapters.j
 const adapterCss=await source('public/omnidata-v14-module-adapters.css');
 const DESIGN_SYSTEM='omnidata-design-system-v1';
 const VERSION='1.0.0';
-const RUNTIME_BUILD='visual-20260806-14-role-system-1';
+// Ключ кеша таблицы стилей ODS и её рантайма — один на двоих: они меняются вместе, иначе
+// браузер получит новую разметку со старым оформлением или наоборот.
+const RUNTIME_BUILD='visual-20260922-14-role-system-2';
 const ROLES=['table','filterbar','card','status','inspector','button','field'];
 const PARTS=['page-header','table-wrap','table','filterbar','toolbar','header-toolbar','section-head','tabs','pagination','breadcrumb','card','surface','form','metrics','metric','layout','master-detail','list','list-item','definition-grid','definition-item','timeline','timeline-item','progress','progress-track','progress-fill','empty','alert','toast'];
 const CRITICAL_STYLED_PARTS=['page-header','table-wrap','filterbar','toolbar','card','surface','form','metrics','metric','layout','master-detail','list','list-item','definition-grid','definition-item','timeline','timeline-item','progress','progress-track','progress-fill','empty','alert'];

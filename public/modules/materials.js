@@ -573,10 +573,14 @@ function palettePanel(item) {
     ], ['draft', 'published'], materialText('\u041f\u043e\u0438\u0441\u043a \u043f\u043e \u043a\u043e\u0434\u0443, \u043d\u0430\u0437\u0432\u0430\u043d\u0438\u044e \u0438\u043b\u0438 \u043f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a\u0443', 'Search code, name or supplier'), canCreate ? odAction(materialText('\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b', 'Create material'), materialCreateForm) : null);
 
     if (materialState.error && !materialState.items.length) {
-      const retry = el('button', { className: 'button primary', type: 'button', rawText: materialText('\u041f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u044c', 'Retry') });
-      retry.addEventListener('click', () => { void loadMaterials({ reset: true }); });
+      // Повтор предлагается только там, где он может помочь: отказ по правам вернётся тем же.
       const body = el('div', { className: 'material-state' });
-      body.append(notice(materialState.error, 'error'), retry);
+      body.append(notice(materialState.error, 'error'));
+      if (!isForbiddenText(materialState.error)) {
+        const retry = el('button', { className: 'button primary', type: 'button', rawText: materialText('\u041f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u044c', 'Retry') });
+        retry.addEventListener('click', () => { void loadMaterials({ reset: true }); });
+        body.append(retry);
+      }
       return odPage(materialText('\u041c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u044b \u0438 \u0444\u0443\u0440\u043d\u0438\u0442\u0443\u0440\u0430', 'Materials and trims'), header, body);
     }
     if (!materialState.loaded && materialState.loading) {

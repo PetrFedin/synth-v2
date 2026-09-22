@@ -1,7 +1,7 @@
 (function installOmnidataDesignSystemV1(global){
   'use strict';
 
-  const BUILD='visual-20260806-14-role-system-1';
+  const BUILD='visual-20260922-14-role-system-2';
   const DESIGN_SYSTEM='omnidata-design-system-v1';
   const VERSION='1.0.0';
   const CORE_ROLES=Object.freeze(['table','filterbar','card','status','inspector','button','field']);

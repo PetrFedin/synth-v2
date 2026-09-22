@@ -881,3 +881,11 @@ body.omnidata-role-system .od-hierarchy-total{margin:10px 0 0!important;padding-
 body.omnidata-v14 [data-od14-component="filterbar"] :is([data-od14-component="button"],[data-od14-component="icon-button"]).od-column-move,
 body.omnidata-role-system [data-ods-role="filterbar"] [data-ods-role="button"]:is([data-ods-part="button"],[data-ods-part="icon-button"]).od-column-move,
 body.omnidata-design-system-v1 [data-ods-role="filterbar"] [data-ods-role="button"]:is([data-ods-part="button"],[data-ods-part="icon-button"]).od-column-move{flex:0 0 22px!important;width:22px!important;min-width:22px!important;height:22px!important;min-height:22px!important;padding:0!important;line-height:1!important}
+
+/* Отказ по правам — состояние раздела, а не сбой.
+   Красная плашка «не удалось загрузить» предлагает повторить, а повторять нечего: роль та же.
+   Нейтральный тон и замок говорят, что раздел существует и закрыт, — это другая новость. */
+body.omnidata-design-system-v1 .notice.denied,
+body.omnidata-role-system .notice.denied{display:flex!important;align-items:center!important;gap:8px!important;border:1px solid var(--ods-color-border)!important;border-left:3px solid var(--ods-color-text-muted,#656c79)!important;background:var(--ods-color-surface-muted,#f5f6f8)!important;color:var(--ods-color-text,#1f2430)!important}
+body.omnidata-design-system-v1 .notice.denied::before,
+body.omnidata-role-system .notice.denied::before{content:'\1F512'!important;font-size:13px!important;opacity:.7!important}

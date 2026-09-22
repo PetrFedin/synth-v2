@@ -30,7 +30,7 @@ test('Samples local stylesheet is retired from shell and static delivery', () =>
   assert.doesNotMatch(html, /href="\/samples\.css(?:\?|\")/);
   assert.doesNotMatch(handler, /['"]\/samples\.css['"]\s*:/);
   assert.match(html, /omnidata-v14-module-adapters\.css\?v=visual-20260805-14-module-adapters-5/);
-  assert.match(html, /omnidata-v14-role-system\.css\?v=visual-20260806-14-role-system-1/);
+  assert.match(html, /omnidata-v14-role-system\.css\?v=visual-20260922-14-role-system-2/);
 });
 
 test('Samples V8 dependency order is core, workspace, catalog guard, language audit, V8 and startup', () => {

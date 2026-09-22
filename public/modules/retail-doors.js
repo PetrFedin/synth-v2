@@ -34,14 +34,25 @@ async function hydrateRetailDoorWorkspace(card, shops) {
     if (count) count.textContent = String(rows.length);
   } catch (error) {
     clear(stack);
-    const failure = notice(`${localText('Не удалось загрузить торговые точки:', 'Could not load retail doors:')} ${error.message}`, 'error');
-    const retry = el('button', { className: 'button small', rawText: localText('Повторить', 'Retry'), type: 'button' });
-    retry.addEventListener('click', () => {
-      clear(stack);
-      stack.append(empty(localText('Загрузка торговых точек…', 'Loading retail doors…')));
-      void hydrateRetailDoorWorkspace(card, shops);
-    });
-    stack.append(failure, retry);
+    // Отказ по правам не префиксуется и не предлагает повтор: «не удалось загрузить» — неправда,
+    // раздел прочитан и закрыт, а повтор той же ролью вернёт тот же отказ.
+    const denied = isForbiddenText(error.message);
+    const failure = notice(
+      denied
+        ? error.message
+        : `${localText('Не удалось загрузить торговые точки:', 'Could not load retail doors:')} ${error.message}`,
+      'error',
+    );
+    stack.append(failure);
+    if (!denied) {
+      const retry = el('button', { className: 'button small', rawText: localText('Повторить', 'Retry'), type: 'button' });
+      retry.addEventListener('click', () => {
+        clear(stack);
+        stack.append(empty(localText('Загрузка торговых точек…', 'Loading retail doors…')));
+        void hydrateRetailDoorWorkspace(card, shops);
+      });
+      stack.append(retry);
+    }
     if (count) count.textContent = '0';
   }
 }

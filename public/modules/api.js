@@ -32,10 +32,23 @@ async function api(path, { method = 'GET', body, anonymous = false, signal } = {
         // and for logging; the message the user reads is a sentence. Some services prefix their own
         // message with the code — "UI_PREVIEW_READ_ONLY: Public preview is read-only." — which put
         // the code back in front of the reader through every form and toast, so strip it here.
-        const message = stripDiagnosticPrefix(payload.error?.message) || I18N.t('common.requestError');
+        // Отказ по правам — не сбой, и читаться он должен иначе.
+        //
+        // Транспорт знал только 401: всё остальное приходило на экран как ошибка загрузки, то есть
+        // «у вас нет прав» выглядело неотличимо от обрыва сети. Человек в этот момент жмёт
+        // «обновить», хотя повтор ничего не изменит, пока роль та же.
+        //
+        // Сообщение службы при этом английское и написано для того, кто читает журнал, а не для
+        // того, кто сидит за экраном; для 403 оно заменяется фразой на языке читателя. Код и
+        // детали остаются на ошибке — по ним ветвятся вызывающие и по ним же ищут в журнале.
+        const forbidden = response.status === 403;
+        const message = forbidden
+          ? I18N.t('common.forbidden')
+          : stripDiagnosticPrefix(payload.error?.message) || I18N.t('common.requestError');
         const error = new Error(message);
         error.code = code;
         error.status = response.status;
+        if (forbidden) error.forbidden = true;
         error.details = payload.error?.details || {};
         throw error;
       }

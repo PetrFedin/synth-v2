@@ -187,7 +187,22 @@ function actionButton(label, fn, variant = '', confirmText = '') {
 }
 
 function statusBadge(status) { return el('span', { className: `badge ${String(status).toLowerCase()}`, rawText: statusLabel(status) }); }
-function notice(text, type = '') { return el('div', { className: `notice ${type}`.trim(), text }); }
+// Отказ по правам показывается как **состояние раздела**, а не как ошибка: красная плашка «не
+// удалось загрузить» предлагает повторить, а повторять нечего — роль та же. Отдельный вид говорит,
+// что раздел существует и закрыт, и это разные новости.
+//
+// Разделы хранят от упавшего запроса **только текст**, без самой ошибки, поэтому признак отказа
+// приходится узнавать по нему. Это не разбор прозы: сравнение идёт с той же строкой, которую в
+// этом же рантайме выдал `I18N.t('common.forbidden')` — транспорт ставит её сам и только на 403.
+// Если строка когда-нибудь разойдётся, плашка вернётся к обычному виду ошибки, то есть к тому, что
+// было до этой правки: деградация молчаливая и безопасная.
+function isForbiddenText(text) {
+  return typeof text === 'string' && text === I18N.t('common.forbidden');
+}
+function notice(text, type = '') {
+  const kind = type === 'error' && isForbiddenText(text) ? 'denied' : type;
+  return el('div', { className: `notice ${kind}`.trim(), text });
+}
 function empty(text) { return el('div', { className: 'empty', text }); }
 function dialogHost() { return el('dialog', { id: 'form-dialog' }); }
 

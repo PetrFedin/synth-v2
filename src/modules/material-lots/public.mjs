@@ -301,3 +301,36 @@ export function assertMaterialBelongsToGarment(lot, { execution, bom }) {
     });
   return lot.materialCode;
 }
+
+/**
+ * Отгрузка выпускается только тогда, когда известно, из чего она сшита.
+ *
+ * Партия материала ведётся ровно ради одного вопроса: если в носке вылезет дефект полотна, какие
+ * рулоны в нём были и куда ещё они ушли. Ответ на него собирается **до** отгрузки, потому что после
+ * неё собирать уже не из чего: товар у покупателя, а связи «эта отгрузка — эти рулоны» нет нигде.
+ *
+ * До этого правила выпуск на отгрузку не спрашивал о материале вообще: шесть отгрузок на 4800 штук
+ * были выпущены при нуле выдач материала. Учёт партий при этом велся — он просто ни на что не влиял.
+ *
+ * **Ведомость, которой нет, судить не может** — то же исключение, что и при самой выдаче. Если у
+ * изделия нет опубликованной спецификации, неизвестно даже, из чего оно должно состоять, и отказ
+ * остановил бы отгрузку по причине, к прослеживаемости отношения не имеющей. Когда ведомость есть —
+ * она и есть заявление «эта вещь сшита из материалов», и тогда отгрузить, не назвав ни одного
+ * рулона, значит потерять прослеживаемость навсегда.
+ *
+ * @param {{ executionCode?: string }} execution
+ * @param {{ lines?: any[] } | null} bom Опубликованная ведомость изделия, если она есть.
+ * @param {readonly any[]} issues Выдачи материала в это исполнение.
+ */
+export function assertShipmentIsTraceable(execution, bom, issues) {
+  const lines = Array.isArray(bom?.lines) ? bom.lines : null;
+  if (lines === null || lines.length === 0) return null;
+  const issued = Array.isArray(issues) ? issues : [];
+  invariant(issued.length > 0, 'QUALITY_RELEASE_WITHOUT_MATERIAL_TRACE',
+    'A shipment cannot be released before the material lots it was made from are recorded',
+    {
+      executionCode: execution?.executionCode ?? null,
+      billedMaterials: lines.map((line) => line?.materialCode).filter(Boolean),
+    });
+  return issued.map((issue) => issue?.lotReference).filter(Boolean);
+}

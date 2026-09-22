@@ -20,6 +20,7 @@ import {
 const START_FIELDS = Object.freeze(new Set(['expectedVersion','inspectorName','sampleSize','allowedMajorDefects','allowedMinorDefects','standardCode','inspectionLevel','aqlMajor','aqlMinor','samplingNote']));
 const REINSPECTION_FIELDS = Object.freeze(new Set([...START_FIELDS,'reworkReference','resolutionNotes']));
 const COMPLETE_FIELDS = Object.freeze(new Set(['expectedVersion','inspectedQuantity','defects','measurementFailures','checkpoints','evidenceReferences','notes']));
+import { assertShipmentIsTraceable } from '../modules/material-lots/public.mjs';
 const REVIEW_FIELDS = Object.freeze(new Set(['expectedVersion','decision','releaseCode','notes']));
 const CANCEL_FIELDS = Object.freeze(new Set(['expectedVersion','reason']));
 
@@ -151,6 +152,17 @@ export function createFinalQualityService({ store, clock = () => new Date().toIS
             { inspectionCode: current.inspectionCode, runNumber: current.currentRun, actorId },
           );
           const value = reviewQualityInspection(current, { ...withoutExpectedVersion(input), actorId, reviewedAt: clock() });
+          if (value.status === 'released') {
+            // Выпуск на отгрузку — последний момент, когда ещё можно записать, из каких рулонов
+            // сшита партия. После него товар у покупателя, а связи «эта отгрузка — эти рулоны»
+            // не будет нигде. Ведомость и выдачи читаются тем же снимком, что и сама инспекция.
+            const execution = await tx.getExecutionByCode(current.executionCode);
+            assertShipmentIsTraceable(
+              execution ?? { executionCode: current.executionCode },
+              execution?.sku ? await tx.getPublishedBomForSku(execution.sku) : null,
+              await tx.listMaterialLotIssuesForExecution(current.executionCode),
+            );
+          }
           await tx.saveInspection(value, expectedVersion);
           if (value.status === 'released') {
             await tx.insertShipmentRelease(Object.freeze({

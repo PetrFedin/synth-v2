@@ -11,7 +11,10 @@ const readyExecution = Object.freeze({
 });
 
 function fixture() {
-  const state = { inspection: null, commands: new Map(), outbox: [], releases: [], plans: demoPlans(), defectTypes: [] };
+  // `bom` и `lotIssues` — прослеживаемость до рулона: выпуск на отгрузку спрашивает, из каких партий
+  // материала сшита партия товара. По умолчанию опубликованной ведомости нет, и судить не о чем, —
+  // проверки, где она есть, задают её сами.
+  const state = { inspection: null, commands: new Map(), outbox: [], releases: [], plans: demoPlans(), defectTypes: [], bom: null, lotIssues: [] };
   const memberships = new Map([
     ['brand-1:owner', { organisationId: 'brand-1', organisationType: 'brand', userId: 'owner', role: 'owner', status: 'active' }],
     ['brand-1:admin', { organisationId: 'brand-1', organisationType: 'brand', userId: 'admin', role: 'admin', status: 'active' }],
@@ -34,6 +37,8 @@ function fixture() {
     insertCommand: async (value) => { state.commands.set(value.id, value); },
     appendOutbox: async (event) => { state.outbox.push(event); },
     listDefectTypes: async (brandId) => state.defectTypes.filter((type) => type.brandId === brandId),
+    getPublishedBomForSku: async () => state.bom,
+    listMaterialLotIssuesForExecution: async () => state.lotIssues,
     // The rows a brand holds. The lot in this fixture is 100 pieces, so the 91–150 range is the one
     // a run resolves to; the wider ranges are here so that resolving is a choice and not the only
     // row present.
@@ -222,4 +227,30 @@ test('One defect code cannot mean two things', async () => {
     evidenceReferences: ['evidence://q/run'], notes: 'Два несоответствия',
   });
   assert.equal(completed.runs.at(-1).defectCounts.major, 1);
+});
+
+test('a shipment is not released while the rolls it was made from are unknown', async () => {
+  // Прослеживаемость до рулона. Шесть отгрузок на 4800 штук были выпущены при нуле выдач материала:
+  // учёт партий вёлся и ни на что не влиял. Ответ «из каких рулонов» собирается до отгрузки — после
+  // неё собирать не из чего.
+  const { state, service } = fixture();
+  state.bom = { lines: [{ materialCode: 'MAT-SHELL-R5' }] };
+  state.lotIssues = [];
+  let inspection = await completePassingRun(service, 'quality');
+  await assert.rejects(
+    () => service.review('quality-review-trace', 'owner', inspection.inspectionCode, {
+      expectedVersion: inspection.version, decision: 'release', releaseCode: 'REL-TRACE-1', notes: 'Годна',
+    }),
+    (error) => error.code === 'QUALITY_RELEASE_WITHOUT_MATERIAL_TRACE',
+  );
+  // Отказ не оставляет наполовину выпущенную отгрузку.
+  assert.equal(state.releases.length, 0);
+  assert.equal(state.inspection.status, 'review-pending');
+
+  state.lotIssues = [{ lotReference: 'ROLL-R3-A-001' }];
+  inspection = await service.review('quality-review-trace-2', 'owner', state.inspection.inspectionCode, {
+    expectedVersion: state.inspection.version, decision: 'release', releaseCode: 'REL-TRACE-1', notes: 'Годна',
+  });
+  assert.equal(inspection.status, 'released');
+  assert.equal(state.releases.length, 1);
 });

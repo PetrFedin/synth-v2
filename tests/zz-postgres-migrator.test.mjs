@@ -98,6 +98,9 @@ test('PostgreSQL migration ledger serializes runners and rejects changed history
       { tgname: 'quality_inspections_source_immutable_gate' },
     ]);
     assert.deepEqual((await pool.query("SELECT tgname FROM pg_trigger WHERE tgrelid = 'public.quality_shipment_releases'::regclass AND NOT tgisinternal ORDER BY tgname")).rows, [
+      // Прослеживаемость до рулона: выпуск на отгрузку отказывается записываться, пока не известно,
+      // из каких партий материала сшита партия товара.
+      { tgname: 'quality_shipment_release_material_trace' },
       { tgname: 'quality_shipment_releases_immutable_gate' },
       { tgname: 'quality_shipment_releases_source_gate' },
     ]);

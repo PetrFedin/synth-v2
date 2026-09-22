@@ -17,6 +17,18 @@ function view(client) {
       const result = await client.query('SELECT payload FROM production_executions WHERE execution_code = $1 FOR SHARE', [executionCode]);
       return result.rows[0]?.payload;
     },
+    // Прослеживаемость отгрузки читается тем же снимком, что и сама инспекция: прочитанные
+    // отдельно, ведомость и выдачи материала могли бы прийти из разных моментов, и «рулоны не
+    // записаны» оказалось бы следом чужой правки, а не фактом.
+    async getPublishedBomForSku(sku) {
+      const result = await client.query("SELECT payload FROM boms WHERE sku = $1 AND status = 'published' LIMIT 1", [sku]);
+      return result.rows[0]?.payload ?? null;
+    },
+    async listMaterialLotIssuesForExecution(executionCode) {
+      const result = await client.query('SELECT payload FROM material_lot_issues WHERE execution_code = $1 ORDER BY issued_at, id FOR SHARE', [executionCode]);
+      return result.rows.map((row) => row.payload);
+    },
+
     async getInspectionByCode(inspectionCode) {
       const result = await client.query('SELECT payload FROM quality_inspections WHERE inspection_code = $1 FOR UPDATE', [inspectionCode]);
       return result.rows[0]?.payload;

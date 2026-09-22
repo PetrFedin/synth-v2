@@ -246,6 +246,21 @@ function runSamplingPlan(inspection, input) {
       aqlMinor: input.aqlMinor,
     });
   }
+  // Договорённый план обязан сказать, **почему** он договорённый.
+  //
+  // Это единственное место, где число, решающее судьбу партии, берётся не из таблицы, а из головы.
+  // На демонстрационных данных так и вышло: партия в 400 штук проверена выборкой 80, тогда как
+  // таблица бренда для 281–500 даёт 50, — и запись не могла объяснить ни откуда 80, ни почему не
+  // 50. Причина, записанная рядом, и есть разница между «договорились так» и «кто-то ввёл число»;
+  // её читает тот, кто через год разбирает, почему партия ушла покупателю.
+  //
+  // Требование стоит здесь, а не в `agreedSamplingPlan`: тот вызывается дважды, по разу на каждый
+  // предел, и причина у плана одна, а не по одной на предел.
+  const reason = typeof input.samplingNote === 'string' ? input.samplingNote.trim() : '';
+  invariant(reason.length >= 3, 'QUALITY_SAMPLING_NOTE_REQUIRED',
+    'An agreed sampling plan must state why it was agreed instead of read from a standard',
+    { lotSize: inspection.quantity, sampleSize: input.sampleSize });
+
   // A bespoke plan still has to be a plan: the sample fits the lot, and a limit at or above the
   // sample size is not a limit. `agreedSamplingPlan` holds both, and the two limits are then read
   // from the same agreement rather than typed independently of it.

@@ -482,7 +482,7 @@ test('PostgreSQL closes approved PPS through production, rework, reinspection an
       inspectorName: 'Factory Quality Inspector',
       sampleSize: 20,
       allowedMajorDefects: 1,
-      allowedMinorDefects: 2,
+      allowedMinorDefects: 2, samplingNote: 'Согласовано с фабрикой на первую партию сезона',
     });
     quality = await finalQuality.completeRun('quality-run-1-complete', 'product-owner', quality.inspectionCode, {
       expectedVersion: quality.version,
@@ -518,7 +518,7 @@ test('PostgreSQL closes approved PPS through production, rework, reinspection an
       inspectorName: 'Factory Quality Inspector',
       sampleSize: 20,
       allowedMajorDefects: 1,
-      allowedMinorDefects: 2,
+      allowedMinorDefects: 2, samplingNote: 'Согласовано с фабрикой на первую партию сезона',
       reworkReference: 'RWK-TECH-GATE-1',
       resolutionNotes: 'Affected seams were reopened, reinforced, resewn and checked before reinspection',
     });

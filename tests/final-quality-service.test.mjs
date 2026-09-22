@@ -64,6 +64,9 @@ async function completePassingRun(service, actorId = 'quality') {
   inspection = await service.start(`quality-start-${actorId}`, actorId, inspection.inspectionCode, {
     expectedVersion: inspection.version, inspectorName: 'Factory Quality Inspector', sampleSize: 20,
     allowedMajorDefects: 1, allowedMinorDefects: 2,
+    // Договорённый план обязан назвать причину: это единственное место, где число, решающее
+    // судьбу партии, берётся не из таблицы.
+    samplingNote: 'Согласовано с фабрикой на первую партию сезона',
   });
   return service.completeRun(`quality-complete-${actorId}`, actorId, inspection.inspectionCode, {
     expectedVersion: inspection.version, inspectedQuantity: 20, defects: [], measurementFailures: [],
@@ -83,6 +86,9 @@ test('Final Quality separates execution from approval and creates release atomic
   inspection = await service.start('quality-start', 'quality', inspection.inspectionCode, {
     expectedVersion: inspection.version, inspectorName: 'Factory Quality Inspector', sampleSize: 20,
     allowedMajorDefects: 1, allowedMinorDefects: 2,
+    // Договорённый план обязан назвать причину: это единственное место, где число, решающее
+    // судьбу партии, берётся не из таблицы.
+    samplingNote: 'Согласовано с фабрикой на первую партию сезона',
   });
   inspection = await service.completeRun('quality-complete', 'quality', inspection.inspectionCode, {
     expectedVersion: inspection.version, inspectedQuantity: 20, defects: [], measurementFailures: [],
@@ -199,6 +205,7 @@ test('A plan agreed with one factory is allowed, and says so', async () => {
   await assert.rejects(() => inverted.service.start('aql-inverted-start', 'owner', second.inspectionCode, {
     expectedVersion: second.version, inspectorName: 'Factory Quality Inspector',
     sampleSize: 25, allowedMajorDefects: 4, allowedMinorDefects: 1,
+    samplingNote: 'Согласовано с фабрикой на сезон SS27',
   }), { code: 'QUALITY_SAMPLING_PLAN_LIMITS_INVERTED' });
 });
 
@@ -209,7 +216,7 @@ test('One defect code cannot mean two things', async () => {
   state.defectTypes.push({ id: 'defect-type_SEAM-OPEN', brandId: 'brand-1', code: 'SEAM-OPEN', severity: 'major', status: 'active' });
   let inspection = await service.createFromExecution('cat-create', 'quality', readyExecution.executionCode);
   inspection = await service.start('cat-start', 'quality', inspection.inspectionCode, {
-    expectedVersion: inspection.version, inspectorName: 'Factory Quality Inspector', sampleSize: 20, allowedMajorDefects: 1, allowedMinorDefects: 2,
+    expectedVersion: inspection.version, inspectorName: 'Factory Quality Inspector', sampleSize: 20, allowedMajorDefects: 1, allowedMinorDefects: 2, samplingNote: 'Согласовано с фабрикой на первую партию сезона',
   });
   const defect = (severity) => ([{ defectCode: 'SEAM-OPEN', severity, category: 'Пошив', description: 'Разошёлся шов', quantity: 1, evidenceReferences: ['evidence://q/1'] }]);
   await assert.rejects(() => service.completeRun('cat-bad', 'quality', inspection.inspectionCode, {
@@ -253,4 +260,33 @@ test('a shipment is not released while the rolls it was made from are unknown', 
   });
   assert.equal(inspection.status, 'released');
   assert.equal(state.releases.length, 1);
+});
+
+test('an agreed sampling plan must say why it was agreed', async () => {
+  // Единственное место, где число, решающее судьбу партии, берётся не из таблицы, а из головы.
+  // На демонстрационных данных так и вышло: партия в 400 штук проверена выборкой 80, тогда как
+  // таблица бренда для 281–500 даёт 50, и запись не могла объяснить ни откуда 80, ни почему не 50.
+  const { service } = fixture();
+  const inspection = await service.createFromExecution('aql-nonote-create', 'quality', readyExecution.executionCode);
+  for (const samplingNote of [undefined, null, '', '   ', 'ок']) {
+    await assert.rejects(() => service.start('aql-nonote-start', 'quality', inspection.inspectionCode, {
+      expectedVersion: inspection.version, inspectorName: 'Factory Quality Inspector',
+      sampleSize: 25, allowedMajorDefects: 1, allowedMinorDefects: 3,
+      ...(samplingNote === undefined ? {} : { samplingNote }),
+    }), { code: 'QUALITY_SAMPLING_NOTE_REQUIRED' }, `note ${JSON.stringify(samplingNote)} must not pass`);
+  }
+});
+
+test('a plan read off the brand’s own table needs no excuse', async () => {
+  // Требование причины касается только договорённого плана: у стандартного происхождение записано
+  // само — стандарт, уровень и строка таблицы под размер партии.
+  const { service } = fixture();
+  const inspection = await service.createFromExecution('aql-standard-create', 'quality', readyExecution.executionCode);
+  const started = await service.start('aql-standard-start', 'quality', inspection.inspectionCode, {
+    expectedVersion: inspection.version, inspectorName: 'Factory Quality Inspector',
+    standardCode: 'DEMO-AQL-2026', inspectionLevel: 'II', aqlMajor: 2.5, aqlMinor: 4,
+  });
+  const plan = started.runs.at(-1).samplingPlan;
+  assert.equal(plan.source, 'standard');
+  assert.equal(plan.standardCode, 'DEMO-AQL-2026');
 });

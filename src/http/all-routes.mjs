@@ -10,6 +10,7 @@ import { createOperationSequenceRoutes } from './operation-sequence-routes.mjs';
 import { createTargetPricingRoutes } from './target-pricing-routes.mjs';
 import { createSeasonEconomicsRoutes } from './season-economics-routes.mjs';
 import { createMaterialColourRoutes } from './material-colour-routes.mjs';
+import { createSeasonPaletteRoutes } from './season-palette-routes.mjs';
 import { createBomSizeLineRoutes } from './bom-size-line-routes.mjs';
 import { createLibraryRoutes } from './library-routes.mjs';
 import { createHistoryRoutes } from './history-routes.mjs';
@@ -63,6 +64,7 @@ export function createWholesaleRoutes(services = {}) {
     ...createTargetPricingRoutes({ targetPricing: services.targetPricing }),
     ...createSeasonEconomicsRoutes({ seasonEconomics: services.seasonEconomics }),
     ...createMaterialColourRoutes({ materialColours: services.materialColours }),
+    ...createSeasonPaletteRoutes({ seasonPalette: services.seasonPalette }),
     ...createBomSizeLineRoutes({ bomSizeLine: services.bomSizeLine }),
     ...createLibraryRoutes({ libraries: services.libraries }),
     ...createHistoryRoutes({ history: services.history }),

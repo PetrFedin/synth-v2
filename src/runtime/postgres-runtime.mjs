@@ -34,6 +34,8 @@ import { createSeasonEconomicsQueryService } from '../application/season-economi
 import { createPostgresMaterialColourStore } from '../infrastructure/postgres-material-colour-store.mjs';
 import { createPostgresMaterialColourReader } from '../infrastructure/postgres-material-colour-reader.mjs';
 import { createMaterialColourService, createMaterialColourQueryService } from '../application/material-colour-service.mjs';
+import { createSeasonPaletteService } from '../application/season-palette-service.mjs';
+import { createPostgresSeasonPaletteStore } from '../infrastructure/postgres-season-palette-store.mjs';
 import { createPostgresBomSizeLineReader } from '../infrastructure/postgres-bom-size-line-reader.mjs';
 import { createBomSizeLineQueryService } from '../application/bom-size-line-service.mjs';
 import { createPostgresFinalQualityStore } from '../infrastructure/postgres-final-quality-store.mjs';
@@ -238,6 +240,12 @@ export function createPostgresWholesaleRuntime(options = {}) {
     ...(options.clock ? { clock: options.clock } : {}),
   });
   const materialColours = Object.freeze({ ...materialColourQueries, ...materialColourCommands });
+  // Палитра сезона: регистр, которого у заведённой таблицы не было ни строкой кода.
+  const seasonPalette = createSeasonPaletteService({
+    store: createPostgresSeasonPaletteStore({ pool: options.pool }),
+    ...(options.clock ? { clock: options.clock } : {}),
+    ...(options.nextId ? { nextId: options.nextId } : {}),
+  });
 
   // Размерный ряд ведомости читается стилем целиком: автор заполняет ведомость на каждый размер
   // отдельно и без ряда не может сравнить их между собой, а опечатку показывает именно сравнение.
@@ -289,6 +297,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
     operationSequences,
     targetPricing,
     seasonEconomics,
+    seasonPalette,
     materialColours,
     bomSizeLine,
     collaboration: base.collaboration,

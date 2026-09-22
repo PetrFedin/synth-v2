@@ -360,6 +360,9 @@ try {
   // --- What the season actually cost and actually earned ---------------------------------------
   await ensureMoneyChain(runtime, pool, accounts);
 
+  // --- Чем сезону разрешено рисовать ------------------------------------------------------------
+  await ensureSeasonPalette(runtime, pool, accounts);
+
   // --- Потребность, из которой вырос производственный заказ --------------------------------------
   await ensureApprovedDemandChain(runtime, pool, accounts);
 
@@ -1410,6 +1413,40 @@ async function releaseQuality(runtime, pool, brandId, approvers) {
 // на образцы, на допоставку, — и запрещать это значило бы запретить половину работы отрасли.
 // Разница в том, что теперь видно, какой заказ вырос из чужого обязательства, а какой — из решения
 // бренда.
+// Палитра сезона: цвета, которыми сезону разрешено рисовать.
+//
+// Таблица была заведена и осталась пустой — ни одной строки кода во всём репозитории, — то есть
+// вопрос «что вообще в этом сезоне» задать было некому. Палитра собирается из тех же
+// governed-записей справочника цветов, которыми уже покрашено полотно: сезон и склад говорят об
+// одном цвете одним идентификатором, а не двумя похожими строками.
+async function ensureSeasonPalette(runtime, pool, accounts) {
+  const campaign = (await pool.query(
+    "SELECT id FROM campaigns WHERE payload ->> 'name' LIKE '%DEMO%' ORDER BY id LIMIT 1",
+  )).rows[0];
+  if (!campaign) { note('season palette', 'нет кампании — палитру не к чему привязать'); return; }
+
+  const existing = await pool.query('SELECT count(*)::int AS total FROM season_colour_palettes WHERE campaign_id = $1', [campaign.id]);
+  if (existing.rows[0].total > 0) { note('season palette', `в палитре уже ${existing.rows[0].total} цвет(а)`); return; }
+
+  // Берутся ровно те цвета, которыми покрашено полотно бренда: палитра сезона, не совпадающая с
+  // тем, что есть на складе, — это пожелание, а не решение.
+  const colours = (await pool.query(
+    `SELECT DISTINCT colour_code FROM material_colours WHERE status = 'active' ORDER BY colour_code`,
+  )).rows.map((row) => row.colour_code);
+  if (!colours.length) { note('season palette', 'у полотна нет цветов — палитру не из чего собрать'); return; }
+
+  let position = 0;
+  for (const colourCode of colours) {
+    position += 1;
+    try {
+      await runtime.seasonPalette.addColourToSeason(command(`season-palette-${position}`), accounts.owner, campaign.id, { colourCode, position });
+    } catch (error) {
+      note('season palette', `${colourCode} пропущен (${error.code ?? error.message})`);
+    }
+  }
+  note('season palette', `палитра сезона: ${colours.join(', ')}`);
+}
+
 async function ensureApprovedDemandChain(runtime, pool, accounts) {
   const existing = await pool.query('SELECT production_order_number FROM production_orders WHERE lineage_version = 2 LIMIT 1');
   if (existing.rowCount) { note('approved demand', `${existing.rows[0].production_order_number} уже вырос из потребности`); return; }

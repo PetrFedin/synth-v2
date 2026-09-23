@@ -12,6 +12,7 @@
     collectionId: '', selectedId: '', query: '', items: [], nextCursor: null,
     loadedCollectionId: '', loading: false, loadingMore: false, error: '', requestToken: 0,
     buyerAccessKey: '', cycleId: '', buyerCatalog: null, matrices: [], buyerLoadedKey: '', buyerLoading: false, buyerError: '', buyerRequestToken: 0,
+    latestCatalogId: '', latestCatalogAt: '', latestLoadedKey: '', latestLoading: false,
     buyerDoorId: '', buyerDoors: [], buyerDoorShopId: '', buyerDoorLoading: false, buyerDoorError: '', buyerDoorRequestToken: 0,
     selectedStyleId: '', quantities: {}, quantityCatalogId: '', quantitySelectionId: '', dirty: false,
     lastPaste: null, saveState: '', savedAt: '', autosave: true,
@@ -248,7 +249,49 @@
     });
   }
 
+  // Что бренд открыл последним — отдельно от того, что читает этот экран.
+  //
+  // Экран закреплён за тем снимком, по которому собрана подборка, и это верно: цена, по которой
+  // человек набрал количества, не смеет меняться у него под руками. Но и молчать об этом нельзя:
+  // найдено живьём — бренд открыл новый каталог, а магазин смотрел на прежний и ничего об этом
+  // не знал. Кнопка «Обновить каталог» при этом перезапрашивала ровно ту же закреплённую версию —
+  // имя обещало то, чего она не делает и сделать не может.
+  //
+  // Перепривязки здесь не будет: домен уже ответил на этот вопрос правилом `SELECTION_FOR_CYCLE_EXISTS` —
+  // одна подборка на цикл, и новый каталог покупается новым циклом. Экран говорит об этом прямо.
+  function ensureLatestCatalogLoad(context) {
+    const access = context.access;
+    if (!access || !context.selection?.buyerCatalogVersionId) return;
+    if (LS.latestLoading || LS.latestLoadedKey === access.key) return;
+    LS.latestLoading = true;
+    void (async () => {
+      try {
+        const latest = await api(`/v2/showrooms/${encodeURIComponent(access.showroomId)}/buyer-catalog?shopId=${encodeURIComponent(access.shopId)}`);
+        LS.latestCatalogId = value(latest?.id);
+        LS.latestCatalogAt = value(latest?.publishedAt);
+      } catch (problem) {
+        // Нет ответа — нет и утверждения: лучше промолчать, чем сказать неверное о чужих ценах.
+        LS.latestCatalogId = '';
+        LS.latestCatalogAt = '';
+      } finally {
+        LS.latestLoading = false;
+        LS.latestLoadedKey = access.key;
+        if (state.view === 'linesheets') renderApp();
+      }
+    })();
+  }
+
+  function newerCatalogNotice(context) {
+    const pinned = value(context.selection?.buyerCatalogVersionId);
+    if (!pinned || !LS.latestCatalogId || LS.latestCatalogId === pinned) return null;
+    return noticePanel(text(
+      `Бренд открыл более новый каталог — ${formatDate(LS.latestCatalogAt)}. Эта подборка остаётся на своём снимке: цены и условия, по которым набраны количества, не меняются задним числом. Новый каталог покупается в новом коммерческом цикле.`,
+      `The brand has opened a newer catalogue — ${formatDate(LS.latestCatalogAt)}. This selection stays on its own snapshot: the prices and terms the quantities were typed against do not change after the fact. A newer catalogue is bought in a new commercial cycle.`,
+    ), 'warning');
+  }
+
   function ensureBuyerLoad(context) {
+    ensureLatestCatalogLoad(context);
     const request = buyerCatalogRequest(context);
     if (!request || LS.buyerLoading || LS.buyerLoadedKey === request.key) return;
     void loadBuyerCatalog(context, request);
@@ -341,8 +384,8 @@
     }, text('Цикл не найден', 'No cycle')));
     bar.append(retailDoorField(context));
 
-    const refresh = el('button', { className: 'button', type: 'button', rawText: text('Обновить каталог', 'Refresh catalog') });
-    refresh.addEventListener('click', () => { resetBuyerCatalog({ preserveQuantities: false }); renderApp(); });
+    const refresh = el('button', { className: 'button', type: 'button', rawText: text('Перечитать каталог', 'Reload catalog') });
+    refresh.addEventListener('click', () => { resetBuyerCatalog({ preserveQuantities: false }); LS.latestLoadedKey = ''; renderApp(); });
     bar.append(refresh);
     return bar;
   }
@@ -457,6 +500,8 @@
     if (!context.selection && !LS.buyerDoorLoading && !LS.buyerDoorError && !context.retailDoors.length) wrapper.append(noticePanel(text('Для магазина нет активной торговой точки. Сначала добавьте или активируйте её — без точки коммерческий контекст не будет зафиксирован.', 'This shop has no active Retail Door. Add or reactivate one before Selection so the commercial context can be frozen.'), 'warning'));
     if (!context.selection && context.retailDoors.length > 1 && !context.retailDoor) wrapper.append(noticePanel(text('Выберите торговую точку в верхней панели. Она будет зафиксирована в подборке и унаследована заказом без повторного выбора.', 'Select a Retail Door in the toolbar. It will be frozen in Selection and inherited by the order without another choice.')));
     if (context.selection && !context.selection.buyerCatalogVersionId) wrapper.append(noticePanel(text('Текущая подборка создана по legacy-каталогу. Она доступна только для просмотра в новом rich-каталоге и не может быть перепривязана молча.', 'The current selection was created from a legacy catalog. It is read-only in the new rich catalog and cannot be silently rebound.'), 'warning'));
+    const newer = newerCatalogNotice(context);
+    if (newer) wrapper.append(newer);
     if (LS.buyerError) wrapper.append(noticePanel(LS.buyerError, 'warning'));
     wrapper.append(buyerCatalogIdentity(context), styleTabs(), styleWorkspace(context));
     return wrapper;

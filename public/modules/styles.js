@@ -509,30 +509,19 @@
     return pair ? text(pair[0], pair[1]) : (problem?.message || I18N.t('common.requestError'));
   }
 
-  // The brand's roster, fetched once per brand. The workspace carries only the reader's own
-  // membership, so the only colleague the assignment form could name was the reader — and it named
-  // them by their generated user id, because that was all a membership payload holds.
-  const ROSTER = { byBrand: new Map(), loading: new Set() };
+  // Состав бренда. Рабочее пространство несёт только членство самого читателя, поэтому форма
+  // назначения могла назвать единственного коллегу — его самого, — да ещё сгенерированным
+  // идентификатором, потому что больше в членстве ничего нет.
+  //
+  // Загрузчик жил здесь, пока спрашивал о составе один экран. Теперь спрашивают два (матрица
+  // ролей — тот же вопрос), и он вынесен в `brand-roster.js`: второй кэш того же ответа означал бы
+  // два состояния загрузки и два способа разойтись.
   function brandRoster(brandId) {
-    if (!brandId) return null;
-    if (ROSTER.byBrand.has(brandId)) return ROSTER.byBrand.get(brandId);
-    if (!ROSTER.loading.has(brandId)) {
-      ROSTER.loading.add(brandId);
-      queueMicrotask(async () => {
-        try {
-          const loaded = await api(`/v2/organisations/${encodeURIComponent(brandId)}/members`);
-          ROSTER.byBrand.set(brandId, loaded.items || []);
-        } catch (problem) {
-          ROSTER.byBrand.set(brandId, []);
-        } finally {
-          ROSTER.loading.delete(brandId);
-          if (state.view === 'styles') renderApp();
-        }
-      });
-    }
-    return null;
+    const shared = window.SynthaBrandRoster;
+    if (!shared) return null;
+    return shared.roster(brandId, { onLoaded: () => { if (state.view === 'styles') renderApp(); } });
   }
-  function personName(member) { return member.displayName || member.email || member.userId; }
+  function personName(member) { return window.SynthaBrandRoster?.personName(member) ?? (member.displayName || member.email || member.userId); }
 
   function assignDesk(product, role, roleLabel) {
     const roster = brandRoster(product.brandId);
@@ -648,7 +637,13 @@
       fields: [
         field(text('Цветомодель', 'Colourway'), select('colorwayId', [['', text('— вся версия —', '\u2014 the whole version \u2014')], ...colorways.map((entry) => [entry.id, `${entry.colorwayCode} · ${entry.nameRu || entry.nameEn}`])])),
         field(text('Ссылка', 'Link'), input('uri', 'url', { required: true, maxlength: '2000', placeholder: 'https://…' })),
-        field(text('Роль', 'Role'), select('mediaRole', [['hero', text('Основное фото', 'Hero shot')], ['sketch', text('Технический эскиз', 'Technical sketch')], ['detail', text('Деталь', 'Detail')], ['flat', text('Раскладка', 'Flat')]])),
+        // Роли берутся из тех, что знает домен: `hero, gallery, detail, swatch, technical, video,
+        // document` (PRODUCT_MEDIA_ROLES). Форма предлагала `sketch` и `flat`, которых в домене нет
+        // вовсе, — два варианта из четырёх всегда отвечали PRODUCT_MEDIA_ROLE_INVALID. Проверено
+        // живьём: «Основное фото» и «Деталь» проходили, «Технический эскиз» и «Раскладка» — нет.
+        // `video` и `document` здесь не предлагаются намеренно: форма добавляет изображение и сама
+        // отправляет mediaType: 'image'.
+        field(text('Роль', 'Role'), select('mediaRole', [['hero', text('Основное фото', 'Hero shot')], ['gallery', text('Галерея', 'Gallery')], ['detail', text('Деталь', 'Detail')], ['swatch', text('Образец цвета', 'Swatch')], ['technical', text('Технический эскиз', 'Technical sketch')]])),
         field(text('Порядок', 'Order'), input('sortOrder', 'number', { required: true, min: '1', max: '999', value: String(mediaCountFor(item) + 1) })),
       ],
       submitLabel: text('Добавить', 'Add'),

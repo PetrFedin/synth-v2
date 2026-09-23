@@ -94,6 +94,8 @@ const ASSETS = Object.freeze({
   '/ui/tech-pack-core.js': ['modules/tech-pack-core.js', JS, VISUAL_CACHE],
   '/ui/production-execution-core.js': ['modules/production-execution-core.js', JS, VISUAL_CACHE],
   '/ui/final-quality-core.js': ['modules/final-quality-core.js', JS, VISUAL_CACHE],
+  // Состав организации: нужен и матрице ролей, и форме назначения ответственных.
+  '/ui/brand-roster.js': ['modules/brand-roster.js', JS, CACHE],
   '/ui/omnidata-workspace.js': ['modules/omnidata-workspace.js', JS, VISUAL_CACHE],
   '/ui/order-fulfillment-view.js': ['modules/order-fulfillment-view.js', JS, VISUAL_CACHE],
   '/ui/order-lifecycle-actions.js': ['modules/order-lifecycle-actions.js', JS, CACHE],

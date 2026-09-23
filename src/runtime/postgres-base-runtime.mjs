@@ -126,6 +126,8 @@ export function createPostgresWholesaleRuntime({
     commercialStore: commercialPublicationStore,
     wholesaleStore: store,
     catalogReader: catalog,
+    // Список проекций уже умеет читать хранилище готовности — вторая копия того же запроса здесь не нужна.
+    projectionListReader: productReadinessStore,
     nextId: runtimeNextId,
     ...(clock ? { clock } : {}),
   });

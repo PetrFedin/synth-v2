@@ -725,6 +725,8 @@ body.omnidata-v14 dialog .dialog-actions .button { flex: 0 0 auto !important; wi
 .bom-modal-error[hidden] { display: none !important; }
 /* Why a control is not here. An absent button explains nothing on its own, and a person who has just
    created something is exactly the person who needs the next step named. */
+/* Таблица доступов и действие над ними — один блок, а не два слипшиеся. */
+.od-access-panel { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
 .od-action-note { margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--od14-surface-subtle, #f8fafc); color: var(--od14-text-soft, #475467); font-size: 11.5px; }
 
 /* The showroom presentation. A buyer meets a season here, so the looks get the room a photograph

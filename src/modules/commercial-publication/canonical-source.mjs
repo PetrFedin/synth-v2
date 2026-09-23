@@ -176,13 +176,25 @@ export function applyBuyerPrices(styles, lines) {
           'Published ProductSku is missing from buyer price lines',
           { productSkuId: sku.productSkuId },
         );
-        return {
+        // Украшение повторяет строку буквально, включая её молчание о размере упаковки.
+        //
+        // Поле ставилось всегда — `price.packSize ?? null`, — а сама строка копируется из публикации
+        // дословно и должна ей равняться. У снимков, сделанных до миграции 126, ключа `packSize` нет
+        // вовсе, и пара расходилась: у SKU — JSON `null`, у строки — отсутствие, а в jsonb это разные вещи.
+        // Проверки здесь этого не видели — они сравнивают два результата одной и той же сборки, — а триггер базы
+        // видел и отказывал. Найдено живьём: ни один снимок старше миграции 126 не мог стать каталогом
+        // байера — отказ был одинаков и необъясним.
+        //
+        // Источник — строка, и править надо украшение: дописать `packSize: null` в строку нельзя, она
+        // обязана быть равна замороженной строке публикации.
+        const decorated = {
           ...structuredClone(sku),
           buyerUnitPrice: price.unitPrice,
           buyerCurrency: price.currency,
           buyerMinimumOrderQuantity: price.minimumOrderQuantity,
-          buyerPackSize: price.packSize ?? null,
         };
+        if ('packSize' in price) decorated.buyerPackSize = price.packSize;
+        return decorated;
       }),
     })),
   }));

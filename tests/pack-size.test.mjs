@@ -63,7 +63,9 @@ test('The pack travels frozen from the SKU to the cell the order is typed in', a
   assert.ok(publication.includes('packSize: preparation.packSize ?? null'), 'so does the price line');
 
   const source = await readFile(path.join(root, 'src/modules/commercial-publication/canonical-source.mjs'), 'utf8');
-  assert.ok(source.includes('buyerPackSize: price.packSize ?? null'), 'and the buyer catalogue carries it');
+  // Украшение повторяет строку, а не ставит `null` поверх её молчания: в jsonb «ключа нет» и
+  // «ключ равен null» — разные вещи, и триггер базы сравнивает их буквально.
+  assert.ok(source.includes("if ('packSize' in price) decorated.buyerPackSize = price.packSize;"), 'and the buyer catalogue carries it exactly as the line does');
 
   const matrix = await readFile(path.join(root, 'public/modules/linesheet-matrix-core.js'), 'utf8');
   assert.match(matrix, /BUYER_MATRIX_PACK_MULTIPLE_NOT_MET/, 'the save is refused off-pack, not only the cell');

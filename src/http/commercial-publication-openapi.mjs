@@ -87,6 +87,18 @@ function schemas() {
       required: ['id', 'publicationId', 'priceListVersionId', 'brandId', 'shopId', 'showroomId', 'accessGrantId', 'collectionId', 'currency', 'lines', 'status', 'contentHash', 'publishedAt'],
       properties: { id: identifier, publicationId: identifier, priceListVersionId: identifier, ...projectionLineageProperties, brandId: identifier, shopId: identifier, showroomId: identifier, accessGrantId: identifier, collectionId: identifier, currency, lines: { type: 'array', minItems: 1, maxItems: 10_000, items: { $ref: '#/components/schemas/CommercialPublicationLine' } }, styles: { type: 'array', minItems: 1, items: { $ref: '#/components/schemas/CommercialProductStyle' } }, status: { type: 'string', enum: ['published'] }, contentHash: sha256(), publishedAt: date() },
     },
+    PublishableCommercialProjection: {
+      type: 'object', additionalProperties: false,
+      required: ['id', 'styleVersionId', 'versionNo', 'status', 'styleCode', 'titleRu', 'titleEn', 'developmentRoute'],
+      properties: {
+        id: identifier, styleVersionId: identifier, versionNo: version(), status: { type: 'string', enum: ['published'] },
+        styleCode: nullableText(64), titleRu: nullableText(200), titleEn: nullableText(200), developmentRoute: nullableText(64),
+      },
+    },
+    PublishableCommercialProjectionList: {
+      type: 'object', additionalProperties: false, required: ['items', 'collectionStatus'],
+      properties: { items: { type: 'array', maxItems: 10_000, items: { $ref: '#/components/schemas/PublishableCommercialProjection' } }, collectionStatus: { type: 'string', enum: ['draft', 'published', 'closed'] } },
+    },
     BuyerCatalogPublicationResult: { type: 'object', additionalProperties: false, required: ['priceListVersion', 'buyerCatalogVersion'], properties: { priceListVersion: { $ref: '#/components/schemas/PriceListVersion' }, buyerCatalogVersion: { $ref: '#/components/schemas/BuyerCatalogVersion' } } },
   };
 }
@@ -95,6 +107,7 @@ function paths() {
   return {
     '/commercial-publications': { post: { operationId: 'publishCommercialPublication', security: [{ bearerAuth: [] }], parameters: [idempotency], requestBody: body('#/components/schemas/CommercialPublicationInput'), responses: mutationResponses('Published projection-backed commercial snapshot', '#/components/schemas/CommercialPublication') } },
     '/collections/{collectionId}/commercial-publications': { get: { operationId: 'listCommercialPublicationsByCollection', security: [{ bearerAuth: [] }], parameters: [collectionId, pageLimit, pageCursor], responses: readResponses('Published commercial snapshots for collection', '#/components/schemas/CommercialPublicationPage') } },
+    '/collections/{collectionId}/publishable-projections': { get: { operationId: 'listPublishableCommercialProjections', description: 'Published Commercial Product Projections whose Style Version is assigned to the collection: exactly what a commercial publication can be created from.', security: [{ bearerAuth: [] }], parameters: [collectionId, pageLimit], responses: readResponses('Projections this collection can publish', '#/components/schemas/PublishableCommercialProjectionList') } },
     '/commercial-publications/{publicationId}': { get: { operationId: 'getCommercialPublication', security: [{ bearerAuth: [] }], parameters: [publicationId], responses: readResponses('Commercial publication', '#/components/schemas/CommercialPublication') } },
     '/commercial-publications/{publicationId}/buyer-catalogs': { post: { operationId: 'publishBuyerCatalogVersion', description: 'Creates a new immutable ProductSku-exact PriceListVersion and BuyerCatalogVersion from a projection-backed V2 CommercialPublication. Historical V1 commercial snapshots are read-only and cannot originate new buyer commercial truth.', security: [{ bearerAuth: [] }], parameters: [publicationId, idempotency], requestBody: body('#/components/schemas/BuyerCatalogPublicationInput'), responses: mutationResponses('Published buyer-specific catalog and price list', '#/components/schemas/BuyerCatalogPublicationResult') } },
     '/showrooms/{showroomId}/buyer-catalog': { get: { operationId: 'getBuyerCatalogForShowroomAccess', security: [{ bearerAuth: [] }], parameters: [showroomId, shopId], responses: readResponses('Latest buyer catalog version for showroom access', '#/components/schemas/BuyerCatalogVersion') } },
@@ -102,6 +115,7 @@ function paths() {
   };
 }
 
+function nullableText(maxLength) { return { anyOf: [{ type: 'string', minLength: 1, maxLength }, { type: 'null' }] }; }
 function body(reference) { return { required: true, content: { 'application/json': { schema: { $ref: reference } } } }; }
 function dataResponse(description, reference) { return { description, content: { 'application/json': { schema: { type: 'object', additionalProperties: false, required: ['data', 'requestId'], properties: { data: { $ref: reference }, requestId: { type: 'string', pattern: SAFE_ID } } } } } }; }
 function mutationResponses(description, reference) { return { 200: dataResponse(description, reference), 400: errorResponse, 401: errorResponse, 403: errorResponse, 404: errorResponse, 409: errorResponse, 422: errorResponse }; }

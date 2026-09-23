@@ -7,11 +7,20 @@ import process from 'node:process';
 const root = process.cwd();
 
 // Каждое поле, которое каталог байера дописывает к SKU публикации.
+//
+// Список снимался с текста исходника регуляркой по одному литералу объекта — то есть проверялась
+// форма записи, а не то, что сборка действительно дописывает. Стоило украшению стать условным,
+// и проверка перестала находить блок вовсе. Теперь спрашивается сама сборка.
 async function buyerDecorations() {
-  const source = await readFile(path.join(root, 'src/modules/commercial-publication/canonical-source.mjs'), 'utf8');
-  const block = source.match(/return \{\s*\.\.\.structuredClone\(sku\),([\s\S]*?)\n        \};/);
-  assert.ok(block, 'applyBuyerPrices must decorate the published SKU');
-  return [...block[1].matchAll(/^\s*(buyer[A-Za-z]+):/gm)].map((match) => match[1]).sort();
+  const { applyBuyerPrices } = await import('../src/modules/commercial-publication/canonical-source.mjs');
+  const sku = { productSkuId: 'product-sku-1', skuCode: 'JKT-1', sizeValueId: 'size-1' };
+  const styles = [{ styleId: 'style-1', colorways: [{ colorwayId: 'colorway-1', skus: [sku] }] }];
+  // Строка называет всё, что может: тогда и украшений будет максимум.
+  const line = { productSkuId: 'product-sku-1', unitPrice: 129, currency: 'EUR', minimumOrderQuantity: 6, packSize: 3 };
+  const decorated = applyBuyerPrices(styles, [line])[0].colorways[0].skus[0];
+  const added = Object.keys(decorated).filter((key) => !(key in sku));
+  assert.ok(added.length > 0, 'applyBuyerPrices must decorate the published SKU');
+  return added.filter((key) => key.startsWith('buyer')).sort();
 }
 
 // Последнее слово базы о том, какие надстройки она снимает перед сравнением.
@@ -49,4 +58,27 @@ test('the pack the buyer is shown is the pack the price line carries', async () 
   }
   assert.ok(checks, 'the validator must tie the decorations to the price line');
   assert.match(checks, /price_sku -> 'buyerPackSize' IS DISTINCT FROM price_line -> 'packSize'/);
+});
+
+// Найдено живьём: ни одна публикация, сделанная до миграции 126, не могла стать каталогом байера.
+// В её строках нет ключа `packSize`, а украшение ставило `buyerPackSize: null` всегда — в jsonb
+// «ключа нет» и «ключ равен null» различны, и триггер `price_sku -> 'buyerPackSize' IS DISTINCT
+// FROM price_line -> 'packSize'` отвергал пару. Проверки на стороне приложения этого не ловили:
+// они сравнивают два результата одной и той же сборки, то есть одну ошибку с ней же самой.
+// Наружу выходил голый код без единой подсказки, и человек упирался в него на последнем шаге.
+test('the buyer sku says about pack size exactly what its price line says', async () => {
+  const { applyBuyerPrices } = await import('../src/modules/commercial-publication/canonical-source.mjs');
+  const sku = { productSkuId: 'product-sku-1', skuCode: 'JKT-1', sizeValueId: 'size-1' };
+  const styles = [{ styleId: 'style-1', colorways: [{ colorwayId: 'colorway-1', skus: [sku] }] }];
+  const base = { productSkuId: 'product-sku-1', unitPrice: 129, currency: 'EUR', minimumOrderQuantity: 6 };
+
+  // Снимок старше миграции 126: ключа нет — и у покупателя его тоже быть не должно.
+  const silent = applyBuyerPrices(styles, [base])[0].colorways[0].skus[0];
+  assert.equal('buyerPackSize' in silent, false);
+
+  // Снимок, который о упаковке молчит явно, и снимок, который её называет.
+  const explicitNull = applyBuyerPrices(styles, [{ ...base, packSize: null }])[0].colorways[0].skus[0];
+  assert.equal(explicitNull.buyerPackSize, null);
+  const packed = applyBuyerPrices(styles, [{ ...base, packSize: 3 }])[0].colorways[0].skus[0];
+  assert.equal(packed.buyerPackSize, 3);
 });

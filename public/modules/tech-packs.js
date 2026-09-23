@@ -367,7 +367,7 @@
   function minutes(value) {
     const number = Number(value);
     if (!Number.isFinite(number)) return '—';
-    return `${number.toFixed(2).replace(/0+$/, '').replace(/[.,]$/, '').replace('.', ',')} ${text('мин', 'min')}`;
+    return `${I18N.formatNumber(number, { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ${text('мин', 'min')}`;
   }
 
   // Технологическая последовательность — тот самый раздел, который печатный техпак обещает и

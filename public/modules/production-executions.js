@@ -161,7 +161,10 @@
   function amount(value, unit) {
     const number = Number(value);
     if (!Number.isFinite(number)) return '—';
-    return `${number.toFixed(number % 1 ? 2 : 0).replace('.', ',')} ${unit || ''}`.trim();
+    // Разделитель ставил не язык читателя, а `replace('.', ',')` — то есть в английском
+    // интерфейсе выходило «1,5 m» там, где английский пишет «1.5 m». Число печатает слой чисел.
+    const decimals = number % 1 ? 2 : 0;
+    return `${I18N.formatNumber(number, { minimumFractionDigits: decimals, maximumFractionDigits: decimals })} ${unit || ''}`.trim();
   }
 
   async function loadOperations(sku, request = api) {
@@ -195,7 +198,8 @@
   function magnitude(value, unit, decimals) {
     const number = Number(value);
     if (!Number.isFinite(number)) return '—';
-    const shown = Math.abs(number).toFixed(decimals).replace(/0+$/, '').replace(/[.,]$/, '').replace('.', ',');
+    // Хвостовые нули убирает сам формат, когда нижняя граница знаков равна нулю.
+    const shown = I18N.formatNumber(Math.abs(number), { minimumFractionDigits: 0, maximumFractionDigits: decimals });
     return `${shown} ${unit || ''}`.trim();
   }
   // Норма и факт расхода сравниваются третьим знаком — округлять их до второго значит стирать ровно
@@ -321,7 +325,7 @@
     };
     return t(...(labels[code] || [code, code]));
   }
-  function percent(rate) { return `${(Number(rate || 0) * 100).toFixed(1).replace('.', ',')} %`; }
+  function percent(rate) { return `${I18N.formatNumber(Number(rate || 0) * 100, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %`; }
 
   function ensureLoaded() { if (!ui.loaded && !ui.loading && !ui.error) queueMicrotask(() => { void load({ reset: true }); }); }
   function selected() { return ui.items.find((value) => value.executionCode === ui.selectedCode) || ui.items[0] || null; }

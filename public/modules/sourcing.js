@@ -272,8 +272,15 @@
     if (percentValue === null || percentValue === undefined) return text(`— (${detailText})`, `— (${detailText})`);
     // Доля показывается с одним знаком: контракт отдаёт четыре, потому что там это точность
     // вычисления, а на экране это шум — «5,5556 %» не значит ничего сверх «5,6 %».
-    return `${percentValue.toFixed(1).replace('.', ',')} % (${detailText})`;
+    return `${I18N.formatNumber(percentValue, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} % (${detailText})`;
   }
+  // Отклонение цены печаталось в двух местах одинаково неверно: `toFixed(1)` всегда ставит точку,
+  // и на русском экране «+3.2%» стояло рядом с «5,6 %». Знак и число — одно правило, одно место.
+  function signedPercent(value) {
+    const sign = value >= 0 ? '+' : '';
+    return `${sign}${I18N.formatNumber(value, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+  }
+
   async function loadPerformance(supplierCode) {
     if (ui.performanceLoading) return;
     ui.performanceLoading = true;
@@ -439,7 +446,7 @@
         best,
         overdue: core.isRfqOverdue(rfq, ui.referenceTime || new Date().toISOString()),
         spread: worst ? formatMoneyMinor(worst.totalCostMinor - best.totalCostMinor, rfq.bomCurrency) : '\u2014',
-        deltaText: comparison && comparison.deltaPercent !== null ? `${comparison.deltaPercent >= 0 ? '+' : ''}${comparison.deltaPercent.toFixed(1)}%` : '\u2014',
+        deltaText: comparison && comparison.deltaPercent !== null ? signedPercent(comparison.deltaPercent) : '\u2014',
       };
       const row = h('tr', { className: ui.selectedRfqCode === rfq.rfqCode ? 'selected' : '', tabindex: '0' }, columns.map((column) => column.cell(rfq, ctx)));
       const select = () => { ui.selectedRfqCode = rfq.rfqCode; renderApp(); };
@@ -468,7 +475,7 @@
   }
   function quoteCard(rfq, quote) {
     const comparison = core.compareQuoteToBom(rfq, quote);
-    const delta = comparison.deltaPercent === null ? '—' : `${comparison.deltaPercent >= 0 ? '+' : ''}${comparison.deltaPercent.toFixed(1)}%`;
+    const delta = comparison.deltaPercent === null ? '—' : signedPercent(comparison.deltaPercent);
     return h('article', { className: `quote-card ${rfq.selectedSupplierCode === quote.supplierCode ? 'selected' : ''}`.trim() }, [h('div', {}, [h('strong', { text: `#${quote.rank} ${quote.supplierName}` }), h('small', { text: `${quote.supplierCode} · rev ${quote.revision}` })]), h('div', {}, [h('strong', { text: formatMoneyMinor(quote.totalCostMinor, rfq.bomCurrency) }), h('small', { text: `${formatMoneyMinor(quote.unitPriceMinor, rfq.bomCurrency)} / ${text('шт.', 'unit')} · BOM ${delta}` })]), h('small', { text: `${quote.leadTimeDays} ${text('дн.', 'days')} · MOQ ${quote.minimumOrderQuantity}` })]);
   }
   function rfqActionButton(action, rfq) {

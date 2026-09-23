@@ -30,12 +30,16 @@ function targetPanel(order){
   const target=ui.targetFor===order.sku?ui.target:null;
   const children=[h('h3',{text:t('Целевая цена','Target price')})];
   if(!target){children.push(h('p',{className:'muted',text:ui.targetLoading?t('Загрузка…','Loading…'):t('Цель по цене для этого изделия не составлена.','No target price has been set for this product.')}));return h('section',{className:'production-orders-card'},children)}
+  // Наценка, коэффициенты и курс — числа, а не текст. Русская ветка подставляла запятую вручную
+  // через `replace`, английская печатала значение сырым: одно и то же число в двух видах, и оба
+  // мимо языка читателя. Курс держит до восьми знаков — столько же, сколько хранит платформа.
+  const decimal=(value)=>I18N.formatNumber(Number(value),{minimumFractionDigits:0,maximumFractionDigits:8});
   children.push(h('p',{className:'muted',text:t(
-    `Розница ${money(target.targetRrpMinor,target.rrpCurrency)} при наценке ${String(target.retailMarkup).replace('.',',')} — допустимая себестоимость на складе ${money(target.targetLandedMinor,target.rrpCurrency)}.`,
-    `Retail ${money(target.targetRrpMinor,target.rrpCurrency)} at a markup of ${target.retailMarkup} allows ${money(target.targetLandedMinor,target.rrpCurrency)} landed.`)}));
+    `Розница ${money(target.targetRrpMinor,target.rrpCurrency)} при наценке ${decimal(target.retailMarkup)} — допустимая себестоимость на складе ${money(target.targetLandedMinor,target.rrpCurrency)}.`,
+    `Retail ${money(target.targetRrpMinor,target.rrpCurrency)} at a markup of ${decimal(target.retailMarkup)} allows ${money(target.targetLandedMinor,target.rrpCurrency)} landed.`)}));
   children.push(h('p',{className:'muted',text:t(
-    `Коэффициенты ${String(target.countryCoefficient).replace('.',',')} (страна${target.sourcingCountryCode?' '+target.sourcingCountryCode:''}) × ${String(target.categoryCoefficient).replace('.',',')} (категория), курс ${String(target.fxRate).replace('.',',')} на ${date(target.fxEffectiveOn)}`,
-    `Coefficients ${target.countryCoefficient} (country${target.sourcingCountryCode?' '+target.sourcingCountryCode:''}) × ${target.categoryCoefficient} (category), rate ${target.fxRate} of ${date(target.fxEffectiveOn)}`)}));
+    `Коэффициенты ${decimal(target.countryCoefficient)} (страна${target.sourcingCountryCode?' '+target.sourcingCountryCode:''}) × ${decimal(target.categoryCoefficient)} (категория), курс ${decimal(target.fxRate)} на ${date(target.fxEffectiveOn)}`,
+    `Coefficients ${decimal(target.countryCoefficient)} (country${target.sourcingCountryCode?' '+target.sourcingCountryCode:''}) × ${decimal(target.categoryCoefficient)} (category), rate ${decimal(target.fxRate)} of ${date(target.fxEffectiveOn)}`)}));
   children.push(h('div',{className:'production-orders-milestone'},[
     h('strong',{text:t(`Можно платить: ${money(target.targetFobMinor,target.fobCurrency)}`,`We may pay ${money(target.targetFobMinor,target.fobCurrency)}`)}),
     h('p',{className:'muted',text:target.quotedFobMinor===null
@@ -98,7 +102,7 @@ function paymentsPanel(order){
   for(const milestone of schedule.milestones){
     const lines=[
       h('strong',{text:`${t(milestone.labelRu,milestone.labelEn)} — ${money(milestone.amountMinor,schedule.currency)}`}),
-      h('p',{className:'muted',text:`${(milestone.shareBasisPoints/100).toFixed(milestone.shareBasisPoints%100?2:0).replace('.',',')} % · ${paymentTriggerLabel(milestone.triggerEvent)} · ${paymentStatusLabel(milestone.status)}`}),
+      h('p',{className:'muted',text:`${I18N.formatNumber(milestone.shareBasisPoints/100,{minimumFractionDigits:milestone.shareBasisPoints%100?2:0,maximumFractionDigits:milestone.shareBasisPoints%100?2:0})} % · ${paymentTriggerLabel(milestone.triggerEvent)} · ${paymentStatusLabel(milestone.status)}`}),
     ];
     // У вехи, чьё событие не произошло, даты нет вовсе — предлагать её значило бы звать заплатить.
     lines.push(h('p',{className:'muted',text:milestone.dueAt?t(`Срок ${date(milestone.dueAt)}`,`Due ${date(milestone.dueAt)}`):t('Событие ещё не произошло','The event has not happened yet')}));

@@ -76,3 +76,38 @@ test('an unknown currency or unit degrades to something readable instead of disa
   // Не-число остаётся прочерком, а не «NaN».
   assert.match(source, /if \(!Number\.isFinite\(raw\)\) return '\\u2014';/);
 });
+
+// Продолжение той же находки, найденное живым обходом экрана планирования: в одной строке таблицы
+// стояло «-10.7 п.п.» рядом с «56,0 %» и «99,00 EUR». Разделитель ставил не язык читателя, а
+// `toFixed`, который всегда пишет точку, — либо `replace('.', ',')`, который всегда пишет запятую
+// и потому неверен в английском интерфейсе. Восемь таких мест в шести модулях.
+//
+// Правило простое: число, которое читает человек, печатает слой чисел. Проверяется оно по всему
+// клиенту сразу, потому что в прошлый раз правку сделали для процентов и пропустили значок
+// отклонения в той же таблице.
+test('no screen formats a number for the reader with toFixed or a hardcoded separator', async () => {
+  const { readdir } = await import('node:fs/promises');
+  const dir = path.join(root, 'public/modules');
+  const offenders = [];
+  for (const name of (await readdir(dir)).filter((file) => file.endsWith('.js'))) {
+    const source = await readFile(path.join(dir, name), 'utf8');
+    source.split('\n').forEach((line, index) => {
+      const code = line.replace(/\/\/.*$/, '');
+      if (/\.toFixed\(/.test(code)) offenders.push(`${name}:${index + 1} toFixed`);
+      // Замена разделителя вручную — тот же дефект с другой стороны: она верна ровно в одном языке.
+      if (/replace\(\s*['"]\.['"]\s*,\s*['"],['"]\s*\)/.test(code)) offenders.push(`${name}:${index + 1} replace('.', ',')`);
+    });
+  }
+  assert.deepEqual(offenders, [], `numbers must go through I18N.formatNumber:\n${offenders.join('\n')}`);
+});
+
+test('the percentage-point unit is translated like every other unit', async () => {
+  const planning = await readFile(path.join(root, 'public/modules/planning.js'), 'utf8');
+  // «п.п.» — русское сокращение, и английскому читателю оно ничего не говорит.
+  // Модуль держит кириллицу escape-последовательностями, поэтому и ищется она в обоих видах:
+  // проверять надо факт, а не способ записи файла.
+  assert.match(planning, /text\('(п\.п\.|\\u043f\.\\u043f\.)', 'pp'\)/);
+  // И печатается оно в одном месте: значок отклонения и карточка сезона берут один формат.
+  assert.equal((planning.match(/text\('(п\.п\.|\\u043f\.\\u043f\.)', 'pp'\)/g) ?? []).length, 1);
+  assert.match(planning, /rawText: signedPoints\(variance\)/);
+});

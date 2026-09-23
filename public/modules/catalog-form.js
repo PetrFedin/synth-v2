@@ -17,10 +17,10 @@ function catalogSkuForm() {
       brandId: collection.brandId,
       currency: collection.currency,
       sku: validation.sku(values.sku),
-      name: validation.requiredText(values.name, 'SKU name'),
+      name: validation.requiredText(values.name, '\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435'),
       wholesalePrice: validation.number(values.wholesalePrice, 'Wholesale price', { min: 0.01 }),
       minimumOrderQuantity: validation.number(values.minimumOrderQuantity, 'MOQ', { integer: true, min: 1 }),
-      availableQuantity: validation.number(values.availableQuantity, 'Available quantity', { integer: true, min: 0 }),
+      availableQuantity: validation.number(values.availableQuantity, 'Sellable quantity', { integer: true, min: 0 }),
     });
   });
 }
@@ -35,14 +35,14 @@ async function catalogSkuEditForm(item) {
   }
   openForm('\u0420\u0435\u0434\u0430\u043a\u0442\u0438\u0440\u043e\u0432\u0430\u0442\u044c SKU', [
     textDef('name', '\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435', latest.name, 160),
-    numberDef('wholesalePrice', 'Wholesale price', latest.wholesalePrice, false, 0.01),
-    numberDef('minimumOrderQuantity', 'MOQ', latest.minimumOrderQuantity, true, 1),
+    numberDef('wholesalePrice', '\u041e\u043f\u0442\u043e\u0432\u0430\u044f \u0446\u0435\u043d\u0430', latest.wholesalePrice, false, 0.01),
+    numberDef('minimumOrderQuantity', '\u041c\u0438\u043d\u0438\u043c\u0430\u043b\u044c\u043d\u044b\u0439 \u0437\u0430\u043a\u0430\u0437', latest.minimumOrderQuantity, true, 1),
     numberDef('availableQuantity', 'Sellable quantity', latest.availableQuantity, true, latest.reservedQuantity || 0),
   ], values => mutate(`/v2/catalog/skus/${encodeURIComponent(latest.sku)}`, {
     expectedVersion: latest.version,
-    name: validation.requiredText(values.name, 'SKU name'),
+    name: validation.requiredText(values.name, '\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435'),
     wholesalePrice: validation.number(values.wholesalePrice, 'Wholesale price', { min: 0.01 }),
     minimumOrderQuantity: validation.number(values.minimumOrderQuantity, 'MOQ', { integer: true, min: 1 }),
-    availableQuantity: validation.number(values.availableQuantity, 'Available quantity', { integer: true, min: latest.reservedQuantity || 0 }),
+    availableQuantity: validation.number(values.availableQuantity, 'Sellable quantity', { integer: true, min: latest.reservedQuantity || 0 }),
   }, 'PATCH'));
 }

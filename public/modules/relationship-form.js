@@ -9,8 +9,8 @@ function relationshipForm() {
   ], values => {
     const own = owned.find(item => item.id === values.ownOrganisationId);
     if (!own) throw new Error('\u041e\u0440\u0433\u0430\u043d\u0438\u0437\u0430\u0446\u0438\u044f \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u0430');
-    const counterpartyId = validation.requiredText(values.counterpartyId, 'Counterparty ID', { minLength: 1, maxLength: 120 });
-    validation.different(counterpartyId, own.id, 'Trade parties');
+    const counterpartyId = validation.requiredText(values.counterpartyId, 'ID \u043a\u043e\u043d\u0442\u0440\u0430\u0433\u0435\u043d\u0442\u0430', { minLength: 1, maxLength: 120 });
+    validation.different(counterpartyId, own.id);
     return mutate('/v2/relationships', own.type === 'brand'
       ? { brandId: own.id, shopId: counterpartyId }
       : { brandId: counterpartyId, shopId: own.id });

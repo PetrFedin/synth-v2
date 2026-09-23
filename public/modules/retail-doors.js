@@ -152,7 +152,7 @@ function retailDoorAddress(values, prefix) {
 
 function retailDoorCode(value) {
   const validation = window.SynthaUiValidation;
-  const code = validation.requiredText(value, 'Retail door code', { minLength: 1, maxLength: 32 }).toUpperCase();
+  const code = validation.requiredText(value, localText('\u041a\u043e\u0434 \u0442\u043e\u0447\u043a\u0438', 'Door code'), { minLength: 1, maxLength: 32 }).toUpperCase();
   if (!/^[A-Z0-9][A-Z0-9._/-]{0,31}$/.test(code)) throw new Error('RETAIL_DOOR_CODE_INVALID');
   return code;
 }

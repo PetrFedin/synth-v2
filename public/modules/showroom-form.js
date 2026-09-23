@@ -10,10 +10,10 @@ function showroomForm() {
   ], values => {
     const collection = collections.find(item => item.id === values.collectionId);
     if (!collection) throw new Error('COLLECTION_NOT_AVAILABLE');
-    validation.dateRange(values.opensAt, values.closesAt, 'Showroom dates');
+    validation.dateRange(values.opensAt, values.closesAt);
     return mutate('/v2/showrooms', {
       ...isoDates(values,['opensAt','closesAt']),
-      name: validation.requiredText(values.name, 'Showroom name'),
+      name: validation.requiredText(values.name, '\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435'),
       brandId: collection.brandId,
     });
   });

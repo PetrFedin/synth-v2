@@ -10,9 +10,9 @@ function campaignForm() {
     dateTimeDef('startsAt','\u041d\u0430\u0447\u0430\u043b\u043e'),
     dateTimeDef('endsAt','\u041e\u043a\u043e\u043d\u0447\u0430\u043d\u0438\u0435'),
   ], values => {
-    const name = validation.requiredText(values.name, 'Campaign name');
-    const season = validation.requiredText(values.season, 'Season', { maxLength: 40 });
-    validation.dateRange(values.startsAt, values.endsAt, 'Campaign dates');
+    const name = validation.requiredText(values.name, '\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435');
+    const season = validation.requiredText(values.season, '\u0421\u0435\u0437\u043e\u043d', { maxLength: 40 });
+    validation.dateRange(values.startsAt, values.endsAt);
     return mutate('/v2/campaigns', isoDates({ ...values, name, season },['startsAt','endsAt']));
   });
 }

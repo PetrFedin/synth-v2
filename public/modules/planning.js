@@ -169,7 +169,58 @@
           ],
         },
       ],
+      actions: placeholderActions(item),
     });
+  }
+
+  // Слот живёт по статусам, и до сих пор он их не менял.
+  //
+  // Найдено живым обходом: из пяти маршрутов слотов в интерфейсе достижимы только два импортных —
+  // `POST /v2/assortment/placeholders/{id}/transition` не вызывается нигде. Слот навсегда
+  // оставался в том статусе, в котором приехал из импорта, а в демо-данных есть слоты в
+  // `in_development`, то есть в состоянии, которого человек достичь не может.
+  //
+  // Переходы не выдуманы здесь: они повторяют карту домена (`assortment-planning/public.mjs`) —
+  // planned → in_development | dropped, in_development → delivered | dropped, delivered → dropped.
+  // Предлагать то, что сервер отвергнет, значит обещать невыполнимое.
+  const PLACEHOLDER_TRANSITIONS = {
+    planned: [
+      { status: 'in_development', ru: 'В разработку', en: 'Start development', variant: 'primary' },
+      { status: 'dropped', ru: 'Снять с плана', en: 'Drop', variant: 'danger' },
+    ],
+    in_development: [
+      { status: 'delivered', ru: 'Отметить сданным', en: 'Mark delivered', variant: 'primary' },
+      { status: 'dropped', ru: 'Снять с плана', en: 'Drop', variant: 'danger' },
+    ],
+    delivered: [
+      { status: 'dropped', ru: 'Снять с плана', en: 'Drop', variant: 'danger' },
+    ],
+    dropped: [],
+  };
+
+  function placeholderActions(item) {
+    const caps = window.SynthaUiCapabilities;
+    if (!caps?.hasForOrganisation(state.workspace, item.brandId, caps.CAPABILITIES.CAMPAIGN_MANAGE)) return [];
+    const moves = PLACEHOLDER_TRANSITIONS[item.status] || [];
+    if (!moves.length) {
+      // Снятый слот — конец пути, и это надо сказать: пустое место читается как поломка.
+      return [el('p', { className: 'od-action-note', rawText: text(
+        'Слот снят с плана — это конечное состояние, вернуть его нельзя.',
+        'This slot was dropped from the plan — a final state it cannot return from.',
+      ) })];
+    }
+    // Снятие необратимо, поэтому спрашивается подтверждение; остальные переходы — обычный ход работы.
+    return moves.map((move) => actionButton(
+      text(move.ru, move.en),
+      () => mutate(`/v2/assortment/placeholders/${encodeURIComponent(item.id)}/transition`, {
+        expectedVersion: item.version,
+        nextStatus: move.status,
+      }),
+      move.variant,
+      move.status === 'dropped'
+        ? text('Снятый слот вернуть в план нельзя. Снять?', 'A dropped slot cannot return to the plan. Drop it?')
+        : '',
+    ));
   }
   // A tab called Таймлайн that re-sorted the same table by a date both campaigns share rendered the
   // portfolio again, byte for byte. A timeline shows when things happen against each other.

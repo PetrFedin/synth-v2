@@ -9,8 +9,21 @@ const scope = {};
 new Function('globalThis', `${source}`).call(scope, scope);
 const Grid = scope.SynthaOrderGrid;
 
-function cell(sku, { moq = 1, ats = null, price = 2400, size = 'M' } = {}) {
-  return { sku, minimumOrderQuantity: moq, availableToSell: ats, unitPrice: price, currency: 'EUR', size: { key: size, code: size } };
+// Ячейка несёт цену так, как её строит матрица линшита: `unitPrice` — в основных единицах (24,00),
+// `wholesalePriceMinor` — то же целым числом копеек из замороженной строки прайс-листа.
+//
+// Приспособление раньше подавало `unitPrice: 2400`, то есть считало основное поле минорным, — и
+// тем закрепляло дефект: сумма в подвале сетки завышалась в сто раз на любой цене с копейками.
+function cell(sku, { moq = 1, ats = null, priceMinor = 2400, size = 'M' } = {}) {
+  return {
+    sku,
+    minimumOrderQuantity: moq,
+    availableToSell: ats,
+    unitPrice: priceMinor / 100,
+    wholesalePriceMinor: priceMinor,
+    currency: 'EUR',
+    size: { key: size, code: size },
+  };
 }
 
 function style() {

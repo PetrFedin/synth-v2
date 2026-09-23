@@ -289,13 +289,22 @@
       rejected: materialText('\u043e\u0442\u043a\u043b\u043e\u043d\u0451\u043d', 'rejected'),
     }[status] || status;
   }
+  // Жизненный цикл партии живёт своим модулем: реестр материалов показывает партии, а решения о них
+  // — отдельный вопрос со своими правами и своим порядком.
+  function materialLotLifecycle() { return window.SynthaMaterialLotActions || null; }
   function materialLotsContent(item) {
     void ensureMaterialLots();
     const lots = materialState.lots.filter((lot) => lot.materialCode === item.code);
+    const lotActions = materialLotLifecycle();
     if (!lots.length) {
-      return [notice(materialState.lotsLoading
+      const empty = [notice(materialState.lotsLoading
         ? materialText('\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430\u2026', 'Loading\u2026')
         : materialText('\u041f\u0430\u0440\u0442\u0438\u0438 \u044d\u0442\u043e\u0433\u043e \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u0430 \u043d\u0435 \u043f\u0440\u0438\u043d\u0438\u043c\u0430\u043b\u0438\u0441\u044c.', 'No lots of this material have been received.'))];
+      // Первая партия заводится именно отсюда: иначе пустое место сообщает о отсутствии и не даёт его исправить.
+      if (!materialState.lotsLoading && lotActions?.canReceive(item)) {
+        empty.push(actionButton(materialText('Принять партию', 'Receive a lot'), () => lotActions.receiveForm(item, paletteOf(item)), 'primary'));
+      }
+      return empty;
     }
     const table = odMiniTable([
       materialText('\u041f\u0430\u0440\u0442\u0438\u044f', 'Lot'),
@@ -320,13 +329,24 @@
       lot.releasedAgainstLabDip || (lot.status === 'released' ? materialText('\u0431\u0435\u0437 \u044d\u0442\u0430\u043b\u043e\u043d\u0430', 'no standard') : '\u2014'),
     ]));
     const nodes = [table];
+    if (lotActions?.canReceive(item)) {
+      nodes.push(actionButton(materialText('Принять партию', 'Receive a lot'), () => lotActions.receiveForm(item, paletteOf(item)), 'primary'));
+    }
     // Куда ушёл каждый рулон — отдельными строками под таблицей, потому что это и есть ответ на
     // отзыв, и он должен читаться, а не помещаться в ячейку.
     for (const lot of lots) {
-      if (!lot.issues || !lot.issues.length) continue;
-      const line = el('p', { className: 'muted' });
-      line.textContent = `${lot.lotReference} \u2192 ${lot.issues.map((issue) => `${issue.executionCode} (${unitAmount(issue.quantity, lot.unit)})`).join(', ')}`;
-      nodes.push(line);
+      if (lot.issues && lot.issues.length) {
+        const line = el('p', { className: 'muted' });
+        line.textContent = `${lot.lotReference} \u2192 ${lot.issues.map((issue) => `${issue.executionCode} (${unitAmount(issue.quantity, lot.unit)})`).join(', ')}`;
+        nodes.push(line);
+      }
+      // Решения по каждой партии — под таблицей и с её номером: в ячейку они не помещаются, а
+      // без номера непонятно, к какой из них они относятся.
+      const decisions = lotActions ? lotActions.lotActions(lot) : [];
+      if (!decisions.length) continue;
+      const panel = el('div', { className: 'od-access-panel' });
+      panel.append(el('strong', { rawText: `${lot.lotReference} \u00b7 ${lotStatusLabel(lot.status)}` }), ...decisions);
+      nodes.push(panel);
     }
     return nodes;
   }

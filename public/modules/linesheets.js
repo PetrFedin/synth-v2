@@ -66,6 +66,11 @@
   function formatMoney(amount, currency) {
     return I18N.formatMoney(amount, value(currency) || 'EUR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
+  // Та же валюта, но из целого числа минорных единиц. Отдельная функция, а не флаг на месте
+  // вызова: перепутать флаг — значит ошибиться в сто раз, и однажды так и вышло.
+  function formatMoneyMinor(amountMinor, currency) {
+    return I18N.formatMoney(amountMinor, value(currency) || 'EUR', { minor: true, minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
 
   function shortHash(hash) {
     const normalized = value(hash);
@@ -771,7 +776,9 @@
     const lines = frame.querySelector('[data-summary="lines"]');
     if (lines) lines.textContent = `${text('Позиций', 'Lines')}: ${totals.lines}`;
     const amount = frame.querySelector('[data-summary="amount"]');
-    if (amount) amount.textContent = `${text('Сумма', 'Value')}: ${formatMoney(totals.amountMinor, totals.currency || LS.buyerCatalog?.currency)}`;
+    // Итог приходит в минорных единицах — и печатается как минорный. Раньше он шёл в основной
+    // форматтер, и подвал делил сумму на сто молча.
+    if (amount) amount.textContent = `${text('Сумма', 'Value')}: ${formatMoneyMinor(totals.amountMinor, totals.currency || LS.buyerCatalog?.currency)}`;
     const save = frame.querySelector('[data-summary="save"]');
     if (save) {
       save.textContent = saveStateText();

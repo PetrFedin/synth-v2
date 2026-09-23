@@ -173,6 +173,12 @@
       sizeValueId,
       size,
       unitPrice: line.unitPrice,
+      // Цена едет и целым числом минорных единиц — ровно тем, которое заморожено в строке
+      // прайс-листа. Сетка считала сумму по `unitPrice`, угадывая единицу по тому, целое ли число:
+      // «24» принималось за копейки, «24,50» — за евро. На целых ценах ошибка гасилась второй
+      // ошибкой в подвале, на цене с копейками давала **сотикратное** завышение суммы. Угадывать
+      // нечего, когда рядом лежит сам факт.
+      wholesalePriceMinor: Number.isSafeInteger(Number(line.wholesalePriceMinor)) ? Number(line.wholesalePriceMinor) : null,
       currency: lineCurrency,
       catalogVersion,
       minimumOrderQuantity,

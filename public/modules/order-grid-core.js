@@ -182,10 +182,22 @@
 
   // Totals. Units and money, by row, by column, and for the style as a whole. Money is kept in
   // minor units until the very end so a hundred cells do not accumulate a floating-point drift.
+  // Единица цены не угадывается по её виду.
+  //
+  // Здесь стояло `Number.isSafeInteger(raw) ? raw : Math.round(raw * 100)`: целое число считалось
+  // минорным, дробное — основным. Но `unitPrice` в замороженной строке прайс-листа **всегда**
+  // основной (договор допускает четыре знака), и «24» значит 24,00 €, а не 24 цента. На целых
+  // ценах ошибка гасилась второй — подвал печатал минорный итог основным форматтером, — а на цене
+  // с копейками сумма завышалась в сто раз. Обе исправлены вместе: по отдельности каждая правка
+  // сломала бы то, что до неё работало случайно.
+  //
+  // Теперь берётся само целое минорных единиц, которое строка прайс-листа несёт рядом с ценой;
+  // разбор основного значения остаётся только как запасной путь для старых снимков без него.
   function unitPriceMinor(cell) {
+    const minor = cell?.wholesalePriceMinor;
+    if (typeof minor === 'number' && Number.isSafeInteger(minor)) return minor;
     const raw = cell?.unitPrice;
     if (raw === null || raw === undefined) return 0;
-    if (typeof raw === 'number' && Number.isSafeInteger(raw)) return raw;
     const number = Number(String(raw).replace(',', '.'));
     if (!Number.isFinite(number)) return 0;
     return Math.round(number * 100);

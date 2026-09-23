@@ -1359,6 +1359,59 @@ function renderCatalog() {
   return odPage(odText('\u041a\u0430\u0442\u0430\u043b\u043e\u0433 \u0438 \u0440\u0430\u0437\u0440\u0430\u0431\u043e\u0442\u043a\u0430 \u043f\u0440\u043e\u0434\u0443\u043a\u0442\u0430', 'Catalog and product development'), header, odRegistry({ scope: 'od-sku', filterScope: 'catalog', rows: w.catalogSkus, rowKey: item => item.sku, columns: [{ label: '', className: 'od-thumb-cell', render: item => odPreview(item.name, item.sku) }, { label: 'SKU', value: item => item.sku }, { label: odText('\u041c\u043e\u0434\u0435\u043b\u044c', 'Model'), value: item => item.name }, { label: odText('\u041a\u043e\u043b\u043b\u0435\u043a\u0446\u0438\u044f', 'Collection'), value: item => nameById('collections', item.collectionId) }, { label: odText('\u0421\u0442\u0430\u0442\u0443\u0441', 'Status'), render: item => statusBadge(item.status) }, { label: odText('\u041e\u043f\u0442. \u0446\u0435\u043d\u0430', 'Wholesale'), value: item => `${money(item.wholesalePrice, item.currency)}` }, { label: 'MOQ', value: item => item.minimumOrderQuantity || 1 }, { label: 'ATS', value: item => Number.isInteger(item.availableToSell) ? item.availableToSell : Math.max(0, Number(item.availableQuantity || 0) - Number(item.reservedQuantity || 0)) }], inspector: item => odInspector({ title: item.name, subtitle: item.sku, status: item.status, preview: true, tabs: [odText('\u041e\u0431\u0437\u043e\u0440', 'Overview'), odText('\u0426\u0435\u043d\u044b', 'Prices'), odText('\u041e\u0441\u0442\u0430\u0442\u043a\u0438', 'Availability'), odText('\u0418\u0441\u0442\u043e\u0440\u0438\u044f', 'History')], fields: [{ label: 'SKU', value: item.sku }, { label: odText('\u041a\u043e\u043b\u043b\u0435\u043a\u0446\u0438\u044f', 'Collection'), value: nameById('collections', item.collectionId) }, { label: odText('\u041e\u043f\u0442\u043e\u0432\u0430\u044f \u0446\u0435\u043d\u0430', 'Wholesale price'), value: `${money(item.wholesalePrice, item.currency)}` }, { label: 'MOQ', value: item.minimumOrderQuantity || 1 }, { label: odText('\u0414\u043e\u0441\u0442\u0443\u043f\u043d\u043e', 'Available'), value: item.availableQuantity || 0 }, { label: odText('\u0417\u0430\u0440\u0435\u0437\u0435\u0440\u0432\u0438\u0440\u043e\u0432\u0430\u043d\u043e', 'Reserved'), value: item.reservedQuantity || 0 }, { label: odText('\u0412\u0435\u0440\u0441\u0438\u044f', 'Version'), value: item.version || 1 }], actions: odSkuActions(item) }) }));
 }
 
+// Действие этого экрана и объяснение, когда его нет.
+//
+// Кнопка «Начать цикл» стояла в том же слоте, что «Создать шоурум», и выбиралась через else —
+// найдено живым обходом: на вкладке циклов кнопки не было, и это оказалось верно (связь с
+// контрагентом была отозвана), но экран об этом молчал. Отсутствующий орган управления обязан
+// сказать, почему он отсутствует, иначе человек считает молчание поломкой.
+//
+// Цикл требует трёх вещей сразу: действующей связи с контрагентом, открытой кампании и
+// опубликованной коллекции внутри неё. Названа та, которой не хватает первой, — общая фраза
+// «что-то не готово» заставляла бы искать самому.
+function odShowroomHeaderAction(w, caps, tab, canCreate) {
+  if (tab === 'linesheets') return canCreate ? odAction(odText('Создать шоурум', 'Create showroom'), showroomForm) : null;
+  if (tab !== 'cycles') return null;
+  const organisationIds = caps.organisationIds(w, caps.CAPABILITIES.COMMERCIAL_CYCLE_CREATE);
+  if (!organisationIds.length) return null;
+  const contexts = window.SynthaWorkflowContexts
+    ? window.SynthaWorkflowContexts.buildCycleContexts(w, organisationIds)
+    : [];
+  if (contexts.some((context) => caps.hasForTrade(w, context.brandId, context.shopId, caps.CAPABILITIES.COMMERCIAL_CYCLE_CREATE))) {
+    return odAction(odText('Начать цикл', 'Start a cycle'), cycleForm);
+  }
+  return el('p', { className: 'od-action-note', rawText: odCycleBlocker(w) });
+}
+
+function odCycleBlocker(w) {
+  const relationships = (w.relationships || []).filter(item => item.status === 'active');
+  if (!relationships.length) {
+    return odText(
+      'Цикл начинают с контрагентом — действующей связи ни с одним магазином сейчас нет. Свяжитесь на экране «Контрагенты и доступы».',
+      'A cycle is started with a counterparty — there is no active relationship with any shop. Establish one on the “Partners and access” screen.',
+    );
+  }
+  const brandIds = new Set(relationships.map(item => item.brandId));
+  const campaigns = (w.campaigns || []).filter(item => item.status === 'open' && brandIds.has(item.brandId));
+  if (!campaigns.length) {
+    return odText(
+      'Цикл идёт внутри открытого сезона — открытых кампаний у этих брендов нет.',
+      'A cycle runs inside an open season — these brands have no open campaign.',
+    );
+  }
+  const campaignIds = new Set(campaigns.map(item => item.id));
+  if (!(w.collections || []).some(item => item.status === 'published' && campaignIds.has(item.campaignId))) {
+    return odText(
+      'В открытых кампаниях нет опубликованной коллекции — публикуется она на экране «Коллекции».',
+      'The open campaigns hold no published collection — a collection is published on the “Collections” screen.',
+    );
+  }
+  return odText(
+    'Начать цикл сейчас не с чем: нужна действующая связь, открытая кампания и опубликованная коллекция в ней.',
+    'There is nothing to start a cycle from: an active relationship, an open campaign and a published collection inside it are all required.',
+  );
+}
+
 function renderShowrooms() {
   const w = state.workspace;
   const caps = window.SynthaUiCapabilities;
@@ -1371,11 +1424,7 @@ function renderShowrooms() {
   //
   // Действие выбирается по вкладке, как в каталоге, и закрыто тем же правом, каким было закрыто
   // в перекрытом экране: цикл начинают там, где смотрят на циклы.
-  const canCreateCycle = tab === 'cycles' && window.SynthaWorkflowContexts
-    && window.SynthaWorkflowContexts.buildCycleContexts(w, caps.organisationIds(w, caps.CAPABILITIES.COMMERCIAL_CYCLE_CREATE))
-      .some((context) => caps.hasForTrade(w, context.brandId, context.shopId, caps.CAPABILITIES.COMMERCIAL_CYCLE_CREATE));
-  const header = odHeader('showrooms', [{ id: 'linesheets', label: odText('\u0428\u043e\u0443\u0440\u0443\u043c\u044b', 'Showrooms') }, { id: 'invitations', label: odText('\u041f\u0440\u0438\u0433\u043b\u0430\u0448\u0435\u043d\u0438\u044f', 'Invitations') }, { id: 'cycles', label: odText('\u041a\u043e\u043c\u043c\u0435\u0440\u0447\u0435\u0441\u043a\u0438\u0435 \u0446\u0438\u043a\u043b\u044b', 'Commercial cycles') }, { id: 'history', label: odText('\u0418\u0441\u0442\u043e\u0440\u0438\u044f', 'History') }], [{ label: odText('\u0428\u043e\u0443\u0440\u0443\u043c\u044b', 'Showrooms'), value: w.showrooms.length, detail: odText('\u0432\u0441\u0435\u0433\u043e', 'total') }, { label: odText('\u041e\u0442\u043a\u0440\u044b\u0442\u043e', 'Open'), value: w.showrooms.filter(item => item.status === 'open').length, detail: odText('\u0434\u043e\u0441\u0442\u0443\u043f\u043d\u043e \u0431\u0430\u0439\u0435\u0440\u0430\u043c', 'available to buyers') }, { label: odText('\u0427\u0435\u0440\u043d\u043e\u0432\u0438\u043a\u0438', 'Drafts'), value: w.showrooms.filter(item => item.status === 'draft').length, detail: odText('\u043d\u0435 \u043e\u0442\u043a\u0440\u044b\u0442\u044b', 'not open') }, { label: odText('\u041f\u0440\u0438\u0433\u043b\u0430\u0448\u0435\u043d\u0438\u044f', 'Invitations'), value: w.invitations.length, detail: `${w.invitations.filter(item => item.status === 'pending').length} ${odText('\u043e\u0436\u0438\u0434\u0430\u044e\u0442', 'pending')}` }, { label: odText('\u0426\u0438\u043a\u043b\u044b', 'Cycles'), value: w.cycles.length, detail: `${w.cycles.filter(item => item.stage !== 'deal-space').length} ${odText('\u0430\u043a\u0442\u0438\u0432\u043d\u044b\u0445', 'active')}` }], ['draft', 'open', 'pending', 'accepted'], odText('\u041f\u043e\u0438\u0441\u043a \u0448\u043e\u0443\u0440\u0443\u043c\u0430, \u043c\u0430\u0433\u0430\u0437\u0438\u043d\u0430 \u0438\u043b\u0438 \u0446\u0438\u043a\u043b\u0430', 'Search showroom, shop or cycle'), canCreate ? odAction(odText('\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u0448\u043e\u0443\u0440\u0443\u043c', 'Create showroom'), showroomForm)
-    : (canCreateCycle ? odAction(odText('\u041d\u0430\u0447\u0430\u0442\u044c \u0446\u0438\u043a\u043b', 'Start a cycle'), cycleForm) : null));
+  const header = odHeader('showrooms', [{ id: 'linesheets', label: odText('\u0428\u043e\u0443\u0440\u0443\u043c\u044b', 'Showrooms') }, { id: 'invitations', label: odText('\u041f\u0440\u0438\u0433\u043b\u0430\u0448\u0435\u043d\u0438\u044f', 'Invitations') }, { id: 'cycles', label: odText('\u041a\u043e\u043c\u043c\u0435\u0440\u0447\u0435\u0441\u043a\u0438\u0435 \u0446\u0438\u043a\u043b\u044b', 'Commercial cycles') }, { id: 'history', label: odText('\u0418\u0441\u0442\u043e\u0440\u0438\u044f', 'History') }], [{ label: odText('\u0428\u043e\u0443\u0440\u0443\u043c\u044b', 'Showrooms'), value: w.showrooms.length, detail: odText('\u0432\u0441\u0435\u0433\u043e', 'total') }, { label: odText('\u041e\u0442\u043a\u0440\u044b\u0442\u043e', 'Open'), value: w.showrooms.filter(item => item.status === 'open').length, detail: odText('\u0434\u043e\u0441\u0442\u0443\u043f\u043d\u043e \u0431\u0430\u0439\u0435\u0440\u0430\u043c', 'available to buyers') }, { label: odText('\u0427\u0435\u0440\u043d\u043e\u0432\u0438\u043a\u0438', 'Drafts'), value: w.showrooms.filter(item => item.status === 'draft').length, detail: odText('\u043d\u0435 \u043e\u0442\u043a\u0440\u044b\u0442\u044b', 'not open') }, { label: odText('\u041f\u0440\u0438\u0433\u043b\u0430\u0448\u0435\u043d\u0438\u044f', 'Invitations'), value: w.invitations.length, detail: `${w.invitations.filter(item => item.status === 'pending').length} ${odText('\u043e\u0436\u0438\u0434\u0430\u044e\u0442', 'pending')}` }, { label: odText('\u0426\u0438\u043a\u043b\u044b', 'Cycles'), value: w.cycles.length, detail: `${w.cycles.filter(item => item.stage !== 'deal-space').length} ${odText('\u0430\u043a\u0442\u0438\u0432\u043d\u044b\u0445', 'active')}` }], ['draft', 'open', 'pending', 'accepted'], odText('\u041f\u043e\u0438\u0441\u043a \u0448\u043e\u0443\u0440\u0443\u043c\u0430, \u043c\u0430\u0433\u0430\u0437\u0438\u043d\u0430 \u0438\u043b\u0438 \u0446\u0438\u043a\u043b\u0430', 'Search showroom, shop or cycle'), odShowroomHeaderAction(w, caps, tab, canCreate));
   if (header.active === 'history') return odPage(odText('\u041e\u043f\u0442\u043e\u0432\u044b\u0439 \u0448\u043e\u0443\u0440\u0443\u043c', 'Wholesale showroom'), header, odHistory(odText('\u0418\u0441\u0442\u043e\u0440\u0438\u044f \u043e\u043f\u0442\u043e\u0432\u043e\u0439 \u0440\u0430\u0431\u043e\u0442\u044b', 'Wholesale history'), [...w.showrooms.map(item => [item.name, odText('\u0428\u043e\u0443\u0440\u0443\u043c', 'Showroom'), statusBadge(item.status), formatDate(item.updatedAt || item.createdAt)]), ...w.invitations.map(item => [orgName(item.shopId), odText('\u041f\u0440\u0438\u0433\u043b\u0430\u0448\u0435\u043d\u0438\u0435', 'Invitation'), statusBadge(item.status), formatDate(item.updatedAt || item.createdAt)])]));
   if (header.active === 'invitations') return odPage(odText('\u041e\u043f\u0442\u043e\u0432\u044b\u0439 \u0448\u043e\u0443\u0440\u0443\u043c', 'Wholesale showroom'), header, odRegistry({ scope: 'od-invitations', filterScope: 'showrooms', rows: w.invitations, columns: [{ label: odText('\u041c\u0430\u0433\u0430\u0437\u0438\u043d', 'Shop'), value: item => orgName(item.shopId) }, { label: odText('\u0428\u043e\u0443\u0440\u0443\u043c', 'Showroom'), value: item => nameById('showrooms', item.showroomId) }, { label: odText('\u0414\u0435\u0439\u0441\u0442\u0432\u0443\u0435\u0442 \u0434\u043e', 'Expires'), value: item => formatDate(item.expiresAt) }, { label: odText('\u0421\u0442\u0430\u0442\u0443\u0441', 'Status'), render: item => statusBadge(item.status) }], inspector: item => odInspector({ title: orgName(item.shopId), subtitle: nameById('showrooms', item.showroomId), status: item.status, tabs: [odText('\u0414\u043e\u0441\u0442\u0443\u043f', 'Access'), odText('\u0418\u0441\u0442\u043e\u0440\u0438\u044f', 'History')], fields: [{ label: odText('\u041c\u0430\u0433\u0430\u0437\u0438\u043d', 'Shop'), value: orgName(item.shopId) }, { label: 'Linesheet', value: nameById('showrooms', item.showroomId) }, { label: odText('\u0414\u0435\u0439\u0441\u0442\u0432\u0443\u0435\u0442 \u0434\u043e', 'Expires'), value: formatDate(item.expiresAt) }], actions: odInvitationActions(item) }) }));
   if (header.active === 'cycles') return odPage(odText('\u041e\u043f\u0442\u043e\u0432\u044b\u0439 \u0448\u043e\u0443\u0440\u0443\u043c', 'Wholesale showroom'), header, odRegistry({ scope: 'od-cycles', filterScope: 'showrooms', statusAccessor: item => item.stage, rows: w.cycles, columns: [{ label: odText('\u041f\u0430\u0440\u0442\u043d\u0435\u0440\u044b', 'Partners'), value: item => pairName(item.brandId, item.shopId) }, { label: odText('\u041a\u0430\u043c\u043f\u0430\u043d\u0438\u044f', 'Campaign'), value: item => nameById('campaigns', item.campaignId) }, { label: odText('\u042d\u0442\u0430\u043f', 'Stage'), render: item => statusBadge(item.stage) }, { label: odText('\u041f\u0440\u043e\u0433\u0440\u0435\u0441\u0441', 'Progress'), render: item => odProgress(item.stage) }], inspector: item => odInspector({ title: pairName(item.brandId, item.shopId), subtitle: nameById('campaigns', item.campaignId), status: item.stage, tabs: [odText('\u0426\u0438\u043a\u043b', 'Cycle'), odText('\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b', 'Documents'), odText('\u0418\u0441\u0442\u043e\u0440\u0438\u044f', 'History')], fields: [{ label: odText('\u0411\u0440\u0435\u043d\u0434', 'Brand'), value: orgName(item.brandId) }, { label: odText('\u041c\u0430\u0433\u0430\u0437\u0438\u043d', 'Shop'), value: orgName(item.shopId) }, { label: odText('\u041a\u0430\u043c\u043f\u0430\u043d\u0438\u044f', 'Campaign'), value: nameById('campaigns', item.campaignId) }, { label: odText('\u041a\u043e\u043b\u043b\u0435\u043a\u0446\u0438\u044f', 'Collection'), value: nameById('collections', item.collectionId) }], content: [odProgress(item.stage)] }) }));

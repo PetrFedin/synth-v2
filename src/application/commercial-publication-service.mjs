@@ -78,7 +78,7 @@ export function createCommercialPublicationService({
       const membership = await tx.getMembership(publication.brandId, actorId);
       assertCapability(membership, CAPABILITIES.SHOWROOM_MANAGE);
       const invitation = requireEntity(await tx.getShowroomInvitationByAccess(showroomId, shopId), 'SHOWROOM_INVITATION_NOT_FOUND', { showroomId, shopId });
-      assertAcceptedShowroomAccess(invitation, { showroomId, brandId: publication.brandId, shopId, now: clock() });
+      assertAcceptedShowroomAccess(invitation, { showroomId, brandId: publication.brandId, shopId, now: clock(), relationship: await tx.getRelationshipByTrade(publication.brandId, shopId) });
       return Object.freeze({ showroom, invitation });
     });
   }
@@ -98,7 +98,7 @@ export function createCommercialPublicationService({
       const shopMembership = await tx.getMembership(buyerCatalog.shopId, actorId);
       assertCapability(shopMembership, CAPABILITIES.DEAL_READ);
       const invitation = requireEntity(await tx.getShowroomInvitation(buyerCatalog.accessGrantId), 'SHOWROOM_INVITATION_NOT_FOUND', { invitationId: buyerCatalog.accessGrantId });
-      assertAcceptedShowroomAccess(invitation, { showroomId: buyerCatalog.showroomId, brandId: buyerCatalog.brandId, shopId: buyerCatalog.shopId, now: clock() });
+      assertAcceptedShowroomAccess(invitation, { showroomId: buyerCatalog.showroomId, brandId: buyerCatalog.brandId, shopId: buyerCatalog.shopId, now: clock(), relationship: await tx.getRelationshipByTrade(buyerCatalog.brandId, buyerCatalog.shopId) });
       return buyerCatalog;
     });
   }

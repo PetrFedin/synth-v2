@@ -61,7 +61,11 @@ export function createShowroomSelectionService({
     for (const membership of memberships) {
       if (membership.status !== 'active') continue;
       const invitation = await tx.getShowroomInvitationByAccess(showroom.id, membership.organisationId);
-      if (invitation?.status === 'accepted') return;
+      if (invitation?.status !== 'accepted') continue;
+      // Приглашение говорит «этот показ открыли вам», но торгуем ли мы до сих пор — решает связь.
+      // Найдено живьём: после отзыва связи магазин продолжал читать образы с оптовыми ценами.
+      const relationship = await tx.getRelationshipByTrade(showroom.brandId, membership.organisationId);
+      if (relationship?.status === 'active') return;
     }
     invariant(false, 'SHOWROOM_ACCESS_DENIED', 'This showroom has not been shared with you', { showroomId: showroom.id });
   }
@@ -273,7 +277,9 @@ export function createShowroomSelectionService({
           const relationship = await tx.getRelationshipByTrade(cycle.brandId, cycle.shopId);
           assertActiveRelationship(relationship, { brandId: cycle.brandId, shopId: cycle.shopId });
           const invitation = await tx.getShowroomInvitationByAccess(showroomId, cycle.shopId);
-          assertAcceptedShowroomAccess(invitation, { showroomId, brandId: cycle.brandId, shopId: cycle.shopId, now: clock() });
+          // Связь прочитана строкой выше — второй запрос того же факта только развёл бы два
+          // ответа на один вопрос внутри одной транзакции.
+          assertAcceptedShowroomAccess(invitation, { showroomId, brandId: cycle.brandId, shopId: cycle.shopId, now: clock(), relationship });
           const buyerCatalog = trustedCommercialReader
             ? requireEntity(await trustedCommercialReader.getBuyerCatalogForAccess(showroomId, cycle.shopId), 'BUYER_CATALOG_REQUIRED', { showroomId, shopId: cycle.shopId })
             : null;
@@ -383,7 +389,7 @@ export function createShowroomSelectionService({
           await assertOrganisationActor(tx, current.shopId, actorId, CAPABILITIES.SELECTION_WRITE);
           if (current.accessGrantId) {
             const invitation = requireEntity(await tx.getShowroomInvitation(current.accessGrantId), 'SHOWROOM_INVITATION_NOT_FOUND', { invitationId: current.accessGrantId });
-            assertAcceptedShowroomAccess(invitation, { showroomId: current.showroomId, brandId: current.brandId, shopId: current.shopId, now: clock() });
+            assertAcceptedShowroomAccess(invitation, { showroomId: current.showroomId, brandId: current.brandId, shopId: current.shopId, now: clock(), relationship: await tx.getRelationshipByTrade(current.brandId, current.shopId) });
           }
           return current;
         },

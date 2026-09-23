@@ -92,6 +92,9 @@ test('commercial publication service discovers latest buyer catalog through acto
         getMembership: async organisationId => organisationId === 'shop-1'
           ? { organisationId: 'shop-1', status: 'active', role: 'buyer' }
           : null,
+        // Каталог покупателя читается по принятому приглашению И действующей связи: без второй
+        // отозванный партнёр продолжал бы читать прайс-лист.
+        getRelationshipByTrade: async (brandId, shopId) => ({ id: 'relationship-1', brandId, shopId, status: 'active' }),
         getShowroomInvitation: async invitationId => invitationId === 'invitation-1'
           ? {
               id: 'invitation-1',

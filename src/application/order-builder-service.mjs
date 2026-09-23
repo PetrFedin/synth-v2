@@ -203,7 +203,7 @@ export function createOrderBuilderService({
             const showroom = requireEntity(await tx.getShowroom(selection.showroomId), 'SHOWROOM_NOT_FOUND', { showroomId: selection.showroomId });
             invariant(showroom.status === 'open', 'ORDER_COMMIT_SHOWROOM_NOT_OPEN', 'Commercial order can be committed only while its showroom is open', { showroomId: showroom.id, status: showroom.status });
             const invitation = requireEntity(await tx.getShowroomInvitation(current.accessGrantId), 'SHOWROOM_INVITATION_NOT_FOUND', { invitationId: current.accessGrantId });
-            assertAcceptedShowroomAccess(invitation, { showroomId: selection.showroomId, brandId: current.brandId, shopId: current.shopId, now: clock() });
+            assertAcceptedShowroomAccess(invitation, { showroomId: selection.showroomId, brandId: current.brandId, shopId: current.shopId, now: clock(), relationship: await tx.getRelationshipByTrade(current.brandId, current.shopId) });
             buyerCatalog = requireEntity(await trustedCommercialReader.getBuyerCatalogVersion(current.buyerCatalogVersionId), 'BUYER_CATALOG_NOT_FOUND', { buyerCatalogVersionId: current.buyerCatalogVersionId });
           }
           return Object.freeze({ current, cycle, selection, buyerCatalog });

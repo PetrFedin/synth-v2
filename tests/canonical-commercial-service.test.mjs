@@ -39,6 +39,13 @@ function fixture() {
         async getMembership(organisationId, actorId) {
           return organisationId === 'brand:1' && actorId === 'owner:1' ? context.membership : undefined;
         },
+        // Доступ к показу — принятое приглашение И действующая торговая связь: без второй
+        // отключённый партнёр продолжал бы читать каталог с оптовыми ценами.
+        async getRelationshipByTrade(brandId, shopId) {
+          return context.relationship === undefined
+            ? Object.freeze({ id: 'relationship:1', brandId, shopId, status: 'active' })
+            : context.relationship;
+        },
         async getShowroomInvitationByAccess() { return context.invitation; },
       });
     },

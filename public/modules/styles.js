@@ -857,6 +857,18 @@
     return holder;
   }
 
+  // Разбор готовности и следующий шаг за ней живут своим модулем: вкладка показывает статус, а
+  // «чего именно недостаёт» — это отдельный снимок, который читается по требованию.
+  function readinessPanelModule() { return window.SynthaProductReadinessPanel || null; }
+  function readinessDimensions(product) {
+    const panel = readinessPanelModule();
+    return panel ? panel.dimensionsPanel(product, { onLoaded: () => { if (state.view === 'styles') renderApp(); } }) : null;
+  }
+  function readinessProjectionAction(product) {
+    const panel = readinessPanelModule();
+    return panel ? panel.projectionAction(product) : null;
+  }
+
   function inspector(item) {
     const product = item.product;
     const risks = item.risks.length
@@ -896,7 +908,7 @@
             { label: text('Оценка готовности', 'Readiness'), value: product.readinessSnapshotId ? `${statusLabel(product.readinessStatus)} · ${item.readinessPercent}%` : text('Не оценён', 'Not assessed') },
             { label: text('Связка с каталогом', 'Catalogue link'), value: `${item.legacyCatalogLinkCount}/${item.productSkuCount}` },
           ],
-          content: [risks],
+          content: [risks, readinessDimensions(product), readinessProjectionAction(product)].filter(Boolean),
         },
         {
           label: text('Цветомодели', 'Colourways'),

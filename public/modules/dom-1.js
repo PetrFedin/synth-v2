@@ -230,7 +230,11 @@ function el(tag, props = {}) {
     else if (key === 'ariaLabel') node.setAttribute('aria-label', I18N.translate(String(value)));
     else if (key === 'ariaPressed') node.setAttribute('aria-pressed', String(value));
     else if (key === 'ariaHidden') node.setAttribute('aria-hidden', String(value));
-    else if (key === 'title' || key === 'placeholder') node.setAttribute(key, I18N.translate(String(value)));
+    // Проверка на отсутствие стоит **до** перевода, а не только строкой ниже: `title` и
+    // `placeholder` шли мимо общей защиты, и отсутствующая подсказка превращалась в слово
+    // «undefined» серым текстом внутри поля. Найдено живьём в форме выдачи материала — сразу в
+    // двух полях из трёх, и так было бы в любой форме, где поле подсказки не задано.
+    else if (key === 'title' || key === 'placeholder') { if (value !== undefined && value !== null) node.setAttribute(key, I18N.translate(String(value))); }
     else if (value !== undefined && value !== null) node.setAttribute(key, String(value));
   }
   return node;

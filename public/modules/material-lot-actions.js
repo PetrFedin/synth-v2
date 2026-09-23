@@ -44,7 +44,9 @@
       textDef('lotReference', text('Номер партии', 'Lot reference'), '', 64),
       optionalTextDef('dyeLot', text('Красильная партия', 'Dye lot'), '', 64),
       optionalTextDef('supplierCode', text('Код поставщика', 'Supplier code'), '', 64),
-      numberDef('receivedQuantity', `${text('Принято', 'Received')}, ${material.unit || ''}`.trim(), '', false, 0),
+      // Единица не приписывается к подписи сырым кодом: «Принято, m» — это код из базы, а не «м».
+      // Количество печатает слой единиц, и он же называет единицу в подсказке.
+      numberDef('receivedQuantity', text('Принято', 'Received'), '', false, 0),
       optionalTextDef('certificateReference', text('Сертификат', 'Certificate'), '', 200),
     ];
     // Цвет называется кодом из палитры этого полотна, а ссылку на управляемую запись подставляет
@@ -101,9 +103,21 @@
           EXECUTIONS.bills.set(code, []);
         }
       }
-      if (EXECUTIONS.bills.get(code).includes(lot.materialCode)) fitting.push({ id: code, name: code });
+      if (!EXECUTIONS.bills.get(code).includes(lot.materialCode)) continue;
+      // Сколько этой партии уже стоит за этим исполнением — прямо в подписи выбора. Без этого
+      // числа человек не может знать, что он сейчас перепишет.
+      const already = issuedTo(lot, code);
+      fitting.push({
+        id: code,
+        name: already > 0 ? `${code} — ${text('уже выдано', 'already issued')} ${unitAmount(already, lot.unit)}` : code,
+      });
     }
     return fitting;
+  }
+
+  function issuedTo(lot, executionCode) {
+    const issue = (lot.issues || []).find((row) => row.executionCode === executionCode);
+    return Number(issue?.quantity ?? 0);
   }
 
   async function issueForm(lot) {
@@ -116,18 +130,28 @@
       ), 'error');
       return;
     }
+    // Число здесь — **итог** по этому исполнению, а не добавка к нему.
+    //
+    // Домен считает выдачу уточнением: `issuedQuantity - alreadyIssuedToExecution + amount`. То
+    // есть повторная выдача в то же исполнение не прибавляет, а переписывает. Проверено на себе:
+    // форма называла поле «Количество», за исполнением уже стояло 300 м, я ввёл 50 — и стало 50,
+    // а не 350. Модель законна и удобна для исправлений, но поле обязано называться так, как оно
+    // работает, иначе человек молча уменьшает то, что хотел увеличить.
+    const label = text('Всего выдано в это исполнение', 'Total issued into this execution');
+    const ceiling = Number(lot.receivedQuantity ?? 0) - Number(lot.issuedQuantity ?? 0);
     openForm(text('Выдать в производство', 'Issue into production'), [
       selectDef('executionCode', text('Исполнение', 'Execution'), executions),
-      numberDef('quantity', `${text('Количество', 'Quantity')}, ${lot.unit || ''}`.trim(), '', false, 0),
+      { ...numberDef('quantity', label, '', false, 0),
+        placeholder: `${text('итог, не добавка', 'the total, not an addition')}` },
       optionalTextDef('notes', text('Примечание', 'Notes'), '', 1000),
     ], (values) => {
-      const remaining = Number(lot.remainingQuantity ?? 0);
+      // Потолок — остаток партии плюс то, что уже стоит за этим исполнением: переписывая свою же
+      // запись, человек вправе назвать любое число вплоть до всей партии.
+      const already = issuedTo(lot, values.executionCode);
       return mutate(`/v2/material-lots/${encodeURIComponent(lot.id)}/issue`, {
         expectedVersion: lot.version,
         executionCode: values.executionCode,
-        // Больше остатка выдать нельзя — домен это отвергнет, и сказать об этом надо здесь, где
-        // человек набирает число, а не после отправки.
-        quantity: validation.number(values.quantity, text('Количество', 'Quantity'), { min: 0.0001, max: remaining }),
+        quantity: validation.number(values.quantity, label, { min: 0.0001, max: ceiling + already }),
         ...(String(values.notes ?? '').trim() ? { notes: String(values.notes).trim() } : {}),
       });
     });

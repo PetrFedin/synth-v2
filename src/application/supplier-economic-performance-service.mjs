@@ -1,4 +1,4 @@
-import { invariant } from '../core/errors.mjs';
+import { invariant, requireEntity } from '../core/errors.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
 
 const ATTRIBUTION_VERSION = 'unique-recovery-supplier-v1';
@@ -142,8 +142,4 @@ function buildPerformance(supplier, operational, economicsByCurrency) {
 function percent(numerator, denominator) {
   if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator <= 0) return null;
   return Math.round((numerator / denominator) * 1_000_000) / 10_000;
-}
-function requireEntity(value, code, details) {
-  invariant(value, code, 'Entity not found', details);
-  return value;
 }

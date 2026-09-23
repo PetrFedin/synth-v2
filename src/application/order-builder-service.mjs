@@ -1,5 +1,5 @@
 import { domainEvent } from '../core/events.mjs';
-import { DomainError, invariant } from '../core/errors.mjs';
+import { DomainError, invariant, requireEntity } from '../core/errors.mjs';
 import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
 import { assertWholesaleStore } from './store-contract.mjs';
 import { CAPABILITIES, assertCapability, assertTradeCapability } from '../modules/access-control/public.mjs';
@@ -305,7 +305,6 @@ function normalizeOrderVersionInput(input) {
 function versionedFingerprint(base, expectedVersion) {
   return expectedVersion === undefined ? base : `${base}:${expectedVersion}`;
 }
-function requireEntity(entity, code, details) { invariant(entity, code, 'Entity not found', details); return entity; }
 
 function translateInventoryError(error) {
   if (error?.code === 'P0001' && INVENTORY_ERROR_CODES.has(error.message)) {

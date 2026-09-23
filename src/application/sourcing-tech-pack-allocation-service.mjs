@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { domainEvent } from '../core/events.mjs';
-import { invariant } from '../core/errors.mjs';
+import { invariant, requireEntity } from '../core/errors.mjs';
 import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
 import { allocateRfqWithAcknowledgedTechPack } from '../modules/sourcing/tech-pack-allocation.mjs';
@@ -69,5 +69,4 @@ function expectedVersionOf(input) {
 function withoutExpectedVersion(input) { return Object.freeze(Object.fromEntries(Object.entries(input).filter(([field]) => field !== 'expectedVersion'))); }
 function assertObject(value, code, message) { invariant(value && typeof value === 'object' && !Array.isArray(value), code, message); }
 function assertAllowedFields(value, allowed, code) { const fields = Object.keys(value).filter((field) => !allowed.has(field)).sort(); invariant(fields.length === 0, code, 'RFQ allocation contains unsupported fields', { fields }); }
-function requireEntity(value, code, details) { invariant(value, code, 'Entity not found', details); return value; }
 function defaultIdGenerator() { return (prefix) => `${prefix}_${randomUUID()}`; }

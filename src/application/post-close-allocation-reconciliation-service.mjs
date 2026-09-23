@@ -1,5 +1,5 @@
 import { domainEvent } from '../core/events.mjs';
-import { invariant } from '../core/errors.mjs';
+import { invariant, requireEntity } from '../core/errors.mjs';
 import { fingerprintsMatch } from '../core/fingerprints.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
 import { createPostCloseAllocationReconciliation } from '../modules/order-economics/post-close-allocation-reconciliation.mjs';
@@ -116,5 +116,4 @@ export function createPostCloseAllocationReconciliationService({
   });
 }
 
-function requireEntity(entity, code, details) { invariant(entity, code, 'Entity not found', details); return entity; }
 function defaultIdGenerator() { let sequence = 0; return (prefix) => `${prefix}_${++sequence}`; }

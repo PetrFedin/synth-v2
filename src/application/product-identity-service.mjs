@@ -1,5 +1,5 @@
 import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
-import { invariant } from '../core/errors.mjs';
+import { invariant, requireEntity } from '../core/errors.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
 import {
   createProductAttributeValue as createAttributeDomain,
@@ -313,6 +313,5 @@ function assertExpectedVersion(actualVersion, expectedVersion, code) {
   invariant(Number.isInteger(expectedVersion) && expectedVersion > 0, 'PRODUCT_EXPECTED_VERSION_INVALID', 'Expected version must be a positive integer');
   invariant(actualVersion === expectedVersion, code, 'Product Identity record changed concurrently', { expectedVersion, actualVersion });
 }
-function requireEntity(value, code, details) { invariant(value, code, 'Product Identity entity not found', details); return value; }
 function now(clock) { const value = clock(); invariant(typeof value === 'string' && Number.isFinite(Date.parse(value)), 'PRODUCT_IDENTITY_CLOCK_INVALID', 'Product Identity clock must return an ISO-compatible string'); return new Date(value).toISOString(); }
 function defaultIdGenerator() { let sequence = 0; return (prefix) => `${prefix}_${++sequence}`; }

@@ -1,5 +1,5 @@
 import { domainEvent } from '../core/events.mjs';
-import { invariant } from '../core/errors.mjs';
+import { invariant, requireEntity } from '../core/errors.mjs';
 import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
 import { assertPostgresInteger } from '../core/money.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
@@ -304,7 +304,6 @@ function assertAllowedFields(input, allowed, code) {
 function assertExpectedVersion(chart, expectedVersion) { invariant(chart.version === expectedVersion, 'MEASUREMENT_CONCURRENCY_CONFLICT', 'Measurement chart was changed by another operation', { chartId: chart.id, sku: chart.sku, expectedVersion, actualVersion: chart.version }); }
 function canonicalIdentityOf(value) { return Object.freeze({ styleVersionId: value.styleVersionId, colorwayId: value.colorwayId, sizeScaleVersionId: value.sizeScaleVersionId }); }
 function requireCanonical(chart) { invariant(chart?.styleVersionId && chart?.colorwayId && chart?.sizeScaleVersionId && chart?.sku === null, 'MEASUREMENT_CANONICAL_REQUIRED', 'Canonical Measurement Chart is required'); return chart; }
-function requireEntity(entity, code, details) { invariant(entity, code, 'Entity not found', details); return entity; }
 function unique(values) { return [...new Set(values.filter((value) => typeof value === 'string' && value))]; }
 function assertMdmEffective(reference, at) {
   const timestamp = Date.parse(at);

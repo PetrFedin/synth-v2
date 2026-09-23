@@ -266,6 +266,9 @@ function buildField(field) {
     step: field.kind === 'number' ? (field.integer ? '1' : '0.01') : undefined,
     min: field.min ?? (field.kind === 'number' ? '0' : undefined),
     maxlength: field.maxLength,
+    // Пример значения. Поле, которое просит непрозрачный идентификатор, обязано показать, как он
+    // выглядит: иначе человек смотрит на пустую строку и не знает, что туда писать.
+    placeholder: field.placeholder,
   });
   built.control.required = field.required !== false;
   return built;

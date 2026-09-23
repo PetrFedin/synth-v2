@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { domainEvent } from '../core/events.mjs';
-import { invariant } from '../core/errors.mjs';
+import { invariant, requireEntity } from '../core/errors.mjs';
 import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
 import {
@@ -149,5 +149,4 @@ function versionOf(input) {
 function assertVersion(plan, expectedVersion) {
   invariant(plan.version === expectedVersion, 'TARGET_PRICE_CONCURRENCY_CONFLICT', 'This target price was changed by another operation', { sku: plan.sku, expectedVersion, actualVersion: plan.version });
 }
-function requireEntity(value, code, details) { invariant(value, code, code.replace(/_/g, ' ').toLowerCase(), details); return value; }
 function defaultIdGenerator() { return (prefix) => `${prefix}_${randomUUID()}`; }

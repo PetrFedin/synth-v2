@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { domainEvent } from '../core/events.mjs';
-import { invariant } from '../core/errors.mjs';
+import { invariant, requireEntity } from '../core/errors.mjs';
 import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
 import {
@@ -124,5 +124,4 @@ function versionOf(input) {
   invariant(Number.isInteger(input.expectedVersion) && input.expectedVersion >= 1, 'INLINE_QC_EXPECTED_VERSION_INVALID', 'Expected version is invalid');
   return input.expectedVersion;
 }
-function requireEntity(value, code, details) { invariant(value, code, code.replace(/_/g, ' ').toLowerCase(), details); return value; }
 function defaultIdGenerator() { return (prefix) => `${prefix}_${randomUUID()}`; }

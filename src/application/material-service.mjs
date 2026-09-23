@@ -1,5 +1,5 @@
 import { domainEvent } from '../core/events.mjs';
-import { invariant } from '../core/errors.mjs';
+import { invariant, requireEntity } from '../core/errors.mjs';
 import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
 import { assertPostgresInteger } from '../core/money.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
@@ -191,5 +191,4 @@ function assertExpectedVersion(material, expectedVersion) {
   });
 }
 
-function requireEntity(entity, code, details) { invariant(entity, code, 'Entity not found', details); return entity; }
 function defaultIdGenerator() { let sequence = 0; return (prefix) => `${prefix}_${++sequence}`; }

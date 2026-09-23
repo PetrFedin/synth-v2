@@ -1,5 +1,5 @@
 import { domainEvent } from '../core/events.mjs';
-import { invariant } from '../core/errors.mjs';
+import { invariant, requireEntity } from '../core/errors.mjs';
 import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
 import {
@@ -166,7 +166,6 @@ export function createTechPackService({ techPackStore, clock = () => new Date().
 
 function assertVersion(value, expectedVersion) { invariant(Number.isInteger(expectedVersion) && expectedVersion >= 1, 'TECH_PACK_EXPECTED_VERSION_INVALID', 'Expected tech pack version is invalid'); invariant(value.version === expectedVersion, 'TECH_PACK_CONCURRENCY_CONFLICT', 'Tech pack was changed by another operation', { techPackCode: value.techPackCode, expectedVersion, actualVersion: value.version }); }
 function without(value, fields) { const blocked = new Set(fields); return Object.freeze(Object.fromEntries(Object.entries(value || {}).filter(([key]) => !blocked.has(key)))); }
-function requireEntity(value, code, details) { invariant(value, code, 'Entity not found', details); return value; }
 function assertObject(value, code, message) { invariant(value && typeof value === 'object' && !Array.isArray(value), code, message); }
 function assertAllowedFields(value, allowed, code) { const fields = Object.keys(value).filter((field) => !allowed.has(field)).sort(); invariant(fields.length === 0, code, 'Tech pack acknowledgement contains unsupported fields', { fields }); }
 function defaultIdGenerator() { let sequence = 0; return (prefix) => `${prefix}_${++sequence}`; }

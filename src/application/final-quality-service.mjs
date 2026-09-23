@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { domainEvent } from '../core/events.mjs';
-import { invariant } from '../core/errors.mjs';
+import { invariant, requireEntity } from '../core/errors.mjs';
 import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
 import {
@@ -218,5 +218,4 @@ function validateInput(value, allowed, code) {
 }
 function versionOf(value) { invariant(value && Number.isInteger(value.expectedVersion) && value.expectedVersion >= 1, 'QUALITY_EXPECTED_VERSION_INVALID', 'Expected Final Quality version is invalid'); return value.expectedVersion; }
 function withoutExpectedVersion(value) { const { expectedVersion: _expectedVersion, ...rest } = value; return rest; }
-function requireEntity(value, code, details) { invariant(value, code, 'Entity not found', details); return value; }
 function defaultIdGenerator() { return (prefix) => `${prefix}_${randomUUID()}`; }

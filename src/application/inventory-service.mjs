@@ -1,5 +1,5 @@
 import { domainEvent } from '../core/events.mjs';
-import { invariant } from '../core/errors.mjs';
+import { invariant, requireEntity } from '../core/errors.mjs';
 import { fingerprintsMatch } from '../core/fingerprints.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
 import { createReceiptInventoryMovements } from '../modules/inventory/public.mjs';
@@ -110,5 +110,4 @@ export function createInventoryService({ store, clock = () => new Date().toISOSt
   });
 }
 
-function requireEntity(entity, code, details) { invariant(entity, code, 'Entity not found', details); return entity; }
 function defaultIdGenerator() { let sequence = 0; return (prefix) => `${prefix}_${++sequence}`; }

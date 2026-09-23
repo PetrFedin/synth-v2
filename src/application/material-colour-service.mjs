@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { domainEvent } from '../core/events.mjs';
-import { invariant } from '../core/errors.mjs';
+import { invariant, requireEntity } from '../core/errors.mjs';
 import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
 import {
@@ -200,5 +200,4 @@ function versionOf(input) {
 function assertVersion(dip, expectedVersion) {
   invariant(dip.version === expectedVersion, 'LAB_DIP_CONCURRENCY_CONFLICT', 'This lab dip was changed by another operation', { dipReference: dip.dipReference, expectedVersion, actualVersion: dip.version });
 }
-function requireEntity(value, code, details) { invariant(value, code, code.replace(/_/g, ' ').toLowerCase(), details); return value; }
 function defaultIdGenerator() { return (prefix) => `${prefix}_${randomUUID()}`; }

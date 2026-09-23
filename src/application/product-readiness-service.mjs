@@ -1,4 +1,4 @@
-import { invariant } from '../core/errors.mjs';
+import { invariant, requireEntity } from '../core/errors.mjs';
 import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
 import {
@@ -187,7 +187,6 @@ function normalizeLimit(value) {
   return number;
 }
 
-function requireEntity(value, code, details) { invariant(value, code, 'Entity not found', details); return value; }
 function now(clock) { const value = clock(); invariant(typeof value === 'string' && Number.isFinite(Date.parse(value)), 'PRODUCT_READINESS_CLOCK_INVALID', 'Clock must return an ISO-compatible string'); return new Date(value).toISOString(); }
 function defaultIdGenerator() { let sequence = 0; return (prefix) => `${prefix}_${++sequence}`; }
 function deepFreeze(value) { if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value; Object.freeze(value); for (const nested of Object.values(value)) deepFreeze(nested); return value; }

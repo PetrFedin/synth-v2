@@ -1,5 +1,5 @@
 import { domainEvent } from '../core/events.mjs';
-import { invariant } from '../core/errors.mjs';
+import { invariant, requireEntity } from '../core/errors.mjs';
 import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
 import { assertPostgresInteger } from '../core/money.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
@@ -194,5 +194,4 @@ function assertAllowedFields(input, allowed, code) { const forbidden = Object.ke
 function expectedVersionOf(input) { return assertPostgresInteger(input.expectedVersion, { code: 'SAMPLE_EXPECTED_VERSION_INVALID', label: 'Expected sample version', min: 1 }); }
 function withoutExpectedVersion(input) { return Object.freeze(Object.fromEntries(Object.entries(input).filter(([field]) => field !== 'expectedVersion'))); }
 function assertExpectedVersion(sample, expectedVersion) { invariant(sample.version === expectedVersion, 'SAMPLE_CONCURRENCY_CONFLICT', 'Sample was changed by another operation', { sampleCode: sample.sampleCode, expectedVersion, actualVersion: sample.version }); }
-function requireEntity(entity, code, details) { invariant(entity, code, 'Entity not found', details); return entity; }
 function defaultIdGenerator() { let sequence = 0; return (prefix) => `${prefix}_${++sequence}`; }

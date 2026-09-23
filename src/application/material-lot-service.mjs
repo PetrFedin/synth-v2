@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { domainEvent } from '../core/events.mjs';
-import { invariant } from '../core/errors.mjs';
+import { invariant, requireEntity } from '../core/errors.mjs';
 import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
 import {
@@ -179,5 +179,4 @@ function versionOf(input) {
 function assertVersion(lot, expectedVersion) {
   invariant(lot.version === expectedVersion, 'MATERIAL_LOT_CONCURRENCY_CONFLICT', 'This material lot was changed by another operation', { lotReference: lot.lotReference, expectedVersion, actualVersion: lot.version });
 }
-function requireEntity(value, code, details) { invariant(value, code, code.replace(/_/g, ' ').toLowerCase(), details); return value; }
 function defaultIdGenerator() { return (prefix) => `${prefix}_${randomUUID()}`; }

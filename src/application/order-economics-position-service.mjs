@@ -1,4 +1,4 @@
-import { invariant } from '../core/errors.mjs';
+import { invariant, requireEntity } from '../core/errors.mjs';
 import { canonicalJson } from '../core/fingerprints.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
 
@@ -179,5 +179,4 @@ async function openPosition(tx, order, orderCommit) {
 function freezePosition(value) {
   return Object.freeze({ ...value, blockingReasons: Object.freeze([...value.blockingReasons]) });
 }
-function requireEntity(entity, code, details) { invariant(entity, code, 'Entity not found', details); return entity; }
 function roundMoney(value) { return Math.round(value * 10_000) / 10_000; }

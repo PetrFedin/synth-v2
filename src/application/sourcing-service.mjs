@@ -1,5 +1,5 @@
 import { domainEvent } from '../core/events.mjs';
-import { invariant } from '../core/errors.mjs';
+import { invariant, requireEntity } from '../core/errors.mjs';
 import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
 import { assertPostgresInteger } from '../core/money.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
@@ -358,5 +358,4 @@ function expectedVersionOf(input, code, label) { return assertPostgresInteger(in
 function withoutExpectedVersion(input) { return withoutFields(input, ['expectedVersion']); }
 function withoutFields(input, fields) { const excluded = new Set(fields); return Object.freeze(Object.fromEntries(Object.entries(input).filter(([field]) => !excluded.has(field)))); }
 function assertExpectedVersion(entity, expectedVersion, code, details) { invariant(entity.version === expectedVersion, code, 'Aggregate was changed by another operation', { ...details, expectedVersion, actualVersion: entity.version }); }
-function requireEntity(entity, code, details) { invariant(entity, code, 'Entity not found', details); return entity; }
 function defaultIdGenerator() { let sequence = 0; return (prefix) => `${prefix}_${++sequence}`; }

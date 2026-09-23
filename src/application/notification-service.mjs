@@ -1,4 +1,4 @@
-import { DomainError, invariant } from '../core/errors.mjs';
+import { DomainError, invariant, requireEntity } from '../core/errors.mjs';
 import { fingerprintsMatch } from '../core/fingerprints.mjs';
 import { decodeNotificationCursor, encodeNotificationCursor } from '../core/notification-cursor.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
@@ -369,10 +369,6 @@ function compareOutboxRecords(left, right) {
   return leftKey.localeCompare(rightKey);
 }
 
-function requireEntity(entity, code, details) {
-  invariant(entity, code, 'Entity not found', details);
-  return entity;
-}
 
 function defaultWorkerId() {
   const random = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;

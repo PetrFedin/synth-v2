@@ -1,4 +1,5 @@
 const SAFE_ID = '^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$';
+const SKU = '^[A-Z0-9][A-Z0-9._/-]{0,159}$';
 const identifier = { type: 'string', minLength: 1, maxLength: 200, pattern: SAFE_ID };
 const currency = { type: 'string', pattern: '^[A-Z]{3}$' };
 const money = { type: 'number', minimum: -900_719_925_474.0991, maximum: 900_719_925_474.0991, multipleOf: 0.0001 };
@@ -69,6 +70,21 @@ function readinessSchemas() {
       type: 'object', additionalProperties: false, required: ['readiness', 'orderId'],
       properties: { readiness: { $ref: '#/components/schemas/CostCloseReadinessSnapshot' }, orderId: identifier },
     },
+    // Ведомость обещает материальную себестоимость по SKU, факт приходит одной суммой на заказ — и
+    // нигде не встречался со своим планом. `uncoveredSkus` — SKU без опубликованной ведомости в
+    // валюте заказа: они не пересчитаны по случайному курсу, а честно вне покрытия, рядом с долей,
+    // которую покрытие составляет.
+    MaterialCostReconciliation: {
+      type: 'object', additionalProperties: false,
+      required: ['plannedMaterialCost', 'actualMaterialCost', 'varianceMaterialCost', 'coverageBasisPoints', 'uncoveredSkus'],
+      properties: {
+        plannedMaterialCost: nullableSchema(money),
+        actualMaterialCost: nullableSchema(money),
+        varianceMaterialCost: nullableSchema(money),
+        coverageBasisPoints: nullableSchema({ type: 'integer', minimum: 0, maximum: 10_000 }),
+        uncoveredSkus: { type: 'array', maxItems: 500, uniqueItems: true, items: { type: 'string', pattern: SKU } },
+      },
+    },
     OrderEconomicsPosition: {
       type: 'object', additionalProperties: false,
       required: [
@@ -77,9 +93,10 @@ function readinessSchemas() {
         'blockingReasons', 'effectiveLandedCostSnapshotId', 'effectiveMarginActualizationSnapshotId',
         'effectiveTotalLandedCost', 'effectiveContributionMarginAmount', 'effectiveContributionMarginPercent',
         'baseTotalLandedCost', 'baseContributionMarginAmount',
-        'cumulativePostCloseCostDelta', 'cumulativePostCloseMarginDelta',
+        'cumulativePostCloseCostDelta', 'cumulativePostCloseMarginDelta', 'materialCostReconciliation',
       ],
       properties: {
+        materialCostReconciliation: nullableSchema({ $ref: '#/components/schemas/MaterialCostReconciliation' }),
         orderId: identifier,
         orderCommitSnapshotId: identifier,
         currency,

@@ -1,8 +1,9 @@
 import { invariant, requireEntity } from '../core/errors.mjs';
 import { canonicalJson } from '../core/fingerprints.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
+import { materialCostReconciliation } from '../modules/bom/public.mjs';
 
-export function createOrderEconomicsPositionService({ economicsStore } = {}) {
+export function createOrderEconomicsPositionService({ economicsStore, bomStore } = {}) {
   invariant(economicsStore && typeof economicsStore.transaction === 'function', 'ORDER_ECONOMICS_STORE_REQUIRED', 'Order economics store is required');
 
   return Object.freeze({
@@ -16,23 +17,40 @@ export function createOrderEconomicsPositionService({ economicsStore } = {}) {
         invariant(orderCommit.orderId === order.id && orderCommit.status === 'committed', 'ORDER_COMMIT_SNAPSHOT_INVALID_FOR_EXECUTION', 'Economics position requires the committed snapshot for this order', { orderId, orderCommitSnapshotId: orderCommit.id });
 
         const close = await tx.getCostCloseByOrderCommitSnapshotId(orderCommit.id);
-        if (close) return closedPosition(tx, order, orderCommit, close);
+        if (close) return closedPosition(tx, order, orderCommit, close, bomStore);
 
         const readiness = await tx.getLatestCostCloseReadinessByOrderCommitSnapshotId(orderCommit.id);
-        if (!readiness) return openPosition(tx, order, orderCommit);
-        return readinessPosition(tx, order, orderCommit, readiness);
+        if (!readiness) return openPosition(tx, order, orderCommit, bomStore);
+        return readinessPosition(tx, order, orderCommit, readiness, bomStore);
       });
     },
   });
 }
 
-async function readinessPosition(tx, order, orderCommit, readiness) {
+// Ведомость сравнивается с фактом только тогда, когда факт вообще посчитан (веха готовности или
+// закрытия), а не на каждой позиции: до этого момента `componentTotals.material` ещё не существует,
+// и сравнивать план было бы не с чем.
+async function materialReconciliationFor(orderCommit, landed, bomStore) {
+  if (!bomStore || typeof bomStore.getBomBySku !== 'function') return null;
+  const actualMaterialCost = landed.componentTotals?.material ?? null;
+  const bomsBySku = new Map();
+  for (const line of orderCommit.lines) {
+    if (bomsBySku.has(line.sku)) continue;
+    bomsBySku.set(line.sku, (await bomStore.getBomBySku(line.sku)) ?? null);
+  }
+  return materialCostReconciliation({
+    lines: orderCommit.lines, bomsBySku, currency: orderCommit.currency, actualMaterialCost,
+  });
+}
+
+async function readinessPosition(tx, order, orderCommit, readiness, bomStore) {
   const landed = requireEntity(await tx.getLandedCostSnapshot(readiness.landedCostSnapshotId), 'LANDED_COST_SNAPSHOT_NOT_FOUND', { landedCostSnapshotId: readiness.landedCostSnapshotId });
   const margin = requireEntity(await tx.getMarginActualizationSnapshot(readiness.marginActualizationSnapshotId), 'MARGIN_ACTUALIZATION_NOT_FOUND', { marginActualizationSnapshotId: readiness.marginActualizationSnapshotId });
   const currentEntries = (await tx.listActualCostEntries(order.id)).filter((entry) => entry.orderCommitSnapshotId === orderCommit.id);
   const currentIds = currentEntries.map((entry) => entry.id).sort();
   const landedIds = [...(landed.costEntryIds ?? [])].sort();
   const stale = canonicalJson(currentIds) !== canonicalJson(landedIds);
+  const materialReconciliation = await materialReconciliationFor(orderCommit, landed, bomStore);
   return freezePosition({
     orderId: order.id,
     orderCommitSnapshotId: orderCommit.id,
@@ -57,10 +75,11 @@ async function readinessPosition(tx, order, orderCommit, readiness) {
     baseContributionMarginAmount: null,
     cumulativePostCloseCostDelta: null,
     cumulativePostCloseMarginDelta: null,
+    materialCostReconciliation: materialReconciliation,
   });
 }
 
-async function closedPosition(tx, order, orderCommit, close) {
+async function closedPosition(tx, order, orderCommit, close, bomStore) {
   const latestAdjustment = await tx.getLatestPostCloseAdjustment(close.id);
   const reconciliation = latestAdjustment
     ? await tx.getPostCloseAllocationReconciliationByAdjustmentId(latestAdjustment.id)
@@ -85,6 +104,7 @@ async function closedPosition(tx, order, orderCommit, close) {
     );
   }
   const allocationSource = latestAdjustment ? margin : close;
+  const materialReconciliation = await materialReconciliationFor(orderCommit, landed, bomStore);
   return freezePosition({
     orderId: order.id,
     orderCommitSnapshotId: orderCommit.id,
@@ -109,6 +129,7 @@ async function closedPosition(tx, order, orderCommit, close) {
     baseContributionMarginAmount: close.contributionMarginAmount,
     cumulativePostCloseCostDelta: roundMoney(landed.totalCost - close.totalLandedCost),
     cumulativePostCloseMarginDelta: roundMoney(margin.contributionMarginAmount - close.contributionMarginAmount),
+    materialCostReconciliation: materialReconciliation,
   });
 }
 
@@ -119,10 +140,11 @@ async function closedPosition(tx, order, orderCommit, close) {
 // **можно ли закрывать**, а не **сколько заработано**; путать одно с другим значит оставлять экран
 // пустым при полном реестре затрат. Числа отдаются, и вместе с ними остаётся честная причина
 // `readiness_not_evaluated`: цифра есть, но окончательной её ещё никто не объявлял.
-async function openPosition(tx, order, orderCommit) {
+async function openPosition(tx, order, orderCommit, bomStore) {
   const margin = await tx.getLatestMarginActualizationByOrderCommitSnapshotId?.(orderCommit.id);
   const landed = margin?.landedCostSnapshotId ? await tx.getLandedCostSnapshot(margin.landedCostSnapshotId) : null;
   if (margin) {
+    const materialReconciliation = landed ? await materialReconciliationFor(orderCommit, landed, bomStore) : null;
     return freezePosition({
       orderId: order.id,
       orderCommitSnapshotId: orderCommit.id,
@@ -147,6 +169,7 @@ async function openPosition(tx, order, orderCommit) {
       baseContributionMarginAmount: null,
       cumulativePostCloseCostDelta: null,
       cumulativePostCloseMarginDelta: null,
+      materialCostReconciliation: materialReconciliation,
     });
   }
   return freezePosition({
@@ -171,6 +194,7 @@ async function openPosition(tx, order, orderCommit) {
     effectiveContributionMarginPercent: null,
     baseTotalLandedCost: null,
     baseContributionMarginAmount: null,
+    materialCostReconciliation: null,
     cumulativePostCloseCostDelta: null,
     cumulativePostCloseMarginDelta: null,
   });

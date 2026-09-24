@@ -38,7 +38,7 @@
   "src/application/notification-service.mjs": 4,
   "src/application/operation-sequence-service.mjs": 2,
   "src/application/order-builder-service.mjs": 2,
-  "src/application/order-economics-position-service.mjs": 1,
+  "src/application/order-economics-position-service.mjs": 2,
   "src/application/order-economics-service.mjs": 1,
   "src/application/order-margin-bridge-service.mjs": 1,
   "src/application/outbox-publisher-service.mjs": 3,

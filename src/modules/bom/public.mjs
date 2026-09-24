@@ -142,6 +142,44 @@ function normalizeLine({ line, position, brandId, bomCurrency, materialByCode, l
   });
 }
 
+// Ведомость обещает материальную себестоимость по SKU; факт приходит одной суммой на заказ
+// (`costType: 'material'` в реестре фактических затрат) — и нигде не встречался со своим планом.
+// Свод здесь только сравнивает, ничего не решает: SKU без опубликованной ведомости или с ведомостью
+// в другой валюте не пересчитывается по случайному курсу, а честно остаётся вне покрытия, рядом с
+// долей заказа, которую покрытие составляет — как сезонная экономика делает с частичным фактом.
+export function materialCostReconciliation({ lines, bomsBySku, currency, actualMaterialCost }) {
+  invariant(Array.isArray(lines), 'MATERIAL_RECONCILIATION_LINES_INVALID', 'Order lines are required');
+  invariant(bomsBySku instanceof Map, 'MATERIAL_RECONCILIATION_BOMS_INVALID', 'BOM lookup map is required');
+  let plannedCostScaled = 0n;
+  let coveredQuantity = 0;
+  let totalQuantity = 0;
+  const uncoveredSkus = [];
+  for (const line of lines) {
+    const quantity = line.quantity;
+    totalQuantity += quantity;
+    const bom = bomsBySku.get(line.sku) ?? null;
+    if (!bom || bom.status !== 'published' || bom.currency !== currency) {
+      uncoveredSkus.push(line.sku);
+      continue;
+    }
+    plannedCostScaled += toScaled(bom.materialCost) * BigInt(quantity);
+    coveredQuantity += quantity;
+  }
+  const coverageBasisPoints = totalQuantity === 0 ? null : Math.round((coveredQuantity / totalQuantity) * 10_000);
+  const plannedMaterialCost = coveredQuantity === 0 ? null : fromScaled(plannedCostScaled, 'MATERIAL_RECONCILIATION_PLANNED_TOO_LARGE');
+  const varianceMaterialCost = plannedMaterialCost === null || actualMaterialCost === null || actualMaterialCost === undefined
+    ? null : roundMoney(actualMaterialCost - plannedMaterialCost);
+  return Object.freeze({
+    plannedMaterialCost,
+    actualMaterialCost: actualMaterialCost ?? null,
+    varianceMaterialCost,
+    coverageBasisPoints,
+    uncoveredSkus: Object.freeze(uncoveredSkus.sort()),
+  });
+}
+
+function roundMoney(value) { return Math.round(value * 10_000) / 10_000; }
+
 function assertOneMainPerType(lines) {
   const mainByType = new Map();
   for (const line of lines) {

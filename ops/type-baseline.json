@@ -11,7 +11,7 @@
   "src/acceptance/acceptance-auth.mjs": 5,
   "src/acceptance/collection-live-acceptance.mjs": 27,
   "src/acceptance/product-commercialization-live-acceptance.mjs": 20,
-  "src/acceptance/product-readiness-live-acceptance.mjs": 27,
+  "src/acceptance/product-readiness-live-acceptance.mjs": 28,
   "src/acceptance/product-readiness-projection-boundary.mjs": 7,
   "src/acceptance/product-readiness-ready-live-acceptance.mjs": 18,
   "src/application/auth-service.mjs": 1,

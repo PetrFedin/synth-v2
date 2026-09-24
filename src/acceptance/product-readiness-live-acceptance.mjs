@@ -179,6 +179,21 @@ export async function runProductReadinessLiveAcceptance({
     },
   }), 'Style Version creation');
 
+  // Готовность по измерению «атрибуты» больше не принимается на слово: подтверждение в теле
+  // запроса обязано совпадать с реестром. Эта сцена намеренно блокируется на категории и
+  // измерениях — не на атрибутах, — поэтому заводит настоящее управляемое значение, как это
+  // делает READY-сценарий, чтобы `product_attributes` не попало в список блокировок лишним.
+  data(await requestJson(fetchImpl, target.url, '/v2/product/attributes', {
+    method: 'POST', token, idempotencyKey: command(runId, 'blocked-attribute'),
+    body: {
+      ownerType: 'style_version',
+      ownerId: styleVersion.id,
+      attributeCode: 'apparel.fabric_type',
+      attributeCatalogVersion: '1.0.0',
+      value: 'Приёмочное полотно',
+    },
+  }), 'Product governed attribute value');
+
   const colorway = data(await requestJson(fetchImpl, target.url, `/v2/product/style-versions/${encodeURIComponent(styleVersion.id)}/colorways`, {
     method: 'POST', token, idempotencyKey: command(runId, 'product-colorway-create'),
     body: {

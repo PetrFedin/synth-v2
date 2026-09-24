@@ -36,8 +36,13 @@ try {
   });
   await migratePostgres({ pool, migrationsDir });
   const runtime = createPostgresWholesaleRuntime({ pool, migrationsDir });
-  const references = await bootstrapProductionAcceptanceReferences({ platform: runtime.platform });
 
+  // The identity is created before the role is granted, not after. Migration 125 refuses a
+  // sign-in identity for an actor id that already holds memberships — exactly the order this
+  // used to run in, since `bootstrapProductionAcceptanceReferences` grants the brand-owner
+  // membership to this same actor id. Its own doc comment states the contract: the acceptance
+  // run must create the login identity with its own email and password *before* calling the
+  // bootstrap, so the bootstrap finds it already there and leaves it untouched.
   if (!token) {
     const email = process.env.SYNTHA_ACCEPTANCE_EMAIL;
     const password = process.env.SYNTHA_ACCEPTANCE_PASSWORD;
@@ -52,6 +57,8 @@ try {
     token = session.token;
     createdSession = true;
   }
+
+  const references = await bootstrapProductionAcceptanceReferences({ platform: runtime.platform });
 
   const result = await runCollectionLiveAcceptance({
     baseUrl: target.url.toString(),

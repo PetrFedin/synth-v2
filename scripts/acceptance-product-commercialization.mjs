@@ -12,7 +12,7 @@ import {
 } from '../src/acceptance/collection-live-acceptance.mjs';
 import { runProductCommercializationLiveAcceptance } from '../src/acceptance/product-commercialization-live-acceptance.mjs';
 import { runReadyProductReadinessLiveAcceptance } from '../src/acceptance/product-readiness-ready-live-acceptance.mjs';
-import { bootstrapProductionAcceptanceReferences } from '../src/acceptance/production-reference-bootstrap.mjs';
+import { bootstrapProductionAcceptanceReferences, PRODUCTION_ACCEPTANCE_REFERENCES } from '../src/acceptance/production-reference-bootstrap.mjs';
 import { bootstrapMdmReference } from '../src/infrastructure/mdm-reference-bootstrap.mjs';
 import { migratePostgres, waitForPostgres } from '../src/infrastructure/postgres-migrator.mjs';
 import { createPostgresWholesaleRuntime } from '../src/runtime/postgres-runtime.mjs';
@@ -47,8 +47,13 @@ try {
   await bootstrapMdmReference({ pool, datasets });
 
   const runtime = createPostgresWholesaleRuntime({ pool, migrationsDir });
-  const references = await bootstrapProductionAcceptanceReferences({ platform: runtime.platform });
 
+  // The identities are created before the roles are granted, not after — see
+  // acceptance-collection.mjs for the full reason: migration 125 refuses a sign-in identity for
+  // an actor id that already holds memberships, and `bootstrapProductionAcceptanceReferences`
+  // grants the brand-owner and shop-owner memberships to these same actor ids. The shop actor id
+  // is the static reference constant, not the bootstrap's return, precisely so it can be named
+  // before that call runs.
   if (!brandToken) {
     const email = process.env.SYNTHA_ACCEPTANCE_EMAIL;
     const password = process.env.SYNTHA_ACCEPTANCE_PASSWORD;
@@ -70,7 +75,7 @@ try {
     await ensureAcceptanceActor({
       pool,
       auth: runtime.auth,
-      actorId: references.actors.shopOwner,
+      actorId: PRODUCTION_ACCEPTANCE_REFERENCES.actors.shopOwner,
       email,
       password,
       displayName: process.env.SYNTHA_ACCEPTANCE_SHOP_NAME ?? 'Syntha Acceptance Shop Owner',
@@ -80,6 +85,8 @@ try {
     shopToken = session.token;
     shopCreatedSession = true;
   }
+
+  const references = await bootstrapProductionAcceptanceReferences({ platform: runtime.platform });
 
   const runId = process.env.SYNTHA_ACCEPTANCE_RUN_ID?.trim() || undefined;
   const ready = await runReadyProductReadinessLiveAcceptance({

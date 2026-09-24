@@ -175,6 +175,7 @@ test('live Product Identity to Readiness acceptance uses public idempotent HTTP,
       'GET /v2/auth/me': { data: { actorId: PRODUCTION_ACCEPTANCE_REFERENCES.actors.brandOwner } },
       'POST /v2/product/styles': { data: { id: IDS.styleId, brandId } },
       [`POST /v2/product/styles/${IDS.styleId}/versions`]: { data: { id: IDS.styleVersionId, brandId, styleId: IDS.styleId } },
+      'POST /v2/product/attributes': { data: { id: 'product-attribute-value_blocked-fixture', ownerId: IDS.styleVersionId } },
       [`POST /v2/product/style-versions/${IDS.styleVersionId}/colorways`]: { data: { id: IDS.colorwayId, brandId, styleVersionId: IDS.styleVersionId } },
       'POST /v2/product/size-scales': { data: { id: IDS.sizeScaleId, brandId } },
       [`POST /v2/product/size-scales/${IDS.sizeScaleId}/versions`]: { data: { id: IDS.sizeScaleVersionId, brandId, sizeScaleId: IDS.sizeScaleId } },
@@ -218,7 +219,9 @@ test('live Product Identity to Readiness acceptance uses public idempotent HTTP,
   assert.equal(result.isolation.unchanged, true);
 
   const mutations = requests.filter((request) => request.method === 'POST');
-  assert.equal(mutations.length, 10);
+  // Стало на один POST больше: сцена заводит настоящее управляемое значение атрибута, иначе
+  // измерение «атрибуты» блокировалось бы лишним фактом, которого сцена не проверяет.
+  assert.equal(mutations.length, 11);
   for (const request of mutations) {
     assert.match(request.headers['idempotency-key'], /^acceptance-run-002-/);
     assert.equal(request.headers.authorization, 'Bearer opaque-test-token');

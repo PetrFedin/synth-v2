@@ -44,8 +44,11 @@ try {
   await bootstrapMdmReference({ pool, datasets });
 
   const runtime = createPostgresWholesaleRuntime({ pool, migrationsDir });
-  const references = await bootstrapProductionAcceptanceReferences({ platform: runtime.platform });
 
+  // The identity is created before the role is granted, not after — see acceptance-collection.mjs
+  // for the full reason: migration 125 refuses a sign-in identity for an actor id that already
+  // holds memberships, and `bootstrapProductionAcceptanceReferences` grants the brand-owner
+  // membership to this same actor id.
   if (!token) {
     const email = process.env.SYNTHA_ACCEPTANCE_EMAIL;
     const password = process.env.SYNTHA_ACCEPTANCE_PASSWORD;
@@ -60,6 +63,8 @@ try {
     token = session.token;
     createdSession = true;
   }
+
+  const references = await bootstrapProductionAcceptanceReferences({ platform: runtime.platform });
 
   const runId = process.env.SYNTHA_ACCEPTANCE_RUN_ID?.trim() || undefined;
   const blocked = await runProductReadinessLiveAcceptance({

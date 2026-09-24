@@ -1,9 +1,10 @@
 import { domainEvent } from '../core/events.mjs';
-import { invariant } from '../core/errors.mjs';
+import { invariant, requireEntity } from '../core/errors.mjs';
 import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
 import { assertPostgresInteger } from '../core/money.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
-import { createMaterial, publishMaterial, updateDraftMaterial } from '../modules/materials/public.mjs';
+import { amendMaterialSpecification, createMaterial, materialComposition, publishMaterial, updateDraftMaterial } from '../modules/materials/public.mjs';
+
 
 export function createMaterialService({ materialStore, clock = () => new Date().toISOString(), nextId = defaultIdGenerator() } = {}) {
   invariant(materialStore && typeof materialStore.transaction === 'function', 'MATERIAL_STORE_REQUIRED', 'Material store is required');
@@ -73,6 +74,77 @@ export function createMaterialService({ materialStore, clock = () => new Date().
       );
     },
 
+    async amendMaterialSpecification(commandId, actorId, code, input) {
+      invariant(input && typeof input === 'object' && !Array.isArray(input), 'MATERIAL_SPECIFICATION_INVALID', 'Specification request is invalid');
+      assertAllowedFields(input, MATERIAL_SPECIFICATION_FIELDS);
+      const expectedVersion = assertPostgresInteger(input.expectedVersion, { code: 'MATERIAL_EXPECTED_VERSION_INVALID', label: 'Expected material version', min: 1 });
+      const specification = Object.freeze(Object.fromEntries(Object.entries(input).filter(([key]) => key !== 'expectedVersion')));
+      return execute(
+        commandId,
+        `amendMaterialSpecification:${actorId}:${code}:${canonicalJson({ expectedVersion, ...specification })}`,
+        actorId,
+        async (tx) => {
+          const locked = requireEntity(await tx.getMaterial(code), 'MATERIAL_NOT_FOUND', { code });
+          await authorisedBrand(tx, locked.brandId, actorId);
+          return locked;
+        },
+        async (tx, locked) => {
+          assertExpectedVersion(locked, expectedVersion);
+          const amended = amendMaterialSpecification(locked, specification, clock());
+          if (amended === locked) return locked;
+          await tx.saveMaterial(amended, expectedVersion);
+          await append(tx, 'material.specification-amended', code, {
+            brandId: amended.brandId, version: amended.version,
+            cuttableWidth: amended.specification?.cuttableWidth ?? null,
+            cuttableWidthUnit: amended.specification?.cuttableWidthUnit ?? null,
+            weightGsm: amended.specification?.weightGsm ?? null,
+          }, commandId, actorId);
+          return amended;
+        },
+      );
+    },
+
+    /**
+     * Состав материала — целиком, а не построчно.
+     *
+     * Состав правят набором: заменить 100 % хлопка на 60/40 нельзя, не пройдя через промежуточную
+     * сумму, которая ни во что не складывается. Поэтому команда принимает весь состав и заменяет
+     * прежний; база держит сумму отложенной проверкой ровно по той же причине.
+     */
+    async setMaterialComposition(commandId, actorId, code, input) {
+      invariant(input && typeof input === 'object' && !Array.isArray(input), 'MATERIAL_COMPOSITION_INVALID', 'Composition request is invalid');
+      assertAllowedFields(input, MATERIAL_COMPOSITION_FIELDS);
+      const expectedVersion = assertPostgresInteger(input.expectedVersion, { code: 'MATERIAL_EXPECTED_VERSION_INVALID', label: 'Expected material version', min: 1 });
+      return execute(
+        commandId,
+        `setMaterialComposition:${actorId}:${code}:${canonicalJson({ expectedVersion, lines: input.lines })}`,
+        actorId,
+        async (tx) => {
+          const locked = requireEntity(await tx.getMaterial(code), 'MATERIAL_NOT_FOUND', { code });
+          await authorisedBrand(tx, locked.brandId, actorId);
+          return locked;
+        },
+        async (tx, locked) => {
+          assertExpectedVersion(locked, expectedVersion);
+          // Волокна разрешаются в governed-справочнике до записи: строка состава ссылается на
+          // запись с её версией, поэтому переименование волокна не переписывает задним числом то,
+          // что уже напечатано на этикетке.
+          const resolved = await tx.resolveFibres((input.lines ?? []).map((line) => line?.fibreCode));
+          const lines = materialComposition((input.lines ?? []).map((line) => ({
+            fibreCode: line?.fibreCode,
+            percentage: line?.percentage,
+            fibreRef: resolved.get(String(line?.fibreCode ?? '').trim().toUpperCase()) ?? null,
+          })));
+          await tx.replaceMaterialComposition(locked, lines, { at: clock(), actorId, nextId });
+          await append(tx, 'material.composition-set', code, {
+            brandId: locked.brandId,
+            fibres: lines.map((line) => ({ fibreCode: line.fibreCode, percentage: line.percentage })),
+          }, commandId, actorId);
+          return Object.freeze({ code, brandId: locked.brandId, lines });
+        },
+      );
+    },
+
     async publishMaterial(commandId, actorId, code, input) {
       invariant(input && typeof input === 'object' && !Array.isArray(input), 'MATERIAL_PUBLISH_INVALID', 'Material publication request is invalid');
       const expectedVersion = assertPostgresInteger(input.expectedVersion, { code: 'MATERIAL_EXPECTED_VERSION_INVALID', label: 'Expected material version', min: 1 });
@@ -97,9 +169,15 @@ export function createMaterialService({ materialStore, clock = () => new Date().
   });
 }
 
+const MATERIAL_COMPOSITION_FIELDS = Object.freeze(new Set(['expectedVersion', 'lines']));
+const MATERIAL_SPECIFICATION_FIELDS = Object.freeze(new Set([
+  'expectedVersion', 'weightGsm', 'cuttableWidth', 'cuttableWidthUnit', 'countryOfOrigin',
+  'purchaseUnit', 'conversionFactor', 'materialSubtype',
+]));
 const MATERIAL_UPDATE_FIELDS = Object.freeze(new Set([
   'expectedVersion', 'name', 'type', 'unit', 'supplierName', 'supplierReference',
   'composition', 'color', 'currency', 'unitCost', 'minimumOrderQuantity', 'availableQuantity',
+  'weightGsm', 'cuttableWidth', 'cuttableWidthUnit', 'countryOfOrigin', 'purchaseUnit', 'conversionFactor', 'materialSubtype',
 ]));
 
 function assertAllowedFields(input, allowed = MATERIAL_UPDATE_FIELDS) {
@@ -113,5 +191,4 @@ function assertExpectedVersion(material, expectedVersion) {
   });
 }
 
-function requireEntity(entity, code, details) { invariant(entity, code, 'Entity not found', details); return entity; }
 function defaultIdGenerator() { let sequence = 0; return (prefix) => `${prefix}_${++sequence}`; }

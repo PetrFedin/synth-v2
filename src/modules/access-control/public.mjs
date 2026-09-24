@@ -75,9 +75,10 @@ export const ROLE_CAPABILITIES = Object.freeze({
     CAPABILITIES.PRODUCTION_ORDER_READ,
     CAPABILITIES.PRODUCTION_ORDER_MANAGE,
     CAPABILITIES.PRODUCTION_EXECUTION_READ,
-    CAPABILITIES.PRODUCTION_EXECUTION_MANAGE,
+    // Продажи видят качество, но не подписывают его: тот, кто продаёт партию, не может сам
+    // решить, что она годна. Это разделение обязанностей, а не формальность — на нём стоит вся
+    // приёмочная часть, и аудитор спрашивает про него первым.
     CAPABILITIES.QUALITY_READ,
-    CAPABILITIES.QUALITY_MANAGE,
     CAPABILITIES.SHOWROOM_MANAGE,
     CAPABILITIES.PARTNER_RELATIONSHIP_MANAGE,
     CAPABILITIES.SHOWROOM_INVITATION_MANAGE,
@@ -92,6 +93,48 @@ export const ROLE_CAPABILITIES = Object.freeze({
     CAPABILITIES.CLAIM_READ,
     CAPABILITIES.MARGIN_READ,
     CAPABILITIES.DEAL_READ,
+    CAPABILITIES.CALENDAR_READ,
+  ]),
+  // Производство: ведёт заказы фабрике, исполнение, склад материалов и техпаки. Качества не
+  // подписывает — оно решает, годится ли то, что произведено.
+  production: Object.freeze([
+    CAPABILITIES.PRODUCT_READ,
+    CAPABILITIES.BOM_READ,
+    CAPABILITIES.MEASUREMENT_READ,
+    CAPABILITIES.SAMPLE_READ,
+    CAPABILITIES.TECH_PACK_READ,
+    CAPABILITIES.TECH_PACK_MANAGE,
+    CAPABILITIES.SUPPLIER_READ,
+    CAPABILITIES.SOURCING_READ,
+    CAPABILITIES.SOURCING_MANAGE,
+    CAPABILITIES.PRODUCTION_ALLOCATE,
+    CAPABILITIES.PRODUCTION_ORDER_READ,
+    CAPABILITIES.PRODUCTION_ORDER_MANAGE,
+    CAPABILITIES.PRODUCTION_EXECUTION_READ,
+    CAPABILITIES.PRODUCTION_EXECUTION_MANAGE,
+    CAPABILITIES.QUALITY_READ,
+    CAPABILITIES.INVENTORY_READ,
+    CAPABILITIES.INVENTORY_MANAGE,
+    CAPABILITIES.LOGISTICS_READ,
+    CAPABILITIES.CALENDAR_READ,
+  ]),
+  // Качество: решает, годится ли материал и изделие. Ничего не продаёт, ничего не заказывает и
+  // каталогом не распоряжается — иначе решение о годности принимал бы тот, кто заинтересован в
+  // отгрузке.
+  quality: Object.freeze([
+    CAPABILITIES.PRODUCT_READ,
+    CAPABILITIES.BOM_READ,
+    CAPABILITIES.MEASUREMENT_READ,
+    CAPABILITIES.SAMPLE_READ,
+    CAPABILITIES.TECH_PACK_READ,
+    CAPABILITIES.SUPPLIER_READ,
+    CAPABILITIES.PRODUCTION_ORDER_READ,
+    CAPABILITIES.PRODUCTION_EXECUTION_READ,
+    CAPABILITIES.QUALITY_READ,
+    CAPABILITIES.QUALITY_MANAGE,
+    CAPABILITIES.QUALITY_APPROVE,
+    CAPABILITIES.INVENTORY_READ,
+    CAPABILITIES.CLAIM_READ,
     CAPABILITIES.CALENDAR_READ,
   ]),
   buyer: Object.freeze([
@@ -143,7 +186,7 @@ export const ROLE_CAPABILITIES = Object.freeze({
 });
 
 export const ALLOWED_ROLES = Object.freeze({
-  brand: Object.freeze(['owner', 'admin', 'sales', 'finance', 'viewer']),
+  brand: Object.freeze(['owner', 'admin', 'sales', 'production', 'quality', 'finance', 'viewer']),
   shop: Object.freeze(['owner', 'admin', 'buyer', 'finance', 'viewer']),
 });
 

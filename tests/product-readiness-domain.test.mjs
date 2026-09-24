@@ -228,3 +228,52 @@ test('ready snapshot publishes exact frozen technical/commercial handoff and enf
     (error) => error?.code === 'COMMERCIAL_PROJECTION_VERSION_SEQUENCE_INVALID',
   );
 });
+
+test('an attestation of attribute coverage cannot outrun the register', () => {
+  // Это измерение было единственным самодекларативным, и оно противоречило собственному
+  // доказательству, лежащему рядом: живьём вердикт приходил `ready` при
+  // `styleAttributeCount: 0, skuAttributeCount: 0`. Платформа записывала «атрибуты готовы» и тут
+  // же записывала, что их нет.
+  const bare = product();
+  bare.styleAttributes = [];
+  bare.colorways = bare.colorways.map((colorway) => ({
+    ...colorway,
+    attributes: [],
+    skus: colorway.skus.map((sku) => ({ ...sku, attributes: [] })),
+  }));
+
+  const claimed = evaluateProductReadiness({
+    developmentRoute: 'OWN_DEVELOPMENT',
+    technicalSnapshot: { ...technicalSnapshot(), product: bare },
+    commercialPreparation: commercialPreparation(),
+    externalEvidence: { compliance: external('compliance:1') },
+  }).find((dimension) => dimension.code === 'product_attributes');
+
+  assert.equal(claimed.status, 'blocked');
+  assert.equal(claimed.evidence.coverageAttestation, true);
+  assert.equal(claimed.evidence.styleAttributeCount, 0);
+  assert.equal(claimed.evidence.skuAttributeCount, 0);
+  // Причина называет расхождение, а не повторяет «не подтверждено»: подтверждение как раз есть.
+  assert.match(claimed.evidence.reason, /register holds no governed attribute value/);
+
+  // А там, где реестр держит значения, подтверждение принимается — правило проверяет claim против
+  // реестра, а не запрещает измерение.
+  const backed = evaluateProductReadiness({
+    developmentRoute: 'OWN_DEVELOPMENT',
+    technicalSnapshot: technicalSnapshot(),
+    commercialPreparation: commercialPreparation(),
+    externalEvidence: { compliance: external('compliance:1') },
+  }).find((dimension) => dimension.code === 'product_attributes');
+  assert.equal(backed.status, 'ready');
+  assert.ok(backed.evidence.styleAttributeCount > 0);
+
+  // И без подтверждения измерение закрыто даже при полном реестре: реестр не подменяет решение
+  // человека о том, что покрытие для этой категории достаточно.
+  const unattested = evaluateProductReadiness({
+    developmentRoute: 'OWN_DEVELOPMENT',
+    technicalSnapshot: technicalSnapshot(),
+    commercialPreparation: { ...commercialPreparation(), attributeCoverageConfirmed: false },
+    externalEvidence: { compliance: external('compliance:1') },
+  }).find((dimension) => dimension.code === 'product_attributes');
+  assert.equal(unattested.status, 'blocked');
+});

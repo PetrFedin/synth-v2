@@ -70,6 +70,12 @@ function transactionView(client) {
 
     getMembership: (organisationId, userId) => getPayloadBy(client, 'memberships', ['organisation_id', 'user_id'], [organisationId, userId], 'FOR SHARE'),
     listMembershipsByOrganisation: (organisationId) => listPayloadBy(client, 'memberships', 'organisation_id', organisationId, 'FOR SHARE'),
+    // Every organisation this person belongs to. Needed wherever a screen must decide what somebody
+    // may see without being told which organisation to ask about first.
+    listMembershipsForActor: async (actorId) => {
+      const result = await client.query('SELECT payload FROM memberships WHERE user_id = $1 FOR SHARE', [actorId]);
+      return result.rows.map((row) => row.payload);
+    },
     listMembershipsForTrade: async (brandId, shopId) => {
       const result = await client.query(
         'SELECT payload FROM memberships WHERE organisation_id = ANY($1::text[]) FOR SHARE',
@@ -148,6 +154,105 @@ function transactionView(client) {
     insertCampaign: (value) => insert(client, 'campaigns', ['id', 'brand_id', 'status', 'version', 'payload'], [value.id, value.brandId, value.status, value.version, value], 'CAMPAIGN_ALREADY_EXISTS'),
     saveCampaign: (value, expectedVersion) => saveVersioned(client, 'campaigns', value, expectedVersion, ['status'], [value.status], 'CAMPAIGN_CONCURRENCY_CONFLICT'),
 
+    getProductResponsibility: (id) => getPayload(client, 'product_style_responsibilities', 'id', id),
+    insertProductResponsibility: (value) => insert(
+      client,
+      'product_style_responsibilities',
+      ['id', 'style_id', 'brand_id', 'role', 'user_id', 'assigned_at', 'assigned_by', 'payload'],
+      [value.id, value.styleId, value.brandId, value.role, value.userId, value.assignedAt, value.assignedBy, value],
+      'PRODUCT_RESPONSIBILITY_ALREADY_ASSIGNED',
+    ),
+    async deleteProductResponsibility(id) {
+      const result = await client.query('DELETE FROM product_style_responsibilities WHERE id = $1 RETURNING payload', [id]);
+      return result.rows[0]?.payload;
+    },
+
+    // Which slots this campaign already holds. An import re-run after a correction must not create a
+    // second copy of everything that was already right, so the codes are read once up front rather
+    // than probed row by row.
+    async getPlaceholderCodesForCampaign(campaignId) {
+      const result = await client.query('SELECT placeholder_code FROM product_placeholders WHERE campaign_id = $1', [campaignId]);
+      return result.rows.map((row) => row.placeholder_code);
+    },
+    // Resolve the word a person wrote to the governed entry it names. A file says "Одежда" or
+    // "APPAREL" or "Apparel"; all three are the same entry, and none of them is its id.
+    async findMdmEntryByToken(dictionaryCode, token) {
+      const result = await client.query(
+        `SELECT entry.id, entry.version, entry.code, entry.name
+           FROM mdm_entries AS entry
+           JOIN mdm_dictionaries AS dictionary ON dictionary.id = entry.dictionary_id
+          WHERE dictionary.code = $1
+            AND entry.status = 'active'
+            AND (
+              lower(entry.code) = lower($2)
+              OR lower(entry.name) = lower($2)
+              OR EXISTS (
+                SELECT 1 FROM jsonb_each_text(entry.translations) AS translation(language, value)
+                 WHERE lower(translation.value) = lower($2)
+              )
+              OR EXISTS (
+                SELECT 1 FROM jsonb_array_elements_text(entry.aliases) AS alias(value)
+                 WHERE lower(alias.value) = lower($2)
+              )
+            )
+          ORDER BY entry.code
+          LIMIT 2`,
+        [dictionaryCode, token],
+      );
+      // Two entries answering to the same word is a governance problem, not an import problem, and
+      // guessing between them would put the wrong one in a plan.
+      if (result.rowCount !== 1) return result.rowCount > 1 ? { ambiguous: true } : undefined;
+      const row = result.rows[0];
+      return { entryId: row.id, version: row.version, code: row.code, name: row.name };
+    },
+    async mdmDictionaryExists(dictionaryCode) {
+      const result = await client.query('SELECT 1 FROM mdm_dictionaries WHERE code = $1', [dictionaryCode]);
+      return result.rowCount === 1;
+    },
+    getProductPlaceholder: (id) => getPayload(client, 'product_placeholders', 'id', id),
+    insertProductPlaceholder: (value) => insert(
+      client,
+      'product_placeholders',
+      [
+        'id', 'brand_id', 'campaign_id', 'placeholder_code', 'name_ru', 'name_en',
+        'category_entry_id', 'category_entry_version', 'gender_entry_id', 'gender_entry_version',
+        'age_group_entry_id', 'age_group_entry_version', 'novelty_entry_id', 'novelty_entry_version',
+        'seasonality_entry_id', 'seasonality_entry_version', 'fit_entry_id', 'fit_entry_version',
+        'capsule', 'drop_name', 'description', 'colourway_count', 'planned_quantity', 'launch_at',
+        'currency', 'recommended_retail_price_minor', 'planned_unit_cost_minor', 'planned_margin_basis_points',
+        'status', 'version', 'payload', 'created_at', 'created_by', 'updated_at', 'updated_by',
+      ],
+      [
+        value.id, value.brandId, value.campaignId, value.placeholderCode, value.nameRu, value.nameEn,
+        value.categoryRef?.entryId ?? null, value.categoryRef?.version ?? null,
+        value.genderRef?.entryId ?? null, value.genderRef?.version ?? null,
+        value.ageGroupRef?.entryId ?? null, value.ageGroupRef?.version ?? null,
+        value.noveltyRef?.entryId ?? null, value.noveltyRef?.version ?? null,
+        value.seasonalityRef?.entryId ?? null, value.seasonalityRef?.version ?? null,
+        value.fitRef?.entryId ?? null, value.fitRef?.version ?? null,
+        value.capsule, value.drop, value.description, value.colourwayCount, value.plannedQuantity, value.launchAt,
+        value.currency, value.recommendedRetailPriceMinor, value.plannedUnitCostMinor, value.plannedMarginBasisPoints,
+        value.status, value.version, value, value.createdAt, value.createdBy, value.updatedAt, value.updatedBy,
+      ],
+      'PLACEHOLDER_ALREADY_EXISTS',
+    ),
+    saveProductPlaceholder: (value, expectedVersion) => saveVersioned(
+      client,
+      'product_placeholders',
+      value,
+      expectedVersion,
+      ['status', 'updated_at', 'updated_by'],
+      [value.status, value.updatedAt, value.updatedBy],
+      'PLACEHOLDER_CONCURRENCY_CONFLICT',
+    ),
+    insertProductPlaceholderStyleLink: (value) => insert(
+      client,
+      'product_placeholder_style_links',
+      ['id', 'placeholder_id', 'style_id', 'brand_id', 'campaign_id', 'linked_at', 'linked_by', 'payload'],
+      [value.id, value.placeholderId, value.styleId, value.brandId, value.campaignId, value.linkedAt, value.linkedBy, value],
+      'PLACEHOLDER_STYLE_LINK_ALREADY_EXISTS',
+    ),
+
     getCollection: (id) => getPayload(client, 'collections', 'id', id),
     getCollectionStyleVersion: (collectionId, styleVersionId) => getPayloadBy(
       client,
@@ -173,6 +278,38 @@ function transactionView(client) {
     ),
     saveCollection: (value, expectedVersion) => saveVersioned(client, 'collections', value, expectedVersion, ['status', 'currency'], [value.status, value.currency], 'COLLECTION_CONCURRENCY_CONFLICT'),
 
+    // The looks a showroom is composed of.
+    getShowroomLook: (id) => getPayloadBy(client, 'showroom_looks', ['id'], [id], 'FOR UPDATE'),
+    // Read through the workspace view, not the stored row: the row holds the SKU codes a brand
+    // chose, and what a buyer needs is the pieces with their prices and minimums. The stored payload
+    // alone showed a look with no products under it.
+    async listShowroomLooks(showroomId) {
+      const result = await client.query('SELECT payload FROM showroom_look_workspace WHERE showroom_id = $1 ORDER BY position', [showroomId]);
+      return result.rows.map((row) => row.payload);
+    },
+    insertShowroomLook: (value) => insert(
+      client,
+      'showroom_looks',
+      ['id', 'showroom_id', 'brand_id', 'collection_id', 'position', 'title_ru', 'title_en', 'story_ru', 'story_en', 'image_uri', 'version', 'payload', 'created_at', 'created_by', 'updated_at', 'updated_by'],
+      [value.id, value.showroomId, value.brandId, value.collectionId, value.position, value.titleRu, value.titleEn, value.storyRu, value.storyEn, value.imageUri, value.version, value, value.createdAt, value.createdBy, value.updatedAt, value.updatedBy],
+      'SHOWROOM_LOOK_ALREADY_EXISTS',
+    ),
+    async saveShowroomLook(value, expectedVersion) {
+      invariant(value.version === expectedVersion + 1, 'VERSION_INCREMENT_INVALID', 'Look version must increment exactly once');
+      const result = await client.query(
+        `UPDATE showroom_looks
+            SET position = $2, title_ru = $3, title_en = $4, story_ru = $5, story_en = $6, image_uri = $7,
+                version = $8, payload = $9::jsonb, updated_at = $10::timestamptz, updated_by = $11
+          WHERE id = $1 AND version = $12`,
+        [value.id, value.position, value.titleRu, value.titleEn, value.storyRu, value.storyEn, value.imageUri,
+          value.version, JSON.stringify(value), value.updatedAt, value.updatedBy, expectedVersion],
+      );
+      invariant(result.rowCount === 1, 'SHOWROOM_LOOK_CONCURRENCY_CONFLICT', 'The look was changed by someone else', { id: value.id, expectedVersion });
+    },
+    async deleteShowroomLook(id) {
+      const result = await client.query('DELETE FROM showroom_looks WHERE id = $1 RETURNING payload', [id]);
+      return result.rows[0]?.payload;
+    },
     getShowroom: (id) => getPayloadBy(client, 'showrooms', ['id'], [id], 'FOR SHARE'),
     insertShowroom: (value) => insert(client, 'showrooms', ['id', 'collection_id', 'brand_id', 'status', 'version', 'payload'], [value.id, value.collectionId, value.brandId, value.status, value.version, value], 'SHOWROOM_ALREADY_EXISTS'),
     saveShowroom: (value, expectedVersion) => saveVersioned(client, 'showrooms', value, expectedVersion, ['status'], [value.status], 'SHOWROOM_CONCURRENCY_CONFLICT'),

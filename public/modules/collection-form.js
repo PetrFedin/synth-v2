@@ -12,7 +12,7 @@ function collectionForm() {
     return mutate('/v2/collections', {
       campaignId: campaign.id,
       brandId: campaign.brandId,
-      name: validation.requiredText(values.name, 'Collection name'),
+      name: validation.requiredText(values.name, '\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435'),
       currency: validation.currency(values.currency),
     });
   });

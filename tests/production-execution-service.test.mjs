@@ -10,18 +10,21 @@ const productionOrder=Object.freeze({
 
 function harness(){
   const executions=new Map(),commands=new Map(),events=[];let sequence=0,tick=0;
+  // Пооперационный контроль ничего не держит, пока проверок нет. The fixture makes that the default
+  // and lets a test open one, because the gate is only interesting when there is something to gate.
+  const openInlineChecks=[];
   const membership=Object.freeze({organisationId:'brand-1',organisationType:'brand',userId:'planner-1',role:'owner',status:'active'});
   const tx={
     getCommand:async(id)=>commands.get(id),insertCommand:async(v)=>commands.set(v.id,v),getMembership:async()=>membership,
     getProductionOrderByNumber:async(number)=>number===productionOrder.productionOrderNumber?productionOrder:undefined,
     getExecutionByProductionOrderNumber:async(number)=>[...executions.values()].find((v)=>v.productionOrderNumber===number),
-    getExecutionByCode:async(code)=>executions.get(code),insertExecution:async(v)=>executions.set(v.executionCode,v),
+    getExecutionByCode:async(code)=>executions.get(code),listOpenInlineChecks:async()=>openInlineChecks,insertExecution:async(v)=>executions.set(v.executionCode,v),
     saveExecution:async(v,expected)=>{assert.equal(executions.get(v.executionCode).version,expected);executions.set(v.executionCode,v)},
     appendOutbox:async(event)=>events.push(event),
   };
   const times=['2026-08-06T12:00:00.000Z','2026-08-10T08:00:00.000Z','2026-08-12T00:00:00.000Z','2026-08-14T00:00:00.000Z','2026-08-15T00:00:00.000Z'];
   const service=createProductionExecutionService({store:{transaction:(work)=>work(tx)},clock:()=>times[Math.min(tick++,times.length-1)],nextId:(prefix)=>`${prefix}-${++sequence}`});
-  return{service,executions,commands,events};
+  return{service,executions,commands,events,openInlineChecks};
 }
 
 test('service creates, starts, blocks, resolves and completes the current milestone',async()=>{
@@ -47,4 +50,17 @@ test('replayed command returns its original result without duplicate event',asyn
   const first=await f.service.createFromProductionOrder('c1','planner-1',productionOrder.productionOrderNumber);
   const replay=await f.service.createFromProductionOrder('c1','planner-1',productionOrder.productionOrderNumber);
   assert.deepEqual(replay,first);assert.equal(f.executions.size,1);assert.equal(f.events.length,1);
+});
+
+test('A stage is not signed off while the defects found on it are undecided',async()=>{
+  const f=harness();
+  let execution=await f.service.createFromProductionOrder('gate-create','planner-1',productionOrder.productionOrderNumber);
+  execution=await f.service.start('gate-start','planner-1',execution.executionCode,{expectedVersion:execution.version});
+  // An inline check found defects at the current stage and nobody has decided what happens to them.
+  f.openInlineChecks.push({milestoneCode:'materials-ready',checkNumber:1,status:'open'});
+  await assert.rejects(()=>f.service.completeMilestone('gate-block','planner-1',execution.executionCode,{expectedVersion:execution.version,milestoneCode:'materials-ready',notes:'materials-ready completed'}),{code:'PRODUCTION_MILESTONE_HAS_OPEN_INLINE_CHECK'});
+  // Deciding closes it, and the stage signs off as it always did.
+  f.openInlineChecks.length=0;
+  execution=await f.service.completeMilestone('gate-pass','planner-1',execution.executionCode,{expectedVersion:execution.version,milestoneCode:'materials-ready',notes:'materials-ready completed'});
+  assert.equal(execution.milestones[0].status,'completed');
 });

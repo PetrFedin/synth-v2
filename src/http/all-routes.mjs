@@ -2,6 +2,21 @@ import { createCollectionStyleVersionRoutes } from './collection-style-version-r
 import { createCommercialPublicationRoutes } from './commercial-publication-routes.mjs';
 import { createEconomicsRouteBundle } from './economics-route-bundle.mjs';
 import { createFinalQualityRoutes } from './final-quality-routes.mjs';
+import { createInlineQualityRoutes } from './inline-quality-routes.mjs';
+import { createSupplierPaymentRoutes } from './supplier-payment-routes.mjs';
+import { createMaterialLotRoutes } from './material-lot-routes.mjs';
+import { createCuttingRoutes } from './cutting-routes.mjs';
+import { createOperationSequenceRoutes } from './operation-sequence-routes.mjs';
+import { createTargetPricingRoutes } from './target-pricing-routes.mjs';
+import { createSeasonEconomicsRoutes } from './season-economics-routes.mjs';
+import { createMaterialColourRoutes } from './material-colour-routes.mjs';
+import { createSeasonPaletteRoutes } from './season-palette-routes.mjs';
+import { createBomSizeLineRoutes } from './bom-size-line-routes.mjs';
+import { createLibraryRoutes } from './library-routes.mjs';
+import { createHistoryRoutes } from './history-routes.mjs';
+import { createSupplierPortalRoutes } from './supplier-portal-routes.mjs';
+import { createCategoryAttributeRoutes } from './category-attribute-routes.mjs';
+import { createOrganisationMemberRoutes } from './organisation-member-routes.mjs';
 import { createFulfillmentRoutes } from './fulfillment-routes.mjs';
 import { createInventoryRoutes } from './inventory-routes.mjs';
 import { createProductIdentityRoutes } from './product-identity-routes.mjs';
@@ -41,6 +56,21 @@ export function createWholesaleRoutes(services = {}) {
     ...createProductionOrderRoutes({ productionOrders: services.productionOrders }),
     ...createProductionExecutionRoutes({ productionExecutions: services.productionExecutions }),
     ...createFinalQualityRoutes({ finalQuality: services.finalQuality }),
+    ...createInlineQualityRoutes({ inlineQuality: services.inlineQuality }),
+    ...createSupplierPaymentRoutes({ supplierPayments: services.supplierPayments }),
+    ...createMaterialLotRoutes({ materialLots: services.materialLots }),
+    ...createCuttingRoutes({ cutting: services.cutting }),
+    ...createOperationSequenceRoutes({ operationSequences: services.operationSequences }),
+    ...createTargetPricingRoutes({ targetPricing: services.targetPricing }),
+    ...createSeasonEconomicsRoutes({ seasonEconomics: services.seasonEconomics }),
+    ...createMaterialColourRoutes({ materialColours: services.materialColours }),
+    ...createSeasonPaletteRoutes({ seasonPalette: services.seasonPalette }),
+    ...createBomSizeLineRoutes({ bomSizeLine: services.bomSizeLine }),
+    ...createLibraryRoutes({ libraries: services.libraries }),
+    ...createHistoryRoutes({ history: services.history }),
+    ...createSupplierPortalRoutes({ supplierPortal: services.supplierPortal }),
+    ...createCategoryAttributeRoutes({ categoryAttributes: services.categoryAttributes }),
+    ...createOrganisationMemberRoutes({ organisationMembers: services.organisationMembers }),
   ]);
 }
 

@@ -54,6 +54,7 @@ export function buyerCatalogProductSku(catalog, selector = {}) {
     currency: priceLine.currency,
     catalogVersion: priceLine.catalogVersion,
     minimumOrderQuantity: priceLine.minimumOrderQuantity,
+    packSize: priceLine.packSize ?? null,
     availability: priceLine.availability ?? sku.commercialTerms?.availability ?? null,
   });
 }
@@ -66,6 +67,22 @@ export function assertBuyerCatalogQuantity(product, quantity) {
     quantity: normalizedQuantity,
     minimumOrderQuantity,
   });
+
+  // Кратность упаковки. Goods leave the factory in boxes, so a quantity between two boxes is not
+  // an order, it is a conversation — and one the buyer should not have after the fact. The rule sits
+  // beside the minimum because the two are read together: the minimum says how little may be
+  // ordered, the pack says in what steps.
+  const packSize = product?.packSize ?? null;
+  if (packSize !== null && packSize !== undefined) {
+    const normalizedPack = assertPostgresInteger(packSize, { code: 'BUYER_CATALOG_PACK_SIZE_INVALID', label: 'Frozen buyer catalog pack size', min: 1 });
+    invariant(normalizedQuantity % normalizedPack === 0, 'BUYER_CATALOG_PACK_MULTIPLE_NOT_MET',
+      'Selection quantity must be a multiple of the frozen pack size', {
+        sku: product?.sku,
+        quantity: normalizedQuantity,
+        packSize: normalizedPack,
+        nearest: Math.ceil(normalizedQuantity / normalizedPack) * normalizedPack,
+      });
+  }
 
   const availability = product?.availability;
   if (availability?.mode === 'available_to_sell') {

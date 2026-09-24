@@ -157,7 +157,7 @@ body.omnidata-role-system :is([data-ods-role="card"],[data-od14-unified-role="ca
 body.omnidata-design-system-v1 :is([data-ods-role="card"],[data-od14-unified-role="card"]):is([data-ods-part="list-item"],[data-od14-unified-part="list-item"]):hover,
 body.omnidata-role-system :is([data-ods-role="card"],[data-od14-unified-role="card"]):is([data-ods-part="list-item"],[data-od14-unified-part="list-item"]):hover{border-color:#efb59d!important;background:var(--ods-color-surface-hover)!important}
 body.omnidata-design-system-v1 :is([data-ods-role="card"],[data-od14-unified-role="card"]):is([data-ods-part="definition-grid"],[data-od14-unified-part="definition-grid"]),
-body.omnidata-role-system :is([data-ods-role="card"],[data-od14-unified-role="card"]):is([data-ods-part="definition-grid"],[data-od14-unified-part="definition-grid"]){display:grid!important;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))!important;gap:var(--ods-space-2)!important;padding:0!important;border:0!important;background:transparent!important}
+body.omnidata-role-system :is([data-ods-role="card"],[data-od14-unified-role="card"]):is([data-ods-part="definition-grid"],[data-od14-unified-part="definition-grid"]){display:grid!important;grid-template-columns:repeat(auto-fit,minmax(210px,1fr))!important;gap:var(--ods-space-2)!important;padding:0!important;border:0!important;background:transparent!important}
 body.omnidata-design-system-v1 :is([data-ods-role="card"],[data-od14-unified-role="card"]):is([data-ods-part="definition-item"],[data-od14-unified-part="definition-item"]) dt,
 body.omnidata-role-system :is([data-ods-role="card"],[data-od14-unified-role="card"]):is([data-ods-part="definition-item"],[data-od14-unified-part="definition-item"]) dt{margin:0 0 var(--ods-space-1)!important;color:var(--ods-color-muted)!important;font-size:10px!important;font-weight:700!important;letter-spacing:.05em!important;text-transform:uppercase!important}
 body.omnidata-design-system-v1 :is([data-ods-role="card"],[data-od14-unified-role="card"]):is([data-ods-part="definition-item"],[data-od14-unified-part="definition-item"]) dd,
@@ -181,8 +181,8 @@ body.omnidata-design-system-v1 :is([data-ods-role="filterbar"],[data-od14-unifie
 body.omnidata-role-system :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]){min-width:0!important;color:var(--ods-color-text)!important}
 body.omnidata-design-system-v1 :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="filterbar"],[data-od14-unified-part="filterbar"]),
 body.omnidata-role-system :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="filterbar"],[data-od14-unified-part="filterbar"]){display:grid!important;grid-template-columns:minmax(220px,1.4fr) repeat(3,minmax(140px,.7fr)) auto!important;align-items:end!important;gap:var(--ods-space-2)!important;width:100%!important;margin:var(--ods-space-3) 0!important;padding:var(--ods-space-2)!important;border:1px solid var(--ods-color-border)!important;border-radius:var(--ods-radius-md)!important;background:var(--ods-color-surface)!important;box-shadow:var(--ods-shadow-surface)!important}
-body.omnidata-design-system-v1 :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="toolbar"],[data-ods-part="header-toolbar"],[data-ods-part="section-head"],[data-od14-unified-part="toolbar"],[data-od14-unified-part="header-toolbar"],[data-od14-unified-part="section-head"]),
-body.omnidata-role-system :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="toolbar"],[data-ods-part="header-toolbar"],[data-ods-part="section-head"],[data-od14-unified-part="toolbar"],[data-od14-unified-part="header-toolbar"],[data-od14-unified-part="section-head"]){display:flex!important;min-height:var(--ods-control-height)!important;align-items:center!important;justify-content:flex-end!important;flex-wrap:wrap!important;gap:var(--ods-space-2)!important;margin:0!important;padding:0!important;border:0!important;background:transparent!important}
+body.omnidata-design-system-v1 :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="toolbar"],[data-ods-part="header-toolbar"],[data-ods-part="section-head"],[data-od14-unified-part="toolbar"],[data-od14-unified-part="header-toolbar"],[data-od14-unified-part="section-head"]):not(.topbar-actions),
+body.omnidata-role-system :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="toolbar"],[data-ods-part="header-toolbar"],[data-ods-part="section-head"],[data-od14-unified-part="toolbar"],[data-od14-unified-part="header-toolbar"],[data-od14-unified-part="section-head"]):not(.topbar-actions){display:flex!important;min-height:var(--ods-control-height)!important;align-items:center!important;justify-content:flex-end!important;flex-wrap:wrap!important;gap:var(--ods-space-2)!important;margin:0!important;padding:0!important;border:0!important;background:transparent!important}
 body.omnidata-design-system-v1 :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="section-head"],[data-od14-unified-part="section-head"]),
 body.omnidata-role-system :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="section-head"],[data-od14-unified-part="section-head"]){justify-content:space-between!important;padding-bottom:var(--ods-space-2)!important;border-bottom:1px solid var(--ods-color-border)!important}
 body.omnidata-design-system-v1 :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="tabs"],[data-od14-unified-part="tabs"]),
@@ -273,8 +273,17 @@ body.omnidata-role-system :is([data-ods-role="inspector"],[data-od14-unified-rol
 body.omnidata-design-system-v1 :is([data-ods-role="inspector"],[data-od14-unified-role="inspector"]) dl>div,
 body.omnidata-role-system :is([data-ods-role="inspector"],[data-od14-unified-role="inspector"]) dl>div{padding:var(--ods-space-2)!important;border:1px solid #e8eaec!important;border-radius:var(--ods-radius-sm)!important;background:#fafbfb!important}
 
-body.omnidata-design-system-v1 [data-ods-language-mismatch],
-body.omnidata-role-system [data-ods-language-mismatch]{text-decoration:underline dotted var(--ods-color-danger)!important;text-underline-offset:3px!important}
+/* The language audit is a development instrument, not a label for the client.
+   It marks every node that holds a Latin word the interface dictionary does not
+   know, and business data is full of them: SKU codes, style names, supplier
+   names, order numbers, retail door codes. Painted unconditionally, it drew a
+   red dotted underline under "SS27 Paris Showroom DEMO" and under the colourway
+   code on the product card, and the product read as though it were full of
+   spelling mistakes. The attribute still lands on the node and the counter still
+   reaches body.dataset, so the audit keeps working for us; only the paint is now
+   opt-in, through data-ods-language-audit-visible on the document element. */
+html[data-ods-language-audit-visible="true"] body.omnidata-design-system-v1 [data-ods-language-mismatch],
+html[data-ods-language-audit-visible="true"] body.omnidata-role-system [data-ods-language-mismatch]{text-decoration:underline dotted var(--ods-color-danger)!important;text-underline-offset:3px!important}
 
 @media (max-width:1080px){
   body.omnidata-design-system-v1 .workspace-content,
@@ -413,7 +422,23 @@ body.omnidata-role-system .topbar .breadcrumb > strong{flex:1 1 auto!important;m
 /* The breadcrumb column was starved to 212px inside a 1208px header because the
    trailing column was unbounded. Give the path room and bound the tail. */
 body.omnidata-design-system-v1 .topbar,
-body.omnidata-role-system .topbar{grid-template-columns:minmax(320px,1fr) minmax(200px,340px) minmax(220px,max-content)!important}
+body.omnidata-role-system .topbar{grid-template-columns:minmax(360px,1fr) minmax(200px,300px) minmax(220px,max-content)!important}
+/* Those three floors add up to 740px before gaps and padding, and this rule had
+   no breakpoint, so below roughly 1100px it overrode the responsive ladder the
+   earlier layers set and the header burst: the search box landed on top of the
+   page content, the organisation and user chips were clipped to an empty white
+   rectangle, and with them went the way out of the application. Step the floors
+   down, then drop to two columns and give the search a row of its own. */
+@media (max-width:1180px){
+  body.omnidata-design-system-v1 .topbar,
+  body.omnidata-role-system .topbar{grid-template-columns:minmax(0,1fr) minmax(160px,300px) max-content!important;gap:var(--ods-space-2)!important;padding:0 var(--ods-space-3)!important}
+}
+@media (max-width:980px){
+  body.omnidata-design-system-v1 .topbar,
+  body.omnidata-role-system .topbar{height:auto!important;min-height:0!important;grid-template-columns:minmax(0,1fr) max-content!important;align-items:center!important;row-gap:var(--ods-space-2)!important;padding:var(--ods-space-2) var(--ods-space-3)!important}
+  body.omnidata-design-system-v1 .topbar .global-search,
+  body.omnidata-role-system .topbar .global-search{grid-column:1/-1!important;grid-row:2!important;width:100%!important;max-width:none!important}
+}
 
 /* The v11 layer painted the system footer dark and set a translucent white text
    colour to match. A later layer repainted the ground almost white but left the
@@ -446,3 +471,421 @@ body.omnidata-role-system :is(span,strong,em,b,i,small,label):is([data-ods-role=
    slot into a 1160x16 hairline strip that reads as a broken toolbar. */
 body.omnidata-design-system-v1 :is([data-ods-role="card"],[data-od14-unified-role="card"],[data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):empty,
 body.omnidata-role-system :is([data-ods-role="card"],[data-od14-unified-role="card"],[data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):empty{min-height:0!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important}
+
+/* Attribute filter panel. Registries carry more columns than a single status select can serve, so
+   the Filters control opens a panel listing every filterable attribute with its values and how many
+   rows carry each. Choices apply as they are made; the panel closes on Apply. */
+body.omnidata-design-system-v1 :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]).od-filter-panel,
+body.omnidata-role-system :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]).od-filter-panel{position:absolute!important;top:0!important;left:0!important;z-index:40!important;display:flex!important;flex-direction:column!important;width:min(340px,86%)!important;max-height:100%!important;border:1px solid var(--ods-color-border)!important;border-radius:var(--ods-radius-sm)!important;background:var(--ods-color-surface)!important;box-shadow:0 10px 30px rgba(15,20,26,.14)!important;overflow:hidden!important}
+body.omnidata-design-system-v1 .od-master,
+body.omnidata-role-system .od-master{position:relative!important}
+body.omnidata-design-system-v1 .od-filter-panel-head,
+body.omnidata-role-system .od-filter-panel-head{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:8px!important;padding:12px 14px!important;border-bottom:1px solid var(--ods-color-border)!important}
+body.omnidata-design-system-v1 .od-filter-panel-title,
+body.omnidata-role-system .od-filter-panel-title{margin:0!important;font-size:13px!important;font-weight:700!important}
+body.omnidata-design-system-v1 .od-filter-panel-close,
+body.omnidata-role-system .od-filter-panel-close{display:inline-flex!important;align-items:center!important;justify-content:center!important;width:26px!important;height:26px!important;padding:0!important;border:0!important;border-radius:var(--ods-radius-sm)!important;background:transparent!important;cursor:pointer!important}
+body.omnidata-design-system-v1 .od-filter-panel-close:hover,
+body.omnidata-role-system .od-filter-panel-close:hover{background:var(--ods-color-surface-hover)!important}
+body.omnidata-design-system-v1 :is([data-ods-role="field"],[data-od14-unified-role="field"]).od-filter-panel-search,
+body.omnidata-role-system :is([data-ods-role="field"],[data-od14-unified-role="field"]).od-filter-panel-search{display:flex!important;align-items:center!important;gap:7px!important;margin:10px 14px!important;padding:0 10px!important;min-height:var(--ods-control-height)!important;border:1px solid var(--ods-color-border-strong)!important;border-radius:var(--ods-radius-sm)!important}
+body.omnidata-design-system-v1 .od-filter-panel-search input,
+body.omnidata-role-system .od-filter-panel-search input{flex:1 1 auto!important;min-width:0!important;border:0!important;background:transparent!important;outline:0!important;padding:0!important;font-size:12px!important}
+body.omnidata-design-system-v1 .od-filter-panel-body,
+body.omnidata-role-system .od-filter-panel-body{flex:1 1 auto!important;min-height:0!important;overflow-y:auto!important;padding:0 14px 8px!important}
+body.omnidata-design-system-v1 .od-filter-group,
+body.omnidata-role-system .od-filter-group{padding:8px 0!important;border-bottom:1px solid var(--ods-color-border)!important}
+body.omnidata-design-system-v1 .od-filter-group:last-child,
+body.omnidata-role-system .od-filter-group:last-child{border-bottom:0!important}
+body.omnidata-design-system-v1 .od-filter-group-title,
+body.omnidata-role-system .od-filter-group-title{margin:0 0 6px!important;font-size:10px!important;font-weight:700!important;letter-spacing:.06em!important;text-transform:uppercase!important;color:var(--ods-color-text-soft)!important}
+body.omnidata-design-system-v1 :is([data-ods-role="field"],[data-od14-unified-role="field"]).od-filter-option,
+body.omnidata-role-system :is([data-ods-role="field"],[data-od14-unified-role="field"]).od-filter-option{display:flex!important;align-items:center!important;gap:8px!important;min-height:26px!important;padding:2px 0!important;font-size:12px!important;cursor:pointer!important}
+body.omnidata-design-system-v1 .od-filter-option-label,
+body.omnidata-role-system .od-filter-option-label{flex:1 1 auto!important;min-width:0!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important}
+body.omnidata-design-system-v1 .od-filter-option-count,
+body.omnidata-role-system .od-filter-option-count{flex:0 0 auto!important;color:var(--ods-color-text-soft)!important;font-variant-numeric:tabular-nums!important;font-size:11px!important}
+body.omnidata-design-system-v1 .od-filter-panel-foot,
+body.omnidata-role-system .od-filter-panel-foot{display:flex!important;justify-content:flex-end!important;gap:8px!important;padding:10px 14px!important;border-top:1px solid var(--ods-color-border)!important}
+
+/* Applied filters stay visible above the table and each one can be taken off. */
+body.omnidata-design-system-v1 .od-filter-chips,
+body.omnidata-role-system .od-filter-chips{display:flex!important;flex-wrap:wrap!important;gap:6px!important;margin:0 0 10px!important}
+body.omnidata-design-system-v1 .od-filter-chip,
+body.omnidata-role-system .od-filter-chip{display:inline-flex!important;align-items:center!important;gap:6px!important;min-height:24px!important;padding:0 8px!important;border:1px solid var(--ods-color-border-strong)!important;border-radius:999px!important;background:var(--ods-color-surface)!important;color:var(--ods-color-text-soft)!important;font-size:11px!important;cursor:pointer!important}
+body.omnidata-design-system-v1 .od-filter-chip:hover,
+body.omnidata-role-system .od-filter-chip:hover{border-color:var(--ods-color-accent)!important;color:var(--ods-color-accent)!important}
+body.omnidata-design-system-v1 .od-filter-chip-remove,
+body.omnidata-role-system .od-filter-chip-remove{font-size:13px!important;line-height:1!important}
+body.omnidata-design-system-v1 .od-filter-button-count,
+body.omnidata-role-system .od-filter-button-count{display:inline-flex!important;align-items:center!important;justify-content:center!important;min-width:16px!important;height:16px!important;margin-left:6px!important;padding:0 4px!important;border-radius:999px!important;background:var(--ods-color-accent)!important;color:#fff!important;font-size:10px!important;font-weight:700!important}
+body.omnidata-design-system-v1 .od-filter-panel-close-mark,
+body.omnidata-role-system .od-filter-panel-close-mark{font-size:16px!important;line-height:1!important;color:var(--ods-color-text-soft)!important}
+
+/* The column chooser shares the filter panel's shell. */
+body.omnidata-design-system-v1 :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]).od-column-panel,
+body.omnidata-role-system :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]).od-column-panel{width:min(280px,80%)!important}
+body.omnidata-design-system-v1 :is([data-ods-role="field"],[data-od14-unified-role="field"]).od-column-option,
+body.omnidata-role-system :is([data-ods-role="field"],[data-od14-unified-role="field"]).od-column-option{display:flex!important;align-items:center!important;gap:8px!important;min-height:28px!important;padding:2px 0!important;font-size:12px!important;cursor:pointer!important}
+body.omnidata-design-system-v1 .od-column-option input:disabled,
+body.omnidata-role-system .od-column-option input:disabled{opacity:.5!important;cursor:not-allowed!important}
+
+/* ------------------------------------------------------------------
+   A control bar holds as many controls as its screen has
+   ------------------------------------------------------------------
+   The filter bar was a fixed five-track grid: one wide track for the
+   search and three equal tracks after it. Every view puts a different
+   number of controls in that bar, so on a view with four the last one
+   dropped to a second row, and on a view with two buttons they sat
+   marooned in the middle of 190px tracks with a hundred-pixel hole
+   between them. Lay the bar out as a row that wraps: the search takes
+   the slack, everything else is its own width, and the bar reads the
+   same whether it carries two controls or six. */
+/* The header's action cluster carries the filterbar role too, so it was being
+   given a filter bar's border, padding and wrapping: at 1440 the user chip
+   wrapped onto a second row inside a 50px header. The header is not a filter
+   bar, and says so here. */
+body.omnidata-design-system-v1 :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="filterbar"],[data-od14-unified-part="filterbar"]):not(.topbar-actions),
+body.omnidata-role-system :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="filterbar"],[data-od14-unified-part="filterbar"]):not(.topbar-actions){display:flex!important;align-items:flex-end!important;flex-wrap:wrap!important;grid-template-columns:none!important;gap:var(--ods-space-2)!important;width:100%!important;min-width:0!important;margin:var(--ods-space-3) 0!important;padding:var(--ods-space-2)!important;border:1px solid var(--ods-color-border)!important;border-radius:var(--ods-radius-md)!important;background:var(--ods-color-surface)!important;box-shadow:var(--ods-shadow-surface)!important}
+body.omnidata-design-system-v1 :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="filterbar"],[data-od14-unified-part="filterbar"])>*,
+body.omnidata-role-system :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="filterbar"],[data-od14-unified-part="filterbar"]):not(.topbar-actions)>*{flex:0 0 auto!important;min-width:0!important;max-width:100%!important;margin:0!important}
+/* The search is the one control that should drink the leftover width. */
+body.omnidata-design-system-v1 :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="filterbar"],[data-od14-unified-part="filterbar"])>:is(label,.od-search,.od-filter),
+body.omnidata-role-system :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="filterbar"],[data-od14-unified-part="filterbar"]):not(.topbar-actions)>:is(label,.od-search,.od-filter){flex:1 1 220px!important;max-width:360px!important}
+/* The legacy flex spacer means nothing once the bar wraps; it used to hold
+   open a whole empty track. */
+body.omnidata-design-system-v1 .od-commandbar-spacer,
+body.omnidata-role-system .od-commandbar-spacer{display:none!important}
+/* And a bar that ended up carrying no control at all is not a bar. The
+   workspace overview painted one as a bordered white rectangle 56px tall,
+   directly under the page title, holding nothing. */
+body.omnidata-design-system-v1 .od-commandbar.od14-empty-bar,
+body.omnidata-role-system .od-commandbar.od14-empty-bar{display:none!important}
+
+/* ------------------------------------------------------------------
+   A metric tile names the thing it measures
+   ------------------------------------------------------------------
+   The tile was a two-column grid, "label value", with the label in a
+   1fr track and the value in an auto track. A numeric value left the
+   label alone; a worded one — "Только чтение", "BER-MITTE",
+   "Отправлена" — took the width it needed and squeezed the label out
+   of existence, so the client read "Ре…", "R…" and a bare "П". Stack
+   them instead: the label above, the value below, the way every other
+   figure in the product is presented. Nothing competes, and a long
+   value wraps rather than evicting its own caption. */
+body.omnidata-design-system-v1 :is([data-ods-role="card"],[data-od14-unified-role="card"]):is([data-ods-part="metric"],[data-od14-unified-part="metric"]),
+body.omnidata-role-system :is([data-ods-role="card"],[data-od14-unified-role="card"]):is([data-ods-part="metric"],[data-od14-unified-part="metric"]){display:grid!important;grid-template-columns:minmax(0,1fr)!important;grid-template-areas:"label" "value" "detail"!important;align-content:start!important;justify-items:start!important;gap:var(--ods-space-1)!important;min-height:82px!important;padding:var(--ods-space-3)!important;overflow:hidden!important}
+body.omnidata-design-system-v1 :is([data-ods-role="card"],[data-od14-unified-role="card"]):is([data-ods-part="metric"],[data-od14-unified-part="metric"])>*,
+body.omnidata-role-system :is([data-ods-role="card"],[data-od14-unified-role="card"]):is([data-ods-part="metric"],[data-od14-unified-part="metric"])>*{max-width:100%!important;min-width:0!important;margin:0!important;justify-self:start!important}
+body.omnidata-design-system-v1 :is([data-ods-role="card"],[data-od14-unified-role="card"]):is([data-ods-part="metric"],[data-od14-unified-part="metric"])>:is(span,.muted,[class*="label"]),
+body.omnidata-role-system :is([data-ods-role="card"],[data-od14-unified-role="card"]):is([data-ods-part="metric"],[data-od14-unified-part="metric"])>:is(span,.muted,[class*="label"]){grid-area:label!important;color:var(--ods-color-text-soft)!important;font-size:var(--ods-font-size-xs)!important;line-height:1.3!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important}
+body.omnidata-design-system-v1 :is([data-ods-role="card"],[data-od14-unified-role="card"]):is([data-ods-part="metric"],[data-od14-unified-part="metric"]) strong,
+body.omnidata-role-system :is([data-ods-role="card"],[data-od14-unified-role="card"]):is([data-ods-part="metric"],[data-od14-unified-part="metric"]) strong{grid-area:value!important;color:var(--ods-color-text)!important;font-size:20px!important;font-weight:600!important;font-variant-numeric:tabular-nums!important;line-height:1.15!important;white-space:normal!important;overflow-wrap:anywhere!important}
+body.omnidata-design-system-v1 :is([data-ods-role="card"],[data-od14-unified-role="card"]):is([data-ods-part="metric"],[data-od14-unified-part="metric"]) small,
+body.omnidata-role-system :is([data-ods-role="card"],[data-od14-unified-role="card"]):is([data-ods-part="metric"],[data-od14-unified-part="metric"]) small{grid-area:detail!important;color:var(--ods-color-muted)!important;font-size:var(--ods-font-size-xs)!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important}
+
+/* A container that ended up with nothing in it is not a panel.
+   The Production Order inspector renders its action row unconditionally, so a
+   confirmed order — which has no action left — showed a bordered 74px box under
+   the status with nothing inside. The same shape appears wherever a toolbar or
+   an action row is built before its contents are known. :empty is exact: it
+   matches only a box with no child and no text, so nothing that carries
+   anything can be caught by it. */
+body.omnidata-design-system-v1 :is([data-ods-part="toolbar"],[data-od14-unified-part="toolbar"],[data-od14-component="toolbar"],[data-ods-part="header-toolbar"],[data-od14-unified-part="header-toolbar"],[data-ods-part="button-group"],[data-od14-unified-part="button-group"]):empty,
+body.omnidata-role-system :is([data-ods-part="toolbar"],[data-od14-unified-part="toolbar"],[data-od14-component="toolbar"],[data-ods-part="header-toolbar"],[data-od14-unified-part="header-toolbar"],[data-ods-part="button-group"],[data-od14-unified-part="button-group"]):empty{display:none!important}
+
+/* The showroom's looks are a rack of cards of one size, not a responsive layout.
+   The role system classifies the container as a "layout" and lays it out with
+   repeat(auto-fit, minmax(280px, 1fr)), which is right for panels and wrong for
+   cards: with a single look in the showroom, auto-fit collapsed to one track and
+   1fr stretched that one card across the whole 807px row, so its 3/4 figure stood
+   over a thousand pixels tall and the buyer's order grid was pushed off the page.
+   auto-fill with a bounded track keeps a card the same size whether the showroom
+   holds one look or twelve. */
+body.omnidata-design-system-v1 .od-look-grid,
+body.omnidata-role-system .od-look-grid{grid-template-columns:repeat(auto-fill,minmax(240px,300px))!important;justify-content:start!important}
+
+/* The buyer's "from matrix to confirmed order" card. Its heading and its progress
+   rows had been built with the toolbar class, which the shell right-aligns; the
+   card read as a ragged column hugging its right edge with the whole left half
+   empty. A step is a label and the state it is in, at opposite ends of one row. */
+body.omnidata-design-system-v1 .od-handoff-head,
+body.omnidata-role-system .od-handoff-head{display:block!important;text-align:left!important}
+body.omnidata-design-system-v1 .od-handoff-step,
+body.omnidata-role-system .od-handoff-step{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:var(--ods-space-3)!important;min-height:32px!important;padding:var(--ods-space-2) 0!important;border-bottom:1px solid var(--ods-color-border)!important}
+body.omnidata-design-system-v1 .od-handoff-step:last-child,
+body.omnidata-role-system .od-handoff-step:last-child{border-bottom:0!important}
+
+/* One height for everything in the header's action cluster.
+   The language toggle, the notification bell and the help button stood 34px
+   tall while the organisation and user chips beside them stood 59px — taller
+   than the 50px header itself, so they bled past its rule at the top and the
+   bottom and the row read as two different toolbars pushed together. */
+body.omnidata-design-system-v1 .topbar-actions,
+body.omnidata-role-system .topbar-actions{display:flex!important;align-items:center!important;flex-wrap:nowrap!important;gap:var(--ods-space-2)!important}
+body.omnidata-design-system-v1 .topbar-actions > *,
+body.omnidata-role-system .topbar-actions > *{min-height:36px!important;height:36px!important;flex:0 0 auto!important;align-self:center!important}
+body.omnidata-design-system-v1 .topbar-actions > :is(button,a,.button),
+body.omnidata-role-system .topbar-actions > :is(button,a,.button){min-height:36px!important;height:36px!important}
+body.omnidata-design-system-v1 .topbar-actions > div > button,
+body.omnidata-role-system .topbar-actions > div > button{min-height:36px!important;height:36px!important}
+body.omnidata-design-system-v1 .topbar-actions :is(.topbar-organisation,.topbar-user),
+body.omnidata-role-system .topbar-actions :is(.topbar-organisation,.topbar-user){display:flex!important;align-items:center!important;gap:var(--ods-space-2)!important;padding:0 var(--ods-space-2)!important;overflow:hidden!important}
+/* The user chip carries a name over a role. At 36px the two lines have to be
+   tight, and neither may push the chip open. */
+body.omnidata-design-system-v1 .topbar-actions :is(.topbar-organisation,.topbar-user) .user-copy,
+body.omnidata-role-system .topbar-actions :is(.topbar-organisation,.topbar-user) .user-copy{display:grid!important;min-width:0!important;gap:0!important}
+body.omnidata-design-system-v1 .topbar-actions .user-copy strong,
+body.omnidata-role-system .topbar-actions .user-copy strong{font-size:10.5px!important;line-height:1.25!important}
+body.omnidata-design-system-v1 .topbar-actions .user-copy small,
+body.omnidata-role-system .topbar-actions .user-copy small{font-size:9.5px!important;line-height:1.25!important}
+
+/* ------------------------------------------------------------------
+   The shell below 700px
+   ------------------------------------------------------------------
+   The base stylesheet turns the shell into a block and the sidebar into a
+   horizontal scrolling strip at phone width. Nine later layers then pin the
+   sidebar back to a vertical column with a fixed width, so what actually
+   rendered was a 550px-tall rail sitting in a full-width block with an empty
+   grey rectangle beside it, and the workspace pushed below all of it. The
+   two-column rail already works between 700 and 980; it works at 360 too, and
+   it is the layout this product is actually built for. */
+@media (max-width:700px){
+  body.omnidata-design-system-v1 .shell,
+  body.omnidata-role-system .shell,
+  body.omnidata-design-system-v1 .shell.sidebar-collapsed,
+  body.omnidata-role-system .shell.sidebar-collapsed{display:grid!important;grid-template-columns:60px minmax(0,1fr)!important;align-items:stretch!important}
+  body.omnidata-v14.omnidata-design-system-v1 .sidebar,
+  body.omnidata-design-system-v1 .sidebar,
+  body.omnidata-role-system .sidebar{position:sticky!important;top:0!important;height:100vh!important;max-height:100vh!important;min-height:100vh!important;flex-direction:column!important;align-items:stretch!important;padding:0!important;border-right:1px solid rgba(0,0,0,.15)!important;border-bottom:0!important}
+  body.omnidata-design-system-v1 .sidebar .nav,
+  body.omnidata-role-system .sidebar .nav{flex:1 1 auto!important;flex-direction:column!important;overflow-x:hidden!important;overflow-y:auto!important}
+  body.omnidata-design-system-v1 .sidebar .nav-item,
+  body.omnidata-role-system .sidebar .nav-item{width:100%!important;flex:0 0 auto!important;justify-content:center!important;padding-inline:0!important}
+  body.omnidata-design-system-v1 .sidebar-footer,
+  body.omnidata-role-system .sidebar-footer{display:flex!important}
+  /* The system footer is fixed, and in the block layout it sat on top of the
+     page's last rows. */
+  /* The system footer is a child of the shell grid. Left static it dropped into
+     the 60px rail column and squeezed its three fields into a stack of single
+     letters; left fixed it sat on top of the page's last rows. It spans the
+     grid instead. */
+  body.omnidata-v14.omnidata-design-system-v1 .od-v7-system-footer,
+  body.omnidata-design-system-v1 .od-v7-system-footer,
+  body.omnidata-role-system .od-v7-system-footer{position:static!important;left:auto!important;width:auto!important;grid-column:1/-1!important}
+  /* At 390 the header could not hold the path and six controls on one row: the
+     action cluster is sized to its content, so the breadcrumb's 1fr collapsed
+     to nine pixels and the path rendered as an empty white sliver with its own
+     text hidden outside the box. Below 700 each part gets a row of its own. */
+  body.omnidata-v14.omnidata-design-system-v1 .topbar,
+  body.omnidata-design-system-v1 .topbar,
+  body.omnidata-role-system .topbar{grid-template-columns:minmax(0,1fr)!important}
+  body.omnidata-design-system-v1 .topbar .breadcrumb,
+  body.omnidata-role-system .topbar .breadcrumb{grid-area:1/1!important;min-width:0!important}
+  body.omnidata-design-system-v1 .topbar-actions,
+  body.omnidata-role-system .topbar-actions{grid-area:2/1!important;justify-content:flex-start!important;overflow-x:auto!important}
+  body.omnidata-design-system-v1 .topbar .global-search,
+  body.omnidata-role-system .topbar .global-search{grid-area:3/1!important}
+}
+/* An icon must not be cropped to fit its rail. */
+body.omnidata-design-system-v1 .sidebar .nav-item .icon,
+body.omnidata-role-system .sidebar .nav-item .icon{flex:0 0 18px!important;width:18px!important;height:18px!important;overflow:visible!important}
+body.omnidata-design-system-v1 .sidebar .nav-item .icon svg,
+body.omnidata-role-system .sidebar .nav-item .icon svg{width:18px!important;height:18px!important;display:block!important}
+
+/* Below 980 the header's action cluster keeps its controls but drops the two
+   text blocks; their marks still say which organisation and who is signed in,
+   and the breadcrumb gets the room it was being starved of. */
+@media (max-width:1180px){
+  /* Below 1180 the path cannot hold three crumbs: it needed 270px and had 171,
+     so the page name — the one crumb that must survive — was clipped away and
+     the header ended on a dangling separator. The group name goes instead; the
+     sidebar shows it in full, highlighted, at every width. */
+  body.omnidata-design-system-v1 .topbar .breadcrumb > .breadcrumb-muted:nth-of-type(2),
+  body.omnidata-role-system .topbar .breadcrumb > .breadcrumb-muted:nth-of-type(2),
+  body.omnidata-design-system-v1 .topbar .breadcrumb > .breadcrumb-muted:nth-of-type(3),
+  body.omnidata-role-system .topbar .breadcrumb > .breadcrumb-muted:nth-of-type(3){display:none!important}
+  /* With the group gone its separator is a dangling slash, and the root button
+     keeps the mark that says what it does without the word beside it. */
+  body.omnidata-design-system-v1 .topbar .breadcrumb > .breadcrumb-muted + .breadcrumb-divider,
+  body.omnidata-role-system .topbar .breadcrumb > .breadcrumb-muted + .breadcrumb-divider{display:none!important}
+  body.omnidata-design-system-v1 .topbar .breadcrumb-root > :not(.icon),
+  body.omnidata-role-system .topbar .breadcrumb-root > :not(.icon){display:none!important}
+  body.omnidata-design-system-v1 .topbar .breadcrumb-root,
+  body.omnidata-role-system .topbar .breadcrumb-root{padding:0 var(--ods-space-2)!important}
+  body.omnidata-design-system-v1 .topbar .breadcrumb > strong,
+  body.omnidata-role-system .topbar .breadcrumb > strong{min-width:5rem!important}
+  body.omnidata-design-system-v1 .topbar-actions :is(.topbar-organisation,.topbar-user) :is(.user-copy,span:not(.icon):not([class*="avatar"])),
+  body.omnidata-role-system .topbar-actions :is(.topbar-organisation,.topbar-user) :is(.user-copy,span:not(.icon):not([class*="avatar"])){display:none!important}
+}
+
+/* The look rack, again, and properly this time. The previous override lost on
+   specificity to the role system's "layout" rule, so at 1920 a single look was
+   still one 1640px card with a 600px picture and a thousand pixels of white
+   paper beside it. Matching on the part as well as the class outranks it. */
+body.omnidata-design-system-v1 :is([data-ods-part="layout"],[data-od14-unified-part="layout"]).od-look-grid,
+body.omnidata-role-system :is([data-ods-part="layout"],[data-od14-unified-part="layout"]).od-look-grid,
+body.omnidata-design-system-v1 .od-look-grid,
+body.omnidata-role-system .od-look-grid{grid-template-columns:repeat(auto-fill,minmax(240px,300px))!important;justify-content:start!important}
+
+/* The system footer is fixed, so the page's last rows ran underneath it. The
+   workspace reserves its height instead of pretending it is not there. */
+body.omnidata-design-system-v1 .workspace-content,
+body.omnidata-role-system .workspace-content{padding-bottom:48px!important}
+
+/* The brand block and the header are two halves of one band, so they are the
+   same height. The block stood 58px against the header's 56, which put its
+   dark ground two pixels below the header's rule — the notch that appears to
+   cut the corner off the mark. */
+body.omnidata-design-system-v1 .topbar,
+body.omnidata-role-system .topbar{min-height:56px!important}
+body.omnidata-design-system-v1 .sidebar .brand,
+body.omnidata-role-system .sidebar .brand{height:56px!important;min-height:56px!important;box-sizing:border-box!important}
+body.omnidata-v14.omnidata-design-system-v1 .sidebar .brand,
+body.omnidata-v14.omnidata-role-system .sidebar .brand{flex:0 0 56px!important;height:56px!important;min-height:56px!important}
+
+/* Freeze Line: видимость, порядок и закрепление колонок реестра.
+
+   Закрепление — не украшение. Реестр моделей несёт двадцать колонок, и при горизонтальной
+   прокрутке до «Технолога» первая колонка уезжает: значения видны, а чьи они — нет.
+
+   Смещения перечислены здесь, а не считаются скриптом, потому что дизайн-система запрещает
+   динамическую стилизацию из рантайма. Цена этого решения названа прямо: закреплённая колонка
+   получает **предсказуемую ширину**, иначе смещение следующей нечем вычислить. Для колонок
+   идентичности — номер, изображение, артикул — это скорее плюс: они перестают прыгать от длины
+   содержимого. Закрепить можно не больше шести: дальше не остаётся места прокручиваемой части,
+   и сам приём теряет смысл. */
+body.omnidata-design-system-v1 .od-table th.od-frozen-column,
+body.omnidata-design-system-v1 .od-table td.od-frozen-column,
+body.omnidata-role-system .od-table th.od-frozen-column,
+body.omnidata-role-system .od-table td.od-frozen-column{position:sticky!important;z-index:2!important;background:var(--ods-color-surface,#fff)!important;width:150px!important;min-width:150px!important;max-width:150px!important}
+body.omnidata-design-system-v1 .od-table thead th.od-frozen-column,
+body.omnidata-role-system .od-table thead th.od-frozen-column{z-index:3!important}
+
+/* Номер строки дописывает слой достоверности, он всегда первый и узкий. Когда что-то закреплено,
+   он закрепляется вместе с ними: уехавший номер делает закрепление бессмысленным. */
+body.omnidata-design-system-v1 .od-table.od-table-frozen .od-number-cell,
+body.omnidata-role-system .od-table.od-table-frozen .od-number-cell{position:sticky!important;left:0!important;z-index:3!important;background:var(--ods-color-surface,#fff)!important;width:36px!important;min-width:36px!important;max-width:36px!important}
+
+/* Смещения: номер 36px, каждая следующая закреплённая — 150px. */
+body.omnidata-design-system-v1 .od-table tr > .od-frozen-column:nth-child(2),
+body.omnidata-role-system .od-table tr > .od-frozen-column:nth-child(2){left:36px!important}
+body.omnidata-design-system-v1 .od-table tr > .od-frozen-column:nth-child(3),
+body.omnidata-role-system .od-table tr > .od-frozen-column:nth-child(3){left:186px!important}
+body.omnidata-design-system-v1 .od-table tr > .od-frozen-column:nth-child(4),
+body.omnidata-role-system .od-table tr > .od-frozen-column:nth-child(4){left:336px!important}
+body.omnidata-design-system-v1 .od-table tr > .od-frozen-column:nth-child(5),
+body.omnidata-role-system .od-table tr > .od-frozen-column:nth-child(5){left:486px!important}
+body.omnidata-design-system-v1 .od-table tr > .od-frozen-column:nth-child(6),
+body.omnidata-role-system .od-table tr > .od-frozen-column:nth-child(6){left:636px!important}
+body.omnidata-design-system-v1 .od-table tr > .od-frozen-column:nth-child(7),
+body.omnidata-role-system .od-table tr > .od-frozen-column:nth-child(7){left:786px!important}
+
+body.omnidata-design-system-v1 .od-table .od-frozen-edge,
+body.omnidata-role-system .od-table .od-frozen-edge{box-shadow:1px 0 0 0 var(--ods-color-border)!important}
+body.omnidata-design-system-v1 .od-table-row.selected td.od-frozen-column,
+body.omnidata-role-system .od-table-row.selected td.od-frozen-column{background:var(--ods-color-surface-selected,#fff4ee)!important}
+
+body.omnidata-design-system-v1 .od-column-row,
+body.omnidata-role-system .od-column-row{display:flex!important;align-items:center!important;gap:8px!important;min-height:28px!important;padding:2px 0!important;font-size:12px!important}
+body.omnidata-design-system-v1 .od-column-row .od-filter-option-label,
+body.omnidata-role-system .od-column-row .od-filter-option-label{flex:1 1 auto!important}
+body.omnidata-design-system-v1 .od-column-row.od-column-frozen .od-filter-option-label,
+body.omnidata-role-system .od-column-row.od-column-frozen .od-filter-option-label{font-weight:600!important}
+body.omnidata-design-system-v1 .od-column-move,
+body.omnidata-role-system .od-column-move{width:22px!important;height:22px!important;padding:0!important;border:1px solid var(--ods-color-border)!important;border-radius:4px!important;background:transparent!important;font-size:11px!important;line-height:1!important;cursor:pointer!important}
+body.omnidata-design-system-v1 .od-column-move:disabled,
+body.omnidata-role-system .od-column-move:disabled{opacity:.35!important;cursor:default!important}
+
+/* Сама линия. В покое это тонкая разделительная полоса с неброской подписью; активная —
+   сплошная линия акцентом, потому что именно она отвечает на вопрос «докуда закреплено». */
+body.omnidata-design-system-v1 .od-freeze-line,
+body.omnidata-role-system .od-freeze-line{display:flex!important;align-items:center!important;gap:8px!important;margin:1px 0!important}
+body.omnidata-design-system-v1 .od-freeze-line::after,
+body.omnidata-role-system .od-freeze-line::after{content:''!important;flex:1 1 auto!important;height:1px!important;background:var(--ods-color-border)!important}
+body.omnidata-design-system-v1 .od-freeze-line.active::after,
+body.omnidata-role-system .od-freeze-line.active::after{height:2px!important;background:var(--ods-color-accent,#ff5b22)!important}
+body.omnidata-design-system-v1 .od-freeze-line-handle,
+body.omnidata-role-system .od-freeze-line-handle{padding:0!important;border:0!important;background:transparent!important;color:var(--ods-color-text-muted,#656c79)!important;font-size:10px!important;text-transform:uppercase!important;letter-spacing:.04em!important;cursor:pointer!important;opacity:0!important}
+body.omnidata-design-system-v1 .od-freeze-line:hover .od-freeze-line-handle,
+body.omnidata-design-system-v1 .od-freeze-line-handle:focus-visible,
+body.omnidata-design-system-v1 .od-freeze-line.active .od-freeze-line-handle,
+body.omnidata-role-system .od-freeze-line:hover .od-freeze-line-handle,
+body.omnidata-role-system .od-freeze-line-handle:focus-visible,
+body.omnidata-role-system .od-freeze-line.active .od-freeze-line-handle{opacity:1!important}
+body.omnidata-design-system-v1 .od-freeze-line.active .od-freeze-line-handle,
+body.omnidata-role-system .od-freeze-line.active .od-freeze-line-handle{color:var(--ods-color-accent,#ff5b22)!important}
+
+/* Тело панели Freeze Line раскладывается сверху вниз. Панель несёт роль filterbar, чья раскладка —
+   строка, и без этого двадцать колонок уходили за её правый край. */
+/* Панель Freeze Line не переносит содержимое в соседнюю колонку.
+   Общее правило filterbar (строка 549) задаёт перенос селекторами по атрибутам, и при равном
+   !important побеждает специфичность — поэтому здесь те же атрибуты плюс класс панели. Высота
+   ограничена окном, иначе телу нечего прокручивать и длинный список просто переносится. */
+body.omnidata-design-system-v1 :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="filterbar"],[data-od14-unified-part="filterbar"]).od-column-panel,
+body.omnidata-role-system :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="filterbar"],[data-od14-unified-part="filterbar"]).od-column-panel{flex-wrap:nowrap!important;flex-direction:column!important;align-items:stretch!important;max-height:min(80vh,100%)!important}
+/* Тело прокручивается, а не переносится. Панель — колоночный флекс с переносом, и длинный список
+   колонок не помещался по высоте: он переносился в соседнюю колонку и утаскивал за собой подвал,
+   так что и список, и кнопки уезжали за правый край. */
+body.omnidata-design-system-v1 :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]).od-column-panel .od-filter-panel-body,
+body.omnidata-role-system :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]).od-column-panel .od-filter-panel-body{display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:0!important;flex:1 1 auto!important;min-height:0!important;overflow-y:auto!important}
+body.omnidata-design-system-v1 .od-column-panel .od-column-row,
+body.omnidata-role-system .od-column-panel .od-column-row{width:100%!important}
+
+/* Навигатор по иерархии раздела. Панель раскладывается так же, как Freeze Line: колонкой, с
+   прокручиваемым телом — список веток длиннее списка колонок, и уехать он может ещё дальше. */
+body.omnidata-design-system-v1 :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]).od-hierarchy-panel,
+body.omnidata-role-system :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]).od-hierarchy-panel{width:min(300px,86%)!important}
+body.omnidata-design-system-v1 :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="filterbar"],[data-od14-unified-part="filterbar"]).od-hierarchy-panel,
+body.omnidata-role-system :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]):is([data-ods-part="filterbar"],[data-od14-unified-part="filterbar"]).od-hierarchy-panel{flex-wrap:nowrap!important;flex-direction:column!important;align-items:stretch!important;max-height:min(80vh,100%)!important}
+body.omnidata-design-system-v1 :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]).od-hierarchy-panel .od-filter-panel-body,
+body.omnidata-role-system :is([data-ods-role="filterbar"],[data-od14-unified-role="filterbar"]).od-hierarchy-panel .od-filter-panel-body{display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:0!important;flex:1 1 auto!important;min-height:0!important;overflow-y:auto!important}
+body.omnidata-design-system-v1 .od-hierarchy-panel .od-column-row,
+body.omnidata-role-system .od-hierarchy-panel .od-column-row{width:100%!important}
+body.omnidata-design-system-v1 .od-hierarchy-panel .od-filter-group-title,
+body.omnidata-role-system .od-hierarchy-panel .od-filter-group-title{margin:10px 0 4px!important;font-size:10px!important;text-transform:uppercase!important;letter-spacing:.06em!important;color:var(--ods-color-text-muted,#656c79)!important}
+
+/* Порядковый номер уровня: иерархия — это последовательность, и её шаг виден числом, а не только
+   положением строки, которое при прокрутке теряется. */
+body.omnidata-design-system-v1 .od-hierarchy-level-mark,
+body.omnidata-role-system .od-hierarchy-level-mark{display:inline-flex!important;align-items:center!important;justify-content:center!important;width:16px!important;height:16px!important;border-radius:999px!important;background:var(--ods-color-accent,#ff5b22)!important;color:#fff!important;font-size:9px!important;font-weight:700!important}
+
+/* Узел дерева. Отступ говорит про глубину, вес — про выбранную ветвь. */
+body.omnidata-design-system-v1 .od-hierarchy-node,
+body.omnidata-role-system .od-hierarchy-node{display:flex!important;align-items:center!important;gap:8px!important;width:100%!important;min-height:26px!important;padding:2px 6px!important;border:0!important;border-radius:4px!important;background:transparent!important;color:inherit!important;font-size:12px!important;text-align:left!important;cursor:pointer!important}
+body.omnidata-design-system-v1 .od-hierarchy-node .od-filter-option-label,
+body.omnidata-role-system .od-hierarchy-node .od-filter-option-label{flex:1 1 auto!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important}
+body.omnidata-design-system-v1 .od-hierarchy-node:hover,
+body.omnidata-role-system .od-hierarchy-node:hover{background:var(--ods-color-surface-muted,#f5f6f8)!important}
+body.omnidata-design-system-v1 .od-hierarchy-node.selected,
+body.omnidata-role-system .od-hierarchy-node.selected{background:var(--ods-color-surface-muted,#f5f6f8)!important;color:var(--ods-color-accent,#ff5b22)!important;font-weight:600!important}
+body.omnidata-design-system-v1 .od-hierarchy-depth-1,
+body.omnidata-role-system .od-hierarchy-depth-1{padding-left:18px!important}
+body.omnidata-design-system-v1 .od-hierarchy-depth-2,
+body.omnidata-role-system .od-hierarchy-depth-2{padding-left:30px!important}
+body.omnidata-design-system-v1 .od-hierarchy-depth-3,
+body.omnidata-role-system .od-hierarchy-depth-3{padding-left:42px!important}
+body.omnidata-design-system-v1 .od-hierarchy-depth-4,
+body.omnidata-role-system .od-hierarchy-depth-4{padding-left:54px!important}
+
+/* Счётчик: он меняется вместе с выбранной ветвью, поэтому стоит под деревом, а не в шапке. */
+body.omnidata-design-system-v1 .od-hierarchy-total,
+body.omnidata-role-system .od-hierarchy-total{margin:10px 0 0!important;padding-top:8px!important;border-top:1px solid var(--ods-color-border)!important;font-size:11px!important;font-weight:600!important;color:var(--ods-color-text-muted,#656c79)!important}
+
+/* Кнопки порядка (↑ ↓ ×) в панелях Freeze Line и «Структура иерархии».
+   Заявленные 22×22 не доезжали: ODS задаёт кнопке `min-height: var(--ods-control-height)` и
+   `width:auto` селекторами по ролевым атрибутам, а они специфичнее одного класса — стрелка
+   схлопывалась до семи пикселей ширины при высоте в тридцать четыре, а «×», опознанный
+   как icon-button, оставался на полторы высоты выше соседей. Правило повторяет форму
+   конкурирующего селектора, поэтому размер задан здесь, а не разнесён между двумя слоями. */
+body.omnidata-v14 [data-od14-component="filterbar"] :is([data-od14-component="button"],[data-od14-component="icon-button"]).od-column-move,
+body.omnidata-role-system [data-ods-role="filterbar"] [data-ods-role="button"]:is([data-ods-part="button"],[data-ods-part="icon-button"]).od-column-move,
+body.omnidata-design-system-v1 [data-ods-role="filterbar"] [data-ods-role="button"]:is([data-ods-part="button"],[data-ods-part="icon-button"]).od-column-move{flex:0 0 22px!important;width:22px!important;min-width:22px!important;height:22px!important;min-height:22px!important;padding:0!important;line-height:1!important}
+
+/* Отказ по правам — состояние раздела, а не сбой.
+   Красная плашка «не удалось загрузить» предлагает повторить, а повторять нечего: роль та же.
+   Нейтральный тон и замок говорят, что раздел существует и закрыт, — это другая новость. */
+body.omnidata-design-system-v1 .notice.denied,
+body.omnidata-role-system .notice.denied{display:flex!important;align-items:center!important;gap:8px!important;border:1px solid var(--ods-color-border)!important;border-left:3px solid var(--ods-color-text-muted,#656c79)!important;background:var(--ods-color-surface-muted,#f5f6f8)!important;color:var(--ods-color-text,#1f2430)!important}
+body.omnidata-design-system-v1 .notice.denied::before,
+body.omnidata-role-system .notice.denied::before{content:'\1F512'!important;font-size:13px!important;opacity:.7!important}

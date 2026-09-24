@@ -1,0 +1,583 @@
+{
+  "dataset_version": "1.0.0",
+  "profile": "RU_FASHION_CORE",
+  "markets": [
+    "RU"
+  ],
+  "languages": [
+    "ru",
+    "en"
+  ],
+  "source": {
+    "system": "syntha_operational_master",
+    "version": "1.0.0",
+    "endpoint": "mdm/reference/russia-fashion-product-dimensions.json",
+    "license": "SYNTHA internal operational master data",
+    "retrieved_at": "2026-09-18T00:00:00.000Z"
+  },
+  "dictionaries": [
+    {
+      "id": "mdm-dictionary:assortment-gender",
+      "code": "assortment.gender",
+      "data_class": "classifier",
+      "scope_model": "global",
+      "hierarchy_enabled": false,
+      "effective_dated": true,
+      "approval_required": true,
+      "name": {
+        "ru": "Пол",
+        "en": "Gender"
+      },
+      "description": {
+        "ru": "Пол, для которого спроектировано изделие. Отвечает на вопрос конструкции и посадки, а не на вопрос целевой аудитории кампании.",
+        "en": "The gender the product is designed for. It answers a construction and fit question, not a campaign audience question."
+      },
+      "entries": [
+        {
+          "id": "mdm-entry:assortment-gender:women",
+          "version": 1,
+          "domain": "assortment.gender",
+          "code": "WOMEN",
+          "name_ru": "Женский",
+          "name_en": "Women",
+          "description_ru": "Женская конструкция и размерная шкала.",
+          "description_en": "Women's construction and size scale.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-product-dimensions.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-18T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-18T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ]
+          }
+        },
+        {
+          "id": "mdm-entry:assortment-gender:men",
+          "version": 1,
+          "domain": "assortment.gender",
+          "code": "MEN",
+          "name_ru": "Мужской",
+          "name_en": "Men",
+          "description_ru": "Мужская конструкция и размерная шкала.",
+          "description_en": "Men's construction and size scale.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-product-dimensions.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-18T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-18T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ]
+          }
+        },
+        {
+          "id": "mdm-entry:assortment-gender:unisex",
+          "version": 1,
+          "domain": "assortment.gender",
+          "code": "UNISEX",
+          "name_ru": "Унисекс",
+          "name_en": "Unisex",
+          "description_ru": "Единая конструкция без разделения по полу.",
+          "description_en": "One construction without a gender split.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-product-dimensions.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-18T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-18T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "mdm-dictionary:assortment-age-group",
+      "code": "assortment.age_group",
+      "data_class": "classifier",
+      "scope_model": "global",
+      "hierarchy_enabled": false,
+      "effective_dated": true,
+      "approval_required": true,
+      "name": {
+        "ru": "Возрастная группа",
+        "en": "Age group"
+      },
+      "description": {
+        "ru": "Возрастная группа, на которую рассчитаны конструкция и размерная шкала.",
+        "en": "The age group the construction and size scale are built for."
+      },
+      "entries": [
+        {
+          "id": "mdm-entry:assortment-age-group:adult",
+          "version": 1,
+          "domain": "assortment.age_group",
+          "code": "ADULT",
+          "name_ru": "Взрослый",
+          "name_en": "Adult",
+          "description_ru": "Взрослая размерная шкала.",
+          "description_en": "Adult size scale.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-product-dimensions.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-18T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-18T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ]
+          }
+        },
+        {
+          "id": "mdm-entry:assortment-age-group:teen",
+          "version": 1,
+          "domain": "assortment.age_group",
+          "code": "TEEN",
+          "name_ru": "Подростковый",
+          "name_en": "Teen",
+          "description_ru": "Подростковая размерная шкала.",
+          "description_en": "Teen size scale.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-product-dimensions.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-18T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-18T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ]
+          }
+        },
+        {
+          "id": "mdm-entry:assortment-age-group:kids",
+          "version": 1,
+          "domain": "assortment.age_group",
+          "code": "KIDS",
+          "name_ru": "Детский",
+          "name_en": "Kids",
+          "description_ru": "Детская размерная шкала.",
+          "description_en": "Kids size scale.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-product-dimensions.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-18T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-18T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ]
+          }
+        },
+        {
+          "id": "mdm-entry:assortment-age-group:baby",
+          "version": 1,
+          "domain": "assortment.age_group",
+          "code": "BABY",
+          "name_ru": "Ясельный",
+          "name_en": "Baby",
+          "description_ru": "Ясельная размерная шкала и требования к безопасности.",
+          "description_en": "Baby size scale and its safety requirements.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-product-dimensions.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-18T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-18T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "mdm-dictionary:assortment-novelty",
+      "code": "assortment.novelty",
+      "data_class": "classifier",
+      "scope_model": "global",
+      "hierarchy_enabled": false,
+      "effective_dated": true,
+      "approval_required": true,
+      "name": {
+        "ru": "Новизна",
+        "en": "Novelty"
+      },
+      "description": {
+        "ru": "Отношение модели к сезону: новинка, переходящая или базовая позиция. Управляет закупкой, ценообразованием и порядком показа в листе коллекции.",
+        "en": "How the style relates to the season: new, carried over or a core line. It drives buying, pricing and linesheet order."
+      },
+      "entries": [
+        {
+          "id": "mdm-entry:assortment-novelty:new",
+          "version": 1,
+          "domain": "assortment.novelty",
+          "code": "NEW",
+          "name_ru": "Новинка",
+          "name_en": "New",
+          "description_ru": "Впервые выходит в этом сезоне.",
+          "description_en": "Enters the assortment for the first time this season.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-product-dimensions.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-18T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-18T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ]
+          }
+        },
+        {
+          "id": "mdm-entry:assortment-novelty:carry-over",
+          "version": 1,
+          "domain": "assortment.novelty",
+          "code": "CARRY_OVER",
+          "name_ru": "Переходящая",
+          "name_en": "Carry-over",
+          "description_ru": "Переходит из предыдущего сезона без изменений конструкции.",
+          "description_en": "Carried over from the previous season with no construction change.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-product-dimensions.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-18T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-18T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ]
+          }
+        },
+        {
+          "id": "mdm-entry:assortment-novelty:core",
+          "version": 1,
+          "domain": "assortment.novelty",
+          "code": "CORE",
+          "name_ru": "Базовая",
+          "name_en": "Core",
+          "description_ru": "Постоянная позиция ассортимента вне сезонного цикла.",
+          "description_en": "A permanent assortment line outside the seasonal cycle.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-product-dimensions.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-18T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-18T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "mdm-dictionary:assortment-seasonality",
+      "code": "assortment.seasonality",
+      "data_class": "classifier",
+      "scope_model": "global",
+      "hierarchy_enabled": false,
+      "effective_dated": true,
+      "approval_required": true,
+      "name": {
+        "ru": "Сезонность",
+        "en": "Seasonality"
+      },
+      "description": {
+        "ru": "Сезон эксплуатации изделия.",
+        "en": "The season the product is intended to be worn in."
+      },
+      "entries": [
+        {
+          "id": "mdm-entry:assortment-seasonality:ss",
+          "version": 1,
+          "domain": "assortment.seasonality",
+          "code": "SS",
+          "name_ru": "Весна-лето",
+          "name_en": "Spring/Summer",
+          "description_ru": "Весенне-летний сезон эксплуатации.",
+          "description_en": "Spring/summer wearing season.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-product-dimensions.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-18T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-18T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ]
+          }
+        },
+        {
+          "id": "mdm-entry:assortment-seasonality:fw",
+          "version": 1,
+          "domain": "assortment.seasonality",
+          "code": "FW",
+          "name_ru": "Осень-зима",
+          "name_en": "Fall/Winter",
+          "description_ru": "Осенне-зимний сезон эксплуатации.",
+          "description_en": "Fall/winter wearing season.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-product-dimensions.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-18T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-18T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ]
+          }
+        },
+        {
+          "id": "mdm-entry:assortment-seasonality:transitional",
+          "version": 1,
+          "domain": "assortment.seasonality",
+          "code": "TRANSITIONAL",
+          "name_ru": "Демисезонный",
+          "name_en": "Transitional",
+          "description_ru": "Межсезонье.",
+          "description_en": "Between the two main seasons.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-product-dimensions.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-18T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-18T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ]
+          }
+        },
+        {
+          "id": "mdm-entry:assortment-seasonality:all-season",
+          "version": 1,
+          "domain": "assortment.seasonality",
+          "code": "ALL_SEASON",
+          "name_ru": "Всесезонный",
+          "name_en": "All season",
+          "description_ru": "Без сезонного ограничения.",
+          "description_en": "No seasonal restriction.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-product-dimensions.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-18T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-18T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "mdm-dictionary:fit-class",
+      "code": "fit.class",
+      "data_class": "classifier",
+      "scope_model": "global",
+      "hierarchy_enabled": false,
+      "effective_dated": true,
+      "approval_required": true,
+      "name": {
+        "ru": "Класс посадки",
+        "en": "Fit class"
+      },
+      "description": {
+        "ru": "Характер прилегания изделия к телу. Это классификатор для коммерческого описания и фильтрации, а не конструкторская база: базовая конструкция живёт в fit.block.",
+        "en": "How closely the garment sits on the body. This is a classifier for commercial description and filtering, not a pattern-making base: the base construction lives in fit.block."
+      },
+      "entries": [
+        {
+          "id": "mdm-entry:fit-class:slim",
+          "version": 1,
+          "domain": "fit.class",
+          "code": "SLIM",
+          "name_ru": "Прилегающая",
+          "name_en": "Slim",
+          "description_ru": "Минимальная прибавка на свободу облегания.",
+          "description_en": "Minimal ease over the body.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-product-dimensions.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-18T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-18T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ]
+          }
+        },
+        {
+          "id": "mdm-entry:fit-class:regular",
+          "version": 1,
+          "domain": "fit.class",
+          "code": "REGULAR",
+          "name_ru": "Прямая",
+          "name_en": "Regular",
+          "description_ru": "Стандартная прибавка на свободу облегания.",
+          "description_en": "Standard ease over the body.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-product-dimensions.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-18T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-18T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ]
+          }
+        },
+        {
+          "id": "mdm-entry:fit-class:relaxed",
+          "version": 1,
+          "domain": "fit.class",
+          "code": "RELAXED",
+          "name_ru": "Свободная",
+          "name_en": "Relaxed",
+          "description_ru": "Увеличенная прибавка без смещения плечевого шва.",
+          "description_en": "Increased ease with the shoulder seam still in place.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-product-dimensions.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-18T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-18T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ]
+          }
+        },
+        {
+          "id": "mdm-entry:fit-class:oversize",
+          "version": 1,
+          "domain": "fit.class",
+          "code": "OVERSIZE",
+          "name_ru": "Оверсайз",
+          "name_en": "Oversize",
+          "description_ru": "Намеренно увеличенный объём со смещённым плечевым швом.",
+          "description_en": "Deliberately enlarged volume with a dropped shoulder seam.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-product-dimensions.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-09-18T00:00:00.000Z"
+          },
+          "effective_from": "2026-09-18T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "market_codes": [
+              "RU"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

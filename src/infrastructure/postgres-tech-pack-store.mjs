@@ -58,6 +58,20 @@ function view(client) {
       const result = await client.query('SELECT payload FROM tech_packs WHERE source_tech_pack_code = $1 FOR UPDATE', [sourceCode]);
       return result.rows[0]?.payload;
     },
+    async insertTechPackOperation(value) {
+      try {
+        await insertOperation(client, value);
+      } catch (error) {
+        // Two operations cannot hold the same place in the sequence, or the same code within one
+        // pack. A raw constraint name means nothing to whoever tripped it.
+        if (error?.code === '23505') {
+          invariant(false, 'TECH_PACK_OPERATION_ALREADY_EXISTS',
+            'That sequence number or operation code is already used in this tech pack',
+            { sequence: value.sequence, operationCode: value.operationCode });
+        }
+        throw error;
+      }
+    },
     async insertTechPack(value) {
       try {
         await client.query(
@@ -98,4 +112,14 @@ function view(client) {
 
 function parameters(value) {
   return [value.id, value.techPackCode, value.sku, value.brandId, value.skuVersion, value.revision, value.status, value.supplierCode, value.sourceTechPackCode, value.version, JSON.stringify(value), value.createdAt, value.updatedAt, value.issuedAt, value.acknowledgedAt, value.withdrawnAt];
+}
+
+async function insertOperation(client, value) {
+await client.query(
+    `INSERT INTO tech_pack_operations
+       (id, tech_pack_code, brand_id, sequence, operation_code, name_ru, name_en, equipment, machine_class, standard_minutes, notes, payload, created_at, created_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13,$14)`,
+    [value.id, value.techPackCode, value.brandId, value.sequence, value.operationCode, value.nameRu, value.nameEn,
+     value.equipment, value.machineClass, value.standardMinutes, value.notes, JSON.stringify(value), value.createdAt, value.createdBy],
+  );
 }

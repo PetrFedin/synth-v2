@@ -1,4 +1,4 @@
-import { invariant } from '../core/errors.mjs';
+import { invariant, requireEntity } from '../core/errors.mjs';
 import { canonicalJson } from '../core/fingerprints.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
 
@@ -19,7 +19,7 @@ export function createOrderEconomicsPositionService({ economicsStore } = {}) {
         if (close) return closedPosition(tx, order, orderCommit, close);
 
         const readiness = await tx.getLatestCostCloseReadinessByOrderCommitSnapshotId(orderCommit.id);
-        if (!readiness) return openPosition(order, orderCommit);
+        if (!readiness) return openPosition(tx, order, orderCommit);
         return readinessPosition(tx, order, orderCommit, readiness);
       });
     },
@@ -112,7 +112,43 @@ async function closedPosition(tx, order, orderCommit, close) {
   });
 }
 
-function openPosition(order, orderCommit) {
+// Открытая позиция: закрытия нет и готовность ещё не оценивали.
+//
+// Раньше она отвечала одними нулями и `null`, даже когда маржа уже была посчитана, — то есть
+// прятала записанный факт за шагом, который к нему отношения не имеет. Оценка готовности говорит,
+// **можно ли закрывать**, а не **сколько заработано**; путать одно с другим значит оставлять экран
+// пустым при полном реестре затрат. Числа отдаются, и вместе с ними остаётся честная причина
+// `readiness_not_evaluated`: цифра есть, но окончательной её ещё никто не объявлял.
+async function openPosition(tx, order, orderCommit) {
+  const margin = await tx.getLatestMarginActualizationByOrderCommitSnapshotId?.(orderCommit.id);
+  const landed = margin?.landedCostSnapshotId ? await tx.getLandedCostSnapshot(margin.landedCostSnapshotId) : null;
+  if (margin) {
+    return freezePosition({
+      orderId: order.id,
+      orderCommitSnapshotId: orderCommit.id,
+      currency: orderCommit.currency,
+      status: 'OPEN',
+      costCloseReadinessSnapshotId: null,
+      costCloseSnapshotId: null,
+      latestPostCloseAdjustmentId: null,
+      postCloseAllocationReconciliationSnapshotId: null,
+      blockingReasons: ['readiness_not_evaluated'],
+      effectiveLandedCostSnapshotId: landed?.id ?? margin.landedCostSnapshotId ?? null,
+      effectiveMarginActualizationSnapshotId: margin.id,
+      allocationStatus: margin.allocationStatus ?? null,
+      costAllocationRunSnapshotId: margin.costAllocationRunSnapshotId ?? null,
+      costAllocationRunContentHash: margin.costAllocationRunContentHash ?? null,
+      costAllocationPolicyVersionId: margin.costAllocationPolicyVersionId ?? null,
+      costAllocationLineageMode: margin.costAllocationLineageMode ?? null,
+      effectiveTotalLandedCost: landed?.totalCost ?? margin.landedCost ?? null,
+      effectiveContributionMarginAmount: margin.contributionMarginAmount,
+      effectiveContributionMarginPercent: margin.contributionMarginPercent,
+      baseTotalLandedCost: null,
+      baseContributionMarginAmount: null,
+      cumulativePostCloseCostDelta: null,
+      cumulativePostCloseMarginDelta: null,
+    });
+  }
   return freezePosition({
     orderId: order.id,
     orderCommitSnapshotId: orderCommit.id,
@@ -143,5 +179,4 @@ function openPosition(order, orderCommit) {
 function freezePosition(value) {
   return Object.freeze({ ...value, blockingReasons: Object.freeze([...value.blockingReasons]) });
 }
-function requireEntity(entity, code, details) { invariant(entity, code, 'Entity not found', details); return entity; }
 function roundMoney(value) { return Math.round(value * 10_000) / 10_000; }

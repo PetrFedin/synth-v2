@@ -17,14 +17,28 @@
   if (window.SynthaBomCore) activate('BOM and costing', 'boms', '\u0421\u043f\u0435\u0446\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u0438 \u0438 \u0441\u0435\u0431\u0435\u0441\u0442\u043e\u0438\u043c\u043e\u0441\u0442\u044c', 'BOM and costing');
   if (window.SynthaMeasurementCore) activate('Measurement charts', 'measurements', '\u0422\u0430\u0431\u043b\u0438\u0446\u044b \u0438\u0437\u043c\u0435\u0440\u0435\u043d\u0438\u0439', 'Measurement charts');
   if (window.SynthaSampleCore) activate('Samples', 'samples', '\u041e\u0431\u0440\u0430\u0437\u0446\u044b', 'Samples');
+  // Экран контрагентов остался без входа, и это видно только на экране.
+  //
+  // `Partners and suppliers` был **единственным** незапланированным пунктом, указывавшим на
+  // `partners`, и строка ниже переназначила его на `suppliers`, заодно переименовав. С того дня
+  // `renderPartners()` со всеми четырьмя вкладками — карта связей, приглашения, матрица ролей,
+  // история изменений — не достигался ниоткуда: ни один другой пункт не ставит этот вид.
+  //
+  // Возвращается он не отменой сорсинга, а своим пунктом: «Байеры и ретейлеры» стоял
+  // запланированным и не занятым, а этот экран — ровно про них, про их доступы и про историю.
+  // Имя берётся то, которым его называет спецификация.
+  activate('Buyers and retailers', 'partners', '\u041a\u043e\u043d\u0442\u0440\u0430\u0433\u0435\u043d\u0442\u044b \u0438 \u0434\u043e\u0441\u0442\u0443\u043f\u044b', 'Partners and access');
+
   if (window.SynthaSourcingCore) {
     activate('Partners and suppliers', 'suppliers', '\u041f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a\u0438', 'Suppliers');
     activate('Requests for quotation', 'rfqs', '\u0417\u0430\u043f\u0440\u043e\u0441\u044b \u0446\u0435\u043d', 'Requests for quotation');
     activate('Quotations', 'quotations', '\u041a\u043e\u0442\u0438\u0440\u043e\u0432\u043a\u0438', 'Quotations');
     activate('Production', 'production', '\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434\u0441\u0442\u0432\u043e', 'Production');
   }
-  if (window.SynthaProductionOrdersWorkspace) activate('Production orders', 'production-orders', '\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434\u0441\u0442\u0432\u0435\u043d\u043d\u044b\u0435 \u0437\u0430\u043a\u0430\u0437\u044b', 'Production orders');
-  if (window.SynthaProductionExecutionsWorkspace) activate('Production execution', 'production-executions', '\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434\u0441\u0442\u0432\u0435\u043d\u043d\u044b\u0439 \u043a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u044c', 'Production execution');
-  if (window.SynthaFinalQualityWorkspace) activate('Quality', 'final-quality', '\u041a\u0430\u0447\u0435\u0441\u0442\u0432\u043e', 'Quality');
+  // This layer has to run before measurements.js and samples.js, whose renderers wrap the view and
+  // need V7 navigation to be active first. Production Orders, Production Execution and Final Quality
+  // load after it, so their globals do not exist yet and the checks above would always miss them.
+  // They call activate themselves once they have registered, through the handle exported below.
+  window.SynthaOmnidataV7Nav = Object.freeze({ activate });
   if (window.SynthaLinesheetsWorkspace) activate('Linesheets', 'linesheets', '\u041b\u0438\u0441\u0442\u044b \u043a\u043e\u043b\u043b\u0435\u043a\u0446\u0438\u0439', 'Linesheets');
 })();

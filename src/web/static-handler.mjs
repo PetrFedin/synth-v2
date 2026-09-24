@@ -18,7 +18,12 @@ const encodedAssets = new Map();
 
 const DEFAULT_PUBLIC_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'public');
 const JS = 'text/javascript; charset=utf-8';
-const CACHE = 'public, max-age=300';
+// `no-cache` means "keep it, but ask me first", not "do not keep it". Thirty of these assets carry
+// no version in their URL, so a five-minute window let a returning browser run five-minute-old
+// scripts beside freshly deployed ones — the state that produces bug reports nobody can reproduce.
+// The ETag is already a content hash, so asking costs a 304 and the body is sent only when it
+// actually changed.
+const CACHE = 'no-cache';
 const VISUAL_CACHE = 'no-store';
 const ASSETS = Object.freeze({
   '/': ['index.html', 'text/html; charset=utf-8', 'no-store'],
@@ -89,7 +94,14 @@ const ASSETS = Object.freeze({
   '/ui/tech-pack-core.js': ['modules/tech-pack-core.js', JS, VISUAL_CACHE],
   '/ui/production-execution-core.js': ['modules/production-execution-core.js', JS, VISUAL_CACHE],
   '/ui/final-quality-core.js': ['modules/final-quality-core.js', JS, VISUAL_CACHE],
+  // Состав организации: нужен и матрице ролей, и форме назначения ответственных.
+  '/ui/brand-roster.js': ['modules/brand-roster.js', JS, CACHE],
+  '/ui/commercial-publication-actions.js': ['modules/commercial-publication-actions.js', JS, CACHE],
+  '/ui/material-lot-actions.js': ['modules/material-lot-actions.js', JS, CACHE],
+  '/ui/product-readiness-panel.js': ['modules/product-readiness-panel.js', JS, CACHE],
+  '/ui/product-readiness-assessment.js': ['modules/product-readiness-assessment.js', JS, CACHE],
   '/ui/omnidata-workspace.js': ['modules/omnidata-workspace.js', JS, VISUAL_CACHE],
+  '/ui/order-fulfillment-view.js': ['modules/order-fulfillment-view.js', JS, VISUAL_CACHE],
   '/ui/order-lifecycle-actions.js': ['modules/order-lifecycle-actions.js', JS, CACHE],
   '/ui/omnidata-polish.js': ['modules/omnidata-polish.js', JS, VISUAL_CACHE],
   '/ui/omnidata-fidelity.js': ['modules/omnidata-fidelity.js', JS, VISUAL_CACHE],
@@ -110,6 +122,7 @@ const ASSETS = Object.freeze({
   '/ui/omnidata-v14-components.js': ['modules/omnidata-v14-components.js', JS, VISUAL_CACHE],
   '/ui/omnidata-v14-role-system.js': ['modules/omnidata-v14-role-system.js', JS, VISUAL_CACHE],
   '/ui/linesheet-matrix-core.js': ['modules/linesheet-matrix-core.js', JS, VISUAL_CACHE],
+  '/ui/order-grid-core.js': ['modules/order-grid-core.js', JS, VISUAL_CACHE],
   '/ui/linesheets.js': ['modules/linesheets.js', JS, VISUAL_CACHE],
   '/ui/buyer-order-handoff.js': ['modules/buyer-order-handoff.js', JS, VISUAL_CACHE],
   '/ui/planning.js': ['modules/planning.js', JS, VISUAL_CACHE],
@@ -127,6 +140,10 @@ const ASSETS = Object.freeze({
   '/ui/production-orders.js': ['modules/production-orders.js', JS, VISUAL_CACHE],
   '/ui/production-executions.js': ['modules/production-executions.js', JS, VISUAL_CACHE],
   '/ui/final-quality.js': ['modules/final-quality.js', JS, VISUAL_CACHE],
+  '/ui/libraries.js': ['modules/libraries.js', JS, VISUAL_CACHE],
+  '/ui/supplier-portal.js': ['modules/supplier-portal.js', JS, VISUAL_CACHE],
+  '/ui/placeholder-import.js': ['modules/placeholder-import.js', JS, VISUAL_CACHE],
+  '/ui/showroom-looks.js': ['modules/showroom-looks.js', JS, VISUAL_CACHE],
   '/ui/app-start.js': ['modules/app-start.js', JS, CACHE],
 });
 

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { domainEvent } from '../core/events.mjs';
-import { invariant } from '../core/errors.mjs';
+import { invariant, requireEntity } from '../core/errors.mjs';
 import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
 import {
@@ -12,6 +12,7 @@ import {
   resolveProductionMilestoneBlock,
   startProductionExecution,
 } from '../modules/production-execution/public.mjs';
+import { assertMilestoneClearOfOpenChecks } from '../modules/inline-quality/public.mjs';
 
 const COMPLETE_FIELDS = Object.freeze(new Set(['expectedVersion','milestoneCode','notes']));
 const BLOCK_FIELDS = Object.freeze(new Set(['expectedVersion','milestoneCode','reason']));
@@ -101,6 +102,13 @@ export function createProductionExecutionService({ store, clock = () => new Date
         (tx) => contextForExecution(tx, executionCode, actorId),
         async (tx, current) => {
           assertProductionExecutionVersion(current, expectedVersion);
+          // Веха не закрывается, пока найденный на ней брак не разобран.
+          //
+          // The inline checks are read in the same transaction that writes the completion, so a
+          // check opened between the read and the write cannot slip through. The database holds the
+          // same rule, because this one crosses two aggregates and the module that happens to be
+          // writing is not the only writer.
+          assertMilestoneClearOfOpenChecks(await tx.listOpenInlineChecks(current.id), input.milestoneCode);
           const value = completeProductionMilestone(current, { milestoneCode: input.milestoneCode, actorId, notes: input.notes, completedAt: clock() });
           await tx.saveExecution(value, expectedVersion);
           await append(tx, value.status === 'ready-for-qc' ? 'production-execution.ready-for-qc' : 'production-milestone.completed', value, commandId, actorId, { milestoneCode: input.milestoneCode });
@@ -154,5 +162,4 @@ export function createProductionExecutionService({ store, clock = () => new Date
 
 function validateInput(value, allowed, code) { invariant(value && typeof value === 'object' && !Array.isArray(value), code, 'Production execution input is invalid'); const fields = Object.keys(value).filter((field) => !allowed.has(field)); invariant(fields.length === 0, 'PRODUCTION_EXECUTION_FIELD_FORBIDDEN', 'Production execution input contains unsupported fields', { fields }); }
 function versionOf(value) { invariant(value && Number.isInteger(value.expectedVersion) && value.expectedVersion >= 1, 'PRODUCTION_EXECUTION_EXPECTED_VERSION_INVALID', 'Expected production execution version is invalid'); return value.expectedVersion; }
-function requireEntity(value, code, details) { invariant(value, code, 'Entity not found', details); return value; }
 function defaultIdGenerator() { return (prefix) => `${prefix}_${randomUUID()}`; }

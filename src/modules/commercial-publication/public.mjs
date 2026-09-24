@@ -174,6 +174,9 @@ function legacyLine(sku, collection, seen) {
     unitPrice: normalizeMoney(sku.wholesalePrice, moneyOptions('Commercial publication unit price')),
     currency: sku.currency,
     minimumOrderQuantity: sku.minimumOrderQuantity,
+    // Frozen with the price: a buyer is held to the pack the brand published to them, not to
+    // whatever the brand changed it to afterwards.
+    packSize: sku.packSize ?? null,
   });
 }
 
@@ -225,6 +228,10 @@ function compatibilityLine(sku, colorway, styleVersion, preparation, commercialP
     unitPrice: moneyFromMinor(preparation.wholesalePriceMinor, 'Commercial projection wholesale price'),
     currency: preparation.currency,
     minimumOrderQuantity: preparation.minimumOrderQuantity,
+    // Кратность упаковки for this one SKU, frozen with its price. Distinct from `packRatio` in the
+    // commercial terms below, which is a ростовка — the mix of sizes inside one assorted box, a
+    // rule about a whole row rather than a single cell.
+    packSize: preparation.packSize ?? null,
     rrpMinor: preparation.rrpMinor,
     wholesalePriceMinor: preparation.wholesalePriceMinor,
     deliveryStart: preparation.deliveryStart,

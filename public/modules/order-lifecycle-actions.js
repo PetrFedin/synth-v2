@@ -44,6 +44,28 @@
     if (item.status === 'attached' && canWrite) {
       actions.push(actionButton(localized('Отменить заказ', 'Cancel order'), () => orderCancellationForm(item), 'danger'));
     }
+
+    // Экран экономики заказа был написан и недостижим: кнопка, которая его открывает, осталась на
+    // прежней карточке заказа, а реестр, заменивший её, о ней не знал. Ни выручки, ни фактической
+    // себестоимости, ни маржи в интерфейсе не было — при том, что диалог, который их показывает,
+    // лежит в `views-4.js` целиком написанный.
+    //
+    // Диалог переиспользуется, а не переписывается: два экрана об одном числе расходятся ровно
+    // тогда, когда один из них поправят.
+    if (item.orderCommitSnapshotId
+      && caps.hasForOrganisation(state.workspace, item.brandId, caps.CAPABILITIES.MARGIN_READ)
+      && typeof window.orderEconomicsDialog === 'function') {
+      actions.push(actionButton(localized('Экономика', 'Economics'), () => window.orderEconomicsDialog(item)));
+    }
+
+    // «Где товар сейчас» — вопрос, который задают сразу после маржи. Цепочку вправе видеть обе
+    // стороны сделки: бренд отгружает, магазин принимает, и право спрашивается у той организации,
+    // в которой состоит спрашивающий.
+    const seesLogistics = caps.hasForOrganisation(state.workspace, item.brandId, caps.CAPABILITIES.LOGISTICS_READ)
+      || caps.hasForOrganisation(state.workspace, item.shopId, caps.CAPABILITIES.LOGISTICS_READ);
+    if (item.orderCommitSnapshotId && seesLogistics && typeof window.orderFulfillmentDialog === 'function') {
+      actions.push(actionButton(localized('Поставка', 'Fulfillment'), () => window.orderFulfillmentDialog(item)));
+    }
     return actions;
   };
 

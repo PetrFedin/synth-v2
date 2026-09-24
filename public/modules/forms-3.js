@@ -7,7 +7,7 @@ function invitationForm(showroom) {
     selectDef('shopId','Магазин',activeShops),
     dateTimeDef('expiresAt','Действует до'),
   ], values => {
-    validation.futureDate(values.expiresAt, new Date().toISOString(), 'Invitation expiry');
+    validation.futureDate(values.expiresAt, new Date().toISOString());
     return mutate(`/v2/showrooms/${encodeURIComponent(showroom.id)}/invitations`, { shopId: values.shopId, expiresAt: toIso(values.expiresAt) });
   });
 }
@@ -51,7 +51,7 @@ async function selectionLineForm(selection) {
   if (!catalogLines.length) throw new Error(I18N.translate('Доступных SKU пока нет.'));
 
   openForm('Добавить или обновить SKU', [
-    selectDef('sku','SKU',catalogLines,line => `${line.sku} · ${money(line.unitPrice)} ${line.currency} · MOQ ${line.minimumOrderQuantity || 1}`),
+    selectDef('sku','SKU',catalogLines,line => `${line.sku} · ${money(line.unitPrice, line.currency)} · MOQ ${line.minimumOrderQuantity || 1}`),
     numberDef('quantity','Количество',1,true,1),
   ], values => {
     const line = catalogLines.find(item => item.sku === values.sku || item.id === values.sku);
@@ -74,7 +74,7 @@ async function orderForm(preferredSelectionId = '') {
     const doorEntries = await Promise.all(shopIds.map(async shopId => [shopId, await api(`/v2/shops/${encodeURIComponent(shopId)}/doors`)]));
     const doorsByShop = Object.fromEntries(doorEntries.map(([shopId, doors]) => [shopId, Array.isArray(doors) ? doors : []]));
     openForm('Создать заказ', [
-      selectDef('selectionId', 'Selection', selections, selection => `${orgName(selection.shopId)} · ${selection.id}`, selectedSelectionId),
+      selectDef('selectionId', localText('\u0410\u0441\u0441\u043e\u0440\u0442\u0438\u043c\u0435\u043d\u0442', 'Selection'), selections, selection => `${orgName(selection.shopId)} \u00b7 ${objectReference(selection.id)}`, selectedSelectionId),
       dependentSelectDef(
         'retailDoorId',
         'Торговая точка / Retail Door',
@@ -107,11 +107,11 @@ function orderTermsFields(terms = {}) {
 
 function validatedOrderTerms(values) {
   const validation = window.SynthaUiValidation;
-  validation.dateRange(values.deliveryStart, values.deliveryEnd, 'Delivery dates');
+  validation.dateRange(values.deliveryStart, values.deliveryEnd);
   return {
     incoterm: values.incoterm,
-    paymentDays: validation.number(values.paymentDays, 'Payment days', { integer: true, min: 0, max: 365 }),
-    prepaymentPercent: validation.number(values.prepaymentPercent, 'Prepayment', { min: 0, max: 100 }),
+    paymentDays: validation.number(values.paymentDays, '\u041e\u0442\u0441\u0440\u043e\u0447\u043a\u0430, \u0434\u043d\u0435\u0439', { integer: true, min: 0, max: 365 }),
+    prepaymentPercent: validation.number(values.prepaymentPercent, '\u041f\u0440\u0435\u0434\u043e\u043f\u043b\u0430\u0442\u0430, %', { min: 0, max: 100 }),
     deliveryStart: values.deliveryStart,
     deliveryEnd: values.deliveryEnd,
   };
@@ -128,6 +128,6 @@ function orderCancellationForm(order) {
   openForm(I18N.t('form.cancelOrder'), [textDef('reason', I18N.t('form.cancellationReason'), '', 1000)], values => mutate(`/v2/orders/${encodeURIComponent(order.id)}/cancel`, {
     orderId: order.id,
     expectedVersion: order.version,
-    reason: validation.requiredText(values.reason, 'Cancellation reason', { minLength: 3, maxLength: 1000 }),
+    reason: validation.requiredText(values.reason, '\u041f\u0440\u0438\u0447\u0438\u043d\u0430 \u043e\u0442\u043c\u0435\u043d\u044b', { minLength: 3, maxLength: 1000 }),
   }));
 }

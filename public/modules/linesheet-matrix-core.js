@@ -173,9 +173,17 @@
       sizeValueId,
       size,
       unitPrice: line.unitPrice,
+      // Цена едет и целым числом минорных единиц — ровно тем, которое заморожено в строке
+      // прайс-листа. Сетка считала сумму по `unitPrice`, угадывая единицу по тому, целое ли число:
+      // «24» принималось за копейки, «24,50» — за евро. На целых ценах ошибка гасилась второй
+      // ошибкой в подвале, на цене с копейками давала **сотикратное** завышение суммы. Угадывать
+      // нечего, когда рядом лежит сам факт.
+      wholesalePriceMinor: Number.isSafeInteger(Number(line.wholesalePriceMinor)) ? Number(line.wholesalePriceMinor) : null,
       currency: lineCurrency,
       catalogVersion,
       minimumOrderQuantity,
+      // Кратность упаковки, frozen with the price like the minimum beside it.
+      packSize: Number.isSafeInteger(Number(line.packSize)) && Number(line.packSize) >= 1 ? Number(line.packSize) : null,
       availability,
       availableToSell: availableToSellQuantity(availability),
     });
@@ -232,6 +240,7 @@
     const normalized = positiveInteger(quantity);
     if (normalized === null) fail('BUYER_MATRIX_QUANTITY_INVALID', 'Buyer matrix quantity must be a positive integer', { sku: cell?.sku, quantity });
     if (normalized < cell.minimumOrderQuantity) fail('BUYER_MATRIX_MOQ_NOT_MET', 'Buyer matrix quantity is below the frozen buyer MOQ', { sku: cell.sku, quantity: normalized, minimumOrderQuantity: cell.minimumOrderQuantity });
+    if (cell.packSize !== null && cell.packSize !== undefined && normalized % cell.packSize !== 0) fail('BUYER_MATRIX_PACK_MULTIPLE_NOT_MET', 'Buyer matrix quantity is not a multiple of the frozen pack size', { sku: cell.sku, quantity: normalized, packSize: cell.packSize });
     if (cell.availableToSell !== null && normalized > cell.availableToSell) fail('BUYER_MATRIX_AVAILABILITY_EXCEEDED', 'Buyer matrix quantity exceeds frozen available-to-sell', { sku: cell.sku, quantity: normalized, availableToSell: cell.availableToSell });
     return normalized;
   }

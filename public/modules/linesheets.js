@@ -3,6 +3,8 @@
 
   const Matrix = global.SynthaLinesheetMatrix;
   if (!Matrix) throw new Error('LINESHEET_MATRIX_CORE_REQUIRED: Buyer order matrix core must load before linesheets');
+  const Grid = global.SynthaOrderGrid;
+  if (!Grid) throw new Error('ORDER_GRID_CORE_REQUIRED: Order grid core must load before linesheets');
 
   const LS = global.SynthaLinesheets || (global.SynthaLinesheets = {});
   const defaults = {
@@ -10,8 +12,10 @@
     collectionId: '', selectedId: '', query: '', items: [], nextCursor: null,
     loadedCollectionId: '', loading: false, loadingMore: false, error: '', requestToken: 0,
     buyerAccessKey: '', cycleId: '', buyerCatalog: null, matrices: [], buyerLoadedKey: '', buyerLoading: false, buyerError: '', buyerRequestToken: 0,
+    latestCatalogId: '', latestCatalogAt: '', latestLoadedKey: '', latestLoading: false,
     buyerDoorId: '', buyerDoors: [], buyerDoorShopId: '', buyerDoorLoading: false, buyerDoorError: '', buyerDoorRequestToken: 0,
     selectedStyleId: '', quantities: {}, quantityCatalogId: '', quantitySelectionId: '', dirty: false,
+    lastPaste: null, saveState: '', savedAt: '', autosave: true,
   };
   for (const [key, fallback] of Object.entries(defaults)) if (LS[key] === undefined) LS[key] = structuredClone(fallback);
 
@@ -58,19 +62,32 @@
     }).format(date);
   }
 
+  // A published price is money, and a buyer reads it as money: two decimals, in their locale.
   function formatMoney(amount, currency) {
-    const number = Number(amount);
-    if (!Number.isFinite(number)) return '—';
-    try {
-      return new Intl.NumberFormat(I18N.getLocale() === 'en' ? 'en-GB' : 'ru-RU', {
-        style: 'currency', currency: value(currency) || 'USD', maximumFractionDigits: 4,
-      }).format(number);
-    } catch { return `${number.toFixed(2)} ${value(currency)}`.trim(); }
+    return I18N.formatMoney(amount, value(currency) || 'EUR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  // Та же валюта, но из целого числа минорных единиц. Отдельная функция, а не флаг на месте
+  // вызова: перепутать флаг — значит ошибиться в сто раз, и однажды так и вышло.
+  function formatMoneyMinor(amountMinor, currency) {
+    return I18N.formatMoney(amountMinor, value(currency) || 'EUR', { minor: true, minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
   function shortHash(hash) {
     const normalized = value(hash);
     return normalized ? `${normalized.slice(0, 10)}…${normalized.slice(-6)}` : '—';
+  }
+
+  // The buyer's catalogue is the most customer-facing screen in the product, and it was printing
+  // raw aggregate keys — "buyer-catalog-version_72842dd6-41a7-4795-95a3-f736d510a1de" — under
+  // labels that were class names. These are pinned commercial facts a buyer may genuinely need to
+  // quote in an audit, so the value stays reachable: the tail that tells two of them apart is
+  // shown, and the whole key is on hover, which is what every other register here already does.
+  function shortRef(id) {
+    const normalized = value(id);
+    if (!normalized) return '—';
+    const tail = normalized.includes('_') ? normalized.slice(normalized.lastIndexOf('_') + 1) : normalized;
+    const compact = tail.replace(/-/g, '');
+    return compact.length >= 8 ? compact.slice(0, 8).toUpperCase() : normalized;
   }
 
   function statePanel(className, title, description, action) {
@@ -215,7 +232,7 @@
       LS.buyerDoors = [];
       LS.buyerDoorId = '';
       LS.buyerDoorShopId = request.key;
-      LS.buyerDoorError = value(error?.message) || text('Не удалось загрузить торговые точки покупателя.', 'Could not load buyer Retail Doors.');
+      LS.buyerDoorError = value(error?.message) || text('Не удалось загрузить торговые точки покупателя.', 'Could not load the buyer’s retail doors.');
     } finally {
       if (requestToken === LS.buyerDoorRequestToken) {
         LS.buyerDoorLoading = false;
@@ -237,7 +254,49 @@
     });
   }
 
+  // Что бренд открыл последним — отдельно от того, что читает этот экран.
+  //
+  // Экран закреплён за тем снимком, по которому собрана подборка, и это верно: цена, по которой
+  // человек набрал количества, не смеет меняться у него под руками. Но и молчать об этом нельзя:
+  // найдено живьём — бренд открыл новый каталог, а магазин смотрел на прежний и ничего об этом
+  // не знал. Кнопка «Обновить каталог» при этом перезапрашивала ровно ту же закреплённую версию —
+  // имя обещало то, чего она не делает и сделать не может.
+  //
+  // Перепривязки здесь не будет: домен уже ответил на этот вопрос правилом `SELECTION_FOR_CYCLE_EXISTS` —
+  // одна подборка на цикл, и новый каталог покупается новым циклом. Экран говорит об этом прямо.
+  function ensureLatestCatalogLoad(context) {
+    const access = context.access;
+    if (!access || !context.selection?.buyerCatalogVersionId) return;
+    if (LS.latestLoading || LS.latestLoadedKey === access.key) return;
+    LS.latestLoading = true;
+    void (async () => {
+      try {
+        const latest = await api(`/v2/showrooms/${encodeURIComponent(access.showroomId)}/buyer-catalog?shopId=${encodeURIComponent(access.shopId)}`);
+        LS.latestCatalogId = value(latest?.id);
+        LS.latestCatalogAt = value(latest?.publishedAt);
+      } catch (problem) {
+        // Нет ответа — нет и утверждения: лучше промолчать, чем сказать неверное о чужих ценах.
+        LS.latestCatalogId = '';
+        LS.latestCatalogAt = '';
+      } finally {
+        LS.latestLoading = false;
+        LS.latestLoadedKey = access.key;
+        if (state.view === 'linesheets') renderApp();
+      }
+    })();
+  }
+
+  function newerCatalogNotice(context) {
+    const pinned = value(context.selection?.buyerCatalogVersionId);
+    if (!pinned || !LS.latestCatalogId || LS.latestCatalogId === pinned) return null;
+    return noticePanel(text(
+      `Бренд открыл более новый каталог — ${formatDate(LS.latestCatalogAt)}. Эта подборка остаётся на своём снимке: цены и условия, по которым набраны количества, не меняются задним числом. Новый каталог покупается в новом коммерческом цикле.`,
+      `The brand has opened a newer catalogue — ${formatDate(LS.latestCatalogAt)}. This selection stays on its own snapshot: the prices and terms the quantities were typed against do not change after the fact. A newer catalogue is bought in a new commercial cycle.`,
+    ), 'warning');
+  }
+
   function ensureBuyerLoad(context) {
+    ensureLatestCatalogLoad(context);
     const request = buyerCatalogRequest(context);
     if (!request || LS.buyerLoading || LS.buyerLoadedKey === request.key) return;
     void loadBuyerCatalog(context, request);
@@ -323,21 +382,21 @@
       resetBuyerDoor();
       renderApp();
     }));
-    bar.append(selectField(text('Коммерческий цикл', 'Commercial cycle'), context.cycles, context.cycle?.id || '', cycle => `${value(cycle.id)} · ${stageText(cycle.stage)}`, next => {
+    bar.append(selectField(text('Коммерческий цикл', 'Commercial cycle'), context.cycles, context.cycle?.id || '', cycle => `${objectReference(cycle.id)} · ${stageText(cycle.stage)}`, next => {
       LS.cycleId = next;
       resetBuyerCatalog();
       renderApp();
     }, text('Цикл не найден', 'No cycle')));
     bar.append(retailDoorField(context));
 
-    const refresh = el('button', { className: 'button', type: 'button', rawText: text('Обновить каталог', 'Refresh catalog') });
-    refresh.addEventListener('click', () => { resetBuyerCatalog({ preserveQuantities: false }); renderApp(); });
+    const refresh = el('button', { className: 'button', type: 'button', rawText: text('Перечитать каталог', 'Reload catalog') });
+    refresh.addEventListener('click', () => { resetBuyerCatalog({ preserveQuantities: false }); LS.latestLoadedKey = ''; renderApp(); });
     bar.append(refresh);
     return bar;
   }
 
   function retailDoorField(context) {
-    const labelText = text('Торговая точка / Retail Door', 'Retail Door');
+    const labelText = text('Торговая точка', 'Retail door');
     const label = el('label', { className: 'ls9-field', 'data-od14-component': 'field-group' });
     label.append(el('span', { className: 'ls9-field-label', rawText: labelText }));
     const select = el('select', { className: 'ls9-select', ariaLabel: labelText, 'data-od14-component': 'field' });
@@ -346,10 +405,10 @@
       select.disabled = true;
     } else {
       const placeholder = LS.buyerDoorLoading
-        ? text('Загрузка торговых точек…', 'Loading Retail Doors...')
+        ? text('Загрузка торговых точек…', 'Loading retail doors…')
         : context.retailDoors.length
-          ? text('Выберите торговую точку', 'Select Retail Door')
-          : text('Нет активных торговых точек', 'No active Retail Doors');
+          ? text('Выберите торговую точку', 'Select a retail door')
+          : text('Нет активных торговых точек', 'No active retail doors');
       const emptyOption = el('option', { value: '', rawText: placeholder });
       if (!LS.buyerDoorId) emptyOption.selected = true;
       select.append(emptyOption);
@@ -391,7 +450,7 @@
   function stageText(stage) {
     const labels = {
       showroom: ['Шоурум', 'Showroom'], selection: ['Подборка', 'Selection'], 'order-builder': ['Сборка заказа', 'Order builder'],
-      order: ['Заказ', 'Order'], confirmation: ['Подтверждение', 'Confirmation'], 'deal-space': ['DealSpace', 'DealSpace'], collection: ['Коллекция', 'Collection'],
+      order: ['Заказ', 'Order'], confirmation: ['Подтверждение', 'Confirmation'], 'deal-space': ['Пространство сделки', 'Deal space'], collection: ['Коллекция', 'Collection'],
     };
     const pair = labels[stage];
     return pair ? text(pair[0], pair[1]) : value(stage) || '—';
@@ -406,7 +465,7 @@
       [text('Модели', 'Styles'), matrices.length],
       [text('SKU', 'SKUs'), skuCount],
       [text('Валюта', 'Currency'), value(LS.buyerCatalog?.currency) || '—'],
-      [text('Retail Door', 'Retail Door'), value(context.retailDoor?.code) || text('Не выбрана', 'Not selected')],
+      [text('Торговая точка', 'Retail door'), value(context.retailDoor?.code) || text('Не выбрана', 'Not selected')],
       [text('Подборка', 'Selection'), selectionStatus],
     ].forEach(([label, metric]) => {
       const card = el('div', { className: 'ls9-metric', 'data-od14-component': 'metric' });
@@ -424,7 +483,7 @@
 
   function buyerContent(context) {
     if (!context.accesses.length) return statePanel('ls9-empty', text('Нет активного доступа покупателя', 'No buyer access'), text('Примите приглашение в шоурум, чтобы открыть зафиксированный каталог покупателя.', 'Accept a showroom invitation to open the pinned buyer catalog.'));
-    if (LS.buyerLoading && !LS.buyerCatalog) return statePanel('ls9-loading', text('Загрузка каталога покупателя…', 'Loading buyer catalog...'), text('Читаем опубликованную BuyerCatalogVersion без обращения к изменяемому Product Master.', 'Reading the published BuyerCatalogVersion without consulting mutable Product Master data.'));
+    if (LS.buyerLoading && !LS.buyerCatalog) return statePanel('ls9-loading', text('Загрузка каталога покупателя…', 'Loading buyer catalog...'), text('Читаем опубликованную версию каталога — рабочие данные моделей не затрагиваются.', 'Reading the published catalogue version without consulting mutable product data.'));
     if (LS.buyerError && !LS.buyerCatalog) {
       const retry = el('button', { className: 'button', type: 'button', rawText: text('Повторить', 'Retry') });
       retry.addEventListener('click', () => { LS.buyerLoadedKey = ''; LS.buyerError = ''; renderApp(); });
@@ -433,12 +492,21 @@
     if (!LS.buyerCatalog) return statePanel('ls9-empty', text('Каталог покупателя не загружен', 'Buyer catalog not loaded'), text('Выберите доступ и коммерческий цикл.', 'Select buyer access and a commercial cycle.'));
 
     const wrapper = el('div', { className: 'stack' });
+    // What the brand composed comes before the grid. A buyer opening a season should meet the
+    // collection first and the spreadsheet second; until now they only ever met the spreadsheet.
+    const looks = window.SynthaShowroomLooks;
+    if (looks?.panel && context.access?.showroomId) {
+      const showroom = list(workspace().showrooms).find(item => item.id === context.access.showroomId);
+      if (showroom) wrapper.append(looks.panel(showroom, { manage: false }));
+    }
     if (!context.cycle) wrapper.append(noticePanel(text('Матрица доступна для просмотра, но подборку нельзя создать без коммерческого цикла этой коллекции.', 'The matrix is available for viewing, but a selection cannot be created without a commercial cycle for this collection.')));
     if (!context.selection && LS.buyerDoorLoading) wrapper.append(noticePanel(text('Загружаем активные торговые точки покупателя…', 'Loading active buyer Retail Doors...')));
     if (!context.selection && LS.buyerDoorError) wrapper.append(noticePanel(LS.buyerDoorError, 'warning'));
-    if (!context.selection && !LS.buyerDoorLoading && !LS.buyerDoorError && !context.retailDoors.length) wrapper.append(noticePanel(text('Для магазина нет активной торговой точки. Сначала добавьте или активируйте Retail Door — без неё коммерческий контекст не будет зафиксирован.', 'This shop has no active Retail Door. Add or reactivate one before Selection so the commercial context can be frozen.'), 'warning'));
-    if (!context.selection && context.retailDoors.length > 1 && !context.retailDoor) wrapper.append(noticePanel(text('Выберите торговую точку в верхней панели. Она будет зафиксирована в Selection и унаследована заказом без повторного выбора.', 'Select a Retail Door in the toolbar. It will be frozen in Selection and inherited by the order without another choice.')));
+    if (!context.selection && !LS.buyerDoorLoading && !LS.buyerDoorError && !context.retailDoors.length) wrapper.append(noticePanel(text('Для магазина нет активной торговой точки. Сначала добавьте или активируйте её — без точки коммерческий контекст не будет зафиксирован.', 'This shop has no active Retail Door. Add or reactivate one before Selection so the commercial context can be frozen.'), 'warning'));
+    if (!context.selection && context.retailDoors.length > 1 && !context.retailDoor) wrapper.append(noticePanel(text('Выберите торговую точку в верхней панели. Она будет зафиксирована в подборке и унаследована заказом без повторного выбора.', 'Select a Retail Door in the toolbar. It will be frozen in Selection and inherited by the order without another choice.')));
     if (context.selection && !context.selection.buyerCatalogVersionId) wrapper.append(noticePanel(text('Текущая подборка создана по legacy-каталогу. Она доступна только для просмотра в новом rich-каталоге и не может быть перепривязана молча.', 'The current selection was created from a legacy catalog. It is read-only in the new rich catalog and cannot be silently rebound.'), 'warning'));
+    const newer = newerCatalogNotice(context);
+    if (newer) wrapper.append(newer);
     if (LS.buyerError) wrapper.append(noticePanel(LS.buyerError, 'warning'));
     wrapper.append(buyerCatalogIdentity(context), styleTabs(), styleWorkspace(context));
     return wrapper;
@@ -454,19 +522,21 @@
     const info = el('dl', { className: 'ls9-info-grid', 'data-od14-component': 'definition-grid' });
     const door = context.retailDoor;
     const values = [
-      [text('BuyerCatalogVersion', 'BuyerCatalogVersion'), value(LS.buyerCatalog.id) || '—'],
-      [text('Публикация', 'Publication'), value(LS.buyerCatalog.publicationId) || '—'],
-      [text('Прайс-лист', 'Price list'), value(LS.buyerCatalog.priceListVersionId) || '—'],
+      [text('Версия каталога', 'Catalogue version'), shortRef(LS.buyerCatalog.id), value(LS.buyerCatalog.id)],
+      [text('Публикация', 'Publication'), shortRef(LS.buyerCatalog.publicationId), value(LS.buyerCatalog.publicationId)],
+      [text('Прайс-лист', 'Price list'), shortRef(LS.buyerCatalog.priceListVersionId), value(LS.buyerCatalog.priceListVersionId)],
       [text('Шоурум', 'Showroom'), showroomName(context.access.showroomId)],
       [text('Магазин', 'Shop'), organisationName(context.access.shopId)],
-      [text('Retail Door', 'Retail Door'), retailDoorLabel(door)],
+      [text('Торговая точка', 'Retail door'), retailDoorLabel(door)],
       [text('Версия точки', 'Door version'), door?.version ? `v${door.version}` : '—'],
       [text('Адрес поставки', 'Ship-to'), retailDoorAddressLabel(door?.shipToAddress)],
       [text('Контрольная сумма', 'Checksum'), shortHash(LS.buyerCatalog.contentHash)],
     ];
-    values.forEach(([label, content]) => {
+    values.forEach(([label, content, hover]) => {
       const item = el('div', { className: 'ls9-info-item', 'data-od14-component': 'definition-item' });
-      item.append(el('dt', { rawText: label }), el('dd', { rawText: content }));
+      const definition = el('dd', { rawText: content });
+      if (hover) definition.title = String(hover);
+      item.append(el('dt', { rawText: label }), definition);
       info.append(item);
     });
     card.append(info);
@@ -504,13 +574,15 @@
     if (description) card.append(el('p', { rawText: description }));
     const facts = el('dl', { className: 'ls9-info-grid', 'data-od14-component': 'definition-grid' });
     [
-      [text('StyleVersion', 'StyleVersion'), style.styleVersionNo == null ? style.styleVersionId : `${style.styleVersionNo} · ${style.styleVersionId}`],
+      [text('Версия модели', 'Style version'), style.styleVersionNo == null ? shortRef(style.styleVersionId) : `v${style.styleVersionNo}`, style.styleVersionId],
       [text('Состав', 'Composition'), localized(style.compositionRu, style.compositionEn) || '—'],
       [text('Страна происхождения', 'Country of origin'), style.countryOfOrigin || '—'],
       [text('Цветов', 'Colorways'), String(style.rows.length)],
-    ].forEach(([label, content]) => {
+    ].forEach(([label, content, hover]) => {
       const item = el('div', { className: 'ls9-info-item', 'data-od14-component': 'definition-item' });
-      item.append(el('dt', { rawText: label }), el('dd', { rawText: content })); facts.append(item);
+      const definition = el('dd', { rawText: content });
+      if (hover) definition.title = String(hover);
+      item.append(el('dt', { rawText: label }), definition); facts.append(item);
     });
     card.append(facts);
     return card;
@@ -536,13 +608,34 @@
     } catch { return ''; }
   }
 
+  // The catalogue stores a media role as a token. "hero" under a photograph is a word from our
+  // schema, not from the reader's trade.
+  function mediaRoleLabel(role) {
+    const labels = {
+      hero: ['Основное фото', 'Hero'], front: ['Вид спереди', 'Front'], back: ['Вид сзади', 'Back'],
+      side: ['Вид сбоку', 'Side'], detail: ['Деталь', 'Detail'], flat: ['Выкладка', 'Flat'],
+      sketch: ['Эскиз', 'Sketch'], fabric: ['Ткань', 'Fabric'],
+    };
+    const key = value(role);
+    if (!key) return '';
+    const pair = labels[key.toLowerCase()];
+    return pair ? text(pair[0], pair[1]) : key;
+  }
+
   function mediaNode(media, alt) {
     const uri = safeMediaUri(media);
     if (!uri) return el('div', { className: 'muted', rawText: text('Медиа недоступно', 'Media unavailable') });
-    const figure = el('figure', { 'data-od14-component': 'card' });
+    const figure = el('figure', { className: 'ls9-media', 'data-od14-component': 'card' });
     const image = el('img', { src: uri, alt: value(alt) || text('Изображение модели', 'Style image'), loading: 'lazy', decoding: 'async', width: '220' });
+    // A link that does not resolve left the browser's broken-image glyph with the alt text
+    // spilling out beside it, on the buyer's own product card. Say what happened instead, the
+    // way the showroom's look cards already do.
+    image.addEventListener('error', () => {
+      if (!image.isConnected) return;
+      image.replaceWith(el('span', { className: 'ls9-media-missing muted', rawText: text('Изображение не загрузилось', 'Image did not load'), title: uri }));
+    }, { once: true });
     figure.append(image);
-    if (media.mediaRole || media.id) figure.append(el('figcaption', { className: 'muted', rawText: [media.mediaRole, media.id].filter(Boolean).join(' · ') }));
+    if (media.mediaRole || media.id) figure.append(el('figcaption', { className: 'muted', rawText: mediaRoleLabel(media.mediaRole) || shortRef(media.id), title: value(media.id) }));
     return figure;
   }
 
@@ -550,7 +643,7 @@
     const surface = el('section', { 'data-od14-component': 'surface' });
     const head = el('div', { 'data-od14-component': 'section-head' });
     const copy = el('div');
-    copy.append(el('h3', { rawText: text('Матрица заказа Color × Size', 'Color × Size order matrix') }), el('p', { className: 'muted', rawText: text('Каждая ячейка — точный SKU из неизменяемой BuyerCatalogVersion. Цена и товарная иерархия повторно проверяются сервером.', 'Every cell is an exact SKU from immutable BuyerCatalogVersion. Price and product lineage are revalidated by the server.') }));
+    copy.append(el('h3', { rawText: text('Матрица заказа: цвет × размер', 'Colour × size order matrix') }), el('p', { className: 'muted', rawText: text('Каждая ячейка — точный SKU из неизменяемой версии каталога. Цену и товарную иерархию сервер проверяет заново.', 'Every cell is an exact SKU from the immutable catalogue version. Price and product lineage are revalidated by the server.') }));
     head.append(copy, matrixActions(context));
     surface.append(head, orderMatrixTable(style, context));
     return surface;
@@ -565,9 +658,7 @@
       return actions;
     }
     if (!context.selection && context.cycle?.stage === 'showroom' && LS.buyerCatalog && !context.retailDoor) {
-      const badge = el('span', { className: 'badge', rawText: text('Выберите Retail Door', 'Select Retail Door') });
-      actions.append(badge);
-      return actions;
+      return statusLine(el('span', { className: 'badge', rawText: text('Выберите торговую точку', 'Select a retail door') }));
     }
     if (canEditMatrix(context)) {
       const save = el('button', { className: 'button primary', type: 'button', rawText: text('Сохранить матрицу', 'Save matrix') });
@@ -579,38 +670,173 @@
       actions.append(save, submit);
       return actions;
     }
-    const badge = el('span', { className: 'badge', rawText: context.selection ? selectionStatusText(context.selection.status) : text('Только просмотр', 'Read only') });
-    actions.append(badge);
-    return actions;
+    return statusLine(el('span', { className: 'badge', rawText: context.selection ? selectionStatusText(context.selection.status) : text('Только просмотр', 'Read only') }));
   }
 
+  // When there is nothing to press, the row is a statement, not a toolbar. Returning it as one
+  // drew a bordered, padded, rounded box around a single rounded pill — two nested containers
+  // for one word.
+  function statusLine(badge) {
+    const line = el('div', { className: 'ls9-standing' });
+    line.append(badge);
+    return line;
+  }
+
+  // The grid an order is actually written in (JOOR §64.2). It is the one surface in the product
+  // where a person types a hundred numbers in a row, so it earns: totals down every column and
+  // along every row, a paste from a spreadsheet that is shown before it is applied, an undo for
+  // that paste, cells that go red for the same reasons the server would refuse them, arrow keys
+  // that move between cells, and a save status that is always on screen.
   function orderMatrixTable(style, context) {
     const wrap = el('div', { 'data-od14-component': 'table-wrap' });
-    const table = el('table', { 'data-od14-component': 'table', ariaLabel: text('Матрица количества по цветам и размерам', 'Color and size quantity matrix') });
+    const table = el('table', { className: 'ls9-matrix', 'data-od14-component': 'table', ariaLabel: text('Матрица количества по цветам и размерам', 'Colour and size quantity matrix') });
     const thead = el('thead');
     const headRow = el('tr');
-    headRow.append(el('th', { rawText: text('Цвет', 'Color') }));
+    headRow.append(el('th', { rawText: text('Цвет', 'Colour') }));
     style.sizes.forEach(size => headRow.append(el('th', { rawText: localized(size.labelRu, size.labelEn) || size.code, title: `${size.code} · ${size.id}` })));
+    headRow.append(el('th', { className: 'ls9-total-head', rawText: text('Итого', 'Total') }));
     thead.append(headRow);
     const tbody = el('tbody');
     const editable = canEditMatrix(context) || canCreateSelection(context);
-    style.rows.forEach(row => {
+    style.rows.forEach((row, rowIndex) => {
       const tr = el('tr');
       const color = el('td');
       color.append(colorLabel(row));
       tr.append(color);
-      style.sizes.forEach(size => {
+      style.sizes.forEach((size, sizeIndex) => {
         const cell = row.cells[size.key];
         const td = el('td');
         if (!cell) td.append(el('span', { className: 'muted', rawText: '—' }));
-        else td.append(matrixCell(cell, editable));
+        else td.append(matrixCell(cell, editable, style, rowIndex, sizeIndex));
         tr.append(td);
       });
+      tr.append(el('td', { className: 'ls9-total-cell', 'data-row-total': String(rowIndex), rawText: '0' }));
       tbody.append(tr);
     });
-    table.append(thead, tbody);
+    const tfoot = el('tfoot');
+    const footRow = el('tr');
+    footRow.append(el('th', { rawText: text('Всего по размеру', 'Per size') }));
+    style.sizes.forEach((size, sizeIndex) => footRow.append(el('td', { className: 'ls9-total-cell', 'data-column-total': String(sizeIndex), rawText: '0' })));
+    footRow.append(el('td', { className: 'ls9-total-cell ls9-total-grand', 'data-grand-total': 'units', rawText: '0' }));
+    tfoot.append(footRow);
+    table.append(thead, tbody, tfoot);
     wrap.append(table);
-    return wrap;
+    const frame = el('div', { className: 'ls9-grid' });
+    frame.append(wrap, gridSummary(style, editable));
+    refreshTotals(style, frame);
+    return frame;
+  }
+
+  // Units, lines and money for the style, plus the save state and the undo. Everything a person
+  // needs to know they are done is on one line under the grid.
+  function gridSummary(style, editable) {
+    const summary = el('div', { className: 'ls9-gridfoot' });
+    summary.append(el('span', { className: 'ls9-gridfoot-figure', 'data-summary': 'units' }));
+    summary.append(el('span', { className: 'ls9-gridfoot-figure', 'data-summary': 'lines' }));
+    summary.append(el('span', { className: 'ls9-gridfoot-figure ls9-gridfoot-amount', 'data-summary': 'amount' }));
+    const tail = el('div', { className: 'ls9-gridfoot-tail' });
+    if (editable) {
+      tail.append(el('span', { className: 'muted ls9-gridfoot-hint', rawText: text('Вставьте блок из таблицы прямо в ячейку — сначала покажем, что изменится.', 'Paste a block from a spreadsheet straight into a cell — we show what would change first.') }));
+      const undo = el('button', { className: 'button small', type: 'button', rawText: text('Отменить вставку', 'Undo paste'), 'data-summary': 'undo' });
+      undo.hidden = !LS.lastPaste;
+      undo.addEventListener('click', () => undoLastPaste(style));
+      tail.append(undo);
+    }
+    tail.append(el('span', { className: 'ls9-save-state', 'data-summary': 'save' }));
+    summary.append(tail);
+    return summary;
+  }
+
+  function saveStateText() {
+    if (LS.saveState === 'saving') return text('Сохраняется…', 'Saving…');
+    if (LS.saveState === 'error') return text('Не сохранено', 'Not saved');
+    if (LS.dirty) return text('Есть несохранённые изменения', 'Unsaved changes');
+    if (LS.savedAt) return `${text('Сохранено', 'Saved')} ${LS.savedAt}`;
+    return '';
+  }
+
+  // Redrawn in place after every keystroke and every paste, because re-rendering the whole view
+  // would take the caret out of the cell the person is typing in.
+  function refreshTotals(style, root) {
+    const frame = root || document.querySelector('.ls9-grid');
+    if (!frame) return;
+    const totals = Grid.styleTotals(style, LS.quantities);
+    totals.rows.forEach((row, index) => {
+      const node = frame.querySelector(`[data-row-total="${index}"]`);
+      if (node) { node.textContent = String(row.units); node.classList.toggle('ls9-total-zero', row.units === 0); }
+    });
+    totals.columns.forEach((column, index) => {
+      const node = frame.querySelector(`[data-column-total="${index}"]`);
+      if (node) { node.textContent = String(column.units); node.classList.toggle('ls9-total-zero', column.units === 0); }
+    });
+    const grand = frame.querySelector('[data-grand-total="units"]');
+    if (grand) grand.textContent = String(totals.units);
+    const units = frame.querySelector('[data-summary="units"]');
+    if (units) units.textContent = `${text('Единиц', 'Units')}: ${totals.units}`;
+    const lines = frame.querySelector('[data-summary="lines"]');
+    if (lines) lines.textContent = `${text('Позиций', 'Lines')}: ${totals.lines}`;
+    const amount = frame.querySelector('[data-summary="amount"]');
+    // Итог приходит в минорных единицах — и печатается как минорный. Раньше он шёл в основной
+    // форматтер, и подвал делил сумму на сто молча.
+    if (amount) amount.textContent = `${text('Сумма', 'Value')}: ${formatMoneyMinor(totals.amountMinor, totals.currency || LS.buyerCatalog?.currency)}`;
+    const save = frame.querySelector('[data-summary="save"]');
+    if (save) {
+      save.textContent = saveStateText();
+      save.dataset.state = LS.saveState || (LS.dirty ? 'dirty' : 'clean');
+    }
+    const undo = frame.querySelector('[data-summary="undo"]');
+    if (undo) undo.hidden = !LS.lastPaste;
+  }
+
+  const CELL_MESSAGE = Object.freeze({
+    MOQ_NOT_MET: (cell) => text(`Минимум ${cell.minimumOrderQuantity}`, `Minimum ${cell.minimumOrderQuantity}`),
+    // The next whole box is named, because "not a multiple of six" leaves the reader to divide.
+    PACK_MULTIPLE_NOT_MET: (cell, quantity) => {
+      const pack = cell.packSize;
+      const next = Number.isFinite(quantity) && quantity > 0 ? Math.ceil(quantity / pack) * pack : pack;
+      return text(`Кратно ${pack} — ближайшее ${next}`, `Packs of ${pack} — nearest ${next}`);
+    },
+    AVAILABILITY_EXCEEDED: (cell) => text(`Доступно ${cell.availableToSell}`, `Available ${cell.availableToSell}`),
+    QUANTITY_INVALID: () => text('Целое число', 'Whole number'),
+    REMOVED: () => text('Не заказываем', 'Not ordered'),
+    SKU_UNKNOWN: () => text('Нет такого SKU', 'Unknown SKU'),
+  });
+
+  const CLOSED_MESSAGE = Object.freeze({
+    SOLD_OUT: () => text('Распродано', 'Sold out'),
+    BELOW_MOQ_STOCK: (cell) => text(`Остаток меньше минимума ${cell.minimumOrderQuantity}`, `Stock below the minimum of ${cell.minimumOrderQuantity}`),
+    BELOW_PACK_STOCK: (cell) => text(`Остаток меньше упаковки ${cell.packSize}`, `Stock below one pack of ${cell.packSize}`),
+    NO_SKU: () => text('Нет SKU', 'No SKU'),
+  });
+
+  // Mark one cell against its own price line, and say why in the cell rather than at save time.
+  function markCell(block, cell, raw) {
+    const verdict = Grid.evaluateCell(cell, raw);
+    const note = block.querySelector('[data-cell-note]');
+    block.classList.toggle('ls9-cell-error', verdict.level === 'error');
+    block.classList.toggle('ls9-cell-removed', verdict.code === 'REMOVED');
+    block.classList.toggle('ls9-cell-filled', verdict.kind === 'number');
+    if (note) {
+      const message = CELL_MESSAGE[verdict.code];
+      note.textContent = message ? message(cell, verdict.quantity) : '';
+      note.hidden = !message;
+    }
+    return verdict;
+  }
+
+  function quantityInputs(root) {
+    return [...(root || document).querySelectorAll('.ls9-grid input[data-sku]:not([disabled])')];
+  }
+
+  // Arrow keys, Enter and Tab move between cells. A grid you have to reach for the mouse in is
+  // not a grid anybody enters a season's buy into.
+  function moveFocus(input, rowDelta, columnDelta) {
+    const table = input.closest('table');
+    if (!table) return;
+    const row = Number(input.dataset.gridRow);
+    const column = Number(input.dataset.gridColumn);
+    const target = table.querySelector(`input[data-grid-row="${row + rowDelta}"][data-grid-column="${column + columnDelta}"]:not([disabled])`);
+    if (target) { target.focus(); target.select?.(); }
   }
 
   function colorLabel(row) {
@@ -618,50 +844,202 @@
     const name = localized(row.nameRu, row.nameEn) || row.code;
     const firstLine = el('strong', { rawText: name });
     if (/^#[0-9A-Fa-f]{6}$/.test(row.swatchHex || '')) {
-      const swatch = el('input', {
-        type: 'color', value: row.swatchHex, disabled: true,
-        ariaLabel: `${text('Цвет', 'Color')} ${row.swatchHex}`,
-        title: row.swatchHex,
-        'data-od14-component': 'field',
-      });
-      firstLine.append(' ', swatch);
+      firstLine.append(' ', colourSwatch(row.swatchHex, `${text('Цвет', 'Color')} ${row.swatchHex}`));
     }
-    block.append(firstLine, el('small', { rawText: `${row.code} · ${row.id}` }));
+    block.append(firstLine, el('small', { rawText: row.code, title: row.id }));
     return block;
   }
 
-  function matrixCell(cell, editable) {
-    const block = el('div');
+  function matrixCell(cell, editable, style, rowIndex, sizeIndex) {
+    const block = el('div', { className: 'ls9-cell' });
     block.append(el('small', { rawText: cell.sku, title: `${cell.productSkuId} · ${cell.sizeValueId}` }));
     const input = el('input', {
-      type: 'number', min: String(cell.minimumOrderQuantity), step: '1', value: LS.quantities[cell.sku] ?? '',
+      // A quantity is a whole number of garments, so the cell accepts text and judges it here.
+      // A number input silently swallows what a spreadsheet pastes — "1 200", "12,00" — and
+      // reports an empty string for it, which is how a pasted column used to vanish.
+      type: 'text', inputmode: 'numeric', autocomplete: 'off', value: LS.quantities[cell.sku] ?? '',
       ariaLabel: `${cell.sku} · ${text('Количество', 'Quantity')}`,
       placeholder: String(cell.minimumOrderQuantity),
       'data-sku': cell.sku,
+      'data-grid-row': String(rowIndex),
+      'data-grid-column': String(sizeIndex),
       'data-od14-component': 'field',
     });
-    if (cell.availableToSell !== null) input.max = String(cell.availableToSell);
-    if (!editable || cell.availableToSell === 0 || (cell.availableToSell !== null && cell.availableToSell < cell.minimumOrderQuantity)) input.disabled = true;
+    const closed = Grid.cellClosedReason(cell);
+    if (!editable || closed) input.disabled = true;
     input.addEventListener('input', () => {
       LS.quantities[cell.sku] = input.value;
       LS.dirty = true;
+      LS.saveState = '';
+      markCell(block, cell, input.value);
+      refreshTotals(style);
+      scheduleAutosave();
+    });
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'ArrowDown' || event.key === 'Enter') { event.preventDefault(); moveFocus(input, 1, 0); }
+      else if (event.key === 'ArrowUp') { event.preventDefault(); moveFocus(input, -1, 0); }
+      else if (event.key === 'ArrowRight' && input.selectionStart === input.value.length) { event.preventDefault(); moveFocus(input, 0, 1); }
+      else if (event.key === 'ArrowLeft' && input.selectionStart === 0) { event.preventDefault(); moveFocus(input, 0, -1); }
+    });
+    input.addEventListener('paste', (event) => {
+      const clipboard = event.clipboardData?.getData('text/plain') ?? '';
+      if (!/[\t\n\r]/.test(clipboard)) return;
+      event.preventDefault();
+      const grid = Grid.parseClipboardGrid(clipboard);
+      if (!grid.length) return;
+      void openPastePreview(style, cell.sku, grid);
     });
     block.append(input);
-    const availability = cell.availableToSell === null ? text('Доступность: по условиям', 'Availability: per terms') : `${text('ATS', 'ATS')}: ${cell.availableToSell}`;
-    block.append(el('small', { rawText: `${formatMoney(cell.unitPrice, cell.currency)} · MOQ ${cell.minimumOrderQuantity} · ${availability}` }));
+    block.append(el('small', { className: 'ls9-cell-note', 'data-cell-note': 'true', hidden: true }));
+    if (closed) {
+      const reason = CLOSED_MESSAGE[closed];
+      block.append(el('small', { className: 'ls9-cell-closed', rawText: reason ? reason(cell) : '' }));
+    }
+    // "MOQ 12 · ATS: 600" is trade shorthand a brand's own planner reads fluently and a shop
+    // assistant does not. The showroom's look cards already say «мин. 6» in words; the cell the
+    // order is actually written in says the same.
+    const availability = cell.availableToSell === null ? text('доступность по условиям', 'availability per terms') : `${text('доступно', 'available')} ${cell.availableToSell}`;
+    const pack = cell.packSize ? ` · ${text('кратно', 'packs of')} ${cell.packSize}` : '';
+    block.append(el('small', { rawText: `${formatMoney(cell.unitPrice, cell.currency)} · ${text('мин.', 'min.')} ${cell.minimumOrderQuantity}${pack} · ${availability}` }));
+    markCell(block, cell, LS.quantities[cell.sku] ?? '');
     return block;
+  }
+
+  // A paste is shown before it is applied.
+  //
+  // A spreadsheet pasted one column out of line silently rewrites a season's buy, and the person
+  // who did it finds out at the brand's confirmation. So: what lands where, what each cell was
+  // and becomes, which cells the brand's own rules would refuse, and how much of the block fell
+  // off the edge of the style. Nothing is written until the reader says so.
+  function openPastePreview(style, anchorSku, grid) {
+    const plan = Grid.planPaste({ style, anchorSku, grid, quantities: LS.quantities });
+    if (!plan.anchor) return;
+    if (!plan.changes.length) {
+      toast(plan.unchanged
+        ? text('Вставка ничего не меняет: значения совпадают.', 'The paste changes nothing: the values already match.')
+        : text('В буфере нет значений для этой матрицы.', 'The clipboard holds nothing this matrix can take.'), 'info');
+      return;
+    }
+    const modal = el('dialog', { className: 'app-confirm ls9-paste-preview' });
+    const form = el('form', { method: 'dialog' });
+    const heading = el('header');
+    heading.append(el('h2', { rawText: text('Проверьте вставку', 'Review the paste') }));
+    const ok = plan.changes.length - plan.errors;
+    const counts = [
+      text(`Изменится ячеек: ${ok}`, `Cells to change: ${ok}`),
+      plan.errors ? text(`Отклонено правилами: ${plan.errors}`, `Refused by the rules: ${plan.errors}`) : '',
+      plan.unchanged ? text(`Без изменений: ${plan.unchanged}`, `Unchanged: ${plan.unchanged}`) : '',
+      plan.outside ? text(`Не поместилось в матрицу: ${plan.outside}`, `Fell outside the matrix: ${plan.outside}`) : '',
+    ].filter(Boolean).join(' · ');
+    heading.append(el('p', { className: 'muted', rawText: counts }));
+
+    const wrap = el('div', { className: 'ls9-paste-rows' });
+    const table = el('table', { 'data-od14-component': 'table' });
+    const thead = el('thead');
+    const headRow = el('tr');
+    [text('Цвет', 'Colour'), text('Размер', 'Size'), 'SKU', text('Было', 'Was'), text('Станет', 'Becomes'), text('Примечание', 'Note')]
+      .forEach(label => headRow.append(el('th', { rawText: label })));
+    thead.append(headRow);
+    const tbody = el('tbody');
+    plan.changes.forEach(change => {
+      const tr = el('tr', { className: change.level === 'error' ? 'ls9-paste-refused' : '' });
+      tr.append(el('td', { rawText: change.rowLabel || '—' }));
+      tr.append(el('td', { rawText: change.sizeLabel || '—' }));
+      tr.append(el('td', { rawText: change.sku }));
+      tr.append(el('td', { rawText: change.before === '' ? '—' : change.before }));
+      tr.append(el('td', { rawText: change.kind === 'remove' ? text('убрать', 'remove') : (change.after === '' ? '—' : change.after) }));
+      const note = change.level === 'error'
+        ? (CELL_MESSAGE[change.code] ? CELL_MESSAGE[change.code]({ minimumOrderQuantity: change.minimumOrderQuantity, availableToSell: change.availableToSell, packSize: change.packSize }, Number(change.after)) : change.code)
+        : '';
+      tr.append(el('td', { className: 'muted', rawText: note }));
+      tbody.append(tr);
+    });
+    table.append(thead, tbody);
+    wrap.append(table);
+
+    const footer = el('footer');
+    const cancel = el('button', { className: 'button secondary', type: 'button', rawText: text('Отмена', 'Cancel') });
+    const accept = el('button', { className: 'button primary', type: 'submit', rawText: ok
+      ? text(`Вставить ${ok}`, `Paste ${ok}`)
+      : text('Нечего вставлять', 'Nothing to paste') });
+    accept.disabled = ok === 0;
+    cancel.addEventListener('click', () => modal.close());
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const applied = Grid.applyPlan(LS.quantities, plan);
+      LS.quantities = applied.next;
+      LS.lastPaste = { previous: applied.previous, applied: applied.applied };
+      LS.dirty = true;
+      LS.saveState = '';
+      modal.close();
+      renderApp();
+      toast(text(`Вставлено ячеек: ${applied.applied}. Можно отменить одной кнопкой.`, `${applied.applied} cell(s) pasted. One button undoes it.`), 'success');
+      scheduleAutosave();
+    });
+    modal.addEventListener('close', () => modal.remove(), { once: true });
+    footer.append(cancel, accept);
+    form.append(heading, wrap, footer);
+    modal.append(form);
+    document.body.append(modal);
+    modal.showModal();
+    accept.focus();
+    return modal;
+  }
+
+  // Undo restores the map the paste replaced, rather than trying to reverse each cell.
+  function undoLastPaste() {
+    if (!LS.lastPaste) return;
+    LS.quantities = { ...LS.lastPaste.previous };
+    LS.lastPaste = null;
+    LS.dirty = true;
+    LS.saveState = '';
+    renderApp();
+    toast(text('Вставка отменена.', 'The paste has been undone.'), 'info');
+    scheduleAutosave();
+  }
+
+  // Autosave, with the state always on screen. It only ever runs on a draft selection the reader
+  // may edit, it waits for them to stop typing, and it never runs while another save is in
+  // flight; a failure leaves the work in the grid and says so rather than discarding it.
+  let autosaveTimer = null;
+  function scheduleAutosave() {
+    if (!LS.autosave) { refreshTotals(currentStyle()); return; }
+    if (autosaveTimer) clearTimeout(autosaveTimer);
+    autosaveTimer = setTimeout(() => { autosaveTimer = null; void runAutosave(); }, 2000);
+    refreshTotals(currentStyle());
+  }
+
+  function currentStyle() {
+    return list(LS.matrices).find(item => item.styleId === LS.selectedStyleId) || list(LS.matrices)[0] || null;
+  }
+
+  async function runAutosave() {
+    const context = currentContext?.();
+    if (!context || !LS.dirty || LS.saveState === 'saving') return;
+    if (!canEditMatrix(context)) return;
+    // A cell the rules refuse is not sent. The reader keeps it on screen, in red, and the rest
+    // of their work is still saved.
+    LS.saveState = 'saving';
+    refreshTotals(currentStyle());
+    try {
+      await saveBuyerMatrix(context, { silent: true });
+    } catch (error) {
+      LS.saveState = 'error';
+      refreshTotals(currentStyle());
+      toast(error?.message || text('Автосохранение не прошло. Нажмите «Сохранить матрицу».', 'Autosave did not go through. Use “Save matrix”.'), 'error');
+    }
   }
 
   async function createBuyerSelection(context) {
     const catalog = LS.buyerCatalog;
     if (!catalog || !context.cycle || !context.access) throw uiError('BUYER_MATRIX_CONTEXT_REQUIRED', text('Не выбран коммерческий контекст.', 'Commercial context is not selected.'));
-    if (!context.retailDoor?.id) throw uiError('BUYER_MATRIX_RETAIL_DOOR_REQUIRED', text('Выберите Retail Door до создания подборки.', 'Select a Retail Door before creating the selection.'));
+    if (!context.retailDoor?.id) throw uiError('BUYER_MATRIX_RETAIL_DOOR_REQUIRED', text('Выберите торговую точку до создания подборки.', 'Select a retail door before creating the selection.'));
     const pinnedRetailDoorId = context.retailDoor.id;
     const request = Matrix.createSelectionRequest(context.cycle.id, context.access.showroomId, pinnedRetailDoorId);
     const result = await mutate(request.path, request.body, request.method);
     const created = result?.selection;
     if (!created?.id) throw uiError('BUYER_MATRIX_SELECTION_CREATE_FAILED', text('Сервер не вернул созданную подборку.', 'Server did not return the created selection.'));
-    if (created.retailDoorId !== pinnedRetailDoorId || !created.buyerCommercialSnapshot) throw uiError('BUYER_MATRIX_RETAIL_DOOR_PIN_FAILED', text('Сервер не зафиксировал выбранную торговую точку в подборке.', 'Server did not freeze the selected Retail Door in the selection.'));
+    if (created.retailDoorId !== pinnedRetailDoorId || !created.buyerCommercialSnapshot) throw uiError('BUYER_MATRIX_RETAIL_DOOR_PIN_FAILED', text('Сервер не зафиксировал выбранную торговую точку в подборке.', 'The server did not freeze the selected retail door in the selection.'));
     if (created.buyerCatalogVersionId !== catalog.id || created.commercialBasisHash !== catalog.contentHash) {
       LS.quantities = {};
       LS.quantityCatalogId = '';
@@ -677,22 +1055,46 @@
     await reload();
     LS.buyerLoadedKey = '';
     renderApp();
-    toast(text('Подборка создана. Retail Door зафиксирован; теперь сохраните количества матрицы.', 'Selection created with the Retail Door pinned. Save the matrix quantities next.'), 'success');
+    toast(text('Подборка создана. Торговая точка зафиксирована; теперь сохраните количества матрицы.', 'Selection created with the Retail Door pinned. Save the matrix quantities next.'), 'success');
   }
 
-  async function saveBuyerMatrix(context) {
+  async function saveBuyerMatrix(context, { silent = false } = {}) {
     const selection = context.selection;
     if (!selection || !LS.buyerCatalog) throw uiError('BUYER_MATRIX_SELECTION_REQUIRED', text('Сначала создайте подборку.', 'Create a selection first.'));
-    const request = Matrix.selectionMatrixRequest(selection.id, LS.matrices, LS.quantities);
+    // A cell the rules refuse never reaches the server: the grid already says why, in red, in
+    // the cell. Sending it would trade a precise complaint for a single error at the top of the
+    // page and lose the rest of the buy with it.
+    const cells = new Map();
+    list(LS.matrices).forEach(style => list(style.rows).forEach(row => Object.values(row.cells || {}).forEach(cell => { if (cell?.sku) cells.set(cell.sku, cell); })));
+    const sendable = {};
+    let refused = 0;
+    Object.entries(LS.quantities).forEach(([sku, raw]) => {
+      const verdict = Grid.evaluateCell(cells.get(sku), raw);
+      if (verdict.level === 'error') { refused += 1; return; }
+      if (verdict.kind === 'number') sendable[sku] = String(verdict.quantity);
+    });
+    const request = Matrix.selectionMatrixRequest(selection.id, LS.matrices, sendable);
     const updated = await mutate(request.path, request.body, request.method);
     if (updated?.buyerCatalogVersionId !== LS.buyerCatalog.id || updated?.commercialBasisHash !== LS.buyerCatalog.contentHash) throw uiError('BUYER_MATRIX_CATALOG_CHANGED', text('Сервер вернул подборку с другим коммерческим снимком.', 'Server returned a selection bound to a different commercial snapshot.'));
-    LS.quantities = Object.fromEntries(list(updated.lines).map(line => [line.sku, String(line.quantity)]));
+    // What the grid shows after a save is what the server stored, plus the cells it refused,
+    // which stay on screen in red so the reader can fix them rather than lose them.
+    const stored = Object.fromEntries(list(updated.lines).map(line => [line.sku, String(line.quantity)]));
+    Object.entries(LS.quantities).forEach(([sku, raw]) => {
+      const verdict = Grid.evaluateCell(cells.get(sku), raw);
+      if (verdict.level === 'error') stored[sku] = String(raw);
+    });
+    LS.quantities = stored;
     LS.quantityCatalogId = updated.buyerCatalogVersionId;
     LS.quantitySelectionId = updated.id;
-    LS.dirty = false;
+    LS.dirty = refused > 0;
+    LS.saveState = refused > 0 ? 'error' : '';
+    LS.savedAt = new Intl.DateTimeFormat(I18N.localeTag(), { hour: '2-digit', minute: '2-digit' }).format(new Date());
     await reload();
     renderApp();
-    toast(text('Матрица сохранена атомарно.', 'Matrix saved atomically.'), 'success');
+    if (silent) return;
+    toast(refused
+      ? text(`Сохранено. Не принято ячеек: ${refused} — они остались в сетке красными.`, `Saved. ${refused} cell(s) were not accepted and remain in the grid in red.`)
+      : text('Матрица сохранена атомарно.', 'Matrix saved atomically.'), refused ? 'info' : 'success');
   }
 
   async function submitBuyerSelection(context) {
@@ -780,7 +1182,13 @@
 
     const refresh = el('button', { className: 'ls9-filter-button', type: 'button' });
     refresh.append(icon('refresh'), el('span', { rawText: text('Обновить', 'Refresh') }));
-    refresh.addEventListener('click', () => { LS.loadedCollectionId = ''; LS.nextCursor = null; LS.selectedId = ''; void loadPublications(); renderApp(); });
+    refresh.addEventListener('click', () => {
+      LS.loadedCollectionId = ''; LS.nextCursor = null; LS.selectedId = '';
+      loadPublications()
+        .then(() => toast(text('\u0414\u0430\u043d\u043d\u044b\u0435 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u044b.', 'Data refreshed.')))
+        .catch((error) => toast(error?.message || text('\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u0434\u0430\u043d\u043d\u044b\u0435.', 'The data could not be refreshed.'), 'error'));
+      renderApp();
+    });
     bar.append(collectionLabel, searchLabel, refresh);
     return bar;
   }
@@ -891,7 +1299,7 @@
     copy.append(el('span', { className: 'ls9-eyebrow', rawText: LS.mode === 'buyer' ? text('Wholesale / Buyer Experience', 'Wholesale / Buyer Experience') : text('Коммерческая публикация', 'Commercial Publication') }),
       el('h2', { rawText: text('Листы коллекций', 'Linesheets') }),
       el('p', { rawText: LS.mode === 'buyer'
-        ? text('Buyer Catalog, Retail Door и Color × Size матрица работают как единый коммерческий контекст: точка фиксируется до Selection и дальше наследуется заказом.', 'Buyer Catalog, Retail Door, and the Color × Size matrix operate as one commercial context: the door is pinned before Selection and then inherited by the order.')
+        ? text('Каталог покупателя, торговая точка и матрица «цвет × размер» работают как единый коммерческий контекст: точка фиксируется до подборки и дальше наследуется заказом.', 'Buyer Catalog, Retail Door, and the colour × size matrix operate as one commercial context: the door is pinned before Selection and then inherited by the order.')
         : text('Реестр неизменяемых коммерческих публикаций коллекции. Данные только для чтения и не вычисляются в браузере.', 'Registry of immutable commercial collection publications. Data is read-only and is never derived in the browser.') }));
     header.append(copy, el('div', { className: 'ls9-header-actions' }));
     page.append(header, modeTabs(accesses.length > 0));

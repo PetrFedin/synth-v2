@@ -6,6 +6,9 @@
 
   const materialState = window.SynthaMaterialWorkspace || (window.SynthaMaterialWorkspace = {
     items: [], nextCursor: null, loaded: false, loading: false, error: '', generation: 0,
+    // Партии материала лежат рядом с самим материалом: «куда ушёл этот рулон» — вопрос про
+    // материал, а не про отдельный экран, и отвечать на него надо там, где на материал и смотрят.
+    lots: [], lotsLoaded: false, lotsLoading: false,
   });
 
   const materialNav = OD_V5_GROUPS.flatMap((group) => group.items)
@@ -266,6 +269,234 @@
     return wrap;
   }
 
+  // Рулоны этого материала и то, куда они ушли.
+  //
+  // This is the answer to a recall: when a mill reports a fault in a dye batch, the question is which
+  // production orders carry it, and without this the answer is «probably all of them». The lots are
+  // fetched once — they change when the warehouse receives or issues, not when a reader opens
+  // another material — and a failure leaves the rest of the card readable rather than blanking it.
+  async function ensureMaterialLots() {
+    if (materialState.lotsLoaded || materialState.lotsLoading) return;
+    materialState.lotsLoading = true;
+    try { materialState.lots = await api('/v2/material-lots') || []; }
+    catch (error) { materialState.lots = []; }
+    finally { materialState.lotsLoaded = true; materialState.lotsLoading = false; renderApp(); }
+  }
+  function lotStatusLabel(status) {
+    return {
+      quarantine: materialText('\u043a\u0430\u0440\u0430\u043d\u0442\u0438\u043d', 'quarantine'),
+      released: materialText('\u0432\u044b\u043f\u0443\u0449\u0435\u043d', 'released'),
+      rejected: materialText('\u043e\u0442\u043a\u043b\u043e\u043d\u0451\u043d', 'rejected'),
+    }[status] || status;
+  }
+  // Жизненный цикл партии живёт своим модулем: реестр материалов показывает партии, а решения о них
+  // — отдельный вопрос со своими правами и своим порядком.
+  function materialLotLifecycle() { return window.SynthaMaterialLotActions || null; }
+  function materialLotsContent(item) {
+    void ensureMaterialLots();
+    const lots = materialState.lots.filter((lot) => lot.materialCode === item.code);
+    const lotActions = materialLotLifecycle();
+    if (!lots.length) {
+      const empty = [notice(materialState.lotsLoading
+        ? materialText('\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430\u2026', 'Loading\u2026')
+        : materialText('\u041f\u0430\u0440\u0442\u0438\u0438 \u044d\u0442\u043e\u0433\u043e \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u0430 \u043d\u0435 \u043f\u0440\u0438\u043d\u0438\u043c\u0430\u043b\u0438\u0441\u044c.', 'No lots of this material have been received.'))];
+      // Первая партия заводится именно отсюда: иначе пустое место сообщает о отсутствии и не даёт его исправить.
+      if (!materialState.lotsLoading && lotActions?.canReceive(item)) {
+        empty.push(actionButton(materialText('Принять партию', 'Receive a lot'), () => lotActions.receiveForm(item, paletteOf(item)), 'primary'));
+      }
+      return empty;
+    }
+    const table = odMiniTable([
+      materialText('\u041f\u0430\u0440\u0442\u0438\u044f', 'Lot'),
+      materialText('\u041a\u0440\u0430\u0448\u0435\u043d\u0438\u0435', 'Dye lot'),
+      materialText('\u041f\u0440\u0438\u043d\u044f\u0442\u043e', 'Received'),
+      materialText('\u0412\u044b\u0434\u0430\u043d\u043e', 'Issued'),
+      materialText('\u041e\u0441\u0442\u0430\u0442\u043e\u043a', 'Remaining'),
+      materialText('\u0426\u0432\u0435\u0442', 'Colour'),
+      materialText('\u0421\u0442\u0430\u0442\u0443\u0441', 'Status'),
+      materialText('\u0412\u044b\u043f\u0443\u0449\u0435\u043d\u043e \u043f\u043e \u044d\u0442\u0430\u043b\u043e\u043d\u0443', 'Released against'),
+    ], lots.map((lot) => [
+      lot.lotReference,
+      lot.dyeLot || '\u2014',
+      `${unitAmount(lot.receivedQuantity, lot.unit)}`,
+      `${unitAmount(lot.issuedQuantity, lot.unit)}`,
+      `${unitAmount(lot.remainingQuantity, lot.unit)}`,
+      lot.colourCode || '\u2014',
+      lotStatusLabel(lot.status),
+      // \u041a\u0430\u043a\u043e\u0439 \u0443\u0442\u0432\u0435\u0440\u0436\u0434\u0451\u043d\u043d\u044b\u0439 \u043e\u0431\u0440\u0430\u0437\u0435\u0446 \u0440\u0430\u0437\u0440\u0435\u0448\u0438\u043b \u0432\u044b\u043f\u0443\u0441\u043a \u044d\u0442\u043e\u0439 \u043f\u0430\u0440\u0442\u0438\u0438. \u0423\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u0438\u0435 \u043c\u043e\u0436\u0435\u0442 \u0431\u044b\u0442\u044c \u043f\u043e\u0437\u0436\u0435
+      // \u0437\u0430\u043c\u0435\u043d\u0435\u043d\u043e \u0438\u043b\u0438 \u0438\u0441\u0442\u0435\u0447\u044c, \u0430 \u043f\u0430\u0440\u0442\u0438\u044f \u043f\u0440\u0438\u043d\u044f\u0442\u0430 \u043f\u0440\u043e\u0442\u0438\u0432 \u0442\u043e\u0433\u043e, \u0447\u0442\u043e \u0434\u0435\u0439\u0441\u0442\u0432\u043e\u0432\u0430\u043b\u043e \u0432 \u0434\u0435\u043d\u044c \u0432\u044b\u043f\u0443\u0441\u043a\u0430 \u2014
+      // \u043f\u043e\u044d\u0442\u043e\u043c\u0443 \u0441\u0441\u044b\u043b\u043a\u0430 \u0438 \u0437\u0430\u043f\u0438\u0441\u044b\u0432\u0430\u0435\u0442\u0441\u044f \u0432\u043c\u0435\u0441\u0442\u0435 \u0441 \u0432\u044b\u043f\u0443\u0441\u043a\u043e\u043c.
+      lot.releasedAgainstLabDip || (lot.status === 'released' ? materialText('\u0431\u0435\u0437 \u044d\u0442\u0430\u043b\u043e\u043d\u0430', 'no standard') : '\u2014'),
+    ]));
+    const nodes = [table];
+    if (lotActions?.canReceive(item)) {
+      nodes.push(actionButton(materialText('Принять партию', 'Receive a lot'), () => lotActions.receiveForm(item, paletteOf(item)), 'primary'));
+    }
+    // Куда ушёл каждый рулон — отдельными строками под таблицей, потому что это и есть ответ на
+    // отзыв, и он должен читаться, а не помещаться в ячейку.
+    for (const lot of lots) {
+      if (lot.issues && lot.issues.length) {
+        const line = el('p', { className: 'muted' });
+        line.textContent = `${lot.lotReference} \u2192 ${lot.issues.map((issue) => `${issue.executionCode} (${unitAmount(issue.quantity, lot.unit)})`).join(', ')}`;
+        nodes.push(line);
+      }
+      // Решения по каждой партии — под таблицей и с её номером: в ячейку они не помещаются, а
+      // без номера непонятно, к какой из них они относятся.
+      const decisions = lotActions ? lotActions.lotActions(lot) : [];
+      if (!decisions.length) continue;
+      const panel = el('div', { className: 'od-access-panel' });
+      panel.append(el('strong', { rawText: `${lot.lotReference} \u00b7 ${lotStatusLabel(lot.status)}` }), ...decisions);
+      nodes.push(panel);
+    }
+    return nodes;
+  }
+
+// \u0421\u043e\u0441\u0442\u0430\u0432 \u043f\u0435\u0447\u0430\u0442\u0430\u0435\u0442\u0441\u044f \u0441\u0442\u0440\u043e\u043a\u0430\u043c\u0438: \u043f\u0440\u043e\u0446\u0435\u043d\u0442\u044b, \u043a\u043e\u0442\u043e\u0440\u044b\u0435 \u043d\u0435\u043b\u044c\u0437\u044f \u0441\u043b\u043e\u0436\u0438\u0442\u044c, \u043d\u0435\u043b\u044c\u0437\u044f \u0438 \u043f\u0440\u043e\u0432\u0435\u0440\u0438\u0442\u044c, \u0430 \u0441 \u044d\u0442\u0438\u043a\u0435\u0442\u043a\u0438
+  // \u0438\u0445 \u0447\u0438\u0442\u0430\u0435\u0442 \u043f\u043e\u043a\u0443\u043f\u0430\u0442\u0435\u043b\u044c.
+// \u041f\u0430\u043b\u0438\u0442\u0440\u0430 \u043f\u043e\u043b\u043e\u0442\u043d\u0430 \u0441 \u0441\u0443\u0434\u044c\u0431\u043e\u0439 \u043a\u0430\u0436\u0434\u043e\u0433\u043e \u043e\u0431\u0440\u0430\u0437\u0446\u0430. \u0413\u0440\u0443\u0437\u0438\u0442\u0441\u044f \u043e\u0442\u0434\u0435\u043b\u044c\u043d\u044b\u043c \u0437\u0430\u043f\u0440\u043e\u0441\u043e\u043c: \u0446\u0432\u0435\u0442\u0430 \u0438 \u0438\u0445 \u043e\u0431\u0440\u0430\u0437\u0446\u044b
+// \u0436\u0438\u0432\u0443\u0442 \u0441\u0432\u043e\u0438\u043c\u0438 \u0442\u0430\u0431\u043b\u0438\u0446\u0430\u043c\u0438, \u0438 \u043a\u043b\u0430\u0441\u0442\u044c \u0438\u0445 \u0432 \u043e\u0431\u0449\u0438\u0439 \u0441\u043f\u0438\u0441\u043e\u043a \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u043e\u0432 \u0437\u043d\u0430\u0447\u0438\u043b\u043e \u0431\u044b \u0442\u044f\u043d\u0443\u0442\u044c \u0438\u0445 \u0434\u043b\u044f \u0432\u0441\u0435\u0445
+// \u0447\u0435\u0442\u044b\u0440\u043d\u0430\u0434\u0446\u0430\u0442\u0438 \u0441\u0442\u0440\u043e\u043a \u0440\u0435\u0435\u0441\u0442\u0440\u0430 \u0440\u0430\u0434\u0438 \u043e\u0434\u043d\u043e\u0439 \u043e\u0442\u043a\u0440\u044b\u0442\u043e\u0439 \u043a\u0430\u0440\u0442\u043e\u0447\u043a\u0438.
+const paletteState = window.SynthaMaterialPaletteState
+  || (window.SynthaMaterialPaletteState = { data: {}, loading: {}, failed: {} });
+
+function loadPalette(code) {
+  if (paletteState.data[code] || paletteState.loading[code] || paletteState.failed[code]) return;
+  paletteState.loading[code] = true;
+  api(`/v2/materials/${encodeURIComponent(code)}/palette`)
+    .then((value) => { paletteState.data[code] = Array.isArray(value) ? value : []; })
+    .catch(() => { paletteState.failed[code] = true; })
+    .finally(() => { paletteState.loading[code] = false; if (state.view === 'materials') renderApp(); });
+}
+
+function paletteOf(item) {
+  loadPalette(item.code);
+  return paletteState.data[item.code] || [];
+}
+
+function averageRounds(item) {
+  const rows = paletteOf(item).filter((colour) => colour.performance && colour.performance.averageRounds !== null && colour.performance.averageRounds !== undefined);
+  if (rows.length === 0) return '\u2014';
+  const average = rows.reduce((sum, colour) => sum + colour.performance.averageRounds, 0) / rows.length;
+  return I18N.formatNumber(Math.round(average * 100) / 100, { maximumFractionDigits: 2 });
+}
+
+function labDipStatusLabel(status) {
+  const labels = {
+    requested: ['\u0417\u0430\u043f\u0440\u043e\u0448\u0435\u043d', 'Requested'],
+    submitted: ['\u041f\u0440\u0438\u0441\u043b\u0430\u043d, \u0436\u0434\u0451\u0442 \u0440\u0435\u0448\u0435\u043d\u0438\u044f', 'Submitted for review'],
+    approved: ['\u0423\u0442\u0432\u0435\u0440\u0436\u0434\u0451\u043d', 'Approved'],
+    conditionally_approved: ['\u0423\u0442\u0432\u0435\u0440\u0436\u0434\u0451\u043d \u0443\u0441\u043b\u043e\u0432\u043d\u043e', 'Conditionally approved'],
+    rejected_resubmit: ['\u041e\u0442\u043a\u043b\u043e\u043d\u0451\u043d, \u043f\u0435\u0440\u0435\u0441\u0434\u0430\u0447\u0430', 'Rejected, re-submit'],
+    rejected_cancelled: ['\u041e\u0442\u043a\u043b\u043e\u043d\u0451\u043d \u043e\u043a\u043e\u043d\u0447\u0430\u0442\u0435\u043b\u044c\u043d\u043e', 'Rejected, cancelled'],
+    cancelled: ['\u041e\u0442\u043c\u0435\u043d\u0451\u043d', 'Cancelled'],
+  };
+  const pair = labels[status];
+  return pair ? materialText(pair[0], pair[1]) : status;
+}
+
+function dipRoundOf(colour) {
+  const dips = Array.isArray(colour.labDips) ? colour.labDips : [];
+  if (dips.length === 0) return 0;
+  const last = colour.effectiveStandard || dips[dips.length - 1];
+  return last.submissionRound || 0;
+}
+
+function latestDipLabel(colour) {
+  const dips = Array.isArray(colour.labDips) ? colour.labDips : [];
+  if (dips.length === 0) return materialText('\u041d\u0435 \u0437\u0430\u043f\u0440\u0430\u0448\u0438\u0432\u0430\u043b\u0441\u044f', 'Not requested');
+  const last = dips[dips.length - 1];
+  return `${labDipStatusLabel(last.status)} \u00b7 ${last.dipReference}`;
+}
+
+function palettePanel(item) {
+  const rows = paletteOf(item);
+  if (paletteState.failed[item.code]) return notice(materialText('\u041f\u0430\u043b\u0438\u0442\u0440\u0430 \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u043d\u0430.', 'The palette is unavailable.'));
+  if (rows.length === 0) {
+    return notice(paletteState.loading[item.code]
+      ? materialText('\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430\u2026', 'Loading\u2026')
+      : materialText('\u041f\u0430\u043b\u0438\u0442\u0440\u0430 \u043d\u0435 \u0437\u0430\u0432\u0435\u0434\u0435\u043d\u0430: \u0443 \u043f\u043e\u043b\u043e\u0442\u043d\u0430 \u043d\u0435\u0442 \u043d\u0438 \u043e\u0434\u043d\u043e\u0433\u043e \u0446\u0432\u0435\u0442\u0430 \u0438\u0437 \u0441\u043f\u0440\u0430\u0432\u043e\u0447\u043d\u0438\u043a\u0430, \u043f\u043e\u044d\u0442\u043e\u043c\u0443 \u043f\u0430\u0440\u0442\u0438\u044e \u0432 \u0446\u0432\u0435\u0442\u0435 \u043f\u0440\u0438\u043d\u044f\u0442\u044c \u043d\u0435\u043b\u044c\u0437\u044f.',
+        'No palette: the cloth has no governed colour, so a lot cannot be received in a colour.'));
+  }
+  const holder = document.createDocumentFragment();
+  holder.append(odMiniTable(
+    [materialText('\u0426\u0432\u0435\u0442', 'Colour'), materialText('\u0410\u0440\u0442\u0438\u043a\u0443\u043b \u0444\u0430\u0431\u0440\u0438\u043a\u0438', 'Mill reference'), materialText('\u041e\u0431\u0440\u0430\u0437\u0435\u0446', 'Lab dip'), materialText('\u0420\u0430\u0443\u043d\u0434\u043e\u0432', 'Rounds')],
+    rows.map((colour) => [
+      colour.colourCode,
+      colour.supplierColourReference || '\u2014',
+      colour.effectiveStandard
+        ? `${labDipStatusLabel(colour.effectiveStandard.status)} \u00b7 ${colour.effectiveStandard.dipReference}`
+        : latestDipLabel(colour),
+      // \u0420\u0430\u0443\u043d\u0434 \u0441\u0442\u0440\u043e\u043a\u0438 \u2014 \u044d\u0442\u043e \u0440\u0430\u0443\u043d\u0434 \u0435\u0451 \u0441\u043e\u0431\u0441\u0442\u0432\u0435\u043d\u043d\u043e\u0433\u043e \u043e\u0431\u0440\u0430\u0437\u0446\u0430, \u0430 \u043d\u0435 \u0441\u0432\u043e\u0434\u043a\u0430 \u043f\u043e \u0437\u0430\u043a\u0440\u044b\u0442\u044b\u043c: \u043f\u0440\u0438\u0441\u043b\u0430\u043d\u043d\u044b\u0439 \u0438
+      // \u0436\u0434\u0443\u0449\u0438\u0439 \u0440\u0435\u0448\u0435\u043d\u0438\u044f \u043f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u043b \u0431\u044b \u043d\u043e\u043b\u044c \u0438 \u0447\u0438\u0442\u0430\u043b\u0441\u044f \u0431\u044b \u043a\u0430\u043a \u00ab\u043d\u0435 \u043f\u0440\u0438\u0441\u044b\u043b\u0430\u043b\u0438\u00bb.
+      String(dipRoundOf(colour)),
+    ]),
+  ));
+  const blocked = rows.filter((colour) => !colour.approvedForBulk);
+  const ambiguous = rows.filter((colour) => colour.standardAmbiguous);
+  if (ambiguous.length) {
+    holder.append(notice(materialText(
+      `\u041d\u0430 ${ambiguous.map((c) => c.colourCode).join(', ')} \u0434\u0435\u0439\u0441\u0442\u0432\u0443\u0435\u0442 \u0431\u043e\u043b\u044c\u0448\u0435 \u043e\u0434\u043d\u043e\u0433\u043e \u0443\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u0438\u044f \u2014 \u043a\u0430\u043a\u043e\u0439 \u043e\u0442\u0442\u0435\u043d\u043e\u043a \u043f\u0440\u0430\u0432\u0438\u043b\u044c\u043d\u044b\u0439, \u0440\u0435\u0448\u0430\u0435\u0442 \u0447\u0435\u043b\u043e\u0432\u0435\u043a.`,
+      `More than one approved standard is effective for ${ambiguous.map((c) => c.colourCode).join(', ')}.`), 'warning'));
+  }
+  holder.append(blocked.length
+    ? notice(materialText(
+      `\u041f\u0430\u0440\u0442\u0438\u044e \u043d\u0435\u043b\u044c\u0437\u044f \u0432\u044b\u043f\u0443\u0441\u0442\u0438\u0442\u044c \u0432 \u0446\u0432\u0435\u0442\u0430\u0445: ${blocked.map((c) => c.colourCode).join(', ')} \u2014 \u043f\u043e \u043d\u0438\u043c \u043d\u0435\u0442 \u0434\u0435\u0439\u0441\u0442\u0432\u0443\u044e\u0449\u0435\u0433\u043e \u0443\u0442\u0432\u0435\u0440\u0436\u0434\u0451\u043d\u043d\u043e\u0433\u043e \u043e\u0431\u0440\u0430\u0437\u0446\u0430.`,
+      `Bulk cannot be released in ${blocked.map((c) => c.colourCode).join(', ')}: no effective approved lab dip.`))
+    : notice(materialText('\u0412\u0441\u0435 \u0446\u0432\u0435\u0442\u0430 \u043f\u0430\u043b\u0438\u0442\u0440\u044b \u0443\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u044b \u043a \u0442\u0438\u0440\u0430\u0436\u0443.', 'Every colour in the palette is approved for bulk.'), 'success'));
+  return holder;
+}
+
+  function compositionPanel(item) {
+    const lines = Array.isArray(item.compositionLines) ? item.compositionLines : [];
+    if (lines.length === 0) {
+      return notice(item.composition
+        ? materialText(`\u0421\u043e\u0441\u0442\u0430\u0432 \u0437\u0430\u043f\u0438\u0441\u0430\u043d \u0442\u0435\u043a\u0441\u0442\u043e\u043c: \u00ab${item.composition}\u00bb. \u0420\u0430\u0437\u0431\u0435\u0440\u0438\u0442\u0435 \u0435\u0433\u043e \u043d\u0430 \u0441\u0442\u0440\u043e\u043a\u0438, \u0447\u0442\u043e\u0431\u044b \u043f\u0440\u043e\u0446\u0435\u043d\u0442\u044b \u043c\u043e\u0436\u043d\u043e \u0431\u044b\u043b\u043e \u0441\u043b\u043e\u0436\u0438\u0442\u044c.`,
+          `Composition is kept as text: "${item.composition}". Break it into rows so the percentages can be added up.`)
+        : materialText('\u0421\u043e\u0441\u0442\u0430\u0432 \u043d\u0435 \u0443\u043a\u0430\u0437\u0430\u043d.', 'No composition stated.'));
+    }
+    const total = lines.reduce((sum, line) => sum + Number(line.percentage), 0);
+    const table = odMiniTable(
+      [materialText('\u0412\u043e\u043b\u043e\u043a\u043d\u043e', 'Fibre'), materialText('\u0414\u043e\u043b\u044f', 'Share'), materialText('\u041a\u043b\u0430\u0441\u0441', 'Class')],
+      lines.map((line) => [
+        (I18N.getLocale?.() === 'en' ? line.nameEn : line.nameRu) || line.fibreCode,
+        `${I18N.formatNumber(Number(line.percentage), { maximumFractionDigits: 3 })}%`,
+        originClassLabel(line.originClassCode),
+      ]),
+    );
+    const holder = document.createDocumentFragment();
+    holder.append(table, notice(materialText(
+      `\u0421\u0443\u043c\u043c\u0430 \u2014 ${I18N.formatNumber(total, { maximumFractionDigits: 3 })}%.`,
+      `Adds up to ${I18N.formatNumber(total, { maximumFractionDigits: 3 })}%.`), total === 100 ? 'success' : 'warning'));
+    return holder;
+  }
+  
+  function originClassLabel(code) {
+    const labels = {
+      NATURAL: ['\u041d\u0430\u0442\u0443\u0440\u0430\u043b\u044c\u043d\u043e\u0435', 'Natural'],
+      ARTIFICIAL: ['\u0418\u0441\u043a\u0443\u0441\u0441\u0442\u0432\u0435\u043d\u043d\u043e\u0435', 'Artificial'],
+      SYNTHETIC: ['\u0421\u0438\u043d\u0442\u0435\u0442\u0438\u0447\u0435\u0441\u043a\u043e\u0435', 'Synthetic'],
+    };
+    const pair = labels[code];
+    return pair ? materialText(pair[0], pair[1]) : (code || '\u2014');
+  }
+  
+  function conversionLine(item) {
+    const specification = item.specification ?? null;
+    if (!specification?.conversionFactor) return '\u2014';
+    return materialText(
+      `1 ${specification.purchaseUnit} \u2192 ${I18N.formatNumber(specification.conversionFactor, { maximumFractionDigits: 4 })} ${item.unit}`,
+      `1 ${specification.purchaseUnit} yields ${I18N.formatNumber(specification.conversionFactor, { maximumFractionDigits: 4 })} ${item.unit}`);
+  }
+  
+  function widthNote(item) {
+    return item.specification?.cuttableWidth
+      ? notice(materialText(
+        '\u041d\u0430\u0441\u0442\u0438\u043b \u0448\u0438\u0440\u0435 \u044d\u0442\u043e\u0439 \u0448\u0438\u0440\u0438\u043d\u044b \u043d\u0435 \u043a\u043b\u0430\u0434\u0451\u0442\u0441\u044f: \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0430 \u0441\u0442\u043e\u0438\u0442 \u0438 \u0432 \u0440\u0430\u0441\u043a\u0440\u043e\u0435, \u0438 \u0432 \u0431\u0430\u0437\u0435.',
+        'A spread wider than this cannot be laid: the rule is enforced both in cutting and in the database.'), 'success')
+      : notice(materialText(
+        '\u0428\u0438\u0440\u0438\u043d\u0430 \u0440\u0430\u0441\u043a\u0440\u043e\u044f \u043d\u0435 \u0443\u043a\u0430\u0437\u0430\u043d\u0430, \u043f\u043e\u044d\u0442\u043e\u043c\u0443 \u043d\u0430\u0441\u0442\u0438\u043b\u044b \u043f\u043e \u044d\u0442\u043e\u043c\u0443 \u043f\u043e\u043b\u043e\u0442\u043d\u0443 \u043d\u0438\u0447\u0435\u043c \u043d\u0435 \u043e\u0433\u0440\u0430\u043d\u0438\u0447\u0435\u043d\u044b.',
+        'No cuttable width is stated, so spreads on this cloth are unchecked.'));
+  }
   function materialInspector(assessment) {
     const item = assessment.material;
     const risks = assessment.risks.length
@@ -275,18 +506,62 @@
       title: item.name,
       subtitle: item.code,
       status: item.status,
-      tabs: [materialText('\u041e\u0431\u0437\u043e\u0440', 'Overview'), materialText('\u041e\u0441\u0442\u0430\u0442\u043a\u0438', 'Inventory'), materialText('\u041a\u0430\u0447\u0435\u0441\u0442\u0432\u043e \u0434\u0430\u043d\u043d\u044b\u0445', 'Data quality')],
-      fields: [
-        { label: materialText('\u0422\u0438\u043f', 'Type'), value: item.type },
-        { label: materialText('\u041f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a', 'Supplier'), value: item.supplierName || '-' },
-        { label: materialText('\u0421\u043e\u0441\u0442\u0430\u0432', 'Composition'), value: item.composition || '-' },
-        { label: materialText('\u0426\u0435\u043d\u0430', 'Unit cost'), value: `${money(item.unitCost)} ${item.currency}/${item.unit}` },
-        { label: 'MOQ', value: `${item.minimumOrderQuantity} ${item.unit}` },
-        { label: materialText('\u0414\u043e\u0441\u0442\u0443\u043f\u043d\u043e', 'Available'), value: `${assessment.availableToUse} ${item.unit}` },
-        { label: materialText('\u0413\u043e\u0442\u043e\u0432\u043d\u043e\u0441\u0442\u044c', 'Readiness'), value: `${assessment.readiness}%` },
-        { label: materialText('\u0412\u0435\u0440\u0441\u0438\u044f', 'Version'), value: item.version || 1 },
+      tabs: [
+        {
+          label: materialText('\u041e\u0431\u0437\u043e\u0440', 'Overview'),
+          fields: [
+            { label: materialText('\u0422\u0438\u043f', 'Type'), value: item.type },
+            { label: materialText('\u041f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a', 'Supplier'), value: item.supplierName || '\u2014' },
+            { label: materialText('\u0421\u043e\u0441\u0442\u0430\u0432', 'Composition'), value: item.composition || '\u2014' },
+            { label: materialText('\u0426\u0435\u043d\u0430', 'Unit cost'), value: `${money(item.unitCost, item.currency)}/${item.unit}` },
+          ],
+        },
+        {
+          // \u041f\u043e\u043b\u043e\u0442\u043d\u043e \u043a\u0430\u043a \u0438\u0437\u043c\u0435\u0440\u0438\u043c\u0430\u044f \u0432\u0435\u0449\u044c. \u0414\u043e \u044d\u0442\u043e\u0433\u043e \u043f\u043b\u043e\u0442\u043d\u043e\u0441\u0442\u044c \u0436\u0438\u043b\u0430 \u0432\u043d\u0443\u0442\u0440\u0438 \u043d\u0430\u0437\u0432\u0430\u043d\u0438\u044f \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u0430, \u0448\u0438\u0440\u0438\u043d\u044b
+          // \u0440\u0430\u0441\u043a\u0440\u043e\u044f \u043d\u0435 \u0431\u044b\u043b\u043e \u0432\u043e\u0432\u0441\u0435, \u0430 \u0441\u043e\u0441\u0442\u0430\u0432 \u0431\u044b\u043b \u0441\u0442\u0440\u043e\u043a\u043e\u0439 \u0442\u0435\u043a\u0441\u0442\u0430 \u2014 \u043d\u0438 \u043e\u0434\u043d\u043e \u0438\u0437 \u0442\u0440\u0451\u0445 \u043d\u0435 \u043f\u0440\u043e\u0432\u0435\u0440\u044f\u043b\u043e\u0441\u044c.
+          label: materialText('\u041f\u043e\u043b\u043e\u0442\u043d\u043e', 'Cloth'),
+          fields: [
+            { label: materialText('\u041f\u043b\u043e\u0442\u043d\u043e\u0441\u0442\u044c', 'Weight'), value: item.specification?.weightGsm ? `${item.specification.weightGsm} \u0433/\u043c\u00b2` : '\u2014' },
+            { label: materialText('\u0428\u0438\u0440\u0438\u043d\u0430 \u0440\u0430\u0441\u043a\u0440\u043e\u044f', 'Cuttable width'), value: item.specification?.cuttableWidth ? `${item.specification.cuttableWidth} ${item.specification.cuttableWidthUnit}` : '\u2014' },
+            { label: materialText('\u041f\u043e\u0434\u0442\u0438\u043f', 'Subtype'), value: item.specification?.materialSubtype || '\u2014' },
+            { label: materialText('\u0421\u0442\u0440\u0430\u043d\u0430 \u043f\u0440\u043e\u0438\u0441\u0445\u043e\u0436\u0434\u0435\u043d\u0438\u044f', 'Country of origin'), value: item.specification?.countryOfOrigin || '\u2014' },
+            { label: materialText('\u0417\u0430\u043a\u0443\u043f\u0430\u0435\u0442\u0441\u044f \u0432', 'Purchased in'), value: item.specification?.purchaseUnit || '\u2014' },
+            { label: materialText('\u0412\u044b\u0445\u043e\u0434 \u0438\u0437 \u0435\u0434\u0438\u043d\u0438\u0446\u044b \u0437\u0430\u043a\u0443\u043f\u043a\u0438', 'Conversion factor'), value: conversionLine(item) },
+          ],
+          content: [compositionPanel(item), widthNote(item)],
+        },
+        {
+          // \u0426\u0432\u0435\u0442 \u043f\u043e\u043b\u043e\u0442\u043d\u0430 \u0438 \u0435\u0433\u043e \u0443\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u0438\u0435. \u041f\u043e\u043a\u0430 \u043b\u0430\u0431\u043e\u0440\u0430\u0442\u043e\u0440\u043d\u044b\u0439 \u043e\u0431\u0440\u0430\u0437\u0435\u0446 \u043d\u0435 \u043f\u0440\u0438\u043d\u044f\u0442, \u043a\u0440\u0430\u0441\u0438\u0442\u044c \u0442\u0438\u0440\u0430\u0436
+          // \u043d\u0435\u043b\u044c\u0437\u044f: \u043f\u0435\u0440\u0435\u043a\u0440\u0430\u0441\u0438\u0442\u044c \u043f\u0440\u0438\u043d\u044f\u0442\u0443\u044e \u043f\u0430\u0440\u0442\u0438\u044e \u043d\u0435\u0432\u043e\u0437\u043c\u043e\u0436\u043d\u043e, \u0435\u0451 \u043c\u043e\u0436\u043d\u043e \u0442\u043e\u043b\u044c\u043a\u043e \u043d\u0435 \u043f\u0440\u0438\u043d\u044f\u0442\u044c.
+          label: materialText('\u0426\u0432\u0435\u0442 \u0438 \u043e\u0431\u0440\u0430\u0437\u0446\u044b', 'Colour and lab dips'),
+          fields: [
+            { label: materialText('\u0426\u0432\u0435\u0442\u043e\u0432 \u0432 \u043f\u0430\u043b\u0438\u0442\u0440\u0435', 'Colours in palette'), value: paletteOf(item).length || '\u2014' },
+            { label: materialText('\u0423\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u043e \u043a \u0442\u0438\u0440\u0430\u0436\u0443', 'Approved for bulk'), value: paletteOf(item).filter((c) => c.approvedForBulk).length },
+            { label: materialText('\u0421\u0440\u0435\u0434\u043d\u0435 \u0440\u0430\u0443\u043d\u0434\u043e\u0432 \u0434\u043e \u043f\u0440\u0438\u043d\u044f\u0442\u0438\u044f', 'Average rounds to approval'), value: averageRounds(item) },
+          ],
+          content: [palettePanel(item)],
+        },
+        {
+          label: materialText('\u041e\u0441\u0442\u0430\u0442\u043a\u0438', 'Inventory'),
+          fields: [
+            { label: materialText('\u0414\u043e\u0441\u0442\u0443\u043f\u043d\u043e', 'Available'), value: `${unitAmount(assessment.availableToUse, item.unit)}` },
+            { label: materialText('\u041c\u0438\u043d\u0438\u043c\u0430\u043b\u044c\u043d\u044b\u0439 \u0437\u0430\u043a\u0430\u0437', 'Minimum order'), value: `${unitAmount(item.minimumOrderQuantity, item.unit)}` },
+          ],
+        },
+        {
+          label: materialText('\u041a\u0430\u0447\u0435\u0441\u0442\u0432\u043e \u0434\u0430\u043d\u043d\u044b\u0445', 'Data quality'),
+          fields: [
+            { label: materialText('\u0413\u043e\u0442\u043e\u0432\u043d\u043e\u0441\u0442\u044c', 'Readiness'), value: `${assessment.readiness}%` },
+            { label: materialText('\u0412\u0435\u0440\u0441\u0438\u044f', 'Version'), value: item.version || 1 },
+          ],
+          content: [risks],
+        },
+        {
+          label: materialText('\u041f\u0430\u0440\u0442\u0438\u0438', 'Lots'),
+          fields: [],
+          content: materialLotsContent(item),
+        },
       ],
-      content: [risks],
       actions: materialActions(assessment),
     });
   }
@@ -318,10 +593,14 @@
     ], ['draft', 'published'], materialText('\u041f\u043e\u0438\u0441\u043a \u043f\u043e \u043a\u043e\u0434\u0443, \u043d\u0430\u0437\u0432\u0430\u043d\u0438\u044e \u0438\u043b\u0438 \u043f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a\u0443', 'Search code, name or supplier'), canCreate ? odAction(materialText('\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b', 'Create material'), materialCreateForm) : null);
 
     if (materialState.error && !materialState.items.length) {
-      const retry = el('button', { className: 'button primary', type: 'button', rawText: materialText('\u041f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u044c', 'Retry') });
-      retry.addEventListener('click', () => { void loadMaterials({ reset: true }); });
+      // Повтор предлагается только там, где он может помочь: отказ по правам вернётся тем же.
       const body = el('div', { className: 'material-state' });
-      body.append(notice(materialState.error, 'error'), retry);
+      body.append(notice(materialState.error, 'error'));
+      if (!isForbiddenText(materialState.error)) {
+        const retry = el('button', { className: 'button primary', type: 'button', rawText: materialText('\u041f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u044c', 'Retry') });
+        retry.addEventListener('click', () => { void loadMaterials({ reset: true }); });
+        body.append(retry);
+      }
       return odPage(materialText('\u041c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u044b \u0438 \u0444\u0443\u0440\u043d\u0438\u0442\u0443\u0440\u0430', 'Materials and trims'), header, body);
     }
     if (!materialState.loaded && materialState.loading) {
@@ -344,9 +623,9 @@
         { label: materialText('\u0422\u0438\u043f', 'Type'), value: (assessment) => assessment.material.type },
         { label: materialText('\u041f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a', 'Supplier'), value: (assessment) => assessment.material.supplierName || '-' },
         { label: materialText('\u0421\u0442\u0430\u0442\u0443\u0441', 'Status'), render: (assessment) => statusBadge(assessment.material.status) },
-        { label: materialText('\u0426\u0435\u043d\u0430', 'Unit cost'), value: (assessment) => `${money(assessment.material.unitCost)} ${assessment.material.currency}` },
-        { label: 'MOQ', value: (assessment) => `${assessment.material.minimumOrderQuantity} ${assessment.material.unit}` },
-        { label: 'ATS', value: (assessment) => `${assessment.availableToUse} ${assessment.material.unit}` },
+        { label: materialText('\u0426\u0435\u043d\u0430', 'Unit cost'), value: (assessment) => `${money(assessment.material.unitCost, assessment.material.currency)}` },
+        { label: 'MOQ', value: (assessment) => `${unitAmount(assessment.material.minimumOrderQuantity, assessment.material.unit)}` },
+        { label: 'ATS', value: (assessment) => `${unitAmount(assessment.availableToUse, assessment.material.unit)}` },
         { label: materialText('\u0413\u043e\u0442\u043e\u0432\u043d\u043e\u0441\u0442\u044c', 'Readiness'), render: readinessCell },
         { label: materialText('\u0420\u0438\u0441\u043a', 'Risk'), render: riskBadge },
       ],

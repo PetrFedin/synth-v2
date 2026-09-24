@@ -1,9 +1,16 @@
 import { invariant } from './errors.mjs';
 
 export const MONEY_SCALE = 4;
+// Курс — не деньги, и шкала у него своя. Денежная шкала в четыре знака на слабой паре обесценивает
+// курс до бессмыслицы: RUB→EUR это 0,010858, а четыре знака позволяют записать только 0,0109 —
+// ошибка около 0,4 % на каждой строке, тихая и systematic. Оба реестра курсов платформы хранят
+// numeric(…,8), и экономика заказа давно требует восьми знаков; правило теперь живёт здесь, чтобы
+// не расходиться между местами, где оно применяется.
+export const FX_RATE_SCALE = 8;
 export const MONEY_PERCENTAGE_SCALE = 4;
 export const POSTGRES_INTEGER_MAX = 2_147_483_647;
 const MONEY_FACTOR = 10 ** MONEY_SCALE;
+const FX_RATE_FACTOR = 10 ** FX_RATE_SCALE;
 const MONEY_PERCENTAGE_FACTOR = 10 ** MONEY_PERCENTAGE_SCALE;
 const MAX_SCALED_MONEY = Number.MAX_SAFE_INTEGER;
 const MAX_SCALED_MONEY_BIGINT = BigInt(MAX_SCALED_MONEY);
@@ -21,6 +28,21 @@ export function normalizeMoney(value, {
   const normalized = scaled / MONEY_FACTOR;
   const tolerance = Math.max(1e-12, Number.EPSILON * Math.max(1, Math.abs(value)) * 4);
   invariant(Math.abs(value - normalized) <= tolerance, scaleCode, `${label} must use at most ${MONEY_SCALE} decimal places`, { scale: MONEY_SCALE });
+  return normalized;
+}
+
+export function normalizeFxRate(value, {
+  invalidCode = 'FX_RATE_INVALID',
+  scaleCode = 'FX_RATE_SCALE_INVALID',
+  overflowCode = 'FX_RATE_TOO_LARGE',
+  label = 'FX rate',
+} = {}) {
+  invariant(Number.isFinite(value) && value > 0, invalidCode, `${label} must be positive`);
+  const scaled = Math.round(value * FX_RATE_FACTOR);
+  invariant(Number.isSafeInteger(scaled), overflowCode, `${label} exceeds the safe fixed-point range`, { scale: FX_RATE_SCALE });
+  const normalized = scaled / FX_RATE_FACTOR;
+  const tolerance = Math.max(1e-12, Number.EPSILON * Math.max(1, Math.abs(value)) * 4);
+  invariant(Math.abs(value - normalized) <= tolerance, scaleCode, `${label} must use at most ${FX_RATE_SCALE} decimal places`, { scale: FX_RATE_SCALE });
   return normalized;
 }
 
@@ -58,6 +80,30 @@ export function calculateMoneyPercentage(numerator, denominator, {
     { scale: MONEY_PERCENTAGE_SCALE },
   );
   return Number(scaledPercentage) / MONEY_PERCENTAGE_FACTOR;
+}
+
+/**
+ * Округлить сумму до денежной шкалы **так же, как это делает PostgreSQL**.
+ *
+ * `Math.round` округляет половину к плюс бесконечности: у положительных это «от нуля», а у
+ * отрицательных — «к нулю». PostgreSQL у `numeric` округляет половину **от нуля при любом знаке**.
+ * Пока числа положительные, разницы нет, и её не было видно годами; на отрицательной величине —
+ * убыточной марже, стоимостной коррекции, кредите поставщика — два округления расходятся на одну
+ * единицу последнего разряда. Там, где то же число пересчитывает триггер целостности, это не
+ * расхождение в копейке, а отказ записи.
+ *
+ * Поправка `Number.EPSILON` вносится в **модуль** числа, а не в само значение: прибавленная к
+ * значению, она сдвигает отрицательные и положительные в разные стороны — то есть чинит
+ * представление ценой той самой симметрии, ради которой всё и делается.
+ *
+ * Минус ноль приводится к нулю: в JSON он неотличим от нуля, а в сравнении — отличим.
+ *
+ * @param {number} value
+ * @param {number} [factor] Множитель шкалы; по умолчанию денежная.
+ */
+export function roundAwayFromZero(value, factor = MONEY_FACTOR) {
+  const magnitude = Math.round((Math.abs(value) + Number.EPSILON) * factor);
+  return (value < 0 ? -magnitude : magnitude) / factor + 0;
 }
 
 export function calculateMoneyTotal(lines, {

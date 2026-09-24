@@ -29,7 +29,7 @@
   <link rel="stylesheet" href="/omnidata-v14.css?v=visual-20260805-14">
   <link rel="stylesheet" href="/omnidata-v14-module-adapters.css?v=visual-20260805-14-module-adapters-5">
   <link rel="stylesheet" href="/omnidata-v14-extensions.css?v=visual-20260805-14-components-4">
-  <link rel="stylesheet" href="/omnidata-v14-role-system.css?v=visual-20260806-14-role-system-1">
+  <link rel="stylesheet" href="/omnidata-v14-role-system.css?v=visual-20260922-14-role-system-2">
 </head>
 <body>
   <div id="app" aria-live="polite"></div>
@@ -71,20 +71,31 @@
   <script defer src="/ui/tech-pack-core.js?v=industrial-20260805-3"></script>
   <script defer src="/ui/production-execution-core.js?v=industrial-20260805-1"></script>
   <script defer src="/ui/final-quality-core.js?v=industrial-20260805-1"></script>
+  <script defer src="/ui/showroom-looks.js?v=showroom-looks-20260920-1"></script>
+  <!-- Состав организации нужен и матрице ролей, и форме назначения ответственных, поэтому
+       загружается раньше обоих. -->
+  <script defer src="/ui/brand-roster.js"></script>
+  <script defer src="/ui/commercial-publication-actions.js"></script>
+  <script defer src="/ui/material-lot-actions.js"></script>
+  <script defer src="/ui/product-readiness-panel.js"></script>
+  <script defer src="/ui/product-readiness-assessment.js"></script>
   <script defer src="/ui/omnidata-workspace.js?v=visual-20260804-7"></script>
+  <script defer src="/ui/order-fulfillment-view.js"></script>
   <script defer src="/ui/order-lifecycle-actions.js"></script>
   <script defer src="/ui/omnidata-polish.js?v=visual-20260804-7"></script>
   <script defer src="/ui/omnidata-fidelity.js?v=visual-20260804-7"></script>
   <script defer src="/ui/omnidata-v5.js?v=visual-20260804-7"></script>
+  <script defer src="/ui/placeholder-import.js?v=placeholder-import-20260919-1"></script>
   <script defer src="/ui/planning.js?v=industrial-20260803-3"></script>
   <script defer src="/ui/styles.js?v=industrial-20260803-3"></script>
   <script defer src="/ui/materials.js?v=industrial-20260803-3"></script>
   <script defer src="/ui/bom.js?v=industrial-20260804-1"></script>
   <script defer src="/ui/omnidata-v7.js?v=visual-20260804-7"></script>
   <script defer src="/ui/linesheet-matrix-core.js?v=buyer-order-matrix-20260813-1"></script>
+  <script defer src="/ui/order-grid-core.js?v=order-grid-20260921-1"></script>
   <script defer src="/ui/linesheets.js?v=buyer-order-matrix-20260813-1"></script>
-  <script defer src="/ui/buyer-order-handoff.js?v=buyer-order-handoff-20260819-1"></script>
   <script defer src="/ui/omnidata-v7-installed.js?v=visual-20260804-9"></script>
+  <script defer src="/ui/buyer-order-handoff.js?v=buyer-order-handoff-20260819-1"></script>
   <script defer src="/ui/measurements.js?v=industrial-20260804-3"></script>
   <script defer src="/ui/measurement-revision-actions.js?v=industrial-20260804-3"></script>
   <script defer src="/ui/measurement-catalog-sync.js?v=industrial-20260804-3"></script>
@@ -96,6 +107,8 @@
   <script defer src="/ui/production-orders.js?v=industrial-20260805-1"></script>
   <script defer src="/ui/production-executions.js?v=industrial-20260805-1"></script>
   <script defer src="/ui/final-quality.js?v=industrial-20260805-1"></script>
+  <script defer src="/ui/libraries.js?v=libraries-20260919-1"></script>
+  <script defer src="/ui/supplier-portal.js?v=supplier-portal-20260919-1"></script>
   <script defer src="/ui/omnidata-v7-language-audit.js?v=visual-20260804-7"></script>
   <script defer src="/ui/omnidata-v8.js?v=visual-20260804-8"></script>
   <script defer src="/ui/omnidata-v9.js?v=visual-20260804-9"></script>
@@ -106,7 +119,7 @@
   <script defer src="/ui/omnidata-v14.js?v=visual-20260805-14"></script>
   <script defer src="/ui/omnidata-v14-module-adapters.js?v=visual-20260805-14-module-adapters-5"></script>
   <script defer src="/ui/omnidata-v14-components.js?v=visual-20260805-14-components-4"></script>
-  <script defer src="/ui/omnidata-v14-role-system.js?v=visual-20260806-14-role-system-1"></script>
+  <script defer src="/ui/omnidata-v14-role-system.js?v=visual-20260922-14-role-system-2"></script>
   <script defer src="/ui/dom-boolean-props.js?v=visual-20260804-9"></script>
   <script defer src="/ui/app-start.js?v=visual-20260805-14-components-4"></script>
 </body>

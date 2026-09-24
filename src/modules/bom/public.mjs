@@ -1,5 +1,10 @@
 import { invariant } from '../../core/errors.mjs';
-import { normalizeMoney } from '../../core/money.mjs';
+
+// Разбор ведомости и её размерный ряд — часть публичного лица спецификации: ими пользуются экран
+// материалов и сводка по стилю. Ходить за ними в приватный файл значило бы обойти ту границу,
+// ради которой модули и разделены.
+export { SIZE_LINE_EXCEPTIONS, bomComposition, efficiencyBasisPoints, styleSizeLine } from './size-line.mjs';
+import { normalizeMoney, normalizeFxRate } from '../../core/money.mjs';
 
 const CODE_PATTERN = /^[A-Z0-9][A-Z0-9._-]{1,63}$/;
 const LINE_ID_PATTERN = /^[A-Z0-9][A-Z0-9._-]{0,63}$/;
@@ -8,9 +13,16 @@ const MATERIAL_UNITS = Object.freeze(['m', 'kg', 'pc', 'yd']);
 const SCALE = 10_000n;
 const PERCENT_DENOMINATOR = 1_000_000n;
 const COST_DENOMINATOR = 100_000_000n;
+// Курс входит в счёт своим множителем, а не денежным. Со SCALE в 10 000 курс 0,01085776
+// превращался в 0,0109 **до умножения**, и строка стоила 8,0050 € вместо 7,9739 € — ошибка
+// тихая, systematic и всегда в одну сторону. Знаменатель стоимости соответственно вырастает на
+// столько же порядков: количество (1e4) × цена (1e4) × курс (1e8) → делим на 1e12, чтобы вернуться
+// к денежной шкале.
+const FX_SCALE = 100_000_000n;
+const FX_COST_DENOMINATOR = COST_DENOMINATOR * (FX_SCALE / SCALE);
 const MAX_SCALED = BigInt(Number.MAX_SAFE_INTEGER);
 const BOM_FIELDS = Object.freeze(new Set(['sku', 'currency', 'lines', 'laborCost', 'overheadCost', 'logisticsCost', 'otherCost', 'notes']));
-const LINE_FIELDS = Object.freeze(new Set(['lineId', 'component', 'materialCode', 'quantity', 'wastePercent', 'exchangeRate']));
+const LINE_FIELDS = Object.freeze(new Set(['lineId', 'component', 'materialCode', 'quantity', 'wastePercent', 'exchangeRate', 'placement', 'isMain']));
 
 export function createBom({ id, catalogSku, materials, input, createdAt }) {
   invariant(typeof id === 'string' && id.length >= 1 && id.length <= 160, 'BOM_ID_REQUIRED', 'BOM id is required');
@@ -64,6 +76,11 @@ function normalizeBomInput({ catalogSku, materials, input }) {
   const materialByCode = materialMap(materials);
   const lineIds = new Set();
   const lines = input.lines.map((line, index) => normalizeLine({ line, position: index + 1, brandId: catalogSku.brandId, bomCurrency: currency, materialByCode, lineIds }));
+  // One principal material per kind. Two principal fabrics is not a strong opinion, it is an
+  // unanswered question, and the answer is what the care label prints. The database holds the same
+  // rule in a partial unique index; it is here as well so the refusal names the two lines that
+  // disagree rather than arriving as a constraint violation.
+  assertOneMainPerType(lines);
   const laborCost = nonNegativeMoney(input.laborCost, 'BOM_LABOR_COST_INVALID', 'Labor cost');
   const overheadCost = nonNegativeMoney(input.overheadCost, 'BOM_OVERHEAD_COST_INVALID', 'Overhead cost');
   const logisticsCost = nonNegativeMoney(input.logisticsCost, 'BOM_LOGISTICS_COST_INVALID', 'Logistics cost');
@@ -100,7 +117,7 @@ function normalizeLine({ line, position, brandId, bomCurrency, materialByCode, l
   invariant(wastePercent <= 1000, 'BOM_LINE_WASTE_INVALID', 'BOM line waste percent cannot exceed 1000', { lineId, wastePercent });
   const exchangeRate = exchangeRateFor(line.exchangeRate, snapshot.currency, bomCurrency, lineId);
   const grossQuantityScaled = roundDivide(toScaled(quantity) * (PERCENT_DENOMINATOR + toScaled(wastePercent)), PERCENT_DENOMINATOR);
-  const lineCostScaled = roundDivide(grossQuantityScaled * toScaled(snapshot.unitCost) * toScaled(exchangeRate), COST_DENOMINATOR);
+  const lineCostScaled = roundDivide(grossQuantityScaled * toScaled(snapshot.unitCost) * toFxScaled(exchangeRate), FX_COST_DENOMINATOR);
   return Object.freeze({
     lineId,
     position,
@@ -117,7 +134,37 @@ function normalizeLine({ line, position, brandId, bomCurrency, materialByCode, l
     unitCostSnapshot: snapshot.unitCost,
     exchangeRate,
     lineCost: fromScaled(lineCostScaled, 'BOM_LINE_COST_TOO_LARGE'),
+    // Where the material goes on the garment, as the tech pack prints it, and whether this is the
+    // principal material of its kind. Neither touches the costing; both are what a factory and a
+    // care label need and a shopping list cannot give them.
+    placement: optionalSentence(line.placement, 2, 400, 'BOM_LINE_PLACEMENT_INVALID', 'BOM line placement'),
+    isMain: booleanFlag(line.isMain, 'BOM_LINE_MAIN_INVALID', 'BOM line main flag'),
   });
+}
+
+function assertOneMainPerType(lines) {
+  const mainByType = new Map();
+  for (const line of lines) {
+    if (!line.isMain) continue;
+    const existing = mainByType.get(line.materialType);
+    invariant(!existing, 'BOM_MULTIPLE_MAIN_LINES', 'A bill of materials may name only one principal material of each kind',
+      { materialType: line.materialType, lineId: line.lineId, conflictingLineId: existing });
+    mainByType.set(line.materialType, line.lineId);
+  }
+}
+
+// The module's own optionalText allows a single character, and the column allows two or more. A
+// placement of one character is not a placement, so the stricter rule is the right one — and a
+// domain that accepts what the database refuses turns a clear refusal into a constraint violation.
+function optionalSentence(value, minimum, maximum, code, label) {
+  if (value === undefined || value === null || value === '') return null;
+  return requiredText(value, minimum, maximum, code, label);
+}
+
+function booleanFlag(value, code, label) {
+  if (value === undefined || value === null || value === '') return false;
+  invariant(typeof value === 'boolean', code, `${label} must be true or false`, { value });
+  return value;
 }
 
 function materialSnapshot(material, brandId, expectedCode) {
@@ -139,15 +186,20 @@ function materialSnapshot(material, brandId, expectedCode) {
   });
 }
 
+// Курс проверяется курсовой шкалой, а не денежной. Денежные четыре знака на слабой паре
+// обесценивают курс до бессмыслицы: RUB→EUR это 0,010858, а четыре знака позволяют записать
+// только 0,0109 — систематическая ошибка около 0,4 % на каждой рублёвой строке, которую никто
+// бы не заметил. Оба реестра курсов платформы хранят восемь знаков, и экономика заказа давно
+// требует того же; ведомость была единственным местом, где курс считался деньгами.
 function exchangeRateFor(value, materialCurrency, bomCurrency, lineId) {
   if (materialCurrency === bomCurrency) {
     if (value === undefined || value === null || value === '') return 1;
-    const rate = positiveMoney(value, 'BOM_EXCHANGE_RATE_INVALID', 'Exchange rate');
+    const rate = normalizeFxRate(value, { invalidCode: 'BOM_EXCHANGE_RATE_INVALID', scaleCode: 'BOM_EXCHANGE_RATE_INVALID_SCALE', overflowCode: 'BOM_EXCHANGE_RATE_TOO_LARGE', label: 'Exchange rate' });
     invariant(rate === 1, 'BOM_EXCHANGE_RATE_INVALID', 'Exchange rate must be 1 when material and BOM currencies match', { lineId });
     return 1;
   }
   invariant(value !== undefined && value !== null && value !== '', 'BOM_EXCHANGE_RATE_REQUIRED', 'Exchange rate is required for cross-currency material', { lineId, materialCurrency, bomCurrency });
-  return positiveMoney(value, 'BOM_EXCHANGE_RATE_INVALID', 'Exchange rate');
+  return normalizeFxRate(value, { invalidCode: 'BOM_EXCHANGE_RATE_INVALID', scaleCode: 'BOM_EXCHANGE_RATE_INVALID_SCALE', overflowCode: 'BOM_EXCHANGE_RATE_TOO_LARGE', label: 'Exchange rate' });
 }
 
 function materialMap(materials) {
@@ -168,6 +220,7 @@ function nonNegativeMoney(value, codeValue, label) {
   return normalizeMoney(normalized, { invalidCode: codeValue, scaleCode: `${codeValue}_SCALE`, overflowCode: `${codeValue}_TOO_LARGE`, label, allowZero: true });
 }
 function toScaled(value) { return BigInt(Math.round(value * Number(SCALE))); }
+function toFxScaled(value) { return BigInt(Math.round(value * Number(FX_SCALE))); }
 function fromScaled(value, errorCode) {
   invariant(value >= 0n && value <= MAX_SCALED, errorCode, 'Calculated BOM value exceeds supported precision');
   return Number(value) / Number(SCALE);

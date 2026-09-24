@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { domainEvent } from '../core/events.mjs';
-import { invariant } from '../core/errors.mjs';
+import { invariant, requireEntity } from '../core/errors.mjs';
 import { fingerprintsMatch } from '../core/fingerprints.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
 import { createProductionRequirementSnapshot } from '../modules/order-economics/production-requirement.mjs';
@@ -123,10 +123,6 @@ export function createProductionRequirementService({
   });
 }
 
-function requireEntity(value, code, details) {
-  invariant(value, code, 'Entity not found', details);
-  return value;
-}
 function defaultIdGenerator() {
   return (prefix) => `${prefix}_${randomUUID()}`;
 }

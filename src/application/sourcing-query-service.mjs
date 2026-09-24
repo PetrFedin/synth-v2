@@ -22,6 +22,12 @@ export function createSourcingQueryService({ reader, clock = () => new Date().to
       invariant(item, 'SUPPLIER_NOT_FOUND', 'Supplier not found', { supplierCode });
       return immutableCopy(item);
     },
+    async portalAccessForActor(actorId, requestedCode) {
+      validateActor(actorId);
+      const supplierCode = normalizeCode(requestedCode, 'SUPPLIER_CODE_INVALID', 'Supplier code');
+      const items = typeof reader.portalAccessForActor === 'function' ? await reader.portalAccessForActor(actorId, supplierCode) : [];
+      return Object.freeze({ items: Object.freeze(items.map((item) => immutableCopy(item))) });
+    },
     rfqPageForActor(actorId, options = {}) {
       return pageForActor({ kind: 'rfq', actorId, options, statuses: RFQ_STATUSES, read: reader.rfqPageForActor, extraFilters: rfqFilters });
     },

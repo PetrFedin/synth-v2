@@ -291,6 +291,20 @@ export async function runReadyProductReadinessLiveAcceptance({
     },
   }), 'READY Style Version creation');
 
+  // Готовность по измерению «атрибуты» больше не принимается на слово: подтверждение в теле
+  // запроса обязано совпадать с реестром. Приёмка поэтому заводит настоящее управляемое значение —
+  // база проверит, что атрибут есть в каталоге и применим к семейству «одежда» (миграция 082).
+  data(await requestJson(fetchImpl, target.url, '/v2/product/attributes', {
+    method: 'POST', token, idempotencyKey: command(runId, 'ready-attribute'),
+    body: {
+      ownerType: 'style_version',
+      ownerId: styleVersion.id,
+      attributeCode: 'apparel.fabric_type',
+      attributeCatalogVersion: '1.0.0',
+      value: 'Приёмочное полотно',
+    },
+  }), 'READY Product governed attribute value');
+
   const colorway = data(await requestJson(fetchImpl, target.url, `/v2/product/style-versions/${encodeURIComponent(styleVersion.id)}/colorways`, {
     method: 'POST', token, idempotencyKey: command(runId, 'ready-colorway'),
     body: {
@@ -523,6 +537,18 @@ function command(runId, operation) {
   return value;
 }
 
+/**
+ * Единственный способ, которым приёмка говорит с платформой, — настоящий HTTP.
+ *
+ * Аннотация здесь не косметика: без неё TypeScript выводит тип параметра из одного лишь `method`,
+ * у которого есть значение по умолчанию, и каждый вызов с `token` считает ошибкой. Таких жалоб в
+ * этом файле накопилось три десятка, и все они об одном и том же.
+ *
+ * @param {typeof globalThis.fetch} fetchImpl
+ * @param {string} baseUrl
+ * @param {string} pathname
+ * @param {{ method?: string, token?: string, body?: unknown, idempotencyKey?: string }} [options]
+ */
 async function requestJson(fetchImpl, baseUrl, pathname, { method = 'GET', token, body, idempotencyKey } = {}) {
   if (typeof fetchImpl !== 'function') throw new Error('Fetch implementation is required');
   const headers = { accept: 'application/json' };

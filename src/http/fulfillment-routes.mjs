@@ -48,6 +48,9 @@ export function createFulfillmentRoutes({ fulfillment } = {}) {
   return Object.freeze([
     mutate('POST', /^\/v2\/orders\/([^/]+)\/fulfillment-plans$/, validatePlanBody,
       ({ commandId, actorId, params, body }) => service.createFulfillmentPlan(commandId, actorId, params[0], body)),
+    // «Где товар сейчас» одним запросом. Поштучное чтение по идентификатору у хвоста было, а
+    // спросить про заказ целиком было нечем — и это, а не отсутствие вёрстки, держало экран пустым.
+    read('GET', /^\/v2\/orders\/([^/]+)\/fulfillment$/, ({ actorId, params }) => service.getOrderFulfillmentForActor(actorId, params[0])),
     read('GET', /^\/v2\/fulfillment-plans\/([^/]+)$/, ({ actorId, params }) => service.getFulfillmentPlanForActor(actorId, params[0])),
     mutate('POST', /^\/v2\/fulfillment-plans\/([^/]+)\/shipment-notices$/, validateShipmentBody,
       ({ commandId, actorId, params, body }) => service.createShipmentNotice(commandId, actorId, params[0], body)),
@@ -196,6 +199,7 @@ function nonNegativeInteger(value, field) {
 function unavailableFulfillment() {
   const fail = () => invariant(false, 'FULFILLMENT_SERVICE_REQUIRED', 'Fulfillment service is required');
   return Object.freeze({
+    getOrderFulfillmentForActor: fail,
     createFulfillmentPlan: fail,
     createShipmentNotice: fail,
     recordReceipt: fail,

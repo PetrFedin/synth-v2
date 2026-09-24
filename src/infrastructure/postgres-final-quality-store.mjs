@@ -17,6 +17,18 @@ function view(client) {
       const result = await client.query('SELECT payload FROM production_executions WHERE execution_code = $1 FOR SHARE', [executionCode]);
       return result.rows[0]?.payload;
     },
+    // Прослеживаемость отгрузки читается тем же снимком, что и сама инспекция: прочитанные
+    // отдельно, ведомость и выдачи материала могли бы прийти из разных моментов, и «рулоны не
+    // записаны» оказалось бы следом чужой правки, а не фактом.
+    async getPublishedBomForSku(sku) {
+      const result = await client.query("SELECT payload FROM boms WHERE sku = $1 AND status = 'published' LIMIT 1", [sku]);
+      return result.rows[0]?.payload ?? null;
+    },
+    async listMaterialLotIssuesForExecution(executionCode) {
+      const result = await client.query('SELECT payload FROM material_lot_issues WHERE execution_code = $1 ORDER BY issued_at, id FOR SHARE', [executionCode]);
+      return result.rows.map((row) => row.payload);
+    },
+
     async getInspectionByCode(inspectionCode) {
       const result = await client.query('SELECT payload FROM quality_inspections WHERE inspection_code = $1 FOR UPDATE', [inspectionCode]);
       return result.rows[0]?.payload;
@@ -24,6 +36,24 @@ function view(client) {
     async getInspectionByExecutionCode(executionCode) {
       const result = await client.query('SELECT payload FROM quality_inspections WHERE execution_code = $1 FOR UPDATE', [executionCode]);
       return result.rows[0]?.payload;
+    },
+    // The plan set a run is judged by. Only the rows for one standard and one level are read: a run
+    // names both, and loading the brand's whole table to filter it in memory would let a row from
+    // another standard reach a resolver that decides whether goods ship.
+    async listSamplingPlans(brandId, standardCode, inspectionLevel) {
+      const result = await client.query(
+        `SELECT payload FROM aql_sampling_plans
+          WHERE brand_id = $1 AND standard_code = $2 AND inspection_level = $3
+          ORDER BY aql, lot_from`,
+        [brandId, standardCode, inspectionLevel],
+      );
+      return result.rows.map((row) => row.payload);
+    },
+    // Каталог дефектов бренда. Shared with inline control rather than duplicated: one catalogue is
+    // what makes a fault countable across the two places it is found.
+    async listDefectTypes(brandId) {
+      const result = await client.query('SELECT payload FROM defect_types WHERE brand_id = $1 ORDER BY code', [brandId]);
+      return result.rows.map((row) => row.payload);
     },
     async insertInspection(value) {
       try {

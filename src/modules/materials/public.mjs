@@ -1,5 +1,20 @@
 import { invariant } from '../../core/errors.mjs';
 import { normalizeMoney } from '../../core/money.mjs';
+import { materialSpecification } from './specification.mjs';
+
+// Спецификация полотна — часть публичного лица материала: ею пользуются раскрой (ширина полотна) и
+// ведомость (пересчёт из единицы закупки). Ходить за ней в приватный файл соседнего модуля значило
+// бы обойти ту самую границу, ради которой модули и разделены.
+export {
+  MATERIAL_WIDTH_UNITS,
+  MATERIAL_PURCHASE_UNITS,
+  assertSpreadFitsCloth,
+  costPerConsumptionUnit,
+  ddpPricePerConsumptionUnit,
+  materialComposition,
+  materialSpecification,
+  widthInMillimetres,
+} from './specification.mjs';
 
 const CODE_PATTERN = /^[A-Z0-9][A-Z0-9._-]{1,63}$/;
 export const MATERIAL_TYPES = Object.freeze(['fabric', 'trim', 'packaging', 'other']);
@@ -19,11 +34,19 @@ export function createMaterial({
   unitCost,
   minimumOrderQuantity,
   availableQuantity,
+  weightGsm = null,
+  cuttableWidth = null,
+  cuttableWidthUnit = null,
+  countryOfOrigin = null,
+  purchaseUnit = null,
+  conversionFactor = null,
+  materialSubtype = null,
   createdAt,
 }) {
   const normalized = normalizeInput({
     code, brandId, name, type, unit, supplierName, supplierReference, composition, color,
     currency, unitCost, minimumOrderQuantity, availableQuantity,
+    weightGsm, cuttableWidth, cuttableWidthUnit, countryOfOrigin, purchaseUnit, conversionFactor, materialSubtype,
   }, { includeIdentity: true });
   return freezeAvailability({
     id: normalized.code,
@@ -54,6 +77,7 @@ export function updateDraftMaterial(material, input, updatedAt) {
     unitCost: normalized.unitCost,
     minimumOrderQuantity: normalized.minimumOrderQuantity,
     availableQuantity: normalized.availableQuantity,
+    specification: normalized.specification,
   };
   invariant(next.availableQuantity >= material.reservedQuantity, 'MATERIAL_AVAILABLE_BELOW_RESERVED', 'Available material quantity cannot be below reserved quantity', {
     code: material.code,
@@ -62,6 +86,34 @@ export function updateDraftMaterial(material, input, updatedAt) {
   });
   if (editableFieldsEqual(material, next)) return material;
   return freezeAvailability({ ...next, version: material.version + 1, updatedAt });
+}
+
+/**
+ * Уточнить физические свойства полотна.
+ *
+ * Плотность, ширину раскроя и выход из единицы закупки измеряют, а не назначают: рулон приходит, и
+ * оказывается, что полезная ширина не 150, а 148. Запрещать эту правку после публикации значило бы
+ * заставлять заводить второй материал на то же полотно.
+ *
+ * Уже опубликованные ведомости при этом не переписываются: цена в строке ведомости снята снимком,
+ * поэтому уточнение материала меняет то, как считается следующая ведомость, и не трогает ни одной
+ * посчитанной. Коммерческих условий — цены, минимальной партии, остатка — команда не касается.
+ */
+export function amendMaterialSpecification(material, input, updatedAt) {
+  invariant(material && typeof material === 'object', 'MATERIAL_INVALID', 'Material is invalid');
+  invariant(input && typeof input === 'object' && !Array.isArray(input), 'MATERIAL_SPECIFICATION_INVALID', 'Specification is invalid');
+  const specification = materialSpecification({
+    consumptionUnit: material.unit,
+    weightGsm: input.weightGsm ?? null,
+    cuttableWidth: input.cuttableWidth ?? null,
+    cuttableWidthUnit: input.cuttableWidthUnit ?? null,
+    countryOfOrigin: input.countryOfOrigin ?? null,
+    purchaseUnit: input.purchaseUnit ?? null,
+    conversionFactor: input.conversionFactor ?? null,
+    materialSubtype: input.materialSubtype ?? null,
+  });
+  if (JSON.stringify(material.specification ?? null) === JSON.stringify(specification)) return material;
+  return freezeAvailability({ ...material, specification, version: material.version + 1, updatedAt });
 }
 
 export function publishMaterial(material, publishedAt) {
@@ -110,6 +162,19 @@ function normalizeInput(input, { includeIdentity }) {
     }),
     minimumOrderQuantity: quantity(input.minimumOrderQuantity, 'MATERIAL_MOQ_INVALID', 'Material MOQ'),
     availableQuantity: quantity(input.availableQuantity, 'MATERIAL_AVAILABLE_QUANTITY_INVALID', 'Available quantity', true),
+    // Измеримые свойства полотна собираются одним правилом, а не россыпью проверок рядом с
+    // именем и поставщиком: парность единиц и запрет пересчёта единицы в себя имеют смысл
+    // только вместе.
+    specification: materialSpecification({
+      consumptionUnit: enumeration(input.unit, MATERIAL_UNITS, 'MATERIAL_UNIT_INVALID', 'Material unit'),
+      weightGsm: input.weightGsm ?? null,
+      cuttableWidth: input.cuttableWidth ?? null,
+      cuttableWidthUnit: input.cuttableWidthUnit ?? null,
+      countryOfOrigin: input.countryOfOrigin ?? null,
+      purchaseUnit: input.purchaseUnit ?? null,
+      conversionFactor: input.conversionFactor ?? null,
+      materialSubtype: input.materialSubtype ?? null,
+    }),
   });
 }
 
@@ -156,10 +221,13 @@ function quantity(value, code, label, allowZero = false) {
 }
 
 function editableFieldsEqual(left, right) {
-  return [
+  const scalarsEqual = [
     'name', 'type', 'unit', 'supplierName', 'supplierReference', 'composition', 'color',
     'currency', 'unitCost', 'minimumOrderQuantity', 'availableQuantity',
   ].every((field) => left[field] === right[field]);
+  // Спецификация — объект, и сравнение по ссылке всегда говорило бы «изменилась», поднимая
+  // версию на каждом сохранении без единой правки.
+  return scalarsEqual && JSON.stringify(left.specification ?? null) === JSON.stringify(right.specification ?? null);
 }
 
 function freezeAvailability(value) {

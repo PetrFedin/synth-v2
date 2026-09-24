@@ -72,6 +72,49 @@ function view(client) {
       );
       invariant(result.rowCount === 1, 'SUPPLIER_CONCURRENCY_CONFLICT', 'Supplier concurrency conflict', { supplierCode: supplier.supplierCode, expectedVersion });
     },
+    // Portal access is stored beside the supplier it belongs to, because the two are always read and
+    // revoked together: a supplier moved to the archive must not leave people able to sign in to it.
+    async getAccountByEmail(email) {
+      const result = await client.query('SELECT id, email FROM auth_users WHERE email_normalized = lower($1)', [email]);
+      return result.rows[0] ? { id: result.rows[0].id, email: result.rows[0].email } : undefined;
+    },
+    async getPortalGrant(supplierCode, userId) {
+      const result = await client.query('SELECT payload FROM supplier_portal_grants WHERE supplier_code = $1 AND user_id = $2 FOR UPDATE', [supplierCode, userId]);
+      return result.rows[0]?.payload;
+    },
+    async insertPortalGrant(grant) {
+      try {
+        await client.query(
+          `INSERT INTO supplier_portal_grants
+             (id, brand_id, supplier_code, user_id, invited_email, status, granted_by, granted_at, revoked_by,
+              revoked_at, version, payload, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8::timestamptz, $9, $10::timestamptz, $11, $12::jsonb, $13::timestamptz, $14::timestamptz)`,
+          grantParameters(grant),
+        );
+      } catch (error) {
+        if (error?.code === '23505') invariant(false, 'SUPPLIER_PORTAL_GRANT_EXISTS', 'This person already has portal access to that supplier', { supplierCode: grant.supplierCode, userId: grant.userId });
+        throw error;
+      }
+    },
+    async savePortalGrant(grant, expectedVersion) {
+      invariant(grant.version === expectedVersion + 1, 'VERSION_INCREMENT_INVALID', 'Grant version must increment exactly once');
+      // Named parameters of its own rather than the insert's list: an UPDATE that skips half of them
+      // leaves PostgreSQL unable to infer the types of the ones it never mentions, and the statement
+      // fails before it reaches a row. It writes who granted and when as well as the status, because
+      // re-opening access to someone whose access was revoked is a new grant on the same row.
+      const result = await client.query(
+        `UPDATE supplier_portal_grants
+            SET status = $4, granted_by = $5, granted_at = $6::timestamptz, revoked_by = $7,
+                revoked_at = $8::timestamptz, version = $9, payload = $10::jsonb, updated_at = $11::timestamptz
+          WHERE id = $1 AND supplier_code = $2 AND user_id = $3 AND version = $12`,
+        [
+          grant.id, grant.supplierCode, grant.userId, grant.status, grant.grantedBy, grant.grantedAt,
+          grant.revokedBy, grant.revokedAt, grant.version, JSON.stringify(grant),
+          grant.revokedAt ?? grant.grantedAt, expectedVersion,
+        ],
+      );
+      invariant(result.rowCount === 1, 'SUPPLIER_PORTAL_GRANT_CONFLICT', 'Portal grant concurrency conflict', { supplierCode: grant.supplierCode, expectedVersion });
+    },
     async insertRfq(rfq) {
       try {
         await client.query(
@@ -134,5 +177,13 @@ function rfqParameters(rfq) {
     rfq.id, rfq.rfqCode, rfq.brandId, rfq.sku, rfq.skuVersion, rfq.bomVersion, rfq.status,
     rfq.targetQuantity, rfq.responseDueAt, rfq.deliveryDueAt, rfq.selectedSupplierCode, rfq.version,
     JSON.stringify(rfq), rfq.createdAt, rfq.updatedAt, rfq.issuedAt, rfq.awardedAt, rfq.allocatedAt, rfq.cancelledAt,
+  ];
+}
+
+function grantParameters(grant) {
+  return [
+    grant.id, grant.brandId, grant.supplierCode, grant.userId, grant.invitedEmail, grant.status, grant.grantedBy,
+    grant.grantedAt, grant.revokedBy, grant.revokedAt, grant.version, JSON.stringify(grant), grant.grantedAt,
+    grant.revokedAt ?? grant.grantedAt,
   ];
 }

@@ -1,5 +1,5 @@
 import { domainEvent } from '../core/events.mjs';
-import { invariant } from '../core/errors.mjs';
+import { invariant, requireEntity } from '../core/errors.mjs';
 import { fingerprintsMatch } from '../core/fingerprints.mjs';
 import { assertWholesaleStore } from './store-contract.mjs';
 import { CAPABILITIES, assertCapability, assertTradeCapability } from '../modules/access-control/public.mjs';
@@ -49,10 +49,6 @@ export function createPartnerAccessService({
     await tx.appendOutbox(event);
   }
 
-  function requireEntity(entity, code, details) {
-    invariant(entity, code, 'Entity not found', details);
-    return entity;
-  }
 
   async function tradeMembership(tx, actorId, brandId, shopId, capability) {
     return assertTradeCapability({

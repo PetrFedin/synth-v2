@@ -23,6 +23,15 @@
         description: point.description,
         toleranceMinus: point.toleranceMinus,
         tolerancePlus: point.tolerancePlus,
+        // Правило градации переносится в ревизию вместе с точкой. Без него PATCH приходил без
+        // `gradeSteps`, домен читал это как «правила нет» и опубликованная таблица теряла его
+        // молча: числа оставались — их шлёт та же посылка, — но межразмерная разница, из которой
+        // они выведены, исчезала, и вся таблица становилась набранной вручную.
+        //
+        // Посылаются и правило, и все значения сразу, и это воспроизводит таблицу точно: значение,
+        // равное выведенному, домен помечает `derived`, а отличающееся — `override`, то есть
+        // исключения остаются исключениями, а выведенные значения — выведенными.
+        gradeSteps: Array.isArray(point.gradeSteps) ? [...point.gradeSteps] : null,
         measurements: point.measurements.map((measurement) => Object.freeze({ sizeCode: measurement.sizeCode, value: measurement.value })),
       })),
       notes: chart.notes,
@@ -44,7 +53,12 @@
   }
   async function startRevision(chart) {
     if (!canRevise(chart) || operation.busySku) return;
-    if (!confirm(text(`Создать новую ревизию таблицы ${chart.sku}? Опубликованная версия будет сохранена в архиве.`, `Start a new revision for ${chart.sku}? The published version will be preserved in the archive.`))) return;
+    const accepted = await confirmAction({
+      title: text('Новая ревизия таблицы', 'New chart revision'),
+      question: text(`${chart.sku}: опубликованная версия сохранится в архиве.`, `${chart.sku}: the published version is kept in the archive.`),
+      confirmLabel: text('Создать ревизию', 'Start revision'),
+    });
+    if (!accepted) return;
     operation.busySku = chart.sku;
     renderApp();
     try {

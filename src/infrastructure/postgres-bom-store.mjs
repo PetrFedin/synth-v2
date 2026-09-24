@@ -96,20 +96,24 @@ async function insertBomLines(client, bom) {
     unit_cost_snapshot: line.unitCostSnapshot,
     exchange_rate: line.exchangeRate,
     line_cost: line.lineCost,
+    placement: line.placement ?? null,
+    is_main: line.isMain === true,
     payload: line,
   }));
   await client.query(
     `INSERT INTO bom_lines
        (bom_id, line_id, position, component, material_code, material_version, material_type, unit,
-        quantity, waste_percent, gross_quantity, material_currency, unit_cost_snapshot, exchange_rate, line_cost, payload)
+        quantity, waste_percent, gross_quantity, material_currency, unit_cost_snapshot, exchange_rate, line_cost,
+        placement, is_main, payload)
      SELECT $1, line.line_id, line.position, line.component, line.material_code, line.material_version,
             line.material_type, line.unit, line.quantity, line.waste_percent, line.gross_quantity,
-            line.material_currency, line.unit_cost_snapshot, line.exchange_rate, line.line_cost, line.payload
+            line.material_currency, line.unit_cost_snapshot, line.exchange_rate, line.line_cost,
+            line.placement, line.is_main, line.payload
        FROM jsonb_to_recordset($2::jsonb) AS line(
          line_id text, position integer, component text, material_code text, material_version integer,
          material_type text, unit text, quantity numeric(20, 4), waste_percent numeric(20, 4),
          gross_quantity numeric(20, 4), material_currency char(3), unit_cost_snapshot numeric(20, 4),
-         exchange_rate numeric(20, 4), line_cost numeric(20, 4), payload jsonb
+         exchange_rate numeric(20, 8), line_cost numeric(20, 4), placement text, is_main boolean, payload jsonb
        )`,
     [bom.id, JSON.stringify(records)],
   );

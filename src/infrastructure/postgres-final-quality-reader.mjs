@@ -26,6 +26,37 @@ export function createPostgresFinalQualityReader({ pool } = {}) {
         return result.rows[0]?.payload;
       }, { begin: SNAPSHOT_BEGIN });
     },
+    // The plan sets this actor's brands work to, collapsed to one row per standard and level.
+    //
+    // The inspector picks a set and the two limits; the sample size is not offered as a choice
+    // because it is not one — it follows from the lot and the level, and the run resolves it. What
+    // the list has to carry is only what a person legitimately chooses between.
+    samplingPlanSetsForActor(actorId) {
+      return withPostgresTransaction(pool, async (queryable) => {
+        const result = await queryable.query(
+          `SELECT plan.brand_id AS "brandId",
+                  plan.standard_code AS "standardCode",
+                  plan.inspection_level AS "inspectionLevel",
+                  array_agg(DISTINCT plan.aql ORDER BY plan.aql) AS aqls,
+                  min(plan.lot_from) AS "lotFrom",
+                  max(plan.lot_to) AS "lotTo",
+                  count(*)::integer AS rows,
+                  min(plan.source_note) AS "sourceNote"
+             FROM aql_sampling_plans AS plan
+            WHERE EXISTS (
+                    SELECT 1 FROM memberships AS membership
+                     WHERE membership.user_id = $1
+                       AND membership.organisation_id = plan.brand_id
+                       AND membership.status = 'active'
+                       AND membership.role = ANY($2::text[])
+                  )
+            GROUP BY plan.brand_id, plan.standard_code, plan.inspection_level
+            ORDER BY plan.standard_code, plan.inspection_level`,
+          [actorId, READ_ROLES],
+        );
+        return result.rows.map((row) => ({ ...row, aqls: row.aqls.map(Number) }));
+      }, { begin: SNAPSHOT_BEGIN });
+    },
     getShipmentReleaseForActor(actorId, releaseCode) {
       return withPostgresTransaction(pool, async (queryable) => {
         const result = await queryable.query(

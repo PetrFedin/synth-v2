@@ -16,6 +16,25 @@ import { createSourcingTechPackAllocationService } from '../src/application/sour
 import { createProductionOrderService } from '../src/application/production-order-service.mjs';
 import { createProductionExecutionService } from '../src/application/production-execution-service.mjs';
 import { createFinalQualityService } from '../src/application/final-quality-service.mjs';
+import { createInlineQualityService } from '../src/application/inline-quality-service.mjs';
+import { createPostgresInlineQualityStore } from '../src/infrastructure/postgres-inline-quality-store.mjs';
+import { createSupplierPaymentService, createSupplierPaymentQueryService } from '../src/application/supplier-payment-service.mjs';
+import { createPostgresSupplierPaymentStore } from '../src/infrastructure/postgres-supplier-payment-store.mjs';
+import { createPostgresSupplierPaymentReader } from '../src/infrastructure/postgres-supplier-payment-reader.mjs';
+import { createTargetPricingService, createTargetPricingQueryService } from '../src/application/target-pricing-service.mjs';
+import { createPostgresTargetPricingStore } from '../src/infrastructure/postgres-target-pricing-store.mjs';
+import { createPostgresTargetPricingReader } from '../src/infrastructure/postgres-target-pricing-reader.mjs';
+import { createPostgresSeasonEconomicsReader } from '../src/infrastructure/postgres-season-economics-reader.mjs';
+import { createSeasonEconomicsQueryService } from '../src/application/season-economics-service.mjs';
+import { createMaterialLotService, createMaterialLotQueryService } from '../src/application/material-lot-service.mjs';
+import { createPostgresMaterialLotStore } from '../src/infrastructure/postgres-material-lot-store.mjs';
+import { createPostgresMaterialLotReader } from '../src/infrastructure/postgres-material-lot-reader.mjs';
+import { createCuttingService, createCuttingQueryService } from '../src/application/cutting-service.mjs';
+import { createPostgresCuttingStore } from '../src/infrastructure/postgres-cutting-store.mjs';
+import { createPostgresCuttingReader } from '../src/infrastructure/postgres-cutting-reader.mjs';
+import { createOperationSequenceService, createOperationSequenceQueryService } from '../src/application/operation-sequence-service.mjs';
+import { createPostgresOperationSequenceStore } from '../src/infrastructure/postgres-operation-sequence-store.mjs';
+import { createPostgresOperationSequenceReader } from '../src/infrastructure/postgres-operation-sequence-reader.mjs';
 import { createPostgresWholesaleStore } from '../src/infrastructure/postgres-store.mjs';
 import { createPostgresCatalogStore } from '../src/infrastructure/postgres-catalog-store.mjs';
 import { createPostgresMaterialStore } from '../src/infrastructure/postgres-material-store.mjs';
@@ -54,6 +73,12 @@ test('PostgreSQL closes approved PPS through production, rework, reinspection an
     const allocationStore = createPostgresSourcingTechPackAllocationStore({ pool });
     const productionOrderStore = createPostgresProductionOrderStore({ pool });
     const productionExecutionStore = createPostgresProductionExecutionStore({ pool });
+    const inlineQualityStore = createPostgresInlineQualityStore({ pool });
+    const supplierPaymentStore = createPostgresSupplierPaymentStore({ pool });
+    const targetPricingStore = createPostgresTargetPricingStore({ pool });
+    const materialLotStore = createPostgresMaterialLotStore({ pool });
+    const cuttingStore = createPostgresCuttingStore({ pool });
+    const operationSequenceStore = createPostgresOperationSequenceStore({ pool });
     const finalQualityStore = createPostgresFinalQualityStore({ pool });
     const platform = createWholesalePlatform({ store: wholesaleStore, clock, nextId });
     const catalog = createCatalogService({ wholesaleStore, catalogStore, clock, nextId });
@@ -66,6 +91,18 @@ test('PostgreSQL closes approved PPS through production, rework, reinspection an
     const allocation = createSourcingTechPackAllocationService({ store: allocationStore, clock, nextId });
     const productionOrders = createProductionOrderService({ store: productionOrderStore, clock, nextId });
     const productionExecutions = createProductionExecutionService({ store: productionExecutionStore, clock, nextId });
+    const inlineQuality = createInlineQualityService({ store: inlineQualityStore, clock, nextId });
+    const supplierPayments = createSupplierPaymentService({ store: supplierPaymentStore, clock, nextId });
+    const materialLots = createMaterialLotService({ store: materialLotStore, clock, nextId });
+    const materialLotQueries = createMaterialLotQueryService({ reader: createPostgresMaterialLotReader({ pool }) });
+    const cutting = createCuttingService({ store: cuttingStore, clock, nextId });
+    const cuttingQueries = createCuttingQueryService({ reader: createPostgresCuttingReader({ pool }) });
+    const operationSequences = createOperationSequenceService({ store: operationSequenceStore, clock, nextId });
+    const operationSequenceQueries = createOperationSequenceQueryService({ reader: createPostgresOperationSequenceReader({ pool }) });
+    const supplierPaymentQueries = createSupplierPaymentQueryService({ reader: createPostgresSupplierPaymentReader({ pool }), clock });
+    const targetPricing = createTargetPricingService({ store: targetPricingStore, clock, nextId });
+    const targetPricingQueries = createTargetPricingQueryService({ reader: createPostgresTargetPricingReader({ pool }) });
+    const seasonEconomicsQueries = createSeasonEconomicsQueryService({ reader: createPostgresSeasonEconomicsReader({ pool }) });
     const finalQuality = createFinalQualityService({ store: finalQualityStore, clock, nextId });
 
     await platform.registerOrganisation('org-create', 'system', createOrganisation({ id: 'brand-tech-gate', type: 'brand', name: 'Tech Gate Brand' }));
@@ -166,6 +203,238 @@ test('PostgreSQL closes approved PPS through production, rework, reinspection an
     assert.equal(execution.milestones[0].resolutionNotes, 'Certificate received and approved by quality team');
 
     execution = await productionExecutions.completeMilestone('production-execution-complete-materials', 'product-owner', execution.executionCode, { expectedVersion: execution.version, milestoneCode: 'materials-ready', notes: 'Materials released to cutting' });
+
+    // --- Прослеживаемость: из какого рулона ------------------------------------------------------
+    //
+    // Материал приезжает в карантин, выпускается после входного контроля и только потом уходит в
+    // раскрой. Этот порядок и есть смысл всей таблицы, поэтому он проверяется против живой базы.
+    const roll = await materialLots.receiveLot('lot-receive-1', 'product-owner', {
+      materialCode: 'FAB-TECH-GATE', lotReference: 'ROLL-A-001', dyeLot: 'DYE-A',
+      receivedQuantity: 600, certificateReference: 'CERT-ATM-1', notes: 'Первый рулон партии',
+    });
+    assert.equal(roll.status, 'quarantine');
+    assert.equal(roll.unit, 'm', 'the unit comes from the material record');
+    await assert.rejects(() => materialLots.issueLot('lot-issue-too-early', 'product-owner', roll.id, {
+      expectedVersion: roll.version, executionCode: execution.executionCode, quantity: 100,
+    }), { code: 'MATERIAL_LOT_NOT_RELEASED' });
+    // И то же правило стоит в базе, против писателя в обход модуля.
+    await assert.rejects(
+      () => pool.query(`INSERT INTO material_lot_issues (id,lot_id,execution_id,execution_code,quantity,issued_at,issued_by,payload)
+                        VALUES ('bypass', $1, $2, $3, 10, now(), 'x', '{"executionCode":"${execution.executionCode}","quantity":10}'::jsonb)`,
+        [roll.id, execution.id, execution.executionCode]),
+      /MATERIAL_LOT_NOT_RELEASED/,
+    );
+
+    const releasedRoll = await materialLots.releaseLot('lot-release-1', 'quality-approver', roll.id, { expectedVersion: roll.version, notes: 'Входной контроль пройден' });
+    assert.equal(releasedRoll.status, 'released');
+    const issuedRoll = await materialLots.issueLot('lot-issue-1', 'product-owner', releasedRoll.id, {
+      expectedVersion: releasedRoll.version, executionCode: execution.executionCode, quantity: 500,
+    });
+    assert.equal(issuedRoll.issuedQuantity, 500);
+    // Выданное ведёт триггер по самим выдачам, а не заявление рядом с ними.
+    const storedRoll = (await pool.query('SELECT issued_quantity, (payload ->> \'issuedQuantity\')::numeric AS projected FROM material_lots WHERE id = $1', [roll.id])).rows[0];
+    assert.equal(Number(storedRoll.issued_quantity), 500);
+    assert.equal(Number(storedRoll.projected), 500, 'and the payload says the same thing the column does');
+    // Больше, чем приехало, рулон не отдаёт — это держит и домен, и CHECK.
+    await assert.rejects(() => materialLots.issueLot('lot-issue-over', 'product-owner', issuedRoll.id, {
+      expectedVersion: issuedRoll.version, executionCode: execution.executionCode, quantity: 700,
+    }), { code: 'MATERIAL_LOT_INSUFFICIENT' });
+    // Партию, которая уже в изделиях, отклонить нельзя: это претензия мельнице, а не смена статуса.
+    await assert.rejects(() => materialLots.rejectLot('lot-reject', 'quality-approver', issuedRoll.id, {
+      expectedVersion: issuedRoll.version, reason: 'Разнооттеночность по всему рулону',
+    }), { code: 'MATERIAL_LOT_ALREADY_IN_PRODUCTION' });
+
+    // Второй рулон другой крашеной партии — и тогда из этого материала нельзя шить одну вещь.
+    const second = await materialLots.receiveLot('lot-receive-2', 'product-owner', {
+      materialCode: 'FAB-TECH-GATE', lotReference: 'ROLL-B-002', dyeLot: 'DYE-B', receivedQuantity: 400,
+    });
+    const secondReleased = await materialLots.releaseLot('lot-release-2', 'quality-approver', second.id, { expectedVersion: second.version });
+    await materialLots.issueLot('lot-issue-2', 'product-owner', secondReleased.id, {
+      expectedVersion: secondReleased.version, executionCode: execution.executionCode, quantity: 300,
+    });
+
+    const trace = await materialLotQueries.executionTraceabilityForActor('product-owner', execution.executionCode);
+    const shell = trace.materials.find((row) => row.materialCode === 'FAB-TECH-GATE');
+    assert.equal(shell.issuedQuantity, 800);
+    assert.deepEqual([...shell.dyeLots], ['DYE-A', 'DYE-B']);
+    assert.deepEqual([...trace.mixedDyeLots], ['FAB-TECH-GATE'], 'each roll passed its own inspection; the fault is in the pairing');
+    assert.ok(shell.requiredQuantity > 0, 'the requirement comes from the published bill, not from a second opinion');
+
+    // --- Технологическая последовательность -------------------------------------------------------
+    //
+    // Шаблон для категории, из него — последовательность изделия, и уже она даёт пооперационному
+    // контролю операцию вместо одной только вехи.
+    const bolTemplate = await operationSequences.createTemplate('bol-template', 'product-owner', {
+      brandId: 'brand-tech-gate', templateCode: 'TPL-COAT', category: 'Верхняя одежда',
+      nameRu: 'Пальто, базовая последовательность', nameEn: 'Coat, base sequence',
+    });
+    const withOperations = await operationSequences.replaceOperations('bol-ops', 'product-owner', bolTemplate.id, {
+      expectedVersion: bolTemplate.version,
+      operations: [
+        { operationCode: 'CUT-PARTS', nameRu: 'Раскрой деталей', nameEn: 'Cut parts', stage: 'cutting-complete', standardMinutes: 4.5, equipment: 'Раскройный нож' },
+        { operationCode: 'JOIN-SHOULDER', nameRu: 'Стачать плечевые швы', nameEn: 'Join shoulders', stage: 'assembly-complete', standardMinutes: 2.25, equipment: 'Оверлок' },
+        { operationCode: 'SET-COLLAR', nameRu: 'Втачать воротник', nameEn: 'Set collar', stage: 'assembly-complete', standardMinutes: 6, constructionNode: 'COLLAR_SET_IN' },
+      ],
+    });
+    assert.deepEqual(withOperations.operations.map((operation) => operation.position), [1, 2, 3]);
+    const publishedTemplate = await operationSequences.publish('bol-publish', 'product-owner', bolTemplate.id, { expectedVersion: withOperations.version });
+
+    const productSequence = await operationSequences.createForProduct('bol-product', 'product-owner', {
+      brandId: 'brand-tech-gate', sku: 'TECH-GATE-1', templateCode: 'TPL-COAT',
+    });
+    assert.equal(productSequence.operations.length, 3, 'из шаблона операции копируются целиком');
+    assert.equal(productSequence.sourceTemplateCode, 'TPL-COAT');
+    await operationSequences.publish('bol-product-publish', 'product-owner', productSequence.id, { expectedVersion: productSequence.version });
+    // Одна действующая последовательность на изделие.
+    await assert.rejects(() => operationSequences.createForProduct('bol-product-again', 'product-owner', {
+      brandId: 'brand-tech-gate', sku: 'TECH-GATE-1', templateCode: 'TPL-COAT',
+    }), { code: 'BOL_PRODUCT_SEQUENCE_EXISTS' });
+
+    const forSku = await operationSequenceQueries.operationSequenceForSku('product-owner', 'TECH-GATE-1');
+    assert.equal(forSku.workload.totalStandardMinutes, 12.75, 'трудоёмкость — сумма, а не хранимое число');
+    assert.deepEqual(forSku.workload.byStage.map((row) => [row.stage, row.standardMinutes]), [['cutting-complete', 4.5], ['assembly-complete', 8.25]]);
+
+    // Дыра в нумерации не проходит и в базе.
+    await assert.rejects(
+      () => pool.query('DELETE FROM bol_operations WHERE sequence_id = $1 AND position = 2', [publishedTemplate.id]),
+      /BOL_POSITIONS_NOT_CONSECUTIVE/,
+    );
+
+    const cuttingOperation = (await pool.query(
+      `SELECT operation.id FROM bol_operations AS operation
+         JOIN bol_sequences AS sequence ON sequence.id = operation.sequence_id
+        WHERE sequence.sku = 'TECH-GATE-1' AND operation.stage = 'cutting-complete'`,
+    )).rows[0].id;
+    const assemblyOperation = (await pool.query(
+      `SELECT operation.id FROM bol_operations AS operation
+         JOIN bol_sequences AS sequence ON sequence.id = operation.sequence_id
+        WHERE sequence.sku = 'TECH-GATE-1' AND operation.stage = 'assembly-complete' LIMIT 1`,
+    )).rows[0].id;
+
+    // --- Раскрой: настил, раскладка и выход --------------------------------------------------------
+    //
+    // Ткань не берётся ниоткуда: снято с рулонов ровно столько, сколько настелено, и только из тех
+    // рулонов, что выданы в эту партию. Оба правила проверяются против живой базы, включая писателя
+    // в обход модуля.
+    const spread = await cutting.laySpread('cutting-lay-1', 'product-owner', {
+      materialCode: 'FAB-TECH-GATE', spreadReference: 'LAY-TECH-001',
+      markerLength: 4, plies: 100, fabricWidth: 150, fabricWidthUnit: 'cm',
+      marker: [{ executionCode: execution.executionCode, garmentsPerPly: 1 }],
+      lots: [{ lotReference: 'ROLL-A-001', quantity: 400 }],
+      notes: 'Первый настил партии',
+    });
+    assert.equal(spread.clothLaid, 400, '4 м раскладки в 100 слоёв');
+    assert.equal(spread.consumptionPerGarment, 4, 'расход на изделие — длина раскладки на изделий в слое');
+    assert.equal(spread.marker[0].sku, execution.sku);
+
+    // Настелить из рулона, выданного в другую партию (или не выданного вовсе), нельзя.
+    await assert.rejects(() => cutting.laySpread('cutting-lay-bad', 'product-owner', {
+      materialCode: 'FAB-TECH-GATE', spreadReference: 'LAY-TECH-BAD', markerLength: 4, plies: 10,
+      marker: [{ executionCode: execution.executionCode, garmentsPerPly: 1 }],
+      lots: [{ lotReference: 'ROLL-NOT-ISSUED', quantity: 40 }],
+    }), { code: 'CUTTING_LOT_NOT_ISSUED_HERE' });
+    // И это же правило стоит в базе. Нужен рулон, который в эту партию не выдавали: ROLL-B-002 как
+    // раз выдан, поэтому он проверяет не то — берём принятый, но не выданный третий рулон.
+    const unissued = await materialLots.receiveLot('lot-receive-3', 'product-owner', {
+      materialCode: 'FAB-TECH-GATE', lotReference: 'ROLL-C-003', dyeLot: 'DYE-C', receivedQuantity: 200,
+    });
+    await assert.rejects(
+      () => pool.query(`INSERT INTO cutting_spread_lots (id,spread_id,lot_id,lot_reference,quantity,payload)
+                        VALUES ('bypass-lot', $1, $2, 'ROLL-C-003', 10, '{"lotReference":"ROLL-C-003","quantity":10}'::jsonb)`,
+        [spread.id, unissued.id]),
+      /CUTTING_LOT_NOT_ISSUED_HERE/,
+    );
+    // Баланс ткани держится отложенным триггером: снято обязано равняться настеленному.
+    await assert.rejects(
+      () => pool.query(`UPDATE cutting_spread_lots
+                           SET quantity = 390, payload = jsonb_set(payload, '{quantity}', '390')
+                         WHERE spread_id = $1`, [spread.id]),
+      /CUTTING_CLOTH_DOES_NOT_BALANCE/,
+    );
+    // Настил без раскладки — испорченная ткань, а не раскрой.
+    await assert.rejects(
+      () => pool.query('DELETE FROM cutting_spread_outputs WHERE spread_id = $1', [spread.id]),
+      /CUTTING_MARKER_EMPTY/,
+    );
+
+    const cutSummary = await cuttingQueries.cuttingSummaryForActor('product-owner', execution.executionCode);
+    assert.equal(cutSummary.garmentsCut, 100);
+    const cutShell = cutSummary.materials.find((row) => row.materialCode === 'FAB-TECH-GATE');
+    assert.equal(cutShell.clothUsed, 400);
+    assert.equal(cutShell.actualPerGarment, 4);
+    assert.ok(cutShell.plannedPerGarment > 0, 'план берётся из опубликованной ведомости');
+    assert.equal(cutSummary.shortfall, execution.quantity - 100, 'недокрой посреди раскроя назван, а не выдан за ошибку');
+
+    const cutSpread = await cutting.markCut('cutting-cut-1', 'product-owner', spread.id, { expectedVersion: spread.version });
+    assert.equal(cutSpread.status, 'cut');
+    // Раскроенный настил не отменяется: детали уже вырезаны.
+    await assert.rejects(() => cutting.cancel('cutting-cancel-1', 'product-owner', spread.id, {
+      expectedVersion: cutSpread.version, reason: 'Ошиблись раскладкой',
+    }), { code: 'CUTTING_SPREAD_NOT_LAID' });
+
+    // --- Пооперационный контроль на раскрое ------------------------------------------------------
+    //
+    // A fault found at the operation that made it costs one piece; the same fault found after
+    // packing costs the lot. This is that, end to end and against the real database: the catalogue,
+    // the check, the gate that holds the stage shut, and the disposition that opens it again.
+    const seamOpen = await inlineQuality.registerDefectType('defect-type-seam', 'product-owner', {
+      brandId: 'brand-tech-gate', code: 'SEAM-OPEN', severity: 'major', originStage: 'cutting-complete',
+      nameRu: 'Разошёлся шов', nameEn: 'Open seam',
+    });
+    assert.equal(seamOpen.status, 'active');
+    // Один код — одна тяжесть. Registering it again is a divergence in the catalogue, not a typo.
+    await assert.rejects(() => inlineQuality.registerDefectType('defect-type-seam-again', 'product-owner', {
+      brandId: 'brand-tech-gate', code: 'SEAM-OPEN', severity: 'minor', originStage: 'cutting-complete',
+      nameRu: 'Разошёлся шов', nameEn: 'Open seam',
+    }), { code: 'DEFECT_TYPE_ALREADY_REGISTERED' });
+    // Свободного текста больше нет: код либо в каталоге, либо строки нет.
+    await assert.rejects(() => inlineQuality.recordCheck('inline-unknown', 'product-owner', execution.executionCode, {
+      milestoneCode: 'cutting-complete', checkedQuantity: 40, inspectorName: 'Павел Дорохов',
+      defects: [{ defectCode: 'NOT-REGISTERED', quantity: 1 }],
+    }), { code: 'INLINE_QC_DEFECT_TYPE_NOT_FOUND' });
+
+    // Операция обязана принадлежать этой вехе: «нашли на пошиве при раскрое» записываемым не будет.
+    await assert.rejects(() => inlineQuality.recordCheck('inline-wrong-stage', 'product-owner', execution.executionCode, {
+      milestoneCode: 'cutting-complete', checkedQuantity: 10, inspectorName: 'Павел Дорохов',
+      defects: [], operationId: assemblyOperation,
+    }), { code: 'INLINE_QC_OPERATION_WRONG_STAGE' });
+
+    const check = await inlineQuality.recordCheck('inline-cutting', 'product-owner', execution.executionCode, {
+      milestoneCode: 'cutting-complete', checkedQuantity: 40, inspectorName: 'Павел Дорохов',
+      defects: [{ defectCode: 'SEAM-OPEN', quantity: 3, notes: 'Три изделия из одной пачки' }],
+      notes: 'Контроль после раскроя', operationId: cuttingOperation,
+    });
+    assert.equal(check.operationCode, 'CUT-PARTS', 'проверка называет операцию, а не только веху');
+    // И то же правило стоит в базе, против писателя в обход модуля.
+    await assert.rejects(
+      () => pool.query('UPDATE inline_quality_checks SET operation_id = $2 WHERE id = $1', [check.id, assemblyOperation]),
+      /INLINE_QC_OPERATION_WRONG_STAGE/,
+    );
+    assert.equal(check.status, 'open');
+    assert.equal(check.defectiveQuantity, 3);
+    assert.equal(check.defects[0].severity, 'major', 'severity comes from the catalogue, never from the caller');
+
+    // The database holds the derived count and the open state, not the caller's word for them.
+    const stored = await pool.query('SELECT defective_quantity, status FROM inline_quality_checks WHERE id = $1', [check.id]);
+    assert.deepEqual(stored.rows[0], { defective_quantity: 3, status: 'open' });
+
+    // Веха не закрывается, пока найденный на ней брак не разобран — и это правило стоит и в БД.
+    await assert.rejects(
+      () => productionExecutions.completeMilestone('production-execution-blocked-by-inline', 'product-owner', execution.executionCode, { expectedVersion: execution.version, milestoneCode: 'cutting-complete', notes: 'Should not pass with undecided defects' }),
+      { code: 'PRODUCTION_MILESTONE_HAS_OPEN_INLINE_CHECK' },
+    );
+    await assert.rejects(
+      () => pool.query("UPDATE production_executions SET payload = jsonb_set(payload, '{milestones,1,status}', '\"completed\"') WHERE id = $1", [execution.id]),
+      /PRODUCTION_MILESTONE_HAS_OPEN_INLINE_CHECK/,
+      'the gate holds against a writer that goes around the module',
+    );
+
+    // Принять известный брак можно, но только объяснив почему.
+    await assert.rejects(() => inlineQuality.disposition('inline-accept-bare', 'product-owner', check.id, { expectedVersion: check.version, disposition: 'accepted', notes: 'ok' }), { code: 'INLINE_QC_ACCEPTANCE_REASON_REQUIRED' });
+    const decided = await inlineQuality.disposition('inline-rework', 'product-owner', check.id, { expectedVersion: check.version, disposition: 'rework', notes: 'Три изделия перекроены из того же рулона' });
+    assert.equal(decided.status, 'closed');
+    assert.equal(decided.disposition, 'rework');
+
     for (const milestoneCode of ['cutting-complete', 'assembly-complete', 'finishing-complete', 'packing-complete']) {
       execution = await productionExecutions.completeMilestone(`production-execution-complete-${milestoneCode}`, 'product-owner', execution.executionCode, { expectedVersion: execution.version, milestoneCode, notes: `${milestoneCode} verified` });
     }
@@ -213,7 +482,7 @@ test('PostgreSQL closes approved PPS through production, rework, reinspection an
       inspectorName: 'Factory Quality Inspector',
       sampleSize: 20,
       allowedMajorDefects: 1,
-      allowedMinorDefects: 2,
+      allowedMinorDefects: 2, samplingNote: 'Согласовано с фабрикой на первую партию сезона',
     });
     quality = await finalQuality.completeRun('quality-run-1-complete', 'product-owner', quality.inspectionCode, {
       expectedVersion: quality.version,
@@ -249,7 +518,7 @@ test('PostgreSQL closes approved PPS through production, rework, reinspection an
       inspectorName: 'Factory Quality Inspector',
       sampleSize: 20,
       allowedMajorDefects: 1,
-      allowedMinorDefects: 2,
+      allowedMinorDefects: 2, samplingNote: 'Согласовано с фабрикой на первую партию сезона',
       reworkReference: 'RWK-TECH-GATE-1',
       resolutionNotes: 'Affected seams were reopened, reinforced, resewn and checked before reinspection',
     });
@@ -304,6 +573,176 @@ test('PostgreSQL closes approved PPS through production, rework, reinspection an
       () => pool.query("UPDATE quality_shipment_releases SET released_by = 'product-owner' WHERE inspection_code = $1", [quality.inspectionCode]),
       (error) => error?.code === '23514' && error?.constraint === 'quality_shipment_releases_immutable',
     );
+
+    // --- Платёжные вехи --------------------------------------------------------------------------
+    //
+    // The money follows the same events the rest of the chain already produced: the factory's
+    // confirmation and Final Quality's release. Nothing here is typed, and due-ness is never stored.
+    const split = [
+      { triggerEvent: 'order-confirmed', shareBasisPoints: 3000, labelRu: 'Аванс', labelEn: 'Deposit' },
+      { triggerEvent: 'shipment-released', shareBasisPoints: 7000, labelRu: 'Остаток', labelEn: 'Balance' },
+    ];
+    const schedule = await supplierPayments.createSchedule('payment-schedule', 'product-owner', productionOrder.productionOrderNumber, { split });
+    assert.equal(schedule.currency, productionOrder.commercialSnapshot.currency);
+    assert.equal(schedule.totalAmountMinor, productionOrder.commercialSnapshot.totalCostMinor, 'the schedule bills the order, it does not restate it');
+    assert.equal(schedule.milestones.reduce((total, milestone) => total + milestone.amountMinor, 0), schedule.totalAmountMinor);
+    // Один заказ — один график: второй был бы вторым мнением о том, сколько мы должны.
+    await assert.rejects(() => supplierPayments.createSchedule('payment-schedule-again', 'product-owner', productionOrder.productionOrderNumber, { split }), { code: 'PAYMENT_SCHEDULE_EXISTS' });
+
+    // Части обязаны складываться в целое, и это стоит в базе, а не только в модуле.
+    // The payload projection refuses a row whose columns and payload disagree, so a writer going
+    // around the module has to change both — and then the sum rule is what stops it.
+    await assert.rejects(
+      () => pool.query(`UPDATE payment_milestones
+                           SET amount_minor = amount_minor - 1,
+                               payload = jsonb_set(payload, '{amountMinor}', to_jsonb(amount_minor - 1))
+                         WHERE schedule_id = $1 AND sequence = 1`, [schedule.id]),
+      /PAYMENT_AMOUNTS_MUST_TOTAL_ORDER/,
+    );
+    await assert.rejects(
+      () => pool.query(`UPDATE payment_milestones
+                           SET share_basis_points = 2000,
+                               payload = jsonb_set(payload, '{shareBasisPoints}', to_jsonb(2000))
+                         WHERE schedule_id = $1 AND sequence = 1`, [schedule.id]),
+      /PAYMENT_SHARES_MUST_TOTAL_WHOLE/,
+    );
+
+    // Обе вехи наступили: заказ подтверждён и партия выпущена, так что срок считается от событий.
+    const view = await supplierPaymentQueries.paymentScheduleForActor('product-owner', productionOrder.productionOrderNumber);
+    // Оба события произошли, поэтому обе вехи наступили — и ни одна не просрочена, потому что срок
+    // считается от события плюс отсрочка, а часы теста ушли от событий совсем недалеко.
+    assert.deepEqual(view.milestones.map((milestone) => milestone.status), ['due', 'due']);
+    assert.equal(view.overdueAmountMinor, 0);
+    assert.equal(view.outstandingAmountMinor, schedule.totalAmountMinor);
+    assert.equal(view.milestones[1].triggerOccurredAt, releaseRow.payload.releasedAt, 'the balance dates from the release, not from the order');
+
+    const afterDeposit = await supplierPayments.recordPayment('payment-deposit', 'product-owner', productionOrder.productionOrderNumber, {
+      expectedVersion: schedule.version, sequence: 1, reference: 'PP-DEPOSIT-1',
+    });
+    assert.equal(afterDeposit.milestones[0].paymentReference, 'PP-DEPOSIT-1');
+    const paidView = await supplierPaymentQueries.paymentScheduleForActor('product-owner', productionOrder.productionOrderNumber);
+    assert.equal(paidView.paidAmountMinor, afterDeposit.milestones[0].amountMinor);
+    assert.equal(paidView.outstandingAmountMinor, schedule.totalAmountMinor - afterDeposit.milestones[0].amountMinor);
+
+    // Деньги не уходят за товар, который не отгружали — и это тоже держит база.
+    await assert.rejects(
+      () => pool.query("UPDATE payment_milestones SET paid_at = '2020-01-01T00:00:00Z', paid_by = 'x', payment_reference = 'BACKDATED' WHERE schedule_id = $1 AND sequence = 2", [schedule.id]),
+      /PAYMENT_BEFORE_ITS_TRIGGER/,
+    );
+
+    // --- Целевая цена ------------------------------------------------------------------------------
+    //
+    // Обратный вопрос к себестоимости: сколько можно платить фабрике, чтобы розница сошлась с
+    // наценкой. Цель считается от розницы вниз и сравнивается с тем, что фабрика уже запросила.
+    await targetPricing.recordSeasonRate('season-rate-1', 'product-owner', {
+      brandId: 'brand-tech-gate', campaignId: campaign.id,
+      fromCurrency: 'EUR', toCurrency: 'RUB', rate: 92.1, effectiveOn: '2028-01-05',
+      sourceNote: 'Курс на начало сезона',
+    });
+    // Один курс одной пары на одну дату.
+    await assert.rejects(() => targetPricing.recordSeasonRate('season-rate-again', 'product-owner', {
+      brandId: 'brand-tech-gate', campaignId: campaign.id,
+      fromCurrency: 'EUR', toCurrency: 'RUB', rate: 95, effectiveOn: '2028-01-05',
+    }), { code: 'SEASON_RATE_EXISTS' });
+
+    // Курса на более раннюю дату нет — «примерно такого» курса не бывает.
+    await assert.rejects(() => targetPricing.createPlan('target-too-early', 'product-owner', {
+      brandId: 'brand-tech-gate', sku: 'TECH-GATE-1', targetRrpMinor: 3_000_000, rrpCurrency: 'RUB',
+      retailMarkup: 2.6, countryCoefficient: 1.18, categoryCoefficient: 1.04, fobCurrency: 'EUR', asOf: '2027-12-01',
+    }), { code: 'TARGET_PRICE_RATE_NOT_IN_SEASON' });
+
+    // Перевозка и растаможка только добавляют: коэффициент меньше единицы не берём. Ровно этот
+    // случай даёт исходная система, где FOB выходит выше себестоимости на складе.
+    await assert.rejects(() => targetPricing.createPlan('target-bad-coefficient', 'product-owner', {
+      brandId: 'brand-tech-gate', sku: 'TECH-GATE-1', targetRrpMinor: 3_000_000, rrpCurrency: 'RUB',
+      retailMarkup: 2.6, countryCoefficient: 1.3, categoryCoefficient: 0.3, fobCurrency: 'EUR', asOf: '2028-02-01',
+    }), { code: 'TARGET_PRICE_CATEGORY_COEFFICIENT_INVALID' });
+
+    const targetPlan = await targetPricing.createPlan('target-plan', 'product-owner', {
+      brandId: 'brand-tech-gate', sku: 'TECH-GATE-1', targetRrpMinor: 3_000_000, rrpCurrency: 'RUB',
+      retailMarkup: 2.6, sourcingCountryCode: 'TR', countryCoefficient: 1.18, categoryCoefficient: 1.04,
+      fobCurrency: 'EUR', asOf: '2028-02-01', notes: 'Цель на сезон',
+    });
+    assert.equal(targetPlan.fxRate, 92.1);
+    assert.equal(targetPlan.fxEffectiveOn, '2028-01-05', 'курс заморожен вместе с датой');
+    await targetPricing.publish('target-publish', 'product-owner', targetPlan.id, { expectedVersion: targetPlan.version });
+
+    // План обязан ссылаться на курс, который действительно был: иначе «курс 92,1» — число, которое
+    // никто не может проверить.
+    await assert.rejects(
+      () => pool.query('UPDATE target_price_plans SET fx_rate = 60 WHERE id = $1', [targetPlan.id]),
+      /TARGET_PRICE_RATE_DISAGREES/,
+    );
+    await assert.rejects(
+      () => pool.query("UPDATE target_price_plans SET fx_effective_on = '2028-03-03' WHERE id = $1", [targetPlan.id]),
+      /TARGET_PRICE_RATE_NOT_IN_SEASON/,
+    );
+
+    const targetView = await targetPricingQueries.targetPricePlanForSku('product-owner', 'TECH-GATE-1');
+    assert.equal(targetView.targetLandedMinor, Math.round(3_000_000 / 2.6));
+    assert.ok(targetView.targetFobInRrpMinor < targetView.targetLandedMinor, 'цена у фабрики ниже себестоимости на складе');
+    assert.equal(targetView.quotedCurrency, productionOrder.commercialSnapshot.currency);
+    // Сравниваем с тем, что реально платим за единицу: цена за штуку **плюс** постоянная часть
+    // заказа (оснастка, образцы, приладку), приходящаяся на изделие. Раньше здесь стояла голая
+    // `unitPriceMinor`, и этот тест закреплял занижение — запас до цели выходил больше, чем есть.
+    const snapshot = productionOrder.commercialSnapshot;
+    const effectiveUnitPriceMinor = Math.round(snapshot.totalCostMinor / productionOrder.quantity);
+    assert.ok(effectiveUnitPriceMinor > snapshot.unitPriceMinor, 'постоянная часть заказа ложится на единицу');
+    assert.equal(targetView.quotedFobMinor, effectiveUnitPriceMinor);
+    assert.equal(typeof targetView.withinTarget, 'boolean');
+
+    // --- Плановая экономика сезона -------------------------------------------------------------
+    //
+    // Слот линейного плана заводится в том же сезоне и в той же розничной валюте, что и целевая
+    // цена. Здесь проверяется то, чего доменные тесты достать не могут: что представление
+    // читается, что читатель приводит bigint к целым, и что база держит плановую маржу связанной
+    // с ценой и себестоимостью, даже если запись пойдёт мимо модуля.
+    const slot = await platform.createProductPlaceholder('placeholder-create', 'product-owner', {
+      campaignId: campaign.id,
+      placeholderCode: 'AW28-GATE-001',
+      nameRu: 'Слот линейного плана',
+      nameEn: 'Line plan slot',
+      currency: 'RUB',
+      // 30 000 ₽ при плановой наценке 2,5 — 12 000 ₽ себестоимости.
+      recommendedRetailPriceMinor: 3_000_000,
+      plannedUnitCostMinor: 1_200_000,
+      plannedQuantity: 500,
+      colourwayCount: 2,
+    });
+    assert.equal(slot.plannedMarginBasisPoints, 6000, 'маржа выводится из цены и себестоимости');
+
+    // Маржа, разъехавшаяся с ценой и себестоимостью, — это план, переставший что-либо значить.
+    await assert.rejects(
+      () => pool.query('UPDATE product_placeholders SET planned_margin_basis_points = 9000 WHERE id = $1', [slot.id]),
+      /product_placeholders_margin_consistent/,
+    );
+    // Себестоимость выше розницы — не «отрицательная маржа», а опечатка, и база её не принимает.
+    await assert.rejects(
+      () => pool.query('UPDATE product_placeholders SET planned_unit_cost_minor = 4000000 WHERE id = $1', [slot.id]),
+      /product_placeholders_margin_consistent/,
+    );
+
+    const seasonView = await seasonEconomicsQueries.seasonEconomicsForCampaign('product-owner', campaign.id);
+    assert.equal(seasonView.placeholders.length, 1);
+    const [plannedSlot] = seasonView.placeholders;
+    assert.equal(plannedSlot.coverage, 'planned-only', 'под слот ещё ничего не разработано');
+    assert.equal(plannedSlot.plannedMarkup, 2.5, 'наценка выводится, а не хранится');
+    assert.equal(plannedSlot.targetLandedMinor, null);
+    assert.equal(plannedSlot.actualLandedMinor, null);
+    assert.equal(plannedSlot.targetToActualMinor, null, 'сравнивать не с чем — это не «ноль расхождения»');
+
+    assert.equal(seasonView.season.currency, 'RUB');
+    assert.equal(seasonView.season.plannedRevenueMinor, 3_000_000 * 500);
+    assert.equal(seasonView.season.plannedCostMinor, 1_200_000 * 500);
+    assert.equal(seasonView.season.plannedMarginBasisPoints, 6000);
+    assert.equal(seasonView.season.confirmedSlotCount, 0);
+    assert.equal(seasonView.season.actualCostMinor, null);
+    assert.equal(seasonView.season.complete, false, 'сезон без единой закупки не может быть сведён');
+
+    // Представление реализаций соединяет слот со стилями; пока стилей нет, оно пусто — и это
+    // ровно то, что должно быть, а не ошибка соединения.
+    const realisations = await pool.query('SELECT count(*)::integer AS total FROM placeholder_realisation_workspace WHERE placeholder_id = $1', [slot.id]);
+    assert.equal(realisations.rows[0].total, 0);
 
     assert.equal(pps.status, 'approved');
     assert.equal(chart.status, 'published');

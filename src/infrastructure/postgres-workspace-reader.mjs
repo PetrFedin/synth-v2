@@ -1,4 +1,5 @@
 import { invariant } from '../core/errors.mjs';
+import { projectCatalogSkusForActor } from './catalog-counterparty-projection.mjs';
 import { WORKSPACE_CURSOR_POSITION_LENGTHS, WORKSPACE_SECTION_NAMES } from '../core/workspace-cursor.mjs';
 import { withPostgresTransaction } from './postgres-transaction.mjs';
 import { loadPostgresVisibilityScope } from './postgres-visibility-scope.mjs';
@@ -15,6 +16,9 @@ const PAGE_SORT = Object.freeze({
   campaigns: Object.freeze([{ expression: "payload->>'startsAt'", direction: 'DESC' }, { expression: "payload->>'name'", direction: 'ASC' }, { expression: 'id', direction: 'ASC' }]),
   collections: Object.freeze([{ expression: "payload->>'name'", direction: 'ASC' }, { expression: 'id', direction: 'ASC' }]),
   productStyles: Object.freeze([{ expression: 'style_code', direction: 'ASC' }, { expression: 'id', direction: 'ASC' }]),
+  placeholders: Object.freeze([{ expression: "payload ->> 'placeholderCode'", direction: 'ASC' }, { expression: 'id', direction: 'ASC' }]),
+  colorways: Object.freeze([{ expression: "payload ->> 'article'", direction: 'ASC' }, { expression: 'id', direction: 'ASC' }]),
+  media: Object.freeze([{ expression: 'id', direction: 'ASC' }]),
   catalogSkus: Object.freeze([{ expression: 'sku', direction: 'ASC' }]),
   showrooms: Object.freeze([{ expression: "payload->>'opensAt'", direction: 'DESC' }, { expression: "payload->>'name'", direction: 'ASC' }, { expression: 'id', direction: 'ASC' }]),
   cycles: Object.freeze([{ expression: "payload->>'updatedAt'", direction: 'DESC' }, { expression: "payload->>'createdAt'", direction: 'DESC' }, { expression: 'id', direction: 'ASC' }]),
@@ -30,6 +34,9 @@ const ORDER_BY = Object.freeze({
   showroom_invitations: "payload->>'updatedAt' DESC NULLS LAST, payload->>'createdAt' DESC NULLS LAST, id ASC",
   campaigns: "payload->>'startsAt' DESC NULLS LAST, payload->>'name' ASC NULLS LAST, id ASC",
   collections: "payload->>'name' ASC NULLS LAST, id ASC",
+  assortment_plan_workspace: "payload->>'placeholderCode' ASC NULLS LAST, id ASC",
+  product_colorway_workspace: "payload->>'article' ASC NULLS LAST, id ASC",
+  product_media_workspace: 'id ASC',
   product_master_workspace: 'style_code ASC, id ASC',
   catalog_skus: 'sku ASC',
   showrooms: "payload->>'opensAt' DESC NULLS LAST, payload->>'name' ASC NULLS LAST, id ASC",
@@ -68,12 +75,15 @@ export function createPostgresWorkspaceReader({ pool }) {
           tradePayloads(queryable, 'deals', scope.ownIds, fetchLimit),
           payloadAny(queryable, 'calendar_milestones', 'owner_organisation_id', scope.ownIds, fetchLimit),
         ]);
-        const [campaignRows, collectionRows, productStyleRows, showroomRows, catalogRows] = await Promise.all([
+        const [campaignRows, collectionRows, productStyleRows, showroomRows, catalogRows, placeholderRows, colorwayRows, mediaRows] = await Promise.all([
           payloadByIdsOrOwner(queryable, 'campaigns', scope.campaignIds, 'brand_id', scope.brandIds, fetchLimit),
           payloadByIdsOrOwner(queryable, 'collections', scope.collectionIds, 'brand_id', scope.brandIds, fetchLimit),
           payloadAny(queryable, 'product_master_workspace', 'brand_id', scope.brandIds, fetchLimit),
           payloadByIdsOrOwner(queryable, 'showrooms', scope.showroomIds, 'brand_id', scope.brandIds, fetchLimit),
           visibleCatalogSkus(queryable, scope.brandIds, scope.visibleCollectionIds, fetchLimit),
+          payloadAny(queryable, 'assortment_plan_workspace', 'brand_id', scope.brandIds, fetchLimit),
+          payloadAny(queryable, 'product_colorway_workspace', 'brand_id', scope.brandIds, fetchLimit),
+          payloadAny(queryable, 'product_media_workspace', 'brand_id', scope.brandIds, fetchLimit),
         ]);
 
         return {
@@ -84,6 +94,9 @@ export function createPostgresWorkspaceReader({ pool }) {
           campaigns: bounded('campaigns', campaignRows, limit, truncatedSections),
           collections: bounded('collections', collectionRows, limit, truncatedSections),
           productStyles: bounded('productStyles', productStyleRows, limit, truncatedSections),
+          placeholders: bounded('placeholders', placeholderRows, limit, truncatedSections),
+          colorways: bounded('colorways', colorwayRows, limit, truncatedSections),
+          media: bounded('media', mediaRows, limit, truncatedSections),
           catalogSkus: bounded('catalogSkus', catalogRows, limit, truncatedSections),
           showrooms: bounded('showrooms', showroomRows, limit, truncatedSections),
           cycles: bounded('cycles', cycleRows, limit, truncatedSections),
@@ -103,7 +116,7 @@ export function createPostgresWorkspaceReader({ pool }) {
         const scope = await loadPostgresVisibilityScope(queryable, actorId);
         const specification = pageSpecification(section, scope, actorId);
         if (!specification) return emptyPage();
-        return readSectionPage(queryable, { section, limit, after, ...specification });
+        return readSectionPage(queryable, { section, limit, after, brandIds: scope.brandIds, ...specification });
       });
     },
   });
@@ -132,6 +145,18 @@ function pageSpecification(section, scope, actorId) {
     case 'productStyles':
       return scope.brandIds.length
         ? { table: 'product_master_workspace', where: 'brand_id = ANY($1::text[])', params: [scope.brandIds] }
+        : undefined;
+    case 'placeholders':
+      return scope.brandIds.length
+        ? { table: 'assortment_plan_workspace', where: 'brand_id = ANY($1::text[])', params: [scope.brandIds] }
+        : undefined;
+    case 'colorways':
+      return scope.brandIds.length
+        ? { table: 'product_colorway_workspace', where: 'brand_id = ANY($1::text[])', params: [scope.brandIds] }
+        : undefined;
+    case 'media':
+      return scope.brandIds.length
+        ? { table: 'product_media_workspace', where: 'brand_id = ANY($1::text[])', params: [scope.brandIds] }
         : undefined;
     case 'catalogSkus':
       return scope.brandIds.length || scope.visibleCollectionIds.length
@@ -172,7 +197,11 @@ function idsOrOwnerPage(table, ids, ownerColumn, ownerIds) {
     : undefined;
 }
 
-async function readSectionPage(queryable, { section, table, where, params: visibilityParams, limit, after }) {
+/**
+ * @param {any} queryable
+ * @param {{ section: string, table: string, where: string, params: any[], limit: number, after?: any, brandIds?: readonly string[] }} request
+ */
+async function readSectionPage(queryable, { section, table, where, params: visibilityParams, limit, after, brandIds = [] }) {
   const sort = PAGE_SORT[section];
   const params = [...visibilityParams];
   const clauses = [`(${where})`];
@@ -187,8 +216,13 @@ async function readSectionPage(queryable, { section, table, where, params: visib
   );
   const rows = result.rows.slice(0, limit);
   const hasMore = result.rows.length > limit;
+  // Постраничное чтение идёт тем же правилом, что и первая загрузка: внутренний склад бренда
+  // контрагенту не отдаётся ни на первой странице, ни на любой следующей.
+  const payloads = section === 'catalogSkus'
+    ? projectCatalogSkusForActor(rows.map((row) => row.payload), brandIds)
+    : rows.map((row) => row.payload);
   return Object.freeze({
-    items: Object.freeze(rows.map((row) => row.payload)),
+    items: Object.freeze(payloads),
     hasMore,
     ...(hasMore ? { nextPosition: Object.freeze(sort.map((_, index) => cursorValue(rows.at(-1)?.[`cursor_${index}`]))) } : {}),
   });
@@ -278,13 +312,16 @@ async function payloadByIdsOrOwner(queryable, table, ids, ownerColumn, ownerIds,
 }
 async function visibleCatalogSkus(queryable, brandIds, collectionIds, fetchLimit) {
   if (!brandIds.length && !collectionIds.length) return [];
-  return payloadWhere(
+  const rows = await payloadWhere(
     queryable,
     'catalog_skus',
     "brand_id = ANY($1::text[]) OR (collection_id = ANY($2::text[]) AND status = 'published')",
     [brandIds, collectionIds],
     fetchLimit,
   );
+  // Контрагент видит опубликованную витрину, но не внутренний склад: резерв складывается из
+  // обязательств перед другими покупателями.
+  return projectCatalogSkusForActor(rows, brandIds);
 }
 function bounded(section, values, limit, truncatedSections) {
   if (values.length > limit) truncatedSections.push(section);
@@ -306,6 +343,9 @@ function emptyWorkspace({ memberships = [], truncatedSections = [] } = {}) {
     invitations: [],
     campaigns: [],
     collections: [],
+    media: [],
+    colorways: [],
+    placeholders: [],
     productStyles: [],
     catalogSkus: [],
     showrooms: [],

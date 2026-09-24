@@ -1,4 +1,5 @@
 import { invariant } from '../../core/errors.mjs';
+import { agreedSamplingPlan, samplingPlanForRun } from './sampling.mjs';
 
 export const QUALITY_INSPECTION_STATUSES = Object.freeze([
   'planned',
@@ -79,7 +80,7 @@ export function completeQualityInspectionRun(inspection, input) {
   invariant(run?.status === 'in-progress' && run.runNumber === inspection.currentRun, 'QUALITY_CURRENT_RUN_INVALID', 'Current Final Quality run is invalid');
   const inspectedQuantity = positiveInteger(input.inspectedQuantity, 'QUALITY_INSPECTED_QUANTITY_INVALID', 'Inspected quantity');
   invariant(inspectedQuantity === run.samplingPlan.sampleSize, 'QUALITY_SAMPLE_NOT_COMPLETED', 'The full approved sample must be inspected', { sampleSize: run.samplingPlan.sampleSize, inspectedQuantity });
-  const defects = normalizeDefects(input.defects);
+  const defects = normalizeDefects(input.defects, input.defectCatalogue);
   const measurements = normalizeMeasurementFailures(input.measurementFailures);
   const checkpoints = normalizeCheckpointResults(input.checkpoints);
   const evidenceReferences = normalizeReferences(input.evidenceReferences, 'QUALITY_EVIDENCE_REFERENCES_INVALID');
@@ -88,6 +89,8 @@ export function completeQualityInspectionRun(inspection, input) {
   const counts = defectCounts(defects, measurements, checkpoints);
   const recommendation = counts.critical > 0
     ? 'reject'
+    // Приёмочное число: the lot passes at this many defects and fails at one more. These two are
+    // the acceptance numbers of the plan above, so the decision is the plan's, not the inspector's.
     : counts.major > run.samplingPlan.allowedMajorDefects || counts.minor > run.samplingPlan.allowedMinorDefects
       ? 'rework'
       : 'pass';
@@ -186,19 +189,13 @@ export function assertQualityInspectionVersion(inspection, expectedVersion) {
 function appendRun(inspection, input) {
   const startedAt = timestamp(input.startedAt, 'QUALITY_INSPECTION_STARTED_AT_INVALID', 'Inspection start time');
   invariant(Date.parse(startedAt) >= Date.parse(inspection.sourceSnapshot.readyForQcAt), 'QUALITY_INSPECTION_BEFORE_READY', 'Final Quality cannot start before production is ready for QC');
-  const sampleSize = positiveInteger(input.sampleSize, 'QUALITY_SAMPLE_SIZE_INVALID', 'Sample size');
-  invariant(sampleSize <= inspection.quantity, 'QUALITY_SAMPLE_EXCEEDS_LOT', 'Sample size cannot exceed production quantity', { sampleSize, quantity: inspection.quantity });
+  const samplingPlan = runSamplingPlan(inspection, input);
   const run = Object.freeze({
     runNumber: positiveInteger(input.runNumber, 'QUALITY_RUN_NUMBER_INVALID', 'Inspection run number'),
     status: 'in-progress',
     inspectorId: required(input.actorId, 'QUALITY_INSPECTOR_ID_REQUIRED', 'Inspector id', 200),
     inspectorName: text(input.inspectorName, 2, 160, 'QUALITY_INSPECTOR_NAME_INVALID', 'Inspector name'),
-    samplingPlan: Object.freeze({
-      sampleSize,
-      allowedMajorDefects: nonNegativeInteger(input.allowedMajorDefects, 'QUALITY_ALLOWED_MAJOR_INVALID', 'Allowed major defects'),
-      allowedMinorDefects: nonNegativeInteger(input.allowedMinorDefects, 'QUALITY_ALLOWED_MINOR_INVALID', 'Allowed minor defects'),
-      criticalTolerance: 0,
-    }),
+    samplingPlan,
     reworkReference: input.reworkReference ?? null,
     resolutionNotes: input.resolutionNotes ?? null,
     startedAt,
@@ -227,17 +224,104 @@ function appendRun(inspection, input) {
   });
 }
 
-function normalizeDefects(value) {
+// Которым планом судят эту партию — и почему именно им.
+//
+// A run used to carry three numbers the inspector typed: how many pieces to inspect and how many
+// major and minor defects were tolerated. Nothing tied them to the size of the lot and nothing
+// recorded where they came from, so two inspections of one product could be judged by different
+// criteria and the record could not say which criterion either used.
+//
+// Now a run states its criterion. Either it names the standard, the inspection level and the two
+// accepted quality limits, and the plan is read off the rows the brand holds — or the plan was
+// agreed with one factory, and it is recorded as agreed rather than dressed up as a standard. Both
+// are ordinary; only pretending the second is the first is not.
+function runSamplingPlan(inspection, input) {
+  if (input.standardCode !== undefined && input.standardCode !== null && input.standardCode !== '') {
+    return samplingPlanForRun({
+      plans: input.samplingPlans,
+      lotSize: inspection.quantity,
+      standardCode: input.standardCode,
+      inspectionLevel: input.inspectionLevel,
+      aqlMajor: input.aqlMajor,
+      aqlMinor: input.aqlMinor,
+    });
+  }
+  // Договорённый план обязан сказать, **почему** он договорённый.
+  //
+  // Это единственное место, где число, решающее судьбу партии, берётся не из таблицы, а из головы.
+  // На демонстрационных данных так и вышло: партия в 400 штук проверена выборкой 80, тогда как
+  // таблица бренда для 281–500 даёт 50, — и запись не могла объяснить ни откуда 80, ни почему не
+  // 50. Причина, записанная рядом, и есть разница между «договорились так» и «кто-то ввёл число»;
+  // её читает тот, кто через год разбирает, почему партия ушла покупателю.
+  //
+  // Требование стоит здесь, а не в `agreedSamplingPlan`: тот вызывается дважды, по разу на каждый
+  // предел, и причина у плана одна, а не по одной на предел.
+  const reason = typeof input.samplingNote === 'string' ? input.samplingNote.trim() : '';
+  invariant(reason.length >= 3, 'QUALITY_SAMPLING_NOTE_REQUIRED',
+    'An agreed sampling plan must state why it was agreed instead of read from a standard',
+    { lotSize: inspection.quantity, sampleSize: input.sampleSize });
+
+  // A bespoke plan still has to be a plan: the sample fits the lot, and a limit at or above the
+  // sample size is not a limit. `agreedSamplingPlan` holds both, and the two limits are then read
+  // from the same agreement rather than typed independently of it.
+  const major = agreedSamplingPlan({
+    lotSize: inspection.quantity,
+    sampleSize: input.sampleSize,
+    acceptAt: input.allowedMajorDefects,
+    note: input.samplingNote,
+  });
+  const minor = agreedSamplingPlan({
+    lotSize: inspection.quantity,
+    sampleSize: input.sampleSize,
+    acceptAt: input.allowedMinorDefects,
+    note: null,
+  });
+  invariant(major.acceptAt <= minor.acceptAt, 'QUALITY_SAMPLING_PLAN_LIMITS_INVERTED',
+    'A major defect cannot be tolerated more readily than a minor one',
+    { majorAcceptAt: major.acceptAt, minorAcceptAt: minor.acceptAt });
+  return Object.freeze({
+    source: 'agreed',
+    standardCode: null,
+    inspectionLevel: null,
+    lotSize: major.lotSize,
+    sampleSize: major.sampleSize,
+    criticalTolerance: 0,
+    aqlMajor: null,
+    aqlMinor: null,
+    allowedMajorDefects: major.acceptAt,
+    allowedMinorDefects: minor.acceptAt,
+    rejectMajorAt: major.rejectAt,
+    rejectMinorAt: minor.rejectAt,
+    note: major.note,
+  });
+}
+
+// Один код — одна тяжесть, где бы он ни был записан.
+//
+// Inline control and final inspection name the same faults, and a code that is major at the
+// operation and minor at the gate is two vocabularies pretending to be one: nothing can be counted
+// across them, which is the whole reason the brand keeps a catalogue at all.
+//
+// A code the brand has not registered is still accepted. A brand that has not yet built a catalogue
+// must keep inspecting, and refusing its inspections would make the catalogue a precondition for
+// quality control rather than an improvement to it.
+function normalizeDefects(value, catalogue) {
   invariant(Array.isArray(value) && value.length <= 500, 'QUALITY_DEFECTS_INVALID', 'Defects must be an array with at most 500 records');
+  const registered = new Map((Array.isArray(catalogue) ? catalogue : []).map((type) => [type.code, type]));
   const codes = new Set();
   return Object.freeze(value.map((defect, index) => {
     invariant(defect && typeof defect === 'object' && !Array.isArray(defect), 'QUALITY_DEFECT_INVALID', 'Defect record is invalid', { index });
     const defectCode = text(defect.defectCode, 2, 80, 'QUALITY_DEFECT_CODE_INVALID', 'Defect code');
     invariant(!codes.has(defectCode), 'QUALITY_DEFECT_CODE_DUPLICATE', 'Defect codes must be unique within a run', { defectCode });
     codes.add(defectCode);
+    const severity = enumValue(defect.severity, QUALITY_DEFECT_SEVERITIES, 'QUALITY_DEFECT_SEVERITY_INVALID', 'Defect severity');
+    const known = registered.get(defectCode);
+    invariant(!known || known.severity === severity, 'QUALITY_DEFECT_SEVERITY_DISAGREES_WITH_CATALOGUE',
+      'This defect code is registered with a different severity, and one code cannot mean two things',
+      { defectCode, severity, registeredSeverity: known?.severity });
     return Object.freeze({
       defectCode,
-      severity: enumValue(defect.severity, QUALITY_DEFECT_SEVERITIES, 'QUALITY_DEFECT_SEVERITY_INVALID', 'Defect severity'),
+      severity,
       category: text(defect.category, 2, 120, 'QUALITY_DEFECT_CATEGORY_INVALID', 'Defect category'),
       description: text(defect.description, 3, 1000, 'QUALITY_DEFECT_DESCRIPTION_INVALID', 'Defect description'),
       quantity: positiveInteger(defect.quantity, 'QUALITY_DEFECT_QUANTITY_INVALID', 'Defect quantity'),

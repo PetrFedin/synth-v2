@@ -7,13 +7,18 @@ function openForm(title, fields, submitAction) {
   if (unavailable) { toast(I18N.t('common.noData', { label: I18N.translate(unavailable.label) }), 'error'); return; }
   const dialog = document.querySelector('#form-dialog'); clear(dialog);
   const body = el('div', { className: 'dialog-body' });
-  const close = el('button', { className: 'button small', text: I18N.t('common.close'), type: 'button' });
-  const head = el('div', { className: 'dialog-head' }); head.append(el('h3', { text: title }), close);
+  const close = el('button', { className: 'button secondary', text: I18N.t('common.close'), type: 'button' });
+  const head = el('div', { className: 'dialog-head' }); head.append(el('h3', { text: title }));
   const form = el('form'); const grid = el('div', { className: 'form-grid' });
   const controls = new Map();
   fields.forEach(field => { const built = buildField(field); controls.set(field.name, built.control); grid.append(built.label); });
   const submit = el('button', { className: 'button primary', text: I18N.t('common.save'), type: 'submit' });
-  form.append(grid, submit);
+  // Closing and saving are the two answers to the same question, so they sit together at the end of
+  // the form. This dialog used to put Close at the top right and stretch Save across the full width,
+  // while every other dialog in the application offered the pair, right-aligned, in a footer.
+  const actions = el('footer', { className: 'dialog-actions' });
+  actions.append(close, submit);
+  form.append(grid, actions);
 
   const setSelectOptions = (field, options) => {
     const control = controls.get(field.name);
@@ -70,19 +75,29 @@ function openForm(title, fields, submitAction) {
     event.preventDefault();
     event.returnValue = '';
   };
-  const requestClose = () => {
+  // Asking "discard your edits?" through the browser's own box was the last native dialog left in the
+  // application. Nobody reads the return value of this, so it can wait for a styled answer.
+  const requestClose = async () => {
     if (submitting) return false;
-    if (isDirty() && !window.confirm(I18N.t('common.unsavedChangesConfirm'))) return false;
+    if (isDirty()) {
+      const accepted = await confirmAction({
+        title: I18N.t('common.unsavedChangesTitle'),
+        question: I18N.t('common.unsavedChangesConfirm'),
+        confirmLabel: I18N.t('common.discardChanges'),
+        danger: true,
+      });
+      if (!accepted) return false;
+    }
     dialog.close();
     return true;
   };
   const cancelDialog = event => {
     if (!shouldBlockNavigation()) return;
     event.preventDefault();
-    requestClose();
+    void requestClose();
   };
 
-  close.addEventListener('click', requestClose);
+  close.addEventListener('click', () => { void requestClose(); });
   dialog.addEventListener('cancel', cancelDialog);
   dialog.addEventListener('close', cleanup, { once: true });
   window.addEventListener('beforeunload', beforeUnload);

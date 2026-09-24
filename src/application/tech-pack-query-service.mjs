@@ -31,6 +31,15 @@ export function createTechPackQueryService({ reader } = {}) {
       invariant(value, 'TECH_PACK_NOT_FOUND', 'Tech pack not found', { techPackCode: requestedCode });
       return immutableCopy(value);
     },
+
+    async getDocumentForActor(actorId, requestedCode) {
+      validateActor(actorId);
+      invariant(CODE_PATTERN.test(requestedCode ?? ''), 'TECH_PACK_CODE_INVALID', 'Tech pack code is invalid');
+      invariant(typeof reader.getDocumentForActor === 'function', 'TECH_PACK_READER_REQUIRED', 'Tech pack reader must expose getDocumentForActor');
+      const value = await reader.getDocumentForActor(actorId, requestedCode);
+      invariant(value, 'TECH_PACK_NOT_FOUND', 'Tech pack not found', { techPackCode: requestedCode });
+      return value;
+    },
   });
 }
 

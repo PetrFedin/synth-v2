@@ -13,6 +13,7 @@ export function createNotification({
   type,
   title,
   body,
+  params = {},
   createdAt,
 }) {
   invariant(id && sourceEventId, 'NOTIFICATION_IDENTITY_REQUIRED', 'Notification id and source event are required');
@@ -28,6 +29,10 @@ export function createNotification({
     type,
     title: title.trim(),
     body: body.trim(),
+    // The facts behind the sentence, so a reader's own language can be used to write it. `title` and
+    // `body` stay as they were: they are what a notification written before this looks like, and what
+    // anything outside the interface still reads.
+    params: Object.freeze({ ...params }),
     status: 'unread',
     version: 1,
     createdAt,

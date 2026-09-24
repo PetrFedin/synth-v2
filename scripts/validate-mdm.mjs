@@ -148,6 +148,9 @@ if (sources) {
 let operationalDatasetCount = 0;
 let operationalDictionaryCount = 0;
 let operationalEntryCount = 0;
+// Сколько записей несёт каждый заведённый справочник. Нужно, чтобы отличать «справочник есть» от
+// «справочник работает»: классификатор из одной записи ничего не классифицирует.
+const operationalEntryCountByDictionary = new Map();
 const operationalEntryIds = new Map();
 const operationalEntriesByDictionaryAndCode = new Map();
 const referenceDir = path.join(root, 'mdm', 'reference');
@@ -179,6 +182,7 @@ function validateOperationalDataset(dataset, location) {
   const localDictionaryCodes = [];
   for (const dictionary of dataset.dictionaries ?? []) {
     operationalDictionaryCount += 1;
+    operationalEntryCountByDictionary.set(dictionary.code, (dictionary.entries ?? []).length);
     const dictionaryLocation = `${location}:${dictionary.code ?? '<missing>'}`;
     localDictionaryIds.push(dictionary.id);
     localDictionaryCodes.push(dictionary.code);
@@ -284,6 +288,66 @@ for (const fragment of [
   if (!migration.includes(fragment)) errors.push(`${migrationPath}: missing contract ${fragment}`);
 }
 
+// --- Покрытие справочников -----------------------------------------------------------------------
+//
+// Каталог объявляет 1060 справочников, заведено 16. Сам по себе этот разрыв — **не дефект**:
+// каталог описывает предметную область целиком, а не список задач, и требовать 100 % значило бы
+// требовать тысячу пустых таблиц вместо трёх работающих. Какие из объявленных нужны платформе —
+// решение владельца, а не валидатора.
+//
+// Дефектом было другое: валидатор отвечал `ok`, и на этом чтение заканчивалось. Он проверял, что
+// заведённое хорошо устроено, и **не имел мнения о том, что заведено не всё**.
+//
+// Поэтому здесь не порог, а **храповик**: покрытие не обязано расти, но потерять его молча нельзя.
+// Тот же приём, что и у базовой линии типов, и по той же причине — он запрещает откат, не требуя
+// совершенства.
+const coverageBaselinePath = 'ops/mdm-coverage-baseline.json';
+// Отсутствие базовой линии — не ошибка: её заводят первым же `--update`. Читается в обход
+// `readJson`, который любое отсутствие файла считает нарушением договора.
+const coverageBaseline = await (async () => {
+  try { return JSON.parse(await fs.readFile(path.join(root, coverageBaselinePath), 'utf8')); }
+  catch { return { dictionaries: 0, entries: 0 }; }
+})();
+const shouldUpdateCoverage = process.argv.includes('--update');
+if (shouldUpdateCoverage) {
+  await fs.writeFile(
+    path.join(root, coverageBaselinePath),
+    `${JSON.stringify({ dictionaries: operationalDictionaryCount, entries: operationalEntryCount }, null, 2)}\n`,
+  );
+} else {
+  if (operationalDictionaryCount < coverageBaseline.dictionaries) {
+    errors.push(`${coverageBaselinePath}: operational dictionaries fell from ${coverageBaseline.dictionaries} to ${operationalDictionaryCount}; coverage may grow or hold, never shrink`);
+  }
+  if (operationalEntryCount < coverageBaseline.entries) {
+    errors.push(`${coverageBaselinePath}: operational entries fell from ${coverageBaseline.entries} to ${operationalEntryCount}; coverage may grow or hold, never shrink`);
+  }
+}
+
+// --- Справочник, который называет код, обязан существовать ----------------------------------------
+//
+// Это единственная часть покрытия, у которой есть **объективный** ответ. Сколько из 1060 нужно
+// платформе — решение владельца; но если служба резолвит запись по коду справочника, а справочника
+// нет, поле не заполнится никогда и никем. Так и было: `product_style_versions` несёт колонку типа
+// товара, служба идентичности резолвит `assortment.product_type`, справочника не существовало — и
+// все четырнадцать версий моделей стоят с категорией и **без единого типа**.
+const identityService = await readText('src/application/product-identity-service.mjs');
+const referencedDictionaryCodes = new Set(
+  [...identityService.matchAll(/_DICTIONARIES = Object\.freeze\(\[([^\]]*)\]\)/g)]
+    .flatMap((match) => [...match[1].matchAll(/'([a-z_]+\.[a-z_]+)'/g)].map((code) => code[1])),
+);
+for (const code of [...referencedDictionaryCodes].sort()) {
+  if (!operationalEntryCountByDictionary.has(code)) {
+    errors.push(`mdm/reference: dictionary ${code} is resolved by src/application/product-identity-service.mjs but is not instantiated; the field it fills can never be set`);
+  }
+}
+
+// Классификатор из одной записи ничего не классифицирует: он выглядит заведённым и не работает.
+// Это не ошибка — так начинается любой справочник, — но молчать об этом нельзя.
+const thinDictionaries = [...operationalEntryCountByDictionary.entries()]
+  .filter(([, count]) => count <= 1)
+  .map(([code, count]) => ({ code, entries: count }))
+  .sort((left, right) => left.code.localeCompare(right.code));
+
 if (errors.length) {
   console.error(`MDM validation failed with ${errors.length} error(s):`);
   for (const error of errors) console.error(`- ${error}`);
@@ -298,6 +362,11 @@ console.log(JSON.stringify({
   operationalDatasets: operationalDatasetCount,
   operationalDictionaries: operationalDictionaryCount,
   operationalEntries: operationalEntryCount,
+  // Разрыв назван числом, а не спрятан за `ok`.
+  declaredDictionaries: dictionaryCount,
+  operationalCoverage: `${((operationalDictionaryCount / Math.max(dictionaryCount, 1)) * 100).toFixed(1)}%`,
+  notInstantiated: dictionaryCount - operationalDictionaryCount,
+  thinDictionaries,
   persistenceTables: requiredTables.length,
   operationalProfile: 'RU_FASHION_CORE',
   languages: ['ru', 'en'],

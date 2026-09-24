@@ -26,7 +26,11 @@ export function createPostgresOutboxPublicationStore({ pool } = {}) {
                            OR existing_claim.next_attempt_at > $2
                          )
                     )
-              ORDER BY source.event->>'occurredAt', source.id
+              -- Порядок — по колонке времени, а не по тексту из jsonb. Строковое сравнение ISO-меток
+              -- совпадает с хронологическим только пока все они записаны в одном формате: «…Z» и «…+00:00»
+              -- уже соседствуют в этой таблице, а смещение, отличное от нуля, сломало бы порядок совсем.
+              -- К тому же выражение по jsonb не берёт индекс.
+              ORDER BY source.queued_at, source.id
               LIMIT $5
               FOR UPDATE OF source SKIP LOCKED
            ), claimed AS (
@@ -56,7 +60,9 @@ export function createPostgresOutboxPublicationStore({ pool } = {}) {
                   claimed.attempt_count
              FROM claimed
              JOIN outbox_events AS source ON source.id = claimed.event_id
-            ORDER BY source.event->>'occurredAt', source.id`,
+            -- Тот же порядок, что и при отборе: партия публикуется в порядке постановки, а два
+            -- разных порядка в одном запросе значили бы, что отобрано одно, а отправлено другим.
+            ORDER BY source.queued_at, source.id`,
           [workerId, claimedAt, leaseExpiresAt, claimToken, limit],
         );
         return Object.freeze(result.rows.map(publicationRecordFromRow));
@@ -216,6 +222,19 @@ export function createPostgresOutboxPublicationStore({ pool } = {}) {
           previousErrorCode: current.error_code,
         });
       });
+    },
+
+    // Сколько событий ждёт и как давно ждёт старейшее. Это единственный вопрос, по которому видно,
+    // жива ли очередь, и до появления `queued_at` на него нельзя было ответить дёшево.
+    async readBacklog() {
+      const result = await pool.query(
+        `SELECT count(*)::integer AS pending, min(queued_at) AS oldest_queued_at
+           FROM outbox_events
+          WHERE status = 'pending'`,
+      );
+      const row = result.rows[0] || {};
+      const oldest = row.oldest_queued_at ? new Date(row.oldest_queued_at).toISOString() : null;
+      return Object.freeze({ pending: Number(row.pending || 0), oldestQueuedAt: oldest });
     },
 
     async listDeadLetters({ limit = 100 } = {}) {

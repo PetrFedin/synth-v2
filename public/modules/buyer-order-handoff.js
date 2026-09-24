@@ -28,10 +28,10 @@
     const order = context.order;
     const cycleStage = context.cycle.stage;
     return [
-      Object.freeze({ label: text('Подборка', 'Selection'), state: context.selection.status === 'submitted' ? 'complete' : 'active', detail: context.selection.status }),
-      Object.freeze({ label: text('Заказ', 'Order'), state: order ? (order.status === 'attached' ? 'complete' : 'active') : 'pending', detail: order?.status || text('Не создан', 'Not created') }),
+      Object.freeze({ label: text('Подборка', 'Selection'), state: context.selection.status === 'submitted' ? 'complete' : 'active', detail: statusLabel(context.selection.status) }),
+      Object.freeze({ label: text('Заказ', 'Order'), state: order ? (order.status === 'attached' ? 'complete' : 'active') : 'pending', detail: order ? statusLabel(order.status) : text('Не создан', 'Not created') }),
       Object.freeze({ label: text('Подтверждение', 'Confirmation'), state: cycleStage === 'deal-space' ? 'complete' : (cycleStage === 'order' && order?.status === 'attached' ? 'active' : 'pending'), detail: cycleStage === 'deal-space' ? text('Подтверждено', 'Confirmed') : text('Ожидается', 'Pending') }),
-      Object.freeze({ label: 'DealSpace', state: cycleStage === 'deal-space' ? 'complete' : 'pending', detail: cycleStage === 'deal-space' ? text('Открыт', 'Open') : text('Ожидается', 'Pending') }),
+      Object.freeze({ label: text('Пространство сделки', 'Deal space'), state: cycleStage === 'deal-space' ? 'complete' : 'pending', detail: cycleStage === 'deal-space' ? text('Открыт', 'Open') : text('Ожидается', 'Pending') }),
     ];
   }
 
@@ -42,19 +42,22 @@
       'data-ods-part': 'surface',
       'data-buyer-order-handoff': 'true',
     });
-    const head = el('div', { className: 'toolbar', 'data-ods-part': 'section-head' });
+    // These rows were given the "toolbar" class, which the shell right-aligns — correct for a
+    // row of buttons, wrong for a heading and for a label/state pair. The whole card sat pushed
+    // against its right edge with half of it empty.
+    const head = el('div', { className: 'od-handoff-head', 'data-ods-part': 'section-head' });
     const copy = el('div');
     copy.append(
       el('span', { className: 'muted', rawText: text('Единый коммерческий путь', 'Unified commercial journey') }),
       el('h3', { rawText: text('От матрицы к подтверждённому заказу', 'From matrix to confirmed order') }),
-      el('p', { className: 'muted', rawText: text('Продолжайте работу здесь: заказ, двустороннее согласование и DealSpace используют тот же зафиксированный коммерческий контекст.', 'Continue here: order creation, bilateral approval and DealSpace use the same pinned commercial context.') }),
+      el('p', { className: 'muted', rawText: text('Продолжайте работу здесь: заказ, двустороннее согласование и пространство сделки используют тот же зафиксированный коммерческий контекст.', 'Continue here: order creation, bilateral approval and the deal space use the same pinned commercial context.') }),
     );
     head.append(copy);
     card.append(head);
 
     const progress = el('div', { className: 'stack', 'data-ods-part': 'progress' });
     progressState(context).forEach(step => {
-      const row = el('div', { className: 'toolbar', 'data-ods-part': 'progress-step' });
+      const row = el('div', { className: 'od-handoff-step' });
       row.append(
         el('strong', { rawText: step.label }),
         el('span', { className: `badge ${step.state}`.trim(), rawText: step.detail }),
@@ -63,7 +66,7 @@
     });
     card.append(progress);
 
-    const actions = el('div', { className: 'toolbar', 'data-ods-part': 'actions' });
+    const actions = el('div', { className: 'toolbar od-handoff-actions', 'data-ods-part': 'actions' });
     if (canCreateOrder(context)) {
       const create = el('button', { className: 'button primary', type: 'button', rawText: text('Создать заказ из этой подборки', 'Create order from this selection') });
       create.addEventListener('click', () => runAction(() => global.orderForm(context.selection.id), create));

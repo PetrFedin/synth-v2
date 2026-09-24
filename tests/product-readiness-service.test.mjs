@@ -44,7 +44,9 @@ function context() {
       style: { id: 'style:1', brandId: 'brand:1' },
       styleVersion: { id: 'style-version:1', brandId: 'brand:1', versionNo: 1, categoryRef: { entryId: 'category:dress', version: 1 }, contentHash: hash },
       styleMedia: [{ id: 'media:hero', colorwayId: null, mediaType: 'image', mediaRole: 'hero' }],
-      styleAttributes: [], mdmUsage: [],
+      // Продукт, заявляющий покрытие атрибутов, обязан их иметь: подтверждение больше не
+      // обгоняет реестр, и фикстура с нулём атрибутов описывала бы то, чего платформа не делает.
+      styleAttributes: [{ id: 'attribute:style', attributeCode: 'apparel.fabric_type' }], mdmUsage: [],
       colorways: [{ id: 'colorway:1', media: [{ id: 'media:color', colorwayId: 'colorway:1', mediaType: 'image', mediaRole: 'gallery' }], attributes: [], skus: [{ id: 'sku:1', skuCode: 'SKU-1', attributes: [], size: { id: 'size:1', sizeScaleVersionId: 'scale-version:1', sortOrder: 1 } }] }],
     },
     measurementEvidence: [{

@@ -31,7 +31,16 @@ test('PostgreSQL material reader applies membership, filters, escaped prefix sea
     filters: { q: 'wool_100%', status: 'published', type: 'fabric', brandId: 'brand-1' },
   });
 
-  assert.deepEqual(page, { items: [{ code: 'FAB-002' }, { code: 'FAB-003' }], hasMore: true, nextCode: 'FAB-003' });
+  // Материал приезжает вместе со своим составом: состав живёт строками в своей таблице, и
+  // отдельный запрос за ним означал бы, что карточка и состав прочитаны в разные моменты.
+  assert.deepEqual(page, {
+    items: [
+      { code: 'FAB-002', compositionLines: [], composition: null, compositionSource: 'none' },
+      { code: 'FAB-003', compositionLines: [], composition: null, compositionSource: 'none' },
+    ],
+    hasMore: true,
+    nextCode: 'FAB-003',
+  });
   const query = queries.find((item) => item.sql.includes('ORDER BY m.code ASC'));
   assert.match(query.sql, /mem\.user_id = \$1/);
   assert.match(query.sql, /m\.brand_id = \$2/);
@@ -48,7 +57,8 @@ test('PostgreSQL material detail query never exposes another organisation materi
   const material = { code: 'FAB-001', brandId: 'brand-1' };
   const { pool, queries } = fixture({ detailRow: material });
   const reader = createPostgresMaterialReader({ pool });
-  assert.equal(await reader.getForActor('actor-1', 'FAB-001'), material);
+  assert.deepEqual(await reader.getForActor('actor-1', 'FAB-001'),
+    { code: 'FAB-001', brandId: 'brand-1', compositionLines: [], composition: null, compositionSource: 'none' });
   const query = queries.find((item) => item.sql.includes('WHERE m.code = $1'));
   assert.match(query.sql, /mem\.organisation_id = m\.brand_id/);
   assert.match(query.sql, /mem\.status = 'active'/);

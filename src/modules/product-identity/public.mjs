@@ -80,6 +80,18 @@ export function createProductStyle({ id, brandId, styleCode, createdAt, createdB
   });
 }
 
+// The transitions a style may take from where it is. Exported so that a screen can offer exactly the
+// steps the domain allows, instead of keeping its own copy of the map and drifting away from it.
+export function allowedStyleTransitions(lifecycleStatus) {
+  return Object.freeze([...(lifecycleTransitions.get(lifecycleStatus) ?? new Set())]);
+}
+
+export function styleLifecycleMap() {
+  return Object.freeze(Object.fromEntries(
+    [...lifecycleTransitions.entries()].map(([status, next]) => [status, Object.freeze([...next])]),
+  ));
+}
+
 export function transitionProductStyle(style, nextStatus, { updatedAt, updatedBy }) {
   invariant(style?.id && style?.brandId, 'PRODUCT_STYLE_REQUIRED', 'Product Style is required');
   invariant(lifecycleTransitions.has(style.lifecycleStatus), 'PRODUCT_STYLE_STATUS_INVALID', 'Current Product Style lifecycle status is invalid');

@@ -1,4 +1,4 @@
-import { invariant } from '../core/errors.mjs';
+import { invariant, requireEntity } from '../core/errors.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
 
 export function createOrderMarginBridgeService({ reader } = {}) {
@@ -108,10 +108,6 @@ function validateBridgeSteps(close, orderCommit, steps) {
   }
 }
 
-function requireEntity(entity, code, details) {
-  invariant(entity, code, 'Entity not found', details);
-  return entity;
-}
 function roundMoney(value) {
   return Math.round(value * 10_000) / 10_000;
 }

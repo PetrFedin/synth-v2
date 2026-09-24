@@ -43,21 +43,102 @@ function odFidelityFilterButton() {
     odFidelityText('\u0424\u0438\u043b\u044c\u0442\u0440\u044b', 'Filters'),
     odFidelityText('\u0424\u0438\u043b\u044c\u0442\u0440\u044b', 'Filters'),
   );
+  // This used to move focus into the status select and call that filtering. It opens the attribute
+  // filter panel for the registry on screen, and carries the number of filters currently applied.
+  const scope = typeof OD_UI !== 'undefined' && OD_UI.registry ? Object.keys(OD_UI.registry).at(-1) : null;
+  const applied = scope && typeof odActiveFilterCount === 'function' ? odActiveFilterCount(scope) : 0;
+  if (applied > 0) {
+    button.classList.add('od-filter-button-active');
+    button.append(el('span', { className: 'od-filter-button-count', rawText: String(applied) }));
+  }
   button.addEventListener('click', () => {
-    const firstSelect = button.parentElement?.querySelector('.od-filter select');
-    firstSelect?.focus();
+    if (!scope) return;
+    OD_UI.filterPanel = OD_UI.filterPanel === scope ? null : scope;
+    OD_UI.columnPanel = null;
+    // Три панели живут в одной колонке над таблицей: открытые разом они оставляют от реестра
+    // полосу. Каждая кнопка гасит две другие.
+    OD_UI.hierarchyPanel = null;
+    OD_UI.filterPanelQuery = '';
+    renderApp();
   });
   return button;
 }
 
 
 
+function odFidelityColumnButton() {
+  // (className, ariaLabel, visibleText) — the spoken name carries the detail, the face stays short.
+  const button = odFidelityButton(
+    'od-column-button',
+    // Подпись названа по работе, а не по одной из трёх её частей: панель управляет видимостью
+    // колонок, их порядком и тем, докуда реестр закреплён при горизонтальной прокрутке.
+    odFidelityText('\u0412\u0438\u0434\u0438\u043c\u043e\u0441\u0442\u044c, \u043f\u043e\u0440\u044f\u0434\u043e\u043a \u0438 \u0437\u0430\u043a\u0440\u0435\u043f\u043b\u0435\u043d\u0438\u0435 \u043a\u043e\u043b\u043e\u043d\u043e\u043a', 'Column visibility, order and freezing'),
+    'Freeze Line',
+  );
+  const scope = typeof OD_UI !== 'undefined' && OD_UI.registry ? Object.keys(OD_UI.registry).at(-1) : null;
+  const hidden = scope && typeof odHiddenColumnCount === 'function' ? odHiddenColumnCount(scope) : 0;
+  if (hidden > 0) {
+    // The badge counts columns that are hidden, and beside the word «Колонки» a bare «6» reads as
+    // "six columns" — on a table showing twenty-four of them. Hiding one more took it to 7, which
+    // looked like the table had grown. A minus sign says which direction the number goes in, and the
+    // spoken name says it in words.
+    button.classList.add('od-filter-button-active');
+    button.append(el('span', { className: 'od-filter-button-count', rawText: `\u2212${hidden}` }));
+    button.setAttribute('aria-label', odFidelityText(
+      `\u0412\u044b\u0431\u0440\u0430\u0442\u044c \u043a\u043e\u043b\u043e\u043d\u043a\u0438 \u0440\u0430\u0437\u0434\u0435\u043b\u0430: \u0441\u043a\u0440\u044b\u0442\u043e ${hidden}`,
+      `Choose the columns for this section: ${hidden} hidden`,
+    ));
+    button.setAttribute('title', button.getAttribute('aria-label') || '');
+  }
+  button.addEventListener('click', () => {
+    if (!scope) return;
+    OD_UI.columnPanel = OD_UI.columnPanel === scope ? null : scope;
+    OD_UI.filterPanel = null;
+    OD_UI.hierarchyPanel = null;
+    renderApp();
+  });
+  return button;
+}
+
+// Навигатор по иерархии раздела. Значок на кнопке — глубина открытой ветви, а не число уровней:
+// сужает реестр именно ветвь, и именно о ней человеку нужно знать, когда панель закрыта.
+function odFidelityHierarchyButton() {
+  const button = odFidelityButton(
+    'od-hierarchy-button',
+    odFidelityText('\u0421\u0442\u0440\u0443\u043a\u0442\u0443\u0440\u0430 \u0438\u0435\u0440\u0430\u0440\u0445\u0438\u0438 \u0440\u0430\u0437\u0434\u0435\u043b\u0430', 'Hierarchy structure for this section'),
+    odFidelityText('\u0418\u0435\u0440\u0430\u0440\u0445\u0438\u044f', 'Hierarchy'),
+  );
+  const scope = typeof OD_UI !== 'undefined' && OD_UI.registry ? Object.keys(OD_UI.registry).at(-1) : null;
+  const depth = scope && typeof odHierarchyDepth === 'function' ? odHierarchyDepth(scope) : 0;
+  if (depth > 0) {
+    button.classList.add('od-filter-button-active');
+    button.append(el('span', { className: 'od-filter-button-count', rawText: String(depth) }));
+  }
+  button.addEventListener('click', () => {
+    if (!scope) return;
+    OD_UI.hierarchyPanel = OD_UI.hierarchyPanel === scope ? null : scope;
+    OD_UI.filterPanel = null;
+    OD_UI.columnPanel = null;
+    renderApp();
+  });
+  return button;
+}
+
 function odFidelityCommandBars() {
   document.querySelectorAll('.od-commandbar').forEach((bar) => {
     if (!OD_FIDELITY.enhancedBars.has(bar)) {
       OD_FIDELITY.enhancedBars.add(bar);
       const search = bar.querySelector('.od-search');
-      if (search) search.after(odFidelityFilterButton());
+      // Both buttons act on the registry that sits below the bar. The dashboard has a command bar
+      // but no registry, so mounting them there produced two controls that could open nothing.
+      const hasRegistry = Boolean(bar.closest('.od-view')?.querySelector('.od-master .od-table'));
+      if (search && hasRegistry) {
+        const filters = odFidelityFilterButton();
+        search.after(filters);
+        const columns = odFidelityColumnButton();
+        filters.after(columns);
+        columns.after(odFidelityHierarchyButton());
+      }
       const primary = bar.querySelector(':scope > .button');
       const spacer = el('span', { className: 'od-commandbar-spacer', ariaHidden: 'true' });
       bar.append(spacer);
@@ -75,6 +156,28 @@ function odFidelityNumberCell(index) {
 }
 
 
+
+// Every workspace table is laid out with table-layout:fixed against one min-width, so a nine-column
+// register squeezed each cell to 94px and silently clipped RFQ codes and status badges. The table
+// states how many columns it has and the stylesheet gives it the width those columns need; the wrap
+// scrolls when the viewport is narrower. Full values stay reachable through the cell's title.
+function odFidelityTableWidths() {
+  // Selecting by a hand-kept list of class names meant any table that did not carry one of them
+  // fell back to the blanket 720px floor. The buyer's Colour x Size order matrix has no class at
+  // all, and with a single size it was two columns held open to 720px inside a 362px card -- the
+  // one grid a buyer actually writes an order in, permanently scrolled sideways. Every table in
+  // the workspace is measured now, and the floor follows its real column count down to one.
+  document.querySelectorAll('.workspace-content table, .od-table, .sourcing-table, .bom-table, .measurement-table, .sample-table, .ls9-table, .planning-table, .styles-table, .materials-table, .tech-pack-table, .production-orders-table, .production-execution-table, .final-quality-table').forEach((table) => {
+    const count = table.querySelectorAll('thead tr:first-child > th').length;
+    if (!count) return;
+    [...table.classList].filter((name) => name.startsWith('od-cols-')).forEach((name) => table.classList.remove(name));
+    table.classList.add(`od-cols-${Math.min(Math.max(count, 1), 14)}`);
+    table.querySelectorAll('tbody td').forEach((cell) => {
+      const value = (cell.textContent || '').trim();
+      if (value && !cell.title) cell.title = value;
+    });
+  });
+}
 
 function odFidelityTables() {
   document.querySelectorAll('.od-table').forEach((table) => {
@@ -110,9 +213,17 @@ function odFidelityInspectors() {
     const subtitle = title?.querySelector('p')?.textContent.trim() || '';
     if (head && title) {
       const main = el('div', { className: 'od-inspector-head-main' });
-      const code = el('span', { className: 'od-inspector-code', rawText: String(heading).slice(0, 12).toUpperCase() });
-      const kicker = title.querySelector('.od-inspector-kicker');
-      kicker?.after(code);
+      // Hard-truncating to 12 characters produced labels like "\u0412\u042b\u0411\u0415\u0420\u0418\u0422\u0415 \u0417\u0410\u041f"; the full text is kept and CSS decides where it ends.
+      // The chip is the object's code. When the inspector has no code of its own it repeats the
+      // heading in capitals directly above the heading, which reads as a rendering accident; the
+      // subtitle is used when it looks like a code, and otherwise nothing is added.
+      const looksLikeCode = subtitle && subtitle.length <= 48 && !/\s{2,}/.test(subtitle) && /[A-Z0-9]/.test(subtitle);
+      if (looksLikeCode) {
+        const code = el('span', { className: 'od-inspector-code', rawText: subtitle.toUpperCase() });
+        code.title = subtitle;
+        const kicker = title.querySelector('.od-inspector-kicker');
+        kicker?.after(code);
+      }
       main.append(title);
       const badge = head.querySelector('.badge');
       if (badge) {
@@ -122,10 +233,14 @@ function odFidelityInspectors() {
       }
       head.append(main);
     }
-    const tabs = inspector.querySelector(':scope > .od-inspector-tabs');
-    const description = odFidelityDescription(subtitle);
-    if (tabs) tabs.before(description);
-    else head?.after(description);
+    // The subtitle is already on screen, under the heading. Repeating it under a "Description"
+    // caption made every inspector state the same string twice, and called a code a description.
+    if (!subtitle) {
+      const tabs = inspector.querySelector(':scope > .od-inspector-tabs');
+      const description = odFidelityDescription('');
+      if (tabs) tabs.before(description);
+      else head?.after(description);
+    }
   });
 }
 
@@ -135,6 +250,7 @@ function applyOmnidataVisualFidelity() {
   odFidelityStatusStrip();
   odFidelityCommandBars();
   odFidelityTables();
+  odFidelityTableWidths();
   odFidelityInspectors();
 }
 

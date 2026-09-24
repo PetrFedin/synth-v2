@@ -1,4 +1,4 @@
-import { DomainError, invariant } from '../core/errors.mjs';
+import { DomainError, invariant, requireEntity } from '../core/errors.mjs';
 import { fingerprintsMatch } from '../core/fingerprints.mjs';
 import { decodeNotificationCursor, encodeNotificationCursor } from '../core/notification-cursor.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
@@ -271,6 +271,7 @@ function notificationCandidates(source, event) {
       type: 'selection-submitted',
       title: 'Selection submitted',
       body: `Shop submitted ${selection.lines.length} selection line(s).`,
+      params: { selectionId: selection.id, lineCount: selection.lines.length, shopId: selection.shopId },
     }];
   }
   if (event.type === 'order.terms-accepted') {
@@ -282,6 +283,7 @@ function notificationCandidates(source, event) {
       type: 'order-terms-accepted',
       title: 'Order terms accepted',
       body: `${acceptedBy} accepted order ${order.id} terms.`,
+      params: { orderId: order.id, acceptedBy },
     }];
   }
   if (event.type === 'deal-space.opened') {
@@ -291,6 +293,7 @@ function notificationCandidates(source, event) {
       type: 'deal-opened',
       title: 'DealSpace opened',
       body: `DealSpace for order ${deal.orderId} is now open.`,
+      params: { dealId: deal.id, orderId: deal.orderId },
     }));
   }
   return [];
@@ -366,10 +369,6 @@ function compareOutboxRecords(left, right) {
   return leftKey.localeCompare(rightKey);
 }
 
-function requireEntity(entity, code, details) {
-  invariant(entity, code, 'Entity not found', details);
-  return entity;
-}
 
 function defaultWorkerId() {
   const random = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;

@@ -3,6 +3,20 @@
   const RISK_RANK = Object.freeze({ critical: 4, high: 3, medium: 2, low: 1 });
   const list = (value) => Array.isArray(value) ? value : [];
   const finite = (value) => value === null || value === undefined || value === '' ? null : (Number.isFinite(Number(value)) ? Number(value) : null);
+  // Выход полотна: какая доля закупленного становится изделием. Считается, а не хранится — он уже
+  // задан процентом отходов, и второе число рядом разошлось бы с первым. Семь процентов отходов
+  // дают 93,46 %, а не 93 %, и на тираже разница видна.
+  //
+  // У фурнитуры отходов нет, и «выход 100 %» на пуговице — шум, а не показатель, поэтому строка
+  // без отходов выхода не объявляет. То же правило и в том же виде живёт в домене
+  // (src/modules/bom/size-line.mjs): браузер серверный модуль импортировать не может, поэтому
+  // формула повторена здесь, и оба места обязаны меняться вместе.
+  function efficiencyBasisPoints(line) {
+    const net = finite(line && line.quantity);
+    const gross = finite(line && line.grossQuantity);
+    if (net === null || gross === null || gross <= 0 || net === gross) return null;
+    return Math.round((net / gross) * 10000);
+  }
   function risk(risks, code, severity, details) { risks.push(Object.freeze({ code, severity, details: Object.freeze(details || {}) })); }
   function assessBom(bom, catalogSkus) {
     const sku = list(catalogSkus).find((item) => item.sku === bom.sku) || null;
@@ -43,5 +57,5 @@
       summary: Object.freeze({ total, draft: items.filter((item) => item.bom.status === 'draft').length, published: items.filter((item) => item.bom.status === 'published').length, publishReady: items.filter((item) => item.publishReady).length, critical: items.filter((item) => item.highestRisk === 'critical').length, averageReadiness: total ? Math.round(items.reduce((sum, item) => sum + item.readiness, 0) / total) : 0, averageTotalCost: total ? items.reduce((sum, item) => sum + (finite(item.bom.totalCost) || 0), 0) / total : 0 }),
     });
   }
-  root.SynthaBomCore = Object.freeze({ assessBom, buildRegistry });
+  root.SynthaBomCore = Object.freeze({ assessBom, buildRegistry, efficiencyBasisPoints });
 })(typeof window === 'undefined' ? globalThis : window);

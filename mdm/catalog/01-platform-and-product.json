@@ -223,6 +223,7 @@
         ["fit.body_type", "Тип телосложения", "Body type", "classifier"],
         ["fit.height_group", "Рост", "Height group", "classifier"],
         ["fit.fullness", "Полнота", "Fullness", "classifier"],
+        ["fit.class", "Класс посадки", "Fit class", "classifier"],
         ["size.footwear_size", "Размер обуви", "Footwear size", "classifier"],
         ["size.accessory_size", "Размер аксессуара", "Accessory size", "classifier"],
         ["size.curve", "Размерная кривая", "Size curve", "template"],

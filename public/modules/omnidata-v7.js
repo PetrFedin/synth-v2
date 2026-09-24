@@ -12,40 +12,40 @@ const OD_V7_GROUPS = Object.freeze([
   {
     label: { ru: '\u0420\u0410\u0417\u0420\u0410\u0411\u041e\u0422\u041a\u0410 \u041f\u0420\u041e\u0414\u0423\u041a\u0422\u0410', en: 'PRODUCT DEVELOPMENT' },
     items: [
-      { icon: 'calendar', ru: '\u041f\u043b\u0430\u043d \u043a\u043e\u043b\u043b\u0435\u043a\u0446\u0438\u0438', en: 'Line plan', planned: true },
+      { icon: 'planning', ru: '\u041f\u043b\u0430\u043d \u043a\u043e\u043b\u043b\u0435\u043a\u0446\u0438\u0438', en: 'Line plan', planned: true },
       { view: 'catalog', icon: 'catalog', ru: '\u041a\u043e\u043b\u043b\u0435\u043a\u0446\u0438\u0438', en: 'Collections' },
-      { icon: 'catalog', ru: '\u041c\u043e\u0434\u0435\u043b\u0438 \u0438 \u0446\u0432\u0435\u0442\u043e\u0432\u044b\u0435 \u0432\u0430\u0440\u0438\u0430\u043d\u0442\u044b', en: 'Styles and colourways', planned: true },
-      { icon: 'catalog', ru: '\u041c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u044b \u0438 \u0444\u0443\u0440\u043d\u0438\u0442\u0443\u0440\u0430', en: 'Materials and trims', planned: true },
-      { icon: 'selections', ru: '\u0421\u043f\u0435\u0446\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u0438 \u0438 \u0441\u0435\u0431\u0435\u0441\u0442\u043e\u0438\u043c\u043e\u0441\u0442\u044c', en: 'BOM and costing', planned: true },
-      { icon: 'selections', ru: '\u0422\u0430\u0431\u043b\u0438\u0446\u044b \u0438\u0437\u043c\u0435\u0440\u0435\u043d\u0438\u0439', en: 'Measurement charts', planned: true },
-      { icon: 'catalog', ru: '\u041e\u0431\u0440\u0430\u0437\u0446\u044b', en: 'Samples', planned: true },
-      { view: 'tech-packs', icon: 'orders', ru: '\u0422\u0435\u0445\u043d\u0438\u0447\u0435\u0441\u043a\u0438\u0435 \u043f\u0430\u043a\u0435\u0442\u044b', en: 'Tech packs', planned: true },
+      { icon: 'styles', ru: '\u041c\u043e\u0434\u0435\u043b\u0438 \u0438 \u0446\u0432\u0435\u0442\u043e\u0432\u044b\u0435 \u0432\u0430\u0440\u0438\u0430\u043d\u0442\u044b', en: 'Styles and colourways', planned: true },
+      { icon: 'materials', ru: '\u041c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u044b \u0438 \u0444\u0443\u0440\u043d\u0438\u0442\u0443\u0440\u0430', en: 'Materials and trims', planned: true },
+      { icon: 'costing', ru: '\u0421\u043f\u0435\u0446\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u0438 \u0438 \u0441\u0435\u0431\u0435\u0441\u0442\u043e\u0438\u043c\u043e\u0441\u0442\u044c', en: 'BOM and costing', planned: true },
+      { icon: 'measurements', ru: '\u0422\u0430\u0431\u043b\u0438\u0446\u044b \u0438\u0437\u043c\u0435\u0440\u0435\u043d\u0438\u0439', en: 'Measurement charts', planned: true },
+      { icon: 'samples', ru: '\u041e\u0431\u0440\u0430\u0437\u0446\u044b', en: 'Samples', planned: true },
+      { view: 'tech-packs', icon: 'techpack', ru: '\u0422\u0435\u0445\u043d\u0438\u0447\u0435\u0441\u043a\u0438\u0435 \u043f\u0430\u043a\u0435\u0442\u044b', en: 'Tech packs', planned: true },
     ],
   },
   {
     label: { ru: '\u0417\u0410\u041a\u0423\u041f\u041a\u0418 \u0418 \u041f\u0420\u041e\u0418\u0417\u0412\u041e\u0414\u0421\u0422\u0412\u041e', en: 'SOURCING AND PRODUCTION' },
     items: [
-      { view: 'partners', icon: 'partners', ru: '\u041f\u0430\u0440\u0442\u043d\u0451\u0440\u044b \u0438 \u043f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a\u0438', en: 'Partners and suppliers' },
-      { icon: 'selections', ru: '\u0417\u0430\u043f\u0440\u043e\u0441\u044b \u0446\u0435\u043d', en: 'Requests for quotation', planned: true },
-      { icon: 'selections', ru: '\u041a\u043e\u0442\u0438\u0440\u043e\u0432\u043a\u0438', en: 'Quotations', planned: true },
-      { icon: 'orders', ru: '\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434\u0441\u0442\u0432\u043e', en: 'Production', planned: true },
-      { icon: 'orders', ru: '\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434\u0441\u0442\u0432\u0435\u043d\u043d\u044b\u0435 \u0437\u0430\u043a\u0430\u0437\u044b', en: 'Production orders', planned: true },
-      { icon: 'orders', ru: '\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434\u0441\u0442\u0432\u0435\u043d\u043d\u044b\u0439 \u043a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u044c', en: 'Production execution', planned: true },
-      { icon: 'selections', ru: '\u041a\u0430\u0447\u0435\u0441\u0442\u0432\u043e', en: 'Quality', planned: true },
-      { icon: 'showrooms', ru: '\u041b\u043e\u0433\u0438\u0441\u0442\u0438\u043a\u0430', en: 'Logistics', planned: true },
+      { view: 'partners', icon: 'suppliers', ru: '\u041f\u0430\u0440\u0442\u043d\u0451\u0440\u044b \u0438 \u043f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a\u0438', en: 'Partners and suppliers' },
+      { icon: 'rfq', ru: '\u0417\u0430\u043f\u0440\u043e\u0441\u044b \u0446\u0435\u043d', en: 'Requests for quotation', planned: true },
+      { icon: 'quotation', ru: '\u041a\u043e\u0442\u0438\u0440\u043e\u0432\u043a\u0438', en: 'Quotations', planned: true },
+      { icon: 'production', ru: '\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434\u0441\u0442\u0432\u043e', en: 'Production', planned: true },
+      { icon: 'productionOrder', ru: '\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434\u0441\u0442\u0432\u0435\u043d\u043d\u044b\u0435 \u0437\u0430\u043a\u0430\u0437\u044b', en: 'Production orders', planned: true },
+      { icon: 'timeline', ru: '\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434\u0441\u0442\u0432\u0435\u043d\u043d\u044b\u0439 \u043a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u044c', en: 'Production execution', planned: true },
+      { icon: 'quality', ru: '\u041a\u0430\u0447\u0435\u0441\u0442\u0432\u043e', en: 'Quality', planned: true },
+      { icon: 'logistics', ru: '\u041b\u043e\u0433\u0438\u0441\u0442\u0438\u043a\u0430', en: 'Logistics', planned: true },
     ],
   },
   {
     label: { ru: '\u041e\u041f\u0422\u041e\u0412\u0410\u042f \u0422\u041e\u0420\u0413\u041e\u0412\u041b\u042f', en: 'WHOLESALE COMMERCE' },
     items: [
       { view: 'showrooms', icon: 'showrooms', ru: '\u041e\u043f\u0442\u043e\u0432\u044b\u0439 \u0448\u043e\u0443\u0440\u0443\u043c', en: 'B2B showroom' },
-      { icon: 'catalog', ru: '\u041b\u0438\u0441\u0442\u044b \u043a\u043e\u043b\u043b\u0435\u043a\u0446\u0438\u0439', en: 'Linesheets', planned: true },
-      { icon: 'partners', ru: '\u0411\u0430\u0439\u0435\u0440\u044b \u0438 \u0440\u0435\u0442\u0435\u0439\u043b\u0435\u0440\u044b', en: 'Buyers and retailers', planned: true },
+      { icon: 'linesheet', ru: '\u041b\u0438\u0441\u0442\u044b \u043a\u043e\u043b\u043b\u0435\u043a\u0446\u0438\u0439', en: 'Linesheets', planned: true },
+      { icon: 'buyers', ru: '\u0411\u0430\u0439\u0435\u0440\u044b \u0438 \u0440\u0435\u0442\u0435\u0439\u043b\u0435\u0440\u044b', en: 'Buyers and retailers', planned: true },
       { view: 'selections', icon: 'selections', ru: '\u0410\u0441\u0441\u043e\u0440\u0442\u0438\u043c\u0435\u043d\u0442\u044b', en: 'Assortments' },
       { view: 'orders', icon: 'orders', ru: '\u041e\u043f\u0442\u043e\u0432\u044b\u0435 \u0437\u0430\u043a\u0430\u0437\u044b', en: 'Wholesale orders' },
-      { icon: 'orders', ru: '\u041f\u043e\u0432\u0442\u043e\u0440\u043d\u044b\u0435 \u0437\u0430\u043a\u0430\u0437\u044b', en: 'Reorders', planned: true },
-      { icon: 'selections', ru: '\u0426\u0435\u043d\u044b \u0438 \u0443\u0441\u043b\u043e\u0432\u0438\u044f', en: 'Prices and terms', planned: true },
-      { icon: 'orders', ru: '\u041f\u043b\u0430\u0442\u0435\u0436\u0438', en: 'Payments', planned: true },
+      { icon: 'reorder', ru: '\u041f\u043e\u0432\u0442\u043e\u0440\u043d\u044b\u0435 \u0437\u0430\u043a\u0430\u0437\u044b', en: 'Reorders', planned: true },
+      { icon: 'pricing', ru: '\u0426\u0435\u043d\u044b \u0438 \u0443\u0441\u043b\u043e\u0432\u0438\u044f', en: 'Prices and terms', planned: true },
+      { icon: 'payments', ru: '\u041f\u043b\u0430\u0442\u0435\u0436\u0438', en: 'Payments', planned: true },
     ],
   },
   {
@@ -53,8 +53,9 @@ const OD_V7_GROUPS = Object.freeze([
     items: [
       { view: 'calendar', icon: 'calendar', ru: '\u041a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u044c', en: 'Calendar' },
       { view: 'notifications', icon: 'notifications', ru: '\u0423\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u044f', en: 'Notifications' },
-      { icon: 'overview', ru: '\u0410\u043d\u0430\u043b\u0438\u0442\u0438\u043a\u0430', en: 'Analytics', planned: true },
-      { icon: 'selections', ru: '\u0417\u0430\u0434\u0430\u0447\u0438', en: 'Tasks', planned: true },
+      { icon: 'libraries', ru: '\u0411\u0438\u0431\u043b\u0438\u043e\u0442\u0435\u043a\u0438', en: 'Libraries', planned: true },
+      { icon: 'analytics', ru: '\u0410\u043d\u0430\u043b\u0438\u0442\u0438\u043a\u0430', en: 'Analytics', planned: true },
+      { icon: 'tasks', ru: '\u0417\u0430\u0434\u0430\u0447\u0438', en: 'Tasks', planned: true },
     ],
   },
 ]);
@@ -118,6 +119,29 @@ function odV7RemoveLegacy() {
   ].join(',')).forEach((node) => node.remove());
 }
 
+// Product development belongs to the brand. A retailer signing in was shown eleven registers of the
+// brand's own work — models, materials, bills of materials, suppliers, tech packs, quality — every one
+// of them reading zero, because a shop has no styles and never will. That is not an empty state, it is
+// somebody else's desk.
+//
+// The filter is deliberately narrow: an item is hidden only from an account with no brand membership
+// at all, and only for the sections whose data a shop cannot hold. Anyone in a brand sees exactly what
+// they saw before, and an account in both sees everything.
+const OD_V7_BRAND_ONLY_VIEWS = new Set([
+  'planning', 'styles', 'materials', 'boms', 'measurements', 'samples', 'tech-packs',
+  'suppliers', 'rfqs', 'quotations', 'production', 'production-orders', 'production-executions',
+  'final-quality',
+]);
+
+function odV7ItemApplies(item) {
+  if (!item?.view || !OD_V7_BRAND_ONLY_VIEWS.has(item.view)) return true;
+  const memberships = state.workspace?.memberships;
+  // Before the workspace has loaded there is nothing to judge by, and hiding on a guess would make
+  // the sidebar flicker for the brand's own staff.
+  if (!Array.isArray(memberships) || memberships.length === 0) return true;
+  return memberships.some((membership) => membership.organisationType === 'brand' && membership.status === 'active');
+}
+
 function odV7Navigation() {
   const nav = document.querySelector('.sidebar .nav');
   if (!nav) return;
@@ -125,13 +149,15 @@ function odV7Navigation() {
   nav.className = 'nav od-v7-nav';
 
   OD_V7_GROUPS.forEach((group) => {
+    const items = group.items.filter(odV7ItemApplies);
+    if (!items.length) return;
     const groupNode = el('section', { className: 'od-v7-nav-group' });
     if (group.label) groupNode.append(el('div', {
       className: 'nav-group-label',
       rawText: odV7Text(group.label),
     }));
 
-    group.items.forEach((item) => {
+    items.forEach((item) => {
       const active = Boolean(item.view && item.view === state.view && !item.planned);
       const label = odV7Text(item);
       const button = el('button', {
@@ -214,29 +240,37 @@ function odV7Topbar() {
 }
 
 function odV7Inspector() {
-  const labels = [
-    ['\u041e\u0431\u0437\u043e\u0440', 'Overview'],
-    ['\u0422\u043e\u0432\u0430\u0440\u044b', 'Products'],
-    ['\u041f\u0430\u0440\u0442\u043d\u0451\u0440\u044b', 'Partners'],
-    ['\u0421\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043a\u0430', 'Statistics'],
-    ['\u0418\u0441\u0442\u043e\u0440\u0438\u044f', 'History'],
-  ];
+  // The tab strip carries the module's own tabs and each one switches a real panel, so this layer
+  // only strips the leftover v5 section titles instead of replacing the labels with generic ones.
   document.querySelectorAll('.od-inspector').forEach((inspector) => {
     inspector.querySelectorAll('.od-v5-inspector-section-title').forEach((node) => node.remove());
-    const tabs = inspector.querySelector('.od-inspector-tabs');
-    if (tabs) tabs.replaceChildren(...labels.map((pair, index) => el('span', {
-      className: index === 0 ? 'active' : '',
-      rawText: localText(pair[0], pair[1]),
-    })));
   });
 }
 
+  // A colour on a counter is a claim about the number, so it follows the number.
+  //
+  // The tone used to be assigned by position: the second chip green, the third amber, the fourth
+  // blue, on every screen in the product, whatever they counted. So «Черновики 0» was painted as
+  // a warning — an alarm about an empty bucket — while a real backlog three chips along was grey.
+  // Now a count of nothing is calm, a bucket that wants somebody's attention is amber only when
+  // it holds something, and a bucket that means the work is done is green.
+  const OD7_ATTENTION = /(\u0447\u0435\u0440\u043d\u043e\u0432\u0438\u043a|\u043e\u0436\u0438\u0434\u0430|\u0442\u0440\u0435\u0431\u0443|\u0437\u0430\u0431\u043b\u043e\u043a\u0438\u0440|\u043f\u0440\u043e\u0441\u0440\u043e\u0447|\u043d\u0435 \u043f\u0440\u043e\u0447\u0438\u0442|\u043e\u0442\u043a\u043b\u043e\u043d|\u0440\u0438\u0441\u043a|draft|pending|awaiting|blocked|overdue|unread|rejected|risk)/i;
+  const OD7_SETTLED = /(\u043e\u0442\u043a\u0440\u044b\u0442|\u0433\u043e\u0442\u043e\u0432|\u043f\u043e\u0434\u0442\u0432\u0435\u0440\u0436\u0434|\u0430\u043a\u0442\u0438\u0432\u043d|\u043e\u043f\u0443\u0431\u043b\u0438\u043a\u043e\u0432|\u0432\u044b\u043f\u0443\u0449|\u0434\u043e\u043f\u0443\u0449|open|ready|confirmed|active|published|released|accepted)/i;
+  function od7StatusToneFor(card) {
+    const label = (card.textContent || '').replace(/\s+/g, ' ').trim();
+    const digits = label.match(/(\d[\d\u00a0\u202f ]*)\s*$/);
+    const count = digits ? Number(digits[1].replace(/[^\d]/g, '')) : null;
+    if (count === 0) return '';
+    if (OD7_ATTENTION.test(label)) return 'warning';
+    if (OD7_SETTLED.test(label)) return 'success';
+    return '';
+  }
+
 function odV7StatusTones() {
-  document.querySelectorAll('.od-status-card').forEach((card, index) => {
+  document.querySelectorAll('.od-status-card').forEach((card) => {
     card.classList.remove('success', 'warning', 'info');
-    if (index === 1) card.classList.add('success');
-    if (index === 2) card.classList.add('warning');
-    if (index === 3) card.classList.add('info');
+    const tone = od7StatusToneFor(card);
+    if (tone) card.classList.add(tone);
   });
 }
 

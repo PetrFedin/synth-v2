@@ -78,11 +78,28 @@ export function evaluateProductReadiness({ developmentRoute, technicalSnapshot, 
     colorwaysWithSkus,
   }, 'Every Colorway must contain at least one canonical Product SKU.'));
 
-  dimensions.push(fact('product_attributes', commercialPreparation.attributeCoverageConfirmed === true, {
-    coverageAttestation: commercialPreparation.attributeCoverageConfirmed === true,
-    styleAttributeCount: Array.isArray(product.styleAttributes) ? product.styleAttributes.length : 0,
-    skuAttributeCount: skus.reduce((sum, sku) => sum + (Array.isArray(sku.attributes) ? sku.attributes.length : 0), 0),
-  }, 'Governed category attribute coverage has not been confirmed.'));
+  // Это измерение было единственным, чей вердикт приходил утверждением из тела запроса, и оно
+  // противоречило собственному доказательству, лежащему рядом: статус `ready` при
+  // `styleAttributeCount: 0, skuAttributeCount: 0`. Платформа записывала «атрибуты готовы» и тут же
+  // записывала, что их нет. Подтверждение теперь не может обогнать реестр.
+  //
+  // Порог намеренно скромный — хотя бы одно значение, — и это не робость, а отсутствие политики:
+  // каталог атрибутов объявляет обязательность полем `required_when`, но заполнено оно **прозой**
+  // («footwear.type has a shaft») у четырёх определений из ста двух, то есть машинно посчитать
+  // «все обязательные заполнены» сегодня нечем. Придумывать эту политику за домен здесь неуместно.
+  // Зато сами значения уже управляемы: база проверяет, что атрибут есть в каталоге и применим к
+  // семейству товара (миграция 082), поэтому «есть значения» — это управляемый факт, а не догадка.
+  const styleAttributeCount = Array.isArray(product.styleAttributes) ? product.styleAttributes.length : 0;
+  const skuAttributeCount = skus.reduce((sum, sku) => sum + (Array.isArray(sku.attributes) ? sku.attributes.length : 0), 0);
+  const attested = commercialPreparation.attributeCoverageConfirmed === true;
+  const registerHoldsAttributes = styleAttributeCount + skuAttributeCount > 0;
+  dimensions.push(fact('product_attributes', attested && registerHoldsAttributes, {
+    coverageAttestation: attested,
+    styleAttributeCount,
+    skuAttributeCount,
+  }, attested
+    ? 'Governed category attribute coverage is confirmed but the register holds no governed attribute value for this StyleVersion or its SKUs.'
+    : 'Governed category attribute coverage has not been confirmed.'));
 
   if (developmentRoute === 'READY_GOODS') {
     dimensions.push(notApplicable('bom', { developmentRoute }, 'BOM is not required for governed READY_GOODS route.'));

@@ -1,8 +1,13 @@
 {
   "dataset_version": "1.0.0",
   "profile": "RU_FASHION_CORE",
-  "markets": ["RU"],
-  "languages": ["ru", "en"],
+  "markets": [
+    "RU"
+  ],
+  "languages": [
+    "ru",
+    "en"
+  ],
   "source": {
     "system": "syntha_operational_master",
     "version": "1.0.0",
@@ -19,7 +24,10 @@
       "hierarchy_enabled": true,
       "effective_dated": true,
       "approval_required": true,
-      "name": {"ru": "Категория", "en": "Category"},
+      "name": {
+        "ru": "Категория",
+        "en": "Category"
+      },
       "description": {
         "ru": "Минимальный управляемый корень товарной иерархии SYNTHA для одежды. Более детальная внутренняя категорийная структура расширяется только отдельными управляемыми версиями MDM.",
         "en": "Minimal governed SYNTHA product-hierarchy root for apparel. More detailed internal category structure is added only through separately governed MDM versions."
@@ -47,8 +55,269 @@
           "effective_to": null,
           "attributes": {
             "hierarchy_level": "category",
-            "market_codes": ["RU"],
+            "market_codes": [
+              "RU"
+            ],
             "product_family": "apparel"
+          }
+        }
+      ]
+    },
+    {
+      "id": "mdm-dictionary:assortment-product-type",
+      "code": "assortment.product_type",
+      "data_class": "classifier",
+      "scope_model": "global",
+      "hierarchy_enabled": true,
+      "effective_dated": true,
+      "approval_required": true,
+      "name": {
+        "ru": "Тип товара",
+        "en": "Product type"
+      },
+      "description": {
+        "ru": "Тип товара под категорией: что это за вещь по крою. Справочник назван кодом в службе идентичности продукта и обязан существовать — иначе поле типа невозможно заполнить ни одному изделию. Связь с категорией записана атрибутом, а не родителем: родитель разрешается внутри своего справочника, а APPAREL живёт в справочнике категорий.",
+        "en": "Product type under the category: what the garment is by cut. The service that resolves Product Identity names this dictionary by code, so it must exist — otherwise no style can ever carry a type. The tie to the category is an attribute rather than a parent: a parent resolves inside its own dictionary, and APPAREL lives in the category dictionary."
+      },
+      "entries": [
+        {
+          "id": "mdm-entry:assortment-product-type:tshirt",
+          "version": 1,
+          "domain": "assortment.product_type",
+          "code": "TSHIRT",
+          "name_ru": "Футболка",
+          "name_en": "T-shirt",
+          "description_ru": "Трикотажная плечевая вещь с короткими рукавами и без застёжки.",
+          "description_en": "Knitted short-sleeve upper-body garment without fastening.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-assortment-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-08-31T00:00:00.000Z"
+          },
+          "effective_from": "2026-08-31T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "hierarchy_level": "product_type",
+            "market_codes": [
+              "RU"
+            ],
+            "product_family": "apparel",
+            "category_entry_id": "mdm-entry:assortment-category:apparel",
+            "category_code": "APPAREL"
+          }
+        },
+        {
+          "id": "mdm-entry:assortment-product-type:shirt",
+          "version": 1,
+          "domain": "assortment.product_type",
+          "code": "SHIRT",
+          "name_ru": "Рубашка",
+          "name_en": "Shirt",
+          "description_ru": "Плечевая вещь с воротником и сквозной застёжкой.",
+          "description_en": "Upper-body garment with a collar and a full-length fastening.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-assortment-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-08-31T00:00:00.000Z"
+          },
+          "effective_from": "2026-08-31T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "hierarchy_level": "product_type",
+            "market_codes": [
+              "RU"
+            ],
+            "product_family": "apparel",
+            "category_entry_id": "mdm-entry:assortment-category:apparel",
+            "category_code": "APPAREL"
+          }
+        },
+        {
+          "id": "mdm-entry:assortment-product-type:jacket",
+          "version": 1,
+          "domain": "assortment.product_type",
+          "code": "JACKET",
+          "name_ru": "Куртка",
+          "name_en": "Jacket",
+          "description_ru": "Верхняя плечевая вещь до линии бедра с застёжкой.",
+          "description_en": "Outerwear upper-body garment to the hip with a fastening.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-assortment-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-08-31T00:00:00.000Z"
+          },
+          "effective_from": "2026-08-31T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "hierarchy_level": "product_type",
+            "market_codes": [
+              "RU"
+            ],
+            "product_family": "apparel",
+            "category_entry_id": "mdm-entry:assortment-category:apparel",
+            "category_code": "APPAREL"
+          }
+        },
+        {
+          "id": "mdm-entry:assortment-product-type:coat",
+          "version": 1,
+          "domain": "assortment.product_type",
+          "code": "COAT",
+          "name_ru": "Пальто",
+          "name_en": "Coat",
+          "description_ru": "Верхняя плечевая вещь ниже линии бедра.",
+          "description_en": "Outerwear upper-body garment below the hip.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-assortment-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-08-31T00:00:00.000Z"
+          },
+          "effective_from": "2026-08-31T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "hierarchy_level": "product_type",
+            "market_codes": [
+              "RU"
+            ],
+            "product_family": "apparel",
+            "category_entry_id": "mdm-entry:assortment-category:apparel",
+            "category_code": "APPAREL"
+          }
+        },
+        {
+          "id": "mdm-entry:assortment-product-type:trousers",
+          "version": 1,
+          "domain": "assortment.product_type",
+          "code": "TROUSERS",
+          "name_ru": "Брюки",
+          "name_en": "Trousers",
+          "description_ru": "Поясная вещь с двумя раздельными штанинами.",
+          "description_en": "Lower-body garment with two separate legs.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-assortment-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-08-31T00:00:00.000Z"
+          },
+          "effective_from": "2026-08-31T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "hierarchy_level": "product_type",
+            "market_codes": [
+              "RU"
+            ],
+            "product_family": "apparel",
+            "category_entry_id": "mdm-entry:assortment-category:apparel",
+            "category_code": "APPAREL"
+          }
+        },
+        {
+          "id": "mdm-entry:assortment-product-type:skirt",
+          "version": 1,
+          "domain": "assortment.product_type",
+          "code": "SKIRT",
+          "name_ru": "Юбка",
+          "name_en": "Skirt",
+          "description_ru": "Поясная вещь без разделения на штанины.",
+          "description_en": "Lower-body garment without separate legs.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-assortment-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-08-31T00:00:00.000Z"
+          },
+          "effective_from": "2026-08-31T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "hierarchy_level": "product_type",
+            "market_codes": [
+              "RU"
+            ],
+            "product_family": "apparel",
+            "category_entry_id": "mdm-entry:assortment-category:apparel",
+            "category_code": "APPAREL"
+          }
+        },
+        {
+          "id": "mdm-entry:assortment-product-type:dress",
+          "version": 1,
+          "domain": "assortment.product_type",
+          "code": "DRESS",
+          "name_ru": "Платье",
+          "name_en": "Dress",
+          "description_ru": "Цельная вещь, закрывающая торс и низ одной деталью кроя.",
+          "description_en": "One-piece garment covering torso and lower body.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-assortment-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-08-31T00:00:00.000Z"
+          },
+          "effective_from": "2026-08-31T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "hierarchy_level": "product_type",
+            "market_codes": [
+              "RU"
+            ],
+            "product_family": "apparel",
+            "category_entry_id": "mdm-entry:assortment-category:apparel",
+            "category_code": "APPAREL"
+          }
+        },
+        {
+          "id": "mdm-entry:assortment-product-type:knitwear",
+          "version": 1,
+          "domain": "assortment.product_type",
+          "code": "KNITWEAR",
+          "name_ru": "Трикотаж",
+          "name_en": "Knitwear",
+          "description_ru": "Плечевая вещь из полотна петельной структуры: джемпер, кардиган, свитер.",
+          "description_en": "Upper-body garment of looped fabric: jumper, cardigan, sweater.",
+          "parent_code": null,
+          "status": "active",
+          "source": {
+            "system": "syntha_operational_master",
+            "version": "1.0.0",
+            "endpoint": "mdm/reference/russia-fashion-assortment-core.json",
+            "license": "SYNTHA internal operational master data",
+            "retrieved_at": "2026-08-31T00:00:00.000Z"
+          },
+          "effective_from": "2026-08-31T00:00:00.000Z",
+          "effective_to": null,
+          "attributes": {
+            "hierarchy_level": "product_type",
+            "market_codes": [
+              "RU"
+            ],
+            "product_family": "apparel",
+            "category_entry_id": "mdm-entry:assortment-category:apparel",
+            "category_code": "APPAREL"
           }
         }
       ]

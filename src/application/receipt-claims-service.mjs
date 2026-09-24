@@ -1,5 +1,5 @@
 import { domainEvent } from '../core/events.mjs';
-import { invariant } from '../core/errors.mjs';
+import { invariant, requireEntity } from '../core/errors.mjs';
 import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
 import { createReceiptClaimResolutionSnapshot, createReceiptDiscrepancyClaimSnapshot } from '../modules/receipt-claims/public.mjs';
@@ -115,5 +115,4 @@ export function createReceiptClaimsService({ store, clock = () => new Date().toI
   });
 }
 
-function requireEntity(entity, code, details) { invariant(entity, code, 'Entity not found', details); return entity; }
 function defaultIdGenerator() { let sequence = 0; return (prefix) => `${prefix}_${++sequence}`; }

@@ -31,7 +31,7 @@ function create() {
 function start(inspection, overrides = {}) {
   return startQualityInspection(inspection, {
     actorId: 'quality-inspector', inspectorName: 'Quality Inspector', sampleSize: 32,
-    allowedMajorDefects: 2, allowedMinorDefects: 4, startedAt: '2026-08-20T10:02:00.000Z', ...overrides,
+    allowedMajorDefects: 2, allowedMinorDefects: 4, samplingNote: 'Согласовано с фабрикой на первую партию сезона', startedAt: '2026-08-20T10:02:00.000Z', ...overrides,
   });
 }
 function passingCompletion(inspection, overrides = {}) {
@@ -92,7 +92,7 @@ test('Final Quality preserves failed run and closes rework through a new run', (
   assert.equal(inspection.status, 'rework-required');
   inspection = startQualityReinspection(inspection, {
     actorId: 'quality-inspector', inspectorName: 'Quality Inspector', sampleSize: 50,
-    allowedMajorDefects: 0, allowedMinorDefects: 2, reworkReference: 'RWK-QUALITY-1',
+    allowedMajorDefects: 0, allowedMinorDefects: 2, samplingNote: 'Согласовано с фабрикой на первую партию сезона', reworkReference: 'RWK-QUALITY-1',
     resolutionNotes: 'Affected units reworked and dimensions verified', startedAt: '2026-08-21T09:00:00.000Z',
   });
   assert.equal(inspection.currentRun, 2);

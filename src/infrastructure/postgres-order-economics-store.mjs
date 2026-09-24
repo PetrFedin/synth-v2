@@ -124,6 +124,16 @@ function view(client) {
       const result = await client.query('SELECT payload FROM cost_close_readiness_snapshots WHERE id = $1 FOR SHARE', [id]);
       return result.rows[0]?.payload;
     },
+    // Последняя актуализация маржи по подтверждённому заказу — до всякой оценки готовности.
+    // Маржа существует с того мгновения, как её посчитали; молчать о ней до отдельного шага
+    // значит скрывать записанный факт.
+    async getLatestMarginActualizationByOrderCommitSnapshotId(orderCommitSnapshotId) {
+      const result = await client.query(
+        'SELECT payload FROM margin_actualization_snapshots WHERE order_commit_snapshot_id = $1 ORDER BY created_at DESC, id DESC LIMIT 1 FOR SHARE',
+        [orderCommitSnapshotId],
+      );
+      return result.rows[0]?.payload;
+    },
     async getLatestCostCloseReadinessByOrderCommitSnapshotId(orderCommitSnapshotId) {
       const result = await client.query(
         'SELECT payload FROM cost_close_readiness_snapshots WHERE order_commit_snapshot_id = $1 ORDER BY evaluated_at DESC, id DESC LIMIT 1 FOR SHARE',

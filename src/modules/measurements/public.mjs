@@ -11,7 +11,7 @@ const POINT_CODE_PATTERN = /^[A-Z0-9][A-Z0-9._-]{0,31}$/;
 const MDM_CODE_PATTERN = /^[A-Z][A-Z0-9._-]{0,63}$/;
 const CHART_FIELDS = Object.freeze(new Set(['sku', 'unit', 'baseSizeCode', 'sizes', 'points', 'notes']));
 const SIZE_FIELDS = Object.freeze(new Set(['code', 'label']));
-const POINT_FIELDS = Object.freeze(new Set(['pointCode', 'name', 'description', 'toleranceMinus', 'tolerancePlus', 'measurements']));
+const POINT_FIELDS = Object.freeze(new Set(['pointCode', 'name', 'description', 'toleranceMinus', 'tolerancePlus', 'measurements', 'gradeSteps']));
 const MEASUREMENT_FIELDS = Object.freeze(new Set(['sizeCode', 'value']));
 const CANONICAL_CHART_FIELDS = Object.freeze(new Set([
   'styleVersionId',
@@ -24,7 +24,7 @@ const CANONICAL_CHART_FIELDS = Object.freeze(new Set([
   'notes',
 ]));
 const CANONICAL_SIZE_FIELDS = Object.freeze(new Set(['sizeValueId']));
-const CANONICAL_POINT_FIELDS = Object.freeze(new Set(['pointEntryId', 'description', 'toleranceMinus', 'tolerancePlus', 'measurements']));
+const CANONICAL_POINT_FIELDS = Object.freeze(new Set(['pointEntryId', 'description', 'toleranceMinus', 'tolerancePlus', 'measurements', 'gradeSteps']));
 const CANONICAL_MEASUREMENT_FIELDS = Object.freeze(new Set(['sizeValueId', 'value']));
 
 export function createMeasurementChart({ id, catalogSku, input, createdAt }) {
@@ -291,19 +291,33 @@ function normalizeCanonicalPoint({ point, position, sizes, selectedSizeIds, base
     invariant(!valueBySizeId.has(sizeValueId), 'MEASUREMENT_VALUE_SIZE_DUPLICATE', 'Point of measure can contain only one value per Product SizeValue', { pointEntryId, sizeValueId });
     valueBySizeId.set(sizeValueId, positiveDecimal(rawMeasurement.value, 'MEASUREMENT_VALUE_INVALID', 'Measurement value'));
   }
+  // The governed path grades exactly as the free path does; only the key of a size differs. A rule
+  // that behaved differently depending on which register a chart was written in would be two rules.
+  const steps = gradeSteps(point.gradeSteps, sizes.length, pointEntryId);
+  const baseIndex = sizes.findIndex((size) => size.sizeValueId === baseSizeValueId);
+  let derived = null;
+  if (steps) {
+    invariant(baseIndex >= 0, 'MEASUREMENT_BASE_SIZE_UNKNOWN', 'The base size is not part of this chart', { pointEntryId, baseSizeValueId });
+    invariant(valueBySizeId.has(baseSizeValueId), 'MEASUREMENT_BASE_VALUE_REQUIRED',
+      'A graded point needs the value of its base size to grade from', { pointEntryId, baseSizeValueId });
+    derived = deriveFromGrade(valueBySizeId.get(baseSizeValueId), baseIndex, steps, sizes.length);
+  }
   const measurements = [];
+  let previousValue = null;
   for (let index = 0; index < sizes.length; index += 1) {
     const size = sizes[index];
-    if (!valueBySizeId.has(size.sizeValueId)) continue;
-    const value = valueBySizeId.get(size.sizeValueId);
-    const previousSizeValueId = sizes[index - 1]?.sizeValueId;
-    const previousValue = previousSizeValueId && valueBySizeId.has(previousSizeValueId) ? valueBySizeId.get(previousSizeValueId) : null;
+    const given = valueBySizeId.has(size.sizeValueId) ? valueBySizeId.get(size.sizeValueId) : null;
+    const value = given ?? (derived ? derived[index] : null);
+    if (value === null) { previousValue = null; continue; }
+    const source = derived && given !== null && size.sizeValueId !== baseSizeValueId && given !== derived[index] ? 'override' : 'derived';
     measurements.push(Object.freeze({
       sizeValueId: size.sizeValueId,
       sizeCode: size.code,
       value,
       deltaFromPrevious: previousValue === null ? null : subtractDecimals(value, previousValue),
+      source,
     }));
+    previousValue = value;
   }
   const snapshot = pointRef.snapshot ?? {};
   const translations = snapshot.translations && typeof snapshot.translations === 'object' && !Array.isArray(snapshot.translations)
@@ -316,6 +330,7 @@ function normalizeCanonicalPoint({ point, position, sizes, selectedSizeIds, base
   const nameEn = requiredText(translations.en, 2, 120, 'MEASUREMENT_POINT_NAME_INVALID', 'Point of measure EN name');
   const descriptionRu = optionalText(attributes.descriptionRu, 500, 'MEASUREMENT_POINT_DESCRIPTION_INVALID', 'Point of measure description');
   return Object.freeze({
+    gradeSteps: steps,
     pointEntryId,
     pointEntryVersion: pointRef.version,
     pointRef,
@@ -368,15 +383,8 @@ function normalizePoint({ point, position, sizes, sizeCodes, baseSizeCode, point
     invariant(!measurementBySize.has(sizeCode), 'MEASUREMENT_VALUE_SIZE_DUPLICATE', 'Point of measure can contain only one value per size', { pointCode, sizeCode });
     measurementBySize.set(sizeCode, positiveDecimal(rawMeasurement.value, 'MEASUREMENT_VALUE_INVALID', 'Measurement value'));
   }
-  const measurements = [];
-  for (let index = 0; index < sizes.length; index += 1) {
-    const sizeCode = sizes[index].code;
-    if (!measurementBySize.has(sizeCode)) continue;
-    const value = measurementBySize.get(sizeCode);
-    const previousSizeCode = sizes[index - 1]?.code;
-    const previousValue = previousSizeCode && measurementBySize.has(previousSizeCode) ? measurementBySize.get(previousSizeCode) : null;
-    measurements.push(Object.freeze({ sizeCode, value, deltaFromPrevious: previousValue === null ? null : subtractDecimals(value, previousValue) }));
-  }
+  const steps = gradeSteps(point.gradeSteps, sizes.length, pointCode);
+  const measurements = buildMeasurements({ sizes, baseSizeCode, measurementBySize, steps, pointCode });
   return Object.freeze({
     pointCode,
     position,
@@ -384,9 +392,47 @@ function normalizePoint({ point, position, sizes, sizeCodes, baseSizeCode, point
     description: optionalText(point.description, 500, 'MEASUREMENT_POINT_DESCRIPTION_INVALID', 'Point of measure description'),
     toleranceMinus,
     tolerancePlus,
+    gradeSteps: steps,
     baseValue: measurementBySize.get(baseSizeCode) ?? null,
     measurements: Object.freeze(measurements),
   });
+}
+
+// One place decides what a point's values are, whether they were typed or graded.
+//
+// Without a rule the point is exactly what it was: the values that were given, in size order, each
+// carrying the difference from its neighbour so a reader can see the grade that was typed. With a
+// rule, the base value is walked outward and every other size is produced from it — and a value
+// that was *also* given explicitly wins and is marked an override, because a person who typed a
+// number into a graded chart meant that number. A factory has to be able to see which cells depart
+// from the rule; an override the document does not distinguish is a rule nobody can trust.
+function buildMeasurements({ sizes, baseSizeCode, measurementBySize, steps, pointCode }) {
+  const baseIndex = sizes.findIndex((size) => size.code === baseSizeCode);
+  let derived = null;
+  if (steps) {
+    invariant(baseIndex >= 0, 'MEASUREMENT_BASE_SIZE_UNKNOWN', 'The base size is not part of this chart', { pointCode, baseSizeCode });
+    invariant(measurementBySize.has(baseSizeCode), 'MEASUREMENT_BASE_VALUE_REQUIRED',
+      'A graded point needs the value of its base size to grade from', { pointCode, baseSizeCode });
+    derived = deriveFromGrade(measurementBySize.get(baseSizeCode), baseIndex, steps, sizes.length);
+  }
+  const measurements = [];
+  let previousValue = null;
+  for (let index = 0; index < sizes.length; index += 1) {
+    const sizeCode = sizes[index].code;
+    const given = measurementBySize.has(sizeCode) ? measurementBySize.get(sizeCode) : null;
+    const value = given ?? (derived ? derived[index] : null);
+    if (value === null) { previousValue = null; continue; }
+    // The base size is where the rule starts, so it is never an exception to it.
+    const source = derived && given !== null && sizeCode !== baseSizeCode && given !== derived[index] ? 'override' : 'derived';
+    measurements.push(Object.freeze({
+      sizeCode,
+      value,
+      deltaFromPrevious: previousValue === null ? null : subtractDecimals(value, previousValue),
+      source,
+    }));
+    previousValue = value;
+  }
+  return measurements;
 }
 
 function assertCompleteMatrix(chart) {
@@ -431,6 +477,39 @@ function decimal(value, { errorCode, label, allowZero, allowNegative }) {
   const tolerance = Math.max(1e-12, Number.EPSILON * Math.max(1, Math.abs(value)) * 4);
   invariant(Math.abs(value - normalized) <= tolerance, `${errorCode}_SCALE`, `${label} must use at most 4 decimal places`);
   return normalized;
+}
+// Межразмерная разница: one signed number per interval between consecutive sizes. A grade may be
+// zero (a point that does not change across the range, like a cuff opening on some blocks) and it
+// may be negative (a point that shrinks as the size grows), so the only thing refused is a value
+// that is not a finite number at four decimal places.
+function gradeSteps(value, sizeCount, pointCode) {
+  if (value === undefined || value === null) return null;
+  invariant(Array.isArray(value), 'MEASUREMENT_GRADE_INVALID', 'Grade rule must be a list of one step per size interval', { pointCode });
+  invariant(sizeCount >= 2, 'MEASUREMENT_GRADE_NOT_APPLICABLE', 'A grade rule needs at least two sizes to grade between', { pointCode });
+  invariant(value.length === sizeCount - 1, 'MEASUREMENT_GRADE_LENGTH_INVALID',
+    'A grade rule holds exactly one step for each interval between consecutive sizes',
+    { pointCode, expected: sizeCount - 1, received: value.length });
+  return Object.freeze(value.map((step) => decimal(step, { errorCode: 'MEASUREMENT_GRADE_STEP_INVALID', label: 'Grade step', allowZero: true, allowNegative: true })));
+}
+
+// The rule is reckoned from the base size outward, which is how a pattern is actually graded: the
+// base is the size that was drafted, and every other size is that many steps away from it. Walking
+// forward adds the step for each interval crossed; walking backward subtracts it.
+function deriveFromGrade(baseValue, baseIndex, steps, sizeCount) {
+  const values = new Array(sizeCount);
+  values[baseIndex] = baseValue;
+  for (let index = baseIndex + 1; index < sizeCount; index += 1) {
+    values[index] = addDecimals(values[index - 1], steps[index - 1]);
+  }
+  for (let index = baseIndex - 1; index >= 0; index -= 1) {
+    values[index] = subtractDecimals(values[index + 1], steps[index]);
+  }
+  return values;
+}
+function addDecimals(left, right) {
+  const result = Math.round(left * SCALE) + Math.round(right * SCALE);
+  invariant(Number.isSafeInteger(result), 'MEASUREMENT_DELTA_TOO_LARGE', 'Measurement grading delta exceeds the safe fixed-point range');
+  return result / SCALE;
 }
 function subtractDecimals(left, right) {
   const result = Math.round(left * SCALE) - Math.round(right * SCALE);

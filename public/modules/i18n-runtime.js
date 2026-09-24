@@ -26,12 +26,20 @@
     'common.processing': ['\u0412\u044b\u043f\u043e\u043b\u043d\u044f\u0435\u0442\u0441\u044f\u2026', 'Processing\u2026'],
     'common.operationComplete': ['\u041e\u043f\u0435\u0440\u0430\u0446\u0438\u044f \u0432\u044b\u043f\u043e\u043b\u043d\u0435\u043d\u0430', 'Operation completed'],
     'common.close': ['\u0417\u0430\u043a\u0440\u044b\u0442\u044c', 'Close'],
+    'common.cancel': ['\u041e\u0442\u043c\u0435\u043d\u0430', 'Cancel'],
+    'common.unsavedChangesTitle': ['\u041d\u0435\u0441\u043e\u0445\u0440\u0430\u043d\u0451\u043d\u043d\u044b\u0435 \u0438\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u044f', 'Unsaved changes'],
+    'common.discardChanges': ['\u041d\u0435 \u0441\u043e\u0445\u0440\u0430\u043d\u044f\u0442\u044c', 'Discard changes'],
     'common.save': ['\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c', 'Save'],
     'common.saving': ['\u0421\u043e\u0445\u0440\u0430\u043d\u044f\u0435\u043c\u2026', 'Saving\u2026'],
     'common.changesSaved': ['\u0418\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u044f \u0441\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u044b', 'Changes saved'],
     'common.unsavedChangesConfirm': ['\u0415\u0441\u0442\u044c \u043d\u0435\u0441\u043e\u0445\u0440\u0430\u043d\u0451\u043d\u043d\u044b\u0435 \u0438\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u044f. \u0417\u0430\u043a\u0440\u044b\u0442\u044c \u0444\u043e\u0440\u043c\u0443 \u0438 \u043f\u043e\u0442\u0435\u0440\u044f\u0442\u044c \u0438\u0445?', 'There are unsaved changes. Close the form and discard them?'],
     'common.savedRefreshFailed': ['\u0418\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u044f \u0441\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u044b, \u043d\u043e \u043e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u0434\u0430\u043d\u043d\u044b\u0435 \u043d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c.', 'Changes were saved, but refreshing data failed.'],
+    'common.networkError': ['\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0441\u0432\u044f\u0437\u0430\u0442\u044c\u0441\u044f \u0441 \u0441\u0435\u0440\u0432\u0435\u0440\u043e\u043c. \u041f\u0440\u043e\u0432\u0435\u0440\u044c\u0442\u0435 \u0441\u043e\u0435\u0434\u0438\u043d\u0435\u043d\u0438\u0435 \u0438 \u043f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u0435.', 'The server could not be reached. Check the connection and try again.'],
+    'common.timeoutError': ['\u0421\u0435\u0440\u0432\u0435\u0440 \u043d\u0435 \u043e\u0442\u0432\u0435\u0442\u0438\u043b \u0432\u043e\u0432\u0440\u0435\u043c\u044f. \u041f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u0435 \u043f\u043e\u043f\u044b\u0442\u043a\u0443.', 'The server did not answer in time. Try again.'],
     'common.requestError': ['\u041e\u0448\u0438\u0431\u043a\u0430 \u0437\u0430\u043f\u0440\u043e\u0441\u0430', 'Request failed'],
+    // Отказ по правам — не сбой. Формулировка говорит, что произошло и что с этим делать, и не
+    // предлагает «повторить попытку»: повтор ничего не изменит, пока роль та же.
+    'common.forbidden': ['\u0423 \u0432\u0430\u0441 \u043d\u0435\u0442 \u043f\u0440\u0430\u0432 \u043d\u0430 \u044d\u0442\u043e \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0435. \u041e\u0431\u0440\u0430\u0442\u0438\u0442\u0435\u0441\u044c \u043a \u0432\u043b\u0430\u0434\u0435\u043b\u044c\u0446\u0443 \u043e\u0440\u0433\u0430\u043d\u0438\u0437\u0430\u0446\u0438\u0438.', 'You do not have the rights for this action. Ask the organisation owner.'],
     'common.noData': ['\u041d\u0435\u0442 \u0434\u043e\u0441\u0442\u0443\u043f\u043d\u044b\u0445 \u0434\u0430\u043d\u043d\u044b\u0445: {label}', 'No available data: {label}'],
     'auth.password': ['\u041f\u0430\u0440\u043e\u043b\u044c', 'Password'],
     'auth.signIn': ['\u0412\u043e\u0439\u0442\u0438', 'Sign in'],
@@ -49,11 +57,58 @@
     draft: ['\u0447\u0435\u0440\u043d\u043e\u0432\u0438\u043a','draft'], open: ['\u043e\u0442\u043a\u0440\u044b\u0442\u043e','open'], published: ['\u043e\u043f\u0443\u0431\u043b\u0438\u043a\u043e\u0432\u0430\u043d\u043e','published'],
     accepted: ['\u043f\u0440\u0438\u043d\u044f\u0442\u043e','accepted'], ready: ['\u0433\u043e\u0442\u043e\u0432','ready'], attached: ['\u043f\u0440\u0438\u043a\u0440\u0435\u043f\u043b\u0451\u043d','attached'],
     cancelled: ['\u043e\u0442\u043c\u0435\u043d\u0451\u043d','cancelled'], read: ['\u043f\u0440\u043e\u0447\u0438\u0442\u0430\u043d\u043e','read'],
+    // Statuses that reached a filter list untranslated and showed English words inside a Russian one.
+    closed: ['\u0437\u0430\u043a\u0440\u044b\u0442\u043e','closed'], submitted: ['\u043e\u0442\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u043e','submitted'],
+    confirmed: ['\u043f\u043e\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u043e','confirmed'], rejected: ['\u043e\u0442\u043a\u043b\u043e\u043d\u0435\u043d\u043e','rejected'],
+    archived: ['\u0432 \u0430\u0440\u0445\u0438\u0432\u0435','archived'], qualified: ['\u043a\u0432\u0430\u043b\u0438\u0444\u0438\u0446\u0438\u0440\u043e\u0432\u0430\u043d','qualified'],
+    approved: ['\u043e\u0434\u043e\u0431\u0440\u0435\u043d\u043e','approved'], requested: ['\u0437\u0430\u043f\u0440\u043e\u0448\u0435\u043d\u043e','requested'],
+    // How a request for quotation reads from the supplier's side of it.
+    awaiting_quote: ['\u0436\u0434\u0451\u0442 \u043a\u043e\u0442\u0438\u0440\u043e\u0432\u043a\u0438','awaiting quote'],
+    quote_submitted: ['\u043a\u043e\u0442\u0438\u0440\u043e\u0432\u043a\u0430 \u043e\u0442\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0430','quote submitted'],
+    won: ['\u0437\u0430\u043a\u0430\u0437 \u0437\u0430 \u0432\u0430\u043c\u0438','awarded to you'],
+    lost: ['\u0432\u044b\u0431\u0440\u0430\u043d \u0434\u0440\u0443\u0433\u043e\u0439 \u043f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a','awarded elsewhere'],
+    unread: ['\u043d\u0435 \u043f\u0440\u043e\u0447\u0438\u0442\u0430\u043d\u043e','unread'], shared: ['\u043e\u0431\u0449\u0438\u0439 \u0434\u043e\u0441\u0442\u0443\u043f','shared'], private: ['\u043b\u0438\u0447\u043d\u043e\u0435','private'],
+    deal: ['\u0441\u0434\u0435\u043b\u043a\u0430','deal'], 'deal-opened': ['\u0441\u0434\u0435\u043b\u043a\u0430 \u043e\u0442\u043a\u0440\u044b\u0442\u0430','deal opened'],
+    'order-terms-accepted': ['\u0443\u0441\u043b\u043e\u0432\u0438\u044f \u0437\u0430\u043a\u0430\u0437\u0430 \u043f\u0440\u0438\u043d\u044f\u0442\u044b','order terms accepted'], 'selection-submitted': ['\u0430\u0441\u0441\u043e\u0440\u0442\u0438\u043c\u0435\u043d\u0442 \u043e\u0442\u043f\u0440\u0430\u0432\u043b\u0435\u043d','selection submitted'],
+    sample_review: ['\u043d\u0430 \u043e\u0446\u0435\u043d\u043a\u0435 \u043e\u0431\u0440\u0430\u0437\u0446\u0430','sample review'], technically_approved: ['\u0442\u0435\u0445\u043d\u0438\u0447\u0435\u0441\u043a\u0438 \u0443\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u043e','technically approved'],
+    sourcing_approved: ['\u0437\u0430\u043a\u0443\u043f\u043a\u0430 \u0443\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u0430','sourcing approved'], purchase_or_production_ready: ['\u0433\u043e\u0442\u043e\u0432\u043e \u043a \u0437\u0430\u043a\u0443\u043f\u043a\u0435 \u0438\u043b\u0438 \u043f\u0440\u043e\u0438\u0437\u0432\u043e\u0434\u0441\u0442\u0432\u0443','ready for purchase or production'],
+    compliance_ready: ['\u0441\u043e\u043e\u0442\u0432\u0435\u0442\u0441\u0442\u0432\u0438\u0435 \u043f\u043e\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u043e','compliance ready'], commercial_ready: ['\u043a\u043e\u043c\u043c\u0435\u0440\u0447\u0435\u0441\u043a\u0438 \u0433\u043e\u0442\u043e\u0432\u043e','commercial ready'],
+    in_development: ['\u0432 \u0440\u0430\u0437\u0440\u0430\u0431\u043e\u0442\u043a\u0435','in development'], discontinued: ['\u0441\u043d\u044f\u0442\u043e \u0441 \u043f\u0440\u043e\u0438\u0437\u0432\u043e\u0434\u0441\u0442\u0432\u0430','discontinued'], on_hold: ['\u043f\u0440\u0438\u043e\u0441\u0442\u0430\u043d\u043e\u0432\u043b\u0435\u043d\u043e','on hold'],
+    superseded: ['\u0437\u0430\u043c\u0435\u043d\u0435\u043d\u043e','superseded'],
+    planned: ['\u0437\u0430\u043f\u043b\u0430\u043d\u0438\u0440\u043e\u0432\u0430\u043d\u043e','planned'], delivered: ['\u043f\u0435\u0440\u0435\u0434\u0430\u043d\u043e','delivered'], dropped: ['\u0441\u043d\u044f\u0442\u043e \u0441 \u043f\u043b\u0430\u043d\u0430','dropped'],
+    received: ['\u043f\u043e\u043b\u0443\u0447\u0435\u043d\u043e','received'], allocated: ['\u0440\u0430\u0441\u043f\u0440\u0435\u0434\u0435\u043b\u0435\u043d\u043e','allocated'],
+    awarded: ['\u043f\u0440\u0438\u0441\u0443\u0436\u0434\u0435\u043d\u043e','awarded'], issued: ['\u0432\u044b\u043f\u0443\u0449\u0435\u043d\u043e','issued'],
+    acknowledged: ['\u043f\u043e\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0451\u043d \u043f\u043e\u043b\u0443\u0447\u0430\u0442\u0435\u043b\u0435\u043c','acknowledged'],
+    released: ['\u0440\u0430\u0437\u0440\u0435\u0448\u0435\u043d\u043e','released'], completed: ['\u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u043e','completed'],
+    // Состояния измерений готовности и карантин партии. `ready` здесь был, а два его соседа — нет, и в
+    // реестре моделей рядом с «готов» стояло английское `blocked`. Найдено на экране.
+    blocked: ['\u0437\u0430\u0431\u043b\u043e\u043a\u0438\u0440\u043e\u0432\u0430\u043d\u043e','blocked'], not_applicable: ['\u043d\u0435 \u043f\u0440\u0438\u043c\u0435\u043d\u0438\u043c\u043e','not applicable'],
+    quarantine: ['\u043a\u0430\u0440\u0430\u043d\u0442\u0438\u043d','quarantine'],
+    // Значения, которые служба умеет отдавать, но общий словарь не называл. Часть из них
+    // переводится своими словарями на своих экранах — общий словарь здесь последняя линия:
+    // `statusLabel`, не найдя фразы, показывает сырое слово из базы, и однажды так и вышло.
+    laid: ['\u043d\u0430\u0441\u0442\u043b\u0430\u043d\u043e','laid'],
+    cut: ['\u0440\u0430\u0441\u043a\u0440\u043e\u0435\u043d\u043e','cut'],
+    'in-progress': ['\u0432 \u0440\u0430\u0431\u043e\u0442\u0435','in progress'],
+    'review-pending': ['\u043e\u0436\u0438\u0434\u0430\u0435\u0442 \u0440\u0435\u0448\u0435\u043d\u0438\u044f','review pending'],
+    'rework-required': ['\u0442\u0440\u0435\u0431\u0443\u0435\u0442\u0441\u044f \u0434\u043e\u0440\u0430\u0431\u043e\u0442\u043a\u0430','rework required'],
+    retired: ['\u0432\u044b\u0432\u0435\u0434\u0435\u043d\u043e \u0438\u0437 \u043e\u0431\u043e\u0440\u043e\u0442\u0430','retired'],
+    conditionally_approved: ['\u0443\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u043e \u0443\u0441\u043b\u043e\u0432\u043d\u043e','conditionally approved'],
+    rejected_resubmit: ['\u043e\u0442\u043a\u043b\u043e\u043d\u0435\u043d\u043e, \u043d\u0443\u0436\u0435\u043d \u043f\u043e\u0432\u0442\u043e\u0440','rejected, resubmit'],
+    rejected_cancelled: ['\u043e\u0442\u043a\u043b\u043e\u043d\u0435\u043d\u043e \u0438 \u0437\u0430\u043a\u0440\u044b\u0442\u043e','rejected and closed'],
+    'ready-for-qc': ['\u0433\u043e\u0442\u043e\u0432\u043e \u043a \u043a\u043e\u043d\u0442\u0440\u043e\u043b\u044e','ready for QC'],
+    'in-production': ['\u0432 \u043f\u0440\u043e\u0438\u0437\u0432\u043e\u0434\u0441\u0442\u0432\u0435','in production'],
+    suspended: ['\u043f\u0440\u0438\u043e\u0441\u0442\u0430\u043d\u043e\u0432\u043b\u0435\u043d\u043e','suspended'],
+    quoted: ['\u043a\u043e\u0442\u0438\u0440\u043e\u0432\u043a\u0430 \u043f\u043e\u043b\u0443\u0447\u0435\u043d\u0430','quoted'],
+    due: ['\u043a \u043e\u043f\u043b\u0430\u0442\u0435','due'],
+    overdue: ['\u043f\u0440\u043e\u0441\u0440\u043e\u0447\u0435\u043d\u043e','overdue'],
+    paid: ['\u043e\u043f\u043b\u0430\u0447\u0435\u043d\u043e','paid'],
+    withdrawn: ['\u043e\u0442\u043e\u0437\u0432\u0430\u043d\u043e','withdrawn'],
   };
   const stages = {
     campaign: ['\u041a\u0430\u043c\u043f\u0430\u043d\u0438\u044f','Campaign'], collection: ['\u041a\u043e\u043b\u043b\u0435\u043a\u0446\u0438\u044f','Collection'], showroom: ['\u0428\u043e\u0443\u0440\u0443\u043c','Showroom'],
     selection: ['\u041e\u0442\u0431\u043e\u0440','Selection'], 'order-builder': ['\u041a\u043e\u043d\u0441\u0442\u0440\u0443\u043a\u0442\u043e\u0440 \u0437\u0430\u043a\u0430\u0437\u0430','Order Builder'],
-    order: ['\u0417\u0430\u043a\u0430\u0437','Order'], confirmation: ['\u041f\u043e\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u0438\u0435','Confirmation'], 'deal-space': ['DealSpace','DealSpace'],
+    order: ['\u0417\u0430\u043a\u0430\u0437','Order'], confirmation: ['\u041f\u043e\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u0438\u0435','Confirmation'], 'deal-space': ['\u041f\u0440\u043e\u0441\u0442\u0440\u0430\u043d\u0441\u0442\u0432\u043e \u0441\u0434\u0435\u043b\u043a\u0438','Deal space'],
   };
   for (const [key, pair] of Object.entries(statuses)) messages[`status.${key}`] = pair;
   for (const [key, pair] of Object.entries(stages)) messages[`stage.${key}`] = pair;
@@ -126,10 +181,53 @@
   function localeTag() { return current === 'ru' ? 'ru-RU' : 'en-GB'; }
   function formatDate(value) { if (!value) return '\u2014'; const date = new Date(value); if (Number.isNaN(date.valueOf())) return String(value); return new Intl.DateTimeFormat(localeTag(), { dateStyle: 'medium', timeStyle: String(value).includes('T') ? 'short' : undefined }).format(date); }
   function formatNumber(value, options = {}) { return new Intl.NumberFormat(localeTag(), options).format(Number(value || 0)); }
+
+  // Деньги и единицы форматируются здесь, в одном месте на всё приложение.
+  //
+  // Шесть модулей держали по своему форматтеру денег, и две разные договорённости о копейках:
+  // три делили на сто, три нет. Сегодня ни одно значение не проходит через неверный — проверено, —
+  // но ничем это и не удержано: достаточно передать минорную сумму туда, где деления нет, и экран
+  // покажет число в сто раз больше, молча. Единственный способ не держать такую возможность — не
+  // иметь шести форматтеров.
+  //
+  // Валюта печаталась кодом рядом с числом: русский экран показывал «4,10 EUR» там, где `Intl`
+  // даёт «4,10 €». Код валюты — это то, чем она названа в договоре, а не то, как её читают.
+  const CURRENCY_PATTERN = /^[A-Za-z]{3}$/;
+  function formatMoney(value, currency, { minor = false, ...options } = {}) {
+    const raw = Number(value);
+    if (!Number.isFinite(raw)) return '\u2014';
+    const amount = minor ? raw / 100 : raw;
+    const code = typeof currency === 'string' && CURRENCY_PATTERN.test(currency) ? currency.toUpperCase() : null;
+    if (code) {
+      try { return new Intl.NumberFormat(localeTag(), { style: 'currency', currency: code, ...options }).format(amount); }
+      catch { /* неизвестный код — ниже он допечатается как есть, а не потеряется */ }
+    }
+    const number = formatNumber(amount, { minimumFractionDigits: 2, maximumFractionDigits: 2, ...options });
+    return code ? `${number} ${code}` : number;
+  }
+
+  // Единицы печатались латинским кодом: раскройный цех читал «100 m» вместо «100 м». У `Intl` для
+  // длины и веса есть собственные названия по локали; штуки он не знает, поэтому для них — слово.
+  const UNIT_INTL = Object.freeze({ m: 'meter', cm: 'centimeter', kg: 'kilogram', yd: 'yard', in: 'inch' });
+  const UNIT_WORD = Object.freeze({ pc: ['\u0448\u0442.', 'pcs'], pcs: ['\u0448\u0442.', 'pcs'] });
+  function formatUnit(value, unit, options = {}) {
+    const raw = Number(value);
+    if (!Number.isFinite(raw)) return '\u2014';
+    const code = typeof unit === 'string' ? unit.trim().toLowerCase() : '';
+    const intlUnit = UNIT_INTL[code];
+    if (intlUnit) {
+      try { return new Intl.NumberFormat(localeTag(), { style: 'unit', unit: intlUnit, unitDisplay: 'short', ...options }).format(raw); }
+      catch { /* локаль без поддержки единицы — ниже число и код, а не пустота */ }
+    }
+    const word = UNIT_WORD[code];
+    const suffix = word ? word[localeTag().startsWith('ru') ? 0 : 1] : (typeof unit === 'string' ? unit.trim() : '');
+    const number = formatNumber(raw, options);
+    return suffix ? `${number}\u00a0${suffix}` : number;
+  }
   function applyDocument() { if (global.document?.documentElement) global.document.documentElement.lang = current; if (global.document) global.document.title = t('document.title'); }
   function setLocale(value) { const next = normalize(value); const changed = next !== current; current = next; try { global.localStorage?.setItem(STORAGE_KEY, current); } catch {} applyDocument(); if (changed && typeof global.dispatchEvent === 'function') { const event = typeof global.CustomEvent === 'function' ? new global.CustomEvent('syntha:locale-changed', { detail: { locale: current } }) : { type: 'syntha:locale-changed', detail: { locale: current } }; global.dispatchEvent(event); } return current; }
   function diagnostics() { return Object.freeze({ locales: [...SUPPORTED], locale: current, messageCount: Object.keys(messages).length, phraseCount: pairs.length, invalidMessageKeys: Object.entries(messages).filter(([, pair]) => !Array.isArray(pair) || pair.length !== 2).map(([key]) => key), invalidPhraseCount: pairs.filter(pair => !Array.isArray(pair) || pair.length !== 2).length }); }
 
-  global.SynthaI18n = Object.freeze({ getLocale: () => current, setLocale, t, translate, formatDate, formatNumber, localeTag, diagnostics });
+  global.SynthaI18n = Object.freeze({ getLocale: () => current, setLocale, t, translate, formatDate, formatNumber, formatMoney, formatUnit, localeTag, diagnostics });
   applyDocument();
 })(window);

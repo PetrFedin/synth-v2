@@ -11,7 +11,12 @@ test('forms guard dirty and in-flight state across close escape and browser navi
   assert.match(source, /const shouldBlockNavigation = \(\) => !saved && \(submitting \|\| isDirty\(\)\)/);
   assert.match(source, /window\.addEventListener\('beforeunload', beforeUnload\)/);
   assert.match(source, /dialog\.addEventListener\('cancel', cancelDialog\)/);
-  assert.match(source, /window\.confirm\(I18N\.t\('common\.unsavedChangesConfirm'\)\)/);
+  // Closing a dirty form still asks before discarding, and it now asks through the application's own
+  // confirmation rather than the browser's box, which could not be translated and blocked the page.
+  assert.match(source, /await confirmAction\(\{/);
+  assert.match(source, /question: I18N\.t\('common\.unsavedChangesConfirm'\)/);
+  assert.match(source, /if \(!accepted\) return false/);
+  assert.equal(source.includes('window.confirm('), false);
   assert.match(source, /if \(submitting\) return false/);
 });
 

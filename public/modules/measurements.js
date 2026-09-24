@@ -111,8 +111,8 @@
   }
   function header(summary) {
     const actions = [];
-    if (canManageAny()) actions.push(h('button', { className: 'primary', type: 'button', text: text('Создать таблицу', 'Create chart'), onclick: () => { void openEditor(null); } }));
-    actions.push(h('button', { className: 'secondary', type: 'button', disabled: ui.loading, text: text('Обновить', 'Refresh'), onclick: () => { void loadCharts({ reset: true }); } }));
+    if (canManageAny()) actions.push(h('button', { className: 'primary', type: 'button', text: text('Создать таблицу', 'Create chart'), onclick: () => { openEditor(null).catch((error) => toast(error?.message || text('Не удалось открыть редактор.', 'The editor could not be opened.'), 'error')); } }));
+    actions.push(h('button', { className: 'secondary', type: 'button', disabled: ui.loading, text: text('Обновить', 'Refresh'), onclick: () => { loadCharts({ reset: true }).then(() => toast(text('\u0414\u0430\u043d\u043d\u044b\u0435 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u044b.', 'Data refreshed.'))).catch((error) => toast(error?.message || text('\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u0434\u0430\u043d\u043d\u044b\u0435.', 'The data could not be refreshed.'), 'error')); } }));
     return h('header', { className: 'measurement-header' }, [
       h('div', { className: 'measurement-title' }, [
         h('p', { className: 'eyebrow', text: 'PLM / FIT & GRADING' }),
@@ -170,17 +170,32 @@
   function selectedAssessment(registry) {
     return registry.items.find((item) => item.chart.sku === ui.selectedSku) || registry.items[0] || null;
   }
+  // «Межразмерная разница» as the chart states it. A uniform rule is written once; a rule that
+  // changes across the range is written out, because that is the fact a reader cannot infer.
+  function gradeRuleText(point) {
+    const steps = Array.isArray(point.gradeSteps) ? point.gradeSteps : null;
+    if (!steps || !steps.length) return text('вручную', 'by hand');
+    const unique = [...new Set(steps.map((step) => Number(step)))];
+    if (unique.length === 1) return `${unique[0] >= 0 ? '+' : ''}${unique[0]}`;
+    return steps.map((step) => `${Number(step) >= 0 ? '+' : ''}${Number(step)}`).join(' / ');
+  }
+
   function matrixView(item) {
     if (!item) return h('div', { className: 'measurement-empty', text: text('Выберите размерную таблицу.', 'Select a measurement chart.') });
     const head = [h('th', { text: text('POM / допуск', 'POM / tolerance') })];
     for (const size of item.chart.sizes) head.push(h('th', { text: `${size.code} · ${size.label}` }));
     const rows = item.chart.points.map((point) => {
       const bySize = new Map(point.measurements.map((measurement) => [measurement.sizeCode, measurement]));
-      const cells = [h('td', {}, [h('strong', { text: point.pointCode }), h('span', { text: point.name }), h('small', { text: `−${point.toleranceMinus} / +${point.tolerancePlus} ${item.chart.unit}` })])];
+      const head = h('td', {}, [h('strong', { text: point.pointCode }), h('span', { text: point.name }), h('small', { text: `−${point.toleranceMinus} / +${unitAmount(point.tolerancePlus, item.chart.unit)}` })]);
+      // The rule the row follows, stated once beside the row it governs.
+      head.append(h('small', { className: 'measurement-grade-rule', text: `${text('градация', 'grade')}: ${gradeRuleText(point)}` }));
+      const cells = [head];
       for (const size of item.chart.sizes) {
         const value = bySize.get(size.code);
-        cells.push(h('td', { className: size.code === item.chart.baseSizeCode ? 'base-size' : '' }, value
-          ? [h('strong', { text: String(value.value) }), h('small', { text: value.deltaFromPrevious === null ? '—' : `${value.deltaFromPrevious >= 0 ? '+' : ''}${value.deltaFromPrevious}` })]
+        const classes = ['', size.code === item.chart.baseSizeCode ? 'base-size' : '', value?.source === 'override' ? 'measurement-override' : ''].filter(Boolean).join(' ');
+        cells.push(h('td', { className: classes }, value
+          ? [h('strong', { text: String(value.value) }), h('small', { text: value.deltaFromPrevious === null ? '—' : `${value.deltaFromPrevious >= 0 ? '+' : ''}${value.deltaFromPrevious}` }),
+            ...(value.source === 'override' ? [h('small', { className: 'measurement-override-mark', text: text('вручную', 'by hand') })] : [])]
           : [badge(text('Нет значения', 'Missing'), 'high')]));
       }
       return h('tr', {}, cells);
@@ -198,7 +213,7 @@
     if (!item) return h('aside', { className: 'measurement-inspector' }, [h('p', { className: 'muted', text: text('Выберите запись для просмотра.', 'Select a record to inspect.') })]);
     const actions = [];
     if (canManage(item.chart.brandId) && item.chart.status === 'draft') {
-      actions.push(h('button', { type: 'button', className: 'secondary', text: text('Редактировать', 'Edit'), onclick: () => { void openEditor(item.chart); } }));
+      actions.push(h('button', { type: 'button', className: 'secondary', text: text('Редактировать', 'Edit'), onclick: () => { openEditor(item.chart).catch((error) => toast(error?.message || text('Не удалось открыть редактор.', 'The editor could not be opened.'), 'error')); } }));
       actions.push(h('button', { type: 'button', className: 'primary', disabled: !item.publishReady, text: text('Опубликовать', 'Publish'), onclick: () => { void publishChart(item); } }));
     }
     const risks = item.risks.length
@@ -234,9 +249,24 @@
 
   async function publishChart(item) {
     if (!item.publishReady) return;
-    if (!confirm(text(`Опубликовать размерную таблицу ${item.chart.sku}?`, `Publish measurement chart ${item.chart.sku}?`))) return;
-    await mutate(`/v2/measurements/${encodeURIComponent(item.chart.sku)}/publish`, { expectedVersion: item.chart.version });
+    const accepted = await confirmAction({
+      title: text('Опубликовать размерную таблицу', 'Publish measurement chart'),
+      question: text(`${item.chart.sku}: опубликованная таблица становится неизменяемой.`, `${item.chart.sku}: a published chart becomes immutable.`),
+      confirmLabel: text('Опубликовать', 'Publish'),
+    });
+    if (!accepted) return;
+    // \u041e\u0442\u043a\u0430\u0437 \u043f\u0443\u0431\u043b\u0438\u043a\u0430\u0446\u0438\u0438 (\u0443\u0441\u0442\u0430\u0440\u0435\u0432\u0448\u0438\u0439 \u0441\u043d\u0438\u043c\u043e\u043a SKU, \u043d\u0435\u043e\u043f\u0443\u0431\u043b\u0438\u043a\u043e\u0432\u0430\u043d\u043d\u044b\u0439 SKU) \u0434\u043e \u044d\u0442\u043e\u0439 \u043f\u0440\u0430\u0432\u043a\u0438 \u0443\u0445\u043e\u0434\u0438\u043b \u0432
+    // \u043d\u0435\u043e\u0431\u0440\u0430\u0431\u043e\u0442\u0430\u043d\u043d\u043e\u0435 \u043e\u0442\u043a\u043b\u043e\u043d\u0435\u043d\u0438\u0435 \u043f\u0440\u043e\u043c\u0438\u0441\u0430 \u0438 \u043d\u0435 \u0434\u043e\u0445\u043e\u0434\u0438\u043b \u0434\u043e \u0447\u0435\u043b\u043e\u0432\u0435\u043a\u0430.
+    try {
+      await mutate(`/v2/measurements/${encodeURIComponent(item.chart.sku)}/publish`, { expectedVersion: item.chart.version });
+    } catch (error) {
+      toast((error && error.message) || text('\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043e\u043f\u0443\u0431\u043b\u0438\u043a\u043e\u0432\u0430\u0442\u044c \u0442\u0430\u0431\u043b\u0438\u0446\u0443.', 'The chart could not be published.'), 'error');
+      return;
+    }
     await loadCharts({ reset: true });
+    // The revision action beside this one reports itself; publishing, which is the less reversible of
+    // the two, did not.
+    toast(text(`\u0420\u0430\u0437\u043c\u0435\u0440\u043d\u0430\u044f \u0442\u0430\u0431\u043b\u0438\u0446\u0430 ${item.chart.sku} \u043e\u043f\u0443\u0431\u043b\u0438\u043a\u043e\u0432\u0430\u043d\u0430.`, `Measurement chart ${item.chart.sku} published.`));
   }
   async function fetchCatalogSkus() {
     const items = new Map();
@@ -276,6 +306,9 @@
         return {
           key: `point-${++sequence}`, pointCode: point.pointCode, name: point.name, description: point.description || '',
           toleranceMinus: point.toleranceMinus, tolerancePlus: point.tolerancePlus,
+          // The rule is edited as it is spoken: one step, or a step per interval separated by a
+          // slash. "+4" and "4 / 4 / 6" are both things a technologist writes on paper.
+          grade: Array.isArray(point.gradeSteps) && point.gradeSteps.length ? point.gradeSteps.join(' / ') : '',
           values: new Map(sizes.map((size) => [size.key, values.get(size.code) ?? ''])),
         };
       }),
@@ -284,9 +317,37 @@
     showEditor({ existing, skus, model, nextKey: (prefix) => `${prefix}-${++sequence}` });
   }
 
+  // A rule is written the way a technologist writes it: one number for a uniform grade, or a step
+  // per interval separated by slashes. One number is expanded to every interval here rather than
+  // making a person type "4 / 4 / 4 / 4 / 4" for a five-step range.
+  function parseGrade(raw, sizeCount) {
+    const written = String(raw ?? '').trim();
+    if (!written || sizeCount < 2) return null;
+    const parts = written.split('/').map((part) => Number(part.trim().replace(',', '.')));
+    if (parts.some((part) => !Number.isFinite(part))) return null;
+    if (parts.length === 1) return new Array(sizeCount - 1).fill(parts[0]);
+    return parts.length === sizeCount - 1 ? parts : null;
+  }
+  function gradeCell(point) {
+    return input('text', point.grade || '', (value) => { point.grade = value; }, {
+      maxlength: '120',
+      placeholder: '+4',
+      title: text('Одно число — одинаковая разница между всеми размерами. Через «/» — своя разница на каждый интервал.',
+        'One number grades every interval the same. Slashes give each interval its own step.'),
+    });
+  }
+
   function showEditor({ existing, skus, model, nextKey }) {
     const overlay = h('div', { className: 'measurement-modal-overlay' });
+    // Оверлей закрывается четырьмя путями: крестик, «Отмена», щелчок мимо и успешное сохранение, а
+    // обработчик Escape снимал себя только на пятом — на самом Escape. Каждое закрытие любым из остальных
+    // оставляло на `document` ещё один слушатель, держащий ссылку на весь оторванный диалог. Закрытие теперь
+    // одно для всех путей.
+    function onEscape(event) { if (event.key === 'Escape') closeEditor(); }
+    function closeEditor() { overlay.remove(); document.removeEventListener('keydown', onEscape); }
+
     const form = h('form', { className: 'measurement-modal', role: 'dialog', 'aria-modal': 'true' });
+    const problem = h('p', { className: 'bom-modal-error', hidden: true });
     const body = h('div', { className: 'measurement-editor-body' });
 
     function renderBody() {
@@ -301,8 +362,8 @@
       const sizeList = h('div', { className: 'measurement-size-list' });
       model.sizes.forEach((size) => {
         sizeList.append(h('div', { className: 'measurement-size-card' }, [
-          input('text', size.code, (value) => { size.code = value.toUpperCase(); }, { maxlength: '16', placeholder: 'M' }),
-          input('text', size.label, (value) => { size.label = value; }, { maxlength: '40', placeholder: text('Название', 'Label') }),
+          input('text', size.code, (value) => { size.code = value.toUpperCase(); }, { maxlength: '16', placeholder: 'M', required: true, pattern: '[A-Za-z0-9._-]{1,16}' }),
+          input('text', size.label, (value) => { size.label = value; }, { maxlength: '40', placeholder: text('Название', 'Label'), required: true }),
           h('button', { type: 'button', className: 'danger-link', disabled: model.sizes.length === 1, text: '×', 'aria-label': text('Удалить размер', 'Remove size'), onclick: () => {
             model.sizes = model.sizes.filter((candidate) => candidate.key !== size.key);
             model.points.forEach((point) => point.values.delete(size.key));
@@ -317,39 +378,51 @@
         model.points.forEach((point) => point.values.set(size.key, ''));
         renderBody();
       } })), sizeList);
-      const tableHead = [h('th', { text: 'POM' }), h('th', { text: text('Название / описание', 'Name / description') }), h('th', { text: '− Tol.' }), h('th', { text: '+ Tol.' })];
+      const tableHead = [h('th', { text: 'POM' }), h('th', { text: text('Название / описание', 'Name / description') }), h('th', { text: '− Tol.' }), h('th', { text: '+ Tol.' }), h('th', { text: text('Градация', 'Grade') })];
       model.sizes.forEach((size) => tableHead.push(h('th', { text: size.code || '—' })));
       tableHead.push(h('th', { text: '' }));
       const rows = model.points.map((point) => {
         const cells = [
-          h('td', {}, [input('text', point.pointCode, (value) => { point.pointCode = value.toUpperCase(); }, { maxlength: '32', placeholder: 'CHEST' })]),
-          h('td', {}, [input('text', point.name, (value) => { point.name = value; }, { maxlength: '120', placeholder: text('Название POM', 'POM name') }), input('text', point.description, (value) => { point.description = value; }, { maxlength: '500', placeholder: text('Метод измерения', 'Measuring method') })]),
-          h('td', {}, [input('number', point.toleranceMinus, (value) => { point.toleranceMinus = value; }, { step: '0.0001', min: '0' })]),
-          h('td', {}, [input('number', point.tolerancePlus, (value) => { point.tolerancePlus = value; }, { step: '0.0001', min: '0' })]),
+          h('td', {}, [input('text', point.pointCode, (value) => { point.pointCode = value.toUpperCase(); }, { maxlength: '32', placeholder: 'CHEST', required: true, pattern: '[A-Za-z0-9._-]{1,32}' })]),
+          h('td', {}, [input('text', point.name, (value) => { point.name = value; }, { maxlength: '120', placeholder: text('Название POM', 'POM name'), required: true, minlength: '2' }), input('text', point.description, (value) => { point.description = value; }, { maxlength: '500', placeholder: text('Метод измерения', 'Measuring method') })]),
+          h('td', {}, [input('number', point.toleranceMinus, (value) => { point.toleranceMinus = value; }, { step: '0.0001', min: '0', required: true })]),
+          h('td', {}, [input('number', point.tolerancePlus, (value) => { point.tolerancePlus = value; }, { step: '0.0001', min: '0', required: true })]),
+          h('td', {}, [gradeCell(point)]),
         ];
-        model.sizes.forEach((size) => cells.push(h('td', { className: size.key === model.baseSizeKey ? 'base-size' : '' }, [input('number', point.values.get(size.key), (value) => { point.values.set(size.key, value); }, { step: '0.0001', min: '0.0001' })])));
+        model.sizes.forEach((size) => cells.push(h('td', { className: size.key === model.baseSizeKey ? 'base-size' : '' }, [input('number', point.values.get(size.key), (value) => { point.values.set(size.key, value); }, { step: '0.0001', min: '0.0001', required: true })])));
         cells.push(h('td', {}, [h('button', { type: 'button', className: 'danger-link', text: '×', 'aria-label': text('Удалить POM', 'Remove POM'), onclick: () => { model.points = model.points.filter((candidate) => candidate.key !== point.key); renderBody(); } })]));
         return h('tr', {}, cells);
       });
       body.append(sectionHead(text('Точки измерения и матрица', 'Points of measure and matrix'), h('button', { type: 'button', className: 'secondary', disabled: model.points.length >= 300, text: text('Добавить POM', 'Add POM'), onclick: () => {
-        model.points.push({ key: nextKey('point'), pointCode: '', name: '', description: '', toleranceMinus: 0, tolerancePlus: 0, values: new Map(model.sizes.map((size) => [size.key, ''])) });
+        model.points.push({ key: nextKey('point'), pointCode: '', name: '', description: '', toleranceMinus: 0, tolerancePlus: 0, grade: '', values: new Map(model.sizes.map((size) => [size.key, ''])) });
         renderBody();
       } })), h('div', { className: 'measurement-editor-matrix-wrap' }, [h('table', { className: 'measurement-editor-matrix' }, [h('thead', {}, [h('tr', {}, tableHead)]), h('tbody', {}, rows)] )]));
       body.append(field(text('Примечания', 'Notes'), textarea(model.notes, (value) => { model.notes = value; })));
     }
 
     form.append(
-      h('div', { className: 'measurement-modal-head' }, [h('div', {}, [h('p', { className: 'eyebrow', text: 'MEASUREMENT CHART' }), h('h2', { text: existing ? text(`Редактировать ${existing.sku}`, `Edit ${existing.sku}`) : text('Создать размерную таблицу', 'Create measurement chart') })]), h('button', { type: 'button', className: 'icon-button', text: '×', 'aria-label': text('Закрыть', 'Close'), onclick: () => overlay.remove() })]),
+      h('div', { className: 'measurement-modal-head' }, [h('div', {}, [h('p', { className: 'eyebrow', text: 'MEASUREMENT CHART' }), h('h2', { text: existing ? text(`Редактировать ${existing.sku}`, `Edit ${existing.sku}`) : text('Создать размерную таблицу', 'Create measurement chart') })]), h('button', { type: 'button', className: 'icon-button', text: '×', 'aria-label': text('Закрыть', 'Close'), onclick: () => closeEditor() })]),
       body,
-      h('div', { className: 'measurement-modal-actions' }, [h('button', { type: 'button', className: 'secondary', text: text('Отмена', 'Cancel'), onclick: () => overlay.remove() }), h('button', { type: 'submit', className: 'primary', text: text('Сохранить', 'Save') })]),
+      h('div', { className: 'measurement-modal-actions' }, [h('button', { type: 'button', className: 'secondary', text: text('Отмена', 'Cancel'), onclick: () => closeEditor() }), h('button', { type: 'submit', className: 'primary', text: text('Сохранить', 'Save') })]),
     );
     renderBody();
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
+      // Обе проверки раньше бросали исключение **до** try-блока, то есть в асинхронном
+      // обработчике события: отказ уходил в необработанное отклонение, форма не закрывалась и
+      // ничего не говорила. Сообщение показывается там же, где сообщения сервера, — иначе
+      // проверка формы и отказ домена ведут себя по-разному на одной и той же кнопке.
+      const refuse = (message) => { problem.textContent = message; problem.hidden = false; problem.scrollIntoView({ block: 'nearest' }); };
       const sizeCodes = model.sizes.map((size) => String(size.code).trim().toUpperCase());
-      if (sizeCodes.some((code) => !code) || new Set(sizeCodes).size !== sizeCodes.length) throw new Error(text('Коды размеров должны быть заполнены и уникальны.', 'Size codes must be present and unique.'));
+      if (sizeCodes.some((code) => !code) || new Set(sizeCodes).size !== sizeCodes.length) {
+        refuse(text('Коды размеров должны быть заполнены и уникальны.', 'Size codes must be present and unique.'));
+        return;
+      }
       const baseSize = model.sizes.find((size) => size.key === model.baseSizeKey);
-      if (!baseSize) throw new Error(text('Выберите базовый размер.', 'Select a base size.'));
+      if (!baseSize) {
+        refuse(text('Выберите базовый размер.', 'Select a base size.'));
+        return;
+      }
       const payload = {
         unit: model.unit,
         baseSizeCode: String(baseSize.code).trim().toUpperCase(),
@@ -357,6 +430,7 @@
         points: model.points.map((point) => ({
           pointCode: String(point.pointCode).trim().toUpperCase(), name: String(point.name).trim(), description: String(point.description).trim() || null,
           toleranceMinus: Number(point.toleranceMinus), tolerancePlus: Number(point.tolerancePlus),
+          gradeSteps: parseGrade(point.grade, model.sizes.length),
           measurements: model.sizes.flatMap((size) => {
             const value = point.values.get(size.key);
             return value === '' || value === null || value === undefined ? [] : [{ sizeCode: String(size.code).trim().toUpperCase(), value: Number(value) }];
@@ -364,18 +438,51 @@
         })),
         notes: String(model.notes).trim() || null,
       };
-      if (existing) await mutate(`/v2/measurements/${encodeURIComponent(existing.sku)}`, { expectedVersion: existing.version, ...payload }, 'PATCH');
-      else await mutate('/v2/measurements', { sku: model.sku, ...payload });
-      overlay.remove();
+      // Without this a refusal was an unhandled rejection: the dialog stayed open, nothing was
+      // written, and the person was told nothing at all. The same hole the bill-of-materials editor
+      // had, in the editor beside it.
+      try {
+        if (existing) await mutate(`/v2/measurements/${encodeURIComponent(existing.sku)}`, { expectedVersion: existing.version, ...payload }, 'PATCH');
+        else await mutate('/v2/measurements', { sku: model.sku, ...payload });
+      } catch (error) {
+        problem.textContent = chartErrorMessage(error);
+        problem.hidden = false;
+        problem.scrollIntoView({ block: 'nearest' });
+        return;
+      }
+      closeEditor();
+      toast(existing
+        ? text('Размерная таблица сохранена.', 'The measurement chart is saved.')
+        : text('Размерная таблица создана.', 'The measurement chart is created.'), 'success');
       await loadCharts({ reset: true });
     });
+    form.append(problem);
     overlay.append(form);
-    overlay.addEventListener('mousedown', (event) => { if (event.target === overlay) overlay.remove(); });
+    overlay.addEventListener('mousedown', (event) => { if (event.target === overlay) closeEditor(); });
+    document.addEventListener('keydown', onEscape);
     document.body.append(overlay);
     form.querySelector('input,select,button')?.focus();
   }
 
   function sectionHead(title, action) { return h('div', { className: 'measurement-editor-section-head' }, [h('h3', { text: title }), action]); }
+  const CHART_ERRORS = {
+    MEASUREMENT_ALREADY_EXISTS: ['У этого артикула уже есть размерная таблица — откройте её.', 'This SKU already has a measurement chart — open it instead.'],
+    MEASUREMENT_NOT_EDITABLE: ['Опубликованную таблицу нельзя изменить. Создайте новую ревизию.', 'A published chart cannot be changed. Start a new revision.'],
+    MEASUREMENT_BASE_SIZE_REQUIRED: ['Укажите базовый размер.', 'Choose a base size.'],
+    MEASUREMENT_POINT_DUPLICATE: ['Две точки измерения имеют одинаковый код.', 'Two points of measurement share a code.'],
+    MEASUREMENT_SIZE_DUPLICATE: ['Два размера имеют одинаковый код.', 'Two sizes share a code.'],
+    MEASUREMENT_CONCURRENCY_CONFLICT: ['Таблицу изменил кто-то ещё — обновите раздел и повторите.', 'Someone else changed this chart — refresh and try again.'],
+    MEASUREMENT_SIZE_CODE_INVALID: ['Код размера — латинские буквы, цифры, точка, дефис или подчёркивание, до 16 знаков.', 'A size code is latin letters, digits, dot, hyphen or underscore, up to 16 characters.'],
+    MEASUREMENT_POINT_CODE_INVALID: ['Код точки измерения — латинские буквы, цифры, точка, дефис или подчёркивание.', 'A point code is latin letters, digits, dot, hyphen or underscore.'],
+    MEASUREMENT_VALUE_INVALID: ['Значение измерения должно быть положительным числом.', 'A measurement value must be a positive number.'],
+    MEASUREMENT_TOLERANCE_INVALID: ['Допуск не может быть отрицательным.', 'A tolerance cannot be negative.'],
+    MEASUREMENT_BASE_SIZE_UNKNOWN: ['Базовый размер должен быть одним из перечисленных.', 'The base size must be one of the sizes listed.'],
+  };
+  function chartErrorMessage(error) {
+    const pair = CHART_ERRORS[String(error?.code || '')];
+    return pair ? text(pair[0], pair[1]) : (error?.message || text('Не удалось сохранить размерную таблицу.', 'The measurement chart could not be saved.'));
+  }
+
   function field(label, control) { return h('label', { className: 'measurement-field' }, [h('span', { text: label }), control]); }
   function input(type, value, setter, extra = {}) {
     const control = h('input', { type, ...extra });

@@ -67,6 +67,18 @@ function mapOperational(row) {
     criticalDefectCount: integer(row.critical_defect_count),
     majorDefectCount: integer(row.major_defect_count),
     minorDefectCount: integer(row.minor_defect_count),
+    // Пооперационный контроль: поймала ли фабрика свой брак сама.
+    inlineCheckCount: integer(row.inline_check_count),
+    openInlineCheckCount: integer(row.open_inline_check_count),
+    executionsWithInlineChecks: integer(row.executions_with_inline_checks),
+    inlineCheckedUnits: integer(row.inline_checked_units),
+    inlineDefectiveUnits: integer(row.inline_defective_units),
+    inlineCriticalDefectCount: integer(row.inline_critical_defect_count),
+    inlineMajorDefectCount: integer(row.inline_major_defect_count),
+    inlineMinorDefectCount: integer(row.inline_minor_defect_count),
+    inlineReworkCount: integer(row.inline_rework_count),
+    inlineScrapCount: integer(row.inline_scrap_count),
+    inlineAcceptedCount: integer(row.inline_accepted_count),
   });
 }
 

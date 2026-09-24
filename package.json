@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "node --watch scripts/start.mjs",
     "start": "node scripts/start.mjs",
+    "seed:demo": "node scripts/seed-demo.mjs",
     "db:migrate": "node scripts/run-with-env.mjs scripts/migrate.mjs",
     "bootstrap:owner": "node scripts/run-with-env.mjs scripts/bootstrap-owner.mjs",
     "bootstrap:mdm-reference": "node scripts/run-with-env.mjs scripts/bootstrap-mdm-reference.mjs",

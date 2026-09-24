@@ -65,11 +65,23 @@ test('PostgreSQL catalog reader applies visibility, filters, prefix search and k
 });
 
 test('PostgreSQL catalog detail query enforces owned-brand or published-visible-collection scope', async () => {
-  const draft = { sku: 'SKU-01', brandId: 'brand_2', collectionId: 'collection_2', status: 'draft' };
+  // Строка чужого бренда, видная контрагенту через опубликованную коллекцию. Ему полагается
+  // витрина, но не внутренний склад: резерв складывается из обязательств перед другими
+  // покупателями, и по нему читается, кто и сколько у бренда забрал.
+  const draft = {
+    sku: 'SKU-01', brandId: 'brand_2', collectionId: 'collection_2', status: 'draft',
+    wholesalePrice: 24, currency: 'EUR', minimumOrderQuantity: 6,
+    availableQuantity: 600, reservedQuantity: 180, availableToSell: 420,
+  };
   const { pool, queries } = fixture({ detailRow: draft });
   const reader = createPostgresCatalogReader({ pool });
   const result = await reader.getForActor('actor_1', 'SKU-01');
-  assert.equal(result, draft);
+  assert.equal(result.sku, 'SKU-01');
+  assert.equal(result.wholesalePrice, 24, 'коммерческие условия остаются');
+  assert.equal(result.minimumOrderQuantity, 6);
+  assert.equal('availableQuantity' in result, false);
+  assert.equal('reservedQuantity' in result, false);
+  assert.equal('availableToSell' in result, false);
   const query = queries.find((item) => item.sql.includes('WHERE sku = $1'));
   assert.match(query.sql, /brand_id = ANY\(\$2::text\[\]\) OR \(collection_id = ANY\(\$3::text\[\]\) AND status = 'published'\)/);
   assert.deepEqual(query.params, ['SKU-01', ['brand_1'], ['collection_2']]);

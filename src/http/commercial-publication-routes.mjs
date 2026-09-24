@@ -18,6 +18,7 @@ export function createCommercialPublicationRoutes({ commercialPublication } = {}
   return Object.freeze([
     mutate('POST', /^\/v2\/commercial-publications$/, validatePublicationBody, ({ commandId, actorId, body }) => service.publishCommercialPublication(commandId, actorId, body)),
     pagedRead('GET', /^\/v2\/collections\/([^/]+)\/commercial-publications$/, ({ actorId, params, limit, cursor }) => service.listCommercialPublicationsForActor(actorId, params[0], { limit, cursor })),
+    limitedRead('GET', /^\/v2\/collections\/([^/]+)\/publishable-projections$/, ({ actorId, params, limit }) => service.listPublishableProjectionsForCollection(actorId, params[0], { limit })),
     read('GET', /^\/v2\/commercial-publications\/([^/]+)$/, ({ actorId, params }) => service.getCommercialPublicationForActor(actorId, params[0])),
     mutate('POST', /^\/v2\/commercial-publications\/([^/]+)\/buyer-catalogs$/, validateBuyerCatalogBody, ({ commandId, actorId, params, body }) => service.publishBuyerCatalog(commandId, actorId, params[0], body)),
     accessRead('GET', /^\/v2\/showrooms\/([^/]+)\/buyer-catalog$/, ({ actorId, params, shopId }) => service.getBuyerCatalogForAccessForActor(actorId, params[0], shopId)),
@@ -74,6 +75,21 @@ function accessRead(method, pattern, execute) {
     },
   });
 }
+// Список, из которого выбирают в форме, читается целиком и не листается: курсор здесь был бы
+// обещанием второй страницы, которую выпадающему списку некуда показать. Предел остаётся —
+// он защищает базу, а не страницу.
+function limitedRead(method, pattern, execute) {
+  return Object.freeze({
+    method, pattern, mutation: false,
+    execute(context) {
+      const query = context.query ?? {};
+      assertQueryContract(query, ['limit']);
+      const limitValue = optionalQueryValue(query, 'limit');
+      const limit = limitValue === undefined || limitValue === '' ? 50 : positiveInteger(limitValue, 'limit', 200);
+      return execute({ ...context, limit });
+    },
+  });
+}
 function pagedRead(method, pattern, execute) {
   return Object.freeze({
     method, pattern, mutation: false,
@@ -110,6 +126,7 @@ function unavailableCommercialPublication() {
     publishCommercialPublication: fail,
     publishBuyerCatalog: fail,
     listCommercialPublicationsForActor: fail,
+    listPublishableProjectionsForCollection: fail,
     getCommercialPublicationForActor: fail,
     getBuyerCatalogVersionForActor: fail,
     getBuyerCatalogForAccessForActor: fail,

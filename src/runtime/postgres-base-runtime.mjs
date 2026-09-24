@@ -53,6 +53,16 @@ import { createPostgresSourcingStore } from '../infrastructure/postgres-sourcing
 import { createPostgresSourcingReader } from '../infrastructure/postgres-sourcing-reader.mjs';
 import { createPostgresTechPackStore } from '../infrastructure/postgres-tech-pack-store.mjs';
 import { createPostgresTechPackReader } from '../infrastructure/postgres-tech-pack-reader.mjs';
+import { createPostgresLibraryReader } from '../infrastructure/postgres-library-reader.mjs';
+import { createPostgresHistoryReader } from '../infrastructure/postgres-history-reader.mjs';
+import { createHistoryQueryService } from '../application/history-query-service.mjs';
+import { createPostgresSupplierPortalReader } from '../infrastructure/postgres-supplier-portal-reader.mjs';
+import { createSupplierPortalQueryService } from '../application/supplier-portal-query-service.mjs';
+import { createPostgresCategoryAttributeReader } from '../infrastructure/postgres-category-attribute-reader.mjs';
+import { createCategoryAttributeQueryService } from '../application/category-attribute-query-service.mjs';
+import { createPostgresOrganisationMemberReader } from '../infrastructure/postgres-organisation-member-reader.mjs';
+import { createOrganisationMemberQueryService } from '../application/organisation-member-query-service.mjs';
+import { createLibraryQueryService } from '../application/library-query-service.mjs';
 import { createPostgresMaintenanceStore } from '../infrastructure/postgres-maintenance-store.mjs';
 import { createPostgresOutboxPublicationStore } from '../infrastructure/postgres-outbox-publication-store.mjs';
 import { createPostgresWholesaleStore } from '../infrastructure/postgres-store.mjs';
@@ -116,6 +126,8 @@ export function createPostgresWholesaleRuntime({
     commercialStore: commercialPublicationStore,
     wholesaleStore: store,
     catalogReader: catalog,
+    // Список проекций уже умеет читать хранилище готовности — вторая копия того же запроса здесь не нужна.
+    projectionListReader: productReadinessStore,
     nextId: runtimeNextId,
     ...(clock ? { clock } : {}),
   });
@@ -130,6 +142,13 @@ export function createPostgresWholesaleRuntime({
   const samples = Object.freeze({ ...createSampleService({ sampleStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createSampleQueryService({ reader: createPostgresSampleReader({ pool }), ...(clock ? { clock } : {}) }) });
   const sourcing = Object.freeze({ ...createSourcingService({ sourcingStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createSourcingQueryService({ reader: createPostgresSourcingReader({ pool }), ...(clock ? { clock } : {}) }) });
   const techPacks = Object.freeze({ ...createTechPackService({ techPackStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createTechPackQueryService({ reader: createPostgresTechPackReader({ pool }) }) });
+  // Governed reference data is global and read-only from the application, so it needs a reader and
+  // nothing else.
+  const libraries = createLibraryQueryService({ reader: createPostgresLibraryReader({ pool }) });
+  const history = createHistoryQueryService({ reader: createPostgresHistoryReader({ pool }) });
+  const supplierPortal = createSupplierPortalQueryService({ reader: createPostgresSupplierPortalReader({ pool }) });
+  const categoryAttributes = createCategoryAttributeQueryService({ reader: createPostgresCategoryAttributeReader({ pool }) });
+  const organisationMembers = createOrganisationMemberQueryService({ reader: createPostgresOrganisationMemberReader({ pool }) });
   const partners = createPartnerAccessService(options);
   const retailDoors = createRetailDoorService(options);
   const collaboration = createShowroomSelectionService({ ...options, catalogReader: catalog, commercialPublicationReader: commercialPublication });
@@ -144,8 +163,13 @@ export function createPostgresWholesaleRuntime({
     ...(notificationProjectionMaxAttempts !== undefined ? { maxProjectionAttempts: notificationProjectionMaxAttempts } : {}),
   });
   const notifications = withNotificationPageMetadata({ service: notificationCore, reader: notificationReader });
+  // Хранилище очереди создаётся всегда, а служба публикации — только когда есть кому публиковать.
+  // Раньше без адреса вебхука не создавалось ничего, и вместе со службой исчезала возможность
+  // **посмотреть на очередь**: тысяча событий копилась месяц, и спросить об этом было некого. Отсутствие
+  // подписчика — законная настройка; молчание о накопленном остатке — нет.
+  const outboxPublicationStore = createPostgresOutboxPublicationStore({ pool });
   const outboxPublication = outboxPublisher ? createOutboxPublisherService({
-    store: createPostgresOutboxPublicationStore({ pool }), publisher: outboxPublisher,
+    store: outboxPublicationStore, publisher: outboxPublisher,
     ...(clock ? { clock } : {}), ...(outboxPublicationWorkerId ? { workerId: outboxPublicationWorkerId } : {}),
     ...(outboxPublicationLeaseMs !== undefined ? { leaseMs: outboxPublicationLeaseMs } : {}),
     ...(outboxPublicationRetryDelayMs !== undefined ? { retryDelayMs: outboxPublicationRetryDelayMs } : {}),
@@ -163,12 +187,12 @@ export function createPostgresWholesaleRuntime({
     ...(outboxRetentionMs !== undefined ? { outboxRetentionMs } : {}),
   });
   const workspace = createWorkspaceQueryService({ reader: createPostgresWorkspaceReader({ pool }) });
-  const transport = { authenticate: auth.authenticate, auth, readiness, platform, catalog, productIdentity, productReadiness, commercialPublication, orderEconomics, materials, boms, measurements, samples, partners, retailDoors, sourcing, techPacks, collaboration, orders, notifications, workspace };
+  const transport = { authenticate: auth.authenticate, auth, readiness, platform, catalog, productIdentity, productReadiness, commercialPublication, orderEconomics, materials, boms, measurements, samples, libraries, history, supplierPortal, categoryAttributes, organisationMembers, partners, retailDoors, sourcing, techPacks, collaboration, orders, notifications, workspace };
   const handler = createWholesaleHttpHandler(transport);
   const fetchHandler = createWholesaleFetchHandler(transport);
   return Object.freeze({
-    auth, readiness, maintenance, outboxPublication, store, catalogStore, productIdentityStore, productIdentityReader, productReadinessStore, productReadinessSourceReader, commercialPublicationStore, orderEconomicsStore, materialStore, bomStore, measurementStore, sampleStore, sourcingStore, techPackStore,
-    platform, catalog, productIdentity, productReadiness, commercialPublication, orderEconomics, materials, boms, measurements, samples, partners, retailDoors, sourcing, techPacks, collaboration, orders, notifications, workspace,
+    auth, readiness, maintenance, outboxPublication, outboxPublicationStore, store, catalogStore, productIdentityStore, productIdentityReader, productReadinessStore, productReadinessSourceReader, commercialPublicationStore, orderEconomicsStore, materialStore, bomStore, measurementStore, sampleStore, sourcingStore, techPackStore,
+    platform, catalog, productIdentity, productReadiness, commercialPublication, orderEconomics, materials, boms, measurements, samples, libraries, history, supplierPortal, categoryAttributes, organisationMembers, partners, retailDoors, sourcing, techPacks, collaboration, orders, notifications, workspace,
     handler, fetchHandler,
   });
 }

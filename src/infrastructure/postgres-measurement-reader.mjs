@@ -28,6 +28,9 @@ export function createPostgresMeasurementReader({ pool } = {}) {
         return result.rows[0]?.payload;
       }, { begin: SNAPSHOT_BEGIN });
     },
+    pageCanonicalForActor(actorId, options) {
+      return withPostgresTransaction(pool, (queryable) => canonicalPage(queryable, actorId, options), { begin: SNAPSHOT_BEGIN });
+    },
     getCanonicalForActor(actorId, chartId) {
       return withPostgresTransaction(pool, async (queryable) => {
         const result = await queryable.query(
@@ -84,5 +87,40 @@ async function page(queryable, actorId, { limit, afterSku, filters }) {
   );
   const rows = result.rows.slice(0, limit);
   return Object.freeze({ items: Object.freeze(rows.map((row) => row.payload)), hasMore: result.rows.length > limit, ...(result.rows.length > limit ? { nextSku: rows.at(-1).sku } : {}) });
+}
+// Каноническая таблица опознаётся тем же признаком, что и в чтении по идентификатору: полная
+// тройка происхождения. Список по SKU её намеренно исключает (`chart.sku IS NOT NULL`), а этот —
+// намеренно включает только её, и ничего не берёт из каталога SKU: у канонической таблицы SKU нет.
+async function canonicalPage(queryable, actorId, { limit, afterId, filters }) {
+  const params = [actorId, MEASUREMENT_READ_ROLES];
+  const clauses = [
+    `EXISTS (
+       SELECT 1 FROM memberships AS membership
+        WHERE membership.user_id = $1
+          AND membership.organisation_id = chart.brand_id
+          AND membership.status = 'active'
+          AND membership.role = ANY($2::text[])
+     )`,
+    'chart.style_version_id IS NOT NULL',
+    'chart.colorway_id IS NOT NULL',
+    'chart.size_scale_version_id IS NOT NULL',
+  ];
+  if (filters.brandId) { params.push(filters.brandId); clauses.push(`chart.brand_id = $${params.length}`); }
+  if (filters.status) { params.push(filters.status); clauses.push(`chart.status = $${params.length}`); }
+  if (filters.unit) { params.push(filters.unit); clauses.push(`chart.unit = $${params.length}`); }
+  if (filters.styleVersionId) { params.push(filters.styleVersionId); clauses.push(`chart.style_version_id = $${params.length}`); }
+  if (filters.colorwayId) { params.push(filters.colorwayId); clauses.push(`chart.colorway_id = $${params.length}`); }
+  if (afterId) { params.push(afterId); clauses.push(`chart.id > $${params.length}`); }
+  params.push(limit + 1);
+  const result = await queryable.query(
+    `SELECT chart.payload, chart.id
+       FROM measurement_charts AS chart
+      WHERE ${clauses.join(' AND ')}
+      ORDER BY chart.id ASC
+      LIMIT $${params.length}`,
+    params,
+  );
+  const rows = result.rows.slice(0, limit);
+  return Object.freeze({ items: Object.freeze(rows.map((row) => row.payload)), hasMore: result.rows.length > limit, ...(result.rows.length > limit ? { nextId: rows.at(-1).id } : {}) });
 }
 function escapeLike(value) { return value.replace(/[\\%_]/g, (character) => `\\${character}`); }

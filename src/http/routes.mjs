@@ -5,21 +5,48 @@ import { decodePathParameter } from './transport-contract.mjs';
 const EMPTY_BODY = bodyContract();
 const CAMPAIGN_BODY = bodyContract(['brandId', 'name', 'season', 'startsAt', 'endsAt']);
 const COLLECTION_BODY = bodyContract(['campaignId', 'brandId', 'name', 'currency']);
-const CATALOG_SKU_BODY = bodyContract(['sku', 'collectionId', 'brandId', 'name', 'wholesalePrice', 'currency', 'minimumOrderQuantity', 'availableQuantity']);
-const CATALOG_SKU_UPDATE_BODY = bodyContract(['expectedVersion', 'name', 'wholesalePrice', 'minimumOrderQuantity', 'availableQuantity']);
+const MDM_REF = ['entryId', 'version'];
+const PLACEHOLDER_FIELDS = [
+  'campaignId', 'placeholderCode', 'nameRu', 'nameEn', 'categoryRef', 'genderRef', 'ageGroupRef',
+  'noveltyRef', 'seasonalityRef', 'fitRef', 'capsule', 'drop', 'description', 'colourwayCount',
+  'plannedQuantity', 'launchAt', 'currency', 'recommendedRetailPriceMinor', 'plannedUnitCostMinor',
+];
+const PLACEHOLDER_BODY = bodyContract(PLACEHOLDER_FIELDS, {
+  categoryRef: MDM_REF, genderRef: MDM_REF, ageGroupRef: MDM_REF,
+  noveltyRef: MDM_REF, seasonalityRef: MDM_REF, fitRef: MDM_REF,
+});
+const PLACEHOLDER_IMPORT_ROW = [
+  'line', 'placeholderCode', 'nameRu', 'nameEn', 'category', 'gender', 'ageGroup', 'novelty',
+  'seasonality', 'fit', 'capsule', 'drop', 'description', 'colourwayCount', 'plannedQuantity',
+  'launchAt', 'currency', 'recommendedRetailPrice', 'plannedUnitCost',
+];
+const PLACEHOLDER_IMPORT_BODY = bodyContract(['campaignId', 'mode', 'defaultCurrency', 'rows'], {}, { rows: PLACEHOLDER_IMPORT_ROW });
+const PLACEHOLDER_TRANSITION_BODY = bodyContract(['expectedVersion', 'nextStatus']);
+const PLACEHOLDER_STYLE_LINK_BODY = bodyContract(['styleId']);
+const RESPONSIBILITY_BODY = bodyContract(['role', 'userId']);
+const LOOK_FIELDS = ['position', 'titleRu', 'titleEn', 'storyRu', 'storyEn', 'imageUri', 'skus'];
+const LOOK_CREATE_BODY = bodyContract(LOOK_FIELDS);
+const LOOK_UPDATE_BODY = bodyContract(['expectedVersion', ...LOOK_FIELDS]);
+const CATALOG_SKU_BODY = bodyContract(['sku', 'collectionId', 'brandId', 'name', 'wholesalePrice', 'currency', 'minimumOrderQuantity', 'availableQuantity', 'packSize']);
+const CATALOG_SKU_UPDATE_BODY = bodyContract(['expectedVersion', 'name', 'wholesalePrice', 'minimumOrderQuantity', 'availableQuantity', 'packSize']);
 const CATALOG_SKU_PUBLISH_BODY = bodyContract(['expectedVersion']);
-const MATERIAL_FIELDS = ['name', 'type', 'unit', 'supplierName', 'supplierReference', 'composition', 'color', 'currency', 'unitCost', 'minimumOrderQuantity', 'availableQuantity'];
+const MATERIAL_FIELDS = ['name', 'type', 'unit', 'supplierName', 'supplierReference', 'composition', 'color', 'currency', 'unitCost', 'minimumOrderQuantity', 'availableQuantity',
+  // Измеримые свойства полотна: плотность, ширина раскроя с её единицей, страна происхождения
+  // и пересчёт из единицы закупки в единицу расхода.
+  'weightGsm', 'cuttableWidth', 'cuttableWidthUnit', 'countryOfOrigin', 'purchaseUnit', 'conversionFactor', 'materialSubtype'];
 const MATERIAL_BODY = bodyContract(['code', 'brandId', ...MATERIAL_FIELDS]);
 const MATERIAL_UPDATE_BODY = bodyContract(['expectedVersion', ...MATERIAL_FIELDS]);
 const MATERIAL_PUBLISH_BODY = bodyContract(['expectedVersion']);
+const MATERIAL_COMPOSITION_BODY = bodyContract(['expectedVersion', 'lines']);
+const MATERIAL_SPECIFICATION_BODY = bodyContract(['expectedVersion', 'weightGsm', 'cuttableWidth', 'cuttableWidthUnit', 'countryOfOrigin', 'purchaseUnit', 'conversionFactor', 'materialSubtype']);
 const BOM_EDITABLE_FIELDS = ['currency', 'lines', 'laborCost', 'overheadCost', 'logisticsCost', 'otherCost', 'notes'];
-const BOM_LINE_FIELDS = ['lineId', 'component', 'materialCode', 'quantity', 'wastePercent', 'exchangeRate'];
+const BOM_LINE_FIELDS = ['lineId', 'component', 'materialCode', 'quantity', 'wastePercent', 'exchangeRate', 'placement', 'isMain'];
 const BOM_BODY = bodyContract(['sku', ...BOM_EDITABLE_FIELDS], {}, { lines: BOM_LINE_FIELDS });
 const BOM_UPDATE_BODY = bodyContract(['expectedVersion', ...BOM_EDITABLE_FIELDS], {}, { lines: BOM_LINE_FIELDS });
 const BOM_PUBLISH_BODY = bodyContract(['expectedVersion']);
 const MEASUREMENT_EDITABLE_FIELDS = ['unit', 'baseSizeCode', 'sizes', 'points', 'notes'];
 const MEASUREMENT_SIZE_FIELDS = ['code', 'label'];
-const MEASUREMENT_POINT_FIELDS = ['pointCode', 'name', 'description', 'toleranceMinus', 'tolerancePlus', 'measurements'];
+const MEASUREMENT_POINT_FIELDS = ['pointCode', 'name', 'description', 'toleranceMinus', 'tolerancePlus', 'measurements', 'gradeSteps'];
 const MEASUREMENT_VALUE_FIELDS = ['sizeCode', 'value'];
 const MEASUREMENT_BODY = measurementBody(bodyContract(['sku', ...MEASUREMENT_EDITABLE_FIELDS], {}, { sizes: MEASUREMENT_SIZE_FIELDS, points: MEASUREMENT_POINT_FIELDS }), MEASUREMENT_VALUE_FIELDS);
 const MEASUREMENT_UPDATE_BODY = measurementBody(bodyContract(['expectedVersion', ...MEASUREMENT_EDITABLE_FIELDS], {}, { sizes: MEASUREMENT_SIZE_FIELDS, points: MEASUREMENT_POINT_FIELDS }), MEASUREMENT_VALUE_FIELDS);
@@ -27,7 +54,7 @@ const MEASUREMENT_PUBLISH_BODY = bodyContract(['expectedVersion']);
 const CANONICAL_MEASUREMENT_IDENTITY_FIELDS = ['styleVersionId', 'colorwayId', 'sizeScaleVersionId'];
 const CANONICAL_MEASUREMENT_EDITABLE_FIELDS = ['measurementUnitEntryId', 'baseSizeValueId', 'sizes', 'points', 'notes'];
 const CANONICAL_MEASUREMENT_SIZE_FIELDS = ['sizeValueId'];
-const CANONICAL_MEASUREMENT_POINT_FIELDS = ['pointEntryId', 'description', 'toleranceMinus', 'tolerancePlus', 'measurements'];
+const CANONICAL_MEASUREMENT_POINT_FIELDS = ['pointEntryId', 'description', 'toleranceMinus', 'tolerancePlus', 'measurements', 'gradeSteps'];
 const CANONICAL_MEASUREMENT_VALUE_FIELDS = ['sizeValueId', 'value'];
 const CANONICAL_MEASUREMENT_BODY = measurementBody(
   bodyContract([...CANONICAL_MEASUREMENT_IDENTITY_FIELDS, ...CANONICAL_MEASUREMENT_EDITABLE_FIELDS], {}, { sizes: CANONICAL_MEASUREMENT_SIZE_FIELDS, points: CANONICAL_MEASUREMENT_POINT_FIELDS }),
@@ -60,6 +87,13 @@ export function createWholesaleRoutes({ platform, catalog, materials, boms, meas
   return [
     mutate('POST', /^\/v2\/campaigns$/, CAMPAIGN_BODY, ({ commandId, actorId, body }) => platform.createCampaign(commandId, actorId, body)),
     mutate('POST', /^\/v2\/campaigns\/([^/]+)\/open$/, EMPTY_BODY, ({ commandId, actorId, params }) => platform.openCampaign(commandId, actorId, params[0])),
+    mutate('POST', /^\/v2\/product\/styles\/([^/]+)\/responsibilities$/, RESPONSIBILITY_BODY, ({ commandId, actorId, params, body }) => platform.assignProductResponsibility(commandId, actorId, decodePathParameter(params[0]), body)),
+    mutate('POST', /^\/v2\/product\/responsibilities\/([^/]+)\/release$/, EMPTY_BODY, ({ commandId, actorId, params }) => platform.releaseProductResponsibility(commandId, actorId, decodePathParameter(params[0]))),
+    mutate('POST', /^\/v2\/assortment\/placeholders$/, PLACEHOLDER_BODY, ({ commandId, actorId, body }) => platform.createProductPlaceholder(commandId, actorId, body)),
+    read('GET', /^\/v2\/assortment\/placeholders\/import\/template$/, [], () => platform.placeholderImportContract()),
+    mutate('POST', /^\/v2\/assortment\/placeholders\/import$/, PLACEHOLDER_IMPORT_BODY, ({ commandId, actorId, body }) => platform.importProductPlaceholders(commandId, actorId, body)),
+    mutate('POST', /^\/v2\/assortment\/placeholders\/([^/]+)\/transition$/, PLACEHOLDER_TRANSITION_BODY, ({ commandId, actorId, params, body }) => platform.transitionProductPlaceholder(commandId, actorId, decodePathParameter(params[0]), body)),
+    mutate('POST', /^\/v2\/assortment\/placeholders\/([^/]+)\/styles$/, PLACEHOLDER_STYLE_LINK_BODY, ({ commandId, actorId, params, body }) => platform.linkStyleToPlaceholder(commandId, actorId, decodePathParameter(params[0]), body)),
     mutate('POST', /^\/v2\/collections$/, COLLECTION_BODY, ({ commandId, actorId, body }) => platform.createCollection(commandId, actorId, body)),
     mutate('POST', /^\/v2\/collections\/([^/]+)\/publish$/, EMPTY_BODY, ({ commandId, actorId, params }) => platform.publishCollection(commandId, actorId, params[0])),
     read('GET', /^\/v2\/catalog\/skus$/, ['limit', 'cursor', 'q', 'status', 'brandId', 'collectionId'], ({ actorId, query }) => catalogService.pageForActor(actorId, query)),
@@ -70,6 +104,12 @@ export function createWholesaleRoutes({ platform, catalog, materials, boms, meas
     read('GET', /^\/v2\/materials$/, ['limit', 'cursor', 'q', 'status', 'type', 'brandId'], ({ actorId, query }) => materialService.pageForActor(actorId, query)),
     read('GET', /^\/v2\/materials\/([^/]+)$/, [], ({ actorId, params }) => materialService.getForActor(actorId, params[0])),
     mutate('POST', /^\/v2\/materials$/, MATERIAL_BODY, ({ commandId, actorId, body }) => materialService.createMaterial(commandId, actorId, body)),
+    // Состав задаётся целиком: правка по одной строке провела бы материал через сумму, которая ни
+    // во что не складывается, и отложенная проверка базы отвергла бы её на COMMIT.
+    // Физические свойства уточняются и после публикации: полезная ширина рулона выясняется, когда
+    // рулон приезжает. Посчитанные ведомости от этого не меняются — цена в строке снята снимком.
+    mutate('PUT', /^\/v2\/materials\/([^/]+)\/specification$/, MATERIAL_SPECIFICATION_BODY, ({ commandId, actorId, params, body }) => materialService.amendMaterialSpecification(commandId, actorId, decodePathParameter(params[0]), body)),
+    mutate('PUT', /^\/v2\/materials\/([^/]+)\/composition$/, MATERIAL_COMPOSITION_BODY, ({ commandId, actorId, params, body }) => materialService.setMaterialComposition(commandId, actorId, decodePathParameter(params[0]), body)),
     mutate('PATCH', /^\/v2\/materials\/([^/]+)$/, MATERIAL_UPDATE_BODY, ({ commandId, actorId, params, body }) => materialService.updateMaterial(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/materials\/([^/]+)\/publish$/, MATERIAL_PUBLISH_BODY, ({ commandId, actorId, params, body }) => materialService.publishMaterial(commandId, actorId, params[0], body)),
     read('GET', /^\/v2\/boms$/, ['limit', 'cursor', 'q', 'status', 'brandId'], ({ actorId, query }) => bomService.pageForActor(actorId, query)),
@@ -78,6 +118,9 @@ export function createWholesaleRoutes({ platform, catalog, materials, boms, meas
     mutate('PATCH', /^\/v2\/boms\/([^/]+)$/, BOM_UPDATE_BODY, ({ commandId, actorId, params, body }) => bomService.updateBom(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/boms\/([^/]+)\/publish$/, BOM_PUBLISH_BODY, ({ commandId, actorId, params, body }) => bomService.publishBom(commandId, actorId, params[0], body)),
     read('GET', /^\/v2\/measurements$/, ['limit', 'cursor', 'q', 'status', 'unit', 'brandId'], ({ actorId, query }) => measurementService.pageForActor(actorId, query)),
+    // Стоит **до** чтения по идентификатору: иначе слово `canonical` было бы принято за
+    // идентификатор таблицы, и список остался бы недостижим тем же способом, что и сами таблицы.
+    read('GET', /^\/v2\/measurements\/canonical$/, ['limit', 'cursor', 'status', 'unit', 'brandId', 'styleVersionId', 'colorwayId'], ({ actorId, query }) => measurementService.pageCanonicalForActor(actorId, query)),
     read('GET', /^\/v2\/measurements\/canonical\/([^/]+)$/, [], ({ actorId, params }) => measurementService.getCanonicalForActor(actorId, params[0])),
     mutate('POST', /^\/v2\/measurements\/canonical$/, CANONICAL_MEASUREMENT_BODY, ({ commandId, actorId, body }) => measurementService.createCanonicalMeasurementChart(commandId, actorId, body)),
     mutate('PATCH', /^\/v2\/measurements\/canonical\/([^/]+)$/, CANONICAL_MEASUREMENT_UPDATE_BODY, ({ commandId, actorId, params, body }) => measurementService.updateCanonicalMeasurementChart(commandId, actorId, params[0], body)),
@@ -88,6 +131,10 @@ export function createWholesaleRoutes({ platform, catalog, materials, boms, meas
     mutate('POST', /^\/v2\/measurements\/([^/]+)\/publish$/, MEASUREMENT_PUBLISH_BODY, ({ commandId, actorId, params, body }) => measurementService.publishMeasurementChart(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/showrooms$/, SHOWROOM_BODY, ({ commandId, actorId, body }) => collaboration.createShowroom(commandId, actorId, body)),
     mutate('POST', /^\/v2\/showrooms\/([^/]+)\/open$/, EMPTY_BODY, ({ commandId, actorId, params }) => collaboration.openShowroom(commandId, actorId, params[0])),
+    read('GET', /^\/v2\/showrooms\/([^/]+)\/looks$/, [], ({ actorId, params }) => collaboration.listShowroomLooks(actorId, decodePathParameter(params[0]))),
+    mutate('POST', /^\/v2\/showrooms\/([^/]+)\/looks$/, LOOK_CREATE_BODY, ({ commandId, actorId, params, body }) => collaboration.addShowroomLook(commandId, actorId, decodePathParameter(params[0]), body)),
+    mutate('PATCH', /^\/v2\/showroom-looks\/([^/]+)$/, LOOK_UPDATE_BODY, ({ commandId, actorId, params, body }) => collaboration.updateShowroomLook(commandId, actorId, decodePathParameter(params[0]), body)),
+    mutate('DELETE', /^\/v2\/showroom-looks\/([^/]+)$/, EMPTY_BODY, ({ commandId, actorId, params }) => collaboration.removeShowroomLook(commandId, actorId, decodePathParameter(params[0]))),
     mutate('POST', /^\/v2\/relationships$/, RELATIONSHIP_BODY, ({ commandId, actorId, body }) => partners.requestRelationship(commandId, actorId, body)),
     mutate('POST', /^\/v2\/relationships\/([^/]+)\/accept$/, EMPTY_BODY, ({ commandId, actorId, params }) => partners.acceptRelationship(commandId, actorId, params[0])),
     mutate('POST', /^\/v2\/relationships\/([^/]+)\/reject$/, EMPTY_BODY, ({ commandId, actorId, params }) => partners.rejectRelationship(commandId, actorId, params[0])),
@@ -163,7 +210,7 @@ function measurementBody(contract, valueFields) {
 }
 function sameId(bodyValue, routeValue, field) { invariant(bodyValue === undefined || bodyValue === routeValue, 'HTTP_IDENTIFIER_MISMATCH', 'Body identifier does not match route identifier', { field, routeValue, bodyValue }); }
 function unavailableCatalog() { const fail = () => invariant(false, 'CATALOG_SERVICE_REQUIRED', 'Catalog service is required'); return Object.freeze({ createSku: fail, updateSku: fail, publishSku: fail, pageForActor: fail, getForActor: fail }); }
-function unavailableMaterials() { const fail = () => invariant(false, 'MATERIAL_SERVICE_REQUIRED', 'Material service is required'); return Object.freeze({ createMaterial: fail, updateMaterial: fail, publishMaterial: fail, pageForActor: fail, getForActor: fail }); }
+function unavailableMaterials() { const fail = () => invariant(false, 'MATERIAL_SERVICE_REQUIRED', 'Material service is required'); return Object.freeze({ createMaterial: fail, updateMaterial: fail, publishMaterial: fail, amendMaterialSpecification: fail, setMaterialComposition: fail, pageForActor: fail, getForActor: fail }); }
 function unavailableBoms() { const fail = () => invariant(false, 'BOM_SERVICE_REQUIRED', 'BOM service is required'); return Object.freeze({ createBom: fail, updateBom: fail, publishBom: fail, pageForActor: fail, getForActor: fail }); }
 function unavailableMeasurements() {
   const fail = () => invariant(false, 'MEASUREMENT_SERVICE_REQUIRED', 'Measurement chart service is required');

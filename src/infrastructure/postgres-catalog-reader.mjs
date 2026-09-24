@@ -1,6 +1,7 @@
 import { invariant } from '../core/errors.mjs';
 import { withPostgresTransaction } from './postgres-transaction.mjs';
 import { loadPostgresVisibilityScope } from './postgres-visibility-scope.mjs';
+import { projectCatalogSkuForActor, projectCatalogSkusForActor } from './catalog-counterparty-projection.mjs';
 
 const SNAPSHOT_BEGIN = 'BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY';
 
@@ -38,7 +39,8 @@ export function createPostgresCatalogReader({ pool } = {}) {
         const rows = result.rows.slice(0, limit);
         const hasMore = result.rows.length > limit;
         return Object.freeze({
-          items: Object.freeze(rows.map((row) => row.payload)),
+          // Внутренний склад бренда не уходит контрагенту: резерв — это чужой спрос.
+          items: Object.freeze(projectCatalogSkusForActor(rows.map((row) => row.payload), scope.brandIds)),
           hasMore,
           ...(hasMore ? { nextSku: rows.at(-1).sku } : {}),
         });
@@ -58,7 +60,7 @@ export function createPostgresCatalogReader({ pool } = {}) {
               AND (brand_id = ANY($2::text[]) OR (collection_id = ANY($3::text[]) AND status = 'published'))`,
           [sku, scope.brandIds, scope.visibleCollectionIds],
         );
-        return result.rows[0]?.payload;
+        return result.rows[0] ? projectCatalogSkuForActor(result.rows[0].payload, scope.brandIds) : undefined;
       }, { begin: SNAPSHOT_BEGIN });
     },
   });

@@ -1,5 +1,5 @@
 import { domainEvent } from '../core/events.mjs';
-import { DomainError, invariant } from '../core/errors.mjs';
+import { DomainError, invariant, requireEntity } from '../core/errors.mjs';
 import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
 import { assertWholesaleStore } from './store-contract.mjs';
 import { CAPABILITIES, assertCapability, assertTradeCapability } from '../modules/access-control/public.mjs';
@@ -203,7 +203,7 @@ export function createOrderBuilderService({
             const showroom = requireEntity(await tx.getShowroom(selection.showroomId), 'SHOWROOM_NOT_FOUND', { showroomId: selection.showroomId });
             invariant(showroom.status === 'open', 'ORDER_COMMIT_SHOWROOM_NOT_OPEN', 'Commercial order can be committed only while its showroom is open', { showroomId: showroom.id, status: showroom.status });
             const invitation = requireEntity(await tx.getShowroomInvitation(current.accessGrantId), 'SHOWROOM_INVITATION_NOT_FOUND', { invitationId: current.accessGrantId });
-            assertAcceptedShowroomAccess(invitation, { showroomId: selection.showroomId, brandId: current.brandId, shopId: current.shopId, now: clock() });
+            assertAcceptedShowroomAccess(invitation, { showroomId: selection.showroomId, brandId: current.brandId, shopId: current.shopId, now: clock(), relationship: await tx.getRelationshipByTrade(current.brandId, current.shopId) });
             buyerCatalog = requireEntity(await trustedCommercialReader.getBuyerCatalogVersion(current.buyerCatalogVersionId), 'BUYER_CATALOG_NOT_FOUND', { buyerCatalogVersionId: current.buyerCatalogVersionId });
           }
           return Object.freeze({ current, cycle, selection, buyerCatalog });
@@ -305,7 +305,6 @@ function normalizeOrderVersionInput(input) {
 function versionedFingerprint(base, expectedVersion) {
   return expectedVersion === undefined ? base : `${base}:${expectedVersion}`;
 }
-function requireEntity(entity, code, details) { invariant(entity, code, 'Entity not found', details); return entity; }
 
 function translateInventoryError(error) {
   if (error?.code === 'P0001' && INVENTORY_ERROR_CODES.has(error.message)) {

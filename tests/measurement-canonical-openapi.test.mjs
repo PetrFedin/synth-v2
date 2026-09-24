@@ -19,7 +19,21 @@ test('authoritative OpenAPI exposes canonical Product Identity Measurement Chart
   const publish = api.paths['/measurements/canonical/{chartId}/publish'];
 
   assert.ok(collection?.post);
-  assert.equal(collection.get, undefined);
+  // Раньше здесь стояло `assert.equal(collection.get, undefined)` — договор закреплял **отсутствие**
+  // списка, то есть ту самую недостижимость: авторитетный реестр обмеров нельзя было прочитать,
+  // не зная идентификатора, и тест это охранял. Список обязан быть и обязан повторять форму
+  // соседнего списка по SKU, а не заводить свою.
+  assert.ok(collection?.get);
+  assert.equal(collection.get.operationId, 'listCanonicalMeasurementCharts');
+  const queryNames = collection.get.parameters.map((parameter) => parameter.name);
+  assert.deepEqual(queryNames, ['limit', 'cursor', 'status', 'unit', 'brandId', 'styleVersionId', 'colorwayId']);
+  assert.ok(collection.get.parameters.every((parameter) => parameter.in === 'query'));
+  // Страница отдаётся канонической схемой, а не схемой таблицы по SKU: это разные семейства, и
+  // смешивать их в одном ответе значило бы сводить два реестра в один вопреки спецификации.
+  assert.equal(
+    collection.get.responses[200].content['application/json'].schema.properties.data.$ref,
+    '#/components/schemas/CanonicalMeasurementChartPage',
+  );
   assert.ok(item?.get);
   assert.ok(item?.patch);
   assert.equal(item.put, undefined);
@@ -30,6 +44,7 @@ test('authoritative OpenAPI exposes canonical Product Identity Measurement Chart
     assert.deepEqual(operation.security, [{ bearerAuth: [] }]);
   }
   assert.deepEqual(item.get.security, [{ bearerAuth: [] }]);
+  assert.deepEqual(collection.get.security, [{ bearerAuth: [] }]);
 });
 
 test('canonical Measurement Chart request bodies pin exact Product Identity and governed MDM fields', () => {

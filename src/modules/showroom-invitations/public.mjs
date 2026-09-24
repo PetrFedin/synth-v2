@@ -98,7 +98,18 @@ export function revokeShowroomInvitation(invitation, actorBrandId, updatedAt) {
   });
 }
 
-export function assertAcceptedShowroomAccess(invitation, { showroomId, brandId, shopId, now }) {
+// Доступ магазина к показу — это **две** вещи сразу: принятое приглашение и действующая торговая
+// связь. Приглашение отвечает «этот показ открыли именно вам», связь — «мы всё ещё торгуем».
+//
+// Спрашивалось только приглашение. Проверено живьём: бренд отзывает связь, приглашение при этом
+// остаётся принятым (каскада нет и быть не должно — это разные решения), и отключённый партнёр
+// продолжает читать и образы, и каталог покупателя вместе с оптовыми ценами. Отзыв связи не
+// закрывал ничего.
+//
+// Связь поэтому обязательна в аргументах, а не необязательна: место вызова, которое её не подаст,
+// упрётся в `ACTIVE_RELATIONSHIP_REQUIRED` и будет исправлено, а не тихо сохранит дыру.
+export function assertAcceptedShowroomAccess(invitation, { showroomId, brandId, shopId, now, relationship }) {
+  assertActiveRelationship(relationship, { brandId, shopId });
   invariant(invitation, 'SHOWROOM_ACCESS_REQUIRED', 'Accepted showroom invitation is required', { showroomId, shopId });
   invariant(
     invitation.showroomId === showroomId && invitation.brandId === brandId && invitation.shopId === shopId,

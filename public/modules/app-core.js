@@ -204,7 +204,11 @@ function renderApp() {
   // only asked the same question twice. languageSwitcher() is unchanged and still builds the topbar
   // control and the one on the sign-in card.
   const refresh = sidebarButton('refresh', I18N.t('common.refresh'));
-  refresh.addEventListener('click', () => runAction(async () => { await reload(); renderApp(); }, refresh));
+  refresh.addEventListener('click', () => runAction(async () => {
+    await reload();
+    renderApp();
+    toast(localText('\u0414\u0430\u043d\u043d\u044b\u0435 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u044b.', 'Data refreshed.'));
+  }, refresh));
   const logout = sidebarButton('logout', I18N.t('common.logout'), 'danger');
   logout.addEventListener('click', () => runAction(async () => {
     await api('/v2/auth/logout', { method: 'POST' }).catch(() => null);
@@ -231,6 +235,7 @@ function renderApp() {
 
   shell.append(sidebar, main);
   root.append(shell, dialogHost(), el('div', { id: 'toast', className: 'toast' }));
+  paintToast();
   installSearchShortcut();
 }
 
@@ -239,11 +244,24 @@ function renderTopbar() {
   const breadcrumb = el('div', { className: 'breadcrumb' });
   const crumbTitle = viewTitle(state.view);
   const crumbSection = viewSectionName(state.view);
-  breadcrumb.append(
-    icon('back'),
-    el('span', { className: 'breadcrumb-muted', rawText: 'SYNTHA' }),
-    el('span', { className: 'breadcrumb-divider', rawText: '/' }),
-  );
+  // The path carried a back chevron and was a plain div: it looked like the way back out of a section
+  // and did nothing at all. The root is now the control it already appeared to be, and the chevron is
+  // drawn only when there is somewhere to go — on the workspace itself there is not.
+  const atRoot = state.view === 'overview';
+  const home = el('button', {
+    className: 'breadcrumb-root',
+    type: 'button',
+    title: localText('\u041d\u0430 \u0440\u0430\u0431\u043e\u0447\u0438\u0439 \u0441\u0442\u043e\u043b', 'Back to the workspace'),
+  });
+  if (!atRoot) home.append(icon('back'));
+  home.append(el('span', { className: 'breadcrumb-muted', rawText: 'SYNTHA' }));
+  home.disabled = atRoot;
+  home.addEventListener('click', () => {
+    if (state.view === 'overview') return;
+    state.view = 'overview';
+    renderApp();
+  });
+  breadcrumb.append(home, el('span', { className: 'breadcrumb-divider', rawText: '/' }));
   // On the workspace the section and the page are the same place, and the path read
   // "SYNTHA / Рабочий стол / Рабочий стол". A step that repeats the next one is not a step.
   if (crumbSection && crumbSection.trim().toLowerCase() !== crumbTitle.trim().toLowerCase()) {
@@ -277,8 +295,24 @@ function renderTopbar() {
   if (unread) notifications.append(el('span', { className: 'notification-count', rawText: String(unread) }));
   notifications.addEventListener('click', () => { state.view = 'notifications'; renderApp(); });
 
-  const organisation = el('div', { className: 'topbar-organisation' });
+  const organisation = el('div', { className: 'topbar-organisation', tabindex: '0', role: 'button' });
   organisation.append(icon('building'), el('span', { rawText: ownOrganisationNames()[0] || I18N.t('common.noOrganisation') }));
+  // Both of these carried a dropdown chevron and opened nothing at all. They now open a real menu.
+  const orgMenu = el('div', { className: 'topbar-menu' });
+  const orgList = el('div', { className: 'topbar-menu-list' });
+  const memberships = state.workspace.memberships || [];
+  if (!memberships.length) orgList.append(el('p', { className: 'muted', rawText: I18N.t('common.noOrganisation') }));
+  memberships.forEach(item => {
+    const row = el('div', { className: 'topbar-menu-item' });
+    row.append(
+      el('strong', { rawText: orgName(item.organisationId) }),
+      el('small', { rawText: stageLabel(item.role) }),
+    );
+    orgList.append(row);
+  });
+  orgMenu.append(el('p', { className: 'topbar-menu-title', rawText: localText('\u0412\u0430\u0448\u0438 \u043e\u0440\u0433\u0430\u043d\u0438\u0437\u0430\u0446\u0438\u0438', 'Your organisations') }), orgList);
+  organisation.append(orgMenu);
+  attachTopbarMenu(organisation, orgMenu);
 
   const displayName = state.user?.displayName || state.user?.email || I18N.t('common.user');
   const membership = state.workspace.memberships[0];
@@ -289,9 +323,51 @@ function renderTopbar() {
     el('small', { rawText: membership?.role || localText('\u041f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044c','User') }),
   );
   user.append(el('span', { className: 'user-avatar', rawText: initials(displayName) }), userCopy);
+  user.tabIndex = 0;
+  user.setAttribute('role', 'button');
+  const userMenu = el('div', { className: 'topbar-menu' });
+  const userInfo = el('div', { className: 'topbar-menu-item' });
+  userInfo.append(
+    el('strong', { rawText: displayName }),
+    el('small', { rawText: state.user?.email || '' }),
+  );
+  const signOut = el('button', { className: 'button small danger topbar-menu-action', type: 'button', rawText: I18N.t('common.logout') });
+  signOut.addEventListener('click', () => runAction(async () => {
+    await api('/v2/auth/logout', { method: 'POST' }).catch(() => null);
+    clearSession();
+    renderLogin();
+  }, signOut));
+  userMenu.append(userInfo, signOut);
+  user.append(userMenu);
+  attachTopbarMenu(user, userMenu);
   actions.append(notifications, organisation, user);
   topbar.append(breadcrumb, search, actions);
   return topbar;
+}
+
+function attachTopbarMenu(trigger, menu) {
+  menu.hidden = true;
+  trigger.setAttribute('aria-expanded', 'false');
+  const close = () => {
+    menu.hidden = true;
+    trigger.setAttribute('aria-expanded', 'false');
+  };
+  trigger.addEventListener('click', event => {
+    if (menu.contains(event.target)) return;
+    const open = menu.hidden;
+    document.querySelectorAll('.topbar-menu').forEach(node => { node.hidden = true; });
+    document.querySelectorAll('[aria-expanded="true"].topbar-organisation, [aria-expanded="true"].topbar-user').forEach(node => node.setAttribute('aria-expanded', 'false'));
+    menu.hidden = !open;
+    trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  trigger.addEventListener('keydown', event => {
+    if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); trigger.click(); }
+    if (event.key === 'Escape') close();
+  });
+  document.addEventListener('click', event => {
+    if (!trigger.isConnected) return;
+    if (!trigger.contains(event.target)) close();
+  });
 }
 
 function renderPageHeader() {
@@ -345,6 +421,32 @@ function filterCurrentView(value) {
       if (matches) visible += 1;
     });
     stack.classList.toggle('search-empty-stack', Boolean(query) && entities.length > 0 && visible === 0);
+  });
+  // Registries render as tables, not as .stack/.entity cards, so the topbar search used to match
+  // nothing at all in every workspace section. Rows are hidden in place: re-rendering here would
+  // take the focus away from the field on every keystroke.
+  // Every module that renders its own table was invisible to this search: the sourcing, production,
+  // quality and linesheet screens do not use .od-table, so the box in the top bar promised "search
+  // this section" and did nothing in eight of them.
+  host.querySelectorAll('.od-table, .sourcing-table, .production-orders-table, .production-execution-table, .final-quality-table, .ls9-table, .bom-table, .measurement-table, .sample-table, .tech-pack-table').forEach(table => {
+    const rows = [...table.querySelectorAll('tbody tr')];
+    let visible = 0;
+    rows.forEach(row => {
+      const matches = !query || row.textContent.toLocaleLowerCase().includes(query);
+      row.hidden = !matches;
+      row.classList.toggle('od-row-hidden', !matches);
+      if (matches) visible += 1;
+    });
+    // Where the "nothing found" line is hung. A search that empties a table and says nothing looks
+    // like a table that broke: three sections — bills of materials, measurement charts and samples —
+    // filtered correctly and reported it to nobody, because their wrapper was not in this list.
+    const wrap = table.closest('.od-table-wrap, .sourcing-table-wrap, .production-orders-registry, .production-execution-registry, .final-quality-registry, .ls9-table-wrap, .tech-pack-table-wrap, .bom-table-wrap, .measurement-table-wrap, .sample-table-wrap, .planning-table-wrap, .styles-table-wrap, .materials-table-wrap')
+      || table.parentElement;
+    if (!wrap) return;
+    const note = wrap.querySelector('.od-search-empty');
+    if (query && rows.length && !visible) {
+      if (!note) wrap.append(el('div', { className: 'od-empty od-search-empty', rawText: localText('\u041d\u0438\u0447\u0435\u0433\u043e \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u043e', 'Nothing found') }));
+    } else if (note) note.remove();
   });
 }
 

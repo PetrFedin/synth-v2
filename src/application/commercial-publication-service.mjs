@@ -1,5 +1,5 @@
 import { domainEvent } from '../core/events.mjs';
-import { invariant } from '../core/errors.mjs';
+import { invariant, requireEntity } from '../core/errors.mjs';
 import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
 import { decodeCommercialPublicationCursor, encodeCommercialPublicationCursor } from '../core/commercial-publication-cursor.mjs';
 import { CAPABILITIES, assertCapability, roleHasCapability } from '../modules/access-control/public.mjs';
@@ -14,6 +14,7 @@ export function createCommercialPublicationService({
   commercialStore,
   wholesaleStore,
   commercialProjectionReader = commercialStore,
+  projectionListReader = commercialProjectionReader,
   clock = () => new Date().toISOString(),
   nextId = defaultIdGenerator(),
 } = {}) {
@@ -77,7 +78,7 @@ export function createCommercialPublicationService({
       const membership = await tx.getMembership(publication.brandId, actorId);
       assertCapability(membership, CAPABILITIES.SHOWROOM_MANAGE);
       const invitation = requireEntity(await tx.getShowroomInvitationByAccess(showroomId, shopId), 'SHOWROOM_INVITATION_NOT_FOUND', { showroomId, shopId });
-      assertAcceptedShowroomAccess(invitation, { showroomId, brandId: publication.brandId, shopId, now: clock() });
+      assertAcceptedShowroomAccess(invitation, { showroomId, brandId: publication.brandId, shopId, now: clock(), relationship: await tx.getRelationshipByTrade(publication.brandId, shopId) });
       return Object.freeze({ showroom, invitation });
     });
   }
@@ -97,7 +98,7 @@ export function createCommercialPublicationService({
       const shopMembership = await tx.getMembership(buyerCatalog.shopId, actorId);
       assertCapability(shopMembership, CAPABILITIES.DEAL_READ);
       const invitation = requireEntity(await tx.getShowroomInvitation(buyerCatalog.accessGrantId), 'SHOWROOM_INVITATION_NOT_FOUND', { invitationId: buyerCatalog.accessGrantId });
-      assertAcceptedShowroomAccess(invitation, { showroomId: buyerCatalog.showroomId, brandId: buyerCatalog.brandId, shopId: buyerCatalog.shopId, now: clock() });
+      assertAcceptedShowroomAccess(invitation, { showroomId: buyerCatalog.showroomId, brandId: buyerCatalog.brandId, shopId: buyerCatalog.shopId, now: clock(), relationship: await tx.getRelationshipByTrade(buyerCatalog.brandId, buyerCatalog.shopId) });
       return buyerCatalog;
     });
   }
@@ -146,6 +147,36 @@ export function createCommercialPublicationService({
       });
     },
 
+    // Что эта коллекция может опубликовать.
+    //
+    // Публикация требует `commercialProjectionId`, и до сих пор его знал только скрипт: чтобы
+    // собрать этот список в браузере, пришлось бы прочитать ассортимент коллекции (маршрута на
+    // чтение не было вовсе), затем проекции каждой версии модели, затем отбросить
+    // неопубликованные — три круга и правило домена, переписанное в интерфейсе. Правило
+    // остаётся здесь, а наружу уходит ровно то, из чего человек выбирает.
+    //
+    // Спрашивает тот, кто будет публиковать, поэтому и спрашивается та же способность, что у
+    // самой публикации: список, который видно, но из которого нельзя выбрать, — хуже пустого.
+    async listPublishableProjectionsForCollection(actorId, collectionId, { limit = 50 } = {}) {
+      invariant(Number.isInteger(limit) && limit > 0 && limit <= 200, 'COMMERCIAL_PUBLICATION_LIMIT_INVALID', 'Commercial publication page limit must be between 1 and 200', { limit });
+      invariant(projectionListReader && typeof projectionListReader.listCommercialProjectionsByStyleVersion === 'function', 'COMMERCIAL_PROJECTION_LIST_READER_REQUIRED', 'Commercial Product Projection list reader is required');
+      const collection = await publicationContext(actorId, collectionId);
+      const assignments = await wholesaleStore.transaction(async (tx) => {
+        invariant(typeof tx.listCollectionStyleVersions === 'function', 'COLLECTION_STYLE_VERSION_READER_REQUIRED', 'Wholesale store must expose collection Style Version lineage');
+        return tx.listCollectionStyleVersions(collectionId);
+      });
+      const items = [];
+      for (const assignment of assignments ?? []) {
+        const projections = await projectionListReader.listCommercialProjectionsByStyleVersion(assignment.styleVersionId, { limit });
+        for (const projection of projections ?? []) {
+          if (projection.status !== 'published') continue;
+          if (projection.brandId !== collection.brandId) continue;
+          items.push(summarizeProjectionForPicker(projection));
+        }
+      }
+      return Object.freeze({ items: Object.freeze(items), collectionStatus: collection.status });
+    },
+
     async listCommercialPublicationsForActor(actorId, collectionId, { limit = 50, cursor = null } = {}) {
       invariant(Number.isInteger(limit) && limit > 0 && limit <= 200, 'COMMERCIAL_PUBLICATION_LIMIT_INVALID', 'Commercial publication page limit must be between 1 and 200', { limit });
       invariant(typeof commercialStore.listCommercialPublicationsByCollection === 'function', 'COMMERCIAL_PUBLICATION_QUERY_REQUIRED', 'Commercial publication query store is required');
@@ -177,5 +208,22 @@ export function createCommercialPublicationService({
   });
 }
 
-function requireEntity(entity, code, details) { invariant(entity, code, 'Entity not found', details); return entity; }
+// Подпись проекции для выбора: код модели, её название на двух языках и номер версии — то,
+// чем человек отличает одну проекцию от другой. Сама полезная нагрузка — это весь технический
+// снимок модели со всеми цветами, атрибутами и доказательствами обмеров; в список выбора его
+// везти незачем.
+function summarizeProjectionForPicker(projection) {
+  const product = projection?.payload?.technicalSnapshot?.product ?? {};
+  return Object.freeze({
+    id: projection.id,
+    styleVersionId: projection.styleVersionId,
+    versionNo: projection.versionNo,
+    status: projection.status,
+    styleCode: product.style?.styleCode ?? null,
+    titleRu: product.styleVersion?.titleRu ?? null,
+    titleEn: product.styleVersion?.titleEn ?? null,
+    developmentRoute: projection?.payload?.developmentRoute ?? null,
+  });
+}
+
 function defaultIdGenerator() { let sequence = 0; return (prefix) => `${prefix}_${++sequence}`; }

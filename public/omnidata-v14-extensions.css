@@ -98,7 +98,10 @@ body.omnidata-v14 [data-od14-component="toolbar"] .view-toolbar-copy p{margin:0!
 body.omnidata-v14 [data-od14-component="filterbar"]{display:grid!important;grid-template-columns:minmax(220px,360px) repeat(3,minmax(140px,190px)) max-content!important;justify-content:start!important;align-items:center!important;gap:7px!important;width:100%!important;min-width:0!important;margin:8px 0!important;padding:8px 10px!important;border:1px solid var(--od14-line)!important;border-radius:var(--od14-radius)!important;background:#fff!important;box-shadow:none!important}
 body.omnidata-v14 [data-od14-component="filterbar"]>*{min-width:0!important;margin:0!important}
 body.omnidata-v14 [data-od14-component="filterbar"] [data-od14-component="field"]:first-of-type{width:100%!important;max-width:360px!important}
-body.omnidata-v14 [data-od14-component="filterbar"] select{width:100%!important;min-width:140px!important;max-width:190px!important}
+/* A pinned value — the retail door a catalogue is written against — is shown in a
+   disabled select, and a select cannot ellipsize: at 190px "BER-MITTE · Nordhaus
+   Berlin Mitte" was simply cut mid-word. Give it the width the names actually need. */
+body.omnidata-v14 [data-od14-component="filterbar"] select{width:auto!important;min-width:140px!important;max-width:280px!important}
 body.omnidata-v14 [data-od14-component="filterbar"] [data-od14-component="button"],body.omnidata-v14 [data-od14-component="filterbar"] [data-od14-component="icon-button"]{width:auto!important;justify-self:start!important}
 
 /* Tabs share one height and active state. */
@@ -259,3 +262,557 @@ body.omnidata-v14 [data-od14-tooltip]{cursor:help!important}
   body.omnidata-v14 [data-od14-component="toolbar"],body.omnidata-v14 [data-od14-component="section-head"]{align-items:stretch!important}
   body.omnidata-v14 [data-od14-component="toolbar"]>[data-od14-component="button"],body.omnidata-v14 .od14-page-actions>[data-od14-component="button"]{width:100%!important}
 }
+
+/* Column-count widths. table-layout:fixed divides one min-width between every column, so a wide
+   register has to declare a wider table instead of clipping each cell. */
+body .workspace-content table.od-cols-1,
+body.omnidata-design-system-v1 .workspace-content table.od-cols-1 { min-width: 0 !important; }
+body .workspace-content table.od-cols-2,
+body.omnidata-design-system-v1 .workspace-content table.od-cols-2 { min-width: 240px !important; }
+body .workspace-content table.od-cols-3,
+body.omnidata-design-system-v1 .workspace-content table.od-cols-3 { min-width: 344px !important; }
+body .workspace-content table.od-cols-4,
+body.omnidata-design-system-v1 .workspace-content table.od-cols-4 { min-width: 496px !important; }
+body .workspace-content table.od-cols-5,
+body.omnidata-design-system-v1 .workspace-content table.od-cols-5 { min-width: 648px !important; }
+/* Six columns at 130px each is 780, which fits the 784px reading pane; the
+   old 800px floor was 16px too wide and put a horizontal scrollbar under every
+   six-column table in the product for nothing. Beyond six the floor keeps the
+   same density, so a wide table scrolls because it is wide, not by accident. */
+body .workspace-content table.od-cols-6,
+body.omnidata-design-system-v1 .workspace-content table.od-cols-6 { min-width: 780px !important; }
+body .workspace-content table.od-cols-7,
+body.omnidata-design-system-v1 .workspace-content table.od-cols-7 { min-width: 910px !important; }
+body .workspace-content table.od-cols-8,
+body.omnidata-design-system-v1 .workspace-content table.od-cols-8 { min-width: 1040px !important; }
+body .workspace-content table.od-cols-9,
+body.omnidata-design-system-v1 .workspace-content table.od-cols-9 { min-width: 1170px !important; }
+body .workspace-content table.od-cols-10,
+body.omnidata-design-system-v1 .workspace-content table.od-cols-10 { min-width: 1300px !important; }
+body .workspace-content table.od-cols-11,
+body.omnidata-design-system-v1 .workspace-content table.od-cols-11 { min-width: 1430px !important; }
+body .workspace-content table.od-cols-12,
+body.omnidata-design-system-v1 .workspace-content table.od-cols-12 { min-width: 1560px !important; }
+body .workspace-content table.od-cols-13,
+body.omnidata-design-system-v1 .workspace-content table.od-cols-13 { min-width: 1690px !important; }
+body .workspace-content table.od-cols-14,
+body.omnidata-design-system-v1 .workspace-content table.od-cols-14 { min-width: 1820px !important; }
+body .workspace-content table.od-cols-7,
+body.omnidata-design-system-v1 .workspace-content table.od-cols-7 { min-width: 952px !important; }
+body .workspace-content table.od-cols-8,
+body.omnidata-design-system-v1 .workspace-content table.od-cols-8 { min-width: 1104px !important; }
+body .workspace-content table.od-cols-9,
+body.omnidata-design-system-v1 .workspace-content table.od-cols-9 { min-width: 1256px !important; }
+body .workspace-content table.od-cols-10,
+body.omnidata-design-system-v1 .workspace-content table.od-cols-10 { min-width: 1408px !important; }
+body .workspace-content table.od-cols-11,
+body.omnidata-design-system-v1 .workspace-content table.od-cols-11 { min-width: 1560px !important; }
+body .workspace-content table.od-cols-12,
+body.omnidata-design-system-v1 .workspace-content table.od-cols-12 { min-width: 1712px !important; }
+body .workspace-content table.od-cols-13,
+body.omnidata-design-system-v1 .workspace-content table.od-cols-13 { min-width: 1864px !important; }
+body .workspace-content table.od-cols-14,
+body.omnidata-design-system-v1 .workspace-content table.od-cols-14 { min-width: 2016px !important; }
+body .od-table-wrap, body .sourcing-table-wrap { overflow-x: auto !important; }
+.od-table td .badge, .sourcing-table td .sourcing-badge { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+/* A column header may use two lines rather than be cut in the middle of a word. */
+body .workspace-content table[class*="od-cols-"] th {
+  white-space: normal !important;
+  line-height: 1.25 !important;
+  overflow: visible !important;
+}
+/* A long unbroken code wraps inside its cell instead of being cut mid-glyph; the cell also carries
+   the full value in its title. */
+body .workspace-content table[class*="od-cols-"] td,
+body .workspace-content table[class*="od-cols-"] td strong,
+body .workspace-content table[class*="od-cols-"] td small {
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+}
+/* A risk or status badge inside a cell may use two lines rather than lose its last word. */
+body .workspace-content table[class*="od-cols-"] td .badge,
+body .workspace-content table[class*="od-cols-"] td .sourcing-badge {
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  height: auto !important;
+  min-height: 0 !important;
+}
+
+/* The language switcher. The design-system layer sizes its options as standard controls (34px, with
+   !important), while an older layer still pins the container to a fixed 24px height, so the options
+   stood 5px proud of it top and bottom and the container's grey track showed as a band around the
+   active one. The container is no longer a segmented track — it is a pair of buttons — so it sizes to
+   what it holds and stops painting a background behind them. */
+body.omnidata-v14 .language-switcher {
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  gap: 4px !important;
+  align-items: center !important;
+}
+
+/* The lifecycle rail on a style card: where the style is on the main line of development, and the
+   steps it has already passed. States that are exits from the line rather than steps along it are
+   not drawn here — the card states them as the current state instead. */
+body .od-lifecycle-rail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0 0 10px;
+  padding: 0 14px;
+}
+body .od-lifecycle-step {
+  padding: 3px 8px;
+  border: 1px solid var(--od14-line, #e1e4e7);
+  border-radius: 999px;
+  color: var(--od14-text-soft, #6b7280);
+  font-size: 8.5px;
+  white-space: nowrap;
+}
+body .od-lifecycle-step.passed {
+  border-color: transparent;
+  background: var(--od14-surface-soft, #f2f4f7);
+}
+body .od-lifecycle-step.current {
+  border-color: var(--od14-accent, #ff5b22);
+  background: var(--od14-accent, #ff5b22);
+  color: #fff;
+  font-weight: 600;
+}
+body .od-lifecycle-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 14px 10px;
+}
+
+/* A colourway's swatch. The colour itself is data, so it is carried on the element and painted from
+   there rather than written into a stylesheet that cannot know the palette. */
+body .od-colour-swatch {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* The thumbnail in a register row. It keeps a fixed box so rows stay the same height whether the
+   image loads, fails or was never there. */
+body .od-thumb-wrap { display: inline-block; line-height: 0; }
+body .od-thumb {
+  width: 48px;
+  height: 48px;
+  border: 1px solid var(--od14-line, #e1e4e7);
+  border-radius: 4px;
+  object-fit: cover;
+  background: var(--od14-surface-soft, #f6f7f8);
+}
+body .od-thumb-empty { border: 0; }
+body .workspace-content table td.od-thumb-cell { text-align: center; }
+
+/* The switcher, finished. The rule above sizes the container; these two settle what is painted.
+   The container's own background is set by a higher-specificity rule earlier in this file, so the
+   override has to match it and come later. The active option carries the design system's strong
+   border, which on a fractional x-position lands on its own device pixel to the right and below the
+   fill and reads as a shadow — it takes the accent colour so there is nothing to misread. */
+body.omnidata-v14 .topbar .language-switcher {
+  background: transparent !important;
+  gap: 4px !important;
+}
+body.omnidata-v14 .topbar .language-option.active {
+  border-color: var(--od14-accent, #ff5b22) !important;
+}
+
+/* The planning timeline: one line per campaign, positioned against the whole planned span. */
+body .od-timeline-board { display: grid; gap: 8px; padding: 12px 14px; }
+body .od-timeline-line { display: grid; grid-template-columns: minmax(140px, 220px) minmax(0, 1fr) 44px; gap: 10px; align-items: center; }
+body .od-timeline-label { display: grid; gap: 1px; min-width: 0; }
+body .od-timeline-label strong { font-size: 10px; }
+body .od-timeline-label small { color: var(--od14-text-soft, #6b7280); font-size: 8.5px; }
+body .od-timeline-track { min-width: 0; }
+body .od-timeline-bar { display: block; width: 100%; height: 18px; }
+body .od-timeline-readiness { color: var(--od14-text-soft, #6b7280); font-size: 9px; text-align: right; }
+body .od-timeline-scale { display: flex; justify-content: space-between; color: var(--od14-text-soft, #6b7280); font-size: 8.5px; padding-top: 2px; }
+
+/* The tech pack document. It is laid out for paper: a fixed measure, real headings and tables that
+   survive a page break. Printing hides the application around it, so what comes out is the document
+   and nothing else. */
+body .tp-doc { display: grid; gap: 12px; padding: 12px 14px; }
+body .tp-doc-toolbar { display: flex; gap: 8px; }
+body .tp-doc-page {
+  max-width: 900px;
+  padding: 24px 28px;
+  border: 1px solid var(--od14-line, #e1e4e7);
+  border-radius: 6px;
+  background: #fff;
+}
+body .tp-doc-kicker { margin: 0; color: var(--od14-text-soft, #6b7280); font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; }
+body .tp-doc-h1 { margin: 4px 0 2px; font-size: 20px; }
+body .tp-doc-sub { margin: 0 0 14px; color: var(--od14-text-soft, #6b7280); font-size: 11px; max-width: 60ch; }
+body .tp-doc-section { margin-top: 18px; }
+body .tp-doc-h2 { margin: 0 0 6px; font-size: 13px; }
+body .tp-doc-contents { margin: 0; padding-left: 18px; font-size: 11px; }
+body .tp-doc-table { width: 100%; border-collapse: collapse; font-size: 10px; }
+body .tp-doc-table th, body .tp-doc-table td { padding: 5px 7px; border: 1px solid var(--od14-line, #e1e4e7); text-align: left; vertical-align: top; }
+body .tp-doc-table th { background: var(--od14-surface-soft, #f6f7f8); font-weight: 600; }
+body .tp-doc-empty { color: var(--od14-text-soft, #6b7280); text-align: center; }
+body .tp-doc-notes h3 { margin: 10px 0 2px; font-size: 11px; }
+body .tp-doc-notes p { margin: 0; font-size: 11px; max-width: 70ch; white-space: pre-wrap; }
+body .tp-doc-total { margin: 8px 0 0; font-size: 11px; font-weight: 600; }
+
+@media print {
+  body .sidebar, body .topbar, body .page-header, body .tp-doc-toolbar, body #toast { display: none !important; }
+  body .tp-doc, body .tp-doc-page { padding: 0 !important; border: 0 !important; max-width: none !important; }
+  body .tp-doc-section { break-inside: avoid; }
+  body .tp-doc-table { break-inside: auto; }
+  body .tp-doc-table tr { break-inside: avoid; }
+}
+
+/* The placeholder import. It reuses the dialog proportions and the table rhythm the rest of the
+   application already uses, so a screen a buyer meets once a season does not feel like another
+   product. The only thing it adds is a way to read a verdict quickly: refused rows carry a tint, and
+   the reasons under them are a list rather than a sentence, because a row can be wrong in four ways
+   at once and each of them is a separate thing to fix. */
+.od-import-dialog {
+  width: min(1040px, calc(100vw - 28px));
+  max-height: calc(100vh - 28px);
+  padding: 22px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--od14-surface, #fff);
+  color: var(--od14-text, #101828);
+  box-shadow: 0 24px 80px rgba(16, 24, 40, .28);
+  overflow: auto;
+}
+.od-import-dialog::backdrop { background: rgba(16, 24, 40, .56); }
+.od-import-dialog > header h2 { margin: 0 0 4px; font-size: 20px; }
+.od-import-dialog > p.muted { margin: 0 0 14px; max-width: 72ch; }
+.od-import-controls { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 12px; }
+.od-import-field { display: grid; gap: 6px; font-size: 12px; font-weight: 600; color: var(--od14-muted, #667085); }
+.od-import-field select,
+.od-import-field input { padding: 9px 11px; border: 1px solid var(--od14-line-strong, #d0d5dd); border-radius: 8px; background: #fff; font: inherit; font-weight: 400; }
+.od-import-select { min-width: 280px; }
+.od-import-paste { width: 100%; box-sizing: border-box; padding: 10px 11px; border: 1px solid var(--od14-line-strong, #d0d5dd); border-radius: 8px; font: inherit; font-weight: 400; resize: vertical; }
+.od-import-body { display: grid; gap: 12px; margin-top: 14px; }
+.od-import-summary { margin: 0; font-variant-numeric: tabular-nums; font-weight: 600; }
+.od-import-summary.danger { color: #b42318; }
+.od-import-dialog > footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.od-import-dialog > footer .button:first-child { margin-right: auto; }
+.od-import-table { width: 100%; border-collapse: collapse; }
+.od-import-table th,
+.od-import-table td { padding: 10px 12px; border-bottom: 1px solid var(--od14-line, #e4e7ec); text-align: left; vertical-align: top; }
+.od-import-table th { font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--od14-muted, #667085); background: var(--od14-surface-subtle, #f8fafc); }
+.od-import-table td:first-child { font-variant-numeric: tabular-nums; }
+.od-import-row-rejected { background: #fef6f5; }
+.od-import-problems { margin: 0; padding-left: 16px; display: grid; gap: 3px; }
+.od-import-problems li { font-size: 12px; }
+@media (max-width: 720px) {
+  .od-import-controls { flex-direction: column; }
+  .od-import-select { min-width: 0; width: 100%; }
+}
+
+/* The path's root is a control now, not a decoration. It carries no chrome of its own — a button that
+   looks like a button here would compete with the actions beside it — but it says so on hover and to
+   the keyboard, and it stops offering itself when there is nowhere to go. */
+body .breadcrumb .breadcrumb-root {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+body .breadcrumb .breadcrumb-root:hover:not(:disabled) { background: rgba(16, 24, 40, .06); }
+body .breadcrumb .breadcrumb-root:hover:not(:disabled) .breadcrumb-muted { color: var(--od14-text, #101828); }
+body .breadcrumb .breadcrumb-root:disabled { cursor: default; }
+body .breadcrumb .breadcrumb-root:focus-visible { outline: 2px solid var(--od14-accent, #ff5b22); outline-offset: 1px; }
+
+/* The shared confirmation. It borrows the proportions of the forms it interrupts rather than
+   inventing its own, so agreeing to something never feels like leaving the application. */
+.app-confirm {
+  width: min(460px, calc(100vw - 28px));
+  padding: 0;
+  border: 0;
+  border-radius: 14px;
+  background: var(--od14-surface, #fff);
+  color: var(--od14-text, #101828);
+  box-shadow: 0 24px 80px rgba(16, 24, 40, .28);
+}
+.app-confirm::backdrop { background: rgba(16, 24, 40, .56); }
+.app-confirm form { display: grid; gap: 14px; padding: 22px; }
+.app-confirm header h2 { margin: 0; font-size: 18px; }
+.app-confirm-question { margin: 0; color: var(--od14-text-soft, #475467); }
+.app-confirm footer { display: flex; justify-content: flex-end; gap: 8px; }
+.od-import-more { margin: 8px 0 0; color: var(--od14-muted, #667085); font-size: 12px; }
+
+/* A warning is not decoration: a cell that reads «Артикул не опубли» has told the reader nothing and
+   cost them a hover to find out. The registers lay their columns out on a fixed grid, which is right
+   for scanning, but a status chip in one of those columns was being cut off rather than ellipsised —
+   `text-overflow` does nothing to an element child. Chips wrap instead, and the row grows to hold
+   them, because the height on a cell is a floor and not a ceiling. */
+body :is(.bom-table, .measurement-table, .styles-table, .materials-table, .sample-table, .sourcing-table, .planning-table, .ls9-table) td:has([data-od14-component="status"]) {
+  overflow: visible !important;
+  white-space: normal !important;
+  text-overflow: clip !important;
+}
+body :is(.bom-table, .measurement-table, .styles-table, .materials-table, .sample-table, .sourcing-table, .planning-table, .ls9-table) td [data-od14-component="status"] {
+  /* inline-block rather than inline-flex: a flex container lays its text out as one unbreakable item,
+     so the chip stayed at its content width and spilled past the column however wide the text was. */
+  display: inline-block !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+/* Sidebar entries said «Модели и цветовые…», «Спецификации и себестои…», «Производственный кален…».
+   Three of twenty-three needed a hover to read, and a navigation label is the one piece of text that
+   has to be legible without interaction. Long labels take a second line rather than an ellipsis; the
+   short ones are unaffected because nothing else about the row changed. */
+body .sidebar .nav-item {
+  height: auto !important;
+  min-height: 34px !important;
+  align-items: center !important;
+}
+body .sidebar .nav-item .nav-label {
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  line-height: 1.25 !important;
+  text-wrap: balance;
+}
+body .sidebar.collapsed .nav-item .nav-label,
+body .sidebar[data-collapsed="true"] .nav-item .nav-label { white-space: nowrap !important; }
+
+/* Column headings are the labels a reader needs most and the ones the fixed grid cut first: a column
+   headed «Публикация» read «Публика», and the reader had to infer the rest from the values under it.
+   A heading takes a second line rather than losing its end; the row of headings grows once for the
+   whole table, which costs a few pixels and nothing else. */
+body .workspace-content :is(.bom-table, .measurement-table, .styles-table, .materials-table, .sample-table, .sourcing-table, .planning-table, .ls9-table, .od-table) th {
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  line-height: 1.25 !important;
+  height: auto !important;
+  padding-top: 8px !important;
+  padding-bottom: 8px !important;
+  vertical-align: bottom !important;
+}
+
+/* The linesheet register's columns were pinned by position — 37px, then 32px, then 230px — for a
+   table whose first two columns were a checkbox and an icon. That table is not the one rendered here
+   any more: the first two columns are «Публикация» and «Статус», and they were given a checkbox's
+   width, so both headings were cut and a cell reading «Опубликовано» had 46 pixels to say it in.
+   The widths are left where they are rather than removed, in case something still renders the shape
+   they were written for; the two tables that exist today are told to divide the row evenly instead,
+   which is what a fixed layout does when nobody overrides it. */
+body .workspace-content :is(.ls9-registry-table, .ls9-line-table, .ls9-table.od-cols-3, .ls9-table.od-cols-4, .ls9-table.od-cols-5, .ls9-table.od-cols-6, .ls9-table.od-cols-7, .ls9-table.od-cols-8) th {
+  width: auto !important;
+}
+
+/* A note in the tech pack document that explains an absence or qualifies what is shown. The warning
+   variant is the one a factory must not build from, so it does not look like a caption. */
+.tp-doc-note { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--od14-surface-subtle, #f8fafc); color: var(--od14-text-soft, #475467); font-size: 12px; }
+.tp-doc-note + table { margin-top: 10px; }
+.tp-doc-warning { background: #fef3f2; color: #b42318; font-weight: 600; }
+
+/* Inspector tabs were one unbreakable row in a 326px column: with eight tabs, five of them sat past
+   the right edge — «Состояние» began 13px outside the panel and «Коммерция» ended 611px outside it.
+   The strip scrolled, but nothing said so: there is no arrow, no shadow, and macOS hides the
+   scrollbar until a gesture, so more than half the inspector looked like it did not exist.
+   They wrap now. A second row of tabs costs twenty pixels; a hidden tab costs the feature. */
+
+/* An inspector's tab strip is not a page filter bar, and the difference is the width it lives in.
+   The design-system layer styles both through the same `[data-ods-part="tabs"]` rule — one line, no
+   wrap, horizontal scroll — which is right for a bar that spans the workspace and wrong for a 326px
+   column. With eight tabs, five sat past the inspector's right edge: «Состояние» began 13px outside
+   it and «Коммерция» ended 611px outside. The strip did scroll, but nothing said so — no arrow, no
+   shadow, and macOS hides the scrollbar until a gesture — so more than half the inspector looked
+   like it did not exist.
+
+   The override lives here rather than in the ODS stylesheet because it names module classes, and
+   that stylesheet is deliberately kept free of them. It carries the part attribute as well so it
+   outranks the generic rule, which loads after this file. */
+body.omnidata-v14.omnidata-design-system-v1 :is(.od-inspector-tabs, .ls9-inspector-tabs, .bom-inspector-tabs, .measurement-inspector-tabs, .sample-inspector-tabs, .tech-pack-inspector-tabs)[data-ods-part="tabs"],
+body.omnidata-v14.omnidata-design-system-v1 :is(.od-inspector-tabs, .ls9-inspector-tabs, .bom-inspector-tabs, .measurement-inspector-tabs, .sample-inspector-tabs, .tech-pack-inspector-tabs)[data-od14-unified-part="tabs"] {
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  gap: 0 var(--ods-space-4, 14px) !important;
+  row-gap: 0 !important;
+  min-height: 0 !important;
+  height: auto !important;
+  padding: 2px var(--ods-space-2, 8px) !important;
+  overflow-x: visible !important;
+}
+body.omnidata-v14.omnidata-design-system-v1 :is(.od-inspector-tabs, .ls9-inspector-tabs, .bom-inspector-tabs, .measurement-inspector-tabs, .sample-inspector-tabs, .tech-pack-inspector-tabs) button[data-ods-part="tab"],
+body.omnidata-v14.omnidata-design-system-v1 :is(.od-inspector-tabs, .ls9-inspector-tabs, .bom-inspector-tabs, .measurement-inspector-tabs, .sample-inspector-tabs, .tech-pack-inspector-tabs) button[data-od14-unified-part="tab"] {
+  min-height: 26px !important;
+  height: 26px !important;
+  flex: 0 0 auto !important;
+  white-space: nowrap !important;
+}
+
+/* Writing in the Product Master. The card used to state its own gaps — «Ответственные не назначены»,
+   «Заполнено 0 из 40 полей» — with nothing to press. These are the controls that close them, and
+   they borrow the geometry of the forms elsewhere so filling a field, adding a colourway and
+   assigning a desk feel like the same act. */
+.od-inline-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+
+.od-desk-list { display: grid; gap: 6px; }
+.od-desk-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border: 1px solid var(--od14-line, #e4e7ec); border-radius: 8px; }
+.od-desk-people { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.od-desk-people strong { font-size: 11px; }
+.od-desk-person { display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; border-radius: 999px; background: var(--od14-surface-subtle, #f2f4f7); font-size: 11px; }
+.od-desk-release { border: 0; background: transparent; color: var(--od14-muted, #667085); cursor: pointer; font-size: 13px; line-height: 1; padding: 0 2px; }
+.od-desk-release:hover { color: #b42318; }
+
+.od-attribute-list { display: grid; gap: 4px; margin-top: 10px; }
+.od-attribute-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 7px 10px; border-bottom: 1px solid var(--od14-line, #eef0f3); }
+/* An unfilled field is the thing a person came to act on, so it is the one that stands out. */
+.od-attribute-row.empty { background: #fffaf7; }
+.od-attribute-name { display: grid; min-width: 0; }
+.od-attribute-name strong { font-size: 11.5px; }
+.od-attribute-name small { color: var(--od14-muted, #667085); font-size: 9.5px; }
+.od-attribute-value { min-width: 0; font-size: 11.5px; overflow-wrap: anywhere; }
+
+.od-form-dialog { width: min(520px, calc(100vw - 28px)); padding: 0; border: 0; border-radius: 14px; background: var(--od14-surface, #fff); color: var(--od14-text, #101828); box-shadow: 0 24px 80px rgba(16, 24, 40, .28); }
+.od-form-dialog::backdrop { background: rgba(16, 24, 40, .56); }
+.od-form-dialog form { display: grid; gap: 14px; padding: 22px; }
+/* The header and the footer run the full width of the two-column form the design system lays out. */
+.od-form-dialog form > header,
+.od-form-dialog form > footer,
+.od-form-dialog form > .od-form-error { grid-column: 1 / -1; }
+.od-form-dialog header h2 { margin: 0 0 4px; font-size: 18px; }
+.od-form-dialog header p { margin: 0; font-size: 12px; }
+/* A hidden message must be hidden: the design system gives dialog children a display of their own,
+   which beat the browser's own rule for [hidden] and left an empty pink box above every footer. */
+.od-form-dialog .od-form-error[hidden] { display: none !important; }
+.od-form-field { display: grid; gap: 5px; font-size: 12px; font-weight: 600; color: var(--od14-muted, #667085); }
+.od-form-field input,
+.od-form-field select { width: 100% !important; min-width: 0; box-sizing: border-box; padding: 9px 11px; border: 1px solid var(--od14-line-strong, #d0d5dd); border-radius: 8px; background: #fff; color: var(--od14-text, #101828); font: inherit; font-weight: 400; }
+.od-form-field input[type="color"] { padding: 3px; height: 38px; }
+.od-form-error { margin: 0; padding: 10px; border-radius: 8px; background: #fef3f2; color: #b42318; font-size: 12px; }
+.od-form-dialog footer { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* The shared create/edit dialog. The design system makes every direct <div> of a dialog's form a
+   full-width flex row, which is right for a header or a footer and wrong for the field grid: five
+   fields ended up on one line with the last wrapping underneath, and the save button stretched to
+   half the dialog. The grid keeps its two columns inside a dialog, and the actions sit in a footer
+   like every other dialog's. */
+body.omnidata-v14 dialog [data-ods-part="form"] > .form-grid,
+body.omnidata-v14 dialog [data-od14-component="form"] > .form-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: var(--ods-space-3, 10px) !important;
+}
+body.omnidata-v14 dialog .dialog-actions {
+  display: flex !important;
+  justify-content: flex-end !important;
+  gap: var(--ods-space-2, 8px) !important;
+}
+body.omnidata-v14 dialog .dialog-actions .button { flex: 0 0 auto !important; width: auto !important; }
+@media (max-width: 720px) {
+  body.omnidata-v14 dialog [data-ods-part="form"] > .form-grid,
+  body.omnidata-v14 dialog [data-od14-component="form"] > .form-grid { grid-template-columns: minmax(0, 1fr) !important; }
+}
+.bom-modal-error { margin: 0; padding: 10px 12px; border-radius: 8px; background: #fef3f2; color: #b42318; font-size: 12px; }
+.bom-modal-error[hidden] { display: none !important; }
+/* Why a control is not here. An absent button explains nothing on its own, and a person who has just
+   created something is exactly the person who needs the next step named. */
+/* Таблица доступов и действие над ними — один блок, а не два слипшиеся. */
+.od-access-panel { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.od-action-note { margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--od14-surface-subtle, #f8fafc); color: var(--od14-text-soft, #475467); font-size: 11.5px; }
+
+/* The showroom presentation. A buyer meets a season here, so the looks get the room a photograph
+   needs and the pieces sit under it as a readable list rather than another table. */
+/* A look card is one object, and it is the same size whether the showroom holds one
+   or twelve. With 1fr a single look stretched to the full 807px row, and the 3/4
+   figure above it then stood 1076px tall — a screen and a half of grey placeholder
+   that pushed the order grid out of sight entirely. */
+.od-look-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 300px)); justify-content: start; gap: 14px; margin-top: 12px; }
+.od-look-card { display: grid; grid-template-rows: auto 1fr; border: 1px solid var(--od14-line, #e4e7ec); border-radius: 12px; background: var(--od14-surface, #fff); overflow: hidden; }
+.od-look-figure { display: flex; align-items: center; justify-content: center; aspect-ratio: 3 / 4; max-height: 400px; background: var(--od14-surface-subtle, #f2f4f7); overflow: hidden; }
+.od-look-figure img { width: 100%; height: 100%; object-fit: cover; }
+.od-look-placeholder { color: var(--od14-muted, #98a2b3); font-size: 28px; font-weight: 700; }
+.od-look-body { display: grid; gap: 6px; padding: 12px 14px 14px; align-content: start; }
+.od-look-index { margin: 0; color: var(--od14-muted, #667085); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; }
+.od-look-body h3 { margin: 0; font-size: 14px; }
+.od-look-story { margin: 0; color: var(--od14-text-soft, #475467); font-size: 12px; }
+.od-look-pieces { display: grid; gap: 4px; margin: 4px 0 0; padding: 0; list-style: none; }
+.od-look-pieces li { display: grid; gap: 1px; font-size: 11.5px; }
+.od-look-pieces .muted { font-size: 10.5px; }
+
+.od-look-dialog { width: min(640px, calc(100vw - 28px)); }
+.od-look-dialog textarea { width: 100%; box-sizing: border-box; padding: 9px 11px; border: 1px solid var(--od14-line-strong, #d0d5dd); border-radius: 8px; font: inherit; font-weight: 400; resize: vertical; }
+/* The picker is a list of what this collection actually holds: a look may carry nothing else, and a
+   text box would invite exactly the mistake the rule exists to prevent. */
+.od-look-picker { display: grid; gap: 2px; max-height: 220px; overflow-y: auto; padding: 6px; border: 1px solid var(--od14-line, #e4e7ec); border-radius: 8px; }
+.od-look-pick { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 6px; font-weight: 400; font-size: 12px; cursor: pointer; }
+.od-look-pick:hover { background: var(--od14-surface-subtle, #f8fafc); }
+.od-look-pick input { width: auto !important; }
+
+/* A status on its own is a statement, not a row of controls: no border, no
+   padding, no second rounded box around the pill. */
+body.omnidata-v14 .ls9-standing{display:flex!important;align-items:center!important;gap:6px!important;margin:0!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important}
+
+/* ------------------------------------------------------------------
+   The buyer's order grid (JOOR §64.2)
+   ------------------------------------------------------------------ */
+body.omnidata-v14 .ls9-grid{display:grid!important;gap:8px!important;min-width:0!important}
+body.omnidata-v14 .ls9-cell{display:grid!important;grid-auto-flow:row!important;grid-template-columns:minmax(0,1fr)!important;gap:3px!important;min-width:0!important;justify-items:stretch!important}
+body.omnidata-v14 .ls9-cell input{width:100%!important;min-width:56px!important;text-align:right!important;font-variant-numeric:tabular-nums!important}
+body.omnidata-v14 .ls9-cell-filled input{border-color:#9bb3cb!important;background:#f7fafd!important;font-weight:600!important}
+/* A refused cell says so where it happened, in the colour the rest of the product uses for a
+   refusal, and keeps the value so the reader can correct it rather than retype it. */
+body.omnidata-v14 .ls9-cell-error input{border-color:var(--od14-danger,#ad464b)!important;background:#fff6f6!important;color:var(--od14-danger,#ad464b)!important}
+body.omnidata-v14 .ls9-cell-note{color:var(--od14-danger,#ad464b)!important;font-size:9px!important;line-height:1.25!important}
+body.omnidata-v14 .ls9-cell-removed input{color:#8d949c!important;background:#f4f5f6!important}
+body.omnidata-v14 .ls9-cell-removed .ls9-cell-note{color:#8d949c!important}
+body.omnidata-v14 .ls9-cell-closed{color:#8d949c!important;font-size:9px!important}
+/* Totals are read down a column and along a row, so they line up on their digits. */
+body.omnidata-v14 .ls9-matrix .ls9-total-cell,body.omnidata-v14 .ls9-matrix .ls9-total-head{text-align:right!important;font-variant-numeric:tabular-nums!important;font-weight:600!important;white-space:nowrap!important}
+body.omnidata-v14 .ls9-matrix tfoot td,body.omnidata-v14 .ls9-matrix tfoot th{border-top:2px solid var(--od14-line-strong,#cfd4d9)!important;background:var(--od14-surface-subtle,#f6f7f8)!important;font-weight:600!important}
+body.omnidata-v14 .ls9-matrix .ls9-total-zero{color:#a6acb3!important;font-weight:400!important}
+body.omnidata-v14 .ls9-matrix .ls9-total-grand{color:var(--od14-text,#1f242b)!important;font-size:13px!important}
+body.omnidata-v14 .ls9-gridfoot{display:flex!important;grid-template-columns:none!important;align-items:center!important;flex-wrap:wrap!important;gap:6px 16px!important;padding:8px 10px!important;border:1px solid var(--od14-line,#e4e7ec)!important;border-radius:var(--od14-radius,5px)!important;background:var(--od14-surface,#fff)!important;font-size:11px!important}
+body.omnidata-v14 .ls9-gridfoot-figure{color:var(--od14-text-soft,#5e646d)!important;font-variant-numeric:tabular-nums!important}
+body.omnidata-v14 .ls9-gridfoot-amount{color:var(--od14-text,#1f242b)!important;font-weight:600!important;font-size:12px!important}
+body.omnidata-v14 .ls9-gridfoot-tail{display:flex!important;border:0!important;padding:0!important;background:transparent!important;box-shadow:none!important;align-items:center!important;flex-wrap:wrap!important;gap:10px!important;margin-left:auto!important}
+body.omnidata-v14 .ls9-gridfoot-hint{font-size:10px!important}
+body.omnidata-v14 .ls9-save-state{font-size:10.5px!important;color:var(--od14-muted,#8d949c)!important;white-space:nowrap!important}
+body.omnidata-v14 .ls9-save-state[data-state="saving"]{color:var(--od14-text-soft,#5e646d)!important}
+body.omnidata-v14 .ls9-save-state[data-state="dirty"]{color:var(--od14-warning,#9a6a1f)!important}
+body.omnidata-v14 .ls9-save-state[data-state="error"]{color:var(--od14-danger,#ad464b)!important;font-weight:600!important}
+/* The preview is a table of what would change, and it has to stay readable when a paste covers
+   a whole colour card, so the list scrolls inside the dialog rather than the dialog growing. */
+body.omnidata-v14 dialog.ls9-paste-preview{width:min(760px,94vw)!important;max-width:min(760px,94vw)!important}
+body.omnidata-v14 dialog.ls9-paste-preview .ls9-paste-rows{max-height:46vh!important;overflow:auto!important;border:1px solid var(--od14-line,#e4e7ec)!important;border-radius:var(--od14-radius,5px)!important}
+body.omnidata-v14 dialog.ls9-paste-preview table{min-width:0!important;width:100%!important}
+body.omnidata-v14 dialog.ls9-paste-preview .ls9-paste-refused td{background:#fff6f6!important;color:var(--od14-danger,#ad464b)!important}
+
+/* The tech pack document is a printed page, and a printed page does not scroll
+   sideways. Its tables were given the same column-count floor as a workspace
+   register — 780px for six columns — inside a 458px document column, so the
+   list of operations was permanently cut off and the reader had to drag a
+   scrollbar across a document they were about to hand to a factory. A document
+   table fits its page and wraps its cells instead. */
+body.omnidata-v14 .tp-doc-page table,
+body.omnidata-v14 .workspace-content .tp-doc-page table.od-cols-6,
+body.omnidata-v14 .workspace-content .tp-doc-page table[class*="od-cols-"]{min-width:0!important;width:100%!important;table-layout:auto!important}
+body.omnidata-v14 .tp-doc-page :is(td,th){overflow:visible!important;white-space:normal!important;overflow-wrap:anywhere!important;text-overflow:clip!important}
+
+/* The attribute-change filters sit inside the inspector, so they wrap into its narrow column
+   rather than stretching across a workspace-wide bar. */
+body.omnidata-v14 .od-change-filters{display:flex!important;align-items:flex-end!important;flex-wrap:wrap!important;gap:8px!important;margin:0 0 8px!important;padding:8px!important;border:1px solid var(--od14-line,#e4e7ec)!important;border-radius:var(--od14-radius,5px)!important;background:var(--od14-surface,#fff)!important}
+body.omnidata-v14 .od-change-filters .od-filter{display:grid!important;gap:3px!important;min-width:0!important;flex:1 1 120px!important}
+body.omnidata-v14 .od-change-filters .od-filter > span{color:var(--od14-text-soft,#5e646d)!important;font-size:9px!important;font-weight:600!important;text-transform:uppercase!important;letter-spacing:.04em!important}
+body.omnidata-v14 .od-change-filters :is(select,input){width:100%!important;min-width:0!important}
+/* The page keeps its measure; a table too wide for it scrolls inside its own frame. */
+body.omnidata-v14 .tp-doc-page{overflow-x:hidden!important}
+body.omnidata-v14 .tp-doc-table-wrap{width:100%!important;max-width:100%!important;overflow-x:auto!important}

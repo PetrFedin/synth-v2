@@ -50,7 +50,7 @@
     return text(pair[0], pair[1]);
   }
   function badge(value, tone = 'neutral') { return h('span', { className: `sample-badge sample-${tone}`, text: value }); }
-  function formatDate(value) { if (!value) return '—'; const date = new Date(value); return Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat(undefined, { day: '2-digit', month: 'short', year: 'numeric' }).format(date) : '—'; }
+  function formatDate(value) { if (!value) return '—'; const date = new Date(value); return Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat(I18N.localeTag(), { day: '2-digit', month: 'short', year: 'numeric' }).format(date) : '—'; }
   function pair(label, value) { return h('div', {}, [h('dt', { text: label }), h('dd', { text: value ?? '—' })]); }
 
   function reset() {
@@ -151,7 +151,7 @@
   function header(summary) {
     const actions = [];
     if (canManageAny()) actions.push(h('button', { type: 'button', className: 'primary', text: text('Создать образец', 'Create sample'), onclick: () => openDraftDialog(null) }));
-    actions.push(h('button', { type: 'button', className: 'secondary', disabled: ui.loading, text: text('Обновить', 'Refresh'), onclick: () => { void loadSamples({ reset: true }); } }));
+    actions.push(h('button', { type: 'button', className: 'secondary', disabled: ui.loading, text: text('Обновить', 'Refresh'), onclick: () => { loadSamples({ reset: true }).then(() => toast(text('\u0414\u0430\u043d\u043d\u044b\u0435 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u044b.', 'Data refreshed.'))).catch((error) => toast(error?.message || text('\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u0434\u0430\u043d\u043d\u044b\u0435.', 'The data could not be refreshed.'), 'error')); } }));
     return h('header', { className: 'sample-header' }, [
       h('div', { className: 'sample-title' }, [h('p', { className: 'eyebrow', text: 'PLM / SAMPLE MANAGEMENT' }), h('h1', { text: text('Образцы и согласования', 'Samples and approvals') }), h('p', { className: 'muted', text: text('Полный контроль раундов образцов от запроса фабрике до решения и следующей итерации.', 'End-to-end sample rounds from factory request through decision and the next iteration.') })]),
       h('div', { className: 'sample-header-actions' }, actions),
@@ -195,7 +195,7 @@
       receive: ['Принять образец', 'Receive'], approve: ['Одобрить', 'Approve'], reject: ['Отклонить', 'Reject'], cancel: ['Отменить', 'Cancel'], 'next-round': ['Создать следующий раунд', 'Create next round'],
     };
     const handler = {
-      edit: () => openDraftDialog(sample), request: () => confirmAction(sample, 'request'), 'start-production': () => confirmAction(sample, 'start-production'),
+      edit: () => openDraftDialog(sample), request: () => runSampleTransition(sample, 'request'), 'start-production': () => runSampleTransition(sample, 'start-production'),
       receive: () => openReceiptDialog(sample), approve: () => openDecisionDialog(sample, 'approved'), reject: () => openDecisionDialog(sample, 'rejected'),
       cancel: () => openCancellationDialog(sample), 'next-round': () => openNextRoundDialog(sample),
     }[action];
@@ -208,7 +208,24 @@
     const sku = bySku.get(sample.sku);
     const assessment = core.assess(sample, sku, referenceTime);
     const actions = core.allowedActions(sample, { canManage: canManage(sample.brandId), catalogSku: sku, referenceTime }).map((action) => actionButton(action, sample, assessment));
-    const blockers = assessment.requestIssues.map((code) => badge(code, 'medium'));
+    // These are diagnostic codes from the domain, not copy. Printing them put SAMPLE_SUPPLIER_REQUIRED
+    // in front of the reader where a sentence belongs; the code stays available for support in the
+    // element's title.
+    const blockerLabels = {
+      SAMPLE_SKU_NOT_FOUND: ['SKU \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d \u0432 \u043a\u0430\u0442\u0430\u043b\u043e\u0433\u0435', 'The SKU is not in the catalogue'],
+      SAMPLE_SKU_NOT_PUBLISHED: ['SKU \u0435\u0449\u0451 \u043d\u0435 \u043e\u043f\u0443\u0431\u043b\u0438\u043a\u043e\u0432\u0430\u043d', 'The SKU is not published yet'],
+      SAMPLE_SKU_SNAPSHOT_STALE: ['\u0421\u043d\u0438\u043c\u043e\u043a SKU \u0443\u0441\u0442\u0430\u0440\u0435\u043b \u2014 \u043e\u0431\u043d\u043e\u0432\u0438\u0442\u0435 \u043e\u0431\u0440\u0430\u0437\u0435\u0446', 'The SKU snapshot is stale — refresh the sample'],
+      SAMPLE_SUPPLIER_REQUIRED: ['\u041d\u0435 \u0443\u043a\u0430\u0437\u0430\u043d \u043f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a', 'A supplier is required'],
+      SAMPLE_DUE_AT_REQUIRED: ['\u041d\u0435 \u0443\u043a\u0430\u0437\u0430\u043d \u0441\u0440\u043e\u043a', 'A due date is required'],
+      SAMPLE_DUE_AT_INVALID: ['\u0421\u0440\u043e\u043a \u0443\u043a\u0430\u0437\u0430\u043d \u043d\u0435\u0432\u0435\u0440\u043d\u043e', 'The due date is invalid'],
+      SAMPLE_DUE_AT_NOT_FUTURE: ['\u0421\u0440\u043e\u043a \u0434\u043e\u043b\u0436\u0435\u043d \u0431\u044b\u0442\u044c \u0432 \u0431\u0443\u0434\u0443\u0449\u0435\u043c', 'The due date must be in the future'],
+    };
+    const blockers = assessment.requestIssues.map((code) => {
+      const pair = blockerLabels[code];
+      const chip = badge(pair ? text(pair[0], pair[1]) : code, 'medium');
+      chip.title = code;
+      return chip;
+    });
     return h('aside', { className: 'sample-inspector' }, [
       h('div', { className: 'sample-inspector-head' }, [h('div', {}, [h('p', { className: 'eyebrow', text: sample.sampleCode }), h('h2', { text: sample.sku }), h('p', { className: 'muted', text: `${labelType(sample.sampleType)} · R${sample.round}` })]), badge(labelStatus(sample.status), assessment.overdue ? 'high' : sample.status === 'approved' ? 'ok' : 'neutral')]),
       h('div', { className: 'sample-inspector-actions' }, actions),
@@ -282,10 +299,20 @@
     });
   }
 
-  async function confirmAction(sample, action) {
+  // \u041b\u043e\u043a\u0430\u043b\u044c\u043d\u0430\u044f \u0444\u0443\u043d\u043a\u0446\u0438\u044f \u043d\u0430\u0437\u044b\u0432\u0430\u043b\u0430\u0441\u044c \u0442\u0430\u043a \u0436\u0435, \u043a\u0430\u043a \u0433\u043b\u043e\u0431\u0430\u043b\u044c\u043d\u0430\u044f (`dom-1.js:138`), \u0437\u0430\u0442\u0435\u043d\u044f\u043b\u0430 \u0435\u0451 \u0438 \u0432\u044b\u0437\u044b\u0432\u0430\u043b\u0430
+  // \u0441\u0430\u043c\u0443 \u0441\u0435\u0431\u044f: \u00ab\u0417\u0430\u043f\u0440\u043e\u0441\u0438\u0442\u044c \u0443 \u0444\u0430\u0431\u0440\u0438\u043a\u0438\u00bb \u0438 \u00ab\u0417\u0430\u043f\u0443\u0441\u0442\u0438\u0442\u044c \u043f\u0440\u043e\u0438\u0437\u0432\u043e\u0434\u0441\u0442\u0432\u043e\u00bb \u0443\u0445\u043e\u0434\u0438\u043b\u0438 \u0432 \u0431\u0435\u0441\u043a\u043e\u043d\u0435\u0447\u043d\u0443\u044e \u0440\u0435\u043a\u0443\u0440\u0441\u0438\u044e \u0438
+  // \u043d\u0438\u043a\u043e\u0433\u0434\u0430 \u043d\u0435 \u0434\u043e\u0445\u043e\u0434\u0438\u043b\u0438 \u0434\u043e \u043c\u0443\u0442\u0430\u0446\u0438\u0438. \u0418\u043c\u044f \u0440\u0430\u0437\u0432\u0435\u0434\u0435\u043d\u043e, \u0432\u044b\u0437\u043e\u0432 \u0438\u0434\u0451\u0442 \u043a \u0433\u043b\u043e\u0431\u0430\u043b\u044c\u043d\u043e\u043c\u0443 \u043f\u043e\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u0438\u044e.
+  async function runSampleTransition(sample, action) {
     const pathByAction = { request: 'request', 'start-production': 'start-production' };
-    if (!confirm(text(`Подтвердить действие для ${sample.sampleCode}?`, `Confirm action for ${sample.sampleCode}?`))) return;
-    await runMutation(sample.sampleCode, `/v2/samples/${encodeURIComponent(sample.sampleCode)}/${pathByAction[action]}`, { expectedVersion: sample.version });
+    const path = pathByAction[action];
+    if (!path) return;
+    const accepted = await confirmAction({
+      title: text('\u041f\u043e\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u044c \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0435', 'Confirm action'),
+      question: text(`\u041e\u0431\u0440\u0430\u0437\u0435\u0446 ${sample.sampleCode}.`, `Sample ${sample.sampleCode}.`),
+      confirmLabel: text('\u041f\u043e\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u044c', 'Confirm'),
+    });
+    if (!accepted) return;
+    await runMutation(sample.sampleCode, `/v2/samples/${encodeURIComponent(sample.sampleCode)}/${path}`, { expectedVersion: sample.version });
   }
   function openReceiptDialog(sample) {
     dialog(text('Приёмка образца', 'Receive sample'), [field(text('Получено, шт.', 'Received quantity'), input('receivedQuantity', 'number', sample.quantity, { min: '1', max: '100', required: true })), field(text('Состояние', 'Condition'), select('condition', [['accepted', text('Принят', 'Accepted')], ['damaged', text('Повреждён', 'Damaged')], ['incomplete', text('Неполная комплектация', 'Incomplete')]], 'accepted')), field(text('Трекинг', 'Tracking'), input('trackingReference', 'text', '', { maxlength: '120' })), field(text('Комментарий', 'Notes'), textarea('notes', '', { maxlength: '1000', rows: '4' }))], async (values) => Boolean(await runMutation(sample.sampleCode, `/v2/samples/${encodeURIComponent(sample.sampleCode)}/receive`, { expectedVersion: sample.version, receivedQuantity: Number(values.receivedQuantity), condition: values.condition, trackingReference: values.trackingReference || null, notes: values.notes || null })));

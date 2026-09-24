@@ -35,7 +35,7 @@ function schemas() {
     },
     SupplierQualityPerformance: {
       type: 'object', additionalProperties: false,
-      required: ['inspectionCount', 'releasedInspectionCount', 'rejectedInspectionCount', 'reworkInspectionCount', 'reviewedFirstRunCount', 'firstPassReleaseCount', 'firstPassYieldPercent', 'releaseRatePercent', 'reworkIncidencePercent', 'rejectionRatePercent', 'reworkRunCount', 'defectCounts'],
+      required: ['inspectionCount', 'releasedInspectionCount', 'rejectedInspectionCount', 'reworkInspectionCount', 'reviewedFirstRunCount', 'firstPassReleaseCount', 'firstPassYieldPercent', 'releaseRatePercent', 'reworkIncidencePercent', 'rejectionRatePercent', 'reworkRunCount', 'defectCounts', 'inline'],
       properties: {
         inspectionCount: count(), releasedInspectionCount: count(), rejectedInspectionCount: count(), reworkInspectionCount: count(),
         reviewedFirstRunCount: count(), firstPassReleaseCount: count(), firstPassYieldPercent: nullablePercent(), releaseRatePercent: nullablePercent(),
@@ -43,6 +43,26 @@ function schemas() {
         defectCounts: {
           type: 'object', additionalProperties: false, required: ['critical', 'major', 'minor'],
           properties: { critical: count(), major: count(), minor: count() },
+        },
+        // Пооперационный контроль. Each share names its own denominator and there is no blended
+        // score: an inline defect rate is measured against pieces checked during production, the
+        // final gate's against a sample of a finished lot, and one number over both would hide the
+        // difference worth looking at.
+        inline: {
+          type: 'object', additionalProperties: false,
+          required: ['checkCount', 'openCheckCount', 'executionsWithChecks', 'coveragePercent', 'checkedUnits', 'defectiveUnits', 'defectRatePercent', 'defectCounts', 'dispositions'],
+          properties: {
+            checkCount: count(), openCheckCount: count(), executionsWithChecks: count(), coveragePercent: nullablePercent(),
+            checkedUnits: count(), defectiveUnits: count(), defectRatePercent: nullablePercent(),
+            defectCounts: {
+              type: 'object', additionalProperties: false, required: ['critical', 'major', 'minor'],
+              properties: { critical: count(), major: count(), minor: count() },
+            },
+            dispositions: {
+              type: 'object', additionalProperties: false, required: ['rework', 'scrap', 'accepted', 'acceptedSharePercent'],
+              properties: { rework: count(), scrap: count(), accepted: count(), acceptedSharePercent: nullablePercent() },
+            },
+          },
         },
       },
     },

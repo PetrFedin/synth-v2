@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { domainEvent } from '../core/events.mjs';
-import { invariant } from '../core/errors.mjs';
+import { invariant, requireEntity } from '../core/errors.mjs';
 import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
 import { productionRequirementLine } from '../modules/order-economics/production-requirement.mjs';
@@ -117,10 +117,6 @@ function assertInput(input) {
   invariant(typeof input.productionRequirementSnapshotId === 'string' && input.productionRequirementSnapshotId.length > 0, 'PRODUCTION_REQUIREMENT_ID_REQUIRED', 'Production requirement snapshot id is required');
   invariant(Number.isInteger(input.orderLineNo) && input.orderLineNo > 0, 'PRODUCTION_REQUIREMENT_ORDER_LINE_NO_INVALID', 'Production requirement order line number must be a positive integer');
   invariant(Array.isArray(input.supplierCodes) && input.supplierCodes.length > 0, 'PRODUCTION_RFQ_SUPPLIERS_REQUIRED', 'At least one supplier is required');
-}
-function requireEntity(value, code, details) {
-  invariant(value, code, 'Entity not found', details);
-  return value;
 }
 function defaultIdGenerator() {
   return (prefix) => `${prefix}_${randomUUID()}`;

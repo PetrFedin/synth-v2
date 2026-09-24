@@ -440,7 +440,7 @@
     });
     if (!rows.length) rows.push(h('tr', {}, [h('td', { colspan: '7', className: 'production-execution-empty', text: ui.loading ? t('Загрузка…', 'Loading…') : t('Нет партий для выбранных фильтров.', 'No batches match the filters.') })]));
     return h('div', { className: 'production-execution-registry' }, [h('table', { className: 'production-execution-table' }, [
-      h('thead', {}, [h('tr', {}, [t('Календарь', 'Execution'), 'SKU', t('Фабрика', 'Supplier'), t('Количество', 'Quantity'), t('Прогресс', 'Progress'), t('Статус', 'Status'), t('Текущий этап', 'Current milestone')].map((label) => h('th', { text: label })))]),
+      h('thead', {}, [h('tr', {}, [t('Календарь', 'Execution'), 'SKU', t('Фабрика', 'Supplier'), t('Количество', 'Quantity'), t('Прогресс', 'Progress'), t('Статус', 'Status'), t('Текущий этап', 'Current milestone')].map((label) => h('th', { text: label, scope: 'col' })))]),
       h('tbody', {}, rows),
     ])]);
   }

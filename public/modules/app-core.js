@@ -234,7 +234,10 @@ function renderApp() {
   main.append(content);
 
   shell.append(sidebar, main);
-  root.append(shell, dialogHost(), el('div', { id: 'toast', className: 'toast' }));
+  // Свой aria-live нужен именно тосту: общий `aria-live="polite"` на `#app` объявляет любое
+  // обновление экрана целиком, а не только сообщение. `role="status"` несёт объявление сам по
+  // себе, независимо от того, что вокруг него меняется.
+  root.append(shell, dialogHost(), el('div', { id: 'toast', className: 'toast', role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true' }));
   paintToast();
   installSearchShortcut();
 }

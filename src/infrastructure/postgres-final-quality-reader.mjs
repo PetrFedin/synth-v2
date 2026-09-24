@@ -4,6 +4,23 @@ import { withPostgresTransaction } from './postgres-transaction.mjs';
 const SNAPSHOT_BEGIN = 'BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY';
 const READ_ROLES = Object.freeze(['owner', 'admin', 'sales', 'finance']);
 
+// Инлайн-контроль и финальный AQL накапливают брак по одному исполнению независимо друг от друга и
+// нигде не встречались, хотя оба уже пишут в `execution_id`. Свод только показывает — приёмочное
+// число выборки остаётся решением плана, а не переписывается накопленным браком по вехам, это было
+// бы политикой, а не связью. Считается в обоих чтениях (списке и карточке): список — то, что видит
+// инспектор до открытия карточки, и там же он решает, с которой инспекции начать.
+const INLINE_DEFECT_HISTORY = `(SELECT COALESCE(json_agg(milestone ORDER BY milestone."milestoneCode"), '[]'::json)
+    FROM (
+      SELECT check_row.milestone_code AS "milestoneCode",
+             SUM(check_row.checked_quantity)::int AS "checkedQuantity",
+             SUM(check_row.defective_quantity)::int AS "defectiveQuantity",
+             COUNT(*) FILTER (WHERE check_row.defective_quantity > 0 AND check_row.disposition IS NULL)::int AS "openDispositions"
+        FROM inline_quality_checks AS check_row
+       WHERE check_row.execution_id = inspection.payload ->> 'executionId'
+       GROUP BY check_row.milestone_code
+    ) AS milestone
+  )`;
+
 export function createPostgresFinalQualityReader({ pool } = {}) {
   invariant(pool && typeof pool.connect === 'function', 'POSTGRES_POOL_REQUIRED', 'PostgreSQL pool is required');
   return Object.freeze({
@@ -11,7 +28,7 @@ export function createPostgresFinalQualityReader({ pool } = {}) {
     getForActor(actorId, inspectionCode) {
       return withPostgresTransaction(pool, async (queryable) => {
         const result = await queryable.query(
-          `SELECT inspection.payload
+          `SELECT inspection.payload, ${INLINE_DEFECT_HISTORY} AS "inlineDefectHistory"
              FROM quality_inspections AS inspection
             WHERE inspection.inspection_code = $1
               AND EXISTS (
@@ -23,7 +40,9 @@ export function createPostgresFinalQualityReader({ pool } = {}) {
               )`,
           [inspectionCode, actorId, READ_ROLES],
         );
-        return result.rows[0]?.payload;
+        const row = result.rows[0];
+        if (!row) return undefined;
+        return withInlineDefectHistory(row);
       }, { begin: SNAPSHOT_BEGIN });
     },
     // The plan sets this actor's brands work to, collapsed to one row per standard and level.
@@ -98,7 +117,7 @@ async function page(queryable, actorId, { limit, afterInspectionCode, filters })
   if (afterInspectionCode) { params.push(afterInspectionCode); clauses.push(`inspection.inspection_code > $${params.length}`); }
   params.push(limit + 1);
   const result = await queryable.query(
-    `SELECT inspection.payload, inspection.inspection_code
+    `SELECT inspection.payload, inspection.inspection_code, ${INLINE_DEFECT_HISTORY} AS "inlineDefectHistory"
        FROM quality_inspections AS inspection
       WHERE ${clauses.join(' AND ')}
       ORDER BY inspection.inspection_code ASC
@@ -107,9 +126,12 @@ async function page(queryable, actorId, { limit, afterInspectionCode, filters })
   );
   const rows = result.rows.slice(0, limit);
   return Object.freeze({
-    items: Object.freeze(rows.map((row) => row.payload)),
+    items: Object.freeze(rows.map((row) => withInlineDefectHistory(row))),
     hasMore: result.rows.length > limit,
     ...(result.rows.length > limit ? { nextInspectionCode: rows.at(-1).inspection_code } : {}),
   });
+}
+function withInlineDefectHistory(row) {
+  return Object.freeze({ ...row.payload, inlineDefectHistory: Object.freeze(row.inlineDefectHistory.map((entry) => Object.freeze(entry))) });
 }
 function escapeLike(value) { return value.replace(/[\\%_]/g, (character) => `\\${character}`); }

@@ -351,6 +351,33 @@
       run.reworkReference ? h('p', { className: 'muted', text: `${t('Доработка', 'Rework')}: ${run.reworkReference}` }) : null,
     ])));
   }
+  const INLINE_MILESTONE_LABELS = {
+    'materials-ready': ['Материалы готовы', 'Materials ready'],
+    'cutting-complete': ['Раскрой завершён', 'Cutting complete'],
+    'assembly-complete': ['Пошив завершён', 'Assembly complete'],
+    'finishing-complete': ['Отделка завершена', 'Finishing complete'],
+    'packing-complete': ['Упаковка завершена', 'Packing complete'],
+    'ready-for-qc': ['Готово к QC', 'Ready for QC'],
+  };
+  function inlineMilestoneLabel(code) { const pair = INLINE_MILESTONE_LABELS[code]; return pair ? t(pair[0], pair[1]) : code; }
+  // Брак, накопленный инлайн-контролем по этому же исполнению, — только для чтения рядом с решением
+  // AQL. Приёмочное число выборки его не учитывает и не должно: оно решение плана выборки, а не
+  // истории производства, снятой другой методикой; это число инспектор читает сам, а не система за
+  // него.
+  function inlineDefectHistoryPanel(value) {
+    const rows = value.inlineDefectHistory || [];
+    if (!rows.length) return null;
+    return h('section', { className: 'final-quality-card' }, [
+      h('h3', { text: t('Брак по вехам инлайн-контроля', 'Inline control defect history') }),
+      h('p', { className: 'muted', text: t(
+        'Справочно: накоплено на том же исполнении, не входит в приёмочное число выборки.',
+        'For reference: accumulated on the same execution, not part of the sampling acceptance number.') }),
+      h('ul', { className: 'final-quality-inline-history' }, rows.map((row) => h('li', {}, [
+        h('strong', { text: inlineMilestoneLabel(row.milestoneCode) }),
+        h('span', { className: 'muted', text: `${t('Проверено', 'Checked')} ${row.checkedQuantity} · ${t('Брак', 'Defective')} ${row.defectiveQuantity}${row.openDispositions ? ` · ${t('без решения', 'undispositioned')}: ${row.openDispositions}` : ''}` }),
+      ]))),
+    ]);
+  }
   function cancelPanel(value) { return h('section', { className: 'final-quality-card' }, [h('h3', { text: t('Отмена инспекции', 'Cancel inspection') }), h('input', { value: ui.cancelReason, placeholder: t('Причина отмены', 'Cancellation reason'), oninput: (event) => { ui.cancelReason = event.target.value; } }), h('button', { type: 'button', className: 'danger', disabled: Boolean(ui.busyCode), text: t('Отменить', 'Cancel'), onclick: () => { const reason = requireText(ui.cancelReason, 5, t('Укажите причину отмены.', 'Enter a cancellation reason.')); if (reason) void command(value.inspectionCode, `/v2/final-quality-inspections/${encodeURIComponent(value.inspectionCode)}/cancel`, { expectedVersion: value.version, reason }); } })]); }
   function inspector(value) {
     if (!value) return h('aside', { className: 'final-quality-inspector' }, [h('p', { className: 'muted', text: t('Выберите инспекцию.', 'Select an inspection.') })]);
@@ -358,6 +385,7 @@
     const children = [h('div', { className: 'final-quality-inspector-head' }, [h('div', {}, [h('p', { className: 'eyebrow', text: value.inspectionCode }), h('h2', { text: statusLabel(value.status) })]), value.shipmentRelease ? h('span', { className: 'final-quality-release', text: value.shipmentRelease.releaseCode }) : null]),
       h('dl', { className: 'final-quality-facts' }, [pair(t('Исполнение', 'Execution'), value.executionCode), pair('PO', value.productionOrderNumber), pair('SKU', value.sku), pair(t('Фабрика', 'Supplier'), value.supplierCode), pair(t('Партия', 'Lot quantity'), value.quantity), pair(t('Техпак', 'Tech Pack'), `${value.sourceSnapshot.techPackCode} · v${value.sourceSnapshot.techPackVersion}`), pair(t('Готово к QC', 'Ready for QC'), date(value.sourceSnapshot.readyForQcAt)), pair(t('Версия исполнения', 'Execution version'), value.sourceSnapshot.executionVersion)]),
       h('section', { className: 'final-quality-card' }, [h('h3', { text: t('История инспекций', 'Inspection history') }), runHistory(value)]),
+      inlineDefectHistoryPanel(value),
     ];
     if (actions.includes('start')) children.push(startPanel(value, false));
     if (actions.includes('complete')) children.push(completePanel(value));

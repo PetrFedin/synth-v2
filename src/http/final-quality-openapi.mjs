@@ -13,7 +13,7 @@ const inspectionParameter = { name: 'inspectionCode', in: 'path', required: true
 
 export function withFinalQualityOpenApi(base) {
   const specification = structuredClone(base);
-  specification.info.version = '1.18.0';
+  specification.info.version = '1.19.0';
   Object.assign(specification.components.schemas, schemas());
   Object.assign(specification.paths, paths());
   return deepFreeze(specification);
@@ -79,8 +79,16 @@ function schemas() {
       releaseCode: { type: 'string', pattern: CODE }, inspectionCode: { type: 'string', pattern: CODE }, inspectionVersion: version(), executionCode: { type: 'string', pattern: CODE }, productionOrderNumber: { type: 'string', pattern: CODE }, supplierCode: { type: 'string', pattern: CODE }, sku: { type: 'string', pattern: CODE }, quantity: quantity(), runNumber: version(), releasedAt: date(), releasedBy: text(1,200), notes: text(5,2000),
     } },
     FinalQualityRejection: { type: 'object', additionalProperties: false, required: ['runNumber','rejectedAt','rejectedBy','notes'], properties: { runNumber: version(), rejectedAt: date(), rejectedBy: text(1,200), notes: text(5,2000) } },
-    FinalQualityInspection: { type: 'object', additionalProperties: false, required: ['id','inspectionCode','executionId','executionCode','executionVersion','productionOrderNumber','productionOrderVersion','brandId','supplierCode','sku','quantity','sourceSnapshot','status','version','currentRun','runs','shipmentRelease','rejection','cancelledAt','cancelledBy','cancellationReason','createdAt','updatedAt'], properties: {
+    // Накопленный брак по вехам инлайн-контроля того же исполнения — только для чтения рядом с
+    // решением, ничего не хранится и ничего не решает за инспектора: приёмочное число остаётся
+    // числом плана выборки, а не переписывается вехами, которые сняты не по той же методике.
+    FinalQualityInlineDefectHistoryEntry: { type: 'object', additionalProperties: false, required: ['milestoneCode','checkedQuantity','defectiveQuantity','openDispositions'], properties: {
+      milestoneCode: { type: 'string', enum: ['materials-ready','cutting-complete','assembly-complete','finishing-complete','packing-complete','ready-for-qc'] },
+      checkedQuantity: nonNegative(), defectiveQuantity: nonNegative(), openDispositions: nonNegative(),
+    } },
+    FinalQualityInspection: { type: 'object', additionalProperties: false, required: ['id','inspectionCode','executionId','executionCode','executionVersion','productionOrderNumber','productionOrderVersion','brandId','supplierCode','sku','quantity','sourceSnapshot','status','version','currentRun','runs','shipmentRelease','rejection','cancelledAt','cancelledBy','cancellationReason','createdAt','updatedAt','inlineDefectHistory'], properties: {
       id: text(1,200), inspectionCode: { type: 'string', pattern: CODE }, executionId: text(1,200), executionCode: { type: 'string', pattern: CODE }, executionVersion: version(), productionOrderNumber: { type: 'string', pattern: CODE }, productionOrderVersion: version(), brandId: text(1,200), supplierCode: { type: 'string', pattern: CODE }, sku: { type: 'string', pattern: CODE }, quantity: quantity(), sourceSnapshot: { $ref: '#/components/schemas/FinalQualitySourceSnapshot' }, status: { type: 'string', enum: STATUSES }, version: version(), currentRun: nonNegative(), runs: { type: 'array', maxItems: 100, items: { $ref: '#/components/schemas/FinalQualityRun' } }, shipmentRelease: nullableRef('#/components/schemas/FinalQualityShipmentRelease'), rejection: nullableRef('#/components/schemas/FinalQualityRejection'), cancelledAt: nullableDate(), cancelledBy: nullableText(200), cancellationReason: nullableText(1000), createdAt: date(), updatedAt: date(),
+      inlineDefectHistory: { type: 'array', maxItems: 6, items: { $ref: '#/components/schemas/FinalQualityInlineDefectHistoryEntry' } },
     } },
     FinalQualityPage: { type: 'object', additionalProperties: false, required: ['items','nextCursor'], properties: { items: { type: 'array', maxItems: 200, items: { $ref: '#/components/schemas/FinalQualityInspection' } }, nextCursor: nullableText(2048) } },
   };

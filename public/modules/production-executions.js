@@ -515,6 +515,12 @@
       for (const defect of check.defects || []) {
         lines.push(h('p', { className: 'muted', text: `${defectTypeLabel(defect.defectCode)} — ${defect.quantity} ${t('шт.', 'pcs')} · ${severityLabel(defect.severity)}${defect.notes ? ` · ${defect.notes}` : ''}` }));
       }
+      // Дефект раскроя сведён к рулону: настил, из которого он вышел, уже связан и с исполнением, и
+      // с партиями материала — не хватало только показать эту связь рядом с находкой. Найдено живым
+      // обходом: связь была в данных и нигде не читалась.
+      if (check.defectiveQuantity > 0 && check.culpableLots && check.culpableLots.length) {
+        lines.push(h('p', { className: 'muted', text: `${t('Из рулонов', 'From rolls')}: ${check.culpableLots.map((lot) => `${lot.lotReference} (${lot.materialCode})`).join(', ')}` }));
+      }
       if (check.status === 'closed' && check.disposition) {
         lines.push(h('p', { className: 'muted', text: `${t('Решение', 'Disposition')}: ${dispositionLabel(check.disposition)}${check.dispositionNotes ? ` · ${check.dispositionNotes}` : ''}` }));
       }

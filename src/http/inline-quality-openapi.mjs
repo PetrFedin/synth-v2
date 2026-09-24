@@ -38,7 +38,14 @@ function schemas() {
       defectTypeId: text(1, 200), defectCode: { type: 'string', pattern: DEFECT_CODE },
       severity: { type: 'string', enum: SEVERITIES }, quantity: quantity(), notes: nullableText(500),
     } },
-    InlineQualityCheck: { type: 'object', additionalProperties: false, required: ['id', 'brandId', 'executionId', 'executionCode', 'supplierCode', 'sku', 'lotQuantity', 'milestoneCode', 'checkNumber', 'checkedQuantity', 'defectiveQuantity', 'defects', 'defectRate', 'status', 'disposition', 'dispositionNotes', 'inspectorName', 'notes', 'version', 'recordedAt', 'recordedBy', 'dispositionedAt', 'dispositionedBy'], properties: {
+    // Из какого рулона это выкроено. Собирается при чтении из «настил ↔ исполнение» и «настил ↔
+    // партия» — обе связи уже существуют для прослеживаемости материала, и на вехе раскроя они же
+    // отвечают на вопрос, где искать причину найденного дефекта. Применимо только к самому раскрою:
+    // на остальных вехах список пуст, а не гадателен.
+    CulpableLot: { type: 'object', additionalProperties: false, required: ['lotId', 'lotReference', 'materialCode'], properties: {
+      lotId: text(1, 200), lotReference: text(1, 200), materialCode: text(1, 200),
+    } },
+    InlineQualityCheck: { type: 'object', additionalProperties: false, required: ['id', 'brandId', 'executionId', 'executionCode', 'supplierCode', 'sku', 'lotQuantity', 'milestoneCode', 'checkNumber', 'checkedQuantity', 'defectiveQuantity', 'defects', 'defectRate', 'status', 'disposition', 'dispositionNotes', 'inspectorName', 'notes', 'version', 'recordedAt', 'recordedBy', 'dispositionedAt', 'dispositionedBy', 'culpableLots'], properties: {
       id: text(1, 200), brandId: text(1, 200), executionId: text(1, 200), executionCode: { type: 'string', pattern: CODE },
       supplierCode: { type: 'string', pattern: CODE }, sku: { type: 'string', pattern: CODE }, lotQuantity: quantity(),
       milestoneCode: { type: 'string', enum: STAGES }, checkNumber: version(), checkedQuantity: quantity(),
@@ -47,6 +54,7 @@ function schemas() {
       disposition: nullableEnum(DISPOSITIONS), dispositionNotes: nullableText(2000), inspectorName: text(2, 160),
       notes: nullableText(2000), version: version(), recordedAt: date(), recordedBy: text(1, 200),
       dispositionedAt: nullableDate(), dispositionedBy: nullableText(200),
+      culpableLots: { type: 'array', maxItems: 200, items: { $ref: '#/components/schemas/CulpableLot' } },
     } },
     // Итог и Парето едут вместе со списком: a defect rate computed three different ways in three
     // screens is three different numbers with one name.

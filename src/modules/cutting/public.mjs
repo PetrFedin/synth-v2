@@ -131,6 +131,11 @@ export function cuttingSummary({ execution, bom, spreads }) {
       spreadReference: spread.spreadReference, plies: spread.plies, markerLength: spread.markerLength,
       garmentsPerPly: perPlyHere, garmentsCut: cutHere, clothUsed: clothHere,
       lots: Object.freeze(list(spread.lots).map((lot) => lot.lotReference)),
+      // Записано при закладке, против ширины полотна на тот момент — не пересчитано против
+      // сегодняшней спецификации материала. Честно так и подписано на экране: это не текущая
+      // проверка, а то, что было известно во время раскроя.
+      fabricWidth: spread.fabricWidth, fabricWidthUnit: spread.fabricWidthUnit,
+      clothSlackMillimetres: spread.clothSlackMillimetres,
     }));
     byMaterial.set(spread.materialCode, current);
   }

@@ -247,6 +247,15 @@
         lines.push(h('p', { className: 'muted', text: t(
           `${spread.spreadReference}: ${perGarment(spread.markerLength, material.unit)} × ${spread.plies} сл. — ${spread.garmentsCut} изд., ${amount(spread.clothUsed, material.unit)}${spread.lots.length ? ` · ${spread.lots.join(', ')}` : ''}`,
           `${spread.spreadReference}: ${perGarment(spread.markerLength, material.unit)} × ${spread.plies} plies — ${spread.garmentsCut} garments, ${amount(spread.clothUsed, material.unit)}${spread.lots.length ? ` · ${spread.lots.join(', ')}` : ''}`) }));
+        // Ширина и запас записаны при закладке, против ширины полотна на тот момент — это не
+        // повторная проверка против сегодняшней спецификации материала (аудит, раздел E, пункты
+        // E6/E8: правило ширины стоит через NOT VALID, обратной перепроверки в системе нет).
+        if (spread.fabricWidth !== null && spread.fabricWidth !== undefined) {
+          const negative = spread.clothSlackMillimetres !== null && spread.clothSlackMillimetres !== undefined && spread.clothSlackMillimetres < 0;
+          lines.push(h('p', { className: negative ? 'production-execution-warn' : 'muted', text: t(
+            `Ширина настила ${I18N.formatNumber(spread.fabricWidth)} ${spread.fabricWidthUnit}, запас на момент закладки ${spread.clothSlackMillimetres === null || spread.clothSlackMillimetres === undefined ? '—' : `${I18N.formatNumber(spread.clothSlackMillimetres)} мм`}`,
+            `Spread width ${I18N.formatNumber(spread.fabricWidth)} ${spread.fabricWidthUnit}, slack at laying ${spread.clothSlackMillimetres === null || spread.clothSlackMillimetres === undefined ? '—' : `${I18N.formatNumber(spread.clothSlackMillimetres)} mm`}`) }));
+        }
       }
       children.push(h('div', { className: 'production-execution-check closed' }, lines));
     }

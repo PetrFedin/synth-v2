@@ -29,13 +29,17 @@ function schemas() {
     // читателю, чтобы он не повторял деление, которое легко сделать иначе; в базе их нет.
     CuttingSpread: {
       type: 'object', additionalProperties: false,
-      required: ['id', 'brandId', 'materialCode', 'unit', 'spreadReference', 'markerLength', 'plies', 'fabricWidth', 'fabricWidthUnit', 'marker', 'lots', 'status', 'laidAt', 'laidBy', 'notes', 'version', 'createdAt', 'updatedAt', 'garmentsPerPly', 'clothLaid', 'consumptionPerGarment'],
+      required: ['id', 'brandId', 'materialCode', 'unit', 'spreadReference', 'markerLength', 'plies', 'fabricWidth', 'fabricWidthUnit', 'clothSlackMillimetres', 'marker', 'lots', 'status', 'laidAt', 'laidBy', 'notes', 'version', 'createdAt', 'updatedAt', 'garmentsPerPly', 'clothLaid', 'consumptionPerGarment'],
       properties: {
         id: text(1, 200), brandId: text(1, 200), materialCode: text(1, 200), unit: text(1, 32),
         spreadReference: { type: 'string', pattern: REFERENCE }, markerLength: quantity(), plies: count(),
         fabricWidth: { oneOf: [quantity(), { type: 'null' }] },
         // Ширина — длина и носит свою единицу, а не наследует единицу расхода материала.
         fabricWidthUnit: { oneOf: [{ type: 'string', enum: ['mm', 'cm', 'm'] }, { type: 'null' }] },
+        // Запас полезной ширины полотна над заложенной шириной настила, в мм, записанный при
+        // закладке. Отрицательный означал бы настил шире полотна — домен такого не создаёт, но
+        // число не пересчитывается против сегодняшней спецификации материала (E6/E8 аудита).
+        clothSlackMillimetres: { oneOf: [{ type: 'number', minimum: -1_000_000_000, maximum: 1_000_000_000 }, { type: 'null' }] },
         marker: { type: 'array', minItems: 1, maxItems: 40, items: { $ref: '#/components/schemas/CuttingMarkerEntry' } },
         lots: { type: 'array', minItems: 1, maxItems: 40, items: { $ref: '#/components/schemas/CuttingSpreadLot' } },
         status: { type: 'string', enum: STATUSES }, laidAt: date(), laidBy: text(1, 200), notes: nullableText(1000),
@@ -82,11 +86,16 @@ function schemas() {
             variancePerGarment: { oneOf: [{ type: 'number', minimum: -1_000_000_000, maximum: 1_000_000_000 }, { type: 'null' }] },
             variancePercent: { oneOf: [{ type: 'number', minimum: -1_000_000, maximum: 1_000_000 }, { type: 'null' }] },
             spreads: { type: 'array', maxItems: 500, items: {
-              type: 'object', additionalProperties: false, required: ['spreadReference', 'plies', 'markerLength', 'garmentsPerPly', 'garmentsCut', 'clothUsed', 'lots'],
+              type: 'object', additionalProperties: false, required: ['spreadReference', 'plies', 'markerLength', 'garmentsPerPly', 'garmentsCut', 'clothUsed', 'lots', 'fabricWidth', 'fabricWidthUnit', 'clothSlackMillimetres'],
               properties: {
                 spreadReference: { type: 'string', pattern: REFERENCE }, plies: count(), markerLength: quantity(),
                 garmentsPerPly: count(), garmentsCut: nonNegative(), clothUsed: nonNegativeQuantity(),
                 lots: { type: 'array', maxItems: 40, items: { type: 'string', pattern: REFERENCE } },
+                // Записано при закладке настила, против ширины полотна на тот момент — не текущая
+                // проверка (см. E6/E8 в docs/audit-2026-09-21.md).
+                fabricWidth: { oneOf: [quantity(), { type: 'null' }] },
+                fabricWidthUnit: { oneOf: [{ type: 'string', enum: ['mm', 'cm', 'm'] }, { type: 'null' }] },
+                clothSlackMillimetres: { oneOf: [{ type: 'number', minimum: -1_000_000_000, maximum: 1_000_000_000 }, { type: 'null' }] },
               },
             } },
           },

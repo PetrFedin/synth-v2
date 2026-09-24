@@ -48,6 +48,7 @@ import { createPostgresSourcingTechPackAllocationStore } from '../src/infrastruc
 import { createPostgresProductionOrderStore } from '../src/infrastructure/postgres-production-order-store.mjs';
 import { createPostgresProductionExecutionStore } from '../src/infrastructure/postgres-production-execution-store.mjs';
 import { createPostgresFinalQualityStore } from '../src/infrastructure/postgres-final-quality-store.mjs';
+import { createPostgresFinalQualityReader } from '../src/infrastructure/postgres-final-quality-reader.mjs';
 import { migratePostgres } from '../src/infrastructure/postgres-migrator.mjs';
 import { createPostgresTestPool } from './postgres-test-pool.mjs';
 
@@ -570,6 +571,20 @@ test('PostgreSQL closes approved PPS through production, rework, reinspection an
     const releaseRow = (await pool.query('SELECT release_code, inspection_version, released_by, payload FROM quality_shipment_releases WHERE inspection_code = $1', [quality.inspectionCode])).rows[0];
     assert.deepEqual({ releaseCode: releaseRow.release_code, inspectionVersion: releaseRow.inspection_version, releasedBy: releaseRow.released_by }, { releaseCode: 'SHIP-REL-TECH-GATE-1', inspectionVersion: 7, releasedBy: 'quality-approver' });
     assert.equal(releaseRow.payload.productionOrderNumber, productionOrder.productionOrderNumber);
+
+    // Инлайн-контроль и финальный AQL накапливали брак по одному исполнению независимо и нигде не
+    // встречались. Финальная карточка теперь видит вехи инлайн-контроля рядом с собственным
+    // решением: раскрой нёс проверку на 40 шт. с 3 дефектами, разобранными как «rework», — приёмочное
+    // число выборки её не учитывает, но инспектор видит её справочно.
+    const finalQualityReader = createPostgresFinalQualityReader({ pool });
+    const qualityWithHistory = await finalQualityReader.getForActor('product-owner', quality.inspectionCode);
+    const cuttingHistory = qualityWithHistory.inlineDefectHistory.find((row) => row.milestoneCode === 'cutting-complete');
+    assert.deepEqual(cuttingHistory, { milestoneCode: 'cutting-complete', checkedQuantity: 40, defectiveQuantity: 3, openDispositions: 0 });
+    const otherHistory = qualityWithHistory.inlineDefectHistory.filter((row) => row.milestoneCode !== 'cutting-complete');
+    assert.ok(otherHistory.every((row) => row.defectiveQuantity === 0), 'no other milestone on this execution carried a defect');
+    const qualityPage = await finalQualityReader.pageForActor('product-owner', { limit: 50, filters: {} });
+    const pagedInspection = qualityPage.items.find((row) => row.inspectionCode === quality.inspectionCode);
+    assert.deepEqual(pagedInspection.inlineDefectHistory.find((row) => row.milestoneCode === 'cutting-complete'), cuttingHistory, 'the list carries the same history as the card, not a lighter shape');
 
     const qualityEventsBeforeReplay = Number((await pool.query('SELECT count(*)::integer AS count FROM outbox_events WHERE aggregate_id = $1', [quality.id])).rows[0].count);
     const releaseReplay = await finalQuality.review('quality-run-2-release', 'quality-approver', quality.inspectionCode, releaseInput);

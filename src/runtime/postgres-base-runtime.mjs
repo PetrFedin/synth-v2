@@ -134,7 +134,7 @@ export function createPostgresWholesaleRuntime({
   const orderEconomics = Object.freeze({
     ...createOrderEconomicsService({ economicsStore: orderEconomicsStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }),
     ...createPostCloseAllocationReconciliationService({ economicsStore: orderEconomicsStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }),
-    ...createOrderEconomicsPositionService({ economicsStore: orderEconomicsStore }),
+    ...createOrderEconomicsPositionService({ economicsStore: orderEconomicsStore, bomStore }),
   });
   const materials = Object.freeze({ ...createMaterialService({ materialStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createMaterialQueryService({ reader: createPostgresMaterialReader({ pool }) }) });
   const boms = Object.freeze({ ...createBomService({ bomStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createBomQueryService({ reader: createPostgresBomReader({ pool }) }) });

@@ -61,6 +61,14 @@ async function orderEconomicsDialog(order) {
   if (position.latestPostCloseAdjustmentId) rows.push(economicsRow('Последняя корректировка', 'Latest adjustment', position.latestPostCloseAdjustmentId));
   if (position.cumulativePostCloseCostDelta !== null && position.cumulativePostCloseCostDelta !== undefined) rows.push(economicsRow('Изменение себестоимости после закрытия', 'Post-close cost delta', economicsMoney(position.cumulativePostCloseCostDelta, position.currency)));
   if (position.cumulativePostCloseMarginDelta !== null && position.cumulativePostCloseMarginDelta !== undefined) rows.push(economicsRow('Изменение маржи после закрытия', 'Post-close margin delta', economicsMoney(position.cumulativePostCloseMarginDelta, position.currency)));
+  const mcr = position.materialCostReconciliation;
+  if (mcr) {
+    rows.push(economicsRow('Ведомость vs факт: материалы', 'Bill of materials vs actual: material', economicsMoney(mcr.plannedMaterialCost, position.currency)));
+    rows.push(economicsRow('Факт по материалам', 'Actual material cost', economicsMoney(mcr.actualMaterialCost, position.currency)));
+    if (mcr.varianceMaterialCost !== null) rows.push(economicsRow('Отклонение по материалам', 'Material cost variance', economicsMoney(mcr.varianceMaterialCost, position.currency)));
+    if (mcr.coverageBasisPoints !== null) rows.push(economicsRow('Покрыто ведомостью', 'Covered by BOM', economicsPercent(mcr.coverageBasisPoints / 100)));
+    if (mcr.uncoveredSkus.length) rows.push(economicsRow('Без ведомости', 'No BOM', mcr.uncoveredSkus.join(', ')));
+  }
 
   openDetails(economicsText('Экономика заказа', 'Order economics'), rows);
 }

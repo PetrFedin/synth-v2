@@ -147,6 +147,69 @@ test('economics position resolves immutable close as CLOSED with zero post-close
   assert.equal(position.cumulativePostCloseMarginDelta, 0);
 });
 
+test('material cost reconciliation compares the BOM to the actual material ledger, honestly excluding what it cannot cover', async () => {
+  // Ведомость (план по SKU) и факт (одна сумма 'material' на заказ) никогда не встречались —
+  // это ровно находка аудита. Свод сравнивает их только там, где ведомость опубликована и в
+  // валюте заказа; JACKET-1 не покрыт нарочно, чтобы проверить честное исключение, а не тихий
+  // пересчёт по случайному курсу.
+  const mcOrder = Object.freeze({
+    id: 'ORDER-MC-1', version: 1, status: 'attached', brandId: 'BRAND-MC', shopId: 'SHOP-MC', currency: 'EUR', totalAmount: 1000,
+    orderCommitSnapshotId: 'COMMIT-MC-1',
+  });
+  const mcOrderCommit = Object.freeze({
+    id: 'COMMIT-MC-1', orderId: mcOrder.id, orderVersion: mcOrder.version, status: 'committed',
+    brandId: mcOrder.brandId, shopId: mcOrder.shopId, currency: mcOrder.currency, totalAmount: mcOrder.totalAmount,
+    lines: Object.freeze([
+      Object.freeze({ sku: 'TSHIRT-1', quantity: 10 }),
+      Object.freeze({ sku: 'JACKET-1', quantity: 2 }),
+    ]),
+  });
+  const mcMembership = Object.freeze({
+    id: 'MEM-MC-1', organisationId: mcOrder.brandId, organisationType: 'brand', userId: actorId,
+    role: 'owner', status: 'active', createdAt: '2026-08-09T00:00:00.000Z',
+  });
+  const landed = Object.freeze({
+    id: 'LANDED-MC-1', orderId: mcOrder.id, orderCommitSnapshotId: mcOrderCommit.id, currency: mcOrder.currency,
+    totalCost: 900, costEntryIds: Object.freeze(['COST-MC-1']),
+    componentTotals: Object.freeze({ material: 55 }),
+  });
+  const margin = Object.freeze({
+    id: 'MARGIN-MC-1', orderId: mcOrder.id, orderCommitSnapshotId: mcOrderCommit.id, landedCostSnapshotId: landed.id, currency: mcOrder.currency,
+    netRevenue: 1000, landedCost: 900, contributionMarginAmount: 300, contributionMarginPercent: 30,
+    ...currentAllocation,
+  });
+  const close = Object.freeze({
+    id: 'CLOSE-MC-1', orderId: mcOrder.id, orderCommitSnapshotId: mcOrderCommit.id,
+    costCloseReadinessSnapshotId: 'READY-MC-1', landedCostSnapshotId: landed.id,
+    marginActualizationSnapshotId: margin.id, totalLandedCost: 900, contributionMarginAmount: 300,
+    ...currentAllocation,
+  });
+  const boms = new Map([
+    ['TSHIRT-1', Object.freeze({ sku: 'TSHIRT-1', status: 'published', currency: 'EUR', materialCost: 4 })],
+    // JACKET-1 has no published BOM — must be excluded from coverage, not silently priced at zero.
+  ]);
+  const tx = {
+    getOrder: async (id) => id === mcOrder.id ? mcOrder : undefined,
+    getOrderCommitSnapshot: async (id) => id === mcOrderCommit.id ? mcOrderCommit : undefined,
+    getMembership: async (organisationId, userId) => organisationId === mcOrder.brandId && userId === actorId ? mcMembership : undefined,
+    getCostCloseByOrderCommitSnapshotId: async (id) => id === mcOrderCommit.id ? close : undefined,
+    getLatestPostCloseAdjustment: async () => undefined,
+    getLandedCostSnapshot: async (id) => id === landed.id ? landed : undefined,
+    getMarginActualizationSnapshot: async (id) => id === margin.id ? margin : undefined,
+  };
+  const bomStore = { getBomBySku: async (sku) => boms.get(sku) ?? null };
+  const service = createOrderEconomicsPositionService({ economicsStore: { transaction: (work) => work(tx) }, bomStore });
+  const position = await service.getOrderEconomicsPositionForActor(actorId, mcOrder.id);
+
+  const mcr = position.materialCostReconciliation;
+  assert.ok(mcr, 'material cost reconciliation must be present once the order is closed');
+  assert.equal(mcr.plannedMaterialCost, 40, 'only TSHIRT-1 is covered: 4 per unit × 10 units');
+  assert.equal(mcr.actualMaterialCost, 55);
+  assert.equal(mcr.varianceMaterialCost, 15);
+  assert.equal(mcr.coverageBasisPoints, 8333, '10 of 12 ordered units are covered by a published BOM');
+  assert.deepEqual(mcr.uncoveredSkus, ['JACKET-1']);
+});
+
 test('latest post-close adjustment remains pending until its exact allocation is reconciled', async () => {
   const baseLanded = landedSnapshot('LANDED-BASE', 600, ['COST-1']);
   const baseMargin = marginSnapshot('MARGIN-BASE', baseLanded.id, 600, 400, 40, currentAllocation);

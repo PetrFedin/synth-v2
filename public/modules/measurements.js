@@ -162,7 +162,7 @@
       h('thead', {}, [h('tr', {}, [
         text('SKU / модель', 'SKU / style'), text('Статус', 'Status'), text('Ед.', 'Unit'), text('Размеры', 'Sizes'),
         'POM', text('Матрица', 'Matrix'), text('Готовность', 'Readiness'), text('Риск', 'Risk'),
-      ].map((label) => h('th', { text: label })))]),
+      ].map((label) => h('th', { text: label, scope: 'col' })))]),
       h('tbody', {}, rows),
     ])]);
   }
@@ -182,8 +182,8 @@
 
   function matrixView(item) {
     if (!item) return h('div', { className: 'measurement-empty', text: text('Выберите размерную таблицу.', 'Select a measurement chart.') });
-    const head = [h('th', { text: text('POM / допуск', 'POM / tolerance') })];
-    for (const size of item.chart.sizes) head.push(h('th', { text: `${size.code} · ${size.label}` }));
+    const head = [h('th', { text: text('POM / допуск', 'POM / tolerance'), scope: 'col' })];
+    for (const size of item.chart.sizes) head.push(h('th', { text: `${size.code} · ${size.label}`, scope: 'col' }));
     const rows = item.chart.points.map((point) => {
       const bySize = new Map(point.measurements.map((measurement) => [measurement.sizeCode, measurement]));
       const head = h('td', {}, [h('strong', { text: point.pointCode }), h('span', { text: point.name }), h('small', { text: `−${point.toleranceMinus} / +${unitAmount(point.tolerancePlus, item.chart.unit)}` })]);
@@ -378,9 +378,9 @@
         model.points.forEach((point) => point.values.set(size.key, ''));
         renderBody();
       } })), sizeList);
-      const tableHead = [h('th', { text: 'POM' }), h('th', { text: text('Название / описание', 'Name / description') }), h('th', { text: '− Tol.' }), h('th', { text: '+ Tol.' }), h('th', { text: text('Градация', 'Grade') })];
-      model.sizes.forEach((size) => tableHead.push(h('th', { text: size.code || '—' })));
-      tableHead.push(h('th', { text: '' }));
+      const tableHead = [h('th', { text: 'POM', scope: 'col' }), h('th', { text: text('Название / описание', 'Name / description'), scope: 'col' }), h('th', { text: '− Tol.', scope: 'col' }), h('th', { text: '+ Tol.', scope: 'col' }), h('th', { text: text('Градация', 'Grade'), scope: 'col' })];
+      model.sizes.forEach((size) => tableHead.push(h('th', { text: size.code || '—', scope: 'col' })));
+      tableHead.push(h('th', { text: '', scope: 'col' }));
       const rows = model.points.map((point) => {
         const cells = [
           h('td', {}, [input('text', point.pointCode, (value) => { point.pointCode = value.toUpperCase(); }, { maxlength: '32', placeholder: 'CHEST', required: true, pattern: '[A-Za-z0-9._-]{1,32}' })]),

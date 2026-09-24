@@ -164,7 +164,7 @@
     });
     if (!body.length) body.push(h('tr', {}, [h('td', { colspan: '7', className: 'bom-empty', text: ui.loading ? text('Загрузка…', 'Loading…') : text('Нет данных для выбранного режима.', 'No data for this view.') })]));
     return h('div', { className: 'bom-table-wrap' }, [h('table', { className: 'bom-table' }, [
-      h('thead', {}, [h('tr', {}, [text('SKU / модель', 'SKU / style'), text('Статус', 'Status'), text('Готовность', 'Readiness'), text('Строки', 'Lines'), text('Материалы', 'Materials'), text('Итого', 'Total'), text('Риск', 'Risk')].map((label) => h('th', { text: label })))]),
+      h('thead', {}, [h('tr', {}, [text('SKU / модель', 'SKU / style'), text('Статус', 'Status'), text('Готовность', 'Readiness'), text('Строки', 'Lines'), text('Материалы', 'Materials'), text('Итого', 'Total'), text('Риск', 'Risk')].map((label) => h('th', { text: label, scope: 'col' })))]),
       h('tbody', {}, body),
     ])]);
   }

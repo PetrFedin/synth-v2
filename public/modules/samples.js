@@ -186,7 +186,7 @@
       return row;
     });
     if (!rows.length) rows.push(h('tr', {}, [h('td', { colspan: '7', className: 'sample-empty', text: ui.loading ? text('Загрузка…', 'Loading…') : text('Нет образцов для выбранных фильтров.', 'No samples match the filters.') })]));
-    return h('div', { className: 'sample-table-wrap' }, [h('table', { className: 'sample-table' }, [h('thead', {}, [h('tr', {}, [text('Образец / SKU', 'Sample / SKU'), text('Тип', 'Type'), text('Раунд', 'Round'), text('Статус', 'Status'), text('Поставщик', 'Supplier'), text('Срок', 'Due'), text('Контроль', 'Control')].map((value) => h('th', { text: value })))]), h('tbody', {}, rows)])]);
+    return h('div', { className: 'sample-table-wrap' }, [h('table', { className: 'sample-table' }, [h('thead', {}, [h('tr', {}, [text('Образец / SKU', 'Sample / SKU'), text('Тип', 'Type'), text('Раунд', 'Round'), text('Статус', 'Status'), text('Поставщик', 'Supplier'), text('Срок', 'Due'), text('Контроль', 'Control')].map((value) => h('th', { text: value, scope: 'col' })))]), h('tbody', {}, rows)])]);
   }
 
   function actionButton(action, sample, assessment) {

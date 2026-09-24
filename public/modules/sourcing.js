@@ -197,7 +197,7 @@
       row.addEventListener('click', select); row.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); select(); } }); return row;
     });
     if (!rows.length) rows.push(h('tr', {}, [h('td', { colspan: '7', className: 'sourcing-empty', text: ui.loading ? text('Загрузка…', 'Loading…') : text('Поставщики не найдены.', 'No suppliers found.') })]));
-    return h('div', { className: 'sourcing-grid' }, [h('section', { className: 'sourcing-panel' }, [h('div', { className: 'sourcing-toolbar' }, [h('h2', { text: text('Реестр поставщиков', 'Supplier register') }), filter]), h('div', { className: 'sourcing-table-wrap' }, [h('table', { className: 'sourcing-table' }, [h('thead', {}, [h('tr', {}, [text('Код / название', 'Code / name'), text('Страна', 'Country'), text('Категории', 'Categories'), text('Lead time', 'Lead time'), 'MOQ', text('Статус', 'Status'), text('Аудит до', 'Audit valid until')].map((value) => h('th', { text: value })))]), h('tbody', {}, rows)])])]), supplierInspector(selectedSupplier())]);
+    return h('div', { className: 'sourcing-grid' }, [h('section', { className: 'sourcing-panel' }, [h('div', { className: 'sourcing-toolbar' }, [h('h2', { text: text('Реестр поставщиков', 'Supplier register') }), filter]), h('div', { className: 'sourcing-table-wrap' }, [h('table', { className: 'sourcing-table' }, [h('thead', {}, [h('tr', {}, [text('Код / название', 'Code / name'), text('Страна', 'Country'), text('Категории', 'Categories'), text('Lead time', 'Lead time'), 'MOQ', text('Статус', 'Status'), text('Аудит до', 'Audit valid until')].map((value) => h('th', { text: value, scope: 'col' })))]), h('tbody', {}, rows)])])]), supplierInspector(selectedSupplier())]);
   }
   function supplierInspector(supplier) {
     if (!supplier) return h('aside', { className: 'sourcing-inspector' }, [h('p', { className: 'muted', text: text('Выберите поставщика.', 'Select a supplier.') })]);
@@ -335,7 +335,7 @@
         )
         : text('Приглашённый видит только запросы и заказы этого поставщика — ни других поставщиков, ни их котировок.', 'An invited person sees only this supplier\u2019s requests and orders \u2014 no other supplier and no other quotation.') }),
       h('div', { className: 'sourcing-table-wrap' }, [h('table', { className: 'sourcing-table' }, [
-        h('thead', {}, [h('tr', {}, [text('Контакт', 'Contact'), text('Учётная запись', 'Account'), text('Статус', 'Status'), ''].map((value) => h('th', { text: value })))]),
+        h('thead', {}, [h('tr', {}, [text('Контакт', 'Contact'), text('Учётная запись', 'Account'), text('Статус', 'Status'), ''].map((value) => h('th', { text: value, scope: 'col' })))]),
         h('tbody', {}, rows),
       ])]),
     ]);
@@ -456,7 +456,7 @@
     });
     if (!rows.length) rows.push(h('tr', {}, [h('td', { colspan: String(columns.length), className: 'sourcing-empty', text: ui.loading ? text('\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430\u2026', 'Loading\u2026') : text('RFQ \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u044b.', 'No RFQs found.') })]));
     const heading = view === 'quotations' ? text('\u0421\u0440\u0430\u0432\u043d\u0435\u043d\u0438\u0435 \u043a\u043e\u0442\u0438\u0440\u043e\u0432\u043e\u043a', 'Quotation comparison') : view === 'production' ? text('\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434\u0441\u0442\u0432\u0435\u043d\u043d\u044b\u0435 \u0440\u0430\u0437\u043c\u0435\u0449\u0435\u043d\u0438\u044f', 'Production allocations') : text('\u0420\u0435\u0435\u0441\u0442\u0440 RFQ', 'RFQ register');
-    return h('div', { className: 'sourcing-grid' }, [h('section', { className: 'sourcing-panel' }, [h('div', { className: 'sourcing-toolbar' }, [h('h2', { text: heading }), filter]), h('div', { className: 'sourcing-table-wrap' }, [h('table', { className: 'sourcing-table' }, [h('thead', {}, [h('tr', {}, columns.map((column) => h('th', { text: column.label })))]), h('tbody', {}, rows)])])]), rfqInspector(selectedRfq())]);
+    return h('div', { className: 'sourcing-grid' }, [h('section', { className: 'sourcing-panel' }, [h('div', { className: 'sourcing-toolbar' }, [h('h2', { text: heading }), filter]), h('div', { className: 'sourcing-table-wrap' }, [h('table', { className: 'sourcing-table' }, [h('thead', {}, [h('tr', {}, columns.map((column) => h('th', { text: column.label, scope: 'col' })))]), h('tbody', {}, rows)])])]), rfqInspector(selectedRfq())]);
   }
 
   function rfqInspector(rfq) {

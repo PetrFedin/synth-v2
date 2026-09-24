@@ -187,7 +187,7 @@
       row.addEventListener('click', choose); row.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); choose(); } }); return row;
     });
     if (!rows.length) rows.push(h('tr', {}, [h('td', { colspan: '8', className: 'final-quality-empty', text: ui.loading ? t('Загрузка…', 'Loading…') : t('Нет партий для выбранных фильтров.', 'No lots match the filters.') })]));
-    return h('div', { className: 'final-quality-registry' }, [h('table', { className: 'final-quality-table' }, [h('thead', {}, [h('tr', {}, [t('Инспекция', 'Inspection'), 'SKU', t('Фабрика', 'Supplier'), t('Партия', 'Lot'), t('Прогон', 'Run'), 'C/M/m', t('Рекомендация', 'Recommendation'), t('Статус', 'Status')].map((label) => h('th', { text: label })))]), h('tbody', {}, rows)])]);
+    return h('div', { className: 'final-quality-registry' }, [h('table', { className: 'final-quality-table' }, [h('thead', {}, [h('tr', {}, [t('Инспекция', 'Inspection'), 'SKU', t('Фабрика', 'Supplier'), t('Партия', 'Lot'), t('Прогон', 'Run'), 'C/M/m', t('Рекомендация', 'Recommendation'), t('Статус', 'Status')].map((label) => h('th', { text: label, scope: 'col' })))]), h('tbody', {}, rows)])]);
   }
   function pair(label, value) { return h('div', {}, [h('dt', { text: label }), h('dd', { text: value ?? '—' })]); }
   function numericInput(label, key, min = 0) { return h('label', {}, [h('span', { text: label }), h('input', { type: 'number', min, value: ui[key], oninput: (event) => { ui[key] = event.target.value; } })]); }

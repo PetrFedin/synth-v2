@@ -135,7 +135,7 @@
       return row;
     });
     if (!rows.length) rows.push(h('tr', {}, [h('td', { colspan: '7', className: 'tech-pack-empty', text: ui.loading ? text('Загрузка…', 'Loading…') : text('Нет техпаков для выбранных фильтров.', 'No Tech Packs match the filters.') })]));
-    return h('div', { className: 'tech-pack-table-wrap' }, [h('table', { className: 'tech-pack-table' }, [h('thead', {}, [h('tr', {}, [text('Техпак', 'Tech Pack'), 'SKU', text('Редакция', 'Revision'), text('Статус', 'Status'), text('Фабрика', 'Supplier'), text('Допуск', 'Readiness'), text('Обновлён', 'Updated')].map((item) => h('th', { text: item })))]), h('tbody', {}, rows)])]);
+    return h('div', { className: 'tech-pack-table-wrap' }, [h('table', { className: 'tech-pack-table' }, [h('thead', {}, [h('tr', {}, [text('Техпак', 'Tech Pack'), 'SKU', text('Редакция', 'Revision'), text('Статус', 'Status'), text('Фабрика', 'Supplier'), text('Допуск', 'Readiness'), text('Обновлён', 'Updated')].map((item) => h('th', { text: item, scope: 'col' })))]), h('tbody', {}, rows)])]);
   }
   function pair(label, value) { return h('div', {}, [h('dt', { text: label }), h('dd', { text: value ?? '—' })]); }
   // The document a factory receives. It is assembled by the read model in one go, so the pack, the
@@ -175,7 +175,7 @@
   }
   function documentTableElement(headers, rows) {
     return h('table', { className: 'tp-doc-table' }, [
-      h('thead', {}, [h('tr', {}, headers.map((label) => h('th', { text: label })))]),
+      h('thead', {}, [h('tr', {}, headers.map((label) => h('th', { text: label, scope: 'col' })))]),
       h('tbody', {}, rows.length
         ? rows.map((row) => h('tr', {}, row.map((cell) => h('td', { text: String(cell ?? '\u2014') }))))
         : [h('tr', {}, [h('td', { colspan: String(headers.length), className: 'tp-doc-empty', text: text('\u0412 \u044d\u0442\u043e\u043c \u0440\u0430\u0437\u0434\u0435\u043b\u0435 \u043f\u043e\u043a\u0430 \u043f\u0443\u0441\u0442\u043e.', 'Nothing in this section yet.') })])]),

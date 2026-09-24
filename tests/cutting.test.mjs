@@ -54,6 +54,9 @@ test('Настил шире полотна не кладётся, а запас 
   assert.equal(codeOf(() => spreadOnCloth({ fabricWidth: 160 })), 'CUTTING_SPREAD_WIDER_THAN_CLOTH');
   // Единицы приводятся к одной линейке: 1,6 м — это те же 160 см, и отказ тот же.
   assert.equal(codeOf(() => spreadOnCloth({ fabricWidth: 1.6, fabricWidthUnit: 'm' })), 'CUTTING_SPREAD_WIDER_THAN_CLOTH');
+  // Тот же запас доезжает до свода раскроя, а не теряется в нём (E4 аудита).
+  const summary = cuttingSummary({ execution: execM, bom, spreads: [laid] });
+  assert.equal(summary.materials[0].spreads[0].clothSlackMillimetres, 40);
 });
 
 test('Ширина называется вместе с единицей, иначе она ничего не значит', () => {
@@ -124,6 +127,12 @@ test('Выход сверяется с ведомостью, а отменённ
   assert.equal(shell.actualPerGarment, 2.2);
   assert.equal(shell.plannedPerGarment, 2.247, 'план берётся из ведомости, где отход уже учтён');
   assert.equal(shell.variancePerGarment, -0.047, 'экономия против нормы — знак важнее величины');
+  // Ширина настила теперь доезжает до свода, а не теряется в нём (E4 аудита). Запас в этой
+  // фикстуре честно `null` — у `material` здесь нет спецификации (полезной ширины), поэтому
+  // сверить настил не с чем; положительный случай — в тесте `spreadOnCloth` ниже.
+  assert.equal(shell.spreads[0].fabricWidth, 146);
+  assert.equal(shell.spreads[0].fabricWidthUnit, 'cm');
+  assert.equal(shell.spreads[0].clothSlackMillimetres, null);
   assert.deepEqual([...summary.overConsuming], []);
   assert.equal(summary.shortfall, 350, 'посреди раскроя недокрой — обычное состояние, и оно названо');
   assert.equal(summary.overcut, 0);

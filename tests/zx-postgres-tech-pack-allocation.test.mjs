@@ -18,6 +18,7 @@ import { createProductionExecutionService } from '../src/application/production-
 import { createFinalQualityService } from '../src/application/final-quality-service.mjs';
 import { createInlineQualityService } from '../src/application/inline-quality-service.mjs';
 import { createPostgresInlineQualityStore } from '../src/infrastructure/postgres-inline-quality-store.mjs';
+import { createPostgresInlineQualityReader } from '../src/infrastructure/postgres-inline-quality-reader.mjs';
 import { createSupplierPaymentService, createSupplierPaymentQueryService } from '../src/application/supplier-payment-service.mjs';
 import { createPostgresSupplierPaymentStore } from '../src/infrastructure/postgres-supplier-payment-store.mjs';
 import { createPostgresSupplierPaymentReader } from '../src/infrastructure/postgres-supplier-payment-reader.mjs';
@@ -413,6 +414,20 @@ test('PostgreSQL closes approved PPS through production, rework, reinspection an
     assert.equal(check.status, 'open');
     assert.equal(check.defectiveQuantity, 3);
     assert.equal(check.defects[0].severity, 'major', 'severity comes from the catalogue, never from the caller');
+
+    // Дефект раскроя сведён к рулону.
+    //
+    // Настил связан с исполнением через раскладку и с партиями материала через выход — обе связи
+    // уже существуют для прослеживаемости, но нигде не собирались в один ответ, и найденный здесь же
+    // дефект («три изделия из одной пачки», решение — «перекроены из того же рулона») нельзя было
+    // свести к конкретному рулону, хотя весь смысл связи «настил ↔ партии» в этом.
+    const inlineQualityReader = createPostgresInlineQualityReader({ pool });
+    const checksWithLots = await inlineQualityReader.checksForExecution('product-owner', execution.executionCode);
+    const cuttingCheck = checksWithLots.find((row) => row.id === check.id);
+    assert.deepEqual(cuttingCheck.culpableLots.map((lot) => [lot.lotReference, lot.materialCode]), [['ROLL-A-001', 'FAB-TECH-GATE']]);
+    // Применимо только к раскрою: на других вехах список рулонов пуст, а не гадателен.
+    const otherMilestoneChecks = checksWithLots.filter((row) => row.milestoneCode !== 'cutting-complete');
+    assert.ok(otherMilestoneChecks.length === 0 || otherMilestoneChecks.every((row) => row.culpableLots.length === 0));
 
     // The database holds the derived count and the open state, not the caller's word for them.
     const stored = await pool.query('SELECT defective_quantity, status FROM inline_quality_checks WHERE id = $1', [check.id]);

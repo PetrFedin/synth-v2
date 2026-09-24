@@ -7,7 +7,7 @@ const numberParameter = { name: 'productionOrderNumber', in: 'path', required: t
 
 export function withProductionOrderOpenApi(base) {
   const specification = structuredClone(base);
-  specification.info.version = '1.15.0';
+  specification.info.version = '1.16.0';
   Object.assign(specification.components.schemas, schemas());
   Object.assign(specification.paths, paths());
   return deepFreeze(specification);
@@ -23,8 +23,20 @@ function schemas() {
     ProductionOrderCommercialSnapshot: { type: 'object', additionalProperties: false, required: ['currency','incoterm','unitPriceMinor','fixedCostMinor','totalCostMinor','quoteRevision'], properties: { currency: { type: 'string', minLength: 3, maxLength: 3 }, incoterm: { type: 'string', minLength: 3, maxLength: 3 }, unitPriceMinor: money(), fixedCostMinor: money(), totalCostMinor: money(), quoteRevision: version() } },
     ProductionOrderTechPackSnapshot: { type: 'object', additionalProperties: false, required: ['techPackCode','revision','version','issuedVersion','acknowledgedAt','acknowledgementReference'], properties: { techPackCode: { type: 'string', pattern: CODE }, revision: version(), version: version(), issuedVersion: version(), acknowledgedAt: { type: 'string', format: 'date-time' }, acknowledgementReference: text(2,120) } },
     ProductionOrderConfirmation: { type: 'object', additionalProperties: false, required: ['supplierCode','confirmationReference','confirmedBy','notes','confirmedAt','issuedProductionOrderVersion'], properties: { supplierCode: { type: 'string', pattern: CODE }, confirmationReference: text(2,120), confirmedBy: text(2,200), notes: nullableText(2000), confirmedAt: { type: 'string', format: 'date-time' }, issuedProductionOrderVersion: version() } },
-    ProductionOrder: { type: 'object', additionalProperties: false, required: ['id','productionOrderNumber','rfqId','rfqCode','rfqVersion','brandId','sku','skuVersion','bomVersion','quantity','productionStartAt','deliveryDueAt','supplierCode','supplierSnapshot','commercialSnapshot','techPackSnapshot','allocationNotes','status','version','issuedAt','issuedBy','confirmedAt','confirmation','cancelledAt','cancellationReason','createdAt','updatedAt'], properties: {
+    // Платёжная веха и фактическая затрата — два независимых денежных регистра (аудит,
+    // docs/audit-2026-09-21.md, раздел D). Путь между ними существует только когда этот PO вырос из
+    // подтверждённой потребности (lineageVersion 2), а не из распределения RFQ (lineageVersion 1
+    // или отсутствует у заказов, заведённых до самого поля). `linkedActualCost` — сумма того, что
+    // уже записано по связанному оптовому заказу, только для чтения; `null` означает честно «пути
+    // нет», а не «нашли ноль».
+    ProductionOrderLinkedActualCost: { type: 'object', additionalProperties: false, required: ['orderId','totalCost','currency','entryCount'], properties: {
+      orderId: text(1,200), totalCost: { type: 'number', minimum: -900_719_925_474.0991, maximum: 900_719_925_474.0991, multipleOf: 0.0001 }, currency: { type: 'string', minLength: 3, maxLength: 3 }, entryCount: { type: 'integer', minimum: 0, maximum: 2_147_483_647 },
+    } },
+    ProductionOrder: { type: 'object', additionalProperties: false, required: ['id','productionOrderNumber','rfqId','rfqCode','rfqVersion','brandId','sku','skuVersion','bomVersion','quantity','productionStartAt','deliveryDueAt','supplierCode','supplierSnapshot','commercialSnapshot','techPackSnapshot','allocationNotes','status','version','issuedAt','issuedBy','confirmedAt','confirmation','cancelledAt','cancellationReason','createdAt','updatedAt','lineageVersion','linkedWholesaleOrderId','linkedActualCost'], properties: {
       id: text(1,200), productionOrderNumber: { type: 'string', pattern: CODE }, rfqId: text(1,200), rfqCode: { type: 'string', pattern: CODE }, rfqVersion: version(), brandId: text(1,200), sku: text(1,200), skuVersion: version(), bomVersion: version(), quantity: version(), productionStartAt: { type: 'string', format: 'date-time' }, deliveryDueAt: { type: 'string', format: 'date-time' }, supplierCode: { type: 'string', pattern: CODE }, supplierSnapshot: { $ref: '#/components/schemas/ProductionOrderSupplierSnapshot' }, commercialSnapshot: { $ref: '#/components/schemas/ProductionOrderCommercialSnapshot' }, techPackSnapshot: { $ref: '#/components/schemas/ProductionOrderTechPackSnapshot' }, allocationNotes: nullableText(1000), status: { type: 'string', enum: STATUSES }, version: version(), issuedAt: dateOrNull(), issuedBy: nullableText(200), confirmedAt: dateOrNull(), confirmation: { oneOf: [{ $ref: '#/components/schemas/ProductionOrderConfirmation' }, { type: 'null' }] }, cancelledAt: dateOrNull(), cancellationReason: nullableText(1000), createdAt: { type: 'string', format: 'date-time' }, updatedAt: { type: 'string', format: 'date-time' },
+      lineageVersion: { oneOf: [{ type: 'integer', enum: [1, 2] }, { type: 'null' }] },
+      linkedWholesaleOrderId: nullableText(200),
+      linkedActualCost: { oneOf: [{ $ref: '#/components/schemas/ProductionOrderLinkedActualCost' }, { type: 'null' }] },
     } },
     ProductionOrderPage: { type: 'object', additionalProperties: false, required: ['items','nextCursor'], properties: { items: { type: 'array', maxItems: 200, items: { $ref: '#/components/schemas/ProductionOrder' } }, nextCursor: { oneOf: [{ type: 'string', minLength: 1, maxLength: 2048 }, { type: 'null' }] } } },
   };

@@ -4,6 +4,24 @@ import { withPostgresTransaction } from './postgres-transaction.mjs';
 const SNAPSHOT_BEGIN = 'BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY';
 const READ_ROLES = Object.freeze(['owner', 'admin', 'sales', 'finance']);
 
+// Платёжная веха и фактическая затрата — два независимых денежных регистра, и простой связью их не
+// свести: веха ключуется производственным заказом, затрата — оптовым, и путь между ними существует
+// только когда этот PO вырос из подтверждённой потребности (`lineageVersion === 2`), а не из
+// распределения RFQ. Читатель только показывает оба факта рядом — сумму того, что записано по
+// связанному оптовому заказу, если связь есть, и честно `null`, если её нет в принципе. Платёж не
+// становится строкой затрат: суммы не вычитаются друг из друга, это было бы учётным решением, а не
+// связью для починки.
+const LINKED_ACTUAL_COST = `(CASE WHEN production_order.payload ->> 'orderId' IS NOT NULL THEN
+    (SELECT jsonb_build_object(
+              'orderId', production_order.payload ->> 'orderId',
+              'totalCost', COALESCE(SUM(entry.amount), 0)::numeric,
+              'currency', MIN(entry.currency),
+              'entryCount', COUNT(*)::int
+            )
+       FROM actual_cost_ledger_entries AS entry
+      WHERE entry.order_id = production_order.payload ->> 'orderId')
+  ELSE NULL END)`;
+
 export function createPostgresProductionOrderReader({ pool } = {}) {
   invariant(pool && typeof pool.connect === 'function', 'POSTGRES_POOL_REQUIRED', 'PostgreSQL pool is required');
   return Object.freeze({
@@ -11,7 +29,7 @@ export function createPostgresProductionOrderReader({ pool } = {}) {
     getForActor(actorId, productionOrderNumber) {
       return withPostgresTransaction(pool, async (queryable) => {
         const result = await queryable.query(
-          `SELECT production_order.payload
+          `SELECT production_order.payload, ${LINKED_ACTUAL_COST} AS "linkedActualCost"
              FROM production_orders AS production_order
             WHERE production_order.production_order_number = $1
               AND EXISTS (
@@ -23,9 +41,24 @@ export function createPostgresProductionOrderReader({ pool } = {}) {
               )`,
           [productionOrderNumber, actorId, READ_ROLES],
         );
-        return result.rows[0]?.payload;
+        const row = result.rows[0];
+        if (!row) return undefined;
+        return withLinkedActualCost(row);
       }, { begin: SNAPSHOT_BEGIN });
     },
+  });
+}
+function withLinkedActualCost(row) {
+  return Object.freeze({
+    ...row.payload,
+    lineageVersion: row.payload.lineageVersion ?? null,
+    linkedWholesaleOrderId: row.payload.orderId ?? null,
+    linkedActualCost: row.linkedActualCost ? Object.freeze({
+      orderId: row.linkedActualCost.orderId,
+      totalCost: Number(row.linkedActualCost.totalCost),
+      currency: row.linkedActualCost.currency,
+      entryCount: row.linkedActualCost.entryCount,
+    }) : null,
   });
 }
 
@@ -49,7 +82,7 @@ async function page(queryable, actorId, { limit, afterProductionOrderNumber, fil
   if (afterProductionOrderNumber) { params.push(afterProductionOrderNumber); clauses.push(`production_order.production_order_number > $${params.length}`); }
   params.push(limit + 1);
   const result = await queryable.query(
-    `SELECT production_order.payload, production_order.production_order_number
+    `SELECT production_order.payload, production_order.production_order_number, ${LINKED_ACTUAL_COST} AS "linkedActualCost"
        FROM production_orders AS production_order
       WHERE ${clauses.join(' AND ')}
       ORDER BY production_order.production_order_number ASC
@@ -58,7 +91,7 @@ async function page(queryable, actorId, { limit, afterProductionOrderNumber, fil
   );
   const rows = result.rows.slice(0, limit);
   return Object.freeze({
-    items: Object.freeze(rows.map((row) => row.payload)),
+    items: Object.freeze(rows.map((row) => withLinkedActualCost(row))),
     hasMore: result.rows.length > limit,
     ...(result.rows.length > limit ? { nextProductionOrderNumber: rows.at(-1).production_order_number } : {}),
   });

@@ -46,6 +46,7 @@ import { createPostgresSourcingStore } from '../src/infrastructure/postgres-sour
 import { createPostgresTechPackStore } from '../src/infrastructure/postgres-tech-pack-store.mjs';
 import { createPostgresSourcingTechPackAllocationStore } from '../src/infrastructure/postgres-sourcing-tech-pack-allocation-store.mjs';
 import { createPostgresProductionOrderStore } from '../src/infrastructure/postgres-production-order-store.mjs';
+import { createPostgresProductionOrderReader } from '../src/infrastructure/postgres-production-order-reader.mjs';
 import { createPostgresProductionExecutionStore } from '../src/infrastructure/postgres-production-execution-store.mjs';
 import { createPostgresFinalQualityStore } from '../src/infrastructure/postgres-final-quality-store.mjs';
 import { createPostgresFinalQualityReader } from '../src/infrastructure/postgres-final-quality-reader.mjs';
@@ -164,6 +165,19 @@ test('PostgreSQL closes approved PPS through production, rework, reinspection an
     const row = (await pool.query('SELECT status, version, rfq_code, supplier_code, payload FROM production_orders WHERE production_order_number = $1', [productionOrder.productionOrderNumber])).rows[0];
     assert.deepEqual({ status: row.status, version: row.version, rfqCode: row.rfq_code, supplierCode: row.supplier_code }, { status: 'confirmed', version: 3, rfqCode: rfq.rfqCode, supplierCode: supplier.supplierCode });
     assert.equal(row.payload.techPackSnapshot.acknowledgementReference, 'FACTORY-ACK-TECH-1');
+
+    // Платёжная веха и фактическая затрата — два независимых денежных регистра. Путь между ними
+    // есть только у заказов, выросших из подтверждённой потребности; этот PO пришёл из обычного
+    // распределения RFQ, и читатель обязан честно сказать «пути нет», а не подставить ноль.
+    const productionOrderReader = createPostgresProductionOrderReader({ pool });
+    const readOrder = await productionOrderReader.getForActor('product-owner', productionOrder.productionOrderNumber);
+    assert.equal(readOrder.lineageVersion, null);
+    assert.equal(readOrder.linkedWholesaleOrderId, null);
+    assert.equal(readOrder.linkedActualCost, null);
+    const readPage = await productionOrderReader.pageForActor('product-owner', { limit: 50, filters: {} });
+    const pagedOrder = readPage.items.find((item) => item.productionOrderNumber === productionOrder.productionOrderNumber);
+    assert.equal(pagedOrder.linkedActualCost, null, 'the list is honest about the missing link too, not only the card');
+
     await assert.rejects(
       () => pool.query("UPDATE production_orders SET payload = jsonb_set(payload, '{commercialSnapshot,totalCostMinor}', '1'::jsonb) WHERE production_order_number = $1", [productionOrder.productionOrderNumber]),
       (error) => error?.code === '23514' && error?.constraint === 'production_orders_source_immutable',

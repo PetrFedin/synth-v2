@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 // The product foundation the rest of the demonstration assumes.
 //
 // `seed-demo.mjs` opens a showroom over a published collection, walks a buyer through it and closes
@@ -12,19 +14,54 @@
 // the start — a size scale version is immutable once written, so a run that started as one size
 // could never be reordered into S, M, L after the fact. Building fresh avoids that trap rather than
 // working around it.
-const CAMPAIGN_NAME = 'DEMO Aurora Season';
+//
+// And it carries the product all the way to a real CommercialPublication — the canonical PLM→
+// commerce handoff (`ProductReadinessSnapshot -> CommercialProductProjectionVersion ->
+// CommercialPublication`, AGENTS.md) — instead of stopping at a published BOM. Without that, the
+// rest of `seed-demo.mjs` (`ensureBuyerCatalog` onward) has nothing to build a showroom on. The
+// route taken is `READY_GOODS`: it is the cheapest honest path to a `ready` snapshot — `bom`,
+// `samples` and `tech_pack` are `not_applicable` under it by the domain's own rule, so the BOM built
+// above serves the size-line demo and plays no part in the readiness gate, and `sourcing` /
+// `purchase_or_production_commitment` / `quality` are satisfied with immutable external evidence
+// rather than by also standing up sourcing/production/quality services here.
+//
+// This campaign/collection is always its own, never an existing one: `assignStyleVersionToCollection`
+// only succeeds while the collection is still `draft`, so publishing this product's readiness needs a
+// collection this script fully controls the lifecycle of. Its name deliberately does not contain
+// "DEMO" so it never wins `pickDemoCollection`'s name-priority ordering over a real demonstration
+// collection that already exists — it only becomes *the* collection `seed-demo.mjs` walks when it is
+// the only one, i.e. exactly the from-zero case this script exists for.
+const CAMPAIGN_NAME = 'Aurora Season';
 const COLLECTION_NAME = 'Aurora Collection';
 const STYLE_CODE = 'SYN.JKT';
 const COLORWAY_CODE = 'MIDNIGHT';
 const SIZE_SCALE_CODE = 'APPAREL.ALPHA';
 const CURRENCY = 'EUR';
 
+// Well-known governed MDM entries loaded by `npm run bootstrap:mdm-reference` from
+// `mdm/reference/russia-fashion-core.json` / `russia-fashion-assortment-core.json` — the same
+// entries `src/acceptance/product-readiness-ready-live-acceptance.mjs` pins as
+// `READY_PRODUCT_MDM_REFERENCES`, reused here by value rather than by import since this is seed
+// code, not acceptance code.
+const MDM = Object.freeze({
+  category: Object.freeze({ entryId: 'mdm-entry:assortment-category:apparel', version: 1 }),
+  measurementUnit: Object.freeze({ entryId: 'mdm-entry:measurement-unit:cm', version: 1 }),
+  measurementPoint: Object.freeze({ entryId: 'mdm-entry:measurement-point:chest-circ', version: 1 }),
+});
+const EVIDENCE_APPROVED_AT = '2027-01-10T00:00:00.000Z';
+
 // Расход растёт с размером — так и должна выглядеть градуированная ведомость, а не одна цифра на
 // все размеры. Цифры условны, но правдоподобны: подкладка расходуется меньше полотна верха.
+//
+// `quantity` (the catalog SKU's own available-to-sell stock) must clear the highest fixed order
+// quantity `seed-demo.mjs`'s `ensureSelection` can pick per line (`[180, 640, 240, 420]`, cycled by
+// alphabetical SKU order) — the buyer catalogue's flat `commercialPreparation.availability.quantity`
+// only caps the *selection*, the physical ProductSku inventory gate at order-commit checks this
+// number instead, and a real order for this size run must clear both.
 const SIZE_RUN = Object.freeze([
-  { code: 'S', labelRu: 'S', labelEn: 'S', sortOrder: 1, shellMetres: 1.8, liningMetres: 0.9, quantity: 320 },
-  { code: 'M', labelRu: 'M', labelEn: 'M', sortOrder: 2, shellMetres: 2.0, liningMetres: 1.0, quantity: 420 },
-  { code: 'L', labelRu: 'L', labelEn: 'L', sortOrder: 3, shellMetres: 2.2, liningMetres: 1.1, quantity: 260 },
+  { code: 'S', labelRu: 'S', labelEn: 'S', sortOrder: 1, shellMetres: 1.8, liningMetres: 0.9, quantity: 900 },
+  { code: 'M', labelRu: 'M', labelEn: 'M', sortOrder: 2, shellMetres: 2.0, liningMetres: 1.0, quantity: 900 },
+  { code: 'L', labelRu: 'L', labelEn: 'L', sortOrder: 3, shellMetres: 2.2, liningMetres: 1.1, quantity: 900 },
 ]);
 
 const SHELL_MATERIAL_CODE = 'FAB-AURORA-SHELL';
@@ -35,18 +72,15 @@ const LINING_MATERIAL_CODE = 'FAB-AURORA-LINING';
  * каждый размер, если его ещё нет. Идемпотентно: каждый шаг сперва смотрит, чего уже есть.
  */
 export async function ensureProductFoundation(runtime, pool, brandId, actorId, { note, command }) {
-  // A published collection is reused if the brand already has one — this product is meant to join
-  // whatever season already exists, not to compete with it for `pickDemoCollection`'s attention.
-  // Only a database with none at all (a genuine from-zero run) gets a season built for it here.
-  const anchor = await pool.query(
-    "SELECT id, campaign_id FROM collections WHERE brand_id = $1 AND status = 'published' ORDER BY id LIMIT 1",
-    [brandId],
-  );
-  const collection = anchor.rowCount
-    ? { id: anchor.rows[0].id, campaignId: anchor.rows[0].campaign_id }
-    : await ensureCollection(runtime, pool, await ensureCampaign(runtime, pool, brandId, actorId, command), brandId, actorId, command);
+  const campaign = await ensureCampaign(runtime, pool, brandId, actorId, command);
+  const collection = await ensureCollection(runtime, pool, campaign, brandId, actorId, command);
   const style = await ensureStyle(runtime, pool, brandId, actorId, command);
   const styleVersion = await ensureStyleVersion(runtime, pool, style, actorId, command);
+  // Assigning and publishing happens here, right after the style version exists and before any
+  // catalog SKU is published — `publishCatalogSku` itself requires the collection to already be
+  // published, and assignment can only happen while it is still draft. There is no order that
+  // satisfies both constraints except this one.
+  await ensureCollectionAssignmentAndPublish(runtime, pool, collection, styleVersion, actorId, command);
   const colorway = await ensureColorway(runtime, pool, styleVersion, actorId, command);
   const sizeScale = await ensureSizeScale(runtime, pool, brandId, actorId, command);
   const sizeScaleVersion = await ensureSizeScaleVersion(runtime, pool, sizeScale, actorId, command);
@@ -66,7 +100,18 @@ export async function ensureProductFoundation(runtime, pool, brandId, actorId, {
   } else {
     note('product foundation', `${STYLE_CODE} / ${COLORWAY_CODE} — ${created} size(s) built (${SIZE_RUN.map((s) => s.code).join(', ')})`);
   }
-  return { collection, styleId: style.id, styleVersionId: styleVersion.id };
+
+  const media = await ensureMedia(runtime, pool, styleVersion, colorway, actorId, command);
+  await ensureAttributeValue(runtime, pool, styleVersion, actorId, command);
+  await ensureMeasurementChart(runtime, pool, styleVersion, colorway, sizeScaleVersion, sizeValues, actorId, command);
+  const readiness = await ensureReadiness(runtime, pool, styleVersion, media, actorId, command, note);
+  const projection = await ensureCommercialProjection(runtime, pool, readiness, actorId, command);
+  const publication = await ensureCommercialPublication(runtime, pool, collection, projection, actorId, command, note);
+
+  return {
+    collection, styleId: style.id, styleVersionId: styleVersion.id,
+    readinessId: readiness.id, projectionId: projection.id, publicationId: publication.id,
+  };
 }
 
 async function ensureCampaign(runtime, pool, brandId, actorId, command) {
@@ -83,21 +128,19 @@ async function ensureCampaign(runtime, pool, brandId, actorId, command) {
   return created;
 }
 
+// Left in draft here on purpose: `assignStyleVersionToCollection` only succeeds while the collection
+// is draft, and that assignment has to happen after the style version exists but before this
+// collection can carry a CommercialPublication. `ensureCollectionAssignmentAndPublish` publishes it
+// once the assignment is in place.
 async function ensureCollection(runtime, pool, campaign, brandId, actorId, command) {
   const existing = await pool.query(
     "SELECT id, status FROM collections WHERE campaign_id = $1 AND payload ->> 'name' = $2",
     [campaign.id, COLLECTION_NAME],
   );
-  if (existing.rowCount) {
-    if (existing.rows[0].status !== 'published') {
-      await runtime.platform.publishCollection(command('foundation-collection-publish'), actorId, existing.rows[0].id);
-    }
-    return { id: existing.rows[0].id, campaignId: campaign.id };
-  }
+  if (existing.rowCount) return { id: existing.rows[0].id, campaignId: campaign.id };
   const created = await runtime.platform.createCollection(command('foundation-collection'), actorId, {
     campaignId: campaign.id, brandId, name: COLLECTION_NAME, currency: CURRENCY,
   });
-  await runtime.platform.publishCollection(command('foundation-collection-publish'), actorId, created.id);
   return { id: created.id, campaignId: campaign.id };
 }
 
@@ -113,10 +156,14 @@ async function ensureStyleVersion(runtime, pool, style, actorId, command) {
     [style.id],
   );
   if (existing.rowCount) return { id: existing.rows[0].id, brandId: style.brandId };
+  // categoryRef is required for readiness's `category` dimension — omitting it (it's optional at
+  // the domain layer) would leave this StyleVersion permanently unable to reach `ready`, since
+  // StyleVersions are immutable and there is no update path to add it after creation.
   return runtime.productIdentity.createStyleVersion(command('foundation-style-version'), actorId, style.id, {
     expectedLatestVersionNo: 0,
     titleRu: 'Aurora Quilted Jacket',
     titleEn: 'Aurora Quilted Jacket',
+    categoryRef: MDM.category,
   });
 }
 
@@ -244,4 +291,162 @@ async function ensureGradedSku(runtime, pool, { brandId, actorId, command, style
   });
   await runtime.boms.publishBom(command(`foundation-bom-publish-${size.code}`), actorId, bom.sku, { expectedVersion: bom.version });
   return true;
+}
+
+// Readiness's `commercial_media` dimension requires a selected hero image covering every colorway —
+// one colorway here, so one hero image tied to it is sufficient coverage.
+async function ensureMedia(runtime, pool, styleVersion, colorway, actorId, command) {
+  const existing = await pool.query(
+    "SELECT id FROM product_media WHERE style_version_id = $1 AND colorway_id = $2 AND media_role = 'hero' AND sort_order = 0",
+    [styleVersion.id, colorway.id],
+  );
+  if (existing.rowCount) return { id: existing.rows[0].id };
+  return runtime.productIdentity.addMedia(command('foundation-media'), actorId, styleVersion.id, {
+    colorwayId: colorway.id, mediaType: 'image', mediaRole: 'hero',
+    uri: 'https://example.invalid/syntha-demo/aurora-quilted-jacket-midnight.jpg', sortOrder: 0,
+  });
+}
+
+// Readiness's `product_attributes` dimension requires both a governed attribute value in the
+// register AND `commercialPreparation.attributeCoverageConfirmed: true` — the confirmation alone is
+// not enough, on purpose (ARCHITECTURE.md: the platform used to record "attributes ready" next to
+// its own proof that there were none).
+async function ensureAttributeValue(runtime, pool, styleVersion, actorId, command) {
+  const existing = await pool.query(
+    "SELECT 1 FROM product_attribute_values WHERE owner_type = 'style_version' AND owner_id = $1 AND attribute_code = $2",
+    [styleVersion.id, 'apparel.fabric_type'],
+  );
+  if (existing.rowCount) return;
+  await runtime.productIdentity.createAttributeValue(command('foundation-attribute'), actorId, {
+    ownerType: 'style_version', ownerId: styleVersion.id,
+    attributeCode: 'apparel.fabric_type', attributeCatalogVersion: '1.0.0', value: 'Стёганый нейлон 40D',
+  });
+}
+
+// Measurement coverage is required per Colorway × SizeScaleVersion regardless of development route,
+// and must cover every SizeValue actually used by a SKU on that colorway — one chart with S/M/L,
+// not one chart per size.
+async function ensureMeasurementChart(runtime, pool, styleVersion, colorway, sizeScaleVersion, sizeValues, actorId, command) {
+  const existing = await pool.query(
+    'SELECT id, status, version FROM measurement_charts WHERE style_version_id = $1 AND colorway_id = $2 AND size_scale_version_id = $3',
+    [styleVersion.id, colorway.id, sizeScaleVersion.id],
+  );
+  if (existing.rowCount) {
+    if (existing.rows[0].status === 'published') return;
+    await runtime.measurements.publishCanonicalMeasurementChart(command('foundation-measurement-publish'), actorId, existing.rows[0].id, { expectedVersion: existing.rows[0].version });
+    return;
+  }
+  const draft = await runtime.measurements.createCanonicalMeasurementChart(command('foundation-measurement'), actorId, {
+    styleVersionId: styleVersion.id, colorwayId: colorway.id, sizeScaleVersionId: sizeScaleVersion.id,
+    measurementUnitEntryId: MDM.measurementUnit.entryId,
+    baseSizeValueId: sizeValues.M.id,
+    sizes: SIZE_RUN.map((size) => ({ sizeValueId: sizeValues[size.code].id })),
+    points: [{
+      pointEntryId: MDM.measurementPoint.entryId,
+      description: 'Обхват груди.',
+      toleranceMinus: 1,
+      tolerancePlus: 1,
+      // Растёт вместе с расходом ткани — тот же принцип градации, что и в ведомости.
+      measurements: SIZE_RUN.map((size) => ({ sizeValueId: sizeValues[size.code].id, value: 92 + (size.sortOrder - 1) * 4 })),
+    }],
+    notes: 'Aurora Quilted Jacket — канонический табель мер.',
+  });
+  await runtime.measurements.publishCanonicalMeasurementChart(command('foundation-measurement-publish'), actorId, draft.id, { expectedVersion: draft.version });
+}
+
+async function ensureCollectionAssignmentAndPublish(runtime, pool, collection, styleVersion, actorId, command) {
+  const current = await pool.query('SELECT status FROM collections WHERE id = $1', [collection.id]);
+  if (current.rows[0].status === 'published') return;
+  const assigned = await pool.query(
+    'SELECT 1 FROM collection_style_versions WHERE collection_id = $1 AND style_version_id = $2',
+    [collection.id, styleVersion.id],
+  );
+  if (!assigned.rowCount) {
+    await runtime.platform.assignStyleVersionToCollection(command('foundation-collection-assign'), actorId, {
+      collectionId: collection.id, styleVersionId: styleVersion.id,
+    });
+  }
+  await runtime.platform.publishCollection(command('foundation-collection-publish'), actorId, collection.id);
+}
+
+// `assessReadiness` has no natural-key idempotency of its own — every call mints a new
+// ProductReadinessSnapshot row, deduplicated only by commandId, and `command()` mints a fresh one
+// every run. Reusing an existing `ready` snapshot here is what keeps a rerun from piling up snapshots.
+async function ensureReadiness(runtime, pool, styleVersion, media, actorId, command, note) {
+  const existing = await pool.query(
+    "SELECT id, readiness_status FROM product_readiness_snapshots WHERE style_version_id = $1 AND readiness_status = 'ready' ORDER BY assessed_at DESC LIMIT 1",
+    [styleVersion.id],
+  );
+  if (existing.rowCount) return { id: existing.rows[0].id };
+
+  const commercialPreparation = {
+    titleRu: 'Aurora Quilted Jacket',
+    titleEn: 'Aurora Quilted Jacket',
+    descriptionRu: 'Стёганая куртка со съёмным капюшоном, утеплитель 120 г/м².',
+    descriptionEn: 'Quilted jacket with a detachable hood, 120 gsm synthetic insulation.',
+    compositionRu: 'Верх: 100% нейлон. Подкладка: 100% полиэстер.',
+    compositionEn: 'Shell: 100% nylon. Lining: 100% polyester.',
+    countryOfOrigin: 'TR',
+    currency: CURRENCY,
+    wholesalePriceMinor: 12800,
+    rrpMinor: 25600,
+    minimumOrderQuantity: 2,
+    deliveryStart: '2027-02-01',
+    deliveryEnd: '2027-04-30',
+    availability: { mode: 'available_to_sell', quantity: 1000 },
+    mediaIds: [media.id],
+    attributeCoverageConfirmed: true,
+  };
+  const externalEvidence = Object.freeze({
+    sourcing: evidence('sourcing', actorId),
+    purchase_or_production_commitment: evidence('purchase', actorId),
+    quality: evidence('quality', actorId),
+    compliance: evidence('compliance', actorId),
+  });
+
+  const snapshot = await runtime.productReadiness.assessReadiness(command('foundation-readiness'), actorId, styleVersion.id, {
+    developmentRoute: 'READY_GOODS', commercialPreparation, externalEvidence,
+  });
+  if (snapshot.readinessStatus !== 'ready') {
+    const blocked = snapshot.dimensions.filter((dimension) => dimension.status === 'blocked').map((dimension) => dimension.code);
+    note('product foundation', `readiness blocked on: ${blocked.join(', ')}`);
+    throw new Error(`Aurora Quilted Jacket readiness assessment is blocked: ${blocked.join(', ')}`);
+  }
+  return snapshot;
+}
+
+function evidence(dimension, approvedBy) {
+  return Object.freeze({
+    status: 'ready',
+    evidenceId: `foundation-${dimension}`,
+    sourceSystem: 'syntha-seed-demo',
+    version: `foundation:${dimension}:1`,
+    contentHash: createHash('sha256').update(`foundation:${dimension}`).digest('hex'),
+    approvedAt: EVIDENCE_APPROVED_AT,
+    approvedBy,
+  });
+}
+
+async function ensureCommercialProjection(runtime, pool, readiness, actorId, command) {
+  const existing = await pool.query(
+    'SELECT id FROM commercial_product_projection_versions WHERE readiness_snapshot_id = $1',
+    [readiness.id],
+  );
+  if (existing.rowCount) return { id: existing.rows[0].id };
+  return runtime.productReadiness.publishCommercialProjection(command('foundation-projection'), actorId, readiness.id, {
+    expectedLatestVersionNo: 0,
+  });
+}
+
+async function ensureCommercialPublication(runtime, pool, collection, projection, actorId, command, note) {
+  const existing = await pool.query(
+    'SELECT id FROM commercial_publications WHERE collection_id = $1 AND commercial_projection_id = $2',
+    [collection.id, projection.id],
+  );
+  if (existing.rowCount) { note('product foundation', `commercial publication ${existing.rows[0].id} already exists`); return { id: existing.rows[0].id }; }
+  const publication = await runtime.commercialPublication.publishCommercialPublication(command('foundation-publication'), actorId, {
+    collectionId: collection.id, commercialProjectionId: projection.id,
+  });
+  note('product foundation', `commercial publication ${publication.id} published for ${collection.id}`);
+  return publication;
 }

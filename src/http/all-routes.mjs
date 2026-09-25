@@ -19,6 +19,7 @@ import { createCategoryAttributeRoutes } from './category-attribute-routes.mjs';
 import { createOrganisationMemberRoutes } from './organisation-member-routes.mjs';
 import { createFulfillmentRoutes } from './fulfillment-routes.mjs';
 import { createInventoryRoutes } from './inventory-routes.mjs';
+import { createLegalEntityRoutes } from './legal-entity-routes.mjs';
 import { createProductIdentityRoutes } from './product-identity-routes.mjs';
 import { createProductReadinessRoutes } from './product-readiness-routes.mjs';
 import { createProductionRequirementRoutes } from './production-requirement-routes.mjs';
@@ -39,6 +40,7 @@ export function createWholesaleRoutes(services = {}) {
     ...createCoreWholesaleRoutes(services),
     ...createOptionalCollectionStyleVersionRoutes(services.platform),
     ...createProductIdentityRoutes({ productIdentity: services.productIdentity }),
+    ...createLegalEntityRoutes({ legalEntities: services.legalEntities }),
     ...createProductReadinessRoutes({ productReadiness: services.productReadiness }),
     ...createCommercialPublicationRoutes({ commercialPublication: services.commercialPublication }),
     ...createRetailDoorRoutes({ retailDoors: services.retailDoors }),

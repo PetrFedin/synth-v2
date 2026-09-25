@@ -50,6 +50,8 @@ import { createPostgresSourcingTechPackAllocationStore } from '../infrastructure
 import { createPostgresSupplierEconomicPerformanceReader } from '../infrastructure/postgres-supplier-economic-performance-reader.mjs';
 import { createWholesaleHttpHandler } from '../http/api.mjs';
 import { createWholesaleFetchHandler } from '../http/fetch-api.mjs';
+import { createComplianceDocumentService } from '../application/compliance-document-service.mjs';
+import { createPostgresComplianceDocumentStore } from '../infrastructure/postgres-compliance-document-store.mjs';
 import { createPostgresWholesaleRuntime as createBaseRuntime } from './postgres-base-runtime.mjs';
 import { createPostgresCostAllocationRuntime } from './postgres-cost-allocation-runtime.mjs';
 import { createPostgresFulfillmentRuntime } from './postgres-fulfillment-runtime.mjs';
@@ -189,6 +191,15 @@ export function createPostgresWholesaleRuntime(options = {}) {
   const materialLotQueries = createMaterialLotQueryService({ reader: materialLotReader });
   const materialLots = Object.freeze({ ...materialLotQueries, ...materialLotCommands });
 
+  // Реестр документов соответствия ссылается на юрлицо, а не наоборот — юрлица уже собраны в
+  // `base`, документ пристёгивается к рантайму отдельным слайсом сверху него.
+  const complianceDocumentStore = createPostgresComplianceDocumentStore({ pool: options.pool });
+  const complianceDocuments = createComplianceDocumentService({
+    store: complianceDocumentStore,
+    ...(options.clock ? { clock: options.clock } : {}),
+    ...(options.nextId ? { nextId: options.nextId } : {}),
+  });
+
   // Раскрой стоит сразу за партиями материала: настил делается из выданных рулонов, поэтому его
   // сборка следует за ними и предшествует пооперационному контролю, который проверяет уже детали.
   const cuttingStore = createPostgresCuttingStore({ pool: options.pool });
@@ -264,6 +275,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
     platform: base.platform,
     catalog: base.catalog,
     legalEntities: base.legalEntities,
+    complianceDocuments,
     productIdentity: base.productIdentity,
     productReadiness: base.productReadiness,
     commercialPublication: base.commercialPublication,
@@ -350,6 +362,8 @@ export function createPostgresWholesaleRuntime(options = {}) {
     materialLotStore,
     materialLotReader,
     materialLots,
+    complianceDocumentStore,
+    complianceDocuments,
     supplierPaymentStore,
     supplierPaymentReader,
     supplierPayments,

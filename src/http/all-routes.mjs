@@ -5,6 +5,8 @@ import { createFinalQualityRoutes } from './final-quality-routes.mjs';
 import { createInlineQualityRoutes } from './inline-quality-routes.mjs';
 import { createSupplierPaymentRoutes } from './supplier-payment-routes.mjs';
 import { createMaterialLotRoutes } from './material-lot-routes.mjs';
+import { createMaterialSourcingRoutes } from './material-sourcing-routes.mjs';
+import { createMaterialPurchaseOrderRoutes } from './material-purchase-order-routes.mjs';
 import { createCuttingRoutes } from './cutting-routes.mjs';
 import { createOperationSequenceRoutes } from './operation-sequence-routes.mjs';
 import { createTargetPricingRoutes } from './target-pricing-routes.mjs';
@@ -61,6 +63,8 @@ export function createWholesaleRoutes(services = {}) {
     ...createInlineQualityRoutes({ inlineQuality: services.inlineQuality }),
     ...createSupplierPaymentRoutes({ supplierPayments: services.supplierPayments }),
     ...createMaterialLotRoutes({ materialLots: services.materialLots }),
+    ...createMaterialSourcingRoutes({ materialSourcing: services.materialSourcing }),
+    ...createMaterialPurchaseOrderRoutes({ materialPurchaseOrders: services.materialPurchaseOrders }),
     ...createCuttingRoutes({ cutting: services.cutting }),
     ...createOperationSequenceRoutes({ operationSequences: services.operationSequences }),
     ...createTargetPricingRoutes({ targetPricing: services.targetPricing }),

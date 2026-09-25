@@ -7,6 +7,7 @@ const LEDGERS = Object.freeze({
   'product-identity': 'product_identity_commands',
   'product-readiness': 'product_readiness_commands',
   'legal-entity': 'legal_entity_commands',
+  'material-sourcing': 'material_sourcing_commands',
 });
 
 export async function getRegisteredCommand(client, scope, id) {

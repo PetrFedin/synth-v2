@@ -20,14 +20,19 @@ export const MATERIAL_LOT_STATUSES = Object.freeze(['quarantine', 'released', 'r
  * and a lot that skipped that decision is indistinguishable from one that passed it — which is the
  * whole reason incoming inspection exists.
  */
-export function receiveMaterialLot({ id, material, input, receivedAt, actorId }) {
+export function receiveMaterialLot({ id, material, purchaseOrder, input, receivedAt, actorId }) {
   invariant(material?.status === 'published', 'MATERIAL_NOT_PUBLISHED', 'A lot can only be received against a published material', { materialCode: material?.code, status: material?.status });
+  if (purchaseOrder) {
+    invariant(purchaseOrder.materialCode === material.code, 'MATERIAL_LOT_PURCHASE_ORDER_MATERIAL_MISMATCH', 'Cited Material Purchase Order is for a different material', { materialCode: material.code, purchaseOrderMaterialCode: purchaseOrder.materialCode });
+    invariant(['issued', 'confirmed'].includes(purchaseOrder.status), 'MATERIAL_LOT_PURCHASE_ORDER_NOT_ACTIONABLE', 'Cited Material Purchase Order must be issued or confirmed', { status: purchaseOrder.status });
+  }
   const received = timestamp(receivedAt, 'MATERIAL_LOT_RECEIVED_AT_INVALID', 'Receipt time');
   return Object.freeze({
     id: required(id, 'MATERIAL_LOT_ID_REQUIRED', 'Material lot id'),
     brandId: required(material.brandId, 'MATERIAL_LOT_BRAND_REQUIRED', 'Brand id'),
     materialCode: material.code,
     materialName: material.name,
+    materialPurchaseOrderId: purchaseOrder?.id ?? null,
     // Версия материала фиксируется: состав и единица измерения могут быть исправлены завтра, а эта
     // партия приехала по тому описанию, которое действовало сегодня.
     materialVersion: positiveInteger(material.version, 'MATERIAL_LOT_VERSION_INVALID', 'Material version'),

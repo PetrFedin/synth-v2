@@ -20,6 +20,10 @@ import { createSupplierPaymentService, createSupplierPaymentQueryService } from 
 import { createPostgresMaterialLotStore } from '../infrastructure/postgres-material-lot-store.mjs';
 import { createPostgresMaterialLotReader } from '../infrastructure/postgres-material-lot-reader.mjs';
 import { createMaterialLotService, createMaterialLotQueryService } from '../application/material-lot-service.mjs';
+import { createPostgresMaterialSourcingStore } from '../infrastructure/postgres-material-sourcing-store.mjs';
+import { createMaterialSourcingService } from '../application/material-sourcing-service.mjs';
+import { createPostgresMaterialPurchaseOrderStore } from '../infrastructure/postgres-material-purchase-order-store.mjs';
+import { createMaterialPurchaseOrderService } from '../application/material-purchase-order-service.mjs';
 import { createPostgresCuttingStore } from '../infrastructure/postgres-cutting-store.mjs';
 import { createPostgresCuttingReader } from '../infrastructure/postgres-cutting-reader.mjs';
 import { createCuttingService, createCuttingQueryService } from '../application/cutting-service.mjs';
@@ -189,6 +193,21 @@ export function createPostgresWholesaleRuntime(options = {}) {
   const materialLotQueries = createMaterialLotQueryService({ reader: materialLotReader });
   const materialLots = Object.freeze({ ...materialLotQueries, ...materialLotCommands });
 
+  // Route B: запрос цены и заказ на материал стоят перед приходом партии — партия теперь может
+  // назвать закрывший её заказ, а не начинать цепочку сама собой.
+  const materialSourcingStore = createPostgresMaterialSourcingStore({ pool: options.pool });
+  const materialSourcing = createMaterialSourcingService({
+    materialSourcingStore,
+    ...(options.clock ? { clock: options.clock } : {}),
+    ...(options.nextId ? { nextId: options.nextId } : {}),
+  });
+  const materialPurchaseOrderStore = createPostgresMaterialPurchaseOrderStore({ pool: options.pool });
+  const materialPurchaseOrders = createMaterialPurchaseOrderService({
+    store: materialPurchaseOrderStore,
+    ...(options.clock ? { clock: options.clock } : {}),
+    ...(options.nextId ? { nextId: options.nextId } : {}),
+  });
+
   // Раскрой стоит сразу за партиями материала: настил делается из выданных рулонов, поэтому его
   // сборка следует за ними и предшествует пооперационному контролю, который проверяет уже детали.
   const cuttingStore = createPostgresCuttingStore({ pool: options.pool });
@@ -294,6 +313,8 @@ export function createPostgresWholesaleRuntime(options = {}) {
     inlineQuality,
     supplierPayments,
     materialLots,
+    materialSourcing,
+    materialPurchaseOrders,
     cutting,
     operationSequences,
     targetPricing,
@@ -350,6 +371,10 @@ export function createPostgresWholesaleRuntime(options = {}) {
     materialLotStore,
     materialLotReader,
     materialLots,
+    materialSourcingStore,
+    materialSourcing,
+    materialPurchaseOrderStore,
+    materialPurchaseOrders,
     supplierPaymentStore,
     supplierPaymentReader,
     supplierPayments,

@@ -28,6 +28,7 @@ import pg from 'pg';
 import { createMembership } from '../src/modules/access-control/public.mjs';
 import { migratePostgres, waitForPostgres } from '../src/infrastructure/postgres-migrator.mjs';
 import { createPostgresWholesaleRuntime } from '../src/runtime/postgres-runtime.mjs';
+import { ensureProductFoundation } from './seed-product-foundation.mjs';
 
 const databaseUrl = process.env.SYNTHA_V2_DATABASE_URL ?? process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error('SYNTHA_V2_DATABASE_URL is required');
@@ -347,6 +348,12 @@ try {
   if (!brandRow.rowCount) throw new Error('The demonstration brand does not exist; run bootstrap-owner first');
   const brandId = brandRow.rows[0].id;
   note('brand', brandId);
+
+  // The product a season is actually built from. Nothing before this line created a style, a size
+  // scale, a SKU or a published collection — every downstream step here (showroom, order, quality,
+  // BOM) has always assumed one already existed in the target database. This builds it from zero,
+  // idempotently, and with a real S/M/L size run instead of the single size a from-zero run had none of.
+  await ensureProductFoundation(runtime, pool, brandId, accounts.owner, { note, command });
 
   // The quality approver. A run's inspector may not sign off their own disposition, so a second
   // person in the brand is not a nicety here — without one the quality chain cannot be finished.

@@ -12,7 +12,7 @@ import {
   releaseMaterialLot,
 } from '../modules/material-lots/public.mjs';
 
-const RECEIVE_FIELDS = Object.freeze(new Set(['materialCode', 'lotReference', 'dyeLot', 'supplierCode', 'receivedQuantity', 'certificateReference', 'notes', 'colourCode']));
+const RECEIVE_FIELDS = Object.freeze(new Set(['materialCode', 'lotReference', 'dyeLot', 'supplierCode', 'receivedQuantity', 'certificateReference', 'notes', 'colourCode', 'materialPurchaseOrderId']));
 const VERDICT_FIELDS = Object.freeze(new Set(['expectedVersion', 'reason', 'certificateReference', 'notes']));
 const ISSUE_FIELDS = Object.freeze(new Set(['expectedVersion', 'executionCode', 'quantity', 'notes']));
 
@@ -66,14 +66,19 @@ export function createMaterialLotService({ store, clock = () => new Date().toISO
           // Цвет называют кодом, а ссылку на governed-запись с её версией подставляет система:
           // принимать ссылку от клиента значило бы позволить назвать цвет, которого у полотна нет.
           const colour = input.colourCode ? await tx.resolveMaterialColour(material.code, input.colourCode) : null;
-          return Object.freeze({ material, colour });
+          // Назвать закрываемый заказ необязательно — пополнение склада без предшествующего заказа
+          // остаётся законным, — но если он назван, он обязан существовать и быть тем же материалом.
+          const purchaseOrder = input.materialPurchaseOrderId
+            ? requireEntity(await tx.getMaterialPurchaseOrderById(input.materialPurchaseOrderId), 'MATERIAL_PURCHASE_ORDER_NOT_FOUND', { materialPurchaseOrderId: input.materialPurchaseOrderId })
+            : null;
+          return Object.freeze({ material, colour, purchaseOrder });
         },
-        async (tx, { material, colour }) => {
-          const value = receiveMaterialLot({ id: nextId('material-lot'), material, input: { ...input, colour }, receivedAt: clock(), actorId });
+        async (tx, { material, colour, purchaseOrder }) => {
+          const value = receiveMaterialLot({ id: nextId('material-lot'), material, purchaseOrder, input: { ...input, colour }, receivedAt: clock(), actorId });
           await tx.insertLot(value);
           await tx.appendOutbox(domainEvent({
             id: nextId('event'), type: 'material-lot.received', aggregateId: value.id, occurredAt: clock(),
-            payload: { brandId: value.brandId, materialCode: value.materialCode, lotReference: value.lotReference, dyeLot: value.dyeLot, receivedQuantity: value.receivedQuantity, unit: value.unit },
+            payload: { brandId: value.brandId, materialCode: value.materialCode, lotReference: value.lotReference, dyeLot: value.dyeLot, receivedQuantity: value.receivedQuantity, unit: value.unit, materialPurchaseOrderId: value.materialPurchaseOrderId },
             metadata: { commandId, actorId },
           }));
           return value;

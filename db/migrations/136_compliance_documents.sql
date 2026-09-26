@@ -27,7 +27,7 @@ ALTER TABLE command_registry
   DROP CONSTRAINT IF EXISTS command_registry_scope_check;
 ALTER TABLE command_registry
   ADD CONSTRAINT command_registry_scope_check
-  CHECK (scope IN ('wholesale', 'catalog', 'notification', 'product-identity', 'product-readiness', 'legal-entity', 'compliance-document'));
+  CHECK (scope IN ('wholesale', 'catalog', 'notification', 'product-identity', 'product-readiness', 'legal-entity', 'material-sourcing', 'compliance-document'));
 
 CREATE TABLE compliance_document_commands (
   id text PRIMARY KEY,

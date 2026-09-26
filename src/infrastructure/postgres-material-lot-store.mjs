@@ -25,6 +25,10 @@ function view(client) {
       const result = await client.query('SELECT payload FROM material_lots WHERE id = $1 FOR UPDATE', [lotId]);
       return result.rows[0]?.payload;
     },
+    async getMaterialPurchaseOrderById(id) {
+      const result = await client.query('SELECT payload FROM material_purchase_orders WHERE id = $1 FOR SHARE', [id]);
+      return result.rows[0]?.payload;
+    },
     async getIssue(lotId, executionId) {
       const result = await client.query('SELECT payload FROM material_lot_issues WHERE lot_id = $1 AND execution_id = $2 FOR UPDATE', [lotId, executionId]);
       return result.rows[0]?.payload;
@@ -32,12 +36,12 @@ function view(client) {
     async insertLot(value) {
       try {
         await client.query(
-          `INSERT INTO material_lots (id,brand_id,material_code,material_version,lot_reference,dye_lot,supplier_code,unit,received_quantity,issued_quantity,status,received_at,certificate_reference,notes,version,created_at,created_by,updated_at,payload,colour_entry_id,colour_entry_version,colour_code)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::timestamptz,$13,$14,$15,$16::timestamptz,$17,$18::timestamptz,$19::jsonb,$20,$21,$22)`,
+          `INSERT INTO material_lots (id,brand_id,material_code,material_version,lot_reference,dye_lot,supplier_code,unit,received_quantity,issued_quantity,status,received_at,certificate_reference,notes,version,created_at,created_by,updated_at,payload,colour_entry_id,colour_entry_version,colour_code,material_purchase_order_id)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::timestamptz,$13,$14,$15,$16::timestamptz,$17,$18::timestamptz,$19::jsonb,$20,$21,$22,$23)`,
           [value.id, value.brandId, value.materialCode, value.materialVersion, value.lotReference, value.dyeLot, value.supplierCode, value.unit,
             value.receivedQuantity, value.issuedQuantity, value.status, value.receivedAt, value.certificateReference, value.notes,
             value.version, value.createdAt, value.createdBy, value.updatedAt, JSON.stringify(value),
-            value.colourEntryId ?? null, value.colourEntryVersion ?? null, value.colourCode ?? null],
+            value.colourEntryId ?? null, value.colourEntryVersion ?? null, value.colourCode ?? null, value.materialPurchaseOrderId ?? null],
         );
       } catch (error) {
         if (error?.code === '23505') invariant(false, 'MATERIAL_LOT_ALREADY_RECEIVED', 'This lot reference is already recorded for this material', { materialCode: value.materialCode, lotReference: value.lotReference });

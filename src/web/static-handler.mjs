@@ -66,6 +66,7 @@ const ASSETS = Object.freeze({
   '/ui/overview.js': ['modules/overview.js', JS, CACHE],
   '/ui/partners.js': ['modules/partners.js', JS, CACHE],
   '/ui/legal-entities.js': ['modules/legal-entities.js', JS, CACHE],
+  '/ui/compliance-documents.js': ['modules/compliance-documents.js', JS, CACHE],
   '/ui/retail-doors.js': ['modules/retail-doors.js', JS, CACHE],
   '/ui/catalog.js': ['modules/catalog.js', JS, CACHE],
   '/ui/showrooms.js': ['modules/showrooms.js', JS, CACHE],

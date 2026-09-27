@@ -55,6 +55,8 @@ export const CAPABILITIES = Object.freeze({
   MARGIN_READ: 'margin.read',
   DEAL_READ: 'deal.read',
   CALENDAR_READ: 'calendar.read',
+  COMPLIANCE_DOCUMENT_READ: 'compliance-document.read',
+  COMPLIANCE_DOCUMENT_MANAGE: 'compliance-document.manage',
 });
 
 const ALL_CAPABILITIES = Object.freeze(Object.values(CAPABILITIES));
@@ -95,6 +97,7 @@ export const ROLE_CAPABILITIES = Object.freeze({
     CAPABILITIES.MARGIN_READ,
     CAPABILITIES.DEAL_READ,
     CAPABILITIES.CALENDAR_READ,
+    CAPABILITIES.COMPLIANCE_DOCUMENT_READ,
   ]),
   // Производство: ведёт заказы фабрике, исполнение, склад материалов и техпаки. Качества не
   // подписывает — оно решает, годится ли то, что произведено.
@@ -157,6 +160,7 @@ export const ROLE_CAPABILITIES = Object.freeze({
     CAPABILITIES.CLAIM_READ,
     CAPABILITIES.DEAL_READ,
     CAPABILITIES.CALENDAR_READ,
+    CAPABILITIES.COMPLIANCE_DOCUMENT_READ,
   ]),
   finance: Object.freeze([
     CAPABILITIES.PRODUCT_READ,
@@ -176,6 +180,8 @@ export const ROLE_CAPABILITIES = Object.freeze({
     CAPABILITIES.MARGIN_READ,
     CAPABILITIES.DEAL_READ,
     CAPABILITIES.CALENDAR_READ,
+    CAPABILITIES.COMPLIANCE_DOCUMENT_READ,
+    CAPABILITIES.COMPLIANCE_DOCUMENT_MANAGE,
   ]),
   viewer: Object.freeze([
     CAPABILITIES.PRODUCT_READ,

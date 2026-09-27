@@ -56,6 +56,8 @@
     MARGIN_READ: 'margin.read',
     DEAL_READ: 'deal.read',
     CALENDAR_READ: 'calendar.read',
+    COMPLIANCE_DOCUMENT_READ: 'compliance-document.read',
+    COMPLIANCE_DOCUMENT_MANAGE: 'compliance-document.manage',
   });
 
   const ALL = Object.freeze(Object.values(CAPABILITIES));
@@ -95,6 +97,7 @@
       CAPABILITIES.MARGIN_READ,
       CAPABILITIES.DEAL_READ,
       CAPABILITIES.CALENDAR_READ,
+      CAPABILITIES.COMPLIANCE_DOCUMENT_READ,
   ]),
   production: Object.freeze([
       CAPABILITIES.PRODUCT_READ,
@@ -152,6 +155,7 @@
       CAPABILITIES.CLAIM_READ,
       CAPABILITIES.DEAL_READ,
       CAPABILITIES.CALENDAR_READ,
+      CAPABILITIES.COMPLIANCE_DOCUMENT_READ,
     ]),
     finance: Object.freeze([
       CAPABILITIES.PRODUCT_READ,
@@ -171,6 +175,8 @@
       CAPABILITIES.MARGIN_READ,
       CAPABILITIES.DEAL_READ,
       CAPABILITIES.CALENDAR_READ,
+      CAPABILITIES.COMPLIANCE_DOCUMENT_READ,
+      CAPABILITIES.COMPLIANCE_DOCUMENT_MANAGE,
     ]),
     viewer: Object.freeze([
       CAPABILITIES.PRODUCT_READ,

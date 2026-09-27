@@ -36,6 +36,10 @@ function view(client) {
       const result = await client.query('SELECT payload FROM material_rfqs WHERE rfq_code = $1 FOR UPDATE', [rfqCode]);
       return result.rows[0]?.payload;
     },
+    async listRfqsForBrand(brandId) {
+      const result = await client.query('SELECT payload FROM material_rfqs WHERE brand_id = $1 ORDER BY rfq_code FOR SHARE', [brandId]);
+      return result.rows.map((row) => row.payload);
+    },
     async insertRfq(rfq) {
       try {
         await client.query(

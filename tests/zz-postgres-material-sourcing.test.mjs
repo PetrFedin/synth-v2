@@ -151,6 +151,14 @@ test('PostgreSQL Route B (material RFQ -> quote -> award -> Material Purchase Or
     });
     assert.equal(freeLot.materialPurchaseOrderId, null);
 
+    // Listing was the actual gap behind "no UI screen": there was no way to browse RFQs or
+    // purchase orders for a brand at all, only single-item lookup by exact code.
+    const rfqList = await materialSourcing.listForActor('sales-user', 'brand-mat');
+    assert.ok(rfqList.some((item) => item.rfqCode === 'MRFQ-0001'));
+    const poList = await materialPurchaseOrders.listForActor('sales-user', 'brand-mat');
+    assert.ok(poList.some((item) => item.purchaseOrderNumber === 'MPO-2027-0001'));
+    await assert.rejects(() => materialSourcing.listForActor('nobody', 'brand-mat'), { code: 'ACTIVE_MEMBERSHIP_REQUIRED' });
+
     const events = (await pool.query("SELECT event_type FROM outbox_events WHERE event_type LIKE 'material-rfq%' OR event_type LIKE 'material-purchase-order%'")).rows.map((row) => row.event_type).sort();
     assert.deepEqual(events, [
       'material-purchase-order.confirmed', 'material-purchase-order.created', 'material-purchase-order.issued',

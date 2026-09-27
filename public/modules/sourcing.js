@@ -13,11 +13,19 @@
     // Карточка поставщика считалась целиком и не была видна нигде. Она живёт рядом с поставщиком по
     // той же причине, что и доступ к порталу: это факт об этом контрагенте.
     performance: null, performanceFor: null, performanceLoading: false,
+    // Route B (материал): тот же реестр поставщиков, тот же общий busyKey/generation — отдельные
+    // только сами списки и выбор строки, ровно как materialRfqs/materialPurchaseOrders были
+    // отдельными таблицами на бэкенде.
+    materialRfqs: [], materialPurchaseOrders: [], selectedMaterialRfqCode: null, selectedMaterialPurchaseOrderNumber: null,
+    materialRfqStatus: 'all', materialPurchaseOrderStatus: 'all',
   });
   const SUPPLIER_STATUSES = ['draft', 'qualified', 'suspended', 'archived'];
   const RFQ_STATUSES = ['draft', 'issued', 'quoted', 'awarded', 'allocated', 'cancelled'];
+  const MATERIAL_PURCHASE_ORDER_STATUSES = ['draft', 'issued', 'confirmed', 'cancelled'];
+  const MATERIAL_UNITS = ['m', 'kg', 'pc', 'yd'];
   const INCOTERMS = ['EXW', 'FCA', 'FOB', 'CIF', 'DAP', 'DDP'];
   const SOURCING_VIEWS = new Set(['suppliers', 'rfqs', 'quotations', 'production']);
+  const MATERIAL_SOURCING_VIEWS = new Set(['material-rfqs', 'material-purchase-orders']);
 
   function text(ru, en) { return typeof localText === 'function' ? localText(ru, en) : ru; }
   function h(tag, attrs = {}, children = []) {
@@ -46,6 +54,8 @@
   function supplierByCode(code) { return ui.suppliers.find((item) => item.supplierCode === code); }
   function selectedSupplier() { return supplierByCode(ui.selectedSupplierCode) || ui.suppliers[0] || null; }
   function selectedRfq() { return ui.rfqs.find((item) => item.rfqCode === ui.selectedRfqCode) || ui.rfqs[0] || null; }
+  function selectedMaterialRfq() { return ui.materialRfqs.find((item) => item.rfqCode === ui.selectedMaterialRfqCode) || ui.materialRfqs[0] || null; }
+  function selectedMaterialPurchaseOrder() { return ui.materialPurchaseOrders.find((item) => item.purchaseOrderNumber === ui.selectedMaterialPurchaseOrderNumber) || ui.materialPurchaseOrders[0] || null; }
   function publishedBoms() { return ui.boms.filter((bom) => bom.status === 'published'); }
   function publishedSkuOptions() {
     const bomSkus = new Set(publishedBoms().map((bom) => bom.sku));
@@ -60,14 +70,16 @@
     const labels = {
       draft: ['Черновик', 'Draft'], qualified: ['Квалифицирован', 'Qualified'], suspended: ['Приостановлен', 'Suspended'], archived: ['Архив', 'Archived'],
       issued: ['Отправлен', 'Issued'], quoted: ['Есть котировки', 'Quoted'], awarded: ['Победитель выбран', 'Awarded'], allocated: ['В производстве', 'Allocated'], cancelled: ['Отменён', 'Cancelled'],
+      confirmed: ['Подтверждён', 'Confirmed'],
     };
     const pair = labels[status] || [status, status]; return text(pair[0], pair[1]);
   }
-  function statusTone(status) { if (['qualified', 'allocated'].includes(status)) return 'ok'; if (['suspended', 'cancelled'].includes(status)) return 'danger'; if (['issued', 'quoted', 'awarded'].includes(status)) return 'warning'; return 'neutral'; }
+  function statusTone(status) { if (['qualified', 'allocated', 'confirmed'].includes(status)) return 'ok'; if (['suspended', 'cancelled'].includes(status)) return 'danger'; if (['issued', 'quoted', 'awarded'].includes(status)) return 'warning'; return 'neutral'; }
 
   function reset() {
     ui.suppliers = []; ui.rfqs = []; ui.boms = []; ui.loaded = false; ui.error = ''; ui.selectedSupplierCode = null;
     ui.selectedRfqCode = null; ui.referenceTime = null; ui.generation += 1;
+    ui.materialRfqs = []; ui.materialPurchaseOrders = []; ui.selectedMaterialRfqCode = null; ui.selectedMaterialPurchaseOrderNumber = null;
   }
   async function fetchAllPages(path, request = api) {
     const items = [];
@@ -89,32 +101,51 @@
     }
     throw new Error('SOURCING_PAGE_LIMIT_EXCEEDED');
   }
+  // The per-brand material endpoints return a plain array, not a `{items, nextCursor}` page — they
+  // are not paginated (a brand's own RFQ/PO register is not expected to grow into the thousands the
+  // way a global feed might), so they are fetched directly per manageable brand and flattened rather
+  // than routed through fetchAllPages.
+  async function fetchForBrands(pathFor, brands) {
+    const results = await Promise.all(brands.map((brandId) => api(pathFor(brandId))));
+    return results.flat();
+  }
   async function loadSourcing({ reset: shouldReset = false } = {}) {
     if (ui.loading) return;
     if (shouldReset) reset();
     ui.loading = true; ui.error = '';
     const generation = ui.generation;
     try {
-      const [suppliers, rfqs, boms] = await Promise.all([fetchAllPages('/v2/suppliers'), fetchAllPages('/v2/rfqs'), fetchAllPages('/v2/boms')]);
+      const brands = manageableBrands(caps.CAPABILITIES.SOURCING_READ);
+      const [suppliers, rfqs, boms, materialRfqs, materialPurchaseOrders] = await Promise.all([
+        fetchAllPages('/v2/suppliers'), fetchAllPages('/v2/rfqs'), fetchAllPages('/v2/boms'),
+        fetchForBrands((brandId) => `/v2/organisations/${encodeURIComponent(brandId)}/material-rfqs`, brands),
+        fetchForBrands((brandId) => `/v2/organisations/${encodeURIComponent(brandId)}/material-purchase-orders`, brands),
+      ]);
       if (generation !== ui.generation) return;
       ui.suppliers = [...suppliers.items].sort((a, b) => String(a.supplierCode).localeCompare(String(b.supplierCode)));
       ui.rfqs = [...rfqs.items].sort((a, b) => String(a.rfqCode).localeCompare(String(b.rfqCode)));
       ui.boms = [...boms.items];
+      ui.materialRfqs = [...materialRfqs].sort((a, b) => String(a.rfqCode).localeCompare(String(b.rfqCode)));
+      ui.materialPurchaseOrders = [...materialPurchaseOrders].sort((a, b) => String(a.purchaseOrderNumber).localeCompare(String(b.purchaseOrderNumber)));
       ui.referenceTime = rfqs.referenceTime || suppliers.referenceTime || new Date().toISOString();
       ui.loaded = true;
       ui.selectedSupplierCode ||= ui.suppliers[0]?.supplierCode || null;
       ui.selectedRfqCode ||= ui.rfqs[0]?.rfqCode || null;
+      ui.selectedMaterialRfqCode ||= ui.materialRfqs[0]?.rfqCode || null;
+      ui.selectedMaterialPurchaseOrderNumber ||= ui.materialPurchaseOrders[0]?.purchaseOrderNumber || null;
     } catch (error) {
       if (generation === ui.generation) ui.error = error?.message || I18N.t('common.requestError');
     } finally {
       if (generation === ui.generation) ui.loading = false;
-      if (SOURCING_VIEWS.has(state.view)) renderApp();
+      if (SOURCING_VIEWS.has(state.view) || MATERIAL_SOURCING_VIEWS.has(state.view)) renderApp();
     }
   }
   // See materials.js: retrying a failed load from render starves the event loop.
   function ensureLoaded() { if (!ui.loaded && !ui.loading && !ui.error) queueMicrotask(() => { void loadSourcing({ reset: true }); }); }
   function upsertSupplier(supplier) { const map = new Map(ui.suppliers.map((item) => [item.supplierCode, item])); map.set(supplier.supplierCode, supplier); ui.suppliers = [...map.values()].sort((a, b) => a.supplierCode.localeCompare(b.supplierCode)); ui.selectedSupplierCode = supplier.supplierCode; }
   function upsertRfq(rfq) { const map = new Map(ui.rfqs.map((item) => [item.rfqCode, item])); map.set(rfq.rfqCode, rfq); ui.rfqs = [...map.values()].sort((a, b) => a.rfqCode.localeCompare(b.rfqCode)); ui.selectedRfqCode = rfq.rfqCode; }
+  function upsertMaterialRfq(rfq) { const map = new Map(ui.materialRfqs.map((item) => [item.rfqCode, item])); map.set(rfq.rfqCode, rfq); ui.materialRfqs = [...map.values()].sort((a, b) => a.rfqCode.localeCompare(b.rfqCode)); ui.selectedMaterialRfqCode = rfq.rfqCode; }
+  function upsertMaterialPurchaseOrder(order) { const map = new Map(ui.materialPurchaseOrders.map((item) => [item.purchaseOrderNumber, item])); map.set(order.purchaseOrderNumber, order); ui.materialPurchaseOrders = [...map.values()].sort((a, b) => a.purchaseOrderNumber.localeCompare(b.purchaseOrderNumber)); ui.selectedMaterialPurchaseOrderNumber = order.purchaseOrderNumber; }
   async function runMutation(key, path, body, method = 'POST', kind = 'rfq') {
     if (ui.busyKey) return null;
     ui.busyKey = key; renderApp();
@@ -125,6 +156,8 @@
       // next render threw on a field a grant does not have.
       if (kind === 'supplier') upsertSupplier(result);
       else if (kind === 'grant') { /* the access panel reloads itself */ }
+      else if (kind === 'materialRfq') upsertMaterialRfq(result);
+      else if (kind === 'materialPurchaseOrder') upsertMaterialPurchaseOrder(result);
       else upsertRfq(result);
       toast(text('Изменения сохранены.', 'Changes saved.'));
       return result;
@@ -504,6 +537,19 @@
     const [whole, fraction = ''] = normalized.split('.');
     return Number(whole) * 100 + Number(fraction.padEnd(2, '0'));
   }
+  // Material quantity is metres/kilograms, not pieces — fractional, same locale-friendly comma
+  // parsing as money but without the ×100 (there are no minor units for a length or a weight).
+  function decimalToNumber(value) {
+    const normalized = String(value).trim().replace(/[\s  ]/g, '').replace(',', '.');
+    if (!/^\d+(?:\.\d{1,4})?$/.test(normalized)) {
+      throw new Error(text('Укажите количество, например 1000 или 12,5.', 'Enter a quantity, for example 1000 or 12.5.'));
+    }
+    return Number(normalized);
+  }
+  async function publishedMaterialOptions(brandId) {
+    const page = await fetchAllPages('/v2/materials');
+    return page.items.filter((item) => item.status === 'published' && item.brandId === brandId);
+  }
   function dialog(title, fields, submitLabel, onSubmit, danger = false) {
     const modal = h('dialog', { className: 'sourcing-dialog' }); const form = h('form', { method: 'dialog' }, [h('header', {}, [h('h2', { text: title })]), h('div', { className: 'sourcing-form-grid' }, fields)]);
     const error = h('p', { className: 'sourcing-form-error', hidden: true });
@@ -608,7 +654,264 @@
 
   function openRfqCancelDialog(rfq) { dialog(text('Отменить RFQ', 'Cancel RFQ'), [field(text('Причина', 'Reason'), textarea('reason', '', { required: true, minlength: '5', maxlength: '500', rows: '4' }))], text('Отменить RFQ', 'Cancel RFQ'), async (values) => Boolean(await runMutation(rfq.rfqCode, `/v2/rfqs/${encodeURIComponent(rfq.rfqCode)}/cancel`, { expectedVersion: rfq.version, reason: values.reason })), true); }
 
+  // ---- Route B: material RFQs and material purchase orders ----
+  // A second workspace living in the same file, not because it fits SOURCING_VIEWS' own tab bar, but
+  // because it is the same domain (sourcing) reusing the same suppliers already loaded here, the same
+  // busyKey/dialog/runMutation plumbing, and the pure allowedRfqActions/rankQuotes/isRfqOverdue
+  // helpers from sourcing-core.js as-is — a material RFQ carries the exact same status enum and the
+  // exact same quotes/award/allocation shape as a finished-goods one, so nothing there needed rewriting.
+  function materialRfqFilterValues() { return ui.materialRfqs.filter((rfq) => ui.materialRfqStatus === 'all' || rfq.status === ui.materialRfqStatus); }
+  function materialSummary() {
+    const rfqs = ui.materialRfqs; const orders = ui.materialPurchaseOrders;
+    return {
+      rfqs: rfqs.length, open: rfqs.filter((item) => ['issued', 'quoted'].includes(item.status)).length,
+      overdue: rfqs.filter((item) => core.isRfqOverdue(item, ui.referenceTime || new Date().toISOString())).length,
+      awarded: rfqs.filter((item) => item.status === 'awarded').length,
+      orders: orders.length, awaitingConfirmation: orders.filter((item) => item.status === 'issued').length,
+    };
+  }
+  function materialWorkspaceHeader(summary) {
+    return h('header', { className: 'sourcing-header' }, [
+      h('div', {}, [h('p', { className: 'eyebrow', text: 'PLM / MATERIAL SOURCING' }), h('h1', { text: text('Закупка материала', 'Material sourcing') }), h('p', { className: 'muted', text: text('Запрос цены на материал → котировка → присуждение → заказ поставщику материала.', 'Material RFQ → quotation → award → material purchase order.') })]),
+      h('div', { className: 'sourcing-header-actions' }, [
+        state.view === 'material-rfqs' && canAny(caps.CAPABILITIES.SOURCING_MANAGE) ? h('button', { type: 'button', className: 'primary', text: text('Новый запрос на материал', 'New material RFQ'), onclick: () => openMaterialRfqDialog(null) }) : null,
+        h('button', { type: 'button', className: 'secondary', disabled: ui.loading, text: text('Обновить', 'Refresh'), onclick: () => { loadSourcing({ reset: true }).then(() => toast(text('Данные обновлены.', 'Data refreshed.'))).catch((error) => toast(error?.message || text('Не удалось обновить данные.', 'The data could not be refreshed.'), 'error')); } }),
+      ]),
+      h('section', { className: 'sourcing-kpis' }, [
+        metric(text('Запросы', 'RFQs'), summary.rfqs), metric(text('Открытые', 'Open'), summary.open),
+        metric(text('Просрочено', 'Overdue'), summary.overdue), metric(text('Победитель выбран', 'Awarded'), summary.awarded),
+        metric(text('Заказы', 'Purchase orders'), summary.orders), metric(text('Ждут подтверждения', 'Awaiting confirmation'), summary.awaitingConfirmation),
+      ]),
+    ]);
+  }
+  function materialViewTabs() {
+    const items = [['material-rfqs', text('Запросы на материал', 'Material RFQs')], ['material-purchase-orders', text('Заказы на материал', 'Material purchase orders')]];
+    return h('nav', { className: 'sourcing-tabs', 'aria-label': text('Разделы закупки материала', 'Material sourcing sections') }, items.map(([view, label]) => h('button', { type: 'button', className: state.view === view ? 'active' : '', text: label, onclick: () => { state.view = view; renderApp(); } })));
+  }
+  function renderMaterialSourcing() {
+    ensureLoaded();
+    const body = h('section', { className: 'sourcing-workspace' }, [materialWorkspaceHeader(materialSummary()), materialViewTabs()]);
+    if (ui.error) body.append(h('div', { className: 'sourcing-error', text: ui.error }));
+    body.append(state.view === 'material-purchase-orders' ? renderMaterialPurchaseOrders() : renderMaterialRfqs());
+    return body;
+  }
+
+  function materialRfqColumns() {
+    return [
+      { label: text('Запрос / материал', 'RFQ / material'), cell: (rfq) => h('td', {}, [h('strong', { text: rfq.rfqCode }), h('small', { text: `${rfq.materialCode} v${rfq.materialVersion}` })]) },
+      { label: text('Кол-во', 'Qty'), cell: (rfq) => h('td', { text: `${rfq.targetQuantity} ${rfq.unit}` }) },
+      { label: text('Приглашено', 'Invited'), cell: (rfq) => h('td', { text: String(rfq.supplierCodes.length) }) },
+      { label: text('Ответов', 'Quotes'), cell: (rfq) => h('td', { text: String(rfq.quotes.length) }) },
+      { label: text('Лучшая сумма', 'Best total'), cell: (rfq, ctx) => h('td', { text: ctx.best ? formatMoneyMinor(ctx.best.totalCostMinor, ctx.best.currency) : '—' }) },
+      { label: text('Статус', 'Status'), cell: (rfq, ctx) => h('td', {}, [badge(statusLabel(rfq.status), statusTone(rfq.status)), ctx.overdue ? badge(text('Просрочено', 'Overdue'), 'danger') : null]) },
+      { label: text('Поставщик', 'Supplier'), cell: (rfq) => h('td', { text: rfq.selectedSupplierCode || '—' }) },
+      { label: text('Поставка', 'Delivery'), cell: (rfq) => h('td', { text: formatDate(rfq.deliveryDueAt) }) },
+    ];
+  }
+  function renderMaterialRfqs() {
+    const values = materialRfqFilterValues();
+    const columns = materialRfqColumns();
+    const filter = h('select', { onchange: (event) => { ui.materialRfqStatus = event.target.value; renderApp(); } }, [h('option', { value: 'all', text: text('Все статусы', 'All statuses') }), ...RFQ_STATUSES.map((status) => h('option', { value: status, text: statusLabel(status), selected: ui.materialRfqStatus === status }))]);
+    filter.value = ui.materialRfqStatus;
+    const rows = values.map((rfq) => {
+      const quotes = core.rankQuotes(rfq);
+      const ctx = { best: quotes[0], overdue: core.isRfqOverdue(rfq, ui.referenceTime || new Date().toISOString()) };
+      const row = h('tr', { className: ui.selectedMaterialRfqCode === rfq.rfqCode ? 'selected' : '', tabindex: '0' }, columns.map((column) => column.cell(rfq, ctx)));
+      const select = () => { ui.selectedMaterialRfqCode = rfq.rfqCode; renderApp(); };
+      row.addEventListener('click', select); row.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); select(); } });
+      return row;
+    });
+    if (!rows.length) rows.push(h('tr', {}, [h('td', { colspan: String(columns.length), className: 'sourcing-empty', text: ui.loading ? text('Загрузка…', 'Loading…') : text('Запросы на материал не найдены.', 'No material RFQs found.') })]));
+    return h('div', { className: 'sourcing-grid' }, [h('section', { className: 'sourcing-panel' }, [h('div', { className: 'sourcing-toolbar' }, [h('h2', { text: text('Реестр запросов на материал', 'Material RFQ register') }), filter]), h('div', { className: 'sourcing-table-wrap' }, [h('table', { className: 'sourcing-table' }, [h('thead', {}, [h('tr', {}, columns.map((column) => h('th', { text: column.label, scope: 'col' })))]), h('tbody', {}, rows)])])]), materialRfqInspector(selectedMaterialRfq())]);
+  }
+  function materialRfqInspector(rfq) {
+    if (!rfq) return h('aside', { className: 'sourcing-inspector' }, [h('p', { className: 'muted', text: text('Выберите запрос на материал.', 'Select a material RFQ.') })]);
+    const permissions = { manage: can(rfq.brandId, caps.CAPABILITIES.SOURCING_MANAGE), award: can(rfq.brandId, caps.CAPABILITIES.SOURCING_AWARD), allocate: can(rfq.brandId, caps.CAPABILITIES.MATERIAL_PURCHASE_MANAGE) };
+    const actions = core.allowedRfqActions(rfq, permissions);
+    const quotes = core.rankQuotes(rfq);
+    return h('aside', { className: 'sourcing-inspector' }, [
+      h('div', { className: 'sourcing-inspector-title' }, [h('div', {}, [h('p', { className: 'eyebrow', text: rfq.rfqCode }), h('h2', { text: `${rfq.materialCode} v${rfq.materialVersion}` })]), badge(statusLabel(rfq.status), statusTone(rfq.status))]),
+      h('dl', { className: 'sourcing-details' }, [detail(text('Количество', 'Quantity'), `${rfq.targetQuantity} ${rfq.unit}`), detail('Incoterm', rfq.incoterm), detail(text('Ответ до', 'Response due'), formatDate(rfq.responseDueAt)), detail(text('Поставка до', 'Delivery due'), formatDate(rfq.deliveryDueAt)), detail(text('Выбран', 'Selected'), rfq.selectedSupplierCode || '—')]),
+      quotes.length ? h('section', { className: 'quote-ranking' }, [h('h3', { text: text('Котировки', 'Quotations') }), ...quotes.map((quote) => materialQuoteCard(quote))]) : h('p', { className: 'muted', text: text('Котировки пока не получены.', 'No quotations received yet.') }),
+      rfq.allocation ? h('section', { className: 'allocation-card' }, [h('h3', { text: text('Размещение заказа', 'Purchase order allocation') }), h('strong', { text: rfq.allocation.purchaseOrderNumber }), h('p', { text: `${rfq.allocation.supplierCode} · ${rfq.allocation.quantity} ${rfq.unit} · ${formatDate(rfq.allocation.orderPlacedAt)} → ${formatDate(rfq.allocation.deliveryDueAt)}` })]) : null,
+      rfq.cancellationReason ? h('div', { className: 'sourcing-warning', text: rfq.cancellationReason }) : null,
+      h('div', { className: 'sourcing-actions' }, actions.map((action) => materialRfqActionButton(action, rfq))),
+    ]);
+  }
+  function materialQuoteCard(quote) {
+    return h('article', { className: 'quote-card' }, [
+      h('div', {}, [h('strong', { text: `#${quote.rank} ${quote.supplierName}` }), h('small', { text: `${quote.supplierCode} · rev ${quote.revision}` })]),
+      h('div', {}, [h('strong', { text: formatMoneyMinor(quote.totalCostMinor, quote.currency) }), h('small', { text: `${formatMoneyMinor(quote.unitPriceMinor, quote.currency)} / ${text('ед.', 'unit')}` })]),
+      h('small', { text: `${quote.leadTimeDays} ${text('дн.', 'days')} · MOQ ${quote.minimumOrderQuantity}` }),
+    ]);
+  }
+  function materialRfqActionButton(action, rfq) {
+    const labels = { edit: [text('Редактировать', 'Edit'), 'secondary'], issue: [text('Отправить запрос', 'Issue RFQ'), 'primary'], quote: [text('Добавить котировку', 'Add quotation'), 'primary'], award: [text('Выбрать победителя', 'Award supplier'), 'primary'], allocate: [text('Создать заказ', 'Create purchase order'), 'primary'], cancel: [text('Отменить', 'Cancel'), 'danger'] };
+    const handlers = { edit: () => openMaterialRfqDialog(rfq), issue: () => issueMaterialRfq(rfq), quote: () => openMaterialQuoteDialog(rfq), award: () => openMaterialAwardDialog(rfq), allocate: () => openMaterialAllocationDialog(rfq), cancel: () => openMaterialRfqCancelDialog(rfq) };
+    return h('button', { type: 'button', className: labels[action][1], disabled: ui.busyKey === rfq.rfqCode, text: labels[action][0], onclick: handlers[action] });
+  }
+
+  async function openMaterialRfqDialog(rfq) {
+    const brands = manageableBrands(caps.CAPABILITIES.SOURCING_MANAGE);
+    if (!rfq && !brands.length) { toast(text('Нет доступного бренда.', 'No manageable brand is available.'), 'error'); return; }
+    const brandId = rfq?.brandId || brands[0];
+    const materials = rfq ? [] : await publishedMaterialOptions(brandId);
+    if (!rfq && !materials.length) { toast(text('Нужен опубликованный материал.', 'A published material is required.'), 'error'); return; }
+    const suppliers = qualifiedSuppliers(brandId);
+    if (!rfq && !suppliers.length) { toast(text('Сначала квалифицируйте поставщика.', 'Qualify a supplier first.'), 'error'); return; }
+    const materialCode = rfq?.materialCode || materials[0].code;
+    const controls = {
+      materialCode: rfq ? control('materialCode', 'text', `${rfq.materialCode} v${rfq.materialVersion}`, { disabled: true }) : select('materialCode', materials.map((item) => [item.code, `${item.code} · ${item.name || ''}`]), materialCode),
+      rfqCode: control('rfqCode', 'text', rfq?.rfqCode || `MRFQ-${materialCode}-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}`, { required: true, maxlength: '64', disabled: Boolean(rfq) }),
+      targetQuantity: control('targetQuantity', 'text', rfq?.targetQuantity ?? '', { required: true, inputmode: 'decimal' }),
+      unit: select('unit', MATERIAL_UNITS.map((item) => [item, item]), rfq?.unit || materials.find((item) => item.code === materialCode)?.unit || 'm'),
+      responseDueAt: control('responseDueAt', 'datetime-local', localInput(rfq?.responseDueAt) || daysFromNow(7), { required: true }),
+      deliveryDueAt: control('deliveryDueAt', 'datetime-local', localInput(rfq?.deliveryDueAt) || daysFromNow(60), { required: true }),
+      incoterm: select('incoterm', INCOTERMS.map((item) => [item, item]), rfq?.incoterm || 'FOB'),
+      supplierCodes: control('supplierCodes', 'text', (rfq?.supplierCodes || suppliers.map((item) => item.supplierCode)).join(', '), { required: true }),
+      notes: textarea('notes', rfq?.notes || '', { maxlength: '2000', rows: '4' }),
+    };
+    dialog(rfq ? text('Редактировать запрос на материал', 'Edit material RFQ') : text('Новый запрос на материал', 'New material RFQ'), [
+      field(text('Материал', 'Material'), controls.materialCode), field(text('Код запроса', 'RFQ code'), controls.rfqCode),
+      field(text('Количество', 'Quantity'), controls.targetQuantity), field(text('Единица', 'Unit'), controls.unit),
+      field(text('Ответ до', 'Response due'), controls.responseDueAt), field(text('Поставка до', 'Delivery due'), controls.deliveryDueAt),
+      field('Incoterm', controls.incoterm), field(text('Коды поставщиков через запятую', 'Comma-separated supplier codes'), controls.supplierCodes),
+      field(text('Комментарий', 'Notes'), controls.notes),
+    ], text('Сохранить', 'Save'), async (values) => {
+      const editable = { targetQuantity: decimalToNumber(values.targetQuantity), unit: values.unit, responseDueAt: iso(values.responseDueAt), deliveryDueAt: iso(values.deliveryDueAt), incoterm: values.incoterm, supplierCodes: list(values.supplierCodes).map((item) => item.toUpperCase()), notes: values.notes.trim() || null };
+      if (rfq) return Boolean(await runMutation(rfq.rfqCode, `/v2/material-rfqs/${encodeURIComponent(rfq.rfqCode)}`, { expectedVersion: rfq.version, ...editable }, 'PATCH', 'materialRfq'));
+      return Boolean(await runMutation(values.rfqCode.trim().toUpperCase(), '/v2/material-rfqs', { rfqCode: values.rfqCode.trim().toUpperCase(), materialCode: values.materialCode, ...editable }, 'POST', 'materialRfq'));
+    });
+  }
+  function issueMaterialRfq(rfq) {
+    confirmDialog(text('Отправить запрос на материал', 'Issue material request'), text(`${rfq.rfqCode} будет отправлен приглашённым поставщикам.`, `${rfq.rfqCode} goes to the invited suppliers.`), text('Отправить', 'Issue'),
+      () => runMutation(rfq.rfqCode, `/v2/material-rfqs/${encodeURIComponent(rfq.rfqCode)}/issue`, { expectedVersion: rfq.version }, 'POST', 'materialRfq'));
+  }
+  function openMaterialQuoteDialog(rfq) {
+    const suppliers = rfq.supplierCodes.map(supplierByCode).filter(Boolean);
+    if (!suppliers.length) { toast(text('Приглашённые поставщики не найдены.', 'Invited suppliers were not found.'), 'error'); return; }
+    dialog(text('Полученная котировка на материал', 'Received material quotation'), [
+      field(text('Поставщик', 'Supplier'), select('supplierCode', suppliers.map((item) => [item.supplierCode, `${item.supplierCode} · ${item.legalName}`]), suppliers[0].supplierCode)),
+      field(text('Валюта', 'Currency'), control('currency', 'text', suppliers[0].currency || 'EUR', { required: true, minlength: '3', maxlength: '3' })),
+      field(text('Цена за единицу', 'Unit price'), control('unitPrice', 'text', '', { required: true, inputmode: 'decimal' })),
+      field(text('Фиксированные затраты', 'Fixed cost'), control('fixedCost', 'text', '0', { required: true, inputmode: 'decimal' })),
+      field('Lead time', control('leadTimeDays', 'number', suppliers[0].leadTimeDays, { min: '1', max: '730', required: true })),
+      field('MOQ', control('minimumOrderQuantity', 'text', String(suppliers[0].minimumOrderQuantity), { required: true, inputmode: 'decimal' })),
+      field(text('Действует до', 'Valid until'), control('validUntil', 'datetime-local', daysFromNow(21), { required: true })),
+      field(text('Комментарий', 'Notes'), textarea('notes', '', { maxlength: '1000', rows: '4' })),
+    ], text('Записать котировку', 'Record quotation'), async (values) => Boolean(await runMutation(rfq.rfqCode, `/v2/material-rfqs/${encodeURIComponent(rfq.rfqCode)}/quotes`, {
+      expectedVersion: rfq.version, supplierCode: values.supplierCode, currency: values.currency.trim().toUpperCase(),
+      unitPriceMinor: decimalToMinor(values.unitPrice), fixedCostMinor: decimalToMinor(values.fixedCost),
+      leadTimeDays: Number(values.leadTimeDays), minimumOrderQuantity: decimalToNumber(values.minimumOrderQuantity),
+      validUntil: iso(values.validUntil), notes: values.notes.trim() || null,
+    }, 'POST', 'materialRfq')));
+  }
+  function openMaterialAwardDialog(rfq) {
+    const quotes = core.rankQuotes(rfq); if (!quotes.length) return;
+    dialog(text('Выбор победителя запроса на материал', 'Award material RFQ'), [field(text('Поставщик / сумма', 'Supplier / total'), select('supplierCode', quotes.map((quote) => [quote.supplierCode, `#${quote.rank} ${quote.supplierName} · ${formatMoneyMinor(quote.totalCostMinor, quote.currency)}`]), quotes[0].supplierCode))], text('Подтвердить выбор', 'Confirm award'), async (values) => Boolean(await runMutation(rfq.rfqCode, `/v2/material-rfqs/${encodeURIComponent(rfq.rfqCode)}/award`, { expectedVersion: rfq.version, supplierCode: values.supplierCode }, 'POST', 'materialRfq')));
+  }
+  function openMaterialAllocationDialog(rfq) {
+    dialog(text('Заказ на материал и размещение', 'Material purchase order and allocation'), [
+      field(text('Номер заказа', 'Purchase order number'), control('purchaseOrderNumber', 'text', `MPO-${rfq.rfqCode}`, { required: true, maxlength: '80' })),
+      field(text('Количество', 'Quantity'), control('quantity', 'text', String(rfq.targetQuantity), { required: true, readonly: true })),
+      field(text('Дата размещения заказа', 'Order placed'), control('orderPlacedAt', 'datetime-local', daysFromNow(1), { required: true })),
+      field(text('Поставка', 'Delivery due'), control('deliveryDueAt', 'datetime-local', localInput(rfq.deliveryDueAt), { required: true })),
+      field(text('Комментарий', 'Notes'), textarea('notes', '', { maxlength: '1000', rows: '4' })),
+    ], text('Разместить заказ', 'Place order'), async (values) => {
+      const allocated = await runMutation(rfq.rfqCode, `/v2/material-rfqs/${encodeURIComponent(rfq.rfqCode)}/allocate`, {
+        expectedVersion: rfq.version, purchaseOrderNumber: values.purchaseOrderNumber.trim().toUpperCase(),
+        quantity: decimalToNumber(values.quantity), orderPlacedAt: iso(values.orderPlacedAt), deliveryDueAt: iso(values.deliveryDueAt), notes: values.notes.trim() || null,
+      }, 'POST', 'materialRfq');
+      if (!allocated) return false;
+      if (!can(rfq.brandId, caps.CAPABILITIES.MATERIAL_PURCHASE_MANAGE)) {
+        toast(text(`Размещение выполнено. Заказ на материал откроет тот, у кого есть право на закупку материала — код запроса ${rfq.rfqCode}.`, `Allocated. Someone with material purchase rights opens the order itself — request code ${rfq.rfqCode}.`));
+        return true;
+      }
+      await openMaterialPurchaseOrderFromAllocation(rfq.rfqCode);
+      return true;
+    });
+  }
+  async function openMaterialPurchaseOrderFromAllocation(rfqCode) {
+    try {
+      const order = await mutate(`/v2/material-rfqs/${encodeURIComponent(rfqCode)}/purchase-order`, {}, 'POST');
+      upsertMaterialPurchaseOrder(order);
+      toast(text(`Заказ на материал ${order.purchaseOrderNumber} открыт.`, `Material purchase order ${order.purchaseOrderNumber} is open.`));
+    } catch (error) {
+      toast(text(
+        `Размещение выполнено, но заказ на материал не открылся: ${errorMessage(error)} Откройте его в разделе «Заказы на материал» по коду ${rfqCode}.`,
+        `Allocated, but the material purchase order did not open: ${errorMessage(error)} Open it in Material purchase orders using code ${rfqCode}.`,
+      ), 'error');
+    }
+  }
+  function openMaterialRfqCancelDialog(rfq) { dialog(text('Отменить запрос на материал', 'Cancel material RFQ'), [field(text('Причина', 'Reason'), textarea('reason', '', { required: true, minlength: '5', maxlength: '500', rows: '4' }))], text('Отменить запрос', 'Cancel RFQ'), async (values) => Boolean(await runMutation(rfq.rfqCode, `/v2/material-rfqs/${encodeURIComponent(rfq.rfqCode)}/cancel`, { expectedVersion: rfq.version, reason: values.reason }, 'POST', 'materialRfq')), true); }
+
+  function materialPurchaseOrderFilterValues() { return ui.materialPurchaseOrders.filter((order) => ui.materialPurchaseOrderStatus === 'all' || order.status === ui.materialPurchaseOrderStatus); }
+  function materialPurchaseOrderColumns() {
+    return [
+      { label: text('Заказ / материал', 'Order / material'), cell: (order) => h('td', {}, [h('strong', { text: order.purchaseOrderNumber }), h('small', { text: `${order.materialCode} v${order.materialVersion}` })]) },
+      { label: text('Поставщик', 'Supplier'), cell: (order) => h('td', { text: order.supplierCode }) },
+      { label: text('Кол-во', 'Qty'), cell: (order) => h('td', { text: `${order.quantity} ${order.unit}` }) },
+      { label: text('Сумма', 'Total'), cell: (order) => h('td', { text: formatMoneyMinor(order.commercialSnapshot?.totalCostMinor, order.commercialSnapshot?.currency) }) },
+      { label: text('Поставка', 'Delivery'), cell: (order) => h('td', { text: formatDate(order.deliveryDueAt) }) },
+      { label: text('Статус', 'Status'), cell: (order) => h('td', {}, [badge(statusLabel(order.status), statusTone(order.status))]) },
+    ];
+  }
+  function renderMaterialPurchaseOrders() {
+    const values = materialPurchaseOrderFilterValues();
+    const columns = materialPurchaseOrderColumns();
+    const filter = h('select', { onchange: (event) => { ui.materialPurchaseOrderStatus = event.target.value; renderApp(); } }, [h('option', { value: 'all', text: text('Все статусы', 'All statuses') }), ...MATERIAL_PURCHASE_ORDER_STATUSES.map((status) => h('option', { value: status, text: statusLabel(status), selected: ui.materialPurchaseOrderStatus === status }))]);
+    filter.value = ui.materialPurchaseOrderStatus;
+    const rows = values.map((order) => {
+      const row = h('tr', { className: ui.selectedMaterialPurchaseOrderNumber === order.purchaseOrderNumber ? 'selected' : '', tabindex: '0' }, columns.map((column) => column.cell(order)));
+      const select = () => { ui.selectedMaterialPurchaseOrderNumber = order.purchaseOrderNumber; renderApp(); };
+      row.addEventListener('click', select); row.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); select(); } });
+      return row;
+    });
+    if (!rows.length) rows.push(h('tr', {}, [h('td', { colspan: String(columns.length), className: 'sourcing-empty', text: ui.loading ? text('Загрузка…', 'Loading…') : text('Заказы на материал не найдены.', 'No material purchase orders found.') })]));
+    return h('div', { className: 'sourcing-grid' }, [h('section', { className: 'sourcing-panel' }, [h('div', { className: 'sourcing-toolbar' }, [h('h2', { text: text('Реестр заказов на материал', 'Material purchase order register') }), filter]), h('div', { className: 'sourcing-table-wrap' }, [h('table', { className: 'sourcing-table' }, [h('thead', {}, [h('tr', {}, columns.map((column) => h('th', { text: column.label, scope: 'col' })))]), h('tbody', {}, rows)])])]), materialPurchaseOrderInspector(selectedMaterialPurchaseOrder())]);
+  }
+  function materialPurchaseOrderInspector(order) {
+    if (!order) return h('aside', { className: 'sourcing-inspector' }, [h('p', { className: 'muted', text: text('Выберите заказ на материал.', 'Select a material purchase order.') })]);
+    const actions = core.allowedMaterialPurchaseOrderActions(order, { manage: can(order.brandId, caps.CAPABILITIES.MATERIAL_PURCHASE_MANAGE) });
+    return h('aside', { className: 'sourcing-inspector' }, [
+      h('div', { className: 'sourcing-inspector-title' }, [h('div', {}, [h('p', { className: 'eyebrow', text: order.purchaseOrderNumber }), h('h2', { text: `${order.materialCode} v${order.materialVersion}` })]), badge(statusLabel(order.status), statusTone(order.status))]),
+      h('dl', { className: 'sourcing-details' }, [
+        detail(text('Запрос', 'RFQ'), order.rfqCode), detail(text('Поставщик', 'Supplier'), `${order.supplierSnapshot?.legalName || order.supplierCode} (${order.supplierCode})`),
+        detail(text('Количество', 'Quantity'), `${order.quantity} ${order.unit}`), detail('Incoterm', order.commercialSnapshot?.incoterm),
+        detail(text('Сумма', 'Total'), formatMoneyMinor(order.commercialSnapshot?.totalCostMinor, order.commercialSnapshot?.currency)),
+        detail(text('Размещён', 'Order placed'), formatDate(order.orderPlacedAt)), detail(text('Поставка до', 'Delivery due'), formatDate(order.deliveryDueAt)),
+      ]),
+      order.confirmation ? h('section', { className: 'allocation-card' }, [h('h3', { text: text('Подтверждение поставщика', 'Supplier confirmation') }), h('p', { text: `${order.confirmation.confirmationReference} · ${order.confirmation.confirmedBy}` })]) : null,
+      order.cancellationReason ? h('div', { className: 'sourcing-warning', text: order.cancellationReason }) : null,
+      h('div', { className: 'sourcing-actions' }, actions.map((action) => materialPurchaseOrderActionButton(action, order))),
+    ]);
+  }
+  function materialPurchaseOrderActionButton(action, order) {
+    const labels = { issue: [text('Отправить поставщику', 'Issue to supplier'), 'primary'], confirm: [text('Подтвердить', 'Confirm'), 'primary'], cancel: [text('Отменить', 'Cancel'), 'danger'] };
+    const handlers = { issue: () => issueMaterialPurchaseOrder(order), confirm: () => openMaterialPurchaseOrderConfirmDialog(order), cancel: () => openMaterialPurchaseOrderCancelDialog(order) };
+    return h('button', { type: 'button', className: labels[action][1], disabled: ui.busyKey === order.purchaseOrderNumber, text: labels[action][0], onclick: handlers[action] });
+  }
+  function issueMaterialPurchaseOrder(order) {
+    confirmDialog(text('Отправить заказ поставщику', 'Issue purchase order'), text(`${order.purchaseOrderNumber} будет отправлен поставщику ${order.supplierCode}.`, `${order.purchaseOrderNumber} goes to supplier ${order.supplierCode}.`), text('Отправить', 'Issue'),
+      () => runMutation(order.purchaseOrderNumber, `/v2/material-purchase-orders/${encodeURIComponent(order.purchaseOrderNumber)}/issue`, { expectedVersion: order.version }, 'POST', 'materialPurchaseOrder'));
+  }
+  function openMaterialPurchaseOrderConfirmDialog(order) {
+    dialog(text('Подтверждение поставщика', 'Supplier confirmation'), [
+      field(text('Поставщик', 'Supplier'), control('supplierCode', 'text', order.supplierCode, { disabled: true })),
+      field(text('Номер подтверждения', 'Confirmation reference'), control('confirmationReference', 'text', '', { required: true, minlength: '2', maxlength: '120' })),
+      field(text('Подтвердил', 'Confirmed by'), control('confirmedBy', 'text', '', { required: true, minlength: '2', maxlength: '200' })),
+      field(text('Комментарий', 'Notes'), textarea('notes', '', { maxlength: '2000', rows: '4' })),
+    ], text('Зафиксировать', 'Record confirmation'), async (values) => Boolean(await runMutation(order.purchaseOrderNumber, `/v2/material-purchase-orders/${encodeURIComponent(order.purchaseOrderNumber)}/confirm`, { expectedVersion: order.version, supplierCode: order.supplierCode, confirmationReference: values.confirmationReference.trim(), confirmedBy: values.confirmedBy.trim(), notes: values.notes.trim() || null }, 'POST', 'materialPurchaseOrder')));
+  }
+  function openMaterialPurchaseOrderCancelDialog(order) { dialog(text('Отменить заказ на материал', 'Cancel material purchase order'), [field(text('Причина', 'Reason'), textarea('reason', '', { required: true, minlength: '5', maxlength: '1000', rows: '4' }))], text('Отменить заказ', 'Cancel order'), async (values) => Boolean(await runMutation(order.purchaseOrderNumber, `/v2/material-purchase-orders/${encodeURIComponent(order.purchaseOrderNumber)}/cancel`, { expectedVersion: order.version, reason: values.reason }, 'POST', 'materialPurchaseOrder')), true); }
+
   const previousRenderView = renderView;
-  renderView = (...args) => SOURCING_VIEWS.has(state.view) ? renderSourcing() : previousRenderView(...args);
+  renderView = (...args) => {
+    if (SOURCING_VIEWS.has(state.view)) return renderSourcing();
+    if (MATERIAL_SOURCING_VIEWS.has(state.view)) return renderMaterialSourcing();
+    return previousRenderView(...args);
+  };
   global.SynthaSourcingWorkspace.fetchAllPages = fetchAllPages;
+  global.SynthaOmnidataV7Nav?.activate('Material RFQs', 'material-rfqs', 'Запросы цен на материал', 'Material RFQs');
+  global.SynthaOmnidataV7Nav?.activate('Material purchase orders', 'material-purchase-orders', 'Заказы на материал', 'Material purchase orders');
 })(window);

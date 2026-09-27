@@ -32,6 +32,10 @@ function view(client) {
       const result = await client.query('SELECT payload FROM material_purchase_orders WHERE rfq_code = $1 FOR UPDATE', [rfqCode]);
       return result.rows[0]?.payload;
     },
+    async listPurchaseOrdersForBrand(brandId) {
+      const result = await client.query('SELECT payload FROM material_purchase_orders WHERE brand_id = $1 ORDER BY purchase_order_number FOR SHARE', [brandId]);
+      return result.rows.map((row) => row.payload);
+    },
     async insertPurchaseOrder(value) {
       try {
         await client.query(

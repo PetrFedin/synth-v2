@@ -166,6 +166,13 @@ export function createMaterialSourcingService({ materialSourcingStore, clock = (
         return rfq;
       });
     },
+
+    async listForActor(actorId, brandId) {
+      return materialSourcingStore.transaction(async (tx) => {
+        await membership(tx, brandId, actorId, CAPABILITIES.SOURCING_READ);
+        return tx.listRfqsForBrand(brandId);
+      });
+    },
   });
 }
 

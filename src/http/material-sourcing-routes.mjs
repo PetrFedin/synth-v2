@@ -13,6 +13,7 @@ const CANCEL_BODY = bodyContract(['expectedVersion', 'reason']);
 export function createMaterialSourcingRoutes({ materialSourcing } = {}) {
   const service = materialSourcing ?? unavailable();
   return Object.freeze([
+    read('GET', /^\/v2\/organisations\/([^/]+)\/material-rfqs$/, [], ({ actorId, params }) => service.listForActor(actorId, decodeURIComponent(params[0]))),
     read('GET', /^\/v2\/material-rfqs\/([^/]+)$/, [], ({ actorId, params }) => service.getForActor(actorId, params[0])),
     mutate('POST', /^\/v2\/material-rfqs$/, RFQ_CREATE_BODY, ({ commandId, actorId, body }) => service.createRfq(commandId, actorId, body)),
     mutate('PATCH', /^\/v2\/material-rfqs\/([^/]+)$/, RFQ_UPDATE_BODY, ({ commandId, actorId, params, body }) => service.updateRfq(commandId, actorId, params[0], body)),
@@ -53,5 +54,5 @@ function listBody(contract, fields) {
 }
 function unavailable() {
   const fail = () => invariant(false, 'MATERIAL_SOURCING_SERVICE_REQUIRED', 'Material sourcing service is required');
-  return Object.freeze({ getForActor: fail, createRfq: fail, updateRfq: fail, issueRfq: fail, upsertQuote: fail, awardRfq: fail, allocateRfq: fail, cancelRfq: fail });
+  return Object.freeze({ getForActor: fail, listForActor: fail, createRfq: fail, updateRfq: fail, issueRfq: fail, upsertQuote: fail, awardRfq: fail, allocateRfq: fail, cancelRfq: fail });
 }

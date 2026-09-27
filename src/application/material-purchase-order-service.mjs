@@ -144,6 +144,14 @@ export function createMaterialPurchaseOrderService({ store, clock = () => new Da
         return current;
       });
     },
+
+    async listForActor(actorId, brandId) {
+      return store.transaction(async (tx) => {
+        const membership = await tx.getMembership(brandId, actorId);
+        assertCapability(membership, CAPABILITIES.SOURCING_READ);
+        return tx.listPurchaseOrdersForBrand(brandId);
+      });
+    },
   });
 }
 

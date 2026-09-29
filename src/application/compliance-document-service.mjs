@@ -49,8 +49,13 @@ export function createComplianceDocumentService({ store, clock = () => new Date(
           if (input.counterpartyLegalEntityId) {
             invariant(await tx.legalEntityExists(input.counterpartyLegalEntityId), 'COMPLIANCE_DOCUMENT_COUNTERPARTY_NOT_FOUND', { counterpartyLegalEntityId: input.counterpartyLegalEntityId });
           }
+          let shipment = null;
+          if (input.linkedShipmentNoticeSnapshotId) {
+            shipment = requireEntity(await tx.getShipmentNoticeSnapshot(input.linkedShipmentNoticeSnapshotId), 'COMPLIANCE_DOCUMENT_SHIPMENT_NOT_FOUND', { linkedShipmentNoticeSnapshotId: input.linkedShipmentNoticeSnapshotId });
+            invariant(shipment.brandId === input.organisationId, 'COMPLIANCE_DOCUMENT_SHIPMENT_ORGANISATION_MISMATCH', 'Shipment does not belong to this organisation', { organisationId: input.organisationId, linkedShipmentNoticeSnapshotId: input.linkedShipmentNoticeSnapshotId });
+          }
           const existing = await tx.getDocumentByNumber(input.organisationId, input.documentNumber);
-          return Object.freeze({ issuer, existing });
+          return Object.freeze({ issuer, shipment, existing });
         },
         async (tx, context) => {
           invariant(!context.existing, 'COMPLIANCE_DOCUMENT_ALREADY_EXISTS', 'Compliance Document number already exists', { documentNumber: input.documentNumber });
@@ -63,6 +68,7 @@ export function createComplianceDocumentService({ store, clock = () => new Date(
             counterpartyLegalEntityId: input.counterpartyLegalEntityId ?? null,
             validFrom: input.validFrom ?? null,
             validTo: input.validTo ?? null,
+            linkedShipmentNoticeSnapshotId: input.linkedShipmentNoticeSnapshotId ?? null,
             createdAt: now(clock),
             createdBy: actorId,
           });
@@ -125,6 +131,7 @@ export function createComplianceDocumentService({ store, clock = () => new Date(
             counterpartyLegalEntityId: context.document.counterpartyLegalEntityId,
             validFrom: context.document.validFrom,
             validTo: context.document.validTo,
+            linkedShipmentNoticeSnapshotId: context.document.linkedShipmentNoticeSnapshotId,
             createdAt: now(clock),
             createdBy: actorId,
           });

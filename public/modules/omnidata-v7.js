@@ -47,6 +47,7 @@ const OD_V7_GROUPS = Object.freeze([
       { view: 'orders', icon: 'orders', ru: '\u041e\u043f\u0442\u043e\u0432\u044b\u0435 \u0437\u0430\u043a\u0430\u0437\u044b', en: 'Wholesale orders' },
       { icon: 'reorder', ru: '\u041f\u043e\u0432\u0442\u043e\u0440\u043d\u044b\u0435 \u0437\u0430\u043a\u0430\u0437\u044b', en: 'Reorders', planned: true },
       { icon: 'pricing', ru: '\u0426\u0435\u043d\u044b \u0438 \u0443\u0441\u043b\u043e\u0432\u0438\u044f', en: 'Prices and terms', planned: true },
+      { icon: 'pricing', ru: '\u041a\u0443\u0440\u0441\u044b \u0432\u0430\u043b\u044e\u0442', en: 'Currency rates', planned: true },
       { icon: 'payments', ru: '\u041f\u043b\u0430\u0442\u0435\u0436\u0438', en: 'Payments', planned: true },
     ],
   },

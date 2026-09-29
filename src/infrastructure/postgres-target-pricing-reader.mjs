@@ -40,9 +40,37 @@ const VISIBLE = `EXISTS (
            AND membership.role = ANY($2::text[])
       )`;
 
+const SELECT_SEASON_RATES = `
+  SELECT rate.payload AS rate
+    FROM season_fx_rates AS rate`;
+const SEASON_RATE_VISIBLE = `EXISTS (
+        SELECT 1 FROM memberships AS membership
+         WHERE membership.user_id = $1
+           AND membership.organisation_id = rate.brand_id
+           AND membership.status = 'active'
+           AND membership.role = ANY($2::text[])
+      )`;
+
 export function createPostgresTargetPricingReader({ pool } = {}) {
   invariant(pool && typeof pool.connect === 'function', 'POSTGRES_POOL_REQUIRED', 'PostgreSQL pool is required');
   return Object.freeze({
+    // Прежде у сезонных курсов не было чтения списком — только запись и внутреннее чтение при
+    // составлении плана. Без него нельзя показать историю: ни свою, ни курса ЦБ рядом с ней.
+    seasonRatesForActor(actorId, { brandId, campaignId, fromCurrency, toCurrency } = {}) {
+      return withPostgresTransaction(pool, async (queryable) => {
+        const conditions = [SEASON_RATE_VISIBLE];
+        const values = [actorId, READ_ROLES];
+        if (brandId) { values.push(brandId); conditions.push(`rate.brand_id = $${values.length}`); }
+        if (campaignId) { values.push(campaignId); conditions.push(`rate.campaign_id = $${values.length}`); }
+        if (fromCurrency) { values.push(fromCurrency); conditions.push(`rate.from_currency = $${values.length}`); }
+        if (toCurrency) { values.push(toCurrency); conditions.push(`rate.to_currency = $${values.length}`); }
+        const result = await queryable.query(
+          `${SELECT_SEASON_RATES} WHERE ${conditions.join(' AND ')} ORDER BY rate.effective_on DESC`,
+          values,
+        );
+        return result.rows.map((row) => row.rate);
+      }, { begin: SNAPSHOT_BEGIN });
+    },
     plansForActor(actorId) {
       return withPostgresTransaction(pool, async (queryable) => {
         const result = await queryable.query(

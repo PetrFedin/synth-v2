@@ -101,10 +101,12 @@ function view(client) {
       await insertImmutable(client, `INSERT INTO shipment_notice_snapshots
         (id, order_id, order_commit_snapshot_id, supply_commitment_snapshot_id, fulfillment_plan_snapshot_id,
          brand_id, shop_id, shipment_number, carrier, service_level, tracking_number,
+         container_number, container_type, vessel_name, port_of_loading, port_of_discharge, bill_of_lading_number,
          shipped_at, expected_delivery_at, lines, status, created_at, content_hash, payload)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15, $16, $17, $18::jsonb)`,
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20::jsonb, $21, $22, $23, $24::jsonb)`,
       [value.id, value.orderId, value.orderCommitSnapshotId, value.supplyCommitmentSnapshotId, value.fulfillmentPlanSnapshotId,
         value.brandId, value.shopId, value.shipmentNumber, value.carrier, value.serviceLevel, value.trackingNumber,
+        value.containerNumber, value.containerType, value.vesselName, value.portOfLoading, value.portOfDischarge, value.billOfLadingNumber,
         value.shippedAt, value.expectedDeliveryAt, JSON.stringify(value.lines), value.status, value.createdAt, value.contentHash, JSON.stringify(value)],
       'SHIPMENT_NOTICE_ALREADY_EXISTS', { shipmentNoticeId: value.id });
     },

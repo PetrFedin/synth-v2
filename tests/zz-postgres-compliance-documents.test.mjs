@@ -62,6 +62,13 @@ test('PostgreSQL Compliance Document registry issues a УПД, tracks its ЭДО
     assert.equal(draft.edoStatus, null);
     assert.equal(draft.validFrom, null);
     assert.equal(draft.counterpartyLegalEntityId, counterparty.id);
+    assert.equal(draft.linkedShipmentNoticeSnapshotId, null, 'unlinked by default -- not every document accompanies a shipment');
+
+    // A document cannot claim a shipment that does not exist.
+    await assert.rejects(() => complianceDocuments.createComplianceDocument('bad-shipment', 'finance-user', {
+      organisationId: 'brand-cd', documentNumber: 'UPD-SHIP-0000', documentType: 'upd', issuerLegalEntityId: entity.id,
+      linkedShipmentNoticeSnapshotId: 'shipment-notice_missing',
+    }), { code: 'COMPLIANCE_DOCUMENT_SHIPMENT_NOT_FOUND' });
     // replay is idempotent
     assert.equal((await complianceDocuments.createComplianceDocument('doc-create', 'finance-user', {
       organisationId: 'brand-cd', documentNumber: 'UPD-0001', documentType: 'upd', issuerLegalEntityId: entity.id, counterpartyLegalEntityId: counterparty.id,

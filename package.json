@@ -20,6 +20,7 @@
     "smoke:runtime": "node scripts/run-with-env.mjs scripts/smoke-runtime.mjs",
     "outbox:requeue": "node scripts/run-with-env.mjs scripts/requeue-outbox-event.mjs",
     "sync:mdm-sources": "node scripts/sync-mdm-sources.mjs",
+    "sync:cbr-rates": "node scripts/run-with-env.mjs scripts/sync-cbr-rates.mjs",
     "test": "node --import ./tests/register-pg-test-loader.mjs --test --test-concurrency=1 tests/*.test.mjs",
     "test:postgres": "node --test --test-concurrency=1 tests/postgres/*.test.mjs",
     "validate:architecture": "node scripts/validate-architecture.mjs",

@@ -37,6 +37,13 @@ function view(client) {
       return result.rowCount === 1;
     },
 
+    async getShipmentNoticeSnapshot(id) {
+      if (!id) return undefined;
+      const result = await client.query('SELECT id, brand_id, shop_id FROM shipment_notice_snapshots WHERE id = $1', [id]);
+      if (!result.rows[0]) return undefined;
+      return Object.freeze({ id: result.rows[0].id, brandId: result.rows[0].brand_id, shopId: result.rows[0].shop_id });
+    },
+
     async getDocumentByNumber(organisationId, documentNumber) {
       const result = await client.query('SELECT payload FROM compliance_documents WHERE organisation_id = $1 AND document_number = $2 FOR UPDATE', [organisationId, documentNumber]);
       return result.rows[0]?.payload;
@@ -60,12 +67,12 @@ function view(client) {
           `INSERT INTO compliance_documents (
              id, organisation_id, document_number, document_type,
              issuer_legal_entity_id, issuer_legal_entity_version_id, counterparty_legal_entity_id,
-             status, edo_status, valid_from, valid_to, supersedes_document_id,
+             status, edo_status, valid_from, valid_to, supersedes_document_id, linked_shipment_notice_snapshot_id,
              version, payload, created_at, created_by, updated_at, updated_by,
              issued_at, superseded_at
            ) VALUES (
-             $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,
-             $15::timestamptz,$16,$17::timestamptz,$18,$19::timestamptz,$20::timestamptz
+             $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb,
+             $16::timestamptz,$17,$18::timestamptz,$19,$20::timestamptz,$21::timestamptz
            )`,
           parameters(value),
         );
@@ -114,7 +121,7 @@ function parameters(value) {
   return [
     value.id, value.organisationId, value.documentNumber, value.documentType,
     value.issuerLegalEntityId, value.issuerLegalEntityVersionId, value.counterpartyLegalEntityId,
-    value.status, value.edoStatus, value.validFrom, value.validTo, value.supersedesDocumentId,
+    value.status, value.edoStatus, value.validFrom, value.validTo, value.supersedesDocumentId, value.linkedShipmentNoticeSnapshotId,
     value.version, JSON.stringify(value), value.createdAt, value.createdBy, value.updatedAt, value.updatedBy,
     value.issuedAt, value.supersededAt,
   ];

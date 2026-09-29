@@ -2,7 +2,7 @@ import { invariant } from '../core/errors.mjs';
 import { assertBodyContract, assertQueryContract, bodyContract } from './request-contract.mjs';
 
 const CREATE = required(
-  bodyContract(['organisationId', 'documentNumber', 'documentType', 'issuerLegalEntityId', 'counterpartyLegalEntityId', 'validFrom', 'validTo']),
+  bodyContract(['organisationId', 'documentNumber', 'documentType', 'issuerLegalEntityId', 'counterpartyLegalEntityId', 'validFrom', 'validTo', 'linkedShipmentNoticeSnapshotId']),
   ['organisationId', 'documentNumber', 'documentType', 'issuerLegalEntityId'],
 );
 const ISSUE = required(bodyContract(['expectedVersion']), ['expectedVersion']);

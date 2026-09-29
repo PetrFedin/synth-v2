@@ -44,6 +44,7 @@ const PHYSICAL_COST_CORRECTION_BODY = bodyContract([
   'sourceRef',
   'occurredAt',
 ]);
+const ORDER_LINE_COMMENT_BODY = bodyContract(['body']);
 
 export function createFulfillmentRoutes({ fulfillment } = {}) {
   const service = fulfillment ?? unavailableFulfillment();
@@ -65,6 +66,9 @@ export function createFulfillmentRoutes({ fulfillment } = {}) {
       ({ commandId, actorId, params, body }) => service.correctPhysicalActualCost(commandId, actorId, params[0], params[1], body)),
     read('GET', /^\/v2\/receipts\/([^/]+)$/, ({ actorId, params }) => service.getReceiptForActor(actorId, params[0])),
     read('GET', /^\/v2\/receipt-discrepancies\/([^/]+)$/, ({ actorId, params }) => service.getReceiptDiscrepancyForActor(actorId, params[0])),
+    mutate('PUT', /^\/v2\/orders\/([^/]+)\/lines\/([1-9][0-9]*)\/comment$/, validateOrderLineCommentBody,
+      ({ commandId, actorId, params, body }) => service.setOrderLineComment(commandId, actorId, params[0], { lineNo: positiveIntegerPath(params[1]), body: body.body })),
+    read('GET', /^\/v2\/orders\/([^/]+)\/comments$/, ({ actorId, params }) => service.getOrderLineCommentsForActor(actorId, params[0])),
   ]);
 }
 
@@ -156,6 +160,15 @@ function validatePhysicalCostIdentity(body) {
   optionalString(body.sku, 'sku', 200);
 }
 
+function validateOrderLineCommentBody(body) {
+  assertBodyContract(body, ORDER_LINE_COMMENT_BODY);
+  invariant(typeof body.body === 'string' && body.body.length <= 1000, 'HTTP_BODY_FIELD_INVALID', 'body must be a string of at most 1000 characters', { field: 'body' });
+}
+function positiveIntegerPath(value) {
+  const parsed = Number(value);
+  invariant(Number.isSafeInteger(parsed) && parsed > 0, 'HTTP_PATH_PARAMETER_INVALID', 'Order line number must be a positive integer', { value });
+  return parsed;
+}
 function validateLocation(value, field) {
   invariant(value && typeof value === 'object' && !Array.isArray(value), 'HTTP_BODY_FIELD_INVALID', `${field} must be an object`, { field });
   requiredString(value.locationId, `${field}.locationId`, 1, 120);
@@ -217,5 +230,7 @@ function unavailableFulfillment() {
     getShipmentNoticeForActor: fail,
     getReceiptForActor: fail,
     getReceiptDiscrepancyForActor: fail,
+    setOrderLineComment: fail,
+    getOrderLineCommentsForActor: fail,
   });
 }

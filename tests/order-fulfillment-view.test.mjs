@@ -63,3 +63,12 @@ test('the screen names the shortage and the claim, not only the happy path', asy
   assert.match(actions, /window\.orderFulfillmentDialog\(item\)/);
   assert.match(actions, /CAPABILITIES\.LOGISTICS_READ/);
 });
+
+test('the screen breaks shipments down by order line, not only by shipment', async () => {
+  const view = await readFile(path.join(root, 'public/modules/order-fulfillment-view.js'), 'utf8');
+  assert.ok(view.includes('Строки заказа'), 'a per-order-line section must be shown');
+  // Разбивка группируется по orderLineNo — тому же полю, что уже несут shipment.lines[] и
+  // receipt.lines[] с бэкенда (order-fulfillment-view-service.mjs), а не по своему индексу.
+  assert.match(view, /shipmentLine\.orderLineNo/);
+  assert.match(view, /receiptLine\.orderLineNo/);
+});

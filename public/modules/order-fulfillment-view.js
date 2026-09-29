@@ -30,6 +30,39 @@
   }
 
   /**
+   * Сколько от каждой строки заказа уже уехало и приехало — из тех же planы→shipments→receipts,
+   * что уже приходят с `/v2/orders/:id/fulfillment`, просто перегруппированных по orderLineNo
+   * (совпадает с 1-based индексом order.lines, см. lineNo в order-commit/public.mjs).
+   */
+  function lineBreakdown(order, view) {
+    const byLineNo = new Map();
+    (order.lines || []).forEach((line, index) => {
+      byLineNo.set(index + 1, { lineNo: index + 1, sku: line.sku, ordered: Number(line.quantity || 0), shipped: 0, shipmentNumbers: new Set(), received: 0 });
+    });
+    for (const plan of view.plans) {
+      for (const shipment of plan.shipments || []) {
+        for (const shipmentLine of shipment.lines || []) {
+          if (shipmentLine.orderLineNo == null) continue;
+          if (!byLineNo.has(shipmentLine.orderLineNo)) {
+            byLineNo.set(shipmentLine.orderLineNo, { lineNo: shipmentLine.orderLineNo, sku: shipmentLine.sku, ordered: 0, shipped: 0, shipmentNumbers: new Set(), received: 0 });
+          }
+          const entry = byLineNo.get(shipmentLine.orderLineNo);
+          entry.shipped += Number(shipmentLine.quantity || 0);
+          entry.shipmentNumbers.add(shipment.shipmentNumber);
+        }
+        for (const receipt of shipment.receipts || []) {
+          for (const receiptLine of receipt.lines || []) {
+            if (receiptLine.orderLineNo == null) continue;
+            const entry = byLineNo.get(receiptLine.orderLineNo);
+            if (entry) entry.received += Number(receiptLine.receivedQuantity || 0);
+          }
+        }
+      }
+    }
+    return [...byLineNo.values()].sort((a, b) => a.lineNo - b.lineNo);
+  }
+
+  /**
    * «Где товар сейчас» — цепочка от плана отгрузки до решения по претензии.
    *
    * Строится сверху вниз в порядке событий, а не по таблицам: план, что уехало, что приехало, что
@@ -46,6 +79,21 @@
       rows.push(row(text('Поставка', 'Fulfillment'), text('План отгрузки ещё не создан', 'No fulfillment plan yet')));
       openDetails(text('Поставка по заказу', 'Order fulfillment'), rows);
       return;
+    }
+
+    const lines = lineBreakdown(order, view);
+    if (lines.length) {
+      rows.push(row(text('Строки заказа', 'Order lines'), text(`${lines.length} поз.`, `${lines.length} line(s)`)));
+      lines.forEach((entry) => {
+        const shipmentList = [...entry.shipmentNumbers].join(', ');
+        rows.push(row(
+          `${entry.lineNo}. ${entry.sku}`,
+          text(
+            `заказано ${entry.ordered} · отгружено ${entry.shipped}${shipmentList ? ` (${shipmentList})` : ''} · принято ${entry.received}`,
+            `ordered ${entry.ordered} · shipped ${entry.shipped}${shipmentList ? ` (${shipmentList})` : ''} · received ${entry.received}`,
+          ),
+        ));
+      });
     }
 
     view.plans.forEach((plan, planIndex) => {

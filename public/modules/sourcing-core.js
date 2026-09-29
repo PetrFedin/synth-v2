@@ -16,6 +16,16 @@
     if (supplier.status === 'suspended') return Object.freeze(['edit', 'qualify', 'archive']);
     return Object.freeze([]);
   }
+  // Material Purchase Orders share the finished-goods production order's shape (draft -> issued ->
+  // confirmed -> cancelled) closely enough that only the allowed-actions rule needed writing fresh;
+  // material RFQs reuse allowedRfqActions/rankQuotes/isRfqOverdue below as-is, since a material RFQ
+  // carries the same status enum and the same quotes/award/allocation shape as a finished-goods one.
+  function allowedMaterialPurchaseOrderActions(order, permissions = {}) {
+    if (!order || !permissions.manage) return Object.freeze([]);
+    if (order.status === 'draft') return Object.freeze(['issue', 'cancel']);
+    if (order.status === 'issued') return Object.freeze(['confirm', 'cancel']);
+    return Object.freeze([]);
+  }
   function allowedRfqActions(rfq, permissions = {}) {
     if (!rfq) return Object.freeze([]);
     const actions = [];
@@ -64,5 +74,5 @@
     });
   }
 
-  global.SynthaSourcingCore = Object.freeze({ allowedRfqActions, allowedSupplierActions, compareQuoteToBom, isRfqOverdue, rankQuotes, summarize });
+  global.SynthaSourcingCore = Object.freeze({ allowedMaterialPurchaseOrderActions, allowedRfqActions, allowedSupplierActions, compareQuoteToBom, isRfqOverdue, rankQuotes, summarize });
 })(window);

@@ -13,22 +13,22 @@ function sourceBetween(startMarker, endMarker, from = source) {
 }
 
 test('active retail doors expose edit and deactivate actions', () => {
-  const entitySource = sourceBetween('function retailDoorEntity(shop, door) {', '\nfunction retailDoorCreateForm(shops)');
+  const actionsSource = sourceBetween('function retailDoorActions(door) {', '\nfunction retailDoorForm()');
   const activeSource = sourceBetween(
-    "if (canManage && door.status === 'active') {",
-    "} else if (canManage && door.status === 'inactive') {",
-    entitySource,
+    "if (door.status === 'active') {",
+    "} else if (door.status === 'inactive') {",
+    actionsSource,
   );
   assert.match(activeSource, /retailDoorEditForm\(door\)/);
   assert.match(activeSource, /\/deactivate/);
 });
 
 test('inactive retail doors expose reactivation without a backend-rejected edit action', () => {
-  const entitySource = sourceBetween('function retailDoorEntity(shop, door) {', '\nfunction retailDoorCreateForm(shops)');
+  const actionsSource = sourceBetween('function retailDoorActions(door) {', '\nfunction retailDoorForm()');
   const inactiveSource = sourceBetween(
-    "} else if (canManage && door.status === 'inactive') {",
-    '\n  }\n  return entity(',
-    entitySource,
+    "} else if (door.status === 'inactive') {",
+    '\n  }\n  return actions;',
+    actionsSource,
   );
   assert.match(inactiveSource, /\/reactivate/);
   assert.match(inactiveSource, /expectedVersion: door\.version/);

@@ -84,14 +84,35 @@ test('PostgreSQL Route B (material RFQ -> quote -> award -> Material Purchase Or
     const quoted = await materialSourcing.upsertQuote('rfq-quote', 'prod-user', rfq.rfqCode, {
       expectedVersion: issued.version, supplierCode: 'MILL-ONE', currency: 'EUR', unitPriceMinor: 1000, fixedCostMinor: 5000,
       leadTimeDays: 30, minimumOrderQuantity: 100, validUntil: iso('2027-02-15'), notes: null,
+      tiers: [{ quantity: 500, unitPriceMinor: 950 }],
     });
     assert.equal(quoted.status, 'quoted');
     assert.equal(quoted.quotes.length, 1);
+    assert.deepEqual(quoted.quotes[0].tiers, [{ quantity: 500, unitPriceMinor: 950 }]);
+
+    // A price break above the RFQ's own target quantity is refused, not silently accepted.
+    await assert.rejects(() => materialSourcing.upsertQuote('rfq-quote-bad-tier', 'prod-user', rfq.rfqCode, {
+      expectedVersion: quoted.version, supplierCode: 'MILL-ONE', currency: 'EUR', unitPriceMinor: 1000, fixedCostMinor: 5000,
+      leadTimeDays: 30, minimumOrderQuantity: 100, validUntil: iso('2027-02-15'), notes: null,
+      tiers: [{ quantity: 5000, unitPriceMinor: 950 }],
+    }), { code: 'MATERIAL_RFQ_QUOTE_TIER_ABOVE_TARGET' });
+
+    // A counter-offer above the price already quoted for that quantity (via the tier ladder) is refused.
+    await assert.rejects(() => materialSourcing.counterQuote('rfq-counter-too-high', 'owner-user', rfq.rfqCode, {
+      expectedVersion: quoted.version, supplierCode: 'MILL-ONE', quantity: 1000, unitPriceMinor: 960, notes: null,
+    }), { code: 'MATERIAL_RFQ_COUNTER_ABOVE_QUOTE' });
+
+    const countered = await materialSourcing.counterQuote('rfq-counter', 'owner-user', rfq.rfqCode, {
+      expectedVersion: quoted.version, supplierCode: 'MILL-ONE', quantity: 1000, unitPriceMinor: 900, notes: 'Buyer counter at full quantity',
+    });
+    assert.equal(countered.quotes[0].counterOffer.unitPriceMinor, 900);
+    assert.equal(countered.quotes[0].counterOffer.totalCostMinor, 900_000);
+    assert.equal(countered.quotes[0].counterOffer.answersQuoteRevision, quoted.quotes[0].revision);
 
     // production has SOURCING_MANAGE but not SOURCING_AWARD.
-    await assert.rejects(() => materialSourcing.awardRfq('rfq-award-deny', 'prod-user', rfq.rfqCode, { expectedVersion: quoted.version, supplierCode: 'MILL-ONE' }), { code: 'CAPABILITY_DENIED' });
+    await assert.rejects(() => materialSourcing.awardRfq('rfq-award-deny', 'prod-user', rfq.rfqCode, { expectedVersion: countered.version, supplierCode: 'MILL-ONE' }), { code: 'CAPABILITY_DENIED' });
 
-    const awarded = await materialSourcing.awardRfq('rfq-award', 'owner-user', rfq.rfqCode, { expectedVersion: quoted.version, supplierCode: 'MILL-ONE' });
+    const awarded = await materialSourcing.awardRfq('rfq-award', 'owner-user', rfq.rfqCode, { expectedVersion: countered.version, supplierCode: 'MILL-ONE' });
     assert.equal(awarded.status, 'awarded');
     assert.equal(awarded.award.totalCostMinor, 1_000 * 1000 + 5000);
 
@@ -162,7 +183,7 @@ test('PostgreSQL Route B (material RFQ -> quote -> award -> Material Purchase Or
     const events = (await pool.query("SELECT event_type FROM outbox_events WHERE event_type LIKE 'material-rfq%' OR event_type LIKE 'material-purchase-order%'")).rows.map((row) => row.event_type).sort();
     assert.deepEqual(events, [
       'material-purchase-order.confirmed', 'material-purchase-order.created', 'material-purchase-order.issued',
-      'material-rfq.allocated', 'material-rfq.awarded', 'material-rfq.created', 'material-rfq.issued', 'material-rfq.quote-received',
+      'material-rfq.allocated', 'material-rfq.awarded', 'material-rfq.created', 'material-rfq.issued', 'material-rfq.quote-received', 'material-rfq.quote-countered',
     ].sort());
   } finally { await pool.end(); }
 });

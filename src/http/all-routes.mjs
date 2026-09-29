@@ -10,6 +10,7 @@ import { createMaterialPurchaseOrderRoutes } from './material-purchase-order-rou
 import { createCuttingRoutes } from './cutting-routes.mjs';
 import { createOperationSequenceRoutes } from './operation-sequence-routes.mjs';
 import { createTargetPricingRoutes } from './target-pricing-routes.mjs';
+import { createCurrencyReferenceRoutes } from './currency-reference-routes.mjs';
 import { createSeasonEconomicsRoutes } from './season-economics-routes.mjs';
 import { createMaterialColourRoutes } from './material-colour-routes.mjs';
 import { createSeasonPaletteRoutes } from './season-palette-routes.mjs';
@@ -70,6 +71,7 @@ export function createWholesaleRoutes(services = {}) {
     ...createCuttingRoutes({ cutting: services.cutting }),
     ...createOperationSequenceRoutes({ operationSequences: services.operationSequences }),
     ...createTargetPricingRoutes({ targetPricing: services.targetPricing }),
+    ...createCurrencyReferenceRoutes({ currencyReference: services.currencyReference }),
     ...createSeasonEconomicsRoutes({ seasonEconomics: services.seasonEconomics }),
     ...createMaterialColourRoutes({ materialColours: services.materialColours }),
     ...createSeasonPaletteRoutes({ seasonPalette: services.seasonPalette }),

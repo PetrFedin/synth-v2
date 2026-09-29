@@ -137,6 +137,7 @@ const ASSETS = Object.freeze({
   '/ui/samples.js': ['modules/samples.js', JS, VISUAL_CACHE],
   '/ui/sample-catalog-sync.js': ['modules/sample-catalog-sync.js', JS, VISUAL_CACHE],
   '/ui/sourcing.js': ['modules/sourcing.js', JS, VISUAL_CACHE],
+  '/ui/currency-rates.js': ['modules/currency-rates.js', JS, VISUAL_CACHE],
   '/ui/tech-pack-navigation.js': ['modules/tech-pack-navigation.js', JS, VISUAL_CACHE],
   '/ui/tech-packs.js': ['modules/tech-packs.js', JS, VISUAL_CACHE],
   '/ui/production-orders.js': ['modules/production-orders.js', JS, VISUAL_CACHE],

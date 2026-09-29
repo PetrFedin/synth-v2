@@ -1,16 +1,21 @@
-function renderRetailDoorWorkspace() {
-  const caps = window.SynthaUiCapabilities;
-  const readableShops = retailDoorShopsFor(caps.CAPABILITIES.RETAIL_DOOR_READ);
-  const manageableShops = retailDoorShopsFor(caps.CAPABILITIES.RETAIL_DOOR_MANAGE);
-  const card = sectionCard(
-    localText('Торговые точки', 'Retail doors'),
-    [empty(readableShops.length ? localText('Загрузка торговых точек…', 'Loading retail doors…') : localText('Нет доступных магазинов.', 'No accessible shops.'))],
-    manageableShops.length ? localText('Добавить точку', 'Add retail door') : undefined,
-    manageableShops.length ? () => retailDoorCreateForm(manageableShops) : undefined,
-  );
-  if (readableShops.length) void hydrateRetailDoorWorkspace(card, readableShops);
-  return card;
-}
+// Точки розницы магазина — код, название, адрес отгрузки и адрес для документов. Бэкенд
+// (src/http/retail-door-routes.mjs, src/application/retail-door-service.mjs) существовал и
+// раньше и полностью рабочий; недоставало экрана, который заводит и редактирует дверь. До этой
+// правки единственной активной точкой входа было `SynthaRetailDoorUi.activeDoorsForSelection`
+// в `retail-door-ui-core.js` — она лишь выбирает уже существующую дверь при оформлении заказа,
+// поэтому завести точку розницы через интерфейс было нечем (docs/backlog-not-yet-integrated.md,
+// раздел 5: «распределение по магазинам и дверям (`retail_doors` есть, распределения нет)» —
+// сама дверь теперь заводится здесь, распределение заказа по ней остаётся отдельным слоем).
+// Прежняя версия этого файла собирала собственную карточку (`renderRetailDoorWorkspace`) и
+// вызывалась только из мёртвого `partners.js`, затенённого одноимённым `renderPartners()` в
+// `omnidata-workspace.js` — экран, который её звал, никогда не выполнялся.
+//
+// Экран — `renderPartners()` в omnidata-workspace.js (вкладка «Точки розницы»). Данные не входят
+// в общую пачку `state.workspace` — подгружаются лениво по магазинам, которыми актёр вправе
+// видеть/вести двери, тем же способом, каким это делают `legal-entities.js` и
+// `compliance-documents.js`.
+const retailDoorState = window.SynthaRetailDoorState
+  || (window.SynthaRetailDoorState = { data: {}, loading: {}, failed: {}, error: {} });
 
 function retailDoorShopsFor(capability) {
   const caps = window.SynthaUiCapabilities;
@@ -18,81 +23,95 @@ function retailDoorShopsFor(capability) {
   return state.workspace.organisations.filter(organisation => organisation.type === 'shop' && ids.has(organisation.id));
 }
 
-async function hydrateRetailDoorWorkspace(card, shops) {
-  const stack = card.querySelector('.stack');
-  const count = card.querySelector('.section-count');
-  try {
-    const groups = await Promise.all(shops.map(async shop => ({
-      shop,
-      doors: await api(`/v2/shops/${encodeURIComponent(shop.id)}/doors`),
-    })));
-    const rows = groups.flatMap(({ shop, doors }) => (Array.isArray(doors) ? doors : []).map(door => ({ shop, door })));
-    rows.sort((left, right) => `${left.shop.name}:${left.door.code}`.localeCompare(`${right.shop.name}:${right.door.code}`));
-    clear(stack);
-    if (!rows.length) stack.append(empty(localText('Торговые точки ещё не созданы.', 'No retail doors yet.')));
-    else rows.forEach(({ shop, door }) => stack.append(retailDoorEntity(shop, door)));
-    if (count) count.textContent = String(rows.length);
-  } catch (error) {
-    clear(stack);
-    // Отказ по правам не префиксуется и не предлагает повтор: «не удалось загрузить» — неправда,
-    // раздел прочитан и закрыт, а повтор той же ролью вернёт тот же отказ.
-    const denied = isForbiddenText(error.message);
-    const failure = notice(
-      denied
-        ? error.message
-        : `${localText('Не удалось загрузить торговые точки:', 'Could not load retail doors:')} ${error.message}`,
-      'error',
-    );
-    stack.append(failure);
-    if (!denied) {
-      const retry = el('button', { className: 'button small', rawText: localText('Повторить', 'Retry'), type: 'button' });
-      retry.addEventListener('click', () => {
-        clear(stack);
-        stack.append(empty(localText('Загрузка торговых точек…', 'Loading retail doors…')));
-        void hydrateRetailDoorWorkspace(card, shops);
-      });
-      stack.append(retry);
-    }
-    if (count) count.textContent = '0';
-  }
+function retailDoorReadableShops() {
+  const caps = window.SynthaUiCapabilities;
+  return retailDoorShopsFor(caps.CAPABILITIES.RETAIL_DOOR_READ);
 }
 
-function retailDoorEntity(shop, door) {
+function retailDoorManageableShops() {
   const caps = window.SynthaUiCapabilities;
-  const canManage = caps.hasForOrganisation(state.workspace, shop.id, caps.CAPABILITIES.RETAIL_DOOR_MANAGE);
+  return retailDoorShopsFor(caps.CAPABILITIES.RETAIL_DOOR_MANAGE);
+}
+
+function loadRetailDoors(shopId) {
+  if (retailDoorState.data[shopId] || retailDoorState.loading[shopId] || retailDoorState.failed[shopId]) return;
+  retailDoorState.loading[shopId] = true;
+  api(`/v2/shops/${encodeURIComponent(shopId)}/doors`)
+    .then((value) => { retailDoorState.data[shopId] = value; })
+    .catch((error) => { retailDoorState.failed[shopId] = true; retailDoorState.error[shopId] = error; })
+    .finally(() => { retailDoorState.loading[shopId] = false; if (state.view === 'partners') renderApp(); });
+}
+
+/** Flattened rows across every shop the actor may see, triggering the lazy loads as a side effect. */
+function retailDoorRows() {
+  const shops = retailDoorReadableShops();
+  shops.forEach((shop) => loadRetailDoors(shop.id));
+  return shops.flatMap((shop) => (retailDoorState.data[shop.id] || []).map((door) => ({ ...door, shopName: shop.name || shop.id })));
+}
+
+function retailDoorInvalidate(shopId) {
+  // `actionButton` and `openForm`'s own success paths only reload `state.workspace`; this
+  // screen's data lives in its own lazily-loaded cache, which nothing else knows to invalidate.
+  delete retailDoorState.data[shopId];
+}
+
+// Отказ по правам виден как состояние раздела, а не как сбой загрузки: см. ARCHITECTURE.md,
+// `fix/forbidden-reads-as-a-refusal` — «не удалось загрузить» неправда, если роль просто не даёт
+// видеть точки этого магазина, и повторять тут нечего. Показывается первый отказавший магазин
+// среди читаемых по капабилити; остальные тем временем продолжают подгружаться независимо.
+function retailDoorErrorNotice() {
+  const failedShop = retailDoorReadableShops().find(shop => retailDoorState.failed[shop.id]);
+  if (!failedShop) return null;
+  const error = retailDoorState.error[failedShop.id];
+  const denied = isForbiddenText(error.message);
+  const group = el('div', { className: 'stack' });
+  group.append(notice(
+    denied
+      ? error.message
+      : `${localText('Не удалось загрузить точки магазина', 'Could not load doors for the shop')} «${failedShop.name}»: ${error.message}`,
+    'error',
+  ));
+  if (!denied) {
+    const retry = el('button', { className: 'button small', rawText: localText('Повторить', 'Retry'), type: 'button' });
+    retry.addEventListener('click', () => {
+      delete retailDoorState.failed[failedShop.id];
+      delete retailDoorState.error[failedShop.id];
+      loadRetailDoors(failedShop.id);
+      renderApp();
+    });
+    group.append(retry);
+  }
+  return group;
+}
+
+function retailDoorActions(door) {
+  const caps = window.SynthaUiCapabilities;
+  const canManage = caps.hasForOrganisation(state.workspace, door.shopId, caps.CAPABILITIES.RETAIL_DOOR_MANAGE);
   const actions = [];
-  if (canManage && door.status === 'active') {
-    const edit = el('button', { className: 'button small', rawText: localText('Редактировать', 'Edit'), type: 'button' });
-    edit.addEventListener('click', () => retailDoorEditForm(door));
-    actions.push(edit);
+  if (!canManage) return actions;
+  if (door.status === 'active') {
+    actions.push(actionButton(localText('Редактировать', 'Edit'), () => retailDoorEditForm(door)));
     actions.push(actionButton(
       localText('Деактивировать', 'Deactivate'),
-      () => mutate(`/v2/retail-doors/${encodeURIComponent(door.id)}/deactivate`, { expectedVersion: door.version }),
+      () => mutate(`/v2/retail-doors/${encodeURIComponent(door.id)}/deactivate`, { expectedVersion: door.version })
+        .then((result) => { retailDoorInvalidate(door.shopId); return result; }),
       'danger',
       localText('Деактивировать торговую точку? Новые заказы больше нельзя будет привязать к ней.', 'Deactivate this retail door? New orders will no longer be assignable to it.'),
     ));
-  } else if (canManage && door.status === 'inactive') {
+  } else if (door.status === 'inactive') {
     actions.push(actionButton(
       localText('Активировать', 'Reactivate'),
-      () => mutate(`/v2/retail-doors/${encodeURIComponent(door.id)}/reactivate`, { expectedVersion: door.version }),
+      () => mutate(`/v2/retail-doors/${encodeURIComponent(door.id)}/reactivate`, { expectedVersion: door.version })
+        .then((result) => { retailDoorInvalidate(door.shopId); return result; }),
       undefined,
       localText('Активировать торговую точку? После этого её снова можно будет выбирать для новых заказов.', 'Reactivate this retail door? It will become available for new orders again.'),
     ));
   }
-  return entity(
-    `${door.code} · ${door.name}`,
-    door.status,
-    [
-      shop.name,
-      retailDoorAddressLabel(door.shipToAddress, localText('Ship-to', 'Ship-to')),
-      retailDoorAddressLabel(door.billToAddress, localText('Bill-to', 'Bill-to')),
-      `v${door.version}`,
-    ],
-    actions,
-  );
+  return actions;
 }
 
-function retailDoorCreateForm(shops) {
+function retailDoorForm() {
+  const shops = retailDoorManageableShops();
   openForm(localText('Новая торговая точка', 'New retail door'), [
     selectDef('shopId', localText('Магазин', 'Shop'), shops),
     textDef('code', localText('Код точки', 'Door code'), '', 32),
@@ -108,7 +127,7 @@ function retailDoorCreateForm(shops) {
       name: retailDoorName(values.name),
       shipToAddress: retailDoorAddress(values, 'shipTo'),
       billToAddress: retailDoorAddress(values, 'billTo'),
-    });
+    }).then((result) => { retailDoorInvalidate(shop.id); return result; });
   });
 }
 
@@ -122,7 +141,7 @@ function retailDoorEditForm(door) {
     name: retailDoorName(values.name),
     shipToAddress: retailDoorAddress(values, 'shipTo'),
     billToAddress: retailDoorAddress(values, 'billTo'),
-  }, 'PATCH'));
+  }, 'PATCH').then((result) => { retailDoorInvalidate(door.shopId); return result; }));
 }
 
 function retailDoorAddressFields(prefix, title, address = {}) {
@@ -152,7 +171,7 @@ function retailDoorAddress(values, prefix) {
 
 function retailDoorCode(value) {
   const validation = window.SynthaUiValidation;
-  const code = validation.requiredText(value, localText('\u041a\u043e\u0434 \u0442\u043e\u0447\u043a\u0438', 'Door code'), { minLength: 1, maxLength: 32 }).toUpperCase();
+  const code = validation.requiredText(value, localText('Код точки', 'Door code'), { minLength: 1, maxLength: 32 }).toUpperCase();
   if (!/^[A-Z0-9][A-Z0-9._/-]{0,31}$/.test(code)) throw new Error('RETAIL_DOOR_CODE_INVALID');
   return code;
 }
@@ -166,7 +185,7 @@ function retailDoorOptional(value) {
   return normalized || null;
 }
 
-function retailDoorAddressLabel(address, label) {
-  if (!address) return `${label}: —`;
-  return `${label}: ${[address.countryCode, address.postalCode, address.city, address.region, address.line1, address.line2].filter(Boolean).join(', ')}`;
+function retailDoorAddressText(address) {
+  if (!address) return '—';
+  return [address.countryCode, address.postalCode, address.city, address.region, address.line1, address.line2].filter(Boolean).join(', ') || '—';
 }

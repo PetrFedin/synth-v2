@@ -24,6 +24,6 @@ function renderPartners() {
       'invitations',
     ),
   );
-  box.append(grid, renderRetailDoorWorkspace());
+  box.append(grid);
   return box;
 }

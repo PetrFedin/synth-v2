@@ -66,6 +66,11 @@
     if (item.orderCommitSnapshotId && seesLogistics && typeof window.orderFulfillmentDialog === 'function') {
       actions.push(actionButton(localized('Поставка', 'Fulfillment'), () => window.orderFulfillmentDialog(item)));
     }
+    // Комментарий — заметка при строке заказа, а не факт исполнения: он осмыслен уже на черновике,
+    // до всякого плана отгрузки, поэтому не требует item.orderCommitSnapshotId, в отличие от «Поставки».
+    if (seesLogistics && typeof window.orderLineCommentsDialog === 'function') {
+      actions.push(actionButton(localized('Комментарии', 'Comments'), () => window.orderLineCommentsDialog(item)));
+    }
     return actions;
   };
 

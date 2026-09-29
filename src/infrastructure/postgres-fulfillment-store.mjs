@@ -168,6 +168,27 @@ function view(client) {
         value.occurredAt, value.recordedAt, JSON.stringify(value)],
       'ACTUAL_COST_ENTRY_ALREADY_EXISTS', { costEntryId: value.id });
     },
+    async listOrderLineComments(orderId) {
+      const result = await client.query(
+        'SELECT line_no, side, body, commented_at, commented_by FROM order_line_comments WHERE order_id = $1 ORDER BY line_no, side',
+        [orderId],
+      );
+      return result.rows.map((row) => ({
+        orderId, lineNo: row.line_no, side: row.side, body: row.body,
+        commentedAt: row.commented_at?.toISOString?.() ?? row.commented_at, commentedBy: row.commented_by,
+      }));
+    },
+    async upsertOrderLineComment(value) {
+      await client.query(
+        `INSERT INTO order_line_comments (order_id, line_no, side, body, commented_at, commented_by)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (order_id, line_no, side) DO UPDATE SET body = EXCLUDED.body, commented_at = EXCLUDED.commented_at, commented_by = EXCLUDED.commented_by`,
+        [value.orderId, value.lineNo, value.side, value.body, value.commentedAt, value.commentedBy],
+      );
+    },
+    async deleteOrderLineComment({ orderId, lineNo, side }) {
+      await client.query('DELETE FROM order_line_comments WHERE order_id = $1 AND line_no = $2 AND side = $3', [orderId, lineNo, side]);
+    },
     getCommand: (id) => getRegisteredCommand(client, 'wholesale', id),
     insertCommand: (value) => insertRegisteredCommand(client, 'wholesale', value),
     async appendOutbox(event) {

@@ -161,4 +161,63 @@
 
     openDetails(text('Поставка по заказу', 'Order fulfillment'), rows);
   };
+
+  function commentEditForm(order, lineNo, sku, sideLabel, currentBody) {
+    openForm(`${sideLabel} — ${sku}`, [textDef('body', sideLabel, currentBody || '', 1000, false)], (values) => mutate(
+      `/v2/orders/${encodeURIComponent(order.id)}/lines/${lineNo}/comment`,
+      { body: (values.body || '').trim() },
+      'PUT',
+    ));
+  }
+
+  function commentRow(order, lineNo, sku, sideLabel, currentBody, canWrite) {
+    const label = el('label');
+    label.append(el('span', { text: `${lineNo}. ${sku} — ${sideLabel}` }));
+    label.append(el('input', { type: 'text', value: currentBody || '—', readOnly: true }));
+    if (canWrite) {
+      label.append(actionButton(
+        currentBody ? text('Изменить', 'Edit') : text('Добавить', 'Add'),
+        () => commentEditForm(order, lineNo, sku, sideLabel, currentBody),
+      ));
+    }
+    return label;
+  }
+
+  /**
+   * Комментарий поставщика (бренд) и комментарий заказчика (магазин) на строке заказа — заметка
+   * при сделке, не факт её исполнения, поэтому осмыслена уже на черновике заказа, а не только
+   * после отгрузки. Каждая сторона правит только свой комментарий — редактирование другой стороны
+   * не предлагается вовсе, а не отклоняется сервером молча.
+   */
+  global.orderLineCommentsDialog = async function orderLineCommentsDialog(order) {
+    const caps = window.SynthaUiCapabilities;
+    const canWriteSupplier = caps.hasForOrganisation(state.workspace, order.brandId, caps.CAPABILITIES.ORDER_WRITE);
+    const canWriteCustomer = caps.hasForOrganisation(state.workspace, order.shopId, caps.CAPABILITIES.ORDER_WRITE);
+    const result = await api(`/v2/orders/${encodeURIComponent(order.id)}/comments`);
+    const byLine = new Map();
+    (result?.comments || []).forEach((comment) => {
+      const entry = byLine.get(comment.lineNo) || {};
+      entry[comment.side] = comment.body;
+      byLine.set(comment.lineNo, entry);
+    });
+
+    const dialog = document.querySelector('#form-dialog'); clear(dialog);
+    const body = el('div', { className: 'dialog-body' });
+    const close = el('button', { className: 'button small', text: I18N.t('common.close'), type: 'button' });
+    const head = el('div', { className: 'dialog-head' }); head.append(el('h3', { text: text('Комментарии к строкам заказа', 'Order line comments') }), close);
+    const grid = el('div', { className: 'form-grid' });
+
+    if (!order.lines || !order.lines.length) {
+      grid.append(el('div', { className: 'empty', text: text('В заказе нет строк', 'The order has no lines') }));
+    }
+    (order.lines || []).forEach((line, index) => {
+      const lineNo = index + 1;
+      const existing = byLine.get(lineNo) || {};
+      grid.append(commentRow(order, lineNo, line.sku, text('Комментарий поставщика', 'Supplier comment'), existing.supplier, canWriteSupplier));
+      grid.append(commentRow(order, lineNo, line.sku, text('Комментарий заказчика', 'Customer comment'), existing.customer, canWriteCustomer));
+    });
+
+    close.addEventListener('click', () => dialog.close());
+    body.append(head, grid); dialog.append(body); dialog.showModal();
+  };
 })(window);

@@ -135,6 +135,12 @@ export function createTargetPricingQueryService({ reader } = {}) {
       invariant(row, 'TARGET_PRICE_PLAN_NOT_FOUND', 'This product has no active target price', { sku });
       return targetPricing(row.plan, row);
     },
+    async seasonRatesForActor(actorId, filter) {
+      invariant(typeof reader.seasonRatesForActor === 'function', 'TARGET_PRICE_READER_REQUIRED', 'Target pricing reader is required');
+      const rows = await reader.seasonRatesForActor(actorId, filter ?? {});
+      invariant(Array.isArray(rows), 'TARGET_PRICE_LISTING_INVALID', 'Season rate listing is invalid');
+      return Object.freeze(rows);
+    },
   });
 }
 

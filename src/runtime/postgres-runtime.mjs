@@ -33,6 +33,8 @@ import { createOperationSequenceService, createOperationSequenceQueryService } f
 import { createPostgresTargetPricingStore } from '../infrastructure/postgres-target-pricing-store.mjs';
 import { createPostgresTargetPricingReader } from '../infrastructure/postgres-target-pricing-reader.mjs';
 import { createTargetPricingService, createTargetPricingQueryService } from '../application/target-pricing-service.mjs';
+import { createPostgresCurrencyReferenceStore } from '../infrastructure/postgres-currency-reference-store.mjs';
+import { createCurrencyReferenceQueryService } from '../application/currency-reference-service.mjs';
 import { createPostgresSeasonEconomicsReader } from '../infrastructure/postgres-season-economics-reader.mjs';
 import { createSeasonEconomicsQueryService } from '../application/season-economics-service.mjs';
 import { createPostgresMaterialColourStore } from '../infrastructure/postgres-material-colour-store.mjs';
@@ -255,6 +257,11 @@ export function createPostgresWholesaleRuntime(options = {}) {
   const targetPricingQueries = createTargetPricingQueryService({ reader: targetPricingReader });
   const targetPricing = Object.freeze({ ...targetPricingQueries, ...targetPricingCommands });
 
+  // Курс ЦБ — общий для всех, не бренда: справочник читается тем же приёмом, что и `libraries`,
+  // и наполняется скриптом синхронизации, а не HTTP-мутацией.
+  const currencyReferenceStore = createPostgresCurrencyReferenceStore({ pool: options.pool });
+  const currencyReference = createCurrencyReferenceQueryService({ store: currencyReferenceStore });
+
   // Плановая экономика сезона замыкает ту же цепочку сверху: слот линейного плана, целевая цена по
   // нему и цена из подтверждённого заказа сводятся в одну маржу. Читается и только читается —
   // ни одно из сведённых чисел не хранится.
@@ -330,6 +337,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
     cutting,
     operationSequences,
     targetPricing,
+    currencyReference,
     seasonEconomics,
     seasonPalette,
     materialColours,
@@ -371,6 +379,8 @@ export function createPostgresWholesaleRuntime(options = {}) {
     targetPricingStore,
     targetPricingReader,
     targetPricing,
+    currencyReferenceStore,
+    currencyReference,
     seasonEconomics,
     materialColours,
     bomSizeLine,

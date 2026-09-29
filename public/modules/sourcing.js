@@ -727,7 +727,8 @@
   function materialRfqInspector(rfq) {
     if (!rfq) return h('aside', { className: 'sourcing-inspector' }, [h('p', { className: 'muted', text: text('Выберите запрос на материал.', 'Select a material RFQ.') })]);
     const permissions = { manage: can(rfq.brandId, caps.CAPABILITIES.SOURCING_MANAGE), award: can(rfq.brandId, caps.CAPABILITIES.SOURCING_AWARD), allocate: can(rfq.brandId, caps.CAPABILITIES.MATERIAL_PURCHASE_MANAGE) };
-    const actions = core.allowedRfqActions(rfq, permissions);
+    const actions = [...core.allowedRfqActions(rfq, permissions)];
+    if (permissions.manage && rfq.status === 'quoted') actions.push('counter');
     const quotes = core.rankQuotes(rfq);
     return h('aside', { className: 'sourcing-inspector' }, [
       h('div', { className: 'sourcing-inspector-title' }, [h('div', {}, [h('p', { className: 'eyebrow', text: rfq.rfqCode }), h('h2', { text: `${rfq.materialCode} v${rfq.materialVersion}` })]), badge(statusLabel(rfq.status), statusTone(rfq.status))]),
@@ -743,11 +744,13 @@
       h('div', {}, [h('strong', { text: `#${quote.rank} ${quote.supplierName}` }), h('small', { text: `${quote.supplierCode} · rev ${quote.revision}` })]),
       h('div', {}, [h('strong', { text: formatMoneyMinor(quote.totalCostMinor, quote.currency) }), h('small', { text: `${formatMoneyMinor(quote.unitPriceMinor, quote.currency)} / ${text('ед.', 'unit')}` })]),
       h('small', { text: `${quote.leadTimeDays} ${text('дн.', 'days')} · MOQ ${quote.minimumOrderQuantity}` }),
+      quote.tiers?.length ? h('div', { className: 'quote-tiers' }, [h('small', { className: 'muted', text: text('Ценовые уровни: ', 'Price tiers: ') + quote.tiers.map((tier) => `${tier.quantity} → ${formatMoneyMinor(tier.unitPriceMinor, quote.currency)}`).join(', ') })]) : null,
+      quote.counterOffer ? h('div', { className: 'quote-counter-offer' }, [h('small', { text: text(`Встречное предложение: ${quote.counterOffer.quantity} × ${formatMoneyMinor(quote.counterOffer.unitPriceMinor, quote.currency)} = ${formatMoneyMinor(quote.counterOffer.totalCostMinor, quote.currency)}`, `Counter-offer: ${quote.counterOffer.quantity} × ${formatMoneyMinor(quote.counterOffer.unitPriceMinor, quote.currency)} = ${formatMoneyMinor(quote.counterOffer.totalCostMinor, quote.currency)}`) })]) : null,
     ]);
   }
   function materialRfqActionButton(action, rfq) {
-    const labels = { edit: [text('Редактировать', 'Edit'), 'secondary'], issue: [text('Отправить запрос', 'Issue RFQ'), 'primary'], quote: [text('Добавить котировку', 'Add quotation'), 'primary'], award: [text('Выбрать победителя', 'Award supplier'), 'primary'], allocate: [text('Создать заказ', 'Create purchase order'), 'primary'], cancel: [text('Отменить', 'Cancel'), 'danger'] };
-    const handlers = { edit: () => openMaterialRfqDialog(rfq), issue: () => issueMaterialRfq(rfq), quote: () => openMaterialQuoteDialog(rfq), award: () => openMaterialAwardDialog(rfq), allocate: () => openMaterialAllocationDialog(rfq), cancel: () => openMaterialRfqCancelDialog(rfq) };
+    const labels = { edit: [text('Редактировать', 'Edit'), 'secondary'], issue: [text('Отправить запрос', 'Issue RFQ'), 'primary'], quote: [text('Добавить котировку', 'Add quotation'), 'primary'], counter: [text('Встречное предложение', 'Counter-offer'), 'secondary'], award: [text('Выбрать победителя', 'Award supplier'), 'primary'], allocate: [text('Создать заказ', 'Create purchase order'), 'primary'], cancel: [text('Отменить', 'Cancel'), 'danger'] };
+    const handlers = { edit: () => openMaterialRfqDialog(rfq), issue: () => issueMaterialRfq(rfq), quote: () => openMaterialQuoteDialog(rfq), counter: () => openMaterialCounterDialog(rfq), award: () => openMaterialAwardDialog(rfq), allocate: () => openMaterialAllocationDialog(rfq), cancel: () => openMaterialRfqCancelDialog(rfq) };
     return h('button', { type: 'button', className: labels[action][1], disabled: ui.busyKey === rfq.rfqCode, text: labels[action][0], onclick: handlers[action] });
   }
 
@@ -798,12 +801,33 @@
       field('Lead time', control('leadTimeDays', 'number', suppliers[0].leadTimeDays, { min: '1', max: '730', required: true })),
       field('MOQ', control('minimumOrderQuantity', 'text', String(suppliers[0].minimumOrderQuantity), { required: true, inputmode: 'decimal' })),
       field(text('Действует до', 'Valid until'), control('validUntil', 'datetime-local', daysFromNow(21), { required: true })),
+      field(text('Ценовые уровни', 'Price tiers'), control('tiers', 'text', '', { placeholder: text('кол-во:цена, кол-во:цена', 'qty:price, qty:price') })),
       field(text('Комментарий', 'Notes'), textarea('notes', '', { maxlength: '1000', rows: '4' })),
     ], text('Записать котировку', 'Record quotation'), async (values) => Boolean(await runMutation(rfq.rfqCode, `/v2/material-rfqs/${encodeURIComponent(rfq.rfqCode)}/quotes`, {
       expectedVersion: rfq.version, supplierCode: values.supplierCode, currency: values.currency.trim().toUpperCase(),
       unitPriceMinor: decimalToMinor(values.unitPrice), fixedCostMinor: decimalToMinor(values.fixedCost),
       leadTimeDays: Number(values.leadTimeDays), minimumOrderQuantity: decimalToNumber(values.minimumOrderQuantity),
-      validUntil: iso(values.validUntil), notes: values.notes.trim() || null,
+      validUntil: iso(values.validUntil), notes: values.notes.trim() || null, tiers: parseQuoteTiers(values.tiers),
+    }, 'POST', 'materialRfq')));
+  }
+  function parseQuoteTiers(raw) {
+    const parts = (raw || '').split(',').map((item) => item.trim()).filter(Boolean);
+    if (!parts.length) return null;
+    return parts.map((part) => {
+      const [quantity, price] = part.split(':').map((item) => item.trim());
+      return { quantity: decimalToNumber(quantity), unitPriceMinor: decimalToMinor(price) };
+    });
+  }
+  function openMaterialCounterDialog(rfq) {
+    const quotes = core.rankQuotes(rfq); if (!quotes.length) return;
+    dialog(text('Встречное предложение по материалу', 'Counter material quotation'), [
+      field(text('Поставщик / сумма', 'Supplier / total'), select('supplierCode', quotes.map((quote) => [quote.supplierCode, `#${quote.rank} ${quote.supplierName} · ${formatMoneyMinor(quote.totalCostMinor, quote.currency)}`]), quotes[0].supplierCode)),
+      field(text('Количество', 'Quantity'), control('quantity', 'text', String(rfq.targetQuantity), { required: true, inputmode: 'decimal' })),
+      field(text('Цена за единицу', 'Unit price'), control('unitPrice', 'text', '', { required: true, inputmode: 'decimal' })),
+      field(text('Комментарий', 'Notes'), textarea('notes', '', { maxlength: '1000', rows: '4' })),
+    ], text('Отправить встречное предложение', 'Send counter-offer'), async (values) => Boolean(await runMutation(rfq.rfqCode, `/v2/material-rfqs/${encodeURIComponent(rfq.rfqCode)}/counter-offer`, {
+      expectedVersion: rfq.version, supplierCode: values.supplierCode, quantity: decimalToNumber(values.quantity),
+      unitPriceMinor: decimalToMinor(values.unitPrice), notes: values.notes.trim() || null,
     }, 'POST', 'materialRfq')));
   }
   function openMaterialAwardDialog(rfq) {

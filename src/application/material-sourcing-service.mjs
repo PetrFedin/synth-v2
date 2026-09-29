@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { domainEvent } from '../core/events.mjs';
 import { invariant, requireEntity } from '../core/errors.mjs';
 import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
@@ -7,6 +8,7 @@ import {
   allocateMaterialRfq as allocateMaterialRfqDomain,
   awardMaterialRfq as awardMaterialRfqDomain,
   cancelMaterialRfq as cancelMaterialRfqDomain,
+  counterMaterialRfqQuote as counterMaterialRfqQuoteDomain,
   createMaterialRfq as createMaterialRfqDomain,
   issueMaterialRfq as issueMaterialRfqDomain,
   updateDraftMaterialRfq as updateDraftMaterialRfqDomain,
@@ -17,7 +19,8 @@ const RFQ_EDITABLE = Object.freeze(['targetQuantity', 'unit', 'responseDueAt', '
 const RFQ_CREATE_FIELDS = Object.freeze(new Set(['rfqCode', 'materialCode', ...RFQ_EDITABLE]));
 const RFQ_UPDATE_FIELDS = Object.freeze(new Set(['expectedVersion', ...RFQ_EDITABLE]));
 const VERSION_FIELDS = Object.freeze(new Set(['expectedVersion']));
-const QUOTE_FIELDS = Object.freeze(new Set(['expectedVersion', 'supplierCode', 'currency', 'unitPriceMinor', 'fixedCostMinor', 'leadTimeDays', 'minimumOrderQuantity', 'validUntil', 'notes']));
+const QUOTE_FIELDS = Object.freeze(new Set(['expectedVersion', 'supplierCode', 'currency', 'unitPriceMinor', 'fixedCostMinor', 'leadTimeDays', 'minimumOrderQuantity', 'validUntil', 'notes', 'tiers']));
+const COUNTER_FIELDS = Object.freeze(new Set(['expectedVersion', 'supplierCode', 'quantity', 'unitPriceMinor', 'notes']));
 const AWARD_FIELDS = Object.freeze(new Set(['expectedVersion', 'supplierCode']));
 const ALLOCATION_FIELDS = Object.freeze(new Set(['expectedVersion', 'purchaseOrderNumber', 'quantity', 'orderPlacedAt', 'deliveryDueAt', 'notes']));
 const CANCEL_FIELDS = Object.freeze(new Set(['expectedVersion', 'reason']));
@@ -136,6 +139,20 @@ export function createMaterialSourcingService({ materialSourcingStore, clock = (
       });
     },
 
+    // A counter-offer answers a quotation with the quantity and price the buyer is prepared to place.
+    counterQuote(commandId, actorId, rfqCode, input) {
+      return rfqTransition({
+        commandName: 'counterMaterialRfqQuote', eventType: () => 'material-rfq.quote-countered', commandId, actorId, rfqCode, input, fields: COUNTER_FIELDS,
+        prepare: async (tx, rfq, value) => ({ supplier: requireEntity(await tx.getSupplierByCode(value.supplierCode), 'SUPPLIER_NOT_FOUND', { supplierCode: value.supplierCode }) }),
+        transform: (context, value) => counterMaterialRfqQuoteDomain(context.rfq, {
+          supplier: context.supplier,
+          input: { quantity: value.quantity, unitPriceMinor: value.unitPriceMinor, notes: value.notes },
+          offeredAt: clock(),
+          offeredBy: actorId,
+        }),
+      });
+    },
+
     awardRfq(commandId, actorId, rfqCode, input) {
       return rfqTransition({
         commandName: 'awardMaterialRfq', eventType: () => 'material-rfq.awarded', commandId, actorId, rfqCode, input, fields: AWARD_FIELDS, capability: CAPABILITIES.SOURCING_AWARD,
@@ -186,4 +203,4 @@ function assertAllowedFields(input, allowed, code) { const fields = Object.keys(
 function expectedVersionOf(input, code, label) { return assertPostgresInteger(input.expectedVersion, { code, label, min: 1 }); }
 function withoutExpectedVersion(input) { const { expectedVersion, ...rest } = input; return Object.freeze(rest); }
 function assertExpectedVersion(entity, expectedVersion, code, details) { invariant(entity.version === expectedVersion, code, 'Aggregate was changed by another operation', { ...details, expectedVersion, actualVersion: entity.version }); }
-function defaultIdGenerator() { let sequence = 0; return (prefix) => `${prefix}_${++sequence}`; }
+function defaultIdGenerator() { return (prefix) => `${prefix}_${randomUUID()}`; }

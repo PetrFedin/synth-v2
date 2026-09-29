@@ -8,7 +8,9 @@ const PLAN_BODY = bodyContract(
   { shipFrom: LOCATION_FIELDS, shipTo: LOCATION_FIELDS },
 );
 const SHIPMENT_BODY = bodyContract(
-  ['shipmentNumber', 'carrier', 'serviceLevel', 'trackingNumber', 'lines', 'shippedAt', 'expectedDeliveryAt'],
+  ['shipmentNumber', 'carrier', 'serviceLevel', 'trackingNumber',
+    'containerNumber', 'containerType', 'vesselName', 'portOfLoading', 'portOfDischarge', 'billOfLadingNumber',
+    'lines', 'shippedAt', 'expectedDeliveryAt'],
   {},
   { lines: ['lineId', 'quantity'] },
 );
@@ -82,6 +84,12 @@ function validateShipmentBody(body) {
   requiredString(body.carrier, 'carrier', 2, 160);
   requiredString(body.serviceLevel, 'serviceLevel', 1, 120);
   optionalString(body.trackingNumber, 'trackingNumber', 160);
+  optionalString(body.containerNumber, 'containerNumber', 32);
+  optionalString(body.containerType, 'containerType', 20);
+  optionalString(body.vesselName, 'vesselName', 160);
+  optionalString(body.portOfLoading, 'portOfLoading', 120);
+  optionalString(body.portOfDischarge, 'portOfDischarge', 120);
+  optionalString(body.billOfLadingNumber, 'billOfLadingNumber', 64);
   timestamp(body.shippedAt, 'shippedAt');
   timestamp(body.expectedDeliveryAt, 'expectedDeliveryAt');
   invariant(Date.parse(body.expectedDeliveryAt) > Date.parse(body.shippedAt), 'HTTP_BODY_FIELD_INVALID', 'expectedDeliveryAt must be after shippedAt', { field: 'expectedDeliveryAt' });

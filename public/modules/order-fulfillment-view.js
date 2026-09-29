@@ -63,6 +63,18 @@
         const shipped = (shipment.lines || []).reduce((sum, line) => sum + Number(line.quantity || 0), 0);
         rows.push(row(text('Отгрузка', 'Shipment'), `${shipment.shipmentNumber} · ${shipment.carrier || '—'} · ${shipment.trackingNumber || '—'}`));
         rows.push(row(text('Отгружено, шт.', 'Shipped, units'), `${shipped} · ${when(shipment.shippedAt)}`));
+        // Морские реквизиты показываются, только если они есть: авиа- и автоперевозка их не несут,
+        // и строка «—» на каждой такой отгрузке была бы шумом, а не информацией.
+        if (shipment.vesselName || shipment.containerNumber) {
+          const vessel = [shipment.vesselName, shipment.portOfLoading && shipment.portOfDischarge ? `${shipment.portOfLoading} → ${shipment.portOfDischarge}` : null].filter(Boolean).join(' · ');
+          rows.push(row(text('Судно и порты', 'Vessel and ports'), vessel || '—'));
+        }
+        if (shipment.containerNumber) {
+          rows.push(row(text('Контейнер', 'Container'), [shipment.containerNumber, shipment.containerType].filter(Boolean).join(' · ')));
+        }
+        if (shipment.billOfLadingNumber) {
+          rows.push(row(text('Коносамент', 'Bill of lading'), shipment.billOfLadingNumber));
+        }
 
         const receipts = shipment.receipts || [];
         if (!receipts.length) {

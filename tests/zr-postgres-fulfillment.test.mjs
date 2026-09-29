@@ -51,12 +51,18 @@ test('PostgreSQL closes committed legacy order -> fulfillment -> receipt invento
 
     const attempts = await Promise.allSettled([
       fulfillment.createShipmentNotice('cmd-pg-asn-a', 'brand-sales', plan.id, {
-        shipmentNumber: 'ASN-PG-A', carrier: 'DHL', serviceLevel: 'road',
+        shipmentNumber: 'ASN-PG-A', carrier: 'DHL', serviceLevel: 'ocean-fcl',
+        containerNumber: 'MSCU1234567', containerType: '40HC', vesselName: 'MSC Istanbul',
+        portOfLoading: 'Mersin', portOfDischarge: 'Hamburg', billOfLadingNumber: 'MEDUAB123456',
         lines: [{ lineId: plan.lines[0].lineId, quantity: 2 }],
         shippedAt: '2026-08-11T10:00:00.000Z', expectedDeliveryAt: '2026-08-14T08:00:00.000Z',
       }),
+      // Same ocean-freight fields on the competing attempt too: the race decides which commits, not
+      // this assertion, so both candidates must carry them for the winner-agnostic check below.
       fulfillment.createShipmentNotice('cmd-pg-asn-b', 'brand-sales', plan.id, {
-        shipmentNumber: 'ASN-PG-B', carrier: 'UPS', serviceLevel: 'road',
+        shipmentNumber: 'ASN-PG-B', carrier: 'UPS', serviceLevel: 'ocean-fcl',
+        containerNumber: 'MSCU1234567', containerType: '40HC', vesselName: 'MSC Istanbul',
+        portOfLoading: 'Mersin', portOfDischarge: 'Hamburg', billOfLadingNumber: 'MEDUAB123456',
         lines: [{ lineId: plan.lines[0].lineId, quantity: 2 }],
         shippedAt: '2026-08-11T10:01:00.000Z', expectedDeliveryAt: '2026-08-14T08:00:00.000Z',
       }),
@@ -64,6 +70,14 @@ test('PostgreSQL closes committed legacy order -> fulfillment -> receipt invento
     assert.equal(attempts.filter((result) => result.status === 'fulfilled').length, 1, 'exactly one competing full ASN must commit');
     assert.equal(attempts.filter((result) => result.status === 'rejected').length, 1, 'overshipping competitor must roll back');
     const shipment = attempts.find((result) => result.status === 'fulfilled').value;
+    assert.equal(shipment.containerNumber, 'MSCU1234567');
+    assert.equal(shipment.containerType, '40HC');
+    assert.equal(shipment.vesselName, 'MSC Istanbul');
+    assert.equal(shipment.portOfLoading, 'Mersin');
+    assert.equal(shipment.portOfDischarge, 'Hamburg');
+    assert.equal(shipment.billOfLadingNumber, 'MEDUAB123456');
+    const reloaded = await fulfillment.getShipmentNoticeForActor('brand-sales', shipment.id);
+    assert.equal(reloaded.containerNumber, 'MSCU1234567', 'ocean-freight detail round-trips through PostgreSQL, not just the in-process return value');
 
     const receiptResult = await fulfillment.recordReceipt('cmd-pg-receipt', 'shop-buyer', shipment.id, {
       receiptReference: 'GRN-PG-1', receivedBy: 'Berlin DC', receiptComplete: true,

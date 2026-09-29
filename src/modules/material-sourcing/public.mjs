@@ -80,6 +80,40 @@ export function upsertMaterialRfqQuote(rfq, { supplier, input, receivedAt }) {
   return freezeRfq({ ...rfq, status: 'quoted', quotes: Object.freeze(quotes), version: rfq.version + 1, updatedAt: at });
 }
 
+// A counter-offer. Mirrors sourcing/public.mjs's counterRfqQuote one to one: the buyer answers a
+// quotation with the quantity and price they are prepared to place, recorded against the quotation
+// it answers so a later revision can be read against what was actually asked for. Award still prices
+// off the quotation's own base rate, exactly as the finished-goods RFQ does -- a counter-offer or a
+// price tier changes what the negotiation shows, not what award mechanically applies.
+export function counterMaterialRfqQuote(rfq, { supplier, input, offeredAt, offeredBy }) {
+  invariant(rfq?.status === 'quoted', 'MATERIAL_RFQ_NOT_NEGOTIABLE', 'Only a quoted Material RFQ can be countered', { status: rfq?.status });
+  const at = timestamp(offeredAt, 'MATERIAL_RFQ_COUNTER_OFFERED_AT_INVALID', 'Counter-offer time');
+  invariant(typeof offeredBy === 'string' && offeredBy.trim(), 'MATERIAL_RFQ_COUNTER_ACTOR_REQUIRED', 'Counter-offer actor is required');
+  const quote = rfq.quotes.find((item) => item.supplierCode === supplier?.supplierCode);
+  invariant(quote, 'MATERIAL_RFQ_QUOTE_NOT_FOUND', 'That supplier has no quotation to counter', { supplierCode: supplier?.supplierCode });
+  invariant(Date.parse(quote.validUntil) >= Date.parse(at), 'MATERIAL_RFQ_QUOTE_EXPIRED', 'That quotation has expired', { validUntil: quote.validUntil });
+  invariant(input && typeof input === 'object' && !Array.isArray(input), 'MATERIAL_RFQ_COUNTER_INPUT_INVALID', 'Counter-offer input is invalid');
+  assertAllowedFields(input, new Set(['quantity', 'unitPriceMinor', 'notes']), 'MATERIAL_RFQ_COUNTER_FIELD_FORBIDDEN', 'Counter-offer contains unsupported fields');
+  const quantity = numeric(input.quantity, 'MATERIAL_RFQ_COUNTER_QUANTITY_INVALID', 'Counter-offer quantity');
+  const unitPriceMinor = integer(input.unitPriceMinor, 1, Number.MAX_SAFE_INTEGER, 'MATERIAL_RFQ_COUNTER_PRICE_INVALID', 'Counter-offer unit price');
+  const quoted = quotedMaterialUnitPriceFor(quote, quantity);
+  invariant(quoted === null || unitPriceMinor <= quoted, 'MATERIAL_RFQ_COUNTER_ABOVE_QUOTE',
+    'A counter-offer cannot be above the price already quoted for that quantity', { unitPriceMinor, quotedUnitPriceMinor: quoted, quantity });
+  const counterOffer = Object.freeze({
+    quantity,
+    unitPriceMinor,
+    totalCostMinor: Math.round(unitPriceMinor * quantity),
+    notes: optionalText(input.notes, 1000, 'MATERIAL_RFQ_COUNTER_NOTES_INVALID', 'Counter-offer notes'),
+    answersQuoteRevision: quote.revision,
+    offeredAt: at,
+    offeredBy,
+  });
+  const quotes = rfq.quotes.map((item) => (item.supplierCode === quote.supplierCode
+    ? Object.freeze({ ...item, counterOffer })
+    : item));
+  return freezeRfq({ ...rfq, quotes: Object.freeze(quotes), version: rfq.version + 1, updatedAt: at });
+}
+
 export function awardMaterialRfq(rfq, { supplier, awardedAt }) {
   invariant(rfq?.status === 'quoted', 'MATERIAL_RFQ_NOT_AWARDABLE', 'Material RFQ must contain a quotation before award', { status: rfq?.status });
   const at = timestamp(awardedAt, 'MATERIAL_RFQ_AWARDED_AT_INVALID', 'Material RFQ award time');
@@ -164,9 +198,53 @@ function normalizeRfqInput(input, suppliers, brandId, referenceTime) {
   });
 }
 
+// A price ladder, mirroring sourcing/public.mjs's normalizeQuoteTiers -- the one difference is that a
+// material's price break is named by a fractional quantity (metres, kilograms), not a piece count.
+function normalizeMaterialQuoteTiers(input, rfq) {
+  if (input === null || input === undefined) return Object.freeze([]);
+  invariant(Array.isArray(input), 'MATERIAL_RFQ_QUOTE_TIERS_INVALID', 'Quotation tiers must be a list');
+  invariant(input.length <= 10, 'MATERIAL_RFQ_QUOTE_TIERS_TOO_MANY', 'A quotation may carry at most ten price breaks', { count: input.length });
+  const tiers = input.map((tier, index) => {
+    invariant(tier && typeof tier === 'object' && !Array.isArray(tier), 'MATERIAL_RFQ_QUOTE_TIER_INVALID', 'Quotation tier is invalid', { index });
+    assertAllowedFields(tier, new Set(['quantity', 'unitPriceMinor']), 'MATERIAL_RFQ_QUOTE_TIER_FIELD_FORBIDDEN', 'Quotation tier contains unsupported fields');
+    return Object.freeze({
+      quantity: numeric(tier.quantity, 'MATERIAL_RFQ_QUOTE_TIER_QUANTITY_INVALID', 'Quotation tier quantity'),
+      unitPriceMinor: integer(tier.unitPriceMinor, 1, Number.MAX_SAFE_INTEGER, 'MATERIAL_RFQ_QUOTE_TIER_PRICE_INVALID', 'Quotation tier unit price'),
+    });
+  }).sort((left, right) => left.quantity - right.quantity);
+  for (let index = 1; index < tiers.length; index += 1) {
+    invariant(tiers[index].quantity > tiers[index - 1].quantity, 'MATERIAL_RFQ_QUOTE_TIER_QUANTITY_REPEATED',
+      'Two price breaks cannot name the same quantity', { quantity: tiers[index].quantity });
+    invariant(tiers[index].unitPriceMinor <= tiers[index - 1].unitPriceMinor, 'MATERIAL_RFQ_QUOTE_TIER_PRICE_RISES',
+      'A larger quantity cannot cost more per unit', {
+        quantity: tiers[index].quantity,
+        unitPriceMinor: tiers[index].unitPriceMinor,
+        previousUnitPriceMinor: tiers[index - 1].unitPriceMinor,
+      });
+  }
+  if (tiers.length) {
+    invariant(tiers[0].quantity <= rfq.targetQuantity, 'MATERIAL_RFQ_QUOTE_TIER_ABOVE_TARGET',
+      'The smallest price break is above the quantity the Material RFQ asks for', {
+        smallestBreak: tiers[0].quantity, targetQuantity: rfq.targetQuantity,
+      });
+  }
+  return Object.freeze(tiers);
+}
+
+// The price that applies to a quantity: the largest break at or below it, or the quotation's own unit
+// price when the ladder says nothing about quantities that small.
+export function quotedMaterialUnitPriceFor(quote, quantity) {
+  const tiers = Array.isArray(quote?.tiers) ? quote.tiers : [];
+  let price = quote?.unitPriceMinor ?? null;
+  for (const tier of tiers) {
+    if (tier.quantity <= quantity) price = tier.unitPriceMinor;
+  }
+  return price;
+}
+
 function normalizeQuote(input, supplier, rfq, receivedAt) {
   invariant(input && typeof input === 'object' && !Array.isArray(input), 'MATERIAL_RFQ_QUOTE_INPUT_INVALID', 'Quotation input is invalid');
-  const allowed = new Set(['supplierCode', 'currency', 'unitPriceMinor', 'fixedCostMinor', 'leadTimeDays', 'minimumOrderQuantity', 'validUntil', 'notes']);
+  const allowed = new Set(['supplierCode', 'currency', 'unitPriceMinor', 'fixedCostMinor', 'leadTimeDays', 'minimumOrderQuantity', 'validUntil', 'notes', 'tiers']);
   assertAllowedFields(input, allowed, 'MATERIAL_RFQ_QUOTE_FIELD_FORBIDDEN', 'Quotation contains unsupported fields');
   invariant(input.supplierCode === supplier.supplierCode, 'MATERIAL_RFQ_QUOTE_SUPPLIER_MISMATCH', 'Quotation supplier does not match selected supplier');
   const currency = pattern(input.currency, /^[A-Z]{3}$/, 'MATERIAL_RFQ_QUOTE_CURRENCY_INVALID', 'Quotation currency');
@@ -190,6 +268,7 @@ function normalizeQuote(input, supplier, rfq, receivedAt) {
     minimumOrderQuantity,
     validUntil,
     notes: optionalText(input.notes, 1000, 'MATERIAL_RFQ_QUOTE_NOTES_INVALID', 'Quotation notes'),
+    tiers: normalizeMaterialQuoteTiers(input.tiers, rfq),
     receivedAt,
   });
 }

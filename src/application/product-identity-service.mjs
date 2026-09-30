@@ -11,6 +11,7 @@ import {
   createProductSizeValue as createSizeValueDomain,
   createProductSku as createSkuDomain,
   createProductStyle as createStyleDomain,
+  createProductStyleReference as createStyleReferenceDomain,
   createProductStyleVersion as createStyleVersionDomain,
   transitionProductStyle as transitionStyleDomain,
   updateProductSizeScale as updateSizeScaleDomain,
@@ -308,6 +309,27 @@ export function createProductIdentityService({ store, clock = () => new Date().t
         async (tx, context) => {
           const value = createMediaDomain({ id: nextId('product-media'), styleVersion: context.styleVersion, colorway: context.colorway, mediaType: input.mediaType, mediaRole: input.mediaRole, uri: input.uri, sortOrder: input.sortOrder, contentHash: input.contentHash ?? null, payload: input.payload ?? {}, createdAt: now(clock), createdBy: actorId });
           await tx.insertMedia(value);
+          return value;
+        });
+    },
+
+    // Доска референсов на стиле — та же лёгкая, пополняемая доска, что и медиа чуть выше, но
+    // привязана к самому стилю, а не к его версии: референс переживает смену версий так же, как
+    // переживает её сам стиль.
+    addStyleReference(commandId, actorId, styleId, input) {
+      return execute(commandId, actorId, `addProductStyleReference:${styleId}`, input,
+        async (tx) => {
+          const style = requireEntity(await tx.getStyleForUpdate(styleId), 'PRODUCT_STYLE_NOT_FOUND', { styleId });
+          await authorize(tx, style.brandId, actorId);
+          return style;
+        },
+        async (tx, style) => {
+          const value = createStyleReferenceDomain({
+            id: nextId('product-style-reference'), style, imageUri: input?.imageUri,
+            referencedModel: input?.referencedModel ?? null, season: input?.season ?? null, comment: input?.comment ?? null,
+            sortOrder: input?.sortOrder, createdAt: now(clock), createdBy: actorId,
+          });
+          await tx.insertStyleReference(value);
           return value;
         });
     },

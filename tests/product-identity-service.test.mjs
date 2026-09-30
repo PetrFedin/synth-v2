@@ -9,6 +9,7 @@ function harness() {
   const styles = new Map();
   const styleVersions = [];
   const colorways = new Map();
+  const styleReferences = new Map();
   const usages = [];
   const mdm = new Map();
   const memberships = new Map();
@@ -26,12 +27,13 @@ function harness() {
     getStyleVersion: async (id) => styleVersions.find((value) => value.id === id),
     getColorwayByCode: async (styleVersionId, colorwayCode) => [...colorways.values()].find((value) => value.styleVersionId === styleVersionId && value.colorwayCode === colorwayCode),
     insertColorway: async (value) => colorways.set(value.id, value),
+    insertStyleReference: async (value) => styleReferences.set(value.id, value),
     getMdmEntryVersion: async (entryId, version) => mdm.get(`${entryId}:${version}`),
     insertMdmUsageSnapshot: async (value) => usages.push(value),
   };
   const store = { transaction: async (work) => work(tx) };
   const service = createProductIdentityService({ store, clock: () => at, nextId: (prefix) => `${prefix}:${++sequence}` });
-  return { service, commands, styles, styleVersions, colorways, usages, mdm, memberships };
+  return { service, commands, styles, styleVersions, colorways, styleReferences, usages, mdm, memberships };
 }
 
 function activeMembership(organisationId, userId, role = 'sales') {
@@ -199,4 +201,43 @@ test('a colorway batch rejects an empty item list', async () => {
     h.service.createColorwaysBatch('cmd:empty', 'user:1', styleVersion.id, { items: [] }),
     (error) => error?.code === 'PRODUCT_COLORWAY_BATCH_SIZE_INVALID',
   );
+});
+
+test('addStyleReference attaches to the style itself and is idempotent by command', async () => {
+  const h = harness();
+  h.memberships.set('brand:1:user:1', activeMembership('brand:1', 'user:1'));
+  const style = await h.service.createStyle('cmd:style', 'user:1', { brandId: 'brand:1', styleCode: 'DRS-001' });
+  const reference = await h.service.addStyleReference('cmd:ref', 'user:1', style.id, {
+    imageUri: 's3://product-references/DRS-001/past-season.jpg',
+    referencedModel: 'SS25 midi dress',
+    sortOrder: 0,
+  });
+  assert.equal(reference.styleId, style.id);
+  assert.equal(reference.brandId, 'brand:1');
+  assert.equal(reference.season, null);
+  assert.equal(h.styleReferences.size, 1);
+
+  const replay = await h.service.addStyleReference('cmd:ref', 'user:1', style.id, {
+    imageUri: 's3://product-references/DRS-001/past-season.jpg',
+    referencedModel: 'SS25 midi dress',
+    sortOrder: 0,
+  });
+  assert.equal(replay.id, reference.id);
+  assert.equal(h.styleReferences.size, 1);
+});
+
+test('addStyleReference is denied for a buyer and rejected for an unknown style', async () => {
+  const h = harness();
+  h.memberships.set('brand:1:user:1', activeMembership('brand:1', 'user:1'));
+  h.memberships.set('brand:1:user:buyer', activeMembership('brand:1', 'user:buyer', 'buyer'));
+  const style = await h.service.createStyle('cmd:style', 'user:1', { brandId: 'brand:1', styleCode: 'DRS-001' });
+  await assert.rejects(
+    h.service.addStyleReference('cmd:ref-buyer', 'user:buyer', style.id, { imageUri: 'ok.jpg', sortOrder: 0 }),
+    (error) => error?.code === 'CAPABILITY_DENIED',
+  );
+  await assert.rejects(
+    h.service.addStyleReference('cmd:ref-missing', 'user:1', 'style:unknown', { imageUri: 'ok.jpg', sortOrder: 0 }),
+    (error) => error?.code === 'PRODUCT_STYLE_NOT_FOUND',
+  );
+  assert.equal(h.styleReferences.size, 0);
 });

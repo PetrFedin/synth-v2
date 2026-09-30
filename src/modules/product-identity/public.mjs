@@ -397,6 +397,44 @@ export function createProductMedia({
   });
 }
 
+// Доска референсов на стиле — модели прошлых сезонов, референс посадки, референс на воротник и
+// застёжку (docs/backlog-not-yet-integrated.md, раздел C). Привязана к самому стилю, а не к его
+// версии: референс — вход в разработку, а не факт о зафиксированной версии, и переживает смену
+// версий так же, как переживает её сам стиль. Пополняемая доска, а не документ с жизненным циклом:
+// у записи нет «версии содержимого» и нет черновика/выставления — тем же приёмом, что уже несёт
+// `createProductMedia` чуть выше, а не `product-certifications`, у которой лицензированный статус
+// действительно нужен.
+export function createProductStyleReference({
+  id,
+  style,
+  imageUri,
+  referencedModel = null,
+  season = null,
+  comment = null,
+  sortOrder,
+  createdAt,
+  createdBy,
+}) {
+  requireId(id, 'PRODUCT_STYLE_REFERENCE_ID_REQUIRED', 'Product Style Reference id is required');
+  invariant(style?.id && style?.brandId, 'PRODUCT_STYLE_REQUIRED', 'Product Style is required');
+  invariant(typeof imageUri === 'string' && imageUri.trim().length > 0 && imageUri.trim().length <= 2048, 'PRODUCT_STYLE_REFERENCE_IMAGE_URI_INVALID', 'Product Style Reference image URI is invalid');
+  invariant(Number.isInteger(sortOrder) && sortOrder >= 0, 'PRODUCT_STYLE_REFERENCE_SORT_ORDER_INVALID', 'Product Style Reference sort order must be a non-negative integer');
+  requireTimestamp(createdAt, 'PRODUCT_STYLE_REFERENCE_CREATED_AT_REQUIRED');
+  requireActor(createdBy, 'PRODUCT_STYLE_REFERENCE_CREATED_BY_REQUIRED');
+  return Object.freeze({
+    id,
+    brandId: style.brandId,
+    styleId: style.id,
+    imageUri: imageUri.trim(),
+    referencedModel: optionalText(referencedModel, 160, 'PRODUCT_STYLE_REFERENCE_MODEL_INVALID', 'Referenced model'),
+    season: optionalText(season, 40, 'PRODUCT_STYLE_REFERENCE_SEASON_INVALID', 'Season'),
+    comment: optionalText(comment, 1000, 'PRODUCT_STYLE_REFERENCE_COMMENT_INVALID', 'Comment'),
+    sortOrder,
+    createdAt,
+    createdBy,
+  });
+}
+
 export function createProductAttributeValue({
   id,
   ownerType,
@@ -491,6 +529,12 @@ function requireTimestamp(value, code) {
 
 function requireLocalizedText(value, min, max, code, label) {
   invariant(typeof value === 'string' && value.trim().length >= min && value.trim().length <= max, code, `${label} must contain ${min}-${max} characters`);
+}
+
+function optionalText(value, max, code, label) {
+  if (value === undefined || value === null || value === '') return null;
+  invariant(typeof value === 'string' && value.trim().length >= 1 && value.trim().length <= max, code, `${label} must contain 1 to ${max} characters`);
+  return value.trim();
 }
 
 function requirePositiveInteger(value, code, label) {

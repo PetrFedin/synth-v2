@@ -53,7 +53,7 @@
     // сервер: позволить назвать произвольный цвет значило бы записать оттенок, которого у полотна
     // нет. Поля нет вовсе, когда палитры нет — пустой список выбора хуже его отсутствия.
     if (colours.length) {
-      fields.push(selectDef(
+      fields.push(optionalSelectDef(
         'colourCode',
         text('Цвет партии', 'Lot colour'),
         [{ id: '', name: text('без цвета', 'no colour') }, ...colours.map((colour) => ({ id: colour.colourCode, name: colour.colourCode }))],

@@ -283,7 +283,8 @@ function optionalTextDef(name, label, value = '', maxLength = 160) { return text
 function dateDef(name, label, value = '') { return { name, label, kind: 'date', value }; }
 function dateTimeDef(name, label, value = '') { return { name, label, kind: 'datetime-local', value }; }
 function numberDef(name, label, value, integer, min = 0) { return { name, label, kind: 'number', value, integer, min }; }
-function selectDef(name, label, options, format, value) { return { name, label, kind: 'select', options, format, value }; }
+function selectDef(name, label, options, format, value, required = true) { return { name, label, kind: 'select', options, format, value, required }; }
+function optionalSelectDef(name, label, options, format, value) { return selectDef(name, label, options, format, value, false); }
 function showInlineError(form, message) { form.querySelector('.notice.error')?.remove(); form.prepend(notice(message, 'error')); }
 function setButtonBusy(button, busy, text) { button.disabled = busy; button.textContent = I18N.translate(String(text)); }
 

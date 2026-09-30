@@ -26,6 +26,7 @@ function harness({ role = 'owner', lots = [], executions = [], bills = {} } = {}
   w.optionalTextDef = (name, label) => ({ name, label, optional: true });
   w.numberDef = (name, label) => ({ name, label, kind: 'number' });
   w.selectDef = (name, label, options) => ({ name, label, options });
+  w.optionalSelectDef = (name, label, options) => ({ name, label, options, required: false });
   w.actionButton = (label, fn, variant, confirm) => ({ kind: 'button', label, fn, variant, confirm });
   w.openForm = (title, fields, submit) => { calls.forms.push({ title, fields, submit }); };
   w.mutate = async (path, body) => { calls.mutations.push({ path, body }); return {}; };

@@ -1526,6 +1526,7 @@ function renderPartners() {
           { label: odText('Действует по', 'Valid to'), value: item.validTo ? formatDate(item.validTo) : '—' },
           { label: odText('Заменяет', 'Supersedes'), value: item.supersedesDocumentId || '—' },
           { label: odText('Отгрузка', 'Shipment'), value: item.linkedShipmentNoticeSnapshotId || '—' },
+          { label: odText('Заказ', 'Order'), value: item.linkedOrderId || '—' },
         ],
         actions: complianceDocumentActions(item),
       }),

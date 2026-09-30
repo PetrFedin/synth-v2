@@ -1023,6 +1023,71 @@
     return grid;
   }
 
+  // Квотирование продукта: RFQ уже существует как собственный, независимый от заказа бэкенд
+  // (`sourcing/public.mjs`, `createRfq` требует только опубликованный SKU и опубликованную BOM) — но
+  // ни разу не был виден с самой карточки продукта, только из отдельного раздела «Запросы цен». Этот
+  // блок ничего не добавляет на бэкенд: то же самое чтение `GET /v2/rfqs?sku=...`, каким уже
+  // пользуется sourcing.js, просто адресованное сразу по всем легаси-кодам SKU этого стиля (агрегат
+  // стиля уже несёт `colorways[].skus[].legacyCatalogSku`). Право на чтение отдельное —
+  // `sourcing.read`, не `product.read` — поэтому вкладка проверяет его сама, тем же приёмом, что и
+  // `performancePanel` чуть выше проверяет `margin.read`.
+  const RFQ_STATUS_LABELS = {
+    draft: ['Черновик', 'Draft'], issued: ['Отправлен', 'Issued'], quoted: ['Есть котировки', 'Quoted'],
+    awarded: ['Победитель выбран', 'Awarded'], allocated: ['В производстве', 'Allocated'], cancelled: ['Отменён', 'Cancelled'],
+  };
+  function rfqStatusBadge(status) {
+    const pair = RFQ_STATUS_LABELS[status] || [status, status];
+    const tone = status === 'allocated' ? 'success' : (status === 'cancelled' ? '' : (status ? 'warning' : ''));
+    return el('span', { className: `badge ${tone}`.trim(), rawText: text(pair[0], pair[1]) });
+  }
+  const styleQuotationState = window.SynthaProductStyleQuotationState
+    || (window.SynthaProductStyleQuotationState = { data: {}, loading: {}, failed: {} });
+
+  function loadStyleQuotations(styleId) {
+    if (styleQuotationState.data[styleId] || styleQuotationState.loading[styleId] || styleQuotationState.failed[styleId]) return;
+    styleQuotationState.loading[styleId] = true;
+    api(`/v2/product/styles/${encodeURIComponent(styleId)}`)
+      .then(async (aggregate) => {
+        const skuCodes = [...new Set((aggregate?.colorways || []).flatMap((colorway) => (colorway.skus || []).map((sku) => sku.legacyCatalogSku).filter(Boolean)))];
+        if (!skuCodes.length) { styleQuotationState.data[styleId] = []; return; }
+        const pages = await Promise.all(skuCodes.map((sku) => api(`/v2/rfqs?${new URLSearchParams({ sku, limit: '50' }).toString()}`).catch(() => ({ items: [] }))));
+        const rfqs = pages.flatMap((page) => (Array.isArray(page?.items) ? page.items : []));
+        rfqs.sort((a, b) => String(a.rfqCode).localeCompare(String(b.rfqCode)));
+        styleQuotationState.data[styleId] = rfqs;
+      })
+      .catch(() => { styleQuotationState.failed[styleId] = true; })
+      .finally(() => { styleQuotationState.loading[styleId] = false; if (state.view === 'styles') renderApp(); });
+  }
+  function invalidateStyleQuotations(styleId) {
+    delete styleQuotationState.data[styleId];
+    delete styleQuotationState.failed[styleId];
+  }
+
+  function styleQuotationPanel(item) {
+    const product = item.product;
+    if (!window.SynthaUiCapabilities?.hasForOrganisation(state.workspace, product.brandId, window.SynthaUiCapabilities.CAPABILITIES.SOURCING_READ)) {
+      return notice(text('Раздел закупки недоступен вашей роли.', 'Sourcing is not available to your role.'));
+    }
+    loadStyleQuotations(product.id);
+    const wrap = document.createDocumentFragment();
+    const goToSourcing = el('button', { className: 'button small', type: 'button', rawText: text('Перейти в «Запросы цен»', 'Open in Sourcing') });
+    goToSourcing.addEventListener('click', () => { state.view = 'rfqs'; renderApp(); });
+    const refresh = el('button', { className: 'button small', type: 'button', rawText: text('Обновить', 'Refresh') });
+    refresh.addEventListener('click', () => { invalidateStyleQuotations(product.id); renderApp(); });
+    const actions = el('div', { className: 'od-inline-actions' });
+    actions.append(goToSourcing, refresh);
+    wrap.append(actions);
+    if (styleQuotationState.failed[product.id]) { wrap.append(notice(text('Не удалось загрузить запросы цены.', 'RFQs could not be loaded.'))); return wrap; }
+    const rows = styleQuotationState.data[product.id];
+    if (!rows) { wrap.append(notice(text('Загрузка…', 'Loading…'))); return wrap; }
+    if (!rows.length) { wrap.append(notice(text('По SKU этого стиля пока нет запросов цены.', 'No RFQs exist yet for this style’s SKUs.'))); return wrap; }
+    wrap.append(odMiniTable(
+      ['RFQ', 'SKU', text('Статус', 'Status'), text('Количество', 'Quantity'), text('Ответ до', 'Response due'), text('Поставка до', 'Delivery due')],
+      rows.map((rfq) => [rfq.rfqCode, rfq.sku, rfqStatusBadge(rfq.status), String(rfq.targetQuantity ?? '—'), rfq.responseDueAt ? rfq.responseDueAt.slice(0, 10) : '—', rfq.deliveryDueAt ? rfq.deliveryDueAt.slice(0, 10) : '—']),
+    ));
+    return wrap;
+  }
+
   const sizeLineState = window.SynthaBomSizeLineState
     || (window.SynthaBomSizeLineState = { data: {}, loading: {}, failed: {} });
 
@@ -1176,6 +1241,10 @@
         {
           label: text('Референсы', 'References'),
           content: [styleReferenceActions(item), styleReferencePanel(item)].filter(Boolean),
+        },
+        {
+          label: text('Квотирование', 'Quotation'),
+          content: [styleQuotationPanel(item)],
         },
         {
           label: text('Состояние', 'State'),

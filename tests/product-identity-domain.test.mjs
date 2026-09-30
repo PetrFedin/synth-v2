@@ -11,6 +11,7 @@ import {
   createProductSizeValue,
   createProductSku,
   createProductStyle,
+  createProductStyleConstructionNode,
   createProductStyleReference,
   createProductStyleVersion,
   hashProductIdentitySnapshot,
@@ -237,6 +238,35 @@ test('Style Reference board attaches to the style itself and trims optional fiel
   assert.throws(
     () => createProductStyleReference({ id: 'product-style-reference:bad', style, imageUri: 'ok.jpg', season: 'a'.repeat(41), sortOrder: 0, createdAt: at, createdBy: actor }),
     (error) => error?.code === 'PRODUCT_STYLE_REFERENCE_SEASON_INVALID',
+  );
+});
+
+test('Construction Node board attaches a governed design.construction_node reference to the style, not a made-up text label', () => {
+  const { style } = fixture();
+  const node = createProductStyleConstructionNode({
+    id: 'product-style-construction-node:001',
+    style,
+    mdmRef: { entryId: 'mdm-entry:construction-node:collar-set-in', version: 1 },
+    note: '  проверить на образце  ',
+    sortOrder: 0,
+    createdAt: at,
+    createdBy: actor,
+  });
+  assert.equal(node.styleId, style.id);
+  assert.equal(node.brandId, style.brandId);
+  assert.deepEqual(node.mdmRef, { entryId: 'mdm-entry:construction-node:collar-set-in', version: 1 });
+  assert.equal(node.note, 'проверить на образце');
+  assert.throws(
+    () => createProductStyleConstructionNode({ id: 'product-style-construction-node:bad', style, mdmRef: null, sortOrder: 0, createdAt: at, createdBy: actor }),
+    (error) => error?.code === 'PRODUCT_STYLE_CONSTRUCTION_NODE_REF_REQUIRED',
+  );
+  assert.throws(
+    () => createProductStyleConstructionNode({ id: 'product-style-construction-node:bad', style, mdmRef: { entryId: 'x' }, sortOrder: 0, createdAt: at, createdBy: actor }),
+    (error) => error?.code === 'PRODUCT_STYLE_CONSTRUCTION_NODE_REF_INVALID',
+  );
+  assert.throws(
+    () => createProductStyleConstructionNode({ id: 'product-style-construction-node:bad', style, mdmRef: { entryId: 'mdm-entry:x', version: 1 }, sortOrder: -1, createdAt: at, createdBy: actor }),
+    (error) => error?.code === 'PRODUCT_STYLE_CONSTRUCTION_NODE_SORT_ORDER_INVALID',
   );
 });
 

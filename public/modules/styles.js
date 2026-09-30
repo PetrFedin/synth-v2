@@ -1024,6 +1024,108 @@
     return grid;
   }
 
+  // Доска технологических узлов на стиле — справочник `design.construction_node` заведён с самого
+  // начала (последовательность операций / BOL), но ни разу не был виден с самого стиля. Узел
+  // выбирается из уже каталогизированного справочника (тот же чтениемый всем `GET
+  // /v2/libraries/:code/entries`, каким уже пользуется экран «Библиотеки»), а не вписывается свободным текстом.
+  const constructionNodeLibraryState = window.SynthaConstructionNodeLibraryState
+    || (window.SynthaConstructionNodeLibraryState = { items: null, loading: false, failed: false });
+
+  function loadConstructionNodeLibrary() {
+    if (constructionNodeLibraryState.items || constructionNodeLibraryState.loading || constructionNodeLibraryState.failed) return;
+    constructionNodeLibraryState.loading = true;
+    api('/v2/libraries/design.construction_node/entries?limit=200')
+      .then((page) => { constructionNodeLibraryState.items = Array.isArray(page?.items) ? page.items : []; })
+      .catch(() => { constructionNodeLibraryState.failed = true; })
+      .finally(() => { constructionNodeLibraryState.loading = false; if (state.view === 'styles') renderApp(); });
+  }
+  function constructionNodeEntry(entryId) {
+    return (constructionNodeLibraryState.items || []).find((entry) => entry.id === entryId);
+  }
+  function constructionNodeLabel(entryId) {
+    const entry = constructionNodeEntry(entryId);
+    if (!entry) return entryId;
+    return `${entry.code} · ${I18N.getLocale?.() === 'en' ? entry.nameEn : entry.nameRu}`;
+  }
+
+  const styleConstructionNodeState = window.SynthaProductStyleConstructionNodeState
+    || (window.SynthaProductStyleConstructionNodeState = { data: {}, loading: {}, failed: {} });
+
+  function loadStyleConstructionNodes(styleId) {
+    if (styleConstructionNodeState.data[styleId] || styleConstructionNodeState.loading[styleId] || styleConstructionNodeState.failed[styleId]) return;
+    styleConstructionNodeState.loading[styleId] = true;
+    api(`/v2/product/styles/${encodeURIComponent(styleId)}`)
+      .then((value) => { styleConstructionNodeState.data[styleId] = Array.isArray(value?.styleConstructionNodes) ? value.styleConstructionNodes : []; })
+      .catch(() => { styleConstructionNodeState.failed[styleId] = true; })
+      .finally(() => { styleConstructionNodeState.loading[styleId] = false; if (state.view === 'styles') renderApp(); });
+  }
+  function invalidateStyleConstructionNodes(styleId) {
+    delete styleConstructionNodeState.data[styleId];
+    delete styleConstructionNodeState.failed[styleId];
+  }
+
+  function addConstructionNode(item) {
+    const product = item.product;
+    const rows = styleConstructionNodeState.data[product.id] || [];
+    const library = constructionNodeLibraryState.items || [];
+    if (!library.length) {
+      toast(text('Справочник узлов ещё загружается, попробуйте ещё раз.', 'The node library is still loading, try again.'), 'error');
+      return;
+    }
+    const alreadyAttached = new Set(rows.map((value) => value.mdmRef.entryId));
+    const options = library
+      .filter((entry) => !alreadyAttached.has(entry.id))
+      .map((entry) => [`${entry.id}|${entry.version}`, `${entry.code} · ${I18N.getLocale?.() === 'en' ? entry.nameEn : entry.nameRu}`]);
+    if (!options.length) {
+      toast(text('Все узлы из справочника уже на доске.', 'Every node in the library is already on the board.'), 'error');
+      return;
+    }
+    openForm({
+      title: text('Добавить узел', 'Add a construction node'),
+      hint: text('Узел выбирается из уже каталогизированного справочника — не вписывается свободным текстом.', 'The node is chosen from the already-catalogued library, not typed freely.'),
+      fields: [
+        field(text('Узел', 'Construction node'), select('nodeRef', options)),
+        field(text('Примечание', 'Note'), input('note', 'text', { maxlength: '1000' })),
+        field(text('Порядок', 'Order'), input('sortOrder', 'number', { required: true, min: '0', max: '999', value: String(rows.length) })),
+      ],
+      submitLabel: text('Добавить', 'Add'),
+      onSubmit: async (values) => {
+        const [entryId, version] = values.nodeRef.split('|');
+        await mutate(`/v2/product/styles/${encodeURIComponent(product.id)}/construction-nodes`, {
+          mdmRef: { entryId, version: Number(version) },
+          note: values.note?.trim() || undefined,
+          sortOrder: Number(values.sortOrder),
+        });
+        invalidateStyleConstructionNodes(product.id);
+        toast(text('Узел добавлен.', 'The construction node was added.'), 'success');
+      },
+    });
+  }
+
+  function styleConstructionNodeActions(item) {
+    const manage = window.SynthaUiCapabilities?.hasForOrganisation(state.workspace, item.product.brandId, window.SynthaUiCapabilities.CAPABILITIES.PRODUCT_MANAGE);
+    if (!manage) return null;
+    const row = el('div', { className: 'od-inline-actions' });
+    const add = el('button', { className: 'button small primary', type: 'button', rawText: text('Добавить узел', 'Add a construction node') });
+    add.addEventListener('click', () => addConstructionNode(item));
+    row.append(add);
+    return row;
+  }
+
+  function styleConstructionNodePanel(item) {
+    const product = item.product;
+    loadConstructionNodeLibrary();
+    loadStyleConstructionNodes(product.id);
+    if (styleConstructionNodeState.failed[product.id]) return notice(text('Доска узлов недоступна.', 'The construction node board is unavailable.'));
+    const rows = styleConstructionNodeState.data[product.id];
+    if (!rows) return notice(text('Загрузка…', 'Loading…'));
+    if (!rows.length) return notice(text('На доске пока нет узлов.', 'The construction node board is empty so far.'));
+    return odMiniTable(
+      [text('Узел', 'Node'), text('Примечание', 'Note')],
+      [...rows].sort((a, b) => a.sortOrder - b.sortOrder).map((node) => [constructionNodeLabel(node.mdmRef.entryId), node.note || '—']),
+    );
+  }
+
   // Квотирование продукта: RFQ уже существует как собственный, независимый от заказа бэкенд
   // (`sourcing/public.mjs`, `createRfq` требует только опубликованный SKU и опубликованную BOM) — но
   // ни разу не был виден с самой карточки продукта, только из отдельного раздела «Запросы цен». Этот
@@ -1246,6 +1348,10 @@
         {
           label: text('Квотирование', 'Quotation'),
           content: [styleQuotationPanel(item)],
+        },
+        {
+          label: text('Технологические узлы', 'Construction nodes'),
+          content: [styleConstructionNodeActions(item), styleConstructionNodePanel(item)].filter(Boolean),
         },
         {
           label: text('Состояние', 'State'),

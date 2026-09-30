@@ -435,6 +435,39 @@ export function createProductStyleReference({
   });
 }
 
+// Доска технологических узлов на стиле (docs/backlog-not-yet-integrated.md, раздел C: справочник
+// `design.construction_node` был заведён с самого начала, но привязан только к последовательности
+// операций (BOL), ни разу — к самому продукту). Тот же лёгкий, пополняемый без жизненного цикла
+// приём, что и у `createProductStyleReference` чуть выше, но ссылается на управляемую запись MDM,
+// а не на свободный текст — узел не выдумывается, а выбирается из уже каталогизированного справочника.
+export function createProductStyleConstructionNode({
+  id,
+  style,
+  mdmRef,
+  note = null,
+  sortOrder,
+  createdAt,
+  createdBy,
+}) {
+  requireId(id, 'PRODUCT_STYLE_CONSTRUCTION_NODE_ID_REQUIRED', 'Product Style Construction Node id is required');
+  invariant(style?.id && style?.brandId, 'PRODUCT_STYLE_REQUIRED', 'Product Style is required');
+  const normalizedRef = normalizeMdmRef(mdmRef, 'PRODUCT_STYLE_CONSTRUCTION_NODE_REF_INVALID');
+  invariant(normalizedRef, 'PRODUCT_STYLE_CONSTRUCTION_NODE_REF_REQUIRED', 'Construction node reference is required');
+  invariant(Number.isInteger(sortOrder) && sortOrder >= 0, 'PRODUCT_STYLE_CONSTRUCTION_NODE_SORT_ORDER_INVALID', 'Product Style Construction Node sort order must be a non-negative integer');
+  requireTimestamp(createdAt, 'PRODUCT_STYLE_CONSTRUCTION_NODE_CREATED_AT_REQUIRED');
+  requireActor(createdBy, 'PRODUCT_STYLE_CONSTRUCTION_NODE_CREATED_BY_REQUIRED');
+  return Object.freeze({
+    id,
+    brandId: style.brandId,
+    styleId: style.id,
+    mdmRef: normalizedRef,
+    note: optionalText(note, 1000, 'PRODUCT_STYLE_CONSTRUCTION_NODE_NOTE_INVALID', 'Construction node note'),
+    sortOrder,
+    createdAt,
+    createdBy,
+  });
+}
+
 export function createProductAttributeValue({
   id,
   ownerType,

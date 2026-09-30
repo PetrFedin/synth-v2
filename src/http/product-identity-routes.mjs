@@ -49,6 +49,10 @@ const STYLE_REFERENCE_CREATE = required(
   bodyContract(['imageUri', 'referencedModel', 'season', 'comment', 'sortOrder']),
   ['imageUri', 'sortOrder'],
 );
+const CONSTRUCTION_NODE_CREATE = required(
+  bodyContract(['mdmRef', 'note', 'sortOrder'], { mdmRef: MDM_REF_FIELDS }),
+  ['mdmRef', 'sortOrder'],
+);
 const ATTRIBUTE_CREATE = required(
   bodyContract(['ownerType', 'ownerId', 'attributeCode', 'attributeCatalogVersion', 'value', 'mdmRef'], { mdmRef: MDM_REF_FIELDS }),
   ['ownerType', 'ownerId', 'attributeCode', 'attributeCatalogVersion', 'value'],
@@ -78,6 +82,7 @@ export function createProductIdentityRoutes({ productIdentity } = {}) {
     mutate('POST', /^\/v2\/product\/skus$/, SKU_CREATE, ({ commandId, actorId, body }) => service.createSku(commandId, actorId, body)),
     mutate('POST', /^\/v2\/product\/style-versions\/([^/]+)\/media$/, MEDIA_CREATE, ({ commandId, actorId, params, body }) => service.addMedia(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/product\/styles\/([^/]+)\/references$/, STYLE_REFERENCE_CREATE, ({ commandId, actorId, params, body }) => service.addStyleReference(commandId, actorId, params[0], body)),
+    mutate('POST', /^\/v2\/product\/styles\/([^/]+)\/construction-nodes$/, CONSTRUCTION_NODE_CREATE, ({ commandId, actorId, params, body }) => service.addConstructionNode(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/product\/attributes$/, ATTRIBUTE_CREATE, ({ commandId, actorId, body }) => service.createAttributeValue(commandId, actorId, body)),
     mutate('POST', /^\/v2\/product\/skus\/([^/]+)\/catalog-link$/, CATALOG_LINK, ({ commandId, actorId, params, body }) => service.linkCatalogSku(commandId, actorId, params[0], body)),
   ]);
@@ -134,6 +139,7 @@ function unavailableProductIdentity() {
     createSku: fail,
     addMedia: fail,
     addStyleReference: fail,
+    addConstructionNode: fail,
     createAttributeValue: fail,
     linkCatalogSku: fail,
   });

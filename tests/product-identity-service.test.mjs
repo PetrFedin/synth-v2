@@ -10,6 +10,7 @@ function harness() {
   const styleVersions = [];
   const colorways = new Map();
   const styleReferences = new Map();
+  const styleConstructionNodes = new Map();
   const usages = [];
   const mdm = new Map();
   const memberships = new Map();
@@ -28,12 +29,13 @@ function harness() {
     getColorwayByCode: async (styleVersionId, colorwayCode) => [...colorways.values()].find((value) => value.styleVersionId === styleVersionId && value.colorwayCode === colorwayCode),
     insertColorway: async (value) => colorways.set(value.id, value),
     insertStyleReference: async (value) => styleReferences.set(value.id, value),
+    insertStyleConstructionNode: async (value) => styleConstructionNodes.set(value.id, value),
     getMdmEntryVersion: async (entryId, version) => mdm.get(`${entryId}:${version}`),
     insertMdmUsageSnapshot: async (value) => usages.push(value),
   };
   const store = { transaction: async (work) => work(tx) };
   const service = createProductIdentityService({ store, clock: () => at, nextId: (prefix) => `${prefix}:${++sequence}` });
-  return { service, commands, styles, styleVersions, colorways, styleReferences, usages, mdm, memberships };
+  return { service, commands, styles, styleVersions, colorways, styleReferences, styleConstructionNodes, usages, mdm, memberships };
 }
 
 function activeMembership(organisationId, userId, role = 'sales') {
@@ -240,4 +242,50 @@ test('addStyleReference is denied for a buyer and rejected for an unknown style'
     (error) => error?.code === 'PRODUCT_STYLE_NOT_FOUND',
   );
   assert.equal(h.styleReferences.size, 0);
+});
+
+test('addConstructionNode attaches a governed design.construction_node reference and is idempotent by command', async () => {
+  const h = harness();
+  h.memberships.set('brand:1:user:1', activeMembership('brand:1', 'user:1'));
+  const style = await h.service.createStyle('cmd:style', 'user:1', { brandId: 'brand:1', styleCode: 'DRS-001' });
+  h.mdm.set('mdm:construction:collar-set-in:1', mdmRecord({ entryId: 'mdm:construction:collar-set-in', version: 1, dictionaryCode: 'design.construction_node' }));
+  const node = await h.service.addConstructionNode('cmd:node', 'user:1', style.id, {
+    mdmRef: { entryId: 'mdm:construction:collar-set-in', version: 1 },
+    sortOrder: 0,
+  });
+  assert.equal(node.styleId, style.id);
+  assert.equal(node.brandId, 'brand:1');
+  assert.deepEqual(node.mdmRef, { entryId: 'mdm:construction:collar-set-in', version: 1 });
+  assert.equal(h.styleConstructionNodes.size, 1);
+  assert.equal(h.usages.length, 1);
+  assert.equal(h.usages[0].fieldPath, 'mdmRef');
+
+  const replay = await h.service.addConstructionNode('cmd:node', 'user:1', style.id, {
+    mdmRef: { entryId: 'mdm:construction:collar-set-in', version: 1 },
+    sortOrder: 0,
+  });
+  assert.equal(replay.id, node.id);
+  assert.equal(h.styleConstructionNodes.size, 1);
+});
+
+test('addConstructionNode is denied for a buyer, rejected for an unknown style, and refuses a reference from the wrong MDM dictionary', async () => {
+  const h = harness();
+  h.memberships.set('brand:1:user:1', activeMembership('brand:1', 'user:1'));
+  h.memberships.set('brand:1:user:buyer', activeMembership('brand:1', 'user:buyer', 'buyer'));
+  const style = await h.service.createStyle('cmd:style', 'user:1', { brandId: 'brand:1', styleCode: 'DRS-001' });
+  h.mdm.set('mdm:construction:collar-set-in:1', mdmRecord({ entryId: 'mdm:construction:collar-set-in', version: 1, dictionaryCode: 'design.construction_node' }));
+  h.mdm.set('mdm:category:dress:1', mdmRecord({ entryId: 'mdm:category:dress', version: 1, dictionaryCode: 'assortment.category' }));
+  await assert.rejects(
+    h.service.addConstructionNode('cmd:node-buyer', 'user:buyer', style.id, { mdmRef: { entryId: 'mdm:construction:collar-set-in', version: 1 }, sortOrder: 0 }),
+    (error) => error?.code === 'CAPABILITY_DENIED',
+  );
+  await assert.rejects(
+    h.service.addConstructionNode('cmd:node-missing', 'user:1', 'style:unknown', { mdmRef: { entryId: 'mdm:construction:collar-set-in', version: 1 }, sortOrder: 0 }),
+    (error) => error?.code === 'PRODUCT_STYLE_NOT_FOUND',
+  );
+  await assert.rejects(
+    h.service.addConstructionNode('cmd:node-wrong-dict', 'user:1', style.id, { mdmRef: { entryId: 'mdm:category:dress', version: 1 }, sortOrder: 0 }),
+    (error) => error?.code === 'PRODUCT_MDM_DICTIONARY_MISMATCH',
+  );
+  assert.equal(h.styleConstructionNodes.size, 0);
 });

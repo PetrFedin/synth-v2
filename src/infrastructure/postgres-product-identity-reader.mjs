@@ -22,10 +22,12 @@ export function createPostgresProductIdentityReader({ pool } = {}) {
       const style = mapStyle(styleResult.rows[0]);
       const referenceResult = await pool.query('SELECT * FROM product_style_references WHERE style_id = $1 ORDER BY sort_order, id', [styleId]);
       const styleReferences = Object.freeze(referenceResult.rows.map(mapStyleReference));
+      const constructionNodeResult = await pool.query('SELECT * FROM product_style_construction_nodes WHERE style_id = $1 ORDER BY sort_order, id', [styleId]);
+      const styleConstructionNodes = Object.freeze(constructionNodeResult.rows.map(mapStyleConstructionNode));
       const versionResult = versionNo === null
         ? await pool.query('SELECT * FROM product_style_versions WHERE style_id = $1 ORDER BY version_no DESC LIMIT 1', [styleId])
         : await pool.query('SELECT * FROM product_style_versions WHERE style_id = $1 AND version_no = $2', [styleId, versionNo]);
-      if (!versionResult.rows[0]) return Object.freeze({ style, styleVersion: null, colorways: Object.freeze([]), styleMedia: Object.freeze([]), styleAttributes: Object.freeze([]), mdmUsage: Object.freeze([]), styleReferences });
+      if (!versionResult.rows[0]) return Object.freeze({ style, styleVersion: null, colorways: Object.freeze([]), styleMedia: Object.freeze([]), styleAttributes: Object.freeze([]), mdmUsage: Object.freeze([]), styleReferences, styleConstructionNodes });
 
       const styleVersion = mapStyleVersion(versionResult.rows[0]);
       const colorwayResult = await pool.query(
@@ -116,6 +118,7 @@ export function createPostgresProductIdentityReader({ pool } = {}) {
         styleAttributes: Object.freeze(styleAttributes),
         mdmUsage: Object.freeze(mdmUsage),
         styleReferences,
+        styleConstructionNodes,
       });
     },
 
@@ -176,6 +179,7 @@ function mapSizeValue(row) { return Object.freeze({ id: row.id, sizeScaleVersion
 function mapSkuWithSize(row) { return Object.freeze({ id: row.id, skuCode: row.sku_code, brandId: row.brand_id, styleVersionId: row.style_version_id, colorwayId: row.colorway_id, sizeValueId: row.size_value_id, gtin: row.gtin, payload: row.payload, contentHash: row.content_hash, createdAt: iso(row.created_at), createdBy: row.created_by, legacyCatalogSku: row.catalog_sku ?? null, size: Object.freeze({ id: row.size_value_id, sizeScaleId: row.size_scale_id, sizeScaleVersionId: row.size_scale_version_id, sizeScaleVersionNo: row.size_scale_version_no, scaleCode: row.scale_code, scaleNameRu: row.scale_name_ru, scaleNameEn: row.scale_name_en, code: row.size_code, labelRu: row.size_label_ru, labelEn: row.size_label_en, sortOrder: row.size_sort_order, mdmRef: ref(row.size_entry_id, row.size_entry_version) }) }); }
 function mapMedia(row) { return Object.freeze({ id: row.id, brandId: row.brand_id, styleVersionId: row.style_version_id, colorwayId: row.colorway_id, mediaType: row.media_type, mediaRole: row.media_role, uri: row.uri, sortOrder: row.sort_order, contentHash: row.content_hash, payload: row.payload, createdAt: iso(row.created_at), createdBy: row.created_by }); }
 function mapStyleReference(row) { return Object.freeze({ id: row.id, brandId: row.brand_id, styleId: row.style_id, imageUri: row.image_uri, referencedModel: row.referenced_model, season: row.season, comment: row.comment, sortOrder: row.sort_order, createdAt: iso(row.created_at), createdBy: row.created_by }); }
+function mapStyleConstructionNode(row) { return Object.freeze({ id: row.id, brandId: row.brand_id, styleId: row.style_id, mdmRef: ref(row.construction_node_entry_id, row.construction_node_entry_version), note: row.note, sortOrder: row.sort_order, createdAt: iso(row.created_at), createdBy: row.created_by }); }
 function mapAttributeValue(row) { return Object.freeze({ id: row.id, brandId: row.brand_id, ownerType: row.owner_type, ownerId: row.owner_id, attributeCode: row.attribute_code, attributeCatalogVersion: row.attribute_catalog_version, value: row.value_json, mdmRef: ref(row.mdm_entry_id, row.mdm_entry_version), createdAt: iso(row.created_at), createdBy: row.created_by }); }
 function mapUsage(row) { return Object.freeze({ id: row.id, tenantId: row.tenant_id, sourceType: row.source_type, sourceId: row.source_id, fieldPath: row.field_path, entryId: row.entry_id, entryVersion: row.entry_version, snapshot: row.snapshot, capturedAt: iso(row.captured_at), capturedBy: row.captured_by }); }
 function ref(entryId, version) { return entryId === null || entryId === undefined ? null : Object.freeze({ entryId, version }); }

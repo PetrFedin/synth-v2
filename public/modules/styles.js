@@ -681,13 +681,11 @@
       fields: [
         field(text('Цветомодель', 'Colourway'), select('colorwayId', [['', text('— вся версия —', '\u2014 the whole version \u2014')], ...colorways.map((entry) => [entry.id, `${entry.colorwayCode} · ${entry.nameRu || entry.nameEn}`])])),
         field(text('Ссылка', 'Link'), input('uri', 'url', { required: true, maxlength: '2000', placeholder: 'https://…' })),
-        // Роли берутся из тех, что знает домен: `hero, gallery, detail, swatch, technical, video,
-        // document` (PRODUCT_MEDIA_ROLES). Форма предлагала `sketch` и `flat`, которых в домене нет
-        // вовсе, — два варианта из четырёх всегда отвечали PRODUCT_MEDIA_ROLE_INVALID. Проверено
-        // живьём: «Основное фото» и «Деталь» проходили, «Технический эскиз» и «Раскладка» — нет.
+        // Роли берутся из тех, что знает домен: `hero, gallery, detail, swatch, technical,
+        // design_sketch, tech_pack_thumbnail, video, document` (PRODUCT_MEDIA_ROLES).
         // `video` и `document` здесь не предлагаются намеренно: форма добавляет изображение и сама
         // отправляет mediaType: 'image'.
-        field(text('Роль', 'Role'), select('mediaRole', [['hero', text('Основное фото', 'Hero shot')], ['gallery', text('Галерея', 'Gallery')], ['detail', text('Деталь', 'Detail')], ['swatch', text('Образец цвета', 'Swatch')], ['technical', text('Технический эскиз', 'Technical sketch')]])),
+        field(text('Роль', 'Role'), select('mediaRole', [['hero', text('Основное фото', 'Hero shot')], ['gallery', text('Галерея', 'Gallery')], ['detail', text('Деталь', 'Detail')], ['swatch', text('Образец цвета', 'Swatch')], ['technical', text('Технический эскиз', 'Technical sketch')], ['design_sketch', text('Дизайнерский эскиз', 'Design sketch')], ['tech_pack_thumbnail', text('Эскиз Tech Pack', 'Tech pack thumbnail')]])),
         field(text('Порядок', 'Order'), input('sortOrder', 'number', { required: true, min: '1', max: '999', value: String(mediaCountFor(item) + 1) })),
       ],
       submitLabel: text('Добавить', 'Add'),

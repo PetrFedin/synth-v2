@@ -10,6 +10,11 @@
     if (!location) return '—';
     return [location.name, location.city, location.countryCode].filter(Boolean).join(', ');
   }
+  function packingStatusLabel(status) {
+    if (status === 'packing') return text('идёт упаковка', 'packing');
+    if (status === 'packed') return text('товары упакованы', 'packed');
+    return text('не начата', 'not started');
+  }
 
   const CLAIM_RESOLUTIONS = Object.freeze({
     'accepted-for-replacement': ['принята: замена', 'accepted: replacement'],
@@ -104,6 +109,7 @@
 
       if (!plan.shipments.length) {
         rows.push(row(`${prefix}${text('Отгружено', 'Shipped')}`, text('ещё не отгружено', 'not shipped yet')));
+        rows.push(row(`${prefix}${text('Упаковка', 'Packing')}`, packingStatusLabel(plan.packingStatus)));
         return;
       }
 
@@ -215,6 +221,48 @@
       const existing = byLine.get(lineNo) || {};
       grid.append(commentRow(order, lineNo, line.sku, text('Комментарий поставщика', 'Supplier comment'), existing.supplier, canWriteSupplier));
       grid.append(commentRow(order, lineNo, line.sku, text('Комментарий заказчика', 'Customer comment'), existing.customer, canWriteCustomer));
+    });
+
+    close.addEventListener('click', () => dialog.close());
+    body.append(head, grid); dialog.append(body); dialog.showModal();
+  };
+
+  const PACKING_NEXT = Object.freeze({ null: 'packing', packing: 'packed' });
+  function packingAdvanceLabel(status) {
+    return status === 'packing' ? text('Товары упакованы', 'Mark packed') : text('Начать упаковку', 'Start packing');
+  }
+
+  /**
+   * Упаковка — предвестник отгрузки, не сам план: пока у плана нет ни одной отгрузки, статус можно
+   * двигать только вперёд («не начата» → «идёт упаковка» → «товары упакованы»). Как только появилась
+   * первая отгрузка, вопрос уже не стоит — сервер откажет, а этот экран сюда и не доходит.
+   */
+  global.orderPackingStatusDialog = async function orderPackingStatusDialog(order) {
+    const view = await api(`/v2/orders/${encodeURIComponent(order.id)}/fulfillment`);
+    if (!view || view.orderId !== order.id) throw new Error(I18N.t('common.requestError'));
+    const pending = (view.plans || []).filter((plan) => !plan.shipments.length);
+
+    const dialog = document.querySelector('#form-dialog'); clear(dialog);
+    const body = el('div', { className: 'dialog-body' });
+    const close = el('button', { className: 'button small', text: I18N.t('common.close'), type: 'button' });
+    const head = el('div', { className: 'dialog-head' }); head.append(el('h3', { text: text('Упаковка отгрузок', 'Shipment packing') }), close);
+    const grid = el('div', { className: 'form-grid' });
+
+    if (!pending.length) {
+      grid.append(el('div', { className: 'empty', text: text('Все планы этого заказа уже отгружены.', 'Every plan on this order has already shipped.') }));
+    }
+    pending.forEach((plan, index) => {
+      const label = el('label');
+      label.append(el('span', { text: `${view.plans.length > 1 ? `${index + 1}. ` : ''}${place(plan.shipFrom)} → ${place(plan.shipTo)}` }));
+      label.append(el('input', { type: 'text', value: packingStatusLabel(plan.packingStatus), readOnly: true }));
+      const nextStatus = PACKING_NEXT[plan.packingStatus ?? 'null'];
+      if (nextStatus) {
+        label.append(actionButton(packingAdvanceLabel(plan.packingStatus), async () => {
+          await mutate(`/v2/fulfillment-plans/${encodeURIComponent(plan.id)}/packing-status`, { status: nextStatus }, 'PUT');
+          dialog.close();
+        }));
+      }
+      grid.append(label);
     });
 
     close.addEventListener('click', () => dialog.close());

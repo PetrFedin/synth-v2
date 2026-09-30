@@ -8,6 +8,7 @@ import {
   createReceiptSnapshot,
   createShipmentNoticeSnapshot,
 } from '../modules/fulfillment/public.mjs';
+import { advancePackingStatus } from '../modules/fulfillment-packing/public.mjs';
 
 export function createFulfillmentService({ store, clock = () => new Date().toISOString(), nextId = defaultIdGenerator() } = {}) {
   invariant(store && typeof store.transaction === 'function', 'FULFILLMENT_STORE_REQUIRED', 'Fulfillment store is required');
@@ -86,6 +87,35 @@ export function createFulfillmentService({ store, clock = () => new Date().toISO
             contentHash: plan.contentHash,
           }, commandId, actorId);
           return plan;
+        },
+      );
+    },
+
+    setPackingStatus(commandId, actorId, fulfillmentPlanId, input) {
+      return execute(
+        commandId,
+        `setPackingStatus:${actorId}:${fulfillmentPlanId}:${canonicalJson(input)}`,
+        actorId,
+        async (tx) => {
+          const plan = requireEntity(await tx.getFulfillmentPlan(fulfillmentPlanId), 'FULFILLMENT_PLAN_NOT_FOUND', { fulfillmentPlanId });
+          const membership = await tx.getMembership(plan.brandId, actorId);
+          assertCapability(membership, CAPABILITIES.FULFILLMENT_MANAGE);
+          const priorShipments = await tx.listShipmentNotices(fulfillmentPlanId);
+          // Упаковка — предвестник отгрузки: как только уведомление об отгрузке уже есть, статус
+          // упаковки отвечает на вопрос, который уже не стоит.
+          invariant(priorShipments.length === 0, 'FULFILLMENT_PACKING_AFTER_SHIPMENT_FORBIDDEN', 'Packing status cannot be set once the plan already has a shipment', { fulfillmentPlanId });
+          const current = await tx.getPackingStatus(fulfillmentPlanId);
+          return Object.freeze({ plan, current: current?.status ?? null });
+        },
+        async (tx, { plan, current }) => {
+          const value = advancePackingStatus({
+            fulfillmentPlanId, brandId: plan.brandId, currentStatus: current, nextStatus: input.status, actorId, updatedAt: clock(),
+          });
+          await tx.upsertPackingStatus(value);
+          await append(tx, 'fulfillment.packing-status.advanced.v1', fulfillmentPlanId, {
+            orderId: plan.orderId, fulfillmentPlanSnapshotId: fulfillmentPlanId, status: value.status,
+          }, commandId, actorId);
+          return value;
         },
       );
     },

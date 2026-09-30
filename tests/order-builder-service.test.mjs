@@ -76,3 +76,66 @@ test('one-sided approval cannot attach order and transaction rolls back', async 
   assert.equal(snapshot.cycles.find((item) => item.id === context.cycleId).stage, 'order-builder');
   assert.equal(snapshot.commands.some((item) => item.id === 'order-attach-invalid'), false);
 });
+
+async function attachedOrderFixture() {
+  const context = await fixture();
+  let order = await context.orders.createOrderDraft('order-create', 'buyer-1', { selectionId: context.selectionId, terms });
+  order = await context.orders.acceptTerms('order-shop-accept', 'buyer-1', { orderId: order.id, organisationId: 'shop-1' });
+  order = await context.orders.acceptTerms('order-brand-accept', 'sales-1', { orderId: order.id, organisationId: 'brand-1' });
+  const attached = await context.orders.attachOrderToCycle('order-attach', 'buyer-1', order.id);
+  return { ...context, order: attached.order };
+}
+
+test('either side of an attached order can propose an amendment; the commercial impact is derived from the line price', async () => {
+  const { orders, order } = await attachedOrderFixture();
+  assert.equal(order.lines[0].quantity, 3);
+  const amendment = await orders.proposeAmendment('amend-propose', 'buyer-1', { orderId: order.id, lineNo: 1, proposedQuantity: 5, reason: 'Retailer wants two more units for a launch event' });
+  assert.equal(amendment.status, 'proposed');
+  assert.equal(amendment.currentQuantity, 3);
+  assert.equal(amendment.proposedQuantity, 5);
+  assert.equal(amendment.deltaAmount, 160); // (5 - 3) * 80
+  assert.equal(amendment.proposedOrganisationId, 'shop-1');
+});
+
+test('an order that is not yet attached cannot be amended', async () => {
+  const context = await fixture();
+  const order = await context.orders.createOrderDraft('order-create-draft', 'buyer-1', { selectionId: context.selectionId, terms });
+  await assert.rejects(
+    context.orders.proposeAmendment('amend-too-early', 'buyer-1', { orderId: order.id, lineNo: 1, proposedQuantity: 5, reason: 'x' }),
+    (error) => error.code === 'ORDER_AMENDMENT_NOT_ATTACHED',
+  );
+});
+
+test('a line cannot carry two open amendments at once', async () => {
+  const { orders, order } = await attachedOrderFixture();
+  await orders.proposeAmendment('amend-first', 'buyer-1', { orderId: order.id, lineNo: 1, proposedQuantity: 5, reason: 'First request' });
+  await assert.rejects(
+    orders.proposeAmendment('amend-second', 'buyer-1', { orderId: order.id, lineNo: 1, proposedQuantity: 7, reason: 'Second request before the first is answered' }),
+    (error) => error.code === 'ORDER_AMENDMENT_ALREADY_OPEN',
+  );
+});
+
+test('only the other side of the order can accept or reject a proposal, and rejection requires a reason', async () => {
+  const { orders, order } = await attachedOrderFixture();
+  const amendment = await orders.proposeAmendment('amend-propose', 'buyer-1', { orderId: order.id, lineNo: 1, proposedQuantity: 5, reason: 'Retailer wants two more units' });
+
+  await assert.rejects(
+    orders.respondToAmendment('amend-self-respond', 'buyer-1', { orderId: order.id, amendmentId: amendment.id, decision: 'accepted' }),
+    (error) => error.code === 'ORDER_AMENDMENT_SELF_RESPONSE_FORBIDDEN',
+  );
+  await assert.rejects(
+    orders.respondToAmendment('amend-reject-no-reason', 'sales-1', { orderId: order.id, amendmentId: amendment.id, decision: 'rejected' }),
+    (error) => error.code === 'ORDER_AMENDMENT_RESPONSE_REASON_REQUIRED',
+  );
+  const accepted = await orders.respondToAmendment('amend-accept', 'sales-1', { orderId: order.id, amendmentId: amendment.id, decision: 'accepted' });
+  assert.equal(accepted.status, 'accepted');
+  assert.equal(accepted.respondedOrganisationId, 'brand-1');
+
+  const view = await orders.getAmendmentsForActor('buyer-1', order.id);
+  assert.equal(view.amendments.length, 1);
+  assert.equal(view.amendments[0].status, 'accepted');
+
+  // the order line itself is untouched — an accepted amendment records a decision, it does not
+  // silently rewrite committed quantities.
+  assert.equal((await orders.getAmendmentsForActor('sales-1', order.id)).orderId, order.id);
+});

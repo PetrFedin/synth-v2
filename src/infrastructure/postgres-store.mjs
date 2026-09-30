@@ -344,6 +344,32 @@ function transactionView(client) {
       'ORDER_CONCURRENCY_CONFLICT',
     ),
 
+    getOrderAmendment: (id) => getPayload(client, 'order_amendments', 'id', id),
+    async getOpenOrderAmendmentForLine(orderId, lineNo) {
+      const result = await client.query("SELECT payload FROM order_amendments WHERE order_id = $1 AND line_no = $2 AND status = 'proposed'", [orderId, lineNo]);
+      return result.rows[0]?.payload;
+    },
+    async listOrderAmendmentsByOrder(orderId) {
+      const result = await client.query('SELECT payload FROM order_amendments WHERE order_id = $1 ORDER BY proposed_at, id', [orderId]);
+      return result.rows.map((row) => row.payload);
+    },
+    insertOrderAmendment: (value) => insert(
+      client,
+      'order_amendments',
+      ['id', 'order_id', 'line_no', 'current_quantity', 'proposed_quantity', 'delta_amount', 'currency', 'reason', 'status', 'response_reason', 'proposed_organisation_id', 'proposed_by', 'proposed_at', 'responded_organisation_id', 'responded_by', 'responded_at', 'payload'],
+      [value.id, value.orderId, value.lineNo, value.currentQuantity, value.proposedQuantity, value.deltaAmount, value.currency, value.reason, value.status, value.responseReason, value.proposedOrganisationId, value.proposedBy, value.proposedAt, value.respondedOrganisationId, value.respondedBy, value.respondedAt, value],
+      'ORDER_AMENDMENT_ALREADY_EXISTS',
+    ),
+    async respondToOrderAmendmentRow(value) {
+      const result = await client.query(
+        `UPDATE order_amendments
+            SET status = $2, response_reason = $3, responded_organisation_id = $4, responded_by = $5, responded_at = $6, payload = $7::jsonb
+          WHERE id = $1 AND status = 'proposed'`,
+        [value.id, value.status, value.responseReason, value.respondedOrganisationId, value.respondedBy, value.respondedAt, JSON.stringify(value)],
+      );
+      invariant(result.rowCount === 1, 'ORDER_AMENDMENT_NOT_PROPOSED', 'Order amendment is no longer open', { id: value.id });
+    },
+
     getOrderCommitSnapshot: (id) => getPayload(client, 'order_commit_snapshots', 'id', id),
     insertOrderCommitSnapshot: (value) => insert(
       client,

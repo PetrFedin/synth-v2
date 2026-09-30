@@ -78,6 +78,8 @@ const ORDER_TERMS_UPDATE_BODY = bodyContract(['expectedVersion', 'terms'], { ter
 const ORDER_ACCEPT_BODY = bodyContract(['orderId', 'organisationId', 'expectedVersion']);
 const ORDER_VERSION_BODY = bodyContract(['expectedVersion']);
 const ORDER_CANCEL_BODY = bodyContract(['orderId', 'reason', 'expectedVersion']);
+const ORDER_AMENDMENT_PROPOSE_BODY = bodyContract(['lineNo', 'proposedQuantity', 'reason']);
+const ORDER_AMENDMENT_RESPOND_BODY = bodyContract(['decision', 'responseReason']);
 
 export function createWholesaleRoutes({ platform, catalog, materials, boms, measurements, partners, collaboration, orders, notifications, workspace }) {
   invariant(platform && partners && collaboration && orders && notifications && workspace, 'HTTP_SERVICES_REQUIRED', 'All V2 application services are required');
@@ -171,6 +173,9 @@ export function createWholesaleRoutes({ platform, catalog, materials, boms, meas
     mutate('POST', /^\/v2\/orders\/([^/]+)\/accept$/, ORDER_ACCEPT_BODY, ({ commandId, actorId, params, body }) => { sameId(body.orderId, params[0], 'orderId'); return orders.acceptTerms(commandId, actorId, { ...body, orderId: params[0] }); }),
     mutate('POST', /^\/v2\/orders\/([^/]+)\/attach$/, ORDER_VERSION_BODY, ({ commandId, actorId, params, body }) => orders.attachOrderToCycle(commandId, actorId, { orderId: params[0], expectedVersion: body.expectedVersion })),
     mutate('POST', /^\/v2\/orders\/([^/]+)\/cancel$/, ORDER_CANCEL_BODY, ({ commandId, actorId, params, body }) => { sameId(body.orderId, params[0], 'orderId'); return orders.cancelOrder(commandId, actorId, { orderId: params[0], reason: body.reason, expectedVersion: body.expectedVersion }); }),
+    mutate('POST', /^\/v2\/orders\/([^/]+)\/amendments$/, ORDER_AMENDMENT_PROPOSE_BODY, ({ commandId, actorId, params, body }) => orders.proposeAmendment(commandId, actorId, { orderId: params[0], lineNo: body.lineNo, proposedQuantity: body.proposedQuantity, reason: body.reason })),
+    mutate('POST', /^\/v2\/orders\/([^/]+)\/amendments\/([^/]+)\/respond$/, ORDER_AMENDMENT_RESPOND_BODY, ({ commandId, actorId, params, body }) => orders.respondToAmendment(commandId, actorId, { orderId: params[0], amendmentId: params[1], decision: body.decision, responseReason: body.responseReason })),
+    read('GET', /^\/v2\/orders\/([^/]+)\/amendments$/, [], ({ actorId, params }) => orders.getAmendmentsForActor(actorId, params[0])),
     read('GET', /^\/v2\/workspace\/([^/]+)\/page$/, ['limit', 'cursor'], ({ actorId, params, query }) => workspace.pageForActor(actorId, { section: params[0], limit: query.limit, cursor: query.cursor })),
     read('GET', /^\/v2\/workspace$/, ['limit'], ({ actorId, query }) => workspace.loadForActor(actorId, { limit: query.limit })),
     read('GET', /^\/v2\/notifications\/page$/, ['limit', 'cursor'], ({ actorId, query }) => notifications.pageForActor(actorId, { limit: query.limit, cursor: query.cursor })),

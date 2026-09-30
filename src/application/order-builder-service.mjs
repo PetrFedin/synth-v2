@@ -12,6 +12,10 @@ import {
   attachReadyOrder,
   cancelAttachedOrder,
 } from '../modules/orders/public.mjs';
+import {
+  proposeOrderAmendment as proposeOrderAmendmentDomain,
+  respondToOrderAmendment as respondToOrderAmendmentDomain,
+} from '../modules/order-amendments/public.mjs';
 import { assertBuyerCommercialSnapshot } from '../modules/retail-doors/public.mjs';
 import { assertAcceptedShowroomAccess } from '../modules/showroom-invitations/public.mjs';
 import { advanceCommercialCycle, attachOrder, cancelCommercialCycleOrder } from '../modules/commercial-cycle/public.mjs';
@@ -278,6 +282,76 @@ export function createOrderBuilderService({
           return Object.freeze({ order: cancelled, cycle: cancelledCycle });
         },
       ).catch(translateInventoryError);
+    },
+
+    // Предложение изменить количество строки уже подтверждённого заказа. Не переписывает саму
+    // строку — orderCommitSnapshot и резервирования склада построены вокруг зафиксированных
+    // количеств, и сдвигать их вслед за принятой правкой значило бы завести вторую, несогласованную
+    // причину изменения того, что уже зафиксировано. Применение принятой правки — отдельный шаг.
+    proposeAmendment(commandId, actorId, { orderId, lineNo, proposedQuantity, reason }) {
+      return execute(
+        commandId,
+        `proposeOrderAmendment:${actorId}:${orderId}:${lineNo}:${proposedQuantity}:${canonicalJson(reason ?? null)}`,
+        actorId,
+        async (tx) => {
+          const order = requireEntity(await tx.getOrder(orderId), 'ORDER_NOT_FOUND', { orderId });
+          const cycle = requireEntity(await tx.getCycle(order.cycleId), 'CYCLE_NOT_FOUND', { cycleId: order.cycleId });
+          const membership = authorizeOrderMutation(await tx.listMembershipsForTrade(cycle.brandId, cycle.shopId), actorId, cycle);
+          invariant(order.status === 'attached', 'ORDER_AMENDMENT_NOT_ATTACHED', 'Only an attached order can be amended', { status: order.status });
+          const line = order.lines[lineNo - 1];
+          invariant(line, 'ORDER_AMENDMENT_LINE_NOT_FOUND', 'Order does not have that line', { orderId, lineNo, lineCount: order.lines.length });
+          const existingOpen = await tx.getOpenOrderAmendmentForLine(orderId, lineNo);
+          invariant(!existingOpen, 'ORDER_AMENDMENT_ALREADY_OPEN', 'This line already has a proposal awaiting a response', { orderId, lineNo });
+          return Object.freeze({ order, line, proposedOrganisationId: membership.organisationId });
+        },
+        async (tx, { order, line, proposedOrganisationId }) => {
+          const amendment = proposeOrderAmendmentDomain({
+            id: nextId('order-amendment'), orderId, lineNo, currentQuantity: line.quantity, proposedQuantity,
+            unitPrice: line.unitPrice, currency: order.currency, reason, proposedOrganisationId, proposedBy: actorId, proposedAt: clock(),
+          });
+          await tx.insertOrderAmendment(amendment);
+          await append(tx, 'order.amendment-proposed', orderId, {
+            amendmentId: amendment.id, lineNo, currentQuantity: amendment.currentQuantity, proposedQuantity: amendment.proposedQuantity, deltaAmount: amendment.deltaAmount,
+          }, commandId, actorId);
+          return amendment;
+        },
+      );
+    },
+
+    respondToAmendment(commandId, actorId, { orderId, amendmentId, decision, responseReason }) {
+      return execute(
+        commandId,
+        `respondToOrderAmendment:${actorId}:${amendmentId}:${decision}:${canonicalJson(responseReason ?? null)}`,
+        actorId,
+        async (tx) => {
+          const amendment = requireEntity(await tx.getOrderAmendment(amendmentId), 'ORDER_AMENDMENT_NOT_FOUND', { amendmentId });
+          invariant(amendment.orderId === orderId, 'ORDER_AMENDMENT_ORDER_MISMATCH', 'Amendment does not belong to this order', { orderId, amendmentId });
+          const order = requireEntity(await tx.getOrder(orderId), 'ORDER_NOT_FOUND', { orderId });
+          const cycle = requireEntity(await tx.getCycle(order.cycleId), 'CYCLE_NOT_FOUND', { cycleId: order.cycleId });
+          const membership = authorizeOrderMutation(await tx.listMembershipsForTrade(cycle.brandId, cycle.shopId), actorId, cycle);
+          return Object.freeze({ amendment, responderOrganisationId: membership.organisationId });
+        },
+        async (tx, { amendment, responderOrganisationId }) => {
+          const updated = respondToOrderAmendmentDomain(amendment, {
+            decision, responderOrganisationId, responderActorId: actorId, responseReason, respondedAt: clock(),
+          });
+          await tx.respondToOrderAmendmentRow(updated);
+          await append(tx, decision === 'accepted' ? 'order.amendment-accepted' : 'order.amendment-rejected', orderId, {
+            amendmentId: updated.id, lineNo: updated.lineNo, responseReason: updated.responseReason,
+          }, commandId, actorId);
+          return updated;
+        },
+      );
+    },
+
+    async getAmendmentsForActor(actorId, orderId) {
+      return store.transaction(async (tx) => {
+        const order = requireEntity(await tx.getOrder(orderId), 'ORDER_NOT_FOUND', { orderId });
+        const membership = (await tx.getMembership(order.brandId, actorId)) ?? (await tx.getMembership(order.shopId, actorId));
+        assertCapability(membership, CAPABILITIES.LOGISTICS_READ);
+        const amendments = await tx.listOrderAmendmentsByOrder(orderId);
+        return Object.freeze({ orderId, amendments: Object.freeze(amendments) });
+      });
     },
   });
 }

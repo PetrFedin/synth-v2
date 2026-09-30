@@ -208,6 +208,38 @@ test('Media and attributes preserve exact variant/MDM context without becoming c
   assert.deepEqual(attribute.mdmRef, { entryId: 'mdm:fit:regular', version: 2 });
 });
 
+test('Media accepts the sketch roles that split the former generic "technical" bucket', () => {
+  const { styleVersion, colorway } = fixture();
+  for (const mediaRole of ['design_sketch', 'technical', 'tech_pack_thumbnail']) {
+    const media = createProductMedia({
+      id: `media:sketch:${mediaRole}`,
+      styleVersion,
+      colorway,
+      mediaType: 'image',
+      mediaRole,
+      uri: `s3://product-media/DRS-001/black/${mediaRole}.jpg`,
+      sortOrder: 0,
+      createdAt: at,
+      createdBy: actor,
+    });
+    assert.equal(media.mediaRole, mediaRole);
+  }
+  assert.throws(
+    () => createProductMedia({
+      id: 'media:sketch:invalid',
+      styleVersion,
+      colorway,
+      mediaType: 'image',
+      mediaRole: 'flat',
+      uri: 's3://product-media/DRS-001/black/flat.jpg',
+      sortOrder: 0,
+      createdAt: at,
+      createdBy: actor,
+    }),
+    (error) => error?.code === 'PRODUCT_MEDIA_ROLE_INVALID',
+  );
+});
+
 test('Style Reference board attaches to the style itself and trims optional fields, rejecting blanks over their limit', () => {
   const { style } = fixture();
   const reference = createProductStyleReference({

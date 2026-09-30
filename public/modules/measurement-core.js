@@ -104,5 +104,85 @@
     });
   }
 
-  root.SynthaMeasurementCore = Object.freeze({ assessChart, buildRegistry });
+  // Import/export of the measurement chart editor (docs/backlog-not-yet-integrated.md, section E):
+  // the same table the editor already builds by hand, one row per point, one column per size — kept
+  // here rather than in measurements.js so the round trip is testable without a DOM, the same way
+  // `assessChart` is. Nothing here touches the document; the file-picker and Blob download stay in
+  // measurements.js, which calls these as pure functions.
+  const CSV_FIXED_COLUMNS = 7;
+  function csvDelimiter(line) {
+    const counts = [[';', 0], ['\t', 0], [',', 0]].map(([char]) => [char, line.split(char).length - 1]);
+    counts.sort((a, b) => b[1] - a[1]);
+    return counts[0][1] > 0 ? counts[0][0] : ';';
+  }
+  function parseDelimited(source) {
+    const normalized = String(source || '').replace(/\r\n?/g, '\n').replace(/^﻿/, '');
+    const firstLine = normalized.split('\n')[0] || '';
+    const delimiter = csvDelimiter(firstLine);
+    const rows = [];
+    let row = [];
+    let field = '';
+    let quoted = false;
+    for (let index = 0; index < normalized.length; index += 1) {
+      const char = normalized[index];
+      if (quoted) {
+        if (char === '"') { if (normalized[index + 1] === '"') { field += '"'; index += 1; } else quoted = false; }
+        else field += char;
+        continue;
+      }
+      if (char === '"') { quoted = true; continue; }
+      if (char === delimiter) { row.push(field); field = ''; continue; }
+      if (char === '\n') { row.push(field); rows.push(row); row = []; field = ''; continue; }
+      field += char;
+    }
+    row.push(field);
+    rows.push(row);
+    return rows.filter((line) => line.some((cell) => String(cell).trim() !== ''));
+  }
+  function csvField(value) {
+    const raw = String(value ?? '');
+    return /[;"\n]/.test(raw) ? `"${raw.replace(/"/g, '""')}"` : raw;
+  }
+  function chartModelToCsv(model, columnLabels) {
+    const header = [...columnLabels, ...model.sizes.map((size) => size.code || '')];
+    const rows = model.points.map((point) => [
+      point.pointCode, point.name, point.description, point.toleranceMinus, point.tolerancePlus, point.grade || '', point.qcChecked ? '1' : '',
+      ...model.sizes.map((size) => point.values.get(size.key) ?? ''),
+    ]);
+    return `﻿${[header, ...rows].map((row) => row.map(csvField).join(';')).join('\r\n')}\r\n`;
+  }
+  function parseMeasurementChartCsv(source) {
+    const table = parseDelimited(source);
+    if (table.length < 2) return null;
+    const [headerRow, ...dataRows] = table;
+    const sizeCodes = headerRow.slice(CSV_FIXED_COLUMNS).map((code) => String(code).trim().toUpperCase()).filter(Boolean);
+    if (!sizeCodes.length) return null;
+    return { sizeCodes, dataRows };
+  }
+  // Mutates the already-open editor model in place: the person reviews the loaded grid in the same
+  // form they would have typed it into, and nothing reaches the server until they press Save.
+  function applyMeasurementChartCsv(model, parsed, nextKey) {
+    const sizes = parsed.sizeCodes.map((code) => ({ key: nextKey('size'), code, label: code }));
+    const points = parsed.dataRows.map((cells) => {
+      const values = new Map(sizes.map((size, index) => [size.key, String(cells[CSV_FIXED_COLUMNS + index] ?? '').trim()]));
+      const qc = String(cells[6] ?? '').trim().toLowerCase();
+      return {
+        key: nextKey('point'),
+        pointCode: String(cells[0] ?? '').trim().toUpperCase(),
+        name: String(cells[1] ?? '').trim(),
+        description: String(cells[2] ?? '').trim(),
+        toleranceMinus: String(cells[3] ?? '').trim().replace(',', '.'),
+        tolerancePlus: String(cells[4] ?? '').trim().replace(',', '.'),
+        grade: String(cells[5] ?? '').trim(),
+        qcChecked: qc === '1' || qc === 'true' || qc === 'yes' || qc === 'да',
+        values,
+      };
+    }).filter((point) => point.pointCode);
+    model.sizes = sizes;
+    model.points = points;
+    model.baseSizeKey = sizes[Math.floor(sizes.length / 2)]?.key;
+    return model;
+  }
+
+  root.SynthaMeasurementCore = Object.freeze({ assessChart, buildRegistry, chartModelToCsv, parseMeasurementChartCsv, applyMeasurementChartCsv });
 })(typeof window === 'undefined' ? globalThis : window);

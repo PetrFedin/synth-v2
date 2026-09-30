@@ -107,6 +107,15 @@ test('canonical caller cannot override governed unit, POM code or POM name', () 
   throwsCode(() => create(context(), input({ points: [{ ...point, name: 'Free form name' }] })), 'MEASUREMENT_POINT_FIELD_FORBIDDEN');
 });
 
+test('canonical QC-checked defaults to false, round-trips true, and rejects a non-boolean value', () => {
+  const defaulted = create();
+  assert.equal(defaulted.points[0].qcChecked, false);
+  const point = input().points[0];
+  const flagged = create(context(), input({ points: [{ ...point, qcChecked: true }] }));
+  assert.equal(flagged.points[0].qcChecked, true);
+  throwsCode(() => create(context(), input({ points: [{ ...point, qcChecked: 'yes' }] })), 'MEASUREMENT_QC_CHECKED_INVALID');
+});
+
 test('Russia-first canonical chart rejects imperial/wrong unit dictionary and wrong POM dictionary', () => {
   const imperial = context({
     measurementUnit: mdmEntry({

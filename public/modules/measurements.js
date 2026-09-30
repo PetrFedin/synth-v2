@@ -189,6 +189,7 @@
       const head = h('td', {}, [h('strong', { text: point.pointCode }), h('span', { text: point.name }), h('small', { text: `−${point.toleranceMinus} / +${unitAmount(point.tolerancePlus, item.chart.unit)}` })]);
       // The rule the row follows, stated once beside the row it governs.
       head.append(h('small', { className: 'measurement-grade-rule', text: `${text('градация', 'grade')}: ${gradeRuleText(point)}` }));
+      if (point.qcChecked) head.append(badge(text('Проверяется на приёмке', 'Checked at receiving'), 'low'));
       const cells = [head];
       for (const size of item.chart.sizes) {
         const value = bySize.get(size.code);
@@ -310,6 +311,7 @@
           // slash. "+4" and "4 / 4 / 6" are both things a technologist writes on paper.
           grade: Array.isArray(point.gradeSteps) && point.gradeSteps.length ? point.gradeSteps.join(' / ') : '',
           values: new Map(sizes.map((size) => [size.key, values.get(size.code) ?? ''])),
+          qcChecked: point.qcChecked === true,
         };
       }),
       notes: existing?.notes || '',
@@ -335,6 +337,14 @@
       title: text('Одно число — одинаковая разница между всеми размерами. Через «/» — своя разница на каждый интервал.',
         'One number grades every interval the same. Slashes give each interval its own step.'),
     });
+  }
+  // Which POM the receiving inspector actually re-measures, as opposed to every POM the chart
+  // happens to define — the chart states intent, the flag states practice.
+  function qcCheckedCell(point) {
+    const box = h('input', { type: 'checkbox', title: text('Проверяется при приёмке', 'Checked at receiving inspection') });
+    box.checked = point.qcChecked === true;
+    box.addEventListener('change', () => { point.qcChecked = box.checked; });
+    return box;
   }
 
   function showEditor({ existing, skus, model, nextKey }) {
@@ -378,7 +388,7 @@
         model.points.forEach((point) => point.values.set(size.key, ''));
         renderBody();
       } })), sizeList);
-      const tableHead = [h('th', { text: 'POM', scope: 'col' }), h('th', { text: text('Название / описание', 'Name / description'), scope: 'col' }), h('th', { text: '− Tol.', scope: 'col' }), h('th', { text: '+ Tol.', scope: 'col' }), h('th', { text: text('Градация', 'Grade'), scope: 'col' })];
+      const tableHead = [h('th', { text: 'POM', scope: 'col' }), h('th', { text: text('Название / описание', 'Name / description'), scope: 'col' }), h('th', { text: '− Tol.', scope: 'col' }), h('th', { text: '+ Tol.', scope: 'col' }), h('th', { text: text('Градация', 'Grade'), scope: 'col' }), h('th', { text: text('QC', 'QC'), scope: 'col' })];
       model.sizes.forEach((size) => tableHead.push(h('th', { text: size.code || '—', scope: 'col' })));
       tableHead.push(h('th', { text: '', scope: 'col' }));
       const rows = model.points.map((point) => {
@@ -388,13 +398,14 @@
           h('td', {}, [input('number', point.toleranceMinus, (value) => { point.toleranceMinus = value; }, { step: '0.0001', min: '0', required: true })]),
           h('td', {}, [input('number', point.tolerancePlus, (value) => { point.tolerancePlus = value; }, { step: '0.0001', min: '0', required: true })]),
           h('td', {}, [gradeCell(point)]),
+          h('td', {}, [qcCheckedCell(point)]),
         ];
         model.sizes.forEach((size) => cells.push(h('td', { className: size.key === model.baseSizeKey ? 'base-size' : '' }, [input('number', point.values.get(size.key), (value) => { point.values.set(size.key, value); }, { step: '0.0001', min: '0.0001', required: true })])));
         cells.push(h('td', {}, [h('button', { type: 'button', className: 'danger-link', text: '×', 'aria-label': text('Удалить POM', 'Remove POM'), onclick: () => { model.points = model.points.filter((candidate) => candidate.key !== point.key); renderBody(); } })]));
         return h('tr', {}, cells);
       });
       body.append(sectionHead(text('Точки измерения и матрица', 'Points of measure and matrix'), h('button', { type: 'button', className: 'secondary', disabled: model.points.length >= 300, text: text('Добавить POM', 'Add POM'), onclick: () => {
-        model.points.push({ key: nextKey('point'), pointCode: '', name: '', description: '', toleranceMinus: 0, tolerancePlus: 0, grade: '', values: new Map(model.sizes.map((size) => [size.key, ''])) });
+        model.points.push({ key: nextKey('point'), pointCode: '', name: '', description: '', toleranceMinus: 0, tolerancePlus: 0, grade: '', values: new Map(model.sizes.map((size) => [size.key, ''])), qcChecked: false });
         renderBody();
       } })), h('div', { className: 'measurement-editor-matrix-wrap' }, [h('table', { className: 'measurement-editor-matrix' }, [h('thead', {}, [h('tr', {}, tableHead)]), h('tbody', {}, rows)] )]));
       body.append(field(text('Примечания', 'Notes'), textarea(model.notes, (value) => { model.notes = value; })));
@@ -431,6 +442,7 @@
           pointCode: String(point.pointCode).trim().toUpperCase(), name: String(point.name).trim(), description: String(point.description).trim() || null,
           toleranceMinus: Number(point.toleranceMinus), tolerancePlus: Number(point.tolerancePlus),
           gradeSteps: parseGrade(point.grade, model.sizes.length),
+          qcChecked: point.qcChecked === true,
           measurements: model.sizes.flatMap((size) => {
             const value = point.values.get(size.key);
             return value === '' || value === null || value === undefined ? [] : [{ sizeCode: String(size.code).trim().toUpperCase(), value: Number(value) }];

@@ -60,6 +60,7 @@ test('PostgreSQL Measurement Charts preserve matrix integrity, RBAC, revisions, 
     const created = await measurements.createMeasurementChart('measurement-create', 'product-owner', initial);
     assert.equal(created.skuVersion, skuDraft.version);
     assert.equal(created.points[0].measurements[1].deltaFromPrevious, 3);
+    assert.equal(created.points[0].qcChecked, false);
     assert.equal((await measurements.createMeasurementChart('measurement-create', 'product-owner', initial)).id, created.id);
     await assert.rejects(() => measurements.createMeasurementChart('measurement-sales', 'sales-user', initial), { code: 'CAPABILITY_DENIED' });
 
@@ -76,11 +77,17 @@ test('PostgreSQL Measurement Charts preserve matrix integrity, RBAC, revisions, 
     });
     const publishedSku = await catalog.publishSku('sku-publish', 'product-owner', skuDraft.sku, { expectedVersion: revisedSku.version });
     await assert.rejects(() => measurements.publishMeasurementChart('measurement-stale-publish', 'product-owner', created.sku, { expectedVersion: created.version }), { code: 'MEASUREMENT_SKU_SNAPSHOT_STALE' });
-    const updateInput = chartInput(created.sku, { notes: 'Rebased after SKU publication', points: [{ ...initial.points[0], measurements: [{ sizeCode: 'S', value: 49 }, { sizeCode: 'M', value: 52.25 }, { sizeCode: 'L', value: 55.5 }] }, initial.points[1]] });
+    const updateInput = chartInput(created.sku, { notes: 'Rebased after SKU publication', points: [{ ...initial.points[0], qcChecked: true, measurements: [{ sizeCode: 'S', value: 49 }, { sizeCode: 'M', value: 52.25 }, { sizeCode: 'L', value: 55.5 }] }, initial.points[1]] });
     const updated = await measurements.updateMeasurementChart('measurement-update', 'product-owner', created.sku, { expectedVersion: created.version, ...editable(updateInput) });
     assert.equal(updated.skuVersion, publishedSku.version);
     assert.equal(updated.version, 2);
     assert.equal(updated.points[0].measurements[1].deltaFromPrevious, 3.25);
+    // The QC-checked flag is not its own column — it rides the same jsonb payload as every other
+    // point attribute, so persistence through a real update is the thing worth proving here.
+    assert.equal(updated.points[0].qcChecked, true);
+    assert.equal(updated.points[1].qcChecked, false);
+    const persisted = await pool.query('SELECT payload FROM measurement_charts WHERE sku = $1', [created.sku]);
+    assert.equal(persisted.rows[0].payload.points.find((p) => p.pointCode === 'CHEST').qcChecked, true);
     await assert.rejects(() => measurements.updateMeasurementChart('measurement-stale-update', 'product-owner', created.sku, { expectedVersion: created.version, ...editable(updateInput) }), { code: 'MEASUREMENT_CONCURRENCY_CONFLICT' });
 
     assert.equal((await measurements.getForActor('sales-user', created.sku)).sku, created.sku);

@@ -205,6 +205,32 @@ function view(client) {
     async deleteOrderLineComment({ orderId, lineNo, side }) {
       await client.query('DELETE FROM order_line_comments WHERE order_id = $1 AND line_no = $2 AND side = $3', [orderId, lineNo, side]);
     },
+    async getRetailDoor(retailDoorId) {
+      const result = await client.query('SELECT id, shop_id, status FROM retail_doors WHERE id = $1 FOR SHARE', [retailDoorId]);
+      const row = result.rows[0];
+      return row ? { id: row.id, shopId: row.shop_id, status: row.status } : undefined;
+    },
+    async listOrderLineDoorAllocations(orderId) {
+      const result = await client.query(
+        'SELECT line_no, retail_door_id, quantity, updated_at, updated_by FROM order_line_door_allocations WHERE order_id = $1 ORDER BY line_no, retail_door_id',
+        [orderId],
+      );
+      return result.rows.map((row) => ({
+        orderId, lineNo: row.line_no, retailDoorId: row.retail_door_id, quantity: row.quantity,
+        updatedAt: row.updated_at?.toISOString?.() ?? row.updated_at, updatedBy: row.updated_by,
+      }));
+    },
+    async upsertOrderLineDoorAllocation(value) {
+      await client.query(
+        `INSERT INTO order_line_door_allocations (order_id, line_no, retail_door_id, quantity, updated_at, updated_by)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (order_id, line_no, retail_door_id) DO UPDATE SET quantity = EXCLUDED.quantity, updated_at = EXCLUDED.updated_at, updated_by = EXCLUDED.updated_by`,
+        [value.orderId, value.lineNo, value.retailDoorId, value.quantity, value.updatedAt, value.updatedBy],
+      );
+    },
+    async deleteOrderLineDoorAllocation({ orderId, lineNo, retailDoorId }) {
+      await client.query('DELETE FROM order_line_door_allocations WHERE order_id = $1 AND line_no = $2 AND retail_door_id = $3', [orderId, lineNo, retailDoorId]);
+    },
     getCommand: (id) => getRegisteredCommand(client, 'wholesale', id),
     insertCommand: (value) => insertRegisteredCommand(client, 'wholesale', value),
     async appendOutbox(event) {

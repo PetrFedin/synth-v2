@@ -75,6 +75,11 @@
     }
     // Комментарий — заметка при строке заказа, а не факт исполнения: он осмыслен уже на черновике,
     // до всякого плана отгрузки, поэтому не требует item.orderCommitSnapshotId, в отличие от «Поставки».
+    // Распределение по точкам розницы — тоже про заказ, а не про его исполнение, и тоже осмыслено
+    // уже на черновике: магазин решает, куда разойдётся товар, ещё до всякого плана отгрузки.
+    if (seesLogistics && typeof window.orderLineDoorAllocationDialog === 'function') {
+      actions.push(actionButton(localized('Точки', 'Doors'), () => window.orderLineDoorAllocationDialog(item)));
+    }
     if (seesLogistics && typeof window.orderLineCommentsDialog === 'function') {
       actions.push(actionButton(localized('Комментарии', 'Comments'), () => window.orderLineCommentsDialog(item)));
     }

@@ -47,6 +47,7 @@ const PHYSICAL_COST_CORRECTION_BODY = bodyContract([
 const ORDER_LINE_COMMENT_BODY = bodyContract(['body']);
 const PACKING_STATUS_BODY = bodyContract(['status']);
 const PACKING_STATUSES = new Set(['packing', 'packed']);
+const DOOR_ALLOCATION_BODY = bodyContract(['quantity']);
 
 export function createFulfillmentRoutes({ fulfillment } = {}) {
   const service = fulfillment ?? unavailableFulfillment();
@@ -73,6 +74,9 @@ export function createFulfillmentRoutes({ fulfillment } = {}) {
     mutate('PUT', /^\/v2\/orders\/([^/]+)\/lines\/([1-9][0-9]*)\/comment$/, validateOrderLineCommentBody,
       ({ commandId, actorId, params, body }) => service.setOrderLineComment(commandId, actorId, params[0], { lineNo: positiveIntegerPath(params[1]), body: body.body })),
     read('GET', /^\/v2\/orders\/([^/]+)\/comments$/, ({ actorId, params }) => service.getOrderLineCommentsForActor(actorId, params[0])),
+    mutate('PUT', /^\/v2\/orders\/([^/]+)\/lines\/([1-9][0-9]*)\/door-allocations\/([^/]+)$/, validateDoorAllocationBody,
+      ({ commandId, actorId, params, body }) => service.setOrderLineDoorAllocation(commandId, actorId, params[0], { lineNo: positiveIntegerPath(params[1]), retailDoorId: decodeURIComponent(params[2]), quantity: body.quantity })),
+    read('GET', /^\/v2\/orders\/([^/]+)\/door-allocations$/, ({ actorId, params }) => service.getOrderLineDoorAllocationsForActor(actorId, params[0])),
   ]);
 }
 
@@ -172,6 +176,10 @@ function validatePackingStatusBody(body) {
   assertBodyContract(body, PACKING_STATUS_BODY);
   invariant(PACKING_STATUSES.has(body.status), 'HTTP_BODY_FIELD_INVALID', 'status must be packing or packed', { field: 'status' });
 }
+function validateDoorAllocationBody(body) {
+  assertBodyContract(body, DOOR_ALLOCATION_BODY);
+  invariant(Number.isInteger(body.quantity) && body.quantity >= 0 && body.quantity <= 2_147_483_647, 'HTTP_BODY_FIELD_INVALID', 'quantity must be a non-negative integer (0 clears the allocation)', { field: 'quantity' });
+}
 function positiveIntegerPath(value) {
   const parsed = Number(value);
   invariant(Number.isSafeInteger(parsed) && parsed > 0, 'HTTP_PATH_PARAMETER_INVALID', 'Order line number must be a positive integer', { value });
@@ -241,5 +249,7 @@ function unavailableFulfillment() {
     setOrderLineComment: fail,
     getOrderLineCommentsForActor: fail,
     setPackingStatus: fail,
+    setOrderLineDoorAllocation: fail,
+    getOrderLineDoorAllocationsForActor: fail,
   });
 }

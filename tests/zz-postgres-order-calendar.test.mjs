@@ -53,6 +53,62 @@ test('PostgreSQL order calendar milestones: either side adds its own, private st
   }
 });
 
+// docs/backlog-not-yet-integrated.md, раздел H: «календарные шаблоны в библиотеках» — шаблон заводится
+// один раз, применяется к заказу через тот же самый `createCalendarMilestone`, каким уже пишется
+// одиночная веха. Этот тест проходит настоящий цикл сервис → стор → реальный PostgreSQL: право на
+// чужой шаблон отказано, применение считает даты от якоря и переживает повторную команду без
+// удвоения вех.
+test('PostgreSQL calendar templates: applying one to an order creates offset milestones, replay-safe and organisation-scoped', { skip: !databaseUrl }, async () => {
+  const pool = createPostgresTestPool({ connectionString: databaseUrl, max: 6 });
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+  let sequence = 0;
+  const nextId = (prefix) => `${prefix}-pgt-${++sequence}`;
+  try {
+    await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
+    await migratePostgres({ pool, migrationsDir: path.join(root, 'db', 'migrations'), clock: () => now });
+    await seedOrder(pool);
+
+    const store = createPostgresFulfillmentStore({ pool });
+    const calendar = createOrderCalendarService({ store, clock: () => now, nextId });
+
+    const template = await calendar.createCalendarTemplate('cmd-template', 'brand-sales', 'brand-cal', {
+      name: 'Стандартный цикл заказа',
+      lines: [
+        { title: 'Заказ подтверждён', type: 'order', offsetDays: 0 },
+        { title: 'Груз готов', type: 'order', offsetDays: 60, visibility: 'shared' },
+      ],
+    });
+    const persistedTemplate = await pool.query('SELECT organisation_id, name FROM calendar_milestone_templates WHERE id = $1', [template.id]);
+    assert.deepEqual(persistedTemplate.rows[0], { organisation_id: 'brand-cal', name: 'Стандартный цикл заказа' });
+
+    // a member of the other side of the deal cannot apply the brand's own template
+    await assert.rejects(
+      calendar.applyCalendarTemplateToOrder('cmd-apply-denied', 'shop-buyer', 'order-cal', { templateId: template.id, anchorAt: '2026-10-05T00:00:00.000Z' }),
+      (error) => error.code === 'CALENDAR_TEMPLATE_ORGANISATION_MISMATCH',
+    );
+
+    const applied = await calendar.applyCalendarTemplateToOrder('cmd-apply', 'brand-sales', 'order-cal', { templateId: template.id, anchorAt: '2026-10-05T00:00:00.000Z' });
+    assert.equal(applied.milestones.length, 2);
+    assert.equal(applied.milestones[0].startsAt, '2026-10-05T00:00:00.000Z');
+    assert.equal(applied.milestones[1].startsAt, '2026-12-04T00:00:00.000Z');
+
+    const persistedMilestones = await pool.query('SELECT type, visibility FROM calendar_milestones WHERE cycle_id = $1 ORDER BY starts_at', ['cycle-cal']);
+    assert.deepEqual(persistedMilestones.rows, [{ type: 'order', visibility: 'private' }, { type: 'order', visibility: 'shared' }]);
+
+    // replaying the same command does not double the milestones
+    const replay = await calendar.applyCalendarTemplateToOrder('cmd-apply', 'brand-sales', 'order-cal', { templateId: template.id, anchorAt: '2026-10-05T00:00:00.000Z' });
+    assert.deepEqual(replay.milestones.map((m) => m.id), applied.milestones.map((m) => m.id));
+    const afterReplay = await pool.query('SELECT count(*)::int AS count FROM calendar_milestones WHERE cycle_id = $1', ['cycle-cal']);
+    assert.equal(afterReplay.rows[0].count, 2);
+
+    // the applied milestones are readable through the same view the order calendar tab already uses
+    const brandView = await calendar.getOrderCalendarMilestonesForActor('brand-sales', 'order-cal');
+    assert.deepEqual(brandView.milestones.map((m) => m.title), ['Заказ подтверждён', 'Груз готов']);
+  } finally {
+    await pool.end();
+  }
+});
+
 async function seedOrder(pool) {
   const brand = { id: 'brand-cal', type: 'brand', name: 'Calendar Brand' };
   const shop = { id: 'shop-cal', type: 'shop', name: 'Calendar Shop' };

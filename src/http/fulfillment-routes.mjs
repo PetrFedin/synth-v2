@@ -50,6 +50,9 @@ const PACKING_STATUSES = new Set(['packing', 'packed']);
 const DOOR_ALLOCATION_BODY = bodyContract(['quantity']);
 const CALENDAR_MILESTONE_BODY = bodyContract(['title', 'startsAt', 'visibility']);
 const CALENDAR_VISIBILITIES = new Set(['private', 'shared']);
+const CALENDAR_TEMPLATE_LINE_FIELDS = ['title', 'type', 'offsetDays', 'visibility'];
+const CALENDAR_TEMPLATE_BODY = bodyContract(['name', 'lines'], {}, { lines: CALENDAR_TEMPLATE_LINE_FIELDS });
+const CALENDAR_TEMPLATE_APPLY_BODY = bodyContract(['templateId', 'anchorAt']);
 
 export function createFulfillmentRoutes({ fulfillment } = {}) {
   const service = fulfillment ?? unavailableFulfillment();
@@ -82,6 +85,11 @@ export function createFulfillmentRoutes({ fulfillment } = {}) {
     mutate('POST', /^\/v2\/orders\/([^/]+)\/calendar-milestones$/, validateCalendarMilestoneBody,
       ({ commandId, actorId, params, body }) => service.addOrderCalendarMilestone(commandId, actorId, params[0], body)),
     read('GET', /^\/v2\/orders\/([^/]+)\/calendar-milestones$/, ({ actorId, params }) => service.getOrderCalendarMilestonesForActor(actorId, params[0])),
+    mutate('POST', /^\/v2\/organisations\/([^/]+)\/calendar-templates$/, validateCalendarTemplateBody,
+      ({ commandId, actorId, params, body }) => service.createCalendarTemplate(commandId, actorId, params[0], body)),
+    read('GET', /^\/v2\/organisations\/([^/]+)\/calendar-templates$/, ({ actorId, params }) => service.listCalendarTemplatesForActor(actorId, params[0])),
+    mutate('POST', /^\/v2\/orders\/([^/]+)\/calendar-milestones\/apply-template$/, validateCalendarTemplateApplyBody,
+      ({ commandId, actorId, params, body }) => service.applyCalendarTemplateToOrder(commandId, actorId, params[0], body)),
   ]);
 }
 
@@ -191,6 +199,23 @@ function validateCalendarMilestoneBody(body) {
   timestamp(body.startsAt, 'startsAt');
   invariant(body.visibility === undefined || CALENDAR_VISIBILITIES.has(body.visibility), 'HTTP_BODY_FIELD_INVALID', 'visibility must be private or shared', { field: 'visibility' });
 }
+const CALENDAR_MILESTONE_TYPES = new Set(['buying', 'order', 'deal']);
+function validateCalendarTemplateBody(body) {
+  assertBodyContract(body, CALENDAR_TEMPLATE_BODY);
+  requiredString(body.name, 'name', 1, 160);
+  invariant(Array.isArray(body.lines) && body.lines.length >= 1 && body.lines.length <= 50, 'HTTP_BODY_FIELD_INVALID', 'lines must contain 1 to 50 items', { field: 'lines' });
+  body.lines.forEach((line, index) => {
+    requiredString(line.title, 'title', 1, 200);
+    invariant(CALENDAR_MILESTONE_TYPES.has(line.type), 'HTTP_BODY_FIELD_INVALID', 'type must be buying, order or deal', { field: 'lines', index });
+    invariant(Number.isInteger(line.offsetDays), 'HTTP_BODY_FIELD_INVALID', 'offsetDays must be an integer', { field: 'lines', index });
+    invariant(line.visibility === undefined || CALENDAR_VISIBILITIES.has(line.visibility), 'HTTP_BODY_FIELD_INVALID', 'visibility must be private or shared', { field: 'lines', index });
+  });
+}
+function validateCalendarTemplateApplyBody(body) {
+  assertBodyContract(body, CALENDAR_TEMPLATE_APPLY_BODY);
+  requiredString(body.templateId, 'templateId', 1, 200);
+  timestamp(body.anchorAt, 'anchorAt');
+}
 function positiveIntegerPath(value) {
   const parsed = Number(value);
   invariant(Number.isSafeInteger(parsed) && parsed > 0, 'HTTP_PATH_PARAMETER_INVALID', 'Order line number must be a positive integer', { value });
@@ -264,5 +289,8 @@ function unavailableFulfillment() {
     getOrderLineDoorAllocationsForActor: fail,
     addOrderCalendarMilestone: fail,
     getOrderCalendarMilestonesForActor: fail,
+    createCalendarTemplate: fail,
+    listCalendarTemplatesForActor: fail,
+    applyCalendarTemplateToOrder: fail,
   });
 }

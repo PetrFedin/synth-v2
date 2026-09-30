@@ -54,6 +54,7 @@
     ['fabric_manager', 'Менеджер по тканям', 'Fabric manager'],
     ['technologist', 'Технолог', 'Technologist'],
     ['designer', 'Дизайнер', 'Designer'],
+    ['constructor', 'Конструктор', 'Patternmaker'],
   ];
   function people(product, role) {
     const list = product?.responsibilities?.[role];

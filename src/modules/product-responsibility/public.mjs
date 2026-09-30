@@ -10,6 +10,7 @@ export const PRODUCT_ROLES = Object.freeze([
   'buyer',
   'fabric_manager',
   'technologist',
+  'constructor',
 ]);
 
 const roles = new Set(PRODUCT_ROLES);

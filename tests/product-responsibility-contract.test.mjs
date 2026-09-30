@@ -11,11 +11,16 @@ const base = Object.freeze({
   assignedAt: '2026-09-18T10:00:00.000Z', assignedBy: 'actor-1',
 });
 
-test('a style carries the five desks a fashion product actually moves through', () => {
-  assert.deepEqual([...PRODUCT_ROLES], ['designer', 'product_manager', 'buyer', 'fabric_manager', 'technologist']);
+test('a style carries the six desks a fashion product actually moves through', () => {
+  assert.deepEqual([...PRODUCT_ROLES], ['designer', 'product_manager', 'buyer', 'fabric_manager', 'technologist', 'constructor']);
   const responsibility = createProductResponsibility(base);
   assert.equal(responsibility.role, 'buyer');
   assert.equal(responsibility.brandId, 'brand-1');
+});
+
+test('the constructor (patternmaker) desk is a recognized role, not an unknown one', () => {
+  const responsibility = createProductResponsibility({ ...base, role: 'constructor' });
+  assert.equal(responsibility.role, 'constructor');
 });
 
 test('a desk cannot be handed to someone outside the brand that owns the style', () => {
@@ -60,5 +65,12 @@ test('migration 081 projects the desks and the planned slot onto the Product Mas
   assert.match(sql, /'placeholderCode', slot\.placeholder_code/);
   assert.match(sql, /JOIN auth_users person ON person\.id = responsibility\.user_id/);
   assert.match(sql, /CREATE OR REPLACE VIEW product_master_workspace/);
+  assert.doesNotMatch(sql, /DROP\s+TABLE/i);
+});
+
+test('migration 145 widens the role constraint to include the constructor desk, without dropping the table', async () => {
+  const sql = await readMigration('145_product_responsibility_constructor_role.sql');
+  assert.match(sql, /DROP CONSTRAINT product_style_responsibilities_role_check/);
+  assert.match(sql, /'designer', 'product_manager', 'buyer', 'fabric_manager', 'technologist', 'constructor'/);
   assert.doesNotMatch(sql, /DROP\s+TABLE/i);
 });

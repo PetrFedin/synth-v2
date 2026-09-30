@@ -42,6 +42,7 @@ function schemas() {
       name: { type: 'string', minLength: 2, maxLength: 120 },
       description: nullableText(500), toleranceMinus: decimal, tolerancePlus: decimal,
       measurements: { type: 'array', maxItems: 50, items: valueInput },
+      qcChecked: { type: 'boolean' },
     },
   };
   const editable = {
@@ -70,6 +71,7 @@ function schemas() {
       toleranceMinus: decimal,
       tolerancePlus: decimal,
       measurements: { type: 'array', maxItems: 50, items: canonicalValueInput },
+      qcChecked: { type: 'boolean' },
     },
   };
   const canonicalEditable = {
@@ -94,12 +96,13 @@ function schemas() {
     MeasurementValue: { type: 'object', additionalProperties: false, required: ['sizeCode', 'value', 'deltaFromPrevious'], properties: { ...valueInput.properties, deltaFromPrevious: { oneOf: [signedDecimal, { type: 'null' }] } } },
     MeasurementPoint: {
       type: 'object', additionalProperties: false,
-      required: ['pointCode', 'position', 'name', 'description', 'toleranceMinus', 'tolerancePlus', 'baseValue', 'measurements'],
+      required: ['pointCode', 'position', 'name', 'description', 'toleranceMinus', 'tolerancePlus', 'baseValue', 'measurements', 'qcChecked'],
       properties: {
         pointCode: { type: 'string', pattern: POINT_PATTERN }, position: { type: 'integer', minimum: 1, maximum: 300 },
         name: { type: 'string', minLength: 2, maxLength: 120 }, description: nullableText(500),
         toleranceMinus: decimal, tolerancePlus: decimal, baseValue: { oneOf: [positiveDecimal, { type: 'null' }] },
         measurements: { type: 'array', maxItems: 50, items: { $ref: '#/components/schemas/MeasurementValue' } },
+        qcChecked: { type: 'boolean' },
       },
     },
     MeasurementChart: {
@@ -151,13 +154,14 @@ function schemas() {
     },
     CanonicalMeasurementPoint: {
       type: 'object', additionalProperties: false,
-      required: ['pointEntryId', 'pointEntryVersion', 'pointRef', 'pointCode', 'position', 'name', 'nameRu', 'nameEn', 'description', 'toleranceMinus', 'tolerancePlus', 'baseValue', 'measurements'],
+      required: ['pointEntryId', 'pointEntryVersion', 'pointRef', 'pointCode', 'position', 'name', 'nameRu', 'nameEn', 'description', 'toleranceMinus', 'tolerancePlus', 'baseValue', 'measurements', 'qcChecked'],
       properties: {
         pointEntryId: canonicalId(), pointEntryVersion: version(), pointRef: mdmSnapshot,
         pointCode: { type: 'string', pattern: MDM_CODE_PATTERN }, position: { type: 'integer', minimum: 1, maximum: 300 },
         name: { type: 'string', minLength: 2, maxLength: 120 }, nameRu: { type: 'string', minLength: 2, maxLength: 120 }, nameEn: { type: 'string', minLength: 2, maxLength: 120 },
         description: nullableText(500), toleranceMinus: decimal, tolerancePlus: decimal, baseValue: { oneOf: [positiveDecimal, { type: 'null' }] },
         measurements: { type: 'array', maxItems: 50, items: { $ref: '#/components/schemas/CanonicalMeasurementValue' } },
+        qcChecked: { type: 'boolean' },
       },
     },
     CanonicalMeasurementChart: {

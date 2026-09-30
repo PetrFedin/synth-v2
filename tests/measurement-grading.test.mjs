@@ -89,7 +89,7 @@ test('The rule and the source are carried by the schema and the transport', asyn
     'a JSON null and an SQL NULL both mean "no rule"');
   const routes = await readFile(path.join(root, 'src/http/routes.mjs'), 'utf8');
   assert.ok(routes.includes("'measurements', 'gradeSteps'"), 'the free chart accepts a rule');
-  assert.ok(routes.includes("'tolerancePlus', 'measurements', 'gradeSteps']"), 'the governed chart accepts one too');
+  assert.ok(routes.includes("'tolerancePlus', 'measurements', 'gradeSteps', 'qcChecked']"), 'the governed chart accepts one too');
 });
 
 // Ревизия опубликованной таблицы — это её собственные точки, отправленные обратно. Проверяется

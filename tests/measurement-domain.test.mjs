@@ -88,6 +88,15 @@ test('editing a draft rebases the SKU snapshot and supports no-op replay', () =>
   assert.equal(replay, updated);
 });
 
+test('QC-checked defaults to false, round-trips true, and rejects a non-boolean value', () => {
+  const defaulted = create();
+  assert.equal(defaulted.points[0].qcChecked, false);
+  const flagged = create({ ...completeInput, points: [{ ...completeInput.points[0], qcChecked: true }, completeInput.points[1]] });
+  assert.equal(flagged.points[0].qcChecked, true);
+  assert.equal(flagged.points[1].qcChecked, false);
+  assert.throws(() => create({ ...completeInput, points: [{ ...completeInput.points[0], qcChecked: 'yes' }] }), { code: 'MEASUREMENT_QC_CHECKED_INVALID' });
+});
+
 test('rejects duplicates, unknown sizes, client-derived fields and unsafe precision', () => {
   assert.throws(() => create({ ...completeInput, sizes: [{ code: 'M', label: 'Medium' }, { code: 'M', label: 'Duplicate' }] }), { code: 'MEASUREMENT_SIZE_CODE_DUPLICATE' });
   assert.throws(() => create({ ...completeInput, points: [{ ...completeInput.points[0], measurements: [{ sizeCode: 'XL', value: 58 }] }] }), { code: 'MEASUREMENT_VALUE_SIZE_UNKNOWN' });

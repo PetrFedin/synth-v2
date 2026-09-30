@@ -11,7 +11,7 @@ const POINT_CODE_PATTERN = /^[A-Z0-9][A-Z0-9._-]{0,31}$/;
 const MDM_CODE_PATTERN = /^[A-Z][A-Z0-9._-]{0,63}$/;
 const CHART_FIELDS = Object.freeze(new Set(['sku', 'unit', 'baseSizeCode', 'sizes', 'points', 'notes']));
 const SIZE_FIELDS = Object.freeze(new Set(['code', 'label']));
-const POINT_FIELDS = Object.freeze(new Set(['pointCode', 'name', 'description', 'toleranceMinus', 'tolerancePlus', 'measurements', 'gradeSteps']));
+const POINT_FIELDS = Object.freeze(new Set(['pointCode', 'name', 'description', 'toleranceMinus', 'tolerancePlus', 'measurements', 'gradeSteps', 'qcChecked']));
 const MEASUREMENT_FIELDS = Object.freeze(new Set(['sizeCode', 'value']));
 const CANONICAL_CHART_FIELDS = Object.freeze(new Set([
   'styleVersionId',
@@ -24,7 +24,7 @@ const CANONICAL_CHART_FIELDS = Object.freeze(new Set([
   'notes',
 ]));
 const CANONICAL_SIZE_FIELDS = Object.freeze(new Set(['sizeValueId']));
-const CANONICAL_POINT_FIELDS = Object.freeze(new Set(['pointEntryId', 'description', 'toleranceMinus', 'tolerancePlus', 'measurements', 'gradeSteps']));
+const CANONICAL_POINT_FIELDS = Object.freeze(new Set(['pointEntryId', 'description', 'toleranceMinus', 'tolerancePlus', 'measurements', 'gradeSteps', 'qcChecked']));
 const CANONICAL_MEASUREMENT_FIELDS = Object.freeze(new Set(['sizeValueId', 'value']));
 
 export function createMeasurementChart({ id, catalogSku, input, createdAt }) {
@@ -344,6 +344,7 @@ function normalizeCanonicalPoint({ point, position, sizes, selectedSizeIds, base
     tolerancePlus,
     baseValue: valueBySizeId.get(baseSizeValueId) ?? null,
     measurements: Object.freeze(measurements),
+    qcChecked: booleanFlag(point.qcChecked, 'MEASUREMENT_QC_CHECKED_INVALID', 'QC checked flag'),
   });
 }
 
@@ -395,6 +396,7 @@ function normalizePoint({ point, position, sizes, sizeCodes, baseSizeCode, point
     gradeSteps: steps,
     baseValue: measurementBySize.get(baseSizeCode) ?? null,
     measurements: Object.freeze(measurements),
+    qcChecked: booleanFlag(point.qcChecked, 'MEASUREMENT_QC_CHECKED_INVALID', 'QC checked flag'),
   });
 }
 
@@ -517,6 +519,12 @@ function subtractDecimals(left, right) {
   return result / SCALE;
 }
 function code(value, pattern, errorCode, label) { invariant(typeof value === 'string' && pattern.test(value), errorCode, `${label} is invalid`); return value; }
+
+function booleanFlag(value, errorCode, label) {
+  if (value === undefined || value === null || value === '') return false;
+  invariant(typeof value === 'boolean', errorCode, `${label} must be true or false`, { value });
+  return value;
+}
 function requiredId(value, errorCode, label) { return requiredText(value, 1, 160, errorCode, label); }
 function requiredText(value, minimum, maximum, errorCode, label) {
   invariant(typeof value === 'string', errorCode, `${label} is required`);

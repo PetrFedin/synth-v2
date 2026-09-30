@@ -324,4 +324,56 @@
     close.addEventListener('click', () => dialog.close());
     body.append(head, grid); dialog.append(body); dialog.showModal();
   };
+
+  function calendarMilestoneAddForm(order) {
+    openForm(text('Добавить веху', 'Add milestone'), [
+      textDef('title', text('Название', 'Title'), '', 200),
+      dateTimeDef('startsAt', text('Дата', 'Date')),
+      selectDef('visibility', text('Видимость', 'Visibility'), [
+        { id: 'private', name: text('только мне', 'private to me') },
+        { id: 'shared', name: text('обеим сторонам', 'shared with both sides') },
+      ], (option) => option.name, 'private'),
+    ], (values) => mutate(
+      `/v2/orders/${encodeURIComponent(order.id)}/calendar-milestones`,
+      isoDates({ title: values.title, startsAt: values.startsAt, visibility: values.visibility }, ['startsAt']),
+      'POST',
+    ));
+  }
+
+  /**
+   * Общая на обе стороны сделки таймлиния заказа — переиспользует `calendar_milestones`
+   * (миграция 001), которая до этого писала только вехи открытия сделки. `private` видна только
+   * той стороне, что её завела, `shared` — обеим; каждая сторона добавляет вехи только от своего
+   * имени, редактирование чужой вехи не предлагается вовсе.
+   */
+  global.orderCalendarDialog = async function orderCalendarDialog(order) {
+    const caps = window.SynthaUiCapabilities;
+    const canWrite = caps.hasForOrganisation(state.workspace, order.brandId, caps.CAPABILITIES.ORDER_WRITE)
+      || caps.hasForOrganisation(state.workspace, order.shopId, caps.CAPABILITIES.ORDER_WRITE);
+    const result = await api(`/v2/orders/${encodeURIComponent(order.id)}/calendar-milestones`);
+
+    const dialog = document.querySelector('#form-dialog'); clear(dialog);
+    const body = el('div', { className: 'dialog-body' });
+    const close = el('button', { className: 'button small', text: I18N.t('common.close'), type: 'button' });
+    const head = el('div', { className: 'dialog-head' }); head.append(el('h3', { text: text('Календарь заказа', 'Order calendar') }), close);
+    const grid = el('div', { className: 'form-grid' });
+
+    const milestones = result?.milestones || [];
+    if (!milestones.length) {
+      grid.append(el('div', { className: 'empty', text: text('Вех пока нет.', 'No milestones yet.') }));
+    }
+    milestones.forEach((milestone) => {
+      const label = el('label');
+      const visibilityLabel = milestone.visibility === 'shared' ? text('обеим сторонам', 'shared') : text('только своей стороне', 'private');
+      label.append(el('span', { text: `${formatDate(milestone.startsAt)} — ${milestone.title}` }));
+      label.append(el('input', { type: 'text', value: `${orgName(milestone.ownerOrganisationId)} · ${visibilityLabel}`, readOnly: true }));
+      grid.append(label);
+    });
+    if (canWrite) {
+      grid.append(actionButton(text('Добавить веху', 'Add milestone'), () => calendarMilestoneAddForm(order)));
+    }
+
+    close.addEventListener('click', () => dialog.close());
+    body.append(head, grid); dialog.append(body); dialog.showModal();
+  };
 })(window);

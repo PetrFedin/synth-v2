@@ -83,6 +83,11 @@
     if (seesLogistics && typeof window.orderLineCommentsDialog === 'function') {
       actions.push(actionButton(localized('Комментарии', 'Comments'), () => window.orderLineCommentsDialog(item)));
     }
+    // Общая таймлиния заказа — тоже осмыслена уже на черновике, тем же правом чтения, что и
+    // комментарии с точками розницы.
+    if (seesLogistics && typeof window.orderCalendarDialog === 'function') {
+      actions.push(actionButton(localized('Календарь', 'Calendar'), () => window.orderCalendarDialog(item)));
+    }
     return actions;
   };
 

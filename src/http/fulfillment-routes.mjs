@@ -48,6 +48,8 @@ const ORDER_LINE_COMMENT_BODY = bodyContract(['body']);
 const PACKING_STATUS_BODY = bodyContract(['status']);
 const PACKING_STATUSES = new Set(['packing', 'packed']);
 const DOOR_ALLOCATION_BODY = bodyContract(['quantity']);
+const CALENDAR_MILESTONE_BODY = bodyContract(['title', 'startsAt', 'visibility']);
+const CALENDAR_VISIBILITIES = new Set(['private', 'shared']);
 
 export function createFulfillmentRoutes({ fulfillment } = {}) {
   const service = fulfillment ?? unavailableFulfillment();
@@ -77,6 +79,9 @@ export function createFulfillmentRoutes({ fulfillment } = {}) {
     mutate('PUT', /^\/v2\/orders\/([^/]+)\/lines\/([1-9][0-9]*)\/door-allocations\/([^/]+)$/, validateDoorAllocationBody,
       ({ commandId, actorId, params, body }) => service.setOrderLineDoorAllocation(commandId, actorId, params[0], { lineNo: positiveIntegerPath(params[1]), retailDoorId: decodeURIComponent(params[2]), quantity: body.quantity })),
     read('GET', /^\/v2\/orders\/([^/]+)\/door-allocations$/, ({ actorId, params }) => service.getOrderLineDoorAllocationsForActor(actorId, params[0])),
+    mutate('POST', /^\/v2\/orders\/([^/]+)\/calendar-milestones$/, validateCalendarMilestoneBody,
+      ({ commandId, actorId, params, body }) => service.addOrderCalendarMilestone(commandId, actorId, params[0], body)),
+    read('GET', /^\/v2\/orders\/([^/]+)\/calendar-milestones$/, ({ actorId, params }) => service.getOrderCalendarMilestonesForActor(actorId, params[0])),
   ]);
 }
 
@@ -180,6 +185,12 @@ function validateDoorAllocationBody(body) {
   assertBodyContract(body, DOOR_ALLOCATION_BODY);
   invariant(Number.isInteger(body.quantity) && body.quantity >= 0 && body.quantity <= 2_147_483_647, 'HTTP_BODY_FIELD_INVALID', 'quantity must be a non-negative integer (0 clears the allocation)', { field: 'quantity' });
 }
+function validateCalendarMilestoneBody(body) {
+  assertBodyContract(body, CALENDAR_MILESTONE_BODY);
+  requiredString(body.title, 'title', 1, 200);
+  timestamp(body.startsAt, 'startsAt');
+  invariant(body.visibility === undefined || CALENDAR_VISIBILITIES.has(body.visibility), 'HTTP_BODY_FIELD_INVALID', 'visibility must be private or shared', { field: 'visibility' });
+}
 function positiveIntegerPath(value) {
   const parsed = Number(value);
   invariant(Number.isSafeInteger(parsed) && parsed > 0, 'HTTP_PATH_PARAMETER_INVALID', 'Order line number must be a positive integer', { value });
@@ -251,5 +262,7 @@ function unavailableFulfillment() {
     setPackingStatus: fail,
     setOrderLineDoorAllocation: fail,
     getOrderLineDoorAllocationsForActor: fail,
+    addOrderCalendarMilestone: fail,
+    getOrderCalendarMilestonesForActor: fail,
   });
 }

@@ -84,6 +84,40 @@ export function submitSelection(selection, updatedAt) {
   return Object.freeze({ ...selection, status: 'submitted', version: selection.version + 1, updatedAt });
 }
 
+// Внутреннее согласование у ритейлера — необязательный путь рядом с прямой отправкой, а не замена
+// ей: тот, кто собирал ассортимент, может отправить его сам (submitSelection, как и раньше), а
+// может сперва отправить на согласование тому, кто в магазине его не собирал. Требования к составу
+// те же самые, что и у прямой отправки, — согласование проверяет тот же набор строк, который иначе
+// проверила бы сама отправка.
+export function requestSelectionApproval(selection, updatedAt) {
+  invariant(selection.status === 'draft', 'SELECTION_NOT_DRAFT', 'Only a draft selection can be sent for approval');
+  invariant(selection.lines.length > 0, 'SELECTION_LINES_REQUIRED', 'Selection must contain at least one line');
+  const currencies = new Set(selection.lines.map((line) => line.currency));
+  invariant(currencies.size === 1, 'SELECTION_CURRENCY_MISMATCH', 'All selection lines must use one currency');
+  return Object.freeze({ ...selection, status: 'pending_approval', approvalRequestedAt: updatedAt, version: selection.version + 1, updatedAt });
+}
+
+// Согласовано — тот же переход, что делает submitSelection (черновик минуют, а не заменяют его),
+// только из состояния «на согласовании» и с именем того, кто решил. Отклонено — назад в черновик,
+// с причиной: тот, кто собирал ассортимент, должен знать, что поправить, а не только что решение
+// отрицательное.
+export function approveSelection(selection, actorId, updatedAt) {
+  invariant(selection.status === 'pending_approval', 'SELECTION_NOT_PENDING_APPROVAL', 'Only a selection pending approval can be approved', { status: selection.status });
+  return Object.freeze({
+    ...selection, status: 'submitted', approvalDecidedAt: updatedAt, approvalDecidedBy: actorId, approvalOutcome: 'approved',
+    version: selection.version + 1, updatedAt,
+  });
+}
+export function rejectSelection(selection, actorId, reason, updatedAt) {
+  invariant(selection.status === 'pending_approval', 'SELECTION_NOT_PENDING_APPROVAL', 'Only a selection pending approval can be rejected', { status: selection.status });
+  const normalizedReason = typeof reason === 'string' ? reason.trim() : '';
+  invariant(normalizedReason.length >= 2 && normalizedReason.length <= NOTE_MAX_LENGTH, 'SELECTION_APPROVAL_REJECTION_REASON_INVALID', `Rejection reason must contain 2 to ${NOTE_MAX_LENGTH} characters`);
+  return Object.freeze({
+    ...selection, status: 'draft', approvalDecidedAt: updatedAt, approvalDecidedBy: actorId, approvalOutcome: 'rejected', approvalRejectionReason: normalizedReason,
+    version: selection.version + 1, updatedAt,
+  });
+}
+
 function normalizeSelectionLine(line, actorId, updatedAt) {
   invariant(typeof line.sku === 'string' && line.sku.length > 0, 'SELECTION_LINE_SKU_REQUIRED', 'Selection line SKU is required');
   const quantity = assertPostgresInteger(line.quantity, { code: 'SELECTION_LINE_QUANTITY_INVALID', label: 'Selection quantity', min: 1 });

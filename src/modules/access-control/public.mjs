@@ -59,6 +59,7 @@ export const CAPABILITIES = Object.freeze({
   COMPLIANCE_DOCUMENT_MANAGE: 'compliance-document.manage',
   PRODUCT_CERTIFICATION_READ: 'product-certification.read',
   PRODUCT_CERTIFICATION_MANAGE: 'product-certification.manage',
+  SELECTION_APPROVE: 'selection.approve',
 });
 
 const ALL_CAPABILITIES = Object.freeze(Object.values(CAPABILITIES));
@@ -189,6 +190,9 @@ export const ROLE_CAPABILITIES = Object.freeze({
     CAPABILITIES.CALENDAR_READ,
     CAPABILITIES.COMPLIANCE_DOCUMENT_READ,
     CAPABILITIES.COMPLIANCE_DOCUMENT_MANAGE,
+    // Согласование ассортимента — то же разделение обязанностей, что уже стоит между продажами и
+    // качеством: тот, кто собрал ассортимент (buyer, selection.write), не согласует сам себя.
+    CAPABILITIES.SELECTION_APPROVE,
   ]),
   viewer: Object.freeze([
     CAPABILITIES.PRODUCT_READ,

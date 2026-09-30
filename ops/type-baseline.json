@@ -67,7 +67,7 @@
   "src/application/retail-door-service.mjs": 3,
   "src/application/sample-query-service.mjs": 1,
   "src/application/sample-service.mjs": 1,
-  "src/application/showroom-selection-service.mjs": 7,
+  "src/application/showroom-selection-service.mjs": 8,
   "src/application/sourcing-query-service.mjs": 1,
   "src/application/sourcing-service.mjs": 4,
   "src/application/sourcing-tech-pack-allocation-service.mjs": 1,

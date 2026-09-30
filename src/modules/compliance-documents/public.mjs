@@ -11,7 +11,7 @@ export const COMPLIANCE_DOCUMENT_EDO_STATUSES = Object.freeze(['sent', 'delivere
 
 const CODE_PATTERN = /^[A-Z0-9][A-Z0-9._/-]{2,79}$/;
 
-export function createComplianceDocument({ id, organisationId, documentNumber, documentType, issuer, counterpartyLegalEntityId, validFrom, validTo, linkedShipmentNoticeSnapshotId = null, createdAt, createdBy }) {
+export function createComplianceDocument({ id, organisationId, documentNumber, documentType, issuer, counterpartyLegalEntityId, validFrom, validTo, linkedShipmentNoticeSnapshotId = null, linkedOrderId = null, createdAt, createdBy }) {
   invariant(COMPLIANCE_DOCUMENT_TYPES.includes(documentType), 'COMPLIANCE_DOCUMENT_TYPE_INVALID', 'Compliance Document type is invalid', { documentType });
   assertIssuer(issuer);
   const at = timestamp(createdAt, 'COMPLIANCE_DOCUMENT_CREATED_AT_INVALID', 'Compliance Document creation time');
@@ -33,6 +33,10 @@ export function createComplianceDocument({ id, organisationId, documentNumber, d
     // Не каждый документ сопровождает конкретную отгрузку: декларация/сертификат ЕАЭС может быть
     // выставлен на партию до отгрузки, поэтому связь необязательна.
     linkedShipmentNoticeSnapshotId: linkedShipmentNoticeSnapshotId ? identifier(linkedShipmentNoticeSnapshotId, 'COMPLIANCE_DOCUMENT_SHIPMENT_INVALID', 'Linked shipment notice') : null,
+    // Не каждый документ сопровождает ровно один заказ: декларация/сертификат ЕАЭС может быть
+    // выставлен на партию до всякого заказа, поэтому связь необязательна — тем же приёмом, что и
+    // ссылка на отгрузку чуть выше.
+    linkedOrderId: linkedOrderId ? identifier(linkedOrderId, 'COMPLIANCE_DOCUMENT_ORDER_INVALID', 'Linked order') : null,
     version: 1,
     issuedAt: null,
     supersededAt: null,

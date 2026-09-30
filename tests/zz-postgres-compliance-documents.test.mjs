@@ -37,6 +37,13 @@ test('PostgreSQL Compliance Document registry issues a УПД, tracks its ЭДО
     await platform.grantMembership('member-finance', 'owner-user', createMembership({ id: 'membership-finance', organisationId: 'brand-cd', organisationType: 'brand', userId: 'finance-user', role: 'finance', createdAt: clock() }));
     await platform.grantMembership('member-sales', 'owner-user', createMembership({ id: 'membership-sales', organisationId: 'brand-cd', organisationType: 'brand', userId: 'sales-user', role: 'sales', createdAt: clock() }));
 
+    const order = await seedOrder(pool, { suffix: 'cd', brandId: 'brand-cd' });
+    await pool.query(
+      `INSERT INTO organisations (id, type, payload) VALUES ($1, 'brand', $2::jsonb) ON CONFLICT (id) DO NOTHING`,
+      ['brand-other-cd', JSON.stringify({ id: 'brand-other-cd', type: 'brand', name: 'Other Brand' })],
+    );
+    const otherOrder = await seedOrder(pool, { suffix: 'other-cd', brandId: 'brand-other-cd' });
+
     const entity = await legalEntities.createLegalEntity('entity-create', 'owner-user', { organisationId: 'brand-cd', entityCode: 'RU-MAIN' });
     await legalEntities.createLegalEntityVersion('v1', 'owner-user', entity.id, {
       expectedLatestVersionNo: 0, jurisdiction: 'RU', nameRu: 'ООО «Синта Рус»', nameEn: 'Syntha Rus LLC',
@@ -69,6 +76,29 @@ test('PostgreSQL Compliance Document registry issues a УПД, tracks its ЭДО
       organisationId: 'brand-cd', documentNumber: 'UPD-SHIP-0000', documentType: 'upd', issuerLegalEntityId: entity.id,
       linkedShipmentNoticeSnapshotId: 'shipment-notice_missing',
     }), { code: 'COMPLIANCE_DOCUMENT_SHIPMENT_NOT_FOUND' });
+
+    // A document cannot claim an order that does not exist, nor one that belongs to another brand.
+    await assert.rejects(() => complianceDocuments.createComplianceDocument('bad-order', 'finance-user', {
+      organisationId: 'brand-cd', documentNumber: 'UPD-ORDER-0000', documentType: 'upd', issuerLegalEntityId: entity.id,
+      linkedOrderId: 'order_missing',
+    }), { code: 'COMPLIANCE_DOCUMENT_ORDER_NOT_FOUND' });
+    await assert.rejects(() => complianceDocuments.createComplianceDocument('cross-brand-order', 'finance-user', {
+      organisationId: 'brand-cd', documentNumber: 'UPD-ORDER-0001', documentType: 'upd', issuerLegalEntityId: entity.id,
+      linkedOrderId: otherOrder.id,
+    }), { code: 'COMPLIANCE_DOCUMENT_ORDER_ORGANISATION_MISMATCH' });
+
+    const orderLinked = await complianceDocuments.createComplianceDocument('order-linked-create', 'finance-user', {
+      organisationId: 'brand-cd', documentNumber: 'UPD-ORDER-0002', documentType: 'upd', issuerLegalEntityId: entity.id,
+      linkedOrderId: order.id,
+    });
+    assert.equal(orderLinked.linkedOrderId, order.id);
+    const persistedLink = await pool.query('SELECT linked_order_id FROM compliance_documents WHERE id = $1', [orderLinked.id]);
+    assert.equal(persistedLink.rows[0].linked_order_id, order.id);
+    // Superseding carries the order link forward — it is issuance context, not a mutable attribute.
+    const orderLinkedIssued = await complianceDocuments.issueComplianceDocument('order-linked-issue', 'finance-user', orderLinked.id, { expectedVersion: 1 });
+    const orderLinkedSuperseded = await complianceDocuments.supersedeComplianceDocument('order-linked-supersede', 'finance-user', orderLinked.id, { expectedVersion: orderLinkedIssued.version, replacementDocumentNumber: 'UPD-ORDER-0002-KORR' });
+    assert.equal(orderLinkedSuperseded.replacement.linkedOrderId, order.id);
+
     // replay is idempotent
     assert.equal((await complianceDocuments.createComplianceDocument('doc-create', 'finance-user', {
       organisationId: 'brand-cd', documentNumber: 'UPD-0001', documentType: 'upd', issuerLegalEntityId: entity.id, counterpartyLegalEntityId: counterparty.id,
@@ -114,19 +144,53 @@ test('PostgreSQL Compliance Document registry issues a УПД, tracks its ЭДО
     assert.equal(replacement.supersedesDocumentId, draft.id);
 
     const listed = await complianceDocuments.listForActor('finance-user', 'brand-cd');
-    assert.equal(listed.length, 3);
+    assert.equal(listed.length, 5);
     assert.ok(listed.some((doc) => doc.documentNumber === 'UPD-0001-KORR'));
+    assert.ok(listed.some((doc) => doc.documentNumber === 'UPD-ORDER-0002-KORR' && doc.linkedOrderId === order.id));
 
     const events = (await pool.query("SELECT event_type FROM outbox_events WHERE event_type LIKE 'compliance-document%'")).rows.map((row) => row.event_type).sort();
     assert.deepEqual(events, [
       'compliance-document.created',
       'compliance-document.created',
+      'compliance-document.created',
       'compliance-document.edo-status-recorded',
       'compliance-document.edo-status-recorded',
       'compliance-document.edo-status-recorded',
       'compliance-document.issued',
       'compliance-document.issued',
+      'compliance-document.issued',
+      'compliance-document.superseded',
       'compliance-document.superseded',
     ].sort());
   } finally { await pool.end(); }
 });
+
+async function seedOrder(pool, { suffix, brandId }) {
+  const now = '2026-09-01T09:00:00.000Z';
+  const shopId = `shop-${suffix}`;
+  await pool.query(
+    `INSERT INTO organisations (id, type, payload) VALUES ($1, 'shop', $2::jsonb) ON CONFLICT (id) DO NOTHING`,
+    [shopId, JSON.stringify({ id: shopId, type: 'shop', name: `Shop ${suffix}` })],
+  );
+  const campaign = { id: `campaign-${suffix}`, brandId, status: 'open', version: 1 };
+  const collection = { id: `collection-${suffix}`, campaignId: campaign.id, brandId, status: 'published', currency: 'EUR', version: 1 };
+  const showroom = { id: `showroom-${suffix}`, collectionId: collection.id, brandId, status: 'open', version: 1 };
+  await pool.query('INSERT INTO campaigns (id, brand_id, status, version, payload) VALUES ($1, $2, $3, $4, $5::jsonb) ON CONFLICT (id) DO NOTHING', [campaign.id, campaign.brandId, campaign.status, campaign.version, JSON.stringify(campaign)]);
+  await pool.query('INSERT INTO collections (id, campaign_id, brand_id, status, currency, version, payload) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb) ON CONFLICT (id) DO NOTHING', [collection.id, collection.campaignId, collection.brandId, collection.status, collection.currency, collection.version, JSON.stringify(collection)]);
+  await pool.query('INSERT INTO showrooms (id, collection_id, brand_id, status, version, payload) VALUES ($1, $2, $3, $4, $5, $6::jsonb) ON CONFLICT (id) DO NOTHING', [showroom.id, showroom.collectionId, showroom.brandId, showroom.status, showroom.version, JSON.stringify(showroom)]);
+
+  const cycle = { id: `cycle-${suffix}`, brandId, shopId, campaignId: campaign.id, collectionId: collection.id, stage: 'order-builder', version: 1, createdAt: now, updatedAt: now };
+  await pool.query('INSERT INTO commercial_cycles (id, brand_id, shop_id, campaign_id, collection_id, stage, version, payload) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)', [cycle.id, cycle.brandId, cycle.shopId, cycle.campaignId, cycle.collectionId, cycle.stage, cycle.version, JSON.stringify(cycle)]);
+
+  const lines = [{ sku: `SKU-${suffix}`, quantity: 8, unitPrice: 100, currency: 'EUR', catalogVersion: 1 }];
+  const selection = { id: `selection-${suffix}`, cycleId: cycle.id, showroomId: showroom.id, collectionId: collection.id, brandId, shopId, status: 'submitted', version: 1, lines, createdAt: now, updatedAt: now };
+  await pool.query('INSERT INTO selections (id, cycle_id, showroom_id, collection_id, brand_id, shop_id, status, version, payload) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)', [selection.id, selection.cycleId, selection.showroomId, selection.collectionId, selection.brandId, selection.shopId, selection.status, selection.version, JSON.stringify(selection)]);
+
+  const order = { id: `order-${suffix}`, selectionId: selection.id, cycleId: cycle.id, brandId, shopId, currency: 'EUR', lines, totalAmount: 800, status: 'ready', version: 1, createdAt: now, updatedAt: now };
+  await pool.query(
+    `INSERT INTO orders (id, selection_id, cycle_id, brand_id, shop_id, status, currency, total_amount, order_commit_snapshot_id, version, payload)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULL, $9, $10::jsonb)`,
+    [order.id, order.selectionId, order.cycleId, order.brandId, order.shopId, order.status, order.currency, order.totalAmount, order.version, JSON.stringify(order)],
+  );
+  return order;
+}

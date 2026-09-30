@@ -131,6 +131,9 @@ function complianceDocumentForm() {
     // что и у самой отгрузки (`order-fulfillment-view.js` только читает). Идентификатор вставляется
     // вручную; сервер отклонит чужой или несуществующий, а не примет молча.
     textDef('linkedShipmentNoticeSnapshotId', localText('ID отгрузки (необязательно)', 'Shipment notice id (optional)'), '', 200, false),
+    // У заказа свой экран со списком («Оптовые заказы»), но не отсюда — тем же приёмом, что и
+    // отгрузка выше, а не отдельным зависимым выбором.
+    textDef('linkedOrderId', localText('ID заказа (необязательно)', 'Order id (optional)'), '', 200, false),
   ], async (values) => {
     const organisationId = validation.requiredText(values.organisationId, localText('Организация', 'Organisation'), { minLength: 1, maxLength: 120 });
     const result = await mutate('/v2/compliance-documents', {
@@ -142,6 +145,7 @@ function complianceDocumentForm() {
       validFrom: values.documentType === 'upd' ? null : (values.validFrom || null),
       validTo: values.documentType === 'upd' ? null : (values.validTo || null),
       linkedShipmentNoticeSnapshotId: values.linkedShipmentNoticeSnapshotId?.trim() || null,
+      linkedOrderId: values.linkedOrderId?.trim() || null,
     });
     delete complianceDocumentState.data[organisationId];
     return result;

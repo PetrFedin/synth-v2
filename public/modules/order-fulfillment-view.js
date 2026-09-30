@@ -268,4 +268,60 @@
     close.addEventListener('click', () => dialog.close());
     body.append(head, grid); dialog.append(body); dialog.showModal();
   };
+
+  function doorAllocationEditForm(order, lineNo, sku, door, currentQuantity) {
+    openForm(`${text('Точка', 'Door')} ${door.code} — ${sku}`, [numberDef('quantity', text('Количество', 'Quantity'), currentQuantity ?? 0, true, 0)], (values) => mutate(
+      `/v2/orders/${encodeURIComponent(order.id)}/lines/${lineNo}/door-allocations/${encodeURIComponent(door.id)}`,
+      { quantity: Number.parseInt(values.quantity, 10) || 0 },
+      'PUT',
+    ));
+  }
+
+  /**
+   * Распределение строки заказа по точкам розницы магазина — намерение магазина, куда разойдётся
+   * товар, а не команда на исполнение: ни план отгрузки, ни резервирование склада эта запись не
+   * трогает. Пишет только магазин по своим собственным дверям, бренд — читает результат.
+   */
+  global.orderLineDoorAllocationDialog = async function orderLineDoorAllocationDialog(order) {
+    const caps = window.SynthaUiCapabilities;
+    const canWrite = caps.hasForOrganisation(state.workspace, order.shopId, caps.CAPABILITIES.ORDER_WRITE);
+    const [allocationResult, doorsResult] = await Promise.all([
+      api(`/v2/orders/${encodeURIComponent(order.id)}/door-allocations`),
+      api(`/v2/shops/${encodeURIComponent(order.shopId)}/doors`).catch(() => []),
+    ]);
+    const activeDoors = (Array.isArray(doorsResult) ? doorsResult : []).filter((door) => door.status === 'active');
+    const byLineAndDoor = new Map();
+    (allocationResult?.allocations || []).forEach((entry) => {
+      byLineAndDoor.set(`${entry.lineNo}:${entry.retailDoorId}`, entry.quantity);
+    });
+
+    const dialog = document.querySelector('#form-dialog'); clear(dialog);
+    const body = el('div', { className: 'dialog-body' });
+    const close = el('button', { className: 'button small', text: I18N.t('common.close'), type: 'button' });
+    const head = el('div', { className: 'dialog-head' }); head.append(el('h3', { text: text('Распределение по точкам розницы', 'Retail door allocation') }), close);
+    const grid = el('div', { className: 'form-grid' });
+
+    if (!activeDoors.length) {
+      grid.append(el('div', { className: 'empty', text: text('У магазина нет активных точек розницы.', 'The shop has no active retail doors.') }));
+    }
+    (order.lines || []).forEach((line, index) => {
+      const lineNo = index + 1;
+      activeDoors.forEach((door) => {
+        const quantity = byLineAndDoor.get(`${lineNo}:${door.id}`) ?? null;
+        const label = el('label');
+        label.append(el('span', { text: `${lineNo}. ${line.sku} — ${door.code} · ${door.name || ''}` }));
+        label.append(el('input', { type: 'text', value: quantity === null ? '—' : String(quantity), readOnly: true }));
+        if (canWrite) {
+          label.append(actionButton(
+            quantity === null ? text('Указать', 'Set') : text('Изменить', 'Edit'),
+            () => doorAllocationEditForm(order, lineNo, line.sku, door, quantity),
+          ));
+        }
+        grid.append(label);
+      });
+    });
+
+    close.addEventListener('click', () => dialog.close());
+    body.append(head, grid); dialog.append(body); dialog.showModal();
+  };
 })(window);

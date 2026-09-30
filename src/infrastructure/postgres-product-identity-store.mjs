@@ -210,6 +210,24 @@ function view(client) {
         [value.id, value.brandId, value.styleId, value.imageUri, value.referencedModel, value.season, value.comment, value.sortOrder, value.createdAt, value.createdBy],
         'PRODUCT_STYLE_REFERENCE_POSITION_CONFLICT', 'Product Style Reference position already exists', { styleId: value.styleId, sortOrder: value.sortOrder });
     },
+    async insertStyleConstructionNode(value) {
+      try {
+        await client.query(
+          `INSERT INTO product_style_construction_nodes
+             (id, brand_id, style_id, construction_node_entry_id, construction_node_entry_version, note, sort_order, created_at, created_by)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+          [value.id, value.brandId, value.styleId, value.mdmRef.entryId, value.mdmRef.version, value.note, value.sortOrder, value.createdAt, value.createdBy],
+        );
+      } catch (error) {
+        if (error?.code === '23505' && error?.constraint === 'product_style_construction_nodes_node_uq') {
+          invariant(false, 'PRODUCT_STYLE_CONSTRUCTION_NODE_ALREADY_ATTACHED', 'Construction node is already on this style’s board', { styleId: value.styleId, entryId: value.mdmRef.entryId });
+        }
+        if (error?.code === '23505' && error?.constraint === 'product_style_construction_nodes_order_uq') {
+          invariant(false, 'PRODUCT_STYLE_CONSTRUCTION_NODE_POSITION_CONFLICT', 'Product Style Construction Node position already exists', { styleId: value.styleId, sortOrder: value.sortOrder });
+        }
+        throw error;
+      }
+    },
 
     async getAttributeOwner(ownerType, ownerId) {
       const query = ownerType === 'style_version'

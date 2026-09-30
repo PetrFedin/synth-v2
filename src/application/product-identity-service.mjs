@@ -11,6 +11,7 @@ import {
   createProductSizeValue as createSizeValueDomain,
   createProductSku as createSkuDomain,
   createProductStyle as createStyleDomain,
+  createProductStyleConstructionNode as createConstructionNodeDomain,
   createProductStyleReference as createStyleReferenceDomain,
   createProductStyleVersion as createStyleVersionDomain,
   transitionProductStyle as transitionStyleDomain,
@@ -23,6 +24,7 @@ const GENDER_DICTIONARIES = Object.freeze(['assortment.gender']);
 const COLOUR_DICTIONARIES = Object.freeze(['colour.colour']);
 const SIZE_SYSTEM_DICTIONARIES = Object.freeze(['size.system']);
 const SIZE_VALUE_DICTIONARIES = Object.freeze(['size.size', 'size.footwear_size', 'size.accessory_size']);
+const CONSTRUCTION_NODE_DICTIONARIES = Object.freeze(['design.construction_node']);
 
 export function createProductIdentityService({ store, clock = () => new Date().toISOString(), nextId = defaultIdGenerator() } = {}) {
   invariant(store && typeof store.transaction === 'function', 'PRODUCT_IDENTITY_STORE_REQUIRED', 'Product Identity store is required');
@@ -330,6 +332,30 @@ export function createProductIdentityService({ store, clock = () => new Date().t
             sortOrder: input?.sortOrder, createdAt: now(clock), createdBy: actorId,
           });
           await tx.insertStyleReference(value);
+          return value;
+        });
+    },
+
+    // Доска технологических узлов на стиле — тот же лёгкий приём, что и у референсов чуть выше, но
+    // узел не выдумывается: он выбирается из уже каталогизированного справочника
+    // `design.construction_node`, поэтому проверяется через `resolveMdm`, как и любая другая
+    // управляемая ссылка в этом модуле.
+    addConstructionNode(commandId, actorId, styleId, input) {
+      return execute(commandId, actorId, `addProductStyleConstructionNode:${styleId}`, input,
+        async (tx, { replay }) => {
+          const style = requireEntity(await tx.getStyleForUpdate(styleId), 'PRODUCT_STYLE_NOT_FOUND', { styleId });
+          await authorize(tx, style.brandId, actorId);
+          if (replay) return Object.freeze({ style, replay: true });
+          const node = await resolveMdm(tx, input?.mdmRef, CONSTRUCTION_NODE_DICTIONARIES, style.brandId, true);
+          return Object.freeze({ style, node, replay: false });
+        },
+        async (tx, context) => {
+          const value = createConstructionNodeDomain({
+            id: nextId('product-style-construction-node'), style: context.style, mdmRef: input?.mdmRef,
+            note: input?.note ?? null, sortOrder: input?.sortOrder, createdAt: now(clock), createdBy: actorId,
+          });
+          await tx.insertStyleConstructionNode(value);
+          await captureMdmUsage(tx, { brandId: value.brandId, sourceType: 'product_style_construction_node', sourceId: value.id, fieldPath: 'mdmRef', record: context.node, actorId });
           return value;
         });
     },

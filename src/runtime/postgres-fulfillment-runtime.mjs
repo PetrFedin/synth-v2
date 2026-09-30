@@ -4,6 +4,7 @@ import { createPhysicalActualCostService } from '../application/physical-actual-
 import { createOrderFulfillmentViewService } from '../application/order-fulfillment-view-service.mjs';
 import { createOrderLineCommentService } from '../application/order-line-comment-service.mjs';
 import { createOrderLineDoorAllocationService } from '../application/order-line-door-allocation-service.mjs';
+import { createOrderCalendarService } from '../application/order-calendar-service.mjs';
 import { createPostgresFulfillmentStore } from '../infrastructure/postgres-fulfillment-store.mjs';
 import { createPostgresOrderFulfillmentReader } from '../infrastructure/postgres-order-fulfillment-reader.mjs';
 import { resolveRuntimeIdGenerator } from './id-generator.mjs';
@@ -33,6 +34,9 @@ export function createPostgresFulfillmentRuntime({ pool, clock, nextId } = {}) {
     // Распределение по своим дверям — тоже про заказ, не про его исполнение: тот же store, свой
     // сервис, потому что пишет только магазин, а не обе стороны.
     ...createOrderLineDoorAllocationService({ store, nextId: resolvedNextId, ...(clock ? { clock } : {}) }),
+    // Вехи заказа — тоже общий store: писать вправе любая из сторон сделки за саму себя, читает
+    // каждая сторона свои вехи плюс то, что другая сторона отметила как общее.
+    ...createOrderCalendarService({ store, nextId: resolvedNextId, ...(clock ? { clock } : {}) }),
   });
   return Object.freeze({ store, service });
 }

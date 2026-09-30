@@ -231,6 +231,22 @@ function view(client) {
     async deleteOrderLineDoorAllocation({ orderId, lineNo, retailDoorId }) {
       await client.query('DELETE FROM order_line_door_allocations WHERE order_id = $1 AND line_no = $2 AND retail_door_id = $3', [orderId, lineNo, retailDoorId]);
     },
+    async insertCalendarMilestone(value) {
+      try {
+        await client.query(
+          `INSERT INTO calendar_milestones (id, owner_organisation_id, cycle_id, type, starts_at, visibility, payload)
+           VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)`,
+          [value.id, value.ownerOrganisationId, value.cycleId, value.type, value.startsAt, value.visibility, JSON.stringify(value)],
+        );
+      } catch (error) {
+        if (error?.code === '23505') invariant(false, 'CALENDAR_MILESTONE_ALREADY_EXISTS', 'Calendar milestone already exists', { milestoneId: value.id });
+        throw error;
+      }
+    },
+    async listCalendarMilestonesByCycle(cycleId) {
+      const result = await client.query('SELECT payload FROM calendar_milestones WHERE cycle_id = $1 ORDER BY starts_at, id', [cycleId]);
+      return result.rows.map((row) => row.payload);
+    },
     getCommand: (id) => getRegisteredCommand(client, 'wholesale', id),
     insertCommand: (value) => insertRegisteredCommand(client, 'wholesale', value),
     async appendOutbox(event) {

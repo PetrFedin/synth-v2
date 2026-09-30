@@ -501,7 +501,9 @@
     PRODUCT_RESPONSIBILITY_ALREADY_ASSIGNED: ['Этот человек уже отвечает за этот стол.', 'This person already holds that desk.'],
     PRODUCT_ATTRIBUTE_NOT_IN_CATALOGUE: ['Такого поля нет в каталоге атрибутов.', 'That field is not in the attribute catalogue.'],
     PRODUCT_ATTRIBUTE_CATEGORY_MISMATCH: ['Это поле не относится к категории модели.', 'That field does not belong to this style\u2019s category.'],
-    PRODUCT_COLORWAY_CODE_TAKEN: ['Такой код цветомодели уже есть у этой версии.', 'That colourway code already exists on this version.'],
+    PRODUCT_COLORWAY_ALREADY_EXISTS: ['Такой код цветомодели уже есть у этой версии.', 'That colourway code already exists on this version.'],
+    PRODUCT_COLORWAY_BATCH_CODE_DUPLICATE: ['Код цвета повторяется в списке — каждая строка нужна со своим кодом.', 'A colour code repeats in the list — each row needs its own code.'],
+    PRODUCT_COLORWAY_BATCH_SIZE_INVALID: ['Заполните хотя бы одну строку.', 'Fill in at least one row.'],
     PRODUCT_IDENTITY_SNAPSHOT_IMMUTABLE: ['Значение уже зафиксировано и не меняется — заведите новую версию модели.', 'The value is frozen and cannot be changed \u2014 open a new style version.'],
   };
   function styleErrorMessage(problem) {
@@ -624,6 +626,44 @@
           swatchHex: values.swatchHex,
         });
         toast(text('Цветомодель добавлена.', 'The colourway is added.'), 'success');
+      },
+    });
+  }
+
+  // Несколько цветов одной семьи ткани заводились по одной форме на цвет. Строки, оставленные
+  // пустыми (без кода цвета), просто пропускаются — форма не требует заполнять все шесть разом.
+  const COLORWAY_BATCH_ROWS = 6;
+  function addColorwaysBatch(item) {
+    const product = item.product;
+    if (!product.styleVersionId) {
+      toast(text('У модели ещё нет версии, к которой можно добавить цвет.', 'This style has no version to add a colour to yet.'), 'error');
+      return;
+    }
+    const fields = [];
+    for (let row = 1; row <= COLORWAY_BATCH_ROWS; row += 1) {
+      fields.push(field(text(`${row}. Код цвета`, `${row}. Colour code`), input(`colorwayCode${row}`, 'text', { maxlength: '32', pattern: '[A-Za-z0-9._-]{2,32}' })));
+      fields.push(field(text('Название RU', 'Name RU'), input(`nameRu${row}`, 'text', { minlength: '2', maxlength: '160' })));
+      fields.push(field(text('Название EN', 'Name EN'), input(`nameEn${row}`, 'text', { minlength: '2', maxlength: '160' })));
+      fields.push(field(text('Образец цвета', 'Swatch'), input(`swatchHex${row}`, 'color', { value: '#1d2939' })));
+    }
+    openForm({
+      title: text('Добавить несколько цветомоделей', 'Add several colourways'),
+      hint: text('Заполните столько строк, сколько нужно — пустые строки без кода цвета пропускаются.', 'Fill in as many rows as you need — a row with no colour code is skipped.'),
+      fields,
+      submitLabel: text('Добавить', 'Add'),
+      onSubmit: async (values) => {
+        const items = [];
+        for (let row = 1; row <= COLORWAY_BATCH_ROWS; row += 1) {
+          const colorwayCode = (values[`colorwayCode${row}`] || '').trim();
+          if (!colorwayCode) continue;
+          const nameRu = (values[`nameRu${row}`] || '').trim();
+          const nameEn = (values[`nameEn${row}`] || '').trim();
+          if (!nameRu || !nameEn) { throw new Error(text(`Строка ${row}: заполните название на обоих языках.`, `Row ${row}: fill in the name in both languages.`)); }
+          items.push({ colorwayCode: colorwayCode.toUpperCase(), nameRu, nameEn, swatchHex: values[`swatchHex${row}`] });
+        }
+        if (!items.length) throw Object.assign(new Error(), { code: 'PRODUCT_COLORWAY_BATCH_SIZE_INVALID' });
+        const created = await mutate(`/v2/product/style-versions/${encodeURIComponent(product.styleVersionId)}/colorways/batch`, { items });
+        toast(text(`Добавлено цветомоделей: ${created.length}.`, `${created.length} colourway(s) added.`), 'success');
       },
     });
   }
@@ -768,9 +808,11 @@
     const row = el('div', { className: 'od-inline-actions' });
     const colour = el('button', { className: 'button small primary', type: 'button', rawText: text('Добавить цветомодель', 'Add a colourway') });
     colour.addEventListener('click', () => addColorway(item));
+    const colourBatch = el('button', { className: 'button small', type: 'button', rawText: text('Добавить несколько цветов', 'Add several colours') });
+    colourBatch.addEventListener('click', () => addColorwaysBatch(item));
     const image = el('button', { className: 'button small', type: 'button', rawText: text('Добавить изображение', 'Add an image') });
     image.addEventListener('click', () => addMedia(item));
-    row.append(colour, image);
+    row.append(colour, colourBatch, image);
     return row;
   }
 

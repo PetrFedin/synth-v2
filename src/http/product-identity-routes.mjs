@@ -13,11 +13,24 @@ const STYLE_VERSION = required(
   ['expectedLatestVersionNo', 'titleRu', 'titleEn'],
   ['technicalPayload'],
 );
+const COLORWAY_FIELDS = ['colorwayCode', 'nameRu', 'nameEn', 'colorRef', 'swatchHex', 'payload'];
 const COLORWAY = required(
-  bodyContract(['colorwayCode', 'nameRu', 'nameEn', 'colorRef', 'swatchHex', 'payload'], { colorRef: MDM_REF_FIELDS }),
+  bodyContract(COLORWAY_FIELDS, { colorRef: MDM_REF_FIELDS }),
   ['colorwayCode', 'nameRu', 'nameEn'],
   ['payload'],
 );
+const COLORWAY_BATCH_CONTRACT = bodyContract(['items'], {}, { items: COLORWAY_FIELDS });
+function COLORWAY_BATCH(body) {
+  assertBodyContract(body, COLORWAY_BATCH_CONTRACT);
+  invariant(Array.isArray(body.items) && body.items.length >= 1, 'HTTP_BODY_FIELD_INVALID', 'items must be a non-empty array', { field: 'items' });
+  body.items.forEach((item, index) => {
+    for (const field of ['colorwayCode', 'nameRu', 'nameEn']) {
+      invariant(Object.hasOwn(item, field) && item[field] !== undefined, 'HTTP_BODY_FIELD_INVALID', `${field} is required`, { field, index });
+    }
+    if (item.payload !== undefined) invariant(item.payload !== null && typeof item.payload === 'object' && !Array.isArray(item.payload), 'HTTP_BODY_FIELD_INVALID', 'payload must be a JSON object', { field: 'payload', index });
+  });
+  return body;
+}
 const SIZE_SCALE_CREATE = required(bodyContract(['brandId', 'scaleCode', 'nameRu', 'nameEn']), ['brandId', 'scaleCode', 'nameRu', 'nameEn']);
 const SIZE_SCALE_UPDATE = required(bodyContract(['expectedVersion', 'nameRu', 'nameEn', 'status']), ['expectedVersion', 'nameRu', 'nameEn', 'status']);
 const SIZE_SCALE_VERSION = required(
@@ -53,6 +66,7 @@ export function createProductIdentityRoutes({ productIdentity } = {}) {
     mutate('POST', /^\/v2\/product\/styles\/([^/]+)\/transition$/, STYLE_TRANSITION, ({ commandId, actorId, params, body }) => service.transitionStyle(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/product\/styles\/([^/]+)\/versions$/, STYLE_VERSION, ({ commandId, actorId, params, body }) => service.createStyleVersion(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/product\/style-versions\/([^/]+)\/colorways$/, COLORWAY, ({ commandId, actorId, params, body }) => service.createColorway(commandId, actorId, params[0], body)),
+    mutate('POST', /^\/v2\/product\/style-versions\/([^/]+)\/colorways\/batch$/, COLORWAY_BATCH, ({ commandId, actorId, params, body }) => service.createColorwaysBatch(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/product\/size-scales$/, SIZE_SCALE_CREATE, ({ commandId, actorId, body }) => service.createSizeScale(commandId, actorId, body)),
     mutate('PATCH', /^\/v2\/product\/size-scales\/([^/]+)$/, SIZE_SCALE_UPDATE, ({ commandId, actorId, params, body }) => service.updateSizeScale(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/product\/size-scales\/([^/]+)\/versions$/, SIZE_SCALE_VERSION, ({ commandId, actorId, params, body }) => service.createSizeScaleVersion(commandId, actorId, params[0], body)),
@@ -107,6 +121,7 @@ function unavailableProductIdentity() {
     transitionStyle: fail,
     createStyleVersion: fail,
     createColorway: fail,
+    createColorwaysBatch: fail,
     createSizeScale: fail,
     updateSizeScale: fail,
     createSizeScaleVersion: fail,

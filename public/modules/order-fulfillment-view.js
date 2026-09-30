@@ -340,6 +340,68 @@
     ));
   }
 
+  // Which side of the deal the current actor writes calendar facts as — the exact rule the server
+  // itself applies in `order-calendar-service.mjs`: the brand side wins if the actor holds
+  // `order.write` there, otherwise the shop side. Needed client-side because template routes are
+  // organisation-scoped (`POST /v2/organisations/:id/calendar-templates`), unlike the milestone
+  // route, which infers the writer from order membership alone.
+  function calendarWriterOrganisationId(order) {
+    const caps = window.SynthaUiCapabilities;
+    if (caps.hasForOrganisation(state.workspace, order.brandId, caps.CAPABILITIES.ORDER_WRITE)) return order.brandId;
+    if (caps.hasForOrganisation(state.workspace, order.shopId, caps.CAPABILITIES.ORDER_WRITE)) return order.shopId;
+    return null;
+  }
+
+  const CALENDAR_TEMPLATE_LINE_SLOTS = 5;
+  const CALENDAR_TEMPLATE_TYPE_OPTIONS = [
+    { id: 'buying', name: text('закупка', 'buying') },
+    { id: 'order', name: text('заказ', 'order') },
+    { id: 'deal', name: text('сделка', 'deal') },
+  ];
+  const CALENDAR_TEMPLATE_VISIBILITY_OPTIONS = [
+    { id: 'private', name: text('только мне', 'private to me') },
+    { id: 'shared', name: text('обеим сторонам', 'shared with both sides') },
+  ];
+
+  /**
+   * Именованный набор вех с известным смещением в днях от даты-якоря
+   * (docs/backlog-not-yet-integrated.md, раздел H: «календарные шаблоны в библиотеках»). Форма несёт
+   * фиксированное число слотов строки, а не динамически растущий список: домен допускает до 50
+   * строк, но `openForm` строит плоскую сетку полей, а не повторяющуюся группу, и пяти слотов
+   * достаточно для типового набора вех заказа. Пустое название слота просто пропускается при сборке.
+   */
+  function calendarTemplateCreateForm(order, organisationId) {
+    const fields = [textDef('name', text('Название шаблона', 'Template name'), '', 160)];
+    for (let slot = 1; slot <= CALENDAR_TEMPLATE_LINE_SLOTS; slot += 1) {
+      fields.push(
+        (slot === 1 ? textDef : optionalTextDef)(`line${slot}Title`, text(`Веха ${slot}`, `Milestone ${slot}`), '', 200),
+        selectDef(`line${slot}Type`, text(`Тип ${slot}`, `Type ${slot}`), CALENDAR_TEMPLATE_TYPE_OPTIONS, (option) => option.name, 'order'),
+        numberDef(`line${slot}OffsetDays`, text(`Смещение, дни ${slot}`, `Offset, days ${slot}`), '0', true, -3650),
+        selectDef(`line${slot}Visibility`, text(`Видимость ${slot}`, `Visibility ${slot}`), CALENDAR_TEMPLATE_VISIBILITY_OPTIONS, (option) => option.name, 'private'),
+      );
+    }
+    openForm(text('Создать шаблон календаря', 'Create a calendar template'), fields, (values) => {
+      const lines = [];
+      for (let slot = 1; slot <= CALENDAR_TEMPLATE_LINE_SLOTS; slot += 1) {
+        const title = String(values[`line${slot}Title`] ?? '').trim();
+        if (!title) continue;
+        lines.push({ title, type: values[`line${slot}Type`], offsetDays: values[`line${slot}OffsetDays`], visibility: values[`line${slot}Visibility`] });
+      }
+      return mutate(`/v2/organisations/${encodeURIComponent(organisationId)}/calendar-templates`, { name: values.name, lines }, 'POST');
+    });
+  }
+
+  function calendarTemplateApplyForm(order, organisationId, templates) {
+    openForm(text('Применить шаблон', 'Apply a template'), [
+      selectDef('templateId', text('Шаблон', 'Template'), templates, (template) => `${template.name} · ${template.lines.length} ${text('веха(и)', 'milestone(s)')}`, templates[0]?.id),
+      dateTimeDef('anchorAt', text('Дата-якорь', 'Anchor date')),
+    ], (values) => mutate(
+      `/v2/orders/${encodeURIComponent(order.id)}/calendar-milestones/apply-template`,
+      isoDates({ templateId: values.templateId, anchorAt: values.anchorAt }, ['anchorAt']),
+      'POST',
+    ));
+  }
+
   /**
    * Общая на обе стороны сделки таймлиния заказа — переиспользует `calendar_milestones`
    * (миграция 001), которая до этого писала только вехи открытия сделки. `private` видна только
@@ -350,7 +412,12 @@
     const caps = window.SynthaUiCapabilities;
     const canWrite = caps.hasForOrganisation(state.workspace, order.brandId, caps.CAPABILITIES.ORDER_WRITE)
       || caps.hasForOrganisation(state.workspace, order.shopId, caps.CAPABILITIES.ORDER_WRITE);
-    const result = await api(`/v2/orders/${encodeURIComponent(order.id)}/calendar-milestones`);
+    const writerOrganisationId = calendarWriterOrganisationId(order);
+    const [result, templateResult] = await Promise.all([
+      api(`/v2/orders/${encodeURIComponent(order.id)}/calendar-milestones`),
+      writerOrganisationId ? api(`/v2/organisations/${encodeURIComponent(writerOrganisationId)}/calendar-templates`) : Promise.resolve(null),
+    ]);
+    const templates = templateResult?.templates || [];
 
     const dialog = document.querySelector('#form-dialog'); clear(dialog);
     const body = el('div', { className: 'dialog-body' });
@@ -371,6 +438,10 @@
     });
     if (canWrite) {
       grid.append(actionButton(text('Добавить веху', 'Add milestone'), () => calendarMilestoneAddForm(order)));
+      if (templates.length) {
+        grid.append(actionButton(text('Применить шаблон', 'Apply a template'), () => calendarTemplateApplyForm(order, writerOrganisationId, templates)));
+      }
+      grid.append(actionButton(text('Создать шаблон', 'Create a template'), () => calendarTemplateCreateForm(order, writerOrganisationId)));
     }
 
     close.addEventListener('click', () => dialog.close());

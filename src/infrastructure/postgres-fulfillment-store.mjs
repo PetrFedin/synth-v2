@@ -247,6 +247,26 @@ function view(client) {
       const result = await client.query('SELECT payload FROM calendar_milestones WHERE cycle_id = $1 ORDER BY starts_at, id', [cycleId]);
       return result.rows.map((row) => row.payload);
     },
+    async insertCalendarTemplate(value) {
+      try {
+        await client.query(
+          `INSERT INTO calendar_milestone_templates (id, organisation_id, name, payload, created_at)
+           VALUES ($1, $2, $3, $4::jsonb, $5)`,
+          [value.id, value.organisationId, value.name, JSON.stringify(value), value.createdAt],
+        );
+      } catch (error) {
+        if (error?.code === '23505') invariant(false, 'CALENDAR_TEMPLATE_ALREADY_EXISTS', 'A calendar template with this name already exists', { organisationId: value.organisationId, name: value.name });
+        throw error;
+      }
+    },
+    async listCalendarTemplatesByOrganisation(organisationId) {
+      const result = await client.query('SELECT payload FROM calendar_milestone_templates WHERE organisation_id = $1 ORDER BY name', [organisationId]);
+      return result.rows.map((row) => row.payload);
+    },
+    async getCalendarTemplate(id) {
+      const result = await client.query('SELECT payload FROM calendar_milestone_templates WHERE id = $1', [id]);
+      return result.rows[0]?.payload;
+    },
     getCommand: (id) => getRegisteredCommand(client, 'wholesale', id),
     insertCommand: (value) => insertRegisteredCommand(client, 'wholesale', value),
     async appendOutbox(event) {

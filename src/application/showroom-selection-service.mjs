@@ -10,7 +10,15 @@ import { createBuyerCommercialSnapshot } from '../modules/retail-doors/public.mj
 import { assertAcceptedShowroomAccess } from '../modules/showroom-invitations/public.mjs';
 import { createShowroom, openShowroom } from '../modules/showrooms/public.mjs';
 import { createShowroomLook, updateShowroomLook as updateShowroomLookDomain } from '../modules/showroom-looks/public.mjs';
-import { createSelection, replaceSelectionLines, submitSelection, upsertSelectionLine } from '../modules/selections/public.mjs';
+import {
+  approveSelection as approveSelectionDomain,
+  createSelection,
+  rejectSelection as rejectSelectionDomain,
+  replaceSelectionLines,
+  requestSelectionApproval as requestSelectionApprovalDomain,
+  submitSelection,
+  upsertSelectionLine,
+} from '../modules/selections/public.mjs';
 import { advanceCommercialCycle } from '../modules/commercial-cycle/public.mjs';
 
 const MATRIX_MAX_LINES = 5_000;
@@ -412,6 +420,76 @@ export function createShowroomSelectionService({
           }, commandId, actorId);
           await append(tx, 'commercial-cycle.advanced', cycle.id, { from: cycle.stage, to: advanced.stage, version: advanced.version }, commandId, actorId);
           return Object.freeze({ selection: submitted, cycle: advanced });
+        },
+      );
+    },
+
+    requestSelectionApproval(commandId, actorId, selectionId) {
+      return execute(
+        commandId,
+        `requestSelectionApproval:${actorId}:${selectionId}`,
+        actorId,
+        async (tx) => {
+          const current = requireEntity(await tx.getSelection(selectionId), 'SELECTION_NOT_FOUND', { selectionId });
+          await assertOrganisationActor(tx, current.shopId, actorId, CAPABILITIES.SELECTION_WRITE);
+          return current;
+        },
+        async (tx, current) => {
+          const collection = requireEntity(await tx.getCollection(current.collectionId), 'COLLECTION_NOT_FOUND', { collectionId: current.collectionId });
+          invariant(current.lines.every((line) => line.currency === collection.currency), 'SELECTION_CURRENCY_MISMATCH', 'Selection line currency must match collection currency');
+          const requested = requestSelectionApprovalDomain(current, clock());
+          await tx.saveSelection(requested, current.version);
+          await append(tx, 'selection.approval-requested', selectionId, { lineCount: requested.lines.length }, commandId, actorId);
+          return requested;
+        },
+      );
+    },
+
+    // Согласовано — тот же переход и то же продвижение цикла, что делает submitSelection: решение
+    // согласующего замещает прямую отправку, а не идёт вдобавок к ней.
+    approveSelection(commandId, actorId, selectionId) {
+      return execute(
+        commandId,
+        `approveSelection:${actorId}:${selectionId}`,
+        actorId,
+        async (tx) => {
+          const current = requireEntity(await tx.getSelection(selectionId), 'SELECTION_NOT_FOUND', { selectionId });
+          await assertOrganisationActor(tx, current.shopId, actorId, CAPABILITIES.SELECTION_APPROVE);
+          if (current.accessGrantId) {
+            const invitation = requireEntity(await tx.getShowroomInvitation(current.accessGrantId), 'SHOWROOM_INVITATION_NOT_FOUND', { invitationId: current.accessGrantId });
+            assertAcceptedShowroomAccess(invitation, { showroomId: current.showroomId, brandId: current.brandId, shopId: current.shopId, now: clock(), relationship: await tx.getRelationshipByTrade(current.brandId, current.shopId) });
+          }
+          return current;
+        },
+        async (tx, current) => {
+          const cycle = requireEntity(await tx.getCycle(current.cycleId), 'CYCLE_NOT_FOUND', { cycleId: current.cycleId });
+          invariant(cycle.stage === 'selection', 'SELECTION_CYCLE_STAGE_INVALID', 'Cycle must be at selection stage before submission', { stage: cycle.stage });
+          const approved = approveSelectionDomain(current, actorId, clock());
+          const advanced = advanceCommercialCycle(cycle, 'order-builder', clock());
+          await tx.saveSelection(approved, current.version);
+          await tx.saveCycle(advanced, cycle.version);
+          await append(tx, 'selection.approved', selectionId, { decidedBy: actorId }, commandId, actorId);
+          await append(tx, 'commercial-cycle.advanced', cycle.id, { from: cycle.stage, to: advanced.stage, version: advanced.version }, commandId, actorId);
+          return Object.freeze({ selection: approved, cycle: advanced });
+        },
+      );
+    },
+
+    rejectSelection(commandId, actorId, selectionId, { reason } = {}) {
+      return execute(
+        commandId,
+        `rejectSelection:${actorId}:${selectionId}:${canonicalJson(reason ?? null)}`,
+        actorId,
+        async (tx) => {
+          const current = requireEntity(await tx.getSelection(selectionId), 'SELECTION_NOT_FOUND', { selectionId });
+          await assertOrganisationActor(tx, current.shopId, actorId, CAPABILITIES.SELECTION_APPROVE);
+          return current;
+        },
+        async (tx, current) => {
+          const rejected = rejectSelectionDomain(current, actorId, reason, clock());
+          await tx.saveSelection(rejected, current.version);
+          await append(tx, 'selection.rejected', selectionId, { decidedBy: actorId, reason: rejected.approvalRejectionReason }, commandId, actorId);
+          return rejected;
         },
       );
     },

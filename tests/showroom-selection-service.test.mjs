@@ -214,3 +214,47 @@ test('empty selection submission rolls back selection and cycle changes', async 
   assert.equal(snapshot.cycles.find((item) => item.id === context.cycle.id).stage, 'selection');
   assert.equal(snapshot.commands.some((item) => item.id === 'selection-empty-submit'), false);
 });
+
+// Внутреннее согласование — путь рядом с прямой отправкой: тот, кто собрал ассортимент (owner
+// или buyer, оба несут selection.write), не может согласовать сам себя — согласует тот, у кого
+// есть отдельное право selection.approve (finance), и решение того же рода, что делает
+// submitSelection: продвигает цикл в order-builder, а не откладывает это на отдельный шаг.
+test('a buyer requests internal approval; a plain buyer cannot approve, finance can', async () => {
+  const context = await fixture();
+  await context.platform.grantMembership('member-finance-approve', 'buyer-1', createMembership({ id: 'm-finance-approve', organisationId: 'shop-1', organisationType: 'shop', userId: 'finance-1', role: 'finance', createdAt: 'now' }));
+  await context.platform.grantMembership('member-buyer-plain', 'buyer-1', createMembership({ id: 'm-buyer-plain', organisationId: 'shop-1', organisationType: 'shop', userId: 'buyer-2', role: 'buyer', createdAt: 'now' }));
+
+  const created = await context.collaboration.createSelection('selection-create-approval', 'buyer-1', { cycleId: context.cycle.id, showroomId: context.showroomId });
+  await context.collaboration.upsertSelectionLine('selection-line-approval', 'buyer-1', created.selection.id, { sku: 'SKU-1', quantity: 3 });
+  const requested = await context.collaboration.requestSelectionApproval('selection-request-approval', 'buyer-1', created.selection.id);
+  assert.equal(requested.status, 'pending_approval');
+
+  await assert.rejects(
+    context.collaboration.approveSelection('selection-approve-denied', 'buyer-2', created.selection.id),
+    (error) => error.code === 'CAPABILITY_DENIED',
+  );
+
+  const approved = await context.collaboration.approveSelection('selection-approve', 'finance-1', created.selection.id);
+  assert.equal(approved.selection.status, 'submitted');
+  assert.equal(approved.selection.approvalDecidedBy, 'finance-1');
+  assert.equal(approved.selection.approvalOutcome, 'approved');
+  assert.equal(approved.cycle.stage, 'order-builder');
+});
+
+test('an internal reviewer can reject a selection back to draft with a reason, and it can be resubmitted', async () => {
+  const context = await fixture();
+  await context.platform.grantMembership('member-finance-reject', 'buyer-1', createMembership({ id: 'm-finance-reject', organisationId: 'shop-1', organisationType: 'shop', userId: 'finance-2', role: 'finance', createdAt: 'now' }));
+
+  const created = await context.collaboration.createSelection('selection-create-reject', 'buyer-1', { cycleId: context.cycle.id, showroomId: context.showroomId });
+  await context.collaboration.upsertSelectionLine('selection-line-reject', 'buyer-1', created.selection.id, { sku: 'SKU-1', quantity: 3 });
+  await context.collaboration.requestSelectionApproval('selection-request-reject', 'buyer-1', created.selection.id);
+
+  const rejected = await context.collaboration.rejectSelection('selection-reject', 'finance-2', created.selection.id, { reason: 'Too many units for this door' });
+  assert.equal(rejected.status, 'draft');
+  assert.equal(rejected.approvalOutcome, 'rejected');
+  assert.equal(rejected.approvalRejectionReason, 'Too many units for this door');
+
+  const submitted = await context.collaboration.submitSelection('selection-resubmit', 'buyer-1', created.selection.id);
+  assert.equal(submitted.selection.status, 'submitted');
+  assert.equal(submitted.cycle.stage, 'order-builder');
+});

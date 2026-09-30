@@ -3,6 +3,7 @@ import { assertBodyContract, assertQueryContract, bodyContract } from './request
 import { decodePathParameter } from './transport-contract.mjs';
 
 const EMPTY_BODY = bodyContract();
+const SELECTION_REJECTION_BODY = bodyContract(['reason']);
 const CAMPAIGN_BODY = bodyContract(['brandId', 'name', 'season', 'startsAt', 'endsAt']);
 const COLLECTION_BODY = bodyContract(['campaignId', 'brandId', 'name', 'currency']);
 const MDM_REF = ['entryId', 'version'];
@@ -158,6 +159,13 @@ export function createWholesaleRoutes({ platform, catalog, materials, boms, meas
       return collaboration.upsertSelectionLine(commandId, actorId, params[0], { ...body, sku });
     }),
     mutate('POST', /^\/v2\/selections\/([^/]+)\/submit$/, EMPTY_BODY, ({ commandId, actorId, params }) => collaboration.submitSelection(commandId, actorId, params[0])),
+    mutate('POST', /^\/v2\/selections\/([^/]+)\/request-approval$/, EMPTY_BODY, ({ commandId, actorId, params }) => collaboration.requestSelectionApproval(commandId, actorId, params[0])),
+    mutate('POST', /^\/v2\/selections\/([^/]+)\/approve$/, EMPTY_BODY, ({ commandId, actorId, params }) => collaboration.approveSelection(commandId, actorId, params[0])),
+    mutate('POST', /^\/v2\/selections\/([^/]+)\/reject$/, SELECTION_REJECTION_BODY, ({ commandId, actorId, params, body }) => {
+      const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
+      invariant(reason.length >= 2 && reason.length <= 2000, 'HTTP_BODY_FIELD_INVALID', 'reason must contain 2 to 2000 characters', { field: 'reason' });
+      return collaboration.rejectSelection(commandId, actorId, params[0], { reason });
+    }),
     mutate('POST', /^\/v2\/orders$/, ORDER_BODY, ({ commandId, actorId, body }) => orders.createOrderDraft(commandId, actorId, body)),
     mutate('PATCH', /^\/v2\/orders\/([^/]+)\/terms$/, ORDER_TERMS_UPDATE_BODY, ({ commandId, actorId, params, body }) => orders.reviseTerms(commandId, actorId, { orderId: params[0], expectedVersion: body.expectedVersion, terms: body.terms })),
     mutate('POST', /^\/v2\/orders\/([^/]+)\/accept$/, ORDER_ACCEPT_BODY, ({ commandId, actorId, params, body }) => { sameId(body.orderId, params[0], 'orderId'); return orders.acceptTerms(commandId, actorId, { ...body, orderId: params[0] }); }),

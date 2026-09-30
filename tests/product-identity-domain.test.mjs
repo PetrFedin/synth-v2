@@ -11,6 +11,7 @@ import {
   createProductSizeValue,
   createProductSku,
   createProductStyle,
+  createProductStyleReference,
   createProductStyleVersion,
   hashProductIdentitySnapshot,
   transitionProductStyle,
@@ -204,6 +205,39 @@ test('Media and attributes preserve exact variant/MDM context without becoming c
   });
   assert.equal(media.colorwayId, colorway.id);
   assert.deepEqual(attribute.mdmRef, { entryId: 'mdm:fit:regular', version: 2 });
+});
+
+test('Style Reference board attaches to the style itself and trims optional fields, rejecting blanks over their limit', () => {
+  const { style } = fixture();
+  const reference = createProductStyleReference({
+    id: 'product-style-reference:001',
+    style,
+    imageUri: '  s3://product-references/DRS-001/past-season.jpg  ',
+    referencedModel: '  SS25 midi dress  ',
+    season: null,
+    comment: '',
+    sortOrder: 0,
+    createdAt: at,
+    createdBy: actor,
+  });
+  assert.equal(reference.styleId, style.id);
+  assert.equal(reference.brandId, style.brandId);
+  assert.equal(reference.imageUri, 's3://product-references/DRS-001/past-season.jpg');
+  assert.equal(reference.referencedModel, 'SS25 midi dress');
+  assert.equal(reference.season, null);
+  assert.equal(reference.comment, null);
+  assert.throws(
+    () => createProductStyleReference({ id: 'product-style-reference:bad', style, imageUri: '', sortOrder: 0, createdAt: at, createdBy: actor }),
+    (error) => error?.code === 'PRODUCT_STYLE_REFERENCE_IMAGE_URI_INVALID',
+  );
+  assert.throws(
+    () => createProductStyleReference({ id: 'product-style-reference:bad', style, imageUri: 'ok.jpg', sortOrder: -1, createdAt: at, createdBy: actor }),
+    (error) => error?.code === 'PRODUCT_STYLE_REFERENCE_SORT_ORDER_INVALID',
+  );
+  assert.throws(
+    () => createProductStyleReference({ id: 'product-style-reference:bad', style, imageUri: 'ok.jpg', season: 'a'.repeat(41), sortOrder: 0, createdAt: at, createdBy: actor }),
+    (error) => error?.code === 'PRODUCT_STYLE_REFERENCE_SEASON_INVALID',
+  );
 });
 
 test('legacy catalog SKU bridge is one explicit compatibility edge, not a second Product Master', () => {

@@ -757,6 +757,13 @@ body.omnidata-v14 dialog .dialog-actions .button { flex: 0 0 auto !important; wi
 .od-look-pick:hover { background: var(--od14-surface-subtle, #f8fafc); }
 .od-look-pick input { width: auto !important; }
 
+.od-reference-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 200px)); justify-content: start; gap: 12px; margin-top: 10px; }
+.od-reference-tile { display: grid; grid-template-rows: auto 1fr; margin: 0; border: 1px solid var(--od14-line, #e4e7ec); border-radius: 10px; background: var(--od14-surface, #fff); overflow: hidden; }
+.od-reference-tile img { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; }
+.od-reference-tile figcaption { display: grid; gap: 2px; padding: 8px 10px 10px; font-size: 11.5px; color: var(--od14-text-soft, #475467); }
+.od-reference-tile figcaption strong { font-size: 12.5px; color: inherit; }
+.od-reference-tile figcaption p { margin: 2px 0 0; }
+
 /* A status on its own is a statement, not a row of controls: no border, no
    padding, no second rounded box around the pill. */
 body.omnidata-v14 .ls9-standing{display:flex!important;align-items:center!important;gap:6px!important;margin:0!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important}

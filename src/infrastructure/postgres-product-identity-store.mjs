@@ -202,6 +202,14 @@ function view(client) {
         [value.id, value.brandId, value.styleVersionId, value.colorwayId, value.mediaType, value.mediaRole, value.uri, value.sortOrder, value.contentHash, JSON.stringify(value.payload), value.createdAt, value.createdBy],
         'PRODUCT_MEDIA_POSITION_CONFLICT', 'Product Media position already exists', { styleVersionId: value.styleVersionId, colorwayId: value.colorwayId, mediaRole: value.mediaRole, sortOrder: value.sortOrder });
     },
+    async insertStyleReference(value) {
+      await uniqueInsert(client,
+        `INSERT INTO product_style_references
+           (id, brand_id, style_id, image_uri, referenced_model, season, comment, sort_order, created_at, created_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        [value.id, value.brandId, value.styleId, value.imageUri, value.referencedModel, value.season, value.comment, value.sortOrder, value.createdAt, value.createdBy],
+        'PRODUCT_STYLE_REFERENCE_POSITION_CONFLICT', 'Product Style Reference position already exists', { styleId: value.styleId, sortOrder: value.sortOrder });
+    },
 
     async getAttributeOwner(ownerType, ownerId) {
       const query = ownerType === 'style_version'

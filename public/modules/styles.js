@@ -505,6 +505,9 @@
     PRODUCT_COLORWAY_BATCH_CODE_DUPLICATE: ['Код цвета повторяется в списке — каждая строка нужна со своим кодом.', 'A colour code repeats in the list — each row needs its own code.'],
     PRODUCT_COLORWAY_BATCH_SIZE_INVALID: ['Заполните хотя бы одну строку.', 'Fill in at least one row.'],
     PRODUCT_IDENTITY_SNAPSHOT_IMMUTABLE: ['Значение уже зафиксировано и не меняется — заведите новую версию модели.', 'The value is frozen and cannot be changed \u2014 open a new style version.'],
+    PRODUCT_STYLE_REFERENCE_POSITION_CONFLICT: ['Такая позиция на доске референсов уже занята.', 'That position on the reference board is already taken.'],
+    PRODUCT_STYLE_REFERENCE_IMAGE_URI_INVALID: ['Укажите ссылку на изображение.', 'Enter an image link.'],
+    PRODUCT_STYLE_REFERENCE_SORT_ORDER_INVALID: ['Порядок должен быть неотрицательным числом.', 'Order must be a non-negative number.'],
   };
   function styleErrorMessage(problem) {
     const pair = STYLE_ERRORS[String(problem?.code || '')];
@@ -944,6 +947,82 @@
 
   // \u0420\u044f\u0434 \u0433\u0440\u0443\u0437\u0438\u0442\u0441\u044f \u043e\u0442\u0434\u0435\u043b\u044c\u043d\u044b\u043c \u0437\u0430\u043f\u0440\u043e\u0441\u043e\u043c: \u043e\u043d \u0441\u043e\u0431\u0438\u0440\u0430\u0435\u0442\u0441\u044f \u0438\u0437 \u0432\u0435\u0434\u043e\u043c\u043e\u0441\u0442\u0435\u0439 \u0432\u0441\u0435\u0445 \u0440\u0430\u0437\u043c\u0435\u0440\u043e\u0432 \u0441\u0442\u0438\u043b\u044f, \u0438 \u0442\u044f\u043d\u0443\u0442\u044c
   // \u0435\u0433\u043e \u0434\u043b\u044f \u043a\u0430\u0436\u0434\u043e\u0439 \u0441\u0442\u0440\u043e\u043a\u0438 \u0440\u0435\u0435\u0441\u0442\u0440\u0430 \u0440\u0430\u0434\u0438 \u043e\u0434\u043d\u043e\u0439 \u043e\u0442\u043a\u0440\u044b\u0442\u043e\u0439 \u043a\u0430\u0440\u0442\u043e\u0447\u043a\u0438 \u0431\u044b\u043b\u043e \u0431\u044b \u0440\u0430\u0441\u0442\u043e\u0447\u0438\u0442\u0435\u043b\u044c\u043d\u043e.
+  // Доска референсов на стиле — тот же приём ленивой подгрузки по styleId и своей карты данных/загрузки/отказа, что и у сертификатов чуть выше: боард привязан к самому стилю, не к версии.
+  const styleReferenceState = window.SynthaProductStyleReferenceState
+    || (window.SynthaProductStyleReferenceState = { data: {}, loading: {}, failed: {} });
+
+  function loadStyleReferences(styleId) {
+    if (styleReferenceState.data[styleId] || styleReferenceState.loading[styleId] || styleReferenceState.failed[styleId]) return;
+    styleReferenceState.loading[styleId] = true;
+    api(`/v2/product/styles/${encodeURIComponent(styleId)}`)
+      .then((value) => { styleReferenceState.data[styleId] = Array.isArray(value?.styleReferences) ? value.styleReferences : []; })
+      .catch(() => { styleReferenceState.failed[styleId] = true; })
+      .finally(() => { styleReferenceState.loading[styleId] = false; if (state.view === 'styles') renderApp(); });
+  }
+  function invalidateStyleReferences(styleId) {
+    delete styleReferenceState.data[styleId];
+    delete styleReferenceState.failed[styleId];
+  }
+
+  function addStyleReference(item) {
+    const product = item.product;
+    const rows = styleReferenceState.data[product.id] || [];
+    openForm({
+      title: text('Добавить референс', 'Add a reference'),
+      hint: text('Модель прошлого сезона, референс посадки или детали — вход в разработку, не версия стиля.', 'A past-season model, a fit or a detail reference — design-research input, not a style version.'),
+      fields: [
+        field(text('Ссылка на изображение', 'Image link'), input('imageUri', 'text', { required: true, maxlength: '2048' })),
+        field(text('Модель/сезон прошлого сезона', 'Prior-season model'), input('referencedModel', 'text', { maxlength: '160' })),
+        field(text('Сезон', 'Season'), input('season', 'text', { maxlength: '40' })),
+        field(text('Комментарий', 'Comment'), input('comment', 'text', { maxlength: '1000' })),
+        field(text('Порядок', 'Order'), input('sortOrder', 'number', { required: true, min: '0', max: '999', value: String(rows.length) })),
+      ],
+      submitLabel: text('Добавить', 'Add'),
+      onSubmit: async (values) => {
+        await mutate(`/v2/product/styles/${encodeURIComponent(product.id)}/references`, {
+          imageUri: values.imageUri.trim(),
+          referencedModel: values.referencedModel?.trim() || undefined,
+          season: values.season?.trim() || undefined,
+          comment: values.comment?.trim() || undefined,
+          sortOrder: Number(values.sortOrder),
+        });
+        invalidateStyleReferences(product.id);
+        toast(text('Референс добавлен.', 'The reference was added.'), 'success');
+      },
+    });
+  }
+
+  function styleReferenceActions(item) {
+    const manage = window.SynthaUiCapabilities?.hasForOrganisation(state.workspace, item.product.brandId, window.SynthaUiCapabilities.CAPABILITIES.PRODUCT_MANAGE);
+    if (!manage) return null;
+    const row = el('div', { className: 'od-inline-actions' });
+    const add = el('button', { className: 'button small primary', type: 'button', rawText: text('Добавить референс', 'Add a reference') });
+    add.addEventListener('click', () => addStyleReference(item));
+    row.append(add);
+    return row;
+  }
+
+  function styleReferencePanel(item) {
+    const product = item.product;
+    loadStyleReferences(product.id);
+    if (styleReferenceState.failed[product.id]) return notice(text('Доска референсов недоступна.', 'The reference board is unavailable.'));
+    const rows = styleReferenceState.data[product.id];
+    if (!rows) return notice(text('Загрузка…', 'Loading…'));
+    if (!rows.length) return notice(text('На доске пока нет референсов.', 'The reference board is empty so far.'));
+    const grid = el('div', { className: 'od-reference-grid' });
+    [...rows].sort((a, b) => a.sortOrder - b.sortOrder).forEach((reference) => {
+      const tile = el('figure', { className: 'od-reference-tile' });
+      tile.append(el('img', { className: 'od-thumb', src: reference.imageUri, alt: reference.referencedModel || product.styleCode, loading: 'lazy' }));
+      const caption = el('figcaption', {});
+      if (reference.referencedModel) caption.append(el('strong', { rawText: reference.referencedModel }));
+      if (reference.season) caption.append(el('span', { rawText: ` · ${reference.season}` }));
+      if (reference.comment) caption.append(el('p', { rawText: reference.comment }));
+      tile.append(caption);
+      grid.append(tile);
+    });
+    return grid;
+  }
+
   const sizeLineState = window.SynthaBomSizeLineState
     || (window.SynthaBomSizeLineState = { data: {}, loading: {}, failed: {} });
 
@@ -1093,6 +1172,10 @@
             { label: text('С управляемым цветом', 'With a governed colour'), value: colorwaysOf(item).filter((entry) => entry.pantone).length },
           ],
           content: [colorwayActions(item), colorwayPanel(item)],
+        },
+        {
+          label: text('Референсы', 'References'),
+          content: [styleReferenceActions(item), styleReferencePanel(item)].filter(Boolean),
         },
         {
           label: text('Состояние', 'State'),

@@ -57,6 +57,8 @@ export const CAPABILITIES = Object.freeze({
   CALENDAR_READ: 'calendar.read',
   COMPLIANCE_DOCUMENT_READ: 'compliance-document.read',
   COMPLIANCE_DOCUMENT_MANAGE: 'compliance-document.manage',
+  PRODUCT_CERTIFICATION_READ: 'product-certification.read',
+  PRODUCT_CERTIFICATION_MANAGE: 'product-certification.manage',
 });
 
 const ALL_CAPABILITIES = Object.freeze(Object.values(CAPABILITIES));
@@ -98,6 +100,7 @@ export const ROLE_CAPABILITIES = Object.freeze({
     CAPABILITIES.DEAL_READ,
     CAPABILITIES.CALENDAR_READ,
     CAPABILITIES.COMPLIANCE_DOCUMENT_READ,
+    CAPABILITIES.PRODUCT_CERTIFICATION_READ,
   ]),
   // Производство: ведёт заказы фабрике, исполнение, склад материалов и техпаки. Качества не
   // подписывает — оно решает, годится ли то, что произведено.
@@ -122,10 +125,12 @@ export const ROLE_CAPABILITIES = Object.freeze({
     CAPABILITIES.INVENTORY_MANAGE,
     CAPABILITIES.LOGISTICS_READ,
     CAPABILITIES.CALENDAR_READ,
+    CAPABILITIES.PRODUCT_CERTIFICATION_READ,
   ]),
   // Качество: решает, годится ли материал и изделие. Ничего не продаёт, ничего не заказывает и
   // каталогом не распоряжается — иначе решение о годности принимал бы тот, кто заинтересован в
-  // отгрузке.
+  // отгрузке. Сертификация продукта — то же самое решение о годности, только выданное внешним
+  // органом, а не внутренней приёмкой, поэтому ведёт её та же роль.
   quality: Object.freeze([
     CAPABILITIES.PRODUCT_READ,
     CAPABILITIES.BOM_READ,
@@ -141,6 +146,8 @@ export const ROLE_CAPABILITIES = Object.freeze({
     CAPABILITIES.INVENTORY_READ,
     CAPABILITIES.CLAIM_READ,
     CAPABILITIES.CALENDAR_READ,
+    CAPABILITIES.PRODUCT_CERTIFICATION_READ,
+    CAPABILITIES.PRODUCT_CERTIFICATION_MANAGE,
   ]),
   buyer: Object.freeze([
     CAPABILITIES.PARTNER_RELATIONSHIP_MANAGE,

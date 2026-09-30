@@ -58,6 +58,8 @@ import { createWholesaleHttpHandler } from '../http/api.mjs';
 import { createWholesaleFetchHandler } from '../http/fetch-api.mjs';
 import { createComplianceDocumentService } from '../application/compliance-document-service.mjs';
 import { createPostgresComplianceDocumentStore } from '../infrastructure/postgres-compliance-document-store.mjs';
+import { createProductCertificationService } from '../application/product-certification-service.mjs';
+import { createPostgresProductCertificationStore } from '../infrastructure/postgres-product-certification-store.mjs';
 import { createPostgresWholesaleRuntime as createBaseRuntime } from './postgres-base-runtime.mjs';
 import { createPostgresCostAllocationRuntime } from './postgres-cost-allocation-runtime.mjs';
 import { createPostgresFulfillmentRuntime } from './postgres-fulfillment-runtime.mjs';
@@ -221,6 +223,15 @@ export function createPostgresWholesaleRuntime(options = {}) {
     ...(options.nextId ? { nextId: options.nextId } : {}),
   });
 
+  // Сертификация продукта — заключение внешнего органа о стиле, а не документ между
+  // организациями: своя маленькая изменяемая шапка рядом, а не внутри compliance-document.
+  const productCertificationStore = createPostgresProductCertificationStore({ pool: options.pool });
+  const productCertifications = createProductCertificationService({
+    store: productCertificationStore,
+    ...(options.clock ? { clock: options.clock } : {}),
+    ...(options.nextId ? { nextId: options.nextId } : {}),
+  });
+
   // Раскрой стоит сразу за партиями материала: настил делается из выданных рулонов, поэтому его
   // сборка следует за ними и предшествует пооперационному контролю, который проверяет уже детали.
   const cuttingStore = createPostgresCuttingStore({ pool: options.pool });
@@ -302,6 +313,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
     catalog: base.catalog,
     legalEntities: base.legalEntities,
     complianceDocuments,
+    productCertifications,
     productIdentity: base.productIdentity,
     productReadiness: base.productReadiness,
     commercialPublication: base.commercialPublication,
@@ -399,6 +411,8 @@ export function createPostgresWholesaleRuntime(options = {}) {
     materialPurchaseOrders,
     complianceDocumentStore,
     complianceDocuments,
+    productCertificationStore,
+    productCertifications,
     supplierPaymentStore,
     supplierPaymentReader,
     supplierPayments,

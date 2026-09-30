@@ -774,6 +774,132 @@
     return row;
   }
 
+  // Сертификация продукта: заключение внешнего органа (OEKO-TEX, GOTS, GRS и т. п.) о стиле.
+  // Тот же приём ленивой подгрузки по styleId, что и у `sizeLineState` чуть ниже: своя карта
+  // данных/загрузки/отказа, а не поле воркспейса — сертификаты не нужны на каждом экране со
+  // списком моделей, только когда открыта эта вкладка инспектора.
+  const certificationState = window.SynthaProductCertificationState
+    || (window.SynthaProductCertificationState = { data: {}, loading: {}, failed: {} });
+
+  function loadCertifications(styleId) {
+    if (certificationState.data[styleId] || certificationState.loading[styleId] || certificationState.failed[styleId]) return;
+    certificationState.loading[styleId] = true;
+    api(`/v2/product/styles/${encodeURIComponent(styleId)}/certifications`)
+      .then((value) => { certificationState.data[styleId] = Array.isArray(value) ? value : []; })
+      .catch(() => { certificationState.failed[styleId] = true; })
+      .finally(() => { certificationState.loading[styleId] = false; if (state.view === 'styles') renderApp(); });
+  }
+  function invalidateCertifications(styleId) {
+    delete certificationState.data[styleId];
+    delete certificationState.failed[styleId];
+  }
+
+  function certificationStatusLabel(status) {
+    const labels = {
+      draft: [text('черновик', 'draft'), ''],
+      issued: [text('выставлен', 'issued'), 'success'],
+      superseded: [text('заменён', 'superseded'), ''],
+    };
+    const pair = labels[status] || [status, ''];
+    return el('span', { className: `badge ${pair[1]}`.trim(), rawText: pair[0] });
+  }
+
+  function addCertification(item) {
+    const product = item.product;
+    openForm({
+      title: text('Добавить сертификат', 'Add a certificate'),
+      hint: text('Заключение внешнего органа о соответствии стиля стандарту.', 'An external body’s attestation that the style meets a standard.'),
+      fields: [
+        field(text('Стандарт', 'Standard'), input('certificationType', 'text', { required: true, minlength: '2', maxlength: '200', placeholder: 'OEKO-TEX Standard 100' })),
+        field(text('Номер сертификата', 'Certificate number'), input('certificateNumber', 'text', { required: true, maxlength: '120' })),
+        field(text('Орган выдачи', 'Issuing body'), input('issuingBody', 'text', { required: true, minlength: '2', maxlength: '200' })),
+        field(text('Действует с', 'Valid from'), input('validFrom', 'date')),
+        field(text('Действует по', 'Valid to'), input('validTo', 'date')),
+      ],
+      submitLabel: text('Добавить', 'Add'),
+      onSubmit: async (values) => {
+        await mutate('/v2/product-certifications', {
+          styleId: product.id,
+          certificationType: values.certificationType.trim(),
+          certificateNumber: values.certificateNumber.trim(),
+          issuingBody: values.issuingBody.trim(),
+          validFrom: values.validFrom || null,
+          validTo: values.validTo || null,
+        });
+        invalidateCertifications(product.id);
+        toast(text('Сертификат добавлен как черновик.', 'The certificate was added as a draft.'), 'success');
+      },
+    });
+  }
+
+  function supersedeCertification(product, certification) {
+    openForm({
+      title: text('Продлить сертификат', 'Renew the certificate'),
+      hint: text('Прежний сертификат будет заменён новым; старый останется в истории.', 'The prior certificate will be marked superseded; the old one stays in the history.'),
+      fields: [
+        field(text('Новый номер сертификата', 'New certificate number'), input('replacementCertificateNumber', 'text', { required: true, maxlength: '120' })),
+        field(text('Орган выдачи', 'Issuing body'), input('issuingBody', 'text', { value: certification.issuingBody, minlength: '2', maxlength: '200' })),
+        field(text('Действует с', 'Valid from'), input('validFrom', 'date', { value: certification.validFrom || '' })),
+        field(text('Действует по', 'Valid to'), input('validTo', 'date', { value: certification.validTo || '' })),
+      ],
+      submitLabel: text('Продлить', 'Renew'),
+      onSubmit: async (values) => {
+        await mutate(`/v2/product-certifications/${encodeURIComponent(certification.id)}/supersede`, {
+          expectedVersion: certification.version,
+          replacementCertificateNumber: values.replacementCertificateNumber.trim(),
+          issuingBody: values.issuingBody.trim(),
+          validFrom: values.validFrom || null,
+          validTo: values.validTo || null,
+        });
+        invalidateCertifications(product.id);
+        toast(text('Сертификат продлён.', 'The certificate was renewed.'), 'success');
+      },
+    });
+  }
+
+  function issueCertification(product, certification) {
+    return actionButton(text('Выставить', 'Issue'), async () => {
+      await mutate(`/v2/product-certifications/${encodeURIComponent(certification.id)}/issue`, { expectedVersion: certification.version });
+      invalidateCertifications(product.id);
+    });
+  }
+
+  function certificationActions(item) {
+    const manage = window.SynthaUiCapabilities?.hasForOrganisation(state.workspace, item.product.brandId, window.SynthaUiCapabilities.CAPABILITIES.PRODUCT_CERTIFICATION_MANAGE);
+    if (!manage) return null;
+    const row = el('div', { className: 'od-inline-actions' });
+    const add = el('button', { className: 'button small primary', type: 'button', rawText: text('Добавить сертификат', 'Add a certificate') });
+    add.addEventListener('click', () => addCertification(item));
+    row.append(add);
+    return row;
+  }
+
+  function certificationPanel(item) {
+    const product = item.product;
+    const manage = window.SynthaUiCapabilities?.hasForOrganisation(state.workspace, product.brandId, window.SynthaUiCapabilities.CAPABILITIES.PRODUCT_CERTIFICATION_MANAGE);
+    loadCertifications(product.id);
+    if (certificationState.failed[product.id]) return notice(text('Сертификаты недоступны.', 'Certificates are unavailable.'));
+    const rows = certificationState.data[product.id];
+    if (!rows) return notice(text('Загрузка…', 'Loading…'));
+    if (!rows.length) return notice(text('У модели пока нет сертификатов.', 'This style has no certificates yet.'));
+    return odMiniTable(
+      [text('Стандарт', 'Standard'), text('Номер', 'Number'), text('Орган', 'Issuing body'), text('Действует', 'Valid'), text('Статус', 'Status'), ''],
+      rows.map((certification) => [
+        certification.certificationType,
+        certification.certificateNumber,
+        certification.issuingBody,
+        [certification.validFrom || '—', certification.validTo || '—'].join(' … '),
+        certificationStatusLabel(certification.status),
+        manage && certification.status === 'draft' ? issueCertification(product, certification)
+          : (manage && certification.status === 'issued' ? (() => {
+              const button = el('button', { className: 'button small', type: 'button', rawText: text('Продлить', 'Renew') });
+              button.addEventListener('click', () => supersedeCertification(product, certification));
+              return button;
+            })() : null),
+      ]),
+    );
+  }
+
   // \u0420\u044f\u0434 \u0433\u0440\u0443\u0437\u0438\u0442\u0441\u044f \u043e\u0442\u0434\u0435\u043b\u044c\u043d\u044b\u043c \u0437\u0430\u043f\u0440\u043e\u0441\u043e\u043c: \u043e\u043d \u0441\u043e\u0431\u0438\u0440\u0430\u0435\u0442\u0441\u044f \u0438\u0437 \u0432\u0435\u0434\u043e\u043c\u043e\u0441\u0442\u0435\u0439 \u0432\u0441\u0435\u0445 \u0440\u0430\u0437\u043c\u0435\u0440\u043e\u0432 \u0441\u0442\u0438\u043b\u044f, \u0438 \u0442\u044f\u043d\u0443\u0442\u044c
   // \u0435\u0433\u043e \u0434\u043b\u044f \u043a\u0430\u0436\u0434\u043e\u0439 \u0441\u0442\u0440\u043e\u043a\u0438 \u0440\u0435\u0435\u0441\u0442\u0440\u0430 \u0440\u0430\u0434\u0438 \u043e\u0434\u043d\u043e\u0439 \u043e\u0442\u043a\u0440\u044b\u0442\u043e\u0439 \u043a\u0430\u0440\u0442\u043e\u0447\u043a\u0438 \u0431\u044b\u043b\u043e \u0431\u044b \u0440\u0430\u0441\u0442\u043e\u0447\u0438\u0442\u0435\u043b\u044c\u043d\u043e.
   const sizeLineState = window.SynthaBomSizeLineState
@@ -913,6 +1039,10 @@
             { label: text('Связка с каталогом', 'Catalogue link'), value: `${item.legacyCatalogLinkCount}/${item.productSkuCount}` },
           ],
           content: [risks, readinessDimensions(product), readinessAssessAction(product), readinessProjectionAction(product)].filter(Boolean),
+        },
+        {
+          label: text('Сертификация', 'Certification'),
+          content: [certificationActions(item), certificationPanel(item)].filter(Boolean),
         },
         {
           label: text('Цветомодели', 'Colourways'),

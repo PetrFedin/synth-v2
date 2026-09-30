@@ -24,6 +24,7 @@ import { createFulfillmentRoutes } from './fulfillment-routes.mjs';
 import { createInventoryRoutes } from './inventory-routes.mjs';
 import { createLegalEntityRoutes } from './legal-entity-routes.mjs';
 import { createComplianceDocumentRoutes } from './compliance-document-routes.mjs';
+import { createProductCertificationRoutes } from './product-certification-routes.mjs';
 import { createProductIdentityRoutes } from './product-identity-routes.mjs';
 import { createProductReadinessRoutes } from './product-readiness-routes.mjs';
 import { createProductionRequirementRoutes } from './production-requirement-routes.mjs';
@@ -46,6 +47,7 @@ export function createWholesaleRoutes(services = {}) {
     ...createProductIdentityRoutes({ productIdentity: services.productIdentity }),
     ...createLegalEntityRoutes({ legalEntities: services.legalEntities }),
     ...createComplianceDocumentRoutes({ complianceDocuments: services.complianceDocuments }),
+    ...createProductCertificationRoutes({ productCertifications: services.productCertifications }),
     ...createProductReadinessRoutes({ productReadiness: services.productReadiness }),
     ...createCommercialPublicationRoutes({ commercialPublication: services.commercialPublication }),
     ...createRetailDoorRoutes({ retailDoors: services.retailDoors }),

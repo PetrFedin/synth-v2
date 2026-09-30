@@ -45,6 +45,8 @@ const PHYSICAL_COST_CORRECTION_BODY = bodyContract([
   'occurredAt',
 ]);
 const ORDER_LINE_COMMENT_BODY = bodyContract(['body']);
+const PACKING_STATUS_BODY = bodyContract(['status']);
+const PACKING_STATUSES = new Set(['packing', 'packed']);
 
 export function createFulfillmentRoutes({ fulfillment } = {}) {
   const service = fulfillment ?? unavailableFulfillment();
@@ -55,6 +57,8 @@ export function createFulfillmentRoutes({ fulfillment } = {}) {
     // спросить про заказ целиком было нечем — и это, а не отсутствие вёрстки, держало экран пустым.
     read('GET', /^\/v2\/orders\/([^/]+)\/fulfillment$/, ({ actorId, params }) => service.getOrderFulfillmentForActor(actorId, params[0])),
     read('GET', /^\/v2\/fulfillment-plans\/([^/]+)$/, ({ actorId, params }) => service.getFulfillmentPlanForActor(actorId, params[0])),
+    mutate('PUT', /^\/v2\/fulfillment-plans\/([^/]+)\/packing-status$/, validatePackingStatusBody,
+      ({ commandId, actorId, params, body }) => service.setPackingStatus(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/fulfillment-plans\/([^/]+)\/shipment-notices$/, validateShipmentBody,
       ({ commandId, actorId, params, body }) => service.createShipmentNotice(commandId, actorId, params[0], body)),
     read('GET', /^\/v2\/shipment-notices\/([^/]+)$/, ({ actorId, params }) => service.getShipmentNoticeForActor(actorId, params[0])),
@@ -164,6 +168,10 @@ function validateOrderLineCommentBody(body) {
   assertBodyContract(body, ORDER_LINE_COMMENT_BODY);
   invariant(typeof body.body === 'string' && body.body.length <= 1000, 'HTTP_BODY_FIELD_INVALID', 'body must be a string of at most 1000 characters', { field: 'body' });
 }
+function validatePackingStatusBody(body) {
+  assertBodyContract(body, PACKING_STATUS_BODY);
+  invariant(PACKING_STATUSES.has(body.status), 'HTTP_BODY_FIELD_INVALID', 'status must be packing or packed', { field: 'status' });
+}
 function positiveIntegerPath(value) {
   const parsed = Number(value);
   invariant(Number.isSafeInteger(parsed) && parsed > 0, 'HTTP_PATH_PARAMETER_INVALID', 'Order line number must be a positive integer', { value });
@@ -232,5 +240,6 @@ function unavailableFulfillment() {
     getReceiptDiscrepancyForActor: fail,
     setOrderLineComment: fail,
     getOrderLineCommentsForActor: fail,
+    setPackingStatus: fail,
   });
 }

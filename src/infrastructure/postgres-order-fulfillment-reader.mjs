@@ -24,6 +24,11 @@ export function createPostgresOrderFulfillmentReader({ pool } = {}) {
       if (!plans.rowCount) return Object.freeze([]);
 
       const planIds = plans.rows.map((row) => row.payload.id);
+      const packingStatuses = await pool.query(
+        'SELECT fulfillment_plan_id, status FROM fulfillment_packing_status WHERE fulfillment_plan_id = ANY($1)',
+        [planIds],
+      );
+      const packingStatusByPlan = new Map(packingStatuses.rows.map((row) => [row.fulfillment_plan_id, row.status]));
       const notices = await pool.query(
         'SELECT payload FROM shipment_notice_snapshots WHERE fulfillment_plan_snapshot_id = ANY($1) ORDER BY shipped_at, id',
         [planIds],
@@ -68,6 +73,7 @@ export function createPostgresOrderFulfillmentReader({ pool } = {}) {
         const plan = row.payload;
         return Object.freeze({
           ...plan,
+          packingStatus: packingStatusByPlan.get(plan.id) ?? null,
           shipments: Object.freeze((noticesByPlan.get(plan.id) ?? []).map((notice) => {
             const discrepancy = discrepancyByNotice.get(notice.id) ?? null;
             const claim = discrepancy ? claimByDiscrepancy.get(discrepancy.id) ?? null : null;

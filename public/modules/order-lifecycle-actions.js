@@ -66,6 +66,13 @@
     if (item.orderCommitSnapshotId && seesLogistics && typeof window.orderFulfillmentDialog === 'function') {
       actions.push(actionButton(localized('Поставка', 'Fulfillment'), () => window.orderFulfillmentDialog(item)));
     }
+    // Упаковка — сторона бренда, а не обеих сторон сделки: магазин ничего в ней не двигает, только
+    // видит итог уже в «Поставке» после того, как план ушёл в отгрузку.
+    if (item.orderCommitSnapshotId
+      && caps.hasForOrganisation(state.workspace, item.brandId, caps.CAPABILITIES.FULFILLMENT_MANAGE)
+      && typeof window.orderPackingStatusDialog === 'function') {
+      actions.push(actionButton(localized('Упаковка', 'Packing'), () => window.orderPackingStatusDialog(item)));
+    }
     // Комментарий — заметка при строке заказа, а не факт исполнения: он осмыслен уже на черновике,
     // до всякого плана отгрузки, поэтому не требует item.orderCommitSnapshotId, в отличие от «Поставки».
     if (seesLogistics && typeof window.orderLineCommentsDialog === 'function') {

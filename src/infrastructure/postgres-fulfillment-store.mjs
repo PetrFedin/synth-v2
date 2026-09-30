@@ -97,6 +97,22 @@ function view(client) {
       );
       return result.rows.map((row) => row.payload);
     },
+    async getPackingStatus(fulfillmentPlanId) {
+      const result = await client.query(
+        'SELECT status, updated_at, updated_by FROM fulfillment_packing_status WHERE fulfillment_plan_id = $1 FOR UPDATE',
+        [fulfillmentPlanId],
+      );
+      const found = result.rows[0];
+      return found ? { fulfillmentPlanId, status: found.status, updatedAt: found.updated_at?.toISOString?.() ?? found.updated_at, updatedBy: found.updated_by } : undefined;
+    },
+    async upsertPackingStatus(value) {
+      await client.query(
+        `INSERT INTO fulfillment_packing_status (fulfillment_plan_id, brand_id, status, updated_at, updated_by)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (fulfillment_plan_id) DO UPDATE SET status = EXCLUDED.status, updated_at = EXCLUDED.updated_at, updated_by = EXCLUDED.updated_by`,
+        [value.fulfillmentPlanId, value.brandId, value.status, value.updatedAt, value.updatedBy],
+      );
+    },
     async insertShipmentNotice(value) {
       await insertImmutable(client, `INSERT INTO shipment_notice_snapshots
         (id, order_id, order_commit_snapshot_id, supply_commitment_snapshot_id, fulfillment_plan_snapshot_id,

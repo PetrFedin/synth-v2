@@ -33,7 +33,7 @@ function emptyState() {
   return {
     organisations: new Map(), memberships: new Map(), relationships: new Map(), showroomInvitations: new Map(), retailDoors: new Map(),
     campaigns: new Map(), collections: new Map(), productPlaceholders: new Map(), productPlaceholderStyleLinks: new Map(), productResponsibilities: new Map(), collectionStyleVersions: new Map(), showrooms: new Map(), selections: new Map(), orders: new Map(),
-    orderCommitSnapshots: new Map(), cycles: new Map(), deals: new Map(), calendar: new Map(), commands: new Map(), outbox: new Map(),
+    orderCommitSnapshots: new Map(), orderAmendments: new Map(), cycles: new Map(), deals: new Map(), calendar: new Map(), commands: new Map(), outbox: new Map(),
   };
 }
 function cloneState(state) { return Object.fromEntries(Object.entries(state).map(([key, value]) => [key, new Map(value)])); }
@@ -126,6 +126,15 @@ function transactionView(state) {
     saveOrder: (order, expectedVersion) => saveVersioned(state.orders, order, expectedVersion, 'ORDER_CONCURRENCY_CONFLICT'),
     getOrderCommitSnapshot: (id) => state.orderCommitSnapshots.get(id),
     insertOrderCommitSnapshot: (snapshot) => insertUnique(state.orderCommitSnapshots, snapshot.id, snapshot, 'ORDER_COMMIT_SNAPSHOT_ALREADY_EXISTS'),
+    getOrderAmendment: (id) => state.orderAmendments.get(id),
+    getOpenOrderAmendmentForLine: (orderId, lineNo) => [...state.orderAmendments.values()].find((item) => item.orderId === orderId && item.lineNo === lineNo && item.status === 'proposed'),
+    listOrderAmendmentsByOrder: (orderId) => [...state.orderAmendments.values()].filter((item) => item.orderId === orderId).sort((a, b) => a.proposedAt.localeCompare(b.proposedAt) || a.id.localeCompare(b.id)),
+    insertOrderAmendment: (amendment) => insertUnique(state.orderAmendments, amendment.id, amendment, 'ORDER_AMENDMENT_ALREADY_EXISTS'),
+    respondToOrderAmendmentRow: (amendment) => {
+      const current = state.orderAmendments.get(amendment.id);
+      invariant(current?.status === 'proposed', 'ORDER_AMENDMENT_NOT_PROPOSED', 'Order amendment is no longer open', { id: amendment.id });
+      state.orderAmendments.set(amendment.id, amendment);
+    },
     getCycle: (id) => state.cycles.get(id),
     insertCycle: (cycle) => insertUnique(state.cycles, cycle.id, cycle, 'CYCLE_ALREADY_EXISTS'),
     saveCycle: (cycle, expectedVersion) => saveVersioned(state.cycles, cycle, expectedVersion, 'CYCLE_CONCURRENCY_CONFLICT'),
@@ -158,7 +167,7 @@ function freezeSnapshot(state) {
     organisations: [...state.organisations.values()], memberships: [...state.memberships.values()],
     relationships: [...state.relationships.values()], showroomInvitations: [...state.showroomInvitations.values()], retailDoors: [...state.retailDoors.values()],
     campaigns: [...state.campaigns.values()], collections: [...state.collections.values()], collectionStyleVersions: [...state.collectionStyleVersions.values()], showrooms: [...state.showrooms.values()],
-    selections: [...state.selections.values()], orders: [...state.orders.values()], orderCommitSnapshots: [...state.orderCommitSnapshots.values()],
+    selections: [...state.selections.values()], orders: [...state.orders.values()], orderCommitSnapshots: [...state.orderCommitSnapshots.values()], orderAmendments: [...state.orderAmendments.values()],
     cycles: [...state.cycles.values()], deals: [...state.deals.values()],
     calendar: [...state.calendar.values()], commands: [...state.commands.values()], outbox: [...state.outbox.values()],
     events: [...state.outbox.values()].map((record) => record.event),

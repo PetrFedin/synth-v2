@@ -376,4 +376,79 @@
     close.addEventListener('click', () => dialog.close());
     body.append(head, grid); dialog.append(body); dialog.showModal();
   };
+
+  function amendmentProposeForm(order) {
+    const lineOptions = order.lines.map((line, index) => ({ id: String(index + 1), name: `${index + 1}. ${line.sku} — ${text('сейчас', 'now')} ${line.quantity}` }));
+    openForm(text('Предложить изменение количества', 'Propose a quantity change'), [
+      selectDef('lineNo', text('Строка заказа', 'Order line'), lineOptions, (option) => option.name, lineOptions[0]?.id),
+      numberDef('proposedQuantity', text('Новое количество', 'New quantity'), '', true, 1),
+      textDef('reason', text('Причина', 'Reason'), '', 1000),
+    ], (values) => mutate(
+      `/v2/orders/${encodeURIComponent(order.id)}/amendments`,
+      { lineNo: Number.parseInt(values.lineNo, 10), proposedQuantity: Number.parseInt(values.proposedQuantity, 10), reason: values.reason },
+      'POST',
+    ));
+  }
+
+  function amendmentRejectForm(order, amendment) {
+    openForm(text('Отклонить изменение', 'Reject the amendment'), [
+      textDef('responseReason', text('Причина отклонения', 'Rejection reason'), '', 1000),
+    ], (values) => mutate(
+      `/v2/orders/${encodeURIComponent(order.id)}/amendments/${encodeURIComponent(amendment.id)}/respond`,
+      { decision: 'rejected', responseReason: values.responseReason },
+      'POST',
+    ));
+  }
+
+  /**
+   * Изменение уже подтверждённого заказа — до этого у заказа был только один путь после `attached`:
+   * отмена целиком. Предложение и ответ на него, а не тихая перезапись количества: строку заказа
+   * этот экран не трогает вовсе, только фиксирует факт предложения и решение другой стороны.
+   * Отвечает не та сторона, что предложила, — сервер откажет самой попыткой, эта кнопка её просто
+   * не показывает.
+   */
+  global.orderAmendmentsDialog = async function orderAmendmentsDialog(order) {
+    const caps = window.SynthaUiCapabilities;
+    const canWrite = caps.hasForOrganisation(state.workspace, order.brandId, caps.CAPABILITIES.ORDER_WRITE)
+      || caps.hasForOrganisation(state.workspace, order.shopId, caps.CAPABILITIES.ORDER_WRITE);
+    const myOrgId = ownIds().find((id) => id === order.brandId || id === order.shopId) || null;
+    const result = await api(`/v2/orders/${encodeURIComponent(order.id)}/amendments`);
+
+    const dialog = document.querySelector('#form-dialog'); clear(dialog);
+    const body = el('div', { className: 'dialog-body' });
+    const close = el('button', { className: 'button small', text: I18N.t('common.close'), type: 'button' });
+    const head = el('div', { className: 'dialog-head' }); head.append(el('h3', { text: text('Изменения заказа', 'Order amendments') }), close);
+    const grid = el('div', { className: 'form-grid' });
+
+    const amendments = result?.amendments || [];
+    if (!amendments.length) {
+      grid.append(el('div', { className: 'empty', text: text('Предложений об изменении пока нет.', 'No amendments proposed yet.') }));
+    }
+    amendments.forEach((amendment) => {
+      const label = el('label');
+      const line = order.lines[amendment.lineNo - 1];
+      const statusText = amendment.status === 'proposed' ? text('на рассмотрении', 'pending')
+        : amendment.status === 'accepted' ? text('принято', 'accepted') : text('отклонено', 'rejected');
+      const signedDelta = `${amendment.deltaAmount >= 0 ? '+' : ''}${money(amendment.deltaAmount, amendment.currency)}`;
+      label.append(el('span', { text: `${amendment.lineNo}. ${line?.sku || ''}: ${amendment.currentQuantity} → ${amendment.proposedQuantity} (${signedDelta})` }));
+      const detailParts = [`${text('от', 'from')} ${orgName(amendment.proposedOrganisationId)}`, `${text('причина', 'reason')}: ${amendment.reason}`, statusText];
+      if (amendment.responseReason) detailParts.push(`${text('ответ', 'response')}: ${amendment.responseReason}`);
+      label.append(el('input', { type: 'text', value: detailParts.join(' · '), readOnly: true }));
+      if (amendment.status === 'proposed' && canWrite && myOrgId && myOrgId !== amendment.proposedOrganisationId) {
+        label.append(actionButton(text('Принять', 'Accept'), () => mutate(
+          `/v2/orders/${encodeURIComponent(order.id)}/amendments/${encodeURIComponent(amendment.id)}/respond`,
+          { decision: 'accepted' },
+          'POST',
+        )));
+        label.append(actionButton(text('Отклонить', 'Reject'), () => amendmentRejectForm(order, amendment), 'danger'));
+      }
+      grid.append(label);
+    });
+    if (canWrite) {
+      grid.append(actionButton(text('Предложить изменение', 'Propose a change'), () => amendmentProposeForm(order)));
+    }
+
+    close.addEventListener('click', () => dialog.close());
+    body.append(head, grid); dialog.append(body); dialog.showModal();
+  };
 })(window);

@@ -88,6 +88,12 @@
     if (seesLogistics && typeof window.orderCalendarDialog === 'function') {
       actions.push(actionButton(localized('Календарь', 'Calendar'), () => window.orderCalendarDialog(item)));
     }
+    // Изменение уже подтверждённого заказа — до этой правки единственным путём после «прикреплён»
+    // была отмена целиком. Осмыслено только для уже прикреплённого заказа, тем же гейтом, что и
+    // «Отменить заказ» — до прикрепления менять нечего, для этого хватает черновика условий.
+    if (item.status === 'attached' && seesLogistics && typeof window.orderAmendmentsDialog === 'function') {
+      actions.push(actionButton(localized('Изменения', 'Amendments'), () => window.orderAmendmentsDialog(item)));
+    }
     return actions;
   };
 

@@ -124,7 +124,7 @@ function complianceDocumentForm() {
     ], (option) => option.name, 'upd'),
     textDef('documentNumber', localText('Номер документа', 'Document number'), '', 80),
     selectDef('issuerLegalEntityId', localText('Юрлицо-эмитент', 'Issuer Legal Entity'), entityOptions, (option) => option.name),
-    selectDef('counterpartyLegalEntityId', localText('Юрлицо-контрагент (необязательно)', 'Counterparty Legal Entity (optional)'), [{ id: '', name: localText('— не указано —', '— none —') }, ...entityOptions], (option) => option.name),
+    optionalSelectDef('counterpartyLegalEntityId', localText('Юрлицо-контрагент (необязательно)', 'Counterparty Legal Entity (optional)'), [{ id: '', name: localText('— не указано —', '— none —') }, ...entityOptions], (option) => option.name),
     textDef('validFrom', localText('Действует с (только для ЕАЭС, ГГГГ-ММ-ДД)', 'Valid from (EAEU only, YYYY-MM-DD)'), '', 10, false),
     textDef('validTo', localText('Действует по (только для ЕАЭС, ГГГГ-ММ-ДД)', 'Valid to (EAEU only, YYYY-MM-DD)'), '', 10, false),
     // Нет отдельного экрана отгрузок, где документ можно было бы выбрать из списка — тот же разрыв,

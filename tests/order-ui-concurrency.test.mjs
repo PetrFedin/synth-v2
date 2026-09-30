@@ -45,5 +45,5 @@ test('versioned actions load after Omnidata and before polish', () => {
 test('shared form controls preserve initial select and date values', () => {
   assert.match(dom, /field\.value !== undefined/);
   assert.match(dom, /function dateDef\(name, label, value = ''\)/);
-  assert.match(dom, /function selectDef\(name, label, options, format, value\)/);
+  assert.match(dom, /function selectDef\(name, label, options, format, value, required = true\)/);
 });

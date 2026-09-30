@@ -175,6 +175,44 @@ export function createProductIdentityService({ store, clock = () => new Date().t
         });
     },
 
+    // Заведение цветомоделей одной семьи по одной за раз — то самое трение, что держало каталог
+    // пустым дольше, чем должно было: бренд с 8 оттенками одной ткани заводил 8 отдельных форм. Та
+    // же доменная функция `createColorwayDomain`, тот же transaction-boundary, что и у одиночного
+    // создания — просто несколько раз внутри одной команды, поэтому либо весь пакет входит в
+    // каталог, либо ни один код не занимается наполовину.
+    createColorwaysBatch(commandId, actorId, styleVersionId, input) {
+      return execute(commandId, actorId, `createProductColorwaysBatch:${styleVersionId}`, input,
+        async (tx, { replay }) => {
+          const styleVersion = requireEntity(await tx.getStyleVersion(styleVersionId), 'PRODUCT_STYLE_VERSION_NOT_FOUND', { styleVersionId });
+          await authorize(tx, styleVersion.brandId, actorId);
+          if (replay) return Object.freeze({ styleVersion, replay: true });
+          const items = Array.isArray(input?.items) ? input.items : [];
+          invariant(items.length >= 1 && items.length <= 50, 'PRODUCT_COLORWAY_BATCH_SIZE_INVALID', 'Colorway batch must contain 1 to 50 items', { count: items.length });
+          const seenCodes = new Set();
+          const prepared = [];
+          for (const [index, item] of items.entries()) {
+            invariant(typeof item?.colorwayCode === 'string' && item.colorwayCode, 'PRODUCT_COLORWAY_CODE_INVALID', 'Colorway code is invalid', { index });
+            invariant(!seenCodes.has(item.colorwayCode), 'PRODUCT_COLORWAY_BATCH_CODE_DUPLICATE', 'Colorway code repeats within the batch', { index, colorwayCode: item.colorwayCode });
+            seenCodes.add(item.colorwayCode);
+            const existing = await tx.getColorwayByCode(styleVersionId, item.colorwayCode);
+            invariant(!existing, 'PRODUCT_COLORWAY_ALREADY_EXISTS', 'Colorway code already exists for this Style Version', { index, styleVersionId, colorwayCode: item.colorwayCode });
+            const color = await resolveMdm(tx, item?.colorRef, COLOUR_DICTIONARIES, styleVersion.brandId);
+            prepared.push({ item, color });
+          }
+          return Object.freeze({ styleVersion, prepared, replay: false });
+        },
+        async (tx, context) => {
+          const created = [];
+          for (const { item, color } of context.prepared) {
+            const value = createColorwayDomain({ id: nextId('product-colorway'), styleVersion: context.styleVersion, ...item, createdAt: now(clock), createdBy: actorId });
+            await tx.insertColorway(value);
+            await captureMdmUsage(tx, { brandId: value.brandId, sourceType: 'product_colorway', sourceId: value.id, fieldPath: 'colorRef', record: color, actorId });
+            created.push(value);
+          }
+          return Object.freeze(created);
+        });
+    },
+
     createSizeScale(commandId, actorId, input) {
       return execute(commandId, actorId, 'createProductSizeScale', input,
         async (tx) => {

@@ -8,6 +8,7 @@ function harness() {
   const commands = new Map();
   const styles = new Map();
   const styleVersions = [];
+  const colorways = new Map();
   const usages = [];
   const mdm = new Map();
   const memberships = new Map();
@@ -22,12 +23,15 @@ function harness() {
     saveStyle: async (value) => styles.set(value.id, value),
     getLatestStyleVersion: async (styleId) => styleVersions.filter((value) => value.styleId === styleId).sort((a, b) => b.versionNo - a.versionNo)[0],
     insertStyleVersion: async (value) => styleVersions.push(value),
+    getStyleVersion: async (id) => styleVersions.find((value) => value.id === id),
+    getColorwayByCode: async (styleVersionId, colorwayCode) => [...colorways.values()].find((value) => value.styleVersionId === styleVersionId && value.colorwayCode === colorwayCode),
+    insertColorway: async (value) => colorways.set(value.id, value),
     getMdmEntryVersion: async (entryId, version) => mdm.get(`${entryId}:${version}`),
     insertMdmUsageSnapshot: async (value) => usages.push(value),
   };
   const store = { transaction: async (work) => work(tx) };
   const service = createProductIdentityService({ store, clock: () => at, nextId: (prefix) => `${prefix}:${++sequence}` });
-  return { service, commands, styles, styleVersions, usages, mdm, memberships };
+  return { service, commands, styles, styleVersions, colorways, usages, mdm, memberships };
 }
 
 function activeMembership(organisationId, userId, role = 'sales') {
@@ -121,5 +125,78 @@ test('buyer membership cannot mutate the technical Product Master', async () => 
   await assert.rejects(
     h.service.createStyle('cmd:buyer', 'user:buyer', { brandId: 'brand:1', styleCode: 'DRS-001' }),
     (error) => error?.code === 'CAPABILITY_DENIED',
+  );
+});
+
+async function styleVersionFixture(h) {
+  h.memberships.set('brand:1:user:1', activeMembership('brand:1', 'user:1'));
+  const style = await h.service.createStyle('cmd:style', 'user:1', { brandId: 'brand:1', styleCode: 'DRS-001' });
+  return h.service.createStyleVersion('cmd:v1', 'user:1', style.id, { expectedLatestVersionNo: 0, titleRu: 'Платье миди', titleEn: 'Midi dress' });
+}
+
+test('a colorway batch creates every item atomically in one command', async () => {
+  const h = harness();
+  const styleVersion = await styleVersionFixture(h);
+  const created = await h.service.createColorwaysBatch('cmd:batch', 'user:1', styleVersion.id, {
+    items: [
+      { colorwayCode: 'BLK', nameRu: 'Чёрный', nameEn: 'Black' },
+      { colorwayCode: 'WHT', nameRu: 'Белый', nameEn: 'White' },
+      { colorwayCode: 'NVY', nameRu: 'Тёмно-синий', nameEn: 'Navy' },
+    ],
+  });
+  assert.equal(created.length, 3);
+  assert.equal(h.colorways.size, 3);
+  assert.deepEqual(created.map((value) => value.colorwayCode), ['BLK', 'WHT', 'NVY']);
+
+  // replay is idempotent: no duplicate rows land
+  const replay = await h.service.createColorwaysBatch('cmd:batch', 'user:1', styleVersion.id, {
+    items: [
+      { colorwayCode: 'BLK', nameRu: 'Чёрный', nameEn: 'Black' },
+      { colorwayCode: 'WHT', nameRu: 'Белый', nameEn: 'White' },
+      { colorwayCode: 'NVY', nameRu: 'Тёмно-синий', nameEn: 'Navy' },
+    ],
+  });
+  assert.deepEqual(replay.map((value) => value.id), created.map((value) => value.id));
+  assert.equal(h.colorways.size, 3);
+});
+
+test('a colorway batch refuses a duplicate code within the same batch, creating nothing', async () => {
+  const h = harness();
+  const styleVersion = await styleVersionFixture(h);
+  await assert.rejects(
+    h.service.createColorwaysBatch('cmd:dupe', 'user:1', styleVersion.id, {
+      items: [
+        { colorwayCode: 'BLK', nameRu: 'Чёрный', nameEn: 'Black' },
+        { colorwayCode: 'BLK', nameRu: 'Чёрный 2', nameEn: 'Black 2' },
+      ],
+    }),
+    (error) => error?.code === 'PRODUCT_COLORWAY_BATCH_CODE_DUPLICATE',
+  );
+  assert.equal(h.colorways.size, 0);
+});
+
+test('a colorway batch refuses a code already taken on the style version, creating nothing', async () => {
+  const h = harness();
+  const styleVersion = await styleVersionFixture(h);
+  await h.service.createColorway('cmd:single', 'user:1', styleVersion.id, { colorwayCode: 'BLK', nameRu: 'Чёрный', nameEn: 'Black' });
+  await assert.rejects(
+    h.service.createColorwaysBatch('cmd:batch-collide', 'user:1', styleVersion.id, {
+      items: [
+        { colorwayCode: 'WHT', nameRu: 'Белый', nameEn: 'White' },
+        { colorwayCode: 'BLK', nameRu: 'Чёрный ещё раз', nameEn: 'Black again' },
+      ],
+    }),
+    (error) => error?.code === 'PRODUCT_COLORWAY_ALREADY_EXISTS',
+  );
+  // The first item of the batch must not have landed either — the whole command is one transaction.
+  assert.equal(h.colorways.size, 1);
+});
+
+test('a colorway batch rejects an empty item list', async () => {
+  const h = harness();
+  const styleVersion = await styleVersionFixture(h);
+  await assert.rejects(
+    h.service.createColorwaysBatch('cmd:empty', 'user:1', styleVersion.id, { items: [] }),
+    (error) => error?.code === 'PRODUCT_COLORWAY_BATCH_SIZE_INVALID',
   );
 });

@@ -347,6 +347,46 @@
     return box;
   }
 
+  // Импорт/экспорт табеля мер (docs/backlog-not-yet-integrated.md, раздел E) — та же таблица, что
+  // уже собрана вручную в редакторе: строка на точку измерения, колонка на размер, и ни одного
+  // поля, которого не было бы в самой форме. Экспорт и импорт работают с уже открытой моделью
+  // редактора, а не с отдельным диалогом — сохранённый файл открывается в Excel и возвращается сюда
+  // тем же самым способом, каким уже читается CSV плейсхолдеров (`placeholder-import.js`): сниффинг
+  // разделителя по первой строке, экранированные кавычками поля. Сам разбор и сборка CSV живут в
+  // `measurement-core.js` — без DOM, тем же приёмом, что и `assessChart` рядом с ним — здесь только
+  // Blob/файловый ввод, которым эта чистая логика не может касаться сама.
+  function downloadMeasurementCsv(model) {
+    const columnLabels = ['POM', text('Название', 'Name'), text('Описание', 'Description'), text('Допуск-', 'Tol-'), text('Допуск+', 'Tol+'), text('Градация', 'Grade'), 'QC'];
+    const blob = new Blob([core.chartModelToCsv(model, columnLabels)], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = h('a', { href: url, download: `${model.sku || 'measurement-chart'}.csv` });
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  // The file is trusted only as far as the grid already trusts manual entry: nothing is sent to the
+  // server here, the parsed rows just replace what is on screen so the person reviews them in the
+  // same matrix and table before pressing Сохранить, exactly as if they had retyped every cell.
+  function importMeasurementCsvButton(model, nextKey, onImported) {
+    const fileInput = h('input', { type: 'file', accept: '.csv,text/csv', hidden: true, onchange: async (event) => {
+      const file = event.target.files?.[0];
+      fileInput.value = '';
+      if (!file) return;
+      const parsed = core.parseMeasurementChartCsv(await file.text());
+      if (!parsed) {
+        toast(text('Файл не похож на экспорт табеля мер: нужна строка заголовка и хотя бы один размер.', 'The file does not look like an exported chart: a header row and at least one size are required.'), 'error');
+        return;
+      }
+      core.applyMeasurementChartCsv(model, parsed, nextKey);
+      onImported();
+      toast(text(`Загружено из файла: точек — ${model.points.length}, размеров — ${model.sizes.length}. Проверьте таблицу перед сохранением.`, `Loaded from file: ${model.points.length} points, ${model.sizes.length} sizes. Review the table before saving.`), 'success');
+    } });
+    const button = h('button', { type: 'button', className: 'secondary', text: text('Импорт CSV', 'Import CSV') });
+    button.addEventListener('click', () => fileInput.click());
+    return h('span', {}, [button, fileInput]);
+  }
+
   function showEditor({ existing, skus, model, nextKey }) {
     const overlay = h('div', { className: 'measurement-modal-overlay' });
     // Оверлей закрывается четырьмя путями: крестик, «Отмена», щелчок мимо и успешное сохранение, а
@@ -404,10 +444,15 @@
         cells.push(h('td', {}, [h('button', { type: 'button', className: 'danger-link', text: '×', 'aria-label': text('Удалить POM', 'Remove POM'), onclick: () => { model.points = model.points.filter((candidate) => candidate.key !== point.key); renderBody(); } })]));
         return h('tr', {}, cells);
       });
-      body.append(sectionHead(text('Точки измерения и матрица', 'Points of measure and matrix'), h('button', { type: 'button', className: 'secondary', disabled: model.points.length >= 300, text: text('Добавить POM', 'Add POM'), onclick: () => {
-        model.points.push({ key: nextKey('point'), pointCode: '', name: '', description: '', toleranceMinus: 0, tolerancePlus: 0, grade: '', values: new Map(model.sizes.map((size) => [size.key, ''])), qcChecked: false });
-        renderBody();
-      } })), h('div', { className: 'measurement-editor-matrix-wrap' }, [h('table', { className: 'measurement-editor-matrix' }, [h('thead', {}, [h('tr', {}, tableHead)]), h('tbody', {}, rows)] )]));
+      const matrixActions = h('div', { className: 'measurement-header-actions' }, [
+        h('button', { type: 'button', className: 'secondary', text: text('Экспорт CSV', 'Export CSV'), onclick: () => downloadMeasurementCsv(model) }),
+        importMeasurementCsvButton(model, nextKey, renderBody),
+        h('button', { type: 'button', className: 'secondary', disabled: model.points.length >= 300, text: text('Добавить POM', 'Add POM'), onclick: () => {
+          model.points.push({ key: nextKey('point'), pointCode: '', name: '', description: '', toleranceMinus: 0, tolerancePlus: 0, grade: '', values: new Map(model.sizes.map((size) => [size.key, ''])), qcChecked: false });
+          renderBody();
+        } }),
+      ]);
+      body.append(sectionHead(text('Точки измерения и матрица', 'Points of measure and matrix'), matrixActions), h('div', { className: 'measurement-editor-matrix-wrap' }, [h('table', { className: 'measurement-editor-matrix' }, [h('thead', {}, [h('tr', {}, tableHead)]), h('tbody', {}, rows)] )]));
       body.append(field(text('Примечания', 'Notes'), textarea(model.notes, (value) => { model.notes = value; })));
     }
 

@@ -606,20 +606,73 @@
     return list;
   }
 
+  // Справочник цветов (`colour.colour`): форма заведения цветомодели всегда предлагала только
+  // свободный ввод кода/названия, хотя домен принимает управляемую ссылку на справочник (`colorRef`)
+  // с самого начала пакетного заведения (`feat/bulk-colorway-creation`) — она просто не была ничем
+  // заполнена ни в одиночной форме, ни в пакетной. Тот же приём чтения справочника, что уже несёт
+  // доска технологических узлов чуть ниже — `GET /v2/libraries/colour.colour/entries`, глобальный
+  // кеш на уровне окна, список один раз на восемь governed-записей.
+  const colourLibraryState = window.SynthaColourLibraryState
+    || (window.SynthaColourLibraryState = { items: null, loading: false, failed: false });
+
+  function loadColourLibrary() {
+    if (colourLibraryState.items || colourLibraryState.loading || colourLibraryState.failed) return;
+    colourLibraryState.loading = true;
+    api('/v2/libraries/colour.colour/entries?limit=200')
+      .then((page) => { colourLibraryState.items = Array.isArray(page?.items) ? page.items : []; })
+      .catch(() => { colourLibraryState.failed = true; })
+      .finally(() => { colourLibraryState.loading = false; if (state.view === 'styles') renderApp(); });
+  }
+  function colourRefOptions() {
+    const library = colourLibraryState.items || [];
+    return [
+      ['', text('— свободный ввод —', '— free text —')],
+      ...library.map((entry) => [`${entry.id}|${entry.version}`, `${entry.code} · ${I18N.getLocale?.() === 'en' ? entry.nameEn : entry.nameRu}${entry.attributes?.pantone ? ` · Pantone ${entry.attributes.pantone}` : ''}`]),
+    ];
+  }
+  // Форма не реактивна — поля строятся один раз как обычные DOM-узлы, а не перерисовываются из
+  // состояния, — поэтому «выбор подставляет название» сделан прямым `change`-слушателем на сам
+  // `<select>`, трогающим соседние узлы по ссылке, а не декларативным связыванием.
+  function colourRefSelect(name, onSelect) {
+    const control = select(name, colourRefOptions());
+    control.addEventListener('change', () => {
+      if (!control.value) return;
+      const [entryId] = control.value.split('|');
+      const entry = (colourLibraryState.items || []).find((candidate) => candidate.id === entryId);
+      if (entry) onSelect(entry);
+    });
+    return control;
+  }
+  function colorRefFromValue(rawValue) {
+    if (!rawValue) return {};
+    const [entryId, version] = rawValue.split('|');
+    return { colorRef: { entryId, version: Number(version) } };
+  }
+
   function addColorway(item) {
     const product = item.product;
     if (!product.styleVersionId) {
       toast(text('У модели ещё нет версии, к которой можно добавить цвет.', 'This style has no version to add a colour to yet.'), 'error');
       return;
     }
+    loadColourLibrary();
+    const nameRuField = input('nameRu', 'text', { required: true, minlength: '2', maxlength: '160' });
+    const nameEnField = input('nameEn', 'text', { required: true, minlength: '2', maxlength: '160' });
+    const swatchField = input('swatchHex', 'color', { value: '#1d2939' });
+    const colourField = colourRefSelect('colourRef', (entry) => {
+      nameRuField.value = entry.nameRu;
+      nameEnField.value = entry.nameEn;
+      if (entry.attributes?.hex) swatchField.value = entry.attributes.hex;
+    });
     openForm({
       title: text('Добавить цветомодель', 'Add a colourway'),
-      hint: text('Артикул цветомодели складывается из кода модели и кода цвета.', 'The colourway article is the style code joined to the colour code.'),
+      hint: text('Артикул цветомодели складывается из кода модели и кода цвета. Цвет из справочника подставляет название и образец — их можно поправить вручную.', 'The colourway article is the style code joined to the colour code. A library colour fills in the name and swatch, which can still be edited by hand.'),
       fields: [
         field(text('Код цвета', 'Colour code'), input('colorwayCode', 'text', { required: true, maxlength: '32', pattern: '[A-Za-z0-9._-]{2,32}' })),
-        field(text('Название RU', 'Name RU'), input('nameRu', 'text', { required: true, minlength: '2', maxlength: '160' })),
-        field(text('Название EN', 'Name EN'), input('nameEn', 'text', { required: true, minlength: '2', maxlength: '160' })),
-        field(text('Образец цвета', 'Swatch'), input('swatchHex', 'color', { value: '#1d2939' })),
+        field(text('Цвет из справочника', 'Governed colour'), colourField),
+        field(text('Название RU', 'Name RU'), nameRuField),
+        field(text('Название EN', 'Name EN'), nameEnField),
+        field(text('Образец цвета', 'Swatch'), swatchField),
       ],
       submitLabel: text('Добавить', 'Add'),
       onSubmit: async (values) => {
@@ -628,6 +681,7 @@
           nameRu: values.nameRu.trim(),
           nameEn: values.nameEn.trim(),
           swatchHex: values.swatchHex,
+          ...colorRefFromValue(values.colourRef),
         });
         toast(text('Цветомодель добавлена.', 'The colourway is added.'), 'success');
       },
@@ -643,12 +697,22 @@
       toast(text('У модели ещё нет версии, к которой можно добавить цвет.', 'This style has no version to add a colour to yet.'), 'error');
       return;
     }
+    loadColourLibrary();
     const fields = [];
     for (let row = 1; row <= COLORWAY_BATCH_ROWS; row += 1) {
+      const nameRuField = input(`nameRu${row}`, 'text', { minlength: '2', maxlength: '160' });
+      const nameEnField = input(`nameEn${row}`, 'text', { minlength: '2', maxlength: '160' });
+      const swatchField = input(`swatchHex${row}`, 'color', { value: '#1d2939' });
+      const colourField = colourRefSelect(`colourRef${row}`, (entry) => {
+        nameRuField.value = entry.nameRu;
+        nameEnField.value = entry.nameEn;
+        if (entry.attributes?.hex) swatchField.value = entry.attributes.hex;
+      });
       fields.push(field(text(`${row}. Код цвета`, `${row}. Colour code`), input(`colorwayCode${row}`, 'text', { maxlength: '32', pattern: '[A-Za-z0-9._-]{2,32}' })));
-      fields.push(field(text('Название RU', 'Name RU'), input(`nameRu${row}`, 'text', { minlength: '2', maxlength: '160' })));
-      fields.push(field(text('Название EN', 'Name EN'), input(`nameEn${row}`, 'text', { minlength: '2', maxlength: '160' })));
-      fields.push(field(text('Образец цвета', 'Swatch'), input(`swatchHex${row}`, 'color', { value: '#1d2939' })));
+      fields.push(field(text('Цвет из справочника', 'Governed colour'), colourField));
+      fields.push(field(text('Название RU', 'Name RU'), nameRuField));
+      fields.push(field(text('Название EN', 'Name EN'), nameEnField));
+      fields.push(field(text('Образец цвета', 'Swatch'), swatchField));
     }
     openForm({
       title: text('Добавить несколько цветомоделей', 'Add several colourways'),
@@ -663,7 +727,7 @@
           const nameRu = (values[`nameRu${row}`] || '').trim();
           const nameEn = (values[`nameEn${row}`] || '').trim();
           if (!nameRu || !nameEn) { throw new Error(text(`Строка ${row}: заполните название на обоих языках.`, `Row ${row}: fill in the name in both languages.`)); }
-          items.push({ colorwayCode: colorwayCode.toUpperCase(), nameRu, nameEn, swatchHex: values[`swatchHex${row}`] });
+          items.push({ colorwayCode: colorwayCode.toUpperCase(), nameRu, nameEn, swatchHex: values[`swatchHex${row}`], ...colorRefFromValue(values[`colourRef${row}`]) });
         }
         if (!items.length) throw Object.assign(new Error(), { code: 'PRODUCT_COLORWAY_BATCH_SIZE_INVALID' });
         const created = await mutate(`/v2/product/style-versions/${encodeURIComponent(product.styleVersionId)}/colorways/batch`, { items });
@@ -813,6 +877,9 @@
   function colorwayActions(item) {
     const manage = window.SynthaUiCapabilities?.hasForOrganisation(state.workspace, item.product.brandId, window.SynthaUiCapabilities.CAPABILITIES.PRODUCT_MANAGE);
     if (!manage) return null;
+    // Загружается здесь, пока открыта вкладка «Цветомодели», — не в момент нажатия «Добавить», —
+    // чтобы справочник уже успел прийти к тому моменту, когда человек откроет форму.
+    loadColourLibrary();
     const row = el('div', { className: 'od-inline-actions' });
     const colour = el('button', { className: 'button small primary', type: 'button', rawText: text('Добавить цветомодель', 'Add a colourway') });
     colour.addEventListener('click', () => addColorway(item));

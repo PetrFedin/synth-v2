@@ -852,7 +852,8 @@
 
   function matrixCell(cell, editable, style, rowIndex, sizeIndex) {
     const block = el('div', { className: 'ls9-cell' });
-    block.append(el('small', { rawText: cell.sku, title: `${cell.productSkuId} · ${cell.sizeValueId}` }));
+    const identityTitle = cell.gtin ? `${cell.productSkuId} · ${cell.sizeValueId} · GTIN ${cell.gtin}` : `${cell.productSkuId} · ${cell.sizeValueId}`;
+    block.append(el('small', { rawText: cell.sku, title: identityTitle }));
     const input = el('input', {
       // A quantity is a whole number of garments, so the cell accepts text and judges it here.
       // A number input silently swallows what a spreadsheet pastes — "1 200", "12,00" — and
@@ -1227,10 +1228,10 @@
     const wrap = el('div', { className: 'ls9-table-wrap ls9-line-table-wrap' });
     const table = el('table', { className: 'ls9-table ls9-line-table' });
     const head = el('thead'); const row = el('tr');
-    [text('SKU', 'SKU'), text('Наименование', 'Name'), text('Версия', 'Version'), text('Цена', 'Price'), text('Мин. заказ', 'MOQ')]
+    [text('SKU', 'SKU'), text('GTIN', 'GTIN'), text('Наименование', 'Name'), text('Версия', 'Version'), text('Цена', 'Price'), text('Мин. заказ', 'MOQ')]
       .forEach(label => row.append(el('th', { rawText: label })));
     head.append(row); const body = el('tbody');
-    list(publication.lines).forEach(line => { const tr = el('tr'); tr.append(el('td', { rawText: value(line.sku) || '—' }), el('td', { rawText: value(line.name) || '—' }), el('td', { rawText: line.catalogVersion == null ? '—' : String(line.catalogVersion) }), el('td', { rawText: formatMoney(line.unitPrice, line.currency || publication.currency) }), el('td', { rawText: line.minimumOrderQuantity == null ? '—' : String(line.minimumOrderQuantity) })); body.append(tr); });
+    list(publication.lines).forEach(line => { const tr = el('tr'); tr.append(el('td', { rawText: value(line.sku) || '—' }), el('td', { rawText: value(line.gtin) || '—' }), el('td', { rawText: value(line.name) || '—' }), el('td', { rawText: line.catalogVersion == null ? '—' : String(line.catalogVersion) }), el('td', { rawText: formatMoney(line.unitPrice, line.currency || publication.currency) }), el('td', { rawText: line.minimumOrderQuantity == null ? '—' : String(line.minimumOrderQuantity) })); body.append(tr); });
     table.append(head, body); wrap.append(table); return wrap;
   }
 
@@ -1251,7 +1252,7 @@
   }
 
   function exportPublication(publication) {
-    const headers = ['sku', 'name', 'catalogVersion', 'unitPrice', 'currency', 'minimumOrderQuantity'];
+    const headers = ['sku', 'gtin', 'name', 'catalogVersion', 'unitPrice', 'currency', 'minimumOrderQuantity'];
     const escapeCsv = input => `"${String(input ?? '').replaceAll('"', '""')}"`;
     const rows = list(publication.lines).map(line => headers.map(key => escapeCsv(line[key])).join(','));
     const blob = new Blob([[headers.join(','), ...rows].join('\n')], { type: 'text/csv;charset=utf-8' });

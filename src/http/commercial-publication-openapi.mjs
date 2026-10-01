@@ -38,7 +38,7 @@ function schemas() {
       properties: {
         sku: { type: 'string', pattern: SKU }, name: { type: 'string', minLength: 1, maxLength: 240 },
         catalogVersion: { ...version(), description: 'Compatibility sequencing field. For projection-backed V2 publications it equals CommercialProductProjectionVersion.versionNo and is not a flat catalog_skus version.' }, unitPrice: money, currency, minimumOrderQuantity: { type: 'integer', minimum: 1, maximum: 2_147_483_647 },
-        productSkuId: identifier, styleVersionId: identifier, colorwayId: identifier, sizeValueId: identifier,
+        productSkuId: identifier, gtin: { anyOf: [{ type: 'string' }, { type: 'null' }] }, styleVersionId: identifier, colorwayId: identifier, sizeValueId: identifier,
         rrpMinor: { type: 'integer', minimum: 1 }, wholesalePriceMinor: { type: 'integer', minimum: 1 }, deliveryStart: date(), deliveryEnd: date(), availability,
       },
     },

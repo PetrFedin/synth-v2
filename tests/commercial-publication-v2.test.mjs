@@ -16,6 +16,10 @@ test('V2 publication derives Style -> Colorway -> ordered Size/SKU and price onl
   assert.equal(publication.lines[0].unitPrice, 1000);
   assert.equal(publication.lines[0].currency, 'RUB');
   assert.equal(publication.lines[0].minimumOrderQuantity, 1);
+  // GTIN reaches the rich Style/Colorway/SKU hierarchy via projectSku() already — this line is
+  // the flat compatibility projection (`publication.lines`) that the published-linesheet table,
+  // CSV export and order-writing matrix actually read, and it used to drop the field entirely.
+  assert.equal(publication.lines[0].gtin, '4601234567890');
   assert.equal(Object.hasOwn(publication.styles[0].colorways[0].skus[0], 'legacyCatalogSnapshot'), false);
 });
 

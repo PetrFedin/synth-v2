@@ -217,6 +217,10 @@ function compatibilityLine(sku, colorway, styleVersion, preparation, commercialP
   return deepFreeze({
     sku: sku.skuCode,
     productSkuId: sku.productSkuId,
+    // `projectSku()` above already freezes gtin onto the rich hierarchy this line is built from —
+    // this flat line (what `publication.lines`/`catalog.lines` actually persist and what the
+    // published-linesheet table, CSV export and order-writing matrix all read) never carried it.
+    gtin: sku.gtin ?? null,
     styleVersionId: styleVersion.id,
     colorwayId: colorway.colorwayId,
     sizeValueId: sku.sizeValueId,

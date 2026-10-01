@@ -35,7 +35,7 @@ export function projection() {
             media: [{ id: 'media:black', mediaType: 'image', mediaRole: 'gallery', uri: 'https://cdn.example/black.jpg', sortOrder: 0, colorwayId: 'color:black' }],
             attributes: [],
             skus: [{
-              id: 'psku:1', skuCode: 'SKU-1', contentHash: projectionHash, gtin: null, sizeValueId: 'size:m', attributes: [],
+              id: 'psku:1', skuCode: 'SKU-1', contentHash: projectionHash, gtin: '4601234567890', sizeValueId: 'size:m', attributes: [],
               size: {
                 id: 'size:m', sizeScaleId: 'scale:1', sizeScaleVersionId: 'scale-version:1', sizeScaleVersionNo: 1,
                 scaleCode: 'INT', scaleNameRu: 'Международный', scaleNameEn: 'International', code: 'M', labelRu: 'M', labelEn: 'M', sortOrder: 2, mdmRef: null,

@@ -54,7 +54,7 @@ const lifecycleTransitions = new Map([
 ]);
 
 const mediaTypes = new Set(['image', 'video', 'document', 'swatch']);
-const mediaRoles = new Set(['hero', 'gallery', 'detail', 'swatch', 'technical', 'video', 'document', 'design_sketch', 'tech_pack_thumbnail']);
+const mediaRoles = new Set(['hero', 'gallery', 'detail', 'swatch', 'technical', 'video', 'document', 'design_sketch', 'tech_pack_thumbnail', 'pattern', 'die_line']);
 const attributeOwnerTypes = new Set(['style_version', 'colorway', 'sku']);
 
 export const PRODUCT_MEDIA_TYPES = Object.freeze([...mediaTypes]);

@@ -240,6 +240,24 @@ test('Media accepts the sketch roles that split the former generic "technical" b
   );
 });
 
+test('Media accepts the pattern and die-line roles', () => {
+  const { styleVersion, colorway } = fixture();
+  for (const mediaRole of ['pattern', 'die_line']) {
+    const media = createProductMedia({
+      id: `media:pattern:${mediaRole}`,
+      styleVersion,
+      colorway,
+      mediaType: 'image',
+      mediaRole,
+      uri: `s3://product-media/DRS-001/black/${mediaRole}.jpg`,
+      sortOrder: 0,
+      createdAt: at,
+      createdBy: actor,
+    });
+    assert.equal(media.mediaRole, mediaRole);
+  }
+});
+
 test('Style Reference board attaches to the style itself and trims optional fields, rejecting blanks over their limit', () => {
   const { style } = fixture();
   const reference = createProductStyleReference({

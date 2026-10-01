@@ -36,6 +36,9 @@
     window.SynthaOptionalFieldSupport = true;
   }
 
+  // A received lot or a verdict changes the lot table; the table is otherwise fetched once.
+  window.SynthaMaterialLotsInvalidate = () => { materialState.lots = []; materialState.lotsLoaded = false; };
+
   function resetMaterials() {
     materialState.items = [];
     materialState.nextCursor = null;

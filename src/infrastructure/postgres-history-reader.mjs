@@ -16,7 +16,11 @@ export function createPostgresHistoryReader({ pool } = {}) {
         let cursor = '';
         if (before) { params.push(before); cursor = ` AND history.payload ->> 'occurredAt' < $${params.length}`; }
         const result = await queryable.query(
-          `SELECT history.payload
+          `SELECT history.payload, (SELECT membership.role FROM memberships AS membership
+                      WHERE membership.user_id = $1
+                        AND membership.organisation_id = history.brand_id
+                        AND membership.status = 'active'
+                      LIMIT 1) AS viewer_role
              FROM object_history_workspace AS history
             WHERE history.subject_id = $2
               AND EXISTS (
@@ -32,7 +36,7 @@ export function createPostgresHistoryReader({ pool } = {}) {
         const rows = result.rows.map((row) => row.payload);
         const hasMore = rows.length > limit;
         const items = hasMore ? rows.slice(0, limit) : rows;
-        return { items, nextCursor: hasMore ? items.at(-1)?.occurredAt ?? null : null };
+        return { items, nextCursor: hasMore ? items.at(-1)?.occurredAt ?? null : null, viewerRole: result.rows[0]?.viewer_role ?? null };
       }, { begin: SNAPSHOT_BEGIN });
     },
     // The same access rule, over the attribute differences rather than the events. Filters are
@@ -48,7 +52,11 @@ export function createPostgresHistoryReader({ pool } = {}) {
         if (from) { params.push(from); clauses.push(`AND history.occurred_at >= $${params.length}`); }
         if (to) { params.push(to); clauses.push(`AND history.occurred_at <= $${params.length}`); }
         const result = await queryable.query(
-          `SELECT history.payload
+          `SELECT history.payload, (SELECT membership.role FROM memberships AS membership
+                      WHERE membership.user_id = $1
+                        AND membership.organisation_id = history.brand_id
+                        AND membership.status = 'active'
+                      LIMIT 1) AS viewer_role
              FROM object_attribute_history_workspace AS history
             WHERE history.subject_id = $2
               AND EXISTS (
@@ -64,7 +72,7 @@ export function createPostgresHistoryReader({ pool } = {}) {
         const rows = result.rows.map((row) => row.payload);
         const hasMore = rows.length > limit;
         const items = hasMore ? rows.slice(0, limit) : rows;
-        return { items, nextCursor: hasMore ? items.at(-1)?.occurredAt ?? null : null };
+        return { items, nextCursor: hasMore ? items.at(-1)?.occurredAt ?? null : null, viewerRole: result.rows[0]?.viewer_role ?? null };
       }, { begin: SNAPSHOT_BEGIN });
     },
   });

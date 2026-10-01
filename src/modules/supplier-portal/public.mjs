@@ -10,7 +10,7 @@ import { invariant } from '../../core/errors.mjs';
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export function createSupplierPortalGrant({ id, supplier, account, contactName, grantedBy, granterMembership, grantedAt }) {
+export function createSupplierPortalGrant({ id, supplier, account, contactName, grantedBy, granterMembership, grantedAt, accountMemberships = [] }) {
   invariant(id && supplier?.supplierCode, 'SUPPLIER_PORTAL_IDENTITY_REQUIRED', 'Grant id and supplier are required');
   invariant(supplier.status === 'qualified', 'SUPPLIER_PORTAL_SUPPLIER_NOT_QUALIFIED',
     'Portal access belongs to a qualified supplier', { supplierCode: supplier.supplierCode, status: supplier.status });
@@ -25,6 +25,11 @@ export function createSupplierPortalGrant({ id, supplier, account, contactName, 
     { brandId: supplier.brandId });
   invariant(typeof grantedBy === 'string' && grantedBy.trim(), 'SUPPLIER_PORTAL_ACTOR_REQUIRED', 'Granting actor is required');
   invariant(typeof grantedAt === 'string' && !Number.isNaN(Date.parse(grantedAt)), 'SUPPLIER_PORTAL_TIMESTAMP_INVALID', 'Grant timestamp is invalid');
+  // A shop member sees the brand's wholesale side; portal access puts the same person on the supplier
+  // side of the same brand's requests. A person cannot sit on both sides of the table, so an account
+  // that belongs to any shop is refused, whichever shop it is.
+  invariant(!(Array.isArray(accountMemberships) ? accountMemberships : []).some((item) => item?.organisationType === 'shop' && (item.status ?? 'active') === 'active'),
+    'SUPPLIER_PORTAL_HOLDER_IS_SHOP_MEMBER', 'A shop member cannot hold supplier portal access', { userId: account.id });
   const holder = account.id.trim();
   // The person who awards the business cannot also be the person who answers as the supplier. The
   // database enforces this too; stating it here means a caller is told why, not just that it failed.

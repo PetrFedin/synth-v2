@@ -62,7 +62,7 @@ export function createWholesaleRequestPipeline({ authenticate, auth, readiness, 
       assertEmptyQuery(url);
       invariant(auth?.login, 'AUTH_SERVICE_REQUIRED', 'Authentication service is required');
       const body = assertBodyContract(await readJson(request), LOGIN_BODY);
-      return { status: 200, payload: { data: await auth.login(body), requestId } };
+      return { status: 200, payload: { data: await auth.login({ ...body, clientAddress: clientAddressOf(request) }), requestId } };
     }
     invariant(url.pathname.startsWith('/v2/'), 'HTTP_ROUTE_NOT_FOUND', 'Route not found', { method, path: url.pathname });
     const identity = await authenticateBearer(request);
@@ -162,3 +162,12 @@ function readinessUnavailable() {
 }
 
 function publicIdentity(actor) { return Object.freeze({ actorId: actor.actorId, email: actor.email ?? null, displayName: actor.displayName ?? '' }); }
+
+// The address a login attempt came from. Behind a proxy the last x-forwarded-for entry is the one the
+// nearest proxy appended; a client can forge the earlier ones, which is why the per-email limit in the
+// auth service still holds when the address is made up.
+function clientAddressOf(request) {
+  const forwarded = request.header('x-forwarded-for');
+  if (typeof forwarded === 'string' && forwarded.trim()) return forwarded.split(',').at(-1).trim();
+  return typeof request.clientAddress === 'string' ? request.clientAddress : undefined;
+}

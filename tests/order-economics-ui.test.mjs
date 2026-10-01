@@ -30,6 +30,13 @@ test('Order economics UI consumes server economics-position without reconstructi
   assert.match(source, /position\.effectiveContributionMarginPercent/);
   assert.match(source, /position\.cumulativePostCloseCostDelta/);
   assert.match(source, /position\.cumulativePostCloseMarginDelta/);
+  // The server already distinguishes an exact per-SKU cost-allocation result from a provisional
+  // aggregate one pending reconciliation (econ003-allocation-margin-openapi.mjs's enrichEconomicsPosition)
+  // — the dialog used to fetch and discard that distinction instead of showing it.
+  assert.match(source, /position\.allocationStatus/);
+  assert.match(source, /position\.costAllocationRunSnapshotId/);
+  assert.match(source, /position\.baseTotalLandedCost/);
+  assert.match(source, /position\.baseContributionMarginAmount/);
   assert.match(source, /openDetails/);
   assert.doesNotMatch(source, /totalAmount\s*-/);
   assert.doesNotMatch(source, /effectiveTotalLandedCost\s*-/);

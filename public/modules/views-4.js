@@ -56,9 +56,20 @@ async function orderEconomicsDialog(order) {
     economicsRow('Маржа', 'Contribution margin', economicsMoney(position.effectiveContributionMarginAmount, position.currency)),
     economicsRow('Маржа, %', 'Contribution margin, %', economicsPercent(position.effectiveContributionMarginPercent)),
   ];
+  // `allocationStatus` is the one signal that tells a finance user whether the margin above is an
+  // exact per-SKU cost-allocation result ('current') or a provisional aggregate approximation
+  // ('pending-post-close', still awaiting reconciliation) — without it, an ADJUSTED order with a
+  // post-close entry looked identical to one whose margin was already exactly reallocated.
+  if (position.allocationStatus) rows.push(economicsRow('Статус распределения себестоимости', 'Cost allocation status', economicsAllocationStatus(position.allocationStatus)));
   if (position.blockingReasons?.length) rows.push(economicsRow('Блокирует закрытие', 'Close blockers', position.blockingReasons.map(economicsBlockingReason).join(', ')));
   if (position.costCloseSnapshotId) rows.push(economicsRow('Закрытие себестоимости', 'Cost close', position.costCloseSnapshotId));
+  if (position.costAllocationRunSnapshotId) rows.push(economicsRow('Прогон распределения себестоимости', 'Cost allocation run', position.costAllocationRunSnapshotId));
   if (position.latestPostCloseAdjustmentId) rows.push(economicsRow('Последняя корректировка', 'Latest adjustment', position.latestPostCloseAdjustmentId));
+  // The base figures are what cost-close originally landed, before any post-close adjustment —
+  // shown alongside the deltas below so the two numbers that explain "effective" above are both
+  // on screen, not just their difference.
+  if (position.baseTotalLandedCost !== null && position.baseTotalLandedCost !== undefined) rows.push(economicsRow('Себестоимость на момент закрытия', 'Landed cost at close', economicsMoney(position.baseTotalLandedCost, position.currency)));
+  if (position.baseContributionMarginAmount !== null && position.baseContributionMarginAmount !== undefined) rows.push(economicsRow('Маржа на момент закрытия', 'Margin at close', economicsMoney(position.baseContributionMarginAmount, position.currency)));
   if (position.cumulativePostCloseCostDelta !== null && position.cumulativePostCloseCostDelta !== undefined) rows.push(economicsRow('Изменение себестоимости после закрытия', 'Post-close cost delta', economicsMoney(position.cumulativePostCloseCostDelta, position.currency)));
   if (position.cumulativePostCloseMarginDelta !== null && position.cumulativePostCloseMarginDelta !== undefined) rows.push(economicsRow('Изменение маржи после закрытия', 'Post-close margin delta', economicsMoney(position.cumulativePostCloseMarginDelta, position.currency)));
   const mcr = position.materialCostReconciliation;
@@ -89,6 +100,15 @@ function economicsStatus(status) {
   };
   const label = labels[status];
   return label ? economicsText(label[0], label[1]) : economicsText('Неизвестно', 'Unknown');
+}
+function economicsAllocationStatus(status) {
+  const labels = {
+    current: ['точное, по SKU', 'exact, per-SKU'],
+    'legacy-not-applicable': ['не применимо (устаревший заказ)', 'not applicable (legacy order)'],
+    'pending-post-close': ['предварительное — ожидает точного распределения', 'provisional — awaiting exact reallocation'],
+  };
+  const label = labels[status];
+  return label ? economicsText(label[0], label[1]) : economicsText('неизвестно', 'unknown');
 }
 function economicsBlockingReason(reason) {
   const labels = {

@@ -8,7 +8,7 @@ import { assertShipmentIsTraceable } from '../src/modules/material-lots/public.m
 const root = process.cwd();
 const EXECUTION = Object.freeze({ executionCode: 'EXEC-PO-1', sku: 'SYN_TEE_DEMO_OFW_M' });
 const BILL = Object.freeze({ lines: Object.freeze([Object.freeze({ materialCode: 'MAT-SHELL-R5' })]) });
-const ISSUE = Object.freeze({ lotReference: 'ROLL-R3-A-001' });
+const ISSUE = Object.freeze({ lotReference: 'ROLL-R3-A-001', materialCode: 'MAT-SHELL-R5' });
 
 test('a shipment cannot be released before the rolls it was made from are recorded', () => {
   // Партия материала ведётся ради одного вопроса: если в носке вылезет дефект полотна, какие рулоны

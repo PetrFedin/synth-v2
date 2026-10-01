@@ -6,6 +6,7 @@ const RFQ_CREATE_BODY = listBody(bodyContract(['rfqCode', 'materialCode', ...RFQ
 const RFQ_UPDATE_BODY = listBody(bodyContract(['expectedVersion', ...RFQ_EDITABLE]), ['supplierCodes']);
 const VERSION_BODY = bodyContract(['expectedVersion']);
 const QUOTE_BODY = bodyContract(['expectedVersion', 'supplierCode', 'currency', 'unitPriceMinor', 'fixedCostMinor', 'leadTimeDays', 'minimumOrderQuantity', 'validUntil', 'notes', 'tiers'], {}, { tiers: ['quantity', 'unitPriceMinor'] });
+const ACCEPT_COUNTER_BODY = bodyContract(['expectedVersion', 'supplierCode']);
 const COUNTER_BODY = bodyContract(['expectedVersion', 'supplierCode', 'quantity', 'unitPriceMinor', 'notes']);
 const AWARD_BODY = bodyContract(['expectedVersion', 'supplierCode']);
 const ALLOCATION_BODY = bodyContract(['expectedVersion', 'purchaseOrderNumber', 'quantity', 'orderPlacedAt', 'deliveryDueAt', 'notes']);
@@ -21,6 +22,7 @@ export function createMaterialSourcingRoutes({ materialSourcing } = {}) {
     mutate('POST', /^\/v2\/material-rfqs\/([^/]+)\/issue$/, VERSION_BODY, ({ commandId, actorId, params, body }) => service.issueRfq(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/material-rfqs\/([^/]+)\/quotes$/, QUOTE_BODY, ({ commandId, actorId, params, body }) => service.upsertQuote(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/material-rfqs\/([^/]+)\/counter-offer$/, COUNTER_BODY, ({ commandId, actorId, params, body }) => service.counterQuote(commandId, actorId, params[0], body)),
+    mutate('POST', /^\/v2\/material-rfqs\/([^/]+)\/counter-offer\/accept$/, ACCEPT_COUNTER_BODY, ({ commandId, actorId, params, body }) => service.acceptCounterQuote(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/material-rfqs\/([^/]+)\/award$/, AWARD_BODY, ({ commandId, actorId, params, body }) => service.awardRfq(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/material-rfqs\/([^/]+)\/allocate$/, ALLOCATION_BODY, ({ commandId, actorId, params, body }) => service.allocateRfq(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/material-rfqs\/([^/]+)\/cancel$/, CANCEL_BODY, ({ commandId, actorId, params, body }) => service.cancelRfq(commandId, actorId, params[0], body)),
@@ -56,5 +58,5 @@ function listBody(contract, fields) {
 }
 function unavailable() {
   const fail = () => invariant(false, 'MATERIAL_SOURCING_SERVICE_REQUIRED', 'Material sourcing service is required');
-  return Object.freeze({ getForActor: fail, listForActor: fail, createRfq: fail, updateRfq: fail, issueRfq: fail, upsertQuote: fail, counterQuote: fail, awardRfq: fail, allocateRfq: fail, cancelRfq: fail });
+  return Object.freeze({ getForActor: fail, listForActor: fail, createRfq: fail, updateRfq: fail, issueRfq: fail, upsertQuote: fail, counterQuote: fail, acceptCounterQuote: fail, awardRfq: fail, allocateRfq: fail, cancelRfq: fail });
 }

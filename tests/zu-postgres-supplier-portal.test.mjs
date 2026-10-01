@@ -58,6 +58,19 @@ test('PostgreSQL shows a supplier its own requests, hides its competitors, and s
     const again = await runtime.sourcing.grantPortalAccess('cmd-regrant', 'brand-owner', 'SUP-ONE', { email: 'rep@one.example', contactName: 'Mei Lin' });
     assert.equal(again.status, 'active');
     assert.equal((await runtime.supplierPortal.rfqsForActor('user-rep', {})).items.length, 1);
+    assert.equal((await runtime.supplierPortal.suppliersForActor('user-rep')).items.length, 1);
+
+    // Q-03. Suspending the supplier closes the portal without touching the grant, and qualifying it
+    // again opens it: access follows the supplier's standing, not just the grant.
+    const supplierRow = (await pool.query("SELECT version FROM suppliers WHERE supplier_code = 'SUP-ONE'")).rows[0];
+    const suspended = await runtime.sourcing.suspendSupplier('cmd-suspend', 'brand-owner', 'SUP-ONE', { expectedVersion: supplierRow.version, reason: 'Audit lapsed' });
+    assert.equal(suspended.status, 'suspended');
+    assert.deepEqual((await runtime.supplierPortal.rfqsForActor('user-rep', {})).items, []);
+    assert.deepEqual((await runtime.supplierPortal.ordersForActor('user-rep', {})).items, []);
+    assert.deepEqual((await runtime.supplierPortal.suppliersForActor('user-rep')).items, []);
+    assert.equal((await runtime.sourcing.portalAccessForActor('brand-owner', 'SUP-ONE')).items[0].status, 'active', 'the grant itself is untouched');
+    await runtime.sourcing.qualifySupplier('cmd-requalify', 'brand-owner', 'SUP-ONE', { expectedVersion: suspended.version });
+    assert.equal((await runtime.supplierPortal.rfqsForActor('user-rep', {})).items.length, 1);
 
     await assert.rejects(
       () => runtime.sourcing.grantPortalAccess('cmd-nobody', 'brand-owner', 'SUP-ONE', { email: 'nobody@nowhere.example' }),

@@ -8,6 +8,7 @@ import {
   allocateMaterialRfq as allocateMaterialRfqDomain,
   awardMaterialRfq as awardMaterialRfqDomain,
   cancelMaterialRfq as cancelMaterialRfqDomain,
+  acceptMaterialRfqCounterOffer as acceptMaterialRfqCounterOfferDomain,
   counterMaterialRfqQuote as counterMaterialRfqQuoteDomain,
   createMaterialRfq as createMaterialRfqDomain,
   issueMaterialRfq as issueMaterialRfqDomain,
@@ -20,6 +21,7 @@ const RFQ_CREATE_FIELDS = Object.freeze(new Set(['rfqCode', 'materialCode', ...R
 const RFQ_UPDATE_FIELDS = Object.freeze(new Set(['expectedVersion', ...RFQ_EDITABLE]));
 const VERSION_FIELDS = Object.freeze(new Set(['expectedVersion']));
 const QUOTE_FIELDS = Object.freeze(new Set(['expectedVersion', 'supplierCode', 'currency', 'unitPriceMinor', 'fixedCostMinor', 'leadTimeDays', 'minimumOrderQuantity', 'validUntil', 'notes', 'tiers']));
+const ACCEPT_COUNTER_FIELDS = Object.freeze(new Set(['expectedVersion', 'supplierCode']));
 const COUNTER_FIELDS = Object.freeze(new Set(['expectedVersion', 'supplierCode', 'quantity', 'unitPriceMinor', 'notes']));
 const AWARD_FIELDS = Object.freeze(new Set(['expectedVersion', 'supplierCode']));
 const ALLOCATION_FIELDS = Object.freeze(new Set(['expectedVersion', 'purchaseOrderNumber', 'quantity', 'orderPlacedAt', 'deliveryDueAt', 'notes']));
@@ -150,6 +152,15 @@ export function createMaterialSourcingService({ materialSourcingStore, clock = (
           offeredAt: clock(),
           offeredBy: actorId,
         }),
+      });
+    },
+
+    // Q-05. The supplier's agreement to the counter-offer: it becomes the quotation award prices off.
+    acceptCounterQuote(commandId, actorId, rfqCode, input) {
+      return rfqTransition({
+        commandName: 'acceptMaterialRfqCounterOffer', eventType: () => 'material-rfq.counter-accepted', commandId, actorId, rfqCode, input, fields: ACCEPT_COUNTER_FIELDS,
+        prepare: async (tx, rfq, value) => ({ supplier: requireEntity(await tx.getSupplierByCode(value.supplierCode), 'SUPPLIER_NOT_FOUND', { supplierCode: value.supplierCode }) }),
+        transform: (context) => acceptMaterialRfqCounterOfferDomain(context.rfq, { supplier: context.supplier, acceptedAt: clock(), acceptedBy: actorId }),
       });
     },
 

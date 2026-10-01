@@ -729,6 +729,8 @@
     const permissions = { manage: can(rfq.brandId, caps.CAPABILITIES.SOURCING_MANAGE), award: can(rfq.brandId, caps.CAPABILITIES.SOURCING_AWARD), allocate: can(rfq.brandId, caps.CAPABILITIES.MATERIAL_PURCHASE_MANAGE) };
     const actions = [...core.allowedRfqActions(rfq, permissions)];
     if (permissions.manage && rfq.status === 'quoted') actions.push('counter');
+    // Q-05: a counter-offer the supplier has agreed to becomes the quotation award prices off.
+    if (permissions.manage && rfq.status === 'quoted' && (rfq.quotes || []).some((item) => item.counterOffer && !item.counterOffer.acceptedAt)) actions.push('acceptCounter');
     const quotes = core.rankQuotes(rfq);
     return h('aside', { className: 'sourcing-inspector' }, [
       h('div', { className: 'sourcing-inspector-title' }, [h('div', {}, [h('p', { className: 'eyebrow', text: rfq.rfqCode }), h('h2', { text: `${rfq.materialCode} v${rfq.materialVersion}` })]), badge(statusLabel(rfq.status), statusTone(rfq.status))]),
@@ -745,12 +747,12 @@
       h('div', {}, [h('strong', { text: formatMoneyMinor(quote.totalCostMinor, quote.currency) }), h('small', { text: `${formatMoneyMinor(quote.unitPriceMinor, quote.currency)} / ${text('ед.', 'unit')}` })]),
       h('small', { text: `${quote.leadTimeDays} ${text('дн.', 'days')} · MOQ ${quote.minimumOrderQuantity}` }),
       quote.tiers?.length ? h('div', { className: 'quote-tiers' }, [h('small', { className: 'muted', text: text('Ценовые уровни: ', 'Price tiers: ') + quote.tiers.map((tier) => `${tier.quantity} → ${formatMoneyMinor(tier.unitPriceMinor, quote.currency)}`).join(', ') })]) : null,
-      quote.counterOffer ? h('div', { className: 'quote-counter-offer' }, [h('small', { text: text(`Встречное предложение: ${quote.counterOffer.quantity} × ${formatMoneyMinor(quote.counterOffer.unitPriceMinor, quote.currency)} = ${formatMoneyMinor(quote.counterOffer.totalCostMinor, quote.currency)}`, `Counter-offer: ${quote.counterOffer.quantity} × ${formatMoneyMinor(quote.counterOffer.unitPriceMinor, quote.currency)} = ${formatMoneyMinor(quote.counterOffer.totalCostMinor, quote.currency)}`) })]) : null,
+      quote.counterOffer ? h('div', { className: 'quote-counter-offer' }, [h('small', { text: text(`Встречное предложение: ${quote.counterOffer.quantity} × ${formatMoneyMinor(quote.counterOffer.unitPriceMinor, quote.currency)} = ${formatMoneyMinor(quote.counterOffer.totalCostMinor, quote.currency)}`, `Counter-offer: ${quote.counterOffer.quantity} × ${formatMoneyMinor(quote.counterOffer.unitPriceMinor, quote.currency)} = ${formatMoneyMinor(quote.counterOffer.totalCostMinor, quote.currency)}`) + (quote.counterOffer.acceptedAt ? text(' · принято, это цена котировки', ' · accepted, this is the quotation price') : '') })]) : null,
     ]);
   }
   function materialRfqActionButton(action, rfq) {
-    const labels = { edit: [text('Редактировать', 'Edit'), 'secondary'], issue: [text('Отправить запрос', 'Issue RFQ'), 'primary'], quote: [text('Добавить котировку', 'Add quotation'), 'primary'], counter: [text('Встречное предложение', 'Counter-offer'), 'secondary'], award: [text('Выбрать победителя', 'Award supplier'), 'primary'], allocate: [text('Создать заказ', 'Create purchase order'), 'primary'], cancel: [text('Отменить', 'Cancel'), 'danger'] };
-    const handlers = { edit: () => openMaterialRfqDialog(rfq), issue: () => issueMaterialRfq(rfq), quote: () => openMaterialQuoteDialog(rfq), counter: () => openMaterialCounterDialog(rfq), award: () => openMaterialAwardDialog(rfq), allocate: () => openMaterialAllocationDialog(rfq), cancel: () => openMaterialRfqCancelDialog(rfq) };
+    const labels = { edit: [text('Редактировать', 'Edit'), 'secondary'], issue: [text('Отправить запрос', 'Issue RFQ'), 'primary'], quote: [text('Добавить котировку', 'Add quotation'), 'primary'], counter: [text('Встречное предложение', 'Counter-offer'), 'secondary'], acceptCounter: [text('Принять встречное предложение', 'Accept counter-offer'), 'secondary'], award: [text('Выбрать победителя', 'Award supplier'), 'primary'], allocate: [text('Создать заказ', 'Create purchase order'), 'primary'], cancel: [text('Отменить', 'Cancel'), 'danger'] };
+    const handlers = { edit: () => openMaterialRfqDialog(rfq), issue: () => issueMaterialRfq(rfq), quote: () => openMaterialQuoteDialog(rfq), counter: () => openMaterialCounterDialog(rfq), acceptCounter: () => openMaterialAcceptCounterDialog(rfq), award: () => openMaterialAwardDialog(rfq), allocate: () => openMaterialAllocationDialog(rfq), cancel: () => openMaterialRfqCancelDialog(rfq) };
     return h('button', { type: 'button', className: labels[action][1], disabled: ui.busyKey === rfq.rfqCode, text: labels[action][0], onclick: handlers[action] });
   }
 
@@ -833,6 +835,16 @@
     ], text('Отправить встречное предложение', 'Send counter-offer'), async (values) => Boolean(await runMutation(rfq.rfqCode, `/v2/material-rfqs/${encodeURIComponent(rfq.rfqCode)}/counter-offer`, {
       expectedVersion: rfq.version, supplierCode: values.supplierCode, quantity: decimalToNumber(values.quantity),
       unitPriceMinor: decimalToMinor(values.unitPrice), notes: values.notes.trim() || null,
+    }, 'POST', 'materialRfq')));
+  }
+  function openMaterialAcceptCounterDialog(rfq) {
+    const open = core.rankQuotes(rfq).filter((quote) => quote.counterOffer && !quote.counterOffer.acceptedAt);
+    if (!open.length) return;
+    dialog(text('Принять встречное предложение', 'Accept counter-offer'), [
+      field(text('Поставщик / предложение', 'Supplier / counter-offer'), select('supplierCode', open.map((quote) => [quote.supplierCode, `${quote.supplierName} · ${quote.counterOffer.quantity} × ${formatMoneyMinor(quote.counterOffer.unitPriceMinor, quote.currency)}`]), open[0].supplierCode)),
+      h('p', { className: 'sourcing-confirm', text: text('Принятая цена заменит цену котировки; победитель будет выбран по ней. Принять можно предложение на всё количество запроса.', 'The accepted price replaces the quotation price, and award uses it. Only a counter-offer for the full RFQ quantity can be accepted.') }),
+    ], text('Принять', 'Accept'), async (values) => Boolean(await runMutation(rfq.rfqCode, `/v2/material-rfqs/${encodeURIComponent(rfq.rfqCode)}/counter-offer/accept`, {
+      expectedVersion: rfq.version, supplierCode: values.supplierCode,
     }, 'POST', 'materialRfq')));
   }
   function openMaterialAwardDialog(rfq) {

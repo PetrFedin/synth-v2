@@ -250,3 +250,78 @@ Do not:
 10. SYNTH2-INT-09 Enterprise lineage gate.
 
 **Implementation instruction:** Synth-v2 remains the product/commercial authority. External projects provide algorithms, adapters, views and patterns only.
+
+## Additional wave — schema contracts, analytical interchange and observability
+
+### AJV external-schema validation — ADOPT
+
+Reference: https://github.com/ajv-validator/ajv
+
+Use JSON Schema + AJV for machine-readable external/import/export contracts before data reaches domain validation.
+
+Applicable to:
+
+- supplier JSON/API payloads;
+- order/export contracts;
+- product/passport exchange;
+- integration webhooks;
+- generated import manifests.
+
+Layering:
+
+`transport schema (AJV) -> staging -> Synth-v2 domain validation -> command -> PostgreSQL`
+
+AJV does not replace business/readiness rules.
+
+Version schemas explicitly and keep backward-compatibility tests for supported versions.
+
+### Apache Arrow / Parquet analytical interchange — ADOPT
+
+Reference: https://github.com/apache/arrow
+
+Provide versioned read-only analytical exports for large product/order/production datasets.
+
+Use columnar formats for:
+
+- assortment scenario inputs/outputs;
+- BI/data-science extracts;
+- supplier-performance history;
+- production/QC analytical snapshots.
+
+Every export records:
+
+- export schema version;
+- source snapshot/as-of time;
+- tenant/org scope;
+- generation SHA.
+
+Arrow/Parquet is interchange, not a second transactional database.
+
+### OpenTelemetry JS — ADOPT
+
+Reference: https://github.com/open-telemetry/opentelemetry-js
+
+Trace:
+
+`API/import -> validation -> transaction -> outbox -> worker/provider -> projection`
+
+Important attributes:
+
+- org/tenant-safe identifier;
+- command/import type;
+- schema/rule version;
+- outbox event type;
+- release SHA;
+- error class.
+
+Never export product confidential text/BOM content or commercial pricing into span bodies.
+
+### Additional acceptance
+
+- malformed external payloads are rejected before domain mutation;
+- analytical exports can be reproduced from a declared snapshot;
+- trace links show command-to-outbox-to-worker lifecycle;
+- telemetry cannot cross tenant boundaries.
+
+**Sequencing:** AJV belongs before expanding imports/integrations; Arrow after canonical analytical tables exist; OpenTelemetry can be introduced alongside outbox/import tracing.
+

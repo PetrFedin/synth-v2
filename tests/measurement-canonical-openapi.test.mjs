@@ -66,6 +66,7 @@ test('canonical Measurement Chart request bodies pin exact Product Identity and 
     'sizes',
     'points',
     'notes',
+    'schemaImageUri',
   ]);
   assert.deepEqual(api.components.schemas.CanonicalMeasurementChartUpdate.required, [
     'expectedVersion',
@@ -74,6 +75,7 @@ test('canonical Measurement Chart request bodies pin exact Product Identity and 
     'sizes',
     'points',
     'notes',
+    'schemaImageUri',
   ]);
   assert.deepEqual(api.components.schemas.MeasurementVersionExpectation.required, ['expectedVersion']);
 

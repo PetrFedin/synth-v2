@@ -51,6 +51,7 @@ function schemas() {
     sizes: { type: 'array', minItems: 1, maxItems: 50, items: sizeInput },
     points: { type: 'array', maxItems: 300, items: pointInput },
     notes: nullableText(2000),
+    schemaImageUri: nullableText(2048),
   };
   const requiredEditable = Object.keys(editable);
 
@@ -80,6 +81,7 @@ function schemas() {
     sizes: { type: 'array', minItems: 1, maxItems: 50, items: canonicalSizeInput },
     points: { type: 'array', maxItems: 300, items: canonicalPointInput },
     notes: nullableText(2000),
+    schemaImageUri: nullableText(2048),
   };
   const canonicalRequiredEditable = Object.keys(canonicalEditable);
   const mdmSnapshot = { type: 'object', additionalProperties: true };
@@ -107,13 +109,13 @@ function schemas() {
     },
     MeasurementChart: {
       type: 'object', additionalProperties: false,
-      required: ['id', 'sku', 'brandId', 'skuVersion', 'unit', 'baseSizeCode', 'sizes', 'points', 'notes', 'status', 'version', 'publishedAt', 'createdAt', 'updatedAt'],
+      required: ['id', 'sku', 'brandId', 'skuVersion', 'unit', 'baseSizeCode', 'sizes', 'points', 'notes', 'schemaImageUri', 'status', 'version', 'publishedAt', 'createdAt', 'updatedAt'],
       properties: {
         id: { type: 'string', minLength: 1, maxLength: 160 }, sku: { type: 'string', pattern: SKU_PATTERN }, brandId: { type: 'string', minLength: 1, maxLength: 160 },
         skuVersion: version(), unit: editable.unit, baseSizeCode: editable.baseSizeCode,
         sizes: { type: 'array', minItems: 1, maxItems: 50, items: { $ref: '#/components/schemas/MeasurementSize' } },
         points: { type: 'array', maxItems: 300, items: { $ref: '#/components/schemas/MeasurementPoint' } },
-        notes: editable.notes, status: { type: 'string', enum: ['draft', 'published'] }, version: version(),
+        notes: editable.notes, schemaImageUri: editable.schemaImageUri, status: { type: 'string', enum: ['draft', 'published'] }, version: version(),
         publishedAt: { oneOf: [{ type: 'string', format: 'date-time' }, { type: 'null' }] }, createdAt: { type: 'string', format: 'date-time' }, updatedAt: { type: 'string', format: 'date-time' },
       },
     },
@@ -166,14 +168,14 @@ function schemas() {
     },
     CanonicalMeasurementChart: {
       type: 'object', additionalProperties: false,
-      required: ['id', 'sku', 'skuVersion', 'brandId', 'styleVersionId', 'colorwayId', 'sizeScaleVersionId', 'measurementUnitEntryId', 'measurementUnitEntryVersion', 'measurementUnit', 'unit', 'baseSizeValueId', 'baseSizeCode', 'sizes', 'points', 'notes', 'status', 'version', 'publishedAt', 'createdAt', 'updatedAt'],
+      required: ['id', 'sku', 'skuVersion', 'brandId', 'styleVersionId', 'colorwayId', 'sizeScaleVersionId', 'measurementUnitEntryId', 'measurementUnitEntryVersion', 'measurementUnit', 'unit', 'baseSizeValueId', 'baseSizeCode', 'sizes', 'points', 'notes', 'schemaImageUri', 'status', 'version', 'publishedAt', 'createdAt', 'updatedAt'],
       properties: {
         id: canonicalId(), sku: { type: 'null' }, skuVersion: { type: 'null' }, brandId: canonicalId(), styleVersionId: canonicalId(), colorwayId: canonicalId(), sizeScaleVersionId: canonicalId(),
         measurementUnitEntryId: canonicalId(), measurementUnitEntryVersion: version(), measurementUnit: mdmSnapshot,
         unit: { type: 'string', pattern: MDM_CODE_PATTERN }, baseSizeValueId: canonicalId(), baseSizeCode: { type: 'string', minLength: 1, maxLength: 64 },
         sizes: { type: 'array', minItems: 1, maxItems: 50, items: { $ref: '#/components/schemas/CanonicalMeasurementSize' } },
         points: { type: 'array', maxItems: 300, items: { $ref: '#/components/schemas/CanonicalMeasurementPoint' } },
-        notes: nullableText(2000), status: { type: 'string', enum: ['draft', 'published'] }, version: version(),
+        notes: nullableText(2000), schemaImageUri: nullableText(2048), status: { type: 'string', enum: ['draft', 'published'] }, version: version(),
         publishedAt: { oneOf: [{ type: 'string', format: 'date-time' }, { type: 'null' }] }, createdAt: { type: 'string', format: 'date-time' }, updatedAt: { type: 'string', format: 'date-time' },
       },
     },

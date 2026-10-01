@@ -206,6 +206,7 @@
         h('div', {}, [h('h2', { text: item.chart.sku }), h('p', { text: `${item.sku?.name || ''} · ${item.chart.unit} · ${text('базовый размер', 'base size')} ${item.chart.baseSizeCode}` })]),
         progress(item.readiness),
       ]),
+      item.chart.schemaImageUri ? h('img', { className: 'measurement-schema-preview', src: item.chart.schemaImageUri, alt: text('Схема измерений', 'Measurement schema') }) : null,
       h('div', { className: 'measurement-table-wrap' }, [h('table', { className: 'measurement-matrix' }, [h('thead', {}, [h('tr', {}, head)]), h('tbody', {}, rows)])]),
     ]);
   }
@@ -315,6 +316,7 @@
         };
       }),
       notes: existing?.notes || '',
+      schemaImageUri: existing?.schemaImageUri || '',
     };
     showEditor({ existing, skus, model, nextKey: (prefix) => `${prefix}-${++sequence}` });
   }
@@ -454,6 +456,7 @@
       ]);
       body.append(sectionHead(text('Точки измерения и матрица', 'Points of measure and matrix'), matrixActions), h('div', { className: 'measurement-editor-matrix-wrap' }, [h('table', { className: 'measurement-editor-matrix' }, [h('thead', {}, [h('tr', {}, tableHead)]), h('tbody', {}, rows)] )]));
       body.append(field(text('Примечания', 'Notes'), textarea(model.notes, (value) => { model.notes = value; })));
+      body.append(schemaImageField(model));
     }
 
     form.append(
@@ -494,6 +497,7 @@
           }),
         })),
         notes: String(model.notes).trim() || null,
+        schemaImageUri: String(model.schemaImageUri).trim() || null,
       };
       // Without this a refusal was an unhandled rejection: the dialog stayed open, nothing was
       // written, and the person was told nothing at all. The same hole the bill-of-materials editor
@@ -552,6 +556,17 @@
     control.value = value || '';
     control.addEventListener('input', () => setter(control.value));
     return control;
+  }
+  function schemaImageField(model) {
+    const preview = h('img', { className: 'measurement-schema-preview', src: model.schemaImageUri || '', hidden: !model.schemaImageUri, alt: text('Схема измерений', 'Measurement schema') });
+    const control = h('input', { type: 'url', maxlength: '2048', placeholder: 'https://…' });
+    control.value = model.schemaImageUri || '';
+    control.addEventListener('input', () => {
+      model.schemaImageUri = control.value;
+      preview.src = control.value;
+      preview.hidden = !control.value;
+    });
+    return h('div', { className: 'measurement-schema-field' }, [field(text('Схема измерений (ссылка на изображение)', 'Measurement schema (image link)'), control), preview]);
   }
   function select(options, value, setter, extra = {}) {
     const control = h('select', extra, options.map(([optionValue, label]) => h('option', { value: optionValue, text: label })));

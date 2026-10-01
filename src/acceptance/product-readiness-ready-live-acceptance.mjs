@@ -387,6 +387,7 @@ export async function runReadyProductReadinessLiveAcceptance({
         measurements: [{ sizeValueId: sizeValue.id, value: 96 }],
       }],
       notes: `READY acceptance ${runId}`,
+      schemaImageUri: null,
     },
   }), 'canonical Measurement Chart creation');
   if (measurementDraft.status !== 'draft' || !Number.isInteger(measurementDraft.version) || measurementDraft.version < 1) {

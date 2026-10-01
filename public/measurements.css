@@ -4,3 +4,5 @@
 .measurement-grade-rule { display: block; color: #6b7178; font-size: 9.5px; }
 .measurement-matrix td.measurement-override { background: #fffaf2; }
 .measurement-override-mark { display: block; color: #8a6420; font-size: 8.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
+.measurement-schema-field { display: grid; gap: 10px; }
+.measurement-schema-preview { max-width: 320px; max-height: 320px; width: auto; height: auto; object-fit: contain; border: 1px solid #cfd7e3; border-radius: 10px; background: #f8fafc; }

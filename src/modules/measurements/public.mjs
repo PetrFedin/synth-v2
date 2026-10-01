@@ -9,7 +9,7 @@ const SKU_PATTERN = /^[A-Z0-9][A-Z0-9._-]{1,63}$/;
 const SIZE_CODE_PATTERN = /^[A-Z0-9][A-Z0-9._/-]{0,15}$/;
 const POINT_CODE_PATTERN = /^[A-Z0-9][A-Z0-9._-]{0,31}$/;
 const MDM_CODE_PATTERN = /^[A-Z][A-Z0-9._-]{0,63}$/;
-const CHART_FIELDS = Object.freeze(new Set(['sku', 'unit', 'baseSizeCode', 'sizes', 'points', 'notes']));
+const CHART_FIELDS = Object.freeze(new Set(['sku', 'unit', 'baseSizeCode', 'sizes', 'points', 'notes', 'schemaImageUri']));
 const SIZE_FIELDS = Object.freeze(new Set(['code', 'label']));
 const POINT_FIELDS = Object.freeze(new Set(['pointCode', 'name', 'description', 'toleranceMinus', 'tolerancePlus', 'measurements', 'gradeSteps', 'qcChecked']));
 const MEASUREMENT_FIELDS = Object.freeze(new Set(['sizeCode', 'value']));
@@ -22,6 +22,7 @@ const CANONICAL_CHART_FIELDS = Object.freeze(new Set([
   'sizes',
   'points',
   'notes',
+  'schemaImageUri',
 ]));
 const CANONICAL_SIZE_FIELDS = Object.freeze(new Set(['sizeValueId']));
 const CANONICAL_POINT_FIELDS = Object.freeze(new Set(['pointEntryId', 'description', 'toleranceMinus', 'tolerancePlus', 'measurements', 'gradeSteps', 'qcChecked']));
@@ -184,6 +185,7 @@ function normalizeChartInput({ catalogSku, input }) {
     sizes: Object.freeze(sizes),
     points: Object.freeze(points),
     notes: optionalText(input.notes, 2000, 'MEASUREMENT_NOTES_INVALID', 'Measurement chart notes'),
+    schemaImageUri: optionalText(input.schemaImageUri, 2048, 'MEASUREMENT_SCHEMA_IMAGE_URI_INVALID', 'Measurement chart schema image URI'),
   });
 }
 
@@ -263,6 +265,7 @@ function normalizeCanonicalChartInput({ context, input }) {
     sizes: Object.freeze(sizes),
     points: Object.freeze(points),
     notes: optionalText(input.notes, 2000, 'MEASUREMENT_NOTES_INVALID', 'Measurement chart notes'),
+    schemaImageUri: optionalText(input.schemaImageUri, 2048, 'MEASUREMENT_SCHEMA_IMAGE_URI_INVALID', 'Measurement chart schema image URI'),
   });
 }
 
@@ -538,8 +541,8 @@ function assertAllowedFields(value, allowed, errorCode, message, details = {}) {
   const forbidden = Object.keys(value).filter((field) => !allowed.has(field)).sort();
   invariant(forbidden.length === 0, errorCode, message, { ...details, fields: forbidden });
 }
-function editableProjection(value) { return JSON.stringify({ skuVersion: value.skuVersion, unit: value.unit, baseSizeCode: value.baseSizeCode, sizes: value.sizes, points: value.points, notes: value.notes }); }
-function canonicalEditableProjection(value) { return JSON.stringify({ measurementUnitEntryId: value.measurementUnitEntryId, measurementUnitEntryVersion: value.measurementUnitEntryVersion, baseSizeValueId: value.baseSizeValueId, sizes: value.sizes, points: value.points, notes: value.notes }); }
+function editableProjection(value) { return JSON.stringify({ skuVersion: value.skuVersion, unit: value.unit, baseSizeCode: value.baseSizeCode, sizes: value.sizes, points: value.points, notes: value.notes, schemaImageUri: value.schemaImageUri }); }
+function canonicalEditableProjection(value) { return JSON.stringify({ measurementUnitEntryId: value.measurementUnitEntryId, measurementUnitEntryVersion: value.measurementUnitEntryVersion, baseSizeValueId: value.baseSizeValueId, sizes: value.sizes, points: value.points, notes: value.notes, schemaImageUri: value.schemaImageUri }); }
 function deepFreezeClone(value) { return deepFreeze(structuredClone(value)); }
 function deepFreeze(value) { if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value; Object.freeze(value); for (const nested of Object.values(value)) deepFreeze(nested); return value; }
 function freezeChart(value) {

@@ -350,6 +350,7 @@ async function ensureMeasurementChart(runtime, pool, styleVersion, colorway, siz
       measurements: SIZE_RUN.map((size) => ({ sizeValueId: sizeValues[size.code].id, value: 92 + (size.sortOrder - 1) * 4 })),
     }],
     notes: 'Aurora Quilted Jacket — канонический табель мер.',
+    schemaImageUri: null,
   });
   await runtime.measurements.publishCanonicalMeasurementChart(command('foundation-measurement-publish'), actorId, draft.id, { expectedVersion: draft.version });
 }

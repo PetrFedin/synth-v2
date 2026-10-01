@@ -56,6 +56,6 @@ test('order totals are exact and delivery dates are canonicalized', () => {
 
 test('order cancellation reasons are bounded', () => {
   const order = { status: 'attached', version: 1 };
-  assert.equal(cancelAttachedOrder(order, 'Buyer request', timestamp).cancellationReason, 'Buyer request');
-  assert.throws(() => cancelAttachedOrder(order, 'x'.repeat(1001), timestamp), (error) => error.code === 'ORDER_CANCELLATION_REASON_REQUIRED');
+  assert.equal(cancelAttachedOrder(order, 'Buyer request', timestamp, order.version).cancellationReason, 'Buyer request');
+  assert.throws(() => cancelAttachedOrder(order, 'x'.repeat(1001), timestamp, order.version), (error) => error.code === 'ORDER_CANCELLATION_REASON_REQUIRED');
 });

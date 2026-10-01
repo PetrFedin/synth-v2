@@ -86,9 +86,9 @@ test('PostgreSQL persists the complete wholesale route, atomic inventory reserva
       selectionId: submitted.selection.id,
       terms: { incoterm: 'DAP', paymentDays: 30, prepaymentPercent: 20, deliveryStart: '2027-03-01', deliveryEnd: '2027-03-31' },
     });
-    order = await orders.acceptTerms('pg-order-shop-accept', 'buyer-pg', { orderId: order.id, organisationId: 'shop-pg' });
-    order = await orders.acceptTerms('pg-order-brand-accept', 'sales-pg', { orderId: order.id, organisationId: 'brand-pg' });
-    const attached = await orders.attachOrderToCycle('pg-order-attach', 'buyer-pg', order.id);
+    order = await orders.acceptTerms('pg-order-shop-accept', 'buyer-pg', { orderId: order.id, organisationId: 'shop-pg', expectedVersion: order.version });
+    order = await orders.acceptTerms('pg-order-brand-accept', 'sales-pg', { orderId: order.id, organisationId: 'brand-pg', expectedVersion: order.version });
+    const attached = await orders.attachOrderToCycle('pg-order-attach', 'buyer-pg', { orderId: order.id, expectedVersion: order.version });
 
     const inventory = await pool.query(
       `SELECT available_quantity, reserved_quantity, payload

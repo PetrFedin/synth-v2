@@ -76,7 +76,7 @@ export function createOrderDraft({ id, selection, currency, terms, buyerCommerci
   });
 }
 
-export function reviseOrderTerms(order, terms, updatedAt, expectedVersion = order?.version) {
+export function reviseOrderTerms(order, terms, updatedAt, expectedVersion) {
   assertExpectedVersion(order, expectedVersion);
   invariant(order.status === 'draft' || order.status === 'ready', 'ORDER_TERMS_NOT_EDITABLE', 'Order terms can no longer be edited');
   const normalizedTerms = validateTerms(terms);
@@ -91,7 +91,7 @@ export function reviseOrderTerms(order, terms, updatedAt, expectedVersion = orde
   });
 }
 
-export function acceptOrderTerms(order, organisationId, updatedAt, expectedVersion = order?.version) {
+export function acceptOrderTerms(order, organisationId, updatedAt, expectedVersion) {
   assertExpectedVersion(order, expectedVersion);
   invariant(order.status === 'draft' || order.status === 'ready', 'ORDER_TERMS_NOT_ACCEPTABLE', 'Order terms can no longer be accepted');
   invariant(organisationId === order.brandId || organisationId === order.shopId, 'ORDER_PARTY_INVALID', 'Only order parties can accept terms', { organisationId });
@@ -109,7 +109,7 @@ export function acceptOrderTerms(order, organisationId, updatedAt, expectedVersi
   });
 }
 
-export function attachReadyOrder(order, updatedAt, expectedVersion = order?.version, orderCommitSnapshotId = null) {
+export function attachReadyOrder(order, updatedAt, expectedVersion, orderCommitSnapshotId = null) {
   assertExpectedVersion(order, expectedVersion);
   invariant(order.status === 'ready', 'ORDER_NOT_READY', 'Both Brand and Shop must accept order terms');
   invariant(orderCommitSnapshotId === null || (typeof orderCommitSnapshotId === 'string' && orderCommitSnapshotId.trim().length > 0), 'ORDER_COMMIT_SNAPSHOT_ID_INVALID', 'Order commit snapshot id must be a non-empty string');
@@ -122,7 +122,7 @@ export function attachReadyOrder(order, updatedAt, expectedVersion = order?.vers
   });
 }
 
-export function cancelAttachedOrder(order, reason, cancelledAt, expectedVersion = order?.version) {
+export function cancelAttachedOrder(order, reason, cancelledAt, expectedVersion) {
   assertExpectedVersion(order, expectedVersion);
   invariant(order.status === 'attached', 'ORDER_NOT_ATTACHED', 'Only an attached order can be cancelled');
   const normalizedReason = typeof reason === 'string' ? reason.trim() : '';

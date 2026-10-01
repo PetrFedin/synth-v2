@@ -54,11 +54,11 @@ test('dual-approved order advances to DealSpace without manual totals', async ()
   const context = await fixture();
   let order = await context.orders.createOrderDraft('order-create', 'buyer-1', { selectionId: context.selectionId, terms });
   assert.equal(order.totalAmount, 240);
-  order = await context.orders.acceptTerms('order-shop-accept', 'buyer-1', { orderId: order.id, organisationId: 'shop-1' });
+  order = await context.orders.acceptTerms('order-shop-accept', 'buyer-1', { orderId: order.id, organisationId: 'shop-1', expectedVersion: order.version });
   assert.equal(order.status, 'draft');
-  order = await context.orders.acceptTerms('order-brand-accept', 'sales-1', { orderId: order.id, organisationId: 'brand-1' });
+  order = await context.orders.acceptTerms('order-brand-accept', 'sales-1', { orderId: order.id, organisationId: 'brand-1', expectedVersion: order.version });
   assert.equal(order.status, 'ready');
-  const attached = await context.orders.attachOrderToCycle('order-attach', 'buyer-1', order.id);
+  const attached = await context.orders.attachOrderToCycle('order-attach', 'buyer-1', { orderId: order.id, expectedVersion: order.version });
   assert.equal(attached.cycle.stage, 'order');
   assert.equal(attached.cycle.order.totalAmount, 240);
   const deal = await context.platform.confirmAndOpenDeal('deal-confirm', 'buyer-1', context.cycleId);
@@ -69,8 +69,8 @@ test('dual-approved order advances to DealSpace without manual totals', async ()
 test('one-sided approval cannot attach order and transaction rolls back', async () => {
   const context = await fixture();
   let order = await context.orders.createOrderDraft('order-create-one-sided', 'buyer-1', { selectionId: context.selectionId, terms });
-  order = await context.orders.acceptTerms('order-shop-only', 'buyer-1', { orderId: order.id, organisationId: 'shop-1' });
-  await assert.rejects(context.orders.attachOrderToCycle('order-attach-invalid', 'buyer-1', order.id), (error) => error.code === 'ORDER_NOT_READY');
+  order = await context.orders.acceptTerms('order-shop-only', 'buyer-1', { orderId: order.id, organisationId: 'shop-1', expectedVersion: order.version });
+  await assert.rejects(context.orders.attachOrderToCycle('order-attach-invalid', 'buyer-1', { orderId: order.id, expectedVersion: order.version }), (error) => error.code === 'ORDER_NOT_READY');
   const snapshot = context.store.snapshot();
   assert.equal(snapshot.orders[0].status, 'draft');
   assert.equal(snapshot.cycles.find((item) => item.id === context.cycleId).stage, 'order-builder');
@@ -80,9 +80,9 @@ test('one-sided approval cannot attach order and transaction rolls back', async 
 async function attachedOrderFixture() {
   const context = await fixture();
   let order = await context.orders.createOrderDraft('order-create', 'buyer-1', { selectionId: context.selectionId, terms });
-  order = await context.orders.acceptTerms('order-shop-accept', 'buyer-1', { orderId: order.id, organisationId: 'shop-1' });
-  order = await context.orders.acceptTerms('order-brand-accept', 'sales-1', { orderId: order.id, organisationId: 'brand-1' });
-  const attached = await context.orders.attachOrderToCycle('order-attach', 'buyer-1', order.id);
+  order = await context.orders.acceptTerms('order-shop-accept', 'buyer-1', { orderId: order.id, organisationId: 'shop-1', expectedVersion: order.version });
+  order = await context.orders.acceptTerms('order-brand-accept', 'sales-1', { orderId: order.id, organisationId: 'brand-1', expectedVersion: order.version });
+  const attached = await context.orders.attachOrderToCycle('order-attach', 'buyer-1', { orderId: order.id, expectedVersion: order.version });
   return { ...context, order: attached.order };
 }
 

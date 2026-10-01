@@ -108,7 +108,7 @@ test('atomic inventory failure rolls back Order, Cycle, command and reservation'
       nextId: (() => { let id = 0; return (prefix) => `${prefix}_rollback_${++id}`; })(),
     });
     await assert.rejects(
-      () => service.attachOrderToCycle('attach-race', 'buyer-race', order.id),
+      () => service.attachOrderToCycle('attach-race', 'buyer-race', { orderId: order.id, expectedVersion: order.version }),
       (error) => error?.code === 'CATALOG_AVAILABILITY_EXCEEDED' && error.details?.availableToSell === 3,
     );
 

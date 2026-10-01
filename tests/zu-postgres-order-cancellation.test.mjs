@@ -101,7 +101,7 @@ test('PostgreSQL cancellation releases reservation atomically and blocks DealSpa
       clock: () => now,
       nextId: (() => { let id = 0; return (prefix) => `${prefix}_cancel_${++id}`; })(),
     });
-    const cancelled = await service.cancelOrder('cancel-command', 'buyer-cancel', { orderId: order.id, reason: 'Buyer assortment changed' });
+    const cancelled = await service.cancelOrder('cancel-command', 'buyer-cancel', { orderId: order.id, reason: 'Buyer assortment changed', expectedVersion: order.version });
     assert.equal(cancelled.order.status, 'cancelled');
     assert.equal(cancelled.cycle.order.status, 'cancelled');
     assert.equal(cancelled.order.cancellationReason, 'Buyer assortment changed');
@@ -119,12 +119,12 @@ test('PostgreSQL cancellation releases reservation atomically and blocks DealSpa
     assert.equal(cycleRow.rows[0].version, 3);
     assert.equal(cycleRow.rows[0].payload.order.status, 'cancelled');
 
-    const replay = await service.cancelOrder('cancel-command', 'buyer-cancel', { orderId: order.id, reason: 'Buyer assortment changed' });
+    const replay = await service.cancelOrder('cancel-command', 'buyer-cancel', { orderId: order.id, reason: 'Buyer assortment changed', expectedVersion: order.version });
     assert.deepEqual(replay, cancelled);
     assert.equal((await pool.query("SELECT count(*)::int AS count FROM commands WHERE id = 'cancel-command'")).rows[0].count, 1);
     assert.equal((await pool.query("SELECT reserved_quantity FROM catalog_skus WHERE sku = 'SKU-CANCEL'")).rows[0].reserved_quantity, 0);
     await assert.rejects(
-      () => service.cancelOrder('cancel-again', 'buyer-cancel', { orderId: order.id, reason: 'Second cancellation' }),
+      () => service.cancelOrder('cancel-again', 'buyer-cancel', { orderId: order.id, reason: 'Second cancellation', expectedVersion: cancelled.order.version }),
       (error) => error?.code === 'ORDER_NOT_ATTACHED',
     );
     await assert.rejects(

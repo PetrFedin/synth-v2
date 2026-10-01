@@ -60,3 +60,13 @@ test('corrupt persisted material produces controlled domain error', () => {
     createdAt: '2026-08-03T12:00:00.000Z',
   }), { code: 'BOM_MATERIAL_UNIT_COST_INVALID' });
 });
+
+test('P-08: costing uses the cost per consumption unit, not the purchase-unit price', () => {
+  // Fabric bought by the kg at 40 EUR, one kg yields 4 m: a metre costs 10 EUR, not 40.
+  const bought = Object.freeze({ code: 'FAB-KG', brandId: 'brand-1', name: 'Knit by weight', type: 'fabric', unit: 'm', currency: 'EUR', unitCost: 40, version: 1, status: 'published',
+    specification: Object.freeze({ consumptionUnit: 'm', purchaseUnit: 'kg', conversionFactor: 4 }) });
+  const bom = createBom({ id: 'bom-kg', catalogSku, materials: [bought], input: { sku: 'STYLE-001', currency: 'EUR', lines: [{ lineId: 'KNIT', component: 'Body', materialCode: 'FAB-KG', quantity: 2, wastePercent: 0 }], laborCost: 0, overheadCost: 0, logisticsCost: 0, otherCost: 0 }, createdAt: '2026-08-03T12:00:00.000Z' });
+  assert.equal(bom.lines[0].unitCostSnapshot, 10);
+  assert.equal(bom.lines[0].lineCost, 20);
+  assert.equal(bom.materialCost, 20);
+});

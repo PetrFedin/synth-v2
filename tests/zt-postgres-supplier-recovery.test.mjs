@@ -72,6 +72,15 @@ test('PostgreSQL closes accepted legacy receipt claim into aggregate supplier cr
     });
     assert.equal(costClose.status, 'closed');
 
+    // M-02: more than the 60 EUR recorded cost cannot be recovered.
+    await assert.rejects(
+      runtime.supplierRecovery.recordRecovery('cmd-recovery-credit-too-large', 'brand-finance', resolution.id, {
+        supplierCode: 'SUP-RECOVERY', amount: 61, currency: 'EUR', fxRateSnapshotId: null,
+        sourceRef: 'CREDIT-NOTE-RECOVERY-0', occurredAt: now, reason: 'Credit larger than the recorded cost',
+      }),
+      (error) => error.code === 'SUPPLIER_RECOVERY_EXCEEDS_RECORDED_COST',
+    );
+
     // The fixture predates canonical ProductSku lineage. Recovery remains legal
     // only as aggregate physical economics and must not infer identity from SKU.
     const result = await runtime.supplierRecovery.recordRecovery('cmd-recovery-credit', 'brand-finance', resolution.id, {

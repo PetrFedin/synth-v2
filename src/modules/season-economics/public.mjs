@@ -1,4 +1,5 @@
 import { invariant } from '../../core/errors.mjs';
+import { assertSaneFxRate } from '../../core/money.mjs';
 
 // Плановая экономика сезона: план, цель и факт об одной и той же единице.
 //
@@ -32,7 +33,7 @@ import { invariant } from '../../core/errors.mjs';
  */
 export function landedFromQuote({ quotedFobMinor, fxRate, landedFactor }) {
   const quote = nonNegativeMinor(quotedFobMinor, 'SEASON_QUOTE_INVALID', 'Quoted FOB price');
-  const rate = positiveNumber(fxRate, 'SEASON_FX_RATE_INVALID', 'FX rate');
+  const rate = assertSaneFxRate(positiveNumber(fxRate, 'SEASON_FX_RATE_INVALID', 'FX rate'), { invalidCode: 'SEASON_FX_RATE_INVALID', label: 'FX rate' });
   const factor = positiveNumber(landedFactor, 'SEASON_LANDED_FACTOR_INVALID', 'Landed factor');
   return Math.round(quote * rate * factor);
 }

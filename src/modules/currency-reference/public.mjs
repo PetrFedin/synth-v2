@@ -1,4 +1,5 @@
 import { invariant } from '../../core/errors.mjs';
+import { assertSaneFxRate } from '../../core/money.mjs';
 
 // Официальный курс, общий для всех.
 //
@@ -19,7 +20,7 @@ export function recordCurrencyReferenceRate({ id, source, fromCurrency, toCurren
     source: oneOf(source, CURRENCY_REFERENCE_SOURCES, 'CURRENCY_REFERENCE_RATE_SOURCE_INVALID', 'Rate source'),
     fromCurrency: currency(fromCurrency, 'CURRENCY_REFERENCE_RATE_FROM_INVALID', 'Source currency'),
     toCurrency: pairedCurrency(toCurrency, fromCurrency, 'CURRENCY_REFERENCE_RATE_TO_INVALID', 'Target currency'),
-    rate: positiveNumber(rate, 'CURRENCY_REFERENCE_RATE_INVALID', 'Rate'),
+    rate: assertSaneFxRate(positiveNumber(rate, 'CURRENCY_REFERENCE_RATE_INVALID', 'Rate'), { invalidCode: 'CURRENCY_REFERENCE_RATE_INVALID', label: 'Rate' }),
     effectiveOn: day(effectiveOn, 'CURRENCY_REFERENCE_RATE_DATE_INVALID', 'Rate date'),
     recordedAt: timestamp(recordedAt, 'CURRENCY_REFERENCE_RATE_RECORDED_AT_INVALID', 'Recorded time'),
   });

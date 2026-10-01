@@ -2,7 +2,7 @@ import { domainEvent } from '../core/events.mjs';
 import { invariant, requireEntity } from '../core/errors.mjs';
 import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
-import { createSupplierRecoverySnapshot } from '../modules/receipt-claims/supplier-recovery.mjs';
+import { assertRecoveryWithinRecordedCost, createSupplierRecoverySnapshot } from '../modules/receipt-claims/supplier-recovery.mjs';
 import { createActualCostLedgerEntry, createLandedCostSnapshot, createMarginActualizationSnapshot, createPostCloseAdjustment } from '../modules/order-economics/public.mjs';
 
 export function createSupplierRecoveryService({ store, clock = () => new Date().toISOString(), nextId = defaultIdGenerator() } = {}) {
@@ -51,6 +51,7 @@ export function createSupplierRecoveryService({ store, clock = () => new Date().
           productSkuId:recoveryLine?.productSkuId??null,
           sku:recoveryLine?.sku??null,
         });
+        assertRecoveryWithinRecordedCost({ entries: await tx.listActualCostEntries(order.id), orderCommitSnapshotId: orderCommit.id, recoveryAmount: -actualCost.amount });
         await tx.insertPhysicalActualCostEntry(actualCost);
         const entries = (await tx.listActualCostEntries(order.id)).filter((entry)=>entry.orderCommitSnapshotId===orderCommit.id);
         const landedCost = createLandedCostSnapshot({id:nextId('landed-cost'),order,orderCommit,costEntries:entries,createdAt:recordedAt});

@@ -410,7 +410,11 @@ function normalizeActualCostCurrency({ sourceAmount, sourceCurrency, orderCommit
     sourceCurrency,
     targetCurrency: orderCommit.currency,
   });
-  return Object.freeze({ amount: convertSignedMoney(sourceAmount, fxRateSnapshot.rate), fxRateSnapshotId: fxRateSnapshot.id });
+  const amount = convertSignedMoney(sourceAmount, fxRateSnapshot.rate);
+  // Малая сумма по слабому курсу округляется в ноль: запись, которая в валюте заказа ничего не стоит,
+  // не может быть фактической себестоимостью.
+  invariant(amount !== 0, 'ACTUAL_COST_AMOUNT_INVALID', 'Actual cost amount converts to zero in the order currency', { sourceAmount, rate: fxRateSnapshot.rate });
+  return Object.freeze({ amount, fxRateSnapshotId: fxRateSnapshot.id });
 }
 
 function assertExecutionLineage(order, orderCommit) {

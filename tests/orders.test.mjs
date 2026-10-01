@@ -54,10 +54,10 @@ test('order refuses corrupted submitted selections without one valid frozen curr
 
 test('both organisations must accept terms before attachment', () => {
   let order = createOrderDraft({ id: 'order-1', selection, currency: 'EUR', terms, createdAt: 'now' });
-  order = acceptOrderTerms(order, 'shop-1', 'now');
+  order = acceptOrderTerms(order, 'shop-1', 'now', order.version);
   assert.equal(order.status, 'draft');
-  assert.throws(() => attachReadyOrder(order, 'now'), (error) => error.code === 'ORDER_NOT_READY');
-  order = acceptOrderTerms(order, 'brand-1', 'now');
+  assert.throws(() => attachReadyOrder(order, 'now', order.version), (error) => error.code === 'ORDER_NOT_READY');
+  order = acceptOrderTerms(order, 'brand-1', 'now', order.version);
   assert.equal(order.status, 'ready');
-  assert.equal(attachReadyOrder(order, 'now').status, 'attached');
+  assert.equal(attachReadyOrder(order, 'now', order.version).status, 'attached');
 });

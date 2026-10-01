@@ -2,7 +2,9 @@ import { invariant } from '../core/errors.mjs';
 import { withPostgresTransaction } from './postgres-transaction.mjs';
 
 const SNAPSHOT_BEGIN = 'BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY';
-const READ_ROLES = Object.freeze(['owner', 'admin', 'sales', 'finance']);
+// `quality` and `production` hold the matching *_READ capabilities (access-control/public.mjs): a role
+// that may write here has to be able to see what it writes.
+const READ_ROLES = Object.freeze(['owner', 'admin', 'sales', 'finance', 'quality', 'production']);
 
 // Инлайн-контроль и финальный AQL накапливают брак по одному исполнению независимо друг от друга и
 // нигде не встречались, хотя оба уже пишут в `execution_id`. Свод только показывает — приёмочное

@@ -24,7 +24,8 @@ test('Selection line authoring uses the pinned immutable BuyerCatalogVersion', (
   assert.match(selectionLineSource, /commercialBasisHash/);
   assert.match(selectionLineSource, /\/v2\/buyer-catalog-versions\//);
   assert.match(selectionLineSource, /catalog\.contentHash !== selection\.commercialBasisHash/);
-  assert.match(selectionLineSource, /catalog\.currency !== selection\.currency/);
+  assert.match(selectionLineSource, /line\.currency !== catalog\.currency/);
+  assert.doesNotMatch(selectionLineSource, /selection\.currency/);
   assert.match(selectionLineSource, /line\.unitPrice/);
   assert.match(selectionLineSource, /line\.minimumOrderQuantity/);
 

@@ -32,9 +32,13 @@
         // равное выведенному, домен помечает `derived`, а отличающееся — `override`, то есть
         // исключения остаются исключениями, а выведенные значения — выведенными.
         gradeSteps: Array.isArray(point.gradeSteps) ? [...point.gradeSteps] : null,
+        qcChecked: point.qcChecked === true,
         measurements: point.measurements.map((measurement) => Object.freeze({ sizeCode: measurement.sizeCode, value: measurement.value })),
       })),
       notes: chart.notes,
+      // The server requires the schema image on every write and treats an omitted per-point `qcChecked` as false,
+      // so a revision without them was refused (422) and, once accepted, silently cleared the receiving-check flags.
+      schemaImageUri: chart.schemaImageUri ?? null,
     });
   }
   function replaceChart(chart) {

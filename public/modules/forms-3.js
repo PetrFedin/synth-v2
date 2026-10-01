@@ -22,15 +22,38 @@ function cycleForm() {
     return mutate('/v2/cycles', { brandId: context.brandId, shopId: context.shopId, campaignId: context.campaignId, collectionId: context.collectionId });
   });
 }
-function selectionForm() {
+async function selectionForm() {
   const caps = window.SynthaUiCapabilities;
+  const doorUi = window.SynthaRetailDoorUi;
   const contexts = window.SynthaWorkflowContexts.buildSelectionContexts(state.workspace, ownIds(), new Date().toISOString()).filter(context => caps.hasForOrganisation(state.workspace, context.shopId, caps.CAPABILITIES.SELECTION_WRITE));
+  // A selection is created against one Retail Door (the server refuses SELECTION_RETAIL_DOOR_REQUIRED without it),
+  // so the form asks for it the same way the order form does.
+  let doorsByShop;
+  try {
+    const shopIds = [...new Set(contexts.map(context => context.shopId))];
+    const doorEntries = await Promise.all(shopIds.map(async shopId => [shopId, await api(`/v2/shops/${encodeURIComponent(shopId)}/doors`)]));
+    doorsByShop = Object.fromEntries(doorEntries.map(([shopId, doors]) => [shopId, Array.isArray(doors) ? doors : []]));
+  } catch (error) {
+    toast(error.message, 'error');
+    return;
+  }
   openForm('Создать Selection', [
     selectDef('contextId','Цикл',contexts, context => `${orgName(context.brandId)} → ${orgName(context.shopId)} / ${nameById('showrooms', context.showroomId)} / ${nameById('collections', context.collectionId)}`),
+    dependentSelectDef(
+      'retailDoorId',
+      'Торговая точка / Retail Door',
+      'contextId',
+      contextId => doorUi.activeDoorsForSelection(contexts.find(context => context.id === contextId), doorsByShop),
+      door => `${door.code} · ${door.name} · ${door.shipToAddress?.city || '—'}`,
+      undefined,
+      'Для выбранного магазина нет активной торговой точки. Создайте или активируйте её в «Партнёры → Торговые точки».',
+    ),
   ], values => {
     const context = contexts.find(item => item.id === values.contextId);
     if (!context) throw new Error(I18N.t('common.requestError'));
-    return mutate('/v2/selections', { cycleId: context.cycleId, showroomId: context.showroomId });
+    const door = doorUi.activeDoorsForSelection(context, doorsByShop).find(item => item.id === values.retailDoorId);
+    if (!door) throw new Error(I18N.t('common.requestError'));
+    return mutate('/v2/selections', { cycleId: context.cycleId, showroomId: context.showroomId, retailDoorId: door.id });
   });
 }
 async function selectionLineForm(selection) {
@@ -44,7 +67,9 @@ async function selectionLineForm(selection) {
     !catalog
     || catalog.id !== selection.buyerCatalogVersionId
     || catalog.contentHash !== selection.commercialBasisHash
-    || catalog.currency !== selection.currency
+    // A selection carries no currency field, only its lines do (one currency per selection). The earlier guard read a
+    // field that never exists, so it was always true and adding a SKU never succeeded.
+    || (Array.isArray(selection.lines) && selection.lines.some(line => line.currency && line.currency !== catalog.currency))
   ) throw new Error(I18N.t('common.requestError'));
 
   const catalogLines = (Array.isArray(catalog.lines) ? catalog.lines : []).map(line => Object.freeze({ ...line, id: line.sku }));

@@ -214,16 +214,17 @@ export function createSourcingService({ sourcingStore, clock = () => new Date().
           // the honest answer is to say the account is not there yet.
           const account = await tx.getAccountByEmail(String(input.email ?? '').trim());
           invariant(account, 'SUPPLIER_PORTAL_ACCOUNT_NOT_FOUND', 'That person has no Syntha account yet', { email: input.email });
-          return Object.freeze({ supplier, granterMembership, account, existing: await tx.getPortalGrant(supplierCode, account.id) });
+          const accountMemberships = await tx.getAccountMemberships(account.id);
+          return Object.freeze({ supplier, granterMembership, account, accountMemberships, existing: await tx.getPortalGrant(supplierCode, account.id) });
         },
-        async (tx, { supplier, granterMembership, account, existing }) => {
+        async (tx, { supplier, granterMembership, account, accountMemberships, existing }) => {
           // Re-granting access to someone whose access was revoked is a new decision, not an edit of the
           // old one: the record of the revocation stays readable.
           invariant(!existing || existing.status === 'revoked', 'SUPPLIER_PORTAL_GRANT_EXISTS',
             'This person already has portal access to that supplier', { supplierCode, email: input.email });
           const grant = createSupplierPortalGrantDomain({
             id: existing?.id ?? nextId('supplier-portal-grant'),
-            supplier, account, contactName: input.contactName,
+            supplier, account, accountMemberships, contactName: input.contactName,
             grantedBy: actorId, granterMembership, grantedAt: clock(),
           });
           if (existing) await tx.savePortalGrant({ ...grant, version: existing.version + 1 }, existing.version);

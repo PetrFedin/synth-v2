@@ -282,9 +282,14 @@ function projectionLineage(snapshot) {
   };
 }
 
+// Only what a buyer is meant to see. The media table also holds working files (die lines, patterns,
+// tech sketches, documents); an id that someone put on the preparation by mistake must not carry one
+// into a published document.
+const BUYER_MEDIA_ROLES = new Set(['hero', 'gallery', 'detail', 'swatch']);
+
 function selectMedia(media, selectedIds) {
   return deepFreeze((Array.isArray(media) ? media : [])
-    .filter((item) => selectedIds.has(item.id))
+    .filter((item) => selectedIds.has(item.id) && BUYER_MEDIA_ROLES.has(item.mediaRole))
     .sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0) || left.id.localeCompare(right.id))
     .map(deepCopy));
 }

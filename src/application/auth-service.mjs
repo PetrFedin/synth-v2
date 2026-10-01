@@ -14,6 +14,7 @@ export function createAuthService({
   randomBytesImpl = randomBytes,
   sessionTtlMs = 12 * 60 * 60 * 1000,
   maxLoginFailures = 5,
+  maxLoginFailuresPerEmail = maxLoginFailures * 10,
   loginWindowMs = 15 * 60 * 1000,
   loginBlockMs = 15 * 60 * 1000,
   revokedSessionRetentionMs = 7 * 24 * 60 * 60 * 1000,
@@ -24,6 +25,7 @@ export function createAuthService({
   invariant(typeof randomBytesImpl === 'function', 'AUTH_RANDOM_SOURCE_INVALID', 'Secure random byte generator is required');
   invariant(Number.isInteger(sessionTtlMs) && sessionTtlMs >= 60_000, 'AUTH_SESSION_TTL_INVALID', 'Session TTL must be at least one minute');
   invariant(Number.isInteger(maxLoginFailures) && maxLoginFailures >= 2, 'AUTH_FAILURE_LIMIT_INVALID', 'Login failure limit must be at least two');
+  invariant(Number.isInteger(maxLoginFailuresPerEmail) && maxLoginFailuresPerEmail >= maxLoginFailures, 'AUTH_FAILURE_LIMIT_INVALID', 'Per-email login failure limit must not be below the per-client limit');
   invariant(Number.isInteger(loginWindowMs) && loginWindowMs >= 60_000, 'AUTH_LOGIN_WINDOW_INVALID', 'Login window must be at least one minute');
   invariant(Number.isInteger(loginBlockMs) && loginBlockMs >= 60_000, 'AUTH_LOGIN_BLOCK_INVALID', 'Login block must be at least one minute');
   invariant(Number.isInteger(revokedSessionRetentionMs) && revokedSessionRetentionMs >= 60_000, 'AUTH_SESSION_RETENTION_INVALID', 'Revoked session retention must be at least one minute');
@@ -61,32 +63,49 @@ export function createAuthService({
       });
     },
 
-    async login({ email, password }) {
+    // Блокировка считается по двум ключам. Пара «email + адрес клиента» блокируется быстро (после
+    // maxLoginFailures неудач): так чужой адрес, подставленный атакующим, не запирает настоящего
+    // владельца, пока тот входит со своего. Ключ одного email остаётся общим предохранителем с более
+    // высоким порогом: сменой адреса перебор пароля к одной учётной записи не обойти.
+    async login({ email, password, clientAddress }) {
       const emailNormalized = normalizeEmail(email);
-      const keyHash = hashLoginKey(emailNormalized);
+      const emailKeyHash = hashLoginKey(emailNormalized);
+      const address = typeof clientAddress === 'string' ? clientAddress.trim().slice(0, 100) : '';
+      const pairKeyHash = address ? hashLoginKey(`${emailNormalized}|${address}`) : null;
+      const limits = [
+        { keyHash: emailKeyHash, limit: pairKeyHash ? maxLoginFailuresPerEmail : maxLoginFailures },
+        ...(pairKeyHash ? [{ keyHash: pairKeyHash, limit: maxLoginFailures }] : []),
+      ];
       const outcome = await store.transaction(async (tx) => {
         const now = currentTimestamp(clock);
-        await tx.lockLoginKey?.(keyHash);
+        for (const { keyHash } of limits) await tx.lockLoginKey?.(keyHash);
         await tx.deleteExpiredSessions?.(now, new Date(Date.parse(now) - revokedSessionRetentionMs).toISOString());
-        const throttle = await tx.getLoginThrottle?.(keyHash);
-        if (throttle?.blockedUntil && isFutureTimestamp(throttle.blockedUntil, now)) {
-          const retryAfterSeconds = Math.max(1, Math.ceil((Date.parse(throttle.blockedUntil) - Date.parse(now)) / 1000));
-          await tx.insertLoginAudit?.(audit(nextId('auth-audit'), keyHash, null, 'blocked', now, { retryAfterSeconds }));
+        const throttles = [];
+        for (const entry of limits) throttles.push(await tx.getLoginThrottle?.(entry.keyHash));
+        const blockedUntil = latestBlock(throttles.map((throttle) => throttle?.blockedUntil), now);
+        const auditKey = pairKeyHash ?? emailKeyHash;
+        if (blockedUntil) {
+          const retryAfterSeconds = retryAfter(blockedUntil, now);
+          await tx.insertLoginAudit?.(audit(nextId('auth-audit'), auditKey, null, 'blocked', now, { retryAfterSeconds }));
           return Object.freeze({ kind: 'blocked', retryAfterSeconds });
         }
 
         const user = await tx.getUserByEmail(emailNormalized);
         const passwordValid = await verifyPassword(password, user?.passwordHash ?? DUMMY_PASSWORD_HASH);
         if (!user || user.status !== 'active' || !passwordValid) {
-          const nextThrottle = failedThrottle(throttle, keyHash, now, { maxLoginFailures, loginWindowMs, loginBlockMs });
-          await tx.saveLoginThrottle?.(nextThrottle);
-          const blocked = Boolean(nextThrottle.blockedUntil && isFutureTimestamp(nextThrottle.blockedUntil, now));
-          const retryAfterSeconds = blocked ? Math.max(1, Math.ceil((Date.parse(nextThrottle.blockedUntil) - Date.parse(now)) / 1000)) : 0;
-          await tx.insertLoginAudit?.(audit(nextId('auth-audit'), keyHash, user?.id ?? null, blocked ? 'blocked' : 'failed', now, blocked ? { retryAfterSeconds } : {}));
-          return Object.freeze({ kind: blocked ? 'blocked' : 'invalid', retryAfterSeconds });
+          const next = [];
+          for (const [index, entry] of limits.entries()) {
+            const nextThrottle = failedThrottle(throttles[index], entry.keyHash, now, { maxLoginFailures: entry.limit, loginWindowMs, loginBlockMs });
+            await tx.saveLoginThrottle?.(nextThrottle);
+            next.push(nextThrottle.blockedUntil);
+          }
+          const nextBlock = latestBlock(next, now);
+          const retryAfterSeconds = nextBlock ? retryAfter(nextBlock, now) : 0;
+          await tx.insertLoginAudit?.(audit(nextId('auth-audit'), auditKey, user?.id ?? null, nextBlock ? 'blocked' : 'failed', now, nextBlock ? { retryAfterSeconds } : {}));
+          return Object.freeze({ kind: nextBlock ? 'blocked' : 'invalid', retryAfterSeconds });
         }
 
-        await tx.deleteLoginThrottle?.(keyHash);
+        for (const { keyHash } of limits) await tx.deleteLoginThrottle?.(keyHash);
         const token = `${TOKEN_PREFIX}${randomBuffer(randomBytesImpl, TOKEN_BYTES).toString('base64url')}`;
         invariant(TOKEN_PATTERN.test(token), 'AUTH_RANDOM_SOURCE_INVALID', 'Secure random byte generator produced an invalid session token');
         const expiresAt = new Date(Date.parse(now) + sessionTtlMs).toISOString();
@@ -100,7 +119,7 @@ export function createAuthService({
           revokedAt: null,
         });
         await tx.insertSession(session);
-        await tx.insertLoginAudit?.(audit(nextId('auth-audit'), keyHash, user.id, 'succeeded', now));
+        await tx.insertLoginAudit?.(audit(nextId('auth-audit'), auditKey, user.id, 'succeeded', now));
         return Object.freeze({ kind: 'success', value: Object.freeze({ accessToken: token, tokenType: 'Bearer', expiresAt, user: publicUser(user) }) });
       });
 
@@ -141,6 +160,11 @@ export function createAuthService({
   });
 }
 
+function latestBlock(values, now) {
+  const future = values.filter((value) => isFutureTimestamp(value, now)).map((value) => Date.parse(value));
+  return future.length ? new Date(Math.max(...future)).toISOString() : null;
+}
+function retryAfter(blockedUntil, now) { return Math.max(1, Math.ceil((Date.parse(blockedUntil) - Date.parse(now)) / 1000)); }
 function failedThrottle(current, keyHash, now, { maxLoginFailures, loginWindowMs, loginBlockMs }) {
   const currentWindowStartedAt = validTimestamp(current?.windowStartedAt) ? Date.parse(current.windowStartedAt) : Number.NEGATIVE_INFINITY;
   const windowExpired = !current || Date.parse(now) - currentWindowStartedAt >= loginWindowMs;

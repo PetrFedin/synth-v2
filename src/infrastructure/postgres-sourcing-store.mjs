@@ -78,6 +78,11 @@ function view(client) {
       const result = await client.query('SELECT id, email FROM auth_users WHERE email_normalized = lower($1)', [email]);
       return result.rows[0] ? { id: result.rows[0].id, email: result.rows[0].email } : undefined;
     },
+    async getAccountMemberships(userId) {
+      const result = await client.query(
+        `SELECT organisation_id, organisation_type, status FROM memberships WHERE user_id = $1 FOR SHARE`, [userId]);
+      return result.rows.map((row) => ({ organisationId: row.organisation_id, organisationType: row.organisation_type, status: row.status }));
+    },
     async getPortalGrant(supplierCode, userId) {
       const result = await client.query('SELECT payload FROM supplier_portal_grants WHERE supplier_code = $1 AND user_id = $2 FOR UPDATE', [supplierCode, userId]);
       return result.rows[0]?.payload;

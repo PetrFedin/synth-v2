@@ -18,6 +18,7 @@ function nodeRequestView(request) {
   return {
     method: request.method,
     url: new URL(request.url ?? '/', 'http://syntha.local'),
+    clientAddress: request.socket?.remoteAddress,
     header: (name) => header(request, name),
     // The limit is enforced while chunks arrive, so an oversized body is rejected without
     // ever being buffered in full.

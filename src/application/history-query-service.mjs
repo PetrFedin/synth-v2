@@ -1,4 +1,5 @@
 import { invariant } from '../core/errors.mjs';
+import { CAPABILITIES, roleHasCapability } from '../modules/access-control/public.mjs';
 
 const MAX_LIMIT = 200;
 
@@ -19,7 +20,7 @@ export function createHistoryQueryService({ reader } = {}) {
       });
       // An object with no history and an object the reader may not see look the same from here, and
       // that is deliberate: the alternative tells an outsider that the object exists.
-      return Object.freeze({ items: Object.freeze(page.items), nextCursor: page.nextCursor ?? null });
+      return Object.freeze({ items: Object.freeze(withheldFor(page).items), nextCursor: page.nextCursor ?? null });
     },
     // The attribute stream: every value that changed, with what it was and what it became. The
     // filters are the three an auditor reaches for — one attribute, one person, one window — and an
@@ -42,7 +43,7 @@ export function createHistoryQueryService({ reader } = {}) {
         before: options.cursor ? String(options.cursor) : null,
         attribute, actor, from, to,
       });
-      return Object.freeze({ items: Object.freeze(page.items), nextCursor: page.nextCursor ?? null });
+      return Object.freeze({ items: Object.freeze(withheldFor(page).items), nextCursor: page.nextCursor ?? null });
     },
   });
 }
@@ -60,4 +61,33 @@ function optionalInstant(value, field) {
   const parsed = new Date(text);
   invariant(Number.isFinite(parsed.getTime()), 'HISTORY_FILTER_INVALID', 'History filter date is invalid', { field, value: text });
   return parsed.toISOString();
+}
+
+// Event payloads are handed over whole, and a snapshot of a production order or a BOM carries what it
+// costs. A reader without `cost.manage` or `margin.read` may see that something changed, but not the
+// figures: any field named for cost or margin is removed, and an attribute row about one loses its
+// before/after values. A page that does not say which role it was read under is treated as the
+// least privileged one.
+const COST_FIELD = /cost|margin/i;
+
+function withheldFor(page) {
+  const role = page.viewerRole;
+  if (role && (roleHasCapability(role, CAPABILITIES.COST_MANAGE) || roleHasCapability(role, CAPABILITIES.MARGIN_READ))) return page;
+  return { ...page, items: page.items.map((item) => withheldItem(item)) };
+}
+
+function withheldItem(item) {
+  if (typeof item?.attribute === 'string' && COST_FIELD.test(item.attribute)) {
+    const { before, after, ...rest } = item;
+    return { ...rest, before: null, after: null, redacted: true };
+  }
+  return stripCostFields(item);
+}
+
+function stripCostFields(value) {
+  if (Array.isArray(value)) return value.map(stripCostFields);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(Object.entries(value)
+    .filter(([key]) => !COST_FIELD.test(key))
+    .map(([key, nested]) => [key, stripCostFields(nested)]));
 }

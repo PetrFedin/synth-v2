@@ -1281,6 +1281,10 @@
     const assessment = window.SynthaProductReadinessAssessment;
     return assessment ? assessment.assessAction(product) : null;
   }
+  function readinessPackRatioTemplateAction(product) {
+    const assessment = window.SynthaProductReadinessAssessment;
+    return assessment ? assessment.packRatioTemplateAction(product) : null;
+  }
   function readinessProjectionAction(product) {
     const panel = readinessPanelModule();
     return panel ? panel.projectionAction(product) : null;
@@ -1325,7 +1329,7 @@
             { label: text('Оценка готовности', 'Readiness'), value: product.readinessSnapshotId ? `${statusLabel(product.readinessStatus)} · ${item.readinessPercent}%` : text('Не оценён', 'Not assessed') },
             { label: text('Связка с каталогом', 'Catalogue link'), value: `${item.legacyCatalogLinkCount}/${item.productSkuCount}` },
           ],
-          content: [risks, readinessDimensions(product), readinessAssessAction(product), readinessProjectionAction(product)].filter(Boolean),
+          content: [risks, readinessDimensions(product), readinessAssessAction(product), readinessPackRatioTemplateAction(product), readinessProjectionAction(product)].filter(Boolean),
         },
         {
           label: text('Сертификация', 'Certification'),

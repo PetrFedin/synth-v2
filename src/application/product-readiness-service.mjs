@@ -6,6 +6,7 @@ import {
   createProductReadinessSnapshot,
   evaluateProductReadiness,
 } from '../modules/product-readiness/public.mjs';
+import { createPackRatioTemplate } from '../modules/pack-ratio/public.mjs';
 
 export function createProductReadinessService({
   store,
@@ -154,6 +155,35 @@ export function createProductReadinessService({
       const limit = normalizeLimit(options.limit);
       return store.listCommercialProjectionsByStyleVersion(styleVersionId, { limit });
     },
+
+    async createPackRatioTemplate(commandId, actorId, input) {
+      assertCommandId(commandId);
+      assertPackRatioTemplateInput(input);
+      await authorizeBrand(actorId, input.brandId, CAPABILITIES.PRODUCT_MANAGE);
+      const fingerprint = `createPackRatioTemplate:${actorId}:${input.brandId}:${canonicalJson(input)}`;
+      const value = createPackRatioTemplate({
+        id: nextId('pack-ratio-template'),
+        brandId: input.brandId,
+        name: input.name,
+        ratio: input.ratio,
+        createdAt: now(clock),
+        createdBy: actorId,
+      });
+      return replayOrExecute({
+        commandId,
+        actorId,
+        fingerprint,
+        action: async (tx) => {
+          await tx.insertPackRatioTemplate(value);
+          return value;
+        },
+      });
+    },
+
+    async listPackRatioTemplatesForActor(actorId, brandId) {
+      await authorizeBrand(actorId, brandId, CAPABILITIES.PRODUCT_READ);
+      return store.listPackRatioTemplatesByBrand(brandId);
+    },
   });
 }
 
@@ -171,6 +201,13 @@ function assertAssessmentInput(input) {
 function assertProjectionInput(input) {
   invariant(input && typeof input === 'object' && !Array.isArray(input), 'COMMERCIAL_PROJECTION_INPUT_INVALID', 'Commercial projection input is invalid');
   invariant(Number.isInteger(input.expectedLatestVersionNo) && input.expectedLatestVersionNo >= 0, 'COMMERCIAL_PROJECTION_VERSION_EXPECTATION_INVALID', 'expectedLatestVersionNo must be a non-negative integer');
+}
+
+function assertPackRatioTemplateInput(input) {
+  invariant(input && typeof input === 'object' && !Array.isArray(input), 'PACK_RATIO_TEMPLATE_INPUT_INVALID', 'Pack ratio template input is invalid');
+  invariant(typeof input.brandId === 'string' && input.brandId.length >= 1, 'PACK_RATIO_TEMPLATE_BRAND_REQUIRED', 'brandId is required');
+  invariant(typeof input.name === 'string', 'PACK_RATIO_TEMPLATE_NAME_REQUIRED', 'name is required');
+  invariant(Array.isArray(input.ratio), 'PACK_RATIO_TEMPLATE_RATIO_REQUIRED', 'ratio is required');
 }
 
 function normalizeCommercialPreparation(brandId, value) {

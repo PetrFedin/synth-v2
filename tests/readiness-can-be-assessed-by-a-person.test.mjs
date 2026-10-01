@@ -15,7 +15,7 @@ const routes = await readFile(path.join(root, 'src/http/product-readiness-routes
 // предзаполняется прежним снимком, потому что набирать шестнадцать полей заново ради поправки цены
 // есть способ ошибиться в цене.
 
-function harness({ role = 'owner', style = {}, previous = null } = {}) {
+function harness({ role = 'owner', style = {}, previous = null, packRatioTemplates = [] } = {}) {
   const calls = { forms: [], mutations: [], reads: [] };
   const w = { Object, Map, Set, String, Array, Number, Math, Promise, RegExp, Error, queueMicrotask, setTimeout, encodeURIComponent, JSON };
   w.window = w;
@@ -33,6 +33,7 @@ function harness({ role = 'owner', style = {}, previous = null } = {}) {
     calls.reads.push(p);
     if (p.startsWith('/v2/product/styles/')) return style;
     if (p.startsWith('/v2/product/readiness/')) { if (!previous) throw new Error('none'); return previous; }
+    if (p.startsWith('/v2/product/pack-ratio-templates')) return packRatioTemplates;
     return {};
   };
   w.SynthaUiValidation = {
@@ -76,6 +77,33 @@ test('the form sends exactly the fields the route requires, and no external evid
     assert.equal(body.externalEvidence, undefined, 'a person cannot type a SHA-256 from another system');
     assert.equal(body.developmentRoute, 'OWN_DEVELOPMENT');
   })();
+});
+
+test('a pack ratio can be typed by hand as a comma-separated list', async () => {
+  const { module, calls } = harness({ style: styleRead, previous });
+  await module.assessForm(product);
+  const values = { developmentRoute: 'OWN_DEVELOPMENT', titleRu: 'a', titleEn: 'a', descriptionRu: 'a', descriptionEn: 'a', compositionRu: 'a', compositionEn: 'a', countryOfOrigin: 'TR', currency: 'EUR', wholesalePrice: '1', rrp: '2', minimumOrderQuantity: '1', deliveryStart: '2027-01-01', deliveryEnd: '2027-02-01', availabilityMode: 'preorder', availabilityQuantity: '0', attributeCoverageConfirmed: 'yes', packRatioTemplateId: '', packRatio: '1, 2, 2, 1' };
+  await calls.forms[0].submit(values);
+  assert.deepEqual(JSON.parse(JSON.stringify(calls.mutations[0].body.commercialPreparation.packRatio)), [1, 2, 2, 1]);
+});
+
+test('choosing a library template wins over whatever is typed by hand', async () => {
+  const templates = [{ id: 'tpl-1', brandId: 'brand-1', name: 'Стандарт', ratio: [1, 2, 1] }];
+  const { module, calls } = harness({ style: styleRead, previous, packRatioTemplates: templates });
+  await module.assessForm(product);
+  const option = calls.forms[0].fields.find((f) => f.name === 'packRatioTemplateId').options.find((o) => o.id === 'tpl-1');
+  assert.match(option.name, /Стандарт/);
+  const values = { developmentRoute: 'OWN_DEVELOPMENT', titleRu: 'a', titleEn: 'a', descriptionRu: 'a', descriptionEn: 'a', compositionRu: 'a', compositionEn: 'a', countryOfOrigin: 'TR', currency: 'EUR', wholesalePrice: '1', rrp: '2', minimumOrderQuantity: '1', deliveryStart: '2027-01-01', deliveryEnd: '2027-02-01', availabilityMode: 'preorder', availabilityQuantity: '0', attributeCoverageConfirmed: 'yes', packRatioTemplateId: 'tpl-1', packRatio: '9,9,9' };
+  await calls.forms[0].submit(values);
+  assert.deepEqual(calls.mutations[0].body.commercialPreparation.packRatio, [1, 2, 1]);
+});
+
+test('with neither a template nor a typed ratio, packRatio is null', async () => {
+  const { module, calls } = harness({ style: styleRead, previous });
+  await module.assessForm(product);
+  const values = { developmentRoute: 'OWN_DEVELOPMENT', titleRu: 'a', titleEn: 'a', descriptionRu: 'a', descriptionEn: 'a', compositionRu: 'a', compositionEn: 'a', countryOfOrigin: 'TR', currency: 'EUR', wholesalePrice: '1', rrp: '2', minimumOrderQuantity: '1', deliveryStart: '2027-01-01', deliveryEnd: '2027-02-01', availabilityMode: 'preorder', availabilityQuantity: '0', attributeCoverageConfirmed: 'yes', packRatioTemplateId: '', packRatio: '' };
+  await calls.forms[0].submit(values);
+  assert.equal(calls.mutations[0].body.commercialPreparation.packRatio, null);
 });
 
 test('money is typed in major units and sent in minor units', async () => {
@@ -143,4 +171,15 @@ test('the action is named by whether an assessment already exists, and gated by 
   assert.equal(module.assessAction(product).label, 'Оценить заново');
   assert.equal(module.assessAction({ ...product, readinessSnapshotId: null }).label, 'Оценить готовность');
   assert.equal(harness({ role: 'viewer' }).module.assessAction(product), null);
+});
+
+test('the pack ratio template action is gated the same way, and creates a template against the brand', async () => {
+  const { module, calls } = harness();
+  assert.equal(harness({ role: 'viewer' }).module.packRatioTemplateAction(product), null);
+  const action = module.packRatioTemplateAction(product);
+  assert.ok(action);
+  action.fn();
+  assert.equal(calls.forms[0].title, 'Создать шаблон ростовки');
+  await calls.forms[0].submit({ name: 'Стандарт', ratio: '1,2,2,1' });
+  assert.deepEqual(JSON.parse(JSON.stringify(calls.mutations[0])), { path: '/v2/product/pack-ratio-templates', body: { brandId: 'brand-1', name: 'Стандарт', ratio: [1, 2, 2, 1] } });
 });

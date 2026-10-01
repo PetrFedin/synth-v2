@@ -15,6 +15,7 @@ const ASSESSMENT = bodyContract(
   { commercialPreparation: COMMERCIAL_FIELDS, externalEvidence: EXTERNAL_DIMENSIONS },
 );
 const PROJECTION = bodyContract(['expectedLatestVersionNo']);
+const PACK_RATIO_TEMPLATE = bodyContract(['brandId', 'name', 'ratio']);
 
 export function createProductReadinessRoutes({ productReadiness } = {}) {
   const service = productReadiness ?? unavailableService();
@@ -25,6 +26,11 @@ export function createProductReadinessRoutes({ productReadiness } = {}) {
     mutate('POST', /^\/v2\/product\/readiness\/([^/]+)\/commercial-projection$/, PROJECTION, validateProjection, ({ commandId, actorId, params, body }) => service.publishCommercialProjection(commandId, actorId, params[0], body)),
     read('GET', /^\/v2\/product\/commercial-projections\/([^/]+)$/, [], ({ actorId, params }) => service.getCommercialProjectionForActor(actorId, params[0])),
     read('GET', /^\/v2\/product\/style-versions\/([^/]+)\/commercial-projections$/, ['limit'], ({ actorId, params, query }) => service.listCommercialProjectionsForStyleVersion(actorId, params[0], { limit: query.limit })),
+    mutate('POST', /^\/v2\/product\/pack-ratio-templates$/, PACK_RATIO_TEMPLATE, validatePackRatioTemplate, ({ commandId, actorId, body }) => service.createPackRatioTemplate(commandId, actorId, body)),
+    read('GET', /^\/v2\/product\/pack-ratio-templates$/, ['brandId'], ({ actorId, query }) => {
+      invariant(typeof query.brandId === 'string' && query.brandId.length >= 1, 'HTTP_QUERY_FIELD_INVALID', 'brandId is required', { field: 'brandId' });
+      return service.listPackRatioTemplatesForActor(actorId, query.brandId);
+    }),
   ]);
 }
 
@@ -86,6 +92,15 @@ function validateProjection(body) {
   invariant(Number.isInteger(body.expectedLatestVersionNo) && body.expectedLatestVersionNo >= 0, 'HTTP_BODY_FIELD_INVALID', 'expectedLatestVersionNo must be a non-negative integer', { field: 'expectedLatestVersionNo' });
 }
 
+function validatePackRatioTemplate(body) {
+  invariant(Object.hasOwn(body, 'brandId'), 'HTTP_BODY_FIELD_INVALID', 'brandId is required', { field: 'brandId' });
+  invariant(isIdentifier(body.brandId), 'HTTP_BODY_FIELD_INVALID', 'brandId is invalid', { field: 'brandId' });
+  invariant(Object.hasOwn(body, 'name'), 'HTTP_BODY_FIELD_INVALID', 'name is required', { field: 'name' });
+  invariant(typeof body.name === 'string' && body.name.trim().length >= 1, 'HTTP_BODY_FIELD_INVALID', 'name is invalid', { field: 'name' });
+  invariant(Object.hasOwn(body, 'ratio'), 'HTTP_BODY_FIELD_INVALID', 'ratio is required', { field: 'ratio' });
+  invariant(Array.isArray(body.ratio) && body.ratio.length >= 1 && body.ratio.every((value) => Number.isSafeInteger(value) && value > 0), 'HTTP_BODY_FIELD_INVALID', 'ratio must be a non-empty array of positive integers', { field: 'ratio' });
+}
+
 function assertExactFields(value, allowedFields, label) {
   const allowed = new Set(allowedFields);
   const unknownFields = Object.keys(value).filter((field) => !allowed.has(field)).sort();
@@ -103,5 +118,7 @@ function unavailableService() {
     publishCommercialProjection: fail,
     getCommercialProjectionForActor: fail,
     listCommercialProjectionsForStyleVersion: fail,
+    createPackRatioTemplate: fail,
+    listPackRatioTemplatesForActor: fail,
   });
 }

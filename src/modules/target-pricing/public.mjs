@@ -1,4 +1,5 @@
 import { invariant } from '../../core/errors.mjs';
+import { assertSaneFxRate } from '../../core/money.mjs';
 
 // Сколько нам можно потратить.
 //
@@ -35,7 +36,7 @@ export function resolveSeasonRate({ rates, fromCurrency, toCurrency, asOf }) {
   invariant(candidates.length > 0, 'TARGET_PRICE_RATE_NOT_IN_SEASON',
     'This season records no rate for that pair on or before that date', { fromCurrency: from, toCurrency: to, asOf: on });
   const rate = candidates[0];
-  return Object.freeze({ fromCurrency: from, toCurrency: to, rate: positiveNumber(rate.rate, 'TARGET_PRICE_RATE_INVALID', 'Rate'), effectiveOn: day(rate.effectiveOn, 'TARGET_PRICE_RATE_DATE_INVALID', 'Rate date') });
+  return Object.freeze({ fromCurrency: from, toCurrency: to, rate: assertSaneFxRate(positiveNumber(rate.rate, 'TARGET_PRICE_RATE_INVALID', 'Rate'), { invalidCode: 'TARGET_PRICE_RATE_INVALID', label: 'Rate' }), effectiveOn: day(rate.effectiveOn, 'TARGET_PRICE_RATE_DATE_INVALID', 'Rate date') });
 }
 
 /** Составить цель по цене на изделие. */

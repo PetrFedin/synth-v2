@@ -146,7 +146,7 @@ export function createOrderBuilderService({
           return current;
         },
         async (tx, current) => {
-          const updated = reviseOrderTerms(current, terms, clock(), expectedVersion ?? current.version);
+          const updated = reviseOrderTerms(current, terms, clock(), expectedVersion);
           if (updated === current) return current;
           await tx.saveOrder(updated, current.version);
           await append(tx, 'order.terms-revised', orderId, {
@@ -172,7 +172,7 @@ export function createOrderBuilderService({
           return current;
         },
         async (tx, current) => {
-          const updated = acceptOrderTerms(current, organisationId, clock(), expectedVersion ?? current.version);
+          const updated = acceptOrderTerms(current, organisationId, clock(), expectedVersion);
           if (updated === current) return current;
           await tx.saveOrder(updated, current.version);
           await append(tx, 'order.terms-accepted', orderId, {
@@ -216,7 +216,7 @@ export function createOrderBuilderService({
           invariant(cycle.stage === 'order-builder', 'ORDER_BUILDER_STAGE_REQUIRED', 'Cycle must be at order-builder stage', { stage: cycle.stage });
           const committedAt = clock();
           const orderCommitSnapshotId = nextId('order-commit');
-          const readyOrder = attachReadyOrder(current, committedAt, expectedVersion ?? current.version, orderCommitSnapshotId);
+          const readyOrder = attachReadyOrder(current, committedAt, expectedVersion, orderCommitSnapshotId);
           const orderCommitSnapshot = createOrderCommitSnapshot({
             id: orderCommitSnapshotId,
             order: readyOrder,
@@ -268,7 +268,7 @@ export function createOrderBuilderService({
           return Object.freeze({ current, cycle });
         },
         async (tx, { current, cycle }) => {
-          const cancelled = cancelAttachedOrder(current, reason, clock(), expectedVersion ?? current.version);
+          const cancelled = cancelAttachedOrder(current, reason, clock(), expectedVersion);
           const cancelledCycle = cancelCommercialCycleOrder(cycle, cancelled, clock());
           await tx.saveCycle(cancelledCycle, cycle.version);
           await tx.saveOrder(cancelled, current.version);

@@ -5,6 +5,7 @@ import { invariant } from '../../core/errors.mjs';
 // ради которой модули и разделены.
 export { SIZE_LINE_EXCEPTIONS, bomComposition, efficiencyBasisPoints, styleSizeLine } from './size-line.mjs';
 import { normalizeMoney, normalizeFxRate } from '../../core/money.mjs';
+import { costPerConsumptionUnit } from '../materials/public.mjs';
 
 const CODE_PATTERN = /^[A-Z0-9][A-Z0-9._-]{1,63}$/;
 const LINE_ID_PATTERN = /^[A-Z0-9][A-Z0-9._-]{0,63}$/;
@@ -118,6 +119,8 @@ function normalizeLine({ line, position, brandId, bomCurrency, materialByCode, l
   const exchangeRate = exchangeRateFor(line.exchangeRate, snapshot.currency, bomCurrency, lineId);
   const grossQuantityScaled = roundDivide(toScaled(quantity) * (PERCENT_DENOMINATOR + toScaled(wastePercent)), PERCENT_DENOMINATOR);
   const lineCostScaled = roundDivide(grossQuantityScaled * toScaled(snapshot.unitCost) * toFxScaled(exchangeRate), FX_COST_DENOMINATOR);
+  // Строка, которая после округления ничего не стоит, — не бесплатный материал, а потерянная цена.
+  invariant(lineCostScaled > 0n, 'BOM_LINE_COST_INVALID', 'BOM line cost must be greater than zero', { lineId });
   return Object.freeze({
     lineId,
     position,
@@ -220,7 +223,12 @@ function materialSnapshot(material, brandId, expectedCode) {
     type: material.type,
     unit: material.unit,
     currency: currencyCode(material.currency, 'BOM_MATERIAL_CURRENCY_INVALID', 'Material currency'),
-    unitCost: positiveMoney(material.unitCost, 'BOM_MATERIAL_UNIT_COST_INVALID', 'Material unit cost'),
+    // Закупочная цена названа в единице закупки (рулон, кг), а расход в ведомости — в единице расхода.
+    // Умножать расход на цену закупочной единицы значит ошибиться ровно в коэффициент пересчёта, и
+    // ни одна строка этого не покажет. Снимок хранит цену за единицу расхода.
+    unitCost: positiveMoney(
+      costPerConsumptionUnit({ unitCost: positiveMoney(material.unitCost, 'BOM_MATERIAL_UNIT_COST_INVALID', 'Material unit cost'), conversionFactor: material.specification?.conversionFactor ?? null }),
+      'BOM_MATERIAL_UNIT_COST_INVALID', 'Material unit cost per consumption unit'),
   });
 }
 

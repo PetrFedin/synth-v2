@@ -9,6 +9,16 @@ const ATTRIBUTE_CODE_PATTERN = /^[a-z][a-z0-9_.-]{2,127}$/;
 const HEX_PATTERN = /^#[0-9A-Fa-f]{6}$/;
 const GTIN_PATTERN = /^(?:[0-9]{8}|[0-9]{12}|[0-9]{13}|[0-9]{14})$/;
 
+// GS1 mod-10: counting from the digit left of the check digit, weights alternate 3, 1, 3, ... A GTIN
+// that only "looks like" 13 digits is a typo that the marking systems and EDI partners reject later.
+export function isValidGtin(value) {
+  if (typeof value !== 'string' || !GTIN_PATTERN.test(value)) return false;
+  const digits = [...value].map(Number);
+  const check = digits.pop();
+  const sum = digits.reverse().reduce((total, digit, index) => total + digit * (index % 2 === 0 ? 3 : 1), 0);
+  return (10 - (sum % 10)) % 10 === check;
+}
+
 export const STYLE_LIFECYCLE = Object.freeze({
   DRAFT: 'draft',
   IN_DEVELOPMENT: 'in_development',
@@ -338,6 +348,7 @@ export function createProductSku({
   invariant(colorway.styleVersionId === styleVersion.id && colorway.brandId === styleVersion.brandId, 'PRODUCT_SKU_COLORWAY_LINEAGE_MISMATCH', 'Product SKU Colorway must belong to the exact Style Version and brand');
   invariant(sizeValue.brandId === styleVersion.brandId, 'PRODUCT_SKU_SIZE_LINEAGE_MISMATCH', 'Product SKU Size Value must belong to the same brand');
   invariant(gtin === null || GTIN_PATTERN.test(gtin), 'PRODUCT_SKU_GTIN_INVALID', 'GTIN must contain exactly 8, 12, 13 or 14 digits when provided');
+  invariant(gtin === null || isValidGtin(gtin), 'PRODUCT_SKU_GTIN_CHECK_DIGIT_INVALID', 'GTIN check digit is wrong', { gtin });
   requirePlainObject(payload, 'PRODUCT_SKU_PAYLOAD_INVALID', 'Product SKU payload must be a plain object');
   assertJsonSerializable(payload, 'PRODUCT_SKU_PAYLOAD_INVALID');
   requireTimestamp(createdAt, 'PRODUCT_SKU_CREATED_AT_REQUIRED');

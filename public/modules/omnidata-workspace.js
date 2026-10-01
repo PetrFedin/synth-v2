@@ -1311,10 +1311,10 @@ function odOrderActions(item) {
   const actions = [];
   const accepted = new Set(odList(item.acceptedOrganisationIds));
   ownIds().filter(id => [item.brandId, item.shopId].includes(id)).forEach(orgId => {
-    if (!accepted.has(orgId) && ['draft', 'ready'].includes(item.status) && caps.hasForOrganisation(state.workspace, orgId, caps.CAPABILITIES.ORDER_CONFIRM)) actions.push(actionButton(`${odText('\u0421\u043e\u0433\u043b\u0430\u0441\u043e\u0432\u0430\u0442\u044c', 'Approve')}: ${orgName(orgId)}`, () => mutate(`/v2/orders/${encodeURIComponent(item.id)}/accept`, { organisationId: orgId }), 'primary'));
+    if (!accepted.has(orgId) && ['draft', 'ready'].includes(item.status) && caps.hasForOrganisation(state.workspace, orgId, caps.CAPABILITIES.ORDER_CONFIRM)) actions.push(actionButton(`${odText('\u0421\u043e\u0433\u043b\u0430\u0441\u043e\u0432\u0430\u0442\u044c', 'Approve')}: ${orgName(orgId)}`, () => mutate(`/v2/orders/${encodeURIComponent(item.id)}/accept`, { orderId: item.id, organisationId: orgId, expectedVersion: item.version }), 'primary'));
   });
   const canWrite = caps.hasForTrade(state.workspace, item.brandId, item.shopId, caps.CAPABILITIES.ORDER_WRITE);
-  if (item.status === 'ready' && canWrite) actions.push(actionButton(odText('\u041f\u0440\u0438\u043a\u0440\u0435\u043f\u0438\u0442\u044c \u043a \u0446\u0438\u043a\u043b\u0443', 'Attach to cycle'), () => mutate(`/v2/orders/${encodeURIComponent(item.id)}/attach`, {}), 'primary'));
+  if (item.status === 'ready' && canWrite) actions.push(actionButton(odText('\u041f\u0440\u0438\u043a\u0440\u0435\u043f\u0438\u0442\u044c \u043a \u0446\u0438\u043a\u043b\u0443', 'Attach to cycle'), () => mutate(`/v2/orders/${encodeURIComponent(item.id)}/attach`, { expectedVersion: item.version }), 'primary'));
   if (item.status === 'attached' && canWrite) actions.push(actionButton(odText('\u041e\u0442\u043c\u0435\u043d\u0438\u0442\u044c \u0437\u0430\u043a\u0430\u0437', 'Cancel order'), () => orderCancellationForm(item), 'danger'));
   return actions;
 }

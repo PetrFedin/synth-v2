@@ -58,3 +58,21 @@ export function createSupplierRecoverySnapshot({ id, resolution, supplier, actua
 function requiredText(value,min,max,code,label){ const normalized=typeof value==='string'?value.trim():''; invariant(normalized.length>=min&&normalized.length<=max,code,`${label} must contain ${min} to ${max} characters`); return normalized; }
 function requiredTimestamp(value,code){ const parsed=Date.parse(value); invariant(typeof value==='string'&&Number.isFinite(parsed),code,'Timestamp must be a valid ISO date-time'); return new Date(parsed).toISOString(); }
 function hashBasis(value){ return createHash('sha256').update(canonicalJson(value)).digest('hex'); }
+
+/**
+ * Возврат от поставщика не может превысить то, что по заказу уже проведено как себестоимость.
+ *
+ * Без этого предела отрицательная запись «качества» уводит посадочную себестоимость заказа в минус и
+ * рисует маржу, которой не было: кредит-нота на 1 000 000 по заказу с фактическими затратами в 60
+ * проходила бы как обычная строка. Предел — чистая сумма уже проведённых проводок этого снимка
+ * заказа; возвраты, проведённые раньше, в неё входят со своим знаком, поэтому суммарно вернуть больше
+ * потраченного нельзя и несколькими частями.
+ */
+export function assertRecoveryWithinRecordedCost({ entries, orderCommitSnapshotId, recoveryAmount }) {
+  invariant(Number.isFinite(recoveryAmount) && recoveryAmount > 0, 'SUPPLIER_RECOVERY_AMOUNT_INVALID', 'Recovery amount must be positive');
+  const recorded = (Array.isArray(entries) ? entries : [])
+    .filter((entry) => entry?.orderCommitSnapshotId === orderCommitSnapshotId)
+    .reduce((sum, entry) => sum + Math.round(Number(entry.amount) * 10_000), 0) / 10_000;
+  invariant(Math.round(recoveryAmount * 10_000) / 10_000 <= recorded, 'SUPPLIER_RECOVERY_EXCEEDS_RECORDED_COST', 'Supplier recovery cannot exceed the cost already recorded for this order commit', { recoveryAmount, recordedCost: recorded });
+  return recorded;
+}

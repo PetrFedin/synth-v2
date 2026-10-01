@@ -83,20 +83,20 @@ test('PostgreSQL SKU form path: remaining sizes resolve from the real size scale
 
     // the second SKU, with a real 13-digit GTIN — exactly what the form now sends
     const secondSku = await productIdentity.createSku('sku-create-m', 'owner-user', {
-      styleVersionId: styleVersion.id, colorwayId: colorway.id, sizeValueId: sizeM.id, skuCode: 'DRS-SKU-BLK-M', gtin: '4601234567890',
+      styleVersionId: styleVersion.id, colorwayId: colorway.id, sizeValueId: sizeM.id, skuCode: 'DRS-SKU-BLK-M', gtin: '4601234567893',
     });
-    assert.equal(secondSku.gtin, '4601234567890');
+    assert.equal(secondSku.gtin, '4601234567893');
 
     // a colliding SKU code is refused
     await assert.rejects(
       productIdentity.createSku('sku-create-collide', 'owner-user', {
-        styleVersionId: styleVersion.id, colorwayId: colorway.id, sizeValueId: sizeM.id, skuCode: 'DRS-SKU-BLK-S', gtin: '4601234567891',
+        styleVersionId: styleVersion.id, colorwayId: colorway.id, sizeValueId: sizeM.id, skuCode: 'DRS-SKU-BLK-S', gtin: '4601234567909',
       }),
       (error) => error.code === 'PRODUCT_SKU_ALREADY_EXISTS',
     );
 
     const persisted = await pool.query('SELECT sku_code, gtin FROM product_skus WHERE id = $1', [secondSku.id]);
-    assert.deepEqual(persisted.rows[0], { sku_code: 'DRS-SKU-BLK-M', gtin: '4601234567890' });
+    assert.deepEqual(persisted.rows[0], { sku_code: 'DRS-SKU-BLK-M', gtin: '4601234567893' });
 
     // the aggregate the UI reads (GET /v2/product/styles/:id) carries gtin and the size-scale lineage
     // the form needs to resolve the next SKU's remaining sizes, for both SKUs now on the colourway
@@ -104,7 +104,7 @@ test('PostgreSQL SKU form path: remaining sizes resolve from the real size scale
     const colorwayAgg = aggregate.colorways.find((value) => value.id === colorway.id);
     const skuByCode = Object.fromEntries(colorwayAgg.skus.map((sku) => [sku.skuCode, sku]));
     assert.equal(skuByCode['DRS-SKU-BLK-S'].gtin, null);
-    assert.equal(skuByCode['DRS-SKU-BLK-M'].gtin, '4601234567890');
+    assert.equal(skuByCode['DRS-SKU-BLK-M'].gtin, '4601234567893');
     assert.equal(skuByCode['DRS-SKU-BLK-M'].size.sizeScaleId, sizeScale.id);
     assert.equal(skuByCode['DRS-SKU-BLK-M'].size.sizeScaleVersionNo, sizeScaleVersion.versionNo);
   } finally {

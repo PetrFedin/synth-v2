@@ -189,13 +189,17 @@ function view(client) {
       const result = await client.query('SELECT * FROM product_skus WHERE sku_code = $1 FOR SHARE', [skuCode]);
       return result.rows[0] ? mapSku(result.rows[0]) : undefined;
     },
+    async getSkuByGtin(gtin) {
+      const result = await client.query('SELECT * FROM product_skus WHERE gtin = $1 FOR SHARE', [gtin]);
+      return result.rows[0] ? mapSku(result.rows[0]) : undefined;
+    },
     async insertSku(value) {
       await uniqueInsert(client,
         `INSERT INTO product_skus
            (id, sku_code, brand_id, style_version_id, colorway_id, size_value_id, gtin, payload, content_hash, created_at, created_by)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11)`,
         [value.id, value.skuCode, value.brandId, value.styleVersionId, value.colorwayId, value.sizeValueId, value.gtin, JSON.stringify(value.payload), value.contentHash, value.createdAt, value.createdBy],
-        'PRODUCT_SKU_ALREADY_EXISTS', 'Canonical Product SKU already exists', { skuCode: value.skuCode });
+        'PRODUCT_SKU_ALREADY_EXISTS', 'Canonical Product SKU (code or GTIN) already exists', { skuCode: value.skuCode, gtin: value.gtin });
     },
 
     async insertMedia(value) {

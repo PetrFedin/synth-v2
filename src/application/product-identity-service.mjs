@@ -290,10 +290,11 @@ export function createProductIdentityService({ store, clock = () => new Date().t
           await authorize(tx, styleVersion.brandId, actorId);
           const colorway = requireEntity(await tx.getColorway(input?.colorwayId), 'PRODUCT_COLORWAY_NOT_FOUND', { colorwayId: input?.colorwayId });
           const sizeValue = requireEntity(await tx.getSizeValue(input?.sizeValueId), 'PRODUCT_SIZE_VALUE_NOT_FOUND', { sizeValueId: input?.sizeValueId });
-          return Object.freeze({ styleVersion, colorway, sizeValue, existing: await tx.getSkuByCode(input?.skuCode) });
+          return Object.freeze({ styleVersion, colorway, sizeValue, existing: await tx.getSkuByCode(input?.skuCode), gtinOwner: typeof input?.gtin === 'string' ? await tx.getSkuByGtin(input.gtin) : undefined });
         },
         async (tx, context) => {
           invariant(!context.existing, 'PRODUCT_SKU_ALREADY_EXISTS', 'Canonical Product SKU code already exists', { skuCode: input.skuCode });
+          invariant(!context.gtinOwner, 'PRODUCT_SKU_GTIN_ALREADY_USED', 'GTIN already belongs to another Product SKU', { gtin: input.gtin, skuCode: context.gtinOwner?.skuCode });
           const value = createSkuDomain({ id: nextId('product-sku'), skuCode: input.skuCode, styleVersion: context.styleVersion, colorway: context.colorway, sizeValue: context.sizeValue, gtin: input.gtin ?? null, payload: input.payload ?? {}, createdAt: now(clock), createdBy: actorId });
           await tx.insertSku(value);
           return value;

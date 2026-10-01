@@ -99,7 +99,7 @@ test('trade order replay requires a currently authorized trade membership', asyn
           return Object.freeze({
             id,
             actorId: 'former-buyer',
-            fingerprint: 'attachOrderToCycle:former-buyer:order-1',
+            fingerprint: 'attachOrderToCycle:former-buyer:order-1:1',
             result: previousResult,
           });
         },
@@ -126,7 +126,7 @@ test('trade order replay requires a currently authorized trade membership', asyn
   const service = createOrderBuilderService({ store });
 
   await assert.rejects(
-    () => service.attachOrderToCycle('command-1', 'former-buyer', 'order-1'),
+    () => service.attachOrderToCycle('command-1', 'former-buyer', { orderId: 'order-1', expectedVersion: 1 }),
     (error) => error.code === 'TRADE_MEMBERSHIP_REQUIRED',
   );
   assert.deepEqual(calls, [

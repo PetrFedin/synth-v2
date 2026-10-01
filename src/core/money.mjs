@@ -7,6 +7,12 @@ export const MONEY_SCALE = 4;
 // numeric(…,8), и экономика заказа давно требует восьми знаков; правило теперь живёт здесь, чтобы
 // не расходиться между местами, где оно применяется.
 export const FX_RATE_SCALE = 8;
+// Курс вне этого коридора — не рыночное число, а опечатка (лишний ноль, перепутанное направление
+// пары, курс «за тысячу»): самые слабые пары мира стоят порядка 1e-5 (VND в EUR), самые крепкие —
+// порядка 1e5. Коридор намеренно широк на несколько порядков: он отлавливает бессмыслицу, а не
+// спорит с рынком.
+export const FX_RATE_MINIMUM = 0.000001;
+export const FX_RATE_MAXIMUM = 1_000_000;
 export const MONEY_PERCENTAGE_SCALE = 4;
 export const POSTGRES_INTEGER_MAX = 2_147_483_647;
 const MONEY_FACTOR = 10 ** MONEY_SCALE;
@@ -37,13 +43,20 @@ export function normalizeFxRate(value, {
   overflowCode = 'FX_RATE_TOO_LARGE',
   label = 'FX rate',
 } = {}) {
-  invariant(Number.isFinite(value) && value > 0, invalidCode, `${label} must be positive`);
+  assertSaneFxRate(value, { invalidCode, label });
   const scaled = Math.round(value * FX_RATE_FACTOR);
   invariant(Number.isSafeInteger(scaled), overflowCode, `${label} exceeds the safe fixed-point range`, { scale: FX_RATE_SCALE });
   const normalized = scaled / FX_RATE_FACTOR;
   const tolerance = Math.max(1e-12, Number.EPSILON * Math.max(1, Math.abs(value)) * 4);
   invariant(Math.abs(value - normalized) <= tolerance, scaleCode, `${label} must use at most ${FX_RATE_SCALE} decimal places`, { scale: FX_RATE_SCALE });
   return normalized;
+}
+
+/** Курс положителен, конечен и лежит в разумном коридоре; иначе это опечатка, а не курс. */
+export function assertSaneFxRate(value, { invalidCode = 'FX_RATE_INVALID', label = 'FX rate' } = {}) {
+  invariant(Number.isFinite(value) && value > 0, invalidCode, `${label} must be positive`, { value });
+  invariant(value >= FX_RATE_MINIMUM && value <= FX_RATE_MAXIMUM, invalidCode, `${label} must be between ${FX_RATE_MINIMUM} and ${FX_RATE_MAXIMUM}`, { value, minimum: FX_RATE_MINIMUM, maximum: FX_RATE_MAXIMUM });
+  return value;
 }
 
 export function calculateMoneyPercentage(numerator, denominator, {

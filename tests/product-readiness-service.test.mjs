@@ -5,13 +5,13 @@ import { createProductReadinessService } from '../src/application/product-readin
 const now = '2026-08-12T12:00:00.000Z';
 const hash = 'b'.repeat(64);
 
-function harness() {
+function harness({ role = 'owner' } = {}) {
   const commands = new Map();
   const readiness = new Map();
   const projections = [];
   const locks = [];
   const packRatioTemplates = new Map();
-  const membership = { id: 'm:1', organisationId: 'brand:1', organisationType: 'brand', userId: 'user:1', role: 'sales', status: 'active' };
+  const membership = { id: 'm:1', organisationId: 'brand:1', organisationType: 'brand', userId: 'user:1', role, status: 'active' };
   const tx = {
     getCommand: async (id) => commands.get(id),
     insertCommand: async (value) => commands.set(value.id, value),

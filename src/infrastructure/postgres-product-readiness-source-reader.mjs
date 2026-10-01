@@ -149,9 +149,24 @@ export function createPostgresProductReadinessSourceReader({ pool, productIdenti
         [styleVersionId],
       );
 
+      // Таблицы, введённые на экране «Размерные таблицы» по каталожному SKU, лежат в той же таблице
+      // БД, но без цветового варианта, версии размерной шкалы и управляемой единицы — готовность их
+      // не считает. Они не доказательство, а объяснение: человек, который ввёл таблицу и всё равно
+      // видит «блокировано», должен узнать, что его ввод был не туда.
+      const legacyResult = await pool.query(
+        `SELECT chart.sku, chart.status, chart.version
+           FROM product_skus AS product_sku
+           JOIN product_catalog_sku_links AS link ON link.product_sku_id = product_sku.id
+           JOIN measurement_charts AS chart ON chart.sku = link.catalog_sku AND chart.style_version_id IS NULL
+          WHERE product_sku.style_version_id = $1
+          ORDER BY chart.sku`,
+        [styleVersionId],
+      );
+
       return Object.freeze({
         styleVersion,
         product: aggregate,
+        legacyMeasurementEvidence: Object.freeze(legacyResult.rows.map((row) => Object.freeze({ sku: row.sku, status: row.status, version: row.version }))),
         measurementEvidence: Object.freeze(measurementResult.rows.map(mapMeasurementEvidence)),
         technicalEvidence: Object.freeze(evidenceResult.rows.map(mapTechnicalEvidence)),
       });

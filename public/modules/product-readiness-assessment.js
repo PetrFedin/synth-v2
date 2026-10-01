@@ -6,9 +6,14 @@
   // без снимка нет проекции, без проекции — публикации, без публикации — каталога байера.
   //
   // Оценка всегда записывает снимок, даже заблокированный: её смысл не в том, чтобы пройти, а в
-  // том, чтобы узнать, чего не хватает. Поэтому форма не требует от человека невозможного —
-  // внешних подтверждений с хешами из чужих систем она не спрашивает вовсе: такие измерения
-  // останутся заблокированными, и панель рядом назовёт каждое словами оценщика.
+  // том, чтобы узнать, чего не хватает.
+  //
+  // Раньше форма внешних подтверждений не спрашивала вовсе, а соответствие требуется на каждом
+  // маршруте, — поэтому из интерфейса модель нельзя было довести до «готова» никому. Теперь
+  // человек, чья роль вправе подтверждать измерение (соответствие, качество, закупка, выбор
+  // поставщика), подтверждает его в форме сам: ссылка на документ и «подтверждаю». Хеш, время и
+  // подписавшего форма ставит сама, а служба проверяет источник, свежесть и роль. Тот, чья роль не
+  // вправе подтверждать, этих полей не видит — они ему не помогли бы: служба откажет.
   //
   // Форма предзаполняется прежним снимком, когда он есть: коммерческая подготовка меняется
   // редко, а набирать шестнадцать полей заново ради поправки цены — способ сделать ошибку в
@@ -25,6 +30,50 @@
     { id: 'made_to_order', ru: 'Под заказ', en: 'Made to order' },
     { id: 'preorder', ru: 'Предзаказ', en: 'Pre-order' },
   ]);
+
+  // Измерения, подтверждаемые не платформой, и то, кто вправе их подтверждать. Совпадает с тем, что
+  // проверяет служба (EXTERNAL_EVIDENCE_CAPABILITIES): расхождение здесь означало бы кнопку,
+  // которая всегда отвечает отказом.
+  const EVIDENCE_DIMENSIONS = Object.freeze([
+    { code: 'sourcing', ru: 'Выбор поставщика', en: 'Supplier selection', capabilities: ['SOURCING_AWARD'], routes: ['READY_GOODS'] },
+    { code: 'purchase_or_production_commitment', ru: 'Закупка / заказ', en: 'Purchase / order', capabilities: ['PRODUCTION_ORDER_CONFIRM', 'MATERIAL_PURCHASE_MANAGE'], routes: ['MATERIALS_SEPARATE', 'READY_GOODS'] },
+    { code: 'quality', ru: 'Входной контроль качества', en: 'Incoming quality control', capabilities: ['QUALITY_APPROVE'], routes: ['READY_GOODS'] },
+    { code: 'compliance', ru: 'Соответствие и маркировка (РФ/ЕАЭС)', en: 'Compliance and marking (RU/EAEU)', capabilities: ['PRODUCT_CERTIFICATION_MANAGE', 'COMPLIANCE_DOCUMENT_MANAGE'], routes: ['OWN_DEVELOPMENT', 'MATERIALS_SEPARATE', 'READY_GOODS'] },
+  ]);
+  const ATTESTATION_SOURCE = 'syntha-attestation';
+
+  function attestableDimensions(product) {
+    const caps = global.SynthaUiCapabilities;
+    return EVIDENCE_DIMENSIONS.filter((dimension) => dimension.capabilities.some((name) => {
+      const capability = caps?.CAPABILITIES?.[name];
+      return capability && caps.hasForOrganisation(state.workspace, product.brandId, capability);
+    }));
+  }
+
+  function actorIdOf() { return state.user?.actorId || state.user?.id || null; }
+
+  async function sha256Hex(value) {
+    const bytes = new TextEncoder().encode(value);
+    const digest = await global.crypto.subtle.digest('SHA-256', bytes);
+    return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+  }
+
+  // Подтверждение собирается из того, что сказал человек (ссылка), и того, что знает форма (кто, когда,
+  // что именно подтверждено). Хеш — от всего этого вместе, чтобы подтверждение нельзя было переназначить
+  // на другую модель или другое измерение.
+  async function buildEvidence(product, dimension, reference, approvedBy) {
+    const approvedAt = new Date().toISOString();
+    const contentHash = await sha256Hex(JSON.stringify({ dimension: dimension.code, styleVersionId: product.styleVersionId, reference, approvedBy, approvedAt }));
+    return {
+      status: 'ready',
+      evidenceId: `attest:${product.styleVersionId}:${dimension.code}:${approvedAt.replace(/[^0-9]/g, '')}`.slice(0, 160),
+      sourceSystem: ATTESTATION_SOURCE,
+      version: reference,
+      contentHash,
+      approvedAt,
+      approvedBy,
+    };
+  }
 
   function text(ru, en) { return global.odText ? global.odText(ru, en) : ru; }
   function options(list) { return list.map((item) => ({ id: item.id, name: text(item.ru, item.en) })); }
@@ -138,7 +187,17 @@
         { id: 'no', name: text('нет', 'no') },
       ], undefined, prep.attributeCoverageConfirmed === false ? 'no' : 'yes'),
     ];
-    openForm(text('Оценить готовность', 'Assess readiness'), fields, (values) => {
+    const attestable = attestableDimensions(product);
+    for (const dimension of attestable) {
+      fields.push(
+        selectDef(`evidence_${dimension.code}`, `${text(dimension.ru, dimension.en)}: ${text('подтверждаю', 'I confirm')}`, [
+          { id: 'no', name: text('нет', 'no') },
+          { id: 'yes', name: text('да, подтверждаю', 'yes, I confirm') },
+        ], undefined, 'no'),
+        textDef(`evidenceRef_${dimension.code}`, `${text(dimension.ru, dimension.en)}: ${text('номер или название документа', 'document number or name')}`, '', 128, false),
+      );
+    }
+    openForm(text('Оценить готовность', 'Assess readiness'), fields, async (values) => {
       const money = (value, label) => Math.round(validation.number(value, label, { min: 0.01 }) * 100);
       // Шаблон из библиотеки побеждает ручной ввод: выбрав шаблон, человек явно отказывается от
       // ручного набора, а не забывает очистить поле рядом.
@@ -172,10 +231,31 @@
         problem.code = 'COUNTRY_INVALID';
         throw problem;
       }
-      return mutate(`/v2/product/style-versions/${encodeURIComponent(product.styleVersionId)}/readiness`, {
-        developmentRoute: values.developmentRoute,
-        commercialPreparation: preparation,
-      });
+      const externalEvidence = {};
+      for (const dimension of attestable) {
+        if (values[`evidence_${dimension.code}`] !== 'yes') continue;
+        if (!dimension.routes.includes(values.developmentRoute)) {
+          const problem = new Error(text(
+            `«${dimension.ru}» на выбранном маршруте подтверждается самой платформой — снимите подтверждение.`,
+            `"${dimension.en}" is established by the platform itself on the chosen route — clear the confirmation.`,
+          ));
+          problem.code = 'EVIDENCE_NOT_ALLOWED_FOR_ROUTE';
+          throw problem;
+        }
+        const reference = String(values[`evidenceRef_${dimension.code}`] || '').trim();
+        if (reference.length < 2) {
+          const problem = new Error(text(
+            `«${dimension.ru}»: укажите номер или название документа, на котором держится подтверждение.`,
+            `"${dimension.en}": give the number or name of the document the confirmation rests on.`,
+          ));
+          problem.code = 'EVIDENCE_REFERENCE_REQUIRED';
+          throw problem;
+        }
+        externalEvidence[dimension.code] = await buildEvidence(product, dimension, reference.slice(0, 128), actorIdOf());
+      }
+      const body = { developmentRoute: values.developmentRoute, commercialPreparation: preparation };
+      if (Object.keys(externalEvidence).length) body.externalEvidence = externalEvidence;
+      return mutate(`/v2/product/style-versions/${encodeURIComponent(product.styleVersionId)}/readiness`, body);
     });
   }
 
@@ -192,5 +272,5 @@
     return actionButton(text('Шаблон ростовки', 'Pack ratio template'), () => createPackRatioTemplateForm(product.brandId));
   }
 
-  global.SynthaProductReadinessAssessment = Object.freeze({ assessForm, assessAction, packRatioTemplateAction, mediaIdsOf });
+  global.SynthaProductReadinessAssessment = Object.freeze({ assessForm, assessAction, packRatioTemplateAction, mediaIdsOf, attestableDimensions, evidenceDimensions: EVIDENCE_DIMENSIONS });
 })(window);

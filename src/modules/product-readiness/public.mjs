@@ -31,6 +31,36 @@ const allowedExternalEvidence = Object.freeze({
   READY_GOODS: new Set(['sourcing', 'purchase_or_production_commitment', 'quality', 'compliance']),
 });
 
+// Внешнее подтверждение — это утверждение о том, чего платформа не видит сама. Раньше оно принималось
+// как есть: любая строка в `sourceSystem`, любая дата `approvedAt`, подписанное кем угодно. Теперь
+// оно допускается только если (1) источник назван в закрытом списке, (2) оно свежее и не из будущего,
+// (3) для самоподтверждения подписавший — тот, кто отправил запрос. Роль отправителя проверяет
+// служба: домену неизвестны членства.
+export const EXTERNAL_EVIDENCE_POLICY = Object.freeze({
+  // `syntha-documents` — документы самой платформы; `syntha-attestation` — подтверждение человека,
+  // ответственного за измерение, введённое в интерфейсе.
+  trustedSources: Object.freeze(['syntha-documents', 'syntha-attestation']),
+  attestationSource: 'syntha-attestation',
+  maxAgeDays: 90,
+  futureSkewMs: 5 * 60 * 1000,
+});
+
+export function assertExternalEvidenceAdmissible({ dimension, evidence, actorId, at, policy = EXTERNAL_EVIDENCE_POLICY }) {
+  if (evidence === undefined || evidence === null) return;
+  const trusted = policy.trustedSources ?? EXTERNAL_EVIDENCE_POLICY.trustedSources;
+  invariant(trusted.includes(evidence.sourceSystem), 'PRODUCT_READINESS_EXTERNAL_EVIDENCE_SOURCE_UNTRUSTED', 'External evidence comes from a source that is not on the trusted list', { dimension, sourceSystem: evidence.sourceSystem, trustedSources: [...trusted] });
+  const atMs = Date.parse(at);
+  const approvedMs = Date.parse(evidence.approvedAt);
+  const skew = policy.futureSkewMs ?? EXTERNAL_EVIDENCE_POLICY.futureSkewMs;
+  invariant(approvedMs <= atMs + skew, 'PRODUCT_READINESS_EXTERNAL_EVIDENCE_FROM_FUTURE', 'External evidence cannot be approved in the future', { dimension, approvedAt: evidence.approvedAt });
+  const maxAgeDays = policy.maxAgeDays ?? EXTERNAL_EVIDENCE_POLICY.maxAgeDays;
+  invariant(atMs - approvedMs <= maxAgeDays * 86_400_000, 'PRODUCT_READINESS_EXTERNAL_EVIDENCE_STALE', 'External evidence is older than the freshness window and must be re-confirmed', { dimension, approvedAt: evidence.approvedAt, maxAgeDays });
+  const attestationSource = policy.attestationSource ?? EXTERNAL_EVIDENCE_POLICY.attestationSource;
+  if (evidence.sourceSystem === attestationSource) {
+    invariant(evidence.approvedBy === actorId, 'PRODUCT_READINESS_EXTERNAL_EVIDENCE_ATTESTER_MISMATCH', 'An attestation can only be signed by the person submitting it', { dimension, approvedBy: evidence.approvedBy });
+  }
+}
+
 export function evaluateProductReadiness({ developmentRoute, technicalSnapshot, commercialPreparation, externalEvidence = {} }) {
   invariant(DEVELOPMENT_ROUTES.includes(developmentRoute), 'PRODUCT_READINESS_ROUTE_INVALID', 'Development route is invalid', { developmentRoute });
   requireObject(technicalSnapshot, 'PRODUCT_READINESS_TECHNICAL_SNAPSHOT_INVALID', 'Technical snapshot is required');
@@ -111,7 +141,8 @@ export function evaluateProductReadiness({ developmentRoute, technicalSnapshot, 
     }, canonicalTechnicalCoverage ? 'Published BOM is required for every canonical SKU.' : 'Canonical ProductSku lineage is incomplete; BOM evidence cannot be resolved.'));
   }
 
-  const measurementCoverage = evaluateMeasurementCoverage({ styleVersion, colorways, measurementEvidence });
+  const legacyMeasurementEvidence = Array.isArray(technicalSnapshot.legacyMeasurementEvidence) ? technicalSnapshot.legacyMeasurementEvidence : [];
+  const measurementCoverage = evaluateMeasurementCoverage({ styleVersion, colorways, measurementEvidence, legacyMeasurementEvidence });
   dimensions.push(fact('measurements', measurementCoverage.ready, measurementCoverage.evidence, measurementCoverage.reason));
 
   if (developmentRoute === 'READY_GOODS') {
@@ -282,7 +313,9 @@ export function createCommercialProductProjectionVersion({ id, readinessSnapshot
   });
 }
 
-function evaluateMeasurementCoverage({ styleVersion, colorways, measurementEvidence }) {
+export const LEGACY_MEASUREMENT_REASON = 'Measurement charts exist only for catalog SKUs (legacy screen) and do not count: readiness reads canonical charts per Colorway × SizeScaleVersion.';
+
+function evaluateMeasurementCoverage({ styleVersion, colorways, measurementEvidence, legacyMeasurementEvidence = [] }) {
   const expectedByKey = new Map();
   for (const colorway of colorways) {
     for (const sku of Array.isArray(colorway.skus) ? colorway.skus : []) {
@@ -336,8 +369,11 @@ function evaluateMeasurementCoverage({ styleVersion, colorways, measurementEvide
       expectedContextCount: contexts.length,
       readyContextCount: contexts.filter((context) => context.ready).length,
       contexts,
+      legacyCharts: legacyMeasurementEvidence,
     },
-    reason: readyState ? null : 'Every Colorway × SizeScaleVersion requires one published canonical Measurement Chart with a frozen governed unit and coverage of every sellable ProductSizeValue.',
+    reason: readyState ? null : legacyMeasurementEvidence.length > 0 && !contexts.some((context) => context.ready)
+      ? LEGACY_MEASUREMENT_REASON
+      : 'Every Colorway × SizeScaleVersion requires one published canonical Measurement Chart with a frozen governed unit and coverage of every sellable ProductSizeValue.',
   };
 }
 

@@ -1,16 +1,29 @@
 import { invariant, requireEntity } from '../core/errors.mjs';
 import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
-import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
+import { CAPABILITIES, assertCapability, roleHasCapability } from '../modules/access-control/public.mjs';
 import {
+  EXTERNAL_EVIDENCE_POLICY,
+  assertExternalEvidenceAdmissible,
   createCommercialProductProjectionVersion,
   createProductReadinessSnapshot,
   evaluateProductReadiness,
 } from '../modules/product-readiness/public.mjs';
 import { createPackRatioTemplate } from '../modules/pack-ratio/public.mjs';
 
+// Кто вправе утверждать внешнее измерение. Тот, кто собирает коммерческую подготовку (PRODUCT_MANAGE),
+// не может сам подтвердить соответствие, качество или закупку: это решения других ролей — так же,
+// как продажи видят качество, но не подписывают его.
+export const EXTERNAL_EVIDENCE_CAPABILITIES = Object.freeze({
+  sourcing: Object.freeze([CAPABILITIES.SOURCING_AWARD]),
+  purchase_or_production_commitment: Object.freeze([CAPABILITIES.PRODUCTION_ORDER_CONFIRM, CAPABILITIES.MATERIAL_PURCHASE_MANAGE]),
+  quality: Object.freeze([CAPABILITIES.QUALITY_APPROVE]),
+  compliance: Object.freeze([CAPABILITIES.PRODUCT_CERTIFICATION_MANAGE, CAPABILITIES.COMPLIANCE_DOCUMENT_MANAGE]),
+});
+
 export function createProductReadinessService({
   store,
   sourceReader,
+  externalEvidencePolicy = EXTERNAL_EVIDENCE_POLICY,
   clock = () => new Date().toISOString(),
   nextId = defaultIdGenerator(),
 } = {}) {
@@ -46,6 +59,7 @@ export function createProductReadinessService({
       assertCommandId(commandId);
       assertAssessmentInput(input);
       const styleVersionIdentity = await authorizeStyleVersion(actorId, styleVersionId, CAPABILITIES.PRODUCT_MANAGE);
+      const actorMembership = await sourceReader.getMembership(styleVersionIdentity.brandId, actorId);
       const fingerprint = `assessProductReadiness:${actorId}:${styleVersionId}:${canonicalJson(input)}`;
       const existing = await store.transaction((tx) => tx.getCommand(commandId));
       if (existing) {
@@ -62,6 +76,7 @@ export function createProductReadinessService({
         capturedAt: assessedAt,
         product: context.product,
         measurementEvidence: context.measurementEvidence ?? [],
+        legacyMeasurementEvidence: context.legacyMeasurementEvidence ?? [],
         technicalEvidence: context.technicalEvidence ?? [],
       });
       const commercialPreparation = normalizeCommercialPreparation(styleVersionIdentity.brandId, input.commercialPreparation);
@@ -71,6 +86,11 @@ export function createProductReadinessService({
         commercialPreparation,
         externalEvidence: input.externalEvidence ?? {},
       });
+      for (const [dimension, evidence] of Object.entries(input.externalEvidence ?? {})) {
+        const allowed = EXTERNAL_EVIDENCE_CAPABILITIES[dimension] ?? [];
+        invariant(allowed.some((capability) => roleHasCapability(actorMembership?.role, capability)), 'PRODUCT_READINESS_EXTERNAL_EVIDENCE_ROLE_DENIED', 'The actor role cannot confirm this readiness dimension', { dimension, role: actorMembership?.role ?? null, requiredAnyOf: [...allowed] });
+        assertExternalEvidenceAdmissible({ dimension, evidence, actorId, at: assessedAt, policy: externalEvidencePolicy });
+      }
       const snapshot = createProductReadinessSnapshot({
         id: nextId('product-readiness'),
         styleVersion: styleVersionIdentity,

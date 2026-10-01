@@ -96,6 +96,12 @@ export function allowedStyleTransitions(lifecycleStatus) {
   return Object.freeze([...(lifecycleTransitions.get(lifecycleStatus) ?? new Set())]);
 }
 
+// Состояния, в которые модель не переходит на слово: «готова к коммерции» и «активна» — это
+// утверждение о готовности, и оно должно опираться на последнюю оценку готовности ровно этой
+// модели. Раньше переход не смотрел на готовность вовсе: модель с заблокированными измерениями
+// переводилась в `commercial_ready` одним нажатием.
+export const READINESS_GATED_STYLE_STATUSES = Object.freeze([STYLE_LIFECYCLE.COMMERCIAL_READY, STYLE_LIFECYCLE.ACTIVE]);
+
 export function styleLifecycleMap() {
   return Object.freeze(Object.fromEntries(
     [...lifecycleTransitions.entries()].map(([status, next]) => [status, Object.freeze([...next])]),

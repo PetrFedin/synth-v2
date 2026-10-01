@@ -14,6 +14,7 @@ import {
   createProductStyleConstructionNode as createConstructionNodeDomain,
   createProductStyleReference as createStyleReferenceDomain,
   createProductStyleVersion as createStyleVersionDomain,
+  READINESS_GATED_STYLE_STATUSES,
   transitionProductStyle as transitionStyleDomain,
   updateProductSizeScale as updateSizeScaleDomain,
 } from '../modules/product-identity/public.mjs';
@@ -114,6 +115,14 @@ export function createProductIdentityService({ store, clock = () => new Date().t
         async (tx, style) => {
           assertExpectedVersion(style.version, input?.expectedVersion, 'PRODUCT_STYLE_CONCURRENCY_CONFLICT');
           const value = transitionStyleDomain(style, input.nextStatus, { updatedAt: now(clock), updatedBy: actorId });
+          if (READINESS_GATED_STYLE_STATUSES.includes(input.nextStatus)) {
+            invariant(typeof tx.getLatestReadinessSnapshotForStyle === 'function', 'PRODUCT_STYLE_READINESS_SOURCE_REQUIRED', 'Readiness source is required to enter a readiness-gated state');
+            const readiness = await tx.getLatestReadinessSnapshotForStyle(style.id);
+            invariant(readiness, 'PRODUCT_STYLE_READINESS_NOT_ASSESSED', 'The style cannot enter this state before its readiness is assessed', { styleId: style.id, to: input.nextStatus });
+            invariant(readiness.readinessStatus === 'ready', 'PRODUCT_STYLE_READINESS_BLOCKED', 'The style cannot enter this state while its latest readiness assessment is blocked', {
+              styleId: style.id, to: input.nextStatus, readinessSnapshotId: readiness.id, blockedDimensionCount: readiness.blockedDimensionCount,
+            });
+          }
           await tx.saveStyle(value, input.expectedVersion);
           return value;
         });

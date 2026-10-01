@@ -199,7 +199,10 @@ function statusBadge(status) { return el('span', { className: `badge ${String(st
 function isForbiddenText(text) {
   return typeof text === 'string' && text === I18N.t('common.forbidden');
 }
+// Every error banner, toast and inline form error is built here, so this is where a bare code or a
+// "CODE: sentence" string (thrown by client checks and some services) becomes a sentence.
 function notice(text, type = '') {
+  if (type === 'error' && typeof SynthaErrorMessages !== 'undefined') text = SynthaErrorMessages.humanise(text);
   const kind = type === 'error' && isForbiddenText(text) ? 'denied' : type;
   return el('div', { className: `notice ${kind}`.trim(), text });
 }
@@ -267,9 +270,11 @@ function buildField(field) {
   const built = inputField(field.label, field.kind === 'number' ? 'number' : field.kind, {
     name: field.name,
     value: field.value ?? '',
-    step: field.kind === 'number' ? (field.integer ? '1' : '0.01') : undefined,
+    step: field.kind === 'number' ? (field.step ?? (field.integer ? '1' : '0.01')) : undefined,
     min: field.min ?? (field.kind === 'number' ? '0' : undefined),
+    max: field.kind === 'number' ? field.max : undefined,
     maxlength: field.maxLength,
+    minlength: field.minLength,
     // Пример значения. Поле, которое просит непрозрачный идентификатор, обязано показать, как он
     // выглядит: иначе человек смотрит на пустую строку и не знает, что туда писать.
     placeholder: field.placeholder,
@@ -278,11 +283,11 @@ function buildField(field) {
   return built;
 }
 
-function textDef(name, label, value = '', maxLength = 160, required = true) { return { name, label, kind: 'text', value, maxLength, required }; }
+function textDef(name, label, value = '', maxLength = 160, required = true, minLength = undefined) { return { name, label, kind: 'text', value, maxLength, minLength, required }; }
 function optionalTextDef(name, label, value = '', maxLength = 160) { return textDef(name, label, value, maxLength, false); }
 function dateDef(name, label, value = '') { return { name, label, kind: 'date', value }; }
 function dateTimeDef(name, label, value = '') { return { name, label, kind: 'datetime-local', value }; }
-function numberDef(name, label, value, integer, min = 0) { return { name, label, kind: 'number', value, integer, min }; }
+function numberDef(name, label, value, integer, min = 0, max = undefined, step = undefined) { return { name, label, kind: 'number', value, integer, min, max, step }; }
 function selectDef(name, label, options, format, value, required = true) { return { name, label, kind: 'select', options, format, value, required }; }
 function optionalSelectDef(name, label, options, format, value) { return selectDef(name, label, options, format, value, false); }
 function showInlineError(form, message) { form.querySelector('.notice.error')?.remove(); form.prepend(notice(message, 'error')); }

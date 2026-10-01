@@ -43,7 +43,7 @@ test('no form passes the validator an English label the interface never shows', 
 
 test('a date range refuses without naming a field, because the sentence is already unambiguous', async () => {
   const source = await readFile(path.join(root, 'public/modules/ui-validation.js'), 'utf8');
-  assert.match(source, /function dateRange\(start, end, label = ''\)/);
+  assert.match(source, /function dateRange\(start, end, label = '', \{ allowEqual = false \} = \{\}\)/);
   assert.match(source, /function futureDate\(value, now = new Date\(\)\.toISOString\(\), label = ''\)/);
   // Без подписи фраза начинается с заглавной буквы, а не с двоеточия в пустоте.
   assert.match(source, /\$\{message\.charAt\(0\)\.toUpperCase\(\)\}\$\{message\.slice\(1\)\}/);

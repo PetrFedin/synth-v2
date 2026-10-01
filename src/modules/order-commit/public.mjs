@@ -128,6 +128,11 @@ function validateCommercialLines(order, selection, buyerCatalog) {
       styleId: product.styleId,
       styleVersionId: product.styleVersionId,
       colorwayId: product.colorwayId,
+      colourEntryId: product.colourEntryId,
+      colourEntryVersion: product.colourEntryVersion,
+      swatchHex: product.swatchHex,
+      colourNameRu: product.colourNameRu,
+      colourNameEn: product.colourNameEn,
       sizeValueId: product.sizeValueId,
       sizeCode: product.sizeCode,
       sizeLabelRu: product.sizeLabelRu,
@@ -185,6 +190,11 @@ function assertRichLineage(line, product, code) {
   }
   invariant((line.gtin ?? null) === (product.gtin ?? null), code, 'Committed GTIN differs from the pinned buyer catalog', { sku: product.sku });
   invariant((line.sizeLabelRu ?? product.sizeCode) === product.sizeLabelRu && (line.sizeLabelEn ?? product.sizeCode) === product.sizeLabelEn, code, 'Committed localized size labels differ from the pinned buyer catalog', { sku: product.sku });
+  // Same passthrough discipline as gtin: the colour is not part of RICH_LINEAGE_KEYS (older
+  // committed lines predate it), but once present it must still match the pinned catalog —
+  // otherwise a commit could silently carry a colour the buyer never actually saw.
+  invariant((line.colourEntryId ?? null) === (product.colourEntryId ?? null) && (line.colourEntryVersion ?? null) === (product.colourEntryVersion ?? null), code, 'Committed colour reference differs from the pinned buyer catalog', { sku: product.sku });
+  invariant((line.swatchHex ?? null) === (product.swatchHex ?? null), code, 'Committed swatch differs from the pinned buyer catalog', { sku: product.sku });
 }
 
 function copyExistingLineage(line) {
@@ -195,6 +205,11 @@ function copyExistingLineage(line) {
     styleId: line.styleId,
     styleVersionId: line.styleVersionId,
     colorwayId: line.colorwayId,
+    colourEntryId: line.colourEntryId ?? null,
+    colourEntryVersion: line.colourEntryVersion ?? null,
+    swatchHex: line.swatchHex ?? null,
+    colourNameRu: line.colourNameRu ?? null,
+    colourNameEn: line.colourNameEn ?? null,
     sizeValueId: line.sizeValueId,
     sizeCode: line.sizeCode,
     sizeLabelRu: line.sizeLabelRu ?? line.sizeCode,

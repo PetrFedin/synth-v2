@@ -96,6 +96,10 @@ function richBuyerCatalog(context, overrides = {}) {
       styleVersionId: 'style-version-1',
       colorways: Object.freeze([Object.freeze({
         colorwayId: 'colorway-1',
+        colorRef: Object.freeze({ entryId: 'mdm-entry:colour-colour:navy', version: 1 }),
+        swatchHex: '#1a2b4c',
+        nameRu: 'Тёмно-синий',
+        nameEn: 'Navy',
         skus: Object.freeze([Object.freeze({
           productSkuId: 'product-sku-1',
           skuCode: 'SKU-1',
@@ -159,6 +163,11 @@ test('rich pinned buyer cart resolves Style Colorway Size SKU entirely from froz
     styleId: 'style-1',
     styleVersionId: 'style-version-1',
     colorwayId: 'colorway-1',
+    colourEntryId: 'mdm-entry:colour-colour:navy',
+    colourEntryVersion: 1,
+    swatchHex: '#1a2b4c',
+    colourNameRu: 'Тёмно-синий',
+    colourNameEn: 'Navy',
     sizeValueId: 'size-m',
     sizeCode: 'M',
     sizeLabelRu: 'М',

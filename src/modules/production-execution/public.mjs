@@ -118,8 +118,17 @@ export function resolveProductionMilestoneBlock(execution, { milestoneCode, acto
   return freezeExecution({ ...updated, version: execution.version + 1, updatedAt: at });
 }
 
-export function cancelProductionExecution(execution, { reason, cancelledAt }) {
-  invariant(['planned','active'].includes(execution?.status), 'PRODUCTION_EXECUTION_NOT_CANCELLABLE', 'Ready-for-QC or cancelled production execution cannot be cancelled', { status: execution?.status });
+// Q-01. A ready-for-QC execution used to be a dead end: Final Quality holds one inspection per
+// execution, so once that inspection was cancelled or rejected there was no second one and no way
+// to close the execution either. It can now be cancelled when no live inspection stands behind it
+// (none yet, cancelled, or rejected). A running, review-pending, rework or released inspection
+// keeps its execution: cancelling it would strand the lot mid-inspection or after release.
+// `qualityInspection` is the Final Quality inspection of this execution, or null when there is none.
+export function cancelProductionExecution(execution, { reason, cancelledAt, qualityInspection = null }) {
+  invariant(['planned','active','ready-for-qc'].includes(execution?.status), 'PRODUCTION_EXECUTION_NOT_CANCELLABLE', 'Cancelled production execution cannot be cancelled again', { status: execution?.status });
+  if (execution.status === 'ready-for-qc') {
+    invariant(!qualityInspection || ['cancelled','rejected'].includes(qualityInspection.status), 'PRODUCTION_EXECUTION_QUALITY_INSPECTION_LIVE', 'A ready-for-QC production execution with a live Final Quality inspection cannot be cancelled', { inspectionCode: qualityInspection?.inspectionCode, inspectionStatus: qualityInspection?.status });
+  }
   const at = timestamp(cancelledAt, 'PRODUCTION_EXECUTION_CANCELLED_AT_INVALID', 'Production cancellation time');
   return freezeExecution({ ...execution, status: 'cancelled', version: execution.version + 1, cancelledAt: at, cancellationReason: text(reason, 5, 1000, 'PRODUCTION_EXECUTION_CANCELLATION_REASON_INVALID', 'Cancellation reason'), updatedAt: at });
 }

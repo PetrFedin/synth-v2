@@ -30,6 +30,10 @@ function view(client) {
       const result = await client.query('SELECT payload FROM production_executions WHERE execution_code = $1 FOR UPDATE', [executionCode]);
       return result.rows[0]?.payload;
     },
+    async getQualityInspectionByExecutionCode(executionCode) {
+      const result = await client.query('SELECT payload FROM quality_inspections WHERE execution_code = $1 FOR SHARE', [executionCode]);
+      return result.rows[0]?.payload;
+    },
     async getExecutionByProductionOrderNumber(productionOrderNumber) {
       const result = await client.query('SELECT payload FROM production_executions WHERE production_order_number = $1 FOR UPDATE', [productionOrderNumber]);
       return result.rows[0]?.payload;

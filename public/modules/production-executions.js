@@ -659,7 +659,7 @@
     if (manage || qualityManage) { ensureCutting(value); children.push(cuttingPanel(value)); }
     if (qualityManage) { ensureInlineQuality(value); children.push(inlineQualityPanel(value, current, qualityManage)); }
     if (value.status === 'active' && current && manage) children.push(actionPanel(value, current, actions));
-    if (['planned', 'active'].includes(value.status) && manage) children.push(cancelPanel(value));
+    if (['planned', 'active', 'ready-for-qc'].includes(value.status) && manage) children.push(cancelPanel(value));
     return h('aside', { className: 'production-execution-inspector' }, children);
   }
   function renderProductionExecutions() {

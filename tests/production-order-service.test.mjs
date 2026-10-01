@@ -19,13 +19,16 @@ function harness() {
   const orders = new Map();
   const commands = new Map();
   const events = [];
+  const rfqs = new Map([[rfq.rfqCode, rfq]]);
   let sequence = 0;
   const membership = Object.freeze({ organisationId: rfq.brandId, organisationType: 'brand', userId: 'owner-1', role: 'owner', status: 'active' });
   const tx = {
     getCommand: async (id) => commands.get(id),
     insertCommand: async (value) => commands.set(value.id, value),
     getMembership: async () => membership,
-    getRfqByCode: async (code) => code === rfq.rfqCode ? rfq : undefined,
+    getRfqByCode: async (code) => rfqs.get(code),
+    getRfqForUpdate: async (code) => rfqs.get(code),
+    saveRfq: async (value, expectedVersion) => { assert.equal(rfqs.get(value.rfqCode).version, expectedVersion); rfqs.set(value.rfqCode, value); },
     getSupplierByCode: async (_brandId, code) => code === supplier.supplierCode ? supplier : undefined,
     getProductionOrderByNumber: async (number) => orders.get(number),
     getProductionOrderByRfqCode: async (code) => [...orders.values()].find((value) => value.rfqCode === code),
@@ -38,7 +41,7 @@ function harness() {
     clock: () => ['2026-08-05T00:00:00.000Z','2026-08-06T00:00:00.000Z','2026-08-06T10:00:00.000Z'][Math.min(sequence, 2)],
     nextId: (prefix) => `${prefix}-${++sequence}`,
   });
-  return { service, orders, commands, events };
+  return { service, orders, commands, events, rfqs };
 }
 
 test('service creates, issues and confirms one Production Order from allocation', async () => {
@@ -65,4 +68,18 @@ test('replaying the same command returns the stored result without a second writ
   assert.deepEqual(replay, first);
   assert.equal(fixture.orders.size, 1);
   assert.equal(fixture.events.length, 1);
+});
+
+// Q-02: cancelling the order left its RFQ allocated, which kept the approved-demand line occupied.
+test('cancelling a Production Order releases its allocated RFQ in the same transaction', async () => {
+  const fixture = harness();
+  const created = await fixture.service.createFromAllocation('cmd-create', 'owner-1', rfq.rfqCode);
+  const cancelled = await fixture.service.cancel('cmd-cancel', 'owner-1', created.productionOrderNumber, { expectedVersion: created.version, reason: 'Factory lost capacity' });
+  assert.equal(cancelled.status, 'cancelled');
+  const released = fixture.rfqs.get(rfq.rfqCode);
+  assert.equal(released.status, 'cancelled');
+  assert.equal(released.version, rfq.version + 1);
+  assert.match(released.cancellationReason, /Factory lost capacity/);
+  assert.equal(released.allocation.purchaseOrderNumber, 'PO-STYLE-001', 'the allocation stays as the trail');
+  assert.deepEqual(fixture.events.map((event) => event.type), ['production-order.created', 'production-order.cancelled', 'rfq.cancelled']);
 });

@@ -25,6 +25,21 @@ function view(client) {
       );
       return result.rows[0]?.payload;
     },
+    async getRfqForUpdate(rfqCode) {
+      if (!rfqCode) return undefined;
+      const result = await client.query('SELECT payload FROM sourcing_rfqs WHERE rfq_code = $1 FOR UPDATE', [rfqCode]);
+      return result.rows[0]?.payload;
+    },
+    async saveRfq(rfq, expectedVersion) {
+      invariant(rfq.version === expectedVersion + 1, 'VERSION_INCREMENT_INVALID', 'RFQ version must increment exactly once');
+      const result = await client.query(
+        `UPDATE sourcing_rfqs
+            SET status = $3, version = $4, payload = $5::jsonb, updated_at = $6::timestamptz, cancelled_at = $7::timestamptz
+          WHERE id = $1 AND rfq_code = $2 AND version = $8`,
+        [rfq.id, rfq.rfqCode, rfq.status, rfq.version, JSON.stringify(rfq), rfq.updatedAt, rfq.cancelledAt, expectedVersion],
+      );
+      invariant(result.rowCount === 1, 'RFQ_CONCURRENCY_CONFLICT', 'RFQ concurrency conflict', { rfqCode: rfq.rfqCode, expectedVersion });
+    },
     async getSupplierByCode(brandId, supplierCode) {
       if (!brandId || !supplierCode) return undefined;
       const result = await client.query(

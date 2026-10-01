@@ -13,18 +13,19 @@ function harness(){
   // Пооперационный контроль ничего не держит, пока проверок нет. The fixture makes that the default
   // and lets a test open one, because the gate is only interesting when there is something to gate.
   const openInlineChecks=[];
+  const inspections=new Map();
   const membership=Object.freeze({organisationId:'brand-1',organisationType:'brand',userId:'planner-1',role:'owner',status:'active'});
   const tx={
     getCommand:async(id)=>commands.get(id),insertCommand:async(v)=>commands.set(v.id,v),getMembership:async()=>membership,
     getProductionOrderByNumber:async(number)=>number===productionOrder.productionOrderNumber?productionOrder:undefined,
     getExecutionByProductionOrderNumber:async(number)=>[...executions.values()].find((v)=>v.productionOrderNumber===number),
-    getExecutionByCode:async(code)=>executions.get(code),listOpenInlineChecks:async()=>openInlineChecks,insertExecution:async(v)=>executions.set(v.executionCode,v),
+    getExecutionByCode:async(code)=>executions.get(code),listOpenInlineChecks:async()=>openInlineChecks,getQualityInspectionByExecutionCode:async(code)=>inspections.get(code),insertExecution:async(v)=>executions.set(v.executionCode,v),
     saveExecution:async(v,expected)=>{assert.equal(executions.get(v.executionCode).version,expected);executions.set(v.executionCode,v)},
     appendOutbox:async(event)=>events.push(event),
   };
   const times=['2026-08-06T12:00:00.000Z','2026-08-10T08:00:00.000Z','2026-08-12T00:00:00.000Z','2026-08-14T00:00:00.000Z','2026-08-15T00:00:00.000Z'];
   const service=createProductionExecutionService({store:{transaction:(work)=>work(tx)},clock:()=>times[Math.min(tick++,times.length-1)],nextId:(prefix)=>`${prefix}-${++sequence}`});
-  return{service,executions,commands,events,openInlineChecks};
+  return{service,executions,commands,events,openInlineChecks,inspections};
 }
 
 test('service creates, starts, blocks, resolves and completes the current milestone',async()=>{
@@ -63,4 +64,19 @@ test('A stage is not signed off while the defects found on it are undecided',asy
   f.openInlineChecks.length=0;
   execution=await f.service.completeMilestone('gate-pass','planner-1',execution.executionCode,{expectedVersion:execution.version,milestoneCode:'materials-ready',notes:'materials-ready completed'});
   assert.equal(execution.milestones[0].status,'completed');
+});
+
+// Q-01: a ready-for-qc execution whose Final Quality inspection was cancelled had no way forward.
+test('service cancels a ready-for-qc execution only when its Final Quality inspection is not live',async()=>{
+  const f=harness();
+  let execution=await f.service.createFromProductionOrder('c1','planner-1',productionOrder.productionOrderNumber);
+  execution=await f.service.start('c2','planner-1',execution.executionCode,{expectedVersion:execution.version});
+  const ready={...execution,status:'ready-for-qc',version:execution.version+1,readyForQcAt:'2026-10-20T00:00:00.000Z',milestones:execution.milestones.map((m)=>({...m,status:'completed'}))};
+  f.executions.set(ready.executionCode,ready);
+  f.inspections.set(ready.executionCode,{inspectionCode:'QCI-PO-STYLE-001',status:'released'});
+  await assert.rejects(()=>f.service.cancel('c3','planner-1',ready.executionCode,{expectedVersion:ready.version,reason:'Lot scrapped at the factory'}),{code:'PRODUCTION_EXECUTION_QUALITY_INSPECTION_LIVE'});
+  f.inspections.set(ready.executionCode,{inspectionCode:'QCI-PO-STYLE-001',status:'cancelled'});
+  const cancelled=await f.service.cancel('c4','planner-1',ready.executionCode,{expectedVersion:ready.version,reason:'Lot scrapped at the factory'});
+  assert.equal(cancelled.status,'cancelled');
+  assert.equal(f.events.at(-1).type,'production-execution.cancelled');
 });

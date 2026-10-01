@@ -10,6 +10,7 @@ import {
   confirmProductionOrder,
   issueProductionOrder,
 } from '../modules/production-orders/public.mjs';
+import { releaseAllocatedRfq } from '../modules/sourcing/public.mjs';
 
 const CONFIRM_FIELDS = Object.freeze(new Set(['expectedVersion', 'supplierCode', 'confirmationReference', 'confirmedBy', 'notes']));
 const CANCEL_FIELDS = Object.freeze(new Set(['expectedVersion', 'reason']));
@@ -147,13 +148,24 @@ export function createProductionOrderService({ store, clock = () => new Date().t
         async (tx) => {
           const current = requireEntity(await tx.getProductionOrderByNumber(productionOrderNumber), 'PRODUCTION_ORDER_NOT_FOUND', { productionOrderNumber });
           await authorize(tx, current.brandId, actorId, CAPABILITIES.PRODUCTION_ORDER_MANAGE);
-          return current;
+          return Object.freeze({ current, rfq: await tx.getRfqForUpdate(current.rfqCode) });
         },
-        async (tx, current) => {
+        async (tx, { current, rfq }) => {
           assertProductionOrderVersion(current, expectedVersion);
           const value = cancelProductionOrder(current, { reason: input.reason, cancelledAt: clock() });
           await tx.saveProductionOrder(value, expectedVersion);
           await append(tx, 'production-order.cancelled', value, commandId, actorId);
+          // The order no longer holds its source: the RFQ is released in the same transaction so the
+          // approved-demand line is not left occupied by an allocation nobody will act on.
+          if (rfq?.status === 'allocated') {
+            const released = releaseAllocatedRfq(rfq, { productionOrderNumber: value.productionOrderNumber, reason: value.cancellationReason, releasedAt: value.cancelledAt });
+            await tx.saveRfq(released, rfq.version);
+            await tx.appendOutbox(domainEvent({
+              id: nextId('event'), type: 'rfq.cancelled', aggregateId: released.id, occurredAt: clock(),
+              payload: { rfqCode: released.rfqCode, brandId: released.brandId, sku: released.sku, status: released.status, version: released.version, productionOrderNumber: value.productionOrderNumber, releasedByProductionOrderCancellation: true },
+              metadata: { commandId, actorId },
+            }));
+          }
           return value;
         });
     },

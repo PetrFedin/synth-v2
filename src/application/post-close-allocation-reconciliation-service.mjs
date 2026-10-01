@@ -49,7 +49,7 @@ export function createPostCloseAllocationReconciliationService({
         const costAllocation = requireEntity(await tx.getCostAllocationRunSnapshot(costAllocationRunSnapshotId), 'COST_ALLOCATION_RUN_NOT_FOUND', { costAllocationRunSnapshotId });
         const reconciledAt = clock();
         const result = createPostCloseAllocationReconciliation({
-          reconciliationId: nextId('post-close-allocation-reconciliation'),
+          reconciliationId: nextId('post-close-recon'),
           marginActualizationId: nextId('margin-actualization'),
           order,
           orderCommit,

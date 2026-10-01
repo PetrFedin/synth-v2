@@ -61,6 +61,7 @@
     ['Canonical ProductSku lineage is incomplete; BOM evidence cannot be resolved.', 'Родословная канонических SKU неполна — спецификацию не к чему привязать.'],
     ['BOM is not required for governed READY_GOODS route.', 'На маршруте готовых изделий спецификация не требуется.'],
     ['Every Colorway × SizeScaleVersion requires one published canonical Measurement Chart with a frozen governed unit and coverage of every sellable ProductSizeValue.', 'На каждую пару «цветовой вариант × версия размерной шкалы» нужна одна опубликованная каноническая таблица измерений с замороженной единицей и покрытием всех продаваемых размеров.'],
+    ['Measurement charts exist only for catalog SKUs (legacy screen) and do not count: readiness reads canonical charts per Colorway × SizeScaleVersion.', 'Таблицы введены только по каталожным SKU (старый экран) и не учитываются: готовность читает канонические таблицы на каждую пару «цветовой вариант × версия размерной шкалы».'],
     ['Approved pre-production sample is required for every canonical SKU.', 'На каждый канонический SKU нужен утверждённый предпроизводственный образец.'],
     ['Canonical ProductSku lineage is incomplete; sample evidence cannot be resolved.', 'Родословная канонических SKU неполна — образец не к чему привязать.'],
     ['Sample approval is recommended but not a hard gate for READY_GOODS.', 'Утверждение образца желательно, но на маршруте готовых изделий не обязательно.'],

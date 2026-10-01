@@ -6,7 +6,6 @@ import { PRODUCTION_ACCEPTANCE_REFERENCES } from './production-reference-bootstr
 
 const RUN_ID_PATTERN = /^[A-Za-z0-9_-]{1,80}$/;
 const EXPECTED_BLOCKED_DIMENSIONS = Object.freeze(['category', 'measurements']);
-const EVIDENCE_APPROVED_AT = '2026-08-31T00:00:00.000Z';
 
 export async function assertProductReadinessPersistence(pool, {
   styleId,
@@ -363,10 +362,11 @@ function evidence(runId, dimension, approvedBy) {
   return Object.freeze({
     status: 'ready',
     evidenceId: `acceptance-${runId}-${dimension}`,
-    sourceSystem: 'syntha-live-acceptance',
+    sourceSystem: 'syntha-documents',
     version: runId,
     contentHash: createHash('sha256').update(`acceptance:${runId}:${dimension}`).digest('hex'),
-    approvedAt: EVIDENCE_APPROVED_AT,
+    // Подтверждение должно быть свежим (служба отвергает старше окна свежести), поэтому время берётся сейчас.
+    approvedAt: new Date().toISOString(),
     approvedBy,
   });
 }

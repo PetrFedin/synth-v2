@@ -3,7 +3,6 @@ import { snapshotAcceptanceIsolation, validateAcceptanceOrigin } from './collect
 import { PRODUCTION_ACCEPTANCE_REFERENCES } from './production-reference-bootstrap.mjs';
 
 const RUN_ID_PATTERN = /^[A-Za-z0-9_-]{1,80}$/;
-const EVIDENCE_APPROVED_AT = '2026-08-31T00:00:00.000Z';
 const MAX_COMMAND_ID_LENGTH = 128;
 
 export const READY_PRODUCT_MDM_REFERENCES = Object.freeze({
@@ -516,10 +515,11 @@ function evidence(runId, dimension, approvedBy) {
   return Object.freeze({
     status: 'ready',
     evidenceId: `acceptance-${runId}-${dimension}`,
-    sourceSystem: 'syntha-live-acceptance',
+    sourceSystem: 'syntha-documents',
     version: `${runId}:ready`,
     contentHash: createHash('sha256').update(`acceptance:${runId}:${dimension}`).digest('hex'),
-    approvedAt: EVIDENCE_APPROVED_AT,
+    // Подтверждение должно быть свежим (служба отвергает старше окна свежести), поэтому время берётся сейчас.
+    approvedAt: new Date().toISOString(),
     approvedBy,
   });
 }

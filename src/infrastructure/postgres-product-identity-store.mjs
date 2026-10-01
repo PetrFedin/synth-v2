@@ -81,6 +81,23 @@ function view(client) {
       invariant(result.rowCount === 1, 'PRODUCT_STYLE_CONCURRENCY_CONFLICT', 'Product Style concurrency conflict', { styleId: value.id, expectedVersion });
     },
 
+    // Последняя оценка готовности последней версии модели — ровно то, что рабочее пространство
+    // показывает как статус готовности. Оценка более ранней версии не доказывает готовность текущей.
+    async getLatestReadinessSnapshotForStyle(styleId) {
+      const result = await client.query(
+        `SELECT snapshot.id, snapshot.readiness_status, snapshot.blocked_dimension_count
+           FROM product_readiness_snapshots AS snapshot
+           JOIN product_style_versions AS version ON version.id = snapshot.style_version_id
+          WHERE version.style_id = $1
+            AND version.version_no = (SELECT max(version_no) FROM product_style_versions WHERE style_id = $1)
+          ORDER BY snapshot.assessed_at DESC, snapshot.id DESC
+          LIMIT 1`,
+        [styleId],
+      );
+      const row = result.rows[0];
+      return row ? Object.freeze({ id: row.id, readinessStatus: row.readiness_status, blockedDimensionCount: row.blocked_dimension_count }) : undefined;
+    },
+
     async getLatestStyleVersion(styleId) {
       const result = await client.query('SELECT * FROM product_style_versions WHERE style_id = $1 ORDER BY version_no DESC LIMIT 1', [styleId]);
       return result.rows[0] ? mapStyleVersion(result.rows[0]) : undefined;

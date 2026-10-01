@@ -1,6 +1,6 @@
 import { invariant } from '../core/errors.mjs';
 import { assertBodyContract, assertQueryContract, bodyContract } from './request-contract.mjs';
-import { STYLE_LIFECYCLE, styleLifecycleMap } from '../modules/product-identity/public.mjs';
+import { READINESS_GATED_STYLE_STATUSES, STYLE_LIFECYCLE, styleLifecycleMap } from '../modules/product-identity/public.mjs';
 
 const MDM_REF_FIELDS = ['entryId', 'version'];
 const STYLE_CREATE = required(bodyContract(['brandId', 'styleCode']), ['brandId', 'styleCode']);
@@ -67,6 +67,7 @@ export function createProductIdentityRoutes({ productIdentity } = {}) {
     read('GET', /^\/v2\/product\/lifecycle$/, [], () => Object.freeze({
       statuses: Object.freeze(Object.values(STYLE_LIFECYCLE)),
       transitions: styleLifecycleMap(),
+      readinessGated: READINESS_GATED_STYLE_STATUSES,
     })),
     read('GET', /^\/v2\/product\/styles\/([^/]+)$/, ['versionNo'], ({ actorId, params, query }) => service.getStyleForActor(actorId, params[0], { versionNo: query.versionNo })),
     read('GET', /^\/v2\/product\/size-scales\/([^/]+)$/, ['versionNo'], ({ actorId, params, query }) => service.getSizeScaleForActor(actorId, params[0], { versionNo: query.versionNo })),

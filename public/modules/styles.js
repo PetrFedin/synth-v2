@@ -77,7 +77,7 @@
     if (lifecycle.transitions || lifecycle.loading) return;
     lifecycle.loading = true;
     api('/v2/product/lifecycle')
-      .then((result) => { lifecycle.statuses = result.statuses || []; lifecycle.transitions = result.transitions || {}; })
+      .then((result) => { lifecycle.statuses = result.statuses || []; lifecycle.transitions = result.transitions || {}; lifecycle.readinessGated = result.readinessGated || []; })
       .catch((error) => { lifecycle.error = error?.message || ''; })
       .finally(() => { lifecycle.loading = false; renderApp(); });
   }
@@ -105,8 +105,17 @@
       ))];
     }
     const row = el('div', { className: 'od-lifecycle-actions' });
+    const gated = Array.isArray(lifecycle.readinessGated) ? lifecycle.readinessGated : [];
     next.forEach((status) => {
       const button = el('button', { className: 'button small', type: 'button', rawText: statusLabel(status) });
+      // «Готова к коммерции» и «активна» опираются на оценку готовности: служба откажет, пока
+      // последняя оценка не «готова», так что кнопка заранее говорит, чего не хватает.
+      if (gated.includes(status) && !(product.readinessSnapshotId && product.readinessStatus === 'ready')) {
+        button.disabled = true;
+        button.title = product.readinessSnapshotId
+          ? text('Последняя оценка готовности заблокирована — закройте незакрытые измерения.', 'The latest readiness assessment is blocked — close the open dimensions.')
+          : text('Сначала оцените готовность модели.', 'Assess the style readiness first.');
+      }
       button.addEventListener('click', () => runAction(async () => {
         await mutate(`/v2/product/styles/${encodeURIComponent(product.id)}/transition`, {
           expectedVersion: product.styleHeadVersion,

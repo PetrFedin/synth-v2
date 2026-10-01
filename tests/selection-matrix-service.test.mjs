@@ -73,7 +73,7 @@ function richBuyerCatalog({ collectionId, showroomId, invitationId }) {
     accessGrantId: invitationId, collectionId, brandId: 'brand-1', shopId: 'shop-1', showroomId, currency: 'EUR',
     ...PROJECTION_LINEAGE,
     lines: Object.freeze([Object.freeze({ sku: 'SKU-1', productSkuId: product.productSkuId, styleVersionId: 'style-version-1', colorwayId: 'colorway-1', sizeValueId: 'size-m', catalogVersion: 4, unitPrice: 95, currency: 'EUR', minimumOrderQuantity: 2, availability })]),
-    styles: Object.freeze([Object.freeze({ styleId: 'style-1', styleVersionId: 'style-version-1', colorways: Object.freeze([Object.freeze({ colorwayId: 'colorway-1', skus: Object.freeze([product]) })]) })]),
+    styles: Object.freeze([Object.freeze({ styleId: 'style-1', styleVersionId: 'style-version-1', colorways: Object.freeze([Object.freeze({ colorwayId: 'colorway-1', colorRef: Object.freeze({ entryId: 'mdm-entry:colour-colour:navy', version: 1 }), swatchHex: '#1a2b4c', nameRu: 'Тёмно-синий', nameEn: 'Navy', skus: Object.freeze([product]) })]) })]),
   });
 }
 
@@ -89,6 +89,7 @@ test('rich buyer matrix replacement is one atomic selection version change and p
   assert.deepEqual(updated.lines[0], {
     sku: 'SKU-1', quantity: 3, unitPrice: 95, currency: 'EUR', catalogVersion: 4,
     productSkuId: 'product-sku-1', styleId: 'style-1', styleVersionId: 'style-version-1', colorwayId: 'colorway-1',
+    colourEntryId: 'mdm-entry:colour-colour:navy', colourEntryVersion: 1, swatchHex: '#1a2b4c', colourNameRu: 'Тёмно-синий', colourNameEn: 'Navy',
     sizeValueId: 'size-m', sizeCode: 'M', sizeLabelRu: 'М', sizeLabelEn: 'M', sizeSortOrder: 2, gtin: '4601234567890',
     note: 'core buy', updatedBy: 'buyer-1', updatedAt: now,
   });

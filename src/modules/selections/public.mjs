@@ -156,11 +156,25 @@ function normalizeOptionalLineage(line) {
   const sizeLabelRu = normalizeOptionalLabel(line.sizeLabelRu, line.sizeCode);
   const sizeLabelEn = normalizeOptionalLabel(line.sizeLabelEn, line.sizeCode);
   const gtin = line.gtin === undefined || line.gtin === null || line.gtin === '' ? null : String(line.gtin).trim();
+  // The colour was always on the pinned colourway, but it stopped at the buyer catalog's own
+  // product projection — a selection line never carried it onward. Passthrough, like gtin: no
+  // presence requirement, so an older catalog snapshot without a colour reference still selects.
+  const colourEntryId = optionalString(line.colourEntryId);
+  const colourEntryVersion = line.colourEntryVersion === undefined || line.colourEntryVersion === null || line.colourEntryVersion === ''
+    ? null : assertPostgresInteger(line.colourEntryVersion, { code: 'SELECTION_LINE_COLOUR_VERSION_INVALID', label: 'Selection line colour entry version', min: 1 });
+  const swatchHex = optionalString(line.swatchHex);
+  const colourNameRu = optionalString(line.colourNameRu);
+  const colourNameEn = optionalString(line.colourNameEn);
   return Object.freeze({
     productSkuId: line.productSkuId.trim(),
     styleId: line.styleId.trim(),
     styleVersionId: line.styleVersionId.trim(),
     colorwayId: line.colorwayId.trim(),
+    colourEntryId,
+    colourEntryVersion,
+    swatchHex,
+    colourNameRu,
+    colourNameEn,
     sizeValueId: line.sizeValueId.trim(),
     sizeCode: line.sizeCode.trim(),
     sizeLabelRu,
@@ -168,6 +182,10 @@ function normalizeOptionalLineage(line) {
     sizeSortOrder,
     gtin,
   });
+}
+
+function optionalString(value) {
+  return value === undefined || value === null || value === '' ? null : String(value).trim();
 }
 
 function normalizeOptionalLabel(value, fallback) {

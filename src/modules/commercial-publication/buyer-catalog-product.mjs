@@ -45,6 +45,16 @@ export function buyerCatalogProductSku(catalog, selector = {}) {
     styleId: style.styleId,
     styleVersionId: style.styleVersionId,
     colorwayId: colorway.colorwayId,
+    // The colour was always in the commercial projection (projectColorway() already carries
+    // colorRef/swatchHex/nameRu/nameEn) but never reached this flattened SKU — so a colourway
+    // became an opaque id the moment it left the showroom. Flattened to primitives (not the
+    // {entryId,version} colorRef object) so every downstream copy of this lineage can compare
+    // them with === the same way gtin/sizeCode already do.
+    colourEntryId: colorway.colorRef?.entryId ?? null,
+    colourEntryVersion: colorway.colorRef?.version ?? null,
+    swatchHex: colorway.swatchHex ?? null,
+    colourNameRu: colorway.nameRu ?? null,
+    colourNameEn: colorway.nameEn ?? null,
     sizeValueId: sku.sizeValueId,
     sizeCode: sku.size.code,
     sizeLabelRu: sku.size.labelRu ?? sku.size.code,

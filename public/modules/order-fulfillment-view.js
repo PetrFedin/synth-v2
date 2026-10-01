@@ -15,6 +15,11 @@
     if (status === 'packed') return text('товары упакованы', 'packed');
     return text('не начата', 'not started');
   }
+  function colourLabel(line) {
+    const name = I18N?.getLocale?.() === 'en' ? (line.colourNameEn || line.colourNameRu) : (line.colourNameRu || line.colourNameEn);
+    if (!name && !line.swatchHex) return '';
+    return [name, line.swatchHex].filter(Boolean).join(' · ');
+  }
 
   const CLAIM_RESOLUTIONS = Object.freeze({
     'accepted-for-replacement': ['принята: замена', 'accepted: replacement'],
@@ -42,7 +47,13 @@
   function lineBreakdown(order, view) {
     const byLineNo = new Map();
     (order.lines || []).forEach((line, index) => {
-      byLineNo.set(index + 1, { lineNo: index + 1, sku: line.sku, ordered: Number(line.quantity || 0), shipped: 0, shipmentNumbers: new Set(), received: 0 });
+      byLineNo.set(index + 1, {
+        lineNo: index + 1, sku: line.sku, ordered: Number(line.quantity || 0), shipped: 0, shipmentNumbers: new Set(), received: 0,
+        // The colour reached this line through order-commit's lineage passthrough (same discipline
+        // as gtin) — surfaced here because this breakdown was the one place an order's own lines
+        // were ever listed by SKU at all, and a colourway had been an opaque id past this screen.
+        colourLabel: colourLabel(line),
+      });
     });
     for (const plan of view.plans) {
       for (const shipment of plan.shipments || []) {
@@ -92,7 +103,7 @@
       lines.forEach((entry) => {
         const shipmentList = [...entry.shipmentNumbers].join(', ');
         rows.push(row(
-          `${entry.lineNo}. ${entry.sku}`,
+          `${entry.lineNo}. ${entry.sku}${entry.colourLabel ? ` — ${entry.colourLabel}` : ''}`,
           text(
             `заказано ${entry.ordered} · отгружено ${entry.shipped}${shipmentList ? ` (${shipmentList})` : ''} · принято ${entry.received}`,
             `ordered ${entry.ordered} · shipped ${entry.shipped}${shipmentList ? ` (${shipmentList})` : ''} · received ${entry.received}`,

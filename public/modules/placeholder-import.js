@@ -415,10 +415,12 @@
   }
 
   // Published for the planning screen, which owns the line-plan tab this belongs to.
+  // The contract is fetched when the dialog opens, never at script load: this file runs before
+  // sign-in, so a load-time fetch always hit the protected route without a token and logged a 401
+  // on every page view.
   global.SynthaPlaceholderImport.open = () => { void ensureContract().then(openDialog); };
   global.SynthaPlaceholderImport.canImport = () => {
     const caps = window.SynthaUiCapabilities;
     return Boolean(caps?.hasAny(state.workspace, caps.CAPABILITIES.CAMPAIGN_MANAGE, 'brand'));
   };
-  queueMicrotask(() => { void ensureContract(); });
 })(window);

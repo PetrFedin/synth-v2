@@ -143,3 +143,11 @@ test('the template the screen offers is one the import accepts', async () => {
     }
   }
 });
+
+test('the import template is fetched when the dialog opens, never at script load before sign-in', async () => {
+  const source = await readFile(new URL('../public/modules/placeholder-import.js', import.meta.url), 'utf8');
+  // The script loads before authentication; a load-time fetch always hit the protected route with
+  // no token and logged a 401 on every page view.
+  assert.doesNotMatch(source, /queueMicrotask\(.*ensureContract/);
+  assert.match(source, /SynthaPlaceholderImport\.open = \(\) => \{ void ensureContract\(\)\.then\(openDialog\); \}/);
+});

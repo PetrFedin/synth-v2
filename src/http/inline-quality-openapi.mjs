@@ -75,7 +75,7 @@ function schemas() {
       defects: { type: 'array', maxItems: 100, items: { type: 'object', additionalProperties: false, required: ['defectCode', 'quantity'], properties: {
         defectCode: { type: 'string', pattern: DEFECT_CODE }, quantity: quantity(), notes: text(2, 500),
       } } },
-      notes: text(2, 2000),
+      notes: text(2, 2000), operationId: { type: 'string', pattern: SAFE_ID },
     } },
     InlineQualityDispositionInput: { type: 'object', additionalProperties: false, required: ['expectedVersion', 'disposition'], properties: {
       expectedVersion: version(), disposition: { type: 'string', enum: DISPOSITIONS }, notes: text(2, 2000),

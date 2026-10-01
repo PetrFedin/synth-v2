@@ -71,7 +71,7 @@
       }
       const colourCode = String(values.colourCode ?? '').trim();
       if (colourCode) body.colourCode = colourCode;
-      return mutate('/v2/material-lots', body);
+      return mutateLots('/v2/material-lots', body);
     });
   }
 
@@ -148,7 +148,7 @@
       // Потолок — остаток партии плюс то, что уже стоит за этим исполнением: переписывая свою же
       // запись, человек вправе назвать любое число вплоть до всей партии.
       const already = issuedTo(lot, values.executionCode);
-      return mutate(`/v2/material-lots/${encodeURIComponent(lot.id)}/issue`, {
+      return mutateLots(`/v2/material-lots/${encodeURIComponent(lot.id)}/issue`, {
         expectedVersion: lot.version,
         executionCode: values.executionCode,
         quantity: validation.number(values.quantity, label, { min: 0.0001, max: ceiling + already }),
@@ -171,7 +171,7 @@
       };
       const certificate = String(values.certificateReference ?? '').trim();
       if (certificate) body.certificateReference = certificate;
-      return mutate(`/v2/material-lots/${encodeURIComponent(lot.id)}/${verdict}`, body);
+      return mutateLots(`/v2/material-lots/${encodeURIComponent(lot.id)}/${verdict}`, body);
     });
   }
 
@@ -210,6 +210,16 @@
       actions.push(note(text('Партия отклонена — это конечное состояние.', 'The lot is rejected — a final state.')));
     }
     return actions;
+  }
+
+  // Every lot mutation drops the cached lot table and the cached executions, or the next action
+  // would be written against a version the screen no longer matches.
+  async function mutateLots(path, body) {
+    const result = await mutate(path, body);
+    global.SynthaMaterialLotsInvalidate?.();
+    reset();
+    if (typeof renderApp === 'function') renderApp();
+    return result;
   }
 
   function reset() {

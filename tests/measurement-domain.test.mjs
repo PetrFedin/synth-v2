@@ -97,6 +97,16 @@ test('QC-checked defaults to false, round-trips true, and rejects a non-boolean 
   assert.throws(() => create({ ...completeInput, points: [{ ...completeInput.points[0], qcChecked: 'yes' }] }), { code: 'MEASUREMENT_QC_CHECKED_INVALID' });
 });
 
+test('the schema image link is absent by default, round-trips a URI, and rejects an unsafe value', () => {
+  const defaulted = create();
+  assert.equal(defaulted.schemaImageUri, null);
+  const withSchema = create({ ...completeInput, schemaImageUri: 'https://cdn.syntha.local/schemas/style-100.png' });
+  assert.equal(withSchema.schemaImageUri, 'https://cdn.syntha.local/schemas/style-100.png');
+  const cleared = updateDraftMeasurementChart(withSchema, { catalogSku: sku, input: { ...completeInput, sku: withSchema.sku, schemaImageUri: null }, updatedAt: '2026-08-04T09:00:00.000Z' });
+  assert.equal(cleared.schemaImageUri, null);
+  assert.throws(() => create({ ...completeInput, schemaImageUri: 'x'.repeat(2049) }), { code: 'MEASUREMENT_SCHEMA_IMAGE_URI_INVALID' });
+});
+
 test('rejects duplicates, unknown sizes, client-derived fields and unsafe precision', () => {
   assert.throws(() => create({ ...completeInput, sizes: [{ code: 'M', label: 'Medium' }, { code: 'M', label: 'Duplicate' }] }), { code: 'MEASUREMENT_SIZE_CODE_DUPLICATE' });
   assert.throws(() => create({ ...completeInput, points: [{ ...completeInput.points[0], measurements: [{ sizeCode: 'XL', value: 58 }] }] }), { code: 'MEASUREMENT_VALUE_SIZE_UNKNOWN' });

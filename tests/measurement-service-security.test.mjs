@@ -8,7 +8,7 @@ function input(overrides = {}) {
     sku: 'STYLE-001', unit: 'cm', baseSizeCode: 'M',
     sizes: [{ code: 'S', label: 'Small' }, { code: 'M', label: 'Medium' }, { code: 'L', label: 'Large' }],
     points: [{ pointCode: 'CHEST', name: 'Half chest', description: null, toleranceMinus: 0.5, tolerancePlus: 0.5, measurements: [{ sizeCode: 'S', value: 48 }, { sizeCode: 'M', value: 51 }, { sizeCode: 'L', value: 54 }] }],
-    notes: null, ...overrides,
+    notes: null, schemaImageUri: null, ...overrides,
   };
 }
 function store(role = 'owner') {

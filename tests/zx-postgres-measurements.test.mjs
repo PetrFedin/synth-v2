@@ -23,7 +23,7 @@ function chartInput(sku, overrides = {}) {
     points: [
       { pointCode: 'CHEST', name: 'Half chest', description: 'Two centimetres below armhole', toleranceMinus: 0.5, tolerancePlus: 0.75, measurements: [{ sizeCode: 'S', value: 48.5 }, { sizeCode: 'M', value: 51.5 }, { sizeCode: 'L', value: 54.5 }] },
       { pointCode: 'BODY-LEN', name: 'Body length', description: null, toleranceMinus: 0.3, tolerancePlus: 0.3, measurements: [{ sizeCode: 'S', value: 69.1 }, { sizeCode: 'M', value: 70.2 }, { sizeCode: 'L', value: 71.3 }] },
-    ], notes: 'Initial measuring method', ...overrides,
+    ], notes: 'Initial measuring method', schemaImageUri: null, ...overrides,
   };
 }
 function editable(value) { const copy = structuredClone(value); delete copy.sku; return copy; }
@@ -77,7 +77,7 @@ test('PostgreSQL Measurement Charts preserve matrix integrity, RBAC, revisions, 
     });
     const publishedSku = await catalog.publishSku('sku-publish', 'product-owner', skuDraft.sku, { expectedVersion: revisedSku.version });
     await assert.rejects(() => measurements.publishMeasurementChart('measurement-stale-publish', 'product-owner', created.sku, { expectedVersion: created.version }), { code: 'MEASUREMENT_SKU_SNAPSHOT_STALE' });
-    const updateInput = chartInput(created.sku, { notes: 'Rebased after SKU publication', points: [{ ...initial.points[0], qcChecked: true, measurements: [{ sizeCode: 'S', value: 49 }, { sizeCode: 'M', value: 52.25 }, { sizeCode: 'L', value: 55.5 }] }, initial.points[1]] });
+    const updateInput = chartInput(created.sku, { notes: 'Rebased after SKU publication', schemaImageUri: 'https://cdn.syntha.local/schemas/meas-pg-1.png', points: [{ ...initial.points[0], qcChecked: true, measurements: [{ sizeCode: 'S', value: 49 }, { sizeCode: 'M', value: 52.25 }, { sizeCode: 'L', value: 55.5 }] }, initial.points[1]] });
     const updated = await measurements.updateMeasurementChart('measurement-update', 'product-owner', created.sku, { expectedVersion: created.version, ...editable(updateInput) });
     assert.equal(updated.skuVersion, publishedSku.version);
     assert.equal(updated.version, 2);
@@ -86,8 +86,12 @@ test('PostgreSQL Measurement Charts preserve matrix integrity, RBAC, revisions, 
     // point attribute, so persistence through a real update is the thing worth proving here.
     assert.equal(updated.points[0].qcChecked, true);
     assert.equal(updated.points[1].qcChecked, false);
+    // Same story for the measurement schema diagram link: no dedicated column, just another field
+    // in the same jsonb payload, so a real update through PostgreSQL is what actually proves it.
+    assert.equal(updated.schemaImageUri, 'https://cdn.syntha.local/schemas/meas-pg-1.png');
     const persisted = await pool.query('SELECT payload FROM measurement_charts WHERE sku = $1', [created.sku]);
     assert.equal(persisted.rows[0].payload.points.find((p) => p.pointCode === 'CHEST').qcChecked, true);
+    assert.equal(persisted.rows[0].payload.schemaImageUri, 'https://cdn.syntha.local/schemas/meas-pg-1.png');
     await assert.rejects(() => measurements.updateMeasurementChart('measurement-stale-update', 'product-owner', created.sku, { expectedVersion: created.version, ...editable(updateInput) }), { code: 'MEASUREMENT_CONCURRENCY_CONFLICT' });
 
     assert.equal((await measurements.getForActor('sales-user', created.sku)).sku, created.sku);

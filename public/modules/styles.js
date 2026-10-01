@@ -687,15 +687,21 @@
         // отправляет mediaType: 'image'.
         field(text('Роль', 'Role'), select('mediaRole', [['hero', text('Основное фото', 'Hero shot')], ['gallery', text('Галерея', 'Gallery')], ['detail', text('Деталь', 'Detail')], ['swatch', text('Образец цвета', 'Swatch')], ['technical', text('Технический эскиз', 'Technical sketch')], ['design_sketch', text('Дизайнерский эскиз', 'Design sketch')], ['tech_pack_thumbnail', text('Эскиз Tech Pack', 'Tech pack thumbnail')], ['pattern', text('Лекало', 'Pattern')], ['die_line', text('Контур детали', 'Die line')]])),
         field(text('Порядок', 'Order'), input('sortOrder', 'number', { required: true, min: '1', max: '999', value: String(mediaCountFor(item) + 1) })),
+        // Название вида попадает только в печатный техпак (раздел «Изделие и поставщик»,
+        // docs/backlog-not-yet-integrated.md, раздел J) — для фото оно просто ни на что не влияет,
+        // поэтому поле необязательно и не привязано к конкретной роли.
+        field(text('Название вида (для техпака)', 'View label (for the tech pack)'), input('viewLabel', 'text', { maxlength: '160', placeholder: text('например, «Внешний вид рубашки»', 'e.g. "Front view"') })),
       ],
       submitLabel: text('Добавить', 'Add'),
       onSubmit: async (values) => {
+        const viewLabel = values.viewLabel.trim();
         await mutate(`/v2/product/style-versions/${encodeURIComponent(product.styleVersionId)}/media`, {
           ...(values.colorwayId ? { colorwayId: values.colorwayId } : {}),
           mediaType: 'image',
           mediaRole: values.mediaRole,
           uri: values.uri.trim(),
           sortOrder: Number(values.sortOrder),
+          ...(viewLabel ? { payload: { viewLabel } } : {}),
         });
         toast(text('Изображение добавлено.', 'The image is added.'), 'success');
       },

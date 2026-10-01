@@ -244,6 +244,32 @@
     ) });
   }
 
+  const SKETCH_ROLE_LABELS = Object.freeze({
+    design_sketch: ['Дизайнерский эскиз', 'Design sketch'],
+    technical: ['Технический эскиз', 'Technical sketch'],
+    tech_pack_thumbnail: ['Эскиз Tech Pack', 'Tech pack thumbnail'],
+  });
+  // Именованные виды эскизов (docs/backlog-not-yet-integrated.md, раздел J): подпись берётся из
+  // `viewLabel`, который человек вводит при добавлении изображения («Внешний вид рубашки»), а если
+  // его не ввели — название самой роли эскиза, чтобы подпись не была пустой.
+  function sketchesBlock(doc) {
+    const sketches = doc.sketches || [];
+    if (!sketches.length) {
+      return h('p', { className: 'tp-doc-note', text: text(
+        'К этому артикулу не прикреплено ни одного эскиза.',
+        'No sketches are attached to this article.',
+      ) });
+    }
+    return h('div', { className: 'tp-doc-sketches' }, sketches.map((sketch) => {
+      const roleLabel = SKETCH_ROLE_LABELS[sketch.mediaRole];
+      const caption = sketch.viewLabel || (roleLabel ? bilingual(roleLabel[0], roleLabel[1]) : sketch.mediaRole);
+      return h('figure', { className: 'tp-doc-sketch' }, [
+        h('img', { src: sketch.uri, alt: caption, loading: 'lazy' }),
+        h('figcaption', { text: caption }),
+      ]);
+    }));
+  }
+
   // The materials section, and what it says when it has nothing. A document carries a bill only once
   // that bill is published — an unpublished one is still being argued about, and a factory must not
   // build from it — but an empty table under a heading says none of that.
@@ -310,6 +336,7 @@
         ),
         documentSection('tp-contents', '\u041e\u0433\u043b\u0430\u0432\u043b\u0435\u043d\u0438\u0435', 'Table of contents',
           h('ol', { className: 'tp-doc-contents' }, contents.map(([, ru, enTitle]) => h('li', { text: bilingual(ru, enTitle) })))),
+        documentSection('tp-sketch', '\u0418\u0437\u0434\u0435\u043b\u0438\u0435 \u0438 \u043f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a', 'Product and supplier', sketchesBlock(doc)),
         documentSection('tp-materials', '\u0421\u043f\u0435\u0446\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u044f \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u043e\u0432', 'Bill of materials', materialsBlock(doc, money)),
         documentSection('tp-measurements', '\u0422\u0430\u0431\u043b\u0438\u0446\u0430 \u043c\u0435\u0440', 'Measurement chart', measurementBlock(doc)),
         documentSection('tp-construction', '\u041a\u043e\u043d\u0441\u0442\u0440\u0443\u043a\u0446\u0438\u044f, \u043a\u0430\u0447\u0435\u0441\u0442\u0432\u043e \u0438 \u0443\u043f\u0430\u043a\u043e\u0432\u043a\u0430', 'Construction, quality and packing',

@@ -74,3 +74,25 @@ test('Tech Pack migration enforces an approved pre-production sample from the sa
   assert.match(migration, /sample_record\.supplier_code IS DISTINCT FROM NEW\.supplier_code/);
   assert.match(migration, /tech_packs_approved_pps_supplier_match/);
 });
+
+// docs/backlog-not-yet-integrated.md, раздел J: «именованные виды эскизов» — the table of contents
+// promised a 'tp-sketch' section since the very first version of the document (migration 090), but
+// nothing ever rendered it: no documentSection call for it, and the whole file had zero <img>
+// elements. These checks pin that the section is wired on both ends — the read model (a new,
+// additive migration, since applied migrations are never edited) and the printed document.
+test('the printed tech pack finally renders the sketches its own table of contents has promised since the start', async () => {
+  const workspace = await source('public/modules/tech-packs.js');
+  assert.match(workspace, /documentSection\('tp-sketch'/);
+  assert.match(workspace, /function sketchesBlock\(doc\)/);
+  for (const fragment of ['tp-doc-sketches', 'tp-doc-sketch', 'doc.sketches', 'viewLabel']) assert.ok(workspace.includes(fragment), fragment);
+
+  const migration = await source('db/migrations/151_tech_pack_document_sketches.sql');
+  assert.match(migration, /CREATE OR REPLACE VIEW tech_pack_document_workspace/);
+  assert.match(migration, /product_catalog_sku_links/);
+  assert.match(migration, /media\.media_role IN \('design_sketch', 'technical', 'tech_pack_thumbnail'\)/);
+  assert.match(migration, /'sketches', COALESCE\(sketches\.rows, '\[\]'::jsonb\)/);
+
+  const styles = await source('public/modules/styles.js');
+  assert.match(styles, /viewLabel/);
+  assert.match(styles, /payload: \{ viewLabel \}/);
+});

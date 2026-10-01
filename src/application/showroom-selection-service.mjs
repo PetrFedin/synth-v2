@@ -8,7 +8,7 @@ import { assertBuyerCatalogQuantity, buyerCatalogLine, buyerCatalogProductSku, i
 import { assertActiveRelationship } from '../modules/counterparty-relationships/public.mjs';
 import { createBuyerCommercialSnapshot } from '../modules/retail-doors/public.mjs';
 import { assertAcceptedShowroomAccess } from '../modules/showroom-invitations/public.mjs';
-import { createShowroom, openShowroom } from '../modules/showrooms/public.mjs';
+import { closeShowroom, createShowroom, openShowroom } from '../modules/showrooms/public.mjs';
 import { createShowroomLook, updateShowroomLook as updateShowroomLookDomain } from '../modules/showroom-looks/public.mjs';
 import {
   approveSelection as approveSelectionDomain,
@@ -269,6 +269,32 @@ export function createShowroomSelectionService({
           const updated = openShowroom(current, collection, clock());
           await tx.saveShowroom(updated, current.version);
           await append(tx, 'showroom.opened', showroomId, { version: updated.version }, commandId, actorId);
+          return updated;
+        },
+      );
+    },
+
+    // Закрытие показа (O-04): `closeShowroom` был в домене, а вызвать его было нечем — ни службы, ни
+    // маршрута, ни кнопки, и открытый показ оставался открытым навсегда. Закрытый показ не принимает
+    // новых подборок, приглашений и каталогов, а заказ, уже собранный в нём, прикрепить нельзя
+    // (ORDER_COMMIT_SHOWROOM_NOT_OPEN) — такой заказ отменяется явно.
+    closeShowroom(commandId, actorId, showroomId, input) {
+      const { expectedVersion } = input ?? {};
+      return execute(
+        commandId,
+        `closeShowroom:${actorId}:${showroomId}:${expectedVersion ?? ''}`,
+        actorId,
+        async (tx) => {
+          const current = requireEntity(await tx.getShowroom(showroomId), 'SHOWROOM_NOT_FOUND', { showroomId });
+          await assertOrganisationActor(tx, current.brandId, actorId, CAPABILITIES.SHOWROOM_MANAGE);
+          return current;
+        },
+        async (tx, current) => {
+          invariant(Number.isInteger(expectedVersion) && expectedVersion >= 1, 'SHOWROOM_EXPECTED_VERSION_INVALID', 'Showroom expectedVersion must be a positive integer', { expectedVersion });
+          invariant(current.version === expectedVersion, 'SHOWROOM_CONCURRENCY_CONFLICT', 'Showroom was changed by another operation', { id: current.id, expectedVersion, actualVersion: current.version });
+          const updated = closeShowroom(current, clock());
+          await tx.saveShowroom(updated, current.version);
+          await append(tx, 'showroom.closed', showroomId, { version: updated.version }, commandId, actorId);
           return updated;
         },
       );

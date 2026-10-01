@@ -10,15 +10,17 @@ import {
   reviseOrderTerms,
   acceptOrderTerms,
   attachReadyOrder,
-  cancelAttachedOrder,
+  cancelOrder as cancelOrderDomain,
 } from '../modules/orders/public.mjs';
 import {
   proposeOrderAmendment as proposeOrderAmendmentDomain,
   respondToOrderAmendment as respondToOrderAmendmentDomain,
+  applyAcceptedOrderAmendment,
 } from '../modules/order-amendments/public.mjs';
+import { assertShowroomWindowNotElapsed } from '../modules/showrooms/public.mjs';
 import { assertBuyerCommercialSnapshot } from '../modules/retail-doors/public.mjs';
 import { assertAcceptedShowroomAccess } from '../modules/showroom-invitations/public.mjs';
-import { advanceCommercialCycle, attachOrder, cancelCommercialCycleOrder } from '../modules/commercial-cycle/public.mjs';
+import { advanceCommercialCycle, amendCommercialCycleOrder, attachOrder, cancelCommercialCycleOrder } from '../modules/commercial-cycle/public.mjs';
 
 const INVENTORY_ERROR_CODES = new Set([
   'CATALOG_SKU_NOT_FOUND',
@@ -41,6 +43,11 @@ const INVENTORY_ERROR_CODES = new Set([
   'ORDER_RESERVATION_COMMIT_NOT_FOUND',
   'ORDER_RESERVATION_COMMIT_PRODUCT_SKU_MISMATCH',
   'PRODUCT_SKU_RELEASE_EXCEEDS_RESERVED',
+  'ORDER_AMENDMENT_ORDER_NOT_ATTACHED',
+  'ORDER_AMENDMENT_EXECUTION_STARTED',
+  'ORDER_AMENDMENT_LINE_NOT_FOUND',
+  'ORDER_AMENDMENT_DOOR_ALLOCATION_CONFLICT',
+  'ORDER_AMENDMENT_STALE',
 ]);
 
 export function createOrderBuilderService({
@@ -67,6 +74,17 @@ export function createOrderBuilderService({
       await tx.insertCommand(Object.freeze({ id: commandId, fingerprint, actorId, result, completedAt: clock() }));
       return result;
     });
+  }
+
+  // Закреплённый заказ несёт минимальную партию в снимке каталога байера: правка не вправе увести
+  // строку ниже неё — иначе принятая правка обошла бы то, что проверялось при прикреплении.
+  async function assertAmendedQuantityMeetsMoq(order, line, quantity) {
+    if (!hasPinnedCommercialBasis(order)) return;
+    invariant(trustedCommercialReader, 'COMMERCIAL_PUBLICATION_READER_REQUIRED', 'Commercial publication reader is required to amend a commercially pinned order');
+    const buyerCatalog = requireEntity(await trustedCommercialReader.getBuyerCatalogVersion(order.buyerCatalogVersionId), 'BUYER_CATALOG_NOT_FOUND', { buyerCatalogVersionId: order.buyerCatalogVersionId });
+    const catalogLine = buyerCatalog.lines?.find((candidate) => candidate.sku === line.sku);
+    invariant(catalogLine, 'ORDER_AMENDMENT_SKU_NOT_IN_CATALOG', 'Amended SKU is missing from the pinned buyer catalog', { sku: line.sku });
+    invariant(quantity >= catalogLine.minimumOrderQuantity, 'ORDER_AMENDMENT_MOQ_NOT_MET', 'Amended quantity is below the buyer catalog minimum order quantity', { sku: line.sku, quantity, minimumOrderQuantity: catalogLine.minimumOrderQuantity });
   }
 
   async function append(tx, type, aggregateId, payload, commandId, actorId) {
@@ -197,6 +215,13 @@ export function createOrderBuilderService({
           const cycle = requireEntity(await tx.getCycle(current.cycleId), 'CYCLE_NOT_FOUND', { cycleId: current.cycleId });
           authorizeOrderMutation(await tx.listMembershipsForTrade(cycle.brandId, cycle.shopId), actorId, cycle);
           const selection = requireEntity(await tx.getSelection(current.selectionId), 'SELECTION_NOT_FOUND', { selectionId: current.selectionId });
+          // Окно показа и его закрытие гасят и заказ без закреплённого каталога: «Закрыть» у шоурума
+          // обещает, что в нём больше ничего не фиксируется, а не только для коммерческих заказов.
+          const commitShowroom = await tx.getShowroom(selection.showroomId);
+          if (commitShowroom) {
+            invariant(commitShowroom.status === 'open', 'ORDER_COMMIT_SHOWROOM_NOT_OPEN', 'An order can be committed only while its showroom is open', { showroomId: commitShowroom.id, status: commitShowroom.status });
+            assertShowroomWindowNotElapsed(commitShowroom, clock());
+          }
           let buyerCatalog = null;
           if (hasPinnedCommercialBasis(current)) {
             invariant(current.commercialPublicationId && current.priceListVersionId && current.buyerCatalogVersionId && current.commercialBasisHash && current.accessGrantId, 'ORDER_COMMERCIAL_BASIS_INCOMPLETE', 'Commercial order lineage is incomplete');
@@ -268,26 +293,29 @@ export function createOrderBuilderService({
           return Object.freeze({ current, cycle });
         },
         async (tx, { current, cycle }) => {
-          const cancelled = cancelAttachedOrder(current, reason, clock(), expectedVersion);
-          const cancelledCycle = cancelCommercialCycleOrder(cycle, cancelled, clock());
-          await tx.saveCycle(cancelledCycle, cycle.version);
+          const wasAttached = current.status === 'attached';
+          const cancelled = cancelOrderDomain(current, reason, clock(), expectedVersion);
+          // Встроенная в цикл копия заказа и стадия «order» есть только у прикреплённого заказа;
+          // черновик и «готов» цикл не держит, и менять в нём нечего.
+          const cancelledCycle = wasAttached ? cancelCommercialCycleOrder(cycle, cancelled, clock()) : cycle;
+          if (wasAttached) await tx.saveCycle(cancelledCycle, cycle.version);
           await tx.saveOrder(cancelled, current.version);
           await append(tx, 'order.cancelled', orderId, {
             cycleId: cycle.id,
             reason: cancelled.cancellationReason,
+            previousStatus: current.status,
             expectedVersion: current.version,
             version: cancelled.version,
-            releasedLines: cancelled.lines.map((line) => ({ sku: line.sku, quantity: line.quantity })),
+            releasedLines: wasAttached ? cancelled.lines.map((line) => ({ sku: line.sku, quantity: line.quantity })) : [],
           }, commandId, actorId);
           return Object.freeze({ order: cancelled, cycle: cancelledCycle });
         },
       ).catch(translateInventoryError);
     },
 
-    // Предложение изменить количество строки уже подтверждённого заказа. Не переписывает саму
-    // строку — orderCommitSnapshot и резервирования склада построены вокруг зафиксированных
-    // количеств, и сдвигать их вслед за принятой правкой значило бы завести вторую, несогласованную
-    // причину изменения того, что уже зафиксировано. Применение принятой правки — отдельный шаг.
+    // Предложение изменить количество строки уже подтверждённого заказа. Само предложение строку
+    // не переписывает: количество меняется, только когда другая сторона принимает правку
+    // (respondToAmendment). orderCommitSnapshot при этом не трогается — он «как подтверждено».
     proposeAmendment(commandId, actorId, { orderId, lineNo, proposedQuantity, reason }) {
       return execute(
         commandId,
@@ -302,6 +330,7 @@ export function createOrderBuilderService({
           invariant(line, 'ORDER_AMENDMENT_LINE_NOT_FOUND', 'Order does not have that line', { orderId, lineNo, lineCount: order.lines.length });
           const existingOpen = await tx.getOpenOrderAmendmentForLine(orderId, lineNo);
           invariant(!existingOpen, 'ORDER_AMENDMENT_ALREADY_OPEN', 'This line already has a proposal awaiting a response', { orderId, lineNo });
+          if (Number.isInteger(proposedQuantity) && proposedQuantity >= 1) await assertAmendedQuantityMeetsMoq(order, line, proposedQuantity);
           return Object.freeze({ order, line, proposedOrganisationId: membership.organisationId });
         },
         async (tx, { order, line, proposedOrganisationId }) => {
@@ -318,6 +347,9 @@ export function createOrderBuilderService({
       );
     },
 
+    // Ответ другой стороны. Принятие правки применяет её: количество строки, итог заказа, встроенная
+    // в цикл копия заказа и резерв склада (триггер БД) меняются в той же транзакции, что и сам ответ,
+    // — частично применённой правки быть не может. Отклонение заказ не трогает.
     respondToAmendment(commandId, actorId, { orderId, amendmentId, decision, responseReason }) {
       return execute(
         commandId,
@@ -329,19 +361,35 @@ export function createOrderBuilderService({
           const order = requireEntity(await tx.getOrder(orderId), 'ORDER_NOT_FOUND', { orderId });
           const cycle = requireEntity(await tx.getCycle(order.cycleId), 'CYCLE_NOT_FOUND', { cycleId: order.cycleId });
           const membership = authorizeOrderMutation(await tx.listMembershipsForTrade(cycle.brandId, cycle.shopId), actorId, cycle);
-          return Object.freeze({ amendment, responderOrganisationId: membership.organisationId });
+          if (decision === 'accepted' && amendment.status === 'proposed') {
+            invariant(order.status === 'attached', 'ORDER_AMENDMENT_NOT_ATTACHED', 'Only an attached order can be amended', { status: order.status });
+            await assertAmendedQuantityMeetsMoq(order, order.lines[amendment.lineNo - 1] ?? {}, amendment.proposedQuantity);
+          }
+          return Object.freeze({ amendment, order, cycle, responderOrganisationId: membership.organisationId });
         },
-        async (tx, { amendment, responderOrganisationId }) => {
+        async (tx, { amendment, order, cycle, responderOrganisationId }) => {
           const updated = respondToOrderAmendmentDomain(amendment, {
             decision, responderOrganisationId, responderActorId: actorId, responseReason, respondedAt: clock(),
           });
+          let amendedOrder = null;
+          if (updated.status === 'accepted') {
+            amendedOrder = applyAcceptedOrderAmendment(order, updated, clock());
+            await tx.saveOrder(amendedOrder, order.version);
+            if (cycle.order?.id === order.id) await tx.saveCycle(amendCommercialCycleOrder(cycle, amendedOrder, clock()), cycle.version);
+          }
+          // Строка ответа обновляется последней: триггер БД двигает резерв склада уже по новому
+          // состоянию заказа и отвергает правку, если исполнение началось или запаса не хватает.
           await tx.respondToOrderAmendmentRow(updated);
           await append(tx, decision === 'accepted' ? 'order.amendment-accepted' : 'order.amendment-rejected', orderId, {
             amendmentId: updated.id, lineNo: updated.lineNo, responseReason: updated.responseReason,
+            ...(amendedOrder ? {
+              currentQuantity: updated.currentQuantity, proposedQuantity: updated.proposedQuantity, deltaAmount: updated.deltaAmount,
+              totalAmount: amendedOrder.totalAmount, orderVersion: amendedOrder.version,
+            } : {}),
           }, commandId, actorId);
           return updated;
         },
-      );
+      ).catch(translateInventoryError);
     },
 
     async getAmendmentsForActor(actorId, orderId) {
@@ -410,6 +458,11 @@ function inventoryMessage(code) {
     ORDER_RESERVATION_COMMIT_NOT_FOUND: 'Inventory reservation references a missing order commit snapshot',
     ORDER_RESERVATION_COMMIT_PRODUCT_SKU_MISMATCH: 'Inventory reservation does not match the ProductSku frozen in the order commit snapshot',
     PRODUCT_SKU_RELEASE_EXCEEDS_RESERVED: 'Inventory release exceeds the active ProductSku reserved quantity',
+    ORDER_AMENDMENT_ORDER_NOT_ATTACHED: 'Only an attached order can be amended',
+    ORDER_AMENDMENT_EXECUTION_STARTED: 'The order is already in execution (supply commitment or fulfillment plan); its quantities can no longer be amended',
+    ORDER_AMENDMENT_LINE_NOT_FOUND: 'Order does not have that line',
+    ORDER_AMENDMENT_DOOR_ALLOCATION_CONFLICT: 'Proposed quantity is below the quantity already allocated to retail doors',
+    ORDER_AMENDMENT_STALE: 'The order line changed since this amendment was proposed',
   })[code] ?? 'Inventory mutation failed';
 }
 function defaultIdGenerator() { let sequence = 0; return (prefix) => `${prefix}_${++sequence}`; }

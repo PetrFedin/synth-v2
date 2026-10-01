@@ -210,8 +210,37 @@ export const wholesaleV2OpenApi = Object.freeze({
       },
       OrderCancel: {
         type: 'object', required: ['reason', 'expectedVersion'], additionalProperties: false,
+        description: 'Cancels a draft, ready or attached order. An attached order releases its inventory reservation; a confirmed deal (cycle past the order stage) cannot be cancelled.',
         properties: {
           orderId: identifier,
+          reason: { type: 'string', minLength: 3, maxLength: 1000 },
+          expectedVersion: { type: 'integer', minimum: 1, maximum: postgresIntegerMaximum },
+        },
+      },
+      OrderAmendmentPropose: {
+        type: 'object', required: ['lineNo', 'proposedQuantity', 'reason'], additionalProperties: false,
+        properties: {
+          lineNo: { type: 'integer', minimum: 1, maximum: postgresIntegerMaximum },
+          proposedQuantity: { type: 'integer', minimum: 1, maximum: postgresIntegerMaximum },
+          reason: { type: 'string', minLength: 1, maxLength: 1000 },
+        },
+      },
+      OrderAmendmentRespond: {
+        type: 'object', required: ['decision'], additionalProperties: false,
+        description: 'Accepting applies the amendment: the order line quantity, order total, cycle order copy and inventory reservation change atomically. The order commit snapshot stays as committed. Rejected after execution started.',
+        properties: {
+          decision: { type: 'string', enum: ['accepted', 'rejected'] },
+          responseReason: { type: 'string', minLength: 1, maxLength: 1000 },
+        },
+      },
+      ShowroomClose: {
+        type: 'object', required: ['expectedVersion'], additionalProperties: false,
+        properties: { expectedVersion: { type: 'integer', minimum: 1, maximum: postgresIntegerMaximum } },
+      },
+      CycleClose: {
+        type: 'object', required: ['reason', 'expectedVersion'], additionalProperties: false,
+        description: 'Abandons a commercial cycle that never reached a deal. Draft and ready orders are cancelled with it; an attached order must be cancelled first; a confirmed cycle cannot be closed.',
+        properties: {
           reason: { type: 'string', minLength: 3, maxLength: 1000 },
           expectedVersion: { type: 'integer', minimum: 1, maximum: postgresIntegerMaximum },
         },
@@ -352,6 +381,7 @@ export const wholesaleV2OpenApi = Object.freeze({
     '/catalog/skus/{sku}/publish': { post: operation('publishCatalogSku', ['sku'], '#/components/schemas/CatalogSkuVersionExpectation') },
     '/showrooms': { post: operation('createShowroom', [], '#/components/schemas/ShowroomCreate') },
     '/showrooms/{showroomId}/open': { post: operation('openShowroom', ['showroomId']) },
+    '/showrooms/{showroomId}/close': { post: operation('closeShowroom', ['showroomId'], '#/components/schemas/ShowroomClose') },
     '/relationships': { post: operation('requestRelationship', [], '#/components/schemas/RelationshipCreate') },
     '/relationships/{relationshipId}/accept': { post: operation('acceptRelationship', ['relationshipId']) },
     '/relationships/{relationshipId}/reject': { post: operation('rejectRelationship', ['relationshipId']) },
@@ -362,6 +392,7 @@ export const wholesaleV2OpenApi = Object.freeze({
     '/invitations/{invitationId}/revoke': { post: operation('revokeShowroomInvitation', ['invitationId']) },
     '/cycles': { post: operation('startCycle', [], '#/components/schemas/CycleCreate') },
     '/cycles/{cycleId}/advance': { post: operation('advanceCycle', ['cycleId'], '#/components/schemas/CycleAdvance') },
+    '/cycles/{cycleId}/close': { post: operation('closeCycle', ['cycleId'], '#/components/schemas/CycleClose') },
     '/cycles/{cycleId}/confirm': { post: operation('confirmAndOpenDeal', ['cycleId']) },
     '/selections': { post: operation('createSelection', [], '#/components/schemas/SelectionCreate') },
     '/selections/{selectionId}/lines/{sku}': { put: operation('upsertSelectionLine', ['selectionId', 'sku'], '#/components/schemas/SelectionLineInput') },
@@ -371,6 +402,11 @@ export const wholesaleV2OpenApi = Object.freeze({
     '/orders/{orderId}/accept': { post: operation('acceptOrderTerms', ['orderId'], '#/components/schemas/OrderAccept') },
     '/orders/{orderId}/attach': { post: operation('attachOrderToCycle', ['orderId'], '#/components/schemas/OrderVersionExpectation') },
     '/orders/{orderId}/cancel': { post: operation('cancelOrder', ['orderId'], '#/components/schemas/OrderCancel') },
+    '/orders/{orderId}/amendments': {
+      post: operation('proposeOrderAmendment', ['orderId'], '#/components/schemas/OrderAmendmentPropose'),
+      get: readOperation('listOrderAmendments', { 200: 'Order amendments', 401: 'Authentication required', 403: 'Logistics read capability required', 404: 'Order not found' }),
+    },
+    '/orders/{orderId}/amendments/{amendmentId}/respond': { post: operation('respondToOrderAmendment', ['orderId', 'amendmentId'], '#/components/schemas/OrderAmendmentRespond') },
     '/workspace': {
       get: {
         ...readOperation('loadWorkspace', { 200: 'Bounded actor workspace', 400: 'Invalid workspace limit', 401: 'Authentication required' }),

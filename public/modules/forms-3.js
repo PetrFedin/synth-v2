@@ -160,3 +160,14 @@ function orderCancellationForm(order) {
     reason: validation.requiredText(values.reason, '\u041f\u0440\u0438\u0447\u0438\u043d\u0430 \u043e\u0442\u043c\u0435\u043d\u044b', { minLength: 3, maxLength: 1000 }),
   }));
 }
+
+// Закрытие брошенного цикла (O-10): причина обязательна, версия — та, что на экране. Черновик заказа
+// закрывается вместе с циклом, прикреплённый заказ сервер не даст закрыть молча.
+function cycleCloseForm(cycle) {
+  const validation = window.SynthaUiValidation;
+  openForm(I18N.t('form.closeCycle'), [textDef('reason', I18N.t('form.closeCycleReason'), '', 1000, true, 3)], values => mutate(`/v2/cycles/${encodeURIComponent(cycle.id)}/close`, {
+    expectedVersion: cycle.version,
+    reason: validation.requiredText(values.reason, '\u041f\u0440\u0438\u0447\u0438\u043d\u0430 \u0437\u0430\u043a\u0440\u044b\u0442\u0438\u044f', { minLength: 3, maxLength: 1000 }),
+  }));
+}
+window.cycleCloseForm = cycleCloseForm;

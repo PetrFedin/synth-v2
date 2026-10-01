@@ -157,6 +157,35 @@ test('PostgreSQL uses one ProductSku reservation counter for rich V2 and linked 
     }]);
     await assertBalance(pool, productSkuId, 5, 3);
 
+    // O-03: an accepted order amendment moves the reservation of the rich V2 order. The commit
+    // snapshot stays at 3 (as committed); the identity trigger accepts a reservation that differs
+    // from it only when an accepted amendment says so.
+    await assert.rejects(
+      () => pool.query('UPDATE order_inventory_reservations SET quantity = 4 WHERE order_id = $1 AND sku = $2', [first.orderId, sku]),
+      (error) => error?.message?.includes('ORDER_RESERVATION_COMMIT_PRODUCT_SKU_MISMATCH'),
+    );
+    const amend = async (suffix, current, proposed) => {
+      await pool.query(
+        `INSERT INTO order_amendments
+           (id, order_id, line_no, current_quantity, proposed_quantity, delta_amount, currency, reason, status,
+            proposed_organisation_id, proposed_by, proposed_at, payload)
+         VALUES ($1, $2, 1, $3, $4, $5, 'EUR', 'test', 'proposed', $6, 'buyer', $7, '{}'::jsonb)`,
+        [`amendment-${suffix}`, first.orderId, current, proposed, (proposed - current) * 100, shopId, now],
+      );
+      return () => pool.query("UPDATE order_amendments SET status = 'accepted' WHERE id = $1", [`amendment-${suffix}`]);
+    };
+    await (await amend('up', 3, 5))();
+    await assertBalance(pool, productSkuId, 5, 5);
+    assert.equal((await pool.query('SELECT quantity FROM order_inventory_reservations WHERE order_id = $1', [first.orderId])).rows[0].quantity, 5);
+    const tooMany = await amend('too-many', 5, 6);
+    await assert.rejects(() => tooMany(), (error) => error?.message?.includes('PRODUCT_SKU_AVAILABILITY_EXCEEDED'));
+    await assertBalance(pool, productSkuId, 5, 5);
+    assert.equal((await pool.query("SELECT status FROM order_amendments WHERE id = 'amendment-too-many'")).rows[0].status, 'proposed');
+    await pool.query("UPDATE order_amendments SET status = 'rejected' WHERE id = 'amendment-too-many'");
+    await (await amend('down', 5, 3))();
+    await assertBalance(pool, productSkuId, 5, 3);
+    assert.equal((await pool.query('SELECT quantity FROM order_inventory_reservations WHERE order_id = $1', [first.orderId])).rows[0].quantity, 3);
+
     const oversell = await insertOrder(pool, {
       suffix: 'canonical-oversell', brandId, shopId, campaignId, collectionId, showroomId,
       line: richLine(3), commit: true, styleVersionId,

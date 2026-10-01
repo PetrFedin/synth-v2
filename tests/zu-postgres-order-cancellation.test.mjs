@@ -125,7 +125,7 @@ test('PostgreSQL cancellation releases reservation atomically and blocks DealSpa
     assert.equal((await pool.query("SELECT reserved_quantity FROM catalog_skus WHERE sku = 'SKU-CANCEL'")).rows[0].reserved_quantity, 0);
     await assert.rejects(
       () => service.cancelOrder('cancel-again', 'buyer-cancel', { orderId: order.id, reason: 'Second cancellation', expectedVersion: cancelled.order.version }),
-      (error) => error?.code === 'ORDER_NOT_ATTACHED',
+      (error) => error?.code === 'ORDER_NOT_CANCELLABLE',
     );
     await assert.rejects(
       () => createWholesalePlatform({ store }).confirmAndOpenDeal('confirm-cancelled', 'buyer-cancel', cycle.id),

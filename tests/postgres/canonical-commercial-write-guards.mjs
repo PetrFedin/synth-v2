@@ -71,6 +71,38 @@ export async function assertCanonicalCommercialWriteGuards({ pool, baseUrl, bran
 
   assert.equal(JSON.stringify(await readSnapshots(pool, result)), originalJson, 'negative bypass probes must not rewrite immutable source snapshots');
   assert.deepEqual(await commercialCounts(pool, references.brand.id), before);
+
+  // O-05: the buyer price can be rolled back. Publishing a different price and then rolling back to
+  // the first catalogue version must mint NEW immutable rows (through the same canonical DB guards)
+  // with the earlier content, and must not touch any earlier row.
+  const second = await post(baseUrl, route, brandToken, { ...exactBody, priceOverrides: [{ productSkuId, wholesalePriceMinor: 12000 }] }, `o05-second-${randomUUID()}`);
+  assert.equal(second.status, 200, JSON.stringify(second.body));
+  assert.equal(second.body.data.buyerCatalogVersion.lines[0].wholesalePriceMinor, 12000);
+  const rollbackRoute = `/v2/buyer-catalog-versions/${encodeURIComponent(result.buyerCatalogVersion.id)}/rollback`;
+  const stale = await post(baseUrl, rollbackRoute, brandToken, { expectedLatestBuyerCatalogVersionId: result.buyerCatalogVersion.id }, `o05-stale-${randomUUID()}`);
+  assert.equal(stale.status, 409, JSON.stringify(stale.body));
+  assert.equal(stale.body.error.code, 'BUYER_CATALOG_ROLLBACK_STALE');
+  const rollbackKey = `o05-rollback-${randomUUID()}`;
+  const rolledBack = await post(baseUrl, rollbackRoute, brandToken, { expectedLatestBuyerCatalogVersionId: second.body.data.buyerCatalogVersion.id }, rollbackKey);
+  assert.equal(rolledBack.status, 200, JSON.stringify(rolledBack.body));
+  const restored = rolledBack.body.data.buyerCatalogVersion;
+  assert.equal(restored.lines[0].wholesalePriceMinor, 10000);
+  assert.equal(restored.restoredFromBuyerCatalogVersionId, result.buyerCatalogVersion.id);
+  assert.equal(restored.supersedesBuyerCatalogVersionId, second.body.data.buyerCatalogVersion.id);
+  const replayed = await post(baseUrl, rollbackRoute, brandToken, { expectedLatestBuyerCatalogVersionId: second.body.data.buyerCatalogVersion.id }, rollbackKey);
+  assert.equal(replayed.body.data.buyerCatalogVersion.id, restored.id, 'replaying the command must not mint a duplicate version');
+  const shopForbidden = await post(baseUrl, rollbackRoute, shopToken, { expectedLatestBuyerCatalogVersionId: restored.id }, `o05-forbidden-${randomUUID()}`);
+  assert.equal(shopForbidden.status, 403);
+  const counts = await commercialCounts(pool, references.brand.id);
+  assert.equal(counts.prices, before.prices + 2);
+  assert.equal(counts.catalogs, before.catalogs + 2);
+  assert.equal(JSON.stringify(await readSnapshots(pool, result)), originalJson, 'a rollback must not rewrite the version it restores');
+  const latest = await fetch(`${baseUrl}/v2/showrooms/${encodeURIComponent(result.showroom.id)}/buyer-catalog?shopId=${encodeURIComponent(references.shop.id)}`, { headers: { Authorization: `Bearer ${brandToken}` }, signal: AbortSignal.timeout(15_000) });
+  assert.equal((await latest.json()).data.id, restored.id, 'the restored version is the one the buyer sees');
+  const history = await fetch(`${baseUrl}/v2/showrooms/${encodeURIComponent(result.showroom.id)}/buyer-catalog-versions?shopId=${encodeURIComponent(references.shop.id)}`, { headers: { Authorization: `Bearer ${brandToken}` }, signal: AbortSignal.timeout(15_000) });
+  const historyBody = await history.json();
+  assert.equal(history.status, 200, JSON.stringify(historyBody));
+  assert.deepEqual(historyBody.data.items.slice(0, 3).map((item) => item.id), [restored.id, second.body.data.buyerCatalogVersion.id, result.buyerCatalogVersion.id]);
 }
 
 async function assertPriceBypassRejected(pool, sourcePrice, mutation, expectedError) {

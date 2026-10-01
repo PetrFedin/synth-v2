@@ -5,9 +5,11 @@ import { decodeCommercialPublicationCursor, encodeCommercialPublicationCursor } 
 import { CAPABILITIES, assertCapability, roleHasCapability } from '../modules/access-control/public.mjs';
 import { assertAcceptedShowroomAccess } from '../modules/showroom-invitations/public.mjs';
 import {
+  buyerCatalogContentEquals,
   createBuyerCatalogVersion,
   createPriceListVersion,
   createProjectionBackedCommercialPublication,
+  restorePriceListVersion,
 } from '../modules/commercial-publication/public.mjs';
 
 export function createCommercialPublicationService({
@@ -144,6 +146,74 @@ export function createCommercialPublicationService({
         await append(tx, 'price-list-version.published', priceListVersion.id, { publicationId, brandId: publication.brandId, shopId: input.shopId, contentHash: priceListVersion.contentHash }, commandId, actorId);
         await append(tx, 'buyer-catalog-version.published', buyerCatalogVersion.id, { publicationId, priceListVersionId: priceListVersion.id, showroomId: input.showroomId, shopId: input.shopId, accessGrantId: context.invitation.id, contentHash: buyerCatalogVersion.contentHash }, commandId, actorId);
         return Object.freeze({ priceListVersion, buyerCatalogVersion });
+      });
+    },
+
+    // Откат цены байера (O-05): выпускает новую версию каталога с содержимым прежней. Ничего не
+    // удаляет и не правит — версии неизменяемы, на старую уже могли встать подборка и заказ. Ключ
+    // `expectedLatestBuyerCatalogVersionId` — аналог expectedVersion: бренд откатывает то, что видел
+    // последним, а не то, что успели опубликовать за это время.
+    async rollbackBuyerCatalog(commandId, actorId, buyerCatalogVersionId, input) {
+      invariant(input && typeof input === 'object' && !Array.isArray(input), 'BUYER_CATALOG_ROLLBACK_INVALID', 'Buyer catalog rollback request is invalid');
+      invariant(Object.keys(input).every((key) => key === 'expectedLatestBuyerCatalogVersionId'), 'BUYER_CATALOG_ROLLBACK_FIELD_UNKNOWN', 'Buyer catalog rollback contains unsupported fields');
+      invariant(typeof input.expectedLatestBuyerCatalogVersionId === 'string' && input.expectedLatestBuyerCatalogVersionId.length > 0, 'BUYER_CATALOG_ROLLBACK_EXPECTED_LATEST_REQUIRED', 'expectedLatestBuyerCatalogVersionId is required');
+      const fingerprint = `rollbackBuyerCatalog:${actorId}:${buyerCatalogVersionId}:${input.expectedLatestBuyerCatalogVersionId}`;
+      const target = requireEntity(await commercialStore.getBuyerCatalogVersion(buyerCatalogVersionId), 'BUYER_CATALOG_NOT_FOUND', { buyerCatalogVersionId });
+      const publication = requireEntity(await commercialStore.getCommercialPublication(target.publicationId), 'COMMERCIAL_PUBLICATION_NOT_FOUND', { publicationId: target.publicationId });
+      const context = await buyerCatalogContext(actorId, publication, target.showroomId, target.shopId);
+      return execute(commandId, fingerprint, actorId, async (tx) => {
+        const latest = requireEntity(
+          await (typeof tx.getLatestBuyerCatalogForAccess === 'function' ? tx.getLatestBuyerCatalogForAccess(target.showroomId, target.shopId) : commercialStore.getBuyerCatalogForAccess(target.showroomId, target.shopId)),
+          'BUYER_CATALOG_NOT_FOUND',
+          { showroomId: target.showroomId, shopId: target.shopId },
+        );
+        invariant(latest.id === input.expectedLatestBuyerCatalogVersionId, 'BUYER_CATALOG_ROLLBACK_STALE', 'A newer buyer catalog was published since you looked; reload before rolling back', { expectedLatestBuyerCatalogVersionId: input.expectedLatestBuyerCatalogVersionId, latestBuyerCatalogVersionId: latest.id });
+        invariant(latest.id !== target.id, 'BUYER_CATALOG_ROLLBACK_TARGET_CURRENT', 'This is already the current buyer catalog', { buyerCatalogVersionId: target.id });
+        invariant(!buyerCatalogContentEquals(latest, target), 'BUYER_CATALOG_ROLLBACK_NO_CHANGE', 'The current buyer catalog already has this content', { buyerCatalogVersionId: target.id, latestBuyerCatalogVersionId: latest.id });
+        const publishedAt = clock();
+        const priceListVersion = restorePriceListVersion({ id: nextId('price-list-version'), publication, source: target, supersedes: latest, publishedAt });
+        const buyerCatalogVersion = createBuyerCatalogVersion({
+          id: nextId('buyer-catalog-version'),
+          publication,
+          priceListVersion,
+          showroom: context.showroom,
+          invitation: context.invitation,
+          publishedAt,
+          rollback: { restoredFromBuyerCatalogVersionId: target.id, supersedesBuyerCatalogVersionId: latest.id },
+        });
+        await tx.insertPriceListVersion(priceListVersion);
+        await tx.insertBuyerCatalogVersion(buyerCatalogVersion);
+        await append(tx, 'price-list-version.restored', priceListVersion.id, { publicationId: publication.id, brandId: publication.brandId, shopId: target.shopId, restoredFromBuyerCatalogVersionId: target.id, contentHash: priceListVersion.contentHash }, commandId, actorId);
+        await append(tx, 'buyer-catalog-version.rolled-back', buyerCatalogVersion.id, { publicationId: publication.id, priceListVersionId: priceListVersion.id, showroomId: target.showroomId, shopId: target.shopId, restoredFromBuyerCatalogVersionId: target.id, supersedesBuyerCatalogVersionId: latest.id, contentHash: buyerCatalogVersion.contentHash }, commandId, actorId);
+        return Object.freeze({ priceListVersion, buyerCatalogVersion });
+      });
+    },
+
+    // История версий каталога байера для одного доступа, новые сверху: чтобы откатить цену, нужно
+    // видеть, к чему откатывать. Версии отдаются сводкой (без строк) — это список выбора, а не
+    // содержимое; читает бренд, который эти версии выпускает.
+    async listBuyerCatalogVersionsForAccessForActor(actorId, showroomId, shopId, { limit = 50 } = {}) {
+      invariant(Number.isInteger(limit) && limit > 0 && limit <= 200, 'BUYER_CATALOG_LIMIT_INVALID', 'Buyer catalog history limit must be between 1 and 200', { limit });
+      invariant(typeof commercialStore.listBuyerCatalogVersionsForAccess === 'function', 'BUYER_CATALOG_HISTORY_QUERY_REQUIRED', 'Buyer catalog history query store is required');
+      const showroom = await wholesaleStore.transaction(async (tx) => {
+        const found = requireEntity(await tx.getShowroom(showroomId), 'SHOWROOM_NOT_FOUND', { showroomId });
+        assertCapability(await tx.getMembership(found.brandId, actorId), CAPABILITIES.DEAL_READ);
+        return found;
+      });
+      const versions = await commercialStore.listBuyerCatalogVersionsForAccess(showroomId, shopId, { limit });
+      return Object.freeze({
+        showroomId: showroom.id,
+        shopId,
+        items: Object.freeze(versions.map((version) => Object.freeze({
+          id: version.id,
+          publicationId: version.publicationId,
+          priceListVersionId: version.priceListVersionId,
+          lineCount: version.lines.length,
+          contentHash: version.contentHash,
+          publishedAt: version.publishedAt,
+          restoredFromBuyerCatalogVersionId: version.restoredFromBuyerCatalogVersionId ?? null,
+          supersedesBuyerCatalogVersionId: version.supersedesBuyerCatalogVersionId ?? null,
+        }))),
       });
     },
 

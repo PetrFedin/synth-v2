@@ -1,9 +1,11 @@
 import { invariant } from '../../core/errors.mjs';
+import { calculateMoneyTotal } from '../../core/money.mjs';
 
-// Предложение изменить количество строки уже подтверждённого заказа — и ответ на него. Не
-// перезаписывает строку заказа: заказ, его `orderCommitSnapshot` и резервирования склада построены
-// вокруг зафиксированных количеств, и это не тот слой, где их можно сдвигать тихо. Применение
-// принятой правки к самому заказу — отдельный, следующий шаг.
+// Предложение изменить количество строки уже подтверждённого заказа — и ответ на него. Само
+// предложение и ответ строку не трогают; принятая правка применяется отдельным шагом
+// (`applyAcceptedOrderAmendment`) — в той же транзакции, что и ответ, и вместе со сдвигом резерва
+// склада (триггер БД, миграция 157). `orderCommitSnapshot` остаётся «как подтверждено» и не меняется:
+// действующее количество — в строках заказа, история — в списке `appliedAmendmentIds`.
 
 const MAX_INTEGER = 2_147_483_647;
 const REASON_MAX_LENGTH = 1000;
@@ -58,6 +60,38 @@ export function respondToOrderAmendment(amendment, { decision, responderOrganisa
     respondedOrganisationId: responderOrganisationId,
     respondedBy: responderActorId,
     respondedAt: timestamp(respondedAt, 'ORDER_AMENDMENT_RESPONDED_AT_INVALID'),
+  });
+}
+
+// Принятая правка меняет количество строки и итог заказа. Заказ после этого — новая версия того же
+// заказа, а не новый заказ: идентификатор, снимок подтверждения и стороны те же.
+export function applyAcceptedOrderAmendment(order, amendment, appliedAt) {
+  invariant(amendment?.status === 'accepted', 'ORDER_AMENDMENT_NOT_ACCEPTED', 'Only an accepted amendment can be applied', { status: amendment?.status });
+  invariant(order?.status === 'attached', 'ORDER_AMENDMENT_NOT_ATTACHED', 'Only an attached order can be amended', { status: order?.status });
+  invariant(amendment.orderId === order.id, 'ORDER_AMENDMENT_ORDER_MISMATCH', 'Amendment does not belong to this order');
+  const line = order.lines[amendment.lineNo - 1];
+  invariant(line, 'ORDER_AMENDMENT_LINE_NOT_FOUND', 'Order does not have that line', { orderId: order.id, lineNo: amendment.lineNo });
+  invariant(line.quantity === amendment.currentQuantity, 'ORDER_AMENDMENT_STALE', 'The order line changed since this amendment was proposed', {
+    orderId: order.id, lineNo: amendment.lineNo, lineQuantity: line.quantity, amendmentCurrentQuantity: amendment.currentQuantity,
+  });
+  const lines = Object.freeze(order.lines.map((candidate, index) => (
+    index === amendment.lineNo - 1 ? Object.freeze({ ...candidate, quantity: amendment.proposedQuantity }) : candidate
+  )));
+  const totalAmount = calculateMoneyTotal(lines, {
+    priceInvalidCode: 'ORDER_LINE_PRICE_INVALID',
+    priceScaleCode: 'ORDER_LINE_PRICE_SCALE_INVALID',
+    priceOverflowCode: 'ORDER_LINE_PRICE_TOO_LARGE',
+    quantityCode: 'ORDER_LINE_QUANTITY_INVALID',
+    totalCode: 'ORDER_TOTAL_INVALID',
+    totalOverflowCode: 'ORDER_TOTAL_TOO_LARGE',
+  });
+  return Object.freeze({
+    ...order,
+    lines,
+    totalAmount,
+    appliedAmendmentIds: Object.freeze([...(order.appliedAmendmentIds ?? []), amendment.id]),
+    version: order.version + 1,
+    updatedAt: timestamp(appliedAt, 'ORDER_AMENDMENT_APPLIED_AT_INVALID'),
   });
 }
 

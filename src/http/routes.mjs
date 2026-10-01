@@ -78,6 +78,8 @@ const ORDER_TERMS_UPDATE_BODY = bodyContract(['expectedVersion', 'terms'], { ter
 const ORDER_ACCEPT_BODY = bodyContract(['orderId', 'organisationId', 'expectedVersion']);
 const ORDER_VERSION_BODY = bodyContract(['expectedVersion']);
 const ORDER_CANCEL_BODY = bodyContract(['orderId', 'reason', 'expectedVersion']);
+const SHOWROOM_CLOSE_BODY = bodyContract(['expectedVersion']);
+const CYCLE_CLOSE_BODY = bodyContract(['reason', 'expectedVersion']);
 const ORDER_AMENDMENT_PROPOSE_BODY = bodyContract(['lineNo', 'proposedQuantity', 'reason']);
 const ORDER_AMENDMENT_RESPOND_BODY = bodyContract(['decision', 'responseReason']);
 
@@ -134,6 +136,7 @@ export function createWholesaleRoutes({ platform, catalog, materials, boms, meas
     mutate('POST', /^\/v2\/measurements\/([^/]+)\/publish$/, MEASUREMENT_PUBLISH_BODY, ({ commandId, actorId, params, body }) => measurementService.publishMeasurementChart(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/showrooms$/, SHOWROOM_BODY, ({ commandId, actorId, body }) => collaboration.createShowroom(commandId, actorId, body)),
     mutate('POST', /^\/v2\/showrooms\/([^/]+)\/open$/, EMPTY_BODY, ({ commandId, actorId, params }) => collaboration.openShowroom(commandId, actorId, params[0])),
+    mutate('POST', /^\/v2\/showrooms\/([^/]+)\/close$/, SHOWROOM_CLOSE_BODY, ({ commandId, actorId, params, body }) => collaboration.closeShowroom(commandId, actorId, params[0], { expectedVersion: body.expectedVersion })),
     read('GET', /^\/v2\/showrooms\/([^/]+)\/looks$/, [], ({ actorId, params }) => collaboration.listShowroomLooks(actorId, decodePathParameter(params[0]))),
     mutate('POST', /^\/v2\/showrooms\/([^/]+)\/looks$/, LOOK_CREATE_BODY, ({ commandId, actorId, params, body }) => collaboration.addShowroomLook(commandId, actorId, decodePathParameter(params[0]), body)),
     mutate('PATCH', /^\/v2\/showroom-looks\/([^/]+)$/, LOOK_UPDATE_BODY, ({ commandId, actorId, params, body }) => collaboration.updateShowroomLook(commandId, actorId, decodePathParameter(params[0]), body)),
@@ -154,6 +157,7 @@ export function createWholesaleRoutes({ platform, catalog, materials, boms, meas
       sameId(body.cycleId, params[0], 'cycleId');
       return platform.advanceCycle(commandId, actorId, params[0], body.targetStage);
     }),
+    mutate('POST', /^\/v2\/cycles\/([^/]+)\/close$/, CYCLE_CLOSE_BODY, ({ commandId, actorId, params, body }) => platform.closeCycle(commandId, actorId, params[0], { reason: body.reason, expectedVersion: body.expectedVersion })),
     mutate('POST', /^\/v2\/cycles\/([^/]+)\/confirm$/, EMPTY_BODY, ({ commandId, actorId, params }) => platform.confirmAndOpenDeal(commandId, actorId, params[0])),
     mutate('POST', /^\/v2\/selections$/, SELECTION_BODY, ({ commandId, actorId, body }) => collaboration.createSelection(commandId, actorId, body)),
     mutate('PUT', /^\/v2\/selections\/([^/]+)\/lines\/([^/]+)$/, SELECTION_LINE_BODY, ({ commandId, actorId, params, body }) => {

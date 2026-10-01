@@ -1,6 +1,7 @@
 import { invariant } from '../../core/errors.mjs';
 import { parseIsoDateTime } from '../../core/validation.mjs';
 import { assertActiveRelationship } from '../counterparty-relationships/public.mjs';
+import { assertShowroomWindowNotElapsed } from '../showrooms/public.mjs';
 
 export function showroomInvitationKey(showroomId, shopId) {
   return `${showroomId}:${shopId}`;
@@ -11,6 +12,7 @@ export function createShowroomInvitation({ id, showroom, shopId, relationship, e
   invariant(showroom.status === 'open', 'SHOWROOM_NOT_OPEN', 'Only an open showroom can be shared');
   assertActiveRelationship(relationship, { brandId: showroom.brandId, shopId });
   const created = parseIsoDateTime(createdAt, { code: 'SHOWROOM_INVITATION_TIMESTAMP_INVALID', label: 'Invitation creation time' });
+  assertShowroomWindowNotElapsed(showroom, created.value);
   const expiry = parseIsoDateTime(expiresAt, { code: 'SHOWROOM_INVITATION_EXPIRY_INVALID', label: 'Invitation expiry' });
   invariant(expiry.timestamp > created.timestamp, 'SHOWROOM_INVITATION_EXPIRY_INVALID', 'Invitation expiry must be in the future');
   return Object.freeze({

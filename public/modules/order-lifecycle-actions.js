@@ -41,7 +41,9 @@
       ));
     }
 
-    if (item.status === 'attached' && canWrite) {
+    // Отмена нужна и черновику, и «готов»: у них раньше не было выхода (O-02) — заказ оставался в цикле
+    // навсегда, а второй заказ в том же цикле создать нельзя.
+    if (['draft', 'ready', 'attached'].includes(item.status) && canWrite) {
       actions.push(actionButton(localized('Отменить заказ', 'Cancel order'), () => orderCancellationForm(item), 'danger'));
     }
 
@@ -118,6 +120,14 @@
         () => mutate(`/v2/cycles/${encodeURIComponent(item.id)}/confirm`, {}),
         'primary',
       ));
+    }
+
+    // Выход из цикла, который не дошёл до сделки (O-10). Прикреплённый заказ сначала отменяется
+    // явно — это снимает резервы склада, — поэтому кнопки у такого цикла нет; сделку (подтверждение
+    // и дальше) закрыть нельзя вовсе.
+    const closable = index >= 0 && index < STAGES.indexOf('confirmation') && item.order?.status !== 'attached';
+    if (canAdvance && closable && typeof window.cycleCloseForm === 'function') {
+      actions.push(actionButton(localized('Закрыть цикл', 'Close cycle'), () => window.cycleCloseForm(item), 'danger'));
     }
     return actions;
   }

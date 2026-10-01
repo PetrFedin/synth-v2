@@ -84,6 +84,57 @@
     });
   }
 
+  function versionLabel(version) {
+    const parts = [formatDate(version.publishedAt), `${version.lineCount} SKU`];
+    if (version.restoredFromBuyerCatalogVersionId) parts.push(text('откат', 'rollback'));
+    return parts.join(' · ');
+  }
+
+  // Откат цены байера (O-05): версии неизменяемы, поэтому откат выпускает новую версию с содержимым
+  // выбранной прежней. История читается сервером по каждому принятому доступу заранее — выпадающий
+  // список синхронный; «действующая» версия (первая в истории) откатом не выбирается, но её
+  // идентификатор уходит как ожидаемая последняя: если бренд успел выпустить новую, сервер откажет.
+  async function rollbackForm(showroom) {
+    const histories = new Map();
+    for (const invitation of acceptedAccess(showroom)) {
+      const history = await api(`/v2/showrooms/${encodeURIComponent(showroom.id)}/buyer-catalog-versions?shopId=${encodeURIComponent(invitation.shopId)}`);
+      if ((history.items || []).length > 1) histories.set(invitation.shopId, history.items);
+    }
+    const shops = acceptedAccess(showroom).filter(invitation => histories.has(invitation.shopId)).map(invitation => ({ id: invitation.shopId, name: orgName(invitation.shopId) }));
+    if (!shops.length) {
+      toast(text('Откатывать нечего: у каталога нет прежних версий.', 'Nothing to roll back to: the catalogue has no earlier versions.'), 'error');
+      return;
+    }
+    openForm(text('Откатить цены каталога', 'Roll back catalogue prices'), [
+      selectDef('shopId', text('Магазин', 'Shop'), shops),
+      {
+        name: 'buyerCatalogVersionId',
+        label: text('Версия, к которой вернуться', 'Version to return to'),
+        kind: 'select',
+        options: [],
+        required: true,
+        dependsOn: 'shopId',
+        optionsFor: shopId => (histories.get(shopId) || []).slice(1),
+        format: versionLabel,
+        emptyMessage: text('У этого каталога нет прежних версий.', 'This catalogue has no earlier versions.'),
+      },
+    ], async values => {
+      const latest = histories.get(values.shopId)[0];
+      const restored = await mutate(`/v2/buyer-catalog-versions/${encodeURIComponent(values.buyerCatalogVersionId)}/rollback`, {
+        expectedLatestBuyerCatalogVersionId: latest.id,
+      });
+      forget(showroom.id, values.shopId);
+      return restored;
+    });
+  }
+
+  function rollbackAction(showroom) {
+    const caps = global.SynthaUiCapabilities;
+    if (!caps.hasForOrganisation(state.workspace, showroom.brandId, caps.CAPABILITIES.SHOWROOM_MANAGE)) return null;
+    if (showroom.status !== 'open' || !acceptedAccess(showroom).length) return null;
+    return actionButton(text('Откатить цены каталога', 'Roll back catalogue prices'), () => rollbackForm(showroom));
+  }
+
   function acceptedAccess(showroom) {
     return (state.workspace.invitations || []).filter(item => item.showroomId === showroom.id && item.status === 'accepted');
   }
@@ -166,6 +217,6 @@
   }
 
   global.SynthaCommercialPublication = Object.freeze({
-    publicationForm, buyerCatalogForm, collectionAction, accessAction, catalogCell, forget, reset,
+    publicationForm, buyerCatalogForm, rollbackForm, rollbackAction, collectionAction, accessAction, catalogCell, forget, reset,
   });
 })(window);

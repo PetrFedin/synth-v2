@@ -20,7 +20,8 @@ import {
   referenceField,
 } from '../modules/assortment-planning/import.mjs';
 import { createCollection, createCollectionStyleVersionAssignment, publishCollection } from '../modules/collections/public.mjs';
-import { advanceCommercialCycle, attachOrder, createCommercialCycle } from '../modules/commercial-cycle/public.mjs';
+import { advanceCommercialCycle, attachOrder, closeCommercialCycle, createCommercialCycle } from '../modules/commercial-cycle/public.mjs';
+import { cancelOrder } from '../modules/orders/public.mjs';
 import { openDealSpace } from '../modules/deal-space/public.mjs';
 import { createCalendarMilestone } from '../modules/calendar/public.mjs';
 
@@ -560,6 +561,56 @@ export function createWholesalePlatform({
           await tx.saveCycle(updated, current.version);
           await append(tx, 'commercial-cycle.advanced', cycleId, { from: current.stage, to: targetStage, version: updated.version }, commandId, actorId);
           return updated;
+        },
+      );
+    },
+
+    // Выход из цикла, который так и не дошёл до сделки (O-10): раньше он висел на своей стадии вечно
+    // и считался «открытым». Не отменяет прикреплённый заказ молча — резервы склада снимает только
+    // явная отмена заказа, и закрытие просит сделать её сначала. Черновик заказа и «готов» резервов
+    // не держат, поэтому закрываются вместе с циклом: иначе они остались бы висеть без цикла.
+    closeCycle(commandId, actorId, cycleId, input) {
+      const { reason, expectedVersion } = input ?? {};
+      return execute(
+        commandId,
+        `closeCycle:${actorId}:${cycleId}:${canonicalJson(reason ?? null)}:${expectedVersion ?? ''}`,
+        actorId,
+        async (tx) => {
+          const current = requireEntity(await tx.getCycle(cycleId), 'CYCLE_NOT_FOUND', { cycleId });
+          await authorizeTrade(tx, actorId, current, CAPABILITIES.COMMERCIAL_CYCLE_ADVANCE);
+          const order = await tx.getOrderByCycle(cycleId);
+          return Object.freeze({ current, order });
+        },
+        async (tx, { current, order }) => {
+          invariant(
+            Number.isInteger(expectedVersion) && expectedVersion >= 1,
+            'CYCLE_EXPECTED_VERSION_INVALID',
+            'Cycle expectedVersion must be a positive integer',
+            { expectedVersion },
+          );
+          invariant(current.version === expectedVersion, 'CYCLE_CONCURRENCY_CONFLICT', 'Commercial cycle was changed by another operation', { id: current.id, expectedVersion, actualVersion: current.version });
+          // Закрыть можно только цикл без прикреплённого заказа: сначала доменное правило цикла,
+          // чтобы отказ звучал как отказ закрытия, а не отмены.
+          const closed = closeCommercialCycle(
+            order?.status === 'attached' ? { ...current, order } : current,
+            { reason, closedBy: actorId, closedAt: clock() },
+          );
+          let cancelledOrder = null;
+          if (order && (order.status === 'draft' || order.status === 'ready')) {
+            cancelledOrder = cancelOrder(order, `Cycle closed: ${closed.closeReason}`.slice(0, 1000), clock(), order.version);
+            await tx.saveOrder(cancelledOrder, order.version);
+          }
+          await tx.saveCycle(closed, current.version);
+          if (cancelledOrder) {
+            await append(tx, 'order.cancelled', order.id, {
+              cycleId, reason: cancelledOrder.cancellationReason, previousStatus: order.status,
+              expectedVersion: order.version, version: cancelledOrder.version, releasedLines: [],
+            }, commandId, actorId);
+          }
+          await append(tx, 'commercial-cycle.closed', cycleId, {
+            from: current.stage, reason: closed.closeReason, version: closed.version, cancelledOrderId: cancelledOrder?.id ?? null,
+          }, commandId, actorId);
+          return closed;
         },
       );
     },

@@ -42,7 +42,7 @@ async function fixture() {
   await platform.publishCollection('collection-publish', 'sales-1', collection.id);
   const showroom = await collaboration.createShowroom('showroom-create', 'sales-1', {
     collectionId: collection.id, brandId: 'brand-1', name: 'Paris',
-    opensAt: '2027-01-05T00:00:00.000Z', closesAt: '2027-01-20T00:00:00.000Z',
+    opensAt: '2026-07-01T00:00:00.000Z', closesAt: '2027-01-20T00:00:00.000Z',
   });
   await collaboration.openShowroom('showroom-open', 'sales-1', showroom.id);
   return { timeline, store, platform, partners, collaboration, campaign, collection, showroom };

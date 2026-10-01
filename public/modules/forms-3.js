@@ -81,7 +81,10 @@ async function selectionLineForm(selection) {
   ], values => {
     const line = catalogLines.find(item => item.sku === values.sku || item.id === values.sku);
     if (!line) throw new Error(I18N.t('common.requestError'));
-    const quantity = validation.number(values.quantity, I18N.translate('Количество'), { integer: true, min: Number(line.minimumOrderQuantity || 1) });
+    const quantityLabel = I18N.translate('Количество');
+    const quantity = validation.quantity(values.quantity, quantityLabel, { min: Number(line.minimumOrderQuantity || 1) });
+    // Кратность упаковки замораживается вместе с ценой, и сервер отвергает количество между упаковками.
+    validation.multipleOf(quantity, Number(line.packSize), quantityLabel);
     return mutate(`/v2/selections/${encodeURIComponent(selection.id)}/lines/${encodeURIComponent(line.sku)}`, { selectionId: selection.id, sku: line.sku, quantity }, 'PUT');
   });
 }
@@ -123,8 +126,8 @@ async function orderForm(preferredSelectionId = '') {
 function orderTermsFields(terms = {}) {
   return [
     selectDef('incoterm', 'Incoterm', ['EXW', 'FCA', 'FOB', 'CIF', 'DAP', 'DDP'], undefined, terms.incoterm || 'EXW'),
-    numberDef('paymentDays', 'Отсрочка, дней', terms.paymentDays ?? 30, true, 0),
-    numberDef('prepaymentPercent', 'Предоплата, %', terms.prepaymentPercent ?? 20, false, 0),
+    numberDef('paymentDays', 'Отсрочка, дней', terms.paymentDays ?? 30, true, 0, 365),
+    numberDef('prepaymentPercent', 'Предоплата, %', terms.prepaymentPercent ?? 20, false, 0, 100, 'any'),
     dateDef('deliveryStart', 'Начало поставки', orderDateValue(terms.deliveryStart)),
     dateDef('deliveryEnd', 'Конец поставки', orderDateValue(terms.deliveryEnd)),
   ];
@@ -132,7 +135,8 @@ function orderTermsFields(terms = {}) {
 
 function validatedOrderTerms(values) {
   const validation = window.SynthaUiValidation;
-  validation.dateRange(values.deliveryStart, values.deliveryEnd);
+  // Домен допускает поставку в один день: начало не позже конца, а не строго раньше.
+  validation.dateRange(values.deliveryStart, values.deliveryEnd, '', { allowEqual: true });
   return {
     incoterm: values.incoterm,
     paymentDays: validation.number(values.paymentDays, '\u041e\u0442\u0441\u0440\u043e\u0447\u043a\u0430, \u0434\u043d\u0435\u0439', { integer: true, min: 0, max: 365 }),
@@ -150,7 +154,7 @@ function orderDateValue(value) {
 
 function orderCancellationForm(order) {
   const validation = window.SynthaUiValidation;
-  openForm(I18N.t('form.cancelOrder'), [textDef('reason', I18N.t('form.cancellationReason'), '', 1000)], values => mutate(`/v2/orders/${encodeURIComponent(order.id)}/cancel`, {
+  openForm(I18N.t('form.cancelOrder'), [textDef('reason', I18N.t('form.cancellationReason'), '', 1000, true, 3)], values => mutate(`/v2/orders/${encodeURIComponent(order.id)}/cancel`, {
     orderId: order.id,
     expectedVersion: order.version,
     reason: validation.requiredText(values.reason, '\u041f\u0440\u0438\u0447\u0438\u043d\u0430 \u043e\u0442\u043c\u0435\u043d\u044b', { minLength: 3, maxLength: 1000 }),

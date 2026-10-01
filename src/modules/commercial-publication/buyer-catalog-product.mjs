@@ -66,6 +66,12 @@ export function buyerCatalogProductSku(catalog, selector = {}) {
     minimumOrderQuantity: priceLine.minimumOrderQuantity,
     packSize: priceLine.packSize ?? null,
     availability: priceLine.availability ?? sku.commercialTerms?.availability ?? null,
+    // The frozen delivery promise is a readiness gate on every SKU (validateAvailabilityDelivery()
+    // in product-readiness/public.mjs requires it), and it already rides the same priceLine as
+    // minimumOrderQuantity/packSize/availability above — it just never got cherry-picked onto this
+    // flattened SKU, so a buyer choosing what to order could never see when it would actually ship.
+    deliveryStart: priceLine.deliveryStart ?? null,
+    deliveryEnd: priceLine.deliveryEnd ?? null,
   });
 }
 

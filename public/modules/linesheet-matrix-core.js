@@ -186,6 +186,10 @@
       packSize: Number.isSafeInteger(Number(line.packSize)) && Number(line.packSize) >= 1 ? Number(line.packSize) : null,
       availability,
       availableToSell: availableToSellQuantity(availability),
+      // The frozen delivery promise rides the same price line as minimumOrderQuantity/packSize/
+      // availability above — a buyer filling the order-writing matrix had no way to see it.
+      deliveryStart: line.deliveryStart ?? null,
+      deliveryEnd: line.deliveryEnd ?? null,
     });
   }
 

@@ -34,6 +34,8 @@ function priceLine({ skuCode, productSkuId, colorwayId, sizeValueId, price = 95,
     currency: 'RUB',
     minimumOrderQuantity: moq,
     availability,
+    deliveryStart: '2027-02-01',
+    deliveryEnd: '2027-04-30',
   };
 }
 
@@ -91,6 +93,10 @@ test('buyer matrix orders size columns by frozen size sortOrder and preserves ex
   assert.equal(style.rows[1].cells['size:s'], undefined);
   assert.equal(style.rows[1].cells['size:l'], undefined);
   assert.equal(style.rows[0].cells['size:m'].availableToSell, 10);
+  // The frozen delivery promise rides the same price line as everything else above it — it used
+  // to be cherry-picked out, leaving a buyer with no way to see when a SKU would actually ship.
+  assert.equal(style.rows[0].cells['size:m'].deliveryStart, '2027-02-01');
+  assert.equal(style.rows[0].cells['size:m'].deliveryEnd, '2027-04-30');
 });
 
 test('buyer matrix does not freeze or mutate the source buyer catalog response', () => {

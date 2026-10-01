@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
+import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { createOrganisation } from '../src/modules/organisations/public.mjs';
 import { createMembership } from '../src/modules/access-control/public.mjs';
@@ -9,6 +10,7 @@ import { createProductIdentityService } from '../src/application/product-identit
 import { createPostgresWholesaleStore } from '../src/infrastructure/postgres-store.mjs';
 import { createPostgresProductIdentityStore } from '../src/infrastructure/postgres-product-identity-store.mjs';
 import { migratePostgres } from '../src/infrastructure/postgres-migrator.mjs';
+import { bootstrapMdmReference } from '../src/infrastructure/mdm-reference-bootstrap.mjs';
 import { createPostgresTestPool } from './postgres-test-pool.mjs';
 
 const databaseUrl = process.env.POSTGRES_TEST_URL;
@@ -20,12 +22,16 @@ test('PostgreSQL colorway batch creates several Product Colorways atomically, in
   const pool = createPostgresTestPool({ connectionString: databaseUrl, max: 6 });
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
   let tick = 0;
-  const baseTime = Date.parse('2026-09-01T09:00:00.000Z');
+  // 2026-09-18 is when the real colour.colour reference dataset becomes effective; the clock has to
+  // be at or after that for the governed-colour assertion added at the end of this test to resolve.
+  const baseTime = Date.parse('2026-09-19T09:00:00.000Z');
   const clock = () => new Date(baseTime + tick++ * 1000).toISOString();
   const nextId = (prefix) => `${prefix}_${++tick}`;
   try {
     await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
     await migratePostgres({ pool, migrationsDir: path.join(root, 'db', 'migrations'), clock });
+    const colourDataset = JSON.parse(await readFile(path.join(root, 'mdm', 'reference', 'russia-fashion-colour-core.json'), 'utf8'));
+    await bootstrapMdmReference({ pool, datasets: [colourDataset] });
     const wholesaleStore = createPostgresWholesaleStore({ pool });
     const productIdentityStore = createPostgresProductIdentityStore({ pool });
     const platform = createWholesalePlatform({ store: wholesaleStore, clock, nextId });
@@ -98,6 +104,18 @@ test('PostgreSQL colorway batch creates several Product Colorways atomically, in
     );
     const afterDuplicate = await pool.query('SELECT count(*)::int AS count FROM product_colorways WHERE style_version_id = $1', [styleVersion.id]);
     assert.equal(afterDuplicate.rows[0].count, 3);
+
+    // the governed colour library (docs/backlog-not-yet-integrated.md, section F) was always
+    // accepted by the domain (`colorRef`) but no form ever sent one — the single-colorway path with
+    // a real, catalogued colour.colour entry proves the whole chain still works end to end.
+    const forest = (await pool.query("SELECT id, version FROM mdm_entries WHERE code = 'DEEP_FOREST'")).rows[0];
+    assert.ok(forest, 'the real colour.colour reference dataset must resolve DEEP_FOREST');
+    const governed = await productIdentity.createColorway('colorway-governed', 'owner-user', styleVersion.id, {
+      colorwayCode: 'FRST', nameRu: 'Тёмно-зелёный', nameEn: 'Deep Forest', colorRef: { entryId: forest.id, version: forest.version },
+    });
+    assert.deepEqual(governed.colorRef, { entryId: forest.id, version: forest.version });
+    const persistedGoverned = await pool.query('SELECT color_entry_id, color_entry_version FROM product_colorways WHERE id = $1', [governed.id]);
+    assert.deepEqual(persistedGoverned.rows[0], { color_entry_id: forest.id, color_entry_version: forest.version });
   } finally {
     await pool.end();
   }

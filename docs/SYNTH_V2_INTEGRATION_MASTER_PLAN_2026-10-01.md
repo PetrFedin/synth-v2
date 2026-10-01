@@ -325,3 +325,120 @@ Never export product confidential text/BOM content or commercial pricing into sp
 
 **Sequencing:** AJV belongs before expanding imports/integrations; Arrow after canonical analytical tables exist; OpenTelemetry can be introduced alongside outbox/import tracing.
 
+## Additional wave — demand plan, inbound receiving and controlled product revisions
+
+This wave strengthens the commercial-to-supply loop after Product Master, PLM, assortment scenarios and order authority are stable.
+
+### Demand Plan / Statistical Baseline — ADOPT/ADAPT
+
+Reference: https://github.com/skforecast/skforecast
+
+Create a versioned demand-plan entity that clearly separates:
+
+- observed sales/history;
+- planner overrides;
+- statistical baseline;
+- campaign/event effects;
+- final approved planning scenario.
+
+Use statistical forecasting only where history/coverage is sufficient. The result is a planning input, not an order command.
+
+Required lineage:
+
+- product/category/brand grain;
+- training window;
+- features;
+- model/version;
+- forecast horizon;
+- error metrics;
+- override reason;
+- approved scenario/version.
+
+For sparse/new-fashion items, category/style analogue methods may be more appropriate than a misleading SKU forecast. The system should explicitly allow "insufficient history".
+
+### ASN / Inbound Receiving Authority — ADOPT
+
+Add supplier Advanced Shipping Notice / inbound workflow:
+
+`PO/order -> supplier ASN -> expected cartons/items -> arrival -> receiving -> discrepancy -> QC -> accepted/quarantine -> stock availability`
+
+Track:
+
+- supplier shipment ID;
+- expected/received quantities;
+- carton/package IDs;
+- expected/actual dates;
+- warehouse/location;
+- discrepancy reason;
+- damage/QC;
+- document references;
+- receiving user/time.
+
+This closes the current gap between confirmed order and actual received stock.
+
+### Landed Cost Actualisation — ADOPT
+
+Extend landed-cost logic from analytical formula to a versioned allocation authority:
+
+`supplier cost + freight + duty + insurance + broker/handling + allocation rule -> expected landed cost -> actual landed cost -> variance`
+
+Allocation rules must be explicit and versioned (units/value/weight/volume or approved custom driver).
+
+Preserve:
+
+- expected vs actual;
+- currency/rate source and date;
+- Incoterm;
+- allocation run/version;
+- unapplied residual;
+- manual adjustment with reason.
+
+Margin/GMROI should be able to show whether it uses provisional or actual landed cost.
+
+### Product / BOM Change Control — ADOPT
+
+Add controlled revision workflow for material/spec/BOM changes after a product reaches defined readiness:
+
+`change request -> impacted product/BOM/measurements/cost/orders -> review -> approved/rejected -> new revision -> downstream propagation`
+
+Never overwrite an approved historic tech-pack/BOM in place.
+
+Impact analysis should identify:
+
+- affected supplier quote;
+- sample status;
+- production order;
+- compliance/passport fields;
+- cost/margin;
+- customer/order commitments.
+
+### Line Planning Canvas — ADOPT/CONDITIONAL UI
+
+Reference: https://github.com/xyflow/xyflow
+
+Use a visual canvas only as a projection/editor over canonical product/collection/order entities.
+
+Possible nodes/links:
+
+- collection;
+- category/story;
+- style;
+- colourway;
+- delivery;
+- supplier;
+- readiness blocker.
+
+The canvas may propose reordering/grouping and open domain commands, but the graph UI must not become the only place where product relations exist.
+
+### Additional acceptance
+
+- forecast scenario is reproducible and never auto-orders;
+- ASN/receiving discrepancies reconcile to ordered quantities;
+- actual landed cost can be traced to source cost components/allocation rules;
+- approved product revisions preserve prior versions;
+- line-plan UI reloads entirely from canonical PostgreSQL state.
+
+**Sequencing:** governed imports/rules -> assortment scenarios -> demand-plan baseline -> PO/ASN/receiving -> landed-cost actualisation -> controlled revision/line-plan UX.
+
+**Dependency hygiene:** external forecasting/UI libraries remain replaceable; pin versions and review current licenses/security before production adoption.
+

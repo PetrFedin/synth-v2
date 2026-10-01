@@ -81,7 +81,11 @@ export function createSupplierPaymentService({ store, clock = () => new Date().t
         },
         async (tx, { schedule, evidence }) => {
           invariant(schedule.version === expectedVersion, 'PAYMENT_CONCURRENCY_CONFLICT', 'This payment schedule was changed by another operation', { productionOrderNumber, expectedVersion, actualVersion: schedule.version });
-          const value = recordPayment(schedule, { sequence: input.sequence, paidAt: input.paidAt ?? clock(), reference: input.reference, evidence, actorId });
+          const now = clock();
+          // Money out is recorded as it happened: a future date cannot be corrected afterwards (there is no reversal),
+          // and it would also stamp the schedule's updatedAt in the future.
+          invariant(input.paidAt === undefined || input.paidAt === null || Date.parse(input.paidAt) <= Date.parse(now), 'PAYMENT_PAID_AT_IN_FUTURE', 'A payment cannot be recorded with a date in the future', { sequence: input.sequence, paidAt: input.paidAt });
+          const value = recordPayment(schedule, { sequence: input.sequence, paidAt: input.paidAt ?? now, reference: input.reference, evidence, actorId });
           await tx.saveSchedule(value, expectedVersion);
           const paid = value.milestones.find((milestone) => milestone.sequence === input.sequence);
           await tx.appendOutbox(domainEvent({

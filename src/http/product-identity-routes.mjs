@@ -46,7 +46,7 @@ const SIZE_VALUE = required(
 const SKU_CREATE = required(bodyContract(['skuCode', 'styleVersionId', 'colorwayId', 'sizeValueId', 'gtin', 'payload']), ['skuCode', 'styleVersionId', 'colorwayId', 'sizeValueId'], ['payload']);
 const MEDIA_CREATE = required(bodyContract(['colorwayId', 'mediaType', 'mediaRole', 'uri', 'sortOrder', 'contentHash', 'payload']), ['mediaType', 'mediaRole', 'uri', 'sortOrder'], ['payload']);
 const STYLE_REFERENCE_CREATE = required(
-  bodyContract(['imageUri', 'referencedModel', 'season', 'comment', 'sortOrder']),
+  bodyContract(['imageUri', 'referencedModel', 'season', 'comment', 'linkedStyleId', 'sortOrder']),
   ['imageUri', 'sortOrder'],
 );
 const CONSTRUCTION_NODE_CREATE = required(

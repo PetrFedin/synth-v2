@@ -411,6 +411,7 @@ export function createProductStyleReference({
   referencedModel = null,
   season = null,
   comment = null,
+  linkedStyleId = null,
   sortOrder,
   createdAt,
   createdBy,
@@ -421,6 +422,8 @@ export function createProductStyleReference({
   invariant(Number.isInteger(sortOrder) && sortOrder >= 0, 'PRODUCT_STYLE_REFERENCE_SORT_ORDER_INVALID', 'Product Style Reference sort order must be a non-negative integer');
   requireTimestamp(createdAt, 'PRODUCT_STYLE_REFERENCE_CREATED_AT_REQUIRED');
   requireActor(createdBy, 'PRODUCT_STYLE_REFERENCE_CREATED_BY_REQUIRED');
+  const normalizedLinkedStyleId = optionalId(linkedStyleId, 'PRODUCT_STYLE_REFERENCE_LINKED_STYLE_INVALID', 'Linked style id');
+  invariant(normalizedLinkedStyleId === null || normalizedLinkedStyleId !== style.id, 'PRODUCT_STYLE_REFERENCE_LINKED_STYLE_SELF', 'A Product Style Reference cannot link to its own style');
   return Object.freeze({
     id,
     brandId: style.brandId,
@@ -429,6 +432,7 @@ export function createProductStyleReference({
     referencedModel: optionalText(referencedModel, 160, 'PRODUCT_STYLE_REFERENCE_MODEL_INVALID', 'Referenced model'),
     season: optionalText(season, 40, 'PRODUCT_STYLE_REFERENCE_SEASON_INVALID', 'Season'),
     comment: optionalText(comment, 1000, 'PRODUCT_STYLE_REFERENCE_COMMENT_INVALID', 'Comment'),
+    linkedStyleId: normalizedLinkedStyleId,
     sortOrder,
     createdAt,
     createdBy,
@@ -567,6 +571,12 @@ function requireLocalizedText(value, min, max, code, label) {
 function optionalText(value, max, code, label) {
   if (value === undefined || value === null || value === '') return null;
   invariant(typeof value === 'string' && value.trim().length >= 1 && value.trim().length <= max, code, `${label} must contain 1 to ${max} characters`);
+  return value.trim();
+}
+
+function optionalId(value, code, label) {
+  if (value === undefined || value === null || value === '') return null;
+  invariant(typeof value === 'string' && value.trim().length > 0, code, `${label} is invalid`);
   return value.trim();
 }
 

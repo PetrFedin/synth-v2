@@ -20,6 +20,7 @@ function harness() {
     insertCommand: async (value) => commands.set(value.id, value),
     getMembership: async (organisationId, actorId) => memberships.get(`${organisationId}:${actorId}`),
     getStyleByBrandAndCode: async (brandId, styleCode) => [...styles.values()].find((value) => value.brandId === brandId && value.styleCode === styleCode),
+    getStyle: async (id) => styles.get(id),
     getStyleForUpdate: async (id) => styles.get(id),
     insertStyle: async (value) => styles.set(value.id, value),
     saveStyle: async (value) => styles.set(value.id, value),
@@ -242,6 +243,30 @@ test('addStyleReference is denied for a buyer and rejected for an unknown style'
     (error) => error?.code === 'PRODUCT_STYLE_NOT_FOUND',
   );
   assert.equal(h.styleReferences.size, 0);
+});
+
+test('addStyleReference links to a real Product Style in the same brand, but refuses one from another brand or one that does not exist', async () => {
+  const h = harness();
+  h.memberships.set('brand:1:user:1', activeMembership('brand:1', 'user:1'));
+  h.memberships.set('brand:2:user:2', activeMembership('brand:2', 'user:2'));
+  const style = await h.service.createStyle('cmd:style', 'user:1', { brandId: 'brand:1', styleCode: 'DRS-001' });
+  const sibling = await h.service.createStyle('cmd:sibling', 'user:1', { brandId: 'brand:1', styleCode: 'DRS-002' });
+  const otherBrandStyle = await h.service.createStyle('cmd:other-brand', 'user:2', { brandId: 'brand:2', styleCode: 'DRS-900' });
+
+  const reference = await h.service.addStyleReference('cmd:ref-linked', 'user:1', style.id, {
+    imageUri: 'analog.jpg', linkedStyleId: sibling.id, sortOrder: 0,
+  });
+  assert.equal(reference.linkedStyleId, sibling.id);
+
+  await assert.rejects(
+    h.service.addStyleReference('cmd:ref-cross-brand', 'user:1', style.id, { imageUri: 'analog.jpg', linkedStyleId: otherBrandStyle.id, sortOrder: 1 }),
+    (error) => error?.code === 'PRODUCT_STYLE_REFERENCE_LINKED_STYLE_NOT_FOUND',
+  );
+  await assert.rejects(
+    h.service.addStyleReference('cmd:ref-unknown', 'user:1', style.id, { imageUri: 'analog.jpg', linkedStyleId: 'style:ghost', sortOrder: 2 }),
+    (error) => error?.code === 'PRODUCT_STYLE_REFERENCE_LINKED_STYLE_NOT_FOUND',
+  );
+  assert.equal(h.styleReferences.size, 1);
 });
 
 test('addConstructionNode attaches a governed design.construction_node reference and is idempotent by command', async () => {

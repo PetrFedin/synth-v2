@@ -320,15 +320,19 @@ export function createProductIdentityService({ store, clock = () => new Date().t
     // переживает её сам стиль.
     addStyleReference(commandId, actorId, styleId, input) {
       return execute(commandId, actorId, `addProductStyleReference:${styleId}`, input,
-        async (tx) => {
+        async (tx, { replay }) => {
           const style = requireEntity(await tx.getStyleForUpdate(styleId), 'PRODUCT_STYLE_NOT_FOUND', { styleId });
           await authorize(tx, style.brandId, actorId);
+          if (replay || !input?.linkedStyleId) return style;
+          const linkedStyle = await tx.getStyle(input.linkedStyleId);
+          invariant(linkedStyle && linkedStyle.brandId === style.brandId, 'PRODUCT_STYLE_REFERENCE_LINKED_STYLE_NOT_FOUND', 'Linked Product Style was not found in this brand', { linkedStyleId: input.linkedStyleId });
           return style;
         },
         async (tx, style) => {
           const value = createStyleReferenceDomain({
             id: nextId('product-style-reference'), style, imageUri: input?.imageUri,
             referencedModel: input?.referencedModel ?? null, season: input?.season ?? null, comment: input?.comment ?? null,
+            linkedStyleId: input?.linkedStyleId ?? null,
             sortOrder: input?.sortOrder, createdAt: now(clock), createdBy: actorId,
           });
           await tx.insertStyleReference(value);

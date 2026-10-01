@@ -44,6 +44,7 @@ function canonicalInput(overrides = {}) {
       measurements: [{ sizeValueId: 'size:44', value: 88 }, { sizeValueId: 'size:46', value: 92 }],
     }],
     notes: 'Основная таблица мер',
+    schemaImageUri: null,
     ...overrides,
   };
 }

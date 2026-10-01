@@ -258,6 +258,7 @@ test('positive Product Identity to Readiness acceptance creates governed categor
       measurements: [{ sizeValueId: IDS.sizeValueId, value: 96 }],
     }],
     notes: 'READY acceptance ready-002',
+    schemaImageUri: null,
   });
 
   const measurementPublish = requests.find((request) => request.path.endsWith('/publish'));

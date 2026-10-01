@@ -14,14 +14,14 @@ import {
   updateDraftMeasurementChart,
 } from '../modules/measurements/public.mjs';
 
-const EDITABLE_FIELDS = Object.freeze(['unit', 'baseSizeCode', 'sizes', 'points', 'notes']);
+const EDITABLE_FIELDS = Object.freeze(['unit', 'baseSizeCode', 'sizes', 'points', 'notes', 'schemaImageUri']);
 const REQUIRED_SIZE_FIELDS = Object.freeze(['code', 'label']);
 const REQUIRED_POINT_FIELDS = Object.freeze(['pointCode', 'name', 'description', 'toleranceMinus', 'tolerancePlus', 'measurements']);
 const REQUIRED_VALUE_FIELDS = Object.freeze(['sizeCode', 'value']);
 const UPDATE_FIELDS = Object.freeze(new Set(['expectedVersion', ...EDITABLE_FIELDS]));
 const PUBLISH_FIELDS = Object.freeze(new Set(['expectedVersion']));
 const CANONICAL_IDENTITY_FIELDS = Object.freeze(['styleVersionId', 'colorwayId', 'sizeScaleVersionId']);
-const CANONICAL_EDITABLE_FIELDS = Object.freeze(['measurementUnitEntryId', 'baseSizeValueId', 'sizes', 'points', 'notes']);
+const CANONICAL_EDITABLE_FIELDS = Object.freeze(['measurementUnitEntryId', 'baseSizeValueId', 'sizes', 'points', 'notes', 'schemaImageUri']);
 const CANONICAL_CREATE_FIELDS = Object.freeze(new Set([...CANONICAL_IDENTITY_FIELDS, ...CANONICAL_EDITABLE_FIELDS]));
 const CANONICAL_UPDATE_FIELDS = Object.freeze(new Set(['expectedVersion', ...CANONICAL_EDITABLE_FIELDS]));
 const CANONICAL_SIZE_FIELDS = Object.freeze(['sizeValueId']);

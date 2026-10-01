@@ -11,6 +11,14 @@ function stripDiagnosticPrefix(message) {
   return match ? match[2].trim() : value;
 }
 
+// Фраза сервера английская и написана для журнала. Если загружен словарь, пользователь читает русскую
+// формулировку, а для неизвестного кода — «фраза (КОД)». Статусные коды без кода домена (`HTTP_502`)
+// ничего не говорят человеку и в сообщение не попадают.
+function humaniseServerError(code, message) {
+  if (typeof SynthaErrorMessages === 'undefined' || /^HTTP_\d+$/.test(code)) return message;
+  return SynthaErrorMessages.describe(code, message);
+}
+
 async function api(path, { method = 'GET', body, anonymous = false, signal } = {}) {
   const headers = { accept: 'application/json', 'accept-language': I18N.localeTag() };
   if (!anonymous && state.token) headers.authorization = `Bearer ${state.token}`;
@@ -44,7 +52,7 @@ async function api(path, { method = 'GET', body, anonymous = false, signal } = {
         const forbidden = response.status === 403;
         const message = forbidden
           ? I18N.t('common.forbidden')
-          : stripDiagnosticPrefix(payload.error?.message) || I18N.t('common.requestError');
+          : humaniseServerError(code, stripDiagnosticPrefix(payload.error?.message)) || I18N.t('common.requestError');
         const error = new Error(message);
         error.code = code;
         error.status = response.status;

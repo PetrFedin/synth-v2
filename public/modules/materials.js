@@ -408,18 +408,169 @@ function latestDipLabel(colour) {
   return `${labDipStatusLabel(last.status)} \u00b7 ${last.dipReference}`;
 }
 
+// \u0421\u043f\u0440\u0430\u0432\u043e\u0447\u043d\u0438\u043a \u0443\u043f\u0440\u0430\u0432\u043b\u044f\u0435\u043c\u043e\u0433\u043e \u0446\u0432\u0435\u0442\u0430 (`colour.colour`) \u0443\u0436\u0435 \u0431\u044b\u043b \u043f\u043e\u043b\u043d\u043e\u0441\u0442\u044c\u044e \u043f\u0440\u043e\u0432\u0435\u0434\u0451\u043d \u0447\u0435\u0440\u0435\u0437 \u0434\u043e\u043c\u0435\u043d \u0438 \u0441\u0442\u043e\u0440
+// \u0446\u0432\u0435\u0442\u0430 \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u0430 (`resolveGovernedColour` \u0432 `postgres-material-colour-store.mjs` \u0438\u0449\u0435\u0442 \u0440\u043e\u0432\u043d\u043e \u043f\u043e
+// `dictionary.code = 'colour.colour'` \u0438 `entry.code`) \u2014 \u0442\u043e\u0442 \u0436\u0435 \u0441\u043f\u0440\u0430\u0432\u043e\u0447\u043d\u0438\u043a, \u0447\u0442\u043e \u0438 \u0443 `colorRef`
+// \u0446\u0432\u0435\u0442\u043e\u043c\u043e\u0434\u0435\u043b\u0438 \u0432 `styles.js`. \u0421\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u0435 \u043d\u0430\u043c\u0435\u0440\u0435\u043d\u043d\u043e \u0434\u0435\u0440\u0436\u0438\u0442\u0441\u044f \u0432 \u0442\u043e\u043c \u0436\u0435 \u0433\u043b\u043e\u0431\u0430\u043b\u044c\u043d\u043e\u043c \u043a\u043b\u044e\u0447\u0435
+// `window.SynthaColourLibraryState`, \u0447\u0442\u043e \u0438 \u0442\u0430\u043c: \u043e\u0431\u0430 \u044d\u043a\u0440\u0430\u043d\u0430 \u0447\u0438\u0442\u0430\u044e\u0442 \u043e\u0434\u0438\u043d \u0438 \u0442\u043e\u0442 \u0436\u0435 \u043a\u043e\u0440\u043e\u0442\u043a\u0438\u0439 \u0441\u043f\u0438\u0441\u043e\u043a, \u0438
+// \u043e\u0442\u043a\u0440\u044b\u0442\u0438\u0435 \u0444\u043e\u0440\u043c\u044b \u043d\u0430 \u043e\u0434\u043d\u043e\u043c \u044d\u043a\u0440\u0430\u043d\u0435 \u043d\u0435 \u0434\u043e\u043b\u0436\u043d\u043e \u0442\u0440\u0435\u0431\u043e\u0432\u0430\u0442\u044c \u0432\u0442\u043e\u0440\u043e\u0433\u043e \u0437\u0430\u043f\u0440\u043e\u0441\u0430, \u0435\u0441\u043b\u0438 \u0441\u043f\u0438\u0441\u043e\u043a \u0443\u0436\u0435 \u043f\u0440\u0438\u0448\u0451\u043b \u0441
+// \u0434\u0440\u0443\u0433\u043e\u0433\u043e.
+const materialColourLibraryState = window.SynthaColourLibraryState
+  || (window.SynthaColourLibraryState = { items: null, loading: false, failed: false });
+
+function loadColourLibrary() {
+  if (materialColourLibraryState.items || materialColourLibraryState.loading || materialColourLibraryState.failed) return;
+  materialColourLibraryState.loading = true;
+  api('/v2/libraries/colour.colour/entries?limit=200')
+    .then((page) => { materialColourLibraryState.items = Array.isArray(page?.items) ? page.items : []; })
+    .catch(() => { materialColourLibraryState.failed = true; })
+    .finally(() => { materialColourLibraryState.loading = false; if (state.view === 'materials') renderApp(); });
+}
+
+function colourLibraryOptions() {
+  const library = materialColourLibraryState.items || [];
+  return library.map((entry) => ({
+    id: entry.code,
+    name: `${entry.code} \u00b7 ${I18N.getLocale?.() === 'en' ? entry.nameEn : entry.nameRu}${entry.attributes?.pantone ? ` \u00b7 Pantone ${entry.attributes.pantone}` : ''}`,
+  }));
+}
+
+// \u0414\u043e\u0431\u0430\u0432\u043b\u0435\u043d\u0438\u0435 \u0446\u0432\u0435\u0442\u0430 \u0432 \u043f\u0430\u043b\u0438\u0442\u0440\u0443 \u043f\u043e\u043b\u043e\u0442\u043d\u0430: \u0434\u043e\u043c\u0435\u043d (`materialColour` \u0432 `src/modules/material-colours/public.mjs`)
+// \u0442\u0440\u0435\u0431\u0443\u0435\u0442 \u043d\u0430\u0441\u0442\u043e\u044f\u0449\u0438\u0439 \u0443\u043f\u0440\u0430\u0432\u043b\u044f\u0435\u043c\u044b\u0439 \u0446\u0432\u0435\u0442 \u0441 \u0441\u0430\u043c\u043e\u0433\u043e \u043d\u0430\u0447\u0430\u043b\u0430 \u2014 \u0441\u0432\u043e\u0431\u043e\u0434\u043d\u043e\u0433\u043e \u0432\u0432\u043e\u0434\u0430 \u0437\u0434\u0435\u0441\u044c \u043d\u0435\u0442, \u043f\u043e\u044d\u0442\u043e\u043c\u0443
+// \u0441\u0435\u043b\u0435\u043a\u0442 \u043e\u0431\u044f\u0437\u0430\u0442\u0435\u043b\u0435\u043d \u0438 \u0444\u043e\u0440\u043c\u0430 \u043d\u0435 \u043e\u0442\u043a\u0440\u043e\u0435\u0442\u0441\u044f, \u043f\u043e\u043a\u0430 \u0441\u043f\u0440\u0430\u0432\u043e\u0447\u043d\u0438\u043a \u043d\u0435 \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u043b\u0441\u044f (\u0442\u0430 \u0436\u0435 \u0437\u0430\u0449\u0438\u0442\u0430, \u0447\u0442\u043e \u0438 \u0443
+// \u043b\u044e\u0431\u043e\u0439 \u0434\u0440\u0443\u0433\u043e\u0439 \u0444\u043e\u0440\u043c\u044b \u0447\u0435\u0440\u0435\u0437 \u043e\u0431\u0449\u0438\u0439 `openForm`).
+function addMaterialColourForm(item) {
+  const caps = window.SynthaUiCapabilities;
+  if (!caps.hasForOrganisation(state.workspace, item.brandId, caps.CAPABILITIES.CATALOG_MANAGE)) return null;
+  const button = materialDialogButton(materialText('\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c \u0446\u0432\u0435\u0442', 'Add a colour'), async () => {
+    openForm(materialText('\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c \u0446\u0432\u0435\u0442 \u0432 \u043f\u0430\u043b\u0438\u0442\u0440\u0443', 'Add a colour to the palette'), [
+      selectDef('colourCode', materialText('\u0426\u0432\u0435\u0442 \u0438\u0437 \u0441\u043f\u0440\u0430\u0432\u043e\u0447\u043d\u0438\u043a\u0430', 'Colour from the library'), colourLibraryOptions()),
+      optionalTextDef('supplierColourReference', materialText('\u0410\u0440\u0442\u0438\u043a\u0443\u043b \u0444\u0430\u0431\u0440\u0438\u043a\u0438', 'Mill reference'), '', 120),
+    ], async (values) => {
+      await mutate('/v2/material-colours', {
+        materialCode: item.code,
+        colourCode: values.colourCode,
+        supplierColourReference: optionalText(values.supplierColourReference, materialText('\u0410\u0440\u0442\u0438\u043a\u0443\u043b \u0444\u0430\u0431\u0440\u0438\u043a\u0438', 'Mill reference'), 120),
+      });
+      delete paletteState.data[item.code];
+    });
+  });
+  return button;
+}
+
+function actionableLabDip(colour) {
+  const dips = Array.isArray(colour.labDips) ? colour.labDips : [];
+  for (let index = dips.length - 1; index >= 0; index -= 1) {
+    if (['requested', 'submitted', 'rejected_resubmit'].includes(dips[index].status)) return dips[index];
+  }
+  return null;
+}
+
+function requestLabDipForm(item, colour) {
+  openForm(materialText('\u0417\u0430\u043f\u0440\u043e\u0441\u0438\u0442\u044c \u043e\u0431\u0440\u0430\u0437\u0435\u0446', 'Request a lab dip'), [
+    textDef('dipReference', materialText('\u041d\u043e\u043c\u0435\u0440 \u043e\u0431\u0440\u0430\u0437\u0446\u0430', 'Lab dip reference'), '', 63),
+    textDef('supplierCode', materialText('\u041a\u043e\u0434 \u0444\u0430\u0431\u0440\u0438\u043a\u0438', 'Supplier code'), '', 64),
+    // Seasonal validity (docs/omnidata-screens-gap-analysis.md, \u043f.26): \u0441\u0440\u043e\u043a \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u044f \u044d\u0442\u0430\u043b\u043e\u043d\u0430, \u0430 \u043d\u0435 \u0441\u0430\u043c\u043e\u0433\u043e \u0437\u0430\u043f\u0440\u043e\u0441\u0430.
+    { ...dateDef('validFrom', materialText('\u0414\u0435\u0439\u0441\u0442\u0432\u0443\u0435\u0442 \u0441', 'Valid from')), required: false },
+    { ...dateDef('validTo', materialText('\u0414\u0435\u0439\u0441\u0442\u0432\u0443\u0435\u0442 \u043f\u043e', 'Valid to')), required: false },
+    optionalTextDef('notes', materialText('\u041f\u0440\u0438\u043c\u0435\u0447\u0430\u043d\u0438\u0435', 'Notes'), '', 1000),
+  ], async (values) => {
+    await mutate('/v2/lab-dips', {
+      materialColourId: colour.id,
+      dipReference: values.dipReference.trim().toUpperCase(),
+      supplierCode: values.supplierCode.trim(),
+      validFrom: values.validFrom || null,
+      validTo: values.validTo || null,
+      notes: optionalText(values.notes, materialText('\u041f\u0440\u0438\u043c\u0435\u0447\u0430\u043d\u0438\u0435', 'Notes'), 1000),
+    });
+    delete paletteState.data[item.code];
+  });
+}
+
+function submitLabDipAction(item, dip) {
+  return materialMutationButton(materialText('\u041e\u0431\u0440\u0430\u0437\u0435\u0446 \u043f\u0440\u0438\u0441\u043b\u0430\u043d', 'Lab dip submitted'), async () => {
+    await mutate(`/v2/lab-dips/${encodeURIComponent(dip.id)}/submit`, { expectedVersion: dip.version });
+    delete paletteState.data[item.code];
+  });
+}
+
+function decideLabDipForm(item, dip) {
+  const button = el('button', { className: 'button small', type: 'button', rawText: materialText('\u0420\u0435\u0448\u0435\u043d\u0438\u0435', 'Decide') });
+  button.addEventListener('click', () => {
+    openForm(materialText('\u0420\u0435\u0448\u0435\u043d\u0438\u0435 \u043f\u043e \u043b\u0430\u0431\u043e\u0440\u0430\u0442\u043e\u0440\u043d\u043e\u043c\u0443 \u043e\u0431\u0440\u0430\u0437\u0446\u0443', 'Decide the lab dip'), [
+      selectDef('verdict', materialText('\u0412\u0435\u0440\u0434\u0438\u043a\u0442', 'Verdict'), [
+        { id: 'approved', name: labDipStatusLabel('approved') },
+        { id: 'conditionally_approved', name: labDipStatusLabel('conditionally_approved') },
+        { id: 'rejected_resubmit', name: labDipStatusLabel('rejected_resubmit') },
+        { id: 'rejected_cancelled', name: labDipStatusLabel('rejected_cancelled') },
+      ]),
+      // \u0423\u0441\u043b\u043e\u0432\u043d\u043e\u0435 \u0443\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u0438\u0435 \u0438 \u043e\u0442\u043a\u0430\u0437 \u0442\u0440\u0435\u0431\u0443\u044e\u0442 \u043f\u0440\u0438\u0447\u0438\u043d\u0443 \u043d\u0430 \u0443\u0440\u043e\u0432\u043d\u0435 \u0434\u043e\u043c\u0435\u043d\u0430
+      // (`LAB_DIP_DECISION_NOTE_REQUIRED`) \u2014 \u0444\u043e\u0440\u043c\u0430 \u043d\u0435 \u0434\u0443\u0431\u043b\u0438\u0440\u0443\u0435\u0442 \u044d\u0442\u043e \u0443\u0441\u043b\u043e\u0432\u0438\u0435, \u0434\u043e\u043c\u0435\u043d \u043e\u0442\u043a\u0430\u0436\u0435\u0442 \u0441\u0430\u043c.
+      optionalTextDef('note', materialText('\u041f\u0440\u0438\u043c\u0435\u0447\u0430\u043d\u0438\u0435 \u043a \u0440\u0435\u0448\u0435\u043d\u0438\u044e', 'Decision note'), '', 1000),
+    ], async (values) => {
+      await mutate(`/v2/lab-dips/${encodeURIComponent(dip.id)}/decide`, {
+        expectedVersion: dip.version,
+        verdict: values.verdict,
+        note: optionalText(values.note, materialText('\u041f\u0440\u0438\u043c\u0435\u0447\u0430\u043d\u0438\u0435 \u043a \u0440\u0435\u0448\u0435\u043d\u0438\u044e', 'Decision note'), 1000),
+      });
+      delete paletteState.data[item.code];
+    });
+  });
+  return button;
+}
+
+function cancelLabDipForm(item, dip) {
+  const button = el('button', { className: 'button small', type: 'button', rawText: materialText('\u041e\u0442\u043c\u0435\u043d\u0438\u0442\u044c', 'Cancel') });
+  button.addEventListener('click', () => {
+    openForm(materialText('\u041e\u0442\u043c\u0435\u043d\u0438\u0442\u044c \u043e\u0431\u0440\u0430\u0437\u0435\u0446', 'Cancel the lab dip'), [
+      textDef('reason', materialText('\u041f\u0440\u0438\u0447\u0438\u043d\u0430', 'Reason'), '', 1000),
+    ], async (values) => {
+      await mutate(`/v2/lab-dips/${encodeURIComponent(dip.id)}/cancel`, { expectedVersion: dip.version, reason: values.reason.trim() });
+      delete paletteState.data[item.code];
+    });
+  });
+  return button;
+}
+
+function labDipActionsCell(item, colour) {
+  const caps = window.SynthaUiCapabilities;
+  const canManage = caps.hasForOrganisation(state.workspace, item.brandId, caps.CAPABILITIES.CATALOG_MANAGE);
+  const canDecide = caps.hasForOrganisation(state.workspace, item.brandId, caps.CAPABILITIES.QUALITY_MANAGE);
+  const row = el('div', { className: 'od-inline-actions' });
+  if (canManage) {
+    const request = el('button', { className: 'button small', type: 'button', rawText: materialText('\u0417\u0430\u043f\u0440\u043e\u0441\u0438\u0442\u044c \u043e\u0431\u0440\u0430\u0437\u0435\u0446', 'Request a lab dip') });
+    request.addEventListener('click', () => requestLabDipForm(item, colour));
+    row.append(request);
+  }
+  const dip = actionableLabDip(colour);
+  if (dip && canDecide) {
+    if (dip.status === 'requested' || dip.status === 'rejected_resubmit') row.append(submitLabDipAction(item, dip));
+    if (dip.status === 'submitted') row.append(decideLabDipForm(item, dip));
+    row.append(cancelLabDipForm(item, dip));
+  }
+  return row.childNodes.length ? row : el('span', { rawText: '\u2014' });
+}
+
 function palettePanel(item) {
   const rows = paletteOf(item);
+  loadColourLibrary();
   if (paletteState.failed[item.code]) return notice(materialText('\u041f\u0430\u043b\u0438\u0442\u0440\u0430 \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u043d\u0430.', 'The palette is unavailable.'));
+  const holder = document.createDocumentFragment();
+  const addButton = addMaterialColourForm(item);
+  if (addButton) {
+    const actions = el('div', { className: 'od-inline-actions' });
+    actions.append(addButton);
+    holder.append(actions);
+  }
   if (rows.length === 0) {
-    return notice(paletteState.loading[item.code]
+    holder.append(notice(paletteState.loading[item.code]
       ? materialText('\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430\u2026', 'Loading\u2026')
       : materialText('\u041f\u0430\u043b\u0438\u0442\u0440\u0430 \u043d\u0435 \u0437\u0430\u0432\u0435\u0434\u0435\u043d\u0430: \u0443 \u043f\u043e\u043b\u043e\u0442\u043d\u0430 \u043d\u0435\u0442 \u043d\u0438 \u043e\u0434\u043d\u043e\u0433\u043e \u0446\u0432\u0435\u0442\u0430 \u0438\u0437 \u0441\u043f\u0440\u0430\u0432\u043e\u0447\u043d\u0438\u043a\u0430, \u043f\u043e\u044d\u0442\u043e\u043c\u0443 \u043f\u0430\u0440\u0442\u0438\u044e \u0432 \u0446\u0432\u0435\u0442\u0435 \u043f\u0440\u0438\u043d\u044f\u0442\u044c \u043d\u0435\u043b\u044c\u0437\u044f.',
-        'No palette: the cloth has no governed colour, so a lot cannot be received in a colour.'));
+        'No palette: the cloth has no governed colour, so a lot cannot be received in a colour.')));
+    return holder;
   }
-  const holder = document.createDocumentFragment();
   holder.append(odMiniTable(
-    [materialText('\u0426\u0432\u0435\u0442', 'Colour'), materialText('\u0410\u0440\u0442\u0438\u043a\u0443\u043b \u0444\u0430\u0431\u0440\u0438\u043a\u0438', 'Mill reference'), materialText('\u041e\u0431\u0440\u0430\u0437\u0435\u0446', 'Lab dip'), materialText('\u0420\u0430\u0443\u043d\u0434\u043e\u0432', 'Rounds')],
+    [materialText('\u0426\u0432\u0435\u0442', 'Colour'), materialText('\u0410\u0440\u0442\u0438\u043a\u0443\u043b \u0444\u0430\u0431\u0440\u0438\u043a\u0438', 'Mill reference'), materialText('\u041e\u0431\u0440\u0430\u0437\u0435\u0446', 'Lab dip'), materialText('\u0420\u0430\u0443\u043d\u0434\u043e\u0432', 'Rounds'), materialText('\u0414\u0435\u0439\u0441\u0442\u0432\u0438\u044f', 'Actions')],
     rows.map((colour) => [
       colour.colourCode,
       colour.supplierColourReference || '\u2014',
@@ -429,6 +580,7 @@ function palettePanel(item) {
       // \u0420\u0430\u0443\u043d\u0434 \u0441\u0442\u0440\u043e\u043a\u0438 \u2014 \u044d\u0442\u043e \u0440\u0430\u0443\u043d\u0434 \u0435\u0451 \u0441\u043e\u0431\u0441\u0442\u0432\u0435\u043d\u043d\u043e\u0433\u043e \u043e\u0431\u0440\u0430\u0437\u0446\u0430, \u0430 \u043d\u0435 \u0441\u0432\u043e\u0434\u043a\u0430 \u043f\u043e \u0437\u0430\u043a\u0440\u044b\u0442\u044b\u043c: \u043f\u0440\u0438\u0441\u043b\u0430\u043d\u043d\u044b\u0439 \u0438
       // \u0436\u0434\u0443\u0449\u0438\u0439 \u0440\u0435\u0448\u0435\u043d\u0438\u044f \u043f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u043b \u0431\u044b \u043d\u043e\u043b\u044c \u0438 \u0447\u0438\u0442\u0430\u043b\u0441\u044f \u0431\u044b \u043a\u0430\u043a \u00ab\u043d\u0435 \u043f\u0440\u0438\u0441\u044b\u043b\u0430\u043b\u0438\u00bb.
       String(dipRoundOf(colour)),
+      labDipActionsCell(item, colour),
     ]),
   ));
   const blocked = rows.filter((colour) => !colour.approvedForBulk);

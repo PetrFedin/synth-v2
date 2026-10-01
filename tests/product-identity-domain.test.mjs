@@ -291,6 +291,42 @@ test('Style Reference board attaches to the style itself and trims optional fiel
   );
 });
 
+// «аналог — ссылка на похожее изделие» (docs/backlog-not-yet-integrated.md, раздел C) — до этой
+// правки `referencedModel` был свободным текстом-подписью, а не настоящей ссылкой на другую строку
+// `product_styles`.
+test('Style Reference board can link to another real Product Style as an analog, but never to itself', () => {
+  const { style } = fixture();
+  const linked = createProductStyleReference({
+    id: 'product-style-reference:linked',
+    style,
+    imageUri: 'analog.jpg',
+    linkedStyleId: 'product-style:another',
+    sortOrder: 0,
+    createdAt: at,
+    createdBy: actor,
+  });
+  assert.equal(linked.linkedStyleId, 'product-style:another');
+
+  const unlinked = createProductStyleReference({
+    id: 'product-style-reference:unlinked',
+    style,
+    imageUri: 'moodboard.jpg',
+    sortOrder: 1,
+    createdAt: at,
+    createdBy: actor,
+  });
+  assert.equal(unlinked.linkedStyleId, null);
+
+  assert.throws(
+    () => createProductStyleReference({ id: 'product-style-reference:self', style, imageUri: 'self.jpg', linkedStyleId: style.id, sortOrder: 2, createdAt: at, createdBy: actor }),
+    (error) => error?.code === 'PRODUCT_STYLE_REFERENCE_LINKED_STYLE_SELF',
+  );
+  assert.throws(
+    () => createProductStyleReference({ id: 'product-style-reference:bad-link', style, imageUri: 'bad.jpg', linkedStyleId: '   ', sortOrder: 3, createdAt: at, createdBy: actor }),
+    (error) => error?.code === 'PRODUCT_STYLE_REFERENCE_LINKED_STYLE_INVALID',
+  );
+});
+
 test('Construction Node board attaches a governed design.construction_node reference to the style, not a made-up text label', () => {
   const { style } = fixture();
   const node = createProductStyleConstructionNode({

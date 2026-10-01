@@ -1036,6 +1036,20 @@
     delete styleReferenceState.failed[styleId];
   }
 
+  // Сам список стилей уже загружен в `state.workspace.productStyles` (реестр «Модели» на рабочем
+  // столе), поэтому выбор «похожего изделия» не требует отдельного запроса — ровно тот же приём,
+  // что и у выбора цвета из справочника (`colourRefOptions`), только источник не библиотека, а уже
+  // загруженный реестр собственного бренда.
+  function linkedStyleOptions(product) {
+    const styles = (state.workspace?.productStyles || [])
+      .filter((candidate) => candidate.brandId === product.brandId && candidate.id !== product.id)
+      .sort((left, right) => String(left.styleCode).localeCompare(String(right.styleCode)));
+    return [
+      ['', text('— не выбрано —', '— none —')],
+      ...styles.map((candidate) => [candidate.id, `${candidate.styleCode} · ${title(candidate)}`]),
+    ];
+  }
+
   function addStyleReference(item) {
     const product = item.product;
     const rows = styleReferenceState.data[product.id] || [];
@@ -1044,6 +1058,7 @@
       hint: text('Модель прошлого сезона, референс посадки или детали — вход в разработку, не версия стиля.', 'A past-season model, a fit or a detail reference — design-research input, not a style version.'),
       fields: [
         field(text('Ссылка на изображение', 'Image link'), input('imageUri', 'text', { required: true, maxlength: '2048' })),
+        field(text('Похожее изделие (аналог из каталога)', 'Similar product (analog from the catalog)'), select('linkedStyleId', linkedStyleOptions(product))),
         field(text('Модель/сезон прошлого сезона', 'Prior-season model'), input('referencedModel', 'text', { maxlength: '160' })),
         field(text('Сезон', 'Season'), input('season', 'text', { maxlength: '40' })),
         field(text('Комментарий', 'Comment'), input('comment', 'text', { maxlength: '1000' })),
@@ -1056,6 +1071,7 @@
           referencedModel: values.referencedModel?.trim() || undefined,
           season: values.season?.trim() || undefined,
           comment: values.comment?.trim() || undefined,
+          linkedStyleId: values.linkedStyleId || undefined,
           sortOrder: Number(values.sortOrder),
         });
         invalidateStyleReferences(product.id);
@@ -1088,6 +1104,7 @@
       const caption = el('figcaption', {});
       if (reference.referencedModel) caption.append(el('strong', { rawText: reference.referencedModel }));
       if (reference.season) caption.append(el('span', { rawText: ` · ${reference.season}` }));
+      if (reference.linkedStyleCode) caption.append(el('span', { className: 'badge', rawText: `${text('Аналог', 'Analog')}: ${reference.linkedStyleCode}` }));
       if (reference.comment) caption.append(el('p', { rawText: reference.comment }));
       tile.append(caption);
       grid.append(tile);

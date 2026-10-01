@@ -105,6 +105,46 @@ test('PostgreSQL Style Reference board attaches to the style, is replay-safe, an
       'https://cdn.example/product-references/DRS-PSR/past-season.jpg',
       'https://cdn.example/product-references/DRS-PSR/collar-detail.jpg',
     ]);
+
+    // «аналог — ссылка на похожее изделие» (docs/backlog-not-yet-integrated.md, раздел C) — a real
+    // link to another catalogued Product Style in the same brand, not a free-text label.
+    const analog = await productIdentity.createStyle('analog-create', 'owner-user', { brandId: 'brand-psr', styleCode: 'DRS-ANALOG' });
+    const linkedReference = await productIdentity.addStyleReference('ref-linked', 'owner-user', style.id, {
+      imageUri: 'https://cdn.example/product-references/DRS-PSR/analog.jpg',
+      linkedStyleId: analog.id,
+      sortOrder: 2,
+    });
+    assert.equal(linkedReference.linkedStyleId, analog.id);
+    const persistedLink = await pool.query('SELECT linked_style_id FROM product_style_references WHERE id = $1', [linkedReference.id]);
+    assert.equal(persistedLink.rows[0].linked_style_id, analog.id);
+    const aggregateWithLink = await productIdentityQuery.getStyleForActor('owner-user', style.id);
+    const linkedInAggregate = aggregateWithLink.styleReferences.find((value) => value.id === linkedReference.id);
+    assert.equal(linkedInAggregate.linkedStyleCode, 'DRS-ANALOG');
+
+    // cross-brand links are refused by the service before any write
+    await platform.registerOrganisation('org-other-create', 'system', createOrganisation({ id: 'brand-other', type: 'brand', name: 'Other Brand' }));
+    await platform.grantMembership('member-other-owner', 'system', createMembership({ id: 'membership-other-owner', organisationId: 'brand-other', organisationType: 'brand', userId: 'other-owner-user', role: 'owner', createdAt: clock() }));
+    const otherBrandStyle = await productIdentity.createStyle('other-brand-create', 'other-owner-user', { brandId: 'brand-other', styleCode: 'DRS-OTHER' });
+    await assert.rejects(
+      productIdentity.addStyleReference('ref-cross-brand', 'owner-user', style.id, { imageUri: 'https://cdn.example/cross-brand.jpg', linkedStyleId: otherBrandStyle.id, sortOrder: 3 }),
+      (error) => error.code === 'PRODUCT_STYLE_REFERENCE_LINKED_STYLE_NOT_FOUND',
+    );
+
+    // the database itself refuses a cross-brand link and a self-link, independently of the service
+    await assert.rejects(
+      pool.query(
+        'INSERT INTO product_style_references (id, brand_id, style_id, image_uri, linked_style_id, sort_order, created_at, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
+        ['ref-raw-cross-brand', 'brand-psr', style.id, 'https://cdn.example/raw.jpg', otherBrandStyle.id, 4, clock(), 'owner-user'],
+      ),
+      (error) => error.code === '23503',
+    );
+    await assert.rejects(
+      pool.query(
+        'INSERT INTO product_style_references (id, brand_id, style_id, image_uri, linked_style_id, sort_order, created_at, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
+        ['ref-raw-self', 'brand-psr', style.id, 'https://cdn.example/raw-self.jpg', style.id, 5, clock(), 'owner-user'],
+      ),
+      (error) => error.code === '23514',
+    );
   } finally {
     await pool.end();
   }

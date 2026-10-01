@@ -54,6 +54,10 @@ function view(client) {
       const result = await client.query('SELECT * FROM product_styles WHERE brand_id = $1 AND style_code = $2 FOR SHARE', [brandId, styleCode]);
       return result.rows[0] ? mapStyle(result.rows[0]) : undefined;
     },
+    async getStyle(id) {
+      const result = await client.query('SELECT * FROM product_styles WHERE id = $1 FOR SHARE', [id]);
+      return result.rows[0] ? mapStyle(result.rows[0]) : undefined;
+    },
     async getStyleForUpdate(id) {
       const result = await client.query('SELECT * FROM product_styles WHERE id = $1 FOR UPDATE', [id]);
       return result.rows[0] ? mapStyle(result.rows[0]) : undefined;
@@ -205,9 +209,9 @@ function view(client) {
     async insertStyleReference(value) {
       await uniqueInsert(client,
         `INSERT INTO product_style_references
-           (id, brand_id, style_id, image_uri, referenced_model, season, comment, sort_order, created_at, created_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-        [value.id, value.brandId, value.styleId, value.imageUri, value.referencedModel, value.season, value.comment, value.sortOrder, value.createdAt, value.createdBy],
+           (id, brand_id, style_id, image_uri, referenced_model, season, comment, linked_style_id, sort_order, created_at, created_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+        [value.id, value.brandId, value.styleId, value.imageUri, value.referencedModel, value.season, value.comment, value.linkedStyleId, value.sortOrder, value.createdAt, value.createdBy],
         'PRODUCT_STYLE_REFERENCE_POSITION_CONFLICT', 'Product Style Reference position already exists', { styleId: value.styleId, sortOrder: value.sortOrder });
     },
     async insertStyleConstructionNode(value) {

@@ -788,6 +788,37 @@ test('PostgreSQL closes approved PPS through production, rework, reinspection an
     const realisations = await pool.query('SELECT count(*)::integer AS total FROM placeholder_realisation_workspace WHERE placeholder_id = $1', [slot.id]);
     assert.equal(realisations.rows[0].total, 0);
 
+    // Q-01: the database refuses to cancel a ready-for-qc execution whose Final Quality inspection is
+    // released (or otherwise live); only a cancelled or rejected one lets the execution close.
+    const releasedExecution = (await pool.query('SELECT payload FROM production_executions WHERE execution_code = $1', [execution.executionCode])).rows[0].payload;
+    assert.equal(releasedExecution.status, 'ready-for-qc');
+    const cancelledAt = clock();
+    await assert.rejects(
+      () => pool.query(
+        `UPDATE production_executions
+            SET status = 'cancelled', version = version + 1, cancelled_at = $2::timestamptz, updated_at = $2::timestamptz,
+                payload = payload || jsonb_build_object('status', 'cancelled', 'version', version + 1, 'cancelledAt', $2::text, 'cancellationReason', 'Lot scrapped at the factory', 'updatedAt', $2::text)
+          WHERE execution_code = $1`,
+        [execution.executionCode, cancelledAt],
+      ),
+      (error) => error?.code === '23514' && error?.constraint === 'production_executions_cancel_requires_closed_inspection',
+    );
+
+    // Q-02: cancelling a Production Order releases its allocated RFQ (cancelled, allocation kept).
+    let rfq2 = await sourcingBase.createRfq('rfq2-create', 'product-owner', { ...rfqInput, rfqCode: 'RFQ-TECH-GATE-2' });
+    rfq2 = await sourcingBase.issueRfq('rfq2-issue', 'product-owner', rfq2.rfqCode, { expectedVersion: rfq2.version });
+    rfq2 = await sourcingBase.upsertQuote('rfq2-quote', 'product-owner', rfq2.rfqCode, { expectedVersion: rfq2.version, supplierCode: supplier.supplierCode, unitPriceMinor: 13200, fixedCostMinor: 150000, leadTimeDays: 55, minimumOrderQuantity: 100, validUntil: '2027-10-01T00:00:00.000Z', notes: 'Second lot' });
+    rfq2 = await sourcingBase.awardRfq('rfq2-award', 'product-owner', rfq2.rfqCode, { expectedVersion: rfq2.version, supplierCode: supplier.supplierCode });
+    rfq2 = await allocation.allocateRfq('rfq2-allocate', 'product-owner', rfq2.rfqCode, { ...allocationInput, expectedVersion: rfq2.version, purchaseOrderNumber: 'PO-TECH-GATE-2' });
+    let productionOrder2 = await productionOrders.createFromAllocation('production-order2-create', 'product-owner', rfq2.rfqCode);
+    productionOrder2 = await productionOrders.cancel('production-order2-cancel', 'product-owner', productionOrder2.productionOrderNumber, { expectedVersion: productionOrder2.version, reason: 'Factory lost capacity' });
+    assert.equal(productionOrder2.status, 'cancelled');
+    const releasedRfq = (await pool.query('SELECT status, version, allocated_at, cancelled_at, payload FROM sourcing_rfqs WHERE rfq_code = $1', [rfq2.rfqCode])).rows[0];
+    assert.equal(releasedRfq.status, 'cancelled');
+    assert.equal(releasedRfq.version, rfq2.version + 1);
+    assert.ok(releasedRfq.allocated_at && releasedRfq.cancelled_at, 'allocation stays as the trail');
+    assert.equal(releasedRfq.payload.allocation.purchaseOrderNumber, 'PO-TECH-GATE-2');
+
     assert.equal(pps.status, 'approved');
     assert.equal(chart.status, 'published');
     assert.equal(bom.status, 'published');

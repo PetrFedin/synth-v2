@@ -148,10 +148,13 @@ export function createProductionExecutionService({ store, clock = () => new Date
       validateInput(input, CANCEL_FIELDS, 'PRODUCTION_EXECUTION_CANCEL_INPUT_INVALID');
       const expectedVersion = versionOf(input);
       return execute(commandId, `cancelProductionExecution:${actorId}:${executionCode}:${canonicalJson(input)}`, actorId,
-        (tx) => contextForExecution(tx, executionCode, actorId),
-        async (tx, current) => {
+        async (tx) => {
+          const current = await contextForExecution(tx, executionCode, actorId);
+          return Object.freeze({ current, qualityInspection: await tx.getQualityInspectionByExecutionCode(executionCode) ?? null });
+        },
+        async (tx, { current, qualityInspection }) => {
           assertProductionExecutionVersion(current, expectedVersion);
-          const value = cancelProductionExecution(current, { reason: input.reason, cancelledAt: clock() });
+          const value = cancelProductionExecution(current, { reason: input.reason, cancelledAt: clock(), qualityInspection });
           await tx.saveExecution(value, expectedVersion);
           await append(tx, 'production-execution.cancelled', value, commandId, actorId);
           return value;

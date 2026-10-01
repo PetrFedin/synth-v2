@@ -56,11 +56,31 @@ test('current milestone can be blocked, resolved and then completed without losi
   assert.equal(execution.milestones[0].resolutionNotes,'Replacement bulk approved');
 });
 
-test('final milestone closes production execution as ready-for-qc and prevents cancellation',()=>{
+function readyForQc(){
   let execution=active();
   const times=['2026-08-15','2026-08-25','2026-09-20','2026-10-05','2026-10-15','2026-10-20'];
   for(let index=0;index<execution.milestones.length;index+=1){execution=completeProductionMilestone(execution,{milestoneCode:execution.milestones[index].code,actorId:'planner-1',notes:null,completedAt:`${times[index]}T00:00:00.000Z`})}
+  return execution;
+}
+test('final milestone closes production execution as ready-for-qc',()=>{
+  const execution=readyForQc();
   assert.equal(execution.status,'ready-for-qc');
   assert.equal(execution.readyForQcAt,'2026-10-20T00:00:00.000Z');
-  assert.throws(()=>cancelProductionExecution(execution,{reason:'Too late to cancel',cancelledAt:'2026-10-21T00:00:00.000Z'}),{code:'PRODUCTION_EXECUTION_NOT_CANCELLABLE'});
+});
+
+// Q-01: ready-for-qc was a dead end once Final Quality's single inspection was cancelled or rejected.
+test('ready-for-qc execution can be cancelled when no live Final Quality inspection stands behind it',()=>{
+  const execution=readyForQc();
+  const at='2026-10-21T00:00:00.000Z';
+  for(const qualityInspection of [null,{status:'cancelled'},{status:'rejected'}]){
+    const cancelled=cancelProductionExecution(execution,{reason:'Lot scrapped at the factory',cancelledAt:at,qualityInspection});
+    assert.equal(cancelled.status,'cancelled');
+    assert.equal(cancelled.readyForQcAt,'2026-10-20T00:00:00.000Z');
+    assert.equal(cancelled.version,execution.version+1);
+  }
+  for(const status of ['planned','in-progress','review-pending','rework-required','released']){
+    assert.throws(()=>cancelProductionExecution(execution,{reason:'Lot scrapped at the factory',cancelledAt:at,qualityInspection:{status,inspectionCode:'QCI-1'}}),{code:'PRODUCTION_EXECUTION_QUALITY_INSPECTION_LIVE'},status);
+  }
+  const cancelled=cancelProductionExecution(execution,{reason:'Lot scrapped at the factory',cancelledAt:at});
+  assert.throws(()=>cancelProductionExecution(cancelled,{reason:'Cancel twice please',cancelledAt:at}),{code:'PRODUCTION_EXECUTION_NOT_CANCELLABLE'});
 });

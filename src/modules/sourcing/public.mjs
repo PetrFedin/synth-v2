@@ -242,6 +242,24 @@ export function cancelRfq(rfq, { reason, cancelledAt }) {
   });
 }
 
+// Q-02. A Production Order cancelled before confirmation gives its source back. The RFQ stays the
+// record of what was awarded and allocated (allocation and allocatedAt are kept as the trail), but
+// it stops holding the approved-demand line: a cancelled RFQ no longer counts as active, so a new
+// RFQ can be raised for the same line.
+export function releaseAllocatedRfq(rfq, { productionOrderNumber, reason, releasedAt }) {
+  invariant(rfq?.status === 'allocated', 'RFQ_NOT_ALLOCATED', 'Only an allocated RFQ can be released by a cancelled Production Order', { status: rfq?.status });
+  invariant(rfq.allocation?.purchaseOrderNumber === productionOrderNumber, 'RFQ_ALLOCATION_ORDER_MISMATCH', 'RFQ was allocated to another Production Order', { productionOrderNumber, allocatedTo: rfq.allocation?.purchaseOrderNumber });
+  const at = timestamp(releasedAt, 'RFQ_CANCELLED_AT_INVALID', 'RFQ cancellation time');
+  return freezeRfq({
+    ...rfq,
+    status: 'cancelled',
+    cancellationReason: requiredText(`Production Order ${productionOrderNumber} cancelled: ${reason}`.slice(0, 500), 5, 500, 'RFQ_CANCELLATION_REASON_INVALID', 'RFQ cancellation reason'),
+    version: rfq.version + 1,
+    cancelledAt: at,
+    updatedAt: at,
+  });
+}
+
 function normalizeSupplierInput(input, { requireCode }) {
   invariant(input && typeof input === 'object' && !Array.isArray(input), 'SUPPLIER_INPUT_INVALID', 'Supplier input is invalid');
   const allowed = requireCode ? new Set(['supplierCode', ...SUPPLIER_EDITABLE_FIELDS]) : SUPPLIER_EDITABLE_FIELDS;

@@ -8,6 +8,7 @@
   function allowedActions(value,{canManage=false}={}){
     if(!value||!canManage)return Object.freeze([]);
     if(value.status==='planned')return Object.freeze(['start','cancel']);
+    if(value.status==='ready-for-qc')return Object.freeze(['cancel']);
     if(value.status!=='active')return Object.freeze([]);
     const current=currentMilestone(value);
     if(!current)return Object.freeze([]);

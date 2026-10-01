@@ -807,8 +807,13 @@
       expectedVersion: rfq.version, supplierCode: values.supplierCode, currency: values.currency.trim().toUpperCase(),
       unitPriceMinor: decimalToMinor(values.unitPrice), fixedCostMinor: decimalToMinor(values.fixedCost),
       leadTimeDays: Number(values.leadTimeDays), minimumOrderQuantity: decimalToNumber(values.minimumOrderQuantity),
-      validUntil: iso(values.validUntil), notes: values.notes.trim() || null, tiers: parseQuoteTiers(values.tiers),
+      validUntil: iso(values.validUntil), notes: values.notes.trim() || null, ...tiersField(values.tiers),
     }, 'POST', 'materialRfq')));
+  }
+  // The route rejects `tiers: null` (400: must be an array); an empty field means "no price tiers", so the key is left out.
+  function tiersField(raw) {
+    const tiers = parseQuoteTiers(raw);
+    return tiers ? { tiers } : {};
   }
   function parseQuoteTiers(raw) {
     const parts = (raw || '').split(',').map((item) => item.trim()).filter(Boolean);

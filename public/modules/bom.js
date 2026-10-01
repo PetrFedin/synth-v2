@@ -350,7 +350,7 @@
       sku: existing?.sku || skus[0]?.sku || '', currency: existing?.currency || skus[0]?.currency || 'EUR',
       laborCost: existing?.laborCost ?? 0, overheadCost: existing?.overheadCost ?? 0, logisticsCost: existing?.logisticsCost ?? 0, otherCost: existing?.otherCost ?? 0,
       notes: existing?.notes || '',
-      lines: (existing?.lines || [{ lineId: 'LINE-1', component: '', materialCode: materials[0]?.code || '', quantity: 1, wastePercent: 0, exchangeRate: 1 }]).map((line) => ({ lineId: line.lineId, component: line.component, materialCode: line.materialCode, quantity: line.quantity, wastePercent: line.wastePercent, exchangeRate: line.exchangeRate ?? 1 })),
+      lines: (existing?.lines || [{ lineId: 'LINE-1', component: '', materialCode: materials[0]?.code || '', quantity: 1, wastePercent: 0, exchangeRate: 1 }]).map((line) => ({ lineId: line.lineId, component: line.component, materialCode: line.materialCode, quantity: line.quantity, wastePercent: line.wastePercent, exchangeRate: line.exchangeRate ?? 1, placement: line.placement || '', isMain: line.isMain === true })),
     };
     showEditor({ existing, materials, skus, model });
   }
@@ -447,7 +447,7 @@
       event.preventDefault();
       const payload = {
         currency: model.currency,
-        lines: model.lines.map((line) => ({ lineId: String(line.lineId).trim().toUpperCase(), component: String(line.component).trim(), materialCode: line.materialCode, quantity: Number(line.quantity), wastePercent: Number(line.wastePercent), exchangeRate: Number(line.exchangeRate) })),
+        lines: model.lines.map((line) => ({ lineId: String(line.lineId).trim().toUpperCase(), component: String(line.component).trim(), materialCode: line.materialCode, quantity: Number(line.quantity), wastePercent: Number(line.wastePercent), exchangeRate: Number(line.exchangeRate), placement: String(line.placement || '').trim() || null, isMain: line.isMain === true })),
         laborCost: Number(model.laborCost), overheadCost: Number(model.overheadCost), logisticsCost: Number(model.logisticsCost), otherCost: Number(model.otherCost), notes: model.notes.trim() || null,
       };
       // Without this the save failed as an unhandled rejection: the dialog stayed open, nothing was

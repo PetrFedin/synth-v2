@@ -223,6 +223,15 @@ function compatibilityLine(sku, colorway, styleVersion, preparation, commercialP
     gtin: sku.gtin ?? null,
     styleVersionId: styleVersion.id,
     colorwayId: colorway.colorwayId,
+    // Same drop, same function, one field-family over: `projectColorway()` above already freezes
+    // colorRef/swatchHex/nameRu/nameEn onto the rich hierarchy, and `feat/buyer-catalog-colour-lineage`
+    // (#199) threaded them through buyerCatalogProductSku()'s sibling flat projection — but this one,
+    // the one `publicationLineTable()`/`exportPublication()` in linesheets.js actually read, never got it.
+    colourEntryId: colorway.colorRef?.entryId ?? null,
+    colourEntryVersion: colorway.colorRef?.version ?? null,
+    swatchHex: colorway.swatchHex ?? null,
+    colourNameRu: colorway.nameRu ?? null,
+    colourNameEn: colorway.nameEn ?? null,
     sizeValueId: sku.sizeValueId,
     name: preparation.titleEn,
     // Downstream legacy selection/order contracts still require a positive integer

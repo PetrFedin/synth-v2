@@ -20,6 +20,13 @@ test('V2 publication derives Style -> Colorway -> ordered Size/SKU and price onl
   // the flat compatibility projection (`publication.lines`) that the published-linesheet table,
   // CSV export and order-writing matrix actually read, and it used to drop the field entirely.
   assert.equal(publication.lines[0].gtin, '4601234567890');
+  // Same drop, same function, the colour field-family: projectColorway() already carries
+  // colorRef/swatchHex/nameRu/nameEn, but compatibilityLine() dropped it until now.
+  assert.equal(publication.lines[0].colourEntryId, 'color:black');
+  assert.equal(publication.lines[0].colourEntryVersion, 1);
+  assert.equal(publication.lines[0].swatchHex, '#000000');
+  assert.equal(publication.lines[0].colourNameRu, 'Черный');
+  assert.equal(publication.lines[0].colourNameEn, 'Black');
   assert.equal(Object.hasOwn(publication.styles[0].colorways[0].skus[0], 'legacyCatalogSnapshot'), false);
 });
 

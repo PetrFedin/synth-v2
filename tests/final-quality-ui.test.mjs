@@ -37,6 +37,22 @@ test('Final Quality core exposes lifecycle actions and risk summaries', async ()
   assert.deepEqual(core.filter(values, { search: 'rel-2' }).map((value) => value.inspectionCode), ['QCI-2']);
 });
 
+test('Final Quality run history shows the audit trail behind the aggregate counts, not just the counts', async () => {
+  // completeQualityInspectionRun()/reviewQualityInspection() (src/modules/final-quality/public.mjs)
+  // and the FinalQualityRun OpenAPI schema both already carry these fields on every run — the
+  // history list used to fetch them and render only runNumber/inspectorName/defectCounts/
+  // recommendation/disposition/reworkReference, discarding the itemized records and the decision
+  // rationale an approver is required to type before release/rework/reject.
+  const workspace = await read('public/modules/final-quality.js');
+  const start = workspace.indexOf('function runHistory(value)');
+  const end = workspace.indexOf('\n  function ', start + 1);
+  assert.notEqual(start, -1, 'runHistory() not found');
+  const source = workspace.slice(start, end);
+  for (const field of ['run.defects', 'run.measurementFailures', 'run.checkpoints', 'run.evidenceReferences', 'run.completionNotes', 'run.completedBy', 'run.completedAt', 'run.reviewNotes', 'run.reviewedBy', 'run.reviewedAt', 'run.resolutionNotes']) {
+    assert.ok(source.includes(field), `runHistory() does not read ${field}`);
+  }
+});
+
 test('Final Quality workspace is bilingual, covers every mutation path and maps to shared ODS semantics', async () => {
   const [workspace, capabilities, odsRuntime] = await Promise.all([
     read('public/modules/final-quality.js'), read('public/modules/ui-capabilities.js'), read('public/modules/omnidata-v14-role-system.js'),

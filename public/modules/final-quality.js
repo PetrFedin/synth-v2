@@ -346,9 +346,24 @@
       h('p', { className: 'muted', text: `${run.inspectorName} · ${date(run.startedAt)}` }),
       h('p', { className: 'muted', text: samplingPlanLabel(run.samplingPlan) }),
       run.defectCounts ? h('p', { className: 'muted', text: `${t('Крит./знач./незнач.', 'Critical/major/minor')} ${run.defectCounts.critical}/${run.defectCounts.major}/${run.defectCounts.minor}` }) : null,
+      // The itemized records behind the aggregate counts above — what the inspector typed, not
+      // just the three numbers it rolled up into. Nothing downstream ever showed these again once
+      // the run left the active screen.
+      run.defects?.length ? h('p', { className: 'muted', text: `${t('Дефекты', 'Defects')}: ${run.defects.map((defect) => `${defect.defectCode} ×${defect.quantity} — ${defect.description}`).join('; ')}` }) : null,
+      run.measurementFailures?.length ? h('p', { className: 'muted', text: `${t('Отклонения измерений', 'Measurement failures')}: ${run.measurementFailures.map((failure) => `${failure.pointCode}/${failure.sizeCode} ${failure.measuredValue} (${failure.lowerLimit}–${failure.upperLimit})`).join('; ')}` }) : null,
+      run.checkpoints?.length ? h('p', { className: 'muted', text: `${t('Контрольные точки', 'Checkpoints')}: ${run.checkpoints.map((checkpoint) => `${checkpoint.name}: ${checkpoint.result}`).join(', ')}` }) : null,
+      run.evidenceReferences?.length ? h('p', { className: 'muted', text: `${t('Доказательства', 'Evidence')}: ${run.evidenceReferences.join(', ')}` }) : null,
       run.recommendation ? h('p', { className: 'muted', text: `${t('Рекомендация', 'Recommendation')}: ${recommendationLabel(run.recommendation)}` }) : null,
+      run.completionNotes ? h('p', { className: 'muted', text: `${t('Комментарий инспектора', 'Inspector notes')}: ${run.completionNotes}` }) : null,
+      run.completedAt ? h('p', { className: 'muted', text: `${t('Завершил', 'Completed by')}: ${run.completedBy} · ${date(run.completedAt)}` }) : null,
       run.disposition ? h('p', { className: 'muted', text: `${t('Решение', 'Disposition')}: ${dispositionLabel(run.disposition)}` }) : null,
+      // `reviewNotes` is the rationale the approver was required to type before release/rework/
+      // reject (5–2000 chars, enforced both here and server-side) — it used to vanish the moment
+      // the decision was submitted, leaving no record of WHY a lot was released or rejected.
+      run.reviewNotes ? h('p', { className: 'muted', text: `${t('Обоснование решения', 'Decision rationale')}: ${run.reviewNotes}` }) : null,
+      run.reviewedAt ? h('p', { className: 'muted', text: `${t('Проверил', 'Reviewed by')}: ${run.reviewedBy} · ${date(run.reviewedAt)}` }) : null,
       run.reworkReference ? h('p', { className: 'muted', text: `${t('Доработка', 'Rework')}: ${run.reworkReference}` }) : null,
+      run.resolutionNotes ? h('p', { className: 'muted', text: `${t('Выполненная доработка', 'Rework performed')}: ${run.resolutionNotes}` }) : null,
     ])));
   }
   const INLINE_MILESTONE_LABELS = {

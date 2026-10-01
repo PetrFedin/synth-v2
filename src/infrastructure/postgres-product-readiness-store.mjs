@@ -34,6 +34,10 @@ export function createPostgresProductReadinessStore({ pool } = {}) {
       );
       return Object.freeze(result.rows.map(mapProjection));
     },
+    async listPackRatioTemplatesByBrand(brandId) {
+      const result = await pool.query('SELECT payload FROM pack_ratio_templates WHERE brand_id = $1 ORDER BY name', [brandId]);
+      return Object.freeze(result.rows.map((row) => deepFreeze(row.payload)));
+    },
   });
 }
 
@@ -111,6 +115,19 @@ function view(client) {
           value.publishedBy,
         ],
       );
+    },
+
+    async insertPackRatioTemplate(value) {
+      try {
+        await client.query(
+          `INSERT INTO pack_ratio_templates (id, brand_id, name, payload, created_at, created_by)
+           VALUES ($1,$2,$3,$4::jsonb,$5,$6)`,
+          [value.id, value.brandId, value.name, JSON.stringify(value), value.createdAt, value.createdBy],
+        );
+      } catch (error) {
+        if (error?.code === '23505') invariant(false, 'PACK_RATIO_TEMPLATE_ALREADY_EXISTS', 'A pack ratio template with this name already exists', { brandId: value.brandId, name: value.name });
+        throw error;
+      }
     },
   });
 }

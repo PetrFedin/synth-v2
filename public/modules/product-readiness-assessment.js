@@ -56,15 +56,49 @@
     }
   }
 
+  // Библиотека ростовок бренда: именованные шаблоны `packRatio`, набранные один раз и
+  // переиспользуемые в оценке готовности любой модели того же бренда.
+  async function packRatioTemplatesOf(brandId) {
+    try {
+      return await api(`/v2/product/pack-ratio-templates?brandId=${encodeURIComponent(brandId)}`);
+    } catch (problem) {
+      return [];
+    }
+  }
+
+  function parseRatio(raw) {
+    const trimmed = String(raw || '').trim();
+    if (!trimmed) return null;
+    const parts = trimmed.split(',').map((part) => Number.parseInt(part.trim(), 10));
+    if (!parts.length || parts.some((value) => !Number.isSafeInteger(value) || value <= 0)) {
+      const problem = new Error(text('Ростовка: список положительных целых чисел через запятую, например 1,2,2,1', 'Pack ratio: a comma-separated list of positive integers, e.g. 1,2,2,1'));
+      problem.code = 'PACK_RATIO_INVALID';
+      throw problem;
+    }
+    return parts;
+  }
+
+  function createPackRatioTemplateForm(brandId) {
+    openForm(text('Создать шаблон ростовки', 'Create a pack ratio template'), [
+      textDef('name', text('Название', 'Name'), '', 160),
+      textDef('ratio', text('Ростовка (через запятую)', 'Pack ratio (comma-separated)'), '', 200),
+    ], (values) => mutate('/v2/product/pack-ratio-templates', {
+      brandId,
+      name: values.name,
+      ratio: parseRatio(values.ratio) || [],
+    }));
+  }
+
   function minorToMajor(value) {
     return Number.isSafeInteger(Number(value)) ? String(Number(value) / 100) : '';
   }
 
   async function assessForm(product) {
     const validation = global.SynthaUiValidation;
-    const [styleRead, previous] = await Promise.all([
+    const [styleRead, previous, packRatioTemplates] = await Promise.all([
       api(`/v2/product/styles/${encodeURIComponent(product.id)}`).catch(() => null),
       previousPreparation(product),
+      packRatioTemplatesOf(product.brandId),
     ]);
     const mediaIds = mediaIdsOf(styleRead);
     if (!mediaIds.length) {
@@ -94,6 +128,11 @@
       dateDef('deliveryEnd', text('Поставка по', 'Delivery to'), prep.deliveryEnd || ''),
       selectDef('availabilityMode', text('Доступность', 'Availability'), options(AVAILABILITY), undefined, prep.availability?.mode || 'available_to_sell'),
       numberDef('availabilityQuantity', text('Доступное количество', 'Available quantity'), prep.availability?.quantity ?? '', true, 0),
+      selectDef('packRatioTemplateId', text('Шаблон ростовки', 'Pack ratio template'), [
+        { id: '', name: text('— не из библиотеки —', '— not from the library —') },
+        ...packRatioTemplates.map((template) => ({ id: template.id, name: `${template.name} (${template.ratio.join('/')})` })),
+      ], undefined, '', false),
+      textDef('packRatio', text('Ростовка вручную (через запятую)', 'Pack ratio by hand (comma-separated)'), Array.isArray(prep.packRatio) ? prep.packRatio.join(',') : '', 200, false),
       selectDef('attributeCoverageConfirmed', text('Атрибуты категории заполнены', 'Category attributes are filled in'), [
         { id: 'yes', name: text('да, подтверждаю', 'yes, I confirm') },
         { id: 'no', name: text('нет', 'no') },
@@ -101,6 +140,10 @@
     ];
     openForm(text('Оценить готовность', 'Assess readiness'), fields, (values) => {
       const money = (value, label) => Math.round(validation.number(value, label, { min: 0.01 }) * 100);
+      // Шаблон из библиотеки побеждает ручной ввод: выбрав шаблон, человек явно отказывается от
+      // ручного набора, а не забывает очистить поле рядом.
+      const selectedTemplate = packRatioTemplates.find((template) => template.id === values.packRatioTemplateId);
+      const packRatio = selectedTemplate ? selectedTemplate.ratio : parseRatio(values.packRatio);
       const preparation = {
         titleRu: validation.requiredText(values.titleRu, text('Название (рус.)', 'Title (RU)'), { minLength: 2, maxLength: 200 }),
         titleEn: validation.requiredText(values.titleEn, text('Название (англ.)', 'Title (EN)'), { minLength: 2, maxLength: 200 }),
@@ -120,6 +163,7 @@
           quantity: validation.number(values.availabilityQuantity, text('Доступное количество', 'Available quantity'), { integer: true, min: 0 }),
         },
         mediaIds,
+        packRatio,
         attributeCoverageConfirmed: values.attributeCoverageConfirmed === 'yes',
       };
       validation.dateRange(preparation.deliveryStart, preparation.deliveryEnd, text('Окно поставки', 'Delivery window'));
@@ -143,5 +187,10 @@
     );
   }
 
-  global.SynthaProductReadinessAssessment = Object.freeze({ assessForm, assessAction, mediaIdsOf });
+  function packRatioTemplateAction(product) {
+    if (!canAssess(product) || !product.brandId) return null;
+    return actionButton(text('Шаблон ростовки', 'Pack ratio template'), () => createPackRatioTemplateForm(product.brandId));
+  }
+
+  global.SynthaProductReadinessAssessment = Object.freeze({ assessForm, assessAction, packRatioTemplateAction, mediaIdsOf });
 })(window);

@@ -10,6 +10,7 @@ function harness() {
   const readiness = new Map();
   const projections = [];
   const locks = [];
+  const packRatioTemplates = new Map();
   const membership = { id: 'm:1', organisationId: 'brand:1', organisationType: 'brand', userId: 'user:1', role: 'sales', status: 'active' };
   const tx = {
     getCommand: async (id) => commands.get(id),
@@ -19,6 +20,16 @@ function harness() {
     lockStyleVersion: async (id) => locks.push(id),
     getLatestProjectionForUpdate: async () => projections.at(-1),
     insertCommercialProjection: async (value) => projections.push(value),
+    async insertPackRatioTemplate(value) {
+      for (const existing of packRatioTemplates.values()) {
+        if (existing.brandId === value.brandId && existing.name === value.name) {
+          const error = new Error('A pack ratio template with this name already exists');
+          error.code = 'PACK_RATIO_TEMPLATE_ALREADY_EXISTS';
+          throw error;
+        }
+      }
+      packRatioTemplates.set(value.id, value);
+    },
   };
   const store = {
     transaction: async (work) => work(tx),
@@ -26,6 +37,7 @@ function harness() {
     getCommercialProjection: async (id) => projections.find((value) => value.id === id),
     listReadinessByStyleVersion: async () => [...readiness.values()],
     listCommercialProjectionsByStyleVersion: async () => [...projections],
+    listPackRatioTemplatesByBrand: async (brandId) => [...packRatioTemplates.values()].filter((value) => value.brandId === brandId),
   };
   const sourceReader = {
     getMembership: async () => membership,
@@ -34,7 +46,7 @@ function harness() {
   };
   let sequence = 0;
   const service = createProductReadinessService({ store, sourceReader, clock: () => now, nextId: (prefix) => `${prefix}:${++sequence}` });
-  return { service, commands, readiness, projections, locks };
+  return { service, commands, readiness, projections, locks, packRatioTemplates };
 }
 
 function context() {
@@ -120,4 +132,20 @@ test('projection publish is contiguous, idempotent and serializes version alloca
     (error) => error?.code === 'COMMERCIAL_PROJECTION_CONCURRENCY_CONFLICT',
   );
   assert.deepEqual(h.locks, ['style-version:1', 'style-version:1']);
+});
+
+test('a pack ratio template is created once, replays idempotently, and refuses a duplicate name in the same brand', async () => {
+  const h = harness();
+  const first = await h.service.createPackRatioTemplate('cmd:template', 'user:1', { brandId: 'brand:1', name: 'Стандарт', ratio: [1, 2, 2, 1] });
+  assert.deepEqual(first.ratio, [1, 2, 2, 1]);
+  const replay = await h.service.createPackRatioTemplate('cmd:template', 'user:1', { brandId: 'brand:1', name: 'Стандарт', ratio: [1, 2, 2, 1] });
+  assert.equal(replay.id, first.id);
+  assert.equal(h.packRatioTemplates.size, 1);
+  await assert.rejects(
+    h.service.createPackRatioTemplate('cmd:template-2', 'user:1', { brandId: 'brand:1', name: 'Стандарт', ratio: [1, 1] }),
+    (error) => error?.code === 'PACK_RATIO_TEMPLATE_ALREADY_EXISTS',
+  );
+  const listed = await h.service.listPackRatioTemplatesForActor('user:1', 'brand:1');
+  assert.equal(listed.length, 1);
+  assert.equal(listed[0].name, 'Стандарт');
 });

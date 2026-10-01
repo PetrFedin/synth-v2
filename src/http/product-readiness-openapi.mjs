@@ -8,6 +8,7 @@ const errorResponse = { description: 'Domain or transport error', content: { 'ap
 const idempotencyHeader = { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 1, maxLength: 128, pattern: SAFE_ID_PATTERN } };
 const idParameter = (name) => ({ name, in: 'path', required: true, schema: id() });
 const limitParameter = { name: 'limit', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 200, default: 50 } };
+const brandIdParameter = { name: 'brandId', in: 'query', required: true, schema: id() };
 
 export function withProductReadinessOpenApi(base) {
   const specification = structuredClone(base);
@@ -81,6 +82,15 @@ function schemas() {
     },
     ProductReadinessSnapshotList: { type: 'array', maxItems: 200, items: { $ref: '#/components/schemas/ProductReadinessSnapshot' } },
     CommercialProductProjectionList: { type: 'array', maxItems: 200, items: { $ref: '#/components/schemas/CommercialProductProjectionVersion' } },
+    PackRatioTemplateCreate: {
+      type: 'object', additionalProperties: false, required: ['brandId', 'name', 'ratio'],
+      properties: { brandId: id(), name: text(1, 160), ratio: { type: 'array', minItems: 1, maxItems: 50, items: { type: 'integer', minimum: 1 } } },
+    },
+    PackRatioTemplate: {
+      type: 'object', additionalProperties: false, required: ['id', 'brandId', 'name', 'ratio', 'createdAt', 'createdBy'],
+      properties: { id: id(), brandId: id(), name: text(1, 160), ratio: { type: 'array', minItems: 1, maxItems: 50, items: { type: 'integer', minimum: 1 } }, createdAt: dateTime(), createdBy: id() },
+    },
+    PackRatioTemplateList: { type: 'array', maxItems: 200, items: { $ref: '#/components/schemas/PackRatioTemplate' } },
   };
 }
 
@@ -94,6 +104,10 @@ function paths() {
     '/product/readiness/{readinessSnapshotId}/commercial-projection': { post: mutation('publishCommercialProductProjection', [idParameter('readinessSnapshotId')], '#/components/schemas/CommercialProductProjectionPublishInput', '#/components/schemas/CommercialProductProjectionVersion', 'Published immutable CommercialProductProjectionVersion') },
     '/product/commercial-projections/{projectionId}': { get: read('getCommercialProductProjection', [idParameter('projectionId')], '#/components/schemas/CommercialProductProjectionVersion', 'CommercialProductProjectionVersion') },
     '/product/style-versions/{styleVersionId}/commercial-projections': { get: read('listCommercialProductProjections', [idParameter('styleVersionId'), limitParameter], '#/components/schemas/CommercialProductProjectionList', 'Commercial Product Projection versions') },
+    '/product/pack-ratio-templates': {
+      post: mutation('createPackRatioTemplate', [], '#/components/schemas/PackRatioTemplateCreate', '#/components/schemas/PackRatioTemplate', 'Created PackRatioTemplate'),
+      get: read('listPackRatioTemplates', [brandIdParameter], '#/components/schemas/PackRatioTemplateList', 'Pack ratio templates for exact brand'),
+    },
   };
 }
 

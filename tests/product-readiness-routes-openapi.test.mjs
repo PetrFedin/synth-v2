@@ -47,6 +47,27 @@ test('assessment transport rejects unknown commercial or external evidence field
   );
 });
 
+test('pack ratio template transport wires through to the service and rejects a bad ratio', async () => {
+  const { service, calls } = serviceSpy();
+  const routes = createProductReadinessRoutes({ productReadiness: service });
+  const create = route(routes, 'POST', '/v2/product/pack-ratio-templates');
+  const list = route(routes, 'GET', '/v2/product/pack-ratio-templates');
+  assert(create?.mutation);
+  assert(!list?.mutation);
+  await create.execute({ actorId: 'user:1', commandId: 'cmd:1', params: [], query: {}, body: { brandId: 'brand:1', name: 'Стандарт', ratio: [1, 2, 2, 1] } });
+  assert.equal(calls[0][0], 'createPackRatioTemplate');
+  assert.throws(
+    () => create.execute({ actorId: 'user:1', commandId: 'cmd:1', params: [], query: {}, body: { brandId: 'brand:1', name: 'Стандарт', ratio: [1, 0, 1] } }),
+    (error) => error?.code === 'HTTP_BODY_FIELD_INVALID',
+  );
+  await list.execute({ actorId: 'user:1', params: [], query: { brandId: 'brand:1' } });
+  assert.equal(calls.at(-1)[0], 'listPackRatioTemplatesForActor');
+  assert.throws(
+    () => list.execute({ actorId: 'user:1', params: [], query: {} }),
+    (error) => error?.code === 'HTTP_QUERY_FIELD_INVALID',
+  );
+});
+
 test('OpenAPI publishes readiness/projection snapshots and all mutations require idempotency keys', () => {
   for (const path of [
     '/product/style-versions/{styleVersionId}/readiness',
@@ -54,10 +75,12 @@ test('OpenAPI publishes readiness/projection snapshots and all mutations require
     '/product/readiness/{readinessSnapshotId}/commercial-projection',
     '/product/commercial-projections/{projectionId}',
     '/product/style-versions/{styleVersionId}/commercial-projections',
+    '/product/pack-ratio-templates',
   ]) assert(spec.paths[path], `missing ${path}`);
   assert.equal(spec.components.schemas.ProductReadinessSnapshot.properties.dimensions.minItems, 18);
   for (const operation of [
     spec.paths['/product/style-versions/{styleVersionId}/readiness'].post,
     spec.paths['/product/readiness/{readinessSnapshotId}/commercial-projection'].post,
+    spec.paths['/product/pack-ratio-templates'].post,
   ]) assert(operation.parameters.some((parameter) => parameter.name === 'Idempotency-Key' && parameter.required));
 });

@@ -95,3 +95,11 @@ All acceptance commands require `SYNTHA_ACCEPTANCE_BASE_URL` and a database URL 
 ## Operations
 
 Production metrics, scrape security, cardinality rules and incident response are documented in [`docs/observability.md`](docs/observability.md). Initial Prometheus alerts are provided in [`ops/prometheus/syntha-v2-alerts.yml`](ops/prometheus/syntha-v2-alerts.yml).
+
+## Planned integration roadmap
+
+Canonical implementation plan:
+
+- [docs/SYNTH_V2_INTEGRATION_MASTER_PLAN_2026-10-01.md](./docs/SYNTH_V2_INTEGRATION_MASTER_PLAN_2026-10-01.md)
+
+This file is a **planned implementation source**, not evidence that all listed capabilities are already live. Future full-roadmap implementation should cite this filename explicitly and follow its phases, authority boundaries, dependencies and acceptance gates.

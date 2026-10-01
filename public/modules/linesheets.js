@@ -850,6 +850,21 @@
     return block;
   }
 
+  // A compact day.month pair — the full formatDate() timestamp (with hour:minute) is built for an
+  // audit trail, not a cell caption a buyer skims across a whole size run.
+  function formatShortDate(raw) {
+    const date = raw ? new Date(raw) : null;
+    if (!date || Number.isNaN(date.getTime())) return null;
+    return new Intl.DateTimeFormat(I18N.getLocale() === 'en' ? 'en-GB' : 'ru-RU', { day: '2-digit', month: '2-digit' }).format(date);
+  }
+
+  function cellDeliveryWindow(cell) {
+    const start = formatShortDate(cell.deliveryStart);
+    const end = formatShortDate(cell.deliveryEnd);
+    if (!start || !end) return '';
+    return ` · ${text('отгрузка', 'ships')} ${start}–${end}`;
+  }
+
   function matrixCell(cell, editable, style, rowIndex, sizeIndex) {
     const block = el('div', { className: 'ls9-cell' });
     const identityTitle = cell.gtin ? `${cell.productSkuId} · ${cell.sizeValueId} · GTIN ${cell.gtin}` : `${cell.productSkuId} · ${cell.sizeValueId}`;
@@ -901,7 +916,8 @@
     // order is actually written in says the same.
     const availability = cell.availableToSell === null ? text('доступность по условиям', 'availability per terms') : `${text('доступно', 'available')} ${cell.availableToSell}`;
     const pack = cell.packSize ? ` · ${text('кратно', 'packs of')} ${cell.packSize}` : '';
-    block.append(el('small', { rawText: `${formatMoney(cell.unitPrice, cell.currency)} · ${text('мин.', 'min.')} ${cell.minimumOrderQuantity}${pack} · ${availability}` }));
+    const delivery = cellDeliveryWindow(cell);
+    block.append(el('small', { rawText: `${formatMoney(cell.unitPrice, cell.currency)} · ${text('мин.', 'min.')} ${cell.minimumOrderQuantity}${pack} · ${availability}${delivery}` }));
     markCell(block, cell, LS.quantities[cell.sku] ?? '');
     return block;
   }

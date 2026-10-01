@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import { createCatalogSku, updateDraftCatalogSku } from '../src/modules/catalog/public.mjs';
-import { assertBuyerCatalogQuantity } from '../src/modules/commercial-publication/buyer-catalog-product.mjs';
+import { assertBuyerCatalogQuantity, buyerCatalogProductSku } from '../src/modules/commercial-publication/buyer-catalog-product.mjs';
 
 const root = process.cwd();
 const collection = { id: 'collection-1', brandId: 'brand-1', currency: 'EUR' };
@@ -51,6 +51,36 @@ test('A quantity between two boxes is refused, and the refusal names the next wh
   }
   // With no pack declared the SKU is sold by the unit and any quantity above the minimum stands.
   assert.doesNotThrow(() => assertBuyerCatalogQuantity({ ...product, packSize: null }, 14));
+});
+
+test('The frozen delivery promise rides the same price line as the pack and MOQ, not just them', () => {
+  // The delivery window is a readiness gate on every SKU (product-readiness/public.mjs), and it sits
+  // on the exact same priceLine as minimumOrderQuantity/packSize/availability — buyerCatalogProductSku()
+  // used to cherry-pick everything around it and leave it out, so a buyer could never see it.
+  const catalog = {
+    id: 'buyer:1',
+    status: 'published',
+    currency: 'EUR',
+    styles: [{
+      styleId: 'style:1',
+      styleVersionId: 'style-version:1',
+      colorways: [{
+        colorwayId: 'color:black',
+        skus: [{
+          productSkuId: 'psku:1', skuCode: 'TEE-1', sizeValueId: 'size:m',
+          size: { id: 'size:m', code: 'M', sortOrder: 1 },
+        }],
+      }],
+    }],
+    lines: [{
+      sku: 'TEE-1', productSkuId: 'psku:1', styleVersionId: 'style-version:1', colorwayId: 'color:black', sizeValueId: 'size:m',
+      catalogVersion: 1, unitPrice: 24, currency: 'EUR', minimumOrderQuantity: 12,
+      deliveryStart: '2027-02-01', deliveryEnd: '2027-04-30',
+    }],
+  };
+  const product = buyerCatalogProductSku(catalog, { skuCode: 'TEE-1' });
+  assert.equal(product.deliveryStart, '2027-02-01');
+  assert.equal(product.deliveryEnd, '2027-04-30');
 });
 
 test('The pack travels frozen from the SKU to the cell the order is typed in', async () => {

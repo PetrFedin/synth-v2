@@ -30,6 +30,7 @@ export function createPostgresSupplierPortalReader({ pool } = {}) {
   return Object.freeze({
     rfqsForActor: (actorId, options) => page('supplier_portal_rfq_workspace', 'portal.response_due_at ASC, portal.rfq_code ASC', actorId, options),
     ordersForActor: (actorId, options) => page('supplier_portal_order_workspace', 'portal.delivery_due_at ASC, portal.production_order_number ASC', actorId, options),
+    // Q-03. A suspended or archived supplier is not listed: the person keeps the grant, not the access.
     suppliersForActor(actorId) {
       return withPostgresTransaction(pool, async (queryable) => {
         const result = await queryable.query(
@@ -43,6 +44,7 @@ export function createPostgresSupplierPortalReader({ pool } = {}) {
                ON supplier.brand_id = access.brand_id AND supplier.supplier_code = access.supplier_code
              JOIN organisations AS brand ON brand.id = access.brand_id
             WHERE access.user_id = $1 AND access.status = 'active'
+              AND supplier.status = 'qualified'
             ORDER BY access.supplier_code ASC`,
           [actorId],
         );

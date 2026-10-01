@@ -108,9 +108,12 @@ export function createProductionOrderService({ store, clock = () => new Date().t
         async (tx) => {
           const current = requireEntity(await tx.getProductionOrderByNumber(productionOrderNumber), 'PRODUCTION_ORDER_NOT_FOUND', { productionOrderNumber });
           await authorize(tx, current.brandId, actorId, CAPABILITIES.PRODUCTION_ORDER_MANAGE);
-          return current;
+          return Object.freeze({ current, supplier: await tx.getSupplierByCode(current.brandId, current.supplierCode) });
         },
-        async (tx, current) => {
+        async (tx, { current, supplier }) => {
+          // Q-03. A supplier that was suspended or archived after the order was drafted or issued takes no
+          // new order: the brand may cancel it, but it cannot be issued to, or accepted by, that supplier.
+          invariant(supplier?.status === 'qualified', 'PRODUCTION_ORDER_SUPPLIER_NOT_QUALIFIED', 'Production Order supplier must remain qualified', { supplierCode: current.supplierCode, status: supplier?.status ?? null });
           assertProductionOrderVersion(current, expectedVersion);
           const value = issueProductionOrder(current, { actorId, issuedAt: clock() });
           await tx.saveProductionOrder(value, expectedVersion);
@@ -128,9 +131,12 @@ export function createProductionOrderService({ store, clock = () => new Date().t
         async (tx) => {
           const current = requireEntity(await tx.getProductionOrderByNumber(productionOrderNumber), 'PRODUCTION_ORDER_NOT_FOUND', { productionOrderNumber });
           await authorize(tx, current.brandId, actorId, CAPABILITIES.PRODUCTION_ORDER_CONFIRM);
-          return current;
+          return Object.freeze({ current, supplier: await tx.getSupplierByCode(current.brandId, current.supplierCode) });
         },
-        async (tx, current) => {
+        async (tx, { current, supplier }) => {
+          // Q-03. A supplier that was suspended or archived after the order was drafted or issued takes no
+          // new order: the brand may cancel it, but it cannot be issued to, or accepted by, that supplier.
+          invariant(supplier?.status === 'qualified', 'PRODUCTION_ORDER_SUPPLIER_NOT_QUALIFIED', 'Production Order supplier must remain qualified', { supplierCode: current.supplierCode, status: supplier?.status ?? null });
           assertProductionOrderVersion(current, expectedVersion);
           const value = confirmProductionOrder(current, { ...without(input, ['expectedVersion']), confirmedAt: clock() });
           await tx.saveProductionOrder(value, expectedVersion);

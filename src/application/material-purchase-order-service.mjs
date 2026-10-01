@@ -85,9 +85,12 @@ export function createMaterialPurchaseOrderService({ store, clock = () => new Da
         async (tx) => {
           const current = requireEntity(await tx.getPurchaseOrderByNumber(purchaseOrderNumber), 'MATERIAL_PURCHASE_ORDER_NOT_FOUND', { purchaseOrderNumber });
           await authorize(tx, current.brandId, actorId, CAPABILITIES.MATERIAL_PURCHASE_MANAGE);
-          return current;
+          return Object.freeze({ current, supplier: await tx.getSupplierByCode(current.brandId, current.supplierCode) });
         },
-        async (tx, current) => {
+        async (tx, { current, supplier }) => {
+          // Q-03. A supplier that was suspended or archived after the order was drafted or issued takes no
+          // new order: the brand may cancel it, but it cannot be issued to, or accepted by, that supplier.
+          invariant(supplier?.status === 'qualified', 'MATERIAL_PURCHASE_ORDER_SUPPLIER_NOT_QUALIFIED', 'Material Purchase Order supplier must remain qualified', { supplierCode: current.supplierCode, status: supplier?.status ?? null });
           assertMaterialPurchaseOrderVersion(current, expectedVersion);
           const value = issueMaterialPurchaseOrder(current, { actorId, issuedAt: clock() });
           await tx.savePurchaseOrder(value, expectedVersion);
@@ -105,9 +108,12 @@ export function createMaterialPurchaseOrderService({ store, clock = () => new Da
         async (tx) => {
           const current = requireEntity(await tx.getPurchaseOrderByNumber(purchaseOrderNumber), 'MATERIAL_PURCHASE_ORDER_NOT_FOUND', { purchaseOrderNumber });
           await authorize(tx, current.brandId, actorId, CAPABILITIES.MATERIAL_PURCHASE_MANAGE);
-          return current;
+          return Object.freeze({ current, supplier: await tx.getSupplierByCode(current.brandId, current.supplierCode) });
         },
-        async (tx, current) => {
+        async (tx, { current, supplier }) => {
+          // Q-03. A supplier that was suspended or archived after the order was drafted or issued takes no
+          // new order: the brand may cancel it, but it cannot be issued to, or accepted by, that supplier.
+          invariant(supplier?.status === 'qualified', 'MATERIAL_PURCHASE_ORDER_SUPPLIER_NOT_QUALIFIED', 'Material Purchase Order supplier must remain qualified', { supplierCode: current.supplierCode, status: supplier?.status ?? null });
           assertMaterialPurchaseOrderVersion(current, expectedVersion);
           const value = confirmMaterialPurchaseOrder(current, { ...without(input, ['expectedVersion']), confirmedAt: clock() });
           await tx.savePurchaseOrder(value, expectedVersion);

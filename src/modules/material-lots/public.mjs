@@ -331,11 +331,22 @@ export function assertShipmentIsTraceable(execution, bom, issues) {
   const lines = Array.isArray(bom?.lines) ? bom.lines : null;
   if (lines === null || lines.length === 0) return null;
   const issued = Array.isArray(issues) ? issues : [];
-  invariant(issued.length > 0, 'QUALITY_RELEASE_WITHOUT_MATERIAL_TRACE',
+  const billedMaterials = [...new Set(lines.map((line) => line?.materialCode).filter(Boolean))];
+  // Q-04. Раньше хватало любой выдачи: одна пуговичная партия открывала отгрузку изделия, в
+  // ведомости которого есть ткань, и ни одного рулона ткани названо не было. Теперь по каждому
+  // материалу, который обязан прослеживаться, должна быть своя выдача. Обязательны основные ткани —
+  // у них красильные партии, ради которых и ведётся учёт; если в ведомости тканей нет, обязательны
+  // все материалы ведомости. Остальное (фурнитура, упаковка) выпуск не блокирует.
+  const fabrics = [...new Set(lines.filter((line) => line?.materialType === 'fabric').map((line) => line.materialCode).filter(Boolean))];
+  const mustTrace = fabrics.length > 0 ? fabrics : billedMaterials;
+  const issuedMaterials = new Set(issued.map((issue) => issue?.materialCode).filter(Boolean));
+  const missingMaterials = mustTrace.filter((materialCode) => !issuedMaterials.has(materialCode));
+  invariant(issued.length > 0 && missingMaterials.length === 0, 'QUALITY_RELEASE_WITHOUT_MATERIAL_TRACE',
     'A shipment cannot be released before the material lots it was made from are recorded',
     {
       executionCode: execution?.executionCode ?? null,
-      billedMaterials: lines.map((line) => line?.materialCode).filter(Boolean),
+      billedMaterials,
+      missingMaterials,
     });
   return issued.map((issue) => issue?.lotReference).filter(Boolean);
 }

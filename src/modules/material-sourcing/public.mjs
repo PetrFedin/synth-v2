@@ -82,12 +82,14 @@ export function upsertMaterialRfqQuote(rfq, { supplier, input, receivedAt }) {
 
 // A counter-offer. Mirrors sourcing/public.mjs's counterRfqQuote one to one: the buyer answers a
 // quotation with the quantity and price they are prepared to place, recorded against the quotation
-// it answers so a later revision can be read against what was actually asked for. Award still prices
-// off the quotation's own base rate, exactly as the finished-goods RFQ does -- a counter-offer or a
-// price tier changes what the negotiation shows, not what award mechanically applies.
+// it answers so a later revision can be read against what was actually asked for. The counter changes
+// nothing until the supplier agrees to it: acceptMaterialRfqCounterOffer is the step that turns it into
+// the quotation award prices off (Q-05).
 export function counterMaterialRfqQuote(rfq, { supplier, input, offeredAt, offeredBy }) {
   invariant(rfq?.status === 'quoted', 'MATERIAL_RFQ_NOT_NEGOTIABLE', 'Only a quoted Material RFQ can be countered', { status: rfq?.status });
   const at = timestamp(offeredAt, 'MATERIAL_RFQ_COUNTER_OFFERED_AT_INVALID', 'Counter-offer time');
+  // Q-03. A suspended or archived supplier takes no further part in the negotiation.
+  assertQualifiedSupplier(supplier, rfq.brandId);
   invariant(typeof offeredBy === 'string' && offeredBy.trim(), 'MATERIAL_RFQ_COUNTER_ACTOR_REQUIRED', 'Counter-offer actor is required');
   const quote = rfq.quotes.find((item) => item.supplierCode === supplier?.supplierCode);
   invariant(quote, 'MATERIAL_RFQ_QUOTE_NOT_FOUND', 'That supplier has no quotation to counter', { supplierCode: supplier?.supplierCode });
@@ -111,6 +113,36 @@ export function counterMaterialRfqQuote(rfq, { supplier, input, offeredAt, offer
   const quotes = rfq.quotes.map((item) => (item.supplierCode === quote.supplierCode
     ? Object.freeze({ ...item, counterOffer })
     : item));
+  return freezeRfq({ ...rfq, quotes: Object.freeze(quotes), version: rfq.version + 1, updatedAt: at });
+}
+
+// Q-05. Mirrors acceptRfqCounterOffer: an agreed counter-offer becomes the quotation, so award prices
+// off the agreed terms. Only a counter for the RFQ's own quantity can be accepted.
+export function acceptMaterialRfqCounterOffer(rfq, { supplier, acceptedAt, acceptedBy }) {
+  invariant(rfq?.status === 'quoted', 'MATERIAL_RFQ_NOT_NEGOTIABLE', 'Only a quoted Material RFQ has a counter-offer to accept', { status: rfq?.status });
+  const at = timestamp(acceptedAt, 'MATERIAL_RFQ_COUNTER_ACCEPTED_AT_INVALID', 'Counter-offer acceptance time');
+  invariant(typeof acceptedBy === 'string' && acceptedBy.trim(), 'MATERIAL_RFQ_COUNTER_ACTOR_REQUIRED', 'Counter-offer actor is required');
+  assertQualifiedSupplier(supplier, rfq.brandId);
+  const quote = rfq.quotes.find((item) => item.supplierCode === supplier.supplierCode);
+  invariant(quote, 'MATERIAL_RFQ_QUOTE_NOT_FOUND', 'That supplier has no quotation', { supplierCode: supplier.supplierCode });
+  const counter = quote.counterOffer;
+  invariant(counter, 'MATERIAL_RFQ_COUNTER_NOT_FOUND', 'That quotation has no counter-offer to accept', { supplierCode: supplier.supplierCode });
+  invariant(!counter.acceptedAt, 'MATERIAL_RFQ_COUNTER_ALREADY_ACCEPTED', 'That counter-offer was already accepted', { supplierCode: supplier.supplierCode });
+  invariant(counter.answersQuoteRevision === quote.revision, 'MATERIAL_RFQ_COUNTER_STALE', 'The quotation was revised after this counter-offer', { answersQuoteRevision: counter.answersQuoteRevision, quoteRevision: quote.revision });
+  invariant(Date.parse(quote.validUntil) >= Date.parse(at), 'MATERIAL_RFQ_QUOTE_EXPIRED', 'That quotation has expired', { validUntil: quote.validUntil });
+  invariant(counter.quantity === rfq.targetQuantity, 'MATERIAL_RFQ_COUNTER_QUANTITY_DIFFERS', 'Only a counter-offer for the RFQ quantity can be accepted', { counterQuantity: counter.quantity, targetQuantity: rfq.targetQuantity });
+  const totalCostMinor = Math.round(counter.unitPriceMinor * rfq.targetQuantity) + quote.fixedCostMinor;
+  invariant(Number.isSafeInteger(totalCostMinor), 'MATERIAL_RFQ_QUOTE_TOTAL_TOO_LARGE', 'Quotation total exceeds supported precision');
+  const agreed = Object.freeze({
+    ...quote,
+    unitPriceMinor: counter.unitPriceMinor,
+    totalCostMinor,
+    tiers: Object.freeze([]),
+    revision: quote.revision + 1,
+    previousTerms: Object.freeze({ revision: quote.revision, unitPriceMinor: quote.unitPriceMinor, totalCostMinor: quote.totalCostMinor, tiers: Object.freeze([...(quote.tiers ?? [])]) }),
+    counterOffer: Object.freeze({ ...counter, acceptedAt: at, acceptedBy: acceptedBy.trim() }),
+  });
+  const quotes = rfq.quotes.map((item) => (item.supplierCode === quote.supplierCode ? agreed : item));
   return freezeRfq({ ...rfq, quotes: Object.freeze(quotes), version: rfq.version + 1, updatedAt: at });
 }
 

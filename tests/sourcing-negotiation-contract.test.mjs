@@ -14,8 +14,8 @@ const quote = Object.freeze({
     Object.freeze({ quantity: 1000, unitPriceMinor: 4400 }),
   ]),
 });
-const rfq = Object.freeze({ status: 'quoted', version: 3, quotes: Object.freeze([quote]) });
-const supplier = Object.freeze({ supplierCode: 'SUP-1' });
+const rfq = Object.freeze({ status: 'quoted', brandId: 'brand-1', version: 3, quotes: Object.freeze([quote]) });
+const supplier = Object.freeze({ supplierCode: 'SUP-1', brandId: 'brand-1', status: 'qualified' });
 
 test('the price that applies is the largest break at or below the quantity', () => {
   assert.equal(quotedUnitPriceFor(quote, 50), 5200);

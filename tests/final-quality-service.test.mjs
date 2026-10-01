@@ -254,7 +254,7 @@ test('a shipment is not released while the rolls it was made from are unknown', 
   assert.equal(state.releases.length, 0);
   assert.equal(state.inspection.status, 'review-pending');
 
-  state.lotIssues = [{ lotReference: 'ROLL-R3-A-001' }];
+  state.lotIssues = [{ lotReference: 'ROLL-R3-A-001', materialCode: 'MAT-SHELL-R5' }];
   inspection = await service.review('quality-review-trace-2', 'owner', state.inspection.inspectionCode, {
     expectedVersion: state.inspection.version, decision: 'release', releaseCode: 'REL-TRACE-1', notes: 'Годна',
   });

@@ -156,6 +156,9 @@ export function upsertRfqQuote(rfq, { supplier, input, receivedAt }) {
 export function counterRfqQuote(rfq, { supplier, input, offeredAt, offeredBy }) {
   invariant(rfq?.status === 'quoted', 'RFQ_NOT_NEGOTIABLE', 'Only a quoted RFQ can be countered', { status: rfq?.status });
   const at = timestamp(offeredAt, 'RFQ_COUNTER_OFFERED_AT_INVALID', 'Counter-offer time');
+  // Q-03. A supplier that was suspended or archived after quoting no longer takes part in the
+  // negotiation: a counter-offer is a new action towards it, like a quotation or an award.
+  assertQualifiedSupplier(supplier, rfq.brandId);
   invariant(typeof offeredBy === 'string' && offeredBy.trim(), 'RFQ_COUNTER_ACTOR_REQUIRED', 'Counter-offer actor is required');
   const quote = rfq.quotes.find((item) => item.supplierCode === supplier?.supplierCode);
   invariant(quote, 'RFQ_QUOTE_NOT_FOUND', 'That supplier has no quotation to counter', { supplierCode: supplier?.supplierCode });
@@ -181,6 +184,44 @@ export function counterRfqQuote(rfq, { supplier, input, offeredAt, offeredBy }) 
   const quotes = rfq.quotes.map((item) => (item.supplierCode === quote.supplierCode
     ? Object.freeze({ ...item, counterOffer })
     : item));
+  return freezeRfq({ ...rfq, quotes: Object.freeze(quotes), version: rfq.version + 1, updatedAt: at });
+}
+
+// Q-05. A counter-offer that the supplier has agreed to is no longer a note beside the quotation:
+// it becomes the quotation. The price the buyer asked for replaces the quoted price, the total is
+// recomputed from it, and the quotation moves to a new revision, so an award afterwards prices off
+// the agreed terms rather than off the figure the supplier first offered. What the supplier first
+// quoted stays on the record (`previousTerms`), and the counter keeps who accepted it and when.
+//
+// Only a counter for the RFQ's own quantity can be accepted: the award, the allocation and every
+// other supplier's quotation are priced for `targetQuantity`, and a different agreed quantity would
+// be a change to the RFQ itself, which is a decision for the buyer rather than a side effect.
+export function acceptRfqCounterOffer(rfq, { supplier, acceptedAt, acceptedBy }) {
+  invariant(rfq?.status === 'quoted', 'RFQ_NOT_NEGOTIABLE', 'Only a quoted RFQ has a counter-offer to accept', { status: rfq?.status });
+  const at = timestamp(acceptedAt, 'RFQ_COUNTER_ACCEPTED_AT_INVALID', 'Counter-offer acceptance time');
+  invariant(typeof acceptedBy === 'string' && acceptedBy.trim(), 'RFQ_COUNTER_ACTOR_REQUIRED', 'Counter-offer actor is required');
+  assertQualifiedSupplier(supplier, rfq.brandId);
+  const quote = rfq.quotes.find((item) => item.supplierCode === supplier.supplierCode);
+  invariant(quote, 'RFQ_QUOTE_NOT_FOUND', 'That supplier has no quotation', { supplierCode: supplier.supplierCode });
+  const counter = quote.counterOffer;
+  invariant(counter, 'RFQ_COUNTER_NOT_FOUND', 'That quotation has no counter-offer to accept', { supplierCode: supplier.supplierCode });
+  invariant(!counter.acceptedAt, 'RFQ_COUNTER_ALREADY_ACCEPTED', 'That counter-offer was already accepted', { supplierCode: supplier.supplierCode });
+  invariant(counter.answersQuoteRevision === quote.revision, 'RFQ_COUNTER_STALE', 'The quotation was revised after this counter-offer', { answersQuoteRevision: counter.answersQuoteRevision, quoteRevision: quote.revision });
+  invariant(Date.parse(quote.validUntil) >= Date.parse(at), 'RFQ_QUOTE_EXPIRED', 'That quotation has expired', { validUntil: quote.validUntil });
+  invariant(counter.quantity === rfq.targetQuantity, 'RFQ_COUNTER_QUANTITY_DIFFERS', 'Only a counter-offer for the RFQ quantity can be accepted', { counterQuantity: counter.quantity, targetQuantity: rfq.targetQuantity });
+  const totalCostMinor = counter.unitPriceMinor * rfq.targetQuantity + quote.fixedCostMinor;
+  invariant(Number.isSafeInteger(totalCostMinor), 'RFQ_QUOTE_TOTAL_TOO_LARGE', 'Quotation total exceeds supported precision');
+  const agreed = Object.freeze({
+    ...quote,
+    unitPriceMinor: counter.unitPriceMinor,
+    totalCostMinor,
+    // The ladder described the old price; the agreed price is one price for the agreed quantity.
+    tiers: Object.freeze([]),
+    revision: quote.revision + 1,
+    previousTerms: Object.freeze({ revision: quote.revision, unitPriceMinor: quote.unitPriceMinor, totalCostMinor: quote.totalCostMinor, tiers: Object.freeze([...(quote.tiers ?? [])]) }),
+    counterOffer: Object.freeze({ ...counter, acceptedAt: at, acceptedBy: acceptedBy.trim() }),
+  });
+  const quotes = rfq.quotes.map((item) => (item.supplierCode === quote.supplierCode ? agreed : item));
   return freezeRfq({ ...rfq, quotes: Object.freeze(quotes), version: rfq.version + 1, updatedAt: at });
 }
 

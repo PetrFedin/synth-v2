@@ -4,6 +4,7 @@ import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
 import { assertPostgresInteger } from '../core/money.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
 import {
+  acceptRfqCounterOffer as acceptRfqCounterOfferDomain,
   allocateRfq as allocateRfqDomain,
   archiveSupplier as archiveSupplierDomain,
   awardRfq as awardRfqDomain,
@@ -33,6 +34,7 @@ const RFQ_OPTIONAL = Object.freeze(['sampleRequested', 'techPackCode']);
 const RFQ_CREATE_FIELDS = Object.freeze(new Set(['rfqCode', 'sku', ...RFQ_EDITABLE, ...RFQ_OPTIONAL]));
 const RFQ_UPDATE_FIELDS = Object.freeze(new Set(['expectedVersion', ...RFQ_EDITABLE, ...RFQ_OPTIONAL]));
 const QUOTE_FIELDS = Object.freeze(new Set(['expectedVersion', 'supplierCode', 'unitPriceMinor', 'fixedCostMinor', 'leadTimeDays', 'minimumOrderQuantity', 'validUntil', 'notes', 'tiers']));
+const ACCEPT_COUNTER_FIELDS = Object.freeze(new Set(['expectedVersion', 'supplierCode']));
 const COUNTER_FIELDS = Object.freeze(new Set(['expectedVersion', 'supplierCode', 'quantity', 'unitPriceMinor', 'notes']));
 const AWARD_FIELDS = Object.freeze(new Set(['expectedVersion', 'supplierCode']));
 const ALLOCATION_FIELDS = Object.freeze(new Set(['expectedVersion', 'purchaseOrderNumber', 'quantity', 'productionStartAt', 'deliveryDueAt', 'notes']));
@@ -320,6 +322,16 @@ export function createSourcingService({ sourcingStore, clock = () => new Date().
           offeredAt: clock(),
           offeredBy: actorId,
         }),
+      });
+    },
+
+    // Q-05. The supplier's agreement to the counter-offer, recorded by the brand the way a quotation
+    // is: the counter stops being a note beside the quotation and becomes the quotation.
+    acceptCounterQuote(commandId, actorId, rfqCode, input) {
+      return rfqTransition({
+        commandName: 'acceptRfqCounterOffer', eventType: () => 'rfq.counter-accepted', commandId, actorId, rfqCode, input, fields: ACCEPT_COUNTER_FIELDS,
+        prepare: async (tx, rfq, value) => ({ supplier: requireEntity(await tx.getSupplierByCode(value.supplierCode), 'SUPPLIER_NOT_FOUND', { supplierCode: value.supplierCode }) }),
+        transform: (context) => acceptRfqCounterOfferDomain(context.rfq, { supplier: context.supplier, acceptedAt: clock(), acceptedBy: actorId }),
       });
     },
 

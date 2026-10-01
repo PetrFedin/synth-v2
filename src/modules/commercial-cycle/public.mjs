@@ -35,7 +35,36 @@ export function createCommercialCycle({ id, brandId, shopId, campaign, collectio
   });
 }
 
+// Закрытый цикл — терминальное состояние «бросили»: стадии `COMMERCIAL_STAGES` идут только вперёд,
+// а выхода из цикла, в котором заказ отменён или так и не оформлен, не было — он висел на своей
+// стадии вечно и считался открытым. `closed` не входит в список стадий намеренно: в него нельзя
+// «дойти» продвижением, только закрыть.
+export const COMMERCIAL_CYCLE_CLOSED_STAGE = 'closed';
+const CLOSE_REASON_MAX_LENGTH = 1_000;
+// Цикл, дошедший до подтверждения, — уже сделка, а не брошенная попытка: закрывать его так нельзя.
+const NOT_CLOSABLE_STAGES = Object.freeze(['confirmation', 'deal-space', COMMERCIAL_CYCLE_CLOSED_STAGE]);
+
+export function closeCommercialCycle(cycle, { reason, closedBy, closedAt }) {
+  invariant(cycle.stage !== COMMERCIAL_CYCLE_CLOSED_STAGE, 'CYCLE_ALREADY_CLOSED', 'Commercial cycle is already closed');
+  invariant(!NOT_CLOSABLE_STAGES.includes(cycle.stage), 'CYCLE_CLOSE_STAGE_INVALID', 'A confirmed commercial cycle is a deal and cannot be abandoned', { stage: cycle.stage });
+  invariant(cycle.order?.status !== 'attached', 'CYCLE_CLOSE_ORDER_ATTACHED', 'Cancel the attached order before closing the cycle', { orderId: cycle.order?.id });
+  const normalizedReason = typeof reason === 'string' ? reason.trim() : '';
+  invariant(normalizedReason.length >= 3 && normalizedReason.length <= CLOSE_REASON_MAX_LENGTH, 'CYCLE_CLOSE_REASON_REQUIRED', `Close reason must contain 3 to ${CLOSE_REASON_MAX_LENGTH} characters`);
+  invariant(typeof closedBy === 'string' && closedBy, 'CYCLE_CLOSE_ACTOR_REQUIRED', 'Closing actor is required');
+  return Object.freeze({
+    ...cycle,
+    stage: COMMERCIAL_CYCLE_CLOSED_STAGE,
+    closedFromStage: cycle.stage,
+    closeReason: normalizedReason,
+    closedBy,
+    closedAt,
+    version: cycle.version + 1,
+    updatedAt: closedAt,
+  });
+}
+
 export function advanceCommercialCycle(cycle, targetStage, updatedAt) {
+  invariant(cycle.stage !== COMMERCIAL_CYCLE_CLOSED_STAGE, 'CYCLE_CLOSED', 'A closed commercial cycle cannot advance');
   const currentIndex = COMMERCIAL_STAGES.indexOf(cycle.stage);
   const targetIndex = COMMERCIAL_STAGES.indexOf(targetStage);
   invariant(targetIndex >= 0, 'STAGE_UNKNOWN', 'Unknown commercial stage', { targetStage });
@@ -52,6 +81,7 @@ export function advanceCommercialCycle(cycle, targetStage, updatedAt) {
 }
 
 export function attachOrder(cycle, order, updatedAt) {
+  invariant(cycle.stage !== COMMERCIAL_CYCLE_CLOSED_STAGE, 'CYCLE_CLOSED', 'A closed commercial cycle cannot take an order');
   invariant(cycle.stage === 'order', 'ORDER_STAGE_REQUIRED', 'Order can only be attached at the order stage', { stage: cycle.stage });
   invariant(order?.id, 'ORDER_ID_REQUIRED', 'Order id is required');
   invariant(order.status === 'attached', 'ORDER_NOT_ATTACHED', 'Cycle requires an attached order snapshot');
@@ -86,6 +116,23 @@ export function cancelCommercialCycleOrder(cycle, cancelledOrder, updatedAt) {
   return Object.freeze({
     ...cycle,
     order: Object.freeze({ ...cancelledOrder, lines: Object.freeze(cancelledOrder.lines.map((line) => Object.freeze({ ...line }))) }),
+    version: cycle.version + 1,
+    updatedAt,
+  });
+}
+
+// Принятая правка меняет количества и итог заказа, а цикл хранит заказ встроенной копией, по которой
+// читают подтверждение и DealSpace: копия обязана идти за заказом, иначе подтверждение откроет
+// сделку на старый итог.
+export function amendCommercialCycleOrder(cycle, amendedOrder, updatedAt) {
+  invariant(cycle.order?.id === amendedOrder?.id, 'ORDER_CYCLE_MISMATCH', 'Amended order does not match cycle order', {
+    cycleOrderId: cycle.order?.id,
+    orderId: amendedOrder?.id,
+  });
+  invariant(amendedOrder.status === 'attached', 'ORDER_NOT_ATTACHED', 'Cycle takes only an attached order snapshot');
+  return Object.freeze({
+    ...cycle,
+    order: Object.freeze({ ...amendedOrder, lines: Object.freeze(amendedOrder.lines.map((line) => Object.freeze({ ...line }))) }),
     version: cycle.version + 1,
     updatedAt,
   });

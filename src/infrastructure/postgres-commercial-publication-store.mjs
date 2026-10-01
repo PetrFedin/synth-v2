@@ -38,6 +38,15 @@ export function createPostgresCommercialPublicationStore({ pool } = {}) {
       const result = await pool.query('SELECT payload FROM buyer_catalog_versions WHERE id = $1', [id]);
       return result.rows[0]?.payload;
     },
+    async listBuyerCatalogVersionsForAccess(showroomId, shopId, { limit = 50 } = {}) {
+      const result = await pool.query(
+        `SELECT payload FROM buyer_catalog_versions
+          WHERE showroom_id = $1 AND shop_id = $2
+          ORDER BY published_at DESC, id DESC LIMIT $3`,
+        [showroomId, shopId, limit],
+      );
+      return result.rows.map(row => row.payload);
+    },
     async getBuyerCatalogForAccess(showroomId, shopId) {
       const result = await pool.query(
         `SELECT payload FROM buyer_catalog_versions
@@ -77,6 +86,15 @@ function view(client) {
       ], `INSERT INTO buyer_catalog_versions
             (id, publication_id, price_list_version_id, brand_id, shop_id, showroom_id, access_grant_id, currency, published_at, content_hash, payload)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb)`, 'BUYER_CATALOG_VERSION_ALREADY_EXISTS', { buyerCatalogVersionId: value.id });
+    },
+    async getLatestBuyerCatalogForAccess(showroomId, shopId) {
+      const result = await client.query(
+        `SELECT payload FROM buyer_catalog_versions
+          WHERE showroom_id = $1 AND shop_id = $2
+          ORDER BY published_at DESC, id DESC LIMIT 1`,
+        [showroomId, shopId],
+      );
+      return result.rows[0]?.payload;
     },
     getCommand: (id) => getRegisteredCommand(client, 'catalog', id),
     insertCommand: (value) => insertRegisteredCommand(client, 'catalog', value),

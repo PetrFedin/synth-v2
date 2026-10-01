@@ -63,7 +63,7 @@ test('PostgreSQL persists the complete wholesale route, atomic inventory reserva
     await catalog.publishSku('pg-catalog-publish', 'sales-pg', 'SKU-PG', { expectedVersion: 1 });
     const showroom = await collaboration.createShowroom('pg-showroom-create', 'sales-pg', {
       collectionId: collection.id, brandId: 'brand-pg', name: 'Paris',
-      opensAt: '2027-01-05T00:00:00.000Z', closesAt: '2027-01-20T00:00:00.000Z',
+      opensAt: '2026-07-01T00:00:00.000Z', closesAt: '2027-01-20T00:00:00.000Z',
     });
     await collaboration.openShowroom('pg-showroom-open', 'sales-pg', showroom.id);
     const invitation = await partners.inviteShopToShowroom('pg-invitation-create', 'sales-pg', {

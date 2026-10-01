@@ -4,6 +4,7 @@ import { fingerprintsMatch } from '../core/fingerprints.mjs';
 import { assertWholesaleStore } from './store-contract.mjs';
 import { CAPABILITIES, assertCapability, assertTradeCapability } from '../modules/access-control/public.mjs';
 import { assertTradePair } from '../modules/organisations/public.mjs';
+import { assertShowroomWindowNotElapsed } from '../modules/showrooms/public.mjs';
 import {
   acceptCounterpartyRelationship,
   assertActiveRelationship,
@@ -168,6 +169,12 @@ export function createPartnerAccessService({
           return Object.freeze({ showroom, relationship, existing });
         },
         async (tx, { showroom, relationship, existing }) => {
+          if (existing) {
+            // Новое приглашение проверяет это в домене; повторное (после отзыва, отказа или срока) шло
+            // мимо и могло снова открыть доступ к закрытому показу.
+            invariant(showroom.status === 'open', 'SHOWROOM_NOT_OPEN', 'Only an open showroom can be shared');
+            assertShowroomWindowNotElapsed(showroom, clock());
+          }
           const invitation = existing
             ? renewShowroomInvitation(existing, relationship, expiresAt, clock())
             : createShowroomInvitation({ id: nextId('invitation'), showroom, shopId, relationship, expiresAt, createdAt: clock() });

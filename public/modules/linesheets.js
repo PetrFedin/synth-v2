@@ -450,7 +450,7 @@
   function stageText(stage) {
     const labels = {
       showroom: ['Шоурум', 'Showroom'], selection: ['Подборка', 'Selection'], 'order-builder': ['Сборка заказа', 'Order builder'],
-      order: ['Заказ', 'Order'], confirmation: ['Подтверждение', 'Confirmation'], 'deal-space': ['Пространство сделки', 'Deal space'], collection: ['Коллекция', 'Collection'],
+      order: ['Заказ', 'Order'], confirmation: ['Подтверждение', 'Confirmation'], 'deal-space': ['Пространство сделки', 'Deal space'], collection: ['Коллекция', 'Collection'], closed: ['Закрыт', 'Closed'],
     };
     const pair = labels[stage];
     return pair ? text(pair[0], pair[1]) : value(stage) || '—';

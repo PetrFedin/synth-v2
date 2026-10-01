@@ -1,6 +1,7 @@
 import { invariant } from '../../core/errors.mjs';
 import { assertPostgresInteger, normalizeMoney } from '../../core/money.mjs';
 import { assertBuyerCommercialSnapshot } from '../retail-doors/public.mjs';
+import { assertShowroomWindowRunning } from '../showrooms/public.mjs';
 
 const NOTE_MAX_LENGTH = 2_000;
 const RICH_LINEAGE_KEYS = Object.freeze(['productSkuId', 'styleId', 'styleVersionId', 'colorwayId', 'sizeValueId', 'sizeCode']);
@@ -16,6 +17,7 @@ export function createSelection({ id, cycle, showroom, commercialBasis = null, b
   invariant(id && cycle?.id && showroom?.id, 'SELECTION_IDENTITY_REQUIRED', 'Selection, cycle and showroom are required');
   invariant(cycle.stage === 'showroom', 'SELECTION_CYCLE_STAGE_INVALID', 'Selection can be created only at showroom stage', { stage: cycle.stage });
   invariant(showroom.status === 'open', 'SHOWROOM_NOT_OPEN', 'Selection requires an open showroom');
+  assertShowroomWindowRunning(showroom, createdAt);
   invariant(showroom.collectionId === cycle.collectionId, 'SELECTION_COLLECTION_MISMATCH', 'Showroom and cycle must use the same collection');
   invariant(showroom.brandId === cycle.brandId, 'SELECTION_BRAND_MISMATCH', 'Showroom and cycle must use the same brand');
   const basis = commercialBasis ? validateCommercialBasis(commercialBasis, cycle, showroom) : null;

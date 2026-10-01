@@ -137,6 +137,25 @@ export function cancelAttachedOrder(order, reason, cancelledAt, expectedVersion)
   });
 }
 
+// Выход для заказа на любой стадии до сделки. Раньше отменить можно было только `attached`: черновик
+// и «готов» (обе стороны согласовали, но прикрепить нельзя — шоурум закрыт, каталог сменился) не имели
+// ни пути отмены, ни пути назад, а `ORDER_FOR_CYCLE_EXISTS` не давал начать второй заказ в том же
+// цикле. Резервов у неприкреплённого заказа нет — снимает их только `attached` (триггер БД).
+export function cancelOrder(order, reason, cancelledAt, expectedVersion) {
+  assertExpectedVersion(order, expectedVersion);
+  invariant(['draft', 'ready', 'attached'].includes(order.status), 'ORDER_NOT_CANCELLABLE', 'Only a draft, ready or attached order can be cancelled', { status: order.status });
+  const normalizedReason = typeof reason === 'string' ? reason.trim() : '';
+  invariant(normalizedReason.length >= 3 && normalizedReason.length <= CANCELLATION_REASON_MAX_LENGTH, 'ORDER_CANCELLATION_REASON_REQUIRED', `Cancellation reason must contain 3 to ${CANCELLATION_REASON_MAX_LENGTH} characters`);
+  return Object.freeze({
+    ...order,
+    status: 'cancelled',
+    cancellationReason: normalizedReason,
+    cancelledAt,
+    version: order.version + 1,
+    updatedAt: cancelledAt,
+  });
+}
+
 function assertSubmittedSelectionCurrency(selection) {
   invariant(Array.isArray(selection.lines) && selection.lines.length > 0, 'ORDER_SELECTION_LINES_REQUIRED', 'Submitted selection must contain at least one line');
   const currencies = new Set();

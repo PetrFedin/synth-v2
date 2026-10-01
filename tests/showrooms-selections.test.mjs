@@ -9,11 +9,11 @@ const collection = Object.freeze({ id: 'collection-1', campaignId: 'campaign-1',
 test('showroom requires a published collection and valid dates', () => {
   assert.throws(() => createShowroom({
     id: 'showroom-1', collection: { ...collection, status: 'draft' }, brandId: 'brand-1', name: 'Main',
-    opensAt: '2027-01-01T00:00:00.000Z', closesAt: '2027-01-10T00:00:00.000Z', createdAt: now,
+    opensAt: '2026-07-01T00:00:00.000Z', closesAt: '2027-01-10T00:00:00.000Z', createdAt: now,
   }), (error) => error.code === 'COLLECTION_NOT_PUBLISHED');
   const showroom = createShowroom({
     id: 'showroom-1', collection, brandId: 'brand-1', name: 'Main',
-    opensAt: '2027-01-01T00:00:00.000Z', closesAt: '2027-01-10T00:00:00.000Z', createdAt: now,
+    opensAt: '2026-07-01T00:00:00.000Z', closesAt: '2027-01-10T00:00:00.000Z', createdAt: now,
   });
   assert.equal(openShowroom(showroom, collection, now).status, 'open');
 });

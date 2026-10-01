@@ -47,5 +47,6 @@ function showroomEntity(item) {
   const caps = window.SynthaUiCapabilities;
   if (item.status === 'draft' && caps.hasForOrganisation(state.workspace, item.brandId, caps.CAPABILITIES.SHOWROOM_MANAGE)) actions.push(actionButton('\u041e\u0442\u043a\u0440\u044b\u0442\u044c', () => mutate(`/v2/showrooms/${encodeURIComponent(item.id)}/open`, {})));
   if (item.status === 'open' && caps.hasForOrganisation(state.workspace, item.brandId, caps.CAPABILITIES.SHOWROOM_INVITATION_MANAGE)) actions.push(actionButton('\u041f\u0440\u0438\u0433\u043b\u0430\u0441\u0438\u0442\u044c \u043c\u0430\u0433\u0430\u0437\u0438\u043d', () => invitationForm(item)));
+  if (item.status === 'open' && caps.hasForOrganisation(state.workspace, item.brandId, caps.CAPABILITIES.SHOWROOM_MANAGE)) actions.push(actionButton(localText('Закрыть показ', 'Close showroom'), () => mutate(`/v2/showrooms/${encodeURIComponent(item.id)}/close`, { expectedVersion: item.version }), 'danger', localText('Закрыть показ? Новые подборки, приглашения и заказы в нём будут недоступны.', 'Close the showroom? New selections, invitations and orders in it will no longer be possible.')));
   return entity(item.name, item.status, [`\u041a\u043e\u043b\u043b\u0435\u043a\u0446\u0438\u044f: ${nameById('collections',item.collectionId)}`, `${formatDate(item.opensAt)} \u2014 ${formatDate(item.closesAt)}`, item.id], actions);
 }

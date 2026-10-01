@@ -11,6 +11,7 @@ const BUYER_CATALOG_BODY = bodyContract(
   {},
   { priceOverrides: ['productSkuId', 'wholesalePriceMinor'] },
 );
+const BUYER_CATALOG_ROLLBACK_BODY = bodyContract(['expectedLatestBuyerCatalogVersionId']);
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/;
 
 export function createCommercialPublicationRoutes({ commercialPublication } = {}) {
@@ -21,6 +22,8 @@ export function createCommercialPublicationRoutes({ commercialPublication } = {}
     limitedRead('GET', /^\/v2\/collections\/([^/]+)\/publishable-projections$/, ({ actorId, params, limit }) => service.listPublishableProjectionsForCollection(actorId, params[0], { limit })),
     read('GET', /^\/v2\/commercial-publications\/([^/]+)$/, ({ actorId, params }) => service.getCommercialPublicationForActor(actorId, params[0])),
     mutate('POST', /^\/v2\/commercial-publications\/([^/]+)\/buyer-catalogs$/, validateBuyerCatalogBody, ({ commandId, actorId, params, body }) => service.publishBuyerCatalog(commandId, actorId, params[0], body)),
+    accessRead('GET', /^\/v2\/showrooms\/([^/]+)\/buyer-catalog-versions$/, ({ actorId, params, shopId }) => service.listBuyerCatalogVersionsForAccessForActor(actorId, params[0], shopId)),
+    mutate('POST', /^\/v2\/buyer-catalog-versions\/([^/]+)\/rollback$/, validateBuyerCatalogRollbackBody, ({ commandId, actorId, params, body }) => service.rollbackBuyerCatalog(commandId, actorId, params[0], body)),
     accessRead('GET', /^\/v2\/showrooms\/([^/]+)\/buyer-catalog$/, ({ actorId, params, shopId }) => service.getBuyerCatalogForAccessForActor(actorId, params[0], shopId)),
     read('GET', /^\/v2\/buyer-catalog-versions\/([^/]+)$/, ({ actorId, params }) => service.getBuyerCatalogVersionForActor(actorId, params[0])),
   ]);
@@ -30,6 +33,11 @@ function validatePublicationBody(body) {
   assertBodyContract(body, PUBLICATION_BODY);
   invariant(typeof body.collectionId === 'string' && SAFE_ID.test(body.collectionId), 'HTTP_BODY_FIELD_INVALID', 'collectionId must be a valid identifier', { field: 'collectionId' });
   invariant(typeof body.commercialProjectionId === 'string' && SAFE_ID.test(body.commercialProjectionId), 'HTTP_BODY_FIELD_INVALID', 'commercialProjectionId must be a valid identifier', { field: 'commercialProjectionId' });
+}
+
+function validateBuyerCatalogRollbackBody(body) {
+  assertBodyContract(body, BUYER_CATALOG_ROLLBACK_BODY);
+  invariant(typeof body.expectedLatestBuyerCatalogVersionId === 'string' && SAFE_ID.test(body.expectedLatestBuyerCatalogVersionId), 'HTTP_BODY_FIELD_INVALID', 'expectedLatestBuyerCatalogVersionId must be a valid identifier', { field: 'expectedLatestBuyerCatalogVersionId' });
 }
 
 function validateBuyerCatalogBody(body) {
@@ -125,6 +133,8 @@ function unavailableCommercialPublication() {
   return Object.freeze({
     publishCommercialPublication: fail,
     publishBuyerCatalog: fail,
+    rollbackBuyerCatalog: fail,
+    listBuyerCatalogVersionsForAccessForActor: fail,
     listCommercialPublicationsForActor: fail,
     listPublishableProjectionsForCollection: fail,
     getCommercialPublicationForActor: fail,

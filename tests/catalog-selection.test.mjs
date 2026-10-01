@@ -37,7 +37,7 @@ async function fixture() {
     sku: 'SKU-1', collectionId: collection.id, brandId: 'brand-1', name: 'Jacket Black 48',
     wholesalePrice: 80, currency: 'EUR', minimumOrderQuantity: 2, availableQuantity: 10,
   });
-  const showroom = await collaboration.createShowroom('showroom-create', 'sales-1', { collectionId: collection.id, brandId: 'brand-1', name: 'Paris', opensAt: '2027-01-05T00:00:00.000Z', closesAt: '2027-01-20T00:00:00.000Z' });
+  const showroom = await collaboration.createShowroom('showroom-create', 'sales-1', { collectionId: collection.id, brandId: 'brand-1', name: 'Paris', opensAt: '2026-07-01T00:00:00.000Z', closesAt: '2027-01-20T00:00:00.000Z' });
   await collaboration.openShowroom('showroom-open', 'sales-1', showroom.id);
   const invitation = await partners.inviteShopToShowroom('invitation-create', 'sales-1', { showroomId: showroom.id, shopId: 'shop-1', expiresAt: '2027-01-15T00:00:00.000Z' });
   await partners.acceptShowroomInvitation('invitation-accept', 'buyer-1', invitation.id);

@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { invariant } from '../../core/errors.mjs';
 import { normalizeMoney } from '../../core/money.mjs';
 import { canonicalJson } from '../../core/fingerprints.mjs';
+import { assertShowroomWindowNotElapsed } from '../showrooms/public.mjs';
 import { assertCanonicalPriceList, assertCanonicalPublication, applyBuyerPrices } from './canonical-source.mjs';
 export { assertBuyerCatalogQuantity, buyerCatalogProductSku, isRichBuyerCatalog } from './buyer-catalog-product.mjs';
 
@@ -127,9 +128,10 @@ export function createPriceListVersion({ id, publication, shopId, priceOverrides
   return deepFreeze({ id, ...basis, status: 'published', contentHash: hashBasis(basis), publishedAt });
 }
 
-export function createBuyerCatalogVersion({ id, publication, priceListVersion, showroom, invitation, publishedAt }) {
+export function createBuyerCatalogVersion({ id, publication, priceListVersion, showroom, invitation, publishedAt, rollback = null }) {
   invariant(id && publication?.id && priceListVersion?.id && showroom?.id && invitation?.id, 'BUYER_CATALOG_VERSION_IDENTITY_REQUIRED', 'Buyer catalog version identity is required');
   invariant(showroom.status === 'open', 'BUYER_CATALOG_SHOWROOM_NOT_OPEN', 'Buyer catalog requires an open showroom');
+  assertShowroomWindowNotElapsed(showroom, publishedAt);
   invariant(showroom.brandId === publication.brandId && showroom.collectionId === publication.collectionId, 'BUYER_CATALOG_SHOWROOM_MISMATCH', 'Showroom does not match publication');
   invariant(invitation.status === 'accepted', 'BUYER_CATALOG_ACCESS_NOT_ACCEPTED', 'Buyer catalog requires accepted showroom access');
   invariant(invitation.showroomId === showroom.id && invitation.brandId === publication.brandId && invitation.shopId === priceListVersion.shopId, 'BUYER_CATALOG_ACCESS_MISMATCH', 'Showroom invitation does not match buyer catalog');
@@ -149,8 +151,40 @@ export function createBuyerCatalogVersion({ id, publication, priceListVersion, s
     currency: publication.currency,
     lines: priceListVersion.lines,
     ...(priceListVersion.styles ? { styles: priceListVersion.styles } : {}),
+    ...(rollback ? { restoredFromBuyerCatalogVersionId: rollback.restoredFromBuyerCatalogVersionId, supersedesBuyerCatalogVersionId: rollback.supersedesBuyerCatalogVersionId } : {}),
   });
   return deepFreeze({ id, ...basis, status: 'published', contentHash: hashBasis(basis), publishedAt });
+}
+
+// Откат цены байера (O-05). Версии цен неизменяемы и только добавляются, а «последняя» — это самая
+// поздняя по времени: убрать плохую версию нельзя, да и не нужно — на неё уже могла встать подборка
+// или заказ. Откат поэтому не удаляет и не правит ничего, а выпускает НОВУЮ версию с содержимым
+// прежней и пометкой, откуда она и что заменила. Пометка нужна ещё и по существу: `content_hash`
+// уникален, и версия с буквально тем же содержимым столкнулась бы с оригиналом.
+export function restorePriceListVersion({ id, publication, source, supersedes, publishedAt }) {
+  invariant(id && publication?.id && source?.id && supersedes?.id, 'PRICE_LIST_VERSION_IDENTITY_REQUIRED', 'Price list version identity is required');
+  invariant(publication.status === 'published', 'PRICE_LIST_PUBLICATION_NOT_PUBLISHED', 'Price list requires a published commercial publication');
+  invariant(source.publicationId === publication.id, 'BUYER_CATALOG_ROLLBACK_PUBLICATION_MISMATCH', 'Rollback target does not belong to the publication');
+  invariant(source.shopId === supersedes.shopId && source.showroomId === supersedes.showroomId, 'BUYER_CATALOG_ROLLBACK_ACCESS_MISMATCH', 'Rollback target and the current catalog belong to different showroom access');
+  assertCanonicalPublication(publication);
+  const basis = deepFreeze({
+    publicationId: publication.id,
+    ...projectionLineage(publication),
+    brandId: publication.brandId,
+    shopId: source.shopId,
+    currency: publication.currency,
+    lines: structuredClone(source.lines),
+    ...(source.styles ? { styles: structuredClone(source.styles) } : {}),
+    restoredFromBuyerCatalogVersionId: source.id,
+    supersedesBuyerCatalogVersionId: supersedes.id,
+  });
+  return deepFreeze({ id, ...basis, status: 'published', contentHash: hashBasis(basis), publishedAt });
+}
+
+// Одинаково ли то, что видит байер: содержимое, а не идентификаторы версий.
+export function buyerCatalogContentEquals(left, right) {
+  const view = (catalog) => canonicalJson({ publicationId: catalog.publicationId, lines: catalog.lines, styles: catalog.styles ?? null });
+  return view(left) === view(right);
 }
 
 export function buyerCatalogLine(catalog, sku) {

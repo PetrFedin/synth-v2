@@ -501,6 +501,13 @@
     const close = el('button', { className: 'button small', text: I18N.t('common.close'), type: 'button' });
     const head = el('div', { className: 'dialog-head' }); head.append(el('h3', { text: text('Изменения заказа', 'Order amendments') }), close);
     const grid = el('div', { className: 'form-grid' });
+    // Принятая правка применяется: количество строки и итог заказа меняются сразу, резерв склада
+    // сдвигается на разницу. После начала исполнения (производственное обязательство, план поставки)
+    // сервер откажет — об этом человек должен узнать до нажатия, а не из ошибки.
+    grid.append(el('p', { className: 'od-action-note', text: text(
+      'Принятая правка сразу меняет количество строки и итог заказа. После начала исполнения заказа принять её нельзя.',
+      'An accepted amendment changes the line quantity and the order total at once. It cannot be accepted after order execution has started.',
+    ) }));
 
     const amendments = result?.amendments || [];
     if (!amendments.length) {

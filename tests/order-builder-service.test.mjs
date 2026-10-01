@@ -35,7 +35,7 @@ async function fixture() {
     currency: 'EUR', minimumOrderQuantity: 1, availableQuantity: 10,
   });
   await catalog.publishSku('catalog-publish', 'sales-1', 'SKU-1', { expectedVersion: 1 });
-  const showroom = await collaboration.createShowroom('showroom-create', 'sales-1', { collectionId: collection.id, brandId: 'brand-1', name: 'Paris', opensAt: '2027-01-05', closesAt: '2027-01-20' });
+  const showroom = await collaboration.createShowroom('showroom-create', 'sales-1', { collectionId: collection.id, brandId: 'brand-1', name: 'Paris', opensAt: '2026-07-01T00:00:00.000Z', closesAt: '2027-01-20' });
   await collaboration.openShowroom('showroom-open', 'sales-1', showroom.id);
   const invitation = await partners.inviteShopToShowroom('invitation-create', 'sales-1', { showroomId: showroom.id, shopId: 'shop-1', expiresAt: '2027-01-15' });
   await partners.acceptShowroomInvitation('invitation-accept', 'buyer-1', invitation.id);

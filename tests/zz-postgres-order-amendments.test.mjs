@@ -12,9 +12,11 @@ const now = '2026-10-01T09:00:00.000Z';
 
 // Изменение уже подтверждённого заказа (docs/backlog-not-yet-integrated.md, раздел 3) — до этой
 // правки после `attached` был только один путь, отмена целиком. Этот тест проходит настоящий цикл
-// сервис → стор → реальный PostgreSQL: любая сторона предлагает, отвечает — только другая, а
-// принятие или отклонение не трогает саму строку заказа.
-test('PostgreSQL order amendments: either side proposes, only the other responds, and the order line stays untouched', { skip: !databaseUrl }, async () => {
+// сервис → стор → реальный PostgreSQL: любая сторона предлагает, отвечает — только другая; принятие
+// применяет правку к строке, итогу, копии заказа в цикле и резерву склада (миграция 157) —
+// атомарно, а отклонение заказ не трогает. Применение ограничено: резерв не уходит выше запаса, а
+// после начала исполнения правка отвергается.
+test('PostgreSQL order amendments: either side proposes, only the other responds, and acceptance is applied to the order, the cycle copy and the inventory reservation', { skip: !databaseUrl }, async () => {
   const pool = createPostgresTestPool({ connectionString: databaseUrl, max: 6 });
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
   let sequence = 0;
@@ -63,6 +65,18 @@ test('PostgreSQL order amendments: either side proposes, only the other responds
       [order.id, order.selectionId, order.cycleId, order.brandId, order.shopId, order.status, order.currency, order.totalAmount, order.version, JSON.stringify(order)],
     );
 
+    // Склад и резерв — как после настоящего прикрепления: 100 штук зарезервировано из 150.
+    const sku = { id: 'SKU-OA-1', sku: 'SKU-OA-1', collectionId: collection.id, brandId: brand.id, name: 'OA SKU', wholesalePrice: 25, currency: 'EUR', minimumOrderQuantity: 1, availableQuantity: 150, reservedQuantity: 100, availableToSell: 50, status: 'published', version: 2, publishedAt: now, createdAt: now, updatedAt: now };
+    await pool.query(
+      `INSERT INTO catalog_skus (sku, collection_id, brand_id, status, currency, wholesale_price, minimum_order_quantity, available_quantity, reserved_quantity, version, payload)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)`,
+      [sku.sku, sku.collectionId, sku.brandId, sku.status, sku.currency, sku.wholesalePrice, sku.minimumOrderQuantity, sku.availableQuantity, sku.reservedQuantity, sku.version, JSON.stringify(sku)],
+    );
+    await pool.query('INSERT INTO order_inventory_reservations (order_id, sku, quantity, created_at) VALUES ($1,$2,$3,$4)', [order.id, sku.sku, 100, now]);
+    await pool.query('UPDATE commercial_cycles SET payload = $2::jsonb WHERE id = $1', [cycle.id, JSON.stringify({ ...cycle, order })]);
+    const reserved = async () => (await pool.query("SELECT reserved_quantity, payload FROM catalog_skus WHERE sku = 'SKU-OA-1'")).rows[0];
+    const reservation = async () => (await pool.query("SELECT quantity FROM order_inventory_reservations WHERE order_id = 'order-oa'")).rows[0].quantity;
+
     const store = createPostgresWholesaleStore({ pool });
     const orders = createOrderBuilderService({ store, clock: () => now, nextId });
 
@@ -96,10 +110,16 @@ test('PostgreSQL order amendments: either side proposes, only the other responds
     const replay = await orders.respondToAmendment('respond-accept', 'sales-oa', { orderId: order.id, amendmentId: amendment.id, decision: 'accepted' });
     assert.deepEqual(replay, accepted);
 
-    // the order line itself was never touched by any of this
-    const orderRow = await pool.query('SELECT version, payload FROM orders WHERE id = $1', [order.id]);
-    assert.equal(orderRow.rows[0].version, 2);
-    assert.equal(orderRow.rows[0].payload.lines[0].quantity, 100);
+    // acceptance is applied: line, total, version, cycle copy and the inventory reservation all moved together
+    const orderRow = await pool.query('SELECT version, total_amount, payload FROM orders WHERE id = $1', [order.id]);
+    assert.equal(orderRow.rows[0].version, 3);
+    assert.equal(Number(orderRow.rows[0].total_amount), 3000);
+    assert.equal(orderRow.rows[0].payload.lines[0].quantity, 120);
+    assert.deepEqual(orderRow.rows[0].payload.appliedAmendmentIds, [amendment.id]);
+    assert.equal((await pool.query('SELECT payload FROM commercial_cycles WHERE id = $1', [cycle.id])).rows[0].payload.order.lines[0].quantity, 120);
+    assert.equal(await reservation(), 120);
+    assert.equal((await reserved()).reserved_quantity, 120);
+    assert.equal((await reserved()).payload.availableToSell, 30);
 
     const view = await orders.getAmendmentsForActor('buyer-oa', order.id);
     assert.equal(view.amendments.length, 1);
@@ -117,6 +137,39 @@ test('PostgreSQL order amendments: either side proposes, only the other responds
     assert.equal(rejected.responseReason, 'Retailer already committed shelf space for the original quantity');
 
     assert.equal((await pool.query('SELECT count(*)::int AS count FROM order_amendments WHERE order_id = $1', [order.id])).rows[0].count, 2);
+    // a rejection leaves the order, the reservation and the stock where they were
+    assert.equal((await pool.query('SELECT version FROM orders WHERE id = $1', [order.id])).rows[0].version, 3);
+    assert.equal(await reservation(), 120);
+
+    // an increase beyond what the shelf can give is refused, and the whole acceptance rolls back
+    const greedy = await orders.proposeAmendment('propose-greedy', 'buyer-oa', { orderId: order.id, lineNo: 1, proposedQuantity: 200, reason: 'Retailer wants the whole shelf' });
+    await assert.rejects(
+      orders.respondToAmendment('respond-greedy', 'sales-oa', { orderId: order.id, amendmentId: greedy.id, decision: 'accepted' }),
+      (error) => error.code === 'CATALOG_AVAILABILITY_EXCEEDED',
+    );
+    assert.equal((await pool.query('SELECT status FROM order_amendments WHERE id = $1', [greedy.id])).rows[0].status, 'proposed', 'the amendment is still open');
+    assert.equal((await pool.query('SELECT payload FROM orders WHERE id = $1', [order.id])).rows[0].payload.lines[0].quantity, 120, 'the order line did not move');
+    assert.equal(await reservation(), 120);
+    await orders.respondToAmendment('respond-greedy-reject', 'sales-oa', { orderId: order.id, amendmentId: greedy.id, decision: 'rejected', responseReason: 'Not available' });
+
+    // a decrease releases stock
+    const smaller = await orders.proposeAmendment('propose-smaller', 'buyer-oa', { orderId: order.id, lineNo: 1, proposedQuantity: 60, reason: 'Retailer shrinks the launch' });
+    await orders.respondToAmendment('respond-smaller', 'sales-oa', { orderId: order.id, amendmentId: smaller.id, decision: 'accepted' });
+    assert.equal(await reservation(), 60);
+    assert.equal((await reserved()).reserved_quantity, 60);
+    assert.equal((await reserved()).payload.availableToSell, 90);
+
+    // cancelling afterwards releases exactly the amended reservation, not the committed one
+    // (the cancellation trigger reads order_inventory_reservations)
+    // and once execution has started the quantities are frozen
+    const frozen = await orders.proposeAmendment('propose-frozen', 'buyer-oa', { orderId: order.id, lineNo: 1, proposedQuantity: 70, reason: 'One more change' });
+    await pool.query("UPDATE orders SET execution_started_at = $2 WHERE id = $1", [order.id, now]);
+    await assert.rejects(
+      orders.respondToAmendment('respond-frozen', 'sales-oa', { orderId: order.id, amendmentId: frozen.id, decision: 'accepted' }),
+      (error) => error.code === 'ORDER_AMENDMENT_EXECUTION_STARTED',
+    );
+    assert.equal(await reservation(), 60);
+    assert.equal((await pool.query('SELECT payload FROM orders WHERE id = $1', [order.id])).rows[0].payload.lines[0].quantity, 60);
   } finally {
     await pool.end();
   }

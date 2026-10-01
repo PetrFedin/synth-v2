@@ -98,7 +98,7 @@ export function createMaterialLotService({ store, clock = () => new Date().toISO
         },
         (tx, { lot, labDips }) => {
           assertVersion(lot, expectedVersion);
-          return saveVerdict(tx, releaseMaterialLot(lot, { certificateReference: input.certificateReference, notes: input.notes, at: clock(), actorId, labDips }), expectedVersion, 'material-lot.released', commandId, actorId);
+          return saveVerdict(tx, releaseMaterialLot(lot, { certificateReference: input.certificateReference, notes: input.notes ?? input.reason, at: clock(), actorId, labDips }), expectedVersion, 'material-lot.released', commandId, actorId);
         });
     },
 

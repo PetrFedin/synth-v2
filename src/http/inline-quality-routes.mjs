@@ -2,7 +2,7 @@ import { invariant } from '../core/errors.mjs';
 import { assertBodyContract, assertQueryContract, bodyContract } from './request-contract.mjs';
 
 const DEFECT_TYPE_BODY = bodyContract(['brandId', 'code', 'severity', 'originStage', 'nameRu', 'nameEn']);
-const CHECK_BODY = bodyContract(['milestoneCode', 'checkedQuantity', 'inspectorName', 'defects', 'notes'], {}, { defects: ['defectCode', 'quantity', 'notes'] });
+const CHECK_BODY = bodyContract(['milestoneCode', 'checkedQuantity', 'inspectorName', 'defects', 'notes', 'operationId'], {}, { defects: ['defectCode', 'quantity', 'notes'] });
 const DISPOSITION_BODY = bodyContract(['expectedVersion', 'disposition', 'notes']);
 const RETIRE_BODY = bodyContract(['brandId']);
 

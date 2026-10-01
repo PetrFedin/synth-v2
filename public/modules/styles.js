@@ -375,9 +375,116 @@
   function swatch(entry) {
     return colourSwatch(entry.swatchHex, entry.swatchHex || text('\u0426\u0432\u0435\u0442 \u043d\u0435 \u0437\u0430\u0434\u0430\u043d', 'No colour set'));
   }
+  // Товарный SKU уже полностью проведён через домен/стор/HTTP — вплоть до поля `gtin`
+  // (docs/backlog-not-yet-integrated.md, раздел 4: «применимость маркировки, GTIN... поле `gtin` на
+  // SKU есть, обвязки нет»). Формы создания SKU не было нигде: таблица цветомоделей показывала
+  // только число `skuCount`, без единого кода или возможности завести новый. Детальный список берём
+  // из того же полного агрегата стиля, каким уже пользуется квотирование чуть ниже
+  // (`GET /v2/product/styles/:id`, `colorways[].skus[]` уже несёт `gtin` и `size.sizeScaleId`).
+  const styleSkuAggregateState = window.SynthaStyleSkuAggregateState
+    || (window.SynthaStyleSkuAggregateState = { data: {}, loading: {}, failed: {} });
+
+  function loadStyleSkuAggregate(styleId) {
+    if (styleSkuAggregateState.data[styleId] || styleSkuAggregateState.loading[styleId] || styleSkuAggregateState.failed[styleId]) return;
+    styleSkuAggregateState.loading[styleId] = true;
+    api(`/v2/product/styles/${encodeURIComponent(styleId)}`)
+      .then((aggregate) => { styleSkuAggregateState.data[styleId] = Array.isArray(aggregate?.colorways) ? aggregate.colorways : []; })
+      .catch(() => { styleSkuAggregateState.failed[styleId] = true; })
+      .finally(() => { styleSkuAggregateState.loading[styleId] = false; if (state.view === 'styles') renderApp(); });
+  }
+  function invalidateStyleSkuAggregate(styleId) {
+    delete styleSkuAggregateState.data[styleId];
+    delete styleSkuAggregateState.failed[styleId];
+  }
+  function skusOfColorway(item, colorwayId) {
+    const colorways = styleSkuAggregateState.data[item.product.id] || [];
+    return colorways.find((entry) => entry.id === colorwayId)?.skus || [];
+  }
+
+  // Размерная шкала уже полностью читается через `GET /v2/product/size-scales/:id` (используется в
+  // редакторе самой шкалы), но форма SKU — первый вызов этого маршрута отсюда. Кешируется по паре
+  // id шкалы + номер версии: та же версия, что уже несёт первый SKU этой цветомодели, не обязательно
+  // последняя версия шкалы бренда.
+  const sizeScaleLibraryState = window.SynthaSizeScaleLibraryState
+    || (window.SynthaSizeScaleLibraryState = { data: {}, loading: {}, failed: {} });
+
+  function loadSizeScale(sizeScaleId, versionNo) {
+    const key = `${sizeScaleId}@${versionNo}`;
+    if (sizeScaleLibraryState.data[key] || sizeScaleLibraryState.loading[key] || sizeScaleLibraryState.failed[key]) return;
+    sizeScaleLibraryState.loading[key] = true;
+    api(`/v2/product/size-scales/${encodeURIComponent(sizeScaleId)}?versionNo=${encodeURIComponent(versionNo)}`)
+      .then((aggregate) => { sizeScaleLibraryState.data[key] = Array.isArray(aggregate?.values) ? aggregate.values : []; })
+      .catch(() => { sizeScaleLibraryState.failed[key] = true; })
+      .finally(() => { sizeScaleLibraryState.loading[key] = false; if (state.view === 'styles') renderApp(); });
+  }
+
+  function addSkuForm(item, colorwayEntry, existingSkus) {
+    const product = item.product;
+    const reference = existingSkus[0];
+    const sizeScaleId = reference.size.sizeScaleId;
+    const versionNo = reference.size.sizeScaleVersionNo;
+    const key = `${sizeScaleId}@${versionNo}`;
+    const values = sizeScaleLibraryState.data[key];
+    if (!values) { toast(text('Размерная шкала ещё загружается, попробуйте через момент.', 'The size scale is still loading, try again in a moment.'), 'error'); return; }
+    const used = new Set(existingSkus.map((sku) => sku.sizeValueId));
+    const options = values
+      .filter((value) => !used.has(value.id))
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((value) => [value.id, `${value.sizeCode} · ${I18N.getLocale?.() === 'en' ? value.labelEn : value.labelRu}`]);
+    if (!options.length) { toast(text('В этой размерной шкале не осталось свободных размеров.', 'No remaining sizes are left in this size scale.'), 'error'); return; }
+    openForm({
+      title: text('Добавить SKU', 'Add a SKU'),
+      hint: text('Размер — из той же размерной шкалы, что уже несут SKU этой цветомодели.', 'Size — from the same size scale this colourway’s SKUs already use.'),
+      fields: [
+        field(text('Размер', 'Size'), select('sizeValueId', options)),
+        field(text('Код SKU', 'SKU code'), input('skuCode', 'text', { required: true, maxlength: '64', placeholder: `${product.styleCode}-${colorwayEntry.colorwayCode}-...` })),
+        field('GTIN', input('gtin', 'text', { maxlength: '14', pattern: '([0-9]{8}|[0-9]{12}|[0-9]{13}|[0-9]{14})', title: text('8, 12, 13 или 14 цифр', '8, 12, 13 or 14 digits') })),
+      ],
+      submitLabel: text('Добавить', 'Add'),
+      onSubmit: async (values2) => {
+        await mutate('/v2/product/skus', {
+          styleVersionId: product.styleVersionId,
+          colorwayId: colorwayEntry.id,
+          sizeValueId: values2.sizeValueId,
+          skuCode: values2.skuCode.trim().toUpperCase(),
+          gtin: values2.gtin?.trim() || undefined,
+        });
+        invalidateStyleSkuAggregate(product.id);
+        toast(text('SKU добавлен.', 'The SKU was added.'), 'success');
+      },
+    });
+  }
+
+  function skuCell(item, entry) {
+    const skus = skusOfColorway(item, entry.id);
+    const wrap = el('div', { className: 'od-inline-actions' });
+    if (skus.length) {
+      const list = el('div', {});
+      skus.forEach((sku) => {
+        list.append(el('div', { rawText: `${sku.skuCode} · ${sku.size?.code || '—'}${sku.gtin ? ` · GTIN ${sku.gtin}` : ''}` }));
+      });
+      wrap.append(list);
+      loadSizeScale(skus[0].size.sizeScaleId, skus[0].size.sizeScaleVersionNo);
+    } else {
+      wrap.append(el('span', { rawText: String(entry.skuCount ?? 0) }));
+    }
+    const caps = window.SynthaUiCapabilities;
+    const manage = caps?.hasForOrganisation(state.workspace, item.product.brandId, caps.CAPABILITIES.PRODUCT_MANAGE);
+    // Размер нового SKU резолвится по размерной шкале уже существующего SKU этой цветомодели —
+    // без единого SKU взять эту шкалу неоткуда, поэтому кнопка появляется только когда есть за что
+    // зацепиться.
+    if (manage && skus.length) {
+      const button = el('button', { className: 'button small', type: 'button', rawText: text('Добавить SKU', 'Add a SKU') });
+      button.addEventListener('click', () => addSkuForm(item, entry, skus));
+      wrap.append(button);
+    }
+    return wrap;
+  }
+
   function colorwayPanel(item) {
     const rows = colorwaysOf(item);
     if (!rows.length) return notice(text('У модели пока нет цветомоделей.', 'This style has no colourways yet.'));
+    loadStyleSkuAggregate(item.product.id);
     return odMiniTable(
       ['', text('Цветомодель', 'Colourway'), 'Pantone', text('Семейство', 'Family'), text('Артикул', 'Article'), 'SKU'],
       rows.map((entry) => [
@@ -386,7 +493,7 @@
         entry.pantone || '—',
         (I18N.getLocale?.() === 'en' ? entry.familyNameEn : entry.familyNameRu) || '—',
         entry.article,
-        String(entry.skuCount ?? 0),
+        skuCell(item, entry),
       ]),
     );
   }

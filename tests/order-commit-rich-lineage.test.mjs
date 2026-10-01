@@ -42,6 +42,11 @@ function richSelection() {
       styleId: 'style-1',
       styleVersionId: 'style-version-1',
       colorwayId: 'colorway-1',
+      colourEntryId: 'mdm-entry:colour-colour:navy',
+      colourEntryVersion: 1,
+      swatchHex: '#1a2b4c',
+      colourNameRu: 'Тёмно-синий',
+      colourNameEn: 'Navy',
       sizeValueId: 'size-m',
       sizeCode: 'M',
       sizeLabelRu: 'М',
@@ -83,6 +88,10 @@ function richBuyerCatalog({ catalogVersion = 7 } = {}) {
       styleVersionId: 'style-version-1',
       colorways: Object.freeze([Object.freeze({
         colorwayId: 'colorway-1',
+        colorRef: Object.freeze({ entryId: 'mdm-entry:colour-colour:navy', version: 1 }),
+        swatchHex: '#1a2b4c',
+        nameRu: 'Тёмно-синий',
+        nameEn: 'Navy',
         skus: Object.freeze([Object.freeze({
           productSkuId: 'product-sku-1',
           skuCode: 'SKU-1',
@@ -157,6 +166,11 @@ test('rich Product Style Colorway Size, projection and Retail Door lineage survi
     styleId: 'style-1',
     styleVersionId: 'style-version-1',
     colorwayId: 'colorway-1',
+    colourEntryId: 'mdm-entry:colour-colour:navy',
+    colourEntryVersion: 1,
+    swatchHex: '#1a2b4c',
+    colourNameRu: 'Тёмно-синий',
+    colourNameEn: 'Navy',
     sizeValueId: 'size-m',
     sizeCode: 'M',
     sizeLabelRu: 'М',
@@ -188,6 +202,11 @@ test('rich Product Style Colorway Size, projection and Retail Door lineage survi
     styleId: 'style-1',
     styleVersionId: 'style-version-1',
     colorwayId: 'colorway-1',
+    colourEntryId: 'mdm-entry:colour-colour:navy',
+    colourEntryVersion: 1,
+    swatchHex: '#1a2b4c',
+    colourNameRu: 'Тёмно-синий',
+    colourNameEn: 'Navy',
     sizeValueId: 'size-m',
     sizeCode: 'M',
     sizeLabelRu: 'М',
@@ -236,6 +255,22 @@ test('order commit fails closed when order variant lineage differs from pinned B
   const tampered = Object.freeze({
     ...order,
     lines: Object.freeze([Object.freeze({ ...order.lines[0], colorwayId: 'colorway-other' })]),
+  });
+
+  assert.throws(
+    () => createOrderCommitSnapshot({ id: 'snapshot-1', order: tampered, selection, buyerCatalog: richBuyerCatalog(), committedAt: NOW }),
+    (error) => error.code === 'ORDER_COMMIT_ORDER_LINEAGE_MISMATCH',
+  );
+});
+
+// Colour is not in RICH_LINEAGE_KEYS (older committed lines predate it), but once a line carries
+// one it must still match the pinned catalog — the same discipline gtin already had.
+test('order commit fails closed when a committed colour reference differs from the pinned buyer catalog', () => {
+  const selection = richSelection();
+  const order = attachedOrder(selection);
+  const tampered = Object.freeze({
+    ...order,
+    lines: Object.freeze([Object.freeze({ ...order.lines[0], colourEntryId: 'mdm-entry:colour-colour:other' })]),
   });
 
   assert.throws(

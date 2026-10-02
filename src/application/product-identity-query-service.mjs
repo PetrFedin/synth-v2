@@ -20,6 +20,15 @@ export function createProductIdentityQueryService({ reader } = {}) {
       return immutableCopy(aggregate);
     },
 
+    async listSizeScalesForActor(actorId, options = {}) {
+      validateActor(actorId);
+      validateIdentifier(options.brandId, 'PRODUCT_BRAND_ID_INVALID', 'Product brand id');
+      invariant(typeof reader.listSizeScales === 'function', 'PRODUCT_IDENTITY_READER_REQUIRED', 'Product Identity reader cannot list size scales');
+      const membership = await reader.getMembership(options.brandId, actorId);
+      assertCapability(membership, CAPABILITIES.PRODUCT_READ);
+      return immutableCopy({ items: await reader.listSizeScales(options.brandId) });
+    },
+
     async getSizeScaleForActor(actorId, sizeScaleId, options = {}) {
       validateActor(actorId);
       validateIdentifier(sizeScaleId, 'PRODUCT_SIZE_SCALE_ID_INVALID', 'Product Size Scale id');

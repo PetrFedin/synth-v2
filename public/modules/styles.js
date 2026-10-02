@@ -486,6 +486,17 @@
       const button = el('button', { className: 'button small', type: 'button', rawText: text('Добавить SKU', 'Add a SKU') });
       button.addEventListener('click', () => addSkuForm(item, entry, skus));
       wrap.append(button);
+    } else if (manage && !skus.length && styleSkuAggregateState.data[item.product.id]) {
+      // Первый SKU цветомодели: шкалу взять не у чего, поэтому она выбирается из шкал бренда, и SKU
+      // заводятся по всем её размерам. Кнопка ждёт загрузки состава, чтобы не предлагать шкалу
+      // цветомодели, у которой SKU уже есть, но ещё не подгрузились.
+      const bind = el('button', { className: 'button small', type: 'button', rawText: text('Привязать размерную шкалу', 'Bind a size scale') });
+      bind.addEventListener('click', () => chainForms()?.bindSizeScaleForm({
+        product: item.product,
+        colorway: { id: entry.id, colorwayCode: entry.colorwayCode },
+        onSaved: () => invalidateStyleSkuAggregate(item.product.id),
+      }).catch((problem) => toast(styleErrorMessage(problem), 'error')));
+      wrap.append(bind);
     }
     return wrap;
   }
@@ -1004,6 +1015,9 @@
     const image = el('button', { className: 'button small', type: 'button', rawText: text('Добавить изображение', 'Add an image') });
     image.addEventListener('click', () => addMedia(item));
     row.append(colour, colourBatch, image);
+    const scale = el('button', { className: 'button small', type: 'button', rawText: text('Создать размерную шкалу', 'Create a size scale') });
+    scale.addEventListener('click', () => chainForms()?.createSizeScaleForm({ brandId: item.product.brandId }).catch((problem) => toast(styleErrorMessage(problem), 'error')));
+    row.append(scale);
     return row;
   }
 
@@ -1496,6 +1510,35 @@
     return panel ? panel.projectionAction(product) : null;
   }
 
+  // Шаги цепочки «модель → версия → коллекция» живут в `product-chain-forms.js`; здесь только кнопки
+  // на карточке. Скрипт грузится раньше этого файла, но обращение — в момент нажатия, не при загрузке.
+  function chainForms() { return window.SynthaProductChainForms || null; }
+  function chainActions(product) {
+    const forms = chainForms();
+    if (!forms || !forms.mayManageProducts(product.brandId)) return null;
+    const row = el('div', { className: 'od-inline-actions' });
+    const version = el('button', { className: 'button small', type: 'button', rawText: text('Новая версия модели', 'New style version') });
+    version.addEventListener('click', () => forms.newStyleVersionForm(product).catch((problem) => toast(styleErrorMessage(problem), 'error')));
+    const collection = el('button', { className: 'button small primary', type: 'button', rawText: text('Добавить в коллекцию', 'Add to a collection') });
+    collection.addEventListener('click', () => { try { forms.addToCollectionForm({ product }); } catch (problem) { toast(styleErrorMessage(problem), 'error'); } });
+    row.append(version, collection);
+    return row;
+  }
+  function registryActions() {
+    const forms = chainForms();
+    if (!forms) return null;
+    const caps = window.SynthaUiCapabilities;
+    const mayManage = (state.workspace?.organisations || []).some((org) => org.type === 'brand' && forms.mayManageProducts(org.id)) && caps;
+    if (!mayManage) return null;
+    const row = el('div', { className: 'od-inline-actions' });
+    const create = el('button', { className: 'button primary', type: 'button', rawText: text('Создать модель', 'Create a style') });
+    create.addEventListener('click', () => forms.createStyleForm().catch((problem) => toast(styleErrorMessage(problem), 'error')));
+    const scale = el('button', { className: 'button', type: 'button', rawText: text('Создать размерную шкалу', 'Create a size scale') });
+    scale.addEventListener('click', () => forms.createSizeScaleForm().catch((problem) => toast(styleErrorMessage(problem), 'error')));
+    row.append(create, scale);
+    return row;
+  }
+
   function inspector(item) {
     const product = item.product;
     const risks = item.risks.length
@@ -1528,6 +1571,7 @@
             { label: text('Новизна', 'Novelty'), value: dimension(product, 'common.novelty') || '—' },
             { label: text('Сезон', 'Season'), value: dimension(product, 'common.operating_season') || '—' },
           ],
+          content: [chainActions(product)].filter(Boolean),
         },
         {
           label: text('Готовность', 'Readiness'),
@@ -1630,7 +1674,7 @@
       { label: text('Проекции', 'Projected'), value: registry.summary.projected, detail: text('опубликованы неизменяемо', 'immutable published') },
       { label: text('Заблокированы', 'Blocked'), value: registry.summary.blocked, detail: `${registry.summary.notAssessed} ${text('не оценено', 'not assessed')}` },
       { label: text('Связка с каталогом', 'Catalogue bridge'), value: registry.summary.bridgeIncomplete, detail: text('неполные связи legacy SKU', 'incomplete legacy SKU links') },
-    ], [], text('Поиск модели или версии', 'Search style or version'), null);
+    ], [], text('Поиск модели или версии', 'Search style or version'), registryActions());
 
     // The two middle tabs are named for a view and were built as exception lists: «Готовность» kept
     // only the styles that are not ready, «Коммерческая проекция» only those without one. With a

@@ -17,6 +17,14 @@ export function withProductIdentityOpenApi(base) {
   const specification = structuredClone(base);
   specification.info.version = '1.20.0';
   Object.assign(specification.components.schemas, schemas());
+  // A list row is the Size Scale head plus the number of its latest version (null while it has none).
+  const head = specification.components.schemas.ProductSizeScale;
+  specification.components.schemas.ProductSizeScaleList = {
+    type: 'object',
+    additionalProperties: false,
+    required: ['items'],
+    properties: { items: { type: 'array', items: { type: 'object', additionalProperties: false, required: [...head.required, 'latestVersionNo'], properties: { ...head.properties, latestVersionNo: { oneOf: [version(), { type: 'null' }] } } } } },
+  };
   Object.assign(specification.paths, paths());
   return deepFreeze(specification);
 }
@@ -73,7 +81,7 @@ function paths() {
     '/product/styles/{styleId}/versions': { post: mutation('createProductStyleVersion', [idParameter('styleId')], '#/components/schemas/ProductStyleVersionCreate', '#/components/schemas/ProductStyleVersion', 'Created immutable Product Style Version') },
     '/product/style-versions/{styleVersionId}/colorways': { post: mutation('createProductColorway', [idParameter('styleVersionId')], '#/components/schemas/ProductColorwayCreate', '#/components/schemas/ProductColorway', 'Created Product Colorway') },
     '/product/style-versions/{styleVersionId}/colorways/batch': { post: mutation('createProductColorwaysBatch', [idParameter('styleVersionId')], '#/components/schemas/ProductColorwayBatchCreate', '#/components/schemas/ProductColorwayBatchResult', 'Created several Product Colorways in one call') },
-    '/product/size-scales': { post: mutation('createProductSizeScale', [], '#/components/schemas/ProductSizeScaleCreate', '#/components/schemas/ProductSizeScale', 'Created Product Size Scale') },
+    '/product/size-scales': { get: { operationId: 'listProductSizeScales', security: [{ bearerAuth: [] }], parameters: [{ name: 'brandId', in: 'query', required: true, schema: { type: 'string', minLength: 1, maxLength: 160, pattern: SAFE_ID_PATTERN } }], responses: readResponses('Size Scales of one brand with the latest version number', '#/components/schemas/ProductSizeScaleList') }, post: mutation('createProductSizeScale', [], '#/components/schemas/ProductSizeScaleCreate', '#/components/schemas/ProductSizeScale', 'Created Product Size Scale') },
     '/product/size-scales/{sizeScaleId}': { get: { operationId: 'getProductSizeScale', security: [{ bearerAuth: [] }], parameters: [idParameter('sizeScaleId'), versionNoQuery], responses: readResponses('Product Size Scale aggregate', '#/components/schemas/ProductSizeScaleAggregate') }, patch: mutation('updateProductSizeScale', [idParameter('sizeScaleId')], '#/components/schemas/ProductSizeScaleUpdate', '#/components/schemas/ProductSizeScale', 'Updated Product Size Scale head') },
     '/product/size-scales/{sizeScaleId}/versions': { post: mutation('createProductSizeScaleVersion', [idParameter('sizeScaleId')], '#/components/schemas/ProductSizeScaleVersionCreate', '#/components/schemas/ProductSizeScaleVersion', 'Created immutable Product Size Scale Version') },
     '/product/size-scale-versions/{sizeScaleVersionId}/values': { post: mutation('createProductSizeValue', [idParameter('sizeScaleVersionId')], '#/components/schemas/ProductSizeValueCreate', '#/components/schemas/ProductSizeValue', 'Created ordered Product Size Value') },

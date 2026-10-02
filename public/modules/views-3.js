@@ -40,6 +40,10 @@ function collectionEntity(item) {
   const actions = item.status === 'draft' && campaign?.status === 'open' && caps.hasForOrganisation(state.workspace, item.brandId, caps.CAPABILITIES.COLLECTION_MANAGE)
     ? [actionButton('\u041e\u043f\u0443\u0431\u043b\u0438\u043a\u043e\u0432\u0430\u0442\u044c', () => mutate(`/v2/collections/${encodeURIComponent(item.id)}/publish`, {}))]
     : [];
+  // Состав меняется только у черновика: кнопка есть ровно там, где сервер примет команду.
+  if (item.status === 'draft' && window.SynthaProductChainForms && caps.hasForOrganisation(state.workspace, item.brandId, caps.CAPABILITIES.COLLECTION_MANAGE)) {
+    actions.push(actionButton(localText('Добавить модель', 'Add a style'), () => window.SynthaProductChainForms.addToCollectionForm({ collection: item })));
+  }
   return entity(item.name, item.status, [item.currency, `\u041a\u0430\u043c\u043f\u0430\u043d\u0438\u044f: ${nameById('campaigns',item.campaignId)}`, item.id], actions);
 }
 function showroomEntity(item) {

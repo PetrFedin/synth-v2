@@ -70,6 +70,7 @@ export function createProductIdentityRoutes({ productIdentity } = {}) {
       readinessGated: READINESS_GATED_STYLE_STATUSES,
     })),
     read('GET', /^\/v2\/product\/styles\/([^/]+)$/, ['versionNo'], ({ actorId, params, query }) => service.getStyleForActor(actorId, params[0], { versionNo: query.versionNo })),
+    read('GET', /^\/v2\/product\/size-scales$/, ['brandId'], ({ actorId, query }) => service.listSizeScalesForActor(actorId, { brandId: query.brandId })),
     read('GET', /^\/v2\/product\/size-scales\/([^/]+)$/, ['versionNo'], ({ actorId, params, query }) => service.getSizeScaleForActor(actorId, params[0], { versionNo: query.versionNo })),
     mutate('POST', /^\/v2\/product\/styles$/, STYLE_CREATE, ({ commandId, actorId, body }) => service.createStyle(commandId, actorId, body)),
     mutate('POST', /^\/v2\/product\/styles\/([^/]+)\/transition$/, STYLE_TRANSITION, ({ commandId, actorId, params, body }) => service.transitionStyle(commandId, actorId, params[0], body)),
@@ -128,6 +129,7 @@ function unavailableProductIdentity() {
   return Object.freeze({
     getStyleForActor: fail,
     getSizeScaleForActor: fail,
+    listSizeScalesForActor: fail,
     createStyle: fail,
     transitionStyle: fail,
     createStyleVersion: fail,

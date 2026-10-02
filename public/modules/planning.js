@@ -212,8 +212,13 @@
         'This slot was dropped from the plan — a final state it cannot return from.',
       ) })];
     }
+    // Слот — идея; модель из неё заводится здесь же, без обхода через реестр моделей.
+    const chain = window.SynthaProductChainForms;
+    const createStyle = chain && chain.mayManageProducts(item.brandId)
+      ? [actionButton(text('Создать модель из слота', 'Create a style from the slot'), () => chain.createStyleForm({ placeholder: item }), 'primary')]
+      : [];
     // Снятие необратимо, поэтому спрашивается подтверждение; остальные переходы — обычный ход работы.
-    return moves.map((move) => actionButton(
+    return [...createStyle, ...moves.map((move) => actionButton(
       text(move.ru, move.en),
       () => mutate(`/v2/assortment/placeholders/${encodeURIComponent(item.id)}/transition`, {
         expectedVersion: item.version,
@@ -223,7 +228,7 @@
       move.status === 'dropped'
         ? text('Снятый слот вернуть в план нельзя. Снять?', 'A dropped slot cannot return to the plan. Drop it?')
         : '',
-    ));
+    ))];
   }
   // A tab called Таймлайн that re-sorted the same table by a date both campaigns share rendered the
   // portfolio again, byte for byte. A timeline shows when things happen against each other.

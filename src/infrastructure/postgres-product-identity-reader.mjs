@@ -134,6 +134,20 @@ export function createPostgresProductIdentityReader({ pool } = {}) {
       return result.rows[0] ? mapSizeScale(result.rows[0]) : undefined;
     },
 
+    // Размерные шкалы бренда: шапка и номер последней версии. Без этого списка форма привязки шкалы
+    // к цветомодели не может предложить ни одной шкалы — читалась только шкала, id которой уже известен.
+    async listSizeScales(brandId, { limit = 200 } = {}) {
+      const result = await pool.query(
+        `SELECT s.*, (SELECT MAX(v.version_no) FROM product_size_scale_versions v WHERE v.size_scale_id = s.id) AS latest_version_no
+           FROM product_size_scales s
+          WHERE s.brand_id = $1
+          ORDER BY s.scale_code, s.id
+          LIMIT $2`,
+        [brandId, limit],
+      );
+      return result.rows.map((row) => Object.freeze({ ...mapSizeScale(row), latestVersionNo: row.latest_version_no ?? null }));
+    },
+
     async getSizeScaleAggregate(sizeScaleId, versionNo = null) {
       const scaleResult = await pool.query('SELECT * FROM product_size_scales WHERE id = $1', [sizeScaleId]);
       if (!scaleResult.rows[0]) return undefined;

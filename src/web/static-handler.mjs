@@ -82,6 +82,7 @@ const ASSETS = Object.freeze({
   '/ui/retail-door-ui-core.js': ['modules/retail-door-ui-core.js', JS, CACHE],
   '/ui/forms-3.js': ['modules/forms-3.js', JS, CACHE],
   '/ui/open-form.js': ['modules/open-form.js', JS, CACHE],
+  '/ui/product-chain-forms.js': ['modules/product-chain-forms.js', JS, CACHE],
   '/ui/api.js': ['modules/api.js', JS, CACHE],
   '/ui/dom-1.js': ['modules/dom-1.js', JS, CACHE],
   '/ui/dom-2.js': ['modules/dom-2.js', JS, CACHE],

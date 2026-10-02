@@ -522,3 +522,104 @@ Never auto-merge two facilities solely on fuzzy name/address similarity.
 
 **Dependency note:** OpenEPCIS and Open Supply Hub remain external interoperability/reference systems; pin versions and re-check license/API terms before runtime use.
 
+## Additional integration wave — lifecycle-impact modeling and colour-quality authority
+
+This wave strengthens Product Passport, material sourcing and QC with two bounded technical capabilities: environmental-impact calculation and objective colour measurement.
+
+### Product / Material LCA Projection — ADAPT/SIDECAR
+
+Reference:
+
+https://github.com/GreenDelta/olca-app
+
+Use openLCA concepts/tooling as a separate analytical sidecar for lifecycle-impact calculations.
+
+Authoritative Synth-v2 inputs may include:
+
+- approved BOM/material composition;
+- material mass/quantity;
+- supplier/facility;
+- geography;
+- production/process mapping;
+- energy/process factors when available;
+- transport stage;
+- packaging;
+- source evidence/version.
+
+Flow:
+
+approved Synth-v2 snapshot -> LCA mapping/export -> calculation sidecar -> result dataset -> reviewed import -> Product Passport / sustainability projection
+
+openLCA never owns product, BOM, supplier or passport state.
+
+### Sustainability Evidence Authority — ADOPT
+
+Every sustainability figure shown in Product Passport or internal sourcing analysis must store:
+
+- metric;
+- value/unit;
+- scope/boundary;
+- methodology;
+- dataset/database source;
+- dataset version;
+- mapping assumptions;
+- calculated_at;
+- reviewer/status.
+
+Unknown data remains unknown; do not substitute generic averages without labeling them.
+
+### Colour Measurement / Delta-E QA — ADOPT/ADAPT
+
+Reference:
+
+https://github.com/colour-science/colour
+
+Create controlled colour records for sample/production QC when measured instrument data is available.
+
+Store:
+
+- product/colourway;
+- reference target;
+- measurement source/device;
+- colour space/illuminant/observer;
+- Lab/LCH or other normalized values;
+- Delta-E method/value;
+- tolerance rule/version;
+- measurement time;
+- reviewer/QC outcome.
+
+Use objective colour difference as QC evidence, not as a replacement for visual/brand approval.
+
+### Colour Reference Authority — ADOPT
+
+Keep separate:
+
+- commercial colour name;
+- internal colour code;
+- supplier colour reference;
+- measured colour target;
+- optional external standard reference.
+
+Do not infer exact measured colour from ordinary product photography.
+
+### Batch / Lot Colour Drift — ADOPT
+
+Where multiple material/production lots are measured:
+
+reference -> lot measurement -> Delta-E -> tolerance -> QC disposition
+
+This can connect to supplier performance and production batch traceability.
+
+### Additional acceptance
+
+- LCA result resolves to exact BOM/material/supplier snapshot + methodology/dataset version;
+- generic/default environmental factors are explicitly labeled;
+- openLCA sidecar cannot write product/BOM records;
+- colour measurement stores instrument/condition context;
+- photo-derived colour is never presented as calibrated instrument truth unless a validated calibrated workflow exists;
+- QC outcome remains a Synth-v2 domain decision.
+
+**Sequencing:** Product/BOM/Supplier/Traceability first -> sustainability evidence mapping -> openLCA analytical sidecar -> Passport projection; Sample/QC authority -> colour reference -> measured Delta-E/batch drift.
+
+**Dependency note:** openLCA upstream is MPL-2.0 and Colour is BSD-3-Clause in the verified repositories; review database/license terms separately from application code because LCA datasets can have independent licensing.
+

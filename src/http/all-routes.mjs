@@ -20,6 +20,7 @@ import { createHistoryRoutes } from './history-routes.mjs';
 import { createSupplierPortalRoutes } from './supplier-portal-routes.mjs';
 import { createCategoryAttributeRoutes } from './category-attribute-routes.mjs';
 import { createOrganisationMemberRoutes } from './organisation-member-routes.mjs';
+import { createTeamRoutes } from './team-routes.mjs';
 import { createFulfillmentRoutes } from './fulfillment-routes.mjs';
 import { createInventoryRoutes } from './inventory-routes.mjs';
 import { createLegalEntityRoutes } from './legal-entity-routes.mjs';
@@ -83,6 +84,7 @@ export function createWholesaleRoutes(services = {}) {
     ...createSupplierPortalRoutes({ supplierPortal: services.supplierPortal }),
     ...createCategoryAttributeRoutes({ categoryAttributes: services.categoryAttributes }),
     ...createOrganisationMemberRoutes({ organisationMembers: services.organisationMembers }),
+    ...createTeamRoutes({ team: services.team }),
   ]);
 }
 

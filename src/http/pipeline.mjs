@@ -8,6 +8,7 @@ import { wholesaleV2ExtendedOpenApi } from './v2-openapi.mjs';
 
 const EMPTY_BODY = bodyContract();
 const LOGIN_BODY = bodyContract(['email', 'password']);
+const ACCEPT_INVITE_BODY = bodyContract(['token', 'password']);
 
 /**
  * Transport-independent request pipeline.
@@ -63,6 +64,14 @@ export function createWholesaleRequestPipeline({ authenticate, auth, readiness, 
       invariant(auth?.login, 'AUTH_SERVICE_REQUIRED', 'Authentication service is required');
       const body = assertBodyContract(await readJson(request), LOGIN_BODY);
       return { status: 200, payload: { data: await auth.login({ ...body, clientAddress: clientAddressOf(request) }), requestId } };
+    }
+    // Принять приглашение может тот, кто ещё не может войти: у него нет ни пароля, ни сессии, есть
+    // только одноразовый токен, который ему передали.
+    if (method === 'POST' && url.pathname === '/v2/auth/accept-invite') {
+      assertEmptyQuery(url);
+      invariant(services.team?.acceptInvite, 'TEAM_SERVICE_REQUIRED', 'Team service is required');
+      const body = assertBodyContract(await readJson(request), ACCEPT_INVITE_BODY);
+      return { status: 200, payload: { data: await services.team.acceptInvite(body), requestId } };
     }
     invariant(url.pathname.startsWith('/v2/'), 'HTTP_ROUTE_NOT_FOUND', 'Route not found', { method, path: url.pathname });
     const identity = await authenticateBearer(request);

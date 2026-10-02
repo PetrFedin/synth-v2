@@ -1,19 +1,21 @@
 import { invariant } from '../core/errors.mjs';
 
+export function emptyAuthState() { return { users: new Map(), emails: new Map(), sessions: new Map(), sessionHashes: new Map(), throttles: new Map(), audits: new Map() }; }
+
 export function createMemoryAuthStore() {
-  let state = { users: new Map(), emails: new Map(), sessions: new Map(), sessionHashes: new Map(), throttles: new Map(), audits: new Map() };
+  let state = emptyAuthState();
   return Object.freeze({
     async transaction(work) {
-      const draft = clone(state);
-      const result = await work(view(draft));
+      const draft = cloneAuthState(state);
+      const result = await work(memoryAuthView(draft));
       state = draft;
       return result;
     },
     snapshot() { return { users: [...state.users.values()], sessions: [...state.sessions.values()], throttles: [...state.throttles.values()], audits: [...state.audits.values()] }; },
   });
 }
-function clone(s) { return { users:new Map(s.users), emails:new Map(s.emails), sessions:new Map(s.sessions), sessionHashes:new Map(s.sessionHashes), throttles:new Map(s.throttles), audits:new Map(s.audits) }; }
-function view(s) { return Object.freeze({
+export function cloneAuthState(s) { return { users:new Map(s.users), emails:new Map(s.emails), sessions:new Map(s.sessions), sessionHashes:new Map(s.sessionHashes), throttles:new Map(s.throttles), audits:new Map(s.audits) }; }
+export function memoryAuthView(s) { return Object.freeze({
   getUser: async (id)=>s.users.get(id),
   getUserByEmail: async (email)=>s.users.get(s.emails.get(email)),
   insertUser: async (u)=>{ invariant(!s.users.has(u.id) && !s.emails.has(u.emailNormalized),'AUTH_USER_ALREADY_EXISTS','User already exists'); s.users.set(u.id,u); s.emails.set(u.emailNormalized,u.id); },

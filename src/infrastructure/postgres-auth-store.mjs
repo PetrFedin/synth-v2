@@ -4,11 +4,11 @@ import { withPostgresTransaction } from './postgres-transaction.mjs';
 export function createPostgresAuthStore({ pool } = {}) {
   invariant(pool && typeof pool.connect === 'function', 'POSTGRES_POOL_REQUIRED', 'PostgreSQL pool is required');
   return Object.freeze({
-    transaction: (work) => withPostgresTransaction(pool, work, { createView: view }),
+    transaction: (work) => withPostgresTransaction(pool, work, { createView: postgresAuthView }),
   });
 }
 
-function view(client) {
+export function postgresAuthView(client) {
   return Object.freeze({
     async getUser(id) {
       const result = await client.query('SELECT * FROM auth_users WHERE id = $1', [id]);
@@ -110,7 +110,7 @@ function view(client) {
   });
 }
 
-function userFromRow(row) {
+export function userFromRow(row) {
   if (!row) return undefined;
   return Object.freeze({
     id: row.id,

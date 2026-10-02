@@ -2,6 +2,7 @@ import { invariant } from '../../core/errors.mjs';
 
 export const CAPABILITIES = Object.freeze({
   ORGANISATION_MANAGE: 'organisation.manage',
+  MEMBERSHIP_MANAGE: 'membership.manage',
   CAMPAIGN_MANAGE: 'campaign.manage',
   COLLECTION_MANAGE: 'collection.manage',
   CATALOG_MANAGE: 'catalog.manage',

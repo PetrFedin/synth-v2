@@ -172,6 +172,12 @@ function renderLogin(message = '') {
     }
   });
   card.append(form, el('p', { className: 'login-hint', text: I18N.t('auth.bootstrapHint') }));
+  // Приглашённый ещё не может войти, а токен ему передали из рук в руки: принять его — отсюда.
+  if (typeof renderAcceptInvite === 'function') {
+    const invited = el('button', { className: 'button secondary', rawText: localText('Принять приглашение', 'Accept invitation'), type: 'button' });
+    invited.addEventListener('click', () => renderAcceptInvite());
+    card.append(invited);
+  }
   wrap.append(card);
   root.append(wrap);
 }

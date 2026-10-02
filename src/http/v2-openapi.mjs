@@ -32,6 +32,7 @@ import { withSampleOpenApi } from './sample-openapi.mjs';
 import { withSourcingOpenApi } from './sourcing-openapi.mjs';
 import { withSourcingTechPackGateOpenApi } from './sourcing-tech-pack-gate-openapi.mjs';
 import { withTechPackOpenApi } from './tech-pack-openapi.mjs';
+import { withTeamOpenApi } from './team-openapi.mjs';
 import { wholesaleV2OpenApi } from './openapi.mjs';
 
 const AUTHORITATIVE_V2_CONTRACT_VERSION = '1.17.0';
@@ -104,7 +105,7 @@ const composed = withOperationSequenceOpenApi(
   ),
 );
 
-export const wholesaleV2ExtendedOpenApi = preserveAuthoritativeContractVersion(composed);
+export const wholesaleV2ExtendedOpenApi = preserveAuthoritativeContractVersion(withTeamOpenApi(composed));
 
 function preserveAuthoritativeContractVersion(specification) {
   const normalized = structuredClone(specification);

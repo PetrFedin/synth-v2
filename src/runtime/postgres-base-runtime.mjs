@@ -62,6 +62,8 @@ import { createPostgresHistoryReader } from '../infrastructure/postgres-history-
 import { createHistoryQueryService } from '../application/history-query-service.mjs';
 import { createPostgresSupplierPortalReader } from '../infrastructure/postgres-supplier-portal-reader.mjs';
 import { createSupplierPortalQueryService } from '../application/supplier-portal-query-service.mjs';
+import { createSupplierPortalCommandService } from '../application/supplier-portal-command-service.mjs';
+import { createPostgresSupplierPortalStore } from '../infrastructure/postgres-supplier-portal-store.mjs';
 import { createPostgresCategoryAttributeReader } from '../infrastructure/postgres-category-attribute-reader.mjs';
 import { createCategoryAttributeQueryService } from '../application/category-attribute-query-service.mjs';
 import { createPostgresOrganisationMemberReader } from '../infrastructure/postgres-organisation-member-reader.mjs';
@@ -155,7 +157,10 @@ export function createPostgresWholesaleRuntime({
   // nothing else.
   const libraries = createLibraryQueryService({ reader: createPostgresLibraryReader({ pool }) });
   const history = createHistoryQueryService({ reader: createPostgresHistoryReader({ pool }) });
-  const supplierPortal = createSupplierPortalQueryService({ reader: createPostgresSupplierPortalReader({ pool }) });
+  const supplierPortal = Object.freeze({
+    ...createSupplierPortalQueryService({ reader: createPostgresSupplierPortalReader({ pool }) }),
+    ...createSupplierPortalCommandService({ store: createPostgresSupplierPortalStore({ pool }), nextId: runtimeNextId, ...(clock ? { clock } : {}) }),
+  });
   const categoryAttributes = createCategoryAttributeQueryService({ reader: createPostgresCategoryAttributeReader({ pool }) });
   const organisationMembers = createOrganisationMemberQueryService({ reader: createPostgresOrganisationMemberReader({ pool }) });
   const awaitingActions = createAwaitingActionQueryService({ reader: createPostgresAwaitingActionReader({ pool }), ...(clock ? { clock } : {}) });

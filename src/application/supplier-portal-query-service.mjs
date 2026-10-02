@@ -1,4 +1,5 @@
 import { invariant } from '../core/errors.mjs';
+import { supplierPortalCapabilities } from '../modules/supplier-portal/public.mjs';
 
 const MAX_LIMIT = 200;
 const CODE = /^[A-Za-z0-9][A-Za-z0-9._-]{1,63}$/;
@@ -32,7 +33,10 @@ export function createSupplierPortalQueryService({ reader } = {}) {
     // an agent representing two factories is normal and the screen has to say which one it is showing.
     async suppliersForActor(actorId) {
       actor(actorId);
-      return Object.freeze({ items: Object.freeze(await reader.suppliersForActor(actorId)) });
+      // Each entry says what the grant lets this person do, so the screen shows a button only for an
+      // answer the server will accept; the server checks the same thing again on every command.
+      const items = (await reader.suppliersForActor(actorId)).map((item) => Object.freeze({ ...item, capabilities: supplierPortalCapabilities() }));
+      return Object.freeze({ items: Object.freeze(items) });
     },
     rfqsForActor: (actorId, input) => read(reader.rfqsForActor, actorId, input),
     ordersForActor: (actorId, input) => read(reader.ordersForActor, actorId, input),

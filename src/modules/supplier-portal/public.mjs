@@ -68,3 +68,53 @@ export function supplierPortalActions(rfq) {
   if (status === 'quote_submitted') return Object.freeze(['quote']);
   return Object.freeze([]);
 }
+
+// S-01. What a person holding a grant may do. The portal used to be read-only because a supplier
+// answering through the brand's own endpoints would have meant an account outside the brand holding a
+// brand role. These are not brand capabilities and are not in `ROLE_CAPABILITIES`: a grant is the
+// whole of the holder's standing, the capabilities below belong to that standing and to nothing else,
+// and a brand role can never hold them by accident because they are not in the list the roles draw from.
+export const SUPPLIER_PORTAL_ROLE = 'supplier-portal';
+export const SUPPLIER_PORTAL_CAPABILITIES = Object.freeze({
+  QUOTE_SUBMIT: 'supplier-portal.quote.submit',
+  COUNTER_ACCEPT: 'supplier-portal.counter.accept',
+  ORDER_CONFIRM: 'supplier-portal.order.confirm',
+});
+const PORTAL_ROLE_CAPABILITIES = Object.freeze(Object.values(SUPPLIER_PORTAL_CAPABILITIES));
+
+export function supplierPortalCapabilities() { return PORTAL_ROLE_CAPABILITIES; }
+
+// The grant must be active, and it must be the grant of the supplier the command names: a person who
+// answers for two factories holds two grants, and a standing at one is no standing at the other.
+export function assertSupplierPortalCapability(grant, { supplierCode, capability }) {
+  invariant(grant?.status === 'active' && grant.supplierCode === supplierCode, 'SUPPLIER_PORTAL_ACCESS_REQUIRED',
+    'An active portal grant for this supplier is required', { supplierCode });
+  invariant(PORTAL_ROLE_CAPABILITIES.includes(capability), 'CAPABILITY_DENIED',
+    'The supplier portal role does not grant the required capability', { role: SUPPLIER_PORTAL_ROLE, capability });
+}
+
+// The supplier's standing in a request, as the portal view states it. Kept here, beside the view's
+// description, so that a command's answer and the next read of the list cannot disagree.
+export function supplierPortalRfqStatus(rfq, supplierCode) {
+  if (rfq.status === 'cancelled') return 'cancelled';
+  if (['awarded', 'allocated'].includes(rfq.status)) return rfq.selectedSupplierCode === supplierCode ? 'won' : 'lost';
+  return (rfq.quotes ?? []).some((quote) => quote.supplierCode === supplierCode) ? 'quote_submitted' : 'awaiting_quote';
+}
+
+// A command answers with the supplier's own part of the aggregate and nothing else. The RFQ aggregate
+// holds every invited supplier's quotation; handing it back would undo in one response what the portal
+// views keep out of every read.
+export function supplierPortalRfqReceipt(rfq, supplierCode) {
+  const own = (rfq.quotes ?? []).find((quote) => quote.supplierCode === supplierCode) ?? null;
+  return Object.freeze({
+    rfqCode: rfq.rfqCode, supplierCode, supplierStatus: supplierPortalRfqStatus(rfq, supplierCode),
+    version: rfq.version, ownQuote: own,
+  });
+}
+
+export function supplierPortalOrderReceipt(order) {
+  return Object.freeze({
+    productionOrderNumber: order.productionOrderNumber, supplierCode: order.supplierCode, status: order.status,
+    version: order.version, confirmedAt: order.confirmedAt ?? null, confirmation: order.confirmation ?? null,
+  });
+}

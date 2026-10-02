@@ -8,6 +8,7 @@ import { withCostCloseReadinessOpenApi } from './cost-close-readiness-openapi.mj
 import { withEcon003AllocationMarginOpenApi } from './econ003-allocation-margin-openapi.mjs';
 import { withFinalQualityOpenApi } from './final-quality-openapi.mjs';
 import { withInlineQualityOpenApi } from './inline-quality-openapi.mjs';
+import { withSupplierPortalOpenApi } from './supplier-portal-openapi.mjs';
 import { withSupplierPaymentOpenApi } from './supplier-payment-openapi.mjs';
 import { withMaterialLotOpenApi } from './material-lot-openapi.mjs';
 import { withCuttingOpenApi } from './cutting-openapi.mjs';
@@ -38,7 +39,7 @@ import { wholesaleV2OpenApi } from './openapi.mjs';
 
 const AUTHORITATIVE_V2_CONTRACT_VERSION = '1.17.0';
 
-const composed = withOperationSequenceOpenApi(
+const composed = withSupplierPortalOpenApi(withOperationSequenceOpenApi(
   withCuttingOpenApi(
   withMaterialLotOpenApi(
   withSupplierPaymentOpenApi(
@@ -104,7 +105,7 @@ const composed = withOperationSequenceOpenApi(
   ),
   ),
   ),
-);
+));
 
 export const wholesaleV2ExtendedOpenApi = preserveAuthoritativeContractVersion(withAwaitingActionOpenApi(withTeamOpenApi(composed)));
 

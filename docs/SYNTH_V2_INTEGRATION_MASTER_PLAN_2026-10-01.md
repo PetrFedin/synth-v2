@@ -715,3 +715,130 @@ Measure whether digital sampling actually reduces physical iterations and lead t
 
 **Dependency note:** MaterialX is Apache-2.0 upstream; review exact OpenUSD license/distribution terms before bundling.
 
+## Premium commercial wave — should-cost and supplier negotiation workbench
+
+This wave strengthens Synth-v2 as a commercial fashion operating system, connecting sourcing decisions directly to margin and realised landed cost.
+
+### Supplier Quote Version Authority — ADOPT
+
+For each style/material/service quotation store:
+
+- supplier;
+- product/material;
+- quote version/date;
+- MOQ;
+- tiered quantities;
+- unit cost;
+- currency;
+- Incoterm;
+- payment terms;
+- lead time;
+- tooling/development cost;
+- freight/other known components;
+- validity period;
+- attachments/source;
+- reviewer/status.
+
+Never overwrite a prior quote.
+
+### Cost Breakdown / Should-Cost Model — ADOPT
+
+Create a versioned target-cost model using approved inputs such as:
+
+- fabric/material consumption;
+- material price;
+- trims;
+- CM/labour;
+- wash/finish;
+- packaging;
+- tooling/development;
+- freight/duty/handling scenario;
+- quality/inspection allowance where defined;
+- FX assumptions.
+
+Clearly distinguish:
+
+- supplier quoted cost;
+- internally estimated should-cost;
+- negotiated agreed cost;
+- expected landed cost;
+- actual landed cost.
+
+### Negotiation Round Workspace — ADOPT
+
+Flow:
+
+quote -> internal target -> negotiation round -> supplier response -> revised quote -> agreed / rejected / alternate supplier
+
+Store:
+
+- round;
+- requested changes;
+- response;
+- commercial concessions;
+- MOQ/lead-time tradeoff;
+- validity;
+- owner;
+- attachments/communications reference.
+
+Do not turn private commercial negotiation notes into supplier-visible data by default.
+
+### Margin Impact Simulator — ADOPT
+
+For a quote/scenario show effect on:
+
+- wholesale/retail price;
+- intake margin;
+- contribution;
+- landed cost;
+- MOQ/budget;
+- scenario GMROI/stock risk where applicable.
+
+Reuse the existing rules, Assortment Scenario Engine and Landed Cost authorities rather than creating parallel formulas.
+
+### Supplier Comparison — ADOPT
+
+Compare qualified suppliers on explainable dimensions:
+
+- quote/cost;
+- MOQ;
+- lead time;
+- capacity/commitment where known;
+- quality/QC history;
+- OTIF;
+- sample performance;
+- payment terms;
+- facility/provenance status.
+
+Do not collapse this into a black-box single supplier score unless components are visible.
+
+### Realised Negotiation Effect — ADOPT
+
+After receiving/actual-cost data exists:
+
+baseline quote -> agreed quote -> actual landed cost -> realised effect
+
+Separate:
+
+- negotiated unit-cost effect;
+- FX;
+- freight/duty;
+- quantity/MOQ;
+- quality/rework;
+- mix.
+
+This prevents fake "savings" claims that disappear in landed cost.
+
+### Additional acceptance
+
+- quote history is immutable/versioned;
+- should-cost assumptions are visible;
+- supplier negotiation cannot bypass sourcing/approval roles;
+- margin simulator uses canonical price/cost formulas;
+- realised effect reconciles to actual landed cost;
+- supplier comparison is explainable and evidence-linked.
+
+**Sequencing:** Supplier/Quote/Sourcing + Cost/Landed Cost authorities -> should-cost -> negotiation rounds -> margin scenarios -> actual-effect reconciliation.
+
+**Commercial framing:** sell as a negotiation and sourcing-control cockpit that turns PLM data into measurable procurement margin improvement.
+

@@ -623,3 +623,95 @@ This can connect to supplier performance and production batch traceability.
 
 **Dependency note:** openLCA upstream is MPL-2.0 and Colour is BSD-3-Clause in the verified repositories; review database/license terms separately from application code because LCA datasets can have independent licensing.
 
+## Additional wave — 3D digital sample and material-authoring authority
+
+This wave positions Synth-v2 as a premium fashion PLM with versioned digital samples rather than decorative 3D files.
+
+### 3D Sample Authority — ADOPT
+
+Add a native digital-sample record linked to:
+
+- product/style;
+- colourway;
+- sample iteration;
+- pattern/spec/BOM revision;
+- supplier;
+- source application/provider;
+- source file/checksum;
+- web derivative;
+- review status;
+- reviewer comments;
+- approved/superseded relation.
+
+Digital approval does not silently replace physical sample/QC gates.
+
+### OpenUSD Interchange — ADAPT
+
+Reference: https://github.com/PixarAnimationStudios/OpenUSD
+
+Use OpenUSD as an optional scene/interchange boundary for compatible upstream 3D-fashion tools.
+
+Track source format/version, conversion tool/version, scale/units and product/sample mapping.
+
+Synth-v2 remains product/sample authority.
+
+### MaterialX Digital Material Definitions — ADOPT/ADAPT
+
+Reference: https://github.com/AcademySoftwareFoundation/MaterialX
+
+Connect:
+
+physical material/BOM item -> digital material definition -> approved digital sample
+
+Store digital material revision separately from physical sourcing/compliance truth.
+
+A visually accurate shader does not prove physical colour, drape or performance.
+
+### GLB/GLTF Web Derivative — ADOPT
+
+Generate validated lightweight derivatives for:
+
+- buyer/showroom preview;
+- PLM review;
+- mobile/tablet;
+- Product Passport/media surfaces.
+
+The derivative is not the editing master.
+
+### 3D Review / Annotation — ADOPT
+
+Allow reviewer comments anchored to mesh/part/material/view/sample revision.
+
+A review may create:
+
+- sample change request;
+- BOM/material change request;
+- fit/spec review task.
+
+It cannot rewrite the product/BOM directly.
+
+### Digital-vs-Physical Sample Evidence — ADOPT
+
+Track whether a decision was based on digital, physical or both, plus discrepancy classes:
+
+- colour;
+- construction detail;
+- trim/material;
+- silhouette/fit;
+- visual drape.
+
+Measure whether digital sampling actually reduces physical iterations and lead time.
+
+### Additional acceptance
+
+- every 3D sample resolves to exact product/sample/BOM revision;
+- historic approved digital revisions remain immutable;
+- digital material remains distinct from physical-material authority;
+- 3D viewer failure does not block core PLM;
+- sample comments create explicit domain change requests;
+- digital-sample ROI is based on observed iteration/time evidence.
+
+**Sequencing:** sample/BOM/revision authority -> 3D sample records -> MaterialX/USD boundaries -> GLB derivatives -> review/annotation -> benefit measurement.
+
+**Dependency note:** MaterialX is Apache-2.0 upstream; review exact OpenUSD license/distribution terms before bundling.
+

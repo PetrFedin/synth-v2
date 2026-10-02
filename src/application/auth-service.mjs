@@ -175,7 +175,7 @@ function failedThrottle(current, keyHash, now, { maxLoginFailures, loginWindowMs
 function audit(id, keyHash, userId, outcome, occurredAt, metadata = {}) {
   return Object.freeze({ id, keyHash, userId, outcome, occurredAt, metadata: Object.freeze({ ...metadata }) });
 }
-function normalizeEmail(email) {
+export function normalizeEmail(email) {
   const normalized = typeof email === 'string' ? email.trim() : '';
   invariant(normalized.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized), 'AUTH_EMAIL_INVALID', 'A valid email is required');
   return normalized.toLowerCase();

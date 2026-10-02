@@ -442,3 +442,83 @@ The canvas may propose reordering/grouping and open domain commands, but the gra
 
 **Dependency hygiene:** external forecasting/UI libraries remain replaceable; pin versions and review current licenses/security before production adoption.
 
+## Additional wave — EPCIS traceability exchange and supplier-facility identity
+
+This wave strengthens DPP and supply-chain interoperability without replacing Synth-v2 inventory, production, supplier or order authorities.
+
+### EPCIS 2.0 event projection — ADAPT
+
+Reference implementation: https://github.com/openepcis/epcis-repository-ce
+
+Use GS1 EPCIS 2.0 concepts as an external interchange/read projection for selected traceability events.
+
+Candidate Synth-v2 source events:
+
+- item/batch commissioned or identified;
+- material received;
+- components aggregated into production/packing units;
+- production/transformation completed;
+- QC event;
+- shipment/despatch;
+- warehouse receipt;
+- return/rework where relevant.
+
+Map approved native facts into EPCIS event types/fields while keeping:
+
+- canonical Synth-v2 event ID;
+- EPCIS event ID;
+- source entity IDs;
+- event time;
+- business step/disposition mapping;
+- read point/location mapping;
+- transformation/batch relationships;
+- schema/profile version.
+
+OpenEPCIS may be used as a test/reference repository or bounded interoperability sidecar. It must not become the transactional stock or production database.
+
+### Traceability Chain for Digital Product Passport — ADOPT
+
+Build a native chain that can resolve:
+
+product / batch -> BOM/material lots -> supplier/facility -> transformation/production -> QC -> shipment/receipt -> passport projection
+
+The passport only exposes fields approved for its audience. Commercially sensitive supplier/cost data remains private even if used internally to establish provenance.
+
+### Open Supply Hub facility identity — ADAPT
+
+Reference: https://github.com/opensupplyhub/open-supply-hub
+
+Add optional external facility identity links for supplier/manufacturing sites.
+
+Store:
+
+- Synth-v2 supplier/facility ID;
+- external provider;
+- OSH/external facility ID;
+- matched name/address/country at reconciliation time;
+- confidence/status;
+- reviewer;
+- last verified time.
+
+External facility data helps normalize identity and reduce duplicates; it does not certify compliance, ownership, capacity or supplier performance.
+
+### Facility Reconciliation Queue — ADOPT
+
+When an import/supplier declares a new manufacturing site:
+
+candidate facility -> normalization -> external lookup candidates -> reviewer confirms/new internal identity -> future orders/production reference canonical facility
+
+Never auto-merge two facilities solely on fuzzy name/address similarity.
+
+### Additional acceptance
+
+- EPCIS export can be regenerated from canonical Synth-v2 source events;
+- external EPCIS ingestion goes through staging/schema/domain admission, never direct stock mutation;
+- passport trace links resolve to actual approved material/production/QC records;
+- external facility identity has human-reviewed status/confidence;
+- Open Supply Hub data is not presented as compliance certification.
+
+**Sequencing:** ASN/Receiving + production/QC/batch identity first -> native trace chain -> EPCIS export/interchange -> facility reconciliation -> DPP enrichment.
+
+**Dependency note:** OpenEPCIS and Open Supply Hub remain external interoperability/reference systems; pin versions and re-check license/API terms before runtime use.
+

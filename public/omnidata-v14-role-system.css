@@ -889,3 +889,25 @@ body.omnidata-design-system-v1 .notice.denied,
 body.omnidata-role-system .notice.denied{display:flex!important;align-items:center!important;gap:8px!important;border:1px solid var(--ods-color-border)!important;border-left:3px solid var(--ods-color-text-muted,#656c79)!important;background:var(--ods-color-surface-muted,#f5f6f8)!important;color:var(--ods-color-text,#1f2430)!important}
 body.omnidata-design-system-v1 .notice.denied::before,
 body.omnidata-role-system .notice.denied::before{content:'\1F512'!important;font-size:13px!important;opacity:.7!important}
+
+/* «В разработке»: свёрнутая группа запланированных разделов внизу меню. Заголовок — кнопка, а не
+   подпись, поэтому ему возвращают то, что браузер отнимает у кнопки: без рамки и фона, на всю
+   ширину, с указателем, и стрелка показывает, раскрыта ли группа. */
+body.omnidata-v13 .nav-group-toggle {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  width: calc(100% - 20px);
+  background: none;
+  border: 0;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+}
+.nav-group-toggle::after { content: '\25B8'; font-size: 10px; }
+.nav-group-toggle[aria-expanded="true"]::after { content: '\25BE'; }
+.nav-group-toggle:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+
+/* Заглушка вместо картинки, которую страница не вправе загружать (внешний адрес, CSP). */
+.image-placeholder { display: inline-block; padding: 8px 10px; border: 1px dashed currentColor; border-radius: 6px; font-size: 12px; opacity: .7; }

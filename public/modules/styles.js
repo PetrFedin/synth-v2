@@ -161,9 +161,9 @@
   }
   function productThumb(item) {
     const media = mediaFor(item);
-    if (!media?.uri) return initialsTile(item.product);
+    if (!media?.uri || !imageSource(media.uri)) return initialsTile(item.product);
     const wrap = el('span', { className: 'od-thumb-wrap' });
-    const image = el('img', { className: 'od-thumb', src: media.uri, alt: title(item.product), loading: 'lazy' });
+    const image = el('img', { className: 'od-thumb', src: imageSource(media.uri), alt: title(item.product), loading: 'lazy' });
     // A stored URI is not a promise that it resolves. When it does not, the row falls back to the
     // same tile an image-less style gets instead of showing a broken picture.
     image.addEventListener('error', () => {
@@ -971,8 +971,13 @@
     items.forEach((definition) => {
       const row = el('div', { className: `od-attribute-row ${definition.value === null || definition.value === undefined ? 'empty' : ''}`.trim() });
       const name = el('div', { className: 'od-attribute-name' });
-      name.append(el('strong', { rawText: I18N.getLocale?.() === 'en' ? definition.nameEn : definition.nameRu }));
-      name.append(el('small', { rawText: definition.code }));
+      // Имя поля берётся из каталога; если сервер его не прислал, из словаря интерфейса по коду, и
+      // только в последнюю очередь — сам код. Технический код (`common.net_weight`) читателю не
+      // адресован: он остаётся подсказкой при наведении, а не подписью под названием.
+      const named = I18N.getLocale?.() === 'en' ? definition.nameEn : definition.nameRu;
+      const dictionary = I18N.t(definition.code);
+      name.append(el('strong', { rawText: named || (dictionary !== definition.code ? dictionary : definition.code) }));
+      name.title = definition.code;
       const value = el('div', { className: 'od-attribute-value' });
       const shown = definition.entryNameRu || definition.entryNameEn
         ? (I18N.getLocale?.() === 'en' ? definition.entryNameEn : definition.entryNameRu)
@@ -1026,14 +1031,15 @@
   // данных/загрузки/отказа, а не поле воркспейса — сертификаты не нужны на каждом экране со
   // списком моделей, только когда открыта эта вкладка инспектора.
   const certificationState = window.SynthaProductCertificationState
-    || (window.SynthaProductCertificationState = { data: {}, loading: {}, failed: {} });
+    || (window.SynthaProductCertificationState = { data: {}, loading: {}, failed: {}, denied: {} });
+  certificationState.denied = certificationState.denied || {};
 
   function loadCertifications(styleId) {
     if (certificationState.data[styleId] || certificationState.loading[styleId] || certificationState.failed[styleId]) return;
     certificationState.loading[styleId] = true;
     api(`/v2/product/styles/${encodeURIComponent(styleId)}/certifications`)
       .then((value) => { certificationState.data[styleId] = Array.isArray(value) ? value : []; })
-      .catch(() => { certificationState.failed[styleId] = true; })
+      .catch((problem) => { certificationState.failed[styleId] = true; if (problem?.forbidden) certificationState.denied[styleId] = true; })
       .finally(() => { certificationState.loading[styleId] = false; if (state.view === 'styles') renderApp(); });
   }
   function invalidateCertifications(styleId) {
@@ -1124,7 +1130,12 @@
   function certificationPanel(item) {
     const product = item.product;
     const manage = window.SynthaUiCapabilities?.hasForOrganisation(state.workspace, product.brandId, window.SynthaUiCapabilities.CAPABILITIES.PRODUCT_CERTIFICATION_MANAGE);
+    // Сертификаты читает тот, у кого есть право на их чтение. Остальным сервер ответил бы отказом, и
+    // вкладка молчала: запрос не уходит, а вкладка говорит, что раздел закрыт для роли.
+    const caps = window.SynthaUiCapabilities;
+    if (caps && !caps.hasForOrganisation(state.workspace, product.brandId, caps.CAPABILITIES.PRODUCT_CERTIFICATION_READ)) return noAccessNotice();
     loadCertifications(product.id);
+    if (certificationState.denied[product.id]) return noAccessNotice();
     if (certificationState.failed[product.id]) return notice(text('Сертификаты недоступны.', 'Certificates are unavailable.'));
     const rows = certificationState.data[product.id];
     if (!rows) return notice(text('Загрузка…', 'Loading…'));
@@ -1230,7 +1241,10 @@
     const grid = el('div', { className: 'od-reference-grid' });
     [...rows].sort((a, b) => a.sortOrder - b.sortOrder).forEach((reference) => {
       const tile = el('figure', { className: 'od-reference-tile' });
-      tile.append(el('img', { className: 'od-thumb', src: reference.imageUri, alt: reference.referencedModel || product.styleCode, loading: 'lazy' }));
+      const referenceSrc = imageSource(reference.imageUri);
+      tile.append(referenceSrc
+        ? el('img', { className: 'od-thumb', src: referenceSrc, alt: reference.referencedModel || product.styleCode, loading: 'lazy' })
+        : imagePlaceholder(reference.imageUri));
       const caption = el('figcaption', {});
       if (reference.referencedModel) caption.append(el('strong', { rawText: reference.referencedModel }));
       if (reference.season) caption.append(el('span', { rawText: ` · ${reference.season}` }));

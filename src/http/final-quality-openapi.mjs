@@ -95,7 +95,7 @@ function schemas() {
 }
 
 function paths() {
-  const mutation = (operationId, schema, description) => ({ operationId, security: [{ bearerAuth: [] }], parameters: [inspectionParameter, idempotency], requestBody: body(schema), responses: mutationResponses(description) });
+  const mutation = (operationId, schema, description, details) => ({ operationId, ...(details ? { description: details } : {}), security: [{ bearerAuth: [] }], parameters: [inspectionParameter, idempotency], requestBody: body(schema), responses: mutationResponses(description) });
   return {
     '/final-quality-inspections': { get: { operationId: 'listFinalQualityInspections', security: [{ bearerAuth: [] }], parameters: [
       { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 200, default: 50 } }, { name: 'cursor', in: 'query', schema: { type: 'string', maxLength: 2048 } }, { name: 'q', in: 'query', schema: { type: 'string', minLength: 1, maxLength: 80 } }, { name: 'status', in: 'query', schema: { type: 'string', enum: STATUSES } }, { name: 'brandId', in: 'query', schema: { type: 'string', minLength: 1, maxLength: 200 } }, { name: 'supplierCode', in: 'query', schema: { type: 'string', pattern: CODE } }, { name: 'sku', in: 'query', schema: { type: 'string', pattern: CODE } },
@@ -106,7 +106,7 @@ function paths() {
     '/final-quality-inspections/from-execution/{executionCode}': { post: { operationId: 'createFinalQualityInspectionFromExecution', security: [{ bearerAuth: [] }], parameters: [{ name: 'executionCode', in: 'path', required: true, schema: { type: 'string', pattern: CODE } }, idempotency], requestBody: body('#/components/schemas/FinalQualityEmptyInput'), responses: mutationResponses('Created Final Quality inspection') } },
     '/final-quality-inspections/{inspectionCode}/start': { post: mutation('startFinalQualityInspection', '#/components/schemas/FinalQualityStartInput', 'Started Final Quality inspection') },
     '/final-quality-inspections/{inspectionCode}/complete-run': { post: mutation('completeFinalQualityRun', '#/components/schemas/FinalQualityCompleteInput', 'Completed Final Quality run') },
-    '/final-quality-inspections/{inspectionCode}/review': { post: mutation('reviewFinalQualityInspection', '#/components/schemas/FinalQualityReviewInput', 'Reviewed Final Quality inspection') },
+    '/final-quality-inspections/{inspectionCode}/review': { post: mutation('reviewFinalQualityInspection', '#/components/schemas/FinalQualityReviewInput', 'Reviewed Final Quality inspection', 'A release decision is refused with 422 when the material trace is not enough: QUALITY_RELEASE_WITHOUT_MATERIAL_TRACE (a main material of the published bill has no issued lot), QUALITY_RELEASE_MATERIAL_SHORTFALL (issued quantity of a main material is below the requirement computed from the bill and the execution quantity; exact coverage, no tolerance) or QUALITY_RELEASE_MATERIAL_LOT_NOT_RELEASED (an issued lot is in quarantine or rejected).') },
     '/final-quality-inspections/{inspectionCode}/reinspect': { post: mutation('startFinalQualityReinspection', '#/components/schemas/FinalQualityReinspectionInput', 'Started Final Quality reinspection') },
     '/final-quality-inspections/{inspectionCode}/cancel': { post: mutation('cancelFinalQualityInspection', '#/components/schemas/FinalQualityCancellationInput', 'Cancelled Final Quality inspection') },
   };

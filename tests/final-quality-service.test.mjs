@@ -14,7 +14,7 @@ function fixture() {
   // `bom` и `lotIssues` — прослеживаемость до рулона: выпуск на отгрузку спрашивает, из каких партий
   // материала сшита партия товара. По умолчанию опубликованной ведомости нет, и судить не о чем, —
   // проверки, где она есть, задают её сами.
-  const state = { inspection: null, commands: new Map(), outbox: [], releases: [], plans: demoPlans(), defectTypes: [], bom: null, lotIssues: [] };
+  const state = { inspection: null, commands: new Map(), outbox: [], releases: [], plans: demoPlans(), defectTypes: [], bom: null, lotIssues: [], lots: [] };
   const memberships = new Map([
     ['brand-1:owner', { organisationId: 'brand-1', organisationType: 'brand', userId: 'owner', role: 'owner', status: 'active' }],
     ['brand-1:admin', { organisationId: 'brand-1', organisationType: 'brand', userId: 'admin', role: 'admin', status: 'active' }],
@@ -39,6 +39,7 @@ function fixture() {
     listDefectTypes: async (brandId) => state.defectTypes.filter((type) => type.brandId === brandId),
     getPublishedBomForSku: async () => state.bom,
     listMaterialLotIssuesForExecution: async () => state.lotIssues,
+    listMaterialLotsIssuedToExecution: async () => state.lots,
     // The rows a brand holds. The lot in this fixture is 100 pieces, so the 91–150 range is the one
     // a run resolves to; the wider ranges are here so that resolving is a choice and not the only
     // row present.
@@ -259,6 +260,35 @@ test('a shipment is not released while the rolls it was made from are unknown', 
     expectedVersion: state.inspection.version, decision: 'release', releaseCode: 'REL-TRACE-1', notes: 'Годна',
   });
   assert.equal(inspection.status, 'released');
+  assert.equal(state.releases.length, 1);
+});
+
+test('a shipment is not released while the issued material does not cover the bill, or a lot behind it is in quarantine', async () => {
+  // Допуск, выданный при 150 м из 256,8 м и после перевода партии в карантин, — прослеживаемость на
+  // бумаге: запись о выдаче есть, а ткани под ней не хватает или она под вопросом.
+  const { state, service } = fixture();
+  // 100 изделий × 2,568 м (с отходом) = 256,8 м.
+  state.bom = { lines: [{ materialCode: 'MAT-SHELL-R5', materialType: 'fabric', unit: 'm', quantity: 2.4, grossQuantity: 2.568 }] };
+  state.lotIssues = [{ lotId: 'lot-1', lotReference: 'ROLL-R3-A-001', materialCode: 'MAT-SHELL-R5', quantity: 150 }];
+  state.lots = [{ id: 'lot-1', lotReference: 'ROLL-R3-A-001', materialCode: 'MAT-SHELL-R5', status: 'released' }];
+  const inspection = await completePassingRun(service, 'quality');
+  const review = (id, version) => service.review(id, 'owner', inspection.inspectionCode, { expectedVersion: version, decision: 'release', releaseCode: 'REL-COVER-1', notes: 'Годна' });
+  await assert.rejects(() => review('cover-1', inspection.version), (error) => {
+    assert.equal(error.code, 'QUALITY_RELEASE_MATERIAL_SHORTFALL');
+    assert.deepEqual(error.details.shortfalls.map((row) => [row.materialCode, row.requiredQuantity, row.issuedQuantity, row.shortfallQuantity]), [['MAT-SHELL-R5', 256.8, 150, 106.8]]);
+    return true;
+  });
+  assert.equal(state.releases.length, 0);
+  state.lotIssues = [{ lotId: 'lot-1', lotReference: 'ROLL-R3-A-001', materialCode: 'MAT-SHELL-R5', quantity: 256.8 }];
+  state.lots = [{ id: 'lot-1', lotReference: 'ROLL-R3-A-001', materialCode: 'MAT-SHELL-R5', status: 'quarantine' }];
+  await assert.rejects(() => review('cover-2', inspection.version), (error) => {
+    assert.equal(error.code, 'QUALITY_RELEASE_MATERIAL_LOT_NOT_RELEASED');
+    assert.deepEqual(error.details.lots, [{ lotReference: 'ROLL-R3-A-001', materialCode: 'MAT-SHELL-R5', status: 'quarantine' }]);
+    return true;
+  });
+  state.lots = [{ id: 'lot-1', lotReference: 'ROLL-R3-A-001', materialCode: 'MAT-SHELL-R5', status: 'released' }];
+  const released = await review('cover-3', inspection.version);
+  assert.equal(released.status, 'released');
   assert.equal(state.releases.length, 1);
 });
 

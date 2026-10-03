@@ -161,6 +161,7 @@ export function createFinalQualityService({ store, clock = () => new Date().toIS
               execution ?? { executionCode: current.executionCode },
               execution?.sku ? await tx.getPublishedBomForSku(execution.sku) : null,
               await tx.listMaterialLotIssuesForExecution(current.executionCode),
+              await tx.listMaterialLotsIssuedToExecution(current.executionCode),
             );
           }
           await tx.saveInspection(value, expectedVersion);

@@ -14,6 +14,8 @@ function harness(){
   // and lets a test open one, because the gate is only interesting when there is something to gate.
   const openInlineChecks=[];
   const inspections=new Map();
+  // Ведомость и выдачи материала: по умолчанию ведомости нет, и закрытие последней вехи ничего не спрашивает.
+  const material={bom:null,issues:[]};
   const membership=Object.freeze({organisationId:'brand-1',organisationType:'brand',userId:'planner-1',role:'owner',status:'active'});
   const tx={
     getCommand:async(id)=>commands.get(id),insertCommand:async(v)=>commands.set(v.id,v),getMembership:async()=>membership,
@@ -21,11 +23,12 @@ function harness(){
     getExecutionByProductionOrderNumber:async(number)=>[...executions.values()].find((v)=>v.productionOrderNumber===number),
     getExecutionByCode:async(code)=>executions.get(code),listOpenInlineChecks:async()=>openInlineChecks,getQualityInspectionByExecutionCode:async(code)=>inspections.get(code),insertExecution:async(v)=>executions.set(v.executionCode,v),
     saveExecution:async(v,expected)=>{assert.equal(executions.get(v.executionCode).version,expected);executions.set(v.executionCode,v)},
+    getPublishedBomForSku:async()=>material.bom,listMaterialLotIssuesForExecution:async()=>material.issues,
     appendOutbox:async(event)=>events.push(event),
   };
   const times=['2026-08-06T12:00:00.000Z','2026-08-10T08:00:00.000Z','2026-08-12T00:00:00.000Z','2026-08-14T00:00:00.000Z','2026-08-15T00:00:00.000Z'];
   const service=createProductionExecutionService({store:{transaction:(work)=>work(tx)},clock:()=>times[Math.min(tick++,times.length-1)],nextId:(prefix)=>`${prefix}-${++sequence}`});
-  return{service,executions,commands,events,openInlineChecks,inspections};
+  return{service,executions,commands,events,openInlineChecks,inspections,material};
 }
 
 test('service creates, starts, blocks, resolves and completes the current milestone',async()=>{
@@ -79,4 +82,40 @@ test('service cancels a ready-for-qc execution only when its Final Quality inspe
   const cancelled=await f.service.cancel('c4','planner-1',ready.executionCode,{expectedVersion:ready.version,reason:'Lot scrapped at the factory'});
   assert.equal(cancelled.status,'cancelled');
   assert.equal(f.events.at(-1).type,'production-execution.cancelled');
+});
+
+// Q-01 (ловушка порядка). Материал выдаётся только в активное исполнение, а допуск к отгрузке требует
+// записи выдачи; закрытие последней вехи отнимало у человека последний шанс выдать.
+test('the last milestone is refused while a main material of the bill has no issue, and the refusal names it',async()=>{
+  const f=harness();
+  f.material.bom={lines:[{materialCode:'FAB-SHELL',materialType:'fabric'},{materialCode:'FAB-LINING',materialType:'fabric'},{materialCode:'BTN-1',materialType:'trim'}]};
+  let execution=await f.service.createFromProductionOrder('c1','planner-1',productionOrder.productionOrderNumber);
+  execution=await f.service.start('c2','planner-1',execution.executionCode,{expectedVersion:execution.version});
+  // Материал не спрашивается на промежуточных вехах: он нужен к концу, а не к началу.
+  for(const code of ['materials-ready','cutting-complete','assembly-complete','finishing-complete','packing-complete']){
+    execution=await f.service.completeMilestone(`m-${code}`,'planner-1',execution.executionCode,{expectedVersion:execution.version,milestoneCode:code,notes:'done'});
+  }
+  assert.equal(execution.status,'active');
+  await assert.rejects(()=>f.service.completeMilestone('last-1','planner-1',execution.executionCode,{expectedVersion:execution.version,milestoneCode:'ready-for-qc',notes:'done'}),(error)=>{
+    assert.equal(error.code,'PRODUCTION_READY_FOR_QC_WITHOUT_MATERIAL');
+    assert.deepEqual(error.details.missingMaterials,['FAB-SHELL','FAB-LINING']);
+    return true;
+  });
+  assert.equal(f.executions.get(execution.executionCode).status,'active','a refusal leaves the execution active, where material can still be issued');
+  // Пуговицы — не основной материал; одна ткань из двух всё ещё не закрывает вопрос.
+  f.material.issues=[{materialCode:'FAB-SHELL',quantity:10},{materialCode:'BTN-1',quantity:10}];
+  await assert.rejects(()=>f.service.completeMilestone('last-2','planner-1',execution.executionCode,{expectedVersion:execution.version,milestoneCode:'ready-for-qc',notes:'done'}),(error)=>error.code==='PRODUCTION_READY_FOR_QC_WITHOUT_MATERIAL'&&error.details.missingMaterials.join()==='FAB-LINING');
+  f.material.issues.push({materialCode:'FAB-LINING',quantity:5});
+  const ready=await f.service.completeMilestone('last-3','planner-1',execution.executionCode,{expectedVersion:execution.version,milestoneCode:'ready-for-qc',notes:'done'});
+  assert.equal(ready.status,'ready-for-qc');
+});
+
+test('a bill that does not exist cannot judge the last milestone',async()=>{
+  const f=harness();
+  let execution=await f.service.createFromProductionOrder('c1','planner-1',productionOrder.productionOrderNumber);
+  execution=await f.service.start('c2','planner-1',execution.executionCode,{expectedVersion:execution.version});
+  for(const code of ['materials-ready','cutting-complete','assembly-complete','finishing-complete','packing-complete','ready-for-qc']){
+    execution=await f.service.completeMilestone(`m-${code}`,'planner-1',execution.executionCode,{expectedVersion:execution.version,milestoneCode:code,notes:'done'});
+  }
+  assert.equal(execution.status,'ready-for-qc');
 });

@@ -326,9 +326,10 @@ export function assertMaterialBelongsToGarment(lot, { execution, bom }) {
  * она и есть заявление «эта вещь сшита из материалов», и тогда отгрузить, не назвав ни одного
  * рулона, значит потерять прослеживаемость навсегда.
  *
- * @param {{ executionCode?: string }} execution
+ * @param {{ executionCode?: string, quantity?: number }} execution
  * @param {{ lines?: any[] } | null} bom Опубликованная ведомость изделия, если она есть.
  * @param {readonly any[]} issues Выдачи материала в это исполнение.
+ * @param {readonly any[] | null} [lots] Текущее состояние партий, выданных в исполнение.
  */
 export function assertShipmentIsTraceable(execution, bom, issues, lots = null) {
   const lines = Array.isArray(bom?.lines) ? bom.lines : null;

@@ -470,7 +470,21 @@
     if (skus.length) {
       const list = el('div', {});
       skus.forEach((sku) => {
-        list.append(el('div', { rawText: `${sku.skuCode} · ${sku.size?.code || '—'}${sku.gtin ? ` · GTIN ${sku.gtin}` : ''}` }));
+        const line = el('div', { className: 'od-inline-actions' });
+        line.append(el('span', { rawText: `${sku.skuCode} · ${sku.size?.code || '—'}${sku.gtin ? ` · GTIN ${sku.gtin}` : ''}${sku.legacyCatalogSku ? ` · ${text('витрина', 'catalog')}: ${sku.legacyCatalogSku}` : ''}` }));
+        // Без связи с витринным SKU измерения спецификации, образцов и техпакета в готовности не
+        // сходятся: они читают таблицы по каталожному коду. Связь выбирается из витринных SKU бренда.
+        const forms = chainForms();
+        if (!sku.legacyCatalogSku && forms?.mayManageProducts(item.product.brandId)) {
+          const link = el('button', { className: 'button small', type: 'button', rawText: text('Связать с витринным SKU', 'Link to a catalog SKU') });
+          link.addEventListener('click', () => forms.linkCatalogSkuForm({
+            product: item.product,
+            sku,
+            onSaved: () => invalidateStyleSkuAggregate(item.product.id),
+          }).catch((problem) => toast(styleErrorMessage(problem), 'error')));
+          line.append(link);
+        }
+        list.append(line);
       });
       wrap.append(list);
       loadSizeScale(skus[0].size.sizeScaleId, skus[0].size.sizeScaleVersionNo);
@@ -482,6 +496,13 @@
     // Размер нового SKU резолвится по размерной шкале уже существующего SKU этой цветомодели —
     // без единого SKU взять эту шкалу неоткуда, поэтому кнопка появляется только когда есть за что
     // зацепиться.
+    const measurementForm = window.SynthaCanonicalMeasurementForm;
+    if (skus.length && measurementForm?.mayManage(item.product.brandId)) {
+      const chart = el('button', { className: 'button small', type: 'button', rawText: text('Каноническая таблица мер', 'Canonical measurement chart') });
+      chart.addEventListener('click', () => measurementForm.open({ product: item.product, colorwayId: entry.id })
+        .catch((problem) => toast(styleErrorMessage(problem), 'error')));
+      wrap.append(chart);
+    }
     if (manage && skus.length) {
       const button = el('button', { className: 'button small', type: 'button', rawText: text('Добавить SKU', 'Add a SKU') });
       button.addEventListener('click', () => addSkuForm(item, entry, skus));

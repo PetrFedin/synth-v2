@@ -152,6 +152,87 @@
     return { styleVersionId };
   }
 
+  // Связь канонического SKU с витринным. Домен требует тот же код и тот же бренд, поэтому выбирать
+  // можно только из витринных SKU бренда с кодом этого SKU — вводить код руками незачем и нечем.
+  function buildCatalogLink({ catalogSku }) {
+    const code = String(catalogSku ?? '').trim();
+    if (!code) fail('CATALOG_SKU_REQUIRED', 'Выберите витринный SKU.', 'Choose a catalog SKU.');
+    return { catalogSku: code };
+  }
+
+  function catalogLinkCandidates({ sku, brandId, catalogSkus }) {
+    return (Array.isArray(catalogSkus) ? catalogSkus : []).filter((item) => item && item.brandId === brandId && item.sku === sku.skuCode);
+  }
+
+  // Слот плана. Обязательны кампания, код, оба названия и валюта; остальное необязательно и, если
+  // не указано, не отправляется — маршрут отвергает `null` в числах и ссылках как неверное поле.
+  const PLACEHOLDER_CODE_PATTERN = /^[A-Z0-9][A-Z0-9._/-]{1,63}$/;
+  const PLACEHOLDER_REFS = Object.freeze([
+    ['categoryRef', 'assortment.category'],
+    ['genderRef', 'assortment.gender'],
+    ['ageGroupRef', 'assortment.age_group'],
+    ['noveltyRef', 'assortment.novelty'],
+    ['seasonalityRef', 'assortment.seasonality'],
+    ['fitRef', 'fit.class'],
+  ]);
+
+  function optionalPositiveInteger(raw, label, labelEn) {
+    const text = String(raw ?? '').trim();
+    if (!text) return null;
+    if (!/^\d+$/.test(text) || Number(text) < 1 || !Number.isSafeInteger(Number(text))) fail('PLACEHOLDER_NUMBER_INVALID', `${label}: целое число больше нуля.`, `${labelEn}: a whole number above zero.`);
+    return Number(text);
+  }
+
+  // Цена вводится в валюте («249,50»), сервер хранит минимальные единицы (копейки, центы).
+  function minorFromMajor(raw, label, labelEn) {
+    const text = String(raw ?? '').trim();
+    if (!text) return null;
+    if (!/^\d+(?:[.,]\d{1,2})?$/.test(text)) fail('PLACEHOLDER_AMOUNT_INVALID', `${label}: число не больше чем с двумя знаками после запятой.`, `${labelEn}: a number with at most two decimal places.`);
+    return Math.round(Number(text.replace(',', '.')) * 100);
+  }
+
+  function buildPlaceholderCreate(values) {
+    if (!values?.campaignId) fail('CAMPAIGN_NOT_FOUND', 'Выберите кампанию.', 'Choose a campaign.');
+    const code = normaliseCode(values.placeholderCode);
+    if (!PLACEHOLDER_CODE_PATTERN.test(code)) {
+      fail('PLACEHOLDER_CODE_INVALID', 'Код слота: 2–64 символа, заглавные латинские буквы, цифры, точка, подчёркивание, косая черта или дефис.', 'Slot code: 2-64 characters, uppercase Latin letters, digits, dot, underscore, slash or dash.');
+    }
+    const currency = String(values.currency ?? '').trim().toUpperCase();
+    if (!/^[A-Z]{3}$/.test(currency)) fail('PLACEHOLDER_CURRENCY_INVALID', 'Валюта — трёхбуквенный код ISO 4217, например RUB или EUR.', 'Currency is a three-letter ISO 4217 code, for example RUB or EUR.');
+    const body = {
+      campaignId: values.campaignId,
+      placeholderCode: code,
+      nameRu: requireText(values.nameRu, 2, 200, 'Название RU', 'Name RU'),
+      nameEn: requireText(values.nameEn, 2, 200, 'Название EN', 'Name EN'),
+      currency,
+    };
+    for (const [field, items, choice] of Array.isArray(values.refs) ? values.refs : []) {
+      const ref = refFromChoice(items, choice);
+      if (ref) body[field] = ref;
+    }
+    for (const [field, max, ru, en] of [['capsule', 120, 'Капсула', 'Capsule'], ['drop', 120, 'Дроп', 'Drop'], ['description', 2000, 'Описание', 'Description']]) {
+      const text = String(values[field] ?? '').trim();
+      if (!text) continue;
+      if (text.length > max) fail('PLACEHOLDER_TEXT_TOO_LONG', `${ru}: не больше ${max} символов.`, `${en}: at most ${max} characters.`);
+      body[field] = text;
+    }
+    const colourwayCount = optionalPositiveInteger(values.colourwayCount, 'Цветомоделей', 'Colourways');
+    const plannedQuantity = optionalPositiveInteger(values.plannedQuantity, 'План, шт', 'Planned units');
+    if (colourwayCount !== null) body.colourwayCount = colourwayCount;
+    if (plannedQuantity !== null) body.plannedQuantity = plannedQuantity;
+    const launch = String(values.launchAt ?? '').trim();
+    if (launch) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(launch) || Number.isNaN(Date.parse(launch))) fail('PLACEHOLDER_LAUNCH_AT_INVALID', 'Дата запуска указана неверно.', 'The launch date is invalid.');
+      body.launchAt = `${launch}T00:00:00.000Z`;
+    }
+    const retail = minorFromMajor(values.recommendedRetailPrice, 'Розничная цена', 'Retail price');
+    const cost = minorFromMajor(values.plannedUnitCost, 'Плановая себестоимость', 'Planned unit cost');
+    if (retail !== null) body.recommendedRetailPriceMinor = retail;
+    if (cost !== null) body.plannedUnitCostMinor = cost;
+    if (retail !== null && cost !== null && cost > retail) fail('PLACEHOLDER_MARGIN_NEGATIVE', 'Плановая себестоимость не может быть выше розничной цены.', 'The planned unit cost cannot exceed the retail price.');
+    return body;
+  }
+
   // --- чтение справочников и состояние -------------------------------------------------------------
 
   const libraryCache = global.SynthaProductChainLibraries || (global.SynthaProductChainLibraries = new Map());
@@ -367,12 +448,76 @@
     ], (values) => mutate(`/v2/collections/${encodeURIComponent(collection.id)}/style-versions`, buildCollectionAssignment({ styleVersionId: values.styleVersionId })));
   }
 
+  // --- 5. Связь SKU модели с витринным SKU -----------------------------------------------------------
+
+  async function linkCatalogSkuForm({ product, sku, onSaved } = {}) {
+    if (!mayManageProducts(product.brandId)) throw new Error('CAPABILITY_DENIED');
+    if (!sku?.id) throw new Error('PRODUCT_SKU_NOT_FOUND');
+    if (sku.legacyCatalogSku) { toast(t('Этот SKU уже связан с витринным.', 'This SKU is already linked to a catalog SKU.'), 'error'); return; }
+    // Витринные SKU читаются с сервера по коду: рабочее пространство листается и может не нести нужный.
+    let catalogSkus = [];
+    try {
+      const page = await api(`/v2/catalog/skus?brandId=${encodeURIComponent(product.brandId)}&q=${encodeURIComponent(sku.skuCode)}&limit=50`);
+      catalogSkus = Array.isArray(page?.items) ? page.items : [];
+    } catch {
+      catalogSkus = Array.isArray(state.workspace?.catalogSkus) ? state.workspace.catalogSkus : [];
+    }
+    const candidates = catalogLinkCandidates({ sku, brandId: product.brandId, catalogSkus });
+    if (!candidates.length) {
+      toast(t(`В каталоге бренда нет витринного SKU с кодом ${sku.skuCode}. Создайте его на экране «Каталог» с тем же кодом.`, `The brand catalog has no SKU with code ${sku.skuCode}. Create it in the Catalog view with the same code.`), 'error');
+      return;
+    }
+    openForm(t(`Связать ${sku.skuCode} с витринным SKU`, `Link ${sku.skuCode} to a catalog SKU`), [
+      selectDef('catalogSku', t('Витринный SKU', 'Catalog SKU'), candidates.map((item) => ({ ...item, id: item.sku })), (item) => `${item.sku} · ${item.name || ''} · ${item.status || ''}`),
+    ], async (values) => {
+      await mutate(`/v2/product/skus/${encodeURIComponent(sku.id)}/catalog-link`, buildCatalogLink({ catalogSku: values.catalogSku }));
+      if (typeof onSaved === 'function') onSaved();
+    });
+  }
+
+  // --- 6. Новый слот плана -------------------------------------------------------------------------
+
+  async function createPlaceholderForm({ campaignId = null, onSaved } = {}) {
+    const c = caps();
+    const campaigns = (state.workspace?.campaigns || []).filter((item) => !['closed', 'cancelled'].includes(item.status)
+      && c?.hasForOrganisation(state.workspace, item.brandId, c.CAPABILITIES.CAMPAIGN_MANAGE));
+    if (!campaigns.length) { toast(t('Нет открытой кампании, в которой вы можете планировать слоты.', 'There is no open campaign in which you may plan slots.'), 'error'); return; }
+    const lists = await Promise.all(PLACEHOLDER_REFS.map(([, code]) => loadLibrary(code)));
+    const labels = { categoryRef: ['Категория', 'Category'], genderRef: ['Пол', 'Gender'], ageGroupRef: ['Возраст', 'Age group'], noveltyRef: ['Новизна', 'Novelty'], seasonalityRef: ['Сезонность', 'Seasonality'], fitRef: ['Посадка', 'Fit'] };
+    const fields = [
+      selectDef('campaignId', t('Кампания', 'Campaign'), campaigns, (item) => `${item.name || item.id}${item.season ? ` · ${item.season}` : ''}`, campaignId || campaigns[0].id),
+      textDef('placeholderCode', t('Код слота', 'Slot code'), '', 64, true, 2),
+      textDef('nameRu', t('Название RU', 'Name RU'), '', 200, true, 2),
+      textDef('nameEn', t('Название EN', 'Name EN'), '', 200, true, 2),
+      textDef('currency', t('Валюта (ISO, например RUB)', 'Currency (ISO, for example RUB)'), 'RUB', 3, true, 3),
+      ...PLACEHOLDER_REFS.map(([field], index) => selectDef(`${field}Choice`, t(...labels[field]), libraryOptions(lists[index]), libraryFormat, '', false)),
+      optionalTextDef('capsule', t('Капсула', 'Capsule'), '', 120),
+      optionalTextDef('drop', t('Дроп', 'Drop'), '', 120),
+      optionalTextDef('colourwayCount', t('Цветомоделей', 'Colourways'), '', 6),
+      optionalTextDef('plannedQuantity', t('План, шт', 'Planned units'), '', 9),
+      { ...dateDef('launchAt', t('Запуск', 'Launch date'), ''), required: false },
+      optionalTextDef('recommendedRetailPrice', t('Розничная цена', 'Retail price'), '', 14),
+      optionalTextDef('plannedUnitCost', t('Плановая себестоимость', 'Planned unit cost'), '', 14),
+      optionalTextDef('description', t('Описание', 'Description'), '', 2000),
+    ];
+    openForm(t('Новый слот плана', 'New plan slot'), fields, async (values) => {
+      const body = buildPlaceholderCreate({
+        ...values,
+        refs: PLACEHOLDER_REFS.map(([field], index) => [field, lists[index], values[`${field}Choice`]]),
+      });
+      await mutate('/v2/assortment/placeholders', body);
+      if (typeof onSaved === 'function') onSaved();
+    });
+  }
+
   global.SynthaProductChainForms = Object.freeze({
     createStyleForm,
     newStyleVersionForm,
     createSizeScaleForm,
     bindSizeScaleForm,
     addToCollectionForm,
+    linkCatalogSkuForm,
+    createPlaceholderForm,
     mayManageProducts,
     build: Object.freeze({
       styleCreate: buildStyleCreate,
@@ -384,6 +529,9 @@
       sizeScaleActivation: buildSizeScaleActivation,
       skuPayloads: buildSkuPayloads,
       collectionAssignment: buildCollectionAssignment,
+      catalogLink: buildCatalogLink,
+      catalogLinkCandidates,
+      placeholderCreate: buildPlaceholderCreate,
     }),
   });
 }(typeof window !== 'undefined' ? window : globalThis));

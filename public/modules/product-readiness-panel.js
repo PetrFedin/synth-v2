@@ -138,9 +138,30 @@
         statusLabel(dimension.status),
         // Причина — слова самой службы. Переводить их здесь значило бы пересказывать систему за
         // неё; название измерения рядом уже сказано на языке читателя.
-        dimension.status === 'blocked' ? reasonText(dimension.evidence?.reason) : '\u2014',
+        dimension.status === 'blocked' ? blockedCell(product, dimension) : '\u2014',
       ]),
     );
+  }
+
+  // Рядом с причиной блокировки — действие, которое её закрывает. Для измерений это каноническая
+  // таблица мер: готовность читает именно её, а экран «Таблицы мерок» заводил только старую таблицу
+  // по каталожному SKU, и из интерфейса эта блокировка не снималась. Для остальных измерений
+  // действие остаётся там, где оно жило (форма оценки, карточка цветомодели).
+  function blockedCell(product, dimension) {
+    const reason = reasonText(dimension.evidence?.reason);
+    const form = global.SynthaCanonicalMeasurementForm;
+    if (dimension.code !== 'measurements' || !form?.mayManage(product.brandId)) return reason;
+    const wrap = el('div', {});
+    wrap.append(el('div', { rawText: reason }));
+    const button = el('button', { className: 'button small primary', type: 'button', rawText: text('Создать каноническую таблицу', 'Create a canonical chart') });
+    button.addEventListener('click', () => {
+      form.open({ product, onSaved: () => reset() }).catch((problem) => {
+        const messages = global.SynthaErrorMessages;
+        toast(messages?.humanise ? messages.humanise(problem?.message) : (problem?.message || String(problem)), 'error');
+      });
+    });
+    wrap.append(button);
+    return wrap;
   }
 
   function rank(dimension) {

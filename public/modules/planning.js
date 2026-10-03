@@ -389,7 +389,29 @@
     return card;
   }
 
+  // Слот плана раньше заводился только импортом таблицы. Форма «Новый слот» нужна тому, у кого
+  // одна-две строки, и тому, у кого файла нет вовсе; обе кнопки лежат над реестром.
+  function linePlanToolbar() {
+    const caps = window.SynthaUiCapabilities;
+    const chain = window.SynthaProductChainForms;
+    if (!chain?.createPlaceholderForm || !caps?.hasAny(state.workspace, caps.CAPABILITIES.CAMPAIGN_MANAGE, 'brand')) return null;
+    const row = el('div', { className: 'od-inline-actions' });
+    const create = el('button', { className: 'button primary', type: 'button', rawText: text('Новый слот', 'New slot') });
+    create.addEventListener('click', () => chain.createPlaceholderForm().catch((problem) => toast(problem?.message || I18N.t('common.requestError'), 'error')));
+    row.append(create);
+    return row;
+  }
+
   function renderLinePlan() {
+    const toolbar = linePlanToolbar();
+    const body = renderLinePlanBody();
+    if (!toolbar) return body;
+    const page = document.createDocumentFragment();
+    page.append(toolbar, body);
+    return page;
+  }
+
+  function renderLinePlanBody() {
     const rows = Array.isArray(state.workspace.placeholders) ? state.workspace.placeholders : [];
     // Реестр, показывающий первые двести слотов тысячного сезона, опаснее пустого: счётчик выглядит
     // как план. Раньше экран мог только сказать об этом — плейсхолдеры не листались на клиенте.

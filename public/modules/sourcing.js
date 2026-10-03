@@ -509,11 +509,17 @@
   function quoteCard(rfq, quote) {
     const comparison = core.compareQuoteToBom(rfq, quote);
     const delta = comparison.deltaPercent === null ? '—' : signedPercent(comparison.deltaPercent);
-    return h('article', { className: `quote-card ${rfq.selectedSupplierCode === quote.supplierCode ? 'selected' : ''}`.trim() }, [h('div', {}, [h('strong', { text: `#${quote.rank} ${quote.supplierName}` }), h('small', { text: `${quote.supplierCode} · rev ${quote.revision}` })]), h('div', {}, [h('strong', { text: formatMoneyMinor(quote.totalCostMinor, rfq.bomCurrency) }), h('small', { text: `${formatMoneyMinor(quote.unitPriceMinor, rfq.bomCurrency)} / ${text('шт.', 'unit')} · BOM ${delta}` })]), h('small', { text: `${quote.leadTimeDays} ${text('дн.', 'days')} · MOQ ${quote.minimumOrderQuantity}` })]);
+    return h('article', { className: `quote-card ${rfq.selectedSupplierCode === quote.supplierCode ? 'selected' : ''}`.trim() }, [h('div', {}, [h('strong', { text: `#${quote.rank} ${quote.supplierName}` }), h('small', { text: `${quote.supplierCode} · rev ${quote.revision}` })]), h('div', {}, [h('strong', { text: formatMoneyMinor(quote.totalCostMinor, rfq.bomCurrency) }), h('small', { text: `${formatMoneyMinor(quote.unitPriceMinor, rfq.bomCurrency)} / ${text('шт.', 'unit')} · BOM ${delta}` })]), h('small', { text: `${quote.leadTimeDays} ${text('дн.', 'days')} · MOQ ${quote.minimumOrderQuantity}` }), counterOfferNote(quote, rfq.bomCurrency)]);
+  }
+  function counterOfferNote(quote, currency) {
+    if (!quote.counterOffer) return null;
+    const counter = quote.counterOffer;
+    const money = (minor) => formatMoneyMinor(minor, currency);
+    return h('div', { className: 'quote-counter-offer' }, [h('small', { text: text(`Встречное предложение: ${counter.quantity} × ${money(counter.unitPriceMinor)} = ${money(counter.totalCostMinor)}`, `Counter-offer: ${counter.quantity} × ${money(counter.unitPriceMinor)} = ${money(counter.totalCostMinor)}`) + (counter.acceptedAt ? text(' · принято, это цена котировки', ' · accepted, this is the quotation price') : '') })]);
   }
   function rfqActionButton(action, rfq) {
-    const labels = { edit: [text('Редактировать', 'Edit'), 'secondary'], issue: [text('Отправить RFQ', 'Issue RFQ'), 'primary'], quote: [text('Добавить котировку', 'Add quotation'), 'primary'], award: [text('Выбрать победителя', 'Award supplier'), 'primary'], allocate: [text('Создать PO / разместить', 'Create PO / allocate'), 'primary'], cancel: [text('Отменить', 'Cancel'), 'danger'] };
-    const handlers = { edit: () => openRfqDialog(rfq), issue: () => issueRfq(rfq), quote: () => openQuoteDialog(rfq), award: () => openAwardDialog(rfq), allocate: () => openAllocationDialog(rfq), cancel: () => openRfqCancelDialog(rfq) };
+    const labels = { edit: [text('Редактировать', 'Edit'), 'secondary'], issue: [text('Отправить RFQ', 'Issue RFQ'), 'primary'], quote: [text('Добавить котировку', 'Add quotation'), 'primary'], counter: [text('Встречное предложение', 'Counter-offer'), 'secondary'], acceptCounter: [text('Принять встречное предложение', 'Accept counter-offer'), 'secondary'], award: [text('Выбрать победителя', 'Award supplier'), 'primary'], allocate: [text('Создать PO / разместить', 'Create PO / allocate'), 'primary'], cancel: [text('Отменить', 'Cancel'), 'danger'] };
+    const handlers = { edit: () => openRfqDialog(rfq), issue: () => issueRfq(rfq), quote: () => openQuoteDialog(rfq), counter: () => openCounterDialog(rfq), acceptCounter: () => openAcceptCounterDialog(rfq), award: () => openAwardDialog(rfq), allocate: () => openAllocationDialog(rfq), cancel: () => openRfqCancelDialog(rfq) };
     return h('button', { type: 'button', className: labels[action][1], disabled: ui.busyKey === rfq.rfqCode, text: labels[action][0], onclick: handlers[action] });
   }
   function detail(label, value) { return h('div', {}, [h('dt', { text: label }), h('dd', { text: value ?? '—' })]); }
@@ -611,6 +617,29 @@
   function openQuoteDialog(rfq) {
     const suppliers = rfq.supplierCodes.map(supplierByCode).filter(Boolean); if (!suppliers.length) { toast(text('Приглашённые поставщики не найдены.', 'Invited suppliers were not found.'), 'error'); return; }
     dialog(text('Полученная котировка', 'Received quotation'), [field(text('Поставщик', 'Supplier'), select('supplierCode', suppliers.map((item) => [item.supplierCode, `${item.supplierCode} · ${item.legalName}`]), suppliers[0].supplierCode)), field(text('Цена за единицу', 'Unit price'), control('unitPrice', 'text', '', { required: true, inputmode: 'decimal' })), field(text('Фиксированные затраты', 'Fixed cost'), control('fixedCost', 'text', '0', { required: true, inputmode: 'decimal' })), field('Lead time', control('leadTimeDays', 'number', suppliers[0].leadTimeDays, { min: '1', max: '730', required: true })), field('MOQ', control('minimumOrderQuantity', 'number', suppliers[0].minimumOrderQuantity, { min: '1', required: true })), field(text('Действует до', 'Valid until'), control('validUntil', 'datetime-local', daysFromNow(21), { required: true })), field(text('Комментарий', 'Notes'), textarea('notes', '', { maxlength: '1000', rows: '4' }))], text('Записать котировку', 'Record quotation'), async (values) => Boolean(await runMutation(rfq.rfqCode, `/v2/rfqs/${encodeURIComponent(rfq.rfqCode)}/quotes`, { expectedVersion: rfq.version, supplierCode: values.supplierCode, unitPriceMinor: decimalToMinor(values.unitPrice), fixedCostMinor: decimalToMinor(values.fixedCost), leadTimeDays: Number(values.leadTimeDays), minimumOrderQuantity: Number(values.minimumOrderQuantity), validUntil: iso(values.validUntil), notes: values.notes.trim() || null })));
+  }
+  // Встречное предложение по запросу на изделие: количество — целое число штук, цена — за штуку в
+  // валюте BOM. Сервер отклоняет цену выше уже названной фабрикой (RFQ_COUNTER_ABOVE_QUOTE).
+  function openCounterDialog(rfq) {
+    const quotes = core.rankQuotes(rfq); if (!quotes.length) return;
+    dialog(text('Встречное предложение по запросу', 'Counter quotation'), [
+      field(text('Поставщик / сумма', 'Supplier / total'), select('supplierCode', quotes.map((quote) => [quote.supplierCode, `#${quote.rank} ${quote.supplierName} · ${formatMoneyMinor(quote.totalCostMinor, rfq.bomCurrency)}`]), quotes[0].supplierCode)),
+      field(text('Количество', 'Quantity'), control('quantity', 'number', String(rfq.targetQuantity), { min: '1', step: '1', required: true })),
+      field(text('Цена за единицу', 'Unit price'), control('unitPrice', 'text', '', { required: true, inputmode: 'decimal' })),
+      field(text('Комментарий', 'Notes'), textarea('notes', '', { maxlength: '1000', rows: '4' })),
+    ], text('Отправить встречное предложение', 'Send counter-offer'), async (values) => Boolean(await runMutation(rfq.rfqCode, `/v2/rfqs/${encodeURIComponent(rfq.rfqCode)}/counter-offer`, counterOfferPayload(rfq, values))));
+  }
+  function counterOfferPayload(rfq, values) {
+    return { expectedVersion: rfq.version, supplierCode: values.supplierCode, quantity: Number(values.quantity), unitPriceMinor: decimalToMinor(values.unitPrice), notes: String(values.notes || '').trim() || null };
+  }
+  // Бренд записывает согласие фабрики за неё (Q-05): встречное предложение становится котировкой.
+  function openAcceptCounterDialog(rfq) {
+    const open = core.rankQuotes(rfq).filter((quote) => quote.counterOffer && !quote.counterOffer.acceptedAt);
+    if (!open.length) return;
+    dialog(text('Принять встречное предложение', 'Accept counter-offer'), [
+      field(text('Поставщик / предложение', 'Supplier / counter-offer'), select('supplierCode', open.map((quote) => [quote.supplierCode, `${quote.supplierName} · ${quote.counterOffer.quantity} × ${formatMoneyMinor(quote.counterOffer.unitPriceMinor, rfq.bomCurrency)}`]), open[0].supplierCode)),
+      h('p', { className: 'sourcing-confirm', text: text('Принятая цена заменит цену котировки; победитель будет выбран по ней. Принять можно предложение на всё количество запроса.', 'The accepted price replaces the quotation price, and award uses it. Only a counter-offer for the full RFQ quantity can be accepted.') }),
+    ], text('Принять', 'Accept'), async (values) => Boolean(await runMutation(rfq.rfqCode, `/v2/rfqs/${encodeURIComponent(rfq.rfqCode)}/counter-offer/accept`, { expectedVersion: rfq.version, supplierCode: values.supplierCode })));
   }
   function openAwardDialog(rfq) {
     const quotes = core.rankQuotes(rfq); if (!quotes.length) return;
@@ -727,10 +756,8 @@
   function materialRfqInspector(rfq) {
     if (!rfq) return h('aside', { className: 'sourcing-inspector' }, [h('p', { className: 'muted', text: text('Выберите запрос на материал.', 'Select a material RFQ.') })]);
     const permissions = { manage: can(rfq.brandId, caps.CAPABILITIES.SOURCING_MANAGE), award: can(rfq.brandId, caps.CAPABILITIES.SOURCING_AWARD), allocate: can(rfq.brandId, caps.CAPABILITIES.MATERIAL_PURCHASE_MANAGE) };
-    const actions = [...core.allowedRfqActions(rfq, permissions)];
-    if (permissions.manage && rfq.status === 'quoted') actions.push('counter');
-    // Q-05: a counter-offer the supplier has agreed to becomes the quotation award prices off.
-    if (permissions.manage && rfq.status === 'quoted' && (rfq.quotes || []).some((item) => item.counterOffer && !item.counterOffer.acceptedAt)) actions.push('acceptCounter');
+    // Q-05: counter and acceptCounter come from the shared rule in sourcing-core.
+    const actions = core.allowedRfqActions(rfq, permissions);
     const quotes = core.rankQuotes(rfq);
     return h('aside', { className: 'sourcing-inspector' }, [
       h('div', { className: 'sourcing-inspector-title' }, [h('div', {}, [h('p', { className: 'eyebrow', text: rfq.rfqCode }), h('h2', { text: `${rfq.materialCode} v${rfq.materialVersion}` })]), badge(statusLabel(rfq.status), statusTone(rfq.status))]),

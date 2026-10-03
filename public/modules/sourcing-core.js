@@ -26,13 +26,19 @@
     if (order.status === 'issued') return Object.freeze(['confirm', 'cancel']);
     return Object.freeze([]);
   }
+  function hasOpenCounterOffer(rfq) { return (rfq?.quotes || []).some((item) => item.counterOffer && !item.counterOffer.acceptedAt); }
   function allowedRfqActions(rfq, permissions = {}) {
     if (!rfq) return Object.freeze([]);
     const actions = [];
     if (permissions.manage) {
       if (rfq.status === 'draft') actions.push('edit', 'issue', 'cancel');
-      if (['issued', 'quoted'].includes(rfq.status)) actions.push('quote', 'cancel');
-      if (rfq.status === 'awarded') actions.push('cancel');
+      if (['issued', 'quoted'].includes(rfq.status)) actions.push('quote');
+      // A counter-offer answers a quotation, so it exists only once there is one (status quoted); the
+      // supplier's agreement to it is recorded by the brand on the supplier's behalf (Q-05). Both
+      // finished-goods and material RFQs take this one rule — the material screen used to bolt it on.
+      if (rfq.status === 'quoted') actions.push('counter');
+      if (rfq.status === 'quoted' && hasOpenCounterOffer(rfq)) actions.push('acceptCounter');
+      if (['issued', 'quoted', 'awarded'].includes(rfq.status)) actions.push('cancel');
     }
     if (permissions.award && rfq.status === 'quoted') actions.push('award');
     if (permissions.allocate && rfq.status === 'awarded') actions.push('allocate');
@@ -74,5 +80,5 @@
     });
   }
 
-  global.SynthaSourcingCore = Object.freeze({ allowedMaterialPurchaseOrderActions, allowedRfqActions, allowedSupplierActions, compareQuoteToBom, isRfqOverdue, rankQuotes, summarize });
+  global.SynthaSourcingCore = Object.freeze({ allowedMaterialPurchaseOrderActions, allowedRfqActions, allowedSupplierActions, compareQuoteToBom, hasOpenCounterOffer, isRfqOverdue, rankQuotes, summarize });
 })(window);

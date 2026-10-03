@@ -250,7 +250,9 @@ test('Q-05: the accept route exists for both kinds of RFQ', async () => {
 
 test('Q-05: the material RFQ screen offers the acceptance', async () => {
   const ui = await read('public/modules/sourcing.js');
-  assert.match(ui, /actions\.push\('acceptCounter'\)/);
+  // The action now comes from the shared rule in sourcing-core, for product and material RFQs alike.
+  assert.match(await read('public/modules/sourcing-core.js'), /actions\.push\('acceptCounter'\)/);
+  assert.match(ui, /acceptCounter: \(\) => openMaterialAcceptCounterDialog\(rfq\)/);
   assert.match(ui, /counter-offer\/accept/);
   const messages = await read('public/modules/error-messages.js');
   for (const errorCode of ['RFQ_COUNTER_ALREADY_ACCEPTED', 'RFQ_COUNTER_QUANTITY_DIFFERS', 'MATERIAL_RFQ_COUNTER_ALREADY_ACCEPTED']) assert.match(messages, new RegExp(errorCode));

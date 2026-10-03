@@ -48,7 +48,8 @@ const MDM = Object.freeze({
   measurementUnit: Object.freeze({ entryId: 'mdm-entry:measurement-unit:cm', version: 1 }),
   measurementPoint: Object.freeze({ entryId: 'mdm-entry:measurement-point:chest-circ', version: 1 }),
 });
-const EVIDENCE_APPROVED_AT = '2027-01-10T00:00:00.000Z';
+// Подтверждение должно быть свежим (не старше 90 дней) и не из будущего — политика product-readiness.
+const EVIDENCE_APPROVED_AT = new Date().toISOString();
 
 // Расход растёт с размером — так и должна выглядеть градуированная ведомость, а не одна цифра на
 // все размеры. Цифры условны, но правдоподобны: подкладка расходуется меньше полотна верха.
@@ -420,7 +421,7 @@ function evidence(dimension, approvedBy) {
   return Object.freeze({
     status: 'ready',
     evidenceId: `foundation-${dimension}`,
-    sourceSystem: 'syntha-seed-demo',
+    sourceSystem: 'syntha-documents',
     version: `foundation:${dimension}:1`,
     contentHash: createHash('sha256').update(`foundation:${dimension}`).digest('hex'),
     approvedAt: EVIDENCE_APPROVED_AT,

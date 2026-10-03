@@ -60,6 +60,7 @@ const ASSETS = Object.freeze({
   '/ui/i18n-v7.js': ['modules/i18n-v7.js', JS, VISUAL_CACHE],
   '/ui/ui-capabilities.js': ['modules/ui-capabilities.js', JS, CACHE],
   '/ui/ui-validation.js': ['modules/ui-validation.js', JS, CACHE],
+  '/ui/error-messages.js': ['modules/error-messages.js', JS, CACHE],
   '/ui/workspace-pagination.js': ['modules/workspace-pagination.js', JS, CACHE],
   '/ui/notification-pagination.js': ['modules/notification-pagination.js', JS, CACHE],
   '/ui/app-core.js': ['modules/app-core.js', JS, CACHE],

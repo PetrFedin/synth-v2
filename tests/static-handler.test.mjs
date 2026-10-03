@@ -110,3 +110,18 @@ test('delegates API and unknown paths', async () => {
   });
   assert.deepEqual(seen, ['/v2/auth/me', '/unknown']);
 });
+
+test('every /ui script that index.html loads is actually served', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const html = await readFile(path.join(publicDir, 'index.html'), 'utf8');
+  const urls = [...html.matchAll(/<script[^>]*\ssrc="(\/ui\/[^"?]+)"/g)].map(match => match[1]);
+  assert.ok(urls.length > 10, 'index.html should load the /ui modules');
+  assert.ok(urls.includes('/ui/error-messages.js'));
+  await withServer(createStandaloneHandler({ publicDir, apiHandler: apiFallback }), async base => {
+    for (const url of urls) {
+      const response = await fetch(`${base}${url}`);
+      assert.equal(response.status, 200, `${url} must be served`);
+      await response.arrayBuffer();
+    }
+  });
+});

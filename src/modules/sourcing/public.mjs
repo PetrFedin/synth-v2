@@ -135,7 +135,10 @@ export function issueRfq(rfq, { catalogSku, bom, suppliers, issuedAt }) {
   return freezeRfq({ ...rfq, status: 'issued', version: rfq.version + 1, issuedAt: at, updatedAt: at });
 }
 
-export function upsertRfqQuote(rfq, { supplier, input, receivedAt }) {
+// `submittedBy` is set only when the supplier answers for itself through the portal (S-01): the quotation
+// then says who sent it, so the brand reads "entered by the factory" and "entered by us for the factory"
+// as two different facts. A quotation the brand records on the supplier's behalf carries no such mark.
+export function upsertRfqQuote(rfq, { supplier, input, receivedAt, submittedBy = null }) {
   invariant(['issued', 'quoted'].includes(rfq?.status), 'RFQ_NOT_OPEN_FOR_QUOTES', 'RFQ is not open for quotations', { status: rfq?.status });
   const at = timestamp(receivedAt, 'RFQ_QUOTE_RECEIVED_AT_INVALID', 'Quotation receipt time');
   assertQualifiedSupplier(supplier, rfq.brandId);
@@ -143,7 +146,11 @@ export function upsertRfqQuote(rfq, { supplier, input, receivedAt }) {
   invariant(Date.parse(at) <= Date.parse(rfq.responseDueAt), 'RFQ_RESPONSE_DEADLINE_PASSED', 'Quotation arrived after the response deadline', { responseDueAt: rfq.responseDueAt });
   const quote = normalizeQuote(input, supplier, rfq, at);
   const previous = rfq.quotes.find((item) => item.supplierCode === supplier.supplierCode);
-  const replacement = Object.freeze({ ...quote, revision: (previous?.revision ?? 0) + 1 });
+  const replacement = Object.freeze({
+    ...quote,
+    revision: (previous?.revision ?? 0) + 1,
+    ...(submittedBy ? { submittedBy: Object.freeze({ kind: 'supplier', userId: submittedBy, via: 'supplier-portal' }) } : {}),
+  });
   const quotes = [...rfq.quotes.filter((item) => item.supplierCode !== supplier.supplierCode), replacement]
     .sort((left, right) => left.supplierCode.localeCompare(right.supplierCode));
   return freezeRfq({ ...rfq, status: 'quoted', quotes: Object.freeze(quotes), version: rfq.version + 1, updatedAt: at });
@@ -196,7 +203,7 @@ export function counterRfqQuote(rfq, { supplier, input, offeredAt, offeredBy }) 
 // Only a counter for the RFQ's own quantity can be accepted: the award, the allocation and every
 // other supplier's quotation are priced for `targetQuantity`, and a different agreed quantity would
 // be a change to the RFQ itself, which is a decision for the buyer rather than a side effect.
-export function acceptRfqCounterOffer(rfq, { supplier, acceptedAt, acceptedBy }) {
+export function acceptRfqCounterOffer(rfq, { supplier, acceptedAt, acceptedBy, acceptedVia = null }) {
   invariant(rfq?.status === 'quoted', 'RFQ_NOT_NEGOTIABLE', 'Only a quoted RFQ has a counter-offer to accept', { status: rfq?.status });
   const at = timestamp(acceptedAt, 'RFQ_COUNTER_ACCEPTED_AT_INVALID', 'Counter-offer acceptance time');
   invariant(typeof acceptedBy === 'string' && acceptedBy.trim(), 'RFQ_COUNTER_ACTOR_REQUIRED', 'Counter-offer actor is required');
@@ -219,7 +226,7 @@ export function acceptRfqCounterOffer(rfq, { supplier, acceptedAt, acceptedBy })
     tiers: Object.freeze([]),
     revision: quote.revision + 1,
     previousTerms: Object.freeze({ revision: quote.revision, unitPriceMinor: quote.unitPriceMinor, totalCostMinor: quote.totalCostMinor, tiers: Object.freeze([...(quote.tiers ?? [])]) }),
-    counterOffer: Object.freeze({ ...counter, acceptedAt: at, acceptedBy: acceptedBy.trim() }),
+    counterOffer: Object.freeze({ ...counter, acceptedAt: at, acceptedBy: acceptedBy.trim(), ...(acceptedVia ? { acceptedVia } : {}) }),
   });
   const quotes = rfq.quotes.map((item) => (item.supplierCode === quote.supplierCode ? agreed : item));
   return freezeRfq({ ...rfq, quotes: Object.freeze(quotes), version: rfq.version + 1, updatedAt: at });

@@ -32,6 +32,14 @@
     cancelled: ['Отменён', 'Cancelled'],
   };
 
+  // What the grant lets this person do is stated by the server on the supplier list, and the server checks
+  // it again on every command. The screen shows an action only when it is both allowed and meaningful
+  // for the state the brand has put the request or the order in.
+  const CAP = { quote: 'supplier-portal.quote.submit', accept: 'supplier-portal.counter.accept', confirm: 'supplier-portal.order.confirm' };
+  function can(supplierCode, capability) {
+    return ui.suppliers.some((item) => item.supplierCode === supplierCode && (item.capabilities || []).includes(capability));
+  }
+
   function label(table, key) { const pair = table[key]; return pair ? text(pair[0], pair[1]) : (key || '—'); }
 
   function formatDate(value) {
@@ -156,6 +164,118 @@
     return rows;
   }
 
+  // The portal prints money as "52,00 €", so a person types 52,00; a comma is a decimal separator and
+  // spaces group thousands. Amounts go to the server as integer minor units.
+  function decimalToMinor(value) {
+    const normalized = String(value).trim().replace(/[\s\u00a0\u202f]/g, '').replace(',', '.');
+    if (!/^\d+(?:\.\d{1,2})?$/.test(normalized)) throw new Error(text('Укажите сумму, например 52,00 или 52.', 'Enter an amount, for example 52,00 or 52.'));
+    const [whole, fraction = ''] = normalized.split('.');
+    return Number(whole) * 100 + Number(fraction.padEnd(2, '0'));
+  }
+  function minorToInput(minor) { return Number.isInteger(minor) ? `${Math.floor(minor / 100)},${String(minor % 100).padStart(2, '0')}` : ''; }
+  function localInput(value) {
+    const date = new Date(value);
+    if (!Number.isFinite(date.getTime())) return '';
+    return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  }
+  function isoFromLocal(value) {
+    const date = new Date(value);
+    if (!Number.isFinite(date.getTime())) throw new Error(text('Укажите дату.', 'Enter a date.'));
+    return date.toISOString();
+  }
+
+  // The three answers a supplier can give for itself. Each posts to its own portal route, which runs the
+  // same domain function the brand's command runs; the screen then re-reads the portal lists, because a
+  // command answers with the supplier's own receipt and not with the aggregate.
+  async function answer(path, body) {
+    const receipt = await mutate(path, body);
+    await load(false);
+    return receipt;
+  }
+
+  function openQuoteForm(item) {
+    const own = item.ownQuote;
+    openForm(own ? text('Обновить котировку', 'Revise quotation') : text('Отправить котировку', 'Submit quotation'), [
+      textDef('unitPrice', text('Цена за единицу', 'Unit price'), minorToInput(own?.unitPriceMinor), 20),
+      textDef('fixedCost', text('Постоянные затраты', 'Fixed cost'), own ? minorToInput(own.fixedCostMinor) : '0', 20),
+      numberDef('leadTimeDays', text('Срок производства, дней', 'Lead time, days'), own?.leadTimeDays ?? '', true, 1, 730),
+      numberDef('minimumOrderQuantity', text('Минимальная партия', 'Minimum order'), own?.minimumOrderQuantity ?? '', true, 1),
+      dateTimeDef('validUntil', text('Действует до', 'Valid until'), localInput(own?.validUntil || new Date(Date.now() + 21 * 86400000).toISOString())),
+      optionalTextDef('notes', text('Комментарий', 'Notes'), own?.notes || '', 1000),
+    ], async (values) => {
+      await answer(`/v2/supplier-portal/rfqs/${encodeURIComponent(item.rfqCode)}/quote`, {
+        expectedVersion: item.version,
+        supplierCode: item.supplierCode,
+        unitPriceMinor: decimalToMinor(values.unitPrice),
+        fixedCostMinor: decimalToMinor(values.fixedCost),
+        leadTimeDays: values.leadTimeDays,
+        minimumOrderQuantity: values.minimumOrderQuantity,
+        validUntil: isoFromLocal(values.validUntil),
+        notes: String(values.notes || '').trim() || null,
+        tiers: [],
+      });
+    });
+  }
+
+  async function acceptCounterOffer(item) {
+    const counter = item.ownQuote.counterOffer;
+    const accepted = await confirmAction({
+      title: text('Принять встречное предложение', 'Accept the counter-offer'),
+      question: text(
+        `Цена за единицу станет ${formatMoney(counter.unitPriceMinor, item.currency)} на ${counter.quantity} шт. Ваша котировка будет заменена этими условиями.`,
+        `The unit price becomes ${formatMoney(counter.unitPriceMinor, item.currency)} for ${counter.quantity} units. Your quotation is replaced by these terms.`,
+      ),
+      confirmLabel: text('Принять', 'Accept'),
+    });
+    if (!accepted) return;
+    try {
+      await answer(`/v2/supplier-portal/rfqs/${encodeURIComponent(item.rfqCode)}/counter-offer/accept`, { expectedVersion: item.version, supplierCode: item.supplierCode });
+      toast(text('Встречное предложение принято.', 'Counter-offer accepted.'), 'success');
+    } catch (error) { toast(error?.message || I18N.t('common.requestError'), 'error'); }
+    renderApp();
+  }
+
+  function openConfirmOrderForm(item) {
+    openForm(text('Подтвердить заказ', 'Confirm the order'), [
+      textDef('confirmationReference', text('Номер подтверждения', 'Confirmation reference'), '', 120, true, 2),
+      optionalTextDef('notes', text('Комментарий', 'Notes'), '', 2000),
+    ], async (values) => {
+      await answer(`/v2/supplier-portal/orders/${encodeURIComponent(item.productionOrderNumber)}/confirm`, {
+        expectedVersion: item.version,
+        supplierCode: item.supplierCode,
+        confirmationReference: values.confirmationReference.trim(),
+        notes: String(values.notes || '').trim() || null,
+      });
+    });
+  }
+
+  function actionButton(labelText, className, onclick) {
+    const button = el('button', { className: `button ${className}`, type: 'button', text: labelText });
+    button.addEventListener('click', onclick);
+    return button;
+  }
+
+  function rfqActions(item) {
+    const own = item.ownQuote;
+    const actions = [];
+    const open = item.supplierStatus === 'awaiting_quote' || item.supplierStatus === 'quote_submitted';
+    if (open && can(item.supplierCode, CAP.quote)) {
+      actions.push(actionButton(own ? text('Обновить котировку', 'Revise quotation') : text('Отправить котировку', 'Submit quotation'), 'primary', () => openQuoteForm(item)));
+    }
+    const counter = own?.counterOffer;
+    const answerable = counter && !counter.acceptedAt && counter.answersQuoteRevision === own.revision && counter.quantity === item.targetQuantity;
+    if (item.supplierStatus === 'quote_submitted' && answerable && can(item.supplierCode, CAP.accept)) {
+      actions.push(actionButton(text('Принять встречное предложение', 'Accept counter-offer'), 'secondary', () => { void acceptCounterOffer(item); }));
+    }
+    return actions;
+  }
+
+  function orderActions(item) {
+    return item.status === 'issued' && can(item.supplierCode, CAP.confirm)
+      ? [actionButton(text('Подтвердить заказ', 'Confirm the order'), 'primary', () => openConfirmOrderForm(item))]
+      : [];
+  }
+
   function rfqInspector(item) {
     if (!item) return odInspector({ title: text('Выберите запрос', 'Select a request') });
     const content = [];
@@ -174,10 +294,9 @@
     ));
     content.push(own
       ? odMiniTable([text('Ваша котировка', 'Your quotation'), ''], quoteRows(own, item.currency))
-      : notice(text(
-        'Котировка ещё не отправлена. Пришлите условия менеджеру бренда — они появятся здесь.',
-        'No quotation submitted yet. Send your terms to the brand and they will appear here.',
-      )));
+      : notice(can(item.supplierCode, CAP.quote)
+        ? text('Котировка ещё не отправлена. Отправьте условия кнопкой ниже.', 'No quotation submitted yet. Submit your terms with the button below.')
+        : text('Котировка ещё не отправлена. Пришлите условия менеджеру бренда — они появятся здесь.', 'No quotation submitted yet. Send your terms to the brand and they will appear here.')));
     if (item.notes) content.push(notice(item.notes));
     return odInspector({
       title: item.rfqCode,
@@ -190,6 +309,7 @@
         { label: 'SKU', value: item.sku },
       ],
       content,
+      actions: rfqActions(item),
     });
   }
 
@@ -215,10 +335,9 @@
         [text('Комментарий', 'Notes'), item.confirmation.notes || '—'],
       ]));
     } else {
-      content.push(notice(text(
-        'Заказ ещё не подтверждён. Подтверждение принимает менеджер бренда после вашего согласия.',
-        'This order is not confirmed yet. The brand records the confirmation once you accept it.',
-      )));
+      content.push(notice(item.status === 'issued' && can(item.supplierCode, CAP.confirm)
+        ? text('Заказ ещё не подтверждён. Подтвердите его кнопкой ниже.', 'This order is not confirmed yet. Confirm it with the button below.')
+        : text('Заказ ещё не подтверждён. Подтверждение принимает менеджер бренда после вашего согласия.', 'This order is not confirmed yet. The brand records the confirmation once you accept it.')));
     }
     return odInspector({
       title: item.productionOrderNumber,
@@ -231,6 +350,7 @@
         { label: 'SKU', value: item.sku },
       ],
       content,
+      actions: orderActions(item),
     });
   }
 

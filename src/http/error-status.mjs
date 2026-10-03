@@ -91,7 +91,7 @@ function statusForCode(code) {
   if (code === 'HTTP_ROUTE_NOT_FOUND' || code.endsWith('_NOT_FOUND')) status = 404;
   else if (['HTTP_AUTH_REQUIRED', 'HTTP_AUTH_INVALID', 'AUTH_CREDENTIALS_INVALID'].includes(code)) status = 401;
   else if (code === 'AUTH_RATE_LIMITED') status = 429;
-  else if (code === 'CAPABILITY_DENIED' || code.includes('MEMBERSHIP_REQUIRED')) status = 403;
+  else if (code === 'CAPABILITY_DENIED' || code === 'SUPPLIER_PORTAL_ACCESS_REQUIRED' || code.includes('MEMBERSHIP_REQUIRED')) status = 403;
   else if (code === 'HTTP_CONTENT_TYPE_UNSUPPORTED') status = 415;
   else if ([
     'HTTP_JSON_INVALID', 'HTTP_JSON_OBJECT_REQUIRED', 'HTTP_CONTENT_LENGTH_INVALID', 'HTTP_IDEMPOTENCY_KEY_REQUIRED', 'HTTP_IDEMPOTENCY_KEY_INVALID',

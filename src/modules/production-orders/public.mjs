@@ -64,7 +64,7 @@ export function issueProductionOrder(order, { actorId, issuedAt }) {
   });
 }
 
-export function confirmProductionOrder(order, { supplierCode, confirmationReference, confirmedBy, notes, confirmedAt }) {
+export function confirmProductionOrder(order, { supplierCode, confirmationReference, confirmedBy, notes, confirmedAt, confirmedVia = null, confirmedByUserId = null }) {
   invariant(order?.status === 'issued', 'PRODUCTION_ORDER_NOT_ISSUED', 'Only an issued Production Order can be confirmed', { status: order?.status });
   invariant(supplierCode === order.supplierCode, 'PRODUCTION_ORDER_SUPPLIER_MISMATCH', 'Production Order confirmation must come from the allocated supplier', { expectedSupplierCode: order.supplierCode, actualSupplierCode: supplierCode });
   const at = timestamp(confirmedAt, 'PRODUCTION_ORDER_CONFIRMED_AT_INVALID', 'Production Order confirmation time');
@@ -76,6 +76,8 @@ export function confirmProductionOrder(order, { supplierCode, confirmationRefere
     notes: optionalText(notes, 2_000, 'PRODUCTION_ORDER_CONFIRMATION_NOTES_INVALID', 'Confirmation notes'),
     confirmedAt: at,
     issuedProductionOrderVersion: order.version,
+    // S-01. Set only when the supplier confirms through the portal; the brand's own record has neither.
+    ...(confirmedVia ? { confirmedVia, confirmedByUserId } : {}),
   });
   return freezeOrder({
     ...order,

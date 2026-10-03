@@ -339,6 +339,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
     categoryAttributes: base.categoryAttributes,
     organisationMembers: base.organisationMembers,
     team: base.team,
+    awaitingActions: base.awaitingActions,
     productionOrders,
     productionExecutions,
     finalQuality,

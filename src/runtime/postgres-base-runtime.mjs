@@ -65,6 +65,8 @@ import { createSupplierPortalQueryService } from '../application/supplier-portal
 import { createPostgresCategoryAttributeReader } from '../infrastructure/postgres-category-attribute-reader.mjs';
 import { createCategoryAttributeQueryService } from '../application/category-attribute-query-service.mjs';
 import { createPostgresOrganisationMemberReader } from '../infrastructure/postgres-organisation-member-reader.mjs';
+import { createPostgresAwaitingActionReader } from '../infrastructure/postgres-awaiting-action-reader.mjs';
+import { createAwaitingActionQueryService } from '../application/awaiting-action-query-service.mjs';
 import { createOrganisationMemberQueryService } from '../application/organisation-member-query-service.mjs';
 import { createLibraryQueryService } from '../application/library-query-service.mjs';
 import { createPostgresMaintenanceStore } from '../infrastructure/postgres-maintenance-store.mjs';
@@ -156,6 +158,7 @@ export function createPostgresWholesaleRuntime({
   const supplierPortal = createSupplierPortalQueryService({ reader: createPostgresSupplierPortalReader({ pool }) });
   const categoryAttributes = createCategoryAttributeQueryService({ reader: createPostgresCategoryAttributeReader({ pool }) });
   const organisationMembers = createOrganisationMemberQueryService({ reader: createPostgresOrganisationMemberReader({ pool }) });
+  const awaitingActions = createAwaitingActionQueryService({ reader: createPostgresAwaitingActionReader({ pool }), ...(clock ? { clock } : {}) });
   const partners = createPartnerAccessService(options);
   const retailDoors = createRetailDoorService(options);
   const collaboration = createShowroomSelectionService({ ...options, catalogReader: catalog, commercialPublicationReader: commercialPublication });
@@ -194,12 +197,12 @@ export function createPostgresWholesaleRuntime({
     ...(outboxRetentionMs !== undefined ? { outboxRetentionMs } : {}),
   });
   const workspace = createWorkspaceQueryService({ reader: createPostgresWorkspaceReader({ pool }) });
-  const transport = { authenticate: auth.authenticate, auth, readiness, platform, catalog, legalEntities, productIdentity, productReadiness, commercialPublication, orderEconomics, materials, boms, measurements, samples, libraries, history, supplierPortal, categoryAttributes, organisationMembers, team, partners, retailDoors, sourcing, techPacks, collaboration, orders, notifications, workspace };
+  const transport = { authenticate: auth.authenticate, auth, readiness, platform, catalog, legalEntities, productIdentity, productReadiness, commercialPublication, orderEconomics, materials, boms, measurements, samples, libraries, history, supplierPortal, categoryAttributes, organisationMembers, awaitingActions, team, partners, retailDoors, sourcing, techPacks, collaboration, orders, notifications, workspace };
   const handler = createWholesaleHttpHandler(transport);
   const fetchHandler = createWholesaleFetchHandler(transport);
   return Object.freeze({
     auth, readiness, maintenance, outboxPublication, outboxPublicationStore, store, catalogStore, legalEntityStore, productIdentityStore, productIdentityReader, productReadinessStore, productReadinessSourceReader, commercialPublicationStore, orderEconomicsStore, materialStore, bomStore, measurementStore, sampleStore, sourcingStore, techPackStore,
-    platform, catalog, legalEntities, productIdentity, productReadiness, commercialPublication, orderEconomics, materials, boms, measurements, samples, libraries, history, supplierPortal, categoryAttributes, organisationMembers, team, partners, retailDoors, sourcing, techPacks, collaboration, orders, notifications, workspace,
+    platform, catalog, legalEntities, productIdentity, productReadiness, commercialPublication, orderEconomics, materials, boms, measurements, samples, libraries, history, supplierPortal, categoryAttributes, organisationMembers, awaitingActions, team, partners, retailDoors, sourcing, techPacks, collaboration, orders, notifications, workspace,
     handler, fetchHandler,
   });
 }

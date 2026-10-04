@@ -139,6 +139,11 @@ const OD_V7_BRAND_ONLY_VIEWS = new Set([
 ]);
 
 function odV7ItemApplies(item) {
+  // Пункт, на чтение которого у роли нет ни одного права, не показывается: он открывал экран,
+  // который либо молчал, либо отвечал отказом. Соответствие «пункт → право» живёт в одном месте —
+  // в ui-capabilities.js рядом с самими правами.
+  const caps = window.SynthaUiCapabilities;
+  if (item?.view && caps?.canOpenView && !caps.canOpenView(state.workspace, item.view)) return false;
   if (!item?.view || !OD_V7_BRAND_ONLY_VIEWS.has(item.view)) return true;
   const memberships = state.workspace?.memberships;
   // Before the workspace has loaded there is nothing to judge by, and hiding on a guess would make
@@ -147,45 +152,74 @@ function odV7ItemApplies(item) {
   return memberships.some((membership) => membership.organisationType === 'brand' && membership.status === 'active');
 }
 
+// Разделы, которые только запланированы, не должны стоять среди рабочих: человек искал в них
+// работу и получал всплывающую подсказку. Они не удалены — их собираются реализовать, — а лежат
+// отдельной свёрнутой группой внизу меню.
+const OD_V7_PLANNED_GROUP = Object.freeze({ ru: '\u0412 \u0420\u0410\u0417\u0420\u0410\u0411\u041e\u0422\u041a\u0415', en: 'IN DEVELOPMENT' });
+const OD_V7_NAV_UI = { plannedOpen: false };
+
+function odV7NavButton(item) {
+  const active = Boolean(item.view && item.view === state.view && !item.planned);
+  const label = odV7Text(item);
+  const button = el('button', {
+    className: `nav-item ${active ? 'active' : ''} ${item.planned ? 'planned' : ''}`.trim(),
+    type: 'button',
+    title: label,
+    ariaPressed: active ? 'true' : 'false',
+  });
+  // The rendered sidebar is the one place that knows every reachable view, whichever module
+  // contributed it. Naming the view on the button lets the breadcrumb and the page header read
+  // their labels from the navigation the user is actually looking at.
+  if (item.view) button.dataset.view = item.view;
+  button.append(icon(item.icon || 'catalog'), el('span', { className: 'nav-label', rawText: label }));
+  if (item.planned) button.append(el('span', { className: 'nav-plan-dot', ariaHidden: 'true' }));
+  button.addEventListener('click', () => {
+    if (item.planned || !item.view) return odV7PlannedNotice(item);
+    state.view = item.view;
+    renderApp();
+  });
+  return button;
+}
+
 function odV7Navigation() {
   const nav = document.querySelector('.sidebar .nav');
   if (!nav) return;
   clear(nav);
   nav.className = 'nav od-v7-nav';
 
+  const planned = [];
   OD_V7_GROUPS.forEach((group) => {
     const items = group.items.filter(odV7ItemApplies);
-    if (!items.length) return;
+    // Пункт без экрана уходит в «В разработке»; пункт с экраном, даже помеченный запланированным,
+    // остаётся там, где стоит: его модуль подключается позже и снимает пометку сам.
+    const working = items.filter((item) => !(item.planned && !item.view));
+    items.filter((item) => item.planned && !item.view).forEach((item) => planned.push(item));
+    if (!working.length) return;
     const groupNode = el('section', { className: 'od-v7-nav-group' });
     if (group.label) groupNode.append(el('div', {
       className: 'nav-group-label',
       rawText: odV7Text(group.label),
     }));
-
-    items.forEach((item) => {
-      const active = Boolean(item.view && item.view === state.view && !item.planned);
-      const label = odV7Text(item);
-      const button = el('button', {
-        className: `nav-item ${active ? 'active' : ''} ${item.planned ? 'planned' : ''}`.trim(),
-        type: 'button',
-        title: label,
-        ariaPressed: active ? 'true' : 'false',
-      });
-      // The rendered sidebar is the one place that knows every reachable view, whichever module
-      // contributed it. Naming the view on the button lets the breadcrumb and the page header read
-      // their labels from the navigation the user is actually looking at.
-      if (item.view) button.dataset.view = item.view;
-      button.append(icon(item.icon || 'catalog'), el('span', { className: 'nav-label', rawText: label }));
-      if (item.planned) button.append(el('span', { className: 'nav-plan-dot', ariaHidden: 'true' }));
-      button.addEventListener('click', () => {
-        if (item.planned || !item.view) return odV7PlannedNotice(item);
-        state.view = item.view;
-        renderApp();
-      });
-      groupNode.append(button);
-    });
+    working.forEach((item) => groupNode.append(odV7NavButton(item)));
     nav.append(groupNode);
   });
+
+  if (!planned.length) return;
+  const groupNode = el('section', { className: 'od-v7-nav-group od-v7-nav-planned' });
+  const toggle = el('button', {
+    className: 'nav-group-label nav-group-toggle',
+    type: 'button',
+    rawText: `${odV7Text(OD_V7_PLANNED_GROUP)} (${planned.length})`,
+    'aria-expanded': OD_V7_NAV_UI.plannedOpen ? 'true' : 'false',
+  });
+  toggle.dataset.navGroup = 'planned';
+  toggle.addEventListener('click', () => {
+    OD_V7_NAV_UI.plannedOpen = !OD_V7_NAV_UI.plannedOpen;
+    renderApp();
+  });
+  groupNode.append(toggle);
+  if (OD_V7_NAV_UI.plannedOpen) planned.forEach((item) => groupNode.append(odV7NavButton(item)));
+  nav.append(groupNode);
 }
 
 function odV7LanguageSwitcher() {

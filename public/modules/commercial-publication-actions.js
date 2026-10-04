@@ -15,6 +15,7 @@
   // что каталог всегда чей-то, и «чей» определяется принятым приглашением.
 
   const CATALOGS = { byAccess: new Map(), loading: new Set() };
+  const FORBIDDEN = Object.freeze({ forbidden: true });
 
   function text(ru, en) { return global.odText ? global.odText(ru, en) : ru; }
 
@@ -187,8 +188,9 @@
           CATALOGS.byAccess.set(key, loaded || null);
         } catch (problem) {
           // Каталога может просто не быть, и это не сбой: пустое значение вместо отсутствующего,
-          // иначе экран просил бы его снова и снова.
-          CATALOGS.byAccess.set(key, null);
+          // иначе экран просил бы его снова и снова. Отказ по правам — другое: у роли нет доступа,
+          // и экран говорит об этом, а не изображает пустой каталог.
+          CATALOGS.byAccess.set(key, problem?.forbidden ? FORBIDDEN : null);
         } finally {
           CATALOGS.loading.delete(key);
           if (typeof onLoaded === 'function') onLoaded();
@@ -198,9 +200,23 @@
     return null;
   }
 
+  // Каталог читает тот, у кого есть право на сделки: бренд или магазин пары. У остальных ролей сервер
+  // ответит отказом, поэтому и спрашивать его незачем — ответ известен заранее.
+  function canReadCatalog(showroom, invitation) {
+    const caps = global.SynthaUiCapabilities;
+    if (!caps?.hasForOrganisation) return true;
+    const dealRead = caps.CAPABILITIES.DEAL_READ;
+    return caps.hasForOrganisation(state.workspace, showroom.brandId, dealRead)
+      || caps.hasForOrganisation(state.workspace, invitation.shopId, dealRead);
+  }
+
+  function noAccess() { return text('Нет доступа', 'No access'); }
+
   function catalogCell(showroom, invitation, { onLoaded } = {}) {
     if (invitation.status !== 'accepted') return '—';
+    if (!canReadCatalog(showroom, invitation)) return noAccess();
     const catalog = catalogFor(showroom.id, invitation.shopId, { onLoaded });
+    if (catalog === FORBIDDEN) return noAccess();
     if (!catalog) return '—';
     return `${(catalog.lines || []).length} SKU · ${formatDate(catalog.publishedAt)}`;
   }

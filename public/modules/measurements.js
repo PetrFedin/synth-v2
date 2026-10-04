@@ -206,7 +206,7 @@
         h('div', {}, [h('h2', { text: item.chart.sku }), h('p', { text: `${item.sku?.name || ''} · ${item.chart.unit} · ${text('базовый размер', 'base size')} ${item.chart.baseSizeCode}` })]),
         progress(item.readiness),
       ]),
-      item.chart.schemaImageUri ? h('img', { className: 'measurement-schema-preview', src: item.chart.schemaImageUri, alt: text('Схема измерений', 'Measurement schema') }) : null,
+      item.chart.schemaImageUri ? (imageSource(item.chart.schemaImageUri) ? h('img', { className: 'measurement-schema-preview', src: imageSource(item.chart.schemaImageUri), alt: text('Схема измерений', 'Measurement schema') }) : imagePlaceholder(item.chart.schemaImageUri)) : null,
       h('div', { className: 'measurement-table-wrap' }, [h('table', { className: 'measurement-matrix' }, [h('thead', {}, [h('tr', {}, head)]), h('tbody', {}, rows)])]),
     ]);
   }
@@ -558,13 +558,13 @@
     return control;
   }
   function schemaImageField(model) {
-    const preview = h('img', { className: 'measurement-schema-preview', src: model.schemaImageUri || '', hidden: !model.schemaImageUri, alt: text('Схема измерений', 'Measurement schema') });
+    const preview = h('img', { className: 'measurement-schema-preview', src: imageSource(model.schemaImageUri), hidden: !imageSource(model.schemaImageUri), alt: text('Схема измерений', 'Measurement schema') });
     const control = h('input', { type: 'url', maxlength: '2048', placeholder: 'https://…' });
     control.value = model.schemaImageUri || '';
     control.addEventListener('input', () => {
       model.schemaImageUri = control.value;
-      preview.src = control.value;
-      preview.hidden = !control.value;
+      preview.src = imageSource(control.value);
+      preview.hidden = !imageSource(control.value);
     });
     return h('div', { className: 'measurement-schema-field' }, [field(text('Схема измерений (ссылка на изображение)', 'Measurement schema (image link)'), control), preview]);
   }

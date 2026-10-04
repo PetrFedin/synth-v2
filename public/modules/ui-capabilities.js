@@ -224,5 +224,70 @@
       .map(item => item.organisationId));
   }
 
-  global.SynthaUiCapabilities = Object.freeze({ CAPABILITIES, hasForOrganisation, hasForTrade, hasAny, organisationIds });
+  // Пункт меню и вкладка раздела видны, только если у роли есть хотя бы одно право, на котором
+  // держится чтение их данных. Список соответствия — единственный: меню, вкладки и экраны читают
+  // его отсюда, а не заводят каждый свой. Вид, которого здесь нет, открыт всем: так остаются
+  // справочники, уведомления и «Ждёт вас» (там отбор делает сам сервер).
+  const C = CAPABILITIES;
+  const VIEW_READ_CAPABILITIES = Object.freeze({
+    planning: Object.freeze([C.PRODUCT_READ, C.CAMPAIGN_MANAGE, C.COLLECTION_MANAGE]),
+    catalog: Object.freeze([C.PRODUCT_READ, C.CATALOG_MANAGE, C.COLLECTION_MANAGE, C.DEAL_READ]),
+    styles: Object.freeze([C.PRODUCT_READ]),
+    'season-palette': Object.freeze([C.PRODUCT_READ]),
+    materials: Object.freeze([C.PRODUCT_READ, C.BOM_READ]),
+    boms: Object.freeze([C.BOM_READ]),
+    measurements: Object.freeze([C.MEASUREMENT_READ]),
+    samples: Object.freeze([C.SAMPLE_READ]),
+    'tech-packs': Object.freeze([C.TECH_PACK_READ]),
+    suppliers: Object.freeze([C.SUPPLIER_READ]),
+    rfqs: Object.freeze([C.SOURCING_READ]),
+    quotations: Object.freeze([C.SOURCING_READ]),
+    production: Object.freeze([C.SOURCING_READ, C.PRODUCTION_ORDER_READ]),
+    'material-rfqs': Object.freeze([C.SOURCING_READ]),
+    'material-purchase-orders': Object.freeze([C.SOURCING_READ]),
+    'production-orders': Object.freeze([C.PRODUCTION_ORDER_READ]),
+    'production-executions': Object.freeze([C.PRODUCTION_EXECUTION_READ]),
+    'final-quality': Object.freeze([C.QUALITY_READ]),
+    showrooms: Object.freeze([C.DEAL_READ, C.SHOWROOM_MANAGE, C.SHOWROOM_INVITATION_ACCEPT]),
+    linesheets: Object.freeze([C.DEAL_READ]),
+    partners: Object.freeze([C.PARTNER_RELATIONSHIP_MANAGE, C.SHOWROOM_INVITATION_MANAGE, C.SHOWROOM_INVITATION_ACCEPT, C.RETAIL_DOOR_READ, C.COMPLIANCE_DOCUMENT_READ, C.MEMBERSHIP_MANAGE, C.ORGANISATION_MANAGE]),
+    selections: Object.freeze([C.SELECTION_WRITE, C.SELECTION_APPROVE, C.DEAL_READ]),
+    orders: Object.freeze([C.ORDER_WRITE, C.ORDER_CONFIRM, C.DEAL_READ, C.LOGISTICS_READ]),
+    calendar: Object.freeze([C.CALENDAR_READ]),
+  });
+
+  // Вкладки экрана «Контрагенты и доступы»: то, что видно не всем, а тем, у кого есть право на данные.
+  const PARTNERS_TAB_READ_CAPABILITIES = Object.freeze({
+    roles: Object.freeze([C.MEMBERSHIP_MANAGE, C.ORGANISATION_MANAGE]),
+    'legal-entities': Object.freeze([C.ORGANISATION_MANAGE]),
+    'compliance-documents': Object.freeze([C.COMPLIANCE_DOCUMENT_READ]),
+    'retail-doors': Object.freeze([C.RETAIL_DOOR_READ]),
+  });
+
+  function holdsAny(workspace, capabilities) {
+    return capabilities.some(capability => hasAny(workspace, capability));
+  }
+
+  // Без единого активного членства судить не по чему (портал поставщика, рабочее пространство ещё
+  // не загружено): прятать по догадке значило бы оставить человека без меню.
+  function judgeable(workspace) {
+    return activeMemberships(workspace).length > 0;
+  }
+
+  function canOpenView(workspace, view) {
+    const needed = VIEW_READ_CAPABILITIES[view];
+    if (!needed || !judgeable(workspace)) return true;
+    return holdsAny(workspace, needed);
+  }
+
+  function canOpenPartnersTab(workspace, tab) {
+    const needed = PARTNERS_TAB_READ_CAPABILITIES[tab];
+    if (!needed || !judgeable(workspace)) return true;
+    return holdsAny(workspace, needed);
+  }
+
+  global.SynthaUiCapabilities = Object.freeze({
+    CAPABILITIES, hasForOrganisation, hasForTrade, hasAny, organisationIds,
+    VIEW_READ_CAPABILITIES, PARTNERS_TAB_READ_CAPABILITIES, canOpenView, canOpenPartnersTab,
+  });
 })(window);

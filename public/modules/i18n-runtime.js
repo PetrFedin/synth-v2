@@ -39,6 +39,11 @@
     'common.requestError': ['\u041e\u0448\u0438\u0431\u043a\u0430 \u0437\u0430\u043f\u0440\u043e\u0441\u0430', 'Request failed'],
     // Отказ по правам — не сбой. Формулировка говорит, что произошло и что с этим делать, и не
     // предлагает «повторить попытку»: повтор ничего не изменит, пока роль та же.
+    'common.loading': ['\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430\u2026', 'Loading\u2026'],
+    'common.noSectionAccess': ['\u041d\u0435\u0442 \u0434\u043e\u0441\u0442\u0443\u043f\u0430 \u043a \u044d\u0442\u043e\u043c\u0443 \u0440\u0430\u0437\u0434\u0435\u043b\u0443 \u0434\u043b\u044f \u0432\u0430\u0448\u0435\u0439 \u0440\u043e\u043b\u0438', 'Your role has no access to this section'],
+    'common.dimensions': ['\u0413\u0430\u0431\u0430\u0440\u0438\u0442\u044b \u0438\u0437\u0434\u0435\u043b\u0438\u044f', 'Product dimensions'],
+    'common.net_weight': ['\u041c\u0430\u0441\u0441\u0430 \u043d\u0435\u0442\u0442\u043e', 'Net weight'],
+    'common.primary_material': ['\u041e\u0441\u043d\u043e\u0432\u043d\u043e\u0439 \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b', 'Primary material'],
     'common.forbidden': ['\u0423 \u0432\u0430\u0441 \u043d\u0435\u0442 \u043f\u0440\u0430\u0432 \u043d\u0430 \u044d\u0442\u043e \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0435. \u041e\u0431\u0440\u0430\u0442\u0438\u0442\u0435\u0441\u044c \u043a \u0432\u043b\u0430\u0434\u0435\u043b\u044c\u0446\u0443 \u043e\u0440\u0433\u0430\u043d\u0438\u0437\u0430\u0446\u0438\u0438.', 'You do not have the rights for this action. Ask the organisation owner.'],
     'common.noData': ['\u041d\u0435\u0442 \u0434\u043e\u0441\u0442\u0443\u043f\u043d\u044b\u0445 \u0434\u0430\u043d\u043d\u044b\u0445: {label}', 'No available data: {label}'],
     'auth.password': ['\u041f\u0430\u0440\u043e\u043b\u044c', 'Password'],

@@ -159,8 +159,8 @@
   function lookCard(showroom, look, { manage }) {
     const card = el('article', { className: 'od-look-card' });
     const figure = el('div', { className: 'od-look-figure' });
-    if (look.imageUri) {
-      const image = el('img', { src: look.imageUri, alt: title(look), loading: 'lazy', decoding: 'async' });
+    if (look.imageUri && imageSource(look.imageUri)) {
+      const image = el('img', { src: imageSource(look.imageUri), alt: title(look), loading: 'lazy', decoding: 'async' });
       // A link that does not load must not leave a broken icon in the middle of a presentation.
       image.addEventListener('error', () => { if (figure.isConnected) figure.replaceChildren(el('span', { className: 'od-look-placeholder', rawText: String(look.position) })); }, { once: true });
       figure.append(image);

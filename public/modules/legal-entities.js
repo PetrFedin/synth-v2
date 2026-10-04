@@ -21,8 +21,23 @@ function loadLegalEntities(organisationId) {
   legalEntityState.loading[organisationId] = true;
   api(`/v2/organisations/${encodeURIComponent(organisationId)}/legal-entities`)
     .then((value) => { legalEntityState.data[organisationId] = value; })
-    .catch(() => { legalEntityState.failed[organisationId] = true; })
+    .catch((problem) => {
+      legalEntityState.failed[organisationId] = true;
+      if (problem?.forbidden) (legalEntityState.denied || (legalEntityState.denied = {}))[organisationId] = true;
+    })
     .finally(() => { legalEntityState.loading[organisationId] = false; if (state.view === 'partners') renderApp(); });
+}
+
+/**
+ * Закрыта ли вкладка для читателя целиком: нет организаций, которыми он вправе управлять, или сервер
+ * отказал по каждой. Пустая таблица на этом месте читалась как «юрлиц нет» — а на деле их не
+ * показывают.
+ */
+function legalEntitiesDenied() {
+  const owned = legalEntityManageableOrganisations();
+  if (!owned.length) return true;
+  const denied = legalEntityState.denied || {};
+  return owned.every((org) => denied[org.id]);
 }
 
 /** Flattened rows across every organisation the actor may manage, triggering the lazy loads as a side effect. */

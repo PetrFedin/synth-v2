@@ -604,6 +604,8 @@
     try {
       const parsed = new URL(raw, global.location.origin);
       if (!['http:', 'https:'].includes(parsed.protocol)) return '';
+      // Страница вправе загружать только свой origin: внешний адрес CSP заблокирует.
+      if (typeof imageSource === 'function' && !imageSource(parsed.href)) return '';
       return parsed.href;
     } catch { return ''; }
   }
@@ -1126,15 +1128,30 @@
 
   function resetForCollection(collectionId) {
     LS.collectionId = collectionId; LS.selectedId = ''; LS.items = []; LS.nextCursor = null;
-    LS.loadedCollectionId = ''; LS.loading = false; LS.loadingMore = false; LS.error = ''; LS.requestToken += 1;
+    LS.loadedCollectionId = ''; LS.loading = false; LS.loadingMore = false; LS.error = ''; LS.forbidden = false; LS.requestToken += 1;
+  }
+
+  // Публикации читает тот, у кого в бренде коллекции есть право на сделки. Остальным роли сервер
+  // отвечал отказом, и экран предлагал «Повторить» там, где повторять нечего. Теперь ответ
+  // известен заранее: запрос не уходит, а экран говорит, что раздел закрыт для роли.
+  function canReadPublications() {
+    const caps = global.SynthaUiCapabilities;
+    const collection = collectionById(LS.collectionId);
+    if (!caps?.hasForOrganisation || !collection) return true;
+    return caps.hasForOrganisation(workspace(), collection.brandId, caps.CAPABILITIES.DEAL_READ);
+  }
+
+  function deniedPanel() {
+    return statePanel('ls9-empty ls9-denied', text('Нет доступа', 'No access'), text('Нет доступа к этому разделу для вашей роли', 'Your role has no access to this section'));
   }
 
   async function loadPublications({ append = false } = {}) {
     const collectionId = value(LS.collectionId);
     if (!collectionId || LS.loading || LS.loadingMore) return;
+    if (!canReadPublications()) { LS.loadedCollectionId = collectionId; LS.items = []; return; }
     const requestToken = ++LS.requestToken;
     if (append) LS.loadingMore = true; else LS.loading = true;
-    LS.error = '';
+    LS.error = ''; LS.forbidden = false;
     try {
       const cursor = append && LS.nextCursor ? `&cursor=${encodeURIComponent(LS.nextCursor)}` : '';
       const page = await api(`/v2/collections/${encodeURIComponent(collectionId)}/commercial-publications?limit=50${cursor}`);
@@ -1146,6 +1163,7 @@
       if (!LS.selectedId || !LS.items.some(item => item.id === LS.selectedId)) LS.selectedId = LS.items[0]?.id || '';
     } catch (error) {
       if (requestToken !== LS.requestToken || collectionId !== LS.collectionId) return;
+      LS.forbidden = Boolean(error?.forbidden);
       LS.error = value(error?.message) || text('Не удалось загрузить опубликованные листы.', 'Could not load published linesheets.');
       LS.loadedCollectionId = collectionId;
       if (!append) LS.items = [];
@@ -1287,6 +1305,7 @@
 
   function registryContent() {
     if (!collections().length) return statePanel('ls9-empty', text('Нет доступных коллекций', 'No collections available'), text('Сначала создайте или откройте коллекцию. Раздел листов не создаёт демонстрационные коммерческие данные.', 'Create or open a collection first. Linesheets does not create demonstration commercial data.'));
+    if (!canReadPublications() || LS.forbidden) return deniedPanel();
     if (LS.loading && !LS.items.length) return statePanel('ls9-loading', text('Загрузка опубликованных листов…', 'Loading published linesheets...'), text('Получаем неизменяемые коммерческие снимки из серверного реестра.', 'Fetching immutable commercial snapshots from the server registry.'));
     if (LS.error && !LS.items.length) {
       const retry = el('button', { className: 'button', type: 'button', rawText: text('Повторить', 'Retry') });

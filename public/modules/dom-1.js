@@ -105,6 +105,26 @@ function sectionCard(title, children, buttonLabel, onButton, pagingSection) {
   return card;
 }
 
+// Адрес картинки, который страница вправе загружать. Политика безопасности разрешает только
+// собственный origin и data: (`img-src 'self' data:`), а демо-данные и введённые людьми ссылки
+// указывают наружу: браузер блокировал каждую, и консоль заполнялась нарушениями, а на экране
+// оставался значок битой картинки. Политику не ослабляем — внешний адрес просто не загружается, и
+// вместо картинки показывается заглушка. Пустая строка означает «загружать нечего».
+function imageSource(uri) {
+  const raw = String(uri ?? '').trim();
+  if (!raw) return '';
+  if (/^data:image\//i.test(raw)) return raw;
+  try {
+    const parsed = new URL(raw, window.location.origin);
+    return ['http:', 'https:'].includes(parsed.protocol) && parsed.origin === window.location.origin ? parsed.href : '';
+  } catch { return ''; }
+}
+
+function imagePlaceholder(caption) {
+  const text = localText('Изображение недоступно', 'Image unavailable');
+  return el('span', { className: 'image-placeholder muted', rawText: text, title: caption || undefined });
+}
+
 function toolbar(title, buttonLabel, action) {
   const bar = el('div', { className: 'toolbar view-toolbar' });
   const copy = el('div', { className: 'view-toolbar-copy' });
@@ -205,6 +225,11 @@ function notice(text, type = '') {
   if (type === 'error' && typeof SynthaErrorMessages !== 'undefined') text = SynthaErrorMessages.humanise(text);
   const kind = type === 'error' && isForbiddenText(text) ? 'denied' : type;
   return el('div', { className: `notice ${kind}`.trim(), text });
+}
+// Раздел существует и закрыт для роли — это не пустота и не сбой: ни пустого списка, ни кнопки
+// «Повторить», а одна фраза о том, что произошло.
+function noAccessNotice() {
+  return el('div', { className: 'notice denied', rawText: I18N.t('common.noSectionAccess') });
 }
 function empty(text) { return el('div', { className: 'empty', text }); }
 function dialogHost() { return el('dialog', { id: 'form-dialog' }); }

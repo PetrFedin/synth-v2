@@ -133,9 +133,33 @@
     return node;
   }
 
+  // Куда «Перейти» приводит на самом деле. Раньше экран открывался с той же выбранной строкой, что
+  // была до этого, и человек искал нужное дело глазами среди остальных, хотя сервер в `route` уже
+  // называет сущность. Выбирается она там, где реестр экрана ключуется самим идентификатором
+  // сущности; для остальных видов открывается экран, как и прежде, — подставлять чужой ключ
+  // значило бы выбрать несуществующую строку.
+  const ENTITY_TARGETS = Object.freeze({
+    orders: Object.freeze({ scope: 'od-orders', tab: 'orders' }),
+    selections: Object.freeze({ scope: 'od-selections' }),
+  });
+
   function open(item) {
-    state.view = item.route.view;
+    const view = item.route.view;
+    const target = ENTITY_TARGETS[view];
+    if (target && item.route.entityId && typeof OD_UI !== 'undefined') {
+      OD_UI.selected[target.scope] = item.route.entityId;
+      if (target.tab) OD_UI.tabs[view] = target.tab;
+    }
+    state.view = view;
     renderApp();
+  }
+
+  // Сервер подписывает дело идентификатором, когда у сущности нет имени: `order_<uuid>` не читается.
+  // Тот же короткий номер, которым этот заказ называется на своём экране, — ORD-XXXXXXXX.
+  function labelOf(item) {
+    const label = String(item.label ?? '');
+    if (label && label === String(item.entityId) && typeof objectReference === 'function') return objectReference(label);
+    return label;
   }
 
   function refreshButton() {
@@ -171,14 +195,14 @@
     go.addEventListener('click', () => open(item));
     const rows = [
       [text('Что сделать', 'What to do'), text(item.titleRu, item.titleEn)],
-      [text('Объект', 'Object'), item.label],
+      [text('Объект', 'Object'), labelOf(item)],
       [text('Ждёт', 'Waiting'), `${ageLabel(item.ageSeconds)} · ${formatDate(item.waitingSince)}`],
     ];
     const detail = detailLine(item);
     if (detail) rows.push([text('Подробности', 'Details'), detail]);
     if (item.dueAt) rows.push([text('Срок', 'Due'), `${formatDate(item.dueAt)} · ${dueLabel(item)}`]);
     return odInspector({
-      title: item.label,
+      title: labelOf(item),
       subtitle: text(item.titleRu, item.titleEn),
       status: item.overdue ? 'overdue' : '',
       content: [odMiniTable([text('Условие', 'Term'), text('Значение', 'Value')], rows)],
@@ -217,7 +241,7 @@
       statusAccessor: (item) => (item.overdue ? 'overdue' : 'open'),
       columns: [
         { key: 'what', label: text('Что сделать', 'What to do'), value: (item) => text(item.titleRu, item.titleEn) },
-        { key: 'object', label: text('Объект', 'Object'), value: (item) => item.label },
+        { key: 'object', label: text('Объект', 'Object'), value: (item) => labelOf(item) },
         { key: 'detail', label: text('Подробности', 'Details'), value: detailLine },
         { key: 'age', label: text('Ждёт', 'Waiting'), value: (item) => ageLabel(item.ageSeconds) },
         { key: 'due', label: text('Срок', 'Due'), value: (item) => dueLabel(item) || '—' },
@@ -284,6 +308,18 @@
     }
     return result;
   };
+
+  // Заголовок и путь страницы берутся из таблицы пунктов навигации, а этого экрана в ней нет: его
+  // кнопку дорисовывает сам этот модуль уже после того, как страница собрана, — поэтому на
+  // заглавном месте стояло «Обзор», запасное имя для любого неизвестного вида.
+  if (typeof viewTitle === 'function') {
+    const previousViewTitle = viewTitle;
+    viewTitle = (view) => (view === VIEW ? text('Ждёт вас', 'Awaiting you') : previousViewTitle(view));
+  }
+  if (typeof viewSectionName === 'function') {
+    const previousViewSectionName = viewSectionName;
+    viewSectionName = (view) => (view === VIEW ? text('Операционное управление', 'Operations') : previousViewSectionName(view));
+  }
 
   const previousRenderView = renderView;
   renderView = (...args) => (state.view === VIEW ? renderScreen() : previousRenderView(...args));

@@ -45,7 +45,13 @@ function loadComplianceDocuments(organisationId) {
 /** Flattened rows across every organisation the actor may see, triggering the lazy loads as a side effect. */
 function complianceDocumentRows() {
   const owned = complianceDocumentManageableOrganisations();
-  owned.forEach((org) => { loadComplianceDocuments(org.id); loadLegalEntities(org.id); });
+  // Реквизиты юрлиц читает только тот, кто управляет организацией; остальным запрос — гарантированный
+  // отказ, и названий они всё равно не получат, поэтому не спрашивают.
+  const caps = window.SynthaUiCapabilities;
+  owned.forEach((org) => {
+    loadComplianceDocuments(org.id);
+    if (caps.hasForOrganisation(state.workspace, org.id, caps.CAPABILITIES.ORGANISATION_MANAGE)) loadLegalEntities(org.id);
+  });
   return owned.flatMap((org) => (complianceDocumentState.data[org.id] || []).map((item) => ({ ...item, orgName: org.name || org.id })));
 }
 
@@ -55,7 +61,14 @@ function complianceDocumentTypeName(documentType) {
 
 function legalEntityLabel(organisationId, legalEntityId) {
   const entity = (legalEntityState.data[organisationId] || []).find((item) => item.id === legalEntityId);
-  return entity ? `${entity.entityCode} (${entity.latestVersion?.nameRu || '—'})` : legalEntityId;
+  if (entity) return `${entity.entityCode} (${entity.latestVersion?.nameRu || '—'})`;
+  // Названия нет, когда у читателя нет права читать реквизиты. Сырой идентификатор
+  // (`legal-entity_<uuid>`) в колонке эмитента ничего не говорит: «Юрлицо» и короткий код, по
+  // которому его можно найти.
+  const id = String(legalEntityId ?? '');
+  if (!id) return '—';
+  const shortCode = id.replace(/^[a-z-]+_/i, '').replace(/-/g, '').slice(0, 6).toUpperCase();
+  return `${localText('Юрлицо', 'Legal entity')} ${shortCode}`;
 }
 
 function complianceDocumentInvalidate(item) {

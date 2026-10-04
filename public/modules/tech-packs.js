@@ -264,7 +264,7 @@
       const roleLabel = SKETCH_ROLE_LABELS[sketch.mediaRole];
       const caption = sketch.viewLabel || (roleLabel ? bilingual(roleLabel[0], roleLabel[1]) : sketch.mediaRole);
       return h('figure', { className: 'tp-doc-sketch' }, [
-        h('img', { src: sketch.uri, alt: caption, loading: 'lazy' }),
+        imageSource(sketch.uri) ? h('img', { src: imageSource(sketch.uri), alt: caption, loading: 'lazy' }) : imagePlaceholder(sketch.uri),
         h('figcaption', { text: caption }),
       ]);
     }));

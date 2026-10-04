@@ -29,7 +29,7 @@ test('it offers a badge in the top bar and the navigation, a type filter and a l
   assert.match(script, /topbar-actions/);
   assert.match(script, /\.sidebar \.nav/);
   assert.match(script, /typeFilter/);
-  assert.match(script, /state\.view = item\.route\.view/);
+  assert.match(script, /const view = item\.route\.view;[\s\S]{0,400}state\.view = view;/);
   assert.match(script, /OD_UI\.tabs\['awaiting-action'\]/, 'family tabs');
 });
 

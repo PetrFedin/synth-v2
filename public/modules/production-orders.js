@@ -44,7 +44,7 @@ function targetPanel(order){
   children.push(h('p',{className:'muted',text:t(
     `Коэффициенты ${decimal(target.countryCoefficient)} (страна${target.sourcingCountryCode?' '+target.sourcingCountryCode:''}) × ${decimal(target.categoryCoefficient)} (категория), курс ${decimal(target.fxRate)} на ${date(target.fxEffectiveOn)}`,
     `Coefficients ${decimal(target.countryCoefficient)} (country${target.sourcingCountryCode?' '+target.sourcingCountryCode:''}) × ${decimal(target.categoryCoefficient)} (category), rate ${decimal(target.fxRate)} of ${date(target.fxEffectiveOn)}`)}));
-  children.push(h('div',{className:'production-orders-milestone'},[
+  children.push(h('div',{className:'production-orders-payment'},[
     h('strong',{text:t(`Можно платить: ${money(target.targetFobMinor,target.fobCurrency)}`,`We may pay ${money(target.targetFobMinor,target.fobCurrency)}`)}),
     h('p',{className:'muted',text:target.quotedFobMinor===null
       ? t('Фабрика цену ещё не называла.','The factory has not quoted yet.')
@@ -173,15 +173,25 @@ function paymentsPanel(order){
     `Paid ${money(schedule.paidAmountMinor,schedule.currency)}, due ${money(schedule.dueAmountMinor,schedule.currency)}, not yet due ${money(schedule.plannedAmountMinor,schedule.currency)}. Terms ${schedule.paymentTermsDays} days.`)}));
   if(schedule.overdueAmountMinor>0)children.push(h('p',{className:'production-orders-warn',text:t(`Просрочено ${money(schedule.overdueAmountMinor,schedule.currency)}.`,`Overdue ${money(schedule.overdueAmountMinor,schedule.currency)}.`)}));
   for(const milestone of schedule.milestones){
+    // Карточка вехи — на всю ширину блока, одна колонка: название слева и сумма справа в шапке, под
+    // ней доля и событие, затем статус и срок. Класс не называется «milestone»: эвристика дизайн-системы
+    // принимает такое имя за элемент временной шкалы и сажает заголовок в 24-пиксельную колонку.
+    const share=`${I18N.formatNumber(milestone.shareBasisPoints/100,{minimumFractionDigits:milestone.shareBasisPoints%100?2:0,maximumFractionDigits:milestone.shareBasisPoints%100?2:0})} %`;
     const lines=[
-      h('strong',{text:`${t(milestone.labelRu,milestone.labelEn)} — ${money(milestone.amountMinor,schedule.currency)}`}),
-      h('p',{className:'muted',text:`${I18N.formatNumber(milestone.shareBasisPoints/100,{minimumFractionDigits:milestone.shareBasisPoints%100?2:0,maximumFractionDigits:milestone.shareBasisPoints%100?2:0})} % · ${paymentTriggerLabel(milestone.triggerEvent)} · ${paymentStatusLabel(milestone.status)}`}),
+      h('div',{className:'production-orders-payment-head'},[
+        h('strong',{className:'production-orders-payment-title',text:t(milestone.labelRu,milestone.labelEn)}),
+        h('span',{className:'production-orders-payment-amount',text:money(milestone.amountMinor,schedule.currency)}),
+      ]),
+      h('p',{className:'muted',text:`${t('Доля','Share')} ${share} · ${paymentTriggerLabel(milestone.triggerEvent)}`}),
+      h('div',{className:'production-orders-payment-meta'},[
+        h('span',{className:`badge ${milestone.status}`,text:paymentStatusLabel(milestone.status)}),
+        // У вехи, чьё событие не произошло, даты нет вовсе — предлагать её значило бы звать заплатить.
+        h('small',{text:milestone.dueAt?t(`Срок ${date(milestone.dueAt)}`,`Due ${date(milestone.dueAt)}`):t('Событие ещё не произошло','The event has not happened yet')}),
+      ]),
     ];
-    // У вехи, чьё событие не произошло, даты нет вовсе — предлагать её значило бы звать заплатить.
-    lines.push(h('p',{className:'muted',text:milestone.dueAt?t(`Срок ${date(milestone.dueAt)}`,`Due ${date(milestone.dueAt)}`):t('Событие ещё не произошло','The event has not happened yet')}));
     if(milestone.paidAt)lines.push(h('p',{className:'muted',text:`${t('Оплачено','Paid')} ${date(milestone.paidAt)} · ${milestone.paymentReference}`}));
     else if(manage&&(milestone.status==='due'||milestone.status==='overdue'))lines.push(h('button',{className:'primary',text:t('Зафиксировать платёж','Record payment'),disabled:ui.busy,onclick:()=>void payMilestone(order,milestone)}));
-    children.push(h('div',{className:`production-orders-milestone ${milestone.status}`},lines));
+    children.push(h('div',{className:`production-orders-payment ${milestone.status}`},lines));
   }
   if(manage&&schedule.milestones.some(m=>!m.paidAt&&(m.status==='due'||m.status==='overdue')))children.push(h('input',{value:ui.paymentReference,placeholder:t('Платёжный документ','Payment reference'),oninput:e=>{ui.paymentReference=e.target.value}}));
   return h('section',{className:'production-orders-card'},children);

@@ -53,6 +53,19 @@
     return text('срок: ', 'due: ') + new Intl.DateTimeFormat(I18N.localeTag(), { day: '2-digit', month: 'short', year: 'numeric' }).format(date);
   }
 
+  // «Документ соответствия» — подпись для любого из трёх видов, а вид в данных есть: УПД, декларация
+  // и сертификат ждут проверки и выпуска каждый под своим названием. Чужой или пустой вид оставляет
+  // подпись сервера.
+  const COMPLIANCE_DOCUMENT_TITLES = {
+    upd: ['УПД — черновик ждёт проверки и выпуска', 'UPD draft awaits review and issue'],
+    eaeu_declaration_of_conformity: ['Декларация соответствия ЕАЭС — черновик ждёт проверки и выпуска', 'EAEU declaration of conformity draft awaits review and issue'],
+    eaeu_certificate_of_conformity: ['Сертификат соответствия ЕАЭС — черновик ждёт проверки и выпуска', 'EAEU certificate of conformity draft awaits review and issue'],
+  };
+  function itemTitle(item) {
+    const typed = item?.type === 'compliance-document-issue' ? COMPLIANCE_DOCUMENT_TITLES[item.detail?.documentType] : null;
+    return typed ? text(typed[0], typed[1]) : text(item.titleRu, item.titleEn);
+  }
+
   function detailLine(item) {
     const detail = item.detail || {};
     const parts = [];
@@ -248,7 +261,7 @@
     const go = el('button', { className: 'button primary', type: 'button', rawText: text('Перейти', 'Open') });
     go.addEventListener('click', () => open(item));
     const rows = [
-      [text('Что сделать', 'What to do'), text(item.titleRu, item.titleEn)],
+      [text('Что сделать', 'What to do'), itemTitle(item)],
       [text('Объект', 'Object'), labelOf(item)],
       [text('Ждёт', 'Waiting'), `${ageLabel(item.ageSeconds)} · ${formatDate(item.waitingSince)}`],
     ];
@@ -257,7 +270,7 @@
     if (item.dueAt) rows.push([text('Срок', 'Due'), `${formatDate(item.dueAt)} · ${dueLabel(item)}`]);
     return odInspector({
       title: labelOf(item),
-      subtitle: text(item.titleRu, item.titleEn),
+      subtitle: itemTitle(item),
       status: item.overdue ? 'overdue' : '',
       content: [odMiniTable([text('Условие', 'Term'), text('Значение', 'Value')], rows)],
       actions: [go],
@@ -298,7 +311,7 @@
       rowKey: (item) => `${item.type}|${item.entityId}|${item.organisationId}`,
       statusAccessor: (item) => (item.overdue ? 'overdue' : 'open'),
       columns: [
-        { key: 'what', label: text('Что сделать', 'What to do'), value: (item) => text(item.titleRu, item.titleEn) },
+        { key: 'what', label: text('Что сделать', 'What to do'), value: (item) => itemTitle(item) },
         { key: 'object', label: text('Объект', 'Object'), value: (item) => labelOf(item) },
         { key: 'detail', label: text('Подробности', 'Details'), value: detailLine },
         { key: 'age', label: text('Ждёт', 'Waiting'), value: (item) => ageLabel(item.ageSeconds) },

@@ -191,8 +191,17 @@ function notificationBody(item){
 // The same rule applied inside a sentence somebody else wrote. Calendar events and notifications carry
 // server-written titles such as "Deal opened for order_8c22a11c-…", and the identifier in the middle of
 // them is the part nobody can read.
+// Фразы, которые сервер пишет по-английски в заголовок события (`platform.mjs`), переводятся здесь по
+// их образцу: клиент знает язык читателя, сервер — нет. Фраза без образца остаётся как есть.
+const SERVER_TITLES=[[/^Deal opened for (.+)$/,'\u0421\u0434\u0435\u043b\u043a\u0430 \u043e\u0442\u043a\u0440\u044b\u0442\u0430 \u043f\u043e \u0437\u0430\u043a\u0430\u0437\u0443 $1']];
+function localiseServerTitle(value){
+  const text=String(value??'');
+  if(I18N.getLocale()==='en')return text;
+  for(const [pattern,russian] of SERVER_TITLES)if(pattern.test(text))return text.replace(pattern,russian);
+  return text;
+}
 function humaniseIdentifiers(value){
-  return String(value??'').replace(/\b(order|selection|deal|cycle|showroom|invitation)_[0-9a-f-]{8,}\b/gi,(match)=>objectReference(match));
+  return localiseServerTitle(value).replace(/\b(order|selection|deal|cycle|showroom|invitation)_[0-9a-f-]{8,}\b/gi,(match)=>objectReference(match));
 }
 function stageLabel(value){const key=`stage.${value}`;const translated=I18N.t(key);return translated===key?String(value||'\u2014'):translated;}
 function viewTitle(view){const item=NAV.find(([id])=>id===view);return item?I18N.t(item[1]):I18N.t('nav.overview');}

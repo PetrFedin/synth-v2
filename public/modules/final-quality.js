@@ -45,7 +45,7 @@
       'review-pending': ['Ожидает решения', 'Review pending'], 'rework-required': ['Требуется доработка', 'Rework required'],
       released: ['Разрешена отгрузка', 'Shipment released'], rejected: ['Партия отклонена', 'Rejected'], cancelled: ['Отменено', 'Cancelled'],
     };
-    return labels[status] ? t(...labels[status]) : statusLabel(status);
+    return labels[status] ? t(...labels[status]) : global.statusLabel(status);
   }
   function recommendationLabel(value) {
     const labels = { pass: ['Соответствует', 'Pass'], rework: ['Доработка', 'Rework'], reject: ['Отклонить', 'Reject'] };
@@ -351,7 +351,7 @@
       // the run left the active screen.
       run.defects?.length ? h('p', { className: 'muted', text: `${t('Дефекты', 'Defects')}: ${run.defects.map((defect) => `${defect.defectCode} ×${defect.quantity} — ${defect.description}`).join('; ')}` }) : null,
       run.measurementFailures?.length ? h('p', { className: 'muted', text: `${t('Отклонения измерений', 'Measurement failures')}: ${run.measurementFailures.map((failure) => `${failure.pointCode}/${failure.sizeCode} ${failure.measuredValue} (${failure.lowerLimit}–${failure.upperLimit})`).join('; ')}` }) : null,
-      run.checkpoints?.length ? h('p', { className: 'muted', text: `${t('Контрольные точки', 'Checkpoints')}: ${run.checkpoints.map((checkpoint) => `${checkpoint.name}: ${checkpoint.result}`).join(', ')}` }) : null,
+      run.checkpoints?.length ? h('p', { className: 'muted', text: `${t('Контрольные точки', 'Checkpoints')}: ${run.checkpoints.map((checkpoint) => `${checkpoint.name}: ${statusLabel(checkpoint.result)}`).join(', ')}` }) : null,
       run.evidenceReferences?.length ? h('p', { className: 'muted', text: `${t('Доказательства', 'Evidence')}: ${run.evidenceReferences.join(', ')}` }) : null,
       run.recommendation ? h('p', { className: 'muted', text: `${t('Рекомендация', 'Recommendation')}: ${recommendationLabel(run.recommendation)}` }) : null,
       run.completionNotes ? h('p', { className: 'muted', text: `${t('Комментарий инспектора', 'Inspector notes')}: ${run.completionNotes}` }) : null,
@@ -372,7 +372,7 @@
     'assembly-complete': ['Пошив завершён', 'Assembly complete'],
     'finishing-complete': ['Отделка завершена', 'Finishing complete'],
     'packing-complete': ['Упаковка завершена', 'Packing complete'],
-    'ready-for-qc': ['Готово к QC', 'Ready for QC'],
+    'ready-for-qc': ['Готово к контролю качества', 'Ready for QC'],
   };
   function inlineMilestoneLabel(code) { const pair = INLINE_MILESTONE_LABELS[code]; return pair ? t(pair[0], pair[1]) : code; }
   // Брак, накопленный инлайн-контролем по этому же исполнению, — только для чтения рядом с решением
@@ -398,7 +398,7 @@
     if (!value) return h('aside', { className: 'final-quality-inspector' }, [h('p', { className: 'muted', text: t('Выберите инспекцию.', 'Select an inspection.') })]);
     const manage = can(value.brandId, caps.CAPABILITIES.QUALITY_MANAGE); const approve = can(value.brandId, caps.CAPABILITIES.QUALITY_APPROVE); const actions = core.allowedActions(value, { canManage: manage, canApprove: approve });
     const children = [h('div', { className: 'final-quality-inspector-head' }, [h('div', {}, [h('p', { className: 'eyebrow', text: value.inspectionCode }), h('h2', { text: statusLabel(value.status) })]), value.shipmentRelease ? h('span', { className: 'final-quality-release', text: value.shipmentRelease.releaseCode }) : null]),
-      h('dl', { className: 'final-quality-facts' }, [pair(t('Исполнение', 'Execution'), value.executionCode), pair('PO', value.productionOrderNumber), pair('SKU', value.sku), pair(t('Фабрика', 'Supplier'), value.supplierCode), pair(t('Партия', 'Lot quantity'), value.quantity), pair(t('Техпак', 'Tech Pack'), `${value.sourceSnapshot.techPackCode} · v${value.sourceSnapshot.techPackVersion}`), pair(t('Готово к QC', 'Ready for QC'), date(value.sourceSnapshot.readyForQcAt)), pair(t('Версия исполнения', 'Execution version'), value.sourceSnapshot.executionVersion)]),
+      h('dl', { className: 'final-quality-facts' }, [pair(t('Исполнение', 'Execution'), value.executionCode), pair('PO', value.productionOrderNumber), pair('SKU', value.sku), pair(t('Фабрика', 'Supplier'), value.supplierCode), pair(t('Партия', 'Lot quantity'), value.quantity), pair(t('Техпак', 'Tech Pack'), `${value.sourceSnapshot.techPackCode} · v${value.sourceSnapshot.techPackVersion}`), pair(t('Готово к контролю качества', 'Ready for QC'), date(value.sourceSnapshot.readyForQcAt)), pair(t('Версия исполнения', 'Execution version'), value.sourceSnapshot.executionVersion)]),
       h('section', { className: 'final-quality-card' }, [h('h3', { text: t('История инспекций', 'Inspection history') }), runHistory(value)]),
       inlineDefectHistoryPanel(value),
     ];

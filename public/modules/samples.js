@@ -44,6 +44,15 @@
     const pair = labels[status];
     return pair ? text(pair[0], pair[1]) : statusLabel(status);
   }
+  // Состояние при приёмке — не статус образца, но подписывается тем же словарём: одной формой для
+  // диалога приёмки и для карточки, чтобы в карточке не оставался сырой код «accepted».
+  const CONDITION_LABELS = {
+    accepted: ['Принят', 'Accepted'], damaged: ['Повреждён', 'Damaged'], incomplete: ['Неполная комплектация', 'Incomplete'],
+  };
+  function labelCondition(condition) {
+    const pair = CONDITION_LABELS[condition];
+    return pair ? text(pair[0], pair[1]) : statusLabel(condition);
+  }
   function labelType(type) {
     const labels = { proto: ['Прототип', 'Proto'], fit: ['Примерочный', 'Fit'], 'size-set': ['Размерный ряд', 'Size set'], 'pre-production': ['Предсерийный', 'Pre-production'], sales: ['Продажный', 'Sales'], photo: ['Фото', 'Photo'] };
     const pair = labels[type] || [type, type];
@@ -235,7 +244,7 @@
         pair(text('Количество', 'Quantity'), String(sample.quantity)), pair(text('Размеры', 'Sizes'), (sample.sizeCodes || []).join(', ')), pair(text('Цвет', 'Colourway'), sample.colourway || '—'),
         pair(text('Версия', 'Version'), String(sample.version)), pair('SKU version', `${sample.skuVersion}${assessment.stale && sku ? ` → ${sku.version}` : ''}`), pair(text('Предыдущий раунд', 'Source round'), sample.sourceSampleCode || '—'),
       ]),
-      sample.receipt ? h('section', { className: 'sample-detail-card' }, [h('h3', { text: text('Приёмка', 'Receipt') }), h('p', { text: `${sample.receipt.receivedQuantity} · ${sample.receipt.condition}` }), h('p', { className: 'muted', text: sample.receipt.notes || sample.receipt.trackingReference || '—' })]) : null,
+      sample.receipt ? h('section', { className: 'sample-detail-card' }, [h('h3', { text: text('Приёмка', 'Receipt') }), h('p', { text: `${sample.receipt.receivedQuantity} ${text('шт.', 'pcs')} · ${labelCondition(sample.receipt.condition)}` }), h('p', { className: 'muted', text: sample.receipt.notes || sample.receipt.trackingReference || '—' })]) : null,
       sample.decision ? h('section', { className: 'sample-detail-card' }, [h('h3', { text: text('Решение', 'Decision') }), h('p', { text: labelStatus(sample.decision.outcome) }), h('p', { className: 'muted', text: sample.decision.notes || '—' })]) : null,
       sample.cancellationReason ? h('section', { className: 'sample-detail-card' }, [h('h3', { text: text('Причина отмены', 'Cancellation reason') }), h('p', { className: 'muted', text: sample.cancellationReason })]) : null,
       sample.notes ? h('section', { className: 'sample-detail-card' }, [h('h3', { text: text('Комментарий', 'Notes') }), h('p', { className: 'muted', text: sample.notes })]) : null,
@@ -315,7 +324,7 @@
     await runMutation(sample.sampleCode, `/v2/samples/${encodeURIComponent(sample.sampleCode)}/${path}`, { expectedVersion: sample.version });
   }
   function openReceiptDialog(sample) {
-    dialog(text('Приёмка образца', 'Receive sample'), [field(text('Получено, шт.', 'Received quantity'), input('receivedQuantity', 'number', sample.quantity, { min: '1', max: '100', required: true })), field(text('Состояние', 'Condition'), select('condition', [['accepted', text('Принят', 'Accepted')], ['damaged', text('Повреждён', 'Damaged')], ['incomplete', text('Неполная комплектация', 'Incomplete')]], 'accepted')), field(text('Трекинг', 'Tracking'), input('trackingReference', 'text', '', { maxlength: '120' })), field(text('Комментарий', 'Notes'), textarea('notes', '', { maxlength: '1000', rows: '4' }))], async (values) => Boolean(await runMutation(sample.sampleCode, `/v2/samples/${encodeURIComponent(sample.sampleCode)}/receive`, { expectedVersion: sample.version, receivedQuantity: Number(values.receivedQuantity), condition: values.condition, trackingReference: values.trackingReference || null, notes: values.notes || null })));
+    dialog(text('Приёмка образца', 'Receive sample'), [field(text('Получено, шт.', 'Received quantity'), input('receivedQuantity', 'number', sample.quantity, { min: '1', max: '100', required: true })), field(text('Состояние', 'Condition'), select('condition', Object.keys(CONDITION_LABELS).map((code) => [code, labelCondition(code)]), 'accepted')), field(text('Трекинг', 'Tracking'), input('trackingReference', 'text', '', { maxlength: '120' })), field(text('Комментарий', 'Notes'), textarea('notes', '', { maxlength: '1000', rows: '4' }))], async (values) => Boolean(await runMutation(sample.sampleCode, `/v2/samples/${encodeURIComponent(sample.sampleCode)}/receive`, { expectedVersion: sample.version, receivedQuantity: Number(values.receivedQuantity), condition: values.condition, trackingReference: values.trackingReference || null, notes: values.notes || null })));
   }
   function openDecisionDialog(sample, decision) {
     dialog(decision === 'approved' ? text('Одобрить образец', 'Approve sample') : text('Отклонить образец', 'Reject sample'), [field(text('Комментарий к решению', 'Decision notes'), textarea('notes', '', { maxlength: '2000', rows: '5', ...(decision === 'rejected' ? { required: true } : {}) }))], async (values) => Boolean(await runMutation(sample.sampleCode, `/v2/samples/${encodeURIComponent(sample.sampleCode)}/decision`, { expectedVersion: sample.version, decision, notes: values.notes || null })), decision === 'approved' ? text('Одобрить', 'Approve') : text('Отклонить', 'Reject'));

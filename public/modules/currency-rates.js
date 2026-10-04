@@ -49,7 +49,7 @@
 
   function formatDate(value) { if (!value) return '—'; const date = new Date(value); return Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat(I18N.localeTag(), { day: '2-digit', month: 'short', year: 'numeric' }).format(date) : '—'; }
   function formatRate(value) { return I18N.formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 4 }); }
-  function badge(label, tone = 'neutral') { return h('span', { className: `sourcing-badge sourcing-${tone}`, text: label }); }
+  function badge(label, tone = 'neutral') { return h('span', { className: `sourcing-badge sourcing-${tone === 'warning' ? 'caution' : tone}`, text: label }); }
   function control(name, type, value, attrs = {}) { return h('input', { name, type, value: value ?? '', ...attrs }); }
   function textarea(name, value, attrs = {}) { return h('textarea', { name, text: value || '', ...attrs }); }
   function select(name, options, value, attrs = {}) { const node = h('select', { name, ...attrs }, options.map(([key, label]) => h('option', { value: key, text: label }))); node.value = value ?? options[0]?.[0] ?? ''; return node; }

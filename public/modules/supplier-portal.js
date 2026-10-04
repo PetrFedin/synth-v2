@@ -226,9 +226,13 @@
 
   function openQuoteForm(item) {
     const own = item.ownQuote;
+    // Котировка своей валюты не несёт: все суммы — в валюте запроса. Валюта стоит в подписи поля и в
+    // итоге ниже, до отправки, а не появляется только в карточке после неё.
+    const currency = typeof item.currency === 'string' && item.currency ? item.currency.toUpperCase() : '';
+    const inCurrency = (ru, en) => (currency ? `${text(ru, en)}, ${currency}` : text(ru, en));
     openForm(own ? text('Обновить котировку', 'Revise quotation') : text('Отправить котировку', 'Submit quotation'), [
-      textDef('unitPrice', text('Цена за единицу', 'Unit price'), minorToInput(own?.unitPriceMinor), 20),
-      textDef('fixedCost', text('Постоянные затраты', 'Fixed cost'), own ? minorToInput(own.fixedCostMinor) : '0', 20),
+      textDef('unitPrice', inCurrency('Цена за единицу', 'Unit price'), minorToInput(own?.unitPriceMinor), 20),
+      textDef('fixedCost', inCurrency('Постоянные затраты', 'Fixed cost'), own ? minorToInput(own.fixedCostMinor) : '0', 20),
       numberDef('leadTimeDays', text('Срок производства, дней', 'Lead time, days'), own?.leadTimeDays ?? '', true, 1, 730),
       numberDef('minimumOrderQuantity', text('Минимальная партия', 'Minimum order'), own?.minimumOrderQuantity ?? '', true, 1),
       dateTimeDef('validUntil', text('Действует до', 'Valid until'), localInput(own?.validUntil || new Date(Date.now() + 21 * 86400000).toISOString())),
@@ -246,6 +250,34 @@
         tiers: [],
       });
     });
+    attachQuoteTotal(item, currency);
+  }
+
+  // Итог по котировке до отправки: цена × количество запроса + постоянные затраты, в валюте запроса.
+  // Форма принадлежит общему диалогу, поэтому строка добавляется в уже построенную форму и
+  // пересчитывается по вводу; при неверной сумме остаётся подсказка о валюте, а не пустота.
+  function attachQuoteTotal(item, currency) {
+    const form = document.querySelector('#form-dialog form');
+    const unit = form?.querySelector('[name="unitPrice"]');
+    const fixed = form?.querySelector('[name="fixedCost"]');
+    if (!form || !unit || !fixed) return;
+    const quantity = Number.isInteger(item.targetQuantity) ? item.targetQuantity : 0;
+    const line = document.createElement('p');
+    line.className = 'muted quote-total';
+    const refresh = () => {
+      try {
+        const total = decimalToMinor(unit.value) * quantity + decimalToMinor(fixed.value || '0');
+        line.textContent = quantity
+          ? text(`Итого на ${quantity} шт. в валюте запроса: ${formatMoney(total, currency)}`, `Total for ${quantity} units in the request currency: ${formatMoney(total, currency)}`)
+          : text(`Валюта запроса: ${currency}`, `Request currency: ${currency}`);
+      } catch {
+        line.textContent = currency ? text(`Валюта запроса: ${currency}. Итог появится, когда цена будет введена.`, `Request currency: ${currency}. The total appears once the price is entered.`) : '';
+      }
+    };
+    unit.addEventListener('input', refresh);
+    fixed.addEventListener('input', refresh);
+    refresh();
+    form.insertBefore(line, form.querySelector('.dialog-actions'));
   }
 
   async function acceptCounterOffer(item) {

@@ -1185,10 +1185,31 @@
     void loadPublications();
   }
 
+  // Публикация называется человеческим словом — «Aurora Collection · 4 окт. 2026 г., 13:39», — а её
+  // технический идентификатор (`commercial-publication_1e67…`) остаётся в подсказке и в кнопке
+  // «Скопировать ID»: по нему ищут в журнале, но подписью строки он не служит.
+  function publicationTitle(publication) {
+    const collection = collections().find(item => item.id === publication?.collectionId);
+    const name = collection ? collectionName(collection) : text('Публикация', 'Publication');
+    return publication?.publishedAt ? `${name} \u00b7 ${formatDate(publication.publishedAt)}` : name;
+  }
+  function publicationCollectionName(publication) {
+    const collection = collections().find(item => item.id === publication?.collectionId);
+    return collection ? collectionName(collection) : (value(publication?.collectionId) || '\u2014');
+  }
+  function copyIdButton(id) {
+    const button = el('button', { className: 'button small', type: 'button', rawText: text('Скопировать ID', 'Copy ID'), title: id });
+    button.addEventListener('click', async () => {
+      try { await global.navigator.clipboard.writeText(id); toast(text('ID скопирован.', 'ID copied.'), 'success'); }
+      catch { toast(id); }
+    });
+    return button;
+  }
+
   function filteredPublications() {
     const query = value(LS.query).toLocaleLowerCase();
     if (!query) return LS.items;
-    return LS.items.filter(publication => [publication.id, publication.currency, publication.contentHash,
+    return LS.items.filter(publication => [publication.id, publicationTitle(publication), publication.currency, publication.contentHash,
       ...list(publication.lines).flatMap(line => [line.sku, line.name])].join(' ').toLocaleLowerCase().includes(query));
   }
 
@@ -1255,7 +1276,7 @@
       row.addEventListener('click', choose);
       row.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); choose(); } });
       const status = el('td'); status.append(el('span', { className: 'ls9-status ls9-status-published', rawText: text('Опубликовано', 'Published') }));
-      row.append(el('td', { rawText: value(publication.id) || '—' }), status, el('td', { rawText: formatDate(publication.publishedAt) }), el('td', { rawText: value(publication.currency) || '—' }), el('td', { rawText: String(list(publication.lines).length) }), el('td', { rawText: shortHash(publication.contentHash), title: value(publication.contentHash) }));
+      row.append(el('td', { rawText: publicationTitle(publication), title: value(publication.id) }), status, el('td', { rawText: formatDate(publication.publishedAt) }), el('td', { rawText: value(publication.currency) || '—' }), el('td', { rawText: String(list(publication.lines).length) }), el('td', { rawText: shortHash(publication.contentHash), title: value(publication.contentHash) }));
       body.append(row);
     });
     table.append(head, body); wrap.append(table); return wrap;
@@ -1285,16 +1306,16 @@
     const aside = el('aside', { className: 'ls9-inspector' });
     if (!publication) { aside.append(el('div', { className: 'ls9-empty', rawText: text('Выберите опубликованный лист.', 'Select a published linesheet.') })); return aside; }
     const header = el('div', { className: 'ls9-inspector-head' }); const title = el('div');
-    title.append(el('span', { className: 'ls9-eyebrow', rawText: text('Неизменяемый коммерческий снимок', 'Immutable commercial snapshot') }), el('h3', { rawText: value(publication.id) || text('Публикация', 'Publication') }));
+    title.append(el('span', { className: 'ls9-eyebrow', rawText: text('Неизменяемый коммерческий снимок', 'Immutable commercial snapshot') }), el('h3', { rawText: publicationTitle(publication), title: value(publication.id) }));
     header.append(title, el('span', { className: 'ls9-status ls9-status-published', rawText: text('Опубликовано', 'Published') }));
     const info = el('dl', { className: 'ls9-info-grid' });
-    [[text('Коллекция', 'Collection'), value(publication.collectionId) || '—'], [text('Валюта', 'Currency'), value(publication.currency) || '—'], [text('Опубликовано', 'Published'), formatDate(publication.publishedAt)], [text('Позиций', 'Lines'), String(list(publication.lines).length)], [text('Контрольная сумма', 'Checksum'), value(publication.contentHash) || '—']]
+    [[text('Коллекция', 'Collection'), publicationCollectionName(publication)], [text('Валюта', 'Currency'), value(publication.currency) || '—'], [text('Опубликовано', 'Published'), formatDate(publication.publishedAt)], [text('Позиций', 'Lines'), String(list(publication.lines).length)], [text('Контрольная сумма', 'Checksum'), value(publication.contentHash) || '—']]
       .forEach(([label, content]) => { const item = el('div', { className: 'ls9-info-item' }); item.append(el('dt', { rawText: label }), el('dd', { rawText: content })); info.append(item); });
     const sectionTitle = el('div', { className: 'ls9-section-title' }); sectionTitle.append(el('h4', { rawText: text('Опубликованный ассортимент', 'Published assortment') }), el('span', { rawText: text('Только чтение', 'Read only') }));
     const actions = el('div', { className: 'ls9-actions' });
     const printButton = el('button', { className: 'button', type: 'button', rawText: text('Печать', 'Print') }); printButton.addEventListener('click', () => global.print());
     const exportButton = el('button', { className: 'button primary', type: 'button', rawText: text('Экспорт CSV', 'Export CSV') }); exportButton.addEventListener('click', () => exportPublication(publication));
-    actions.append(printButton, exportButton); aside.append(header, info, sectionTitle, publicationLineTable(publication), actions); return aside;
+    actions.append(copyIdButton(value(publication.id)), printButton, exportButton); aside.append(header, info, sectionTitle, publicationLineTable(publication), actions); return aside;
   }
 
   function exportPublication(publication) {

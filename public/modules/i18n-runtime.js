@@ -20,6 +20,9 @@
     'nav.calendar': ['\u041a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u044c', 'Calendar'],
     'nav.notifications': ['\u0423\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u044f', 'Notifications'],
     'common.user': ['\u041f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044c', 'User'],
+    // Логические значения структурных атрибутов категории: «да»/«нет», а не true/false.
+    'attr.yes': ['да', 'yes'],
+    'attr.no': ['нет', 'no'],
     'common.noOrganisation': ['\u043e\u0440\u0433\u0430\u043d\u0438\u0437\u0430\u0446\u0438\u044f \u043d\u0435 \u043d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0430', 'no organisation assigned'],
     'common.refresh': ['\u041e\u0431\u043d\u043e\u0432\u0438\u0442\u044c', 'Refresh'],
     'common.logout': ['\u0412\u044b\u0439\u0442\u0438', 'Sign out'],
@@ -145,6 +148,33 @@
     selection: ['\u041e\u0442\u0431\u043e\u0440','Selection'], 'order-builder': ['\u041a\u043e\u043d\u0441\u0442\u0440\u0443\u043a\u0442\u043e\u0440 \u0437\u0430\u043a\u0430\u0437\u0430','Order Builder'],
     order: ['\u0417\u0430\u043a\u0430\u0437','Order'], confirmation: ['\u041f\u043e\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u0438\u0435','Confirmation'], 'deal-space': ['\u041f\u0440\u043e\u0441\u0442\u0440\u0430\u043d\u0441\u0442\u0432\u043e \u0441\u0434\u0435\u043b\u043a\u0438','Deal space'], closed: ['\u0417\u0430\u043a\u0440\u044b\u0442','Closed'],
   };
+  // Структурные атрибуты категории («Карманы», «Подкладка», «Утепление») хранятся как объекты со
+  // свободными ключами: `{ count: 3, kinds: ['welt', 'inner'] }`. Экран печатал их как есть —
+  // «count: 3, kinds: welt,welt,inner». Подписи полей, значений и единиц лежат здесь, в одном
+  // словаре, рядом со статусами: `attr.part.<ключ>`, `attr.value.<значение>`, `attr.unit.<ключ>`.
+  // Ключ, которого здесь нет, печатается читаемым словом (без «_»), а не сырым кодом.
+  const attributeParts = {
+    count: ['Количество', 'Count'], kinds: ['Виды', 'Kinds'], present: ['Есть', 'Present'], full: ['По всему изделию', 'Full coverage'],
+    material: ['Материал', 'Material'], type: ['Тип', 'Type'], placement: ['Расположение', 'Placement'], construction: ['Конструкция', 'Construction'],
+    detachable: ['Съёмный', 'Detachable'], adjustable: ['Регулируется', 'Adjustable'], lined: ['С подкладкой', 'Lined'], position: ['Положение', 'Position'],
+    length: ['Длина', 'Length'], width: ['Ширина', 'Width'], height: ['Высота', 'Height'], depth: ['Глубина', 'Depth'], diameter: ['Диаметр', 'Diameter'],
+    unit: ['Единица', 'Unit'], value: ['Значение', 'Value'], min: ['Минимум', 'Minimum'], max: ['Максимум', 'Maximum'],
+    grams_per_square_metre: ['Плотность', 'Density'], grams: ['Масса', 'Weight'], weight_grams: ['Масса', 'Weight'],
+    layers: ['Слоёв', 'Layers'], colour: ['Цвет', 'Colour'], note: ['Примечание', 'Note'], notes: ['Примечание', 'Note'],
+  };
+  const attributeUnits = {
+    grams_per_square_metre: ['г/м²', 'g/m²'], grams: ['г', 'g'], weight_grams: ['г', 'g'],
+  };
+  const attributeValues = {
+    welt: ['прорезной', 'welt'], inner: ['внутренний', 'inner'], patch: ['накладной', 'patch'], zip: ['на молнии', 'zip'], flap: ['с клапаном', 'flap'],
+    slit: ['шлица', 'slit'], side: ['боковой', 'side'], chest: ['нагрудный', 'chest'], back: ['задний', 'back'], front: ['передний', 'front'],
+    synthetic: ['синтетический', 'synthetic'], down: ['пух', 'down'], feather: ['перо', 'feather'], wool: ['шерсть', 'wool'], cotton: ['хлопок', 'cotton'],
+    fleece: ['флис', 'fleece'], mesh: ['сетка', 'mesh'], taffeta: ['тафта', 'taffeta'], satin: ['сатин', 'satin'], viscose: ['вискоза', 'viscose'],
+    polyester: ['полиэстер', 'polyester'], nylon: ['нейлон', 'nylon'], leather: ['кожа', 'leather'], none: ['нет', 'none'],
+  };
+  for (const [key, pair] of Object.entries(attributeParts)) messages[`attr.part.${key}`] = pair;
+  for (const [key, pair] of Object.entries(attributeUnits)) messages[`attr.unit.${key}`] = pair;
+  for (const [key, pair] of Object.entries(attributeValues)) messages[`attr.value.${key}`] = pair;
   for (const [key, pair] of Object.entries(statuses)) messages[`status.${key}`] = pair;
   for (const [key, pair] of Object.entries(stages)) messages[`stage.${key}`] = pair;
   Object.freeze(messages);

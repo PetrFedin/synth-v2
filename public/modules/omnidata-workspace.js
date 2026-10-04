@@ -1002,7 +1002,7 @@ function odDefinitionGrid(fields) {
   return grid;
 }
 
-function odInspector({ title, subtitle = '', status = '', preview = false, tabs = [], fields = [], content = [], actions = [] }) {
+function odInspector({ title, subtitle = '', technicalId = '', status = '', preview = false, tabs = [], fields = [], content = [], actions = [] }) {
   const node = el('aside', { className: 'od-inspector' });
   const head = el('div', { className: 'od-inspector-head' });
   const copy = el('div', { className: 'od-inspector-title' });
@@ -1011,6 +1011,15 @@ function odInspector({ title, subtitle = '', status = '', preview = false, tabs 
     el('h3', { rawText: title || '\u2014' }),
     el('p', { rawText: subtitle || '' }),
   );
+  // Технический идентификатор записи (`relationship_370a…`) — не подпись: он лежит в подсказке и
+  // копируется кнопкой, а заголовком служит название, которое читает человек.
+  if (technicalId) {
+    const copyId = el('button', { className: 'button small od-inspector-copy-id', type: 'button', rawText: odText('Скопировать ID', 'Copy ID'), title: technicalId });
+    copyId.addEventListener('click', async () => {
+      try { await window.navigator.clipboard.writeText(technicalId); toast(odText('ID скопирован.', 'ID copied.'), 'success'); } catch { toast(technicalId); }
+    });
+    copy.append(copyId);
+  }
   head.append(copy);
   if (status) head.append(statusBadge(status));
   node.append(head);
@@ -1646,7 +1655,7 @@ function renderPartners() {
     return odPage(odText('Контрагенты и доступы', 'Partners and access'), header, body);
   }
   if (header.active === 'invitations') return odPage(odText('\u041a\u043e\u043d\u0442\u0440\u0430\u0433\u0435\u043d\u0442\u044b \u0438 \u0434\u043e\u0441\u0442\u0443\u043f\u044b', 'Partners and access'), header, odRegistry({ scope: 'od-partner-invitations', filterScope: 'partners', rows: w.invitations, columns: [{ label: odText('\u041c\u0430\u0433\u0430\u0437\u0438\u043d', 'Shop'), value: item => orgName(item.shopId) }, { label: odText('\u0428\u043e\u0443\u0440\u0443\u043c', 'Showroom'), value: item => nameById('showrooms', item.showroomId) }, { label: odText('\u0414\u0435\u0439\u0441\u0442\u0432\u0443\u0435\u0442 \u0434\u043e', 'Expires'), value: item => formatDate(item.expiresAt) }, { label: odText('\u0421\u0442\u0430\u0442\u0443\u0441', 'Status'), render: item => statusBadge(item.status) }], inspector: item => odInspector({ title: orgName(item.shopId), subtitle: nameById('showrooms', item.showroomId), status: item.status, tabs: [odText('\u0414\u043e\u0441\u0442\u0443\u043f', 'Access'), odText('\u0418\u0441\u0442\u043e\u0440\u0438\u044f', 'History')], fields: [{ label: odText('\u041c\u0430\u0433\u0430\u0437\u0438\u043d', 'Shop'), value: orgName(item.shopId) }, { label: odText('Лист коллекций', 'Linesheet'), value: nameById('showrooms', item.showroomId) }, { label: odText('\u0414\u0435\u0439\u0441\u0442\u0432\u0443\u0435\u0442 \u0434\u043e', 'Expires'), value: formatDate(item.expiresAt) }], actions: odInvitationActions(item) }) }));
-  return odPage(odText('\u041a\u043e\u043d\u0442\u0440\u0430\u0433\u0435\u043d\u0442\u044b \u0438 \u0434\u043e\u0441\u0442\u0443\u043f\u044b', 'Partners and access'), header, odRegistry({ scope: 'od-relationships', filterScope: 'partners', rows: w.relationships, columns: [{ label: odText('\u0411\u0440\u0435\u043d\u0434', 'Brand'), value: item => orgName(item.brandId) }, { label: odText('\u041c\u0430\u0433\u0430\u0437\u0438\u043d', 'Shop'), value: item => orgName(item.shopId) }, { label: odText('\u0417\u0430\u043f\u0440\u043e\u0441\u0438\u043b', 'Requested by'), value: item => orgName(item.requestedByOrganisationId) }, { label: odText('\u0421\u0442\u0430\u0442\u0443\u0441', 'Status'), render: item => statusBadge(item.status) }], inspector: item => odInspector({ title: pairName(item.brandId, item.shopId), subtitle: item.id, status: item.status, tabs: [odText('\u041e\u0431\u0437\u043e\u0440', 'Overview'), odText('\u0414\u043e\u0441\u0442\u0443\u043f\u044b', 'Access'), odText('\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b', 'Documents'), odText('\u0418\u0441\u0442\u043e\u0440\u0438\u044f', 'History')], fields: [{ label: odText('\u0411\u0440\u0435\u043d\u0434', 'Brand'), value: orgName(item.brandId) }, { label: odText('\u041c\u0430\u0433\u0430\u0437\u0438\u043d', 'Shop'), value: orgName(item.shopId) }, { label: odText('\u0417\u0430\u043f\u0440\u043e\u0441\u0438\u043b', 'Requested by'), value: orgName(item.requestedByOrganisationId) }], actions: odRelationshipActions(item) }) }));
+  return odPage(odText('\u041a\u043e\u043d\u0442\u0440\u0430\u0433\u0435\u043d\u0442\u044b \u0438 \u0434\u043e\u0441\u0442\u0443\u043f\u044b', 'Partners and access'), header, odRegistry({ scope: 'od-relationships', filterScope: 'partners', rows: w.relationships, columns: [{ label: odText('\u0411\u0440\u0435\u043d\u0434', 'Brand'), value: item => orgName(item.brandId) }, { label: odText('\u041c\u0430\u0433\u0430\u0437\u0438\u043d', 'Shop'), value: item => orgName(item.shopId) }, { label: odText('\u0417\u0430\u043f\u0440\u043e\u0441\u0438\u043b', 'Requested by'), value: item => orgName(item.requestedByOrganisationId) }, { label: odText('\u0421\u0442\u0430\u0442\u0443\u0441', 'Status'), render: item => statusBadge(item.status) }], inspector: item => odInspector({ title: pairName(item.brandId, item.shopId), subtitle: odText('Торговая связь', 'trade relationship'), technicalId: item.id, status: item.status, tabs: [odText('\u041e\u0431\u0437\u043e\u0440', 'Overview'), odText('\u0414\u043e\u0441\u0442\u0443\u043f\u044b', 'Access'), odText('\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b', 'Documents'), odText('\u0418\u0441\u0442\u043e\u0440\u0438\u044f', 'History')], fields: [{ label: odText('\u0411\u0440\u0435\u043d\u0434', 'Brand'), value: orgName(item.brandId) }, { label: odText('\u041c\u0430\u0433\u0430\u0437\u0438\u043d', 'Shop'), value: orgName(item.shopId) }, { label: odText('\u0417\u0430\u043f\u0440\u043e\u0441\u0438\u043b', 'Requested by'), value: orgName(item.requestedByOrganisationId) }], actions: odRelationshipActions(item) }) }));
 }
 
 function renderSelections() {

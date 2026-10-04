@@ -48,6 +48,11 @@ button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: .58; }
 [hidden] { display: none !important; }
+/* The plain rule above loses to any later `!important` display with more specificity (the design-system
+   adapters give every error banner `body.omnidata-v14 [data-od14-component="alert"] { display: grid
+   !important }`), so a banner meant to be hidden showed as an empty pink bar. The id in :not() makes this
+   outweigh every class/attribute rule, whatever stylesheet loads later. */
+html body [hidden]:not(#syntha-hidden-guard) { display: none !important; }
 
 .shell {
   min-height: 100vh;

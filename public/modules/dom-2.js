@@ -1,13 +1,70 @@
 // A toast has to outlive a re-render: every mutation ends with renderApp(), which rebuilds the root
 // and with it an empty #toast host, so a message written before that call used to vanish in the same
 // tick and the user saw nothing at all. The live message is kept here and repainted after each render.
+//
+// A modal <dialog> opened with showModal() lives in the browser's top layer, above everything in the
+// page including the fixed #toast host, so a refusal toasted while one is open was painted underneath
+// it and the person saw "nothing happened" (found by clicking: "Создать PO и разместить" refused with
+// TECH_PACK_ACKNOWLEDGEMENT_REQUIRED, the dialog stayed open with no text). Every error therefore goes
+// through one place: while a modal dialog is open the text is shown INSIDE that dialog, in its own error
+// banner (or one made on the spot), and only without a dialog does it become a toast. Other toasts
+// opened under a modal are painted inside it too, for the same reason.
 let TOAST_LIVE=null; let TOAST_TIMER=0;
-function toast(message,type=''){TOAST_LIVE={message,type,until:Date.now()+4500};paintToast();}
-function paintToast(){const host=typeof document!=='undefined'?document.querySelector('#toast'):null;if(!host)return;clear(host);
+const DIALOG_ERROR_SELECTOR='[data-dialog-error], .sourcing-form-error, .od-form-error, .bom-modal-error';
+function topModalDialog(){
+  if(typeof document==='undefined'||typeof document.querySelectorAll!=='function')return null;
+  const open=[...document.querySelectorAll('dialog[open]')].filter(d=>{try{return typeof d.matches!=='function'||d.matches(':modal');}catch{return true;}});
+  return open.length?open[open.length-1]:null;
+}
+function showDialogError(dialog,message){
+  let banner=dialog.querySelector(DIALOG_ERROR_SELECTOR);
+  if(!banner){
+    const host=dialog.querySelector('form')||dialog.querySelector('.dialog-body')||dialog;
+    banner=document.createElement('p'); banner.className='dialog-error notice error'; banner.setAttribute('data-dialog-error','');
+    const footer=host.querySelector('footer, .dialog-actions');
+    if(footer&&footer.parentNode===host)host.insertBefore(banner,footer);else host.append(banner);
+  }
+  banner.setAttribute('role','alert');
+  banner.textContent=message;
+  banner.hidden=false;
+  // A banner made here has no owner to hide it again, so the next attempt to submit does.
+  if(banner.hasAttribute('data-dialog-error')&&!banner.__hideOnSubmit){
+    banner.__hideOnSubmit=true;
+    dialog.addEventListener('submit',()=>{banner.hidden=true;},true);
+  }
+  if(typeof banner.scrollIntoView==='function')banner.scrollIntoView({block:'nearest'});
+  return banner;
+}
+function humaniseError(message){
+  return typeof SynthaErrorMessages!=='undefined'?SynthaErrorMessages.humanise(message):String(message??'');
+}
+// The one way to report a refused action: "in the nearest open modal dialog, otherwise a toast".
+// Returns where the text went so callers (and tests) can tell.
+function reportError(error,fallback){
+  const raw=typeof error==='string'?error:(error&&error.message);
+  const message=humaniseError(raw||fallback||(typeof I18N!=='undefined'?I18N.t('common.requestError'):'Error'));
+  const dialog=topModalDialog();
+  if(dialog){showDialogError(dialog,message);return 'dialog';}
+  toast(message,'error');return 'toast';
+}
+function toast(message,type=''){
+  if(type==='error'){const dialog=topModalDialog();if(dialog){showDialogError(dialog,humaniseError(message));return;}}
+  TOAST_LIVE={message,type,until:Date.now()+4500};paintToast();
+}
+function toastHost(){
+  const base=document.querySelector('#toast');
+  const dialog=topModalDialog();
+  if(!dialog){return base;}
+  let host=[...dialog.children].find(child=>typeof child.hasAttribute==='function'&&child.hasAttribute('data-toast-host'));
+  if(!host){host=document.createElement('div');host.className='toast';host.setAttribute('data-toast-host','');dialog.append(host);}
+  if(base)clear(base);
+  return host;
+}
+function paintToast(){const host=typeof document!=='undefined'?toastHost():null;if(!host)return;clear(host);
   if(!TOAST_LIVE||Date.now()>=TOAST_LIVE.until){TOAST_LIVE=null;return;}
   host.append(notice(TOAST_LIVE.message,TOAST_LIVE.type));
   clearTimeout(TOAST_TIMER);
-  TOAST_TIMER=setTimeout(()=>{TOAST_LIVE=null;const node=document.querySelector('#toast');if(node&&node.isConnected)clear(node);},Math.max(0,TOAST_LIVE.until-Date.now()));}
+  TOAST_TIMER=setTimeout(()=>{TOAST_LIVE=null;const node=document.querySelector('#toast');if(node&&node.isConnected)clear(node);document.querySelectorAll('[data-toast-host]').forEach(item=>{if(item.isConnected)clear(item);});},Math.max(0,TOAST_LIVE.until-Date.now()));}
 function clearSession(){state.token='';state.user=null;state.workspace=emptyWorkspace();state.notifications=[];state.notificationUnreadCount=0;window.SynthaWorkspaceController?.reset(state.workspace);window.SynthaNotificationController?.reset({items:[],nextCursor:null,unreadCount:0});sessionStorage.removeItem(TOKEN_KEY);}
 function ownIds(){return state.workspace.memberships.map(x=>x.organisationId);} function ownOrganisations(type){return state.workspace.organisations.filter(x=>ownIds().includes(x.id)&&(!type||x.type===type));} function organisationsByType(type){return state.workspace.organisations.filter(x=>x.type===type);} function ownOrganisationNames(){return ownOrganisations().map(x=>x.name||x.id);} function orgName(id){return state.workspace.organisations.find(x=>x.id===id)?.name||id||'\u2014';} function nameById(group,id){return state.workspace[group].find(x=>x.id===id)?.name||id||'\u2014';}
 function pairName(brandId,shopId){return `${orgName(brandId)} \u2194 ${orgName(shopId)}`;} function counterpartyResponder(rel){return rel.requestedByOrganisationId===rel.brandId?rel.shopId:rel.brandId;}

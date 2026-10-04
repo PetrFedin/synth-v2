@@ -139,7 +139,7 @@
         reset();
         queueMicrotask(() => { void loadSamples({ reset: true }); });
       }
-      toast(error?.message || I18N.t('common.requestError'), 'error');
+      reportError(error);
       return null;
     } finally {
       ui.busyCode = null;
@@ -263,7 +263,7 @@
   function dialog(title, fields, onSubmit, submitLabel = text('Сохранить', 'Save')) {
     const modal = h('dialog', { className: 'sample-dialog' });
     const form = h('form', { method: 'dialog', className: 'sample-form' }, [h('div', { className: 'sample-dialog-head' }, [h('h2', { text: title }), h('button', { type: 'button', className: 'icon-button', text: '×', 'aria-label': text('Закрыть', 'Close'), onclick: () => modal.close() })]), ...fields, h('div', { className: 'sample-dialog-actions' }, [h('button', { type: 'button', className: 'secondary', text: text('Отмена', 'Cancel'), onclick: () => modal.close() }), h('button', { type: 'submit', className: 'primary', text: submitLabel })])]);
-    form.addEventListener('submit', async (event) => { event.preventDefault(); const values = Object.fromEntries(new FormData(form).entries()); const completed = await onSubmit(values); if (completed !== false) modal.close(); });
+    form.addEventListener('submit', async (event) => { event.preventDefault(); try { const values = Object.fromEntries(new FormData(form).entries()); const completed = await onSubmit(values); if (completed !== false) modal.close(); } catch (submitError) { reportError(submitError); } });
     modal.addEventListener('close', () => modal.remove());
     modal.append(form); document.body.append(modal); modal.showModal();
     return modal;

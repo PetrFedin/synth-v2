@@ -100,7 +100,7 @@
       upsert(result); toast(text('Изменения сохранены.', 'Changes saved.')); return result;
     } catch (error) {
       if (error?.code === 'TECH_PACK_CONCURRENCY_CONFLICT') queueMicrotask(() => { void load({ reset: true }); });
-      toast(error?.message || I18N.t('common.requestError'), 'error'); return null;
+      reportError(error); return null;
     } finally { ui.busyCode = null; renderApp(); }
   }
 
@@ -441,7 +441,7 @@
   function dialog(title, fields, submit, label = text('Сохранить', 'Save')) {
     const modal = h('dialog', { className: 'tech-pack-dialog' });
     const form = h('form', { method: 'dialog', className: 'tech-pack-form' }, [h('div', { className: 'tech-pack-dialog-head' }, [h('h2', { text: title }), h('button', { type: 'button', className: 'icon-button', text: '×', onclick: () => modal.close() })]), ...fields, h('div', { className: 'tech-pack-dialog-actions' }, [h('button', { type: 'button', className: 'secondary', text: text('Отмена', 'Cancel'), onclick: () => modal.close() }), h('button', { type: 'submit', className: 'primary', text: label })])]);
-    form.addEventListener('submit', async (event) => { event.preventDefault(); const result = await submit(Object.fromEntries(new FormData(form).entries())); if (result !== false) modal.close(); });
+    form.addEventListener('submit', async (event) => { event.preventDefault(); try { const result = await submit(Object.fromEntries(new FormData(form).entries())); if (result !== false) modal.close(); } catch (submitError) { reportError(submitError); } });
     modal.addEventListener('close', () => modal.remove()); modal.append(form); document.body.append(modal); modal.showModal();
   }
   // openDraft(null) reaches here with null, and a default parameter only fires on undefined, so

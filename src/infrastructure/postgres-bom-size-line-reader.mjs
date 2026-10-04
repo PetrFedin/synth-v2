@@ -1,6 +1,7 @@
 import { invariant } from '../core/errors.mjs';
 import { CAPABILITIES, rolesWithCapability } from '../modules/access-control/public.mjs';
 import { withPostgresTransaction } from './postgres-transaction.mjs';
+import { viewerRoleColumn } from './viewer-role-sql.mjs';
 
 const SNAPSHOT_BEGIN = 'BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY';
 const READ_ROLES = rolesWithCapability(CAPABILITIES.PRODUCT_READ);
@@ -9,7 +10,7 @@ const READ_ROLES = rolesWithCapability(CAPABILITIES.PRODUCT_READ);
 // из разных моментов, и «расход упал на большем размере» оказалось бы следом чужой правки, а не
 // опечаткой автора.
 const SELECT_ROWS = `
-  SELECT row.payload
+  SELECT row.payload, ${viewerRoleColumn('$1', 'row.brand_id')}
     FROM style_bom_size_line_workspace AS row
    WHERE row.style_id = $3
      AND EXISTS (
@@ -29,7 +30,7 @@ export function createPostgresBomSizeLineReader({ pool } = {}) {
         const result = await queryable.query(SELECT_ROWS, [actorId, READ_ROLES, styleId]);
         // Числа приезжают из PostgreSQL строками, чтобы не потерять точность; домен считает ими,
         // поэтому приведение делается здесь один раз, а не в каждом правиле.
-        return Object.freeze(result.rows.map((row) => Object.freeze({
+        const rows = Object.freeze(result.rows.map((row) => Object.freeze({
           ...row.payload,
           sizeSortOrder: numberOrNull(row.payload.sizeSortOrder) ?? 0,
           bomTotalCost: numberOrNull(row.payload.bomTotalCost),
@@ -38,6 +39,9 @@ export function createPostgresBomSizeLineReader({ pool } = {}) {
           wastePercent: numberOrNull(row.payload.wastePercent),
           lineCost: numberOrNull(row.payload.lineCost),
         })));
+        // Ряд одной ведомости-стиля — одного бренда, роль читателя одна. Стоимость здесь входит в сам
+        // расчёт (доля группы, выход, итог), поэтому скрывает её сервис — после расчёта, не до него.
+        return Object.freeze({ rows, viewerRole: result.rows[0]?.viewer_role ?? null });
       }, { begin: SNAPSHOT_BEGIN });
     },
   });

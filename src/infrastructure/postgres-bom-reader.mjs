@@ -1,8 +1,12 @@
 import { invariant } from '../core/errors.mjs';
-import { CAPABILITIES, rolesWithCapability } from '../modules/access-control/public.mjs';
+import { CAPABILITIES, costVisibleTo, rolesWithCapability } from '../modules/access-control/public.mjs';
 import { withPostgresTransaction } from './postgres-transaction.mjs';
+import { viewerRoleColumn } from './viewer-role-sql.mjs';
 
 const SNAPSHOT_BEGIN = 'BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY';
+// Читать ведомость могут и производство с качеством (`bom.read`), но себестоимость материалов и итоги
+// по ней — деньги: их видят только роли с `cost.manage` или `margin.read` (A-02), остальным поля
+// стоимости в ответ не попадают вовсе.
 const BOM_READ_ROLES = rolesWithCapability(CAPABILITIES.BOM_READ);
 
 export function createPostgresBomReader({ pool } = {}) {
@@ -14,7 +18,7 @@ export function createPostgresBomReader({ pool } = {}) {
     getForActor(actorId, sku) {
       return withPostgresTransaction(pool, async (queryable) => {
         const result = await queryable.query(
-          `SELECT bom.payload
+          `SELECT bom.payload, ${viewerRoleColumn('$2', 'bom.brand_id')}
              FROM boms AS bom
             WHERE bom.sku = $1
               AND EXISTS (
@@ -26,7 +30,8 @@ export function createPostgresBomReader({ pool } = {}) {
               )`,
           [sku, actorId, BOM_READ_ROLES],
         );
-        return result.rows[0]?.payload;
+        const row = result.rows[0];
+        return row && costVisibleTo(row.viewer_role, row.payload);
       }, { begin: SNAPSHOT_BEGIN });
     },
   });
@@ -52,7 +57,7 @@ async function page(queryable, actorId, { limit, afterSku, filters }) {
   if (afterSku) { params.push(afterSku); clauses.push(`bom.sku > $${params.length}`); }
   params.push(limit + 1);
   const result = await queryable.query(
-    `SELECT bom.payload, bom.sku
+    `SELECT bom.payload, bom.sku, ${viewerRoleColumn('$1', 'bom.brand_id')}
        FROM boms AS bom
        JOIN catalog_skus AS sku ON sku.sku = bom.sku
       WHERE ${clauses.join(' AND ')}
@@ -62,7 +67,7 @@ async function page(queryable, actorId, { limit, afterSku, filters }) {
   );
   const rows = result.rows.slice(0, limit);
   return Object.freeze({
-    items: Object.freeze(rows.map((row) => row.payload)),
+    items: Object.freeze(rows.map((row) => costVisibleTo(row.viewer_role, row.payload))),
     hasMore: result.rows.length > limit,
     ...(result.rows.length > limit ? { nextSku: rows.at(-1).sku } : {}),
   });

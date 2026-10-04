@@ -7,6 +7,13 @@
 const complianceDocumentState = window.SynthaComplianceDocumentState
   || (window.SynthaComplianceDocumentState = { data: {}, loading: {}, failed: {} });
 
+// Эмитента документа выбирают из облегчённого списка юрлиц (`legal-entity-issuers`): код, названия,
+// юрисдикция и статус, без реквизитов. Полный список (`legal-entities`) отдаёт ИНН и банковские
+// данные и закрыт правом `organisation.manage`, а выставляет документы финансист
+// (`compliance-document.manage`) — по полному списку выбор эмитента у него не работал.
+const legalEntityIssuerState = window.SynthaLegalEntityIssuerState
+  || (window.SynthaLegalEntityIssuerState = { data: {}, loading: {}, failed: {} });
+
 const COMPLIANCE_DOCUMENT_TYPE_NAMES = {
   upd: () => localText('УПД', 'UPD (transfer document)'),
   eaeu_declaration_of_conformity: () => localText('Декларация соответствия ЕАЭС', 'EAEU declaration of conformity'),
@@ -42,15 +49,33 @@ function loadComplianceDocuments(organisationId) {
     .finally(() => { complianceDocumentState.loading[organisationId] = false; if (state.view === 'partners') renderApp(); });
 }
 
+function canReadLegalEntityIssuers(organisationId) {
+  const caps = window.SynthaUiCapabilities;
+  return caps.hasForOrganisation(state.workspace, organisationId, caps.CAPABILITIES.ORGANISATION_MANAGE)
+    || caps.hasForOrganisation(state.workspace, organisationId, caps.CAPABILITIES.COMPLIANCE_DOCUMENT_MANAGE);
+}
+
+function loadLegalEntityIssuers(organisationId) {
+  if (legalEntityIssuerState.data[organisationId] || legalEntityIssuerState.loading[organisationId] || legalEntityIssuerState.failed[organisationId]) return;
+  // Остальным запрос — гарантированный отказ, и названий они всё равно не получат, поэтому не спрашивают.
+  if (!canReadLegalEntityIssuers(organisationId)) return;
+  legalEntityIssuerState.loading[organisationId] = true;
+  api(`/v2/organisations/${encodeURIComponent(organisationId)}/legal-entity-issuers`)
+    .then((value) => { legalEntityIssuerState.data[organisationId] = Array.isArray(value) ? value : (value?.items || []); })
+    .catch(() => { legalEntityIssuerState.failed[organisationId] = true; })
+    .finally(() => { legalEntityIssuerState.loading[organisationId] = false; if (state.view === 'partners') renderApp(); });
+}
+
+function legalEntityIssuerName(issuer) {
+  return localText(issuer.nameRu || issuer.nameEn || '—', issuer.nameEn || issuer.nameRu || '—');
+}
+
 /** Flattened rows across every organisation the actor may see, triggering the lazy loads as a side effect. */
 function complianceDocumentRows() {
   const owned = complianceDocumentManageableOrganisations();
-  // Реквизиты юрлиц читает только тот, кто управляет организацией; остальным запрос — гарантированный
-  // отказ, и названий они всё равно не получат, поэтому не спрашивают.
-  const caps = window.SynthaUiCapabilities;
   owned.forEach((org) => {
     loadComplianceDocuments(org.id);
-    if (caps.hasForOrganisation(state.workspace, org.id, caps.CAPABILITIES.ORGANISATION_MANAGE)) loadLegalEntities(org.id);
+    loadLegalEntityIssuers(org.id);
   });
   return owned.flatMap((org) => (complianceDocumentState.data[org.id] || []).map((item) => ({ ...item, orgName: org.name || org.id })));
 }
@@ -60,9 +85,12 @@ function complianceDocumentTypeName(documentType) {
 }
 
 function legalEntityLabel(organisationId, legalEntityId) {
-  const entity = (legalEntityState.data[organisationId] || []).find((item) => item.id === legalEntityId);
+  const issuer = (legalEntityIssuerState.data[organisationId] || []).find((item) => item.id === legalEntityId);
+  if (issuer) return `${issuer.entityCode} (${legalEntityIssuerName(issuer)})`;
+  // Список юрлиц, уже загруженный вкладкой «Юридические лица», тоже годится — но он не обязателен.
+  const entity = (typeof legalEntityState === 'undefined' ? {} : legalEntityState.data)[organisationId]?.find((item) => item.id === legalEntityId);
   if (entity) return `${entity.entityCode} (${entity.latestVersion?.nameRu || '—'})`;
-  // Названия нет, когда у читателя нет права читать реквизиты. Сырой идентификатор
+  // Названия нет, когда у читателя нет права и на облегчённый список. Сырой идентификатор
   // (`legal-entity_<uuid>`) в колонке эмитента ничего не говорит: «Юрлицо» и короткий код, по
   // которому его можно найти.
   const id = String(legalEntityId ?? '');
@@ -124,10 +152,10 @@ function complianceDocumentActions(item) {
 function complianceDocumentForm() {
   const owned = complianceDocumentManageableOrganisations();
   const validation = window.SynthaUiValidation;
-  owned.forEach((org) => loadLegalEntities(org.id));
-  const entityOptions = owned.flatMap((org) => (legalEntityState.data[org.id] || [])
+  owned.forEach((org) => loadLegalEntityIssuers(org.id));
+  const entityOptions = owned.flatMap((org) => (legalEntityIssuerState.data[org.id] || [])
     .filter((item) => item.status === 'active')
-    .map((item) => ({ id: item.id, name: `${item.entityCode} (${org.name || org.id})` })));
+    .map((item) => ({ id: item.id, name: `${item.entityCode} — ${legalEntityIssuerName(item)}${item.jurisdiction ? ` [${item.jurisdiction}]` : ''} (${org.name || org.id})` })));
   openForm(localText('Новый документ соответствия', 'New compliance document'), [
     selectDef('organisationId', localText('Организация', 'Organisation'), owned),
     selectDef('documentType', localText('Тип документа', 'Document type'), [

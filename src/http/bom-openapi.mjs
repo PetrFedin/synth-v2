@@ -49,7 +49,7 @@ function schemas() {
     BomVersionExpectation: { type: 'object', additionalProperties: false, required: ['expectedVersion'], properties: { expectedVersion: { type: 'integer', minimum: 1, maximum: 2_147_483_647 } } },
     BomLine: {
       type: 'object', additionalProperties: false,
-      required: ['lineId', 'position', 'component', 'materialCode', 'materialVersion', 'materialName', 'materialType', 'unit', 'quantity', 'wastePercent', 'grossQuantity', 'materialCurrency', 'unitCostSnapshot', 'exchangeRate', 'lineCost'],
+      required: ['lineId', 'position', 'component', 'materialCode', 'materialVersion', 'materialName', 'materialType', 'unit', 'quantity', 'wastePercent', 'grossQuantity', 'materialCurrency', 'exchangeRate'],
       properties: {
         lineId: { type: 'string' }, position: { type: 'integer', minimum: 1, maximum: 500 }, component: { type: 'string' },
         materialCode: { type: 'string', pattern: SKU_PATTERN }, materialVersion: { type: 'integer', minimum: 1 }, materialName: { type: 'string' },
@@ -60,7 +60,7 @@ function schemas() {
     },
     Bom: {
       type: 'object', additionalProperties: false,
-      required: ['id', 'sku', 'brandId', 'currency', 'lines', 'materialCost', 'laborCost', 'overheadCost', 'logisticsCost', 'otherCost', 'totalCost', 'notes', 'status', 'version', 'publishedAt', 'createdAt', 'updatedAt'],
+      required: ['id', 'sku', 'brandId', 'currency', 'lines', 'notes', 'status', 'version', 'publishedAt', 'createdAt', 'updatedAt'],
       properties: {
         id: { type: 'string', minLength: 1, maxLength: 160 }, sku: { type: 'string', pattern: SKU_PATTERN }, brandId: { type: 'string', minLength: 1, maxLength: 160 }, currency,
         lines: { type: 'array', minItems: 1, maxItems: 500, items: { $ref: '#/components/schemas/BomLine' } },

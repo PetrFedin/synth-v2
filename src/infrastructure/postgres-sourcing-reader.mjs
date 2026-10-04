@@ -1,17 +1,25 @@
 import { invariant } from '../core/errors.mjs';
-import { CAPABILITIES, rolesWithCapability } from '../modules/access-control/public.mjs';
+import { CAPABILITIES, costVisibleTo, rolesWithCapability } from '../modules/access-control/public.mjs';
 import { withPostgresTransaction } from './postgres-transaction.mjs';
+import { viewerRoleColumn } from './viewer-role-sql.mjs';
 
 const SNAPSHOT_BEGIN = 'BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY';
 const SOURCING_READ_ROLES = rolesWithCapability(CAPABILITIES.SOURCING_READ);
+
+// Запрос ценности у поставщиков читают и производство с продажами (`sourcing.read`), но в RFQ лежат
+// деньги: снимок себестоимости ведомости (`bomTotalCost`), итоги котировок и цена поставщика за
+// единицу (`unitPriceMinor`) — закупочная цена и есть себестоимость. Видят их роли с `cost.manage`
+// или `margin.read` (A-02); остальным эти поля не приходят. Поставщики — справочник, не деньги.
+const RFQ_PRICE_KEYS = Object.freeze(['unitPriceMinor']);
+const forViewer = (row) => costVisibleTo(row.viewer_role, row.payload, { extraKeys: RFQ_PRICE_KEYS });
 
 export function createPostgresSourcingReader({ pool } = {}) {
   invariant(pool && typeof pool.connect === 'function', 'POSTGRES_POOL_REQUIRED', 'PostgreSQL pool is required');
   return Object.freeze({
     supplierPageForActor(actorId, options) { return withPostgresTransaction(pool, (queryable) => supplierPage(queryable, actorId, options), { begin: SNAPSHOT_BEGIN }); },
-    supplierGetForActor(actorId, supplierCode) { return getForActor(pool, actorId, 'suppliers', 'supplier_code', supplierCode); },
+    supplierGetForActor(actorId, supplierCode) { return getForActor(pool, actorId, 'suppliers', 'supplier_code', supplierCode, (row) => row.payload); },
     rfqPageForActor(actorId, options) { return withPostgresTransaction(pool, (queryable) => rfqPage(queryable, actorId, options), { begin: SNAPSHOT_BEGIN }); },
-    rfqGetForActor(actorId, rfqCode) { return getForActor(pool, actorId, 'sourcing_rfqs', 'rfq_code', rfqCode); },
+    rfqGetForActor(actorId, rfqCode) { return getForActor(pool, actorId, 'sourcing_rfqs', 'rfq_code', rfqCode, forViewer); },
     // Who at this supplier can sign in to the portal. Revoked grants are returned as well: the point of
     // an access list is to answer "who can read our requests, and who used to", and a row that vanishes
     // on revocation answers only half of that.
@@ -37,10 +45,10 @@ export function createPostgresSourcingReader({ pool } = {}) {
   });
 }
 
-async function getForActor(pool, actorId, table, codeColumn, code) {
+async function getForActor(pool, actorId, table, codeColumn, code, present) {
   return withPostgresTransaction(pool, async (queryable) => {
     const result = await queryable.query(
-      `SELECT aggregate.payload
+      `SELECT aggregate.payload, ${viewerRoleColumn('$2', 'aggregate.brand_id')}
          FROM ${table} AS aggregate
         WHERE aggregate.${codeColumn} = $1
           AND EXISTS (
@@ -52,7 +60,8 @@ async function getForActor(pool, actorId, table, codeColumn, code) {
           )`,
       [code, actorId, SOURCING_READ_ROLES],
     );
-    return result.rows[0]?.payload;
+    const row = result.rows[0];
+    return row && present(row);
   }, { begin: SNAPSHOT_BEGIN });
 }
 
@@ -105,14 +114,14 @@ async function rfqPage(queryable, actorId, { limit, afterCode, filters, referenc
   if (afterCode) add(params, clauses, 'rfq.rfq_code', '>', afterCode);
   params.push(limit + 1);
   const result = await queryable.query(
-    `SELECT rfq.payload, rfq.rfq_code AS code
+    `SELECT rfq.payload, rfq.rfq_code AS code, ${viewerRoleColumn('$1', 'rfq.brand_id')}
        FROM sourcing_rfqs AS rfq
       WHERE ${clauses.join(' AND ')}
       ORDER BY rfq.rfq_code ASC
       LIMIT $${params.length}`,
     params,
   );
-  return pageResult(result.rows, limit);
+  return pageResult(result.rows, limit, forViewer);
 }
 
 function membershipClause(alias) {
@@ -125,5 +134,5 @@ function membershipClause(alias) {
   )`;
 }
 function add(params, clauses, column, operator, value) { params.push(value); clauses.push(`${column} ${operator} $${params.length}`); }
-function pageResult(rows, limit) { const items = rows.slice(0, limit); return Object.freeze({ items: Object.freeze(items.map((row) => row.payload)), hasMore: rows.length > limit, ...(rows.length > limit ? { nextCode: items.at(-1).code } : {}) }); }
+function pageResult(rows, limit, present = (row) => row.payload) { const items = rows.slice(0, limit); return Object.freeze({ items: Object.freeze(items.map(present)), hasMore: rows.length > limit, ...(rows.length > limit ? { nextCode: items.at(-1).code } : {}) }); }
 function escapeLike(value) { return value.replace(/[\\%_]/g, (character) => `\\${character}`); }

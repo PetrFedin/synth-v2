@@ -533,7 +533,8 @@ test('the legal-entities tab says "no access" instead of an empty table, and leg
   assert.match(workspaceScreen, /if \(legalEntitiesDenied\(\)\) return odPage\([^\n]*noAccessNotice\(\)\);/);
   assert.match(workspaceScreen, /\.filter\(tab => caps\.canOpenPartnersTab\(w, tab\.id\)\)/);
   const documents = await read('compliance-documents.js');
-  assert.match(documents, /if \(caps\.hasForOrganisation\(state\.workspace, org\.id, caps\.CAPABILITIES\.ORGANISATION_MANAGE\)\) loadLegalEntities\(org\.id\);/);
+  assert.doesNotMatch(documents, /loadLegalEntities\(/, 'the document screen must not ask for the full requisites list');
+  assert.match(documents, /\/legal-entity-issuers/);
 });
 
 test('a remembered tab that is no longer on the strip falls back to the first one', async () => {

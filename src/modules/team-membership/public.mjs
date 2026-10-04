@@ -60,7 +60,7 @@ export function inviteMembership({ actor, organisationType, id, organisationId, 
  * Самому себе роль можно только **понизить**: иначе администратор, которому владелец не дал бы
  * владельца, получал бы его одним запросом к собственному членству.
  */
-export function changeMembershipRole({ actor, target, role, activeOwnerCount, updatedAt }) {
+export function changeMembershipRole({ actor, target, role, activeOwnerCount, targetCountsAsOwner = true, updatedAt }) {
   invariant(target.status === MEMBERSHIP_STATUS.ACTIVE, 'TEAM_MEMBERSHIP_NOT_ACTIVE', 'Only an active membership can change role', { status: target.status });
   assertRoleForOrganisation(target.organisationType, role);
   invariant(role !== target.role, 'TEAM_ROLE_UNCHANGED', 'Member already holds this role', { role });
@@ -69,15 +69,15 @@ export function changeMembershipRole({ actor, target, role, activeOwnerCount, up
   if (actor.userId === target.userId) {
     invariant(isDemotion(target.role, role), 'TEAM_SELF_ROLE_ESCALATION', 'A member cannot raise or sideways-change their own role', { from: target.role, to: role });
   }
-  if (target.role === 'owner' && role !== 'owner') assertOwnerRemains(activeOwnerCount);
+  if (target.role === 'owner' && role !== 'owner' && targetCountsAsOwner) assertOwnerRemains(activeOwnerCount);
   return Object.freeze({ ...target, role, version: membershipVersion(target) + 1, updatedAt, updatedBy: actor.userId });
 }
 
-export function deactivateMembership({ actor, target, activeOwnerCount, updatedAt }) {
+export function deactivateMembership({ actor, target, activeOwnerCount, targetCountsAsOwner = true, updatedAt }) {
   invariant(target.status === MEMBERSHIP_STATUS.ACTIVE, 'TEAM_MEMBERSHIP_NOT_ACTIVE', 'Membership is already disabled', { status: target.status });
   assertNotSelf(actor, target, 'TEAM_SELF_DEACTIVATION', 'A member cannot disable their own membership');
   assertMayHandleRole(actor, target.role);
-  if (target.role === 'owner') assertOwnerRemains(activeOwnerCount);
+  if (target.role === 'owner' && targetCountsAsOwner) assertOwnerRemains(activeOwnerCount);
   return Object.freeze({ ...target, status: MEMBERSHIP_STATUS.INACTIVE, version: membershipVersion(target) + 1, updatedAt, updatedBy: actor.userId });
 }
 
@@ -97,6 +97,11 @@ function isDemotion(from, to) {
   return after.length < before.size && after.every((capability) => before.has(capability));
 }
 
+// «Владелец» здесь — действующий: членство `active` **и** учётная запись `active`. Приглашённый, не
+// принявший приглашение, владельцем не считается: он не может войти, и организация, где «владельцы»
+// только приглашённые, осталась бы без того, кто ей управляет. Поэтому `activeOwnerCount` — число
+// таких владельцев (включая цель, если она сама из их числа), а `targetCountsAsOwner` говорит, из их
+// числа ли цель: разжаловать приглашённого владельца можно всегда, он ничего не держал.
 function assertOwnerRemains(activeOwnerCount) {
   invariant(Number.isInteger(activeOwnerCount) && activeOwnerCount > 1, 'TEAM_LAST_OWNER', 'The organisation must keep at least one active owner');
 }

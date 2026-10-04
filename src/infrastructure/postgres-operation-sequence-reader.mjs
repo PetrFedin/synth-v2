@@ -1,8 +1,9 @@
 import { invariant } from '../core/errors.mjs';
+import { CAPABILITIES, rolesWithCapability } from '../modules/access-control/public.mjs';
 import { withPostgresTransaction } from './postgres-transaction.mjs';
 
 const SNAPSHOT_BEGIN = 'BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY';
-const READ_ROLES = Object.freeze(['owner', 'admin', 'sales', 'finance']);
+const READ_ROLES = rolesWithCapability(CAPABILITIES.TECH_PACK_READ);
 const VISIBLE = `EXISTS (
         SELECT 1 FROM memberships AS membership
          WHERE membership.user_id = $1

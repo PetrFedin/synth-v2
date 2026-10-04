@@ -1,8 +1,9 @@
 import { invariant } from '../core/errors.mjs';
+import { CAPABILITIES, rolesWithCapability } from '../modules/access-control/public.mjs';
 import { withPostgresTransaction } from './postgres-transaction.mjs';
 
 const SNAPSHOT_BEGIN = 'BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY';
-const READ_ROLES = Object.freeze(['owner', 'admin', 'sales', 'finance']);
+const READ_ROLES = rolesWithCapability(CAPABILITIES.PRODUCTION_ORDER_READ);
 
 // Платёжная веха и фактическая затрата — два независимых денежных регистра, и простой связью их не
 // свести: веха ключуется производственным заказом, затрата — оптовым, и путь между ними существует
@@ -11,7 +12,19 @@ const READ_ROLES = Object.freeze(['owner', 'admin', 'sales', 'finance']);
 // связанному оптовому заказу, если связь есть, и честно `null`, если её нет в принципе. Платёж не
 // становится строкой затрат: суммы не вычитаются друг из друга, это было бы учётным решением, а не
 // связью для починки.
-const LINKED_ACTUAL_COST = `(CASE WHEN production_order.payload ->> 'orderId' IS NOT NULL THEN
+// Фактическая затрата — регистр себестоимости. Читать заказ фабрике могут и производство с качеством
+// (`production-order.read`), но затрату видят только те, у кого есть доступ к деньгам: тот же
+// критерий, что у истории (`cost.manage` или `margin.read`). Остальным поле приходит `null`, как у
+// заказа без связи, — самого заказа это не прячет.
+const COST_VISIBLE_ROLES = Object.freeze([...new Set([...rolesWithCapability(CAPABILITIES.COST_MANAGE), ...rolesWithCapability(CAPABILITIES.MARGIN_READ)])]);
+const COST_VISIBLE_SQL = `ARRAY[${COST_VISIBLE_ROLES.map((role) => `'${role}'`).join(', ')}]::text[]`;
+const linkedActualCost = (actorParameter) => `(CASE WHEN production_order.payload ->> 'orderId' IS NOT NULL AND EXISTS (
+      SELECT 1 FROM memberships AS cost_membership
+       WHERE cost_membership.user_id = ${actorParameter}
+         AND cost_membership.organisation_id = production_order.brand_id
+         AND cost_membership.status = 'active'
+         AND cost_membership.role = ANY(${COST_VISIBLE_SQL})
+    ) THEN
     (SELECT jsonb_build_object(
               'orderId', production_order.payload ->> 'orderId',
               'totalCost', COALESCE(SUM(entry.amount), 0)::numeric,
@@ -29,7 +42,7 @@ export function createPostgresProductionOrderReader({ pool } = {}) {
     getForActor(actorId, productionOrderNumber) {
       return withPostgresTransaction(pool, async (queryable) => {
         const result = await queryable.query(
-          `SELECT production_order.payload, ${LINKED_ACTUAL_COST} AS "linkedActualCost"
+          `SELECT production_order.payload, ${linkedActualCost('$2')} AS "linkedActualCost"
              FROM production_orders AS production_order
             WHERE production_order.production_order_number = $1
               AND EXISTS (
@@ -82,7 +95,7 @@ async function page(queryable, actorId, { limit, afterProductionOrderNumber, fil
   if (afterProductionOrderNumber) { params.push(afterProductionOrderNumber); clauses.push(`production_order.production_order_number > $${params.length}`); }
   params.push(limit + 1);
   const result = await queryable.query(
-    `SELECT production_order.payload, production_order.production_order_number, ${LINKED_ACTUAL_COST} AS "linkedActualCost"
+    `SELECT production_order.payload, production_order.production_order_number, ${linkedActualCost('$1')} AS "linkedActualCost"
        FROM production_orders AS production_order
       WHERE ${clauses.join(' AND ')}
       ORDER BY production_order.production_order_number ASC

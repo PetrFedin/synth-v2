@@ -85,3 +85,11 @@ test('a stale expected version is a conflict, a malformed one is a bad request',
   assert.throws(() => assertExpectedMembershipVersion({ version: 3 }, 0), { code: 'TEAM_EXPECTED_VERSION_INVALID' });
   assertExpectedMembershipVersion({}, 1); // a membership written before versions existed is version 1
 });
+
+test('an owner who cannot sign in does not hold the organisation: removing them needs no spare owner', () => {
+  const ghost = member('ghost-1', 'owner');
+  assert.equal(changeMembershipRole({ actor: owner, target: ghost, role: 'viewer', activeOwnerCount: 1, targetCountsAsOwner: false, updatedAt: at }).role, 'viewer');
+  assert.equal(deactivateMembership({ actor: owner, target: ghost, activeOwnerCount: 1, targetCountsAsOwner: false, updatedAt: at }).status, 'inactive');
+  // Цель, которая считается, по-прежнему не может уйти, если она единственная.
+  assert.throws(() => changeMembershipRole({ actor: owner, target: owner, role: 'admin', activeOwnerCount: 1, targetCountsAsOwner: true, updatedAt: at }), { code: 'TEAM_LAST_OWNER' });
+});

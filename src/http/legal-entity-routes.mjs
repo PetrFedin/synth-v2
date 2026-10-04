@@ -13,6 +13,7 @@ export function createLegalEntityRoutes({ legalEntities } = {}) {
   const service = legalEntities ?? unavailable();
   return Object.freeze([
     read('GET', /^\/v2\/organisations\/([^/]+)\/legal-entities$/, [], ({ actorId, params }) => service.listForActor(actorId, decodeURIComponent(params[0]))),
+    read('GET', /^\/v2\/organisations\/([^/]+)\/legal-entity-issuers$/, [], ({ actorId, params }) => service.listIssuersForActor(actorId, decodeURIComponent(params[0]))),
     read('GET', /^\/v2\/legal-entities\/([^/]+)$/, [], ({ actorId, params }) => service.getForActor(actorId, decodeURIComponent(params[0]))),
     mutate('POST', /^\/v2\/legal-entities$/, CREATE, ({ commandId, actorId, body }) => service.createLegalEntity(commandId, actorId, body)),
     mutate('POST', /^\/v2\/legal-entities\/([^/]+)\/transition$/, TRANSITION, ({ commandId, actorId, params, body }) => service.transitionLegalEntity(commandId, actorId, decodeURIComponent(params[0]), body)),
@@ -56,5 +57,5 @@ function required(contract, requiredFields, objectFields = []) {
 }
 function unavailable() {
   const fail = () => invariant(false, 'LEGAL_ENTITY_SERVICE_REQUIRED', 'Legal Entity service is required');
-  return Object.freeze({ listForActor: fail, getForActor: fail, createLegalEntity: fail, transitionLegalEntity: fail, createLegalEntityVersion: fail });
+  return Object.freeze({ listForActor: fail, listIssuersForActor: fail, getForActor: fail, createLegalEntity: fail, transitionLegalEntity: fail, createLegalEntityVersion: fail });
 }

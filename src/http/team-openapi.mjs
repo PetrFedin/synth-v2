@@ -73,6 +73,34 @@ function schemas() {
       type: 'object', additionalProperties: false, required: ['token', 'password'],
       properties: { token: { type: 'string', pattern: '^swv2i_[A-Za-z0-9_-]{43}$' }, password: { type: 'string', minLength: 12, maxLength: 1024, format: 'password' } },
     },
+    OrganisationRosterMember: {
+      type: 'object', additionalProperties: false, required: ['userId', 'role', 'displayName', 'email'],
+      properties: {
+        userId: identifier,
+        role: { $ref: '#/components/schemas/TeamRole' },
+        displayName: nullableText,
+        email: { ...nullableText, description: 'E-mail address. Present only for a caller holding membership.manage; null for every other role.' },
+      },
+    },
+    OrganisationRoster: {
+      type: 'object', additionalProperties: false, required: ['items'],
+      properties: { items: { type: 'array', items: { $ref: '#/components/schemas/OrganisationRosterMember' } } },
+    },
+    LegalEntityIssuer: {
+      type: 'object', additionalProperties: false, required: ['id', 'organisationId', 'entityCode', 'status', 'nameRu', 'nameEn', 'jurisdiction'],
+      properties: {
+        id: identifier, organisationId: identifier, entityCode: { type: 'string' },
+        status: { type: 'string', enum: ['draft', 'active', 'archived'] },
+        nameRu: nullableText, nameEn: nullableText,
+        jurisdiction: { oneOf: [{ type: 'string', enum: ['RU', 'FOREIGN'] }, { type: 'null' }] },
+      },
+    },
+    LegalEntityIssuerList: { type: 'array', items: { $ref: '#/components/schemas/LegalEntityIssuer' } },
+    SeasonEconomicsResult: { type: 'object', description: 'Planned season economics of one campaign: placeholders, realisations and season totals.' },
+    LibraryEntryPage: {
+      type: 'object', additionalProperties: false, required: ['items', 'nextCursor'],
+      properties: { items: { type: 'array', items: { type: 'object' } }, nextCursor: nullableText },
+    },
     AcceptInviteResult: {
       type: 'object', additionalProperties: false, required: ['userId', 'email', 'organisationId'],
       properties: { userId: identifier, email: { type: 'string' }, organisationId: identifier },
@@ -100,7 +128,7 @@ function paths() {
     },
     '/organisations/{organisationId}/team/{userId}/role': {
       post: mutation('changeTeamMemberRole', member, '#/components/schemas/TeamRoleChangeInput', '#/components/schemas/TeamChangeResult',
-        'Changes a member role. Refused for the last active owner, for a non-owner touching an owner, and for a member raising their own role.'),
+        'Changes a member role. Refused (422 TEAM_LAST_OWNER) when it would leave no active owner who can sign in: an owner who was invited but has not accepted, or whose account is disabled, does not count. Also refused for a non-owner touching an owner and for a member raising their own role.'),
     },
     '/organisations/{organisationId}/team/{userId}/deactivate': {
       post: mutation('deactivateTeamMember', member, '#/components/schemas/TeamVersionedInput', '#/components/schemas/TeamChangeResult',
@@ -113,6 +141,47 @@ function paths() {
     '/organisations/{organisationId}/team/{userId}/reissue-invite': {
       post: mutation('reissueTeamInvite', member, '#/components/schemas/TeamVersionedInput', '#/components/schemas/TeamChangeResult',
         'Issues a new one-time invitation token for a member who has not set a password yet; earlier tokens stop working.'),
+    },
+    '/organisations/{organisationId}/members': {
+      get: {
+        operationId: 'listOrganisationMembers',
+        description: 'Active members of an organisation the caller belongs to: name and role for every member, e-mail only when the caller holds membership.manage. Outsiders get an empty roster rather than a refusal.',
+        security: [{ bearerAuth: [] }],
+        parameters: [organisationId],
+        responses: responses('#/components/schemas/OrganisationRoster', false),
+      },
+    },
+    '/organisations/{organisationId}/legal-entity-issuers': {
+      get: {
+        operationId: 'listLegalEntityIssuers',
+        description: 'Lightweight legal entity list for choosing a document issuer: code, names, jurisdiction and status, never requisites. Readable with organisation.manage or compliance-document.manage (finance); the full list stays organisation.manage only.',
+        security: [{ bearerAuth: [] }],
+        parameters: [organisationId],
+        responses: responses('#/components/schemas/LegalEntityIssuerList', false),
+      },
+    },
+    '/campaigns/{campaignId}/season-economics': {
+      get: {
+        operationId: 'getSeasonEconomics',
+        description: 'Planned cost and margin of a season. 404 when the campaign does not exist or is not the caller organisation; 403 for a member without cost.manage (owner, admin, finance).',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'campaignId', in: 'path', required: true, schema: identifier }],
+        responses: responses('#/components/schemas/SeasonEconomicsResult', false),
+      },
+    },
+    '/libraries/{dictionaryCode}/entries': {
+      get: {
+        operationId: 'listLibraryEntries',
+        description: 'Entries of a governed library. 404 LIBRARY_NOT_FOUND for a code that is not a library. (History of an unknown or foreign object, by contrast, is an empty page by design: history subjects are not a closed set and a refusal would confirm existence.)',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'dictionaryCode', in: 'path', required: true, schema: { type: 'string' } },
+          { name: 'limit', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 200, default: 100 } },
+          { name: 'cursor', in: 'query', required: false, schema: { type: 'string' } },
+          { name: 'q', in: 'query', required: false, schema: { type: 'string', maxLength: 200 } },
+        ],
+        responses: responses('#/components/schemas/LibraryEntryPage', false),
+      },
     },
     '/auth/accept-invite': {
       post: {

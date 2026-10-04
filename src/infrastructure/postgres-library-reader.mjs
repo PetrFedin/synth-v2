@@ -29,6 +29,19 @@ export function createPostgresLibraryReader({ pool } = {}) {
 
     entriesForActor(actorId, dictionaryCode, { limit, after, query }) {
       return withPostgresTransaction(pool, async (queryable) => {
+        // Справочника с таким кодом нет (или читающий ничего не видит) — это не пустая страница, а
+        // `null`: опечатка в коде не должна выглядеть как справочник без записей.
+        const known = await queryable.query(
+          `SELECT 1
+             FROM mdm_library_workspace AS library
+            WHERE library.code = $2
+              AND EXISTS (
+                SELECT 1 FROM memberships AS membership
+                 WHERE membership.user_id = $1 AND membership.status = 'active'
+              )`,
+          [actorId, dictionaryCode],
+        );
+        if (known.rowCount === 0) return null;
         const params = [actorId, dictionaryCode, limit + 1];
         let filter = '';
         if (after) { params.push(after); filter += ` AND entry.payload ->> 'code' > $${params.length}`; }

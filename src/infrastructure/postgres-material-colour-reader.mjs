@@ -1,8 +1,9 @@
 import { invariant } from '../core/errors.mjs';
+import { CAPABILITIES, rolesWithCapability } from '../modules/access-control/public.mjs';
 import { withPostgresTransaction } from './postgres-transaction.mjs';
 
 const SNAPSHOT_BEGIN = 'BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY';
-const READ_ROLES = Object.freeze(['owner', 'admin', 'sales', 'finance', 'viewer']);
+const READ_ROLES = rolesWithCapability(CAPABILITIES.PRODUCT_READ);
 
 // Палитра и её образцы читаются одним снимком: прочитанные порознь, они могли бы показать цвет,
 // утверждённый по образцу, который в тот же момент отозвали.

@@ -67,3 +67,32 @@ test('recipient member can read notification while another organisation cannot',
   );
   assert.equal(projectionStore.snapshot().commands.some((item) => item.id === 'cmd-foreign-read'), false);
 });
+
+test('read state is per person: a viewer marking a notification does not clear it for the owner', async () => {
+  const { sourceStore, service } = await fixture();
+  await sourceStore.transaction((tx) => {
+    tx.insertMembership(createMembership({ id: 'm-owner', organisationId: 'brand-1', organisationType: 'brand', userId: 'brand-owner', role: 'owner', createdAt: 'now' }));
+  });
+  await service.projectPending();
+  const ownerBefore = await service.listForActor('brand-owner');
+  assert.ok(ownerBefore.length >= 3 && ownerBefore.every((item) => item.status === 'unread'));
+  const target = ownerBefore[0];
+
+  const viewerRead = await service.markRead('cmd-viewer-read', 'brand-user', target.id);
+  assert.equal(viewerRead.status, 'read');
+  assert.equal(viewerRead.readBy, 'brand-user');
+
+  const ownerAfter = await service.listForActor('brand-owner');
+  assert.equal(ownerAfter.find((item) => item.id === target.id).status, 'unread', 'the owner never read it');
+  assert.equal(ownerAfter.find((item) => item.id === target.id).readBy, null);
+  const viewerAfter = await service.listForActor('brand-user');
+  assert.equal(viewerAfter.find((item) => item.id === target.id).status, 'read');
+  assert.equal(viewerAfter.filter((item) => item.status === 'unread').length, ownerBefore.length - 1);
+
+  // Повтор — то же прочтение; своя отметка у владельца — отдельная.
+  const again = await service.markRead('cmd-viewer-read-2', 'brand-user', target.id);
+  assert.equal(again.readAt, viewerRead.readAt);
+  const ownerRead = await service.markRead('cmd-owner-read', 'brand-owner', target.id);
+  assert.equal(ownerRead.readBy, 'brand-owner');
+  assert.equal((await service.pageForActor('brand-owner', { limit: 50 })).items.find((item) => item.id === target.id).status, 'read');
+});

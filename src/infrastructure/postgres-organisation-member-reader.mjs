@@ -1,7 +1,11 @@
 import { invariant } from '../core/errors.mjs';
+import { CAPABILITIES, rolesWithCapability } from '../modules/access-control/public.mjs';
 import { withPostgresTransaction } from './postgres-transaction.mjs';
 
 const SNAPSHOT_BEGIN = 'BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY';
+// Адрес почты — персональные данные. Видят его только те, кто управляет составом (`membership.manage`);
+// остальным ростер нужен, чтобы назвать коллегу по имени и роли, а не чтобы писать ему.
+const EMAIL_VISIBLE_ROLES = rolesWithCapability(CAPABILITIES.MEMBERSHIP_MANAGE);
 
 // Who works here.
 //
@@ -11,7 +15,8 @@ const SNAPSHOT_BEGIN = 'BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ O
 // register showed a raw user id because that was all it had.
 //
 // A roster is readable by the people in it. Nothing else is exposed — no roles from other
-// organisations, no accounts that never joined this one.
+// organisations, no accounts that never joined this one, and no e-mail addresses unless the reader
+// manages the team (including addresses of people invited but not yet signed in).
 /** @param {{ pool?: any }} [options] */
 export function createPostgresOrganisationMemberReader({ pool } = {}) {
   invariant(pool && typeof pool.connect === 'function', 'ORGANISATION_MEMBER_POOL_REQUIRED', 'PostgreSQL pool is required');
@@ -22,19 +27,17 @@ export function createPostgresOrganisationMemberReader({ pool } = {}) {
           `SELECT membership.user_id,
                   membership.role,
                   NULLIF(trim(person.display_name), '') AS display_name,
-                  person.email
+                  CASE WHEN reader.role = ANY($3::text[]) THEN person.email END AS email
              FROM memberships AS membership
+             JOIN memberships AS reader
+               ON reader.organisation_id = membership.organisation_id
+              AND reader.user_id = $2
+              AND reader.status = 'active'
              LEFT JOIN auth_users AS person ON person.id = membership.user_id
             WHERE membership.organisation_id = $1
               AND membership.status = 'active'
-              AND EXISTS (
-                SELECT 1 FROM memberships AS reader
-                 WHERE reader.organisation_id = membership.organisation_id
-                   AND reader.user_id = $2
-                   AND reader.status = 'active'
-              )
-            ORDER BY COALESCE(NULLIF(trim(person.display_name), ''), person.email, membership.user_id)`,
-          [organisationId, actorId],
+            ORDER BY COALESCE(NULLIF(trim(person.display_name), ''), CASE WHEN reader.role = ANY($3::text[]) THEN person.email END, membership.user_id)`,
+          [organisationId, actorId, EMAIL_VISIBLE_ROLES],
         );
         return result.rows.map((row) => Object.freeze({
           userId: row.user_id,

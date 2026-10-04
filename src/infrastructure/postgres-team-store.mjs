@@ -41,7 +41,10 @@ function view(client) {
       return result.rows.map(membershipFromRow);
     },
     async countActiveOwners(organisationId) {
-      const result = await client.query(`SELECT count(*)::int AS count FROM memberships WHERE organisation_id = $1 AND role = 'owner' AND status = 'active'`, [organisationId]);
+      const result = await client.query(`SELECT count(*)::int AS count
+           FROM memberships AS membership
+           JOIN auth_users AS account ON account.id = membership.user_id
+          WHERE membership.organisation_id = $1 AND membership.role = 'owner' AND membership.status = 'active' AND account.status = 'active'`, [organisationId]);
       return result.rows[0].count;
     },
     async countActiveMembershipsForUser(userId) {

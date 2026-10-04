@@ -1,7 +1,7 @@
 import { domainEvent } from '../core/events.mjs';
 import { invariant, requireEntity } from '../core/errors.mjs';
 import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
-import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
+import { CAPABILITIES, assertCapability, roleHasCapability } from '../modules/access-control/public.mjs';
 import {
   createLegalEntity as createLegalEntityDomain,
   createLegalEntityVersion as createLegalEntityVersionDomain,
@@ -109,6 +109,38 @@ export function createLegalEntityService({ store, clock = () => new Date().toISO
         assertCapability(membership, CAPABILITIES.ORGANISATION_MANAGE);
         const latest = await tx.getLatestLegalEntityVersion(legalEntityId);
         return Object.freeze({ ...legalEntity, latestVersion: latest ?? null });
+      });
+    },
+
+    /**
+     * Облегчённый список юрлиц для выбора эмитента документа.
+     *
+     * Полный список (`listForActor`) отдаёт реквизиты — ИНН, ОГРН, банковские данные — и поэтому
+     * закрыт правом `organisation.manage`. Но документ выпускает тот, у кого есть
+     * `compliance-document.manage` (финансы), и без юрлица-эмитента выпустить его нельзя. Поэтому
+     * здесь два права вместо одного, а наружу идёт только то, что нужно для выбора: код, название,
+     * юрисдикция и статус — без реквизитов, хеша и авторов.
+     */
+    async listIssuersForActor(actorId, organisationId) {
+      return store.transaction(async (tx) => {
+        invariant(typeof organisationId === 'string' && organisationId, 'LEGAL_ENTITY_ORGANISATION_REQUIRED', 'Organisation id is required');
+        const membership = await tx.getMembership(organisationId, actorId);
+        invariant(membership?.status === 'active', 'ACTIVE_MEMBERSHIP_REQUIRED', 'Active organisation membership is required', { organisationId });
+        invariant(
+          roleHasCapability(membership.role, CAPABILITIES.ORGANISATION_MANAGE) || roleHasCapability(membership.role, CAPABILITIES.COMPLIANCE_DOCUMENT_MANAGE),
+          'CAPABILITY_DENIED', 'Role does not grant required capability',
+          { role: membership.role, capability: CAPABILITIES.COMPLIANCE_DOCUMENT_MANAGE, organisationId },
+        );
+        const entities = await tx.listLegalEntitiesWithLatestVersion(organisationId);
+        return Object.freeze(entities.map((entity) => Object.freeze({
+          id: entity.id,
+          organisationId: entity.organisationId,
+          entityCode: entity.entityCode,
+          status: entity.status,
+          nameRu: entity.latestVersion?.nameRu ?? null,
+          nameEn: entity.latestVersion?.nameEn ?? null,
+          jurisdiction: entity.latestVersion?.jurisdiction ?? null,
+        })));
       });
     },
 

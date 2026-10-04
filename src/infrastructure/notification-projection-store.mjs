@@ -21,6 +21,7 @@ export function createMemoryNotificationProjectionStore() {
       notifications: [...state.notifications.values()],
       projections: [...state.projections.values()],
       commands: [...state.commands.values()],
+      reads: [...state.reads.values()],
     }),
   });
 }
@@ -31,6 +32,7 @@ function emptyState() {
     notificationByDedupeKey: new Map(),
     projections: new Map(),
     commands: new Map(),
+    reads: new Map(),
   };
 }
 
@@ -50,6 +52,14 @@ function transactionView(state) {
       invariant(!state.notificationByDedupeKey.has(notification.dedupeKey), 'NOTIFICATION_DEDUPE_CONFLICT', 'Notification already projected', { dedupeKey: notification.dedupeKey });
       state.notifications.set(notification.id, notification);
       state.notificationByDedupeKey.set(notification.dedupeKey, notification.id);
+    },
+    recordNotificationRead({ notificationId, userId, readAt }) {
+      const key = `${notificationId}\u0000${userId}`;
+      const existing = state.reads.get(key);
+      if (existing) return existing;
+      const read = Object.freeze({ notificationId, userId, readAt });
+      state.reads.set(key, read);
+      return read;
     },
     saveNotification(notification, expectedVersion) {
       const current = state.notifications.get(notification.id);

@@ -32,6 +32,7 @@ export function createLibraryQueryService({ reader } = {}) {
         after: options.cursor ? String(options.cursor) : null,
         query,
       });
+      invariant(page, 'LIBRARY_NOT_FOUND', 'Library not found', { dictionaryCode });
       return Object.freeze({ items: Object.freeze(page.items), nextCursor: page.nextCursor ?? null });
     },
   });

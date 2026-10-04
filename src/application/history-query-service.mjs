@@ -19,7 +19,10 @@ export function createHistoryQueryService({ reader } = {}) {
         before: options.cursor ? String(options.cursor) : null,
       });
       // An object with no history and an object the reader may not see look the same from here, and
-      // that is deliberate: the alternative tells an outsider that the object exists.
+      // that is deliberate: the alternative tells an outsider that the object exists. History subjects
+      // are not a closed set either (any aggregate id that ever produced an event is one), so "unknown"
+      // is not a state the service could tell from "nothing yet". Contrast with libraries, which are
+      // a closed, global list: an unknown code there is a 404.
       return Object.freeze({ items: Object.freeze(withheldFor(page).items), nextCursor: page.nextCursor ?? null });
     },
     // The attribute stream: every value that changed, with what it was and what it became. The

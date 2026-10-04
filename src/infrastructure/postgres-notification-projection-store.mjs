@@ -1,5 +1,6 @@
 import { invariant } from '../core/errors.mjs';
 import { getRegisteredCommand, insertRegisteredCommand } from './postgres-command-registry.mjs';
+import { notificationForReader } from '../modules/notifications/public.mjs';
 import { withPostgresTransaction } from './postgres-transaction.mjs';
 
 const MAX_BATCH_LIMIT = 1000;
@@ -91,7 +92,8 @@ export function createPostgresNotificationProjectionStore({ pool }) {
       );
       return result.rows.map((row) => outboxRecordFromRow({ ...row, attempt_count: 1 }));
     },
-    async listForOrganisations(organisationIds, { limit = DEFAULT_LIST_LIMIT } = {}) {
+    /** @param {string[]} organisationIds @param {{ limit?: number, actorId?: string }} [options] */
+    async listForOrganisations(organisationIds, { limit = DEFAULT_LIST_LIMIT, actorId } = {}) {
       invariant(Array.isArray(organisationIds), 'NOTIFICATION_ORGANISATIONS_INVALID', 'Notification organisation ids must be an array');
       invariant(
         Number.isSafeInteger(limit) && limit >= 1 && limit <= MAX_LIST_LIMIT,
@@ -101,19 +103,24 @@ export function createPostgresNotificationProjectionStore({ pool }) {
       );
       const ids = normalizeOrganisationIds(organisationIds);
       if (!ids.length) return Object.freeze([]);
+      assertReader(actorId);
+      // «Прочитано» — у человека, а не у организации: непрочитанные первыми по его собственным отметкам.
       const result = await pool.query(
-        `SELECT payload
-           FROM notifications
-          WHERE recipient_organisation_id = ANY($1::text[])
-          ORDER BY (status = 'unread') DESC,
-                   created_at DESC,
-                   id DESC
+        `SELECT notification.payload, own_read.read_at
+           FROM notifications AS notification
+           LEFT JOIN notification_reads AS own_read
+             ON own_read.notification_id = notification.id AND own_read.user_id = $3
+          WHERE notification.recipient_organisation_id = ANY($1::text[])
+          ORDER BY (own_read.read_at IS NULL) DESC,
+                   notification.created_at DESC,
+                   notification.id DESC
           LIMIT $2`,
-        [ids, limit],
+        [ids, limit, actorId],
       );
-      return Object.freeze(result.rows.map((row) => row.payload));
+      return Object.freeze(result.rows.map((row) => notificationForReader(row.payload, actorId, row.read_at)));
     },
-    async pageForOrganisations(organisationIds, { limit, after } = {}) {
+    /** @param {string[]} organisationIds @param {{ limit?: number, after?: any, actorId?: string }} [options] */
+    async pageForOrganisations(organisationIds, { limit, after, actorId } = {}) {
       invariant(Array.isArray(organisationIds), 'NOTIFICATION_ORGANISATIONS_INVALID', 'Notification organisation ids must be an array');
       invariant(
         Number.isSafeInteger(limit) && limit >= 1 && limit <= MAX_PAGE_LIMIT,
@@ -122,31 +129,36 @@ export function createPostgresNotificationProjectionStore({ pool }) {
         { min: 1, max: MAX_PAGE_LIMIT },
       );
       validatePagePosition(after);
+      assertReader(actorId);
       const ids = normalizeOrganisationIds(organisationIds);
       if (!ids.length) return emptyPage();
       const fetchLimit = limit + 1;
       const result = after
         ? await pool.query(
-            `SELECT payload, created_at, id
-               FROM notifications
-              WHERE recipient_organisation_id = ANY($1::text[])
-                AND (created_at, id) < ($2::timestamptz, $3::text)
-              ORDER BY created_at DESC, id DESC
+            `SELECT notification.payload, notification.created_at, notification.id, own_read.read_at
+               FROM notifications AS notification
+               LEFT JOIN notification_reads AS own_read
+                 ON own_read.notification_id = notification.id AND own_read.user_id = $5
+              WHERE notification.recipient_organisation_id = ANY($1::text[])
+                AND (notification.created_at, notification.id) < ($2::timestamptz, $3::text)
+              ORDER BY notification.created_at DESC, notification.id DESC
               LIMIT $4`,
-            [ids, after.createdAt, after.id, fetchLimit],
+            [ids, after.createdAt, after.id, fetchLimit, actorId],
           )
         : await pool.query(
-            `SELECT payload, created_at, id
-               FROM notifications
-              WHERE recipient_organisation_id = ANY($1::text[])
-              ORDER BY created_at DESC, id DESC
+            `SELECT notification.payload, notification.created_at, notification.id, own_read.read_at
+               FROM notifications AS notification
+               LEFT JOIN notification_reads AS own_read
+                 ON own_read.notification_id = notification.id AND own_read.user_id = $3
+              WHERE notification.recipient_organisation_id = ANY($1::text[])
+              ORDER BY notification.created_at DESC, notification.id DESC
               LIMIT $2`,
-            [ids, fetchLimit],
+            [ids, fetchLimit, actorId],
           );
       const hasMore = result.rows.length > limit;
       const rows = hasMore ? result.rows.slice(0, limit) : result.rows;
       return Object.freeze({
-        items: Object.freeze(rows.map((row) => row.payload)),
+        items: Object.freeze(rows.map((row) => notificationForReader(row.payload, actorId, row.read_at))),
         hasMore,
         ...(hasMore ? { nextPosition: notificationPagePosition(rows.at(-1)) } : {}),
       });
@@ -228,6 +240,20 @@ function transactionView(client) {
         throw error;
       }
     },
+    // Отметка «прочитано» — строка на пару (уведомление, человек). Повторная отметка не меняет
+    // первую: вернётся то время, когда человек прочитал впервые.
+    async recordNotificationRead({ notificationId, userId, readAt }) {
+      const inserted = await client.query(
+        `INSERT INTO notification_reads (notification_id, user_id, read_at)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (notification_id, user_id) DO NOTHING
+         RETURNING read_at`,
+        [notificationId, userId, readAt],
+      );
+      if (inserted.rows[0]) return Object.freeze({ readAt: inserted.rows[0].read_at.toISOString() });
+      const existing = await client.query('SELECT read_at FROM notification_reads WHERE notification_id = $1 AND user_id = $2', [notificationId, userId]);
+      return Object.freeze({ readAt: existing.rows[0].read_at.toISOString() });
+    },
     async saveNotification(notification, expectedVersion) {
       invariant(notification.version === expectedVersion + 1, 'VERSION_INCREMENT_INVALID', 'Version must increment exactly once');
       const result = await client.query(
@@ -267,6 +293,10 @@ function transactionView(client) {
     getCommand: (id) => getRegisteredCommand(client, 'notification', id),
     insertCommand: (command) => insertRegisteredCommand(client, 'notification', command),
   });
+}
+
+function assertReader(actorId) {
+  invariant(typeof actorId === 'string' && actorId.length > 0, 'NOTIFICATION_ACTOR_REQUIRED', 'Notification actor is required');
 }
 
 function notificationPagePosition(row) {

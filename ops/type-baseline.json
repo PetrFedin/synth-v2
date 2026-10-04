@@ -158,7 +158,6 @@
   "src/infrastructure/postgres-measurement-reader.mjs": 1,
   "src/infrastructure/postgres-measurement-store.mjs": 1,
   "src/infrastructure/postgres-migrator.mjs": 5,
-  "src/infrastructure/postgres-notification-projection-store.mjs": 2,
   "src/infrastructure/postgres-notification-reader.mjs": 1,
   "src/infrastructure/postgres-operation-sequence-reader.mjs": 1,
   "src/infrastructure/postgres-operation-sequence-store.mjs": 1,

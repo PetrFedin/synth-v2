@@ -36,7 +36,11 @@ export function createPostgresNotificationReader({ pool } = {}) {
       const result = await pool.query(
         `SELECT count(*)::bigint AS unread_count
            FROM notifications AS notification
-          WHERE notification.status = 'unread'
+          WHERE NOT EXISTS (
+              SELECT 1 FROM notification_reads AS own_read
+               WHERE own_read.notification_id = notification.id
+                 AND own_read.user_id = $1
+            )
             AND EXISTS (
               SELECT 1
                 FROM memberships AS membership

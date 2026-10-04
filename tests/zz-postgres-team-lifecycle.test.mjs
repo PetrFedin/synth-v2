@@ -175,3 +175,50 @@ test('PostgreSQL: the invitation token is never stored in clear, and a replay by
     assert.deepEqual(audit, ['membership.invited']);
   } finally { await pool.end(); }
 });
+
+test('PostgreSQL: owners who never accepted their invitation do not keep the organisation owned', { skip: !databaseUrl }, async () => {
+  const { pool, runtime, call, login } = await boot();
+  try {
+    const owner = await login('owner@brand.test');
+    const members = [];
+    for (const email of ['ghost1@brand.test', 'ghost2@brand.test']) {
+      const invited = await call('POST', '/v2/organisations/brand-1/team/invitations', { token: owner, body: { email, role: 'viewer' } });
+      assert.equal(invited.status, 200, JSON.stringify(invited.body));
+      const promoted = await call('POST', `/v2/organisations/brand-1/team/${invited.body.data.member.userId}/role`, { token: owner, body: { role: 'owner', expectedVersion: 1 } });
+      assert.equal(promoted.status, 200, JSON.stringify(promoted.body));
+      members.push(invited.body.data.member);
+    }
+    // Служба: 422 TEAM_LAST_OWNER, членство не тронуто.
+    const refused = await call('POST', '/v2/organisations/brand-1/team/owner-1/role', { token: owner, body: { role: 'admin', expectedVersion: 1 } });
+    assert.equal(refused.status, 422, JSON.stringify(refused.body));
+    assert.equal(refused.body.error.code, 'TEAM_LAST_OWNER');
+    assert.equal((await pool.query(`SELECT role FROM memberships WHERE user_id = 'owner-1'`)).rows[0].role, 'owner');
+    // База сама, в обход службы: тот же отказ.
+    await assert.rejects(() => pool.query(`UPDATE memberships SET role = 'admin' WHERE user_id = 'owner-1'`), /TEAM_LAST_OWNER/);
+    await assert.rejects(() => pool.query(`UPDATE memberships SET status = 'inactive' WHERE user_id = 'owner-1'`), /TEAM_LAST_OWNER/);
+    // Приглашённого владельца разжаловать можно: он не считался.
+    await pool.query(`UPDATE memberships SET role = 'viewer' WHERE user_id = $1`, [members[0].userId]);
+    // Отключённая учётная запись владельца тоже не считается.
+    await pool.query(`UPDATE auth_users SET status = 'disabled' WHERE id = $1`, [members[1].userId]);
+    await assert.rejects(() => pool.query(`UPDATE memberships SET role = 'admin' WHERE user_id = 'owner-1'`), /TEAM_LAST_OWNER/);
+  } finally { await pool.end(); }
+});
+
+test('PostgreSQL: with an unaccepted third owner, two real owners demoting each other still leave one', { skip: !databaseUrl }, async () => {
+  const { pool, runtime, call, login, onboard } = await boot();
+  try {
+    const owner = await login('owner@brand.test');
+    const second = await onboard(owner, 'second@brand.test', 'viewer');
+    await call('POST', `/v2/organisations/brand-1/team/${second.userId}/role`, { token: owner, body: { role: 'owner', expectedVersion: 1 } });
+    const ghost = await call('POST', '/v2/organisations/brand-1/team/invitations', { token: owner, body: { email: 'ghost@brand.test', role: 'viewer' } });
+    await call('POST', `/v2/organisations/brand-1/team/${ghost.body.data.member.userId}/role`, { token: owner, body: { role: 'owner', expectedVersion: 1 } });
+    const outcomes = await Promise.allSettled([
+      runtime.team.changeRole('ghost-race-a', 'owner-1', 'brand-1', second.userId, { role: 'viewer', expectedVersion: 2 }),
+      runtime.team.changeRole('ghost-race-b', second.userId, 'brand-1', 'owner-1', { role: 'viewer', expectedVersion: 1 }),
+    ]);
+    assert.equal(outcomes.filter((outcome) => outcome.status === 'fulfilled').length, 1, JSON.stringify(outcomes.map((o) => o.reason?.code)));
+    const signable = (await pool.query(`SELECT count(*)::int AS count FROM memberships m JOIN auth_users u ON u.id = m.user_id
+                                         WHERE m.organisation_id = 'brand-1' AND m.role = 'owner' AND m.status = 'active' AND u.status = 'active'`)).rows[0].count;
+    assert.equal(signable, 1);
+  } finally { await pool.end(); }
+});

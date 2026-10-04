@@ -11,6 +11,8 @@ import { createMeasurementService } from '../application/measurement-service.mjs
 import { createMeasurementQueryService } from '../application/measurement-query-service.mjs';
 import { createOrderEconomicsService } from '../application/order-economics-service.mjs';
 import { createOrderEconomicsPositionService } from '../application/order-economics-position-service.mjs';
+import { createOrderEconomicsLedgerService } from '../application/order-economics-ledger-service.mjs';
+import { createPostgresOrderEconomicsLedgerReader } from '../infrastructure/postgres-order-economics-ledger-reader.mjs';
 import { createPostCloseAllocationReconciliationService } from '../application/post-close-allocation-reconciliation-service.mjs';
 import { createLegalEntityService } from '../application/legal-entity-service.mjs';
 import { createTeamService } from '../application/team-service.mjs';
@@ -146,6 +148,7 @@ export function createPostgresWholesaleRuntime({
     ...createOrderEconomicsService({ economicsStore: orderEconomicsStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }),
     ...createPostCloseAllocationReconciliationService({ economicsStore: orderEconomicsStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }),
     ...createOrderEconomicsPositionService({ economicsStore: orderEconomicsStore, bomStore }),
+    ...createOrderEconomicsLedgerService({ reader: createPostgresOrderEconomicsLedgerReader({ pool }) }),
   });
   const materials = Object.freeze({ ...createMaterialService({ materialStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createMaterialQueryService({ reader: createPostgresMaterialReader({ pool }) }) });
   const boms = Object.freeze({ ...createBomService({ bomStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createBomQueryService({ reader: createPostgresBomReader({ pool }) }) });

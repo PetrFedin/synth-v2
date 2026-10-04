@@ -150,15 +150,27 @@
     return item.type === 'order-amendment-response' ? item.detail?.orderId : item.route.entityId;
   }
 
+  // Экран-владелец один на несколько видов дел: партнёры — это и запрос на связь, и документ, и
+  // юрлицо. Чтобы «Перейти» приводило к самому делу, а не к вкладке, открытой последней, вид сам
+  // называет вкладку и реестр, где его сущность лежит под собственным идентификатором.
+  const TYPE_TARGETS = Object.freeze({
+    'relationship-response': Object.freeze({ scope: 'od-relationships', tab: 'relationships' }),
+    'compliance-document-issue': Object.freeze({ scope: 'od-compliance-documents', tab: 'compliance-documents' }),
+    'showroom-invitation-response': Object.freeze({ scope: 'od-invitations', tab: 'invitations' }),
+  });
+
   function open(item) {
     const view = item.route.view;
-    const target = ENTITY_TARGETS[view];
+    const target = TYPE_TARGETS[item.type] || ENTITY_TARGETS[view];
     // Приёмка и претензия живут в заказе: выделяется заказ, а там — «Отгрузка и приёмка».
     const entityId = ORDER_KEYED.has(item.type) ? item.detail?.orderId : targetEntityId(item);
     if (target && entityId && typeof OD_UI !== 'undefined') {
       OD_UI.selected[target.scope] = entityId;
       if (target.tab) OD_UI.tabs[view] = target.tab;
     }
+    // Экран-владелец сам решает, как перечитать свои данные (`view-refresh.js`): дело появилось в
+    // реестре потому, что сущность изменилась, а экран мог открыться раньше и хранить старый список.
+    if (global.SynthaViewRefresh) { void global.SynthaViewRefresh.open(view); return; }
     state.view = view;
     renderApp();
   }
@@ -191,16 +203,16 @@
     Object.entries(ui.counts)
       .filter(([, entry]) => entry.count && (ui.group === 'all' || entry.group === ui.group))
       .forEach(([type, entry]) => {
-        const title = TYPE_TITLES[type];
-        select.append(el('option', { value: type, rawText: `${title ? text(title[0], title[1]) : type} (${entry.count})` }));
+        // Подпись приходит вместе со счётчиком — теми же словами, что заголовок дела в реестре, —
+        // поэтому тип из другой семьи или ещё не загруженный не превращается в сырой код.
+        const title = entry.titleRu ? text(entry.titleRu, entry.titleEn || entry.titleRu) : type;
+        select.append(el('option', { value: type, rawText: `${title} (${entry.count})` }));
       });
     select.value = ui.type;
     select.addEventListener('change', () => { ui.type = select.value; void loadList(true); });
     wrap.append(select);
     return wrap;
   }
-
-  const TYPE_TITLES = {};
 
   function inspector(item) {
     if (!item) return odInspector({ title: text('Выберите дело', 'Select an item') });
@@ -241,12 +253,13 @@
     const wanted = (OD_UI.tabs['awaiting-action'] && tabs.some((tab) => tab.id === OD_UI.tabs['awaiting-action'])) ? OD_UI.tabs['awaiting-action'] : 'all';
     if (wanted !== ui.group) { ui.group = wanted; ui.type = 'all'; }
     queueMicrotask(() => { void loadList(false); });
-    ui.items.forEach((item) => { TYPE_TITLES[item.type] = [item.titleRu, item.titleEn]; });
     const header = odHeader('awaiting-action', tabs, [
       { label: text('Ждёт вас', 'Awaiting you'), value: ui.total, detail: text('ход за вами', 'the move is yours') },
       { label: text('Просрочено', 'Overdue'), value: ui.overdue, detail: text('срок уже прошёл', 'deadline passed'), tone: ui.overdue ? 'danger' : '' },
     ], [], null, (() => { const box = el('div', { className: 'row' }); box.append(typeFilter(), refreshButton()); return box; })());
-    if (ui.loading && !ui.items.length) return odPage(text('Ждёт вас', 'Awaiting you'), header, empty(I18N.t('common.loading')));
+    // «Ничего не ждёт» — утверждение, и оно верно только после чтения: до первого ответа сервера
+    // (и пока список этого фильтра ещё не загружен) экран говорит «загрузка», а не «пусто».
+    if (!ui.items.length && (ui.loading || ui.loadedKey !== listKey())) return odPage(text('Ждёт вас', 'Awaiting you'), header, empty(I18N.t('common.loading')));
     if (!ui.items.length) return odPage(text('Ждёт вас', 'Awaiting you'), header, empty(text('Сейчас ничего не ждёт вашего действия.', 'Nothing is waiting for your action right now.')));
     const registry = odRegistry({
       scope: 'od-awaiting-action', filterScope: 'awaiting-action', rows: ui.items,

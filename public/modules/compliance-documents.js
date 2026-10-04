@@ -43,7 +43,7 @@ function complianceDocumentManageableOrganisations() {
 function loadComplianceDocuments(organisationId) {
   if (complianceDocumentState.data[organisationId] || complianceDocumentState.loading[organisationId] || complianceDocumentState.failed[organisationId]) return;
   complianceDocumentState.loading[organisationId] = true;
-  api(`/v2/organisations/${encodeURIComponent(organisationId)}/compliance-documents`)
+  return api(`/v2/organisations/${encodeURIComponent(organisationId)}/compliance-documents`)
     .then((value) => { complianceDocumentState.data[organisationId] = value; })
     .catch(() => { complianceDocumentState.failed[organisationId] = true; })
     .finally(() => { complianceDocumentState.loading[organisationId] = false; if (state.view === 'partners') renderApp(); });
@@ -98,6 +98,14 @@ function legalEntityLabel(organisationId, legalEntityId) {
   const shortCode = id.replace(/^[a-z-]+_/i, '').replace(/-/g, '').slice(0, 6).toUpperCase();
   return `${localText('Юрлицо', 'Legal entity')} ${shortCode}`;
 }
+
+// Документы кэшируются по организации и без этого не перечитываются: черновик, из-за которого дело
+// появилось в «Ждёт вас», отсутствовал бы в уже открытой вкладке «Документы».
+window.SynthaViewRefresh?.register('partners', () => {
+  complianceDocumentState.data = {};
+  complianceDocumentState.failed = {};
+  return Promise.all(complianceDocumentManageableOrganisations().map((org) => loadComplianceDocuments(org.id)));
+});
 
 function complianceDocumentInvalidate(item) {
   delete complianceDocumentState.data[item.organisationId];

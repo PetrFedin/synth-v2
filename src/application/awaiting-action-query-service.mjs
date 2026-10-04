@@ -27,7 +27,12 @@ export function createAwaitingActionQueryService({ reader, clock = () => new Dat
         invariant(types.includes(row.type), 'AWAITING_ACTION_RESULT_INVALID', 'Awaiting action reader returned a type that was not requested', { type: row.type });
       }
       const summary = summariseAwaitingActionCounts(result.counts);
-      const counts = Object.fromEntries(types.map((type) => [type, Object.freeze({ group: awaitingActionType(type).group, count: summary.byType[type]?.count ?? 0, overdue: summary.byType[type]?.overdue ?? 0 })]));
+      // The title travels with the counter: the type filter must name a type the list below it does
+      // not show (another family, or a type with nothing loaded yet) in the words of the register.
+      const counts = Object.fromEntries(types.map((type) => {
+        const entry = awaitingActionType(type);
+        return [type, Object.freeze({ group: entry.group, titleRu: entry.labelRu, titleEn: entry.labelEn, count: summary.byType[type]?.count ?? 0, overdue: summary.byType[type]?.overdue ?? 0 })];
+      }));
       return Object.freeze({
         asOf,
         total: summary.total,

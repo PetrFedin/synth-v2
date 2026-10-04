@@ -497,4 +497,5 @@
     return navigation;
   };
   global.SynthaTechPacksWorkspace.fetchAll = fetchAll;
+  global.SynthaViewRefresh?.register('tech-packs', () => load({ reset: true }));
 })(window);

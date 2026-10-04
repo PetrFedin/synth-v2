@@ -64,6 +64,7 @@ const ASSETS = Object.freeze({
   '/ui/workspace-pagination.js': ['modules/workspace-pagination.js', JS, CACHE],
   '/ui/notification-pagination.js': ['modules/notification-pagination.js', JS, CACHE],
   '/ui/app-core.js': ['modules/app-core.js', JS, CACHE],
+  '/ui/view-refresh.js': ['modules/view-refresh.js', JS, CACHE],
   '/ui/overview.js': ['modules/overview.js', JS, CACHE],
   '/ui/partners.js': ['modules/partners.js', JS, CACHE],
   '/ui/legal-entities.js': ['modules/legal-entities.js', JS, CACHE],

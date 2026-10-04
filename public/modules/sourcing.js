@@ -980,6 +980,8 @@
     return previousRenderView(...args);
   };
   global.SynthaSourcingWorkspace.fetchAllPages = fetchAllPages;
+  // Один чтение кормит все пять экранов закупок; «Перейти» из «Ждёт вас» перечитывает его заново.
+  global.SynthaViewRefresh?.register([...SOURCING_VIEWS, ...MATERIAL_SOURCING_VIEWS], () => loadSourcing({ reset: true }));
   global.SynthaOmnidataV7Nav?.activate('Material RFQs', 'material-rfqs', 'Запросы цен на материал', 'Material RFQs');
   global.SynthaOmnidataV7Nav?.activate('Material purchase orders', 'material-purchase-orders', 'Заказы на материал', 'Material purchase orders');
 })(window);

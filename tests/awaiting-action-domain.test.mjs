@@ -5,6 +5,7 @@ import {
   AWAITING_ACTION_GROUPS,
   AWAITING_ACTION_TYPES,
   AWAITING_ACTION_TYPE_CODES,
+  awaitingActionType,
   buildAwaitingActionItem,
   normalizeAwaitingActionQuery,
   rolesForAwaitingAction,
@@ -115,7 +116,12 @@ test('the service asks the reader once, with the filter, and answers with counte
   assert.equal(result.total, 4, 'the counter covers more than the page');
   assert.equal(result.items.length, 1);
   assert.equal(result.items[0].ageSeconds, 86_400);
-  assert.deepEqual(result.counts, { 'order-attach': { group: 'orders', count: 0, overdue: 0 }, 'rfq-award': { group: 'sourcing', count: 4, overdue: 0 } });
+  const attach = awaitingActionType('order-attach');
+  const award = awaitingActionType('rfq-award');
+  assert.deepEqual(result.counts, {
+    'order-attach': { group: 'orders', titleRu: attach.labelRu, titleEn: attach.labelEn, count: 0, overdue: 0 },
+    'rfq-award': { group: 'sourcing', titleRu: award.labelRu, titleEn: award.labelEn, count: 4, overdue: 0 },
+  });
 });
 
 test('the service refuses what the reader should not have returned, and does not call it for an empty filter', async () => {

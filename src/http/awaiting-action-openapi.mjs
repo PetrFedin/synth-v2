@@ -16,8 +16,14 @@ export function withAwaitingActionOpenApi(base) {
 
 function schemas() {
   const count = {
-    type: 'object', additionalProperties: false, required: ['group', 'count', 'overdue'],
-    properties: { group: { type: 'string', enum: AWAITING_ACTION_GROUPS }, count: nonNegative(), overdue: nonNegative() },
+    type: 'object', additionalProperties: false, required: ['group', 'titleRu', 'titleEn', 'count', 'overdue'],
+    properties: {
+      group: { type: 'string', enum: AWAITING_ACTION_GROUPS },
+      titleRu: { type: 'string', maxLength: 200, description: 'The same title the item of this type carries; the type filter labels itself with it.' },
+      titleEn: { type: 'string', maxLength: 200 },
+      count: nonNegative(),
+      overdue: nonNegative(),
+    },
   };
   return {
     AwaitingActionRoute: {

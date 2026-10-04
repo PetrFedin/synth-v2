@@ -795,6 +795,12 @@ function palettePanel(item) {
   renderView = function renderIndustrialView() {
     return state.view === 'materials' ? renderMaterials() : previousRenderView();
   };
+  // Партия на карантине и образец цвета — часть самого материала: «Перейти» из «Ждёт вас» перечитывает
+  // и реестр материалов, и таблицу партий, которая иначе берётся один раз.
+  window.SynthaViewRefresh?.register('materials', () => {
+    window.SynthaMaterialLotsInvalidate();
+    return Promise.all([loadMaterials({ reset: true }), ensureMaterialLots()]);
+  });
   const previousViewTitle = viewTitle;
   viewTitle = function materialViewTitle(view) {
     return view === 'materials' ? materialText('\u041c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u044b / Trims', 'Materials / Trims') : previousViewTitle(view);

@@ -464,6 +464,24 @@ test('cost form offers recorded supply commitments and rates, and a rate is chos
   assert.equal(field(form, 'amount').maxLength, 24);
 });
 
+test('a cost in the order currency saved the way the form sends it (no rate field at all) passes the real routes, services and domain', async () => {
+  const h = await harness();
+  await h.run('supply', { qty_1: 4, qty_2: 6, sourceType: 'production', sourceRef: 'PO-77', expectedAvailabilityAt: '' });
+  const supplyId = (await h.load()).ledger.supplyCommitments[0].id;
+  // Поле курса для валюты заказа скрыто и отключено — форма не кладёт его в значения вовсе.
+  const form = await h.run('cost', { supplyCommitmentSnapshotId: supplyId, costType: 'freight', amount: '120', currency: 'EUR', sourceRef: 'INV-EUR', occurredAt: '2026-10-01' });
+  const fx = field(form, 'fxRateSnapshotId');
+  assert.equal(fx.required, false);
+  assert.equal(fx.visibleWhen('EUR'), false);
+  const posted = h.calls.requests.filter((request) => request.method === 'POST').at(-1);
+  assert.ok(!('fxRateSnapshotId' in posted.body), 'no rate is sent for the order currency');
+  const { ledger } = await h.load();
+  assert.equal(ledger.actualCosts.length, 1);
+  assert.equal(ledger.actualCosts[0].amount, 120);
+  assert.equal(ledger.actualCosts[0].currency, 'EUR');
+  assert.equal(ledger.actualCosts[0].fxRateSnapshotId ?? null, null);
+});
+
 test('supply form lists every order line with the quantity not yet committed', async () => {
   const h = await harness();
   const first = await h.run('supply');

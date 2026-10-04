@@ -441,7 +441,11 @@ export function createOrderBuilderService({
         const order = requireEntity(await tx.getOrder(orderId), 'ORDER_NOT_FOUND', { orderId });
         const membership = (await tx.getMembership(order.brandId, actorId)) ?? (await tx.getMembership(order.shopId, actorId));
         assertCapability(membership, CAPABILITIES.LOGISTICS_READ);
-        const amendments = await tx.listOrderAmendmentsByOrder(orderId);
+        const stored = await tx.listOrderAmendmentsByOrder(orderId);
+        // Почему «принять» сейчас откажет (экономика или исполнение уже начаты) — экран отключает
+        // кнопку до нажатия. У решённой правки причины нет: отвечать на неё уже нечем.
+        const acceptBlock = stored.some((item) => item.status === 'proposed') ? (await tx.getOrderAmendmentAcceptBlock(orderId)) ?? null : null;
+        const amendments = stored.map((item) => Object.freeze({ ...item, acceptBlock: item.status === 'proposed' ? acceptBlock : null }));
         return Object.freeze({ orderId, amendments: Object.freeze(amendments) });
       });
     },

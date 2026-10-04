@@ -65,6 +65,20 @@ test('a clean database seeds a qualified supplier, portal access and the demand-
     assert.ok(firstAwaiting.quality['lab-dip-decision'] >= 1, 'quality: a lab dip on a decision');
     assert.ok(firstAwaiting.finance['compliance-document-issue'] >= 1, 'finance: a draft compliance document');
     assert.ok(firstAwaiting.buyer['order-amendment-response'] >= 1, 'buyer: an order amendment waits for the shop');
+    // Правка, которую байеру предлагают принять, лежит на заказе без начатой экономики и исполнения:
+    // иначе «Принять» отвечало бы 422 ORDER_AMENDMENT_ECONOMICS_STARTED, а дело оставалось бы в «Ждёт вас».
+    const pending = (await pool.query(
+      `SELECT ord.id, ord.execution_started_at,
+              (SELECT count(*)::int FROM supply_commitment_snapshots WHERE order_id = ord.id) AS supply,
+              (SELECT count(*)::int FROM actual_cost_ledger_entries WHERE order_id = ord.id) AS costs
+         FROM order_amendments amendment JOIN orders ord ON ord.id = amendment.order_id WHERE amendment.status = 'proposed'`,
+    )).rows;
+    assert.equal(pending.length, 1);
+    assert.deepEqual([pending[0].execution_started_at, pending[0].supply, pending[0].costs], [null, 0, 0], 'the amendment can still be accepted');
+    const buyerItem = await awaitingItem(pool, 'buyer@nordhaus.example', 'order-amendment-response');
+    assert.equal(buyerItem.detail.acceptBlock, null, 'the buyer is offered an amendment that can be accepted');
+    const money = (await pool.query('SELECT count(*)::int AS count FROM margin_actualization_snapshots')).rows[0].count;
+    assert.ok(money >= 1, 'the order with the money chain keeps its economics');
     assert.equal(firstAwaiting.viewer.total, 0, 'a role without the capabilities is offered nothing');
 
     const before = await counts(pool);
@@ -93,4 +107,10 @@ async function awaitingByRole(pool) {
     result[role] = { total: view.total, ...Object.fromEntries(Object.entries(view.counts).filter(([, value]) => value.count > 0).map(([type, value]) => [type, value.count])) };
   }
   return result;
+}
+
+async function awaitingItem(pool, email, type) {
+  const service = createAwaitingActionQueryService({ reader: createPostgresAwaitingActionReader({ pool }) });
+  const actorId = (await pool.query('SELECT id FROM auth_users WHERE email_normalized = $1', [email])).rows[0].id;
+  return (await service.forActor(actorId, { limit: 200 })).items.find((item) => item.type === type);
 }

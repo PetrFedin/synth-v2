@@ -451,10 +451,17 @@
       selectDef('costType', t('Вид затраты', 'Cost type'), COST_TYPES.map((row) => ({ id: row[0], ru: row[1], en: row[2] })), (item) => t(item.ru, item.en), 'freight'),
       textDef('amount', t('Сумма (минус — кредит)', 'Amount (a minus sign is a credit)'), '', 24, true, 1),
       selectDef('currency', t('Валюта затраты', 'Cost currency'), currencies, undefined, orderCurrency),
-      dependentSelectDef('fxRateSnapshotId', t('Курс', 'Exchange rate'), 'currency',
-        (code) => (code === orderCurrency ? [{ id: '' }] : ledger.fxRateSnapshots.filter((item) => item.sourceCurrency === code && item.targetCurrency === orderCurrency)),
-        (item) => (item.id === '' ? t('— не нужен (валюта заказа) —', '— not needed (order currency) —') : `${item.rate} · ${pair(FX_RATE_TYPES, item.rateType)} · ${shortDate(item.effectiveAt)} · ${item.id}`),
-        '', t('Для этой валюты нет курса: сначала запишите курс.', 'There is no rate for this currency: record a rate first.')),
+      // Курс нужен, только когда валюта затраты отличается от валюты заказа. В валюте заказа поле
+      // скрыто и отключено (форма не проверяет и не отправляет отключённое поле): единственная пустая
+      // опция «не нужен» у обязательного списка упиралась в «Выберите один из пунктов списка».
+      {
+        ...dependentSelectDef('fxRateSnapshotId', t('Курс', 'Exchange rate'), 'currency',
+          (code) => (code === orderCurrency ? [{ id: '' }] : ledger.fxRateSnapshots.filter((item) => item.sourceCurrency === code && item.targetCurrency === orderCurrency)),
+          (item) => (item.id === '' ? t('— не нужен (валюта заказа) —', '— not needed (order currency) —') : `${item.rate} · ${pair(FX_RATE_TYPES, item.rateType)} · ${shortDate(item.effectiveAt)} · ${item.id}`),
+          '', t('Для этой валюты нет курса: сначала запишите курс.', 'There is no rate for this currency: record a rate first.')),
+        required: false,
+        visibleWhen: (code) => code !== orderCurrency,
+      },
       textDef('sourceRef', t('Документ-основание (счёт, инвойс)', 'Source document (invoice)'), '', 200, true, 1),
       dateDef('occurredAt', t('Дата затраты', 'Cost date'), today()),
     );

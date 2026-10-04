@@ -129,6 +129,8 @@ function transactionView(state) {
     getOrderAmendment: (id) => state.orderAmendments.get(id),
     getOpenOrderAmendmentForLine: (orderId, lineNo) => [...state.orderAmendments.values()].find((item) => item.orderId === orderId && item.lineNo === lineNo && item.status === 'proposed'),
     listOrderAmendmentsByOrder: (orderId) => [...state.orderAmendments.values()].filter((item) => item.orderId === orderId).sort((a, b) => a.proposedAt.localeCompare(b.proposedAt) || a.id.localeCompare(b.id)),
+    // Экономика и исполнение заказа живут только в PostgreSQL: в памяти принять правку можно всегда.
+    getOrderAmendmentAcceptBlock: () => null,
     insertOrderAmendment: (amendment) => insertUnique(state.orderAmendments, amendment.id, amendment, 'ORDER_AMENDMENT_ALREADY_EXISTS'),
     respondToOrderAmendmentRow: (amendment) => {
       const current = state.orderAmendments.get(amendment.id);

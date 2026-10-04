@@ -1,3 +1,4 @@
+import { orderAmendmentAcceptBlockSql } from './order-amendment-acceptance-sql.mjs';
 import { invariant } from '../core/errors.mjs';
 import { AWAITING_ACTION_TYPE_CODES, rolesForAwaitingAction } from '../modules/awaiting-action/public.mjs';
 import { withPostgresTransaction } from './postgres-transaction.mjs';
@@ -47,7 +48,7 @@ const BRANCHES = Object.freeze({
            amendment.proposed_at, NULL::timestamptz,
            jsonb_build_object('orderId', ord.id, 'lineNo', amendment.line_no, 'currentQuantity', amendment.current_quantity,
                               'proposedQuantity', amendment.proposed_quantity, 'deltaAmount', amendment.delta_amount,
-                              'currency', amendment.currency)
+                              'currency', amendment.currency, 'acceptBlock', ${orderAmendmentAcceptBlockSql('ord')})
       FROM order_amendments AS amendment
       JOIN orders AS ord ON ord.id = amendment.order_id AND ord.status = 'attached'
       JOIN me ON me.organisation_id IN (ord.brand_id, ord.shop_id) AND me.role = ANY(${roles}::text[])

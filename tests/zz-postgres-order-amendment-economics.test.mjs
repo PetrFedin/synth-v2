@@ -8,6 +8,8 @@ import { migratePostgres } from '../src/infrastructure/postgres-migrator.mjs';
 import { createOrderBuilderService } from '../src/application/order-builder-service.mjs';
 import { createOrderEconomicsService } from '../src/application/order-economics-service.mjs';
 import { createPostgresTestPool } from './postgres-test-pool.mjs';
+import { createPostgresAwaitingActionReader } from '../src/infrastructure/postgres-awaiting-action-reader.mjs';
+import { createAwaitingActionQueryService } from '../src/application/awaiting-action-query-service.mjs';
 
 const databaseUrl = process.env.POSTGRES_TEST_URL;
 const now = '2026-10-01T09:00:00.000Z';
@@ -86,6 +88,26 @@ test('PostgreSQL: an accepted amendment issues the next commit snapshot revision
 
     // правка: 10 → 12
     const amendment = await orders.proposeAmendment('propose-ae', 'buyer-ae', { orderId: order.id, lineNo: 1, proposedQuantity: 12, reason: 'Retailer wants two more for the launch' });
+    // Пока на заказе нет ни экономики, ни исполнения, правку можно принять: признака отказа нет ни в
+    // списке правок заказа, ни в деле «Ждёт вас».
+    const awaiting = createAwaitingActionQueryService({ clock: () => now, reader: createPostgresAwaitingActionReader({ pool }) });
+    const waitingAmendment = async (actorId) => (await awaiting.forActor(actorId, { limit: '50' })).items.find((item) => item.type === 'order-amendment-response');
+    assert.equal((await orders.getAmendmentsForActor('sales-ae', order.id)).amendments[0].acceptBlock, null);
+    assert.equal((await waitingAmendment('sales-ae')).detail.acceptBlock, null);
+    // Исполнение (без экономики) отключает «принять» теми же словами, что и сервер.
+    const setExecutionStartedAt = async (value) => {
+      await pool.query('ALTER TABLE orders DISABLE TRIGGER USER');
+      await pool.query('UPDATE orders SET execution_started_at = $2 WHERE id = $1', [order.id, value]);
+      await pool.query('ALTER TABLE orders ENABLE TRIGGER USER');
+    };
+    await setExecutionStartedAt(now);
+    assert.equal((await orders.getAmendmentsForActor('sales-ae', order.id)).amendments[0].acceptBlock, 'ORDER_AMENDMENT_EXECUTION_STARTED');
+    assert.equal((await waitingAmendment('sales-ae')).detail.acceptBlock, 'ORDER_AMENDMENT_EXECUTION_STARTED');
+    await assert.rejects(
+      orders.respondToAmendment('accept-ae-0', 'sales-ae', { orderId: order.id, amendmentId: amendment.id, decision: 'accepted' }),
+      (error) => error.code === 'ORDER_AMENDMENT_EXECUTION_STARTED',
+    );
+    await setExecutionStartedAt(null);
     await orders.respondToAmendment('accept-ae', 'sales-ae', { orderId: order.id, amendmentId: amendment.id, decision: 'accepted' });
 
     const orderRow = (await pool.query('SELECT version, total_amount, order_commit_snapshot_id FROM orders WHERE id = $1', [order.id])).rows[0];
@@ -161,6 +183,13 @@ test('PostgreSQL: an accepted amendment issues the next commit snapshot revision
     assert.equal((await pool.query('SELECT count(*)::int AS count FROM order_commit_snapshots WHERE order_id = $1', [order.id])).rows[0].count, 2, 'the refused acceptance rolled back with no third revision');
     assert.equal((await pool.query('SELECT status FROM order_amendments WHERE id = $1', [second.id])).rows[0].status, 'proposed');
     assert.equal((await pool.query('SELECT version FROM orders WHERE id = $1', [order.id])).rows[0].version, 9);
+
+    // Экономика уже стоит на заказе: «принять» заведомо откажет, и об этом говорят данные, а не ошибка
+    // после нажатия — и в списке правок заказа, и в деле «Ждёт вас». Решённая правка признака не несёт.
+    const listed = (await orders.getAmendmentsForActor('sales-ae', order.id)).amendments;
+    assert.equal(listed.find((item) => item.id === amendment.id).acceptBlock, null, 'an accepted amendment has nothing left to block');
+    assert.equal(listed.find((item) => item.id === second.id).acceptBlock, 'ORDER_AMENDMENT_ECONOMICS_STARTED');
+    assert.equal((await waitingAmendment('sales-ae')).detail.acceptBlock, 'ORDER_AMENDMENT_ECONOMICS_STARTED');
   } finally {
     await pool.end();
   }

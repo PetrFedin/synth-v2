@@ -1,3 +1,4 @@
+import { orderAmendmentAcceptBlockSql } from './order-amendment-acceptance-sql.mjs';
 import { invariant } from '../core/errors.mjs';
 import { getRegisteredCommand, insertRegisteredCommand } from './postgres-command-registry.mjs';
 import { withPostgresTransaction } from './postgres-transaction.mjs';
@@ -377,6 +378,11 @@ function transactionView(client) {
     async listOrderAmendmentsByOrder(orderId) {
       const result = await client.query('SELECT payload FROM order_amendments WHERE order_id = $1 ORDER BY proposed_at, id', [orderId]);
       return result.rows.map((row) => row.payload);
+    },
+    // Код отказа, которым сервер ответит на «принять» прямо сейчас, или null, если принять можно.
+    async getOrderAmendmentAcceptBlock(orderId) {
+      const result = await client.query(`SELECT ${orderAmendmentAcceptBlockSql('ord')} AS block FROM orders AS ord WHERE ord.id = $1`, [orderId]);
+      return result.rows[0]?.block ?? null;
     },
     insertOrderAmendment: (value) => insert(
       client,

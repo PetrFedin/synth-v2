@@ -62,6 +62,8 @@
     if (Number.isInteger(detail.amountMinor)) parts.push(I18N.formatMoney(detail.amountMinor, detail.currency || 'EUR', { minor: true }));
     else if (typeof detail.totalAmount === 'number') parts.push(I18N.formatMoney(detail.totalAmount, detail.currency || 'EUR'));
     if (Number.isInteger(detail.proposedQuantity)) parts.push(`${detail.currentQuantity} → ${detail.proposedQuantity}`);
+    // Экономика или исполнение заказа уже начаты: правку принять нельзя, остаётся отклонить.
+    if (detail.acceptBlock) parts.push(text('принять нельзя, можно отклонить', 'cannot be accepted, can be rejected'));
     return parts.join(' · ');
   }
 

@@ -529,11 +529,22 @@
       if (amendment.responseReason) detailParts.push(`${text('ответ', 'response')}: ${amendment.responseReason}`);
       label.append(el('input', { type: 'text', value: detailParts.join(' · '), readOnly: true }));
       if (amendment.status === 'proposed' && canWrite && myOrgId && myOrgId !== amendment.proposedOrganisationId) {
-        label.append(actionButton(text('Принять', 'Accept'), () => mutate(
+        const accept = actionButton(text('Принять', 'Accept'), () => mutate(
           `/v2/orders/${encodeURIComponent(order.id)}/amendments/${encodeURIComponent(amendment.id)}/respond`,
           { decision: 'accepted' },
           'POST',
-        )));
+        ));
+        // Сервер откажет принять правку, когда исполнение или экономика уже начаты (признак
+        // `acceptBlock`): кнопка отключена заранее, причина названа здесь, а не в ошибке после нажатия.
+        if (amendment.acceptBlock) {
+          const reason = amendment.acceptBlock === 'ORDER_AMENDMENT_EXECUTION_STARTED'
+            ? text('Заказ уже в исполнении: принять правку нельзя, её можно только отклонить.', 'The order is already in execution: the amendment cannot be accepted, only rejected.')
+            : text('По заказу уже ведётся экономика: принять правку нельзя, её можно только отклонить.', 'Economics is already running on this order: the amendment cannot be accepted, only rejected.');
+          accept.disabled = true;
+          accept.title = reason;
+          label.append(accept);
+          label.append(el('span', { className: 'od-action-note amendment-accept-blocked', text: reason }));
+        } else label.append(accept);
         label.append(actionButton(text('Отклонить', 'Reject'), () => amendmentRejectForm(order, amendment), 'danger'));
       }
       grid.append(label);

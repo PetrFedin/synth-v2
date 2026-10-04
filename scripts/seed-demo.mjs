@@ -617,7 +617,8 @@ async function ensureBuyerCatalog(runtime, pool, collectionId, showroomId, owner
 }
 
 async function ensureCycle(runtime, pool, input, buyerId) {
-  const existing = await pool.query('SELECT id, stage FROM commercial_cycles WHERE brand_id = $1 AND shop_id = $2 AND collection_id = $3 LIMIT 1', [input.brandId, input.shopId, input.collectionId]);
+  const existing = await pool.query(`SELECT id, stage FROM commercial_cycles WHERE brand_id = $1 AND shop_id = $2 AND collection_id = $3
+      ORDER BY payload ->> 'createdAt', id LIMIT 1`, [input.brandId, input.shopId, input.collectionId]);
   if (existing.rowCount) { note('cycle', `${existing.rows[0].id} at ${existing.rows[0].stage}`); return existing.rows[0]; }
   const created = await runtime.platform.startCycle(command('cycle'), buyerId, input);
   note('cycle', `${created.id} started at ${created.stage}`);
@@ -638,7 +639,7 @@ async function advanceCycleTo(runtime, pool, cycleId, targetStage, actorId) {
   }
 }
 
-async function ensureSelection(runtime, pool, cycle, showroomId, collectionId, buyerId, retailDoorId) {
+async function ensureSelection(runtime, pool, cycle, showroomId, collectionId, buyerId, retailDoorId, { singleLineQuantity = null } = {}) {
   await advanceCycleTo(runtime, pool, cycle.id, 'showroom', buyerId);
   const existing = await pool.query('SELECT id, status FROM selections WHERE cycle_id = $1 LIMIT 1', [cycle.id]);
   if (existing.rowCount && existing.rows[0].status === 'submitted') { note('selection', `${existing.rows[0].id} already submitted`); return existing.rows[0]; }
@@ -665,8 +666,11 @@ async function ensureSelection(runtime, pool, cycle, showroomId, collectionId, b
   );
   if (!catalogue.rowCount) throw new Error('The published buyer catalogue holds no line to select');
   const quantities = [180, 640, 240, 420];
-  for (const [index, row] of catalogue.rows.entries()) {
-    const wanted = quantities[index % quantities.length];
+  // Заказ для правки — одна небольшая строка: он должен быть меньше основного и не совпадать по
+  // партии ни с одним сценарием затрат, иначе сид начнёт по нему экономику, и правку нельзя будет принять.
+  const rows = singleLineQuantity ? catalogue.rows.slice(0, 1) : catalogue.rows;
+  for (const [index, row] of rows.entries()) {
+    const wanted = singleLineQuantity ?? quantities[index % quantities.length];
     const quantity = Math.max(Number(row.moq), Math.min(wanted, Number(row.available) || wanted));
     await runtime.collaboration.upsertSelectionLine(command('selection-line'), buyerId, selection.id, { sku: row.sku, quantity });
     note('selection line', `${row.sku} × ${quantity}`);
@@ -2204,11 +2208,18 @@ async function ensurePendingComplianceDocument(runtime, pool, accounts, brandId)
 }
 
 // Правка подтверждённого заказа: бренд предлагает уменьшить первую строку, ответ — за магазином.
+//
+// Правка принимаема, только пока на заказе не начаты экономика, производственная потребность и
+// исполнение (ORDER_AMENDMENT_ECONOMICS_STARTED / _EXECUTION_STARTED). Основной заказ сезона несёт
+// всю цепочку затрат и маржи, поэтому предлагать правку на нём значило бы положить байеру в «Ждёт вас»
+// дело, которое можно только отклонить. Правка заводится на отдельном заказе без начатой экономики.
 async function ensurePendingOrderAmendment(runtime, pool, accounts, brandId) {
-  const order = (await pool.query("SELECT id, payload FROM orders WHERE brand_id = $1 AND status = 'attached' ORDER BY id LIMIT 1", [brandId])).rows[0];
-  if (!order) { note('ожидающие дела', 'нет подтверждённого заказа — править нечего'); return; }
-  const prior = await pool.query('SELECT status FROM order_amendments WHERE order_id = $1 LIMIT 1', [order.id]);
-  if (prior.rowCount) { note('ожидающие дела', `правка ${order.id} уже предлагалась (${prior.rows[0].status})`); return; }
+  if ((await pool.query('SELECT 1 FROM order_amendments amendment JOIN orders ord ON ord.id = amendment.order_id WHERE ord.brand_id = $1 LIMIT 1', [brandId])).rowCount) {
+    note('ожидающие дела', 'правка заказа уже предлагалась'); return;
+  }
+  let order = await readAmendableOrder(pool, brandId);
+  if (!order) order = await ensureAmendableOrder(runtime, pool, accounts, brandId);
+  if (!order) { note('ожидающие дела', 'нет заказа, на котором правку ещё можно принять'); return; }
   const line = order.payload.lines?.[0];
   if (!line) { note('ожидающие дела', `в заказе ${order.id} нет строк`); return; }
   // Уменьшаем на десятую часть: меньше заказанного всегда укладывается и в запас склада.
@@ -2218,4 +2229,54 @@ async function ensurePendingOrderAmendment(runtime, pool, accounts, brandId) {
     orderId: order.id, lineNo: 1, proposedQuantity, reason: 'Фабрика не успевает по срокам — просим сократить партию на 10%',
   });
   note('ожидающие дела', `${order.id}: бренд предложил ${line.quantity} → ${proposedQuantity} по строке 1, ответ за магазином`);
+}
+
+// Подтверждённый заказ, у которого нет ни исполнения, ни экономики, ни потребности производства.
+async function readAmendableOrder(pool, brandId) {
+  const result = await pool.query(
+    `SELECT ord.id, ord.payload
+       FROM orders ord
+      WHERE ord.brand_id = $1 AND ord.status = 'attached' AND ord.execution_started_at IS NULL
+        AND NOT EXISTS (SELECT 1 FROM order_commit_snapshots c
+                         WHERE c.order_id = ord.id
+                           AND (EXISTS (SELECT 1 FROM supply_commitment_snapshots x WHERE x.order_commit_snapshot_id = c.id)
+                             OR EXISTS (SELECT 1 FROM order_fx_rate_snapshots x WHERE x.order_commit_snapshot_id = c.id)
+                             OR EXISTS (SELECT 1 FROM landed_cost_snapshots x WHERE x.order_commit_snapshot_id = c.id)
+                             OR EXISTS (SELECT 1 FROM actual_cost_ledger_entries x WHERE x.order_commit_snapshot_id = c.id)
+                             OR EXISTS (SELECT 1 FROM margin_actualization_snapshots x WHERE x.order_commit_snapshot_id = c.id)
+                             OR EXISTS (SELECT 1 FROM production_requirement_snapshots x WHERE x.order_commit_snapshot_id = c.id)
+                             OR EXISTS (SELECT 1 FROM fulfillment_plan_snapshots x WHERE x.order_commit_snapshot_id = c.id)))
+      ORDER BY ord.id LIMIT 1`,
+    [brandId],
+  );
+  return result.rows[0] ?? null;
+}
+
+// Второй сезонный заказ тому же магазину: новый цикл по той же коллекции, одна небольшая строка.
+async function ensureAmendableOrder(runtime, pool, accounts, brandId) {
+  const first = (await pool.query(
+    `SELECT cycle.id, cycle.campaign_id, cycle.collection_id, cycle.shop_id
+       FROM commercial_cycles cycle JOIN orders ord ON ord.cycle_id = cycle.id
+      WHERE cycle.brand_id = $1 AND ord.status = 'attached'
+      ORDER BY cycle.payload ->> 'createdAt', cycle.id LIMIT 1`, [brandId])).rows[0];
+  if (!first) return null;
+  const showroom = (await pool.query('SELECT id FROM showrooms WHERE collection_id = $1 ORDER BY status = \'open\' DESC, id LIMIT 1', [first.collection_id])).rows[0];
+  const door = (await pool.query('SELECT id FROM retail_doors WHERE shop_id = $1 ORDER BY id LIMIT 1', [first.shop_id])).rows[0];
+  if (!showroom || !door) return null;
+  // Цикл без заказа, начатый прошлым прерванным запуском, достраивается, новый не заводится.
+  let cycle = (await pool.query(
+    `SELECT cycle.id, cycle.stage FROM commercial_cycles cycle
+      WHERE cycle.brand_id = $1 AND cycle.shop_id = $2 AND cycle.collection_id = $3 AND cycle.id <> $4
+        AND NOT EXISTS (SELECT 1 FROM orders ord WHERE ord.cycle_id = cycle.id AND ord.status = 'attached')
+      ORDER BY cycle.payload ->> 'createdAt', cycle.id LIMIT 1`,
+    [brandId, first.shop_id, first.collection_id, first.id])).rows[0];
+  if (!cycle) {
+    cycle = await runtime.platform.startCycle(command('amendable-cycle'), accounts.buyer, {
+      brandId, shopId: first.shop_id, campaignId: first.campaign_id, collectionId: first.collection_id,
+    });
+    note('cycle', `${cycle.id} started for the order that the amendment is proposed on`);
+  }
+  const selection = await ensureSelection(runtime, pool, cycle, showroom.id, first.collection_id, accounts.buyer, door.id, { singleLineQuantity: 48 });
+  await ensureOrder(runtime, pool, cycle, selection, accounts.buyer, accounts.owner);
+  return readAmendableOrder(pool, brandId);
 }

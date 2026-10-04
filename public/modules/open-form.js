@@ -161,6 +161,8 @@ function openForm(title, fields, submitAction) {
       if (submit.isConnected) {
         setButtonBusy(submit, false, I18N.t('common.save'));
         refreshDependentFields();
+        // Список зависимых полей включает отключённые, а скрытое поле должно оставаться отключённым.
+        refreshVisibleFields();
       }
     }
   });

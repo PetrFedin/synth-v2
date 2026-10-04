@@ -143,6 +143,8 @@
     selections: Object.freeze({ scope: 'od-selections' }),
   });
 
+  const ORDER_KEYED = new Set(['receipt-accept', 'claim-resolve']);
+
   // Правка выделяет свой заказ: идентификатор самой правки в реестре заказов не найти.
   function targetEntityId(item) {
     return item.type === 'order-amendment-response' ? item.detail?.orderId : item.route.entityId;
@@ -151,7 +153,8 @@
   function open(item) {
     const view = item.route.view;
     const target = ENTITY_TARGETS[view];
-    const entityId = targetEntityId(item);
+    // Приёмка и претензия живут в заказе: выделяется заказ, а там — «Отгрузка и приёмка».
+    const entityId = ORDER_KEYED.has(item.type) ? item.detail?.orderId : targetEntityId(item);
     if (target && entityId && typeof OD_UI !== 'undefined') {
       OD_UI.selected[target.scope] = entityId;
       if (target.tab) OD_UI.tabs[view] = target.tab;

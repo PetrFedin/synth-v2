@@ -75,6 +75,18 @@
     if (item.orderCommitSnapshotId && seesLogistics && typeof window.orderFulfillmentDialog === 'function') {
       actions.push(actionButton(localized('Поставка', 'Fulfillment'), () => window.orderFulfillmentDialog(item)));
     }
+    // «Отгрузка и приёмка» — рабочее место с действиями цепочки: план, отгрузка (бренд), приёмка и
+    // претензия (магазин), решение (бренд), возврат от поставщика (финансы бренда). Предлагается тем,
+    // у кого в своей организации есть хотя бы одно из этих прав: остальным хватает «Поставки» выше.
+    // Какие кнопки внутри — решает само рабочее место, по праву роли и состоянию цепочки.
+    const C = caps.CAPABILITIES;
+    const actsOnFulfillment = [C.SUPPLY_MANAGE, C.FULFILLMENT_MANAGE, C.CLAIM_RESOLVE, C.COST_MANAGE]
+      .some(capability => caps.hasForOrganisation(state.workspace, item.brandId, capability))
+      || [C.RECEIPT_MANAGE, C.CLAIM_MANAGE].some(capability => caps.hasForOrganisation(state.workspace, item.shopId, capability));
+    if (item.orderCommitSnapshotId && item.status === 'attached' && seesLogistics && actsOnFulfillment
+      && typeof window.orderFulfillmentWorkspaceDialog === 'function') {
+      actions.push(actionButton(localized('Отгрузка и приёмка', 'Shipment and receipt'), () => window.orderFulfillmentWorkspaceDialog(item), 'primary'));
+    }
     // Упаковка — сторона бренда, а не обеих сторон сделки: магазин ничего в ней не двигает, только
     // видит итог уже в «Поставке» после того, как план ушёл в отгрузку.
     if (item.orderCommitSnapshotId

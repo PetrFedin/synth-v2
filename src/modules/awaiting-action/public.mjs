@@ -39,6 +39,10 @@ export const AWAITING_ACTION_TYPES = Object.freeze([
   define('selection-approval', 'selection', CAPABILITIES.SELECTION_APPROVE, 'shop', 'selections', 'orders', 'Ассортимент ждёт согласования', 'Assortment awaits your approval'),
   define('relationship-response', 'relationship', CAPABILITIES.PARTNER_RELATIONSHIP_MANAGE, 'either', 'partners', 'partners', 'Запрос на партнёрство ждёт ответа', 'Partnership request awaits your answer'),
   define('showroom-invitation-response', 'showroom-invitation', CAPABILITIES.SHOWROOM_INVITATION_ACCEPT, 'shop', 'showrooms', 'partners', 'Приглашение в шоурум ждёт ответа', 'Showroom invitation awaits your answer'),
+  // Поставка: приёмка — ход магазина, решение по претензии — ход бренда. Срок приёмки — ожидаемая
+  // доставка из уведомления об отгрузке: пришла бы раньше — ждали бы раньше.
+  define('receipt-accept', 'shipment-notice', CAPABILITIES.RECEIPT_MANAGE, 'shop', 'orders', 'orders', 'Принять поставку', 'Receive the shipment'),
+  define('claim-resolve', 'receipt-claim', CAPABILITIES.CLAIM_RESOLVE, 'brand', 'orders', 'orders', 'Решить по претензии', 'Resolve the claim'),
   // Закупки и производство.
   define('rfq-award', 'sourcing-rfq', CAPABILITIES.SOURCING_AWARD, 'brand', 'rfqs', 'sourcing', 'По запросу цен есть котировки — выберите поставщика', 'Quotations received — choose a supplier'),
   define('material-rfq-award', 'material-rfq', CAPABILITIES.SOURCING_AWARD, 'brand', 'material-rfqs', 'sourcing', 'По запросу на материал есть котировки — выберите поставщика', 'Material quotations received — choose a supplier'),

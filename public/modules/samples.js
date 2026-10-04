@@ -330,4 +330,5 @@
   const previousRenderView = renderView;
   renderView = (...args) => state.view === 'samples' ? renderSamples() : previousRenderView(...args);
   global.SynthaSamplesWorkspace.fetchAllSamples = fetchAllSamples;
+  global.SynthaViewRefresh?.register('samples', () => loadSamples({ reset: true }));
 })(window);

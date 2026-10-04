@@ -11,6 +11,10 @@ test('the awaiting-action screen is loaded and served', () => {
   // never appears: both lists must name it.
   assert.match(handler, /'\/ui\/awaiting-action\.js': \['modules\/awaiting-action\.js'/);
   assert.ok(html.indexOf('/ui/awaiting-action.js') > html.indexOf('/ui/omnidata-workspace.js'), 'it extends the workspace, so it loads after it');
+  // The refresh registry is what the owners of the data register with: it must exist before them.
+  assert.match(html, /<script defer src="\/ui\/view-refresh\.js"><\/script>/);
+  assert.match(handler, /'\/ui\/view-refresh\.js': \['modules\/view-refresh\.js'/);
+  assert.ok(html.indexOf('/ui/view-refresh.js') > html.indexOf('/ui/app-core.js') && html.indexOf('/ui/view-refresh.js') < html.indexOf('/ui/overview.js'));
 });
 
 test('the screen reads one endpoint and the counter is the cheap form of it', () => {
@@ -29,7 +33,7 @@ test('it offers a badge in the top bar and the navigation, a type filter and a l
   assert.match(script, /topbar-actions/);
   assert.match(script, /\.sidebar \.nav/);
   assert.match(script, /typeFilter/);
-  assert.match(script, /const view = item\.route\.view;[\s\S]{0,400}state\.view = view;/);
+  assert.match(script, /const view = item\.route\.view;[\s\S]{0,1500}SynthaViewRefresh\.open\(view\)[\s\S]{0,200}state\.view = view;/);
   assert.match(script, /OD_UI\.tabs\['awaiting-action'\]/, 'family tabs');
 });
 

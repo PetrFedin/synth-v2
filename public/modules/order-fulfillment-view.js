@@ -543,7 +543,7 @@
           accept.disabled = true;
           accept.title = reason;
           label.append(accept);
-          label.append(el('span', { className: 'od-action-note amendment-accept-blocked', text: reason }));
+          label.append(el('span', { className: 'od-hint-note amendment-accept-blocked', text: reason }));
         } else label.append(accept);
         label.append(actionButton(text('Отклонить', 'Reject'), () => amendmentRejectForm(order, amendment), 'danger'));
       }

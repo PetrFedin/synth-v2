@@ -111,6 +111,7 @@ async function orderForm(preferredSelectionId = '') {
         door => `${door.code} · ${door.name} · ${door.shipToAddress?.city || '—'}`,
         undefined,
         'Для выбранного магазина нет активной торговой точки. Создайте или активируйте её в «Партнёры → Торговые точки».',
+        selectionId => doorUi.defaultDoorIdForSelection(selections.find(selection => selection.id === selectionId), doorsByShop),
       ),
       ...orderTermsFields(),
     ], values => mutate('/v2/orders', doorUi.buildOrderPayload({
@@ -151,6 +152,16 @@ function orderDateValue(value) {
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? new Date(parsed).toISOString().slice(0, 10) : String(value).slice(0, 10);
 }
+
+// Отмена прикреплённого заказа возможна, только пока цикл на стадии «order»: после подтверждения
+// открыт DealSpace, и сервер отвечает ORDER_CANCELLATION_STAGE_INVALID. Кнопка, которая ведёт в
+// заведомый отказ, не показывается. Черновик и «готов» цикл не держит — их отмена возможна всегда.
+function orderCancellationOffered(order) {
+  if (order?.status !== 'attached') return true;
+  const cycle = (state.workspace?.cycles || []).find(candidate => candidate.id === order.cycleId);
+  return !cycle || cycle.stage === 'order';
+}
+window.orderCancellationOffered = orderCancellationOffered;
 
 function orderCancellationForm(order) {
   const validation = window.SynthaUiValidation;

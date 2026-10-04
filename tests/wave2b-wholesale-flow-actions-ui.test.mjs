@@ -33,7 +33,7 @@ test('showroom close: button in both showroom surfaces, gated by SHOWROOM_MANAGE
 test('order cancel is offered for draft, ready and attached orders in every order surface', async () => {
   for (const file of ['omnidata-workspace.js', 'views-4.js', 'order-lifecycle-actions.js']) {
     const source = await read(file);
-    assert.match(source, /\['draft', 'ready', 'attached'\]\.includes\(item\.status\) && canWrite/, `${file}: cancel for draft/ready/attached`);
+    assert.match(source, /\['draft', 'ready', 'attached'\]\.includes\(item\.status\) && canWrite && orderCancellationOffered\(item\)/, `${file}: cancel for draft/ready/attached, hidden once DealSpace is open`);
     assert.doesNotMatch(source, /item\.status === 'attached' && canWrite\) (?:\{\s*)?actions\.push\([^\n]*(?:Cancel order|Отменить заказ)/, `${file}: the attached-only cancel is gone`);
   }
   const forms = await read('forms-3.js');

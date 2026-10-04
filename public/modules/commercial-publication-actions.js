@@ -68,14 +68,34 @@
       ), 'error');
       return;
     }
+    // Цены на магазин — необязательные поля по вариантам выбранного снимка: пустое поле значит «цена
+    // снимка», заполненное — цену этого магазина (`priceOverrides`). Раньше форма отправляла только
+    // снимок и магазин, и особые цены на магазин можно было задать лишь скриптом.
+    const priceFields = publications.flatMap(publication => (publication.lines || []).filter(line => line.productSkuId).map(line => ({
+      name: `${PRICE_FIELD_PREFIX}${publication.id}:${line.productSkuId}`,
+      label: priceFieldLabel(line),
+      kind: 'number',
+      required: false,
+      min: '0.01',
+      step: '0.01',
+      value: '',
+      placeholder: priceBase(line),
+      dependsOn: 'publicationId',
+      visibleWhen: publicationId => publicationId === publication.id,
+      productSkuId: line.productSkuId,
+    })));
     openForm(text('Открыть каталог байеру', 'Open the catalogue to a buyer'), [
       selectDef('publicationId', text('Коммерческий снимок', 'Commercial snapshot'), publications, publicationLabel),
       selectDef('shopId', text('Магазин', 'Shop'), accepted.map(invitation => ({ id: invitation.shopId, name: orgName(invitation.shopId) }))),
+      ...priceFields,
     ], async values => {
-      const published = await mutate(`/v2/commercial-publications/${encodeURIComponent(values.publicationId)}/buyer-catalogs`, {
+      const body = {
         showroomId: showroom.id,
         shopId: values.shopId,
-      });
+      };
+      const overrides = priceOverridesFromValues(values, values.publicationId, priceFields);
+      if (overrides.length) body.priceOverrides = overrides;
+      const published = await mutate(`/v2/commercial-publications/${encodeURIComponent(values.publicationId)}/buyer-catalogs`, body);
       // Найдено живьём: каталог создавался, форма говорила «Изменения сохранены», а в строке
       // доступа оставалась прежняя дата: кэш переживал перезагрузку рабочего пространства, потому
       // что каталоги читаются не в составе него. Собственная запись обязана его сбросить — иначе человек
@@ -83,6 +103,32 @@
       forget(showroom.id, values.shopId);
       return published;
     });
+  }
+
+  const PRICE_FIELD_PREFIX = 'price:';
+
+  function priceBase(line) {
+    const price = Number(line.unitPrice);
+    return Number.isFinite(price) ? `${I18N.formatNumber(price, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${line.currency || ''}`.trim() : '';
+  }
+
+  function priceFieldLabel(line) {
+    const colour = I18N.getLocale() === 'en' ? (line.colourNameEn || line.colourNameRu) : (line.colourNameRu || line.colourNameEn);
+    return `${text('Цена на магазин', 'Shop price')}: ${[line.sku, colour].filter(Boolean).join(' · ')} (${text('необязательно', 'optional')})`;
+  }
+
+  // Заполненные поля цен выбранного снимка → `priceOverrides` с целыми минимальными единицами
+  // (копейки/центы): сервер принимает `wholesalePriceMinor`, а не дробное число.
+  function priceOverridesFromValues(values, publicationId, priceFields) {
+    return priceFields
+      .filter(field => field.name.startsWith(`${PRICE_FIELD_PREFIX}${publicationId}:`))
+      .map(field => ({ field, price: values[field.name] }))
+      .filter(entry => entry.price !== null && entry.price !== undefined && Number.isFinite(entry.price))
+      .map(entry => {
+        const minor = Math.round(entry.price * 100);
+        if (!(minor > 0) || Math.abs(minor / 100 - entry.price) > 1e-9) throw new Error('PRICE_LIST_OVERRIDE_PRICE_INVALID');
+        return { productSkuId: entry.field.productSkuId, wholesalePriceMinor: minor };
+      });
   }
 
   function versionLabel(version) {
@@ -233,6 +279,6 @@
   }
 
   global.SynthaCommercialPublication = Object.freeze({
-    publicationForm, buyerCatalogForm, rollbackForm, rollbackAction, collectionAction, accessAction, catalogCell, forget, reset,
+    publicationForm, buyerCatalogForm, rollbackForm, rollbackAction, collectionAction, accessAction, catalogCell, forget, reset, priceOverridesFromValues,
   });
 })(window);

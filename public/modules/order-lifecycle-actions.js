@@ -42,8 +42,9 @@
     }
 
     // Отмена нужна и черновику, и «готов»: у них раньше не было выхода (O-02) — заказ оставался в цикле
-    // навсегда, а второй заказ в том же цикле создать нельзя.
-    if (['draft', 'ready', 'attached'].includes(item.status) && canWrite) {
+    // навсегда, а второй заказ в том же цикле создать нельзя. После открытия DealSpace отмена
+    // прикреплённого заказа невозможна (ORDER_CANCELLATION_STAGE_INVALID), и кнопка не показывается.
+    if (['draft', 'ready', 'attached'].includes(item.status) && canWrite && orderCancellationOffered(item)) {
       actions.push(actionButton(localized('Отменить заказ', 'Cancel order'), () => orderCancellationForm(item), 'danger'));
     }
 

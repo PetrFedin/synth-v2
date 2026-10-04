@@ -9,6 +9,15 @@
     return doors.filter(door => door?.status === 'active' && door.shopId === selection.shopId);
   }
 
+  // Заказ наследует торговую точку подборки, и сервер отвергает любую другую («должна совпадать с
+  // торговой точкой выбора»). Поэтому по умолчанию подставляется точка подборки, если она ещё
+  // активна; иначе — пусто, и список сам предложит первую из доступных.
+  function defaultDoorIdForSelection(selection, doorsByShop = {}) {
+    const doorId = selection?.retailDoorId;
+    if (!doorId) return '';
+    return activeDoorsForSelection(selection, doorsByShop).some(door => door.id === doorId) ? doorId : '';
+  }
+
   function buildOrderPayload({ selectionId, retailDoorId, terms }, selections = [], doorsByShop = {}) {
     const selection = selections.find(item => item?.id === selectionId);
     invariant(selection, 'ORDER_SELECTION_INVALID');
@@ -18,5 +27,5 @@
     return Object.freeze({ selectionId: selection.id, retailDoorId: door.id, terms });
   }
 
-  global.SynthaRetailDoorUi = Object.freeze({ activeDoorsForSelection, buildOrderPayload });
+  global.SynthaRetailDoorUi = Object.freeze({ activeDoorsForSelection, defaultDoorIdForSelection, buildOrderPayload });
 })(window);

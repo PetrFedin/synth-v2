@@ -69,5 +69,5 @@ test('every place that trusts an invitation now also reads the relationship', as
   // Образы охраняются собственной проверкой, не через общий помощник, — и она спрашивает то же.
   const [selection] = sources;
   assert.match(selection, /const relationship = await tx\.getRelationshipByTrade\(showroom\.brandId, membership\.organisationId\);/);
-  assert.match(selection, /if \(relationship\?\.status === 'active'\) return;/);
+  assert.match(selection, /if \(relationship\?\.status === 'active'\) return membership\.organisationId;/);
 });

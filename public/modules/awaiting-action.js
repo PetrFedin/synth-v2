@@ -12,6 +12,8 @@
     total: 0, overdue: 0, counts: {}, countsLoaded: false,
     items: [], loadedKey: '', loading: false, error: '',
     group: 'all', type: 'all', checkedFor: null, timer: null, inflight: false,
+    // Человек уходил с экрана: при возврате показанный ранее список не показывается, а читается заново.
+    away: true, generation: 0, reloadRequested: false,
   });
 
   const VIEW = 'awaiting-action';
@@ -67,24 +69,75 @@
     return parts.join(' · ');
   }
 
-  function query(extra) {
+  function query(extra, path = '/v2/inbox/awaiting-action') {
     const params = new URLSearchParams(extra);
-    return `/v2/inbox/awaiting-action?${params.toString()}`;
+    return `${path}?${params.toString()}`;
+  }
+
+  // Откуда читается «ждёт вас». Член организации — из реестра дел по членству; поставщик — не член
+  // ничего, его единственное основание грант портала, и дела берутся из портала
+  // (`/v2/supplier-portal/awaiting-action`). Человек может быть и тем и другим: тогда читаются оба
+  // источника и сливаются. Пока портал не опознан, читается обычный источник: для того, у кого нет
+  // членства, он честно отвечает «ничего».
+  const BRAND_SOURCE = Object.freeze({ id: 'brand', path: '/v2/inbox/awaiting-action' });
+  const PORTAL_SOURCE = Object.freeze({ id: 'portal', path: '/v2/supplier-portal/awaiting-action' });
+  const PORTAL_GROUPS = Object.freeze(['sourcing', 'production']);
+  function portalSuppliers() { return global.SynthaSupplierPortal?.suppliers || []; }
+  function hasMemberships() { return (state.workspace?.memberships || []).length > 0; }
+  function sources() {
+    const out = [];
+    if (hasMemberships() || !portalSuppliers().length) out.push(BRAND_SOURCE);
+    if (portalSuppliers().length) out.push(PORTAL_SOURCE);
+    return out;
+  }
+  function sourcesKey() { return sources().map((source) => source.id).join('+'); }
+
+  // Какой источник отвечает за запрошенный тип или группу: чужой тип источник отвергает как неизвестный.
+  function accepts(source, params) {
+    if (params.type) {
+      const known = ui.counts[params.type]?.source;
+      return known ? known === source.id : source.id === 'brand';
+    }
+    if (params.group && source.id === 'portal') return PORTAL_GROUPS.includes(params.group);
+    return true;
+  }
+
+  function byUrgency(left, right) {
+    return (Number(Boolean(right.overdue)) - Number(Boolean(left.overdue)))
+      || String(left.waitingSince || '').localeCompare(String(right.waitingSince || ''));
+  }
+
+  async function fetchMerged(params) {
+    const chosen = sources().filter((source) => accepts(source, params));
+    const results = await Promise.all(chosen.map((source) => api(query(params, source.path))));
+    const merged = { total: 0, overdue: 0, counts: {}, items: [] };
+    results.forEach((result, index) => {
+      merged.total += result.total || 0;
+      merged.overdue += result.overdue || 0;
+      Object.entries(result.counts || {}).forEach(([type, entry]) => { merged.counts[type] = { ...entry, source: chosen[index].id }; });
+      merged.items.push(...(result.items || []));
+    });
+    if (results.length > 1) merged.items.sort(byUrgency);
+    return merged;
   }
 
   // Счётчик для значка — отдельный дешёвый вызов: limit=0 возвращает только числа, и стоимость
   // значка в шапке не растёт с числом дел.
-  async function refreshCounters() {
+  async function refreshCounters({ force = false } = {}) {
     const id = actorId();
-    if (!id || ui.inflight) return;
+    if (!id || (ui.inflight && !force)) return;
     ui.inflight = true;
+    // Ответ, обогнанный более новым чтением (запись произошла, пока шло прошлое), не применяется.
+    const generation = ++ui.generation;
+    const key = `${id}|${sourcesKey()}`;
     try {
-      const result = await api(query({ limit: '0' }));
+      const result = await fetchMerged({ limit: '0' });
+      if (generation !== ui.generation) return;
       ui.total = result.total || 0;
       ui.overdue = result.overdue || 0;
       ui.counts = result.counts || {};
       ui.countsLoaded = true;
-      ui.checkedFor = id;
+      ui.checkedFor = key;
       paintBadges();
       if (state.view === VIEW && !ui.loading) {
         // Счётчики изменились, пока экран открыт, — значит, и список устарел.
@@ -92,16 +145,18 @@
       }
     } catch (error) {
       // Значок — подсказка, а не функция: сбой сети не должен мешать работать.
-      ui.checkedFor = id;
+      ui.checkedFor = key;
     } finally {
-      ui.inflight = false;
+      if (generation === ui.generation) ui.inflight = false;
     }
   }
 
   function listKey() { return `${ui.group}|${ui.type}`; }
 
   async function loadList(force) {
-    if (ui.loading) return;
+    // Чтение уже идёт, а запрошено новое (после записи): текущее ответит старым, поэтому по его
+    // окончании список читается ещё раз.
+    if (ui.loading) { if (force) ui.reloadRequested = true; return; }
     if (!force && ui.loadedKey === listKey()) return;
     ui.loading = true; ui.error = '';
     const key = listKey();
@@ -109,9 +164,11 @@
       const params = { limit: '200' };
       if (ui.type !== 'all') params.type = ui.type;
       else if (ui.group !== 'all') params.group = ui.group;
-      const result = await api(query(params));
+      const result = await fetchMerged(params);
       ui.items = result.items || [];
       ui.loadedKey = key;
+      // Список прочитан на экране, который открыт, — значит, он свежий и заново читать его при первой отрисовке не нужно.
+      if (state.view === VIEW) ui.away = false;
       if (ui.type === 'all' && ui.group === 'all') {
         ui.total = result.total || 0; ui.overdue = result.overdue || 0; ui.counts = result.counts || {};
         ui.countsLoaded = true;
@@ -122,6 +179,7 @@
       ui.loading = false;
       paintBadges();
       if (state.view === VIEW) renderApp();
+      if (ui.reloadRequested) { ui.reloadRequested = false; if (state.view === VIEW) void loadList(true); }
     }
   }
 
@@ -135,45 +193,14 @@
     return node;
   }
 
-  // Куда «Перейти» приводит на самом деле. Раньше экран открывался с той же выбранной строкой, что
-  // была до этого, и человек искал нужное дело глазами среди остальных, хотя сервер в `route` уже
-  // называет сущность. Выбирается она там, где реестр экрана ключуется самим идентификатором
-  // сущности; для остальных видов открывается экран, как и прежде, — подставлять чужой ключ
-  // значило бы выбрать несуществующую строку.
-  const ENTITY_TARGETS = Object.freeze({
-    orders: Object.freeze({ scope: 'od-orders', tab: 'orders' }),
-    selections: Object.freeze({ scope: 'od-selections' }),
-  });
-
-  const ORDER_KEYED = new Set(['receipt-accept', 'claim-resolve']);
-
-  // Правка выделяет свой заказ: идентификатор самой правки в реестре заказов не найти.
-  function targetEntityId(item) {
-    return item.type === 'order-amendment-response' ? item.detail?.orderId : item.route.entityId;
-  }
-
-  // Экран-владелец один на несколько видов дел: партнёры — это и запрос на связь, и документ, и
-  // юрлицо. Чтобы «Перейти» приводило к самому делу, а не к вкладке, открытой последней, вид сам
-  // называет вкладку и реестр, где его сущность лежит под собственным идентификатором.
-  const TYPE_TARGETS = Object.freeze({
-    'relationship-response': Object.freeze({ scope: 'od-relationships', tab: 'relationships' }),
-    'compliance-document-issue': Object.freeze({ scope: 'od-compliance-documents', tab: 'compliance-documents' }),
-    'showroom-invitation-response': Object.freeze({ scope: 'od-invitations', tab: 'invitations' }),
-  });
-
+  // Куда «Перейти» приводит на самом деле. Сервер в `route` называет не только экран, но и запись,
+  // вкладку и (где нужно) диалог. Выбрать запись умеет только экран-владелец, поэтому он сам
+  // зарегистрировал обработчик в `view-refresh.js`: «Перейти» перечитывает экран, а затем отдаёт
+  // маршрут его обработчику — после чтения, потому что чтение сбрасывает выбор.
   function open(item) {
-    const view = item.route.view;
-    const target = TYPE_TARGETS[item.type] || ENTITY_TARGETS[view];
-    // Приёмка и претензия живут в заказе: выделяется заказ, а там — «Отгрузка и приёмка».
-    const entityId = ORDER_KEYED.has(item.type) ? item.detail?.orderId : targetEntityId(item);
-    if (target && entityId && typeof OD_UI !== 'undefined') {
-      OD_UI.selected[target.scope] = entityId;
-      if (target.tab) OD_UI.tabs[view] = target.tab;
-    }
-    // Экран-владелец сам решает, как перечитать свои данные (`view-refresh.js`): дело появилось в
-    // реестре потому, что сущность изменилась, а экран мог открыться раньше и хранить старый список.
-    if (global.SynthaViewRefresh) { void global.SynthaViewRefresh.open(view); return; }
-    state.view = view;
+    const route = item.route;
+    if (global.SynthaViewRefresh) { void global.SynthaViewRefresh.open(route.view, route); return; }
+    state.view = route.view;
     renderApp();
   }
 
@@ -244,6 +271,9 @@
   }
 
   function renderScreen() {
+    // Возврат на экран: пока человек был на другом, дело могли сделать (его же рукой на экране-владельце),
+    // и показанный ранее список врёт. Список перечитывается при каждом входе на экран.
+    if (ui.away) { ui.away = false; ui.items = []; ui.loadedKey = ''; }
     if (ui.error) return odPage(text('Ждёт вас', 'Awaiting you'), null, notice(ui.error, 'error'));
     // Какая вкладка открыта — решает пользователь, но список нужной группы приходит с сервера:
     // фильтр на клиенте потерял бы дела, не поместившиеся в страницу.
@@ -318,10 +348,11 @@
     const id = actorId();
     if (!id) {
       if (ui.timer) { clearInterval(ui.timer); ui.timer = null; }
-      if (ui.checkedFor) Object.assign(ui, { total: 0, overdue: 0, counts: {}, countsLoaded: false, items: [], loadedKey: '', error: '', checkedFor: null, group: 'all', type: 'all' });
+      if (ui.checkedFor) Object.assign(ui, { total: 0, overdue: 0, counts: {}, countsLoaded: false, items: [], loadedKey: '', error: '', checkedFor: null, group: 'all', type: 'all', away: true });
       return;
     }
-    if (ui.checkedFor !== id && !ui.inflight) queueMicrotask(() => { void refreshCounters(); });
+    if (state.view !== VIEW) ui.away = true;
+    if (ui.checkedFor !== `${id}|${sourcesKey()}` && !ui.inflight) queueMicrotask(() => { void refreshCounters(); });
     if (!ui.timer) ui.timer = setInterval(() => { if (!document.hidden) void refreshCounters(); }, POLL_MS);
   }
 
@@ -352,16 +383,20 @@
   const previousRenderView = renderView;
   renderView = (...args) => (state.view === VIEW ? renderScreen() : previousRenderView(...args));
 
-  // Сделанный ход убирает пункт: после любой успешной записи счётчик перечитывается, чтобы значок
-  // не показывал уже выполненное до ближайшего опроса.
-  if (typeof mutate === 'function') {
-    const previousMutate = mutate;
-    mutate = async (...args) => {
-      const result = await previousMutate(...args);
-      setTimeout(() => { void refreshCounters(); }, 400);
-      return result;
-    };
+  // Сделанный ход убирает пункт: после любой успешной записи (`api()` сообщает о ней событием
+  // `syntha:mutated`, откуда бы запись ни пришла) счётчик и список перечитываются, чтобы значок и
+  // таблица не показывали уже выполненное до ближайшего опроса.
+  let mutationTimer = null;
+  function onMutated() {
+    if (!actorId()) return;
+    clearTimeout(mutationTimer);
+    mutationTimer = setTimeout(() => {
+      mutationTimer = null;
+      void refreshCounters({ force: true });
+      if (state.view === VIEW) void loadList(true);
+    }, 400);
   }
+  if (typeof global.addEventListener === 'function') global.addEventListener('syntha:mutated', onMutated);
 
   global.SynthaAwaitingAction.refresh = () => { void refreshCounters(); if (state.view === VIEW) void loadList(true); };
 })(window);

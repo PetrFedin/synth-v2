@@ -2,7 +2,12 @@ import {
   AWAITING_ACTION_GROUPS,
   AWAITING_ACTION_MAX_LIMIT,
   AWAITING_ACTION_TYPE_CODES,
+  SUPPLIER_AWAITING_ACTION_GROUPS,
+  SUPPLIER_AWAITING_ACTION_TYPE_CODES,
 } from '../modules/awaiting-action/public.mjs';
+
+const ALL_TYPE_CODES = Object.freeze([...AWAITING_ACTION_TYPE_CODES, ...SUPPLIER_AWAITING_ACTION_TYPE_CODES]);
+const ALL_GROUPS = Object.freeze([...new Set([...AWAITING_ACTION_GROUPS, ...SUPPLIER_AWAITING_ACTION_GROUPS])]);
 
 const SAFE_ID = '^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$';
 const errorResponse = { description: 'Domain or transport error', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } };
@@ -18,7 +23,7 @@ function schemas() {
   const count = {
     type: 'object', additionalProperties: false, required: ['group', 'titleRu', 'titleEn', 'count', 'overdue'],
     properties: {
-      group: { type: 'string', enum: AWAITING_ACTION_GROUPS },
+      group: { type: 'string', enum: ALL_GROUPS },
       titleRu: { type: 'string', maxLength: 200, description: 'The same title the item of this type carries; the type filter labels itself with it.' },
       titleEn: { type: 'string', maxLength: 200 },
       count: nonNegative(),
@@ -28,16 +33,23 @@ function schemas() {
   return {
     AwaitingActionRoute: {
       type: 'object', additionalProperties: false, required: ['view', 'entityId'],
-      description: 'The screen of the web client that opens the entity, and the entity to open on it.',
-      properties: { view: { type: 'string', minLength: 1, maxLength: 80 }, entityId: { type: 'string', minLength: 1, maxLength: 300 } },
+      description: 'The exact target of «Перейти»: the screen of the web client, the entity to open on it, and — where the screen needs them — the tab, the containing record, the sub-record to highlight and the dialog to open over the selected record.',
+      properties: {
+        view: { type: 'string', minLength: 1, maxLength: 80 },
+        entityId: { type: 'string', minLength: 1, maxLength: 300 },
+        tab: { type: 'string', minLength: 1, maxLength: 80, description: 'Tab of the owning screen (or of the record inspector) the item lives on.' },
+        parentId: { type: 'string', minLength: 1, maxLength: 300, description: 'The record that contains the item and is the one selected on the screen: the order of an amendment, receipt or claim, the material of a lot or lab dip, the production order of a payment.' },
+        focus: { type: 'string', minLength: 1, maxLength: 300, description: 'The sub-record to highlight inside the selected one: the lot reference or the colour code.' },
+        dialog: { type: 'string', minLength: 1, maxLength: 80, description: 'A dialog of the selected record to open: `amendments` or `fulfilment`.' },
+      },
     },
     // Это не хранимая задача, а состояние самой сущности: пункт исчезает, как только ход сделан.
     AwaitingActionItem: {
       type: 'object', additionalProperties: false,
       required: ['type', 'group', 'entityKind', 'entityId', 'label', 'organisationId', 'titleRu', 'titleEn', 'route', 'waitingSince', 'ageSeconds', 'dueAt', 'overdue', 'detail'],
       properties: {
-        type: { type: 'string', enum: AWAITING_ACTION_TYPE_CODES },
-        group: { type: 'string', enum: AWAITING_ACTION_GROUPS },
+        type: { type: 'string', enum: ALL_TYPE_CODES },
+        group: { type: 'string', enum: ALL_GROUPS },
         entityKind: { type: 'string', minLength: 1, maxLength: 80 },
         entityId: { type: 'string', minLength: 1, maxLength: 300 },
         label: { type: 'string', minLength: 1, maxLength: 400 },
@@ -69,6 +81,26 @@ function schemas() {
 
 function paths() {
   return {
+    '/supplier-portal/awaiting-action': {
+      get: {
+        operationId: 'listSupplierPortalAwaitingAction',
+        summary: 'What waits for the authenticated supplier representative to answer',
+        description: 'The supplier-side counterpart of the awaiting-action list. The reader is not a member of any organisation: the portal grant is the whole of their standing, so the items are read through the same grant-scoped views as the portal lists and only for the grants the caller holds. Three kinds: a request for quotation without the supplier\'s quotation, a brand counter-offer the supplier can accept, an order placed with the supplier that is not yet confirmed. A supplier that is not qualified, a revoked grant and another supplier\'s requests and orders produce nothing.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'type', in: 'query', required: false, description: 'One type code or a comma-separated list.', schema: { type: 'string', maxLength: 600 } },
+          { name: 'group', in: 'query', required: false, schema: { type: 'string', enum: SUPPLIER_AWAITING_ACTION_GROUPS } },
+          { name: 'limit', in: 'query', required: false, description: 'Page size; 0 returns the counters only.', schema: { type: 'integer', minimum: 0, maximum: AWAITING_ACTION_MAX_LIMIT, default: 100 } },
+        ],
+        responses: {
+          200: {
+            description: 'Supplier awaiting action list',
+            content: { 'application/json': { schema: { type: 'object', additionalProperties: false, required: ['data', 'requestId'], properties: { data: { $ref: '#/components/schemas/AwaitingActionList' }, requestId: { type: 'string', minLength: 1, maxLength: 128, pattern: SAFE_ID } } } } },
+          },
+          400: errorResponse, 401: errorResponse, 422: errorResponse,
+        },
+      },
+    },
     '/inbox/awaiting-action': {
       get: {
         operationId: 'listAwaitingAction',

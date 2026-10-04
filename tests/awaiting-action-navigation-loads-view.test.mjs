@@ -5,7 +5,7 @@ import path from 'node:path';
 import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 
-import { AWAITING_ACTION_TYPES } from '../src/modules/awaiting-action/public.mjs';
+import { AWAITING_ACTION_TYPES, buildAwaitingActionItem } from '../src/modules/awaiting-action/public.mjs';
 import { createAwaitingActionQueryService } from '../src/application/awaiting-action-query-service.mjs';
 
 // Найдено настоящим кликом: «Перейти» по делу «выберите поставщика» открывало «Запросы цен» с нулями
@@ -53,16 +53,20 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
 function stand({ reads = {}, organisations = [{ id: 'org-1', name: 'Brand' }] } = {}) {
   const window = { Object, Array, String, Number, Promise, URLSearchParams, Intl, Date, Map, Set, Math, JSON, Error, queueMicrotask, setTimeout, clearTimeout };
   window.window = window;
+  // События окна: `api()` объявляет успешную запись событием, «Ждёт вас» его слушает.
+  const listeners = {};
+  window.addEventListener = (type, handler) => { (listeners[type] ||= []).push(handler); };
+  window.announce = (type, detail) => (listeners[type] || []).forEach((handler) => handler({ detail }));
   window.setInterval = () => 1;
   window.clearInterval = () => {};
-  window.document = { hidden: false, querySelector: () => null, querySelectorAll: () => [], createDocumentFragment: () => node('fragment') };
+  window.document = { hidden: false, querySelector: () => null, querySelectorAll: (selector) => (window.inspectorButtons && /inspector/.test(selector) ? window.inspectorButtons : []), createDocumentFragment: () => node('fragment') };
   window.localText = (ru) => ru;
   window.I18N = { t: (key) => key, getLocale: () => 'ru', localeTag: () => 'ru-RU', formatMoney: (v) => String(v) };
   window.state = {
     view: 'overview', user: { actorId: 'u-1' },
     workspace: { memberships: [{ id: 'm1', organisationId: 'org-1', userId: 'u-1', status: 'active', role: 'owner' }], organisations: [{ id: 'org-1', type: 'brand' }] },
   };
-  window.OD_UI = { tabs: {}, selected: {}, filters: {} };
+  window.OD_UI = { tabs: {}, selected: {}, filters: {}, hierarchyPath: {}, inspectorTab: {} };
   window.el = node;
   window.h = (tag, props, children) => { const item = node(tag, props || {}); [].concat(children || []).forEach((child) => item.append(child)); return item; };
   window.icon = () => node('i');
@@ -76,8 +80,9 @@ function stand({ reads = {}, organisations = [{ id: 'org-1', name: 'Brand' }] } 
   window.odRegistry = (config) => ({ registry: config });
   window.odPage = (title, header, content) => ({ title, header, content });
   window.odHeader = (scope, tabs, metrics, statuses, placeholder, action) => ({ fragment: node('fragment'), active: 'all', action });
-  const log = { reads: [], renders: 0, reloads: 0 };
-  window.renderApp = () => { log.renders += 1; };
+  const log = { reads: [], renders: 0, reloads: 0, wantedTabs: [] };
+  // Какую вкладку панели просит маршрут в момент каждой отрисовки: панель читает её при отрисовке.
+  window.renderApp = () => { log.renders += 1; log.wantedTabs.push(window.OD_UI.wantedInspectorTab ?? null); };
   window.renderView = () => 'previous-view';
   window.viewTitle = () => 'Обзор';
   window.viewSectionName = () => 'Рабочий стол';
@@ -104,18 +109,21 @@ function stand({ reads = {}, organisations = [{ id: 'org-1', name: 'Brand' }] } 
   return { window, log };
 }
 
-function itemOf(entry) {
-  return {
-    type: entry.type, entityKind: entry.entityKind, entityId: `${entry.entityKind}_1`, label: 'L', organisationId: 'org-1',
-    titleRu: entry.labelRu, titleEn: entry.labelEn, route: { view: entry.view, entityId: `${entry.entityKind}_1` },
-    ageSeconds: 1, waitingSince: null, detail: { orderId: 'order_1', lineNo: 1 }, group: entry.group,
-  };
+// Дело строится тем же кодом, что строит его сервер: маршрут (экран, запись, вкладка, диалог) — не
+// выдумка теста, а то, что приходит по сети.
+const DETAIL = { orderId: 'order_1', lineNo: 1, materialCode: 'MAT-1', lotReference: 'LOT-1', colourCode: 'C-RED', productionOrderNumber: 'PO-1' };
+function itemOf(entry, entityId = `${entry.entityKind}_1`) {
+  return JSON.parse(JSON.stringify(buildAwaitingActionItem(
+    { type: entry.type, entityId, label: 'L', organisationId: 'org-1', since: '2026-10-01T00:00:00.000Z', dueAt: null, detail: DETAIL },
+    '2026-10-04T00:00:00.000Z',
+  )));
 }
 
 // «Перейти» нажимается так же, как в браузере: кнопка берётся из инспектора настоящего экрана.
 async function pressOpen(window, item) {
   window.SynthaAwaitingAction.items = [item];
   window.SynthaAwaitingAction.loadedKey = 'all|all';
+  window.SynthaAwaitingAction.away = false;
   window.state.view = 'awaiting-action';
   const screen = window.renderView();
   const shown = screen.content.registry.inspector(item).inspector;
@@ -152,12 +160,38 @@ for (const entry of AWAITING_ACTION_TYPES) {
     // Документ лежит в своём кэше по организации, а не в рабочем пространстве: перечитывается он отдельно.
     if (entry.type === 'compliance-document-issue') {
       assert.ok(log.reads.includes('/v2/organisations/org-1/compliance-documents'), `the document register was reread; reads: ${log.reads.join(', ')}`);
-      assert.equal(window.OD_UI.tabs.partners, 'compliance-documents', 'the tab that holds the draft opens, not the relationship map');
-      assert.equal(window.OD_UI.selected['od-compliance-documents'], itemOf(entry).entityId);
     }
+    // Не просто нужный экран, а нужная запись и вкладка: каждое из девятнадцати дел приводит к своей цели.
+    TARGET[entry.type](window, itemOf(entry), log);
   });
 }
 
+// Куда приводит каждое дело: чем экран-владелец помечает выбранную запись и вкладку.
+const same = (actual, expected, what) => assert.equal(actual, expected, what);
+const TARGET = {
+  'order-accept-terms': (w, item) => { same(w.OD_UI.selected['od-orders'], item.entityId); same(w.OD_UI.tabs.orders, 'orders'); },
+  'order-attach': (w, item) => { same(w.OD_UI.selected['od-orders'], item.entityId); same(w.OD_UI.tabs.orders, 'orders'); },
+  // Правка, приёмка и претензия живут в заказе: выбирается заказ, а не их собственный идентификатор.
+  'order-amendment-response': (w) => { same(w.OD_UI.selected['od-orders'], 'order_1', 'the order of the amendment, not the amendment'); same(w.OD_UI.tabs.orders, 'orders'); },
+  'selection-approval': (w, item) => { same(w.OD_UI.selected['od-selections'], item.entityId); same(w.OD_UI.tabs.selections, 'selections'); },
+  'relationship-response': (w, item) => { same(w.OD_UI.selected['od-relationships'], item.entityId); same(w.OD_UI.tabs.partners, 'relationships'); },
+  'showroom-invitation-response': (w, item) => { same(w.OD_UI.selected['od-invitations'], item.entityId); same(w.OD_UI.tabs.showrooms, 'invitations'); },
+  'receipt-accept': (w) => { same(w.OD_UI.selected['od-orders'], 'order_1'); same(w.OD_UI.tabs.orders, 'orders'); },
+  'claim-resolve': (w) => { same(w.OD_UI.selected['od-orders'], 'order_1'); same(w.OD_UI.tabs.orders, 'orders'); },
+  'rfq-award': (w, item) => { same(w.SynthaSourcingWorkspace.selectedRfqCode, item.entityId); same(w.SynthaSourcingWorkspace.rfqStatus, 'all'); },
+  'material-rfq-award': (w, item) => { same(w.SynthaSourcingWorkspace.selectedMaterialRfqCode, item.entityId); },
+  'production-order-confirm': (w, item) => { same(w.SynthaProductionOrdersWorkspace.selectedNumber(), item.entityId); },
+  'material-purchase-order-confirm': (w, item) => { same(w.SynthaSourcingWorkspace.selectedMaterialPurchaseOrderNumber, item.entityId); },
+  'tech-pack-acknowledge': (w, item) => { same(w.SynthaTechPacksWorkspace.selectedCode, item.entityId); },
+  'sample-decision': (w, item) => { same(w.SynthaSamplesWorkspace.selectedCode, item.entityId); },
+  'inspection-review': (w, item) => { same(w.SynthaFinalQualityWorkspace.selectedCode(), item.entityId); },
+  // Партия и образец цвета — не материал «первый в реестре», а материал самой партии; панель открывается на нужной вкладке.
+  'material-lot-release': (w, item, log) => { same(w.OD_UI.selected['od-materials'], 'MAT-1'); assert.ok(log.wantedTabs.includes('lots'), 'the lots tab was asked for'); },
+  'lab-dip-decision': (w, item, log) => { same(w.OD_UI.selected['od-materials'], 'MAT-1'); assert.ok(log.wantedTabs.includes('colour'), 'the colour tab was asked for'); },
+  // Платёж лежит в графике своего производственного заказа: выбирается заказ.
+  'supplier-payment': (w) => { same(w.SynthaProductionOrdersWorkspace.selectedNumber(), 'PO-1'); },
+  'compliance-document-issue': (w, item) => { same(w.OD_UI.tabs.partners, 'compliance-documents', 'the tab that holds the draft opens, not the relationship map'); same(w.OD_UI.selected['od-compliance-documents'], item.entityId); },
+};
 test('the screen that cached an empty list before the entity appeared is reread on "Open"', async () => {
   const rfq = { rfqCode: 'RFQ-PENDING-QUOTE-001', status: 'quoted', brandId: 'org-1' };
   let served = { items: [], nextCursor: null, referenceTime: '2026-10-04T00:00:00.000Z' };
@@ -222,4 +256,88 @@ test('"nothing is waiting" is said only about a list that was read and is empty'
   // Прочитан и пуст: теперь это правда.
   window.SynthaAwaitingAction.items = [];
   assert.deepEqual(text(window.renderView()), ['Сейчас ничего не ждёт вашего действия.']);
+});
+
+// --- Диалог поверх выбранной записи --------------------------------------------------------------
+
+for (const [type, labelRu] of [['order-amendment-response', 'Изменения'], ['receipt-accept', 'Отгрузка и приёмка'], ['claim-resolve', 'Отгрузка и приёмка']]) {
+  test(`"Open" on ${type} presses «${labelRu}» of the selected order, exactly as the person would`, async () => {
+    const { window } = stand();
+    const clicked = [];
+    window.inspectorButtons = [
+      { textContent: 'Экономика', disabled: false, click: () => clicked.push('Экономика') },
+      { textContent: labelRu, disabled: false, click: () => clicked.push(labelRu) },
+    ];
+    await pressOpen(window, itemOf(AWAITING_ACTION_TYPES.find((entry) => entry.type === type)));
+    assert.deepEqual(clicked, [labelRu]);
+  });
+}
+
+test('a dialog the person could not open by hand is not opened for them', async () => {
+  const { window } = stand();
+  const clicked = [];
+  // Нет права или не то состояние — кнопки в панели нет: заказ просто показан.
+  window.inspectorButtons = [{ textContent: 'Экономика', disabled: false, click: () => clicked.push('x') }];
+  await pressOpen(window, itemOf(AWAITING_ACTION_TYPES.find((entry) => entry.type === 'order-amendment-response')));
+  assert.deepEqual(clicked, []);
+  assert.equal(window.OD_UI.selected['od-orders'], 'order_1');
+});
+
+test('the target is applied after the read, because the read resets the selection', async () => {
+  const rfq = (code) => ({ rfqCode: code, status: 'quoted', brandId: 'org-1', quotes: [], supplierCodes: [] });
+  const { window } = stand({ reads: { '/v2/rfqs': { items: [rfq('RFQ-A-001'), rfq('RFQ-PENDING-QUOTE-001')], nextCursor: null, referenceTime: '2026-10-04T00:00:00.000Z' } } });
+  const entry = AWAITING_ACTION_TYPES.find((candidate) => candidate.type === 'rfq-award');
+  await pressOpen(window, itemOf(entry, 'RFQ-PENDING-QUOTE-001'));
+  const sourcing = window.SynthaSourcingWorkspace;
+  assert.equal(sourcing.selectedRfqCode, 'RFQ-PENDING-QUOTE-001', 'not the first row of the register');
+});
+
+test('a status filter that would hide the entity is cleared by the target', async () => {
+  const { window } = stand();
+  window.SynthaSourcingWorkspace.rfqStatus = 'awarded';
+  window.OD_UI.filters.orders = { status: 'cancelled', query: 'x' };
+  await pressOpen(window, itemOf(AWAITING_ACTION_TYPES.find((candidate) => candidate.type === 'rfq-award')));
+  assert.equal(window.SynthaSourcingWorkspace.rfqStatus, 'all');
+  await pressOpen(window, itemOf(AWAITING_ACTION_TYPES.find((candidate) => candidate.type === 'order-accept-terms')));
+  assert.equal(window.OD_UI.filters.orders, undefined);
+});
+
+// --- Список и счётчики не отстают от действий -------------------------------------------------------
+
+test('after any successful write the counters and the open list are read again', async () => {
+  let served = { items: [{ type: 'rfq-award', entityKind: 'sourcing-rfq', entityId: 'r1', label: 'RFQ-1', organisationId: 'org-1', titleRu: 'x', titleEn: 'x', route: { view: 'rfqs', entityId: 'r1' }, ageSeconds: 1, waitingSince: null, detail: {}, group: 'sourcing' }], total: 1, overdue: 0, counts: { 'rfq-award': { group: 'sourcing', titleRu: 'x', titleEn: 'x', count: 1, overdue: 0 } } };
+  const { window, log } = stand({ reads: { '/v2/inbox/awaiting-action': () => served } });
+  window.state.view = 'awaiting-action';
+  window.renderView();
+  await settle();
+  assert.equal(window.SynthaAwaitingAction.items.length, 1);
+  // Победитель выбран на другом экране: дело исчезло, и об этом знает только событие записи.
+  served = { items: [], total: 0, overdue: 0, counts: {} };
+  window.announce('syntha:mutated', { path: '/v2/rfqs/RFQ-1/award', method: 'POST' });
+  await new Promise((resolve) => setTimeout(resolve, 450));
+  assert.equal(window.SynthaAwaitingAction.items.length, 0, 'the row that was done is gone');
+  assert.equal(window.SynthaAwaitingAction.total, 0);
+  assert.ok(log.reads.filter((url) => url.startsWith('/v2/inbox/awaiting-action')).length >= 3);
+});
+
+test('coming back to the screen never shows the list that was read before the move was made', async () => {
+  const row = { type: 'rfq-award', entityKind: 'sourcing-rfq', entityId: 'r1', label: 'RFQ-1', organisationId: 'org-1', titleRu: 'x', titleEn: 'x', route: { view: 'rfqs', entityId: 'r1' }, ageSeconds: 1, waitingSince: null, detail: {}, group: 'sourcing' };
+  let served = { items: [row], total: 1, overdue: 0, counts: { 'rfq-award': { group: 'sourcing', titleRu: 'x', titleEn: 'x', count: 1, overdue: 0 } } };
+  const { window } = stand({ reads: { '/v2/inbox/awaiting-action': () => served } });
+  window.state.view = 'awaiting-action';
+  window.renderView();
+  await settle();
+  assert.equal(window.SynthaAwaitingAction.items.length, 1);
+  // Человек ушёл на экран закупок (renderApp рисует другой вид) и сделал ход там.
+  window.state.view = 'rfqs';
+  window.renderApp();
+  served = { items: [], total: 0, overdue: 0, counts: {} };
+  // Возврат: прежних строк нет ни на мгновение, а чтение идёт заново.
+  window.state.view = 'awaiting-action';
+  const first = window.renderView();
+  assert.equal(window.SynthaAwaitingAction.items.length, 0, 'the stale row is not drawn');
+  assert.ok(first.content, 'a screen is drawn while the read runs');
+  await settle();
+  assert.equal(window.SynthaAwaitingAction.items.length, 0);
+  assert.equal(window.SynthaAwaitingAction.loadedKey, 'all|all');
 });

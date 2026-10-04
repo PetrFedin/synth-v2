@@ -18,7 +18,8 @@ test('the awaiting-action screen is loaded and served', () => {
 });
 
 test('the screen reads one endpoint and the counter is the cheap form of it', () => {
-  assert.match(script, /\/v2\/inbox\/awaiting-action\?/);
+  assert.match(script, /\/v2\/inbox\/awaiting-action'/);
+  assert.match(script, /\/v2\/supplier-portal\/awaiting-action'/, 'a supplier is read through the portal grant');
   assert.match(script, /limit: '0'/, 'the badge asks for counters only');
   assert.match(script, /limit: '200'/);
   assert.doesNotMatch(script, /mutate\(/, 'the list has no write path of its own');
@@ -33,12 +34,12 @@ test('it offers a badge in the top bar and the navigation, a type filter and a l
   assert.match(script, /topbar-actions/);
   assert.match(script, /\.sidebar \.nav/);
   assert.match(script, /typeFilter/);
-  assert.match(script, /const view = item\.route\.view;[\s\S]{0,1500}SynthaViewRefresh\.open\(view\)[\s\S]{0,200}state\.view = view;/);
+  assert.match(script, /const route = item\.route;[\s\S]{0,1500}SynthaViewRefresh\.open\(route\.view, route\)[\s\S]{0,200}state\.view = route\.view;/);
   assert.match(script, /OD_UI\.tabs\['awaiting-action'\]/, 'family tabs');
 });
 
 test('the polling stops with the session and a failed badge read never blocks work', () => {
   assert.match(script, /clearInterval\(ui\.timer\)/);
   assert.match(script, /document\.hidden/);
-  assert.match(script, /catch \(error\) \{\s*\/\/[^\n]*\n\s*ui\.checkedFor = id;/);
+  assert.match(script, /catch \(error\) \{\s*\/\/[^\n]*\n\s*ui\.checkedFor = key;/);
 });

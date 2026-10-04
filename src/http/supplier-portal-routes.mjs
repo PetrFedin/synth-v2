@@ -2,6 +2,7 @@ import { invariant } from '../core/errors.mjs';
 import { assertBodyContract, assertQueryContract, bodyContract } from './request-contract.mjs';
 
 const PAGE_QUERY_FIELDS = Object.freeze(['limit', 'supplierCode']);
+const AWAITING_QUERY_FIELDS = Object.freeze(['type', 'group', 'limit']);
 
 const QUOTE_BODY = bodyContract(['expectedVersion', 'supplierCode', 'unitPriceMinor', 'fixedCostMinor', 'leadTimeDays', 'minimumOrderQuantity', 'validUntil', 'notes', 'tiers'], {}, { tiers: ['quantity', 'unitPriceMinor'] });
 const ACCEPT_COUNTER_BODY = bodyContract(['expectedVersion', 'supplierCode']);
@@ -18,6 +19,8 @@ export function createSupplierPortalRoutes({ supplierPortal } = {}) {
     read('GET', /^\/v2\/supplier-portal\/suppliers$/, [], ({ actorId }) => service.suppliersForActor(actorId)),
     read('GET', /^\/v2\/supplier-portal\/rfqs$/, PAGE_QUERY_FIELDS, ({ actorId, query }) => service.rfqsForActor(actorId, query)),
     read('GET', /^\/v2\/supplier-portal\/orders$/, PAGE_QUERY_FIELDS, ({ actorId, query }) => service.ordersForActor(actorId, query)),
+    // «Ждёт вас» поставщика: что в портале ждёт ответа именно этого держателя гранта.
+    read('GET', /^\/v2\/supplier-portal\/awaiting-action$/, AWAITING_QUERY_FIELDS, ({ actorId, query }) => service.awaitingActionsForActor(actorId, query)),
     mutate(/^\/v2\/supplier-portal\/rfqs\/([^/]+)\/quote$/, QUOTE_BODY, ({ commandId, actorId, params, body }) => service.submitQuote(commandId, actorId, params[0], body)),
     mutate(/^\/v2\/supplier-portal\/rfqs\/([^/]+)\/counter-offer\/accept$/, ACCEPT_COUNTER_BODY, ({ commandId, actorId, params, body }) => service.acceptCounterOffer(commandId, actorId, params[0], body)),
     mutate(/^\/v2\/supplier-portal\/orders\/([^/]+)\/confirm$/, CONFIRM_ORDER_BODY, ({ commandId, actorId, params, body }) => service.confirmOrder(commandId, actorId, params[0], body)),
@@ -51,5 +54,5 @@ function read(method, pattern, fields, execute) {
 
 function unavailable() {
   const fail = () => invariant(false, 'SUPPLIER_PORTAL_SERVICE_REQUIRED', 'Supplier portal service is required');
-  return Object.freeze({ suppliersForActor: fail, rfqsForActor: fail, ordersForActor: fail, submitQuote: fail, acceptCounterOffer: fail, confirmOrder: fail });
+  return Object.freeze({ suppliersForActor: fail, rfqsForActor: fail, ordersForActor: fail, awaitingActionsForActor: fail, submitQuote: fail, acceptCounterOffer: fail, confirmOrder: fail });
 }

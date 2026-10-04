@@ -423,7 +423,12 @@ test('"Ждёт вас" lists a shipment to receive for the buyer and a claim to
   assert.match(reader, /NOT EXISTS \(SELECT 1 FROM receipt_snapshots AS rcpt/, 'a partial receipt does not close the move');
   assert.match(reader, /receipt_claim_resolution_snapshots AS resolution/);
   const screen = await read('public/modules/awaiting-action.js');
-  assert.match(screen, /ORDER_KEYED = new Set\(\['receipt-accept', 'claim-resolve'\]\)/);
+  // Приёмка и претензия живут в заказе: маршрут называет заказ и диалог «Отгрузка и приёмка», а не собственный идентификатор.
+  assert.equal(receive.target.parent, 'orderId');
+  assert.equal(receive.target.dialog, 'fulfilment');
+  assert.equal(resolve.target.parent, 'orderId');
+  assert.equal(resolve.target.dialog, 'fulfilment');
+  assert.doesNotMatch(screen, /ORDER_KEYED/, 'the screen no longer keeps its own table of targets');
 });
 
 test('the shared chain read withholds supplier recoveries from everyone but a brand that may read margin', async () => {

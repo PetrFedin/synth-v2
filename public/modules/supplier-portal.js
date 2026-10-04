@@ -16,6 +16,8 @@
 
   const RFQ_VIEW = 'supplier-portal-rfqs';
   const ORDER_VIEW = 'supplier-portal-orders';
+  // «Ждёт вас» — экран самого портала для поставщика: список дел по его гранту, а не пустой экран брендового реестра.
+  const AWAITING_VIEW = 'awaiting-action';
 
   function text(ru, en) { return typeof localText === 'function' ? localText(ru, en) : ru; }
 
@@ -98,6 +100,28 @@
   // vocabulary and its action verbs, on screens that could never do anything. The portal is the whole
   // of their navigation.
   function portalOnly() { return ui.suppliers.length > 0 && !(state.workspace?.memberships || []).length; }
+
+  // Поставщик не состоит ни в одной организации, и шапка писала «организация не назначена» — хотя
+  // название у него есть: это поставщик, на которого выдан грант. Показывается оно (а у держателя
+  // нескольких грантов — первое, остальные в меню).
+  function nameSupplierInTopbar() {
+    if (!portalOnly()) return;
+    const names = ui.suppliers.map((item) => item.legalName || item.supplierCode).filter(Boolean);
+    if (!names.length) return;
+    document.querySelectorAll('.topbar-organisation').forEach((chip) => {
+      const label = [...chip.children].find((node) => node.tagName === 'SPAN' && !node.classList.contains('icon') && !node.querySelector('svg'));
+      if (label && label.textContent !== names[0]) label.textContent = names[0];
+      chip.querySelectorAll('.topbar-menu-list').forEach((list) => {
+        if (list.dataset.supplierNames === names.join('|')) return;
+        list.dataset.supplierNames = names.join('|');
+        list.replaceChildren(...ui.suppliers.map((item) => {
+          const row = el('div', { className: 'topbar-menu-item' });
+          row.append(el('strong', { rawText: item.legalName || item.supplierCode }), el('small', { rawText: item.brandName || '' }));
+          return row;
+        }));
+      });
+    });
+  }
 
   function appendNavigation() {
     if (!ui.suppliers.length) return;
@@ -424,11 +448,17 @@
     if (actorId && ui.checkedFor !== actorId && !ui.checking) queueMicrotask(() => { void detectAccess(actorId); });
     // A portal-only account has no workspace to land on, so the first screen is the first thing
     // addressed to them rather than a brand dashboard with every tile at zero.
-    if (portalOnly() && state.view !== RFQ_VIEW && state.view !== ORDER_VIEW) state.view = RFQ_VIEW;
+    if (portalOnly() && state.view !== RFQ_VIEW && state.view !== ORDER_VIEW && state.view !== AWAITING_VIEW) state.view = RFQ_VIEW;
     const result = previousRenderApp(...args);
     appendNavigation();
+    nameSupplierInTopbar();
     return result;
   };
+
+  // «Перейти» из «Ждёт вас»: экран портала перечитывается и выбирает запись по коду запроса или заказа.
+  global.SynthaViewRefresh?.register([RFQ_VIEW, ORDER_VIEW], () => load(false));
+  global.SynthaViewRefresh?.registerTarget(RFQ_VIEW, (route) => { global.SynthaViewRefresh.clearRegistryFilters('supplier-portal-rfqs'); OD_UI.selected['od-supplier-portal-rfqs'] = route.entityId; });
+  global.SynthaViewRefresh?.registerTarget(ORDER_VIEW, (route) => { global.SynthaViewRefresh.clearRegistryFilters('supplier-portal-orders'); OD_UI.selected['od-supplier-portal-orders'] = route.entityId; });
 
   const previousRenderView = renderView;
   renderView = (...args) => {

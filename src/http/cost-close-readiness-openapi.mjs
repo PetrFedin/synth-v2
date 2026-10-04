@@ -85,6 +85,27 @@ function readinessSchemas() {
         uncoveredSkus: { type: 'array', maxItems: 500, uniqueItems: true, items: { type: 'string', pattern: SKU } },
       },
     },
+    // Что уже записано по подтверждённому заказу, чтобы рабочее место «Экономика заказа» продолжало цепочку
+    // после перезагрузки страницы, а не помнило только то, что создало само. Право чтения — `margin.read`.
+    OrderEconomicsLedger: {
+      type: 'object', additionalProperties: false,
+      required: ['orderId', 'orderCommitSnapshotId', 'brandId', 'currency', 'lineageMode', 'lines', 'supplyCommitments', 'fxRateSnapshots', 'actualCosts', 'landedCosts', 'allocationPolicies', 'allocationRuns', 'marginActualizations', 'readiness', 'costClose', 'postCloseAdjustments'],
+      properties: {
+        orderId: identifier, orderCommitSnapshotId: identifier, brandId: identifier, currency,
+        lineageMode: { type: 'string', enum: ['product-sku-v2', 'legacy', 'mixed'] },
+        lines: { type: 'array', maxItems: 5000, items: { type: 'object', additionalProperties: false, required: ['lineNo', 'sku', 'productSkuId', 'quantity'], properties: { lineNo: { type: 'integer', minimum: 1 }, sku: { type: 'string', minLength: 1 }, productSkuId: nullableIdentifier(), quantity: { type: 'integer', minimum: 0 } } } },
+        supplyCommitments: { type: 'array', maxItems: 500, items: { type: 'object', additionalProperties: false, required: ['id', 'createdAt', 'allocations'], properties: { id: identifier, createdAt: { type: 'string', format: 'date-time' }, allocations: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['orderLineNo', 'sku', 'quantity', 'sourceType', 'sourceRef'], properties: { orderLineNo: { type: 'integer', minimum: 1 }, sku: { type: 'string' }, quantity: { type: 'integer', minimum: 1 }, sourceType: { type: 'string', enum: ['inventory', 'inbound', 'production', 'drop-ship'] }, sourceRef: { type: 'string' } } } } } } },
+        fxRateSnapshots: { type: 'array', maxItems: 500, items: { type: 'object', additionalProperties: false, required: ['id', 'sourceCurrency', 'targetCurrency', 'rate', 'rateType', 'sourceRef', 'effectiveAt'], properties: { id: identifier, sourceCurrency: currency, targetCurrency: currency, rate: { type: 'number' }, rateType: { type: 'string' }, sourceRef: { type: 'string' }, effectiveAt: { type: 'string', format: 'date-time' } } } },
+        actualCosts: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['id', 'entryKind', 'reversalOfEntryId', 'reversed', 'costType', 'sourceAmount', 'sourceCurrency', 'amount', 'currency', 'supplyCommitmentSnapshotId', 'fxRateSnapshotId', 'sourceRef', 'occurredAt'], properties: { id: identifier, entryKind: { type: 'string', enum: ['actual', 'reversal'] }, reversalOfEntryId: nullableIdentifier(), reversed: { type: 'boolean' }, costType: { type: 'string' }, sourceAmount: money, sourceCurrency: currency, amount: money, currency, supplyCommitmentSnapshotId: identifier, fxRateSnapshotId: nullableIdentifier(), sourceRef: { type: 'string' }, occurredAt: { type: 'string', format: 'date-time' } } } },
+        landedCosts: { type: 'array', maxItems: 500, items: { type: 'object', additionalProperties: false, required: ['id', 'totalCost', 'currency', 'createdAt', 'supplyLineageComplete', 'costEntryCount', 'current'], properties: { id: identifier, totalCost: money, currency, createdAt: { type: 'string', format: 'date-time' }, supplyLineageComplete: { type: 'boolean' }, costEntryCount: { type: 'integer', minimum: 0 }, current: { type: 'boolean' } } } },
+        allocationPolicies: { type: 'array', maxItems: 500, items: { type: 'object', additionalProperties: false, required: ['id', 'name', 'version', 'defaultBasis', 'rules', 'status'], properties: { id: identifier, name: { type: 'string' }, version: { type: 'integer', minimum: 1 }, defaultBasis: { type: 'string', enum: ['direct', 'unit', 'net_value', 'custom'] }, rules: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['costType', 'basis'], properties: { costType: { type: 'string' }, basis: { type: 'string', enum: ['direct', 'unit', 'net_value', 'custom'] } } } }, status: { type: 'string' } } } },
+        allocationRuns: { type: 'array', maxItems: 500, items: { type: 'object', additionalProperties: false, required: ['id', 'landedCostSnapshotId', 'policyVersionId', 'lineageMode', 'allocatedTotal', 'currency', 'createdAt'], properties: { id: identifier, landedCostSnapshotId: identifier, policyVersionId: identifier, lineageMode: { type: ['string', 'null'] }, allocatedTotal: money, currency, createdAt: { type: 'string', format: 'date-time' } } } },
+        marginActualizations: { type: 'array', maxItems: 500, items: { type: 'object', additionalProperties: false, required: ['id', 'landedCostSnapshotId', 'costAllocationRunSnapshotId', 'allocationStatus', 'contributionMarginAmount', 'contributionMarginPercent', 'createdAt'], properties: { id: identifier, landedCostSnapshotId: identifier, costAllocationRunSnapshotId: nullableIdentifier(), allocationStatus: { type: ['string', 'null'] }, contributionMarginAmount: money, contributionMarginPercent: metric, createdAt: { type: 'string', format: 'date-time' } } } },
+        readiness: nullableSchema({ type: 'object', additionalProperties: false, required: ['id', 'landedCostSnapshotId', 'marginActualizationSnapshotId', 'status', 'blockingReasons', 'requirements', 'evaluatedAt'], properties: { id: identifier, landedCostSnapshotId: identifier, marginActualizationSnapshotId: identifier, status: readinessStatus(), blockingReasons: { type: 'array', items: requirementType() }, requirements: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['type', 'status'], properties: { type: requirementType(), status: requirementStatus() } } }, evaluatedAt: { type: 'string', format: 'date-time' } } }),
+        costClose: nullableSchema({ type: 'object', additionalProperties: false, required: ['id', 'closedAt'], properties: { id: identifier, closedAt: { type: 'string', format: 'date-time' } } }),
+        postCloseAdjustments: { type: 'array', maxItems: 500, items: { type: 'object', additionalProperties: false, required: ['id', 'reason', 'landedCostSnapshotId', 'marginActualizationSnapshotId', 'costDeltaAmount', 'marginDeltaAmount', 'resultingAllocationStatus', 'recordedAt', 'reconciled'], properties: { id: identifier, reason: { type: 'string' }, landedCostSnapshotId: identifier, marginActualizationSnapshotId: identifier, costDeltaAmount: money, marginDeltaAmount: money, resultingAllocationStatus: { type: ['string', 'null'] }, recordedAt: { type: 'string', format: 'date-time' }, reconciled: { type: 'boolean' } } } },
+      },
+    },
     OrderEconomicsPosition: {
       type: 'object', additionalProperties: false,
       required: [
@@ -135,6 +156,12 @@ function readinessPaths() {
       get: {
         operationId: 'getOrderEconomicsPosition', security: [{ bearerAuth: [] }], parameters: [orderId],
         responses: readResponses('Canonical effective order economics position', '#/components/schemas/OrderEconomicsPosition'),
+      },
+    },
+    '/orders/{orderId}/economics-ledger': {
+      get: {
+        operationId: 'getOrderEconomicsLedger', security: [{ bearerAuth: [] }], parameters: [orderId],
+        responses: readResponses('Recorded economics facts of the order commit: supply, FX, costs, snapshots, policies, runs, close and adjustments', '#/components/schemas/OrderEconomicsLedger'),
       },
     },
     '/cost-close-readiness/{costCloseReadinessSnapshotId}': {

@@ -35,7 +35,11 @@ function orderEntity(item) {
   const canWrite = caps.hasForTrade(state.workspace, item.brandId, item.shopId, caps.CAPABILITIES.ORDER_WRITE);
   const canReadMargin = caps.hasForOrganisation(state.workspace, item.brandId, caps.CAPABILITIES.MARGIN_READ);
   if (item.status === 'ready' && canWrite) actions.push(actionButton('Прикрепить к циклу', () => mutate(`/v2/orders/${encodeURIComponent(item.id)}/attach`, { expectedVersion: item.version }), 'primary'));
-  if (item.orderCommitSnapshotId && canReadMargin) actions.push(formActionButton(economicsText('Экономика', 'Economics'), () => orderEconomicsDialog(item)));
+  // Финансисту, владельцу и администратору «Экономика» открывает рабочее место с кнопками записи по каждому
+  // шагу цепочки (`order-economics-workspace.js`); тому, у кого только чтение маржи, — прежний экран позиции.
+  const canManageEconomics = caps.hasForOrganisation(state.workspace, item.brandId, caps.CAPABILITIES.COST_MANAGE)
+    || caps.hasForOrganisation(state.workspace, item.brandId, caps.CAPABILITIES.SUPPLY_MANAGE);
+  if (item.orderCommitSnapshotId && canReadMargin) actions.push(formActionButton(economicsText('Экономика', 'Economics'), () => (canManageEconomics && window.SynthaOrderEconomics ? window.SynthaOrderEconomics.open(item) : orderEconomicsDialog(item))));
   if (['draft', 'ready', 'attached'].includes(item.status) && canWrite && orderCancellationOffered(item)) actions.push(actionButton('Отменить заказ', () => orderCancellationForm(item)));
   const details = [
     `${money(item.totalAmount, item.currency)}`,

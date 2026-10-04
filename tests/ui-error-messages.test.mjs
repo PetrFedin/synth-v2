@@ -72,7 +72,7 @@ test('the dictionary holds at least 200 explicit Russian sentences and none is a
 test('every dictionary code is raised somewhere in src or the client, so the entries cannot rot unnoticed', async () => {
   const { dictionary } = messages('ru');
   const { execFileSync } = await import('node:child_process');
-  const clientSources = (await Promise.all(['forms-3.js', 'catalog-form.js', 'retail-doors.js', 'ui-validation.js'].map(read))).join('\n');
+  const clientSources = (await Promise.all(['forms-3.js', 'catalog-form.js', 'retail-doors.js', 'ui-validation.js', 'order-economics-workspace.js'].map(read))).join('\n');
   const raised = new Set(execFileSync('grep', ['-rhoE', "'[A-Z][A-Z0-9_]+'", 'src'], { cwd: root, maxBuffer: 1 << 28 }).toString().split('\n').map((token) => token.replaceAll("'", '')));
   const missing = Object.keys(dictionary).filter((code) => !raised.has(code) && !clientSources.includes(`'${code}'`));
   assert.deepEqual(missing, [], 'dictionary entries for codes nothing raises');

@@ -58,7 +58,13 @@
     if (item.orderCommitSnapshotId
       && caps.hasForOrganisation(state.workspace, item.brandId, caps.CAPABILITIES.MARGIN_READ)
       && typeof window.orderEconomicsDialog === 'function') {
-      actions.push(actionButton(localized('Экономика', 'Economics'), () => window.orderEconomicsDialog(item)));
+      // Финансисту, владельцу и администратору (`cost.manage`) и тому, кто ведёт поставки (`supply.manage`), «Экономика»
+      // открывает рабочее место с кнопками записи по каждому шагу цепочки (`order-economics-workspace.js`);
+      // тому, у кого только чтение маржи, — прежний экран позиции без кнопок записи.
+      const managesEconomics = caps.hasForOrganisation(state.workspace, item.brandId, caps.CAPABILITIES.COST_MANAGE)
+        || caps.hasForOrganisation(state.workspace, item.brandId, caps.CAPABILITIES.SUPPLY_MANAGE);
+      actions.push(actionButton(localized('Экономика', 'Economics'), () => (managesEconomics && window.SynthaOrderEconomics
+        ? window.SynthaOrderEconomics.open(item) : window.orderEconomicsDialog(item))));
     }
 
     // «Где товар сейчас» — вопрос, который задают сразу после маржи. Цепочку вправе видеть обе

@@ -85,6 +85,7 @@ const ASSETS = Object.freeze({
   '/ui/forms-3.js': ['modules/forms-3.js', JS, CACHE],
   '/ui/open-form.js': ['modules/open-form.js', JS, CACHE],
   '/ui/product-chain-forms.js': ['modules/product-chain-forms.js', JS, CACHE],
+  '/ui/order-economics-workspace.js': ['modules/order-economics-workspace.js', JS, CACHE],
   '/ui/canonical-measurement-form.js': ['modules/canonical-measurement-form.js', JS, CACHE],
   '/ui/api.js': ['modules/api.js', JS, CACHE],
   '/ui/dom-1.js': ['modules/dom-1.js', JS, CACHE],

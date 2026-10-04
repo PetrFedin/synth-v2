@@ -90,8 +90,8 @@
   // sidebar every time. The portal is not another item in it but a different standing, so the group is
   // appended to the rendered navigation instead of being pushed into the shared definition.
   const PORTAL_ITEMS = [
-    { view: RFQ_VIEW, icon: 'selections', ru: 'Запрос на квотирование', en: 'Request for quotation' },
-    { view: ORDER_VIEW, icon: 'orders', ru: 'Заказ', en: 'Order' },
+    { view: RFQ_VIEW, icon: 'selections', ru: 'Запросы на квотирование', en: 'Requests for quotation' },
+    { view: ORDER_VIEW, icon: 'orders', ru: 'Заказы', en: 'Orders' },
   ];
 
   // Somebody who belongs to no organisation is not a brand user with two extra screens. Leaving the
@@ -173,7 +173,11 @@
 
   function quoteRows(quote, currency) {
     if (!quote) return [];
+    // The quotation carries no currency of its own: every amount is in the currency of the request, the
+    // one the brand reads it in. Saying so beside the price is what keeps «9,80 €» from being read as a
+    // supplier-currency figure that somebody converted.
     const rows = [[text('Цена за единицу', 'Unit price'), formatMoney(quote.unitPriceMinor, currency)]];
+    if (currency) rows.push([text('Валюта запроса', 'Request currency'), currency]);
     if (Number.isInteger(quote.fixedCostMinor)) rows.push([text('Постоянные затраты', 'Fixed cost'), formatMoney(quote.fixedCostMinor, currency)]);
     if (quote.leadTimeDays) rows.push([text('Срок производства, дней', 'Lead time, days'), String(quote.leadTimeDays)]);
     if (quote.minimumOrderQuantity) rows.push([text('Минимальная партия', 'Minimum order'), String(quote.minimumOrderQuantity)]);
@@ -182,8 +186,11 @@
       rows.push([text(`Ступень от ${tier.quantity} шт.`, `Tier from ${tier.quantity} units`), formatMoney(tier.unitPriceMinor, currency)]);
     });
     if (quote.counterOffer) {
-      rows.push([text('Встречное предложение бренда', 'Brand counter-offer'),
-        `${formatMoney(quote.counterOffer.unitPriceMinor, currency)} · ${quote.counterOffer.quantity} ${text('шт.', 'units')}`]);
+      // An accepted counter-offer is no longer an offer: its terms replaced the quotation, so the row says
+      // it was accepted and when, instead of keeping the wording of something still awaiting an answer.
+      const accepted = Boolean(quote.counterOffer.acceptedAt);
+      rows.push([accepted ? text('Встречное предложение бренда: принято', 'Brand counter-offer: accepted') : text('Встречное предложение бренда', 'Brand counter-offer'),
+        `${formatMoney(quote.counterOffer.unitPriceMinor, currency)} · ${quote.counterOffer.quantity} ${text('шт.', 'units')}${accepted ? ` · ${text('принято', 'accepted')} ${formatDate(quote.counterOffer.acceptedAt)}` : ''}`]);
     }
     return rows;
   }
@@ -387,7 +394,7 @@
 
   function renderRfqs() {
     ensureLoaded();
-    if (ui.error) return odPage(text('Запрос на квотирование', 'Request for quotation'), null, notice(ui.error, 'error'));
+    if (ui.error) return odPage(text('Запросы на квотирование', 'Requests for quotation'), null, notice(ui.error, 'error'));
     const rows = ui.rfqs;
     const open = rows.filter((item) => item.supplierStatus === 'awaiting_quote');
     const header = odHeader('supplier-portal-rfqs', [
@@ -411,12 +418,12 @@
       ],
       inspector: rfqInspector,
     });
-    return odPage(text('Запрос на квотирование', 'Request for quotation'), header, registry);
+    return odPage(text('Запросы на квотирование', 'Requests for quotation'), header, registry);
   }
 
   function renderOrders() {
     ensureLoaded();
-    if (ui.error) return odPage(text('Заказ', 'Order'), null, notice(ui.error, 'error'));
+    if (ui.error) return odPage(text('Заказы', 'Orders'), null, notice(ui.error, 'error'));
     const rows = ui.orders;
     const header = odHeader('supplier-portal-orders', [
       { id: 'all', label: text('Все заказы', 'All orders') },
@@ -439,7 +446,7 @@
       ],
       inspector: orderInspector,
     });
-    return odPage(text('Заказ', 'Order'), header, registry);
+    return odPage(text('Заказы', 'Orders'), header, registry);
   }
 
   const previousRenderApp = renderApp;

@@ -20,7 +20,7 @@
   const EXECUTIONS = { list: null, loading: false, bills: new Map() };
 
   function text(ru, en) { return global.odText ? global.odText(ru, en) : ru; }
-  function note(message) { return el('p', { className: 'od-action-note', rawText: message }); }
+  function note(message) { return el('p', { className: 'od-hint-note', rawText: message }); }
 
   function canReceive(material) {
     const caps = global.SynthaUiCapabilities;

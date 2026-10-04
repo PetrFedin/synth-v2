@@ -465,6 +465,8 @@ async function renderedWorkspace(actorId, role, organisationId, shared) {
   Object.assign(ctx.context, {
     el: node, clear: () => { dialog.children.length = 0; },
     actionButton: (label) => node('button', { text: label }),
+    // The read-only facts are `output` blocks (factValue in dom-1.js), not one-line inputs that cut the value.
+    factValue: (value) => node('output', { rawText: value === null || value === undefined || value === '' ? '—' : String(value) }),
     formatDate: (value) => String(value).slice(0, 10), money: (value, currency) => `${value} ${currency}`,
     document: { querySelector: () => dialog },
   });
@@ -472,7 +474,7 @@ async function renderedWorkspace(actorId, role, organisationId, shared) {
   ctx.context.state.workspace = { memberships: [{ organisationId, role, status: 'active' }] };
   await ctx.window.orderFulfillmentWorkspaceDialog(order());
   const buttons = nodes.filter((item) => item.tag === 'button' && item.text !== 'common.close').map((item) => item.text);
-  const facts = nodes.filter((item) => item.tag === 'input').map((item) => item.props.value);
+  const facts = nodes.filter((item) => item.tag === 'output').map((item) => item.text);
   return { buttons, facts, nodes, dialog };
 }
 

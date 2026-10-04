@@ -35,7 +35,7 @@
   }
   function labelStatus(status) {
     const labels = { draft: ['Черновик', 'Draft'], issued: ['Выпущен', 'Issued'], acknowledged: ['Подтверждён фабрикой', 'Supplier acknowledged'], superseded: ['Заменён редакцией', 'Superseded'], withdrawn: ['Отозван', 'Withdrawn'] };
-    return text(...(labels[status] || [status, status]));
+    return labels[status] ? text(...labels[status]) : statusLabel(status);
   }
   function date(value) { if (!value) return '—'; const parsed = new Date(value); return Number.isFinite(parsed.getTime()) ? new Intl.DateTimeFormat(I18N.localeTag(), { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(parsed) : '—'; }
   function badge(value, tone = 'neutral') { return h('span', { className: `tech-pack-badge tech-pack-${tone}`, text: value }); }

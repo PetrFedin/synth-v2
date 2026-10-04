@@ -51,7 +51,9 @@ test('Order economics labels switch explicitly between RU and EN', () => {
 
 test('read-only details dialog has no mutation submit or workspace refresh behavior', () => {
   const source = functionSource(dialogSource, 'function openDetails(title, rows)', '\n}');
-  assert.match(source, /readOnly: true/);
+  // A fact is read-only text (`factValue`, an `output` that wraps), never an editable control.
+  assert.match(source, /factValue\(row\.value\)/);
+  assert.doesNotMatch(source, /<input|el\('input'/);
   assert.doesNotMatch(source, /mutate\(/);
   assert.doesNotMatch(source, /reload\(/);
   assert.doesNotMatch(source, /renderApp\(/);

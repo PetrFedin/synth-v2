@@ -76,7 +76,20 @@ function formatDate(value){return I18N.formatDate(value);} // Money keeps both d
 // отдельной колонкой, и тогда выводится голое число, как и раньше.
 function money(value,currency,options){return I18N.formatMoney(value,currency,options);}
 function unitAmount(value,unit,options){return I18N.formatUnit(value,unit,options);}
-function statusLabel(value){const key=`status.${value}`;const translated=I18N.t(key);return translated===key?stageLabel(value):translated;}
+// Один путь от кода статуса к подписи для человека. Экран не должен ни выбирать словарь, ни
+// показывать код как есть: `not_assessed` в колонке реестра читается как сбой, а не как состояние.
+// Порядок: словарь статусов (с поправкой на регистр и на «-»/«_», которыми домен пишет составные
+// значения по-разному: `ready-for-qc`, `not_applicable`, `VALUE`), затем словарь стадий, затем
+// читаемая форма самого кода. Словарь живёт в i18n-runtime.js (`status.*`), второго нет.
+function statusKeyVariants(raw){const lower=raw.toLowerCase();return [...new Set([raw,lower,lower.replace(/-/g,'_'),lower.replace(/_/g,'-')])];}
+function readableStatusCode(raw){const words=raw.replace(/[_-]+/g,' ').replace(/\s+/g,' ').trim();return words===words.toUpperCase()?words.toLowerCase():words;}
+function statusLabel(value){
+  const raw=String(value??'').trim();
+  if(!raw)return '\u2014';
+  for(const candidate of statusKeyVariants(raw)){const key=`status.${candidate}`;const translated=I18N.t(key);if(translated!==key)return translated;}
+  const stage=stageLabel(raw);
+  return stage===raw?readableStatusCode(raw):stage;
+}
 // Identifiers here are prefixed by their kind: product-style_8390232a-…, selection_c49bce4f-….
 // Slicing the first characters showed the prefix and hid the part that tells two rows apart, so
 // every style read as the identical "product-…". The kind is dropped first.

@@ -526,17 +526,25 @@
     const rows = colorwaysOf(item);
     if (!rows.length) return notice(text('У модели пока нет цветомоделей.', 'This style has no colourways yet.'));
     loadStyleSkuAggregate(item.product.id);
-    return odMiniTable(
-      ['', text('Цветомодель', 'Colourway'), 'Pantone', text('Семейство', 'Family'), text('Артикул', 'Article'), 'SKU'],
-      rows.map((entry) => [
-        swatch(entry),
-        I18N.getLocale?.() === 'en' ? (entry.nameEn || entry.nameRu) : (entry.nameRu || entry.nameEn),
-        entry.pantone || '—',
-        (I18N.getLocale?.() === 'en' ? entry.familyNameEn : entry.familyNameRu) || '—',
-        entry.article,
-        skuCell(item, entry),
-      ]),
-    );
+    // The inspector is 360px wide. Six columns (swatch, name, Pantone, family, article, SKU) made a 616px
+    // table behind a horizontal scrollbar, and the SKU list with its buttons, the part that tells two
+    // rows apart, was the part cut off. One card per colourway: swatch and name with the descriptive
+    // fields under it, then the SKUs and their actions across the full width.
+    const english = I18N.getLocale?.() === 'en';
+    const list = el('div', { className: 'od-colourway-list' });
+    rows.forEach((entry) => {
+      const family = (english ? entry.familyNameEn : entry.familyNameRu) || '';
+      const detail = [entry.pantone, family, entry.article].filter(Boolean).join(' \u00b7 ');
+      const head = el('div', { className: 'od-colourway-head' });
+      const name = el('div', { className: 'od-colourway-name' });
+      name.append(el('strong', { rawText: (english ? (entry.nameEn || entry.nameRu) : (entry.nameRu || entry.nameEn)) || '\u2014' }));
+      if (detail) name.append(el('small', { className: 'muted', rawText: detail }));
+      head.append(swatch(entry), name);
+      const card = el('article', { className: 'od-colourway-card' });
+      card.append(head, skuCell(item, entry));
+      list.append(card);
+    });
+    return list;
   }
 
   function dimensionLabel(product) {
@@ -1392,7 +1400,7 @@
     awarded: ['Победитель выбран', 'Awarded'], allocated: ['В производстве', 'Allocated'], cancelled: ['Отменён', 'Cancelled'],
   };
   function rfqStatusBadge(status) {
-    const pair = RFQ_STATUS_LABELS[status] || [status, status];
+    const pair = RFQ_STATUS_LABELS[status] || [statusLabel(status), statusLabel(status)];
     const tone = status === 'allocated' ? 'success' : (status === 'cancelled' ? '' : (status ? 'warning' : ''));
     return el('span', { className: `badge ${tone}`.trim(), rawText: text(pair[0], pair[1]) });
   }

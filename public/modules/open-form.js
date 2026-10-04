@@ -177,7 +177,7 @@ function openDetails(title, rows) {
   const grid = el('div', { className: 'form-grid' });
   for (const row of rows) {
     const label = el('label');
-    const output = el('input', { type: 'text', value: row.value ?? '—', readOnly: true });
+    const output = factValue(row.value);
     label.append(el('span', { text: row.label }), output);
     grid.append(label);
   }

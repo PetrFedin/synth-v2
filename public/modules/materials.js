@@ -290,7 +290,7 @@
       quarantine: materialText('\u043a\u0430\u0440\u0430\u043d\u0442\u0438\u043d', 'quarantine'),
       released: materialText('\u0432\u044b\u043f\u0443\u0449\u0435\u043d', 'released'),
       rejected: materialText('\u043e\u0442\u043a\u043b\u043e\u043d\u0451\u043d', 'rejected'),
-    }[status] || status;
+    }[status] || statusLabel(status);
   }
   // Жизненный цикл партии живёт своим модулем: реестр материалов показывает партии, а решения о них
   // — отдельный вопрос со своими правами и своим порядком.
@@ -394,7 +394,7 @@ function labDipStatusLabel(status) {
     cancelled: ['\u041e\u0442\u043c\u0435\u043d\u0451\u043d', 'Cancelled'],
   };
   const pair = labels[status];
-  return pair ? materialText(pair[0], pair[1]) : status;
+  return pair ? materialText(pair[0], pair[1]) : statusLabel(status);
 }
 
 function dipRoundOf(colour) {

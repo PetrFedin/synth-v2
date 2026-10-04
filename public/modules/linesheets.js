@@ -494,10 +494,14 @@
     const wrapper = el('div', { className: 'stack' });
     // What the brand composed comes before the grid. A buyer opening a season should meet the
     // collection first and the spreadsheet second; until now they only ever met the spreadsheet.
+    // One banner about the brand's side of the story, not two that contradict each other: when the
+    // brand has opened a newer catalogue the empty-looks statement («не собрал показ») is dropped, and
+    // the newer-catalogue warning below says what is true now.
+    const newer = newerCatalogNotice(context);
     const looks = window.SynthaShowroomLooks;
     if (looks?.panel && context.access?.showroomId) {
       const showroom = list(workspace().showrooms).find(item => item.id === context.access.showroomId);
-      if (showroom) wrapper.append(looks.panel(showroom, { manage: false }));
+      if (showroom) wrapper.append(looks.panel(showroom, { manage: false, quietWhenEmpty: Boolean(newer) }));
     }
     if (!context.cycle) wrapper.append(noticePanel(text('Матрица доступна для просмотра, но подборку нельзя создать без коммерческого цикла этой коллекции.', 'The matrix is available for viewing, but a selection cannot be created without a commercial cycle for this collection.')));
     if (!context.selection && LS.buyerDoorLoading) wrapper.append(noticePanel(text('Загружаем активные торговые точки покупателя…', 'Loading active buyer Retail Doors...')));
@@ -505,7 +509,6 @@
     if (!context.selection && !LS.buyerDoorLoading && !LS.buyerDoorError && !context.retailDoors.length) wrapper.append(noticePanel(text('Для магазина нет активной торговой точки. Сначала добавьте или активируйте её — без точки коммерческий контекст не будет зафиксирован.', 'This shop has no active Retail Door. Add or reactivate one before Selection so the commercial context can be frozen.'), 'warning'));
     if (!context.selection && context.retailDoors.length > 1 && !context.retailDoor) wrapper.append(noticePanel(text('Выберите торговую точку в верхней панели. Она будет зафиксирована в подборке и унаследована заказом без повторного выбора.', 'Select a Retail Door in the toolbar. It will be frozen in Selection and inherited by the order without another choice.')));
     if (context.selection && !context.selection.buyerCatalogVersionId) wrapper.append(noticePanel(text('Текущая подборка создана по legacy-каталогу. Она доступна только для просмотра в новом rich-каталоге и не может быть перепривязана молча.', 'The current selection was created from a legacy catalog. It is read-only in the new rich catalog and cannot be silently rebound.'), 'warning'));
-    const newer = newerCatalogNotice(context);
     if (newer) wrapper.append(newer);
     if (LS.buyerError) wrapper.append(noticePanel(LS.buyerError, 'warning'));
     wrapper.append(buyerCatalogIdentity(context), styleTabs(), styleWorkspace(context));

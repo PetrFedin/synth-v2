@@ -193,7 +193,7 @@
     return card;
   }
 
-  function lookPanel(showroom, { manage }) {
+  function lookPanel(showroom, { manage, quietWhenEmpty = false }) {
     const wrap = document.createDocumentFragment();
     if (manage) {
       const actions = el('div', { className: 'od-inline-actions' });
@@ -206,6 +206,7 @@
     if (ui.errors.has(showroom.id)) { wrap.append(notice(ui.errors.get(showroom.id), 'error')); return wrap; }
     if (looks === null) { wrap.append(notice(text('Загрузка образов…', 'Loading looks…'))); return wrap; }
     if (!looks.length) {
+      if (!manage && quietWhenEmpty) return wrap;
       wrap.append(notice(manage
         ? text('В шоуруме ещё нет образов. Байер увидит только таблицу артикулов — а видеть он должен коллекцию.', 'This showroom has no looks yet. A buyer will see a table of articles, when what they should see is the collection.')
         : text('Бренд ещё не собрал показ для этого шоурума.', 'The brand has not composed this showroom yet.')));

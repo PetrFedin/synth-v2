@@ -207,7 +207,7 @@
     const moves = PLACEHOLDER_TRANSITIONS[item.status] || [];
     if (!moves.length) {
       // Снятый слот — конец пути, и это надо сказать: пустое место читается как поломка.
-      return [el('p', { className: 'od-action-note', rawText: text(
+      return [el('p', { className: 'od-hint-note', rawText: text(
         'Слот снят с плана — это конечное состояние, вернуть его нельзя.',
         'This slot was dropped from the plan — a final state it cannot return from.',
       ) })];

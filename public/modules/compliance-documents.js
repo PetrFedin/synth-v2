@@ -139,7 +139,12 @@ function complianceDocumentActions(item) {
   if (!canManage) return [];
   const actions = [];
   if (item.status === 'draft') {
-    actions.push(actionButton(localText('Выставить', 'Issue'), () => complianceDocumentIssue(item), 'primary'));
+    // Issuing cannot be undone: an issued document is read-only and can only be superseded by a new
+    // one (with its own number). One click is not enough for that, so the button asks first.
+    actions.push(actionButton(localText('Выставить', 'Issue'), () => complianceDocumentIssue(item), 'primary', localText(
+      `Документ ${item.documentNumber || ''} будет выставлен. После этого его нельзя изменить: исправить можно только заменой на новый документ.`.replace('  ', ' '),
+      `Document ${item.documentNumber || ''} will be issued. After that it cannot be edited: it can only be replaced by a new document.`.replace('  ', ' '),
+    )));
   }
   if (item.status === 'issued') {
     if (item.documentType === 'upd') {

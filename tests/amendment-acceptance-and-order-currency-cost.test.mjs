@@ -41,6 +41,7 @@ async function openDialog(amendment) {
     document: { querySelector: () => dialog },
     clear: () => { dialog.children.length = 0; },
     el: (tag, props) => fakeNode(tag, props),
+    factValue: (value) => fakeNode('output', { rawText: String(value) }),
     actionButton: (label, fn, variant) => fakeNode('button', { text: label, fn, variant }),
     state: { workspace: {} },
     ownIds: () => ['shop-1'],

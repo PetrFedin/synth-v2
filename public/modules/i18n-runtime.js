@@ -117,6 +117,28 @@
     // \u0421\u0442\u0430\u0442\u0443\u0441 \u041f\u0414\u041e-\u043f\u0435\u0440\u0435\u0434\u0430\u0447\u0438 \u0423\u041f\u0414: \u043e\u0442\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u043e \u043e\u043f\u0435\u0440\u0430\u0442\u043e\u0440\u0443, \u043f\u043e\u0434\u043f\u0438\u0441\u0430\u043d\u043e \u044d\u043b\u0435\u043a\u0442\u0440\u043e\u043d\u043d\u043e\u0439 \u043f\u043e\u0434\u043f\u0438\u0441\u044c\u044e \u043e\u0431\u0435\u0438\u043c\u0438 \u0441\u0442\u043e\u0440\u043e\u043d\u0430\u043c\u0438.
     sent: ['\u043e\u0442\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u043e','sent'],
     signed: ['\u043f\u043e\u0434\u043f\u0438\u0441\u0430\u043d\u043e','signed'],
+    // Единый словарь статусов продукта, заказов, RFQ и документов. Любой экран, который показывает
+    // статус из базы, идёт через `statusLabel` и попадает сюда; тест tests/status-labels.test.mjs
+    // сверяет словарь с доменными константами src/modules/*, так что новое значение статуса без
+    // подписи ломает сборку, а не показывается человеку сырым кодом.
+    // Составные состояния интерфейса, которых нет в домене: их выводит сам экран.
+    not_assessed: ['не проверено','not assessed'], not_published: ['не опубликовано','not published'],
+    inactive: ['неактивно','inactive'], revoked: ['отозвано','revoked'], invited: ['приглашён','invited'],
+    expired: ['истекло','expired'], committed: ['зафиксирован','committed'],
+    waived: ['снято','waived'], complete: ['выполнено','complete'], required: ['требуется','required'],
+    recorded: ['записано','recorded'], shipped: ['отгружено','shipped'], resolved: ['решено','resolved'],
+    reviewed: ['рассмотрено','reviewed'],
+    // Серьёзность и результат проверки: те же слова показывают отчёты о дефектах и контрольные точки.
+    critical: ['критический','critical'], major: ['значительный','major'], minor: ['незначительный','minor'],
+    high: ['высокий','high'], medium: ['средний','medium'], low: ['низкий','low'],
+    pass: ['соответствует','pass'], fail: ['не соответствует','fail'],
+    rework: ['доработка','rework'], reject: ['отклонить','reject'], release: ['разрешить отгрузку','release'],
+    // Роли участников: матрица ролей и форма ответственных называют роль тем же путём, что статус.
+    owner: ['Владелец','Owner'], admin: ['Администратор','Administrator'], sales: ['Продажи','Sales'],
+    production: ['Производство','Production'], quality: ['Качество','Quality'], buyer: ['Байер','Buyer'],
+    finance: ['Финансы','Finance'], viewer: ['Наблюдатель','Viewer'], member: ['Участник','Member'],
+    // Состояния данных показателя (KPI): значение, ноль, неприменимо, нет данных, ошибка в данных.
+    value: ['значение','value'], zero: ['ноль','zero'], missing: ['нет данных','missing'], invalid: ['данные некорректны','invalid'],
   };
   const stages = {
     campaign: ['\u041a\u0430\u043c\u043f\u0430\u043d\u0438\u044f','Campaign'], collection: ['\u041a\u043e\u043b\u043b\u0435\u043a\u0446\u0438\u044f','Collection'], showroom: ['\u0428\u043e\u0443\u0440\u0443\u043c','Showroom'],
@@ -143,7 +165,7 @@
     ['\u0414\u043e\u0441\u0442\u0443\u043f\u043d\u044b\u0445 SKU \u043f\u043e\u043a\u0430 \u043d\u0435\u0442.','No available SKUs yet.'], ['\u041e\u043f\u0443\u0431\u043b\u0438\u043a\u043e\u0432\u0430\u0442\u044c','Publish'],
     ['\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u0448\u043e\u0443\u0440\u0443\u043c','Create showroom'], ['\u0420\u0430\u0431\u043e\u0447\u0435\u0435 \u043f\u0440\u043e\u0441\u0442\u0440\u0430\u043d\u0441\u0442\u0432\u043e \u0448\u043e\u0443\u0440\u0443\u043c\u043e\u0432','Showroom workspace'],
     ['\u0428\u043e\u0443\u0440\u0443\u043c\u043e\u0432 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442.','No showrooms yet.'], ['\u041d\u0430\u0447\u0430\u0442\u044c \u0446\u0438\u043a\u043b','Start cycle'],
-    ['\u041e\u0442\u0431\u043e\u0440 \u0437\u0430\u043a\u0443\u043f\u0449\u0438\u043a\u0430','Buyer Selection'], ['\u0421\u043e\u0437\u0434\u0430\u0442\u044c Selection','Create selection'], ['\u041e\u0442\u0431\u043e\u0440\u044b','Selections'], ['Selections \u043f\u043e\u043a\u0430 \u043d\u0435\u0442.','No selections yet.'],
+    ['\u041e\u0442\u0431\u043e\u0440 \u0437\u0430\u043a\u0443\u043f\u0449\u0438\u043a\u0430','Buyer Selection'], ['\u0421\u043e\u0437\u0434\u0430\u0442\u044c Selection','Create selection'], ['\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u043f\u043e\u0434\u0431\u043e\u0440\u043a\u0443','Create selection'], ['\u041e\u0442\u0431\u043e\u0440\u044b','Selections'], ['Selections \u043f\u043e\u043a\u0430 \u043d\u0435\u0442.','No selections yet.'],
     ['Order Builder \u0438 DealSpace','Order Builder and DealSpace'], ['\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u0437\u0430\u043a\u0430\u0437','Create order'], ['\u0417\u0430\u043a\u0430\u0437\u044b','Orders'], ['\u0417\u0430\u043a\u0430\u0437\u043e\u0432 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442.','No orders yet.'],
     ['\u041f\u043e\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0451\u043d\u043d\u044b\u0445 \u0441\u0434\u0435\u043b\u043e\u043a \u043f\u043e\u043a\u0430 \u043d\u0435\u0442.','No confirmed deals yet.'], ['\u041e\u0431\u0449\u0438\u0439 \u043a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u044c','Shared calendar'],
     ['\u0421\u043e\u0431\u044b\u0442\u0438\u0439 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442.','No events yet.'], ['\u0426\u0435\u043d\u0442\u0440 \u0443\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u0439','Notification Center'], ['\u0423\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u0439 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442.','No notifications yet.'],

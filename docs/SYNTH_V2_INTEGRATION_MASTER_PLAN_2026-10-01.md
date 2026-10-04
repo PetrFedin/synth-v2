@@ -842,3 +842,98 @@ This prevents fake "savings" claims that disappear in landed cost.
 
 **Commercial framing:** sell as a negotiation and sourcing-control cockpit that turns PLM data into measurable procurement margin improvement.
 
+## Premium enterprise wave — Peppol / UBL B2B interoperability
+
+This wave adds enterprise electronic-document interchange for retailers, distributors, suppliers and finance systems.
+
+### Official interoperability source — ADOPT/REFERENCE
+
+Primary specifications:
+
+https://peppol.org/documentation/technical-documentation/post-award-documentation/
+
+https://docs.peppol.eu/
+
+Use the applicable current release and jurisdiction rules at implementation time.
+
+### B2B Document Exchange Authority — ADOPT
+
+Support projections for:
+
+- purchase/order;
+- order response/agreement;
+- despatch advice / ASN;
+- invoice;
+- credit note;
+- catalogue/price update where appropriate.
+
+Store:
+
+- canonical source entity/version;
+- external document type;
+- UBL/Peppol profile/version;
+- sender/receiver identifiers;
+- generated/received time;
+- validation result;
+- transport/provider;
+- external message ID;
+- acknowledgement;
+- raw checksum.
+
+### Outbound Mapping — ADOPT
+
+confirmed canonical entity -> UBL/Peppol projection -> schema/Schematron validation -> access-point/provider adapter -> acknowledgement
+
+A sent document is immutable projection of one canonical version.
+
+### Inbound Staging — REQUIRED
+
+raw external document -> checksum -> syntax/profile validation -> partner mapping -> staging -> reconciliation -> preview/diff -> explicit commit
+
+No inbound document directly mutates Order, ASN, Invoice or Product state.
+
+### Access Point Boundary — ADAPT
+
+Synth-v2 does not implement the whole Peppol network.
+
+Use certified/approved provider/access point where required.
+
+Synth-v2 owns mapping, validation, partner identity mapping, reconciliation and canonical state.
+
+### Rule Pack Versioning — ADOPT
+
+Store exact:
+
+- BIS/PINT profile;
+- release;
+- jurisdiction rule set;
+- validation artifact/version.
+
+### EDI Exception Desk — ADOPT
+
+Surface:
+
+- rejected document;
+- validation error;
+- identifier mismatch;
+- quantity/price mismatch;
+- unknown SKU;
+- duplicate;
+- invoice/order discrepancy.
+
+Every exception links to raw document and canonical entities.
+
+### Additional acceptance
+
+- outbound document reproduces from exact canonical version;
+- inbound raw is immutable;
+- validation happens before admission;
+- EDI cannot bypass bilateral order authority;
+- partner identifiers/rule packs are versioned;
+- provider is replaceable;
+- CSV/email import is never mislabeled Peppol-compliant.
+
+**Sequencing:** Order/Confirmation + ASN/Receiving + invoice readiness -> UBL mapping -> validation -> provider adapter -> inbound staging -> exception desk.
+
+**Commercial framing:** enterprise B2B infrastructure capable of integrating with large retailers and supply-chain partners.
+

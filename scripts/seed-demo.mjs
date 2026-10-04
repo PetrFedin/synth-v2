@@ -86,6 +86,7 @@ const PEOPLE = Object.freeze({
   supplier: { email: 'rep@atmosphere.example', password: process.env.SYNTHA_DEMO_SUPPLIER_PASSWORD ?? 'local-supplier-password-2026', name: 'Mei Lin' },
 });
 
+const DEMO_SUPPLIER_CODE = 'ATM-FAC';
 const SHOP_ID = 'demo-shop-nordhaus';
 const SHOP_NAME = 'Nordhaus Retail';
 
@@ -442,7 +443,12 @@ try {
   await ensureProductAttributes(runtime, pool, accounts);
 
   // --- Потребность, из которой вырос производственный заказ --------------------------------------
-  await ensureApprovedDemandChain(runtime, pool, accounts);
+  await ensureApprovedDemandChain(runtime, pool, accounts, brandId);
+  // Заказ из потребности появился только что, а графики платежей по нему ставятся выше — раньше
+  // заказа. Повторный проход здесь доводит чистую базу до готового состояния за один запуск, а не за
+  // два; на уже заполненной базе это пустой проход (оба шага ищут собственный результат).
+  await ensureStagedPaymentSchedule(runtime, pool, brandId, accounts.owner);
+  await ensurePaymentSchedules(runtime, pool, brandId, accounts.owner);
 
   // --- Где товар сейчас -------------------------------------------------------------------------
   await ensureShipmentChain(runtime, pool, accounts);
@@ -833,8 +839,93 @@ async function ensureDefectCatalogue(runtime, pool, brandId, actorId) {
 // Issue needs an approved pre-production sample from that same supplier, and allocation needs the
 // factory to have acknowledged the issued pack. Both are gates worth having: they are what stops a
 // lot going into production against a document nobody on the other side has seen.
+// Фабрика, без которой нет ни запроса цен, ни размещения, ни портала поставщика.
+//
+// Раньше сид только искал поставщика со статусом «qualified» и, не найдя, молча пропускал спрос,
+// RFQ, доступ в портал и всё, что стоит на поставщике: на чистой базе от сезона оставалась половина.
+// Теперь фабрика заводится тем же сервисом и квалифицируется тем же переходом, что и вручную —
+// проверка аудита, категорий и инкотермс не обходится. Адрес совпадает с учётной записью портала,
+// поэтому тот, кто войдёт как представитель поставщика, видит именно эту фабрику.
+
+// Даты считаются от сегодняшнего дня: зашитые в сид даты запроса цен однажды оказываются в
+// прошлом, и домен справедливо отказывается выпускать RFQ с просроченным сроком ответа.
+function demoDate(daysFromNow) {
+  return new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate() + daysFromNow)).toISOString();
+}
+
+async function ensureQualifiedSupplier(runtime, pool, brandId, actorId) {
+  const existing = await pool.query('SELECT payload FROM suppliers WHERE supplier_code = $1', [DEMO_SUPPLIER_CODE]);
+  let supplier = existing.rows[0]?.payload;
+  if (supplier && supplier.brandId !== brandId) { note('supplier', `${DEMO_SUPPLIER_CODE} принадлежит другому бренду — не трогаем`); return null; }
+  if (!supplier) {
+    supplier = await runtime.sourcing.createSupplier(command('supplier-create'), actorId, {
+      supplierCode: DEMO_SUPPLIER_CODE, brandId, legalName: 'Atmosphere Textiles Factory', countryCode: 'TR', email: PEOPLE.supplier.email,
+      currency: 'USD', incoterms: ['FOB', 'FCA', 'EXW'], categories: ['Outerwear', 'Knitwear'], leadTimeDays: 45,
+      minimumOrderQuantity: 100, paymentTermsDays: 30, auditExpiresAt: demoDate(730),
+      notes: 'Демонстрационная фабрика: аудит действует, техпаки подтверждает представитель.',
+    });
+    note('supplier', `${supplier.supplierCode} заведён`);
+  }
+  if (supplier.status === 'draft' || supplier.status === 'suspended') {
+    supplier = await runtime.sourcing.qualifySupplier(command('supplier-qualify'), actorId, supplier.supplierCode, { expectedVersion: supplier.version });
+    note('supplier', `${supplier.supplierCode} квалифицирован`);
+  } else if (supplier.status === 'qualified') note('supplier', `${supplier.supplierCode} уже квалифицирован`);
+  else { note('supplier', `${supplier.supplierCode} в статусе ${supplier.status}`); return null; }
+  return supplier.supplierCode;
+}
+
+// Всё, что должно лежать перед техпаком для фабрики: опубликованная таблица мер и утверждённый
+// предсерийный образец именно от этой фабрики. Домен не выпустит техпак без них, и сид не
+// подделывает ни то, ни другое — он проводит образец через его собственные шаги.
+async function ensureTechPackPrerequisites(runtime, pool, sku, supplier, actorId) {
+  const catalog = (await pool.query('SELECT sku FROM catalog_skus WHERE sku = $1', [sku])).rows[0];
+  if (!catalog) return false;
+  if (!(await pool.query('SELECT 1 FROM measurement_charts WHERE sku = $1', [sku])).rowCount) {
+    await runtime.measurements.createMeasurementChart(command('chart-create'), actorId, {
+      sku, unit: 'cm', baseSizeCode: 'M', sizes: [{ code: 'S', label: 'S' }, { code: 'M', label: 'M' }, { code: 'L', label: 'L' }],
+      points: [
+        { pointCode: 'CHEST', name: 'Полуобхват груди', description: null, toleranceMinus: 0.5, tolerancePlus: 0.5, measurements: [{ sizeCode: 'S', value: 53 }, { sizeCode: 'M', value: 55 }, { sizeCode: 'L', value: 57 }] },
+        { pointCode: 'LENGTH', name: 'Длина по спинке', description: null, toleranceMinus: 1, tolerancePlus: 1, measurements: [{ sizeCode: 'S', value: 68 }, { sizeCode: 'M', value: 70 }, { sizeCode: 'L', value: 72 }] },
+      ],
+      notes: 'Градация демонстрационной куртки.', schemaImageUri: null,
+    });
+    note('tech pack', `таблица мер ${sku} создана`);
+  }
+  const approved = await pool.query("SELECT 1 FROM samples WHERE sku = $1 AND supplier_code = $2 AND sample_type = 'pre-production' AND status = 'approved'", [sku, supplier.supplierCode]);
+  if (!approved.rowCount) {
+    const sampleCode = `SMP-${sku}-PPS-R01`.slice(0, 64);
+    let sample = (await pool.query('SELECT payload FROM samples WHERE sample_code = $1', [sampleCode])).rows[0]?.payload;
+    if (!sample) {
+      sample = await runtime.samples.createSample(command('pps-create'), actorId, {
+        sampleCode, sku, sampleType: 'pre-production', round: 1, supplierCode: supplier.supplierCode, supplierName: supplier.legalName,
+        dueAt: demoDate(14), quantity: 1, sizeCodes: ['M'], colourway: 'Midnight', notes: 'Предсерийный образец для утверждения.',
+      });
+    }
+    if (sample.status === 'draft') sample = await runtime.samples.requestSample(command('pps-request'), actorId, sampleCode, { expectedVersion: sample.version });
+    if (sample.status === 'requested') sample = await runtime.samples.startProduction(command('pps-production'), actorId, sampleCode, { expectedVersion: sample.version });
+    if (sample.status === 'in-production') sample = await runtime.samples.receiveSample(command('pps-receive'), actorId, sampleCode, { expectedVersion: sample.version, receivedQuantity: 1, condition: 'accepted', trackingReference: `PPS-${sku}`.slice(0, 64), notes: 'Образец получен без повреждений.' });
+    if (sample.status === 'received') sample = await runtime.samples.decideSample(command('pps-approve'), actorId, sampleCode, { expectedVersion: sample.version, decision: 'approved', notes: 'Утверждён к серийному производству.' });
+    note('tech pack', `предсерийный образец ${sampleCode}: ${sample.status}`);
+  }
+  return true;
+}
+
 async function ensureAcknowledgedTechPack(runtime, pool, sku, supplierCode, actorId) {
-  const row = await pool.query('SELECT payload FROM tech_packs WHERE sku = $1 ORDER BY version DESC LIMIT 1', [sku]);
+  let row = await pool.query('SELECT payload FROM tech_packs WHERE sku = $1 AND supplier_code = $2 ORDER BY version DESC LIMIT 1', [sku, supplierCode]);
+  if (!row.rowCount) {
+    const supplier = (await pool.query('SELECT payload FROM suppliers WHERE supplier_code = $1', [supplierCode])).rows[0]?.payload;
+    if (supplier && await ensureTechPackPrerequisites(runtime, pool, sku, supplier, actorId)) {
+      const created = await runtime.techPacks.createTechPack(command('tp-create'), actorId, {
+        techPackCode: `TP-${sku}-R01`.slice(0, 64), sku, supplierCode, supplierName: supplier.legalName, supplierEmail: supplier.email,
+        title: `Техпак ${sku}`, description: 'Спецификация серийного производства.',
+        constructionNotes: 'Конструкция и последовательность операций — по утверждённому образцу.',
+        qualityNotes: 'Контролировать ключевые меры и контрольные точки пошива.',
+        packingNotes: 'Упаковка по размерам и цветам, штрихкодирование по спецификации.',
+      });
+      note('tech pack', `${created.techPackCode} создан`);
+      row = await pool.query('SELECT payload FROM tech_packs WHERE sku = $1 AND supplier_code = $2 ORDER BY version DESC LIMIT 1', [sku, supplierCode]);
+    }
+  }
   if (!row.rowCount) { note('tech pack', `${sku}: техпака нет`); return; }
   let techPack = row.rows[0].payload;
   // Техпак нельзя выпустить на неопубликованной таблице мер: фабрика получила бы документ, который
@@ -1674,7 +1765,7 @@ async function ensureSeasonPalette(runtime, pool, accounts) {
   note('season palette', `палитра сезона: ${colours.join(', ')}`);
 }
 
-async function ensureApprovedDemandChain(runtime, pool, accounts) {
+async function ensureApprovedDemandChain(runtime, pool, accounts, brandId) {
   const existing = await pool.query('SELECT production_order_number FROM production_orders WHERE lineage_version = 2 LIMIT 1');
   if (existing.rowCount) { note('approved demand', `${existing.rows[0].production_order_number} уже вырос из потребности`); return; }
 
@@ -1686,37 +1777,56 @@ async function ensureApprovedDemandChain(runtime, pool, accounts) {
   )).rows[0];
   if (!commitment) { note('approved demand', 'нет обязательств поставки — потребности не из чего вывести'); return; }
 
-  const supplier = (await pool.query("SELECT supplier_code FROM suppliers WHERE status = 'qualified' ORDER BY supplier_code LIMIT 1")).rows[0];
-  if (!supplier) { note('approved demand', 'нет квалифицированного поставщика — запрос цен некому послать'); return; }
+  const supplierCode = await ensureQualifiedSupplier(runtime, pool, brandId, accounts.owner);
+  if (!supplierCode) { note('approved demand', 'нет квалифицированного поставщика — запрос цен некому послать'); return; }
+  const supplier = { supplier_code: supplierCode };
 
-  const requirement = await runtime.productionRequirements.createFromSupplyCommitment(
-    command('production-requirement'), accounts.owner, commitment.order_id, commitment.id,
-  );
-  note('approved demand', `потребность выведена из обязательства поставки: ${requirement.lines.length} строк(и)`);
+  // Цепочка возобновляема: каждый шаг сначала ищет собственный результат. Иначе обрыв на размещении
+  // (например, из-за техпака) оставлял потребность и RFQ без заказа, а повторный запуск упирался в
+  // «потребность по обязательству уже есть» и не доходил до конца.
+  let requirement = (await pool.query('SELECT payload FROM production_requirement_snapshots WHERE supply_commitment_snapshot_id = $1', [commitment.id])).rows[0]?.payload;
+  if (!requirement) {
+    requirement = await runtime.productionRequirements.createFromSupplyCommitment(
+      command('production-requirement'), accounts.owner, commitment.order_id, commitment.id,
+    );
+    note('approved demand', `потребность выведена из обязательства поставки: ${requirement.lines.length} строк(и)`);
+  }
 
   const rfqCode = 'RFQ-DEMAND-001';
-  let rfq = await runtime.sourcing.createRfqFromProductionRequirement(command('demand-rfq'), accounts.owner, {
-    productionRequirementSnapshotId: requirement.id,
-    orderLineNo: requirement.lines[0].orderLineNo,
-    rfqCode,
-    responseDueAt: '2026-10-10',
-    deliveryDueAt: '2026-11-30',
-    incoterm: 'FOB',
-    supplierCodes: [supplier.supplier_code],
-    notes: 'Потребность из подтверждённого оптового заказа',
-  });
-  rfq = await runtime.sourcing.issueRfq(command('demand-issue'), accounts.owner, rfqCode, { expectedVersion: rfq.version });
-  rfq = await runtime.sourcing.upsertQuote(command('demand-quote'), accounts.owner, rfqCode, {
-    expectedVersion: rfq.version, supplierCode: supplier.supplier_code,
-    unitPriceMinor: 980, fixedCostMinor: 25_000, leadTimeDays: 45, minimumOrderQuantity: 100, validUntil: '2026-11-01',
-  });
-  rfq = await runtime.sourcing.awardRfq(command('demand-award'), accounts.owner, rfqCode, {
-    expectedVersion: rfq.version, supplierCode: supplier.supplier_code,
-  });
-  rfq = await runtime.sourcing.allocateRfq(command('demand-allocate'), accounts.owner, rfqCode, {
-    expectedVersion: rfq.version, purchaseOrderNumber: 'PO-DEMAND-001', quantity: requirement.lines[0].quantity,
-    productionStartAt: '2026-10-15', deliveryDueAt: '2026-11-30',
-  });
+  let rfq = (await pool.query('SELECT payload FROM sourcing_rfqs WHERE rfq_code = $1', [rfqCode])).rows[0]?.payload;
+  if (!rfq) {
+    rfq = await runtime.sourcing.createRfqFromProductionRequirement(command('demand-rfq'), accounts.owner, {
+      productionRequirementSnapshotId: requirement.id,
+      orderLineNo: requirement.lines[0].orderLineNo,
+      rfqCode,
+      responseDueAt: demoDate(7),
+      deliveryDueAt: demoDate(75),
+      incoterm: 'FOB',
+      supplierCodes: [supplier.supplier_code],
+      notes: 'Потребность из подтверждённого оптового заказа',
+    });
+  }
+  if (rfq.status === 'draft') rfq = await runtime.sourcing.issueRfq(command('demand-issue'), accounts.owner, rfqCode, { expectedVersion: rfq.version });
+  if (['issued', 'quoted'].includes(rfq.status) && !rfq.quotes?.some((quote) => quote.supplierCode === supplier.supplier_code)) {
+    rfq = await runtime.sourcing.upsertQuote(command('demand-quote'), accounts.owner, rfqCode, {
+      expectedVersion: rfq.version, supplierCode: supplier.supplier_code,
+      unitPriceMinor: 980, fixedCostMinor: 25_000, leadTimeDays: 45, minimumOrderQuantity: 100, validUntil: demoDate(30),
+    });
+  }
+  if (rfq.status === 'quoted') {
+    rfq = await runtime.sourcing.awardRfq(command('demand-award'), accounts.owner, rfqCode, {
+      expectedVersion: rfq.version, supplierCode: supplier.supplier_code,
+    });
+  }
+  if (rfq.status === 'awarded') {
+    // Размещение требует техпак, подтверждённый этой фабрикой: образец, таблица мер, выпуск, подтверждение.
+    await ensureAcknowledgedTechPack(runtime, pool, rfq.sku, rfq.selectedSupplierCode, accounts.owner);
+    rfq = await runtime.sourcing.allocateRfq(command('demand-allocate'), accounts.owner, rfqCode, {
+      expectedVersion: rfq.version, purchaseOrderNumber: 'PO-DEMAND-001', quantity: requirement.lines[0].productionQuantity,
+      productionStartAt: demoDate(14), deliveryDueAt: demoDate(75),
+    });
+  }
+  if (rfq.status !== 'allocated') { note('approved demand', `${rfqCode} в статусе ${rfq.status} — размещать нечего`); return; }
   const order = await runtime.productionOrders.createFromAllocation(command('demand-production-order'), accounts.owner, rfqCode);
   note('approved demand', `${order.productionOrderNumber}: заказ второй версии — происхождение из потребности записано и проверено`);
 }
@@ -1948,9 +2058,8 @@ async function ensureMoneyChain(runtime, pool, accounts) {
 }
 
 async function ensurePortalAccess(runtime, pool, brandId, ownerId) {
-  const supplier = await pool.query("SELECT supplier_code FROM suppliers WHERE brand_id = $1 AND status = 'qualified' ORDER BY supplier_code LIMIT 1", [brandId]);
-  if (!supplier.rowCount) { note('portal access', 'no qualified supplier to invite'); return; }
-  const code = supplier.rows[0].supplier_code;
+  const code = await ensureQualifiedSupplier(runtime, pool, brandId, ownerId);
+  if (!code) { note('portal access', 'no qualified supplier to invite'); return; }
   const existing = await pool.query("SELECT status FROM supplier_portal_grants WHERE supplier_code = $1 AND invited_email = $2", [code, PEOPLE.supplier.email]);
   if (existing.rowCount && existing.rows[0].status === 'active') { note('portal access', `${PEOPLE.supplier.email} already reads ${code}`); return; }
   await runtime.sourcing.grantPortalAccess(command('portal'), ownerId, code, { email: PEOPLE.supplier.email, contactName: PEOPLE.supplier.name });

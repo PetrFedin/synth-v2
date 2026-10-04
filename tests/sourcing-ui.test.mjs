@@ -13,7 +13,7 @@ test('sourcing UI core exposes deterministic action matrices and quote ranking',
   const core = window.SynthaSourcingCore;
   assert.ok(core);
   assert.deepEqual(Array.from(core.allowedSupplierActions({ status: 'draft' }, { canManage: true })), ['edit', 'qualify', 'archive']);
-  assert.deepEqual(Array.from(core.allowedRfqActions({ status: 'quoted' }, { manage: true, award: true, allocate: false })), ['quote', 'cancel', 'award']);
+  assert.deepEqual(Array.from(core.allowedRfqActions({ status: 'quoted' }, { manage: true, award: true, allocate: false })), ['quote', 'counter', 'cancel', 'award']);
   const ranked = core.rankQuotes({ quotes: [
     { supplierCode: 'B', totalCostMinor: 1000, leadTimeDays: 40 },
     { supplierCode: 'A', totalCostMinor: 1000, leadTimeDays: 30 },

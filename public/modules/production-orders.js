@@ -1,7 +1,7 @@
 (function installProductionOrdersWorkspace(global){
 'use strict';
 const caps=global.SynthaUiCapabilities;if(!caps)throw new Error('SynthaUiCapabilities must load before production-orders.js');
-const ui=global.SynthaProductionOrdersWorkspace||(global.SynthaProductionOrdersWorkspace={items:[],loaded:false,loading:false,error:'',selected:null,status:'all',search:'',rfqCode:'',confirmationReference:'',confirmedBy:'',confirmationNotes:'',cancelReason:'',busy:false,generation:0,schedule:null,scheduleFor:null,scheduleLoading:false,paymentReference:'',target:null,targetFor:null,targetLoading:false});
+const ui=global.SynthaProductionOrdersWorkspace||(global.SynthaProductionOrdersWorkspace={items:[],loaded:false,loading:false,error:'',selected:null,status:'all',search:'',rfqCode:'',confirmationReference:'',confirmedBy:'',confirmationNotes:'',cancelReason:'',busy:false,generation:0,schedule:null,scheduleFor:null,scheduleDraft:null,scheduleLoading:false,paymentReference:'',target:null,targetFor:null,targetLoading:false});
 function t(ru,en){return typeof localText==='function'?localText(ru,en):ru}function h(tag,attrs={},children=[]){const n=document.createElement(tag);for(const[k,v]of Object.entries(attrs)){if(v===undefined||v===null||v===false)continue;if(k==='className')n.className=v;else if(k==='text')n.textContent=v;else if(k==='disabled')n.disabled=!!v;else if(k==='value')n.value=v;else if(k.startsWith('on')&&typeof v==='function')n.addEventListener(k.slice(2).toLowerCase(),v);else n.setAttribute(k,String(v))}for(const c of(Array.isArray(children)?children:[children]))if(c!==undefined&&c!==null)n.append(c instanceof Node?c:document.createTextNode(String(c)));return n}
 function can(brandId,cap){return caps.hasForOrganisation(state.workspace,brandId,cap)}function canAny(cap){return caps.hasAny(state.workspace,cap,'brand')}
 function label(status){const m={draft:['Черновик','Draft'],issued:['Отправлен фабрике','Issued'],confirmed:['Подтверждён фабрикой','Supplier confirmed'],cancelled:['Отменён','Cancelled']};return t(...(m[status]||[status,status]))}function date(v){if(!v)return'—';const d=new Date(v);return Number.isFinite(d.getTime())?new Intl.DateTimeFormat(I18N.localeTag(),{day:'2-digit',month:'short',year:'numeric'}).format(d):'—'}function money(v,c){return Number.isInteger(v)?I18N.formatMoney(v,c||'EUR',{minor:true}):'\u2014'}
@@ -71,7 +71,43 @@ function targetPanel(order){
 // Наступление срока здесь не хранится — оно вычисляется при чтении, поэтому «причитается» на экране
 // означает «причитается сейчас», а не «кто-то когда-то так отметил».
 function paymentStatusLabel(status){const m={planned:['не наступил','not due yet'],due:['причитается','due'],overdue:['просрочен','overdue'],paid:['оплачен','paid']};return t(...(m[status]||[status,status]))}
-function paymentTriggerLabel(trigger){const m={'order-confirmed':['по подтверждению заказа','on order confirmation'],'shipment-released':['по допуску к отгрузке','on shipment release']};return t(...(m[trigger]||[trigger,trigger]))}
+// Четыре события, на которые домен вешает платёжные вехи (PAYMENT_TRIGGERS в supplier-payments).
+// Раньше переводились два из четырёх, и график из «запуска в работу» или «готовности к контролю»
+// печатал сырой код. Список — договор: тест сверяет его с доменом.
+const PAYMENT_TRIGGER_ORDER=Object.freeze(['order-confirmed','production-started','ready-for-quality-control','shipment-released']);
+const PAYMENT_TRIGGER_TEXT=Object.freeze({
+  'order-confirmed':Object.freeze({ru:'по подтверждению заказа',en:'on order confirmation',labelRu:'Аванс при подтверждении заказа',labelEn:'Deposit on order confirmation'}),
+  'production-started':Object.freeze({ru:'по запуску в производство',en:'on production start',labelRu:'Платёж при запуске в производство',labelEn:'Payment on production start'}),
+  'ready-for-quality-control':Object.freeze({ru:'по готовности к контролю качества',en:'when ready for quality control',labelRu:'Платёж по готовности к контролю качества',labelEn:'Payment when ready for quality control'}),
+  'shipment-released':Object.freeze({ru:'по допуску к отгрузке',en:'on shipment release',labelRu:'Остаток при допуске к отгрузке',labelEn:'Balance on shipment release'}),
+});
+function paymentTriggerLabel(trigger){const m=PAYMENT_TRIGGER_TEXT[trigger];return m?t(m.ru,m.en):String(trigger)}
+// Доля вводится в процентах («30», «33,33»), домен хранит её в базисных пунктах (1–10000), и
+// сумма долей обязана быть ровно 100 %. Проверка здесь — подсказка до отправки, а не замена
+// серверной: сервер всё равно проверяет и сумму, и порядок.
+function parseShareBasisPoints(value){
+  const normalized=String(value??'').trim().replace(/[\s\u00a0\u202f]/g,'').replace(',','.');
+  if(!/^\d+(?:\.\d{1,2})?$/.test(normalized))throw new Error(t('Укажите долю в процентах, например 30 или 33,33.','Enter a share in percent, for example 30 or 33.33.'));
+  const points=Math.round(Number(normalized)*100);
+  if(points<1||points>10000)throw new Error(t('Доля — от 0,01 до 100 процентов.','A share is from 0.01 to 100 percent.'));
+  return points;
+}
+function totalShareBasisPoints(rows){let total=0;for(const row of rows){try{total+=parseShareBasisPoints(row.share)}catch(e){return null}}return total}
+// Тело POST /v2/production-orders/{номер}/payment-schedule: только `split`. Сумма берётся из
+// подтверждённого заказа, отсрочка — из условий поставщика на момент составления графика; ни то, ни
+// другое с этого экрана не вводится.
+function buildPaymentSplit(rows){
+  if(!Array.isArray(rows)||rows.length<1||rows.length>12)throw new Error(t('В графике от одной до двенадцати вех.','A schedule has one to twelve milestones.'));
+  const split=rows.map(row=>{
+    const text=PAYMENT_TRIGGER_TEXT[row.triggerEvent];
+    if(!text)throw new Error(t('Выберите событие для каждой вехи.','Choose a trigger for every milestone.'));
+    return{triggerEvent:row.triggerEvent,shareBasisPoints:parseShareBasisPoints(row.share),labelRu:text.labelRu,labelEn:text.labelEn};
+  });
+  const total=split.reduce((sum,part)=>sum+part.shareBasisPoints,0);
+  if(total!==10000)throw new Error(t('Доли должны в сумме давать ровно 100 процентов.','Shares must total exactly 100 percent.'));
+  return{split};
+}
+function defaultScheduleDraft(){return[{triggerEvent:'order-confirmed',share:'30'},{triggerEvent:'shipment-released',share:'70'}]}
 async function loadSchedule(number,request=api){
   if(ui.scheduleLoading)return;
   ui.scheduleLoading=true;
@@ -91,14 +127,47 @@ async function payMilestone(order,milestone){
   }catch(e){toast(e?.message||I18N.t('common.requestError'),'error')}
   finally{ui.busy=false;renderApp()}
 }
+async function createPaymentSchedule(order){
+  if(ui.busy)return;
+  let body;
+  try{body=buildPaymentSplit(ui.scheduleDraft||defaultScheduleDraft())}catch(e){toast(e?.message||I18N.t('common.requestError'),'error');return}
+  ui.busy=true;renderApp();
+  try{
+    await mutate(`/v2/production-orders/${encodeURIComponent(order.productionOrderNumber)}/payment-schedule`,body,'POST');
+    ui.scheduleDraft=null;ui.scheduleFor=null;
+    toast(t('График платежей создан.','Payment schedule created.'));
+  }catch(e){toast(e?.message||I18N.t('common.requestError'),'error')}
+  finally{ui.busy=false;renderApp()}
+}
+function scheduleForm(order){
+  if(!ui.scheduleDraft)ui.scheduleDraft=defaultScheduleDraft();
+  const rows=ui.scheduleDraft;
+  const total=h('p',{className:'muted'});
+  const refreshTotal=()=>{const points=totalShareBasisPoints(rows);total.textContent=points===null?t('Проверьте доли: нужны числа в процентах.','Check the shares: percentages are expected.'):t(`Сумма долей: ${I18N.formatNumber(points/100,{minimumFractionDigits:0,maximumFractionDigits:2})} % из 100 %.`,`Shares total ${I18N.formatNumber(points/100,{minimumFractionDigits:0,maximumFractionDigits:2})} % of 100 %.`);total.className=points===10000?'muted':'production-orders-warn'};
+  refreshTotal();
+  const fields=[h('h3',{text:t('Создать график платежей','Create payment schedule')}),h('p',{className:'muted',text:t('Сумма берётся из подтверждённого заказа, отсрочка — из условий поставщика на сегодня и фиксируется в графике. Вехи идут в порядке событий; доли в сумме дают 100 %.','The amount comes from the confirmed order and the term from the supplier\u2019s current terms, frozen into the schedule. Milestones follow the order of events; shares must total 100 %.')})];
+  rows.forEach((row,index)=>{
+    const trigger=h('select',{onchange:e=>{row.triggerEvent=e.target.value}},PAYMENT_TRIGGER_ORDER.map(key=>h('option',{value:key,text:paymentTriggerLabel(key)})));
+    trigger.value=row.triggerEvent;
+    const share=h('input',{value:row.share,inputmode:'decimal',placeholder:t('Доля, %','Share, %'),oninput:e=>{row.share=e.target.value;refreshTotal()}});
+    const remove=h('button',{type:'button',className:'secondary',text:t('Убрать','Remove'),disabled:ui.busy||rows.length<2,onclick:()=>{rows.splice(index,1);renderApp()}});
+    fields.push(h('div',{className:'production-orders-confirm'},[trigger,share,remove]));
+  });
+  fields.push(total);
+  fields.push(h('div',{className:'production-orders-actions'},[
+    h('button',{type:'button',className:'secondary',text:t('Добавить веху','Add milestone'),disabled:ui.busy||rows.length>=12,onclick:()=>{rows.push({triggerEvent:'production-started',share:''});renderApp()}}),
+    h('button',{type:'button',className:'primary',text:t('Создать график','Create schedule'),disabled:ui.busy,onclick:()=>void createPaymentSchedule(order)}),
+  ]));
+  return fields;
+}
 function paymentsPanel(order){
   if(!can(order.brandId,caps.CAPABILITIES.MARGIN_READ))return null;
   if(order.status!=='confirmed')return null;
   if(ui.scheduleFor!==order.productionOrderNumber&&!ui.scheduleLoading)queueMicrotask(()=>void loadSchedule(order.productionOrderNumber));
   const schedule=ui.scheduleFor===order.productionOrderNumber?ui.schedule:null;
   const children=[h('h3',{text:t('Платёжные вехи','Payment milestones')})];
-  if(!schedule){children.push(h('p',{className:'muted',text:ui.scheduleLoading?t('Загрузка…','Loading…'):t('График платежей по этому заказу не составлен.','No payment schedule has been drawn for this order.')}));return h('section',{className:'production-orders-card'},children)}
   const manage=can(order.brandId,caps.CAPABILITIES.COST_MANAGE);
+  if(!schedule){children.push(h('p',{className:'muted',text:ui.scheduleLoading?t('Загрузка…','Loading…'):t('График платежей по этому заказу не составлен.','No payment schedule has been drawn for this order.')}));if(!ui.scheduleLoading&&manage)children.push(...scheduleForm(order));return h('section',{className:'production-orders-card'},children)}
   children.push(h('p',{className:'muted',text:t(
     `Оплачено ${money(schedule.paidAmountMinor,schedule.currency)}, причитается ${money(schedule.dueAmountMinor,schedule.currency)}, не наступило ${money(schedule.plannedAmountMinor,schedule.currency)}. Отсрочка ${schedule.paymentTermsDays} дн.`,
     `Paid ${money(schedule.paidAmountMinor,schedule.currency)}, due ${money(schedule.dueAmountMinor,schedule.currency)}, not yet due ${money(schedule.plannedAmountMinor,schedule.currency)}. Terms ${schedule.paymentTermsDays} days.`)}));
@@ -153,7 +222,7 @@ function inspector(v){if(!v)return h('aside',{className:'production-orders-inspe
 function render(){ensure();const visible=ui.items.filter(v=>(ui.status==='all'||v.status===ui.status)&&(!ui.search.trim()||[v.productionOrderNumber,v.rfqCode,v.sku,v.supplierCode,v.supplierSnapshot?.legalName].some(x=>String(x||'').toLowerCase().includes(ui.search.trim().toLowerCase()))));const summary=ui.items.reduce((a,v)=>(a.total++,a[v.status]=(a[v.status]||0)+1,a),{total:0,draft:0,issued:0,confirmed:0,cancelled:0});const status=h('select',{onchange:e=>{ui.status=e.target.value;renderApp()}},[h('option',{value:'all',text:t('Все статусы','All statuses')}),...['draft','issued','confirmed','cancelled'].map(s=>h('option',{value:s,text:label(s)}))]);status.value=ui.status;return h('section',{className:'production-orders-page'},[renderHeader(summary),h('div',{className:'production-orders-filters'},[h('input',{type:'search',value:ui.search,placeholder:t('PO, RFQ, SKU, фабрика…','PO, RFQ, SKU, supplier…'),oninput:e=>{ui.search=e.target.value;renderApp()}}),status]),ui.error?h('div',{className:'production-orders-error',text:ui.error}):null,h('div',{className:'production-orders-layout'},[table(visible),inspector(selected())])])}
 const previousRenderView=renderView;renderView=(...args)=>state.view==='production-orders'?render():previousRenderView(...args);
 const previousRenderNavigation=renderNavigation;renderNavigation=(...args)=>{const nav=previousRenderNavigation(...args);if(!nav.querySelector('[data-production-orders-nav]')){const button=h('button',{type:'button','data-production-orders-nav':'true',text:t('Производственные заказы','Production Orders'),onclick:()=>{state.view='production-orders';renderApp()}});nav.append(button)}return nav};
-global.SynthaProductionOrdersWorkspace=Object.freeze({...ui,fetchAll,load,render});
+global.SynthaProductionOrdersWorkspace=Object.freeze({...ui,fetchAll,load,render,buildPaymentSplit,paymentTriggerLabel,parseShareBasisPoints});
 // The V7 nav shim runs before this file, so it could not see the global above; the section
 // stayed marked as planned and could not be opened. Claim the entry now that it exists.
 global.SynthaOmnidataV7Nav?.activate('Production orders', 'production-orders', '\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434\u0441\u0442\u0432\u0435\u043d\u043d\u044b\u0435 \u0437\u0430\u043a\u0430\u0437\u044b', 'Production orders');

@@ -5,8 +5,8 @@ import { bootstrapProductionAcceptanceReferences } from '../src/acceptance/produ
 import { migratePostgres } from '../src/infrastructure/postgres-migrator.mjs';
 import { createPostgresWholesaleRuntime } from '../src/runtime/postgres-runtime.mjs';
 
-const databaseUrl = process.env.DATABASE_URL;
-if (!databaseUrl) throw new Error('DATABASE_URL is required');
+const databaseUrl = process.env.SYNTHA_V2_DATABASE_URL ?? process.env.DATABASE_URL;
+if (!databaseUrl) throw new Error('SYNTHA_V2_DATABASE_URL is required');
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const migrationsDir = path.join(root, 'db', 'migrations');

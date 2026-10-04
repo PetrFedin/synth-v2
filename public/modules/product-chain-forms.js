@@ -133,18 +133,54 @@
     return joined;
   }
 
-  // По одному SKU на каждый размер шкалы, которого у цветомодели ещё нет.
-  function buildSkuPayloads({ styleVersionId, styleCode, colorway, sizeValues, existingSizeValueIds = [] }) {
+  const GTIN_PATTERN = /^(?:[0-9]{8}|[0-9]{12}|[0-9]{13}|[0-9]{14})$/;
+
+  // Контрольная цифра GS1 — то же правило, что у домена (`isValidGtin`): цифры справа налево с весами 3 и 1.
+  function isValidGtin(value) {
+    if (!GTIN_PATTERN.test(value)) return false;
+    const digits = [...value].map(Number);
+    const check = digits.pop();
+    const sum = digits.reverse().reduce((total, digit, index) => total + digit * (index % 2 === 0 ? 3 : 1), 0);
+    return (10 - (sum % 10)) % 10 === check;
+  }
+
+  // «S=4006381333931, M=4006381333948» (запятая, точка с запятой или перевод строки) → { S: '…', M: '…' }.
+  // Необязательно: пустой ввод — SKU без GTIN. Размер должен быть в выбранной шкале, GTIN — с верной
+  // контрольной цифрой; `PATCH /v2/product/skus/{id}` для GTIN нет, поэтому исправить его позже нельзя.
+  function parseGtinBySize(text, sizeValues = []) {
+    const result = new Map();
+    const known = new Map(sizeValues.map((value) => [normaliseCode(value.sizeCode), value.sizeCode]));
+    for (const token of String(text ?? '').split(/[,;\n]/).map((part) => part.trim()).filter(Boolean)) {
+      const at = token.lastIndexOf('=');
+      const sizeCode = normaliseCode(at > 0 ? token.slice(0, at) : '');
+      const gtin = at > 0 ? token.slice(at + 1).trim() : '';
+      if (!sizeCode || !gtin) fail('PRODUCT_SKU_GTIN_FORMAT_INVALID', `GTIN указывается как «размер=GTIN», например S=4006381333931: «${token}».`, `Give a GTIN as "size=GTIN", for example S=4006381333931: "${token}".`);
+      if (!known.has(sizeCode)) fail('PRODUCT_SKU_GTIN_SIZE_UNKNOWN', `В выбранной шкале нет размера «${sizeCode}».`, `The chosen scale has no size "${sizeCode}".`);
+      if (result.has(sizeCode)) fail('PRODUCT_SKU_GTIN_DUPLICATE_SIZE', `GTIN для размера «${sizeCode}» указан дважды.`, `The GTIN for size "${sizeCode}" is given twice.`);
+      if (!GTIN_PATTERN.test(gtin)) fail('PRODUCT_SKU_GTIN_INVALID', `GTIN размера ${sizeCode}: 8, 12, 13 или 14 цифр.`, `GTIN for size ${sizeCode}: 8, 12, 13 or 14 digits.`);
+      if (!isValidGtin(gtin)) fail('PRODUCT_SKU_GTIN_CHECK_DIGIT_INVALID', `GTIN размера ${sizeCode}: неверная контрольная цифра.`, `GTIN for size ${sizeCode}: the check digit is wrong.`);
+      result.set(sizeCode, gtin);
+    }
+    return Object.fromEntries(result);
+  }
+
+  // По одному SKU на каждый размер шкалы, которого у цветомодели ещё нет. GTIN по размеру необязателен;
+  // без него ключ `gtin` не отправляется (как в форме «Добавить SKU»).
+  function buildSkuPayloads({ styleVersionId, styleCode, colorway, sizeValues, existingSizeValueIds = [], gtinBySize = {} }) {
     const taken = new Set(existingSizeValueIds);
     return [...sizeValues]
       .sort((left, right) => left.sortOrder - right.sortOrder)
       .filter((value) => !taken.has(value.id))
-      .map((value) => ({
-        skuCode: skuCodeFor(styleCode, colorway.colorwayCode, value.sizeCode),
-        styleVersionId,
-        colorwayId: colorway.id,
-        sizeValueId: value.id,
-      }));
+      .map((value) => {
+        const gtin = gtinBySize[normaliseCode(value.sizeCode)];
+        return {
+          skuCode: skuCodeFor(styleCode, colorway.colorwayCode, value.sizeCode),
+          styleVersionId,
+          colorwayId: colorway.id,
+          sizeValueId: value.id,
+          ...(gtin ? { gtin } : {}),
+        };
+      });
   }
 
   function buildCollectionAssignment({ styleVersionId }) {
@@ -406,13 +442,15 @@
     const created = new Set();
     openForm(t(`Привязать размерную шкалу к цветомодели ${colorway.colorwayCode || ''}`, `Bind a size scale to colourway ${colorway.colorwayCode || ''}`), [
       selectDef('sizeScaleId', t('Размерная шкала', 'Size scale'), scales, (scale) => `${scale.scaleCode} · ${global.I18N?.getLocale?.() === 'en' ? scale.nameEn : scale.nameRu} · v${scale.latestVersionNo}`),
+      { ...textDef('gtins', t('GTIN по размерам (необязательно): «размер=GTIN» через запятую, например S=4006381333931', 'GTIN by size (optional): "size=GTIN" comma separated, for example S=4006381333931'), '', 1600, false), required: false },
     ], async (values) => {
       const scale = scales.find((candidate) => candidate.id === values.sizeScaleId);
       if (!scale) throw new Error('PRODUCT_SIZE_SCALE_NOT_FOUND');
       const aggregate = await api(`/v2/product/size-scales/${encodeURIComponent(scale.id)}?versionNo=${encodeURIComponent(scale.latestVersionNo)}`);
       const sizeValues = Array.isArray(aggregate?.values) ? aggregate.values : [];
       if (!sizeValues.length) fail('PRODUCT_SIZE_VALUE_REQUIRED', 'В этой шкале нет размеров.', 'This scale has no sizes.');
-      const payloads = buildSkuPayloads({ styleVersionId: product.styleVersionId, styleCode: product.styleCode, colorway, sizeValues, existingSizeValueIds: [...existingSizeValueIds, ...created] });
+      const gtinBySize = parseGtinBySize(values.gtins, sizeValues);
+      const payloads = buildSkuPayloads({ styleVersionId: product.styleVersionId, styleCode: product.styleCode, colorway, sizeValues, existingSizeValueIds: [...existingSizeValueIds, ...created], gtinBySize });
       if (!payloads.length) fail('PRODUCT_SKU_ALREADY_EXISTS', 'Все размеры этой шкалы у цветомодели уже есть.', 'Every size of this scale already exists on the colourway.');
       try {
         for (const body of payloads) { await mutate('/v2/product/skus', body); created.add(body.sizeValueId); }
@@ -528,6 +566,7 @@
       sizeValue: buildSizeValue,
       sizeScaleActivation: buildSizeScaleActivation,
       skuPayloads: buildSkuPayloads,
+      gtinBySize: parseGtinBySize,
       collectionAssignment: buildCollectionAssignment,
       catalogLink: buildCatalogLink,
       catalogLinkCandidates,

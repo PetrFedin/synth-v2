@@ -29,13 +29,15 @@
     ['plan', 'Плановый', 'Plan'], ['budget', 'Бюджетный', 'Budget'], ['po', 'По заказу фабрике', 'Purchase order'],
     ['invoice', 'По счёту', 'Invoice'], ['accounting', 'Учётный', 'Accounting'], ['settlement', 'По факту оплаты', 'Settlement'],
   ]);
-  // `custom` требует весов по каждой затрате и строке заказа — из интерфейса их не ввести, поэтому
-  // политики с этой базой не предлагаются, а новая политика создаётся только с тремя остальными.
+  // `custom` требует весов по каждой затрате и строке заказа — из интерфейса их не ввести. `direct` на
+  // канонических заказах требует у каждой затраты orderLineNo + productSkuId (иначе 422
+  // COST_ALLOCATION_DIRECT_EXACT_IDENTITY_REQUIRED), а форма затрат их не отправляет, поэтому обе базы
+  // не предлагаются: новая политика создаётся только с двумя остальными.
   const ALLOCATION_BASES = Object.freeze([
-    ['direct', 'Прямая: затрата относится к своему SKU', 'Direct: the cost belongs to its SKU'],
     ['unit', 'По штукам', 'By units'],
     ['net_value', 'По стоимости строк заказа', 'By order line value'],
   ]);
+  const UNUSABLE_BASES = new Set(['custom', 'direct']);
   const READINESS_TYPES = Object.freeze(['factory', 'freight', 'duty', 'credits']);
   const READINESS_COST_TYPES = Object.freeze({
     factory: Object.freeze(['factory', 'material', 'labor', 'packaging']),
@@ -188,7 +190,7 @@
 
   function usablePolicies(ledger) {
     return (ledger.allocationPolicies ?? []).filter((policy) => policy.status === 'approved'
-      && policy.defaultBasis !== 'custom' && !policy.rules.some((rule) => rule.basis === 'custom'));
+      && !UNUSABLE_BASES.has(policy.defaultBasis) && !policy.rules.some((rule) => UNUSABLE_BASES.has(rule.basis)));
   }
 
   function buildAllocationRun({ landedCost, policy }) {

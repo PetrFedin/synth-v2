@@ -36,6 +36,7 @@ const USER_FACING_CODES = Object.freeze([
   'ORDER_INCOTERM_INVALID', 'ORDER_PAYMENT_DAYS_INVALID', 'ORDER_PREPAYMENT_INVALID', 'ORDER_DELIVERY_WINDOW_INVALID',
   'ORDER_CANCELLATION_REASON_REQUIRED', 'ORDER_COMMIT_TERMS_NOT_ACCEPTED', 'ORDER_COMMIT_MOQ_NOT_MET',
   'ORDER_AMENDMENT_ALREADY_OPEN', 'COST_CLOSE_REQUIRES_POST_CLOSE_ADJUSTMENT',
+  'FULFILLMENT_RESERVATION_LINEAGE_MISMATCH', 'BUYER_CATALOG_VERSION_ALREADY_EXISTS',
   'MATERIAL_COMPOSITION_NOT_WHOLE', 'BOM_MULTIPLE_MAIN_LINES', 'BOM_NOT_DRAFT', 'MEASUREMENT_MATRIX_INCOMPLETE',
   'SAMPLE_ROUND_LIMIT_REACHED', 'SUPPLIER_NOT_QUALIFIED', 'RFQ_QUOTE_EXPIRED', 'RFQ_NOT_OPEN_FOR_QUOTES',
   'MATERIAL_RFQ_RESPONSE_DEADLINE_PASSED', 'PRODUCTION_ORDER_NOT_DRAFT', 'PRODUCTION_MILESTONE_SEQUENCE_VIOLATION',
@@ -143,4 +144,11 @@ test('error banners humanise bare codes in one place and the dictionary loads be
   // Транспорт и баннер обращаются к словарю в момент ошибки (typeof-проверка), поэтому достаточно, чтобы он
   // загрузился до запуска приложения; порядок фундамента (`validate:i18n`) при этом не меняется.
   assert.ok(order.indexOf('error-messages') > order.indexOf('api') && order.indexOf('error-messages') < order.indexOf('app-start'));
+});
+
+test('a republished buyer catalog identical to an earlier (rolled back) version is not described as the current one', () => {
+  const text = messages('ru').humanise('BUYER_CATALOG_VERSION_ALREADY_EXISTS');
+  assert.doesNotMatch(text, /уже открыт\b/);
+  assert.match(text, /уже существовала/);
+  assert.match(text, /истори/);
 });

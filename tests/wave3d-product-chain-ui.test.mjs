@@ -358,6 +358,35 @@ test('bind-scale form lists the brand’s scales through the new read route and 
   assert.equal(forms.build.skuPayloads({ styleVersionId: styleVersion.id, styleCode: style.styleCode, colorway, sizeValues: [...identity.sizeValues.values()], existingSizeValueIds: [...identity.sizeValues.keys()] }).length, 0);
 });
 
+test('bind-scale form takes an optional GTIN per size, checks the digit and sends it with the SKU', async () => {
+  const { calls, forms, identity } = await harness();
+  await forms.createSizeScaleForm({ brandId: 'brand-1' });
+  await calls.forms.at(-1).submit({ scaleCode: 'SC-G', nameRu: 'Шкала', nameEn: 'Scale', sizeSystemId: '', sizes: 'S, M' });
+  await forms.createStyleForm();
+  await calls.forms.at(-1).submit({ brandId: 'brand-1', styleCode: 'DR-021', titleRu: 'Платье', titleEn: 'Dress', categoryId: '', productTypeId: '', genderId: '' });
+  const style = [...identity.styles.values()][0];
+  const styleVersion = identity.styleVersions[0];
+  const colorway = { id: 'colorway-g', brandId: 'brand-1', styleVersionId: styleVersion.id, colorwayCode: 'BLK' };
+  identity.colorways.set(colorway.id, colorway);
+  const product = { id: style.id, brandId: 'brand-1', styleCode: style.styleCode, styleVersionId: styleVersion.id };
+  await forms.bindSizeScaleForm({ product, colorway });
+  const form = calls.forms.at(-1);
+  const gtinField = form.fields.find((field) => field.name === 'gtins');
+  assert.ok(gtinField && gtinField.required === false, 'the GTIN field is optional');
+  const scaleId = form.fields[0].options[0].id;
+  // неверная контрольная цифра и неизвестный размер отвергаются до любого запроса
+  const before = calls.requests.length;
+  await assert.rejects(form.submit({ sizeScaleId: scaleId, gtins: 'S=4006381333932' }), (error) => error.code === 'PRODUCT_SKU_GTIN_CHECK_DIGIT_INVALID');
+  await assert.rejects(form.submit({ sizeScaleId: scaleId, gtins: 'XL=4006381333931' }), (error) => error.code === 'PRODUCT_SKU_GTIN_SIZE_UNKNOWN');
+  assert.equal([...identity.skus.values()].length, 0);
+  assert.ok(calls.requests.slice(before).every((request) => request.method === 'GET' || request.method === undefined));
+  await form.submit({ sizeScaleId: scaleId, gtins: 'S=4006381333931' });
+  const skus = [...identity.skus.values()];
+  assert.equal(skus.find((sku) => sku.skuCode.endsWith('-S')).gtin, '4006381333931');
+  assert.equal(skus.find((sku) => sku.skuCode.endsWith('-M')).gtin ?? null, null, 'sizes without a GTIN stay without one');
+  assert.deepEqual(forms.build.gtinBySize('s = 96385074; M=4006381333931', [{ sizeCode: 'S' }, { sizeCode: 'M' }]), { S: '96385074', M: '4006381333931' });
+});
+
 test('bind-scale form tells a brand with no scale to create one first, and sends nothing', async () => {
   const { calls, forms } = await harness();
   await forms.bindSizeScaleForm({ product: { id: 's', brandId: 'brand-1', styleCode: 'DR', styleVersionId: 'v1' }, colorway: { id: 'c', colorwayCode: 'BLK' } });

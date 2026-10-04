@@ -937,3 +937,126 @@ Every exception links to raw document and canonical entities.
 
 **Commercial framing:** enterprise B2B infrastructure capable of integrating with large retailers and supply-chain partners.
 
+## Moat wave — supplier capacity exchange and production-slot reservations
+
+This wave turns supplier data from static profiles into a governed network for production-capacity commitments.
+
+### Capacity Offer Authority — ADOPT
+
+Supplier/factory can publish or confirm a bounded capacity offer:
+
+- facility;
+- capability/product family;
+- production process;
+- period/week/month;
+- available quantity/hours/lines;
+- MOQ;
+- lead-time assumptions;
+- material dependency;
+- currency/commercial note where allowed;
+- confidence/status;
+- valid-until;
+- source/owner.
+
+Capacity is a commitment candidate, not guaranteed output.
+
+### Capacity Request — ADOPT
+
+Brand/buyer creates a request from approved demand/order planning:
+
+- product/category;
+- quantity;
+- delivery window;
+- required process/capability;
+- compliance/facility constraints;
+- target cost range where shareable;
+- priority;
+- confidentiality scope.
+
+Do not expose full commercial plan to every supplier.
+
+### Capacity Match / Optimizer — ADAPT
+
+Reference:
+
+https://github.com/google/or-tools
+
+Use a scenario solver to propose:
+
+demand -> qualified facility -> feasible capacity slot -> shipment/delivery implication
+
+Constraints may include:
+
+- facility capability;
+- approved supplier status;
+- reserved/available capacity;
+- lead time;
+- MOQ;
+- QC/compliance;
+- logistics calendar;
+- priority.
+
+Solver output is a proposal, never a supplier commitment.
+
+### Production Slot Reservation — ADOPT
+
+Lifecycle:
+
+capacity offer -> request/match -> provisional hold -> bilateral confirmation -> reserved slot -> linked PO/production order -> consumed/released/expired
+
+Store:
+
+- capacity version;
+- held quantity/time;
+- expiry;
+- parties;
+- confirmation;
+- linked canonical order;
+- release reason.
+
+### Confidentiality Boundary — REQUIRED
+
+Multi-supplier/network deployment must protect:
+
+- other brands' forecasts;
+- supplier private capacity;
+- negotiated cost;
+- buyer identity where anonymised sourcing is intended.
+
+No cross-tenant leakage for "network intelligence".
+
+### Capacity Reliability History — ADOPT
+
+Compare:
+
+reserved -> confirmed -> actual start -> output -> ship -> receipt
+
+Derive explainable supplier metrics:
+
+- commitment adherence;
+- capacity cancellation;
+- late start;
+- realised output;
+- OTIF context.
+
+This becomes a defensible network data asset.
+
+### Supplier Network Product — CONDITIONAL
+
+If multiple organisations use Synth-v2, offer opt-in network discovery for approved suppliers/facilities.
+
+Network participation is not automatic and must separate public profile, shared capacity and private commercial data.
+
+### Additional acceptance
+
+- capacity offer/request versions are immutable/auditable;
+- reservation cannot exceed configured available capacity without override;
+- supplier confirmation is explicit;
+- solver cannot create PO/production order;
+- cross-tenant forecasts/costs remain isolated;
+- reliability metrics trace to actual production/shipment facts.
+
+**Sequencing:** Supplier/Facility + Production + Order + Planning -> capacity offers -> requests/matching -> slot reservation -> actual reliability -> optional network.
+
+**Commercial framing:** creates a two-sided supplier-capacity network and longitudinal reliability moat, moving Synth-v2 beyond PLM into supply-network orchestration.
+

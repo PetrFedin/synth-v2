@@ -1,5 +1,5 @@
 import { invariant } from '../core/errors.mjs';
-import { CAPABILITIES, roleHasCapability } from '../modules/access-control/public.mjs';
+import { COST_FIELD, roleSeesCost, withholdCostFields } from '../modules/access-control/public.mjs';
 
 const MAX_LIMIT = 200;
 
@@ -71,11 +71,9 @@ function optionalInstant(value, field) {
 // figures: any field named for cost or margin is removed, and an attribute row about one loses its
 // before/after values. A page that does not say which role it was read under is treated as the
 // least privileged one.
-const COST_FIELD = /cost|margin/i;
-
 function withheldFor(page) {
   const role = page.viewerRole;
-  if (role && (roleHasCapability(role, CAPABILITIES.COST_MANAGE) || roleHasCapability(role, CAPABILITIES.MARGIN_READ))) return page;
+  if (roleSeesCost(role)) return page;
   return { ...page, items: page.items.map((item) => withheldItem(item)) };
 }
 
@@ -84,13 +82,5 @@ function withheldItem(item) {
     const { before, after, ...rest } = item;
     return { ...rest, before: null, after: null, redacted: true };
   }
-  return stripCostFields(item);
-}
-
-function stripCostFields(value) {
-  if (Array.isArray(value)) return value.map(stripCostFields);
-  if (!value || typeof value !== 'object') return value;
-  return Object.fromEntries(Object.entries(value)
-    .filter(([key]) => !COST_FIELD.test(key))
-    .map(([key, nested]) => [key, stripCostFields(nested)]));
+  return withholdCostFields(item);
 }

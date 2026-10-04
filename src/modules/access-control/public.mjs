@@ -243,3 +243,5 @@ export function assertTradeCapability({ memberships, actorId, brandId, shopId, c
   assertCapability(membership, capability);
   return membership;
 }
+
+export { COST_FIELD, roleSeesCost, withholdCostFields, costVisibleTo } from './cost-visibility.mjs';

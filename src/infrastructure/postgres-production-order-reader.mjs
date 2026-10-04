@@ -1,6 +1,7 @@
 import { invariant } from '../core/errors.mjs';
-import { CAPABILITIES, rolesWithCapability } from '../modules/access-control/public.mjs';
+import { CAPABILITIES, costVisibleTo, rolesWithCapability } from '../modules/access-control/public.mjs';
 import { withPostgresTransaction } from './postgres-transaction.mjs';
+import { viewerRoleColumn } from './viewer-role-sql.mjs';
 
 const SNAPSHOT_BEGIN = 'BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY';
 const READ_ROLES = rolesWithCapability(CAPABILITIES.PRODUCTION_ORDER_READ);
@@ -17,6 +18,10 @@ const READ_ROLES = rolesWithCapability(CAPABILITIES.PRODUCTION_ORDER_READ);
 // критерий, что у истории (`cost.manage` или `margin.read`). Остальным поле приходит `null`, как у
 // заказа без связи, — самого заказа это не прячет.
 const COST_VISIBLE_ROLES = Object.freeze([...new Set([...rolesWithCapability(CAPABILITIES.COST_MANAGE), ...rolesWithCapability(CAPABILITIES.MARGIN_READ)])]);
+// Сам заказ — тоже деньги: условия награждения (`unitPriceMinor`, `fixedCostMinor`, `totalCostMinor`)
+// и всё, что названо стоимостью. Та же граница, что у `linkedActualCost`: без `cost.manage` и
+// `margin.read` эти поля из ответа убираются (не обнуляются); `linkedActualCost` остаётся `null`.
+const PRICE_KEYS = Object.freeze(['unitPriceMinor']);
 const COST_VISIBLE_SQL = `ARRAY[${COST_VISIBLE_ROLES.map((role) => `'${role}'`).join(', ')}]::text[]`;
 const linkedActualCost = (actorParameter) => `(CASE WHEN production_order.payload ->> 'orderId' IS NOT NULL AND EXISTS (
       SELECT 1 FROM memberships AS cost_membership
@@ -42,7 +47,7 @@ export function createPostgresProductionOrderReader({ pool } = {}) {
     getForActor(actorId, productionOrderNumber) {
       return withPostgresTransaction(pool, async (queryable) => {
         const result = await queryable.query(
-          `SELECT production_order.payload, ${linkedActualCost('$2')} AS "linkedActualCost"
+          `SELECT production_order.payload, ${viewerRoleColumn('$2', 'production_order.brand_id')}, ${linkedActualCost('$2')} AS "linkedActualCost"
              FROM production_orders AS production_order
             WHERE production_order.production_order_number = $1
               AND EXISTS (
@@ -63,7 +68,7 @@ export function createPostgresProductionOrderReader({ pool } = {}) {
 }
 function withLinkedActualCost(row) {
   return Object.freeze({
-    ...row.payload,
+    ...costVisibleTo(row.viewer_role, row.payload, { extraKeys: PRICE_KEYS }),
     lineageVersion: row.payload.lineageVersion ?? null,
     linkedWholesaleOrderId: row.payload.orderId ?? null,
     linkedActualCost: row.linkedActualCost ? Object.freeze({
@@ -95,7 +100,7 @@ async function page(queryable, actorId, { limit, afterProductionOrderNumber, fil
   if (afterProductionOrderNumber) { params.push(afterProductionOrderNumber); clauses.push(`production_order.production_order_number > $${params.length}`); }
   params.push(limit + 1);
   const result = await queryable.query(
-    `SELECT production_order.payload, production_order.production_order_number, ${linkedActualCost('$1')} AS "linkedActualCost"
+    `SELECT production_order.payload, production_order.production_order_number, ${viewerRoleColumn('$1', 'production_order.brand_id')}, ${linkedActualCost('$1')} AS "linkedActualCost"
        FROM production_orders AS production_order
       WHERE ${clauses.join(' AND ')}
       ORDER BY production_order.production_order_number ASC

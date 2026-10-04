@@ -37,7 +37,7 @@ async function selectionForm() {
     toast(error.message, 'error');
     return;
   }
-  openForm('Создать Selection', [
+  openForm('Создать подборку', [
     selectDef('contextId','Цикл',contexts, context => `${orgName(context.brandId)} → ${orgName(context.shopId)} / ${nameById('showrooms', context.showroomId)} / ${nameById('collections', context.collectionId)}`),
     dependentSelectDef(
       'retailDoorId',

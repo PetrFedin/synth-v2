@@ -34,6 +34,10 @@ test('PostgreSQL shows a supplier its own requests, hides its competitors, and s
     assert.equal(request.rfqCode, 'RFQ-ISSUED');
     assert.equal(request.supplierStatus, 'quote_submitted');
     assert.equal(request.ownQuote.unitPriceMinor, 5200);
+    // The quotation holds no currency of its own: its amounts are in the currency of the request (the
+    // BOM's, which is also what the brand reads them in). The supplier is filed in USD here, and the
+    // portal used to print its price in dollars next to the brand's euros for the very same number.
+    assert.equal(request.currency, 'EUR', 'the portal names the request currency, not the supplier profile currency');
     for (const leak of ['supplierCodes', 'quotes', 'award', 'allocation', 'selectedSupplierCode']) {
       assert.equal(Object.hasOwn(request, leak), false, `the portal projected ${leak}`);
     }
@@ -108,13 +112,13 @@ async function seed(pool) {
 
   for (const [id, code] of [['supplier-one', 'SUP-ONE'], ['supplier-two', 'SUP-TWO']]) {
     const supplier = {
-      id, supplierCode: code, brandId: brand.id, status: 'qualified', countryCode: 'TR', currency: 'EUR',
+      id, supplierCode: code, brandId: brand.id, status: 'qualified', countryCode: 'TR', currency: 'USD',
       legalName: `${code} Mills`, leadTimeDays: 30, minimumOrderQuantity: 1, auditExpiresAt: '2027-09-19T10:00:00.000Z',
       version: 1, incoterms: ['FOB'], categories: ['apparel'], createdAt: now, updatedAt: now, qualifiedAt: now,
     };
     await pool.query(
       `INSERT INTO suppliers (id,supplier_code,brand_id,status,country_code,currency,lead_time_days,minimum_order_quantity,audit_expires_at,version,payload,created_at,updated_at,qualified_at)
-       VALUES ($1,$2,$3,'qualified','TR','EUR',30,1,$4,1,$5::jsonb,$6,$6,$6)`,
+       VALUES ($1,$2,$3,'qualified','TR','USD',30,1,$4,1,$5::jsonb,$6,$6,$6)`,
       [id, code, brand.id, supplier.auditExpiresAt, JSON.stringify(supplier), now],
     );
   }
@@ -145,7 +149,7 @@ async function seed(pool) {
 
 async function insertRfq(pool, brandId, { id, rfqCode, status, issuedAt, supplierCodes, quotes, incoterm, notes }) {
   const payload = {
-    id, rfqCode, brandId, sku: 'SKU-PORTAL', skuVersion: 1, bomVersion: 1, status, targetQuantity: 400,
+    id, rfqCode, brandId, sku: 'SKU-PORTAL', skuVersion: 1, bomVersion: 1, bomCurrency: 'EUR', status, targetQuantity: 400,
     responseDueAt: '2026-11-20T00:00:00.000Z', deliveryDueAt: '2027-02-15T00:00:00.000Z',
     selectedSupplierCode: null, version: 1, supplierCodes, quotes, incoterm, notes,
   };

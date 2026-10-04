@@ -195,7 +195,7 @@
   function commentRow(order, lineNo, sku, sideLabel, currentBody, canWrite) {
     const label = el('label');
     label.append(el('span', { text: `${lineNo}. ${sku} — ${sideLabel}` }));
-    label.append(el('input', { type: 'text', value: currentBody || '—', readOnly: true }));
+    label.append(factValue(currentBody));
     if (canWrite) {
       label.append(actionButton(
         currentBody ? text('Изменить', 'Edit') : text('Добавить', 'Add'),
@@ -270,7 +270,7 @@
     pending.forEach((plan, index) => {
       const label = el('label');
       label.append(el('span', { text: `${view.plans.length > 1 ? `${index + 1}. ` : ''}${place(plan.shipFrom)} → ${place(plan.shipTo)}` }));
-      label.append(el('input', { type: 'text', value: packingStatusLabel(plan.packingStatus), readOnly: true }));
+      label.append(factValue(packingStatusLabel(plan.packingStatus)));
       const nextStatus = PACKING_NEXT[plan.packingStatus ?? 'null'];
       if (nextStatus) {
         label.append(actionButton(packingAdvanceLabel(plan.packingStatus), async () => {
@@ -326,7 +326,7 @@
         const quantity = byLineAndDoor.get(`${lineNo}:${door.id}`) ?? null;
         const label = el('label');
         label.append(el('span', { text: `${lineNo}. ${line.sku} — ${door.code} · ${door.name || ''}` }));
-        label.append(el('input', { type: 'text', value: quantity === null ? '—' : String(quantity), readOnly: true }));
+        label.append(factValue(quantity));
         if (canWrite) {
           label.append(actionButton(
             quantity === null ? text('Указать', 'Set') : text('Изменить', 'Edit'),
@@ -449,7 +449,7 @@
       const label = el('label');
       const visibilityLabel = milestone.visibility === 'shared' ? text('обеим сторонам', 'shared') : text('только своей стороне', 'private');
       label.append(el('span', { text: `${formatDate(milestone.startsAt)} — ${milestone.title}` }));
-      label.append(el('input', { type: 'text', value: `${orgName(milestone.ownerOrganisationId)} · ${visibilityLabel}`, readOnly: true }));
+      label.append(factValue(`${orgName(milestone.ownerOrganisationId)} · ${visibilityLabel}`));
       grid.append(label);
     });
     if (canWrite) {
@@ -509,7 +509,7 @@
     // Принятая правка применяется: количество строки и итог заказа меняются сразу, резерв склада
     // сдвигается на разницу. После начала исполнения (производственное обязательство, план поставки)
     // сервер откажет — об этом человек должен узнать до нажатия, а не из ошибки.
-    grid.append(el('p', { className: 'od-action-note', text: text(
+    grid.append(el('p', { className: 'od-hint-note', text: text(
       'Принятая правка сразу меняет количество строки и итог заказа. После начала исполнения заказа принять её нельзя.',
       'An accepted amendment changes the line quantity and the order total at once. It cannot be accepted after order execution has started.',
     ) }));
@@ -527,7 +527,7 @@
       label.append(el('span', { text: `${amendment.lineNo}. ${line?.sku || ''}: ${amendment.currentQuantity} → ${amendment.proposedQuantity} (${signedDelta})` }));
       const detailParts = [`${text('от', 'from')} ${orgName(amendment.proposedOrganisationId)}`, `${text('причина', 'reason')}: ${amendment.reason}`, statusText];
       if (amendment.responseReason) detailParts.push(`${text('ответ', 'response')}: ${amendment.responseReason}`);
-      label.append(el('input', { type: 'text', value: detailParts.join(' · '), readOnly: true }));
+      label.append(factValue(detailParts.join(' · ')));
       if (amendment.status === 'proposed' && canWrite && myOrgId && myOrgId !== amendment.proposedOrganisationId) {
         const accept = actionButton(text('Принять', 'Accept'), () => mutate(
           `/v2/orders/${encodeURIComponent(order.id)}/amendments/${encodeURIComponent(amendment.id)}/respond`,

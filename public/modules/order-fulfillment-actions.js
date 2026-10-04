@@ -574,7 +574,7 @@
 
   function fact(label, value) {
     const wrap = el('label');
-    wrap.append(el('span', { text: label }), el('input', { type: 'text', value: value === null || value === undefined || value === '' ? '—' : String(value), readOnly: true }));
+    wrap.append(el('span', { text: label }), factValue(value));
     return wrap;
   }
 
@@ -677,7 +677,7 @@
       topActions.append(actionButton(t('Упаковка', 'Packing'), () => global.orderPackingStatusDialog(order)));
     }
     if (!steps.length && !topActions.childNodes.length) {
-      grid.append(el('p', { className: 'od-action-note', text: t('Для вашей роли сейчас нет доступных шагов: ход за другой стороной или цепочка завершена.', 'There is no step for your role right now: it is the other side’s move, or the chain is complete.') }));
+      grid.append(el('p', { className: 'od-hint-note', text: t('Для вашей роли сейчас нет доступных шагов: ход за другой стороной или цепочка завершена.', 'There is no step for your role right now: it is the other side’s move, or the chain is complete.') }));
     }
     if (topActions.childNodes.length) grid.append(topActions);
 

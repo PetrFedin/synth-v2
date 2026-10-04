@@ -144,7 +144,7 @@
     const rows = items.map((item) => {
       const row = h('tr', { className: ui.selectedSku === item.chart.sku ? 'selected' : '', tabindex: '0' }, [
         h('td', {}, [h('strong', { text: item.chart.sku }), h('small', { text: item.sku?.name || '' })]),
-        h('td', {}, [badge(item.chart.status, item.chart.status === 'published' ? 'ok' : 'neutral')]),
+        h('td', {}, [badge(statusLabel(item.chart.status), item.chart.status === 'published' ? 'ok' : 'neutral')]),
         h('td', { text: item.chart.unit }),
         h('td', { text: item.chart.sizes.length }),
         h('td', { text: item.chart.points.length }),
@@ -224,7 +224,7 @@
     return h('aside', { className: 'measurement-inspector' }, [
       h('div', { className: 'measurement-inspector-head' }, [h('div', {}, [h('p', { className: 'eyebrow', text: item.chart.sku }), h('h2', { text: item.sku?.name || item.chart.sku })]), h('div', { className: 'measurement-inspector-actions' }, actions)]),
       h('dl', { className: 'measurement-summary' }, [
-        pair(text('Статус', 'Status'), item.chart.status), pair(text('Версия', 'Version'), item.chart.version), pair(text('SKU version', 'SKU version'), item.chart.skuVersion),
+        pair(text('Статус', 'Status'), statusLabel(item.chart.status)), pair(text('Версия', 'Version'), item.chart.version), pair(text('SKU version', 'SKU version'), item.chart.skuVersion),
         pair(text('Размеры', 'Sizes'), item.chart.sizes.length), pair('POM', item.chart.points.length), pair(text('Заполнение', 'Completion'), `${item.actualValues}/${item.expectedValues}`),
       ]),
       h('h3', { text: text('Контрольные исключения', 'Control exceptions') }),

@@ -178,7 +178,7 @@
     if (!caps?.hasForOrganisation(state.workspace, product.brandId, caps.CAPABILITIES.CATALOG_MANAGE)) return null;
     if (!product.readinessSnapshotId) return null;
     if (product.readinessStatus !== 'ready') {
-      return el('p', { className: 'od-action-note', rawText: text(
+      return el('p', { className: 'od-hint-note', rawText: text(
         'Проекция публикуется из готовой оценки. Пока есть незакрытые измерения — список выше называет каждое.',
         'A projection is published from a ready assessment. Some dimensions are still blocked — the list above names each one.',
       ) });

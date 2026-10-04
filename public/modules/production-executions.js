@@ -52,7 +52,7 @@
       planned: ['Запланировано', 'Planned'], active: ['В производстве', 'Active'],
       'ready-for-qc': ['Готово к QC', 'Ready for QC'], cancelled: ['Отменено', 'Cancelled'],
     };
-    return t(...(labels[status] || [status, status]));
+    return labels[status] ? t(...labels[status]) : statusLabel(status);
   }
   function milestoneLabel(code) {
     const labels = {

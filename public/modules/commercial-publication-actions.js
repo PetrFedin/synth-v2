@@ -187,7 +187,7 @@
   }
 
   function note(message) {
-    return el('p', { className: 'od-action-note', rawText: message });
+    return el('p', { className: 'od-hint-note', rawText: message });
   }
 
   // Кнопка на коллекции. Способность та же, что проверяет сам маршрут публикации — `CATALOG_MANAGE`

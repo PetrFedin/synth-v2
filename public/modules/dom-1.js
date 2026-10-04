@@ -268,6 +268,14 @@ function el(tag, props = {}) {
   return node;
 }
 
+// A fact that cannot be edited is text, not a disabled-looking input. A read-only <input> is one
+// line wide whatever it holds, so «заказано 180 · в планах 180 · точки: не распределено по точк…»
+// and a reason for an order change were cut off with no way to read the rest. This block wraps.
+function factValue(value, className = '') {
+  const shown = value === null || value === undefined || value === '' ? '\u2014' : String(value);
+  return el('output', { className: `od-fact-value${className ? ` ${className}` : ''}`, rawText: shown });
+}
+
 function inputField(labelText, type, attrs = {}) {
   const label = el('label');
   label.append(el('span', { text: labelText }));

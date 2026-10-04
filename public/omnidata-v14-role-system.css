@@ -422,7 +422,10 @@ body.omnidata-role-system .topbar .breadcrumb > strong{flex:1 1 auto!important;m
 /* The breadcrumb column was starved to 212px inside a 1208px header because the
    trailing column was unbounded. Give the path room and bound the tail. */
 body.omnidata-design-system-v1 .topbar,
-body.omnidata-role-system .topbar{grid-template-columns:minmax(360px,1fr) minmax(200px,300px) minmax(220px,max-content)!important}
+body.omnidata-role-system .topbar{grid-template-columns:minmax(160px,1fr) minmax(200px,300px) max-content!important}
+/* The tail column is `max-content` with no floor on the path column: with a long organisation name
+   (buyer: «Nordhaus Retail», «Jonas Herrmann») the old 360px floor left the actions 70px short, and
+   their overflow clip ate the «RU» button down to a sliver. The path column gives way, it ellipsises. */
 /* Those three floors add up to 740px before gaps and padding, and this rule had
    no breakpoint, so below roughly 1100px it overrode the responsive ladder the
    earlier layers set and the header burst: the search box landed on top of the

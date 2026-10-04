@@ -45,7 +45,7 @@
       'review-pending': ['Ожидает решения', 'Review pending'], 'rework-required': ['Требуется доработка', 'Rework required'],
       released: ['Разрешена отгрузка', 'Shipment released'], rejected: ['Партия отклонена', 'Rejected'], cancelled: ['Отменено', 'Cancelled'],
     };
-    return t(...(labels[status] || [status, status]));
+    return labels[status] ? t(...labels[status]) : statusLabel(status);
   }
   function recommendationLabel(value) {
     const labels = { pass: ['Соответствует', 'Pass'], rework: ['Доработка', 'Rework'], reject: ['Отклонить', 'Reject'] };

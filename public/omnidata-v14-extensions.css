@@ -653,6 +653,11 @@ body.omnidata-v14.omnidata-design-system-v1 :is(.od-inspector-tabs, .ls9-inspect
   height: auto !important;
   padding: 2px var(--ods-space-2, 8px) !important;
   overflow-x: visible !important;
+  overflow-y: visible !important;
+  /* The inspector body is a column with its own scroll; a tab strip left shrinkable gave up its
+     second row to the content below, so on a card with a dozen tabs the rows were painted over the
+     preview and the first row was all that stayed readable. The strip keeps its full height. */
+  flex: 0 0 auto !important;
 }
 body.omnidata-v14.omnidata-design-system-v1 :is(.od-inspector-tabs, .ls9-inspector-tabs, .bom-inspector-tabs, .measurement-inspector-tabs, .sample-inspector-tabs, .tech-pack-inspector-tabs) button[data-ods-part="tab"],
 body.omnidata-v14.omnidata-design-system-v1 :is(.od-inspector-tabs, .ls9-inspector-tabs, .bom-inspector-tabs, .measurement-inspector-tabs, .sample-inspector-tabs, .tech-pack-inspector-tabs) button[data-od14-unified-part="tab"] {
@@ -736,7 +741,7 @@ body.omnidata-v14 dialog .dialog-actions .button { flex: 0 0 auto !important; wi
    created something is exactly the person who needs the next step named. */
 /* Таблица доступов и действие над ними — один блок, а не два слипшиеся. */
 .od-access-panel { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
-.od-action-note { margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--od14-surface-subtle, #f8fafc); color: var(--od14-text-soft, #475467); font-size: 11.5px; }
+.od-hint-note { margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--od14-surface-subtle, #f8fafc); color: var(--od14-text-soft, #475467); font-size: 11.5px; }
 
 /* The showroom presentation. A buyer meets a season here, so the looks get the room a photograph
    needs and the pieces sit under it as a readable list rather than another table. */
@@ -832,3 +837,40 @@ body.omnidata-v14 .od-change-filters :is(select,input){width:100%!important;min-
 /* The page keeps its measure; a table too wide for it scrolls inside its own frame. */
 body.omnidata-v14 .tp-doc-page{overflow-x:hidden!important}
 body.omnidata-v14 .tp-doc-table-wrap{width:100%!important;max-width:100%!important;overflow-x:auto!important}
+
+/* Read-only facts in dialogs (shipment and receipt, order amendments, object details). They were
+   disabled-looking one-line inputs, so a long value was cut off mid-word with no way to read the
+   rest. A fact is text: it wraps, and the field grows to fit it. */
+body.omnidata-v14 .od-fact-value {
+  display: block;
+  min-width: 0;
+  min-height: 36px;
+  padding: 8px 10px;
+  border: 1px solid var(--ods-color-border, #e4e7ec);
+  border-radius: var(--ods-radius-2, 6px);
+  background: var(--ods-color-surface-subtle, #f9fafb);
+  color: var(--ods-color-text, #1d2939);
+  font: inherit;
+  line-height: 1.4;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+/* The note class used to carry the word «action»: the role classifier splits class names on «-» and read «action»
+   as a button, so every note on the platform was dressed as one (nowrap, 26px high, centred). It is
+   renamed, not special-cased, so the next note is not caught by the same word.
+   A note or an empty state inside a two-column form grid is a sentence, not a field: it spans the
+   row and wraps instead of overflowing its half-width cell on both sides. */
+body.omnidata-v14 .form-grid > :is(.od-hint-note, .empty, .notice) {
+  grid-column: 1 / -1;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+/* Colourways in the inspector: one card each, so nothing needs a horizontal scrollbar. */
+body.omnidata-v14 .od-colourway-list { display: grid; gap: 8px; min-width: 0; }
+body.omnidata-v14 .od-colourway-card { display: grid; gap: 8px; min-width: 0; padding: 10px; border: 1px solid var(--od14-line, #e4e7ec); border-radius: 8px; }
+body.omnidata-v14 .od-colourway-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+body.omnidata-v14 .od-colourway-name { display: grid; gap: 2px; min-width: 0; }
+body.omnidata-v14 .od-colourway-name small { overflow-wrap: anywhere; white-space: normal; }

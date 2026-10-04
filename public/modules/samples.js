@@ -41,8 +41,8 @@
       draft: ['Черновик', 'Draft'], requested: ['Запрошен', 'Requested'], 'in-production': ['В производстве', 'In production'],
       received: ['Получен / на проверке', 'Received / review'], approved: ['Одобрен', 'Approved'], rejected: ['Отклонён', 'Rejected'], cancelled: ['Отменён', 'Cancelled'],
     };
-    const pair = labels[status] || [status, status];
-    return text(pair[0], pair[1]);
+    const pair = labels[status];
+    return pair ? text(pair[0], pair[1]) : statusLabel(status);
   }
   function labelType(type) {
     const labels = { proto: ['Прототип', 'Proto'], fit: ['Примерочный', 'Fit'], 'size-set': ['Размерный ряд', 'Size set'], 'pre-production': ['Предсерийный', 'Pre-production'], sales: ['Продажный', 'Sales'], photo: ['Фото', 'Photo'] };

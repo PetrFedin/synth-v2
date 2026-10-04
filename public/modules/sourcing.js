@@ -72,7 +72,7 @@
       issued: ['Отправлен', 'Issued'], quoted: ['Есть котировки', 'Quoted'], awarded: ['Победитель выбран', 'Awarded'], allocated: ['В производстве', 'Allocated'], cancelled: ['Отменён', 'Cancelled'],
       confirmed: ['Подтверждён', 'Confirmed'],
     };
-    const pair = labels[status] || [status, status]; return text(pair[0], pair[1]);
+    const pair = labels[status]; return pair ? text(pair[0], pair[1]) : statusLabel(status);
   }
   function statusTone(status) { if (['qualified', 'allocated', 'confirmed'].includes(status)) return 'ok'; if (['suspended', 'cancelled'].includes(status)) return 'danger'; if (['issued', 'quoted', 'awarded'].includes(status)) return 'warning'; return 'neutral'; }
 
@@ -436,6 +436,7 @@
     const statusCell = (rfq, ctx) => h('td', {}, [badge(statusLabel(rfq.status), statusTone(rfq.status)), ctx.overdue ? badge(text('\u041f\u0440\u043e\u0441\u0440\u043e\u0447\u0435\u043d\u043e', 'Overdue'), 'danger') : null]);
     if (view === 'quotations') return [
       { label: 'RFQ / SKU', cell: codeCell },
+      { label: text('\u0421\u0442\u0430\u0442\u0443\u0441', 'Status'), cell: statusCell },
       { label: text('\u041e\u0442\u0432\u0435\u0442\u043e\u0432', 'Quotes'), cell: (rfq) => h('td', { text: String(rfq.quotes.length) }) },
       { label: text('\u041b\u0443\u0447\u0448\u0430\u044f \u0441\u0443\u043c\u043c\u0430', 'Best total'), cell: (rfq, ctx) => h('td', { text: ctx.best ? formatMoneyMinor(ctx.best.totalCostMinor, rfq.bomCurrency) : '\u2014' }) },
       { label: text('\u0426\u0435\u043d\u0430 \u0437\u0430 \u0435\u0434.', 'Unit price'), cell: (rfq, ctx) => h('td', { text: ctx.best ? formatMoneyMinor(ctx.best.unitPriceMinor, rfq.bomCurrency) : '\u2014' }) },
@@ -443,25 +444,24 @@
       { label: text('\u043a BOM', 'vs BOM'), cell: (rfq, ctx) => h('td', { text: ctx.deltaText }) },
       { label: text('\u0421\u0440\u043e\u043a', 'Lead time'), cell: (rfq, ctx) => h('td', { text: ctx.best ? `${ctx.best.leadTimeDays} ${text('\u0434\u043d.', 'days')}` : '\u2014' }) },
       { label: text('\u041b\u0443\u0447\u0448\u0438\u0439 \u043f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a', 'Best supplier'), cell: (rfq, ctx) => h('td', { text: ctx.best ? ctx.best.supplierName || ctx.best.supplierCode : '\u2014' }) },
-      { label: text('\u0421\u0442\u0430\u0442\u0443\u0441', 'Status'), cell: statusCell },
     ];
     if (view === 'production') return [
       { label: 'RFQ / SKU', cell: codeCell },
+      { label: text('\u0421\u0442\u0430\u0442\u0443\u0441', 'Status'), cell: statusCell },
       { label: text('\u041f\u0440\u043e\u0438\u0437\u0432. \u0437\u0430\u043a\u0430\u0437', 'Purchase order'), cell: (rfq) => h('td', { text: rfq.allocation?.purchaseOrderNumber || text('\u041d\u0435 \u0440\u0430\u0437\u043c\u0435\u0449\u0451\u043d', 'Not placed') }) },
       { label: text('\u041f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a', 'Supplier'), cell: (rfq) => h('td', { text: rfq.allocation?.supplierCode || rfq.selectedSupplierCode || '\u2014' }) },
       { label: text('\u041a\u043e\u043b-\u0432\u043e', 'Qty'), cell: (rfq) => h('td', { text: String(rfq.allocation?.quantity ?? rfq.targetQuantity) }) },
       { label: text('\u0421\u0442\u0430\u0440\u0442 \u043f\u0440\u043e\u0438\u0437\u0432\u043e\u0434\u0441\u0442\u0432\u0430', 'Production start'), cell: (rfq) => h('td', { text: rfq.allocation ? formatDate(rfq.allocation.productionStartAt) : '\u2014' }) },
       { label: text('\u0421\u0440\u043e\u043a \u043f\u043e\u0441\u0442\u0430\u0432\u043a\u0438', 'Delivery due'), cell: (rfq) => h('td', { text: rfq.allocation ? formatDate(rfq.allocation.deliveryDueAt) : formatDate(rfq.deliveryDueAt) }) },
       { label: text('\u0421\u0443\u043c\u043c\u0430 \u0440\u0430\u0437\u043c\u0435\u0449\u0435\u043d\u0438\u044f', 'Awarded total'), cell: (rfq, ctx) => h('td', { text: ctx.best ? formatMoneyMinor(ctx.best.totalCostMinor, rfq.bomCurrency) : '\u2014' }) },
-      { label: text('\u0421\u0442\u0430\u0442\u0443\u0441', 'Status'), cell: statusCell },
     ];
     return [
       { label: 'RFQ / SKU', cell: codeCell },
+      { label: text('\u0421\u0442\u0430\u0442\u0443\u0441', 'Status'), cell: statusCell },
       { label: text('\u041a\u043e\u043b-\u0432\u043e', 'Qty'), cell: (rfq) => h('td', { text: String(rfq.targetQuantity) }) },
       { label: text('\u041f\u0440\u0438\u0433\u043b\u0430\u0448\u0435\u043d\u043e', 'Invited'), cell: (rfq) => h('td', { text: String(rfq.supplierCodes.length) }) },
       { label: text('\u041e\u0442\u0432\u0435\u0442\u043e\u0432', 'Quotes'), cell: (rfq) => h('td', { text: String(rfq.quotes.length) }) },
       { label: text('\u041b\u0443\u0447\u0448\u0430\u044f \u0441\u0443\u043c\u043c\u0430', 'Best total'), cell: (rfq, ctx) => h('td', { text: ctx.best ? formatMoneyMinor(ctx.best.totalCostMinor, rfq.bomCurrency) : '\u2014' }) },
-      { label: text('\u0421\u0442\u0430\u0442\u0443\u0441', 'Status'), cell: statusCell },
       { label: text('\u041f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a', 'Supplier'), cell: (rfq) => h('td', { text: rfq.selectedSupplierCode || '\u2014' }) },
       { label: text('\u041f\u043e\u0441\u0442\u0430\u0432\u043a\u0430', 'Delivery'), cell: (rfq) => h('td', { text: formatDate(rfq.deliveryDueAt) }) },
     ];
@@ -730,11 +730,11 @@
   function materialRfqColumns() {
     return [
       { label: text('Запрос / материал', 'RFQ / material'), cell: (rfq) => h('td', {}, [h('strong', { text: rfq.rfqCode }), h('small', { text: `${rfq.materialCode} v${rfq.materialVersion}` })]) },
+      { label: text('Статус', 'Status'), cell: (rfq, ctx) => h('td', {}, [badge(statusLabel(rfq.status), statusTone(rfq.status)), ctx.overdue ? badge(text('Просрочено', 'Overdue'), 'danger') : null]) },
       { label: text('Кол-во', 'Qty'), cell: (rfq) => h('td', { text: `${rfq.targetQuantity} ${rfq.unit}` }) },
       { label: text('Приглашено', 'Invited'), cell: (rfq) => h('td', { text: String(rfq.supplierCodes.length) }) },
       { label: text('Ответов', 'Quotes'), cell: (rfq) => h('td', { text: String(rfq.quotes.length) }) },
       { label: text('Лучшая сумма', 'Best total'), cell: (rfq, ctx) => h('td', { text: ctx.best ? formatMoneyMinor(ctx.best.totalCostMinor, ctx.best.currency) : '—' }) },
-      { label: text('Статус', 'Status'), cell: (rfq, ctx) => h('td', {}, [badge(statusLabel(rfq.status), statusTone(rfq.status)), ctx.overdue ? badge(text('Просрочено', 'Overdue'), 'danger') : null]) },
       { label: text('Поставщик', 'Supplier'), cell: (rfq) => h('td', { text: rfq.selectedSupplierCode || '—' }) },
       { label: text('Поставка', 'Delivery'), cell: (rfq) => h('td', { text: formatDate(rfq.deliveryDueAt) }) },
     ];
@@ -919,11 +919,11 @@
   function materialPurchaseOrderColumns() {
     return [
       { label: text('Заказ / материал', 'Order / material'), cell: (order) => h('td', {}, [h('strong', { text: order.purchaseOrderNumber }), h('small', { text: `${order.materialCode} v${order.materialVersion}` })]) },
+      { label: text('Статус', 'Status'), cell: (order) => h('td', {}, [badge(statusLabel(order.status), statusTone(order.status))]) },
       { label: text('Поставщик', 'Supplier'), cell: (order) => h('td', { text: order.supplierCode }) },
       { label: text('Кол-во', 'Qty'), cell: (order) => h('td', { text: `${order.quantity} ${order.unit}` }) },
       { label: text('Сумма', 'Total'), cell: (order) => h('td', { text: formatMoneyMinor(order.commercialSnapshot?.totalCostMinor, order.commercialSnapshot?.currency) }) },
       { label: text('Поставка', 'Delivery'), cell: (order) => h('td', { text: formatDate(order.deliveryDueAt) }) },
-      { label: text('Статус', 'Status'), cell: (order) => h('td', {}, [badge(statusLabel(order.status), statusTone(order.status))]) },
     ];
   }
   function renderMaterialPurchaseOrders() {

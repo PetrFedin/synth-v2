@@ -608,7 +608,7 @@
     body.append(summary);
 
     if (ledger.supplyCommitments.length || ledger.actualCosts.length) {
-      body.append(notice(t('По заказу уже ведётся экономика: количества в заказе больше менять нельзя (ORDER_AMENDMENT_ECONOMICS_STARTED).', 'Economics is already running on this order: its quantities can no longer be changed (ORDER_AMENDMENT_ECONOMICS_STARTED).')));
+      body.append(notice(t('По заказу уже ведётся экономика: количества в заказе больше менять нельзя.', 'Economics is already running on this order: its quantities can no longer be changed.')));
     }
     if (!can.cost) body.append(notice(t('У вас право только на чтение: записывать затраты и закрывать себестоимость могут финансы, владелец и администратор.', 'You have read-only access: finance, owner and admin may record costs and close the cost.')));
 

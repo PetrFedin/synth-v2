@@ -104,7 +104,7 @@ test('traceability lists the main materials that nothing was issued for', () => 
 });
 
 test('the cancellation check lets a ready-for-qc execution keep its ready time', async () => {
-  const sql = await readFile(path.join(root, 'db/migrations/159_production_execution_cancel_keeps_ready_for_qc.sql'), 'utf8');
+  const sql = await readFile(path.join(root, 'db/migrations/160_production_execution_cancel_keeps_ready_for_qc.sql'), 'utf8');
   assert.match(sql, /DROP CONSTRAINT production_executions_state_check/);
   assert.match(sql, /status = 'cancelled' AND cancelled_at IS NOT NULL/);
 });

@@ -40,7 +40,7 @@ const databaseUrl = process.env.POSTGRES_TEST_URL;
 
 // Производство → качество на живой PostgreSQL. Три дефекта приёмочного прогона:
 //   1. отмена исполнения из ready-for-qc падала 500 SCHEMA_RULE_RESULT_INVALID, потому что табличный
-//      CHECK требовал ready_for_qc_at IS NULL при status = 'cancelled' (миграция 159);
+//      CHECK требовал ready_for_qc_at IS NULL при status = 'cancelled' (миграция 160);
 //   2. исполнение доходило до ready-for-qc без выданного материала и застревало: выдать уже нельзя,
 //      допуск требует выдачи;
 //   3. допуск к отгрузке не проверял ни количество выданного, ни статус партий.

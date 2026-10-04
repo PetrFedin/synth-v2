@@ -163,7 +163,9 @@
       return result;
     } catch (error) {
       if (String(error?.code || '').includes('CONCURRENCY_CONFLICT')) { reset(); queueMicrotask(() => { void loadSourcing({ reset: true }); }); }
-      toast(errorMessage(error), 'error');
+      // Inside an open modal dialog (every command here is issued from one) the refusal has to appear in
+      // that dialog: a toast is painted under a modal and the dialog looked as if nothing had happened.
+      reportError(errorMessage(error));
       return null;
     } finally { ui.busyKey = null; renderApp(); }
   }
@@ -980,6 +982,8 @@
     return previousRenderView(...args);
   };
   global.SynthaSourcingWorkspace.fetchAllPages = fetchAllPages;
+  // The dialogs are reachable for the tests that press their buttons the way a person does.
+  Object.assign(global.SynthaSourcingWorkspace, { openAwardDialog, openAllocationDialog });
   // Один чтение кормит все пять экранов закупок; «Перейти» из «Ждёт вас» перечитывает его заново.
   global.SynthaViewRefresh?.register([...SOURCING_VIEWS, ...MATERIAL_SOURCING_VIEWS], () => loadSourcing({ reset: true }));
   global.SynthaOmnidataV7Nav?.activate('Material RFQs', 'material-rfqs', 'Запросы цен на материал', 'Material RFQs');

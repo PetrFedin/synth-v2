@@ -436,8 +436,9 @@
     renderApp();
   }
 
-  global.SynthaFinalQualityWorkspace = Object.freeze({ fetchAll, load, render: renderFinalQuality, openForExecution });
+  global.SynthaFinalQualityWorkspace = Object.freeze({ fetchAll, load, render: renderFinalQuality, openForExecution, selectedCode: () => ui.selectedCode });
   global.SynthaViewRefresh?.register('final-quality', () => load({ reset: true }));
+  global.SynthaViewRefresh?.registerTarget('final-quality', (route) => { ui.status = 'all'; ui.risk = 'all'; ui.search = ''; ui.selectedCode = route.entityId; });
 // The V7 nav shim runs before this file, so it could not see the global above; the section
 // stayed marked as planned and could not be opened. Claim the entry now that it exists.
 global.SynthaOmnidataV7Nav?.activate('Quality', 'final-quality', '\u041a\u0430\u0447\u0435\u0441\u0442\u0432\u043e', 'Quality');

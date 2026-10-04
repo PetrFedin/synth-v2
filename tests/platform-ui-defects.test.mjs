@@ -184,14 +184,16 @@ test('"Open" selects the entity the item names and shows an order by its number,
 
   const shown = registry.inspector(order).inspector;
   assert.equal(shown.title, 'ORD-C974EE97');
+  // Выбор записи — дело экрана-владельца: «Перейти» отдаёт реестру обновления экран и маршрут целиком.
+  const opened = [];
+  window.SynthaViewRefresh = { open: (view, route) => { opened.push({ view, route }); window.state.view = view; } };
   shown.actions[0].handlers.click();
   assert.equal(window.state.view, 'orders');
-  assert.equal(window.OD_UI.selected['od-orders'], order.entityId);
-  assert.equal(window.OD_UI.tabs.orders, 'orders');
+  assert.deepEqual(opened[0].route, order.route);
 
   registry.inspector(named).inspector.actions[0].handlers.click();
   assert.equal(window.state.view, 'selections');
-  assert.equal(window.OD_UI.selected['od-selections'], 'selection_1');
+  assert.equal(opened[1].route.entityId, 'selection_1');
 });
 
 test('a view with no per-entity selection still opens its screen', async () => {
@@ -201,7 +203,6 @@ test('a view with no per-entity selection still opens its screen', async () => {
   await settle();
   window.renderView().content.registry.inspector(rfq).inspector.actions[0].handlers.click();
   assert.equal(window.state.view, 'rfqs');
-  assert.deepEqual(Object.keys(window.OD_UI.selected), []);
 });
 
 // ---------------------------------------------------------------------------------------------

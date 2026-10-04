@@ -986,6 +986,11 @@
   Object.assign(global.SynthaSourcingWorkspace, { openAwardDialog, openAllocationDialog });
   // Один чтение кормит все пять экранов закупок; «Перейти» из «Ждёт вас» перечитывает его заново.
   global.SynthaViewRefresh?.register([...SOURCING_VIEWS, ...MATERIAL_SOURCING_VIEWS], () => loadSourcing({ reset: true }));
+  // «Перейти» из «Ждёт вас»: после перечитывания (оно сбрасывает выбор) выбирается RFQ или заказ по коду,
+  // а фильтр по статусу, который мог его скрыть, снимается.
+  global.SynthaViewRefresh?.registerTarget('rfqs', (route) => { ui.rfqStatus = 'all'; ui.selectedRfqCode = route.entityId; });
+  global.SynthaViewRefresh?.registerTarget('material-rfqs', (route) => { ui.materialRfqStatus = 'all'; ui.selectedMaterialRfqCode = route.entityId; });
+  global.SynthaViewRefresh?.registerTarget('material-purchase-orders', (route) => { ui.materialPurchaseOrderStatus = 'all'; ui.selectedMaterialPurchaseOrderNumber = route.entityId; });
   global.SynthaOmnidataV7Nav?.activate('Material RFQs', 'material-rfqs', 'Запросы цен на материал', 'Material RFQs');
   global.SynthaOmnidataV7Nav?.activate('Material purchase orders', 'material-purchase-orders', 'Заказы на материал', 'Material purchase orders');
 })(window);

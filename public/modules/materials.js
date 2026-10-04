@@ -688,6 +688,7 @@ function palettePanel(item) {
         {
           // \u0426\u0432\u0435\u0442 \u043f\u043e\u043b\u043e\u0442\u043d\u0430 \u0438 \u0435\u0433\u043e \u0443\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u0438\u0435. \u041f\u043e\u043a\u0430 \u043b\u0430\u0431\u043e\u0440\u0430\u0442\u043e\u0440\u043d\u044b\u0439 \u043e\u0431\u0440\u0430\u0437\u0435\u0446 \u043d\u0435 \u043f\u0440\u0438\u043d\u044f\u0442, \u043a\u0440\u0430\u0441\u0438\u0442\u044c \u0442\u0438\u0440\u0430\u0436
           // \u043d\u0435\u043b\u044c\u0437\u044f: \u043f\u0435\u0440\u0435\u043a\u0440\u0430\u0441\u0438\u0442\u044c \u043f\u0440\u0438\u043d\u044f\u0442\u0443\u044e \u043f\u0430\u0440\u0442\u0438\u044e \u043d\u0435\u0432\u043e\u0437\u043c\u043e\u0436\u043d\u043e, \u0435\u0451 \u043c\u043e\u0436\u043d\u043e \u0442\u043e\u043b\u044c\u043a\u043e \u043d\u0435 \u043f\u0440\u0438\u043d\u044f\u0442\u044c.
+          id: 'colour',
           label: materialText('\u0426\u0432\u0435\u0442 \u0438 \u043e\u0431\u0440\u0430\u0437\u0446\u044b', 'Colour and lab dips'),
           fields: [
             { label: materialText('\u0426\u0432\u0435\u0442\u043e\u0432 \u0432 \u043f\u0430\u043b\u0438\u0442\u0440\u0435', 'Colours in palette'), value: paletteOf(item).length || '\u2014' },
@@ -712,6 +713,7 @@ function palettePanel(item) {
           content: [risks],
         },
         {
+          id: 'lots',
           label: materialText('\u041f\u0430\u0440\u0442\u0438\u0438', 'Lots'),
           fields: [],
           content: materialLotsContent(item),
@@ -800,6 +802,19 @@ function palettePanel(item) {
   window.SynthaViewRefresh?.register('materials', () => {
     window.SynthaMaterialLotsInvalidate();
     return Promise.all([loadMaterials({ reset: true }), ensureMaterialLots()]);
+  });
+  // Партия и образец цвета — часть материала: выбирается материал (`parentId`), реестр дочитывается до него,
+  // панель открывается на «Партиях» или «Цвете и образцах», а нужная партия или цвет подсвечивается.
+  window.SynthaViewRefresh?.registerTarget('materials', async (route) => {
+    const code = route.parentId || route.entityId;
+    OD_UI.tabs.materials = 'registry';
+    window.SynthaViewRefresh.clearRegistryFilters('materials');
+    OD_UI.selected['od-materials'] = code;
+    for (let guard = 0; guard < 40 && !materialState.items.some((item) => item.code === code) && materialState.nextCursor; guard += 1) {
+      if (materialState.loading) break;
+      await loadMaterials();
+    }
+    if (route.focus) window.SynthaViewRefresh.afterOpen(() => window.SynthaViewRefresh.focusRow(route.focus));
   });
   const previousViewTitle = viewTitle;
   viewTitle = function materialViewTitle(view) {

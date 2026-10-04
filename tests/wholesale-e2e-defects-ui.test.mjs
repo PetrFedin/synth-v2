@@ -78,8 +78,12 @@ test('K: the awaiting list labels an amendment by its order number and "Open" se
   const source = await read('awaiting-action.js');
   assert.match(source, /item\.type === 'order-amendment-response' && item\.detail\?\.orderId/);
   assert.match(source, /\$\{objectReference\(item\.detail\.orderId\)\} · \$\{text\('строка', 'line'\)\} \$\{item\.detail\.lineNo\}/);
-  assert.match(source, /function targetEntityId\(item\) \{\s*return item\.type === 'order-amendment-response' \? item\.detail\?\.orderId : item\.route\.entityId;/);
-  assert.match(source, /OD_UI\.selected\[target\.scope\] = entityId;/);
+  // Выбор записи теперь — дело маршрута: сервер называет заказ правки в `route.parentId`, а экран заказов
+  // (`view-refresh.js`) выделяет именно его, а не идентификатор самой правки.
+  const refresh = await read('view-refresh.js');
+  assert.match(refresh, /id: route\.parentId \|\| route\.entityId/);
+  assert.match(refresh, /route\.dialog === 'amendments'/);
+  assert.doesNotMatch(source, /targetEntityId|OD_UI\.selected\[target\.scope\]/, 'the screen no longer keeps its own selection table');
 });
 
 // --- H ----------------------------------------------------------------------------------------

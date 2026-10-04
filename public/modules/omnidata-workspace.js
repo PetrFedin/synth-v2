@@ -996,6 +996,10 @@ function odInspector({ title, subtitle = '', status = '', preview = false, tabs 
     // register, which is what a person expects.
     const tabKey = panelled.map(tab => tab.label).join('|');
     OD_UI.inspectorTab = OD_UI.inspectorTab || {};
+    // «Перейти» из «Ждёт вас» называет вкладку по идентификатору (`tabs[].id`): панель, у которой такая
+    // вкладка есть, открывается на ней и запоминает выбор, как если бы человек нажал сам.
+    const wantedIndex = OD_UI.wantedInspectorTab ? panelled.findIndex(tab => tab.id === OD_UI.wantedInspectorTab) : -1;
+    if (wantedIndex >= 0) OD_UI.inspectorTab[tabKey] = wantedIndex;
     const remembered = OD_UI.inspectorTab[tabKey];
     const activeIndex = Number.isInteger(remembered) && remembered >= 0 && remembered < panelled.length ? remembered : 0;
     const nav = el('div', { className: 'od-inspector-tabs' });

@@ -60,6 +60,9 @@ async function api(path, { method = 'GET', body, anonymous = false, signal } = {
         error.details = payload.error?.details || {};
         throw error;
       }
+      // Успешная запись — событие для тех, кто держит производные от неё данные (счётчики и список
+      // «Ждёт вас»): им незачем оборачивать каждый путь записи, достаточно слушать это событие.
+      if (mutation && !anonymous) announceMutation(path, method);
       return payload.data;
     } catch (error) {
       lastError = error;
@@ -71,6 +74,14 @@ async function api(path, { method = 'GET', body, anonymous = false, signal } = {
   // diagnostic string, not something to show a person. Every section printed it verbatim in its
   // error banner.
   throw describeTransportError(lastError);
+}
+
+function announceMutation(path, method) {
+  try {
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof CustomEvent === 'function') {
+      window.dispatchEvent(new CustomEvent('syntha:mutated', { detail: { path, method } }));
+    }
+  } catch (error) { /* слушатель — удобство: он не должен ломать саму запись */ }
 }
 
 function describeTransportError(error) {

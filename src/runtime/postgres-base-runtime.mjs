@@ -70,7 +70,7 @@ import { createPostgresCategoryAttributeReader } from '../infrastructure/postgre
 import { createCategoryAttributeQueryService } from '../application/category-attribute-query-service.mjs';
 import { createPostgresOrganisationMemberReader } from '../infrastructure/postgres-organisation-member-reader.mjs';
 import { createPostgresAwaitingActionReader } from '../infrastructure/postgres-awaiting-action-reader.mjs';
-import { createAwaitingActionQueryService } from '../application/awaiting-action-query-service.mjs';
+import { createAwaitingActionQueryService, createSupplierAwaitingActionQueryService } from '../application/awaiting-action-query-service.mjs';
 import { createOrganisationMemberQueryService } from '../application/organisation-member-query-service.mjs';
 import { createLibraryQueryService } from '../application/library-query-service.mjs';
 import { createPostgresMaintenanceStore } from '../infrastructure/postgres-maintenance-store.mjs';
@@ -160,8 +160,10 @@ export function createPostgresWholesaleRuntime({
   // nothing else.
   const libraries = createLibraryQueryService({ reader: createPostgresLibraryReader({ pool }) });
   const history = createHistoryQueryService({ reader: createPostgresHistoryReader({ pool }) });
+  const supplierPortalReader = createPostgresSupplierPortalReader({ pool });
   const supplierPortal = Object.freeze({
-    ...createSupplierPortalQueryService({ reader: createPostgresSupplierPortalReader({ pool }) }),
+    ...createSupplierPortalQueryService({ reader: supplierPortalReader }),
+    awaitingActionsForActor: createSupplierAwaitingActionQueryService({ reader: supplierPortalReader, ...(clock ? { clock } : {}) }).forActor,
     ...createSupplierPortalCommandService({ store: createPostgresSupplierPortalStore({ pool }), nextId: runtimeNextId, ...(clock ? { clock } : {}) }),
   });
   const categoryAttributes = createCategoryAttributeQueryService({ reader: createPostgresCategoryAttributeReader({ pool }) });

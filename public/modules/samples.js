@@ -331,4 +331,5 @@
   renderView = (...args) => state.view === 'samples' ? renderSamples() : previousRenderView(...args);
   global.SynthaSamplesWorkspace.fetchAllSamples = fetchAllSamples;
   global.SynthaViewRefresh?.register('samples', () => loadSamples({ reset: true }));
+  global.SynthaViewRefresh?.registerTarget('samples', (route) => { ui.status = 'all'; ui.sampleType = 'all'; ui.overdueOnly = false; ui.selectedCode = route.entityId; });
 })(window);

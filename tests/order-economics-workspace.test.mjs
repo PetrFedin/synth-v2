@@ -478,11 +478,12 @@ test('policy form proposes the next version and a run can only use usable polici
   await walkToLanded(h);
   const policy = await h.run('policy');
   assert.equal(field(policy, 'version').value, 1);
-  assert.deepEqual(plain(field(policy, 'defaultBasis').options.map((item) => item.id)), ['direct', 'unit', 'net_value']);
-  await policy.submit({ name: 'Прямая', version: 1, defaultBasis: 'direct' });
+  assert.deepEqual(plain(field(policy, 'defaultBasis').options.map((item) => item.id)), ['unit', 'net_value']);
+  await assert.rejects(async () => policy.submit({ name: 'Прямая', version: 1, defaultBasis: 'direct' }), (error) => error.code === 'COST_ALLOCATION_DEFAULT_BASIS_INVALID');
+  await policy.submit({ name: 'По штукам', version: 1, defaultBasis: 'unit' });
   assert.equal(field(await h.run('policy'), 'version').value, 2);
   const { ledger } = await h.load();
-  assert.deepEqual(plain(h.ui.usablePolicies({ allocationPolicies: [...ledger.allocationPolicies, { id: 'P-custom', status: 'approved', defaultBasis: 'custom', rules: [] }, { id: 'P-rule', status: 'approved', defaultBasis: 'unit', rules: [{ costType: 'freight', basis: 'custom' }] }] }).map((item) => item.id)), [ledger.allocationPolicies[0].id]);
+  assert.deepEqual(plain(h.ui.usablePolicies({ allocationPolicies: [...ledger.allocationPolicies, { id: 'P-custom', status: 'approved', defaultBasis: 'custom', rules: [] }, { id: 'P-rule', status: 'approved', defaultBasis: 'unit', rules: [{ costType: 'freight', basis: 'custom' }] }, { id: 'P-direct', status: 'approved', defaultBasis: 'direct', rules: [] }, { id: 'P-direct-rule', status: 'approved', defaultBasis: 'unit', rules: [{ costType: 'freight', basis: 'direct' }] }] }).map((item) => item.id)), [ledger.allocationPolicies[0].id]);
 });
 
 // --- подключение и связка с реестром заказов ----------------------------------------------------------------

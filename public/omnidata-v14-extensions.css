@@ -686,6 +686,11 @@ body.omnidata-v14.omnidata-design-system-v1 :is(.od-inspector-tabs, .ls9-inspect
 .od-attribute-value { min-width: 0; font-size: 11.5px; overflow-wrap: anywhere; }
 
 .od-form-dialog { width: min(520px, calc(100vw - 28px)); padding: 0; border: 0; border-radius: 14px; background: var(--od14-surface, #fff); color: var(--od14-text, #101828); box-shadow: 0 24px 80px rgba(16, 24, 40, .28); }
+/* The canonical measurement chart is a points-by-sizes matrix: it needs the width a text form does not. */
+.od-form-dialog.od-measurement-dialog { width: min(1120px, calc(100vw - 28px)); }
+.od-measurement-matrix { overflow-x: auto; }
+.od-measurement-matrix table { width: 100%; }
+.od-measurement-matrix select { min-width: 200px; }
 .od-form-dialog::backdrop { background: rgba(16, 24, 40, .56); }
 .od-form-dialog form { display: grid; gap: 14px; padding: 22px; }
 /* The header and the footer run the full width of the two-column form the design system lays out. */

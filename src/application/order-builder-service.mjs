@@ -4,7 +4,7 @@ import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
 import { assertWholesaleStore } from './store-contract.mjs';
 import { CAPABILITIES, assertCapability, assertTradeCapability } from '../modules/access-control/public.mjs';
 import { assertActiveRelationship } from '../modules/counterparty-relationships/public.mjs';
-import { createOrderCommitSnapshot } from '../modules/order-commit/public.mjs';
+import { createOrderCommitSnapshot, reviseOrderCommitSnapshot } from '../modules/order-commit/public.mjs';
 import {
   createOrderDraft,
   reviseOrderTerms,
@@ -48,6 +48,7 @@ const INVENTORY_ERROR_CODES = new Set([
   'ORDER_AMENDMENT_LINE_NOT_FOUND',
   'ORDER_AMENDMENT_DOOR_ALLOCATION_CONFLICT',
   'ORDER_AMENDMENT_STALE',
+  'ORDER_AMENDMENT_ECONOMICS_STARTED',
 ]);
 
 export function createOrderBuilderService({
@@ -85,6 +86,26 @@ export function createOrderBuilderService({
     const catalogLine = buyerCatalog.lines?.find((candidate) => candidate.sku === line.sku);
     invariant(catalogLine, 'ORDER_AMENDMENT_SKU_NOT_IN_CATALOG', 'Amended SKU is missing from the pinned buyer catalog', { sku: line.sku });
     invariant(quantity >= catalogLine.minimumOrderQuantity, 'ORDER_AMENDMENT_MOQ_NOT_MET', 'Amended quantity is below the buyer catalog minimum order quantity', { sku: line.sku, quantity, minimumOrderQuantity: catalogLine.minimumOrderQuantity });
+  }
+
+  // Правка заказа возможна, только пока между сторонами действует торговое отношение: после отзыва
+  // (`revoke`) новые изменения количеств по уже существующим заказам не принимаются.
+  async function assertTradeRelationshipActive(tx, order) {
+    const relationship = await tx.getRelationshipByTrade(order.brandId, order.shopId);
+    assertActiveRelationship(requireEntity(relationship, 'RELATIONSHIP_NOT_FOUND', { brandId: order.brandId, shopId: order.shopId }), { brandId: order.brandId, shopId: order.shopId });
+  }
+
+  // Остаток проверяется уже при предложении: иначе сторона ждёт ответа на правку, которую
+  // принять нельзя, и узнаёт об этом только от второй стороны. Применяется то же правило, что и
+  // триггер принятия: прирост не вправе превысить доступное к продаже.
+  async function assertAmendedQuantityIsAvailable(tx, order, line, proposedQuantity) {
+    const delta = proposedQuantity - line.quantity;
+    if (delta <= 0 || typeof tx.getOrderLineAvailability !== 'function') return;
+    const availability = await tx.getOrderLineAvailability(order.id, line.sku);
+    if (!availability) return;
+    invariant(delta <= availability.availableToSell, availability.code, 'Amended quantity exceeds the available-to-sell stock', {
+      orderId: order.id, sku: line.sku, quantity: delta, availableToSell: availability.availableToSell,
+    });
   }
 
   async function append(tx, type, aggregateId, payload, commandId, actorId) {
@@ -238,6 +259,7 @@ export function createOrderBuilderService({
           return Object.freeze({ current, cycle, selection, buyerCatalog });
         },
         async (tx, { current, cycle, selection, buyerCatalog }) => {
+          invariant(current.status !== 'attached', 'ORDER_ALREADY_ATTACHED', 'The order is already attached to its cycle', { orderId, cycleStage: cycle.stage });
           invariant(cycle.stage === 'order-builder', 'ORDER_BUILDER_STAGE_REQUIRED', 'Cycle must be at order-builder stage', { stage: cycle.stage });
           const committedAt = clock();
           const orderCommitSnapshotId = nextId('order-commit');
@@ -326,11 +348,15 @@ export function createOrderBuilderService({
           const cycle = requireEntity(await tx.getCycle(order.cycleId), 'CYCLE_NOT_FOUND', { cycleId: order.cycleId });
           const membership = authorizeOrderMutation(await tx.listMembershipsForTrade(cycle.brandId, cycle.shopId), actorId, cycle);
           invariant(order.status === 'attached', 'ORDER_AMENDMENT_NOT_ATTACHED', 'Only an attached order can be amended', { status: order.status });
+          await assertTradeRelationshipActive(tx, order);
           const line = order.lines[lineNo - 1];
           invariant(line, 'ORDER_AMENDMENT_LINE_NOT_FOUND', 'Order does not have that line', { orderId, lineNo, lineCount: order.lines.length });
           const existingOpen = await tx.getOpenOrderAmendmentForLine(orderId, lineNo);
           invariant(!existingOpen, 'ORDER_AMENDMENT_ALREADY_OPEN', 'This line already has a proposal awaiting a response', { orderId, lineNo });
-          if (Number.isInteger(proposedQuantity) && proposedQuantity >= 1) await assertAmendedQuantityMeetsMoq(order, line, proposedQuantity);
+          if (Number.isInteger(proposedQuantity) && proposedQuantity >= 1) {
+            await assertAmendedQuantityMeetsMoq(order, line, proposedQuantity);
+            await assertAmendedQuantityIsAvailable(tx, order, line, proposedQuantity);
+          }
           return Object.freeze({ order, line, proposedOrganisationId: membership.organisationId });
         },
         async (tx, { order, line, proposedOrganisationId }) => {
@@ -363,6 +389,7 @@ export function createOrderBuilderService({
           const membership = authorizeOrderMutation(await tx.listMembershipsForTrade(cycle.brandId, cycle.shopId), actorId, cycle);
           if (decision === 'accepted' && amendment.status === 'proposed') {
             invariant(order.status === 'attached', 'ORDER_AMENDMENT_NOT_ATTACHED', 'Only an attached order can be amended', { status: order.status });
+            await assertTradeRelationshipActive(tx, order);
             await assertAmendedQuantityMeetsMoq(order, order.lines[amendment.lineNo - 1] ?? {}, amendment.proposedQuantity);
           }
           return Object.freeze({ amendment, order, cycle, responderOrganisationId: membership.organisationId });
@@ -372,14 +399,31 @@ export function createOrderBuilderService({
             decision, responderOrganisationId, responderActorId: actorId, responseReason, respondedAt: clock(),
           });
           let amendedOrder = null;
+          let revisedSnapshot = null;
           if (updated.status === 'accepted') {
             amendedOrder = applyAcceptedOrderAmendment(order, updated, clock());
+            // Снимок фиксации неизменяем: принятая правка выпускает его следующую ревизию, а заказ
+            // переключается на неё. Экономика и поставка читают действующую ревизию, и номер версии
+            // заказа в ней сходится с версией заказа.
+            if (order.orderCommitSnapshotId) {
+              const previousSnapshot = requireEntity(await tx.getOrderCommitSnapshot(order.orderCommitSnapshotId), 'ORDER_COMMIT_SNAPSHOT_NOT_FOUND', { orderCommitSnapshotId: order.orderCommitSnapshotId });
+              const revised = reviseOrderCommitSnapshot({ id: nextId('order-commit'), previous: previousSnapshot, order: amendedOrder, amendment: updated, committedAt: clock() });
+              await tx.insertOrderCommitSnapshot(revised);
+              amendedOrder = Object.freeze({ ...amendedOrder, orderCommitSnapshotId: revised.id });
+              revisedSnapshot = revised;
+            }
             await tx.saveOrder(amendedOrder, order.version);
             if (cycle.order?.id === order.id) await tx.saveCycle(amendCommercialCycleOrder(cycle, amendedOrder, clock()), cycle.version);
           }
           // Строка ответа обновляется последней: триггер БД двигает резерв склада уже по новому
           // состоянию заказа и отвергает правку, если исполнение началось или запаса не хватает.
           await tx.respondToOrderAmendmentRow(updated);
+          if (revisedSnapshot) {
+            await append(tx, 'order.commit-snapshot-revised', revisedSnapshot.id, {
+              orderId, orderVersion: revisedSnapshot.orderVersion, revision: revisedSnapshot.revision,
+              supersedesOrderCommitSnapshotId: revisedSnapshot.supersedesOrderCommitSnapshotId, amendmentId: updated.id, contentHash: revisedSnapshot.contentHash,
+            }, commandId, actorId);
+          }
           await append(tx, decision === 'accepted' ? 'order.amendment-accepted' : 'order.amendment-rejected', orderId, {
             amendmentId: updated.id, lineNo: updated.lineNo, responseReason: updated.responseReason,
             ...(amendedOrder ? {
@@ -463,6 +507,7 @@ function inventoryMessage(code) {
     ORDER_AMENDMENT_LINE_NOT_FOUND: 'Order does not have that line',
     ORDER_AMENDMENT_DOOR_ALLOCATION_CONFLICT: 'Proposed quantity is below the quantity already allocated to retail doors',
     ORDER_AMENDMENT_STALE: 'The order line changed since this amendment was proposed',
+    ORDER_AMENDMENT_ECONOMICS_STARTED: 'Order economics, production demand or fulfilment already rest on the current commit snapshot; the order can no longer be amended',
   })[code] ?? 'Inventory mutation failed';
 }
 function defaultIdGenerator() { let sequence = 0; return (prefix) => `${prefix}_${++sequence}`; }

@@ -139,11 +139,19 @@ export function createCommercialPublicationService({
       const context = await buyerCatalogContext(actorId, publication, input.showroomId, input.shopId);
       return execute(commandId, fingerprint, actorId, async (tx) => {
         const publishedAt = clock();
-        const priceListVersion = createPriceListVersion({ id: nextId('price-list-version'), publication, shopId: input.shopId, priceOverrides: input.priceOverrides === undefined ? [] : input.priceOverrides, publishedAt });
+        const candidate = createPriceListVersion({ id: nextId('price-list-version'), publication, shopId: input.shopId, priceOverrides: input.priceOverrides === undefined ? [] : input.priceOverrides, publishedAt });
+        // Прайс-лист — чистая функция «снимок + магазин + цены на магазин»: он не знает про шоурум. Тот же
+        // магазин в другом шоуруме с теми же ценами даёт буквально то же содержимое (и тот же
+        // `content_hash`), а версия неизменяема и поэтому безопасно переиспользуется: новая запись
+        // с тем же хешем столкнулась бы с оригиналом (PRICE_LIST_VERSION_ALREADY_EXISTS). Другие цены —
+        // другое содержимое, и это уже новая версия.
+        const existing = typeof tx.getPriceListVersionByContentHash === 'function' ? await tx.getPriceListVersionByContentHash(candidate.contentHash) : undefined;
+        if (existing) invariant(existing.publicationId === publication.id && existing.shopId === input.shopId && existing.contentHash === candidate.contentHash, 'PRICE_LIST_VERSION_REUSE_MISMATCH', 'Existing price list version does not match the requested publication and shop', { priceListVersionId: existing.id });
+        const priceListVersion = existing ?? candidate;
         const buyerCatalogVersion = createBuyerCatalogVersion({ id: nextId('buyer-catalog-version'), publication, priceListVersion, showroom: context.showroom, invitation: context.invitation, publishedAt });
-        await tx.insertPriceListVersion(priceListVersion);
+        if (!existing) await tx.insertPriceListVersion(priceListVersion);
         await tx.insertBuyerCatalogVersion(buyerCatalogVersion);
-        await append(tx, 'price-list-version.published', priceListVersion.id, { publicationId, brandId: publication.brandId, shopId: input.shopId, contentHash: priceListVersion.contentHash }, commandId, actorId);
+        if (!existing) await append(tx, 'price-list-version.published', priceListVersion.id, { publicationId, brandId: publication.brandId, shopId: input.shopId, contentHash: priceListVersion.contentHash }, commandId, actorId);
         await append(tx, 'buyer-catalog-version.published', buyerCatalogVersion.id, { publicationId, priceListVersionId: priceListVersion.id, showroomId: input.showroomId, shopId: input.shopId, accessGrantId: context.invitation.id, contentHash: buyerCatalogVersion.contentHash }, commandId, actorId);
         return Object.freeze({ priceListVersion, buyerCatalogVersion });
       });

@@ -45,7 +45,7 @@ async function fixture() {
   const created = await collaboration.createSelection('selection-create', 'buyer-1', { cycleId: cycle.id, showroomId: showroom.id });
   const edited = await collaboration.upsertSelectionLine('selection-line', 'buyer-1', created.selection.id, { sku: 'SKU-1', quantity: 3 });
   const submitted = await collaboration.submitSelection('selection-submit', 'buyer-1', edited.id);
-  return { store, platform, orders, selectionId: submitted.selection.id, cycleId: submitted.cycle.id };
+  return { store, platform, orders, partners, relationshipId: relationship.id, options, selectionId: submitted.selection.id, cycleId: submitted.cycle.id };
 }
 
 const terms = { incoterm: 'DAP', paymentDays: 30, prepaymentPercent: 20, deliveryStart: '2027-03-01', deliveryEnd: '2027-03-31' };
@@ -138,4 +138,84 @@ test('only the other side of the order can accept or reject a proposal, and reje
   // the order line itself is untouched — an accepted amendment records a decision, it does not
   // silently rewrite committed quantities.
   assert.equal((await orders.getAmendmentsForActor('sales-1', order.id)).orderId, order.id);
+});
+
+// --- Приёмочный прогон оптовой цепочки: дефекты A, F, G, I, J ---------------------------------------
+
+test('A: an accepted amendment issues the next revision of the commit snapshot; the old one stays and the order follows the new one', async () => {
+  const { orders, order, store } = await attachedOrderFixture();
+  const original = store.snapshot().orderCommitSnapshots.find((snapshot) => snapshot.id === order.orderCommitSnapshotId);
+  assert.equal(original.orderVersion, order.version);
+  const amendment = await orders.proposeAmendment('amend-propose', 'buyer-1', { orderId: order.id, lineNo: 1, proposedQuantity: 5, reason: 'Retailer wants two more units' });
+  await orders.respondToAmendment('amend-accept', 'sales-1', { orderId: order.id, amendmentId: amendment.id, decision: 'accepted' });
+  const state = store.snapshot();
+  const amended = state.orders.find((candidate) => candidate.id === order.id);
+  const revision = state.orderCommitSnapshots.find((snapshot) => snapshot.id === amended.orderCommitSnapshotId);
+  assert.notEqual(revision.id, original.id);
+  assert.equal(revision.orderVersion, amended.version, 'order version and snapshot version agree: economics no longer fails with ORDER_COMMIT_ORDER_VERSION_MISMATCH');
+  assert.equal(revision.lines[0].quantity, 5, 'supply commitments for the new quantity fit the snapshot lines');
+  assert.equal(revision.supersedesOrderCommitSnapshotId, original.id);
+  assert.equal(revision.revision, 2);
+  const untouched = state.orderCommitSnapshots.find((snapshot) => snapshot.id === original.id);
+  assert.equal(untouched.lines[0].quantity, 3);
+  assert.equal(untouched.contentHash, original.contentHash);
+  assert.ok(state.events.some((event) => event.type === 'order.commit-snapshot-revised'));
+});
+
+test('F: the cycle cannot be confirmed while an amendment awaits a response', async () => {
+  const { orders, order, platform, cycleId } = await attachedOrderFixture();
+  const amendment = await orders.proposeAmendment('amend-pending', 'buyer-1', { orderId: order.id, lineNo: 1, proposedQuantity: 5, reason: 'Retailer wants two more units' });
+  await assert.rejects(platform.confirmAndOpenDeal('confirm-pending', 'buyer-1', cycleId), (error) => error.code === 'CYCLE_CONFIRMATION_AMENDMENT_PENDING');
+  await orders.respondToAmendment('amend-reject', 'sales-1', { orderId: order.id, amendmentId: amendment.id, decision: 'rejected', responseReason: 'No stock for the extra two' });
+  const deal = await platform.confirmAndOpenDeal('confirm-after-answer', 'buyer-1', cycleId);
+  assert.equal(deal.cycle.stage, 'deal-space');
+});
+
+test('I: after the relationship is revoked an existing order accepts no new amendments and an open one cannot be accepted', async () => {
+  const { orders, order, partners, relationshipId } = await attachedOrderFixture();
+  const open = await orders.proposeAmendment('amend-before-revoke', 'buyer-1', { orderId: order.id, lineNo: 1, proposedQuantity: 5, reason: 'Retailer wants two more units' });
+  await partners.revokeRelationship('revoke', 'sales-1', relationshipId);
+  await assert.rejects(
+    orders.proposeAmendment('amend-after-revoke', 'buyer-1', { orderId: order.id, lineNo: 1, proposedQuantity: 6, reason: 'Retailer wants three more units' }),
+    (error) => error.code === 'ACTIVE_RELATIONSHIP_REQUIRED',
+  );
+  await assert.rejects(
+    orders.respondToAmendment('accept-after-revoke', 'sales-1', { orderId: order.id, amendmentId: open.id, decision: 'accepted' }),
+    (error) => error.code === 'ACTIVE_RELATIONSHIP_REQUIRED',
+  );
+  const rejected = await orders.respondToAmendment('reject-after-revoke', 'sales-1', { orderId: order.id, amendmentId: open.id, decision: 'rejected', responseReason: 'Relationship ended' });
+  assert.equal(rejected.status, 'rejected');
+});
+
+test('G: the stock is checked when an amendment is proposed, not only when it is answered', async () => {
+  const { order, store, options } = await attachedOrderFixture();
+  const seen = [];
+  const withStock = (availableToSell) => ({
+    ...store,
+    transaction: (work) => store.transaction((tx) => work({ ...tx, async getOrderLineAvailability(orderId, sku) { seen.push([orderId, sku]); return { code: 'PRODUCT_SKU_AVAILABILITY_EXCEEDED', availableToSell }; } })),
+  });
+  const tight = createOrderBuilderService({ ...options, store: withStock(1) });
+  await assert.rejects(
+    tight.proposeAmendment('amend-too-many', 'buyer-1', { orderId: order.id, lineNo: 1, proposedQuantity: 5, reason: 'Two more, but only one is left' }),
+    (error) => error.code === 'PRODUCT_SKU_AVAILABILITY_EXCEEDED' && error.details?.availableToSell === 1 && error.details?.quantity === 2,
+  );
+  assert.deepEqual(seen[0], [order.id, 'SKU-1']);
+  assert.equal(store.snapshot().orderAmendments.length, 0, 'a refused proposal is not stored');
+  const enough = createOrderBuilderService({ ...options, store: withStock(2) });
+  assert.equal((await enough.proposeAmendment('amend-fits', 'buyer-1', { orderId: order.id, lineNo: 1, proposedQuantity: 5, reason: 'Exactly what is left' })).status, 'proposed');
+});
+
+test('G: a decrease is never refused for stock', async () => {
+  const { order, store, options } = await attachedOrderFixture();
+  const empty = { ...store, transaction: (work) => store.transaction((tx) => work({ ...tx, async getOrderLineAvailability() { return { code: 'PRODUCT_SKU_AVAILABILITY_EXCEEDED', availableToSell: 0 }; } })) };
+  const reduce = createOrderBuilderService({ ...options, store: empty });
+  assert.equal((await reduce.proposeAmendment('amend-reduce', 'buyer-1', { orderId: order.id, lineNo: 1, proposedQuantity: 1, reason: 'Releasing stock never needs stock' })).status, 'proposed');
+});
+
+test('J: attaching twice says the order is already attached instead of a misleading stage error', async () => {
+  const { orders, order } = await attachedOrderFixture();
+  await assert.rejects(
+    orders.attachOrderToCycle('order-attach-again', 'buyer-1', { orderId: order.id, expectedVersion: order.version }),
+    (error) => error.code === 'ORDER_ALREADY_ATTACHED',
+  );
 });

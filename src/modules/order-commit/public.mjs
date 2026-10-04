@@ -223,3 +223,43 @@ function requiredTimestamp(value) {
   invariant(typeof value === 'string' && Number.isFinite(parsed), 'ORDER_COMMIT_TIMESTAMP_INVALID', 'Commit timestamp must be a valid ISO date-time');
   return new Date(parsed).toISOString();
 }
+
+// Ревизия снимка фиксации после принятой правки заказа (O-03 → A).
+//
+// Снимок неизменяем: принятая правка не переписывает его, а выпускает СЛЕДУЮЩУЮ ревизию того же
+// заказа — со ссылкой на заменённую (`supersedesOrderCommitSnapshotId`), номером ревизии и
+// правкой, которая её вызвала. Старая ревизия остаётся как была («как подтверждено первый раз»);
+// заказ указывает на действующую. Экономика заказа, обязательства поставки и производственная
+// потребность читают именно действующую ревизию, поэтому версия заказа и количества в снимке
+// снова сходятся. Меняется только то, что правит правка: количества и итог, версия заказа; цены,
+// условия, стороны и вся коммерческая линия берутся из заменяемой ревизии без изменений.
+export function reviseOrderCommitSnapshot({ id, previous, order, amendment, committedAt }) {
+  invariant(id && previous?.id && order?.id && amendment?.id, 'ORDER_COMMIT_IDENTITY_REQUIRED', 'Order commit snapshot revision identity is required');
+  invariant(previous.status === 'committed' && previous.orderId === order.id, 'ORDER_COMMIT_REVISION_BASE_INVALID', 'Only a committed snapshot of the same order can be superseded', { orderId: order.id, previousId: previous.id });
+  invariant(order.status === 'attached' && order.orderCommitSnapshotId === previous.id, 'ORDER_COMMIT_REVISION_BASE_INVALID', 'The order must be attached and point to the snapshot being superseded', { orderId: order.id, previousId: previous.id });
+  invariant(amendment.status === 'accepted' && amendment.orderId === order.id, 'ORDER_COMMIT_REVISION_AMENDMENT_INVALID', 'A snapshot revision requires an accepted amendment of the same order', { amendmentId: amendment.id });
+  invariant(order.lines.length === previous.lines.length, 'ORDER_COMMIT_REVISION_LINES_CHANGED', 'An amendment changes quantities only: the line set must stay the same');
+  invariant(canonicalJson(order.terms) === canonicalJson(previous.terms), 'ORDER_COMMIT_REVISION_TERMS_CHANGED', 'An amendment cannot change order terms');
+  const lines = Object.freeze(previous.lines.map((line, index) => {
+    const orderLine = order.lines[index];
+    invariant(orderLine.sku === line.sku && normalizeMoney(orderLine.unitPrice, { label: 'Order line price' }) === line.unitPrice, 'ORDER_COMMIT_REVISION_LINES_CHANGED', 'An amendment cannot change the SKU or the price of a committed line', { lineNo: line.lineNo, sku: line.sku });
+    return Object.freeze({ ...line, quantity: orderLine.quantity });
+  }));
+  const { id: _id, status: _status, contentHash: _contentHash, committedAt: _committedAt, ...previousBasis } = previous;
+  const basis = Object.freeze({
+    ...previousBasis,
+    orderVersion: order.version,
+    totalAmount: normalizeMoney(order.totalAmount, { label: 'Committed order total' }),
+    lines,
+    revision: (previous.revision ?? 1) + 1,
+    supersedesOrderCommitSnapshotId: previous.id,
+    amendmentId: amendment.id,
+  });
+  return Object.freeze({
+    id,
+    ...basis,
+    status: 'committed',
+    contentHash: createHash('sha256').update(canonicalJson(basis)).digest('hex'),
+    committedAt: requiredTimestamp(committedAt),
+  });
+}

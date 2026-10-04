@@ -40,6 +40,12 @@ test('PostgreSQL order amendments: either side proposes, only the other responds
       [brandMembership.id, brand.id, brandMembership.userId, JSON.stringify(brandMembership), shopMembership.id, shop.id, shopMembership.userId, JSON.stringify(shopMembership)],
     );
 
+    const relationship = { id: 'relationship-oa', brandId: brand.id, shopId: shop.id, status: 'active', version: 2 };
+    await pool.query(
+      `INSERT INTO counterparty_relationships (id, brand_id, shop_id, status, version, payload) VALUES ($1, $2, $3, 'active', 2, $4::jsonb)`,
+      [relationship.id, brand.id, shop.id, JSON.stringify(relationship)],
+    );
+
     const campaign = { id: 'campaign-oa', brandId: brand.id, status: 'open', version: 1 };
     const collection = { id: 'collection-oa', campaignId: campaign.id, brandId: brand.id, status: 'published', currency: 'EUR', version: 1 };
     const showroom = { id: 'showroom-oa', collectionId: collection.id, brandId: brand.id, status: 'open', version: 1 };
@@ -141,8 +147,16 @@ test('PostgreSQL order amendments: either side proposes, only the other responds
     assert.equal((await pool.query('SELECT version FROM orders WHERE id = $1', [order.id])).rows[0].version, 3);
     assert.equal(await reservation(), 120);
 
-    // an increase beyond what the shelf can give is refused, and the whole acceptance rolls back
-    const greedy = await orders.proposeAmendment('propose-greedy', 'buyer-oa', { orderId: order.id, lineNo: 1, proposedQuantity: 200, reason: 'Retailer wants the whole shelf' });
+    // G: an increase beyond what the shelf can give is refused already when it is PROPOSED
+    await assert.rejects(
+      orders.proposeAmendment('propose-greedy', 'buyer-oa', { orderId: order.id, lineNo: 1, proposedQuantity: 200, reason: 'Retailer wants the whole shelf' }),
+      (error) => error.code === 'CATALOG_AVAILABILITY_EXCEEDED' && error.details.availableToSell === 30,
+    );
+    assert.equal((await pool.query("SELECT count(*)::int AS count FROM order_amendments WHERE status = 'proposed'")).rows[0].count, 0, 'a refused proposal is not stored');
+
+    // The acceptance trigger stays the last line of defence: stock can vanish between the proposal and the answer.
+    const greedy = await orders.proposeAmendment('propose-greedy-fits', 'buyer-oa', { orderId: order.id, lineNo: 1, proposedQuantity: 140, reason: 'Retailer wants more of the shelf' });
+    await pool.query("UPDATE catalog_skus SET available_quantity = 125 WHERE sku = 'SKU-OA-1'");
     await assert.rejects(
       orders.respondToAmendment('respond-greedy', 'sales-oa', { orderId: order.id, amendmentId: greedy.id, decision: 'accepted' }),
       (error) => error.code === 'CATALOG_AVAILABILITY_EXCEEDED',
@@ -151,6 +165,7 @@ test('PostgreSQL order amendments: either side proposes, only the other responds
     assert.equal((await pool.query('SELECT payload FROM orders WHERE id = $1', [order.id])).rows[0].payload.lines[0].quantity, 120, 'the order line did not move');
     assert.equal(await reservation(), 120);
     await orders.respondToAmendment('respond-greedy-reject', 'sales-oa', { orderId: order.id, amendmentId: greedy.id, decision: 'rejected', responseReason: 'Not available' });
+    await pool.query("UPDATE catalog_skus SET available_quantity = 150 WHERE sku = 'SKU-OA-1'");
 
     // a decrease releases stock
     const smaller = await orders.proposeAmendment('propose-smaller', 'buyer-oa', { orderId: order.id, lineNo: 1, proposedQuantity: 60, reason: 'Retailer shrinks the launch' });

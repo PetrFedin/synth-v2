@@ -29,6 +29,15 @@ async function fixture({ orderStatus = 'attached' } = {}) {
   await store.transaction(async (tx) => {
     await tx.insertMembership(Object.freeze({ id: 'm-shop', organisationId: 'shop-1', organisationType: 'shop', userId: 'buyer-1', role: 'owner', status: 'active' }));
     await tx.insertMembership(Object.freeze({ id: 'm-brand', organisationId: 'brand-1', organisationType: 'brand', userId: 'sales-1', role: 'owner', status: 'active' }));
+    await tx.insertRelationship(Object.freeze({ id: 'rel-1', brandId: 'brand-1', shopId: 'shop-1', status: 'active' }));
+    await tx.insertOrderCommitSnapshot(Object.freeze({
+      id: 'commit-1', orderId: 'order-1', orderVersion: 2, status: 'committed', brandId: 'brand-1', shopId: 'shop-1', currency: 'EUR',
+      terms, totalAmount: total, committedAt: '2026-10-01T00:00:00.000Z', contentHash: 'hash-1',
+      lines: Object.freeze([
+        Object.freeze({ lineNo: 1, sku: 'SKU-1', quantity: 100, unitPrice: 25 }),
+        Object.freeze({ lineNo: 2, sku: 'SKU-2', quantity: 10, unitPrice: 10 }),
+      ]),
+    }));
     await tx.insertCycle(Object.freeze({
       id: 'cycle-1', brandId: 'brand-1', shopId: 'shop-1', stage: 'order', version: 3, order: attachedOrder,
     }));
@@ -58,7 +67,21 @@ test('accepting an amendment changes the order line, the order total and bumps t
   assert.equal(order.version, 3);
   assert.equal(order.status, 'attached');
   assert.deepEqual(order.appliedAmendmentIds, [amendment.id]);
-  assert.equal(order.orderCommitSnapshotId, 'commit-1', 'the commit snapshot reference stays: it is "as committed"');
+  // A: the commit snapshot is immutable, so acceptance issues its next revision and the order points to it.
+  assert.notEqual(order.orderCommitSnapshotId, 'commit-1');
+  const snapshots = store.snapshot().orderCommitSnapshots;
+  const original = snapshots.find((snapshot) => snapshot.id === 'commit-1');
+  assert.equal(original.lines[0].quantity, 100, 'the superseded revision stays exactly as committed');
+  assert.equal(original.orderVersion, 2);
+  const revision = snapshots.find((snapshot) => snapshot.id === order.orderCommitSnapshotId);
+  assert.equal(revision.revision, 2);
+  assert.equal(revision.supersedesOrderCommitSnapshotId, 'commit-1');
+  assert.equal(revision.amendmentId, amendment.id);
+  assert.equal(revision.orderVersion, order.version, 'the snapshot revision and the order agree on the version again');
+  assert.equal(revision.lines[0].quantity, 120);
+  assert.equal(revision.lines[1].quantity, 10);
+  assert.equal(revision.totalAmount, order.totalAmount);
+  assert.notEqual(revision.contentHash, original.contentHash);
 });
 
 test('the order copy embedded in the cycle follows the amended order, so confirmation opens the deal on the new total', async () => {

@@ -218,7 +218,7 @@ export const wholesaleV2OpenApi = Object.freeze({
         },
       },
       OrderAmendmentPropose: {
-        type: 'object', required: ['lineNo', 'proposedQuantity', 'reason'], additionalProperties: false,
+        type: 'object', description: 'The proposal is rejected at once when the increase exceeds the available-to-sell stock (PRODUCT_SKU_AVAILABILITY_EXCEEDED / CATALOG_AVAILABILITY_EXCEEDED) or when the trade relationship is not active.', required: ['lineNo', 'proposedQuantity', 'reason'], additionalProperties: false,
         properties: {
           lineNo: { type: 'integer', minimum: 1, maximum: postgresIntegerMaximum },
           proposedQuantity: { type: 'integer', minimum: 1, maximum: postgresIntegerMaximum },
@@ -227,7 +227,7 @@ export const wholesaleV2OpenApi = Object.freeze({
       },
       OrderAmendmentRespond: {
         type: 'object', required: ['decision'], additionalProperties: false,
-        description: 'Accepting applies the amendment: the order line quantity, order total, cycle order copy and inventory reservation change atomically. The order commit snapshot stays as committed. Rejected after execution started.',
+        description: 'Accepting applies the amendment: the order line quantity, order total, cycle order copy and inventory reservation change atomically. The order commit snapshot is immutable: acceptance issues its next revision (supersedes the previous one, same order) and the order points to it, so economics and supply read the current revision. Rejected after execution started, after economics/production demand/fulfilment rest on the current snapshot (ORDER_AMENDMENT_ECONOMICS_STARTED), and when the trade relationship is no longer active (ACTIVE_RELATIONSHIP_REQUIRED).',
         properties: {
           decision: { type: 'string', enum: ['accepted', 'rejected'] },
           responseReason: { type: 'string', minLength: 1, maxLength: 1000 },
@@ -393,7 +393,7 @@ export const wholesaleV2OpenApi = Object.freeze({
     '/cycles': { post: operation('startCycle', [], '#/components/schemas/CycleCreate') },
     '/cycles/{cycleId}/advance': { post: operation('advanceCycle', ['cycleId'], '#/components/schemas/CycleAdvance') },
     '/cycles/{cycleId}/close': { post: operation('closeCycle', ['cycleId'], '#/components/schemas/CycleClose') },
-    '/cycles/{cycleId}/confirm': { post: operation('confirmAndOpenDeal', ['cycleId']) },
+    '/cycles/{cycleId}/confirm': { post: { ...operation('confirmAndOpenDeal', ['cycleId']), description: 'Confirms the cycle and opens the DealSpace. Refused while the order has an unanswered amendment (CYCLE_CONFIRMATION_AMENDMENT_PENDING).' } },
     '/selections': { post: operation('createSelection', [], '#/components/schemas/SelectionCreate') },
     '/selections/{selectionId}/lines/{sku}': { put: operation('upsertSelectionLine', ['selectionId', 'sku'], '#/components/schemas/SelectionLineInput') },
     '/selections/{selectionId}/submit': { post: operation('submitSelection', ['selectionId']) },

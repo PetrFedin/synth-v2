@@ -50,9 +50,9 @@
   function statusLabel(status) {
     const labels = {
       planned: ['Запланировано', 'Planned'], active: ['В производстве', 'Active'],
-      'ready-for-qc': ['Готово к QC', 'Ready for QC'], cancelled: ['Отменено', 'Cancelled'],
+      'ready-for-qc': ['Готово к контролю качества', 'Ready for QC'], cancelled: ['Отменено', 'Cancelled'],
     };
-    return labels[status] ? t(...labels[status]) : statusLabel(status);
+    return labels[status] ? t(...labels[status]) : global.statusLabel(status);
   }
   function milestoneLabel(code) {
     const labels = {
@@ -393,7 +393,7 @@
       metric(t('В производстве', 'Active'), summary.active, t('Текущие партии', 'Current batches')),
       metric(t('Блокировки', 'Blocked'), summary.blocked, t('Требуют решения', 'Need resolution'), summary.blocked ? 'risk' : ''),
       metric(t('Просрочено', 'Overdue'), summary.overdue, t('Текущий этап', 'Current milestone'), summary.overdue ? 'risk' : ''),
-      metric(t('Готово к QC', 'Ready for QC'), summary.ready, t('Производственный контур закрыт', 'Production gate closed'), 'ok'),
+      metric(t('Готово к контролю качества', 'Ready for QC'), summary.ready, t('Производственный контур закрыт', 'Production gate closed'), 'ok'),
     ]));
     return h('header', { className: 'production-execution-header' }, children);
   }
@@ -410,7 +410,7 @@
     ]);
     risk.value = ui.risk;
     return h('div', { className: 'production-execution-filters' }, [
-      h('input', { type: 'search', value: ui.search, placeholder: t('Execution, PO, SKU, фабрика…', 'Execution, PO, SKU, supplier…'), oninput: (event) => { ui.search = event.target.value; renderApp(); } }),
+      h('input', { type: 'search', value: ui.search, placeholder: t('Исполнение, PO, SKU, фабрика…', 'Execution, PO, SKU, supplier…'), oninput: (event) => { ui.search = event.target.value; renderApp(); } }),
       status, risk,
     ]);
   }

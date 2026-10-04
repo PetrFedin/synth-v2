@@ -12,11 +12,11 @@
     const labels = {
       STYLE_VERSION_MISSING: ['Нет канонической версии модели', 'Canonical StyleVersion is missing'],
       COLORWAYS_MISSING: ['Нет цветовых вариантов', 'No Colorways'],
-      PRODUCT_SKUS_MISSING: ['Нет канонических Product SKU', 'No canonical Product SKUs'],
-      READINESS_NOT_ASSESSED: ['Product Readiness не оценён', 'Product Readiness not assessed'],
-      READINESS_BLOCKED: ['Product Readiness заблокирован', 'Product Readiness is blocked'],
-      COMMERCIAL_PROJECTION_MISSING: ['Нет Commercial Projection', 'Commercial Projection is missing'],
-      LEGACY_BRIDGE_INCOMPLETE: ['Миграционный SKU bridge неполный', 'Legacy SKU migration bridge incomplete'],
+      PRODUCT_SKUS_MISSING: ['Нет канонических товарных SKU', 'No canonical Product SKUs'],
+      READINESS_NOT_ASSESSED: ['Готовность модели не оценена', 'Product Readiness not assessed'],
+      READINESS_BLOCKED: ['Готовность модели заблокирована', 'Product Readiness is blocked'],
+      COMMERCIAL_PROJECTION_MISSING: ['Нет коммерческой проекции', 'Commercial Projection is missing'],
+      LEGACY_BRIDGE_INCOMPLETE: ['Связка с каталогом неполна', 'Legacy SKU migration bridge incomplete'],
     };
     const pair = labels[code] || [code, code];
     return text(pair[0], pair[1]);
@@ -27,7 +27,7 @@
     const bar = el('progress', { className: 'industrial-readiness-bar' });
     bar.max = 100;
     bar.value = Math.max(0, Math.min(100, item.readinessPercent));
-    bar.setAttribute('aria-label', 'Product Readiness');
+    bar.setAttribute('aria-label', text('Готовность модели', 'Product Readiness'));
     node.append(bar, el('strong', { rawText: item.product.readinessSnapshotId ? `${item.readinessPercent}%` : '—' }));
     return node;
   }
@@ -1011,7 +1011,16 @@
       const shown = definition.entryNameRu || definition.entryNameEn
         ? (I18N.getLocale?.() === 'en' ? definition.entryNameEn : definition.entryNameRu)
         : formatAttributeValue(definition.value);
-      value.append(el('span', { rawText: shown ?? '\u2014' }));
+      const structured = !(definition.entryNameRu || definition.entryNameEn) ? attributeParts(definition.value) : [];
+      if (structured.length) {
+        structured.forEach(([label, content]) => {
+          const part = el('div', { className: 'od-attribute-part' });
+          part.append(el('span', { className: 'od-attribute-part-label', rawText: label }), el('span', { rawText: content }));
+          value.append(part);
+        });
+      } else {
+        value.append(el('span', { rawText: shown ?? '\u2014' }));
+      }
       row.append(name, value);
       if (manage && (definition.value === null || definition.value === undefined)) {
         const fill = el('button', { className: 'button small', type: 'button', rawText: text('Заполнить', 'Fill in') });
@@ -1029,10 +1038,52 @@
     return wrap;
   }
 
+  // Структурное значение атрибута читается как таблица «параметр — значение», а не как дамп ключей:
+  // подписи полей, значений и единиц живут в словаре рантайма (`attr.part.*`, `attr.value.*`,
+  // `attr.unit.*`), логические значения — «да/нет». Чего в словаре нет, печатается читаемым словом.
+  function attributeWord(prefix, key) {
+    const wanted = `${prefix}${key}`;
+    const translated = I18N.t(wanted);
+    return translated === wanted ? null : translated;
+  }
+  function attributePartLabel(key) {
+    const known = attributeWord('attr.part.', key);
+    if (known) return known;
+    const words = String(key).replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+    return words ? words.charAt(0).toUpperCase() + words.slice(1) : String(key);
+  }
+  function attributeScalar(key, value) {
+    if (value === true) return I18N.t('attr.yes');
+    if (value === false) return I18N.t('attr.no');
+    if (typeof value === 'number') {
+      const unit = attributeWord('attr.unit.', key);
+      const number = I18N.formatNumber(value, { maximumFractionDigits: 6 });
+      return unit ? `${number}\u00a0${unit}` : number;
+    }
+    if (Array.isArray(value)) {
+      // «welt, welt, inner» — один и тот же вид дважды читается как «прорезной × 2».
+      const counted = new Map();
+      value.forEach((item) => { const shown = attributeScalar(key, item); counted.set(shown, (counted.get(shown) || 0) + 1); });
+      return [...counted].map(([shown, times]) => (times > 1 ? `${shown} \u00d7 ${times}` : shown)).join(', ') || '\u2014';
+    }
+    if (value && typeof value === 'object') return attributeParts(value).map(([label, shown]) => `${label}: ${shown}`).join('; ');
+    const raw = String(value);
+    return attributeWord('attr.value.', raw.toLowerCase()) || raw.replace(/_/g, ' ');
+  }
+  // Пары «параметр — значение» структурного значения; для скаляра и массива — null (печатается строкой).
+  function attributeParts(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
+    // Количество с единицей — `{ value, unit }` — это одно значение, а не две строки.
+    const keys = Object.keys(value);
+    if (keys.length === 2 && typeof value.value === 'number' && typeof value.unit === 'string') {
+      return [[attributePartLabel('value'), I18N.formatUnit(value.value, value.unit)]];
+    }
+    return keys.map((key) => [attributePartLabel(key), attributeScalar(key, value[key])]);
+  }
   function formatAttributeValue(value) {
     if (value === null || value === undefined) return null;
-    if (typeof value === 'object') return Object.entries(value).map(([key, part]) => `${key}: ${part}`).join(', ');
-    return String(value);
+    if (value && typeof value === 'object' && !Array.isArray(value)) return attributeParts(value).map(([label, shown]) => `${label}: ${shown}`).join('; ');
+    return attributeScalar('', value);
   }
 
   function colorwayActions(item) {
@@ -1652,7 +1703,9 @@
           label: text('Состояние', 'State'),
           fields: [
             { label: text('Текущее состояние', 'Current state'), value: statusLabel(product.lifecycleStatus) },
-            { label: text('Версия карточки', 'Card version'), value: product.styleHeadVersion ?? '—' },
+            // Версия модели — та, что в заголовке («v2»), а не счётчик правок записи: единица рядом с «v2»
+            // читалась как противоречие.
+            { label: text('Версия модели', 'Style version'), value: product.styleVersionNo ? `v${product.styleVersionNo}` : '—' },
           ],
           content: [lifecycleRail(product), ...transitionButtons(item)],
         },

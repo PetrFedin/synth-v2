@@ -914,3 +914,18 @@ body.omnidata-v13 .nav-group-toggle {
 
 /* Заглушка вместо картинки, которую страница не вправе загружать (внешний адрес, CSP). */
 .image-placeholder { display: inline-block; padding: 8px 10px; border: 1px dashed currentColor; border-radius: 6px; font-size: 12px; opacity: .7; }
+
+/* Подписи и вёрстка: структурные атрибуты, мини-таблицы, пустая панель команд. */
+
+/* Структурное значение атрибута категории: строки «параметр — значение». */
+body.omnidata-role-system .od-attribute-part{display:flex!important;flex-wrap:wrap!important;gap:2px 6px!important}
+body.omnidata-role-system .od-attribute-part-label{color:var(--ods-color-muted)!important}
+body.omnidata-role-system .od-attribute-part-label::after{content:":"}
+
+/* Слово в узкой колонке мини-таблицы не рвётся посреди: «опублико/вано». */
+body.omnidata-role-system .workspace-content table.od-mini-table td{overflow-wrap:break-word!important}
+/* В узком инспекторе таблица не должна уезжать в горизонтальную прокрутку из-за полей ячеек. */
+body.omnidata-role-system .workspace-content .od-inspector table.od-mini-table :is(th,td){padding-inline:6px!important}
+
+/* Пустая панель команд под KPI «Рабочего стола»: правило скрытия проигрывало по специфичности. */
+body.omnidata-role-system .od-commandbar.od14-empty-bar[data-ods-role="filterbar"][data-ods-part="filterbar"]:not(.topbar-actions){display:none!important}

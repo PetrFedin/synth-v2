@@ -425,3 +425,26 @@ body.omnidata-v14.omnidata-design-system-v1 .entity-actions{
   body.omnidata-v14 dialog [data-od14-component="form"],
   body.omnidata-v14 dialog [data-ods-part="form"]{grid-template-columns:minmax(0,1fr)!important}
 }
+
+/* Подписи и вёрстка модулей: платёжные карточки PO, ряды фильтров, чип статуса RFQ. */
+
+/* Платёжная веха PO — карточка на всю ширину блока: название слева, сумма справа, ниже доля и
+   событие, затем статус и срок. Раньше класс звался «milestone», эвристика принимала его за пункт
+   временной шкалы (колонка 24px + 1fr), и заголовок переносился по слову. */
+body.omnidata-role-system .production-orders-payment{display:grid!important;grid-template-columns:minmax(0,1fr)!important;gap:var(--ods-space-2)!important;width:100%!important;min-width:0!important}
+body.omnidata-role-system .production-orders-payment > *{min-width:0!important;margin:0!important}
+body.omnidata-role-system .production-orders-payment-head{display:flex!important;flex-wrap:wrap!important;align-items:baseline!important;justify-content:space-between!important;gap:4px var(--ods-space-3,12px)!important}
+body.omnidata-role-system .production-orders-payment-title{flex:1 1 12em!important;min-width:0!important;overflow-wrap:break-word!important}
+body.omnidata-role-system .production-orders-payment-amount{flex:0 0 auto!important;white-space:nowrap!important;font-weight:700!important}
+body.omnidata-role-system .production-orders-payment-meta{display:flex!important;flex-wrap:wrap!important;align-items:center!important;gap:var(--ods-space-2)!important}
+body.omnidata-role-system .production-orders-payment button{justify-self:start!important}
+
+/* Фильтры — один ряд, а не колонка из растянутых на всю ширину полей. */
+body.omnidata-role-system .workspace-content div.sample-filters[data-ods-role="filterbar"][data-ods-part="filterbar"],
+body.omnidata-role-system .workspace-content div.final-quality-filters[data-ods-role="filterbar"][data-ods-part="filterbar"],
+body.omnidata-role-system .workspace-content div.production-execution-filters[data-ods-role="filterbar"][data-ods-part="filterbar"]{display:grid!important;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))!important;align-items:center!important;gap:var(--ods-space-2)!important}
+body.omnidata-role-system .workspace-content div.sample-filters > .sample-check{justify-self:start!important}
+
+/* Чип «Есть котировки»: класс `sourcing-warning` принимался за предупреждение-панель и раздувал чип. */
+body.omnidata-v14 .sourcing-badge.sourcing-caution{border-color:#e8d9a8!important;background:#faf3df!important;color:var(--od14-warning)!important}
+

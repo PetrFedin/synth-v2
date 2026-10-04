@@ -235,9 +235,16 @@ function odV7Role() {
   const roleNode = document.querySelector('.topbar-user .user-copy small');
   if (!roleNode) return;
   const membership = state.workspace?.memberships?.[0];
-  const rawRole = String(membership?.role || 'user').trim().toLocaleLowerCase();
-  const pair = OD_V7_ROLE_NAMES[rawRole] || OD_V7_ROLE_NAMES.user;
-  roleNode.textContent = localText(pair[0], pair[1]);
+  // Поставщик входит по гранту портала, а не по членству: ролей у него нет, но он и не «пользователь».
+  let rawRole = String(membership?.role || '').trim().toLocaleLowerCase();
+  if (!rawRole && window.SynthaSupplierPortal?.suppliers?.length) rawRole = 'supplier';
+  if (!rawRole) rawRole = 'user';
+  // Роль называется тем же словарём, что и статус (`status.quality`, `status.finance`): роли, которых
+  // нет в короткой таблице ниже, раньше падали в «Пользователь».
+  const dictionaryKey = `status.${rawRole}`;
+  const dictionary = I18N.t(dictionaryKey);
+  const pair = OD_V7_ROLE_NAMES[rawRole];
+  roleNode.textContent = pair ? localText(pair[0], pair[1]) : (dictionary !== dictionaryKey ? dictionary : localText(OD_V7_ROLE_NAMES.user[0], OD_V7_ROLE_NAMES.user[1]));
 }
 
 function odV7Topbar() {

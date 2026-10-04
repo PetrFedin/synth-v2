@@ -329,7 +329,7 @@ function renderTopbar() {
   const userCopy = el('div', { className: 'user-copy' });
   userCopy.append(
     el('strong', { rawText: displayName }),
-    el('small', { rawText: membership?.role || localText('\u041f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044c','User') }),
+    el('small', { rawText: membership?.role ? statusLabel(membership.role) : localText('\u041f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044c','User') }),
   );
   user.append(el('span', { className: 'user-avatar', rawText: initials(displayName) }), userCopy);
   user.tabIndex = 0;

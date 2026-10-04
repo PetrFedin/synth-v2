@@ -65,14 +65,14 @@
   function formatDate(value) { if (!value) return '—'; const date = new Date(value); return Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat(I18N.localeTag(), { day: '2-digit', month: 'short', year: 'numeric' }).format(date) : '—'; }
   // Суммы приходят в минорных единицах — деление живёт в одном форматтере, а не в пяти.
   function formatMoneyMinor(value, currency) { return I18N.formatMoney(value, currency || 'EUR', { minor: true, maximumFractionDigits: 2 }); }
-  function badge(label, tone = 'neutral') { return h('span', { className: `sourcing-badge sourcing-${tone}`, text: label }); }
+  function badge(label, tone = 'neutral') { return h('span', { className: `sourcing-badge sourcing-${tone === 'warning' ? 'caution' : tone}`, text: label }); }
   function statusLabel(status) {
     const labels = {
       draft: ['Черновик', 'Draft'], qualified: ['Квалифицирован', 'Qualified'], suspended: ['Приостановлен', 'Suspended'], archived: ['Архив', 'Archived'],
       issued: ['Отправлен', 'Issued'], quoted: ['Есть котировки', 'Quoted'], awarded: ['Победитель выбран', 'Awarded'], allocated: ['В производстве', 'Allocated'], cancelled: ['Отменён', 'Cancelled'],
       confirmed: ['Подтверждён', 'Confirmed'],
     };
-    const pair = labels[status]; return pair ? text(pair[0], pair[1]) : statusLabel(status);
+    const pair = labels[status]; return pair ? text(pair[0], pair[1]) : global.statusLabel(status);
   }
   function statusTone(status) { if (['qualified', 'allocated', 'confirmed'].includes(status)) return 'ok'; if (['suspended', 'cancelled'].includes(status)) return 'danger'; if (['issued', 'quoted', 'awarded'].includes(status)) return 'warning'; return 'neutral'; }
 

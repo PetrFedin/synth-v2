@@ -472,8 +472,19 @@
         if (notes) void command(value.executionCode, `/v2/production-executions/${encodeURIComponent(value.executionCode)}/milestones/resolve`, { expectedVersion: value.version, milestoneCode: current.code, notes });
       } }) : null,
     ]);
+    // Последняя веха переводит партию в «готово к QC», а материал выдать можно только в активное
+    // производство. Подсказка стоит здесь, до нажатия: после перехода выдавать уже нельзя.
+    const trace = ui.traceByExecution[value.executionCode];
+    const missingMain = current.code === 'ready-for-qc' && trace && Array.isArray(trace.missingMainMaterials) ? trace.missingMainMaterials : [];
+    const short = current.code === 'ready-for-qc' && trace && Array.isArray(trace.shortfalls) ? trace.shortfalls.filter((code) => !missingMain.includes(code)) : [];
     return h('section', { className: 'production-execution-card production-execution-command' }, [
       h('h3', { text: milestoneLabel(current.code) }),
+      missingMain.length ? h('p', { className: 'production-execution-warn', text: t(
+        `Основной материал не выдан в производство: ${missingMain.join(', ')}. Выдайте партию материала до закрытия последней вехи — после перехода в «готово к QC» выдать её уже нельзя, и допуск к отгрузке не пройдёт.`,
+        `Main material has not been issued into production: ${missingMain.join(', ')}. Issue the material lot before closing the last milestone — once the batch is ready for QC nothing can be issued and the shipment release will be refused.`) }) : null,
+      short.length ? h('p', { className: 'production-execution-warn', text: t(
+        `Выдано меньше, чем нужно по ведомости: ${short.join(', ')}. После перехода в «готово к QC» докинуть материал нельзя, и допуск к отгрузке потребует полного покрытия потребности.`,
+        `Less has been issued than the bill needs: ${short.join(', ')}. Nothing can be issued once the batch is ready for QC, and the shipment release requires the full requirement to be covered.`) }) : null,
       h('textarea', { value: ui.completionNotes, placeholder: t('Комментарий к завершению — необязательно', 'Completion notes — optional'), oninput: (event) => { ui.completionNotes = event.target.value; } }),
       actions.includes('complete') ? h('button', { type: 'button', className: 'primary', disabled: Boolean(ui.busyCode), text: t('Завершить текущий этап', 'Complete current milestone'), onclick: () => { void command(value.executionCode, `/v2/production-executions/${encodeURIComponent(value.executionCode)}/milestones/complete`, { expectedVersion: value.version, milestoneCode: current.code, notes: String(ui.completionNotes || '').trim() || null }); } }) : null,
       h('input', { value: ui.blockReason, placeholder: t('Причина блокировки — минимум 5 символов', 'Block reason — at least 5 characters'), oninput: (event) => { ui.blockReason = event.target.value; } }),

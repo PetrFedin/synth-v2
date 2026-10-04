@@ -26,6 +26,16 @@ function view(client) {
       );
       return result.rows.map((row) => row.payload);
     },
+    // Ведомость и выдачи материала читаются тем же снимком, что и закрытие последней вехи: вопрос
+    // «выдан ли основной материал» не должен зависеть от того, в какой момент прочитан каждый из них.
+    async getPublishedBomForSku(sku) {
+      const result = await client.query("SELECT payload FROM boms WHERE sku = $1 AND status = 'published' LIMIT 1", [sku]);
+      return result.rows[0]?.payload ?? null;
+    },
+    async listMaterialLotIssuesForExecution(executionCode) {
+      const result = await client.query('SELECT payload FROM material_lot_issues WHERE execution_code = $1 ORDER BY issued_at, id FOR SHARE', [executionCode]);
+      return result.rows.map((row) => row.payload);
+    },
     async getExecutionByCode(executionCode) {
       const result = await client.query('SELECT payload FROM production_executions WHERE execution_code = $1 FOR UPDATE', [executionCode]);
       return result.rows[0]?.payload;

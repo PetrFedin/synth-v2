@@ -226,7 +226,7 @@ test('PostgreSQL closes approved PPS through production, rework, reinspection an
     // раскрой. Этот порядок и есть смысл всей таблицы, поэтому он проверяется против живой базы.
     const roll = await materialLots.receiveLot('lot-receive-1', 'product-owner', {
       materialCode: 'FAB-TECH-GATE', lotReference: 'ROLL-A-001', dyeLot: 'DYE-A',
-      receivedQuantity: 600, certificateReference: 'CERT-ATM-1', notes: 'Первый рулон партии',
+      receivedQuantity: 1000, certificateReference: 'CERT-ATM-1', notes: 'Первый рулон партии',
     });
     assert.equal(roll.status, 'quarantine');
     assert.equal(roll.unit, 'm', 'the unit comes from the material record');
@@ -244,16 +244,16 @@ test('PostgreSQL closes approved PPS through production, rework, reinspection an
     const releasedRoll = await materialLots.releaseLot('lot-release-1', 'quality-approver', roll.id, { expectedVersion: roll.version, notes: 'Входной контроль пройден' });
     assert.equal(releasedRoll.status, 'released');
     const issuedRoll = await materialLots.issueLot('lot-issue-1', 'product-owner', releasedRoll.id, {
-      expectedVersion: releasedRoll.version, executionCode: execution.executionCode, quantity: 500,
+      expectedVersion: releasedRoll.version, executionCode: execution.executionCode, quantity: 800,
     });
-    assert.equal(issuedRoll.issuedQuantity, 500);
+    assert.equal(issuedRoll.issuedQuantity, 800);
     // Выданное ведёт триггер по самим выдачам, а не заявление рядом с ними.
     const storedRoll = (await pool.query('SELECT issued_quantity, (payload ->> \'issuedQuantity\')::numeric AS projected FROM material_lots WHERE id = $1', [roll.id])).rows[0];
-    assert.equal(Number(storedRoll.issued_quantity), 500);
-    assert.equal(Number(storedRoll.projected), 500, 'and the payload says the same thing the column does');
+    assert.equal(Number(storedRoll.issued_quantity), 800);
+    assert.equal(Number(storedRoll.projected), 800, 'and the payload says the same thing the column does');
     // Больше, чем приехало, рулон не отдаёт — это держит и домен, и CHECK.
     await assert.rejects(() => materialLots.issueLot('lot-issue-over', 'product-owner', issuedRoll.id, {
-      expectedVersion: issuedRoll.version, executionCode: execution.executionCode, quantity: 700,
+      expectedVersion: issuedRoll.version, executionCode: execution.executionCode, quantity: 1100,
     }), { code: 'MATERIAL_LOT_INSUFFICIENT' });
     // Партию, которая уже в изделиях, отклонить нельзя: это претензия мельнице, а не смена статуса.
     await assert.rejects(() => materialLots.rejectLot('lot-reject', 'quality-approver', issuedRoll.id, {
@@ -262,16 +262,18 @@ test('PostgreSQL closes approved PPS through production, rework, reinspection an
 
     // Второй рулон другой крашеной партии — и тогда из этого материала нельзя шить одну вещь.
     const second = await materialLots.receiveLot('lot-receive-2', 'product-owner', {
-      materialCode: 'FAB-TECH-GATE', lotReference: 'ROLL-B-002', dyeLot: 'DYE-B', receivedQuantity: 400,
+      materialCode: 'FAB-TECH-GATE', lotReference: 'ROLL-B-002', dyeLot: 'DYE-B', receivedQuantity: 700,
     });
     const secondReleased = await materialLots.releaseLot('lot-release-2', 'quality-approver', second.id, { expectedVersion: second.version });
     await materialLots.issueLot('lot-issue-2', 'product-owner', secondReleased.id, {
-      expectedVersion: secondReleased.version, executionCode: execution.executionCode, quantity: 300,
+      expectedVersion: secondReleased.version, executionCode: execution.executionCode, quantity: 550,
     });
 
     const trace = await materialLotQueries.executionTraceabilityForActor('product-owner', execution.executionCode);
     const shell = trace.materials.find((row) => row.materialCode === 'FAB-TECH-GATE');
-    assert.equal(shell.issuedQuantity, 800);
+    // 500 изделий × 2,7 м (2,5 м и 8 % отхода) = 1350 м: допуск к отгрузке требует точного покрытия.
+    assert.equal(shell.issuedQuantity, 1350);
+    assert.equal(shell.requiredQuantity, 1350);
     assert.deepEqual([...shell.dyeLots], ['DYE-A', 'DYE-B']);
     assert.deepEqual([...trace.mixedDyeLots], ['FAB-TECH-GATE'], 'each roll passed its own inspection; the fault is in the pairing');
     assert.ok(shell.requiredQuantity > 0, 'the requirement comes from the published bill, not from a second opinion');

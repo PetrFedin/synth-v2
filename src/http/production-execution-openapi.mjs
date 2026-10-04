@@ -37,7 +37,7 @@ function schemas() {
 }
 
 function paths() {
-  const mutation = (operationId, schema, description) => ({ operationId, security: [{ bearerAuth: [] }], parameters: [executionParameter, idempotency], requestBody: body(schema), responses: mutationResponses(description) });
+  const mutation = (operationId, schema, description, details) => ({ operationId, ...(details ? { description: details } : {}), security: [{ bearerAuth: [] }], parameters: [executionParameter, idempotency], requestBody: body(schema), responses: mutationResponses(description) });
   return {
     '/production-executions': { get: { operationId: 'listProductionExecutions', security: [{ bearerAuth: [] }], parameters: [
       { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 200, default: 50 } }, { name: 'cursor', in: 'query', schema: { type: 'string', maxLength: 2048 } }, { name: 'q', in: 'query', schema: { type: 'string', minLength: 1, maxLength: 80 } }, { name: 'status', in: 'query', schema: { type: 'string', enum: STATUSES } }, { name: 'brandId', in: 'query', schema: { type: 'string', minLength: 1, maxLength: 160 } }, { name: 'supplierCode', in: 'query', schema: { type: 'string', pattern: CODE } }, { name: 'sku', in: 'query', schema: { type: 'string', pattern: CODE } },
@@ -45,10 +45,10 @@ function paths() {
     '/production-executions/{executionCode}': { get: { operationId: 'getProductionExecution', security: [{ bearerAuth: [] }], parameters: [executionParameter], responses: { 200: dataResponse('Production execution', '#/components/schemas/ProductionExecution'), 400: errorResponse, 401: errorResponse, 403: errorResponse, 404: errorResponse } } },
     '/production-executions/from-production-order/{productionOrderNumber}': { post: { operationId: 'createProductionExecutionFromProductionOrder', security: [{ bearerAuth: [] }], parameters: [{ name: 'productionOrderNumber', in: 'path', required: true, schema: { type: 'string', pattern: CODE } }, idempotency], requestBody: body('#/components/schemas/ProductionExecutionEmptyInput'), responses: mutationResponses('Created production execution') } },
     '/production-executions/{executionCode}/start': { post: mutation('startProductionExecution', '#/components/schemas/ProductionExecutionVersionExpectation', 'Started production execution') },
-    '/production-executions/{executionCode}/milestones/complete': { post: mutation('completeProductionMilestone', '#/components/schemas/ProductionMilestoneCompletionInput', 'Completed current production milestone') },
+    '/production-executions/{executionCode}/milestones/complete': { post: mutation('completeProductionMilestone', '#/components/schemas/ProductionMilestoneCompletionInput', 'Completed current production milestone', 'Closing the last milestone (ready-for-qc) is refused with 422 PRODUCTION_READY_FOR_QC_WITHOUT_MATERIAL (details.missingMaterials) while any main material of the published bill of materials has no issued material lot: a lot can only be issued into an active execution, so material has to be issued before the last milestone is closed.') },
     '/production-executions/{executionCode}/milestones/block': { post: mutation('blockProductionMilestone', '#/components/schemas/ProductionMilestoneBlockInput', 'Blocked current production milestone') },
     '/production-executions/{executionCode}/milestones/resolve': { post: mutation('resolveProductionMilestone', '#/components/schemas/ProductionMilestoneResolutionInput', 'Resolved current production milestone block') },
-    '/production-executions/{executionCode}/cancel': { post: mutation('cancelProductionExecution', '#/components/schemas/ProductionExecutionCancellationInput', 'Cancelled production execution') },
+    '/production-executions/{executionCode}/cancel': { post: mutation('cancelProductionExecution', '#/components/schemas/ProductionExecutionCancellationInput', 'Cancelled production execution', 'A ready-for-qc execution can be cancelled when its Final Quality inspection is absent, cancelled or rejected; the ready-for-qc time is kept as history.') },
   };
 }
 function version() { return { type: 'integer', minimum: 1, maximum: 2_147_483_647 }; }

@@ -28,6 +28,15 @@ function view(client) {
       const result = await client.query('SELECT payload FROM material_lot_issues WHERE execution_code = $1 ORDER BY issued_at, id FOR SHARE', [executionCode]);
       return result.rows.map((row) => row.payload);
     },
+    // Текущий статус партий, ушедших в это исполнение: партию, выданную в производство, потом могли
+    // вернуть в карантин, и допуск должен видеть это, а не статус на день выдачи.
+    async listMaterialLotsIssuedToExecution(executionCode) {
+      const result = await client.query(
+        'SELECT payload FROM material_lots WHERE id IN (SELECT lot_id FROM material_lot_issues WHERE execution_code = $1) ORDER BY id FOR SHARE',
+        [executionCode],
+      );
+      return result.rows.map((row) => row.payload);
+    },
 
     async getInspectionByCode(inspectionCode) {
       const result = await client.query('SELECT payload FROM quality_inspections WHERE inspection_code = $1 FOR UPDATE', [inspectionCode]);

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
-import { assertShipmentIsTraceable } from '../src/modules/material-lots/public.mjs';
+import { assertMaterialIssuedBeforeQc, assertShipmentIsTraceable, executionTraceability } from '../src/modules/material-lots/public.mjs';
 
 const root = process.cwd();
 const EXECUTION = Object.freeze({ executionCode: 'EXEC-PO-1', sku: 'SYN_TEE_DEMO_OFW_M' });
@@ -48,4 +48,63 @@ test('the release path asks the question before it writes the release', async ()
   assert.match(review, /assertShipmentIsTraceable\(/);
   // Проверка стоит до записи инспекции: отказ не должен оставлять наполовину выпущенную отгрузку.
   assert.ok(review.indexOf('assertShipmentIsTraceable(') < review.indexOf('saveInspection'), 'проверка раньше записи');
+});
+
+const FABRIC_BILL = Object.freeze({ lines: Object.freeze([
+  Object.freeze({ materialCode: 'FAB-SHELL', materialType: 'fabric', unit: 'm', quantity: 2.4, grossQuantity: 2.568 }),
+  Object.freeze({ materialCode: 'BTN-1', materialType: 'trim', unit: 'pcs', quantity: 5, grossQuantity: 5 }),
+]) });
+const EXEC_100 = Object.freeze({ executionCode: 'EXEC-PO-2', quantity: 100 });
+
+test('a shipment is not released when the issued quantity does not cover the requirement', () => {
+  // 100 изделий × 2,568 м = 256,8 м, выдано 150 м: недостача 106,8 м, а допуск раньше проходил.
+  const issues = [{ lotId: 'l1', lotReference: 'ROLL-1', materialCode: 'FAB-SHELL', quantity: 150 }];
+  assert.throws(() => assertShipmentIsTraceable(EXEC_100, FABRIC_BILL, issues), (error) => {
+    assert.equal(error.code, 'QUALITY_RELEASE_MATERIAL_SHORTFALL');
+    assert.deepEqual(error.details.shortfalls, [{ materialCode: 'FAB-SHELL', unit: 'm', requiredQuantity: 256.8, issuedQuantity: 150, shortfallQuantity: 106.8 }]);
+    return true;
+  });
+  // Два рулона вместе покрывают потребность ровно — допуск проходит; трим на допуск не влияет.
+  const covered = [...issues, { lotId: 'l2', lotReference: 'ROLL-2', materialCode: 'FAB-SHELL', quantity: 106.8 }];
+  assert.deepEqual(assertShipmentIsTraceable(EXEC_100, FABRIC_BILL, covered), ['ROLL-1', 'ROLL-2']);
+});
+
+test('a shipment is not released while an issued lot is in quarantine or rejected', () => {
+  const issues = [{ lotId: 'l1', lotReference: 'ROLL-1', materialCode: 'FAB-SHELL', quantity: 256.8 }, { lotId: 'l2', lotReference: 'BTN-LOT', materialCode: 'BTN-1', quantity: 500 }];
+  for (const status of ['quarantine', 'rejected']) {
+    const lots = [{ id: 'l1', lotReference: 'ROLL-1', materialCode: 'FAB-SHELL', status }, { id: 'l2', lotReference: 'BTN-LOT', materialCode: 'BTN-1', status: 'released' }, { id: 'other', lotReference: 'OTHER', materialCode: 'FAB-SHELL', status: 'quarantine' }];
+    assert.throws(() => assertShipmentIsTraceable(EXEC_100, FABRIC_BILL, issues, lots), (error) => {
+      assert.equal(error.code, 'QUALITY_RELEASE_MATERIAL_LOT_NOT_RELEASED');
+      // Партия, которая в это исполнение не выдавалась, ни при чём.
+      assert.deepEqual(error.details.lots, [{ lotReference: 'ROLL-1', materialCode: 'FAB-SHELL', status }]);
+      return true;
+    }, status);
+  }
+  const released = [{ id: 'l1', status: 'released' }, { id: 'l2', status: 'released' }];
+  assert.deepEqual(assertShipmentIsTraceable(EXEC_100, FABRIC_BILL, issues, released), ['ROLL-1', 'BTN-LOT']);
+});
+
+test('the last milestone asks for the same main materials the release does', () => {
+  assert.throws(() => assertMaterialIssuedBeforeQc(EXEC_100, FABRIC_BILL, [{ materialCode: 'BTN-1' }]), (error) => {
+    assert.equal(error.code, 'PRODUCTION_READY_FOR_QC_WITHOUT_MATERIAL');
+    assert.deepEqual(error.details.missingMaterials, ['FAB-SHELL']);
+    return true;
+  });
+  // Достаточно любой выдачи по основному материалу; количество — дело допуска.
+  assert.equal(assertMaterialIssuedBeforeQc(EXEC_100, FABRIC_BILL, [{ materialCode: 'FAB-SHELL', quantity: 1 }]), null);
+  // Ведомости нет — судить не о чем.
+  assert.equal(assertMaterialIssuedBeforeQc(EXEC_100, null, []), null);
+  // Нет тканей — основные все материалы ведомости.
+  assert.throws(() => assertMaterialIssuedBeforeQc(EXEC_100, BILL, []), { code: 'PRODUCTION_READY_FOR_QC_WITHOUT_MATERIAL' });
+});
+
+test('traceability lists the main materials that nothing was issued for', () => {
+  const trace = executionTraceability({ execution: EXEC_100, bom: FABRIC_BILL, issues: [{ materialCode: 'BTN-1', lotId: 'l2', lotReference: 'B', quantity: 5 }] });
+  assert.deepEqual([...trace.missingMainMaterials], ['FAB-SHELL']);
+});
+
+test('the cancellation check lets a ready-for-qc execution keep its ready time', async () => {
+  const sql = await readFile(path.join(root, 'db/migrations/160_production_execution_cancel_keeps_ready_for_qc.sql'), 'utf8');
+  assert.match(sql, /DROP CONSTRAINT production_executions_state_check/);
+  assert.match(sql, /status = 'cancelled' AND cancelled_at IS NOT NULL/);
 });

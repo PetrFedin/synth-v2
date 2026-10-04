@@ -13,6 +13,7 @@ import {
   startProductionExecution,
 } from '../modules/production-execution/public.mjs';
 import { assertMilestoneClearOfOpenChecks } from '../modules/inline-quality/public.mjs';
+import { assertMaterialIssuedBeforeQc } from '../modules/material-lots/public.mjs';
 
 const COMPLETE_FIELDS = Object.freeze(new Set(['expectedVersion','milestoneCode','notes']));
 const BLOCK_FIELDS = Object.freeze(new Set(['expectedVersion','milestoneCode','reason']));
@@ -110,6 +111,13 @@ export function createProductionExecutionService({ store, clock = () => new Date
           // writing is not the only writer.
           assertMilestoneClearOfOpenChecks(await tx.listOpenInlineChecks(current.id), input.milestoneCode);
           const value = completeProductionMilestone(current, { milestoneCode: input.milestoneCode, actorId, notes: input.notes, completedAt: clock() });
+          // Последняя веха переводит исполнение в ready-for-qc, а материал можно выдать только в
+          // активное. Без выданного основного материала исполнение застревало: допуск к отгрузке
+          // требует записи выдачи, выдать уже нельзя. Спрашиваем здесь, пока исправить ещё можно;
+          // выдачи читаются той же транзакцией, что и запись.
+          if (value.status === 'ready-for-qc') {
+            assertMaterialIssuedBeforeQc(current, await tx.getPublishedBomForSku(current.sku), await tx.listMaterialLotIssuesForExecution(current.executionCode));
+          }
           await tx.saveExecution(value, expectedVersion);
           await append(tx, value.status === 'ready-for-qc' ? 'production-execution.ready-for-qc' : 'production-milestone.completed', value, commandId, actorId, { milestoneCode: input.milestoneCode });
           return value;

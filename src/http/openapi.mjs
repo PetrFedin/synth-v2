@@ -478,7 +478,12 @@ export const wholesaleV2OpenApi = Object.freeze({
         parameters: [{ name: 'limit', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 500, default: 100 } }],
       },
     },
-    '/notifications/{notificationId}/read': { post: operation('markNotificationRead', ['notificationId']) },
+    '/notifications/{notificationId}/read': {
+      post: {
+        ...operation('markNotificationRead', ['notificationId']),
+        description: 'Marks the notification read for the calling person only. Read state is per user: it does not change the notification for other members of the organisation or their unread count.',
+      },
+    },
   },
 });
 

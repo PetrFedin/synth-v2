@@ -4,7 +4,8 @@ import { decodeNotificationCursor, encodeNotificationCursor } from '../core/noti
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
 import {
   createNotification,
-  markNotificationRead,
+  notificationForReader,
+  notificationReadBy,
   notificationDedupeKey,
 } from '../modules/notifications/public.mjs';
 
@@ -64,13 +65,15 @@ export function createNotificationService({
       const organisationIds = await activeOrganisationIds(actorId);
       if (!organisationIds.length) return Object.freeze([]);
       if (typeof projectionStore.listForOrganisations === 'function') {
-        return projectionStore.listForOrganisations(organisationIds, { limit: normalizedLimit });
+        return projectionStore.listForOrganisations(organisationIds, { limit: normalizedLimit, actorId });
       }
       const projection = await projectionStore.snapshot();
       const visible = new Set(organisationIds);
+      const own = readsOf(projection, actorId);
       return Object.freeze(
         projection.notifications
           .filter((notification) => visible.has(notification.recipientOrganisationId))
+          .map((notification) => notificationForReader(notification, actorId, own.get(notification.id)))
           .sort(compareNotifications)
           .slice(0, normalizedLimit),
       );
@@ -86,12 +89,14 @@ export function createNotificationService({
 
       let page;
       if (typeof projectionStore.pageForOrganisations === 'function') {
-        page = await projectionStore.pageForOrganisations(organisationIds, { limit: normalizedLimit, after });
+        page = await projectionStore.pageForOrganisations(organisationIds, { limit: normalizedLimit, after, actorId });
       } else {
         const projection = await projectionStore.snapshot();
         const visible = new Set(organisationIds);
+        const own = readsOf(projection, actorId);
         const ordered = projection.notifications
           .filter((notification) => visible.has(notification.recipientOrganisationId))
+          .map((notification) => notificationForReader(notification, actorId, own.get(notification.id)))
           .sort(compareNotificationPageOrder)
           .filter((notification) => isAfterPosition(notification, after));
         const rows = ordered.slice(0, normalizedLimit + 1);
@@ -137,8 +142,10 @@ export function createNotificationService({
         const membership = await membershipFor(tx, current.recipientOrganisationId);
         assertCapability(membership, CAPABILITIES.CALENDAR_READ);
         if (previous) return previous.result;
-        const updated = markNotificationRead(current, actorId, clock());
-        if (updated !== current) await tx.saveNotification(updated, current.version);
+        // Отметка личная: она не меняет строку уведомления организации и не гасит счётчик никому, кроме
+        // того, кто прочитал. Повторная отметка возвращает первое время прочтения.
+        const recorded = await tx.recordNotificationRead({ notificationId: current.id, userId: actorId, readAt: validClockTimestamp(clock()) });
+        const updated = notificationReadBy(current, actorId, new Date(recorded.readAt).toISOString());
         await tx.insertCommand(Object.freeze({ id: commandId, fingerprint, actorId, result: updated, completedAt: clock() }));
         return updated;
       });
@@ -297,6 +304,11 @@ function notificationCandidates(source, event) {
     }));
   }
   return [];
+}
+
+// Отметки «прочитано» одного человека по снимку проекции: уведомление → время.
+function readsOf(projection, actorId) {
+  return new Map((projection.reads ?? []).filter((read) => read.userId === actorId).map((read) => [read.notificationId, read.readAt]));
 }
 
 function notificationPagePosition(notification) {

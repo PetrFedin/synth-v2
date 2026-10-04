@@ -299,3 +299,26 @@ test('the roster lists every status with the version the next change must send',
   assert.equal(byUser['owner-1'].role, 'owner');
   assert.equal(JSON.stringify(roster).includes('passwordHash'), false);
 });
+
+test('owners who have not accepted their invitation do not count: the only owner who can sign in cannot step down', async () => {
+  const ctx = await setup();
+  const first = await invite(ctx, 'owner-1', 'first@brand.test', 'viewer');
+  const second = await invite(ctx, 'owner-1', 'second@brand.test', 'viewer');
+  for (const invited of [first, second]) {
+    await ctx.team.changeRole(ctx.key(), 'owner-1', 'brand-1', invited.member.userId, { role: 'owner', expectedVersion: 1 });
+  }
+  // Двое «владельцев» приглашены, но войти не могут; настоящий владелец один.
+  await assert.rejects(() => ctx.team.changeRole(ctx.key(), 'owner-1', 'brand-1', 'owner-1', { role: 'admin', expectedVersion: 1 }), { code: 'TEAM_LAST_OWNER' });
+  // Тот, кто сам не может войти, ничего не держал: его можно разжаловать и отключить свободно.
+  const demoted = await ctx.team.changeRole(ctx.key(), 'owner-1', 'brand-1', first.member.userId, { role: 'viewer', expectedVersion: 2 });
+  assert.equal(demoted.member.role, 'viewer');
+  const off = await ctx.team.deactivate(ctx.key(), 'owner-1', 'brand-1', second.member.userId, { expectedVersion: 2 });
+  assert.equal(off.member.status, 'inactive');
+  // Приняв приглашение, он становится владельцем в полном смысле — и только тогда первый может уйти.
+  const third = await invite(ctx, 'owner-1', 'third@brand.test', 'viewer');
+  await ctx.team.changeRole(ctx.key(), 'owner-1', 'brand-1', third.member.userId, { role: 'owner', expectedVersion: 1 });
+  await assert.rejects(() => ctx.team.changeRole(ctx.key(), 'owner-1', 'brand-1', 'owner-1', { role: 'admin', expectedVersion: 1 }), { code: 'TEAM_LAST_OWNER' });
+  await ctx.team.acceptInvite({ token: third.invite.token, password: PASSWORD });
+  const stepped = await ctx.team.changeRole(ctx.key(), 'owner-1', 'brand-1', 'owner-1', { role: 'admin', expectedVersion: 1 });
+  assert.equal(stepped.member.role, 'admin');
+});

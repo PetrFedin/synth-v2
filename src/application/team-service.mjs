@@ -86,6 +86,11 @@ export function createTeamService({
     return requireEntity(await tx.getMembership(organisationId, userId), 'TEAM_MEMBER_NOT_FOUND', { organisationId, userId });
   }
 
+  // Владелец, который не может войти (приглашён и не принял, отключён), владельцем не считается.
+  async function countsAsOwner(tx, membership) {
+    return (await tx.getUser(membership.userId))?.status === 'active';
+  }
+
   async function append(tx, type, aggregateId, payload, commandId, actorId) {
     await tx.appendOutbox(domainEvent({ id: nextId('event'), type, aggregateId, occurredAt: now(), payload, metadata: { commandId, actorId } }));
   }
@@ -155,7 +160,7 @@ export function createTeamService({
         async (tx, actor) => {
           const target = await loadTarget(tx, organisationId, userId);
           assertExpectedMembershipVersion(target, input?.expectedVersion);
-          const next = changeMembershipRole({ actor, target, role: input?.role, activeOwnerCount: await tx.countActiveOwners(organisationId), updatedAt: now() });
+          const next = changeMembershipRole({ actor, target, role: input?.role, activeOwnerCount: await tx.countActiveOwners(organisationId), targetCountsAsOwner: await countsAsOwner(tx, target), updatedAt: now() });
           await tx.saveMembership(next, input.expectedVersion);
           await append(tx, 'membership.role-changed', next.id, { organisationId, userId, previousRole: target.role, role: next.role, version: next.version }, commandId, actorId);
           return Object.freeze({ member: memberView(next, await tx.getUser(userId), null), invite: Object.freeze({ issued: false, expiresAt: null }) });
@@ -177,7 +182,7 @@ export function createTeamService({
           const target = await loadTarget(tx, organisationId, userId);
           assertExpectedMembershipVersion(target, input?.expectedVersion);
           const at = now();
-          const next = deactivateMembership({ actor, target, activeOwnerCount: await tx.countActiveOwners(organisationId), updatedAt: at });
+          const next = deactivateMembership({ actor, target, activeOwnerCount: await tx.countActiveOwners(organisationId), targetCountsAsOwner: await countsAsOwner(tx, target), updatedAt: at });
           await tx.saveMembership(next, input.expectedVersion);
           await tx.revokeOpenCredentialTokens(userId, organisationId, at);
           let sessionsRevoked = 0;

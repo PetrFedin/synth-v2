@@ -65,7 +65,7 @@ test('snapshot pagination is stable across status changes and newly inserted lea
   };
   const service = createNotificationService({ sourceStore, projectionStore });
 
-  const first = await service.pageForActor('user-1', { limit: 2 });
+  const first = await service.pageForActor('user-1', { limit: 2, actorId: 'user-1' });
   assert.deepEqual(first.items.map((item) => item.id), ['notification-2', 'notification-1']);
   assert.equal(typeof first.nextCursor, 'string');
   assert.equal(Object.isFrozen(first), true);
@@ -125,19 +125,20 @@ test('PostgreSQL notification pages use indexed keyset predicates and limit plus
   };
   const store = createPostgresNotificationProjectionStore({ pool });
 
-  const first = await store.pageForOrganisations(['brand-1', 'brand-1'], { limit: 2 });
+  const first = await store.pageForOrganisations(['brand-1', 'brand-1'], { limit: 2, actorId: 'user-1' });
   assert.deepEqual(first.items.map((item) => item.id), ['notification-2', 'notification-1']);
   assert.equal(first.hasMore, true);
-  assert.match(queries[0].sql, /ORDER BY created_at DESC, id DESC/);
+  assert.match(queries[0].sql, /ORDER BY notification\.created_at DESC, notification\.id DESC/);
   assert.match(queries[0].sql, /LIMIT \$2/);
   assert.doesNotMatch(queries[0].sql, /OFFSET/i);
-  assert.deepEqual(queries[0].params, [['brand-1'], 3]);
+  assert.deepEqual(queries[0].params, [['brand-1'], 3, 'user-1']);
 
   await store.pageForOrganisations(['brand-1'], {
     limit: 2,
+    actorId: 'user-1',
     after: { createdAt: '2026-08-02T11:00:00.000Z', id: 'notification-1' },
   });
-  assert.match(queries[1].sql, /\(created_at, id\) < \(\$2::timestamptz, \$3::text\)/);
+  assert.match(queries[1].sql, /\(notification\.created_at, notification\.id\) < \(\$2::timestamptz, \$3::text\)/);
   assert.match(queries[1].sql, /LIMIT \$4/);
   assert.doesNotMatch(queries[1].sql, /OFFSET/i);
   assert.deepEqual(queries[1].params, [
@@ -145,6 +146,7 @@ test('PostgreSQL notification pages use indexed keyset predicates and limit plus
     '2026-08-02T11:00:00.000Z',
     'notification-1',
     3,
+    'user-1',
   ]);
 });
 

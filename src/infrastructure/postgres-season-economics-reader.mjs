@@ -1,8 +1,9 @@
 import { invariant } from '../core/errors.mjs';
+import { CAPABILITIES, rolesWithCapability } from '../modules/access-control/public.mjs';
 import { withPostgresTransaction } from './postgres-transaction.mjs';
 
 const SNAPSHOT_BEGIN = 'BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY';
-const READ_ROLES = Object.freeze(['owner', 'admin', 'finance']);
+const READ_ROLES = rolesWithCapability(CAPABILITIES.COST_MANAGE);
 
 // План сезона и то, чем он обернулся, читаются одним снимком. Прочитанные порознь, слоты и их
 // реализации могли бы прийти из разных моментов — и маржа сезона посчиталась бы по плану до правки
@@ -45,6 +46,23 @@ const SELECT_REALISATIONS = `
 export function createPostgresSeasonEconomicsReader({ pool } = {}) {
   invariant(pool && typeof pool.connect === 'function', 'POSTGRES_POOL_REQUIRED', 'PostgreSQL pool is required');
   return Object.freeze({
+    // Роль читающего в бренде кампании: `null`, если кампании нет или читающий не из этого бренда
+    // (то и другое для постороннего неотличимо), иначе роль — решение «можно ли» принимает служба.
+    roleForCampaign(actorId, campaignId) {
+      return withPostgresTransaction(pool, async (queryable) => {
+        const result = await queryable.query(
+          `SELECT membership.role
+             FROM campaigns AS campaign
+             JOIN memberships AS membership
+               ON membership.organisation_id = campaign.brand_id
+              AND membership.user_id = $1
+              AND membership.status = 'active'
+            WHERE campaign.id = $2`,
+          [actorId, campaignId],
+        );
+        return result.rows[0]?.role ?? null;
+      }, { begin: SNAPSHOT_BEGIN });
+    },
     seasonForActor(actorId, campaignId) {
       return withPostgresTransaction(pool, async (queryable) => {
         const parameters = [actorId, READ_ROLES, campaignId];

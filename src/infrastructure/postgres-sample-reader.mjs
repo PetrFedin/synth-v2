@@ -1,8 +1,9 @@
 import { invariant } from '../core/errors.mjs';
+import { CAPABILITIES, rolesWithCapability } from '../modules/access-control/public.mjs';
 import { withPostgresTransaction } from './postgres-transaction.mjs';
 
 const SNAPSHOT_BEGIN = 'BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY';
-const SAMPLE_READ_ROLES = Object.freeze(['owner', 'admin', 'sales']);
+const SAMPLE_READ_ROLES = rolesWithCapability(CAPABILITIES.SAMPLE_READ);
 
 export function createPostgresSampleReader({ pool } = {}) {
   invariant(pool && typeof pool.connect === 'function', 'POSTGRES_POOL_REQUIRED', 'PostgreSQL pool is required');

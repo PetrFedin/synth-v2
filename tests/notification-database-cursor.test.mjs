@@ -52,7 +52,7 @@ test('PostgreSQL notification page exposes the actual database key as nextPositi
   };
   const store = createPostgresNotificationProjectionStore({ pool });
 
-  const page = await store.pageForOrganisations(['brand-1'], { limit: 2 });
+  const page = await store.pageForOrganisations(['brand-1'], { limit: 2, actorId: 'user-1' });
 
   assert.equal(page.hasMore, true);
   assert.deepEqual(page.nextPosition, {

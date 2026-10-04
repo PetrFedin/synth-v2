@@ -42,17 +42,29 @@ export function createNotification({
   });
 }
 
-export function markNotificationRead(notification, actorId, updatedAt) {
-  invariant(notification.status === 'unread' || notification.status === 'read', 'NOTIFICATION_STATUS_INVALID', 'Notification status is invalid');
-  if (notification.status === 'read') return notification;
+// Уведомление принадлежит организации, а «прочитано» — человеку. Строка уведомления одна на
+// организацию-получателя и после создания не меняется; кто что прочитал, лежит отдельно, по
+// пользователю. Иначе наблюдатель, отметивший уведомление, гасил бы счётчик владельцу, который его
+// в глаза не видел, — и важное для владельца уведомление исчезало бы из его «непрочитанных».
+//
+// Поэтому домен не «помечает» уведомление, а показывает его глазами конкретного человека.
+export function notificationReadBy(notification, actorId, readAt) {
+  invariant(notification && typeof actorId === 'string' && actorId, 'NOTIFICATION_READER_REQUIRED', 'Reader is required');
+  invariant(readAt, 'NOTIFICATION_READ_AT_REQUIRED', 'Read time is required');
   return Object.freeze({
     ...notification,
     status: 'read',
-    readAt: updatedAt,
+    readAt,
     readBy: actorId,
     version: notification.version + 1,
-    updatedAt,
+    updatedAt: readAt,
   });
+}
+
+/** Уведомление так, как его видит `actorId`: прочитанное — если он сам его отметил, иначе непрочитанное. */
+export function notificationForReader(notification, actorId, readAt) {
+  if (readAt) return notificationReadBy(notification, actorId, new Date(readAt).toISOString());
+  return Object.freeze({ ...notification, status: 'unread', readAt: null, readBy: null });
 }
 
 export function notificationDedupeKey(sourceEventId, recipientOrganisationId) {

@@ -1,10 +1,11 @@
 import { invariant } from '../core/errors.mjs';
+import { CAPABILITIES, rolesWithCapability } from '../modules/access-control/public.mjs';
 import { withPostgresTransaction } from './postgres-transaction.mjs';
 
 const SNAPSHOT_BEGIN = 'BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY';
 // `quality` and `production` hold the matching *_READ capabilities (access-control/public.mjs): a role
 // that may write here has to be able to see what it writes.
-const READ_ROLES = Object.freeze(['owner', 'admin', 'sales', 'finance', 'quality', 'production']);
+const READ_ROLES = rolesWithCapability(CAPABILITIES.QUALITY_READ);
 
 export function createPostgresMaterialLotReader({ pool } = {}) {
   invariant(pool && typeof pool.connect === 'function', 'POSTGRES_POOL_REQUIRED', 'PostgreSQL pool is required');

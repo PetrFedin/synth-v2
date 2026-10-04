@@ -45,7 +45,7 @@ function replayStore({ membership }) {
           calls.push(`membership:${organisationId}:${actorId}`);
           return membership;
         },
-        saveNotification() { throw new Error('replay must not save'); },
+        recordNotificationRead() { throw new Error('replay must not record a read'); },
         insertCommand() { throw new Error('replay must not insert a command'); },
       });
     },
@@ -118,7 +118,7 @@ test('PostgreSQL mark-read locks the notification and membership through commit'
           }],
         };
       }
-      if (/UPDATE notifications/.test(sql)) return { rows: [], rowCount: 1 };
+      if (/INSERT INTO notification_reads/.test(sql)) return { rows: [{ read_at: new Date('2026-08-02T00:00:00.000Z') }], rowCount: 1 };
       return { rows: [], rowCount: 1 };
     },
     release() { queries.push({ sql: 'RELEASE', params: [] }); },

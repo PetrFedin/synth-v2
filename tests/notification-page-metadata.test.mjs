@@ -70,7 +70,7 @@ test('PostgreSQL unread count is actor-scoped and validates bigint conversion', 
   });
 
   assert.equal(await reader.countUnreadForActor('actor-1'), 42);
-  assert.match(queries[0].sql, /notification\.status = 'unread'/);
+  assert.match(queries[0].sql, /NOT EXISTS[\s\S]*notification_reads[\s\S]*own_read\.user_id = \$1/);
   assert.match(queries[0].sql, /membership\.user_id = \$1/);
   assert.match(queries[0].sql, /membership\.status = 'active'/);
   assert.deepEqual(queries[0].params, ['actor-1']);

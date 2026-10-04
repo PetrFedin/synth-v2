@@ -32,8 +32,8 @@ test('notification service applies default and explicit list limits', async () =
   await service.listForActor('user-1');
   await service.listForActor('user-1', { limit: '25' });
   assert.deepEqual(projection.calls, [
-    [['brand-1'], { limit: 100 }],
-    [['brand-1'], { limit: 25 }],
+    [['brand-1'], { limit: 100, actorId: 'user-1' }],
+    [['brand-1'], { limit: 25, actorId: 'user-1' }],
   ]);
 });
 
@@ -55,8 +55,10 @@ test('fallback notification reads sort unread first and slice to the requested l
     transaction: async (work) => work({}),
     snapshot: async () => ({
       projections: [], commands: [],
+      // «Прочитано» — отметка этого человека; чужая отметка на n2 его порядок не меняет.
+      reads: [{ notificationId: 'n1', userId: 'user-1', readAt: '2026-08-03T01:00:00Z' }, { notificationId: 'n2', userId: 'someone-else', readAt: '2026-08-03T01:00:00Z' }],
       notifications: [
-        { id: 'n1', recipientOrganisationId: 'brand-1', status: 'read', createdAt: '2026-08-03T00:00:00Z' },
+        { id: 'n1', recipientOrganisationId: 'brand-1', status: 'unread', createdAt: '2026-08-03T00:00:00Z' },
         { id: 'n2', recipientOrganisationId: 'brand-1', status: 'unread', createdAt: '2026-08-01T00:00:00Z' },
         { id: 'n3', recipientOrganisationId: 'brand-1', status: 'unread', createdAt: '2026-08-02T00:00:00Z' },
         { id: 'foreign', recipientOrganisationId: 'shop-2', status: 'unread', createdAt: '2026-08-04T00:00:00Z' },
@@ -79,11 +81,11 @@ test('PostgreSQL list query uses a server-side limit', async () => {
     async connect() { throw new Error('transaction not expected'); },
   };
   const store = createPostgresNotificationProjectionStore({ pool });
-  await store.listForOrganisations(['brand-1', 'brand-1', 'shop-1'], { limit: 25 });
+  await store.listForOrganisations(['brand-1', 'brand-1', 'shop-1'], { limit: 25, actorId: 'user-1' });
   assert.match(captured.sql, /LIMIT \$2/);
-  assert.deepEqual(captured.params, [['brand-1', 'shop-1'], 25]);
+  assert.deepEqual(captured.params, [['brand-1', 'shop-1'], 25, 'user-1']);
   await assert.rejects(
-    () => store.listForOrganisations(['brand-1'], { limit: 501 }),
+    () => store.listForOrganisations(['brand-1'], { limit: 501, actorId: 'user-1' }),
     (error) => error.code === 'NOTIFICATION_LIMIT_INVALID',
   );
 });

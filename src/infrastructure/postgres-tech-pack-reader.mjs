@@ -1,8 +1,9 @@
 import { invariant } from '../core/errors.mjs';
+import { CAPABILITIES, rolesWithCapability } from '../modules/access-control/public.mjs';
 import { withPostgresTransaction } from './postgres-transaction.mjs';
 
 const SNAPSHOT_BEGIN = 'BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY';
-const READ_ROLES = Object.freeze(['owner', 'admin', 'sales', 'finance']);
+const READ_ROLES = rolesWithCapability(CAPABILITIES.TECH_PACK_READ);
 
 export function createPostgresTechPackReader({ pool } = {}) {
   invariant(pool && typeof pool.connect === 'function', 'POSTGRES_POOL_REQUIRED', 'PostgreSQL pool is required');

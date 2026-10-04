@@ -23,7 +23,7 @@ test('Sample optimistic update uses contiguous placeholders and exact one-versio
 });
 
 test('Sample reader enforces least-privilege actor scope and keyset pagination', () => {
-  assert.match(reader, /\['owner', 'admin', 'sales'\]/);
+  assert.match(reader, /rolesWithCapability\(CAPABILITIES\.SAMPLE_READ\)/);
   assert.match(reader, /sample\.sample_code > \$/);
   assert.match(reader, /ORDER BY sample\.sample_code ASC/);
   assert.doesNotMatch(reader, /OFFSET/i);

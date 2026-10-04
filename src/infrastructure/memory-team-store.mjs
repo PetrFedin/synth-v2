@@ -63,7 +63,8 @@ function view(s) {
 
     getMembership: async (organisationId, userId) => s.memberships.get(key(organisationId, userId)),
     listMembershipsByOrganisation: async (organisationId) => [...s.memberships.values()].filter((item) => item.organisationId === organisationId),
-    countActiveOwners: async (organisationId) => [...s.memberships.values()].filter((item) => item.organisationId === organisationId && item.role === 'owner' && item.status === 'active').length,
+    // Считаются только владельцы, которые могут войти: членство и учётная запись активны.
+    countActiveOwners: async (organisationId) => [...s.memberships.values()].filter((item) => item.organisationId === organisationId && item.role === 'owner' && item.status === 'active' && s.users.get(item.userId)?.status === 'active').length,
     countActiveMembershipsForUser: async (userId) => [...s.memberships.values()].filter((item) => item.userId === userId && item.status === 'active').length,
     insertMembership: async (membership) => {
       invariant(!s.memberships.has(key(membership.organisationId, membership.userId)), 'TEAM_MEMBER_ALREADY_EXISTS', 'This person already has a membership in the organisation');

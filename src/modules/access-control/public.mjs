@@ -220,6 +220,18 @@ export function createMembership({ id, organisationId, organisationType, userId,
 
 export function membershipKey(organisationId, userId) { return `${organisationId}:${userId}`; }
 export function capabilitiesForRole(role) { return ROLE_CAPABILITIES[role] ?? Object.freeze([]); }
+/**
+ * Роли, у которых есть способность, — по той же таблице, по которой отвечает `roleHasCapability`.
+ *
+ * Читатели PostgreSQL отбирают строки по членству в SQL и поэтому держат список ролей. Захардкоженный
+ * список расходится с таблицей молча (так `production` и `quality` годами не видели то, что им
+ * положено), а список, выведенный из таблицы, разойтись не может: добавили способность роли —
+ * читатель её увидел.
+ */
+export function rolesWithCapability(capability) {
+  invariant(ALL_CAPABILITIES.includes(capability), 'CAPABILITY_UNKNOWN', 'Unknown capability', { capability });
+  return Object.freeze(Object.keys(ROLE_CAPABILITIES).filter((role) => ROLE_CAPABILITIES[role].includes(capability)));
+}
 export function roleHasCapability(role, capability) { return capabilitiesForRole(role).includes(capability); }
 export function assertCapability(membership, capability) {
   invariant(membership?.status === 'active', 'ACTIVE_MEMBERSHIP_REQUIRED', 'Active organisation membership is required', { capability });

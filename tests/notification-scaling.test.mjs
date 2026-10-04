@@ -42,10 +42,7 @@ function projectionStore() {
           transactionMembershipReads += 1;
           return { organisationId: 'brand-1', userId: 'user-1', status: 'active', role: 'owner' };
         },
-        saveNotification(updated) {
-          const index = notifications.findIndex((item) => item.id === updated.id);
-          notifications[index] = updated;
-        },
+        recordNotificationRead: ({ readAt }) => ({ readAt }),
         insertCommand() {},
       });
     },
@@ -142,7 +139,7 @@ test('PostgreSQL transaction view checks membership without a second pool checko
       if (/FROM memberships/.test(sql)) {
         return { rows: [{ payload: { organisationId: 'brand-1', userId: 'user-1', status: 'active', role: 'owner' } }] };
       }
-      if (/UPDATE notifications/.test(sql)) return { rowCount: 1, rows: [] };
+      if (/INSERT INTO notification_reads/.test(sql)) return { rowCount: 1, rows: [{ read_at: new Date('2026-08-02T00:00:00.000Z') }] };
       return { rowCount: 1, rows: [] };
     },
     release() {},

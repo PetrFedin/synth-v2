@@ -5,7 +5,12 @@ function dependentSelectDef(name, label, dependsOn, optionsFor, format, value, e
   return { name, label, kind: 'select', options: [], dependsOn, optionsFor, format, value, emptyMessage, valueFor };
 }
 
-function openForm(title, fields, submitAction) {
+// Четвёртый параметр — что делать после успешного сохранения (оба поля необязательны):
+//   successMessage — [ru, en]: тост «Готово: …» вместо общего «Изменения сохранены»;
+//   afterSave — вернуть человека туда, откуда открыта форма (например, перечитать диалог с
+//   долгоживущим состоянием): вызывается после перечитывания рабочего пространства и перерисовки,
+//   тост показывается после него, чтобы лечь в только что открытый диалог.
+function openForm(title, fields, submitAction, options = {}) {
   const unavailable = fields.find(field => field.kind === 'select' && !field.dependsOn && field.options.length === 0);
   if (unavailable) { toast(I18N.t('common.noData', { label: I18N.translate(unavailable.label) }), 'error'); return; }
   const dialog = document.querySelector('#form-dialog'); clear(dialog);
@@ -44,6 +49,9 @@ function openForm(title, fields, submitAction) {
       const value = typeof option === 'string' ? option : option.id;
       const text = field.format ? field.format(option) : (typeof option === 'string' ? option : (option.name || option.id));
       const optionNode = el('option', { value, rawText: text });
+      // Подсказка к пункту — для того, что человеку не нужно читать, но нужно назвать в поддержку (короткий код).
+      const hint = typeof field.optionTitle === 'function' && typeof option === 'object' ? field.optionTitle(option) : undefined;
+      if (hint) optionNode.setAttribute('title', hint);
       if (preferred !== undefined && String(preferred) === String(value)) optionNode.selected = true;
       control.append(optionNode);
     });
@@ -149,7 +157,9 @@ function openForm(title, fields, submitAction) {
       try {
         await reload();
         renderApp();
-        toast(I18N.t('common.changesSaved'), 'success');
+        if (typeof options.afterSave === 'function') await options.afterSave();
+        if (Array.isArray(options.successMessage)) toastDone(options.successMessage[0], options.successMessage[1]);
+        else toast(I18N.t('common.changesSaved'), 'success');
       } catch (refreshError) {
         toast(`${I18N.t('common.savedRefreshFailed')} ${refreshError.message}`, 'error');
       }

@@ -216,6 +216,22 @@
   function localeTag() { return current === 'ru' ? 'ru-RU' : 'en-GB'; }
   function formatDate(value) { if (!value) return '\u2014'; const date = new Date(value); if (Number.isNaN(date.valueOf())) return String(value); return new Intl.DateTimeFormat(localeTag(), { dateStyle: 'medium', timeStyle: String(value).includes('T') ? 'short' : undefined }).format(date); }
   function formatNumber(value, options = {}) { return new Intl.NumberFormat(localeTag(), options).format(Number(value || 0)); }
+  // Слово после числа: plural(2, ['политика', 'политики', 'политик'], ['policy', 'policies']).
+  // Русский — три формы (1, 2-4, 5-20 и 0; 11-14 всегда третья), английский — две. Формы не
+  // склеиваются из окончаний: у каждого слова они свои, и их называет вызывающий.
+  function plural(count, ru, en) {
+    const n = Math.abs(Math.trunc(Number(count) || 0));
+    if (current === 'ru') {
+      const tail = n % 100;
+      const last = n % 10;
+      if (tail >= 11 && tail <= 14) return ru[2];
+      if (last === 1) return ru[0];
+      if (last >= 2 && last <= 4) return ru[1];
+      return ru[2];
+    }
+    const forms = en || ru;
+    return n === 1 ? forms[0] : forms[1] ?? forms[0];
+  }
 
   // Деньги и единицы форматируются здесь, в одном месте на всё приложение.
   //
@@ -263,6 +279,6 @@
   function setLocale(value) { const next = normalize(value); const changed = next !== current; current = next; try { global.localStorage?.setItem(STORAGE_KEY, current); } catch {} applyDocument(); if (changed && typeof global.dispatchEvent === 'function') { const event = typeof global.CustomEvent === 'function' ? new global.CustomEvent('syntha:locale-changed', { detail: { locale: current } }) : { type: 'syntha:locale-changed', detail: { locale: current } }; global.dispatchEvent(event); } return current; }
   function diagnostics() { return Object.freeze({ locales: [...SUPPORTED], locale: current, messageCount: Object.keys(messages).length, phraseCount: pairs.length, invalidMessageKeys: Object.entries(messages).filter(([, pair]) => !Array.isArray(pair) || pair.length !== 2).map(([key]) => key), invalidPhraseCount: pairs.filter(pair => !Array.isArray(pair) || pair.length !== 2).length }); }
 
-  global.SynthaI18n = Object.freeze({ getLocale: () => current, setLocale, t, translate, formatDate, formatNumber, formatMoney, formatUnit, localeTag, diagnostics });
+  global.SynthaI18n = Object.freeze({ getLocale: () => current, setLocale, t, translate, formatDate, formatNumber, plural, formatMoney, formatUnit, localeTag, diagnostics });
   applyDocument();
 })(window);

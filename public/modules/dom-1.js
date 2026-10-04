@@ -294,6 +294,9 @@ function buildField(field) {
       const value = typeof option === 'string' ? option : option.id;
       const text = field.format ? field.format(option) : (typeof option === 'string' ? option : (option.name || option.id));
       const optionNode = el('option',{value,rawText:text});
+      // Подсказка к пункту (короткий код и т. п.) — то, что человеку не читать, но назвать в поддержку.
+      const hint = typeof field.optionTitle === 'function' && typeof option === 'object' ? field.optionTitle(option) : undefined;
+      if (hint) optionNode.setAttribute('title', hint);
       if (field.value !== undefined && String(field.value) === String(value)) optionNode.selected = true;
       control.append(optionNode);
     });

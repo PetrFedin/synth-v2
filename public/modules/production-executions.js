@@ -356,7 +356,7 @@
     try {
       const value = await mutate(path, body, 'POST');
       upsert(value); clearInputs();
-      toast(t('Производственный календарь обновлён.', 'Production calendar updated.'));
+      toastDone('производственный календарь обновлён.', 'the production calendar is updated.');
       return value;
     } catch (error) {
       if (error?.code === 'PRODUCTION_EXECUTION_CONCURRENCY_CONFLICT') queueMicrotask(() => { void load({ reset: true }); });
@@ -647,7 +647,7 @@
       if (after) after();
       ui.checksLoading = '';
       delete ui.checksByExecution[value.executionCode];
-      toast(t('Пооперационный контроль обновлён.', 'Inline quality control updated.'));
+      toastDone('пооперационный контроль обновлён.', 'inline quality control is updated.');
     } catch (error) {
       toast(error?.message || I18N.t('common.requestError'), 'error');
     } finally { ui.busyCode = null; renderApp(); }

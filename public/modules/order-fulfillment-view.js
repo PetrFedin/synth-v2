@@ -184,12 +184,20 @@
     openDetails(text('Поставка по заказу', 'Order fulfillment'), rows);
   };
 
+  // Диалоги заказа с записью (комментарии, точки, календарь, правки) после сохранения открываются
+  // заново: человек остаётся в том же месте и видит записанное, а не закрытое окно и тост.
+  function reopenOrderDialog(name, order) {
+    const fresh = (state.workspace?.orders || []).find((item) => item.id === order.id) || order;
+    return global[name](fresh);
+  }
+  const afterSaving = (name, order, ru, en) => ({ afterSave: () => reopenOrderDialog(name, order), successMessage: [ru, en] });
+
   function commentEditForm(order, lineNo, sku, sideLabel, currentBody) {
     openForm(`${sideLabel} — ${sku}`, [textDef('body', sideLabel, currentBody || '', 1000, false)], (values) => mutate(
       `/v2/orders/${encodeURIComponent(order.id)}/lines/${lineNo}/comment`,
       { body: (values.body || '').trim() },
       'PUT',
-    ));
+    ), afterSaving('orderLineCommentsDialog', order, 'комментарий сохранён.', 'the comment is saved.'));
   }
 
   function commentRow(order, lineNo, sku, sideLabel, currentBody, canWrite) {
@@ -240,7 +248,7 @@
     });
 
     close.addEventListener('click', () => dialog.close());
-    body.append(head, grid); dialog.append(body); dialog.showModal();
+    body.append(head, grid); dialog.append(body); if (!dialog.open) dialog.showModal();
   };
 
   const PACKING_NEXT = Object.freeze({ null: 'packing', packing: 'packed' });
@@ -275,14 +283,24 @@
       if (nextStatus) {
         label.append(actionButton(packingAdvanceLabel(plan.packingStatus), async () => {
           await mutate(`/v2/fulfillment-plans/${encodeURIComponent(plan.id)}/packing-status`, { status: nextStatus }, 'PUT');
-          dialog.close();
+          // Диалог остаётся и показывает новый статус: «Начать упаковку» сразу превращается в «Товары
+          // упакованы», а не пропадает вместе с диалогом.
+          try {
+            await reload();
+            renderApp();
+            const fresh = (state.workspace?.orders || []).find((item) => item.id === order.id) || order;
+            await global.orderPackingStatusDialog(fresh);
+            toastDone(nextStatus === 'packed' ? 'товары отмечены упакованными.' : 'упаковка начата.', nextStatus === 'packed' ? 'the goods are marked as packed.' : 'packing has started.');
+          } catch (refreshError) {
+            toast(`${I18N.t('common.savedRefreshFailed')} ${refreshError.message}`, 'error');
+          }
         }));
       }
       grid.append(label);
     });
 
     close.addEventListener('click', () => dialog.close());
-    body.append(head, grid); dialog.append(body); dialog.showModal();
+    body.append(head, grid); dialog.append(body); if (!dialog.open) dialog.showModal();
   };
 
   function doorAllocationEditForm(order, lineNo, sku, door, currentQuantity) {
@@ -290,7 +308,7 @@
       `/v2/orders/${encodeURIComponent(order.id)}/lines/${lineNo}/door-allocations/${encodeURIComponent(door.id)}`,
       { quantity: Number.parseInt(values.quantity, 10) || 0 },
       'PUT',
-    ));
+    ), afterSaving('orderLineDoorAllocationDialog', order, 'распределение по точке сохранено.', 'the door allocation is saved.'));
   }
 
   /**
@@ -338,7 +356,7 @@
     });
 
     close.addEventListener('click', () => dialog.close());
-    body.append(head, grid); dialog.append(body); dialog.showModal();
+    body.append(head, grid); dialog.append(body); if (!dialog.open) dialog.showModal();
   };
 
   function calendarMilestoneAddForm(order) {
@@ -353,7 +371,7 @@
       `/v2/orders/${encodeURIComponent(order.id)}/calendar-milestones`,
       isoDates({ title: values.title, startsAt: values.startsAt, visibility: values.visibility }, ['startsAt']),
       'POST',
-    ));
+    ), afterSaving('orderCalendarDialog', order, 'веха добавлена.', 'the milestone is added.'));
   }
 
   // Which side of the deal the current actor writes calendar facts as — the exact rule the server
@@ -404,7 +422,7 @@
         lines.push({ title, type: values[`line${slot}Type`], offsetDays: values[`line${slot}OffsetDays`], visibility: values[`line${slot}Visibility`] });
       }
       return mutate(`/v2/organisations/${encodeURIComponent(organisationId)}/calendar-templates`, { name: values.name, lines }, 'POST');
-    });
+    }, afterSaving('orderCalendarDialog', order, 'шаблон календаря создан.', 'the calendar template is created.'));
   }
 
   function calendarTemplateApplyForm(order, organisationId, templates) {
@@ -415,7 +433,7 @@
       `/v2/orders/${encodeURIComponent(order.id)}/calendar-milestones/apply-template`,
       isoDates({ templateId: values.templateId, anchorAt: values.anchorAt }, ['anchorAt']),
       'POST',
-    ));
+    ), afterSaving('orderCalendarDialog', order, 'шаблон применён, вехи добавлены.', 'the template is applied and the milestones are added.'));
   }
 
   /**
@@ -461,7 +479,7 @@
     }
 
     close.addEventListener('click', () => dialog.close());
-    body.append(head, grid); dialog.append(body); dialog.showModal();
+    body.append(head, grid); dialog.append(body); if (!dialog.open) dialog.showModal();
   };
 
   function amendmentProposeForm(order) {
@@ -474,7 +492,29 @@
       `/v2/orders/${encodeURIComponent(order.id)}/amendments`,
       { lineNo: Number.parseInt(values.lineNo, 10), proposedQuantity: Number.parseInt(values.proposedQuantity, 10), reason: values.reason },
       'POST',
-    ));
+    ), { afterSave: () => reopenAmendments(order), successMessage: ['правка отправлена на рассмотрение.', 'the amendment was sent for review.'] });
+  }
+
+  // Диалог правок живёт долго: человек отвечает на одну правку, а рядом лежат другие, и сумма заказа
+  // в списке меняется от его ответа. Поэтому после любого успешного ответа и приложение (список
+  // заказов, сумма, «Ждёт вас»), и сам диалог перечитываются с сервера: у правки новый статус, её
+  // кнопки исчезают, и второй раз «Принять» нажать нельзя. Заказ берётся из свежего рабочего
+  // пространства — количества строк в форме предложения должны быть уже новые.
+  function reopenAmendments(order) {
+    const fresh = (state.workspace?.orders || []).find((item) => item.id === order.id) || order;
+    return global.orderAmendmentsDialog(fresh);
+  }
+
+  async function respondToAmendment(order, amendment, body, message) {
+    await mutate(`/v2/orders/${encodeURIComponent(order.id)}/amendments/${encodeURIComponent(amendment.id)}/respond`, body, 'POST');
+    try {
+      await reload();
+      renderApp();
+      await reopenAmendments(order);
+      toastDone(message[0], message[1]);
+    } catch (refreshError) {
+      toast(`${I18N.t('common.savedRefreshFailed')} ${refreshError.message}`, 'error');
+    }
   }
 
   function amendmentRejectForm(order, amendment) {
@@ -484,7 +524,7 @@
       `/v2/orders/${encodeURIComponent(order.id)}/amendments/${encodeURIComponent(amendment.id)}/respond`,
       { decision: 'rejected', responseReason: values.responseReason },
       'POST',
-    ));
+    ), { afterSave: () => reopenAmendments(order), successMessage: ['правка отклонена.', 'the amendment was rejected.'] });
   }
 
   /**
@@ -529,10 +569,9 @@
       if (amendment.responseReason) detailParts.push(`${text('ответ', 'response')}: ${amendment.responseReason}`);
       label.append(factValue(detailParts.join(' · ')));
       if (amendment.status === 'proposed' && canWrite && myOrgId && myOrgId !== amendment.proposedOrganisationId) {
-        const accept = actionButton(text('Принять', 'Accept'), () => mutate(
-          `/v2/orders/${encodeURIComponent(order.id)}/amendments/${encodeURIComponent(amendment.id)}/respond`,
-          { decision: 'accepted' },
-          'POST',
+        const accept = actionButton(text('Принять', 'Accept'), () => respondToAmendment(
+          order, amendment, { decision: 'accepted' },
+          ['правка принята, количество и сумма заказа обновлены.', 'the amendment was accepted, the quantity and the order total are updated.'],
         ));
         // Сервер откажет принять правку, когда исполнение или экономика уже начаты (признак
         // `acceptBlock`): кнопка отключена заранее, причина названа здесь, а не в ошибке после нажатия.
@@ -554,6 +593,6 @@
     }
 
     close.addEventListener('click', () => dialog.close());
-    body.append(head, grid); dialog.append(body); dialog.showModal();
+    body.append(head, grid); dialog.append(body); if (!dialog.open) dialog.showModal();
   };
 })(window);

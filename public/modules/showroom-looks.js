@@ -123,7 +123,7 @@
         else await mutate(`/v2/showrooms/${encodeURIComponent(showroom.id)}/looks`, payload);
         modal.close();
         looksOf(showroom.id, { refresh: true });
-        toast(look ? text('Образ изменён.', 'The look is updated.') : text('Образ добавлен.', 'The look is added.'), 'success');
+        if (look) toastDone('образ изменён.', 'the look is updated.'); else toastDone('образ добавлен.', 'the look is added.');
       } catch (problem) {
         error.textContent = lookError(problem);
         error.hidden = false;
@@ -152,7 +152,7 @@
     try {
       await mutate(`/v2/showroom-looks/${encodeURIComponent(look.id)}`, {}, 'DELETE');
       looksOf(showroom.id, { refresh: true });
-      toast(text('Образ убран.', 'The look is removed.'), 'success');
+      toastDone('образ убран.', 'the look is removed.');
     } catch (problem) { toast(lookError(problem), 'error'); }
   }
 

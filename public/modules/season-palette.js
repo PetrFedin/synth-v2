@@ -129,7 +129,7 @@
         }, 'POST');
         ui.paletteFor = null;
         await loadPalette();
-        toast(text('Цвет добавлен в палитру.', 'Colour added to the palette.'));
+        toastDone('цвет добавлен в палитру.', 'the colour is added to the palette.');
         return true;
       } finally {
         ui.busyKey = null; renderApp();

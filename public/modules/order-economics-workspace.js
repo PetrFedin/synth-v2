@@ -53,6 +53,7 @@
   const CLOSED_STATUSES = Object.freeze(['CLOSED', 'ADJUSTED']);
 
   function t(ru, en) { return typeof localText === 'function' ? localText(ru, en) : ru; }
+  function plural(count, ru, en) { return global.I18N.plural(count, ru, en); }
   function pair(list, key) { const row = list.find((item) => item[0] === key); return row ? t(row[1], row[2]) : key; }
 
   function readinessLabel(type) { return t(READINESS_LABELS[type][0], READINESS_LABELS[type][1]); }
@@ -272,6 +273,34 @@
     return { closed, canonical, legacy, costs, landed, landedCurrent, run, margin, marginDone, readiness, readinessDone, adjustment, adjustmentRun };
   }
 
+  // --- подписи для человека ------------------------------------------------------------------------
+  // Снимки в реестре называются идентификаторами (`supply-commitment_8d3e…`): по ним нельзя понять, о чём
+  // речь. Человеку показывается то, что видно в самих данных — состав, дата, сумма, пара валют, номер
+  // прогона; короткий код остаётся только в подсказке (`title`) для обращения в поддержку.
+  function dateLabel(value) { const day = shortDate(value); return day ? global.I18N?.formatDate?.(day) ?? day : '—'; }
+  function shortCode(id) {
+    const value = String(id ?? '');
+    const tail = value.includes('_') ? value.slice(value.indexOf('_') + 1) : value;
+    return tail.slice(0, 8);
+  }
+  const SHOWN_LINES = 3;
+  function supplyLabel(item) {
+    const parts = item.allocations.map((a) => `${a.sku} × ${a.quantity}`);
+    const shown = parts.slice(0, SHOWN_LINES).join(', ');
+    const rest = parts.length > SHOWN_LINES ? t(` и ещё ${parts.length - SHOWN_LINES}`, ` and ${parts.length - SHOWN_LINES} more`) : '';
+    const source = item.allocations[0] ? pair(SUPPLY_SOURCES, item.allocations[0].sourceType) : '';
+    return `${dateLabel(item.createdAt)} · ${shown}${rest}${source ? ` · ${source}` : ''}`;
+  }
+  function fxLabel(item) { return `${item.sourceCurrency} → ${item.targetCurrency} · ${item.rate} · ${pair(FX_RATE_TYPES, item.rateType)} · ${dateLabel(item.effectiveAt)}`; }
+  function landedLabel(item) { return `${moneyText(item.totalCost, item.currency)} · ${dateLabel(item.createdAt)}`; }
+  function runLabel(item, ledger) {
+    const number = (ledger.allocationRuns ?? []).findIndex((run) => run.id === item.id) + 1;
+    return t(`Прогон №${number || '?'} от ${dateLabel(item.createdAt)}`, `Run no. ${number || '?'} of ${dateLabel(item.createdAt)}`);
+  }
+  // Строка итога: `{ text, hint }` — текст виден, подсказка (короткий код) в `title`.
+  const codeHint = (item) => `${t('Код', 'Code')}: ${shortCode(item.id)}`;
+  const hinted = (text, id) => (id ? { text, hint: shortCode(id) } : text);
+
   function blockingText(position) {
     const labels = {
       readiness_not_evaluated: ['готовность ещё не проверялась', 'readiness has not been checked'],
@@ -300,7 +329,7 @@
       id: 'supply',
       title: t('Обязательство поставки', 'Supply commitment'),
       state: supplyCount ? 'done' : 'todo',
-      summary: ledger.supplyCommitments.map((item) => t(`${item.id}: ${item.allocations.length} поз., ${item.allocations.reduce((sum, a) => sum + a.quantity, 0)} шт.`, `${item.id}: ${item.allocations.length} lines, ${item.allocations.reduce((sum, a) => sum + a.quantity, 0)} pcs`)),
+      summary: ledger.supplyCommitments.map((item) => hinted(supplyLabel(item), item.id)),
       needs: t('Количество по строкам заказа, источник поставки и ссылка на него.', 'Quantity per order line, the supply source and a reference to it.'),
       actions: [action('supply', supplyCount ? t('Добавить обязательство', 'Add a commitment') : t('Записать обязательство', 'Record commitment'), can.supply, noSupply)],
     });
@@ -308,7 +337,7 @@
       id: 'fx',
       title: t('Курс (если затраты в другой валюте)', 'Exchange rate (if costs are in another currency)'),
       state: ledger.fxRateSnapshots.length ? 'done' : 'optional',
-      summary: ledger.fxRateSnapshots.map((item) => `${item.sourceCurrency} → ${item.targetCurrency}: ${item.rate} · ${pair(FX_RATE_TYPES, item.rateType)}`),
+      summary: ledger.fxRateSnapshots.map((item) => hinted(fxLabel(item), item.id)),
       needs: t('Валюта затрат, курс к валюте заказа, тип курса, основание и дата.', 'Cost currency, the rate to the order currency, rate type, basis and date.'),
       actions: [action('fx', t('Записать курс', 'Record rate'), can.cost, noCost)],
     });
@@ -325,8 +354,9 @@
     push({
       id: 'landed',
       title: t('Посадочная себестоимость', 'Landed cost'),
-      state: s.landedCurrent ? 'done' : 'todo',
-      summary: s.landed ? [t(`Снимок ${s.landed.id}: ${s.landed.totalCost} ${s.landed.currency}${s.landed.current ? '' : ' — устарел, реестр затрат изменился'}`, `Snapshot ${s.landed.id}: ${s.landed.totalCost} ${s.landed.currency}${s.landed.current ? '' : ' - out of date, the cost ledger changed'}`)] : [],
+      // После закрытия снимок — часть закрытой цепочки: корректировка делает новый снимок сама.
+      state: s.landedCurrent || s.closed ? 'done' : 'todo',
+      summary: s.landed ? [hinted(`${t('Посадочная себестоимость', 'Landed cost')}: ${landedLabel(s.landed)}${s.landed.current || s.closed ? '' : t(' — устарела, реестр затрат изменился', ' - out of date, the cost ledger changed')}`, s.landed.id)] : [],
       blocker: s.costs.length ? null : t('Нет ни одной действующей затраты.', 'There is no active cost.'),
       needs: t('Ничего вводить не нужно: снимок собирается из текущего реестра затрат.', 'Nothing to enter: the snapshot is built from the current cost ledger.'),
       actions: [action('landed', t('Зафиксировать себестоимость', 'Record landed cost'), can.cost && s.costs.length > 0 && !s.closed && !s.landedCurrent,
@@ -334,15 +364,18 @@
     });
     const policies = usablePolicies(ledger);
     const postCloseRunNeeded = s.closed && s.adjustment && s.adjustment.resultingAllocationStatus === 'pending-post-close' && !s.adjustment.reconciled && !s.adjustmentRun;
+    // Прогон, который виден в шаге: по текущему снимку, а у закрытого заказа — последний из записанных.
+    const shownRun = s.run ?? (s.closed ? last(ledger.allocationRuns) : null);
     const runEnabled = can.cost && !s.legacy && policies.length > 0 && Boolean(s.landed) && (s.closed ? postCloseRunNeeded : (s.landedCurrent && !s.run));
     push({
       id: 'allocation',
       title: t('Распределение затрат по SKU', 'Cost allocation per SKU'),
-      state: s.legacy ? 'locked' : (s.run ? 'done' : (s.canonical ? 'todo' : 'optional')),
+      // После закрытия нужен только прогон по себестоимости после корректировки; прогон закрытия уже есть.
+      state: s.legacy ? 'locked' : (s.closed ? (postCloseRunNeeded ? 'todo' : 'done') : (s.run ? 'done' : (s.canonical ? 'todo' : 'optional'))),
       summary: [
         ...(s.legacy ? [t('Не применимо: в заказе нет привязки строк к каноническим SKU.', 'Not applicable: the order lines are not tied to canonical SKUs.')] : []),
-        ...(s.run ? [t(`Прогон ${s.run.id}: ${s.run.allocatedTotal} ${s.run.currency}`, `Run ${s.run.id}: ${s.run.allocatedTotal} ${s.run.currency}`)] : []),
-        policies.length ? t(`Политик для выбора: ${policies.length}`, `Policies to choose from: ${policies.length}`) : t('Политик распределения ещё нет.', 'There is no allocation policy yet.'),
+        ...(shownRun ? [hinted(`${runLabel(shownRun, ledger)}: ${moneyText(shownRun.allocatedTotal, shownRun.currency)}`, shownRun.id)] : []),
+        policies.length ? t(`Для выбора: ${policies.length} ${plural(policies.length, ['политика', 'политики', 'политик'], ['policy', 'policies'])}`, `Available: ${policies.length} ${plural(policies.length, ['политика', 'политики', 'политик'], ['policy', 'policies'])}`) : t('Политик распределения ещё нет.', 'There is no allocation policy yet.'),
       ],
       blocker: s.landed ? null : t('Сначала зафиксируйте посадочную себестоимость.', 'Record the landed cost first.'),
       needs: t('Политика распределения (база: прямая, по штукам или по стоимости строк). Для заказа с каноническими SKU маржа без прогона не актуализируется.', 'An allocation policy (basis: direct, by units or by line value).'),
@@ -356,26 +389,31 @@
         ),
       ],
     });
-    const marginText = s.margin ? t(`Маржа ${s.margin.contributionMarginAmount} (${s.margin.contributionMarginPercent}%)${s.margin.costAllocationRunSnapshotId ? ', с распределением по SKU' : ', без распределения по SKU'}`, `Margin ${s.margin.contributionMarginAmount} (${s.margin.contributionMarginPercent}%)${s.margin.costAllocationRunSnapshotId ? ', with per-SKU allocation' : ', without per-SKU allocation'}`) : null;
+    // У закрытого заказа маржа — та, что в позиции: на закрытии она зафиксирована, а после корректировки
+    // её распределение по SKU уточняет шаг «Сверка распределения», не этот.
+    const marginSource = s.closed ? { amount: position.effectiveContributionMarginAmount, percent: position.effectiveContributionMarginPercent, withRun: Boolean(position.costAllocationRunSnapshotId) } : (s.margin ? { amount: s.margin.contributionMarginAmount, percent: s.margin.contributionMarginPercent, withRun: Boolean(s.margin.costAllocationRunSnapshotId) } : null);
+    const marginText = marginSource ? t(`Маржа ${moneyText(marginSource.amount, ledger.currency)} (${percentText(marginSource.percent)})${marginSource.withRun ? ', с распределением по SKU' : ', без распределения по SKU'}`, `Margin ${moneyText(marginSource.amount, ledger.currency)} (${percentText(marginSource.percent)})${marginSource.withRun ? ', with per-SKU allocation' : ', without per-SKU allocation'}`) : null;
+    const marginPending = s.closed && Boolean(s.adjustment) && !s.adjustment.reconciled && s.adjustment.resultingAllocationStatus === 'pending-post-close';
     push({
       id: 'margin',
       title: t('Актуализация маржи', 'Margin actualisation'),
-      state: s.marginDone ? 'done' : 'todo',
-      summary: marginText ? [marginText] : [],
-      blocker: !s.landedCurrent ? t('Нужна актуальная посадочная себестоимость.', 'A current landed cost is required.')
+      state: s.closed || s.marginDone ? 'done' : 'todo',
+      summary: [...(marginText ? [hinted(marginText, s.closed ? position.effectiveMarginActualizationSnapshotId : s.margin?.id)] : []), ...(marginPending ? [t('Распределение по SKU после корректировки уточнит шаг «Сверка распределения после корректировки».', 'The per-SKU allocation after the adjustment is refined by the "Post-adjustment allocation reconciliation" step.')] : [])],
+      blocker: s.closed ? null : !s.landedCurrent ? t('Нужна актуальная посадочная себестоимость.', 'A current landed cost is required.')
         : (s.canonical && !s.run ? t('Для заказа с каноническими SKU нужен прогон распределения затрат.', 'An order with canonical SKUs needs a cost allocation run.')
           : (s.margin && s.run && !s.marginDone ? t('Есть прогон распределения, которого маржа ещё не учла.', 'There is an allocation run the margin does not reflect yet.') : null)),
       needs: t('Ничего вводить не нужно: используется последний снимок себестоимости и, если есть, его прогон распределения.', 'Nothing to enter: the latest landed cost and, if there is one, its allocation run are used.'),
       actions: [action('margin', t('Актуализировать маржу', 'Actualise margin'), can.cost && s.landedCurrent && !s.marginDone && !s.closed && (!s.canonical || Boolean(s.run)),
         needCost(s.closed ? closedReason : (s.marginDone ? t('Маржа уже актуальна.', 'The margin is already current.') : (s.landedCurrent ? t('Сначала сделайте прогон распределения затрат.', 'Run the cost allocation first.') : t('Нужна актуальная посадочная себестоимость.', 'A current landed cost is required.')))))],
     });
-    const readinessText = s.readiness ? [`${t('Проверка', 'Check')} ${s.readiness.id}: ${s.readiness.requirements.map((item) => `${readinessLabel(item.type)} — ${readinessStateLabel(item.status)}`).join('; ')}`] : [];
+    const readinessText = s.readiness ? [hinted(`${t('Проверка от', 'Check of')} ${dateLabel(s.readiness.evaluatedAt)}: ${s.readiness.requirements.map((item) => `${readinessLabel(item.type)} — ${readinessStateLabel(item.status)}`).join('; ')}`, s.readiness.id)] : [];
     push({
       id: 'readiness',
       title: t('Проверка готовности к закрытию', 'Close readiness check'),
-      state: s.readinessDone ? 'done' : 'todo',
+      // Закрытие уже опирается на проверку; после корректировки снимки сменились, но проверять заново нечего.
+      state: s.closed || s.readinessDone ? 'done' : 'todo',
       summary: readinessText,
-      blocker: s.marginDone ? (position.status === 'STALE' ? t('Реестр затрат изменился после проверки: проверьте заново.', 'The cost ledger changed after the check: check again.') : null) : t('Сначала актуализируйте маржу.', 'Actualise the margin first.'),
+      blocker: s.closed ? null : s.marginDone ? (position.status === 'STALE' ? t('Реестр затрат изменился после проверки: проверьте заново.', 'The cost ledger changed after the check: check again.') : null) : t('Сначала актуализируйте маржу.', 'Actualise the margin first.'),
       needs: t('По каждому требованию (фабрика, фрахт, пошлина, кредиты): подтверждено, ожидается или не требуется с причиной.', 'For each requirement (factory, freight, duty, credits): confirmed, pending or waived with a reason.'),
       actions: [action('readiness', t('Проверить готовность', 'Check readiness'), can.cost && s.marginDone && !s.closed && !(s.readinessDone && position.status === 'READY_TO_CLOSE'),
         needCost(s.closed ? closedReason : (s.marginDone ? t('Готовность уже подтверждена.', 'Readiness is already confirmed.') : t('Сначала актуализируйте маржу.', 'Actualise the margin first.'))))],
@@ -385,7 +423,7 @@
       id: 'close',
       title: t('Закрытие себестоимости', 'Cost close'),
       state: s.closed ? 'done' : 'todo',
-      summary: s.closed ? [t(`Закрыто: ${position.costCloseSnapshotId}`, `Closed: ${position.costCloseSnapshotId}`)] : [],
+      summary: s.closed ? [hinted(t(`Закрыто ${dateLabel(ledger.costClose?.closedAt)}`, `Closed ${dateLabel(ledger.costClose?.closedAt)}`), position.costCloseSnapshotId)] : [],
       blocker: s.closed || ready ? null : (blockingText(position) || t('Готовность не подтверждена.', 'Readiness is not confirmed.')),
       needs: t('Подтверждение: закрытие необратимо.', 'Confirmation: closing cannot be undone.'),
       actions: [action('close', t('Закрыть себестоимость', 'Close cost'), can.cost && ready && !s.closed,
@@ -395,7 +433,7 @@
       id: 'adjustment',
       title: t('Корректировка после закрытия', 'Post-close adjustment'),
       state: s.closed ? (s.adjustment ? 'done' : 'optional') : 'locked',
-      summary: ledger.postCloseAdjustments.map((item) => t(`${item.id}: ${item.reason} (себестоимость ${item.costDeltaAmount > 0 ? '+' : ''}${item.costDeltaAmount})`, `${item.id}: ${item.reason} (cost ${item.costDeltaAmount > 0 ? '+' : ''}${item.costDeltaAmount})`)),
+      summary: ledger.postCloseAdjustments.map((item) => hinted(t(`${dateLabel(item.recordedAt)}: ${item.reason} (себестоимость ${item.costDeltaAmount > 0 ? '+' : ''}${item.costDeltaAmount})`, `${dateLabel(item.recordedAt)}: ${item.reason} (cost ${item.costDeltaAmount > 0 ? '+' : ''}${item.costDeltaAmount})`), item.id)),
       blocker: s.closed ? null : t('Доступна только после закрытия себестоимости.', 'Available only after the cost is closed.'),
       needs: t('Причина, обязательство поставки, вид затраты, сумма, валюта, документ-основание и дата.', 'Reason, supply commitment, cost type, amount, currency, source document and date.'),
       actions: [action('adjustment', t('Внести корректировку', 'Record adjustment'), can.cost && s.closed && supplyCount > 0,
@@ -407,7 +445,7 @@
       title: t('Сверка распределения после корректировки', 'Post-adjustment allocation reconciliation'),
       state: !s.closed || !s.adjustment || (!needsReconcile && !s.adjustment.reconciled) ? 'locked' : (s.adjustment.reconciled ? 'done' : 'todo'),
       summary: s.adjustment ? [s.adjustment.reconciled ? t('Последняя корректировка сверена.', 'The latest adjustment is reconciled.') : t('Маржа по последней корректировке предварительная: ждёт точного распределения.', 'The margin after the latest adjustment is provisional: it awaits the exact allocation.')] : [],
-      blocker: needsReconcile && !s.adjustmentRun ? t('Сначала сделайте прогон распределения (шаг «Распределение затрат по SKU»).', 'Run the allocation first (the "Cost allocation per SKU" step).') : (needsReconcile ? null : t('Нет корректировки, которую нужно сверять.', 'There is no adjustment to reconcile.')),
+      blocker: needsReconcile && !s.adjustmentRun ? t('Сначала сделайте прогон распределения (шаг «Распределение затрат по SKU»).', 'Run the allocation first (the "Cost allocation per SKU" step).') : (needsReconcile || s.adjustment?.reconciled ? null : t('Нет корректировки, которую нужно сверять.', 'There is no adjustment to reconcile.')),
       needs: t('Ничего вводить не нужно: используется прогон по себестоимости после корректировки.', 'Nothing to enter: the run for the post-adjustment landed cost is used.'),
       actions: [action('reconcile', t('Сверить распределение', 'Reconcile allocation'), can.cost && s.closed && needsReconcile && Boolean(s.adjustmentRun),
         needCost(!s.closed ? t('Доступна только после закрытия.', 'Available only after the close.') : (!needsReconcile ? t('Нечего сверять.', 'Nothing to reconcile.') : t('Сначала сделайте прогон распределения.', 'Run the allocation first.'))))],
@@ -447,7 +485,7 @@
     const fields = [];
     if (withReason) fields.push(textDef('reason', t('Причина корректировки', 'Adjustment reason'), '', 1000, true, 1));
     fields.push(
-      selectDef('supplyCommitmentSnapshotId', t('Обязательство поставки', 'Supply commitment'), commitments, (item) => `${shortDate(item.createdAt)} · ${item.allocations.length} ${t('поз.', 'lines')} · ${item.id}`, commitments.at(-1)?.id),
+      { ...selectDef('supplyCommitmentSnapshotId', t('Обязательство поставки', 'Supply commitment'), commitments, supplyLabel, commitments.at(-1)?.id), optionTitle: codeHint },
       selectDef('costType', t('Вид затраты', 'Cost type'), COST_TYPES.map((row) => ({ id: row[0], ru: row[1], en: row[2] })), (item) => t(item.ru, item.en), 'freight'),
       textDef('amount', t('Сумма (минус — кредит)', 'Amount (a minus sign is a credit)'), '', 24, true, 1),
       selectDef('currency', t('Валюта затраты', 'Cost currency'), currencies, undefined, orderCurrency),
@@ -457,9 +495,10 @@
       {
         ...dependentSelectDef('fxRateSnapshotId', t('Курс', 'Exchange rate'), 'currency',
           (code) => (code === orderCurrency ? [{ id: '' }] : ledger.fxRateSnapshots.filter((item) => item.sourceCurrency === code && item.targetCurrency === orderCurrency)),
-          (item) => (item.id === '' ? t('— не нужен (валюта заказа) —', '— not needed (order currency) —') : `${item.rate} · ${pair(FX_RATE_TYPES, item.rateType)} · ${shortDate(item.effectiveAt)} · ${item.id}`),
+          (item) => (item.id === '' ? t('— не нужен (валюта заказа) —', '— not needed (order currency) —') : `${item.rate} · ${pair(FX_RATE_TYPES, item.rateType)} · ${dateLabel(item.effectiveAt)}`),
           '', t('Для этой валюты нет курса: сначала запишите курс.', 'There is no rate for this currency: record a rate first.')),
         required: false,
+        optionTitle: (item) => (item.id ? codeHint(item) : undefined),
         visibleWhen: (code) => code !== orderCurrency,
       },
       textDef('sourceRef', t('Документ-основание (счёт, инвойс)', 'Source document (invoice)'), '', 200, true, 1),
@@ -467,6 +506,21 @@
     );
     return fields;
   }
+
+  // «Готово: …» после каждого действия шага — одна форма сообщения на все десять шагов.
+  const DONE = Object.freeze({
+    supply: ['обязательство поставки записано.', 'the supply commitment is recorded.'],
+    fx: ['курс записан.', 'the exchange rate is recorded.'],
+    cost: ['затрата записана.', 'the cost is recorded.'],
+    landed: ['посадочная себестоимость зафиксирована.', 'the landed cost is recorded.'],
+    policy: ['политика распределения создана.', 'the allocation policy is created.'],
+    allocation: ['прогон распределения выполнен.', 'the allocation run is done.'],
+    margin: ['маржа актуализирована.', 'the margin is actualised.'],
+    readiness: ['готовность к закрытию проверена.', 'close readiness is checked.'],
+    close: ['себестоимость закрыта.', 'the cost is closed.'],
+    adjustment: ['корректировка внесена.', 'the adjustment is recorded.'],
+    reconcile: ['распределение сверено, маржа обновлена.', 'the allocation is reconciled and the margin is updated.'],
+  });
 
   function createActions({ order, position, ledger, can, refresh, openStepForm }) {
     const s = deriveState(position, ledger);
@@ -486,7 +540,7 @@
         openStepForm(t('Обязательство поставки', 'Supply commitment'), fields, (values) => {
           const quantities = Object.fromEntries(lines.map((line) => [line.lineNo, values[`qty_${line.lineNo}`]]));
           return mutate(ROUTES.supply(id), buildSupplyCommitment({ lines, quantities, sourceType: values.sourceType, sourceRef: values.sourceRef, expectedAvailabilityAt: values.expectedAvailabilityAt }));
-        });
+        }, DONE.supply);
       },
       fx: async () => {
         openStepForm(t('Курс валюты', 'Exchange rate'), [
@@ -495,28 +549,28 @@
           selectDef('rateType', t('Тип курса', 'Rate type'), FX_RATE_TYPES.map((row) => ({ id: row[0], ru: row[1], en: row[2] })), (item) => t(item.ru, item.en), 'invoice'),
           textDef('sourceRef', t('Основание курса (документ, источник)', 'Rate basis (document, source)'), '', 200, true, 1),
           dateDef('effectiveAt', t('Дата курса', 'Rate date'), today()),
-        ], (values) => mutate(ROUTES.fx(id), buildFxRate({ orderCurrency: ledger.currency, ...values })));
+        ], (values) => mutate(ROUTES.fx(id), buildFxRate({ orderCurrency: ledger.currency, ...values })), DONE.fx);
       },
       cost: async () => {
         openStepForm(t('Фактическая затрата', 'Actual cost'), costFields({ ledger, withReason: false }),
-          (values) => mutate(ROUTES.cost(id), buildActualCost(costInput(values))));
+          (values) => mutate(ROUTES.cost(id), buildActualCost(costInput(values))), DONE.cost);
       },
-      landed: async () => { await mutate(ROUTES.landed(id), {}); await refresh(); },
+      landed: async () => { await mutate(ROUTES.landed(id), {}); await refresh(DONE.landed); },
       policy: async () => {
         const nextVersion = Math.max(0, ...ledger.allocationPolicies.map((item) => item.version)) + 1;
         openStepForm(t('Политика распределения затрат', 'Cost allocation policy'), [
           textDef('name', t('Название', 'Name'), t('Распределение затрат', 'Cost allocation'), 160, true, 1),
           numberDef('version', t('Версия', 'Version'), nextVersion, true, 1, undefined, 1),
           selectDef('defaultBasis', t('База распределения', 'Allocation basis'), ALLOCATION_BASES.map((row) => ({ id: row[0], ru: row[1], en: row[2] })), (item) => t(item.ru, item.en), 'unit'),
-        ], (values) => mutate(ROUTES.policy(order.brandId), buildAllocationPolicy(values)));
+        ], (values) => mutate(ROUTES.policy(order.brandId), buildAllocationPolicy(values)), DONE.policy);
       },
       allocation: async () => {
         const policies = usablePolicies(ledger);
         openStepForm(t('Прогон распределения затрат', 'Cost allocation run'), [
           selectDef('policyVersionId', t('Политика распределения', 'Allocation policy'), policies, (item) => `${item.name} · v${item.version} · ${pair(ALLOCATION_BASES, item.defaultBasis).split(':')[0]}`, policies.at(-1)?.id),
-        ], (values) => mutate(ROUTES.allocation(id), buildAllocationRun({ landedCost: s.landed, policy: policies.find((item) => item.id === values.policyVersionId) })));
+        ], (values) => mutate(ROUTES.allocation(id), buildAllocationRun({ landedCost: s.landed, policy: policies.find((item) => item.id === values.policyVersionId) })), DONE.allocation);
       },
-      margin: async () => { await mutate(ROUTES.margin(id), buildMarginActualization({ landedCost: s.landed, allocationRun: s.run })); await refresh(); },
+      margin: async () => { await mutate(ROUTES.margin(id), buildMarginActualization({ landedCost: s.landed, allocationRun: s.run })); await refresh(DONE.margin); },
       readiness: async () => {
         const statusOptions = [{ id: 'complete', ru: 'Подтверждено', en: 'Confirmed' }, { id: 'pending', ru: 'Ожидается', en: 'Pending' }, { id: 'waived', ru: 'Не требуется (с причиной)', en: 'Waived (with a reason)' }];
         const fields = [];
@@ -529,7 +583,7 @@
         openStepForm(t('Готовность к закрытию', 'Close readiness'), fields, (values) => {
           const choices = Object.fromEntries(READINESS_TYPES.map((type) => [type, { status: values[`status_${type}`], waiverReason: values[`waiver_${type}`] }]));
           return mutate(ROUTES.readiness(id), buildReadiness({ landedCost: s.landed, margin: s.margin, ledger, choices }));
-        });
+        }, DONE.readiness);
       },
       close: async () => {
         const readiness = ledger.readiness;
@@ -543,15 +597,15 @@
         });
         if (!accepted) return;
         await mutate(ROUTES.close(id), body);
-        await refresh();
+        await refresh(DONE.close);
       },
       adjustment: async () => {
         openStepForm(t('Корректировка после закрытия', 'Post-close adjustment'), costFields({ ledger, withReason: true }),
-          (values) => mutate(ROUTES.adjustment(id), buildPostCloseAdjustment(costInput(values))));
+          (values) => mutate(ROUTES.adjustment(id), buildPostCloseAdjustment(costInput(values))), DONE.adjustment);
       },
       reconcile: async () => {
         await mutate(ROUTES.reconcile(id, s.adjustment.id), buildReconciliation({ allocationRun: s.adjustmentRun }));
-        await refresh();
+        await refresh(DONE.reconcile);
       },
     });
   }
@@ -569,6 +623,11 @@
 
   function stateLabel(state) {
     return ({ done: t('Сделано', 'Done'), todo: t('Нужно сделать', 'To do'), optional: t('По необходимости', 'Optional'), locked: t('Недоступно', 'Unavailable') })[state] ?? state;
+  }
+
+  function percentText(value) {
+    if (value === null || value === undefined) return '—';
+    return `${global.I18N?.formatNumber ? global.I18N.formatNumber(value, { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : String(value)}%`;
   }
 
   function moneyText(value, currency) {
@@ -604,6 +663,12 @@
     row(t('Статус экономики', 'Economics status'), statusText(position.status));
     row(t('Фактическая себестоимость', 'Effective landed cost'), moneyText(position.effectiveTotalLandedCost, position.currency));
     row(t('Маржа', 'Contribution margin'), moneyText(position.effectiveContributionMarginAmount, position.currency));
+    // Итог в шапке — по последнему снимку, а не по реестру: после новой затраты он остаётся прежним,
+    // пока себестоимость не зафиксирована заново. Это говорится здесь, а не молчаливо старой цифрой.
+    const lastLanded = ledger.landedCosts[ledger.landedCosts.length - 1];
+    if (!CLOSED_STATUSES.includes(position.status) && lastLanded && !lastLanded.current) {
+      row(t('Снимок себестоимости', 'Landed cost snapshot'), t('устарел: затраты изменились, зафиксируйте себестоимость заново', 'out of date: costs changed, record the landed cost again'));
+    }
     if (position.blockingReasons?.length && !CLOSED_STATUSES.includes(position.status)) row(t('Что блокирует закрытие', 'What blocks the close'), blockingText(position));
     body.append(summary);
 
@@ -612,7 +677,7 @@
     }
     if (!can.cost) body.append(notice(t('У вас право только на чтение: записывать затраты и закрывать себестоимость могут финансы, владелец и администратор.', 'You have read-only access: finance, owner and admin may record costs and close the cost.')));
 
-    const handlers = createActions({ order, position, ledger, can, refresh: reopen, openStepForm: (title, fields, submit) => openStepForm(order, title, fields, submit, reopen) });
+    const handlers = createActions({ order, position, ledger, can, refresh: reopen, openStepForm: (title, fields, submit, message) => openStepForm(order, title, fields, submit, reopen, message) });
     for (const step of deriveSteps({ position, ledger, can })) {
       const card = el('article', { className: 'entity' });
       const titleBlock = el('div', { className: 'entity-title-block' });
@@ -621,7 +686,7 @@
       headRow.append(titleBlock, el('span', { className: `badge ${step.state}`, rawText: stateLabel(step.state) }));
       card.append(headRow);
       const meta = el('div', { className: 'meta' });
-      step.summary.forEach((line) => meta.append(el('span', { rawText: line })));
+      step.summary.forEach((entry) => meta.append(el('span', { rawText: typeof entry === 'string' ? entry : entry.text, title: typeof entry === 'string' ? undefined : `${t('Код', 'Code')}: ${entry.hint}` })));
       if (step.blocker) meta.append(el('span', { rawText: `${t('Блокирует', 'Blocked by')}: ${step.blocker}` }));
       if (step.needs && step.state !== 'done') meta.append(el('span', { rawText: `${t('Нужно ввести', 'To enter')}: ${step.needs}` }));
       card.append(meta);
@@ -641,33 +706,27 @@
 
   // Форма шага открывается в том же диалоге. `openForm` после сохранения сам перезагружает рабочее
   // пространство и перерисовывает приложение — а перерисовка создаёт диалог заново и уничтожила бы
-  // экран шагов. Поэтому после сохранения экран ждёт, пока диалог пересоздан, и только потом
-  // перечитывает позицию и записанное; при отмене формы перечитывает сразу.
-  function openStepForm(order, title, fields, submit, reopen) {
+  // экран шагов. Поэтому после сохранения экран шагов открывается заново из `afterSave` (то есть уже
+  // в новом диалоге, и «Готово: …» ложится в него), с позицией и записанным, перечитанными с
+  // сервера; при отмене формы он перечитывается сразу.
+  function openStepForm(order, title, fields, submit, reopen, message) {
     let saved = false;
-    openForm(title, fields, async (values) => { await submit(values); saved = true; });
+    openForm(title, fields, async (values) => { await submit(values); saved = true; }, { afterSave: () => reopen(), successMessage: message });
     const dialog = document.querySelector('#form-dialog');
     if (!dialog.querySelector('form')) return;
-    dialog.addEventListener('close', () => { void (saved ? waitForRender(dialog).then(reopen) : reopen()); }, { once: true });
-  }
-
-  function waitForRender(original, { timeoutMs = 8000, stepMs = 50 } = {}) {
-    return new Promise((resolve) => {
-      const started = Date.now();
-      const check = () => {
-        if (document.querySelector('#form-dialog') !== original || Date.now() - started >= timeoutMs) resolve();
-        else setTimeout(check, stepMs);
-      };
-      check();
-    });
+    dialog.addEventListener('close', () => { if (!saved) void reopen(); }, { once: true });
   }
 
   async function open(order) {
     const can = capabilitiesFor(order);
     if (!can.read) throw new Error('CAPABILITY_DENIED');
-    const reopen = async () => {
-      try { renderWorkspace(order, await load(order), can, reopen); }
-      catch (error) { toast(error.message, 'error'); }
+    // `done` — [ru, en] подпись только что сделанного действия: после того как экран перерисован
+    // свежими позицией и записанным, показывается «Готово: …».
+    const reopen = async (done) => {
+      try {
+        renderWorkspace(order, await load(order), can, reopen);
+        if (Array.isArray(done)) toastDone(done[0], done[1]);
+      } catch (error) { toast(error.message, 'error'); }
     };
     renderWorkspace(order, await load(order), can, reopen);
   }

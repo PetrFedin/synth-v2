@@ -227,6 +227,8 @@ export function executionTraceability({ execution, bom, issues }) {
     mixedDyeLots: Object.freeze(materials.filter((row) => row.multipleDyeLots).map((row) => row.materialCode)),
     // Основные материалы (те же, что спрашивают закрытие последней вехи и допуск), выданные в ноль.
     // Ведомость, которой нет, судить не может — список пуст.
+    // Недостача по основным материалам — та, что блокирует закрытие последней вехи и допуск.
+    mainShortfalls: Object.freeze(mainMaterialShortfalls(execution, bom, rows).map((row) => row.materialCode)),
     missingMainMaterials: Object.freeze(Array.isArray(bom?.lines) ? mustTraceMaterialCodes(bom.lines).filter((code) => !rows.some((issue) => issue.materialCode === code)).sort() : []),
   });
 }
@@ -354,60 +356,78 @@ export function assertShipmentIsTraceable(execution, bom, issues, lots = null) {
 
   // Q-04b. Выдача «хоть чего-то» не значит «столько, сколько нужно»: выдано 150 м при потребности
   // 256,8 м — это не прослеживаемая отгрузка, а отгрузка, у которой 106,8 м ткани неизвестного
-  // происхождения. Допуска на неточность в проекте нет (потребность уже содержит отход из
-  // ведомости), поэтому покрытие точное: выдано не меньше, чем нужно. Количество изделий берётся из
-  // исполнения; если его нет (исполнение не прочитано), сравнивать не с чем.
-  if (Number.isFinite(Number(execution?.quantity)) && Number(execution.quantity) > 0) {
-    const required = new Map(materialRequirement({ bom, quantity: Number(execution.quantity) }).map((row) => [row.materialCode, row]));
-    const issuedByMaterial = new Map();
-    for (const issue of issued) {
-      if (!issue?.materialCode) continue;
-      issuedByMaterial.set(issue.materialCode, round4((issuedByMaterial.get(issue.materialCode) ?? 0) + Number(issue.quantity)));
-    }
-    const shortfalls = [];
-    for (const materialCode of mustTrace) {
-      const need = required.get(materialCode);
-      if (!need) continue;
-      const have = issuedByMaterial.get(materialCode) ?? 0;
-      if (have < need.requiredQuantity) {
-        shortfalls.push(Object.freeze({ materialCode, unit: need.unit, requiredQuantity: need.requiredQuantity, issuedQuantity: have, shortfallQuantity: round4(need.requiredQuantity - have) }));
-      }
-    }
-    invariant(shortfalls.length === 0, 'QUALITY_RELEASE_MATERIAL_SHORTFALL',
-      'A shipment cannot be released while the issued material does not cover the bill of materials requirement',
-      { executionCode: execution?.executionCode ?? null, shortfalls });
-  }
+  // происхождения. Расчёт общий с закрытием последней вехи (`mainMaterialShortfalls`), чтобы два
+  // правила не разошлись. Допуска на неточность нет: потребность уже содержит отход из ведомости.
+  const shortfalls = mainMaterialShortfalls(execution, bom, issued);
 
   // Партия, которую после выдачи вернули в карантин или не приняли, — уже не «из чего сшита», а
-  // «что под вопросом»: допуск к отгрузке на такой материале выпускал бы изделия, происхождение
-  // которых поставлено под сомнение входным контролем. Статусы приходят из того же снимка, что и
-  // выдачи; если вызывающий их не передал, проверять нечего (юнит-вызовы без хранилища).
+  // «что под вопросом»: допуск на таком материале выпускал бы изделия, происхождение которых
+  // поставлено под сомнение входным контролем. Статусы приходят из того же снимка, что и выдачи;
+  // если вызывающий их не передал, проверять нечего (юнит-вызовы без хранилища).
+  let flagged = [];
   if (Array.isArray(lots)) {
     const issuedLotIds = new Set(issued.map((issue) => issue?.lotId).filter(Boolean));
-    const flagged = lots
+    flagged = lots
       .filter((lot) => issuedLotIds.has(lot.id) && ['quarantine', 'rejected'].includes(lot.status))
       .map((lot) => Object.freeze({ lotReference: lot.lotReference, materialCode: lot.materialCode, status: lot.status }));
-    invariant(flagged.length === 0, 'QUALITY_RELEASE_MATERIAL_LOT_NOT_RELEASED',
-      'A shipment cannot be released while a material lot that went into it is in quarantine or rejected',
-      { executionCode: execution?.executionCode ?? null, lots: flagged });
   }
+  // Оба нарушения собираются в один отказ: недостача не должна прятать карантин, иначе человек
+  // докомплектует материал и тут же упрётся во вторую причину. Код — по первой из причин (недостача),
+  // карантин лежит рядом в details.lots; если недостачи нет, отказ чисто карантинный.
+  if (shortfalls.length > 0) {
+    invariant(false, 'QUALITY_RELEASE_MATERIAL_SHORTFALL',
+      'A shipment cannot be released while the issued material does not cover the bill of materials requirement',
+      { executionCode: execution?.executionCode ?? null, shortfalls, ...(flagged.length > 0 ? { lots: flagged } : {}) });
+  }
+  invariant(flagged.length === 0, 'QUALITY_RELEASE_MATERIAL_LOT_NOT_RELEASED',
+    'A shipment cannot be released while a material lot that went into it is in quarantine or rejected',
+    { executionCode: execution?.executionCode ?? null, lots: flagged });
   return issued.map((issue) => issue?.lotReference).filter(Boolean);
 }
 
 /**
- * Исполнение не может стать «готово к контролю», пока по основным материалам ведомости не выдано
- * ничего.
+ * Недостача основных материалов: сколько нужно по ведомости × количество исполнения и сколько выдано.
+ *
+ * Единый расчёт для двух мест — закрытия последней вехи и допуска к отгрузке. «Основные материалы» —
+ * ткани ведомости, а если тканей нет, все материалы. Допуска на неточность нет: потребность уже
+ * содержит отход. Если количества исполнения нет или ведомости нет — сравнивать не с чем, пусто.
+ */
+export function mainMaterialShortfalls(execution, bom, issues) {
+  const lines = Array.isArray(bom?.lines) ? bom.lines : null;
+  if (lines === null || lines.length === 0) return Object.freeze([]);
+  if (!(Number.isFinite(Number(execution?.quantity)) && Number(execution.quantity) > 0)) return Object.freeze([]);
+  const required = new Map(materialRequirement({ bom, quantity: Number(execution.quantity) }).map((row) => [row.materialCode, row]));
+  const issuedByMaterial = new Map();
+  for (const issue of Array.isArray(issues) ? issues : []) {
+    if (!issue?.materialCode) continue;
+    issuedByMaterial.set(issue.materialCode, round4((issuedByMaterial.get(issue.materialCode) ?? 0) + Number(issue.quantity)));
+  }
+  const shortfalls = [];
+  for (const materialCode of mustTraceMaterialCodes(lines)) {
+    const need = required.get(materialCode);
+    if (!need) continue;
+    const have = issuedByMaterial.get(materialCode) ?? 0;
+    if (have < need.requiredQuantity) {
+      shortfalls.push(Object.freeze({ materialCode, unit: need.unit, requiredQuantity: need.requiredQuantity, issuedQuantity: have, shortfallQuantity: round4(need.requiredQuantity - have) }));
+    }
+  }
+  return Object.freeze(shortfalls);
+}
+
+/**
+ * Исполнение не может стать «готово к контролю», пока основные материалы ведомости не выданы
+ * ПОЛНОСТЬЮ.
  *
  * Ловушка порядка: выдать партию можно только в активное исполнение (`MATERIAL_LOT_EXECUTION_NOT_ACTIVE`),
- * а допуск к отгрузке требует записи выдачи. Закрытие последней вехи переводит исполнение в
- * ready-for-qc, и с этой минуты материал выдать уже нельзя: инспекция бесполезна (допуск не
- * пройдёт), отмену надо делать вручную, а новое исполнение на тот же заказ запрещено. Поэтому
- * вопрос задаётся на последней вехе, пока исправить ещё можно.
+ * а допуск к отгрузке требует полного покрытия потребности. Закрытие последней вехи переводит
+ * исполнение в ready-for-qc, и с этой минуты материал выдать уже нельзя: недовыдать и закрыть веху
+ * значило застрять (докомплектовать нельзя, допуск не пройдёт, блокировать веху нельзя; выход —
+ * отмена). Поэтому правило допуска спрашивается уже здесь, пока исправить ещё можно, и тем же
+ * расчётом (`mainMaterialShortfalls`).
  *
- * «Основные материалы» — те же, что при допуске: ткани ведомости, а если тканей нет, все материалы.
- * Проверяется наличие выдачи, а не полное покрытие: часть материала может ещё доехать до закрытия
- * последней вехи, и полное покрытие остаётся за допуском (`QUALITY_RELEASE_MATERIAL_SHORTFALL`).
- * Ведомости нет — судить не о чем, как и везде.
+ * Ничего не выдано — `PRODUCTION_READY_FOR_QC_WITHOUT_MATERIAL` (details.missingMaterials); выдано,
+ * но не всё — `PRODUCTION_READY_FOR_QC_MATERIAL_SHORTFALL` (details.shortfalls). Ведомости нет —
+ * судить не о чем, как и везде.
  */
 export function assertMaterialIssuedBeforeQc(execution, bom, issues) {
   const lines = Array.isArray(bom?.lines) ? bom.lines : null;
@@ -417,6 +437,10 @@ export function assertMaterialIssuedBeforeQc(execution, bom, issues) {
   invariant(missingMaterials.length === 0, 'PRODUCTION_READY_FOR_QC_WITHOUT_MATERIAL',
     'Production cannot be marked ready for quality control before the main materials of the bill are issued into it',
     { executionCode: execution?.executionCode ?? null, missingMaterials });
+  const shortfalls = mainMaterialShortfalls(execution, bom, issues);
+  invariant(shortfalls.length === 0, 'PRODUCTION_READY_FOR_QC_MATERIAL_SHORTFALL',
+    'Production cannot be marked ready for quality control while the issued main material does not cover the bill of materials requirement',
+    { executionCode: execution?.executionCode ?? null, shortfalls });
   return null;
 }
 

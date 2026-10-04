@@ -110,6 +110,28 @@ test('the last milestone is refused while a main material of the bill has no iss
   assert.equal(ready.status,'ready-for-qc');
 });
 
+// Повторная приёмка: выдано 200 м из 256,8 м — раньше веха закрывалась, и исполнение застревало.
+test('the last milestone is refused while the issued main material does not cover the requirement',async()=>{
+  const f=harness();
+  f.material.bom={lines:[{materialCode:'FAB-SHELL',materialType:'fabric',unit:'m',quantity:0.4,grossQuantity:0.5136},{materialCode:'BTN-1',materialType:'trim',unit:'pcs',quantity:5,grossQuantity:5}]};
+  let execution=await f.service.createFromProductionOrder('c1','planner-1',productionOrder.productionOrderNumber);
+  execution=await f.service.start('c2','planner-1',execution.executionCode,{expectedVersion:execution.version});
+  for(const code of ['materials-ready','cutting-complete','assembly-complete','finishing-complete','packing-complete']){
+    execution=await f.service.completeMilestone(`m-${code}`,'planner-1',execution.executionCode,{expectedVersion:execution.version,milestoneCode:code,notes:'done'});
+  }
+  // 500 изделий x 0,5136 = 256,8 м.
+  f.material.issues=[{materialCode:'FAB-SHELL',quantity:200}];
+  await assert.rejects(()=>f.service.completeMilestone('short-1','planner-1',execution.executionCode,{expectedVersion:execution.version,milestoneCode:'ready-for-qc',notes:'done'}),(error)=>{
+    assert.equal(error.code,'PRODUCTION_READY_FOR_QC_MATERIAL_SHORTFALL');
+    assert.deepEqual(error.details.shortfalls,[{materialCode:'FAB-SHELL',unit:'m',requiredQuantity:256.8,issuedQuantity:200,shortfallQuantity:56.8}]);
+    return true;
+  });
+  assert.equal(f.executions.get(execution.executionCode).status,'active','the refusal leaves the execution active, where the rest can still be issued');
+  f.material.issues.push({materialCode:'FAB-SHELL',quantity:56.8});
+  const ready=await f.service.completeMilestone('short-2','planner-1',execution.executionCode,{expectedVersion:execution.version,milestoneCode:'ready-for-qc',notes:'done'});
+  assert.equal(ready.status,'ready-for-qc');
+});
+
 test('a bill that does not exist cannot judge the last milestone',async()=>{
   const f=harness();
   let execution=await f.service.createFromProductionOrder('c1','planner-1',productionOrder.productionOrderNumber);

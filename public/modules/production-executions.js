@@ -476,17 +476,23 @@
     // производство. Подсказка стоит здесь, до нажатия: после перехода выдавать уже нельзя.
     const trace = ui.traceByExecution[value.executionCode];
     const missingMain = current.code === 'ready-for-qc' && trace && Array.isArray(trace.missingMainMaterials) ? trace.missingMainMaterials : [];
-    const short = current.code === 'ready-for-qc' && trace && Array.isArray(trace.shortfalls) ? trace.shortfalls.filter((code) => !missingMain.includes(code)) : [];
+    // Блокирующая недостача — только по основным материалам (их же проверяет сервер при закрытии
+    // последней вехи); недостача по фурнитуре остаётся справкой и веху не держит.
+    const mainShort = current.code === 'ready-for-qc' && trace && Array.isArray(trace.mainShortfalls)
+      ? trace.mainShortfalls.filter((code) => !missingMain.includes(code)) : [];
+    const shortRows = mainShort.map((code) => (trace.materials || []).find((row) => row.materialCode === code)).filter(Boolean);
+    const shortText = shortRows.map((row) => `${row.materialCode}: ${t('выдано', 'issued')} ${amount(row.issuedQuantity, row.unit)} ${t('из', 'of')} ${amount(row.requiredQuantity, row.unit)}, ${t('не хватает', 'short')} ${amount(row.shortfallQuantity, row.unit)}`).join('; ');
+    const blockedByMaterial = missingMain.length > 0 || mainShort.length > 0;
     return h('section', { className: 'production-execution-card production-execution-command' }, [
       h('h3', { text: milestoneLabel(current.code) }),
       missingMain.length ? h('p', { className: 'production-execution-warn', text: t(
-        `Основной материал не выдан в производство: ${missingMain.join(', ')}. Выдайте партию материала до закрытия последней вехи — после перехода в «готово к QC» выдать её уже нельзя, и допуск к отгрузке не пройдёт.`,
-        `Main material has not been issued into production: ${missingMain.join(', ')}. Issue the material lot before closing the last milestone — once the batch is ready for QC nothing can be issued and the shipment release will be refused.`) }) : null,
-      short.length ? h('p', { className: 'production-execution-warn', text: t(
-        `Выдано меньше, чем нужно по ведомости: ${short.join(', ')}. После перехода в «готово к QC» докинуть материал нельзя, и допуск к отгрузке потребует полного покрытия потребности.`,
-        `Less has been issued than the bill needs: ${short.join(', ')}. Nothing can be issued once the batch is ready for QC, and the shipment release requires the full requirement to be covered.`) }) : null,
+        `Основной материал не выдан в производство: ${missingMain.join(', ')}. Закрыть последнюю веху нельзя, пока он не выдан: после перехода в «готово к QC» выдать партию уже невозможно.`,
+        `Main material has not been issued into production: ${missingMain.join(', ')}. The last milestone cannot be closed until it is issued: once the batch is ready for QC nothing can be issued.`) }) : null,
+      mainShort.length ? h('p', { className: 'production-execution-warn', text: t(
+        `Основной материал выдан не полностью — ${shortText}. Закрыть последнюю веху нельзя, пока выдача не покроет потребность по ведомости: после перехода в «готово к QC» докомплектовать уже невозможно.`,
+        `Main material is not fully issued — ${shortText}. The last milestone cannot be closed until the issue covers the bill requirement: once the batch is ready for QC nothing can be issued.`) }) : null,
       h('textarea', { value: ui.completionNotes, placeholder: t('Комментарий к завершению — необязательно', 'Completion notes — optional'), oninput: (event) => { ui.completionNotes = event.target.value; } }),
-      actions.includes('complete') ? h('button', { type: 'button', className: 'primary', disabled: Boolean(ui.busyCode), text: t('Завершить текущий этап', 'Complete current milestone'), onclick: () => { void command(value.executionCode, `/v2/production-executions/${encodeURIComponent(value.executionCode)}/milestones/complete`, { expectedVersion: value.version, milestoneCode: current.code, notes: String(ui.completionNotes || '').trim() || null }); } }) : null,
+      actions.includes('complete') ? h('button', { type: 'button', className: 'primary', disabled: Boolean(ui.busyCode) || blockedByMaterial, title: blockedByMaterial ? t('Сначала выдайте основной материал полностью', 'Issue the main material in full first') : '', text: t('Завершить текущий этап', 'Complete current milestone'), onclick: () => { void command(value.executionCode, `/v2/production-executions/${encodeURIComponent(value.executionCode)}/milestones/complete`, { expectedVersion: value.version, milestoneCode: current.code, notes: String(ui.completionNotes || '').trim() || null }); } }) : null,
       h('input', { value: ui.blockReason, placeholder: t('Причина блокировки — минимум 5 символов', 'Block reason — at least 5 characters'), oninput: (event) => { ui.blockReason = event.target.value; } }),
       actions.includes('block') ? h('button', { type: 'button', className: 'danger', disabled: Boolean(ui.busyCode), text: t('Зафиксировать блокировку', 'Report block'), onclick: () => {
         const reason = requireText(ui.blockReason, 5, t('Укажите причину блокировки.', 'Enter a block reason.'));

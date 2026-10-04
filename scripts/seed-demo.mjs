@@ -89,6 +89,11 @@ const PEOPLE = Object.freeze({
 const DEMO_SUPPLIER_CODE = 'ATM-FAC';
 const SHOP_ID = 'demo-shop-nordhaus';
 const SHOP_NAME = 'Nordhaus Retail';
+const DEMO_PENDING_RFQ = 'RFQ-PENDING-QUOTE-001';
+const DEMO_PENDING_LOT = 'ROLL-PENDING-QC-001';
+const DEMO_PENDING_COLOUR = { colourCode: 'BURGUNDY', supplierReference: 'ATM-BURG-19-1526', dip: 'submitted' };
+const DEMO_PENDING_LEGAL_ENTITY = 'RU-DEMO-MAIN';
+const DEMO_PENDING_DOCUMENT = 'UPD-DEMO-0001';
 
 const pool = new pg.Pool({ connectionString: databaseUrl, max: 4 });
 const log = [];
@@ -455,6 +460,11 @@ try {
 
   // --- The supplier's side of the table -------------------------------------------------------
   await ensurePortalAccess(runtime, pool, brandId, accounts.owner);
+
+  // --- Дела, которые ждут людей ------------------------------------------------------------------
+  // Последним шагом: всё выше доводит сезон до конца, а «Ждёт вас» показывает именно незавершённое.
+  // Сид, который закрыл каждую ситуацию, оставляет всем ролям пустой экран и нечего показать.
+  await ensurePendingWork(runtime, pool, accounts, brandId);
 
   process.stdout.write('\nSigning in as:\n');
   for (const [key, person] of Object.entries(PEOPLE)) {
@@ -2064,4 +2074,148 @@ async function ensurePortalAccess(runtime, pool, brandId, ownerId) {
   if (existing.rowCount && existing.rows[0].status === 'active') { note('portal access', `${PEOPLE.supplier.email} already reads ${code}`); return; }
   await runtime.sourcing.grantPortalAccess(command('portal'), ownerId, code, { email: PEOPLE.supplier.email, contactName: PEOPLE.supplier.name });
   note('portal access', `${PEOPLE.supplier.email} invited to ${code}`);
+}
+
+// Незавершённые ситуации: у каждой роли после сида есть живое дело.
+//
+// Всё идёт через доменные службы, теми же правами, что и у человека: запрос цен ведёт владелец,
+// карантинную партию принимает склад (владелец), образец цвета запрашивает владелец, а решает
+// качество, документ соответствия заводит финансист. Ничего здесь не закрывается: дело, которое сид
+// довёл бы до конца, перестало бы быть делом.
+//
+// Каждая ситуация ищет собственный след и без него ничего не создаёт, поэтому повторный запуск сида
+// не плодит ни запросов, ни партий, ни образцов.
+async function ensurePendingWork(runtime, pool, accounts, brandId) {
+  const settle = async (step, work) => {
+    try { await work(); } catch (error) { note('ожидающие дела', `${step} не заведено (${error.code ?? error.message})`); }
+  };
+  await settle('запрос цен', () => ensurePendingRfq(runtime, pool, accounts, brandId));
+  await settle('партия в карантине', () => ensurePendingQuarantineLot(runtime, pool, accounts, brandId));
+  await settle('образец цвета', () => ensurePendingLabDip(runtime, pool, accounts, brandId));
+  await settle('документ соответствия', () => ensurePendingComplianceDocument(runtime, pool, accounts, brandId));
+  await settle('правка заказа', () => ensurePendingOrderAmendment(runtime, pool, accounts, brandId));
+  const waiting = await pool.query(
+    `SELECT (SELECT count(*) FROM sourcing_rfqs WHERE brand_id = $1 AND status = 'quoted')::int AS rfqs,
+            (SELECT count(*) FROM material_lots WHERE brand_id = $1 AND status = 'quarantine')::int AS lots,
+            (SELECT count(*) FROM lab_dips WHERE brand_id = $1 AND status = 'submitted')::int AS dips,
+            (SELECT count(*) FROM compliance_documents WHERE organisation_id = $1 AND status = 'draft')::int AS documents,
+            (SELECT count(*) FROM order_amendments amendment JOIN orders ord ON ord.id = amendment.order_id
+              WHERE ord.brand_id = $1 AND amendment.status = 'proposed')::int AS amendments`,
+    [brandId],
+  );
+  const row = waiting.rows[0];
+  note('ожидающие дела', `ждут решения: запросов цен с котировками — ${row.rfqs}, партий в карантине — ${row.lots}, образцов цвета — ${row.dips}, черновиков документов — ${row.documents}, правок заказа — ${row.amendments}`);
+}
+
+// Запрос цен на изделие: котировка поставщика есть, выбора нет. Владелец увидит «выберите поставщика».
+async function ensurePendingRfq(runtime, pool, accounts, brandId) {
+  const existing = await pool.query('SELECT status FROM sourcing_rfqs WHERE rfq_code = $1', [DEMO_PENDING_RFQ]);
+  if (existing.rowCount) { note('ожидающие дела', `${DEMO_PENDING_RFQ} уже есть (${existing.rows[0].status})`); return; }
+  const supplierCode = await ensureQualifiedSupplier(runtime, pool, brandId, accounts.owner);
+  if (!supplierCode) { note('ожидающие дела', 'нет квалифицированного поставщика — запрос цен некому послать'); return; }
+  // Изделие, под которое ещё не размещали производство: опубликованный SKU с опубликованной ведомостью.
+  const sku = (await pool.query(
+    `SELECT bom.sku FROM boms AS bom
+       JOIN catalog_skus AS catalog ON catalog.sku = bom.sku AND catalog.status = 'published'
+      WHERE bom.brand_id = $1 AND bom.status = 'published'
+        AND NOT EXISTS (SELECT 1 FROM sourcing_rfqs AS rfq WHERE rfq.sku = bom.sku)
+      ORDER BY bom.sku LIMIT 1`,
+    [brandId],
+  )).rows[0]?.sku;
+  if (!sku) { note('ожидающие дела', 'нет изделия без запроса цен — запрос заводить не на что'); return; }
+  let rfq = await runtime.sourcing.createRfq(command('pending-rfq'), accounts.owner, {
+    rfqCode: DEMO_PENDING_RFQ, sku, targetQuantity: 240, responseDueAt: demoDate(10), deliveryDueAt: demoDate(90),
+    incoterm: 'FOB', supplierCodes: [supplierCode], notes: 'Дозаказ на следующий дроп: сравнение котировок',
+  });
+  rfq = await runtime.sourcing.issueRfq(command('pending-rfq-issue'), accounts.owner, DEMO_PENDING_RFQ, { expectedVersion: rfq.version });
+  rfq = await runtime.sourcing.upsertQuote(command('pending-rfq-quote'), accounts.owner, DEMO_PENDING_RFQ, {
+    expectedVersion: rfq.version, supplierCode, unitPriceMinor: 1_020, fixedCostMinor: 30_000, leadTimeDays: 50, minimumOrderQuantity: 100, validUntil: demoDate(30),
+  });
+  note('ожидающие дела', `${DEMO_PENDING_RFQ}: ${sku}, котировка ${supplierCode} получена, поставщик не выбран (${rfq.status})`);
+}
+
+// Рулон принят, входной контроль не решён: партия стоит в карантине и ждёт качества.
+async function ensurePendingQuarantineLot(runtime, pool, accounts, brandId) {
+  // След ищется по номеру рулона без привязки к полотну: полотно выбирается по состоянию палитры,
+  // а палитра между запусками меняется, и привязанный к ней поиск не узнал бы собственную партию.
+  const existing = await pool.query('SELECT material_code, status FROM material_lots WHERE brand_id = $1 AND lot_reference = $2', [brandId, DEMO_PENDING_LOT]);
+  if (existing.rowCount) { note('ожидающие дела', `${existing.rows[0].material_code} / ${DEMO_PENDING_LOT} уже принят (${existing.rows[0].status})`); return; }
+  const coloured = (await pool.query(
+    `SELECT colour.material_code, colour.colour_code
+       FROM material_colours AS colour JOIN materials AS material ON material.code = colour.material_code
+      WHERE colour.brand_id = $1 AND colour.status = 'active' AND material.material_type = 'fabric' AND material.status = 'published'
+      ORDER BY colour.material_code, colour.colour_code LIMIT 1`,
+    [brandId],
+  )).rows[0];
+  const materialCode = coloured?.material_code ?? (await pool.query(
+    "SELECT code FROM materials WHERE brand_id = $1 AND material_type = 'fabric' AND status = 'published' ORDER BY code LIMIT 1", [brandId],
+  )).rows[0]?.code;
+  if (!materialCode) { note('ожидающие дела', 'нет опубликованного полотна — принимать рулон нечему'); return; }
+  const lot = await runtime.materialLots.receiveLot(command('pending-lot'), accounts.owner, {
+    materialCode, lotReference: DEMO_PENDING_LOT, dyeLot: 'DYE-2611-A', receivedQuantity: 320,
+    notes: 'Приехал вчера, входной контроль ещё не проведён',
+    ...(coloured ? { colourCode: coloured.colour_code } : {}),
+  });
+  note('ожидающие дела', `${materialCode} / ${DEMO_PENDING_LOT}: принят в карантин (${lot.status}), решение за качеством`);
+}
+
+// Образец цвета прислан и ждёт решения качества.
+async function ensurePendingLabDip(runtime, pool, accounts, brandId) {
+  const material = (await pool.query(
+    "SELECT code FROM materials WHERE brand_id = $1 AND material_type = 'fabric' AND status = 'published' ORDER BY code LIMIT 1", [brandId],
+  )).rows[0];
+  if (!material) { note('ожидающие дела', 'нет опубликованного полотна — образец цвета не к чему привязать'); return; }
+  const colour = DEMO_PENDING_COLOUR;
+  const listed = await pool.query('SELECT id FROM material_colours WHERE material_code = $1 AND colour_code = $2', [material.code, colour.colourCode]);
+  let materialColourId = listed.rows[0]?.id ?? null;
+  if (!materialColourId) {
+    const added = await runtime.materialColours.addMaterialColour(command('pending-colour'), accounts.owner, {
+      materialCode: material.code, colourCode: colour.colourCode, supplierColourReference: colour.supplierReference,
+    });
+    materialColourId = added.id;
+  }
+  const dip = await pool.query('SELECT status FROM lab_dips WHERE material_colour_id = $1', [materialColourId]);
+  if (dip.rowCount) { note('ожидающие дела', `${material.code}/${colour.colourCode}: образец уже есть (${dip.rows[0].status})`); return; }
+  await runLabDip(runtime, materialColourId, material.code, colour, accounts.owner, accounts.quality);
+  note('ожидающие дела', `${material.code}/${colour.colourCode}: образец цвета прислан, решение за качеством`);
+}
+
+// Черновик документа соответствия: финансист ведёт, владелец выпускает.
+async function ensurePendingComplianceDocument(runtime, pool, accounts, brandId) {
+  const existing = await pool.query('SELECT status FROM compliance_documents WHERE organisation_id = $1 AND document_number = $2', [brandId, DEMO_PENDING_DOCUMENT]);
+  if (existing.rowCount) { note('ожидающие дела', `${DEMO_PENDING_DOCUMENT} уже заведён (${existing.rows[0].status})`); return; }
+  let entity = (await pool.query('SELECT id, status, version FROM legal_entities WHERE organisation_id = $1 AND entity_code = $2', [brandId, DEMO_PENDING_LEGAL_ENTITY])).rows[0];
+  if (!entity) {
+    const created = await runtime.legalEntities.createLegalEntity(command('pending-legal-entity'), accounts.owner, { organisationId: brandId, entityCode: DEMO_PENDING_LEGAL_ENTITY });
+    await runtime.legalEntities.createLegalEntityVersion(command('pending-legal-entity-version'), accounts.owner, created.id, {
+      expectedLatestVersionNo: 0, jurisdiction: 'RU', nameRu: 'ООО «Синта Демо»', nameEn: 'Syntha Demo LLC',
+      requisites: { inn: '7707083893', ogrn: '1027700132195', kpp: '770701001', legalAddress: 'г. Москва, ул. Тверская, д. 1' },
+    });
+    entity = (await pool.query('SELECT id, status, version FROM legal_entities WHERE id = $1', [created.id])).rows[0];
+    note('ожидающие дела', `юрлицо ${DEMO_PENDING_LEGAL_ENTITY} заведено`);
+  }
+  if (entity.status !== 'active') {
+    await runtime.legalEntities.transitionLegalEntity(command('pending-legal-entity-activate'), accounts.owner, entity.id, { expectedVersion: entity.version, nextStatus: 'active' });
+  }
+  const document = await runtime.complianceDocuments.createComplianceDocument(command('pending-compliance-document'), accounts.finance, {
+    organisationId: brandId, documentNumber: DEMO_PENDING_DOCUMENT, documentType: 'upd', issuerLegalEntityId: entity.id,
+  });
+  note('ожидающие дела', `${document.documentNumber}: черновик документа соответствия ждёт проверки и выпуска`);
+}
+
+// Правка подтверждённого заказа: бренд предлагает уменьшить первую строку, ответ — за магазином.
+async function ensurePendingOrderAmendment(runtime, pool, accounts, brandId) {
+  const order = (await pool.query("SELECT id, payload FROM orders WHERE brand_id = $1 AND status = 'attached' ORDER BY id LIMIT 1", [brandId])).rows[0];
+  if (!order) { note('ожидающие дела', 'нет подтверждённого заказа — править нечего'); return; }
+  const prior = await pool.query('SELECT status FROM order_amendments WHERE order_id = $1 LIMIT 1', [order.id]);
+  if (prior.rowCount) { note('ожидающие дела', `правка ${order.id} уже предлагалась (${prior.rows[0].status})`); return; }
+  const line = order.payload.lines?.[0];
+  if (!line) { note('ожидающие дела', `в заказе ${order.id} нет строк`); return; }
+  // Уменьшаем на десятую часть: меньше заказанного всегда укладывается и в запас склада.
+  const proposedQuantity = Math.max(1, Math.floor(line.quantity * 0.9));
+  if (proposedQuantity === line.quantity) { note('ожидающие дела', 'строка слишком мала для правки'); return; }
+  await runtime.orders.proposeAmendment(command('pending-amendment'), accounts.owner, {
+    orderId: order.id, lineNo: 1, proposedQuantity, reason: 'Фабрика не успевает по срокам — просим сократить партию на 10%',
+  });
+  note('ожидающие дела', `${order.id}: бренд предложил ${line.quantity} → ${proposedQuantity} по строке 1, ответ за магазином`);
 }

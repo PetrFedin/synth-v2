@@ -16,6 +16,8 @@ import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createPostgresTestPool } from './postgres-test-pool.mjs';
+import { createPostgresAwaitingActionReader } from '../src/infrastructure/postgres-awaiting-action-reader.mjs';
+import { createAwaitingActionQueryService } from '../src/application/awaiting-action-query-service.mjs';
 
 const databaseUrl = process.env.POSTGRES_TEST_URL;
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -55,18 +57,40 @@ test('a clean database seeds a qualified supplier, portal access and the demand-
     const schedule = (await pool.query("SELECT jsonb_array_length(payload -> 'milestones') AS milestones FROM payment_schedules WHERE production_order_number = 'PO-DEMAND-001'")).rows;
     assert.deepEqual(schedule.map((row) => row.milestones), [4]);
 
+    // «Ждёт вас» у ролей после сида: приёмка и демонстрация показывают живые дела, а не пустой экран.
+    const firstAwaiting = await awaitingByRole(pool);
+    assert.ok(firstAwaiting.owner['rfq-award'] >= 1, 'owner: choose a supplier on a quoted RFQ');
+    assert.ok(firstAwaiting.owner.total >= 1);
+    assert.ok(firstAwaiting.quality['material-lot-release'] >= 1, 'quality: a lot in quarantine');
+    assert.ok(firstAwaiting.quality['lab-dip-decision'] >= 1, 'quality: a lab dip on a decision');
+    assert.ok(firstAwaiting.finance['compliance-document-issue'] >= 1, 'finance: a draft compliance document');
+    assert.ok(firstAwaiting.buyer['order-amendment-response'] >= 1, 'buyer: an order amendment waits for the shop');
+    assert.equal(firstAwaiting.viewer.total, 0, 'a role without the capabilities is offered nothing');
+
     const before = await counts(pool);
     const second = run('seed-demo.mjs');
     assert.match(second, /PO-DEMAND-001 уже вырос из потребности/);
-    assert.deepEqual(await counts(pool), before, 'a second run must not add suppliers, RFQs, orders, tech packs, samples or grants');
+    assert.deepEqual(await counts(pool), before, 'a second run must not add suppliers, RFQs, orders, tech packs, samples, grants or pending work');
+    assert.deepEqual(await awaitingByRole(pool), firstAwaiting, 'a second run keeps the same pending work and adds none');
   } finally {
     await pool.end();
   }
 });
 
 async function counts(pool) {
-  const tables = ['suppliers', 'sourcing_rfqs', 'production_orders', 'tech_packs', 'samples', 'measurement_charts', 'supplier_portal_grants', 'production_requirement_snapshots', 'payment_schedules'];
+  const tables = ['suppliers', 'sourcing_rfqs', 'production_orders', 'tech_packs', 'samples', 'measurement_charts', 'supplier_portal_grants', 'production_requirement_snapshots', 'payment_schedules', 'material_lots', 'lab_dips', 'material_colours', 'compliance_documents', 'legal_entities', 'order_amendments'];
   const result = {};
   for (const table of tables) result[table] = (await pool.query(`SELECT count(*)::integer AS count FROM ${table}`)).rows[0].count;
+  return result;
+}
+
+async function awaitingByRole(pool) {
+  const service = createAwaitingActionQueryService({ reader: createPostgresAwaitingActionReader({ pool }) });
+  const result = {};
+  for (const [role, email] of [['owner', 'owner@syntha.local'], ['quality', 'quality@syntha.local'], ['finance', 'finance@syntha.local'], ['buyer', 'buyer@nordhaus.example'], ['viewer', 'viewer@syntha.local']]) {
+    const actorId = (await pool.query('SELECT id FROM auth_users WHERE email_normalized = $1', [email])).rows[0].id;
+    const view = await service.forActor(actorId, { limit: 200 });
+    result[role] = { total: view.total, ...Object.fromEntries(Object.entries(view.counts).filter(([, value]) => value.count > 0).map(([type, value]) => [type, value.count])) };
+  }
   return result;
 }

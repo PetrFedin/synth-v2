@@ -62,9 +62,11 @@ export function createShowroomSelectionService({
   // A showroom's looks are read by the brand that composed them and by the shops it invited. The
   // invitation is the same one that already decides what a buyer may see, so presentation opens no
   // new door.
+  // Возвращает магазин, через которого читает покупатель, и `null` для бренда: образы покупателю
+  // показываются по ценам и остаткам ЕГО каталога, а бренду — по ценам каталога коллекции.
   async function assertShowroomAudience(tx, showroom, actorId) {
     const brandMembership = await tx.getMembership(showroom.brandId, actorId);
-    if (brandMembership?.status === 'active') return;
+    if (brandMembership?.status === 'active') return null;
     const memberships = await tx.listMembershipsForActor?.(actorId) ?? [];
     for (const membership of memberships) {
       if (membership.status !== 'active') continue;
@@ -73,9 +75,37 @@ export function createShowroomSelectionService({
       // Приглашение говорит «этот показ открыли вам», но торгуем ли мы до сих пор — решает связь.
       // Найдено живьём: после отзыва связи магазин продолжал читать образы с оптовыми ценами.
       const relationship = await tx.getRelationshipByTrade(showroom.brandId, membership.organisationId);
-      if (relationship?.status === 'active') return;
+      if (relationship?.status === 'active') return membership.organisationId;
     }
     invariant(false, 'SHOWROOM_ACCESS_DENIED', 'This showroom has not been shared with you', { showroomId: showroom.id });
+  }
+
+  // Образ показывает покупателю то, что он закажет: цена, минимум и остаток берутся из ДЕЙСТВУЮЩЕЙ
+  // версии его каталога (цены на магазин, замороженная доступность), а не из каталога коллекции. Иначе
+  // образ называл 128 при остатке 900, а заказать можно было по 110 из 1000. Позиция образа, которой нет
+  // в каталоге покупателя, остаётся с каталожными фактами и помечена `priceSource: 'catalog'`.
+  async function withBuyerCatalogFacts(looks, showroomId, buyerShopId) {
+    if (!buyerShopId || !trustedCommercialReader) return looks;
+    const buyerCatalog = await trustedCommercialReader.getBuyerCatalogForAccess(showroomId, buyerShopId);
+    if (!buyerCatalog || buyerCatalog.status !== 'published') return looks;
+    const lines = new Map((buyerCatalog.lines ?? []).map((line) => [line.sku, line]));
+    return looks.map((look) => Object.freeze({
+      ...look,
+      products: Object.freeze((look.products ?? []).map((product) => {
+        const line = lines.get(product.sku);
+        if (!line) return Object.freeze({ ...product, priceSource: 'catalog' });
+        const availability = line.availability;
+        return Object.freeze({
+          ...product,
+          currency: line.currency,
+          wholesalePrice: line.unitPrice,
+          minimumOrderQuantity: line.minimumOrderQuantity,
+          availableQuantity: availability?.mode === 'available_to_sell' ? availability.quantity : null,
+          priceSource: 'buyer-catalog',
+          buyerCatalogVersionId: buyerCatalog.id,
+        });
+      })),
+    }));
   }
 
   async function assertOrganisationActor(tx, organisationId, actorId, capability) {
@@ -166,8 +196,9 @@ export function createShowroomSelectionService({
     listShowroomLooks(actorId, showroomId) {
       return store.transaction(async (tx) => {
         const showroom = requireEntity(await tx.getShowroom(showroomId), 'SHOWROOM_NOT_FOUND', { showroomId });
-        await assertShowroomAudience(tx, showroom, actorId);
-        return Object.freeze({ items: Object.freeze(await tx.listShowroomLooks(showroomId)) });
+        const buyerShopId = await assertShowroomAudience(tx, showroom, actorId);
+        const looks = await tx.listShowroomLooks(showroomId);
+        return Object.freeze({ items: Object.freeze(await withBuyerCatalogFacts(looks, showroomId, buyerShopId)) });
       });
     },
 

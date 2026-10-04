@@ -36,7 +36,7 @@ function orderEntity(item) {
   const canReadMargin = caps.hasForOrganisation(state.workspace, item.brandId, caps.CAPABILITIES.MARGIN_READ);
   if (item.status === 'ready' && canWrite) actions.push(actionButton('Прикрепить к циклу', () => mutate(`/v2/orders/${encodeURIComponent(item.id)}/attach`, { expectedVersion: item.version }), 'primary'));
   if (item.orderCommitSnapshotId && canReadMargin) actions.push(formActionButton(economicsText('Экономика', 'Economics'), () => orderEconomicsDialog(item)));
-  if (['draft', 'ready', 'attached'].includes(item.status) && canWrite) actions.push(actionButton('Отменить заказ', () => orderCancellationForm(item)));
+  if (['draft', 'ready', 'attached'].includes(item.status) && canWrite && orderCancellationOffered(item)) actions.push(actionButton('Отменить заказ', () => orderCancellationForm(item)));
   const details = [
     `${money(item.totalAmount, item.currency)}`,
     `${item.terms?.incoterm || ''}, оплата ${item.terms?.paymentDays ?? 0} дн.`,

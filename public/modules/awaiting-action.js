@@ -143,11 +143,17 @@
     selections: Object.freeze({ scope: 'od-selections' }),
   });
 
+  // Правка выделяет свой заказ: идентификатор самой правки в реестре заказов не найти.
+  function targetEntityId(item) {
+    return item.type === 'order-amendment-response' ? item.detail?.orderId : item.route.entityId;
+  }
+
   function open(item) {
     const view = item.route.view;
     const target = ENTITY_TARGETS[view];
-    if (target && item.route.entityId && typeof OD_UI !== 'undefined') {
-      OD_UI.selected[target.scope] = item.route.entityId;
+    const entityId = targetEntityId(item);
+    if (target && entityId && typeof OD_UI !== 'undefined') {
+      OD_UI.selected[target.scope] = entityId;
       if (target.tab) OD_UI.tabs[view] = target.tab;
     }
     state.view = view;
@@ -157,6 +163,10 @@
   // Сервер подписывает дело идентификатором, когда у сущности нет имени: `order_<uuid>` не читается.
   // Тот же короткий номер, которым этот заказ называется на своём экране, — ORD-XXXXXXXX.
   function labelOf(item) {
+    // Правка — не заказ, но живёт в нём: подписывается номером заказа и строкой («ORD-…· строка 1»).
+    if (item.type === 'order-amendment-response' && item.detail?.orderId && typeof objectReference === 'function') {
+      return `${objectReference(item.detail.orderId)} · ${text('строка', 'line')} ${item.detail.lineNo}`;
+    }
     const label = String(item.label ?? '');
     if (label && label === String(item.entityId) && typeof objectReference === 'function') return objectReference(label);
     return label;

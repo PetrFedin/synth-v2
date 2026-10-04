@@ -1324,7 +1324,7 @@ function odOrderActions(item) {
   });
   const canWrite = caps.hasForTrade(state.workspace, item.brandId, item.shopId, caps.CAPABILITIES.ORDER_WRITE);
   if (item.status === 'ready' && canWrite) actions.push(actionButton(odText('\u041f\u0440\u0438\u043a\u0440\u0435\u043f\u0438\u0442\u044c \u043a \u0446\u0438\u043a\u043b\u0443', 'Attach to cycle'), () => mutate(`/v2/orders/${encodeURIComponent(item.id)}/attach`, { expectedVersion: item.version }), 'primary'));
-  if (['draft', 'ready', 'attached'].includes(item.status) && canWrite) actions.push(actionButton(odText('\u041e\u0442\u043c\u0435\u043d\u0438\u0442\u044c \u0437\u0430\u043a\u0430\u0437', 'Cancel order'), () => orderCancellationForm(item), 'danger'));
+  if (['draft', 'ready', 'attached'].includes(item.status) && canWrite && orderCancellationOffered(item)) actions.push(actionButton(odText('\u041e\u0442\u043c\u0435\u043d\u0438\u0442\u044c \u0437\u0430\u043a\u0430\u0437', 'Cancel order'), () => orderCancellationForm(item), 'danger'));
   return actions;
 }
 

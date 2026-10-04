@@ -79,6 +79,10 @@ function view(client) {
             (id, publication_id, brand_id, shop_id, currency, published_at, content_hash, payload)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)`, 'PRICE_LIST_VERSION_ALREADY_EXISTS', { priceListVersionId: value.id });
     },
+    async getPriceListVersionByContentHash(contentHash) {
+      const result = await client.query('SELECT payload FROM price_list_versions WHERE content_hash = $1 FOR SHARE', [contentHash]);
+      return result.rows[0]?.payload;
+    },
     async insertBuyerCatalogVersion(value) {
       await insertImmutable(client, 'buyer_catalog_versions', [
         value.id, value.publicationId, value.priceListVersionId, value.brandId, value.shopId, value.showroomId,

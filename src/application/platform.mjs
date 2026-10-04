@@ -646,6 +646,12 @@ export function createWholesalePlatform({
         async (tx) => {
           const current = requireEntity(await tx.getCycle(cycleId), 'CYCLE_NOT_FOUND', { cycleId });
           await authorizeTrade(tx, actorId, current, CAPABILITIES.ORDER_CONFIRM);
+          // Подтверждение открывает сделку по заказу «как он есть». Предложенная, но неотвеченная правка
+          // количества означает, что стороны ещё не договорились, какой он, — сделку открывать рано.
+          if (current.order?.id && typeof tx.listOrderAmendmentsByOrder === 'function') {
+            const pending = (await tx.listOrderAmendmentsByOrder(current.order.id)).filter((amendment) => amendment.status === 'proposed');
+            invariant(pending.length === 0, 'CYCLE_CONFIRMATION_AMENDMENT_PENDING', 'The order has an amendment awaiting a response; answer it before confirming the cycle', { cycleId, orderId: current.order.id, pendingAmendmentIds: pending.map((amendment) => amendment.id) });
+          }
           return current;
         },
         async (tx, current) => {

@@ -349,6 +349,31 @@ function transactionView(client) {
       const result = await client.query("SELECT payload FROM order_amendments WHERE order_id = $1 AND line_no = $2 AND status = 'proposed'", [orderId, lineNo]);
       return result.rows[0]?.payload;
     },
+    // Доступное к продаже по строке заказа — по тому же счётчику, который двигает триггер принятия
+    // правки (миграция 157): ProductSku v2 или каталог v1. Читается без блокировки: это ранний отказ
+    // при предложении, окончательное решение остаётся за триггером при принятии.
+    async getOrderLineAvailability(orderId, sku) {
+      const result = await client.query(
+        `SELECT reservation.inventory_identity_version, reservation.product_sku_id, reservation.sku, order_row.brand_id
+           FROM order_inventory_reservations AS reservation
+           JOIN orders AS order_row ON order_row.id = reservation.order_id
+          WHERE reservation.order_id = $1 AND reservation.sku = $2`,
+        [orderId, sku],
+      );
+      const reservation = result.rows[0];
+      if (!reservation) return undefined;
+      if (reservation.inventory_identity_version === 2) {
+        const balance = await client.query(
+          'SELECT available_quantity - reserved_quantity AS to_sell FROM product_sku_inventory_balances WHERE product_sku_id = $1 AND brand_id = $2',
+          [reservation.product_sku_id, reservation.brand_id],
+        );
+        if (!balance.rows[0]) return undefined;
+        return { code: 'PRODUCT_SKU_AVAILABILITY_EXCEEDED', availableToSell: Number(balance.rows[0].to_sell) };
+      }
+      const catalog = await client.query('SELECT available_quantity - reserved_quantity AS to_sell FROM catalog_skus WHERE sku = $1', [sku]);
+      if (!catalog.rows[0]) return undefined;
+      return { code: 'CATALOG_AVAILABILITY_EXCEEDED', availableToSell: Number(catalog.rows[0].to_sell) };
+    },
     async listOrderAmendmentsByOrder(orderId) {
       const result = await client.query('SELECT payload FROM order_amendments WHERE order_id = $1 ORDER BY proposed_at, id', [orderId]);
       return result.rows.map((row) => row.payload);
@@ -374,8 +399,8 @@ function transactionView(client) {
     insertOrderCommitSnapshot: (value) => insert(
       client,
       'order_commit_snapshots',
-      ['id', 'order_id', 'order_version', 'brand_id', 'shop_id', 'currency', 'retail_door_id', 'retail_door_version', 'committed_at', 'content_hash', 'payload'],
-      [value.id, value.orderId, value.orderVersion, value.brandId, value.shopId, value.currency, value.retailDoorId ?? null, value.retailDoorVersion ?? null, value.committedAt, value.contentHash, value],
+      ['id', 'order_id', 'order_version', 'brand_id', 'shop_id', 'currency', 'retail_door_id', 'retail_door_version', 'committed_at', 'content_hash', 'revision', 'supersedes_snapshot_id', 'payload'],
+      [value.id, value.orderId, value.orderVersion, value.brandId, value.shopId, value.currency, value.retailDoorId ?? null, value.retailDoorVersion ?? null, value.committedAt, value.contentHash, value.revision ?? 1, value.supersedesOrderCommitSnapshotId ?? null, value],
       'ORDER_COMMIT_SNAPSHOT_ALREADY_EXISTS',
     ),
 

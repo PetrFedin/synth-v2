@@ -60,7 +60,7 @@ function schemas() {
     // Недостача и разнооттеночность — сравнения, посчитанные при чтении: хранимое сравнение
     // устаревает при первой же правке выдачи.
     MaterialTraceability: {
-      type: 'object', additionalProperties: false, required: ['executionCode', 'quantity', 'materials', 'shortfalls', 'mixedDyeLots', 'missingMainMaterials'],
+      type: 'object', additionalProperties: false, required: ['executionCode', 'quantity', 'materials', 'shortfalls', 'mixedDyeLots', 'missingMainMaterials', 'mainShortfalls'],
       properties: {
         executionCode: { type: 'string', pattern: CODE }, quantity: version(),
         materials: { type: 'array', maxItems: 500, items: {
@@ -84,6 +84,8 @@ function schemas() {
         // Основные материалы ведомости (ткани), по которым не выдано ничего: с ними исполнение нельзя
         // закрыть последней вехой и нельзя допустить к отгрузке.
         missingMainMaterials: { type: 'array', maxItems: 500, items: text(1, 200) },
+        // Основные материалы, выданные не полностью (недостача > 0): с ними последнюю веху закрыть нельзя.
+        mainShortfalls: { type: 'array', maxItems: 500, items: text(1, 200) },
       },
     },
   };

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
-import { assertMaterialIssuedBeforeQc, assertShipmentIsTraceable, executionTraceability } from '../src/modules/material-lots/public.mjs';
+import { assertMaterialIssuedBeforeQc, assertShipmentIsTraceable, executionTraceability, mainMaterialShortfalls } from '../src/modules/material-lots/public.mjs';
 
 const root = process.cwd();
 const EXECUTION = Object.freeze({ executionCode: 'EXEC-PO-1', sku: 'SYN_TEE_DEMO_OFW_M' });
@@ -90,21 +90,62 @@ test('the last milestone asks for the same main materials the release does', () 
     assert.deepEqual(error.details.missingMaterials, ['FAB-SHELL']);
     return true;
   });
-  // Достаточно любой выдачи по основному материалу; количество — дело допуска.
-  assert.equal(assertMaterialIssuedBeforeQc(EXEC_100, FABRIC_BILL, [{ materialCode: 'FAB-SHELL', quantity: 1 }]), null);
+  // Одной выдачи мало: нужно полное покрытие потребности (100 x 2,568 = 256,8 м) — то же правило,
+  // что у допуска, иначе исполнение застревает в ready-for-qc (докомплектовать нельзя, допуск нельзя).
+  assert.throws(() => assertMaterialIssuedBeforeQc(EXEC_100, FABRIC_BILL, [{ materialCode: 'FAB-SHELL', quantity: 200 }]), (error) => {
+    assert.equal(error.code, 'PRODUCTION_READY_FOR_QC_MATERIAL_SHORTFALL');
+    assert.deepEqual(error.details.shortfalls, [{ materialCode: 'FAB-SHELL', unit: 'm', requiredQuantity: 256.8, issuedQuantity: 200, shortfallQuantity: 56.8 }]);
+    return true;
+  });
+  // Две выдачи вместе покрывают ровно — веха закрывается; трим на правило не влияет.
+  assert.equal(assertMaterialIssuedBeforeQc(EXEC_100, FABRIC_BILL, [{ materialCode: 'FAB-SHELL', quantity: 200 }, { materialCode: 'FAB-SHELL', quantity: 56.8 }]), null);
   // Ведомости нет — судить не о чем.
   assert.equal(assertMaterialIssuedBeforeQc(EXEC_100, null, []), null);
   // Нет тканей — основные все материалы ведомости.
   assert.throws(() => assertMaterialIssuedBeforeQc(EXEC_100, BILL, []), { code: 'PRODUCTION_READY_FOR_QC_WITHOUT_MATERIAL' });
 });
 
+test('the last milestone and the release use one shortfall calculation', () => {
+  const issues = [{ materialCode: 'FAB-SHELL', quantity: 200 }];
+  const shared = mainMaterialShortfalls(EXEC_100, FABRIC_BILL, issues);
+  let milestone = null; let release = null;
+  try { assertMaterialIssuedBeforeQc(EXEC_100, FABRIC_BILL, issues); } catch (error) { milestone = error; }
+  try { assertShipmentIsTraceable(EXEC_100, FABRIC_BILL, issues); } catch (error) { release = error; }
+  assert.deepEqual(milestone.details.shortfalls, shared);
+  assert.deepEqual(release.details.shortfalls, shared);
+  assert.equal(shared.length, 1);
+});
+
+test('a shortfall does not hide a lot in quarantine: the release refusal names both', () => {
+  const issues = [{ lotId: 'l1', lotReference: 'ROLL-1', materialCode: 'FAB-SHELL', quantity: 150 }];
+  const lots = [{ id: 'l1', lotReference: 'ROLL-1', materialCode: 'FAB-SHELL', status: 'quarantine' }];
+  assert.throws(() => assertShipmentIsTraceable(EXEC_100, FABRIC_BILL, issues, lots), (error) => {
+    assert.equal(error.code, 'QUALITY_RELEASE_MATERIAL_SHORTFALL');
+    assert.equal(error.details.shortfalls[0].shortfallQuantity, 106.8);
+    assert.deepEqual(error.details.lots, [{ lotReference: 'ROLL-1', materialCode: 'FAB-SHELL', status: 'quarantine' }]);
+    return true;
+  });
+});
+
 test('traceability lists the main materials that nothing was issued for', () => {
   const trace = executionTraceability({ execution: EXEC_100, bom: FABRIC_BILL, issues: [{ materialCode: 'BTN-1', lotId: 'l2', lotReference: 'B', quantity: 5 }] });
   assert.deepEqual([...trace.missingMainMaterials], ['FAB-SHELL']);
+  // Недостача по основному материалу отдельно от недостачи вообще: трим веху не держит.
+  const partial = executionTraceability({ execution: EXEC_100, bom: FABRIC_BILL, issues: [{ materialCode: 'FAB-SHELL', lotId: 'l1', lotReference: 'A', quantity: 200 }, { materialCode: 'BTN-1', lotId: 'l2', lotReference: 'B', quantity: 5 }] });
+  assert.deepEqual([...partial.shortfalls], ['BTN-1', 'FAB-SHELL']);
+  assert.deepEqual([...partial.mainShortfalls], ['FAB-SHELL']);
 });
 
 test('the cancellation check lets a ready-for-qc execution keep its ready time', async () => {
   const sql = await readFile(path.join(root, 'db/migrations/160_production_execution_cancel_keeps_ready_for_qc.sql'), 'utf8');
   assert.match(sql, /DROP CONSTRAINT production_executions_state_check/);
   assert.match(sql, /status = 'cancelled' AND cancelled_at IS NOT NULL/);
+});
+
+test('the interface explains the new refusal and blocks the last milestone on a main-material shortfall', async () => {
+  const messages = await readFile(path.join(root, 'public/modules/error-messages.js'), 'utf8');
+  assert.match(messages, /PRODUCTION_READY_FOR_QC_MATERIAL_SHORTFALL: '[^']*выдан не полностью/);
+  const panel = await readFile(path.join(root, 'public/modules/production-executions.js'), 'utf8');
+  assert.match(panel, /trace\.mainShortfalls/);
+  assert.match(panel, /disabled: Boolean\(ui\.busyCode\) \|\| blockedByMaterial/);
 });

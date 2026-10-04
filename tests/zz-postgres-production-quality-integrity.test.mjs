@@ -256,20 +256,48 @@ test('PostgreSQL: производство → качество — отмена
     assert.equal(cancelledAfterReject.status, 'cancelled');
     await assertCancelledConsistently(quarantined.execution.executionCode, quarantined.execution);
 
-    // === 3. Допуск: выдано меньше, чем нужно ==========================================================
-    // Выдано 150 м при потребности 270 м — запись о выдаче есть, а ткани под изделиями не хватает.
-    const short = await readyExecution('SHORT', 150);
-    const inspectionS = await passingInspection('SHORT', short.execution);
+    // === 2b. Ловушка порядка, узкий вид: выдано меньше, чем нужно ====================================
+    // Повторная приёмка: потребность 270 м, выдано 150 м — последняя веха раньше закрывалась, и
+    // исполнение застревало в ready-for-qc: докомплектовать нельзя (MATERIAL_LOT_EXECUTION_NOT_ACTIVE),
+    // допуск нельзя (SHORTFALL), блокировать веху нельзя. Теперь недовыдача не доходит до ready-for-qc.
+    const short = await activeExecution('SHORT');
+    await issueMaterial('SHORT', short, 150);
+    const shortBeforeLast = await completeUpTo('SHORT', short, 'packing-complete');
     await assert.rejects(
-      () => finalQuality.review('quality-release-SHORT', 'quality-approver', inspectionS.inspectionCode, releaseInput(inspectionS, 'SHORT')),
+      () => productionExecutions.completeMilestone('ms-SHORT-ready-refused', 'product-owner', shortBeforeLast.executionCode, { expectedVersion: shortBeforeLast.version, milestoneCode: 'ready-for-qc', notes: 'Partly issued' }),
       (error) => {
-        assert.equal(error.code, 'QUALITY_RELEASE_MATERIAL_SHORTFALL');
+        assert.equal(error.code, 'PRODUCTION_READY_FOR_QC_MATERIAL_SHORTFALL');
         assert.deepEqual(error.details.shortfalls, [{ materialCode: 'FAB-PINT', unit: 'm', requiredQuantity: REQUIRED_METRES, issuedQuantity: 150, shortfallQuantity: REQUIRED_METRES - 150 }]);
         return true;
       },
     );
-    assert.equal((await pool.query('SELECT count(*)::integer AS total FROM quality_shipment_releases WHERE execution_code = $1', [short.execution.executionCode])).rows[0].total, 0);
-    assert.equal((await pool.query('SELECT status FROM quality_inspections WHERE inspection_code = $1', [inspectionS.inspectionCode])).rows[0].status, 'review-pending');
+    const shortRow = await executionRow(shortBeforeLast.executionCode);
+    assert.equal(shortRow.status, 'active', 'the refusal leaves the execution where the rest can still be issued');
+    assert.equal(shortRow.version, shortBeforeLast.version);
+    assert.equal(shortRow.ready_for_qc_at, null);
+    // Докомплектовать можно, пока исполнение активно; после полного покрытия веха закрывается.
+    await issueMaterial('SHORT-REST', short, REQUIRED_METRES - 150);
+    const shortReady = await productionExecutions.completeMilestone('ms-SHORT-ready', 'product-owner', shortBeforeLast.executionCode, { expectedVersion: shortBeforeLast.version, milestoneCode: 'ready-for-qc', notes: 'Fully issued' });
+    assert.equal(shortReady.status, 'ready-for-qc');
+
+    // === 3. Допуск: недостача и карантин одновременно =================================================
+    // Недостача не должна прятать карантин: оба нарушения в одном отказе. Через модуль такое состояние
+    // уже не создать (веха не закроется), поэтому писатель в обход: выдача ужата прямым UPDATE.
+    const both = await readyExecution('BOTH');
+    const inspectionB = await passingInspection('BOTH', both.execution);
+    await pool.query("UPDATE material_lot_issues SET quantity = 150, payload = jsonb_set(payload, '{quantity}', '150') WHERE execution_code = $1", [both.execution.executionCode]);
+    await materialLots.quarantineLot('lot-quarantine-BOTH', 'quality-approver', both.lot.id, { expectedVersion: both.lot.version, reason: 'Mill reports dye fault in this roll' });
+    await assert.rejects(
+      () => finalQuality.review('quality-release-BOTH', 'quality-approver', inspectionB.inspectionCode, releaseInput(inspectionB, 'BOTH')),
+      (error) => {
+        assert.equal(error.code, 'QUALITY_RELEASE_MATERIAL_SHORTFALL');
+        assert.deepEqual(error.details.shortfalls, [{ materialCode: 'FAB-PINT', unit: 'm', requiredQuantity: REQUIRED_METRES, issuedQuantity: 150, shortfallQuantity: REQUIRED_METRES - 150 }]);
+        assert.deepEqual(error.details.lots, [{ lotReference: 'ROLL-BOTH', materialCode: 'FAB-PINT', status: 'quarantine' }]);
+        return true;
+      },
+    );
+    assert.equal((await pool.query('SELECT count(*)::integer AS total FROM quality_shipment_releases WHERE execution_code = $1', [both.execution.executionCode])).rows[0].total, 0);
+    assert.equal((await pool.query('SELECT status FROM quality_inspections WHERE inspection_code = $1', [inspectionB.inspectionCode])).rows[0].status, 'review-pending');
 
     // === Положительный путь допуска: покрытие ровно, партия выпущена ==================================
     const good = await readyExecution('GOOD');

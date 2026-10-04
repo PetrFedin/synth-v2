@@ -173,6 +173,11 @@
         } else if (shortage || damaged || rejected) {
           rows.push(row(text('Претензия', 'Claim'), text('не подана', 'not submitted')));
         }
+        // Возврат от поставщика приходит только бренду с правом на маржу (сервер убирает его из
+        // ответа для остальных), поэтому здесь он либо есть, либо строки нет вовсе.
+        (shipment.supplierRecoveries || []).forEach((recovery) => {
+          rows.push(row(text('Возврат от поставщика', 'Supplier recovery'), `${recovery.supplierCode} · ${money(recovery.recoveryAmount, recovery.currency)} · ${recovery.sourceRef}`));
+        });
       });
     });
 

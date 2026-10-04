@@ -48,6 +48,18 @@ export function createPostgresOrderFulfillmentReader({ pool } = {}) {
       const resolutions = claimIds.length
         ? await pool.query('SELECT payload FROM receipt_claim_resolution_snapshots WHERE claim_snapshot_id = ANY($1) ORDER BY resolved_at, id', [claimIds])
         : { rows: [] };
+      // Возврат от поставщика — продолжение решения по претензии. Читается тем же пакетом, а не по
+      // одному; кто вправе его видеть, решает служба чтения (это внутренняя экономика бренда).
+      const resolutionIds = resolutions.rows.map((row) => row.payload.id);
+      const recoveries = resolutionIds.length
+        ? await pool.query('SELECT payload FROM supplier_claim_recovery_snapshots WHERE claim_resolution_snapshot_id = ANY($1) ORDER BY recorded_at, id', [resolutionIds])
+        : { rows: [] };
+      const recoveriesByNotice = new Map();
+      for (const row of recoveries.rows) {
+        const list = recoveriesByNotice.get(row.payload.shipmentNoticeSnapshotId) ?? [];
+        list.push(row.payload);
+        recoveriesByNotice.set(row.payload.shipmentNoticeSnapshotId, list);
+      }
 
       const resolutionByClaim = new Map(resolutions.rows.map((row) => [row.payload.claimSnapshotId, row.payload]));
       const claimByDiscrepancy = new Map(claims.rows.map((row) => [row.payload.receiptDiscrepancySnapshotId, row.payload]));
@@ -83,6 +95,7 @@ export function createPostgresOrderFulfillmentReader({ pool } = {}) {
               discrepancy,
               claim,
               claimResolution: claim ? resolutionByClaim.get(claim.id) ?? null : null,
+              supplierRecoveries: Object.freeze(recoveriesByNotice.get(notice.id) ?? []),
             });
           })),
         });

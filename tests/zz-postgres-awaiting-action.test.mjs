@@ -48,7 +48,7 @@ test('PostgreSQL lists, in one statement, only the moves that are the reader\'s 
     // The owner holds every capability and belongs to the brand: everything that waits for the brand.
     assert.deepEqual(
       [...new Set(owner.items.map((item) => item.type))].sort(),
-      AWAITING_ACTION_TYPE_CODES.filter((type) => !['selection-approval', 'showroom-invitation-response', 'relationship-response'].includes(type)).sort(),
+      AWAITING_ACTION_TYPE_CODES.filter((type) => !['selection-approval', 'showroom-invitation-response', 'relationship-response', 'receipt-accept'].includes(type)).sort(),
       'every brand-side kind is present, none of the shop-side ones',
     );
     assert.equal(owner.total, owner.items.length);
@@ -59,13 +59,16 @@ test('PostgreSQL lists, in one statement, only the moves that are the reader\'s 
     assert.equal(owner.counts['inspection-review'].count, 1);
     assert.equal(owner.counts['supplier-payment'].count, 1, 'the paid and the not-yet-triggered milestones are not owed');
     assert.equal(owner.counts['showroom-invitation-response']?.count ?? 0, 0);
+    assert.equal(owner.counts['claim-resolve'].count, 1, 'the claim nobody has resolved yet; not the one with a resolution');
+    assert.equal(owner.counts['receipt-accept']?.count ?? 0, 0, 'receiving is the shop\'s move, not the brand\'s');
 
     // Each role sees its own part and nothing more.
     assert.deepEqual(await types('u-quality'), ['inspection-review', 'lab-dip-decision', 'material-lot-release']);
     assert.deepEqual(await types('u-finance'), ['compliance-document-issue', 'order-accept-terms', 'order-accept-terms', 'supplier-payment']);
-    assert.deepEqual(await types('u-sales'), ['order-accept-terms', 'order-accept-terms', 'order-amendment-response', 'order-attach']);
+    assert.deepEqual(await types('u-sales'), ['claim-resolve', 'order-accept-terms', 'order-accept-terms', 'order-amendment-response', 'order-attach']);
     assert.deepEqual(await types('u-viewer'), [], 'a viewer can read everything and do nothing');
-    assert.deepEqual(await types('u-buyer'), ['order-accept-terms', 'order-amendment-response', 'order-attach', 'relationship-response', 'showroom-invitation-response']);
+    // A shipment waits for the buyer until a FINAL receipt exists: a partial receipt leaves it open, a final one closes it.
+    assert.deepEqual(await types('u-buyer'), ['order-accept-terms', 'order-amendment-response', 'order-attach', 'receipt-accept', 'receipt-accept', 'relationship-response', 'showroom-invitation-response']);
     assert.deepEqual(await types('u-shopfin'), ['order-accept-terms', 'selection-approval']);
     // Somebody else's organisation, and somebody with none, are shown nothing of this brand's.
     assert.deepEqual(await types('u-outsider'), []);
@@ -117,12 +120,29 @@ test('PostgreSQL lists, in one statement, only the moves that are the reader\'s 
     // The state is the source: once the move is made, the item is gone, with nothing to clean up.
     await pool.query("UPDATE sourcing_rfqs SET status = 'awarded' WHERE rfq_code = 'RFQ-AW-1'");
     assert.equal((await service.forActor('u-owner', { type: 'rfq-award' })).total, 0);
+    // A claim leaves the brand's list the moment it has a resolution; a shipment leaves the buyer's once its receipt is final.
+    await raw(pool, "INSERT INTO receipt_claim_resolution_snapshots (id, claim_snapshot_id, claim_content_hash, order_id, order_version, order_commit_snapshot_id, supply_commitment_snapshot_id, fulfillment_plan_snapshot_id, shipment_notice_snapshot_id, latest_receipt_snapshot_id, receipt_discrepancy_snapshot_id, brand_id, shop_id, resolution_type, resolution_reason, status, resolved_at, content_hash, payload) VALUES ('res-late', 'clm-open', 'c', 'ord-attached', 2, 'oc', 'sc', 'fp', 'sn-open', 'rc', 'disc', $1, $2, 'rejected', 'no', 'resolved', $3, 'hash-late', '{}')", [BRAND, SHOP, now]);
+    assert.equal((await service.forActor('u-sales', { type: 'claim-resolve' })).total, 0);
+    await raw(pool, "UPDATE receipt_snapshots SET receipt_complete = true WHERE id = 'rc-partial'");
+    assert.deepEqual((await service.forActor('u-buyer', { type: 'receipt-accept' })).items.map((item) => item.entityId), ['sn-open']);
     await pool.query("UPDATE payment_milestones SET paid_at = $1 WHERE id = 'ms-1'", [now]);
     assert.equal((await service.forActor('u-finance', { type: 'supplier-payment' })).total, 0);
   } finally {
     await pool.end();
   }
 });
+
+// Snapshot tables are immutable and foreign-keyed on purpose; this test proves the reader's selection, so
+// its late edits go through a session that skips those guards, exactly as the seed does.
+async function raw(pool, text, params = []) {
+  const client = await pool.connect();
+  try {
+    await client.query("SET session_replication_role = 'replica'");
+    await client.query(text, params);
+  } finally {
+    client.release();
+  }
+}
 
 async function seed(pool) {
   const client = await pool.connect();
@@ -199,6 +219,36 @@ async function seed(pool) {
     await milestone('ms-2', 2, 'production-started', 30_000, null);
     await milestone('ms-3', 3, 'shipment-released', 40_000, null);
     await milestone('ms-0', 4, 'order-confirmed', 5_000, ago(30));
+
+    // Shipment tail: one shipment nobody has received, one received only in part, one received for good;
+    // one claim with no resolution, one that was resolved.
+    const trade = { order_id: 'ord-attached', order_commit_snapshot_id: 'oc', supply_commitment_snapshot_id: 'sc', brand_id: BRAND, shop_id: SHOP };
+    const shipment = (id, number, expectedIn) => insert('shipment_notice_snapshots', {
+      id, ...trade, fulfillment_plan_snapshot_id: 'fp', shipment_number: number, carrier: 'DHL', service_level: 'air',
+      shipped_at: ago(6), expected_delivery_at: new Date(Date.parse(now) + expectedIn * day).toISOString(),
+      lines: JSON.stringify([{ lineId: 'line-0001', quantity: 10 }]), status: 'shipped', created_at: ago(6), content_hash: `hash-${id}`, payload: { id },
+    });
+    await shipment('sn-open', 'ASN-OPEN', 3);
+    await shipment('sn-partial', 'ASN-PARTIAL', -1);
+    await shipment('sn-done', 'ASN-DONE', -2);
+    const receipt = (id, noticeId, complete) => insert('receipt_snapshots', {
+      id, ...trade, fulfillment_plan_snapshot_id: 'fp', shipment_notice_snapshot_id: noticeId, receipt_reference: `GRN-${id}`, received_by: 'Склад',
+      receipt_complete: complete, received_at: ago(1), lines: JSON.stringify([{ lineId: 'line-0001', receivedQuantity: 9 }]), status: 'received', created_at: ago(1), content_hash: `hash-${id}`, payload: { id },
+    });
+    await receipt('rc-partial', 'sn-partial', false);
+    await receipt('rc-done', 'sn-done', true);
+    const claim = (id, noticeId, submittedDaysAgo) => insert('receipt_discrepancy_claim_snapshots', {
+      id, ...trade, order_version: 2, fulfillment_plan_snapshot_id: 'fp', shipment_notice_snapshot_id: noticeId, latest_receipt_snapshot_id: 'rc-done',
+      receipt_discrepancy_snapshot_id: `disc-${id}`, receipt_discrepancy_content_hash: 'd', claim_reference: `CLM-${id}`, reason: 'Недостача', requested_remedy: 'credit',
+      issue_count: 1, lines: JSON.stringify([{ lineId: 'line-0001' }]), status: 'submitted', submitted_at: ago(submittedDaysAgo), content_hash: `hash-${id}`, payload: { id },
+    });
+    await claim('clm-open', 'sn-done', 2);
+    await claim('clm-closed', 'sn-done', 3);
+    await insert('receipt_claim_resolution_snapshots', {
+      id: 'res-1', claim_snapshot_id: 'clm-closed', claim_content_hash: 'c', ...trade, order_version: 2, fulfillment_plan_snapshot_id: 'fp', shipment_notice_snapshot_id: 'sn-done',
+      latest_receipt_snapshot_id: 'rc-done', receipt_discrepancy_snapshot_id: 'disc-clm-closed', resolution_type: 'accepted-for-credit', resolution_reason: 'ok',
+      status: 'resolved', resolved_at: ago(1), content_hash: 'hash-res-1', payload: {},
+    });
   } finally {
     client.release();
   }

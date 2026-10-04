@@ -54,6 +54,32 @@ const BRANCHES = Object.freeze({
      WHERE amendment.status = 'proposed'
        AND me.organisation_id <> amendment.proposed_organisation_id`,
 
+  // Поставка ждёт приёмки, пока нет окончательной приёмки (`receiptComplete`): частичная приёмка
+  // дело не закрывает, потому что недостача фиксируется только окончательной. Срок — ожидаемая
+  // доставка по уведомлению об отгрузке. Приёмку проводит только магазин-получатель.
+  'receipt-accept': (roles) => `
+    SELECT 'receipt-accept'::text, sn.id, sn.shipment_number, me.organisation_id,
+           sn.shipped_at, sn.expected_delivery_at,
+           jsonb_build_object('orderId', sn.order_id, 'shipmentNumber', sn.shipment_number, 'carrier', sn.carrier,
+                              'counterpartyName', ${PARTY_NAME('me', 'sn.brand_id', 'sn.shop_id')})
+      FROM shipment_notice_snapshots AS sn
+      JOIN me ON me.organisation_id = sn.shop_id AND me.role = ANY(${roles}::text[])
+     WHERE NOT EXISTS (SELECT 1 FROM receipt_snapshots AS rcpt
+                        WHERE rcpt.shipment_notice_snapshot_id = sn.id AND rcpt.receipt_complete)`,
+
+  // Претензия ждёт решения, пока у неё нет решения: оно неизменяемо и одно на претензию. Решает
+  // только бренд-продавец (`resolveClaim`).
+  'claim-resolve': (roles) => `
+    SELECT 'claim-resolve'::text, claim.id, claim.claim_reference, me.organisation_id,
+           claim.submitted_at, NULL::timestamptz,
+           jsonb_build_object('orderId', claim.order_id, 'claimReference', claim.claim_reference,
+                              'requestedRemedy', claim.requested_remedy,
+                              'counterpartyName', ${PARTY_NAME('me', 'claim.brand_id', 'claim.shop_id')})
+      FROM receipt_discrepancy_claim_snapshots AS claim
+      JOIN me ON me.organisation_id = claim.brand_id AND me.role = ANY(${roles}::text[])
+     WHERE NOT EXISTS (SELECT 1 FROM receipt_claim_resolution_snapshots AS resolution
+                        WHERE resolution.claim_snapshot_id = claim.id)`,
+
   'selection-approval': (roles) => `
     SELECT 'selection-approval'::text, sel.id, sel.id, me.organisation_id,
            COALESCE((sel.payload->>'approvalRequestedAt')::timestamptz, (sel.payload->>'updatedAt')::timestamptz),

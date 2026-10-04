@@ -109,6 +109,7 @@ const ASSETS = Object.freeze({
   '/ui/product-readiness-assessment.js': ['modules/product-readiness-assessment.js', JS, CACHE],
   '/ui/omnidata-workspace.js': ['modules/omnidata-workspace.js', JS, VISUAL_CACHE],
   '/ui/order-fulfillment-view.js': ['modules/order-fulfillment-view.js', JS, VISUAL_CACHE],
+  '/ui/order-fulfillment-actions.js': ['modules/order-fulfillment-actions.js', JS, VISUAL_CACHE],
   '/ui/order-lifecycle-actions.js': ['modules/order-lifecycle-actions.js', JS, CACHE],
   '/ui/omnidata-polish.js': ['modules/omnidata-polish.js', JS, VISUAL_CACHE],
   '/ui/omnidata-fidelity.js': ['modules/omnidata-fidelity.js', JS, VISUAL_CACHE],

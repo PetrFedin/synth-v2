@@ -261,7 +261,7 @@
     if (!accepted) return;
     try {
       await answer(`/v2/supplier-portal/rfqs/${encodeURIComponent(item.rfqCode)}/counter-offer/accept`, { expectedVersion: item.version, supplierCode: item.supplierCode });
-      toast(text('Встречное предложение принято.', 'Counter-offer accepted.'), 'success');
+      toastDone('встречное предложение принято.', 'the counter-offer is accepted.');
     } catch (error) { toast(error?.message || I18N.t('common.requestError'), 'error'); }
     renderApp();
   }

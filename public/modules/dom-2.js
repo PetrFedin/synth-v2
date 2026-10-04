@@ -51,12 +51,26 @@ function toast(message,type=''){
   if(type==='error'){const dialog=topModalDialog();if(dialog){showDialogError(dialog,humaniseError(message));return;}}
   TOAST_LIVE={message,type,until:Date.now()+4500};paintToast();
 }
+// Единый тост об успешном действии: «Готово: RFQ отправлен.» Подпись называет, что именно сделано.
+function toastDone(ru,en){
+  const label=typeof localText==='function'?localText('Готово','Done'):'Готово';
+  const what=typeof localText==='function'?localText(ru,en):ru;
+  toast(`${label}: ${what}`,'success');
+}
 function toastHost(){
   const base=document.querySelector('#toast');
   const dialog=topModalDialog();
   if(!dialog){return base;}
   let host=[...dialog.children].find(child=>typeof child.hasAttribute==='function'&&child.hasAttribute('data-toast-host'));
-  if(!host){host=document.createElement('div');host.className='toast';host.setAttribute('data-toast-host','');dialog.append(host);}
+  if(!host){
+    host=document.createElement('div');host.className='toast';host.setAttribute('data-toast-host','');dialog.append(host);
+    // Тост, нарисованный внутри диалога, умирает вместе с ним: «Готово: …» после отправки RFQ
+    // появлялся в диалоге, который тут же закрывался. Пока сообщение живо, после закрытия диалога
+    // оно показывается на обычном месте.
+    if(typeof dialog.addEventListener==='function'){
+      dialog.addEventListener('close',()=>{if(TOAST_LIVE&&Date.now()<TOAST_LIVE.until)paintToast();},{once:true});
+    }
+  }
   if(base)clear(base);
   return host;
 }

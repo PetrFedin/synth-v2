@@ -154,7 +154,7 @@
         }, 'POST');
         ui.seasonFor = null; // force a reload so the new row and its history appear
         await loadSeasonRates();
-        toast(text('Курс записан.', 'Rate recorded.'));
+        toastDone('курс записан.', 'the rate is recorded.');
         return true;
       } finally {
         ui.busyKey = null; renderApp();

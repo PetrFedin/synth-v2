@@ -138,7 +138,7 @@
     if (ui.busyCode) return null; ui.busyCode = code || 'new'; renderApp();
     try {
       const value = await mutate(path, body, 'POST'); upsert(value);
-      toast(t('Контур Final Quality обновлён.', 'Final Quality workflow updated.')); return value;
+      toastDone('финальный контроль обновлён.', 'final quality is updated.'); return value;
     } catch (error) {
       if (error?.code === 'QUALITY_CONCURRENCY_CONFLICT') queueMicrotask(() => { void load({ reset: true }); });
       toast(error?.message || I18N.t('common.requestError'), 'error'); return null;

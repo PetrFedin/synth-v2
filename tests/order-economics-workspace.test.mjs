@@ -108,6 +108,16 @@ function createBackend({ canonical = true } = {}) {
   return { state, routes };
 }
 
+// Склонение слов после числа — настоящий помощник рантайма i18n, а не копия в стенде.
+async function realI18n() {
+  const win = { Intl, Date, Object, Array, String, Number, Math, JSON, Map, Set, Error, localStorage: { getItem: () => null, setItem() {} }, navigator: { language: 'ru-RU' } };
+  win.window = win;
+  win.document = { documentElement: { lang: '' }, querySelectorAll: () => [], addEventListener() {} };
+  const ctx = vm.createContext(win);
+  vm.runInContext(await read('public/modules/i18n-runtime.js'), ctx, { filename: 'i18n-runtime.js' });
+  return win.SynthaI18n;
+}
+
 async function harness({ actor = 'own-1', memberRole = 'owner', canonical = true } = {}) {
   const backend = createBackend({ canonical });
   let command = 0;
@@ -115,7 +125,7 @@ async function harness({ actor = 'own-1', memberRole = 'owner', canonical = true
   const window = {};
   const context = vm.createContext({
     window, document: {},
-    I18N: { t: (key) => key, translate: (value) => value, localeTag: () => 'ru-RU', getLocale: () => 'ru', formatNumber: (value) => String(value) },
+    I18N: { t: (key) => key, translate: (value) => value, localeTag: () => 'ru-RU', getLocale: () => 'ru', formatNumber: (value) => String(value), plural: (await realI18n()).plural, formatDate: (value) => String(value).slice(0, 10) },
     localText: (ru) => ru,
     state: { workspace: { organisations: [{ id: 'BRAND-1', type: 'brand' }], memberships: [{ organisationId: 'BRAND-1', role: memberRole, status: 'active', userId: actor }] } },
     Date, Number, String, Object, Array, Math, Error, JSON, Promise, Set, Map, RegExp, encodeURIComponent, setTimeout,
@@ -534,8 +544,9 @@ test('the workspace never reconstructs money client-side and re-reads position a
   assert.match(source, /part\.orderCommitSnapshotId !== order\.orderCommitSnapshotId/);
   assert.doesNotMatch(source, /totalAmount\s*-/);
   assert.doesNotMatch(source, /Idempotency-Key/i, 'the shared api() adds a key per mutation and reuses it on retries');
-  assert.match(source, /await refresh\(\)/);
-  assert.match(source, /waitForRender/);
+  assert.match(source, /await refresh\(DONE\./);
+  // Форма шага возвращает экран шагов из afterSave (уже в новом диалоге), а не из закрытия диалога.
+  assert.match(source, /afterSave: \(\) => reopen\(\)/);
 });
 
 test('every error code the workspace raises or the server answers has a Russian sentence', async () => {
@@ -649,4 +660,136 @@ test('the PostgreSQL ledger reader only selects columns and tables the migration
     assert.doesNotMatch(sql, /\b(INSERT|UPDATE|DELETE)\b/);
   }
   for (const [, sql] of queries.filter(([, query]) => /ORDER BY/.test(query) && !/LIMIT 1/.test(query) && !/order_id = \$1/.test(query))) assert.match(sql, /LIMIT \$2/, sql);
+});
+
+
+// --- N8: состояние шагов после закрытия соответствует правилам сервера ------------------------------------------
+
+async function walkToClosed(h, { adjust = false } = {}) {
+  const policyId = await walkToMargin(h);
+  const readinessForm = await h.run('readiness');
+  await readinessForm.submit(Object.fromEntries(['factory', 'freight', 'duty', 'credits'].flatMap((type) => [[`status_${type}`, 'complete'], [`waiver_${type}`, '']])));
+  await h.run('close');
+  if (adjust) {
+    const { ledger } = await h.load();
+    await h.run('adjustment', { reason: 'Доплата по инвойсу', supplyCommitmentSnapshotId: ledger.supplyCommitments[0].id, costType: 'freight', amount: '25', currency: 'EUR', fxRateSnapshotId: '', sourceRef: 'INV-9', occurredAt: '2026-10-02' });
+  }
+  return policyId;
+}
+
+test('after the cost close and an adjustment the steps follow the server rules: margin and readiness are done, nothing is blocked by a run the margin cannot take any more', async () => {
+  const h = await harness();
+  const policyId = await walkToClosed(h);
+  let { position, ledger } = await h.load();
+  let steps = h.ui.deriveSteps({ position, ledger, can: h.can() });
+  const step = (id) => steps.find((item) => item.id === id);
+  for (const id of ['supply', 'cost', 'landed', 'allocation', 'margin', 'readiness', 'close']) assert.equal(step(id).state, 'done', `${id} right after the close`);
+  assert.equal(step('adjustment').state, 'optional');
+
+  await h.run('adjustment', { reason: 'Доплата по инвойсу', supplyCommitmentSnapshotId: ledger.supplyCommitments[0].id, costType: 'freight', amount: '25', currency: 'EUR', fxRateSnapshotId: '', sourceRef: 'INV-9', occurredAt: '2026-10-02' });
+  ({ position, ledger } = await h.load());
+  steps = h.ui.deriveSteps({ position, ledger, can: h.can() });
+  // Сервер не принимает ни актуализацию маржи, ни новую проверку готовности у закрытого заказа: маржу
+  // после корректировки обновляет только «Сверка распределения». «Нужно сделать» с недоступной кнопкой —
+  // тупик, из которого человек не знает выхода.
+  assert.equal(step('margin').state, 'done');
+  assert.equal(step('margin').blocker, null, 'no «a run the margin has not taken» blocker on a closed order');
+  assert.equal(step('margin').actions[0].enabled, false);
+  assert.equal(step('readiness').state, 'done');
+  assert.equal(step('readiness').blocker, null);
+  assert.equal(step('landed').state, 'done');
+  assert.equal(step('close').state, 'done');
+  // А настоящая работа названа: прогон по себестоимости после корректировки, затем сверка.
+  assert.equal(step('allocation').state, 'todo');
+  assert.equal(step('allocation').actions.find((item) => item.id === 'allocation').enabled, true);
+  assert.equal(step('reconcile').state, 'todo');
+  assert.match(step('reconcile').blocker, /прогон распределения/i);
+  assert.ok(step('margin').summary.some((line) => /Сверка распределения/.test(typeof line === 'string' ? line : line.text)), 'the margin step says what refines the margin');
+  assert.doesNotMatch(JSON.stringify(plain(steps.map((item) => item.blocker))), /которого маржа ещё не учла/);
+
+  await h.run('allocation', { policyVersionId: policyId });
+  await h.run('reconcile');
+  ({ position, ledger } = await h.load());
+  steps = h.ui.deriveSteps({ position, ledger, can: h.can() });
+  for (const item of steps.filter((entry) => entry.id !== 'fx')) assert.ok(['done', 'locked'].includes(item.state) || item.id === 'adjustment', `${item.id} is ${item.state} after the reconciliation`);
+  assert.equal(step('allocation').state, 'done');
+  assert.equal(step('reconcile').state, 'done');
+  assert.equal(step('reconcile').blocker, null, 'a reconciled adjustment is not «nothing to reconcile»');
+});
+
+test('an open order keeps the old rule: an allocation run the margin has not taken is a real blocker with an enabled button', async () => {
+  const h = await harness();
+  await walkToLanded(h);
+  await h.run('policy', { name: 'Стандарт', version: 1, defaultBasis: 'unit' });
+  const { position, ledger } = await h.load();
+  const steps = h.ui.deriveSteps({ position, ledger, can: h.can() });
+  assert.equal(steps.find((item) => item.id === 'margin').state, 'todo');
+  assert.equal(steps.find((item) => item.id === 'readiness').state, 'todo');
+});
+
+test('every step action hands its «Готово» wording to the screen, and forms carry it too', async () => {
+  const h = await harness();
+  const { position, ledger } = await h.load();
+  const refreshed = [];
+  const forms = [];
+  const handlers = h.ui.createActions({ order, position, ledger, can: h.can(), refresh: async (done) => { refreshed.push(done); }, openStepForm: (title, fields, submit, message) => { forms.push(message); } });
+  await handlers.supply();
+  await handlers.fx();
+  await handlers.policy();
+  assert.equal(forms.length, 3);
+  for (const message of forms) {
+    assert.ok(Array.isArray(message) && message[0] && message[1], 'every form step names what it did, in both languages');
+    assert.match(message[0], /\.$/);
+  }
+  await walkToLanded(h);
+  const after = await h.load();
+  const next = h.ui.createActions({ order, position: after.position, ledger: after.ledger, can: h.can(), refresh: async (done) => { refreshed.push(done); }, openStepForm: () => {} });
+  await next.landed();
+  assert.ok(refreshed.at(-1)?.[0], 'direct actions (landed, margin, close, reconcile) pass their wording to refresh');
+});
+
+// --- N5b: подписи для человека -----------------------------------------------------------------------------------
+
+test('steps and selects show what a snapshot is, not its identifier; the short code stays in the hint', async () => {
+  const h = await harness();
+  await walkToMargin(h);
+  const { position, ledger } = await h.load();
+  const steps = h.ui.deriveSteps({ position, ledger, can: h.can() });
+  const lines = steps.flatMap((item) => item.summary).map((entry) => (typeof entry === 'string' ? entry : entry.text));
+  assert.ok(lines.length >= 5);
+  for (const text of lines) assert.doesNotMatch(text, /(supply-commitment|landed-cost|cost-allocation-run|cost-close-readiness|fx-rate|margin-actualization)[_-]/, `identifier in «${text}»`);
+  const supply = steps.find((item) => item.id === 'supply').summary[0];
+  assert.match(supply.text, /SKU-A × 4/);
+  assert.match(supply.text, /SKU-B × 6/);
+  assert.equal(supply.hint, ledger.supplyCommitments[0].id.split('_').at(-1).slice(0, 8), 'the short code is the hint');
+  assert.match(steps.find((item) => item.id === 'allocation').summary.map((entry) => entry.text ?? entry).join(' '), /Прогон №1/);
+
+  let form = null;
+  const handlers = h.ui.createActions({ order, position, ledger, can: h.can(), refresh: async () => {}, openStepForm: (title, fields) => { form = fields; } });
+  await handlers.cost();
+  const commitment = field({ fields: form }, 'supplyCommitmentSnapshotId');
+  assert.doesNotMatch(commitment.format(ledger.supplyCommitments[0]), /supply-commitment/);
+  assert.match(commitment.format(ledger.supplyCommitments[0]), /SKU-A × 4/);
+  assert.match(commitment.optionTitle(ledger.supplyCommitments[0]), /Код: /);
+  const fx = field({ fields: form }, 'fxRateSnapshotId');
+  const fxItem = ledger.fxRateSnapshots[0];
+  assert.doesNotMatch(fx.format(fxItem), /fx-rate/);
+  assert.match(fx.format(fxItem), /0\.92|0,92/);
+  assert.match(fx.optionTitle(fxItem), /Код: /);
+});
+
+test('the number of policies reads in Russian: one policy, two policies, five policies', async () => {
+  const h = await harness();
+  await walkToLanded(h);
+  const summaryOf = async () => {
+    const { position, ledger } = await h.load();
+    return h.ui.deriveSteps({ position, ledger, can: h.can() }).find((item) => item.id === 'allocation').summary.map((entry) => entry.text ?? entry).join(' | ');
+  };
+  await h.run('policy', { name: 'П1', version: 1, defaultBasis: 'unit' });
+  assert.match(await summaryOf(), /Для выбора: 1 политика(?!\w)/);
+  await h.run('policy', { name: 'П2', version: 2, defaultBasis: 'unit' });
+  assert.match(await summaryOf(), /Для выбора: 2 политики/);
+  for (const version of [3, 4, 5]) await h.run('policy', { name: `П${version}`, version, defaultBasis: 'unit' });
+  assert.match(await summaryOf(), /Для выбора: 5 политик(?!\w)/);
+  assert.doesNotMatch(await summaryOf(), /Политик для выбора/);
 });

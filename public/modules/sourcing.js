@@ -146,6 +146,35 @@
   function upsertRfq(rfq) { const map = new Map(ui.rfqs.map((item) => [item.rfqCode, item])); map.set(rfq.rfqCode, rfq); ui.rfqs = [...map.values()].sort((a, b) => a.rfqCode.localeCompare(b.rfqCode)); ui.selectedRfqCode = rfq.rfqCode; }
   function upsertMaterialRfq(rfq) { const map = new Map(ui.materialRfqs.map((item) => [item.rfqCode, item])); map.set(rfq.rfqCode, rfq); ui.materialRfqs = [...map.values()].sort((a, b) => a.rfqCode.localeCompare(b.rfqCode)); ui.selectedMaterialRfqCode = rfq.rfqCode; }
   function upsertMaterialPurchaseOrder(order) { const map = new Map(ui.materialPurchaseOrders.map((item) => [item.purchaseOrderNumber, item])); map.set(order.purchaseOrderNumber, order); ui.materialPurchaseOrders = [...map.values()].sort((a, b) => a.purchaseOrderNumber.localeCompare(b.purchaseOrderNumber)); ui.selectedMaterialPurchaseOrderNumber = order.purchaseOrderNumber; }
+  // Что именно сделано — по маршруту команды. Тост «Готово: …» называет действие, а не повторяет
+  // «Изменения сохранены»: статус записи в реестре меняется под диалогом, и без названия человек не
+  // понимал, отправился ли запрос. Незнакомый маршрут получает общую подпись.
+  const DONE_BY_SUFFIX = [
+    [/\/counter-offer\/accept$/, ['встречное предложение принято.', 'the counter-offer is accepted.']],
+    [/\/counter-offer$/, ['встречное предложение отправлено.', 'the counter-offer is sent.']],
+    [/\/portal-access\/revoke$/, ['доступ к порталу отозван.', 'portal access is revoked.']],
+    [/\/portal-access$/, ['доступ к порталу открыт.', 'portal access is granted.']],
+    [/\/issue$/, ['запрос отправлен.', 'the request is issued.']],
+    [/\/quotes$/, ['котировка записана.', 'the quotation is recorded.']],
+    [/\/award$/, ['победитель выбран.', 'the supplier is awarded.']],
+    [/\/allocate$/, ['размещение выполнено.', 'the allocation is done.']],
+    [/\/cancel$/, ['отменено.', 'cancelled.']],
+    [/\/qualify$/, ['поставщик квалифицирован.', 'the supplier is qualified.']],
+    [/\/suspend$/, ['поставщик приостановлен.', 'the supplier is suspended.']],
+    [/\/archive$/, ['поставщик отправлен в архив.', 'the supplier is archived.']],
+    [/\/confirm$/, ['подтверждение зафиксировано.', 'the confirmation is recorded.']],
+  ];
+  function doneMessage(path, method) {
+    const hit = DONE_BY_SUFFIX.find(([pattern]) => pattern.test(path));
+    if (hit) return hit[1];
+    if (method === 'POST') {
+      if (/\/suppliers$/.test(path)) return ['поставщик создан.', 'the supplier is created.'];
+      if (/\/material-rfqs$/.test(path)) return ['запрос на материал создан.', 'the material request is created.'];
+      if (/\/rfqs$/.test(path)) return ['запрос цен создан.', 'the RFQ is created.'];
+      return ['запись создана.', 'the record is created.'];
+    }
+    return ['изменения сохранены.', 'changes are saved.'];
+  }
   async function runMutation(key, path, body, method = 'POST', kind = 'rfq') {
     if (ui.busyKey) return null;
     ui.busyKey = key; renderApp();
@@ -159,7 +188,8 @@
       else if (kind === 'materialRfq') upsertMaterialRfq(result);
       else if (kind === 'materialPurchaseOrder') upsertMaterialPurchaseOrder(result);
       else upsertRfq(result);
-      toast(text('Изменения сохранены.', 'Changes saved.'));
+      const done = doneMessage(path, method);
+      toastDone(done[0], done[1]);
       return result;
     } catch (error) {
       if (String(error?.code || '').includes('CONCURRENCY_CONFLICT')) { reset(); queueMicrotask(() => { void loadSourcing({ reset: true }); }); }
@@ -658,10 +688,10 @@
       const allocated = await runMutation(rfq.rfqCode, `/v2/rfqs/${encodeURIComponent(rfq.rfqCode)}/allocate`, { expectedVersion: rfq.version, purchaseOrderNumber: values.purchaseOrderNumber.trim().toUpperCase(), quantity: Number(values.quantity), productionStartAt: iso(values.productionStartAt), deliveryDueAt: iso(values.deliveryDueAt), notes: values.notes.trim() || null });
       if (!allocated) return false;
       if (!can(rfq.brandId, caps.CAPABILITIES.PRODUCTION_ORDER_MANAGE)) {
-        toast(text(
-          `Размещение выполнено. Производственный заказ откроет тот, у кого есть право на производственные заказы — код запроса ${rfq.rfqCode}.`,
-          `Allocated. Someone with production-order rights opens the order itself — request code ${rfq.rfqCode}.`,
-        ));
+        toastDone(
+          `размещение выполнено. Производственный заказ откроет тот, у кого есть право на производственные заказы — код запроса ${rfq.rfqCode}.`,
+          `allocated. Someone with production-order rights opens the order itself — request code ${rfq.rfqCode}.`,
+        );
         return true;
       }
       await openProductionOrder(rfq.rfqCode);
@@ -672,7 +702,7 @@
   async function openProductionOrder(rfqCode) {
     try {
       const order = await mutate(`/v2/production-orders/from-allocation/${encodeURIComponent(rfqCode)}`, {}, 'POST');
-      toast(text(`Производственный заказ ${order.productionOrderNumber} открыт.`, `Production order ${order.productionOrderNumber} is open.`));
+      toastDone(`производственный заказ ${order.productionOrderNumber} открыт.`, `production order ${order.productionOrderNumber} is open.`);
     } catch (error) {
       // The allocation succeeded and must not be reported as a failure; what failed is the step after
       // it, and the message says which step and what to do about it.
@@ -894,7 +924,7 @@
       }, 'POST', 'materialRfq');
       if (!allocated) return false;
       if (!can(rfq.brandId, caps.CAPABILITIES.MATERIAL_PURCHASE_MANAGE)) {
-        toast(text(`Размещение выполнено. Заказ на материал откроет тот, у кого есть право на закупку материала — код запроса ${rfq.rfqCode}.`, `Allocated. Someone with material purchase rights opens the order itself — request code ${rfq.rfqCode}.`));
+        toastDone(`размещение выполнено. Заказ на материал откроет тот, у кого есть право на закупку материала — код запроса ${rfq.rfqCode}.`, `allocated. Someone with material purchase rights opens the order itself — request code ${rfq.rfqCode}.`);
         return true;
       }
       await openMaterialPurchaseOrderFromAllocation(rfq.rfqCode);
@@ -905,7 +935,7 @@
     try {
       const order = await mutate(`/v2/material-rfqs/${encodeURIComponent(rfqCode)}/purchase-order`, {}, 'POST');
       upsertMaterialPurchaseOrder(order);
-      toast(text(`Заказ на материал ${order.purchaseOrderNumber} открыт.`, `Material purchase order ${order.purchaseOrderNumber} is open.`));
+      toastDone(`заказ на материал ${order.purchaseOrderNumber} открыт.`, `material purchase order ${order.purchaseOrderNumber} is open.`);
     } catch (error) {
       toast(text(
         `Размещение выполнено, но заказ на материал не открылся: ${errorMessage(error)} Откройте его в разделе «Заказы на материал» по коду ${rfqCode}.`,
@@ -983,7 +1013,7 @@
   };
   global.SynthaSourcingWorkspace.fetchAllPages = fetchAllPages;
   // The dialogs are reachable for the tests that press their buttons the way a person does.
-  Object.assign(global.SynthaSourcingWorkspace, { openAwardDialog, openAllocationDialog });
+  Object.assign(global.SynthaSourcingWorkspace, { openAwardDialog, openAllocationDialog, issueRfq });
   // Один чтение кормит все пять экранов закупок; «Перейти» из «Ждёт вас» перечитывает его заново.
   global.SynthaViewRefresh?.register([...SOURCING_VIEWS, ...MATERIAL_SOURCING_VIEWS], () => loadSourcing({ reset: true }));
   // «Перейти» из «Ждёт вас»: после перечитывания (оно сбрасывает выбор) выбирается RFQ или заказ по коду,

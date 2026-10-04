@@ -455,7 +455,21 @@
       } catch (error) {
         throw notePartial(error, 'обязательство поставки записано', 'the supply commitment is recorded');
       }
-    });
+    }, stepDone(order, 'план поставки создан.', 'the fulfillment plan is created.'));
+  }
+
+  // Шаг цепочки «план → отгрузка → приёмка → претензия» меняет то, что нарисовано в рабочем месте:
+  // кнопки следующего шага, количества, статус приёмки. Форма открывается в том же диалоге и после
+  // сохранения закрывает его, поэтому рабочее место открывается заново уже со свежим состоянием
+  // сервера и заказом из перечитанного рабочего пространства.
+  function stepDone(order, ru, en) {
+    return {
+      afterSave: () => {
+        const fresh = (state.workspace?.orders || []).find((item) => item.id === order.id) || order;
+        return global.orderFulfillmentWorkspaceDialog(fresh);
+      },
+      successMessage: [ru, en],
+    };
   }
 
   function shipmentForm(order, plan) {
@@ -480,7 +494,7 @@
     openForm(t('Уведомление об отгрузке', 'Shipment notice'), fields, async (values) => {
       const body = buildShipmentNotice({ plan, values, quantities: remaining.map((_, index) => values[`qty${index}`]) });
       return mutate(path`/v2/fulfillment-plans/${plan.id}/shipment-notices`, body, 'POST');
-    });
+    }, stepDone(order, 'уведомление об отгрузке отправлено.', 'the shipment notice is sent.'));
   }
 
   function receiptForm(order, shipment) {
@@ -506,7 +520,7 @@
     openForm(`${t('Приёмка поставки', 'Receipt of shipment')} ${shipment.shipmentNumber}`, fields, async (values) => {
       const rows = (shipment.lines || []).map((_, index) => ({ received: values[`received${index}`], damaged: values[`damaged${index}`], rejected: values[`rejected${index}`] }));
       return mutate(path`/v2/shipment-notices/${shipment.id}/receipts`, buildReceipt({ shipment, values, rows }), 'POST');
-    });
+    }, stepDone(order, 'приёмка записана.', 'the receipt is recorded.'));
   }
 
   function discrepancySummary(discrepancy) {
@@ -529,7 +543,7 @@
       textDef('claimReference', t('Номер претензии', 'Claim reference'), `CLM-${shipment.shipmentNumber}`.slice(0, 160), 160, true, 2),
       selectDef('requestedRemedy', t('Что требуете', 'Requested remedy'), Object.keys(REMEDIES), (key) => labelled(REMEDIES, key), 'credit'),
       textDef('reason', t('Причина расхождения', 'Reason for the discrepancy'), '', 2000, true, 2),
-    ], async (values) => mutate(path`/v2/receipt-discrepancies/${discrepancy.id}/claims`, buildClaim(values), 'POST'));
+    ], async (values) => mutate(path`/v2/receipt-discrepancies/${discrepancy.id}/claims`, buildClaim(values), 'POST'), stepDone(order, 'претензия подана.', 'the claim is submitted.'));
   }
 
   function resolutionForm(order, shipment) {
@@ -537,7 +551,7 @@
     openForm(`${t('Решение по претензии', 'Claim resolution')} ${claim.claimReference}`, [
       selectDef('resolutionType', t('Решение', 'Resolution'), Object.keys(RESOLUTIONS), (key) => labelled(RESOLUTIONS, key), 'accepted-for-credit'),
       textDef('resolutionReason', t('Обоснование', 'Reason'), '', 2000, true, 2),
-    ], async (values) => mutate(path`/v2/receipt-claims/${claim.id}/resolutions`, buildResolution(values), 'POST'));
+    ], async (values) => mutate(path`/v2/receipt-claims/${claim.id}/resolutions`, buildResolution(values), 'POST'), stepDone(order, 'решение по претензии записано.', 'the claim resolution is recorded.'));
   }
 
   async function recoveryForm(order, shipment) {
@@ -564,7 +578,7 @@
       textDef('sourceRef', t('Документ поставщика (кредит-нота)', 'Supplier document (credit note)'), '', 240),
       dateTimeDef('occurredAt', t('Дата документа', 'Document date'), localInput()),
       textDef('reason', t('Основание', 'Reason'), '', 1000, true, 2),
-    ], async (values) => mutate(path`/v2/receipt-claim-resolutions/${resolution.id}/supplier-recoveries`, buildSupplierRecovery({ claim, order, values }), 'POST'));
+    ], async (values) => mutate(path`/v2/receipt-claim-resolutions/${resolution.id}/supplier-recoveries`, buildSupplierRecovery({ claim, order, values }), 'POST'), stepDone(order, 'возврат от поставщика записан.', 'the supplier recovery is recorded.'));
   }
 
   // --- рабочее место ---------------------------------------------------------------------------------
@@ -682,7 +696,7 @@
     if (topActions.childNodes.length) grid.append(topActions);
 
     close.addEventListener('click', () => dialog.close());
-    body.append(head, grid); dialog.append(body); dialog.showModal();
+    body.append(head, grid); dialog.append(body); if (!dialog.open) dialog.showModal();
   };
 
   global.SynthaFulfillmentForms = Object.freeze({

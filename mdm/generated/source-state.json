@@ -1,4 +1,25 @@
 {
   "state_version": "1",
-  "sources": {}
+  "sources": {
+    "iso_4217_six": {
+      "fingerprint": "b77758c266fcd67308d048c10bc658dcff82282086652059025573f018e4fd2b",
+      "etag": "\"b983-65d152496301e-gzip\"",
+      "last_modified": "Mon, 05 Oct 2026 10:14:09 GMT",
+      "content_length": "5640",
+      "body_sha256": null,
+      "source_url": "https://www.six-group.com/en/products-services/financial-information/market-reference-data/data-standards.html",
+      "probe_url": "https://www.six-group.com/dam/download/financial-information/data-center/iso-currrency/lists/list-one.xml",
+      "last_changed_at": "2026-10-05T10:25:41.721Z"
+    },
+    "iana_tzdb": {
+      "fingerprint": "0941fed6a2a872ff37dcf459a8f631626526fc2bf1bd3f903509555f01bf31cd",
+      "etag": "\"75ac5-65ca8e908efa8\"",
+      "last_modified": "Wed, 30 Sep 2026 01:06:34 GMT",
+      "content_length": "481989",
+      "body_sha256": null,
+      "source_url": "https://data.iana.org/time-zones/tz-link.html",
+      "probe_url": "https://data.iana.org/time-zones/tzdata-latest.tar.gz",
+      "last_changed_at": "2026-10-05T10:25:41.877Z"
+    }
+  }
 }

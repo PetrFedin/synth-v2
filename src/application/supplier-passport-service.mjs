@@ -267,9 +267,24 @@ function buildPartnerBundle(passport) {
       issuer: null,
     },
   };
+  const hashPayload = {
+    schemaVersion: canonical.schemaVersion,
+    supplier: canonical.supplier,
+    qualification: {
+      state: canonical.qualification.state,
+      auditState: canonical.qualification.auditState,
+      auditExpiresAt: canonical.qualification.auditExpiresAt,
+    },
+    evidenceDimensions: canonical.evidenceDimensions,
+    evidenceCounters: canonical.evidenceCounters,
+    lineage: canonical.lineage,
+    disclosureBoundary: canonical.disclosureBoundary,
+    signature: canonical.signature,
+  };
   return Object.freeze({
     ...canonical,
-    bundleSha256: crypto.createHash('sha256').update(stable(canonical)).digest('hex'),
+    hashScope: 'stable-evidence-v1',
+    bundleSha256: crypto.createHash('sha256').update(stable(hashPayload)).digest('hex'),
   });
 }
 

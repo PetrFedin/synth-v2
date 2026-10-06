@@ -14,6 +14,12 @@ function ctx(route,{body={},query={},commandId='cmd-1'}={}){return {actorId:'use
 test('product engineering routes expose evidence-first workflow',async()=>{
   const {calls,routes}=fixture();
   const cases=[
+    ['POST','/v2/product/styles/style-1/engineering/sources',{body:{kind:'document',ingestMode:'upload',mediaType:'application/pdf',contentHash:'a'.repeat(64),storageRef:'object://bucket/spec.pdf'}}],
+    ['GET','/v2/product-engineering/sources/source-1',{}],
+    ['POST','/v2/product-engineering/sources/source-1/scan',{body:{expectedVersion:1,status:'clean',engine:'scanner-v1'}}],
+    ['POST','/v2/product-engineering/sources/source-1/admit',{body:{expectedVersion:2,policyVersion:'intake-v1'}}],
+    ['POST','/v2/product-engineering/sources/source-1/fragments',{body:{kind:'document_page',locator:{page:1},content:{text:'BOM'}}}],
+    ['POST','/v2/product-engineering/sources/source-1/parse-complete',{body:{expectedVersion:3,parser:'pdf-structure',parserVersion:'1.0',fragmentCount:1}}],
     ['POST','/v2/product/styles/style-1/engineering/analyses',{body:{styleVersionId:'sv-1',purpose:'garment_interpretation',inputManifest:{assets:['m1']}}}],
     ['GET','/v2/product/styles/style-1/engineering',{query:{limit:'50'}}],
     ['GET','/v2/product-engineering/analyses/analysis-1',{}],
@@ -30,6 +36,7 @@ test('product engineering routes expose evidence-first workflow',async()=>{
     await route.execute(ctx(route,{...input,commandId:`cmd-${i}`}));
   }
   assert.deepEqual(calls.map(row=>row[0]),[
+    'registerSource','getSourceForActor','recordSourceScan','admitSource','addSourceFragment','completeSourceParsing',
     'requestAnalysis','getStyleWorkspaceForActor','getAnalysisWorkspaceForActor','startAnalysis',
     'recordFinding','createProposal','createConflict','createDrawing',
   ]);
@@ -47,6 +54,13 @@ test('transport refuses unknown fields and malformed evidence before service exe
 test('OpenAPI documents engineering review and every mutation carries idempotency',()=>{
   const spec=wholesaleV2ExtendedOpenApi;
   const paths=[
+    '/product/styles/{styleId}/engineering/sources',
+    '/product-engineering/sources/{sourceId}',
+    '/product-engineering/sources/{sourceId}/scan',
+    '/product-engineering/sources/{sourceId}/admit',
+    '/product-engineering/sources/{sourceId}/reject',
+    '/product-engineering/sources/{sourceId}/fragments',
+    '/product-engineering/sources/{sourceId}/parse-complete',
     '/product/styles/{styleId}/engineering/analyses',
     '/product/styles/{styleId}/engineering',
     '/product-engineering/analyses/{analysisRunId}',
@@ -67,4 +81,15 @@ test('OpenAPI documents engineering review and every mutation carries idempotenc
   }
   assert.equal(spec.components.schemas.ProductEngineeringAnalysisCreate.additionalProperties,false);
   assert.deepEqual(spec.components.schemas.ProductEngineeringProposalResolve.properties.decision.enum,['accepted','rejected']);
+});
+
+
+test('governed source transport rejects unsafe direct external ingestion shape',()=>{
+  const {calls,routes}=fixture();
+  const route=matchWholesaleRoute(routes,'POST','/v2/product/styles/style-1/engineering/sources');
+  assert.throws(()=>route.execute(ctx(route,{body:{
+    kind:'document',ingestMode:'upload',mediaType:'application/pdf',
+    storageRef:'object://bucket/spec.pdf'
+  }})),error=>error.code==='ENGINEERING_SOURCE_UPLOAD_HASH_REQUIRED');
+  assert.equal(calls.length,1,'transport delegates semantic admission invariants to the domain service fixture');
 });

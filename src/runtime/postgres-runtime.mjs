@@ -9,6 +9,7 @@ import { createProductionRequirementService } from '../application/production-re
 import { createProductionSourcingService } from '../application/production-sourcing-service.mjs';
 import { createSourcingTechPackAllocationService } from '../application/sourcing-tech-pack-allocation-service.mjs';
 import { createSupplierEconomicPerformanceService } from '../application/supplier-economic-performance-service.mjs';
+import { createSupplierPassportService } from '../application/supplier-passport-service.mjs';
 import { createPostgresFinalQualityReader } from '../infrastructure/postgres-final-quality-reader.mjs';
 import { createPostgresInlineQualityReader } from '../infrastructure/postgres-inline-quality-reader.mjs';
 import { createPostgresInlineQualityStore } from '../infrastructure/postgres-inline-quality-store.mjs';
@@ -107,6 +108,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
   const supplierRecovery = supplierRecoveryRuntime.service;
   const supplierPerformanceReader = createPostgresSupplierEconomicPerformanceReader({ pool: options.pool });
   const supplierPerformance = createSupplierEconomicPerformanceService({ reader: supplierPerformanceReader });
+  const supplierPassport = createSupplierPassportService({ reader: supplierPerformanceReader, ...(options.clock ? { clock: options.clock } : {}) });
 
   const productionRequirementStore = createPostgresProductionRequirementStore({ pool: options.pool });
   const productionRequirements = createProductionRequirementService({
@@ -326,6 +328,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
     receiptClaims,
     supplierRecovery,
     supplierPerformance,
+    supplierPassport,
     materials: base.materials,
     boms: base.boms,
     measurements: base.measurements,
@@ -382,6 +385,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
     supplierRecovery,
     supplierPerformanceReader,
     supplierPerformance,
+    supplierPassport,
     sourcingTechPackAllocationStore: allocationStore,
     productionSourcingStore,
     sourcing,

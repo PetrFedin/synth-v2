@@ -20,6 +20,7 @@ import { createProductIdentityService } from '../application/product-identity-se
 import { createProductIdentityQueryService } from '../application/product-identity-query-service.mjs';
 import { createProductReadinessService } from '../application/product-readiness-service.mjs';
 import { createProductEngineeringService } from '../application/product-engineering-service.mjs';
+import { createProductEngineeringProposalApplyService } from '../application/product-engineering-proposal-apply-service.mjs';
 import { createProductEngineeringJobService } from '../application/product-engineering-job-service.mjs';
 import { createProductEngineeringAnalysisExecutor } from '../application/product-engineering-analysis-executor.mjs';
 import { createSampleService } from '../application/sample-service.mjs';
@@ -188,6 +189,13 @@ export function createPostgresWholesaleRuntime({
   const samples = Object.freeze({ ...createSampleService({ sampleStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createSampleQueryService({ reader: createPostgresSampleReader({ pool }), ...(clock ? { clock } : {}) }) });
   const sourcing = Object.freeze({ ...createSourcingService({ sourcingStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createSourcingQueryService({ reader: createPostgresSourcingReader({ pool }), ...(clock ? { clock } : {}) }) });
   const techPacks = Object.freeze({ ...createTechPackService({ techPackStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createTechPackQueryService({ reader: createPostgresTechPackReader({ pool }) }) });
+  const productEngineeringApply = createProductEngineeringProposalApplyService({
+    productEngineering,
+    measurements,
+    materials,
+    techPacks,
+  });
+  const productEngineeringApi = Object.freeze({ ...productEngineering, ...productEngineeringApply });
   // Governed reference data is global and read-only from the application, so it needs a reader and
   // nothing else.
   const libraries = createLibraryQueryService({ reader: createPostgresLibraryReader({ pool }) });
@@ -239,12 +247,12 @@ export function createPostgresWholesaleRuntime({
     ...(outboxRetentionMs !== undefined ? { outboxRetentionMs } : {}),
   });
   const workspace = createWorkspaceQueryService({ reader: createPostgresWorkspaceReader({ pool }) });
-  const transport = { authenticate: auth.authenticate, auth, readiness, platform, catalog, legalEntities, productIdentity, productEngineering, productEngineeringJobs, productReadiness, commercialPublication, orderEconomics, materials, boms, measurements, samples, libraries, history, supplierPortal, categoryAttributes, organisationMembers, awaitingActions, team, partners, retailDoors, sourcing, techPacks, collaboration, orders, notifications, workspace };
+  const transport = { authenticate: auth.authenticate, auth, readiness, platform, catalog, legalEntities, productIdentity, productEngineering: productEngineeringApi, productEngineeringJobs, productReadiness, commercialPublication, orderEconomics, materials, boms, measurements, samples, libraries, history, supplierPortal, categoryAttributes, organisationMembers, awaitingActions, team, partners, retailDoors, sourcing, techPacks, collaboration, orders, notifications, workspace };
   const handler = createWholesaleHttpHandler(transport);
   const fetchHandler = createWholesaleFetchHandler(transport);
   return Object.freeze({
     auth, readiness, maintenance, outboxPublication, outboxPublicationStore, store, catalogStore, legalEntityStore, productIdentityStore, productIdentityReader, productEngineeringStore, productEngineeringJobStore, productEngineeringModelControlStore, productReadinessStore, productReadinessSourceReader, commercialPublicationStore, orderEconomicsStore, materialStore, bomStore, measurementStore, sampleStore, sourcingStore, techPackStore,
-    platform, catalog, legalEntities, productIdentity, productEngineering, productEngineeringJobs, productReadiness, commercialPublication, orderEconomics, materials, boms, measurements, samples, libraries, history, supplierPortal, categoryAttributes, organisationMembers, awaitingActions, team, partners, retailDoors, sourcing, techPacks, collaboration, orders, notifications, workspace,
+    platform, catalog, legalEntities, productIdentity, productEngineering: productEngineeringApi, productEngineeringJobs, productReadiness, commercialPublication, orderEconomics, materials, boms, measurements, samples, libraries, history, supplierPortal, categoryAttributes, organisationMembers, awaitingActions, team, partners, retailDoors, sourcing, techPacks, collaboration, orders, notifications, workspace,
     handler, fetchHandler,
   });
 }

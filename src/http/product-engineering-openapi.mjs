@@ -137,14 +137,33 @@ function schemas() {
         linkPayload: jsonObject, confidence,
       },
     },
+    ProductEngineeringGarmentGraph: {
+      oneOf: [
+        { type: 'null' },
+        {
+          type: 'object', additionalProperties: false,
+          required: ['id','analysisRunId','brandId','styleId','schemaVersion','status','contentHash','nodeCount','edgeCount','createdAt','createdBy','reviewedAt','reviewedBy','version','nodes','edges'],
+          properties: {
+            id, analysisRunId:id, brandId:id, styleId:id, schemaVersion:{type:'string'},
+            status:{type:'string',enum:['draft','reviewed','superseded']},
+            contentHash:{oneOf:[hash,{type:'null'}]}, nodeCount:{type:'integer',minimum:0}, edgeCount:{type:'integer',minimum:0},
+            createdAt:dateTime, createdBy:id, reviewedAt:nullableDateTime, reviewedBy:nullableId,
+            version:{type:'integer',minimum:1},
+            nodes:{type:'array',items:{type:'object',additionalProperties:true}},
+            edges:{type:'array',items:{type:'object',additionalProperties:true}},
+          },
+        },
+      ],
+    },
     ProductEngineeringStyleWorkspace: {
-      type: 'object', additionalProperties: false, required: ['analyses','proposals','conflicts','drawings','sources'],
+      type: 'object', additionalProperties: false, required: ['analyses','proposals','conflicts','drawings','sources','garmentGraph'],
       properties: {
         analyses: { type: 'array', items: { $ref: '#/components/schemas/ProductEngineeringAnalysis' } },
         proposals: { type: 'array', items: { type: 'object', additionalProperties: true } },
         conflicts: { type: 'array', items: { type: 'object', additionalProperties: true } },
         drawings: { type: 'array', items: { type: 'object', additionalProperties: true } },
         sources: { type: 'array', items: { type: 'object', additionalProperties: true } },
+        garmentGraph: { $ref: '#/components/schemas/ProductEngineeringGarmentGraph' },
       },
     },
     ProductEngineeringAnalysisWorkspace: {

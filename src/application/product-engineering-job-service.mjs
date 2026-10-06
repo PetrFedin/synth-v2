@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { invariant } from '../core/errors.mjs';
 import { admitEngineeringSource, completeSourceParsing, createEngineeringFragment, queueSourceParsing, recordSourceScan, rejectEngineeringSource } from '../modules/product-engineering/intake.mjs';
+import { failAnalysis } from '../modules/product-engineering/public.mjs';
 import { parseEngineeringSourceStructure } from '../modules/product-engineering/structural-parser.mjs';
 
 /**
@@ -36,6 +37,15 @@ export function createProductEngineeringJobService(options={}) {
         const code=errorCode(error);
         const retryAt=new Date(Date.parse(now())+retryDelayMs*Math.min(16,2**Math.max(0,job.attemptCount-1))).toISOString();
         const failed=await jobStore.fail({jobId:job.id,workerId,errorCode:code,retryAt,failedAt:now()});
+        if(failed.status==='dead_letter'&&job.analysisRunId){
+          await engineeringStore.transaction(async tx=>{
+            const analysis=await tx.getAnalysisRunForUpdate(job.analysisRunId);
+            if(analysis&&['queued','running'].includes(analysis.status)){
+              const terminal=failAnalysis(analysis,{failureCode:code,failureMessage:'Durable Product Engineering job exhausted retry policy',failedAt:now()});
+              await tx.updateAnalysisRun(terminal,analysis.version);
+            }
+          });
+        }
         results.push(Object.freeze({jobId:job.id,status:failed.status,errorCode:code,jobType:job.jobType}));
       }
     }

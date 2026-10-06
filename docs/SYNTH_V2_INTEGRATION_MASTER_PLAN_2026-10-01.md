@@ -1060,3 +1060,112 @@ Network participation is not automatic and must separate public profile, shared 
 
 **Commercial framing:** creates a two-sided supplier-capacity network and longitudinal reliability moat, moving Synth-v2 beyond PLM into supply-network orchestration.
 
+## Platform economics wave — verified Supplier Passport and Network API
+
+This wave packages the growing supplier/facility/capacity/performance graph into a reusable network product for brands and approved suppliers.
+
+### Supplier Passport Authority — ADOPT
+
+Create a governed passport projection over existing source facts:
+
+- supplier/facility identity;
+- manufacturing capabilities;
+- categories/processes;
+- locations;
+- external facility IDs;
+- compliance/document references;
+- sample/QC history;
+- OTIF/performance;
+- quote/MOQ/lead-time ranges only where shareable;
+- capacity offer status;
+- sustainability/traceability evidence;
+- last verified date;
+- visibility scope.
+
+Passport is a projection, not a replacement for Supplier/Facility authority.
+
+### Evidence Classes — ADOPT
+
+Each passport field is labelled:
+
+- self-declared;
+- document-verified;
+- externally referenced;
+- Synth-v2 transaction-history verified;
+- expired/stale;
+- disputed.
+
+This creates trust without a black-box supplier score.
+
+### Capability Credential — ADOPT
+
+For selected verified capabilities, issue a versioned signed attestation inside Synth-v2 such as:
+
+- facility identity verified;
+- category capability verified by completed production;
+- QC evidence-ready;
+- traceability-ready;
+- Peppol/EDI-ready;
+- capacity-sharing participant.
+
+A credential states exactly what was verified and when; it is not a general certification unless issued by an authorised certifier.
+
+### Supplier Network API — ADOPT
+
+For authorised brands expose:
+
+- supplier/facility search;
+- capability filters;
+- passport fields allowed by supplier policy;
+- current shared capacity offers;
+- evidence/credential status;
+- request/match creation;
+- performance facts from that brand's own relationship.
+
+No competitor quotes/costs/forecasts are exposed.
+
+### Supplier Self-service Portal — ADOPT
+
+Approved supplier may:
+
+- maintain public/shared profile;
+- submit evidence;
+- update capabilities;
+- publish capacity;
+- respond to requests;
+- view verification issues;
+- manage visibility.
+
+All changes go through validation/review where required.
+
+### Network Data Moat — ADOPT
+
+Longitudinal graph:
+
+supplier/facility -> sample -> quote -> reservation -> production -> QC -> ship -> receipt -> actual performance
+
+This evidence becomes increasingly hard to replicate.
+
+### Commercial Packaging — ADOPT
+
+Potential products:
+
+- Supplier Passport;
+- Network Discovery;
+- Capacity Network;
+- Enterprise API;
+- Verification/Onboarding service.
+
+### Additional acceptance
+
+- passport fields preserve evidence class/freshness;
+- supplier controls shareable profile fields;
+- cross-brand private commercial data stays isolated;
+- capability credential scope is explicit;
+- API cannot expose competitor-specific performance/cost;
+- network metrics trace to canonical production/shipment evidence.
+
+**Sequencing:** Supplier/Facility + Capacity + QC/Performance + Traceability -> passport projection -> self-service -> credentials -> Network API -> commercial packaging.
+
+**Commercial framing:** Synth-v2 gains a verified supplier network whose trust and performance history compound with usage, creating a defensible multi-tenant data moat.
+

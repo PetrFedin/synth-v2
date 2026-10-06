@@ -61,7 +61,12 @@ test('material specification impact is deterministic and reflects active downstr
   assert.equal(byArea.get('sourcing').activeDependencyCount,1);
   assert.equal(byArea.get('production').activeDependencyCount,1);
   assert.equal(byArea.get('cost').action,'recalculate');
+  assert.equal(byArea.get('cost').activeDependencyCount,null);
+  assert.equal(byArea.get('cost').evidence.status,'not_available');
+  assert.equal(byArea.get('cutting').evidence.status,'derived');
+  assert.equal(byArea.get('cutting').evidence.basis,'active_production_orders');
   assert.equal(byArea.get('production').severity,'high');
+  assert.equal(byArea.get('production').evidence.status,'observed');
 });
 
 test('impact preview stays explicit when exact StyleVersion context is unavailable',()=>{
@@ -73,7 +78,10 @@ test('impact preview stays explicit when exact StyleVersion context is unavailab
   assert.equal(result.contextStatus,'unavailable');
   assert.equal(result.styleVersionId,null);
   assert.equal(result.impacts.some(row=>row.area==='samples'&&row.action==='review'),true);
-  assert.equal(result.impacts.every(row=>row.activeDependencyCount===0),true);
+  assert.equal(result.impacts.find(row=>row.area==='samples').activeDependencyCount,0);
+  assert.equal(result.impacts.find(row=>row.area==='samples').evidence.status,'observed');
+  assert.equal(result.impacts.find(row=>row.area==='commercial_publication').activeDependencyCount,null);
+  assert.equal(result.impacts.find(row=>row.area==='commercial_publication').evidence.status,'not_available');
 });
 
 test('unsupported proposal action has no invented downstream impact policy',()=>{

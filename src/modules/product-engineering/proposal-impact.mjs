@@ -52,11 +52,14 @@ export function evaluateEngineeringProposalImpact({proposal,context=null}={}) {
     supported:rules.length>0,
     contextStatus:context?'resolved':'unavailable',
     styleVersionId:context?.styleVersion?.id??null,
-    impacts:rules.map(rule=>({
-      ...rule,
-      activeDependencyCount:dependencyCount(rule.area,facts),
-      evidence:dependencyEvidence(rule.area,facts),
-    })),
+    impacts:rules.map(rule=>{
+      const evidence=dependencyEvidence(rule.area,facts);
+      return {
+        ...rule,
+        activeDependencyCount:evidence.count,
+        evidence,
+      };
+    }),
     facts,
   });
 }
@@ -84,23 +87,23 @@ function summarizeContext(context){
   });
 }
 
-function dependencyCount(area,facts){
-  if(['measurements','product_readiness','commercial_publication','cost','cutting','inline_quality','supplier_acknowledgement'].includes(area)){
-    if(area==='measurements')return facts.measurementCharts;
-    if(area==='supplier_acknowledgement')return facts.acknowledgedTechPacks;
-    if(area==='cutting'||area==='inline_quality')return facts.activeProductionOrders;
-    return 0;
-  }
-  if(area==='bom')return facts.boms;
-  if(area==='samples')return facts.samples;
-  if(area==='tech_pack')return facts.techPacks;
-  if(area==='sourcing')return facts.sourcing;
-  if(area==='production')return facts.activeProductionOrders;
-  if(area==='quality')return facts.qualityInspections;
-  return 0;
-}
 function dependencyEvidence(area,facts){
-  const count=dependencyCount(area,facts);
-  return Object.freeze({present:count>0,count});
+  if(area==='measurements')return observed(facts.measurementCharts);
+  if(area==='bom')return observed(facts.boms);
+  if(area==='samples')return observed(facts.samples);
+  if(area==='tech_pack')return observed(facts.techPacks);
+  if(area==='sourcing')return observed(facts.sourcing);
+  if(area==='production')return observed(facts.activeProductionOrders);
+  if(area==='quality')return observed(facts.qualityInspections);
+  if(area==='supplier_acknowledgement')return observed(facts.acknowledgedTechPacks);
+
+  // The current Product Readiness context does not query these authorities directly.
+  // Production presence is a useful warning signal for cutting/inline quality, but must
+  // remain explicitly derived rather than being mislabeled as an observed row count.
+  if(area==='cutting'||area==='inline_quality')return derived(facts.activeProductionOrders,'active_production_orders');
+
+  return Object.freeze({status:'not_available',present:null,count:null,basis:null});
 }
+function observed(count){return Object.freeze({status:'observed',present:count>0,count,basis:null});}
+function derived(count,basis){return Object.freeze({status:'derived',present:count>0,count,basis});}
 function deepFreeze(value){if(!value||typeof value!=='object'||Object.isFrozen(value))return value;Object.freeze(value);for(const nested of Object.values(value))deepFreeze(nested);return value;}

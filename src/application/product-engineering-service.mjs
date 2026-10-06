@@ -15,6 +15,7 @@ import {
   createTechnicalDrawing as createTechnicalDrawingDomain,
   resolveConflict as resolveConflictDomain,
   resolveProposal as resolveProposalDomain,
+  markProposalApplied as markProposalAppliedDomain,
   startAnalysis as startAnalysisDomain,
 } from '../modules/product-engineering/public.mjs';
 import {
@@ -461,6 +462,54 @@ export function createProductEngineeringService(options = {}) {
         const exact = required(await tx.getProposalForUpdate(proposalId), 'PRODUCT_ENGINEERING_PROPOSAL_NOT_FOUND', { proposalId });
         invariant(exact.version === input.expectedVersion, 'PRODUCT_ENGINEERING_PROPOSAL_CONCURRENCY_CONFLICT', 'Engineering proposal changed concurrently', { proposalId, expectedVersion: input.expectedVersion, actualVersion: exact.version });
         const next = resolveProposalDomain(exact, { decision: input.decision, note: input.note ?? null, resolvedAt: now(clock), resolvedBy: actorId });
+        await tx.updateProposal(next, exact.version);
+        return next;
+      });
+    },
+
+    async prepareProposalApplication(actorId, proposalId, input = {}) {
+      requireObject(input, 'PRODUCT_ENGINEERING_PROPOSAL_APPLY_INVALID');
+      const current = required(await store.getProposal(proposalId), 'PRODUCT_ENGINEERING_PROPOSAL_NOT_FOUND', { proposalId });
+      await authorizeBrand(actorId, current.brandId, CAPABILITIES.PRODUCT_ENGINEERING_MANAGE);
+      if (current.appliedReference) {
+        invariant(
+          typeof input.applicationCommandId === 'string'
+            && input.applicationCommandId
+            && current.appliedReference.commandId === input.applicationCommandId,
+          'PRODUCT_ENGINEERING_PROPOSAL_ALREADY_APPLIED',
+          'Engineering proposal was already applied by another command',
+          { proposalId, appliedReference: current.appliedReference },
+        );
+        return deepFreeze({ proposal: current, replay: true });
+      }
+      invariant(current.status === 'accepted', 'PRODUCT_ENGINEERING_PROPOSAL_NOT_ACCEPTED', 'Only an accepted proposal can be applied', { proposalId, status: current.status });
+      invariant(Number.isInteger(input.expectedVersion) && input.expectedVersion >= 1, 'PRODUCT_ENGINEERING_PROPOSAL_EXPECTED_VERSION_INVALID', 'Expected proposal version must be a positive integer');
+      invariant(current.version === input.expectedVersion, 'PRODUCT_ENGINEERING_PROPOSAL_CONCURRENCY_CONFLICT', 'Engineering proposal changed concurrently', { proposalId, expectedVersion: input.expectedVersion, actualVersion: current.version });
+      invariant(typeof current.targetEntityId === 'string' && current.targetEntityId, 'PRODUCT_ENGINEERING_APPLY_TARGET_REQUIRED', 'Canonical application requires an explicit target entity');
+      return deepFreeze({ proposal: current, replay: false });
+    },
+
+    async markProposalApplied(commandId, actorId, proposalId, input) {
+      requireObject(input, 'PRODUCT_ENGINEERING_PROPOSAL_APPLY_INVALID');
+      const current = required(await store.getProposal(proposalId), 'PRODUCT_ENGINEERING_PROPOSAL_NOT_FOUND', { proposalId });
+      await authorizeBrand(actorId, current.brandId, CAPABILITIES.PRODUCT_ENGINEERING_MANAGE);
+      const fingerprint = `markEngineeringProposalApplied:${actorId}:${proposalId}:${canonicalJson(input)}`;
+      return runCommand(commandId, actorId, fingerprint, async (tx) => {
+        const exact = required(await tx.getProposalForUpdate(proposalId), 'PRODUCT_ENGINEERING_PROPOSAL_NOT_FOUND', { proposalId });
+        if (exact.appliedReference) {
+          invariant(exact.appliedReference.commandId === input.commandId, 'PRODUCT_ENGINEERING_PROPOSAL_ALREADY_APPLIED', 'Engineering proposal was already applied by another command', { proposalId, appliedReference: exact.appliedReference });
+          return exact;
+        }
+        invariant(Number.isInteger(input.expectedVersion) && input.expectedVersion >= 1, 'PRODUCT_ENGINEERING_PROPOSAL_EXPECTED_VERSION_INVALID', 'Expected proposal version must be a positive integer');
+        invariant(exact.version === input.expectedVersion, 'PRODUCT_ENGINEERING_PROPOSAL_CONCURRENCY_CONFLICT', 'Engineering proposal changed concurrently', { proposalId, expectedVersion: input.expectedVersion, actualVersion: exact.version });
+        const next = markProposalAppliedDomain(exact, {
+          authority: input.authority,
+          entityId: input.entityId,
+          version: input.version ?? null,
+          action: input.action ?? null,
+          commandId: input.commandId ?? null,
+          appliedAt: now(clock),
+        });
         await tx.updateProposal(next, exact.version);
         return next;
       });

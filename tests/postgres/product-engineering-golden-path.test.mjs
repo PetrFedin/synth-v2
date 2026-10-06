@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import pg from 'pg';
 import { ensureAcceptanceBrandOwner, loginAcceptanceSession, logoutAcceptanceSession } from '../../src/acceptance/collection-live-acceptance.mjs';
@@ -20,7 +22,8 @@ const BENCHMARK_HASH = 'b'.repeat(64);
 test('AI Engineering Golden Path crosses real HTTP, PostgreSQL, durable jobs and qualified model review', async () => {
   assert.ok(connectionString, 'POSTGRES_TEST_URL is required for PostgreSQL integration tests');
   const pool = new Pool({ connectionString, max: 4 });
-  const migrationsDir = new URL('../../db/migrations/', import.meta.url).pathname;
+  const migrationsDir = fileURLToPath(new URL('../../db/migrations/', import.meta.url));
+  const runId = randomUUID().replaceAll('-', '').slice(0, 20);
   let server;
   let token;
   let baseUrl;
@@ -109,14 +112,14 @@ test('AI Engineering Golden Path crosses real HTTP, PostgreSQL, durable jobs and
     const style = data(await requestJson(baseUrl, '/v2/product/styles', {
       method: 'POST',
       token,
-      idempotencyKey: 'ai-engineering-acceptance-style',
-      body: { brandId: references.brand.id, styleCode: 'AI.ENGINEERING.ACCEPTANCE' },
+      idempotencyKey: `ai-eng-${runId}-style`,
+      body: { brandId: references.brand.id, styleCode: `AI.ENG.${runId.toUpperCase()}` },
     }));
 
     const source = data(await requestBinary(baseUrl, `/v2/product/styles/${encodeURIComponent(style.id)}/engineering/upload`, {
       token,
-      idempotencyKey: 'ai-engineering-acceptance-upload',
-      fileName: 'acceptance-tech-pack.pdf',
+      idempotencyKey: `ai-eng-${runId}-upload`,
+      fileName: `acceptance-${runId}.pdf`,
       mediaType: 'application/pdf',
       bytes: new TextEncoder().encode('%PDF-1.7\n1 0 obj <</Type /Page>> endobj\n%%EOF'),
     }));
@@ -140,7 +143,7 @@ test('AI Engineering Golden Path crosses real HTTP, PostgreSQL, durable jobs and
     const analysis = data(await requestJson(baseUrl, `/v2/product/styles/${encodeURIComponent(style.id)}/engineering/analyses`, {
       method: 'POST',
       token,
-      idempotencyKey: 'ai-engineering-acceptance-analysis',
+      idempotencyKey: `ai-eng-${runId}-analysis`,
       body: {
         purpose: PURPOSE,
         inputManifest: {
@@ -212,11 +215,14 @@ async function seedQualification(pool, brandId) {
     [MODEL_PROVIDER, MODEL, PURPOSE, PROMPT_VERSION, SCHEMA_VERSION, BENCHMARK_HASH, JSON.stringify({ structuralF1: 1, unknownRecall: 1 }), now],
   );
   await pool.query(
+    'DELETE FROM ai_model_route_policies WHERE brand_id=$1 AND purpose=$2',
+    [brandId, PURPOSE],
+  );
+  await pool.query(
     `INSERT INTO ai_model_route_policies
       (id,brand_id,purpose,candidates,max_attempts,timeout_ms,circuit_failure_threshold,circuit_cooldown_ms,status,version,created_at,created_by,updated_at,updated_by)
-     VALUES ('ai-policy-acceptance',$1,$2,$3::jsonb,1,5000,3,60000,'active',1,$4,'acceptance-suite',$4,'acceptance-suite')
-     ON CONFLICT (COALESCE(brand_id, '__GLOBAL__'), purpose) DO NOTHING`,
-    [brandId, PURPOSE, JSON.stringify([{ provider: MODEL_PROVIDER, model: MODEL, priority: 0 }]), now],
+     VALUES ($1,$2,$3,$4::jsonb,1,5000,3,60000,'active',1,$5,'acceptance-suite',$5,'acceptance-suite')`,
+    [`ai-policy-acceptance-${brandId}`, brandId, PURPOSE, JSON.stringify([{ provider: MODEL_PROVIDER, model: MODEL, priority: 0 }]), now],
   );
 }
 

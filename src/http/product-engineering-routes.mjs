@@ -20,8 +20,17 @@ const CONFLICT_CREATE = bodyContract(['conflictType', 'subject', 'candidates', '
 const CONFLICT_RESOLVE = bodyContract(['expectedVersion', 'disposition', 'resolution']);
 const DRAWING_CREATE = bodyContract(['styleVersionId', 'analysisRunId', 'viewType', 'svg']);
 const DRAWING_OBJECT = bodyContract(['objectType', 'semanticCode', 'geometry', 'linkPayload', 'confidence']);
-const SOURCE_KINDS = ['product_media','style_reference','document','spreadsheet','external_uri','manual_observation','sample'];
+const SOURCE_CREATE = bodyContract(['kind','ingestMode','mediaType','originalName','sizeBytes','contentHash','storageRef','sourceUri','metadata']);
+const SOURCE_SCAN = bodyContract(['expectedVersion','status','engine','details']);
+const SOURCE_ADMIT = bodyContract(['expectedVersion','policyVersion']);
+const SOURCE_REJECT = bodyContract(['expectedVersion','code','message','quarantine']);
+const SOURCE_FRAGMENT = bodyContract(['kind','locator','content','contentHash']);
+const SOURCE_PARSE_COMPLETE = bodyContract(['expectedVersion','parser','parserVersion','fragmentCount']);
 const CONFLICT_SEVERITIES = ['info','warning','blocking'];
+const SOURCE_KINDS = ['product_media','style_reference','document','spreadsheet','external_uri','sample','manual_observation'];
+const INGEST_MODES = ['upload','connector','canonical_asset','manual'];
+const SCAN_RESULTS = ['clean','infected','error'];
+const FRAGMENT_KINDS = ['document_page','sheet','cell_range','image_region','text_span','metadata','manual_note'];
 
 /**
  * @param {{ productEngineering?: any }} [options]
@@ -30,6 +39,13 @@ export function createProductEngineeringRoutes(options = {}) {
   const { productEngineering } = options;
   const service = productEngineering ?? unavailableService();
   return Object.freeze([
+    mutate('POST', /^\/v2\/product\/styles\/([^/]+)\/engineering\/sources$/, SOURCE_CREATE, validateSourceCreate, ({ commandId, actorId, params, body }) => service.registerSource(commandId, actorId, params[0], body)),
+    read('GET', /^\/v2\/product-engineering\/sources\/([^/]+)$/, [], ({ actorId, params }) => service.getSourceForActor(actorId, params[0])),
+    mutate('POST', /^\/v2\/product-engineering\/sources\/([^/]+)\/scan$/, SOURCE_SCAN, validateSourceScan, ({ commandId, actorId, params, body }) => service.recordSourceScan(commandId, actorId, params[0], body)),
+    mutate('POST', /^\/v2\/product-engineering\/sources\/([^/]+)\/admit$/, SOURCE_ADMIT, validateSourceAdmit, ({ commandId, actorId, params, body }) => service.admitSource(commandId, actorId, params[0], body)),
+    mutate('POST', /^\/v2\/product-engineering\/sources\/([^/]+)\/reject$/, SOURCE_REJECT, validateSourceReject, ({ commandId, actorId, params, body }) => service.rejectSource(commandId, actorId, params[0], body)),
+    mutate('POST', /^\/v2\/product-engineering\/sources\/([^/]+)\/fragments$/, SOURCE_FRAGMENT, validateSourceFragment, ({ commandId, actorId, params, body }) => service.addSourceFragment(commandId, actorId, params[0], body)),
+    mutate('POST', /^\/v2\/product-engineering\/sources\/([^/]+)\/parse-complete$/, SOURCE_PARSE_COMPLETE, validateSourceParseComplete, ({ commandId, actorId, params, body }) => service.completeSourceParsing(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/product\/styles\/([^/]+)\/engineering\/analyses$/, ANALYSIS_CREATE, validateAnalysis, ({ commandId, actorId, params, body }) => service.requestAnalysis(commandId, actorId, params[0], body)),
     read('GET', /^\/v2\/product\/styles\/([^/]+)\/engineering$/, ['limit'], ({ actorId, params, query }) => service.getStyleWorkspaceForActor(actorId, params[0], { limit: query.limit })),
     read('GET', /^\/v2\/product-engineering\/analyses\/([^/]+)$/, [], ({ actorId, params }) => service.getAnalysisWorkspaceForActor(actorId, params[0])),
@@ -68,6 +84,46 @@ function read(method, pattern, queryFields, execute) {
       return execute(context);
     },
   });
+}
+
+
+function validateSourceCreate(body) {
+  invariant(SOURCE_KINDS.includes(body.kind), 'HTTP_BODY_FIELD_INVALID', 'kind is invalid', { field:'kind', allowed:SOURCE_KINDS });
+  invariant(INGEST_MODES.includes(body.ingestMode), 'HTTP_BODY_FIELD_INVALID', 'ingestMode is invalid', { field:'ingestMode', allowed:INGEST_MODES });
+  if (body.mediaType !== undefined && body.mediaType !== null) nonEmpty(body.mediaType,'mediaType');
+  if (body.originalName !== undefined && body.originalName !== null) nonEmpty(body.originalName,'originalName');
+  invariant(body.sizeBytes === undefined || body.sizeBytes === null || (Number.isSafeInteger(body.sizeBytes) && body.sizeBytes >= 0), 'HTTP_BODY_FIELD_INVALID', 'sizeBytes must be a non-negative integer', { field:'sizeBytes' });
+  if (body.contentHash !== undefined && body.contentHash !== null) sha(body.contentHash,'contentHash');
+  if (body.storageRef !== undefined && body.storageRef !== null) nonEmpty(body.storageRef,'storageRef');
+  if (body.sourceUri !== undefined && body.sourceUri !== null) nonEmpty(body.sourceUri,'sourceUri');
+  if (body.metadata !== undefined) object(body.metadata,'metadata');
+}
+function validateSourceScan(body) {
+  version(body.expectedVersion,'expectedVersion');
+  invariant(SCAN_RESULTS.includes(body.status), 'HTTP_BODY_FIELD_INVALID', 'status is invalid', { field:'status', allowed:SCAN_RESULTS });
+  if (body.engine !== undefined && body.engine !== null) nonEmpty(body.engine,'engine');
+  if (body.details !== undefined) object(body.details,'details');
+}
+function validateSourceAdmit(body) {
+  version(body.expectedVersion,'expectedVersion');
+  nonEmpty(body.policyVersion,'policyVersion');
+}
+function validateSourceReject(body) {
+  version(body.expectedVersion,'expectedVersion');
+  nonEmpty(body.code,'code');
+  nonEmpty(body.message,'message');
+  invariant(body.quarantine === undefined || typeof body.quarantine === 'boolean','HTTP_BODY_FIELD_INVALID','quarantine must be boolean',{field:'quarantine'});
+}
+function validateSourceFragment(body) {
+  invariant(FRAGMENT_KINDS.includes(body.kind),'HTTP_BODY_FIELD_INVALID','kind is invalid',{field:'kind',allowed:FRAGMENT_KINDS});
+  object(body.locator,'locator');
+  if (body.contentHash !== undefined && body.contentHash !== null) sha(body.contentHash,'contentHash');
+}
+function validateSourceParseComplete(body) {
+  version(body.expectedVersion,'expectedVersion');
+  nonEmpty(body.parser,'parser');
+  nonEmpty(body.parserVersion,'parserVersion');
+  invariant(Number.isInteger(body.fragmentCount) && body.fragmentCount >= 0,'HTTP_BODY_FIELD_INVALID','fragmentCount must be a non-negative integer',{field:'fragmentCount'});
 }
 
 function validateAnalysis(body) {

@@ -13,6 +13,13 @@
     conflict_review: Object.freeze({ promptVersion: 'conflict-review-v1', schemaVersion: 'engineering-findings-v1' }),
   });
 
+  const APPLY_ACTIONS = new Set([
+    'measurement/chart',
+    'material/specification',
+    'tech_pack/revision',
+    'operation_sequence/operations',
+  ]);
+
   const PURPOSES = [
     ['garment_interpretation', 'Распознать конструкцию изделия', 'Interpret garment construction'],
     ['document_ingestion', 'Разобрать технические документы', 'Ingest technical documents'],
@@ -133,24 +140,25 @@
 
   function requestAnalysis(item) {
     const product = item.product;
-    const options = PURPOSES.map(([code, ru, en]) => [code, text(ru, en)]);
-    openForm({
-      title: text('Новый инженерный анализ', 'New engineering analysis'),
-      hint: text(
-        'AI создаёт только доказательства и предложения. Ни одно каноническое поле модели, BOM, мерок или техпака автоматически не меняется.',
-        'AI creates evidence and proposals only. No canonical Product, BOM, measurement or Tech Pack field is changed automatically.',
-      ),
-      fields: [
-        field(text('Задача', 'Purpose'), select('purpose', options)),
-        field(text('Что проверить', 'Review objective'), input('objective', 'text', { maxlength: '500', placeholder: text('Например: проверить конструкцию по референсам', 'e.g. verify construction against references') })),
+    const options = PURPOSES.map(([code, ru, en]) => Object.freeze({ id: code, name: text(ru, en) }));
+    openForm(
+      text('Новый инженерный анализ', 'New engineering analysis'),
+      [
+        selectDef('purpose', text('Задача', 'Purpose'), options, option => option.name),
+        textDef(
+          'objective',
+          text('Что проверить', 'Review objective'),
+          '',
+          500,
+          false,
+        ),
       ],
-      submitLabel: text('Создать анализ', 'Create analysis'),
-      onSubmit: async (values) => {
+      async (values) => {
         const readySources = (itemState(product.id).data?.sources ?? []).filter((source) => source.status === 'admitted' && source.parseStatus === 'completed');
         if (!readySources.length) throw new Error(text('Сначала загрузите источник и дождитесь завершения проверки/парсинга.', 'Upload a source and wait for scan/parsing to complete first.'));
         const modelContract = MODEL_CONTRACTS[values.purpose];
         if (!modelContract) throw new Error(text('Для этой задачи ещё не определён model contract.', 'No model contract is defined for this purpose yet.'));
-        await mutate(`/v2/product/styles/${encodeURIComponent(product.id)}/engineering/analyses`, {
+        const result = await mutate(`/v2/product/styles/${encodeURIComponent(product.id)}/engineering/analyses`, {
           ...(product.styleVersionId ? { styleVersionId: product.styleVersionId } : {}),
           purpose: values.purpose,
           inputManifest: {
@@ -165,9 +173,15 @@
           },
         });
         invalidate(product.id);
-        toast(text('Инженерный анализ создан. Канонические данные не изменены.', 'Engineering analysis created. Canonical data is unchanged.'), 'success');
+        return result;
       },
-    });
+      {
+        successMessage: [
+          'Инженерный анализ создан. Канонические данные не изменены.',
+          'Engineering analysis created. Canonical data is unchanged.',
+        ],
+      },
+    );
   }
 
   async function mutateAnalysis(item, analysis, action) {
@@ -298,35 +312,131 @@
   }
 
   function rejectProposal(product, proposal) {
-    openForm({
-      title: text('Отклонить предложение', 'Reject proposal'),
-      hint: text('Причина остаётся в истории инженерного решения.', 'The reason remains in engineering decision history.'),
-      fields: [field(text('Причина', 'Reason'), input('note', 'text', { required: true, minlength: '2', maxlength: '4000' }))],
-      submitLabel: text('Отклонить', 'Reject'),
-      onSubmit: async (values) => {
-        await mutate(`/v2/product-engineering/proposals/${encodeURIComponent(proposal.id)}/resolve`, {
-          expectedVersion: proposal.version, decision: 'rejected', note: values.note.trim(),
+    openForm(
+      text('Отклонить предложение', 'Reject proposal'),
+      [textDef('note', text('Причина', 'Reason'), '', 4000, true, 2)],
+      async (values) => {
+        const result = await mutate(`/v2/product-engineering/proposals/${encodeURIComponent(proposal.id)}/resolve`, {
+          expectedVersion: proposal.version,
+          decision: 'rejected',
+          note: values.note.trim(),
         });
         invalidate(product.id);
+        return result;
       },
-    });
+      { successMessage: ['Предложение отклонено.', 'Proposal rejected.'] },
+    );
   }
 
-  function proposalActions(product, proposal, manage) {
-    if (!manage || proposal.status !== 'pending') return status(proposal.status);
-    const row = el('div', { className: 'od-inline-actions' });
-    const accept = el('button', { className: 'button small primary', type: 'button', rawText: text('Принять', 'Accept') });
-    accept.title = text('Принять предложение в review. Это ещё не меняет canonical entity.', 'Accept the proposal in review. This does not yet mutate the canonical entity.');
-    accept.addEventListener('click', () => { void runAction(async () => {
-      await mutate(`/v2/product-engineering/proposals/${encodeURIComponent(proposal.id)}/resolve`, {
-        expectedVersion: proposal.version, decision: 'accepted',
+  function impactEvidenceLabel(evidence) {
+    if (!evidence || evidence.status === 'not_available') {
+      return text('данные ещё не подключены', 'data not available in this reader');
+    }
+    if (evidence.status === 'derived') {
+      return `${text('косвенно', 'derived')} · ${evidence.count ?? 0} · ${evidence.basis || '—'}`;
+    }
+    return `${text('наблюдается', 'observed')} · ${evidence.count ?? 0}`;
+  }
+
+  async function showProposalImpact(proposal) {
+    const impact = await api(`/v2/product-engineering/proposals/${encodeURIComponent(proposal.id)}/impact`);
+    const rows = [
+      { label: text('Контур', 'Authority'), value: `${impact.authority} / ${impact.action}` },
+      { label: text('Цель', 'Target'), value: impact.targetEntityId || '—' },
+      { label: text('Контекст', 'Context'), value: impact.contextStatus === 'resolved'
+        ? `${text('StyleVersion подтверждён', 'Exact StyleVersion resolved')} · ${impact.styleVersionId || '—'}`
+        : text('StyleVersion не закреплён — показана policy-оценка без выдуманных фактов', 'No exact StyleVersion — policy impact is shown without invented repository facts') },
+      { label: text('Поддержка apply', 'Apply support'), value: impact.supported ? text('поддерживается', 'supported') : text('пока не поддерживается', 'not supported yet') },
+    ];
+    (impact.impacts ?? []).forEach((row) => {
+      rows.push({
+        label: `${row.area} · ${status(row.severity)}`,
+        value: `${row.action} · ${impactEvidenceLabel(row.evidence)}`,
       });
-      invalidate(product.id);
-    }, accept); });
-    const reject = el('button', { className: 'button small', type: 'button', rawText: text('Отклонить', 'Reject') });
-    reject.addEventListener('click', () => rejectProposal(product, proposal));
-    row.append(accept, reject);
-    return row;
+    });
+    openDetails(text('Влияние перед применением', 'Pre-apply change impact'), rows);
+    return impact;
+  }
+
+  function applyProposalForm(product, proposal) {
+    openForm(
+      text('Применить принятое предложение', 'Apply accepted proposal'),
+      [
+        numberDef(
+          'expectedCanonicalVersion',
+          text('Текущая версия canonical entity', 'Current canonical entity version'),
+          '',
+          true,
+          1,
+        ),
+      ],
+      async (values) => {
+        const result = await mutate(`/v2/product-engineering/proposals/${encodeURIComponent(proposal.id)}/apply`, {
+          expectedProposalVersion: proposal.version,
+          expectedCanonicalVersion: values.expectedCanonicalVersion,
+        });
+        invalidate(product.id);
+        return result;
+      },
+      {
+        successMessage: [
+          'Изменение прошло через канонический контур и зафиксировано в appliedReference.',
+          'The change passed through its canonical authority and was recorded in appliedReference.',
+        ],
+      },
+    );
+  }
+
+
+  function proposalActions(product, proposal, manage) {
+    const row = el('div', { className: 'od-inline-actions' });
+
+    if (proposal.status === 'pending') {
+      if (!manage) return status(proposal.status);
+      const accept = el('button', { className: 'button small primary', type: 'button', rawText: text('Принять', 'Accept') });
+      accept.title = text('Принять предложение в review. Это ещё не меняет canonical entity.', 'Accept the proposal in review. This does not yet mutate the canonical entity.');
+      accept.addEventListener('click', () => { void runAction(async () => {
+        await mutate(`/v2/product-engineering/proposals/${encodeURIComponent(proposal.id)}/resolve`, {
+          expectedVersion: proposal.version, decision: 'accepted',
+        });
+        invalidate(product.id);
+      }, accept); });
+      const reject = el('button', { className: 'button small', type: 'button', rawText: text('Отклонить', 'Reject') });
+      reject.addEventListener('click', () => rejectProposal(product, proposal));
+      row.append(accept, reject);
+      return row;
+    }
+
+    if (proposal.status === 'accepted') {
+      const impact = el('button', { className: 'button small', type: 'button', rawText: text('Влияние', 'Impact') });
+      impact.addEventListener('click', () => { void runAction(() => showProposalImpact(proposal), impact); });
+      row.append(impact);
+
+      if (proposal.appliedReference) {
+        row.append(statusBadge('accepted'));
+        row.append(el('small', {
+          className: 'muted',
+          rawText: `${text('Применено', 'Applied')} · ${proposal.appliedReference.authority || proposal.targetAuthority} · v${proposal.appliedReference.version ?? '—'}`,
+        }));
+        return row;
+      }
+
+      const key = `${proposal.targetAuthority}/${proposal.targetField}`;
+      if (manage && APPLY_ACTIONS.has(key)) {
+        const apply = el('button', { className: 'button small primary', type: 'button', rawText: text('Применить', 'Apply') });
+        apply.title = text(
+          'Сначала проверьте влияние. Применение вызывает отдельную canonical command с optimistic version check.',
+          'Review impact first. Apply invokes a separate canonical command with an optimistic version check.',
+        );
+        apply.addEventListener('click', () => applyProposalForm(product, proposal));
+        row.append(apply);
+      } else if (manage) {
+        row.append(el('small', { className: 'muted', rawText: text('Canonical apply для этого действия ещё не подключён.', 'Canonical apply is not connected for this action yet.') }));
+      }
+      return row;
+    }
+
+    return status(proposal.status);
   }
 
   function proposalsPanel(product, rows, manage) {
@@ -347,23 +457,27 @@
   }
 
   function resolveConflictForm(product, conflict) {
-    openForm({
-      title: text('Закрыть технический конфликт', 'Resolve technical conflict'),
-      hint: text('Конфликт не исчезает: решение фиксируется рядом с исходными кандидатами.', 'The conflict is preserved with its candidates and resolution.'),
-      fields: [
-        field(text('Решение', 'Disposition'), select('disposition', [['resolved', text('Разрешён', 'Resolved')], ['ignored', text('Принять как исключение', 'Accept as exception')]])),
-        field(text('Комментарий', 'Decision note'), input('note', 'text', { maxlength: '2000' })),
+    const dispositions = [
+      Object.freeze({ id: 'resolved', name: text('Разрешён', 'Resolved') }),
+      Object.freeze({ id: 'ignored', name: text('Принять как исключение', 'Accept as exception') }),
+    ];
+    openForm(
+      text('Закрыть технический конфликт', 'Resolve technical conflict'),
+      [
+        selectDef('disposition', text('Решение', 'Disposition'), dispositions, option => option.name),
+        optionalTextDef('note', text('Комментарий', 'Decision note'), '', 2000),
       ],
-      submitLabel: text('Зафиксировать', 'Record decision'),
-      onSubmit: async (values) => {
-        await mutate(`/v2/product-engineering/conflicts/${encodeURIComponent(conflict.id)}/resolve`, {
+      async (values) => {
+        const result = await mutate(`/v2/product-engineering/conflicts/${encodeURIComponent(conflict.id)}/resolve`, {
           expectedVersion: conflict.version,
           disposition: values.disposition,
           resolution: { note: values.note?.trim() || null },
         });
         invalidate(product.id);
+        return result;
       },
-    });
+      { successMessage: ['Технический конфликт зафиксирован.', 'Technical conflict decision recorded.'] },
+    );
   }
 
   function conflictsPanel(product, rows, manage) {

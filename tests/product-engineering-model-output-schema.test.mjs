@@ -121,3 +121,22 @@ test('model evidence cannot invent a spreadsheet range outside parsed fragments'
     },
   }),error=>error.code==='ENGINEERING_MODEL_EVIDENCE_LOCATOR_INVALID');
 });
+
+
+test('spreadsheet evidence may cite a verified subrange inside parsed used range',()=>{
+  const output={
+    findings:[{
+      findingType:'measurement.point',origin:'document_extracted',value:{pointCode:'CHEST'},
+      evidence:[{sourceId:'sheet-contained',sourceLocator:{sheet:'Measurements',range:'B12:B12'}}],
+    }],
+    proposals:[],conflicts:[],
+  };
+  assert.equal(validateEngineeringModelOutput({
+    schemaVersion:'engineering-findings-v1',
+    sources:[{
+      source:{id:'sheet-contained',mediaType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'},
+      fragments:[{kind:'cell_range',locator:{sheet:'Measurements',range:'A1:H40'}}],
+    }],
+    output,
+  }),output);
+});

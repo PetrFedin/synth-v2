@@ -13,7 +13,7 @@ const error = { description: 'Domain or transport error', content: { 'applicatio
 const purposes = ['garment_interpretation','document_ingestion','measurement_assist','bom_assist','construction_assist','technical_flat','sample_review','conflict_review'];
 const authorities = ['product_identity','measurement','bom','construction','tech_pack','sample','material','colour','operation_sequence'];
 const views = ['front','back','left','right','inside','detail'];
-const objectTypes = ['outline','panel','seam','stitch','pocket','closure','collar','cuff','trim','measurement_anchor','construction_callout'];
+const objectTypes = ['outline','panel','seam','stitch','pocket','closure','collar','cuff','trim','measurement_anchor','construction_callout','dart','pleat','hem','grainline','foldline','notch','button','buttonhole','zipper','annotation'];
 const sourceKinds = ['product_media','style_reference','document','spreadsheet','external_uri','sample','manual_observation'];
 const ingestModes = ['upload','connector','canonical_asset','manual'];
 const fragmentKinds = ['document_page','sheet','cell_range','image_region','text_span','metadata','manual_note'];
@@ -133,7 +133,7 @@ function schemas() {
     TechnicalDrawingObjectCreate: {
       type: 'object', additionalProperties: false, required: ['objectType','geometry'],
       properties: {
-        objectType: { type: 'string', enum: objectTypes }, semanticCode: { type: 'string' }, geometry: jsonObject,
+        objectType: { type: 'string', enum: objectTypes }, semanticCode: { type: 'string' }, garmentNodeId: id, geometry: jsonObject,
         linkPayload: jsonObject, confidence,
       },
     },

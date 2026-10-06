@@ -1280,3 +1280,127 @@ Minimum disclosure only.
 
 **Moat:** the longitudinal supplier/facility performance graph compounds across transactions and becomes difficult for a new PLM/sourcing competitor to reproduce.
 
+
+
+## AI Product Engineering wave — evidence-first design-to-production intelligence
+
+**Disposition:** ADOPT as a native Synth-v2 bounded capability. Do not create a separate SpecForm clone or second PLM database.
+
+### Existing authorities that must remain canonical
+
+Product Identity, canonical Measurements/Grading, BOM/Materials, Construction/BOL, Samples, Sourcing, Tech Pack, Production, Quality, Commercial Publication and order/economics remain owned by their existing modules.
+
+AI Product Engineering sits upstream and may only create:
+
+`analysis -> model run -> finding -> evidence -> proposal/conflict -> review -> separate canonical command`.
+
+### Phase A — Engineering Authority — IMPLEMENTED/PARTIAL in PR #242
+
+- versioned analysis runs;
+- model run provenance and cost/usage envelope;
+- source-grounded findings/evidence;
+- human proposals and explicit conflicts;
+- semantic versioned SVG drawings;
+- dedicated RBAC;
+- idempotent HTTP/OpenAPI;
+- Product Master AI Engineering review workspace;
+- Awaiting Action from unresolved review state.
+
+### Phase B — Provider Router — NEXT
+
+Add a replaceable model execution contract:
+
+- provider adapter;
+- model/purpose policy;
+- schema-constrained output;
+- timeout/retry/circuit-breaker;
+- rate/credit limits per organisation;
+- input/output content hashes;
+- latency/token/cost telemetry;
+- prompt/schema/model qualification status.
+
+A provider result writes only Product Engineering facts, never canonical PLM facts.
+
+### Phase C — Governed document/media intake
+
+Supported source classes:
+
+- product photos and details;
+- designer/technical sketches;
+- existing Tech Pack PDF;
+- XLSX/CSV measurement sheets;
+- supplier/fabric datasheets;
+- SVG/Illustrator-compatible exports where legally/technically ingestible;
+- sample/QC evidence.
+
+Admission:
+
+`source -> type/size/security validation -> immutable source digest -> parser -> source locator -> finding/evidence`.
+
+### Phase D — Garment Ontology + Technical Flat
+
+Create an evidence-grounded garment graph:
+
+`garment -> component -> panel -> seam/stitch -> closure/pocket/trim -> construction node -> operation`.
+
+Generate editable front/back/side/inside/detail SVG drafts. Every semantic object can link to canonical Product/Measurement/BOM/Construction concepts after human confirmation.
+
+### Phase E — Measurement/POM Intelligence
+
+- detect candidate POM and drawing anchors;
+- reconcile against governed `measurement.point`;
+- never infer absolute units from an uncalibrated photograph;
+- ingest authoritative measurement documents;
+- compare proposed/current/sample actual;
+- use existing interval-specific `grade_steps` rather than generic LLM grading;
+- preserve explicit overrides and QC flags.
+
+### Phase F — BOM / Material / Construction Intelligence
+
+AI may propose:
+
+- component/material role;
+- placement/main/lining semantics;
+- construction nodes;
+- operation sequence candidates;
+- missing material/specification fields.
+
+Unknown GSM/composition/supplier/price stays unknown. Costing remains the existing deterministic BOM/landed-cost authority.
+
+### Phase G — Conflict and change-impact engine
+
+Before a technical revision:
+
+`proposed change -> impacted Measurements/BOM/Tech Pack/Sample/Sourcing/Production/Cost/Commercial publication -> reviewer decision`.
+
+Source conflicts are first-class records, never silently averaged.
+
+### Phase H — Sample-learning loop
+
+Extend sample review to exact POM:
+
+`requested -> actual -> delta -> tolerance -> PASS/FAIL -> comment/evidence -> next round`.
+
+Preserve exact specification/Tech Pack version used by the factory. Learn from proposal -> correction -> actual -> final only within governed data/privacy boundaries.
+
+### Phase I — Production Knowledge + qualification
+
+Use a governed, citable production knowledge corpus. Add a qualification benchmark for every production model/prompt/schema combination:
+
+- field/POM/category coverage;
+- precision/recall for structural detection;
+- measurement MAE only where calibrated ground truth exists;
+- unknown/hallucination rates;
+- conflict-detection recall;
+- latency/cost;
+- reproducible input/output hashes.
+
+Production-qualified combinations receive an immutable Qualification Manifest. No model is trusted because of brand/name alone.
+
+### Commercial/defensibility result
+
+This wave connects Synth-v2's existing design-to-margin spine with a proprietary engineering feedback loop:
+
+`reference -> proposal -> human correction -> factory/sample actual -> QC -> cost/margin outcome`.
+
+The durable moat is the governed ontology + evidence/revision graph + downstream actuals, not a single LLM or image-generation provider.

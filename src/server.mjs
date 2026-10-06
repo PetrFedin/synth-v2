@@ -228,6 +228,8 @@ try {
     }),
     scannerAssurance: 'integrity_only',
     productionMalwareScanner: false,
+    modelGatewayConfigured: Boolean(settings.engineeringGatewayUrl),
+    modelGatewayProvider: settings.engineeringGatewayUrl ? settings.engineeringGatewayProvider : null,
   });
   unregisterProductEngineeringHealth = healthRegistry.register('product-engineering', productEngineeringHealth);
   unregisterProductEngineeringMetrics = operationalMetrics.registerWorker('product-engineering', productEngineeringHealth);

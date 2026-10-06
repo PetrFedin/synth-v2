@@ -1317,11 +1317,11 @@ Implemented in the current branch:
 - durable `analysis_execute` jobs with lease/retry/reclaim/dead-letter semantics;
 - input/output content hashes and persisted ModelRun provenance;
 - fail-closed behavior when no exact qualified route exists;
+- exact schema-version validation before persistence for `engineering-findings-v1` and `garment-ontology-v1`, including strict allowed fields, bounded collection sizes, source-manifest evidence lineage, proposal finding indexes and garment graph node/relation integrity;
 - analysis failure only after durable retry exhaustion, not after the first transient provider error.
 
 Still required before production-grade external AI execution:
 
-- schema-version-specific validation of every model output before persistence;
 - per-organisation rate/credit budgets;
 - persistent circuit-breaker/provider-health state and latency/cost telemetry;
 - provider-specific adapters only where the generic gateway contract is insufficient;

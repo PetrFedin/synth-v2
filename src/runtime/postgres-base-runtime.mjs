@@ -21,6 +21,7 @@ import { createProductIdentityQueryService } from '../application/product-identi
 import { createProductReadinessService } from '../application/product-readiness-service.mjs';
 import { createProductEngineeringService } from '../application/product-engineering-service.mjs';
 import { createProductEngineeringProposalApplyService } from '../application/product-engineering-proposal-apply-service.mjs';
+import { createProductEngineeringProposalImpactService } from '../application/product-engineering-proposal-impact-service.mjs';
 import { createProductEngineeringJobService } from '../application/product-engineering-job-service.mjs';
 import { createProductEngineeringAnalysisExecutor } from '../application/product-engineering-analysis-executor.mjs';
 import { createSampleService } from '../application/sample-service.mjs';
@@ -162,6 +163,11 @@ export function createPostgresWholesaleRuntime({
     ...(clock ? { clock } : {}),
   });
   const productReadinessSourceReader = createPostgresProductReadinessSourceReader({ pool, productIdentityReader });
+  const productEngineeringImpact = createProductEngineeringProposalImpactService({
+    productEngineering,
+    readinessSourceReader: productReadinessSourceReader,
+  });
+  const productEngineeringApi = Object.freeze({ ...productEngineering, ...productEngineeringApply, ...productEngineeringImpact });
   const productReadiness = createProductReadinessService({
     store: productReadinessStore,
     sourceReader: productReadinessSourceReader,
@@ -195,7 +201,6 @@ export function createPostgresWholesaleRuntime({
     materials,
     techPacks,
   });
-  const productEngineeringApi = Object.freeze({ ...productEngineering, ...productEngineeringApply });
   // Governed reference data is global and read-only from the application, so it needs a reader and
   // nothing else.
   const libraries = createLibraryQueryService({ reader: createPostgresLibraryReader({ pool }) });

@@ -22,7 +22,7 @@ export const ENGINEERING_OUTPUT_SCHEMAS=Object.freeze([
   'garment-ontology-v1',
 ]);
 
-export function validateEngineeringModelOutput({schemaVersion,output,sourceIds=[]}={}) {
+export function validateEngineeringModelOutput({schemaVersion,output,sourceIds=[],sources=[]}={}) {
   invariant(ENGINEERING_OUTPUT_SCHEMAS.includes(schemaVersion),'ENGINEERING_MODEL_SCHEMA_UNSUPPORTED','Engineering model output schema is not supported',{schemaVersion});
   object(output,'ENGINEERING_MODEL_OUTPUT_INVALID','Model output must be an object');
   exactFields(output,['findings','proposals','conflicts','garmentGraph'],'model output');
@@ -31,8 +31,10 @@ export function validateEngineeringModelOutput({schemaVersion,output,sourceIds=[
   const proposals=array(output.proposals??[],'ENGINEERING_MODEL_PROPOSALS_INVALID','proposals',MAX_PROPOSALS);
   const conflicts=array(output.conflicts??[],'ENGINEERING_MODEL_CONFLICTS_INVALID','conflicts',MAX_CONFLICTS);
   const sourceSet=new Set(sourceIds);
+  const sourceIndex=new Map((sources??[]).map((entry)=>[entry?.source?.id,entry]));
+  for(const id of sourceIndex.keys()) sourceSet.add(id);
 
-  findings.forEach((finding,index)=>validateFinding(finding,index,sourceSet));
+  findings.forEach((finding,index)=>validateFinding(finding,index,sourceSet,sourceIndex));
   proposals.forEach((proposal,index)=>validateProposal(proposal,index,findings.length));
   conflicts.forEach((conflict,index)=>validateConflict(conflict,index));
 
@@ -46,7 +48,7 @@ export function validateEngineeringModelOutput({schemaVersion,output,sourceIds=[
   return output;
 }
 
-function validateFinding(value,index,sourceSet){
+function validateFinding(value,index,sourceSet,sourceIndex){
   object(value,'ENGINEERING_MODEL_FINDING_INVALID',`findings[${index}] must be an object`);
   exactFields(value,['findingType','origin','value','confidence','evidence'],`findings[${index}]`);
   invariant(typeof value.findingType==='string'&&FINDING_TYPE.test(value.findingType),'ENGINEERING_MODEL_FINDING_INVALID','findingType is invalid',{index});
@@ -62,6 +64,8 @@ function validateFinding(value,index,sourceSet){
     invariant(sourceSet.has(item.sourceId),'ENGINEERING_MODEL_EVIDENCE_SOURCE_INVALID','Model evidence references a source outside the analysis',{sourceId:item.sourceId,index,evidenceIndex});
     if(item.sourceLocator!==undefined) object(item.sourceLocator,'ENGINEERING_MODEL_EVIDENCE_INVALID','sourceLocator must be an object',{index,evidenceIndex});
     if(item.sourceLocator!==undefined) json(item.sourceLocator,'ENGINEERING_MODEL_EVIDENCE_INVALID','sourceLocator must be JSON-serializable',{index,evidenceIndex});
+    const sourceEntry=sourceIndex.get(item.sourceId);
+    if(sourceEntry) validateEvidenceLocator(item.sourceLocator??{},sourceEntry,{index,evidenceIndex});
     if(item.excerpt!==undefined&&item.excerpt!==null) boundedText(item.excerpt,1,4000,'ENGINEERING_MODEL_EVIDENCE_INVALID','evidence excerpt is invalid',{index,evidenceIndex});
   });
 }
@@ -123,6 +127,49 @@ function validateGraph(value,findingCount,schemaVersion){
     if(edge.attributes!==undefined){object(edge.attributes,'ENGINEERING_MODEL_GRAPH_INVALID','garment edge attributes must be an object',{index});json(edge.attributes,'ENGINEERING_MODEL_GRAPH_INVALID','garment edge attributes must be JSON-serializable',{index});}
     confidence(edge.confidence,`garmentGraph.edges[${index}].confidence`);
   });
+}
+
+
+function validateEvidenceLocator(locator,entry,details){
+  const source=entry?.source;
+  const fragments=Array.isArray(entry?.fragments)?entry.fragments:[];
+  const mediaType=source?.mediaType??'';
+  if(mediaType==='application/pdf'){
+    invariant(Number.isInteger(locator.page)&&locator.page>=1,'ENGINEERING_MODEL_EVIDENCE_LOCATOR_INVALID','PDF evidence requires page >= 1',details);
+    invariant(fragments.some(fragment=>fragment.kind==='document_page'&&fragment.locator?.page===locator.page),'ENGINEERING_MODEL_EVIDENCE_LOCATOR_INVALID','PDF evidence page is not present in parsed source',{...details,page:locator.page});
+    exactFields(locator,['page','region'],'PDF evidence locator');
+    if(locator.region!==undefined) normalizedRegion(locator.region,'ENGINEERING_MODEL_EVIDENCE_LOCATOR_INVALID','PDF evidence region is invalid',details);
+    return;
+  }
+  if(mediaType==='text/csv'||mediaType==='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'){
+    exactFields(locator,['sheet','range'],'spreadsheet evidence locator');
+    invariant(typeof locator.sheet==='string'&&locator.sheet.trim(),'ENGINEERING_MODEL_EVIDENCE_LOCATOR_INVALID','Spreadsheet evidence requires sheet',details);
+    invariant(typeof locator.range==='string'&&/^[A-Z]+[1-9][0-9]*:[A-Z]+[1-9][0-9]*$/.test(locator.range),'ENGINEERING_MODEL_EVIDENCE_LOCATOR_INVALID','Spreadsheet evidence requires A1 cell range',details);
+    invariant(fragments.some(fragment=>fragment.kind==='cell_range'&&fragment.locator?.sheet===locator.sheet&&fragment.locator?.range===locator.range),'ENGINEERING_MODEL_EVIDENCE_LOCATOR_INVALID','Spreadsheet evidence range is not an exact parsed fragment',{...details,sheet:locator.sheet,range:locator.range});
+    return;
+  }
+  if(mediaType.startsWith('image/')&&mediaType!=='image/svg+xml'){
+    exactFields(locator,['region'],'image evidence locator');
+    normalizedRegion(locator.region,'ENGINEERING_MODEL_EVIDENCE_LOCATOR_INVALID','Raster image evidence requires a normalized region',details);
+    return;
+  }
+  if(mediaType==='image/svg+xml'){
+    exactFields(locator,['region','key'],'SVG evidence locator');
+    if(locator.region!==undefined){
+      normalizedRegion(locator.region,'ENGINEERING_MODEL_EVIDENCE_LOCATOR_INVALID','SVG evidence region is invalid',details);
+      return;
+    }
+    invariant(locator.key==='svg'&&fragments.some(fragment=>fragment.kind==='metadata'&&fragment.locator?.key==='svg'),'ENGINEERING_MODEL_EVIDENCE_LOCATOR_INVALID','SVG evidence must reference parsed SVG metadata or a normalized region',details);
+    return;
+  }
+  invariant(Object.keys(locator).length>=1,'ENGINEERING_MODEL_EVIDENCE_LOCATOR_INVALID','Evidence locator cannot be empty for a governed source',details);
+}
+
+function normalizedRegion(region,code,message,details={}){
+  invariant(region&&typeof region==='object'&&!Array.isArray(region),code,message,details);
+  exactFields(region,['x','y','w','h'],'evidence region');
+  invariant(['x','y','w','h'].every(key=>typeof region[key]==='number'&&Number.isFinite(region[key])&&region[key]>=0&&region[key]<=1),code,message,details);
+  invariant(region.w>0&&region.h>0&&region.x+region.w<=1.000001&&region.y+region.h<=1.000001,code,message,details);
 }
 
 function exactFields(value,allowed,label){

@@ -84,12 +84,12 @@ test('OpenAPI documents engineering review and every mutation carries idempotenc
 });
 
 
-test('governed source transport rejects unsafe direct external ingestion shape',()=>{
+test('governed source transport rejects malformed source hashes before service execution',()=>{
   const {calls,routes}=fixture();
   const route=matchWholesaleRoute(routes,'POST','/v2/product/styles/style-1/engineering/sources');
   assert.throws(()=>route.execute(ctx(route,{body:{
     kind:'document',ingestMode:'upload',mediaType:'application/pdf',
-    storageRef:'object://bucket/spec.pdf'
-  }})),error=>error.code==='ENGINEERING_SOURCE_UPLOAD_HASH_REQUIRED');
-  assert.equal(calls.length,1,'transport delegates semantic admission invariants to the domain service fixture');
+    contentHash:'not-a-sha256',storageRef:'object://bucket/spec.pdf'
+  }})),error=>error.code==='HTTP_BODY_FIELD_INVALID');
+  assert.equal(calls.length,0);
 });

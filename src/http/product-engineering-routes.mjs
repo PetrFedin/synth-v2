@@ -16,6 +16,7 @@ const EVIDENCE_FIELDS = ['sourceKind', 'sourceId', 'sourceLocator', 'sourceHash'
 const FINDING_CREATE = bodyContract(['findingType', 'origin', 'value', 'confidence', 'evidence'], {}, { evidence: EVIDENCE_FIELDS });
 const PROPOSAL_CREATE = bodyContract(['findingId', 'targetAuthority', 'targetEntityId', 'targetField', 'proposedValue', 'confidence', 'rationale']);
 const PROPOSAL_RESOLVE = bodyContract(['expectedVersion', 'decision', 'note']);
+const PROPOSAL_APPLY = bodyContract(['expectedProposalVersion', 'expectedCanonicalVersion']);
 const CONFLICT_CREATE = bodyContract(['conflictType', 'subject', 'candidates', 'severity']);
 const CONFLICT_RESOLVE = bodyContract(['expectedVersion', 'disposition', 'resolution']);
 const DRAWING_CREATE = bodyContract(['styleVersionId', 'analysisRunId', 'viewType', 'svg']);
@@ -56,6 +57,7 @@ export function createProductEngineeringRoutes(options = {}) {
     mutate('POST', /^\/v2\/product-engineering\/analyses\/([^/]+)\/findings$/, FINDING_CREATE, validateFinding, ({ commandId, actorId, params, body }) => service.recordFinding(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/product-engineering\/analyses\/([^/]+)\/proposals$/, PROPOSAL_CREATE, validateProposal, ({ commandId, actorId, params, body }) => service.createProposal(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/product-engineering\/proposals\/([^/]+)\/resolve$/, PROPOSAL_RESOLVE, validateProposalResolution, ({ commandId, actorId, params, body }) => service.resolveProposal(commandId, actorId, params[0], body)),
+    mutate('POST', /^\/v2\/product-engineering\/proposals\/([^/]+)\/apply$/, PROPOSAL_APPLY, validateProposalApply, ({ commandId, actorId, params, body }) => service.applyProposal(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/product-engineering\/analyses\/([^/]+)\/conflicts$/, CONFLICT_CREATE, validateConflict, ({ commandId, actorId, params, body }) => service.createConflict(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/product-engineering\/conflicts\/([^/]+)\/resolve$/, CONFLICT_RESOLVE, validateConflictResolution, ({ commandId, actorId, params, body }) => service.resolveConflict(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/product\/styles\/([^/]+)\/engineering\/drawings$/, DRAWING_CREATE, validateDrawing, ({ commandId, actorId, params, body }) => service.createDrawing(commandId, actorId, params[0], body)),
@@ -162,6 +164,10 @@ function validateProposal(body) {
   nonEmpty(body.targetField, 'targetField');
   invariant(Object.hasOwn(body, 'proposedValue'), 'HTTP_BODY_FIELD_INVALID', 'proposedValue is required', { field: 'proposedValue' });
   probability(body.confidence, 'confidence');
+}
+function validateProposalApply(body) {
+  version(body.expectedProposalVersion, 'expectedProposalVersion');
+  version(body.expectedCanonicalVersion, 'expectedCanonicalVersion');
 }
 function validateProposalResolution(body) {
   version(body.expectedVersion, 'expectedVersion');

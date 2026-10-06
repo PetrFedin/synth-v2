@@ -2,6 +2,17 @@
   'use strict';
 
   const cache = new Map();
+  const MODEL_CONTRACTS = Object.freeze({
+    garment_interpretation: Object.freeze({ promptVersion: 'garment-interpretation-v1', schemaVersion: 'garment-ontology-v1' }),
+    document_ingestion: Object.freeze({ promptVersion: 'document-ingestion-v1', schemaVersion: 'engineering-findings-v1' }),
+    measurement_assist: Object.freeze({ promptVersion: 'measurement-assist-v1', schemaVersion: 'engineering-findings-v1' }),
+    bom_assist: Object.freeze({ promptVersion: 'bom-assist-v1', schemaVersion: 'engineering-findings-v1' }),
+    construction_assist: Object.freeze({ promptVersion: 'construction-assist-v1', schemaVersion: 'garment-ontology-v1' }),
+    technical_flat: Object.freeze({ promptVersion: 'technical-flat-v1', schemaVersion: 'garment-ontology-v1' }),
+    sample_review: Object.freeze({ promptVersion: 'sample-review-v1', schemaVersion: 'engineering-findings-v1' }),
+    conflict_review: Object.freeze({ promptVersion: 'conflict-review-v1', schemaVersion: 'engineering-findings-v1' }),
+  });
+
   const PURPOSES = [
     ['garment_interpretation', 'Распознать конструкцию изделия', 'Interpret garment construction'],
     ['document_ingestion', 'Разобрать технические документы', 'Ingest technical documents'],
@@ -134,6 +145,10 @@
       ],
       submitLabel: text('Создать анализ', 'Create analysis'),
       onSubmit: async (values) => {
+        const readySources = (itemState(product.id).data?.sources ?? []).filter((source) => source.status === 'admitted' && source.parseStatus === 'completed');
+        if (!readySources.length) throw new Error(text('Сначала загрузите источник и дождитесь завершения проверки/парсинга.', 'Upload a source and wait for scan/parsing to complete first.'));
+        const modelContract = MODEL_CONTRACTS[values.purpose];
+        if (!modelContract) throw new Error(text('Для этой задачи ещё не определён model contract.', 'No model contract is defined for this purpose yet.'));
         await mutate(`/v2/product/styles/${encodeURIComponent(product.id)}/engineering/analyses`, {
           ...(product.styleVersionId ? { styleVersionId: product.styleVersionId } : {}),
           purpose: values.purpose,
@@ -141,7 +156,10 @@
             objective: values.objective?.trim() || null,
             styleCode: product.styleCode,
             styleVersionId: product.styleVersionId || null,
-            sourcePolicy: 'canonical-product-assets-and-explicit-user-sources',
+            sourcePolicy: 'admitted-parsed-sources-only',
+            sourceIds: readySources.map((source) => source.id),
+            autoExecute: true,
+            modelContract,
             requestedFrom: 'product-master-engineering-tab',
           },
         });

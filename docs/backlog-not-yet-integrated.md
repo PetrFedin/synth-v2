@@ -191,7 +191,8 @@ ERP/EDI ритейлера; расширенное планирование ас
 * exact schema-version validation для `engineering-findings-v1` и `garment-ontology-v1`: unknown fields, чужие source IDs, неверные findingIndex, graph cardinality/relations и resource limits отклоняются до persistence;
 * format-aware evidence grounding: PDF page обязан существовать в parsed fragments; XLSX/CSV range обязан лежать внутри распарсенного диапазона листа; image/SVG region валидируется как normalized geometry;
 * persisted/reviewed Garment Graph + nodes/edges, выведенный в Product Master;
-* AI результат остаётся proposal/evidence layer и не пишет напрямую canonical Product/BOM/Measurement/Tech Pack.
+* AI результат остаётся proposal/evidence layer и не пишет напрямую canonical Product/BOM/Measurement/Tech Pack;
+* первый governed apply slice: accepted proposal → allowlisted canonical service command → appliedReference для Measurement Chart / Material Specification / Tech Pack Revision / Operation Sequence; обязательны proposal+canonical expectedVersion, generic patch/SQL отсутствуют, crash recovery идемпотентен.
 
 **Ещё не встроено / нельзя считать production-ready:**
 
@@ -202,7 +203,7 @@ ERP/EDI ритейлера; расширенное планирование ас
 * live qualification benchmark artefact + accepted external model endpoint для exact provider/model/prompt/schema;
 * calibrated POM extraction; абсолютные размеры из некалиброванного фото должны оставаться UNKNOWN;
 * deterministic grading intelligence поверх существующих `grade_steps`, не LLM-generated generic increments;
-* reviewed apply adapters: proposal → отдельная canonical command с impact/revision checks;
+* расширить reviewed apply adapters на BOM / Product Identity / Sample / Colour и добавить полноценный pre-apply change-impact для high-risk изменений;
 * automatic evidence-grounded Technical Flat generation;
 * sample/factory correction learning loop и change-impact по Measurements/BOM/Tech Pack/Sourcing/Production/Cost;
 * production knowledge corpus с citations/qualification.

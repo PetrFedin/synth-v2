@@ -98,7 +98,7 @@ function schemas() {
     },
     SupplierPassportPartnerBundle: {
       type: 'object', additionalProperties: false,
-      required: ['schemaVersion','generatedAt','supplier','qualification','evidenceDimensions','evidenceCounters','lineage','disclosureBoundary','signature','bundleSha256'],
+      required: ['schemaVersion','generatedAt','supplier','qualification','evidenceDimensions','evidenceCounters','lineage','disclosureBoundary','signature','hashScope','bundleSha256'],
       properties: {
         schemaVersion: { type: 'string', enum: ['supplier-passport-partner-bundle-v1'] },
         generatedAt: timestamp(),

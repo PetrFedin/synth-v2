@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import pg from 'pg';
 import { bootstrapProductionAcceptanceReferences } from '../../src/acceptance/production-reference-bootstrap.mjs';
@@ -12,7 +13,7 @@ const connectionString = process.env.POSTGRES_TEST_URL;
 test('Product Engineering durable jobs reclaim expired leases and dead-letter bounded retries',async()=>{
   assert.ok(connectionString,'POSTGRES_TEST_URL is required for PostgreSQL integration tests');
   const pool=new Pool({connectionString,max:2});
-  const migrationsDir=new URL('../../db/migrations/',import.meta.url);
+  const migrationsDir=fileURLToPath(new URL('../../db/migrations/',import.meta.url));
   try{
     await migratePostgres({pool,migrationsDir});
     const runtime=createPostgresWholesaleRuntime({pool,migrationsDir});

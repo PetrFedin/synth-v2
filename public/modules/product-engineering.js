@@ -103,6 +103,7 @@
       [text('Конфликты', 'Open conflicts'), conflicts],
       [text('Блокирующие', 'Blocking'), blocking],
       [text('Утверждённые виды', 'Approved views'), approvedDrawings],
+      [text('Ontology nodes', 'Ontology nodes'), data.garmentGraph?.nodeCount ?? 0],
     ].forEach(([label, value]) => {
       const card = el('div', { className: 'od-engineering-kpi', 'data-od14-component': 'metric' });
       card.append(el('strong', { rawText: String(value) }), el('span', { rawText: label }));
@@ -178,6 +179,60 @@
   }
 
 
+
+  function garmentGraphPanel(graph) {
+    const wrap = el('div', { className: 'stack' });
+    wrap.append(el('h4', { rawText: text('Семантическая конструкция изделия', 'Garment ontology graph') }));
+    if (!graph) {
+      wrap.append(notice(text(
+        'Reviewed garment graph ещё не создан. Он появится после квалифицированного garment/construction анализа.',
+        'No reviewed garment graph yet. It will appear after a qualified garment/construction analysis.',
+      )));
+      return wrap;
+    }
+
+    const meta = el('div', { className: 'od-inline-actions' });
+    meta.append(
+      statusBadge(graph.status),
+      el('span', { className: 'muted', rawText: graph.schemaVersion || '—' }),
+      el('span', { className: 'muted', rawText: graph.contentHash ? `SHA-256 ${graph.contentHash.slice(0, 12)}…` : '—' }),
+      el('span', { className: 'muted', rawText: `${graph.nodeCount ?? graph.nodes?.length ?? 0} undefined · ${graph.edgeCount ?? graph.edges?.length ?? 0} undefined` }),
+    );
+    wrap.append(meta);
+
+    const nodeById = new Map((graph.nodes ?? []).map((node) => [node.id, node]));
+    if (graph.nodes?.length) {
+      wrap.append(odMiniTable(
+        [text('Тип', 'Type'), text('Семантика', 'Semantic'), text('Название', 'Label'), text('Уверенность', 'Confidence'), text('Finding', 'Finding')],
+        graph.nodes.slice(0, 80).map((node) => [
+          node.nodeType,
+          node.semanticCode || '—',
+          node.label || '—',
+          confidence(node.confidence),
+          node.findingId || '—',
+        ]),
+      ));
+    }
+
+    if (graph.edges?.length) {
+      wrap.append(el('h5', { rawText: text('Связи конструкции', 'Structural relations') }));
+      wrap.append(odMiniTable(
+        [text('От', 'From'), text('Связь', 'Relation'), text('К', 'To'), text('Уверенность', 'Confidence')],
+        graph.edges.slice(0, 100).map((edge) => {
+          const from = nodeById.get(edge.fromNodeId);
+          const to = nodeById.get(edge.toNodeId);
+          return [
+            from?.semanticCode || from?.label || edge.fromNodeId,
+            edge.relation,
+            to?.semanticCode || to?.label || edge.toNodeId,
+            confidence(edge.confidence),
+          ];
+        }),
+      ));
+    }
+    return wrap;
+  }
+
   function sourcesPanel(rows) {
     const wrap = el('div', { className: 'stack' });
     wrap.append(el('h4', { rawText: text('Источники и provenance', 'Sources & provenance') }));
@@ -220,7 +275,7 @@
     }
     const tableRows = rows.map((row) => {
       const actions = el('div', { className: 'od-inline-actions' });
-      if (manage && row.status === 'queued') {
+      if (manage && row.status === 'queued' && row.inputManifest?.autoExecute !== true) {
         const start = el('button', { className: 'button small', type: 'button', rawText: text('Запустить', 'Start') });
         start.addEventListener('click', () => { void mutateAnalysis(start, row, 'start'); });
         actions.append(start);
@@ -230,7 +285,10 @@
         complete.addEventListener('click', () => { void mutateAnalysis(complete, row, 'complete'); });
         actions.append(complete);
       }
-      return [purpose(row.purpose), statusBadge(row.status), row.requestedAt ? formatDate(row.requestedAt) : '—', row.inputHash?.slice(0, 10) || '—', actions];
+      const stateCell = el('div', { className: 'stack compact' });
+      stateCell.append(statusBadge(row.status));
+      if (row.failureCode) stateCell.append(el('small', { className: 'muted', rawText: row.failureCode }));
+      return [purpose(row.purpose), stateCell, row.requestedAt ? formatDate(row.requestedAt) : '—', row.inputHash?.slice(0, 10) || '—', actions];
     });
     wrap.append(odMiniTable(
       [text('Задача', 'Purpose'), text('Статус', 'Status'), text('Создан', 'Created'), 'SHA-256', text('Действие', 'Action')],
@@ -392,7 +450,7 @@
       wrap.append(retry);
       return wrap;
     }
-    const data = holder.data || { analyses: [], proposals: [], conflicts: [], drawings: [], sources: [] };
+    const data = holder.data || { analyses: [], proposals: [], conflicts: [], drawings: [], sources: [], garmentGraph: null };
     const manage = manageAllowed(product);
     const wrap = el('div', { className: 'stack od-engineering-workspace' });
     const guard = notice(text(
@@ -413,6 +471,7 @@
     }
     wrap.append(
       sourcesPanel(data.sources ?? []),
+      garmentGraphPanel(data.garmentGraph ?? null),
       conflictsPanel(product, data.conflicts, manage),
       proposalsPanel(product, data.proposals, manage),
       drawingsPanel(product, data.drawings, manage),

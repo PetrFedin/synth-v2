@@ -467,6 +467,12 @@ export function createProductEngineeringService(options = {}) {
       });
     },
 
+    async getProposalForActor(actorId, proposalId) {
+      const proposal = required(await store.getProposal(proposalId), 'PRODUCT_ENGINEERING_PROPOSAL_NOT_FOUND', { proposalId });
+      await authorizeBrand(actorId, proposal.brandId, CAPABILITIES.PRODUCT_ENGINEERING_READ);
+      return proposal;
+    },
+
     async prepareProposalApplication(actorId, proposalId, input = {}) {
       requireObject(input, 'PRODUCT_ENGINEERING_PROPOSAL_APPLY_INVALID');
       const current = required(await store.getProposal(proposalId), 'PRODUCT_ENGINEERING_PROPOSAL_NOT_FOUND', { proposalId });

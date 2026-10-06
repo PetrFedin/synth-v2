@@ -25,9 +25,11 @@ export function createPostgresProductEngineeringJobStore({pool}={}) {
         const result=await client.query(
           `WITH picked AS (
              SELECT id FROM product_engineering_jobs
-              WHERE status IN ('queued','failed')
-                AND available_at <= $2
-                AND (lease_expires_at IS NULL OR lease_expires_at <= $2)
+              WHERE (
+                     (status IN ('queued','failed') AND available_at <= $2)
+                     OR
+                     (status='running' AND lease_expires_at <= $2)
+                    )
                 AND attempt_count < max_attempts
               ORDER BY available_at,created_at,id
               LIMIT $4

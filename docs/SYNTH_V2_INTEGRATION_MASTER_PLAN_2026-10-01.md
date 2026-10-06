@@ -1431,6 +1431,37 @@ Production-qualified combinations receive an immutable Qualification Manifest. N
 
 PR #242 now contains the persisted qualification/policy substrate and an operator bootstrap that refuses qualification without an exact benchmark SHA-256 plus non-empty evaluation metrics. A database record is still not production evidence by itself: the benchmark artefact, evaluation procedure and live acceptance for the deployed model/prompt/schema remain required.
 
+### Phase E — Governed Canonical Apply — IMPLEMENTED/PARTIAL in PR #242
+
+Accepted proposals can now cross the authority boundary through an explicit allowlist of existing canonical service commands:
+
+- `measurement / chart` -> `updateCanonicalMeasurementChart`;
+- `material / specification` -> `amendMaterialSpecification`;
+- `tech_pack / revision` -> `createRevision`;
+- `operation_sequence / operations` -> `replaceOperations`.
+
+Rules:
+
+- proposal must already be human-`accepted`;
+- apply requires both `expectedProposalVersion` and `expectedCanonicalVersion`;
+- AI `proposedValue` cannot supply or override `expectedVersion`;
+- no generic JSON Patch or direct SQL exists;
+- the owning canonical service performs its normal capability, domain and optimistic-concurrency checks;
+- canonical command id is derived from the external apply command id and participates in the existing global command registry;
+- after the owning command succeeds, Product Engineering records immutable `appliedReference = authority + action + canonical commandId + entity/version`;
+- crash between canonical commit and Product Engineering marking is replay-safe: the same canonical command id returns the prior canonical result, then the proposal can be marked applied;
+- reuse of one idempotency key for a different canonical apply conflicts before a second canonical mutation.
+
+PostgreSQL Golden Path now proves:
+`completed analysis -> human-created material proposal -> accept -> POST /apply -> canonical material version increment -> appliedReference`.
+
+Still open:
+
+- apply adapters for BOM, Product Identity fields, Samples/fit decisions, Colour and other canonical actions;
+- change-impact preview before higher-risk apply operations;
+- UI action/confirmation surface for accepted-but-not-applied proposals;
+- policy controls for actions that require stronger approval than ordinary Product Engineering management.
+
 ### Current AI Engineering Golden Path — 2026-10-06
 
 The intended first real user journey is now:
@@ -1451,7 +1482,7 @@ What it **does not yet prove**:
 - semantic extraction quality from arbitrary real PDFs;
 - production object-storage scale;
 - a live external model endpoint with accepted benchmark evidence;
-- automatic canonical apply adapters after human approval;
+- broader canonical apply coverage beyond the current allowlisted first slice (Measurement Chart, Material Specification, Tech Pack Revision, Operation Sequence operations);
 - calibrated POM/grading quality on real garments.
 
 ### Commercial/defensibility result

@@ -78,3 +78,31 @@ test('supplier passport route is read-only and OpenAPI-visible', async () => {
   assert.equal(wholesaleV2ExtendedOpenApi.paths['/suppliers/{supplierCode}/passport']?.get?.operationId, 'getSupplierPassport');
   assert.ok(wholesaleV2ExtendedOpenApi.components.schemas.SupplierPassport);
 });
+
+test('partner bundle is deterministic, portable and redacts internal economics', async () => {
+  const service = createSupplierPassportService({ reader: readerFor(), clock: () => '2026-10-06T12:00:00.000Z' });
+  const one = await service.getPartnerBundleForActor('actor-1', 'SUP-01');
+  const two = await service.getPartnerBundleForActor('actor-1', 'SUP-01');
+
+  assert.equal(one.schemaVersion, 'supplier-passport-partner-bundle-v1');
+  assert.equal(one.supplier.supplierCode, 'SUP-01');
+  assert.equal(one.evidenceDimensions.delivery.valuePercent, 80);
+  assert.equal(one.disclosureBoundary.failureEconomicsIncluded, false);
+  assert.equal(one.signature.status, 'unsigned');
+  assert.equal(one.bundleSha256.length, 64);
+  assert.equal(one.bundleSha256, two.bundleSha256);
+  assert.equal(one.supplier.brandId, undefined);
+  assert.equal(one.performance, undefined);
+});
+
+test('partner bundle route is separate from full supplier passport route', async () => {
+  const calls = [];
+  const rs = createSupplierPassportRoutes({ supplierPassport: {
+    getPartnerBundleForActor(actorId, supplierCode) { calls.push(['bundle', actorId, supplierCode]); return { schemaVersion: 'supplier-passport-partner-bundle-v1' }; },
+    getSupplierPassportForActor(actorId, supplierCode) { calls.push(['passport', actorId, supplierCode]); return { schemaVersion: 'supplier-passport-v1' }; },
+  } });
+  const route = rs.find((item) => item.pattern.test('/v2/suppliers/SUP-01/passport/partner-bundle'));
+  assert.ok(route);
+  assert.deepEqual(await route.execute({ actorId: 'actor-1', params: ['SUP-01'], query: {} }), { schemaVersion: 'supplier-passport-partner-bundle-v1' });
+  assert.deepEqual(calls, [['bundle','actor-1','SUP-01']]);
+});

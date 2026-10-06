@@ -3,6 +3,7 @@ import { validateAcceptanceOrigin } from './collection-live-acceptance.mjs';
 
 const RUN_ID_PATTERN=/^[A-Za-z0-9_-]{1,80}$/;
 
+/** @param {any} [options] */
 export async function runProductEngineeringLiveAcceptance(options={}) {
   const {
     baseUrl, token, pool, fetchImpl=globalThis.fetch, runId=randomUUID(), brandId,
@@ -101,7 +102,9 @@ export async function runProductEngineeringLiveAcceptance(options={}) {
   });
 }
 
-async function pollUntil(check,{timeoutMs,pollIntervalMs,label}){
+/** @param {() => Promise<any>} check @param {any} options */
+async function pollUntil(check,options){
+  const {timeoutMs,pollIntervalMs,label}=options;
   const deadline=Date.now()+timeoutMs;
   while(Date.now()<deadline){
     const result=await check();
@@ -110,13 +113,20 @@ async function pollUntil(check,{timeoutMs,pollIntervalMs,label}){
   }
   throw new Error('Timed out waiting for '+label);
 }
+/** @param {any} value */
 function requiredToken(value){if(typeof value!=='string'||!value.trim())throw new Error('Acceptance bearer token is required');}
+/** @param {any} value @param {string} message */
 function requiredId(value,message){if(typeof value!=='string'||!value.trim())throw new Error(message);}
+/** @param {string} runId @param {string} operation */
 function command(runId,operation){return 'acceptance-'+runId+'-'+operation;}
-function acceptanceFailure(code,value){const error=new Error('Product Engineering acceptance failed: '+code);error.code=code;error.details=value;return error;}
+/** @param {string} code @param {any} value */
+function acceptanceFailure(code,value){return Object.assign(new Error('Product Engineering acceptance failed: '+code),{code,details:value});}
+/** @param {any} payload @param {string} operation */
 function data(payload,operation){if(!payload?.data)throw new Error('Acceptance '+operation+' did not return data');return payload.data;}
 
-async function requestJson(fetchImpl,baseUrl,pathname,{method='GET',token,body,idempotencyKey}={}){
+/** @param {typeof fetch} fetchImpl @param {URL} baseUrl @param {string} pathname @param {any} [options] */
+async function requestJson(fetchImpl,baseUrl,pathname,options={}){
+  const {method='GET',token,body,idempotencyKey}=options;
   const headers={accept:'application/json'};
   if(token)headers.authorization='Bearer '+token;
   if(idempotencyKey)headers['idempotency-key']=idempotencyKey;
@@ -125,7 +135,9 @@ async function requestJson(fetchImpl,baseUrl,pathname,{method='GET',token,body,i
   const response=await fetchImpl(new URL(pathname,baseUrl),{method,headers,...(serialized===undefined?{}:{body:serialized})});
   return decodeResponse(response,method,pathname);
 }
-async function requestBinary(fetchImpl,baseUrl,pathname,{token,idempotencyKey,fileName,mediaType,bytes}){
+/** @param {typeof fetch} fetchImpl @param {URL} baseUrl @param {string} pathname @param {any} options */
+async function requestBinary(fetchImpl,baseUrl,pathname,options){
+  const {token,idempotencyKey,fileName,mediaType,bytes}=options;
   const response=await fetchImpl(new URL(pathname,baseUrl),{
     method:'POST',
     headers:{accept:'application/json',authorization:'Bearer '+token,'idempotency-key':idempotencyKey,'content-type':mediaType,'x-file-name':encodeURIComponent(fileName)},
@@ -133,6 +145,7 @@ async function requestBinary(fetchImpl,baseUrl,pathname,{token,idempotencyKey,fi
   });
   return decodeResponse(response,'POST',pathname);
 }
+/** @param {Response} response @param {string} method @param {string} pathname */
 async function decodeResponse(response,method,pathname){
   const text=await response.text();
   let payload={};

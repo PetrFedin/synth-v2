@@ -145,7 +145,7 @@ function validateEvidenceLocator(locator,entry,details){
     exactFields(locator,['sheet','range'],'spreadsheet evidence locator');
     invariant(typeof locator.sheet==='string'&&locator.sheet.trim(),'ENGINEERING_MODEL_EVIDENCE_LOCATOR_INVALID','Spreadsheet evidence requires sheet',details);
     invariant(typeof locator.range==='string'&&/^[A-Z]+[1-9][0-9]*:[A-Z]+[1-9][0-9]*$/.test(locator.range),'ENGINEERING_MODEL_EVIDENCE_LOCATOR_INVALID','Spreadsheet evidence requires A1 cell range',details);
-    invariant(fragments.some(fragment=>fragment.kind==='cell_range'&&fragment.locator?.sheet===locator.sheet&&fragment.locator?.range===locator.range),'ENGINEERING_MODEL_EVIDENCE_LOCATOR_INVALID','Spreadsheet evidence range is not an exact parsed fragment',{...details,sheet:locator.sheet,range:locator.range});
+    invariant(fragments.some(fragment=>fragment.kind==='cell_range'&&fragment.locator?.sheet===locator.sheet&&rangeContains(fragment.locator?.range,locator.range)),'ENGINEERING_MODEL_EVIDENCE_LOCATOR_INVALID','Spreadsheet evidence range is outside parsed source range',{...details,sheet:locator.sheet,range:locator.range});
     return;
   }
   if(mediaType.startsWith('image/')&&mediaType!=='image/svg+xml'){
@@ -164,6 +164,23 @@ function validateEvidenceLocator(locator,entry,details){
   }
   invariant(Object.keys(locator).length>=1,'ENGINEERING_MODEL_EVIDENCE_LOCATOR_INVALID','Evidence locator cannot be empty for a governed source',details);
 }
+
+
+function rangeContains(container,candidate){
+  const outer=parseA1Range(container);
+  const inner=parseA1Range(candidate);
+  if(!outer||!inner)return false;
+  return inner.minCol>=outer.minCol&&inner.maxCol<=outer.maxCol&&inner.minRow>=outer.minRow&&inner.maxRow<=outer.maxRow;
+}
+function parseA1Range(value){
+  if(typeof value!=='string')return null;
+  const match=value.match(/^([A-Z]+)([1-9][0-9]*):([A-Z]+)([1-9][0-9]*)$/);
+  if(!match)return null;
+  const a=columnNumber(match[1]),b=columnNumber(match[3]);
+  const r1=Number(match[2]),r2=Number(match[4]);
+  return {minCol:Math.min(a,b),maxCol:Math.max(a,b),minRow:Math.min(r1,r2),maxRow:Math.max(r1,r2)};
+}
+function columnNumber(name){let value=0;for(const ch of name)value=value*26+(ch.charCodeAt(0)-64);return value;}
 
 function normalizedRegion(region,code,message,details={}){
   invariant(region&&typeof region==='object'&&!Array.isArray(region),code,message,details);

@@ -14,6 +14,9 @@ const purposes = ['garment_interpretation','document_ingestion','measurement_ass
 const authorities = ['product_identity','measurement','bom','construction','tech_pack','sample','material','colour','operation_sequence'];
 const views = ['front','back','left','right','inside','detail'];
 const objectTypes = ['outline','panel','seam','stitch','pocket','closure','collar','cuff','trim','measurement_anchor','construction_callout'];
+const sourceKinds = ['product_media','style_reference','document','spreadsheet','external_uri','sample','manual_observation'];
+const ingestModes = ['upload','connector','canonical_asset','manual'];
+const fragmentKinds = ['document_page','sheet','cell_range','image_region','text_span','metadata','manual_note'];
 
 export function withProductEngineeringOpenApi(base) {
   const specification = structuredClone(base);
@@ -25,6 +28,39 @@ export function withProductEngineeringOpenApi(base) {
 function schemas() {
   const confidence = { oneOf: [{ type: 'number', minimum: 0, maximum: 1 }, { type: 'null' }] };
   return {
+    ProductEngineeringSourceCreate: {
+      type:'object', additionalProperties:false, required:['kind','ingestMode'],
+      properties:{
+        kind:{type:'string',enum:sourceKinds}, ingestMode:{type:'string',enum:ingestModes},
+        mediaType:{type:'string'}, originalName:{type:'string',maxLength:260},
+        sizeBytes:{type:'integer',minimum:0}, contentHash:hash, storageRef:{type:'string',maxLength:1000},
+        sourceUri:{type:'string',maxLength:2000}, metadata:jsonObject,
+      },
+    },
+    ProductEngineeringSourceScan: {
+      type:'object', additionalProperties:false, required:['expectedVersion','status'],
+      properties:{ expectedVersion:{type:'integer',minimum:1}, status:{type:'string',enum:['clean','infected','error']}, engine:{type:'string'}, details:jsonObject },
+    },
+    ProductEngineeringSourceAdmit: {
+      type:'object', additionalProperties:false, required:['expectedVersion','policyVersion'],
+      properties:{ expectedVersion:{type:'integer',minimum:1}, policyVersion:{type:'string'} },
+    },
+    ProductEngineeringSourceReject: {
+      type:'object', additionalProperties:false, required:['expectedVersion','code','message'],
+      properties:{ expectedVersion:{type:'integer',minimum:1}, code:{type:'string'}, message:{type:'string',maxLength:2000}, quarantine:{type:'boolean'} },
+    },
+    ProductEngineeringSourceFragmentCreate: {
+      type:'object', additionalProperties:false, required:['kind','locator'],
+      properties:{ kind:{type:'string',enum:fragmentKinds}, locator:jsonObject, content:{}, contentHash:hash },
+    },
+    ProductEngineeringSourceParseComplete: {
+      type:'object', additionalProperties:false, required:['expectedVersion','parser','parserVersion','fragmentCount'],
+      properties:{ expectedVersion:{type:'integer',minimum:1}, parser:{type:'string'}, parserVersion:{type:'string'}, fragmentCount:{type:'integer',minimum:0} },
+    },
+    ProductEngineeringSourceWorkspace: {
+      type:'object', additionalProperties:false, required:['source','fragments'],
+      properties:{ source:{type:'object',additionalProperties:true}, fragments:{type:'array',items:{type:'object',additionalProperties:true}} },
+    },
     ProductEngineeringAnalysisCreate: {
       type: 'object', additionalProperties: false, required: ['purpose','inputManifest'],
       properties: { styleVersionId: id, purpose: { type: 'string', enum: purposes }, inputManifest: jsonObject },
@@ -102,12 +138,13 @@ function schemas() {
       },
     },
     ProductEngineeringStyleWorkspace: {
-      type: 'object', additionalProperties: false, required: ['analyses','proposals','conflicts','drawings'],
+      type: 'object', additionalProperties: false, required: ['analyses','proposals','conflicts','drawings','sources'],
       properties: {
         analyses: { type: 'array', items: { $ref: '#/components/schemas/ProductEngineeringAnalysis' } },
         proposals: { type: 'array', items: { type: 'object', additionalProperties: true } },
         conflicts: { type: 'array', items: { type: 'object', additionalProperties: true } },
         drawings: { type: 'array', items: { type: 'object', additionalProperties: true } },
+        sources: { type: 'array', items: { type: 'object', additionalProperties: true } },
       },
     },
     ProductEngineeringAnalysisWorkspace: {
@@ -136,6 +173,13 @@ function paths() {
     responses: { 200: { description: 'Success', content: { 'application/json': { schema: { type: 'object', required: ['data','requestId'], properties: { data: { $ref: responseSchema }, requestId: { type: 'string' } } } } } }, 401: error, 403: error, 404: error },
   });
   return {
+    '/product/styles/{styleId}/engineering/sources': { post: mutation('registerProductEngineeringSource', ['styleId'], '#/components/schemas/ProductEngineeringSourceCreate') },
+    '/product-engineering/sources/{sourceId}': { get: read('getProductEngineeringSource', ['sourceId'], '#/components/schemas/ProductEngineeringSourceWorkspace') },
+    '/product-engineering/sources/{sourceId}/scan': { post: mutation('recordProductEngineeringSourceScan', ['sourceId'], '#/components/schemas/ProductEngineeringSourceScan') },
+    '/product-engineering/sources/{sourceId}/admit': { post: mutation('admitProductEngineeringSource', ['sourceId'], '#/components/schemas/ProductEngineeringSourceAdmit') },
+    '/product-engineering/sources/{sourceId}/reject': { post: mutation('rejectProductEngineeringSource', ['sourceId'], '#/components/schemas/ProductEngineeringSourceReject') },
+    '/product-engineering/sources/{sourceId}/fragments': { post: mutation('addProductEngineeringSourceFragment', ['sourceId'], '#/components/schemas/ProductEngineeringSourceFragmentCreate') },
+    '/product-engineering/sources/{sourceId}/parse-complete': { post: mutation('completeProductEngineeringSourceParsing', ['sourceId'], '#/components/schemas/ProductEngineeringSourceParseComplete') },
     '/product/styles/{styleId}/engineering/analyses': { post: mutation('requestProductEngineeringAnalysis', ['styleId'], '#/components/schemas/ProductEngineeringAnalysisCreate') },
     '/product/styles/{styleId}/engineering': { get: read('getProductEngineeringStyleWorkspace', ['styleId'], '#/components/schemas/ProductEngineeringStyleWorkspace', [{ name: 'limit', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 200 } }]) },
     '/product-engineering/analyses/{analysisRunId}': { get: read('getProductEngineeringAnalysisWorkspace', ['analysisRunId'], '#/components/schemas/ProductEngineeringAnalysisWorkspace') },

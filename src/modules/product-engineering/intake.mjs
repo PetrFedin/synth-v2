@@ -40,7 +40,7 @@ export function createEngineeringSource({
   invariant(ingestMode!=='upload'||contentHash!==null,'ENGINEERING_SOURCE_UPLOAD_HASH_REQUIRED','Uploaded source requires a content hash before registration');
   invariant(ingestMode!=='upload'||storageRef!==null,'ENGINEERING_SOURCE_UPLOAD_STORAGE_REQUIRED','Uploaded source requires a durable storage reference');
   invariant(ingestMode!=='canonical_asset'||storageRef!==null,'ENGINEERING_SOURCE_CANONICAL_REF_REQUIRED','Canonical asset source requires a storage reference');
-  invariant(ingestMode!=='external_uri','ENGINEERING_SOURCE_EXTERNAL_MODE_INVALID','external_uri kind must use a governed connector, not direct external fetch');
+  invariant(kind!=='external_uri'||ingestMode==='connector','ENGINEERING_SOURCE_EXTERNAL_MODE_INVALID','external_uri sources must use a governed connector, not direct external fetch');
   return deepFreeze({
     id,brandId,styleId,kind,ingestMode,mediaType,originalName,sizeBytes,contentHash,storageRef,sourceUri,
     metadata:structuredClone(metadata),status:'pending',

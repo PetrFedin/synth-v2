@@ -18,12 +18,21 @@ import {
   startAnalysis as startAnalysisDomain,
 } from '../modules/product-engineering/public.mjs';
 
-export function createProductEngineeringService({
-  store,
-  productReader,
-  clock = () => new Date().toISOString(),
-  nextId = defaultIdGenerator(),
-} = {}) {
+/**
+ * @param {{
+ *   store?: any,
+ *   productReader?: any,
+ *   clock?: () => string,
+ *   nextId?: (prefix: string) => string
+ * }} [options]
+ */
+export function createProductEngineeringService(options = {}) {
+  const {
+    store,
+    productReader,
+    clock = () => new Date().toISOString(),
+    nextId = defaultIdGenerator(),
+  } = options;
   invariant(store && typeof store.transaction === 'function' && typeof store.getStyleWorkspace === 'function', 'PRODUCT_ENGINEERING_STORE_REQUIRED', 'Product Engineering store is required');
   invariant(productReader && typeof productReader.getStyle === 'function' && typeof productReader.getMembership === 'function', 'PRODUCT_ENGINEERING_READER_REQUIRED', 'Product reader is required');
 
@@ -54,6 +63,11 @@ export function createProductEngineeringService({
     });
   }
 
+  /**
+   * @param {string} actorId
+   * @param {string} analysisRunId
+   * @param {any} capability
+   */
   async function analysisForActor(actorId, analysisRunId, capability = CAPABILITIES.PRODUCT_ENGINEERING_READ) {
     const run = await store.getAnalysisRun(analysisRunId);
     invariant(run, 'PRODUCT_ENGINEERING_ANALYSIS_NOT_FOUND', 'Engineering analysis not found', { analysisRunId });

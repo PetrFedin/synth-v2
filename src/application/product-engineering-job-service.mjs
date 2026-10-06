@@ -3,11 +3,25 @@ import { invariant } from '../core/errors.mjs';
 import { admitEngineeringSource, completeSourceParsing, createEngineeringFragment, queueSourceParsing, recordSourceScan, rejectEngineeringSource } from '../modules/product-engineering/intake.mjs';
 import { parseEngineeringSourceStructure } from '../modules/product-engineering/structural-parser.mjs';
 
-export function createProductEngineeringJobService({
-  jobStore, engineeringStore, scanner, workerId='engineering-worker', clock=()=>new Date().toISOString(),
-  retryDelayMs=5000, leaseMs=60000, nextId=((prefix)=>`${prefix}_${randomUUID()}`),
-  analysisExecutor=null,
-}={}) {
+/**
+ * @param {{
+ *   jobStore?: any,
+ *   engineeringStore?: any,
+ *   scanner?: any,
+ *   workerId?: string,
+ *   clock?: () => string,
+ *   retryDelayMs?: number,
+ *   leaseMs?: number,
+ *   nextId?: (prefix: string) => string,
+ *   analysisExecutor?: ((job: any) => Promise<any>) | null
+ * }} [options]
+ */
+export function createProductEngineeringJobService(options={}) {
+  const {
+    jobStore, engineeringStore, scanner, workerId='engineering-worker', clock=()=>new Date().toISOString(),
+    retryDelayMs=5000, leaseMs=60000, nextId=((prefix)=>`${prefix}_${randomUUID()}`),
+    analysisExecutor=null,
+  }=options;
   invariant(jobStore&&engineeringStore&&scanner,'ENGINEERING_JOB_SERVICE_REQUIRED','Engineering job service dependencies are required');
 
   async function processPending({limit=10}={}) {

@@ -143,10 +143,15 @@ function schemas() {
               area:{type:'string'},
               action:{type:'string'},
               severity:{type:'string',enum:['medium','high']},
-              activeDependencyCount:{type:'integer',minimum:0},
+              activeDependencyCount:{oneOf:[{type:'integer',minimum:0},{type:'null'}]},
               evidence:{
-                type:'object',additionalProperties:false,required:['present','count'],
-                properties:{present:{type:'boolean'},count:{type:'integer',minimum:0}},
+                type:'object',additionalProperties:false,required:['status','present','count','basis'],
+                properties:{
+                  status:{type:'string',enum:['observed','derived','not_available']},
+                  present:{oneOf:[{type:'boolean'},{type:'null'}]},
+                  count:{oneOf:[{type:'integer',minimum:0},{type:'null'}]},
+                  basis:{oneOf:[{type:'string'},{type:'null'}]},
+                },
               },
             },
           },

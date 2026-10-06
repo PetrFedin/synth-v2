@@ -1551,6 +1551,10 @@ At minimum:
 - auto-execute analysis accepts only admitted+parsed sources and an exact modelContract;
 - no exact active qualification => no model execution;
 - malformed/unqualified provider output cannot create canonical PLM state;
+- `tests/postgres/product-engineering-golden-path.test.mjs` proves the in-process real HTTP/PostgreSQL path with a deterministic qualified provider adapter;
+- `tests/postgres/product-engineering-job-recovery.test.mjs` proves expired-lease reclaim and bounded dead-letter semantics;
+- `npm run acceptance:product-engineering` is the live-environment gate: it talks only through the running HTTP service for user mutations, waits for the registered background worker, requires the environment's real exact-qualified model route, and reconciles resulting source/blob/job/evidence lineage against the same PostgreSQL target;
+- the live acceptance command never creates a fake qualification and remote execution requires HTTPS plus `SYNTHA_ACCEPTANCE_ALLOW_REMOTE=true`;
 - `npm run verify` and PostgreSQL verification gates are green before this slice is called DONE.
 
 

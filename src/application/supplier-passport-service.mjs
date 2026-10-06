@@ -15,6 +15,35 @@ export function createSupplierPassportService({ reader, clock = () => new Date()
       const passport = await this.getSupplierPassportForActor(actorId, supplierCode);
       return buildPartnerBundle(passport);
     },
+    async getPartnerBundleForSystem(supplierCode) {
+      invariant(typeof supplierCode === 'string' && supplierCode.length > 0, 'SUPPLIER_CODE_REQUIRED', 'Supplier code is required');
+      return reader.transaction(async (tx) => {
+        const supplier = requireEntity(await tx.getSupplierByCode(supplierCode), 'SUPPLIER_NOT_FOUND', { supplierCode });
+        const operational = requireEntity(
+          await tx.getOperationalPerformance(supplier.brandId, supplier.supplierCode),
+          'SUPPLIER_PERFORMANCE_READ_MODEL_MISSING',
+          { supplierCode, brandId: supplier.brandId },
+        );
+        invariant(
+          operational.supplierId === supplier.id
+            && operational.brandId === supplier.brandId
+            && operational.supplierCode === supplier.supplierCode,
+          'SUPPLIER_PASSPORT_LINEAGE_MISMATCH',
+          'Supplier passport performance belongs to another supplier',
+          { supplierCode },
+        );
+        const economicsByCurrency = await tx.listFailureEconomics(supplier.brandId, supplier.supplierCode);
+        for (const row of economicsByCurrency) {
+          invariant(
+            row.brandId === supplier.brandId && row.supplierCode === supplier.supplierCode,
+            'SUPPLIER_PASSPORT_ECONOMIC_LINEAGE_MISMATCH',
+            'Supplier passport economics belongs to another supplier',
+            { supplierCode, currency: row.currency },
+          );
+        }
+        return buildPartnerBundle(buildPassport({ supplier, operational, economicsByCurrency, asOf: iso(clock()) }));
+      });
+    },
     getSupplierPassportForActor(actorId, supplierCode) {
       invariant(typeof actorId === 'string' && actorId.length > 0, 'ACTOR_ID_REQUIRED', 'Actor id is required');
       invariant(typeof supplierCode === 'string' && supplierCode.length > 0, 'SUPPLIER_CODE_REQUIRED', 'Supplier code is required');

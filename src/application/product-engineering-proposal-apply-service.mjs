@@ -90,7 +90,9 @@ function canonicalPayload(proposal,expectedCanonicalVersion){
   invariant(Number.isInteger(expectedCanonicalVersion)&&expectedCanonicalVersion>=1,'PRODUCT_ENGINEERING_CANONICAL_EXPECTED_VERSION_INVALID','Expected canonical version must be a positive integer');
   const proposed=proposal.proposedValue;
   invariant(proposed&&typeof proposed==='object'&&!Array.isArray(proposed),'PRODUCT_ENGINEERING_APPLY_VALUE_INVALID','Canonical apply proposal value must be an object');
-  return Object.freeze({expectedVersion:expectedCanonicalVersion,...structuredClone(proposed)});
+  const value=structuredClone(proposed);
+  invariant(!Object.hasOwn(value,'expectedVersion'),'PRODUCT_ENGINEERING_APPLY_VALUE_INVALID','Proposal value cannot supply canonical expectedVersion');
+  return Object.freeze({...value,expectedVersion:expectedCanonicalVersion});
 }
 
 function canonicalCommandId(commandId){

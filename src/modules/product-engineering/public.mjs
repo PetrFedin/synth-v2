@@ -108,6 +108,16 @@ export function createModelRun({ id, analysisRun, provider, model, purpose, prom
   });
 }
 
+export function failModelRun(run, { failureCode, completedAt }) {
+  invariant(run?.status === 'started', 'PRODUCT_ENGINEERING_MODEL_RUN_NOT_STARTED', 'Only a started model run can fail');
+  return freeze({
+    ...run,
+    status: 'failed',
+    failureCode: shortCode(failureCode, 'PRODUCT_ENGINEERING_FAILURE_CODE_INVALID'),
+    completedAt: timestamp(completedAt, 'PRODUCT_ENGINEERING_TIME_INVALID'),
+  });
+}
+
 export function completeModelRun(run, { outputHash, usage = {}, costMinor = null, currency = null, completedAt }) {
   invariant(run?.status === 'started', 'PRODUCT_ENGINEERING_MODEL_RUN_NOT_STARTED', 'Only a started model run can complete');
   requireObject(usage, 'PRODUCT_ENGINEERING_MODEL_USAGE_INVALID', 'Model usage must be an object');

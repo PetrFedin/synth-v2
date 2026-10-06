@@ -1,4 +1,5 @@
 import { invariant } from '../../core/errors.mjs';
+import { canonicalJson } from '../../core/fingerprints.mjs';
 import {
   CONFLICT_SEVERITIES,
   FINDING_ORIGINS,
@@ -138,4 +139,4 @@ function object(value,code,message,details={}){invariant(value&&typeof value==='
 function token(value,code,message,details={}){invariant(typeof value==='string'&&TOKEN.test(value),code,message,details);}
 function boundedText(value,min,max,code,message,details={}){invariant(typeof value==='string'&&value.trim().length>=min&&value.trim().length<=max,code,message,details);}
 function confidence(value,label){invariant(value===undefined||value===null||(typeof value==='number'&&Number.isFinite(value)&&value>=0&&value<=1),'ENGINEERING_MODEL_CONFIDENCE_INVALID',`${label} must be between 0 and 1`);}
-function json(value,code,message,details={}){try{JSON.stringify(value);}catch{invariant(false,code,message,details);}}
+function json(value,code,message,details={}){try{canonicalJson(value);}catch{invariant(false,code,message,details);}}

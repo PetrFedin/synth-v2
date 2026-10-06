@@ -1169,3 +1169,114 @@ Potential products:
 
 **Commercial framing:** Synth-v2 gains a verified supplier network whose trust and performance history compound with usage, creating a defensible multi-tenant data moat.
 
+## Defensibility wave — Supplier Trust Graph and portable production credentials
+
+This wave turns the Supplier Passport and capacity/performance network into a trust system based on verified production history rather than self-declared profiles.
+
+### Supplier Trust Graph — ADOPT
+
+Graph entities:
+
+- supplier;
+- facility;
+- capability/process;
+- product/category;
+- sample;
+- quote;
+- capacity reservation;
+- production order;
+- QC result;
+- shipment;
+- receipt;
+- traceability evidence;
+- external facility identity.
+
+Relations are derived from canonical Synth-v2 facts.
+
+### Evidence-backed Trust Dimensions — ADOPT
+
+Expose separate dimensions:
+
+- identity/facility verified;
+- capability self-declared vs production-verified;
+- sample pass history;
+- QC first-pass/rework;
+- reserved-capacity adherence;
+- OTIF;
+- traceability completeness;
+- EDI/Peppol readiness;
+- evidence freshness.
+
+Never collapse these into one unexplained supplier score.
+
+### Portable Production Credential — ADAPT
+
+Reference:
+
+https://github.com/w3c/vc-data-model
+
+Issue scoped credentials such as:
+
+- Facility Identity Verified;
+- Production Capability Verified for category/process;
+- Traceability-ready;
+- Peppol/EDI integration verified;
+- Capacity-sharing participant;
+- QC evidence-ready.
+
+Each states exact evidence standard/version and expiry/review date.
+
+Credential does not certify labour/environmental compliance unless an authorised certifier/evidence process explicitly does so.
+
+### Privacy-safe Cross-brand Reputation — ADOPT
+
+Network-level trust can use aggregated facts only where allowed.
+
+A supplier may show:
+
+- N verified completed productions;
+- OTIF band/period;
+- QC evidence band/period;
+
+without exposing which competing brand, negotiated price or confidential product.
+
+Minimum cohort/privacy rules are required.
+
+### Supplier-issued / Third-party Evidence — ADOPT
+
+Separate evidence classes:
+
+- supplier self-declared;
+- Synth-v2 observed;
+- external registry;
+- third-party certificate;
+- brand-confirmed.
+
+Never convert self-declared evidence into Synth-v2-verified status automatically.
+
+### Credential Verification API — ADOPT
+
+Allow partner systems to verify:
+
+- credential ID;
+- subject facility/supplier;
+- scope;
+- status;
+- issued/review dates;
+- issuer.
+
+Minimum disclosure only.
+
+### Additional acceptance
+
+- every trust dimension resolves to source facts;
+- no competitor-specific commercial data leaks;
+- credential scope is explicit;
+- expired external certificate affects only dependent credential;
+- new suppliers receive no-history state rather than a low reputation score;
+- graph remains reconstructable from canonical events.
+
+**Sequencing:** Supplier Passport + Capacity + QC + Traceability -> Trust Graph -> dimension rules -> credentials -> privacy-safe network reputation -> verification API.
+
+**Moat:** the longitudinal supplier/facility performance graph compounds across transactions and becomes difficult for a new PLM/sourcing competitor to reproduce.
+

@@ -1376,7 +1376,7 @@ Minimum frozen lineage fields for the current commercial spine include:
 
 ### 19.1 AI Product Engineering Authority
 
-**Status in this change:** IMPLEMENTED/PARTIAL. The evidence/review authority, controlled binary intake, durable scan/parse/analysis jobs, structural PDF/XLSX/CSV/SVG/image parsing, model qualification/routing substrate, provider-neutral HTTPS gateway adapter, persisted Garment Graph, RBAC/API/OpenAPI, Product Master review workspace, Awaiting Action projection and the first governed canonical apply slice are executable in PR #242. Production malware scanning, production object storage, semantic arbitrary-PDF extraction, accepted live external-model qualification evidence, broader canonical apply coverage, direct impact-evidence coverage and high-risk blocking policy remain explicit gates.
+**Status in this change:** IMPLEMENTED/PARTIAL. The evidence/review authority, controlled binary intake, durable scan/parse/analysis jobs, structural PDF/XLSX/CSV/SVG/image parsing, model qualification/routing substrate, provider-neutral HTTPS gateway adapter, persisted Garment Graph, RBAC/API/OpenAPI, Product Master review workspace, Awaiting Action projection and the first governed canonical apply slice are executable in PR #242. Production malware scanning, production object storage, semantic arbitrary-PDF extraction, accepted live external-model qualification evidence, broader canonical apply coverage, automatic canonical target-version resolution, direct impact-evidence coverage and high-risk blocking policy remain explicit gates.
 
 #### Purpose and placement
 
@@ -1443,6 +1443,21 @@ Evidence semantics are explicit:
 Direct context currently covers Measurement Charts, BOMs, Samples, Tech Packs, Sourcing, Production Orders, Quality inspections and supplier acknowledgement state. Cutting/Inline Quality may be derived only from active production as a review signal. Cost and Commercial Publication remain `not_available` until dedicated readers are joined.
 
 An AnalysisRun without an exact StyleVersion still receives policy-level impact with `contextStatus = unavailable`; the system does not invent repository facts.
+
+#### Product Master Review → Impact → Apply UI — IMPLEMENTED/PARTIAL
+
+The Product Master Engineering tab mirrors the authority states rather than collapsing them into one action:
+
+- `pending`: Accept / Reject only; Accept is explicitly described as review, not canonical mutation;
+- `accepted + unapplied`: read-only Impact is available to Engineering readers; Apply is shown only when the proposal authority/action is in the canonical allowlist and the actor can manage Product Engineering;
+- `accepted + appliedReference`: the UI shows that the canonical mutation occurred and displays authority/resulting version rather than offering Apply again;
+- unsupported accepted actions remain visible but say that canonical apply is not connected yet.
+
+The impact dialog renders the tri-state evidence semantics. The first Apply form requires an explicit current canonical version and sends it as `expectedCanonicalVersion`; the model cannot provide this value. A later target-snapshot reader may prefill this value, but must preserve the same optimistic-concurrency check.
+
+The Engineering forms use the platform's actual `openForm(title, fields, submitAction, options)` contract. Source upload, new analysis, rejection and conflict resolution must not introduce a parallel modal/form framework.
+
+
 
 
 

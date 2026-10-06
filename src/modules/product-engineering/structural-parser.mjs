@@ -3,6 +3,12 @@ import { invariant } from '../../core/errors.mjs';
 
 const MAX_CSV_ROWS = 500;
 const MAX_CSV_COLUMNS = 100;
+const MAX_XLSX_ENTRIES = 2048;
+const MAX_XLSX_ENTRY_UNCOMPRESSED_BYTES = 16 * 1024 * 1024;
+const MAX_XLSX_TOTAL_UNCOMPRESSED_BYTES = 64 * 1024 * 1024;
+const MAX_XLSX_COMPRESSION_RATIO = 100;
+const MAX_XLSX_SHEETS = 256;
+const MAX_XLSX_CELLS_PER_SHEET = 100_000;
 
 export function parseEngineeringSourceStructure({ source, blob }) {
   invariant(source?.id && source?.mediaType, 'ENGINEERING_PARSE_SOURCE_REQUIRED', 'Source with media type is required');
@@ -53,7 +59,9 @@ function parseXlsxEnvelope(source, bytes) {
       .map(match => [match[1], normalizeWorkbookTarget(match[2])]),
   );
   const sharedStrings = parseSharedStrings(xml(entries.get('xl/sharedStrings.xml'), true));
-  const sheets = [...workbook.matchAll(/<sheet\b([^>]*)\/?\s*>/gi)].map((match, index) => {
+  const sheetMatches = [...workbook.matchAll(/<sheet\b([^>]*)\/?\s*>/gi)];
+  invariant(sheetMatches.length <= MAX_XLSX_SHEETS, 'ENGINEERING_XLSX_RESOURCE_LIMIT', 'XLSX contains too many worksheets', { maxSheets: MAX_XLSX_SHEETS });
+  const sheets = sheetMatches.map((match, index) => {
     const attrs = match[1];
     const name = xmlAttr(attrs, 'name') || `Sheet${index + 1}`;
     const relationId = xmlAttr(attrs, 'r:id');
@@ -93,13 +101,24 @@ function readZipEntries(bytes) {
   }
   invariant(eocd >= 0, 'ENGINEERING_XLSX_ZIP_INVALID', 'XLSX ZIP end-of-central-directory was not found');
   const entryCount = view.getUint16(eocd + 10, true);
+  invariant(entryCount <= MAX_XLSX_ENTRIES, 'ENGINEERING_XLSX_RESOURCE_LIMIT', 'XLSX contains too many archive entries', { maxEntries: MAX_XLSX_ENTRIES });
   let offset = view.getUint32(eocd + 16, true);
+  let totalUncompressedBytes = 0;
   const entries = new Map();
   for (let index = 0; index < entryCount; index += 1) {
     invariant(offset + 46 <= bytes.byteLength && view.getUint32(offset, true) === 0x02014b50, 'ENGINEERING_XLSX_ZIP_INVALID', 'XLSX central directory is invalid');
+    const flags = view.getUint16(offset + 8, true);
     const method = view.getUint16(offset + 10, true);
     const compressedSize = view.getUint32(offset + 20, true);
     const uncompressedSize = view.getUint32(offset + 24, true);
+    invariant((flags & 0x0001) === 0, 'ENGINEERING_XLSX_ENCRYPTED_UNSUPPORTED', 'Encrypted XLSX ZIP entries are not accepted');
+    invariant(uncompressedSize <= MAX_XLSX_ENTRY_UNCOMPRESSED_BYTES, 'ENGINEERING_XLSX_RESOURCE_LIMIT', 'XLSX entry exceeds uncompressed size limit', { maxEntryBytes: MAX_XLSX_ENTRY_UNCOMPRESSED_BYTES });
+    totalUncompressedBytes += uncompressedSize;
+    invariant(totalUncompressedBytes <= MAX_XLSX_TOTAL_UNCOMPRESSED_BYTES, 'ENGINEERING_XLSX_RESOURCE_LIMIT', 'XLSX exceeds total uncompressed size limit', { maxTotalBytes: MAX_XLSX_TOTAL_UNCOMPRESSED_BYTES });
+    if (uncompressedSize > 0) {
+      invariant(compressedSize > 0 || method === 0, 'ENGINEERING_XLSX_ZIP_INVALID', 'Compressed XLSX entry has invalid zero compressed size');
+      if (method !== 0) invariant(uncompressedSize / compressedSize <= MAX_XLSX_COMPRESSION_RATIO, 'ENGINEERING_XLSX_RESOURCE_LIMIT', 'XLSX entry compression ratio is unsafe', { maxCompressionRatio: MAX_XLSX_COMPRESSION_RATIO });
+    }
     const fileNameLength = view.getUint16(offset + 28, true);
     const extraLength = view.getUint16(offset + 30, true);
     const commentLength = view.getUint16(offset + 32, true);
@@ -150,6 +169,7 @@ function parseWorksheetCells(text, sharedStrings) {
       value = Number.isFinite(number) && valueText.trim() !== '' ? number : xmlDecode(valueText);
     }
     cells.push(Object.freeze({ ref, type, value }));
+    invariant(cells.length <= MAX_XLSX_CELLS_PER_SHEET, 'ENGINEERING_XLSX_RESOURCE_LIMIT', 'XLSX worksheet contains too many cells', { maxCellsPerSheet: MAX_XLSX_CELLS_PER_SHEET });
   }
   return cells;
 }

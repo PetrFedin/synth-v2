@@ -57,6 +57,7 @@ export function createProductEngineeringRoutes(options = {}) {
     mutate('POST', /^\/v2\/product-engineering\/analyses\/([^/]+)\/findings$/, FINDING_CREATE, validateFinding, ({ commandId, actorId, params, body }) => service.recordFinding(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/product-engineering\/analyses\/([^/]+)\/proposals$/, PROPOSAL_CREATE, validateProposal, ({ commandId, actorId, params, body }) => service.createProposal(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/product-engineering\/proposals\/([^/]+)\/resolve$/, PROPOSAL_RESOLVE, validateProposalResolution, ({ commandId, actorId, params, body }) => service.resolveProposal(commandId, actorId, params[0], body)),
+    read('GET', /^\/v2\/product-engineering\/proposals\/([^/]+)\/impact$/, [], ({ actorId, params }) => service.getProposalImpactForActor(actorId, params[0])),
     mutate('POST', /^\/v2\/product-engineering\/proposals\/([^/]+)\/apply$/, PROPOSAL_APPLY, validateProposalApply, ({ commandId, actorId, params, body }) => service.applyProposal(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/product-engineering\/analyses\/([^/]+)\/conflicts$/, CONFLICT_CREATE, validateConflict, ({ commandId, actorId, params, body }) => service.createConflict(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/product-engineering\/conflicts\/([^/]+)\/resolve$/, CONFLICT_RESOLVE, validateConflictResolution, ({ commandId, actorId, params, body }) => service.resolveConflict(commandId, actorId, params[0], body)),

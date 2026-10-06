@@ -189,6 +189,7 @@ ERP/EDI ритейлера; расширенное планирование ас
 * persisted model qualifications + route policies + benchmark-hash/metrics bootstrap;
 * provider-neutral HTTPS JSON model gateway и fail-closed exact qualification routing;
 * exact schema-version validation для `engineering-findings-v1` и `garment-ontology-v1`: unknown fields, чужие source IDs, неверные findingIndex, graph cardinality/relations и resource limits отклоняются до persistence;
+* format-aware evidence grounding: PDF page обязан существовать в parsed fragments; XLSX/CSV range обязан лежать внутри распарсенного диапазона листа; image/SVG region валидируется как normalized geometry;
 * persisted/reviewed Garment Graph + nodes/edges, выведенный в Product Master;
 * AI результат остаётся proposal/evidence layer и не пишет напрямую canonical Product/BOM/Measurement/Tech Pack.
 

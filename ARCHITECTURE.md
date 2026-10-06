@@ -1376,7 +1376,7 @@ Minimum frozen lineage fields for the current commercial spine include:
 
 ### 19.1 AI Product Engineering Authority
 
-**Status in this change:** IMPLEMENTED/PARTIAL. The evidence/review authority, controlled binary intake, durable scan/parse/analysis jobs, structural PDF/XLSX/CSV/SVG/image parsing, model qualification/routing substrate, provider-neutral HTTPS gateway adapter, persisted Garment Graph, RBAC/API/OpenAPI, Product Master review workspace and Awaiting Action projection are executable in PR #242. Production malware scanning, production object storage, semantic arbitrary-PDF extraction, accepted live external-model qualification evidence and canonical apply adapters remain explicit gates; none is claimed merely because the bounded runtime exists.
+**Status in this change:** IMPLEMENTED/PARTIAL. The evidence/review authority, controlled binary intake, durable scan/parse/analysis jobs, structural PDF/XLSX/CSV/SVG/image parsing, model qualification/routing substrate, provider-neutral HTTPS gateway adapter, persisted Garment Graph, RBAC/API/OpenAPI, Product Master review workspace, Awaiting Action projection and the first governed canonical apply slice are executable in PR #242. Production malware scanning, production object storage, semantic arbitrary-PDF extraction, accepted live external-model qualification evidence, broader canonical apply coverage and change-impact policy remain explicit gates.
 
 #### Purpose and placement
 
@@ -1408,6 +1408,27 @@ An AI result has four distinct meanings and they must never be collapsed:
 `proposal.status = accepted` means that a person accepted the review conclusion. It **does not** mean that Product/BOM/Measurement/Tech Pack was changed. Canonical application must later record an `appliedReference` that identifies the owning authority and exact resulting entity/version. Until then the proposal remains accepted-but-not-applied.
 
 The AI/model integration has no direct SQL/write path to canonical PLM tables.
+
+#### Canonical apply boundary — IMPLEMENTED/PARTIAL
+
+Human acceptance and canonical mutation remain separate states.
+
+Supported first-slice actions:
+
+| Proposal authority / action | Owning canonical command |
+|---|---|
+| `measurement / chart` | `MeasurementService.updateCanonicalMeasurementChart` |
+| `material / specification` | `MaterialService.amendMaterialSpecification` |
+| `tech_pack / revision` | `TechPackService.createRevision` |
+| `operation_sequence / operations` | `OperationSequenceService.replaceOperations` |
+
+`POST /v2/product-engineering/proposals/{proposalId}/apply` requires `expectedProposalVersion` and `expectedCanonicalVersion`. It accepts only an already accepted, not-yet-applied proposal with an explicit target entity and an allowlisted action. The adapter never uses SQL or generic patch semantics.
+
+The external apply command derives one canonical command id, reused on retry. All supported owning stores participate in the existing global command registry (`catalog` scope), so a reused idempotency key cannot mutate a second canonical target. The proposal is marked applied only after the owning service succeeds, recording `authority + action + canonical commandId + entityId + resulting version + appliedAt`. A process failure after canonical commit but before this final mark is replay-safe because the owning command is idempotent.
+
+AI-provided `proposedValue` is forbidden from carrying `expectedVersion`; concurrency authority belongs to the human apply request, not to the model.
+
+
 
 #### Entity dictionary
 
@@ -1517,7 +1538,7 @@ The remaining implementation order is:
 
 1. **Repository + PostgreSQL AI Golden Path acceptance** — prove real authenticated HTTP upload -> persisted bytes/hash -> worker scan/admission -> structural parse/fragments -> exact qualification gate -> model execution -> findings/evidence/proposals/conflicts/graph, with restart/reclaim and negative cases. No DONE claim before this gate is green.
 2. **Production intake adapters** — malware-grade scanner and object storage/presigned ingestion, retaining the existing Source ID/hash/evidence contract.
-3. **Canonical review/apply adapters** — accepted proposal -> explicit owning domain command -> immutable `appliedReference`; include expected-version and impact checks. Never write canonical tables from the AI executor.
+3. **Broaden canonical review/apply + change impact** — first allowlisted slice is implemented for Measurement/Material/Tech Pack/Operation Sequence; add BOM/Product Identity/Sample/Colour only through owning commands and add pre-apply impact/revision checks for high-risk changes.
 4. **POM Assistant** — detect/anchor POM, reconcile governed measurement-point MDM, prohibit absolute values without calibration, propose rather than write grade/base values.
 5. **Deterministic grading intelligence** — use existing interval-specific `grade_steps`/size-scale semantics and validation, never generic LLM increments.
 6. **Technical Flat Engine** — model-assisted front/back/side/inside/detail vector proposals, deterministic editor operations and canonical ProductMedia/Tech Pack projection only after approval.
@@ -1564,7 +1585,7 @@ At minimum:
 
 | Date | PR / commit | Change | Master sections affected | Evidence/status |
 |---|---|---|---|---|
-| 2026-10-06 | PR #242 `feat/ai-product-engineering-authority` | Add evidence-first AI Product Engineering authority plus first executable Engineering Golden Path substrate: controlled binary upload/server SHA-256, durable scan/parse/analysis jobs, structural PDF/XLSX/CSV/SVG/image parsing, exact model qualification/policy routing, provider-neutral HTTPS gateway, Findings/Evidence/Proposals/Conflicts, reviewed Garment Graph, semantic SVG authority, RBAC/OpenAPI/Product Master/Awaiting Action. Canonical PLM writes remain outside AI authority. | 10, 12, 13, 17, 19.1, 20 | IMPLEMENTED/PARTIAL in PR; built-in scanner is integrity-only, PostgreSQL blob storage is MVP, live external qualification evidence/canonical apply adapters remain open; repository + PostgreSQL Golden Path acceptance required before DONE |
+| 2026-10-06 | PR #242 `feat/ai-product-engineering-authority` | Add evidence-first AI Product Engineering authority plus executable Engineering Golden Path: controlled binary upload/server SHA-256, durable scan/parse/analysis jobs, structural PDF/XLSX/CSV/SVG/image parsing, exact qualification/policy routing, schema-bound + source-grounded model output, Findings/Evidence/Proposals/Conflicts, reviewed Garment Graph, semantic SVG authority, RBAC/OpenAPI/Product Master/Awaiting Action, and first governed accepted-proposal → canonical-command → appliedReference slice for Measurement/Material/Tech Pack/Operation Sequence. | 10, 12, 13, 17, 19.1, 20 | IMPLEMENTED/PARTIAL in PR; no direct AI canonical writes; scanner is integrity-only, PostgreSQL blob storage is MVP, live external qualification evidence, broader apply coverage/change impact and intended-live acceptance remain open; repository + PostgreSQL CI still required before DONE |
 | 2026-08 | #106 | Non-destructive live Campaign → Collection acceptance | 7.2, 15 | merged; public HTTP + PostgreSQL acceptance |
 | 2026-08 | #107 | Repeatable owner bootstrap + isolated dev/test PostgreSQL clean-clone path | 2.3, 2.5 | merged; CI verified |
 | 2026-08 | #108 | Order currency frozen to submitted Selection lineage | 7.5 | merged; Verify/PostgreSQL CI |

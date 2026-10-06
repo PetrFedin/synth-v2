@@ -92,3 +92,32 @@ test('garment schema rejects unknown relations before persistence',()=>{
     },
   }),error=>error.code==='ENGINEERING_MODEL_GRAPH_INVALID');
 });
+
+
+test('model evidence cannot cite a PDF page absent from parsed fragments',()=>{
+  assert.throws(()=>validateEngineeringModelOutput({
+    schemaVersion:'engineering-findings-v1',
+    sources:[{
+      source:{id:'pdf-1',mediaType:'application/pdf'},
+      fragments:[{kind:'document_page',locator:{page:1}}],
+    }],
+    output:{
+      findings:[{findingType:'garment.category',origin:'document_extracted',value:{code:'BLAZER'},evidence:[{sourceId:'pdf-1',sourceLocator:{page:999}}]}],
+      proposals:[],conflicts:[],
+    },
+  }),error=>error.code==='ENGINEERING_MODEL_EVIDENCE_LOCATOR_INVALID');
+});
+
+test('model evidence cannot invent a spreadsheet range outside parsed fragments',()=>{
+  assert.throws(()=>validateEngineeringModelOutput({
+    schemaVersion:'engineering-findings-v1',
+    sources:[{
+      source:{id:'sheet-1',mediaType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'},
+      fragments:[{kind:'cell_range',locator:{sheet:'Measurements',range:'A1:B20'}}],
+    }],
+    output:{
+      findings:[{findingType:'measurement.point',origin:'document_extracted',value:{pointCode:'CHEST'},evidence:[{sourceId:'sheet-1',sourceLocator:{sheet:'Measurements',range:'Z99:Z99'}}]}],
+      proposals:[],conflicts:[],
+    },
+  }),error=>error.code==='ENGINEERING_MODEL_EVIDENCE_LOCATOR_INVALID');
+});

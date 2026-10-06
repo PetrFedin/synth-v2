@@ -1399,11 +1399,29 @@ AI may propose:
 
 Unknown GSM/composition/supplier/price stays unknown. Costing remains the existing deterministic BOM/landed-cost authority.
 
-### Phase G — Conflict and change-impact engine
+### Phase G — Conflict and change-impact engine — IMPLEMENTED/PARTIAL in PR #242
 
 Before a technical revision:
 
 `proposed change -> impacted Measurements/BOM/Tech Pack/Sample/Sourcing/Production/Cost/Commercial publication -> reviewer decision`.
+
+The first deterministic pre-apply impact preview is now executable through
+`GET /v2/product-engineering/proposals/{proposalId}/impact`.
+
+Current policy covers the first canonical apply actions:
+
+- Measurement Chart;
+- Material Specification;
+- Tech Pack Revision;
+- Operation Sequence operations.
+
+The preview combines fixed domain policy with exact StyleVersion Product Readiness context. Evidence is deliberately tri-state:
+
+- `observed` — the current repository context directly contains the dependency;
+- `derived` — a bounded upstream fact implies review risk, for example active production implies cutting/inline-quality review;
+- `not_available` — this reader does not currently query that authority, so the system returns `null`, never a false zero.
+
+Directly observed today: Measurement Charts, BOM, Samples, Tech Packs, Sourcing, Production Orders, Quality inspections and acknowledged Tech Packs. Cost, Commercial Publication and other not-yet-joined authorities remain explicit coverage gaps.
 
 Source conflicts are first-class records, never silently averaged.
 
@@ -1455,11 +1473,14 @@ Rules:
 PostgreSQL Golden Path now proves:
 `completed analysis -> human-created material proposal -> accept -> POST /apply -> canonical material version increment -> appliedReference`.
 
+The same Golden Path now also reads deterministic impact **before** apply and verifies that unavailable repository evidence is labelled `not_available` rather than zero.
+
 Still open:
 
 - apply adapters for BOM, Product Identity fields, Samples/fit decisions, Colour and other canonical actions;
-- change-impact preview before higher-risk apply operations;
-- UI action/confirmation surface for accepted-but-not-applied proposals;
+- richer direct impact evidence for Cost, Commercial Publication, Cutting, Inline Quality and other downstream authorities; 
+- policy gates that can block high-risk apply until required downstream reviewers acknowledge the impact;
+- UI action/confirmation surface for accepted-but-not-applied proposals and its impact preview;
 - policy controls for actions that require stronger approval than ordinary Product Engineering management.
 
 ### Current AI Engineering Golden Path — 2026-10-06

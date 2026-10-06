@@ -35,6 +35,7 @@ import { createRetailDoorRoutes } from './retail-door-routes.mjs';
 import { createSelectionMatrixRoutes } from './selection-matrix-routes.mjs';
 import { createSupplierRecoveryRoutes } from './supplier-recovery-routes.mjs';
 import { createSupplierEconomicPerformanceRoutes } from './supplier-economic-performance-routes.mjs';
+import { createSupplierPassportRoutes } from './supplier-passport-routes.mjs';
 import { createProductionExecutionRoutes } from './production-execution-routes.mjs';
 import { createProductionOrderRoutes } from './production-order-routes.mjs';
 import { createSampleRoutes } from './sample-routes.mjs';
@@ -61,6 +62,7 @@ export function createWholesaleRoutes(services = {}) {
     ...createReceiptClaimsRoutes({ receiptClaims: services.receiptClaims }),
     ...createSupplierRecoveryRoutes({ supplierRecovery: services.supplierRecovery }),
     ...createSupplierEconomicPerformanceRoutes({ supplierPerformance: services.supplierPerformance }),
+    ...createSupplierPassportRoutes({ supplierPassport: services.supplierPassport }),
     ...createSampleRoutes({ samples: services.samples }),
     ...createSourcingRoutes({ sourcing: services.sourcing }),
     ...createTechPackRoutes({ techPacks: services.techPacks }),

@@ -1318,6 +1318,7 @@ Implemented in the current branch:
 - input/output content hashes and persisted ModelRun provenance;
 - fail-closed behavior when no exact qualified route exists;
 - exact schema-version validation before persistence for `engineering-findings-v1` and `garment-ontology-v1`, including strict allowed fields, bounded collection sizes, source-manifest evidence lineage, proposal finding indexes and garment graph node/relation integrity;
+- format-aware evidence grounding: PDF citations must resolve to parsed pages, spreadsheet citations must stay inside a parsed sheet/range, and raster/SVG regions use normalized coordinates; a plausible but nonexistent locator is rejected before persistence;
 - analysis failure only after durable retry exhaustion, not after the first transient provider error.
 
 Still required before production-grade external AI execution:

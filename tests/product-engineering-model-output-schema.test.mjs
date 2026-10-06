@@ -16,7 +16,7 @@ test('engineering-findings-v1 accepts bounded evidence-first findings and propos
     proposals:[{
       findingIndex:0,
       targetAuthority:'measurement',
-      targetField:'points.CHEST',
+      targetField:'points.chest',
       proposedValue:{pointCode:'CHEST'},
       confidence:.96,
       rationale:'Authoritative measurement sheet.',

@@ -17,6 +17,14 @@ import {
   resolveProposal as resolveProposalDomain,
   startAnalysis as startAnalysisDomain,
 } from '../modules/product-engineering/public.mjs';
+import {
+  admitEngineeringSource,
+  completeSourceParsing,
+  createEngineeringFragment,
+  createEngineeringSource,
+  recordSourceScan,
+  rejectEngineeringSource,
+} from '../modules/product-engineering/intake.mjs';
 
 /**
  * @param {{
@@ -76,6 +84,132 @@ export function createProductEngineeringService(options = {}) {
   }
 
   return Object.freeze({
+    async registerSource(commandId, actorId, styleId, input) {
+      requireObject(input, 'ENGINEERING_SOURCE_INPUT_INVALID');
+      const style = await authorizeStyle(actorId, styleId, CAPABILITIES.PRODUCT_ENGINEERING_MANAGE);
+      const fingerprint = `registerEngineeringSource:${actorId}:${styleId}:${canonicalJson(input)}`;
+      return runCommand(commandId, actorId, fingerprint, async (tx) => {
+        const source = createEngineeringSource({
+          id: nextId('engineering-source'),
+          brandId: style.brandId,
+          styleId: style.id,
+          kind: input.kind,
+          ingestMode: input.ingestMode,
+          mediaType: input.mediaType ?? null,
+          originalName: input.originalName ?? null,
+          sizeBytes: input.sizeBytes ?? null,
+          contentHash: input.contentHash ?? null,
+          storageRef: input.storageRef ?? null,
+          sourceUri: input.sourceUri ?? null,
+          metadata: input.metadata ?? {},
+          createdAt: now(clock),
+          createdBy: actorId,
+        });
+        await tx.insertSource(source);
+        return source;
+      });
+    },
+
+    async recordSourceScan(commandId, actorId, sourceId, input) {
+      requireObject(input, 'ENGINEERING_SOURCE_SCAN_INPUT_INVALID');
+      const current = required(await store.getSource(sourceId), 'ENGINEERING_SOURCE_NOT_FOUND', { sourceId });
+      await authorizeBrand(actorId, current.brandId, CAPABILITIES.PRODUCT_ENGINEERING_MANAGE);
+      const fingerprint = `recordEngineeringSourceScan:${actorId}:${sourceId}:${canonicalJson(input)}`;
+      return runCommand(commandId, actorId, fingerprint, async (tx) => {
+        const exact = required(await tx.getSourceForUpdate(sourceId), 'ENGINEERING_SOURCE_NOT_FOUND', { sourceId });
+        invariant(exact.version === input.expectedVersion, 'ENGINEERING_SOURCE_CONCURRENCY_CONFLICT', 'Engineering source changed concurrently', { sourceId, expectedVersion: input.expectedVersion, actualVersion: exact.version });
+        const next = recordSourceScan(exact, {
+          status: input.status,
+          scannedAt: now(clock),
+          engine: input.engine ?? null,
+          details: input.details ?? {},
+        });
+        await tx.updateSource(next, exact.version);
+        return next;
+      });
+    },
+
+    async admitSource(commandId, actorId, sourceId, input) {
+      requireObject(input, 'ENGINEERING_SOURCE_ADMISSION_INPUT_INVALID');
+      const current = required(await store.getSource(sourceId), 'ENGINEERING_SOURCE_NOT_FOUND', { sourceId });
+      await authorizeBrand(actorId, current.brandId, CAPABILITIES.PRODUCT_ENGINEERING_MANAGE);
+      const fingerprint = `admitEngineeringSource:${actorId}:${sourceId}:${canonicalJson(input)}`;
+      return runCommand(commandId, actorId, fingerprint, async (tx) => {
+        const exact = required(await tx.getSourceForUpdate(sourceId), 'ENGINEERING_SOURCE_NOT_FOUND', { sourceId });
+        invariant(exact.version === input.expectedVersion, 'ENGINEERING_SOURCE_CONCURRENCY_CONFLICT', 'Engineering source changed concurrently', { sourceId, expectedVersion: input.expectedVersion, actualVersion: exact.version });
+        const next = admitEngineeringSource(exact, { admittedAt: now(clock), admittedBy: actorId, policyVersion: input.policyVersion });
+        await tx.updateSource(next, exact.version);
+        return next;
+      });
+    },
+
+    async rejectSource(commandId, actorId, sourceId, input) {
+      requireObject(input, 'ENGINEERING_SOURCE_REJECTION_INPUT_INVALID');
+      const current = required(await store.getSource(sourceId), 'ENGINEERING_SOURCE_NOT_FOUND', { sourceId });
+      await authorizeBrand(actorId, current.brandId, CAPABILITIES.PRODUCT_ENGINEERING_MANAGE);
+      const fingerprint = `rejectEngineeringSource:${actorId}:${sourceId}:${canonicalJson(input)}`;
+      return runCommand(commandId, actorId, fingerprint, async (tx) => {
+        const exact = required(await tx.getSourceForUpdate(sourceId), 'ENGINEERING_SOURCE_NOT_FOUND', { sourceId });
+        invariant(exact.version === input.expectedVersion, 'ENGINEERING_SOURCE_CONCURRENCY_CONFLICT', 'Engineering source changed concurrently', { sourceId, expectedVersion: input.expectedVersion, actualVersion: exact.version });
+        const next = rejectEngineeringSource(exact, {
+          code: input.code,
+          message: input.message,
+          rejectedAt: now(clock),
+          rejectedBy: actorId,
+          quarantine: input.quarantine === true,
+        });
+        await tx.updateSource(next, exact.version);
+        return next;
+      });
+    },
+
+    async addSourceFragment(commandId, actorId, sourceId, input) {
+      requireObject(input, 'ENGINEERING_FRAGMENT_INPUT_INVALID');
+      const current = required(await store.getSource(sourceId), 'ENGINEERING_SOURCE_NOT_FOUND', { sourceId });
+      await authorizeBrand(actorId, current.brandId, CAPABILITIES.PRODUCT_ENGINEERING_MANAGE);
+      const fingerprint = `addEngineeringSourceFragment:${actorId}:${sourceId}:${canonicalJson(input)}`;
+      return runCommand(commandId, actorId, fingerprint, async (tx) => {
+        const exact = required(await tx.getSourceForUpdate(sourceId), 'ENGINEERING_SOURCE_NOT_FOUND', { sourceId });
+        const fragment = createEngineeringFragment({
+          id: nextId('engineering-fragment'),
+          source: exact,
+          kind: input.kind,
+          locator: input.locator,
+          content: input.content ?? null,
+          contentHash: input.contentHash ?? null,
+          createdAt: now(clock),
+          createdBy: actorId,
+        });
+        await tx.insertFragment(fragment);
+        return fragment;
+      });
+    },
+
+    async completeSourceParsing(commandId, actorId, sourceId, input) {
+      requireObject(input, 'ENGINEERING_SOURCE_PARSE_INPUT_INVALID');
+      const current = required(await store.getSource(sourceId), 'ENGINEERING_SOURCE_NOT_FOUND', { sourceId });
+      await authorizeBrand(actorId, current.brandId, CAPABILITIES.PRODUCT_ENGINEERING_MANAGE);
+      const fingerprint = `completeEngineeringSourceParsing:${actorId}:${sourceId}:${canonicalJson(input)}`;
+      return runCommand(commandId, actorId, fingerprint, async (tx) => {
+        const exact = required(await tx.getSourceForUpdate(sourceId), 'ENGINEERING_SOURCE_NOT_FOUND', { sourceId });
+        invariant(exact.version === input.expectedVersion, 'ENGINEERING_SOURCE_CONCURRENCY_CONFLICT', 'Engineering source changed concurrently', { sourceId, expectedVersion: input.expectedVersion, actualVersion: exact.version });
+        const next = completeSourceParsing(exact, {
+          completedAt: now(clock),
+          parser: input.parser,
+          parserVersion: input.parserVersion,
+          fragmentCount: input.fragmentCount,
+        });
+        await tx.updateSource(next, exact.version);
+        return next;
+      });
+    },
+
+    async getSourceForActor(actorId, sourceId) {
+      const source = required(await store.getSource(sourceId), 'ENGINEERING_SOURCE_NOT_FOUND', { sourceId });
+      await authorizeBrand(actorId, source.brandId, CAPABILITIES.PRODUCT_ENGINEERING_READ);
+      return deepFreeze({ source, fragments: await store.getSourceFragments(sourceId) });
+    },
+
     async requestAnalysis(commandId, actorId, styleId, input) {
       requireObject(input, 'PRODUCT_ENGINEERING_INPUT_INVALID');
       const style = await authorizeStyle(actorId, styleId, CAPABILITIES.PRODUCT_ENGINEERING_MANAGE);

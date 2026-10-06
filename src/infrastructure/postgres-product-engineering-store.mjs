@@ -62,7 +62,7 @@ export function createPostgresProductEngineeringStore(options = {}) {
     },
     async getStyleWorkspace(styleId, { limit = 100 } = {}) {
       const bounded = normalizeLimit(limit);
-      const [analysisResult, proposalResult, conflictResult, drawingResult, sourceResult] = await Promise.all([
+      const [analysisResult, proposalResult, conflictResult, drawingResult, sourceResult, graphResult] = await Promise.all([
         pool.query(
           `SELECT * FROM product_engineering_analysis_runs
             WHERE style_id = $1
@@ -114,6 +114,42 @@ export function createPostgresProductEngineeringStore(options = {}) {
             LIMIT $2`,
           [styleId, bounded],
         ),
+        pool.query(
+          `SELECT graph.*,
+                  COALESCE(nodes.nodes, '[]'::jsonb) AS nodes,
+                  COALESCE(edges.edges, '[]'::jsonb) AS edges
+             FROM product_engineering_garment_graphs graph
+             LEFT JOIN LATERAL (
+               SELECT jsonb_agg(jsonb_build_object(
+                 'id', node.id,
+                 'nodeType', node.node_type,
+                 'semanticCode', node.semantic_code,
+                 'label', node.label,
+                 'attributes', node.attributes,
+                 'confidence', node.confidence,
+                 'findingId', node.finding_id
+               ) ORDER BY node.id) AS nodes
+                 FROM product_engineering_garment_nodes node
+                WHERE node.graph_id = graph.id
+             ) nodes ON true
+             LEFT JOIN LATERAL (
+               SELECT jsonb_agg(jsonb_build_object(
+                 'id', edge.id,
+                 'fromNodeId', edge.from_node_id,
+                 'toNodeId', edge.to_node_id,
+                 'relation', edge.relation,
+                 'attributes', edge.attributes,
+                 'confidence', edge.confidence
+               ) ORDER BY edge.id) AS edges
+                 FROM product_engineering_garment_edges edge
+                WHERE edge.graph_id = graph.id
+             ) edges ON true
+            WHERE graph.style_id = $1
+            ORDER BY CASE graph.status WHEN 'reviewed' THEN 0 WHEN 'draft' THEN 1 ELSE 2 END,
+                     graph.created_at DESC, graph.id DESC
+            LIMIT 1`,
+          [styleId],
+        ),
       ]);
       return deepFreeze({
         analyses: analysisResult.rows.map(mapAnalysis),
@@ -121,6 +157,7 @@ export function createPostgresProductEngineeringStore(options = {}) {
         conflicts: conflictResult.rows.map(mapConflict),
         drawings: drawingResult.rows.map((row) => Object.freeze({ ...mapDrawing(row), objectCount: row.object_count })),
         sources: sourceResult.rows.map((row) => Object.freeze({ ...mapSource(row), fragmentCount: row.fragment_count })),
+        garmentGraph: graphResult.rows[0] ? mapGarmentGraphWorkspace(graphResult.rows[0]) : null,
       });
     },
     async getAnalysisWorkspace(analysisRunId) {
@@ -475,6 +512,24 @@ function transactionView(client) {
       );
       invariant(result.rowCount === 1, 'TECHNICAL_DRAWING_CONCURRENCY_CONFLICT', 'Technical drawing changed concurrently', { drawingId: value.id });
     },
+  });
+}
+
+function mapGarmentGraphWorkspace(row) {
+  return Object.freeze({
+    id: row.id, analysisRunId: row.analysis_run_id, brandId: row.brand_id, styleId: row.style_id,
+    schemaVersion: row.schema_version, status: row.status, contentHash: row.content_hash,
+    nodeCount: Number(row.node_count), edgeCount: Number(row.edge_count),
+    createdAt: iso(row.created_at), createdBy: row.created_by, reviewedAt: iso(row.reviewed_at), reviewedBy: row.reviewed_by,
+    version: row.version,
+    nodes: deepFreeze((row.nodes ?? []).map((node) => Object.freeze({
+      ...node,
+      confidence: numberOrNull(node.confidence),
+    }))),
+    edges: deepFreeze((row.edges ?? []).map((edge) => Object.freeze({
+      ...edge,
+      confidence: numberOrNull(edge.confidence),
+    }))),
   });
 }
 

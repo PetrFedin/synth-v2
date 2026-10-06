@@ -1,7 +1,7 @@
 import { invariant } from '../core/errors.mjs';
 import { createModelControlPlane } from '../modules/product-engineering/model-control.mjs';
 import {
-  completeAnalysis, completeModelRun, createEvidence, createFinding, createModelRun, failAnalysis, startAnalysis,
+  completeAnalysis, completeModelRun, createConflict, createEvidence, createFinding, createModelRun, createProposal, failAnalysis, startAnalysis,
 } from '../modules/product-engineering/public.mjs';
 import {
   createGarmentEdge, createGarmentGraph, createGarmentNode, reviewGarmentGraph, validateGarmentGraphCompleteness,
@@ -94,6 +94,23 @@ export function createProductEngineeringAnalysisExecutor(options={}) {
             await tx.insertEvidence(evidence);
           }
         }
+        for(const raw of output.output.proposals??[]){
+          const finding=raw.findingIndex===undefined?null:(findings[raw.findingIndex]??null);
+          const proposal=createProposal({
+            id:nextId('engineering-proposal'),analysisRun:running,finding,
+            targetAuthority:raw.targetAuthority,targetEntityId:raw.targetEntityId??null,targetField:raw.targetField,
+            proposedValue:raw.proposedValue,confidence:raw.confidence??null,rationale:raw.rationale??null,
+            createdAt:now(),createdBy:'product-engineering-worker',
+          });
+          await tx.insertProposal(proposal);
+        }
+        for(const raw of output.output.conflicts??[]){
+          const conflict=createConflict({
+            id:nextId('engineering-conflict'),analysisRun:running,conflictType:raw.conflictType,subject:raw.subject,
+            candidates:raw.candidates,severity:raw.severity,createdAt:now(),createdBy:'product-engineering-worker',
+          });
+          await tx.insertConflict(conflict);
+        }
         if(output.output.garmentGraph){
           await persistGraph(tx,running,output.output.garmentGraph,findings);
         }
@@ -144,6 +161,8 @@ export function createProductEngineeringAnalysisExecutor(options={}) {
 function validateGatewayOutput(output){
   invariant(output&&typeof output==='object'&&!Array.isArray(output),'ENGINEERING_MODEL_OUTPUT_INVALID','Model output must be an object');
   invariant(output.findings===undefined||Array.isArray(output.findings),'ENGINEERING_MODEL_OUTPUT_INVALID','Model findings must be an array');
+  invariant(output.proposals===undefined||Array.isArray(output.proposals),'ENGINEERING_MODEL_OUTPUT_INVALID','Model proposals must be an array');
+  invariant(output.conflicts===undefined||Array.isArray(output.conflicts),'ENGINEERING_MODEL_OUTPUT_INVALID','Model conflicts must be an array');
   if(output.garmentGraph!==undefined){
     invariant(output.garmentGraph&&typeof output.garmentGraph==='object'&&Array.isArray(output.garmentGraph.nodes)&&Array.isArray(output.garmentGraph.edges),'ENGINEERING_MODEL_OUTPUT_INVALID','garmentGraph must contain nodes and edges');
   }

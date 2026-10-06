@@ -59,6 +59,7 @@ export function createSupplierTrustService({
     },
 
     async revokeForActor(actorId, envelope, reason) {
+      invariant(publicKey, 'SUPPLIER_TRUST_ISSUER_NOT_CONFIGURED', 'Supplier trust issuer key is not configured');
       const verified = verifySignatureOnly({ envelope, publicKey, issuerId, keyId });
       invariant(verified.valid, 'SUPPLIER_TRUST_CHECKPOINT_INVALID', 'Checkpoint signature is invalid', { reason: verified.reason });
       await supplierPassport.assertManageForActor(actorId, envelope.payload.supplierCode);

@@ -68,3 +68,31 @@ test('technical drawing is versionable SVG with machine-readable objects',()=>{
   assert.equal(approved.status,'approved');
   assert.throws(()=>createDrawingObject({id:'obj-2',drawing:approved,objectType:'seam',geometry:{},createdAt:NOW,createdBy:'u'}),error=>error.code==='TECHNICAL_DRAWING_NOT_DRAFT');
 });
+
+
+test('technical drawing rejects active SVG content before persistence',()=>{
+  assert.throws(()=>createTechnicalDrawing({
+    id:'drawing-unsafe',style,viewType:'front',versionNo:1,
+    svg:'<svg viewBox="0 0 10 10"><script>alert(1)</script></svg>',
+    createdAt:NOW,createdBy:'u'
+  }),error=>error.code==='TECHNICAL_DRAWING_SVG_UNSAFE');
+  assert.throws(()=>createTechnicalDrawing({
+    id:'drawing-unsafe-2',style,viewType:'front',versionNo:1,
+    svg:'<svg viewBox="0 0 10 10"><path onclick="alert(1)" d="M0 0"/></svg>',
+    createdAt:NOW,createdBy:'u'
+  }),error=>error.code==='TECHNICAL_DRAWING_SVG_UNSAFE');
+});
+
+test('technical drawing object can retain exact garment ontology lineage',()=>{
+  const drawing=createTechnicalDrawing({
+    id:'drawing-linked',style,viewType:'front',versionNo:1,
+    svg:'<svg viewBox="0 0 100 100"><path d="M0 0"/></svg>',
+    createdAt:NOW,createdBy:'u'
+  });
+  const object=createDrawingObject({
+    id:'obj-linked',drawing,objectType:'measurement_anchor',semanticCode:'POM.CHEST',
+    garmentNodeId:'node-chest',geometry:{x1:10,y1:20,x2:90,y2:20},
+    createdAt:NOW,createdBy:'u'
+  });
+  assert.equal(object.garmentNodeId,'node-chest');
+});

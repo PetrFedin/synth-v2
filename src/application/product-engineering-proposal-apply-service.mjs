@@ -36,7 +36,7 @@ export function createProductEngineeringProposalApplyService(options={}) {
       assertApplyInput(commandId,actorId,proposalId,input);
       const prepared=await productEngineering.prepareProposalApplication(actorId,proposalId,{
         expectedVersion:input.expectedProposalVersion,
-        applicationCommandId:canonicalCommandId(commandId,proposalId),
+        applicationCommandId:canonicalCommandId(commandId),
       });
       if(prepared.replay)return prepared.proposal;
       const proposal=prepared.proposal;
@@ -52,7 +52,7 @@ export function createProductEngineeringProposalApplyService(options={}) {
         targetField:proposal.targetField,
       });
 
-      const canonicalId=canonicalCommandId(commandId,proposalId);
+      const canonicalId=canonicalCommandId(commandId);
       const payload=canonicalPayload(proposal,input.expectedCanonicalVersion);
       const result=await service[action.method](canonicalId,actorId,proposal.targetEntityId,payload);
       const entityId=result?.id??result?.code??result?.techPackCode??result?.sequenceId??proposal.targetEntityId;
@@ -93,7 +93,7 @@ function canonicalPayload(proposal,expectedCanonicalVersion){
   return Object.freeze({expectedVersion:expectedCanonicalVersion,...structuredClone(proposed)});
 }
 
-function canonicalCommandId(commandId,proposalId){
+function canonicalCommandId(commandId){
   return `${commandId}:canonical:${proposalId}`;
 }
 

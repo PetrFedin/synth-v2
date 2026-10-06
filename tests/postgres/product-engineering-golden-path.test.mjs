@@ -171,6 +171,85 @@ test('AI Engineering Golden Path crosses real HTTP, PostgreSQL, durable jobs and
     assert.equal(workspace.garmentGraph.nodeCount, 2);
     assert.equal(workspace.garmentGraph.edgeCount, 1);
 
+    const materialCode = `AI-MAT-${runId.slice(0, 12).toUpperCase()}`;
+    const material = data(await requestJson(baseUrl, '/v2/materials', {
+      method: 'POST',
+      token,
+      idempotencyKey: `ai-eng-${runId}-material-create`,
+      body: {
+        code: materialCode,
+        brandId: references.brand.id,
+        name: 'AI Engineering acceptance wool',
+        type: 'fabric',
+        unit: 'm',
+        supplierName: 'Acceptance Mill',
+        supplierReference: null,
+        composition: '100% wool',
+        color: 'Black',
+        currency: 'EUR',
+        unitCost: 20,
+        minimumOrderQuantity: 50,
+        availableQuantity: 100,
+      },
+    }));
+    assert.equal(material.version, 1);
+
+    const materialProposal = data(await requestJson(baseUrl, `/v2/product-engineering/analyses/${encodeURIComponent(analysis.id)}/proposals`, {
+      method: 'POST',
+      token,
+      idempotencyKey: `ai-eng-${runId}-material-proposal`,
+      body: {
+        targetAuthority: 'material',
+        targetEntityId: materialCode,
+        targetField: 'specification',
+        proposedValue: {
+          weightGsm: 310,
+          cuttableWidth: 145,
+          cuttableWidthUnit: 'cm',
+          countryOfOrigin: 'IT',
+          purchaseUnit: null,
+          conversionFactor: null,
+          materialSubtype: 'shell',
+        },
+        confidence: 0.99,
+        rationale: 'Accepted technical evidence defines shell material specification.',
+      },
+    }));
+    assert.equal(materialProposal.status, 'pending');
+
+    const acceptedMaterialProposal = data(await requestJson(baseUrl, `/v2/product-engineering/proposals/${encodeURIComponent(materialProposal.id)}/resolve`, {
+      method: 'POST',
+      token,
+      idempotencyKey: `ai-eng-${runId}-material-accept`,
+      body: { expectedVersion: materialProposal.version, decision: 'accepted', note: 'Acceptance reviewer confirmed material specification.' },
+    }));
+    assert.equal(acceptedMaterialProposal.status, 'accepted');
+    assert.equal(acceptedMaterialProposal.appliedReference, null);
+
+    const applyCommandId = `ai-eng-${runId}-material-apply`;
+    const appliedMaterialProposal = data(await requestJson(baseUrl, `/v2/product-engineering/proposals/${encodeURIComponent(materialProposal.id)}/apply`, {
+      method: 'POST',
+      token,
+      idempotencyKey: applyCommandId,
+      body: {
+        expectedProposalVersion: acceptedMaterialProposal.version,
+        expectedCanonicalVersion: material.version,
+      },
+    }));
+    assert.equal(appliedMaterialProposal.status, 'accepted');
+    assert.equal(appliedMaterialProposal.appliedReference.authority, 'material');
+    assert.equal(appliedMaterialProposal.appliedReference.entityId, materialCode);
+    assert.equal(appliedMaterialProposal.appliedReference.action, 'specification');
+    assert.equal(appliedMaterialProposal.appliedReference.commandId, applyCommandId + ':canonical');
+    assert.equal(appliedMaterialProposal.appliedReference.version, 2);
+
+    const appliedMaterial = data(await requestJson(baseUrl, `/v2/materials/${encodeURIComponent(materialCode)}`, { token }));
+    assert.equal(appliedMaterial.version, 2);
+    assert.equal(appliedMaterial.specification.weightGsm, 310);
+    assert.equal(appliedMaterial.specification.cuttableWidth, 145);
+    assert.equal(appliedMaterial.specification.cuttableWidthUnit, 'cm');
+    assert.equal(appliedMaterial.specification.countryOfOrigin, 'IT');
+
     const persisted = await pool.query(
       `SELECT
          source.content_hash AS source_hash,

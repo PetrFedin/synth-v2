@@ -21,6 +21,7 @@ import { createProductIdentityQueryService } from '../application/product-identi
 import { createProductReadinessService } from '../application/product-readiness-service.mjs';
 import { createProductEngineeringService } from '../application/product-engineering-service.mjs';
 import { createProductEngineeringJobService } from '../application/product-engineering-job-service.mjs';
+import { createProductEngineeringAnalysisExecutor } from '../application/product-engineering-analysis-executor.mjs';
 import { createSampleService } from '../application/sample-service.mjs';
 import { createSampleQueryService } from '../application/sample-query-service.mjs';
 import { createSourcingService } from '../application/sourcing-service.mjs';
@@ -56,6 +57,7 @@ import { createPostgresProductIdentityReader } from '../infrastructure/postgres-
 import { createPostgresProductReadinessStore } from '../infrastructure/postgres-product-readiness-store.mjs';
 import { createPostgresProductEngineeringStore } from '../infrastructure/postgres-product-engineering-store.mjs';
 import { createPostgresProductEngineeringJobStore } from '../infrastructure/postgres-product-engineering-job-store.mjs';
+import { createPostgresProductEngineeringModelControlStore } from '../infrastructure/postgres-product-engineering-model-control-store.mjs';
 import { createBaselineEngineeringScanner } from '../modules/product-engineering/baseline-scanner.mjs';
 import { createPostgresProductReadinessSourceReader } from '../infrastructure/postgres-product-readiness-source-reader.mjs';
 import { createPostgresSampleStore } from '../infrastructure/postgres-sample-store.mjs';
@@ -95,7 +97,7 @@ export function createPostgresWholesaleRuntime({
   outboxPublicationWorkerId, outboxPublicationLeaseMs, outboxPublicationRetryDelayMs,
   outboxPublicationMaxRetryDelayMs, outboxPublicationMaxAttempts, maintenanceIntervalMs,
   maintenanceRetryDelayMs, maintenanceStatementTimeoutMs, commandRetentionMs, authAuditRetentionMs, throttleRetentionMs,
-  outboxRetentionMs, operationalReadiness,
+  outboxRetentionMs, operationalReadiness, engineeringModelProviders,
 } = {}) {
   invariant(pool, 'POSTGRES_POOL_REQUIRED', 'PostgreSQL pool is required');
   invariant(operationalReadiness === undefined || typeof operationalReadiness === 'function', 'READINESS_OPERATIONAL_CHECK_INVALID', 'Operational readiness check must be a function');
@@ -135,9 +137,17 @@ export function createPostgresWholesaleRuntime({
   });
   const productEngineeringStore = createPostgresProductEngineeringStore({ pool });
   const productEngineeringJobStore = createPostgresProductEngineeringJobStore({ pool });
+  const productEngineeringModelControlStore = createPostgresProductEngineeringModelControlStore({ pool });
   const productEngineering = createProductEngineeringService({
     store: productEngineeringStore,
     productReader: productIdentityReader,
+    nextId: runtimeNextId,
+    ...(clock ? { clock } : {}),
+  });
+  const productEngineeringAnalysisExecutor = createProductEngineeringAnalysisExecutor({
+    engineeringStore: productEngineeringStore,
+    controlStore: productEngineeringModelControlStore,
+    providers: engineeringModelProviders ?? {},
     nextId: runtimeNextId,
     ...(clock ? { clock } : {}),
   });
@@ -146,6 +156,7 @@ export function createPostgresWholesaleRuntime({
     engineeringStore: productEngineeringStore,
     scanner: createBaselineEngineeringScanner(),
     workerId: 'product-engineering',
+    analysisExecutor: productEngineeringAnalysisExecutor,
     nextId: runtimeNextId,
     ...(clock ? { clock } : {}),
   });
@@ -232,7 +243,7 @@ export function createPostgresWholesaleRuntime({
   const handler = createWholesaleHttpHandler(transport);
   const fetchHandler = createWholesaleFetchHandler(transport);
   return Object.freeze({
-    auth, readiness, maintenance, outboxPublication, outboxPublicationStore, store, catalogStore, legalEntityStore, productIdentityStore, productIdentityReader, productEngineeringStore, productEngineeringJobStore, productReadinessStore, productReadinessSourceReader, commercialPublicationStore, orderEconomicsStore, materialStore, bomStore, measurementStore, sampleStore, sourcingStore, techPackStore,
+    auth, readiness, maintenance, outboxPublication, outboxPublicationStore, store, catalogStore, legalEntityStore, productIdentityStore, productIdentityReader, productEngineeringStore, productEngineeringJobStore, productEngineeringModelControlStore, productReadinessStore, productReadinessSourceReader, commercialPublicationStore, orderEconomicsStore, materialStore, bomStore, measurementStore, sampleStore, sourcingStore, techPackStore,
     platform, catalog, legalEntities, productIdentity, productEngineering, productReadiness, commercialPublication, orderEconomics, materials, boms, measurements, samples, libraries, history, supplierPortal, categoryAttributes, organisationMembers, awaitingActions, team, partners, retailDoors, sourcing, techPacks, collaboration, orders, notifications, workspace,
     handler, fetchHandler,
   });

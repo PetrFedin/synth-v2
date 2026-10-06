@@ -7,9 +7,17 @@ import {
   createGarmentEdge, createGarmentGraph, createGarmentNode, reviewGarmentGraph, validateGarmentGraphCompleteness,
 } from '../modules/product-engineering/garment-ontology.mjs';
 
-export function createProductEngineeringAnalysisExecutor({
-  engineeringStore,controlStore,providers,clock=()=>new Date().toISOString(),nextId,
-}={}) {
+/**
+ * @param {{
+ *   engineeringStore?: any,
+ *   controlStore?: any,
+ *   providers?: Record<string, any>,
+ *   clock?: () => string,
+ *   nextId?: (prefix: string) => string
+ * }} [options]
+ */
+export function createProductEngineeringAnalysisExecutor(options={}) {
+  const {engineeringStore,controlStore,providers,clock=()=>new Date().toISOString(),nextId}=options;
   invariant(engineeringStore&&controlStore&&providers&&typeof nextId==='function','ENGINEERING_ANALYSIS_EXECUTOR_REQUIRED','Analysis executor dependencies are required');
 
   return async function executeAnalysis(job) {

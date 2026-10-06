@@ -26,6 +26,7 @@ test('product engineering routes expose evidence-first workflow',async()=>{
     ['POST','/v2/product-engineering/analyses/analysis-1/start',{}],
     ['POST','/v2/product-engineering/analyses/analysis-1/findings',{body:{findingType:'closure.type',origin:'ai_inferred',value:{code:'DB'},confidence:.9,evidence:[{sourceKind:'product_media',sourceId:'m1',sourceLocator:{page:1}}]}}],
     ['POST','/v2/product-engineering/analyses/analysis-1/proposals',{body:{targetAuthority:'product_identity',targetField:'technical.closure',proposedValue:{code:'DB'}}}],
+    ['POST','/v2/product-engineering/proposals/proposal-1/apply',{body:{expectedProposalVersion:2,expectedCanonicalVersion:7}}],
     ['POST','/v2/product-engineering/analyses/analysis-1/conflicts',{body:{conflictType:'measurement.value',subject:'CHEST M',candidates:[55,56],severity:'blocking'}}],
     ['POST','/v2/product/styles/style-1/engineering/drawings',{body:{viewType:'front',svg:'<svg viewBox="0 0 10 10"></svg>'}}],
   ];
@@ -38,7 +39,7 @@ test('product engineering routes expose evidence-first workflow',async()=>{
   assert.deepEqual(calls.map(row=>row[0]),[
     'registerSource','getSourceForActor','recordSourceScan','admitSource','addSourceFragment','completeSourceParsing',
     'requestAnalysis','getStyleWorkspaceForActor','getAnalysisWorkspaceForActor','startAnalysis',
-    'recordFinding','createProposal','createConflict','createDrawing',
+    'recordFinding','createProposal','applyProposal','createConflict','createDrawing',
   ]);
 });
 
@@ -67,6 +68,7 @@ test('OpenAPI documents engineering review and every mutation carries idempotenc
     '/product-engineering/analyses/{analysisRunId}/findings',
     '/product-engineering/analyses/{analysisRunId}/proposals',
     '/product-engineering/proposals/{proposalId}/resolve',
+    '/product-engineering/proposals/{proposalId}/apply',
     '/product-engineering/analyses/{analysisRunId}/conflicts',
     '/product-engineering/conflicts/{conflictId}/resolve',
     '/product/styles/{styleId}/engineering/drawings',
@@ -81,6 +83,8 @@ test('OpenAPI documents engineering review and every mutation carries idempotenc
   }
   assert.equal(spec.components.schemas.ProductEngineeringAnalysisCreate.additionalProperties,false);
   assert.deepEqual(spec.components.schemas.ProductEngineeringProposalResolve.properties.decision.enum,['accepted','rejected']);
+  assert.deepEqual(spec.components.schemas.ProductEngineeringProposalApply.required,['expectedProposalVersion','expectedCanonicalVersion']);
+  assert.equal(spec.paths['/product-engineering/proposals/{proposalId}/apply'].post.operationId,'applyProductEngineeringProposal');
 });
 
 
@@ -91,5 +95,14 @@ test('governed source transport rejects malformed source hashes before service e
     kind:'document',ingestMode:'upload',mediaType:'application/pdf',
     contentHash:'not-a-sha256',storageRef:'object://bucket/spec.pdf'
   }})),error=>error.code==='HTTP_BODY_FIELD_INVALID');
+  assert.equal(calls.length,0);
+});
+
+
+test('proposal apply transport requires both proposal and canonical optimistic versions',()=>{
+  const {calls,routes}=fixture();
+  const route=matchWholesaleRoute(routes,'POST','/v2/product-engineering/proposals/proposal-1/apply');
+  assert.throws(()=>route.execute(ctx(route,{body:{expectedProposalVersion:2}})),error=>error.code==='HTTP_BODY_FIELD_MISSING');
+  assert.throws(()=>route.execute(ctx(route,{body:{expectedProposalVersion:0,expectedCanonicalVersion:3}})),error=>error.code==='HTTP_BODY_FIELD_INVALID');
   assert.equal(calls.length,0);
 });

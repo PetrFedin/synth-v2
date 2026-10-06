@@ -194,6 +194,7 @@ ERP/EDI ритейлера; расширенное планирование ас
 * AI результат остаётся proposal/evidence layer и не пишет напрямую canonical Product/BOM/Measurement/Tech Pack;
 * первый governed apply slice: accepted proposal → allowlisted canonical service command → appliedReference для Measurement Chart / Material Specification / Tech Pack Revision / Operation Sequence; обязательны proposal+canonical expectedVersion, generic patch/SQL отсутствуют, crash recovery идемпотентен;
 * deterministic pre-apply Change Impact Preview: фиксированная policy + exact StyleVersion readiness context; direct dependencies помечаются `observed`, bounded inference — `derived`, непрочитанные authority — `not_available`, а не ложным нулём.
+* Product Master Review → Impact → Apply UI: pending предложение остаётся review-only, accepted получает read-only Impact, allowlisted accepted — отдельный Apply с optimistic canonical version, appliedReference показывается после реальной canonical mutation; существующие Engineering forms приведены к фактическому `openForm(title, fields, submitAction)` contract.
 
 **Ещё не встроено / нельзя считать production-ready:**
 

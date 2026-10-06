@@ -129,6 +129,18 @@ export function createProductEngineeringService(options = {}) {
           content: bytes,
           createdAt,
         });
+        await tx.insertJob({
+          id: nextId('engineering-job'),
+          dedupeKey: `source-scan:${sourceId}:${inspected.contentHash}`,
+          brandId: style.brandId,
+          styleId: style.id,
+          sourceId,
+          analysisRunId: null,
+          jobType: 'source_scan',
+          payload: { contentHash: inspected.contentHash },
+          maxAttempts: 5,
+          availableAt: createdAt,
+        });
         return source;
       });
     },

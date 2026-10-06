@@ -1374,12 +1374,166 @@ Minimum frozen lineage fields for the current commercial spine include:
 | PostCloseAllocationReconciliationSnapshot | immutable exact link from latest PostCloseAdjustment/pending margin/adjusted landed basis to an explicit new CostAllocationRunSnapshot and new current MarginActualizationSnapshot; freezes allocation id/hash/policy/mode, pending/current status transition, timestamp and content hash; one per adjustment |
 | OrderEconomicsPosition | effective read model over one immutable OrderCommit: exposes close/latest-adjustment/latest-reconciliation IDs, effective landed/margin IDs and current/pending/legacy allocation provenance; an older reconciliation never overrides a newer adjustment |
 
+### 19.1 AI Product Engineering Authority
+
+**Status in this change:** IMPLEMENTED/PARTIAL. The evidence/review authority, persistence, RBAC, API/OpenAPI, Product Master review workspace and Awaiting Action projection are executable. External model-provider execution, automatic document parsing and canonical apply adapters remain explicit follow-up gates; they are not claimed live by the existence of this authority layer.
+
+#### Purpose and placement
+
+AI Product Engineering is the governed acquisition/reasoning layer immediately upstream of existing PLM authorities:
+
+```text
+reference/photo/sketch/document
+  -> AnalysisRun
+  -> ModelRun
+  -> Finding + exact Evidence
+  -> Proposal and/or Conflict
+  -> human review
+  -> accepted review decision
+  -> separate canonical command
+  -> Product Identity / Measurement / BOM / Construction / Tech Pack / Sample / Material / Operation Sequence
+```
+
+It does **not** create a second Product Master, Measurement authority, BOM authority, Tech Pack authority or workflow/task database. PostgreSQL remains canonical and the existing bounded-context services remain the only supported writers of their business facts.
+
+#### Authority invariant
+
+An AI result has four distinct meanings and they must never be collapsed:
+
+1. **Finding** — what an analysis observed, inferred, extracted, derived or could not know.
+2. **Evidence** — exact source locator/hash that supports that finding.
+3. **Proposal / Conflict** — a reviewable recommendation or explicit disagreement between sources.
+4. **Canonical application** — a later mutation through the owning bounded context.
+
+`proposal.status = accepted` means that a person accepted the review conclusion. It **does not** mean that Product/BOM/Measurement/Tech Pack was changed. Canonical application must later record an `appliedReference` that identifies the owning authority and exact resulting entity/version. Until then the proposal remains accepted-but-not-applied.
+
+The AI/model integration has no direct SQL/write path to canonical PLM tables.
+
+#### Entity dictionary
+
+| Entity | Scope / identity | Mutability and lifecycle | Mandatory lineage / meaning | Downstream consumer |
+|---|---|---|---|---|
+| ProductEngineeringAnalysisRun | brand + ProductStyle; optional exact StyleVersion | queued -> running -> completed/failed/cancelled; versioned state | purpose, immutable input manifest + SHA-256, requester/times, optional failure | Model runs, findings, proposals/conflicts, drawings, Product Master workspace |
+| AiModelRun | exact AnalysisRun + style/brand | started -> completed/failed/cancelled | provider/model, purpose, prompt version, output schema version, input/output SHA-256, usage/cost, timestamps | reproducibility, provider qualification, cost/reliability analytics |
+| ProductEngineeringFinding | exact AnalysisRun | append-only; later finding may supersede | typed finding, origin = observed/ai_inferred/document_extracted/rule_derived/unknown, JSON value, confidence, content SHA-256 | Evidence, proposal generation, conflict review |
+| ProductEngineeringEvidence | exact Finding + AnalysisRun | append-only | source kind/id, exact region/page/cell/locator, optional source SHA-256/excerpt | reviewer, audit, future signed evidence |
+| ProductEngineeringProposal | exact AnalysisRun; optional Finding | pending -> accepted/rejected/superseded; optimistic version | target canonical authority/entity/field, proposed value, confidence/rationale, resolver; optional appliedReference only after real canonical mutation | engineering review, Awaiting Action, future canonical apply adapters |
+| ProductEngineeringConflict | exact AnalysisRun | open -> resolved/ignored; optimistic version | typed subject, >=2 source candidates, severity, explicit human resolution | engineering review, blocking policy, change impact |
+| TechnicalDrawingVersion | brand + style + view + contiguous version | draft -> approved/superseded; one approved view per style/view | optional StyleVersion/AnalysisRun, SVG, SHA-256, predecessor | Product Master technical canvas; future ProductMedia/Tech Pack projection |
+| TechnicalDrawingObject | exact drawing | draft-only composition | semantic type, optional governed semantic code, geometry, link payload, confidence | POM anchors, construction callouts, seams/panels, machine-readable garment graph |
+| ProductEngineeringCommand | global command id | immutable command result | scope `product-engineering`, fingerprint, actor, result, completion time | idempotency/replay |
+
+#### AI uncertainty rules
+
+- Confidence is metadata, never permission to write.
+- `unknown` is a valid technical result. Missing evidence must not be converted into a plausible number.
+- Uncalibrated ordinary imagery may identify a POM/feature but must not manufacture absolute cm/in values. A measurement proposal requiring scale must remain unknown or explicitly use a calibrated/authoritative source.
+- Source disagreement becomes `ProductEngineeringConflict`; the model must not silently average, choose or overwrite competing facts.
+- Model/provider identity, prompt version, schema version and input/output digests are required model-run evidence so a future result can be reproduced/audited.
+- Derived PDF/SVG is evidence/projection, not an editable canonical source by itself.
+
+#### Technical drawing contract
+
+Technical drawings are machine-readable SVG versions, not opaque generated pictures. Supported semantic object classes begin with:
+
+`outline, panel, seam, stitch, pocket, closure, collar, cuff, trim, measurement_anchor, construction_callout`.
+
+The intended graph is:
+
+```text
+SVG object
+  -> Product/Construction semantic
+  -> optional Measurement POM / ConstructionNode / BOM component / operation
+  -> factory document / sample review / QC
+```
+
+Only draft drawings accept object changes. Approval is explicit and supersedes the previous approved drawing for the same style/view. Browser rendering sanitises the SVG through an allowlist before DOM insertion; raw SVG is never inserted as trusted HTML.
+
+#### Access control
+
+Dedicated capabilities:
+
+- `product-engineering.read`
+- `product-engineering.manage`
+
+Owner/admin inherit all capabilities. Sales and production can read/manage the engineering workspace; quality can read but cannot resolve/mutate engineering review; viewer/buyer do not inherit access merely because they can see a commercial/product projection. This keeps unverified technical inference out of buyer-facing truth.
+
+#### HTTP/API surface
+
+Authenticated Product Engineering routes are under `/v2/product-engineering/*` plus style-scoped creation/read routes under `/v2/product/styles/{styleId}/engineering*`.
+
+Every mutation requires a globally unique `Idempotency-Key` and uses the durable `product-engineering` command ledger. Current contract covers:
+
+- request/start/complete analysis;
+- start/complete model run;
+- record finding with zero-or-more evidence records atomically;
+- create/resolve proposal;
+- create/resolve conflict;
+- create technical drawing version;
+- add drawing objects while draft;
+- approve drawing;
+- read a style engineering workspace;
+- read the full lineage of an analysis run.
+
+Transport validation rejects unknown top-level/nested evidence fields before domain mutation.
+
+#### UI and Awaiting Action
+
+Product Master owns the human review UX in inspector tab id `engineering`:
+
+- guardrail statement that AI is not authority;
+- counts for analyses, pending proposals, open/blocking conflicts and approved drawing views;
+- proposal accept/reject;
+- conflict resolution;
+- analysis lifecycle;
+- sanitised technical-SVG preview and approval.
+
+`Awaiting Action` derives `technical-review` directly from pending proposals/open conflicts. It is not a stored task. The item disappears when the underlying review facts are resolved and deep-links to the exact style + `engineering` inspector tab.
+
+#### Provider-neutral sequencing after the authority slice
+
+The authority layer deliberately lands before provider calls. Subsequent implementation must preserve this sequence:
+
+1. **AI Job/Model Router** — provider adapters, timeout/retry/circuit breaker, per-purpose policy, model qualification manifest, token/cost/latency metrics; providers remain replaceable.
+2. **Governed Intake** — product media + explicit PDF/XLSX/CSV/SVG/fabric/spec/sample sources -> staging -> malware/type/size admission -> parser -> source hash/locator.
+3. **Garment Ontology Interpreter** — category/silhouette/components/panels/seams/pockets/closures/trims with evidence regions and unknown state.
+4. **Technical Flat Engine** — front/back/side/inside/detail vector proposals -> drawing objects -> human editor/approval -> ProductMedia/Tech Pack projection.
+5. **POM Assistant** — detect/anchor POM, reconcile governed measurement-point MDM, prohibit absolute values without calibration, propose rather than write grade/base values.
+6. **BOM/Construction Co-pilot** — candidate material role/placement/construction node/operation mappings against canonical libraries; unknown GSM/composition/supplier remains unknown.
+7. **Cross-source Conflict + Change Impact** — compare canonical current vs documents vs supplier/sample evidence and project the impact of a proposed material/construction/measurement revision before application.
+8. **Sample Intelligence** — requested vs actual POM, delta/tolerance/PASS-FAIL, annotated fit comments, sample-round learning linked to the exact specification version.
+9. **Production Knowledge Retrieval** — governed internal/standard knowledge with source citation and version; retrieval can explain a rule but cannot override the rule authority.
+10. **Qualification & Trust** — replayable benchmark set, per-category/POM precision-recall/MAE where meaningful, hallucination/unknown-rate, signed qualification manifest and evidence digest before a model/prompt/schema combination may be marked production-qualified.
+11. **Revision-learning moat** — compare proposal -> human correction -> factory/sample actual -> final approved fact without using customer data outside its contractual/privacy boundary. Aggregate learning products require explicit governance and tenant isolation.
+
+No phase may auto-apply a canonical change merely because model confidence crosses a threshold.
+
+#### Acceptance for this authority slice
+
+At minimum:
+
+- migration applies on an existing database and preserves all prior canonical tables;
+- command scope is globally idempotent;
+- tenant/RBAC isolation is enforced for reads and mutations;
+- queued/running/completed transitions fail closed;
+- finding + evidence lineage is exact and hashed;
+- proposal acceptance remains unapplied until a separate canonical result is recorded;
+- open conflicts remain visible with all candidates;
+- only one approved technical drawing exists per style/view;
+- approved drawing objects cannot be mutated;
+- `technical-review` appears only to roles with engineering-manage and disappears after review;
+- API/OpenAPI/body validation agree;
+- Product Master review UI is RU/EN and has no raw-SVG injection path;
+- `npm run verify` and PostgreSQL verification gates are green before this slice is called DONE.
+
+
 ---
 
 ## 20. Change register
 
 | Date | PR / commit | Change | Master sections affected | Evidence/status |
 |---|---|---|---|---|
+| 2026-10-06 | PR #242 `feat/ai-product-engineering-authority` | Add evidence-first AI Product Engineering authority: model/analysis provenance, finding/evidence graph, proposals/conflicts, versioned semantic SVG drawings, dedicated RBAC, strict API/OpenAPI, Product Master review workspace and derived Awaiting Action. Canonical PLM writes remain outside AI authority. | 10, 12, 13, 17, 19.1, 20 | IMPLEMENTED/PARTIAL in PR; provider execution and canonical apply adapters are explicitly not claimed; CI/PostgreSQL evidence required before DONE |
 | 2026-08 | #106 | Non-destructive live Campaign → Collection acceptance | 7.2, 15 | merged; public HTTP + PostgreSQL acceptance |
 | 2026-08 | #107 | Repeatable owner bootstrap + isolated dev/test PostgreSQL clean-clone path | 2.3, 2.5 | merged; CI verified |
 | 2026-08 | #108 | Order currency frozen to submitted Selection lineage | 7.5 | merged; Verify/PostgreSQL CI |

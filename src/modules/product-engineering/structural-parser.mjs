@@ -1,3 +1,4 @@
+import { inflateRawSync } from 'node:zlib';
 import { invariant } from '../../core/errors.mjs';
 
 const MAX_CSV_ROWS = 500;
@@ -44,17 +45,142 @@ function parseCsv(source, bytes) {
 }
 
 function parseXlsxEnvelope(source, bytes) {
-  const text = latin1(bytes);
-  const entries = [...new Set([...text.matchAll(/xl\/worksheets\/(sheet\d+\.xml)/g)].map(match => match[1]))].sort(naturalSheetSort);
-  return result('xlsx-envelope', '1.0.0', [
-    fragment('metadata', { key: 'xlsx-envelope' }, {
-      worksheetEntryCount: entries.length,
-      worksheetEntries: entries,
-      cellValuesExtracted: false,
-      note: 'ZIP envelope parser only; semantic workbook parser is a replaceable follow-up adapter.',
+  const entries = readZipEntries(bytes);
+  const workbook = xml(entries.get('xl/workbook.xml'));
+  const relations = xml(entries.get('xl/_rels/workbook.xml.rels'));
+  const relationMap = new Map(
+    [...relations.matchAll(/<Relationship\b[^>]*\bId=["']([^"']+)["'][^>]*\bTarget=["']([^"']+)["'][^>]*\/?\s*>/gi)]
+      .map(match => [match[1], normalizeWorkbookTarget(match[2])]),
+  );
+  const sharedStrings = parseSharedStrings(xml(entries.get('xl/sharedStrings.xml'), true));
+  const sheets = [...workbook.matchAll(/<sheet\b([^>]*)\/?\s*>/gi)].map((match, index) => {
+    const attrs = match[1];
+    const name = xmlAttr(attrs, 'name') || `Sheet${index + 1}`;
+    const relationId = xmlAttr(attrs, 'r:id');
+    const entry = relationMap.get(relationId) ?? `xl/worksheets/sheet${index + 1}.xml`;
+    return { name, relationId, entry };
+  });
+  const fragments = [
+    fragment('metadata', { key: 'xlsx-workbook' }, {
+      sheetCount: sheets.length,
+      sheetNames: sheets.map(sheet => sheet.name),
+      sharedStringCount: sharedStrings.length,
+      cellValuesExtracted: true,
     }),
-    ...entries.map(entry => fragment('sheet', { sheet: entry }, { archiveEntry: `xl/worksheets/${entry}`, structuralOnly: true })),
-  ]);
+  ];
+  for (const sheet of sheets) {
+    const sheetXml = xml(entries.get(sheet.entry), true);
+    const cells = parseWorksheetCells(sheetXml, sharedStrings);
+    const range = worksheetRange(cells);
+    fragments.push(fragment('sheet', { sheet: sheet.name }, {
+      archiveEntry: sheet.entry,
+      cellCount: cells.length,
+      usedRange: range,
+    }));
+    if (cells.length) fragments.push(fragment('cell_range', { sheet: sheet.name, range }, {
+      cells: cells.slice(0, 5000),
+      truncated: cells.length > 5000,
+    }));
+  }
+  return result('xlsx-structure', '1.0.0', fragments);
+}
+
+function readZipEntries(bytes) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let eocd = -1;
+  for (let offset = bytes.byteLength - 22; offset >= Math.max(0, bytes.byteLength - 65557); offset -= 1) {
+    if (view.getUint32(offset, true) === 0x06054b50) { eocd = offset; break; }
+  }
+  invariant(eocd >= 0, 'ENGINEERING_XLSX_ZIP_INVALID', 'XLSX ZIP end-of-central-directory was not found');
+  const entryCount = view.getUint16(eocd + 10, true);
+  let offset = view.getUint32(eocd + 16, true);
+  const entries = new Map();
+  for (let index = 0; index < entryCount; index += 1) {
+    invariant(offset + 46 <= bytes.byteLength && view.getUint32(offset, true) === 0x02014b50, 'ENGINEERING_XLSX_ZIP_INVALID', 'XLSX central directory is invalid');
+    const method = view.getUint16(offset + 10, true);
+    const compressedSize = view.getUint32(offset + 20, true);
+    const uncompressedSize = view.getUint32(offset + 24, true);
+    const fileNameLength = view.getUint16(offset + 28, true);
+    const extraLength = view.getUint16(offset + 30, true);
+    const commentLength = view.getUint16(offset + 32, true);
+    const localOffset = view.getUint32(offset + 42, true);
+    const name = new TextDecoder('utf-8').decode(bytes.slice(offset + 46, offset + 46 + fileNameLength));
+    invariant(localOffset + 30 <= bytes.byteLength && view.getUint32(localOffset, true) === 0x04034b50, 'ENGINEERING_XLSX_ZIP_INVALID', 'XLSX local file header is invalid');
+    const localNameLength = view.getUint16(localOffset + 26, true);
+    const localExtraLength = view.getUint16(localOffset + 28, true);
+    const dataOffset = localOffset + 30 + localNameLength + localExtraLength;
+    invariant(dataOffset + compressedSize <= bytes.byteLength, 'ENGINEERING_XLSX_ZIP_INVALID', 'XLSX entry exceeds archive bounds');
+    const compressed = bytes.slice(dataOffset, dataOffset + compressedSize);
+    let content;
+    if (method === 0) content = compressed;
+    else if (method === 8) content = new Uint8Array(inflateRawSync(compressed));
+    else invariant(false, 'ENGINEERING_XLSX_COMPRESSION_UNSUPPORTED', 'XLSX contains unsupported ZIP compression', { method, name });
+    invariant(content.byteLength === uncompressedSize, 'ENGINEERING_XLSX_ZIP_INVALID', 'XLSX entry size does not match central directory', { name });
+    entries.set(name.replace(/^\//, ''), content);
+    offset += 46 + fileNameLength + extraLength + commentLength;
+  }
+  return entries;
+}
+
+function parseSharedStrings(text) {
+  if (!text) return [];
+  return [...text.matchAll(/<si\b[^>]*>([\s\S]*?)<\/si>/gi)].map(match => {
+    const runs = [...match[1].matchAll(/<t\b[^>]*>([\s\S]*?)<\/t>/gi)].map(value => xmlDecode(value[1]));
+    return runs.join('');
+  });
+}
+
+function parseWorksheetCells(text, sharedStrings) {
+  if (!text) return [];
+  const cells = [];
+  for (const match of text.matchAll(/<c\b([^>]*)>([\s\S]*?)<\/c>/gi)) {
+    const attrs = match[1];
+    const ref = xmlAttr(attrs, 'r');
+    if (!/^[A-Z]+[1-9][0-9]*$/.test(ref ?? '')) continue;
+    const type = xmlAttr(attrs, 't') ?? 'n';
+    const body = match[2];
+    const valueText = body.match(/<v\b[^>]*>([\s\S]*?)<\/v>/i)?.[1];
+    const inline = body.match(/<is\b[^>]*>([\s\S]*?)<\/is>/i)?.[1];
+    let value = null;
+    if (type === 's' && valueText !== undefined) value = sharedStrings[Number(valueText)] ?? null;
+    else if (type === 'inlineStr' && inline !== undefined) value = [...inline.matchAll(/<t\b[^>]*>([\s\S]*?)<\/t>/gi)].map(x => xmlDecode(x[1])).join('');
+    else if (type === 'b' && valueText !== undefined) value = valueText === '1';
+    else if (valueText !== undefined) {
+      const number = Number(valueText);
+      value = Number.isFinite(number) && valueText.trim() !== '' ? number : xmlDecode(valueText);
+    }
+    cells.push(Object.freeze({ ref, type, value }));
+  }
+  return cells;
+}
+
+function worksheetRange(cells) {
+  if (!cells.length) return 'A1:A1';
+  let minRow = Infinity, maxRow = 1, minCol = Infinity, maxCol = 1;
+  for (const cell of cells) {
+    const match = cell.ref.match(/^([A-Z]+)([1-9][0-9]*)$/);
+    const col = columnNumber(match[1]);
+    const row = Number(match[2]);
+    minRow = Math.min(minRow, row); maxRow = Math.max(maxRow, row);
+    minCol = Math.min(minCol, col); maxCol = Math.max(maxCol, col);
+  }
+  return `${columnName(minCol)}${minRow}:${columnName(maxCol)}${maxRow}`;
+}
+function columnNumber(name) { let value=0; for(const ch of name) value=value*26+(ch.charCodeAt(0)-64); return value; }
+function xml(bytes, optional=false) {
+  if (!bytes) { invariant(optional, 'ENGINEERING_XLSX_PART_MISSING', 'Required XLSX XML part is missing'); return ''; }
+  return utf8(bytes);
+}
+function xmlAttr(attributes, name) {
+  const escaped=name.replace(':','\\:');
+  return attributes.match(new RegExp(`(?:^|\\s)${escaped}=["']([^"']*)["']`, 'i'))?.[1] ?? null;
+}
+function xmlDecode(value) {
+  return String(value).replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&apos;/g,"'").replace(/&amp;/g,'&');
+}
+function normalizeWorkbookTarget(target) {
+  const clean=String(target).replace(/\\/g,'/').replace(/^\.\//,'');
+  return clean.startsWith('xl/') ? clean : `xl/${clean}`;
 }
 
 function parseSvg(source, bytes) {

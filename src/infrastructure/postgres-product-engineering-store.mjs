@@ -224,6 +224,20 @@ function transactionView(client) {
       );
     },
 
+    async insertJob(value) {
+      await client.query(
+        `INSERT INTO product_engineering_jobs
+          (id,dedupe_key,brand_id,style_id,source_id,analysis_run_id,job_type,status,payload,attempt_count,max_attempts,available_at,created_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,'queued',$8::jsonb,0,$9,$10,$10)
+         ON CONFLICT (dedupe_key) DO NOTHING`,
+        [
+          value.id, value.dedupeKey, value.brandId, value.styleId, value.sourceId ?? null,
+          value.analysisRunId ?? null, value.jobType, JSON.stringify(value.payload ?? {}),
+          value.maxAttempts ?? 5, value.availableAt,
+        ],
+      );
+    },
+
     async updateSource(value, expectedVersion) {
       const result = await client.query(
         `UPDATE product_engineering_sources

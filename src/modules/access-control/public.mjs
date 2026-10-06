@@ -8,6 +8,8 @@ export const CAPABILITIES = Object.freeze({
   CATALOG_MANAGE: 'catalog.manage',
   PRODUCT_READ: 'product.read',
   PRODUCT_MANAGE: 'product.manage',
+  PRODUCT_ENGINEERING_READ: 'product-engineering.read',
+  PRODUCT_ENGINEERING_MANAGE: 'product-engineering.manage',
   BOM_READ: 'bom.read',
   BOM_MANAGE: 'bom.manage',
   MEASUREMENT_READ: 'measurement.read',
@@ -74,6 +76,8 @@ export const ROLE_CAPABILITIES = Object.freeze({
     CAPABILITIES.CATALOG_MANAGE,
     CAPABILITIES.PRODUCT_READ,
     CAPABILITIES.PRODUCT_MANAGE,
+    CAPABILITIES.PRODUCT_ENGINEERING_READ,
+    CAPABILITIES.PRODUCT_ENGINEERING_MANAGE,
     CAPABILITIES.MEASUREMENT_READ,
     CAPABILITIES.SAMPLE_READ,
     CAPABILITIES.TECH_PACK_READ,
@@ -108,6 +112,8 @@ export const ROLE_CAPABILITIES = Object.freeze({
   // подписывает — оно решает, годится ли то, что произведено.
   production: Object.freeze([
     CAPABILITIES.PRODUCT_READ,
+    CAPABILITIES.PRODUCT_ENGINEERING_READ,
+    CAPABILITIES.PRODUCT_ENGINEERING_MANAGE,
     CAPABILITIES.BOM_READ,
     CAPABILITIES.MEASUREMENT_READ,
     CAPABILITIES.SAMPLE_READ,
@@ -135,6 +141,7 @@ export const ROLE_CAPABILITIES = Object.freeze({
   // органом, а не внутренней приёмкой, поэтому ведёт её та же роль.
   quality: Object.freeze([
     CAPABILITIES.PRODUCT_READ,
+    CAPABILITIES.PRODUCT_ENGINEERING_READ,
     CAPABILITIES.BOM_READ,
     CAPABILITIES.MEASUREMENT_READ,
     CAPABILITIES.SAMPLE_READ,

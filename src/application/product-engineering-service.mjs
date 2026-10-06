@@ -54,7 +54,7 @@ export function createProductEngineeringService({
     });
   }
 
-  async function analysisForActor(actorId, analysisRunId, capability = CAPABILITIES.PRODUCT_READ) {
+  async function analysisForActor(actorId, analysisRunId, capability = CAPABILITIES.PRODUCT_ENGINEERING_READ) {
     const run = await store.getAnalysisRun(analysisRunId);
     invariant(run, 'PRODUCT_ENGINEERING_ANALYSIS_NOT_FOUND', 'Engineering analysis not found', { analysisRunId });
     await authorizeBrand(actorId, run.brandId, capability);
@@ -64,7 +64,7 @@ export function createProductEngineeringService({
   return Object.freeze({
     async requestAnalysis(commandId, actorId, styleId, input) {
       requireObject(input, 'PRODUCT_ENGINEERING_INPUT_INVALID');
-      const style = await authorizeStyle(actorId, styleId, CAPABILITIES.PRODUCT_MANAGE);
+      const style = await authorizeStyle(actorId, styleId, CAPABILITIES.PRODUCT_ENGINEERING_MANAGE);
       const styleVersionId = input.styleVersionId ?? null;
       if (styleVersionId !== null) {
         const exact = await store.getStyleVersion(styleVersionId);
@@ -87,7 +87,7 @@ export function createProductEngineeringService({
     },
 
     async startAnalysis(commandId, actorId, analysisRunId) {
-      await analysisForActor(actorId, analysisRunId, CAPABILITIES.PRODUCT_MANAGE);
+      await analysisForActor(actorId, analysisRunId, CAPABILITIES.PRODUCT_ENGINEERING_MANAGE);
       const fingerprint = `startEngineeringAnalysis:${actorId}:${analysisRunId}`;
       return runCommand(commandId, actorId, fingerprint, async (tx) => {
         const exact = required(await tx.getAnalysisRunForUpdate(analysisRunId), 'PRODUCT_ENGINEERING_ANALYSIS_NOT_FOUND', { analysisRunId });
@@ -98,7 +98,7 @@ export function createProductEngineeringService({
     },
 
     async completeAnalysis(commandId, actorId, analysisRunId) {
-      await analysisForActor(actorId, analysisRunId, CAPABILITIES.PRODUCT_MANAGE);
+      await analysisForActor(actorId, analysisRunId, CAPABILITIES.PRODUCT_ENGINEERING_MANAGE);
       const fingerprint = `completeEngineeringAnalysis:${actorId}:${analysisRunId}`;
       return runCommand(commandId, actorId, fingerprint, async (tx) => {
         const exact = required(await tx.getAnalysisRunForUpdate(analysisRunId), 'PRODUCT_ENGINEERING_ANALYSIS_NOT_FOUND', { analysisRunId });
@@ -110,7 +110,7 @@ export function createProductEngineeringService({
 
     async startModelRun(commandId, actorId, analysisRunId, input) {
       requireObject(input, 'PRODUCT_ENGINEERING_MODEL_INPUT_INVALID');
-      await analysisForActor(actorId, analysisRunId, CAPABILITIES.PRODUCT_MANAGE);
+      await analysisForActor(actorId, analysisRunId, CAPABILITIES.PRODUCT_ENGINEERING_MANAGE);
       const fingerprint = `startEngineeringModelRun:${actorId}:${analysisRunId}:${canonicalJson(input)}`;
       return runCommand(commandId, actorId, fingerprint, async (tx) => {
         const analysis = required(await tx.getAnalysisRunForUpdate(analysisRunId), 'PRODUCT_ENGINEERING_ANALYSIS_NOT_FOUND', { analysisRunId });
@@ -134,7 +134,7 @@ export function createProductEngineeringService({
     async completeModelRun(commandId, actorId, modelRunId, input) {
       requireObject(input, 'PRODUCT_ENGINEERING_MODEL_INPUT_INVALID');
       const current = required(await store.getModelRun(modelRunId), 'PRODUCT_ENGINEERING_MODEL_RUN_NOT_FOUND', { modelRunId });
-      await authorizeBrand(actorId, current.brandId, CAPABILITIES.PRODUCT_MANAGE);
+      await authorizeBrand(actorId, current.brandId, CAPABILITIES.PRODUCT_ENGINEERING_MANAGE);
       const fingerprint = `completeEngineeringModelRun:${actorId}:${modelRunId}:${canonicalJson(input)}`;
       return runCommand(commandId, actorId, fingerprint, async (tx) => {
         const exact = required(await tx.getModelRunForUpdate(modelRunId), 'PRODUCT_ENGINEERING_MODEL_RUN_NOT_FOUND', { modelRunId });
@@ -152,7 +152,7 @@ export function createProductEngineeringService({
 
     async recordFinding(commandId, actorId, analysisRunId, input) {
       requireObject(input, 'PRODUCT_ENGINEERING_FINDING_INPUT_INVALID');
-      await analysisForActor(actorId, analysisRunId, CAPABILITIES.PRODUCT_MANAGE);
+      await analysisForActor(actorId, analysisRunId, CAPABILITIES.PRODUCT_ENGINEERING_MANAGE);
       const fingerprint = `recordEngineeringFinding:${actorId}:${analysisRunId}:${canonicalJson(input)}`;
       return runCommand(commandId, actorId, fingerprint, async (tx) => {
         const analysis = required(await tx.getAnalysisRunForUpdate(analysisRunId), 'PRODUCT_ENGINEERING_ANALYSIS_NOT_FOUND', { analysisRunId });
@@ -190,7 +190,7 @@ export function createProductEngineeringService({
 
     async createProposal(commandId, actorId, analysisRunId, input) {
       requireObject(input, 'PRODUCT_ENGINEERING_PROPOSAL_INPUT_INVALID');
-      await analysisForActor(actorId, analysisRunId, CAPABILITIES.PRODUCT_MANAGE);
+      await analysisForActor(actorId, analysisRunId, CAPABILITIES.PRODUCT_ENGINEERING_MANAGE);
       const fingerprint = `createEngineeringProposal:${actorId}:${analysisRunId}:${canonicalJson(input)}`;
       return runCommand(commandId, actorId, fingerprint, async (tx) => {
         const analysis = required(await tx.getAnalysisRunForUpdate(analysisRunId), 'PRODUCT_ENGINEERING_ANALYSIS_NOT_FOUND', { analysisRunId });
@@ -216,7 +216,7 @@ export function createProductEngineeringService({
     async resolveProposal(commandId, actorId, proposalId, input) {
       requireObject(input, 'PRODUCT_ENGINEERING_PROPOSAL_RESOLUTION_INVALID');
       const current = required(await store.getProposal(proposalId), 'PRODUCT_ENGINEERING_PROPOSAL_NOT_FOUND', { proposalId });
-      await authorizeBrand(actorId, current.brandId, CAPABILITIES.PRODUCT_MANAGE);
+      await authorizeBrand(actorId, current.brandId, CAPABILITIES.PRODUCT_ENGINEERING_MANAGE);
       const fingerprint = `resolveEngineeringProposal:${actorId}:${proposalId}:${canonicalJson(input)}`;
       return runCommand(commandId, actorId, fingerprint, async (tx) => {
         const exact = required(await tx.getProposalForUpdate(proposalId), 'PRODUCT_ENGINEERING_PROPOSAL_NOT_FOUND', { proposalId });
@@ -229,7 +229,7 @@ export function createProductEngineeringService({
 
     async createConflict(commandId, actorId, analysisRunId, input) {
       requireObject(input, 'PRODUCT_ENGINEERING_CONFLICT_INPUT_INVALID');
-      await analysisForActor(actorId, analysisRunId, CAPABILITIES.PRODUCT_MANAGE);
+      await analysisForActor(actorId, analysisRunId, CAPABILITIES.PRODUCT_ENGINEERING_MANAGE);
       const fingerprint = `createEngineeringConflict:${actorId}:${analysisRunId}:${canonicalJson(input)}`;
       return runCommand(commandId, actorId, fingerprint, async (tx) => {
         const analysis = required(await tx.getAnalysisRunForUpdate(analysisRunId), 'PRODUCT_ENGINEERING_ANALYSIS_NOT_FOUND', { analysisRunId });
@@ -251,7 +251,7 @@ export function createProductEngineeringService({
     async resolveConflict(commandId, actorId, conflictId, input) {
       requireObject(input, 'PRODUCT_ENGINEERING_CONFLICT_RESOLUTION_INVALID');
       const current = required(await store.getConflict(conflictId), 'PRODUCT_ENGINEERING_CONFLICT_NOT_FOUND', { conflictId });
-      await authorizeBrand(actorId, current.brandId, CAPABILITIES.PRODUCT_MANAGE);
+      await authorizeBrand(actorId, current.brandId, CAPABILITIES.PRODUCT_ENGINEERING_MANAGE);
       const fingerprint = `resolveEngineeringConflict:${actorId}:${conflictId}:${canonicalJson(input)}`;
       return runCommand(commandId, actorId, fingerprint, async (tx) => {
         const exact = required(await tx.getConflictForUpdate(conflictId), 'PRODUCT_ENGINEERING_CONFLICT_NOT_FOUND', { conflictId });
@@ -264,7 +264,7 @@ export function createProductEngineeringService({
 
     async createDrawing(commandId, actorId, styleId, input) {
       requireObject(input, 'TECHNICAL_DRAWING_INPUT_INVALID');
-      const style = await authorizeStyle(actorId, styleId, CAPABILITIES.PRODUCT_MANAGE);
+      const style = await authorizeStyle(actorId, styleId, CAPABILITIES.PRODUCT_ENGINEERING_MANAGE);
       const styleVersionId = input.styleVersionId ?? null;
       if (styleVersionId !== null) {
         const exactVersion = await store.getStyleVersion(styleVersionId);
@@ -299,7 +299,7 @@ export function createProductEngineeringService({
     async addDrawingObject(commandId, actorId, drawingId, input) {
       requireObject(input, 'TECHNICAL_DRAWING_OBJECT_INPUT_INVALID');
       const current = required(await store.getDrawing(drawingId), 'TECHNICAL_DRAWING_NOT_FOUND', { drawingId });
-      await authorizeBrand(actorId, current.brandId, CAPABILITIES.PRODUCT_MANAGE);
+      await authorizeBrand(actorId, current.brandId, CAPABILITIES.PRODUCT_ENGINEERING_MANAGE);
       const fingerprint = `addTechnicalDrawingObject:${actorId}:${drawingId}:${canonicalJson(input)}`;
       return runCommand(commandId, actorId, fingerprint, async (tx) => {
         const drawing = required(await tx.getDrawingForUpdate(drawingId), 'TECHNICAL_DRAWING_NOT_FOUND', { drawingId });
@@ -321,7 +321,7 @@ export function createProductEngineeringService({
 
     async approveDrawing(commandId, actorId, drawingId) {
       const current = required(await store.getDrawing(drawingId), 'TECHNICAL_DRAWING_NOT_FOUND', { drawingId });
-      await authorizeBrand(actorId, current.brandId, CAPABILITIES.PRODUCT_MANAGE);
+      await authorizeBrand(actorId, current.brandId, CAPABILITIES.PRODUCT_ENGINEERING_MANAGE);
       const fingerprint = `approveTechnicalDrawing:${actorId}:${drawingId}`;
       return runCommand(commandId, actorId, fingerprint, async (tx) => {
         const exact = required(await tx.getDrawingForUpdate(drawingId), 'TECHNICAL_DRAWING_NOT_FOUND', { drawingId });
@@ -333,12 +333,12 @@ export function createProductEngineeringService({
     },
 
     async getStyleWorkspaceForActor(actorId, styleId, options = {}) {
-      await authorizeStyle(actorId, styleId, CAPABILITIES.PRODUCT_READ);
+      await authorizeStyle(actorId, styleId, CAPABILITIES.PRODUCT_ENGINEERING_READ);
       return store.getStyleWorkspace(styleId, { limit: normalizeLimit(options.limit) });
     },
 
     async getAnalysisWorkspaceForActor(actorId, analysisRunId) {
-      const run = await analysisForActor(actorId, analysisRunId, CAPABILITIES.PRODUCT_READ);
+      const run = await analysisForActor(actorId, analysisRunId, CAPABILITIES.PRODUCT_ENGINEERING_READ);
       const workspace = await store.getAnalysisWorkspace(analysisRunId);
       invariant(workspace && workspace.analysis.id === run.id, 'PRODUCT_ENGINEERING_ANALYSIS_NOT_FOUND', 'Engineering analysis not found', { analysisRunId });
       return workspace;

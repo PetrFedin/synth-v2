@@ -155,6 +155,36 @@ const BRANCHES = Object.freeze({
       JOIN me ON me.organisation_id = tp.brand_id AND me.role = ANY(${roles}::text[])
      WHERE tp.status = 'issued'`,
 
+  'technical-review': (roles) => `
+    SELECT 'technical-review'::text, style.id, style.style_code, me.organisation_id,
+           review.since, NULL::timestamptz,
+           jsonb_build_object(
+             'styleId', style.id,
+             'styleCode', style.style_code,
+             'proposalCount', review.proposal_count,
+             'conflictCount', review.conflict_count,
+             'blockingConflictCount', review.blocking_conflict_count
+           )
+      FROM product_styles AS style
+      JOIN me ON me.organisation_id = style.brand_id AND me.role = ANY(${roles}::text[])
+      CROSS JOIN LATERAL (
+        SELECT
+          (SELECT min(created_at) FROM (
+             SELECT created_at FROM product_engineering_proposals
+              WHERE style_id = style.id AND status = 'pending'
+             UNION ALL
+             SELECT created_at FROM product_engineering_conflicts
+              WHERE style_id = style.id AND status = 'open'
+           ) AS pending_review) AS since,
+          (SELECT count(*)::integer FROM product_engineering_proposals
+            WHERE style_id = style.id AND status = 'pending') AS proposal_count,
+          (SELECT count(*)::integer FROM product_engineering_conflicts
+            WHERE style_id = style.id AND status = 'open') AS conflict_count,
+          (SELECT count(*)::integer FROM product_engineering_conflicts
+            WHERE style_id = style.id AND status = 'open' AND severity = 'blocking') AS blocking_conflict_count
+      ) AS review
+     WHERE review.proposal_count + review.conflict_count > 0`,
+
   'sample-decision': (roles) => `
     SELECT 'sample-decision'::text, smp.sample_code, smp.sample_code, me.organisation_id,
            COALESCE(smp.received_at, smp.updated_at), NULL::timestamptz,

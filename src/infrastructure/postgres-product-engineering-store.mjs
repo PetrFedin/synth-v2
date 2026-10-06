@@ -2,7 +2,11 @@ import { invariant } from '../core/errors.mjs';
 import { getRegisteredCommand, insertRegisteredCommand } from './postgres-command-registry.mjs';
 import { withPostgresTransaction } from './postgres-transaction.mjs';
 
-export function createPostgresProductEngineeringStore({ pool } = {}) {
+/**
+ * @param {{ pool?: any }} [options]
+ */
+export function createPostgresProductEngineeringStore(options = {}) {
+  const { pool } = options;
   invariant(pool && typeof pool.query === 'function' && typeof pool.connect === 'function', 'POSTGRES_POOL_REQUIRED', 'PostgreSQL pool is required');
   return Object.freeze({
     transaction: (work) => withPostgresTransaction(pool, work, { createView: transactionView }),

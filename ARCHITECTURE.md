@@ -1494,10 +1494,19 @@ Product Master owns the human review UX in inspector tab id `engineering`:
 
 The authority layer deliberately lands before provider calls. Subsequent implementation must preserve this sequence:
 
-1. **AI Job/Model Router** — provider adapters, timeout/retry/circuit breaker, per-purpose policy, model qualification manifest, token/cost/latency metrics; providers remain replaceable.
-2. **Governed Intake** — product media + explicit PDF/XLSX/CSV/SVG/fabric/spec/sample sources -> staging -> malware/type/size admission -> parser -> source hash/locator.
-3. **Garment Ontology Interpreter** — category/silhouette/components/panels/seams/pockets/closures/trims with evidence regions and unknown state.
-4. **Technical Flat Engine** — front/back/side/inside/detail vector proposals -> drawing objects -> human editor/approval -> ProductMedia/Tech Pack projection.
+**Current branch progress beyond the initial authority slice (PR #242):**
+
+- **Model Control Plane — IMPLEMENTED/PARTIAL.** Exact `provider + model + purpose + promptVersion + schemaVersion` qualification manifests, benchmark hash/metrics, expiry/suspension, ordered route policy, timeout, retryable failover and in-process circuit breaker exist. No concrete external AI provider is claimed connected yet.
+- **Governed Intake — IMPLEMENTED/PARTIAL.** Sources and addressable fragments are persisted with immutable SHA-256, security scan state, explicit admission/rejection/quarantine, parser state and page/sheet/cell/image-region/text-span provenance. Direct arbitrary external fetching is prohibited; `external_uri` must enter through a governed connector. Raw upload transport/object-storage implementation is still a follow-up integration.
+- **Garment Ontology Graph — IMPLEMENTED/PARTIAL.** Draft/reviewed graph, semantic nodes/edges, finding lineage, deterministic content hash and completeness checks exist. It remains evidence-derived and does not replace canonical Product/BOM/Measurement/Construction masters.
+- **Technical Flat semantic approval — IMPLEMENTED/PARTIAL.** Technical SVG primitives can link to garment ontology nodes; server-side SVG active-content rejection and approval validation exist. Critical POM/construction callouts require semantic lineage. AI SVG generation/editing itself remains a later provider integration.
+
+The remaining implementation order is:
+
+1. **AI Job/Model Router** — control plane is present; next add durable async job leasing, provider adapters, usage/cost/latency persistence and production provider secrets without coupling domain services to a vendor.
+2. **Governed Intake** — source authority is present; next add controlled upload/object storage, malware scanner adapter and PDF/XLSX/CSV/SVG structural parsers that emit exact fragments.
+3. **Garment Ontology Interpreter** — graph authority is present; next add category/silhouette/components/panels/seams/pockets/closures/trims interpretation from admitted evidence with explicit unknown/conflict states.
+4. **Technical Flat Engine** — semantic approval gate is present; next add model-assisted front/back/side/inside/detail vector proposals, deterministic editor operations and canonical ProductMedia/Tech Pack projection after approval.
 5. **POM Assistant** — detect/anchor POM, reconcile governed measurement-point MDM, prohibit absolute values without calibration, propose rather than write grade/base values.
 6. **BOM/Construction Co-pilot** — candidate material role/placement/construction node/operation mappings against canonical libraries; unknown GSM/composition/supplier remains unknown.
 7. **Cross-source Conflict + Change Impact** — compare canonical current vs documents vs supplier/sample evidence and project the impact of a proposed material/construction/measurement revision before application.

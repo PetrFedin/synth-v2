@@ -131,8 +131,8 @@ export function completeSourceParsing(source,{completedAt,parser,parserVersion,f
 
 function scanRequired({kind,ingestMode}) { return ingestMode==='upload'||kind==='document'||kind==='spreadsheet'||kind==='sample'; }
 function parseRequired({kind,mediaType}) {
-  if (['document','spreadsheet'].includes(kind)) return true;
-  return typeof mediaType==='string'&&(mediaType==='application/pdf'||mediaType.includes('spreadsheet')||mediaType.includes('csv'));
+  if (['document','spreadsheet','product_media','style_reference'].includes(kind)) return true;
+  return typeof mediaType==='string'&&(mediaType==='application/pdf'||mediaType.includes('spreadsheet')||mediaType.includes('csv')||mediaType.startsWith('image/'));
 }
 function assertLocator(kind,locator) {
   const fail=(message)=>invariant(false,'ENGINEERING_FRAGMENT_LOCATOR_INVALID',message,{kind,locator});

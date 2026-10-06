@@ -279,6 +279,17 @@ export function createProductEngineeringService(options = {}) {
         const exact = await store.getStyleVersion(styleVersionId);
         invariant(exact && exact.styleId === style.id && exact.brandId === style.brandId, 'PRODUCT_STYLE_VERSION_NOT_FOUND', 'Product Style Version not found for this style', { styleVersionId, styleId });
       }
+      const sourceIds = Array.isArray(input.inputManifest?.sourceIds) ? [...new Set(input.inputManifest.sourceIds)] : [];
+      for (const sourceId of sourceIds) {
+        const source = await store.getSource(sourceId);
+        invariant(source && source.styleId === style.id && source.brandId === style.brandId, 'ENGINEERING_ANALYSIS_SOURCE_INVALID', 'Analysis source is not available for this style', { sourceId, styleId });
+        invariant(source.status === 'admitted' && source.parseStatus === 'completed', 'ENGINEERING_ANALYSIS_SOURCE_NOT_READY', 'Analysis source must be admitted and parsed before execution', { sourceId, status: source.status, parseStatus: source.parseStatus });
+      }
+      if (input.inputManifest?.autoExecute === true) {
+        invariant(sourceIds.length >= 1, 'ENGINEERING_ANALYSIS_SOURCES_REQUIRED', 'Automatic engineering analysis requires at least one admitted parsed source');
+        const contract = input.inputManifest?.modelContract;
+        invariant(contract && typeof contract.promptVersion === 'string' && contract.promptVersion.trim() && typeof contract.schemaVersion === 'string' && contract.schemaVersion.trim(), 'ENGINEERING_MODEL_CONTRACT_REQUIRED', 'Automatic engineering analysis requires prompt/schema contract');
+      }
       const value = createAnalysisRunDomain({
         id: nextId('engineering-analysis'),
         style,
@@ -291,6 +302,25 @@ export function createProductEngineeringService(options = {}) {
       const fingerprint = `requestEngineeringAnalysis:${actorId}:${styleId}:${canonicalJson(input)}`;
       return runCommand(commandId, actorId, fingerprint, async (tx) => {
         await tx.insertAnalysisRun(value);
+        if (input.inputManifest?.autoExecute === true) {
+          await tx.insertJob({
+            id: nextId('engineering-job'),
+            dedupeKey: `analysis-execute:${value.id}:${value.inputHash}`,
+            brandId: value.brandId,
+            styleId: value.styleId,
+            sourceId: null,
+            analysisRunId: value.id,
+            jobType: 'analysis_execute',
+            payload: {
+              purpose: value.purpose,
+              promptVersion: input.inputManifest.modelContract.promptVersion,
+              schemaVersion: input.inputManifest.modelContract.schemaVersion,
+              sourceIds,
+            },
+            maxAttempts: 5,
+            availableAt: value.requestedAt,
+          });
+        }
         return value;
       });
     },

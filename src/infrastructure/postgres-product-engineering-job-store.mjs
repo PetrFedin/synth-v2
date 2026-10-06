@@ -2,7 +2,9 @@ import { randomUUID } from 'node:crypto';
 import { invariant } from '../core/errors.mjs';
 import { withPostgresTransaction } from './postgres-transaction.mjs';
 
-export function createPostgresProductEngineeringJobStore({pool}={}) {
+/** @param {{ pool?: any }} [options] */
+export function createPostgresProductEngineeringJobStore(options={}) {
+  const {pool}=options;
   invariant(pool&&typeof pool.query==='function'&&typeof pool.connect==='function','POSTGRES_POOL_REQUIRED','PostgreSQL pool is required');
   return Object.freeze({
     async enqueue(job) {

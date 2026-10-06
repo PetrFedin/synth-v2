@@ -1,5 +1,6 @@
 import { invariant } from '../core/errors.mjs';
 import { createModelControlPlane } from '../modules/product-engineering/model-control.mjs';
+import { validateEngineeringModelOutput } from '../modules/product-engineering/model-output-schema.mjs';
 import {
   completeAnalysis, completeModelRun, createConflict, createEvidence, createFinding, createModelRun, createProposal, failModelRun, startAnalysis,
 } from '../modules/product-engineering/public.mjs';
@@ -69,7 +70,11 @@ export function createProductEngineeringAnalysisExecutor(options={}) {
         input:{analysis:{id:running.id,purpose:running.purpose,inputManifest:running.inputManifest},sources},
         inputHash:running.inputHash,requestId:job.id,
       });
-      validateGatewayOutput(output.output);
+      validateEngineeringModelOutput({
+        schemaVersion: contract.schemaVersion,
+        output: output.output,
+        sourceIds,
+      });
       const completedRun=completeModelRun(modelRun,{
         outputHash:output.outputHash,usage:output.usage,costMinor:null,currency:null,completedAt:now(),
       });
@@ -156,15 +161,6 @@ export function createProductEngineeringAnalysisExecutor(options={}) {
   }
 
   function now(){const value=clock();invariant(typeof value==='string'&&Number.isFinite(Date.parse(value)),'ENGINEERING_ANALYSIS_CLOCK_INVALID','Analysis executor clock is invalid');return new Date(value).toISOString();}
-}
-function validateGatewayOutput(output){
-  invariant(output&&typeof output==='object'&&!Array.isArray(output),'ENGINEERING_MODEL_OUTPUT_INVALID','Model output must be an object');
-  invariant(output.findings===undefined||Array.isArray(output.findings),'ENGINEERING_MODEL_OUTPUT_INVALID','Model findings must be an array');
-  invariant(output.proposals===undefined||Array.isArray(output.proposals),'ENGINEERING_MODEL_OUTPUT_INVALID','Model proposals must be an array');
-  invariant(output.conflicts===undefined||Array.isArray(output.conflicts),'ENGINEERING_MODEL_OUTPUT_INVALID','Model conflicts must be an array');
-  if(output.garmentGraph!==undefined){
-    invariant(output.garmentGraph&&typeof output.garmentGraph==='object'&&Array.isArray(output.garmentGraph.nodes)&&Array.isArray(output.garmentGraph.edges),'ENGINEERING_MODEL_OUTPUT_INVALID','garmentGraph must contain nodes and edges');
-  }
 }
 function errorCode(error){return error&&typeof error==='object'&&typeof error.code==='string'?error.code:'ENGINEERING_MODEL_EXECUTION_FAILED';}
 function safeMessage(error){const value=error&&typeof error==='object'&&typeof error.message==='string'?error.message:'Model execution failed';return value.slice(0,2000);}

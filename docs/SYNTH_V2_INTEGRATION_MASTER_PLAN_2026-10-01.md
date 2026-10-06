@@ -1475,12 +1475,18 @@ PostgreSQL Golden Path now proves:
 
 The same Golden Path now also reads deterministic impact **before** apply and verifies that unavailable repository evidence is labelled `not_available` rather than zero.
 
+Product Master UI now preserves the same state separation:
+
+`pending -> Accept/Reject -> accepted -> Impact -> Apply -> appliedReference`.
+
+Impact is readable without mutation. Apply is shown only for the explicit allowlist and requires the current canonical optimistic version. Accepted-but-not-applied and applied proposals remain visibly different.
+
 Still open:
 
 - apply adapters for BOM, Product Identity fields, Samples/fit decisions, Colour and other canonical actions;
 - richer direct impact evidence for Cost, Commercial Publication, Cutting, Inline Quality and other downstream authorities; 
 - policy gates that can block high-risk apply until required downstream reviewers acknowledge the impact;
-- UI action/confirmation surface for accepted-but-not-applied proposals and its impact preview;
+- richer automatic resolution of the current canonical target version so the UI can replace the temporary explicit optimistic-version input;
 - policy controls for actions that require stronger approval than ordinary Product Engineering management.
 
 ### Current AI Engineering Golden Path — 2026-10-06

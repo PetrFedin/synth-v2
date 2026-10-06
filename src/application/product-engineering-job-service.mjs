@@ -1,10 +1,11 @@
+import { randomUUID } from 'node:crypto';
 import { invariant } from '../core/errors.mjs';
 import { admitEngineeringSource, completeSourceParsing, createEngineeringFragment, queueSourceParsing, recordSourceScan, rejectEngineeringSource } from '../modules/product-engineering/intake.mjs';
 import { parseEngineeringSourceStructure } from '../modules/product-engineering/structural-parser.mjs';
 
 export function createProductEngineeringJobService({
   jobStore, engineeringStore, scanner, workerId='engineering-worker', clock=()=>new Date().toISOString(),
-  retryDelayMs=5000, leaseMs=60000, nextId=((prefix)=>`${prefix}_${crypto.randomUUID?.()??Date.now()}`),
+  retryDelayMs=5000, leaseMs=60000, nextId=((prefix)=>`${prefix}_${randomUUID()}`),
   analysisExecutor=null,
 }={}) {
   invariant(jobStore&&engineeringStore&&scanner,'ENGINEERING_JOB_SERVICE_REQUIRED','Engineering job service dependencies are required');

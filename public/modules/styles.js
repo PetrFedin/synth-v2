@@ -1692,6 +1692,11 @@
           content: [styleReferenceActions(item), styleReferencePanel(item)].filter(Boolean),
         },
         {
+          id: 'engineering',
+          label: text('AI-инжиниринг', 'AI Engineering'),
+          content: [window.SynthaProductEngineering.panel(item)],
+        },
+        {
           label: text('Квотирование', 'Quotation'),
           content: [styleQuotationPanel(item)],
         },

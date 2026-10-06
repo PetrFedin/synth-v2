@@ -162,6 +162,12 @@
     await registry.ensureWorkspaceRow(section, rows, (item) => item.id === id);
   }
 
+  registry.registerTarget('styles', async (route) => {
+    registry.clearRegistryFilters('styles');
+    OD_UI.selected['od-styles'] = route.parentId || route.entityId;
+    renderApp();
+  });
+
   registry.registerTarget('orders', async (route) => {
     // Приёмка, претензия и правка живут внутри заказа: выделяется заказ (`parentId`), а не их собственный идентификатор.
     await pick({ tab: 'orders', tabScope: 'orders', scope: 'od-orders', filterScope: 'orders', section: 'orders', rows: () => state.workspace?.orders || [], id: route.parentId || route.entityId });

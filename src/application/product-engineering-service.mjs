@@ -26,6 +26,7 @@ import {
   rejectEngineeringSource,
 } from '../modules/product-engineering/intake.mjs';
 import { assertTechnicalFlatApprovable } from '../modules/product-engineering/technical-flat.mjs';
+import { inspectEngineeringUpload, postgresBlobStorageRef } from '../modules/product-engineering/source-upload.mjs';
 
 /**
  * @param {{
@@ -85,6 +86,53 @@ export function createProductEngineeringService(options = {}) {
   }
 
   return Object.freeze({
+    async uploadSourceBytes(commandId, actorId, styleId, input, bytes) {
+      requireObject(input, 'ENGINEERING_UPLOAD_INPUT_INVALID');
+      const style = await authorizeStyle(actorId, styleId, CAPABILITIES.PRODUCT_ENGINEERING_MANAGE);
+      const inspected = inspectEngineeringUpload({
+        bytes,
+        mediaType: input.mediaType,
+        originalName: input.originalName,
+      });
+      const fingerprint = `uploadEngineeringSource:${actorId}:${styleId}:${inspected.contentHash}:${inspected.mediaType}:${inspected.originalName}`;
+      return runCommand(commandId, actorId, fingerprint, async (tx) => {
+        const sourceId = nextId('engineering-source');
+        const createdAt = now(clock);
+        const source = createEngineeringSource({
+          id: sourceId,
+          brandId: style.brandId,
+          styleId: style.id,
+          kind: inspected.kind,
+          ingestMode: 'upload',
+          mediaType: inspected.mediaType,
+          originalName: inspected.originalName,
+          sizeBytes: inspected.sizeBytes,
+          contentHash: inspected.contentHash,
+          storageRef: postgresBlobStorageRef(sourceId),
+          metadata: {
+            upload: {
+              transport: 'binary-http',
+              integrity: 'server-computed-sha256',
+            },
+          },
+          createdAt,
+          createdBy: actorId,
+        });
+        await tx.insertSource(source);
+        await tx.insertSourceBlob({
+          sourceId,
+          brandId: style.brandId,
+          styleId: style.id,
+          mediaType: inspected.mediaType,
+          sizeBytes: inspected.sizeBytes,
+          contentHash: inspected.contentHash,
+          content: bytes,
+          createdAt,
+        });
+        return source;
+      });
+    },
+
     async registerSource(commandId, actorId, styleId, input) {
       requireObject(input, 'ENGINEERING_SOURCE_INPUT_INVALID');
       const style = await authorizeStyle(actorId, styleId, CAPABILITIES.PRODUCT_ENGINEERING_MANAGE);

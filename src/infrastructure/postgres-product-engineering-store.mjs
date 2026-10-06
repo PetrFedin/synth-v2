@@ -53,6 +53,13 @@ export function createPostgresProductEngineeringStore(options = {}) {
       );
       return result.rows.map(mapFragment);
     },
+    async getSourceBlob(sourceId) {
+      const result = await pool.query(
+        'SELECT source_id, brand_id, style_id, media_type, size_bytes, content_hash, content, created_at FROM product_engineering_source_blobs WHERE source_id = $1',
+        [sourceId],
+      );
+      return result.rows[0] ? mapSourceBlob(result.rows[0]) : undefined;
+    },
     async getStyleWorkspace(styleId, { limit = 100 } = {}) {
       const bounded = normalizeLimit(limit);
       const [analysisResult, proposalResult, conflictResult, drawingResult, sourceResult] = await Promise.all([
@@ -205,6 +212,15 @@ function transactionView(client) {
           value.status, value.scanStatus, value.parseStatus, value.rejectionCode, value.rejectionMessage,
           value.createdAt, value.createdBy, value.admittedAt, value.admittedBy, value.version,
         ],
+      );
+    },
+
+    async insertSourceBlob(value) {
+      await client.query(
+        `INSERT INTO product_engineering_source_blobs
+          (source_id, brand_id, style_id, media_type, size_bytes, content_hash, content, created_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [value.sourceId, value.brandId, value.styleId, value.mediaType, value.sizeBytes, value.contentHash, value.content, value.createdAt],
       );
     },
 
@@ -411,6 +427,14 @@ function transactionView(client) {
       );
       invariant(result.rowCount === 1, 'TECHNICAL_DRAWING_CONCURRENCY_CONFLICT', 'Technical drawing changed concurrently', { drawingId: value.id });
     },
+  });
+}
+
+function mapSourceBlob(row) {
+  return Object.freeze({
+    sourceId: row.source_id, brandId: row.brand_id, styleId: row.style_id, mediaType: row.media_type,
+    sizeBytes: Number(row.size_bytes), contentHash: row.content_hash,
+    content: new Uint8Array(row.content), createdAt: iso(row.created_at),
   });
 }
 

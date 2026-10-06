@@ -3,7 +3,8 @@ import { invariant } from '../core/errors.mjs';
 import { normalizeHttpError } from './error-status.mjs';
 import { assertBodyContract, assertQueryContract, bodyContract } from './request-contract.mjs';
 import { createWholesaleRoutes, matchWholesaleRoute } from './all-routes.mjs';
-import { decodeJsonObject, queryParameters, requireIdempotencyKey, resolveRequestId, validateContentLength } from './transport-contract.mjs';
+import { decodeJsonObject, decodePathParameter, queryParameters, requireIdempotencyKey, resolveRequestId, validateContentLength } from './transport-contract.mjs';
+import { ENGINEERING_UPLOAD_MAX_BYTES } from '../modules/product-engineering/source-upload.mjs';
 import { wholesaleV2ExtendedOpenApi } from './v2-openapi.mjs';
 
 const EMPTY_BODY = bodyContract();
@@ -84,6 +85,26 @@ export function createWholesaleRequestPipeline({ authenticate, auth, readiness, 
       invariant(auth?.logout, 'AUTH_SERVICE_REQUIRED', 'Authentication service is required');
       assertBodyContract(await readJson(request), EMPTY_BODY);
       return { status: 200, payload: { data: { revoked: await auth.logout(identity.token) }, requestId } };
+    }
+    const engineeringUpload = method === 'POST'
+      ? url.pathname.match(/^\/v2\/product\/styles\/([^/]+)\/engineering\/upload$/)
+      : null;
+    if (engineeringUpload) {
+      assertEmptyQuery(url);
+      invariant(services.productEngineering?.uploadSourceBytes, 'PRODUCT_ENGINEERING_SERVICE_REQUIRED', 'Product Engineering service is required');
+      const commandId = requireIdempotencyKey(request.header('idempotency-key'));
+      const originalName = decodeUploadFileName(request.header('x-file-name'));
+      const mediaType = request.header('content-type');
+      validateContentLength(request.header('content-length'), ENGINEERING_UPLOAD_MAX_BYTES);
+      const bytes = await request.readBody(ENGINEERING_UPLOAD_MAX_BYTES);
+      const data = await services.productEngineering.uploadSourceBytes(
+        commandId,
+        identity.actor.actorId,
+        decodePathParameter(engineeringUpload[1]),
+        { originalName, mediaType },
+        bytes,
+      );
+      return { status: 200, payload: { data, requestId } };
     }
     const route = matchWholesaleRoute(routes, method, url.pathname);
     invariant(route, 'HTTP_ROUTE_NOT_FOUND', 'Route not found', { method, path: url.pathname });
@@ -168,6 +189,12 @@ function readinessUnavailable() {
     database: Object.freeze({ status: 'unknown' }),
     migrations: Object.freeze({ status: 'unknown', totalCount: 0, appliedCount: 0, pending: Object.freeze([]), mismatched: Object.freeze([]), unknown: Object.freeze([]) }),
   });
+}
+
+function decodeUploadFileName(value) {
+  invariant(typeof value === 'string' && value.length >= 1 && value.length <= 780, 'ENGINEERING_UPLOAD_NAME_INVALID', 'X-File-Name is required');
+  try { return decodeURIComponent(value); }
+  catch { invariant(false, 'ENGINEERING_UPLOAD_NAME_INVALID', 'X-File-Name is invalid'); }
 }
 
 function publicIdentity(actor) { return Object.freeze({ actorId: actor.actorId, email: actor.email ?? null, displayName: actor.displayName ?? '' }); }

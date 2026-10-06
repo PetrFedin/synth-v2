@@ -100,6 +100,25 @@
     return row;
   }
 
+  function uploadSource(item) {
+    const product = item.product;
+    const chooser = document.createElement('input');
+    chooser.type = 'file';
+    chooser.accept = '.pdf,.xlsx,.csv,.svg,.jpg,.jpeg,.png,.webp,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,image/svg+xml,image/jpeg,image/png,image/webp';
+    chooser.addEventListener('change', async () => {
+      const file = chooser.files?.[0];
+      if (!file) return;
+      try {
+        await uploadBinary(`/v2/product/styles/${encodeURIComponent(product.id)}/engineering/upload`, file);
+        invalidate(product.id);
+        toast(text('Источник загружен и зафиксирован по SHA-256.', 'Source uploaded and fixed by SHA-256.'), 'success');
+      } catch (error) {
+        toast(error?.message || text('Не удалось загрузить источник.', 'Source upload failed.'), 'error');
+      }
+    }, { once: true });
+    chooser.click();
+  }
+
   function requestAnalysis(item) {
     const product = item.product;
     const options = PURPOSES.map(([code, ru, en]) => [code, text(ru, en)]);
@@ -365,11 +384,13 @@
     wrap.append(guard, summary(data));
     if (manage) {
       const actions = el('div', { className: 'od-inline-actions' });
-      const create = el('button', { className: 'button small primary', type: 'button', rawText: text('Новый анализ', 'New analysis') });
+      const upload = el('button', { className: 'button small primary', type: 'button', rawText: text('Добавить источник', 'Add source') });
+      upload.addEventListener('click', () => uploadSource(item));
+      const create = el('button', { className: 'button small', type: 'button', rawText: text('Новый анализ', 'New analysis') });
       create.addEventListener('click', () => requestAnalysis(item));
       const refresh = el('button', { className: 'button small', type: 'button', rawText: text('Обновить', 'Refresh') });
       refresh.addEventListener('click', () => { invalidate(product.id); });
-      actions.append(create, refresh);
+      actions.append(upload, create, refresh);
       wrap.append(actions);
     }
     wrap.append(

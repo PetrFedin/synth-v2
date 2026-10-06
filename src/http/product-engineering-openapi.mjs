@@ -173,6 +173,30 @@ function paths() {
     responses: { 200: { description: 'Success', content: { 'application/json': { schema: { type: 'object', required: ['data','requestId'], properties: { data: { $ref: responseSchema }, requestId: { type: 'string' } } } } } }, 401: error, 403: error, 404: error },
   });
   return {
+    '/product/styles/{styleId}/engineering/upload': {
+      post: {
+        operationId: 'uploadProductEngineeringSource',
+        security: auth,
+        parameters: [
+          pathId('styleId'),
+          idempotency,
+          { name:'X-File-Name', in:'header', required:true, schema:{type:'string',minLength:1,maxLength:780} },
+        ],
+        requestBody: {
+          required:true,
+          content: {
+            'application/pdf': { schema:{type:'string',format:'binary'} },
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': { schema:{type:'string',format:'binary'} },
+            'text/csv': { schema:{type:'string',format:'binary'} },
+            'image/svg+xml': { schema:{type:'string',format:'binary'} },
+            'image/jpeg': { schema:{type:'string',format:'binary'} },
+            'image/png': { schema:{type:'string',format:'binary'} },
+            'image/webp': { schema:{type:'string',format:'binary'} },
+          },
+        },
+        responses: { 200:{description:'Controlled source persisted with server-computed SHA-256'}, 400:error, 401:error, 403:error, 409:error, 413:error, 422:error },
+      },
+    },
     '/product/styles/{styleId}/engineering/sources': { post: mutation('registerProductEngineeringSource', ['styleId'], '#/components/schemas/ProductEngineeringSourceCreate') },
     '/product-engineering/sources/{sourceId}': { get: read('getProductEngineeringSource', ['sourceId'], '#/components/schemas/ProductEngineeringSourceWorkspace') },
     '/product-engineering/sources/{sourceId}/scan': { post: mutation('recordProductEngineeringSourceScan', ['sourceId'], '#/components/schemas/ProductEngineeringSourceScan') },

@@ -1,6 +1,8 @@
 import { invariant } from '../core/errors.mjs';
 
-export function createJsonModelGatewayProvider({endpoint,token,fetchImpl=fetch,timeoutMs=60000}={}) {
+/** @param {{ endpoint?: string, token?: string, fetchImpl?: typeof fetch, timeoutMs?: number }} [options] */
+export function createJsonModelGatewayProvider(options={}) {
+  const {endpoint,token,fetchImpl=fetch,timeoutMs=60000}=options;
   invariant(typeof endpoint==='string'&&endpoint.startsWith('https://'),'AI_GATEWAY_ENDPOINT_INVALID','AI model gateway endpoint must use HTTPS');
   invariant(typeof token==='string'&&token.length>=16,'AI_GATEWAY_TOKEN_INVALID','AI model gateway token is required');
   invariant(typeof fetchImpl==='function','AI_GATEWAY_FETCH_INVALID','AI model gateway fetch implementation is required');

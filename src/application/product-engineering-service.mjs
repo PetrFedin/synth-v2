@@ -25,6 +25,7 @@ import {
   recordSourceScan,
   rejectEngineeringSource,
 } from '../modules/product-engineering/intake.mjs';
+import { assertTechnicalFlatApprovable } from '../modules/product-engineering/technical-flat.mjs';
 
 /**
  * @param {{
@@ -456,6 +457,7 @@ export function createProductEngineeringService(options = {}) {
           drawing,
           objectType: input.objectType,
           semanticCode: input.semanticCode ?? null,
+          garmentNodeId: input.garmentNodeId ?? null,
           geometry: input.geometry,
           linkPayload: input.linkPayload ?? {},
           confidence: input.confidence ?? null,
@@ -473,6 +475,8 @@ export function createProductEngineeringService(options = {}) {
       const fingerprint = `approveTechnicalDrawing:${actorId}:${drawingId}`;
       return runCommand(commandId, actorId, fingerprint, async (tx) => {
         const exact = required(await tx.getDrawingForUpdate(drawingId), 'TECHNICAL_DRAWING_NOT_FOUND', { drawingId });
+        const objects = await tx.getDrawingObjects(drawingId);
+        assertTechnicalFlatApprovable({ drawing: exact, objects });
         const next = approveTechnicalDrawingDomain(exact, { approvedAt: now(clock), approvedBy: actorId });
         await tx.supersedeApprovedDrawing(exact.styleId, exact.viewType, exact.id);
         await tx.approveDrawing(next);

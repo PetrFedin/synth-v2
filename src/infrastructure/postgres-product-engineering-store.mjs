@@ -38,9 +38,20 @@ export function createPostgresProductEngineeringStore(options = {}) {
       const result = await pool.query('SELECT * FROM technical_drawing_versions WHERE id = $1', [id]);
       return result.rows[0] ? mapDrawing(result.rows[0]) : undefined;
     },
+    async getSource(id) {
+      const result = await pool.query('SELECT * FROM product_engineering_sources WHERE id = $1', [id]);
+      return result.rows[0] ? mapSource(result.rows[0]) : undefined;
+    },
+    async getSourceFragments(sourceId) {
+      const result = await pool.query(
+        'SELECT * FROM product_engineering_source_fragments WHERE source_id = $1 ORDER BY created_at, id',
+        [sourceId],
+      );
+      return result.rows.map(mapFragment);
+    },
     async getStyleWorkspace(styleId, { limit = 100 } = {}) {
       const bounded = normalizeLimit(limit);
-      const [analysisResult, proposalResult, conflictResult, drawingResult] = await Promise.all([
+      const [analysisResult, proposalResult, conflictResult, drawingResult, sourceResult] = await Promise.all([
         pool.query(
           `SELECT * FROM product_engineering_analysis_runs
             WHERE style_id = $1
@@ -78,12 +89,27 @@ export function createPostgresProductEngineeringStore(options = {}) {
             LIMIT $2`,
           [styleId, bounded],
         ),
+        pool.query(
+          `SELECT source.*,
+                  COALESCE(fragments.fragment_count, 0)::integer AS fragment_count
+             FROM product_engineering_sources source
+             LEFT JOIN LATERAL (
+               SELECT count(*) AS fragment_count
+                 FROM product_engineering_source_fragments fragment
+                WHERE fragment.source_id = source.id
+             ) fragments ON true
+            WHERE source.style_id = $1
+            ORDER BY source.created_at DESC, source.id DESC
+            LIMIT $2`,
+          [styleId, bounded],
+        ),
       ]);
       return deepFreeze({
         analyses: analysisResult.rows.map(mapAnalysis),
         proposals: proposalResult.rows.map(mapProposal),
         conflicts: conflictResult.rows.map(mapConflict),
         drawings: drawingResult.rows.map((row) => Object.freeze({ ...mapDrawing(row), objectCount: row.object_count })),
+        sources: sourceResult.rows.map((row) => Object.freeze({ ...mapSource(row), fragmentCount: row.fragment_count })),
       });
     },
     async getAnalysisWorkspace(analysisRunId) {
@@ -139,6 +165,10 @@ function transactionView(client) {
       const result = await client.query('SELECT * FROM technical_drawing_versions WHERE id = $1 FOR UPDATE', [id]);
       return result.rows[0] ? mapDrawing(result.rows[0]) : undefined;
     },
+    async getSourceForUpdate(id) {
+      const result = await client.query('SELECT * FROM product_engineering_sources WHERE id = $1 FOR UPDATE', [id]);
+      return result.rows[0] ? mapSource(result.rows[0]) : undefined;
+    },
     async lockStyle(styleId) {
       const result = await client.query('SELECT id FROM product_styles WHERE id = $1 FOR UPDATE', [styleId]);
       invariant(result.rowCount === 1, 'PRODUCT_STYLE_NOT_FOUND', 'Product Style not found', { styleId });
@@ -152,6 +182,48 @@ function transactionView(client) {
         [styleId, viewType],
       );
       return result.rows[0] ? mapDrawing(result.rows[0]) : undefined;
+    },
+
+    async insertSource(value) {
+      await client.query(
+        `INSERT INTO product_engineering_sources
+          (id, brand_id, style_id, kind, ingest_mode, media_type, original_name, size_bytes, content_hash,
+           storage_ref, source_uri, metadata, status, scan_status, parse_status, rejection_code,
+           rejection_message, created_at, created_by, admitted_at, admitted_by, version)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`,
+        [
+          value.id, value.brandId, value.styleId, value.kind, value.ingestMode, value.mediaType, value.originalName,
+          value.sizeBytes, value.contentHash, value.storageRef, value.sourceUri, JSON.stringify(value.metadata),
+          value.status, value.scanStatus, value.parseStatus, value.rejectionCode, value.rejectionMessage,
+          value.createdAt, value.createdBy, value.admittedAt, value.admittedBy, value.version,
+        ],
+      );
+    },
+
+    async updateSource(value, expectedVersion) {
+      const result = await client.query(
+        `UPDATE product_engineering_sources
+            SET metadata=$2::jsonb, status=$3, scan_status=$4, parse_status=$5, rejection_code=$6,
+                rejection_message=$7, admitted_at=$8, admitted_by=$9, version=$10
+          WHERE id=$1 AND version=$11`,
+        [
+          value.id, JSON.stringify(value.metadata), value.status, value.scanStatus, value.parseStatus,
+          value.rejectionCode, value.rejectionMessage, value.admittedAt, value.admittedBy, value.version, expectedVersion,
+        ],
+      );
+      invariant(result.rowCount === 1, 'ENGINEERING_SOURCE_CONCURRENCY_CONFLICT', 'Engineering source changed concurrently', { sourceId: value.id, expectedVersion });
+    },
+
+    async insertFragment(value) {
+      await client.query(
+        `INSERT INTO product_engineering_source_fragments
+          (id, source_id, brand_id, style_id, kind, locator, content, content_hash, created_at, created_by)
+         VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8,$9,$10)`,
+        [
+          value.id, value.sourceId, value.brandId, value.styleId, value.kind, JSON.stringify(value.locator),
+          value.content === null ? null : JSON.stringify(value.content), value.contentHash, value.createdAt, value.createdBy,
+        ],
+      );
     },
 
     async insertAnalysisRun(value) {
@@ -330,6 +402,25 @@ function transactionView(client) {
       );
       invariant(result.rowCount === 1, 'TECHNICAL_DRAWING_CONCURRENCY_CONFLICT', 'Technical drawing changed concurrently', { drawingId: value.id });
     },
+  });
+}
+
+function mapSource(row) {
+  return Object.freeze({
+    id: row.id, brandId: row.brand_id, styleId: row.style_id, kind: row.kind, ingestMode: row.ingest_mode,
+    mediaType: row.media_type, originalName: row.original_name, sizeBytes: row.size_bytes === null ? null : Number(row.size_bytes),
+    contentHash: row.content_hash, storageRef: row.storage_ref, sourceUri: row.source_uri,
+    metadata: deepFreeze(row.metadata ?? {}), status: row.status, scanStatus: row.scan_status, parseStatus: row.parse_status,
+    rejectionCode: row.rejection_code, rejectionMessage: row.rejection_message, createdAt: iso(row.created_at),
+    createdBy: row.created_by, admittedAt: iso(row.admitted_at), admittedBy: row.admitted_by, version: row.version,
+  });
+}
+
+function mapFragment(row) {
+  return Object.freeze({
+    id: row.id, sourceId: row.source_id, brandId: row.brand_id, styleId: row.style_id, kind: row.kind,
+    locator: deepFreeze(row.locator ?? {}), content: row.content === null ? null : deepFreeze(row.content),
+    contentHash: row.content_hash, createdAt: iso(row.created_at), createdBy: row.created_by,
   });
 }
 

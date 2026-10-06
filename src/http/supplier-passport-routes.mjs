@@ -6,6 +6,15 @@ export function createSupplierPassportRoutes({ supplierPassport } = {}) {
   return Object.freeze([
     Object.freeze({
       method: 'GET',
+      pattern: /^\/v2\/suppliers\/([^/]+)\/passport\/partner-bundle$/,
+      mutation: false,
+      execute(context) {
+        assertQueryContract(context.query ?? {}, []);
+        return service.getPartnerBundleForActor(context.actorId, context.params[0]);
+      },
+    }),
+    Object.freeze({
+      method: 'GET',
       pattern: /^\/v2\/suppliers\/([^/]+)\/passport$/,
       mutation: false,
       execute(context) {
@@ -19,6 +28,9 @@ export function createSupplierPassportRoutes({ supplierPassport } = {}) {
 function unavailable() {
   return Object.freeze({
     getSupplierPassportForActor() {
+      invariant(false, 'SUPPLIER_PASSPORT_SERVICE_REQUIRED', 'Supplier passport service is required');
+    },
+    getPartnerBundleForActor() {
       invariant(false, 'SUPPLIER_PASSPORT_SERVICE_REQUIRED', 'Supplier passport service is required');
     },
   });

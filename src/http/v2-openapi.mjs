@@ -17,6 +17,7 @@ import { withFulfillmentOpenApi } from './fulfillment-openapi.mjs';
 import { withInventoryOpenApi } from './inventory-openapi.mjs';
 import { withProductIdentityOpenApi } from './product-identity-openapi.mjs';
 import { withProductReadinessOpenApi } from './product-readiness-openapi.mjs';
+import { withProductEngineeringOpenApi } from './product-engineering-openapi.mjs';
 import { withReceiptClaimsOpenApi } from './receipt-claims-openapi.mjs';
 import { withRetailDoorOpenApi } from './retail-door-openapi.mjs';
 import { withSelectionMatrixOpenApi } from './selection-matrix-openapi.mjs';
@@ -107,7 +108,7 @@ const composed = withSupplierPortalOpenApi(withOperationSequenceOpenApi(
   ),
 ));
 
-export const wholesaleV2ExtendedOpenApi = preserveAuthoritativeContractVersion(withAwaitingActionOpenApi(withTeamOpenApi(composed)));
+export const wholesaleV2ExtendedOpenApi = preserveAuthoritativeContractVersion(withProductEngineeringOpenApi(withAwaitingActionOpenApi(withTeamOpenApi(composed))));
 
 function preserveAuthoritativeContractVersion(specification) {
   const normalized = structuredClone(specification);

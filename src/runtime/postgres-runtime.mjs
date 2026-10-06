@@ -315,6 +315,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
     complianceDocuments,
     productCertifications,
     productIdentity: base.productIdentity,
+    productEngineering: base.productEngineering,
     productReadiness: base.productReadiness,
     commercialPublication: base.commercialPublication,
     orderEconomics,

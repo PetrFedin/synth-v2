@@ -17,7 +17,8 @@ export const CONFLICT_SEVERITIES = Object.freeze(['info','warning','blocking']);
 export const DRAWING_VIEWS = Object.freeze(['front','back','left','right','inside','detail']);
 export const DRAWING_OBJECT_TYPES = Object.freeze([
   'outline','panel','seam','stitch','pocket','closure','collar','cuff','trim',
-  'measurement_anchor','construction_callout',
+  'measurement_anchor','construction_callout','dart','pleat','hem','grainline',
+  'foldline','notch','button','buttonhole','zipper','annotation',
 ]);
 
 const CODE = /^[a-z][a-z0-9_.-]{1,159}$/;
@@ -265,6 +266,9 @@ export function createTechnicalDrawing({ id, style, styleVersionId = null, analy
   invariant(Number.isInteger(versionNo) && versionNo >= 1, 'TECHNICAL_DRAWING_VERSION_INVALID', 'Technical drawing version must be a positive integer');
   const normalizedSvg = text(svg, 20, 2_000_000, 'TECHNICAL_DRAWING_SVG_INVALID');
   invariant(/<svg(?:\s|>)/i.test(normalizedSvg), 'TECHNICAL_DRAWING_SVG_INVALID', 'Technical drawing must contain SVG markup');
+  invariant(!/<\s*(script|foreignObject|iframe|object|embed)\b/i.test(normalizedSvg), 'TECHNICAL_DRAWING_SVG_UNSAFE', 'Technical drawing contains unsafe SVG elements');
+  invariant(!/\son[a-z]+\s*=/i.test(normalizedSvg), 'TECHNICAL_DRAWING_SVG_UNSAFE', 'Technical drawing contains event-handler attributes');
+  invariant(!/(?:href|xlink:href)\s*=\s*["']\s*(?:javascript:|https?:|data:text\/html)/i.test(normalizedSvg), 'TECHNICAL_DRAWING_SVG_UNSAFE', 'Technical drawing contains unsafe external references');
   return freeze({
     id: required(id),
     brandId: style.brandId,
@@ -289,7 +293,7 @@ export function approveTechnicalDrawing(drawing, { approvedAt, approvedBy }) {
   return freeze({ ...drawing, status: 'approved', approvedAt: timestamp(approvedAt, 'PRODUCT_ENGINEERING_TIME_INVALID'), approvedBy: actor(approvedBy) });
 }
 
-export function createDrawingObject({ id, drawing, objectType, semanticCode = null, geometry, linkPayload = {}, confidence = null, createdAt, createdBy }) {
+export function createDrawingObject({ id, drawing, objectType, semanticCode = null, garmentNodeId = null, geometry, linkPayload = {}, confidence = null, createdAt, createdBy }) {
   invariant(drawing?.status === 'draft', 'TECHNICAL_DRAWING_NOT_DRAFT', 'Drawing objects can change only while the drawing is a draft');
   invariant(DRAWING_OBJECT_TYPES.includes(objectType), 'TECHNICAL_DRAWING_OBJECT_TYPE_INVALID', 'Technical drawing object type is invalid', { objectType });
   requireObject(geometry, 'TECHNICAL_DRAWING_GEOMETRY_INVALID', 'Drawing geometry must be an object');
@@ -302,6 +306,7 @@ export function createDrawingObject({ id, drawing, objectType, semanticCode = nu
     styleId: drawing.styleId,
     objectType,
     semanticCode,
+    garmentNodeId: nullableId(garmentNodeId),
     geometry: freeze(structuredClone(geometry)),
     linkPayload: freeze(structuredClone(linkPayload)),
     confidence: probability(confidence),

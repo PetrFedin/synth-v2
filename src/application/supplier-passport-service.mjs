@@ -1,14 +1,20 @@
+import crypto from 'node:crypto';
 import { invariant, requireEntity } from '../core/errors.mjs';
 import { CAPABILITIES, assertCapability } from '../modules/access-control/public.mjs';
 
 const PASSPORT_VERSION = 'supplier-passport-v1';
 const ATTRIBUTION_VERSION = 'unique-recovery-supplier-v1';
+const PARTNER_BUNDLE_VERSION = 'supplier-passport-partner-bundle-v1';
 
 export function createSupplierPassportService({ reader, clock = () => new Date().toISOString() } = {}) {
   invariant(reader && typeof reader.transaction === 'function', 'SUPPLIER_PASSPORT_READER_REQUIRED', 'Supplier passport reader is required');
   invariant(typeof clock === 'function', 'SUPPLIER_PASSPORT_CLOCK_REQUIRED', 'Supplier passport clock is required');
 
   return Object.freeze({
+    async getPartnerBundleForActor(actorId, supplierCode) {
+      const passport = await this.getSupplierPassportForActor(actorId, supplierCode);
+      return buildPartnerBundle(passport);
+    },
     getSupplierPassportForActor(actorId, supplierCode) {
       invariant(typeof actorId === 'string' && actorId.length > 0, 'ACTOR_ID_REQUIRED', 'Actor id is required');
       invariant(typeof supplierCode === 'string' && supplierCode.length > 0, 'SUPPLIER_CODE_REQUIRED', 'Supplier code is required');
@@ -171,6 +177,66 @@ function buildPassport({ supplier, operational, economicsByCurrency, asOf }) {
       economicsSource: 'supplier_failure_economics_by_currency',
     }),
   });
+}
+
+function buildPartnerBundle(passport) {
+  const canonical = {
+    schemaVersion: PARTNER_BUNDLE_VERSION,
+    generatedAt: passport.generatedAt,
+    supplier: {
+      supplierCode: passport.supplier.supplierCode,
+      legalName: passport.supplier.legalName,
+      countryCode: passport.supplier.countryCode,
+      categories: passport.supplier.categories,
+      incoterms: passport.supplier.incoterms,
+      leadTimeDays: passport.supplier.leadTimeDays,
+      minimumOrderQuantity: passport.supplier.minimumOrderQuantity,
+    },
+    qualification: {
+      state: passport.qualification.state,
+      auditState: passport.qualification.auditState,
+      auditExpiresAt: passport.qualification.auditExpiresAt,
+      asOf: passport.qualification.asOf,
+    },
+    evidenceDimensions: {
+      delivery: passport.trustDimensions.delivery,
+      firstPassQuality: passport.trustDimensions.firstPassQuality,
+      inlineCoverage: passport.trustDimensions.inlineCoverage,
+      universalScoreUsed: false,
+    },
+    evidenceCounters: {
+      productionOrders: passport.performance.operations.productionOrderCount,
+      executions: passport.performance.operations.executionCount,
+      finalInspections: passport.performance.quality.inspectionCount,
+      inlineChecks: passport.performance.quality.inline.checkCount,
+      openInlineChecks: passport.performance.quality.inline.openCheckCount,
+    },
+    lineage: {
+      supplierCode: passport.lineage.supplierCode,
+      supplierVersion: passport.lineage.supplierVersion,
+      operationalSource: passport.lineage.operationalSource,
+    },
+    disclosureBoundary: {
+      internalBrandIdIncluded: false,
+      internalSupplierIdIncluded: false,
+      failureEconomicsIncluded: false,
+      commercialRecommendationIncluded: false,
+    },
+    signature: {
+      status: 'unsigned',
+      issuer: null,
+    },
+  };
+  return Object.freeze({
+    ...canonical,
+    bundleSha256: crypto.createHash('sha256').update(stable(canonical)).digest('hex'),
+  });
+}
+
+function stable(value) {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return '[' + value.map(stable).join(',') + ']';
+  return '{' + Object.keys(value).sort().map((key) => JSON.stringify(key) + ':' + stable(value[key])).join(',') + '}';
 }
 
 function dimension(code, valuePercent, numerator, denominator) {

@@ -1376,7 +1376,7 @@ Minimum frozen lineage fields for the current commercial spine include:
 
 ### 19.1 AI Product Engineering Authority
 
-**Status in this change:** IMPLEMENTED/PARTIAL. The evidence/review authority, persistence, RBAC, API/OpenAPI, Product Master review workspace and Awaiting Action projection are executable. External model-provider execution, automatic document parsing and canonical apply adapters remain explicit follow-up gates; they are not claimed live by the existence of this authority layer.
+**Status in this change:** IMPLEMENTED/PARTIAL. The evidence/review authority, controlled binary intake, durable scan/parse/analysis jobs, structural PDF/XLSX/CSV/SVG/image parsing, model qualification/routing substrate, provider-neutral HTTPS gateway adapter, persisted Garment Graph, RBAC/API/OpenAPI, Product Master review workspace and Awaiting Action projection are executable in PR #242. Production malware scanning, production object storage, semantic arbitrary-PDF extraction, accepted live external-model qualification evidence and canonical apply adapters remain explicit gates; none is claimed merely because the bounded runtime exists.
 
 #### Purpose and placement
 
@@ -1422,6 +1422,14 @@ The AI/model integration has no direct SQL/write path to canonical PLM tables.
 | TechnicalDrawingVersion | brand + style + view + contiguous version | draft -> approved/superseded; one approved view per style/view | optional StyleVersion/AnalysisRun, SVG, SHA-256, predecessor | Product Master technical canvas; future ProductMedia/Tech Pack projection |
 | TechnicalDrawingObject | exact drawing | draft-only composition | semantic type, optional governed semantic code, geometry, link payload, confidence | POM anchors, construction callouts, seams/panels, machine-readable garment graph |
 | ProductEngineeringCommand | global command id | immutable command result | scope `product-engineering`, fingerprint, actor, result, completion time | idempotency/replay |
+| ProductEngineeringSource | brand + style | pending -> admitted/rejected/quarantined; scan + parse state versioned | ingest mode, MIME/name/size, server SHA-256, storage ref, security/admission/parser metadata | analysis input/evidence |
+| ProductEngineeringSourceBlob | exact Source | immutable MVP binary payload | source/style/brand, MIME, exact byte count, SHA-256, durable bytes | scanner/parser; replaceable by object-storage adapter without changing source identity |
+| ProductEngineeringSourceFragment | exact Source | append-only | typed page/sheet/cell/image/text/metadata locator + content digest | finding/evidence provenance |
+| ProductEngineeringJob | source or analysis scoped | queued/failed -> running -> completed/dead_letter; leased/reclaimable | dedupe key, type, payload, attempt count, lease owner/expiry, retry time, failure code | durable scan/parse/model execution |
+| AiModelQualification | provider/model/purpose/prompt/schema | qualified/suspended/revoked with optional expiry | benchmark SHA-256, metrics, qualifiedAt/by | eligibility gate |
+| AiModelRoutePolicy | global or brand + purpose | active/inactive; versioned | ordered candidates, timeout/retry/circuit policy | model control plane |
+| ProductEngineeringGarmentGraph | exact AnalysisRun + style | draft -> reviewed/superseded | schema version, deterministic content hash, node/edge counts, review actor/time | technical review, semantic drawing/POM/BOM/construction linkage |
+| ProductEngineeringGarmentNode/Edge | exact graph | append-only graph composition before review | semantic node/relation, attributes, confidence, optional Finding lineage | Product Master ontology view and downstream engineering assistants |
 
 #### AI uncertainty rules
 
@@ -1496,24 +1504,28 @@ The authority layer deliberately lands before provider calls. Subsequent impleme
 
 **Current branch progress beyond the initial authority slice (PR #242):**
 
-- **Model Control Plane — IMPLEMENTED/PARTIAL.** Exact `provider + model + purpose + promptVersion + schemaVersion` qualification manifests, benchmark hash/metrics, expiry/suspension, ordered route policy, timeout, retryable failover and in-process circuit breaker exist. No concrete external AI provider is claimed connected yet.
-- **Governed Intake — IMPLEMENTED/PARTIAL.** Sources and addressable fragments are persisted with immutable SHA-256, security scan state, explicit admission/rejection/quarantine, parser state and page/sheet/cell/image-region/text-span provenance. Direct arbitrary external fetching is prohibited; `external_uri` must enter through a governed connector. Raw upload transport/object-storage implementation is still a follow-up integration.
-- **Garment Ontology Graph — IMPLEMENTED/PARTIAL.** Draft/reviewed graph, semantic nodes/edges, finding lineage, deterministic content hash and completeness checks exist. It remains evidence-derived and does not replace canonical Product/BOM/Measurement/Construction masters.
+- **Model Control Plane — IMPLEMENTED/PARTIAL.** Exact `provider + model + purpose + promptVersion + schemaVersion` qualifications, benchmark SHA/metrics, expiry, ordered route policy, timeout/retry/failover control and provider-neutral HTTPS gateway execution exist. A bootstrap refuses qualification without an exact benchmark SHA-256 and non-empty metrics. A configured gateway is still not equivalent to accepted production qualification evidence.
+- **Durable AI execution — IMPLEMENTED/PARTIAL.** PostgreSQL `source_scan`, `source_parse` and `analysis_execute` jobs use dedupe keys, leased `FOR UPDATE SKIP LOCKED` claims, retry/backoff, expired-lease reclaim and terminal dead-letter state. Transient model failure fails the individual ModelRun/job; the Analysis becomes failed only when durable retry policy is exhausted.
+- **Governed Intake — IMPLEMENTED/PARTIAL.** Product Master performs controlled binary upload for PDF/XLSX/CSV/JPEG/PNG/WebP/SVG. The server, not the browser, validates type/signature, computes SHA-256 and atomically stores Source + bytes + scan job. PostgreSQL `bytea` is the dependency-free MVP blob adapter; production object storage remains a replaceable follow-up.
+- **Scanner assurance — MVP ONLY.** The built-in scanner is deliberately labelled `integrity_only`; it rejects the EICAR test signature and active SVG but is **not** a malware-grade production antivirus. Production deployment requires a scanner adapter with explicit operational assurance.
+- **Structural parsing — IMPLEMENTED/PARTIAL.** CSV rows/cell ranges, XLSX workbook/sheet/cells/used ranges, PDF page structure, SVG primitive structure and raster image dimensions are emitted as addressable fragments. XLSX parsing rejects encryption and enforces archive-entry, inflated-size, compression-ratio, worksheet and cell resource budgets. Semantic arbitrary-PDF/table extraction remains open.
+- **Garment Ontology Graph — IMPLEMENTED/PARTIAL.** Qualified model output can create Finding/Evidence, Proposal/Conflict and a validated/reviewed graph with semantic nodes/edges and finding lineage; Product Master projects the latest reviewed graph. It remains evidence-derived and cannot mutate canonical Product/BOM/Measurement/Construction masters.
 - **Technical Flat semantic approval — IMPLEMENTED/PARTIAL.** Technical SVG primitives can link to garment ontology nodes; server-side SVG active-content rejection and approval validation exist. Critical POM/construction callouts require semantic lineage. AI SVG generation/editing itself remains a later provider integration.
 
 The remaining implementation order is:
 
-1. **AI Job/Model Router** — control plane is present; next add durable async job leasing, provider adapters, usage/cost/latency persistence and production provider secrets without coupling domain services to a vendor.
-2. **Governed Intake** — source authority is present; next add controlled upload/object storage, malware scanner adapter and PDF/XLSX/CSV/SVG structural parsers that emit exact fragments.
-3. **Garment Ontology Interpreter** — graph authority is present; next add category/silhouette/components/panels/seams/pockets/closures/trims interpretation from admitted evidence with explicit unknown/conflict states.
-4. **Technical Flat Engine** — semantic approval gate is present; next add model-assisted front/back/side/inside/detail vector proposals, deterministic editor operations and canonical ProductMedia/Tech Pack projection after approval.
+1. **Repository + PostgreSQL AI Golden Path acceptance** — prove real authenticated HTTP upload -> persisted bytes/hash -> worker scan/admission -> structural parse/fragments -> exact qualification gate -> model execution -> findings/evidence/proposals/conflicts/graph, with restart/reclaim and negative cases. No DONE claim before this gate is green.
+2. **Production intake adapters** — malware-grade scanner and object storage/presigned ingestion, retaining the existing Source ID/hash/evidence contract.
+3. **Schema-bound model output validation** — validate every provider response against the exact output schema version before any Product Engineering persistence; malformed output must fail the job without partial findings/graph.
+4. **Canonical review/apply adapters** — accepted proposal -> explicit owning domain command -> immutable `appliedReference`; include expected-version and impact checks. Never write canonical tables from the AI executor.
 5. **POM Assistant** — detect/anchor POM, reconcile governed measurement-point MDM, prohibit absolute values without calibration, propose rather than write grade/base values.
-6. **BOM/Construction Co-pilot** — candidate material role/placement/construction node/operation mappings against canonical libraries; unknown GSM/composition/supplier remains unknown.
-7. **Cross-source Conflict + Change Impact** — compare canonical current vs documents vs supplier/sample evidence and project the impact of a proposed material/construction/measurement revision before application.
-8. **Sample Intelligence** — requested vs actual POM, delta/tolerance/PASS-FAIL, annotated fit comments, sample-round learning linked to the exact specification version.
-9. **Production Knowledge Retrieval** — governed internal/standard knowledge with source citation and version; retrieval can explain a rule but cannot override the rule authority.
-10. **Qualification & Trust** — replayable benchmark set, per-category/POM precision-recall/MAE where meaningful, hallucination/unknown-rate, signed qualification manifest and evidence digest before a model/prompt/schema combination may be marked production-qualified.
-11. **Revision-learning moat** — compare proposal -> human correction -> factory/sample actual -> final approved fact without using customer data outside its contractual/privacy boundary. Aggregate learning products require explicit governance and tenant isolation.
+6. **Deterministic grading intelligence** — use existing interval-specific `grade_steps`/size-scale semantics and validation, never generic LLM increments.
+7. **Technical Flat Engine** — model-assisted front/back/side/inside/detail vector proposals, deterministic editor operations and canonical ProductMedia/Tech Pack projection only after approval.
+8. **BOM/Construction Co-pilot** — candidate material role/placement/construction node/operation mappings against canonical libraries; unknown GSM/composition/supplier remains unknown.
+9. **Cross-source Conflict + Change Impact** — compare canonical current vs documents vs supplier/sample evidence and project impact across Measurements/BOM/Tech Pack/Sample/Sourcing/Production/Cost/Commercial Publication before application.
+10. **Sample/Factory Intelligence** — requested vs actual POM, delta/tolerance/PASS-FAIL, annotated fit/factory comments, next-round changes linked to the exact specification version.
+11. **Production Knowledge Retrieval + Qualification** — governed citable corpus plus replayable benchmark set, per-category/POM precision-recall/MAE where meaningful, hallucination/unknown/conflict-recall, latency/cost and qualification evidence digest.
+12. **Revision-learning moat** — compare proposal -> human correction -> factory/sample actual -> final approved fact within contractual/privacy and tenant-isolation boundaries.
 
 No phase may auto-apply a canonical change merely because model confidence crosses a threshold.
 
@@ -1533,6 +1545,12 @@ At minimum:
 - `technical-review` appears only to roles with engineering-manage and disappears after review;
 - API/OpenAPI/body validation agree;
 - Product Master review UI is RU/EN and has no raw-SVG injection path;
+- controlled upload rejects spoofed MIME/signature, unsafe names, oversize bodies, encrypted XLSX and unsafe decompression/resource budgets;
+- source bytes, source SHA-256 and fragment locators remain exactly linked;
+- durable jobs recover expired leases, dedupe repeat work and dead-letter after bounded attempts;
+- auto-execute analysis accepts only admitted+parsed sources and an exact modelContract;
+- no exact active qualification => no model execution;
+- malformed/unqualified provider output cannot create canonical PLM state;
 - `npm run verify` and PostgreSQL verification gates are green before this slice is called DONE.
 
 
@@ -1542,7 +1560,7 @@ At minimum:
 
 | Date | PR / commit | Change | Master sections affected | Evidence/status |
 |---|---|---|---|---|
-| 2026-10-06 | PR #242 `feat/ai-product-engineering-authority` | Add evidence-first AI Product Engineering authority: model/analysis provenance, finding/evidence graph, proposals/conflicts, versioned semantic SVG drawings, dedicated RBAC, strict API/OpenAPI, Product Master review workspace and derived Awaiting Action. Canonical PLM writes remain outside AI authority. | 10, 12, 13, 17, 19.1, 20 | IMPLEMENTED/PARTIAL in PR; provider execution and canonical apply adapters are explicitly not claimed; CI/PostgreSQL evidence required before DONE |
+| 2026-10-06 | PR #242 `feat/ai-product-engineering-authority` | Add evidence-first AI Product Engineering authority plus first executable Engineering Golden Path substrate: controlled binary upload/server SHA-256, durable scan/parse/analysis jobs, structural PDF/XLSX/CSV/SVG/image parsing, exact model qualification/policy routing, provider-neutral HTTPS gateway, Findings/Evidence/Proposals/Conflicts, reviewed Garment Graph, semantic SVG authority, RBAC/OpenAPI/Product Master/Awaiting Action. Canonical PLM writes remain outside AI authority. | 10, 12, 13, 17, 19.1, 20 | IMPLEMENTED/PARTIAL in PR; built-in scanner is integrity-only, PostgreSQL blob storage is MVP, live external qualification evidence/canonical apply adapters remain open; repository + PostgreSQL Golden Path acceptance required before DONE |
 | 2026-08 | #106 | Non-destructive live Campaign → Collection acceptance | 7.2, 15 | merged; public HTTP + PostgreSQL acceptance |
 | 2026-08 | #107 | Repeatable owner bootstrap + isolated dev/test PostgreSQL clean-clone path | 2.3, 2.5 | merged; CI verified |
 | 2026-08 | #108 | Order currency frozen to submitted Selection lineage | 7.5 | merged; Verify/PostgreSQL CI |

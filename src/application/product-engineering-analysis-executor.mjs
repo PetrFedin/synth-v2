@@ -74,6 +74,7 @@ export function createProductEngineeringAnalysisExecutor(options={}) {
         schemaVersion: contract.schemaVersion,
         output: output.output,
         sourceIds,
+        sources,
       });
       const completedRun=completeModelRun(modelRun,{
         outputHash:output.outputHash,usage:output.usage,costMinor:null,currency:null,completedAt:now(),

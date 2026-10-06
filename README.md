@@ -30,9 +30,15 @@ The web workspace supports Russian and English. The `RU / EN` switch is availabl
 
 All new user-facing text must be routed through `public/modules/i18n-runtime.js`. `npm run validate:i18n` verifies dictionary integrity, browser execution order, locale persistence, static delivery and critical UI action wiring.
 
+## AI Product Engineering
+
+Syntha V2 is extending the existing Product/PLM authority with an evidence-first AI engineering layer. AI analyses references and technical sources into versioned findings, exact source evidence, review proposals/conflicts and semantic SVG technical drawings. AI never writes Product Identity, Measurements, BOM, Tech Pack or Production truth directly: accepted review decisions are applied separately through the owning canonical service.
+
+The review workspace lives inside Product Master and unresolved technical proposals/conflicts project into Awaiting Action. Provider/model execution remains replaceable and must record model, prompt/schema versions plus input/output hashes before its output can participate in review.
+
 ## Product direction
 
-Digital linesheets and buyer collaboration; assortment planning, budgets, doors and size curves; wholesale CRM and payments; style/color/size catalog; PLM, BOM and samples; production, QC, logistics and landed cost; analytics and integration APIs.
+Evidence-first AI Product Engineering; digital linesheets and buyer collaboration; assortment planning, budgets, doors and size curves; wholesale CRM and payments; style/color/size catalog; PLM, BOM and samples; production, QC, logistics and landed cost; analytics and integration APIs.
 
 ## Local start / Cursor
 

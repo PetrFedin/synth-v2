@@ -1306,22 +1306,30 @@ AI Product Engineering sits upstream and may only create:
 - Product Master AI Engineering review workspace;
 - Awaiting Action from unresolved review state.
 
-### Phase B — Provider Router — NEXT
+### Phase B — Provider Router — IMPLEMENTED/PARTIAL in PR #242
 
-Add a replaceable model execution contract:
+Implemented in the current branch:
 
-- provider adapter;
-- model/purpose policy;
-- schema-constrained output;
-- timeout/retry/circuit-breaker;
-- rate/credit limits per organisation;
-- input/output content hashes;
-- latency/token/cost telemetry;
-- prompt/schema/model qualification status.
+- provider-neutral HTTPS JSON model gateway adapter;
+- PostgreSQL-backed model qualification records and route policies;
+- exact eligibility on provider/model/purpose/prompt/schema plus qualification expiry;
+- governed bootstrap requiring benchmark SHA-256 and non-empty qualification metrics;
+- durable `analysis_execute` jobs with lease/retry/reclaim/dead-letter semantics;
+- input/output content hashes and persisted ModelRun provenance;
+- fail-closed behavior when no exact qualified route exists;
+- analysis failure only after durable retry exhaustion, not after the first transient provider error.
+
+Still required before production-grade external AI execution:
+
+- schema-version-specific validation of every model output before persistence;
+- per-organisation rate/credit budgets;
+- persistent circuit-breaker/provider-health state and latency/cost telemetry;
+- provider-specific adapters only where the generic gateway contract is insufficient;
+- live qualification evidence for the exact model/prompt/schema combination used in production.
 
 A provider result writes only Product Engineering facts, never canonical PLM facts.
 
-### Phase C — Governed document/media intake
+### Phase C — Governed document/media intake — IMPLEMENTED/PARTIAL in PR #242
 
 Supported source classes:
 
@@ -1337,13 +1345,36 @@ Admission:
 
 `source -> type/size/security validation -> immutable source digest -> parser -> source locator -> finding/evidence`.
 
-### Phase D — Garment Ontology + Technical Flat
+Current branch now provides:
+
+- controlled binary upload for PDF/XLSX/CSV/JPEG/PNG/WebP/SVG;
+- server-computed SHA-256 rather than trusting client-supplied hashes;
+- MIME/extension/signature admission checks;
+- durable source bytes through a replaceable storage boundary, with PostgreSQL `bytea` as the dependency-free MVP adapter;
+- durable `source_scan -> source_parse` jobs;
+- explicit MVP integrity scanner with EICAR/active-SVG rejection and a visible `integrity_only` assurance label;
+- structural parsers for CSV, XLSX workbook/sheets/cells, PDF page structure, SVG structure and image dimensions;
+- exact source/fragment locators feeding evidence lineage.
+
+Production gates still open:
+
+- malware-grade scanner adapter; the built-in integrity scanner must not be represented as antivirus;
+- object-storage adapter for production-scale files while preserving source IDs/hashes;
+- semantic PDF extraction and authoritative table/text extraction;
+- controlled adapters for Illustrator/CLO/3D or other production formats when justified;
+- archive/decompression hardening and parser resource limits must remain part of admission tests.
+
+### Phase D — Garment Ontology + Technical Flat — IMPLEMENTED/PARTIAL in PR #242
 
 Create an evidence-grounded garment graph:
 
 `garment -> component -> panel -> seam/stitch -> closure/pocket/trim -> construction node -> operation`.
 
-Generate editable front/back/side/inside/detail SVG drafts. Every semantic object can link to canonical Product/Measurement/BOM/Construction concepts after human confirmation.
+Current branch persists versioned graph/node/edge records, validates graph integrity, moves generated graphs into a reviewed engineering state and projects the latest graph into Product Master with semantic nodes/relations and provenance.
+
+Semantic versioned SVG drawing authority also exists. The remaining step is automatic evidence-grounded front/back/side/inside/detail draft generation and explicit reviewed links from graph/drawing objects into canonical Product/Measurement/BOM/Construction concepts.
+
+Every semantic object may affect canonical PLM only after human confirmation through a separate domain command.
 
 ### Phase E — Measurement/POM Intelligence
 
@@ -1396,6 +1427,31 @@ Use a governed, citable production knowledge corpus. Add a qualification benchma
 - reproducible input/output hashes.
 
 Production-qualified combinations receive an immutable Qualification Manifest. No model is trusted because of brand/name alone.
+
+PR #242 now contains the persisted qualification/policy substrate and an operator bootstrap that refuses qualification without an exact benchmark SHA-256 plus non-empty evaluation metrics. A database record is still not production evidence by itself: the benchmark artefact, evaluation procedure and live acceptance for the deployed model/prompt/schema remain required.
+
+### Current AI Engineering Golden Path — 2026-10-06
+
+The intended first real user journey is now:
+
+`Product Master -> choose real file -> controlled binary upload -> server SHA-256 -> durable scan -> admission -> durable structural parse -> fragments/evidence -> exact qualified model route -> durable analysis execution -> ModelRun -> Findings/Evidence -> Proposals/Conflicts -> reviewed Garment Graph -> Technical Review`.
+
+What this **does prove** after repository acceptance:
+
+- the file and AI execution path are durable and replay-aware;
+- every downstream engineering fact is traceable to source hashes/locators;
+- model selection is qualification-gated;
+- AI output cannot directly overwrite canonical Product/BOM/Measurement/Tech Pack authority;
+- unresolved proposals/conflicts enter the human review loop.
+
+What it **does not yet prove**:
+
+- malware-grade production upload security;
+- semantic extraction quality from arbitrary real PDFs;
+- production object-storage scale;
+- a live external model endpoint with accepted benchmark evidence;
+- automatic canonical apply adapters after human approval;
+- calibrated POM/grading quality on real garments.
 
 ### Commercial/defensibility result
 

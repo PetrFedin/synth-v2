@@ -25,7 +25,7 @@ test('XLSX structural parser reads real workbook names, inline strings and used 
   ]);
 });
 
-function createStoredZip(files){
+function createStoredZip(files, options={}){
   const encoder=new TextEncoder();
   const locals=[]; const centrals=[]; let offset=0;
   for(const [name,text] of Object.entries(files)){
@@ -35,11 +35,14 @@ function createStoredZip(files){
     const lv=new DataView(local.buffer);
     lv.setUint32(0,0x04034b50,true);
     lv.setUint16(4,20,true);
-    lv.setUint16(6,0,true);
-    lv.setUint16(8,0,true);
+    const flags=options.encrypted ? 1 : 0;
+    const method=options.compressionMethod ?? 0;
+    const declaredUncompressed=Math.max(data.length, data.length * (options.declaredUncompressedMultiplier ?? 1));
+    lv.setUint16(6,flags,true);
+    lv.setUint16(8,method,true);
     lv.setUint32(14,0,true);
     lv.setUint32(18,data.length,true);
-    lv.setUint32(22,data.length,true);
+    lv.setUint32(22,declaredUncompressed,true);
     lv.setUint16(26,fileName.length,true);
     lv.setUint16(28,0,true);
     local.set(fileName,30);
@@ -51,11 +54,11 @@ function createStoredZip(files){
     cv.setUint32(0,0x02014b50,true);
     cv.setUint16(4,20,true);
     cv.setUint16(6,20,true);
-    cv.setUint16(8,0,true);
-    cv.setUint16(10,0,true);
+    cv.setUint16(8,flags,true);
+    cv.setUint16(10,method,true);
     cv.setUint32(16,0,true);
     cv.setUint32(20,data.length,true);
-    cv.setUint32(24,data.length,true);
+    cv.setUint32(24,declaredUncompressed,true);
     cv.setUint16(28,fileName.length,true);
     cv.setUint16(30,0,true);
     cv.setUint16(32,0,true);
@@ -82,3 +85,27 @@ function createStoredZip(files){
   out.set(end,cursor);
   return out;
 }
+
+
+test('XLSX parser rejects encrypted ZIP entries before decompression',()=>{
+  const zip=createStoredZip({
+    'xl/workbook.xml':'<?xml version="1.0"?><workbook><sheets/></workbook>',
+    'xl/_rels/workbook.xml.rels':'<?xml version="1.0"?><Relationships/>',
+  }, { encrypted: true });
+  const hash='a'.repeat(64);
+  assert.throws(()=>parseEngineeringSourceStructure({
+    source:{id:'xlsx-encrypted',mediaType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',contentHash:hash},
+    blob:{content:zip,contentHash:hash},
+  }),error=>error.code==='ENGINEERING_XLSX_ENCRYPTED_UNSUPPORTED');
+});
+
+test('XLSX parser rejects unsafe declared decompression ratio before inflate',()=>{
+  const zip=createStoredZip({
+    'xl/workbook.xml':'<?xml version="1.0"?><workbook><sheets/></workbook>',
+  }, { declaredUncompressedMultiplier: 200, compressionMethod: 8 });
+  const hash='a'.repeat(64);
+  assert.throws(()=>parseEngineeringSourceStructure({
+    source:{id:'xlsx-ratio',mediaType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',contentHash:hash},
+    blob:{content:zip,contentHash:hash},
+  }),error=>error.code==='ENGINEERING_XLSX_RESOURCE_LIMIT');
+});

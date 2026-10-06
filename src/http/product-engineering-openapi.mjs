@@ -123,6 +123,45 @@ function schemas() {
       },
       description: 'Applies an already accepted allowlisted proposal through the owning canonical domain command. Acceptance alone never mutates canonical PLM.',
     },
+    ProductEngineeringProposalImpact: {
+      type:'object', additionalProperties:false,
+      required:['proposalId','authority','action','targetEntityId','supported','contextStatus','styleVersionId','impacts','facts'],
+      properties:{
+        proposalId:id,
+        authority:{type:'string',enum:authorities},
+        action:{type:'string'},
+        targetEntityId:nullableId,
+        supported:{type:'boolean'},
+        contextStatus:{type:'string',enum:['resolved','unavailable']},
+        styleVersionId:nullableId,
+        impacts:{
+          type:'array',
+          items:{
+            type:'object',additionalProperties:false,
+            required:['area','action','severity','activeDependencyCount','evidence'],
+            properties:{
+              area:{type:'string'},
+              action:{type:'string'},
+              severity:{type:'string',enum:['medium','high']},
+              activeDependencyCount:{type:'integer',minimum:0},
+              evidence:{
+                type:'object',additionalProperties:false,required:['present','count'],
+                properties:{present:{type:'boolean'},count:{type:'integer',minimum:0}},
+              },
+            },
+          },
+        },
+        facts:{
+          type:'object',additionalProperties:false,
+          required:['measurementCharts','boms','samples','techPacks','sourcing','productionOrders','qualityInspections','activeProductionOrders','acknowledgedTechPacks'],
+          properties:{
+            measurementCharts:{type:'integer',minimum:0},boms:{type:'integer',minimum:0},samples:{type:'integer',minimum:0},
+            techPacks:{type:'integer',minimum:0},sourcing:{type:'integer',minimum:0},productionOrders:{type:'integer',minimum:0},
+            qualityInspections:{type:'integer',minimum:0},activeProductionOrders:{type:'integer',minimum:0},acknowledgedTechPacks:{type:'integer',minimum:0},
+          },
+        },
+      },
+    },
     ProductEngineeringConflictCreate: {
       type: 'object', additionalProperties: false, required: ['conflictType','subject','candidates','severity'],
       properties: {
@@ -241,6 +280,7 @@ function paths() {
     '/product-engineering/analyses/{analysisRunId}/findings': { post: mutation('recordProductEngineeringFinding', ['analysisRunId'], '#/components/schemas/ProductEngineeringFindingCreate') },
     '/product-engineering/analyses/{analysisRunId}/proposals': { post: mutation('createProductEngineeringProposal', ['analysisRunId'], '#/components/schemas/ProductEngineeringProposalCreate') },
     '/product-engineering/proposals/{proposalId}/resolve': { post: mutation('resolveProductEngineeringProposal', ['proposalId'], '#/components/schemas/ProductEngineeringProposalResolve') },
+    '/product-engineering/proposals/{proposalId}/impact': { get: read('getProductEngineeringProposalImpact', ['proposalId'], '#/components/schemas/ProductEngineeringProposalImpact') },
     '/product-engineering/proposals/{proposalId}/apply': { post: mutation('applyProductEngineeringProposal', ['proposalId'], '#/components/schemas/ProductEngineeringProposalApply') },
     '/product-engineering/analyses/{analysisRunId}/conflicts': { post: mutation('createProductEngineeringConflict', ['analysisRunId'], '#/components/schemas/ProductEngineeringConflictCreate') },
     '/product-engineering/conflicts/{conflictId}/resolve': { post: mutation('resolveProductEngineeringConflict', ['conflictId'], '#/components/schemas/ProductEngineeringConflictResolve') },

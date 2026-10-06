@@ -1,6 +1,8 @@
 import { invariant } from '../core/errors.mjs';
 
-export function createPostgresProductEngineeringModelControlStore({pool}={}) {
+/** @param {{ pool?: any }} [options] */
+export function createPostgresProductEngineeringModelControlStore(options={}) {
+  const {pool}=options;
   invariant(pool&&typeof pool.query==='function','POSTGRES_POOL_REQUIRED','PostgreSQL pool is required');
   return Object.freeze({
     async load({brandId,purpose,at=new Date().toISOString()}) {

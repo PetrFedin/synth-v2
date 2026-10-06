@@ -226,6 +226,15 @@ test('AI Engineering Golden Path crosses real HTTP, PostgreSQL, durable jobs and
     assert.equal(acceptedMaterialProposal.status, 'accepted');
     assert.equal(acceptedMaterialProposal.appliedReference, null);
 
+    const impact = data(await requestJson(baseUrl, `/v2/product-engineering/proposals/${encodeURIComponent(materialProposal.id)}/impact`, { token }));
+    assert.equal(impact.supported, true);
+    assert.equal(impact.authority, 'material');
+    assert.equal(impact.action, 'specification');
+    assert.equal(impact.contextStatus, 'unavailable');
+    assert.equal(impact.impacts.some((row) => row.area === 'bom' && row.action === 'review' && row.severity === 'high'), true);
+    assert.equal(impact.impacts.some((row) => row.area === 'cost' && row.action === 'recalculate' && row.evidence.status === 'not_available'), true);
+    assert.equal(impact.impacts.some((row) => row.area === 'production' && row.action === 'review_if_started'), true);
+
     const applyCommandId = `ai-eng-${runId}-material-apply`;
     const appliedMaterialProposal = data(await requestJson(baseUrl, `/v2/product-engineering/proposals/${encodeURIComponent(materialProposal.id)}/apply`, {
       method: 'POST',

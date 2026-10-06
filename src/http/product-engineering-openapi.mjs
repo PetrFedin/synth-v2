@@ -115,6 +115,14 @@ function schemas() {
       type: 'object', additionalProperties: false, required: ['expectedVersion','decision'],
       properties: { expectedVersion: { type: 'integer', minimum: 1 }, decision: { type: 'string', enum: ['accepted','rejected'] }, note: { type: 'string', maxLength: 4000 } },
     },
+    ProductEngineeringProposalApply: {
+      type: 'object', additionalProperties: false, required: ['expectedProposalVersion','expectedCanonicalVersion'],
+      properties: {
+        expectedProposalVersion: { type: 'integer', minimum: 1 },
+        expectedCanonicalVersion: { type: 'integer', minimum: 1 },
+      },
+      description: 'Applies an already accepted allowlisted proposal through the owning canonical domain command. Acceptance alone never mutates canonical PLM.',
+    },
     ProductEngineeringConflictCreate: {
       type: 'object', additionalProperties: false, required: ['conflictType','subject','candidates','severity'],
       properties: {
@@ -233,6 +241,7 @@ function paths() {
     '/product-engineering/analyses/{analysisRunId}/findings': { post: mutation('recordProductEngineeringFinding', ['analysisRunId'], '#/components/schemas/ProductEngineeringFindingCreate') },
     '/product-engineering/analyses/{analysisRunId}/proposals': { post: mutation('createProductEngineeringProposal', ['analysisRunId'], '#/components/schemas/ProductEngineeringProposalCreate') },
     '/product-engineering/proposals/{proposalId}/resolve': { post: mutation('resolveProductEngineeringProposal', ['proposalId'], '#/components/schemas/ProductEngineeringProposalResolve') },
+    '/product-engineering/proposals/{proposalId}/apply': { post: mutation('applyProductEngineeringProposal', ['proposalId'], '#/components/schemas/ProductEngineeringProposalApply') },
     '/product-engineering/analyses/{analysisRunId}/conflicts': { post: mutation('createProductEngineeringConflict', ['analysisRunId'], '#/components/schemas/ProductEngineeringConflictCreate') },
     '/product-engineering/conflicts/{conflictId}/resolve': { post: mutation('resolveProductEngineeringConflict', ['conflictId'], '#/components/schemas/ProductEngineeringConflictResolve') },
     '/product/styles/{styleId}/engineering/drawings': { post: mutation('createTechnicalDrawing', ['styleId'], '#/components/schemas/TechnicalDrawingCreate') },

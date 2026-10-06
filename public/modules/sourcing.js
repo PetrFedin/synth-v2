@@ -224,6 +224,7 @@
       h('div', { className: 'sourcing-header-actions' }, [
         canAny(caps.CAPABILITIES.SUPPLIER_MANAGE) ? h('button', { type: 'button', className: 'secondary', text: text('Новый поставщик', 'New supplier'), onclick: () => openSupplierDialog(null) }) : null,
         canAny(caps.CAPABILITIES.SOURCING_MANAGE) ? h('button', { type: 'button', className: 'primary', text: text('Новый RFQ', 'New RFQ'), onclick: () => openRfqDialog(null) }) : null,
+        canAny(caps.CAPABILITIES.MARGIN_READ) ? h('button', { type: 'button', className: 'secondary', text: text('Executive evidence', 'Executive evidence'), onclick: () => { void openExecutiveSupplierBrief(); } }) : null,
         h('button', { type: 'button', className: 'secondary', disabled: ui.loading, text: text('Обновить', 'Refresh'), onclick: () => { loadSourcing({ reset: true }).then(() => toast(text('\u0414\u0430\u043d\u043d\u044b\u0435 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u044b.', 'Data refreshed.'))).catch((error) => toast(error?.message || text('\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u0434\u0430\u043d\u043d\u044b\u0435.', 'The data could not be refreshed.'), 'error')); } }),
       ]),
       h('section', { className: 'sourcing-kpis' }, [
@@ -233,6 +234,87 @@
       ]),
     ]);
   }
+  async function openExecutiveSupplierBrief() {
+    const supplier = selectedSupplier();
+    if (!supplier) {
+      toast(text('Сначала выберите поставщика.', 'Select a supplier first.'), 'error');
+      return;
+    }
+    let passport = ui.passportFor === supplier.supplierCode ? ui.passport : null;
+    if (!passport) {
+      try {
+        passport = await api('/v2/suppliers/' + encodeURIComponent(supplier.supplierCode) + '/passport');
+        ui.passport = passport; ui.passportFor = supplier.supplierCode;
+      } catch (error) {
+        toast(error?.message || text('Паспорт недоступен.', 'Supplier passport is unavailable.'), 'error');
+        return;
+      }
+    }
+    const trust = passport.trustDimensions || {};
+    const economics = passport.performance?.economicsByCurrency || [];
+    const evidenceGaps = [];
+    if (passport.qualification?.state !== 'current') evidenceGaps.push(text('квалификация / аудит не актуальны', 'qualification / audit is not current'));
+    if (trust.delivery?.valuePercent == null) evidenceGaps.push(text('нет достаточной истории поставок', 'delivery history is missing'));
+    if (trust.firstPassQuality?.valuePercent == null) evidenceGaps.push(text('нет достаточной истории финального QC', 'final QC history is missing'));
+    if (trust.inlineCoverage?.valuePercent == null) evidenceGaps.push(text('нет истории inline-контроля', 'inline quality history is missing'));
+    const decisionState = evidenceGaps.length ? 'EVIDENCE_GAPS' : 'READY_FOR_DECISION_REVIEW';
+
+    const modal = h('dialog', { className: 'sourcing-dialog sourcing-executive-dialog' });
+    const close = h('button', { type: 'button', className: 'secondary', text: text('Закрыть', 'Close'), onclick: () => modal.close() });
+    const dims = [
+      [text('Поставка к QC', 'Delivery to QC'), trust.delivery],
+      [text('First-pass quality', 'First-pass quality'), trust.firstPassQuality],
+      [text('Inline coverage', 'Inline coverage'), trust.inlineCoverage],
+    ];
+    const body = h('div', { className: 'sourcing-executive-brief' }, [
+      h('header', {}, [
+        h('p', { className: 'eyebrow', text: 'EXECUTIVE EVIDENCE ROUTE' }),
+        h('h2', { text: supplier.legalName }),
+        h('p', { className: 'muted', text: text(
+          'Короткий decision brief из канонических supplier / production / QC / recovery данных.',
+          'A compact decision brief derived from canonical supplier / production / QC / recovery data.'
+        ) }),
+      ]),
+      h('div', { className: 'sourcing-executive-state' }, [
+        badge(decisionState, evidenceGaps.length ? 'warning' : 'ok'),
+        h('span', { className: 'muted', text: text('Это readiness state, не рекомендация купить.', 'This is a readiness state, not a purchase recommendation.') }),
+      ]),
+      h('section', { className: 'sourcing-executive-flow' }, [
+        ['01', text('Identity', 'Identity'), supplier.supplierCode + ' · ' + supplier.countryCode],
+        ['02', text('Qualification', 'Qualification'), passport.qualification?.state || '—'],
+        ['03', text('Delivery', 'Delivery'), passportDimension(trust.delivery)],
+        ['04', text('Quality', 'Quality'), passportDimension(trust.firstPassQuality)],
+        ['05', text('Control coverage', 'Control coverage'), passportDimension(trust.inlineCoverage)],
+      ].map(([n, label, value]) => h('article', {}, [
+        h('span', { text: n }), h('small', { text: label }), h('strong', { text: value }),
+      ]))),
+      h('section', {}, [
+        h('h3', { text: text('Подтверждённая экономика отказов', 'Confirmed failure economics') }),
+        economics.length ? h('div', { className: 'sourcing-executive-economics' }, economics.map((row) => h('article', {}, [
+          h('strong', { text: row.currency }),
+          h('span', { text: text('Потери', 'Failure cost') + ': ' + row.confirmedFailureCost }),
+          h('span', { text: text('Возмещено', 'Recovered') + ': ' + row.recoveryCreditAmount }),
+          h('span', { text: text('Net', 'Net') + ': ' + row.netConfirmedFailureCost }),
+        ]))) : h('p', { className: 'muted', text: text('Подтверждённых финансовых событий пока нет.', 'No confirmed financial failure events yet.') }),
+      ]),
+      h('section', {}, [
+        h('h3', { text: text('Decision gate', 'Decision gate') }),
+        evidenceGaps.length
+          ? h('div', { className: 'sourcing-warning', text: text('Не закрыто: ', 'Open evidence: ') + evidenceGaps.join(' · ') })
+          : h('p', { className: 'sourcing-executive-ok', text: text(
+            'Базовые evidence dimensions заполнены. Следующее решение должно учитывать конкретный RFQ, цену, capacity и коммерческие условия.',
+            'Core evidence dimensions are populated. The next decision must still consider the specific RFQ, price, capacity and commercial terms.'
+          ) }),
+      ]),
+      h('footer', {}, [
+        h('span', { className: 'muted', text: 'supplier-passport-v1 · ' + (passport.generatedAt || '') }),
+        close,
+      ]),
+    ]);
+    modal.addEventListener('close', () => modal.remove(), { once: true });
+    modal.append(body); document.body.append(modal); modal.showModal();
+  }
+
   function viewTabs() {
     const items = [
       ['suppliers', text('Поставщики', 'Suppliers')], ['rfqs', 'RFQ'], ['quotations', text('Котировки', 'Quotations')], ['production', text('Производство', 'Production')],

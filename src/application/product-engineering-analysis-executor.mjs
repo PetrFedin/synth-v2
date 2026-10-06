@@ -1,7 +1,7 @@
 import { invariant } from '../core/errors.mjs';
 import { createModelControlPlane } from '../modules/product-engineering/model-control.mjs';
 import {
-  completeAnalysis, completeModelRun, createConflict, createEvidence, createFinding, createModelRun, createProposal, failAnalysis, startAnalysis,
+  completeAnalysis, completeModelRun, createConflict, createEvidence, createFinding, createModelRun, createProposal, failModelRun, startAnalysis,
 } from '../modules/product-engineering/public.mjs';
 import {
   createGarmentEdge, createGarmentGraph, createGarmentNode, reviewGarmentGraph, validateGarmentGraphCompleteness,
@@ -121,10 +121,9 @@ export function createProductEngineeringAnalysisExecutor(options={}) {
       return {analysisRunId:running.id,status:'completed',provider:output.provider,model:output.model,outputHash:output.outputHash};
     }catch(error){
       await engineeringStore.transaction(async tx=>{
-        const exact=await tx.getAnalysisRunForUpdate(running.id);
-        if(['queued','running'].includes(exact.status)){
-          const failed=failAnalysis(exact,{failureCode:errorCode(error),failureMessage:safeMessage(error),failedAt:now()});
-          await tx.updateAnalysisRun(failed,exact.version);
+        const exactModel=await tx.getModelRunForUpdate(modelRun.id);
+        if(exactModel?.status==='started'){
+          await tx.updateModelRun(failModelRun(exactModel,{failureCode:errorCode(error),completedAt:now()}));
         }
       });
       throw error;

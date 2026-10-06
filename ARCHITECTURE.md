@@ -1376,7 +1376,7 @@ Minimum frozen lineage fields for the current commercial spine include:
 
 ### 19.1 AI Product Engineering Authority
 
-**Status in this change:** IMPLEMENTED/PARTIAL. The evidence/review authority, controlled binary intake, durable scan/parse/analysis jobs, structural PDF/XLSX/CSV/SVG/image parsing, model qualification/routing substrate, provider-neutral HTTPS gateway adapter, persisted Garment Graph, RBAC/API/OpenAPI, Product Master review workspace, Awaiting Action projection and the first governed canonical apply slice are executable in PR #242. Production malware scanning, production object storage, semantic arbitrary-PDF extraction, accepted live external-model qualification evidence, broader canonical apply coverage and change-impact policy remain explicit gates.
+**Status in this change:** IMPLEMENTED/PARTIAL. The evidence/review authority, controlled binary intake, durable scan/parse/analysis jobs, structural PDF/XLSX/CSV/SVG/image parsing, model qualification/routing substrate, provider-neutral HTTPS gateway adapter, persisted Garment Graph, RBAC/API/OpenAPI, Product Master review workspace, Awaiting Action projection and the first governed canonical apply slice are executable in PR #242. Production malware scanning, production object storage, semantic arbitrary-PDF extraction, accepted live external-model qualification evidence, broader canonical apply coverage, direct impact-evidence coverage and high-risk blocking policy remain explicit gates.
 
 #### Purpose and placement
 
@@ -1427,6 +1427,24 @@ Supported first-slice actions:
 The external apply command derives one canonical command id, reused on retry. All supported owning stores participate in the existing global command registry (`catalog` scope), so a reused idempotency key cannot mutate a second canonical target. The proposal is marked applied only after the owning service succeeds, recording `authority + action + canonical commandId + entityId + resulting version + appliedAt`. A process failure after canonical commit but before this final mark is replay-safe because the owning command is idempotent.
 
 AI-provided `proposedValue` is forbidden from carrying `expectedVersion`; concurrency authority belongs to the human apply request, not to the model.
+
+#### Pre-apply Change Impact Preview — IMPLEMENTED/PARTIAL
+
+`GET /v2/product-engineering/proposals/{proposalId}/impact` is a read-only deterministic projection. It does not call a model and does not mutate Product Engineering or canonical PLM.
+
+For each allowlisted proposal action, a versioned-in-code domain policy identifies potentially affected areas and required follow-up action/severity. The application service resolves the proposal's exact AnalysisRun and, when present, its exact StyleVersion; it then loads the existing Product Readiness source context for that StyleVersion and verifies brand/style lineage before evaluating impact.
+
+Evidence semantics are explicit:
+
+- `observed`: the readiness context directly contains the dependency and returns its count;
+- `derived`: a bounded observed fact is used as a risk signal, with the derivation basis named;
+- `not_available`: that downstream authority is not queried by the current reader, therefore `present` and `count` are `null`, never fabricated as zero.
+
+Direct context currently covers Measurement Charts, BOMs, Samples, Tech Packs, Sourcing, Production Orders, Quality inspections and supplier acknowledgement state. Cutting/Inline Quality may be derived only from active production as a review signal. Cost and Commercial Publication remain `not_available` until dedicated readers are joined.
+
+An AnalysisRun without an exact StyleVersion still receives policy-level impact with `contextStatus = unavailable`; the system does not invent repository facts.
+
+
 
 
 
@@ -1538,12 +1556,12 @@ The remaining implementation order is:
 
 1. **Repository + PostgreSQL AI Golden Path acceptance** — prove real authenticated HTTP upload -> persisted bytes/hash -> worker scan/admission -> structural parse/fragments -> exact qualification gate -> model execution -> findings/evidence/proposals/conflicts/graph, with restart/reclaim and negative cases. No DONE claim before this gate is green.
 2. **Production intake adapters** — malware-grade scanner and object storage/presigned ingestion, retaining the existing Source ID/hash/evidence contract.
-3. **Broaden canonical review/apply + change impact** — first allowlisted slice is implemented for Measurement/Material/Tech Pack/Operation Sequence; add BOM/Product Identity/Sample/Colour only through owning commands and add pre-apply impact/revision checks for high-risk changes.
+3. **Broaden canonical review/apply + impact evidence** — first allowlisted apply slice and deterministic impact preview are implemented; add BOM/Product Identity/Sample/Colour only through owning commands, join direct Cost/Commercial/Cutting/Inline-Quality evidence and add blocking reviewer policy for high-risk changes.
 4. **POM Assistant** — detect/anchor POM, reconcile governed measurement-point MDM, prohibit absolute values without calibration, propose rather than write grade/base values.
 5. **Deterministic grading intelligence** — use existing interval-specific `grade_steps`/size-scale semantics and validation, never generic LLM increments.
 6. **Technical Flat Engine** — model-assisted front/back/side/inside/detail vector proposals, deterministic editor operations and canonical ProductMedia/Tech Pack projection only after approval.
 7. **BOM/Construction Co-pilot** — candidate material role/placement/construction node/operation mappings against canonical libraries; unknown GSM/composition/supplier remains unknown.
-8. **Cross-source Conflict + Change Impact** — compare canonical current vs documents vs supplier/sample evidence and project impact across Measurements/BOM/Tech Pack/Sample/Sourcing/Production/Cost/Commercial Publication before application.
+8. **Cross-source Conflict + deeper Change Impact** — deterministic pre-apply policy exists; next compare canonical current vs documents vs supplier/sample actuals, add direct downstream readers and make required reviewer/revision gates enforceable before high-risk application.
 9. **Sample/Factory Intelligence** — requested vs actual POM, delta/tolerance/PASS-FAIL, annotated fit/factory comments, next-round changes linked to the exact specification version.
 10. **Production Knowledge Retrieval + Qualification** — governed citable corpus plus replayable benchmark set, per-category/POM precision-recall/MAE where meaningful, hallucination/unknown/conflict-recall, latency/cost and qualification evidence digest.
 11. **Revision-learning moat** — compare proposal -> human correction -> factory/sample actual -> final approved fact within contractual/privacy and tenant-isolation boundaries.
@@ -1585,7 +1603,7 @@ At minimum:
 
 | Date | PR / commit | Change | Master sections affected | Evidence/status |
 |---|---|---|---|---|
-| 2026-10-06 | PR #242 `feat/ai-product-engineering-authority` | Add evidence-first AI Product Engineering authority plus executable Engineering Golden Path: controlled binary upload/server SHA-256, durable scan/parse/analysis jobs, structural PDF/XLSX/CSV/SVG/image parsing, exact qualification/policy routing, schema-bound + source-grounded model output, Findings/Evidence/Proposals/Conflicts, reviewed Garment Graph, semantic SVG authority, RBAC/OpenAPI/Product Master/Awaiting Action, and first governed accepted-proposal → canonical-command → appliedReference slice for Measurement/Material/Tech Pack/Operation Sequence. | 10, 12, 13, 17, 19.1, 20 | IMPLEMENTED/PARTIAL in PR; no direct AI canonical writes; scanner is integrity-only, PostgreSQL blob storage is MVP, live external qualification evidence, broader apply coverage/change impact and intended-live acceptance remain open; repository + PostgreSQL CI still required before DONE |
+| 2026-10-06 | PR #242 `feat/ai-product-engineering-authority` | Add evidence-first AI Product Engineering authority plus executable Engineering Golden Path: controlled binary upload/server SHA-256, durable scan/parse/analysis jobs, structural PDF/XLSX/CSV/SVG/image parsing, exact qualification/policy routing, schema-bound + source-grounded model output, Findings/Evidence/Proposals/Conflicts, reviewed Garment Graph, semantic SVG authority, RBAC/OpenAPI/Product Master/Awaiting Action, and first governed accepted-proposal → canonical-command → appliedReference slice for Measurement/Material/Tech Pack/Operation Sequence. | 10, 12, 13, 17, 19.1, 20 | IMPLEMENTED/PARTIAL in PR; no direct AI canonical writes; scanner is integrity-only, PostgreSQL blob storage is MVP, live external qualification evidence, broader apply coverage, direct impact evidence/high-risk blocking policy and intended-live acceptance remain open; repository + PostgreSQL CI still required before DONE |
 | 2026-08 | #106 | Non-destructive live Campaign → Collection acceptance | 7.2, 15 | merged; public HTTP + PostgreSQL acceptance |
 | 2026-08 | #107 | Repeatable owner bootstrap + isolated dev/test PostgreSQL clean-clone path | 2.3, 2.5 | merged; CI verified |
 | 2026-08 | #108 | Order currency frozen to submitted Selection lineage | 7.5 | merged; Verify/PostgreSQL CI |

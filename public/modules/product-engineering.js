@@ -72,6 +72,7 @@
       open: ['открыт', 'open'], resolved: ['решён', 'resolved'], ignored: ['принят как исключение', 'ignored'],
       draft: ['черновик', 'draft'], approved: ['утверждён', 'approved'],
       blocking: ['блокирует', 'blocking'], warning: ['внимание', 'warning'], info: ['информация', 'info'],
+      high: ['высокий риск', 'high risk'], medium: ['средний риск', 'medium risk'],
     };
     const pair = labels[value] || [value || '—', value || '—'];
     return text(pair[0], pair[1]);

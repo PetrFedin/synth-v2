@@ -106,3 +106,17 @@ test('partner bundle route is separate from full supplier passport route', async
   assert.deepEqual(await route.execute({ actorId: 'actor-1', params: ['SUP-01'], query: {} }), { schemaVersion: 'supplier-passport-partner-bundle-v1' });
   assert.deepEqual(calls, [['bundle','actor-1','SUP-01']]);
 });
+
+test('partner bundle identity hash ignores observation timestamps', async () => {
+  const reader = readerFor();
+  const firstService = createSupplierPassportService({ reader, clock: () => '2026-10-06T12:00:00.000Z' });
+  const secondService = createSupplierPassportService({ reader, clock: () => '2026-10-06T12:05:00.000Z' });
+  const first = await firstService.getPartnerBundleForActor('actor-1', 'SUP-01');
+  const second = await secondService.getPartnerBundleForActor('actor-1', 'SUP-01');
+
+  assert.notEqual(first.generatedAt, second.generatedAt);
+  assert.notEqual(first.qualification.asOf, second.qualification.asOf);
+  assert.equal(first.hashScope, 'stable-evidence-v1');
+  assert.equal(second.hashScope, 'stable-evidence-v1');
+  assert.equal(first.bundleSha256, second.bundleSha256);
+});

@@ -19,7 +19,7 @@ const PROPOSAL_RESOLVE = bodyContract(['expectedVersion', 'decision', 'note']);
 const CONFLICT_CREATE = bodyContract(['conflictType', 'subject', 'candidates', 'severity']);
 const CONFLICT_RESOLVE = bodyContract(['expectedVersion', 'disposition', 'resolution']);
 const DRAWING_CREATE = bodyContract(['styleVersionId', 'analysisRunId', 'viewType', 'svg']);
-const DRAWING_OBJECT = bodyContract(['objectType', 'semanticCode', 'geometry', 'linkPayload', 'confidence']);
+const DRAWING_OBJECT = bodyContract(['objectType', 'semanticCode', 'garmentNodeId', 'geometry', 'linkPayload', 'confidence']);
 const SOURCE_CREATE = bodyContract(['kind','ingestMode','mediaType','originalName','sizeBytes','contentHash','storageRef','sourceUri','metadata']);
 const SOURCE_SCAN = bodyContract(['expectedVersion','status','engine','details']);
 const SOURCE_ADMIT = bodyContract(['expectedVersion','policyVersion']);
@@ -187,6 +187,7 @@ function validateDrawing(body) {
 function validateDrawingObject(body) {
   invariant(DRAWING_OBJECT_TYPES.includes(body.objectType), 'HTTP_BODY_FIELD_INVALID', 'objectType is invalid', { field: 'objectType', allowed: DRAWING_OBJECT_TYPES });
   if (body.semanticCode !== undefined && body.semanticCode !== null) nonEmpty(body.semanticCode, 'semanticCode');
+  optionalId(body.garmentNodeId, 'garmentNodeId');
   object(body.geometry, 'geometry');
   if (body.linkPayload !== undefined) object(body.linkPayload, 'linkPayload');
   probability(body.confidence, 'confidence');

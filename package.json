@@ -34,7 +34,8 @@
     "validate:kpi-methodology": "node scripts/validate-fashion-kpi.mjs",
     "validate:types": "node scripts/validate-types.mjs",
     "verify": "npm run validate:isolation && npm run validate:architecture && npm run validate:postgres && npm run validate:ui && npm run validate:design-system && npm run validate:ods-boundaries && npm run validate:i18n && npm run validate:mdm && npm run validate:kpi-methodology && npm run validate:types && npm test",
-    "verify:postgres": "npm run verify && npm run test:postgres && npm run smoke:runtime"
+    "verify:postgres": "npm run verify && npm run test:postgres && npm run smoke:runtime",
+    "bootstrap:engineering-model": "node scripts/run-with-env.mjs scripts/bootstrap-engineering-model.mjs"
   },
   "dependencies": {
     "pg": "8.13.1"

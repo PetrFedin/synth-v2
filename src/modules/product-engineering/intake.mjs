@@ -105,6 +105,17 @@ export function createEngineeringFragment({
   });
 }
 
+export function queueSourceParsing(source,{queuedAt,queuedBy}) {
+  invariant(source?.status==='admitted','ENGINEERING_SOURCE_NOT_ADMITTED','Only admitted source can be queued for parsing');
+  invariant(source.parseStatus==='pending','ENGINEERING_SOURCE_PARSE_STATE_INVALID','Source is not pending parsing');
+  return deepFreeze({
+    ...source,
+    parseStatus:'queued',
+    metadata:deepFreeze({...source.metadata,parseQueue:{queuedAt:time(queuedAt,'ENGINEERING_SOURCE_TIME_INVALID'),queuedBy:actor(queuedBy)}}),
+    version:source.version+1,
+  });
+}
+
 export function completeSourceParsing(source,{completedAt,parser,parserVersion,fragmentCount}) {
   invariant(source?.status==='admitted','ENGINEERING_SOURCE_NOT_ADMITTED','Only admitted source can complete parsing');
   invariant(source.parseStatus==='pending'||source.parseStatus==='queued','ENGINEERING_SOURCE_PARSE_STATE_INVALID','Source is not awaiting parsing');

@@ -38,6 +38,10 @@ export function createPostgresProductEngineeringStore(options = {}) {
       const result = await pool.query('SELECT * FROM technical_drawing_versions WHERE id = $1', [id]);
       return result.rows[0] ? mapDrawing(result.rows[0]) : undefined;
     },
+    async getDrawingObjects(drawingId) {
+      const result = await pool.query('SELECT * FROM technical_drawing_objects WHERE drawing_id = $1 ORDER BY created_at, id', [drawingId]);
+      return result.rows.map(mapDrawingObject);
+    },
     async getSource(id) {
       const result = await pool.query('SELECT * FROM product_engineering_sources WHERE id = $1', [id]);
       return result.rows[0] ? mapSource(result.rows[0]) : undefined;
@@ -164,6 +168,10 @@ function transactionView(client) {
     async getDrawingForUpdate(id) {
       const result = await client.query('SELECT * FROM technical_drawing_versions WHERE id = $1 FOR UPDATE', [id]);
       return result.rows[0] ? mapDrawing(result.rows[0]) : undefined;
+    },
+    async getDrawingObjects(drawingId) {
+      const result = await client.query('SELECT * FROM technical_drawing_objects WHERE drawing_id = $1 ORDER BY created_at, id', [drawingId]);
+      return result.rows.map(mapDrawingObject);
     },
     async getSourceForUpdate(id) {
       const result = await client.query('SELECT * FROM product_engineering_sources WHERE id = $1 FOR UPDATE', [id]);
@@ -374,12 +382,13 @@ function transactionView(client) {
     async insertDrawingObject(value) {
       await client.query(
         `INSERT INTO technical_drawing_objects
-          (id, drawing_id, brand_id, style_id, object_type, semantic_code, geometry, link_payload,
+          (id, drawing_id, brand_id, style_id, object_type, semantic_code, garment_node_id, geometry, link_payload,
            confidence, created_at, created_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9,$10,$11)`,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10,$11,$12)`,
         [
           value.id, value.drawingId, value.brandId, value.styleId, value.objectType, value.semanticCode,
-          JSON.stringify(value.geometry), JSON.stringify(value.linkPayload), value.confidence, value.createdAt, value.createdBy,
+          value.garmentNodeId, JSON.stringify(value.geometry), JSON.stringify(value.linkPayload),
+          value.confidence, value.createdAt, value.createdBy,
         ],
       );
     },
@@ -480,6 +489,15 @@ function mapConflict(row) {
     conflictType: row.conflict_type, subject: row.subject, candidates: deepFreeze(row.candidates),
     severity: row.severity, status: row.status, resolution: row.resolution === null ? null : deepFreeze(row.resolution),
     createdAt: iso(row.created_at), createdBy: row.created_by, resolvedAt: iso(row.resolved_at), resolvedBy: row.resolved_by, version: row.version,
+  });
+}
+
+function mapDrawingObject(row) {
+  return Object.freeze({
+    id: row.id, drawingId: row.drawing_id, brandId: row.brand_id, styleId: row.style_id,
+    objectType: row.object_type, semanticCode: row.semantic_code, garmentNodeId: row.garment_node_id ?? null,
+    geometry: deepFreeze(row.geometry ?? {}), linkPayload: deepFreeze(row.link_payload ?? {}),
+    confidence: numberOrNull(row.confidence), createdAt: iso(row.created_at), createdBy: row.created_by,
   });
 }
 

@@ -261,7 +261,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
   const productEngineering = Object.freeze({
     ...base.productEngineering,
     ...createProductEngineeringProposalApplyService({
-      productEngineering,
+      productEngineering: base.productEngineering,
       measurements: base.measurements,
       materials: base.materials,
       techPacks: base.techPacks,

@@ -192,7 +192,8 @@ ERP/EDI ритейлера; расширенное планирование ас
 * format-aware evidence grounding: PDF page обязан существовать в parsed fragments; XLSX/CSV range обязан лежать внутри распарсенного диапазона листа; image/SVG region валидируется как normalized geometry;
 * persisted/reviewed Garment Graph + nodes/edges, выведенный в Product Master;
 * AI результат остаётся proposal/evidence layer и не пишет напрямую canonical Product/BOM/Measurement/Tech Pack;
-* первый governed apply slice: accepted proposal → allowlisted canonical service command → appliedReference для Measurement Chart / Material Specification / Tech Pack Revision / Operation Sequence; обязательны proposal+canonical expectedVersion, generic patch/SQL отсутствуют, crash recovery идемпотентен.
+* первый governed apply slice: accepted proposal → allowlisted canonical service command → appliedReference для Measurement Chart / Material Specification / Tech Pack Revision / Operation Sequence; обязательны proposal+canonical expectedVersion, generic patch/SQL отсутствуют, crash recovery идемпотентен;
+* deterministic pre-apply Change Impact Preview: фиксированная policy + exact StyleVersion readiness context; direct dependencies помечаются `observed`, bounded inference — `derived`, непрочитанные authority — `not_available`, а не ложным нулём.
 
 **Ещё не встроено / нельзя считать production-ready:**
 
@@ -203,7 +204,7 @@ ERP/EDI ритейлера; расширенное планирование ас
 * live qualification benchmark artefact + accepted external model endpoint для exact provider/model/prompt/schema;
 * calibrated POM extraction; абсолютные размеры из некалиброванного фото должны оставаться UNKNOWN;
 * deterministic grading intelligence поверх существующих `grade_steps`, не LLM-generated generic increments;
-* расширить reviewed apply adapters на BOM / Product Identity / Sample / Colour и добавить полноценный pre-apply change-impact для high-risk изменений;
+* расширить reviewed apply adapters на BOM / Product Identity / Sample / Colour; Change Impact v1 уже есть, но нужно добавить direct readers для Cost / Commercial Publication / Cutting / Inline Quality и blocking reviewer policy для high-risk apply;
 * automatic evidence-grounded Technical Flat generation;
 * sample/factory correction learning loop и change-impact по Measurements/BOM/Tech Pack/Sourcing/Production/Cost;
 * production knowledge corpus с citations/qualification.

@@ -26,6 +26,7 @@ test('product engineering routes expose evidence-first workflow',async()=>{
     ['POST','/v2/product-engineering/analyses/analysis-1/start',{}],
     ['POST','/v2/product-engineering/analyses/analysis-1/findings',{body:{findingType:'closure.type',origin:'ai_inferred',value:{code:'DB'},confidence:.9,evidence:[{sourceKind:'product_media',sourceId:'m1',sourceLocator:{page:1}}]}}],
     ['POST','/v2/product-engineering/analyses/analysis-1/proposals',{body:{targetAuthority:'product_identity',targetField:'technical.closure',proposedValue:{code:'DB'}}}],
+    ['GET','/v2/product-engineering/proposals/proposal-1/impact',{}],
     ['POST','/v2/product-engineering/proposals/proposal-1/apply',{body:{expectedProposalVersion:2,expectedCanonicalVersion:7}}],
     ['POST','/v2/product-engineering/analyses/analysis-1/conflicts',{body:{conflictType:'measurement.value',subject:'CHEST M',candidates:[55,56],severity:'blocking'}}],
     ['POST','/v2/product/styles/style-1/engineering/drawings',{body:{viewType:'front',svg:'<svg viewBox="0 0 10 10"></svg>'}}],
@@ -39,7 +40,7 @@ test('product engineering routes expose evidence-first workflow',async()=>{
   assert.deepEqual(calls.map(row=>row[0]),[
     'registerSource','getSourceForActor','recordSourceScan','admitSource','addSourceFragment','completeSourceParsing',
     'requestAnalysis','getStyleWorkspaceForActor','getAnalysisWorkspaceForActor','startAnalysis',
-    'recordFinding','createProposal','applyProposal','createConflict','createDrawing',
+    'recordFinding','createProposal','getProposalImpactForActor','applyProposal','createConflict','createDrawing',
   ]);
 });
 
@@ -68,6 +69,7 @@ test('OpenAPI documents engineering review and every mutation carries idempotenc
     '/product-engineering/analyses/{analysisRunId}/findings',
     '/product-engineering/analyses/{analysisRunId}/proposals',
     '/product-engineering/proposals/{proposalId}/resolve',
+    '/product-engineering/proposals/{proposalId}/impact',
     '/product-engineering/proposals/{proposalId}/apply',
     '/product-engineering/analyses/{analysisRunId}/conflicts',
     '/product-engineering/conflicts/{conflictId}/resolve',
@@ -85,6 +87,8 @@ test('OpenAPI documents engineering review and every mutation carries idempotenc
   assert.deepEqual(spec.components.schemas.ProductEngineeringProposalResolve.properties.decision.enum,['accepted','rejected']);
   assert.deepEqual(spec.components.schemas.ProductEngineeringProposalApply.required,['expectedProposalVersion','expectedCanonicalVersion']);
   assert.equal(spec.paths['/product-engineering/proposals/{proposalId}/apply'].post.operationId,'applyProductEngineeringProposal');
+  assert.equal(spec.paths['/product-engineering/proposals/{proposalId}/impact'].get.operationId,'getProductEngineeringProposalImpact');
+  assert.equal(spec.paths['/product-engineering/proposals/{proposalId}/impact'].get.parameters.some(parameter=>parameter.name==='Idempotency-Key'),false);
 });
 
 

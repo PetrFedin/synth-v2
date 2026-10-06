@@ -4,6 +4,7 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import { createHttpOutboxPublisher } from './infrastructure/http-outbox-publisher.mjs';
+import { createJsonModelGatewayProvider } from './infrastructure/json-model-gateway-provider.mjs';
 import { migratePostgres, waitForPostgres } from './infrastructure/postgres-migrator.mjs';
 import { createOperationalMetricsHandler } from './http/operational-metrics-handler.mjs';
 import { createPostgresWholesaleRuntime } from './runtime/postgres-runtime.mjs';
@@ -22,6 +23,13 @@ const outboxWebhookUrl = process.env.SYNTHA_OUTBOX_WEBHOOK_URL?.trim() || undefi
 const outboxWebhookSecret = secretSetting('SYNTHA_OUTBOX_WEBHOOK_SECRET');
 if (Boolean(outboxWebhookUrl) !== Boolean(outboxWebhookSecret)) {
   throw new Error('SYNTHA_OUTBOX_WEBHOOK_URL and SYNTHA_OUTBOX_WEBHOOK_SECRET must be configured together');
+}
+
+const engineeringGatewayUrl = process.env.SYNTHA_ENGINEERING_MODEL_GATEWAY_URL?.trim() || undefined;
+const engineeringGatewayToken = secretSetting('SYNTHA_ENGINEERING_MODEL_GATEWAY_TOKEN');
+const engineeringGatewayProvider = process.env.SYNTHA_ENGINEERING_MODEL_GATEWAY_PROVIDER?.trim() || 'syntha-gateway';
+if (Boolean(engineeringGatewayUrl) !== Boolean(engineeringGatewayToken)) {
+  throw new Error('SYNTHA_ENGINEERING_MODEL_GATEWAY_URL and SYNTHA_ENGINEERING_MODEL_GATEWAY_TOKEN must be configured together');
 }
 
 const metricsEnabled = booleanSetting('SYNTHA_METRICS_ENABLED', false);
@@ -80,6 +88,9 @@ const settings = Object.freeze({
   authAuditRetentionMs: integerSetting('SYNTHA_AUTH_AUDIT_RETENTION_MS', 90 * DAY_MS, DAY_MS, 31_536_000_000),
   throttleRetentionMs: integerSetting('SYNTHA_AUTH_THROTTLE_RETENTION_MS', 7 * DAY_MS, DAY_MS, 31_536_000_000),
   outboxRetentionMs: integerSetting('SYNTHA_OUTBOX_RETENTION_MS', 30 * DAY_MS, DAY_MS, 31_536_000_000),
+  engineeringGatewayUrl,
+  engineeringGatewayToken,
+  engineeringGatewayProvider,
   metricsEnabled,
   metricsToken: metricsEnabled ? metricsToken : undefined,
   metricsCacheTtlMs: integerSetting('SYNTHA_METRICS_CACHE_TTL_MS', 5_000, 100, 60_000),
@@ -141,8 +152,15 @@ try {
     timeoutMs: settings.outboxWebhookTimeoutMs,
     allowInsecureLocalhost: settings.outboxAllowInsecureLocalhost,
   }) : undefined;
+  const engineeringModelProviders = settings.engineeringGatewayUrl ? {
+    [settings.engineeringGatewayProvider]: createJsonModelGatewayProvider({
+      endpoint: settings.engineeringGatewayUrl,
+      token: settings.engineeringGatewayToken,
+    }),
+  } : {};
   const runtime = createPostgresWholesaleRuntime({
     pool,
+    engineeringModelProviders,
     migrationsDir,
     sessionTtlMs: settings.sessionTtlMs,
     maxLoginFailures: settings.maxLoginFailures,

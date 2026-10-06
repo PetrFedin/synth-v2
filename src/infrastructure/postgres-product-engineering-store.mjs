@@ -264,6 +264,40 @@ function transactionView(client) {
       );
     },
 
+    async insertGarmentGraph(value) {
+      await client.query(
+        `INSERT INTO product_engineering_garment_graphs
+          (id,analysis_run_id,brand_id,style_id,schema_version,status,content_hash,node_count,edge_count,created_at,created_by,reviewed_at,reviewed_by,version)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+        [value.id,value.analysisRunId,value.brandId,value.styleId,value.schemaVersion,value.status,value.contentHash,value.nodeCount,value.edgeCount,value.createdAt,value.createdBy,value.reviewedAt,value.reviewedBy,value.version],
+      );
+    },
+    async insertGarmentNode(value) {
+      await client.query(
+        `INSERT INTO product_engineering_garment_nodes
+          (id,graph_id,brand_id,style_id,node_type,semantic_code,label,attributes,confidence,finding_id,created_at,created_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11,$12)`,
+        [value.id,value.graphId,value.brandId,value.styleId,value.nodeType,value.semanticCode,value.label,JSON.stringify(value.attributes),value.confidence,value.findingId,value.createdAt,value.createdBy],
+      );
+    },
+    async insertGarmentEdge(value) {
+      await client.query(
+        `INSERT INTO product_engineering_garment_edges
+          (id,graph_id,brand_id,style_id,from_node_id,to_node_id,relation,attributes,confidence,created_at,created_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11)`,
+        [value.id,value.graphId,value.brandId,value.styleId,value.fromNodeId,value.toNodeId,value.relation,JSON.stringify(value.attributes),value.confidence,value.createdAt,value.createdBy],
+      );
+    },
+    async reviewGarmentGraph(value, expectedVersion) {
+      const result=await client.query(
+        `UPDATE product_engineering_garment_graphs
+            SET status=$2,content_hash=$3,node_count=$4,edge_count=$5,reviewed_at=$6,reviewed_by=$7,version=$8
+          WHERE id=$1 AND version=$9 AND status='draft'`,
+        [value.id,value.status,value.contentHash,value.nodeCount,value.edgeCount,value.reviewedAt,value.reviewedBy,value.version,expectedVersion],
+      );
+      invariant(result.rowCount===1,'GARMENT_GRAPH_CONCURRENCY_CONFLICT','Garment graph changed concurrently',{graphId:value.id,expectedVersion});
+    },
+
     async insertAnalysisRun(value) {
       await client.query(
         `INSERT INTO product_engineering_analysis_runs

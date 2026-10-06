@@ -83,8 +83,10 @@
     const conflicts = data.conflicts.filter((row) => row.status === 'open').length;
     const blocking = data.conflicts.filter((row) => row.status === 'open' && row.severity === 'blocking').length;
     const approvedDrawings = data.drawings.filter((row) => row.status === 'approved').length;
+    const admittedSources = (data.sources ?? []).filter((row) => row.status === 'admitted').length;
     const row = el('div', { className: 'od-engineering-summary' });
     [
+      [text('Источники', 'Admitted sources'), admittedSources],
       [text('Анализы', 'Analyses'), data.analyses.length],
       [text('Предложения', 'Pending proposals'), pending],
       [text('Конфликты', 'Open conflicts'), conflicts],
@@ -136,6 +138,40 @@
       await mutate(`/v2/product-engineering/analyses/${encodeURIComponent(analysis.id)}/${action}`, {});
       invalidate(analysis.styleId);
     }, button);
+  }
+
+
+  function sourcesPanel(rows) {
+    const wrap = el('div', { className: 'stack' });
+    wrap.append(el('h4', { rawText: text('Источники и provenance', 'Sources & provenance') }));
+    if (!rows.length) {
+      wrap.append(notice(text(
+        'Управляемых источников пока нет. AI-анализ не должен использовать непроверенные файлы или произвольные внешние URL.',
+        'No governed sources yet. AI analysis must not use unadmitted files or arbitrary external URLs.',
+      )));
+      return wrap;
+    }
+    wrap.append(odMiniTable(
+      [
+        text('Источник', 'Source'),
+        text('Тип', 'Type'),
+        'SHA-256',
+        text('Безопасность', 'Security'),
+        text('Admission', 'Admission'),
+        text('Парсинг', 'Parsing'),
+        text('Фрагменты', 'Fragments'),
+      ],
+      rows.map((row) => [
+        row.originalName || row.id,
+        row.mediaType || row.kind,
+        row.contentHash ? `${row.contentHash.slice(0, 12)}…` : '—',
+        statusBadge(row.scanStatus),
+        statusBadge(row.status),
+        statusBadge(row.parseStatus),
+        String(row.fragmentCount ?? 0),
+      ]),
+    ));
+    return wrap;
   }
 
   function analysisPanel(product, rows, manage) {
@@ -319,7 +355,7 @@
       wrap.append(retry);
       return wrap;
     }
-    const data = holder.data || { analyses: [], proposals: [], conflicts: [], drawings: [] };
+    const data = holder.data || { analyses: [], proposals: [], conflicts: [], drawings: [], sources: [] };
     const manage = manageAllowed(product);
     const wrap = el('div', { className: 'stack od-engineering-workspace' });
     const guard = notice(text(
@@ -337,6 +373,7 @@
       wrap.append(actions);
     }
     wrap.append(
+      sourcesPanel(data.sources ?? []),
       conflictsPanel(product, data.conflicts, manage),
       proposalsPanel(product, data.proposals, manage),
       drawingsPanel(product, data.drawings, manage),

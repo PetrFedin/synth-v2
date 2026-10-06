@@ -254,9 +254,7 @@ async function executeWithTimeout(adapter, request, timeoutMs) {
     const timeout = new Promise((_, reject) => {
       timer = setTimeout(() => {
         controller.abort();
-        const error = new Error('AI model execution timed out');
-        error.code = 'AI_MODEL_TIMEOUT';
-        reject(error);
+        reject(Object.assign(new Error('AI model execution timed out'), { code: 'AI_MODEL_TIMEOUT', retryable: true }));
       }, timeoutMs);
     });
     return await Promise.race([adapter.execute(request, { signal: controller.signal }), timeout]);

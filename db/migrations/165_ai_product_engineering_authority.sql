@@ -5,13 +5,28 @@ BEGIN;
 -- Measurement, BOM, Tech Pack or Production truth. Human-approved changes still pass through those
 -- bounded-context commands and their existing database invariants.
 
+ALTER TABLE command_registry
+  DROP CONSTRAINT IF EXISTS command_registry_scope_check;
+ALTER TABLE command_registry
+  ADD CONSTRAINT command_registry_scope_check
+  CHECK (scope IN (
+    'wholesale', 'catalog', 'notification', 'product-identity', 'product-readiness',
+    'legal-entity', 'material-sourcing', 'compliance-document', 'product-certification',
+    'product-engineering'
+  ));
+
 CREATE TABLE product_engineering_commands (
   id text PRIMARY KEY,
   fingerprint text NOT NULL,
   actor_id text NOT NULL,
   result jsonb NOT NULL,
-  completed_at timestamptz NOT NULL
+  completed_at timestamptz NOT NULL,
+  CONSTRAINT product_engineering_commands_command_registry_fk
+    FOREIGN KEY (id) REFERENCES command_registry(id) ON DELETE RESTRICT
 );
+
+CREATE INDEX product_engineering_commands_completed_idx
+  ON product_engineering_commands (completed_at, id);
 
 CREATE TABLE ai_model_runs (
   id text PRIMARY KEY,

@@ -13,6 +13,7 @@
     // Карточка поставщика считалась целиком и не была видна нигде. Она живёт рядом с поставщиком по
     // той же причине, что и доступ к порталу: это факт об этом контрагенте.
     performance: null, performanceFor: null, performanceLoading: false,
+    passport: null, passportFor: null, passportLoading: false,
     // Route B (материал): тот же реестр поставщиков, тот же общий busyKey/generation — отдельные
     // только сами списки и выбор строки, ровно как materialRfqs/materialPurchaseOrders были
     // отдельными таблицами на бэкенде.
@@ -79,6 +80,7 @@
   function reset() {
     ui.suppliers = []; ui.rfqs = []; ui.boms = []; ui.loaded = false; ui.error = ''; ui.selectedSupplierCode = null;
     ui.selectedRfqCode = null; ui.referenceTime = null; ui.generation += 1;
+    ui.performance = null; ui.performanceFor = null; ui.passport = null; ui.passportFor = null;
     ui.materialRfqs = []; ui.materialPurchaseOrders = []; ui.selectedMaterialRfqCode = null; ui.selectedMaterialPurchaseOrderNumber = null;
   }
   async function fetchAllPages(path, request = api) {
@@ -272,11 +274,76 @@
       h('dl', { className: 'sourcing-details' }, [detail(text('Бренд', 'Brand'), brandName(supplier.brandId)), detail('Email', supplier.email), detail(text('Валюта', 'Currency'), supplier.currency), detail('Incoterms', supplier.incoterms.join(', ')), detail(text('Условия оплаты', 'Payment terms'), `${supplier.paymentTermsDays} ${text('дн.', 'days')}`), detail(text('Аудит до', 'Audit valid until'), formatDate(supplier.auditExpiresAt))]),
       supplier.suspensionReason ? h('div', { className: 'sourcing-warning', text: supplier.suspensionReason }) : null,
       h('div', { className: 'sourcing-actions' }, actions.map((action) => supplierActionButton(action, supplier))),
+      supplierPassportPanel(supplier),
       performancePanel(supplier),
       portalAccessPanel(supplier),
     ]);
   }
 
+  // Паспорт — это не редактируемая оценка поставщика, а проекция уже записанных sourcing/production/QC фактов.
+  function supplierPassportPanel(supplier) {
+    if (!can(supplier.brandId, caps.CAPABILITIES.MARGIN_READ)) return null;
+    if (ui.passportFor !== supplier.supplierCode && !ui.passportLoading) {
+      queueMicrotask(() => { void loadSupplierPassport(supplier.supplierCode); });
+    }
+    const passport = ui.passportFor === supplier.supplierCode ? ui.passport : null;
+    const body = [];
+    if (!passport) {
+      body.push(h('p', { className: 'muted', text: ui.passportLoading
+        ? text('Собираем паспорт из фактической истории…', 'Building passport from recorded history…')
+        : text('Паспорт пока недоступен.', 'Supplier passport is not available yet.') }));
+    } else {
+      const q = passport.qualification || {};
+      const trust = passport.trustDimensions || {};
+      const tone = q.state === 'current' ? 'ok' : q.state === 'expired' ? 'warning' : 'neutral';
+      body.push(h('div', { className: 'sourcing-passport-status' }, [
+        badge(q.state === 'current' ? text('Квалификация актуальна', 'Qualification current')
+          : q.state === 'expired' ? text('Аудит просрочен', 'Audit expired')
+          : text('Не квалифицирован', 'Not qualified'), tone),
+        h('span', { className: 'muted', text: text('Версия поставщика', 'Supplier version') + ': ' + (passport.lineage?.supplierVersion ?? '—') }),
+      ]));
+      body.push(h('dl', { className: 'sourcing-details' }, [
+        detail(text('В срок к QC', 'On time to QC'), passportDimension(trust.delivery)),
+        detail(text('Принято с первого раза', 'First-pass release'), passportDimension(trust.firstPassQuality)),
+        detail(text('Охват inline-контролем', 'Inline quality coverage'), passportDimension(trust.inlineCoverage)),
+        detail(text('Аудит действует до', 'Audit valid until'), formatDate(q.auditExpiresAt)),
+      ]));
+      body.push(h('p', { className: 'muted sourcing-passport-lineage', text: text(
+        'Источник: ' + (passport.lineage?.operationalSource || '—') + ' + ' + (passport.lineage?.economicsSource || '—') + '. Универсальный рейтинг не используется.',
+        'Sources: ' + (passport.lineage?.operationalSource || '—') + ' + ' + (passport.lineage?.economicsSource || '—') + '. No universal rating is used.'
+      ) }));
+      body.push(h('p', { className: 'muted sourcing-passport-generated', text: text(
+        'Снимок сформирован ' + formatDate(passport.generatedAt) + '. Отсутствие истории показывается как «—», а не как нулевой балл.',
+        'Snapshot generated ' + formatDate(passport.generatedAt) + '. Missing history is shown as “—”, not as a zero score.'
+      ) }));
+    }
+    return h('section', { className: 'sourcing-subpanel sourcing-passport' }, [
+      h('div', { className: 'sourcing-toolbar' }, [h('div', {}, [
+        h('p', { className: 'eyebrow', text: 'SUPPLIER PASSPORT' }),
+        h('h3', { text: text('Паспорт поставщика', 'Supplier passport') }),
+      ])]),
+      ...body,
+    ]);
+  }
+
+  function passportDimension(dimension) {
+    if (!dimension) return '—';
+    return share(dimension.valuePercent, String(dimension.numerator) + '/' + String(dimension.denominator));
+  }
+
+  async function loadSupplierPassport(supplierCode) {
+    if (ui.passportLoading) return;
+    ui.passportLoading = true;
+    try {
+      ui.passport = await api('/v2/suppliers/' + encodeURIComponent(supplierCode) + '/passport');
+    } catch (error) {
+      ui.passport = null;
+    } finally {
+      ui.passportFor = supplierCode;
+      ui.passportLoading = false;
+      renderApp();
+    }
+  }
   // Как эта фабрика работает — по нашим собственным данным, а не по нашему впечатлению.
   //
   // Every figure here is measured from what the platform already recorded: orders, delivery dates,

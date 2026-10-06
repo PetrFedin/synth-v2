@@ -23,7 +23,11 @@ const DRAWING_OBJECT = bodyContract(['objectType', 'semanticCode', 'geometry', '
 const SOURCE_KINDS = ['product_media','style_reference','document','spreadsheet','external_uri','manual_observation','sample'];
 const CONFLICT_SEVERITIES = ['info','warning','blocking'];
 
-export function createProductEngineeringRoutes({ productEngineering } = {}) {
+/**
+ * @param {{ productEngineering?: any }} [options]
+ */
+export function createProductEngineeringRoutes(options = {}) {
+  const { productEngineering } = options;
   const service = productEngineering ?? unavailableService();
   return Object.freeze([
     mutate('POST', /^\/v2\/product\/styles\/([^/]+)\/engineering\/analyses$/, ANALYSIS_CREATE, validateAnalysis, ({ commandId, actorId, params, body }) => service.requestAnalysis(commandId, actorId, params[0], body)),

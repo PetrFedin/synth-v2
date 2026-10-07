@@ -151,6 +151,16 @@
   // Экраны на общем рабочем пространстве (/v2/workspace): заказы, подборки, партнёры, шоурумы.
   registry.register(['orders', 'selections', 'partners', 'showrooms', 'styles'], () => reload());
 
+  // Operational Exceptions are projected into the existing Awaiting Action screen.
+  registry.register('awaiting-action', () => {
+    global.SynthaAwaitingAction?.refresh?.();
+    return Promise.resolve();
+  });
+  registry.registerTarget('awaiting-action', (route) => {
+    registry.clearRegistryFilters('awaiting-action');
+    OD_UI.selected['od-awaiting-action'] = route.entityId;
+  });
+
   // Выбор записи на тех же экранах (заказы, ассортименты, партнёры, шоурумы). Их реестры ключуются
   // идентификатором сущности (`item.id`), а строки читаются постранично, поэтому нужную запись при
   // необходимости дочитывают, а фильтры, которые могли её скрыть, снимают. Диалог правки заказа и

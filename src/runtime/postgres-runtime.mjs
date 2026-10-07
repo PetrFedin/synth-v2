@@ -11,6 +11,7 @@ import { createSourcingTechPackAllocationService } from '../application/sourcing
 import { createSupplierEconomicPerformanceService } from '../application/supplier-economic-performance-service.mjs';
 import { createProductEngineeringProposalApplyService } from '../application/product-engineering-proposal-apply-service.mjs';
 import { createSupplierPassportService } from '../application/supplier-passport-service.mjs';
+import { createSupplierTrustService } from '../application/supplier-trust-service.mjs';
 import { createPostgresFinalQualityReader } from '../infrastructure/postgres-final-quality-reader.mjs';
 import { createPostgresInlineQualityReader } from '../infrastructure/postgres-inline-quality-reader.mjs';
 import { createPostgresInlineQualityStore } from '../infrastructure/postgres-inline-quality-store.mjs';
@@ -56,6 +57,7 @@ import { createPostgresProductionRequirementStore } from '../infrastructure/post
 import { createPostgresProductionSourcingStore } from '../infrastructure/postgres-production-sourcing-store.mjs';
 import { createPostgresSourcingTechPackAllocationStore } from '../infrastructure/postgres-sourcing-tech-pack-allocation-store.mjs';
 import { createPostgresSupplierEconomicPerformanceReader } from '../infrastructure/postgres-supplier-economic-performance-reader.mjs';
+import { createPostgresSupplierTrustStore } from '../infrastructure/postgres-supplier-trust-store.mjs';
 import { createWholesaleHttpHandler } from '../http/api.mjs';
 import { createWholesaleFetchHandler } from '../http/fetch-api.mjs';
 import { createComplianceDocumentService } from '../application/compliance-document-service.mjs';
@@ -110,6 +112,15 @@ export function createPostgresWholesaleRuntime(options = {}) {
   const supplierPerformanceReader = createPostgresSupplierEconomicPerformanceReader({ pool: options.pool });
   const supplierPerformance = createSupplierEconomicPerformanceService({ reader: supplierPerformanceReader });
   const supplierPassport = createSupplierPassportService({ reader: supplierPerformanceReader, ...(options.clock ? { clock: options.clock } : {}) });
+  const supplierTrustStore = createPostgresSupplierTrustStore({ pool: options.pool });
+  const supplierTrust = createSupplierTrustService({
+    supplierPassport,
+    store: supplierTrustStore,
+    privateKeyB64: options.supplierTrustPrivateKeyB64,
+    issuerId: options.supplierTrustIssuerId ?? 'syntha-platform',
+    keyId: options.supplierTrustKeyId ?? 'syntha-supplier-trust-v1',
+    ...(options.clock ? { clock: options.clock } : {}),
+  });
 
   const productionRequirementStore = createPostgresProductionRequirementStore({ pool: options.pool });
   const productionRequirements = createProductionRequirementService({
@@ -340,6 +351,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
     supplierRecovery,
     supplierPerformance,
     supplierPassport,
+    supplierTrust,
     materials: base.materials,
     boms: base.boms,
     measurements: base.measurements,
@@ -398,6 +410,8 @@ export function createPostgresWholesaleRuntime(options = {}) {
     supplierPerformanceReader,
     supplierPerformance,
     supplierPassport,
+    supplierTrustStore,
+    supplierTrust,
     sourcingTechPackAllocationStore: allocationStore,
     productionSourcingStore,
     sourcing,

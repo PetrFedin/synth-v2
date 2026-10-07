@@ -93,6 +93,9 @@ const settings = Object.freeze({
   engineeringGatewayProvider,
   metricsEnabled,
   metricsToken: metricsEnabled ? metricsToken : undefined,
+  supplierTrustPrivateKeyB64: secretSetting('SYNTHA_SUPPLIER_TRUST_PRIVATE_KEY_B64'),
+  supplierTrustIssuerId: process.env.SYNTHA_SUPPLIER_TRUST_ISSUER_ID?.trim() || 'syntha-platform',
+  supplierTrustKeyId: process.env.SYNTHA_SUPPLIER_TRUST_KEY_ID?.trim() || 'syntha-supplier-trust-v1',
   metricsCacheTtlMs: integerSetting('SYNTHA_METRICS_CACHE_TTL_MS', 5_000, 100, 60_000),
   requestTimeoutMs: integerSetting('SYNTHA_HTTP_REQUEST_TIMEOUT_MS', 30_000, 1_000, 300_000),
   headersTimeoutMs: integerSetting('SYNTHA_HTTP_HEADERS_TIMEOUT_MS', 15_000, 1_000, 300_000),
@@ -185,6 +188,9 @@ try {
     throttleRetentionMs: settings.throttleRetentionMs,
     outboxRetentionMs: settings.outboxRetentionMs,
     operationalReadiness: () => healthRegistry.check(),
+    supplierTrustPrivateKeyB64: settings.supplierTrustPrivateKeyB64,
+    supplierTrustIssuerId: settings.supplierTrustIssuerId,
+    supplierTrustKeyId: settings.supplierTrustKeyId,
   });
   // Один замер на старте и дальше по циклу обслуживания. Без него запуск с тысячей ждущих событий
   // и запуск с пустой очередью выглядят в журнале одинаково.

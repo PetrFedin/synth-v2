@@ -17,6 +17,46 @@ export function createSupplierPassportService(options = {}) {
       const passport = await this.getSupplierPassportForActor(actorId, supplierCode);
       return buildPartnerBundle(passport);
     },
+    async assertManageForActor(actorId, supplierCode) {
+      invariant(typeof actorId === 'string' && actorId.length > 0, 'ACTOR_ID_REQUIRED', 'Actor id is required');
+      invariant(typeof supplierCode === 'string' && supplierCode.length > 0, 'SUPPLIER_CODE_REQUIRED', 'Supplier code is required');
+      return reader.transaction(async (tx) => {
+        const supplier = requireEntity(await tx.getSupplierByCode(supplierCode), 'SUPPLIER_NOT_FOUND', { supplierCode });
+        const membership = await tx.getMembership(supplier.brandId, actorId);
+        assertCapability(membership, CAPABILITIES.SUPPLIER_MANAGE);
+        invariant(membership.organisationType === 'brand', 'SUPPLIER_TRUST_BRAND_MEMBERSHIP_REQUIRED', 'Supplier trust management requires a brand membership', { supplierCode, brandId: supplier.brandId });
+        return Object.freeze({ supplierCode: supplier.supplierCode, brandId: supplier.brandId });
+      });
+    },
+    async getPartnerBundleForSystem(supplierCode) {
+      invariant(typeof supplierCode === 'string' && supplierCode.length > 0, 'SUPPLIER_CODE_REQUIRED', 'Supplier code is required');
+      return reader.transaction(async (tx) => {
+        const supplier = requireEntity(await tx.getSupplierByCode(supplierCode), 'SUPPLIER_NOT_FOUND', { supplierCode });
+        const operational = requireEntity(
+          await tx.getOperationalPerformance(supplier.brandId, supplier.supplierCode),
+          'SUPPLIER_PERFORMANCE_READ_MODEL_MISSING',
+          { supplierCode, brandId: supplier.brandId },
+        );
+        invariant(
+          operational.supplierId === supplier.id
+            && operational.brandId === supplier.brandId
+            && operational.supplierCode === supplier.supplierCode,
+          'SUPPLIER_PASSPORT_LINEAGE_MISMATCH',
+          'Supplier passport performance belongs to another supplier',
+          { supplierCode },
+        );
+        const economicsByCurrency = await tx.listFailureEconomics(supplier.brandId, supplier.supplierCode);
+        for (const row of economicsByCurrency) {
+          invariant(
+            row.brandId === supplier.brandId && row.supplierCode === supplier.supplierCode,
+            'SUPPLIER_PASSPORT_ECONOMIC_LINEAGE_MISMATCH',
+            'Supplier passport economics belongs to another supplier',
+            { supplierCode, currency: row.currency },
+          );
+        }
+        return buildPartnerBundle(buildPassport({ supplier, operational, economicsByCurrency, asOf: iso(clock()) }));
+      });
+    },
     getSupplierPassportForActor(actorId, supplierCode) {
       invariant(typeof actorId === 'string' && actorId.length > 0, 'ACTOR_ID_REQUIRED', 'Actor id is required');
       invariant(typeof supplierCode === 'string' && supplierCode.length > 0, 'SUPPLIER_CODE_REQUIRED', 'Supplier code is required');
@@ -229,9 +269,24 @@ function buildPartnerBundle(passport) {
       issuer: null,
     },
   };
+  const hashPayload = {
+    schemaVersion: canonical.schemaVersion,
+    supplier: canonical.supplier,
+    qualification: {
+      state: canonical.qualification.state,
+      auditState: canonical.qualification.auditState,
+      auditExpiresAt: canonical.qualification.auditExpiresAt,
+    },
+    evidenceDimensions: canonical.evidenceDimensions,
+    evidenceCounters: canonical.evidenceCounters,
+    lineage: canonical.lineage,
+    disclosureBoundary: canonical.disclosureBoundary,
+    signature: canonical.signature,
+  };
   return Object.freeze({
     ...canonical,
-    bundleSha256: crypto.createHash('sha256').update(stable(canonical)).digest('hex'),
+    hashScope: 'stable-evidence-v1',
+    bundleSha256: crypto.createHash('sha256').update(stable(hashPayload)).digest('hex'),
   });
 }
 

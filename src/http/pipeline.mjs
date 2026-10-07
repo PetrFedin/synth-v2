@@ -74,6 +74,18 @@ export function createWholesaleRequestPipeline({ authenticate, auth, readiness, 
       const body = assertBodyContract(await readJson(request), ACCEPT_INVITE_BODY);
       return { status: 200, payload: { data: await services.team.acceptInvite(body), requestId } };
     }
+    if (method === 'GET' && url.pathname === '/v2/public/supplier-trust/public-key') {
+      assertEmptyQuery(url);
+      invariant(services.supplierTrust?.publicKeyDocument, 'SUPPLIER_TRUST_SERVICE_REQUIRED', 'Supplier trust service is required');
+      return { status: 200, payload: { data: services.supplierTrust.publicKeyDocument(), requestId } };
+    }
+    if (method === 'POST' && url.pathname === '/v2/public/supplier-trust/verify') {
+      assertEmptyQuery(url);
+      invariant(services.supplierTrust?.verify, 'SUPPLIER_TRUST_SERVICE_REQUIRED', 'Supplier trust service is required');
+      const body = await readJson(request);
+      invariant(body?.envelope && typeof body.envelope === 'object' && !Array.isArray(body.envelope), 'HTTP_BODY_FIELD_INVALID', 'envelope is required', { field: 'envelope' });
+      return { status: 200, payload: { data: await services.supplierTrust.verify(body.envelope), requestId } };
+    }
     invariant(url.pathname.startsWith('/v2/'), 'HTTP_ROUTE_NOT_FOUND', 'Route not found', { method, path: url.pathname });
     const identity = await authenticateBearer(request);
     if (method === 'GET' && url.pathname === '/v2/auth/me') {

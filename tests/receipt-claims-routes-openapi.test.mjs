@@ -35,7 +35,7 @@ test('receipt claim transport rejects monetary or issue-line mutation fields', (
 });
 
 test('authoritative OpenAPI exposes claim snapshots without version drift or settlement coupling', () => {
-  assert.equal(wholesaleV2ExtendedOpenApi.info.version, '1.17.0');
+  assert.equal(wholesaleV2ExtendedOpenApi.info.version, '1.18.0');
   for (const path of [
     '/receipt-discrepancies/{receiptDiscrepancySnapshotId}/claims',
     '/receipt-claims/{claimSnapshotId}',

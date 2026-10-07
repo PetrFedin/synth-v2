@@ -1739,3 +1739,14 @@ P1 then adds Fit Review, governed 3D sample assets, Selection draft revision/dif
 
 Status: **PARTIAL / DOMAIN FOUNDATION ONLY**. It must not be represented as user-visible or production-proven until PostgreSQL, application service, HTTP/OpenAPI, ODS UI, Awaiting Action, Calendar and live acceptance layers are added and verified.
 
+### 2026-10-07 CI reconciliation on PR #244
+
+After rebasing the adoption branch onto `main@af135bcf8e79aea739019b172395c4f25d653778`, the first fresh Verify run exposed two classes of contract drift already present on current main plus one new test-style mismatch:
+
+- authoritative composed OpenAPI is intentionally `1.18.0`, while 18 regression tests still pinned `1.17.0`; those tests are updated to the current authoritative contract version without changing API behavior;
+- Supplier Passport added the partner-bundle route before the full passport route, so a test that destructured the first route became order-dependent; it now selects the route by path pattern;
+- Operational Control error tests now assert the existing `DomainError.code` contract instead of searching the human message text for the code;
+- the shared RU/EN status dictionary now includes the five new Operational Exception states required by the repository-wide status-label invariant.
+
+These are verification repairs only. They do not add persistence/API/UI authority to Operational Control.
+

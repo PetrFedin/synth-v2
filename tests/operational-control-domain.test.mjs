@@ -25,8 +25,8 @@ const orderRef = () => operationalEntityReference({ type: 'order', id: 'order-1'
 test('operational entity references pin supported identity, version and hash', () => {
   const ref = orderRef();
   assert.deepEqual(ref, { type: 'order', id: 'order-1', version: 3, contentHash: 'a'.repeat(64) });
-  assert.throws(() => operationalEntityReference({ type: 'unknown', id: 'x' }), /OPERATIONAL_ENTITY_TYPE_INVALID/);
-  assert.throws(() => operationalEntityReference({ type: 'order', id: 'x', contentHash: 'bad' }), /OPERATIONAL_ENTITY_HASH_INVALID/);
+  assert.throws(() => operationalEntityReference({ type: 'unknown', id: 'x' }), { code: 'OPERATIONAL_ENTITY_TYPE_INVALID' });
+  assert.throws(() => operationalEntityReference({ type: 'order', id: 'x', contentHash: 'bad' }), { code: 'OPERATIONAL_ENTITY_HASH_INVALID' });
 });
 
 test('entity thread normalises participants and always includes the owner organisation', () => {
@@ -70,11 +70,11 @@ test('only participating organisations can append messages and archived/resolved
   assert.deepEqual(message.evidenceRefs, ['doc-1', 'doc-2']);
   assert.throws(() => appendEntityThreadMessage({
     id: 'message-2', thread, authorOrganisationId: 'other-1', authorId: 'x', body: 'No', createdAt: at(7, 11),
-  }), /ENTITY_THREAD_PARTICIPANT_REQUIRED/);
+  }), { code: 'ENTITY_THREAD_PARTICIPANT_REQUIRED' });
   const resolved = resolveEntityThread(thread, { resolvedBy: 'sales-1', resolvedAt: at(7, 12) });
   assert.throws(() => appendEntityThreadMessage({
     id: 'message-3', thread: resolved, authorOrganisationId: 'brand-1', authorId: 'sales-1', body: 'Late', createdAt: at(7, 13),
-  }), /ENTITY_THREAD_NOT_OPEN/);
+  }), { code: 'ENTITY_THREAD_NOT_OPEN' });
   const archived = archiveEntityThread(resolved, { archivedBy: 'sales-1', archivedAt: at(7, 14) });
   assert.equal(archived.status, 'archived');
 });
@@ -113,7 +113,7 @@ test('decisions are immutable records pinned to the same stable entity as their 
     decidedBy: 'buyer-1',
     decidedByOrganisationId: 'shop-1',
     decidedAt: at(7, 16),
-  }), /DECISION_ENTITY_THREAD_MISMATCH/);
+  }), { code: 'DECISION_ENTITY_THREAD_MISMATCH' });
   assert.equal(sameEntityIdentity(thread.entity, decision.entity), true);
 });
 
@@ -147,7 +147,7 @@ test('operational exception requires a future due date, owner role, thread and r
     recoveryAction: 'Replan.',
     openedBy: 'system',
     openedAt: at(7),
-  }), /OPERATIONAL_EXCEPTION_DUE_NOT_AFTER_OPEN/);
+  }), { code: 'OPERATIONAL_EXCEPTION_DUE_NOT_AFTER_OPEN' });
 });
 
 test('exception lifecycle supports assignment, waiting, escalation and resolution without destructive overwrite', () => {
@@ -175,7 +175,7 @@ test('exception lifecycle supports assignment, waiting, escalation and resolutio
   assert.equal(escalated.escalationCount, 1);
   assert.equal(isOperationalExceptionBlocking(resolved), false);
   assert.equal(closed.state, 'closed');
-  assert.throws(() => assignOperationalException(resolved, { ownerUserId: 'x', assignedBy: 'x', assignedAt: at(8, 12) }), /OPERATIONAL_EXCEPTION_NOT_ACTIVE/);
+  assert.throws(() => assignOperationalException(resolved, { ownerUserId: 'x', assignedBy: 'x', assignedAt: at(8, 12) }), { code: 'OPERATIONAL_EXCEPTION_NOT_ACTIVE' });
 });
 
 test('accepted risk requires an explicit decision and stops the exception from blocking', () => {
@@ -217,6 +217,6 @@ test('open exceptions cannot be closed directly', () => {
     openedBy: 'sales-1',
     openedAt: at(7),
   });
-  assert.throws(() => closeOperationalException(opened, { closedBy: 'sales-1', closedAt: at(8) }), /OPERATIONAL_EXCEPTION_NOT_CLOSABLE/);
+  assert.throws(() => closeOperationalException(opened, { closedBy: 'sales-1', closedAt: at(8) }), { code: 'OPERATIONAL_EXCEPTION_NOT_CLOSABLE' });
   assert.equal(isOperationalExceptionBlocking(opened), false);
 });

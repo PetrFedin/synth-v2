@@ -10,7 +10,7 @@ export function createSupplierPassportRoutes({ supplierPassport } = {}) {
       mutation: false,
       execute(context) {
         assertQueryContract(context.query ?? {}, []);
-        return service.getPartnerBundleForActor(context.actorId, context.params[0]);
+        return service.getPartnerBundleForActor(context.actorId, String(context.params?.[0] ?? ''));
       },
     }),
     Object.freeze({
@@ -19,7 +19,7 @@ export function createSupplierPassportRoutes({ supplierPassport } = {}) {
       mutation: false,
       execute(context) {
         assertQueryContract(context.query ?? {}, []);
-        return service.getSupplierPassportForActor(context.actorId, context.params[0]);
+        return service.getSupplierPassportForActor(context.actorId, String(context.params?.[0] ?? ''));
       },
     }),
   ]);

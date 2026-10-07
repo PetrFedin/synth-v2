@@ -412,5 +412,8 @@
   }
   if (typeof global.addEventListener === 'function') global.addEventListener('syntha:mutated', onMutated);
 
-  global.SynthaAwaitingAction.refresh = () => { void refreshCounters(); if (state.view === VIEW) void loadList(true); };
+  global.SynthaAwaitingAction.refresh = async () => {
+    await refreshCounters();
+    if (state.view === VIEW) await loadList(true);
+  };
 })(window);

@@ -10,9 +10,45 @@ export function createSupplierPassportService({ reader, clock = () => new Date()
   invariant(reader && typeof reader.transaction === 'function', 'SUPPLIER_PASSPORT_READER_REQUIRED', 'Supplier passport reader is required');
   invariant(typeof clock === 'function', 'SUPPLIER_PASSPORT_CLOCK_REQUIRED', 'Supplier passport clock is required');
 
+  const getSupplierPassportForActor = (actorId, supplierCode) => {
+    invariant(typeof actorId === 'string' && actorId.length > 0, 'ACTOR_ID_REQUIRED', 'Actor id is required');
+    invariant(typeof supplierCode === 'string' && supplierCode.length > 0, 'SUPPLIER_CODE_REQUIRED', 'Supplier code is required');
+
+    return reader.transaction(async (tx) => {
+      const supplier = requireEntity(await tx.getSupplierByCode(supplierCode), 'SUPPLIER_NOT_FOUND', { supplierCode });
+      const membership = await tx.getMembership(supplier.brandId, actorId);
+      assertCapability(membership, CAPABILITIES.MARGIN_READ);
+      invariant(membership.organisationType === 'brand', 'SUPPLIER_PASSPORT_BRAND_MEMBERSHIP_REQUIRED', 'Supplier passport requires a brand membership', { supplierCode, brandId: supplier.brandId });
+
+      const operational = requireEntity(
+        await tx.getOperationalPerformance(supplier.brandId, supplier.supplierCode),
+        'SUPPLIER_PERFORMANCE_READ_MODEL_MISSING',
+        { supplierCode, brandId: supplier.brandId },
+      );
+      invariant(
+        operational.supplierId === supplier.id
+          && operational.brandId === supplier.brandId
+          && operational.supplierCode === supplier.supplierCode,
+        'SUPPLIER_PASSPORT_LINEAGE_MISMATCH',
+        'Supplier passport performance belongs to another supplier',
+        { supplierCode },
+      );
+      const economicsByCurrency = await tx.listFailureEconomics(supplier.brandId, supplier.supplierCode);
+      for (const row of economicsByCurrency) {
+        invariant(
+          row.brandId === supplier.brandId && row.supplierCode === supplier.supplierCode,
+          'SUPPLIER_PASSPORT_ECONOMIC_LINEAGE_MISMATCH',
+          'Supplier passport economics belongs to another supplier',
+          { supplierCode, currency: row.currency },
+        );
+      }
+      return buildPassport({ supplier, operational, economicsByCurrency, asOf: iso(clock()) });
+    });
+  };
+
   return Object.freeze({
     async getPartnerBundleForActor(actorId, supplierCode) {
-      const passport = await this.getSupplierPassportForActor(actorId, supplierCode);
+      const passport = await getSupplierPassportForActor(actorId, supplierCode);
       return buildPartnerBundle(passport);
     },
     async assertManageForActor(actorId, supplierCode) {
@@ -55,43 +91,8 @@ export function createSupplierPassportService({ reader, clock = () => new Date()
         return buildPartnerBundle(buildPassport({ supplier, operational, economicsByCurrency, asOf: iso(clock()) }));
       });
     },
-    getSupplierPassportForActor(actorId, supplierCode) {
-      invariant(typeof actorId === 'string' && actorId.length > 0, 'ACTOR_ID_REQUIRED', 'Actor id is required');
-      invariant(typeof supplierCode === 'string' && supplierCode.length > 0, 'SUPPLIER_CODE_REQUIRED', 'Supplier code is required');
+    getSupplierPassportForActor,
 
-      return reader.transaction(async (tx) => {
-        const supplier = requireEntity(await tx.getSupplierByCode(supplierCode), 'SUPPLIER_NOT_FOUND', { supplierCode });
-        const membership = await tx.getMembership(supplier.brandId, actorId);
-        assertCapability(membership, CAPABILITIES.MARGIN_READ);
-        invariant(membership.organisationType === 'brand', 'SUPPLIER_PASSPORT_BRAND_MEMBERSHIP_REQUIRED', 'Supplier passport requires a brand membership', { supplierCode, brandId: supplier.brandId });
-
-        const operational = requireEntity(
-          await tx.getOperationalPerformance(supplier.brandId, supplier.supplierCode),
-          'SUPPLIER_PERFORMANCE_READ_MODEL_MISSING',
-          { supplierCode, brandId: supplier.brandId },
-        );
-        invariant(
-          operational.supplierId === supplier.id
-            && operational.brandId === supplier.brandId
-            && operational.supplierCode === supplier.supplierCode,
-          'SUPPLIER_PASSPORT_LINEAGE_MISMATCH',
-          'Supplier passport performance belongs to another supplier',
-          { supplierCode },
-        );
-
-        const economicsByCurrency = await tx.listFailureEconomics(supplier.brandId, supplier.supplierCode);
-        for (const row of economicsByCurrency) {
-          invariant(
-            row.brandId === supplier.brandId && row.supplierCode === supplier.supplierCode,
-            'SUPPLIER_PASSPORT_ECONOMIC_LINEAGE_MISMATCH',
-            'Supplier passport economics belongs to another supplier',
-            { supplierCode, currency: row.currency },
-          );
-        }
-
-        return buildPassport({ supplier, operational, economicsByCurrency, asOf: iso(clock()) });
-      });
-    },
   });
 }
 

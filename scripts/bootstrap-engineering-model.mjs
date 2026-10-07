@@ -31,34 +31,34 @@ try{
   await client.query('BEGIN');
   await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',['engineering-model-bootstrap:'+policyScope]);
   await client.query(
-    \`INSERT INTO ai_model_qualifications
+    `INSERT INTO ai_model_qualifications
       (id,provider,model,purpose,prompt_version,schema_version,benchmark_hash,metrics,status,qualified_at,qualified_by,expires_at)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,'qualified',$9,$10,$11)
      ON CONFLICT (provider,model,purpose,prompt_version,schema_version)
      DO UPDATE SET benchmark_hash=EXCLUDED.benchmark_hash,metrics=EXCLUDED.metrics,status='qualified',
-                   qualified_at=EXCLUDED.qualified_at,qualified_by=EXCLUDED.qualified_by,expires_at=EXCLUDED.expires_at\`,
+                   qualified_at=EXCLUDED.qualified_at,qualified_by=EXCLUDED.qualified_by,expires_at=EXCLUDED.expires_at`,
     [qualificationId,provider,model,purpose,promptVersion,schemaVersion,benchmarkHash,JSON.stringify(metrics),qualifiedAt,qualifiedBy,expiresAt],
   );
 
   const existing=await client.query(
-    \`SELECT id,version FROM ai_model_route_policies
+    `SELECT id,version FROM ai_model_route_policies
       WHERE purpose=$2 AND (($1::text IS NULL AND brand_id IS NULL) OR brand_id=$1)
-      FOR UPDATE\`,
+      FOR UPDATE`,
     [brandId,purpose],
   );
   const candidates=JSON.stringify([{provider,model,priority:0}]);
   if(existing.rows[0]){
     await client.query(
-      \`UPDATE ai_model_route_policies
+      `UPDATE ai_model_route_policies
           SET candidates=$2::jsonb,status='active',version=version+1,updated_at=$3,updated_by=$4
-        WHERE id=$1\`,
+        WHERE id=$1`,
       [existing.rows[0].id,candidates,qualifiedAt,qualifiedBy],
     );
   }else{
     await client.query(
-      \`INSERT INTO ai_model_route_policies
+      `INSERT INTO ai_model_route_policies
         (id,brand_id,purpose,candidates,status,version,created_at,created_by,updated_at,updated_by)
-       VALUES ($1,$2,$3,$4::jsonb,'active',1,$5,$6,$5,$6)\`,
+       VALUES ($1,$2,$3,$4::jsonb,'active',1,$5,$6,$5,$6)`,
       [policyId,brandId,purpose,candidates,qualifiedAt,qualifiedBy],
     );
   }

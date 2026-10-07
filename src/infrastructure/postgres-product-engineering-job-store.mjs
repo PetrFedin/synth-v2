@@ -65,8 +65,8 @@ export function createPostgresProductEngineeringJobStore(options={}) {
         `UPDATE product_engineering_jobs
             SET status=CASE WHEN attempt_count>=max_attempts THEN 'dead_letter' ELSE 'failed' END,
                 last_error_code=$3,
-                available_at=CASE WHEN attempt_count>=max_attempts THEN available_at ELSE $4 END,
-                completed_at=CASE WHEN attempt_count>=max_attempts THEN $5 ELSE NULL END,
+                available_at=CASE WHEN attempt_count>=max_attempts THEN available_at ELSE $4::timestamptz END,
+                completed_at=CASE WHEN attempt_count>=max_attempts THEN $5::timestamptz ELSE NULL::timestamptz END,
                 worker_id=NULL,claimed_at=NULL,lease_expires_at=NULL
           WHERE id=$1 AND status='running' AND worker_id=$2
           RETURNING *`,

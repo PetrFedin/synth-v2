@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { invariant } from '../core/errors.mjs';
+import { DomainError, invariant } from '../core/errors.mjs';
 
 const CHECKPOINT_VERSION = 'supplier-trust-checkpoint-v1';
 
@@ -22,7 +22,7 @@ export function createSupplierTrustService({
 
   return Object.freeze({
     publicKeyDocument() {
-      invariant(publicKey, 'SUPPLIER_TRUST_ISSUER_NOT_CONFIGURED', 'Supplier trust issuer key is not configured');
+      if (!publicKey) throw new DomainError('SUPPLIER_TRUST_ISSUER_NOT_CONFIGURED', 'Supplier trust issuer key is not configured');
       const der = publicKey.export({ format: 'der', type: 'spki' });
       return Object.freeze({
         issuerId,
@@ -34,7 +34,7 @@ export function createSupplierTrustService({
     },
 
     async issueForActor(actorId, supplierCode) {
-      invariant(privateKey, 'SUPPLIER_TRUST_ISSUER_NOT_CONFIGURED', 'Supplier trust issuer key is not configured');
+      if (!privateKey) throw new DomainError('SUPPLIER_TRUST_ISSUER_NOT_CONFIGURED', 'Supplier trust issuer key is not configured');
       const bundle = await supplierPassport.getPartnerBundleForActor(actorId, supplierCode);
       invariant(bundle.qualification?.state === 'current', 'SUPPLIER_TRUST_QUALIFICATION_NOT_CURRENT', 'Supplier qualification is not current', { supplierCode });
       invariant(Date.parse(bundle.qualification.auditExpiresAt) > Date.parse(clock()), 'SUPPLIER_TRUST_AUDIT_EXPIRED', 'Supplier audit has expired', { supplierCode });
@@ -59,7 +59,7 @@ export function createSupplierTrustService({
     },
 
     async revokeForActor(actorId, envelope, reason) {
-      invariant(publicKey, 'SUPPLIER_TRUST_ISSUER_NOT_CONFIGURED', 'Supplier trust issuer key is not configured');
+      if (!publicKey) throw new DomainError('SUPPLIER_TRUST_ISSUER_NOT_CONFIGURED', 'Supplier trust issuer key is not configured');
       const verified = verifySignatureOnly({ envelope, publicKey, issuerId, keyId });
       invariant(verified.valid, 'SUPPLIER_TRUST_CHECKPOINT_INVALID', 'Checkpoint signature is invalid', { reason: verified.reason });
       await supplierPassport.assertManageForActor(actorId, envelope.payload.supplierCode);
@@ -127,7 +127,7 @@ function parsePrivateKey(value) {
       type: 'pkcs8',
     });
   } catch {
-    invariant(false, 'SUPPLIER_TRUST_ISSUER_KEY_INVALID', 'Supplier trust issuer private key is invalid');
+    throw new DomainError('SUPPLIER_TRUST_ISSUER_KEY_INVALID', 'Supplier trust issuer private key is invalid');
   }
 }
 
@@ -155,7 +155,7 @@ function sha256(value) {
 }
 
 function stable(value) {
-  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null';
   if (Array.isArray(value)) return '[' + value.map(stable).join(',') + ']';
   return '{' + Object.keys(value).sort().map((key) => JSON.stringify(key) + ':' + stable(value[key])).join(',') + '}';
 }

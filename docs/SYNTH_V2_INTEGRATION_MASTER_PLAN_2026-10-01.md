@@ -1397,3 +1397,158 @@ Portability remains required; switching cost comes from longitudinal network int
 **Sequencing:** Supplier Trust Graph -> interchange spec -> reference implementation -> supplier self-publishing -> certification programme -> privacy-safe contribution network -> OEM/enterprise distribution.
 
 **Moat:** Synth-v2 becomes the interoperability and trust layer of a fashion supply network, with compounding multi-season supplier and production evidence.
+
+
+## 2026-10-07 — Supplier Trust Runtime, Traceability Interop and Agentic Procurement
+
+This layer starts from the redacted Supplier Partner Bundle and signed Supplier Trust Checkpoint. It must preserve tenant isolation and never leak negotiated prices/margins across brands.
+
+### Standards baseline
+
+Credential interoperability:
+
+- W3C VC Data Model 2.0: https://www.w3.org/TR/vc-data-model-2.0/
+- W3C Bitstring Status List v1.0: https://www.w3.org/TR/vc-bitstring-status-list/
+- OpenID4VCI 1.0 Final / OpenID4VP 1.0 Final;
+- OpenID Federation 1.0 for bounded multi-company trust networks.
+
+Supply-chain interoperability:
+
+- GS1 EPCIS 2.0 for visibility-event exchange: https://ref.gs1.org/standards/epcis/2.0.1/
+- GS1 Digital Link URI Syntax for resolvable product/item identifiers: https://ref.gs1.org/standards/digital-link/uri-syntax/
+
+### Supplier Issuer Key Lifecycle — P0
+
+Persistent registry:
+
+`PROVISIONED -> ACTIVE -> VERIFY_ONLY -> RETIRED / COMPROMISED`.
+
+Requirements:
+
+- private key only from managed secret/HSM/KMS boundary;
+- old checkpoints remain verifiable after normal rotation;
+- compromised key can invalidate affected checkpoint generations;
+- issuer/key metadata available through public verifier surface;
+- all lifecycle changes audited.
+
+### Credential Status Distribution — P0
+
+Publish scalable current status for supplier/facility credentials and checkpoints.
+
+Status must distinguish:
+
+- valid;
+- suspended;
+- revoked;
+- expired;
+- stale because canonical bundle changed;
+- stale because dependent certificate/audit expired.
+
+No cross-brand confidential data appears in the status feed.
+
+### GS1 Traceability Bridge — P1
+
+Map canonical Synth events to EPCIS-compatible visibility events where appropriate:
+
+- transformation/production milestone;
+- aggregation/packing;
+- shipping;
+- receiving;
+- return/recall;
+- location/facility identity.
+
+Keep a strict mapping table between Synth authority and external event representation. EPCIS import never silently becomes canonical truth without admission/reconciliation.
+
+### GS1 Digital Link Product Resolver — P1
+
+Where a brand uses GS1 identifiers, resolve a product/lot/item to governed resources:
+
+- product passport;
+- care/material information;
+- traceability view;
+- recall/status;
+- wholesale/private product page;
+- verification endpoint.
+
+Resolver exposure is tenant-controlled.
+
+### Supplier Federation — P1
+
+Allow trusted supplier groups, implementation partners and brand networks to exchange scoped identity/capability credentials without one shared database.
+
+OpenID Federation may define trusted issuer/verifier metadata; tenant data remains isolated.
+
+### Agentic Procurement Delegation — P1 / GOVERNED
+
+Introduce a signed delegation object for software agents:
+
+- principal user/organisation;
+- allowed suppliers/categories;
+- max quantity/value variance;
+- price ceiling / target band where explicitly delegated;
+- allowed actions;
+- expiry;
+- human approval threshold.
+
+Agents may:
+
+- request/compare quotes;
+- detect capacity risk;
+- draft PO/reorder;
+- request missing evidence;
+- propose allocation/reallocation;
+- prepare negotiation brief.
+
+Agents may not create binding PO/financial commitment outside delegated authority. Every agent action receives request ID, policy decision and audit receipt.
+
+### Machine-readable Commercial Policy — P1
+
+Represent approval rules separately from AI:
+
+`facts -> policy evaluation -> allowed / requires approval / denied`.
+
+Examples:
+
+- supplier qualification expired -> PO blocked;
+- price variance > threshold -> commercial approval;
+- missing QC/traceability evidence -> shipment release blocked;
+- agent scope exceeded -> human approval.
+
+The model proposes; policy authority decides.
+
+### Cross-enterprise Verification Receipt — P1
+
+For important supplier admission/PO release, persist a receipt containing:
+
+- supplier bundle hash;
+- checkpoint status;
+- audit/certificate status;
+- policy version;
+- decision;
+- actor/agent delegation reference;
+- timestamp.
+
+This creates auditable procurement governance for enterprise customers.
+
+### Commercial products
+
+- Supplier Verification API;
+- GS1/EPCIS connector pack;
+- supplier federation gateway;
+- agentic procurement module;
+- policy/approval engine;
+- OEM supplier portal;
+- enterprise verification receipts;
+- certified integration programme.
+
+### Acceptance gate
+
+- normal key rotation preserves verification;
+- expired audit automatically invalidates dependent checkpoint;
+- EPCIS round-trip preserves source lineage;
+- no competitor/brand-private commercial data leaks;
+- agent cannot exceed delegated commercial ceiling;
+- AI output never bypasses policy engine;
+- verification receipt can be independently replayed from canonical facts.
+
+**Economic effect:** Synth-v2 becomes an operational trust and interoperability rail for fashion supply chains, enabling premium network/API/agentic modules while increasing enterprise switching cost through longitudinal evidence and integrations rather than data lock-in.

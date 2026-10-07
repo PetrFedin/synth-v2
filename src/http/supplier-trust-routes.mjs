@@ -3,6 +3,7 @@ import { assertBodyContract, assertQueryContract, bodyContract } from './request
 
 const REVOKE_BODY = bodyContract(['envelope','reason']);
 
+/** @param {{supplierTrust?: any}} [options] */
 export function createSupplierTrustRoutes({ supplierTrust } = {}) {
   const service = supplierTrust ?? unavailable();
   return Object.freeze([

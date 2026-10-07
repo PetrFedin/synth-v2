@@ -2,8 +2,7 @@ import { invariant } from '../core/errors.mjs';
 import { assertQueryContract } from './request-contract.mjs';
 
 /** @param {{supplierPassport?: any}} [options] */
-export function createSupplierPassportRoutes(options = {}) {
-  const { supplierPassport } = options;
+export function createSupplierPassportRoutes({ supplierPassport } = {}) {
   const service = supplierPassport ?? unavailable();
   return Object.freeze([
     Object.freeze({
@@ -12,7 +11,7 @@ export function createSupplierPassportRoutes(options = {}) {
       mutation: false,
       execute(context) {
         assertQueryContract(context.query ?? {}, []);
-        return service.getPartnerBundleForActor(context.actorId, context.params[0]);
+        return service.getPartnerBundleForActor(context.actorId, String(context.params?.[0] ?? ''));
       },
     }),
     Object.freeze({
@@ -21,7 +20,7 @@ export function createSupplierPassportRoutes(options = {}) {
       mutation: false,
       execute(context) {
         assertQueryContract(context.query ?? {}, []);
-        return service.getSupplierPassportForActor(context.actorId, context.params[0]);
+        return service.getSupplierPassportForActor(context.actorId, String(context.params?.[0] ?? ''));
       },
     }),
   ]);

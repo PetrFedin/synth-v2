@@ -11,6 +11,7 @@ const LEDGERS = Object.freeze({
   'compliance-document': 'compliance_document_commands',
   'product-certification': 'product_certification_commands',
   'product-engineering': 'product_engineering_commands',
+  'operational-collaboration': 'operational_collaboration_commands',
 });
 
 export async function getRegisteredCommand(client, scope, id) {

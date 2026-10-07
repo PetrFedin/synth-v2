@@ -137,6 +137,9 @@
     waived: ['снято','waived'], complete: ['выполнено','complete'], required: ['требуется','required'],
     recorded: ['записано','recorded'], shipped: ['отгружено','shipped'], resolved: ['решено','resolved'],
     reviewed: ['рассмотрено','reviewed'],
+    assigned: ['назначено','assigned'], waiting_for_role: ['ожидает ответственного','waiting for role'],
+    waiting_for_document: ['ожидает документ','waiting for document'], escalated: ['эскалировано','escalated'],
+    accepted_with_risk: ['принято с риском','accepted with risk'],
     // Серьёзность и результат проверки: те же слова показывают отчёты о дефектах и контрольные точки.
     critical: ['критический','critical'], major: ['значительный','major'], minor: ['незначительный','minor'],
     high: ['высокий','high'], medium: ['средний','medium'], low: ['низкий','low'],

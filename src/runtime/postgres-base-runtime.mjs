@@ -10,6 +10,7 @@ import { createMaterialQueryService } from '../application/material-query-servic
 import { createMeasurementService } from '../application/measurement-service.mjs';
 import { createMeasurementQueryService } from '../application/measurement-query-service.mjs';
 import { createOrderEconomicsService } from '../application/order-economics-service.mjs';
+import { createOperationalCollaborationService } from '../application/operational-collaboration-service.mjs';
 import { createOrderEconomicsPositionService } from '../application/order-economics-position-service.mjs';
 import { createOrderEconomicsLedgerService } from '../application/order-economics-ledger-service.mjs';
 import { createPostgresOrderEconomicsLedgerReader } from '../infrastructure/postgres-order-economics-ledger-reader.mjs';
@@ -78,6 +79,7 @@ import { createPostgresSupplierPortalStore } from '../infrastructure/postgres-su
 import { createPostgresCategoryAttributeReader } from '../infrastructure/postgres-category-attribute-reader.mjs';
 import { createCategoryAttributeQueryService } from '../application/category-attribute-query-service.mjs';
 import { createPostgresOrganisationMemberReader } from '../infrastructure/postgres-organisation-member-reader.mjs';
+import { createPostgresOperationalCollaborationStore } from '../infrastructure/postgres-operational-collaboration-store.mjs';
 import { createPostgresAwaitingActionReader } from '../infrastructure/postgres-awaiting-action-reader.mjs';
 import { createAwaitingActionQueryService, createSupplierAwaitingActionQueryService } from '../application/awaiting-action-query-service.mjs';
 import { createOrganisationMemberQueryService } from '../application/organisation-member-query-service.mjs';
@@ -216,6 +218,11 @@ export function createPostgresWholesaleRuntime(options = {}) {
   const categoryAttributes = createCategoryAttributeQueryService({ reader: createPostgresCategoryAttributeReader({ pool }) });
   const organisationMembers = createOrganisationMemberQueryService({ reader: createPostgresOrganisationMemberReader({ pool }) });
   const awaitingActions = createAwaitingActionQueryService({ reader: createPostgresAwaitingActionReader({ pool }), ...(clock ? { clock } : {}) });
+  const operationalCollaboration = createOperationalCollaborationService({
+    store: createPostgresOperationalCollaborationStore({ pool }),
+    nextId: runtimeNextId,
+    ...(clock ? { clock } : {}),
+  });
   const partners = createPartnerAccessService(serviceOptions);
   const retailDoors = createRetailDoorService(serviceOptions);
   const collaboration = createShowroomSelectionService({ ...serviceOptions, catalogReader: catalog, commercialPublicationReader: commercialPublication });
@@ -254,12 +261,12 @@ export function createPostgresWholesaleRuntime(options = {}) {
     ...(outboxRetentionMs !== undefined ? { outboxRetentionMs } : {}),
   });
   const workspace = createWorkspaceQueryService({ reader: createPostgresWorkspaceReader({ pool }) });
-  const transport = { authenticate: auth.authenticate, auth, readiness, platform, catalog, legalEntities, productIdentity, productEngineering: productEngineeringApi, productEngineeringJobs, productReadiness, commercialPublication, orderEconomics, materials, boms, measurements, samples, libraries, history, supplierPortal, categoryAttributes, organisationMembers, awaitingActions, team, partners, retailDoors, sourcing, techPacks, collaboration, orders, notifications, workspace };
+  const transport = { authenticate: auth.authenticate, auth, readiness, platform, catalog, legalEntities, productIdentity, productEngineering: productEngineeringApi, productEngineeringJobs, productReadiness, commercialPublication, orderEconomics, materials, boms, measurements, samples, libraries, history, supplierPortal, categoryAttributes, organisationMembers, awaitingActions, operationalCollaboration, team, partners, retailDoors, sourcing, techPacks, collaboration, orders, notifications, workspace };
   const handler = createWholesaleHttpHandler(transport);
   const fetchHandler = createWholesaleFetchHandler(transport);
   return Object.freeze({
     auth, readiness, maintenance, outboxPublication, outboxPublicationStore, store, catalogStore, legalEntityStore, productIdentityStore, productIdentityReader, productEngineeringStore, productEngineeringJobStore, productEngineeringModelControlStore, productReadinessStore, productReadinessSourceReader, commercialPublicationStore, orderEconomicsStore, materialStore, bomStore, measurementStore, sampleStore, sourcingStore, techPackStore,
-    platform, catalog, legalEntities, productIdentity, productEngineering: productEngineeringApi, productEngineeringJobs, productReadiness, commercialPublication, orderEconomics, materials, boms, measurements, samples, libraries, history, supplierPortal, categoryAttributes, organisationMembers, awaitingActions, team, partners, retailDoors, sourcing, techPacks, collaboration, orders, notifications, workspace,
+    platform, catalog, legalEntities, productIdentity, productEngineering: productEngineeringApi, productEngineeringJobs, productReadiness, commercialPublication, orderEconomics, materials, boms, measurements, samples, libraries, history, supplierPortal, categoryAttributes, organisationMembers, awaitingActions, operationalCollaboration, team, partners, retailDoors, sourcing, techPacks, collaboration, orders, notifications, workspace,
     handler, fetchHandler,
   });
 }

@@ -453,3 +453,177 @@ body.omnidata-v14 .sourcing-badge.sourcing-caution{border-color:#e8d9a8!importan
 /* AI Product Engineering uses the shared ODS surface/card/metric roles; these rules only express
    its responsive composition and technical-SVG viewport. */
 .od-engineering-workspace{gap:16px}.od-engineering-summary{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}.od-engineering-kpi{border:1px solid var(--border,#e4e7ec);border-radius:8px;padding:10px;background:var(--surface,#fff);min-width:0}.od-engineering-kpi strong{display:block;font-size:20px;line-height:1.2}.od-engineering-kpi span{display:block;margin-top:4px;font-size:11px;color:var(--muted,#667085)}.od-engineering-drawing-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.od-engineering-drawing{border:1px solid var(--border,#e4e7ec);border-radius:8px;padding:10px;display:grid;gap:8px;min-width:0}.od-engineering-drawing-head{display:flex;align-items:center;justify-content:space-between;gap:8px}.od-engineering-svg-preview{min-height:150px;display:grid;place-items:center;background:#fff;border:1px solid #eef0f2;border-radius:6px;overflow:hidden}.od-engineering-svg-preview svg{display:block;width:100%;height:180px;max-width:100%}@media(max-width:1100px){.od-engineering-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.od-engineering-drawing-grid{grid-template-columns:1fr}}
+/* Shared contextual collaboration inspector: operational work belongs to the entity, not to a
+   detached chat application. Desktop is a right-side inspector, tablet keeps a bounded split,
+   and phone becomes a full-height work surface. */
+body.omnidata-v14 dialog.operational-collaboration-inspector {
+  position:fixed;
+  inset:0 0 0 auto;
+  width:min(var(--ods-inspector-width,420px),calc(100vw - 32px));
+  max-width:440px;
+  height:100dvh;
+  max-height:none;
+  margin:0;
+  padding:0;
+  border:0;
+  border-left:1px solid var(--ods-color-border);
+  border-radius:0;
+  background:var(--ods-color-surface);
+  color:var(--ods-color-text);
+  box-shadow:-18px 0 42px rgba(15,23,42,.16);
+  overflow:hidden;
+}
+body.omnidata-v14 dialog.operational-collaboration-inspector::backdrop {
+  background:rgba(15,23,42,.22);
+}
+body.omnidata-v14 .operational-collaboration-head {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) max-content;
+  gap:var(--ods-space-3);
+  align-items:start;
+  padding:var(--ods-space-5);
+  border-bottom:1px solid var(--ods-color-border);
+  background:var(--ods-color-surface);
+}
+body.omnidata-v14 .operational-collaboration-head h2 {
+  margin:2px 0;
+  font-size:var(--ods-font-size-lg);
+  line-height:1.2;
+  overflow-wrap:anywhere;
+}
+body.omnidata-v14 .operational-collaboration-tabs {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  border-bottom:1px solid var(--ods-color-border);
+  background:var(--ods-color-surface);
+}
+body.omnidata-v14 .operational-collaboration-tabs button {
+  min-height:var(--ods-control-height);
+  border:0;
+  border-bottom:2px solid transparent;
+  border-radius:0;
+  background:transparent;
+  color:var(--ods-color-text-soft);
+}
+body.omnidata-v14 .operational-collaboration-tabs button.active {
+  border-bottom-color:var(--ods-color-accent);
+  color:var(--ods-color-text);
+  font-weight:650;
+}
+body.omnidata-v14 .operational-collaboration-body {
+  height:calc(100dvh - 132px);
+  overflow:auto;
+  padding:var(--ods-space-4);
+  background:var(--ods-color-workspace);
+}
+body.omnidata-v14 .operational-collaboration-panel {
+  display:grid;
+  gap:var(--ods-space-3);
+}
+body.omnidata-v14 .operational-thread-list {
+  display:grid;
+  gap:var(--ods-space-2);
+}
+body.omnidata-v14 .operational-thread-item {
+  display:grid;
+  gap:2px;
+  width:100%;
+  min-height:52px;
+  padding:var(--ods-space-3);
+  text-align:left;
+  border:1px solid var(--ods-color-border);
+  border-radius:var(--ods-radius-md);
+  background:var(--ods-color-surface);
+}
+body.omnidata-v14 .operational-thread-item.selected {
+  border-color:var(--ods-color-border-strong);
+  box-shadow:inset 3px 0 0 var(--ods-color-accent);
+}
+body.omnidata-v14 .operational-thread-item small,
+body.omnidata-v14 .operational-message small,
+body.omnidata-v14 .operational-decision small {
+  color:var(--ods-color-muted);
+}
+body.omnidata-v14 .operational-thread-detail,
+body.omnidata-v14 .operational-decision,
+body.omnidata-v14 .operational-collaboration-form,
+body.omnidata-v14 .operational-collaboration-empty {
+  display:grid;
+  gap:var(--ods-space-3);
+  padding:var(--ods-space-4);
+  border:1px solid var(--ods-color-border);
+  border-radius:var(--ods-radius-md);
+  background:var(--ods-color-surface);
+}
+body.omnidata-v14 .operational-thread-title,
+body.omnidata-v14 .operational-message-meta,
+body.omnidata-v14 .operational-decision-meta {
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:var(--ods-space-3);
+}
+body.omnidata-v14 .operational-message-list,
+body.omnidata-v14 .operational-decision-list {
+  display:grid;
+  gap:var(--ods-space-3);
+}
+body.omnidata-v14 .operational-message {
+  display:grid;
+  gap:var(--ods-space-2);
+  padding:var(--ods-space-3);
+  border-left:2px solid var(--ods-color-border-strong);
+  background:var(--ods-color-surface-soft);
+}
+body.omnidata-v14 .operational-decision.superseded {
+  opacity:.66;
+}
+body.omnidata-v14 .operational-collaboration-form input,
+body.omnidata-v14 .operational-collaboration-form select,
+body.omnidata-v14 .operational-collaboration-form textarea {
+  width:100%;
+  min-width:0;
+}
+body.omnidata-v14 .operational-collaboration-form textarea {
+  resize:vertical;
+}
+body.omnidata-v14 .operational-collaboration-alert {
+  display:grid;
+  gap:var(--ods-space-2);
+  margin-bottom:var(--ods-space-3);
+}
+body.omnidata-v14 .operational-collaboration-trigger {
+  white-space:nowrap;
+}
+
+@media(max-width:920px) {
+  body.omnidata-v14 dialog.operational-collaboration-inspector {
+    width:44vw;
+    min-width:360px;
+    max-width:460px;
+  }
+}
+
+@media(max-width:720px) {
+  body.omnidata-v14 dialog.operational-collaboration-inspector {
+    inset:0;
+    width:100vw;
+    min-width:0;
+    max-width:none;
+    height:100dvh;
+    border-left:0;
+  }
+  body.omnidata-v14 .operational-collaboration-head {
+    padding:var(--ods-space-4);
+  }
+  body.omnidata-v14 .operational-collaboration-body {
+    height:calc(100dvh - 126px);
+    padding:var(--ods-space-3);
+  }
+  body.omnidata-v14 .operational-thread-title,
+  body.omnidata-v14 .operational-message-meta,
+  body.omnidata-v14 .operational-decision-meta {
+    align-items:stretch;
+    flex-direction:column;
+  }
+}

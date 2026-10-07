@@ -113,12 +113,13 @@ export function createPostgresWholesaleRuntime(options = {}) {
   const supplierPerformance = createSupplierEconomicPerformanceService({ reader: supplierPerformanceReader });
   const supplierPassport = createSupplierPassportService({ reader: supplierPerformanceReader, ...(options.clock ? { clock: options.clock } : {}) });
   const supplierTrustStore = createPostgresSupplierTrustStore({ pool: options.pool });
+  const trustOptions = /** @type {any} */ (options);
   const supplierTrust = createSupplierTrustService({
     supplierPassport,
     store: supplierTrustStore,
-    privateKeyB64: options.supplierTrustPrivateKeyB64,
-    issuerId: options.supplierTrustIssuerId ?? 'syntha-platform',
-    keyId: options.supplierTrustKeyId ?? 'syntha-supplier-trust-v1',
+    privateKeyB64: trustOptions.supplierTrustPrivateKeyB64,
+    issuerId: trustOptions.supplierTrustIssuerId ?? 'syntha-platform',
+    keyId: trustOptions.supplierTrustKeyId ?? 'syntha-supplier-trust-v1',
     ...(options.clock ? { clock: options.clock } : {}),
   });
 
@@ -367,6 +368,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
     organisationMembers: base.organisationMembers,
     team: base.team,
     awaitingActions: base.awaitingActions,
+    operationalCollaboration: base.operationalCollaboration,
     productionOrders,
     productionExecutions,
     finalQuality,

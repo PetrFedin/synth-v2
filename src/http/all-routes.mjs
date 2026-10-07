@@ -1,4 +1,5 @@
 import { createAwaitingActionRoutes } from './awaiting-action-routes.mjs';
+import { createOperationalCollaborationRoutes } from './operational-collaboration-routes.mjs';
 import { createCollectionStyleVersionRoutes } from './collection-style-version-routes.mjs';
 import { createCommercialPublicationRoutes } from './commercial-publication-routes.mjs';
 import { createEconomicsRouteBundle } from './economics-route-bundle.mjs';
@@ -93,6 +94,7 @@ export function createWholesaleRoutes(services = {}) {
     ...createOrganisationMemberRoutes({ organisationMembers: services.organisationMembers }),
     ...createTeamRoutes({ team: services.team }),
     ...createAwaitingActionRoutes({ awaitingActions: services.awaitingActions }),
+    ...createOperationalCollaborationRoutes({ operationalCollaboration: services.operationalCollaboration }),
   ]);
 }
 

@@ -265,6 +265,7 @@ API/runtime contract:
 - `POST /v2/public/supplier-trust/verify` — public current-state verification.
 - PostgreSQL authority: `supplier_trust_revocations`.
 - Runtime: `createSupplierTrustService` is wired into the final PostgreSQL HTTP transport, not only constructed as an unused side service.
+- Trust factory type contract: every new supplier trust/passport/store/route factory must declare its checkJs dependency shape explicitly. The type-error baseline may not be widened to admit trust-layer code; new trust files must add zero type errors, while pre-existing baseline debt remains independently visible.
 
 Evidence:
 
@@ -1895,6 +1896,7 @@ At minimum:
 | 2026-10-04 | `fix/ui-labels-layout-buyer` | Настоящий клик-тест нашёл дефекты подписей, вёрстки и пути байера. **(1) Один словарь статусов.** `statusLabel` (dom-2.js) шёл по `status.*` рантайма i18n, затем по `stage.*` и показывал сырой код: `not_assessed`/`not_published` в реестре моделей, `published` в плитке «Таблиц измерений», `revoked` в фильтре связей, роль `quality` в матрице ролей. Теперь словарь `statuses` в i18n-runtime.js — единственный: в него добавлены недостающие значения (в том числе составные состояния экранов, серьёзность, результат проверки, состояния KPI и роли), поиск терпит регистр и «-»/«_» (`ready-for-qc`/`ready_for_qc`, `VALUE`), а неизвестное значение выводится читаемыми словами, не кодом. Локальные словари (sourcing, final-quality, production-executions, tech-packs, samples, materials, production-orders, RFQ в styles) при отсутствии ключа падают в общий. `tests/status-labels.test.mjs` обходит доменные константы `src/modules/*/public.mjs` (`*_STATUSES`, `*_STATE(S)`, `STYLE_LIFECYCLE`, серьёзность, результаты, `ALLOWED_ROLES`) и требует подпись ru и en для каждого значения — новый статус без подписи ломает сборку. Баннер экономики заказа больше не печатает код `ORDER_AMENDMENT_ECONOMICS_STARTED`. **(2) Вёрстка.** Кнопка «RU» обрезалась у ролей с длинным названием организации: колонка пути в сетке шапки имела пол 360px, действия оказывались короче своего содержимого, а их `overflow:hidden` съедал кнопку (`omnidata-v14-role-system.css`, пол колонки снят, хвост — `max-content`). Полоса вкладок инспектора теряла строки, потому что могла сжиматься в колонке с собственной прокруткой (`flex: 0 0 auto`, `overflow-y: visible`). В реестрах RFQ колонка «Статус» стоит второй, чтобы горизонтальная прокрутка её не прятала. Неизменяемые значения в диалогах («Отгрузка и приёмка», «Изменения заказа», детали объекта) — не однострочные `input[readonly]`, а `output.od-fact-value`, который переносится (`factValue` в dom-1.js). Класс `od-action-note` переименован в `od-hint-note`: классификатор ролей режет имя класса по «-» и принимал слово «action» за кнопку, поэтому каждая пояснительная строка рисовалась как кнопка (nowrap, 26px). Цветомодели в инспекторе — карточки вместо шестиколоночной таблицы. **(3) Подписи и счётчики.** Портал поставщика подписывал цену валютой профиля поставщика (`supplier.currency`, USD: «9,80 $»), хотя котировка не хранит валюты и её суммы записаны в валюте запроса (`bomCurrency`, у бренда «2 014,00 €»): пересчёта нет, число одно. Миграция 164 переопределяет представление `supplier_portal_rfq_workspace` — `currency` берётся из `rfq.payload.bomCurrency`, валюта поставщика остаётся запасной; в котировке добавлена строка «Валюта запроса». Плитка «Участники» считается по составу организации, из которого строится матрица ролей, а не по единственному членству читателя. После принятия встречного поставщик видит «принято», а не живое предложение. «Выставить» документ соответствия просит подтверждения (выставленный документ меняется только заменой). Пункты меню портала поставщика — во множественном числе. У «Ждёт вас», «Библиотек» и экранов портала свои подзаголовки вместо общего «Единый рабочий раздел Syntha.». **(4) Путь байера.** На экране «Ассортименты» у байера всегда есть «Создать подборку» и «Создать заказ»: когда форма может открыться — открывается существующая `selectionForm`/`orderForm`, когда нет — кнопка объясняет причину и ведёт в «Листы коллекций»; на «Листах коллекций» при более новом каталоге бренда плашка «Бренд ещё не собрал показ» не показывается. **(5) Вопрос продукту, не менялось:** «Новая версия модели» обнуляет цвета и SKU (ЦВЕТА 3→0, SKU 3→0) — нужно решение, переносить ли их в новую версию. |
 | 2026-10-04 | `fix/ui-refresh-after-actions` | Повторный клик-тест в браузере нашёл «интерфейс не обновился и не ответил после действия». **(1) Диалоги с долгоживущим состоянием перечитываются после действия** (`order-fulfillment-view.js`, `order-fulfillment-actions.js`, `open-form.js`): «Принять» правку заказа шло через `actionButton`, который при открытом диалоге ничего не перечитывает и не говорит об успехе, — на сервере принято, а диалог оставался с «на рассмотрении» и живыми «Принять»/«Отклонить», сумма в списке менялась только после перезагрузки. Теперь ответ на правку (принять — `respondToAmendment`; отклонить и предложить — `openForm` с новым четвёртым параметром `{ afterSave, successMessage }`) перечитывает рабочее пространство (список заказов, сумма, «Ждёт вас» по событию `syntha:mutated`), перерисовывает приложение и заново открывает диалог правок с заказом из свежего пространства, затем показывает тост «Готово: …»; тот же приём — у шагов «Отгрузки и приёмки» (план, отгрузка, приёмка, претензия, решение, возврат), у «Упаковки», комментариев, точек и календаря заказа; `showModal` защищён от повторного открытия. **(2) Тост не умирает вместе с диалогом** (`dom-2.js`): тост, нарисованный внутри открытого модального диалога (PR #236), пропадал, когда диалог закрывался следом, — «Отправить RFQ» → «Отправить» менял статус молча. Хост тоста в диалоге теперь по закрытию диалога перерисовывает ещё живое сообщение на обычном месте; единый `toastDone(ru, en)` пишет «Готово: …». `runMutation` закупок называет действие по маршруту (`DONE_BY_SUFFIX`: запрос отправлен, котировка записана, победитель выбран…), успешные тосты курсов, палитры, образов, портала поставщика, финального контроля и производственного календаря переведены на тот же формат. **(3) «Экономика заказа» (N8, N5b)** (`order-economics-workspace.js`): после закрытия себестоимости шаги маржи и готовности — «Сделано» и без блокировки «есть прогон, которого маржа ещё не учла» (сервер у закрытого заказа не принимает ни актуализацию маржи, ни новую проверку: маржу после корректировки обновляет только сверка распределения, и шаг маржи об этом говорит); настоящая работа после корректировки — прогон по новой себестоимости и сверка — названа «Нужно сделать»; у сверенной корректировки нет блокировки «нечего сверять»; шапка предупреждает, что снимок себестоимости устарел после новой затраты. Форма шага возвращает экран шагов из `afterSave` (уже в новом диалоге) и показывает «Готово: …» после перечитывания позиции и записанного (раньше ждала пересоздания диалога опросом `waitForRender`). Вместо идентификаторов (`supply-commitment_…`, `landed-cost_…`, `cost-allocation-run_…`, `cost-close-readiness_…`, `fx-rate_…`) шаги и выпадающие списки показывают состав, дату, сумму, пару валют и номер прогона, а короткий код лежит в подсказке (`title` строки и пункта списка, новое поле `optionTitle` у `selectDef`/`dependentSelectDef`). Форма слова — общий `I18N.plural(count, ruForms, enForms)` в `i18n-runtime.js` (поверхность `i18n-v7.js` перечисляется поимённо и несёт его наружу): «Для выбора: 1 политика / 2 политики / 5 политик». **(4)** `QUALITY_EXECUTION_NOT_READY` в `error-messages.js` подсказывает, что делать: завершить все этапы производства и выдать материалы. Сервер, словарь статусов и вёрстка не менялись. Тесты: `tests/ui-refresh-after-actions.test.mjs` (мини-DOM со всеми модулями экранов) и расширенный `tests/order-economics-workspace.test.mjs`. |
 | 2026-10-04 | `fix/ui-labels-and-layout-2` | Повторный клик-тест нашёл замечания по подписям и вёрстке. **(N2)** Карточка платёжной вехи PO звалась `production-orders-milestone`, и эвристика дизайн-системы принимала её за пункт временной шкалы (сетка 24px + 1fr с `!important`): заголовок переносился по слову и перекрывался строкой «20 % · по подтверждению…». Теперь `production-orders-payment` (карточка на всю ширину: название и сумма в шапке, ниже доля и событие, затем статус и срок), объявлена карточкой в `omnidata-v14-module-adapters.js`, правила — в конце `omnidata-v14-role-system.css`. **(N3)** Структурные атрибуты категории («Карманы», «Подкладка», «Утепление») печатались как `count: 3, kinds: welt,welt,inner`; теперь строки «параметр — значение»: словарь `attr.part.*`/`attr.value.*`/`attr.unit.*` и «да/нет» лежат в `i18n-runtime.js` рядом со статусами, неизвестный ключ — читаемое слово, повтор значения — «× 2», единицы — «120 г/м²» (`styles.js`). **(N4)** Карточка приёмки образца показывала «1 · accepted»: теперь «1 шт. · Принят» (`labelCondition` в `samples.js`), контрольные точки качества идут через `statusLabel`. Попутно найден и исправлен вечный рекурсивный вызов: локальные `statusLabel` в `final-quality.js`, `production-executions.js` и `sourcing.js` после #239 вызывали сами себя для неизвестного значения — теперь `global.statusLabel`. **(N5)** Публикация листа называется «коллекция · дата», пара организаций — заголовком, а `commercial-publication_…`/`relationship_…` остаются в подсказке кнопки «Скопировать ID» (`publicationTitle` в `linesheets.js`, `technicalId` в `odInspector`). **(N6)** Диалог котировки поставщика называет валюту запроса в подписях полей («Цена за единицу, EUR») и показывает итог «Итого на 240 шт. в валюте запроса: …» до отправки (`attachQuoteTotal`). **(N7)** «Ждёт вас»: черновик документа соответствия подписывается по виду (УПД, декларация, сертификат ЕАЭС) из `detail.documentType` (`itemTitle`). **(N10)** «Deal opened for ORD-…» локализуется на клиенте (`localiseServerTitle`, `dom-2.js`); «Product Readiness/Product SKU/Commercial Projection» в рисках модели, «Готово к QC», placeholder «Execution, PO…» переведены. **(N12)** Чип статуса RFQ «Есть котировки» не раздувается (класс `sourcing-warning` принимался за панель-предупреждение, теперь `sourcing-caution`), фильтры «Образцов», «Качества» и «Производственного календаря» — один ряд, пустая панель под KPI «Рабочего стола» скрыта (правило скрытия проигрывало по специфичности), слово «опубликовано» не рвётся в узкой колонке, «Состояние» модели показывает «Версию модели v2», а не счётчик правок, подпись роли берётся из словаря (Финансы/Качество/Поставщик вместо «Пользователь»). Тесты: `tests/platform-ui-labels-layout-2.test.mjs`. |
+| 2026-10-07 | `ci/type-diagnostics-trust-runtime` | Type-baseline governance remains ratchet-only: `scripts/validate-types.mjs` still rejects any increase above the recorded per-file baseline and still requires explicit baseline updates only for legitimate historical debt changes. The diagnostic path now preserves and prints the exact TypeScript line, column, code and message for files that regress, so new supplier-trust/runtime typing defects can be repaired without expanding or guessing the baseline. This is observability for the existing type authority, not a relaxation of it. |
 Future implementation PRs add a row here. The row is not a substitute for updating the affected detailed sections.
 
 ---
@@ -1942,3 +1944,91 @@ A change is DONE only when all applicable boxes are true:
 - [ ] PR is mergeable and required GitHub CI is green.
 
 This checklist is deliberately stricter than “code compiles”. Syntha V2 is treated as one operating platform, so a locally correct screen or service is not complete if its upstream/downstream contract is broken or undocumented.
+
+## 23. Legacy capability adoption control plane (2026-10-07)
+
+The legacy repositories `PetrFedin/Projects` and `PetrFedin/syntha` are donor sources only. Their Product, Order, Inventory, Publication, Cost and Supplier truth must not be copied over current Synth-v2 authority.
+
+The detailed donor disposition is governed by `docs/architecture/LEGACY_CAPABILITY_ADOPTION_REGISTER.md`.
+
+### P0 adoption order
+
+1. Entity-linked operational collaboration;
+2. immutable Decision Ledger;
+3. persisted Exception/SLA lifecycle integrated with Awaiting Action and Calendar;
+4. Action Contract Registry / Next Owner metadata;
+5. Change Impact & Staleness Graph;
+6. Work Center / finite Capacity Reservation;
+7. Execution Profiles;
+8. Material Substitution governance.
+
+P1 then adds Fit Review, governed 3D sample assets, Selection draft revision/diff, sell-through/replenishment and external publication syndication.
+
+### Duplicate-authority prohibitions
+
+- Existing `Awaiting Action` remains the global work inbox; Exception must project into it rather than create a competing task centre.
+- Existing calendar milestones remain deadline truth; exception deadlines must be linked/reconciled rather than copied into an independent calendar.
+- Existing Selection/WholesaleOrder/OrderCommit/Amendment authority remains unchanged; legacy collaborative-order approval state machines are not imported.
+- Existing ProductReadiness/CommercialPublication/BuyerCatalogVersion authority remains unchanged; legacy linesheet state is adapter/output only.
+- Existing outbox/global command registry is mandatory for new writes; stale PR #5's dedicated collaboration command ledger is superseded.
+
+### First implementation tranche
+
+`src/modules/operational-control/public.mjs` introduces an executable pure domain kernel for canonical operational entity references, entity threads, immutable messages, immutable decisions and the exception lifecycle. It intentionally adds no persistence or public API in this tranche so migration numbering can be reconciled with active draft PR #242 and so the stale August collaboration PR is not revived accidentally.
+
+Status: **PARTIAL / DOMAIN FOUNDATION ONLY**. It must not be represented as user-visible or production-proven until PostgreSQL, application service, HTTP/OpenAPI, ODS UI, Awaiting Action, Calendar and live acceptance layers are added and verified.
+
+### 2026-10-07 CI reconciliation on PR #244
+
+After rebasing the adoption branch onto `main@af135bcf8e79aea739019b172395c4f25d653778`, the first fresh Verify run exposed two classes of contract drift already present on current main plus one new test-style mismatch:
+
+- authoritative composed OpenAPI is intentionally `1.18.0`, while 18 regression tests still pinned `1.17.0`; those tests are updated to the current authoritative contract version without changing API behavior;
+- Supplier Passport added the partner-bundle route before the full passport route, so a test that destructured the first route became order-dependent; it now selects the route by path pattern;
+- Operational Control error tests now assert the existing `DomainError.code` contract instead of searching the human message text for the code;
+- the shared RU/EN status dictionary now includes the five new Operational Exception states required by the repository-wide status-label invariant.
+
+These are verification repairs only. They do not add persistence/API/UI authority to Operational Control.
+
+### 2026-10-07 — Persistent EntityThread + Decision Ledger implementation tranche
+
+Branch: `feat/operational-collaboration-persistence`, based on exact merged foundation `main@bbd46f8b30b997eec7c961f2f6fa0fd76b14360c`.
+
+This tranche implements the next gate from the adoption register and deliberately stops before Operational Exception/SLA persistence.
+
+**New authority:** migration `172_operational_collaboration.sql` persists entity-linked threads, immutable messages and immutable decisions. The migration adds a dedicated `operational-collaboration` command scope/ledger under the existing global `command_registry`; it does not revive PR #5's independent command authority.
+
+**Security boundary:** a cross-organisation thread is admitted only when its owner and requested participant form an active brand-shop trade relationship. The client may request an acting organisation, but the service validates active membership, required capability and thread participation inside the same transaction. Viewer remains read-only; operational roles receive collaboration read/write and governed decision recording.
+
+**Decision semantics:** decisions are append-only. A changed decision creates a new row with `supersedesDecisionId`; a unique partial index prevents two competing replacements from superseding the same decision. Stable entity identity must match, while a replacement may pin a newer entity version/hash.
+
+**Read model:** `GET /v2/operational/entities/{entityType}/{entityId}/collaboration` returns only contextual collaboration visible through participant organisations. It is a projection and cannot mutate or replace Product, Order, Production, Supply, Quality or Economics authority.
+
+**Events:** writes publish `collaboration.thread.created.v1`, `collaboration.message.posted.v1`, `collaboration.thread.resolved.v1`, `collaboration.thread.archived.v1`, `decision.recorded.v1` or `decision.superseded.v1` through the existing transactional outbox.
+
+**Migration sequencing:** active draft PR #242 currently occupies 165–171 on its branch while main owns a different 165 Supplier Trust migration. Operational Collaboration therefore begins at 172; PR #242 must still reconcile its 165 collision before merge.
+
+Status: **IMPLEMENTATION IN PROGRESS / NOT YET MERGED / NO Exception-SLA PERSISTENCE YET**. Next gate is exact-head Verify + PostgreSQL CI, then ODS contextual inspector on top of this API.
+
+### 2026-10-07 — ODS Contextual Collaboration Inspector
+
+Persistent Collaboration was accepted and merged as PR #245 at `main@99311b4eaa54b946146c16aa2c5d50683c7d27bb` after exact-head Verify, PostgreSQL CI and Product Commercialization Acceptance passed. The PostgreSQL suite directly proved EntityThread/message/Decision Ledger persistence, idempotent replay and concurrent decision supersession.
+
+The next gate is the shared **Omnidata Contextual Collaboration Inspector**. It is one reusable surface, not a new chat section and not a separate task application.
+
+**Placement:** Samples, Production Orders and Wholesale Orders expose the same secondary `Discussion` control next to their existing business actions. The control opens the exact entity context; it does not change the entity's canonical status.
+
+**Desktop/tablet/phone:** desktop is a right-side inspector bounded by `--ods-inspector-width`; tablet is a 44% bounded side surface; phone is a full-height 100vw operational sheet. The implementation uses existing ODS tokens/semantic parts and the shared adapter layer rather than a detached legacy visual system.
+
+**Capabilities:** `collaboration.read` governs visibility, `collaboration.write` governs thread/message actions and `decision.record` governs immutable decisions. The client selects an acting organisation only from the actor's active memberships that actually hold the required backend-mirrored capability.
+
+**Discussion:** a user can create an entity-bound thread, choose a bounded thread kind, read message history, post messages and resolve a thread. Participant organisations are proposed from the entity context but remain server-admitted through the active relationship rules implemented in PR #245.
+
+**Decision Ledger:** the inspector displays immutable decisions separately from chat and permits a governed new/superseding decision. It never edits a prior decision and never mutates Product/Order/Production truth.
+
+**Explicit boundary:** Operational Exception/SLA, escalation, Awaiting Action exception projection and Calendar linking remain out of this tranche. They may start only after this inspector's exact-head Verify/PostgreSQL/UI contracts are green.
+
+**Full PostgreSQL runtime admission:** the base runtime already constructs the one canonical `operationalCollaboration` service over `createPostgresOperationalCollaborationStore`. The full `postgres-runtime` must forward that exact service into its HTTP transport; it must never reconstruct a second service/store. A dedicated regression contract now locks this wiring so the route cannot silently degrade to the unavailable fallback in the complete runtime.
+
+**ODS asset identity:** the inspector extends the existing canonical `visual-20260805-14-module-adapters-5` adapter build. The UI wave does not mint a second adapter build identifier merely because new semantic selectors were added; validator and inspector tests are required to agree with the canonical shell asset identity.
+
+Status: **IMPLEMENTATION IN PROGRESS / NO EXCEPTION-SLA YET**.

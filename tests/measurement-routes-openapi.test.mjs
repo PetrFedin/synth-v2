@@ -46,7 +46,7 @@ test('transport rejects derived fields at every measurement matrix level', () =>
   assert.equal(calls.length, 0);
 });
 
-test('the authoritative 1.17 document preserves governed Measurement revision semantics', () => {
+test('the authoritative 1.18 document preserves governed Measurement revision semantics', () => {
   const specification = wholesaleV2ExtendedOpenApi;
   assert.equal(specification.info.version, '1.20.0');
   assert.ok(specification.paths['/materials'].get);

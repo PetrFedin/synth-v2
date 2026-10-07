@@ -4,8 +4,7 @@ import { assertBodyContract, assertQueryContract, bodyContract } from './request
 const REVOKE_BODY = bodyContract(['envelope','reason']);
 
 /** @param {{supplierTrust?: any}} [options] */
-export function createSupplierTrustRoutes(options = {}) {
-  const { supplierTrust } = options;
+export function createSupplierTrustRoutes({ supplierTrust } = {}) {
   const service = supplierTrust ?? unavailable();
   return Object.freeze([
     Object.freeze({
@@ -14,7 +13,7 @@ export function createSupplierTrustRoutes(options = {}) {
       mutation: false,
       execute(context) {
         assertQueryContract(context.query ?? {}, []);
-        return service.issueForActor(context.actorId, decodeURIComponent(context.params[0]));
+        return service.issueForActor(context.actorId, decodeURIComponent(String(context.params?.[0] ?? '')));
       },
     }),
     Object.freeze({

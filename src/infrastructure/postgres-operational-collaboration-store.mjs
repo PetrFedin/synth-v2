@@ -119,42 +119,59 @@ function transactionView(client) {
 
     listThreadsForActorEntity: async ({ actorId, entityType, entityId, roles }) => {
       const result = await client.query(
-        `SELECT DISTINCT t.payload
+        `SELECT t.payload
            FROM operational_threads t
-           JOIN operational_thread_participants p ON p.thread_id=t.id
-           JOIN memberships m ON m.organisation_id=p.organisation_id
-          WHERE m.user_id=$1 AND m.status='active' AND m.role=ANY($2::text[])
-            AND t.entity_type=$3 AND t.entity_id=$4
-          ORDER BY t.payload->>'createdAt', t.payload->>'id'`,
+          WHERE t.entity_type=$3 AND t.entity_id=$4
+            AND EXISTS (
+              SELECT 1
+                FROM operational_thread_participants p
+                JOIN memberships m ON m.organisation_id=p.organisation_id
+               WHERE p.thread_id=t.id
+                 AND m.user_id=$1 AND m.status='active' AND m.role=ANY($2::text[])
+            )
+          ORDER BY t.created_at, t.id`,
         [actorId, roles, entityType, entityId],
       );
       return result.rows.map((row) => row.payload);
     },
     listMessagesForActorEntity: async ({ actorId, entityType, entityId, roles }) => {
       const result = await client.query(
-        `SELECT DISTINCT msg.payload
+        `SELECT msg.payload
            FROM operational_thread_messages msg
            JOIN operational_threads t ON t.id=msg.thread_id
-           JOIN operational_thread_participants p ON p.thread_id=t.id
-           JOIN memberships m ON m.organisation_id=p.organisation_id
-          WHERE m.user_id=$1 AND m.status='active' AND m.role=ANY($2::text[])
-            AND t.entity_type=$3 AND t.entity_id=$4
-          ORDER BY msg.payload->>'createdAt', msg.payload->>'id'`,
+          WHERE t.entity_type=$3 AND t.entity_id=$4
+            AND EXISTS (
+              SELECT 1
+                FROM operational_thread_participants p
+                JOIN memberships m ON m.organisation_id=p.organisation_id
+               WHERE p.thread_id=t.id
+                 AND m.user_id=$1 AND m.status='active' AND m.role=ANY($2::text[])
+            )
+          ORDER BY msg.created_at, msg.id`,
         [actorId, roles, entityType, entityId],
       );
       return result.rows.map((row) => row.payload);
     },
     listDecisionsForActorEntity: async ({ actorId, entityType, entityId, roles }) => {
       const result = await client.query(
-        `SELECT DISTINCT d.payload
+        `SELECT d.payload
            FROM operational_decisions d
-           LEFT JOIN operational_thread_participants p ON p.thread_id=d.thread_id
-           JOIN memberships m ON m.organisation_id = CASE
-             WHEN d.thread_id IS NULL THEN d.owner_organisation_id
-             ELSE p.organisation_id
-           END
-          WHERE m.user_id=$1 AND m.status='active' AND m.role=ANY($2::text[])
-            AND d.entity_type=$3 AND d.entity_id=$4
+          WHERE d.entity_type=$3 AND d.entity_id=$4
+            AND (
+              (d.thread_id IS NULL AND EXISTS (
+                SELECT 1 FROM memberships m
+                 WHERE m.organisation_id=d.owner_organisation_id
+                   AND m.user_id=$1 AND m.status='active' AND m.role=ANY($2::text[])
+              ))
+              OR
+              (d.thread_id IS NOT NULL AND EXISTS (
+                SELECT 1
+                  FROM operational_thread_participants p
+                  JOIN memberships m ON m.organisation_id=p.organisation_id
+                 WHERE p.thread_id=d.thread_id
+                   AND m.user_id=$1 AND m.status='active' AND m.role=ANY($2::text[])
+              ))
+            )
           ORDER BY d.decided_at, d.id`,
         [actorId, roles, entityType, entityId],
       );

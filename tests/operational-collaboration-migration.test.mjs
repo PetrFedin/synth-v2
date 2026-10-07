@@ -20,6 +20,6 @@ test('operational collaboration migration keeps one global command authority and
     "status IN ('open','resolved','archived')",
     "outcome IN ('approved','rejected','accepted_with_risk','deferred','waived','recorded')",
   ]) assert.ok(sql.includes(fragment),fragment);
-  assert.ok(/thread_id text NOT NULL REFERENCES operational_threads\\(id\\) ON DELETE RESTRICT/.test(sql),'messages must not disappear because a thread is removed');
+  assert.ok(sql.includes('thread_id text NOT NULL REFERENCES operational_threads(id) ON DELETE RESTRICT'),'messages must not disappear because a thread is removed');
   assert.equal(/UPDATE\s+operational_decisions/i.test(sql),false,'decision migration must not create mutable decision semantics');
 });

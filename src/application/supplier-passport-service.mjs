@@ -290,7 +290,7 @@ function buildPartnerBundle(passport) {
 }
 
 function stable(value) {
-  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null';
   if (Array.isArray(value)) return '[' + value.map(stable).join(',') + ']';
   return '{' + Object.keys(value).sort().map((key) => JSON.stringify(key) + ':' + stable(value[key])).join(',') + '}';
 }

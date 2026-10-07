@@ -1,6 +1,16 @@
 export function createPostgresSupplierTrustStore({ pool } = {}) {
   if (!pool || typeof pool.query !== 'function') throw new Error('SUPPLIER_TRUST_POOL_REQUIRED');
 
+  const get = async (checkpointSha256) => {
+    const result = await pool.query(
+      `SELECT checkpoint_sha256 AS "checkpointSha256",supplier_code AS "supplierCode",
+        reason,revoked_by AS "revokedBy",revoked_at AS "revokedAt"
+       FROM supplier_trust_revocations WHERE checkpoint_sha256=$1`,
+      [checkpointSha256],
+    );
+    return result.rows[0] ?? null;
+  };
+
   return Object.freeze({
     async revoke({ checkpointSha256, supplierCode, reason, revokedBy }) {
       const result = await pool.query(
@@ -12,17 +22,9 @@ export function createPostgresSupplierTrustStore({ pool } = {}) {
         [checkpointSha256, supplierCode, reason, revokedBy],
       );
       if (result.rowCount) return result.rows[0];
-      const existing = await this.get(checkpointSha256);
+      const existing = await get(checkpointSha256);
       return existing;
     },
-    async get(checkpointSha256) {
-      const result = await pool.query(
-        `SELECT checkpoint_sha256 AS "checkpointSha256",supplier_code AS "supplierCode",
-          reason,revoked_by AS "revokedBy",revoked_at AS "revokedAt"
-         FROM supplier_trust_revocations WHERE checkpoint_sha256=$1`,
-        [checkpointSha256],
-      );
-      return result.rows[0] ?? null;
-    },
+    get,
   });
 }

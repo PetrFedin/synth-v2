@@ -27,8 +27,8 @@ assert(html.includes(`<meta name="syntha-design-system" content="${DESIGN_SYSTEM
 assert(html.includes(`<meta name="syntha-design-system-version" content="${VERSION}">`),'Design-system version metadata is missing.');
 assert(html.includes(`/omnidata-v14-role-system.css?v=${RUNTIME_BUILD}`),'ODS stylesheet cache key is missing.');
 assert(html.includes(`/ui/omnidata-v14-role-system.js?v=${RUNTIME_BUILD}`),'ODS runtime cache key is missing.');
-assert(html.includes('/omnidata-v14-module-adapters.css?v=visual-20261007-14-module-adapters-6'),'ODS adapter stylesheet cache key is stale.');
-assert(html.includes('/ui/omnidata-v14-module-adapters.js?v=visual-20261007-14-module-adapters-6'),'ODS adapter runtime cache key is stale.');
+assert(html.includes('/omnidata-v14-module-adapters.css?v=visual-20260805-14-module-adapters-5'),'ODS adapter stylesheet cache key is stale.');
+assert(html.includes('/ui/omnidata-v14-module-adapters.js?v=visual-20260805-14-module-adapters-5'),'ODS adapter runtime cache key is stale.');
 const stylesheets=[...html.matchAll(/<link\s+[^>]*rel="stylesheet"[^>]*href="([^"]+)"/g)].map((m)=>pathname(m[1]));
 const scripts=[...html.matchAll(/<script\s+[^>]*defer[^>]*src="([^"]+)"/g)].map((m)=>pathname(m[1]));
 assert(stylesheets.at(-1)==='/omnidata-v14-role-system.css','ODS stylesheet must remain the final stylesheet.');

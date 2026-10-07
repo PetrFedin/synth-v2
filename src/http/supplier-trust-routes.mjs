@@ -12,7 +12,7 @@ export function createSupplierTrustRoutes({ supplierTrust } = {}) {
       mutation: false,
       execute(context) {
         assertQueryContract(context.query ?? {}, []);
-        return service.issueForActor(context.actorId, decodeURIComponent(context.params[0]));
+        return service.issueForActor(context.actorId, decodeURIComponent(String(context.params?.[0] ?? '')));
       },
     }),
     Object.freeze({

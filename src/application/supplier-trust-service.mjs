@@ -3,6 +3,7 @@ import { DomainError, invariant } from '../core/errors.mjs';
 
 const CHECKPOINT_VERSION = 'supplier-trust-checkpoint-v1';
 
+/** @param {{supplierPassport?: any, store?: any, privateKeyB64?: string, issuerId?: string, keyId?: string, clock?: (() => string)}} [options] */
 export function createSupplierTrustService({
   supplierPassport,
   store,

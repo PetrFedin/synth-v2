@@ -265,6 +265,7 @@ API/runtime contract:
 - `POST /v2/public/supplier-trust/verify` — public current-state verification.
 - PostgreSQL authority: `supplier_trust_revocations`.
 - Runtime: `createSupplierTrustService` is wired into the final PostgreSQL HTTP transport, not only constructed as an unused side service.
+- Trust factory type contract: every new supplier trust/passport/store/route factory must declare its checkJs dependency shape explicitly. The type-error baseline may not be widened to admit trust-layer code; new trust files must add zero type errors, while pre-existing baseline debt remains independently visible.
 
 Evidence:
 

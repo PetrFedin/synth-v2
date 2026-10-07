@@ -227,6 +227,49 @@ Two real actor contexts are required:
 
 PR #118 is merged as `main@0048d10c410231055d13436d61d0cf33db3e95b7`. Its exact pre-merge head `eb86a04b7ac9c6a0ba743882f59a6b33dfbfd113` passed Verify `33979864431`, Syntha V2 CI `33979864438`, MDM Reference Data `33979865154` and Product Commercialization Acceptance `33979864435`. That is repository/runtime CI evidence for the implemented slice; it is **not** an intended deployment-environment `PROD-PROVEN` claim. `PROD-PROVEN` remains forbidden until the specifically designated live acceptance environment completes the gate successfully.
 
+### 2.7 Supplier Trust checkpoints — IMPLEMENTED / LIVE EVIDENCE PENDING
+
+Purpose: expose a portable, externally verifiable trust checkpoint over the redacted Supplier Passport partner bundle without turning mutable supplier master data into a second qualification authority.
+
+Canonical chain:
+
+```text
+Supplier operational evidence
+→ Supplier Passport partner bundle
+→ stable evidence bundleSha256
+→ current qualification + audit expiry gate
+→ platform Ed25519 checkpoint
+→ public key / external verifier
+→ current bundle hash + expiry + revocation status
+```
+
+Rules and boundaries:
+
+- The checkpoint attests the current canonical partner bundle as observed by Syntha; it does not impersonate a supplier, auditor or certification body.
+- Issuance fails closed unless `SYNTHA_SUPPLIER_TRUST_PRIVATE_KEY_B64` is explicitly configured. There is no default private key.
+- The bundle identity hash excludes observation timestamps (`generatedAt`, `qualification.asOf`) and covers only stable evidence payload; otherwise identical evidence observed at a later time would become falsely stale.
+- Issuance is allowed only while supplier qualification is `current` and `auditExpiresAt` is in the future.
+- Public verification recomputes the current partner bundle through an internal system projection. A changed `bundleSha256` produces `STALE`; elapsed audit validity produces `EXPIRED`.
+- Explicit revocation is persisted in `supplier_trust_revocations` (migration 165) and produces `REVOKED`.
+- Tampering is separated into `INVALID_SIGNATURE` and `INVALID_ENVELOPE_HASH`; an unconfigured issuer reports `ISSUER_NOT_CONFIGURED`.
+- Issuance uses the authenticated supplier read boundary. Revocation additionally requires the existing `SUPPLIER_MANAGE` capability for the supplier's brand organisation.
+- Public verification surfaces only checkpoint/bundle status data supplied by or derivable from the presented envelope; it does not expose private supplier workspace data.
+
+API/runtime contract:
+
+- `GET /v2/suppliers/{supplierCode}/trust/checkpoint` — authenticated checkpoint issuance.
+- `POST /v2/supplier-trust/revoke` — authenticated governed revocation.
+- `GET /v2/public/supplier-trust/public-key` — public issuer key metadata.
+- `POST /v2/public/supplier-trust/verify` — public current-state verification.
+- PostgreSQL authority: `supplier_trust_revocations`.
+- Runtime: `createSupplierTrustService` is wired into the final PostgreSQL HTTP transport, not only constructed as an unused side service.
+
+Evidence:
+
+- `tests/supplier-trust.test.mjs` proves valid signing, stale detection, explicit revocation, audit-expiry fail-closed behavior and missing-key fail-closed behavior.
+- `tests/supplier-passport.test.mjs` proves the partner bundle hash is stable across observation timestamps.
+- Live deployment acceptance remains pending; therefore this capability is not `PROD-PROVEN`.
+
 ---
 
 ## 3. Architecture invariants

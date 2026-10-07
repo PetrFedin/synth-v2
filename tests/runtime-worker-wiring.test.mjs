@@ -40,13 +40,15 @@ test('shutdown waits for background workers before closing the database pool', a
 
 test('server registers notification health before listen but starts work only after successful bind', async () => {
   const source = await readFile(path.join(root, 'src', 'server.mjs'), 'utf8');
+  const productEngineeringIndex = source.indexOf('productEngineeringWorker = createBackgroundWorker');
   const workerIndex = source.indexOf('notificationWorker = createBackgroundWorker');
   const healthIndex = source.indexOf("healthRegistry.register('notification-projection'");
   const listenIndex = source.indexOf('await listen(server');
+  const productEngineeringStartIndex = source.indexOf('productEngineeringWorker.start()');
   const startIndex = source.indexOf('notificationWorker.start()');
-  assert.ok(workerIndex >= 0 && healthIndex > workerIndex && listenIndex > healthIndex && startIndex > listenIndex);
+  assert.ok(productEngineeringIndex >= 0 && workerIndex > productEngineeringIndex && healthIndex > workerIndex && listenIndex > healthIndex && productEngineeringStartIndex > listenIndex && startIndex > productEngineeringStartIndex);
   assert.match(source, /projectPending\(\{ limit: settings\.notificationProjectionBatchSize \}\)/);
-  assert.match(source, /const stoppers = \[notificationWorker, outboxWorker\]\.filter\(Boolean\)\.map\(\(worker\) => \(\) => worker\.stop\(\)\)/);
+  assert.match(source, /const stoppers = \[productEngineeringWorker, notificationWorker, outboxWorker\]\.filter\(Boolean\)\.map\(\(worker\) => \(\) => worker\.stop\(\)\)/);
   assert.match(source, /stoppers,/);
   assert.match(source, /SYNTHA_NOTIFICATION_PROJECTION_INTERVAL_MS/);
   assert.match(source, /SYNTHA_NOTIFICATION_PROJECTION_BATCH_SIZE/);

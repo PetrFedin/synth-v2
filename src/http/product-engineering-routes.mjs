@@ -167,6 +167,8 @@ function validateProposal(body) {
   probability(body.confidence, 'confidence');
 }
 function validateProposalApply(body) {
+  invariant(Object.hasOwn(body, 'expectedProposalVersion'), 'HTTP_BODY_FIELD_MISSING', 'expectedProposalVersion is required', { field: 'expectedProposalVersion' });
+  invariant(Object.hasOwn(body, 'expectedCanonicalVersion'), 'HTTP_BODY_FIELD_MISSING', 'expectedCanonicalVersion is required', { field: 'expectedCanonicalVersion' });
   version(body.expectedProposalVersion, 'expectedProposalVersion');
   version(body.expectedCanonicalVersion, 'expectedCanonicalVersion');
 }

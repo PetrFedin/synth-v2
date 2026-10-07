@@ -67,9 +67,11 @@ test('supplier passport makes expired qualification evidence visible without rew
 
 test('supplier passport route is read-only and OpenAPI-visible', async () => {
   const calls = [];
-  const [route] = createSupplierPassportRoutes({ supplierPassport: {
+  const routes = createSupplierPassportRoutes({ supplierPassport: {
     getSupplierPassportForActor(actorId, supplierCode) { calls.push([actorId, supplierCode]); return { schemaVersion: 'supplier-passport-v1' }; },
   } });
+  const route = routes.find((item) => item.pattern.test('/v2/suppliers/SUP-01/passport'));
+  assert.ok(route);
   assert.equal(route.method, 'GET');
   assert.equal(route.mutation, false);
   assert.ok(route.pattern.test('/v2/suppliers/SUP-01/passport'));

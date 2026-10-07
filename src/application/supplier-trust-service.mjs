@@ -3,14 +3,16 @@ import { invariant } from '../core/errors.mjs';
 
 const CHECKPOINT_VERSION = 'supplier-trust-checkpoint-v1';
 
-export function createSupplierTrustService({
-  supplierPassport,
-  store,
-  privateKeyB64,
-  issuerId = 'syntha-platform',
-  keyId = 'syntha-supplier-trust-v1',
-  clock = () => new Date().toISOString(),
-} = {}) {
+/** @param {{supplierPassport?: any, store?: any, privateKeyB64?: string, issuerId?: string, keyId?: string, clock?: () => string}} [options] */
+export function createSupplierTrustService(options = {}) {
+  const {
+    supplierPassport,
+    store,
+    privateKeyB64,
+    issuerId = 'syntha-platform',
+    keyId = 'syntha-supplier-trust-v1',
+    clock = () => new Date().toISOString(),
+  } = options;
   invariant(supplierPassport?.getPartnerBundleForActor, 'SUPPLIER_TRUST_PASSPORT_REQUIRED', 'Supplier passport service is required');
   invariant(supplierPassport?.getPartnerBundleForSystem, 'SUPPLIER_TRUST_SYSTEM_PROJECTION_REQUIRED', 'Supplier system projection is required');
   invariant(supplierPassport?.assertManageForActor, 'SUPPLIER_TRUST_AUTHORIZATION_REQUIRED', 'Supplier trust authorization is required');

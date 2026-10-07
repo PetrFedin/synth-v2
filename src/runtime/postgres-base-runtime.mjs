@@ -119,7 +119,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
   const sampleStore = createPostgresSampleStore({ pool });
   const sourcingStore = createPostgresSourcingStore({ pool });
   const techPackStore = createPostgresTechPackStore({ pool });
-  const options = { store, nextId: runtimeNextId, ...(clock ? { clock } : {}) };
+  const serviceOptions = { store, nextId: runtimeNextId, ...(clock ? { clock } : {}) };
   const auth = createAuthService({
     store: createPostgresAuthStore({ pool }), nextId: runtimeNextId,
     ...(clock ? { clock } : {}), ...(randomBytesImpl ? { randomBytesImpl } : {}),
@@ -130,7 +130,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
     ...(revokedSessionRetentionMs !== undefined ? { revokedSessionRetentionMs } : {}),
   });
   const readiness = migrationsDir ? createPostgresReadinessService({ pool, migrationsDir, ...(clock ? { clock } : {}), ...(operationalReadiness ? { operationalCheck: operationalReadiness } : {}) }) : undefined;
-  const platform = createWholesalePlatform({ ...options, productIdentityStore });
+  const platform = createWholesalePlatform({ ...serviceOptions, productIdentityStore });
   const legalEntities = createLegalEntityService({ store: legalEntityStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) });
   const team = createTeamService({ store: createPostgresTeamStore({ pool }), nextId: runtimeNextId, ...(randomBytesImpl ? { randomBytesImpl } : {}), ...(clock ? { clock } : {}) });
   const catalog = Object.freeze({ ...createCatalogService({ wholesaleStore: store, catalogStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createCatalogQueryService({ reader: createPostgresCatalogReader({ pool }) }) });
@@ -216,10 +216,10 @@ export function createPostgresWholesaleRuntime(options = {}) {
   const categoryAttributes = createCategoryAttributeQueryService({ reader: createPostgresCategoryAttributeReader({ pool }) });
   const organisationMembers = createOrganisationMemberQueryService({ reader: createPostgresOrganisationMemberReader({ pool }) });
   const awaitingActions = createAwaitingActionQueryService({ reader: createPostgresAwaitingActionReader({ pool }), ...(clock ? { clock } : {}) });
-  const partners = createPartnerAccessService(options);
-  const retailDoors = createRetailDoorService(options);
-  const collaboration = createShowroomSelectionService({ ...options, catalogReader: catalog, commercialPublicationReader: commercialPublication });
-  const orders = createOrderBuilderService({ ...options, commercialPublicationReader: commercialPublication });
+  const partners = createPartnerAccessService(serviceOptions);
+  const retailDoors = createRetailDoorService(serviceOptions);
+  const collaboration = createShowroomSelectionService({ ...serviceOptions, catalogReader: catalog, commercialPublicationReader: commercialPublication });
+  const orders = createOrderBuilderService({ ...serviceOptions, commercialPublicationReader: commercialPublication });
   const projectionStore = createPostgresNotificationProjectionStore({ pool });
   const notificationReader = createPostgresNotificationReader({ pool });
   const notificationCore = createNotificationService({

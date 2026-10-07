@@ -1,4 +1,6 @@
-export function createPostgresSupplierTrustStore({ pool } = {}) {
+/** @param {{pool?: any}} [options] */
+export function createPostgresSupplierTrustStore(options = {}) {
+  const { pool } = options;
   if (!pool || typeof pool.query !== 'function') throw new Error('SUPPLIER_TRUST_POOL_REQUIRED');
 
   return Object.freeze({

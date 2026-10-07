@@ -12,7 +12,7 @@ function refName(operation) {
 
 test('authoritative OpenAPI exposes canonical Product Identity Measurement Chart routes without inventing alternate methods', () => {
   const api = wholesaleV2ExtendedOpenApi;
-  assert.equal(api.info.version, '1.17.0');
+  assert.equal(api.info.version, '1.20.0');
 
   const collection = api.paths['/measurements/canonical'];
   const item = api.paths['/measurements/canonical/{chartId}'];

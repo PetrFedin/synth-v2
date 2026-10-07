@@ -164,7 +164,7 @@ test('cost allocation HTTP/OpenAPI expose exact custom weights while composed v2
     body: { ...body, customLineWeightsByCostEntryId: { 'cost-1': [{ orderLineNo: 1, productSkuId: 'ps-1', weight: 1, unsafe: true }] } },
   }), (error) => error.code === 'HTTP_BODY_FIELD_UNKNOWN');
 
-  assert.equal(wholesaleV2ExtendedOpenApi.info.version, '1.17.0');
+  assert.equal(wholesaleV2ExtendedOpenApi.info.version, '1.20.0');
   const schemas = wholesaleV2ExtendedOpenApi.components.schemas;
   assert.ok(schemas.CostAllocationRunInput.properties.customLineWeightsByCostEntryId);
   assert.ok(schemas.CostAllocationRow.required.includes('orderLineNo'));

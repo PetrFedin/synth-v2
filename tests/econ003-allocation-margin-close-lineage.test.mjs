@@ -88,7 +88,7 @@ test('margin HTTP route carries explicit costAllocationRunSnapshotId to the serv
 });
 
 test('authoritative OpenAPI exposes ECON-003 allocation provenance without version drift', () => {
-  assert.equal(wholesaleV2ExtendedOpenApi.info.version, '1.17.0');
+  assert.equal(wholesaleV2ExtendedOpenApi.info.version, '1.20.0');
   const schemas = wholesaleV2ExtendedOpenApi.components.schemas;
   assert.ok(schemas.MarginActualizationInput.properties.costAllocationRunSnapshotId);
   assert.ok(schemas.MarginActualizationSnapshot.properties.allocationStatus);

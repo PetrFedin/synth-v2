@@ -126,7 +126,7 @@ test('BuyerCatalog refuses forged price lineage, frozen terms or buyer hierarchy
   }
 });
 
-test('public route and composed OpenAPI 1.17 accept only ProductSku minor-price override input', () => {
+test('public route and composed OpenAPI 1.20 accept only ProductSku minor-price override input', () => {
   let calls = 0;
   const routes = createCommercialPublicationRoutes({
     commercialPublication: {
@@ -158,7 +158,7 @@ test('public route and composed OpenAPI 1.17 accept only ProductSku minor-price 
   assert.deepEqual(schema.required, ['productSkuId', 'wholesalePriceMinor']);
   assert.deepEqual(Object.keys(schema.properties).sort(), ['productSkuId', 'wholesalePriceMinor']);
   assert.equal(schema.additionalProperties, false);
-  assert.equal(wholesaleV2ExtendedOpenApi.info.version, '1.17.0');
+  assert.equal(wholesaleV2ExtendedOpenApi.info.version, '1.20.0');
 });
 
 test('migration 075 is forward-only and guards fresh price/catalog writes without flat/master joins', async () => {

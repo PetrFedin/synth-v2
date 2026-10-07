@@ -217,6 +217,14 @@
     const sku = bySku.get(sample.sku);
     const assessment = core.assess(sample, sku, referenceTime);
     const actions = core.allowedActions(sample, { canManage: canManage(sample.brandId), catalogSku: sku, referenceTime }).map((action) => actionButton(action, sample, assessment));
+    const collaborationButton = global.SynthaOperationalCollaboration?.createButton({
+      entityType: 'sample',
+      entityId: sample.id,
+      entityVersion: sample.version,
+      organisationIds: [sample.brandId],
+      label: `${sample.sampleCode} · ${sample.sku}`,
+    });
+    if (collaborationButton) actions.push(collaborationButton);
     // These are diagnostic codes from the domain, not copy. Printing them put SAMPLE_SUPPLIER_REQUIRED
     // in front of the reader where a sentence belongs; the code stays available for support in the
     // element's title.

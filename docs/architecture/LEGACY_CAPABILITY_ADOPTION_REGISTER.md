@@ -1207,3 +1207,30 @@ Still intentionally **not** implemented at this checkpoint:
 
 Those remain blocked until Persistent Collaboration and the ODS contextual inspector pass their own gates.
 
+---
+
+## 28. Implementation checkpoint — ODS Contextual Collaboration Inspector
+
+Date: **2026-10-07**
+
+PR #245 merged as `main@99311b4eaa54b946146c16aa2c5d50683c7d27bb` with exact-head Verify, PostgreSQL CI and Product Commercialization Acceptance green.
+
+Current UI wave introduces a single shared contextual inspector:
+
+- entity-bound read route only;
+- Discussion and Decision tabs remain distinct;
+- one shared control integrated first into Samples, Production Orders and Wholesale Orders;
+- no duplicate global messaging navigation;
+- no duplicate task inbox;
+- ODS desktop right inspector / tablet bounded split / phone full-height surface;
+- actor organisation resolved from active membership + mirrored capability, never from arbitrary free client input;
+- thread participants still revalidated server-side;
+- decision supersession remains append-only;
+- no Operational Exception controls are rendered in this wave.
+
+Runtime admission hardening in this wave additionally requires the complete PostgreSQL runtime to forward the already-constructed canonical `operationalCollaboration` service into its HTTP transport. The full runtime must not instantiate another collaboration store/service, and an automated regression contract locks that invariant.
+
+The inspector remains on the existing canonical ODS module-adapter build identity rather than creating a second visual layer or cache-key lineage.
+
+The next admissible transition remains: **inspector exact-head UI/Verify/PostgreSQL acceptance → merge → then Exception/SLA authority**.
+

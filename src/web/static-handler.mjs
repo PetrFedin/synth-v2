@@ -59,6 +59,7 @@ const ASSETS = Object.freeze({
   '/ui/i18n-runtime.js': ['modules/i18n-runtime.js', JS, CACHE],
   '/ui/i18n-v7.js': ['modules/i18n-v7.js', JS, VISUAL_CACHE],
   '/ui/ui-capabilities.js': ['modules/ui-capabilities.js', JS, CACHE],
+  '/ui/operational-collaboration.js': ['modules/operational-collaboration.js', JS, VISUAL_CACHE],
   '/ui/ui-validation.js': ['modules/ui-validation.js', JS, CACHE],
   '/ui/error-messages.js': ['modules/error-messages.js', JS, CACHE],
   '/ui/workspace-pagination.js': ['modules/workspace-pagination.js', JS, CACHE],

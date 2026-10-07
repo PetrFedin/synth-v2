@@ -1770,3 +1770,27 @@ This tranche implements the next gate from the adoption register and deliberatel
 
 Status: **IMPLEMENTATION IN PROGRESS / NOT YET MERGED / NO Exception-SLA PERSISTENCE YET**. Next gate is exact-head Verify + PostgreSQL CI, then ODS contextual inspector on top of this API.
 
+### 2026-10-07 — ODS Contextual Collaboration Inspector
+
+Persistent Collaboration was accepted and merged as PR #245 at `main@99311b4eaa54b946146c16aa2c5d50683c7d27bb` after exact-head Verify, PostgreSQL CI and Product Commercialization Acceptance passed. The PostgreSQL suite directly proved EntityThread/message/Decision Ledger persistence, idempotent replay and concurrent decision supersession.
+
+The next gate is the shared **Omnidata Contextual Collaboration Inspector**. It is one reusable surface, not a new chat section and not a separate task application.
+
+**Placement:** Samples, Production Orders and Wholesale Orders expose the same secondary `Discussion` control next to their existing business actions. The control opens the exact entity context; it does not change the entity's canonical status.
+
+**Desktop/tablet/phone:** desktop is a right-side inspector bounded by `--ods-inspector-width`; tablet is a 44% bounded side surface; phone is a full-height 100vw operational sheet. The implementation uses existing ODS tokens/semantic parts and the shared adapter layer rather than a detached legacy visual system.
+
+**Capabilities:** `collaboration.read` governs visibility, `collaboration.write` governs thread/message actions and `decision.record` governs immutable decisions. The client selects an acting organisation only from the actor's active memberships that actually hold the required backend-mirrored capability.
+
+**Discussion:** a user can create an entity-bound thread, choose a bounded thread kind, read message history, post messages and resolve a thread. Participant organisations are proposed from the entity context but remain server-admitted through the active relationship rules implemented in PR #245.
+
+**Decision Ledger:** the inspector displays immutable decisions separately from chat and permits a governed new/superseding decision. It never edits a prior decision and never mutates Product/Order/Production truth.
+
+**Explicit boundary:** Operational Exception/SLA, escalation, Awaiting Action exception projection and Calendar linking remain out of this tranche. They may start only after this inspector's exact-head Verify/PostgreSQL/UI contracts are green.
+
+**Full PostgreSQL runtime admission:** the base runtime already constructs the one canonical `operationalCollaboration` service over `createPostgresOperationalCollaborationStore`. The full `postgres-runtime` must forward that exact service into its HTTP transport; it must never reconstruct a second service/store. A dedicated regression contract now locks this wiring so the route cannot silently degrade to the unavailable fallback in the complete runtime.
+
+**ODS asset identity:** the inspector extends the existing canonical `visual-20260805-14-module-adapters-5` adapter build. The UI wave does not mint a second adapter build identifier merely because new semantic selectors were added; validator and inspector tests are required to agree with the canonical shell asset identity.
+
+Status: **IMPLEMENTATION IN PROGRESS / NO EXCEPTION-SLA YET**.
+

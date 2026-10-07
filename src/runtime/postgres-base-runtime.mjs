@@ -167,7 +167,6 @@ export function createPostgresWholesaleRuntime({
     productEngineering,
     readinessSourceReader: productReadinessSourceReader,
   });
-  const productEngineeringApi = Object.freeze({ ...productEngineering, ...productEngineeringApply, ...productEngineeringImpact });
   const productReadiness = createProductReadinessService({
     store: productReadinessStore,
     sourceReader: productReadinessSourceReader,
@@ -201,6 +200,7 @@ export function createPostgresWholesaleRuntime({
     materials,
     techPacks,
   });
+  const productEngineeringApi = Object.freeze({ ...productEngineering, ...productEngineeringApply, ...productEngineeringImpact });
   // Governed reference data is global and read-only from the application, so it needs a reader and
   // nothing else.
   const libraries = createLibraryQueryService({ reader: createPostgresLibraryReader({ pool }) });

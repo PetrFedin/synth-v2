@@ -18,7 +18,8 @@ export function createPostgresProductEngineeringJobStore(options={}) {
       );
       return mapJob(result.rows[0]);
     },
-    async claim({workerId,limit=10,leaseMs=60000,claimedAt=new Date().toISOString()}={}) {
+    async claim(options={}) {
+      const {workerId,limit=10,leaseMs=60000,claimedAt=new Date().toISOString()}=/** @type {{workerId?: string, limit?: number, leaseMs?: number, claimedAt?: string}} */ (options);
       invariant(typeof workerId==='string'&&workerId.trim(),'ENGINEERING_JOB_WORKER_REQUIRED','Engineering job worker id is required');
       invariant(Number.isInteger(limit)&&limit>=1&&limit<=100,'ENGINEERING_JOB_LIMIT_INVALID','Engineering job claim limit must be 1-100');
       invariant(Number.isInteger(leaseMs)&&leaseMs>=1000&&leaseMs<=900000,'ENGINEERING_JOB_LEASE_INVALID','Engineering job lease must be 1s-15m');

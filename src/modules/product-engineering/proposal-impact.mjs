@@ -40,6 +40,7 @@ const POLICY=Object.freeze({
   }),
 });
 
+/** @param {{proposal?: any, context?: any}} [options] */
 export function evaluateEngineeringProposalImpact({proposal,context=null}={}) {
   invariant(proposal?.id&&proposal?.targetAuthority&&proposal?.targetField,'PRODUCT_ENGINEERING_IMPACT_PROPOSAL_REQUIRED','Engineering proposal is required for impact evaluation');
   const rules=POLICY[proposal.targetAuthority]?.[proposal.targetField]??[];

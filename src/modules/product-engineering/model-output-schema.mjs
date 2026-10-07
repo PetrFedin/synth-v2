@@ -22,6 +22,7 @@ export const ENGINEERING_OUTPUT_SCHEMAS=Object.freeze([
   'garment-ontology-v1',
 ]);
 
+/** @param {{schemaVersion?: string, output?: any, sourceIds?: any[], sources?: any[]}} [options] */
 export function validateEngineeringModelOutput({schemaVersion,output,sourceIds=[],sources=[]}={}) {
   invariant(ENGINEERING_OUTPUT_SCHEMAS.includes(schemaVersion),'ENGINEERING_MODEL_SCHEMA_UNSUPPORTED','Engineering model output schema is not supported',{schemaVersion});
   object(output,'ENGINEERING_MODEL_OUTPUT_INVALID','Model output must be an object');

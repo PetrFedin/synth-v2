@@ -19,6 +19,7 @@ export function validateAcceptanceOrigin(rawUrl) {
   return Object.freeze({ url, local });
 }
 
+/** @param {{pool?: any, auth?: any, email?: string, password?: string, displayName?: string}} [options] */
 export async function ensureAcceptanceBrandOwner({ pool, auth, email, password, displayName = 'Syntha Acceptance Brand Owner' } = {}) {
   if (!pool || typeof pool.query !== 'function') throw new Error('PostgreSQL pool is required');
   if (!auth || typeof auth.bootstrapUser !== 'function') throw new Error('Authentication service is required');
@@ -48,6 +49,7 @@ export async function ensureAcceptanceBrandOwner({ pool, auth, email, password, 
   return Object.freeze({ id: user.id, email: user.email, created: true });
 }
 
+/** @param {{baseUrl?: string, email?: string, password?: string, fetchImpl?: typeof fetch}} [options] */
 export async function loginAcceptanceSession({ baseUrl, email, password, fetchImpl = globalThis.fetch } = {}) {
   const target = validateAcceptanceOrigin(baseUrl);
   const payload = await requestJson(fetchImpl, target.url, '/v2/auth/login', {
@@ -59,6 +61,7 @@ export async function loginAcceptanceSession({ baseUrl, email, password, fetchIm
   return Object.freeze({ token, expiresAt: payload.data.expiresAt ?? null, user: payload.data.user ?? null });
 }
 
+/** @param {{baseUrl?: string, token?: string, fetchImpl?: typeof fetch}} [options] */
 export async function logoutAcceptanceSession({ baseUrl, token, fetchImpl = globalThis.fetch } = {}) {
   const target = validateAcceptanceOrigin(baseUrl);
   await requestJson(fetchImpl, target.url, '/v2/auth/logout', { method: 'POST', token, body: {} });

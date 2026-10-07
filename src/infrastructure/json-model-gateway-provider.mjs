@@ -7,7 +7,8 @@ export function createJsonModelGatewayProvider(options={}) {
   invariant(typeof token==='string'&&token.length>=16,'AI_GATEWAY_TOKEN_INVALID','AI model gateway token is required');
   invariant(typeof fetchImpl==='function','AI_GATEWAY_FETCH_INVALID','AI model gateway fetch implementation is required');
   return Object.freeze({
-    async execute(request,{signal}={}) {
+    async execute(request,options={}) {
+      const {signal}=/** @type {{signal?: AbortSignal}} */ (options);
       const controller=new AbortController();
       const relay=()=>controller.abort();
       signal?.addEventListener?.('abort',relay,{once:true});

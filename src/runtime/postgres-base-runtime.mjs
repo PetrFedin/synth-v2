@@ -92,15 +92,17 @@ import { createWholesaleHttpHandler } from '../http/api.mjs';
 import { createWholesaleFetchHandler } from '../http/fetch-api.mjs';
 import { resolveRuntimeIdGenerator } from './id-generator.mjs';
 
-export function createPostgresWholesaleRuntime({
-  pool, migrationsDir, clock, nextId, randomBytesImpl, sessionTtlMs, maxLoginFailures, loginWindowMs,
-  loginBlockMs, revokedSessionRetentionMs, notificationProjectionWorkerId, notificationProjectionLeaseMs,
-  notificationProjectionRetryDelayMs, notificationProjectionMaxAttempts, outboxPublisher,
-  outboxPublicationWorkerId, outboxPublicationLeaseMs, outboxPublicationRetryDelayMs,
-  outboxPublicationMaxRetryDelayMs, outboxPublicationMaxAttempts, maintenanceIntervalMs,
-  maintenanceRetryDelayMs, maintenanceStatementTimeoutMs, commandRetentionMs, authAuditRetentionMs, throttleRetentionMs,
-  outboxRetentionMs, operationalReadiness, engineeringModelProviders,
-} = {}) {
+/** @param {any} [options] */
+export function createPostgresWholesaleRuntime(options = {}) {
+  const {
+    pool, migrationsDir, clock, nextId, randomBytesImpl, sessionTtlMs, maxLoginFailures, loginWindowMs,
+    loginBlockMs, revokedSessionRetentionMs, notificationProjectionWorkerId, notificationProjectionLeaseMs,
+    notificationProjectionRetryDelayMs, notificationProjectionMaxAttempts, outboxPublisher,
+    outboxPublicationWorkerId, outboxPublicationLeaseMs, outboxPublicationRetryDelayMs,
+    outboxPublicationMaxRetryDelayMs, outboxPublicationMaxAttempts, maintenanceIntervalMs,
+    maintenanceRetryDelayMs, maintenanceStatementTimeoutMs, commandRetentionMs, authAuditRetentionMs, throttleRetentionMs,
+    outboxRetentionMs, operationalReadiness, engineeringModelProviders,
+  } = options;
   invariant(pool, 'POSTGRES_POOL_REQUIRED', 'PostgreSQL pool is required');
   invariant(operationalReadiness === undefined || typeof operationalReadiness === 'function', 'READINESS_OPERATIONAL_CHECK_INVALID', 'Operational readiness check must be a function');
   const runtimeNextId = resolveRuntimeIdGenerator(nextId);

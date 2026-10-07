@@ -17,7 +17,7 @@ const APPLY_MATRIX=Object.freeze({
 
 /**
  * @param {{
- *   productEngineering:any,
+ *   productEngineering?:any,
  *   measurements?:any,
  *   materials?:any,
  *   techPacks?:any,
@@ -46,6 +46,7 @@ export function createProductEngineeringProposalApplyService(options={}) {
         authority:proposal.targetAuthority,
         targetField:proposal.targetField,
       });
+      const payload=canonicalPayload(proposal,input.expectedCanonicalVersion);
       const service=options[action.service];
       invariant(service&&typeof service[action.method]==='function','PRODUCT_ENGINEERING_APPLY_TARGET_SERVICE_REQUIRED','Canonical target service is not available',{
         authority:proposal.targetAuthority,
@@ -53,7 +54,6 @@ export function createProductEngineeringProposalApplyService(options={}) {
       });
 
       const canonicalId=canonicalCommandId(commandId);
-      const payload=canonicalPayload(proposal,input.expectedCanonicalVersion);
       const result=await service[action.method](canonicalId,actorId,proposal.targetEntityId,payload);
       const entityId=result?.id??result?.code??result?.techPackCode??result?.sequenceId??proposal.targetEntityId;
       const version=Number.isInteger(result?.version)?result.version:null;
@@ -96,7 +96,7 @@ function canonicalPayload(proposal,expectedCanonicalVersion){
 }
 
 function canonicalCommandId(commandId){
-  return `${commandId}:canonical:${proposalId}`;
+  return `${commandId}:canonical`;
 }
 
 function assertApplyInput(commandId,actorId,proposalId,input){

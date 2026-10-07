@@ -11,6 +11,7 @@ const ONLINE_STATEMENT_SEPARATOR = /^\s*--\s*syntha:statement\s*$/gim;
 const ONLINE_INDEX_STATEMENT = /^CREATE\s+(?:UNIQUE\s+)?INDEX\s+CONCURRENTLY\s+IF\s+NOT\s+EXISTS\s+([a-z][a-z0-9_]*)\s+ON\s+/i;
 const SAFE_INDEX_NAME = /^[a-z][a-z0-9_]{0,62}$/;
 
+/** @param {{pool?: any, attempts?: number, delayMs?: number, sleep?: (delayMs:number)=>Promise<any>}} [options] */
 export async function waitForPostgres({ pool, attempts = 30, delayMs = 1_000, sleep = defaultSleep } = {}) {
   invariant(pool && typeof pool.query === 'function', 'POSTGRES_POOL_REQUIRED', 'PostgreSQL pool is required');
   invariant(Number.isInteger(attempts) && attempts > 0, 'POSTGRES_READINESS_ATTEMPTS_INVALID', 'PostgreSQL readiness attempts must be a positive integer');
@@ -27,6 +28,7 @@ export async function waitForPostgres({ pool, attempts = 30, delayMs = 1_000, sl
   throw lastError;
 }
 
+/** @param {{pool?: any, migrationsDir?: string, clock?: () => string, lockAttempts?: number, lockDelayMs?: number, sleep?: (delayMs:number)=>Promise<any>}} [options] */
 export async function migratePostgres({
   pool,
   migrationsDir,

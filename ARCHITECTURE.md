@@ -1750,3 +1750,23 @@ After rebasing the adoption branch onto `main@af135bcf8e79aea739019b172395c4f25d
 
 These are verification repairs only. They do not add persistence/API/UI authority to Operational Control.
 
+### 2026-10-07 — Persistent EntityThread + Decision Ledger implementation tranche
+
+Branch: `feat/operational-collaboration-persistence`, based on exact merged foundation `main@bbd46f8b30b997eec7c961f2f6fa0fd76b14360c`.
+
+This tranche implements the next gate from the adoption register and deliberately stops before Operational Exception/SLA persistence.
+
+**New authority:** migration `172_operational_collaboration.sql` persists entity-linked threads, immutable messages and immutable decisions. The migration adds a dedicated `operational-collaboration` command scope/ledger under the existing global `command_registry`; it does not revive PR #5's independent command authority.
+
+**Security boundary:** a cross-organisation thread is admitted only when its owner and requested participant form an active brand-shop trade relationship. The client may request an acting organisation, but the service validates active membership, required capability and thread participation inside the same transaction. Viewer remains read-only; operational roles receive collaboration read/write and governed decision recording.
+
+**Decision semantics:** decisions are append-only. A changed decision creates a new row with `supersedesDecisionId`; a unique partial index prevents two competing replacements from superseding the same decision. Stable entity identity must match, while a replacement may pin a newer entity version/hash.
+
+**Read model:** `GET /v2/operational/entities/{entityType}/{entityId}/collaboration` returns only contextual collaboration visible through participant organisations. It is a projection and cannot mutate or replace Product, Order, Production, Supply, Quality or Economics authority.
+
+**Events:** writes publish `collaboration.thread.created.v1`, `collaboration.message.posted.v1`, `collaboration.thread.resolved.v1`, `collaboration.thread.archived.v1`, `decision.recorded.v1` or `decision.superseded.v1` through the existing transactional outbox.
+
+**Migration sequencing:** active draft PR #242 currently occupies 165–171 on its branch while main owns a different 165 Supplier Trust migration. Operational Collaboration therefore begins at 172; PR #242 must still reconcile its 165 collision before merge.
+
+Status: **IMPLEMENTATION IN PROGRESS / NOT YET MERGED / NO Exception-SLA PERSISTENCE YET**. Next gate is exact-head Verify + PostgreSQL CI, then ODS contextual inspector on top of this API.
+

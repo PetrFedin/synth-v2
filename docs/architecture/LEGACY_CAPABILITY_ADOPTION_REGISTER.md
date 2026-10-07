@@ -1173,3 +1173,37 @@ This is deliberate:
 
 It is **not** claimed as a user-visible completed feature until Waves B/C complete.
 
+---
+
+## 27. Implementation checkpoint — Persistent Collaboration wave
+
+Date: **2026-10-07**
+
+Foundation PR #244 merged as `main@bbd46f8b30b997eec7c961f2f6fa0fd76b14360c` after exact-head Verify, PostgreSQL CI and Product Commercialization Acceptance all passed.
+
+Current implementation branch: `feat/operational-collaboration-persistence`.
+
+Implemented in this wave before UI:
+
+- migration 172 for EntityThread, participants, immutable messages, Decision Ledger and dedicated command ledger;
+- global command registry scope extension rather than a second idempotency authority;
+- collaboration read/write and decision-record capabilities;
+- active trade-relationship admission for cross-company threads;
+- server-validated acting organisation and participant boundary;
+- exactly-once decision supersession chain;
+- transactional outbox events;
+- authenticated HTTP routes and OpenAPI 1.18 augmentation;
+- contextual entity read projection;
+- unit/route/migration acceptance coverage.
+
+Still intentionally **not** implemented at this checkpoint:
+
+- Operational Exception persistence;
+- SLA policy;
+- escalation worker;
+- Awaiting Action exception projection;
+- calendar linking;
+- Change Impact graph.
+
+Those remain blocked until Persistent Collaboration and the ODS contextual inspector pass their own gates.
+

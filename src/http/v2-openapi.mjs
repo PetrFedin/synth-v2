@@ -1,5 +1,6 @@
 import { withApprovedDemandProductionOpenApi } from './approved-demand-production-openapi.mjs';
 import { withAwaitingActionOpenApi } from './awaiting-action-openapi.mjs';
+import { withOperationalCollaborationOpenApi } from './operational-collaboration-openapi.mjs';
 import { withBomOpenApi } from './bom-openapi.mjs';
 import { withCollectionStyleVersionOpenApi } from './collection-style-version-openapi.mjs';
 import { withCommercialPublicationOpenApi } from './commercial-publication-openapi.mjs';
@@ -110,7 +111,7 @@ const composed = withSupplierPortalOpenApi(withOperationSequenceOpenApi(
 
 const withSupplierPassport = withSupplierPassportOpenApi(composed);
 
-export const wholesaleV2ExtendedOpenApi = preserveAuthoritativeContractVersion(withAwaitingActionOpenApi(withTeamOpenApi(withSupplierPassport)));
+export const wholesaleV2ExtendedOpenApi = preserveAuthoritativeContractVersion(withOperationalCollaborationOpenApi(withAwaitingActionOpenApi(withTeamOpenApi(withSupplierPassport))));
 
 function preserveAuthoritativeContractVersion(specification) {
   const normalized = structuredClone(specification);

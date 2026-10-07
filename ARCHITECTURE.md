@@ -254,6 +254,8 @@ Rules and boundaries:
 - Tampering is separated into `INVALID_SIGNATURE` and `INVALID_ENVELOPE_HASH`; an unconfigured issuer reports `ISSUER_NOT_CONFIGURED`.
 - Issuance uses the authenticated supplier read boundary. Revocation additionally requires the existing `SUPPLIER_MANAGE` capability for the supplier's brand organisation.
 - Public verification surfaces only checkpoint/bundle status data supplied by or derivable from the presented envelope; it does not expose private supplier workspace data.
+- `src/http/supplier-passport-openapi.mjs` is the single canonical OpenAPI augmentation for Supplier Passport and the partner bundle. It must contain one schema graph and one route map only; duplicated/truncated schema fragments are invalid architecture state.
+- The partner-bundle schema explicitly publishes `hashScope=stable-evidence-v1` and `bundleSha256`; observation timestamps remain metadata and are not part of evidence identity.
 
 API/runtime contract:
 

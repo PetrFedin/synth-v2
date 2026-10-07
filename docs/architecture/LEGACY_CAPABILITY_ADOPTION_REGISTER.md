@@ -1,9 +1,9 @@
 # Legacy Capability Adoption Register
 
-Status date: **2026-10-07**  
-Target repository: **PetrFedin/synth-v2**  
-Audit baseline: **main@af135bcf8e79aea739019b172395c4f25d653778**  
-Donor repositories: **PetrFedin/Projects**, **PetrFedin/syntha**  
+Status date: **2026-10-07**
+Target repository: **PetrFedin/synth-v2**
+Audit baseline: **main@af135bcf8e79aea739019b172395c4f25d653778**
+Donor repositories: **PetrFedin/Projects**, **PetrFedin/syntha**
 Authority: this document governs donor adoption only. **ARCHITECTURE.md remains the single product/runtime authority.**
 
 ---
@@ -1233,4 +1233,3 @@ Runtime admission hardening in this wave additionally requires the complete Post
 The inspector remains on the existing canonical ODS module-adapter build identity rather than creating a second visual layer or cache-key lineage.
 
 The next admissible transition remains: **inspector exact-head UI/Verify/PostgreSQL acceptance → merge → then Exception/SLA authority**.
-

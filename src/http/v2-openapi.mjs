@@ -18,6 +18,7 @@ import { withFulfillmentOpenApi } from './fulfillment-openapi.mjs';
 import { withInventoryOpenApi } from './inventory-openapi.mjs';
 import { withProductIdentityOpenApi } from './product-identity-openapi.mjs';
 import { withProductReadinessOpenApi } from './product-readiness-openapi.mjs';
+import { withProductEngineeringOpenApi } from './product-engineering-openapi.mjs';
 import { withReceiptClaimsOpenApi } from './receipt-claims-openapi.mjs';
 import { withRetailDoorOpenApi } from './retail-door-openapi.mjs';
 import { withSelectionMatrixOpenApi } from './selection-matrix-openapi.mjs';
@@ -39,7 +40,7 @@ import { withTechPackOpenApi } from './tech-pack-openapi.mjs';
 import { withTeamOpenApi } from './team-openapi.mjs';
 import { wholesaleV2OpenApi } from './openapi.mjs';
 
-const AUTHORITATIVE_V2_CONTRACT_VERSION = '1.18.0';
+const AUTHORITATIVE_V2_CONTRACT_VERSION = '1.20.0';
 
 const composed = withSupplierPortalOpenApi(withOperationSequenceOpenApi(
   withCuttingOpenApi(
@@ -110,8 +111,11 @@ const composed = withSupplierPortalOpenApi(withOperationSequenceOpenApi(
 ));
 
 const withSupplierPassport = withSupplierPassportOpenApi(composed);
-
-export const wholesaleV2ExtendedOpenApi = preserveAuthoritativeContractVersion(withOperationalCollaborationOpenApi(withAwaitingActionOpenApi(withTeamOpenApi(withSupplierPassport))));
+export const wholesaleV2ExtendedOpenApi = preserveAuthoritativeContractVersion(
+  withOperationalCollaborationOpenApi(
+    withProductEngineeringOpenApi(withAwaitingActionOpenApi(withTeamOpenApi(withSupplierPassport))),
+  ),
+);
 
 function preserveAuthoritativeContractVersion(specification) {
   const normalized = structuredClone(specification);

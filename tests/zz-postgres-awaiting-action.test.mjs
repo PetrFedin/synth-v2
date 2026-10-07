@@ -65,7 +65,7 @@ test('PostgreSQL lists, in one statement, only the moves that are the reader\'s 
     // Each role sees its own part and nothing more.
     assert.deepEqual(await types('u-quality'), ['inspection-review', 'lab-dip-decision', 'material-lot-release']);
     assert.deepEqual(await types('u-finance'), ['compliance-document-issue', 'order-accept-terms', 'order-accept-terms', 'supplier-payment']);
-    assert.deepEqual(await types('u-sales'), ['claim-resolve', 'order-accept-terms', 'order-accept-terms', 'order-amendment-response', 'order-attach']);
+    assert.deepEqual(await types('u-sales'), ['claim-resolve', 'order-accept-terms', 'order-accept-terms', 'order-amendment-response', 'order-attach', 'technical-review']);
     assert.deepEqual(await types('u-viewer'), [], 'a viewer can read everything and do nothing');
     // A shipment waits for the buyer until a FINAL receipt exists: a partial receipt leaves it open, a final one closes it.
     assert.deepEqual(await types('u-buyer'), ['order-accept-terms', 'order-amendment-response', 'order-attach', 'receipt-accept', 'receipt-accept', 'relationship-response', 'showroom-invitation-response']);
@@ -173,6 +173,19 @@ async function seed(pool) {
     for (const [userId, organisationId, organisationType, role] of members) {
       await insert('memberships', { id: `m-${userId}`, organisation_id: organisationId, user_id: userId, organisation_type: organisationType, role, status: 'active', payload: { id: `m-${userId}`, userId, organisationId, role } });
     }
+
+    // Product Engineering contributes a real brand-side Awaiting Action when an accepted source
+    // has unresolved technical review work. Seed one pending proposal so the PostgreSQL sweep proves
+    // the new kind is selected by the same one-statement authority as every older kind.
+    await insert('product_styles', { id: 'style-aw', brand_id: BRAND, style_code: 'STYLE-AW', lifecycle_status: 'draft', version: 1, created_at: ago(6), created_by: 'u-owner', updated_at: ago(2), updated_by: 'u-owner' });
+    await insert('product_engineering_analysis_runs', {
+      id: 'analysis-aw', brand_id: BRAND, style_id: 'style-aw', purpose: 'garment_interpretation', status: 'completed',
+      input_manifest: {}, input_hash: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', requested_at: ago(3), requested_by: 'u-owner', version: 1,
+    });
+    await insert('product_engineering_proposals', {
+      id: 'proposal-aw', analysis_run_id: 'analysis-aw', brand_id: BRAND, style_id: 'style-aw', target_authority: 'product_identity',
+      target_field: 'product_identity.category', proposed_value: { code: 'outerwear' }, status: 'pending', created_at: ago(2), created_by: 'u-owner', version: 1,
+    });
 
     const order = (id, status, accepted, updatedAt) => insert('orders', {
       id, selection_id: `sel-${id}`, cycle_id: `cycle-${id}`, brand_id: BRAND, shop_id: SHOP, status, currency: 'EUR', total_amount: 1000, version: 2,

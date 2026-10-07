@@ -149,7 +149,7 @@
   };
 
   // Экраны на общем рабочем пространстве (/v2/workspace): заказы, подборки, партнёры, шоурумы.
-  registry.register(['orders', 'selections', 'partners', 'showrooms'], () => reload());
+  registry.register(['orders', 'selections', 'partners', 'showrooms', 'styles'], () => reload());
 
   // Выбор записи на тех же экранах (заказы, ассортименты, партнёры, шоурумы). Их реестры ключуются
   // идентификатором сущности (`item.id`), а строки читаются постранично, поэтому нужную запись при
@@ -161,6 +161,12 @@
     OD_UI.selected[scope] = id;
     await registry.ensureWorkspaceRow(section, rows, (item) => item.id === id);
   }
+
+  registry.registerTarget('styles', async (route) => {
+    registry.clearRegistryFilters('styles');
+    OD_UI.selected['od-styles'] = route.parentId || route.entityId;
+    renderApp();
+  });
 
   registry.registerTarget('orders', async (route) => {
     // Приёмка, претензия и правка живут внутри заказа: выделяется заказ (`parentId`), а не их собственный идентификатор.

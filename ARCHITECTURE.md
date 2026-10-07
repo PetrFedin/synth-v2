@@ -1420,12 +1420,251 @@ Minimum frozen lineage fields for the current commercial spine include:
 | PostCloseAllocationReconciliationSnapshot | immutable exact link from latest PostCloseAdjustment/pending margin/adjusted landed basis to an explicit new CostAllocationRunSnapshot and new current MarginActualizationSnapshot; freezes allocation id/hash/policy/mode, pending/current status transition, timestamp and content hash; one per adjustment |
 | OrderEconomicsPosition | effective read model over one immutable OrderCommit: exposes close/latest-adjustment/latest-reconciliation IDs, effective landed/margin IDs and current/pending/legacy allocation provenance; an older reconciliation never overrides a newer adjustment |
 
+### 19.1 AI Product Engineering Authority
+
+**Status in this change:** IMPLEMENTED/PARTIAL. The evidence/review authority, controlled binary intake, durable scan/parse/analysis jobs, structural PDF/XLSX/CSV/SVG/image parsing, model qualification/routing substrate, provider-neutral HTTPS gateway adapter, persisted Garment Graph, RBAC/API/OpenAPI, Product Master review workspace, Awaiting Action projection and the first governed canonical apply slice are executable in PR #242. Production malware scanning, production object storage, semantic arbitrary-PDF extraction, accepted live external-model qualification evidence, broader canonical apply coverage, automatic canonical target-version resolution, direct impact-evidence coverage and high-risk blocking policy remain explicit gates.
+
+#### Purpose and placement
+
+AI Product Engineering is the governed acquisition/reasoning layer immediately upstream of existing PLM authorities:
+
+```text
+reference/photo/sketch/document
+  -> AnalysisRun
+  -> ModelRun
+  -> Finding + exact Evidence
+  -> Proposal and/or Conflict
+  -> human review
+  -> accepted review decision
+  -> separate canonical command
+  -> Product Identity / Measurement / BOM / Construction / Tech Pack / Sample / Material / Operation Sequence
+```
+
+It does **not** create a second Product Master, Measurement authority, BOM authority, Tech Pack authority or workflow/task database. PostgreSQL remains canonical and the existing bounded-context services remain the only supported writers of their business facts.
+
+#### Authority invariant
+
+An AI result has four distinct meanings and they must never be collapsed:
+
+1. **Finding** — what an analysis observed, inferred, extracted, derived or could not know.
+2. **Evidence** — exact source locator/hash that supports that finding.
+3. **Proposal / Conflict** — a reviewable recommendation or explicit disagreement between sources.
+4. **Canonical application** — a later mutation through the owning bounded context.
+
+`proposal.status = accepted` means that a person accepted the review conclusion. It **does not** mean that Product/BOM/Measurement/Tech Pack was changed. Canonical application must later record an `appliedReference` that identifies the owning authority and exact resulting entity/version. Until then the proposal remains accepted-but-not-applied.
+
+The AI/model integration has no direct SQL/write path to canonical PLM tables.
+
+#### Canonical apply boundary — IMPLEMENTED/PARTIAL
+
+Human acceptance and canonical mutation remain separate states.
+
+Supported first-slice actions:
+
+| Proposal authority / action | Owning canonical command |
+|---|---|
+| `measurement / chart` | `MeasurementService.updateCanonicalMeasurementChart` |
+| `material / specification` | `MaterialService.amendMaterialSpecification` |
+| `tech_pack / revision` | `TechPackService.createRevision` |
+| `operation_sequence / operations` | `OperationSequenceService.replaceOperations` |
+
+`POST /v2/product-engineering/proposals/{proposalId}/apply` requires `expectedProposalVersion` and `expectedCanonicalVersion`. It accepts only an already accepted, not-yet-applied proposal with an explicit target entity and an allowlisted action. The adapter never uses SQL or generic patch semantics.
+
+The external apply command derives one canonical command id, reused on retry. All supported owning stores participate in the existing global command registry (`catalog` scope), so a reused idempotency key cannot mutate a second canonical target. The proposal is marked applied only after the owning service succeeds, recording `authority + action + canonical commandId + entityId + resulting version + appliedAt`. A process failure after canonical commit but before this final mark is replay-safe because the owning command is idempotent.
+
+AI-provided `proposedValue` is forbidden from carrying `expectedVersion`; concurrency authority belongs to the human apply request, not to the model.
+
+#### Pre-apply Change Impact Preview — IMPLEMENTED/PARTIAL
+
+`GET /v2/product-engineering/proposals/{proposalId}/impact` is a read-only deterministic projection. It does not call a model and does not mutate Product Engineering or canonical PLM.
+
+For each allowlisted proposal action, a versioned-in-code domain policy identifies potentially affected areas and required follow-up action/severity. The application service resolves the proposal's exact AnalysisRun and, when present, its exact StyleVersion; it then loads the existing Product Readiness source context for that StyleVersion and verifies brand/style lineage before evaluating impact.
+
+Evidence semantics are explicit:
+
+- `observed`: the readiness context directly contains the dependency and returns its count;
+- `derived`: a bounded observed fact is used as a risk signal, with the derivation basis named;
+- `not_available`: that downstream authority is not queried by the current reader, therefore `present` and `count` are `null`, never fabricated as zero.
+
+Direct context currently covers Measurement Charts, BOMs, Samples, Tech Packs, Sourcing, Production Orders, Quality inspections and supplier acknowledgement state. Cutting/Inline Quality may be derived only from active production as a review signal. Cost and Commercial Publication remain `not_available` until dedicated readers are joined.
+
+An AnalysisRun without an exact StyleVersion still receives policy-level impact with `contextStatus = unavailable`; the system does not invent repository facts.
+
+#### Product Master Review → Impact → Apply UI — IMPLEMENTED/PARTIAL
+
+The Product Master Engineering tab mirrors the authority states rather than collapsing them into one action:
+
+- `pending`: Accept / Reject only; Accept is explicitly described as review, not canonical mutation;
+- `accepted + unapplied`: read-only Impact is available to Engineering readers; Apply is shown only when the proposal authority/action is in the canonical allowlist and the actor can manage Product Engineering;
+- `accepted + appliedReference`: the UI shows that the canonical mutation occurred and displays authority/resulting version rather than offering Apply again;
+- unsupported accepted actions remain visible but say that canonical apply is not connected yet.
+
+The impact dialog renders the tri-state evidence semantics. The first Apply form requires an explicit current canonical version and sends it as `expectedCanonicalVersion`; the model cannot provide this value. A later target-snapshot reader may prefill this value, but must preserve the same optimistic-concurrency check.
+
+The Engineering forms use the platform's actual `openForm(title, fields, submitAction, options)` contract. Source upload, new analysis, rejection and conflict resolution must not introduce a parallel modal/form framework.
+
+
+
+
+
+
+
+#### Entity dictionary
+
+| Entity | Scope / identity | Mutability and lifecycle | Mandatory lineage / meaning | Downstream consumer |
+|---|---|---|---|---|
+| ProductEngineeringAnalysisRun | brand + ProductStyle; optional exact StyleVersion | queued -> running -> completed/failed/cancelled; versioned state | purpose, immutable input manifest + SHA-256, requester/times, optional failure | Model runs, findings, proposals/conflicts, drawings, Product Master workspace |
+| AiModelRun | exact AnalysisRun + style/brand | started -> completed/failed/cancelled | provider/model, purpose, prompt version, output schema version, input/output SHA-256, usage/cost, timestamps | reproducibility, provider qualification, cost/reliability analytics |
+| ProductEngineeringFinding | exact AnalysisRun | append-only; later finding may supersede | typed finding, origin = observed/ai_inferred/document_extracted/rule_derived/unknown, JSON value, confidence, content SHA-256 | Evidence, proposal generation, conflict review |
+| ProductEngineeringEvidence | exact Finding + AnalysisRun | append-only | source kind/id, exact region/page/cell/locator, optional source SHA-256/excerpt | reviewer, audit, future signed evidence |
+| ProductEngineeringProposal | exact AnalysisRun; optional Finding | pending -> accepted/rejected/superseded; optimistic version | target canonical authority/entity/field, proposed value, confidence/rationale, resolver; optional appliedReference only after real canonical mutation | engineering review, Awaiting Action, future canonical apply adapters |
+| ProductEngineeringConflict | exact AnalysisRun | open -> resolved/ignored; optimistic version | typed subject, >=2 source candidates, severity, explicit human resolution | engineering review, blocking policy, change impact |
+| TechnicalDrawingVersion | brand + style + view + contiguous version | draft -> approved/superseded; one approved view per style/view | optional StyleVersion/AnalysisRun, SVG, SHA-256, predecessor | Product Master technical canvas; future ProductMedia/Tech Pack projection |
+| TechnicalDrawingObject | exact drawing | draft-only composition | semantic type, optional governed semantic code, geometry, link payload, confidence | POM anchors, construction callouts, seams/panels, machine-readable garment graph |
+| ProductEngineeringCommand | global command id | immutable command result | scope `product-engineering`, fingerprint, actor, result, completion time | idempotency/replay |
+| ProductEngineeringSource | brand + style | pending -> admitted/rejected/quarantined; scan + parse state versioned | ingest mode, MIME/name/size, server SHA-256, storage ref, security/admission/parser metadata | analysis input/evidence |
+| ProductEngineeringSourceBlob | exact Source | immutable MVP binary payload | source/style/brand, MIME, exact byte count, SHA-256, durable bytes | scanner/parser; replaceable by object-storage adapter without changing source identity |
+| ProductEngineeringSourceFragment | exact Source | append-only | typed page/sheet/cell/image/text/metadata locator + content digest | finding/evidence provenance |
+| ProductEngineeringJob | source or analysis scoped | queued/failed -> running -> completed/dead_letter; leased/reclaimable | dedupe key, type, payload, attempt count, lease owner/expiry, retry time, failure code | durable scan/parse/model execution |
+| AiModelQualification | provider/model/purpose/prompt/schema | qualified/suspended/revoked with optional expiry | benchmark SHA-256, metrics, qualifiedAt/by | eligibility gate |
+| AiModelRoutePolicy | global or brand + purpose | active/inactive; versioned | ordered candidates, timeout/retry/circuit policy | model control plane |
+| ProductEngineeringGarmentGraph | exact AnalysisRun + style | draft -> reviewed/superseded | schema version, deterministic content hash, node/edge counts, review actor/time | technical review, semantic drawing/POM/BOM/construction linkage |
+| ProductEngineeringGarmentNode/Edge | exact graph | append-only graph composition before review | semantic node/relation, attributes, confidence, optional Finding lineage | Product Master ontology view and downstream engineering assistants |
+
+#### AI uncertainty rules
+
+- Confidence is metadata, never permission to write.
+- `unknown` is a valid technical result. Missing evidence must not be converted into a plausible number.
+- Uncalibrated ordinary imagery may identify a POM/feature but must not manufacture absolute cm/in values. A measurement proposal requiring scale must remain unknown or explicitly use a calibrated/authoritative source.
+- Source disagreement becomes `ProductEngineeringConflict`; the model must not silently average, choose or overwrite competing facts.
+- Model/provider identity, prompt version, schema version and input/output digests are required model-run evidence so a future result can be reproduced/audited.
+- Derived PDF/SVG is evidence/projection, not an editable canonical source by itself.
+
+#### Technical drawing contract
+
+Technical drawings are machine-readable SVG versions, not opaque generated pictures. Supported semantic object classes begin with:
+
+`outline, panel, seam, stitch, pocket, closure, collar, cuff, trim, measurement_anchor, construction_callout`.
+
+The intended graph is:
+
+```text
+SVG object
+  -> Product/Construction semantic
+  -> optional Measurement POM / ConstructionNode / BOM component / operation
+  -> factory document / sample review / QC
+```
+
+Only draft drawings accept object changes. Approval is explicit and supersedes the previous approved drawing for the same style/view. Browser rendering sanitises the SVG through an allowlist before DOM insertion; raw SVG is never inserted as trusted HTML.
+
+#### Access control
+
+Dedicated capabilities:
+
+- `product-engineering.read`
+- `product-engineering.manage`
+
+Owner/admin inherit all capabilities. Sales and production can read/manage the engineering workspace; quality can read but cannot resolve/mutate engineering review; viewer/buyer do not inherit access merely because they can see a commercial/product projection. This keeps unverified technical inference out of buyer-facing truth.
+
+#### HTTP/API surface
+
+Authenticated Product Engineering routes are under `/v2/product-engineering/*` plus style-scoped creation/read routes under `/v2/product/styles/{styleId}/engineering*`.
+
+Every mutation requires a globally unique `Idempotency-Key` and uses the durable `product-engineering` command ledger. Current contract covers:
+
+- request/start/complete analysis;
+- start/complete model run;
+- record finding with zero-or-more evidence records atomically;
+- create/resolve proposal;
+- create/resolve conflict;
+- create technical drawing version;
+- add drawing objects while draft;
+- approve drawing;
+- read a style engineering workspace;
+- read the full lineage of an analysis run.
+
+Transport validation rejects unknown top-level/nested evidence fields before domain mutation.
+
+#### UI and Awaiting Action
+
+Product Master owns the human review UX in inspector tab id `engineering`:
+
+- guardrail statement that AI is not authority;
+- counts for analyses, pending proposals, open/blocking conflicts and approved drawing views;
+- proposal accept/reject;
+- conflict resolution;
+- analysis lifecycle;
+- sanitised technical-SVG preview and approval.
+
+`Awaiting Action` derives `technical-review` directly from pending proposals/open conflicts. It is not a stored task. The item disappears when the underlying review facts are resolved and deep-links to the exact style + `engineering` inspector tab.
+
+#### Provider-neutral sequencing after the authority slice
+
+The authority layer deliberately lands before provider calls. Subsequent implementation must preserve this sequence:
+
+**Current branch progress beyond the initial authority slice (PR #242):**
+
+- **Model Control Plane — IMPLEMENTED/PARTIAL.** Exact `provider + model + purpose + promptVersion + schemaVersion` qualifications, benchmark SHA/metrics, expiry, ordered route policy, timeout/retry/failover control and provider-neutral HTTPS gateway execution exist. A bootstrap refuses qualification without an exact benchmark SHA-256 and non-empty metrics. A configured gateway is still not equivalent to accepted production qualification evidence.
+- **Durable AI execution — IMPLEMENTED/PARTIAL.** PostgreSQL `source_scan`, `source_parse` and `analysis_execute` jobs use dedupe keys, leased `FOR UPDATE SKIP LOCKED` claims, retry/backoff, expired-lease reclaim and terminal dead-letter state. Transient model failure fails the individual ModelRun/job; the Analysis becomes failed only when durable retry policy is exhausted.
+- **Governed Intake — IMPLEMENTED/PARTIAL.** Product Master performs controlled binary upload for PDF/XLSX/CSV/JPEG/PNG/WebP/SVG. The server, not the browser, validates type/signature, computes SHA-256 and atomically stores Source + bytes + scan job. PostgreSQL `bytea` is the dependency-free MVP blob adapter; production object storage remains a replaceable follow-up.
+- **Scanner assurance — MVP ONLY.** The built-in scanner is deliberately labelled `integrity_only`; it rejects the EICAR test signature and active SVG but is **not** a malware-grade production antivirus. Production deployment requires a scanner adapter with explicit operational assurance.
+- **Structural parsing — IMPLEMENTED/PARTIAL.** CSV rows/cell ranges, XLSX workbook/sheet/cells/used ranges, PDF page structure, SVG primitive structure and raster image dimensions are emitted as addressable fragments. XLSX parsing rejects encryption and enforces archive-entry, inflated-size, compression-ratio, worksheet and cell resource budgets. Semantic arbitrary-PDF/table extraction remains open.
+- **Schema-bound model output — IMPLEMENTED.** Provider JSON is rejected before Product Engineering persistence unless it conforms to the exact declared output schema version. `engineering-findings-v1` and `garment-ontology-v1` use strict allowed fields, bounded arrays, valid confidence/index values, exact analysis-source evidence references and graph node/relation integrity. Evidence grounding is format-aware: PDF page must exist in parsed page fragments; XLSX/CSV source ranges must be contained by a parsed range on the same sheet; raster/SVG geometry is normalized and bounded. Provider drift or invented evidence location is an execution failure, never an implicit schema upgrade.
+- **Garment Ontology Graph — IMPLEMENTED/PARTIAL.** Qualified model output can create Finding/Evidence, Proposal/Conflict and a validated/reviewed graph with semantic nodes/edges and finding lineage; Product Master projects the latest reviewed graph. It remains evidence-derived and cannot mutate canonical Product/BOM/Measurement/Construction masters.
+- **Technical Flat semantic approval — IMPLEMENTED/PARTIAL.** Technical SVG primitives can link to garment ontology nodes; server-side SVG active-content rejection and approval validation exist. Critical POM/construction callouts require semantic lineage. AI SVG generation/editing itself remains a later provider integration.
+
+The remaining implementation order is:
+
+1. **Repository + PostgreSQL AI Golden Path acceptance** — prove real authenticated HTTP upload -> persisted bytes/hash -> worker scan/admission -> structural parse/fragments -> exact qualification gate -> model execution -> findings/evidence/proposals/conflicts/graph, with restart/reclaim and negative cases. No DONE claim before this gate is green.
+2. **Production intake adapters** — malware-grade scanner and object storage/presigned ingestion, retaining the existing Source ID/hash/evidence contract.
+3. **Broaden canonical review/apply + impact evidence** — first allowlisted apply slice and deterministic impact preview are implemented; add BOM/Product Identity/Sample/Colour only through owning commands, join direct Cost/Commercial/Cutting/Inline-Quality evidence and add blocking reviewer policy for high-risk changes.
+4. **POM Assistant** — detect/anchor POM, reconcile governed measurement-point MDM, prohibit absolute values without calibration, propose rather than write grade/base values.
+5. **Deterministic grading intelligence** — use existing interval-specific `grade_steps`/size-scale semantics and validation, never generic LLM increments.
+6. **Technical Flat Engine** — model-assisted front/back/side/inside/detail vector proposals, deterministic editor operations and canonical ProductMedia/Tech Pack projection only after approval.
+7. **BOM/Construction Co-pilot** — candidate material role/placement/construction node/operation mappings against canonical libraries; unknown GSM/composition/supplier remains unknown.
+8. **Cross-source Conflict + deeper Change Impact** — deterministic pre-apply policy exists; next compare canonical current vs documents vs supplier/sample actuals, add direct downstream readers and make required reviewer/revision gates enforceable before high-risk application.
+9. **Sample/Factory Intelligence** — requested vs actual POM, delta/tolerance/PASS-FAIL, annotated fit/factory comments, next-round changes linked to the exact specification version.
+10. **Production Knowledge Retrieval + Qualification** — governed citable corpus plus replayable benchmark set, per-category/POM precision-recall/MAE where meaningful, hallucination/unknown/conflict-recall, latency/cost and qualification evidence digest.
+11. **Revision-learning moat** — compare proposal -> human correction -> factory/sample actual -> final approved fact within contractual/privacy and tenant-isolation boundaries.
+
+No phase may auto-apply a canonical change merely because model confidence crosses a threshold.
+
+#### Acceptance for this authority slice
+
+At minimum:
+
+- migration applies on an existing database and preserves all prior canonical tables;
+- command scope is globally idempotent;
+- tenant/RBAC isolation is enforced for reads and mutations;
+- queued/running/completed transitions fail closed;
+- finding + evidence lineage is exact and hashed;
+- proposal acceptance remains unapplied until a separate canonical result is recorded;
+- open conflicts remain visible with all candidates;
+- only one approved technical drawing exists per style/view;
+- approved drawing objects cannot be mutated;
+- `technical-review` appears only to roles with engineering-manage and disappears after review;
+- API/OpenAPI/body validation agree;
+- Product Master review UI is RU/EN and has no raw-SVG injection path;
+- controlled upload rejects spoofed MIME/signature, unsafe names, oversize bodies, encrypted XLSX and unsafe decompression/resource budgets;
+- source bytes, source SHA-256 and fragment locators remain exactly linked;
+- durable jobs recover expired leases, dedupe repeat work and dead-letter after bounded attempts;
+- auto-execute analysis accepts only admitted+parsed sources and an exact modelContract;
+- no exact active qualification => no model execution;
+- malformed/unqualified provider output cannot create canonical PLM state;
+- `tests/postgres/product-engineering-golden-path.test.mjs` proves the in-process real HTTP/PostgreSQL path with a deterministic qualified provider adapter;
+- `tests/postgres/product-engineering-job-recovery.test.mjs` proves expired-lease reclaim and bounded dead-letter semantics;
+- `npm run acceptance:product-engineering` is the live-environment gate: it talks only through the running HTTP service for user mutations, waits for the registered background worker, requires the environment's real exact-qualified model route, and reconciles resulting source/blob/job/evidence lineage against the same PostgreSQL target;
+- the live acceptance command never creates a fake qualification and remote execution requires HTTPS plus `SYNTHA_ACCEPTANCE_ALLOW_REMOTE=true`;
+- `npm run verify` and PostgreSQL verification gates are green before this slice is called DONE.
+
+
 ---
 
 ## 20. Change register
 
 | Date | PR / commit | Change | Master sections affected | Evidence/status |
 |---|---|---|---|---|
+| 2026-10-06 | PR #242 `feat/ai-product-engineering-authority` | Add evidence-first AI Product Engineering authority plus executable Engineering Golden Path: controlled binary upload/server SHA-256, durable scan/parse/analysis jobs, structural PDF/XLSX/CSV/SVG/image parsing, exact qualification/policy routing, schema-bound + source-grounded model output, Findings/Evidence/Proposals/Conflicts, reviewed Garment Graph, semantic SVG authority, RBAC/OpenAPI/Product Master/Awaiting Action, and first governed accepted-proposal → canonical-command → appliedReference slice for Measurement/Material/Tech Pack/Operation Sequence. | 10, 12, 13, 17, 19.1, 20 | IMPLEMENTED/PARTIAL in PR; no direct AI canonical writes; scanner is integrity-only, PostgreSQL blob storage is MVP, live external qualification evidence, broader apply coverage, direct impact evidence/high-risk blocking policy and intended-live acceptance remain open; repository + PostgreSQL CI still required before DONE |
 | 2026-08 | #106 | Non-destructive live Campaign → Collection acceptance | 7.2, 15 | merged; public HTTP + PostgreSQL acceptance |
 | 2026-08 | #107 | Repeatable owner bootstrap + isolated dev/test PostgreSQL clean-clone path | 2.3, 2.5 | merged; CI verified |
 | 2026-08 | #108 | Order currency frozen to submitted Selection lineage | 7.5 | merged; Verify/PostgreSQL CI |
@@ -1793,4 +2032,3 @@ The next gate is the shared **Omnidata Contextual Collaboration Inspector**. It 
 **ODS asset identity:** the inspector extends the existing canonical `visual-20260805-14-module-adapters-5` adapter build. The UI wave does not mint a second adapter build identifier merely because new semantic selectors were added; validator and inspector tests are required to agree with the canonical shell asset identity.
 
 Status: **IMPLEMENTATION IN PROGRESS / NO EXCEPTION-SLA YET**.
-

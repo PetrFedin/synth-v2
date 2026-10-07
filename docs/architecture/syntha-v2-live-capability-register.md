@@ -21,6 +21,7 @@ This table intentionally mirrors only the current master status. If it diverges 
 | Authentication / organisation foundation | IMPLEMENTED | continuing role/capability audit |
 | RU fashion MDM operational profile | IMPLEMENTED/PARTIAL | expand governed taxonomy only as canonical flows require it |
 | Product Identity V2 | IMPLEMENTED | browser/legacy convergence and broader live proof |
+| AI Product Engineering Authority | IMPLEMENTED/PARTIAL in PR #242 | controlled binary intake, durable scan/parse/analysis jobs, structural parsers, qualification/policy routing, provider-neutral gateway, evidence/review/Garment Graph/SVG/RBAC/API/UI are implemented in branch; malware-grade scanning, production object storage, accepted live external-model qualification evidence and canonical apply adapters remain gated |
 | Canonical Measurement Chart | IMPLEMENTED | intended live Product Readiness evidence and remaining UI convergence |
 | ProductReadinessSnapshot | IMPLEMENTED | dual public-runtime acceptance harness exists; intended-live evidence pending |
 | CommercialProductProjectionVersion | IMPLEMENTED | #118 exact-head repository acceptance passed; intended-live evidence pending |
@@ -62,3 +63,14 @@ This table intentionally mirrors only the current master status. If it diverges 
 - `PROD-PROVEN` requires accepted real public-runtime + PostgreSQL evidence, never merely a spec, unit test or migration.
 
 For exact capability status, gap IDs, evidence references and Definition of Done, use `ARCHITECTURE.md` sections 15–22.
+
+
+## AI Product Engineering authority note — 2026-10-06
+
+The Product Engineering layer is intentionally upstream of canonical PLM mutation:
+
+`source -> analysis/model provenance -> finding/evidence -> proposal/conflict -> human review -> separate canonical command`.
+
+Current PR #242 extends the governed evidence/review substrate into a first durable AI Engineering execution path: controlled binary upload with server SHA-256, durable scan/parse/model jobs, structural PDF/XLSX/CSV/SVG/image parsing, exact model qualification/policy routing, provider-neutral HTTPS gateway execution, Findings/Evidence/Proposals/Conflicts and reviewed Garment Graph projection in Product Master.
+
+This still does **not** claim production-grade malware protection, arbitrary semantic PDF extraction quality, production object-storage scale, a live accepted OpenAI/Gemini/other provider qualification, or automatic mutation of Product Identity/BOM/Measurement/Tech Pack. Those remain explicit gates and must preserve the authority boundary in `ARCHITECTURE.md §19.1`.

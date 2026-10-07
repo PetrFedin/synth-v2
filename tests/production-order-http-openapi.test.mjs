@@ -32,9 +32,9 @@ test('Production Order routes expose reads and strict lifecycle commands', async
   );
 });
 
-test('OpenAPI 1.18 documents immutable Production Orders without dangling schema references', () => {
+test('OpenAPI 1.20 documents immutable Production Orders without dangling schema references', () => {
   const specification = wholesaleV2ExtendedOpenApi;
-  assert.equal(specification.info.version, '1.18.0');
+  assert.equal(specification.info.version, '1.20.0');
   for (const path of [
     '/production-orders',
     '/production-orders/{productionOrderNumber}',

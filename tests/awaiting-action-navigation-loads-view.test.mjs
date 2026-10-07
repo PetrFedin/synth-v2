@@ -111,7 +111,7 @@ function stand({ reads = {}, organisations = [{ id: 'org-1', name: 'Brand' }] } 
 
 // Дело строится тем же кодом, что строит его сервер: маршрут (экран, запись, вкладка, диалог) — не
 // выдумка теста, а то, что приходит по сети.
-const DETAIL = { orderId: 'order_1', lineNo: 1, materialCode: 'MAT-1', lotReference: 'LOT-1', colourCode: 'C-RED', productionOrderNumber: 'PO-1' };
+const DETAIL = { orderId: 'order_1', lineNo: 1, materialCode: 'MAT-1', lotReference: 'LOT-1', colourCode: 'C-RED', productionOrderNumber: 'PO-1', styleId: 'STYLE-1' };
 function itemOf(entry, entityId = `${entry.entityKind}_1`) {
   return JSON.parse(JSON.stringify(buildAwaitingActionItem(
     { type: entry.type, entityId, label: 'L', organisationId: 'org-1', since: '2026-10-01T00:00:00.000Z', dueAt: null, detail: DETAIL },
@@ -133,7 +133,7 @@ async function pressOpen(window, item) {
 
 // Что должен прочитать экран-владелец, чтобы показать данные без «Обновить».
 const OWNER_READ = {
-  orders: 'reload', selections: 'reload', partners: 'reload', showrooms: 'reload',
+  orders: 'reload', selections: 'reload', partners: 'reload', showrooms: 'reload', styles: 'reload',
   rfqs: '/v2/rfqs', 'material-rfqs': '/v2/rfqs', 'material-purchase-orders': '/v2/rfqs',
   'production-orders': '/v2/production-orders', 'tech-packs': '/v2/tech-packs', samples: '/v2/samples',
   'final-quality': '/v2/final-quality-inspections', materials: '/v2/materials',
@@ -191,6 +191,7 @@ const TARGET = {
   // Платёж лежит в графике своего производственного заказа: выбирается заказ.
   'supplier-payment': (w) => { same(w.SynthaProductionOrdersWorkspace.selectedNumber(), 'PO-1'); },
   'compliance-document-issue': (w, item) => { same(w.OD_UI.tabs.partners, 'compliance-documents', 'the tab that holds the draft opens, not the relationship map'); same(w.OD_UI.selected['od-compliance-documents'], item.entityId); },
+  'technical-review': (w) => { same(w.OD_UI.selected['od-styles'], 'STYLE-1', 'technical review opens the exact parent style'); },
 };
 test('the screen that cached an empty list before the entity appeared is reread on "Open"', async () => {
   const rfq = { rfqCode: 'RFQ-PENDING-QUOTE-001', status: 'quoted', brandId: 'org-1' };

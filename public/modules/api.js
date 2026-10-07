@@ -2,6 +2,31 @@ const API_TIMEOUT_MS = 15000;
 const API_RETRY_ATTEMPTS = 2;
 
 async function mutate(path, body, method = 'POST') { return api(path, { method, body }); }
+
+async function uploadBinary(path, file, { signal } = {}) {
+  if (!(file instanceof Blob)) throw new Error(I18N.t('common.requestError'));
+  const headers = {
+    accept: 'application/json',
+    'accept-language': I18N.localeTag(),
+    'content-type': file.type || 'application/octet-stream',
+    'x-file-name': encodeURIComponent(file.name || 'upload.bin'),
+    'idempotency-key': crypto.randomUUID(),
+  };
+  if (state.token) headers.authorization = `Bearer ${state.token}`;
+  const response = await fetchWithTimeout(path, { method: 'POST', headers, body: file }, 60000, signal);
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    if (response.status === 401) clearSession();
+    const code = payload.error?.code || `HTTP_${response.status}`;
+    const error = new Error(humaniseServerError(code, stripDiagnosticPrefix(payload.error?.message)) || I18N.t('common.requestError'));
+    error.code = code;
+    error.status = response.status;
+    error.details = payload.error?.details || {};
+    throw error;
+  }
+  announceMutation(path, 'POST');
+  return payload.data;
+}
 // "SOME_CODE: A sentence." -> "A sentence." Only a leading SCREAMING_SNAKE token followed by a
 // colon is removed, so a message that merely contains an abbreviation is left alone.
 function stripDiagnosticPrefix(message) {

@@ -67,7 +67,7 @@ test('fulfillment runtime routes cover plan, ASN, receipt, exact physical cost a
 });
 
 test('authoritative OpenAPI exposes immutable fulfillment and exact physical-cost contracts without version drift', () => {
-  assert.equal(wholesaleV2ExtendedOpenApi.info.version, '1.18.0');
+  assert.equal(wholesaleV2ExtendedOpenApi.info.version, '1.20.0');
   for (const path of [
     '/orders/{orderId}/fulfillment-plans',
     '/fulfillment-plans/{fulfillmentPlanId}',

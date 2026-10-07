@@ -56,6 +56,7 @@ export const AWAITING_ACTION_TYPES = Object.freeze([
   define('production-order-confirm', 'production-order', CAPABILITIES.PRODUCTION_ORDER_CONFIRM, 'brand', 'production-orders', 'production', 'Производственный заказ ждёт подтверждения фабрики', 'Production order awaits supplier confirmation'),
   define('material-purchase-order-confirm', 'material-purchase-order', CAPABILITIES.MATERIAL_PURCHASE_MANAGE, 'brand', 'material-purchase-orders', 'production', 'Заказ на материал ждёт подтверждения поставщика', 'Material purchase order awaits supplier confirmation'),
   define('tech-pack-acknowledge', 'tech-pack', CAPABILITIES.TECH_PACK_ACKNOWLEDGE, 'brand', 'tech-packs', 'production', 'Технический пакет ждёт подтверждения получения', 'Tech pack awaits acknowledgement'),
+  define('technical-review', 'product-engineering-review', CAPABILITIES.PRODUCT_ENGINEERING_MANAGE, 'brand', 'styles', 'production', 'AI-инжиниринг ждёт технической проверки', 'AI engineering awaits technical review', { tab: 'engineering', parent: 'styleId' }),
   define('sample-decision', 'sample', CAPABILITIES.SAMPLE_MANAGE, 'brand', 'samples', 'production', 'Образец получен — нужно решение', 'Sample received — decision needed'),
   // Качество.
   define('inspection-review', 'quality-inspection', CAPABILITIES.QUALITY_APPROVE, 'brand', 'final-quality', 'quality', 'Инспекция ждёт решения', 'Inspection awaits a decision'),

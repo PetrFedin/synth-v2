@@ -30,9 +30,15 @@ The web workspace supports Russian and English. The `RU / EN` switch is availabl
 
 All new user-facing text must be routed through `public/modules/i18n-runtime.js`. `npm run validate:i18n` verifies dictionary integrity, browser execution order, locale persistence, static delivery and critical UI action wiring.
 
+## AI Product Engineering
+
+Syntha V2 is extending the existing Product/PLM authority with an evidence-first AI engineering layer. AI analyses references and technical sources into versioned findings, exact source evidence, review proposals/conflicts and semantic SVG technical drawings. AI never writes Product Identity, Measurements, BOM, Tech Pack or Production truth directly: accepted review decisions are applied separately through the owning canonical service.
+
+The review workspace lives inside Product Master and unresolved technical proposals/conflicts project into Awaiting Action. Provider/model execution remains replaceable and must record model, prompt/schema versions plus input/output hashes before its output can participate in review.
+
 ## Product direction
 
-Digital linesheets and buyer collaboration; assortment planning, budgets, doors and size curves; wholesale CRM and payments; style/color/size catalog; PLM, BOM and samples; production, QC, logistics and landed cost; analytics and integration APIs.
+Evidence-first AI Product Engineering; digital linesheets and buyer collaboration; assortment planning, budgets, doors and size curves; wholesale CRM and payments; style/color/size catalog; PLM, BOM and samples; production, QC, logistics and landed cost; analytics and integration APIs.
 
 ## Local start / Cursor
 
@@ -89,6 +95,12 @@ It verifies exact Campaign/Collection persistence and proves downstream commerci
 `READY ProductReadinessSnapshot → CommercialProductProjectionVersion → projection-backed CommercialPublication → PriceListVersion → BuyerCatalogVersion`.
 
 The command also creates the exact Collection assortment assignment, open Showroom, active brand↔shop relationship and accepted showroom invitation required by the buyer-specific catalog boundary. It authenticates the reserved brand owner and shop owner as separate actors, verifies immutable ProductSku/projection/readiness/price lineage through public reads and same-environment PostgreSQL, and fails if the slice creates Selection, Order, SupplyCommitment, ActualCost or inventory movements. This gate proves the currently executable atomic-published commercial snapshot path; it does not imply that the planned staged CommercialPublication lifecycle or deeper effective-dated pricing contract is already implemented.
+
+`npm run acceptance:product-engineering` drives the first real AI Engineering user path:
+
+`Product Style -> binary PDF upload -> server SHA-256 -> durable scan/admission -> structural parse -> exact qualified model route -> durable analysis -> Findings/Evidence -> Proposals/Conflicts -> reviewed Garment Graph`.
+
+It waits for the running server's background Product Engineering worker rather than invoking scan/parse/model services directly. The command fails closed when the source is rejected, parsing fails, no exact model qualification is available, the analysis fails, evidence loses source-hash lineage or PostgreSQL does not contain the completed source/analysis jobs. For `garment-ontology-v1` it additionally requires a reviewed Garment Graph. The live command does not create or fake a model qualification: configure and qualify the intended gateway first (for controlled environments, `npm run bootstrap:engineering-model` records an exact benchmark-backed provider/model/purpose/prompt/schema qualification).
 
 All acceptance commands require `SYNTHA_ACCEPTANCE_BASE_URL` and a database URL pointing to the same environment. Brand authentication uses `SYNTHA_ACCEPTANCE_EMAIL` / `SYNTHA_ACCEPTANCE_PASSWORD` or optional `SYNTHA_ACCEPTANCE_TOKEN`. Product commercialization additionally uses `SYNTHA_ACCEPTANCE_SHOP_EMAIL` / `SYNTHA_ACCEPTANCE_SHOP_PASSWORD` or optional `SYNTHA_ACCEPTANCE_SHOP_TOKEN`. `SYNTHA_ACCEPTANCE_RUN_ID` can pin deterministic idempotency keys for replay. Credentials and tokens are never printed by the commands. See [`CURSOR_START_HERE.md`](CURSOR_START_HERE.md), `.env.example` and the authoritative acceptance sections in `ARCHITECTURE.md` for the exact contract and status.
 

@@ -178,6 +178,41 @@ ERP/EDI ритейлера; расширенное планирование ас
 * **Свободное поле состава** у материалов, где строки ещё не заведены (`legacy-text`),
   и свободное поле цвета у материала.
 
+### AI Product Engineering / PR #242 — проверено 2026-10-06
+
+**Уже встроено в ветку, повторять не нужно:**
+
+* Product Master → AI Engineering review workspace, отдельные RBAC/capabilities, analysis/model-run provenance, findings/evidence, proposals/conflicts, Awaiting Action;
+* controlled binary upload PDF/XLSX/CSV/JPEG/PNG/WebP/SVG с серверным SHA-256, MIME/extension/signature checks и durable blob storage boundary;
+* durable PostgreSQL jobs `source_scan -> source_parse -> analysis_execute` с lease/retry/reclaim/dead-letter;
+* CSV/XLSX/PDF-structure/SVG/image structural parsing; XLSX уже читает workbook/sheet names/cells/used ranges;
+* persisted model qualifications + route policies + benchmark-hash/metrics bootstrap;
+* provider-neutral HTTPS JSON model gateway и fail-closed exact qualification routing;
+* exact schema-version validation для `engineering-findings-v1` и `garment-ontology-v1`: unknown fields, чужие source IDs, неверные findingIndex, graph cardinality/relations и resource limits отклоняются до persistence;
+* format-aware evidence grounding: PDF page обязан существовать в parsed fragments; XLSX/CSV range обязан лежать внутри распарсенного диапазона листа; image/SVG region валидируется как normalized geometry;
+* persisted/reviewed Garment Graph + nodes/edges, выведенный в Product Master;
+* AI результат остаётся proposal/evidence layer и не пишет напрямую canonical Product/BOM/Measurement/Tech Pack;
+* первый governed apply slice: accepted proposal → allowlisted canonical service command → appliedReference для Measurement Chart / Material Specification / Tech Pack Revision / Operation Sequence; обязательны proposal+canonical expectedVersion, generic patch/SQL отсутствуют, crash recovery идемпотентен;
+* deterministic pre-apply Change Impact Preview: фиксированная policy + exact StyleVersion readiness context; direct dependencies помечаются `observed`, bounded inference — `derived`, непрочитанные authority — `not_available`, а не ложным нулём.
+* Product Master Review → Impact → Apply UI: pending предложение остаётся review-only, accepted получает read-only Impact, allowlisted accepted — отдельный Apply с optimistic canonical version, appliedReference показывается после реальной canonical mutation; существующие Engineering forms приведены к фактическому `openForm(title, fields, submitAction)` contract.
+
+**Ещё не встроено / нельзя считать production-ready:**
+
+* malware-grade scanner adapter — текущий scanner намеренно только `integrity_only`;
+* production object storage вместо PostgreSQL `bytea` MVP для крупных/массовых файлов;
+* semantic PDF/table extraction с проверяемыми page/text/table locators;
+* per-organisation AI quota/credit/rate limits и полноценная provider latency/cost/circuit telemetry;
+* live qualification benchmark artefact + accepted external model endpoint для exact provider/model/prompt/schema;
+* calibrated POM extraction; абсолютные размеры из некалиброванного фото должны оставаться UNKNOWN;
+* deterministic grading intelligence поверх существующих `grade_steps`, не LLM-generated generic increments;
+* расширить reviewed apply adapters на BOM / Product Identity / Sample / Colour; Change Impact v1 уже есть, но нужно добавить direct readers для Cost / Commercial Publication / Cutting / Inline Quality и blocking reviewer policy для high-risk apply;
+* automatic evidence-grounded Technical Flat generation;
+* sample/factory correction learning loop и change-impact по Measurements/BOM/Tech Pack/Sourcing/Production/Cost;
+* production knowledge corpus с citations/qualification.
+
+Это и есть текущий AI Engineering остаток; его надо сверять с
+`docs/SYNTH_V2_INTEGRATION_MASTER_PLAN_2026-10-01.md`, раздел **AI Product Engineering wave**.
+
 ---
 
 ## 8. Предлагаемый порядок

@@ -9,6 +9,7 @@ import { createProductionRequirementService } from '../application/production-re
 import { createProductionSourcingService } from '../application/production-sourcing-service.mjs';
 import { createSourcingTechPackAllocationService } from '../application/sourcing-tech-pack-allocation-service.mjs';
 import { createSupplierEconomicPerformanceService } from '../application/supplier-economic-performance-service.mjs';
+import { createProductEngineeringProposalApplyService } from '../application/product-engineering-proposal-apply-service.mjs';
 import { createSupplierPassportService } from '../application/supplier-passport-service.mjs';
 import { createSupplierTrustService } from '../application/supplier-trust-service.mjs';
 import { createPostgresFinalQualityReader } from '../infrastructure/postgres-final-quality-reader.mjs';
@@ -269,6 +270,16 @@ export function createPostgresWholesaleRuntime(options = {}) {
   });
   const operationSequenceQueries = createOperationSequenceQueryService({ reader: operationSequenceReader });
   const operationSequences = Object.freeze({ ...operationSequenceQueries, ...operationSequenceCommands });
+  const productEngineering = Object.freeze({
+    ...base.productEngineering,
+    ...createProductEngineeringProposalApplyService({
+      productEngineering: base.productEngineering,
+      measurements: base.measurements,
+      materials: base.materials,
+      techPacks: base.techPacks,
+      operationSequences,
+    }),
+  });
 
   // Целевая цена стоит раньше закупки: она отвечает, сколько можно платить, и её сравнивают с тем,
   // что фабрика запросила в подтверждённом заказе.
@@ -329,6 +340,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
     complianceDocuments,
     productCertifications,
     productIdentity: base.productIdentity,
+    productEngineering,
     productReadiness: base.productReadiness,
     commercialPublication: base.commercialPublication,
     orderEconomics,
@@ -382,6 +394,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
   const fetchHandler = createWholesaleFetchHandler(transport);
   return Object.freeze({
     ...base,
+    productEngineering,
     orderMarginBridgeReader,
     orderEconomics,
     productionRequirementStore,

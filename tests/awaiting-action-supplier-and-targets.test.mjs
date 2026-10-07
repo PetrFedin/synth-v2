@@ -19,10 +19,10 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (file) => readFile(path.join(root, file), 'utf8');
 const AS_OF = '2026-10-04T00:00:00.000Z';
 
-// --- Точная цель каждого из девятнадцати дел ---------------------------------------------------------------
+// --- Точная цель каждого из двадцати дел ---------------------------------------------------------------
 
 // Что сервер называет клиенту для каждого вида: экран, вкладку, содержащую запись, подзапись и диалог.
-const DETAIL = { orderId: 'order-9', lineNo: 2, materialCode: 'FAB-001', lotReference: 'LOT-77', colourCode: 'C-RED', productionOrderNumber: 'PO-5' };
+const DETAIL = { orderId: 'order-9', lineNo: 2, materialCode: 'FAB-001', lotReference: 'LOT-77', colourCode: 'C-RED', productionOrderNumber: 'PO-5', styleId: 'STYLE-1' };
 const EXPECTED_ROUTE = {
   'order-accept-terms': { view: 'orders', tab: 'orders' },
   'order-attach': { view: 'orders', tab: 'orders' },
@@ -43,10 +43,11 @@ const EXPECTED_ROUTE = {
   'lab-dip-decision': { view: 'materials', tab: 'colour', parentId: 'FAB-001', focus: 'C-RED' },
   'supplier-payment': { view: 'production-orders', parentId: 'PO-5' },
   'compliance-document-issue': { view: 'partners', tab: 'compliance-documents' },
+  'technical-review': { view: 'styles', tab: 'engineering', parentId: 'STYLE-1' },
 };
 
 test('every one of the awaiting action kinds has an exact target, not only a screen', () => {
-  assert.equal(AWAITING_ACTION_TYPES.length, 19);
+  assert.equal(AWAITING_ACTION_TYPES.length, 20);
   assert.deepEqual(Object.keys(EXPECTED_ROUTE).sort(), AWAITING_ACTION_TYPES.map((entry) => entry.type).sort());
   for (const entry of AWAITING_ACTION_TYPES) {
     const item = buildAwaitingActionItem({ type: entry.type, entityId: 'ENT-1', label: 'L', organisationId: 'org-1', since: AS_OF, detail: DETAIL }, AS_OF);
@@ -79,7 +80,7 @@ test('the supplier has its own catalogue of three answers, and the brand registe
   assert.throws(() => normalizeAwaitingActionQuery({ group: 'quality' }, 'supplier'), (error) => error.code === 'AWAITING_ACTION_GROUP_INVALID');
   assert.deepEqual([...normalizeAwaitingActionQuery({ group: 'production' }, 'supplier').types], ['portal-order-confirm']);
   assert.equal(normalizeAwaitingActionQuery({}, 'supplier').types.length, 3);
-  assert.equal(normalizeAwaitingActionQuery({}).types.length, 19);
+  assert.equal(normalizeAwaitingActionQuery({}).types.length, 20);
 });
 
 test('the supplier service reads through the grant reader and returns items that open the portal screen', async () => {

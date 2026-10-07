@@ -51,9 +51,9 @@ test('operational collaboration routes reject unknown fields and non-array evide
   assert.equal(calls.length,0);
 });
 
-test('authoritative OpenAPI 1.18 documents operational collaboration without version drift', () => {
+test('authoritative OpenAPI 1.20 documents operational collaboration without version drift', () => {
   const spec=wholesaleV2ExtendedOpenApi;
-  assert.equal(spec.info.version,'1.18.0');
+  assert.equal(spec.info.version,'1.20.0');
   for (const path of [
     '/operational/entities/{entityType}/{entityId}/collaboration',
     '/operational/threads',

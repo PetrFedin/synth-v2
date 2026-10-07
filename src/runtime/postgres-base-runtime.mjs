@@ -20,6 +20,11 @@ import { createTeamService } from '../application/team-service.mjs';
 import { createProductIdentityService } from '../application/product-identity-service.mjs';
 import { createProductIdentityQueryService } from '../application/product-identity-query-service.mjs';
 import { createProductReadinessService } from '../application/product-readiness-service.mjs';
+import { createProductEngineeringService } from '../application/product-engineering-service.mjs';
+import { createProductEngineeringProposalApplyService } from '../application/product-engineering-proposal-apply-service.mjs';
+import { createProductEngineeringProposalImpactService } from '../application/product-engineering-proposal-impact-service.mjs';
+import { createProductEngineeringJobService } from '../application/product-engineering-job-service.mjs';
+import { createProductEngineeringAnalysisExecutor } from '../application/product-engineering-analysis-executor.mjs';
 import { createSampleService } from '../application/sample-service.mjs';
 import { createSampleQueryService } from '../application/sample-query-service.mjs';
 import { createSourcingService } from '../application/sourcing-service.mjs';
@@ -53,6 +58,10 @@ import { createPostgresTeamStore } from '../infrastructure/postgres-team-store.m
 import { createPostgresProductIdentityStore } from '../infrastructure/postgres-product-identity-store.mjs';
 import { createPostgresProductIdentityReader } from '../infrastructure/postgres-product-identity-reader.mjs';
 import { createPostgresProductReadinessStore } from '../infrastructure/postgres-product-readiness-store.mjs';
+import { createPostgresProductEngineeringStore } from '../infrastructure/postgres-product-engineering-store.mjs';
+import { createPostgresProductEngineeringJobStore } from '../infrastructure/postgres-product-engineering-job-store.mjs';
+import { createPostgresProductEngineeringModelControlStore } from '../infrastructure/postgres-product-engineering-model-control-store.mjs';
+import { createBaselineEngineeringScanner } from '../modules/product-engineering/baseline-scanner.mjs';
 import { createPostgresProductReadinessSourceReader } from '../infrastructure/postgres-product-readiness-source-reader.mjs';
 import { createPostgresSampleStore } from '../infrastructure/postgres-sample-store.mjs';
 import { createPostgresSampleReader } from '../infrastructure/postgres-sample-reader.mjs';
@@ -85,15 +94,17 @@ import { createWholesaleHttpHandler } from '../http/api.mjs';
 import { createWholesaleFetchHandler } from '../http/fetch-api.mjs';
 import { resolveRuntimeIdGenerator } from './id-generator.mjs';
 
-export function createPostgresWholesaleRuntime({
-  pool, migrationsDir, clock, nextId, randomBytesImpl, sessionTtlMs, maxLoginFailures, loginWindowMs,
-  loginBlockMs, revokedSessionRetentionMs, notificationProjectionWorkerId, notificationProjectionLeaseMs,
-  notificationProjectionRetryDelayMs, notificationProjectionMaxAttempts, outboxPublisher,
-  outboxPublicationWorkerId, outboxPublicationLeaseMs, outboxPublicationRetryDelayMs,
-  outboxPublicationMaxRetryDelayMs, outboxPublicationMaxAttempts, maintenanceIntervalMs,
-  maintenanceRetryDelayMs, maintenanceStatementTimeoutMs, commandRetentionMs, authAuditRetentionMs, throttleRetentionMs,
-  outboxRetentionMs, operationalReadiness,
-} = {}) {
+/** @param {any} [options] */
+export function createPostgresWholesaleRuntime(options = {}) {
+  const {
+    pool, migrationsDir, clock, nextId, randomBytesImpl, sessionTtlMs, maxLoginFailures, loginWindowMs,
+    loginBlockMs, revokedSessionRetentionMs, notificationProjectionWorkerId, notificationProjectionLeaseMs,
+    notificationProjectionRetryDelayMs, notificationProjectionMaxAttempts, outboxPublisher,
+    outboxPublicationWorkerId, outboxPublicationLeaseMs, outboxPublicationRetryDelayMs,
+    outboxPublicationMaxRetryDelayMs, outboxPublicationMaxAttempts, maintenanceIntervalMs,
+    maintenanceRetryDelayMs, maintenanceStatementTimeoutMs, commandRetentionMs, authAuditRetentionMs, throttleRetentionMs,
+    outboxRetentionMs, operationalReadiness, engineeringModelProviders,
+  } = options;
   invariant(pool, 'POSTGRES_POOL_REQUIRED', 'PostgreSQL pool is required');
   invariant(operationalReadiness === undefined || typeof operationalReadiness === 'function', 'READINESS_OPERATIONAL_CHECK_INVALID', 'Operational readiness check must be a function');
   const runtimeNextId = resolveRuntimeIdGenerator(nextId);
@@ -110,7 +121,7 @@ export function createPostgresWholesaleRuntime({
   const sampleStore = createPostgresSampleStore({ pool });
   const sourcingStore = createPostgresSourcingStore({ pool });
   const techPackStore = createPostgresTechPackStore({ pool });
-  const options = { store, nextId: runtimeNextId, ...(clock ? { clock } : {}) };
+  const serviceOptions = { store, nextId: runtimeNextId, ...(clock ? { clock } : {}) };
   const auth = createAuthService({
     store: createPostgresAuthStore({ pool }), nextId: runtimeNextId,
     ...(clock ? { clock } : {}), ...(randomBytesImpl ? { randomBytesImpl } : {}),
@@ -121,7 +132,7 @@ export function createPostgresWholesaleRuntime({
     ...(revokedSessionRetentionMs !== undefined ? { revokedSessionRetentionMs } : {}),
   });
   const readiness = migrationsDir ? createPostgresReadinessService({ pool, migrationsDir, ...(clock ? { clock } : {}), ...(operationalReadiness ? { operationalCheck: operationalReadiness } : {}) }) : undefined;
-  const platform = createWholesalePlatform({ ...options, productIdentityStore });
+  const platform = createWholesalePlatform({ ...serviceOptions, productIdentityStore });
   const legalEntities = createLegalEntityService({ store: legalEntityStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) });
   const team = createTeamService({ store: createPostgresTeamStore({ pool }), nextId: runtimeNextId, ...(randomBytesImpl ? { randomBytesImpl } : {}), ...(clock ? { clock } : {}) });
   const catalog = Object.freeze({ ...createCatalogService({ wholesaleStore: store, catalogStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createCatalogQueryService({ reader: createPostgresCatalogReader({ pool }) }) });
@@ -130,7 +141,36 @@ export function createPostgresWholesaleRuntime({
     ...createProductIdentityService({ store: productIdentityStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }),
     ...createProductIdentityQueryService({ reader: productIdentityReader }),
   });
+  const productEngineeringStore = createPostgresProductEngineeringStore({ pool });
+  const productEngineeringJobStore = createPostgresProductEngineeringJobStore({ pool });
+  const productEngineeringModelControlStore = createPostgresProductEngineeringModelControlStore({ pool });
+  const productEngineering = createProductEngineeringService({
+    store: productEngineeringStore,
+    productReader: productIdentityReader,
+    nextId: runtimeNextId,
+    ...(clock ? { clock } : {}),
+  });
+  const productEngineeringAnalysisExecutor = createProductEngineeringAnalysisExecutor({
+    engineeringStore: productEngineeringStore,
+    controlStore: productEngineeringModelControlStore,
+    providers: engineeringModelProviders ?? {},
+    nextId: runtimeNextId,
+    ...(clock ? { clock } : {}),
+  });
+  const productEngineeringJobs = createProductEngineeringJobService({
+    jobStore: productEngineeringJobStore,
+    engineeringStore: productEngineeringStore,
+    scanner: createBaselineEngineeringScanner(),
+    workerId: 'product-engineering',
+    analysisExecutor: productEngineeringAnalysisExecutor,
+    nextId: runtimeNextId,
+    ...(clock ? { clock } : {}),
+  });
   const productReadinessSourceReader = createPostgresProductReadinessSourceReader({ pool, productIdentityReader });
+  const productEngineeringImpact = createProductEngineeringProposalImpactService({
+    productEngineering,
+    readinessSourceReader: productReadinessSourceReader,
+  });
   const productReadiness = createProductReadinessService({
     store: productReadinessStore,
     sourceReader: productReadinessSourceReader,
@@ -158,6 +198,13 @@ export function createPostgresWholesaleRuntime({
   const samples = Object.freeze({ ...createSampleService({ sampleStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createSampleQueryService({ reader: createPostgresSampleReader({ pool }), ...(clock ? { clock } : {}) }) });
   const sourcing = Object.freeze({ ...createSourcingService({ sourcingStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createSourcingQueryService({ reader: createPostgresSourcingReader({ pool }), ...(clock ? { clock } : {}) }) });
   const techPacks = Object.freeze({ ...createTechPackService({ techPackStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createTechPackQueryService({ reader: createPostgresTechPackReader({ pool }) }) });
+  const productEngineeringApply = createProductEngineeringProposalApplyService({
+    productEngineering,
+    measurements,
+    materials,
+    techPacks,
+  });
+  const productEngineeringApi = Object.freeze({ ...productEngineering, ...productEngineeringApply, ...productEngineeringImpact });
   // Governed reference data is global and read-only from the application, so it needs a reader and
   // nothing else.
   const libraries = createLibraryQueryService({ reader: createPostgresLibraryReader({ pool }) });
@@ -176,10 +223,10 @@ export function createPostgresWholesaleRuntime({
     nextId: runtimeNextId,
     ...(clock ? { clock } : {}),
   });
-  const partners = createPartnerAccessService(options);
-  const retailDoors = createRetailDoorService(options);
-  const collaboration = createShowroomSelectionService({ ...options, catalogReader: catalog, commercialPublicationReader: commercialPublication });
-  const orders = createOrderBuilderService({ ...options, commercialPublicationReader: commercialPublication });
+  const partners = createPartnerAccessService(serviceOptions);
+  const retailDoors = createRetailDoorService(serviceOptions);
+  const collaboration = createShowroomSelectionService({ ...serviceOptions, catalogReader: catalog, commercialPublicationReader: commercialPublication });
+  const orders = createOrderBuilderService({ ...serviceOptions, commercialPublicationReader: commercialPublication });
   const projectionStore = createPostgresNotificationProjectionStore({ pool });
   const notificationReader = createPostgresNotificationReader({ pool });
   const notificationCore = createNotificationService({
@@ -214,12 +261,12 @@ export function createPostgresWholesaleRuntime({
     ...(outboxRetentionMs !== undefined ? { outboxRetentionMs } : {}),
   });
   const workspace = createWorkspaceQueryService({ reader: createPostgresWorkspaceReader({ pool }) });
-  const transport = { authenticate: auth.authenticate, auth, readiness, platform, catalog, legalEntities, productIdentity, productReadiness, commercialPublication, orderEconomics, materials, boms, measurements, samples, libraries, history, supplierPortal, categoryAttributes, organisationMembers, awaitingActions, operationalCollaboration, team, partners, retailDoors, sourcing, techPacks, collaboration, orders, notifications, workspace };
+  const transport = { authenticate: auth.authenticate, auth, readiness, platform, catalog, legalEntities, productIdentity, productEngineering: productEngineeringApi, productEngineeringJobs, productReadiness, commercialPublication, orderEconomics, materials, boms, measurements, samples, libraries, history, supplierPortal, categoryAttributes, organisationMembers, awaitingActions, operationalCollaboration, team, partners, retailDoors, sourcing, techPacks, collaboration, orders, notifications, workspace };
   const handler = createWholesaleHttpHandler(transport);
   const fetchHandler = createWholesaleFetchHandler(transport);
   return Object.freeze({
-    auth, readiness, maintenance, outboxPublication, outboxPublicationStore, store, catalogStore, legalEntityStore, productIdentityStore, productIdentityReader, productReadinessStore, productReadinessSourceReader, commercialPublicationStore, orderEconomicsStore, materialStore, bomStore, measurementStore, sampleStore, sourcingStore, techPackStore,
-    platform, catalog, legalEntities, productIdentity, productReadiness, commercialPublication, orderEconomics, materials, boms, measurements, samples, libraries, history, supplierPortal, categoryAttributes, organisationMembers, awaitingActions, operationalCollaboration, team, partners, retailDoors, sourcing, techPacks, collaboration, orders, notifications, workspace,
+    auth, readiness, maintenance, outboxPublication, outboxPublicationStore, store, catalogStore, legalEntityStore, productIdentityStore, productIdentityReader, productEngineeringStore, productEngineeringJobStore, productEngineeringModelControlStore, productReadinessStore, productReadinessSourceReader, commercialPublicationStore, orderEconomicsStore, materialStore, bomStore, measurementStore, sampleStore, sourcingStore, techPackStore,
+    platform, catalog, legalEntities, productIdentity, productEngineering: productEngineeringApi, productEngineeringJobs, productReadiness, commercialPublication, orderEconomics, materials, boms, measurements, samples, libraries, history, supplierPortal, categoryAttributes, organisationMembers, awaitingActions, operationalCollaboration, team, partners, retailDoors, sourcing, techPacks, collaboration, orders, notifications, workspace,
     handler, fetchHandler,
   });
 }

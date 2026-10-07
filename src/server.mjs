@@ -4,6 +4,7 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import { createHttpOutboxPublisher } from './infrastructure/http-outbox-publisher.mjs';
+import { createJsonModelGatewayProvider } from './infrastructure/json-model-gateway-provider.mjs';
 import { migratePostgres, waitForPostgres } from './infrastructure/postgres-migrator.mjs';
 import { createOperationalMetricsHandler } from './http/operational-metrics-handler.mjs';
 import { createPostgresWholesaleRuntime } from './runtime/postgres-runtime.mjs';
@@ -24,12 +25,20 @@ if (Boolean(outboxWebhookUrl) !== Boolean(outboxWebhookSecret)) {
   throw new Error('SYNTHA_OUTBOX_WEBHOOK_URL and SYNTHA_OUTBOX_WEBHOOK_SECRET must be configured together');
 }
 
+const engineeringGatewayUrl = process.env.SYNTHA_ENGINEERING_MODEL_GATEWAY_URL?.trim() || undefined;
+const engineeringGatewayToken = secretSetting('SYNTHA_ENGINEERING_MODEL_GATEWAY_TOKEN');
+const engineeringGatewayProvider = process.env.SYNTHA_ENGINEERING_MODEL_GATEWAY_PROVIDER?.trim() || 'syntha-gateway';
+if (Boolean(engineeringGatewayUrl) !== Boolean(engineeringGatewayToken)) {
+  throw new Error('SYNTHA_ENGINEERING_MODEL_GATEWAY_URL and SYNTHA_ENGINEERING_MODEL_GATEWAY_TOKEN must be configured together');
+}
+
 const metricsEnabled = booleanSetting('SYNTHA_METRICS_ENABLED', false);
 const metricsToken = secretSetting('SYNTHA_METRICS_TOKEN');
 if (metricsEnabled && !metricsToken) throw new Error('SYNTHA_METRICS_TOKEN is required when SYNTHA_METRICS_ENABLED is true');
 
 const notificationProjectionIntervalMs = integerSetting('SYNTHA_NOTIFICATION_PROJECTION_INTERVAL_MS', 1_000, 100, 60_000);
 const outboxPublicationIntervalMs = integerSetting('SYNTHA_OUTBOX_PUBLICATION_INTERVAL_MS', 1_000, 100, 60_000);
+const productEngineeringIntervalMs = integerSetting('SYNTHA_ENGINEERING_JOB_INTERVAL_MS', 1_000, 100, 60_000);
 const settings = Object.freeze({
   port: integerSetting('PORT', 4100, 1, 65_535),
   host: process.env.HOST?.trim() || '127.0.0.1',
@@ -48,6 +57,10 @@ const settings = Object.freeze({
   loginBlockMs: integerSetting('SYNTHA_AUTH_BLOCK_MS', 900_000, 60_000, 86_400_000),
   revokedSessionRetentionMs: integerSetting('SYNTHA_REVOKED_SESSION_RETENTION_MS', 7 * DAY_MS, DAY_MS, 31_536_000_000),
   notificationProjectionIntervalMs,
+  productEngineeringIntervalMs,
+  productEngineeringBatchSize: integerSetting('SYNTHA_ENGINEERING_JOB_BATCH_SIZE', 10, 1, 100),
+  productEngineeringStaleMs: integerSetting('SYNTHA_ENGINEERING_JOB_STALE_MS', productEngineeringIntervalMs * 5, productEngineeringIntervalMs, 300_000),
+  productEngineeringFailureThreshold: integerSetting('SYNTHA_ENGINEERING_JOB_FAILURE_THRESHOLD', 3, 1, 100),
   notificationProjectionBatchSize: integerSetting('SYNTHA_NOTIFICATION_PROJECTION_BATCH_SIZE', 100, 1, 1_000),
   notificationProjectionWorkerId: process.env.SYNTHA_NOTIFICATION_PROJECTION_WORKER_ID?.trim() || undefined,
   notificationProjectionLeaseMs: integerSetting('SYNTHA_NOTIFICATION_PROJECTION_LEASE_MS', 30_000, 1_000, 900_000),
@@ -75,6 +88,9 @@ const settings = Object.freeze({
   authAuditRetentionMs: integerSetting('SYNTHA_AUTH_AUDIT_RETENTION_MS', 90 * DAY_MS, DAY_MS, 31_536_000_000),
   throttleRetentionMs: integerSetting('SYNTHA_AUTH_THROTTLE_RETENTION_MS', 7 * DAY_MS, DAY_MS, 31_536_000_000),
   outboxRetentionMs: integerSetting('SYNTHA_OUTBOX_RETENTION_MS', 30 * DAY_MS, DAY_MS, 31_536_000_000),
+  engineeringGatewayUrl,
+  engineeringGatewayToken,
+  engineeringGatewayProvider,
   metricsEnabled,
   metricsToken: metricsEnabled ? metricsToken : undefined,
   supplierTrustPrivateKeyB64: secretSetting('SYNTHA_SUPPLIER_TRUST_PRIVATE_KEY_B64'),
@@ -116,10 +132,13 @@ const operationalMetrics = createOperationalMetrics({
 let server;
 let notificationWorker;
 let outboxWorker;
+let productEngineeringWorker;
 let unregisterNotificationHealth;
+let unregisterProductEngineeringHealth;
 let unregisterOutboxHealth;
 let unregisterNotificationMetrics;
 let unregisterOutboxMetrics;
+let unregisterProductEngineeringMetrics;
 // Последнее известное состояние очереди. Снимок, а не запрос на каждый `/ready`: проверка
 // готовности вызывается балансировщиком часто, и счёт по растущей таблице на каждый её запрос сам стал бы
 // нагрузкой. Возраст самого снимка тоже сообщается — устаревшие цифры должны быть видны как устаревшие.
@@ -136,8 +155,15 @@ try {
     timeoutMs: settings.outboxWebhookTimeoutMs,
     allowInsecureLocalhost: settings.outboxAllowInsecureLocalhost,
   }) : undefined;
+  const engineeringModelProviders = settings.engineeringGatewayUrl ? {
+    [settings.engineeringGatewayProvider]: createJsonModelGatewayProvider({
+      endpoint: settings.engineeringGatewayUrl,
+      token: settings.engineeringGatewayToken,
+    }),
+  } : {};
   const runtime = createPostgresWholesaleRuntime({
     pool,
+    engineeringModelProviders,
     migrationsDir,
     sessionTtlMs: settings.sessionTtlMs,
     maxLoginFailures: settings.maxLoginFailures,
@@ -191,6 +217,29 @@ try {
   const applicationHandler = createStandaloneHandler({ apiHandler: runtime.handler });
   const handler = createOperationalMetricsHandler({ next: applicationHandler, metrics: operationalMetrics });
   server = configureHttpServer(createServer(handler), settings);
+  productEngineeringWorker = createBackgroundWorker({
+    name: 'product-engineering',
+    intervalMs: settings.productEngineeringIntervalMs,
+    task: async () => {
+      const results = await runtime.productEngineeringJobs.processPending({ limit: settings.productEngineeringBatchSize });
+      operationalMetrics.recordWorkerBatch('product-engineering', results);
+      const terminal = results.filter((result) => result.status === 'dead_letter');
+      if (terminal.length) console.warn(`Product Engineering dead-lettered ${terminal.length} job(s)`);
+    },
+  });
+  const productEngineeringHealth = () => Object.freeze({
+    ...productEngineeringWorker.health({
+      maxStalenessMs: settings.productEngineeringStaleMs,
+      maxConsecutiveFailures: settings.productEngineeringFailureThreshold,
+    }),
+    scannerAssurance: 'integrity_only',
+    productionMalwareScanner: false,
+    modelGatewayConfigured: Boolean(settings.engineeringGatewayUrl),
+    modelGatewayProvider: settings.engineeringGatewayUrl ? settings.engineeringGatewayProvider : null,
+  });
+  unregisterProductEngineeringHealth = healthRegistry.register('product-engineering', productEngineeringHealth);
+  unregisterProductEngineeringMetrics = operationalMetrics.registerWorker('product-engineering', productEngineeringHealth);
+
   notificationWorker = createBackgroundWorker({
     name: 'notification-projection',
     intervalMs: settings.notificationProjectionIntervalMs,
@@ -277,6 +326,7 @@ try {
   }
 
   await listen(server, { port: settings.port, host: settings.host });
+  productEngineeringWorker.start();
   notificationWorker.start();
   outboxWorker?.start();
   console.log(`Syntha V2 listening on http://${settings.host}:${settings.port}`);
@@ -284,10 +334,13 @@ try {
   console.error('Syntha V2 failed to start', error);
   unregisterOutboxMetrics?.();
   unregisterNotificationMetrics?.();
+  unregisterProductEngineeringMetrics?.();
   unregisterOutboxHealth?.();
   unregisterNotificationHealth?.();
+  unregisterProductEngineeringHealth?.();
   await outboxWorker?.stop().catch((workerError) => console.error('Failed to stop outbox worker after startup error', workerError));
   await notificationWorker?.stop().catch((workerError) => console.error('Failed to stop notification worker after startup error', workerError));
+  await productEngineeringWorker?.stop().catch((workerError) => console.error('Failed to stop Product Engineering worker after startup error', workerError));
   server?.closeAllConnections?.();
   server = undefined;
   await pool.end().catch((poolError) => console.error('Failed to close PostgreSQL pool after startup error', poolError));
@@ -295,7 +348,7 @@ try {
 }
 
 if (server) {
-  const stoppers = [notificationWorker, outboxWorker].filter(Boolean).map((worker) => () => worker.stop());
+  const stoppers = [productEngineeringWorker, notificationWorker, outboxWorker].filter(Boolean).map((worker) => () => worker.stop());
   const shutdown = createShutdownCoordinator({
     server,
     pool,

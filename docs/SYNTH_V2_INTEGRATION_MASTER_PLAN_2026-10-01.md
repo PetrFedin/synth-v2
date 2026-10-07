@@ -1282,6 +1282,244 @@ Minimum disclosure only.
 
 
 
+## AI Product Engineering wave — evidence-first design-to-production intelligence
+
+**Disposition:** ADOPT as a native Synth-v2 bounded capability. Do not create a separate SpecForm clone or second PLM database.
+
+### Existing authorities that must remain canonical
+
+Product Identity, canonical Measurements/Grading, BOM/Materials, Construction/BOL, Samples, Sourcing, Tech Pack, Production, Quality, Commercial Publication and order/economics remain owned by their existing modules.
+
+AI Product Engineering sits upstream and may only create:
+
+`analysis -> model run -> finding -> evidence -> proposal/conflict -> review -> separate canonical command`.
+
+### Phase A — Engineering Authority — IMPLEMENTED/PARTIAL in PR #242
+
+- versioned analysis runs;
+- model run provenance and cost/usage envelope;
+- source-grounded findings/evidence;
+- human proposals and explicit conflicts;
+- semantic versioned SVG drawings;
+- dedicated RBAC;
+- idempotent HTTP/OpenAPI;
+- Product Master AI Engineering review workspace;
+- Awaiting Action from unresolved review state.
+
+### Phase B — Provider Router — IMPLEMENTED/PARTIAL in PR #242
+
+Implemented in the current branch:
+
+- provider-neutral HTTPS JSON model gateway adapter;
+- PostgreSQL-backed model qualification records and route policies;
+- exact eligibility on provider/model/purpose/prompt/schema plus qualification expiry;
+- governed bootstrap requiring benchmark SHA-256 and non-empty qualification metrics;
+- durable `analysis_execute` jobs with lease/retry/reclaim/dead-letter semantics;
+- input/output content hashes and persisted ModelRun provenance;
+- fail-closed behavior when no exact qualified route exists;
+- exact schema-version validation before persistence for `engineering-findings-v1` and `garment-ontology-v1`, including strict allowed fields, bounded collection sizes, source-manifest evidence lineage, proposal finding indexes and garment graph node/relation integrity;
+- format-aware evidence grounding: PDF citations must resolve to parsed pages, spreadsheet citations must stay inside a parsed sheet/range, and raster/SVG regions use normalized coordinates; a plausible but nonexistent locator is rejected before persistence;
+- analysis failure only after durable retry exhaustion, not after the first transient provider error.
+
+Still required before production-grade external AI execution:
+
+- per-organisation rate/credit budgets;
+- persistent circuit-breaker/provider-health state and latency/cost telemetry;
+- provider-specific adapters only where the generic gateway contract is insufficient;
+- live qualification evidence for the exact model/prompt/schema combination used in production.
+
+A provider result writes only Product Engineering facts, never canonical PLM facts.
+
+### Phase C — Governed document/media intake — IMPLEMENTED/PARTIAL in PR #242
+
+Supported source classes:
+
+- product photos and details;
+- designer/technical sketches;
+- existing Tech Pack PDF;
+- XLSX/CSV measurement sheets;
+- supplier/fabric datasheets;
+- SVG/Illustrator-compatible exports where legally/technically ingestible;
+- sample/QC evidence.
+
+Admission:
+
+`source -> type/size/security validation -> immutable source digest -> parser -> source locator -> finding/evidence`.
+
+Current branch now provides:
+
+- controlled binary upload for PDF/XLSX/CSV/JPEG/PNG/WebP/SVG;
+- server-computed SHA-256 rather than trusting client-supplied hashes;
+- MIME/extension/signature admission checks;
+- durable source bytes through a replaceable storage boundary, with PostgreSQL `bytea` as the dependency-free MVP adapter;
+- durable `source_scan -> source_parse` jobs;
+- explicit MVP integrity scanner with EICAR/active-SVG rejection and a visible `integrity_only` assurance label;
+- structural parsers for CSV, XLSX workbook/sheets/cells, PDF page structure, SVG structure and image dimensions;
+- exact source/fragment locators feeding evidence lineage.
+
+Production gates still open:
+
+- malware-grade scanner adapter; the built-in integrity scanner must not be represented as antivirus;
+- object-storage adapter for production-scale files while preserving source IDs/hashes;
+- semantic PDF extraction and authoritative table/text extraction;
+- controlled adapters for Illustrator/CLO/3D or other production formats when justified;
+- archive/decompression hardening and parser resource limits must remain part of admission tests.
+
+### Phase D — Garment Ontology + Technical Flat — IMPLEMENTED/PARTIAL in PR #242
+
+Create an evidence-grounded garment graph:
+
+`garment -> component -> panel -> seam/stitch -> closure/pocket/trim -> construction node -> operation`.
+
+Current branch persists versioned graph/node/edge records, validates graph integrity, moves generated graphs into a reviewed engineering state and projects the latest graph into Product Master with semantic nodes/relations and provenance.
+
+Semantic versioned SVG drawing authority also exists. The remaining step is automatic evidence-grounded front/back/side/inside/detail draft generation and explicit reviewed links from graph/drawing objects into canonical Product/Measurement/BOM/Construction concepts.
+
+Every semantic object may affect canonical PLM only after human confirmation through a separate domain command.
+
+### Phase E — Measurement/POM Intelligence
+
+- detect candidate POM and drawing anchors;
+- reconcile against governed `measurement.point`;
+- never infer absolute units from an uncalibrated photograph;
+- ingest authoritative measurement documents;
+- compare proposed/current/sample actual;
+- use existing interval-specific `grade_steps` rather than generic LLM grading;
+- preserve explicit overrides and QC flags.
+
+### Phase F — BOM / Material / Construction Intelligence
+
+AI may propose:
+
+- component/material role;
+- placement/main/lining semantics;
+- construction nodes;
+- operation sequence candidates;
+- missing material/specification fields.
+
+Unknown GSM/composition/supplier/price stays unknown. Costing remains the existing deterministic BOM/landed-cost authority.
+
+### Phase G — Conflict and change-impact engine — IMPLEMENTED/PARTIAL in PR #242
+
+Before a technical revision:
+
+`proposed change -> impacted Measurements/BOM/Tech Pack/Sample/Sourcing/Production/Cost/Commercial publication -> reviewer decision`.
+
+The first deterministic pre-apply impact preview is now executable through
+`GET /v2/product-engineering/proposals/{proposalId}/impact`.
+
+Current policy covers the first canonical apply actions:
+
+- Measurement Chart;
+- Material Specification;
+- Tech Pack Revision;
+- Operation Sequence operations.
+
+The preview combines fixed domain policy with exact StyleVersion Product Readiness context. Evidence is deliberately tri-state:
+
+- `observed` — the current repository context directly contains the dependency;
+- `derived` — a bounded upstream fact implies review risk, for example active production implies cutting/inline-quality review;
+- `not_available` — this reader does not currently query that authority, so the system returns `null`, never a false zero.
+
+Directly observed today: Measurement Charts, BOM, Samples, Tech Packs, Sourcing, Production Orders, Quality inspections and acknowledged Tech Packs. Cost, Commercial Publication and other not-yet-joined authorities remain explicit coverage gaps.
+
+Source conflicts are first-class records, never silently averaged.
+
+### Phase H — Sample-learning loop
+
+Extend sample review to exact POM:
+
+`requested -> actual -> delta -> tolerance -> PASS/FAIL -> comment/evidence -> next round`.
+
+Preserve exact specification/Tech Pack version used by the factory. Learn from proposal -> correction -> actual -> final only within governed data/privacy boundaries.
+
+### Phase I — Production Knowledge + qualification
+
+Use a governed, citable production knowledge corpus. Add a qualification benchmark for every production model/prompt/schema combination:
+
+- field/POM/category coverage;
+- precision/recall for structural detection;
+- measurement MAE only where calibrated ground truth exists;
+- unknown/hallucination rates;
+- conflict-detection recall;
+- latency/cost;
+- reproducible input/output hashes.
+
+Production-qualified combinations receive an immutable Qualification Manifest. No model is trusted because of brand/name alone.
+
+PR #242 now contains the persisted qualification/policy substrate and an operator bootstrap that refuses qualification without an exact benchmark SHA-256 plus non-empty evaluation metrics. A database record is still not production evidence by itself: the benchmark artefact, evaluation procedure and live acceptance for the deployed model/prompt/schema remain required.
+
+### Phase E — Governed Canonical Apply — IMPLEMENTED/PARTIAL in PR #242
+
+Accepted proposals can now cross the authority boundary through an explicit allowlist of existing canonical service commands:
+
+- `measurement / chart` -> `updateCanonicalMeasurementChart`;
+- `material / specification` -> `amendMaterialSpecification`;
+- `tech_pack / revision` -> `createRevision`;
+- `operation_sequence / operations` -> `replaceOperations`.
+
+Rules:
+
+- proposal must already be human-`accepted`;
+- apply requires both `expectedProposalVersion` and `expectedCanonicalVersion`;
+- AI `proposedValue` cannot supply or override `expectedVersion`;
+- no generic JSON Patch or direct SQL exists;
+- the owning canonical service performs its normal capability, domain and optimistic-concurrency checks;
+- canonical command id is derived from the external apply command id and participates in the existing global command registry;
+- after the owning command succeeds, Product Engineering records immutable `appliedReference = authority + action + canonical commandId + entity/version`;
+- crash between canonical commit and Product Engineering marking is replay-safe: the same canonical command id returns the prior canonical result, then the proposal can be marked applied;
+- reuse of one idempotency key for a different canonical apply conflicts before a second canonical mutation.
+
+PostgreSQL Golden Path now proves:
+`completed analysis -> human-created material proposal -> accept -> POST /apply -> canonical material version increment -> appliedReference`.
+
+The same Golden Path now also reads deterministic impact **before** apply and verifies that unavailable repository evidence is labelled `not_available` rather than zero.
+
+Product Master UI now preserves the same state separation:
+
+`pending -> Accept/Reject -> accepted -> Impact -> Apply -> appliedReference`.
+
+Impact is readable without mutation. Apply is shown only for the explicit allowlist and requires the current canonical optimistic version. Accepted-but-not-applied and applied proposals remain visibly different.
+
+Still open:
+
+- apply adapters for BOM, Product Identity fields, Samples/fit decisions, Colour and other canonical actions;
+- richer direct impact evidence for Cost, Commercial Publication, Cutting, Inline Quality and other downstream authorities; 
+- policy gates that can block high-risk apply until required downstream reviewers acknowledge the impact;
+- richer automatic resolution of the current canonical target version so the UI can replace the temporary explicit optimistic-version input;
+- policy controls for actions that require stronger approval than ordinary Product Engineering management.
+
+### Current AI Engineering Golden Path — 2026-10-06
+
+The intended first real user journey is now:
+
+`Product Master -> choose real file -> controlled binary upload -> server SHA-256 -> durable scan -> admission -> durable structural parse -> fragments/evidence -> exact qualified model route -> durable analysis execution -> ModelRun -> Findings/Evidence -> Proposals/Conflicts -> reviewed Garment Graph -> Technical Review`.
+
+What this **does prove** after repository acceptance:
+
+- the file and AI execution path are durable and replay-aware;
+- every downstream engineering fact is traceable to source hashes/locators;
+- model selection is qualification-gated;
+- AI output cannot directly overwrite canonical Product/BOM/Measurement/Tech Pack authority;
+- unresolved proposals/conflicts enter the human review loop.
+
+What it **does not yet prove**:
+
+- malware-grade production upload security;
+- semantic extraction quality from arbitrary real PDFs;
+- production object-storage scale;
+- a live external model endpoint with accepted benchmark evidence;
+- broader canonical apply coverage beyond the current allowlisted first slice (Measurement Chart, Material Specification, Tech Pack Revision, Operation Sequence operations);
+- calibrated POM/grading quality on real garments.
+
+### Commercial/defensibility result
+
+This wave connects Synth-v2's existing design-to-margin spine with a proprietary engineering feedback loop:
+
+`reference -> proposal -> human correction -> factory/sample actual -> QC -> cost/margin outcome`.
+
+The durable moat is the governed ontology + evidence/revision graph + downstream actuals, not a single LLM or image-generation provider.
+
 ## Institutional adoption wave — Fashion Supply Network Standard and federated supplier ecosystem
 
 This wave moves Synth-v2 from a strong PLM/commerce OS into shared supply-network infrastructure that brands, suppliers, factories, agents, logistics partners and implementation vendors can adopt without sharing one database.
@@ -1398,6 +1636,116 @@ Portability remains required; switching cost comes from longitudinal network int
 
 **Moat:** Synth-v2 becomes the interoperability and trust layer of a fashion supply network, with compounding multi-season supplier and production evidence.
 
+## Execution checkpoint — 2026-10-07 — PR #242 admission, monitor/tablet UX and next authority layer
+
+This checkpoint was started by re-reading this master plan before changing code. The rule remains unchanged: new capability may enrich Product Engineering, but it must not create a parallel PLM authority or bypass PostgreSQL/domain services.
+
+### Repository admission work — IN PROGRESS
+
+PR #242 is being brought back onto current `main` before any new large Product Engineering surface is added. The admission cycle now explicitly includes:
+
+- exact current-main reconciliation rather than testing an obsolete merge ref;
+- no type-baseline increase to hide regressions; type contracts are corrected and the baseline may only ratchet downward when errors are genuinely removed;
+- canonical runtime startup before public acceptance;
+- PostgreSQL migration/readiness checks;
+- Product Engineering route/OpenAPI contract checks;
+- Supplier Passport / Supplier Trust regression checks after main reconciliation;
+- deliberate OpenAPI V2 contract pinning at `1.20.0` for governed proposal apply + proposal impact preview;
+- full repository `verify` before PR leaves draft.
+
+### Monitor + tablet interaction contract — IMPLEMENTED/PARTIAL
+
+The application remains one responsive product, not two divergent codebases. Two explicit review modes are now available for live localhost QA:
+
+- `?viewport=monitor` — monitor information density and expanded navigation;
+- `?viewport=tablet` — tablet review canvas with left-side collapsible navigation.
+
+The same rules also apply automatically to real tablet-width viewports where appropriate.
+
+Tablet requirements:
+
+- navigation remains a left rail between mobile and desktop breakpoints; it does not become the phone top-navigation pattern;
+- expanded and collapsed rail states are both supported;
+- primary/secondary actions remain content-sized rather than stretching to full page width;
+- touch controls keep a practical minimum target while retaining enterprise information density;
+- KPI/metric areas reduce to two columns;
+- master/detail areas collapse to one readable column;
+- wide operational tables scroll horizontally instead of compressing columns into unreadable cells;
+- dialogs remain bounded to the tablet viewport;
+- Product Engineering review / Impact / Apply actions preserve their separation on both layouts.
+
+The review-mode implementation is part of the final Omnidata/ODS visual contract rather than a stylesheet layered after it. This prevents a preview-only override from silently becoming a second design system.
+
+### Canonical Application Authority — NEXT AFTER #242 GREEN
+
+Do not expand the current allowlist into generic mutation. The next authority increment must add evidence around the existing bounded-context command path:
+
+`accepted proposal`
+`-> exact target authority/entity/version`
+`-> immutable precondition snapshot`
+`-> deterministic proposed diff`
+`-> policy + actor approval decision`
+`-> existing bounded-context command`
+`-> PostgreSQL transaction/outbox`
+`-> resulting canonical version`
+`-> immutable application receipt`
+`-> reverse lineage to proposal/finding/evidence/source/model run`.
+
+Required properties:
+
+- no AI-supplied optimistic version;
+- no generic JSON Patch;
+- no direct AI SQL;
+- replay-safe application receipt;
+- canonical command result and Product Engineering receipt must be reconcilable after crash/retry;
+- source/model lineage survives application and remains queryable from the resulting canonical fact;
+- high-risk targets may require stronger approval policy than ordinary Product Engineering manage rights.
+
+### Product Engineering Change Impact Engine — NEXT HIGH PRIORITY
+
+Extend current pre-apply impact from fixed policy + readiness context into a version-aware dependency graph:
+
+`source revision`
+`-> fragment/evidence invalidation`
+`-> finding stale/current state`
+`-> proposal stale/current state`
+`-> garment graph / technical flat affected nodes`
+`-> Measurement / BOM / Material / Tech Pack dependencies`
+`-> Sample / Sourcing / Production / QC / Cost / Commercial consequences`
+`-> required re-review / block / acknowledge`.
+
+The engine must distinguish:
+
+- `observed` dependency from repository facts;
+- `derived` dependency from bounded domain policy;
+- `not_available` coverage gaps;
+- `not_affected` only when the system has enough evidence to prove non-impact.
+
+A missing reader must never be rendered as a zero-impact decision.
+
+### Selected master-plan work after the authority layer
+
+The next Product Engineering waves remain, in this order:
+
+1. **Measurement/POM Intelligence** — calibrated/uncalibrated distinction, POM ontology, size/grading consistency, tolerance proposal, confidence/evidence per point.
+2. **BOM / Material / Construction Intelligence** — construction-to-material/BOM consistency, missing components, placement/consumption implications, supplier/manufacturability constraints.
+3. **Sample-learning loop** — requested -> actual -> delta -> tolerance -> decision -> correction -> next round, pinned to exact specification/Tech Pack version.
+4. **Production feedback intelligence** — connect inline/final QC, rework, scrap, lead-time and actual cost outcomes back to engineering decisions without turning correlation into unsupported causation.
+5. **Production-grade source security/storage** — external malware scanner adapter, object storage lifecycle, quarantine/retention, parser sandbox/resource policy, evidence-preserving reprocessing.
+
+Larger network/DPP/marketplace/institutional-adoption work remains valuable but must not pre-empt this sequence while Product Engineering canonical apply and change impact are still only partial.
+
+### Localhost review ergonomics — 2026-10-07
+
+The responsive QA surface now has three explicit review modes over the same application codebase:
+
+- `?viewport=monitor` — large-screen information density;
+- `?viewport=tablet` — persistent left navigation, touch-safe actions and reduced grid density;
+- `?viewport=phone` — compact top navigation, single-column operational surfaces and bounded dialogs.
+
+This is a QA/presentation affordance, not three product forks. Real responsive breakpoints remain authoritative in production.
+
+For localhost-only demos, the sign-in screen may expose a convenience block showing demo login/password plus a single `Внести и войти / Fill and sign in` action. The public browser bundle must not embed the credential. The helper endpoint must be loopback-only, `no-store`, and sourced from the local process environment. This feature is explicitly non-production and must disappear when the local demo credential is not configured.
 
 ## 2026-10-07 — Supplier Trust Runtime, Traceability Interop and Agentic Procurement
 

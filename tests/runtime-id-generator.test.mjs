@@ -45,7 +45,7 @@ test('PostgreSQL base runtime injects one shared generator into every id-produci
   assert.match(source, /createAuthService\([\s\S]*?nextId: runtimeNextId/);
   assert.match(source, /createCatalogService\([\s\S]*?nextId: runtimeNextId/);
   assert.match(source, /createNotificationService\([\s\S]*?nextId: runtimeNextId/);
-  assert.match(source, /const options = \{ store, nextId: runtimeNextId/);
+  assert.match(source, /const serviceOptions = \{ store, nextId: runtimeNextId/);
   assert.doesNotMatch(source, /\.\.\.\(nextId \? \{ nextId \} : \{\}\)/);
 });
 

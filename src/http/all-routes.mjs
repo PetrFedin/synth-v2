@@ -30,6 +30,7 @@ import { createComplianceDocumentRoutes } from './compliance-document-routes.mjs
 import { createProductCertificationRoutes } from './product-certification-routes.mjs';
 import { createProductIdentityRoutes } from './product-identity-routes.mjs';
 import { createProductReadinessRoutes } from './product-readiness-routes.mjs';
+import { createProductEngineeringRoutes } from './product-engineering-routes.mjs';
 import { createProductionRequirementRoutes } from './production-requirement-routes.mjs';
 import { createReceiptClaimsRoutes } from './receipt-claims-routes.mjs';
 import { createRetailDoorRoutes } from './retail-door-routes.mjs';
@@ -54,6 +55,7 @@ export function createWholesaleRoutes(services = {}) {
     ...createComplianceDocumentRoutes({ complianceDocuments: services.complianceDocuments }),
     ...createProductCertificationRoutes({ productCertifications: services.productCertifications }),
     ...createProductReadinessRoutes({ productReadiness: services.productReadiness }),
+    ...createProductEngineeringRoutes({ productEngineering: services.productEngineering }),
     ...createCommercialPublicationRoutes({ commercialPublication: services.commercialPublication }),
     ...createRetailDoorRoutes({ retailDoors: services.retailDoors }),
     ...createSelectionMatrixRoutes({ collaboration: services.collaboration }),

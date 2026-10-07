@@ -125,3 +125,29 @@ test('every /ui script that index.html loads is actually served', async () => {
     }
   });
 });
+
+test('localhost demo login is loopback-only, no-store and environment-gated', async () => {
+  const previousEmail = process.env.SYNTHA_DEMO_LOGIN_EMAIL;
+  const previousPassword = process.env.SYNTHA_DEMO_LOGIN_PASSWORD;
+  try {
+    delete process.env.SYNTHA_DEMO_LOGIN_EMAIL;
+    delete process.env.SYNTHA_DEMO_LOGIN_PASSWORD;
+    await withServer(createStandaloneHandler({ publicDir, apiHandler: apiFallback }), async (base) => {
+      assert.equal((await fetch(`${base}/__local/demo-login`)).status, 404);
+    });
+
+    process.env.SYNTHA_DEMO_LOGIN_EMAIL = 'demo@example.test';
+    process.env.SYNTHA_DEMO_LOGIN_PASSWORD = 'test-only-password';
+    await withServer(createStandaloneHandler({ publicDir, apiHandler: apiFallback }), async (base) => {
+      const response = await fetch(`${base}/__local/demo-login`);
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get('cache-control'), 'no-store');
+      assert.deepEqual(await response.json(), { email: 'demo@example.test', password: 'test-only-password' });
+    });
+  } finally {
+    if (previousEmail === undefined) delete process.env.SYNTHA_DEMO_LOGIN_EMAIL;
+    else process.env.SYNTHA_DEMO_LOGIN_EMAIL = previousEmail;
+    if (previousPassword === undefined) delete process.env.SYNTHA_DEMO_LOGIN_PASSWORD;
+    else process.env.SYNTHA_DEMO_LOGIN_PASSWORD = previousPassword;
+  }
+});

@@ -1,6 +1,7 @@
 import { invariant } from '../core/errors.mjs';
 import { assertQueryContract } from './request-contract.mjs';
 
+/** @param {{supplierPassport?: any}} [options] */
 export function createSupplierPassportRoutes({ supplierPassport } = {}) {
   const service = supplierPassport ?? unavailable();
   return Object.freeze([

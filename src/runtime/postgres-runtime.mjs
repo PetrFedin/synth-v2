@@ -114,7 +114,6 @@ export function createPostgresWholesaleRuntime(options = {}) {
   const supplierTrustStore = createPostgresSupplierTrustStore({ pool: options.pool });
   const supplierTrust = createSupplierTrustService({
     supplierPassport,
-    supplierTrust,
     store: supplierTrustStore,
     privateKeyB64: options.supplierTrustPrivateKeyB64,
     issuerId: options.supplierTrustIssuerId ?? 'syntha-platform',
@@ -340,6 +339,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
     supplierRecovery,
     supplierPerformance,
     supplierPassport,
+    supplierTrust,
     materials: base.materials,
     boms: base.boms,
     measurements: base.measurements,

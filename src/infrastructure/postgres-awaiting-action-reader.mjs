@@ -248,6 +248,34 @@ const BRANCHES = Object.freeze({
         END AS occurred_at) AS evidence
      WHERE milestone.paid_at IS NULL AND evidence.occurred_at IS NOT NULL`,
 
+  'operational-exception': (roles) => `
+    SELECT 'operational-exception'::text, ex.id, ex.entity_type || ' · ' || ex.entity_id, me.organisation_id,
+           ex.opened_at, ex.due_at,
+           jsonb_build_object(
+             'exceptionId', ex.id,
+             'entityType', ex.entity_type,
+             'entityId', ex.entity_id,
+             'entityVersion', ex.entity_version,
+             'category', ex.category,
+             'severity', ex.severity,
+             'state', ex.state,
+             'blocking', ex.blocking,
+             'ownerRole', ex.owner_role,
+             'ownerUserId', ex.owner_user_id,
+             'threadId', ex.thread_id,
+             'calendarMilestoneId', ex.calendar_milestone_id,
+             'businessImpact', ex.business_impact,
+             'recoveryAction', ex.recovery_action
+           )
+      FROM operational_exceptions AS ex
+      JOIN me ON me.organisation_id = ex.owner_organisation_id AND me.role = ANY(${roles}::text[])
+     WHERE ex.state IN ('open','assigned','waiting_for_role','waiting_for_document','escalated')
+       AND (
+         ex.owner_user_id = $1
+         OR (ex.owner_user_id IS NULL AND me.role = ex.owner_role)
+         OR me.role IN ('owner','admin')
+       )`,
+
   'compliance-document-issue': (roles) => `
     SELECT 'compliance-document-issue'::text, doc.id, doc.document_number, me.organisation_id,
            doc.updated_at, NULL::timestamptz,

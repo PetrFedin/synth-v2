@@ -76,7 +76,7 @@ export async function runProductEngineeringLiveAcceptance(options={}) {
   }
 
   const persisted=await pool.query(
-    \`SELECT
+    `SELECT
        source.content_hash AS source_hash,
        blob.content_hash AS blob_hash,
        octet_length(blob.content)::integer AS blob_bytes,
@@ -85,7 +85,7 @@ export async function runProductEngineeringLiveAcceptance(options={}) {
        (SELECT count(*)::integer FROM product_engineering_jobs j WHERE j.analysis_run_id=$2 AND j.status='completed') AS analysis_job_count
      FROM product_engineering_sources source
      JOIN product_engineering_source_blobs blob ON blob.source_id=source.id
-     WHERE source.id=$1\`,
+     WHERE source.id=$1`,
     [source.id,analysis.id],
   );
   const row=persisted.rows[0];

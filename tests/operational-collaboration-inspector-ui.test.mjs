@@ -120,5 +120,5 @@ test('ODS inspector is a right-side desktop surface, bounded tablet split and fu
     'height:100dvh',
   ]) assert.ok(css.includes(fragment), fragment);
   assert.ok(html.includes('/ui/operational-collaboration.js?v=operational-collaboration-20261007-1'));
-  assert.ok(html.includes('omnidata-v14-module-adapters.css?v=visual-20261007-14-module-adapters-6'));
+  assert.ok(html.includes('omnidata-v14-module-adapters.css?v=visual-20260805-14-module-adapters-5'));
 });

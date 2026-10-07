@@ -6,6 +6,7 @@ const PASSPORT_VERSION = 'supplier-passport-v1';
 const ATTRIBUTION_VERSION = 'unique-recovery-supplier-v1';
 const PARTNER_BUNDLE_VERSION = 'supplier-passport-partner-bundle-v1';
 
+/** @param {{reader?: any, clock?: (() => string)}} [options] */
 export function createSupplierPassportService({ reader, clock = () => new Date().toISOString() } = {}) {
   invariant(reader && typeof reader.transaction === 'function', 'SUPPLIER_PASSPORT_READER_REQUIRED', 'Supplier passport reader is required');
   invariant(typeof clock === 'function', 'SUPPLIER_PASSPORT_CLOCK_REQUIRED', 'Supplier passport clock is required');

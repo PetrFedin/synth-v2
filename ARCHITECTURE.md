@@ -1705,3 +1705,37 @@ A change is DONE only when all applicable boxes are true:
 - [ ] PR is mergeable and required GitHub CI is green.
 
 This checklist is deliberately stricter than “code compiles”. Syntha V2 is treated as one operating platform, so a locally correct screen or service is not complete if its upstream/downstream contract is broken or undocumented.
+
+## 23. Legacy capability adoption control plane (2026-10-07)
+
+The legacy repositories `PetrFedin/Projects` and `PetrFedin/syntha` are donor sources only. Their Product, Order, Inventory, Publication, Cost and Supplier truth must not be copied over current Synth-v2 authority.
+
+The detailed donor disposition is governed by `docs/architecture/LEGACY_CAPABILITY_ADOPTION_REGISTER.md`.
+
+### P0 adoption order
+
+1. Entity-linked operational collaboration;
+2. immutable Decision Ledger;
+3. persisted Exception/SLA lifecycle integrated with Awaiting Action and Calendar;
+4. Action Contract Registry / Next Owner metadata;
+5. Change Impact & Staleness Graph;
+6. Work Center / finite Capacity Reservation;
+7. Execution Profiles;
+8. Material Substitution governance.
+
+P1 then adds Fit Review, governed 3D sample assets, Selection draft revision/diff, sell-through/replenishment and external publication syndication.
+
+### Duplicate-authority prohibitions
+
+- Existing `Awaiting Action` remains the global work inbox; Exception must project into it rather than create a competing task centre.
+- Existing calendar milestones remain deadline truth; exception deadlines must be linked/reconciled rather than copied into an independent calendar.
+- Existing Selection/WholesaleOrder/OrderCommit/Amendment authority remains unchanged; legacy collaborative-order approval state machines are not imported.
+- Existing ProductReadiness/CommercialPublication/BuyerCatalogVersion authority remains unchanged; legacy linesheet state is adapter/output only.
+- Existing outbox/global command registry is mandatory for new writes; stale PR #5's dedicated collaboration command ledger is superseded.
+
+### First implementation tranche
+
+`src/modules/operational-control/public.mjs` introduces an executable pure domain kernel for canonical operational entity references, entity threads, immutable messages, immutable decisions and the exception lifecycle. It intentionally adds no persistence or public API in this tranche so migration numbering can be reconciled with active draft PR #242 and so the stale August collaboration PR is not revived accidentally.
+
+Status: **PARTIAL / DOMAIN FOUNDATION ONLY**. It must not be represented as user-visible or production-proven until PostgreSQL, application service, HTTP/OpenAPI, ODS UI, Awaiting Action, Calendar and live acceptance layers are added and verified.
+

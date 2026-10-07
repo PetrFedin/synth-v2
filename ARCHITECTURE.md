@@ -1788,5 +1788,9 @@ The next gate is the shared **Omnidata Contextual Collaboration Inspector**. It 
 
 **Explicit boundary:** Operational Exception/SLA, escalation, Awaiting Action exception projection and Calendar linking remain out of this tranche. They may start only after this inspector's exact-head Verify/PostgreSQL/UI contracts are green.
 
+**Full PostgreSQL runtime admission:** the base runtime already constructs the one canonical `operationalCollaboration` service over `createPostgresOperationalCollaborationStore`. The full `postgres-runtime` must forward that exact service into its HTTP transport; it must never reconstruct a second service/store. A dedicated regression contract now locks this wiring so the route cannot silently degrade to the unavailable fallback in the complete runtime.
+
+**ODS asset identity:** the inspector extends the existing canonical `visual-20260805-14-module-adapters-5` adapter build. The UI wave does not mint a second adapter build identifier merely because new semantic selectors were added; validator and inspector tests are required to agree with the canonical shell asset identity.
+
 Status: **IMPLEMENTATION IN PROGRESS / NO EXCEPTION-SLA YET**.
 

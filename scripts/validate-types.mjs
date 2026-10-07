@@ -16,11 +16,15 @@ if (run.error) {
 }
 
 const current = new Map();
+const diagnostics = new Map();
 for (const line of `${run.stdout ?? ''}`.split('\n')) {
   const match = ERROR_LINE.exec(line.trim());
   if (!match) continue;
   const file = match[1].split(path.sep).join('/');
   current.set(file, (current.get(file) ?? 0) + 1);
+  const rows = diagnostics.get(file) ?? [];
+  rows.push({ line: Number(match[2]), column: Number(match[3]), code: match[4], message: match[5] });
+  diagnostics.set(file, rows);
 }
 
 // tsc reports nothing on stdout when it fails for a non-type reason; treat that as fatal rather
@@ -53,6 +57,13 @@ for (const [file, allowed] of Object.entries(baseline)) {
 
 if (regressions.length) {
   console.error('New type errors against the recorded baseline:\n' + regressions.map((item) => `- ${item}`).join('\n'));
+  for (const [file, rows] of diagnostics) {
+    if ((current.get(file) ?? 0) <= (baseline[file] ?? 0)) continue;
+    console.error(`\n${file}`);
+    for (const row of rows.slice(0, 20)) {
+      console.error(`  ${row.line}:${row.column} ${row.code} ${row.message}`);
+    }
+  }
   console.error('\nFix them, or run "npm run validate:types -- --update" only when the baseline legitimately changes.');
   process.exit(1);
 }

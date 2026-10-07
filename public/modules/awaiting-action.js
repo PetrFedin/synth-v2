@@ -26,6 +26,7 @@
     quality: ['Качество', 'Quality'],
     finance: ['Платежи', 'Payments'],
     compliance: ['Документы', 'Documents'],
+    exceptions: ['Исключения', 'Exceptions'],
   });
 
   function text(ru, en) { return typeof localText === 'function' ? localText(ru, en) : ru; }

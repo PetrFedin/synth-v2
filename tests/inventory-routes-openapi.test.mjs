@@ -33,7 +33,7 @@ test('inventory routes reject request-shape drift', () => {
 });
 
 test('authoritative OpenAPI exposes inventory ledger without API version drift', () => {
-  assert.equal(wholesaleV2ExtendedOpenApi.info.version, '1.17.0');
+  assert.equal(wholesaleV2ExtendedOpenApi.info.version, '1.18.0');
   assert.ok(wholesaleV2ExtendedOpenApi.paths['/receipts/{receiptId}/inventory-postings']);
   assert.ok(wholesaleV2ExtendedOpenApi.paths['/shops/{shopId}/warehouse-locations/{warehouseLocationId}/positions']);
   const movement = wholesaleV2ExtendedOpenApi.components.schemas.InventoryMovementLedgerEntry;

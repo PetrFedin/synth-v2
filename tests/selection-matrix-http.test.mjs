@@ -41,7 +41,7 @@ test('selection matrix HTTP route rejects duplicate SKUs and client-controlled p
 });
 
 test('authoritative OpenAPI exposes atomic buyer matrix replacement contract without version drift', () => {
-  assert.equal(wholesaleV2ExtendedOpenApi.info.version, '1.17.0');
+  assert.equal(wholesaleV2ExtendedOpenApi.info.version, '1.18.0');
   const operation = wholesaleV2ExtendedOpenApi.paths['/selections/{selectionId}/matrix']?.put;
   assert.equal(operation?.operationId, 'replaceSelectionMatrix');
   assert.equal(operation.requestBody.content['application/json'].schema.$ref, '#/components/schemas/SelectionMatrixReplaceInput');

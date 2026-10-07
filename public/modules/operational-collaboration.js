@@ -16,7 +16,7 @@
     dialog: null,
   };
 
-  const KINDS = Object.freeze(['general','clarification','fit','qc','sourcing','handoff']);
+  const KINDS = Object.freeze(['general','clarification','fit','qc','sourcing','handoff','exception']);
   const OUTCOMES = Object.freeze(['approved','rejected','accepted_with_risk','deferred','waived','recorded']);
 
   function text(ru, en) {

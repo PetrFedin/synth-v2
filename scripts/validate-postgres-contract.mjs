@@ -14,6 +14,8 @@ const requiredTables = [
   'notification_projection_claims', 'outbox_publication_claims', 'outbox_dead_letters', 'outbox_dead_letter_audit',
   'auth_users', 'auth_sessions', 'auth_login_throttles', 'auth_login_audit',
   'catalog_skus', 'materials', 'boms', 'bom_lines', 'catalog_commands', 'catalog_outbox_events', 'order_inventory_reservations',
+  'operational_collaboration_commands', 'operational_threads', 'operational_thread_participants',
+  'operational_thread_messages', 'operational_decisions',
 ];
 const requiredFragments = [
   'UNIQUE (brand_id, shop_id)', 'UNIQUE (showroom_id, shop_id)', 'UNIQUE (shop_id, code)', 'cycle_id text NOT NULL UNIQUE',
@@ -55,6 +57,10 @@ const requiredFragments = [
   'workspace_page_cycles_brand_idx', 'workspace_page_cycles_shop_idx', 'workspace_page_selections_brand_idx', 'workspace_page_selections_shop_idx',
   'workspace_page_orders_brand_idx', 'workspace_page_orders_shop_idx', 'workspace_page_deals_brand_idx', 'workspace_page_deals_shop_idx',
   'workspace_page_calendar_owner_idx',
+  "'operational-collaboration'", 'operational_collaboration_commands_command_registry_fk',
+  'operational_threads_entity_idx', 'operational_thread_participants_organisation_idx',
+  'operational_thread_messages_thread_time_idx', 'operational_decisions_supersedes_once_idx',
+  'operational_decisions_entity_time_idx',
 ];
 const missing = [];
 for (const table of requiredTables) if (!new RegExp(`CREATE TABLE IF NOT EXISTS\\s+${table}\\s*\\(`, 'i').test(sql)) missing.push(`table:${table}`);

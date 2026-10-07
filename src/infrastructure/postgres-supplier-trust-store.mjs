@@ -1,3 +1,4 @@
+/** @param {{pool?: any}} [options] */
 export function createPostgresSupplierTrustStore({ pool } = {}) {
   if (!pool || typeof pool.query !== 'function') throw new Error('SUPPLIER_TRUST_POOL_REQUIRED');
 

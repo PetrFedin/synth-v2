@@ -171,7 +171,10 @@ function renderLogin(message = '') {
       if (submit.isConnected) setButtonBusy(submit, false, I18N.t('auth.signIn'));
     }
   });
-  card.append(form, el('p', { className: 'login-hint', text: I18N.t('auth.bootstrapHint') }));
+  card.append(form);
+  const localDemo = localDemoLoginPanel({ form, email: email.control, password: password.control });
+  if (localDemo) card.append(localDemo);
+  card.append(el('p', { className: 'login-hint', text: I18N.t('auth.bootstrapHint') }));
   // Приглашённый ещё не может войти, а токен ему передали из рук в руки: принять его — отсюда.
   if (typeof renderAcceptInvite === 'function') {
     const invited = el('button', { className: 'button secondary', rawText: localText('Принять приглашение', 'Accept invitation'), type: 'button' });
@@ -180,6 +183,55 @@ function renderLogin(message = '') {
   }
   wrap.append(card);
   root.append(wrap);
+}
+
+function localDemoLoginPanel({ form, email, password }) {
+  const hostname = String(window.location?.hostname ?? '').toLowerCase();
+  if (!['localhost', '127.0.0.1', '::1'].includes(hostname)) return null;
+  const panel = el('section', { className: 'local-demo-login', ariaLabel: localText('Локальный демо-вход', 'Local demo sign-in') });
+  panel.append(el('p', { className: 'local-demo-title', rawText: localText('Локальный демо-вход', 'Local demo sign-in') }));
+  const values = el('div', { className: 'local-demo-values' });
+  const loginValue = el('code', { className: 'local-demo-value', rawText: localText('загрузка…', 'loading…') });
+  const passwordValue = el('code', { className: 'local-demo-value', rawText: '••••••••••••' });
+  values.append(
+    localDemoCredentialRow(localText('Логин', 'Login'), loginValue),
+    localDemoCredentialRow(localText('Пароль', 'Password'), passwordValue),
+  );
+  const action = el('button', {
+    className: 'button primary local-demo-submit',
+    type: 'button',
+    rawText: localText('Внести и войти', 'Fill and sign in'),
+    disabled: true,
+  });
+  panel.append(values, action);
+  let credentials = null;
+  action.addEventListener('click', () => {
+    if (!credentials) return;
+    email.value = credentials.email;
+    password.value = credentials.password;
+    email.dispatchEvent(new Event('input', { bubbles: true }));
+    password.dispatchEvent(new Event('input', { bubbles: true }));
+    form.requestSubmit();
+  });
+  fetch('/__local/demo-login', { headers: { accept: 'application/json' }, cache: 'no-store' })
+    .then(async response => {
+      if (!response.ok) throw new Error('LOCAL_DEMO_LOGIN_UNAVAILABLE');
+      const data = await response.json();
+      if (typeof data?.email !== 'string' || typeof data?.password !== 'string') throw new Error('LOCAL_DEMO_LOGIN_INVALID');
+      credentials = data;
+      loginValue.textContent = data.email;
+      passwordValue.textContent = data.password;
+      action.disabled = false;
+      if (/(?:^|[?&])autologin=1(?:&|$)/.test(String(window.location?.search ?? ''))) action.click();
+    })
+    .catch(() => panel.remove());
+  return panel;
+}
+
+function localDemoCredentialRow(label, valueNode) {
+  const row = el('div', { className: 'local-demo-row' });
+  row.append(el('span', { className: 'local-demo-label', rawText: label }), valueNode);
+  return row;
 }
 
 function renderApp() {

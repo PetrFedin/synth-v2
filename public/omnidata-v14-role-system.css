@@ -929,3 +929,265 @@ body.omnidata-role-system .workspace-content .od-inspector table.od-mini-table :
 
 /* Пустая панель команд под KPI «Рабочего стола»: правило скрытия проигрывало по специфичности. */
 body.omnidata-role-system .od-commandbar.od14-empty-bar[data-ods-role="filterbar"][data-ods-part="filterbar"]:not(.topbar-actions){display:none!important}
+
+/* Syntha monitor/tablet review modes — responsive-20261007-1 */
+/*
+ * Syntha monitor/tablet review modes.
+ * Production remains responsive by viewport. ?viewport=monitor/tablet lets QA force the
+ * corresponding layout on a MacBook without changing canonical application behavior.
+ */
+html[data-viewport-mode="monitor"] {
+  --syntha-review-width: 100%;
+}
+html[data-viewport-mode="tablet"] {
+  --syntha-review-width: min(1024px, 100vw);
+  background: #e9ebef;
+}
+html[data-viewport-mode="tablet"] body {
+  width: var(--syntha-review-width);
+  min-width: 0;
+  margin-inline: auto;
+  box-shadow: 0 0 0 1px rgba(25, 32, 45, .08), 0 24px 70px rgba(25, 32, 45, .12);
+}
+
+/* Monitor: use the information density that a large display can actually support. */
+html[data-viewport-mode="monitor"] body.omnidata-role-system .shell:not(.sidebar-collapsed) {
+  grid-template-columns: 214px minmax(0, 1fr) !important;
+}
+html[data-viewport-mode="monitor"] body.omnidata-role-system .workspace-content {
+  padding-inline: clamp(18px, 2.1vw, 32px) !important;
+}
+html[data-viewport-mode="monitor"] body.omnidata-role-system :is(.toolbar,.od-inline-actions,.entity-actions) > :is(.button,[data-ods-role="button"]) {
+  width: auto !important;
+  max-width: max-content !important;
+  flex: 0 0 auto !important;
+}
+
+/* Tablet: keep navigation on the left, keep controls touchable, and avoid desktop-wide buttons. */
+html[data-viewport-mode="tablet"] body.omnidata-role-system .shell:not(.sidebar-collapsed) {
+  display: grid !important;
+  grid-template-columns: 176px minmax(0, 1fr) !important;
+}
+html[data-viewport-mode="tablet"] body.omnidata-role-system .shell.sidebar-collapsed {
+  display: grid !important;
+  grid-template-columns: 62px minmax(0, 1fr) !important;
+}
+html[data-viewport-mode="tablet"] body.omnidata-role-system .sidebar {
+  position: sticky !important;
+  top: 0 !important;
+  width: auto !important;
+  height: 100vh !important;
+  min-height: 100vh !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  border-right: 1px solid rgba(7,14,25,.35) !important;
+  border-bottom: 0 !important;
+}
+html[data-viewport-mode="tablet"] body.omnidata-role-system .nav {
+  flex-direction: column !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+}
+html[data-viewport-mode="tablet"] body.omnidata-role-system .shell:not(.sidebar-collapsed) :is(.brand-copy,.nav-label,.sidebar .button-label) {
+  display: initial !important;
+}
+html[data-viewport-mode="tablet"] body.omnidata-role-system .shell.sidebar-collapsed :is(.brand-copy,.nav-group-label,.nav-label,.sidebar .button-label) {
+  display: none !important;
+}
+html[data-viewport-mode="tablet"] body.omnidata-role-system .topbar {
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 280px) max-content !important;
+  gap: 8px !important;
+  padding-inline: 12px !important;
+}
+html[data-viewport-mode="tablet"] body.omnidata-role-system .topbar-organisation,
+html[data-viewport-mode="tablet"] body.omnidata-role-system .topbar-user .user-copy {
+  display: none !important;
+}
+html[data-viewport-mode="tablet"] body.omnidata-role-system .workspace-content {
+  padding: 14px 14px 56px !important;
+}
+html[data-viewport-mode="tablet"] body.omnidata-role-system :is(.kpis,[data-ods-part="metrics"],[data-od14-unified-part="metrics"]) {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+html[data-viewport-mode="tablet"] body.omnidata-role-system :is(.two,.three,[data-ods-part="master-detail"],[data-od14-unified-part="master-detail"]) {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+html[data-viewport-mode="tablet"] body.omnidata-role-system :is(.toolbar,.od-inline-actions,.entity-actions) {
+  align-items: center !important;
+  justify-content: flex-start !important;
+  flex-wrap: wrap !important;
+}
+html[data-viewport-mode="tablet"] body.omnidata-role-system :is(.toolbar,.od-inline-actions,.entity-actions) > :is(.button,[data-ods-role="button"]) {
+  width: auto !important;
+  min-width: 44px !important;
+  min-height: 38px !important;
+  max-width: min(100%, 280px) !important;
+  flex: 0 0 auto !important;
+}
+html[data-viewport-mode="tablet"] body.omnidata-role-system :is(.od-table-wrap,[data-ods-part="table-wrap"],[data-od14-unified-part="table-wrap"]) {
+  max-width: 100% !important;
+  overflow-x: auto !important;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
+}
+html[data-viewport-mode="tablet"] body.omnidata-role-system dialog {
+  width: min(720px, calc(100vw - 28px)) !important;
+}
+
+/* Real tablets get the same ergonomics even without a preview query parameter. */
+@media (min-width: 701px) and (max-width: 1080px) {
+  html:not([data-viewport-mode="monitor"]) body.omnidata-role-system :is(.toolbar,.od-inline-actions,.entity-actions) > :is(.button,[data-ods-role="button"]) {
+    width: auto !important;
+    min-width: 44px !important;
+    min-height: 38px !important;
+    max-width: min(100%, 280px) !important;
+    flex: 0 0 auto !important;
+  }
+  html:not([data-viewport-mode="monitor"]) body.omnidata-role-system .workspace-content {
+    padding-inline: 14px !important;
+  }
+}
+
+
+/* Localhost sign-in convenience. Credentials are delivered only by the loopback-only helper. */
+body.omnidata-role-system .local-demo-login,
+body.omnidata-design-system-v1 .local-demo-login{
+  display:grid!important;
+  gap:10px!important;
+  margin-top:14px!important;
+  padding:12px!important;
+  border:1px solid var(--ods-color-border)!important;
+  border-radius:6px!important;
+  background:var(--ods-color-surface-soft)!important;
+}
+body.omnidata-role-system .local-demo-title,
+body.omnidata-design-system-v1 .local-demo-title{
+  color:var(--ods-color-text)!important;
+  font-size:12px!important;
+  font-weight:700!important;
+}
+body.omnidata-role-system .local-demo-values,
+body.omnidata-design-system-v1 .local-demo-values{display:grid!important;gap:6px!important}
+body.omnidata-role-system .local-demo-row,
+body.omnidata-design-system-v1 .local-demo-row{
+  display:grid!important;
+  grid-template-columns:72px minmax(0,1fr)!important;
+  align-items:center!important;
+  gap:8px!important;
+}
+body.omnidata-role-system .local-demo-label,
+body.omnidata-design-system-v1 .local-demo-label{font-size:11px!important;color:var(--ods-color-muted)!important}
+body.omnidata-role-system .local-demo-value,
+body.omnidata-design-system-v1 .local-demo-value{
+  display:block!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  white-space:nowrap!important;
+  font-size:11px!important;
+}
+body.omnidata-role-system .local-demo-submit,
+body.omnidata-design-system-v1 .local-demo-submit{width:100%!important;min-height:40px!important}
+
+/* Explicit phone QA mode: one responsive product, phone geometry forced for review on desktop. */
+html[data-viewport-mode="phone"]{
+  --syntha-review-width:min(430px,100vw);
+  background:#e9ebef;
+}
+html[data-viewport-mode="phone"] body{
+  width:var(--syntha-review-width);
+  min-width:0;
+  margin-inline:auto;
+  box-shadow:0 0 0 1px rgba(25,32,45,.08),0 24px 70px rgba(25,32,45,.12);
+}
+html[data-viewport-mode="phone"] body.omnidata-role-system .shell,
+html[data-viewport-mode="phone"] body.omnidata-role-system .shell.sidebar-collapsed{
+  display:block!important;
+}
+html[data-viewport-mode="phone"] body.omnidata-role-system .sidebar{
+  position:sticky!important;
+  top:0!important;
+  z-index:30!important;
+  width:100%!important;
+  min-height:0!important;
+  height:auto!important;
+  display:grid!important;
+  grid-template-columns:auto minmax(0,1fr) auto!important;
+  align-items:center!important;
+  border-right:0!important;
+  border-bottom:1px solid rgba(7,14,25,.35)!important;
+}
+html[data-viewport-mode="phone"] body.omnidata-role-system .sidebar>.brand{
+  min-height:48px!important;
+  border-bottom:0!important;
+  padding:8px 10px!important;
+}
+html[data-viewport-mode="phone"] body.omnidata-role-system .sidebar .brand-copy{display:none!important}
+html[data-viewport-mode="phone"] body.omnidata-role-system .nav{
+  display:flex!important;
+  flex-direction:row!important;
+  gap:4px!important;
+  overflow-x:auto!important;
+  overflow-y:hidden!important;
+  padding:6px!important;
+  scrollbar-width:none;
+}
+html[data-viewport-mode="phone"] body.omnidata-role-system .nav::-webkit-scrollbar{display:none}
+html[data-viewport-mode="phone"] body.omnidata-role-system .nav-group-label{display:none!important}
+html[data-viewport-mode="phone"] body.omnidata-role-system .nav-item{
+  flex:0 0 auto!important;
+  min-width:44px!important;
+  min-height:40px!important;
+  padding:7px 9px!important;
+}
+html[data-viewport-mode="phone"] body.omnidata-role-system .nav-label{display:none!important}
+html[data-viewport-mode="phone"] body.omnidata-role-system .sidebar-footer{
+  display:flex!important;
+  flex-direction:row!important;
+  gap:4px!important;
+  padding:6px!important;
+}
+html[data-viewport-mode="phone"] body.omnidata-role-system .sidebar-footer .button-label{display:none!important}
+html[data-viewport-mode="phone"] body.omnidata-role-system .sidebar-action{
+  width:40px!important;
+  min-width:40px!important;
+  height:40px!important;
+  min-height:40px!important;
+  padding:0!important;
+}
+html[data-viewport-mode="phone"] body.omnidata-role-system .topbar{
+  grid-template-columns:minmax(0,1fr) auto!important;
+  min-height:48px!important;
+  gap:6px!important;
+  padding-inline:10px!important;
+}
+html[data-viewport-mode="phone"] body.omnidata-role-system .global-search,
+html[data-viewport-mode="phone"] body.omnidata-role-system .topbar-organisation,
+html[data-viewport-mode="phone"] body.omnidata-role-system .topbar-user .user-copy{display:none!important}
+html[data-viewport-mode="phone"] body.omnidata-role-system .page-header{padding:14px 10px 10px!important}
+html[data-viewport-mode="phone"] body.omnidata-role-system .workspace-content{padding:10px 10px 48px!important}
+html[data-viewport-mode="phone"] body.omnidata-role-system :is(.kpis,[data-ods-part="metrics"],[data-od14-unified-part="metrics"],.two,.three,[data-ods-part="master-detail"],[data-od14-unified-part="master-detail"]){
+  grid-template-columns:minmax(0,1fr)!important;
+}
+html[data-viewport-mode="phone"] body.omnidata-role-system :is(.toolbar,.od-inline-actions,.entity-actions){
+  display:flex!important;
+  flex-wrap:wrap!important;
+  gap:8px!important;
+}
+html[data-viewport-mode="phone"] body.omnidata-role-system :is(.toolbar,.od-inline-actions,.entity-actions) > :is(.button,[data-ods-role="button"]){
+  width:auto!important;
+  min-width:44px!important;
+  min-height:40px!important;
+  max-width:100%!important;
+  flex:0 0 auto!important;
+}
+html[data-viewport-mode="phone"] body.omnidata-role-system :is(.od-table-wrap,[data-ods-part="table-wrap"],[data-od14-unified-part="table-wrap"]){
+  max-width:100%!important;
+  overflow-x:auto!important;
+  -webkit-overflow-scrolling:touch;
+}
+html[data-viewport-mode="phone"] body.omnidata-role-system dialog{
+  width:calc(100vw - 20px)!important;
+  max-width:410px!important;
+  max-height:calc(100vh - 20px)!important;
+  margin:auto!important;
+}

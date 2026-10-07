@@ -1635,3 +1635,114 @@ Portability remains required; switching cost comes from longitudinal network int
 **Sequencing:** Supplier Trust Graph -> interchange spec -> reference implementation -> supplier self-publishing -> certification programme -> privacy-safe contribution network -> OEM/enterprise distribution.
 
 **Moat:** Synth-v2 becomes the interoperability and trust layer of a fashion supply network, with compounding multi-season supplier and production evidence.
+
+## Execution checkpoint — 2026-10-07 — PR #242 admission, monitor/tablet UX and next authority layer
+
+This checkpoint was started by re-reading this master plan before changing code. The rule remains unchanged: new capability may enrich Product Engineering, but it must not create a parallel PLM authority or bypass PostgreSQL/domain services.
+
+### Repository admission work — IN PROGRESS
+
+PR #242 is being brought back onto current `main` before any new large Product Engineering surface is added. The admission cycle now explicitly includes:
+
+- exact current-main reconciliation rather than testing an obsolete merge ref;
+- no type-baseline increase to hide regressions; type contracts are corrected and the baseline may only ratchet downward when errors are genuinely removed;
+- canonical runtime startup before public acceptance;
+- PostgreSQL migration/readiness checks;
+- Product Engineering route/OpenAPI contract checks;
+- Supplier Passport / Supplier Trust regression checks after main reconciliation;
+- deliberate OpenAPI V2 contract pinning at `1.20.0` for governed proposal apply + proposal impact preview;
+- full repository `verify` before PR leaves draft.
+
+### Monitor + tablet interaction contract — IMPLEMENTED/PARTIAL
+
+The application remains one responsive product, not two divergent codebases. Two explicit review modes are now available for live localhost QA:
+
+- `?viewport=monitor` — monitor information density and expanded navigation;
+- `?viewport=tablet` — tablet review canvas with left-side collapsible navigation.
+
+The same rules also apply automatically to real tablet-width viewports where appropriate.
+
+Tablet requirements:
+
+- navigation remains a left rail between mobile and desktop breakpoints; it does not become the phone top-navigation pattern;
+- expanded and collapsed rail states are both supported;
+- primary/secondary actions remain content-sized rather than stretching to full page width;
+- touch controls keep a practical minimum target while retaining enterprise information density;
+- KPI/metric areas reduce to two columns;
+- master/detail areas collapse to one readable column;
+- wide operational tables scroll horizontally instead of compressing columns into unreadable cells;
+- dialogs remain bounded to the tablet viewport;
+- Product Engineering review / Impact / Apply actions preserve their separation on both layouts.
+
+The review-mode implementation is part of the final Omnidata/ODS visual contract rather than a stylesheet layered after it. This prevents a preview-only override from silently becoming a second design system.
+
+### Canonical Application Authority — NEXT AFTER #242 GREEN
+
+Do not expand the current allowlist into generic mutation. The next authority increment must add evidence around the existing bounded-context command path:
+
+`accepted proposal`
+`-> exact target authority/entity/version`
+`-> immutable precondition snapshot`
+`-> deterministic proposed diff`
+`-> policy + actor approval decision`
+`-> existing bounded-context command`
+`-> PostgreSQL transaction/outbox`
+`-> resulting canonical version`
+`-> immutable application receipt`
+`-> reverse lineage to proposal/finding/evidence/source/model run`.
+
+Required properties:
+
+- no AI-supplied optimistic version;
+- no generic JSON Patch;
+- no direct AI SQL;
+- replay-safe application receipt;
+- canonical command result and Product Engineering receipt must be reconcilable after crash/retry;
+- source/model lineage survives application and remains queryable from the resulting canonical fact;
+- high-risk targets may require stronger approval policy than ordinary Product Engineering manage rights.
+
+### Product Engineering Change Impact Engine — NEXT HIGH PRIORITY
+
+Extend current pre-apply impact from fixed policy + readiness context into a version-aware dependency graph:
+
+`source revision`
+`-> fragment/evidence invalidation`
+`-> finding stale/current state`
+`-> proposal stale/current state`
+`-> garment graph / technical flat affected nodes`
+`-> Measurement / BOM / Material / Tech Pack dependencies`
+`-> Sample / Sourcing / Production / QC / Cost / Commercial consequences`
+`-> required re-review / block / acknowledge`.
+
+The engine must distinguish:
+
+- `observed` dependency from repository facts;
+- `derived` dependency from bounded domain policy;
+- `not_available` coverage gaps;
+- `not_affected` only when the system has enough evidence to prove non-impact.
+
+A missing reader must never be rendered as a zero-impact decision.
+
+### Selected master-plan work after the authority layer
+
+The next Product Engineering waves remain, in this order:
+
+1. **Measurement/POM Intelligence** — calibrated/uncalibrated distinction, POM ontology, size/grading consistency, tolerance proposal, confidence/evidence per point.
+2. **BOM / Material / Construction Intelligence** — construction-to-material/BOM consistency, missing components, placement/consumption implications, supplier/manufacturability constraints.
+3. **Sample-learning loop** — requested -> actual -> delta -> tolerance -> decision -> correction -> next round, pinned to exact specification/Tech Pack version.
+4. **Production feedback intelligence** — connect inline/final QC, rework, scrap, lead-time and actual cost outcomes back to engineering decisions without turning correlation into unsupported causation.
+5. **Production-grade source security/storage** — external malware scanner adapter, object storage lifecycle, quarantine/retention, parser sandbox/resource policy, evidence-preserving reprocessing.
+
+Larger network/DPP/marketplace/institutional-adoption work remains valuable but must not pre-empt this sequence while Product Engineering canonical apply and change impact are still only partial.
+
+### Localhost review ergonomics — 2026-10-07
+
+The responsive QA surface now has three explicit review modes over the same application codebase:
+
+- `?viewport=monitor` — large-screen information density;
+- `?viewport=tablet` — persistent left navigation, touch-safe actions and reduced grid density;
+- `?viewport=phone` — compact top navigation, single-column operational surfaces and bounded dialogs.
+
+This is a QA/presentation affordance, not three product forks. Real responsive breakpoints remain authoritative in production.
+
+For localhost-only demos, the sign-in screen may expose a convenience block showing demo login/password plus a single `Внести и войти / Fill and sign in` action. The public browser bundle must not embed the credential. The helper endpoint must be loopback-only, `no-store`, and sourced from the local process environment. This feature is explicitly non-production and must disappear when the local demo credential is not configured.

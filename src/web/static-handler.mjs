@@ -56,6 +56,7 @@ const ASSETS = Object.freeze({
   '/measurements.css': ['measurements.css', 'text/css; charset=utf-8', VISUAL_CACHE],
   '/measurement-sync.css': ['measurement-sync.css', 'text/css; charset=utf-8', VISUAL_CACHE],
   '/sourcing.css': ['sourcing.css', 'text/css; charset=utf-8', VISUAL_CACHE],
+  '/ui/viewport-mode.js': ['modules/viewport-mode.js', JS, VISUAL_CACHE],
   '/ui/i18n-runtime.js': ['modules/i18n-runtime.js', JS, CACHE],
   '/ui/i18n-v7.js': ['modules/i18n-v7.js', JS, VISUAL_CACHE],
   '/ui/ui-capabilities.js': ['modules/ui-capabilities.js', JS, CACHE],
@@ -163,6 +164,10 @@ export function createStandaloneHandler({ apiHandler, publicDir = DEFAULT_PUBLIC
   invariant(typeof apiHandler === 'function', 'HTTP_API_HANDLER_REQUIRED', 'API handler is required');
   return async function standaloneHandler(request, response) {
     const url = new URL(request.url ?? '/', 'http://syntha.local');
+    if (url.pathname === '/__local/demo-login' && isLoopbackPreviewRequest(request)) {
+      if (!['GET', 'HEAD'].includes(request.method ?? 'GET')) return methodNotAllowed(response);
+      return localDemoLogin(response, request.method ?? 'GET');
+    }
     const asset = ASSETS[url.pathname];
     if (!asset) return apiHandler(request, response);
     if (!['GET', 'HEAD'].includes(request.method ?? 'GET')) return methodNotAllowed(response);
@@ -193,6 +198,29 @@ export function createStandaloneHandler({ apiHandler, publicDir = DEFAULT_PUBLIC
     }
   };
 }
+function isLoopbackPreviewRequest(request) {
+  const rawHost = String(request.headers?.host ?? '').trim().toLowerCase();
+  const host = rawHost.startsWith('[') ? rawHost.slice(1, rawHost.indexOf(']')) : rawHost.split(':')[0];
+  const remote = String(request.socket?.remoteAddress ?? '').toLowerCase();
+  const localHost = host === 'localhost' || host === '127.0.0.1' || host === '::1';
+  const localRemote = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1';
+  return localHost && localRemote;
+}
+function localDemoLogin(response, method) {
+  const email = process.env.SYNTHA_DEMO_LOGIN_EMAIL ?? '';
+  const password = process.env.SYNTHA_DEMO_LOGIN_PASSWORD ?? '';
+  if (!password) {
+    applyStaticHeaders(response, { contentType: 'application/json; charset=utf-8', cacheControl: 'no-store' });
+    response.statusCode = 404;
+    return response.end(JSON.stringify({ error: { code: 'LOCAL_DEMO_LOGIN_UNAVAILABLE', message: 'Local demo credentials are not configured' } }));
+  }
+  const payload = JSON.stringify({ email, password });
+  applyStaticHeaders(response, { contentType: 'application/json; charset=utf-8', cacheControl: 'no-store' });
+  response.statusCode = 200;
+  response.setHeader('content-length', Buffer.byteLength(payload));
+  if (method === 'HEAD') response.end(); else response.end(payload);
+}
+
 function methodNotAllowed(response) {
   const body = JSON.stringify({ error: { code: 'HTTP_METHOD_NOT_ALLOWED', message: 'Only GET and HEAD are allowed for static assets' } });
   applyStaticHeaders(response, { contentType: 'application/json; charset=utf-8', cacheControl: 'no-store' });

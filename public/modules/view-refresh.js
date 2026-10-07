@@ -152,10 +152,7 @@
   registry.register(['orders', 'selections', 'partners', 'showrooms', 'styles'], () => reload());
 
   // Operational Exceptions are projected into the existing Awaiting Action screen.
-  registry.register('awaiting-action', () => {
-    global.SynthaAwaitingAction?.refresh?.();
-    return Promise.resolve();
-  });
+  registry.register('awaiting-action', () => global.SynthaAwaitingAction?.refresh?.() ?? Promise.resolve());
   registry.registerTarget('awaiting-action', (route) => {
     registry.clearRegistryFilters('awaiting-action');
     OD_UI.selected['od-awaiting-action'] = route.entityId;

@@ -108,46 +108,7 @@ function schemas() {
           properties: {
             supplierCode: { type: 'string', pattern: SUPPLIER_CODE },
             legalName: { type: 'string', minLength: 2, maxLength: 200 },
-            countryCode: { type: 'string', pattern: '^[A-Z]{2}
-  };
-}
-
-function paths() {
-  return {
-    '/suppliers/{supplierCode}/passport': {
-      get: {
-        operationId: 'getSupplierPassport',
-        security: [{ bearerAuth: [] }],
-        parameters: [{ name: 'supplierCode', in: 'path', required: true, schema: { type: 'string', pattern: SUPPLIER_CODE } }],
-        responses: {
-          200: dataResponse('Evidence-backed supplier passport derived from canonical sourcing, production, quality and recovery facts', '#/components/schemas/SupplierPassport'),
-          400: errorResponse, 401: errorResponse, 403: errorResponse, 404: errorResponse,
-        },
-      },
-    },
-    '/suppliers/{supplierCode}/passport/partner-bundle': {
-      get: {
-        operationId: 'getSupplierPassportPartnerBundle',
-        security: [{ bearerAuth: [] }],
-        parameters: [{ name: 'supplierCode', in: 'path', required: true, schema: { type: 'string', pattern: SUPPLIER_CODE } }],
-        responses: {
-          200: dataResponse('Portable redacted supplier evidence bundle. Internal brand identifiers, failure economics and commercial recommendations are excluded.', '#/components/schemas/SupplierPassportPartnerBundle'),
-          400: errorResponse, 401: errorResponse, 403: errorResponse, 404: errorResponse,
-        },
-      },
-    },
-  };
-}
-
-function dataResponse(description, reference) {
-  return { description, content: { 'application/json': { schema: { type: 'object', additionalProperties: false, required: ['data','requestId'], properties: { data: { $ref: reference }, requestId: { type: 'string', pattern: SAFE_ID } } } } } };
-}
-function identifier() { return { type: 'string', minLength: 1, maxLength: 200, pattern: SAFE_ID }; }
-function timestamp() { return { type: 'string', format: 'date-time', maxLength: 64 }; }
-function count() { return { type: 'integer', minimum: 0, maximum: 9007199254740991 }; }
-function nullablePercent() { return { oneOf: [{ type: 'number', minimum: 0, maximum: 100, multipleOf: 0.0001 }, { type: 'null' }] }; }
-function deepFreeze(value) { if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value; Object.freeze(value); for (const nested of Object.values(value)) deepFreeze(nested); return value; }
- },
+            countryCode: { type: 'string', pattern: '^[A-Z]{2}$' },
             categories: { type: 'array', items: { type: 'string', minLength: 1, maxLength: 120 } },
             incoterms: { type: 'array', items: { type: 'string', minLength: 2, maxLength: 30 } },
             leadTimeDays: { type: 'integer', minimum: 1, maximum: 730 },
@@ -178,7 +139,11 @@ function deepFreeze(value) { if (!value || typeof value !== 'object' || Object.i
           type: 'object', additionalProperties: false,
           required: ['productionOrders','executions','finalInspections','inlineChecks','openInlineChecks'],
           properties: {
-            productionOrders: count(), executions: count(), finalInspections: count(), inlineChecks: count(), openInlineChecks: count(),
+            productionOrders: count(),
+            executions: count(),
+            finalInspections: count(),
+            inlineChecks: count(),
+            openInlineChecks: count(),
           },
         },
         lineage: {
@@ -208,7 +173,10 @@ function deepFreeze(value) { if (!value || typeof value !== 'object' || Object.i
             issuer: { type: 'null' },
           },
         },
-        bundleSha256: { type: 'string', pattern: '^[a-f0-9]{64}
+        hashScope: { type: 'string', enum: ['stable-evidence-v1'] },
+        bundleSha256: { type: 'string', pattern: '^[a-f0-9]{64}$' },
+      },
+    },
   };
 }
 
@@ -225,32 +193,13 @@ function paths() {
         },
       },
     },
-  };
-}
-
-function dataResponse(description, reference) {
-  return { description, content: { 'application/json': { schema: { type: 'object', additionalProperties: false, required: ['data','requestId'], properties: { data: { $ref: reference }, requestId: { type: 'string', pattern: SAFE_ID } } } } } };
-}
-function identifier() { return { type: 'string', minLength: 1, maxLength: 200, pattern: SAFE_ID }; }
-function timestamp() { return { type: 'string', format: 'date-time', maxLength: 64 }; }
-function count() { return { type: 'integer', minimum: 0, maximum: 9007199254740991 }; }
-function nullablePercent() { return { oneOf: [{ type: 'number', minimum: 0, maximum: 100, multipleOf: 0.0001 }, { type: 'null' }] }; }
-function deepFreeze(value) { if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value; Object.freeze(value); for (const nested of Object.values(value)) deepFreeze(nested); return value; }
- },
-      },
-    },
-  };
-}
-
-function paths() {
-  return {
-    '/suppliers/{supplierCode}/passport': {
+    '/suppliers/{supplierCode}/passport/partner-bundle': {
       get: {
-        operationId: 'getSupplierPassport',
+        operationId: 'getSupplierPassportPartnerBundle',
         security: [{ bearerAuth: [] }],
         parameters: [{ name: 'supplierCode', in: 'path', required: true, schema: { type: 'string', pattern: SUPPLIER_CODE } }],
         responses: {
-          200: dataResponse('Evidence-backed supplier passport derived from canonical sourcing, production, quality and recovery facts', '#/components/schemas/SupplierPassport'),
+          200: dataResponse('Portable redacted supplier evidence bundle. Internal brand identifiers, failure economics and commercial recommendations are excluded.', '#/components/schemas/SupplierPassportPartnerBundle'),
           400: errorResponse, 401: errorResponse, 403: errorResponse, 404: errorResponse,
         },
       },

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const sql = await readFile(new URL('../db/migrations/173_operational_exception_sla.sql', import.meta.url), 'utf8');
+const sql = await readFile(new URL('../db/migrations/174_operational_exception_sla.sql', import.meta.url), 'utf8');
 
 test('operational exception migration persists SLA, lifecycle and immutable transition authority', () => {
   for (const fragment of [

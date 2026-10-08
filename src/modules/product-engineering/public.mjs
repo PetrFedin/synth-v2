@@ -352,3 +352,14 @@ function nonNegativeInteger(value, code) { invariant(Number.isSafeInteger(value)
 function text(value, min, max, code) { invariant(typeof value === 'string', code, 'Text is required'); const normalized = value.trim(); invariant(normalized.length >= min && normalized.length <= max, code, 'Text length is invalid'); return normalized; }
 function optionalText(value, max, code) { if (value === null || value === undefined || value === '') return null; return text(value, 1, max, code); }
 function freeze(value) { if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value; Object.freeze(value); for (const nested of Object.values(value)) freeze(nested); return value; }
+
+
+export {
+  RECOMPUTE_EXECUTION_MODES,
+  RECOMPUTE_EXECUTION_STATUSES,
+  createStaleDependencySet,
+  createRecomputePlan,
+  createRecomputeExecutionReceipt,
+  evaluateRecomputeAdmission,
+  createRecomputeOrchestrationReceipt,
+} from './recompute-orchestration.mjs';

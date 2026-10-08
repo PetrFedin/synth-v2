@@ -60,6 +60,7 @@ export const AWAITING_ACTION_TYPES = Object.freeze([
   define('sample-decision', 'sample', CAPABILITIES.SAMPLE_MANAGE, 'brand', 'samples', 'production', 'Образец получен — нужно решение', 'Sample received — decision needed'),
   // Качество.
   define('inspection-review', 'quality-inspection', CAPABILITIES.QUALITY_APPROVE, 'brand', 'final-quality', 'quality', 'Инспекция ждёт решения', 'Inspection awaits a decision'),
+  define('operational-exception', 'exception', CAPABILITIES.EXCEPTION_MANAGE, 'either', 'awaiting-action', 'exceptions', 'Операционное исключение ждёт действия', 'Operational exception awaits action'),
   define('material-lot-release', 'material-lot', CAPABILITIES.QUALITY_MANAGE, 'brand', 'materials', 'quality', 'Партия материала на карантине ждёт решения', 'Quarantined material lot awaits a decision', { tab: 'lots', parent: 'materialCode', focus: 'lotReference' }),
   define('lab-dip-decision', 'lab-dip', CAPABILITIES.QUALITY_MANAGE, 'brand', 'materials', 'quality', 'Лабораторный образец цвета ждёт решения', 'Lab dip awaits a decision', { tab: 'colour', parent: 'materialCode', focus: 'colourCode' }),
   // Деньги и документы.

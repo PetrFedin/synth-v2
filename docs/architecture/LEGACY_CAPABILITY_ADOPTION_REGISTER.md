@@ -1232,4 +1232,77 @@ Runtime admission hardening in this wave additionally requires the complete Post
 
 The inspector remains on the existing canonical ODS module-adapter build identity rather than creating a second visual layer or cache-key lineage.
 
-The next admissible transition remains: **inspector exact-head UI/Verify/PostgreSQL acceptance → merge → then Exception/SLA authority**.
+The contextual inspector gate has been completed and merged. The active transition is now **Operational Exception/SLA authority → Awaiting Action → Calendar linkage → escalation/recovery → Change Impact**.
+
+
+---
+
+## 29. Implementation checkpoint — Operational Exception + SLA Authority
+
+Date: **2026-10-07**
+
+Current branch: `feat/operational-exception-sla`, rebased on current `main@ebf52dbeca377aa6490482bea040e98740333923`.
+
+Implemented in the current tranche:
+
+- migration 176 with immutable versioned SLA policy snapshots;
+- canonical Operational Exception persistence;
+- append-only immutable transition ledger;
+- optimistic transition concurrency;
+- active-condition dedupe through explicit close and recurrence after close;
+- exact EntityThread/entity admission;
+- Decision Ledger binding for `accepted_with_risk`;
+- latest-active SLA policy admission and deterministic due date;
+- optional Calendar milestone reconciliation without a second Calendar authority;
+- global command registry integration preserving Product Engineering and Operational Collaboration scopes;
+- Awaiting Action projection with owner role/user routing;
+- Product Engineering `technical-review` preserved in the same Awaiting Action catalogue;
+- authenticated HTTP/OpenAPI/runtime wiring;
+- PostgreSQL lifecycle and projection acceptance coverage;
+- UI capability parity and exact navigation ownership.
+
+Still required before this capability is ADOPTED:
+
+- exact-head Verify;
+- PostgreSQL CI;
+- Product Commercialization Acceptance;
+- idempotent SLA breach/escalation worker;
+- operator recovery/closure acceptance;
+- contextual Exception state inside the existing shared inspector;
+- full regression and post-merge exact-SHA qualification.
+
+Core authority gate completed at `a0cf82ea7e468801f0420daea9e07c6f790a6cb7`: Product Commercialization Acceptance #528, Verify #1686 and Syntha V2 PostgreSQL CI #2144 all passed.
+
+Added after that gate:
+
+- migration 177 one-shot `sla_breached_at` checkpoint;
+- atomic `processDueEscalations` batch using locked unbreached due exceptions;
+- internal system actor `system:sla-breach`, never exposed as an HTTP mutation authority;
+- `operational.exception.sla-breached.v1` outbox evidence;
+- production `operational-exception-sla` background worker;
+- readiness + metrics + graceful-shutdown participation;
+- configurable interval, batch, staleness and failure thresholds;
+- PostgreSQL acceptance for **due → automatic escalation → replay no-op → Awaiting Action remains → evidence-backed resolve → explicit close → Awaiting Action disappears**.
+
+Contextual inspector tranche now added:
+
+- same canonical entity inspector reads `/v2/operational/entities/{type}/{id}/exceptions`;
+- active exception summary shows severity / owner / dueAt / SLA version / breach time / impact / recovery action;
+- `exception.manage` gates recovery and closure;
+- recovery requires resolution text + evidence reference(s);
+- `accepted_with_risk` UI can select only a current non-superseded Decision Ledger record on the same thread/entity;
+- exact exception version is sent with every operator mutation;
+- active exceptions remain projected to Awaiting Action until explicit close;
+- same desktop/tablet/mobile ODS inspector is reused;
+- asset identities advanced only for the changed canonical inspector/adapters, not by adding another visual layer.
+
+Remaining before ADOPTED:
+
+- exact-head Verify;
+- exact-head PostgreSQL CI;
+- exact-head Product Commercialization Acceptance;
+- mergeability/review-thread check;
+- merge;
+- post-merge exact-SHA 3/3 qualification.
+
+Only after those gates may the project advance to **Change Impact & Staleness Graph**.

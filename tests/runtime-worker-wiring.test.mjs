@@ -41,14 +41,15 @@ test('shutdown waits for background workers before closing the database pool', a
 test('server registers notification health before listen but starts work only after successful bind', async () => {
   const source = await readFile(path.join(root, 'src', 'server.mjs'), 'utf8');
   const productEngineeringIndex = source.indexOf('productEngineeringWorker = createBackgroundWorker');
+  const exceptionSlaIndex = source.indexOf('exceptionSlaWorker = createBackgroundWorker');
   const workerIndex = source.indexOf('notificationWorker = createBackgroundWorker');
   const healthIndex = source.indexOf("healthRegistry.register('notification-projection'");
   const listenIndex = source.indexOf('await listen(server');
   const productEngineeringStartIndex = source.indexOf('productEngineeringWorker.start()');
   const startIndex = source.indexOf('notificationWorker.start()');
-  assert.ok(productEngineeringIndex >= 0 && workerIndex > productEngineeringIndex && healthIndex > workerIndex && listenIndex > healthIndex && productEngineeringStartIndex > listenIndex && startIndex > productEngineeringStartIndex);
+  assert.ok(productEngineeringIndex >= 0 && exceptionSlaIndex > productEngineeringIndex && workerIndex > exceptionSlaIndex && healthIndex > workerIndex && listenIndex > healthIndex && productEngineeringStartIndex > listenIndex && startIndex > productEngineeringStartIndex);
   assert.match(source, /projectPending\(\{ limit: settings\.notificationProjectionBatchSize \}\)/);
-  assert.match(source, /const stoppers = \[productEngineeringWorker, notificationWorker, outboxWorker\]\.filter\(Boolean\)\.map\(\(worker\) => \(\) => worker\.stop\(\)\)/);
+  assert.match(source, /const stoppers = \[productEngineeringWorker, exceptionSlaWorker, notificationWorker, outboxWorker\]\.filter\(Boolean\)\.map\(\(worker\) => \(\) => worker\.stop\(\)\)/);
   assert.match(source, /stoppers,/);
   assert.match(source, /SYNTHA_NOTIFICATION_PROJECTION_INTERVAL_MS/);
   assert.match(source, /SYNTHA_NOTIFICATION_PROJECTION_BATCH_SIZE/);
@@ -58,6 +59,13 @@ test('server registers notification health before listen but starts work only af
   assert.match(source, /notificationProjectionLeaseMs: settings\.notificationProjectionLeaseMs/);
   assert.match(source, /notificationProjectionRetryDelayMs: settings\.notificationProjectionRetryDelayMs/);
   assert.match(source, /notificationProjectionMaxAttempts: settings\.notificationProjectionMaxAttempts/);
+
+  assert.match(source, /name: 'operational-exception-sla'/);
+  assert.match(source, /runtime\.operationalExceptions\.processDueEscalations\(\{/);
+  assert.match(source, /SYNTHA_EXCEPTION_SLA_INTERVAL_MS/);
+  assert.match(source, /SYNTHA_EXCEPTION_SLA_BATCH_SIZE/);
+  assert.match(source, /healthRegistry\.register\('operational-exception-sla'/);
+  assert.ok(source.indexOf('exceptionSlaWorker.start()') > listenIndex, 'SLA worker starts only after bind');
   assert.match(source, /operationalReadiness: \(\) => healthRegistry\.check\(\)/);
 });
 

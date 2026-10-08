@@ -71,6 +71,50 @@ test('READY Product reaches projection, projection-native publication, price lis
     assert.equal(ready.status, 'passed');
     assert.equal(ready.readiness.status, 'ready');
 
+    const changeGateIds = {
+      sourceOld: 'change-gate-source-old', sourceNew: 'change-gate-source-new', revision: 'change-gate-revision',
+      caseId: 'change-gate-case', impact: 'change-gate-impact',
+    };
+    await pool.query(
+      `INSERT INTO product_engineering_sources
+        (id,brand_id,style_id,kind,ingest_mode,media_type,original_name,size_bytes,content_hash,storage_ref,source_uri,metadata,status,scan_status,parse_status,rejection_code,rejection_message,created_at,created_by,admitted_at,admitted_by,version)
+       VALUES
+        ($1,$3,$4,'document','manual','application/pdf','old.pdf',10,$5,NULL,NULL,'{}'::jsonb,'admitted','not_applicable','not_required',NULL,NULL,now(),$3,now(),$3,1),
+        ($2,$3,$4,'document','manual','application/pdf','new.pdf',11,$6,NULL,NULL,'{}'::jsonb,'admitted','not_applicable','not_required',NULL,NULL,now(),$3,now(),$3,1)`,
+      [changeGateIds.sourceOld, changeGateIds.sourceNew, references.brand.id, ready.product.styleId, 'a'.repeat(64), 'b'.repeat(64)],
+    );
+    await pool.query(
+      `INSERT INTO product_engineering_source_revisions
+        (id,brand_id,style_id,superseded_source_id,replacement_source_id,superseded_content_hash,replacement_content_hash,reason,created_at,created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,'Acceptance change gate proof',now(),$2)`,
+      [changeGateIds.revision, references.brand.id, ready.product.styleId, changeGateIds.sourceOld, changeGateIds.sourceNew, 'a'.repeat(64), 'b'.repeat(64)],
+    );
+    await pool.query(
+      `INSERT INTO product_engineering_change_cases
+        (id,source_revision_id,brand_id,style_id,status,impact_snapshot,impact_hash,created_at,created_by,version)
+       VALUES ($1,$2,$3,$4,'open','{}'::jsonb,$5,now(),$3,1)`,
+      [changeGateIds.caseId, changeGateIds.revision, references.brand.id, ready.product.styleId, 'c'.repeat(64)],
+    );
+    await pool.query(
+      `INSERT INTO product_engineering_change_impacts
+        (id,change_case_id,impact_kind,entity_id,entity_version,area,required_action,severity,evidence_status,basis,status,created_at,created_by)
+       VALUES ($1,$2,'downstream_policy',$3,'1','commercial_publication','reproject','high','policy_required',$4::jsonb,'pending',now(),$5)`,
+      [changeGateIds.impact, changeGateIds.caseId, ready.product.styleVersionId, JSON.stringify({ acceptance: true }), references.brand.id],
+    );
+
+    const blockedAdmission = await runtime.productEngineeringChangeAdmission.evaluate(ready.product.styleVersionId, 'commercial_projection');
+    assert.equal(blockedAdmission.admitted, false);
+    assert.equal(blockedAdmission.blockerCount, 1);
+    assert.equal(blockedAdmission.blockers[0].impactId, changeGateIds.impact);
+    await assert.rejects(
+      runtime.productEngineeringChangeAdmission.assertAdmitted(ready.product.styleVersionId, 'commercial_projection'),
+      (error) => error?.code === 'PRODUCT_ENGINEERING_CHANGE_ADMISSION_BLOCKED',
+    );
+    await pool.query(`UPDATE product_engineering_change_impacts SET status='resolved' WHERE id=$1`, [changeGateIds.impact]);
+    const clearedAdmission = await runtime.productEngineeringChangeAdmission.evaluate(ready.product.styleVersionId, 'commercial_projection');
+    assert.equal(clearedAdmission.admitted, true);
+    assert.equal(clearedAdmission.blockerCount, 0);
+
     const result = await runProductCommercializationLiveAcceptance({
       baseUrl,
       brandToken,

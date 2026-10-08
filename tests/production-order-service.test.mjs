@@ -13,9 +13,14 @@ const rfq = Object.freeze({
   status: 'allocated', version: 8,
   award: Object.freeze({ supplierCode: supplier.supplierCode, currency: 'EUR', incoterm: 'FOB', unitPriceMinor: 14_500, fixedCostMinor: 30_000, totalCostMinor: 1_480_000, quoteRevision: 1 }),
   allocation: Object.freeze({ purchaseOrderNumber: 'PO-STYLE-001', supplierCode: supplier.supplierCode, quantity: 100, productionStartAt: '2026-08-10T00:00:00.000Z', deliveryDueAt: '2026-10-30T00:00:00.000Z', notes: null, techPackCode: 'TP-STYLE-001-R01', techPackRevision: 1, techPackVersion: 3, techPackIssuedVersion: 2, techPackAcknowledgedAt: '2026-08-04T11:00:00.000Z', techPackAcknowledgementReference: 'ACK-9081' }),
+  lineageVersion: 2,
+  productionRequirementSnapshotId: 'requirement-1', productionRequirementContentHash: 'a'.repeat(64), productionRequirementOrderLineNo: 1,
+  orderId: 'order-1', orderCommitSnapshotId: 'commit-1', supplyCommitmentSnapshotId: 'supply-1',
+  productSkuId: 'product-sku-1', styleId: 'style-1', styleVersionId: 'style-version-1', colorwayId: 'colorway-1', sizeValueId: 'size-1', sizeCode: 'M',
+  collectionId: 'collection-1', showroomId: 'showroom-1', commercialPublicationId: 'publication-1', buyerCatalogVersionId: 'buyer-catalog-1',
 });
 
-function harness() {
+function harness({ changeImpactAdmission = null } = {}) {
   const orders = new Map();
   const commands = new Map();
   const events = [];
@@ -38,6 +43,7 @@ function harness() {
   };
   const service = createProductionOrderService({
     store: { transaction: (work) => work(tx) },
+    changeImpactAdmission,
     clock: () => ['2026-08-05T00:00:00.000Z','2026-08-06T00:00:00.000Z','2026-08-06T10:00:00.000Z'][Math.min(sequence, 2)],
     nextId: (prefix) => `${prefix}-${++sequence}`,
   });
@@ -68,6 +74,31 @@ test('replaying the same command returns the stored result without a second writ
   assert.deepEqual(replay, first);
   assert.equal(fixture.orders.size, 1);
   assert.equal(fixture.events.length, 1);
+});
+
+test('Production Order issue and confirmation honor exact StyleVersion change admission', async () => {
+  const calls = [];
+  let blockedOperation = 'production_order_issue';
+  const fixture = harness({ changeImpactAdmission: { async assertAdmitted(styleVersionId, operation) {
+    calls.push({ styleVersionId, operation });
+    if (operation === blockedOperation) throw Object.assign(new Error('blocked'), { code: 'PRODUCT_ENGINEERING_CHANGE_ADMISSION_BLOCKED' });
+  } } });
+  const created = await fixture.service.createFromAllocation('cmd-create-gate', 'owner-1', rfq.rfqCode);
+  await assert.rejects(
+    fixture.service.issue('cmd-issue-gate', 'owner-1', created.productionOrderNumber, { expectedVersion: created.version }),
+    (error) => error.code === 'PRODUCT_ENGINEERING_CHANGE_ADMISSION_BLOCKED',
+  );
+  assert.equal(fixture.orders.get(created.productionOrderNumber).status, 'draft');
+  blockedOperation = null;
+  const issued = await fixture.service.issue('cmd-issue-ok', 'owner-1', created.productionOrderNumber, { expectedVersion: created.version });
+  blockedOperation = 'production_order_confirm';
+  await assert.rejects(
+    fixture.service.confirm('cmd-confirm-gate', 'owner-1', issued.productionOrderNumber, { expectedVersion: issued.version, supplierCode: supplier.supplierCode, confirmationReference: 'ACK', confirmedBy: 'Factory', notes: null }),
+    (error) => error.code === 'PRODUCT_ENGINEERING_CHANGE_ADMISSION_BLOCKED',
+  );
+  assert.equal(fixture.orders.get(created.productionOrderNumber).status, 'issued');
+  assert.deepEqual(calls.map((row) => row.operation), ['production_order_issue','production_order_issue','production_order_confirm']);
+  assert.equal(calls.every((row) => row.styleVersionId === 'style-version-1'), true);
 });
 
 // Q-02: cancelling the order left its RFQ allocated, which kept the approved-demand line occupied.

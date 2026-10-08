@@ -23,12 +23,14 @@ export const EXTERNAL_EVIDENCE_CAPABILITIES = Object.freeze({
 export function createProductReadinessService({
   store,
   sourceReader,
+  changeImpactAdmission = null,
   externalEvidencePolicy = EXTERNAL_EVIDENCE_POLICY,
   clock = () => new Date().toISOString(),
   nextId = defaultIdGenerator(),
 } = {}) {
   invariant(store && typeof store.transaction === 'function', 'PRODUCT_READINESS_STORE_REQUIRED', 'Product readiness store is required');
   invariant(sourceReader && typeof sourceReader.getStyleVersion === 'function' && typeof sourceReader.loadAssessmentContext === 'function' && typeof sourceReader.getMembership === 'function', 'PRODUCT_READINESS_SOURCE_READER_REQUIRED', 'Product readiness source reader is required');
+  invariant(changeImpactAdmission === null || typeof changeImpactAdmission?.assertAdmitted === 'function', 'PRODUCT_ENGINEERING_CHANGE_ADMISSION_SERVICE_INVALID', 'Change-impact admission service is invalid');
 
   async function authorizeStyleVersion(actorId, styleVersionId, capability) {
     const styleVersion = requireEntity(await sourceReader.getStyleVersion(styleVersionId), 'PRODUCT_STYLE_VERSION_NOT_FOUND', { styleVersionId });
@@ -126,6 +128,7 @@ export function createProductReadinessService({
         fingerprint,
         action: async (tx) => {
           const exactReadiness = requireEntity(await tx.getReadinessSnapshotForUpdate(readinessSnapshotId), 'PRODUCT_READINESS_NOT_FOUND', { readinessSnapshotId });
+          if (changeImpactAdmission) await changeImpactAdmission.assertAdmitted(exactReadiness.styleVersionId, 'commercial_projection');
           invariant(exactReadiness.readinessStatus === 'ready', 'COMMERCIAL_PROJECTION_READINESS_BLOCKED', 'Commercial Product Projection cannot publish from a blocked readiness snapshot', {
             readinessSnapshotId,
             blockedDimensionCount: exactReadiness.blockedDimensionCount,

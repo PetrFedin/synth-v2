@@ -19,10 +19,12 @@ import {
 
 export function createOrderEconomicsService({
   economicsStore,
+  changeImpactAdmission = null,
   clock = () => new Date().toISOString(),
   nextId = defaultIdGenerator(),
 } = {}) {
   invariant(economicsStore && typeof economicsStore.transaction === 'function', 'ORDER_ECONOMICS_STORE_REQUIRED', 'Order economics store is required');
+  invariant(changeImpactAdmission === null || typeof changeImpactAdmission?.assertAdmitted === 'function', 'PRODUCT_ENGINEERING_CHANGE_ADMISSION_SERVICE_INVALID', 'Change-impact admission service is invalid');
 
   function execute(commandId, fingerprint, actorId, authorize, action) {
     invariant(commandId, 'COMMAND_ID_REQUIRED', 'Every mutation requires commandId');
@@ -346,6 +348,7 @@ export function createOrderEconomicsService({
         actorId,
         (tx) => executionBasisForCapability(tx, orderId, actorId, CAPABILITIES.COST_MANAGE),
         async (tx, { order, orderCommit }) => {
+          if (changeImpactAdmission && orderCommit.styleVersionId) await changeImpactAdmission.assertAdmitted(orderCommit.styleVersionId, 'cost_close');
           await assertCostOpen(tx, orderCommit);
           const landedCost = requireEntity(await tx.getLandedCostSnapshot(input.landedCostSnapshotId), 'LANDED_COST_SNAPSHOT_NOT_FOUND', { landedCostSnapshotId: input.landedCostSnapshotId });
           const marginActualization = requireEntity(await tx.getMarginActualizationSnapshot(input.marginActualizationSnapshotId), 'MARGIN_ACTUALIZATION_NOT_FOUND', { marginActualizationSnapshotId: input.marginActualizationSnapshotId });

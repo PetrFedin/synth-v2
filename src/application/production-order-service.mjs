@@ -15,8 +15,9 @@ import { releaseAllocatedRfq } from '../modules/sourcing/public.mjs';
 const CONFIRM_FIELDS = Object.freeze(new Set(['expectedVersion', 'supplierCode', 'confirmationReference', 'confirmedBy', 'notes']));
 const CANCEL_FIELDS = Object.freeze(new Set(['expectedVersion', 'reason']));
 
-export function createProductionOrderService({ store, clock = () => new Date().toISOString(), nextId = defaultIdGenerator() } = {}) {
+export function createProductionOrderService({ store, changeImpactAdmission = null, clock = () => new Date().toISOString(), nextId = defaultIdGenerator() } = {}) {
   invariant(store && typeof store.transaction === 'function', 'PRODUCTION_ORDER_STORE_REQUIRED', 'Production Order store is required');
+  invariant(changeImpactAdmission === null || typeof changeImpactAdmission?.assertAdmitted === 'function', 'PRODUCT_ENGINEERING_CHANGE_ADMISSION_SERVICE_INVALID', 'Change-impact admission service is invalid');
 
   function execute(commandId, fingerprint, actorId, prepare, action) {
     invariant(typeof commandId === 'string' && commandId, 'COMMAND_ID_REQUIRED', 'Every mutation requires commandId');
@@ -111,6 +112,7 @@ export function createProductionOrderService({ store, clock = () => new Date().t
           return Object.freeze({ current, supplier: await tx.getSupplierByCode(current.brandId, current.supplierCode) });
         },
         async (tx, { current, supplier }) => {
+          if (changeImpactAdmission && current.styleVersionId) await changeImpactAdmission.assertAdmitted(current.styleVersionId, 'production_order_issue');
           // Q-03. A supplier that was suspended or archived after the order was drafted or issued takes no
           // new order: the brand may cancel it, but it cannot be issued to, or accepted by, that supplier.
           invariant(supplier?.status === 'qualified', 'PRODUCTION_ORDER_SUPPLIER_NOT_QUALIFIED', 'Production Order supplier must remain qualified', { supplierCode: current.supplierCode, status: supplier?.status ?? null });
@@ -134,6 +136,7 @@ export function createProductionOrderService({ store, clock = () => new Date().t
           return Object.freeze({ current, supplier: await tx.getSupplierByCode(current.brandId, current.supplierCode) });
         },
         async (tx, { current, supplier }) => {
+          if (changeImpactAdmission && current.styleVersionId) await changeImpactAdmission.assertAdmitted(current.styleVersionId, 'production_order_confirm');
           // Q-03. A supplier that was suspended or archived after the order was drafted or issued takes no
           // new order: the brand may cancel it, but it cannot be issued to, or accepted by, that supplier.
           invariant(supplier?.status === 'qualified', 'PRODUCTION_ORDER_SUPPLIER_NOT_QUALIFIED', 'Production Order supplier must remain qualified', { supplierCode: current.supplierCode, status: supplier?.status ?? null });

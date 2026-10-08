@@ -5,7 +5,7 @@ import { createProductReadinessService } from '../src/application/product-readin
 const now = '2026-08-12T12:00:00.000Z';
 const hash = 'b'.repeat(64);
 
-function harness({ role = 'owner' } = {}) {
+function harness({ role = 'owner', changeImpactAdmission = null } = {}) {
   const commands = new Map();
   const readiness = new Map();
   const projections = [];
@@ -45,7 +45,7 @@ function harness({ role = 'owner' } = {}) {
     loadAssessmentContext: async () => context(),
   };
   let sequence = 0;
-  const service = createProductReadinessService({ store, sourceReader, clock: () => now, nextId: (prefix) => `${prefix}:${++sequence}` });
+  const service = createProductReadinessService({ store, sourceReader, changeImpactAdmission, clock: () => now, nextId: (prefix) => `${prefix}:${++sequence}` });
   return { service, commands, readiness, projections, locks, packRatioTemplates };
 }
 
@@ -132,6 +132,22 @@ test('projection publish is contiguous, idempotent and serializes version alloca
     (error) => error?.code === 'COMMERCIAL_PROJECTION_CONCURRENCY_CONFLICT',
   );
   assert.deepEqual(h.locks, ['style-version:1', 'style-version:1']);
+});
+
+test('commercial projection is blocked by unresolved Product Engineering change admission', async () => {
+  const calls = [];
+  const h = harness({ changeImpactAdmission: { async assertAdmitted(styleVersionId, operation) {
+    calls.push({ styleVersionId, operation });
+    throw Object.assign(new Error('blocked'), { code: 'PRODUCT_ENGINEERING_CHANGE_ADMISSION_BLOCKED' });
+  } } });
+  const snapshot = await h.service.assessReadiness('cmd:assess', 'user:1', 'style-version:1', input());
+  await assert.rejects(
+    h.service.publishCommercialProjection('cmd:projection-blocked', 'user:1', snapshot.id, { expectedLatestVersionNo: 0 }),
+    (error) => error?.code === 'PRODUCT_ENGINEERING_CHANGE_ADMISSION_BLOCKED',
+  );
+  assert.deepEqual(calls, [{ styleVersionId: 'style-version:1', operation: 'commercial_projection' }]);
+  assert.equal(h.projections.length, 0);
+  assert.equal(h.commands.has('cmd:projection-blocked'), false);
 });
 
 test('a pack ratio template is created once, replays idempotently, and refuses a duplicate name in the same brand', async () => {

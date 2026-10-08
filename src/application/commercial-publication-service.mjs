@@ -17,11 +17,13 @@ export function createCommercialPublicationService({
   wholesaleStore,
   commercialProjectionReader = commercialStore,
   projectionListReader = commercialProjectionReader,
+  changeImpactAdmission = null,
   clock = () => new Date().toISOString(),
   nextId = defaultIdGenerator(),
 } = {}) {
   invariant(commercialStore && typeof commercialStore.transaction === 'function', 'COMMERCIAL_PUBLICATION_STORE_REQUIRED', 'Commercial publication store is required');
   invariant(wholesaleStore && typeof wholesaleStore.transaction === 'function', 'WHOLESALE_STORE_REQUIRED', 'Wholesale store is required');
+  invariant(changeImpactAdmission === null || typeof changeImpactAdmission?.assertAdmitted === 'function', 'PRODUCT_ENGINEERING_CHANGE_ADMISSION_SERVICE_INVALID', 'Change-impact admission service is invalid');
 
   function execute(commandId, fingerprint, actorId, action) {
     invariant(commandId, 'COMMAND_ID_REQUIRED', 'Every mutation requires commandId');
@@ -115,6 +117,7 @@ export function createCommercialPublicationService({
       invariant(projection.brandId === collection.brandId, 'COMMERCIAL_PUBLICATION_BRAND_MISMATCH', 'Commercial projection brand does not match collection brand');
       await assertCollectionStyleVersionAssigned(collection, projection.styleVersionId);
       return execute(commandId, fingerprint, actorId, async (tx) => {
+        if (changeImpactAdmission) await changeImpactAdmission.assertAdmitted(projection.styleVersionId, 'commercial_publication');
         const publication = createProjectionBackedCommercialPublication({ id: nextId('commercial-publication'), collection, commercialProjection: projection, publishedAt: clock() });
         await tx.insertCommercialPublication(publication);
         await append(tx, 'commercial-publication.published', publication.id, {

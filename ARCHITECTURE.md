@@ -1512,7 +1512,25 @@ The first workflow slice is `open -> acknowledged`; acknowledgement requires opt
 
 The additive public API surface advances the authoritative composed v2 contract to OpenAPI `1.21.0`. Product Master exposes governed source replacement, change-case impact review and acknowledgement inside the same responsive Engineering workspace rather than introducing a parallel application.
 
-**Not yet claimed:** automatic enforcement inside Production/Cost/Commercial/Sourcing authorities, per-impact resolution receipts, and automatic canonical recomputation. Those are subsequent slices. Until their owning domains enforce a blocker, a `policy_required` row is an auditable requirement, not a statement that execution was blocked.
+#### Downstream Change Admission Guards — IMPLEMENTED/PARTIAL
+
+Downstream canonical commands now consume unresolved Product Engineering requirements through a read-only `ProductEngineeringChangeAdmission` authority keyed by exact `StyleVersion`. The gate reader resolves `StyleVersion -> ProductStyle/brand -> open ChangeCase -> pending ChangeImpact`; only `policy_required` impacts whose area is explicitly relevant to the attempted operation can block. Observed lineage rows remain evidence and never become blockers merely because they exist.
+
+First guarded operations:
+
+- Commercial Product Projection publication: `commercial_publication / product_readiness`;
+- Commercial Publication: `commercial_publication / product_readiness`;
+- production RFQ release: `sourcing / bom / tech_pack`;
+- Production Order issue/confirmation: `production / tech_pack / supplier_acknowledgement / quality`;
+- Cost Close: `cost`.
+
+The gate executes inside the owning command's normal mutation boundary after idempotent command replay has been resolved. A command that already completed can therefore replay its immutable result even if a later source revision creates a new blocker; a new mutation cannot cross the gate until the relevant impact is no longer pending. Cancellation/recovery paths are intentionally not blocked. Legacy records without exact StyleVersion lineage are not falsely promoted to governed lineage.
+
+`acknowledged` ChangeCase status does not clear pending impacts. Acknowledgement assigns review ownership only. The first gate reader continues to block while relevant impact rows remain `pending`; per-impact resolve/waive receipts are the next workflow slice.
+
+PostgreSQL acceptance proves exact StyleVersion gating on a real READY product before commercialization, and proves that clearing the exact pending impact re-admits the same canonical flow.
+
+**Not yet claimed:** per-impact resolution/waiver receipts, automatic recomputation after correction, or a universal blocker across every legacy/non-StyleVersion workflow. Those remain subsequent slices.
 
 #### Product Master Review → Impact → Apply UI — IMPLEMENTED/PARTIAL
 
@@ -1693,6 +1711,7 @@ At minimum:
 
 | Date | PR / commit | Change | Master sections affected | Evidence/status |
 |---|---|---|---|---|
+| 2026-10-08 | branch `feat/change-impact-admission-guards` | Add exact-StyleVersion downstream change admission: unresolved policy-required impacts now block affected Commercial Projection/Publication, production RFQ release, Production Order issue/confirm and Cost Close through each owning service while preserving command replay and cancellation/recovery semantics. | 19.1 | IMPLEMENTED/PARTIAL pending fresh CI; acknowledgement alone does not clear blockers; per-impact resolve/waive receipts remain next |
 | 2026-10-08 | branch `feat/product-engineering-change-impact` | Add governed source revision and first version-aware Change Impact Engine: immutable old/new source hashes, deterministic lineage propagation across analysis/evidence/finding/proposal/garment graph/technical flat/canonical receipts, explicit observed vs policy-required semantics, open/acknowledged workflow and Product Master review UI. | 19.1 | IMPLEMENTED/PARTIAL; downstream domain blocking/recompute and per-impact closure receipts remain next slices; fresh PR CI required before DONE |
 | 2026-10-08 | PR #249 `feat/canonical-application-authority` | Promote accepted-proposal apply into Canonical Application Authority: exact canonical precondition snapshot/version, deterministic diff, immutable intent, distinct application/canonical command ids, crash-safe retry, immutable receipt with SHA-256 binding and reverse model/evidence/source lineage, receipt API/OpenAPI and PostgreSQL E2E proof. | 19.1 | IMPLEMENTED pending fresh PR CI/merge; no generic AI write path; first allowlisted canonical targets remain Measurement/Material/Tech Pack/Operation Sequence |
 | 2026-10-06 | PR #242 `feat/ai-product-engineering-authority` | Add evidence-first AI Product Engineering authority plus executable Engineering Golden Path: controlled binary upload/server SHA-256, durable scan/parse/analysis jobs, structural PDF/XLSX/CSV/SVG/image parsing, exact qualification/policy routing, schema-bound + source-grounded model output, Findings/Evidence/Proposals/Conflicts, reviewed Garment Graph, semantic SVG authority, RBAC/OpenAPI/Product Master/Awaiting Action, and first governed accepted-proposal → canonical-command → appliedReference slice for Measurement/Material/Tech Pack/Operation Sequence. | 10, 12, 13, 17, 19.1, 20 | IMPLEMENTED/PARTIAL in PR; no direct AI canonical writes; scanner is integrity-only, PostgreSQL blob storage is MVP, live external qualification evidence, broader apply coverage, direct impact evidence/high-risk blocking policy and intended-live acceptance remain open; repository + PostgreSQL CI still required before DONE |

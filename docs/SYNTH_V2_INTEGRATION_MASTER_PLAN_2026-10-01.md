@@ -2234,3 +2234,20 @@ Reconciliation against `docs/backlog-not-yet-integrated.md`, this master plan an
 → admission replay.
 
 Architecture invariant: Product Engineering may detect impact, build plans, enqueue/request allowlisted owning-domain work and verify results, but it must not receive generic downstream mutation authority.
+
+
+### 2026-10-08 — Recompute orchestration tranche A started
+
+Branch: `feat/change-impact-recompute-orchestration`, base `main@9943b8507cbbda67c1fee85d8d98c9d84506a372`.
+
+Tranche A implements only the deterministic domain/evidence foundation:
+
+- exact Stale Dependency Set with source/target authority references and version/hash identity;
+- deterministic DAG plan and canonical topological levels;
+- explicit `automatic | human_review | external_evidence` mode per step;
+- immutable execution receipts;
+- verified automatic result requirement;
+- fail-closed admission evaluation;
+- immutable final orchestration receipt.
+
+No persistence, worker, HTTP, UI or generic downstream write path is claimed yet. The next tranche after exact-head CI is PostgreSQL persistence + durable bounded job orchestration, then owning-authority adapters and human/external evidence routing.

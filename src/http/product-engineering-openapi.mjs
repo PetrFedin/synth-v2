@@ -76,11 +76,13 @@ function schemas() {
     },
     ProductEngineeringChangeImpactReceipt: {
       type:'object', additionalProperties:false,
-      required:['id','changeCaseId','impactId','disposition','previousImpactVersion','resultingImpactVersion','reason','evidence','resultReference','waiver','receiptHash','createdAt','createdBy'],
+      required:['id','changeCaseId','impactId','disposition','previousImpactVersion','resultingImpactVersion','reason','evidence','resultReference','resultVerification','waiver','receiptHash','createdAt','createdBy'],
       properties:{
         id,changeCaseId:id,impactId:id,disposition:{type:'string',enum:['resolved','waived']},previousImpactVersion:{type:'integer',minimum:1},resultingImpactVersion:{type:'integer',minimum:2},
         reason:{type:'string'},evidence:{type:'array',items:{type:'object',additionalProperties:true}},
-        resultReference:{oneOf:[{type:'object',additionalProperties:true},{type:'null'}]},waiver:{oneOf:[{type:'object',additionalProperties:true},{type:'null'}]},
+        resultReference:{oneOf:[{type:'object',additionalProperties:true},{type:'null'}]},
+        resultVerification:{oneOf:[{type:'object',additionalProperties:true},{type:'null'}]},
+        waiver:{oneOf:[{type:'object',additionalProperties:true},{type:'null'}]},
         receiptHash:hash,createdAt:dateTime,createdBy:id,
       },
     },

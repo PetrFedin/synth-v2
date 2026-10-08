@@ -368,10 +368,10 @@ function transactionView(client) {
     async insertChangeImpactReceipt(value) {
       await client.query(
         `INSERT INTO product_engineering_change_impact_receipts
-          (id,change_case_id,impact_id,disposition,previous_impact_version,resulting_impact_version,reason,evidence,result_reference,waiver,receipt_hash,created_at,created_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10::jsonb,$11,$12,$13)`,
+          (id,change_case_id,impact_id,disposition,previous_impact_version,resulting_impact_version,reason,evidence,result_reference,result_verification,waiver,receipt_hash,created_at,created_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10::jsonb,$11::jsonb,$12,$13,$14)`,
         [value.id,value.changeCaseId,value.impactId,value.disposition,value.previousImpactVersion,value.resultingImpactVersion,value.reason,
-         JSON.stringify(value.evidence),value.resultReference===null?null:JSON.stringify(value.resultReference),value.waiver===null?null:JSON.stringify(value.waiver),
+         JSON.stringify(value.evidence),value.resultReference===null?null:JSON.stringify(value.resultReference),value.resultVerification===null?null:JSON.stringify(value.resultVerification),value.waiver===null?null:JSON.stringify(value.waiver),
          value.receiptHash,value.createdAt,value.createdBy],
       );
     },
@@ -770,6 +770,7 @@ function mapChangeImpactReceipt(row) {
     id:row.id,changeCaseId:row.change_case_id,impactId:row.impact_id,disposition:row.disposition,
     previousImpactVersion:row.previous_impact_version,resultingImpactVersion:row.resulting_impact_version,reason:row.reason,
     evidence:deepFreeze(row.evidence ?? []),resultReference:row.result_reference===null?null:deepFreeze(row.result_reference),
+    resultVerification:row.result_verification===null?null:deepFreeze(row.result_verification),
     waiver:row.waiver===null?null:deepFreeze(row.waiver),receiptHash:row.receipt_hash,createdAt:iso(row.created_at),createdBy:row.created_by,
   });
 }

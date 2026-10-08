@@ -21,7 +21,8 @@ test('resolved impact produces immutable proof without waiver semantics',()=>{
   const receipt=createEngineeringChangeImpactReceipt({
     id:'receipt-1',impact:current,disposition:'resolved',reason:'Cost authority recalculated from corrected material specification.',
     evidence:[{kind:'canonical_receipt',id:'cost-close-2',hash:'a'.repeat(64)}],
-    resultReference:{authority:'cost',entityId:'order-1',version:9,receiptId:'cost-close-2'},
+    resultReference:{authority:'cost_close',entityId:'cost-close-2',version:9},
+    verification:{verifier:'orderEconomics.getCostCloseForActor',authority:'cost_close',requested:{entityId:'cost-close-2',version:'9',contentHash:null},observed:{authority:'cost_close',entityId:'cost-close-2',version:'9',contentHash:null},verificationHash:'b'.repeat(64)},
     createdAt:NOW,createdBy:'actor-1',
   });
   const next=closeEngineeringChangeImpact(current,receipt);

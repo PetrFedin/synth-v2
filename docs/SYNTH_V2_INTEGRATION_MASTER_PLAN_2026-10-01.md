@@ -2140,3 +2140,59 @@ Then successful verified corrections can enqueue deterministic recomputation/re-
 `verified correction -> stale dependency set -> recompute jobs -> new canonical/readiness/commercial versions -> closure evidence`.
 
 No generic Product Engineering write path is permitted into downstream domains.
+
+
+## 2026-10-08 — Verified Canonical Result References checkpoint
+
+Status: active development on `feat/change-impact-result-verification` from merged `main@2e81703f2cf2326adc3b40e5afac2e0318732a05`; PR #253 Resolution/Waiver Receipts is merged.
+
+### Implemented verification boundary
+
+A resolved ChangeImpact is no longer allowed to turn a manually typed `resultReference` into apparent proof. The server now performs an independent authority read before the immutable resolution receipt is created:
+
+`impact -> human resultReference -> authority-specific read verifier -> exact entity identity -> exact version/hash match -> verification SHA-256 -> immutable impact receipt`.
+
+First supported verification authorities:
+
+- `material` -> Material read authority;
+- `measurement` -> canonical Measurement Chart read authority;
+- `tech_pack` -> Tech Pack read authority;
+- `product_readiness` -> Readiness Snapshot read authority;
+- `commercial_projection` -> Commercial Projection read authority;
+- `commercial_publication` -> Commercial Publication read authority;
+- `cost_close` -> Cost Close read authority;
+- `sourcing_rfq` -> Sourcing RFQ read authority.
+
+Unsupported authorities, stale versions/hashes, mismatched identities or unavailable owning readers fail closed. Waivers cannot carry verification because they do not assert a corrected canonical fact.
+
+### Replay invariant
+
+Verification is internal proof, not user command input. It is excluded from the Product Engineering idempotency fingerprint. If an impact is already closed, retry proceeds to the existing command ledger replay without re-reading a downstream object that may have advanced since the original resolution. This prevents a later version from invalidating replay of an already committed historical decision.
+
+### Evidence already green on current working tree
+
+- verifier unit contracts — PASS;
+- result-verification migration contract — PASS;
+- resolution/waiver domain contracts with verification binding — PASS;
+- PostgreSQL AI Engineering Golden Path with real Material result verification and receipt persistence — PASS;
+- `validate:types` — PASS with no baseline increase;
+- `validate:architecture` — PASS after documentation sync;
+- `validate:ui` — PASS;
+- `validate:design-system` — PASS;
+- `validate:i18n` — PASS;
+- full `npm run verify` — PASS (`2483` tests discovered, `2406` pass, `77` skipped, `0` fail).
+
+### Next strict slice after this merges
+
+**Deterministic Recompute / Re-review Orchestration**
+
+`verified correction receipt`
+-> exact stale dependency set
+-> idempotent recompute plan
+-> bounded domain-specific jobs
+-> canonical/readiness/commercial re-evaluation through owning authorities
+-> new versions / review tasks
+-> immutable orchestration receipt
+-> ChangeCase closure evidence.
+
+The orchestrator must never mutate downstream domains generically. It may enqueue or request only allowlisted owning-domain operations, with exact input versions, idempotency keys, dependency lineage and explicit human approval where the owning domain requires it.

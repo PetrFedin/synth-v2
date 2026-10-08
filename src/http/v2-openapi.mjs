@@ -2,6 +2,7 @@ import { withApprovedDemandProductionOpenApi } from './approved-demand-productio
 import { withAwaitingActionOpenApi } from './awaiting-action-openapi.mjs';
 import { withOperationalCollaborationOpenApi } from './operational-collaboration-openapi.mjs';
 import { withOperationalExceptionOpenApi } from './operational-exception-openapi.mjs';
+import { withVisualRailOpenApi } from './visual-rail-openapi.mjs';
 import { withBomOpenApi } from './bom-openapi.mjs';
 import { withCollectionStyleVersionOpenApi } from './collection-style-version-openapi.mjs';
 import { withCommercialPublicationOpenApi } from './commercial-publication-openapi.mjs';
@@ -41,7 +42,7 @@ import { withTechPackOpenApi } from './tech-pack-openapi.mjs';
 import { withTeamOpenApi } from './team-openapi.mjs';
 import { wholesaleV2OpenApi } from './openapi.mjs';
 
-const AUTHORITATIVE_V2_CONTRACT_VERSION = '1.21.0';
+const AUTHORITATIVE_V2_CONTRACT_VERSION = '1.22.0';
 
 const composed = withSupplierPortalOpenApi(withOperationSequenceOpenApi(
   withCuttingOpenApi(
@@ -113,10 +114,12 @@ const composed = withSupplierPortalOpenApi(withOperationSequenceOpenApi(
 
 const withSupplierPassport = withSupplierPassportOpenApi(composed);
 export const wholesaleV2ExtendedOpenApi = preserveAuthoritativeContractVersion(
-  withOperationalExceptionOpenApi(
-    withOperationalCollaborationOpenApi(
+  withVisualRailOpenApi(
+    withOperationalExceptionOpenApi(
+      withOperationalCollaborationOpenApi(
         withProductEngineeringOpenApi(withAwaitingActionOpenApi(withTeamOpenApi(withSupplierPassport))),
       ),
+    ),
   ),
 );
 

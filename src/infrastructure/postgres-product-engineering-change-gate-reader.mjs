@@ -8,16 +8,35 @@ export function createPostgresProductEngineeringChangeGateReader({ pool } = {}) 
     async listPendingImpactsForStyleVersion(styleVersionId) {
       invariant(typeof styleVersionId === 'string' && styleVersionId.trim(), 'PRODUCT_ENGINEERING_CHANGE_ADMISSION_STYLE_VERSION_REQUIRED', 'Exact StyleVersion is required');
       const result = await pool.query(
-        `SELECT impact.*
+        `SELECT impact.*,
+                receipt.id AS resolution_receipt_id,
+                receipt.disposition AS resolution_disposition,
+                receipt.waiver AS resolution_waiver,
+                CASE
+                  WHEN impact.status='waived'
+                   AND receipt.disposition='waived'
+                   AND receipt.waiver->>'expiresAt' IS NOT NULL
+                   AND (receipt.waiver->>'expiresAt')::timestamptz <= now()
+                  THEN 'pending'
+                  ELSE impact.status
+                END AS effective_status
            FROM product_style_versions style_version
            JOIN product_engineering_change_cases change_case
              ON change_case.style_id = style_version.style_id
             AND change_case.brand_id = style_version.brand_id
            JOIN product_engineering_change_impacts impact
              ON impact.change_case_id = change_case.id
+           LEFT JOIN product_engineering_change_impact_receipts receipt
+             ON receipt.impact_id = impact.id
           WHERE style_version.id = $1
-            AND change_case.status <> 'resolved'
-            AND impact.status = 'pending'
+            AND (
+              (change_case.status <> 'resolved' AND impact.status = 'pending')
+              OR
+              (impact.status='waived'
+               AND receipt.disposition='waived'
+               AND receipt.waiver->>'expiresAt' IS NOT NULL
+               AND (receipt.waiver->>'expiresAt')::timestamptz <= now())
+            )
           ORDER BY CASE impact.severity WHEN 'blocking' THEN 0 WHEN 'high' THEN 1 ELSE 2 END,
                    impact.area, impact.entity_id, impact.id`,
         [styleVersionId],
@@ -39,7 +58,10 @@ function mapImpact(row) {
     severity: row.severity,
     evidenceStatus: row.evidence_status,
     basis: deepFreeze(row.basis),
-    status: row.status,
+    status: row.effective_status ?? row.status,
+    storedStatus: row.status,
+    resolutionReceiptId: row.resolution_receipt_id ?? null,
+    waiver: deepFreeze(row.resolution_waiver ?? null),
     createdAt: new Date(row.created_at).toISOString(),
     createdBy: row.created_by,
   });

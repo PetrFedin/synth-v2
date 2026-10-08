@@ -2070,3 +2070,73 @@ First guarded canonical operations:
 `pending impact -> reviewer/authority -> resolve | waive -> reason -> evidence -> resulting canonical authority/version -> immutable resolution receipt -> impact closed -> admission re-evaluated`
 
 This must replace bare mutable status changes as the production-grade way to clear a blocker. A waiver must never silently claim that the underlying technical fact was corrected; it is a separate governed exception with actor, reason, scope, expiry/review policy where applicable, and evidence lineage.
+
+## 2026-10-08 — Per-impact Resolution / Waiver Receipts checkpoint
+
+Status: active development on `feat/change-impact-resolution-receipts` from merged `main@35a4cab5f7df3abcc23fe461f3c964a8ba8bf997`.
+
+### Why this layer exists
+
+A downstream blocker must never disappear because somebody changed `status='resolved'` by convention. Each impacted dependency now requires an auditable closure decision:
+
+`pending ChangeImpact`
+-> exact optimistic impact version
+-> reviewer / engineering authority
+-> `resolved | waived`
+-> explicit reason
+-> evidence references
+-> resulting canonical reference when a policy-required impact claims correction
+-> immutable receipt + SHA-256
+-> impact version advances
+-> admission is re-evaluated
+-> ChangeCase resolves only after no pending impacts remain.
+
+### Implemented semantics
+
+- migration `178_product_engineering_change_impact_resolution_receipts.sql` adds optimistic versions to ChangeImpact and immutable `product_engineering_change_impact_receipts`;
+- one receipt per exact impact; historical receipts cannot cascade away;
+- `resolved` and `waived` are deliberately different meanings;
+- `policy_required + resolved` requires a resulting canonical reference instead of allowing a naked human status change;
+- `waived` forbids `resultReference` and requires an explicit exception scope;
+- waiver may carry `expiresAt` / `reviewAt`;
+- expired waiver is projected back to effective `pending` by the exact StyleVersion admission reader even if the historical ChangeCase had resolved;
+- the waiver receipt remains immutable historical evidence while admission is blocked again after expiry;
+- closing the last pending impact resolves the ChangeCase automatically;
+- API:
+  - `POST /v2/product-engineering/change-impacts/{impactId}/close`;
+  - `GET /v2/product-engineering/change-impacts/{impactId}/receipt`;
+- Product Master Engineering workspace exposes per-impact Resolve / Waive workflow and receipt visibility; UI explicitly says that waiver is not a corrected technical fact.
+
+### Evidence already green on current working tree
+
+- resolution/waiver domain + migration + route/OpenAPI tests: PASS;
+- expired-waiver admission contract: PASS;
+- Product Engineering PostgreSQL Golden Path including source revision -> impact receipts -> resolved case: PASS;
+- Product Engineering UI contract for resolve/waive workflow: PASS;
+- `validate:types`: PASS with no baseline increase;
+- `validate:architecture`: PASS;
+- `validate:ui`: PASS;
+- `validate:design-system`: PASS;
+- `validate:i18n`: PASS;
+- full `npm run verify`: PASS (`2479` tests discovered, `2402` pass, `77` skipped, `0` fail).
+
+### Remaining gate before merge
+
+- fresh PostgreSQL CI;
+- fresh full verification CI;
+- BuyerCatalog public-runtime acceptance;
+- merge only on exact-head GREEN.
+
+### Next strict slice after this merges
+
+**Verified Canonical Result References + Recompute Orchestration**
+
+A manually supplied `resultReference` is an auditable attestation but is not yet independently proven against every owning downstream authority. Next, resolve must bind to an authority-specific verifier/receipt:
+
+`impact -> expected correction authority -> canonical result/receipt lookup -> exact entity/version/hash verification -> resolution receipt`
+
+Then successful verified corrections can enqueue deterministic recomputation/re-review work rather than depending on mutable flags:
+
+`verified correction -> stale dependency set -> recompute jobs -> new canonical/readiness/commercial versions -> closure evidence`.
+
+No generic Product Engineering write path is permitted into downstream domains.

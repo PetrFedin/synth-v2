@@ -23,6 +23,8 @@ test('product engineering routes expose evidence-first workflow',async()=>{
     ['POST','/v2/product-engineering/sources/source-1/revise',{body:{replacementSourceId:'source-2',reason:'Corrected factory specification'}}],
     ['GET','/v2/product-engineering/change-cases/case-1',{}],
     ['POST','/v2/product-engineering/change-cases/case-1/acknowledge',{body:{expectedVersion:1,note:'Engineering review accepted'}}],
+    ['GET','/v2/product-engineering/change-impacts/impact-1/receipt',{}],
+    ['POST','/v2/product-engineering/change-impacts/impact-1/close',{body:{expectedVersion:1,disposition:'resolved',reason:'Canonical review completed',evidence:[{kind:'review',id:'review-1'}],resultReference:{authority:'cost',entityId:'order-1',version:9}}}],
     ['POST','/v2/product/styles/style-1/engineering/analyses',{body:{styleVersionId:'sv-1',purpose:'garment_interpretation',inputManifest:{assets:['m1']}}}],
     ['GET','/v2/product/styles/style-1/engineering',{query:{limit:'50'}}],
     ['GET','/v2/product-engineering/analyses/analysis-1',{}],
@@ -43,7 +45,7 @@ test('product engineering routes expose evidence-first workflow',async()=>{
   }
   assert.deepEqual(calls.map(row=>row[0]),[
     'registerSource','getSourceForActor','recordSourceScan','admitSource','addSourceFragment','completeSourceParsing',
-    'reviseSource','getChangeCaseForActor','acknowledgeChangeCase',
+    'reviseSource','getChangeCaseForActor','acknowledgeChangeCase','getChangeImpactReceiptForActor','closeChangeImpact',
     'requestAnalysis','getStyleWorkspaceForActor','getAnalysisWorkspaceForActor','startAnalysis',
     'recordFinding','createProposal','getProposalImpactForActor','getProposalApplicationReceiptForActor','applyProposal','createConflict','createDrawing',
   ]);
@@ -71,6 +73,8 @@ test('OpenAPI documents engineering review and every mutation carries idempotenc
     '/product-engineering/sources/{sourceId}/revise',
     '/product-engineering/change-cases/{changeCaseId}',
     '/product-engineering/change-cases/{changeCaseId}/acknowledge',
+    '/product-engineering/change-impacts/{impactId}/receipt',
+    '/product-engineering/change-impacts/{impactId}/close',
     '/product/styles/{styleId}/engineering/analyses',
     '/product/styles/{styleId}/engineering',
     '/product-engineering/analyses/{analysisRunId}',
@@ -97,6 +101,9 @@ test('OpenAPI documents engineering review and every mutation carries idempotenc
   assert.deepEqual(spec.components.schemas.ProductEngineeringProposalApply.required,['expectedProposalVersion','expectedCanonicalVersion']);
   assert.deepEqual(spec.components.schemas.ProductEngineeringSourceRevisionCreate.required,['replacementSourceId','reason']);
   assert.deepEqual(spec.components.schemas.ProductEngineeringChangeCaseAcknowledge.required,['expectedVersion','note']);
+  assert.deepEqual(spec.components.schemas.ProductEngineeringChangeImpactClose.required,['expectedVersion','disposition','reason','evidence']);
+  assert.deepEqual(spec.components.schemas.ProductEngineeringChangeImpactClose.properties.disposition.enum,['resolved','waived']);
+  assert.equal(spec.paths['/product-engineering/change-impacts/{impactId}/receipt'].get.operationId,'getProductEngineeringChangeImpactReceipt');
   assert.equal(spec.paths['/product-engineering/proposals/{proposalId}/apply'].post.operationId,'applyProductEngineeringProposal');
   assert.equal(spec.paths['/product-engineering/proposals/{proposalId}/impact'].get.operationId,'getProductEngineeringProposalImpact');
   assert.equal(spec.paths['/product-engineering/proposals/{proposalId}/impact'].get.parameters.some(parameter=>parameter.name==='Idempotency-Key'),false);

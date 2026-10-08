@@ -29,6 +29,7 @@ const SOURCE_FRAGMENT = bodyContract(['kind','locator','content','contentHash'])
 const SOURCE_PARSE_COMPLETE = bodyContract(['expectedVersion','parser','parserVersion','fragmentCount']);
 const SOURCE_REVISE = bodyContract(['replacementSourceId','reason']);
 const CHANGE_CASE_ACK = bodyContract(['expectedVersion','note']);
+const CHANGE_IMPACT_CLOSE = bodyContract(['expectedVersion','disposition','reason','evidence','resultReference','waiver']);
 const CONFLICT_SEVERITIES = ['info','warning','blocking'];
 const SOURCE_KINDS = ['product_media','style_reference','document','spreadsheet','external_uri','sample','manual_observation'];
 const INGEST_MODES = ['upload','connector','canonical_asset','manual'];
@@ -52,6 +53,8 @@ export function createProductEngineeringRoutes(options = {}) {
     mutate('POST', /^\/v2\/product-engineering\/sources\/([^/]+)\/revise$/, SOURCE_REVISE, validateSourceRevision, ({ commandId, actorId, params, body }) => service.reviseSource(commandId, actorId, params[0], body)),
     read('GET', /^\/v2\/product-engineering\/change-cases\/([^/]+)$/, [], ({ actorId, params }) => service.getChangeCaseForActor(actorId, params[0])),
     mutate('POST', /^\/v2\/product-engineering\/change-cases\/([^/]+)\/acknowledge$/, CHANGE_CASE_ACK, validateChangeCaseAck, ({ commandId, actorId, params, body }) => service.acknowledgeChangeCase(commandId, actorId, params[0], body)),
+    read('GET', /^\/v2\/product-engineering\/change-impacts\/([^/]+)\/receipt$/, [], ({ actorId, params }) => service.getChangeImpactReceiptForActor(actorId, params[0])),
+    mutate('POST', /^\/v2\/product-engineering\/change-impacts\/([^/]+)\/close$/, CHANGE_IMPACT_CLOSE, validateChangeImpactClose, ({ commandId, actorId, params, body }) => service.closeChangeImpact(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/product\/styles\/([^/]+)\/engineering\/analyses$/, ANALYSIS_CREATE, validateAnalysis, ({ commandId, actorId, params, body }) => service.requestAnalysis(commandId, actorId, params[0], body)),
     read('GET', /^\/v2\/product\/styles\/([^/]+)\/engineering$/, ['limit'], ({ actorId, params, query }) => service.getStyleWorkspaceForActor(actorId, params[0], { limit: query.limit })),
     read('GET', /^\/v2\/product-engineering\/analyses\/([^/]+)$/, [], ({ actorId, params }) => service.getAnalysisWorkspaceForActor(actorId, params[0])),
@@ -142,6 +145,19 @@ function validateSourceRevision(body) {
 function validateChangeCaseAck(body) {
   version(body.expectedVersion,'expectedVersion');
   nonEmpty(body.note,'note');
+}
+function validateChangeImpactClose(body) {
+  version(body.expectedVersion,'expectedVersion');
+  invariant(['resolved','waived'].includes(body.disposition),'HTTP_BODY_FIELD_INVALID','disposition is invalid',{field:'disposition',allowed:['resolved','waived']});
+  nonEmpty(body.reason,'reason');
+  invariant(Array.isArray(body.evidence) && body.evidence.length >= 1,'HTTP_BODY_FIELD_INVALID','evidence must contain at least one item',{field:'evidence'});
+  for (const [index,row] of body.evidence.entries()) object(row,`evidence[${index}]`);
+  if (body.resultReference !== undefined && body.resultReference !== null) object(body.resultReference,'resultReference');
+  if (body.waiver !== undefined && body.waiver !== null) object(body.waiver,'waiver');
+  if (body.disposition === 'waived') {
+    invariant(body.resultReference === undefined || body.resultReference === null,'HTTP_BODY_FIELD_INVALID','waived impact cannot claim resultReference',{field:'resultReference'});
+    invariant(body.waiver && typeof body.waiver.scope === 'string' && body.waiver.scope.trim(),'HTTP_BODY_FIELD_INVALID','waiver.scope is required',{field:'waiver.scope'});
+  }
 }
 
 function validateAnalysis(body) {

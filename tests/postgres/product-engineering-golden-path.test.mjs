@@ -325,6 +325,41 @@ test('AI Engineering Golden Path crosses real HTTP, PostgreSQL, durable jobs and
     assert.equal(acknowledgedCase.version, 2);
     assert.equal(acknowledgedCase.resolvedAt, null);
 
+    let finalClose = null;
+    for (const impact of revisionResult.impacts) {
+      const policyRequired = impact.evidenceStatus === 'policy_required';
+      finalClose = data(await requestJson(baseUrl, `/v2/product-engineering/change-impacts/${encodeURIComponent(impact.id)}/close`, {
+        method: 'POST',
+        token,
+        idempotencyKey: `ai-eng-${runId}-impact-${impact.id}`,
+        body: {
+          expectedVersion: impact.version,
+          disposition: policyRequired ? 'waived' : 'resolved',
+          reason: policyRequired
+            ? 'Acceptance suite records an explicit scoped exception; no canonical correction is claimed.'
+            : 'Acceptance reviewer revalidated the direct lineage after source revision.',
+          evidence: [{ kind: 'acceptance_review', impactId: impact.id, sourceRevisionId: revisionResult.revision.id }],
+          ...(policyRequired ? { waiver: { scope: `acceptance-only:${impact.area}` } } : {}),
+        },
+      }));
+      assert.match(finalClose.receipt.receiptHash, /^[0-9a-f]{64}$/);
+      assert.equal(finalClose.receipt.impactId, impact.id);
+      assert.equal(finalClose.impact.version, impact.version + 1);
+      assert.equal(finalClose.impact.status, policyRequired ? 'waived' : 'resolved');
+      if (policyRequired) assert.equal(finalClose.receipt.resultReference, null);
+    }
+    assert.equal(finalClose.changeCase.status, 'resolved');
+    assert.ok(finalClose.changeCase.resolvedBy);
+
+    const firstImpactReceipt = data(await requestJson(baseUrl, `/v2/product-engineering/change-impacts/${encodeURIComponent(revisionResult.impacts[0].id)}/receipt`, { token }));
+    assert.equal(firstImpactReceipt.impactId, revisionResult.impacts[0].id);
+    assert.match(firstImpactReceipt.receiptHash, /^[0-9a-f]{64}$/);
+
+    const closedWorkspace = data(await requestJson(baseUrl, `/v2/product-engineering/change-cases/${encodeURIComponent(revisionResult.changeCase.id)}`, { token }));
+    assert.equal(closedWorkspace.changeCase.status, 'resolved');
+    assert.equal(closedWorkspace.impacts.some((row) => row.status === 'pending'), false);
+    assert.equal(closedWorkspace.receipts.length, revisionResult.impacts.length);
+
     const persisted = await pool.query(
       `SELECT
          source.content_hash AS source_hash,

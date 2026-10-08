@@ -215,7 +215,7 @@ test('HTTP route forwards exact adjustment and allocation identities', () => {
 });
 
 test('authoritative OpenAPI exposes reconciliation contract without changing v2 version', () => {
-  assert.equal(wholesaleV2ExtendedOpenApi.info.version, '1.20.0');
+  assert.equal(wholesaleV2ExtendedOpenApi.info.version, '1.21.0');
   const path = wholesaleV2ExtendedOpenApi.paths['/orders/{orderId}/cost-close/adjustments/{postCloseAdjustmentId}/allocation-reconcile'];
   assert.ok(path?.post);
   assert.equal(path.post.operationId, 'reconcilePostCloseAllocation');

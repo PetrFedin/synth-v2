@@ -68,9 +68,19 @@ export function createPostgresProductEngineeringStore(options = {}) {
       );
       return result.rows[0] ? mapSourceBlob(result.rows[0]) : undefined;
     },
+    async getSourceImpactLineage(sourceId) {
+      return querySourceImpactLineage(pool, sourceId);
+    },
+    async getChangeCase(id) {
+      const [caseResult, impactResult] = await Promise.all([
+        pool.query('SELECT * FROM product_engineering_change_cases WHERE id = $1', [id]),
+        pool.query(`SELECT * FROM product_engineering_change_impacts WHERE change_case_id = $1 ORDER BY CASE severity WHEN 'blocking' THEN 0 WHEN 'high' THEN 1 ELSE 2 END, impact_kind, area, entity_id, required_action`, [id]),
+      ]);
+      return caseResult.rows[0] ? deepFreeze({ changeCase: mapChangeCase(caseResult.rows[0]), impacts: impactResult.rows.map(mapChangeImpact) }) : undefined;
+    },
     async getStyleWorkspace(styleId, { limit = 100 } = {}) {
       const bounded = normalizeLimit(limit);
-      const [analysisResult, proposalResult, conflictResult, drawingResult, sourceResult, graphResult] = await Promise.all([
+      const [analysisResult, proposalResult, conflictResult, drawingResult, sourceResult, graphResult, changeCaseResult] = await Promise.all([
         pool.query(
           `SELECT * FROM product_engineering_analysis_runs
             WHERE style_id = $1
@@ -158,6 +168,28 @@ export function createPostgresProductEngineeringStore(options = {}) {
             LIMIT 1`,
           [styleId],
         ),
+        pool.query(
+          `SELECT change_case.*,
+                  revision.superseded_source_id,
+                  revision.replacement_source_id,
+                  COALESCE(impact_counts.total,0)::integer AS impact_count,
+                  COALESCE(impact_counts.pending,0)::integer AS pending_impact_count,
+                  COALESCE(impact_counts.blocking,0)::integer AS blocking_impact_count
+             FROM product_engineering_change_cases change_case
+             JOIN product_engineering_source_revisions revision ON revision.id=change_case.source_revision_id
+             LEFT JOIN LATERAL (
+               SELECT count(*) AS total,
+                      count(*) FILTER (WHERE impact.status='pending') AS pending,
+                      count(*) FILTER (WHERE impact.severity='blocking' AND impact.status='pending') AS blocking
+                 FROM product_engineering_change_impacts impact
+                WHERE impact.change_case_id=change_case.id
+             ) impact_counts ON true
+            WHERE change_case.style_id=$1
+            ORDER BY CASE change_case.status WHEN 'open' THEN 0 WHEN 'acknowledged' THEN 1 ELSE 2 END,
+                     change_case.created_at DESC, change_case.id DESC
+            LIMIT $2`,
+          [styleId,bounded],
+        ),
       ]);
       return deepFreeze({
         analyses: analysisResult.rows.map(mapAnalysis),
@@ -166,6 +198,14 @@ export function createPostgresProductEngineeringStore(options = {}) {
         drawings: drawingResult.rows.map((row) => Object.freeze({ ...mapDrawing(row), objectCount: row.object_count })),
         sources: sourceResult.rows.map((row) => Object.freeze({ ...mapSource(row), fragmentCount: row.fragment_count })),
         garmentGraph: graphResult.rows[0] ? mapGarmentGraphWorkspace(graphResult.rows[0]) : null,
+        changeCases: changeCaseResult.rows.map((row)=>Object.freeze({
+          ...mapChangeCase(row),
+          supersededSourceId:row.superseded_source_id,
+          replacementSourceId:row.replacement_source_id,
+          impactCount:Number(row.impact_count),
+          pendingImpactCount:Number(row.pending_impact_count),
+          blockingImpactCount:Number(row.blocking_impact_count),
+        })),
       });
     },
     async getAnalysisWorkspace(analysisRunId) {
@@ -237,6 +277,19 @@ function transactionView(client) {
       const result = await client.query('SELECT * FROM product_engineering_sources WHERE id = $1 FOR UPDATE', [id]);
       return result.rows[0] ? mapSource(result.rows[0]) : undefined;
     },
+    getSourceImpactLineage: (sourceId) => querySourceImpactLineage(client, sourceId),
+    async getSourceRevisionBySuperseded(sourceId) {
+      const result = await client.query('SELECT * FROM product_engineering_source_revisions WHERE superseded_source_id = $1', [sourceId]);
+      return result.rows[0] ? mapSourceRevision(result.rows[0]) : undefined;
+    },
+    async getSourceRevisionByReplacement(sourceId) {
+      const result = await client.query('SELECT * FROM product_engineering_source_revisions WHERE replacement_source_id = $1', [sourceId]);
+      return result.rows[0] ? mapSourceRevision(result.rows[0]) : undefined;
+    },
+    async getChangeCaseForUpdate(id) {
+      const result = await client.query('SELECT * FROM product_engineering_change_cases WHERE id = $1 FOR UPDATE', [id]);
+      return result.rows[0] ? mapChangeCase(result.rows[0]) : undefined;
+    },
     async lockStyle(styleId) {
       const result = await client.query('SELECT id FROM product_styles WHERE id = $1 FOR UPDATE', [styleId]);
       invariant(result.rowCount === 1, 'PRODUCT_STYLE_NOT_FOUND', 'Product Style not found', { styleId });
@@ -250,6 +303,42 @@ function transactionView(client) {
         [styleId, viewType],
       );
       return result.rows[0] ? mapDrawing(result.rows[0]) : undefined;
+    },
+
+    async insertSourceRevision(value) {
+      await client.query(
+        `INSERT INTO product_engineering_source_revisions
+          (id,brand_id,style_id,superseded_source_id,replacement_source_id,superseded_content_hash,replacement_content_hash,reason,created_at,created_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        [value.id,value.brandId,value.styleId,value.supersededSourceId,value.replacementSourceId,value.supersededContentHash,value.replacementContentHash,value.reason,value.createdAt,value.createdBy],
+      );
+    },
+    async insertChangeCase(value) {
+      await client.query(
+        `INSERT INTO product_engineering_change_cases
+          (id,source_revision_id,brand_id,style_id,status,impact_snapshot,impact_hash,created_at,created_by,acknowledged_at,acknowledged_by,acknowledgement_note,resolved_at,resolved_by,version)
+         VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+        [value.id,value.sourceRevisionId,value.brandId,value.styleId,value.status,JSON.stringify(value.impactSnapshot),value.impactHash,value.createdAt,value.createdBy,value.acknowledgedAt,value.acknowledgedBy,value.acknowledgementNote,value.resolvedAt,value.resolvedBy,value.version],
+      );
+    },
+    async insertChangeImpacts(changeCaseId, values) {
+      for (const value of values) {
+        await client.query(
+          `INSERT INTO product_engineering_change_impacts
+            (id,change_case_id,impact_kind,entity_id,entity_version,area,required_action,severity,evidence_status,basis,status,created_at,created_by)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,'pending',$11,$12)`,
+          [value.id,changeCaseId,value.impactKind,value.entityId,value.entityVersion,value.area,value.requiredAction,value.severity,value.evidenceStatus,JSON.stringify(value.basis),value.createdAt,value.createdBy],
+        );
+      }
+    },
+    async updateChangeCase(value, expectedVersion) {
+      const result = await client.query(
+        `UPDATE product_engineering_change_cases
+            SET status=$2,acknowledged_at=$3,acknowledged_by=$4,acknowledgement_note=$5,resolved_at=$6,resolved_by=$7,version=$8
+          WHERE id=$1 AND version=$9`,
+        [value.id,value.status,value.acknowledgedAt,value.acknowledgedBy,value.acknowledgementNote,value.resolvedAt,value.resolvedBy,value.version,expectedVersion],
+      );
+      invariant(result.rowCount===1,'PRODUCT_ENGINEERING_CHANGE_CASE_CONCURRENCY_CONFLICT','Engineering change case changed concurrently',{changeCaseId:value.id,expectedVersion});
     },
 
     async insertSource(value) {
@@ -561,6 +650,77 @@ function transactionView(client) {
       );
       invariant(result.rowCount === 1, 'TECHNICAL_DRAWING_CONCURRENCY_CONFLICT', 'Technical drawing changed concurrently', { drawingId: value.id });
     },
+  });
+}
+
+async function querySourceImpactLineage(queryable, sourceId) {
+  const [analysisResult,evidenceResult,findingResult,proposalResult,nodeResult,flatResult,receiptResult] = await Promise.all([
+    queryable.query(`SELECT id,version FROM product_engineering_analysis_runs WHERE COALESCE(input_manifest->'sourceIds','[]'::jsonb) ? $1 ORDER BY id`, [sourceId]),
+    queryable.query(`SELECT id,finding_id FROM product_engineering_evidence WHERE source_id=$1 ORDER BY id`, [sourceId]),
+    queryable.query(`SELECT DISTINCT finding.id,finding.content_hash,finding.superseded_by_id
+      FROM product_engineering_findings finding
+      JOIN product_engineering_evidence evidence ON evidence.finding_id=finding.id
+      WHERE evidence.source_id=$1 ORDER BY finding.id`, [sourceId]),
+    queryable.query(`SELECT DISTINCT proposal.id,proposal.version,proposal.status,proposal.target_authority,proposal.target_field,proposal.target_entity_id
+      FROM product_engineering_proposals proposal
+      LEFT JOIN product_engineering_findings finding ON finding.id=proposal.finding_id
+      LEFT JOIN product_engineering_evidence evidence ON evidence.finding_id=finding.id
+      LEFT JOIN product_engineering_analysis_runs analysis ON analysis.id=proposal.analysis_run_id
+      WHERE evidence.source_id=$1 OR COALESCE(analysis.input_manifest->'sourceIds','[]'::jsonb) ? $1
+      ORDER BY proposal.id`, [sourceId]),
+    queryable.query(`SELECT DISTINCT node.id,node.graph_id,node.node_type,node.finding_id
+      FROM product_engineering_garment_nodes node
+      JOIN product_engineering_garment_graphs graph ON graph.id=node.graph_id
+      LEFT JOIN product_engineering_findings finding ON finding.id=node.finding_id
+      LEFT JOIN product_engineering_evidence evidence ON evidence.finding_id=finding.id
+      LEFT JOIN product_engineering_analysis_runs analysis ON analysis.id=graph.analysis_run_id
+      WHERE evidence.source_id=$1 OR COALESCE(analysis.input_manifest->'sourceIds','[]'::jsonb) ? $1
+      ORDER BY node.id`, [sourceId]),
+    queryable.query(`SELECT DISTINCT object.id,object.drawing_id,drawing.version_no,object.object_type,object.garment_node_id
+      FROM technical_drawing_objects object
+      JOIN technical_drawing_versions drawing ON drawing.id=object.drawing_id
+      JOIN product_engineering_garment_nodes node ON node.id=object.garment_node_id
+      JOIN product_engineering_garment_graphs graph ON graph.id=node.graph_id
+      LEFT JOIN product_engineering_findings finding ON finding.id=node.finding_id
+      LEFT JOIN product_engineering_evidence evidence ON evidence.finding_id=finding.id
+      LEFT JOIN product_engineering_analysis_runs analysis ON analysis.id=graph.analysis_run_id
+      WHERE evidence.source_id=$1 OR COALESCE(analysis.input_manifest->'sourceIds','[]'::jsonb) ? $1
+      ORDER BY object.id`, [sourceId]),
+    queryable.query(`SELECT id,proposal_id,target_authority,target_entity_id,target_action,resulting_canonical_version,receipt_hash
+      FROM product_engineering_application_receipts
+      WHERE COALESCE(lineage->'sourceIds','[]'::jsonb) ? $1
+      ORDER BY id`, [sourceId]),
+  ]);
+  return deepFreeze({
+    analyses: analysisResult.rows.map(row=>Object.freeze({id:row.id,version:row.version})),
+    evidence: evidenceResult.rows.map(row=>Object.freeze({id:row.id,findingId:row.finding_id})),
+    findings: findingResult.rows.map(row=>Object.freeze({id:row.id,contentHash:row.content_hash,supersededById:row.superseded_by_id})),
+    proposals: proposalResult.rows.map(row=>Object.freeze({id:row.id,version:row.version,status:row.status,targetAuthority:row.target_authority,targetField:row.target_field,targetEntityId:row.target_entity_id})),
+    garmentNodes: nodeResult.rows.map(row=>Object.freeze({id:row.id,graphId:row.graph_id,nodeType:row.node_type,findingId:row.finding_id})),
+    technicalFlats: flatResult.rows.map(row=>Object.freeze({id:row.id,drawingId:row.drawing_id,drawingVersionNo:row.version_no,objectType:row.object_type,garmentNodeId:row.garment_node_id})),
+    receipts: receiptResult.rows.map(row=>Object.freeze({id:row.id,proposalId:row.proposal_id,targetAuthority:row.target_authority,targetEntityId:row.target_entity_id,targetAction:row.target_action,resultingCanonicalVersion:row.resulting_canonical_version,receiptHash:row.receipt_hash})),
+  });
+}
+
+function mapSourceRevision(row) {
+  return Object.freeze({
+    id:row.id,brandId:row.brand_id,styleId:row.style_id,supersededSourceId:row.superseded_source_id,replacementSourceId:row.replacement_source_id,
+    supersededContentHash:row.superseded_content_hash,replacementContentHash:row.replacement_content_hash,reason:row.reason,createdAt:iso(row.created_at),createdBy:row.created_by,
+  });
+}
+function mapChangeCase(row) {
+  return Object.freeze({
+    id:row.id,sourceRevisionId:row.source_revision_id,brandId:row.brand_id,styleId:row.style_id,status:row.status,
+    impactSnapshot:deepFreeze(row.impact_snapshot),impactHash:row.impact_hash,createdAt:iso(row.created_at),createdBy:row.created_by,
+    acknowledgedAt:iso(row.acknowledged_at),acknowledgedBy:row.acknowledged_by,acknowledgementNote:row.acknowledgement_note,
+    resolvedAt:iso(row.resolved_at),resolvedBy:row.resolved_by,version:row.version,
+  });
+}
+function mapChangeImpact(row) {
+  return Object.freeze({
+    id:row.id,changeCaseId:row.change_case_id,impactKind:row.impact_kind,entityId:row.entity_id,entityVersion:row.entity_version,
+    area:row.area,requiredAction:row.required_action,severity:row.severity,evidenceStatus:row.evidence_status,basis:deepFreeze(row.basis),
+    status:row.status,createdAt:iso(row.created_at),createdBy:row.created_by,
   });
 }
 

@@ -1496,6 +1496,24 @@ Direct context currently covers Measurement Charts, BOMs, Samples, Tech Packs, S
 
 An AnalysisRun without an exact StyleVersion still receives policy-level impact with `contextStatus = unavailable`; the system does not invent repository facts.
 
+#### Source Revision Change Impact Engine — IMPLEMENTED/PARTIAL
+
+A governed source is never edited in place. When a factory, supplier or internal team issues corrected evidence, the replacement is admitted and parsed as a new `ProductEngineeringSource`; `POST /v2/product-engineering/sources/{sourceId}/revise` then records an immutable `ProductEngineeringSourceRevision` between the exact old/new source ids and SHA-256 byte identities. Both sources remain addressable for historical audit.
+
+The revision transaction resolves exact repository lineage from the superseded source through AnalysisRun input manifests, Evidence, Findings, Proposals, reviewed Garment Graph nodes, Technical Flat objects and Canonical Application Receipts. The resulting `ProductEngineeringChangeCase` stores a deterministic impact snapshot and SHA-256. Individual `ProductEngineeringChangeImpact` rows separate three meanings:
+
+- `observed`: an explicit repository relationship was read (for example Evidence -> Source, Technical Flat -> Garment Node, or Application Receipt -> canonical target/version);
+- `derived`: a bounded deterministic inference from observed repository state;
+- `policy_required`: a follow-up rule from the governed Product Engineering impact policy. It is **not** evidence that a Cost, Production or Commercial row currently exists.
+
+Canonical targets are propagated only from immutable Application Receipts, so the impact engine records the exact resulting canonical version that was originally justified by the superseded source. Downstream rules reuse `PRODUCT_ENGINEERING_IMPACT_POLICY`; the engine therefore does not maintain a second contradictory dependency-policy table.
+
+The first workflow slice is `open -> acknowledged`; acknowledgement requires optimistic version control and an explicit human note. `GET /v2/product-engineering/change-cases/{changeCaseId}` exposes the evidence-backed impact workspace. Acknowledgement means the re-review workload is owned; it does not resolve impacts and does not mutate downstream canonical domains.
+
+The additive public API surface advances the authoritative composed v2 contract to OpenAPI `1.21.0`. Product Master exposes governed source replacement, change-case impact review and acknowledgement inside the same responsive Engineering workspace rather than introducing a parallel application.
+
+**Not yet claimed:** automatic enforcement inside Production/Cost/Commercial/Sourcing authorities, per-impact resolution receipts, and automatic canonical recomputation. Those are subsequent slices. Until their owning domains enforce a blocker, a `policy_required` row is an auditable requirement, not a statement that execution was blocked.
+
 #### Product Master Review → Impact → Apply UI — IMPLEMENTED/PARTIAL
 
 The Product Master Engineering tab mirrors the authority states rather than collapsing them into one action:
@@ -1530,6 +1548,9 @@ The Engineering forms use the platform's actual `openForm(title, fields, submitA
 | ProductEngineeringCommand | global command id | immutable command result | scope `product-engineering`, fingerprint, actor, result, completion time | idempotency/replay |
 | ProductEngineeringApplicationIntent | exact accepted Proposal + canonical target | immutable, one per proposal/application | application/canonical command ids, exact expected proposal/canonical versions, canonical precondition snapshot/hash, deterministic diff, reverse lineage, intent SHA-256 | crash-safe canonical apply, audit, receipt generation |
 | ProductEngineeringApplicationReceipt | exact ApplicationIntent + Proposal | immutable, one per applied proposal | intent hash, canonical result snapshot/hash, resulting version, deterministic diff, reverse lineage, receipt SHA-256, appliedAt | independent application verification, audit, reverse provenance |
+| ProductEngineeringSourceRevision | brand + style + exact old/new Source | immutable, one outgoing/incoming use per source in first slice | old/new source ids, old/new SHA-256, reason, actor/time | deterministic stale-lineage trigger without overwriting historical evidence |
+| ProductEngineeringChangeCase | exact SourceRevision | open -> acknowledged -> resolved; optimistic version | immutable impact snapshot/hash, acknowledgement/resolution actors/times | engineering re-review workload and future blocking/recompute orchestration |
+| ProductEngineeringChangeImpact | exact ChangeCase + entity/action | append-only impact evidence; workflow status pending/acknowledged/resolved | impact kind, exact entity/version where known, area/action/severity, observed/derived/policy_required basis | Product Master change review; future domain blockers and resolution receipts |
 | ProductEngineeringSource | brand + style | pending -> admitted/rejected/quarantined; scan + parse state versioned | ingest mode, MIME/name/size, server SHA-256, storage ref, security/admission/parser metadata | analysis input/evidence |
 | ProductEngineeringSourceBlob | exact Source | immutable MVP binary payload | source/style/brand, MIME, exact byte count, SHA-256, durable bytes | scanner/parser; replaceable by object-storage adapter without changing source identity |
 | ProductEngineeringSourceFragment | exact Source | append-only | typed page/sheet/cell/image/text/metadata locator + content digest | finding/evidence provenance |
@@ -1672,6 +1693,7 @@ At minimum:
 
 | Date | PR / commit | Change | Master sections affected | Evidence/status |
 |---|---|---|---|---|
+| 2026-10-08 | branch `feat/product-engineering-change-impact` | Add governed source revision and first version-aware Change Impact Engine: immutable old/new source hashes, deterministic lineage propagation across analysis/evidence/finding/proposal/garment graph/technical flat/canonical receipts, explicit observed vs policy-required semantics, open/acknowledged workflow and Product Master review UI. | 19.1 | IMPLEMENTED/PARTIAL; downstream domain blocking/recompute and per-impact closure receipts remain next slices; fresh PR CI required before DONE |
 | 2026-10-08 | PR #249 `feat/canonical-application-authority` | Promote accepted-proposal apply into Canonical Application Authority: exact canonical precondition snapshot/version, deterministic diff, immutable intent, distinct application/canonical command ids, crash-safe retry, immutable receipt with SHA-256 binding and reverse model/evidence/source lineage, receipt API/OpenAPI and PostgreSQL E2E proof. | 19.1 | IMPLEMENTED pending fresh PR CI/merge; no generic AI write path; first allowlisted canonical targets remain Measurement/Material/Tech Pack/Operation Sequence |
 | 2026-10-06 | PR #242 `feat/ai-product-engineering-authority` | Add evidence-first AI Product Engineering authority plus executable Engineering Golden Path: controlled binary upload/server SHA-256, durable scan/parse/analysis jobs, structural PDF/XLSX/CSV/SVG/image parsing, exact qualification/policy routing, schema-bound + source-grounded model output, Findings/Evidence/Proposals/Conflicts, reviewed Garment Graph, semantic SVG authority, RBAC/OpenAPI/Product Master/Awaiting Action, and first governed accepted-proposal → canonical-command → appliedReference slice for Measurement/Material/Tech Pack/Operation Sequence. | 10, 12, 13, 17, 19.1, 20 | IMPLEMENTED/PARTIAL in PR; no direct AI canonical writes; scanner is integrity-only, PostgreSQL blob storage is MVP, live external qualification evidence, broader apply coverage, direct impact evidence/high-risk blocking policy and intended-live acceptance remain open; repository + PostgreSQL CI still required before DONE |
 | 2026-08 | #106 | Non-destructive live Campaign → Collection acceptance | 7.2, 15 | merged; public HTTP + PostgreSQL acceptance |

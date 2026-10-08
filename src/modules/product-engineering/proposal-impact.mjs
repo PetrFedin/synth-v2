@@ -1,6 +1,6 @@
 import { invariant } from '../../core/errors.mjs';
 
-const POLICY=Object.freeze({
+export const PRODUCT_ENGINEERING_IMPACT_POLICY=Object.freeze({
   measurement:Object.freeze({
     chart:Object.freeze([
       impact('measurements','canonical_change','high'),
@@ -43,7 +43,7 @@ const POLICY=Object.freeze({
 /** @param {{proposal?: any, context?: any}} [options] */
 export function evaluateEngineeringProposalImpact({proposal,context=null}={}) {
   invariant(proposal?.id&&proposal?.targetAuthority&&proposal?.targetField,'PRODUCT_ENGINEERING_IMPACT_PROPOSAL_REQUIRED','Engineering proposal is required for impact evaluation');
-  const rules=POLICY[proposal.targetAuthority]?.[proposal.targetField]??[];
+  const rules=PRODUCT_ENGINEERING_IMPACT_POLICY[proposal.targetAuthority]?.[proposal.targetField]??[];
   const facts=summarizeContext(context);
   return deepFreeze({
     proposalId:proposal.id,

@@ -57,6 +57,31 @@ function schemas() {
       type:'object', additionalProperties:false, required:['expectedVersion','parser','parserVersion','fragmentCount'],
       properties:{ expectedVersion:{type:'integer',minimum:1}, parser:{type:'string'}, parserVersion:{type:'string'}, fragmentCount:{type:'integer',minimum:0} },
     },
+    ProductEngineeringSourceRevisionCreate: {
+      type:'object', additionalProperties:false, required:['replacementSourceId','reason'],
+      properties:{ replacementSourceId:id, reason:{type:'string',minLength:1,maxLength:2000} },
+    },
+    ProductEngineeringChangeCaseAcknowledge: {
+      type:'object', additionalProperties:false, required:['expectedVersion','note'],
+      properties:{ expectedVersion:{type:'integer',minimum:1}, note:{type:'string',minLength:1,maxLength:4000} },
+    },
+    ProductEngineeringChangeImpact: {
+      type:'object', additionalProperties:false,
+      required:['id','changeCaseId','impactKind','entityId','entityVersion','area','requiredAction','severity','evidenceStatus','basis','status','createdAt','createdBy'],
+      properties:{
+        id,changeCaseId:id,impactKind:{type:'string',enum:['analysis','evidence','finding','proposal','garment_node','technical_flat','canonical_target','downstream_policy']},
+        entityId:id,entityVersion:{oneOf:[{type:'string'},{type:'null'}]},area:{type:'string'},requiredAction:{type:'string'},
+        severity:{type:'string',enum:['medium','high','blocking']},evidenceStatus:{type:'string',enum:['observed','derived','policy_required']},
+        basis:jsonObject,status:{type:'string',enum:['pending','acknowledged','resolved']},createdAt:dateTime,createdBy:id,
+      },
+    },
+    ProductEngineeringChangeCaseWorkspace: {
+      type:'object', additionalProperties:false, required:['changeCase','impacts'],
+      properties:{
+        changeCase:{type:'object',additionalProperties:true},
+        impacts:{type:'array',items:{$ref:'#/components/schemas/ProductEngineeringChangeImpact'}},
+      },
+    },
     ProductEngineeringSourceWorkspace: {
       type:'object', additionalProperties:false, required:['source','fragments'],
       properties:{ source:{type:'object',additionalProperties:true}, fragments:{type:'array',items:{type:'object',additionalProperties:true}} },
@@ -226,7 +251,7 @@ function schemas() {
       ],
     },
     ProductEngineeringStyleWorkspace: {
-      type: 'object', additionalProperties: false, required: ['analyses','proposals','conflicts','drawings','sources','garmentGraph'],
+      type: 'object', additionalProperties: false, required: ['analyses','proposals','conflicts','drawings','sources','garmentGraph','changeCases'],
       properties: {
         analyses: { type: 'array', items: { $ref: '#/components/schemas/ProductEngineeringAnalysis' } },
         proposals: { type: 'array', items: { type: 'object', additionalProperties: true } },
@@ -234,6 +259,7 @@ function schemas() {
         drawings: { type: 'array', items: { type: 'object', additionalProperties: true } },
         sources: { type: 'array', items: { type: 'object', additionalProperties: true } },
         garmentGraph: { $ref: '#/components/schemas/ProductEngineeringGarmentGraph' },
+        changeCases: { type: 'array', items: { type: 'object', additionalProperties: true } },
       },
     },
     ProductEngineeringAnalysisWorkspace: {
@@ -293,6 +319,9 @@ function paths() {
     '/product-engineering/sources/{sourceId}/reject': { post: mutation('rejectProductEngineeringSource', ['sourceId'], '#/components/schemas/ProductEngineeringSourceReject') },
     '/product-engineering/sources/{sourceId}/fragments': { post: mutation('addProductEngineeringSourceFragment', ['sourceId'], '#/components/schemas/ProductEngineeringSourceFragmentCreate') },
     '/product-engineering/sources/{sourceId}/parse-complete': { post: mutation('completeProductEngineeringSourceParsing', ['sourceId'], '#/components/schemas/ProductEngineeringSourceParseComplete') },
+    '/product-engineering/sources/{sourceId}/revise': { post: mutation('reviseProductEngineeringSource', ['sourceId'], '#/components/schemas/ProductEngineeringSourceRevisionCreate') },
+    '/product-engineering/change-cases/{changeCaseId}': { get: read('getProductEngineeringChangeCase', ['changeCaseId'], '#/components/schemas/ProductEngineeringChangeCaseWorkspace') },
+    '/product-engineering/change-cases/{changeCaseId}/acknowledge': { post: mutation('acknowledgeProductEngineeringChangeCase', ['changeCaseId'], '#/components/schemas/ProductEngineeringChangeCaseAcknowledge') },
     '/product/styles/{styleId}/engineering/analyses': { post: mutation('requestProductEngineeringAnalysis', ['styleId'], '#/components/schemas/ProductEngineeringAnalysisCreate') },
     '/product/styles/{styleId}/engineering': { get: read('getProductEngineeringStyleWorkspace', ['styleId'], '#/components/schemas/ProductEngineeringStyleWorkspace', [{ name: 'limit', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 200 } }]) },
     '/product-engineering/analyses/{analysisRunId}': { get: read('getProductEngineeringAnalysisWorkspace', ['analysisRunId'], '#/components/schemas/ProductEngineeringAnalysisWorkspace') },

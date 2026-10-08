@@ -29,6 +29,12 @@ import {
 import { assertTechnicalFlatApprovable } from '../modules/product-engineering/technical-flat.mjs';
 import { inspectEngineeringUpload, postgresBlobStorageRef } from '../modules/product-engineering/source-upload.mjs';
 import { createCanonicalApplicationIntent } from '../modules/product-engineering/application-authority.mjs';
+import {
+  acknowledgeEngineeringChangeCase,
+  createEngineeringChangeCase,
+  createEngineeringSourceRevision,
+  evaluateSourceRevisionImpact,
+} from '../modules/product-engineering/change-impact.mjs';
 
 /**
  * @param {{
@@ -271,6 +277,69 @@ export function createProductEngineeringService(options = {}) {
       const source = required(await store.getSource(sourceId), 'ENGINEERING_SOURCE_NOT_FOUND', { sourceId });
       await authorizeBrand(actorId, source.brandId, CAPABILITIES.PRODUCT_ENGINEERING_READ);
       return deepFreeze({ source, fragments: await store.getSourceFragments(sourceId) });
+    },
+
+    async reviseSource(commandId, actorId, sourceId, input) {
+      requireObject(input, 'PRODUCT_ENGINEERING_SOURCE_REVISION_INPUT_INVALID');
+      const current = required(await store.getSource(sourceId), 'ENGINEERING_SOURCE_NOT_FOUND', { sourceId });
+      const replacement = required(await store.getSource(input.replacementSourceId), 'ENGINEERING_SOURCE_NOT_FOUND', { sourceId: input.replacementSourceId });
+      await authorizeBrand(actorId, current.brandId, CAPABILITIES.PRODUCT_ENGINEERING_MANAGE);
+      const fingerprint = `reviseEngineeringSource:${actorId}:${sourceId}:${canonicalJson(input)}`;
+      return runCommand(commandId, actorId, fingerprint, async (tx) => {
+        const superseded = required(await tx.getSourceForUpdate(sourceId), 'ENGINEERING_SOURCE_NOT_FOUND', { sourceId });
+        const exactReplacement = required(await tx.getSourceForUpdate(input.replacementSourceId), 'ENGINEERING_SOURCE_NOT_FOUND', { sourceId: input.replacementSourceId });
+        invariant(!(await tx.getSourceRevisionBySuperseded(sourceId)), 'PRODUCT_ENGINEERING_SOURCE_ALREADY_REVISED', 'Engineering source already has a replacement', { sourceId });
+        invariant(!(await tx.getSourceRevisionByReplacement(input.replacementSourceId)), 'PRODUCT_ENGINEERING_SOURCE_REPLACEMENT_ALREADY_USED', 'Replacement source is already part of another revision', { replacementSourceId: input.replacementSourceId });
+        invariant(!(await tx.getSourceRevisionBySuperseded(input.replacementSourceId)), 'PRODUCT_ENGINEERING_SOURCE_REPLACEMENT_STALE', 'A source that is already superseded cannot become the replacement', { replacementSourceId: input.replacementSourceId });
+        const revision = createEngineeringSourceRevision({
+          id: nextId('engineering-source-revision'),
+          superseded,
+          replacement: exactReplacement,
+          reason: input.reason,
+          createdAt: now(clock),
+          createdBy: actorId,
+        });
+        const lineage = await tx.getSourceImpactLineage(sourceId);
+        const evaluation = evaluateSourceRevisionImpact({ revision, lineage });
+        const changeCase = createEngineeringChangeCase({
+          id: nextId('engineering-change-case'),
+          revision,
+          evaluation,
+          createdAt: now(clock),
+          createdBy: actorId,
+        });
+        const impacts = evaluation.impacts.map((impact) => Object.freeze({
+          id: nextId('engineering-change-impact'),
+          ...impact,
+          createdAt: changeCase.createdAt,
+          createdBy: actorId,
+        }));
+        await tx.insertSourceRevision(revision);
+        await tx.insertChangeCase(changeCase);
+        await tx.insertChangeImpacts(changeCase.id, impacts);
+        return deepFreeze({ revision, changeCase, impacts });
+      });
+    },
+
+    async getChangeCaseForActor(actorId, changeCaseId) {
+      const bundle = required(await store.getChangeCase(changeCaseId), 'PRODUCT_ENGINEERING_CHANGE_CASE_NOT_FOUND', { changeCaseId });
+      await authorizeBrand(actorId, bundle.changeCase.brandId, CAPABILITIES.PRODUCT_ENGINEERING_READ);
+      return bundle;
+    },
+
+    async acknowledgeChangeCase(commandId, actorId, changeCaseId, input) {
+      requireObject(input, 'PRODUCT_ENGINEERING_CHANGE_CASE_ACK_INVALID');
+      const bundle = required(await store.getChangeCase(changeCaseId), 'PRODUCT_ENGINEERING_CHANGE_CASE_NOT_FOUND', { changeCaseId });
+      await authorizeBrand(actorId, bundle.changeCase.brandId, CAPABILITIES.PRODUCT_ENGINEERING_MANAGE);
+      const fingerprint = `acknowledgeEngineeringChange:${actorId}:${changeCaseId}:${canonicalJson(input)}`;
+      return runCommand(commandId, actorId, fingerprint, async (tx) => {
+        const exact = required(await tx.getChangeCaseForUpdate(changeCaseId), 'PRODUCT_ENGINEERING_CHANGE_CASE_NOT_FOUND', { changeCaseId });
+        invariant(Number.isInteger(input.expectedVersion) && input.expectedVersion >= 1, 'PRODUCT_ENGINEERING_CHANGE_CASE_EXPECTED_VERSION_INVALID', 'Expected change-case version must be a positive integer');
+        invariant(exact.version === input.expectedVersion, 'PRODUCT_ENGINEERING_CHANGE_CASE_CONCURRENCY_CONFLICT', 'Engineering change case changed concurrently', { changeCaseId, expectedVersion: input.expectedVersion, actualVersion: exact.version });
+        const next = acknowledgeEngineeringChangeCase(exact, { note: input.note, acknowledgedAt: now(clock), acknowledgedBy: actorId });
+        await tx.updateChangeCase(next, exact.version);
+        return next;
+      });
     },
 
     async requestAnalysis(commandId, actorId, styleId, input) {

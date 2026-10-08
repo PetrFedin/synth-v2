@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createCommercialPublicationService } from '../src/application/commercial-publication-service.mjs';
 
-function fixture({ assigned = false } = {}) {
+function fixture({ assigned = false, changeImpactAdmission = null } = {}) {
   const collection = Object.freeze({
     id: 'collection-1',
     campaignId: 'campaign-1',
@@ -118,6 +118,7 @@ function fixture({ assigned = false } = {}) {
     commercialStore,
     wholesaleStore,
     commercialProjectionReader,
+    changeImpactAdmission,
     clock: () => '2026-08-26T14:30:00.000Z',
     nextId: (prefix) => `${prefix}_${++id}`,
   });
@@ -136,6 +137,26 @@ test('commercial publication is blocked when its exact Style Version is absent f
     (error) => error.code === 'COMMERCIAL_PUBLICATION_STYLE_VERSION_NOT_ASSIGNED',
   );
 
+  assert.equal(context.publications.length, 0);
+  assert.equal(context.events.length, 0);
+});
+
+test('commercial publication is blocked by unresolved Product Engineering change admission before any write', async () => {
+  const calls = [];
+  const context = fixture({ assigned: true, changeImpactAdmission: { async assertAdmitted(styleVersionId, operation) {
+    calls.push({ styleVersionId, operation });
+    throw Object.assign(new Error('blocked'), { code: 'PRODUCT_ENGINEERING_CHANGE_ADMISSION_BLOCKED' });
+  } } });
+
+  await assert.rejects(
+    context.service.publishCommercialPublication('cmd-publication-change-blocked', 'brand-owner', {
+      collectionId: context.collection.id,
+      commercialProjectionId: context.projection.id,
+    }),
+    (error) => error.code === 'PRODUCT_ENGINEERING_CHANGE_ADMISSION_BLOCKED',
+  );
+
+  assert.deepEqual(calls, [{ styleVersionId: 'style-version-1', operation: 'commercial_publication' }]);
   assert.equal(context.publications.length, 0);
   assert.equal(context.events.length, 0);
 });

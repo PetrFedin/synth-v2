@@ -11,12 +11,13 @@ const order = Object.freeze({
 });
 const orderCommit = Object.freeze({
   id: 'ORDER-COMMIT-1', orderId: 'ORDER-1', orderVersion: 4, status: 'committed', brandId: 'BRAND-1', shopId: 'SHOP-1', currency: 'EUR', totalAmount: 1000,
+  styleVersionId: 'STYLE-VERSION-1',
   commercialPublicationId: 'PUB-1', priceListVersionId: 'PRICE-1', buyerCatalogVersionId: 'BUYER-CAT-1',
   lines: Object.freeze([Object.freeze({ sku: 'SKU-1', quantity: 10, unitPrice: 100 })]),
 });
 const membership = Object.freeze({ id: 'MEM-1', organisationId: 'BRAND-1', organisationType: 'brand', userId: actorId, role: 'owner', status: 'active', createdAt: at });
 
-function createHarness({ committed = orderCommit } = {}) {
+function createHarness({ committed = orderCommit, changeImpactAdmission = null } = {}) {
   const state = {
     commands: new Map(), outbox: [], supply: [], fxRates: [], costs: [], landed: [], margins: [], readiness: [], closes: [], adjustments: [],
     orderCommitReads: 0,
@@ -53,6 +54,7 @@ function createHarness({ committed = orderCommit } = {}) {
   let currentTime = at;
   const service = createOrderEconomicsService({
     economicsStore: { transaction: (work) => work(tx) },
+    changeImpactAdmission,
     clock: () => currentTime,
     nextId: (prefix) => `${prefix}-${++sequence}`,
   });
@@ -207,7 +209,12 @@ test('landed cost ignores legacy cost rows that are not pinned to the current or
 });
 
 test('cost close requires READY_TO_CLOSE and atomically chains late cost re-actualizations', async () => {
-  const { service, state, setClock } = createHarness();
+  const admissionCalls = [];
+  let costCloseBlocked = true;
+  const { service, state, setClock } = createHarness({ changeImpactAdmission: { async assertAdmitted(styleVersionId, operation) {
+    admissionCalls.push({ styleVersionId, operation });
+    if (costCloseBlocked && operation === 'cost_close') throw Object.assign(new Error('blocked'), { code: 'PRODUCT_ENGINEERING_CHANGE_ADMISSION_BLOCKED' });
+  } } });
   const supply = await service.createSupplyCommitment('CMD-CLOSE-SUPPLY', actorId, order.id, {
     allocations: [{ sku: 'SKU-1', quantity: 10, sourceType: 'production', sourceRef: 'PO-CLOSE' }],
   });
@@ -227,6 +234,16 @@ test('cost close requires READY_TO_CLOSE and atomically chains late cost re-actu
   assert.deepEqual(readiness.blockingReasons, []);
 
   setClock('2026-08-09T01:00:00.000Z');
+  await assert.rejects(
+    service.closeCost('CMD-CLOSE-BLOCKED', actorId, order.id, {
+      landedCostSnapshotId: landed.id,
+      marginActualizationSnapshotId: margin.id,
+      costCloseReadinessSnapshotId: readiness.id,
+    }),
+    (error) => error?.code === 'PRODUCT_ENGINEERING_CHANGE_ADMISSION_BLOCKED',
+  );
+  assert.equal(state.closes.length, 0);
+  costCloseBlocked = false;
   const close = await service.closeCost('CMD-CLOSE', actorId, order.id, {
     landedCostSnapshotId: landed.id,
     marginActualizationSnapshotId: margin.id,
@@ -237,6 +254,10 @@ test('cost close requires READY_TO_CLOSE and atomically chains late cost re-actu
   assert.equal(close.totalLandedCost, 600);
   assert.equal(close.contributionMarginAmount, 400);
   assert.equal(state.closes.length, 1);
+  assert.deepEqual(admissionCalls, [
+    { styleVersionId: 'STYLE-VERSION-1', operation: 'cost_close' },
+    { styleVersionId: 'STYLE-VERSION-1', operation: 'cost_close' },
+  ]);
   await assert.rejects(
     () => service.recordActualCost('CMD-LATE-WRONG-PATH', actorId, order.id, {
       supplyCommitmentSnapshotId: supply.id,

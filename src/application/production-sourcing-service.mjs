@@ -19,10 +19,12 @@ const INPUT_FIELDS = new Set([
 
 export function createProductionSourcingService({
   store,
+  changeImpactAdmission = null,
   clock = () => new Date().toISOString(),
   nextId = defaultIdGenerator(),
 } = {}) {
   invariant(store && typeof store.transaction === 'function', 'PRODUCTION_SOURCING_STORE_REQUIRED', 'Production sourcing store is required');
+  invariant(changeImpactAdmission === null || typeof changeImpactAdmission?.assertAdmitted === 'function', 'PRODUCT_ENGINEERING_CHANGE_ADMISSION_SERVICE_INVALID', 'Change-impact admission service is invalid');
 
   function execute(commandId, fingerprint, actorId, prepare, action) {
     invariant(typeof commandId === 'string' && commandId.trim().length > 0, 'COMMAND_ID_REQUIRED', 'Every mutation requires commandId');
@@ -64,6 +66,7 @@ export function createProductionSourcingService({
           return Object.freeze({ requirement, line, existing, productSku, catalogSku, bom, suppliers });
         },
         async (tx, context) => {
+          if (changeImpactAdmission) await changeImpactAdmission.assertAdmitted(context.line.styleVersionId, 'sourcing_release');
           invariant(!context.existing, 'PRODUCTION_RFQ_ACTIVE_EXISTS', 'An active RFQ already covers this immutable production requirement line', {
             productionRequirementSnapshotId: context.requirement.id,
             orderLineNo: context.line.orderLineNo,

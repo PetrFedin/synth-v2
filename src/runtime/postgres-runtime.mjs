@@ -139,6 +139,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
   const productionSourcingStore = createPostgresProductionSourcingStore({ pool: options.pool });
   const productionSourcing = createProductionSourcingService({
     store: productionSourcingStore,
+    changeImpactAdmission: base.productEngineeringChangeAdmission,
     ...(options.clock ? { clock: options.clock } : {}),
     ...(options.nextId ? { nextId: options.nextId } : {}),
   });
@@ -148,6 +149,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
   const productionOrderReader = createPostgresProductionOrderReader({ pool: options.pool });
   const productionOrderCommands = createProductionOrderService({
     store: productionOrderStore,
+    changeImpactAdmission: base.productEngineeringChangeAdmission,
     ...(options.clock ? { clock: options.clock } : {}),
     ...(options.nextId ? { nextId: options.nextId } : {}),
   });

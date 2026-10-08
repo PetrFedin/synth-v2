@@ -2017,3 +2017,56 @@ The Engineering workspace now exposes:
 7. browser E2E on Monitor / Tablet / Phone for Source Revision -> Impact -> Acknowledge.
 
 **Non-negotiable:** the Change Impact Engine observes and orchestrates; it does not gain a generic SQL/write path into downstream PLM authorities. Each actual correction remains a canonical bounded-context command with its own policy, version and receipt.
+
+## 2026-10-08 — Product Engineering downstream Change Admission checkpoint
+
+Status: active development on `feat/change-impact-admission-guards`; Change Impact Engine v1 is merged to `main@ebf52dbeca377aa6490482bea040e98740333923` via PR #251.
+
+### Implemented admission boundary
+
+The Change Impact Engine now has a read-only admission authority keyed by the **exact canonical StyleVersion**:
+
+`StyleVersion -> ProductStyle/brand -> unresolved ChangeCase -> pending ChangeImpact -> operation-specific admission policy -> admitted / blocked`
+
+Only an unresolved `policy_required` impact can block. `observed` and `derived` dependency rows remain evidence and are never silently promoted into blockers.
+
+First guarded canonical operations:
+
+- Commercial Product Projection publication -> `commercial_publication / product_readiness`;
+- Commercial Publication -> `commercial_publication / product_readiness`;
+- production RFQ release -> `sourcing / bom / tech_pack`;
+- Production Order issue and confirmation -> `production / tech_pack / supplier_acknowledgement / quality`;
+- Cost Close -> `cost`.
+
+### Semantics
+
+- the admission check runs inside the owning bounded-context mutation path;
+- existing completed idempotent commands replay their historical result before evaluating a newly-created blocker;
+- cancellation/recovery paths remain available and are not blocked by change admission;
+- legacy records without exact StyleVersion lineage are not falsely upgraded to governed lineage;
+- ChangeCase `acknowledged` means ownership of the re-review workload only and **does not** clear pending impacts;
+- the gate opens only when the relevant impact is no longer `pending` (the next slice will replace ad-hoc status closure with explicit per-impact resolve/waive receipts).
+
+### Current evidence
+
+- admission policy/service unit tests: PASS;
+- Product Readiness commercial projection blocker test: PASS;
+- Commercial Publication blocker/no-partial-write test: PASS;
+- production RFQ blocker/no-partial-write test: PASS;
+- Production Order issue/confirm blocker tests: PASS;
+- Cost Close blocker test: PASS;
+- PostgreSQL commercialization acceptance extended with a real exact-StyleVersion pending impact: blocked as expected, then admitted only after exact impact closure: PASS;
+- `validate:types`: PASS with no baseline increase;
+- `validate:architecture`: PASS;
+- `validate:ui`: PASS;
+- `validate:i18n`: PASS;
+- full `npm run verify`: PASS (`2456` tests discovered, `2380` pass, `76` skipped, `0` fail);
+- fresh PR CI still required before merge.
+
+### Next strict slice after merge
+
+**Per-impact Resolution / Waiver Receipts**
+
+`pending impact -> reviewer/authority -> resolve | waive -> reason -> evidence -> resulting canonical authority/version -> immutable resolution receipt -> impact closed -> admission re-evaluated`
+
+This must replace bare mutable status changes as the production-grade way to clear a blocker. A waiver must never silently claim that the underlying technical fact was corrected; it is a separate governed exception with actor, reason, scope, expiry/review policy where applicable, and evidence lineage.

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createProductionSourcingService } from '../src/application/production-sourcing-service.mjs';
 
-function fixture({ role = 'owner', existing = null } = {}) {
+function fixture({ role = 'owner', existing = null, changeImpactAdmission = null } = {}) {
   const requirement = Object.freeze({
     id: 'requirement-1', status: 'required', contentHash: 'a'.repeat(64),
     orderId: 'order-1', orderCommitSnapshotId: 'commit-1', supplyCommitmentSnapshotId: 'supply-1',
@@ -37,6 +37,7 @@ function fixture({ role = 'owner', existing = null } = {}) {
   let seq = 0;
   const service = createProductionSourcingService({
     store,
+    changeImpactAdmission,
     clock: () => '2026-08-25T12:00:00.000Z',
     nextId: (prefix) => `${prefix}-${++seq}`,
   });
@@ -86,6 +87,21 @@ test('service prevents a second active RFQ from double-covering the same approve
     service.createRfqFromProductionRequirement('cmd-duplicate', 'actor-1', input()),
     (error) => error.code === 'PRODUCTION_RFQ_ACTIVE_EXISTS',
   );
+});
+
+test('production RFQ release is blocked by unresolved Product Engineering sourcing admission', async () => {
+  const calls = [];
+  const { service, state } = fixture({ changeImpactAdmission: { async assertAdmitted(styleVersionId, operation) {
+    calls.push({ styleVersionId, operation });
+    throw Object.assign(new Error('blocked'), { code: 'PRODUCT_ENGINEERING_CHANGE_ADMISSION_BLOCKED' });
+  } } });
+  await assert.rejects(
+    service.createRfqFromProductionRequirement('cmd-impact-blocked', 'actor-1', input()),
+    (error) => error.code === 'PRODUCT_ENGINEERING_CHANGE_ADMISSION_BLOCKED',
+  );
+  assert.deepEqual(calls, [{ styleVersionId: 'style-version-1', operation: 'sourcing_release' }]);
+  assert.equal(state.rfqs.length, 0);
+  assert.equal(state.commands.has('cmd-impact-blocked'), false);
 });
 
 test('production sourcing requires brand sourcing capability', async () => {

@@ -136,7 +136,7 @@ const OWNER_READ = {
   orders: 'reload', selections: 'reload', partners: 'reload', showrooms: 'reload', styles: 'reload',
   rfqs: '/v2/rfqs', 'material-rfqs': '/v2/rfqs', 'material-purchase-orders': '/v2/rfqs',
   'production-orders': '/v2/production-orders', 'tech-packs': '/v2/tech-packs', samples: '/v2/samples',
-  'final-quality': '/v2/final-quality-inspections', materials: '/v2/materials',
+  'final-quality': '/v2/final-quality-inspections', materials: '/v2/materials', 'awaiting-action': '/v2/inbox/awaiting-action',
 };
 
 test('every view a kind of awaiting action opens has an owner that knows how to load it', () => {
@@ -192,6 +192,7 @@ const TARGET = {
   'supplier-payment': (w) => { same(w.SynthaProductionOrdersWorkspace.selectedNumber(), 'PO-1'); },
   'compliance-document-issue': (w, item) => { same(w.OD_UI.tabs.partners, 'compliance-documents', 'the tab that holds the draft opens, not the relationship map'); same(w.OD_UI.selected['od-compliance-documents'], item.entityId); },
   'technical-review': (w) => { same(w.OD_UI.selected['od-styles'], 'STYLE-1', 'technical review opens the exact parent style'); },
+  'operational-exception': (w, item) => { same(w.OD_UI.selected['od-awaiting-action'], item.entityId); },
 };
 test('the screen that cached an empty list before the entity appeared is reread on "Open"', async () => {
   const rfq = { rfqCode: 'RFQ-PENDING-QUOTE-001', status: 'quoted', brandId: 'org-1' };

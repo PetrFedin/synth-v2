@@ -15,6 +15,8 @@ function loadModule() {
     COLLABORATION_READ: 'collaboration.read',
     COLLABORATION_WRITE: 'collaboration.write',
     DECISION_RECORD: 'decision.record',
+    EXCEPTION_READ: 'exception.read',
+    EXCEPTION_MANAGE: 'exception.manage',
   });
   const grants = Object.freeze({
     owner: Object.freeze(Object.values(CAPABILITIES)),
@@ -97,6 +99,52 @@ test('contextual read uses the entity route and preserves IDs through URI encodi
   });
   assert.equal(paths[0], '/v2/operational/entities/production-order/PO%2F27/collaboration');
   assert.deepEqual(data.threads, []);
+});
+
+test('contextual inspector reads governed exceptions and builds recovery commands against exact entity/version authority', async () => {
+  const { api } = loadModule();
+  const paths = [];
+  const context = { entityType: 'production-order', entityId: 'PO/27', organisationIds: ['brand-1'] };
+  const exceptions = await api.readExceptions(context, async (path) => {
+    paths.push(path);
+    return [{ id: 'ex-1', ownerOrganisationId: 'brand-1', entity: { type: 'production-order', id: 'PO/27' }, version: 4 }];
+  });
+  assert.equal(paths[0], '/v2/operational/entities/production-order/PO%2F27/exceptions');
+  assert.equal(exceptions[0].id, 'ex-1');
+  assert.deepEqual(JSON.parse(JSON.stringify(api.buildExceptionActionInput(context, exceptions[0], {
+    resolution: 'Recovered.',
+    evidenceRefs: ['proof://1'],
+  }))), {
+    actingOrganisationId: 'brand-1',
+    expectedVersion: 4,
+    resolution: 'Recovered.',
+    evidenceRefs: ['proof://1'],
+  });
+  assert.throws(
+    () => api.buildExceptionActionInput({ ...context, entityId: 'PO/28' }, exceptions[0]),
+    /OPERATIONAL_EXCEPTION_CONTEXT_MISMATCH/,
+  );
+});
+
+test('recovery evidence input is normalized, deduplicated and never silently accepted as an empty proof set', () => {
+  const { api } = loadModule();
+  assert.deepEqual(JSON.parse(JSON.stringify(api.parseEvidenceRefs(' proof://1\nproof://2, proof://1 '))), ['proof://1','proof://2']);
+  assert.deepEqual(JSON.parse(JSON.stringify(api.parseEvidenceRefs('   '))), []);
+});
+
+
+test('the existing contextual inspector renders exception SLA, recovery evidence, accepted-risk and close actions without a second task centre', () => {
+  for (const token of [
+    'renderExceptions(exceptions, decisions)',
+    'Operational exceptions',
+    'SLA breached',
+    'Resolve with evidence',
+    'Accept risk through decision',
+    'Close after verification',
+    '/v2/operational/exceptions/',
+    'buildExceptionActionInput',
+  ]) assert.ok(moduleSource.includes(token), token);
+  assert.ok(!moduleSource.includes('exception-task-centre'));
 });
 
 test('Samples, Production Orders and Wholesale Orders expose the same shared collaboration control', () => {

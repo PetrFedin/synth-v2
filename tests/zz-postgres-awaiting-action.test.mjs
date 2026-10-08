@@ -226,6 +226,19 @@ async function seed(pool) {
     await insert('compliance_documents', { id: 'doc-1', organisation_id: BRAND, document_number: 'UPD-1', document_type: 'upd', issuer_legal_entity_id: 'le', issuer_legal_entity_version_id: 'lev', status: 'draft', version: 1, payload: {}, created_at: ago(2), created_by: 'x', updated_at: ago(2), updated_by: 'x' });
     await insert('compliance_documents', { id: 'doc-2', organisation_id: BRAND, document_number: 'UPD-2', document_type: 'upd', issuer_legal_entity_id: 'le', issuer_legal_entity_version_id: 'lev', status: 'issued', version: 2, payload: {}, created_at: ago(2), created_by: 'x', updated_at: ago(2), updated_by: 'x' });
 
+    // One active governed exception proves this is a projection of exception authority, not a copied task.
+    await insert('operational_exceptions', {
+      id: 'ex-await-1', owner_organisation_id: BRAND, dedupe_key: 'production-order:PO-AW-2:capacity_conflict:seed',
+      entity_type: 'production-order', entity_id: 'PO-AW-2', entity_version: 2, entity_content_hash: null,
+      category: 'capacity_conflict', severity: 'high', blocking: true, owner_role: 'owner', owner_user_id: null,
+      thread_id: 'thread-seed', due_at: ago(-2), calendar_milestone_id: null,
+      sla_policy_id: 'seed-sla', sla_policy_version: 1, sla_snapshot: { id: 'seed-sla', version: 1, resolutionMinutes: 120 },
+      recovery_action: 'Recover supplier capacity.', business_impact: 'Delivery at risk.', source_event_id: 'seed-event',
+      state: 'open', version: 1, escalation_count: 0, opened_by: 'system', opened_at: ago(1),
+      assigned_at: null, resolved_at: null, closed_at: null, accepted_risk_decision_id: null,
+      payload: { id: 'ex-await-1', entity: { type: 'production-order', id: 'PO-AW-2', version: 2 }, state: 'open' },
+    });
+
     await insert('payment_schedules', { id: 'sch-1', brand_id: BRAND, production_order_number: 'PO-AW-1', supplier_code: 'S1', currency: 'EUR', total_amount_minor: 100_000, payment_terms_days: 30, version: 1, created_at: ago(40), created_by: 'x', updated_at: ago(40), payload: {} });
     const milestone = (id, sequence, trigger, amount, paidAt) => insert('payment_milestones', { id, schedule_id: 'sch-1', sequence, trigger_event: trigger, share_basis_points: 1000, amount_minor: amount, label_ru: `Веха ${sequence}`, label_en: `Milestone ${sequence}`, paid_at: paidAt, payload: {} });
     await milestone('ms-1', 1, 'order-confirmed', 30_000, null);

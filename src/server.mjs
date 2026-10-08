@@ -39,6 +39,7 @@ if (metricsEnabled && !metricsToken) throw new Error('SYNTHA_METRICS_TOKEN is re
 const notificationProjectionIntervalMs = integerSetting('SYNTHA_NOTIFICATION_PROJECTION_INTERVAL_MS', 1_000, 100, 60_000);
 const outboxPublicationIntervalMs = integerSetting('SYNTHA_OUTBOX_PUBLICATION_INTERVAL_MS', 1_000, 100, 60_000);
 const productEngineeringIntervalMs = integerSetting('SYNTHA_ENGINEERING_JOB_INTERVAL_MS', 1_000, 100, 60_000);
+const exceptionSlaIntervalMs = integerSetting('SYNTHA_EXCEPTION_SLA_INTERVAL_MS', 60_000, 100, 3_600_000);
 const settings = Object.freeze({
   port: integerSetting('PORT', 4100, 1, 65_535),
   host: process.env.HOST?.trim() || '127.0.0.1',
@@ -61,6 +62,10 @@ const settings = Object.freeze({
   productEngineeringBatchSize: integerSetting('SYNTHA_ENGINEERING_JOB_BATCH_SIZE', 10, 1, 100),
   productEngineeringStaleMs: integerSetting('SYNTHA_ENGINEERING_JOB_STALE_MS', productEngineeringIntervalMs * 5, productEngineeringIntervalMs, 300_000),
   productEngineeringFailureThreshold: integerSetting('SYNTHA_ENGINEERING_JOB_FAILURE_THRESHOLD', 3, 1, 100),
+  exceptionSlaIntervalMs,
+  exceptionSlaBatchSize: integerSetting('SYNTHA_EXCEPTION_SLA_BATCH_SIZE', 100, 1, 1000),
+  exceptionSlaStaleMs: integerSetting('SYNTHA_EXCEPTION_SLA_STALE_MS', exceptionSlaIntervalMs * 5, exceptionSlaIntervalMs, 3_600_000),
+  exceptionSlaFailureThreshold: integerSetting('SYNTHA_EXCEPTION_SLA_FAILURE_THRESHOLD', 3, 1, 100),
   notificationProjectionBatchSize: integerSetting('SYNTHA_NOTIFICATION_PROJECTION_BATCH_SIZE', 100, 1, 1_000),
   notificationProjectionWorkerId: process.env.SYNTHA_NOTIFICATION_PROJECTION_WORKER_ID?.trim() || undefined,
   notificationProjectionLeaseMs: integerSetting('SYNTHA_NOTIFICATION_PROJECTION_LEASE_MS', 30_000, 1_000, 900_000),
@@ -133,12 +138,15 @@ let server;
 let notificationWorker;
 let outboxWorker;
 let productEngineeringWorker;
+let exceptionSlaWorker;
 let unregisterNotificationHealth;
 let unregisterProductEngineeringHealth;
+let unregisterExceptionSlaHealth;
 let unregisterOutboxHealth;
 let unregisterNotificationMetrics;
 let unregisterOutboxMetrics;
 let unregisterProductEngineeringMetrics;
+let unregisterExceptionSlaMetrics;
 // Последнее известное состояние очереди. Снимок, а не запрос на каждый `/ready`: проверка
 // готовности вызывается балансировщиком часто, и счёт по растущей таблице на каждый её запрос сам стал бы
 // нагрузкой. Возраст самого снимка тоже сообщается — устаревшие цифры должны быть видны как устаревшие.
@@ -240,6 +248,24 @@ try {
   unregisterProductEngineeringHealth = healthRegistry.register('product-engineering', productEngineeringHealth);
   unregisterProductEngineeringMetrics = operationalMetrics.registerWorker('product-engineering', productEngineeringHealth);
 
+  exceptionSlaWorker = createBackgroundWorker(/** @type {any} */ ({
+    name: 'operational-exception-sla',
+    intervalMs: settings.exceptionSlaIntervalMs,
+    task: async () => {
+      const results = await runtime.operationalExceptions.processDueEscalations({
+        limit: settings.exceptionSlaBatchSize,
+      });
+      operationalMetrics.recordWorkerBatch('operational-exception-sla', results);
+      if (results.length) console.warn(`Operational Exception SLA escalated ${results.length} overdue exception(s)`);
+    },
+  }));
+  const exceptionSlaHealth = () => exceptionSlaWorker.health({
+    maxStalenessMs: settings.exceptionSlaStaleMs,
+    maxConsecutiveFailures: settings.exceptionSlaFailureThreshold,
+  });
+  unregisterExceptionSlaHealth = healthRegistry.register('operational-exception-sla', exceptionSlaHealth);
+  unregisterExceptionSlaMetrics = operationalMetrics.registerWorker('operational-exception-sla', exceptionSlaHealth);
+
   notificationWorker = createBackgroundWorker({
     name: 'notification-projection',
     intervalMs: settings.notificationProjectionIntervalMs,
@@ -327,6 +353,7 @@ try {
 
   await listen(server, { port: settings.port, host: settings.host });
   productEngineeringWorker.start();
+  exceptionSlaWorker.start();
   notificationWorker.start();
   outboxWorker?.start();
   console.log(`Syntha V2 listening on http://${settings.host}:${settings.port}`);
@@ -335,11 +362,14 @@ try {
   unregisterOutboxMetrics?.();
   unregisterNotificationMetrics?.();
   unregisterProductEngineeringMetrics?.();
+  unregisterExceptionSlaMetrics?.();
   unregisterOutboxHealth?.();
   unregisterNotificationHealth?.();
   unregisterProductEngineeringHealth?.();
+  unregisterExceptionSlaHealth?.();
   await outboxWorker?.stop().catch((workerError) => console.error('Failed to stop outbox worker after startup error', workerError));
   await notificationWorker?.stop().catch((workerError) => console.error('Failed to stop notification worker after startup error', workerError));
+  await exceptionSlaWorker?.stop().catch((workerError) => console.error('Failed to stop Operational Exception SLA worker after startup error', workerError));
   await productEngineeringWorker?.stop().catch((workerError) => console.error('Failed to stop Product Engineering worker after startup error', workerError));
   server?.closeAllConnections?.();
   server = undefined;
@@ -348,7 +378,7 @@ try {
 }
 
 if (server) {
-  const stoppers = [productEngineeringWorker, notificationWorker, outboxWorker].filter(Boolean).map((worker) => () => worker.stop());
+  const stoppers = [productEngineeringWorker, exceptionSlaWorker, notificationWorker, outboxWorker].filter(Boolean).map((worker) => () => worker.stop());
   const shutdown = createShutdownCoordinator({
     server,
     pool,

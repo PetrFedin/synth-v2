@@ -371,6 +371,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
     team: base.team,
     awaitingActions: base.awaitingActions,
     operationalCollaboration: base.operationalCollaboration,
+    operationalExceptions: base.operationalExceptions,
     productionOrders,
     productionExecutions,
     finalQuality,

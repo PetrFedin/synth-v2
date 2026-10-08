@@ -72,11 +72,24 @@ export function createPostgresProductEngineeringStore(options = {}) {
       return querySourceImpactLineage(pool, sourceId);
     },
     async getChangeCase(id) {
-      const [caseResult, impactResult] = await Promise.all([
+      const [caseResult, impactResult, receiptResult] = await Promise.all([
         pool.query('SELECT * FROM product_engineering_change_cases WHERE id = $1', [id]),
         pool.query(`SELECT * FROM product_engineering_change_impacts WHERE change_case_id = $1 ORDER BY CASE severity WHEN 'blocking' THEN 0 WHEN 'high' THEN 1 ELSE 2 END, impact_kind, area, entity_id, required_action`, [id]),
+        pool.query('SELECT * FROM product_engineering_change_impact_receipts WHERE change_case_id = $1 ORDER BY created_at DESC, id DESC', [id]),
       ]);
-      return caseResult.rows[0] ? deepFreeze({ changeCase: mapChangeCase(caseResult.rows[0]), impacts: impactResult.rows.map(mapChangeImpact) }) : undefined;
+      return caseResult.rows[0] ? deepFreeze({ changeCase: mapChangeCase(caseResult.rows[0]), impacts: impactResult.rows.map(mapChangeImpact), receipts: receiptResult.rows.map(mapChangeImpactReceipt) }) : undefined;
+    },
+    async getChangeImpact(id) {
+      const result = await pool.query(
+        `SELECT impact.*, change_case.brand_id, change_case.style_id
+           FROM product_engineering_change_impacts impact
+           JOIN product_engineering_change_cases change_case ON change_case.id=impact.change_case_id
+          WHERE impact.id=$1`, [id]);
+      return result.rows[0] ? deepFreeze({ impact: mapChangeImpact(result.rows[0]), brandId: result.rows[0].brand_id, styleId: result.rows[0].style_id }) : undefined;
+    },
+    async getChangeImpactReceipt(impactId) {
+      const result = await pool.query('SELECT * FROM product_engineering_change_impact_receipts WHERE impact_id=$1', [impactId]);
+      return result.rows[0] ? mapChangeImpactReceipt(result.rows[0]) : undefined;
     },
     async getStyleWorkspace(styleId, { limit = 100 } = {}) {
       const bounded = normalizeLimit(limit);
@@ -290,6 +303,18 @@ function transactionView(client) {
       const result = await client.query('SELECT * FROM product_engineering_change_cases WHERE id = $1 FOR UPDATE', [id]);
       return result.rows[0] ? mapChangeCase(result.rows[0]) : undefined;
     },
+    async getChangeImpactForUpdate(id) {
+      const result = await client.query('SELECT * FROM product_engineering_change_impacts WHERE id = $1 FOR UPDATE', [id]);
+      return result.rows[0] ? mapChangeImpact(result.rows[0]) : undefined;
+    },
+    async getChangeImpactReceiptByImpact(impactId) {
+      const result = await client.query('SELECT * FROM product_engineering_change_impact_receipts WHERE impact_id = $1', [impactId]);
+      return result.rows[0] ? mapChangeImpactReceipt(result.rows[0]) : undefined;
+    },
+    async countPendingChangeImpacts(changeCaseId) {
+      const result = await client.query(`SELECT count(*)::integer AS count FROM product_engineering_change_impacts WHERE change_case_id=$1 AND status='pending'`, [changeCaseId]);
+      return Number(result.rows[0]?.count ?? 0);
+    },
     async lockStyle(styleId) {
       const result = await client.query('SELECT id FROM product_styles WHERE id = $1 FOR UPDATE', [styleId]);
       invariant(result.rowCount === 1, 'PRODUCT_STYLE_NOT_FOUND', 'Product Style not found', { styleId });
@@ -339,6 +364,23 @@ function transactionView(client) {
         [value.id,value.status,value.acknowledgedAt,value.acknowledgedBy,value.acknowledgementNote,value.resolvedAt,value.resolvedBy,value.version,expectedVersion],
       );
       invariant(result.rowCount===1,'PRODUCT_ENGINEERING_CHANGE_CASE_CONCURRENCY_CONFLICT','Engineering change case changed concurrently',{changeCaseId:value.id,expectedVersion});
+    },
+    async insertChangeImpactReceipt(value) {
+      await client.query(
+        `INSERT INTO product_engineering_change_impact_receipts
+          (id,change_case_id,impact_id,disposition,previous_impact_version,resulting_impact_version,reason,evidence,result_reference,waiver,receipt_hash,created_at,created_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10::jsonb,$11,$12,$13)`,
+        [value.id,value.changeCaseId,value.impactId,value.disposition,value.previousImpactVersion,value.resultingImpactVersion,value.reason,
+         JSON.stringify(value.evidence),value.resultReference===null?null:JSON.stringify(value.resultReference),value.waiver===null?null:JSON.stringify(value.waiver),
+         value.receiptHash,value.createdAt,value.createdBy],
+      );
+    },
+    async updateChangeImpact(value, expectedVersion) {
+      const result = await client.query(
+        `UPDATE product_engineering_change_impacts SET status=$2,version=$3 WHERE id=$1 AND version=$4`,
+        [value.id,value.status,value.version,expectedVersion],
+      );
+      invariant(result.rowCount===1,'PRODUCT_ENGINEERING_CHANGE_IMPACT_CONCURRENCY_CONFLICT','Engineering change impact changed concurrently',{impactId:value.id,expectedVersion});
     },
 
     async insertSource(value) {
@@ -720,7 +762,15 @@ function mapChangeImpact(row) {
   return Object.freeze({
     id:row.id,changeCaseId:row.change_case_id,impactKind:row.impact_kind,entityId:row.entity_id,entityVersion:row.entity_version,
     area:row.area,requiredAction:row.required_action,severity:row.severity,evidenceStatus:row.evidence_status,basis:deepFreeze(row.basis),
-    status:row.status,createdAt:iso(row.created_at),createdBy:row.created_by,
+    status:row.status,createdAt:iso(row.created_at),createdBy:row.created_by,version:row.version ?? 1,
+  });
+}
+function mapChangeImpactReceipt(row) {
+  return Object.freeze({
+    id:row.id,changeCaseId:row.change_case_id,impactId:row.impact_id,disposition:row.disposition,
+    previousImpactVersion:row.previous_impact_version,resultingImpactVersion:row.resulting_impact_version,reason:row.reason,
+    evidence:deepFreeze(row.evidence ?? []),resultReference:row.result_reference===null?null:deepFreeze(row.result_reference),
+    waiver:row.waiver===null?null:deepFreeze(row.waiver),receiptHash:row.receipt_hash,createdAt:iso(row.created_at),createdBy:row.created_by,
   });
 }
 

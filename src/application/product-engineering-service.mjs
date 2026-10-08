@@ -31,9 +31,12 @@ import { inspectEngineeringUpload, postgresBlobStorageRef } from '../modules/pro
 import { createCanonicalApplicationIntent } from '../modules/product-engineering/application-authority.mjs';
 import {
   acknowledgeEngineeringChangeCase,
+  closeEngineeringChangeImpact,
   createEngineeringChangeCase,
+  createEngineeringChangeImpactReceipt,
   createEngineeringSourceRevision,
   evaluateSourceRevisionImpact,
+  resolveEngineeringChangeCase,
 } from '../modules/product-engineering/change-impact.mjs';
 
 /**
@@ -313,6 +316,7 @@ export function createProductEngineeringService(options = {}) {
           ...impact,
           createdAt: changeCase.createdAt,
           createdBy: actorId,
+          version: 1,
         }));
         await tx.insertSourceRevision(revision);
         await tx.insertChangeCase(changeCase);
@@ -339,6 +343,48 @@ export function createProductEngineeringService(options = {}) {
         const next = acknowledgeEngineeringChangeCase(exact, { note: input.note, acknowledgedAt: now(clock), acknowledgedBy: actorId });
         await tx.updateChangeCase(next, exact.version);
         return next;
+      });
+    },
+
+    async getChangeImpactReceiptForActor(actorId, impactId) {
+      const bundle = required(await store.getChangeImpact(impactId), 'PRODUCT_ENGINEERING_CHANGE_IMPACT_NOT_FOUND', { impactId });
+      await authorizeBrand(actorId, bundle.brandId, CAPABILITIES.PRODUCT_ENGINEERING_READ);
+      return required(await store.getChangeImpactReceipt(impactId), 'PRODUCT_ENGINEERING_CHANGE_IMPACT_RECEIPT_NOT_FOUND', { impactId });
+    },
+
+    async closeChangeImpact(commandId, actorId, impactId, input) {
+      requireObject(input, 'PRODUCT_ENGINEERING_CHANGE_IMPACT_CLOSE_INVALID');
+      const bundle = required(await store.getChangeImpact(impactId), 'PRODUCT_ENGINEERING_CHANGE_IMPACT_NOT_FOUND', { impactId });
+      await authorizeBrand(actorId, bundle.brandId, CAPABILITIES.PRODUCT_ENGINEERING_MANAGE);
+      invariant(Number.isInteger(input.expectedVersion) && input.expectedVersion >= 1, 'PRODUCT_ENGINEERING_CHANGE_IMPACT_EXPECTED_VERSION_INVALID', 'Expected change-impact version must be a positive integer');
+      const fingerprint = `closeEngineeringChangeImpact:${actorId}:${impactId}:${canonicalJson(input)}`;
+      return runCommand(commandId, actorId, fingerprint, async (tx) => {
+        const existingReceipt = await tx.getChangeImpactReceiptByImpact(impactId);
+        invariant(!existingReceipt, 'PRODUCT_ENGINEERING_CHANGE_IMPACT_ALREADY_CLOSED', 'Change impact was already closed', { impactId, disposition: existingReceipt?.disposition ?? null });
+        const exactImpact = required(await tx.getChangeImpactForUpdate(impactId), 'PRODUCT_ENGINEERING_CHANGE_IMPACT_NOT_FOUND', { impactId });
+        invariant(exactImpact.version === input.expectedVersion, 'PRODUCT_ENGINEERING_CHANGE_IMPACT_CONCURRENCY_CONFLICT', 'Engineering change impact changed concurrently', { impactId, expectedVersion: input.expectedVersion, actualVersion: exactImpact.version });
+        const exactCase = required(await tx.getChangeCaseForUpdate(exactImpact.changeCaseId), 'PRODUCT_ENGINEERING_CHANGE_CASE_NOT_FOUND', { changeCaseId: exactImpact.changeCaseId });
+        const receipt = createEngineeringChangeImpactReceipt({
+          id: nextId('engineering-impact-receipt'),
+          impact: exactImpact,
+          disposition: input.disposition,
+          reason: input.reason,
+          evidence: input.evidence,
+          resultReference: input.resultReference ?? null,
+          waiver: input.waiver ?? null,
+          createdAt: now(clock),
+          createdBy: actorId,
+        });
+        const nextImpact = closeEngineeringChangeImpact(exactImpact, receipt);
+        await tx.insertChangeImpactReceipt(receipt);
+        await tx.updateChangeImpact(nextImpact, exactImpact.version);
+        const pending = await tx.countPendingChangeImpacts(exactImpact.changeCaseId);
+        let changeCase = exactCase;
+        if (pending === 0 && exactCase.status !== 'resolved') {
+          changeCase = resolveEngineeringChangeCase(exactCase, { resolvedAt: receipt.createdAt, resolvedBy: actorId });
+          await tx.updateChangeCase(changeCase, exactCase.version);
+        }
+        return deepFreeze({ receipt, impact: nextImpact, changeCase });
       });
     },
 

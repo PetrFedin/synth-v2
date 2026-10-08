@@ -291,11 +291,78 @@
       { label: text('Всего действий', 'Required actions'), value: String(bundle.impacts?.length ?? 0) },
     ];
     (bundle.impacts ?? []).slice(0, 80).forEach((impact) => rows.push({
-      label: `${impact.area} · ${status(impact.severity)}`,
+      label: `${impact.area} · ${status(impact.severity)} · ${status(impact.status)}`,
       value: `${impact.requiredAction} · ${changeEvidenceStatus(impact.evidenceStatus)} · ${impact.entityId}${impact.entityVersion ? ` @ v${impact.entityVersion}` : ''}`,
+    }));
+    (bundle.receipts ?? []).slice(0, 80).forEach((receipt) => rows.push({
+      label: `${text('Receipt', 'Receipt')} · ${receipt.disposition}`,
+      value: `${receipt.impactId} · ${receipt.receiptHash?.slice(0, 16) || '—'}… · ${receipt.resultReference?.authority || receipt.waiver?.scope || '—'}`,
     }));
     openDetails(text('Влияние изменения источника', 'Source revision impact'), rows);
     return bundle;
+  }
+
+  async function closeNextChangeImpact(product, changeCaseId) {
+    const bundle = await api(`/v2/product-engineering/change-cases/${encodeURIComponent(changeCaseId)}`);
+    const impact = (bundle.impacts ?? []).find((row) => row.status === 'pending');
+    if (!impact) {
+      toast(text('Незакрытых impact больше нет.', 'No pending impacts remain.'), 'success');
+      return showChangeCase(product, changeCaseId);
+    }
+    const dispositions = [
+      Object.freeze({ id: 'resolved', name: text('Подтверждено исправление / пересмотр', 'Resolved by verified correction / review') }),
+      Object.freeze({ id: 'waived', name: text('Разрешить как управляемое исключение', 'Waive as governed exception') }),
+    ];
+    openForm(
+      `${text('Закрыть impact', 'Close impact')} · ${impact.area} · ${impact.requiredAction}`,
+      [
+        selectDef('disposition', text('Решение', 'Disposition'), dispositions, row => row.name),
+        textDef('reason', text('Причина решения', 'Decision reason'), '', 4000, true, 2),
+        textDef('evidenceReference', text('Ссылка/ID доказательства', 'Evidence reference / ID'), '', 500, true),
+        optionalTextDef('resultAuthority', text('Canonical authority после исправления', 'Resulting canonical authority'), '', 100),
+        optionalTextDef('resultEntityId', text('Canonical entity ID', 'Canonical entity ID'), '', 200),
+        optionalTextDef('resultVersion', text('Версия или hash результата', 'Result version or hash'), '', 200),
+        optionalTextDef('waiverScope', text('Scope исключения', 'Waiver scope'), '', 500),
+        optionalTextDef('waiverExpiresAt', text('Истекает, ISO timestamp', 'Expires at, ISO timestamp'), '', 100),
+      ],
+      async (values) => {
+        const disposition = values.disposition;
+        const payload = {
+          expectedVersion: impact.version,
+          disposition,
+          reason: values.reason.trim(),
+          evidence: [{ kind: 'manual_review', reference: values.evidenceReference.trim() }],
+        };
+        if (disposition === 'waived') {
+          if (!values.waiverScope?.trim()) throw new Error(text('Для waiver обязателен scope исключения.', 'Waiver scope is required.'));
+          payload.waiver = {
+            scope: values.waiverScope.trim(),
+            ...(values.waiverExpiresAt?.trim() ? { expiresAt: values.waiverExpiresAt.trim() } : {}),
+          };
+        } else if (impact.evidenceStatus === 'policy_required') {
+          if (!values.resultAuthority?.trim() || !values.resultEntityId?.trim() || !values.resultVersion?.trim()) {
+            throw new Error(text('Для policy-required resolve нужны authority, entity ID и версия/hash результата.', 'Policy-required resolution needs authority, entity ID and resulting version/hash.'));
+          }
+          payload.resultReference = {
+            authority: values.resultAuthority.trim(),
+            entityId: values.resultEntityId.trim(),
+            version: values.resultVersion.trim(),
+          };
+        } else if (values.resultAuthority?.trim() && values.resultEntityId?.trim() && values.resultVersion?.trim()) {
+          payload.resultReference = { authority: values.resultAuthority.trim(), entityId: values.resultEntityId.trim(), version: values.resultVersion.trim() };
+        }
+        const result = await mutate(`/v2/product-engineering/change-impacts/${encodeURIComponent(impact.id)}/close`, payload);
+        invalidate(product.id);
+        queueMicrotask(() => { void showChangeCase(product, changeCaseId); });
+        return result;
+      },
+      {
+        successMessage: [
+          'Impact закрыт с неизменяемым receipt. Waiver не считается исправлением факта.',
+          'Impact closed with an immutable receipt. A waiver is not treated as a corrected fact.',
+        ],
+      },
+    );
   }
 
   function acknowledgeChangeCase(product, changeCase) {
@@ -330,6 +397,12 @@
         const ack = el('button', { className: 'button small primary', type: 'button', rawText: text('Принять в работу', 'Acknowledge') });
         ack.addEventListener('click', () => acknowledgeChangeCase(product, row));
         actions.append(ack);
+      }
+      if (manage && Number(row.pendingImpactCount ?? 0) > 0) {
+        const resolve = el('button', { className: 'button small', type: 'button', rawText: text('Разобрать impact', 'Resolve impact') });
+        resolve.title = text('Закрывает только один impact через resolve/waive receipt; waiver не выдаётся за исправление.', 'Closes one impact through a resolve/waive receipt; waiver never impersonates a correction.');
+        resolve.addEventListener('click', () => { void closeNextChangeImpact(product, row.id); });
+        actions.append(resolve);
       }
       return [
         statusBadge(row.status),

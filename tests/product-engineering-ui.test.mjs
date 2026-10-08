@@ -41,6 +41,16 @@ test('source revision UI exposes governed replacement, impact review and acknowl
   assert.match(script,/Changes & dependency review/);
 });
 
+
+test('change impact UI closes one impact through immutable resolve or waiver receipt semantics',()=>{
+  assert.match(script,/\/v2\/product-engineering\/change-impacts\/\$\{encodeURIComponent\(impact\.id\)\}\/close/);
+  assert.match(script,/disposition === 'waived'/);
+  assert.match(script,/waiverScope/);
+  assert.match(script,/resultReference/);
+  assert.match(script,/A waiver is not treated as a corrected fact/);
+  assert.match(script,/bundle\.receipts/);
+});
+
 test('Product Engineering asset is cache-busted after Change Impact Engine UI change',()=>{
-  assert.match(html,/\/ui\/product-engineering\.js\?v=engineering-20261008-1/);
+  assert.match(html,/\/ui\/product-engineering\.js\?v=engineering-20261008-2/);
 });

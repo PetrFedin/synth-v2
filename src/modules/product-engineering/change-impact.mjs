@@ -140,6 +140,68 @@ export function acknowledgeEngineeringChangeCase(changeCase, { note, acknowledge
   });
 }
 
+/** @param {any} options */
+export function createEngineeringChangeImpactReceipt({ id, impact, disposition, reason, evidence, resultReference = null, waiver = null, createdAt, createdBy } = {}) {
+  invariant(impact?.id && impact?.changeCaseId, 'PRODUCT_ENGINEERING_CHANGE_IMPACT_REQUIRED', 'Exact change impact is required');
+  invariant(impact.status === 'pending', 'PRODUCT_ENGINEERING_CHANGE_IMPACT_NOT_PENDING', 'Only a pending change impact can be closed', { impactId: impact.id, status: impact.status });
+  invariant(['resolved','waived'].includes(disposition), 'PRODUCT_ENGINEERING_CHANGE_IMPACT_DISPOSITION_INVALID', 'Change impact disposition must be resolved or waived');
+  invariant(Array.isArray(evidence) && evidence.length >= 1, 'PRODUCT_ENGINEERING_CHANGE_IMPACT_EVIDENCE_REQUIRED', 'Closing a change impact requires explicit evidence');
+  const normalizedEvidence = deepFreeze(structuredClone(evidence));
+  const normalizedReason = text(reason, 4000, 'PRODUCT_ENGINEERING_CHANGE_IMPACT_REASON_REQUIRED');
+  let normalizedResult = null;
+  let normalizedWaiver = null;
+  if (disposition === 'resolved') {
+    invariant(waiver === null || waiver === undefined, 'PRODUCT_ENGINEERING_CHANGE_IMPACT_WAIVER_INVALID', 'Resolved impact cannot contain waiver policy');
+    if (impact.evidenceStatus === 'policy_required') {
+      invariant(resultReference && typeof resultReference === 'object' && !Array.isArray(resultReference), 'PRODUCT_ENGINEERING_CHANGE_IMPACT_RESULT_REQUIRED', 'Resolving a policy-required impact requires the resulting canonical reference');
+    }
+    if (resultReference !== null && resultReference !== undefined) {
+      invariant(resultReference && typeof resultReference === 'object' && !Array.isArray(resultReference), 'PRODUCT_ENGINEERING_CHANGE_IMPACT_RESULT_INVALID', 'Result reference must be an object');
+      invariant(typeof resultReference.authority === 'string' && resultReference.authority.trim(), 'PRODUCT_ENGINEERING_CHANGE_IMPACT_RESULT_INVALID', 'Result reference authority is required');
+      invariant(typeof resultReference.entityId === 'string' && resultReference.entityId.trim(), 'PRODUCT_ENGINEERING_CHANGE_IMPACT_RESULT_INVALID', 'Result reference entity id is required');
+      invariant(resultReference.version !== undefined || resultReference.contentHash !== undefined, 'PRODUCT_ENGINEERING_CHANGE_IMPACT_RESULT_INVALID', 'Result reference requires a resulting version or content hash');
+      normalizedResult = deepFreeze(structuredClone(resultReference));
+    }
+  } else {
+    invariant(resultReference === null || resultReference === undefined, 'PRODUCT_ENGINEERING_CHANGE_IMPACT_WAIVER_RESULT_INVALID', 'Waived impact cannot claim a canonical correction result');
+    invariant(waiver && typeof waiver === 'object' && !Array.isArray(waiver), 'PRODUCT_ENGINEERING_CHANGE_IMPACT_WAIVER_REQUIRED', 'Waived impact requires an explicit waiver policy');
+    invariant(typeof waiver.scope === 'string' && waiver.scope.trim(), 'PRODUCT_ENGINEERING_CHANGE_IMPACT_WAIVER_SCOPE_REQUIRED', 'Waiver scope is required');
+    normalizedWaiver = deepFreeze({
+      scope: waiver.scope.trim(),
+      expiresAt: waiver.expiresAt === null || waiver.expiresAt === undefined ? null : timestamp(waiver.expiresAt),
+      reviewAt: waiver.reviewAt === null || waiver.reviewAt === undefined ? null : timestamp(waiver.reviewAt),
+    });
+  }
+  const body = {
+    id: required(id),
+    changeCaseId: impact.changeCaseId,
+    impactId: impact.id,
+    disposition,
+    previousImpactVersion: impact.version,
+    resultingImpactVersion: impact.version + 1,
+    reason: normalizedReason,
+    evidence: normalizedEvidence,
+    resultReference: normalizedResult,
+    waiver: normalizedWaiver,
+    createdAt: timestamp(createdAt),
+    createdBy: required(createdBy),
+  };
+  return deepFreeze({ ...body, receiptHash: sha(body) });
+}
+
+/** @param {any} impact @param {any} receipt */
+export function closeEngineeringChangeImpact(impact, receipt) {
+  invariant(receipt?.impactId === impact?.id && receipt?.changeCaseId === impact?.changeCaseId, 'PRODUCT_ENGINEERING_CHANGE_IMPACT_RECEIPT_MISMATCH', 'Resolution receipt does not match the exact change impact');
+  invariant(impact.status === 'pending' && receipt.previousImpactVersion === impact.version, 'PRODUCT_ENGINEERING_CHANGE_IMPACT_CONCURRENCY_CONFLICT', 'Change impact changed before resolution');
+  return deepFreeze({ ...impact, status: receipt.disposition === 'waived' ? 'waived' : 'resolved', version: receipt.resultingImpactVersion });
+}
+
+/** @param {any} changeCase @param {any} options */
+export function resolveEngineeringChangeCase(changeCase, { resolvedAt, resolvedBy } = {}) {
+  invariant(changeCase && ['open','acknowledged'].includes(changeCase.status), 'PRODUCT_ENGINEERING_CHANGE_CASE_NOT_ACTIVE', 'Only an active change case can be resolved');
+  return deepFreeze({ ...changeCase, status: 'resolved', resolvedAt: timestamp(resolvedAt), resolvedBy: required(resolvedBy), version: changeCase.version + 1 });
+}
+
 /** @param {any} lineage */
 function normalizeLineage(lineage = {}) {
   const sort = (rows, key = 'id') => Object.freeze([...(Array.isArray(rows) ? rows : [])].sort((a, b) => String(a?.[key] ?? '').localeCompare(String(b?.[key] ?? ''))));

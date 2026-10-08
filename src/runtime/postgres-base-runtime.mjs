@@ -25,6 +25,7 @@ import { createProductEngineeringService } from '../application/product-engineer
 import { createProductEngineeringProposalApplyService } from '../application/product-engineering-proposal-apply-service.mjs';
 import { createProductEngineeringProposalImpactService } from '../application/product-engineering-proposal-impact-service.mjs';
 import { createProductEngineeringChangeAdmissionService } from '../application/product-engineering-change-admission-service.mjs';
+import { createProductEngineeringResultVerifier, createProductEngineeringVerifiedImpactClosureService } from '../application/product-engineering-result-verifier-service.mjs';
 import { createProductEngineeringJobService } from '../application/product-engineering-job-service.mjs';
 import { createProductEngineeringAnalysisExecutor } from '../application/product-engineering-analysis-executor.mjs';
 import { createSampleService } from '../application/sample-service.mjs';
@@ -213,7 +214,20 @@ export function createPostgresWholesaleRuntime(options = {}) {
     materials,
     techPacks,
   });
-  const productEngineeringApi = Object.freeze({ ...productEngineering, ...productEngineeringApply, ...productEngineeringImpact });
+  const productEngineeringResultVerifier = createProductEngineeringResultVerifier({
+    materials,
+    measurements,
+    techPacks,
+    productReadiness,
+    commercialPublication,
+    orderEconomics,
+    sourcing,
+  });
+  const productEngineeringVerifiedImpactClosure = createProductEngineeringVerifiedImpactClosureService({
+    productEngineering,
+    resultVerifier: productEngineeringResultVerifier,
+  });
+  const productEngineeringApi = Object.freeze({ ...productEngineering, ...productEngineeringApply, ...productEngineeringImpact, ...productEngineeringVerifiedImpactClosure });
   // Governed reference data is global and read-only from the application, so it needs a reader and
   // nothing else.
   const libraries = createLibraryQueryService({ reader: createPostgresLibraryReader({ pool }) });

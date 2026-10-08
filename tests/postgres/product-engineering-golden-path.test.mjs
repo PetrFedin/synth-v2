@@ -328,6 +328,7 @@ test('AI Engineering Golden Path crosses real HTTP, PostgreSQL, durable jobs and
     let finalClose = null;
     for (const impact of revisionResult.impacts) {
       const policyRequired = impact.evidenceStatus === 'policy_required';
+      const canonicalTarget = impact.impactKind === 'canonical_target' && impact.entityId === materialCode;
       finalClose = data(await requestJson(baseUrl, `/v2/product-engineering/change-impacts/${encodeURIComponent(impact.id)}/close`, {
         method: 'POST',
         token,
@@ -340,6 +341,7 @@ test('AI Engineering Golden Path crosses real HTTP, PostgreSQL, durable jobs and
             : 'Acceptance reviewer revalidated the direct lineage after source revision.',
           evidence: [{ kind: 'acceptance_review', impactId: impact.id, sourceRevisionId: revisionResult.revision.id }],
           ...(policyRequired ? { waiver: { scope: `acceptance-only:${impact.area}` } } : {}),
+          ...(canonicalTarget ? { resultReference: { authority: 'material', entityId: materialCode, version: appliedMaterial.version } } : {}),
         },
       }));
       assert.match(finalClose.receipt.receiptHash, /^[0-9a-f]{64}$/);
@@ -347,6 +349,12 @@ test('AI Engineering Golden Path crosses real HTTP, PostgreSQL, durable jobs and
       assert.equal(finalClose.impact.version, impact.version + 1);
       assert.equal(finalClose.impact.status, policyRequired ? 'waived' : 'resolved');
       if (policyRequired) assert.equal(finalClose.receipt.resultReference, null);
+      if (canonicalTarget) {
+        assert.equal(finalClose.receipt.resultVerification.authority, 'material');
+        assert.equal(finalClose.receipt.resultVerification.observed.entityId, materialCode);
+        assert.equal(finalClose.receipt.resultVerification.observed.version, String(appliedMaterial.version));
+        assert.match(finalClose.receipt.resultVerification.verificationHash, /^[0-9a-f]{64}$/);
+      }
     }
     assert.equal(finalClose.changeCase.status, 'resolved');
     assert.ok(finalClose.changeCase.resolvedBy);

@@ -346,6 +346,12 @@ export function createProductEngineeringService(options = {}) {
       });
     },
 
+    async getChangeImpactForActor(actorId, impactId) {
+      const bundle = required(await store.getChangeImpact(impactId), 'PRODUCT_ENGINEERING_CHANGE_IMPACT_NOT_FOUND', { impactId });
+      await authorizeBrand(actorId, bundle.brandId, CAPABILITIES.PRODUCT_ENGINEERING_READ);
+      return bundle.impact;
+    },
+
     async getChangeImpactReceiptForActor(actorId, impactId) {
       const bundle = required(await store.getChangeImpact(impactId), 'PRODUCT_ENGINEERING_CHANGE_IMPACT_NOT_FOUND', { impactId });
       await authorizeBrand(actorId, bundle.brandId, CAPABILITIES.PRODUCT_ENGINEERING_READ);
@@ -357,7 +363,8 @@ export function createProductEngineeringService(options = {}) {
       const bundle = required(await store.getChangeImpact(impactId), 'PRODUCT_ENGINEERING_CHANGE_IMPACT_NOT_FOUND', { impactId });
       await authorizeBrand(actorId, bundle.brandId, CAPABILITIES.PRODUCT_ENGINEERING_MANAGE);
       invariant(Number.isInteger(input.expectedVersion) && input.expectedVersion >= 1, 'PRODUCT_ENGINEERING_CHANGE_IMPACT_EXPECTED_VERSION_INVALID', 'Expected change-impact version must be a positive integer');
-      const fingerprint = `closeEngineeringChangeImpact:${actorId}:${impactId}:${canonicalJson(input)}`;
+      const { verification: _internalVerification, ...fingerprintInput } = input;
+      const fingerprint = `closeEngineeringChangeImpact:${actorId}:${impactId}:${canonicalJson(fingerprintInput)}`;
       return runCommand(commandId, actorId, fingerprint, async (tx) => {
         const existingReceipt = await tx.getChangeImpactReceiptByImpact(impactId);
         invariant(!existingReceipt, 'PRODUCT_ENGINEERING_CHANGE_IMPACT_ALREADY_CLOSED', 'Change impact was already closed', { impactId, disposition: existingReceipt?.disposition ?? null });
@@ -371,6 +378,7 @@ export function createProductEngineeringService(options = {}) {
           reason: input.reason,
           evidence: input.evidence,
           resultReference: input.resultReference ?? null,
+          verification: input.verification ?? null,
           waiver: input.waiver ?? null,
           createdAt: now(clock),
           createdBy: actorId,

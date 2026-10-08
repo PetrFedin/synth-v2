@@ -1455,7 +1455,7 @@ An AI result has four distinct meanings and they must never be collapsed:
 
 The AI/model integration has no direct SQL/write path to canonical PLM tables.
 
-#### Canonical apply boundary — IMPLEMENTED/PARTIAL
+#### Canonical Application Authority — IMPLEMENTED
 
 Human acceptance and canonical mutation remain separate states.
 
@@ -1470,7 +1470,13 @@ Supported first-slice actions:
 
 `POST /v2/product-engineering/proposals/{proposalId}/apply` requires `expectedProposalVersion` and `expectedCanonicalVersion`. It accepts only an already accepted, not-yet-applied proposal with an explicit target entity and an allowlisted action. The adapter never uses SQL or generic patch semantics.
 
-The external apply command derives one canonical command id, reused on retry. All supported owning stores participate in the existing global command registry (`catalog` scope), so a reused idempotency key cannot mutate a second canonical target. The proposal is marked applied only after the owning service succeeds, recording `authority + action + canonical commandId + entityId + resulting version + appliedAt`. A process failure after canonical commit but before this final mark is replay-safe because the owning command is idempotent.
+Before mutation, the owning canonical reader loads the exact target and proves its current version equals `expectedCanonicalVersion`. Product Engineering then persists an immutable `ProductEngineeringApplicationIntent` containing the exact proposal/version, canonical precondition snapshot, SHA-256 precondition hash, deterministic field diff, outer application command, inner canonical command, and reverse lineage to AnalysisRun/Finding/Evidence/Source/ModelRun where available.
+
+Only after that intent exists does the adapter call the owning bounded-context command. The outer application command and inner canonical command have distinct ids; the canonical id is reused on retry. All supported owning stores participate in the existing global command registry, so retry cannot create a second canonical mutation. After the owning command returns the resulting canonical version, Product Engineering persists an immutable `ProductEngineeringApplicationReceipt` binding intent hash, precondition hash, deterministic diff, canonical result snapshot/hash, resulting version and reverse lineage. `appliedReference` then records the canonical reference plus receipt id/hash.
+
+A process failure after canonical commit but before receipt/proposal finalization is replay-safe: retry reuses the already persisted immutable application intent and the same canonical command id. It does not reread the already-advanced canonical entity and mislabel that state as the original precondition.
+
+`GET /v2/product-engineering/proposals/{proposalId}/application-receipt` exposes the immutable receipt to an authorised Product Engineering reader. The receipt is audit evidence, not another mutable source of canonical truth.
 
 AI-provided `proposedValue` is forbidden from carrying `expectedVersion`; concurrency authority belongs to the human apply request, not to the model.
 
@@ -1522,6 +1528,8 @@ The Engineering forms use the platform's actual `openForm(title, fields, submitA
 | TechnicalDrawingVersion | brand + style + view + contiguous version | draft -> approved/superseded; one approved view per style/view | optional StyleVersion/AnalysisRun, SVG, SHA-256, predecessor | Product Master technical canvas; future ProductMedia/Tech Pack projection |
 | TechnicalDrawingObject | exact drawing | draft-only composition | semantic type, optional governed semantic code, geometry, link payload, confidence | POM anchors, construction callouts, seams/panels, machine-readable garment graph |
 | ProductEngineeringCommand | global command id | immutable command result | scope `product-engineering`, fingerprint, actor, result, completion time | idempotency/replay |
+| ProductEngineeringApplicationIntent | exact accepted Proposal + canonical target | immutable, one per proposal/application | application/canonical command ids, exact expected proposal/canonical versions, canonical precondition snapshot/hash, deterministic diff, reverse lineage, intent SHA-256 | crash-safe canonical apply, audit, receipt generation |
+| ProductEngineeringApplicationReceipt | exact ApplicationIntent + Proposal | immutable, one per applied proposal | intent hash, canonical result snapshot/hash, resulting version, deterministic diff, reverse lineage, receipt SHA-256, appliedAt | independent application verification, audit, reverse provenance |
 | ProductEngineeringSource | brand + style | pending -> admitted/rejected/quarantined; scan + parse state versioned | ingest mode, MIME/name/size, server SHA-256, storage ref, security/admission/parser metadata | analysis input/evidence |
 | ProductEngineeringSourceBlob | exact Source | immutable MVP binary payload | source/style/brand, MIME, exact byte count, SHA-256, durable bytes | scanner/parser; replaceable by object-storage adapter without changing source identity |
 | ProductEngineeringSourceFragment | exact Source | append-only | typed page/sheet/cell/image/text/metadata locator + content digest | finding/evidence provenance |
@@ -1664,6 +1672,7 @@ At minimum:
 
 | Date | PR / commit | Change | Master sections affected | Evidence/status |
 |---|---|---|---|---|
+| 2026-10-08 | PR #249 `feat/canonical-application-authority` | Promote accepted-proposal apply into Canonical Application Authority: exact canonical precondition snapshot/version, deterministic diff, immutable intent, distinct application/canonical command ids, crash-safe retry, immutable receipt with SHA-256 binding and reverse model/evidence/source lineage, receipt API/OpenAPI and PostgreSQL E2E proof. | 19.1 | IMPLEMENTED pending fresh PR CI/merge; no generic AI write path; first allowlisted canonical targets remain Measurement/Material/Tech Pack/Operation Sequence |
 | 2026-10-06 | PR #242 `feat/ai-product-engineering-authority` | Add evidence-first AI Product Engineering authority plus executable Engineering Golden Path: controlled binary upload/server SHA-256, durable scan/parse/analysis jobs, structural PDF/XLSX/CSV/SVG/image parsing, exact qualification/policy routing, schema-bound + source-grounded model output, Findings/Evidence/Proposals/Conflicts, reviewed Garment Graph, semantic SVG authority, RBAC/OpenAPI/Product Master/Awaiting Action, and first governed accepted-proposal → canonical-command → appliedReference slice for Measurement/Material/Tech Pack/Operation Sequence. | 10, 12, 13, 17, 19.1, 20 | IMPLEMENTED/PARTIAL in PR; no direct AI canonical writes; scanner is integrity-only, PostgreSQL blob storage is MVP, live external qualification evidence, broader apply coverage, direct impact evidence/high-risk blocking policy and intended-live acceptance remain open; repository + PostgreSQL CI still required before DONE |
 | 2026-08 | #106 | Non-destructive live Campaign → Collection acceptance | 7.2, 15 | merged; public HTTP + PostgreSQL acceptance |
 | 2026-08 | #107 | Repeatable owner bootstrap + isolated dev/test PostgreSQL clean-clone path | 2.3, 2.5 | merged; CI verified |

@@ -30,6 +30,14 @@ export function createPostgresProductEngineeringStore(options = {}) {
       const result = await pool.query('SELECT * FROM product_engineering_proposals WHERE id = $1', [id]);
       return result.rows[0] ? mapProposal(result.rows[0]) : undefined;
     },
+    async getApplicationIntentByProposal(proposalId) {
+      const result = await pool.query('SELECT * FROM product_engineering_application_intents WHERE proposal_id = $1', [proposalId]);
+      return result.rows[0] ? mapApplicationIntent(result.rows[0]) : undefined;
+    },
+    async getApplicationReceiptByProposal(proposalId) {
+      const result = await pool.query('SELECT * FROM product_engineering_application_receipts WHERE proposal_id = $1', [proposalId]);
+      return result.rows[0] ? mapApplicationReceipt(result.rows[0]) : undefined;
+    },
     async getConflict(id) {
       const result = await pool.query('SELECT * FROM product_engineering_conflicts WHERE id = $1', [id]);
       return result.rows[0] ? mapConflict(result.rows[0]) : undefined;
@@ -204,6 +212,14 @@ function transactionView(client) {
     async getProposalForUpdate(id) {
       const result = await client.query('SELECT * FROM product_engineering_proposals WHERE id = $1 FOR UPDATE', [id]);
       return result.rows[0] ? mapProposal(result.rows[0]) : undefined;
+    },
+    async getApplicationIntentByProposal(proposalId) {
+      const result = await client.query('SELECT * FROM product_engineering_application_intents WHERE proposal_id = $1', [proposalId]);
+      return result.rows[0] ? mapApplicationIntent(result.rows[0]) : undefined;
+    },
+    async getApplicationReceiptByProposal(proposalId) {
+      const result = await client.query('SELECT * FROM product_engineering_application_receipts WHERE proposal_id = $1', [proposalId]);
+      return result.rows[0] ? mapApplicationReceipt(result.rows[0]) : undefined;
     },
     async getConflictForUpdate(id) {
       const result = await client.query('SELECT * FROM product_engineering_conflicts WHERE id = $1 FOR UPDATE', [id]);
@@ -411,6 +427,39 @@ function transactionView(client) {
       );
     },
 
+    async insertApplicationIntent(value) {
+      await client.query(
+        `INSERT INTO product_engineering_application_intents
+          (id,proposal_id,analysis_run_id,finding_id,brand_id,style_id,actor_id,application_command_id,canonical_command_id,
+           target_authority,target_entity_id,target_action,expected_proposal_version,expected_canonical_version,
+           precondition_snapshot,precondition_hash,deterministic_diff,lineage,intent_hash,prepared_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb,$16,$17::jsonb,$18::jsonb,$19,$20)`,
+        [
+          value.id,value.proposalId,value.analysisRunId,value.findingId,value.brandId,value.styleId,value.actorId,
+          value.applicationCommandId,value.canonicalCommandId,value.targetAuthority,value.targetEntityId,value.targetAction,
+          value.expectedProposalVersion,value.expectedCanonicalVersion,JSON.stringify(value.preconditionSnapshot),value.preconditionHash,
+          JSON.stringify(value.deterministicDiff),JSON.stringify(value.lineage),value.intentHash,value.preparedAt,
+        ],
+      );
+    },
+
+    async insertApplicationReceipt(value) {
+      await client.query(
+        `INSERT INTO product_engineering_application_receipts
+          (id,intent_id,intent_hash,proposal_id,analysis_run_id,finding_id,brand_id,style_id,actor_id,application_command_id,canonical_command_id,
+           target_authority,target_entity_id,target_action,expected_proposal_version,expected_canonical_version,resulting_canonical_version,
+           precondition_hash,deterministic_diff,lineage,result_snapshot,result_hash,receipt_hash,applied_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19::jsonb,$20::jsonb,$21::jsonb,$22,$23,$24)`,
+        [
+          value.id,value.intentId,value.intentHash,value.proposalId,value.analysisRunId,value.findingId,value.brandId,value.styleId,value.actorId,
+          value.applicationCommandId,value.canonicalCommandId,value.targetAuthority,value.targetEntityId,value.targetAction,
+          value.expectedProposalVersion,value.expectedCanonicalVersion,value.resultingCanonicalVersion,value.preconditionHash,
+          JSON.stringify(value.deterministicDiff),JSON.stringify(value.lineage),JSON.stringify(value.resultSnapshot),value.resultHash,
+          value.receiptHash,value.appliedAt,
+        ],
+      );
+    },
+
     async insertProposal(value) {
       await client.query(
         `INSERT INTO product_engineering_proposals
@@ -596,6 +645,30 @@ function mapEvidence(row) {
     id: row.id, findingId: row.finding_id, analysisRunId: row.analysis_run_id, brandId: row.brand_id, styleId: row.style_id,
     sourceKind: row.source_kind, sourceId: row.source_id, sourceLocator: deepFreeze(row.source_locator ?? {}),
     sourceHash: row.source_hash, excerpt: row.excerpt, createdAt: iso(row.created_at), createdBy: row.created_by,
+  });
+}
+
+function mapApplicationIntent(row) {
+  return Object.freeze({
+    id:row.id, proposalId:row.proposal_id, analysisRunId:row.analysis_run_id, findingId:row.finding_id,
+    brandId:row.brand_id, styleId:row.style_id, actorId:row.actor_id, applicationCommandId:row.application_command_id,
+    canonicalCommandId:row.canonical_command_id, targetAuthority:row.target_authority, targetEntityId:row.target_entity_id,
+    targetAction:row.target_action, expectedProposalVersion:row.expected_proposal_version, expectedCanonicalVersion:row.expected_canonical_version,
+    preconditionSnapshot:deepFreeze(row.precondition_snapshot), preconditionHash:row.precondition_hash,
+    deterministicDiff:deepFreeze(row.deterministic_diff), lineage:deepFreeze(row.lineage), intentHash:row.intent_hash,
+    preparedAt:iso(row.prepared_at),
+  });
+}
+
+function mapApplicationReceipt(row) {
+  return Object.freeze({
+    id:row.id, intentId:row.intent_id, intentHash:row.intent_hash, proposalId:row.proposal_id, analysisRunId:row.analysis_run_id, findingId:row.finding_id,
+    brandId:row.brand_id, styleId:row.style_id, actorId:row.actor_id, applicationCommandId:row.application_command_id,
+    canonicalCommandId:row.canonical_command_id, targetAuthority:row.target_authority, targetEntityId:row.target_entity_id,
+    targetAction:row.target_action, expectedProposalVersion:row.expected_proposal_version, expectedCanonicalVersion:row.expected_canonical_version,
+    resultingCanonicalVersion:row.resulting_canonical_version, preconditionHash:row.precondition_hash,
+    deterministicDiff:deepFreeze(row.deterministic_diff), lineage:deepFreeze(row.lineage), resultSnapshot:deepFreeze(row.result_snapshot),
+    resultHash:row.result_hash, receiptHash:row.receipt_hash, appliedAt:iso(row.applied_at),
   });
 }
 

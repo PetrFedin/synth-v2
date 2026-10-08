@@ -1900,3 +1900,56 @@ This creates auditable procurement governance for enterprise customers.
 - verification receipt can be independently replayed from canonical facts.
 
 **Economic effect:** Synth-v2 becomes an operational trust and interoperability rail for fashion supply chains, enabling premium network/API/agentic modules while increasing enterprise switching cost through longitudinal evidence and integrations rather than data lock-in.
+
+## 2026-10-08 — Canonical Application Authority checkpoint
+
+Status: implementation complete on `feat/canonical-application-authority`, acceptance pending fresh PR CI.
+
+### Authority chain now enforced
+
+`accepted AI proposal -> exact canonical target/version -> immutable precondition snapshot -> SHA-256 precondition hash -> deterministic field diff -> immutable application intent -> owning bounded-context command -> resulting canonical version -> immutable application receipt -> reverse lineage`.
+
+Implemented:
+
+- migration `174_product_engineering_canonical_application_authority.sql`;
+- immutable `product_engineering_application_intents` and `product_engineering_application_receipts`;
+- explicit separation between the outer application command and the inner canonical domain command;
+- canonical target read before mutation, with optimistic expected-version proof;
+- stable intent reuse on retry so a post-canonical/pre-receipt crash cannot reinterpret the already-advanced canonical entity as the original precondition;
+- deterministic proposal diff and SHA-256 hashes for precondition, intent, canonical result and receipt;
+- receipt linkage from Product Engineering `appliedReference`;
+- reverse lineage to analysis run, finding when present, model runs, evidence and governed sources;
+- read-only receipt endpoint: `GET /v2/product-engineering/proposals/{proposalId}/application-receipt`;
+- authoritative OpenAPI contract for the receipt;
+- PostgreSQL Golden Path now proves HTTP apply -> canonical Material mutation -> persisted receipt -> reverse source/model/evidence lineage.
+
+Local acceptance evidence on final implementation path:
+
+- Product Engineering Canonical Application unit/contract suite: PASS;
+- migration 174 contract: PASS;
+- PostgreSQL AI Engineering Golden Path with migration 174 and receipt E2E: PASS;
+- `validate:types`: PASS with no baseline increase;
+- `validate:architecture`: PASS;
+- `validate:ui`: PASS;
+- `validate:i18n`: PASS;
+- full `npm run verify`: PASS on the final receipt persistence revision (`2443` tests discovered, `2367` pass, `76` skipped, `0` fail); exact `intent_hash` persistence is included in this run.
+
+### Non-negotiable invariant
+
+AI acceptance is not canonical mutation. No AI proposal can silently rewrite PLM state. Application is valid only when the exact accepted proposal/version is bound to an observed canonical precondition, the owning domain command succeeds under its normal policy/capability/idempotency/concurrency rules, and an immutable receipt proves the resulting canonical version.
+
+### Next moat after merge — Product Engineering Change Impact Engine
+
+Build a version-aware dependency graph rather than a static warning list:
+
+`source revision -> stale evidence/finding -> stale proposal -> affected Technical Flat nodes -> Measurement / BOM / Material / Tech Pack -> Sample / Sourcing / Production / QC / Cost / Commercial -> required re-review / block / acknowledge / recompute`.
+
+Required properties:
+
+- exact dependency edges with source and target versions;
+- no inferred dependency presented as observed fact;
+- stale propagation is deterministic and replayable;
+- production-impact rules become stricter once execution has started;
+- commercial projections are invalidated/recomputed only through their owning authorities;
+- each re-review/block/acknowledgement produces its own evidence receipt;
+- source replacement never destroys historical lineage to the version that originally justified a canonical fact.

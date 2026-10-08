@@ -1,17 +1,18 @@
 import { invariant } from '../core/errors.mjs';
+import { applicationLineage, createCanonicalApplicationReceipt } from '../modules/product-engineering/application-authority.mjs';
 
 const APPLY_MATRIX=Object.freeze({
   measurement:Object.freeze({
-    chart:Object.freeze({service:'measurements',method:'updateCanonicalMeasurementChart'}),
+    chart:Object.freeze({service:'measurements',method:'updateCanonicalMeasurementChart',readMethod:'getCanonicalForActor'}),
   }),
   material:Object.freeze({
-    specification:Object.freeze({service:'materials',method:'amendMaterialSpecification'}),
+    specification:Object.freeze({service:'materials',method:'amendMaterialSpecification',readMethod:'getForActor'}),
   }),
   tech_pack:Object.freeze({
-    revision:Object.freeze({service:'techPacks',method:'createRevision'}),
+    revision:Object.freeze({service:'techPacks',method:'createRevision',readMethod:'getForActor'}),
   }),
   operation_sequence:Object.freeze({
-    operations:Object.freeze({service:'operationSequences',method:'replaceOperations'}),
+    operations:Object.freeze({service:'operationSequences',method:'replaceOperations',readMethod:'operationSequenceByIdForActor'}),
   }),
 });
 
@@ -21,22 +22,26 @@ const APPLY_MATRIX=Object.freeze({
  *   measurements?:any,
  *   materials?:any,
  *   techPacks?:any,
- *   operationSequences?:any
+ *   operationSequences?:any,
+ *   clock?:()=>string
  * }} options
  */
 export function createProductEngineeringProposalApplyService(options={}) {
-  const {productEngineering}=options;
+  const {productEngineering,clock=()=>new Date().toISOString()}=options;
   invariant(productEngineering
     && typeof productEngineering.prepareProposalApplication==='function'
+    && typeof productEngineering.recordProposalApplicationIntent==='function'
     && typeof productEngineering.markProposalApplied==='function',
   'PRODUCT_ENGINEERING_APPLY_SERVICE_REQUIRED','Product Engineering apply dependencies are required');
 
   return Object.freeze({
     async applyProposal(commandId,actorId,proposalId,input){
       assertApplyInput(commandId,actorId,proposalId,input);
+      const canonicalId=canonicalCommandId(commandId);
       const prepared=await productEngineering.prepareProposalApplication(actorId,proposalId,{
         expectedVersion:input.expectedProposalVersion,
-        applicationCommandId:canonicalCommandId(commandId),
+        applicationCommandId:commandId,
+        canonicalCommandId:canonicalId,
       });
       if(prepared.replay)return prepared.proposal;
       const proposal=prepared.proposal;
@@ -46,17 +51,46 @@ export function createProductEngineeringProposalApplyService(options={}) {
         authority:proposal.targetAuthority,
         targetField:proposal.targetField,
       });
-      const payload=canonicalPayload(proposal,input.expectedCanonicalVersion);
       const service=options[action.service];
       invariant(service&&typeof service[action.method]==='function','PRODUCT_ENGINEERING_APPLY_TARGET_SERVICE_REQUIRED','Canonical target service is not available',{
         authority:proposal.targetAuthority,
         targetField:proposal.targetField,
       });
 
-      const canonicalId=canonicalCommandId(commandId);
+      let intent=prepared.applicationIntent??null;
+      if(!intent){
+        invariant(typeof service[action.readMethod]==='function','PRODUCT_ENGINEERING_APPLY_TARGET_READER_REQUIRED','Canonical target must be readable before application',{
+          authority:proposal.targetAuthority,
+          targetField:proposal.targetField,
+        });
+        const canonicalBefore=await service[action.readMethod](actorId,proposal.targetEntityId);
+        const workspace=typeof productEngineering.getAnalysisWorkspaceForActor==='function'
+          ? await productEngineering.getAnalysisWorkspaceForActor(actorId,proposal.analysisRunId)
+          : null;
+        intent=await productEngineering.recordProposalApplicationIntent(commandId+':intent',actorId,proposalId,{
+          applicationCommandId:commandId,
+          canonicalCommandId:canonicalId,
+          expectedProposalVersion:input.expectedProposalVersion,
+          expectedCanonicalVersion:input.expectedCanonicalVersion,
+          canonicalBefore,
+          lineage:applicationLineage(proposal,workspace),
+        });
+      }else{
+        invariant(intent.canonicalCommandId===canonicalId,'PRODUCT_ENGINEERING_APPLICATION_INTENT_MISMATCH','Prepared application intent belongs to another canonical command',{proposalId});
+        invariant(intent.expectedCanonicalVersion===input.expectedCanonicalVersion,'PRODUCT_ENGINEERING_APPLICATION_INTENT_MISMATCH','Prepared application intent expects another canonical version',{proposalId});
+      }
+
+      const payload=canonicalPayload(proposal,intent.expectedCanonicalVersion);
       const result=await service[action.method](canonicalId,actorId,proposal.targetEntityId,payload);
       const entityId=result?.id??result?.code??result?.techPackCode??result?.sequenceId??proposal.targetEntityId;
       const version=Number.isInteger(result?.version)?result.version:null;
+      invariant(Number.isInteger(version)&&version>=1,'PRODUCT_ENGINEERING_CANONICAL_RESULT_VERSION_REQUIRED','Canonical command must return the resulting canonical version',{proposalId,authority:proposal.targetAuthority});
+      const receipt=createCanonicalApplicationReceipt({
+        id:intent.id+':receipt',
+        intent,
+        canonicalResult:result,
+        appliedAt:clock(),
+      });
 
       return productEngineering.markProposalApplied(commandId,actorId,proposalId,{
         expectedVersion:proposal.version,
@@ -65,6 +99,7 @@ export function createProductEngineeringProposalApplyService(options={}) {
         version,
         action:proposal.targetField,
         commandId:canonicalId,
+        receipt,
       });
     },
 
@@ -77,6 +112,7 @@ export function createProductEngineeringProposalApplyService(options={}) {
         targetEntityId:proposal?.targetEntityId??null,
         canonicalService:action?.service??null,
         canonicalMethod:action?.method??null,
+        canonicalReadMethod:action?.readMethod??null,
       });
     },
   });

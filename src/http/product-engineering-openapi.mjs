@@ -167,6 +167,24 @@ function schemas() {
         },
       },
     },
+    ProductEngineeringApplicationReceipt: {
+      type:'object', additionalProperties:false,
+      required:['id','intentId','intentHash','proposalId','analysisRunId','findingId','brandId','styleId','actorId','applicationCommandId','canonicalCommandId','targetAuthority','targetEntityId','targetAction','expectedProposalVersion','expectedCanonicalVersion','resultingCanonicalVersion','preconditionHash','deterministicDiff','lineage','resultSnapshot','resultHash','receiptHash','appliedAt'],
+      properties:{
+        id, intentId:id, intentHash:hash, proposalId:id, analysisRunId:id, findingId:nullableId,
+        brandId:id, styleId:id, actorId:id, applicationCommandId:id, canonicalCommandId:id,
+        targetAuthority:{type:'string',enum:authorities}, targetEntityId:id, targetAction:{type:'string'},
+        expectedProposalVersion:{type:'integer',minimum:1}, expectedCanonicalVersion:{type:'integer',minimum:1}, resultingCanonicalVersion:{type:'integer',minimum:1},
+        preconditionHash:hash,
+        deterministicDiff:{type:'array',items:{type:'object',additionalProperties:true}},
+        lineage:{type:'object',additionalProperties:false,required:['analysisRunId','findingId','evidenceIds','sourceIds','modelRunIds'],properties:{
+          analysisRunId:id, findingId:nullableId,
+          evidenceIds:{type:'array',items:id}, sourceIds:{type:'array',items:id}, modelRunIds:{type:'array',items:id},
+        }},
+        resultSnapshot:jsonObject, resultHash:hash, receiptHash:hash, appliedAt:dateTime,
+      },
+      description:'Immutable proof that an accepted engineering proposal crossed the exact canonical authority/version boundary through the owning domain command.',
+    },
     ProductEngineeringConflictCreate: {
       type: 'object', additionalProperties: false, required: ['conflictType','subject','candidates','severity'],
       properties: {
@@ -286,6 +304,7 @@ function paths() {
     '/product-engineering/analyses/{analysisRunId}/proposals': { post: mutation('createProductEngineeringProposal', ['analysisRunId'], '#/components/schemas/ProductEngineeringProposalCreate') },
     '/product-engineering/proposals/{proposalId}/resolve': { post: mutation('resolveProductEngineeringProposal', ['proposalId'], '#/components/schemas/ProductEngineeringProposalResolve') },
     '/product-engineering/proposals/{proposalId}/impact': { get: read('getProductEngineeringProposalImpact', ['proposalId'], '#/components/schemas/ProductEngineeringProposalImpact') },
+    '/product-engineering/proposals/{proposalId}/application-receipt': { get: read('getProductEngineeringApplicationReceipt', ['proposalId'], '#/components/schemas/ProductEngineeringApplicationReceipt') },
     '/product-engineering/proposals/{proposalId}/apply': { post: mutation('applyProductEngineeringProposal', ['proposalId'], '#/components/schemas/ProductEngineeringProposalApply') },
     '/product-engineering/analyses/{analysisRunId}/conflicts': { post: mutation('createProductEngineeringConflict', ['analysisRunId'], '#/components/schemas/ProductEngineeringConflictCreate') },
     '/product-engineering/conflicts/{conflictId}/resolve': { post: mutation('resolveProductEngineeringConflict', ['conflictId'], '#/components/schemas/ProductEngineeringConflictResolve') },

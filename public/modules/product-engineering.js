@@ -69,7 +69,7 @@
       queued: ['в очереди', 'queued'], running: ['в работе', 'running'], completed: ['завершён', 'completed'],
       failed: ['ошибка', 'failed'], cancelled: ['отменён', 'cancelled'], pending: ['ждёт проверки', 'pending'],
       accepted: ['принято', 'accepted'], rejected: ['отклонено', 'rejected'], superseded: ['заменено', 'superseded'],
-      open: ['открыт', 'open'], resolved: ['решён', 'resolved'], ignored: ['принят как исключение', 'ignored'],
+      open: ['открыт', 'open'], acknowledged: ['принят в работу', 'acknowledged'], resolved: ['решён', 'resolved'], ignored: ['принят как исключение', 'ignored'],
       draft: ['черновик', 'draft'], approved: ['утверждён', 'approved'],
       blocking: ['блокирует', 'blocking'], warning: ['внимание', 'warning'], info: ['информация', 'info'],
       high: ['высокий риск', 'high risk'], medium: ['средний риск', 'medium risk'],
@@ -103,6 +103,7 @@
     const blocking = data.conflicts.filter((row) => row.status === 'open' && row.severity === 'blocking').length;
     const approvedDrawings = data.drawings.filter((row) => row.status === 'approved').length;
     const admittedSources = (data.sources ?? []).filter((row) => row.status === 'admitted').length;
+    const openChanges = (data.changeCases ?? []).filter((row) => row.status === 'open').length;
     const row = el('div', { className: 'od-engineering-summary' });
     [
       [text('Источники', 'Admitted sources'), admittedSources],
@@ -112,6 +113,7 @@
       [text('Блокирующие', 'Blocking'), blocking],
       [text('Утверждённые виды', 'Approved views'), approvedDrawings],
       [text('Ontology nodes', 'Ontology nodes'), data.garmentGraph?.nodeCount ?? 0],
+      [text('Изменения источников', 'Open source changes'), openChanges],
     ].forEach(([label, value]) => {
       const card = el('div', { className: 'od-engineering-kpi', 'data-od14-component': 'metric' });
       card.append(el('strong', { rawText: String(value) }), el('span', { rawText: label }));
@@ -248,7 +250,104 @@
     return wrap;
   }
 
-  function sourcesPanel(rows) {
+  function reviseSource(product, source, rows) {
+    const candidates = rows.filter((row) => row.id !== source.id && row.status === 'admitted' && ['completed','not_required'].includes(row.parseStatus));
+    if (!candidates.length) {
+      toast(text('Сначала загрузите и дождитесь admission/parsing новой версии источника.', 'Upload and admit/parse the replacement source first.'), 'error');
+      return;
+    }
+    openForm(
+      text('Зафиксировать новую версию источника', 'Record source revision'),
+      [
+        selectDef('replacementSourceId', text('Новая версия', 'Replacement source'), candidates, row => `${row.originalName || row.id} · ${(row.contentHash || '').slice(0, 10)}…`),
+        textDef('reason', text('Причина изменения', 'Revision reason'), '', 2000, true, 2),
+      ],
+      async (values) => {
+        const result = await mutate(`/v2/product-engineering/sources/${encodeURIComponent(source.id)}/revise`, {
+          replacementSourceId: values.replacementSourceId,
+          reason: values.reason.trim(),
+        });
+        invalidate(product.id);
+        queueMicrotask(() => { void showChangeCase(product, result.changeCase.id); });
+        return result;
+      },
+      { successMessage: ['Изменение источника зафиксировано; зависимости пересчитаны.', 'Source revision recorded; dependency impact was recomputed.'] },
+    );
+  }
+
+  function changeEvidenceStatus(value) {
+    if (value === 'observed') return text('наблюдается', 'observed');
+    if (value === 'derived') return text('выведено', 'derived');
+    if (value === 'policy_required') return text('требуется политикой', 'policy required');
+    return value || '—';
+  }
+
+  async function showChangeCase(product, changeCaseId) {
+    const bundle = await api(`/v2/product-engineering/change-cases/${encodeURIComponent(changeCaseId)}`);
+    const changeCase = bundle.changeCase;
+    const rows = [
+      { label: text('Статус', 'Status'), value: status(changeCase.status) },
+      { label: 'Impact SHA-256', value: changeCase.impactHash },
+      { label: text('Всего действий', 'Required actions'), value: String(bundle.impacts?.length ?? 0) },
+    ];
+    (bundle.impacts ?? []).slice(0, 80).forEach((impact) => rows.push({
+      label: `${impact.area} · ${status(impact.severity)}`,
+      value: `${impact.requiredAction} · ${changeEvidenceStatus(impact.evidenceStatus)} · ${impact.entityId}${impact.entityVersion ? ` @ v${impact.entityVersion}` : ''}`,
+    }));
+    openDetails(text('Влияние изменения источника', 'Source revision impact'), rows);
+    return bundle;
+  }
+
+  function acknowledgeChangeCase(product, changeCase) {
+    openForm(
+      text('Принять изменение в работу', 'Acknowledge change case'),
+      [textDef('note', text('Комментарий', 'Acknowledgement note'), '', 4000, true, 2)],
+      async (values) => {
+        const result = await mutate(`/v2/product-engineering/change-cases/${encodeURIComponent(changeCase.id)}/acknowledge`, {
+          expectedVersion: changeCase.version,
+          note: values.note.trim(),
+        });
+        invalidate(product.id);
+        return result;
+      },
+      { successMessage: ['Изменение принято в работу.', 'Change case acknowledged.'] },
+    );
+  }
+
+  function changeCasesPanel(product, rows, manage) {
+    const wrap = el('div', { className: 'stack' });
+    wrap.append(el('h4', { rawText: text('Изменения и пересмотр зависимостей', 'Changes & dependency review') }));
+    if (!rows.length) {
+      wrap.append(notice(text('Зафиксированных замен источников пока нет.', 'No governed source revisions yet.')));
+      return wrap;
+    }
+    const tableRows = rows.map((row) => {
+      const actions = el('div', { className: 'od-inline-actions' });
+      const view = el('button', { className: 'button small', type: 'button', rawText: text('Влияние', 'Impact') });
+      view.addEventListener('click', () => { void showChangeCase(product, row.id); });
+      actions.append(view);
+      if (manage && row.status === 'open') {
+        const ack = el('button', { className: 'button small primary', type: 'button', rawText: text('Принять в работу', 'Acknowledge') });
+        ack.addEventListener('click', () => acknowledgeChangeCase(product, row));
+        actions.append(ack);
+      }
+      return [
+        statusBadge(row.status),
+        `${(row.supersededSourceId || '').slice(0, 12)}… → ${(row.replacementSourceId || '').slice(0, 12)}…`,
+        String(row.impactCount ?? 0),
+        String(row.pendingImpactCount ?? 0),
+        row.impactHash ? `${row.impactHash.slice(0, 12)}…` : '—',
+        actions,
+      ];
+    });
+    wrap.append(odMiniTable([
+      text('Статус', 'Status'), text('Версии источника', 'Source revision'), text('Влияния', 'Impacts'),
+      text('Ждут действий', 'Pending'), 'SHA-256', text('Действие', 'Action'),
+    ], tableRows));
+    return wrap;
+  }
+
+  function sourcesPanel(product, rows, manage) {
     const wrap = el('div', { className: 'stack' });
     wrap.append(el('h4', { rawText: text('Источники и provenance', 'Sources & provenance') }));
     if (!rows.length) {
@@ -267,6 +366,7 @@
         text('Admission', 'Admission'),
         text('Парсинг', 'Parsing'),
         text('Фрагменты', 'Fragments'),
+        text('Действие', 'Action'),
       ],
       rows.map((row) => [
         row.originalName || row.id,
@@ -276,6 +376,15 @@
         statusBadge(row.status),
         statusBadge(row.parseStatus),
         String(row.fragmentCount ?? 0),
+        manage ? (() => {
+          const actions = el('div', { className: 'od-inline-actions' });
+          if (row.status === 'admitted' && ['completed','not_required'].includes(row.parseStatus)) {
+            const revise = el('button', { className: 'button small', type: 'button', rawText: text('Новая версия', 'New version') });
+            revise.addEventListener('click', () => reviseSource(product, row, rows));
+            actions.append(revise);
+          }
+          return actions;
+        })() : '—',
       ]),
     ));
     return wrap;
@@ -565,7 +674,7 @@
       wrap.append(retry);
       return wrap;
     }
-    const data = holder.data || { analyses: [], proposals: [], conflicts: [], drawings: [], sources: [], garmentGraph: null };
+    const data = holder.data || { analyses: [], proposals: [], conflicts: [], drawings: [], sources: [], garmentGraph: null, changeCases: [] };
     const manage = manageAllowed(product);
     const wrap = el('div', { className: 'stack od-engineering-workspace' });
     const guard = notice(text(
@@ -585,7 +694,8 @@
       wrap.append(actions);
     }
     wrap.append(
-      sourcesPanel(data.sources ?? []),
+      sourcesPanel(product, data.sources ?? [], manage),
+      changeCasesPanel(product, data.changeCases ?? [], manage),
       garmentGraphPanel(data.garmentGraph ?? null),
       conflictsPanel(product, data.conflicts, manage),
       proposalsPanel(product, data.proposals, manage),

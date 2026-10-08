@@ -1953,3 +1953,67 @@ Required properties:
 - commercial projections are invalidated/recomputed only through their owning authorities;
 - each re-review/block/acknowledgement produces its own evidence receipt;
 - source replacement never destroys historical lineage to the version that originally justified a canonical fact.
+
+
+## 2026-10-08 — Product Engineering Change Impact Engine v1 checkpoint
+
+Status: active development on `feat/product-engineering-change-impact`; Canonical Application Authority is merged to `main@9eadd0fdadebe7fea9fbd5d173503012182a1455`.
+
+### Implemented first slice
+
+`admitted source vN -> admitted replacement source vN+1 -> immutable source revision -> exact reverse lineage -> deterministic impact snapshot/hash -> change case -> acknowledge`
+
+The engine now propagates a governed source revision through exact repository relationships:
+
+- AnalysisRun input source manifest;
+- Evidence -> Finding;
+- Finding/Analysis -> Proposal;
+- Finding/Analysis -> reviewed Garment Graph node;
+- Garment Node -> Technical Flat object/version;
+- Application Receipt -> exact canonical authority/entity/resulting version;
+- canonical receipt -> governed downstream impact policy.
+
+Evidence semantics are intentionally strict:
+
+- `observed` = explicit relation read from PostgreSQL;
+- `derived` = bounded deterministic inference from observed state;
+- `policy_required` = required follow-up from policy, **not** a claim that a downstream row exists.
+
+This prevents the impact engine from turning a dependency policy into invented operational facts. Historical source bytes and the canonical version originally justified by them remain verifiable.
+
+### Product Master UX
+
+The Engineering workspace now exposes:
+
+- `New version` on admitted/parsed governed sources;
+- explicit replacement-source selection + revision reason;
+- `Changes & dependency review`;
+- source revision old -> new identity, impact count, pending count and impact SHA-256;
+- evidence status labels (`observed / derived / policy required`);
+- read-only impact details;
+- explicit `Acknowledge` with optimistic version + human note.
+
+### Current acceptance evidence
+
+- Change Impact domain/migration tests: PASS;
+- Product Engineering targeted suite: 80/80 PASS at final local checkpoint;
+- PostgreSQL AI Engineering Golden Path including source replacement -> deterministic impact -> canonical Material v2 lineage -> acknowledgement: PASS;
+- Product Engineering UI tests: PASS;
+- `validate:types`: PASS with no baseline increase;
+- `validate:ui`: PASS;
+- `validate:i18n`: PASS;
+- `validate:design-system`: PASS;
+- authoritative composed OpenAPI advanced additively to `1.21.0`;
+- full `npm run verify`: PASS (`2449` tests discovered, `2373` pass, `76` skipped, `0` fail).
+
+### Next slices before Change Impact Engine is considered complete
+
+1. downstream authority admission guards: Production / Cost / Commercial / Sourcing consume unresolved blocking requirements through their own policies;
+2. per-impact `acknowledge / resolve / waive` receipts with actor, reason, evidence and resulting authority version;
+3. recompute jobs triggered by successful canonical re-review rather than mutable flags;
+4. automatic stale/superseded status projection for findings/proposals/drawings without deleting historical evidence;
+5. dependency freshness dashboard and SLA/owner routing;
+6. supplier/factory notification and acknowledgement when their governed evidence caused a production-relevant change;
+7. browser E2E on Monitor / Tablet / Phone for Source Revision -> Impact -> Acknowledge.
+
+**Non-negotiable:** the Change Impact Engine observes and orchestrates; it does not gain a generic SQL/write path into downstream PLM authorities. Each actual correction remains a canonical bounded-context command with its own policy, version and receipt.

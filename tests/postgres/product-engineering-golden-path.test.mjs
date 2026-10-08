@@ -275,6 +275,56 @@ test('AI Engineering Golden Path crosses real HTTP, PostgreSQL, durable jobs and
     assert.equal(appliedMaterial.specification.cuttableWidthUnit, 'cm');
     assert.equal(appliedMaterial.specification.countryOfOrigin, 'IT');
 
+    const replacementSource = data(await requestBinary(baseUrl, `/v2/product/styles/${encodeURIComponent(style.id)}/engineering/upload`, {
+      token,
+      idempotencyKey: `ai-eng-${runId}-replacement-upload`,
+      fileName: `acceptance-${runId}-revision.pdf`,
+      mediaType: 'application/pdf',
+      bytes: new TextEncoder().encode('%PDF-1.7\n1 0 obj <</Type /Page>> endobj\n2 0 obj <</Revision /Corrected>> endobj\n%%EOF'),
+    }));
+    assert.notEqual(replacementSource.contentHash, source.contentHash);
+    await runtime.productEngineeringJobs.processPending({ limit: 10 });
+    await runtime.productEngineeringJobs.processPending({ limit: 10 });
+    const replacementRead = data(await requestJson(baseUrl, `/v2/product-engineering/sources/${encodeURIComponent(replacementSource.id)}`, { token }));
+    assert.equal(replacementRead.source.status, 'admitted');
+    assert.equal(replacementRead.source.parseStatus, 'completed');
+
+    const revisionResult = data(await requestJson(baseUrl, `/v2/product-engineering/sources/${encodeURIComponent(source.id)}/revise`, {
+      method: 'POST',
+      token,
+      idempotencyKey: `ai-eng-${runId}-source-revision`,
+      body: { replacementSourceId: replacementSource.id, reason: 'Factory issued corrected technical evidence.' },
+    }));
+    assert.equal(revisionResult.revision.supersededSourceId, source.id);
+    assert.equal(revisionResult.revision.replacementSourceId, replacementSource.id);
+    assert.equal(revisionResult.changeCase.status, 'open');
+    assert.match(revisionResult.changeCase.impactHash, /^[0-9a-f]{64}$/);
+    assert.equal(revisionResult.impacts.some((row) => row.impactKind === 'evidence' && row.evidenceStatus === 'observed'), true);
+    assert.equal(revisionResult.impacts.some((row) => row.impactKind === 'canonical_target' && row.entityId === materialCode && row.entityVersion === '2'), true);
+    assert.equal(revisionResult.impacts.some((row) => row.impactKind === 'downstream_policy' && row.area === 'cost' && row.requiredAction === 'recalculate' && row.evidenceStatus === 'policy_required'), true);
+    assert.equal(revisionResult.impacts.some((row) => row.area === 'cost' && row.evidenceStatus === 'observed'), false);
+
+    const workspaceAfterRevision = data(await requestJson(baseUrl, `/v2/product/styles/${encodeURIComponent(style.id)}/engineering`, { token }));
+    const projectedCase = workspaceAfterRevision.changeCases.find((row) => row.id === revisionResult.changeCase.id);
+    assert.ok(projectedCase);
+    assert.equal(projectedCase.status, 'open');
+    assert.equal(projectedCase.impactCount, revisionResult.impacts.length);
+    assert.equal(projectedCase.pendingImpactCount, revisionResult.impacts.length);
+
+    const changeWorkspace = data(await requestJson(baseUrl, `/v2/product-engineering/change-cases/${encodeURIComponent(revisionResult.changeCase.id)}`, { token }));
+    assert.equal(changeWorkspace.changeCase.impactHash, revisionResult.changeCase.impactHash);
+    assert.equal(changeWorkspace.impacts.length, revisionResult.impacts.length);
+
+    const acknowledgedCase = data(await requestJson(baseUrl, `/v2/product-engineering/change-cases/${encodeURIComponent(revisionResult.changeCase.id)}/acknowledge`, {
+      method: 'POST',
+      token,
+      idempotencyKey: `ai-eng-${runId}-change-ack`,
+      body: { expectedVersion: revisionResult.changeCase.version, note: 'Engineering team accepted the deterministic re-review workload.' },
+    }));
+    assert.equal(acknowledgedCase.status, 'acknowledged');
+    assert.equal(acknowledgedCase.version, 2);
+    assert.equal(acknowledgedCase.resolvedAt, null);
+
     const persisted = await pool.query(
       `SELECT
          source.content_hash AS source_hash,

@@ -33,6 +33,14 @@ test('impact UI distinguishes unavailable evidence from observed and derived evi
   assert.match(script,/Pre-apply change impact/);
 });
 
-test('Product Engineering asset is cache-busted after Review Impact Apply UI change',()=>{
-  assert.match(html,/\/ui\/product-engineering\.js\?v=engineering-20261006-2/);
+test('source revision UI exposes governed replacement, impact review and acknowledgement',()=>{
+  assert.match(script,/\/v2\/product-engineering\/sources\/\$\{encodeURIComponent\(source\.id\)\}\/revise/);
+  assert.match(script,/\/v2\/product-engineering\/change-cases\/\$\{encodeURIComponent\(changeCaseId\)\}/);
+  assert.match(script,/\/v2\/product-engineering\/change-cases\/\$\{encodeURIComponent\(changeCase\.id\)\}\/acknowledge/);
+  assert.match(script,/policy_required/);
+  assert.match(script,/Changes & dependency review/);
+});
+
+test('Product Engineering asset is cache-busted after Change Impact Engine UI change',()=>{
+  assert.match(html,/\/ui\/product-engineering\.js\?v=engineering-20261008-1/);
 });

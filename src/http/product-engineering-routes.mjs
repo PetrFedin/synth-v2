@@ -27,6 +27,8 @@ const SOURCE_ADMIT = bodyContract(['expectedVersion','policyVersion']);
 const SOURCE_REJECT = bodyContract(['expectedVersion','code','message','quarantine']);
 const SOURCE_FRAGMENT = bodyContract(['kind','locator','content','contentHash']);
 const SOURCE_PARSE_COMPLETE = bodyContract(['expectedVersion','parser','parserVersion','fragmentCount']);
+const SOURCE_REVISE = bodyContract(['replacementSourceId','reason']);
+const CHANGE_CASE_ACK = bodyContract(['expectedVersion','note']);
 const CONFLICT_SEVERITIES = ['info','warning','blocking'];
 const SOURCE_KINDS = ['product_media','style_reference','document','spreadsheet','external_uri','sample','manual_observation'];
 const INGEST_MODES = ['upload','connector','canonical_asset','manual'];
@@ -47,6 +49,9 @@ export function createProductEngineeringRoutes(options = {}) {
     mutate('POST', /^\/v2\/product-engineering\/sources\/([^/]+)\/reject$/, SOURCE_REJECT, validateSourceReject, ({ commandId, actorId, params, body }) => service.rejectSource(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/product-engineering\/sources\/([^/]+)\/fragments$/, SOURCE_FRAGMENT, validateSourceFragment, ({ commandId, actorId, params, body }) => service.addSourceFragment(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/product-engineering\/sources\/([^/]+)\/parse-complete$/, SOURCE_PARSE_COMPLETE, validateSourceParseComplete, ({ commandId, actorId, params, body }) => service.completeSourceParsing(commandId, actorId, params[0], body)),
+    mutate('POST', /^\/v2\/product-engineering\/sources\/([^/]+)\/revise$/, SOURCE_REVISE, validateSourceRevision, ({ commandId, actorId, params, body }) => service.reviseSource(commandId, actorId, params[0], body)),
+    read('GET', /^\/v2\/product-engineering\/change-cases\/([^/]+)$/, [], ({ actorId, params }) => service.getChangeCaseForActor(actorId, params[0])),
+    mutate('POST', /^\/v2\/product-engineering\/change-cases\/([^/]+)\/acknowledge$/, CHANGE_CASE_ACK, validateChangeCaseAck, ({ commandId, actorId, params, body }) => service.acknowledgeChangeCase(commandId, actorId, params[0], body)),
     mutate('POST', /^\/v2\/product\/styles\/([^/]+)\/engineering\/analyses$/, ANALYSIS_CREATE, validateAnalysis, ({ commandId, actorId, params, body }) => service.requestAnalysis(commandId, actorId, params[0], body)),
     read('GET', /^\/v2\/product\/styles\/([^/]+)\/engineering$/, ['limit'], ({ actorId, params, query }) => service.getStyleWorkspaceForActor(actorId, params[0], { limit: query.limit })),
     read('GET', /^\/v2\/product-engineering\/analyses\/([^/]+)$/, [], ({ actorId, params }) => service.getAnalysisWorkspaceForActor(actorId, params[0])),
@@ -128,6 +133,15 @@ function validateSourceParseComplete(body) {
   nonEmpty(body.parser,'parser');
   nonEmpty(body.parserVersion,'parserVersion');
   invariant(Number.isInteger(body.fragmentCount) && body.fragmentCount >= 0,'HTTP_BODY_FIELD_INVALID','fragmentCount must be a non-negative integer',{field:'fragmentCount'});
+}
+function validateSourceRevision(body) {
+  optionalId(body.replacementSourceId,'replacementSourceId');
+  nonEmpty(body.replacementSourceId,'replacementSourceId');
+  nonEmpty(body.reason,'reason');
+}
+function validateChangeCaseAck(body) {
+  version(body.expectedVersion,'expectedVersion');
+  nonEmpty(body.note,'note');
 }
 
 function validateAnalysis(body) {

@@ -2141,3 +2141,45 @@ The branch adds the first persisted Operational Exception control plane on top o
 **Responsive/ODS identity:** the inspector remains the same ODS right-side desktop / bounded tablet / full-height phone surface. Because the shipped inspector JS and shared adapter CSS changed materially in this tranche, their cache identities are advanced to `operational-collaboration-20261007-1` and `visual-20260805-14-module-adapters-5`; no parallel stylesheet or detached exception UI is created.
 
 Status: **IMPLEMENTATION IN PROGRESS / EXCEPTION-SLA + WORKER + CONTEXTUAL RECOVERY UI COMPLETE IN BRANCH**. Next gate: exact-head Verify + PostgreSQL CI + Product Commercialization Acceptance, then merge qualification.
+
+
+## 2026-10-08 — Deterministic Recompute / Re-review Orchestration v1 domain checkpoint
+
+Status: **IMPLEMENTED/PARTIAL** on `feat/change-impact-recompute-orchestration` from accepted `main@9943b8507cbbda67c1fee85d8d98c9d84506a372`.
+
+The first orchestration tranche is deliberately a pure evidence/domain contract before persistence, workers or owning-domain adapters are added.
+
+Implemented:
+
+`verified correction receipt`
+→ exact `StaleDependencySet`
+→ deterministic version/hash-bound dependency edges
+→ immutable dependency-set SHA-256
+→ `RecomputePlan`
+→ canonical DAG levels with deterministic fan-out/fan-in ordering
+→ explicit execution mode `automatic | human_review | external_evidence`
+→ immutable per-step `RecomputeExecutionReceipt`
+→ independent verification required for successful automatic canonical recompute
+→ fail-closed plan admission
+→ immutable sealed `RecomputeOrchestrationReceipt`.
+
+Critical truth boundary:
+
+- the domain **never infers dependency edges** from area names, similarity or heuristics; the caller must supply exact observed/versioned edges plus evidence;
+- a missing parent or DAG cycle fails closed;
+- successful automatic execution cannot be recorded without an exact result reference and independent verification hash;
+- human review / external evidence completion requires explicit evidence;
+- Product Engineering still receives **no generic downstream mutation authority**.
+
+Not yet claimed in this tranche:
+
+- PostgreSQL persistence for dependency sets/plans/execution/orchestration receipts;
+- durable orchestration jobs / lease-retry-reclaim;
+- owning-domain allowlisted command adapters;
+- Awaiting Action projection for `human_review`;
+- external-evidence intake/reconciliation;
+- admission-service wiring that replays the original blocked commercial/production action;
+- HTTP/OpenAPI/UI surfaces;
+- live PostgreSQL Golden Path.
+
+These are the next bounded implementation slices and must preserve the same ownership rule: the orchestrator may request and verify work, while canonical mutation remains inside the owning bounded context.

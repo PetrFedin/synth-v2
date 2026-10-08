@@ -2063,3 +2063,47 @@ The next gate is the shared **Omnidata Contextual Collaboration Inspector**. It 
 **ODS asset identity:** the inspector extends the existing canonical `visual-20260805-14-module-adapters-5` adapter build. The UI wave does not mint a second adapter build identifier merely because new semantic selectors were added; validator and inspector tests are required to agree with the canonical shell asset identity.
 
 Status: **IMPLEMENTATION IN PROGRESS / NO EXCEPTION-SLA YET**.
+
+### 2026-10-07 — Operational Exception + SLA Authority
+
+Branch: `feat/operational-exception-sla`, rebased on `main@ebf52dbeca377aa6490482bea040e98740333923`.
+
+The branch adds the first persisted Operational Exception control plane on top of the canonical collaboration/decision layer and the already-merged AI Product Engineering authority.
+
+**Migration sequencing:** current main already owns migration 173 for Product Engineering command-scope reconciliation. Operational Exception therefore uses migration `176_operational_exception_sla.sql`. Its command-registry constraint preserves `product-engineering` and `operational-collaboration` while adding `operational-exception`; previously applied migration 173 remains immutable.
+
+**Authority model:** Operational Exception is canonical persisted state with one active-condition dedupe key, optimistic versioning, immutable transition history, versioned immutable SLA policy snapshots and transactional outbox events.
+
+**SLA determinism:** an exception may open only against the latest active SLA policy version. `dueAt` is derived from that exact persisted policy snapshot; later SLA versions cannot rewrite an already-open exception.
+
+**Decision Ledger binding:** `accepted_with_risk` requires an existing, non-superseded Decision Ledger record on the same entity and thread with outcome `accepted_with_risk`.
+
+**Awaiting Action:** active exceptions feed the existing `Ждёт вас / Awaiting Action` projection. No second task centre or duplicate task persistence is introduced. Product Engineering `technical-review` remains part of the same catalogue after the rebase.
+
+**Calendar boundary:** an exception may reference an existing Calendar milestone, but PostgreSQL requires the same organisation and exact deadline equality. Exception does not create a competing calendar truth.
+
+**Runtime boundary:** the canonical exception service is constructed once in the PostgreSQL base runtime and forwarded into the complete runtime HTTP transport. Full runtime must not create a second exception store/service.
+
+**Navigation/UI boundary:** until the shared contextual inspector receives its Exception tab later in this same tranche, `Open` on an exception uses the existing Awaiting Action screen as its deterministic owner and rereads that authoritative projection before selecting the exact exception row.
+
+**Exact-head authority gate:** core persistence/API/runtime/Awaiting Action passed Product Commercialization Acceptance #528, Verify #1686 and PostgreSQL CI #2144 at `a0cf82ea7e468801f0420daea9e07c6f790a6cb7`.
+
+**Automatic SLA breach processing:** migration `177_operational_exception_sla_breach.sql` adds a one-shot `sla_breached_at` checkpoint and a partial due index. The production worker `operational-exception-sla` scans only active, due, not-yet-breached exceptions under `FOR UPDATE SKIP LOCKED`; the breach checkpoint, state transition, immutable transition row and outbox event are committed in one PostgreSQL transaction.
+
+**Idempotency:** repeated worker polls cannot escalate the same SLA deadline twice because `sla_breached_at` is written atomically with the first escalation and subsequent scans exclude it. No duplicate queue/table is introduced.
+
+**System actor boundary:** automatic escalation uses the internal actor `system:sla-breach`; this path is application-internal and is not exposed through HTTP. Human SLA policy administration remains owner/admin-scoped, and normal manual lifecycle mutations continue to require `exception.manage`.
+
+**Recovery acceptance:** an automatically escalated exception remains in the existing Awaiting Action projection until an authorised operator resolves it with evidence and explicitly closes it. Resolution preserves the historical `slaBreachedAt` checkpoint; close removes the projection.
+
+**Operations:** the SLA worker is registered in readiness and operational metrics, starts only after successful HTTP bind, participates in graceful shutdown and exposes bounded interval/batch/staleness/failure-threshold settings.
+
+**Contextual exception inspector:** the existing shared inspector now also reads the canonical entity exception projection. It does not introduce a third global task surface. Active exceptions are shown above Discussion/Decision with category, severity, owner, due date, SLA policy/version, breach timestamp, escalation count, business impact and recovery action.
+
+**Operator recovery UI:** only an organisation membership holding `exception.manage` can submit recovery or close actions. Recovery requires a non-empty resolution plus at least one evidence reference; the client sends the exact persisted exception version for optimistic concurrency. A current non-superseded Decision Ledger record on the same entity/thread is the only UI option for `accepted_with_risk`.
+
+**Closure semantics:** active exceptions may be resolved with evidence or accepted with risk; only `resolved` and `accepted_with_risk` states expose explicit close. This preserves the backend lifecycle and keeps the item in Awaiting Action until recovery is actually accepted and closed.
+
+**Responsive/ODS identity:** the inspector remains the same ODS right-side desktop / bounded tablet / full-height phone surface. Because the shipped inspector JS and shared adapter CSS changed materially in this tranche, their cache identities are advanced to `operational-collaboration-20261007-1` and `visual-20260805-14-module-adapters-5`; no parallel stylesheet or detached exception UI is created.
+
+Status: **IMPLEMENTATION IN PROGRESS / EXCEPTION-SLA + WORKER + CONTEXTUAL RECOVERY UI COMPLETE IN BRANCH**. Next gate: exact-head Verify + PostgreSQL CI + Product Commercialization Acceptance, then merge qualification.

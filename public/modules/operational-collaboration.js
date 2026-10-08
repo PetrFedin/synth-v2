@@ -7,6 +7,8 @@
   const ui = {
     context: null,
     data: null,
+    exceptions: [],
+    exceptionError: '',
     loading: false,
     error: '',
     activeTab: 'threads',
@@ -16,8 +18,10 @@
     dialog: null,
   };
 
-  const KINDS = Object.freeze(['general','clarification','fit','qc','sourcing','handoff']);
+  const KINDS = Object.freeze(['general','clarification','fit','qc','sourcing','handoff','exception']);
   const OUTCOMES = Object.freeze(['approved','rejected','accepted_with_risk','deferred','waived','recorded']);
+  const ACTIVE_EXCEPTION_STATES = new Set(['open','assigned','waiting_for_role','waiting_for_document','escalated']);
+  const CLOSABLE_EXCEPTION_STATES = new Set(['resolved','accepted_with_risk']);
 
   function text(ru, en) {
     if (typeof localText === 'function') return localText(ru, en);
@@ -79,6 +83,15 @@
   function canDecide(context) {
     return Boolean(resolveActingOrganisation(context, caps.CAPABILITIES.DECISION_RECORD));
   }
+  function canReadExceptions(context) {
+    return Boolean(resolveActingOrganisation(context, caps.CAPABILITIES.EXCEPTION_READ));
+  }
+  function canManageException(exception) {
+    const organisationId = String(exception?.ownerOrganisationId ?? '');
+    if (!organisationId) return false;
+    return activeMemberships().some((item) =>
+      item.organisationId === organisationId && caps.hasForOrganisation(state.workspace, organisationId, caps.CAPABILITIES.EXCEPTION_MANAGE));
+  }
 
   function entityReference(context) {
     const normalized = normalizeContext(context);
@@ -124,6 +137,25 @@
     return request(`/v2/operational/entities/${encodeURIComponent(normalized.entityType)}/${encodeURIComponent(normalized.entityId)}/collaboration`);
   }
 
+  async function readExceptions(context, request = api) {
+    const normalized = normalizeContext(context);
+    if (!canReadExceptions(normalized)) return [];
+    return request(`/v2/operational/entities/${encodeURIComponent(normalized.entityType)}/${encodeURIComponent(normalized.entityId)}/exceptions`);
+  }
+
+  function buildExceptionActionInput(context, exception, extra = {}) {
+    const normalized = normalizeContext(context);
+    if (exception?.entity?.type !== normalized.entityType || exception?.entity?.id !== normalized.entityId) {
+      throw new Error('OPERATIONAL_EXCEPTION_CONTEXT_MISMATCH');
+    }
+    if (!canManageException(exception)) throw new Error('EXCEPTION_MANAGE_REQUIRED');
+    return Object.freeze({
+      actingOrganisationId: exception.ownerOrganisationId,
+      expectedVersion: exception.version,
+      ...extra,
+    });
+  }
+
   async function load() {
     if (!ui.context || ui.loading) return;
     const generation = ++ui.generation;
@@ -132,8 +164,19 @@
     render();
     try {
       const data = await read(ui.context);
+      let exceptions = [];
+      let exceptionError = '';
+      if (canReadExceptions(ui.context)) {
+        try {
+          exceptions = await readExceptions(ui.context);
+        } catch (error) {
+          exceptionError = error?.message || text('Не удалось загрузить операционные исключения.', 'Could not load operational exceptions.');
+        }
+      }
       if (generation !== ui.generation) return;
       ui.data = data;
+      ui.exceptions = Array.isArray(exceptions) ? exceptions : [];
+      ui.exceptionError = exceptionError;
       const openThreads = (data?.threads ?? []).filter((thread) => thread.status === 'open');
       if (!openThreads.some((thread) => thread.id === ui.selectedThreadId)) {
         ui.selectedThreadId = openThreads[0]?.id ?? data?.threads?.[0]?.id ?? null;
@@ -159,6 +202,8 @@
     dialog.addEventListener('close', () => {
       ui.context = null;
       ui.data = null;
+      ui.exceptions = [];
+      ui.exceptionError = '';
       ui.error = '';
       ui.selectedThreadId = null;
       ui.generation += 1;
@@ -185,6 +230,8 @@
     if (!canRead(normalized)) return;
     ui.context = normalized;
     ui.data = null;
+    ui.exceptions = [];
+    ui.exceptionError = '';
     ui.error = '';
     ui.activeTab = 'threads';
     ui.selectedThreadId = null;
@@ -216,11 +263,14 @@
 
     const threads = Array.isArray(ui.data?.threads) ? ui.data.threads : [];
     const decisions = Array.isArray(ui.data?.decisions) ? ui.data.decisions : [];
+    const exceptions = Array.isArray(ui.exceptions) ? ui.exceptions : [];
+    const activeExceptions = exceptions.filter((item) => ACTIVE_EXCEPTION_STATES.has(item.state));
     const header = h('header', { className: 'operational-collaboration-head', 'data-ods-part': 'section-head' }, [
       h('div', {}, [
         h('p', { className: 'eyebrow', text: text('ОПЕРАЦИОННЫЙ КОНТЕКСТ', 'OPERATIONAL CONTEXT') }),
         h('h2', { text: ui.context.label }),
         h('p', { className: 'muted', text: `${ui.context.entityType} · ${ui.context.entityId}` }),
+        activeExceptions.length ? h('p', { className: 'muted', text: `${text('Активные исключения', 'Active exceptions')}: ${activeExceptions.length}` }) : null,
       ]),
       h('button', { type: 'button', className: 'secondary', 'aria-label': text('Закрыть', 'Close'), text: '×', onclick: close }),
     ]);
@@ -237,6 +287,11 @@
         h('p', { text: ui.error }),
         h('button', { type: 'button', className: 'secondary', text: text('Повторить', 'Retry'), onclick: () => void load() }),
       ]) : null,
+      !ui.loading && !ui.error && ui.exceptionError ? h('div', { className: 'operational-collaboration-alert', 'data-ods-part': 'alert' }, [
+        h('strong', { text: text('Исключения временно недоступны', 'Exceptions are temporarily unavailable') }),
+        h('p', { text: ui.exceptionError }),
+      ]) : null,
+      !ui.loading && !ui.error && exceptions.length ? renderExceptions(exceptions, decisions) : null,
       !ui.loading && !ui.error && ui.activeTab === 'threads' ? renderThreads(threads) : null,
       !ui.loading && !ui.error && ui.activeTab === 'decisions' ? renderDecisions(decisions, threads) : null,
     ]);
@@ -382,6 +437,170 @@
     return form;
   }
 
+  function renderExceptions(exceptions, decisions) {
+    const container = h('section', { className: 'operational-collaboration-panel', 'data-ods-part': 'section' });
+    const sorted = [...exceptions].sort((a, b) => {
+      const activeDelta = Number(ACTIVE_EXCEPTION_STATES.has(b.state)) - Number(ACTIVE_EXCEPTION_STATES.has(a.state));
+      if (activeDelta) return activeDelta;
+      return Date.parse(a.dueAt ?? 0) - Date.parse(b.dueAt ?? 0);
+    });
+    const activeCount = sorted.filter((item) => ACTIVE_EXCEPTION_STATES.has(item.state)).length;
+    container.append(h('div', { className: 'operational-thread-title' }, [
+      h('div', {}, [
+        h('h3', { text: text('Операционные исключения', 'Operational exceptions') }),
+        h('p', { className: 'muted', text: activeCount
+          ? text('Активные проблемы остаются здесь до подтверждённого восстановления и закрытия.', 'Active issues stay here until evidence-backed recovery and closure.')
+          : text('Активных исключений нет. История остаётся привязана к объекту.', 'No active exceptions. History remains linked to the entity.') }),
+      ]),
+      h('span', { className: 'badge', text: String(activeCount) }),
+    ]));
+    for (const exception of sorted) container.append(renderException(exception, decisions));
+    return container;
+  }
+
+  function renderException(exception, decisions) {
+    const active = ACTIVE_EXCEPTION_STATES.has(exception.state);
+    const breached = Boolean(exception.slaBreachedAt);
+    const card = h('article', { className: 'operational-decision operational-exception-card', 'data-ods-part': 'card' }, [
+      h('div', { className: 'operational-decision-meta' }, [
+        h('strong', { text: exceptionCategoryLabel(exception.category) }),
+        h('span', { className: 'badge', text: statusLabelSafe(exception.state) }),
+      ]),
+      h('p', { className: 'muted', text: [
+        severityLabel(exception.severity),
+        text('Срок', 'Due') + ': ' + formatDateTime(exception.dueAt),
+        text('Владелец', 'Owner') + ': ' + (exception.ownerRole || '—'),
+      ].join(' · ') }),
+      breached ? h('p', { text: text('SLA нарушен', 'SLA breached') + ': ' + formatDateTime(exception.slaBreachedAt) }) : null,
+      exception.businessImpact ? h('p', {}, [h('strong', { text: text('Влияние', 'Impact') + ': ' }), exception.businessImpact]) : null,
+      exception.recoveryAction ? h('p', {}, [h('strong', { text: text('Восстановление', 'Recovery') + ': ' }), exception.recoveryAction]) : null,
+      h('small', { text: text('SLA', 'SLA') + ': ' + (exception.slaPolicyId || '—') + ' v' + (exception.slaPolicyVersion ?? '—') + ' · ' + text('эскалаций', 'escalations') + ': ' + (exception.escalationCount ?? 0) }),
+    ]);
+
+    if (canManageException(exception)) {
+      if (active) {
+        card.append(renderRecoveryForm(exception));
+        const riskDecisions = eligibleRiskDecisions(exception, decisions);
+        if (riskDecisions.length) card.append(renderRiskAcceptanceForm(exception, riskDecisions));
+      } else if (CLOSABLE_EXCEPTION_STATES.has(exception.state)) {
+        card.append(h('button', {
+          type: 'button',
+          className: 'primary',
+          disabled: ui.busy,
+          text: text('Закрыть после проверки', 'Close after verification'),
+          onclick: () => void closeException(exception),
+        }));
+      }
+    }
+    return card;
+  }
+
+  function renderRecoveryForm(exception) {
+    const form = h('form', { className: 'operational-collaboration-form compact', 'data-ods-part': 'form' });
+    const resolution = h('textarea', {
+      name: 'resolution', required: 'required', maxlength: '2000', rows: '3',
+      placeholder: text('Что фактически восстановлено', 'What was actually recovered'),
+    });
+    const evidence = h('textarea', {
+      name: 'evidenceRefs', required: 'required', maxlength: '2000', rows: '2',
+      placeholder: text('Ссылки на доказательства — по одной на строку', 'Evidence references — one per line'),
+    });
+    form.append(
+      h('strong', { text: text('Подтвердить восстановление', 'Confirm recovery') }),
+      resolution, evidence,
+      h('button', { type: 'submit', className: 'primary', disabled: ui.busy, text: text('Разрешить с доказательством', 'Resolve with evidence') }),
+    );
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const evidenceRefs = parseEvidenceRefs(evidence.value);
+      if (!resolution.value.trim() || !evidenceRefs.length) return;
+      void resolveException(exception, resolution.value, evidenceRefs);
+    });
+    return form;
+  }
+
+  function eligibleRiskDecisions(exception, decisions) {
+    const superseded = new Set(decisions.map((item) => item.supersedesDecisionId).filter(Boolean));
+    return decisions.filter((decision) =>
+      decision.outcome === 'accepted_with_risk'
+      && decision.threadId === exception.threadId
+      && decision.entity?.type === exception.entity?.type
+      && decision.entity?.id === exception.entity?.id
+      && !superseded.has(decision.id));
+  }
+
+  function renderRiskAcceptanceForm(exception, decisions) {
+    const form = h('form', { className: 'operational-collaboration-form compact', 'data-ods-part': 'form' });
+    const decision = h('select', { name: 'decisionId' }, decisions.map((item) =>
+      h('option', { value: item.id, text: item.decisionType + ' · ' + formatDateTime(item.decidedAt) })));
+    form.append(
+      h('strong', { text: text('Принять риск по решению', 'Accept risk through decision') }),
+      decision,
+      h('button', { type: 'submit', className: 'secondary', disabled: ui.busy, text: text('Принять риск', 'Accept risk') }),
+    );
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      if (!decision.value) return;
+      void acceptRiskException(exception, decision.value);
+    });
+    return form;
+  }
+
+  function parseEvidenceRefs(value) {
+    return [...new Set(String(value ?? '').split(/[\n,]+/).map((item) => item.trim()).filter(Boolean))];
+  }
+
+  async function resolveException(exception, resolution, evidenceRefs) {
+    await run(() => mutate(
+      '/v2/operational/exceptions/' + encodeURIComponent(exception.id) + '/resolve',
+      buildExceptionActionInput(ui.context, exception, { resolution: String(resolution).trim(), evidenceRefs }),
+    ));
+  }
+
+  async function acceptRiskException(exception, decisionId) {
+    await run(() => mutate(
+      '/v2/operational/exceptions/' + encodeURIComponent(exception.id) + '/accept-risk',
+      buildExceptionActionInput(ui.context, exception, { decisionId }),
+    ));
+  }
+
+  async function closeException(exception) {
+    await run(() => mutate(
+      '/v2/operational/exceptions/' + encodeURIComponent(exception.id) + '/close',
+      buildExceptionActionInput(ui.context, exception),
+    ));
+  }
+
+  function exceptionCategoryLabel(value) {
+    const labels = {
+      missing_data: ['Не хватает данных', 'Missing data'],
+      missing_document: ['Нет документа', 'Missing document'],
+      price_conflict: ['Конфликт цены', 'Price conflict'],
+      terms_conflict: ['Конфликт условий', 'Terms conflict'],
+      reserve_conflict: ['Конфликт резерва', 'Reserve conflict'],
+      capacity_conflict: ['Конфликт мощности', 'Capacity conflict'],
+      material_shortage: ['Дефицит материала', 'Material shortage'],
+      supplier_late: ['Опоздание поставщика', 'Supplier late'],
+      qc_fail: ['Провал контроля качества', 'QC failure'],
+      marking_issue: ['Проблема маркировки', 'Marking issue'],
+      shipment_delay: ['Задержка отгрузки', 'Shipment delay'],
+      delivery_discrepancy: ['Расхождение поставки', 'Delivery discrepancy'],
+      payment_overdue: ['Просрочен платёж', 'Payment overdue'],
+      integration_failed: ['Сбой интеграции', 'Integration failed'],
+      permission_denied: ['Недостаточно прав', 'Permission denied'],
+      policy_block: ['Блокировка политикой', 'Policy block'],
+      other: ['Другое исключение', 'Other exception'],
+    };
+    const fallback = String(value ?? '—').replaceAll('_', ' ');
+    const pair = labels[value] ?? [fallback, fallback];
+    return text(pair[0], pair[1]);
+  }
+
+  function severityLabel(value) {
+    const labels = { low: ['Низкая', 'Low'], medium: ['Средняя', 'Medium'], high: ['Высокая', 'High'], critical: ['Критическая', 'Critical'] };
+    const pair = labels[value] ?? [value || '—', value || '—'];
+    return text(pair[0], pair[1]);
+  }
   async function createThread(input) {
     await run(async () => {
       const created = await mutate('/v2/operational/threads', buildThreadInput(ui.context, input));
@@ -460,7 +679,7 @@
   });
 
   global.SynthaOperationalCollaboration = Object.freeze({
-    open, close, createButton, read, normalizeContext, resolveActingOrganisation, buildThreadInput, buildDecisionInput,
-    canRead, canWrite, canDecide,
+    open, close, createButton, read, readExceptions, normalizeContext, resolveActingOrganisation, buildThreadInput, buildDecisionInput, buildExceptionActionInput,
+    canRead, canWrite, canDecide, canReadExceptions, canManageException, parseEvidenceRefs,
   });
 })(window);

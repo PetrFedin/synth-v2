@@ -22,9 +22,10 @@ test('PostgreSQL base runtime creates and exposes maintenance and optional outbo
 
 test('production workers run maintenance and external outbox publication independently', async () => {
   const server = await source('src/server.mjs');
-  assert.equal((server.match(/createBackgroundWorker\(/g) ?? []).length, 3);
+  assert.equal((server.match(/createBackgroundWorker\(/g) ?? []).length, 4);
   assert.match(server, /name: 'product-engineering'/);
   assert.match(server, /name: 'notification-projection'/);
+  assert.match(server, /name: 'operational-exception-sla'/);
   assert.match(server, /name: 'outbox-publication'/);
   assert.match(server, /runtime\.maintenance\.runIfDue\(\)/);
   assert.match(server, /runtime\.outboxPublication\.publishPending\(\{/);
@@ -47,6 +48,7 @@ test('environment example documents retention and optional external delivery con
     'SYNTHA_OUTBOX_RETENTION_MS','SYNTHA_OUTBOX_WEBHOOK_URL','SYNTHA_OUTBOX_WEBHOOK_SECRET',
     'SYNTHA_OUTBOX_PUBLICATION_INTERVAL_MS','SYNTHA_OUTBOX_PUBLICATION_BATCH_SIZE','SYNTHA_OUTBOX_PUBLICATION_LEASE_MS',
     'SYNTHA_OUTBOX_PUBLICATION_MAX_ATTEMPTS',
+    'SYNTHA_EXCEPTION_SLA_INTERVAL_MS','SYNTHA_EXCEPTION_SLA_BATCH_SIZE','SYNTHA_EXCEPTION_SLA_STALE_MS','SYNTHA_EXCEPTION_SLA_FAILURE_THRESHOLD',
   ]) assert.match(env, new RegExp(`^${key}=`, 'm'), key);
   assert.match(env, /^SYNTHA_COMMAND_RETENTION_MS=2592000000$/m);
   assert.match(env, /^SYNTHA_OUTBOX_RETENTION_MS=2592000000$/m);

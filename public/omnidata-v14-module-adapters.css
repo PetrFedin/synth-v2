@@ -578,6 +578,22 @@ body.omnidata-v14 .operational-message {
 body.omnidata-v14 .operational-decision.superseded {
   opacity:.66;
 }
+
+body.omnidata-v14 .operational-exception-card {
+  border-left:3px solid var(--ods-color-border-strong);
+}
+body.omnidata-v14 .operational-exception-card > p {
+  margin:0;
+  overflow-wrap:anywhere;
+}
+body.omnidata-v14 .operational-exception-card .operational-collaboration-form {
+  margin-top:var(--ods-space-2);
+  background:var(--ods-color-surface-soft);
+}
+body.omnidata-v14 .operational-exception-card .badge {
+  max-width:100%;
+  overflow-wrap:anywhere;
+}
 body.omnidata-v14 .operational-collaboration-form input,
 body.omnidata-v14 .operational-collaboration-form select,
 body.omnidata-v14 .operational-collaboration-form textarea {

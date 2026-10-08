@@ -251,6 +251,22 @@ test('AI Engineering Golden Path crosses real HTTP, PostgreSQL, durable jobs and
     assert.equal(appliedMaterialProposal.appliedReference.action, 'specification');
     assert.equal(appliedMaterialProposal.appliedReference.commandId, applyCommandId + ':canonical');
     assert.equal(appliedMaterialProposal.appliedReference.version, 2);
+    assert.ok(appliedMaterialProposal.appliedReference.receiptId);
+    assert.match(appliedMaterialProposal.appliedReference.receiptHash, /^[0-9a-f]{64}$/);
+
+    const receipt = data(await requestJson(baseUrl, `/v2/product-engineering/proposals/${encodeURIComponent(materialProposal.id)}/application-receipt`, { token }));
+    assert.equal(receipt.proposalId, materialProposal.id);
+    assert.equal(receipt.applicationCommandId, applyCommandId);
+    assert.equal(receipt.canonicalCommandId, applyCommandId + ':canonical');
+    assert.equal(receipt.expectedCanonicalVersion, material.version);
+    assert.equal(receipt.resultingCanonicalVersion, 2);
+    assert.equal(receipt.targetAuthority, 'material');
+    assert.equal(receipt.targetEntityId, materialCode);
+    assert.equal(receipt.targetAction, 'specification');
+    assert.equal(receipt.receiptHash, appliedMaterialProposal.appliedReference.receiptHash);
+    assert.ok(receipt.lineage.modelRunIds.length >= 1);
+    assert.ok(receipt.lineage.evidenceIds.length >= 1);
+    assert.ok(receipt.lineage.sourceIds.includes(source.id));
 
     const appliedMaterial = data(await requestJson(baseUrl, `/v2/materials/${encodeURIComponent(materialCode)}`, { token }));
     assert.equal(appliedMaterial.version, 2);

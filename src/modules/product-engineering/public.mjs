@@ -221,10 +221,12 @@ export function resolveProposal(proposal, { decision, note = null, resolvedAt, r
   });
 }
 
-export function markProposalApplied(proposal, { authority, entityId, version = null, action = null, commandId = null, appliedAt }) {
+export function markProposalApplied(proposal, { authority, entityId, version = null, action = null, commandId = null, receiptId = null, receiptHash = null, appliedAt }) {
   invariant(proposal?.status === 'accepted', 'PRODUCT_ENGINEERING_PROPOSAL_NOT_ACCEPTED', 'Only an accepted proposal can be marked applied');
   invariant(authority === proposal.targetAuthority, 'PRODUCT_ENGINEERING_APPLIED_AUTHORITY_MISMATCH', 'Applied authority must match the proposal target');
   invariant(action === null || action === proposal.targetField, 'PRODUCT_ENGINEERING_APPLIED_ACTION_MISMATCH', 'Applied action must match the proposal target field');
+  invariant(receiptId === null || typeof receiptId === 'string' && receiptId.trim(), 'PRODUCT_ENGINEERING_APPLICATION_RECEIPT_INVALID', 'Applied receipt id is invalid');
+  invariant(receiptHash === null || typeof receiptHash === 'string' && /^[0-9a-f]{64}$/.test(receiptHash), 'PRODUCT_ENGINEERING_APPLICATION_RECEIPT_INVALID', 'Applied receipt hash is invalid');
   return freeze({
     ...proposal,
     appliedReference: freeze({
@@ -233,6 +235,8 @@ export function markProposalApplied(proposal, { authority, entityId, version = n
       version,
       action,
       commandId: commandId === null ? null : required(commandId),
+      receiptId,
+      receiptHash,
       appliedAt: timestamp(appliedAt, 'PRODUCT_ENGINEERING_TIME_INVALID'),
     }),
     version: proposal.version + 1,

@@ -28,6 +28,7 @@ import {
 } from '../modules/product-engineering/intake.mjs';
 import { assertTechnicalFlatApprovable } from '../modules/product-engineering/technical-flat.mjs';
 import { inspectEngineeringUpload, postgresBlobStorageRef } from '../modules/product-engineering/source-upload.mjs';
+import { createCanonicalApplicationIntent } from '../modules/product-engineering/application-authority.mjs';
 
 /**
  * @param {{
@@ -481,18 +482,65 @@ export function createProductEngineeringService(options = {}) {
         invariant(
           typeof input.applicationCommandId === 'string'
             && input.applicationCommandId
-            && current.appliedReference.commandId === input.applicationCommandId,
+            && typeof input.canonicalCommandId === 'string'
+            && input.canonicalCommandId
+            && current.appliedReference.commandId === input.canonicalCommandId,
           'PRODUCT_ENGINEERING_PROPOSAL_ALREADY_APPLIED',
           'Engineering proposal was already applied by another command',
           { proposalId, appliedReference: current.appliedReference },
         );
-        return deepFreeze({ proposal: current, replay: true });
+        const intent = await store.getApplicationIntentByProposal?.(proposalId) ?? null;
+        invariant(!intent || intent.applicationCommandId === input.applicationCommandId, 'PRODUCT_ENGINEERING_PROPOSAL_ALREADY_APPLIED', 'Engineering proposal was applied by another application command', { proposalId, applicationCommandId: intent?.applicationCommandId ?? null });
+        return deepFreeze({ proposal: current, applicationIntent: intent, replay: true });
       }
       invariant(current.status === 'accepted', 'PRODUCT_ENGINEERING_PROPOSAL_NOT_ACCEPTED', 'Only an accepted proposal can be applied', { proposalId, status: current.status });
       invariant(Number.isInteger(input.expectedVersion) && input.expectedVersion >= 1, 'PRODUCT_ENGINEERING_PROPOSAL_EXPECTED_VERSION_INVALID', 'Expected proposal version must be a positive integer');
       invariant(current.version === input.expectedVersion, 'PRODUCT_ENGINEERING_PROPOSAL_CONCURRENCY_CONFLICT', 'Engineering proposal changed concurrently', { proposalId, expectedVersion: input.expectedVersion, actualVersion: current.version });
       invariant(typeof current.targetEntityId === 'string' && current.targetEntityId, 'PRODUCT_ENGINEERING_APPLY_TARGET_REQUIRED', 'Canonical application requires an explicit target entity');
-      return deepFreeze({ proposal: current, replay: false });
+      const intent = await store.getApplicationIntentByProposal?.(proposalId) ?? null;
+      if (intent) {
+        invariant(intent.applicationCommandId === input.applicationCommandId, 'PRODUCT_ENGINEERING_APPLICATION_IN_PROGRESS', 'Engineering proposal already has a canonical application intent owned by another command', { proposalId, applicationCommandId: intent.applicationCommandId });
+        invariant(intent.canonicalCommandId === input.canonicalCommandId, 'PRODUCT_ENGINEERING_APPLICATION_INTENT_MISMATCH', 'Prepared application intent belongs to another canonical command', { proposalId, canonicalCommandId: intent.canonicalCommandId });
+        invariant(intent.expectedProposalVersion === input.expectedVersion, 'PRODUCT_ENGINEERING_APPLICATION_INTENT_MISMATCH', 'Prepared application intent does not match the requested proposal version', { proposalId });
+      }
+      return deepFreeze({ proposal: current, applicationIntent: intent, replay: false });
+    },
+
+    async recordProposalApplicationIntent(commandId, actorId, proposalId, input) {
+      requireObject(input, 'PRODUCT_ENGINEERING_APPLICATION_INTENT_INVALID');
+      const current = required(await store.getProposal(proposalId), 'PRODUCT_ENGINEERING_PROPOSAL_NOT_FOUND', { proposalId });
+      await authorizeBrand(actorId, current.brandId, CAPABILITIES.PRODUCT_ENGINEERING_MANAGE);
+      const fingerprint = `prepareEngineeringProposalApplication:${actorId}:${proposalId}:${canonicalJson(input)}`;
+      return runCommand(commandId, actorId, fingerprint, async (tx) => {
+        const exact = required(await tx.getProposalForUpdate(proposalId), 'PRODUCT_ENGINEERING_PROPOSAL_NOT_FOUND', { proposalId });
+        const existing = await tx.getApplicationIntentByProposal(proposalId);
+        if (existing) {
+          invariant(existing.applicationCommandId === input.applicationCommandId, 'PRODUCT_ENGINEERING_APPLICATION_IN_PROGRESS', 'Engineering proposal already has a canonical application intent owned by another command', { proposalId, applicationCommandId: existing.applicationCommandId });
+          invariant(existing.canonicalCommandId === input.canonicalCommandId, 'PRODUCT_ENGINEERING_APPLICATION_INTENT_MISMATCH', 'Prepared application intent belongs to another canonical command', { proposalId, canonicalCommandId: existing.canonicalCommandId });
+          return existing;
+        }
+        invariant(exact.status === 'accepted' && exact.appliedReference === null, 'PRODUCT_ENGINEERING_PROPOSAL_NOT_ACCEPTED', 'Only an unapplied accepted proposal can prepare a canonical application intent', { proposalId, status: exact.status });
+        const intent = createCanonicalApplicationIntent({
+          id: nextId('engineering-application-intent'),
+          proposal: exact,
+          actorId,
+          applicationCommandId: input.applicationCommandId,
+          canonicalCommandId: input.canonicalCommandId,
+          expectedProposalVersion: input.expectedProposalVersion,
+          expectedCanonicalVersion: input.expectedCanonicalVersion,
+          canonicalBefore: input.canonicalBefore,
+          lineage: input.lineage ?? {},
+          preparedAt: now(clock),
+        });
+        await tx.insertApplicationIntent(intent);
+        return intent;
+      });
+    },
+
+    async getProposalApplicationReceiptForActor(actorId, proposalId) {
+      const proposal = required(await store.getProposal(proposalId), 'PRODUCT_ENGINEERING_PROPOSAL_NOT_FOUND', { proposalId });
+      await authorizeBrand(actorId, proposal.brandId, CAPABILITIES.PRODUCT_ENGINEERING_READ);
+      return required(await store.getApplicationReceiptByProposal?.(proposalId), 'PRODUCT_ENGINEERING_APPLICATION_RECEIPT_NOT_FOUND', { proposalId });
     },
 
     async markProposalApplied(commandId, actorId, proposalId, input) {
@@ -508,14 +556,22 @@ export function createProductEngineeringService(options = {}) {
         }
         invariant(Number.isInteger(input.expectedVersion) && input.expectedVersion >= 1, 'PRODUCT_ENGINEERING_PROPOSAL_EXPECTED_VERSION_INVALID', 'Expected proposal version must be a positive integer');
         invariant(exact.version === input.expectedVersion, 'PRODUCT_ENGINEERING_PROPOSAL_CONCURRENCY_CONFLICT', 'Engineering proposal changed concurrently', { proposalId, expectedVersion: input.expectedVersion, actualVersion: exact.version });
+        const receipt = input.receipt;
+        invariant(receipt && receipt.proposalId === exact.id, 'PRODUCT_ENGINEERING_APPLICATION_RECEIPT_INVALID', 'Canonical application receipt must belong to the exact proposal', { proposalId });
+        const intent = required(await tx.getApplicationIntentByProposal(proposalId), 'PRODUCT_ENGINEERING_APPLICATION_INTENT_REQUIRED', { proposalId });
+        invariant(receipt.intentId === intent.id && receipt.intentHash === intent.intentHash, 'PRODUCT_ENGINEERING_APPLICATION_RECEIPT_INVALID', 'Canonical application receipt does not match the prepared intent', { proposalId, intentId: intent.id });
+        invariant(receipt.canonicalCommandId === input.commandId, 'PRODUCT_ENGINEERING_APPLICATION_RECEIPT_INVALID', 'Canonical application receipt command does not match the applied reference', { proposalId });
         const next = markProposalAppliedDomain(exact, {
           authority: input.authority,
           entityId: input.entityId,
           version: input.version ?? null,
           action: input.action ?? null,
           commandId: input.commandId ?? null,
-          appliedAt: now(clock),
+          receiptId: receipt.id,
+          receiptHash: receipt.receiptHash,
+          appliedAt: receipt.appliedAt,
         });
+        await tx.insertApplicationReceipt(receipt);
         await tx.updateProposal(next, exact.version);
         return next;
       });

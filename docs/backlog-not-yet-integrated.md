@@ -28,14 +28,16 @@
 
 Эти отмечены открытыми в реестре изменений до текущих работ.
 
-| Код | Что открыто | Почему важно |
+| Код | Актуальный остаток на `main@4f8a2b06` | Статус / основание |
 |---|---|---|
-| `ACC-004` | Product Identity → Readiness: харнесс реализован, **живого подтверждения нет** | Без прогона на живом окружении нельзя заявлять `PROD-PROVEN` |
-| `PUB-005` | Коммерческая публикация: рантайм создаёт неизменяемую V2-публикацию сразу как `published` | Промежуточное состояние потеряно, откат публикации невозможен |
-| `PRICE-009` | Прайс-лист: рынок, период действия, налоговая пригодность | Один прайс на все рынки и без срока — это не прайс-лист |
-| `COMM-LC-008` | Коммерческая часть жизненного цикла, глубина для байера | |
-| `SEAM-OPEN` | `createShowroomSelectionService`: при отсутствии канонического читателя каталога **создаётся legacy-подборка без BuyerCatalogVersion**, и цена берётся мимо замороженной витрины | Шов P0: заказ может опереться на изменяемый каталог вместо замороженного |
-| `NOTIF-011`, `NOTIF-012` | Уведомления | |
+| `ACC-004` | Product Identity → Readiness и READY → BuyerCatalog harnesses реализованы, но intended-live Product → Margin доказательство ещё не выполнено | **OPEN/PARTIAL** — repository/PostgreSQL CI не равно `PROD-PROVEN`; нужен успешный accepted gate против целевого live runtime + того же PostgreSQL |
+| `PUB-005` | Fresh PriceList/BuyerCatalog уже fail-closed против V1 history, но остаются `/v2/catalog/skus` compatibility writes/readers и Selection fallback без pinned rich BuyerCatalogVersion; single-line selection всё ещё может брать цену/валюту/version из live `catalog_skus` | **OPEN/PARTIAL, P0** — подтверждено `src/application/showroom-selection-service.mjs` и архитектурным регистром; старое описание только про status=`published` было неполным |
+| `PRICE-009` | PriceListVersion уже ProductSku-exact и immutable, но нет canonical `market`, price-list-level `effective_from/effective_to`, а tax/customer-eligibility depth не формализован | **OPEN/PARTIAL, P0** — `createPriceListVersion()` фиксирует publication/shop/currency/lines/publishedAt, но не эти policy dimensions |
+| `COMM-LC-008` | Canonical V2 CommercialPublication создаётся сразу immutable `published`; staged lifecycle `DRAFT → READY → PUBLISHED → SUPERSEDED/ARCHIVED` отсутствует | **OPEN/GAP, P0** — buyer-catalog rollback уже реализован, но это не lifecycle/rollback самой CommercialPublication |
+| `NOTIF-011` | Notification projection keying on outbox row identity | **CLOSED** — live proof уже зафиксирован в `ARCHITECTURE.md` |
+| `NOTIF-012` | Outbox publication failure isolation / row-key identity | **CLOSED** — live webhook proof уже зафиксирован в `ARCHITECTURE.md` |
+
+> **Reconciliation 2026-10-08.** Псевдодолг `SEAM-OPEN` удалён из этого реестра: фактический commercial seam — это часть `PUB-005` (Selection legacy fallback). Строка `SEAM-OPEN` в архитектурной истории также используется как пример defect code в Quality и не должна быть ID архитектурного долга. `NOTIF-011/012` больше не считаются открытыми.
 
 ---
 

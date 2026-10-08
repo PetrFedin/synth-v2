@@ -2196,3 +2196,41 @@ Verification is internal proof, not user command input. It is excluded from the 
 -> ChangeCase closure evidence.
 
 The orchestrator must never mutate downstream domains generically. It may enqueue or request only allowlisted owning-domain operations, with exact input versions, idempotency keys, dependency lineage and explicit human approval where the owning domain requires it.
+
+
+---
+
+## 2026-10-08 — post-#254 backlog reconciliation and next engineering slice
+
+Exact accepted base: `main@4f8a2b063fcc74a0af4c0238988b254c75c02f18`.
+
+Post-merge qualification is **3/3 GREEN**:
+- Product Commercialization Acceptance #570 — success;
+- Verify #1728 — success;
+- Syntha V2 CI #2186 — success, including PostgreSQL verification.
+
+Reconciliation against `docs/backlog-not-yet-integrated.md`, this master plan and current code established:
+- `NOTIF-011` and `NOTIF-012` are CLOSED and must not be planned again;
+- the old standalone `SEAM-OPEN` backlog row was a duplicate/misnamed representation of the remaining `PUB-005` Selection compatibility seam and is removed as a debt ID;
+- `PUB-005` remains P0 because `createShowroomSelectionService` can still create a legacy Selection without pinned rich BuyerCatalogVersion when the canonical commercial reader is unavailable, and can resolve single-line pricing from live `catalog_skus`;
+- `PRICE-009` remains P0/PARTIAL: ProductSku-exact pricing exists, but market/effective-period/tax-policy depth does not;
+- `COMM-LC-008` remains P0/GAP: BuyerCatalog rollback exists, but canonical CommercialPublication still has no staged lifecycle;
+- `ACC-004` remains OPEN/PARTIAL until intended-live acceptance proves the connected Product → Margin path.
+
+### Next strict Product Engineering slice
+
+**Deterministic Recompute / Re-review Orchestration**
+
+`verified correction receipt`
+→ exact Stale Dependency Set
+→ deterministic dependency graph
+→ immutable RecomputePlan
+→ DAG ordering with fan-out/fan-in
+→ step mode `automatic | human_review | external_evidence`
+→ idempotent bounded-context request
+→ owning-authority result
+→ independent exact result verification
+→ immutable RecomputeExecutionReceipt
+→ admission replay.
+
+Architecture invariant: Product Engineering may detect impact, build plans, enqueue/request allowlisted owning-domain work and verify results, but it must not receive generic downstream mutation authority.

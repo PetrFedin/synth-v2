@@ -9,6 +9,15 @@ import {
   evaluateRecomputeAdmission,
 } from '../modules/product-engineering/recompute-orchestration.mjs';
 
+const AUTOMATIC_IMPACT_AUTHORITIES = Object.freeze({
+  measurements:'measurement',
+  tech_pack:'tech_pack',
+  sourcing:'sourcing_rfq',
+  cost:'cost_close',
+  product_readiness:'product_readiness',
+  commercial_publication:'commercial_publication',
+});
+
 const AUTOMATIC_OPERATIONS = Object.freeze({
   material: Object.freeze(new Set(['material.recompute','material.revalidate'])),
   measurement: Object.freeze(new Set(['measurement.recompute','measurement.revalidate'])),
@@ -81,6 +90,8 @@ export function createProductEngineeringRecomputeService(options = {}) {
         invariant(dependency.severity === impact.severity, 'PRODUCT_ENGINEERING_RECOMPUTE_SEVERITY_MISMATCH', 'Dependency severity must match the exact change impact', { impactId:impact.id, expected:impact.severity, actual:dependency.severity });
         invariant(sameReference(dependency.source, triggerReceipt.resultReference), 'PRODUCT_ENGINEERING_RECOMPUTE_SOURCE_MISMATCH', 'Every stale dependency must originate from the exact verified correction reference', { impactId:impact.id });
         if (dependency.mode === 'automatic') {
+          const expectedAuthority = AUTOMATIC_IMPACT_AUTHORITIES[impact.area];
+          invariant(expectedAuthority && dependency.target?.authority === expectedAuthority, 'PRODUCT_ENGINEERING_RECOMPUTE_AUTOMATIC_AUTHORITY_MISMATCH', 'Automatic target authority must match the exact impact area policy', { impactId:impact.id, area:impact.area, expectedAuthority:expectedAuthority ?? null, actualAuthority:dependency.target?.authority ?? null });
           const allowed = AUTOMATIC_OPERATIONS[dependency.target?.authority];
           invariant(allowed?.has(dependency.operation), 'PRODUCT_ENGINEERING_RECOMPUTE_AUTOMATIC_OPERATION_UNSUPPORTED', 'Automatic operation is not allowlisted for the owning authority', { authority:dependency.target?.authority, operation:dependency.operation });
         }

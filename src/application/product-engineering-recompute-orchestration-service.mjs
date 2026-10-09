@@ -119,7 +119,12 @@ export function createProductEngineeringRecomputeOrchestrationService(options = 
     invariant(plan, 'PRODUCT_ENGINEERING_RECOMPUTE_PLAN_NOT_FOUND', 'Recompute plan not found', { planId });
     const step = plan.steps.find(candidate => candidate.id === stepId);
     invariant(step && step.mode !== 'automatic', 'PRODUCT_ENGINEERING_RECOMPUTE_EVIDENCE_STEP_INVALID', 'Only human-review or external-evidence steps may be completed by evidence');
+    invariant(typeof actorId === 'string' && actorId.trim(), 'PRODUCT_ENGINEERING_RECOMPUTE_ACTOR_REQUIRED', 'Evidence completion requires the exact reviewing actor');
     invariant(Array.isArray(evidence) && evidence.length > 0, 'PRODUCT_ENGINEERING_RECOMPUTE_EVIDENCE_REQUIRED', 'Evidence completion requires explicit evidence');
+    // The evidence path must honour the same DAG dependencies as automatic workers.
+    // No manual/external receipt may bypass an outstanding parent step.
+    const ready = await store.listReadyEvidenceSteps(planId);
+    invariant(ready.some(candidate => candidate.id === stepId), 'PRODUCT_ENGINEERING_RECOMPUTE_EVIDENCE_NOT_READY', 'Evidence step is already completed or its dependencies are not yet admitted', { planId, stepId });
     const receipt = createRecomputeExecutionReceipt({
       id: nextId('recompute-execution'), plan, stepId, commandId, idempotencyKey,
       status: 'succeeded', evidence, startedAt, completedAt,

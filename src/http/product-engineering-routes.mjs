@@ -31,7 +31,7 @@ const SOURCE_REVISE = bodyContract(['replacementSourceId','reason']);
 const CHANGE_CASE_ACK = bodyContract(['expectedVersion','note']);
 const CHANGE_IMPACT_CLOSE = bodyContract(['expectedVersion','disposition','reason','evidence','resultReference','waiver']);
 const RECOMPUTE_PLAN_CREATE = bodyContract(['triggerImpactId','dependencies']);
-const RECOMPUTE_STEP_COMPLETE = bodyContract(['status','evidence','resultReference','errorCode','startedAt','completedAt']);
+const RECOMPUTE_STEP_COMPLETE = bodyContract(['status','evidence','resultReference','errorCode']);
 const CONFLICT_SEVERITIES = ['info','warning','blocking'];
 const SOURCE_KINDS = ['product_media','style_reference','document','spreadsheet','external_uri','sample','manual_observation'];
 const INGEST_MODES = ['upload','connector','canonical_asset','manual'];
@@ -171,8 +171,6 @@ function validateRecomputeStepComplete(body) {
   invariant(Array.isArray(body.evidence),'HTTP_BODY_FIELD_INVALID','evidence must be an array',{field:'evidence'});
   if (body.resultReference !== undefined && body.resultReference !== null) object(body.resultReference,'resultReference');
   if (body.errorCode !== undefined && body.errorCode !== null) nonEmpty(body.errorCode,'errorCode');
-  if (body.startedAt !== undefined && body.startedAt !== null) dateTime(body.startedAt,'startedAt');
-  if (body.completedAt !== undefined && body.completedAt !== null) dateTime(body.completedAt,'completedAt');
 }
 
 function validateChangeImpactClose(body) {
@@ -266,9 +264,6 @@ function nonEmpty(value, field) { invariant(typeof value === 'string' && value.t
 function optionalId(value, field) { invariant(value === undefined || value === null || (typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/.test(value)), 'HTTP_BODY_FIELD_INVALID', `${field} is invalid`, { field }); }
 function probability(value, field) { invariant(value === undefined || value === null || (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1), 'HTTP_BODY_FIELD_INVALID', `${field} must be between 0 and 1`, { field }); }
 function sha(value, field) { invariant(typeof value === 'string' && /^[0-9a-f]{64}$/.test(value), 'HTTP_BODY_FIELD_INVALID', `${field} must be a SHA-256 hex digest`, { field }); }
-function dateTime(value, field) {
-  invariant(typeof value === 'string' && Number.isFinite(Date.parse(value)), 'HTTP_BODY_FIELD_INVALID', `${field} must be an ISO date-time`, { field });
-}
 function version(value, field) { invariant(Number.isInteger(value) && value >= 1, 'HTTP_BODY_FIELD_INVALID', `${field} must be a positive integer`, { field }); }
 
 function unavailableService() {

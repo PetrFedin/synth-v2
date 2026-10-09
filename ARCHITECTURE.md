@@ -2170,6 +2170,7 @@ Critical truth boundary:
 - successful automatic execution cannot be recorded without an exact result reference and independent verification hash;
 - human review / external evidence completion requires explicit evidence;
 - Product Engineering still receives **no generic downstream mutation authority**.
+- `RECOMPUTE_EXECUTION_STATUSES=succeeded` is registered in the shared RU/EN status dictionary (`успешно` / `succeeded`) so the domain-status localization contract remains fail-closed without adding a new UI surface.
 
 Not yet claimed in this tranche:
 

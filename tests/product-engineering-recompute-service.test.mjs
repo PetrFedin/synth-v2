@@ -47,7 +47,7 @@ function fixture(){
   const changeCase={id:'case-1',brandId:'brand-1',styleId:'style-1',status:'acknowledged'};
   const impacts=[
     {id:'impact-trigger',changeCaseId:'case-1',status:'resolved',requiredAction:'re-review',severity:'high'},
-    {id:'impact-ready',changeCaseId:'case-1',status:'pending',requiredAction:'reassess',severity:'high'},
+    {id:'impact-ready',changeCaseId:'case-1',status:'pending',area:'product_readiness',requiredAction:'reassess',severity:'high'},
   ];
   const triggerReceipt={
     id:'receipt-trigger',changeCaseId:'case-1',impactId:'impact-trigger',disposition:'resolved',

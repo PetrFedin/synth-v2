@@ -43,6 +43,9 @@ test('PostgreSQL recompute orchestration survives lease loss, gates DAG dependen
       triggerReceipt: `recompute-trigger-receipt-${suffix}`,
     };
     const t0 = '2026-10-09T12:00:00.000Z';
+    const changeCaseImpactHash = uniqueHash(`recompute-change-case:${suffix}`);
+    const triggerReceiptHash = uniqueHash(`recompute-trigger-receipt:${suffix}`);
+    const triggerVerificationHash = uniqueHash(`recompute-trigger-verification:${suffix}`);
     await pool.query(
       `INSERT INTO product_engineering_sources
          (id,brand_id,style_id,kind,ingest_mode,content_hash,metadata,status,scan_status,parse_status,created_at,created_by,admitted_at,admitted_by)
@@ -61,7 +64,7 @@ test('PostgreSQL recompute orchestration survives lease loss, gates DAG dependen
       `INSERT INTO product_engineering_change_cases
          (id,source_revision_id,brand_id,style_id,status,impact_snapshot,impact_hash,created_at,created_by,version)
        VALUES ($1,$2,$3,$4,'open','{}'::jsonb,$5,$6,$7,1)`,
-      [ids.changeCase, ids.revision, references.brand.id, style.id, H('c'), t0, references.actors.brandOwner],
+      [ids.changeCase, ids.revision, references.brand.id, style.id, changeCaseImpactHash, t0, references.actors.brandOwner],
     );
     await pool.query(
       `INSERT INTO product_engineering_change_impacts
@@ -70,19 +73,19 @@ test('PostgreSQL recompute orchestration survives lease loss, gates DAG dependen
       [ids.impact, ids.changeCase, t0, references.actors.brandOwner],
     );
     const triggerReference = { authority: 'material', entityId: 'MAT-001', version: 8 };
-    const triggerVerification = { authority: 'material', requested: { entityId: 'MAT-001' }, verificationHash: H('d') };
+    const triggerVerification = { authority: 'material', requested: { entityId: 'MAT-001' }, verificationHash: triggerVerificationHash };
     await pool.query(
       `INSERT INTO product_engineering_change_impact_receipts
          (id,change_case_id,impact_id,disposition,previous_impact_version,resulting_impact_version,reason,evidence,
           result_reference,waiver,receipt_hash,created_at,created_by,result_verification)
        VALUES ($1,$2,$3,'resolved',1,2,'Canonical material corrected','[{"kind":"correction"}]'::jsonb,
                $4::jsonb,NULL,$5,$6,$7,$8::jsonb)`,
-      [ids.triggerReceipt, ids.changeCase, ids.impact, JSON.stringify(triggerReference), H('e'), t0, references.actors.brandOwner, JSON.stringify(triggerVerification)],
+      [ids.triggerReceipt, ids.changeCase, ids.impact, JSON.stringify(triggerReference), triggerReceiptHash, t0, references.actors.brandOwner, JSON.stringify(triggerVerification)],
     );
 
     const changeCase = { id: ids.changeCase, brandId: references.brand.id, styleId: style.id };
     const triggerReceipt = {
-      id: ids.triggerReceipt, changeCaseId: ids.changeCase, disposition: 'resolved', receiptHash: H('e'),
+      id: ids.triggerReceipt, changeCaseId: ids.changeCase, disposition: 'resolved', receiptHash: triggerReceiptHash,
       resultReference: triggerReference, resultVerification: triggerVerification,
     };
     const dependency = (id, overrides = {}) => ({

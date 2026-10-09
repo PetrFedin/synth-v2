@@ -167,7 +167,7 @@ function validateRecomputePlanCreate(body) {
 function validateRecomputeStepComplete(body) {
   invariant(Object.hasOwn(body,'status'),'HTTP_BODY_FIELD_MISSING','status is required',{field:'status'});
   invariant(Object.hasOwn(body,'evidence'),'HTTP_BODY_FIELD_MISSING','evidence is required',{field:'evidence'});
-  invariant(['succeeded','blocked','failed'].includes(body.status),'HTTP_BODY_FIELD_INVALID','status is invalid',{field:'status'});
+  invariant(body.status === 'succeeded','HTTP_BODY_FIELD_INVALID','generic step completion accepts succeeded only',{field:'status',allowed:['succeeded']});
   invariant(Array.isArray(body.evidence),'HTTP_BODY_FIELD_INVALID','evidence must be an array',{field:'evidence'});
   if (body.resultReference !== undefined && body.resultReference !== null) object(body.resultReference,'resultReference');
   if (body.errorCode !== undefined && body.errorCode !== null) nonEmpty(body.errorCode,'errorCode');

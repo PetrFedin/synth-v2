@@ -84,10 +84,9 @@ export function createProductEngineeringRecomputeService(options = {}) {
       invariant(typeof input.triggerImpactId === 'string' && input.triggerImpactId.trim(), 'PRODUCT_ENGINEERING_RECOMPUTE_TRIGGER_IMPACT_REQUIRED', 'Exact trigger impact is required');
       invariant(Array.isArray(input.dependencies) && input.dependencies.length >= 1, 'PRODUCT_ENGINEERING_RECOMPUTE_DEPENDENCIES_REQUIRED', 'At least one exact dependency is required');
       const fingerprint = `createProductEngineeringRecomputePlan:${actorId}:${changeCaseId}:${canonicalJson({triggerImpactId:input.triggerImpactId,dependencies:input.dependencies})}`;
+      const workspace = await productEngineering.getChangeCaseForActor(actorId, changeCaseId);
       const replay = await replayExisting(commandId, fingerprint);
       if (replay !== null) return replay;
-
-      const workspace = await productEngineering.getChangeCaseForActor(actorId, changeCaseId);
       const triggerReceipt = await productEngineering.getChangeImpactReceiptForActor(actorId, input.triggerImpactId);
       invariant(triggerReceipt.changeCaseId === changeCaseId, 'PRODUCT_ENGINEERING_RECOMPUTE_TRIGGER_MISMATCH', 'Trigger receipt belongs to another change case');
       const impactById = new Map((workspace.impacts ?? []).map((impact)=>[impact.id,impact]));
@@ -161,10 +160,10 @@ export function createProductEngineeringRecomputeService(options = {}) {
         errorCode:input.errorCode ?? null,
       };
       const fingerprint = `completeProductEngineeringRecomputeStep:${actorId}:${planId}:${stepId}:${canonicalJson(fingerprintInput)}`;
-      const replay = await replayExisting(commandId, fingerprint);
-      if (replay !== null) return replay;
       const workspace = required(await store.getPlanWorkspace(planId), 'PRODUCT_ENGINEERING_RECOMPUTE_PLAN_NOT_FOUND', { planId });
       await productEngineering.getChangeCaseForActor(actorId, workspace.plan.changeCaseId);
+      const replay = await replayExisting(commandId, fingerprint);
+      if (replay !== null) return replay;
       const step = workspace.plan.steps.find((candidate)=>candidate.id===stepId);
       invariant(step, 'PRODUCT_ENGINEERING_RECOMPUTE_STEP_NOT_FOUND', 'Recompute step is not in the exact plan', { planId, stepId });
       invariant(workspace.plan.status === 'open', 'PRODUCT_ENGINEERING_RECOMPUTE_PLAN_NOT_OPEN', 'Only an open recompute plan accepts step results', { planId, status:workspace.plan.status });
@@ -217,9 +216,9 @@ export function createProductEngineeringRecomputeService(options = {}) {
     async sealPlan(commandId, actorId, planId) {
       const workspace = required(await store.getPlanWorkspace(planId), 'PRODUCT_ENGINEERING_RECOMPUTE_PLAN_NOT_FOUND', { planId });
       const fingerprint = `sealProductEngineeringRecomputePlan:${actorId}:${planId}:${workspace.plan.planHash}`;
+      await productEngineering.getChangeCaseForActor(actorId, workspace.plan.changeCaseId);
       const replay = await replayExisting(commandId, fingerprint);
       if (replay !== null) return replay;
-      await productEngineering.getChangeCaseForActor(actorId, workspace.plan.changeCaseId);
       return runCommand(commandId, actorId, fingerprint, async (tx) => {
         const plan = required(await tx.getPlanForUpdate(planId), 'PRODUCT_ENGINEERING_RECOMPUTE_PLAN_NOT_FOUND', { planId });
         const existing = await tx.getOrchestrationReceiptByPlan(planId);

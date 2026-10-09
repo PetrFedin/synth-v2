@@ -133,7 +133,6 @@ function schemas() {
         evidence:{type:'array',items:{type:'object',additionalProperties:true}},
         resultReference:{oneOf:[{type:'object',additionalProperties:true},{type:'null'}]},
         errorCode:{oneOf:[{type:'string'},{type:'null'}]},
-        startedAt:dateTime,completedAt:dateTime,
       },
     },
     ProductEngineeringRecomputePlanWorkspace: {

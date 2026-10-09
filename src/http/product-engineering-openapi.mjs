@@ -404,7 +404,7 @@ function paths() {
     '/product-engineering/change-cases/{changeCaseId}/recompute-plans': { post: mutation('createProductEngineeringRecomputePlan', ['changeCaseId'], '#/components/schemas/ProductEngineeringRecomputePlanCreate') },
     '/product-engineering/recompute-plans/{planId}': { get: read('getProductEngineeringRecomputePlan', ['planId'], '#/components/schemas/ProductEngineeringRecomputePlanWorkspace') },
     '/product-engineering/recompute-plans/{planId}/steps/{stepId}/complete': { post: mutation('completeProductEngineeringRecomputeStep', ['planId','stepId'], '#/components/schemas/ProductEngineeringRecomputeStepComplete') },
-    '/product-engineering/recompute-plans/{planId}/seal': { post: mutation('sealProductEngineeringRecomputePlan', ['planId'], null, '#/components/schemas/ProductEngineeringRecomputeOrchestrationReceipt') },
+    '/product-engineering/recompute-plans/{planId}/seal': { post: mutation('sealProductEngineeringRecomputePlan', ['planId']) },
     '/product/styles/{styleId}/engineering/analyses': { post: mutation('requestProductEngineeringAnalysis', ['styleId'], '#/components/schemas/ProductEngineeringAnalysisCreate') },
     '/product/styles/{styleId}/engineering': { get: read('getProductEngineeringStyleWorkspace', ['styleId'], '#/components/schemas/ProductEngineeringStyleWorkspace', [{ name: 'limit', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 200 } }]) },
     '/product-engineering/analyses/{analysisRunId}': { get: read('getProductEngineeringAnalysisWorkspace', ['analysisRunId'], '#/components/schemas/ProductEngineeringAnalysisWorkspace') },

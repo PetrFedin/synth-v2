@@ -152,3 +152,33 @@ test('generic completion endpoint cannot impersonate the future automatic owning
     error=>error.code==='PRODUCT_ENGINEERING_RECOMPUTE_AUTOMATIC_EXECUTOR_REQUIRED',
   );
 });
+
+
+test('same create-plan command replays after referenced impacts later close',async()=>{
+  const fx=fixture();
+  const created=await fx.service.createPlan('cmd-replay-plan','actor-1','case-1',{triggerImpactId:'impact-trigger',dependencies:[dependency]});
+  const pending=fx.productEngineering;
+  // The command ledger must win over later mutable impact state for the same authorized replay.
+  const originalGetCase=pending.getChangeCaseForActor;
+  pending.getChangeCaseForActor=async(...args)=>{
+    const workspace=await originalGetCase(...args);
+    return {...workspace,impacts:workspace.impacts.map(row=>row.id==='impact-ready'?{...row,status:'resolved'}:row)};
+  };
+  const replay=await fx.service.createPlan('cmd-replay-plan','actor-1','case-1',{triggerImpactId:'impact-trigger',dependencies:[dependency]});
+  assert.equal(replay.plan.id,created.plan.id);
+  assert.equal(replay.plan.planHash,created.plan.planHash);
+});
+
+test('same step command replays after plan is sealed without reinterpreting current plan state',async()=>{
+  const fx=fixture();
+  const created=await fx.service.createPlan('cmd-plan-replay','actor-1','case-1',{triggerImpactId:'impact-trigger',dependencies:[dependency]});
+  const input={
+    status:'succeeded',
+    evidence:[{kind:'human_review',id:'review-replay'}],
+    resultReference:{authority:'product_readiness',entityId:'READY-2',version:3},
+  };
+  const first=await fx.service.completeStep('cmd-step-replay','actor-1',created.plan.id,'ready-step',input);
+  await fx.service.sealPlan('cmd-seal-replay','actor-1',created.plan.id);
+  const replay=await fx.service.completeStep('cmd-step-replay','actor-1',created.plan.id,'ready-step',input);
+  assert.equal(replay.receiptHash,first.receiptHash);
+});

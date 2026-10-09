@@ -25,6 +25,10 @@ test('product engineering routes expose evidence-first workflow',async()=>{
     ['POST','/v2/product-engineering/change-cases/case-1/acknowledge',{body:{expectedVersion:1,note:'Engineering review accepted'}}],
     ['GET','/v2/product-engineering/change-impacts/impact-1/receipt',{}],
     ['POST','/v2/product-engineering/change-impacts/impact-1/close',{body:{expectedVersion:1,disposition:'resolved',reason:'Canonical review completed',evidence:[{kind:'review',id:'review-1'}],resultReference:{authority:'cost',entityId:'order-1',version:9}}}],
+    ['POST','/v2/product-engineering/change-cases/case-1/recompute-plans',{body:{triggerImpactId:'impact-1',dependencies:[{id:'dep-1',impactId:'impact-2',source:{authority:'material',entityId:'MAT-1',version:2},target:{authority:'product_readiness',entityId:'READY-1',version:1},dependencyKind:'derived',reason:'stale after correction',requiredAction:'reassess',severity:'high',mode:'automatic',operation:'product_readiness.reassess',dependsOn:[],evidence:[{kind:'lineage'}]}]}}],
+    ['GET','/v2/product-engineering/recompute-plans/plan-1',{}],
+    ['POST','/v2/product-engineering/recompute-plans/plan-1/steps/dep-1/complete',{body:{status:'succeeded',evidence:[{kind:'job'}],resultReference:{authority:'product_readiness',entityId:'READY-2',version:2}}}],
+    ['POST','/v2/product-engineering/recompute-plans/plan-1/seal',{}],
     ['POST','/v2/product/styles/style-1/engineering/analyses',{body:{styleVersionId:'sv-1',purpose:'garment_interpretation',inputManifest:{assets:['m1']}}}],
     ['GET','/v2/product/styles/style-1/engineering',{query:{limit:'50'}}],
     ['GET','/v2/product-engineering/analyses/analysis-1',{}],
@@ -46,6 +50,7 @@ test('product engineering routes expose evidence-first workflow',async()=>{
   assert.deepEqual(calls.map(row=>row[0]),[
     'registerSource','getSourceForActor','recordSourceScan','admitSource','addSourceFragment','completeSourceParsing',
     'reviseSource','getChangeCaseForActor','acknowledgeChangeCase','getChangeImpactReceiptForActor','closeChangeImpact',
+    'createPlan','getPlanForActor','completeStep','sealPlan',
     'requestAnalysis','getStyleWorkspaceForActor','getAnalysisWorkspaceForActor','startAnalysis',
     'recordFinding','createProposal','getProposalImpactForActor','getProposalApplicationReceiptForActor','applyProposal','createConflict','createDrawing',
   ]);
@@ -75,6 +80,10 @@ test('OpenAPI documents engineering review and every mutation carries idempotenc
     '/product-engineering/change-cases/{changeCaseId}/acknowledge',
     '/product-engineering/change-impacts/{impactId}/receipt',
     '/product-engineering/change-impacts/{impactId}/close',
+    '/product-engineering/change-cases/{changeCaseId}/recompute-plans',
+    '/product-engineering/recompute-plans/{planId}',
+    '/product-engineering/recompute-plans/{planId}/steps/{stepId}/complete',
+    '/product-engineering/recompute-plans/{planId}/seal',
     '/product/styles/{styleId}/engineering/analyses',
     '/product/styles/{styleId}/engineering',
     '/product-engineering/analyses/{analysisRunId}',
@@ -103,6 +112,9 @@ test('OpenAPI documents engineering review and every mutation carries idempotenc
   assert.deepEqual(spec.components.schemas.ProductEngineeringChangeCaseAcknowledge.required,['expectedVersion','note']);
   assert.deepEqual(spec.components.schemas.ProductEngineeringChangeImpactClose.required,['expectedVersion','disposition','reason','evidence']);
   assert.deepEqual(spec.components.schemas.ProductEngineeringChangeImpactClose.properties.disposition.enum,['resolved','waived']);
+  assert.deepEqual(spec.components.schemas.ProductEngineeringRecomputePlanCreate.required,['triggerImpactId','dependencies']);
+  assert.deepEqual(spec.components.schemas.ProductEngineeringRecomputeStepComplete.required,['status','evidence']);
+  assert.equal(spec.paths['/product-engineering/recompute-plans/{planId}'].get.operationId,'getProductEngineeringRecomputePlan');
   assert.equal(spec.paths['/product-engineering/change-impacts/{impactId}/receipt'].get.operationId,'getProductEngineeringChangeImpactReceipt');
   assert.equal(spec.paths['/product-engineering/proposals/{proposalId}/apply'].post.operationId,'applyProductEngineeringProposal');
   assert.equal(spec.paths['/product-engineering/proposals/{proposalId}/impact'].get.operationId,'getProductEngineeringProposalImpact');

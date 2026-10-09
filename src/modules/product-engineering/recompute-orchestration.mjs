@@ -132,6 +132,8 @@ export function createRecomputeExecutionReceipt({
     invariant(normalizedVerification && normalizedVerification.authority === normalizedResult.authority, 'PRODUCT_ENGINEERING_RECOMPUTE_RESULT_UNVERIFIED', 'Automatic recompute result requires independent owning-authority verification');
     hash(normalizedVerification.verificationHash, 'PRODUCT_ENGINEERING_RECOMPUTE_RESULT_UNVERIFIED');
     invariant(normalizedVerification.requested?.entityId === normalizedResult.entityId, 'PRODUCT_ENGINEERING_RECOMPUTE_RESULT_UNVERIFIED', 'Verification does not match the exact recompute result reference');
+    invariant(String(normalizedVerification.requested?.version ?? '') === String(normalizedResult.version ?? ''), 'PRODUCT_ENGINEERING_RECOMPUTE_RESULT_UNVERIFIED', 'Verification version does not match the exact recompute result reference');
+    invariant((normalizedVerification.requested?.contentHash ?? null) === (normalizedResult.contentHash ?? null), 'PRODUCT_ENGINEERING_RECOMPUTE_RESULT_UNVERIFIED', 'Verification hash reference does not match the exact recompute result reference');
   }
   if (status === 'succeeded' && step.mode !== 'automatic') {
     invariant(evidence.length >= 1, 'PRODUCT_ENGINEERING_RECOMPUTE_EVIDENCE_REQUIRED', 'Human review or external evidence completion requires explicit evidence');

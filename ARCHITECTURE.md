@@ -2172,15 +2172,32 @@ Critical truth boundary:
 - Product Engineering still receives **no generic downstream mutation authority**.
 - `RECOMPUTE_EXECUTION_STATUSES=succeeded` is registered in the shared RU/EN status dictionary (`успешно` / `succeeded`) so the domain-status localization contract remains fail-closed without adding a new UI surface.
 
-Not yet claimed in this tranche:
+### Recompute orchestration tranche B — PostgreSQL control plane
 
-- PostgreSQL persistence for dependency sets/plans/execution/orchestration receipts;
-- durable orchestration jobs / lease-retry-reclaim;
-- owning-domain allowlisted command adapters;
-- Awaiting Action projection for `human_review`;
+Status: **IMPLEMENTED/PARTIAL on `feat/change-impact-recompute-control-plane`; fresh CI and PostgreSQL Golden Path pending.**
+
+The second tranche persists and exposes the deterministic domain model without broadening mutation authority:
+
+- migration `180_product_engineering_recompute_orchestration.sql` persists immutable dependency sets, deterministic plans, terminal step receipts and sealed orchestration receipts;
+- every dependency is bound to an exact `ChangeImpact.id`, exact source correction reference and exact target authority/version-or-hash;
+- plan creation re-locks every referenced ChangeImpact and re-checks status/action/severity before persistence, preventing a stale browser snapshot from creating a plan after concurrent closure or semantic change;
+- one trigger correction receipt owns one immutable dependency set; replay with the same set returns the existing plan, while a different set fails closed;
+- automatic operations are allowlisted per owning authority. A caller cannot turn an arbitrary operation string into downstream mutation authority;
+- automatic terminal success requires independent result verification against the owning read authority, including exact entity, version and hash reference;
+- predecessor receipts are re-checked inside the persistence transaction before a DAG step can become terminal;
+- final plan sealing requires every exact step to have one successful immutable receipt; the final orchestration receipt binds the plan/dependency hashes and ordered execution receipt hashes;
+- HTTP/OpenAPI surface is bounded to create/read/complete/seal orchestration. It does not provide generic downstream write endpoints;
+- PostgreSQL runtime composes the control plane with the existing Product Engineering verification service rather than duplicating authority readers.
+
+Still not claimed:
+
+- durable leased execution workers for automatic recompute operations;
+- owning-domain command adapters that actually request new Readiness/Commercial/Cost/etc versions;
+- Awaiting Action routing for `human_review`;
 - external-evidence intake/reconciliation;
-- admission-service wiring that replays the original blocked commercial/production action;
-- HTTP/OpenAPI/UI surfaces;
-- live PostgreSQL Golden Path.
+- automatic closure of the corresponding ChangeImpact from orchestration output;
+- replay of the original blocked commercial/production action after a newly admitted state;
+- Product Master orchestration UI;
+- fresh PostgreSQL Golden Path proving the complete persisted control-plane flow.
 
-These are the next bounded implementation slices and must preserve the same ownership rule: the orchestrator may request and verify work, while canonical mutation remains inside the owning bounded context.
+These are the next bounded implementation slices and must preserve the same ownership rule: the orchestrator may request, order and verify work; canonical mutation remains inside the owning bounded context.

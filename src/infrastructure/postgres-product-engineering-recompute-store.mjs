@@ -7,6 +7,7 @@ export function createPostgresProductEngineeringRecomputeStore({ pool } = {}) {
   invariant(pool && typeof pool.query === 'function' && typeof pool.connect === 'function', 'POSTGRES_POOL_REQUIRED', 'PostgreSQL pool is required');
   return Object.freeze({
     transaction: (work) => withPostgresTransaction(pool, work, { createView: transactionView }),
+    getCommand: (id) => getRegisteredCommand(pool, 'product-engineering', id),
 
     async getPlanWorkspace(planId) {
       const [planResult, executionResult, orchestrationResult] = await Promise.all([

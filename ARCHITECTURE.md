@@ -2186,7 +2186,7 @@ The second tranche persists and exposes the deterministic domain model without b
 - automatic terminal success requires independent result verification against the owning read authority, including exact entity, version and hash reference;
 - predecessor receipts are re-checked inside the persistence transaction before a DAG step can become terminal;
 - final plan sealing requires every exact step to have one successful immutable receipt; the final orchestration receipt binds the plan/dependency hashes and ordered execution receipt hashes;
-- HTTP/OpenAPI surface is bounded to create/read/complete/seal orchestration. It does not provide generic downstream write endpoints;
+- HTTP/OpenAPI surface is bounded to create/read/complete/seal orchestration. Completion can record human-review/external-evidence work but cannot execute an automatic plan step. It does not provide generic downstream write endpoints;
 - PostgreSQL runtime composes the control plane with the existing Product Engineering verification service rather than duplicating authority readers.
 
 Still not claimed:

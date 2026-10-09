@@ -235,6 +235,7 @@ export function createProductEngineeringRecomputeService(options = {}) {
   }
 }
 
+/** @param {any} left @param {any} right */
 function sameReference(left,right) {
   if (!left || !right) return false;
   return left.authority===right.authority
@@ -242,6 +243,9 @@ function sameReference(left,right) {
     && String(left.version ?? '')===String(right.version ?? '')
     && (left.contentHash ?? null)===(right.contentHash ?? null);
 }
+/** @param {any} value @param {string} code */
 function assertObject(value,code){invariant(value&&typeof value==='object'&&!Array.isArray(value),code,'Object input is required');}
+/** @param {any} value @param {string} code @param {any} details */
 function required(value,code,details){invariant(value,code,'Required recompute entity not found',details);return value;}
+/** @param {any} value */
 function deepFreeze(value){if(!value||typeof value!=='object'||Object.isFrozen(value))return value;Object.freeze(value);for(const nested of Object.values(value))deepFreeze(nested);return value;}

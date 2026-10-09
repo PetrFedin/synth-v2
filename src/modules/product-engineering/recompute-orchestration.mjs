@@ -12,6 +12,7 @@ const HASH = /^[0-9a-f]{64}$/;
  * The caller must supply observed/versioned dependency edges; this function never
  * invents downstream relationships from names, areas or heuristics.
  */
+/** @param {any} options */
 export function createStaleDependencySet({
   id,
   changeCase,
@@ -61,6 +62,7 @@ export function createStaleDependencySet({
  * Builds a deterministic DAG plan. Topological levels are canonical: within each
  * level steps are sorted by dependency id, making replay independent of input order.
  */
+/** @param {any} options */
 export function createRecomputePlan({ id, staleDependencySet, createdAt, createdBy } = {}) {
   invariant(staleDependencySet?.id && Array.isArray(staleDependencySet.dependencies), 'PRODUCT_ENGINEERING_RECOMPUTE_SET_REQUIRED', 'Stale dependency set is required');
   hash(staleDependencySet.dependencySetHash, 'PRODUCT_ENGINEERING_RECOMPUTE_SET_HASH_INVALID');
@@ -100,6 +102,7 @@ export function createRecomputePlan({ id, staleDependencySet, createdAt, created
  * The receipt records the requested operation and the independently verified result;
  * it does not grant Product Engineering mutation authority in the owning context.
  */
+/** @param {any} options */
 export function createRecomputeExecutionReceipt({
   id,
   plan,
@@ -160,6 +163,7 @@ export function createRecomputeExecutionReceipt({
   return deepFreeze({ ...basis, receiptHash: sha(basis) });
 }
 
+/** @param {any} options */
 export function evaluateRecomputeAdmission({ plan, executionReceipts } = {}) {
   invariant(plan?.id && Array.isArray(plan.steps), 'PRODUCT_ENGINEERING_RECOMPUTE_PLAN_REQUIRED', 'Recompute plan is required');
   invariant(Array.isArray(executionReceipts), 'PRODUCT_ENGINEERING_RECOMPUTE_RECEIPTS_INVALID', 'Execution receipts must be an array');
@@ -188,6 +192,7 @@ export function evaluateRecomputeAdmission({ plan, executionReceipts } = {}) {
   return deepFreeze({ ...basis, admissionHash: sha(basis) });
 }
 
+/** @param {any} options */
 export function createRecomputeOrchestrationReceipt({ id, plan, executionReceipts, admission, completedAt, completedBy } = {}) {
   invariant(admission?.planId === plan?.id && admission?.planHash === plan?.planHash, 'PRODUCT_ENGINEERING_RECOMPUTE_ADMISSION_MISMATCH', 'Admission result must belong to the exact recompute plan');
   invariant(admission.admitted === true, 'PRODUCT_ENGINEERING_RECOMPUTE_NOT_ADMITTED', 'Orchestration receipt can be sealed only after every exact plan step succeeds');

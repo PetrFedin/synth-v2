@@ -20,6 +20,7 @@ const triggerReceipt=Object.freeze({
 function dep(id,{source='MAT-001',target,authority,version,mode='automatic',operation,dependsOn=[],severity='high'}={}) {
   return {
     id,
+    impactId:`impact-${id}`,
     source:{authority:'material',entityId:source,version:8},
     target:{authority,entityId:target,version},
     dependencyKind:'derived',

@@ -377,7 +377,7 @@ test('AI Engineering Golden Path crosses real HTTP, PostgreSQL, durable jobs and
       idempotencyKey: `ai-eng-${runId}-recompute-step`,
       body: {
         status: 'succeeded',
-        evidence: [{ kind: 'human_review', reviewer: user.id, impactId: orchestratedImpact.id }],
+        evidence: [{ kind: 'human_review', reviewer: ACCEPTANCE_BRAND_OWNER.email, impactId: orchestratedImpact.id }],
       },
     }));
     assert.equal(stepReceipt.status, 'succeeded');

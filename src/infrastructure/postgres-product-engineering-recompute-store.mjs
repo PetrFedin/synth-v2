@@ -38,6 +38,16 @@ function transactionView(client) {
     getCommand: (id) => getRegisteredCommand(client, 'product-engineering', id),
     insertCommand: (value) => insertRegisteredCommand(client, 'product-engineering', value),
 
+    async getChangeImpactForUpdate(impactId) {
+      const result = await client.query('SELECT * FROM product_engineering_change_impacts WHERE id=$1 FOR UPDATE', [impactId]);
+      return result.rows[0] ? mapChangeImpact(result.rows[0]) : undefined;
+    },
+
+    async getChangeImpactReceiptByImpact(impactId) {
+      const result = await client.query('SELECT * FROM product_engineering_change_impact_receipts WHERE impact_id=$1', [impactId]);
+      return result.rows[0] ? mapChangeImpactReceipt(result.rows[0]) : undefined;
+    },
+
     async getDependencySetByTrigger(changeCaseId, triggerReceiptId) {
       const result = await client.query(
         'SELECT * FROM product_engineering_recompute_dependency_sets WHERE change_case_id=$1 AND trigger_receipt_id=$2 ORDER BY detected_at DESC, id DESC LIMIT 1',
@@ -134,6 +144,25 @@ function transactionView(client) {
       );
       invariant(result.rowCount===1,'PRODUCT_ENGINEERING_RECOMPUTE_PLAN_NOT_OPEN','Recompute plan is not open',{planId});
     },
+  });
+}
+
+function mapChangeImpact(row) {
+  return Object.freeze({
+    id:row.id,changeCaseId:row.change_case_id,impactKind:row.impact_kind,entityId:row.entity_id,
+    entityVersion:row.entity_version,area:row.area,requiredAction:row.required_action,severity:row.severity,
+    evidenceStatus:row.evidence_status,basis:deepFreeze(row.basis),status:row.status,
+    createdAt:iso(row.created_at),createdBy:row.created_by,version:Number(row.version),
+  });
+}
+
+function mapChangeImpactReceipt(row) {
+  return Object.freeze({
+    id:row.id,changeCaseId:row.change_case_id,impactId:row.impact_id,disposition:row.disposition,
+    previousImpactVersion:Number(row.previous_impact_version),resultingImpactVersion:Number(row.resulting_impact_version),
+    reason:row.reason,evidence:deepFreeze(row.evidence ?? []),resultReference:deepFreeze(row.result_reference),
+    resultVerification:deepFreeze(row.result_verification),waiver:deepFreeze(row.waiver),receiptHash:row.receipt_hash,
+    createdAt:iso(row.created_at),createdBy:row.created_by,
   });
 }
 

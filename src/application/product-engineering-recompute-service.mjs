@@ -9,24 +9,10 @@ import {
   evaluateRecomputeAdmission,
 } from '../modules/product-engineering/recompute-orchestration.mjs';
 
-const AUTOMATIC_IMPACT_AUTHORITIES = Object.freeze({
-  measurements:'measurement',
-  tech_pack:'tech_pack',
-  sourcing:'sourcing_rfq',
-  cost:'cost_close',
-  product_readiness:'product_readiness',
-  commercial_publication:'commercial_publication',
-});
-
-const AUTOMATIC_OPERATIONS = Object.freeze({
-  material: Object.freeze(new Set(['material.recompute','material.revalidate'])),
-  measurement: Object.freeze(new Set(['measurement.recompute','measurement.revalidate'])),
-  tech_pack: Object.freeze(new Set(['tech_pack.recompute','tech_pack.revalidate'])),
-  product_readiness: Object.freeze(new Set(['product_readiness.recompute','product_readiness.reassess'])),
-  commercial_projection: Object.freeze(new Set(['commercial_projection.recompute','commercial_projection.reproject'])),
-  commercial_publication: Object.freeze(new Set(['commercial_publication.recompute','commercial_publication.republish'])),
-  cost_close: Object.freeze(new Set(['cost.recompute','cost_close.recompute'])),
-  sourcing_rfq: Object.freeze(new Set(['sourcing.recompute','sourcing_rfq.recompute'])),
+const DEPENDENCY_KIND_BY_EVIDENCE = Object.freeze({
+  observed:'direct',
+  derived:'derived',
+  policy_required:'policy',
 });
 
 /**
@@ -98,13 +84,16 @@ export function createProductEngineeringRecomputeService(options = {}) {
         invariant(impact.status === 'pending' || impact.status === 'acknowledged', 'PRODUCT_ENGINEERING_RECOMPUTE_IMPACT_ALREADY_CLOSED', 'Only an unresolved impact can enter a recompute plan', { impactId:impact.id, status:impact.status });
         invariant(dependency.requiredAction === impact.requiredAction, 'PRODUCT_ENGINEERING_RECOMPUTE_ACTION_MISMATCH', 'Dependency action must match the exact change impact', { impactId:impact.id, expected:impact.requiredAction, actual:dependency.requiredAction });
         invariant(dependency.severity === impact.severity, 'PRODUCT_ENGINEERING_RECOMPUTE_SEVERITY_MISMATCH', 'Dependency severity must match the exact change impact', { impactId:impact.id, expected:impact.severity, actual:dependency.severity });
+        const expectedKind = DEPENDENCY_KIND_BY_EVIDENCE[impact.evidenceStatus];
+        invariant(expectedKind && dependency.dependencyKind === expectedKind, 'PRODUCT_ENGINEERING_RECOMPUTE_DEPENDENCY_KIND_MISMATCH', 'Dependency kind must preserve the exact ChangeImpact evidence classification', { impactId:impact.id, evidenceStatus:impact.evidenceStatus, expectedDependencyKind:expectedKind ?? null, actualDependencyKind:dependency.dependencyKind });
         invariant(sameReference(dependency.source, triggerReceipt.resultReference), 'PRODUCT_ENGINEERING_RECOMPUTE_SOURCE_MISMATCH', 'Every stale dependency must originate from the exact verified correction reference', { impactId:impact.id });
-        if (dependency.mode === 'automatic') {
-          const expectedAuthority = AUTOMATIC_IMPACT_AUTHORITIES[impact.area];
-          invariant(expectedAuthority && dependency.target?.authority === expectedAuthority, 'PRODUCT_ENGINEERING_RECOMPUTE_AUTOMATIC_AUTHORITY_MISMATCH', 'Automatic target authority must match the exact impact area policy', { impactId:impact.id, area:impact.area, expectedAuthority:expectedAuthority ?? null, actualAuthority:dependency.target?.authority ?? null });
-          const allowed = AUTOMATIC_OPERATIONS[dependency.target?.authority];
-          invariant(allowed?.has(dependency.operation), 'PRODUCT_ENGINEERING_RECOMPUTE_AUTOMATIC_OPERATION_UNSUPPORTED', 'Automatic operation is not allowlisted for the owning authority', { authority:dependency.target?.authority, operation:dependency.operation });
+        if (impact.evidenceStatus === 'observed') {
+          invariant(dependency.target?.entityId === impact.entityId, 'PRODUCT_ENGINEERING_RECOMPUTE_TARGET_MISMATCH', 'Observed dependency target must be the exact impacted entity', { impactId:impact.id, expectedEntityId:impact.entityId, actualEntityId:dependency.target?.entityId ?? null });
+          if (impact.entityVersion !== null && impact.entityVersion !== undefined) {
+            invariant(String(dependency.target?.version ?? '') === String(impact.entityVersion), 'PRODUCT_ENGINEERING_RECOMPUTE_TARGET_VERSION_MISMATCH', 'Observed dependency target must preserve the exact impacted version', { impactId:impact.id, expectedVersion:impact.entityVersion, actualVersion:dependency.target?.version ?? null });
+          }
         }
+        invariant(dependency.mode !== 'automatic', 'PRODUCT_ENGINEERING_RECOMPUTE_AUTOMATIC_PLANNER_REQUIRED', 'Automatic recompute planning requires a qualified owning-domain target resolver and is not accepted from generic caller input', { impactId:impact.id, area:impact.area });
         return dependency;
       });
 

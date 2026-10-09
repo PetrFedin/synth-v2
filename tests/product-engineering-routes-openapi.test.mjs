@@ -114,6 +114,7 @@ test('OpenAPI documents engineering review and every mutation carries idempotenc
   assert.deepEqual(spec.components.schemas.ProductEngineeringChangeImpactClose.properties.disposition.enum,['resolved','waived']);
   assert.deepEqual(spec.components.schemas.ProductEngineeringRecomputePlanCreate.required,['triggerImpactId','dependencies']);
   assert.deepEqual(spec.components.schemas.ProductEngineeringRecomputeStepComplete.required,['status','evidence']);
+  assert.deepEqual(spec.components.schemas.ProductEngineeringRecomputeStepComplete.properties.status.enum,['succeeded']);
   assert.equal(spec.paths['/product-engineering/recompute-plans/{planId}'].get.operationId,'getProductEngineeringRecomputePlan');
   assert.equal(spec.paths['/product-engineering/change-impacts/{impactId}/receipt'].get.operationId,'getProductEngineeringChangeImpactReceipt');
   assert.equal(spec.paths['/product-engineering/proposals/{proposalId}/apply'].post.operationId,'applyProductEngineeringProposal');

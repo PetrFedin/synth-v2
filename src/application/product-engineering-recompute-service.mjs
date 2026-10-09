@@ -100,6 +100,8 @@ export function createProductEngineeringRecomputeService(options = {}) {
         const existing = await tx.getDependencySetByTrigger(changeCaseId, triggerReceipt.id);
         if (existing) {
           invariant(existing.dependencySetHash === staleSet.dependencySetHash, 'PRODUCT_ENGINEERING_RECOMPUTE_TRIGGER_CONFLICT', 'Trigger receipt already owns a different immutable dependency set', { triggerReceiptId:triggerReceipt.id });
+          const existingPlan = await tx.getPlanByDependencySet(existing.id);
+          if (existingPlan) return deepFreeze({ dependencySet:existing, plan:existingPlan });
         } else {
           await tx.insertDependencySet(staleSet);
         }

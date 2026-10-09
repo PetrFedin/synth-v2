@@ -84,7 +84,7 @@ const dependency={
   reason:'Readiness snapshot depends on the corrected material.',
   requiredAction:'reassess',
   severity:'high',
-  mode:'automatic',
+  mode:'human_review',
   operation:'product_readiness.reassess',
   dependsOn:[],
   evidence:[{kind:'lineage',from:'MAT-1@7',to:'READY-1@2'}],
@@ -108,12 +108,12 @@ test('control plane persists exact trigger-bound deterministic plan',async()=>{
   assert.equal(replay.plan.id,created.plan.id);
 });
 
-test('automatic step succeeds only after owning authority verification and then plan can seal',async()=>{
+test('human review step can bind an independently verified owning result and then plan can seal',async()=>{
   const fx=fixture();
   const created=await fx.service.createPlan('cmd-plan','actor-1','case-1',{triggerImpactId:'impact-trigger',dependencies:[dependency]});
   const receipt=await fx.service.completeStep('cmd-step','actor-1',created.plan.id,'ready-step',{
     status:'succeeded',
-    evidence:[{kind:'recompute_job',id:'job-1'}],
+    evidence:[{kind:'human_review',id:'review-1'}],
     resultReference:{authority:'product_readiness',entityId:'READY-2',version:3},
   });
   assert.equal(receipt.status,'succeeded');
@@ -135,5 +135,20 @@ test('plan creation rejects invented impact semantics and unallowlisted automati
   await assert.rejects(
     ()=>fx.service.createPlan('cmd-bad-2','actor-1','case-1',{triggerImpactId:'impact-trigger',dependencies:[{...dependency,operation:'product_readiness.delete'}]}),
     error=>error.code==='PRODUCT_ENGINEERING_RECOMPUTE_AUTOMATIC_OPERATION_UNSUPPORTED',
+  );
+});
+
+
+test('generic completion endpoint cannot impersonate the future automatic owning-domain executor',async()=>{
+  const fx=fixture();
+  const automatic={...dependency,mode:'automatic'};
+  const created=await fx.service.createPlan('cmd-auto-plan','actor-1','case-1',{triggerImpactId:'impact-trigger',dependencies:[automatic]});
+  await assert.rejects(
+    ()=>fx.service.completeStep('cmd-auto-step','actor-1',created.plan.id,'ready-step',{
+      status:'succeeded',
+      evidence:[{kind:'caller_claim'}],
+      resultReference:{authority:'product_readiness',entityId:'READY-2',version:3},
+    }),
+    error=>error.code==='PRODUCT_ENGINEERING_RECOMPUTE_AUTOMATIC_EXECUTOR_REQUIRED',
   );
 });

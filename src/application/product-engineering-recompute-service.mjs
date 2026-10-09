@@ -161,7 +161,7 @@ export function createProductEngineeringRecomputeService(options = {}) {
       invariant(missingParents.length===0, 'PRODUCT_ENGINEERING_RECOMPUTE_STEP_DEPENDENCY_BLOCKED', 'Recompute step cannot complete before all exact parent steps succeed', { stepId, missingParents });
 
       const status = input.status;
-      invariant(['succeeded','blocked','failed'].includes(status), 'PRODUCT_ENGINEERING_RECOMPUTE_STATUS_INVALID', 'Recompute execution status is invalid');
+      invariant(status === 'succeeded', 'PRODUCT_ENGINEERING_RECOMPUTE_TERMINAL_FAILURE_EXECUTOR_REQUIRED', 'Generic recompute completion records successful human/external work only; blocked/failed terminal outcomes belong to the future qualified durable executor', { planId, stepId, status });
       invariant(step.mode !== 'automatic', 'PRODUCT_ENGINEERING_RECOMPUTE_AUTOMATIC_EXECUTOR_REQUIRED', 'Automatic recompute steps can only be completed by a qualified owning-domain adapter', { planId, stepId, owningAuthority:step.owningAuthority, operation:step.operation });
       let resultVerification = null;
       if (status === 'succeeded' && input.resultReference) {

@@ -89,10 +89,18 @@ export function createProductEngineeringRecomputeService(options = {}) {
 
       const fingerprint = `createProductEngineeringRecomputePlan:${actorId}:${changeCaseId}:${canonicalJson({triggerImpactId:input.triggerImpactId,dependencies})}`;
       return runCommand(commandId, actorId, fingerprint, async (tx) => {
+        const exactTriggerReceipt = required(await tx.getChangeImpactReceiptByImpact(input.triggerImpactId), 'PRODUCT_ENGINEERING_CHANGE_IMPACT_RECEIPT_NOT_FOUND', { impactId:input.triggerImpactId });
+        invariant(exactTriggerReceipt.receiptHash === triggerReceipt.receiptHash && exactTriggerReceipt.changeCaseId === changeCaseId, 'PRODUCT_ENGINEERING_RECOMPUTE_TRIGGER_CHANGED', 'Trigger correction receipt changed before plan persistence', { impactId:input.triggerImpactId });
+        for (const dependency of dependencies) {
+          const exactImpact = required(await tx.getChangeImpactForUpdate(dependency.impactId), 'PRODUCT_ENGINEERING_RECOMPUTE_IMPACT_NOT_IN_CASE', { impactId:dependency.impactId });
+          invariant(exactImpact.changeCaseId === changeCaseId, 'PRODUCT_ENGINEERING_RECOMPUTE_IMPACT_NOT_IN_CASE', 'Dependency impact belongs to another change case', { impactId:dependency.impactId, changeCaseId });
+          invariant(exactImpact.status === 'pending' || exactImpact.status === 'acknowledged', 'PRODUCT_ENGINEERING_RECOMPUTE_IMPACT_ALREADY_CLOSED', 'Only an unresolved impact can enter a recompute plan', { impactId:exactImpact.id, status:exactImpact.status });
+          invariant(exactImpact.requiredAction === dependency.requiredAction && exactImpact.severity === dependency.severity, 'PRODUCT_ENGINEERING_RECOMPUTE_IMPACT_CHANGED', 'Dependency impact semantics changed before plan persistence', { impactId:exactImpact.id });
+        }
         const staleSet = createStaleDependencySet({
           id:nextId('engineering-recompute-set'),
           changeCase:workspace.changeCase,
-          triggerReceipt,
+          triggerReceipt:exactTriggerReceipt,
           dependencies,
           detectedAt:now(),
           detectedBy:actorId,

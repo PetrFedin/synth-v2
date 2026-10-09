@@ -2251,3 +2251,27 @@ Tranche A implements only the deterministic domain/evidence foundation:
 - immutable final orchestration receipt.
 
 No persistence, worker, HTTP, UI or generic downstream write path is claimed yet. The next tranche after exact-head CI is PostgreSQL persistence + durable bounded job orchestration, then owning-authority adapters and human/external evidence routing.
+
+
+### 2026-10-09 — Recompute orchestration Tranche B1 persistence and recovery
+
+Branch `feat/recompute-orchestration-persistence` starts from accepted `main@84f9528e5b2474fbd9ae10dad9f7f81aa45e6ed9` after the mandatory post-#256 reconciliation.
+
+Implemented scope:
+
+- immutable PostgreSQL persistence for exact Stale Dependency Sets, Recompute Plans, plan steps, execution receipts and orchestration receipts;
+- dependency-aware leased automatic jobs with retry, reclaim and dead letter;
+- exact operation allowlist instead of a generic downstream writer;
+- owning-authority result read-back through the existing independent verifier;
+- explicit human/external evidence completion boundary;
+- crash-safe fan-out/fan-in continuation and immutable admission sealing.
+
+Next only after exact-head and post-merge qualification:
+
+1. runtime worker registration and readiness/metrics;
+2. concrete owning-authority adapters, one bounded context at a time;
+3. Awaiting Action projection and capabily ownership for human review;
+4. governed external-evidence intake/reconciliation;
+5. original blocked-action replay plus PostgreSQL Golden Path;
+6. re-evaluate P0 commercial debt and intended-live `ACC-004` proof;
+7. only then start the separate `SHOWROOM-RAIL-001` 2D Rail Composer.

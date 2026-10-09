@@ -173,13 +173,11 @@ export function createProductEngineeringRecomputeService(options = {}) {
 
       const status = input.status;
       invariant(['succeeded','blocked','failed'].includes(status), 'PRODUCT_ENGINEERING_RECOMPUTE_STATUS_INVALID', 'Recompute execution status is invalid');
+      invariant(step.mode !== 'automatic', 'PRODUCT_ENGINEERING_RECOMPUTE_AUTOMATIC_EXECUTOR_REQUIRED', 'Automatic recompute steps can only be completed by a qualified owning-domain adapter', { planId, stepId, owningAuthority:step.owningAuthority, operation:step.operation });
       let resultVerification = null;
       if (status === 'succeeded' && input.resultReference) {
+        invariant(input.resultReference.authority === step.owningAuthority, 'PRODUCT_ENGINEERING_RECOMPUTE_RESULT_AUTHORITY_MISMATCH', 'Result authority must match the exact plan step', { expected:step.owningAuthority, actual:input.resultReference.authority });
         resultVerification = await resultVerifier.verify(actorId, input.resultReference);
-      }
-      if (status === 'succeeded' && step.mode === 'automatic') {
-        invariant(input.resultReference, 'PRODUCT_ENGINEERING_RECOMPUTE_RESULT_REQUIRED', 'Automatic step requires an exact owning-authority result');
-        invariant(input.resultReference.authority === step.owningAuthority, 'PRODUCT_ENGINEERING_RECOMPUTE_RESULT_AUTHORITY_MISMATCH', 'Automatic result authority must match the exact plan step', { expected:step.owningAuthority, actual:input.resultReference.authority });
       }
 
       return runCommand(commandId, actorId, fingerprint, async (tx) => {
@@ -192,8 +190,8 @@ export function createProductEngineeringRecomputeService(options = {}) {
         const exactStep = exactPlan.steps.find((candidate)=>candidate.id===stepId);
         const exactMissingParents = exactStep.dependsOn.filter((parent)=>!exactSucceeded.has(parent));
         invariant(exactMissingParents.length===0, 'PRODUCT_ENGINEERING_RECOMPUTE_STEP_DEPENDENCY_BLOCKED', 'Recompute step cannot complete before all exact parent steps succeed', { stepId, missingParents:exactMissingParents });
-        const startedAt = input.startedAt ?? now();
-        const completedAt = input.completedAt ?? now();
+        const startedAt = now();
+        const completedAt = now();
         const receipt = createRecomputeExecutionReceipt({
           id:nextId('engineering-recompute-execution'),
           plan:exactPlan,

@@ -181,3 +181,19 @@ test('same step command replays after plan is sealed without reinterpreting curr
   const replay=await fx.service.completeStep('cmd-step-replay','actor-1',created.plan.id,'ready-step',input);
   assert.equal(replay.receiptHash,first.receiptHash);
 });
+
+
+test('generic completion cannot persist terminal failed or blocked outcomes without the durable executor',async()=>{
+  const fx=fixture();
+  const created=await fx.service.createPlan('cmd-failure-plan','actor-1','case-1',{triggerImpactId:'impact-trigger',dependencies:[dependency]});
+  for (const status of ['failed','blocked']) {
+    await assert.rejects(
+      ()=>fx.service.completeStep('cmd-'+status,'actor-1',created.plan.id,'ready-step',{
+        status,
+        evidence:[{kind:'review',status}],
+        errorCode:'SIMULATED_'+status.toUpperCase(),
+      }),
+      error=>error.code==='PRODUCT_ENGINEERING_RECOMPUTE_TERMINAL_FAILURE_EXECUTOR_REQUIRED',
+    );
+  }
+});

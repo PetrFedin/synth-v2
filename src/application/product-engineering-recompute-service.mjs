@@ -19,8 +19,8 @@ const DEPENDENCY_KIND_BY_EVIDENCE = Object.freeze({
  * Durable Product Engineering recompute/re-review control plane.
  *
  * It persists exact plans and receipts but never performs a generic write into
- * downstream bounded contexts. Automatic steps can be completed only with an
- * independently verified owning-authority result reference.
+ * downstream bounded contexts. Generic caller input cannot plan or complete
+ * automatic steps; those are reserved for a qualified owning-domain adapter.
  *
  * @param {{
  *   store?:any,

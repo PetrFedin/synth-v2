@@ -100,30 +100,67 @@ function schemas() {
         basis:jsonObject,status:{type:'string',enum:['pending','acknowledged','resolved','waived']},createdAt:dateTime,createdBy:id,version:{type:'integer',minimum:1},
       },
     },
+    ProductEngineeringRecomputeExactReference: {
+      type:'object',additionalProperties:false,required:['authority','entityId','version','contentHash'],
+      properties:{
+        authority:{type:'string'},entityId:id,
+        version:{oneOf:[{type:'string'},{type:'null'}]},
+        contentHash:{oneOf:[hash,{type:'null'}]},
+      },
+    },
+    ProductEngineeringRecomputeDependency: {
+      type:'object',additionalProperties:false,
+      required:['id','impactId','source','target','dependencyKind','reason','requiredAction','severity','mode','operation','dependsOn','evidence'],
+      properties:{
+        id,impactId:id,
+        source:{$ref:'#/components/schemas/ProductEngineeringRecomputeExactReference'},
+        target:{$ref:'#/components/schemas/ProductEngineeringRecomputeExactReference'},
+        dependencyKind:{type:'string',enum:['direct','derived','policy']},
+        reason:{type:'string',minLength:1},
+        requiredAction:{type:'string',minLength:1},
+        severity:{type:'string',enum:['medium','high','blocking']},
+        mode:{type:'string',enum:['automatic','human_review','external_evidence']},
+        operation:{type:'string',minLength:2,maxLength:160},
+        dependsOn:{type:'array',items:id},
+        evidence:{type:'array',minItems:1,items:{type:'object',additionalProperties:true}},
+      },
+    },
     ProductEngineeringRecomputePlanCreate: {
       type:'object', additionalProperties:false, required:['triggerImpactId','dependencies'],
       properties:{
         triggerImpactId:id,
-        dependencies:{
-          type:'array',minItems:1,
-          items:{
-            type:'object',additionalProperties:false,
-            required:['id','impactId','source','target','dependencyKind','reason','requiredAction','severity','mode','operation','dependsOn','evidence'],
-            properties:{
-              id,impactId:id,
-              source:{type:'object',additionalProperties:true},
-              target:{type:'object',additionalProperties:true},
-              dependencyKind:{type:'string',enum:['direct','derived','policy']},
-              reason:{type:'string',minLength:1},
-              requiredAction:{type:'string',minLength:1},
-              severity:{type:'string',enum:['medium','high','blocking']},
-              mode:{type:'string',enum:['automatic','human_review','external_evidence']},
-              operation:{type:'string',minLength:2,maxLength:160},
-              dependsOn:{type:'array',items:id},
-              evidence:{type:'array',minItems:1,items:{type:'object',additionalProperties:true}},
-            },
-          },
-        },
+        dependencies:{type:'array',minItems:1,items:{$ref:'#/components/schemas/ProductEngineeringRecomputeDependency'}},
+      },
+    },
+    ProductEngineeringRecomputeDependencySet: {
+      type:'object',additionalProperties:false,
+      required:['id','changeCaseId','brandId','styleId','triggerReceiptId','triggerReceiptHash','triggerResultReference','triggerVerificationHash','dependencies','detectedAt','detectedBy','dependencySetHash'],
+      properties:{
+        id,changeCaseId:id,brandId:id,styleId:id,triggerReceiptId:id,triggerReceiptHash:hash,
+        triggerResultReference:{$ref:'#/components/schemas/ProductEngineeringRecomputeExactReference'},
+        triggerVerificationHash:hash,
+        dependencies:{type:'array',items:{$ref:'#/components/schemas/ProductEngineeringRecomputeDependency'}},
+        detectedAt:dateTime,detectedBy:id,dependencySetHash:hash,
+      },
+    },
+    ProductEngineeringRecomputePlan: {
+      type:'object',additionalProperties:true,
+      required:['id','changeCaseId','brandId','styleId','triggerReceiptId','triggerReceiptHash','dependencySetId','dependencySetHash','steps','levels','planHash','status','createdAt','createdBy'],
+      properties:{
+        id,changeCaseId:id,brandId:id,styleId:id,triggerReceiptId:id,triggerReceiptHash:hash,
+        dependencySetId:id,dependencySetHash:hash,
+        steps:{type:'array',items:{type:'object',additionalProperties:true}},
+        levels:{type:'array',items:{type:'array',items:id}},
+        planHash:hash,status:{type:'string',enum:['open','completed','blocked']},
+        createdAt:dateTime,createdBy:id,
+        completedAt:nullableDateTime,completedBy:nullableId,
+      },
+    },
+    ProductEngineeringRecomputePlanCreateResult: {
+      type:'object',additionalProperties:false,required:['dependencySet','plan'],
+      properties:{
+        dependencySet:{$ref:'#/components/schemas/ProductEngineeringRecomputeDependencySet'},
+        plan:{$ref:'#/components/schemas/ProductEngineeringRecomputePlan'},
       },
     },
     ProductEngineeringRecomputeStepComplete: {
@@ -131,24 +168,48 @@ function schemas() {
       properties:{
         status:{type:'string',enum:['succeeded','blocked','failed']},
         evidence:{type:'array',items:{type:'object',additionalProperties:true}},
-        resultReference:{oneOf:[{type:'object',additionalProperties:true},{type:'null'}]},
+        resultReference:{oneOf:[{$ref:'#/components/schemas/ProductEngineeringRecomputeExactReference'},{type:'null'}]},
         errorCode:{oneOf:[{type:'string'},{type:'null'}]},
+      },
+      description:'Records terminal human-review/external-evidence work. Generic HTTP completion cannot complete automatic steps; automatic execution is reserved for qualified owning-domain adapters.',
+    },
+    ProductEngineeringRecomputeExecutionReceipt: {
+      type:'object',additionalProperties:true,
+      required:['id','planId','planHash','stepId','dependencyId','impactId','owningAuthority','operation','mode','commandId','idempotencyKey','inputReference','status','evidence','resultReference','resultVerification','errorCode','receiptHash','startedAt','completedAt'],
+      properties:{
+        id,planId:id,planHash:hash,stepId:id,dependencyId:id,impactId:id,
+        owningAuthority:{type:'string'},operation:{type:'string'},
+        mode:{type:'string',enum:['automatic','human_review','external_evidence']},
+        commandId:id,idempotencyKey:{type:'string'},
+        inputReference:{$ref:'#/components/schemas/ProductEngineeringRecomputeExactReference'},
+        status:{type:'string',enum:['succeeded','blocked','failed']},
+        evidence:{type:'array',items:{type:'object',additionalProperties:true}},
+        resultReference:{oneOf:[{$ref:'#/components/schemas/ProductEngineeringRecomputeExactReference'},{type:'null'}]},
+        resultVerification:{oneOf:[{type:'object',additionalProperties:true},{type:'null'}]},
+        errorCode:{oneOf:[{type:'string'},{type:'null'}]},
+        receiptHash:hash,startedAt:dateTime,completedAt:dateTime,
+      },
+    },
+    ProductEngineeringRecomputeOrchestrationReceipt: {
+      type:'object',additionalProperties:false,
+      required:['id','planId','planHash','dependencySetId','dependencySetHash','changeCaseId','triggerReceiptId','triggerReceiptHash','executionReceiptHashes','admissionHash','receiptHash','completedAt','completedBy'],
+      properties:{
+        id,planId:id,planHash:hash,dependencySetId:id,dependencySetHash:hash,changeCaseId:id,
+        triggerReceiptId:id,triggerReceiptHash:hash,
+        executionReceiptHashes:{type:'array',items:hash},admissionHash:hash,receiptHash:hash,
+        completedAt:dateTime,completedBy:id,
       },
     },
     ProductEngineeringRecomputePlanWorkspace: {
       type:'object',additionalProperties:false,required:['plan','dependencies','triggerResultReference','triggerVerificationHash','executionReceipts','orchestrationReceipt'],
       properties:{
-        plan:{type:'object',additionalProperties:true},
-        dependencies:{type:'array',items:{type:'object',additionalProperties:true}},
-        triggerResultReference:{type:'object',additionalProperties:true},
+        plan:{$ref:'#/components/schemas/ProductEngineeringRecomputePlan'},
+        dependencies:{type:'array',items:{$ref:'#/components/schemas/ProductEngineeringRecomputeDependency'}},
+        triggerResultReference:{$ref:'#/components/schemas/ProductEngineeringRecomputeExactReference'},
         triggerVerificationHash:hash,
-        executionReceipts:{type:'array',items:{type:'object',additionalProperties:true}},
-        orchestrationReceipt:{oneOf:[{type:'object',additionalProperties:true},{type:'null'}]},
+        executionReceipts:{type:'array',items:{$ref:'#/components/schemas/ProductEngineeringRecomputeExecutionReceipt'}},
+        orchestrationReceipt:{oneOf:[{$ref:'#/components/schemas/ProductEngineeringRecomputeOrchestrationReceipt'},{type:'null'}]},
       },
-    },
-    ProductEngineeringRecomputeOrchestrationReceipt: {
-      type:'object',additionalProperties:true,
-      required:['id','planId','planHash','dependencySetId','dependencySetHash','changeCaseId','triggerReceiptId','triggerReceiptHash','executionReceiptHashes','admissionHash','receiptHash','completedAt','completedBy'],
     },
     ProductEngineeringChangeCaseWorkspace: {
       type:'object', additionalProperties:false, required:['changeCase','impacts','receipts'],
@@ -354,10 +415,16 @@ function schemas() {
 }
 
 function paths() {
-  const mutation = (operationId, ids, schema = null) => ({
+  const mutation = (operationId, ids, schema = null, responseSchema = null) => ({
     operationId, security: auth, parameters: [...ids.map(pathId), idempotency],
     ...(schema ? { requestBody: body(schema) } : {}),
-    responses: { 200: { description: 'Success' }, 400: error, 401: error, 403: error, 404: error, 409: error, 422: error },
+    responses: {
+      200: {
+        description: 'Success',
+        ...(responseSchema ? { content: { 'application/json': { schema: { type:'object', required:['data','requestId'], properties:{ data:{ $ref:responseSchema }, requestId:{type:'string'} } } } } } : {}),
+      },
+      400:error,401:error,403:error,404:error,409:error,422:error,
+    },
   });
   const read = (operationId, ids, responseSchema, extra = []) => ({
     operationId, security: auth, parameters: [...ids.map(pathId), ...extra],
@@ -400,10 +467,10 @@ function paths() {
     '/product-engineering/change-cases/{changeCaseId}/acknowledge': { post: mutation('acknowledgeProductEngineeringChangeCase', ['changeCaseId'], '#/components/schemas/ProductEngineeringChangeCaseAcknowledge') },
     '/product-engineering/change-impacts/{impactId}/receipt': { get: read('getProductEngineeringChangeImpactReceipt', ['impactId'], '#/components/schemas/ProductEngineeringChangeImpactReceipt') },
     '/product-engineering/change-impacts/{impactId}/close': { post: mutation('closeProductEngineeringChangeImpact', ['impactId'], '#/components/schemas/ProductEngineeringChangeImpactClose') },
-    '/product-engineering/change-cases/{changeCaseId}/recompute-plans': { post: mutation('createProductEngineeringRecomputePlan', ['changeCaseId'], '#/components/schemas/ProductEngineeringRecomputePlanCreate') },
+    '/product-engineering/change-cases/{changeCaseId}/recompute-plans': { post: mutation('createProductEngineeringRecomputePlan', ['changeCaseId'], '#/components/schemas/ProductEngineeringRecomputePlanCreate', '#/components/schemas/ProductEngineeringRecomputePlanCreateResult') },
     '/product-engineering/recompute-plans/{planId}': { get: read('getProductEngineeringRecomputePlan', ['planId'], '#/components/schemas/ProductEngineeringRecomputePlanWorkspace') },
-    '/product-engineering/recompute-plans/{planId}/steps/{stepId}/complete': { post: mutation('completeProductEngineeringRecomputeStep', ['planId','stepId'], '#/components/schemas/ProductEngineeringRecomputeStepComplete') },
-    '/product-engineering/recompute-plans/{planId}/seal': { post: mutation('sealProductEngineeringRecomputePlan', ['planId']) },
+    '/product-engineering/recompute-plans/{planId}/steps/{stepId}/complete': { post: mutation('completeProductEngineeringRecomputeStep', ['planId','stepId'], '#/components/schemas/ProductEngineeringRecomputeStepComplete', '#/components/schemas/ProductEngineeringRecomputeExecutionReceipt') },
+    '/product-engineering/recompute-plans/{planId}/seal': { post: mutation('sealProductEngineeringRecomputePlan', ['planId'], null, '#/components/schemas/ProductEngineeringRecomputeOrchestrationReceipt') },
     '/product/styles/{styleId}/engineering/analyses': { post: mutation('requestProductEngineeringAnalysis', ['styleId'], '#/components/schemas/ProductEngineeringAnalysisCreate') },
     '/product/styles/{styleId}/engineering': { get: read('getProductEngineeringStyleWorkspace', ['styleId'], '#/components/schemas/ProductEngineeringStyleWorkspace', [{ name: 'limit', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 200 } }]) },
     '/product-engineering/analyses/{analysisRunId}': { get: read('getProductEngineeringAnalysisWorkspace', ['analysisRunId'], '#/components/schemas/ProductEngineeringAnalysisWorkspace') },

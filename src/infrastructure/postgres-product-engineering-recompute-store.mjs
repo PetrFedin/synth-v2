@@ -33,6 +33,7 @@ export function createPostgresProductEngineeringRecomputeStore({ pool } = {}) {
   });
 }
 
+/** @param {any} client */
 function transactionView(client) {
   return Object.freeze({
     getCommand: (id) => getRegisteredCommand(client, 'product-engineering', id),
@@ -147,6 +148,7 @@ function transactionView(client) {
   });
 }
 
+/** @param {any} row */
 function mapChangeImpact(row) {
   return Object.freeze({
     id:row.id,changeCaseId:row.change_case_id,impactKind:row.impact_kind,entityId:row.entity_id,
@@ -156,6 +158,7 @@ function mapChangeImpact(row) {
   });
 }
 
+/** @param {any} row */
 function mapChangeImpactReceipt(row) {
   return Object.freeze({
     id:row.id,changeCaseId:row.change_case_id,impactId:row.impact_id,disposition:row.disposition,
@@ -166,6 +169,7 @@ function mapChangeImpactReceipt(row) {
   });
 }
 
+/** @param {any} row */
 function mapDependencySet(row) {
   return Object.freeze({
     id:row.id,changeCaseId:row.change_case_id,brandId:row.brand_id,styleId:row.style_id,
@@ -176,6 +180,7 @@ function mapDependencySet(row) {
   });
 }
 
+/** @param {any} row */
 function mapPlan(row) {
   return Object.freeze({
     id:row.id,changeCaseId:row.change_case_id,brandId:row.brand_id,styleId:row.style_id,
@@ -187,6 +192,7 @@ function mapPlan(row) {
   });
 }
 
+/** @param {any} row */
 function mapExecutionReceipt(row) {
   return Object.freeze({
     id:row.id,planId:row.plan_id,planHash:row.plan_hash,stepId:row.step_id,dependencyId:row.dependency_id,
@@ -198,6 +204,7 @@ function mapExecutionReceipt(row) {
   });
 }
 
+/** @param {any} row */
 function mapOrchestrationReceipt(row) {
   return Object.freeze({
     id:row.id,planId:row.plan_id,planHash:row.plan_hash,dependencySetId:row.dependency_set_id,
@@ -207,5 +214,7 @@ function mapOrchestrationReceipt(row) {
   });
 }
 
+/** @param {any} value */
 function iso(value){return value?new Date(value).toISOString():null;}
+/** @param {any} value */
 function deepFreeze(value){if(!value||typeof value!=='object'||Object.isFrozen(value))return value;Object.freeze(value);for(const nested of Object.values(value))deepFreeze(nested);return value;}

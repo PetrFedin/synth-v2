@@ -2251,3 +2251,81 @@ Tranche A implements only the deterministic domain/evidence foundation:
 - immutable final orchestration receipt.
 
 No persistence, worker, HTTP, UI or generic downstream write path is claimed yet. The next tranche after exact-head CI is PostgreSQL persistence + durable bounded job orchestration, then owning-authority adapters and human/external evidence routing.
+
+
+## 2026-10-09 — Recompute orchestration tranche B / PostgreSQL control plane
+
+Status: implementation active on `feat/change-impact-recompute-control-plane` from merged `main@83c7f59f1fb660e64f4b3d57008c5de28931fddd` (PR #256 domain tranche A already merged).
+
+### Implemented in this tranche
+
+`verified correction receipt`
+→ exact unresolved `ChangeImpact.id` set
+→ locked status/action/severity revalidation
+→ immutable `StaleDependencySet`
+→ deterministic DAG `RecomputePlan`
+→ PostgreSQL persistence
+→ explicit step completion
+→ owning read-authority verification for automatic results
+→ immutable per-step receipt
+→ fail-closed admission
+→ immutable orchestration receipt.
+
+Persistence authority:
+
+- `product_engineering_recompute_dependency_sets`;
+- `product_engineering_recompute_plans`;
+- `product_engineering_recompute_execution_receipts`;
+- `product_engineering_recompute_orchestration_receipts`.
+
+New bounded HTTP surface:
+
+- `POST /v2/product-engineering/change-cases/{changeCaseId}/recompute-plans`;
+- `GET /v2/product-engineering/recompute-plans/{planId}`;
+- `POST /v2/product-engineering/recompute-plans/{planId}/steps/{stepId}/complete`;
+- `POST /v2/product-engineering/recompute-plans/{planId}/seal`.
+
+### Authority invariants
+
+- A dependency cannot be created from a guessed area name. It must cite an exact `ChangeImpact.id`.
+- The dependency source must equal the exact verified canonical correction reference that triggered orchestration.
+- Product Engineering re-locks each impact in PostgreSQL before plan persistence and rechecks unresolved state, action and severity.
+- Automatic operation codes are allowlisted per target authority. Unknown operations fail closed.
+- Automatic success requires independent owning-authority verification of exact entity + version/hash.
+- DAG parents must already have successful terminal receipts before a child step can become terminal.
+- One terminal execution receipt per exact plan step.
+- Plan sealing is impossible until every step succeeds.
+- Orchestration does not gain generic SQL or generic downstream mutation authority.
+
+### Verification state
+
+Implementation and contract tests have been added, but this checkpoint is **not yet admitted** until fresh exact-head CI proves:
+
+- migration 180 integrity;
+- recompute domain contracts;
+- recompute application-service contracts;
+- route/OpenAPI contracts;
+- PostgreSQL runtime composition;
+- Product Engineering PostgreSQL Golden Path;
+- `validate:types`;
+- `validate:architecture`;
+- `validate:ui`;
+- `validate:design-system`;
+- `validate:i18n`;
+- full `npm run verify`.
+
+### Next bounded slice after tranche B admission
+
+**Durable Recompute Worker + Owning-domain Adapters**
+
+`open RecomputePlan`
+→ lease/retry/reclaim durable step job
+→ allowlisted adapter
+→ exact input version
+→ owning bounded-context command or explicit human/external work item
+→ independent read-back verification
+→ terminal execution receipt
+→ next DAG level.
+
+The worker must never execute arbitrary operation names. Each automatic operation requires an explicit code adapter with its own input contract, owning capability/policy, idempotency key and canonical result proof.
+

@@ -48,7 +48,7 @@ function fixture(){
   const changeCase={id:'case-1',brandId:'brand-1',styleId:'style-1',status:'acknowledged'};
   const impacts=[
     {id:'impact-trigger',changeCaseId:'case-1',status:'resolved',requiredAction:'re-review',severity:'high'},
-    {id:'impact-ready',changeCaseId:'case-1',status:'pending',area:'product_readiness',requiredAction:'reassess',severity:'high'},
+    {id:'impact-ready',changeCaseId:'case-1',status:'pending',area:'product_readiness',entityId:'READY-1',entityVersion:'2',evidenceStatus:'observed',requiredAction:'reassess',severity:'high'},
   ];
   const triggerReceipt={
     id:'receipt-trigger',changeCaseId:'case-1',impactId:'impact-trigger',disposition:'resolved',
@@ -80,7 +80,7 @@ const dependency={
   impactId:'impact-ready',
   source:{authority:'material',entityId:'MAT-1',version:8,contentHash:null},
   target:{authority:'product_readiness',entityId:'READY-1',version:2},
-  dependencyKind:'derived',
+  dependencyKind:'direct',
   reason:'Readiness snapshot depends on the corrected material.',
   requiredAction:'reassess',
   severity:'high',
@@ -139,17 +139,12 @@ test('plan creation rejects invented impact semantics and unallowlisted automati
 });
 
 
-test('generic completion endpoint cannot impersonate the future automatic owning-domain executor',async()=>{
+test('generic caller cannot create an automatic plan before a qualified owning-domain target resolver exists',async()=>{
   const fx=fixture();
   const automatic={...dependency,mode:'automatic'};
-  const created=await fx.service.createPlan('cmd-auto-plan','actor-1','case-1',{triggerImpactId:'impact-trigger',dependencies:[automatic]});
   await assert.rejects(
-    ()=>fx.service.completeStep('cmd-auto-step','actor-1',created.plan.id,'ready-step',{
-      status:'succeeded',
-      evidence:[{kind:'caller_claim'}],
-      resultReference:{authority:'product_readiness',entityId:'READY-2',version:3},
-    }),
-    error=>error.code==='PRODUCT_ENGINEERING_RECOMPUTE_AUTOMATIC_EXECUTOR_REQUIRED',
+    ()=>fx.service.createPlan('cmd-auto-plan','actor-1','case-1',{triggerImpactId:'impact-trigger',dependencies:[automatic]}),
+    error=>error.code==='PRODUCT_ENGINEERING_RECOMPUTE_AUTOMATIC_PLANNER_REQUIRED',
   );
 });
 

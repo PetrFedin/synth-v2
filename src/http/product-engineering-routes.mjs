@@ -30,6 +30,8 @@ const SOURCE_PARSE_COMPLETE = bodyContract(['expectedVersion','parser','parserVe
 const SOURCE_REVISE = bodyContract(['replacementSourceId','reason']);
 const CHANGE_CASE_ACK = bodyContract(['expectedVersion','note']);
 const CHANGE_IMPACT_CLOSE = bodyContract(['expectedVersion','disposition','reason','evidence','resultReference','waiver']);
+const RECOMPUTE_PLAN_CREATE = bodyContract(['triggerImpactId','dependencies']);
+const RECOMPUTE_STEP_COMPLETE = bodyContract(['status','evidence','resultReference','errorCode','startedAt','completedAt']);
 const CONFLICT_SEVERITIES = ['info','warning','blocking'];
 const SOURCE_KINDS = ['product_media','style_reference','document','spreadsheet','external_uri','sample','manual_observation'];
 const INGEST_MODES = ['upload','connector','canonical_asset','manual'];
@@ -55,6 +57,10 @@ export function createProductEngineeringRoutes(options = {}) {
     mutate('POST', /^\/v2\/product-engineering\/change-cases\/([^/]+)\/acknowledge$/, CHANGE_CASE_ACK, validateChangeCaseAck, ({ commandId, actorId, params, body }) => service.acknowledgeChangeCase(commandId, actorId, params[0], body)),
     read('GET', /^\/v2\/product-engineering\/change-impacts\/([^/]+)\/receipt$/, [], ({ actorId, params }) => service.getChangeImpactReceiptForActor(actorId, params[0])),
     mutate('POST', /^\/v2\/product-engineering\/change-impacts\/([^/]+)\/close$/, CHANGE_IMPACT_CLOSE, validateChangeImpactClose, ({ commandId, actorId, params, body }) => service.closeChangeImpact(commandId, actorId, params[0], body)),
+    mutate('POST', /^\/v2\/product-engineering\/change-cases\/([^/]+)\/recompute-plans$/, RECOMPUTE_PLAN_CREATE, validateRecomputePlanCreate, ({ commandId, actorId, params, body }) => service.createPlan(commandId, actorId, params[0], body)),
+    read('GET', /^\/v2\/product-engineering\/recompute-plans\/([^/]+)$/, [], ({ actorId, params }) => service.getPlanForActor(actorId, params[0])),
+    mutate('POST', /^\/v2\/product-engineering\/recompute-plans\/([^/]+)\/steps\/([^/]+)\/complete$/, RECOMPUTE_STEP_COMPLETE, validateRecomputeStepComplete, ({ commandId, actorId, params, body }) => service.completeStep(commandId, actorId, params[0], params[1], body)),
+    mutate('POST', /^\/v2\/product-engineering\/recompute-plans\/([^/]+)\/seal$/, EMPTY, () => {}, ({ commandId, actorId, params }) => service.sealPlan(commandId, actorId, params[0])),
     mutate('POST', /^\/v2\/product\/styles\/([^/]+)\/engineering\/analyses$/, ANALYSIS_CREATE, validateAnalysis, ({ commandId, actorId, params, body }) => service.requestAnalysis(commandId, actorId, params[0], body)),
     read('GET', /^\/v2\/product\/styles\/([^/]+)\/engineering$/, ['limit'], ({ actorId, params, query }) => service.getStyleWorkspaceForActor(actorId, params[0], { limit: query.limit })),
     read('GET', /^\/v2\/product-engineering\/analyses\/([^/]+)$/, [], ({ actorId, params }) => service.getAnalysisWorkspaceForActor(actorId, params[0])),
@@ -146,6 +152,27 @@ function validateChangeCaseAck(body) {
   version(body.expectedVersion,'expectedVersion');
   nonEmpty(body.note,'note');
 }
+function validateRecomputePlanCreate(body) {
+  nonEmpty(body.triggerImpactId,'triggerImpactId');
+  invariant(Array.isArray(body.dependencies) && body.dependencies.length >= 1,'HTTP_BODY_FIELD_INVALID','dependencies must contain at least one exact dependency',{field:'dependencies'});
+  body.dependencies.forEach((dependency,index)=>{
+    object(dependency,`dependencies[${index}]`);
+    for (const field of ['id','impactId','dependencyKind','reason','requiredAction','severity','mode','operation']) nonEmpty(dependency[field],`dependencies[${index}].${field}`);
+    object(dependency.source,`dependencies[${index}].source`);
+    object(dependency.target,`dependencies[${index}].target`);
+    invariant(Array.isArray(dependency.dependsOn ?? []),'HTTP_BODY_FIELD_INVALID','dependsOn must be an array',{field:`dependencies[${index}].dependsOn`});
+    invariant(Array.isArray(dependency.evidence) && dependency.evidence.length >= 1,'HTTP_BODY_FIELD_INVALID','dependency evidence is required',{field:`dependencies[${index}].evidence`});
+  });
+}
+function validateRecomputeStepComplete(body) {
+  invariant(['succeeded','blocked','failed'].includes(body.status),'HTTP_BODY_FIELD_INVALID','status is invalid',{field:'status'});
+  invariant(Array.isArray(body.evidence ?? []),'HTTP_BODY_FIELD_INVALID','evidence must be an array',{field:'evidence'});
+  if (body.resultReference !== undefined && body.resultReference !== null) object(body.resultReference,'resultReference');
+  if (body.errorCode !== undefined && body.errorCode !== null) nonEmpty(body.errorCode,'errorCode');
+  if (body.startedAt !== undefined && body.startedAt !== null) dateTime(body.startedAt,'startedAt');
+  if (body.completedAt !== undefined && body.completedAt !== null) dateTime(body.completedAt,'completedAt');
+}
+
 function validateChangeImpactClose(body) {
   version(body.expectedVersion,'expectedVersion');
   invariant(['resolved','waived'].includes(body.disposition),'HTTP_BODY_FIELD_INVALID','disposition is invalid',{field:'disposition',allowed:['resolved','waived']});
@@ -237,6 +264,9 @@ function nonEmpty(value, field) { invariant(typeof value === 'string' && value.t
 function optionalId(value, field) { invariant(value === undefined || value === null || (typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/.test(value)), 'HTTP_BODY_FIELD_INVALID', `${field} is invalid`, { field }); }
 function probability(value, field) { invariant(value === undefined || value === null || (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1), 'HTTP_BODY_FIELD_INVALID', `${field} must be between 0 and 1`, { field }); }
 function sha(value, field) { invariant(typeof value === 'string' && /^[0-9a-f]{64}$/.test(value), 'HTTP_BODY_FIELD_INVALID', `${field} must be a SHA-256 hex digest`, { field }); }
+function dateTime(value, field) {
+  invariant(typeof value === 'string' && Number.isFinite(Date.parse(value)), 'HTTP_BODY_FIELD_INVALID', `${field} must be an ISO date-time`, { field });
+}
 function version(value, field) { invariant(Number.isInteger(value) && value >= 1, 'HTTP_BODY_FIELD_INVALID', `${field} must be a positive integer`, { field }); }
 
 function unavailableService() {

@@ -43,9 +43,9 @@ test('PostgreSQL recompute orchestration survives lease loss, gates DAG dependen
       triggerReceipt: `recompute-trigger-receipt-${suffix}`,
     };
     const t0 = '2026-10-09T12:00:00.000Z';
-    const changeCaseImpactHash = uniqueHash(`recompute-change-case:${suffix}`);
-    const triggerReceiptHash = uniqueHash(`recompute-trigger-receipt:${suffix}`);
-    const triggerVerificationHash = uniqueHash(`recompute-trigger-verification:${suffix}`);
+    const changeCaseImpactHash = H('change-case-impact');
+    const triggerReceiptHash = H('trigger-receipt');
+    const triggerVerificationHash = H('trigger-verification');
     await pool.query(
       `INSERT INTO product_engineering_sources
          (id,brand_id,style_id,kind,ingest_mode,content_hash,metadata,status,scan_status,parse_status,created_at,created_by,admitted_at,admitted_by)

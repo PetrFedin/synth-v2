@@ -2184,3 +2184,43 @@ Not yet claimed in this tranche:
 - live PostgreSQL Golden Path.
 
 These are the next bounded implementation slices and must preserve the same ownership rule: the orchestrator may request and verify work, while canonical mutation remains inside the owning bounded context.
+
+
+## 2026-10-09 — Product Engineering Recompute Orchestration Tranche B1
+
+**Status: IMPLEMENTED/PARTIAL on `feat/recompute-orchestration-persistence`, based on accepted `main@84f9528e5b2474fbd9ae10dad9f7f81aa45e6ed9`.**
+
+Purpose: persist the exact stale dependency set and deterministic recompute DAG from Tranche A, execute automatic steps through a crash-safe leased queue, independently verify owning-authority results and seal immutable admission evidence without giving Product Engineering generic downstream write access.
+
+Canonical persisted chain:
+
+`verified change-impact correction receipt`
+→ immutable `product_engineering_stale_dependency_sets`
+→ immutable `product_engineering_recompute_plans`
+→ immutable exact `product_engineering_recompute_plan_steps`
+→ leased `product_engineering_recompute_jobs` for `automatic` steps only
+→ independently verified `product_engineering_recompute_execution_receipts`
+→ fail-closed admission
+→ immutable `product_engineering_recompute_orchestration_receipts`.
+
+Core invariants:
+
+- dependency-set and plan identities are deterministic SHA-256 evidence and replay idempotently;
+- plan sets, plans, plan steps and receipts are append-only; PostgreSQL refuses UPDATE/DELETE;
+- automatic jobs are claimable only after every parent step has a successful immutable receipt;
+- jobs use `FOR UPDATE SKIP LOCKED`, bounded leases, retry, expired-lease reclaim and terminal dead letter;
+- only exact allowlisted `<authority>:<operation>` adapters are callable; no wildcard/generic writer exists;
+- an automatic successful receipt requires an exact canonical result reference and independent read-authority verification;
+- `human_review` and `external_evidence` are never executed by the automatic worker and require explicit evidence;
+- receipt insertion and durable job completion are one PostgreSQL transaction;
+- dead-letter or missing evidence keeps admission false and never impersonates recovery.
+
+New governed surfaces:
+
+- migration `180_product_engineering_recompute_orchestration.sql`;
+- `createPostgresProductEngineeringRecomputeStore`;
+- `createAllowlistedProductEngineeringRecomputeDispatcher`;
+- `createProductEngineeringRecomputeOrchestrationService`;
+- supporting specification `docs/architecture/product-engineering-recompute-orchestration.md`.
+
+Tranche B1 deliberately does not yet claim runtime worker registration, concrete owning-domain adapters, HTTP/OpenAPI/UI, Awaiting Action assignment, external-evidence intake, original blocked-action replay, operational metrics/readiness or intended-live Golden Path. Those remain subsequent bounded tranches. `SHOWROOM-RAIL-001` remains separately planned and does not pre-empt this P0 sequence.

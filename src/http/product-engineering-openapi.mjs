@@ -101,10 +101,11 @@ function schemas() {
       },
     },
     ProductEngineeringRecomputeExactReference: {
-      type:'object',additionalProperties:false,required:['authority','entityId','version','contentHash'],
+      type:'object',additionalProperties:false,required:['authority','entityId'],
+      anyOf:[{required:['version']},{required:['contentHash']}],
       properties:{
         authority:{type:'string'},entityId:id,
-        version:{oneOf:[{type:'string'},{type:'null'}]},
+        version:{oneOf:[{type:'string'},{type:'integer'},{type:'null'}]},
         contentHash:{oneOf:[hash,{type:'null'}]},
       },
     },

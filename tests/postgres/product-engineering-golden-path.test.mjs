@@ -325,8 +325,81 @@ test('AI Engineering Golden Path crosses real HTTP, PostgreSQL, durable jobs and
     assert.equal(acknowledgedCase.version, 2);
     assert.equal(acknowledgedCase.resolvedAt, null);
 
-    let finalClose = null;
+    const canonicalTriggerImpact = revisionResult.impacts.find((row) => row.impactKind === 'canonical_target' && row.entityId === materialCode);
+    assert.ok(canonicalTriggerImpact);
+    const canonicalTriggerClose = data(await requestJson(baseUrl, `/v2/product-engineering/change-impacts/${encodeURIComponent(canonicalTriggerImpact.id)}/close`, {
+      method: 'POST',
+      token,
+      idempotencyKey: `ai-eng-${runId}-impact-trigger-${canonicalTriggerImpact.id}`,
+      body: {
+        expectedVersion: canonicalTriggerImpact.version,
+        disposition: 'resolved',
+        reason: 'Canonical material correction was independently re-read before orchestration.',
+        evidence: [{ kind: 'canonical_revalidation', materialCode, version: appliedMaterial.version }],
+        resultReference: { authority: 'material', entityId: materialCode, version: appliedMaterial.version },
+      },
+    }));
+    assert.equal(canonicalTriggerClose.impact.status, 'resolved');
+    assert.equal(canonicalTriggerClose.receipt.resultVerification.authority, 'material');
+    assert.match(canonicalTriggerClose.receipt.resultVerification.verificationHash, /^[0-9a-f]{64}$/);
+
+    const orchestratedImpact = revisionResult.impacts.find((row) => row.id !== canonicalTriggerImpact.id && row.evidenceStatus !== 'policy_required');
+    assert.ok(orchestratedImpact);
+    const orchestrationCreate = data(await requestJson(baseUrl, `/v2/product-engineering/change-cases/${encodeURIComponent(revisionResult.changeCase.id)}/recompute-plans`, {
+      method: 'POST',
+      token,
+      idempotencyKey: `ai-eng-${runId}-recompute-plan`,
+      body: {
+        triggerImpactId: canonicalTriggerImpact.id,
+        dependencies: [{
+          id: `review-${orchestratedImpact.id}`,
+          impactId: orchestratedImpact.id,
+          source: { authority: 'material', entityId: materialCode, version: appliedMaterial.version },
+          target: { authority: 'product_engineering', entityId: orchestratedImpact.entityId, version: orchestratedImpact.version },
+          dependencyKind: 'direct',
+          reason: 'Exact Product Engineering lineage was created from the superseded source evidence.',
+          requiredAction: orchestratedImpact.requiredAction,
+          severity: orchestratedImpact.severity,
+          mode: 'human_review',
+          operation: 'product_engineering.re-review',
+          dependsOn: [],
+          evidence: [{ kind: 'change_impact', impactId: orchestratedImpact.id, changeCaseId: revisionResult.changeCase.id }],
+        }],
+      },
+    }));
+    assert.match(orchestrationCreate.dependencySet.dependencySetHash, /^[0-9a-f]{64}$/);
+    assert.match(orchestrationCreate.plan.planHash, /^[0-9a-f]{64}$/);
+    assert.equal(orchestrationCreate.plan.steps[0].impactId, orchestratedImpact.id);
+
+    const stepReceipt = data(await requestJson(baseUrl, `/v2/product-engineering/recompute-plans/${encodeURIComponent(orchestrationCreate.plan.id)}/steps/${encodeURIComponent(orchestrationCreate.plan.steps[0].id)}/complete`, {
+      method: 'POST',
+      token,
+      idempotencyKey: `ai-eng-${runId}-recompute-step`,
+      body: {
+        status: 'succeeded',
+        evidence: [{ kind: 'human_review', reviewer: user.id, impactId: orchestratedImpact.id }],
+      },
+    }));
+    assert.equal(stepReceipt.status, 'succeeded');
+    assert.match(stepReceipt.receiptHash, /^[0-9a-f]{64}$/);
+
+    const orchestrationReceipt = data(await requestJson(baseUrl, `/v2/product-engineering/recompute-plans/${encodeURIComponent(orchestrationCreate.plan.id)}/seal`, {
+      method: 'POST',
+      token,
+      idempotencyKey: `ai-eng-${runId}-recompute-seal`,
+      body: {},
+    }));
+    assert.equal(orchestrationReceipt.planId, orchestrationCreate.plan.id);
+    assert.match(orchestrationReceipt.receiptHash, /^[0-9a-f]{64}$/);
+
+    const persistedOrchestration = data(await requestJson(baseUrl, `/v2/product-engineering/recompute-plans/${encodeURIComponent(orchestrationCreate.plan.id)}`, { token }));
+    assert.equal(persistedOrchestration.plan.status, 'completed');
+    assert.equal(persistedOrchestration.executionReceipts.length, 1);
+    assert.equal(persistedOrchestration.orchestrationReceipt.receiptHash, orchestrationReceipt.receiptHash);
+
+    let finalClose = canonicalTriggerClose;
     for (const impact of revisionResult.impacts) {
+      if (impact.id === canonicalTriggerImpact.id) continue;
       const policyRequired = impact.evidenceStatus === 'policy_required';
       const canonicalTarget = impact.impactKind === 'canonical_target' && impact.entityId === materialCode;
       finalClose = data(await requestJson(baseUrl, `/v2/product-engineering/change-impacts/${encodeURIComponent(impact.id)}/close`, {

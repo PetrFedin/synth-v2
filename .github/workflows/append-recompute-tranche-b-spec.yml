@@ -1,0 +1,116 @@
+name: Synchronize recompute Tranche B specification
+
+on:
+  push:
+    branches:
+      - feat/recompute-orchestration-persistence
+
+permissions:
+  contents: write
+
+jobs:
+  synchronize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/recompute-orchestration-persistence
+          fetch-depth: 0
+
+      - name: Append authoritative architecture checkpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          marker='## 2026-10-09 — Product Engineering Recompute Orchestration Tranche B1'
+          if ! grep -Fq "$marker" ARCHITECTURE.md; then
+            cat >> ARCHITECTURE.md <<'EOF'
+
+
+## 2026-10-09 — Product Engineering Recompute Orchestration Tranche B1
+
+**Status: IMPLEMENTED/PARTIAL on `feat/recompute-orchestration-persistence`, based on accepted `main@84f9528e5b2474fbd9ae10dad9f7f81aa45e6ed9`.**
+
+Purpose: persist the exact stale dependency set and deterministic recompute DAG from Tranche A, execute automatic steps through a crash-safe leased queue, independently verify owning-authority results and seal immutable admission evidence without giving Product Engineering generic downstream write access.
+
+Canonical persisted chain:
+
+`verified change-impact correction receipt`
+→ immutable `product_engineering_stale_dependency_sets`
+→ immutable `product_engineering_recompute_plans`
+→ immutable exact `product_engineering_recompute_plan_steps`
+→ leased `product_engineering_recompute_jobs` for `automatic` steps only
+→ independently verified `product_engineering_recompute_execution_receipts`
+→ fail-closed admission
+→ immutable `product_engineering_recompute_orchestration_receipts`.
+
+Core invariants:
+
+- dependency-set and plan identities are deterministic SHA-256 evidence and replay idempotently;
+- plan sets, plans, plan steps and receipts are append-only; PostgreSQL refuses UPDATE/DELETE;
+- automatic jobs are claimable only after every parent step has a successful immutable receipt;
+- jobs use `FOR UPDATE SKIP LOCKED`, bounded leases, retry, expired-lease reclaim and terminal dead letter;
+- only exact allowlisted `<authority>:<operation>` adapters are callable; no wildcard/generic writer exists;
+- an automatic successful receipt requires an exact canonical result reference and independent read-authority verification;
+- `human_review` and `external_evidence` are never executed by the automatic worker and require explicit evidence;
+- receipt insertion and durable job completion are one PostgreSQL transaction;
+- dead-letter or missing evidence keeps admission false and never impersonates recovery.
+
+New governed surfaces:
+
+- migration `180_product_engineering_recompute_orchestration.sql`;
+- `createPostgresProductEngineeringRecomputeStore`;
+- `createAllowlistedProductEngineeringRecomputeDispatcher`;
+- `createProductEngineeringRecomputeOrchestrationService`;
+- supporting specification `docs/architecture/product-engineering-recompute-orchestration.md`.
+
+Tranche B1 deliberately does not yet claim runtime worker registration, concrete owning-domain adapters, HTTP/OpenAPI/UI, Awaiting Action assignment, external-evidence intake, original blocked-action replay, operational metrics/readiness or intended-live Golden Path. Those remain subsequent bounded tranches. `SHOWROOM-RAIL-001` remains separately planned and does not pre-empt this P0 sequence.
+EOF
+          fi
+
+      - name: Append integration master-plan checkpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          marker='### 2026-10-09 — Recompute orchestration Tranche B1 persistence and recovery'
+          if ! grep -Fq "$marker" docs/SYNTH_V2_INTEGRATION_MASTER_PLAN_2026-10-01.md; then
+            cat >> docs/SYNTH_V2_INTEGRATION_MASTER_PLAN_2026-10-01.md <<'EOF'
+
+
+### 2026-10-09 — Recompute orchestration Tranche B1 persistence and recovery
+
+Branch `feat/recompute-orchestration-persistence` starts from accepted `main@84f9528e5b2474fbd9ae10dad9f7f81aa45e6ed9` after the mandatory post-#256 reconciliation.
+
+Implemented scope:
+
+- immutable PostgreSQL persistence for exact Stale Dependency Sets, Recompute Plans, plan steps, execution receipts and orchestration receipts;
+- dependency-aware leased automatic jobs with retry, reclaim and dead letter;
+- exact operation allowlist instead of a generic downstream writer;
+- owning-authority result read-back through the existing independent verifier;
+- explicit human/external evidence completion boundary;
+- crash-safe fan-out/fan-in continuation and immutable admission sealing.
+
+Next only after exact-head and post-merge qualification:
+
+1. runtime worker registration and readiness/metrics;
+2. concrete owning-authority adapters, one bounded context at a time;
+3. Awaiting Action projection and capability ownership for human review;
+4. governed external-evidence intake/reconciliation;
+5. original blocked-action replay plus PostgreSQL Golden Path;
+6. re-evaluate P0 commercial debt and intended-live `ACC-004` proof;
+7. only then start the separate `SHOWROOM-RAIL-001` 2D Rail Composer.
+EOF
+          fi
+
+      - name: Commit synchronized specification and remove one-shot workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/append-recompute-tranche-b-spec.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add ARCHITECTURE.md docs/SYNTH_V2_INTEGRATION_MASTER_PLAN_2026-10-01.md .github/workflows/append-recompute-tranche-b-spec.yml
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m 'docs: synchronize recompute orchestration Tranche B1'
+          git push origin HEAD:feat/recompute-orchestration-persistence

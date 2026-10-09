@@ -126,15 +126,19 @@ test('human review step can bind an independently verified owning result and the
   assert.match(sealed.receiptHash,/^[0-9a-f]{64}$/);
 });
 
-test('plan creation rejects invented impact semantics and unallowlisted automatic operations',async()=>{
+test('plan creation rejects invented action, evidence classification and observed target identity',async()=>{
   const fx=fixture();
   await assert.rejects(
     ()=>fx.service.createPlan('cmd-bad-1','actor-1','case-1',{triggerImpactId:'impact-trigger',dependencies:[{...dependency,requiredAction:'ignore'}]}),
     error=>error.code==='PRODUCT_ENGINEERING_RECOMPUTE_ACTION_MISMATCH',
   );
   await assert.rejects(
-    ()=>fx.service.createPlan('cmd-bad-2','actor-1','case-1',{triggerImpactId:'impact-trigger',dependencies:[{...dependency,operation:'product_readiness.delete'}]}),
-    error=>error.code==='PRODUCT_ENGINEERING_RECOMPUTE_AUTOMATIC_OPERATION_UNSUPPORTED',
+    ()=>fx.service.createPlan('cmd-bad-2','actor-1','case-1',{triggerImpactId:'impact-trigger',dependencies:[{...dependency,dependencyKind:'derived'}]}),
+    error=>error.code==='PRODUCT_ENGINEERING_RECOMPUTE_DEPENDENCY_KIND_MISMATCH',
+  );
+  await assert.rejects(
+    ()=>fx.service.createPlan('cmd-bad-3','actor-1','case-1',{triggerImpactId:'impact-trigger',dependencies:[{...dependency,target:{...dependency.target,entityId:'READY-OTHER'}}]}),
+    error=>error.code==='PRODUCT_ENGINEERING_RECOMPUTE_TARGET_MISMATCH',
   );
 });
 

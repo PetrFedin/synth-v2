@@ -132,6 +132,13 @@ test('human review is completed only by explicit evidence and the exact admitted
     nextId: prefix => `${prefix}-1`,
   });
   assert.equal((await service.listAwaitingEvidence(plan.id))[0].mode, 'human_review');
+  await assert.rejects(
+    service.completeEvidenceStep({
+      planId: plan.id, stepId: 'not-a-step', actorId: 'technical-designer-1',
+      commandId: 'bad-command', idempotencyKey: 'bad-key', evidence: [{ kind: 'review', status: 'accepted' }],
+    }),
+    error => error.code === 'PRODUCT_ENGINEERING_RECOMPUTE_EVIDENCE_STEP_INVALID',
+  );
   const receipt = await service.completeEvidenceStep({
     planId: plan.id, stepId: 'review', actorId: 'technical-designer-1', commandId: 'review-command-1',
     idempotencyKey: 'plan-1:review', evidence: [{ kind: 'human_review', decision: 'accepted', reviewer: 'technical-designer-1' }],

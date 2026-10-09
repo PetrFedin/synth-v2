@@ -13,6 +13,7 @@ function fixture(){
   const commands=new Map();
   let seq=0;
   const store={
+    async getCommand(id){return commands.get(id);},
     async getPlanWorkspace(planId){
       if(!plan || plan.id!==planId) return undefined;
       return {

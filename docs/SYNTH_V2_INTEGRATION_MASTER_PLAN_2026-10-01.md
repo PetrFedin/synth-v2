@@ -2291,7 +2291,7 @@ New bounded HTTP surface:
 - The dependency source must equal the exact verified canonical correction reference that triggered orchestration.
 - Product Engineering re-locks each impact in PostgreSQL before plan persistence and rechecks unresolved state, action and severity.
 - Generic caller input cannot create `automatic` plan steps; exact automatic target resolution is deferred to the qualified owning-domain planner/adapter layer.
-- The public/manual step-completion endpoint cannot complete `automatic` steps either; no caller-supplied operation string can impersonate an automatic executor.
+- The public/manual step-completion endpoint cannot complete `automatic` steps and can persist only successful human-review/external-evidence completion. Terminal `blocked/failed` outcomes are deferred to the durable executor/recovery policy, preventing a manually created dead-end plan.
 - The immutable automatic execution-receipt contract requires independent owning-authority verification of exact entity + version/hash once that adapter layer is implemented.
 - DAG parents must already have successful terminal receipts before a child step can become terminal.
 - One terminal execution receipt per exact plan step.

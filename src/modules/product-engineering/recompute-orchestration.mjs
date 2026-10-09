@@ -70,6 +70,7 @@ export function createRecomputePlan({ id, staleDependencySet, createdAt, created
   const steps = staleDependencySet.dependencies.map((dependency)=>deepFreeze({
     id: dependency.id,
     dependencyId: dependency.id,
+    impactId: dependency.impactId,
     owningAuthority: dependency.target.authority,
     operation: dependency.operation,
     mode: dependency.mode,
@@ -227,6 +228,7 @@ function normalizeDependency(value) {
   invariant(Array.isArray(value.dependsOn ?? []), 'PRODUCT_ENGINEERING_RECOMPUTE_DEPENDS_ON_INVALID', 'dependsOn must be an array');
   return deepFreeze({
     id: required(value.id, 'PRODUCT_ENGINEERING_RECOMPUTE_DEPENDENCY_ID_REQUIRED'),
+    impactId: required(value.impactId, 'PRODUCT_ENGINEERING_RECOMPUTE_IMPACT_ID_REQUIRED'),
     source: exactReference(value.source, 'PRODUCT_ENGINEERING_RECOMPUTE_SOURCE_REFERENCE_INVALID'),
     target: exactReference(value.target, 'PRODUCT_ENGINEERING_RECOMPUTE_TARGET_REFERENCE_INVALID'),
     dependencyKind: value.dependencyKind,

@@ -149,3 +149,44 @@ test('human review is completed only by explicit evidence and the exact admitted
   assert.equal(orchestration.planHash, plan.planHash);
   assert.match(orchestration.receiptHash, /^[0-9a-f]{64}$/);
 });
+
+
+test('human review cannot bypass an unfinished DAG parent', async () => {
+  const { plan } = fixture([
+    dependency('cost'),
+    dependency('review', { mode: 'human_review', authority: 'tech_pack', entityId: 'TP-1', operation: 'tech_pack.review', dependsOn: ['cost'] }),
+  ]);
+  let recorded = false;
+  const store = {
+    persistPlan: async () => ({}),
+    claim: async () => [],
+    getPlan: async () => plan,
+    completeWithReceipt: async () => { throw new Error('not automatic'); },
+    fail: async () => { throw new Error('not automatic'); },
+    recordExecutionReceipt: async () => { recorded = true; throw new Error('receipt must not be recorded'); },
+    listReadyEvidenceSteps: async () => [],
+    getOrchestrationReceipt: async () => null,
+    listExecutionReceipts: async () => [],
+    recordOrchestrationReceipt: async receipt => receipt,
+  };
+  const service = createProductEngineeringRecomputeOrchestrationService({
+    store,
+    dispatcher: createAllowlistedProductEngineeringRecomputeDispatcher({}),
+    resultVerifier: { verify: async () => { throw new Error('not reached'); } },
+    clock: () => NOW,
+    nextId: prefix => `${prefix}-1`,
+  });
+
+  await assert.rejects(
+    service.completeEvidenceStep({
+      planId: plan.id,
+      stepId: 'review',
+      actorId: 'technical-designer-1',
+      commandId: 'review-before-parent',
+      idempotencyKey: 'plan-1:review-before-parent',
+      evidence: [{ kind: 'human_review', decision: 'accepted', reviewer: 'technical-designer-1' }],
+    }),
+    error => error.code === 'PRODUCT_ENGINEERING_RECOMPUTE_EVIDENCE_NOT_READY',
+  );
+  assert.equal(recorded, false);
+});

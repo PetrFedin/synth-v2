@@ -214,7 +214,7 @@ export function createProductEngineeringRecomputeService(options = {}) {
         const executionReceipts = await tx.listExecutionReceipts(planId);
         const admission = evaluateRecomputeAdmission({ plan, executionReceipts });
         const receipt = createRecomputeOrchestrationReceipt({
-          id:nextId('engineering-recompute-orchestration'),
+          id:nextId('engineering-recompute-final'),
           plan,
           executionReceipts,
           admission,

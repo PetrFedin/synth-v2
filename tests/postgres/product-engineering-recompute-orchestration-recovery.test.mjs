@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import pg from 'pg';
@@ -17,7 +17,6 @@ import {
 
 const { Pool } = pg;
 const connectionString = process.env.POSTGRES_TEST_URL;
-const H = value => value.repeat(64);
 
 test('PostgreSQL recompute orchestration survives lease loss, gates DAG dependencies and seals immutable proof', async () => {
   assert.ok(connectionString, 'POSTGRES_TEST_URL is required for PostgreSQL integration tests');
@@ -28,6 +27,8 @@ test('PostgreSQL recompute orchestration survives lease loss, gates DAG dependen
     const runtime = createPostgresWholesaleRuntime({ pool, migrationsDir });
     const references = await bootstrapProductionAcceptanceReferences({ platform: runtime.platform, auth: runtime.auth, pool });
     const suffix = randomUUID().replaceAll('-', '').slice(0, 16).toUpperCase();
+    // Keep globally unique PostgreSQL fixture hashes isolated across suites and CI reruns.
+    const H = value => createHash('sha256').update(`recompute:${suffix}:${value}`).digest('hex');
     const style = await runtime.productIdentity.createStyle(
       `recompute-style-${suffix}`,
       references.actors.brandOwner,

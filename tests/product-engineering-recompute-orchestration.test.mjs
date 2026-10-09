@@ -98,7 +98,7 @@ test('verified execution receipts seal admission and immutable orchestration rec
     id:'exec-cost',plan,stepId:'cost',commandId:'cmd-cost',idempotencyKey:'plan-1:cost',status:'succeeded',
     evidence:[{kind:'job',id:'job-1'}],
     resultReference:{authority:'cost_close',entityId:'COST-1',version:6},
-    resultVerification:{authority:'cost_close',requested:{entityId:'COST-1'},observed:{entityId:'COST-1',version:'6'},verificationHash:H('c')},
+    resultVerification:{authority:'cost_close',requested:{entityId:'COST-1',version:'6',contentHash:null},observed:{entityId:'COST-1',version:'6'},verificationHash:H('c')},
     startedAt:NOW,completedAt:'2026-10-08T16:00:01.000Z',
   });
   const review=createRecomputeExecutionReceipt({

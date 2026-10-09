@@ -59,6 +59,11 @@ function transactionView(client) {
       );
     },
 
+    async getPlanByDependencySet(dependencySetId) {
+      const result = await client.query('SELECT * FROM product_engineering_recompute_plans WHERE dependency_set_id=$1', [dependencySetId]);
+      return result.rows[0] ? mapPlan(result.rows[0]) : undefined;
+    },
+
     async insertPlan(value) {
       await client.query(
         `INSERT INTO product_engineering_recompute_plans

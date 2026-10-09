@@ -28,6 +28,8 @@ function fixture(){
       return work({
         getCommand:async(id)=>commands.get(id),
         insertCommand:async(value)=>commands.set(value.id,value),
+        getChangeImpactForUpdate:async(id)=>impacts.find(row=>row.id===id),
+        getChangeImpactReceiptByImpact:async(id)=>id==='impact-trigger'?triggerReceipt:undefined,
         getDependencySetByTrigger:async()=>dependencySet,
         insertDependencySet:async(value)=>{dependencySet=value;},
         getPlanByDependencySet:async(id)=>plan?.dependencySetId===id?plan:undefined,

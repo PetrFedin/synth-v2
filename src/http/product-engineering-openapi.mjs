@@ -167,12 +167,12 @@ function schemas() {
     ProductEngineeringRecomputeStepComplete: {
       type:'object',additionalProperties:false,required:['status','evidence'],
       properties:{
-        status:{type:'string',enum:['succeeded','blocked','failed']},
+        status:{type:'string',enum:['succeeded']},
         evidence:{type:'array',items:{type:'object',additionalProperties:true}},
         resultReference:{oneOf:[{$ref:'#/components/schemas/ProductEngineeringRecomputeExactReference'},{type:'null'}]},
         errorCode:{oneOf:[{type:'string'},{type:'null'}]},
       },
-      description:'Records terminal human-review/external-evidence work. Generic HTTP completion cannot complete automatic steps; automatic execution is reserved for qualified owning-domain adapters.',
+      description:'Records successful human-review/external-evidence work only. Generic HTTP completion cannot complete automatic steps or write terminal blocked/failed outcomes; those belong to the qualified durable executor.',
     },
     ProductEngineeringRecomputeExecutionReceipt: {
       type:'object',additionalProperties:true,

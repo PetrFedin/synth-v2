@@ -1,5 +1,7 @@
 # Что выявлено, но ещё не встроено
 
+> **Checkpoint 2026-10-10.** Recompute Orchestration B1 is admitted on `main@b2a015ac866ffde7a537ae5e0655ed423c3da104` via merged PR #259 with post-merge 3/3 GREEN (#622 / #1780 / #2238). Competing PR #258 is superseded at the persistence/store/service layer; only its HTTP/OpenAPI/runtime/Golden-Path ideas remain as B2 requirements. The next strict slice is B2 runtime → owning-domain adapters → Awaiting Action/external evidence → blocked-action replay → Product Engineering Golden Path. Do not start SHOWROOM-RAIL-001 or broader moat work before this sequence is admitted.
+
 Свод по всем источникам: снимки и видео Omnidata, карта JOOR/NuORDER
 (`docs/joor-retailer-cabinet-complete-map.md`), каталог пробелов
 (`docs/omnidata-screens-gap-analysis.md`), реестр изменений `ARCHITECTURE.md`

@@ -2275,3 +2275,24 @@ Next only after exact-head and post-merge qualification:
 5. original blocked-action replay plus PostgreSQL Golden Path;
 6. re-evaluate P0 commercial debt and intended-live `ACC-004` proof;
 7. only then start the separate `SHOWROOM-RAIL-001` 2D Rail Composer.
+
+
+## 2026-10-10 — Recompute Orchestration B1 admitted; B2 runtime is the only next Product Engineering slice
+
+Accepted base: `main@b2a015ac866ffde7a537ae5e0655ed423c3da104`.
+
+PR #259 merged from exact head `9486c1f8be8ae5b7b0420a48a56f1a1e9ca7b791`. Post-merge qualification is 3/3 GREEN: Product Commercialization Acceptance #622, Verify #1780 and Syntha V2 CI #2238.
+
+The accepted B1 model is now the only canonical recompute persistence authority. Competing PR #258 must not merge its alternative migration 180/store/service model. Its HTTP/OpenAPI/runtime/Golden-Path ideas are retained only as B2 requirements to reimplement against the accepted B1 persistence/evidence model.
+
+Strict next order:
+
+1. supported runtime worker registration + readiness/metrics;
+2. concrete allowlisted owning-domain adapters;
+3. Awaiting Action projection and capability ownership for `human_review`;
+4. governed external-evidence intake/reconciliation;
+5. explicit blocked-action replay after admission reopens;
+6. PostgreSQL/public-runtime Product Engineering Golden Path;
+7. only then return to P0 commercial debt: PUB-005, PRICE-009, COMM-LC-008 and ACC-004 intended-live proof.
+
+Detailed reconciliation: `docs/reconciliations/2026-10-10-post-b1-governance-and-b2-runtime.md`.

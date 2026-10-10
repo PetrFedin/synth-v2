@@ -2224,3 +2224,65 @@ New governed surfaces:
 - supporting specification `docs/architecture/product-engineering-recompute-orchestration.md`.
 
 Tranche B1 deliberately does not yet claim runtime worker registration, concrete owning-domain adapters, HTTP/OpenAPI/UI, Awaiting Action assignment, external-evidence intake, original blocked-action replay, operational metrics/readiness or intended-live Golden Path. Those remain subsequent bounded tranches. `SHOWROOM-RAIL-001` remains separately planned and does not pre-empt this P0 sequence.
+
+## 2026-10-10 — Product Engineering Recompute Orchestration B2 runtime registration
+
+**Status: IMPLEMENTED/PARTIAL on `feat/recompute-b2-runtime`, based on post-reconciliation `main@0fa041e64e5a54a709c0afe4aa8e5ff928972f4e`.**
+
+This slice makes the admitted B1 durable queue an operationally supervised runtime capability without yet adding any owning-domain mutation adapter.
+
+### Runtime composition
+
+`createPostgresWholesaleRuntime` now composes:
+
+- `PostgresProductEngineeringRecomputeStore`;
+- the B1 orchestration service;
+- the existing independent Product Engineering result verifier;
+- an exact allowlisted dispatcher whose initial adapter set is intentionally empty.
+
+The service and store are exposed to the supported runtime for worker lifecycle/readiness use but are not added to the public HTTP transport in this slice.
+
+### Worker safety
+
+The production server registers `product-engineering-recompute` as a normal `createBackgroundWorker` participant before HTTP listen and starts it only after a successful bind. It is included in graceful shutdown.
+
+A runtime process receives a unique default recompute worker id. Automatic claims are restricted to the exact `authority:operation` keys actually registered in the allowlisted dispatcher. With zero adapters the worker is a supervised no-op and does not claim or poison queued work. This is required because B2 adapters are introduced one bounded context at a time.
+
+The PostgreSQL claim query remains dependency-aware and `FOR UPDATE ... SKIP LOCKED`, but additionally filters on the exact supported-operation list. Unsupported operations therefore remain queued evidence rather than being consumed into retry/dead-letter by a worker that cannot legally execute them.
+
+### Readiness
+
+The worker has a registered `/ready` probe. It reports background-worker health plus a bounded recompute backlog snapshot:
+
+- queued;
+- retry;
+- running with live lease;
+- expired lease;
+- dead-letter;
+- unsupported pending;
+- oldest queued timestamp;
+- exact supported operation list.
+
+Readiness fails closed with `worker-actor-not-configured` when one or more adapters are registered but no recompute actor is configured, and with `unsupported-recompute-operation` when durable queued/retry work exists outside the current adapter allowlist. With no adapters and no pending work the runtime remains ready.
+
+### Metrics
+
+The protected Prometheus surface now exposes bounded `syntha_queue_records{queue="product-engineering-recompute",state=...}` gauges for `queued | retry | running | expired-lease | dead-letter`. No plan, style, actor, SKU or organisation identifier becomes a metric label.
+
+### Configuration
+
+Supported settings:
+
+- `SYNTHA_ENGINEERING_RECOMPUTE_INTERVAL_MS`;
+- `SYNTHA_ENGINEERING_RECOMPUTE_BATCH_SIZE`;
+- `SYNTHA_ENGINEERING_RECOMPUTE_LEASE_MS`;
+- `SYNTHA_ENGINEERING_RECOMPUTE_RETRY_DELAY_MS`;
+- `SYNTHA_ENGINEERING_RECOMPUTE_STALE_MS`;
+- `SYNTHA_ENGINEERING_RECOMPUTE_FAILURE_THRESHOLD`;
+- `SYNTHA_ENGINEERING_RECOMPUTE_WORKER_ID`;
+- `SYNTHA_ENGINEERING_RECOMPUTE_ACTOR_ID`.
+
+### Still not claimed
+
+This runtime slice does **not** claim a concrete Measurement/Material/Tech Pack/etc. adapter, public recompute HTTP routes, Awaiting Action assignment, external-evidence intake, blocked-action replay or Product Engineering intended-live Golden Path. The next permitted slice is the first bounded owning-authority adapter on top of this supervised runtime.
+

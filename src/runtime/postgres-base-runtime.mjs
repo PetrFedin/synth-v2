@@ -26,6 +26,7 @@ import { createProductEngineeringProposalApplyService } from '../application/pro
 import { createProductEngineeringProposalImpactService } from '../application/product-engineering-proposal-impact-service.mjs';
 import { createProductEngineeringChangeAdmissionService } from '../application/product-engineering-change-admission-service.mjs';
 import { createProductEngineeringResultVerifier, createProductEngineeringVerifiedImpactClosureService } from '../application/product-engineering-result-verifier-service.mjs';
+import { createMeasurementPublishedRevisionRecomputeAdapter, MEASUREMENT_RECOMPUTE_VERIFICATION_OPERATION } from '../application/product-engineering-measurement-recompute-adapter.mjs';
 import { createAllowlistedProductEngineeringRecomputeDispatcher, createProductEngineeringRecomputeOrchestrationService } from '../application/product-engineering-recompute-orchestration-service.mjs';
 import { createProductEngineeringJobService } from '../application/product-engineering-job-service.mjs';
 import { createProductEngineeringAnalysisExecutor } from '../application/product-engineering-analysis-executor.mjs';
@@ -233,7 +234,9 @@ export function createPostgresWholesaleRuntime(options = {}) {
   });
   const productEngineeringRecompute = createProductEngineeringRecomputeOrchestrationService({
     store: productEngineeringRecomputeStore,
-    dispatcher: createAllowlistedProductEngineeringRecomputeDispatcher({}),
+    dispatcher: createAllowlistedProductEngineeringRecomputeDispatcher({
+      [MEASUREMENT_RECOMPUTE_VERIFICATION_OPERATION]: createMeasurementPublishedRevisionRecomputeAdapter({ measurements }),
+    }),
     resultVerifier: productEngineeringResultVerifier,
     ...(productEngineeringRecomputeWorkerId ? { workerId: productEngineeringRecomputeWorkerId } : {}),
     ...(productEngineeringRecomputeLeaseMs !== undefined ? { leaseMs: productEngineeringRecomputeLeaseMs } : {}),

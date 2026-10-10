@@ -111,6 +111,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
     outboxPublicationMaxRetryDelayMs, outboxPublicationMaxAttempts, maintenanceIntervalMs,
     maintenanceRetryDelayMs, maintenanceStatementTimeoutMs, commandRetentionMs, authAuditRetentionMs, throttleRetentionMs,
     outboxRetentionMs, operationalReadiness, engineeringModelProviders, productEngineeringRecomputeWorkerId,
+    productEngineeringRecomputeLeaseMs, productEngineeringRecomputeRetryDelayMs,
   } = options;
   invariant(pool, 'POSTGRES_POOL_REQUIRED', 'PostgreSQL pool is required');
   invariant(operationalReadiness === undefined || typeof operationalReadiness === 'function', 'READINESS_OPERATIONAL_CHECK_INVALID', 'Operational readiness check must be a function');
@@ -235,6 +236,8 @@ export function createPostgresWholesaleRuntime(options = {}) {
     dispatcher: createAllowlistedProductEngineeringRecomputeDispatcher({}),
     resultVerifier: productEngineeringResultVerifier,
     ...(productEngineeringRecomputeWorkerId ? { workerId: productEngineeringRecomputeWorkerId } : {}),
+    ...(productEngineeringRecomputeLeaseMs !== undefined ? { leaseMs: productEngineeringRecomputeLeaseMs } : {}),
+    ...(productEngineeringRecomputeRetryDelayMs !== undefined ? { retryDelayMs: productEngineeringRecomputeRetryDelayMs } : {}),
     nextId: runtimeNextId,
     ...(clock ? { clock } : {}),
   });

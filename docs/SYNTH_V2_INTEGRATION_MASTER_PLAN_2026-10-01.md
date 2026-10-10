@@ -2275,3 +2275,21 @@ Next only after exact-head and post-merge qualification:
 5. original blocked-action replay plus PostgreSQL Golden Path;
 6. re-evaluate P0 commercial debt and intended-live `ACC-004` proof;
 7. only then start the separate `SHOWROOM-RAIL-001` 2D Rail Composer.
+
+
+### 2026-10-10 — Post-PR #259 admission and B2 gate
+
+Accepted exact main: `b2a015ac866ffde7a537ae5e0655ed423c3da104`. Post-merge push CI: Product Commercialization Acceptance #622 GREEN, Verify #1780 GREEN, Syntha V2 CI #2238 GREEN (PostgreSQL included).
+
+B1 is **MERGED / REPOSITORY-QUALIFIED**, not equivalent to intended-live/PROD-PROVEN. The mandatory backlog was re-read and reconciled with current code. Do not duplicate the immutable DAG, PostgreSQL plan/step/receipt tables or durable jobs already present in migration 180.
+
+**Next B2 order** (each layer needs its own exact-head + post-merge gate):
+1. Register an explicit opt-in recompute worker in the supported PostgreSQL runtime/server lifecycle, with fail-closed unset/unauthorized adapter configuration, readiness and operational metrics, bounded retry/reclaim and graceful shutdown.
+2. Add allowlisted owning-context command adapters with exact input version, idempotent command ID, read-after-write independent verification; never generic mutation.
+3. Route human review to the existing Awaiting Action projection with real capability check, human actor and approved evidence.
+4. Govern external evidence attachment/intake and exact source verification, without treating uploaded files as canonical corrections.
+5. Replay blocked admission only after the complete immutable receipts/authority verification; test restarts, multi-worker claims, fail-closed stale/blocked scenarios and intended-live Golden Path.
+
+The parallel commercial P0 obligations `PUB-005`, `PRICE-009`, `COMM-LC-008`, `ACC-004` remain open. `SHOWROOM-RAIL-001` is a separate planned 2D rail composer after B2/commercial gates, not a shipped UI. It reuses canonical Product Identity → Readiness → Commercial Publication → Buyer Catalog → Selection / Order authorities; no duplicate commercial truth.
+
+Mandatory process invariant: check `docs/backlog-not-yet-integrated.md` and this plan against exact current main before every major feature layer.

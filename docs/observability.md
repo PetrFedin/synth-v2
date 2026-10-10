@@ -9,6 +9,7 @@ The metrics surface covers:
 - process uptime and memory;
 - PostgreSQL pool occupancy and waiters;
 - pending, scheduled, expired and dead-letter queue states;
+- Product Engineering recompute queue states: queued, retry, running, expired lease and dead-letter;
 - notification projection backlog;
 - active authentication sessions;
 - bounded HTTP request counts and duration histograms;
@@ -93,9 +94,10 @@ Recommended response order:
 1. confirm `/ready` and `syntha_metrics_collector_up`;
 2. inspect PostgreSQL saturation, migration checksums and required index state;
 3. inspect worker readiness and consecutive failures;
-4. inspect dead letters, expired claims and backlog growth;
-5. use application logs and audited dead-letter records for root-cause analysis;
-6. requeue a dead letter only after the underlying defect is fixed and record a specific recovery reason.
+4. inspect dead letters, expired claims and backlog growth, including `product-engineering-recompute`;
+5. for recompute backlog, compare `/ready` supported operations with queued work before requeueing or adding an adapter;
+6. use application logs and audited dead-letter records for root-cause analysis;
+7. requeue a dead letter only after the underlying defect is fixed and record a specific recovery reason.
 
 ## Cardinality contract
 

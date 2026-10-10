@@ -104,3 +104,14 @@ test('shutdown validates stopper contracts', () => {
     /Shutdown stoppers must be functions/,
   );
 });
+
+
+test('recompute orchestration is composed for runtime supervision but not exposed as public transport', async () => {
+  const source = await readFile(path.join(root, 'src', 'runtime', 'postgres-base-runtime.mjs'), 'utf8');
+  assert.match(source, /createPostgresProductEngineeringRecomputeStore/);
+  assert.match(source, /createProductEngineeringRecomputeOrchestrationService/);
+  assert.match(source, /productEngineeringRecomputeStore/);
+  assert.match(source, /productEngineeringRecompute,/);
+  const transportLine = source.split('\n').find((line) => line.includes('const transport = {')) ?? '';
+  assert.doesNotMatch(transportLine, /productEngineeringRecompute/);
+});

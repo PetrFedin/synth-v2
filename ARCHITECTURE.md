@@ -2297,3 +2297,8 @@ The first exact allowlisted recompute adapter uses `measurement:measurement.veri
 Runtime flag `SYNTHA_ENGINEERING_MEASUREMENT_RECOMPUTE_ENABLED=false` by default; enabling requires separately configured `SYNTHA_ENGINEERING_RECOMPUTE_ACTOR_ID`. Existing deployments do not claim jobs for the operation until opt-in. The existing B2 worker/lease/readiness and exact operation allowlist remain authoritative.
 
 This is **not** automatic grading, POM mutation or Product Master publication. The actual chart revision and review remain owned by Measurement/human workflow. Neither Awaiting Action routing nor public HTTP/API nor a live Golden Path is claimed by this candidate. Full exact-head and PostgreSQL gate must pass before merge.
+
+
+## 2026-10-11 — Material published-version recompute verification (candidate)
+
+**Status: PR CANDIDATE / NOT ADMITTED.** The opt-in `material:material.verify_published_revision` adapter reads the owning Material authority as the configured actor, checks the immutable recompute plan brand and exact prior human-review predecessor (`material.review_revised_specification`), rejects mismatched material codes, draft state and non-advanced versions, and returns an exact material/version reference. Independent result verification is performed by the existing B1 orchestration service before the immutable receipt. This adapter does **not** change material composition, specification, cost, availability or purchasing terms and does not prove the semantic correctness of the revised specification. Runtime opt-in is `SYNTHA_ENGINEERING_MATERIAL_RECOMPUTE_ENABLED=false` by default. Human-review UI, external evidence, blocked-action replay and intended-live Golden Path remain open. No migration or downstream generic writer is introduced.

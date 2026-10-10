@@ -2286,3 +2286,16 @@ Supported settings:
 
 This runtime slice does **not** claim a concrete Measurement/Material/Tech Pack/etc. adapter, public recompute HTTP routes, Awaiting Action assignment, external-evidence intake, blocked-action replay or Product Engineering intended-live Golden Path. The next permitted slice is the first bounded owning-authority adapter on top of this supervised runtime.
 
+
+
+## 2026-10-11 — Recompute B2 reviewed Measurement publication adapter candidate
+
+**Status: IMPLEMENTED/PARTIAL IN BRANCH; not registered in runtime and not PROD-PROVEN.** Accepted parent: `main@bc655ec3473586a45f38055f573f8f2aa6d7120a` (post-merge #263 3/3 GREEN).
+
+The next exact owning-context adapter is limited to `measurement:measurement.publish_reviewed_draft`. It invokes only the existing canonical `measurements.publishCanonicalMeasurementChart(commandId,actorId,chartId,{expectedVersion})`. That command owns capability `MEASUREMENT_MANAGE`, canonical draft status, MDM consistency, version concurrency, ledger idempotency and transactional outbox.
+
+The adapter requires a separate trusted `reviewApprovalAuthority.requireAcceptedForStep(actorId,{planId,planHash,stepId,targetReference,sourceReference})` reader which returns an exact, hash-bound accepted review receipt with matching plan, step, source, target and reviewer. It rejects invented evidence, incorrect command identities, unversioned/hashed-only Measurement inputs and any mismatched canonical publication result. The existing recompute orchestrator subsequently independently read-verifies exact result version before sealing execution receipt.
+
+**Security gate:** no production review authority is currently registered; the runtime dispatcher remains empty. This candidate adapter therefore cannot execute on live data until a capability-aware review authority and explicit runtime wiring are independently accepted. This slice does not calculate measurements or silently publish revised measurement content, does not grant Product Engineering generic writes, and introduces no HTTP/UI route.
+
+Test contract: approved exact canonical draft publication; no review authority; wrong target/review; wrong command key or operation; unsupported target hash; mismatched result. Subsequent gate: exact-head Verify, PostgreSQL CI and Product Commercialization Acceptance before merge.

@@ -2286,3 +2286,14 @@ Supported settings:
 
 This runtime slice does **not** claim a concrete Measurement/Material/Tech Pack/etc. adapter, public recompute HTTP routes, Awaiting Action assignment, external-evidence intake, blocked-action replay or Product Engineering intended-live Golden Path. The next permitted slice is the first bounded owning-authority adapter on top of this supervised runtime.
 
+
+
+## 2026-10-11 — B2 Measurement published-revision verification adapter (candidate)
+
+Status: **PR CANDIDATE / NOT ADMITTED**, based on `main@bc655ec3473586a45f38055f573f8f2aa6d7120a`.
+
+The first exact allowlisted recompute adapter uses `measurement:measurement.verify_published_revision` and **does not mutate Measurements**. It reads the owning canonical Measurement authority as the configured actor, requires an explicit upstream `human_review` DAG step with operation `measurement.review_revised_chart` and the identical stale chart reference/version, requires a published Product Identity chart with a strictly newer integer version, and returns only an exact result reference and bounded evidence. The independent B1 result verifier performs a second owning-authority read before immutable execution receipt persistence.
+
+Runtime flag `SYNTHA_ENGINEERING_MEASUREMENT_RECOMPUTE_ENABLED=false` by default; enabling requires separately configured `SYNTHA_ENGINEERING_RECOMPUTE_ACTOR_ID`. Existing deployments do not claim jobs for the operation until opt-in. The existing B2 worker/lease/readiness and exact operation allowlist remain authoritative.
+
+This is **not** automatic grading, POM mutation or Product Master publication. The actual chart revision and review remain owned by Measurement/human workflow. Neither Awaiting Action routing nor public HTTP/API nor a live Golden Path is claimed by this candidate. Full exact-head and PostgreSQL gate must pass before merge.

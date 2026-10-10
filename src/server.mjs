@@ -264,7 +264,7 @@ try {
   unregisterProductEngineeringHealth = healthRegistry.register('product-engineering', productEngineeringHealth);
   unregisterProductEngineeringMetrics = operationalMetrics.registerWorker('product-engineering', productEngineeringHealth);
 
-  productEngineeringRecomputeWorker = createBackgroundWorker({
+  productEngineeringRecomputeWorker = createBackgroundWorker(/** @type {any} */ ({
     name: 'product-engineering-recompute',
     intervalMs: settings.productEngineeringRecomputeIntervalMs,
     task: async () => {
@@ -277,7 +277,7 @@ try {
       const deadLetters = results.filter((result) => result.status === 'dead_letter');
       if (deadLetters.length) console.warn(`Product Engineering recompute dead-lettered ${deadLetters.length} job(s)`);
     },
-  });
+  }));
   const productEngineeringRecomputeHealth = async () => {
     const workerHealth = productEngineeringRecomputeWorker.health({
       maxStalenessMs: settings.productEngineeringRecomputeStaleMs,

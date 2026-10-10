@@ -113,6 +113,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
     maintenanceRetryDelayMs, maintenanceStatementTimeoutMs, commandRetentionMs, authAuditRetentionMs, throttleRetentionMs,
     outboxRetentionMs, operationalReadiness, engineeringModelProviders, productEngineeringRecomputeWorkerId,
     productEngineeringRecomputeLeaseMs, productEngineeringRecomputeRetryDelayMs,
+    productEngineeringMeasurementRecomputeEnabled = false,
   } = options;
   invariant(pool, 'POSTGRES_POOL_REQUIRED', 'PostgreSQL pool is required');
   invariant(operationalReadiness === undefined || typeof operationalReadiness === 'function', 'READINESS_OPERATIONAL_CHECK_INVALID', 'Operational readiness check must be a function');
@@ -234,9 +235,9 @@ export function createPostgresWholesaleRuntime(options = {}) {
   });
   const productEngineeringRecompute = createProductEngineeringRecomputeOrchestrationService({
     store: productEngineeringRecomputeStore,
-    dispatcher: createAllowlistedProductEngineeringRecomputeDispatcher({
+    dispatcher: createAllowlistedProductEngineeringRecomputeDispatcher(productEngineeringMeasurementRecomputeEnabled ? {
       [MEASUREMENT_RECOMPUTE_VERIFICATION_OPERATION]: createMeasurementPublishedRevisionRecomputeAdapter({ measurements }),
-    }),
+    } : {}),
     resultVerifier: productEngineeringResultVerifier,
     ...(productEngineeringRecomputeWorkerId ? { workerId: productEngineeringRecomputeWorkerId } : {}),
     ...(productEngineeringRecomputeLeaseMs !== undefined ? { leaseMs: productEngineeringRecomputeLeaseMs } : {}),

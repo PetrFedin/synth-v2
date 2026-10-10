@@ -2332,3 +2332,16 @@ Next only after this slice is admitted:
 ### 2026-10-11 — Candidate first B2 owning-domain operation: Measurement verification
 
 From accepted `main@bc655ec3473586a45f38055f573f8f2aa6d7120a`, the first exact allowlisted adapter is proposed under `measurement:measurement.verify_published_revision`. It verifies the newer **published** canonical Measurement Chart only after an exact human-review DAG predecessor, does not write charts, and is opt-in (`SYNTHA_ENGINEERING_MEASUREMENT_RECOMPUTE_ENABLED=false` by default). Owning Measurement reader plus independent result verification remain mandatory. This is not yet an automated size-grading/costing engine; do not claim full B2 adapter coverage or intended-live acceptance until checks and downstream slices pass.
+
+
+### 2026-10-11 — B2 Measurement verification admitted on main
+
+**Accepted SHA:** `main@1feec3199efe5bf347f4207bcbf2f4b3fe5454d3`; merged PR #265 exact head `1cfccce136cdcdbe2b4c76f8ec6a84e33d19ffed`.
+
+Post-merge 3/3 qualification: Product Commercialization Acceptance #635 GREEN, Verify #1793 GREEN, Syntha V2 CI #2251 GREEN (PostgreSQL).
+
+The first owning-domain recompute adapter is `measurement:measurement.verify_published_revision`. It is deliberately read-only, verifies a newer published canonical Measurement Chart after the exact `human_review` DAG predecessor, and returns an exact reference for independent verifier read-back and immutable execution evidence. Its runtime feature flag remains opt-in and disabled by default: `SYNTHA_ENGINEERING_MEASUREMENT_RECOMPUTE_ENABLED=false`. A configured worker actor with the appropriate Measurement read authority is required before enabling.
+
+**Not admitted by this result:** automatic POM grading or correction, Material/Tech Pack/Readiness/Commercial/Cost adapters, role-specific Awaiting Action, governed external evidence, public recompute HTTP/OpenAPI, blocked-action replay or intended-live Product Engineering Golden Path. Do not mark those as implemented.
+
+**Next strict sequence:** (1) reconcile this admission; (2) inspect and implement the next bounded owning-domain adapter only where an existing canonical command and independent result read authority genuinely support it; (3) role-targeted Awaiting Action; (4) external evidence intake; (5) explicit replay; (6) PostgreSQL + public-runtime Golden Path; (7) commercial P0 debts PUB-005 / PRICE-009 / COMM-LC-008 / ACC-004. No new parallel persistence owner or generic Product Engineering downstream writer.

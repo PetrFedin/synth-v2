@@ -31,6 +31,7 @@ export function createAllowlistedProductEngineeringRecomputeDispatcher(adapters 
       return adapter(actorId, Object.freeze({
         planId: request.plan.id,
         planHash: request.plan.planHash,
+        brandId: request.plan.brandId,
         stepId: request.step.id,
         authority: request.step.owningAuthority,
         operation: request.step.operation,

@@ -28,7 +28,7 @@
 
 Эти отмечены открытыми в реестре изменений до текущих работ.
 
-| Код | Актуальный остаток на `main@4f8a2b06` | Статус / основание |
+| Код | Актуальный остаток, повторно сверенный с `main@b2a015ac` | Статус / основание |
 |---|---|---|
 | `ACC-004` | Product Identity → Readiness и READY → BuyerCatalog harnesses реализованы, но intended-live Product → Margin доказательство ещё не выполнено | **OPEN/PARTIAL** — repository/PostgreSQL CI не равно `PROD-PROVEN`; нужен успешный accepted gate против целевого live runtime + того же PostgreSQL |
 | `PUB-005` | Fresh PriceList/BuyerCatalog уже fail-closed против V1 history, но остаются `/v2/catalog/skus` compatibility writes/readers и Selection fallback без pinned rich BuyerCatalogVersion; single-line selection всё ещё может брать цену/валюту/version из live `catalog_skus` | **OPEN/PARTIAL, P0** — подтверждено `src/application/showroom-selection-service.mjs` и архитектурным регистром; старое описание только про status=`published` было неполным |
@@ -230,5 +230,21 @@ ERP/EDI ритейлера; расширенное планирование ас
 7. **C. Дизайн и конструкция** + **J. Печатный техпак** — привязки к изделию и печать.
 8. **H. Календарь** — шаблоны и критический путь.
 9. **K. Интерфейс** — навигатор, Freeze Line, фильтр по атрибутам.
-10. **Долги архитектуры** (`SEAM-OPEN` первым: он про то, что заказ может опереться на
-    изменяемый каталог) — их правильнее закрывать по мере касания смежных областей.
+10. **Долги архитектуры** — `PUB-005` (legacy Selection/catalog compatibility seam), `PRICE-009`, `COMM-LC-008`, `ACC-004`; прежний отдельный `SEAM-OPEN` — дублирующий/устаревший код, не открывать повторно.
+
+
+---
+
+## 2026-10-10 — mandatory post-B1 reconciliation
+
+Accepted exact `main@b2a015ac866ffde7a537ae5e0655ed423c3da104` (PR #259). Independent post-merge push qualification: Product Commercialization Acceptance #622 SUCCESS; Verify #1780 SUCCESS; Syntha V2 CI #2238 SUCCESS including PostgreSQL.
+
+**CLOSED — no reimplementation:** Recompute Orchestration Tranche A and B1. The codebase now contains immutable StaleDependencySet / RecomputePlan / execution and orchestration receipts, PostgreSQL migration 180, append-only constraints, leased dependency-aware automatic jobs, retry/reclaim/dead letter, allowlisted dispatcher, independent canonical verification boundary and DAG-gated human/external evidence completion. Relevant files: `src/modules/product-engineering/recompute-orchestration.mjs`, `src/infrastructure/postgres-product-engineering-recompute-store.mjs`, `src/application/product-engineering-recompute-orchestration-service.mjs`, and `tests/postgres/product-engineering-recompute-orchestration-recovery.test.mjs`.
+
+**OPEN — Tranche B2, distinct from B1:** The new recompute store/service is not wired into `src/runtime/postgres-runtime.mjs` / `src/server.mjs` as a live worker. Register lifecycle and bounded observability, wire independently permissioned owning-domain adapters one at a time, map `human_review` into the existing Awaiting Action authority, govern `external_evidence` intake and confirmation, then build explicit admission replay plus intended-live proof. No generic downstream write path; no implicit human/external completion.
+
+**Remaining commercial P0:** `PUB-005` pinned BuyerCatalogVersion / legacy Selection compatibility; `PRICE-009` price-list market/effective-date/tax eligibility; `COMM-LC-008` CommercialPublication staging/supersession; `ACC-004` intended-live Product → Margin proof. They remain OPEN/PARTIAL on the examined main, not replaced by the green repository CI.
+
+**NEW backlog key `SHOWROOM-RAIL-001` — PLANNED, not implemented.** Virtual 2D rail composer over existing Showroom / Look / published BuyerCatalogVersion / Selection authorities: SceneVersion → Zone → Rail → RailSlot → exact published ProductSku/Look placement → immutable buyer-facing scene → item/card → color × size → existing Selection/Order Grid. Include brand-facing layout editor, rail/slot reorder and permissions, buyer-specific availability and price read only from pinned publication, RU/EN, tablet/mobile UX, scene publication/revisions, analytics and browser Golden Path. No second product master, mutable live-catalog price lookup, new parallel ordering service or generic 3D promise. Start only after B2 and commercial P0 gates.
+
+**Documentation status:** prior `NOTIF-011/012` remain CLOSED, old `SEAM-OPEN` remains obsolete/merged into `PUB-005`. Do not resurrect duplicate debt IDs. This backlog is a mandatory pre-feature gate before every future major tranche.

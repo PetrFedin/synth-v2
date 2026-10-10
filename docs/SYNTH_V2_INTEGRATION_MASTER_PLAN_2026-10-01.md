@@ -2327,3 +2327,8 @@ Next only after this slice is admitted:
 4. governed external evidence;
 5. blocked-action replay;
 6. PostgreSQL/public-runtime Product Engineering Golden Path.
+
+
+### 2026-10-11 — Candidate first B2 owning-domain operation: Measurement verification
+
+From accepted `main@bc655ec3473586a45f38055f573f8f2aa6d7120a`, the first exact allowlisted adapter is proposed under `measurement:measurement.verify_published_revision`. It verifies the newer **published** canonical Measurement Chart only after an exact human-review DAG predecessor, does not write charts, and is opt-in (`SYNTHA_ENGINEERING_MEASUREMENT_RECOMPUTE_ENABLED=false` by default). Owning Measurement reader plus independent result verification remain mandatory. This is not yet an automated size-grading/costing engine; do not claim full B2 adapter coverage or intended-live acceptance until checks and downstream slices pass.

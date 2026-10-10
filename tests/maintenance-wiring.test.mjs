@@ -22,8 +22,9 @@ test('PostgreSQL base runtime creates and exposes maintenance and optional outbo
 
 test('production workers run maintenance and external outbox publication independently', async () => {
   const server = await source('src/server.mjs');
-  assert.equal((server.match(/createBackgroundWorker\(/g) ?? []).length, 4);
+  assert.equal((server.match(/createBackgroundWorker\(/g) ?? []).length, 5);
   assert.match(server, /name: 'product-engineering'/);
+  assert.match(server, /name: 'product-engineering-recompute'/);
   assert.match(server, /name: 'notification-projection'/);
   assert.match(server, /name: 'operational-exception-sla'/);
   assert.match(server, /name: 'outbox-publication'/);

@@ -129,6 +129,11 @@ export function createOperationalMetrics({ pool, token, clock = () => Date.now()
           [['notification-projection', 'expired'], postgres.snapshot.notificationClaimsExpired],
           [['notifications', 'unread'], postgres.snapshot.notificationsUnread],
           [['auth-sessions', 'active'], postgres.snapshot.activeSessions],
+          [['product-engineering-recompute', 'queued'], postgres.snapshot.recomputeQueued],
+          [['product-engineering-recompute', 'retry'], postgres.snapshot.recomputeRetry],
+          [['product-engineering-recompute', 'running'], postgres.snapshot.recomputeRunning],
+          [['product-engineering-recompute', 'expired-lease'], postgres.snapshot.recomputeExpiredLease],
+          [['product-engineering-recompute', 'dead-letter'], postgres.snapshot.recomputeDeadLetter],
         ]);
       }
 
@@ -191,7 +196,12 @@ async function collectPostgres(pool) {
        (SELECT count(*)::bigint FROM notification_projection_claims WHERE lease_expires_at > now()) AS notification_claims_active,
        (SELECT count(*)::bigint FROM notification_projection_claims WHERE lease_expires_at <= now()) AS notification_claims_expired,
        (SELECT count(*)::bigint FROM notifications WHERE status = 'unread') AS notifications_unread,
-       (SELECT count(*)::bigint FROM auth_sessions WHERE status = 'active' AND expires_at > now()) AS active_sessions`,
+       (SELECT count(*)::bigint FROM auth_sessions WHERE status = 'active' AND expires_at > now()) AS active_sessions,
+       (SELECT count(*)::bigint FROM product_engineering_recompute_jobs WHERE status = 'queued') AS recompute_queued,
+       (SELECT count(*)::bigint FROM product_engineering_recompute_jobs WHERE status = 'failed') AS recompute_retry,
+       (SELECT count(*)::bigint FROM product_engineering_recompute_jobs WHERE status = 'running' AND lease_expires_at > now()) AS recompute_running,
+       (SELECT count(*)::bigint FROM product_engineering_recompute_jobs WHERE status = 'running' AND lease_expires_at <= now()) AS recompute_expired_lease,
+       (SELECT count(*)::bigint FROM product_engineering_recompute_jobs WHERE status = 'dead_letter') AS recompute_dead_letter`,
   );
   const row = result.rows[0] ?? {};
   return Object.freeze({
@@ -206,6 +216,11 @@ async function collectPostgres(pool) {
     notificationClaimsExpired: count(row.notification_claims_expired),
     notificationsUnread: count(row.notifications_unread),
     activeSessions: count(row.active_sessions),
+    recomputeQueued: count(row.recompute_queued),
+    recomputeRetry: count(row.recompute_retry),
+    recomputeRunning: count(row.recompute_running),
+    recomputeExpiredLease: count(row.recompute_expired_lease),
+    recomputeDeadLetter: count(row.recompute_dead_letter),
   });
 }
 

@@ -2296,3 +2296,34 @@ Strict next order:
 7. only then return to P0 commercial debt: PUB-005, PRICE-009, COMM-LC-008 and ACC-004 intended-live proof.
 
 Detailed reconciliation: `docs/reconciliations/2026-10-10-post-b1-governance-and-b2-runtime.md`.
+
+
+## 2026-10-10 — Recompute Orchestration B2 runtime slice
+
+Base: `main@0fa041e64e5a54a709c0afe4aa8e5ff928972f4e` after #260 post-merge 3/3 GREEN.
+
+This slice is intentionally limited to runtime supervision of the admitted B1 durable queue:
+
+- compose the recompute store/service into the supported PostgreSQL runtime;
+- register a dedicated `product-engineering-recompute` background worker;
+- register readiness and graceful shutdown;
+- expose bounded queue metrics for queued/retry/running/expired-lease/dead-letter;
+- make durable claims exact-adapter-aware so unsupported operations are never consumed by a worker that cannot legally execute them;
+- keep the dispatcher empty in this slice; no downstream owning-domain command is introduced yet;
+- keep recompute orchestration internal to runtime; no HTTP/OpenAPI surface is added yet.
+
+Fail-closed runtime rules:
+
+- no registered adapter -> worker performs no claim;
+- queued work outside the current adapter allowlist -> readiness reports `unsupported-recompute-operation`;
+- registered adapters without a configured worker actor -> readiness reports `worker-actor-not-configured`;
+- every future adapter remains exact `authority:operation`, never generic SQL/repository access.
+
+Next only after this slice is admitted:
+
+1. first bounded owning-domain adapter;
+2. then one adapter at a time with independent result read-back;
+3. Awaiting Action for `human_review`;
+4. governed external evidence;
+5. blocked-action replay;
+6. PostgreSQL/public-runtime Product Engineering Golden Path.

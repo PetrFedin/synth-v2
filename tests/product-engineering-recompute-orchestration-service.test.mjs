@@ -190,3 +190,61 @@ test('human review cannot bypass an unfinished DAG parent', async () => {
   );
   assert.equal(recorded, false);
 });
+
+
+test('runtime worker does not claim automatic jobs until an exact adapter is registered', async () => {
+  let claims = 0;
+  const service = createProductEngineeringRecomputeOrchestrationService({
+    store: {
+      persistPlan: async () => ({}),
+      claim: async () => { claims += 1; return []; },
+      getPlan: async () => null,
+      completeWithReceipt: async () => { throw new Error('not reached'); },
+      fail: async () => { throw new Error('not reached'); },
+      recordExecutionReceipt: async receipt => receipt,
+      listReadyEvidenceSteps: async () => [],
+      getOrchestrationReceipt: async () => null,
+      listExecutionReceipts: async () => [],
+      recordOrchestrationReceipt: async receipt => receipt,
+    },
+    dispatcher: createAllowlistedProductEngineeringRecomputeDispatcher({}),
+    resultVerifier: { verify: async () => { throw new Error('not reached'); } },
+    clock: () => NOW,
+  });
+
+  assert.deepEqual(service.supportedOperations, []);
+  const outcome = await service.processPending({ actorId: 'worker-actor', limit: 10 });
+  assert.deepEqual(outcome, []);
+  assert.equal(claims, 0);
+});
+
+test('runtime worker passes the exact adapter allowlist into durable claims', async () => {
+  let claimInput;
+  const dispatcher = createAllowlistedProductEngineeringRecomputeDispatcher({
+    'cost_close:cost.recompute': async () => { throw new Error('no jobs should be returned'); },
+  });
+  const service = createProductEngineeringRecomputeOrchestrationService({
+    store: {
+      persistPlan: async () => ({}),
+      claim: async input => { claimInput = input; return []; },
+      getPlan: async () => null,
+      completeWithReceipt: async () => { throw new Error('not reached'); },
+      fail: async () => { throw new Error('not reached'); },
+      recordExecutionReceipt: async receipt => receipt,
+      listReadyEvidenceSteps: async () => [],
+      getOrchestrationReceipt: async () => null,
+      listExecutionReceipts: async () => [],
+      recordOrchestrationReceipt: async receipt => receipt,
+    },
+    dispatcher,
+    resultVerifier: { verify: async () => { throw new Error('not reached'); } },
+    workerId: 'worker-1',
+    clock: () => NOW,
+  });
+
+  await service.processPending({ actorId: 'worker-actor', limit: 7 });
+  assert.deepEqual(service.supportedOperations, ['cost_close:cost.recompute']);
+  assert.deepEqual(claimInput.supportedOperations, ['cost_close:cost.recompute']);
+  assert.equal(claimInput.workerId, 'worker-1');
+  assert.equal(claimInput.limit, 7);
+});

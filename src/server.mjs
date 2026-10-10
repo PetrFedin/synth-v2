@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import path from 'node:path';
 import process from 'node:process';
@@ -39,6 +40,7 @@ if (metricsEnabled && !metricsToken) throw new Error('SYNTHA_METRICS_TOKEN is re
 const notificationProjectionIntervalMs = integerSetting('SYNTHA_NOTIFICATION_PROJECTION_INTERVAL_MS', 1_000, 100, 60_000);
 const outboxPublicationIntervalMs = integerSetting('SYNTHA_OUTBOX_PUBLICATION_INTERVAL_MS', 1_000, 100, 60_000);
 const productEngineeringIntervalMs = integerSetting('SYNTHA_ENGINEERING_JOB_INTERVAL_MS', 1_000, 100, 60_000);
+const productEngineeringRecomputeIntervalMs = integerSetting('SYNTHA_ENGINEERING_RECOMPUTE_INTERVAL_MS', 1_000, 100, 60_000);
 const exceptionSlaIntervalMs = integerSetting('SYNTHA_EXCEPTION_SLA_INTERVAL_MS', 60_000, 100, 3_600_000);
 const settings = Object.freeze({
   port: integerSetting('PORT', 4100, 1, 65_535),
@@ -62,6 +64,14 @@ const settings = Object.freeze({
   productEngineeringBatchSize: integerSetting('SYNTHA_ENGINEERING_JOB_BATCH_SIZE', 10, 1, 100),
   productEngineeringStaleMs: integerSetting('SYNTHA_ENGINEERING_JOB_STALE_MS', productEngineeringIntervalMs * 5, productEngineeringIntervalMs, 300_000),
   productEngineeringFailureThreshold: integerSetting('SYNTHA_ENGINEERING_JOB_FAILURE_THRESHOLD', 3, 1, 100),
+  productEngineeringRecomputeIntervalMs,
+  productEngineeringRecomputeBatchSize: integerSetting('SYNTHA_ENGINEERING_RECOMPUTE_BATCH_SIZE', 10, 1, 100),
+  productEngineeringRecomputeLeaseMs: integerSetting('SYNTHA_ENGINEERING_RECOMPUTE_LEASE_MS', 60_000, 1_000, 900_000),
+  productEngineeringRecomputeRetryDelayMs: integerSetting('SYNTHA_ENGINEERING_RECOMPUTE_RETRY_DELAY_MS', 5_000, 100, 300_000),
+  productEngineeringRecomputeStaleMs: integerSetting('SYNTHA_ENGINEERING_RECOMPUTE_STALE_MS', productEngineeringRecomputeIntervalMs * 5, productEngineeringRecomputeIntervalMs, 300_000),
+  productEngineeringRecomputeFailureThreshold: integerSetting('SYNTHA_ENGINEERING_RECOMPUTE_FAILURE_THRESHOLD', 3, 1, 100),
+  productEngineeringRecomputeWorkerId: process.env.SYNTHA_ENGINEERING_RECOMPUTE_WORKER_ID?.trim() || `product-engineering-recompute-${randomUUID()}`,
+  productEngineeringRecomputeActorId: process.env.SYNTHA_ENGINEERING_RECOMPUTE_ACTOR_ID?.trim() || undefined,
   exceptionSlaIntervalMs,
   exceptionSlaBatchSize: integerSetting('SYNTHA_EXCEPTION_SLA_BATCH_SIZE', 100, 1, 1000),
   exceptionSlaStaleMs: integerSetting('SYNTHA_EXCEPTION_SLA_STALE_MS', exceptionSlaIntervalMs * 5, exceptionSlaIntervalMs, 3_600_000),
@@ -138,14 +148,17 @@ let server;
 let notificationWorker;
 let outboxWorker;
 let productEngineeringWorker;
+let productEngineeringRecomputeWorker;
 let exceptionSlaWorker;
 let unregisterNotificationHealth;
 let unregisterProductEngineeringHealth;
+let unregisterProductEngineeringRecomputeHealth;
 let unregisterExceptionSlaHealth;
 let unregisterOutboxHealth;
 let unregisterNotificationMetrics;
 let unregisterOutboxMetrics;
 let unregisterProductEngineeringMetrics;
+let unregisterProductEngineeringRecomputeMetrics;
 let unregisterExceptionSlaMetrics;
 // Последнее известное состояние очереди. Снимок, а не запрос на каждый `/ready`: проверка
 // готовности вызывается балансировщиком часто, и счёт по растущей таблице на каждый её запрос сам стал бы
@@ -196,6 +209,9 @@ try {
     throttleRetentionMs: settings.throttleRetentionMs,
     outboxRetentionMs: settings.outboxRetentionMs,
     operationalReadiness: () => healthRegistry.check(),
+    productEngineeringRecomputeWorkerId: settings.productEngineeringRecomputeWorkerId,
+    productEngineeringRecomputeLeaseMs: settings.productEngineeringRecomputeLeaseMs,
+    productEngineeringRecomputeRetryDelayMs: settings.productEngineeringRecomputeRetryDelayMs,
     supplierTrustPrivateKeyB64: settings.supplierTrustPrivateKeyB64,
     supplierTrustIssuerId: settings.supplierTrustIssuerId,
     supplierTrustKeyId: settings.supplierTrustKeyId,
@@ -247,6 +263,38 @@ try {
   });
   unregisterProductEngineeringHealth = healthRegistry.register('product-engineering', productEngineeringHealth);
   unregisterProductEngineeringMetrics = operationalMetrics.registerWorker('product-engineering', productEngineeringHealth);
+
+  productEngineeringRecomputeWorker = createBackgroundWorker(/** @type {any} */ ({
+    name: 'product-engineering-recompute',
+    intervalMs: settings.productEngineeringRecomputeIntervalMs,
+    task: async () => {
+      if (runtime.productEngineeringRecompute.supportedOperations.length === 0) return;
+      const results = await runtime.productEngineeringRecompute.processPending({
+        actorId: settings.productEngineeringRecomputeActorId,
+        limit: settings.productEngineeringRecomputeBatchSize,
+      });
+      operationalMetrics.recordWorkerBatch('product-engineering-recompute', results);
+      const deadLetters = results.filter((result) => result.status === 'dead_letter');
+      if (deadLetters.length) console.warn(`Product Engineering recompute dead-lettered ${deadLetters.length} job(s)`);
+    },
+  }));
+  const productEngineeringRecomputeHealth = async () => {
+    const workerHealth = productEngineeringRecomputeWorker.health({
+      maxStalenessMs: settings.productEngineeringRecomputeStaleMs,
+      maxConsecutiveFailures: settings.productEngineeringRecomputeFailureThreshold,
+    });
+    const supportedOperations = runtime.productEngineeringRecompute.supportedOperations;
+    const backlog = await runtime.productEngineeringRecomputeStore.backlog({ supportedOperations });
+    if (workerHealth.status === 'ready' && supportedOperations.length > 0 && !settings.productEngineeringRecomputeActorId) {
+      return Object.freeze({ ...workerHealth, status: 'not-ready', reason: 'worker-actor-not-configured', supportedOperations, backlog });
+    }
+    if (workerHealth.status === 'ready' && backlog.unsupportedPending > 0) {
+      return Object.freeze({ ...workerHealth, status: 'not-ready', reason: 'unsupported-recompute-operation', supportedOperations, backlog });
+    }
+    return Object.freeze({ ...workerHealth, supportedOperations, backlog });
+  };
+  unregisterProductEngineeringRecomputeHealth = healthRegistry.register('product-engineering-recompute', productEngineeringRecomputeHealth);
+  unregisterProductEngineeringRecomputeMetrics = operationalMetrics.registerWorker('product-engineering-recompute', productEngineeringRecomputeHealth);
 
   exceptionSlaWorker = createBackgroundWorker(/** @type {any} */ ({
     name: 'operational-exception-sla',
@@ -353,6 +401,7 @@ try {
 
   await listen(server, { port: settings.port, host: settings.host });
   productEngineeringWorker.start();
+  productEngineeringRecomputeWorker.start();
   exceptionSlaWorker.start();
   notificationWorker.start();
   outboxWorker?.start();
@@ -362,14 +411,17 @@ try {
   unregisterOutboxMetrics?.();
   unregisterNotificationMetrics?.();
   unregisterProductEngineeringMetrics?.();
+  unregisterProductEngineeringRecomputeMetrics?.();
   unregisterExceptionSlaMetrics?.();
   unregisterOutboxHealth?.();
   unregisterNotificationHealth?.();
   unregisterProductEngineeringHealth?.();
+  unregisterProductEngineeringRecomputeHealth?.();
   unregisterExceptionSlaHealth?.();
   await outboxWorker?.stop().catch((workerError) => console.error('Failed to stop outbox worker after startup error', workerError));
   await notificationWorker?.stop().catch((workerError) => console.error('Failed to stop notification worker after startup error', workerError));
   await exceptionSlaWorker?.stop().catch((workerError) => console.error('Failed to stop Operational Exception SLA worker after startup error', workerError));
+  await productEngineeringRecomputeWorker?.stop().catch((workerError) => console.error('Failed to stop Product Engineering recompute worker after startup error', workerError));
   await productEngineeringWorker?.stop().catch((workerError) => console.error('Failed to stop Product Engineering worker after startup error', workerError));
   server?.closeAllConnections?.();
   server = undefined;
@@ -378,7 +430,7 @@ try {
 }
 
 if (server) {
-  const stoppers = [productEngineeringWorker, exceptionSlaWorker, notificationWorker, outboxWorker].filter(Boolean).map((worker) => () => worker.stop());
+  const stoppers = [productEngineeringWorker, productEngineeringRecomputeWorker, exceptionSlaWorker, notificationWorker, outboxWorker].filter(Boolean).map((worker) => () => worker.stop());
   const shutdown = createShutdownCoordinator({
     server,
     pool,

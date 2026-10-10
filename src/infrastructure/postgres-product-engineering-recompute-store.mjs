@@ -81,10 +81,14 @@ export function createPostgresProductEngineeringRecomputeStore(options = {}) {
     },
 
     async claim(options = {}) {
-      const { workerId, limit = 10, leaseMs = 60000, claimedAt = new Date().toISOString() } = /** @type {any} */ (options);
+      const { workerId, limit = 10, leaseMs = 60000, claimedAt = new Date().toISOString(), supportedOperations = [] } = /** @type {any} */ (options);
       invariant(typeof workerId === 'string' && workerId.trim(), 'PRODUCT_ENGINEERING_RECOMPUTE_WORKER_REQUIRED', 'Recompute worker id is required');
       invariant(Number.isInteger(limit) && limit >= 1 && limit <= 100, 'PRODUCT_ENGINEERING_RECOMPUTE_LIMIT_INVALID', 'Recompute claim limit must be 1-100');
       invariant(Number.isInteger(leaseMs) && leaseMs >= 1000 && leaseMs <= 900000, 'PRODUCT_ENGINEERING_RECOMPUTE_LEASE_INVALID', 'Recompute lease must be 1s-15m');
+      invariant(Array.isArray(supportedOperations), 'PRODUCT_ENGINEERING_RECOMPUTE_SUPPORTED_OPERATIONS_INVALID', 'Supported recompute operations must be an array');
+      const normalizedOperations = Object.freeze([...new Set(supportedOperations)].sort());
+      invariant(normalizedOperations.every(key => typeof key === 'string' && /^[a-z][a-z0-9_.-]{1,159}:[a-z][a-z0-9_.-]{1,159}$/.test(key)), 'PRODUCT_ENGINEERING_RECOMPUTE_SUPPORTED_OPERATIONS_INVALID', 'Supported recompute operations must use authority:operation keys');
+      if (normalizedOperations.length === 0) return Object.freeze([]);
       const leaseExpiresAt = new Date(Date.parse(claimedAt) + leaseMs).toISOString();
       return withPostgresTransaction(pool, async client => {
         const result = await client.query(
@@ -99,6 +103,7 @@ export function createPostgresProductEngineeringRecomputeStore(options = {}) {
                      (job.status='running' AND job.lease_expires_at <= $2)
                     )
                 AND job.attempt_count < job.max_attempts
+                AND (step.owning_authority || ':' || step.operation) = ANY($5::text[])
                 AND NOT EXISTS (
                   SELECT 1
                     FROM jsonb_array_elements_text(step.depends_on) dependency(step_id)
@@ -120,7 +125,7 @@ export function createPostgresProductEngineeringRecomputeStore(options = {}) {
              FROM picked
             WHERE job.id=picked.id
            RETURNING job.*`,
-          [workerId, claimedAt, leaseExpiresAt, limit],
+          [workerId, claimedAt, leaseExpiresAt, limit, normalizedOperations],
         );
         return Object.freeze(result.rows.map(mapJob));
       });
@@ -218,16 +223,41 @@ export function createPostgresProductEngineeringRecomputeStore(options = {}) {
       return result.rowCount === 1 ? mapOrchestrationReceipt(result.rows[0]) : null;
     },
 
-    async backlog() {
+    async backlog(options = {}) {
+      const { supportedOperations = [] } = /** @type {any} */ (options);
+      invariant(Array.isArray(supportedOperations), 'PRODUCT_ENGINEERING_RECOMPUTE_SUPPORTED_OPERATIONS_INVALID', 'Supported recompute operations must be an array');
+      const normalizedOperations = Object.freeze([...new Set(supportedOperations)].sort());
+      invariant(normalizedOperations.every(key => typeof key === 'string' && /^[a-z][a-z0-9_.-]{1,159}:[a-z][a-z0-9_.-]{1,159}$/.test(key)), 'PRODUCT_ENGINEERING_RECOMPUTE_SUPPORTED_OPERATIONS_INVALID', 'Supported recompute operations must use authority:operation keys');
       const result = await pool.query(
-        `SELECT count(*) FILTER (WHERE status IN ('queued','failed'))::integer AS pending,
-                count(*) FILTER (WHERE status='running')::integer AS running,
-                count(*) FILTER (WHERE status='dead_letter')::integer AS dead_letter,
-                min(created_at) FILTER (WHERE status IN ('queued','failed')) AS oldest
-           FROM product_engineering_recompute_jobs`,
+        `SELECT
+           count(*) FILTER (WHERE job.status='queued')::integer AS queued,
+           count(*) FILTER (WHERE job.status='failed')::integer AS retry,
+           count(*) FILTER (WHERE job.status='running' AND job.lease_expires_at > now())::integer AS running,
+           count(*) FILTER (WHERE job.status='running' AND job.lease_expires_at <= now())::integer AS expired_lease,
+           count(*) FILTER (WHERE job.status='dead_letter')::integer AS dead_letter,
+           count(*) FILTER (
+             WHERE job.status IN ('queued','failed')
+               AND NOT ((step.owning_authority || ':' || step.operation) = ANY($1::text[]))
+           )::integer AS unsupported_pending,
+           min(job.created_at) FILTER (WHERE job.status IN ('queued','failed')) AS oldest
+         FROM product_engineering_recompute_jobs job
+         JOIN product_engineering_recompute_plan_steps step
+           ON step.plan_id=job.plan_id AND step.step_id=job.step_id`,
+        [normalizedOperations],
       );
       const row = result.rows[0] ?? {};
-      return Object.freeze({ pending: Number(row.pending ?? 0), running: Number(row.running ?? 0), deadLetter: Number(row.dead_letter ?? 0), oldestQueuedAt: iso(row.oldest) });
+      const queued = Number(row.queued ?? 0);
+      const retry = Number(row.retry ?? 0);
+      return Object.freeze({
+        pending: queued + retry,
+        queued,
+        retry,
+        running: Number(row.running ?? 0),
+        expiredLease: Number(row.expired_lease ?? 0),
+        deadLetter: Number(row.dead_letter ?? 0),
+        unsupportedPending: Number(row.unsupported_pending ?? 0),
+        oldestQueuedAt: iso(row.oldest),
+      });
     },
 
     nextId(prefix = 'recompute') { return `${prefix}_${randomUUID()}`; },

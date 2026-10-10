@@ -48,7 +48,7 @@ export function createProductEngineeringRecomputeOrchestrationService(options = 
     store,
     dispatcher,
     resultVerifier,
-    workerId = 'product-engineering-recompute-worker',
+    workerId = `product-engineering-recompute-${randomUUID()}`,
     clock = () => new Date().toISOString(),
     retryDelayMs = 5000,
     leaseMs = 60000,
@@ -66,7 +66,9 @@ export function createProductEngineeringRecomputeOrchestrationService(options = 
   async function processPending(options = {}) {
     const { actorId, limit = 10 } = /** @type {any} */ (options);
     invariant(typeof actorId === 'string' && actorId.trim(), 'PRODUCT_ENGINEERING_RECOMPUTE_ACTOR_REQUIRED', 'Worker requires an actor authorised to read owning authorities');
-    const claimed = await store.claim({ workerId, limit, leaseMs, claimedAt: now() });
+    const supportedOperations = Array.isArray(dispatcher.supportedOperations) ? dispatcher.supportedOperations : [];
+    if (supportedOperations.length === 0) return Object.freeze([]);
+    const claimed = await store.claim({ workerId, limit, leaseMs, claimedAt: now(), supportedOperations });
     const results = [];
     for (const job of claimed) {
       const startedAt = now();
@@ -159,7 +161,14 @@ export function createProductEngineeringRecomputeOrchestrationService(options = 
     return new Date(value).toISOString();
   }
 
-  return Object.freeze({ persistPlan, processPending, completeEvidenceStep, listAwaitingEvidence, sealPlan });
+  return Object.freeze({
+    supportedOperations: Object.freeze([...(dispatcher.supportedOperations ?? [])]),
+    persistPlan,
+    processPending,
+    completeEvidenceStep,
+    listAwaitingEvidence,
+    sealPlan,
+  });
 }
 
 function errorCode(error) { return typeof error?.code === 'string' && error.code ? error.code : 'PRODUCT_ENGINEERING_RECOMPUTE_JOB_FAILED'; }

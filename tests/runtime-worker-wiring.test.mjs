@@ -41,15 +41,16 @@ test('shutdown waits for background workers before closing the database pool', a
 test('server registers notification health before listen but starts work only after successful bind', async () => {
   const source = await readFile(path.join(root, 'src', 'server.mjs'), 'utf8');
   const productEngineeringIndex = source.indexOf('productEngineeringWorker = createBackgroundWorker');
+  const recomputeIndex = source.indexOf('productEngineeringRecomputeWorker = createBackgroundWorker');
   const exceptionSlaIndex = source.indexOf('exceptionSlaWorker = createBackgroundWorker');
   const workerIndex = source.indexOf('notificationWorker = createBackgroundWorker');
   const healthIndex = source.indexOf("healthRegistry.register('notification-projection'");
   const listenIndex = source.indexOf('await listen(server');
   const productEngineeringStartIndex = source.indexOf('productEngineeringWorker.start()');
   const startIndex = source.indexOf('notificationWorker.start()');
-  assert.ok(productEngineeringIndex >= 0 && exceptionSlaIndex > productEngineeringIndex && workerIndex > exceptionSlaIndex && healthIndex > workerIndex && listenIndex > healthIndex && productEngineeringStartIndex > listenIndex && startIndex > productEngineeringStartIndex);
+  assert.ok(productEngineeringIndex >= 0 && recomputeIndex > productEngineeringIndex && exceptionSlaIndex > recomputeIndex && workerIndex > exceptionSlaIndex && healthIndex > workerIndex && listenIndex > healthIndex && productEngineeringStartIndex > listenIndex && startIndex > productEngineeringStartIndex);
   assert.match(source, /projectPending\(\{ limit: settings\.notificationProjectionBatchSize \}\)/);
-  assert.match(source, /const stoppers = \[productEngineeringWorker, exceptionSlaWorker, notificationWorker, outboxWorker\]\.filter\(Boolean\)\.map\(\(worker\) => \(\) => worker\.stop\(\)\)/);
+  assert.match(source, /const stoppers = \[productEngineeringWorker, productEngineeringRecomputeWorker, exceptionSlaWorker, notificationWorker, outboxWorker\]\.filter\(Boolean\)\.map\(\(worker\) => \(\) => worker\.stop\(\)\)/);
   assert.match(source, /stoppers,/);
   assert.match(source, /SYNTHA_NOTIFICATION_PROJECTION_INTERVAL_MS/);
   assert.match(source, /SYNTHA_NOTIFICATION_PROJECTION_BATCH_SIZE/);
@@ -67,6 +68,19 @@ test('server registers notification health before listen but starts work only af
   assert.match(source, /healthRegistry\.register\('operational-exception-sla'/);
   assert.ok(source.indexOf('exceptionSlaWorker.start()') > listenIndex, 'SLA worker starts only after bind');
   assert.match(source, /operationalReadiness: \(\) => healthRegistry\.check\(\)/);
+  assert.match(source, /name: 'product-engineering-recompute'/);
+  assert.match(source, /runtime\.productEngineeringRecompute\.processPending\(\{/);
+  assert.match(source, /runtime\.productEngineeringRecomputeStore\.backlog\(\{ supportedOperations \}\)/);
+  assert.match(source, /healthRegistry\.register\('product-engineering-recompute'/);
+  assert.match(source, /operationalMetrics\.registerWorker\('product-engineering-recompute'/);
+  assert.match(source, /SYNTHA_ENGINEERING_RECOMPUTE_INTERVAL_MS/);
+  assert.match(source, /SYNTHA_ENGINEERING_RECOMPUTE_BATCH_SIZE/);
+  assert.match(source, /SYNTHA_ENGINEERING_RECOMPUTE_LEASE_MS/);
+  assert.match(source, /SYNTHA_ENGINEERING_RECOMPUTE_RETRY_DELAY_MS/);
+  assert.match(source, /SYNTHA_ENGINEERING_RECOMPUTE_WORKER_ID/);
+  assert.match(source, /SYNTHA_ENGINEERING_RECOMPUTE_ACTOR_ID/);
+  assert.ok(source.indexOf("healthRegistry.register('product-engineering-recompute'") < listenIndex);
+  assert.ok(source.indexOf('productEngineeringRecomputeWorker.start()') > listenIndex);
 });
 
 test('PostgreSQL notification batches use expiring claims and a 64-bit advisory lock', async () => {
@@ -89,4 +103,15 @@ test('shutdown validates stopper contracts', () => {
     () => createShutdownCoordinator({ server, pool, stoppers: [null] }),
     /Shutdown stoppers must be functions/,
   );
+});
+
+
+test('recompute orchestration is composed for runtime supervision but not exposed as public transport', async () => {
+  const source = await readFile(path.join(root, 'src', 'runtime', 'postgres-base-runtime.mjs'), 'utf8');
+  assert.match(source, /createPostgresProductEngineeringRecomputeStore/);
+  assert.match(source, /createProductEngineeringRecomputeOrchestrationService/);
+  assert.match(source, /productEngineeringRecomputeStore/);
+  assert.match(source, /productEngineeringRecompute,/);
+  const transportLine = source.split('\n').find((line) => line.includes('const transport = {')) ?? '';
+  assert.doesNotMatch(transportLine, /productEngineeringRecompute/);
 });

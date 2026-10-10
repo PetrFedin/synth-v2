@@ -17,6 +17,11 @@ function databaseRow(overrides = {}) {
     notification_claims_expired: '2',
     notifications_unread: '9',
     active_sessions: '5',
+    recompute_queued: '4',
+    recompute_retry: '2',
+    recompute_running: '1',
+    recompute_expired_lease: '3',
+    recompute_dead_letter: '1',
     ...overrides,
   };
 }
@@ -72,6 +77,11 @@ test('operational metrics expose bounded labels without sensitive identifiers', 
   assert.equal(queries, 1);
   assert.match(output, /syntha_metrics_collector_up\{collector="postgres"\} 1/);
   assert.match(output, /syntha_queue_records\{queue="notification-projection",state="backlog"\} 8/);
+  assert.match(output, /syntha_queue_records\{queue="product-engineering-recompute",state="queued"\} 4/);
+  assert.match(output, /syntha_queue_records\{queue="product-engineering-recompute",state="retry"\} 2/);
+  assert.match(output, /syntha_queue_records\{queue="product-engineering-recompute",state="running"\} 1/);
+  assert.match(output, /syntha_queue_records\{queue="product-engineering-recompute",state="expired-lease"\} 3/);
+  assert.match(output, /syntha_queue_records\{queue="product-engineering-recompute",state="dead-letter"\} 1/);
   assert.match(output, /syntha_http_requests_total\{method="GET",route_group="catalog",status="200"\} 1/);
   assert.match(output, /syntha_http_requests_total\{method="POST",route_group="orders",status="409"\} 1/);
   assert.match(output, /syntha_worker_results_total\{worker="outbox-publication",outcome="other"\} 1/);

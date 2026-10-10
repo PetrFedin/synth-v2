@@ -109,7 +109,13 @@ test('PostgreSQL recompute orchestration survives lease loss, gates DAG dependen
     await store.persistPlan(staleSet, plan);
     await store.persistPlan(staleSet, plan);
 
-    const first = await store.claim({ workerId: 'worker-a', limit: 10, leaseMs: 1000, claimedAt: t0 });
+    const unsupportedBacklog = await store.backlog({ supportedOperations: [] });
+    assert.equal(unsupportedBacklog.queued, 2);
+    assert.equal(unsupportedBacklog.unsupportedPending, 2);
+    const unsupportedClaim = await store.claim({ workerId: 'worker-unsupported', limit: 10, leaseMs: 1000, claimedAt: t0, supportedOperations: [] });
+    assert.deepEqual(unsupportedClaim, []);
+
+    const first = await store.claim({ workerId: 'worker-a', limit: 10, leaseMs: 1000, claimedAt: t0, supportedOperations: ['cost_close:cost.recompute'] });
     assert.deepEqual(first.map(job => job.stepId), ['cost']);
     const costReceipt = createRecomputeExecutionReceipt({
       id: `recompute-exec-cost-${suffix}`, plan, stepId: 'cost', commandId: `cmd-cost-${suffix}`,
@@ -130,9 +136,9 @@ test('PostgreSQL recompute orchestration survives lease loss, gates DAG dependen
     await store.recordExecutionReceipt(reviewReceipt);
 
     const t3 = '2026-10-09T12:00:03.000Z';
-    const commercialFirst = await store.claim({ workerId: 'worker-b', limit: 10, leaseMs: 1000, claimedAt: t3 });
+    const commercialFirst = await store.claim({ workerId: 'worker-b', limit: 10, leaseMs: 1000, claimedAt: t3, supportedOperations: ['commercial_projection:commercial_projection.recompute'] });
     assert.deepEqual(commercialFirst.map(job => job.stepId), ['commercial']);
-    const commercialReclaimed = await store.claim({ workerId: 'worker-c', limit: 10, leaseMs: 1000, claimedAt: '2026-10-09T12:00:05.000Z' });
+    const commercialReclaimed = await store.claim({ workerId: 'worker-c', limit: 10, leaseMs: 1000, claimedAt: '2026-10-09T12:00:05.000Z', supportedOperations: ['commercial_projection:commercial_projection.recompute'] });
     assert.equal(commercialReclaimed[0].id, commercialFirst[0].id);
     assert.equal(commercialReclaimed[0].attemptCount, 2);
     const commercialReceipt = createRecomputeExecutionReceipt({

@@ -26,6 +26,7 @@ import { createProductEngineeringProposalApplyService } from '../application/pro
 import { createProductEngineeringProposalImpactService } from '../application/product-engineering-proposal-impact-service.mjs';
 import { createProductEngineeringChangeAdmissionService } from '../application/product-engineering-change-admission-service.mjs';
 import { createProductEngineeringResultVerifier, createProductEngineeringVerifiedImpactClosureService } from '../application/product-engineering-result-verifier-service.mjs';
+import { createMeasurementPublishedRevisionRecomputeAdapter, MEASUREMENT_RECOMPUTE_VERIFICATION_OPERATION } from '../application/product-engineering-measurement-recompute-adapter.mjs';
 import { createAllowlistedProductEngineeringRecomputeDispatcher, createProductEngineeringRecomputeOrchestrationService } from '../application/product-engineering-recompute-orchestration-service.mjs';
 import { createProductEngineeringJobService } from '../application/product-engineering-job-service.mjs';
 import { createProductEngineeringAnalysisExecutor } from '../application/product-engineering-analysis-executor.mjs';
@@ -112,6 +113,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
     maintenanceRetryDelayMs, maintenanceStatementTimeoutMs, commandRetentionMs, authAuditRetentionMs, throttleRetentionMs,
     outboxRetentionMs, operationalReadiness, engineeringModelProviders, productEngineeringRecomputeWorkerId,
     productEngineeringRecomputeLeaseMs, productEngineeringRecomputeRetryDelayMs,
+    productEngineeringMeasurementRecomputeEnabled = false,
   } = options;
   invariant(pool, 'POSTGRES_POOL_REQUIRED', 'PostgreSQL pool is required');
   invariant(operationalReadiness === undefined || typeof operationalReadiness === 'function', 'READINESS_OPERATIONAL_CHECK_INVALID', 'Operational readiness check must be a function');
@@ -233,7 +235,9 @@ export function createPostgresWholesaleRuntime(options = {}) {
   });
   const productEngineeringRecompute = createProductEngineeringRecomputeOrchestrationService({
     store: productEngineeringRecomputeStore,
-    dispatcher: createAllowlistedProductEngineeringRecomputeDispatcher({}),
+    dispatcher: createAllowlistedProductEngineeringRecomputeDispatcher(productEngineeringMeasurementRecomputeEnabled ? {
+      [MEASUREMENT_RECOMPUTE_VERIFICATION_OPERATION]: createMeasurementPublishedRevisionRecomputeAdapter({ measurements }),
+    } : {}),
     resultVerifier: productEngineeringResultVerifier,
     ...(productEngineeringRecomputeWorkerId ? { workerId: productEngineeringRecomputeWorkerId } : {}),
     ...(productEngineeringRecomputeLeaseMs !== undefined ? { leaseMs: productEngineeringRecomputeLeaseMs } : {}),

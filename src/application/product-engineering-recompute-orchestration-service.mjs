@@ -36,6 +36,7 @@ export function createAllowlistedProductEngineeringRecomputeDispatcher(adapters 
         operation: request.step.operation,
         inputReference: request.step.inputReference,
         sourceReference: request.step.sourceReference,
+        prerequisiteSteps: Object.freeze(request.plan.steps.filter(step => request.step.dependsOn.includes(step.id))),
         idempotencyKey: request.idempotencyKey,
       }));
     },

@@ -26,6 +26,7 @@ import { createProductEngineeringProposalApplyService } from '../application/pro
 import { createProductEngineeringProposalImpactService } from '../application/product-engineering-proposal-impact-service.mjs';
 import { createProductEngineeringChangeAdmissionService } from '../application/product-engineering-change-admission-service.mjs';
 import { createProductEngineeringResultVerifier, createProductEngineeringVerifiedImpactClosureService } from '../application/product-engineering-result-verifier-service.mjs';
+import { createAllowlistedProductEngineeringRecomputeDispatcher, createProductEngineeringRecomputeOrchestrationService } from '../application/product-engineering-recompute-orchestration-service.mjs';
 import { createProductEngineeringJobService } from '../application/product-engineering-job-service.mjs';
 import { createProductEngineeringAnalysisExecutor } from '../application/product-engineering-analysis-executor.mjs';
 import { createSampleService } from '../application/sample-service.mjs';
@@ -65,6 +66,7 @@ import { createPostgresProductEngineeringStore } from '../infrastructure/postgre
 import { createPostgresProductEngineeringChangeGateReader } from '../infrastructure/postgres-product-engineering-change-gate-reader.mjs';
 import { createPostgresProductEngineeringJobStore } from '../infrastructure/postgres-product-engineering-job-store.mjs';
 import { createPostgresProductEngineeringModelControlStore } from '../infrastructure/postgres-product-engineering-model-control-store.mjs';
+import { createPostgresProductEngineeringRecomputeStore } from '../infrastructure/postgres-product-engineering-recompute-store.mjs';
 import { createBaselineEngineeringScanner } from '../modules/product-engineering/baseline-scanner.mjs';
 import { createPostgresProductReadinessSourceReader } from '../infrastructure/postgres-product-readiness-source-reader.mjs';
 import { createPostgresSampleStore } from '../infrastructure/postgres-sample-store.mjs';
@@ -108,7 +110,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
     outboxPublicationWorkerId, outboxPublicationLeaseMs, outboxPublicationRetryDelayMs,
     outboxPublicationMaxRetryDelayMs, outboxPublicationMaxAttempts, maintenanceIntervalMs,
     maintenanceRetryDelayMs, maintenanceStatementTimeoutMs, commandRetentionMs, authAuditRetentionMs, throttleRetentionMs,
-    outboxRetentionMs, operationalReadiness, engineeringModelProviders,
+    outboxRetentionMs, operationalReadiness, engineeringModelProviders, productEngineeringRecomputeWorkerId,
   } = options;
   invariant(pool, 'POSTGRES_POOL_REQUIRED', 'PostgreSQL pool is required');
   invariant(operationalReadiness === undefined || typeof operationalReadiness === 'function', 'READINESS_OPERATIONAL_CHECK_INVALID', 'Operational readiness check must be a function');
@@ -149,6 +151,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
   const productEngineeringStore = createPostgresProductEngineeringStore({ pool });
   const productEngineeringJobStore = createPostgresProductEngineeringJobStore({ pool });
   const productEngineeringModelControlStore = createPostgresProductEngineeringModelControlStore({ pool });
+  const productEngineeringRecomputeStore = createPostgresProductEngineeringRecomputeStore({ pool });
   const productEngineering = createProductEngineeringService({
     store: productEngineeringStore,
     productReader: productIdentityReader,
@@ -227,6 +230,14 @@ export function createPostgresWholesaleRuntime(options = {}) {
     productEngineering,
     resultVerifier: productEngineeringResultVerifier,
   });
+  const productEngineeringRecompute = createProductEngineeringRecomputeOrchestrationService({
+    store: productEngineeringRecomputeStore,
+    dispatcher: createAllowlistedProductEngineeringRecomputeDispatcher({}),
+    resultVerifier: productEngineeringResultVerifier,
+    ...(productEngineeringRecomputeWorkerId ? { workerId: productEngineeringRecomputeWorkerId } : {}),
+    nextId: runtimeNextId,
+    ...(clock ? { clock } : {}),
+  });
   const productEngineeringApi = Object.freeze({ ...productEngineering, ...productEngineeringApply, ...productEngineeringImpact, ...productEngineeringVerifiedImpactClosure });
   // Governed reference data is global and read-only from the application, so it needs a reader and
   // nothing else.
@@ -289,11 +300,11 @@ export function createPostgresWholesaleRuntime(options = {}) {
     ...(outboxRetentionMs !== undefined ? { outboxRetentionMs } : {}),
   });
   const workspace = createWorkspaceQueryService({ reader: createPostgresWorkspaceReader({ pool }) });
-  const transport = { authenticate: auth.authenticate, auth, readiness, platform, catalog, legalEntities, productIdentity, productEngineering: productEngineeringApi, productEngineeringJobs, productReadiness, commercialPublication, orderEconomics, materials, boms, measurements, samples, libraries, history, supplierPortal, categoryAttributes, organisationMembers, awaitingActions, operationalCollaboration, operationalExceptions, team, partners, retailDoors, sourcing, techPacks, collaboration, orders, notifications, workspace };
+  const transport = { authenticate: auth.authenticate, auth, readiness, platform, catalog, legalEntities, productIdentity, productEngineering: productEngineeringApi, productEngineeringJobs, productEngineeringRecompute, productReadiness, commercialPublication, orderEconomics, materials, boms, measurements, samples, libraries, history, supplierPortal, categoryAttributes, organisationMembers, awaitingActions, operationalCollaboration, operationalExceptions, team, partners, retailDoors, sourcing, techPacks, collaboration, orders, notifications, workspace };
   const handler = createWholesaleHttpHandler(transport);
   const fetchHandler = createWholesaleFetchHandler(transport);
   return Object.freeze({
-    auth, readiness, maintenance, outboxPublication, outboxPublicationStore, store, catalogStore, legalEntityStore, productIdentityStore, productIdentityReader, productEngineeringStore, productEngineeringJobStore, productEngineeringModelControlStore, productEngineeringChangeAdmission, productReadinessStore, productReadinessSourceReader, commercialPublicationStore, orderEconomicsStore, materialStore, bomStore, measurementStore, sampleStore, sourcingStore, techPackStore,
+    auth, readiness, maintenance, outboxPublication, outboxPublicationStore, store, catalogStore, legalEntityStore, productIdentityStore, productIdentityReader, productEngineeringStore, productEngineeringJobStore, productEngineeringModelControlStore, productEngineeringRecomputeStore, productEngineeringChangeAdmission, productReadinessStore, productReadinessSourceReader, commercialPublicationStore, orderEconomicsStore, materialStore, bomStore, measurementStore, sampleStore, sourcingStore, techPackStore,
     platform, catalog, legalEntities, productIdentity, productEngineering: productEngineeringApi, productEngineeringJobs, productReadiness, commercialPublication, orderEconomics, materials, boms, measurements, samples, libraries, history, supplierPortal, categoryAttributes, organisationMembers, awaitingActions, operationalCollaboration, operationalExceptions, team, partners, retailDoors, sourcing, techPacks, collaboration, orders, notifications, workspace,
     handler, fetchHandler,
   });

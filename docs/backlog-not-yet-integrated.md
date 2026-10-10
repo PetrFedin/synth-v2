@@ -1,6 +1,6 @@
 # Что выявлено, но ещё не встроено
 
-> **Checkpoint 2026-10-10.** Recompute Orchestration B1 is admitted on `main@b2a015ac866ffde7a537ae5e0655ed423c3da104` via merged PR #259 with post-merge 3/3 GREEN (#622 / #1780 / #2238). Competing PR #258 is superseded at the persistence/store/service layer; only its HTTP/OpenAPI/runtime/Golden-Path ideas remain as B2 requirements. The next strict slice is B2 runtime → owning-domain adapters → Awaiting Action/external evidence → blocked-action replay → Product Engineering Golden Path. Do not start SHOWROOM-RAIL-001 or broader moat work before this sequence is admitted.
+> **Checkpoint 2026-10-10.** Recompute Orchestration B1 and the B2 runtime-supervision slice are admitted on `main@538f00281649ecb12204dd2064e8bc5414555c65`. B1 persistence/evidence is canonical via #259; B2 runtime via #262 adds supervised worker lifecycle, adapter-aware claiming, readiness and bounded recompute metrics. The next strict slice is the first concrete owning-domain adapter → adapter-by-adapter expansion → Awaiting Action/external evidence → blocked-action replay → Product Engineering Golden Path. Do not start SHOWROOM-RAIL-001 or broader moat work before this sequence is admitted.
 
 Свод по всем источникам: снимки и видео Omnidata, карта JOOR/NuORDER
 (`docs/joor-retailer-cabinet-complete-map.md`), каталог пробелов
@@ -30,7 +30,7 @@
 
 Эти отмечены открытыми в реестре изменений до текущих работ.
 
-| Код | Актуальный остаток на `main@4f8a2b06` | Статус / основание |
+| Код | Актуальный остаток, повторно сверенный с `main@538f0028` | Статус / основание |
 |---|---|---|
 | `ACC-004` | Product Identity → Readiness и READY → BuyerCatalog harnesses реализованы, но intended-live Product → Margin доказательство ещё не выполнено | **OPEN/PARTIAL** — repository/PostgreSQL CI не равно `PROD-PROVEN`; нужен успешный accepted gate против целевого live runtime + того же PostgreSQL |
 | `PUB-005` | Fresh PriceList/BuyerCatalog уже fail-closed против V1 history, но остаются `/v2/catalog/skus` compatibility writes/readers и Selection fallback без pinned rich BuyerCatalogVersion; single-line selection всё ещё может брать цену/валюту/version из live `catalog_skus` | **OPEN/PARTIAL, P0** — подтверждено `src/application/showroom-selection-service.mjs` и архитектурным регистром; старое описание только про status=`published` было неполным |
@@ -226,11 +226,27 @@ ERP/EDI ритейлера; расширенное планирование ас
 1. ~~**E. Размеры и ростовки**~~ — **сделано** (#158).
 2. ~~**Юридические лица**~~ — **сделано** (#159).
 3. ~~**Route B: RFQ и заказ на материал**~~ — **сделано** (#160/#162/#163, включая экран).
-4. **Россия P0** — ЭДО/УПД и документы ЕАЭС **частично сделаны** (#161, реестр документов соответствия с ЭДО-статусом УПД и типами деклараций/сертификатов ЕАЭС); GTIN на SKU **частично сделан** (`feat/sku-gtin-ui`, 2026-10-01: форма «Добавить SKU» заводит GTIN, интеграция с «Честным знаком» — нет). Не сделано: 1С-интеграция (требует внешней системы), привязка документа к конкретному заказу, интеграция с реальным оператором ЭДО.
-5. **I. Отгрузки и каналы** — контейнеры, порты, коносамент **сделаны** (`feat/shipment-logistics-detail`); состояния «идёт упаковка» → «товары упакованы» и количества по каналам не сделаны.
+4. **Россия P0** — ЭДО/УПД и документы ЕАЭС **частично сделаны** (#161, реестр документов соответствия с ЭДО-статусом УПД и типами деклараций/сертификатов ЕАЭС); привязки документов к заказу и shipment уже сделаны; GTIN на SKU **частично сделан** (`feat/sku-gtin-ui`, 2026-10-01). Не сделано: 1С-интеграция, реальная интеграция с оператором ЭДО и интеграция с «Честным знаком»/DataMatrix.
+5. **I. Отгрузки и каналы** — контейнеры, порты, коносамент и состояния упаковки **сделаны**; остаётся разбивка quantities по каналам продаж.
 6. **Route C: закупка готовых изделий** — третья модель формирования коллекции.
 7. **C. Дизайн и конструкция** + **J. Печатный техпак** — привязки к изделию и печать.
 8. **H. Календарь** — шаблоны и критический путь.
 9. **K. Интерфейс** — навигатор, Freeze Line, фильтр по атрибутам.
-10. **Долги архитектуры** (`SEAM-OPEN` первым: он про то, что заказ может опереться на
-    изменяемый каталог) — их правильнее закрывать по мере касания смежных областей.
+10. **Долги архитектуры** — `PUB-005` (legacy Selection/catalog compatibility seam), `PRICE-009`, `COMM-LC-008`, `ACC-004`; прежний отдельный `SEAM-OPEN` — дублирующий/устаревший код, повторно не открывать.
+
+
+---
+
+## 2026-10-10 — post-B2 runtime reconciliation
+
+Accepted exact main: `538f00281649ecb12204dd2064e8bc5414555c65`.
+
+Repository qualification after PR #262: Product Commercialization Acceptance #630 GREEN; Verify #1788 GREEN; Syntha V2 CI #2246 GREEN, including PostgreSQL verification.
+
+**CLOSED for reimplementation:** B1 persistence/evidence and B2 runtime supervision. Recompute jobs now have supported production worker lifecycle, exact operation-aware claims, readiness, graceful shutdown and bounded Prometheus queue states. Do not rebuild a second queue/runtime.
+
+**OPEN next:** concrete owning-authority adapters, one exact `authority:operation` at a time; then Awaiting Action for human review, governed external evidence, blocked-action replay and the Product Engineering PostgreSQL/public-runtime Golden Path.
+
+**Commercial P0 remains open:** `PUB-005`, `PRICE-009`, `COMM-LC-008`, `ACC-004`.
+
+**SHOWROOM-RAIL-001 remains planned only** and still must not pre-empt the Product Engineering/commercial P0 sequence.

@@ -7,6 +7,8 @@
 (`docs/omnidata-screens-gap-analysis.md`), реестр изменений `ARCHITECTURE.md`
 и находки по ходу работы.
 
+> **Checkpoint 2026-10-11.** PR #265 (Measurement published-revision verification adapter) merged on `main@1feec3199efe5bf347f4207bcbf2f4b3fe5454d3` with post-merge GREEN #635 / #1793 / #2251. Only the exact read-only, human-review-gated Measurement operation is admitted. Still OPEN: real automatic recompute adapters, Awaiting Action assignment, external evidence, replay and intended-live Golden Path. See integration master plan for the strict dependency chain.
+
 ## Чем это проверено, и чего проверка не покрывает
 
 Наличие проверялось **по схеме и маршрутам**, а не по прочтению спецификации целиком:

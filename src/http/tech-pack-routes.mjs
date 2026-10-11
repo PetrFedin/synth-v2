@@ -16,6 +16,7 @@ export function createTechPackRoutes({ techPacks } = {}) {
   return Object.freeze([
     read('GET', /^\/v2\/tech-packs$/, QUERY_FIELDS, ({ actorId, query }) => service.pageForActor(actorId, query)),
     read('GET', /^\/v2\/tech-packs\/([^/]+)$/, [], ({ actorId, params }) => service.getForActor(actorId, params[0])),
+    read('GET', /^\/v2\/tech-packs\/([^/]+)\/canonical-preflight$/, [], ({ actorId, params }) => service.canonicalPreflightForActor(actorId, params[0])),
     // Everything the document is made of, read at one instant.
     read('GET', /^\/v2\/tech-packs\/([^/]+)\/document$/, [], ({ actorId, params }) => service.getDocumentForActor(actorId, params[0])),
     mutate('POST', /^\/v2\/tech-packs$/, CREATE_BODY, ({ commandId, actorId, body }) => service.createTechPack(commandId, actorId, body)),
@@ -36,5 +37,5 @@ function read(method, pattern, fields, execute) {
 }
 function unavailable() {
   const fail = () => invariant(false, 'TECH_PACK_SERVICE_REQUIRED', 'Tech pack service is required');
-  return Object.freeze({ pageForActor: fail, getForActor: fail, getDocumentForActor: fail, addOperation: fail, createTechPack: fail, updateTechPack: fail, issueTechPack: fail, acknowledgeTechPack: fail, createRevision: fail, withdrawTechPack: fail });
+  return Object.freeze({ pageForActor: fail, getForActor: fail, getDocumentForActor: fail, canonicalPreflightForActor: fail, addOperation: fail, createTechPack: fail, updateTechPack: fail, issueTechPack: fail, acknowledgeTechPack: fail, createRevision: fail, withdrawTechPack: fail });
 }

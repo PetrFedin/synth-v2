@@ -96,3 +96,61 @@ test('source inspector is mounted in the real Tech Pack detail and its script is
   const script=await read('public/modules/tech-pack-canonical-inspector.js');
   assert.doesNotThrow(()=>new vm.Script(script));
 });
+
+function deferredResponse() {
+  let resolve, reject;
+  const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
+  return { promise, resolve, reject };
+}
+
+test('reloaded or tenant-switched Tech Pack cannot resurrect revoked in-flight source evidence', async () => {
+  const oldResponse = deferredResponse();
+  const freshResponse = deferredResponse();
+  let count = 0;
+  const h = await inspectorHarness(() => (++count === 1 ? oldResponse.promise : freshResponse.promise));
+  const first = h.inspector.check('TP-001');
+  assert.equal(count, 1);
+  h.inspector.invalidate(); // The workspace reset path also runs on an organisation switch.
+  assert.match(h.inspector.render(payload).textContent, /Проверка ещё не запускалась/);
+  const second = h.inspector.check('TP-001');
+  assert.equal(count, 2, 'a fresh check must not be blocked by an invalidated request');
+
+  freshResponse.resolve({ ...payload, eligible: false, blockers: ['PPS_SUPPLIER_MISMATCH'] });
+  await second;
+  assert.match(h.inspector.render(payload).textContent, /Требуются исправления/);
+  oldResponse.resolve(payload);
+  await first;
+  assert.match(h.inspector.render(payload).textContent, /Требуются исправления/);
+  assert.doesNotMatch(h.inspector.render(payload).textContent, /Источники согласованы/);
+});
+
+test('a stale rejected request cannot erase newer successful evidence', async () => {
+  const oldResponse = deferredResponse();
+  const h = await inspectorHarness(() => oldResponse.promise);
+  const first = h.inspector.check('TP-001');
+  h.inspector.invalidate('TP-001');
+  h.context.api = async () => payload;
+  await h.inspector.check('TP-001');
+  oldResponse.reject(new Error('Old tenant access denied'));
+  await first;
+  const visible = h.inspector.render(payload).textContent;
+  assert.match(visible, /Источники согласованы/);
+  assert.doesNotMatch(visible, /Old tenant access denied/);
+});
+
+test('rechecking clears previously green state and rejects contradictory green-with-blockers', async () => {
+  const pending = deferredResponse();
+  let count = 0;
+  const h = await inspectorHarness(() => ++count === 1 ? payload : pending.promise);
+  await h.inspector.check('TP-001');
+  assert.match(h.inspector.render(payload).textContent, /Источники согласованы/);
+  const recheck = h.inspector.check('TP-001');
+  const waiting = h.inspector.render(payload).textContent;
+  assert.match(waiting, /Сверяем точные версии источников/);
+  assert.doesNotMatch(waiting, /Источники согласованы/);
+  pending.resolve({ ...payload, blockers: ['CANONICAL_IDENTITY_MISSING'] });
+  await recheck;
+  const result = h.inspector.render(payload).textContent;
+  assert.match(result, /TECH_PACK_PREFLIGHT_RESPONSE_INVALID/);
+  assert.doesNotMatch(result, /Источники согласованы/);
+});

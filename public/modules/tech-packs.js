@@ -11,7 +11,6 @@
     // Технологическая последовательность описывает изделие, а техпак её печатает — поэтому она
     // читается по SKU выбранного пакета, а не хранится в нём второй раз.
     sequenceBySku: {}, sequenceLoading: '',
-    canonicalPreflightByCode: Object.create(null), canonicalPreflightErrorByCode: Object.create(null), canonicalPreflightLoadingCode: '',
   });
   const STATUSES = ['draft', 'issued', 'acknowledged', 'superseded', 'withdrawn'];
 
@@ -45,7 +44,7 @@
   function catalog() { return Array.isArray(state.workspace?.catalogSkus) ? state.workspace.catalogSkus : []; }
   function manageableCatalog() { return catalog().filter((sku) => can(sku.brandId, caps.CAPABILITIES.TECH_PACK_MANAGE)); }
 
-  function reset() { ui.items = []; ui.loaded = false; ui.error = ''; ui.selectedCode = null; ui.generation += 1; ui.canonicalPreflightByCode = Object.create(null); ui.canonicalPreflightErrorByCode = Object.create(null); }
+  function reset() { ui.items = []; ui.loaded = false; ui.error = ''; ui.selectedCode = null; ui.generation += 1; global.SynthaTechPackCanonicalInspector?.invalidate(); }
   async function fetchAll(request = api) {
     const byCode = new Map();
     const seen = new Set();
@@ -87,8 +86,7 @@
   // See materials.js: retrying a failed load from render starves the event loop.
   function ensureLoaded() { if (!ui.loaded && !ui.loading && !ui.error) queueMicrotask(() => { void load({ reset: true }); }); }
   function upsert(value) {
-    delete ui.canonicalPreflightByCode[value.techPackCode];
-    delete ui.canonicalPreflightErrorByCode[value.techPackCode];
+    global.SynthaTechPackCanonicalInspector?.invalidate(value.techPackCode);
     const map = new Map(ui.items.map((item) => [item.techPackCode, item]));
     map.set(value.techPackCode, value);
     ui.items = [...map.values()].sort((a, b) => String(a.techPackCode).localeCompare(String(b.techPackCode)));
@@ -375,6 +373,7 @@
       h('div', { className: 'tech-pack-inspector-head' }, [h('div', {}, [h('p', { className: 'eyebrow', text: value.techPackCode }), h('h2', { text: value.title })]), h('div', { className: 'tech-pack-actions' }, buttons)]),
       h('dl', { className: 'tech-pack-facts' }, [pair('SKU', value.sku), pair(text('Редакция', 'Revision'), value.revision), pair(text('Фабрика', 'Supplier'), `${value.supplierCode || '—'} · ${value.supplierName || '—'}`), pair(text('Выпущен', 'Issued'), date(value.issuedAt)), pair(text('Подтверждён', 'Acknowledged'), date(value.acknowledgedAt)), pair(text('Ссылка подтверждения', 'Acknowledgement reference'), value.acknowledgement?.acknowledgementReference)]),
       h('section', { className: 'tech-pack-card' }, [h('h3', { text: text('Зафиксированные зависимости', 'Immutable dependencies') }), h('dl', { className: 'tech-pack-facts' }, [pair(text('Версия SKU', 'SKU version'), snapshot.skuVersion), pair(text('Версия BOM', 'BOM version'), snapshot.bomVersion), pair(text('Версия таблицы мер', 'Measurement chart version'), snapshot.measurementChartVersion), pair(text('Одобренный PPS', 'Approved PPS'), snapshot.sampleCode)])]),
+      global.SynthaTechPackCanonicalInspector?.render(value),
       operationSequencePanel(value),
       h('section', { className: 'tech-pack-card' }, [h('h3', { text: text('Производственные указания', 'Production instructions') }), h('p', { text: value.constructionNotes || '—' }), h('p', { text: value.qualityNotes || '—' }), h('p', { text: value.packingNotes || '—' })]),
     ]);

@@ -2337,3 +2337,14 @@ Visual contract: ODS typography, restrained orange accent, surface/line tokens; 
 The hub is an additive `/ui/workspace-hub.js` module mounted after Awaiting Action and before final ODS polish. Its responsive first-party styles are appended to the existing final `/omnidata-v14-role-system.css`, not loaded as a new stylesheet; the frozen ODS boundary stays intact. The UI retains RU/EN, keyboard navigation, focus visibility and reduced-motion handling. It does not claim that the underlying modules are complete or production proven. The separate canonical Tech Pack preflight is still a backend read-only primitive until a separate authenticated API/Tech Pack inspector slice is admitted.
 
 Acceptance must cover role-based module filtering, planned vs installed routes, duplicate view elimination, navigation, truthful indicators, responsive CSS and existing overview content, plus exact-head 3/3 CI. This repository-level acceptance does not replace physical mobile/tablet/desktop screenshot inspection or intended-live production UAT.
+
+
+## 2026-10-11 — Fail-closed browser asset delivery gate (PR candidate)
+
+**Status: CANDIDATE / NOT ADMITTED** on `main@09b13306d5a1c746e516386db807441f19c6c50f`.
+
+The standalone HTTP application serves browser JavaScript and CSS from an explicit `src/web/static-handler.mjs` whitelist. A referenced script without a corresponding route returns HTTP 404; syntax and UI-contract tests alone can still pass. In particular, the new connected workspace hub `/ui/workspace-hub.js` (PR #271) requires its own explicitly registered handler entry with no-store caching.
+
+`tests/browser-shell-asset-delivery.test.mjs` is a real loopback-HTTP admission test: start the actual standalone static handler, fetch the delivered HTML, request **every linked JS and CSS asset** with the actual querystring, reject non-200/empty/incorrect-content-type results and assert the workspace hub JS is served with `no-store`. This test is independent of PostgreSQL business mutations and prevents the entire family of invisible UI/404 regressions. It is not browser screenshot proof or domain workflow acceptance.
+
+The registry must be extended together with every future script tag. New module deployment is rejected by CI if its HTML link is not delivered. The final Omnidata Design System CSS contract remains unchanged.

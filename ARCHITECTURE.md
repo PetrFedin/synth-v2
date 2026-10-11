@@ -2350,3 +2350,8 @@ The existing Tech Pack master-detail workspace mounts an optional `SynthaTechPac
 No schema migration, Product Master write, automatic issue, downstream Recompute writer, task ledger or external evidence processing is added. The legacy `issueTechPack` command remains SKU-based until a **separate transactional canonical cutover** revalidates and freezes exact sources during the write. The diagnostic cannot bypass this gate.
 
 Admission proof must include route/OpenAPI parity, UI event/render negative tests, the PostgreSQL compiled-query check on the actual migrated schema, original 3/3 CI, post-merge 3/3 and physical browser screenshots before claiming production visual acceptance. The PostgreSQL SQL compile test is intentionally **not** presented as a positive end-to-end canonical issuance test.
+
+
+### 2026-10-12 — Async admission safety amendment (PR #273)
+
+The browser diagnostic is a revocable, transient read: every check carries a monotonically increasing request epoch. Tech Pack upserts, reload/reset and workspace/organisation reset revoke pending reads, clear the outstanding lease and prevent any older success or failure from restoring previous-tenant or previous-revision evidence. Explicit recheck clears the previous eligible result while a request is running; a contradictory `eligible=true` with nonempty blockers fails closed rather than showing a successful state. Three async regression scenarios cover stale success, stale error and green-with-blockers. This adds no source authority, does not perform issuance, and does not substitute for runtime PostgreSQL and physical browser UAT.

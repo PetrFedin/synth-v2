@@ -51,6 +51,7 @@
       entries: (group.items || []).filter((item) => {
         if (!item || typeof item.view !== 'string' || !item.view || item.planned || seen.has(item.view)) return false;
         if (typeof canOpen === 'function' && !canOpen(workspace, item.view)) return false;
+        if (typeof odV7ItemApplies === 'function' && !odV7ItemApplies(item)) return false;
         seen.add(item.view);
         return true;
       }).map((item) => ({

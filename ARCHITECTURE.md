@@ -2315,3 +2315,12 @@ Existing Awaiting Action is the only supported work inbox: recompute `human_revi
 **Current gap:** `completeEvidenceStep` records evidence but is not, by itself, a capability-aware, independently authoritative human approval command. It must not be exposed as a generic completion API or used to claim that arbitrary user evidence authorises publication. Only after an immutable reviewed decision with correct plan/step/actor/source identity, transaction-safe idempotency and matching role capability may a human review step be closed. The already admitted Measurement/Material recompute adapters remain read-only and opt-in.
 
 Required PostgreSQL + browser acceptance includes multi-org isolation, membership revocation, no duplicate work, DAG gating, exact review receipts, concurrent reviewers, protected financial fields, supplier separation, one-snapshot lists and counters, and no false approval buttons. This PR is specification-only, does not mutate runtime or production data, and does not claim a live Golden Path.
+
+
+## 2026-10-11 — Tech Pack canonical dependency preflight (candidate)
+
+**Status: CANDIDATE / NOT ADMITTED.** Base: `main@9191add5efcec45222067563e9ed5f32207d892b`. This is an incremental read-only preflight, **not** canonical Tech Pack issuance.
+
+`createPostgresTechPackCanonicalPreflightReader` resolves a Tech Pack's existing `product_sku_id` to its exact `styleVersionId/colorwayId/sizeScaleVersionId`, its linked BOM and pre-production sample and a canonical Measurement Chart in one `REPEATABLE READ READ ONLY` PostgreSQL transaction. Access is filtered through active organisation membership and `TECH_PACK_READ` roles in SQL; no text SKU fallback. `createTechPackCanonicalPreflightService` yields a bounded eligible/blockers response, without exposing costs or private supplier data.
+
+This checks source ownership, identity consistency and statuses, **not** technical or commercial correctness. It does not issue, revise, publish, approve, or mutate a Tech Pack. No new schema/table is introduced. Runtime/API wiring and canonical issuance must be separate gated changes; old SKU-based issue and historical documents remain intact. A future canonical issue command must revalidate exact dependencies under its write transaction, pin them into immutable issued evidence, and protect against TOCTOU before publish/issue. The read-only preflight result alone never authorises issue.

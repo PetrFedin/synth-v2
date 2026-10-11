@@ -149,6 +149,7 @@ const ASSETS = Object.freeze({
   '/ui/currency-rates.js': ['modules/currency-rates.js', JS, VISUAL_CACHE],
   '/ui/season-palette.js': ['modules/season-palette.js', JS, VISUAL_CACHE],
   '/ui/tech-pack-navigation.js': ['modules/tech-pack-navigation.js', JS, VISUAL_CACHE],
+  '/ui/tech-pack-canonical-inspector.js': ['modules/tech-pack-canonical-inspector.js', JS, VISUAL_CACHE],
   '/ui/tech-packs.js': ['modules/tech-packs.js', JS, VISUAL_CACHE],
   '/ui/production-orders.js': ['modules/production-orders.js', JS, VISUAL_CACHE],
   '/ui/production-executions.js': ['modules/production-executions.js', JS, VISUAL_CACHE],

@@ -496,6 +496,7 @@
     }
     return navigation;
   };
+  global.SynthaOmnidataV7Nav?.activate('Tech packs', 'tech-packs', 'Технические пакеты', 'Tech packs');
   global.SynthaTechPacksWorkspace.fetchAll = fetchAll;
   global.SynthaViewRefresh?.register('tech-packs', () => load({ reset: true }));
   global.SynthaViewRefresh?.registerTarget('tech-packs', (route) => { ui.status = 'all'; ui.readiness = 'all'; ui.search = ''; ui.document = null; ui.selectedCode = route.entityId; });

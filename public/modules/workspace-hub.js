@@ -67,8 +67,9 @@
     const canOpen = global.SynthaUiCapabilities?.canOpenView;
     if (canOpen && !canOpen(workspace, view)) return false;
     const groups = typeof OD_V7_GROUPS !== 'undefined' ? OD_V7_GROUPS : [];
-    if (!availableSections(groups, workspace, canOpen).some((group) => group.entries.some((item) => item.view === view))
-      && view !== 'awaiting-action') return false;
+    if (view === 'awaiting-action') {
+      if (!global.SynthaAwaitingAction) return false;
+    } else if (!availableSections(groups, workspace, canOpen).some((group) => group.entries.some((item) => item.view === view))) return false;
     state.view = view;
     renderApp();
     return true;

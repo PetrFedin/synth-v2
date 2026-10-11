@@ -9,6 +9,7 @@ const SNAPSHOT_BEGIN = 'BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ O
  * One snapshot, no legacy SKU fallback. All evidence is resolved from the
  * stored product_sku_id and its exact owning Product Identity references.
  */
+/** @param {{ pool?: any }} [options] */
 export function createPostgresTechPackCanonicalPreflightReader({ pool } = {}) {
   invariant(pool && typeof pool.connect === 'function', 'TECH_PACK_PREFLIGHT_POOL_REQUIRED', 'PostgreSQL pool is required');
   return Object.freeze({

@@ -2350,3 +2350,12 @@ The first owning-domain recompute adapter is `measurement:measurement.verify_pub
 ### 2026-10-11 — Candidate B2 Material owning-domain verification
 
 After accepted `main@59eb2919bb4b87e9a840b5bdac1f37ee2bb3feaa` (post-merge #266 3/3 GREEN), the next bounded candidate is `material:material.verify_published_revision`. Existing canonical Material services already support `amendMaterialSpecification` / `publishMaterial` with permission, command id and optimistic version, while `materials.getForActor` and Product Engineering result verifier supply authorised read-back. The recompute adapter itself is read-only and only attests an advanced published Material version after the exact human-review DAG predecessor and brand/identity check. Do not claim verified content correction, automatic BOM/cost mutation, Material ownership transfer or broader B2 coverage. Requires exact-head 3/3 qualification, no unresolved review threads and post-merge main qualification.
+
+
+### 2026-10-11 — Material B2 admitted; Tech Pack canonical cutover and Awaiting Action boundary
+
+PR #267 merged into `main@74f3bf9f279ce6602572dbd10b61543f78d0bf87`, post-merge 3/3 GREEN: Product Commercialization Acceptance #639 / Verify #1797 / Syntha V2 CI #2255. Read-only Material verification joins the previously admitted Measurement verification; neither adapter mutates owning data.
+
+Source audit confirms legacy Tech Pack `issueTechPack` uses text SKU to resolve published BOM/Measurement and pre-production samples. Its `dependencySnapshot` pins their legacy source versions but does **not** prove canonical Product Identity (`styleVersionId/colorwayId/sizeScaleVersionId`) consistency. No Tech Pack recompute adapter may be activated until the canonical cutover and independent read-back are admitted.
+
+Recompute `human_review` should be projected into existing Awaiting Action from authoritative PlanStep + DAG predecessor/ExecutionReceipt state, filtered by the exact executing capability and brand membership. Do not create a second task ledger, infer role assignments or expose blocked steps as actionable. Design and acceptance details: `docs/architecture/tech-pack-canonical-lineage-recompute-awaiting-action.md`. This is a design checkpoint, **not** a claim of implemented Tech Pack cutover/Awaiting Action.

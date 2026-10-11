@@ -4,6 +4,7 @@ import { invariant } from '../core/errors.mjs';
  * Read-only canonical eligibility check. This does not issue, amend or
  * supersede a Tech Pack; authority remains with the issuing service.
  */
+/** @param {{ reader?: any }} [options] */
 export function createTechPackCanonicalPreflightService({ reader } = {}) {
   invariant(reader && typeof reader.forActor === 'function', 'TECH_PACK_PREFLIGHT_READER_REQUIRED', 'Canonical preflight reader is required');
   return Object.freeze({

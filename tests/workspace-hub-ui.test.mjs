@@ -65,6 +65,77 @@ test('connected workspace hub navigates only to installed authorised destination
   assert.deepEqual(events, ['render']);
 });
 
+
+function browserNode(tag, text = '') {
+  let ownText = String(text);
+  const node = {
+    tagName: String(tag).toUpperCase(), children: [], className: '', dataset: {}, hidden: false,
+    attributes: {}, listeners: {}, value: '',
+    append(...children) { this.children.push(...children); },
+    setAttribute(name, value) { this.attributes[name] = String(value); },
+    addEventListener(name, callback) { this.listeners[name] = callback; },
+    querySelectorAll(selector) {
+      const className = selector.replace(/^\\./, '');
+      const output = [];
+      function visit(root) {
+        for (const item of root.children) {
+          if (item.className?.split(' ').includes(className)) output.push(item);
+          if (item.children) visit(item);
+        }
+      }
+      visit(this);
+      return output;
+    },
+    get textContent() { return ownText + this.children.map(x => x.textContent ?? String(x)).join(''); },
+    set textContent(next) { ownText = String(next); },
+  };
+  return node;
+}
+function browserHarness(context) {
+  context.document = { createElement: (tag) => browserNode(tag) };
+  context.icon = (name) => browserNode('i', name);
+  context.state.workspace = {
+    memberships: [{ status: 'active', organisationId: 'b1', role: 'owner', organisationType: 'brand' }],
+    organisations: [{ id: 'b1', type: 'brand' }],
+    orders: [{ id: 'one' }, { id: 'two' }],
+    pageInfo: { truncatedSections: ['orders'] },
+  };
+  context.state.notificationUnreadCount = 4;
+  context.window.SynthaUiCapabilities = { canOpenView: (_workspace, view) => view !== 'orders' };
+  return context.renderOverview();
+}
+function nodeByClass(root, name) {
+  return root.querySelectorAll('.' + name)[0];
+}
+
+test('rendered hub shows live loaded counts, working cards and the existing overview', async () => {
+  const { context, events } = await harness();
+  const root = browserHarness(context);
+  const accessible = root.querySelectorAll('.syntha-hub-card');
+  assert.deepEqual(accessible.map(card => card.dataset.view), ['overview', 'styles', 'boms']);
+  assert.equal(root.querySelectorAll('.syntha-hub-metric-value')[0].textContent, '3');
+  assert.equal(root.querySelectorAll('.syntha-hub-metric-value')[1].textContent, '2+');
+  assert.equal(root.querySelectorAll('.syntha-hub-metric-value')[2].textContent, '4');
+  assert.ok(root.textContent.includes('original-overview'));
+  accessible[1].listeners.click();
+  assert.equal(context.state.view, 'styles');
+  assert.deepEqual(events, ['render']);
+});
+
+test('workspace search filters real cards and displays empty result without routing', async () => {
+  const { context } = await harness();
+  const root = browserHarness(context);
+  const field = nodeByClass(root, 'syntha-hub-search');
+  field.value = 'несуществующий';
+  field.listeners.input();
+  assert.ok(root.querySelectorAll('.syntha-hub-card').every(card => card.hidden));
+  assert.equal(nodeByClass(root, 'syntha-hub-no-matches').hidden, false);
+  field.value = 'Спецификации';
+  field.listeners.input();
+  assert.deepEqual(root.querySelectorAll('.syntha-hub-card').filter(card => !card.hidden).map(card => card.dataset.view), ['boms']);
+  assert.equal(nodeByClass(root, 'syntha-hub-no-matches').hidden, true);
+});
+
 test('workspace hub mounts after Awaiting Action but before final ODS layers, preserving the legacy overview', async () => {
   const [index, code, css, architecture] = await Promise.all([
     source('public/index.html'),

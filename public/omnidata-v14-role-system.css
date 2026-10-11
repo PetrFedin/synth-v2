@@ -1274,17 +1274,17 @@ body.omnidata-v14 .syntha-hub [hidden]{display:none!important}
 
 
 /* Canonical Tech Pack read-only inspector: extend ODS-owned card and status styles. */
-body.omnidata-v14 .tech-pack-canonical-preflight{display:grid;gap:12px;min-width:0}
-body.omnidata-v14 .tech-pack-canonical-heading{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px}
-body.omnidata-v14 .tech-pack-canonical-heading>div{display:grid;gap:4px;flex:1 1 230px;min-width:0}
-body.omnidata-v14 .tech-pack-canonical-heading h3{font-size:13px!important;font-weight:700!important;color:var(--ods-color-text,#222831)!important}
-body.omnidata-v14 .tech-pack-canonical-heading p{font-size:11px!important;line-height:1.5!important}
-body.omnidata-v14 .tech-pack-canonical-heading button{min-height:36px;flex:0 0 auto;max-width:100%;white-space:normal}
-body.omnidata-v14 .tech-pack-canonical-status{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:11px 12px;border:1px solid var(--ods-color-border,#d9dee3);border-radius:6px;background:var(--ods-color-surface-soft,#f7f8f9)}
-body.omnidata-v14 .tech-pack-canonical-status.ready{border-color:#cbded1;background:#f5f9f6;color:var(--ods-color-success,#477052)}
-body.omnidata-v14 .tech-pack-canonical-status.blocked{border-color:#e4d0aa;background:#fdf9f1;color:var(--ods-color-warning,#8c661f)}
-body.omnidata-v14 .tech-pack-canonical-status strong{font-size:12px;font-weight:700}
-body.omnidata-v14 .tech-pack-canonical-status span{font-size:10px;color:var(--ods-color-text-soft,#56606a)}
-body.omnidata-v14 .tech-pack-canonical-blockers{margin:0;padding:0 0 0 18px;display:grid;gap:6px;font-size:11px;line-height:1.5;color:var(--ods-color-text,#222831)}
-body.omnidata-v14 .tech-pack-canonical-disclaimer{padding-top:9px!important;border-top:1px solid var(--ods-color-border,#d9dee3);font-size:11px!important;line-height:1.5!important;color:var(--ods-color-text-soft,#56606a)!important}
-@media(max-width:570px){body.omnidata-v14 .tech-pack-canonical-heading{flex-direction:column;align-items:stretch}body.omnidata-v14 .tech-pack-canonical-heading button{width:100%}}
+body.omnidata-v14 .syntha-canonical-evidence{display:grid;gap:12px;min-width:0}
+body.omnidata-v14 .syntha-canonical-heading{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px}
+body.omnidata-v14 .syntha-canonical-heading>div{display:grid;gap:4px;flex:1 1 230px;min-width:0}
+body.omnidata-v14 .syntha-canonical-heading h3{font-size:13px!important;font-weight:700!important;color:var(--ods-color-text,#222831)!important}
+body.omnidata-v14 .syntha-canonical-heading p{font-size:11px!important;line-height:1.5!important}
+body.omnidata-v14 .syntha-canonical-heading button{min-height:36px;flex:0 0 auto;max-width:100%;white-space:normal}
+body.omnidata-v14 .syntha-canonical-status{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:11px 12px;border:1px solid var(--ods-color-border,#d9dee3);border-radius:6px;background:var(--ods-color-surface-soft,#f7f8f9)}
+body.omnidata-v14 .syntha-canonical-status.ready{border-color:#cbded1;background:#f5f9f6;color:var(--ods-color-success,#477052)}
+body.omnidata-v14 .syntha-canonical-status.blocked{border-color:#e4d0aa;background:#fdf9f1;color:var(--ods-color-warning,#8c661f)}
+body.omnidata-v14 .syntha-canonical-status strong{font-size:12px;font-weight:700}
+body.omnidata-v14 .syntha-canonical-status span{font-size:10px;color:var(--ods-color-text-soft,#56606a)}
+body.omnidata-v14 .syntha-canonical-blockers{margin:0;padding:0 0 0 18px;display:grid;gap:6px;font-size:11px;line-height:1.5;color:var(--ods-color-text,#222831)}
+body.omnidata-v14 .syntha-canonical-disclaimer{padding-top:9px!important;border-top:1px solid var(--ods-color-border,#d9dee3);font-size:11px!important;line-height:1.5!important;color:var(--ods-color-text-soft,#56606a)!important}
+@media(max-width:570px){body.omnidata-v14 .syntha-canonical-heading{flex-direction:column;align-items:stretch}body.omnidata-v14 .syntha-canonical-heading button{width:100%}}

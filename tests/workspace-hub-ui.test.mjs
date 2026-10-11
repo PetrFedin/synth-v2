@@ -56,12 +56,13 @@ test('workspace hub mounts after Awaiting Action but before final ODS layers, pr
   const [index, code, css, architecture] = await Promise.all([
     source('public/index.html'),
     source('public/modules/workspace-hub.js'),
-    source('public/workspace-hub.css'),
+    source('public/omnidata-v14-role-system.css'),
     source('ARCHITECTURE.md'),
   ]);
   assert.ok(index.indexOf('/ui/awaiting-action.js') < index.indexOf('/ui/workspace-hub.js'));
   assert.ok(index.indexOf('/ui/workspace-hub.js') < index.indexOf('/ui/omnidata-v14.js'));
-  assert.ok(index.indexOf('/workspace-hub.css') < index.indexOf('/omnidata-v14-role-system.css'));
+  assert.doesNotMatch(index, /\/workspace-hub\.css/);
+  assert.ok(index.indexOf('/omnidata-v14-role-system.css') > index.indexOf('/omnidata-v14-extensions.css'));
   assert.match(code, /recent\.append\(previousRenderOverview\(\)\)/);
   assert.match(code, /SynthaUiCapabilities\?\.canOpenView/);
   assert.match(code, /\bOD_V7_GROUPS\b/);

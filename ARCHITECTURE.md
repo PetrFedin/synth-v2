@@ -2343,7 +2343,7 @@ Acceptance must cover role-based module filtering, planned vs installed routes, 
 
 **Status: CANDIDATE / NOT ADMITTED** on `main@09b13306d5a1c746e516386db807441f19c6c50f`.
 
-The standalone HTTP application serves browser JavaScript and CSS from an explicit `src/web/static-handler.mjs` whitelist. A referenced script without a corresponding route returns HTTP 404; syntax and UI-contract tests alone can still pass. In particular, the new connected workspace hub `/ui/workspace-hub.js` (PR #271) requires its own explicitly registered handler entry with no-store caching.
+The standalone HTTP application serves browser JavaScript and CSS from an explicit `src/web/static-handler.mjs` whitelist. A referenced script without a corresponding route returns HTTP 404; syntax and UI-contract tests alone can still pass. The audit found **two independently missing real UI resources**: the new connected workspace hub `/ui/workspace-hub.js` (PR #271) and the pre-existing AI Product Engineering screen `/ui/product-engineering.js`. Both require explicit registered no-store handlers; otherwise their script requests return 404 despite successful source-level checks.
 
 `tests/browser-shell-asset-delivery.test.mjs` is a real loopback-HTTP admission test: start the actual standalone static handler, fetch the delivered HTML, request **every linked JS and CSS asset** with the actual querystring, reject non-200/empty/incorrect-content-type results and assert the workspace hub JS is served with `no-store`. This test is independent of PostgreSQL business mutations and prevents the entire family of invisible UI/404 regressions. It is not browser screenshot proof or domain workflow acceptance.
 

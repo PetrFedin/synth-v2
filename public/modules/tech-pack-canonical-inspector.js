@@ -4,6 +4,8 @@
   const results = Object.create(null);
   const errors = Object.create(null);
   let loadingCode = '';
+  // Invalidation also revokes in-flight UI reads (e.g. after a tenant switch).
+  let requestEpoch = 0;
   const blockers = Object.freeze({
     CANONICAL_IDENTITY_MISSING: ['Нет точной версии изделия, цвета или размерной системы.', 'Exact style, colour or size scale identity is missing.'],
     PUBLISHED_CANONICAL_BOM_REQUIRED: ['Не найдена опубликованная каноническая BOM.', 'A published canonical BOM is missing.'],
@@ -28,27 +30,39 @@
     return group;
   }
   function invalidate(code) {
+    // A pending response must not rehydrate data after a reload, revision or tenant switch.
+    // Clear the active request lease so a fresh user check can start immediately.
+    requestEpoch += 1;
+    loadingCode = '';
     if (typeof code === 'string') { delete results[code]; delete errors[code]; }
     else { for (const key of Object.keys(results)) delete results[key]; for (const key of Object.keys(errors)) delete errors[key]; }
   }
   async function check(code) {
     if (loadingCode || typeof code !== 'string' || !code) return;
+    const epoch = ++requestEpoch;
     loadingCode = code;
+    // A past green result must not remain visible while re-verification is pending.
+    delete results[code];
     delete errors[code];
     if (state.view === 'tech-packs') renderApp();
     try {
       const result = await api(`/v2/tech-packs/${encodeURIComponent(code)}/canonical-preflight`);
+      if (epoch !== requestEpoch) return;
       if (!result || result.techPackCode !== code || typeof result.eligible !== 'boolean' ||
-          !Array.isArray(result.blockers) || !result.identity || !result.dependencies) {
+          !Array.isArray(result.blockers) || !result.identity || !result.dependencies ||
+          (result.eligible && result.blockers.length > 0)) {
         throw new Error('TECH_PACK_PREFLIGHT_RESPONSE_INVALID');
       }
       results[code] = Object.freeze({ result, checkedAt: new Date().toISOString() });
     } catch (error) {
+      if (epoch !== requestEpoch) return;
       delete results[code];
       errors[code] = error?.message || text('Не удалось проверить источники.', 'Could not verify source dependencies.');
     } finally {
-      loadingCode = '';
-      if (state.view === 'tech-packs') renderApp();
+      if (epoch === requestEpoch) {
+        loadingCode = '';
+        if (state.view === 'tech-packs') renderApp();
+      }
     }
   }
   function render(pack) {

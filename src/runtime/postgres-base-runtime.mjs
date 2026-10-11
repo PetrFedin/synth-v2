@@ -218,11 +218,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
   const samples = Object.freeze({ ...createSampleService({ sampleStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createSampleQueryService({ reader: createPostgresSampleReader({ pool }), ...(clock ? { clock } : {}) }) });
   const sourcing = Object.freeze({ ...createSourcingService({ sourcingStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createSourcingQueryService({ reader: createPostgresSourcingReader({ pool }), ...(clock ? { clock } : {}) }) });
   const techPackCanonicalPreflight = createTechPackCanonicalPreflightService({ reader: createPostgresTechPackCanonicalPreflightReader({ pool }) });
-  const techPacks = Object.freeze({
-    ...createTechPackService({ techPackStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }),
-    ...createTechPackQueryService({ reader: createPostgresTechPackReader({ pool }) }),
-    canonicalPreflightForActor: techPackCanonicalPreflight.forActor,
-  });
+  const techPacks = Object.freeze({ ...createTechPackService({ techPackStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createTechPackQueryService({ reader: createPostgresTechPackReader({ pool }) }), canonicalPreflightForActor: techPackCanonicalPreflight.forActor });
   const productEngineeringApply = createProductEngineeringProposalApplyService({
     productEngineering,
     measurements,

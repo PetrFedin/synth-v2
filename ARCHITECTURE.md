@@ -2339,6 +2339,17 @@ The hub is an additive `/ui/workspace-hub.js` module mounted after Awaiting Acti
 Acceptance must cover role-based module filtering, planned vs installed routes, duplicate view elimination, navigation, truthful indicators, responsive CSS and existing overview content, plus exact-head 3/3 CI. This repository-level acceptance does not replace physical mobile/tablet/desktop screenshot inspection or intended-live production UAT.
 
 
+## 2026-10-11 — Fail-closed browser asset delivery gate (PR candidate)
+
+**Status: CANDIDATE / NOT ADMITTED** on `main@09b13306d5a1c746e516386db807441f19c6c50f`.
+
+The standalone HTTP application serves browser JavaScript and CSS from an explicit `src/web/static-handler.mjs` whitelist. A referenced script without a corresponding route returns HTTP 404; syntax and UI-contract tests alone can still pass. The audit found **two independently missing real UI resources**: the new connected workspace hub `/ui/workspace-hub.js` (PR #271) and the pre-existing AI Product Engineering screen `/ui/product-engineering.js`. Both require explicit registered no-store handlers; otherwise their script requests return 404 despite successful source-level checks.
+
+`tests/browser-shell-asset-delivery.test.mjs` is a real loopback-HTTP admission test: start the actual standalone static handler, fetch the delivered HTML, request **every linked JS and CSS asset** with the actual querystring, reject non-200/empty/incorrect-content-type results and assert the workspace hub JS is served with `no-store`. This test is independent of PostgreSQL business mutations and prevents the entire family of invisible UI/404 regressions. It is not browser screenshot proof or domain workflow acceptance.
+
+The registry must be extended together with every future script tag. New module deployment is rejected by CI if its HTML link is not delivered. The final Omnidata Design System CSS contract remains unchanged.
+
+
 ## 2026-10-11 — Canonical Tech Pack diagnostics surfaced in the actual workspace
 
 **Status: DRAFT / NOT ADMITTED.** Proposed base `main@09b13306d5a1c746e516386db807441f19c6c50f`; wait for the separate browser-asset delivery hotfix (PR #272) and re-qualify on its new main.
@@ -2355,3 +2366,8 @@ Admission proof must include route/OpenAPI parity, UI event/render negative test
 ### 2026-10-12 — Async admission safety amendment (PR #273)
 
 The browser diagnostic is a revocable, transient read: every check carries a monotonically increasing request epoch. Tech Pack upserts, reload/reset and workspace/organisation reset revoke pending reads, clear the outstanding lease and prevent any older success or failure from restoring previous-tenant or previous-revision evidence. Explicit recheck clears the previous eligible result while a request is running; a contradictory `eligible=true` with nonempty blockers fails closed rather than showing a successful state. Three async regression scenarios cover stale success, stale error and green-with-blockers. This adds no source authority, does not perform issuance, and does not substitute for runtime PostgreSQL and physical browser UAT.
+
+
+### 2026-10-12 — Main reconciliation
+
+This Draft PR now includes the already-merged PR #272 browser shell asset allowlist and real HTTP delivery test alongside the canonical Tech Pack inspector. The merge records both parents to preserve all existing work. This is not production approval: exact merged-head CI, PostgreSQL tenant boundary tests and physical browser UAT remain required before admission.

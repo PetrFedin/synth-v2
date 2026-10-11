@@ -41,9 +41,22 @@ test('connected workspace hub displays only installed, permitted and unique view
   assert.equal(groups.flatMap(g => g.entries).some(x => x.view === 'draft-feature'), false);
 });
 
+test('workspace directory obeys canonical sidebar brand-only visibility', async () => {
+  const { hub, context } = await harness();
+  context.odV7ItemApplies = (item) => item.view !== 'boms';
+  const groups = hub.availableSections(context.OD_V7_GROUPS, {}, () => true);
+  assert.deepEqual(groups.map((group) => [...group.entries].map((entry) => entry.view)), [['overview'], ['styles'], ['orders']]);
+});
+
+test('Tech Packs registers its actual view rather than advertising a planned mock screen', async () => {
+  const sourceText = await source('public/modules/tech-packs.js');
+  assert.match(sourceText, /SynthaOmnidataV7Nav\?\.activate\('Tech packs', 'tech-packs'/);
+});
+
 test('connected workspace hub navigates only to installed authorised destinations', async () => {
   const { hub, context, events } = await harness();
   context.window.SynthaUiCapabilities = { canOpenView: (_workspace, view) => view === 'styles' };
+  assert.equal(hub.navigate('awaiting-action'), false);
   assert.equal(hub.navigate('orders'), false);
   assert.equal(context.state.view, 'overview');
   assert.equal(hub.navigate('draft-feature'), false);

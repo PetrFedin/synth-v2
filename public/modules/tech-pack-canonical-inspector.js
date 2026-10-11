@@ -54,9 +54,9 @@
   function render(pack) {
     const code = pack.techPackCode;
     const record = results[code], error = errors[code], loading = loadingCode === code;
-    const section = element('section', 'tech-pack-card tech-pack-canonical-preflight');
+    const section = element('section', 'tech-pack-card syntha-canonical-evidence');
     section.dataset.odsPart = 'card';
-    const heading = element('div', 'tech-pack-canonical-heading');
+    const heading = element('div', 'syntha-canonical-heading');
     const intro = element('div');
     intro.append(element('h3', '', text('Канонические источники', 'Canonical source verification')),
       element('p', 'muted', text('ProductSku, BOM, измерения и одобренный образец по данным PostgreSQL.', 'ProductSku, BOM, measurements and approved sample from PostgreSQL.')));
@@ -76,12 +76,12 @@
       const source = record.result;
       const stamp = new Date(record.checkedAt);
       const timestamp = Number.isFinite(stamp.getTime()) ? stamp.toLocaleString(typeof I18N !== 'undefined' ? I18N.localeTag() : 'ru-RU') : '';
-      const status = element('div', `tech-pack-canonical-status ${source.eligible ? 'ready' : 'blocked'}`);
+      const status = element('div', `syntha-canonical-status ${source.eligible ? 'ready' : 'blocked'}`);
       status.append(element('strong', '', source.eligible ? text('Источники согласованы', 'Sources are consistent') : text('Требуются исправления', 'Corrections required')),
         element('span', '', `${text('Проверено', 'Checked')}: ${timestamp}`));
       section.append(status);
       if (source.blockers.length) {
-        const list = element('ul', 'tech-pack-canonical-blockers');
+        const list = element('ul', 'syntha-canonical-blockers');
         for (const reason of source.blockers) {
           list.append(element('li', '', blockers[reason] ? text(...blockers[reason]) :
             text(`Проверить: ${reason}`, `Review: ${reason}`)));
@@ -101,7 +101,7 @@
       section.append(element('p', 'muted', loading ? text('Сверяем точные версии источников…', 'Checking exact source versions…') :
         text('Проверка ещё не запускалась.', 'Source verification has not been run yet.')));
     }
-    section.append(element('p', 'tech-pack-canonical-disclaimer', text(
+    section.append(element('p', 'syntha-canonical-disclaimer', text(
       'Это диагностика на момент проверки, не разрешение на выпуск. Команда выпуска должна повторно проверить версии в транзакции.',
       'Point-in-time diagnostic only, not permission to issue. The issuing transaction must revalidate source versions.',
     )));

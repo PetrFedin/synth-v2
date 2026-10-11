@@ -75,7 +75,7 @@ function browserNode(tag, text = '') {
     setAttribute(name, value) { this.attributes[name] = String(value); },
     addEventListener(name, callback) { this.listeners[name] = callback; },
     querySelectorAll(selector) {
-      const className = selector.replace(/^\\./, '');
+      const className = selector.replace(/^\./, '');
       const output = [];
       function visit(root) {
         for (const item of root.children) {

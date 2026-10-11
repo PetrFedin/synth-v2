@@ -2337,3 +2337,16 @@ Visual contract: ODS typography, restrained orange accent, surface/line tokens; 
 The hub is an additive `/ui/workspace-hub.js` module mounted after Awaiting Action and before final ODS polish. Its responsive first-party styles are appended to the existing final `/omnidata-v14-role-system.css`, not loaded as a new stylesheet; the frozen ODS boundary stays intact. The UI retains RU/EN, keyboard navigation, focus visibility and reduced-motion handling. It does not claim that the underlying modules are complete or production proven. The separate canonical Tech Pack preflight is still a backend read-only primitive until a separate authenticated API/Tech Pack inspector slice is admitted.
 
 Acceptance must cover role-based module filtering, planned vs installed routes, duplicate view elimination, navigation, truthful indicators, responsive CSS and existing overview content, plus exact-head 3/3 CI. This repository-level acceptance does not replace physical mobile/tablet/desktop screenshot inspection or intended-live production UAT.
+
+
+## 2026-10-11 — Canonical Tech Pack diagnostics surfaced in the actual workspace
+
+**Status: DRAFT / NOT ADMITTED.** Proposed base `main@09b13306d5a1c746e516386db807441f19c6c50f`; wait for the separate browser-asset delivery hotfix (PR #272) and re-qualify on its new main.
+
+The already admitted read-only canonical Tech Pack preflight is now exposed through the existing `techPacks` runtime service as `canonicalPreflightForActor`, backed by `createPostgresTechPackCanonicalPreflightReader` and its `REPEATABLE READ READ ONLY` exact ProductSku/BOM/Measurement/PPS snapshot. HTTP adds the authenticated `GET /v2/tech-packs/{techPackCode}/canonical-preflight` endpoint, no body, no mutation, documented in the canonical OpenAPI schema `TechPackCanonicalPreflight`. Missing or unauthorised packs both fail closed.
+
+The existing Tech Pack master-detail workspace mounts an optional `SynthaTechPackCanonicalInspector`: the reader starts **only on deliberate user click**, displays time-anchored `eligible / blockers`, exact source identifiers/versions and human-readable RU/EN blocker reasons. A read failure never becomes green. User-facing feedback explicitly states that this is a point-in-time diagnostic, **not a permit to issue**. Saving or reloading a Tech Pack invalidates the transient UI diagnostic. Existing historical documents and issue/revision commands are unchanged.
+
+No schema migration, Product Master write, automatic issue, downstream Recompute writer, task ledger or external evidence processing is added. The legacy `issueTechPack` command remains SKU-based until a **separate transactional canonical cutover** revalidates and freezes exact sources during the write. The diagnostic cannot bypass this gate.
+
+Admission proof must include route/OpenAPI parity, UI event/render negative tests, the PostgreSQL compiled-query check on the actual migrated schema, original 3/3 CI, post-merge 3/3 and physical browser screenshots before claiming production visual acceptance. The PostgreSQL SQL compile test is intentionally **not** presented as a positive end-to-end canonical issuance test.

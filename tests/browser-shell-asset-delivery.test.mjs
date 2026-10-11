@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
-import path from 'node:path';
 import { createStandaloneHandler } from '../src/web/static-handler.mjs';
 
 // An asset reference in index.html does not prove that the actual HTTP server

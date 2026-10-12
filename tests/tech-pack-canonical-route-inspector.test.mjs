@@ -24,13 +24,13 @@ function fakeElement(tag) {
     set textContent(value) { label = String(value); },
   };
 }
-async function inspectorHarness(handler) {
+async function inspectorHarness(handler, locale = 'ru') {
   const source = await read('public/modules/tech-pack-canonical-inspector.js');
   const requests = [];
   const context = vm.createContext({
-    window: {}, document: { createElement: fakeElement }, localText: ru => ru,
+    window: {}, document: { createElement: fakeElement }, localText: (ru, en) => locale === 'en' ? en : ru,
     state: { view: 'tech-packs' }, renderApp: () => {},
-    I18N: { localeTag: () => 'ru-RU' },
+    I18N: { localeTag: () => locale === 'en' ? 'en-GB' : 'ru-RU' },
     api: async path => { requests.push(path); return handler(path); },
   });
   new vm.Script(source, { filename:'tech-pack-canonical-inspector.js' }).runInContext(context);
@@ -153,4 +153,67 @@ test('rechecking clears previously green state and rejects contradictory green-w
   const result = h.inspector.render(payload).textContent;
   assert.match(result, /TECH_PACK_PREFLIGHT_RESPONSE_INVALID/);
   assert.doesNotMatch(result, /Источники согласованы/);
+});
+
+test('incomplete, malformed or contradictory evidence cannot acquire a green diagnostic', async t => {
+  const variants = [
+    ['empty identity', { identity: {} }],
+    ['array identity', { identity: [] }],
+    ['null canonical identity', { identity: { ...payload.identity, productSkuId: null } }],
+    ['blank canonical identity', { identity: { ...payload.identity, styleVersionId: ' ' } }],
+    ['empty dependencies', { dependencies: {} }],
+    ['missing BOM', { dependencies: { ...payload.dependencies, bom: null } }],
+    ['missing sample version', { dependencies: { ...payload.dependencies, sample: { code: 'PPS-1' } } }],
+    ['null published version', { dependencies: { ...payload.dependencies, bom: { id: 'BOM-1', version: null } } }],
+    ['zero published version', { dependencies: { ...payload.dependencies, measurement: { id: 'CHART-1', version: 0 } } }],
+    ['fractional published version', { dependencies: { ...payload.dependencies, bom: { id: 'BOM-1', version: 1.5 } } }],
+    ['invalid sample code', { dependencies: { ...payload.dependencies, sample: { code: 'bad code', version: 1 } } }],
+    ['blank brand', { brandId: ' ' }],
+    ['wrong brand', { brandId: 'brand-2' }],
+    ['blocked without explanation', { eligible: false }],
+    ['non-text blocker', { eligible: false, blockers: [null] }],
+    ['duplicate blockers', { eligible: false, blockers: ['MISSING', 'MISSING'] }],
+    ['extra response field', { unexpected: true }],
+  ];
+  for (const [label, override] of variants) {
+    await t.test(label, async () => {
+      const h = await inspectorHarness(async () => ({ ...payload, ...override }));
+      await h.inspector.check('TP-001', 'brand-1');
+      const visible = h.inspector.render(payload).textContent;
+      assert.match(visible, /TECH_PACK_PREFLIGHT_RESPONSE_INVALID/);
+      assert.doesNotMatch(visible, /Источники согласованы/);
+    });
+  }
+});
+
+test('valid missing-source diagnostic remains visible and cached evidence stays brand-scoped', async () => {
+  const h = await inspectorHarness(async () => ({ ...payload, eligible: false,
+    blockers: ['CANONICAL_IDENTITY_MISSING'],
+    identity: Object.fromEntries(Object.keys(payload.identity).map(key => [key, null])),
+    dependencies: { bom: null, measurement: null, sample: null },
+  }));
+  await h.inspector.check('TP-001', 'brand-1');
+  assert.match(h.inspector.render(payload).textContent, /Требуются исправления/);
+  assert.doesNotMatch(h.inspector.render(payload).textContent, /RESPONSE_INVALID/);
+  assert.match(h.inspector.render({ ...payload, brandId: 'brand-2' }).textContent, /Проверка ещё не запускалась/);
+  h.context.api = async () => payload;
+  await h.inspector.check('TP-001', 'brand-1');
+  assert.doesNotMatch(h.inspector.render({ ...payload, brandId: 'brand-2' }).textContent, /Источники согласованы/);
+});
+
+test('the actual RU/EN button binds source checks to the displayed brand', async t => {
+  for (const locale of ['ru', 'en']) {
+    await t.test(locale, async () => {
+      const h = await inspectorHarness(async () => ({ ...payload, brandId: 'brand-2' }), locale);
+      const visible = h.inspector.render(payload);
+      const button = visible.children[0].children[1];
+      assert.equal(button.textContent, locale === 'ru' ? 'Проверить источники' : 'Check sources');
+      button.listeners.click();
+      await new Promise(resolve => setImmediate(resolve));
+      assert.deepEqual(h.requests, ['/v2/tech-packs/TP-001/canonical-preflight']);
+      const rejected = h.inspector.render(payload).textContent;
+      assert.match(rejected, /TECH_PACK_PREFLIGHT_RESPONSE_INVALID/);
+      assert.doesNotMatch(rejected, /Источники согласованы|Sources are consistent/);
+    });
+  }
 });

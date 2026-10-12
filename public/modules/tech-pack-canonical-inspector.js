@@ -37,7 +37,31 @@
     if (typeof code === 'string') { delete results[code]; delete errors[code]; }
     else { for (const key of Object.keys(results)) delete results[key]; for (const key of Object.keys(errors)) delete errors[key]; }
   }
-  async function check(code) {
+  const identityKeys = ['productSkuId', 'styleVersionId', 'colorwayId', 'sizeScaleVersionId'];
+  const dependencyKeys = ['bom', 'measurement', 'sample'];
+  const identifier = value => typeof value === 'string' && value.trim().length > 0 && value.length <= 160;
+  const version = value => Number.isInteger(value) && value >= 1 && value <= 2147483647;
+  const objectWithKeys = (value, keys) => value !== null && typeof value === 'object' && !Array.isArray(value) &&
+    Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key));
+  function validResponse(result, code, brandId) {
+    if (!objectWithKeys(result, ['techPackCode', 'brandId', 'eligible', 'blockers', 'identity', 'dependencies']) ||
+        result.techPackCode !== code || !identifier(result.brandId) ||
+        (brandId !== undefined && result.brandId !== brandId) || typeof result.eligible !== 'boolean' ||
+        !Array.isArray(result.blockers) || !result.blockers.every(reason => typeof reason === 'string' && reason.trim()) ||
+        new Set(result.blockers).size !== result.blockers.length ||
+        result.eligible !== (result.blockers.length === 0) ||
+        !objectWithKeys(result.identity, identityKeys) || !objectWithKeys(result.dependencies, dependencyKeys)) return false;
+    if (!identityKeys.every(key => result.identity[key] === null ? !result.eligible : identifier(result.identity[key]))) return false;
+    return dependencyKeys.every(key => {
+      const source = result.dependencies[key];
+      if (source === null) return !result.eligible;
+      const idKey = key === 'sample' ? 'code' : 'id';
+      return objectWithKeys(source, [idKey, 'version']) && identifier(source[idKey]) &&
+        (key !== 'sample' || /^[A-Z0-9][A-Z0-9._/-]{2,63}$/.test(source.code)) &&
+        (source.version === null ? !result.eligible : version(source.version));
+    });
+  }
+  async function check(code, brandId) {
     if (loadingCode || typeof code !== 'string' || !code) return;
     const epoch = ++requestEpoch;
     loadingCode = code;
@@ -48,9 +72,7 @@
     try {
       const result = await api(`/v2/tech-packs/${encodeURIComponent(code)}/canonical-preflight`);
       if (epoch !== requestEpoch) return;
-      if (!result || result.techPackCode !== code || typeof result.eligible !== 'boolean' ||
-          !Array.isArray(result.blockers) || !result.identity || !result.dependencies ||
-          (result.eligible && result.blockers.length > 0)) {
+      if (!validResponse(result, code, brandId)) {
         throw new Error('TECH_PACK_PREFLIGHT_RESPONSE_INVALID');
       }
       results[code] = Object.freeze({ result, checkedAt: new Date().toISOString() });
@@ -67,7 +89,9 @@
   }
   function render(pack) {
     const code = pack.techPackCode;
-    const record = results[code], error = errors[code], loading = loadingCode === code;
+    const stored = results[code];
+    const record = stored && stored.result.brandId === pack.brandId ? stored : undefined;
+    const error = errors[code], loading = loadingCode === code;
     const section = element('section', 'tech-pack-card syntha-canonical-evidence');
     section.dataset.odsPart = 'card';
     const heading = element('div', 'syntha-canonical-heading');
@@ -78,7 +102,7 @@
       record ? text('Проверить снова', 'Recheck sources') : text('Проверить источники', 'Check sources'));
     button.type = 'button';
     button.disabled = Boolean(loadingCode);
-    button.addEventListener('click', () => { void check(code); });
+    button.addEventListener('click', () => { void check(code, pack.brandId); });
     heading.append(intro, button);
     section.append(heading);
     if (error) {

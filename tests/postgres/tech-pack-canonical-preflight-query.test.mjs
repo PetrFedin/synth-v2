@@ -36,7 +36,7 @@ test('real PostgreSQL Tech Pack preflight denies another active brand owner and 
   const outsiderBrandId = id('other-brand');
   const ownerId = id('owner');
   const outsiderId = id('other-owner');
-  const techPackCode = 'TP/PREF/' + tag;
+  const techPackCode = 'TP-PREF-' + tag;
   const pool = new pg.Pool({ connectionString, max: 4 });
   try {
     await migratePostgres({ pool, migrationsDir });
@@ -117,6 +117,41 @@ test('real PostgreSQL Tech Pack preflight denies another active brand owner and 
       runtime.techPacks.canonicalPreflightForActor(outsiderId, techPackCode),
       error => error?.code === 'TECH_PACK_NOT_FOUND',
     );
+
+    // The same security guarantees must survive real bearer authentication,
+    // HTTP path matching, route wiring and JSON response serialization.
+    const path = 'http://127.0.0.1/v2/tech-packs/' +
+      encodeURIComponent(techPackCode) + '/canonical-preflight';
+    const open = await runtime.fetchHandler(new Request(path));
+    assert.equal(open.status, 401, 'unauthenticated reads must be rejected');
+    const ownerToken = (await runtime.auth.login({
+      email: 'tp-pref-' + tag.toLowerCase() + '@acceptance.invalid',
+      password: 'OnlyForIsolatedTest-' + tag,
+      clientAddress: '127.0.0.1',
+    })).accessToken;
+    const outsiderToken = (await runtime.auth.login({
+      email: 'tp-pref-other-' + tag.toLowerCase() + '@acceptance.invalid',
+      password: 'OnlyForIsolatedTest-' + tag,
+      clientAddress: '127.0.0.1',
+    })).accessToken;
+    const requestAs = (token, url) => runtime.fetchHandler(new Request(url, {
+      headers: { authorization: 'Bearer ' + token },
+    }));
+    const ownHttp = await requestAs(ownerToken, path);
+    assert.equal(ownHttp.status, 200, 'own authenticated read must succeed');
+    assert.equal(ownHttp.headers.get('cache-control'), 'no-store');
+    const ownPayload = (await ownHttp.json()).data;
+    assert.equal(ownPayload.techPackCode, techPackCode);
+    assert.equal(ownPayload.brandId, brandId);
+    assert.equal(ownPayload.eligible, false);
+    assert.ok(ownPayload.blockers.includes('CANONICAL_IDENTITY_MISSING'));
+    const forbiddenHttp = await requestAs(outsiderToken, path);
+    assert.equal(forbiddenHttp.status, 404, 'foreign pack existence must be concealed');
+    const unknownHttp = await requestAs(ownerToken,
+      'http://127.0.0.1/v2/tech-packs/TP-UNKNOWN-' + tag + '/canonical-preflight');
+    assert.equal(unknownHttp.status, 404);
+    assert.deepEqual((await forbiddenHttp.json()).error,
+      (await unknownHttp.json()).error, 'foreign and missing errors must be identical');
   } finally {
     await pool.end();
   }

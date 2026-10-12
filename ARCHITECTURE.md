@@ -2348,3 +2348,34 @@ The standalone HTTP application serves browser JavaScript and CSS from an explic
 `tests/browser-shell-asset-delivery.test.mjs` is a real loopback-HTTP admission test: start the actual standalone static handler, fetch the delivered HTML, request **every linked JS and CSS asset** with the actual querystring, reject non-200/empty/incorrect-content-type results and assert the workspace hub JS is served with `no-store`. This test is independent of PostgreSQL business mutations and prevents the entire family of invisible UI/404 regressions. It is not browser screenshot proof or domain workflow acceptance.
 
 The registry must be extended together with every future script tag. New module deployment is rejected by CI if its HTML link is not delivered. The final Omnidata Design System CSS contract remains unchanged.
+
+
+## 2026-10-11 — Canonical Tech Pack diagnostics surfaced in the actual workspace
+
+**Status: DRAFT / NOT ADMITTED.** Proposed base `main@09b13306d5a1c746e516386db807441f19c6c50f`; wait for the separate browser-asset delivery hotfix (PR #272) and re-qualify on its new main.
+
+The already admitted read-only canonical Tech Pack preflight is now exposed through the existing `techPacks` runtime service as `canonicalPreflightForActor`, backed by `createPostgresTechPackCanonicalPreflightReader` and its `REPEATABLE READ READ ONLY` exact ProductSku/BOM/Measurement/PPS snapshot. HTTP adds the authenticated `GET /v2/tech-packs/{techPackCode}/canonical-preflight` endpoint, no body, no mutation, documented in the canonical OpenAPI schema `TechPackCanonicalPreflight`. Missing or unauthorised packs both fail closed.
+
+The existing Tech Pack master-detail workspace mounts an optional `SynthaTechPackCanonicalInspector`: the reader starts **only on deliberate user click**, displays time-anchored `eligible / blockers`, exact source identifiers/versions and human-readable RU/EN blocker reasons. A read failure never becomes green. User-facing feedback explicitly states that this is a point-in-time diagnostic, **not a permit to issue**. Saving or reloading a Tech Pack invalidates the transient UI diagnostic. Existing historical documents and issue/revision commands are unchanged.
+
+No schema migration, Product Master write, automatic issue, downstream Recompute writer, task ledger or external evidence processing is added. The legacy `issueTechPack` command remains SKU-based until a **separate transactional canonical cutover** revalidates and freezes exact sources during the write. The diagnostic cannot bypass this gate.
+
+Admission proof must include route/OpenAPI parity, UI event/render negative tests, the PostgreSQL compiled-query check on the actual migrated schema, original 3/3 CI, post-merge 3/3 and physical browser screenshots before claiming production visual acceptance. The PostgreSQL SQL compile test is intentionally **not** presented as a positive end-to-end canonical issuance test.
+
+
+### 2026-10-12 — Async admission safety amendment (PR #273)
+
+The browser diagnostic is a revocable, transient read: every check carries a monotonically increasing request epoch. Tech Pack upserts, reload/reset and workspace/organisation reset revoke pending reads, clear the outstanding lease and prevent any older success or failure from restoring previous-tenant or previous-revision evidence. Explicit recheck clears the previous eligible result while a request is running; a contradictory `eligible=true` with nonempty blockers fails closed rather than showing a successful state. Three async regression scenarios cover stale success, stale error and green-with-blockers. This adds no source authority, does not perform issuance, and does not substitute for runtime PostgreSQL and physical browser UAT.
+
+
+### 2026-10-12 — Main reconciliation
+
+This Draft PR now includes the already-merged PR #272 browser shell asset allowlist and real HTTP delivery test alongside the canonical Tech Pack inspector. The merge records both parents to preserve all existing work. This is not production approval: exact merged-head CI, PostgreSQL tenant boundary tests and physical browser UAT remain required before admission.
+
+### 2026-10-13 — Tech Pack diagnostic response admission
+
+**Status: IN_CODE / NOT LIVE_VERIFIED.** The read-only inspector admits the closed `TechPackCanonicalPreflight` response shape before rendering evidence. It requires the requested code, a nonempty brand identifier, complete identity/dependency keys, unique nonempty blocker strings and consistent eligibility. A green response additionally requires every canonical identity and BOM/Measurement/PPS identifier with a positive bounded integer version; missing sources remain valid only in an explicitly blocked diagnostic. Arrays, omitted fields, unexpected fields and malformed source versions fail closed with `TECH_PACK_PREFLIGHT_RESPONSE_INVALID` rather than displaying green.
+
+The existing RU/EN Check sources button supplies the displayed Tech Pack's `brandId`; a response from another brand is rejected. Cached evidence is also rendered only for the matching displayed brand. Existing async request-epoch invalidation, loading/error states, ODS card, responsive behavior, API route and read capability remain unchanged. This adds neither issuing permission nor a new writer, SQL migration or provider call. `tests/tech-pack-canonical-route-inspector.test.mjs` covers malformed/contradictory responses, wrong-brand admission, valid blocked missing sources and cross-brand cached-evidence suppression. Full verification, exact-head CI and runtime PostgreSQL/browser acceptance remain separate required gates.
+
+Local candidate evidence: Node 24.19.0 `npm run verify` exited 0 (2,471 passed, 77 PostgreSQL-dependent tests skipped, 2,548 total); the focused inspector suite passed all 29 tests including actual RU/EN button interaction. The prior PR head was also executed in a VM and reproduced the empty-identity/empty-dependency green diagnostic. This local result is not the supported Node 22/PostgreSQL 17 release gate. No local PostgreSQL target or live runtime acceptance is claimed; the Draft remains unmerged pending exact-head CI and remaining admission evidence.

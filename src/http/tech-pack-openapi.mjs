@@ -33,6 +33,42 @@ function schemas() {
       id: { type: 'string', minLength: 1, maxLength: 160 }, techPackCode: { type: 'string', pattern: CODE }, sku: { type: 'string', pattern: SKU }, brandId: { type: 'string', minLength: 1, maxLength: 160 }, skuVersion: version(), revision: { type: 'integer', minimum: 1, maximum: 999 }, sourceTechPackCode: { oneOf: [{ type: 'string', pattern: CODE }, { type: 'null' }] }, status: { type: 'string', enum: STATUSES }, version: version(), ...editable,
       dependencySnapshot: { oneOf: [{ $ref: '#/components/schemas/TechPackDependencySnapshot' }, { type: 'null' }] }, issuedAt: dateOrNull(), issuedBy: nullable(160), acknowledgedAt: dateOrNull(), acknowledgement: { oneOf: [{ $ref: '#/components/schemas/TechPackAcknowledgement' }, { type: 'null' }] }, withdrawnAt: dateOrNull(), withdrawalReason: nullable(500), createdAt: { type: 'string', format: 'date-time' }, updatedAt: { type: 'string', format: 'date-time' },
     } },
+    TechPackCanonicalPreflight: {
+      type: 'object', additionalProperties: false,
+      required: ['techPackCode','brandId','eligible','blockers','identity','dependencies'],
+      properties: {
+        techPackCode: { type: 'string', pattern: CODE },
+        brandId: { type: 'string', minLength: 1, maxLength: 160 },
+        eligible: { type: 'boolean' },
+        blockers: { type: 'array', uniqueItems: true, items: { type: 'string', minLength: 1 } },
+        identity: {
+          type: 'object', additionalProperties: false,
+          required: ['productSkuId','styleVersionId','colorwayId','sizeScaleVersionId'],
+          properties: Object.fromEntries(['productSkuId','styleVersionId','colorwayId','sizeScaleVersionId'].map(key => [key, nullable(160)])),
+        },
+        dependencies: {
+          type: 'object', additionalProperties: false,
+          required: ['bom','measurement','sample'],
+          properties: {
+            bom: { oneOf: [
+              { type: 'object', additionalProperties: false, required: ['id','version'],
+                properties: { id: { type: 'string', minLength: 1, maxLength: 160 }, version: { oneOf: [version(), { type: 'null' }] } } },
+              { type: 'null' },
+            ] },
+            measurement: { oneOf: [
+              { type: 'object', additionalProperties: false, required: ['id','version'],
+                properties: { id: { type: 'string', minLength: 1, maxLength: 160 }, version: { oneOf: [version(), { type: 'null' }] } } },
+              { type: 'null' },
+            ] },
+            sample: { oneOf: [
+              { type: 'object', additionalProperties: false, required: ['code','version'],
+                properties: { code: { type: 'string', pattern: CODE }, version: { oneOf: [version(), { type: 'null' }] } } },
+              { type: 'null' },
+            ] },
+          },
+        },
+      },
+    },
     TechPackPage: { type: 'object', additionalProperties: false, required: ['items','nextCursor'], properties: { items: { type: 'array', maxItems: 200, items: { $ref: '#/components/schemas/TechPack' } }, nextCursor: { oneOf: [{ type: 'string', minLength: 1, maxLength: 2048 }, { type: 'null' }] } } },
   };
 }
@@ -47,6 +83,13 @@ function paths() {
       post: { operationId: 'createTechPack', security: [{ bearerAuth: [] }], parameters: [idempotency], requestBody: body('#/components/schemas/TechPackCreate'), responses: mutationResponses('Created tech pack') },
     },
     '/tech-packs/{techPackCode}': { get: { operationId: 'getTechPack', security: [{ bearerAuth: [] }], parameters: [codeParameter], responses: { 200: dataResponse('Tech pack', '#/components/schemas/TechPack'), 400: errorResponse, 401: errorResponse, 403: errorResponse, 404: errorResponse } }, patch: mutation('updateTechPack', '#/components/schemas/TechPackUpdate', 'Updated tech pack') },
+    '/tech-packs/{techPackCode}/canonical-preflight': { get: {
+      operationId: 'getTechPackCanonicalPreflight',
+      description: 'Read-only source identity and revision diagnostic; never authorises issuing or revising a Tech Pack.',
+      security: [{ bearerAuth: [] }], parameters: [codeParameter],
+      responses: { 200: dataResponse('Canonical source diagnostic', '#/components/schemas/TechPackCanonicalPreflight'),
+        400: errorResponse, 401: errorResponse, 403: errorResponse, 404: errorResponse },
+    } },
     '/tech-packs/{techPackCode}/issue': { post: mutation('issueTechPack', '#/components/schemas/TechPackVersionExpectation', 'Issued tech pack') },
     '/tech-packs/{techPackCode}/acknowledge': { post: mutation('acknowledgeTechPack', '#/components/schemas/TechPackAcknowledgementInput', 'Acknowledged tech pack') },
     '/tech-packs/{techPackCode}/revisions': { post: mutation('createTechPackRevision', '#/components/schemas/TechPackRevisionInput', 'Created tech pack revision') },

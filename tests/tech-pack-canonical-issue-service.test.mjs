@@ -132,17 +132,17 @@ test('source mismatches fail before any document, outbox or command is committed
 
 test('a revoked member and an outsider cannot issue or replay another organisation document',async()=>{
   const h=harness({role:'revoked'});
-  await assert.rejects(issue(h),{code:'ACTIVE_MEMBERSHIP_REQUIRED'});
+  await assert.rejects(issue(h),{code:'TECH_PACK_NOT_FOUND'});
   assert.equal(h.state.pack.status,'draft');
   assert.equal(h.state.events.length,0);
   const unrelated=harness();
   await assert.rejects(unrelated.service.issueCanonicalTechPack(
     'outsider-issue','outsider-user','TP/BRAND/0001',{expectedVersion:1}),
-    {code:'ACTIVE_MEMBERSHIP_REQUIRED'});
+    {code:'TECH_PACK_NOT_FOUND'});
   const original=harness();
   await issue(original);
   original.state.role='revoked';
-  await assert.rejects(issue(original),{code:'ACTIVE_MEMBERSHIP_REQUIRED'});
+  await assert.rejects(issue(original),{code:'TECH_PACK_NOT_FOUND'});
   assert.equal(original.state.events.length,1);
 });
 

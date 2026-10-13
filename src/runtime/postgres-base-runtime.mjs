@@ -37,6 +37,7 @@ import { createSourcingService } from '../application/sourcing-service.mjs';
 import { createSourcingQueryService } from '../application/sourcing-query-service.mjs';
 import { createTechPackService } from '../application/tech-pack-service.mjs';
 import { createTechPackQueryService } from '../application/tech-pack-query-service.mjs';
+import { createTechPackCanonicalPreflightService } from '../application/tech-pack-canonical-preflight-service.mjs';
 import { createMaintenanceService } from '../application/maintenance-service.mjs';
 import { withNotificationPageMetadata } from '../application/notification-page-service.mjs';
 import { createOutboxPublisherService } from '../application/outbox-publisher-service.mjs';
@@ -77,6 +78,7 @@ import { createPostgresSourcingStore } from '../infrastructure/postgres-sourcing
 import { createPostgresSourcingReader } from '../infrastructure/postgres-sourcing-reader.mjs';
 import { createPostgresTechPackStore } from '../infrastructure/postgres-tech-pack-store.mjs';
 import { createPostgresTechPackReader } from '../infrastructure/postgres-tech-pack-reader.mjs';
+import { createPostgresTechPackCanonicalPreflightReader } from '../infrastructure/postgres-tech-pack-canonical-preflight-reader.mjs';
 import { createPostgresLibraryReader } from '../infrastructure/postgres-library-reader.mjs';
 import { createPostgresHistoryReader } from '../infrastructure/postgres-history-reader.mjs';
 import { createHistoryQueryService } from '../application/history-query-service.mjs';
@@ -215,7 +217,8 @@ export function createPostgresWholesaleRuntime(options = {}) {
   const measurements = Object.freeze({ ...createMeasurementService({ measurementStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createMeasurementQueryService({ reader: createPostgresMeasurementReader({ pool }) }) });
   const samples = Object.freeze({ ...createSampleService({ sampleStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createSampleQueryService({ reader: createPostgresSampleReader({ pool }), ...(clock ? { clock } : {}) }) });
   const sourcing = Object.freeze({ ...createSourcingService({ sourcingStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createSourcingQueryService({ reader: createPostgresSourcingReader({ pool }), ...(clock ? { clock } : {}) }) });
-  const techPacks = Object.freeze({ ...createTechPackService({ techPackStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createTechPackQueryService({ reader: createPostgresTechPackReader({ pool }) }) });
+  const techPackCanonicalPreflight = createTechPackCanonicalPreflightService({ reader: createPostgresTechPackCanonicalPreflightReader({ pool }) });
+  const techPacks = Object.freeze({ ...createTechPackService({ techPackStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createTechPackQueryService({ reader: createPostgresTechPackReader({ pool }) }), canonicalPreflightForActor: techPackCanonicalPreflight.forActor });
   const productEngineeringApply = createProductEngineeringProposalApplyService({
     productEngineering,
     measurements,

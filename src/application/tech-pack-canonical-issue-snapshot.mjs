@@ -4,6 +4,7 @@ import { canonicalJson } from '../core/fingerprints.mjs';
 
 // This validator consumes rows already locked by the *issuing* transaction.
 // It is deliberately independent from the point-in-time browser preflight.
+/** @param {{techPack?: Record<string, any>, catalogSku?: Record<string, any>, sources?: Record<string, any>}} [input] */
 export function buildCanonicalTechPackIssueSnapshot({ techPack, catalogSku, sources } = {}) {
   const pack = techPack;
   invariant(pack?.status === 'draft', 'TECH_PACK_NOT_DRAFT',

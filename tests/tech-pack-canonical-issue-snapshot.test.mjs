@@ -66,3 +66,15 @@ test('missing, legacy-only, cross-brand or mismatched identity fails closed', ()
     assert.throws(()=>verify(x),{code});
   }
 });
+
+test('canonical evidence cannot be silently inferred from a text SKU or the wrong chart version', () => {
+  const absent=fixture();
+  absent.sources.productSkuId=null;
+  assert.throws(()=>verify(absent),{code:'TECH_PACK_CANONICAL_PRODUCT_SKU_REQUIRED'});
+  const wrong=fixture();
+  wrong.sources.chart.sizeScaleVersionId='ANOTHER-SCALE';
+  assert.throws(()=>verify(wrong),{code:'TECH_PACK_CANONICAL_MEASUREMENT_REQUIRED'});
+  const wrongPps=fixture();
+  wrongPps.sources.sample.supplierCode='ANOTHER-FACTORY';
+  assert.throws(()=>verify(wrongPps),{code:'TECH_PACK_CANONICAL_PPS_REQUIRED'});
+});

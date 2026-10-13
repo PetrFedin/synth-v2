@@ -10,14 +10,16 @@ import { buildCanonicalTechPackIssueSnapshot } from './tech-pack-canonical-issue
  * The active transaction locks pack, membership, catalog and exact canonical
  * sources. No data from the read-only inspector can authorise a write.
  *
- * @param {{techPackStore: any, clock?: () => string, nextId?: (prefix: string) => string}} options
+ * @param {{techPackStore: any, clock?: () => string, nextId: (prefix: string) => string}} options
  */
 export function createCanonicalTechPackIssueService({
-  techPackStore, clock = () => new Date().toISOString(), nextId = defaultId,
+  techPackStore, clock = () => new Date().toISOString(), nextId,
 }) {
   invariant(typeof techPackStore?.canonicalTransaction === 'function',
     'TECH_PACK_CANONICAL_TRANSACTION_REQUIRED',
     'An isolated serializable canonical Tech Pack transaction is required');
+  invariant(typeof nextId === 'function', 'TECH_PACK_CANONICAL_EVENT_IDS_REQUIRED',
+    'A durable collision-resistant event ID provider is required');
 
   return Object.freeze({
     async issueCanonicalTechPack(commandId, actorId, code, input) {
@@ -43,8 +45,12 @@ export function createCanonicalTechPackIssueService({
         // Context and current access rights are checked on *every* replay, too.
         const pack = requireEntity(await tx.getTechPackByCode(code),
           'TECH_PACK_NOT_FOUND', { techPackCode: code });
-        assertCapability(await tx.getMembership(pack.brandId, actorId),
-          CAPABILITIES.TECH_PACK_MANAGE);
+        const membership = await tx.getMembership(pack.brandId, actorId);
+        // Non-members and revoked accounts must not learn if a foreign Pack
+        // exists. Active members without the capability receive CAPABILITY_DENIED.
+        invariant(membership?.status === 'active',
+          'TECH_PACK_NOT_FOUND', 'Tech Pack not found or not accessible');
+        assertCapability(membership, CAPABILITIES.TECH_PACK_MANAGE);
         if (previous) return previous.result;
 
         invariant(pack.version === input.expectedVersion,
@@ -99,5 +105,3 @@ async function emit(tx, nextId, at, commandId, actorId, type, pack) {
     metadata: { commandId, actorId },
   }));
 }
-let idSequence = 0;
-function defaultId(prefix) { return prefix + '_canonical_' + (++idSequence); }

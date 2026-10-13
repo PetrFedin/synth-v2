@@ -35,6 +35,7 @@ function harness({ pack = initialPack(), sources = sourceFixture(), role = 'prod
   const state = {
     pack, catalog, sources, role, commands:{}, events:[], active:null, timeline:[],
   };
+  let ledgerReads = 0;
   const txStore = {
     async canonicalTransaction(work) {
       const staged = {
@@ -42,7 +43,7 @@ function harness({ pack = initialPack(), sources = sourceFixture(), role = 'prod
         timeline:[...state.timeline],
       };
       const tx = {
-        getCommand:async id => staged.commands[id],
+        getCommand:async id => { ledgerReads += 1; return staged.commands[id]; },
         getTechPackByCode:async code => code === staged.pack.techPackCode ? staged.pack : null,
         getMembership:async (brand, actor) => brand === staged.pack.brandId && actor === 'actor-1'
           ? {organisationId:brand,userId:actor,status:staged.role === 'revoked'?'inactive':'active',
@@ -78,7 +79,7 @@ function harness({ pack = initialPack(), sources = sourceFixture(), role = 'prod
   const service=createCanonicalTechPackIssueService({
     techPackStore:txStore,clock:()=>NOW,nextId: prefix => prefix+'-'+(++serial),
   });
-  return {state,service};
+  return {state,service,ledgerReads:()=>ledgerReads};
 }
 function issue(h,command='issue-01',version=1){
   return h.service.issueCanonicalTechPack(command,'actor-1','TP/BRAND/0001',{expectedVersion:version});
@@ -135,10 +136,12 @@ test('a revoked member and an outsider cannot issue or replay another organisati
   await assert.rejects(issue(h),{code:'TECH_PACK_NOT_FOUND'});
   assert.equal(h.state.pack.status,'draft');
   assert.equal(h.state.events.length,0);
+  assert.equal(h.ledgerReads(),0,'revoked actor must not query global commands');
   const unrelated=harness();
   await assert.rejects(unrelated.service.issueCanonicalTechPack(
     'outsider-issue','outsider-user','TP/BRAND/0001',{expectedVersion:1}),
     {code:'TECH_PACK_NOT_FOUND'});
+  assert.equal(unrelated.ledgerReads(),0,'cross-brand actor must not query global commands');
   const original=harness();
   await issue(original);
   original.state.role='revoked';

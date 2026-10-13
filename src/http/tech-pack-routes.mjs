@@ -20,6 +20,7 @@ export function createTechPackRoutes({ techPacks } = {}) {
     // Query aliases preserve codes containing '/' without weakening path decoding.
     readByCode(/^\/v2\/tech-packs\/by-code$/, (actor, code) => service.getForActor(actor, code)),
     readByCode(/^\/v2\/tech-packs\/by-code\/document$/, (actor, code) => service.getDocumentForActor(actor, code)),
+    read('GET', /^\/v2\/tech-packs\/by-code\/canonical-preflight$/, ['code'], ({ actorId, query }) => service.canonicalPreflightForActor(actorId, queryCode(query))),
     mutateByCode('PATCH', /^\/v2\/tech-packs\/by-code$/, UPDATE_BODY, ({ commandId, actorId, body }, code) => service.updateTechPack(commandId, actorId, code, body)),
     mutateByCode('POST', /^\/v2\/tech-packs\/by-code\/operations$/, OPERATION_BODY, ({ commandId, actorId, body }, code) => service.addOperation(commandId, actorId, code, body)),
     mutateByCode('POST', /^\/v2\/tech-packs\/by-code\/issue$/, VERSION_BODY, ({ commandId, actorId, body }, code) => service.issueTechPack(commandId, actorId, code, body)),
@@ -27,6 +28,7 @@ export function createTechPackRoutes({ techPacks } = {}) {
     mutateByCode('POST', /^\/v2\/tech-packs\/by-code\/revisions$/, REVISION_BODY, ({ commandId, actorId, body }, code) => service.createRevision(commandId, actorId, code, body)),
     mutateByCode('POST', /^\/v2\/tech-packs\/by-code\/withdraw$/, WITHDRAW_BODY, ({ commandId, actorId, body }, code) => service.withdrawTechPack(commandId, actorId, code, body)),
     read('GET', /^\/v2\/tech-packs\/([^/]+)$/, [], ({ actorId, params }) => service.getForActor(actorId, params[0])),
+    read('GET', /^\/v2\/tech-packs\/([^/]+)\/canonical-preflight$/, [], ({ actorId, params }) => service.canonicalPreflightForActor(actorId, params[0])),
     // Everything the document is made of, read at one instant.
     read('GET', /^\/v2\/tech-packs\/([^/]+)\/document$/, [], ({ actorId, params }) => service.getDocumentForActor(actorId, params[0])),
     mutate('POST', /^\/v2\/tech-packs$/, CREATE_BODY, ({ commandId, actorId, body }) => service.createTechPack(commandId, actorId, body)),
@@ -65,5 +67,5 @@ function mutateByCode(method, pattern, contract, action) {
 }
 function unavailable() {
   const fail = () => invariant(false, 'TECH_PACK_SERVICE_REQUIRED', 'Tech pack service is required');
-  return Object.freeze({ pageForActor: fail, getForActor: fail, getDocumentForActor: fail, addOperation: fail, createTechPack: fail, updateTechPack: fail, issueTechPack: fail, acknowledgeTechPack: fail, createRevision: fail, withdrawTechPack: fail });
+  return Object.freeze({ pageForActor: fail, getForActor: fail, getDocumentForActor: fail, canonicalPreflightForActor: fail, addOperation: fail, createTechPack: fail, updateTechPack: fail, issueTechPack: fail, acknowledgeTechPack: fail, createRevision: fail, withdrawTechPack: fail });
 }

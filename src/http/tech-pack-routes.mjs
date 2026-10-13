@@ -10,7 +10,7 @@ const REVISION_BODY = bodyContract(['expectedVersion', 'techPackCode', ...EDITAB
 const WITHDRAW_BODY = bodyContract(['expectedVersion', 'reason']);
 const QUERY_FIELDS = Object.freeze(['limit', 'cursor', 'q', 'status', 'brandId', 'sku']);
 const TECH_PACK_CODE = /^[A-Z0-9][A-Z0-9._/-]{2,63}$/;
-const BY_CODE_FIELDS = Object.freeze(['code']);
+const BY_CODE_FIELDS = ['code'];
 const OPERATION_BODY = bodyContract(['sequence', 'operationCode', 'nameRu', 'nameEn', 'equipment', 'machineClass', 'standardMinutes', 'notes']);
 
 export function createTechPackRoutes({ techPacks } = {}) {

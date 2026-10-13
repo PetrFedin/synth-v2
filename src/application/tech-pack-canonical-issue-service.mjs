@@ -35,13 +35,6 @@ export function createCanonicalTechPackIssueService({
       const fingerprint = 'issueCanonicalTechPack:' + actorId + ':' + code + ':' + canonicalJson(input);
 
       return techPackStore.canonicalTransaction(async (tx) => {
-        const previous = await tx.getCommand(commandId);
-        if (previous) {
-          invariant(fingerprintsMatch(previous.fingerprint, fingerprint)
-            && previous.actorId === actorId,
-          'COMMAND_ID_CONFLICT', 'This command ID was used for another operation');
-        }
-
         // Context and current access rights are checked on *every* replay, too.
         const pack = requireEntity(await tx.getTechPackByCode(code),
           'TECH_PACK_NOT_FOUND', { techPackCode: code });
@@ -51,6 +44,13 @@ export function createCanonicalTechPackIssueService({
         invariant(membership?.status === 'active',
           'TECH_PACK_NOT_FOUND', 'Tech Pack not found or not accessible');
         assertCapability(membership, CAPABILITIES.TECH_PACK_MANAGE);
+        const previous = await tx.getCommand(commandId);
+        if (previous) {
+          invariant(fingerprintsMatch(previous.fingerprint, fingerprint)
+            && previous.actorId === actorId,
+          'COMMAND_ID_CONFLICT', 'This command ID was used for another operation');
+        }
+
         if (previous) return previous.result;
 
         invariant(pack.version === input.expectedVersion,

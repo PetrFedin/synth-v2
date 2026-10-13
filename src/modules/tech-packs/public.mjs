@@ -55,6 +55,36 @@ export function issueTechPack(techPack, { catalogSku, bom, measurementChart, app
   return freezeTechPack({ ...techPack, status: 'issued', version: techPack.version + 1, issuedAt: at, issuedBy: actorId, acknowledgedAt: null, acknowledgement: null, updatedAt: at });
 }
 
+/**
+ * Separate canonical issuance transition. The application must supply evidence
+ * validated from rows locked in its issuing transaction; browser preflight has
+ * no role in authorising this transition.
+ *
+ * @param {Record<string, any>} techPack
+ * @param {{actorId: string, issuedAt: string, dependencySnapshot: Record<string, any>}} input
+ */
+export function issueCanonicalTechPack(techPack, { actorId, issuedAt, dependencySnapshot }) {
+  invariant(techPack?.status === 'draft', 'TECH_PACK_NOT_DRAFT',
+    'Only a draft Tech Pack can be issued');
+  assertDocumentComplete(techPack);
+  invariant(typeof actorId === 'string' && ID_PATTERN.test(actorId),
+    'TECH_PACK_ISSUER_INVALID', 'Tech Pack issuer is invalid');
+  invariant(dependencySnapshot?.canonical?.schemaVersion === 1
+    && typeof dependencySnapshot.canonical.productSkuId === 'string'
+    && /^[a-f0-9]{64}$/.test(dependencySnapshot.canonical.lineageHash ?? '')
+    && dependencySnapshot.sampleCode && dependencySnapshot.bomId
+    && dependencySnapshot.measurementChartId,
+    'TECH_PACK_CANONICAL_EVIDENCE_REQUIRED',
+    'Complete source-locked canonical Tech Pack evidence is required');
+  const at = timestamp(issuedAt, 'TECH_PACK_ISSUED_AT_INVALID');
+  assertNotBefore(techPack.updatedAt, at);
+  return freezeTechPack({
+    ...techPack, status: 'issued', version: techPack.version + 1,
+    dependencySnapshot, issuedAt: at, issuedBy: actorId,
+    acknowledgedAt: null, acknowledgement: null, updatedAt: at,
+  });
+}
+
 export function acknowledgeTechPack(techPack, { supplierCode, acknowledgementReference, acknowledgedBy, notes, acknowledgedAt }) {
   invariant(techPack?.status === 'issued', 'TECH_PACK_NOT_ISSUED', 'Only an issued tech pack can be acknowledged');
   const normalizedSupplierCode = code(supplierCode, 'TECH_PACK_ACK_SUPPLIER_CODE_INVALID');

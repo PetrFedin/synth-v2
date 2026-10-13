@@ -1,10 +1,12 @@
 const SAFE_ID = '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$';
 const CODE = '^[A-Z0-9][A-Z0-9._/-]{2,63}$';
+const PATH_CODE = '^[A-Z0-9][A-Z0-9._-]{2,63}$';
 const SKU = '^[A-Z0-9][A-Z0-9._-]{1,63}$';
 const STATUSES = ['draft', 'issued', 'acknowledged', 'superseded', 'withdrawn'];
 const errorResponse = { description: 'Domain or transport error', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } };
 const idempotency = { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 1, maxLength: 128, pattern: SAFE_ID } };
-const codeParameter = { name: 'techPackCode', in: 'path', required: true, schema: { type: 'string', pattern: CODE } };
+const codeParameter = { name: 'techPackCode', in: 'path', required: true, schema: { type: 'string', pattern: PATH_CODE }, description: 'Slash-free legacy route. Use by-code query alias for identifiers containing /.' };
+const codeQuery = { name: 'code', in: 'query', required: true, schema: { type: 'string', pattern: CODE }, description: 'Exact Tech Pack code, including /.' };
 
 export function withTechPackOpenApi(base) {
   const specification = structuredClone(base);
@@ -33,12 +35,26 @@ function schemas() {
       id: { type: 'string', minLength: 1, maxLength: 160 }, techPackCode: { type: 'string', pattern: CODE }, sku: { type: 'string', pattern: SKU }, brandId: { type: 'string', minLength: 1, maxLength: 160 }, skuVersion: version(), revision: { type: 'integer', minimum: 1, maximum: 999 }, sourceTechPackCode: { oneOf: [{ type: 'string', pattern: CODE }, { type: 'null' }] }, status: { type: 'string', enum: STATUSES }, version: version(), ...editable,
       dependencySnapshot: { oneOf: [{ $ref: '#/components/schemas/TechPackDependencySnapshot' }, { type: 'null' }] }, issuedAt: dateOrNull(), issuedBy: nullable(160), acknowledgedAt: dateOrNull(), acknowledgement: { oneOf: [{ $ref: '#/components/schemas/TechPackAcknowledgement' }, { type: 'null' }] }, withdrawnAt: dateOrNull(), withdrawalReason: nullable(500), createdAt: { type: 'string', format: 'date-time' }, updatedAt: { type: 'string', format: 'date-time' },
     } },
+    TechPackDocument: { type: 'object' },
+    TechPackOperationInput: { type: 'object', additionalProperties: false,
+      required: ['sequence','operationCode','nameRu','nameEn','machineClass','standardMinutes'],
+      properties: { sequence: { type: 'integer', minimum: 1, maximum: 999 },
+        operationCode: { type: 'string', pattern: '^[A-Z0-9][A-Z0-9._-]{1,31}$' },
+        nameRu: { type: 'string', minLength: 1, maxLength: 200 }, nameEn: { type: 'string', minLength: 1, maxLength: 200 },
+        equipment: nullable(120), machineClass: { type: 'string' },
+        standardMinutes: { type: 'number', exclusiveMinimum: 0, maximum: 600 }, notes: nullable(1000) },
+    },
+    TechPackOperation: { type: 'object' },
     TechPackPage: { type: 'object', additionalProperties: false, required: ['items','nextCursor'], properties: { items: { type: 'array', maxItems: 200, items: { $ref: '#/components/schemas/TechPack' } }, nextCursor: { oneOf: [{ type: 'string', minLength: 1, maxLength: 2048 }, { type: 'null' }] } } },
   };
 }
 
 function paths() {
   const mutation = (operationId, schema, description) => ({ operationId, security: [{ bearerAuth: [] }], parameters: [codeParameter, idempotency], requestBody: body(schema), responses: mutationResponses(description) });
+  const byCodeMutation = (operationId, schema, description) => ({ operationId, security: [{ bearerAuth: [] }], parameters: [codeQuery, idempotency], requestBody: body(schema), responses: mutationResponses(description) });
+  const byCodeRead = (operationId, label, schema) => ({ operationId, security: [{ bearerAuth: [] }], parameters: [codeQuery], responses: {
+    200: dataResponse(label, schema), 400: errorResponse, 401: errorResponse, 403: errorResponse, 404: errorResponse,
+  } });
   return {
     '/tech-packs': {
       get: { operationId: 'listTechPacks', security: [{ bearerAuth: [] }], parameters: [
@@ -46,6 +62,22 @@ function paths() {
       ], responses: { 200: dataResponse('Tech pack page', '#/components/schemas/TechPackPage'), 400: errorResponse, 401: errorResponse, 403: errorResponse } },
       post: { operationId: 'createTechPack', security: [{ bearerAuth: [] }], parameters: [idempotency], requestBody: body('#/components/schemas/TechPackCreate'), responses: mutationResponses('Created tech pack') },
     },
+    '/tech-packs/by-code': {
+      get: byCodeRead('getTechPackByCode', 'Tech pack', '#/components/schemas/TechPack'),
+      patch: byCodeMutation('updateTechPackByCode', '#/components/schemas/TechPackUpdate', 'Updated tech pack'),
+    },
+    '/tech-packs/by-code/document': { get: byCodeRead('getTechPackDocumentByCode', 'Tech pack document', '#/components/schemas/TechPackDocument') },
+    '/tech-packs/by-code/operations': {
+      post: { operationId: 'addTechPackOperationByCode', security: [{ bearerAuth: [] }],
+        parameters: [codeQuery, idempotency], requestBody: body('#/components/schemas/TechPackOperationInput'),
+        responses: { 200: dataResponse('Created Tech Pack operation', '#/components/schemas/TechPackOperation'),
+          400: errorResponse, 401: errorResponse, 403: errorResponse, 404: errorResponse, 409: errorResponse, 422: errorResponse },
+      },
+    },
+    '/tech-packs/by-code/issue': { post: byCodeMutation('issueTechPackByCode', '#/components/schemas/TechPackVersionExpectation', 'Issued tech pack') },
+    '/tech-packs/by-code/acknowledge': { post: byCodeMutation('acknowledgeTechPackByCode', '#/components/schemas/TechPackAcknowledgementInput', 'Acknowledged tech pack') },
+    '/tech-packs/by-code/revisions': { post: byCodeMutation('createTechPackRevisionByCode', '#/components/schemas/TechPackRevisionInput', 'Created tech pack revision') },
+    '/tech-packs/by-code/withdraw': { post: byCodeMutation('withdrawTechPackByCode', '#/components/schemas/TechPackWithdrawalInput', 'Withdrawn tech pack') },
     '/tech-packs/{techPackCode}': { get: { operationId: 'getTechPack', security: [{ bearerAuth: [] }], parameters: [codeParameter], responses: { 200: dataResponse('Tech pack', '#/components/schemas/TechPack'), 400: errorResponse, 401: errorResponse, 403: errorResponse, 404: errorResponse } }, patch: mutation('updateTechPack', '#/components/schemas/TechPackUpdate', 'Updated tech pack') },
     '/tech-packs/{techPackCode}/issue': { post: mutation('issueTechPack', '#/components/schemas/TechPackVersionExpectation', 'Issued tech pack') },
     '/tech-packs/{techPackCode}/acknowledge': { post: mutation('acknowledgeTechPack', '#/components/schemas/TechPackAcknowledgementInput', 'Acknowledged tech pack') },

@@ -84,25 +84,62 @@ export function createShowroomSelectionService({
   // версии его каталога (цены на магазин, замороженная доступность), а не из каталога коллекции. Иначе
   // образ называл 128 при остатке 900, а заказать можно было по 110 из 1000. Позиция образа, которой нет
   // в каталоге покупателя, остаётся с каталожными фактами и помечена `priceSource: 'catalog'`.
+  // A buyer's Showroom Look is editorial discovery, not a second authority
+  // for commercial prices. The SQL workspace embeds mutable brand catalog
+  // prices; always strip them before deciding whether the exact BuyerCatalog
+  // authorizes a price for this buyer and this showroom.
+  function hideBuyerCommercialFacts(product) {
+    return Object.freeze({
+      ...product,
+      currency: null,
+      wholesalePrice: null,
+      minimumOrderQuantity: null,
+      availableQuantity: null,
+      priceSource: 'unavailable',
+      buyerCatalogVersionId: null,
+      orderable: false,
+    });
+  }
+
   async function withBuyerCatalogFacts(looks, showroomId, buyerShopId) {
-    if (!buyerShopId || !trustedCommercialReader) return looks;
-    const buyerCatalog = await trustedCommercialReader.getBuyerCatalogForAccess(showroomId, buyerShopId);
-    if (!buyerCatalog || buyerCatalog.status !== 'published') return looks;
-    const lines = new Map((buyerCatalog.lines ?? []).map((line) => [line.sku, line]));
+    if (!buyerShopId) return looks; // brand owner retains brand data
+    const buyerCatalog = trustedCommercialReader
+      ? await trustedCommercialReader.getBuyerCatalogForAccess(showroomId, buyerShopId)
+      : null;
+    const validCatalog = buyerCatalog?.status === 'published'
+      && buyerCatalog.showroomId === showroomId
+      && buyerCatalog.shopId === buyerShopId;
+    // Two variants that share the visible legacy SKU cannot be resolved
+    // unambiguously from the Showroom Look projection. Never choose one price
+    // arbitrarily: exact ProductSku identity is required for that extension.
+    const bySku = new Map();
+    if (validCatalog) for (const line of buyerCatalog.lines ?? []) {
+      if (typeof line?.sku !== 'string') continue;
+      if (bySku.has(line.sku)) bySku.set(line.sku, null);
+      else bySku.set(line.sku, line);
+    }
     return looks.map((look) => Object.freeze({
       ...look,
       products: Object.freeze((look.products ?? []).map((product) => {
-        const line = lines.get(product.sku);
-        if (!line) return Object.freeze({ ...product, priceSource: 'catalog' });
+        const hidden = hideBuyerCommercialFacts(product);
+        // A cross-brand catalog response from any adapter fails closed.
+        if (!validCatalog || buyerCatalog.brandId !== look.brandId) return hidden;
+        const line = bySku.get(product.sku);
+        if (!line || !Number.isFinite(Number(line.unitPrice))
+          || Number(line.unitPrice) <= 0
+          || typeof line.currency !== 'string'
+          || !/^[A-Z]{3}$/.test(line.currency)) return hidden;
         const availability = line.availability;
         return Object.freeze({
-          ...product,
+          ...hidden,
           currency: line.currency,
           wholesalePrice: line.unitPrice,
           minimumOrderQuantity: line.minimumOrderQuantity,
-          availableQuantity: availability?.mode === 'available_to_sell' ? availability.quantity : null,
+          availableQuantity: availability?.mode === 'available_to_sell'
+            ? availability.quantity : null,
           priceSource: 'buyer-catalog',
           buyerCatalogVersionId: buyerCatalog.id,
+          orderable: true,
         });
       })),
     }));

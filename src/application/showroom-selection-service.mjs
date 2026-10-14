@@ -80,10 +80,10 @@ export function createShowroomSelectionService({
     invariant(false, 'SHOWROOM_ACCESS_DENIED', 'This showroom has not been shared with you', { showroomId: showroom.id });
   }
 
-  // Образ показывает покупателю то, что он закажет: цена, минимум и остаток берутся из ДЕЙСТВУЮЩЕЙ
-  // версии его каталога (цены на магазин, замороженная доступность), а не из каталога коллекции. Иначе
-  // образ называл 128 при остатке 900, а заказать можно было по 110 из 1000. Позиция образа, которой нет
-  // в каталоге покупателя, остаётся с каталожными фактами и помечена `priceSource: 'catalog'`.
+  // Для покупателя образ — презентация, а не второй источник коммерческой правды.
+  // Без опубликованной версии BuyerCatalog либо без этой модели в его каталоге
+  // стоимость, минимальный заказ и остаток не показываются. У владельца бренда
+  // остаются внутренние факты каталога коллекции для редактирования образа.
   // A buyer's Showroom Look is editorial discovery, not a second authority
   // for commercial prices. The SQL workspace embeds mutable brand catalog
   // prices; always strip them before deciding whether the exact BuyerCatalog

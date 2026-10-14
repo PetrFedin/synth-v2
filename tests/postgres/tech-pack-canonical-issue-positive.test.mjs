@@ -154,8 +154,11 @@ async function seedTechnicalEvidence(pool,{id,brand,owner,catalog,pack}){
       code:'CM',name:'Centimeters',translations:{ru:'Сантиметр',en:'Centimeter'},
       status:'active',version:1,source_system:'acceptance',owner_actor_id:owner,
       steward_actor_id:owner,approval_status:'not_required',created_by:owner,updated_by:owner});
-    await insert('mdm_entry_versions',{id:id('entry-v1'),entry_id:entry,version:1,
-      snapshot:{code:'CM'},change_reason:'Acceptance measurement unit',actor_id:owner});
+    // The MDM entry INSERT trigger has already persisted version 1. A second
+    // manual version insert would violate mdm_entry_versions_entry_id_version_key.
+    const generated = await client.query(
+      'SELECT version FROM mdm_entry_versions WHERE entry_id=$1 AND version=1',[entry]);
+    assert.equal(generated.rowCount,1,'MDM trigger must create the canonical entry version');
     await insert('boms',{id:bomId,sku:catalog.sku,brand_id:brand,status:'published',
       currency:'EUR',material_cost:10,labor_cost:20,overhead_cost:5,
       logistics_cost:2,other_cost:1,total_cost:38,version:1,product_sku_id:productSkuId,

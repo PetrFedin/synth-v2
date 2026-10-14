@@ -15,6 +15,7 @@ The UI in `public/modules/showroom-looks.js` additionally treated `Number(null)`
 - Missing, unpublished, wrong-shop, wrong-showroom or cross-brand BuyerCatalog: same Look imagery/product names remain but price, currency, available quantity and MOQ are `null`, `orderable: false`, `priceSource: unavailable`.
 - Look product absent from the Buyer's publication or duplicate/ambiguous legacy SKU: same safe withholding. Do not invent a price by selecting one arbitrary ProductSku.
 - UI: RU/EN "Цена для покупателя не опубликована / Buyer price not published"; neither fake zero nor a stale internal wholesale amount appears.
+- Commercial `orderable` is derived from frozen availability mode and MOQ: `available_to_sell` requires enough stock for at least MOQ; `preorder` and `made_to_order` remain eligible; unknown modes or incomplete MOQ are not orderable. A published price by itself is never evidence of orderability.
 
 ## Validation and release gate
 

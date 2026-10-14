@@ -21,7 +21,9 @@ const buyerCatalog = Object.freeze({
   ]),
 });
 
-function fixture({catalog=buyerCatalog,asBrand=false,withReader=true}={}) {
+function fixture({catalog=buyerCatalog,asBrand=false,withReader=true,
+  inviteExpiresAt='2027-01-01T00:00:00.000Z', inviteStatus='accepted',
+  inviteBrandId='brand-1', relationshipStatus='active',clockAt='2026-10-15T00:00:00.000Z'}={}) {
   const calls=[];
   const tx={
     async getShowroom(code){
@@ -43,13 +45,14 @@ function fixture({catalog=buyerCatalog,asBrand=false,withReader=true}={}) {
     async getShowroomInvitationByAccess(showroom,shop){
       calls.push('invitation');
       assert.equal(showroom,'showroom-1'); assert.equal(shop,'shop-1');
-      return {status:'accepted'};
+      return {status:inviteStatus,showroomId:showroom,brandId:inviteBrandId,
+        shopId:shop,expiresAt:inviteExpiresAt};
     },
     async getRelationshipByTrade(brand,shop){
       calls.push('relationship');
-      return {brandId:brand,shopId:shop,status:'active'};
+      return {brandId:brand,shopId:shop,status:relationshipStatus};
     },
-    async listShowroomLooks(){return [rawLook];},
+    async listShowroomLooks(){calls.push('showroom-looks-read');return [rawLook];},
   };
   const store={
     transaction:work=>work(tx),
@@ -59,7 +62,7 @@ function fixture({catalog=buyerCatalog,asBrand=false,withReader=true}={}) {
     ? {getBuyerCatalogForAccess:async()=>catalog,getBuyerCatalogVersion:async()=>catalog}
     : null;
   const service=createShowroomSelectionService({
-    store,commercialPublicationReader,
+    store,commercialPublicationReader,clock:()=>clockAt,
   });
   return {service,calls,actor:asBrand?'brand-owner':'buyer-1'};
 }
@@ -130,6 +133,22 @@ test('brand owner still sees owned catalog facts when composing editorial looks'
   assert.equal(rows[0].wholesalePrice,999);
   assert.equal(rows[1].availableQuantity,22);
   assert.ok(!h.calls.includes('shop-memberships'));
+});
+
+test('buyer cannot view Look metadata with expired, revoked or mis-scoped invitation',async()=>{
+  for(const options of [
+    {inviteExpiresAt:'2026-10-14T23:59:59.000Z'},
+    {inviteStatus:'revoked'},
+    {inviteBrandId:'brand-outside'},
+    {relationshipStatus:'revoked'},
+  ]){
+    const h=fixture(options);
+    await assert.rejects(
+      ()=>h.service.listShowroomLooks(h.actor,'showroom-1'),
+      error=>error?.code==='SHOWROOM_ACCESS_DENIED',
+    );
+    assert.ok(!h.calls.includes('showroom-looks-read'),'no unauthorized read');
+  }
 });
 
 test('mobile/desktop Look renderer never converts hidden null price to fictitious zero',async()=>{

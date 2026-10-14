@@ -7,6 +7,7 @@ import { migratePostgres } from '../../src/infrastructure/postgres-migrator.mjs'
 import { createPostgresWholesaleRuntime } from '../../src/runtime/postgres-runtime.mjs';
 import { createPostgresTechPackStore } from '../../src/infrastructure/postgres-tech-pack-store.mjs';
 import { createCanonicalTechPackIssueService } from '../../src/application/tech-pack-canonical-issue-service.mjs';
+import { verifyFrozenCanonicalTechPackSources } from '../../src/application/tech-pack-canonical-issue-snapshot.mjs';
 import { createOrganisation } from '../../src/modules/organisations/public.mjs';
 import { createMembership } from '../../src/modules/access-control/public.mjs';
 
@@ -83,6 +84,12 @@ test('canonical Tech Pack issues on real PostgreSQL and retains immutable issued
     assert.equal(issued.dependencySnapshot.measurementChartId,sources.chartId);
     assert.equal(issued.dependencySnapshot.sampleCode,sources.sampleCode);
     assert.match(issued.dependencySnapshot.canonical.lineageHash,/^[a-f0-9]{64}$/);
+    assert.match(issued.dependencySnapshot.canonical.frozenSourcesHash,/^[a-f0-9]{64}$/);
+    const frozen=verifyFrozenCanonicalTechPackSources(issued.dependencySnapshot);
+    assert.equal(frozen.bom.id,sources.bomId);
+    assert.equal(frozen.measurement.id,sources.chartId);
+    assert.equal(frozen.sample.sampleCode,sources.sampleCode);
+    assert.equal(frozen.bom.payload.lines[0].material,'shell');
     assert.deepEqual(await issuer.issueCanonicalTechPack(commandId,owner,code,
       {expectedVersion:pack.version}),issued);
 
@@ -94,6 +101,10 @@ test('canonical Tech Pack issues on real PostgreSQL and retains immutable issued
       assert.equal(row.rows[0].status,'issued');
       assert.equal(row.rows[0].product_sku_id,sources.productSkuId);
       assert.deepEqual(row.rows[0].payload.dependencySnapshot,issued.dependencySnapshot);
+      assert.deepEqual(
+        verifyFrozenCanonicalTechPackSources(row.rows[0].payload.dependencySnapshot),
+        frozen,'fresh PostgreSQL connection reproduces the immutable issued BOM/chart/PPS');
+
       const receipts=await fresh.query('SELECT result FROM catalog_commands WHERE id=$1',[commandId]);
       assert.equal(receipts.rowCount,1);
       assert.deepEqual(receipts.rows[0].result.dependencySnapshot,issued.dependencySnapshot);

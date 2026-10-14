@@ -140,6 +140,16 @@ export function createShowroomSelectionService({
           || typeof line.currency !== 'string'
           || !/^[A-Z]{3}$/.test(line.currency)) return hidden;
         const availability = line.availability;
+        const minimumOrderQuantity = line.minimumOrderQuantity;
+        const validMinimum = Number.isSafeInteger(minimumOrderQuantity)
+          && minimumOrderQuantity >= 1;
+        const orderable = validMinimum && (
+          (availability?.mode === 'available_to_sell'
+            && Number.isSafeInteger(availability.quantity)
+            && availability.quantity >= minimumOrderQuantity)
+          || availability?.mode === 'made_to_order'
+          || availability?.mode === 'preorder'
+        );
         return Object.freeze({
           ...hidden,
           currency: line.currency,
@@ -149,7 +159,7 @@ export function createShowroomSelectionService({
             ? availability.quantity : null,
           priceSource: 'buyer-catalog',
           buyerCatalogVersionId: buyerCatalog.id,
-          orderable: true,
+          orderable,
         });
       })),
     }));

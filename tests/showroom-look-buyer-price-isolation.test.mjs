@@ -127,6 +127,28 @@ test('ambiguous buyer catalog with repeated legacy SKU refuses to choose a price
   assert.equal(rows[0].orderable,false);
 });
 
+test('Look orderability follows frozen MOQ, stock, preorder and made-to-order modes',async()=>{
+  for(const [availability,moq,shouldOrder] of [
+    [{mode:'available_to_sell',quantity:0},3,false],
+    [{mode:'available_to_sell',quantity:2},3,false],
+    [{mode:'available_to_sell',quantity:3},3,true],
+    [{mode:'available_to_sell',quantity:8},3,true],
+    [{mode:'made_to_order',quantity:null},3,true],
+    [{mode:'preorder',quantity:null},3,true],
+    [{mode:'unsupported'},3,false],
+    [null,3,false],
+    [{mode:'available_to_sell',quantity:8},0,false],
+    [{mode:'available_to_sell',quantity:8},null,false],
+  ]){
+    const catalog={...buyerCatalog,lines:[{
+      ...buyerCatalog.lines[0],availability,minimumOrderQuantity:moq,
+    }]};
+    const rows=products(await fixture({catalog}).service.listShowroomLooks('buyer-1','showroom-1'));
+    assert.equal(rows[0].orderable,shouldOrder,JSON.stringify({availability,moq}));
+    assert.equal(rows[0].priceSource,'buyer-catalog','published price remains distinct from orderability');
+  }
+});
+
 test('brand owner still sees owned catalog facts when composing editorial looks',async()=>{
   const h=fixture({asBrand:true,withReader:false});
   const rows=products(await h.service.listShowroomLooks(h.actor,'showroom-1'));

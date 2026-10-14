@@ -8,6 +8,7 @@ import { createPostgresWholesaleRuntime } from '../../src/runtime/postgres-runti
 import { createPostgresTechPackStore } from '../../src/infrastructure/postgres-tech-pack-store.mjs';
 import { createCanonicalTechPackIssueService } from '../../src/application/tech-pack-canonical-issue-service.mjs';
 import { verifyFrozenCanonicalTechPackSources } from '../../src/application/tech-pack-canonical-issue-snapshot.mjs';
+import { createPostgresTechPackReader } from '../../src/infrastructure/postgres-tech-pack-reader.mjs';
 import { createOrganisation } from '../../src/modules/organisations/public.mjs';
 import { createMembership } from '../../src/modules/access-control/public.mjs';
 
@@ -104,6 +105,12 @@ test('canonical Tech Pack issues on real PostgreSQL and retains immutable issued
       assert.deepEqual(
         verifyFrozenCanonicalTechPackSources(row.rows[0].payload.dependencySnapshot),
         frozen,'fresh PostgreSQL connection reproduces the immutable issued BOM/chart/PPS');
+      const documentReader=createPostgresTechPackReader({pool:fresh});
+      assert.equal(await documentReader.getDocumentForActor(id('unauthorized'),code),undefined,
+        'cross-brand actor must not infer the existence of a canonical document');
+      await assert.rejects(documentReader.getDocumentForActor(owner,code),
+        {code:'TECH_PACK_CANONICAL_PRINT_NOT_ADMITTED'},
+        'canonical issue must not be re-rendered from mutable legacy SKU joins');
 
       const receipts=await fresh.query('SELECT result FROM catalog_commands WHERE id=$1',[commandId]);
       assert.equal(receipts.rowCount,1);

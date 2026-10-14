@@ -66,8 +66,10 @@ test('every place that trusts an invitation now also reads the relationship', as
     }
   }
 
-  // Образы охраняются собственной проверкой, не через общий помощник, — и она спрашивает то же.
+  // Look access must be at least as strict as selection creation: trade parties,
+  // active relationship and invitation expiry, not merely invitation.status.
   const [selection] = sources;
   assert.match(selection, /const relationship = await tx\.getRelationshipByTrade\(showroom\.brandId, membership\.organisationId\);/);
-  assert.match(selection, /if \(relationship\?\.status === 'active'\) return membership\.organisationId;/);
+  assert.match(selection, /assertAcceptedShowroomAccess\(invitation, \{/);
+  assert.match(selection, /shopId: membership\.organisationId, now: clock\(\), relationship/);
 });

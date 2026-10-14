@@ -1,0 +1,203 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
+import pg from 'pg';
+import { migratePostgres } from '../../src/infrastructure/postgres-migrator.mjs';
+import { createPostgresWholesaleRuntime } from '../../src/runtime/postgres-runtime.mjs';
+import { createPostgresTechPackStore } from '../../src/infrastructure/postgres-tech-pack-store.mjs';
+import { createCanonicalTechPackIssueService } from '../../src/application/tech-pack-canonical-issue-service.mjs';
+import { createOrganisation } from '../../src/modules/organisations/public.mjs';
+import { createMembership } from '../../src/modules/access-control/public.mjs';
+
+const connectionString = process.env.POSTGRES_TEST_URL;
+const migrationsDir = fileURLToPath(new URL('../../db/migrations/', import.meta.url));
+
+test('canonical Tech Pack issues on real PostgreSQL and retains immutable issued evidence', async () => {
+  assert.ok(connectionString, 'Isolated PostgreSQL required');
+  const tag = randomUUID().replaceAll('-', '').slice(0, 12).toUpperCase();
+  const id = part => 'tp-canonical-positive-' + tag + '-' + part;
+  const brand = id('brand'), owner = id('owner'), code = 'TP/POS/' + tag;
+  const supplier = 'SUP-' + tag;
+  const pool = new pg.Pool({connectionString, max:4});
+  try {
+    await migratePostgres({pool, migrationsDir});
+    const runtime = createPostgresWholesaleRuntime({pool, migrationsDir});
+    await runtime.auth.bootstrapUser({
+      id:owner, email:'tp-positive-' + tag.toLowerCase() + '@acceptance.invalid',
+      password:'OnlyIsolated-' + tag, displayName:'Canonical tester',
+    });
+    await runtime.platform.registerOrganisation(id('register'), 'system',
+      createOrganisation({id:brand,type:'brand',name:'Tech Pack canonical positive'}));
+    await runtime.platform.grantMembership(id('grant'), 'system',
+      createMembership({id:id('membership'),organisationId:brand,
+        organisationType:'brand',userId:owner,role:'owner',
+        createdAt:'2026-10-13T00:00:00.000Z'}));
+    const campaign=await runtime.platform.createCampaign(id('campaign'),owner,{
+      brandId:brand,name:'Technical issue acceptance',season:'SS28',
+      startsAt:'2028-01-01T00:00:00.000Z',endsAt:'2028-12-31T00:00:00.000Z',
+    });
+    await runtime.platform.openCampaign(id('open'),owner,campaign.id);
+    const collection=await runtime.platform.createCollection(id('collection'),owner,{
+      campaignId:campaign.id,brandId:brand,name:'Technical garment',currency:'EUR',
+    });
+    await runtime.platform.publishCollection(id('publish-collection'),owner,collection.id);
+    const draft=await runtime.catalog.createSku(id('sku'),owner,{
+      sku:'CANON-' + tag,collectionId:collection.id,brandId:brand,
+      name:'Technical jacket',wholesalePrice:250,currency:'EUR',
+      minimumOrderQuantity:1,availableQuantity:20,
+    });
+    const catalog=await runtime.catalog.publishSku(id('publish-sku'),owner,draft.sku,
+      {expectedVersion:draft.version});
+    const p = new Date(Date.now()+365*86400000).toISOString();
+    const supplierPayload={id:id('supplier'),supplierCode:supplier,brandId:brand,
+      status:'qualified',countryCode:'IT',currency:'EUR',leadTimeDays:45,
+      minimumOrderQuantity:1,auditExpiresAt:p,version:1,incoterms:['EXW'],
+      categories:['garments']};
+    await insertRow(pool, 'suppliers', {
+      id:supplierPayload.id,supplier_code:supplier,brand_id:brand,status:'qualified',
+      country_code:'IT',currency:'EUR',lead_time_days:45,
+      minimum_order_quantity:1,audit_expires_at:p,version:1,payload:supplierPayload,
+      created_at:new Date(),updated_at:new Date(),qualified_at:new Date(),
+    });
+    const pack=await runtime.techPacks.createTechPack(id('pack'),owner,{
+      techPackCode:code,sku:catalog.sku,title:'Canonical technical jacket',
+      supplierCode:supplier,supplierName:'Italian acceptance factory',
+      supplierEmail:'production@acceptance.invalid',
+      constructionNotes:'Complete confirmed garment construction',
+      qualityNotes:'Inspect size tolerances and stitches',
+      packingNotes:'Pack each garment under approved procedure',
+    });
+    const sources=await seedTechnicalEvidence(pool,{id,brand,owner,catalog,pack});
+    const issuer=createCanonicalTechPackIssueService({
+      techPackStore:createPostgresTechPackStore({pool}),
+      nextId:prefix=>prefix+'-'+randomUUID(),
+    });
+    const commandId=id('issue');
+    const issued=await issuer.issueCanonicalTechPack(commandId,owner,code,
+      {expectedVersion:pack.version});
+    assert.equal(issued.status,'issued');
+    assert.equal(issued.version,pack.version+1);
+    assert.equal(issued.dependencySnapshot.canonical.productSkuId,sources.productSkuId);
+    assert.equal(issued.dependencySnapshot.bomId,sources.bomId);
+    assert.equal(issued.dependencySnapshot.measurementChartId,sources.chartId);
+    assert.equal(issued.dependencySnapshot.sampleCode,sources.sampleCode);
+    assert.match(issued.dependencySnapshot.canonical.lineageHash,/^[a-f0-9]{64}$/);
+    assert.deepEqual(await issuer.issueCanonicalTechPack(commandId,owner,code,
+      {expectedVersion:pack.version}),issued);
+
+    const fresh=new pg.Pool({connectionString,max:2});
+    try{
+      const row=await fresh.query(
+        'SELECT status,version,product_sku_id,payload FROM tech_packs WHERE tech_pack_code=$1',[code]);
+      assert.equal(row.rowCount,1);
+      assert.equal(row.rows[0].status,'issued');
+      assert.equal(row.rows[0].product_sku_id,sources.productSkuId);
+      assert.deepEqual(row.rows[0].payload.dependencySnapshot,issued.dependencySnapshot);
+      const receipts=await fresh.query('SELECT result FROM catalog_commands WHERE id=$1',[commandId]);
+      assert.equal(receipts.rowCount,1);
+      assert.deepEqual(receipts.rows[0].result.dependencySnapshot,issued.dependencySnapshot);
+      const events=await fresh.query(
+        "SELECT event FROM outbox_events WHERE aggregate_id=$1 AND event_type='tech-pack.issued'",
+        [pack.id]);
+      assert.equal(events.rowCount,1);
+      assert.equal(events.rows[0].event.payload.canonicalLineageHash,
+        issued.dependencySnapshot.canonical.lineageHash);
+    }finally{await fresh.end();}
+  }finally{await pool.end();}
+});
+
+async function insertRow(client,table,record){
+  const keys=Object.keys(record), values=Object.values(record);
+  const sql='INSERT INTO '+table+' ('+keys.join(',')+') VALUES ('+
+    keys.map((_,i)=>'$'+(i+1)).join(',')+')';
+  return client.query(sql,values);
+}
+
+async function seedTechnicalEvidence(pool,{id,brand,owner,catalog,pack}){
+  const now=new Date('2026-10-13T00:00:00.000Z');
+  const hash='a'.repeat(64);
+  const productSkuId=id('product-sku'),style=id('style'),sv=id('style-v1');
+  const color=id('color'),scale=id('scale'),scalev=id('scale-v1'),size=id('size');
+  const bomId=id('bom'),chartId=id('chart'),sampleCode='PPS-'+id('sample');
+  const dict=id('dictionary'),entry=id('measurement-unit');
+  const client=await pool.connect();
+  const insert=(table,row)=>insertRow(client,table,row);
+  try{
+    await client.query('BEGIN');
+    await insert('product_styles',{id:style,brand_id:brand,style_code:'STYLE-'+id('style-code').replaceAll('-','').slice(-20).toUpperCase(),
+      lifecycle_status:'draft',version:1,created_at:now,created_by:owner,updated_at:now,updated_by:owner});
+    await insert('product_style_versions',{id:sv,style_id:style,brand_id:brand,version_no:1,
+      title_ru:'Технический жакет',title_en:'Technical jacket',technical_payload:{},content_hash:hash,
+      created_at:now,created_by:owner});
+    await insert('product_colorways',{id:color,style_version_id:sv,brand_id:brand,
+      colorway_code:'BLK',name_ru:'Чёрный',name_en:'Black',payload:{},content_hash:hash,
+      created_at:now,created_by:owner});
+    await insert('product_size_scales',{id:scale,brand_id:brand,scale_code:'EU-'+id('scale-code').slice(-18).toUpperCase(),
+      name_ru:'Европейская сетка',name_en:'European apparel',status:'active',version:1,
+      created_at:now,created_by:owner,updated_at:now,updated_by:owner});
+    await insert('product_size_scale_versions',{id:scalev,size_scale_id:scale,brand_id:brand,
+      version_no:1,payload:{},content_hash:hash,created_at:now,created_by:owner});
+    await insert('product_size_values',{id:size,size_scale_version_id:scalev,brand_id:brand,
+      size_code:'M',label_ru:'M',label_en:'M',sort_order:0,payload:{},
+      created_at:now,created_by:owner});
+    await insert('product_skus',{id:productSkuId,sku_code:catalog.sku,brand_id:brand,
+      style_version_id:sv,colorway_id:color,size_value_id:size,payload:{},
+      content_hash:hash,created_at:now,created_by:owner});
+    await insert('mdm_dictionaries',{id:dict,tenant_id:brand,code:'measurement.unit',
+      names:{ru:'Единицы измерения',en:'Measurement units'},
+      data_class:'classifier',scope_model:'tenant',hierarchy_enabled:false,
+      effective_dated:false,approval_required:false,status:'active',
+      owner_actor_id:owner,steward_actor_id:owner,source_system:'acceptance',
+      version:1,created_by:owner,updated_by:owner});
+    await insert('mdm_entries',{id:entry,dictionary_id:dict,tenant_id:brand,
+      code:'CM',name:'Centimeters',translations:{ru:'Сантиметр',en:'Centimeter'},
+      status:'active',version:1,source_system:'acceptance',owner_actor_id:owner,
+      steward_actor_id:owner,approval_status:'not_required',created_by:owner,updated_by:owner});
+    await insert('mdm_entry_versions',{id:id('entry-v1'),entry_id:entry,version:1,
+      snapshot:{code:'CM'},change_reason:'Acceptance measurement unit',actor_id:owner});
+    await insert('boms',{id:bomId,sku:catalog.sku,brand_id:brand,status:'published',
+      currency:'EUR',material_cost:10,labor_cost:20,overhead_cost:5,
+      logistics_cost:2,other_cost:1,total_cost:38,version:1,product_sku_id:productSkuId,
+      payload:{id:bomId,sku:catalog.sku,brandId:brand,status:'published',version:1,
+        currency:'EUR',materialCost:10,laborCost:20,overheadCost:5,logisticsCost:2,
+        otherCost:1,totalCost:38,lines:[{position:1,material:'shell',quantity:2}]}});
+    const chartPayload={id:chartId,sku:null,unit:'CM',
+      sizes:[{code:'M',label:'M',position:1}],
+      points:[{pointCode:'CHEST_CIRC',name:'Обхват груди',position:1,
+        measurements:[{sizeCode:'M',value:112,deltaFromPrevious:null}]}]};
+    await insert('measurement_charts',{id:chartId,sku:null,brand_id:brand,
+      sku_version:null,status:'published',unit:'CM',base_size_code:'M',version:1,
+      payload:chartPayload,created_at:now,updated_at:now,published_at:now,
+      style_version_id:sv,colorway_id:color,size_scale_version_id:scalev,
+      measurement_unit_entry_id:entry,measurement_unit_entry_version:1,base_size_value_id:size});
+    await insert('measurement_chart_sizes',{chart_id:chartId,size_code:'M',
+      label:'M',position:1,size_value_id:size,label_ru:'M',label_en:'M'});
+    await insert('measurement_points',{chart_id:chartId,point_code:'CHEST_CIRC',
+      name:'Обхват груди',position:1,tolerance_plus:0,tolerance_minus:0,payload:{}});
+    await insert('measurement_values',{chart_id:chartId,point_code:'CHEST_CIRC',
+      size_code:'M',value:112,delta_from_previous:null,source:'override',size_value_id:size});
+    const sampleId=id('sample');
+    await insert('samples',{id:sampleId,sample_code:sampleCode,sku:catalog.sku,
+      brand_id:brand,sku_version:catalog.version,sample_type:'pre-production',
+      round:1,status:'approved',supplier_code:pack.supplierCode,
+      due_at:'2028-01-01T00:00:00.000Z',version:1,source_sample_code:null,
+      payload:{id:sampleId,sampleCode,sku:catalog.sku,brandId:brand,
+        skuVersion:catalog.version,sampleType:'pre-production',round:1,
+        status:'approved',version:1,sourceSampleCode:null,
+        receipt:{condition:'accepted'}},
+      created_at:'2026-10-01T00:00:00.000Z',
+      updated_at:'2026-10-13T00:00:00.000Z',
+      requested_at:'2026-10-02T00:00:00.000Z',
+      received_at:'2026-10-04T00:00:00.000Z',
+      decision_at:'2026-10-05T00:00:00.000Z',
+      product_sku_id:productSkuId});
+    const updated=await client.query(
+      "UPDATE tech_packs SET product_sku_id=$1 WHERE tech_pack_code=$2 AND brand_id=$3 AND status='draft' RETURNING id",
+      [productSkuId,pack.techPackCode,brand]);
+    assert.equal(updated.rowCount,1);
+    await client.query('COMMIT');
+  }catch(error){await client.query('ROLLBACK').catch(()=>{});throw error;}
+  finally{client.release();}
+  return {productSkuId,bomId,chartId,sampleCode};
+}

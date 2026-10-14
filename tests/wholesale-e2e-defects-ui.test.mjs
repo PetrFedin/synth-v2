@@ -92,7 +92,7 @@ function looksFixture({ buyerCatalog }) {
   const memory = createMemoryWholesaleStore();
   const showroom = { id: 'showroom-1', brandId: 'brand-1', collectionId: 'collection-1', status: 'open' };
   const catalogLook = {
-    id: 'look-1', showroomId: 'showroom-1', position: 1,
+    id: 'look-1', showroomId: 'showroom-1', brandId: 'brand-1', position: 1,
     products: [
       { sku: 'SKU-A', wholesalePrice: 128, currency: 'EUR', minimumOrderQuantity: 1, availableQuantity: 900, status: 'published' },
       { sku: 'SKU-OUT', wholesalePrice: 50, currency: 'EUR', minimumOrderQuantity: 1, availableQuantity: 10, status: 'published' },
@@ -119,7 +119,7 @@ function looksFixture({ buyerCatalog }) {
 }
 
 const buyerCatalog = Object.freeze({
-  id: 'buyer-catalog-2', status: 'published',
+  id: 'buyer-catalog-2', status: 'published', brandId: 'brand-1', shopId: 'shop-1', showroomId: 'showroom-1',
   lines: [{ sku: 'SKU-A', unitPrice: 110, currency: 'EUR', minimumOrderQuantity: 6, availability: { mode: 'available_to_sell', quantity: 1000 } }],
 });
 
@@ -132,17 +132,19 @@ test('H: a buyer sees the price, minimum and stock of their buyer catalogue vers
   assert.equal(first.minimumOrderQuantity, 6);
   assert.equal(first.priceSource, 'buyer-catalog');
   assert.equal(first.buyerCatalogVersionId, 'buyer-catalog-2');
-  assert.equal(second.wholesalePrice, 50, 'a piece missing from the buyer catalogue keeps the catalogue facts');
-  assert.equal(second.priceSource, 'catalog');
+  assert.equal(second.wholesalePrice, null, 'missing buyer-catalog line must not reveal the brand price');
+  assert.equal(second.priceSource, 'unavailable');
+  assert.equal(second.orderable, false);
   assert.deepEqual(asked, [['showroom-1', 'shop-1']]);
 });
 
-test('H: the brand keeps seeing the collection catalogue facts, and a buyer without a catalogue version is unchanged', async () => {
+test('H: the brand sees its own catalog while a buyer without publication gets no brand price', async () => {
   const brand = looksFixture({ buyerCatalog });
   const { items } = await brand.service.listShowroomLooks('brand-user', 'showroom-1');
   assert.equal(items[0].products[0].wholesalePrice, 128);
   assert.deepEqual(brand.asked, [], 'the brand does not read a buyer catalogue');
   const none = looksFixture({ buyerCatalog: undefined });
   const unchanged = await none.service.listShowroomLooks('shop-user', 'showroom-1');
-  assert.equal(unchanged.items[0].products[0].wholesalePrice, 128);
+  assert.equal(unchanged.items[0].products[0].wholesalePrice, null);
+  assert.equal(unchanged.items[0].products[0].orderable, false);
 });

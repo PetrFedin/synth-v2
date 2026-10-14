@@ -44,7 +44,7 @@
   function catalog() { return Array.isArray(state.workspace?.catalogSkus) ? state.workspace.catalogSkus : []; }
   function manageableCatalog() { return catalog().filter((sku) => can(sku.brandId, caps.CAPABILITIES.TECH_PACK_MANAGE)); }
 
-  function reset() { ui.items = []; ui.loaded = false; ui.error = ''; ui.selectedCode = null; ui.generation += 1; }
+  function reset() { ui.items = []; ui.loaded = false; ui.error = ''; ui.selectedCode = null; ui.generation += 1; global.SynthaTechPackCanonicalInspector?.invalidate(); }
   async function fetchAll(request = api) {
     const byCode = new Map();
     const seen = new Set();
@@ -86,6 +86,7 @@
   // See materials.js: retrying a failed load from render starves the event loop.
   function ensureLoaded() { if (!ui.loaded && !ui.loading && !ui.error) queueMicrotask(() => { void load({ reset: true }); }); }
   function upsert(value) {
+    global.SynthaTechPackCanonicalInspector?.invalidate(value.techPackCode);
     const map = new Map(ui.items.map((item) => [item.techPackCode, item]));
     map.set(value.techPackCode, value);
     ui.items = [...map.values()].sort((a, b) => String(a.techPackCode).localeCompare(String(b.techPackCode)));
@@ -142,11 +143,17 @@
   // bill of materials, the measurement chart and the operation sequence are read at the same instant
   // and cannot contradict each other. The page is laid out for print; saving it as PDF is the
   // browser's job, because writing a PDF with Cyrillic by hand means embedding a font.
+  // Slash-containing codes must not traverse the generic HTTP path decoder.
+  function techPackPath(code, suffix = '') {
+    return code.includes('/')
+      ? '/v2/tech-packs/by-code' + suffix + '?code=' + encodeURIComponent(code)
+      : '/v2/tech-packs/' + encodeURIComponent(code) + suffix;
+  }
   async function openDocument(techPackCode) {
     ui.documentLoading = true;
     renderApp();
     try {
-      ui.document = await api(`/v2/tech-packs/${encodeURIComponent(techPackCode)}/document`);
+      ui.document = await api(techPackPath(techPackCode, '/document'));
     } catch (error) {
       toast(error?.message || text('\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0441\u043e\u0431\u0440\u0430\u0442\u044c \u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442.', 'The document could not be built.'), 'error');
     } finally {
@@ -372,6 +379,7 @@
       h('div', { className: 'tech-pack-inspector-head' }, [h('div', {}, [h('p', { className: 'eyebrow', text: value.techPackCode }), h('h2', { text: value.title })]), h('div', { className: 'tech-pack-actions' }, buttons)]),
       h('dl', { className: 'tech-pack-facts' }, [pair('SKU', value.sku), pair(text('Редакция', 'Revision'), value.revision), pair(text('Фабрика', 'Supplier'), `${value.supplierCode || '—'} · ${value.supplierName || '—'}`), pair(text('Выпущен', 'Issued'), date(value.issuedAt)), pair(text('Подтверждён', 'Acknowledged'), date(value.acknowledgedAt)), pair(text('Ссылка подтверждения', 'Acknowledgement reference'), value.acknowledgement?.acknowledgementReference)]),
       h('section', { className: 'tech-pack-card' }, [h('h3', { text: text('Зафиксированные зависимости', 'Immutable dependencies') }), h('dl', { className: 'tech-pack-facts' }, [pair(text('Версия SKU', 'SKU version'), snapshot.skuVersion), pair(text('Версия BOM', 'BOM version'), snapshot.bomVersion), pair(text('Версия таблицы мер', 'Measurement chart version'), snapshot.measurementChartVersion), pair(text('Одобренный PPS', 'Approved PPS'), snapshot.sampleCode)])]),
+      global.SynthaTechPackCanonicalInspector?.render(value),
       operationSequencePanel(value),
       h('section', { className: 'tech-pack-card' }, [h('h3', { text: text('Производственные указания', 'Production instructions') }), h('p', { text: value.constructionNotes || '—' }), h('p', { text: value.qualityNotes || '—' }), h('p', { text: value.packingNotes || '—' })]),
     ]);
@@ -455,7 +463,7 @@
     const sku = value ? h('input', { name: 'sku', value: value.sku, disabled: true }) : select('sku', options, options[0][0]);
     const code = input('techPackCode', value?.techPackCode || `TP-${options[0]?.[0] || value?.sku}-R01`, { required: true, maxlength: '64', disabled: Boolean(value) });
     dialog(value ? text('Редактировать техпак', 'Edit Tech Pack') : text('Новый техпак', 'New Tech Pack'), [field('SKU', sku), field(text('Код техпака', 'Tech Pack code'), code), ...editableFields(value)], async (values) => {
-      if (value) return Boolean(await command(value, `/v2/tech-packs/${encodeURIComponent(value.techPackCode)}`, { expectedVersion: value.version, ...payload(values) }, 'PATCH'));
+      if (value) return Boolean(await command(value, techPackPath(value.techPackCode), { expectedVersion: value.version, ...payload(values) }, 'PATCH'));
       return Boolean(await command(null, '/v2/tech-packs', { techPackCode: values.techPackCode, sku: values.sku, ...payload(values) }));
     });
   }
@@ -465,13 +473,13 @@
       question: text(`${value.techPackCode}: после выпуска редакция неизменяема.`, `${value.techPackCode}: the revision becomes immutable once issued.`),
       confirmLabel: text('Выпустить', 'Issue'),
     });
-    if (accepted) await command(value, `/v2/tech-packs/${encodeURIComponent(value.techPackCode)}/issue`, { expectedVersion: value.version });
+    if (accepted) await command(value, techPackPath(value.techPackCode, '/issue'), { expectedVersion: value.version });
   }
-  function openAcknowledgement(value) { dialog(text('Подтверждение фабрики', 'Supplier acknowledgement'), [field(text('Код фабрики', 'Supplier code'), input('supplierCode', value.supplierCode, { readonly: true, required: true })), field(text('Ссылка / номер подтверждения', 'Acknowledgement reference'), input('acknowledgementReference', '', { required: true, minlength: '2', maxlength: '160' })), field(text('Подтвердил', 'Acknowledged by'), input('acknowledgedBy', '', { required: true, minlength: '2', maxlength: '160' })), field(text('Комментарий', 'Notes'), textarea('notes', '', { rows: '4', maxlength: '1000' }))], async (values) => Boolean(await command(value, `/v2/tech-packs/${encodeURIComponent(value.techPackCode)}/acknowledge`, { expectedVersion: value.version, supplierCode: values.supplierCode, acknowledgementReference: values.acknowledgementReference, acknowledgedBy: values.acknowledgedBy, notes: values.notes || null })), text('Зафиксировать', 'Record'));
+  function openAcknowledgement(value) { dialog(text('Подтверждение фабрики', 'Supplier acknowledgement'), [field(text('Код фабрики', 'Supplier code'), input('supplierCode', value.supplierCode, { readonly: true, required: true })), field(text('Ссылка / номер подтверждения', 'Acknowledgement reference'), input('acknowledgementReference', '', { required: true, minlength: '2', maxlength: '160' })), field(text('Подтвердил', 'Acknowledged by'), input('acknowledgedBy', '', { required: true, minlength: '2', maxlength: '160' })), field(text('Комментарий', 'Notes'), textarea('notes', '', { rows: '4', maxlength: '1000' }))], async (values) => Boolean(await command(value, techPackPath(value.techPackCode, '/acknowledge'), { expectedVersion: value.version, supplierCode: values.supplierCode, acknowledgementReference: values.acknowledgementReference, acknowledgedBy: values.acknowledgedBy, notes: values.notes || null })), text('Зафиксировать', 'Record'));
   }
-  function openRevision(value) { dialog(text('Новая редакция', 'New revision'), [field(text('Код новой редакции', 'New revision code'), input('techPackCode', core.nextRevisionCode(value), { required: true, maxlength: '64' }))], async (values) => Boolean(await command(value, `/v2/tech-packs/${encodeURIComponent(value.techPackCode)}/revisions`, { expectedVersion: value.version, techPackCode: values.techPackCode })), text('Создать редакцию', 'Create revision'));
+  function openRevision(value) { dialog(text('Новая редакция', 'New revision'), [field(text('Код новой редакции', 'New revision code'), input('techPackCode', core.nextRevisionCode(value), { required: true, maxlength: '64' }))], async (values) => Boolean(await command(value, techPackPath(value.techPackCode, '/revisions'), { expectedVersion: value.version, techPackCode: values.techPackCode })), text('Создать редакцию', 'Create revision'));
   }
-  function openWithdraw(value) { dialog(text('Отозвать техпак', 'Withdraw Tech Pack'), [field(text('Причина', 'Reason'), textarea('reason', '', { required: true, minlength: '5', maxlength: '500', rows: '4' }))], async (values) => Boolean(await command(value, `/v2/tech-packs/${encodeURIComponent(value.techPackCode)}/withdraw`, { expectedVersion: value.version, reason: values.reason })), text('Отозвать', 'Withdraw'));
+  function openWithdraw(value) { dialog(text('Отозвать техпак', 'Withdraw Tech Pack'), [field(text('Причина', 'Reason'), textarea('reason', '', { required: true, minlength: '5', maxlength: '500', rows: '4' }))], async (values) => Boolean(await command(value, techPackPath(value.techPackCode, '/withdraw'), { expectedVersion: value.version, reason: values.reason })), text('Отозвать', 'Withdraw'));
   }
 
   function renderTechPacks() {

@@ -105,8 +105,13 @@ function looksFixture({ buyerCatalog }) {
       getShowroom: async () => showroom,
       getMembership: async (organisationId, actorId) => (organisationId === 'brand-1' && actorId === 'brand-user' ? { status: 'active' } : undefined),
       listMembershipsForActor: async (actorId) => (actorId === 'shop-user' ? [{ status: 'active', organisationId: 'shop-1' }] : []),
-      getShowroomInvitationByAccess: async () => ({ status: 'accepted' }),
-      getRelationshipByTrade: async () => ({ status: 'active' }),
+      getShowroomInvitationByAccess: async () => ({
+        showroomId:'showroom-1', brandId:'brand-1', shopId:'shop-1',
+        status:'accepted',expiresAt:'2027-01-01T00:00:00.000Z',
+      }),
+      getRelationshipByTrade: async () => ({
+        status:'active',brandId:'brand-1',shopId:'shop-1',
+      }),
       listShowroomLooks: async () => [catalogLook],
     })),
   };

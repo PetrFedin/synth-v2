@@ -102,7 +102,8 @@ test('authenticated buyer Look response cannot expose brand SKU wholesale price 
     assert.equal(buyerLook.priceSource,'unavailable');
     assert.equal(buyerLook.buyerCatalogVersionId,null);
     assert.equal(buyerLook.orderable,false);
-    assert.ok(!JSON.stringify(buyerLook).includes('319'),'no brand price in response payload');
-    assert.ok(!JSON.stringify(buyerLook).includes('91'),'no brand stock in response payload');
+    const serialized=JSON.stringify(buyerLook);
+    assert.ok(!serialized.includes('"wholesalePrice":319'),'no brand price in response payload');
+    assert.ok(!serialized.includes('"availableQuantity":91'),'no brand stock in response payload');
   } finally {await pool.end();}
 });

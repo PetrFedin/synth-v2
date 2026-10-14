@@ -72,10 +72,20 @@ export function createShowroomSelectionService({
       if (membership.status !== 'active') continue;
       const invitation = await tx.getShowroomInvitationByAccess(showroom.id, membership.organisationId);
       if (invitation?.status !== 'accepted') continue;
-      // Приглашение говорит «этот показ открыли вам», но торгуем ли мы до сих пор — решает связь.
-      // Найдено живьём: после отзыва связи магазин продолжал читать образы с оптовыми ценами.
       const relationship = await tx.getRelationshipByTrade(showroom.brandId, membership.organisationId);
-      if (relationship?.status === 'active') return membership.organisationId;
+      // Read access must observe the same trade, expiry and active-relationship
+      // rules as Selection creation. Checking status alone leaked Look details
+      // through accepted invitations after their expiry or from another trade.
+      try {
+        assertAcceptedShowroomAccess(invitation, {
+          showroomId: showroom.id, brandId: showroom.brandId,
+          shopId: membership.organisationId, now: clock(), relationship,
+        });
+        return membership.organisationId;
+      } catch {
+        // Another active membership may hold valid access. Do not disclose
+        // which invited trade was expired, revoked or mismatched.
+      }
     }
     invariant(false, 'SHOWROOM_ACCESS_DENIED', 'This showroom has not been shared with you', { showroomId: showroom.id });
   }

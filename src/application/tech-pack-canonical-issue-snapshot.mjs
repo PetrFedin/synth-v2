@@ -57,8 +57,23 @@ export function buildCanonicalTechPackIssueSnapshot({ techPack, catalogSku, sour
     'TECH_PACK_CANONICAL_PPS_REQUIRED',
     'Approved pre-production sample must match exact ProductSku, brand and supplier');
 
+  // Copy the exact source payloads from the rows held by the issuing transaction.
+  // Hashes alone cannot reproduce a factory document once newer revisions are
+  // published. This payload is immutable issuance evidence, not a live join.
+  const frozenSources = immutableJsonCopy({
+    bom: { id: bom.id, version: bom.version, payload: bom.payload },
+    measurement: { id: chart.id, version: chart.version, payload: chart.payload },
+    sample: { sampleCode: sample.sampleCode, version: sample.version, payload: sample.payload },
+  });
+  const frozenJson = canonicalJson(frozenSources);
+  invariant(Buffer.byteLength(frozenJson, 'utf8') <= 8 * 1024 * 1024,
+    'TECH_PACK_CANONICAL_EVIDENCE_TOO_LARGE',
+    'Locked source evidence exceeds the maximum safe issuance snapshot');
+  const frozenSourcesHash = sha256(frozenJson);
+
   const evidence = {
     schemaVersion: 1,
+    frozenSourcesHash,
     productSkuId: sku.id,
     productSkuContentHash: sku.contentHash,
     styleVersionId: sku.styleVersionId,
@@ -78,7 +93,53 @@ export function buildCanonicalTechPackIssueSnapshot({ techPack, catalogSku, sour
     measurementChartId: chart.id, measurementChartVersion: chart.version,
     sampleCode: sample.sampleCode, sampleVersion: sample.version,
     canonical,
+    frozenSources,
   });
+}
+
+/**
+ * Verify the self-contained manufacturing source evidence without reading
+ * mutable current BOM/Measurement/Sample rows. Legacy packs and canonical
+ * packs issued without a frozen payload must not be reconstructed silently.
+ */
+export function verifyFrozenCanonicalTechPackSources(snapshot) {
+  const basis = snapshot?.canonical;
+  const frozen = snapshot?.frozenSources;
+  invariant(basis?.schemaVersion === 1 && frozen?.bom && frozen?.measurement
+    && frozen?.sample && /^[0-9a-f]{64}$/.test(basis.frozenSourcesHash ?? ''),
+    'TECH_PACK_CANONICAL_FROZEN_EVIDENCE_REQUIRED',
+    'Canonical document requires its exact frozen source evidence');
+  invariant(sha256(canonicalJson(frozen)) === basis.frozenSourcesHash,
+    'TECH_PACK_CANONICAL_FROZEN_EVIDENCE_TAMPERED',
+    'Stored canonical document sources do not match the issued digest');
+  const {lineageHash, ...manifest} = basis;
+  invariant(sha256(canonicalJson(manifest)) === lineageHash,
+    'TECH_PACK_CANONICAL_LINEAGE_TAMPERED',
+    'Issued canonical lineage manifest is inconsistent');
+  for(const [kind, source, id, version, contentHash] of [
+    ['bom', frozen.bom, snapshot.bomId, snapshot.bomVersion, basis.bomContentHash],
+    ['measurement', frozen.measurement, snapshot.measurementChartId,
+      snapshot.measurementChartVersion, basis.measurementContentHash],
+    ['sample', frozen.sample, snapshot.sampleCode, snapshot.sampleVersion,
+      basis.sampleContentHash],
+  ]) {
+    const sourceId = kind === 'sample' ? source.sampleCode : source.id;
+    invariant(sourceId === id && source.version === version
+      && validVersion(version) && validPayload(source.payload)
+      && evidenceHash(kind, id, version, source.payload) === contentHash,
+      'TECH_PACK_CANONICAL_SOURCE_EVIDENCE_MISMATCH',
+      'Frozen canonical source does not match the issued source reference');
+  }
+  return immutableJsonCopy(frozen);
+}
+
+function immutableJsonCopy(value) {
+  return deepFreeze(JSON.parse(canonicalJson(value)));
+}
+function deepFreeze(value) {
+  if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value;
+  for (const child of Object.values(value)) deepFreeze(child);
+  return Object.freeze(value);
 }
 
 function validVersion(version) {

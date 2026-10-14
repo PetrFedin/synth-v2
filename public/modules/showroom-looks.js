@@ -174,7 +174,12 @@
       const item = el('li');
       item.append(el('strong', { rawText: product.name || product.sku }));
       const facts = [product.sku];
-      if (Number.isFinite(Number(product.wholesalePrice))) facts.push(`${I18N.formatNumber(Number(product.wholesalePrice), { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${product.currency || ''}`.trim());
+      if (product.wholesalePrice !== null && product.wholesalePrice !== undefined
+        && product.wholesalePrice !== '' && Number.isFinite(Number(product.wholesalePrice))) {
+        facts.push(`${I18N.formatNumber(Number(product.wholesalePrice), { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${product.currency || ''}`.trim());
+      } else if (product.priceSource === 'unavailable') {
+        facts.push(text('Цена для покупателя не опубликована', 'Buyer price not published'));
+      }
       if (product.minimumOrderQuantity) facts.push(`${text('мин.', 'min')} ${product.minimumOrderQuantity}`);
       item.append(el('span', { className: 'muted', rawText: facts.join(' · ') }));
       pieces.append(item);

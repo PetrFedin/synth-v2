@@ -1,6 +1,7 @@
 import { invariant } from '../core/errors.mjs';
 import { CAPABILITIES, rolesWithCapability } from '../modules/access-control/public.mjs';
 import { withPostgresTransaction } from './postgres-transaction.mjs';
+import { verifyFrozenCanonicalTechPackSources } from '../application/tech-pack-canonical-issue-snapshot.mjs';
 
 const SNAPSHOT_BEGIN = 'BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY';
 const READ_ROLES = rolesWithCapability(CAPABILITIES.TECH_PACK_READ);
@@ -34,8 +35,11 @@ export function createPostgresTechPackReader({ pool } = {}) {
     getDocumentForActor(actorId, techPackCode) {
       return withPostgresTransaction(pool, async (queryable) => {
         const result = await queryable.query(
-          `SELECT document.payload
+          `SELECT document.payload,
+                  pack.payload->'dependencySnapshot' AS dependency_snapshot
              FROM tech_pack_document_workspace AS document
+             JOIN tech_packs AS pack
+               ON pack.tech_pack_code = document.tech_pack_code
             WHERE document.tech_pack_code = $1
               AND EXISTS (
                 SELECT 1 FROM memberships AS membership
@@ -46,7 +50,19 @@ export function createPostgresTechPackReader({ pool } = {}) {
               )`,
           [techPackCode, actorId, READ_ROLES],
         );
-        return result.rows[0]?.payload;
+        const document = result.rows[0];
+        // Existing legacy documents retain their historical contract. An
+        // internally issued canonical Pack must NOT silently join today's BOM
+        // or legacy-SKU measurement chart into yesterday's factory document.
+        // Verify the frozen sources and block printable readback until the
+        // exact ProductSku document projector has been separately admitted.
+        const basis = document?.dependency_snapshot;
+        if (basis?.canonical?.lineageHash) {
+          verifyFrozenCanonicalTechPackSources(basis);
+          invariant(false, 'TECH_PACK_CANONICAL_PRINT_NOT_ADMITTED',
+            'Frozen Tech Pack sources are verified, but canonical factory print is not yet admitted');
+        }
+        return document?.payload;
       }, { begin: SNAPSHOT_BEGIN });
     },
   });

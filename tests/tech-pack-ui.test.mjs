@@ -115,8 +115,8 @@ test('canonical Tech Pack browser document uses rights-gated endpoint and never 
   assert.match(canonicalRenderer,/Печать пока заблокирована/);
   assert.match(canonicalRenderer,/Print still gated/);
   assert.match(canonicalRenderer,/documentHash/);
-  assert.match(canonicalRenderer,/policyHash/);
-  assert.match(canonicalRenderer,/lineageHash/);
+  assert.match(workspace,/policyHash/);
+  assert.match(workspace,/lineageHash/);
 });
 
 test('canonical Tech Pack browser evidence is bilingual and exposes issued immutable sections', async () => {

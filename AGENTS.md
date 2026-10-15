@@ -42,3 +42,19 @@
 - Run `npm run verify` before publishing. It includes the governed fashion KPI methodology and repository-native source-contract validator.
 - Run `npm run verify:postgres` for a release candidate. It must include PostgreSQL integration coverage plus the real runtime process smoke; when a running local/staging target is available, also run the relevant live acceptance command before claiming end-to-end readiness.
 - Priority: close the canonical Product Master -> Readiness -> Commercial Projection -> Buyer Catalog -> Order Matrix spine before expanding premium buyer features, analytics or additional integration breadth.
+
+## Дизайн и стратегия (справочные ориентиры)
+
+- Перед работой с интерфейсом прочитай `DESIGN.md` и `ARCHITECTURE.md` §10; значения цветов, шрифтов, радиусов и теней берутся только из токенов.
+- Перед стратегическими решениями (приоритеты, тарифы, что строить дальше) прочитай `docs/business/`; помеченные «гипотеза» цифры не выдавай за факты.
+- Не добавляй новые `omnidata-vN.css/js` и не вводи hex вне токенов; свод версий делается поэтапно, один слой за PR.
+- Перед удалением старого CSS/JS слоя докажи поиском (`index.html`, JS-модули, `static-handler.mjs`, `tests/`), что от него ничего не зависит; тесты и маршрут меняй в том же PR.
+- Белый текст на `#FF5B22` не проходит AA (3,10:1): на оранжевой заливке используй `onAccent`, оранжевый текст на светлом — `accentText`.
+- Любая смена токенов, шрифта или состояний кнопок обновляет `ARCHITECTURE.md` §10 в том же PR; прикладывай скриншоты до/после.
+- Новый шрифт хостится самим проектом (не чужим CDN), плотные таблицы проверяются на 5 ключевых экранах.
+- Текст интерфейса только через `public/modules/i18n-runtime.js`, RU и EN.
+- Перед PR: `npm run validate:ui`, `validate:design-system`, `validate:ods-boundaries`, `validate:i18n`, затем `npm run verify`.
+- Предлагая функцию «в дорожную карту», проверь, что у неё есть конкретный пилотный клиент (см. `docs/business/01-business-plan.md`).
+- Перед изменением кнопок, маршрутов и переходов сверяйся с `docs/business/04-interface-and-connections.md` и обновляй реестр действий в том же PR.
+- Автоматы цепочки и инварианты (`docs/business/08-chain-state-machines-and-role-workspaces.md`) не менять без теста на запрещённый переход и обновления `ARCHITECTURE.md`.
+- Новые компоненты сверяй с `docs/design/ui-kit.html`; пары цветов проверяй его таблицей контраста.

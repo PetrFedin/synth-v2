@@ -84,6 +84,24 @@ function schemas() {
       },
     },
     TechPackDocument: { type: 'object' },
+    TechPackCanonicalRenderAdmission: { type: 'object', additionalProperties: false,
+      required: ['schemaVersion','purpose','evaluatedAt','documentHash','admitted','blockers','decisions','policyHash'],
+      properties: {
+        schemaVersion: { type: 'integer', enum: [1] },
+        purpose: { type: 'string', enum: ['canonical-public-render-admission'] },
+        evaluatedAt: { type: 'string', format: 'date-time' },
+        documentHash: { type: 'string', pattern: '^[a-f0-9]{64}$' },
+        admitted: { type: 'boolean', enum: [true] },
+        blockers: { type: 'array', maxItems: 0, items: { type: 'string' } },
+        decisions: { type: 'array', items: { type: 'object' } },
+        policyHash: { type: 'string', pattern: '^[a-f0-9]{64}$' },
+      } },
+    TechPackCanonicalDocumentEnvelope: { type: 'object', additionalProperties: false,
+      required: ['document','admission'],
+      properties: {
+        document: { type: 'object' },
+        admission: { '$ref': '#/components/schemas/TechPackCanonicalRenderAdmission' },
+      } },
     TechPackOperationInput: { type: 'object', additionalProperties: false,
       required: ['sequence','operationCode','nameRu','nameEn','machineClass','standardMinutes'],
       properties: { sequence: { type: 'integer', minimum: 1, maximum: 999 },
@@ -115,6 +133,15 @@ function paths() {
       patch: byCodeMutation('updateTechPackByCode', '#/components/schemas/TechPackUpdate', 'Updated tech pack'),
     },
     '/tech-packs/by-code/document': { get: byCodeRead('getTechPackDocumentByCode', 'Tech pack document', '#/components/schemas/TechPackDocument') },
+    '/tech-packs/by-code/canonical-document': { get: {
+      operationId: 'getRenderableCanonicalTechPackDocumentByCode',
+      description: 'Returns an immutable canonical Tech Pack document only when current publication-rights admission succeeds in the same database snapshot. This is not PDF admission.',
+      security: [{ bearerAuth: [] }], parameters: [codeQuery],
+      responses: {
+        200: dataResponse('Renderable canonical Tech Pack document', '#/components/schemas/TechPackCanonicalDocumentEnvelope'),
+        400:errorResponse,401:errorResponse,403:errorResponse,404:errorResponse,422:errorResponse,
+      },
+    } },
     '/tech-packs/by-code/operations': {
       post: { operationId: 'addTechPackOperationByCode', security: [{ bearerAuth: [] }],
         parameters: [codeQuery, idempotency], requestBody: body('#/components/schemas/TechPackOperationInput'),
@@ -134,6 +161,15 @@ function paths() {
     '/tech-packs/by-code/revisions': { post: byCodeMutation('createTechPackRevisionByCode', '#/components/schemas/TechPackRevisionInput', 'Created tech pack revision') },
     '/tech-packs/by-code/withdraw': { post: byCodeMutation('withdrawTechPackByCode', '#/components/schemas/TechPackWithdrawalInput', 'Withdrawn tech pack') },
     '/tech-packs/{techPackCode}': { get: { operationId: 'getTechPack', security: [{ bearerAuth: [] }], parameters: [codeParameter], responses: { 200: dataResponse('Tech pack', '#/components/schemas/TechPack'), 400: errorResponse, 401: errorResponse, 403: errorResponse, 404: errorResponse } }, patch: mutation('updateTechPack', '#/components/schemas/TechPackUpdate', 'Updated tech pack') },
+    '/tech-packs/{techPackCode}/canonical-document': { get: {
+      operationId: 'getRenderableCanonicalTechPackDocument',
+      description: 'Returns an immutable canonical Tech Pack document only when current publication-rights admission succeeds in the same database snapshot. This is not PDF admission.',
+      security: [{ bearerAuth: [] }], parameters: [codeParameter],
+      responses: {
+        200: dataResponse('Renderable canonical Tech Pack document', '#/components/schemas/TechPackCanonicalDocumentEnvelope'),
+        400:errorResponse,401:errorResponse,403:errorResponse,404:errorResponse,422:errorResponse,
+      },
+    } },
     '/tech-packs/{techPackCode}/canonical-preflight': { get: {
       operationId: 'getTechPackCanonicalPreflight',
       description: 'Read-only source identity and revision diagnostic; never authorises issuing or revising a Tech Pack.',

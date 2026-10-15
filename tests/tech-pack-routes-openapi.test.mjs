@@ -9,6 +9,7 @@ function fixture() {
   const techPacks = {
     pageForActor: async (...args) => { calls.push(['page', ...args]); return { items: [], nextCursor: null }; },
     getForActor: async (...args) => { calls.push(['get', ...args]); return { techPackCode: args[1] }; },
+    getCanonicalRenderableDocumentForActor: async (...args) => { calls.push(['canonical-document', ...args]); return { document:{techPackCode:args[1]}, admission:{admitted:true} }; },
     createTechPack: async (...args) => { calls.push(['create', ...args]); return args[2]; },
     updateTechPack: async (...args) => { calls.push(['update', ...args]); return { techPackCode: args[2], ...args[3] }; },
     issueTechPack: async (...args) => { calls.push(['issue', ...args]); return { techPackCode: args[2], status: 'issued' }; },
@@ -65,4 +66,21 @@ test('authoritative OpenAPI 1.21 documents supplier acknowledgement and guarded 
   assert.ok(specification.components.schemas.TechPackDependencySnapshot.properties.frozenSources);
   assert.ok(specification.components.schemas.TechPackDependencySnapshot.properties.frozenDocumentContext);
   assert.equal(Object.isFrozen(specification), true);
+});
+
+
+test('canonical document routes expose an admitted immutable document without replacing legacy document route',async()=>{
+  const {calls,routes}=fixture();
+  const byCode=matchWholesaleRoute(routes,'GET','/v2/tech-packs/by-code/canonical-document');
+  assert.ok(byCode);
+  await byCode.execute({actorId:'owner-user',query:{code:'TP/STYLE/001'},body:{},params:[]});
+  const slashFree=matchWholesaleRoute(routes,'GET','/v2/tech-packs/TP-STYLE-001/canonical-document');
+  assert.ok(slashFree);
+  await slashFree.execute({actorId:'owner-user',query:{},body:{},params:slashFree.params});
+  assert.deepEqual(calls.filter(c=>c[0]==='canonical-document').map(c=>c.slice(1)),
+    [['owner-user','TP/STYLE/001'],['owner-user','TP-STYLE-001']]);
+  for(const path of ['/tech-packs/by-code/canonical-document','/tech-packs/{techPackCode}/canonical-document']) {
+    assert.ok(wholesaleV2ExtendedOpenApi.paths[path]);
+  }
+  assert.equal(wholesaleV2ExtendedOpenApi.components.schemas.TechPackCanonicalRenderAdmission.properties.admitted.enum[0],true);
 });

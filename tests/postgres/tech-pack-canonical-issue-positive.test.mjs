@@ -108,7 +108,10 @@ test('canonical Tech Pack issues on real PostgreSQL and retains immutable issued
     const originalDocument=buildFrozenCanonicalTechPackDocument(issued);
     const originalDocumentJson=canonicalJson(originalDocument);
     assert.equal(originalDocument.publicPrintAdmitted,false);
-    assert.deepEqual(originalDocument.blockers,['SKETCH_EVIDENCE_MISSING']);
+    assert.equal(originalDocument.factoryEvidenceReady,true);
+    assert.deepEqual(originalDocument.blockers,[]);
+    assert.equal(originalDocument.sketches.state,'verified');
+    assert.equal(originalDocument.sketches.rows[0].id,sources.mediaId);
     assert.equal(await documentFromFreshProcess(connectionString,owner,code),originalDocumentJson,
       'fresh Node process reproduces the complete frozen document before source mutation');
     assert.equal(originalContext.operations.rows[0].id,originalOperation.id);
@@ -117,6 +120,29 @@ test('canonical Tech Pack issues on real PostgreSQL and retains immutable issued
     assert.equal(originalContext.product.styleVersion.titleEn,'Technical jacket');
     assert.equal(await contextFromFreshProcess(connectionString,owner,code),originalJson,
       'first fresh Node process reproduces issued context from persisted data');
+
+    const rightsReader=createPostgresTechPackReader({pool});
+    const beforeRevocation=await rightsReader.getCanonicalRenderAdmissionForActor(
+      owner,code,new Date().toISOString());
+    assert.equal(beforeRevocation.admitted,true,
+      'retained sketch with current cleared rights passes render admission');
+    assert.equal(beforeRevocation.documentHash,originalDocument.documentHash);
+
+    await pool.query(
+      `INSERT INTO product_media_publication_rights
+         (id,media_id,version,status,basis,evidence_ref,approved_at,approved_by,valid_until)
+       VALUES ($1,$2,2,'revoked','brand-rights-revoked',$3,now(),$4,NULL)`,
+      [id('rights-v2'),sources.mediaId,'rights://revocation/'+tag,owner],
+    );
+    const afterRevocation=await rightsReader.getCanonicalRenderAdmissionForActor(
+      owner,code,new Date().toISOString());
+    assert.equal(afterRevocation.admitted,false);
+    assert.ok(afterRevocation.blockers.includes(
+      sources.mediaId+':CURRENT_RIGHTS_REVOKED'));
+    assert.equal(afterRevocation.documentHash,originalDocument.documentHash,
+      'rights revocation changes admission but never rewrites historical documentHash');
+    const unchangedAfterRevocation=await rightsReader.getCanonicalFrozenDocumentForActor(owner,code);
+    assert.equal(unchangedAfterRevocation.documentHash,originalDocument.documentHash);
 
     // Change the authoritative technical sources after R1. R2 must freeze these
     // newer source versions while R1 remains byte-canonical from its issued copy.
@@ -259,6 +285,20 @@ async function seedTechnicalEvidence(pool,{id,brand,owner,catalog,pack}){
     await insert('product_skus',{id:productSkuId,sku_code:catalog.sku,brand_id:brand,
       style_version_id:sv,colorway_id:color,size_value_id:size,payload:{},
       content_hash:hash,created_at:now,created_by:owner});
+    const mediaId=id('media-front'),mediaHash='b'.repeat(64);
+    await insert('product_media',{id:mediaId,brand_id:brand,style_version_id:sv,
+      colorway_id:color,media_type:'image',media_role:'design_sketch',
+      uri:'s3://canonical-tech-pack/'+mediaId+'/front.png',sort_order:0,
+      content_hash:mediaHash,payload:{viewLabel:'Front / Перед'},
+      created_at:now,created_by:owner});
+    await insert('product_media_retained_assets',{media_id:mediaId,
+      content_hash:mediaHash,storage_key:'sha256/'+mediaHash+'/front.png',
+      storage_version:'immutable-v1',mime_type:'image/png',byte_size:24576,
+      retained_at:now,retained_by:owner});
+    await insert('product_media_publication_rights',{id:id('rights-v1'),media_id:mediaId,
+      version:1,status:'cleared',basis:'brand-owned',
+      evidence_ref:'rights://clearance/'+mediaId,approved_at:now,
+      approved_by:owner,valid_until:null});
     await insert('mdm_dictionaries',{id:dict,tenant_id:brand,code:'measurement.unit',
       names:{ru:'Единицы измерения',en:'Measurement units'},
       data_class:'classifier',scope_model:'tenant',hierarchy_enabled:false,
@@ -331,7 +371,7 @@ async function seedTechnicalEvidence(pool,{id,brand,owner,catalog,pack}){
     await client.query('COMMIT');
   }catch(error){await client.query('ROLLBACK').catch(()=>{});throw error;}
   finally{client.release();}
-  return {productSkuId,bomId,chartId,sampleCode};
+  return {productSkuId,bomId,chartId,sampleCode,mediaId};
 }
 
 

@@ -2477,3 +2477,8 @@ The supported PostgreSQL runtime keeps the existing public `issueTechPack` servi
 The real PostgreSQL R1/R2 acceptance now calls `runtime.techPacks.issueTechPack` for both releases, proving the supported runtime surface rather than an internal-only issuer. Legacy issue code remains compatibility implementation and is not the canonical PostgreSQL runtime authority after this candidate.
 
 This is still not PDF/public-document admission. Canonical document rendering remains separately gated by frozen evidence and current publication-rights policy.
+
+
+## 2026-10-15 — Real PostgreSQL sketch-rights revocation acceptance (candidate)
+
+The canonical Tech Pack PostgreSQL Golden Path now includes an actual retained design sketch and append-only publication-rights authority. Rights v1 is cleared before issue and is frozen into the historical document. A later rights v2 revocation does not mutate the issued document or its SHA-256; instead the current-rights render admission flips from admitted to denied with an explicit revoked blocker. This proves the intended separation between historical issue evidence and present-day publication permission against the real database schema.

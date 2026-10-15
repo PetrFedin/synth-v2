@@ -1,0 +1,77 @@
+name: Isolated Tech Pack Source Sections Qualification
+on:
+  push:
+    branches: [chore/tech-pack-source-sections-qualify-20261015]
+permissions:
+  contents: read
+jobs:
+  source-sections:
+    if: github.repository == 'PetrFedin/synth-v2' && github.ref == 'refs/heads/chore/tech-pack-source-sections-qualify-20261015'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run actual source-section and reader-driver regression tests
+        run: |
+          mkdir -p /tmp/syntha-qualification
+          node --test --test-reporter=tap tests/tech-pack-frozen-source-sections.test.mjs tests/postgres-tech-pack-reader-frozen-guard.test.mjs | tee /tmp/syntha-qualification/tests.tap
+      - name: Prepare architecture blob without modifying any branch
+        id: patch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node --input-type=module <<'NODE'
+          import {readFileSync,writeFileSync,appendFileSync} from 'node:fs';
+          import {createHash} from 'node:crypto';
+          import assert from 'node:assert/strict';
+          const bytes=readFileSync('ARCHITECTURE.md');
+          const original=createHash('sha1').update(Buffer.from('blob '+bytes.length+'\0')).update(bytes).digest('hex');
+          assert.equal(original,'c6730c26f65b6f31876da0aaea3bb5089c3d99e7','Architecture base changed; do not overwrite');
+          let text=bytes.toString('utf8');
+          const heading='## 20. Change register';
+          assert.equal(text.split(heading).length,2,'Unique section 20 required');
+          const addition=[
+            '### Canonical Tech Pack source-section projection - 2026-10-15 candidate',
+            '',
+            '`buildFrozenTechPackSourceSections` validates the issued frozen BOM, canonical measurement and approved PPS bundle before building immutable internal source sections. It never reads current catalog, MDM, material prices or images. Source payload identity/version/lifecycle/brand and exact StyleVersion/Colorway/SizeScaleVersion must agree with the issued manifest. BOM quantities, costs, currencies, FX and placement are retained without repricing; measurement cells are keyed by exact Product SizeValue IDs with complete coverage, frozen RU/EN labels, explicit tolerances and versioned MDM references. Missing, duplicate, foreign and code-only cells fail closed; missing data is not zero and is not regenerated from grading.',
+            '',
+            'The deterministic section digest is an integrity checksum, not a signature. The result explicitly has `printAdmitted: false`: issued header/product/supplier context, operation sequence and verified sketch content remain required. This helper is not connected to public HTTP or factory printing. Two-snapshot JSON tests establish pure-function historical section stability only, not two-issued-revision PostgreSQL/restart or PDF byte equivalence.',
+            '',
+            'The document reader recognises either `canonical` or `frozenSources` property even when null/empty; a damaged/missing lineage hash must not fall through to mutable legacy document joins. Valid canonical source evidence remains blocked by `TECH_PACK_CANONICAL_PRINT_NOT_ADMITTED`. Legacy documents and membership predicates keep their contract. Detecting removal of the entire snapshot requires a separate durable issuance-format discriminator and remains open. Full exact-head repository/PostgreSQL/commercialization CI, independent review, complete frozen document and RU/EN browser/PDF acceptance are required before release. See `docs/reconciliations/2026-10-15-tech-pack-frozen-source-evidence.md`.',
+            '',
+            '---',
+            '',
+          ].join('\n');
+          text=text.replace(heading,addition+'\n'+heading);
+          const separator='|---|---|---|---|---|';
+          const at=text.indexOf(separator,text.indexOf(heading))+separator.length;
+          assert.ok(at>separator.length,'Change-register table required');
+          const row='\n| 2026-10-15 | Draft PR #285 source sections / Issue #282 | Add frozen BOM/measurement/PPS source-section projection with exact SizeValue matrix, issued RU/EN and MDM snapshots, deterministic digest and explicit print HOLD; reject damaged canonical markers instead of falling through to mutable legacy data. | 7, 10, 19.1, 20 | CANDIDATE; unit/driver-contract tests are not PostgreSQL/restart/PDF evidence; complete frozen document, exact-head full CI and independent review remain required |';
+          text=text.slice(0,at)+row+text.slice(at);
+          writeFileSync('ARCHITECTURE.md',text);
+          const response=await fetch('https://api.github.com/repos/PetrFedin/synth-v2/git/blobs',{
+            method:'POST',headers:{Authorization:'Bearer '+process.env.GH_TOKEN,Accept:'application/vnd.github+json','Content-Type':'application/json','X-GitHub-Api-Version':'2022-11-28'},
+            body:JSON.stringify({content:text,encoding:'utf-8'}),
+          });
+          assert.equal(response.status,201,'Creating architecture blob failed: '+response.status);
+          const result=await response.json();
+          assert.match(result.sha,/^[a-f0-9]{40}$/);
+          appendFileSync(process.env.GITHUB_OUTPUT,'blob_sha='+result.sha+'\n');
+          console.log('ARCHITECTURE_BLOB_SHA='+result.sha);
+          writeFileSync('/tmp/syntha-qualification/architecture-blob.txt',result.sha+'\n');
+          NODE
+      - name: Archive isolated source worktree for local verification
+        run: tar --exclude=.git -czf /tmp/syntha-qualification/source-worktree.tar.gz .
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: syntha-source-sections-${{ steps.patch.outputs.blob_sha || 'failed' }}
+          path: /tmp/syntha-qualification/
+          retention-days: 1

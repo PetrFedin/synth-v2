@@ -73,7 +73,6 @@
   "src/application/supplier-payment-service.mjs": 2,
   "src/application/supplier-recovery-service.mjs": 1,
   "src/application/target-pricing-service.mjs": 2,
-  "src/application/tech-pack-query-service.mjs": 1,
   "src/application/tech-pack-service.mjs": 2,
   "src/application/workspace-query-service.mjs": 4,
   "src/core/bom-cursor.mjs": 1,

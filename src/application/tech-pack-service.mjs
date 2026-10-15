@@ -55,10 +55,22 @@ export function createTechPackService({ techPackStore, clock = () => new Date().
   return Object.freeze({
     createTechPack(commandId, actorId, input) {
       return execute(commandId, `createTechPack:${actorId}:${canonicalJson(input)}`, actorId,
-        async (tx) => Object.freeze({ catalogSku: await contextForSku(tx, input?.sku, actorId), existing: await tx.getTechPackByCode(input?.techPackCode) }),
+        async (tx) => {
+          const catalogSku = await contextForSku(tx, input?.sku, actorId);
+          const productSkuId = typeof tx.getProductSkuIdByCatalogSku === 'function'
+            ? await tx.getProductSkuIdByCatalogSku(catalogSku.sku, catalogSku.brandId)
+            : null;
+          return Object.freeze({
+            catalogSku, productSkuId,
+            existing: await tx.getTechPackByCode(input?.techPackCode),
+          });
+        },
         async (tx, context) => {
           invariant(!context.existing, 'TECH_PACK_ALREADY_EXISTS', 'Tech pack already exists', { techPackCode: input?.techPackCode });
-          const value = createTechPackDomain({ id: nextId('tech-pack'), catalogSku: context.catalogSku, input, createdAt: clock() });
+          const value = createTechPackDomain({
+            id: nextId('tech-pack'), catalogSku: context.catalogSku,
+            productSkuId: context.productSkuId, input, createdAt: clock(),
+          });
           await tx.insertTechPack(value); await append(tx, 'tech-pack.created', value, commandId, actorId); return value;
         });
     },

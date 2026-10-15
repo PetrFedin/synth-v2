@@ -13,7 +13,7 @@ test('supported PostgreSQL runtime overrides legacy issue command with canonical
 
 test('public Tech Pack routes keep stable issue transport contract during canonical cutover',async()=>{
   const routes=await read('src/http/tech-pack-routes.mjs');
-  assert.match(routes,/by-code\/issue/);
+  assert.ok(routes.includes('by-code\\/issue'));
   assert.match(routes,/service\.issueTechPack\(commandId, actorId, code, body\)/);
   assert.match(routes,/service\.issueTechPack\(commandId, actorId, params\[0\], body\)/);
 });

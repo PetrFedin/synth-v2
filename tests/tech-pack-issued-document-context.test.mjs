@@ -76,7 +76,7 @@ test('legacy source-only evidence remains verifiable but cannot invent a documen
 
 for (const [name, mutate, suffix] of [
   ['absent operation read', f => delete f.documentSources.operations, 'OPERATIONS_REQUIRED'],
-  ['absent sketch read', f => delete f.documentSources.sketches, 'SKETCH_EVIDENCE_ROWS_INVALID'],
+  ['absent sketch read', f => delete f.documentSources.sketches, 'SKETCH_EVIDENCE_REQUIRED'],
   ['foreign operation', f => { f.documentSources.operations[0].brandId = 'other'; }, 'OPERATIONS_INVALID'],
   ['different pack operation', f => { f.documentSources.operations[0].techPackCode = 'OTHER'; }, 'OPERATIONS_INVALID'],
   ['duplicate operation ID', f => { f.documentSources.operations[0].id = f.documentSources.operations[1].id; }, 'OPERATIONS_INVALID'],

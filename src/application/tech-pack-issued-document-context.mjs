@@ -28,8 +28,12 @@ export function bindIssuedTechPackDocumentContext(issued, sources, documentSourc
   check(!Object.hasOwn(snapshot, 'frozenDocumentContext')
     && !Object.hasOwn(snapshot.canonical, 'documentContextHash'),
   'ALREADY_BOUND', 'Issued document context cannot be rebound');
+  check(text(issued?.issuedBy) && timestamp(issued?.issuedAt), 'HEADER_INVALID',
+    'Complete issue actor and issue time are required before document evidence is frozen');
   check(Array.isArray(documentSources?.operations), 'OPERATIONS_REQUIRED',
     'The issuing transaction must explicitly read the operation sequence');
+  check(Array.isArray(documentSources?.sketches), 'SKETCH_EVIDENCE_REQUIRED',
+    'The issuing transaction must explicitly read sketch evidence, including an empty result');
   const rows = [...documentSources.operations];
   validateOperations(rows, issued);
   rows.sort((a, b) => a.sequence - b.sequence);

@@ -1720,10 +1720,21 @@ At minimum:
 
 ---
 
+### Canonical Tech Pack source-section projection - 2026-10-15 candidate
+
+`buildFrozenTechPackSourceSections` validates the issued frozen BOM, canonical measurement and approved PPS bundle before building immutable internal source sections. It never reads current catalog, MDM, material prices or images. Source payload identity/version/lifecycle/brand and exact StyleVersion/Colorway/SizeScaleVersion must agree with the issued manifest. BOM quantities, costs, currencies, FX and placement are retained without repricing; measurement cells are keyed by exact Product SizeValue IDs with complete coverage, frozen RU/EN labels, explicit tolerances and versioned MDM references. Missing, duplicate, foreign and code-only cells fail closed; missing data is not zero and is not regenerated from grading.
+
+The deterministic section digest is an integrity checksum, not a signature. The result explicitly has `printAdmitted: false`: issued header/product/supplier context, operation sequence and verified sketch content remain required. This helper is not connected to public HTTP or factory printing. Two-snapshot JSON tests establish pure-function historical section stability only, not two-issued-revision PostgreSQL/restart or PDF byte equivalence.
+
+The document reader recognises either `canonical` or `frozenSources` property even when null/empty; a damaged/missing lineage hash must not fall through to mutable legacy document joins. Valid canonical source evidence remains blocked by `TECH_PACK_CANONICAL_PRINT_NOT_ADMITTED`. Legacy documents and membership predicates keep their contract. Detecting removal of the entire snapshot requires a separate durable issuance-format discriminator and remains open. Full exact-head repository/PostgreSQL/commercialization CI, independent review, complete frozen document and RU/EN browser/PDF acceptance are required before release. See `docs/reconciliations/2026-10-15-tech-pack-frozen-source-evidence.md`.
+
+---
+
 ## 20. Change register
 
 | Date | PR / commit | Change | Master sections affected | Evidence/status |
 |---|---|---|---|---|
+| 2026-10-15 | Draft PR #285 source sections / Issue #282 | Add frozen BOM/measurement/PPS source-section projection with exact SizeValue matrix, issued RU/EN and MDM snapshots, deterministic digest and explicit print HOLD; reject damaged canonical markers instead of falling through to mutable legacy data. | 7, 10, 19.1, 20 | CANDIDATE; unit/driver-contract tests are not PostgreSQL/restart/PDF evidence; complete frozen document, exact-head full CI and independent review remain required |
 | 2026-10-15 | Draft stacked canonical Tech Pack source-freeze / Issue #282 | At SERIALIZABLE canonical issue, embed deep copied, SHA-256 verified exact BOM/chart/PPS source payloads and bounded source manifest; reject canonical `/document` instead of rejoining mutable legacy-SKU BOM/chart until frozen projector is admitted. Legacy document reader unchanged. | 7, 10, 20; Product Engineering / Tech Pack Issue | CANDIDATE; dependent on #280; exact-head CI/independent review, full frozen print projector, browser/PDF proof all pending |
 | 2026-10-13 | Draft integration branch for PR #273 + #278 | Canonical ProductSku/BOM/Measurement/PPS preflight accessible for slash-containing Tech Pack business codes through strict query alias without weakening safe URL decoding, role isolation, or source snapshot logic. | 7, 10, 20, 22; integration admission | CANDIDATE only: exact-head combined CI, independent review, browser UAT pending |
 | 2026-10-13 | Issue #276 / Draft `fix/tech-pack-query-code-addressing-20261013` | Add strictly validated by-code query aliases for Tech Pack read/document/operation/edit/issue/ack/revision/withdraw; restore slash-containing codes without changing the global path decoder, role/capability checks or idempotency. Browser chooses alias only for slash codes. | 7, 10, 20, 22; 2026-10-13 Tech Pack address contract | CANDIDATE — exact-head CI, independent review and live browser acceptance required; no production release |

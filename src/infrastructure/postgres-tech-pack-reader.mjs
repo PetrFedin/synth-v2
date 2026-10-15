@@ -54,10 +54,12 @@ export function createPostgresTechPackReader({ pool } = {}) {
         // Existing legacy documents retain their historical contract. An
         // internally issued canonical Pack must NOT silently join today's BOM
         // or legacy-SKU measurement chart into yesterday's factory document.
-        // Verify the frozen sources and block printable readback until the
-        // exact ProductSku document projector has been separately admitted.
+        // Detect the presence of either canonical marker, not a truthy hash:
+        // a missing/empty lineage hash is damaged evidence, not a legacy Pack.
+        // The source-section projector alone does not admit factory printing.
         const basis = document?.dependency_snapshot;
-        if (basis?.canonical?.lineageHash) {
+        if (basis && typeof basis === 'object'
+          && (Object.hasOwn(basis, 'canonical') || Object.hasOwn(basis, 'frozenSources'))) {
           verifyFrozenCanonicalTechPackSources(basis);
           invariant(false, 'TECH_PACK_CANONICAL_PRINT_NOT_ADMITTED',
             'Frozen Tech Pack sources are verified, but canonical factory print is not yet admitted');

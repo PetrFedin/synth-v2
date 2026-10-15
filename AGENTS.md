@@ -55,3 +55,6 @@
 - Текст интерфейса только через `public/modules/i18n-runtime.js`, RU и EN.
 - Перед PR: `npm run validate:ui`, `validate:design-system`, `validate:ods-boundaries`, `validate:i18n`, затем `npm run verify`.
 - Предлагая функцию «в дорожную карту», проверь, что у неё есть конкретный пилотный клиент (см. `docs/business/01-business-plan.md`).
+- Перед изменением кнопок, маршрутов и переходов сверяйся с `docs/business/04-interface-and-connections.md` и обновляй реестр действий в том же PR.
+- Автоматы цепочки и инварианты (`docs/business/08-chain-state-machines-and-role-workspaces.md`) не менять без теста на запрещённый переход и обновления `ARCHITECTURE.md`.
+- Новые компоненты сверяй с `docs/design/ui-kit.html`; пары цветов проверяй его таблицей контраста.

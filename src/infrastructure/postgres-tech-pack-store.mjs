@@ -158,8 +158,8 @@ function view(client) {
         await client.query(
           `INSERT INTO tech_packs
              (id, tech_pack_code, sku, brand_id, sku_version, revision, status, supplier_code,
-              source_tech_pack_code, version, payload, created_at, updated_at, issued_at, acknowledged_at, withdrawn_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12::timestamptz,$13::timestamptz,$14::timestamptz,$15::timestamptz,$16::timestamptz)`,
+              source_tech_pack_code, version, issue_format, payload, created_at, updated_at, issued_at, acknowledged_at, withdrawn_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13::timestamptz,$14::timestamptz,$15::timestamptz,$16::timestamptz,$17::timestamptz)`,
           parameters(value),
         );
       } catch (error) {
@@ -171,10 +171,12 @@ function view(client) {
       invariant(value.version === expectedVersion + 1, 'VERSION_INCREMENT_INVALID', 'Version must increment exactly once');
       const result = await client.query(
         `UPDATE tech_packs
-            SET sku_version=$4, status=$5, supplier_code=$6, version=$7, payload=$8::jsonb,
-                updated_at=$9::timestamptz, issued_at=$10::timestamptz, acknowledged_at=$11::timestamptz, withdrawn_at=$12::timestamptz
-          WHERE id=$1 AND tech_pack_code=$2 AND brand_id=$3 AND version=$13`,
-        [value.id, value.techPackCode, value.brandId, value.skuVersion, value.status, value.supplierCode, value.version, JSON.stringify(value), value.updatedAt, value.issuedAt, value.acknowledgedAt, value.withdrawnAt, expectedVersion],
+            SET sku_version=$4, status=$5, supplier_code=$6, version=$7, issue_format=$8, payload=$9::jsonb,
+                updated_at=$10::timestamptz, issued_at=$11::timestamptz, acknowledged_at=$12::timestamptz, withdrawn_at=$13::timestamptz
+          WHERE id=$1 AND tech_pack_code=$2 AND brand_id=$3 AND version=$14`,
+        [value.id, value.techPackCode, value.brandId, value.skuVersion, value.status, value.supplierCode,
+          value.version, issueFormat(value), JSON.stringify(value), value.updatedAt, value.issuedAt,
+          value.acknowledgedAt, value.withdrawnAt, expectedVersion],
       );
       invariant(result.rowCount === 1, 'TECH_PACK_CONCURRENCY_CONFLICT', 'Tech pack concurrency conflict', { techPackCode: value.techPackCode, expectedVersion });
     },
@@ -192,8 +194,12 @@ function view(client) {
 }
 
 function parameters(value) {
-  return [value.id, value.techPackCode, value.sku, value.brandId, value.skuVersion, value.revision, value.status, value.supplierCode, value.sourceTechPackCode, value.version, JSON.stringify(value), value.createdAt, value.updatedAt, value.issuedAt, value.acknowledgedAt, value.withdrawnAt];
+  return [value.id, value.techPackCode, value.sku, value.brandId, value.skuVersion, value.revision,
+    value.status, value.supplierCode, value.sourceTechPackCode, value.version, issueFormat(value),
+    JSON.stringify(value), value.createdAt, value.updatedAt, value.issuedAt, value.acknowledgedAt,
+    value.withdrawnAt];
 }
+function issueFormat(value) { return value?.issueFormat === 'canonical-v1' ? 'canonical-v1' : 'legacy'; }
 
 async function insertOperation(client, value) {
 await client.query(

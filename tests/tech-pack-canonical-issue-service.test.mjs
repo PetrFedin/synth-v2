@@ -184,7 +184,7 @@ test('canonical source snapshots cannot override incomplete factory document',as
 
 test('missing or cross-brand document evidence rolls back before any issue persistence',async()=>{
   for(const mutate of [d=>{d.product=null},d=>{d.supplier.brandId='foreign'},
-    d=>{d.operations[0].brandId='foreign'},d=>{d.operations=null}]) {
+    d=>{d.operations[0].brandId='foreign'},d=>{d.operations=null},d=>{d.sketches=null}]) {
     const h=harness(); mutate(h.state.documentSources);
     await assert.rejects(issue(h),error=>error.code.startsWith('TECH_PACK_DOCUMENT_CONTEXT_'));
     assert.equal(h.state.pack.status,'draft');

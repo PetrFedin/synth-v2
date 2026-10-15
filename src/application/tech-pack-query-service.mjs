@@ -8,7 +8,8 @@ const CODE_PATTERN = /^[A-Z0-9][A-Z0-9._/-]{2,63}$/;
 const SKU_PATTERN = /^[A-Z0-9][A-Z0-9._-]{1,63}$/;
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/;
 
-export function createTechPackQueryService({ reader } = {}) {
+/** @param {{reader?: any, clock?: () => string}} [options] */
+export function createTechPackQueryService({ reader, clock = () => new Date().toISOString() } = {}) {
   invariant(reader && typeof reader.pageForActor === 'function' && typeof reader.getForActor === 'function', 'TECH_PACK_READER_REQUIRED', 'Tech pack reader is required');
   return Object.freeze({
     async pageForActor(actorId, options = {}) {
@@ -38,6 +39,16 @@ export function createTechPackQueryService({ reader } = {}) {
       invariant(typeof reader.getDocumentForActor === 'function', 'TECH_PACK_READER_REQUIRED', 'Tech pack reader must expose getDocumentForActor');
       const value = await reader.getDocumentForActor(actorId, requestedCode);
       invariant(value, 'TECH_PACK_NOT_FOUND', 'Tech pack not found', { techPackCode: requestedCode });
+      return value;
+    },
+
+    async getCanonicalRenderableDocumentForActor(actorId, requestedCode) {
+      validateActor(actorId);
+      invariant(CODE_PATTERN.test(requestedCode ?? ''), 'TECH_PACK_CODE_INVALID', 'Tech pack code is invalid');
+      invariant(typeof reader.getCanonicalRenderableDocumentForActor === 'function',
+        'TECH_PACK_READER_REQUIRED','Tech pack reader must expose canonical renderable document read');
+      const value=await reader.getCanonicalRenderableDocumentForActor(actorId,requestedCode,clock());
+      invariant(value,'TECH_PACK_NOT_FOUND','Tech pack not found',{techPackCode:requestedCode});
       return value;
     },
   });

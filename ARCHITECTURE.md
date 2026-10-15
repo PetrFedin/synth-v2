@@ -2490,3 +2490,14 @@ After R1 issue, a newer append-only rights decision v2=`revoked` is persisted. T
 OpenAPI explicitly identifies both Issue addresses as `canonical-product-sku-v1` authority and describes the canonical frozen snapshot response fields. No legacy SKU fallback is admitted for new Issue.
 
 This tranche still does not expose the frozen document through public HTTP or produce PDF. Those remain the next P0 release gates.
+
+
+## 2026-10-15 — Public canonical Tech Pack document data admission (candidate)
+
+**Status: CANDIDATE / PDF HOLD.**
+
+A new authenticated canonical-document read returns the deterministic frozen Tech Pack document only when current publication-rights admission succeeds. The pack, frozen document and current rights are evaluated in one `REPEATABLE READ READ ONLY` transaction, preventing a document/right race between separate requests.
+
+Access is existence-concealed by the same active-membership/role SQL boundary. The current-rights query runs only after an authorised canonical Pack is found. Missing, stale, restricted, expired or revoked rights raise `TECH_PACK_CANONICAL_RENDER_NOT_ADMITTED` and the public endpoint does not return the document body.
+
+The existing legacy `/document` path remains intact for legacy history and continues to reject canonical live-join rendering. The new endpoint is JSON data admission only; it does not set `publicPrintAdmitted=true`, generate PDF or claim visual production acceptance.

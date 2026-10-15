@@ -230,7 +230,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
     // Public POST .../issue keeps its transport contract but now executes the
     // source-locked canonical SERIALIZABLE issuance path.
     issueTechPack: techPackCanonicalIssue.issueCanonicalTechPack,
-    ...createTechPackQueryService({ reader: createPostgresTechPackReader({ pool }) }),
+    ...createTechPackQueryService({ reader: createPostgresTechPackReader({ pool }), ...(clock ? { clock } : {}) }),
     canonicalPreflightForActor: techPackCanonicalPreflight.forActor,
   });
   const productEngineeringApply = createProductEngineeringProposalApplyService({

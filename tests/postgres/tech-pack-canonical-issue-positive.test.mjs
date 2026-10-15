@@ -133,6 +133,17 @@ test('canonical Tech Pack issues on real PostgreSQL and retains immutable issued
     assert.equal(admittedBeforeRevocation.admitted,true);
     assert.deepEqual(admittedBeforeRevocation.blockers,[]);
     assert.equal(admittedBeforeRevocation.documentHash,originalDocument.documentHash);
+    async function getCanonicalDocumentOverHttp() {
+      return runtime.fetchHandler(new Request(
+        'http://127.0.0.1/v2/tech-packs/by-code/canonical-document?code='+encodeURIComponent(code),{
+          headers:{authorization:'Bearer '+ownerToken},
+        }));
+    }
+    const canonicalHttp=await getCanonicalDocumentOverHttp();
+    assert.equal(canonicalHttp.status,200);
+    const canonicalHttpData=(await canonicalHttp.json()).data;
+    assert.equal(canonicalHttpData.document.documentHash,originalDocument.documentHash);
+    assert.equal(canonicalHttpData.admission.admitted,true);
     await insertRow(pool,'product_media_publication_rights',{
       id:id('rights-revoked'),media_id:sources.mediaId,version:2,status:'revoked',
       basis:'contract-revoked',evidence_ref:'rights://revoked/'+tag,
@@ -145,6 +156,12 @@ test('canonical Tech Pack issues on real PostgreSQL and retains immutable issued
       sources.mediaId+':CURRENT_RIGHTS_REVOKED'));
     assert.equal(deniedAfterRevocation.documentHash,originalDocument.documentHash,
       'current rights revocation must not rewrite historical document evidence');
+    const deniedHttp=await getCanonicalDocumentOverHttp();
+    assert.equal(deniedHttp.status,422);
+    const deniedHttpPayload=await deniedHttp.json();
+    assert.equal(deniedHttpPayload.error.code,'TECH_PACK_CANONICAL_RENDER_NOT_ADMITTED');
+    assert.ok(deniedHttpPayload.error.details.blockers.includes(
+      sources.mediaId+':CURRENT_RIGHTS_REVOKED'));
     assert.equal(await documentFromFreshProcess(connectionString,owner,code),originalDocumentJson,
       'fresh Node process reproduces the complete frozen document before source mutation');
     assert.equal(originalContext.operations.rows[0].id,originalOperation.id);

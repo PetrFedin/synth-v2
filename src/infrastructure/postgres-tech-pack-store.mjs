@@ -14,8 +14,9 @@ export function createPostgresTechPackStore({ pool } = {}) {
       createView: view, begin: 'BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE',
     }),
     async getTechPackByCode(code) {
-      const result = await pool.query('SELECT payload FROM tech_packs WHERE tech_pack_code = $1', [code]);
-      return result.rows[0]?.payload;
+      const result = await pool.query(
+        'SELECT payload, product_sku_id FROM tech_packs WHERE tech_pack_code = $1', [code]);
+      return storedTechPack(result.rows[0]);
     },
   });
 }
@@ -29,6 +30,20 @@ function view(client) {
     async getSku(sku) {
       const result = await client.query('SELECT payload FROM catalog_skus WHERE sku = $1 FOR SHARE', [sku]);
       return result.rows[0]?.payload;
+    },
+    async getProductSkuIdByCatalogSku(sku, brandId) {
+      const result = await client.query(
+        `SELECT link.product_sku_id
+           FROM product_catalog_sku_links AS link
+           JOIN product_skus AS product
+             ON product.id=link.product_sku_id AND product.brand_id=link.brand_id
+          WHERE link.catalog_sku=$1 AND link.brand_id=$2
+          FOR SHARE OF link, product`,
+        [sku, brandId],
+      );
+      invariant(result.rowCount <= 1, 'TECH_PACK_CANONICAL_PRODUCT_LINK_AMBIGUOUS',
+        'Catalog SKU resolves to more than one canonical ProductSku');
+      return result.rows[0]?.product_sku_id ?? null;
     },
     async getBomBySku(sku) {
       const result = await client.query("SELECT payload FROM boms WHERE sku = $1 AND status = 'published' FOR SHARE", [sku]);
@@ -128,16 +143,21 @@ function view(client) {
       };
     },
     async getTechPackByCode(code) {
-      const result = await client.query('SELECT payload FROM tech_packs WHERE tech_pack_code = $1 FOR UPDATE', [code]);
-      return result.rows[0]?.payload;
+      const result = await client.query(
+        'SELECT payload, product_sku_id FROM tech_packs WHERE tech_pack_code = $1 FOR UPDATE', [code]);
+      return storedTechPack(result.rows[0]);
     },
     async getActiveTechPackBySku(sku) {
-      const result = await client.query("SELECT payload FROM tech_packs WHERE sku = $1 AND status IN ('issued','acknowledged') FOR UPDATE", [sku]);
-      return result.rows[0]?.payload;
+      const result = await client.query(
+        "SELECT payload, product_sku_id FROM tech_packs WHERE sku = $1 AND status IN ('issued','acknowledged') FOR UPDATE",
+        [sku]);
+      return storedTechPack(result.rows[0]);
     },
     async getTechPackBySource(sourceCode) {
-      const result = await client.query('SELECT payload FROM tech_packs WHERE source_tech_pack_code = $1 FOR UPDATE', [sourceCode]);
-      return result.rows[0]?.payload;
+      const result = await client.query(
+        'SELECT payload, product_sku_id FROM tech_packs WHERE source_tech_pack_code = $1 FOR UPDATE',
+        [sourceCode]);
+      return storedTechPack(result.rows[0]);
     },
     async insertTechPackOperation(value) {
       try {
@@ -158,8 +178,9 @@ function view(client) {
         await client.query(
           `INSERT INTO tech_packs
              (id, tech_pack_code, sku, brand_id, sku_version, revision, status, supplier_code,
-              source_tech_pack_code, version, issue_format, payload, created_at, updated_at, issued_at, acknowledged_at, withdrawn_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13::timestamptz,$14::timestamptz,$15::timestamptz,$16::timestamptz,$17::timestamptz)`,
+              source_tech_pack_code, version, issue_format, product_sku_id, payload,
+              created_at, updated_at, issued_at, acknowledged_at, withdrawn_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14::timestamptz,$15::timestamptz,$16::timestamptz,$17::timestamptz,$18::timestamptz)`,
           parameters(value),
         );
       } catch (error) {
@@ -171,12 +192,13 @@ function view(client) {
       invariant(value.version === expectedVersion + 1, 'VERSION_INCREMENT_INVALID', 'Version must increment exactly once');
       const result = await client.query(
         `UPDATE tech_packs
-            SET sku_version=$4, status=$5, supplier_code=$6, version=$7, issue_format=$8, payload=$9::jsonb,
-                updated_at=$10::timestamptz, issued_at=$11::timestamptz, acknowledged_at=$12::timestamptz, withdrawn_at=$13::timestamptz
-          WHERE id=$1 AND tech_pack_code=$2 AND brand_id=$3 AND version=$14`,
+            SET sku_version=$4, status=$5, supplier_code=$6, version=$7, issue_format=$8,
+                product_sku_id=$9, payload=$10::jsonb, updated_at=$11::timestamptz,
+                issued_at=$12::timestamptz, acknowledged_at=$13::timestamptz, withdrawn_at=$14::timestamptz
+          WHERE id=$1 AND tech_pack_code=$2 AND brand_id=$3 AND version=$15`,
         [value.id, value.techPackCode, value.brandId, value.skuVersion, value.status, value.supplierCode,
-          value.version, issueFormat(value), JSON.stringify(value), value.updatedAt, value.issuedAt,
-          value.acknowledgedAt, value.withdrawnAt, expectedVersion],
+          value.version, issueFormat(value), value.productSkuId ?? null, JSON.stringify(value),
+          value.updatedAt, value.issuedAt, value.acknowledgedAt, value.withdrawnAt, expectedVersion],
       );
       invariant(result.rowCount === 1, 'TECH_PACK_CONCURRENCY_CONFLICT', 'Tech pack concurrency conflict', { techPackCode: value.techPackCode, expectedVersion });
     },
@@ -196,8 +218,12 @@ function view(client) {
 function parameters(value) {
   return [value.id, value.techPackCode, value.sku, value.brandId, value.skuVersion, value.revision,
     value.status, value.supplierCode, value.sourceTechPackCode, value.version, issueFormat(value),
-    JSON.stringify(value), value.createdAt, value.updatedAt, value.issuedAt, value.acknowledgedAt,
-    value.withdrawnAt];
+    value.productSkuId ?? null, JSON.stringify(value), value.createdAt, value.updatedAt,
+    value.issuedAt, value.acknowledgedAt, value.withdrawnAt];
+}
+function storedTechPack(row) {
+  if (!row) return undefined;
+  return Object.freeze({ ...row.payload, productSkuId: row.product_sku_id ?? row.payload?.productSkuId ?? null });
 }
 function issueFormat(value) { return value?.issueFormat === 'canonical-v1' ? 'canonical-v1' : 'legacy'; }
 

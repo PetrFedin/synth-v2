@@ -2461,3 +2461,10 @@ Showroom buyer reads remain fail-closed: mutable brand wholesale price, MOQ and 
 Human Review remains append-only evidence authority over exact Recompute plan/step assignments and decisions. It does not create a second task ledger, generic downstream writer, public API or automatic Measurement/Material mutation.
 
 This integration candidate still does not switch public Tech Pack Issue to canonical issuance and does not admit canonical public PDF/rendering. Those remain the next P0 cutover gates.
+
+
+## 2026-10-15 — Tech Pack exact ProductSku linkage on create/revision (candidate)
+
+Tech Pack draft creation now reads the immutable one-to-one `product_catalog_sku_links` compatibility bridge when available and persists that exact ProductSku identity in both the Tech Pack row and aggregate payload. No ProductSku is inferred from a similar/current text SKU. A draft without a canonical bridge remains explicitly unlinked and therefore cannot pass canonical issue.
+
+Tech Pack reads surface the durable `product_sku_id`; a revision of an issued canonical Pack inherits and persists that exact ProductSku ID. The real PostgreSQL two-revision acceptance no longer uses a direct SQL update to attach ProductSku to R2. Public Issue cutover remains a separate P0 gate.

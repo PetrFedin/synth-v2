@@ -6,7 +6,10 @@ const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/;
 const CREATE_FIELDS = Object.freeze(new Set(['techPackCode', 'sku', 'supplierCode', 'supplierName', 'supplierEmail', 'title', 'description', 'constructionNotes', 'qualityNotes', 'packingNotes']));
 const EDIT_FIELDS = Object.freeze(new Set(['supplierCode', 'supplierName', 'supplierEmail', 'title', 'description', 'constructionNotes', 'qualityNotes', 'packingNotes']));
 
-export function createTechPack({ id, catalogSku, input, createdAt, revision = 1, sourceTechPackCode = null }) {
+export function createTechPack({
+  id, catalogSku, productSkuId = null, input, createdAt,
+  revision = 1, sourceTechPackCode = null,
+}) {
   invariant(typeof id === 'string' && ID_PATTERN.test(id), 'TECH_PACK_ID_INVALID', 'Tech pack id is invalid');
   assertObject(input, 'TECH_PACK_INPUT_INVALID', 'Tech pack input is invalid');
   assertAllowedFields(input, CREATE_FIELDS, 'TECH_PACK_FIELD_FORBIDDEN');
@@ -15,6 +18,8 @@ export function createTechPack({ id, catalogSku, input, createdAt, revision = 1,
   return freezeTechPack({
     id,
     techPackCode: code(input.techPackCode, 'TECH_PACK_CODE_INVALID'),
+    productSkuId: productSkuId === null ? null
+      : identifier(productSkuId, 'TECH_PACK_PRODUCT_SKU_ID_INVALID'),
     ...normalized,
     revision: positiveInteger(revision, 999, 'TECH_PACK_REVISION_INVALID'),
     sourceTechPackCode: sourceTechPackCode === null ? null : code(sourceTechPackCode, 'TECH_PACK_SOURCE_CODE_INVALID'),
@@ -106,7 +111,9 @@ export function createTechPackRevision({ id, issuedTechPack, catalogSku, input, 
   invariant(['issued', 'acknowledged'].includes(issuedTechPack?.status), 'TECH_PACK_NOT_ACTIVE', 'Only an issued or acknowledged tech pack can create a revision');
   assertObject(input, 'TECH_PACK_REVISION_INPUT_INVALID', 'Tech pack revision input is invalid');
   const next = createTechPack({
-    id, catalogSku, createdAt, revision: issuedTechPack.revision + 1, sourceTechPackCode: issuedTechPack.techPackCode,
+    id, catalogSku, productSkuId: issuedTechPack.productSkuId ?? null,
+    createdAt, revision: issuedTechPack.revision + 1,
+    sourceTechPackCode: issuedTechPack.techPackCode,
     input: {
       techPackCode: input.techPackCode,
       sku: issuedTechPack.sku,
@@ -174,6 +181,11 @@ function freezeTechPack(value) { return Object.freeze({ ...value, dependencySnap
 function assertNotBefore(previous, current) { invariant(Number.isFinite(Date.parse(previous)) && Date.parse(current) >= Date.parse(previous), 'TECH_PACK_TIME_ORDER_INVALID', 'Tech pack lifecycle cannot move time backwards', { previous, current }); }
 function assertObject(value, errorCode, message) { invariant(value && typeof value === 'object' && !Array.isArray(value), errorCode, message); }
 function assertAllowedFields(value, allowed, errorCode) { const forbidden = Object.keys(value).filter((field) => !allowed.has(field)).sort(); invariant(forbidden.length === 0, errorCode, 'Tech pack input contains unsupported fields', { fields: forbidden }); }
+function identifier(value, errorCode) {
+  invariant(typeof value === 'string' && ID_PATTERN.test(value), errorCode, 'Tech Pack ProductSku identifier is invalid');
+  return value;
+}
+
 function code(value, errorCode) { invariant(typeof value === 'string' && CODE_PATTERN.test(value), errorCode, 'Code is invalid'); return value; }
 function optionalCode(value, errorCode) { if (value === undefined || value === null || value === '') return null; return code(value, errorCode); }
 function positiveInteger(value, maximum, errorCode) { invariant(Number.isSafeInteger(value) && value >= 1 && value <= maximum, errorCode, 'Value is outside the allowed range'); return value; }

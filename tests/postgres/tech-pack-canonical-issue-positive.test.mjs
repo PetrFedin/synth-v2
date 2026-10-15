@@ -143,8 +143,13 @@ test('canonical Tech Pack issues on real PostgreSQL and retains immutable issued
       title:'Second revision jacket',supplierName:'Revised factory contact',
       supplierEmail:'revised@acceptance.invalid',qualityNotes:'Revised inspection procedure',
     });
-    await pool.query("UPDATE tech_packs SET product_sku_id=$1 WHERE tech_pack_code=$2 AND brand_id=$3 AND status='draft'",
-      [sources.productSkuId,revision.techPackCode,brand]);
+    assert.equal(revision.productSkuId,sources.productSkuId,
+      'public revision inherits the exact stored canonical ProductSku identity');
+    const persistedRevisionLink=await pool.query(
+      'SELECT product_sku_id FROM tech_packs WHERE tech_pack_code=$1 AND brand_id=$2',
+      [revision.techPackCode,brand]);
+    assert.equal(persistedRevisionLink.rows[0].product_sku_id,sources.productSkuId,
+      'revision persists canonical ProductSku identity without an SQL fixture');
     await runtime.techPacks.addOperation(id('op-revised'),owner,revision.techPackCode,{
       sequence:1,operationCode:'ASSEMBLE',nameRu:'Revised RU assembly',nameEn:'Revised EN assembly',
       equipment:'Revised equipment',machineClass:'manual',standardMinutes:4.75,

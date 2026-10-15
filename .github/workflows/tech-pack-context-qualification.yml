@@ -1,0 +1,70 @@
+name: Isolated Tech Pack Document Context Qualification
+on:
+  push:
+    branches: [chore/tech-pack-document-context-qualify-20261015]
+permissions:
+  contents: write
+defaults:
+  run:
+    shell: bash
+jobs:
+  context:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres-test:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: syntha
+          POSTGRES_PASSWORD: syntha
+          POSTGRES_DB: syntha_context_test
+        ports: ['55433:5432']
+        options: >-
+          --health-cmd "pg_isready -U syntha -d syntha_context_test"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      POSTGRES_TEST_URL: postgres://syntha:syntha@127.0.0.1:55433/syntha_context_test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply bounded patch and verify all exact candidate blobs
+        run: |
+          git apply --recount --check .automation/context-existing.patch
+          git apply --recount .automation/context-existing.patch
+          python3 .automation/context-tree.py
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify types and focused regression
+        run: |
+          npm run validate:types 2>&1 | tee context-types.log
+          node scripts/validate-architecture.mjs 2>&1 | tee context-architecture.log
+          node --test tests/tech-pack-*.test.mjs tests/postgres-tech-pack-reader-frozen-guard.test.mjs 2>&1 | tee context-focused.tap
+      - name: Verify two issued revisions in isolated PostgreSQL and fresh processes
+        run: node --test tests/postgres/tech-pack-canonical-issue-positive.test.mjs 2>&1 | tee context-postgres.tap
+      - name: Prepare candidate Git objects only without branch writes
+        id: tree
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          WRITE_GIT_OBJECTS: 'true'
+        run: python3 .automation/context-tree.py
+      - name: Archive candidate files and diagnostics
+        if: always()
+        run: |
+          git diff --binary > context-applied.patch
+          tar -czf context-worktree.tar.gz src tests db scripts public docs ARCHITECTURE.md AGENTS.md package.json package-lock.json tsconfig.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: syntha-context-${{ steps.tree.outputs.tree }}
+          retention-days: 1
+          path: |
+            context-*.log
+            context-*.tap
+            context-tree.json
+            context-applied.patch
+            context-worktree.tar.gz

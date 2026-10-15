@@ -1,0 +1,260 @@
+diff --git a/ARCHITECTURE.md b/ARCHITECTURE.md
+index b406fb3..f1cc270 100644
+--- a/ARCHITECTURE.md
++++ b/ARCHITECTURE.md
+@@ -1732,2 +1732,16 @@
+ 
++### Canonical Tech Pack issued document context - 2026-10-15 candidate
++
++The internal issuing service reads canonical display sources, same-brand supplier register metadata and the pack's operation rows on the SAME SERIALIZABLE client after pack authorisation and canonical source validation. Pack FOR UPDATE and source FOR SHARE locks remain in force. Product labels use exact StyleVersion/Colorway/SizeValue/SizeScaleVersion IDs, never a second Product Master in the compatibility catalog. The issued supplier contact is frozen separately from register ID/version/status; this does not introduce a new supplier-qualification policy.
++
++`dependencySnapshot.frozenDocumentContext` format 1 retains the issued header, actor, timestamp, revision and issued version, canonical RU/EN product display fields, supplier contact/reference, and sorted operation rows including equipment, machine class, measured time, notes and authorship. Existing `totalStandardMinutes` owns the summation. Empty operations are explicit `state: missing`, total null, NOT zero measured minutes. Foreign, duplicate, malformed or incomplete operations fail before issue/command/outbox persistence.
++
++`canonical.documentContextHash` binds the context to canonical lineage and the issuance outbox. Pack and command replay retain the exact context atomically. Combined source/context evidence is bounded to 8 MiB. Partial markers, digest changes or wrong issued-pack identity fail closed. Old source-only snapshots remain checksum-verifiable but cannot invent historical context. Later acknowledged/superseded/withdrawn lifecycle state does not rewrite the original issued header.
++
++The new context reader is internal and post-authorisation, not a public endpoint. Sketches remain explicitly unverified: URLs are not fetched or treated as retained bytes or rights grants. Full canonical factory printing remains NOT ADMITTED. The immutable issuance-format discriminator for total marker removal, complete document composer, public canonical revision linkage and RU/EN browser/PDF acceptance are separate gates.
++
++Evidence: focused unit/driver tests exercise immutability, checksums, SQL locking, rollback and replay. Extended isolated PostgreSQL acceptance issues two actual revisions with different header/contact/operations and rereads the first context in separate fresh Node processes. Canonical source rows and the exact revision link are SQL fixtures. This is NOT full BOM/chart/PPS revision rendering, public canonical revision admission, deployed HTTP restart or PDF byte equivalence. No migration, public route, dependency or production configuration changes. Exact-head CI, independent review and protected-main/post-merge qualification remain required.
++
++---
++
+ ## 20. Change register
+@@ -1736,2 +1750,3 @@
+ |---|---|---|---|---|
++| 2026-10-15 | Draft issued document context / Issue #282, stacked on #285 | Freeze issued header, canonical RU/EN product display, supplier and exact operations in the issuing transaction; bind context hash to lineage/command/outbox and test fresh-process history across two revisions. | 7, 10, 19.1, 20 | CANDIDATE; exact-head CI, full document, retained sketch bytes, public issue/revision, independent review remain required |
+ | 2026-10-15 | Draft PR #285 source sections / Issue #282 | Add frozen BOM/measurement/PPS source-section projection with exact SizeValue matrix, issued RU/EN and MDM snapshots, deterministic digest and explicit print HOLD; reject damaged canonical markers instead of falling through to mutable legacy data. | 7, 10, 19.1, 20 | CANDIDATE; unit/driver-contract tests are not PostgreSQL/restart/PDF evidence; complete frozen document, exact-head full CI and independent review remain required |
+diff --git a/src/application/tech-pack-canonical-issue-service.mjs b/src/application/tech-pack-canonical-issue-service.mjs
+index bd135b5..85085c9 100644
+--- a/src/application/tech-pack-canonical-issue-service.mjs
++++ b/src/application/tech-pack-canonical-issue-service.mjs
+@@ -1 +1,2 @@
++import { bindIssuedTechPackDocumentContext } from './tech-pack-issued-document-context.mjs';
+ import { domainEvent } from '../core/events.mjs';
+@@ -73,3 +74,3 @@
+         const at = clock();
+-        const value = issueCanonicalTechPack(pack, {
++        const issued = issueCanonicalTechPack(pack, {
+           actorId, issuedAt: at, dependencySnapshot: snapshot,
+@@ -77,2 +78,8 @@
+ 
++        invariant(typeof tx.getCanonicalDocumentSources === 'function',
++          'TECH_PACK_DOCUMENT_SOURCE_READER_REQUIRED',
++          'Canonical issue must read document sources within the issuing transaction');
++        const documentSources = await tx.getCanonicalDocumentSources(pack, sources.productSku);
++        const value = bindIssuedTechPackDocumentContext(issued, sources, documentSources);
++
+         if (active && active.id !== pack.id) {
+@@ -100,2 +107,4 @@
+       version: pack.version, sourceTechPackCode: pack.sourceTechPackCode,
++      ...(pack.dependencySnapshot?.canonical?.documentContextHash
++        ? { documentContextHash: pack.dependencySnapshot.canonical.documentContextHash } : {}),
+       ...(pack.dependencySnapshot?.canonical?.lineageHash
+diff --git a/src/application/tech-pack-canonical-issue-snapshot.mjs b/src/application/tech-pack-canonical-issue-snapshot.mjs
+index 0fedcde..c344dda 100644
+--- a/src/application/tech-pack-canonical-issue-snapshot.mjs
++++ b/src/application/tech-pack-canonical-issue-snapshot.mjs
+@@ -114,2 +114,15 @@
+     'Stored canonical document sources do not match the issued digest');
++  // Additive context: source-only snapshots remain verifiable, but either
++  // partial context marker is corruption, never a legacy fallback.
++  if (Object.hasOwn(snapshot, 'frozenDocumentContext') || Object.hasOwn(basis, 'documentContextHash')) {
++    invariant(validPayload(snapshot.frozenDocumentContext)
++      && /^[a-f0-9]{64}$/.test(basis.documentContextHash ?? ''),
++    'TECH_PACK_DOCUMENT_CONTEXT_REQUIRED', 'Exact issued document context is missing');
++    const contextJson = canonicalJson(snapshot.frozenDocumentContext);
++    invariant(Buffer.byteLength(canonicalJson(frozen), 'utf8')
++      + Buffer.byteLength(contextJson, 'utf8') <= 8 * 1024 * 1024,
++    'TECH_PACK_DOCUMENT_CONTEXT_TOO_LARGE', 'Combined issued evidence exceeds 8 MiB');
++    invariant(sha256(contextJson) === basis.documentContextHash,
++      'TECH_PACK_DOCUMENT_CONTEXT_TAMPERED', 'Issued document context digest does not match');
++  }
+   const {lineageHash, ...manifest} = basis;
+diff --git a/src/infrastructure/postgres-tech-pack-reader.mjs b/src/infrastructure/postgres-tech-pack-reader.mjs
+index fbe594f..d7a88ef 100644
+--- a/src/infrastructure/postgres-tech-pack-reader.mjs
++++ b/src/infrastructure/postgres-tech-pack-reader.mjs
+@@ -61,3 +61,4 @@
+         if (basis && typeof basis === 'object'
+-          && (Object.hasOwn(basis, 'canonical') || Object.hasOwn(basis, 'frozenSources'))) {
++          && (Object.hasOwn(basis, 'canonical') || Object.hasOwn(basis, 'frozenSources')
++            || Object.hasOwn(basis, 'frozenDocumentContext'))) {
+           verifyFrozenCanonicalTechPackSources(basis);
+diff --git a/src/infrastructure/postgres-tech-pack-store.mjs b/src/infrastructure/postgres-tech-pack-store.mjs
+index a133176..308a897 100644
+--- a/src/infrastructure/postgres-tech-pack-store.mjs
++++ b/src/infrastructure/postgres-tech-pack-store.mjs
+@@ -1 +1,2 @@
++import { readTechPackDocumentSources } from './postgres-tech-pack-document-sources.mjs';
+ import { invariant } from '../core/errors.mjs';
+@@ -56,2 +57,3 @@
+     // already hold the Tech Pack FOR UPDATE lock and current membership.
++    getCanonicalDocumentSources: (pack, product) => readTechPackDocumentSources(client, pack, product),
+     async getCanonicalIssueSources(pack) {
+diff --git a/tests/postgres/tech-pack-canonical-issue-positive.test.mjs b/tests/postgres/tech-pack-canonical-issue-positive.test.mjs
+index 6ffef1b..3ac4ee9 100644
+--- a/tests/postgres/tech-pack-canonical-issue-positive.test.mjs
++++ b/tests/postgres/tech-pack-canonical-issue-positive.test.mjs
+@@ -1,2 +1,6 @@
+ import test from 'node:test';
++import { execFile } from 'node:child_process';
++import { promisify } from 'node:util';
++import { canonicalJson } from '../../src/core/fingerprints.mjs';
++import { readFrozenTechPackDocumentContext } from '../../src/application/tech-pack-issued-document-context.mjs';
+ import assert from 'node:assert/strict';
+@@ -73,2 +77,7 @@
+     const sources=await seedTechnicalEvidence(pool,{id,brand,owner,catalog,pack});
++    const originalOperation=await runtime.techPacks.addOperation(id('op-original'),owner,code,{
++      sequence:1,operationCode:'ASSEMBLE',nameRu:'Original RU assembly',nameEn:'Original EN assembly',
++      equipment:'Original equipment',machineClass:'manual',standardMinutes:3.25,
++      notes:'Original operation instructions',
++    });
+     const issuer=createCanonicalTechPackIssueService({
+@@ -96,2 +105,46 @@
+ 
++    const originalContext=readFrozenTechPackDocumentContext(issued);
++    const originalJson=canonicalJson(originalContext);
++    assert.equal(originalContext.operations.rows[0].id,originalOperation.id);
++    assert.equal(originalContext.operations.totalStandardMinutes,3.25);
++    assert.equal(originalContext.supplier.name,'Italian acceptance factory');
++    assert.equal(originalContext.product.styleVersion.titleEn,'Technical jacket');
++    assert.equal(await contextFromFreshProcess(connectionString,owner,code),originalJson,
++      'first fresh Node process reproduces issued context from persisted data');
++
++    // Exact canonical revision linkage is an isolated fixture, not a claim of
++    // public canonical revision admission. Issue and supersede use real commands.
++    const revision=await runtime.techPacks.createRevision(id('revision'),owner,code,{
++      expectedVersion:issued.version,techPackCode:code+'-R2',
++      title:'Second revision jacket',supplierName:'Revised factory contact',
++      supplierEmail:'revised@acceptance.invalid',qualityNotes:'Revised inspection procedure',
++    });
++    await pool.query("UPDATE tech_packs SET product_sku_id=$1 WHERE tech_pack_code=$2 AND brand_id=$3 AND status='draft'",
++      [sources.productSkuId,revision.techPackCode,brand]);
++    await runtime.techPacks.addOperation(id('op-revised'),owner,revision.techPackCode,{
++      sequence:1,operationCode:'ASSEMBLE',nameRu:'Revised RU assembly',nameEn:'Revised EN assembly',
++      equipment:'Revised equipment',machineClass:'manual',standardMinutes:4.75,
++      notes:'Revised operation instructions',
++    });
++    const revised=await issuer.issueCanonicalTechPack(id('issue-r2'),owner,revision.techPackCode,
++      {expectedVersion:revision.version});
++    const revisedContext=readFrozenTechPackDocumentContext(revised);
++    assert.equal(revisedContext.header.revision,2);
++    assert.equal(revisedContext.header.title,'Second revision jacket');
++    assert.equal(revisedContext.supplier.name,'Revised factory contact');
++    assert.equal(revisedContext.operations.totalStandardMinutes,4.75);
++    assert.notEqual(revised.dependencySnapshot.canonical.documentContextHash,
++      issued.dependencySnapshot.canonical.documentContextHash);
++    assert.deepEqual(revised.dependencySnapshot.frozenSources,issued.dependencySnapshot.frozenSources);
++    assert.equal(await contextFromFreshProcess(connectionString,owner,code),originalJson,
++      'second fresh Node process preserves revision one after revision two is issued');
++
++    const foreignOwner=id('foreign-owner'),foreignBrand=id('foreign-brand');
++    await runtime.auth.bootstrapUser({id:foreignOwner,email:'foreign-'+tag.toLowerCase()+'@acceptance.invalid',
++      password:'OnlyIsolatedForeign-'+tag,displayName:'Other active owner'});
++    await runtime.platform.registerOrganisation(id('register-foreign'),'system',
++      createOrganisation({id:foreignBrand,type:'brand',name:'Other active brand'}));
++    await runtime.platform.grantMembership(id('grant-foreign'),'system',
++      createMembership({id:id('foreign-membership'),organisationId:foreignBrand,
++        organisationType:'brand',userId:foreignOwner,role:'owner',createdAt:'2026-10-13T00:00:00.000Z'}));
+     const fresh=new pg.Pool({connectionString,max:2});
+@@ -101,3 +154,3 @@
+       assert.equal(row.rowCount,1);
+-      assert.equal(row.rows[0].status,'issued');
++      assert.equal(row.rows[0].status,'superseded');
+       assert.equal(row.rows[0].product_sku_id,sources.productSkuId);
+@@ -107,3 +160,8 @@
+         frozen,'fresh PostgreSQL connection reproduces the immutable issued BOM/chart/PPS');
++      assert.equal(canonicalJson(readFrozenTechPackDocumentContext(row.rows[0].payload)),originalJson);
+       const documentReader=createPostgresTechPackReader({pool:fresh});
++      assert.equal(await documentReader.getForActor(foreignOwner,code),undefined,
++        'another active brand owner cannot read frozen source or document context');
++      assert.equal(await documentReader.getDocumentForActor(foreignOwner,code),undefined,
++        'another active brand owner cannot obtain an evidence error or document');
+       assert.equal(await documentReader.getDocumentForActor(id('unauthorized'),code),undefined,
+@@ -121,2 +179,4 @@
+       assert.equal(events.rowCount,1);
++      assert.equal(events.rows[0].event.payload.documentContextHash,
++        issued.dependencySnapshot.canonical.documentContextHash);
+       assert.equal(events.rows[0].event.payload.canonicalLineageHash,
+@@ -224 +284,24 @@
+ }
++
++
++async function contextFromFreshProcess(connectionString, actorId, techPackCode) {
++  // Fresh read process, not a production configuration or deployed HTTP restart.
++  const code = `
++    import pg from 'pg';
++    import {createPostgresTechPackReader} from './src/infrastructure/postgres-tech-pack-reader.mjs';
++    import {readFrozenTechPackDocumentContext} from './src/application/tech-pack-issued-document-context.mjs';
++    import {canonicalJson} from './src/core/fingerprints.mjs';
++    const pool=new pg.Pool({connectionString:process.env.POSTGRES_TEST_URL,max:1});
++    try {
++      const pack=await createPostgresTechPackReader({pool}).getForActor(
++        process.env.TECH_PACK_TEST_ACTOR,process.env.TECH_PACK_TEST_CODE);
++      process.stdout.write(canonicalJson(readFrozenTechPackDocumentContext(pack)));
++    } finally {await pool.end();}
++  `;
++  const {stdout}=await promisify(execFile)(process.execPath,['--input-type=module','-e',code],{
++    cwd:fileURLToPath(new URL('../../',import.meta.url)),timeout:15000,maxBuffer:1024*1024,
++    env:{PATH:process.env.PATH,POSTGRES_TEST_URL:connectionString,
++      TECH_PACK_TEST_ACTOR:actorId,TECH_PACK_TEST_CODE:techPackCode},
++  });
++  return stdout;
++}
+diff --git a/tests/tech-pack-canonical-issue-service.test.mjs b/tests/tech-pack-canonical-issue-service.test.mjs
+index eebce5a..0db9896 100644
+--- a/tests/tech-pack-canonical-issue-service.test.mjs
++++ b/tests/tech-pack-canonical-issue-service.test.mjs
+@@ -5,2 +5,5 @@
+ 
++import { documentSourcesFixture } from './helpers/tech-pack-document-context-fixture.mjs';
++import { readFrozenTechPackDocumentContext } from '../src/application/tech-pack-issued-document-context.mjs';
++
+ const NOW = '2026-10-13T12:00:00.000Z';
+@@ -35,3 +38,3 @@
+   const state = {
+-    pack, catalog, sources, role, commands:{}, events:[], active:null, timeline:[],
++    pack, catalog, sources, role, documentSources: documentSourcesFixture(pack, sources), commands:{}, events:[], active:null, timeline:[],
+   };
+@@ -56,2 +59,6 @@
+         },
++        getCanonicalDocumentSources:async()=>{
++          staged.timeline.push('LOCKED_DOCUMENT_SOURCES');
++          return staged.documentSources;
++        },
+         saveTechPack:async (value,expected)=>{
+@@ -98,3 +105,3 @@
+   assert.match(issued.dependencySnapshot.canonical.lineageHash,/^[a-f0-9]{64}$/);
+-  assert.deepEqual(h.state.timeline,['LOCKED_SOURCES','SAVE','OUTBOX','COMMAND']);
++  assert.deepEqual(h.state.timeline,['LOCKED_SOURCES','LOCKED_DOCUMENT_SOURCES','SAVE','OUTBOX','COMMAND']);
+   assert.equal(h.state.events.length,1);
+@@ -103,2 +110,11 @@
+     issued.dependencySnapshot.canonical.lineageHash);
++  const context=readFrozenTechPackDocumentContext(issued);
++  assert.equal(context.header.issuedAt,NOW);
++  assert.equal(context.supplier.name,'Supplier One');
++  assert.equal(context.operations.totalStandardMinutes,3.6);
++  assert.deepEqual(context.operations.rows.map(row=>row.sequence),[1,2]);
++  assert.equal(h.state.events[0].payload.documentContextHash,
++    issued.dependencySnapshot.canonical.documentContextHash);
++  h.state.documentSources.product.styleVersion.titleRu='Changed after issue';
++  h.state.documentSources.operations=[];
+   const replay=await issue(h);
+@@ -106,3 +122,3 @@
+   assert.equal(h.state.events.length,1,'idempotent replay never duplicates events');
+-  assert.equal(h.state.timeline.length,4,'replay does not reissue or re-resolve sources');
++  assert.equal(h.state.timeline.length,5,'replay does not reissue or re-resolve sources');
+   await assert.rejects(issue(h,'different-command',1),
+@@ -166 +182,13 @@
+ });
++
++
++test('missing or cross-brand document evidence rolls back before any issue persistence',async()=>{
++  for(const mutate of [d=>{d.product=null},d=>{d.supplier.brandId='foreign'},
++    d=>{d.operations[0].brandId='foreign'},d=>{d.operations=null}]) {
++    const h=harness(); mutate(h.state.documentSources);
++    await assert.rejects(issue(h),error=>error.code.startsWith('TECH_PACK_DOCUMENT_CONTEXT_'));
++    assert.equal(h.state.pack.status,'draft');
++    assert.equal(h.state.events.length,0);
++    assert.equal(Object.keys(h.state.commands).length,0);
++  }
++});

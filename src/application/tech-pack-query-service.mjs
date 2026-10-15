@@ -8,6 +8,7 @@ const CODE_PATTERN = /^[A-Z0-9][A-Z0-9._/-]{2,63}$/;
 const SKU_PATTERN = /^[A-Z0-9][A-Z0-9._-]{1,63}$/;
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/;
 
+/** @param {{reader?: any, clock?: () => string}} [options] */
 export function createTechPackQueryService({ reader, clock = () => new Date().toISOString() } = {}) {
   invariant(reader && typeof reader.pageForActor === 'function' && typeof reader.getForActor === 'function', 'TECH_PACK_READER_REQUIRED', 'Tech pack reader is required');
   return Object.freeze({

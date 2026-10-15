@@ -3,6 +3,7 @@ import { CAPABILITIES, rolesWithCapability } from '../modules/access-control/pub
 import { withPostgresTransaction } from './postgres-transaction.mjs';
 import { verifyFrozenCanonicalTechPackSources } from '../application/tech-pack-canonical-issue-snapshot.mjs';
 import { buildFrozenCanonicalTechPackDocument } from '../application/tech-pack-frozen-document.mjs';
+import { evaluateCanonicalTechPackRenderAdmission } from '../application/tech-pack-public-render-policy.mjs';
 
 const SNAPSHOT_BEGIN = 'BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY';
 const READ_ROLES = rolesWithCapability(CAPABILITIES.TECH_PACK_READ);
@@ -50,6 +51,43 @@ export function createPostgresTechPackReader({ pool } = {}) {
         invariant(row.issue_format === 'canonical-v1',
           'TECH_PACK_CANONICAL_FORMAT_REQUIRED','Canonical Tech Pack not available');
         return buildFrozenCanonicalTechPackDocument({...row.payload,issueFormat:row.issue_format});
+      }, { begin: SNAPSHOT_BEGIN });
+    },
+
+    getCanonicalRenderAdmissionForActor(actorId,techPackCode,evaluatedAt) {
+      return withPostgresTransaction(pool, async (queryable) => {
+        const result=await queryable.query(
+          `SELECT pack.payload,pack.issue_format
+             FROM tech_packs AS pack
+            WHERE pack.tech_pack_code=$1
+              AND EXISTS (
+                SELECT 1 FROM memberships AS membership
+                 WHERE membership.user_id=$2
+                   AND membership.organisation_id=pack.brand_id
+                   AND membership.status='active'
+                   AND membership.role = ANY($3::text[])
+              )`,
+          [techPackCode,actorId,READ_ROLES],
+        );
+        const row=result.rows[0];
+        if(!row) return undefined;
+        invariant(row.issue_format==='canonical-v1',
+          'TECH_PACK_CANONICAL_FORMAT_REQUIRED','Canonical Tech Pack not available');
+        const document=buildFrozenCanonicalTechPackDocument({...row.payload,issueFormat:row.issue_format});
+        const ids=document.sketches.rows.map(item=>item.id);
+        let rights=[];
+        if(ids.length) rights=(await queryable.query(
+          `SELECT DISTINCT ON (media_id) id,media_id,version,status,basis,evidence_ref,
+                  approved_at,approved_by,valid_until
+             FROM product_media_publication_rights
+            WHERE media_id = ANY($1::text[])
+            ORDER BY media_id,version DESC,id DESC`,[ids])).rows.map(row=>({
+              id:row.id,mediaId:row.media_id,version:row.version,status:row.status,
+              basis:row.basis,evidenceRef:row.evidence_ref,
+              approvedAt:iso(row.approved_at),approvedBy:row.approved_by,
+              validUntil:row.valid_until?iso(row.valid_until):null,
+            }));
+        return evaluateCanonicalTechPackRenderAdmission(document,rights,evaluatedAt);
       }, { begin: SNAPSHOT_BEGIN });
     },
 
@@ -127,3 +165,5 @@ async function page(queryable, actorId, { limit, afterTechPackCode, filters }) {
   return Object.freeze({ items: Object.freeze(rows.map((row) => row.payload)), hasMore: result.rows.length > limit, ...(result.rows.length > limit ? { nextTechPackCode: rows.at(-1).tech_pack_code } : {}) });
 }
 function escapeLike(value) { return value.replace(/[\\%_]/g, (character) => `\\${character}`); }
+
+function iso(value) { return value instanceof Date ? value.toISOString() : new Date(value).toISOString(); }

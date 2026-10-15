@@ -2441,3 +2441,8 @@ A pure composer combines only issuance-frozen source sections and issuance-froze
 ### 2026-10-15 — Two-revision canonical Tech Pack source mutation acceptance (candidate)
 
 Real PostgreSQL acceptance mutates the authoritative BOM, canonical measurement chart and approved PPS after issuing R1, then issues R2 from the newer source versions. R1 must retain its original full canonical document hash through supersession and a fresh Node process; R2 must carry new source versions/hashes and a different document hash. This is historical reproducibility evidence, not public print admission.
+
+
+### 2026-10-15 — Canonical Tech Pack current-rights render policy (candidate)
+
+Historical issue evidence and present-day publication permission are deliberately separate. The frozen document hash never changes when rights are later restricted or revoked. A current-rights admission policy re-reads only the latest publication-rights decisions for the exact frozen sketch media IDs after Tech Pack authorisation, compares them with the rights versions frozen at issue, and fails closed for missing, stale, restricted, expired or revoked decisions. This candidate is internal only; no public print route is admitted.

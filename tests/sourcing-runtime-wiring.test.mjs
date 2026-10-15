@@ -14,7 +14,7 @@ test('PostgreSQL runtime wires sourcing, Tech Packs, guarded allocation and appr
     'createSourcingService', 'createSourcingQueryService', 'createPostgresSourcingStore', 'createPostgresSourcingReader',
     'createTechPackService', 'createTechPackQueryService', 'createPostgresTechPackStore', 'createPostgresTechPackReader',
     'const sourcingStore = createPostgresSourcingStore({ pool })', 'const techPackStore = createPostgresTechPackStore({ pool })',
-    'const techPacks = Object.freeze({ ...createTechPackService',
+    'const techPackCommands = createTechPackService', 'issueTechPack: techPackCanonicalIssue.issueCanonicalTechPack',
   ]) assert.ok(base.includes(fragment), `missing base runtime wiring: ${fragment}`);
   for (const fragment of [
     'createSourcingTechPackAllocationService',

@@ -36,6 +36,7 @@ import { createSampleQueryService } from '../application/sample-query-service.mj
 import { createSourcingService } from '../application/sourcing-service.mjs';
 import { createSourcingQueryService } from '../application/sourcing-query-service.mjs';
 import { createTechPackService } from '../application/tech-pack-service.mjs';
+import { createCanonicalTechPackIssueService } from '../application/tech-pack-canonical-issue-service.mjs';
 import { createTechPackQueryService } from '../application/tech-pack-query-service.mjs';
 import { createTechPackCanonicalPreflightService } from '../application/tech-pack-canonical-preflight-service.mjs';
 import { createMaintenanceService } from '../application/maintenance-service.mjs';
@@ -218,7 +219,20 @@ export function createPostgresWholesaleRuntime(options = {}) {
   const samples = Object.freeze({ ...createSampleService({ sampleStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createSampleQueryService({ reader: createPostgresSampleReader({ pool }), ...(clock ? { clock } : {}) }) });
   const sourcing = Object.freeze({ ...createSourcingService({ sourcingStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createSourcingQueryService({ reader: createPostgresSourcingReader({ pool }), ...(clock ? { clock } : {}) }) });
   const techPackCanonicalPreflight = createTechPackCanonicalPreflightService({ reader: createPostgresTechPackCanonicalPreflightReader({ pool }) });
-  const techPacks = Object.freeze({ ...createTechPackService({ techPackStore, nextId: runtimeNextId, ...(clock ? { clock } : {}) }), ...createTechPackQueryService({ reader: createPostgresTechPackReader({ pool }) }), canonicalPreflightForActor: techPackCanonicalPreflight.forActor });
+  const techPackCommands = createTechPackService({
+    techPackStore, nextId: runtimeNextId, ...(clock ? { clock } : {}),
+  });
+  const techPackCanonicalIssue = createCanonicalTechPackIssueService({
+    techPackStore, nextId: runtimeNextId, ...(clock ? { clock } : {}),
+  });
+  const techPacks = Object.freeze({
+    ...techPackCommands,
+    // Public POST .../issue keeps its transport contract but now executes the
+    // source-locked canonical SERIALIZABLE issuance path.
+    issueTechPack: techPackCanonicalIssue.issueCanonicalTechPack,
+    ...createTechPackQueryService({ reader: createPostgresTechPackReader({ pool }) }),
+    canonicalPreflightForActor: techPackCanonicalPreflight.forActor,
+  });
   const productEngineeringApply = createProductEngineeringProposalApplyService({
     productEngineering,
     measurements,

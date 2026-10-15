@@ -10,8 +10,6 @@ import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import { migratePostgres } from '../../src/infrastructure/postgres-migrator.mjs';
 import { createPostgresWholesaleRuntime } from '../../src/runtime/postgres-runtime.mjs';
-import { createPostgresTechPackStore } from '../../src/infrastructure/postgres-tech-pack-store.mjs';
-import { createCanonicalTechPackIssueService } from '../../src/application/tech-pack-canonical-issue-service.mjs';
 import { verifyFrozenCanonicalTechPackSources } from '../../src/application/tech-pack-canonical-issue-snapshot.mjs';
 import { createPostgresTechPackReader } from '../../src/infrastructure/postgres-tech-pack-reader.mjs';
 import { createOrganisation } from '../../src/modules/organisations/public.mjs';
@@ -81,12 +79,8 @@ test('canonical Tech Pack issues on real PostgreSQL and retains immutable issued
       equipment:'Original equipment',machineClass:'manual',standardMinutes:3.25,
       notes:'Original operation instructions',
     });
-    const issuer=createCanonicalTechPackIssueService({
-      techPackStore:createPostgresTechPackStore({pool}),
-      nextId:prefix=>prefix+'-'+randomUUID(),
-    });
     const commandId=id('issue');
-    const issued=await issuer.issueCanonicalTechPack(commandId,owner,code,
+    const issued=await runtime.techPacks.issueTechPack(commandId,owner,code,
       {expectedVersion:pack.version});
     assert.equal(issued.status,'issued');
     assert.equal(issued.version,pack.version+1);
@@ -105,8 +99,9 @@ test('canonical Tech Pack issues on real PostgreSQL and retains immutable issued
     assert.equal(frozen.sample.sampleCode,sources.sampleCode);
     assert.equal(frozen.bom.payload.lines[0].component,'Shell');
     assert.equal(frozen.bom.payload.lines[0].materialName,'Original shell');
-    assert.deepEqual(await issuer.issueCanonicalTechPack(commandId,owner,code,
-      {expectedVersion:pack.version}),issued);
+    assert.deepEqual(await runtime.techPacks.issueTechPack(commandId,owner,code,
+      {expectedVersion:pack.version}),issued,
+      'public runtime issue method replays the canonical durable command');
 
     const originalContext=readFrozenTechPackDocumentContext(issued);
     const originalJson=canonicalJson(originalContext);
@@ -155,7 +150,7 @@ test('canonical Tech Pack issues on real PostgreSQL and retains immutable issued
       equipment:'Revised equipment',machineClass:'manual',standardMinutes:4.75,
       notes:'Revised operation instructions',
     });
-    const revised=await issuer.issueCanonicalTechPack(id('issue-r2'),owner,revision.techPackCode,
+    const revised=await runtime.techPacks.issueTechPack(id('issue-r2'),owner,revision.techPackCode,
       {expectedVersion:revision.version});
     const revisedContext=readFrozenTechPackDocumentContext(revised);
     assert.equal(revisedContext.header.revision,2);

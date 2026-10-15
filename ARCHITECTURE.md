@@ -2468,3 +2468,12 @@ This integration candidate still does not switch public Tech Pack Issue to canon
 Tech Pack draft creation now reads the immutable one-to-one `product_catalog_sku_links` compatibility bridge when available and persists that exact ProductSku identity in both the Tech Pack row and aggregate payload. No ProductSku is inferred from a similar/current text SKU. A draft without a canonical bridge remains explicitly unlinked and therefore cannot pass canonical issue.
 
 Tech Pack reads surface the durable `product_sku_id`; a revision of an issued canonical Pack inherits and persists that exact ProductSku ID. The real PostgreSQL two-revision acceptance no longer uses a direct SQL update to attach ProductSku to R2. Public Issue cutover remains a separate P0 gate.
+
+
+## 2026-10-15 — Public Tech Pack Issue canonical runtime cutover (candidate)
+
+The supported PostgreSQL runtime keeps the existing public `issueTechPack` service contract but now binds it to the canonical SERIALIZABLE issue service. The HTTP routes and request body remain stable; the authority behind them changes from legacy mutable-SKU dependency lookup to exact source-locked ProductSku/BOM/Measurement/PPS issuance with frozen document evidence.
+
+The real PostgreSQL R1/R2 acceptance now calls `runtime.techPacks.issueTechPack` for both releases, proving the supported runtime surface rather than an internal-only issuer. Legacy issue code remains compatibility implementation and is not the canonical PostgreSQL runtime authority after this candidate.
+
+This is still not PDF/public-document admission. Canonical document rendering remains separately gated by frozen evidence and current publication-rights policy.

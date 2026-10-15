@@ -39,9 +39,6 @@ test('missing, stale and time-expired rights fail closed',()=>{
   const doc=buildFrozenCanonicalTechPackDocument(completeCanonicalTechPackFixture());
   const missing=evaluateCanonicalTechPackRenderAdmission(doc,[],at);
   assert.deepEqual(missing.blockers,['media-1:CURRENT_RIGHTS_MISSING']);
-  const stale=evaluateCanonicalTechPackRenderAdmission(doc,[current({version:0})],at);
-  assert.equal(stale.admitted,false);
-  assert.ok(stale.blockers.some(v=>v.includes('RIGHTS')));
   const expired=evaluateCanonicalTechPackRenderAdmission(doc,[current({
     validUntil:'2026-10-15T11:59:59.000Z',
   })],at);
@@ -53,4 +50,20 @@ test('incomplete historical factory evidence cannot be rescued by current rights
   const result=evaluateCanonicalTechPackRenderAdmission(doc,[current()],at);
   assert.equal(result.admitted,false);
   assert.ok(result.blockers.includes('FACTORY_EVIDENCE_INCOMPLETE'));
+});
+
+
+test('current rights older than rights frozen at issue are stale but syntactically valid',()=>{
+  const doc=buildFrozenCanonicalTechPackDocument(completeCanonicalTechPackFixture({rightsVersion:2}));
+  const result=evaluateCanonicalTechPackRenderAdmission(doc,[current({version:1,id:'rights-current-v1'})],at);
+  assert.equal(result.admitted,false);
+  assert.ok(result.blockers.includes('media-1:RIGHTS_AUTHORITY_STALE'));
+});
+
+test('render policy cryptographically rejects a modified frozen document body',()=>{
+  const doc=buildFrozenCanonicalTechPackDocument(completeCanonicalTechPackFixture());
+  const tampered=JSON.parse(JSON.stringify(doc));
+  tampered.header.title='Changed after issue';
+  assert.throws(()=>evaluateCanonicalTechPackRenderAdmission(tampered,[current()],at),
+    {code:'TECH_PACK_RENDER_DOCUMENT_TAMPERED'});
 });

@@ -4,7 +4,7 @@ import { bindIssuedTechPackDocumentContext } from '../../src/application/tech-pa
 const mdm=(entryId,dictionaryCode,code)=>({entryId,version:3,dictionaryCode,
   snapshot:{code,translations:{ru:'Frozen RU',en:'Frozen EN'}}});
 
-export function completeCanonicalTechPackFixture({operations=true,sketches='verified'}={}) {
+export function completeCanonicalTechPackFixture({operations=true,sketches='verified',rightsVersion=1}={}) {
   const pack={id:'pack-1',techPackCode:'TP/2026/001',sku:'JACKET-01',brandId:'brand-1',
     skuVersion:2,revision:1,sourceTechPackCode:null,status:'draft',version:1,
     title:'Issued technical jacket',description:'Historical issued description',
@@ -69,7 +69,7 @@ export function completeCanonicalTechPackFixture({operations=true,sketches='veri
       retainedAsset:sketches === 'verified'?{mediaId:'media-1',contentHash:'e'.repeat(64),
         storageKey:'sha256/ee/front.png',storageVersion:'v1',mimeType:'image/png',byteSize:12000,
         retainedAt:'2026-10-13T02:00:00.000Z',retainedBy:'asset-authority'}:null,
-      rights:sketches === 'verified'?{id:'rights-1',mediaId:'media-1',version:1,status:'cleared',
+      rights:sketches === 'verified'?{id:'rights-'+rightsVersion,mediaId:'media-1',version:rightsVersion,status:'cleared',
         basis:'brand-owned',evidenceRef:'contract://1',approvedAt:'2026-10-13T03:00:00.000Z',
         approvedBy:'rights-officer',validUntil:null}:null,
     }];

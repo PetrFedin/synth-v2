@@ -14,6 +14,9 @@ export function evaluateCanonicalTechPackRenderAdmission(document,currentRights,
   invariant(document?.schemaVersion===1 && document?.issueFormat==='canonical-v1'
     && typeof document.documentHash==='string' && /^[a-f0-9]{64}$/.test(document.documentHash),
   'TECH_PACK_RENDER_DOCUMENT_INVALID','A verified frozen canonical Tech Pack document is required');
+  const { documentHash, ...historicalBody } = document;
+  invariant(createHash('sha256').update(canonicalJson(historicalBody),'utf8').digest('hex')===documentHash,
+    'TECH_PACK_RENDER_DOCUMENT_TAMPERED','Frozen canonical Tech Pack document hash does not match its content');
   invariant(Array.isArray(currentRights),
     'TECH_PACK_RENDER_RIGHTS_REQUIRED','Explicit current rights decisions are required');
   invariant(typeof evaluatedAt==='string' && Number.isFinite(Date.parse(evaluatedAt)),

@@ -79,9 +79,25 @@ test('canonical Tech Pack issues on real PostgreSQL and retains immutable issued
       equipment:'Original equipment',machineClass:'manual',standardMinutes:3.25,
       notes:'Original operation instructions',
     });
+    const ownerToken=(await runtime.auth.login({
+      email:'tp-positive-' + tag.toLowerCase() + '@acceptance.invalid',
+      password:'OnlyIsolated-' + tag,clientAddress:'127.0.0.1',
+    })).accessToken;
+    async function issueOverHttp(targetCode,expectedVersion,requestCommandId) {
+      const response=await runtime.fetchHandler(new Request(
+        'http://127.0.0.1/v2/tech-packs/by-code/issue?code='+encodeURIComponent(targetCode),{
+          method:'POST',
+          headers:{authorization:'Bearer '+ownerToken,'content-type':'application/json',
+            'idempotency-key':requestCommandId},
+          body:JSON.stringify({expectedVersion}),
+        }));
+      const payload=await response.json();
+      assert.equal(response.status,200,JSON.stringify(payload));
+      assert.equal(response.headers.get('cache-control'),'no-store');
+      return payload.data;
+    }
     const commandId=id('issue');
-    const issued=await runtime.techPacks.issueTechPack(commandId,owner,code,
-      {expectedVersion:pack.version});
+    const issued=await issueOverHttp(code,pack.version,commandId);
     assert.equal(issued.status,'issued');
     assert.equal(issued.version,pack.version+1);
     assert.equal(issued.issueFormat,'canonical-v1');
@@ -99,16 +115,36 @@ test('canonical Tech Pack issues on real PostgreSQL and retains immutable issued
     assert.equal(frozen.sample.sampleCode,sources.sampleCode);
     assert.equal(frozen.bom.payload.lines[0].component,'Shell');
     assert.equal(frozen.bom.payload.lines[0].materialName,'Original shell');
-    assert.deepEqual(await runtime.techPacks.issueTechPack(commandId,owner,code,
-      {expectedVersion:pack.version}),issued,
-      'public runtime issue method replays the canonical durable command');
+    assert.deepEqual(await issueOverHttp(code,pack.version,commandId),issued,
+      'authenticated public HTTP issue replays the canonical durable command');
 
     const originalContext=readFrozenTechPackDocumentContext(issued);
     const originalJson=canonicalJson(originalContext);
     const originalDocument=buildFrozenCanonicalTechPackDocument(issued);
     const originalDocumentJson=canonicalJson(originalDocument);
     assert.equal(originalDocument.publicPrintAdmitted,false);
-    assert.deepEqual(originalDocument.blockers,['SKETCH_EVIDENCE_MISSING']);
+    assert.equal(originalDocument.factoryEvidenceReady,true);
+    assert.deepEqual(originalDocument.blockers,[]);
+    assert.equal(originalDocument.sketches.state,'verified');
+    assert.equal(originalDocument.sketches.rows[0].id,sources.mediaId);
+    const renderReader=createPostgresTechPackReader({pool});
+    const admittedBeforeRevocation=await renderReader.getCanonicalRenderAdmissionForActor(
+      owner,code,'2026-10-15T12:00:00.000Z');
+    assert.equal(admittedBeforeRevocation.admitted,true);
+    assert.deepEqual(admittedBeforeRevocation.blockers,[]);
+    assert.equal(admittedBeforeRevocation.documentHash,originalDocument.documentHash);
+    await insertRow(pool,'product_media_publication_rights',{
+      id:id('rights-revoked'),media_id:sources.mediaId,version:2,status:'revoked',
+      basis:'contract-revoked',evidence_ref:'rights://revoked/'+tag,
+      approved_at:'2026-10-15T11:00:00.000Z',approved_by:owner,valid_until:null,
+    });
+    const deniedAfterRevocation=await renderReader.getCanonicalRenderAdmissionForActor(
+      owner,code,'2026-10-15T12:00:00.000Z');
+    assert.equal(deniedAfterRevocation.admitted,false);
+    assert.ok(deniedAfterRevocation.blockers.includes(
+      sources.mediaId+':CURRENT_RIGHTS_REVOKED'));
+    assert.equal(deniedAfterRevocation.documentHash,originalDocument.documentHash,
+      'current rights revocation must not rewrite historical document evidence');
     assert.equal(await documentFromFreshProcess(connectionString,owner,code),originalDocumentJson,
       'fresh Node process reproduces the complete frozen document before source mutation');
     assert.equal(originalContext.operations.rows[0].id,originalOperation.id);
@@ -150,8 +186,7 @@ test('canonical Tech Pack issues on real PostgreSQL and retains immutable issued
       equipment:'Revised equipment',machineClass:'manual',standardMinutes:4.75,
       notes:'Revised operation instructions',
     });
-    const revised=await runtime.techPacks.issueTechPack(id('issue-r2'),owner,revision.techPackCode,
-      {expectedVersion:revision.version});
+    const revised=await issueOverHttp(revision.techPackCode,revision.version,id('issue-r2'));
     const revisedContext=readFrozenTechPackDocumentContext(revised);
     assert.equal(revisedContext.header.revision,2);
     assert.equal(revisedContext.header.title,'Second revision jacket');
@@ -259,6 +294,25 @@ async function seedTechnicalEvidence(pool,{id,brand,owner,catalog,pack}){
     await insert('product_skus',{id:productSkuId,sku_code:catalog.sku,brand_id:brand,
       style_version_id:sv,colorway_id:color,size_value_id:size,payload:{},
       content_hash:hash,created_at:now,created_by:owner});
+    const mediaId=id('design-sketch'), mediaHash='e'.repeat(64);
+    await insert('product_media',{
+      id:mediaId,brand_id:brand,style_version_id:sv,colorway_id:color,
+      media_type:'image',media_role:'design_sketch',
+      uri:'s3://canonical-tech-pack/'+mediaId+'.png',sort_order:0,
+      content_hash:mediaHash,payload:{viewLabel:'Front / Перед'},
+      created_at:'2026-10-13T01:00:00.000Z',created_by:owner,
+    });
+    await insert('product_media_retained_assets',{
+      media_id:mediaId,content_hash:mediaHash,
+      storage_key:'sha256/'+mediaHash+'/front.png',storage_version:'object-v1',
+      mime_type:'image/png',byte_size:2048,
+      retained_at:'2026-10-13T02:00:00.000Z',retained_by:owner,
+    });
+    await insert('product_media_publication_rights',{
+      id:id('rights-cleared'),media_id:mediaId,version:1,status:'cleared',
+      basis:'brand-owned',evidence_ref:'rights://cleared/'+mediaId,
+      approved_at:'2026-10-13T03:00:00.000Z',approved_by:owner,valid_until:null,
+    });
     await insert('mdm_dictionaries',{id:dict,tenant_id:brand,code:'measurement.unit',
       names:{ru:'Единицы измерения',en:'Measurement units'},
       data_class:'classifier',scope_model:'tenant',hierarchy_enabled:false,
@@ -331,7 +385,7 @@ async function seedTechnicalEvidence(pool,{id,brand,owner,catalog,pack}){
     await client.query('COMMIT');
   }catch(error){await client.query('ROLLBACK').catch(()=>{});throw error;}
   finally{client.release();}
-  return {productSkuId,bomId,chartId,sampleCode};
+  return {productSkuId,bomId,chartId,sampleCode,mediaId};
 }
 
 

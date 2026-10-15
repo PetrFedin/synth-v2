@@ -13,6 +13,11 @@ export function withTechPackOpenApi(base) {
   specification.info.version = '1.13.0';
   Object.assign(specification.components.schemas, schemas());
   Object.assign(specification.paths, paths());
+  for (const path of ['/tech-packs/by-code/issue','/tech-packs/{techPackCode}/issue']) {
+    specification.paths[path].post['x-syntha-issuance-authority']='canonical-product-sku-v1';
+    specification.paths[path].post.description =
+      'Canonical ProductSku issuance only; exact BOM, measurement, PPS and issued document evidence are revalidated and frozen in one SERIALIZABLE transaction. No legacy SKU fallback.';
+  }
   return deepFreeze(specification);
 }
 
@@ -30,9 +35,16 @@ function schemas() {
     TechPackAcknowledgement: { type: 'object', additionalProperties: false, required: ['supplierCode','acknowledgementReference','acknowledgedBy','notes','acknowledgedAt','issuedTechPackVersion'], properties: { supplierCode: { type: 'string', pattern: CODE }, acknowledgementReference: { type: 'string', minLength: 2, maxLength: 160 }, acknowledgedBy: { type: 'string', minLength: 2, maxLength: 160 }, notes: nullable(1000), acknowledgedAt: { type: 'string', format: 'date-time' }, issuedTechPackVersion: version() } },
     TechPackRevisionInput: { type: 'object', additionalProperties: false, required: ['expectedVersion', 'techPackCode'], properties: { expectedVersion: version(), techPackCode: { type: 'string', pattern: CODE }, ...editable } },
     TechPackWithdrawalInput: { type: 'object', additionalProperties: false, required: ['expectedVersion', 'reason'], properties: { expectedVersion: version(), reason: { type: 'string', minLength: 5, maxLength: 500 } } },
-    TechPackDependencySnapshot: { type: 'object', additionalProperties: false, required: ['skuVersion', 'bomId', 'bomVersion', 'measurementChartId', 'measurementChartVersion', 'sampleCode', 'sampleVersion'], properties: { skuVersion: version(), bomId: { type: 'string', minLength: 1, maxLength: 160 }, bomVersion: version(), measurementChartId: { type: 'string', minLength: 1, maxLength: 160 }, measurementChartVersion: version(), sampleCode: { type: 'string', pattern: CODE }, sampleVersion: version() } },
+    TechPackDependencySnapshot: { type: 'object', additionalProperties: false,
+      required: ['skuVersion','bomId','bomVersion','measurementChartId','measurementChartVersion','sampleCode','sampleVersion'],
+      properties: {
+        skuVersion: version(), bomId: { type: 'string', minLength: 1, maxLength: 160 },
+        bomVersion: version(), measurementChartId: { type: 'string', minLength: 1, maxLength: 160 },
+        measurementChartVersion: version(), sampleCode: { type: 'string', pattern: CODE }, sampleVersion: version(),
+        canonical: { type: 'object' }, frozenSources: { type: 'object' }, frozenDocumentContext: { type: 'object' },
+      } },
     TechPack: { type: 'object', additionalProperties: false, required: ['id','techPackCode','sku','brandId','skuVersion','revision','sourceTechPackCode','status','version','supplierCode','supplierName','supplierEmail','title','description','constructionNotes','qualityNotes','packingNotes','dependencySnapshot','issuedAt','issuedBy','acknowledgedAt','acknowledgement','withdrawnAt','withdrawalReason','createdAt','updatedAt'], properties: {
-      id: { type: 'string', minLength: 1, maxLength: 160 }, techPackCode: { type: 'string', pattern: CODE }, sku: { type: 'string', pattern: SKU }, brandId: { type: 'string', minLength: 1, maxLength: 160 }, skuVersion: version(), revision: { type: 'integer', minimum: 1, maximum: 999 }, sourceTechPackCode: { oneOf: [{ type: 'string', pattern: CODE }, { type: 'null' }] }, status: { type: 'string', enum: STATUSES }, version: version(), ...editable,
+      id: { type: 'string', minLength: 1, maxLength: 160 }, techPackCode: { type: 'string', pattern: CODE }, sku: { type: 'string', pattern: SKU }, brandId: { type: 'string', minLength: 1, maxLength: 160 }, skuVersion: version(), revision: { type: 'integer', minimum: 1, maximum: 999 }, sourceTechPackCode: { oneOf: [{ type: 'string', pattern: CODE }, { type: 'null' }] }, status: { type: 'string', enum: STATUSES }, version: version(), issueFormat: { type: 'string', enum: ['canonical-v1'] }, productSkuId: nullable(160), ...editable,
       dependencySnapshot: { oneOf: [{ $ref: '#/components/schemas/TechPackDependencySnapshot' }, { type: 'null' }] }, issuedAt: dateOrNull(), issuedBy: nullable(160), acknowledgedAt: dateOrNull(), acknowledgement: { oneOf: [{ $ref: '#/components/schemas/TechPackAcknowledgement' }, { type: 'null' }] }, withdrawnAt: dateOrNull(), withdrawalReason: nullable(500), createdAt: { type: 'string', format: 'date-time' }, updatedAt: { type: 'string', format: 'date-time' },
     } },
     TechPackCanonicalPreflight: {

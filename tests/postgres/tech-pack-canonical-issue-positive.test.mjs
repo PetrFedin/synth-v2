@@ -103,7 +103,8 @@ test('canonical Tech Pack issues on real PostgreSQL and retains immutable issued
     assert.equal(frozen.bom.id,sources.bomId);
     assert.equal(frozen.measurement.id,sources.chartId);
     assert.equal(frozen.sample.sampleCode,sources.sampleCode);
-    assert.equal(frozen.bom.payload.lines[0].material,'shell');
+    assert.equal(frozen.bom.payload.lines[0].component,'Shell');
+    assert.equal(frozen.bom.payload.lines[0].materialName,'Original shell');
     assert.deepEqual(await issuer.issueCanonicalTechPack(commandId,owner,code,
       {expectedVersion:pack.version}),issued);
 

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildCanonicalTechPackIssueSnapshot } from '../src/application/tech-pack-canonical-issue-snapshot.mjs';
+import { buildCanonicalTechPackIssueSnapshot, verifyFrozenCanonicalTechPackSources } from '../src/application/tech-pack-canonical-issue-snapshot.mjs';
 
 const HASH = 'a'.repeat(64);
 function fixture() {
@@ -77,4 +77,39 @@ test('canonical evidence cannot be silently inferred from a text SKU or the wron
   const wrongPps=fixture();
   wrongPps.sources.sample.supplierCode='ANOTHER-FACTORY';
   assert.throws(()=>verify(wrongPps),{code:'TECH_PACK_CANONICAL_PPS_REQUIRED'});
+});
+
+test('issued canonical sources are copied and permanently frozen at issuance', () => {
+  const input=fixture();
+  const issued=verify(input);
+  assert.match(issued.canonical.frozenSourcesHash,/^[a-f0-9]{64}$/);
+  assert.deepEqual(verifyFrozenCanonicalTechPackSources(issued),issued.frozenSources);
+  const originalHash=issued.canonical.lineageHash;
+  input.sources.bom.payload.lines[0]=999;
+  input.sources.chart.payload.points[0]=999;
+  input.sources.sample.payload.accepted=false;
+  assert.deepEqual(issued.frozenSources.bom.payload.lines,[1,2]);
+  assert.deepEqual(issued.frozenSources.measurement.payload.points,[1]);
+  assert.deepEqual(issued.frozenSources.sample.payload,{accepted:true});
+  assert.equal(issued.canonical.lineageHash,originalHash);
+  assert.equal(Object.isFrozen(issued.frozenSources.bom.payload.lines),true);
+  assert.throws(()=>{issued.frozenSources.bom.payload.lines[0]=999;},TypeError);
+  assert.deepEqual(verifyFrozenCanonicalTechPackSources(JSON.parse(JSON.stringify(issued))),
+    issued.frozenSources,'persisted JSONB roundtrip must retain exact evidence');
+});
+
+test('missing, tampered or cross-version frozen canonical sources fail closed', () => {
+  const original=verify(fixture());
+  const mutate=change=>{const candidate=JSON.parse(JSON.stringify(original));change(candidate);return candidate;};
+  assert.throws(()=>verifyFrozenCanonicalTechPackSources(mutate(x=>{delete x.frozenSources;})),
+    {code:'TECH_PACK_CANONICAL_FROZEN_EVIDENCE_REQUIRED'});
+  assert.throws(()=>verifyFrozenCanonicalTechPackSources(mutate(x=>{x.frozenSources.bom.payload.lines[0]=999;})),
+    {code:'TECH_PACK_CANONICAL_FROZEN_EVIDENCE_TAMPERED'});
+  assert.throws(()=>verifyFrozenCanonicalTechPackSources(mutate(x=>{x.canonical.lineageHash='a'.repeat(64);})),
+    {code:'TECH_PACK_CANONICAL_LINEAGE_TAMPERED'});
+  // Hash manipulations in either direction cannot redirect one version to another.
+  assert.throws(()=>verifyFrozenCanonicalTechPackSources(mutate(x=>{x.bomVersion+=1;})),
+    {code:'TECH_PACK_CANONICAL_SOURCE_EVIDENCE_MISMATCH'});
+  assert.throws(()=>verifyFrozenCanonicalTechPackSources(mutate(x=>{x.sampleCode='PPS-OTHER';})),
+    {code:'TECH_PACK_CANONICAL_SOURCE_EVIDENCE_MISMATCH'});
 });

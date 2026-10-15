@@ -2501,3 +2501,16 @@ A new authenticated canonical-document read returns the deterministic frozen Tec
 Access is existence-concealed by the same active-membership/role SQL boundary. The current-rights query runs only after an authorised canonical Pack is found. Missing, stale, restricted, expired or revoked rights raise `TECH_PACK_CANONICAL_RENDER_NOT_ADMITTED` and the public endpoint does not return the document body.
 
 The existing legacy `/document` path remains intact for legacy history and continues to reject canonical live-join rendering. The new endpoint is JSON data admission only; it does not set `publicPrintAdmitted=true`, generate PDF or claim visual production acceptance.
+
+
+## 2026-10-15 — Canonical Tech Pack RU/EN browser document viewer (candidate)
+
+**Status: CANDIDATE / PDF HOLD.**
+
+The existing ODS Tech Pack workspace now selects document authority using the durable `issueFormat`. Legacy historical Packs retain the existing legacy document reader. A `canonical-v1` Pack can only open the rights-gated `/canonical-document` endpoint; the browser never falls back to the mutable legacy document path.
+
+Browser state is cleared before each document fetch. If current publication rights are revoked or the admission otherwise fails, no previously admitted canonical document remains visible.
+
+The canonical viewer presents RU/EN product/style/colour/size labels, issued supplier/header evidence, frozen sketch rights, BOM, measurement matrix, operation sequence, production notes, `documentHash`, canonical lineage/source/context hashes and current `policyHash`.
+
+The canonical viewer deliberately omits `window.print()` and displays an explicit print-gated badge. JSON/browser admission does not change `publicPrintAdmitted=false`. PDF generation and print admission remain a later independently qualified gate.

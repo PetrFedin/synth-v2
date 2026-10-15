@@ -55,5 +55,14 @@ test('authoritative OpenAPI 1.21 documents supplier acknowledgement and guarded 
   const allocation = specification.components.schemas.RfqAllocation;
   assert.equal(allocation.required.includes('techPackCode'), true); assert.equal(allocation.required.includes('techPackAcknowledgementReference'), true);
   assert.equal(specification.paths['/rfqs/{rfqCode}/allocate'].post['x-syntha-production-gate'], 'supplier-acknowledged-current-tech-pack');
+  for (const path of ['/tech-packs/{techPackCode}/issue','/tech-packs/by-code/issue']) {
+    assert.equal(specification.paths[path].post['x-syntha-issuance-authority'],'canonical-product-sku-v1');
+    assert.match(specification.paths[path].post.description,/No legacy SKU fallback/);
+  }
+  assert.equal(specification.components.schemas.TechPack.properties.issueFormat.enum[0],'canonical-v1');
+  assert.ok(specification.components.schemas.TechPack.properties.productSkuId);
+  assert.ok(specification.components.schemas.TechPackDependencySnapshot.properties.canonical);
+  assert.ok(specification.components.schemas.TechPackDependencySnapshot.properties.frozenSources);
+  assert.ok(specification.components.schemas.TechPackDependencySnapshot.properties.frozenDocumentContext);
   assert.equal(Object.isFrozen(specification), true);
 });

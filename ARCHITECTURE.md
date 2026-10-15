@@ -2477,3 +2477,16 @@ The supported PostgreSQL runtime keeps the existing public `issueTechPack` servi
 The real PostgreSQL R1/R2 acceptance now calls `runtime.techPacks.issueTechPack` for both releases, proving the supported runtime surface rather than an internal-only issuer. Legacy issue code remains compatibility implementation and is not the canonical PostgreSQL runtime authority after this candidate.
 
 This is still not PDF/public-document admission. Canonical document rendering remains separately gated by frozen evidence and current publication-rights policy.
+
+
+## 2026-10-15 — Canonical Tech Pack HTTP + post-issue rights revocation qualification (candidate)
+
+**Status: CANDIDATE / PUBLIC DOCUMENT STILL HOLD.**
+
+The real PostgreSQL canonical acceptance now exercises the supported authenticated HTTP Issue endpoint for both R1 and R2, including durable command replay. R1 includes an exact ProductMedia design sketch, retained content-addressed asset and cleared publication-rights v1, so historical factory evidence is complete.
+
+After R1 issue, a newer append-only rights decision v2=`revoked` is persisted. The current-rights reader must then deny render admission with an exact media blocker while the issued frozen document and its deterministic `documentHash` remain unchanged. Historical evidence records what was true at issue; current publication permission is a separate live gate.
+
+OpenAPI explicitly identifies both Issue addresses as `canonical-product-sku-v1` authority and describes the canonical frozen snapshot response fields. No legacy SKU fallback is admitted for new Issue.
+
+This tranche still does not expose the frozen document through public HTTP or produce PDF. Those remain the next P0 release gates.

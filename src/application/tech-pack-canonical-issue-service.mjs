@@ -1,3 +1,4 @@
+import { bindIssuedTechPackDocumentContext } from './tech-pack-issued-document-context.mjs';
 import { domainEvent } from '../core/events.mjs';
 import { invariant, requireEntity } from '../core/errors.mjs';
 import { canonicalJson, fingerprintsMatch } from '../core/fingerprints.mjs';
@@ -71,9 +72,15 @@ export function createCanonicalTechPackIssueService({
           techPack: pack, catalogSku, sources,
         });
         const at = clock();
-        const value = issueCanonicalTechPack(pack, {
+        const issued = issueCanonicalTechPack(pack, {
           actorId, issuedAt: at, dependencySnapshot: snapshot,
         });
+
+        invariant(typeof tx.getCanonicalDocumentSources === 'function',
+          'TECH_PACK_DOCUMENT_SOURCE_READER_REQUIRED',
+          'Canonical issue must read document sources within the issuing transaction');
+        const documentSources = await tx.getCanonicalDocumentSources(pack, sources.productSku);
+        const value = bindIssuedTechPackDocumentContext(issued, sources, documentSources);
 
         if (active && active.id !== pack.id) {
           const superseded = supersedeTechPack(active, { supersededAt: at });
@@ -98,6 +105,8 @@ async function emit(tx, nextId, at, commandId, actorId, type, pack) {
       techPackCode: pack.techPackCode, sku: pack.sku, brandId: pack.brandId,
       supplierCode: pack.supplierCode, revision: pack.revision, status: pack.status,
       version: pack.version, sourceTechPackCode: pack.sourceTechPackCode,
+      ...(pack.dependencySnapshot?.canonical?.documentContextHash
+        ? { documentContextHash: pack.dependencySnapshot.canonical.documentContextHash } : {}),
       ...(pack.dependencySnapshot?.canonical?.lineageHash
         ? { canonicalLineageHash: pack.dependencySnapshot.canonical.lineageHash }
         : {}),

@@ -112,6 +112,19 @@ export function verifyFrozenCanonicalTechPackSources(snapshot) {
   invariant(sha256(canonicalJson(frozen)) === basis.frozenSourcesHash,
     'TECH_PACK_CANONICAL_FROZEN_EVIDENCE_TAMPERED',
     'Stored canonical document sources do not match the issued digest');
+  // Additive context: source-only snapshots remain verifiable, but either
+  // partial context marker is corruption, never a legacy fallback.
+  if (Object.hasOwn(snapshot, 'frozenDocumentContext') || Object.hasOwn(basis, 'documentContextHash')) {
+    invariant(validPayload(snapshot.frozenDocumentContext)
+      && /^[a-f0-9]{64}$/.test(basis.documentContextHash ?? ''),
+    'TECH_PACK_DOCUMENT_CONTEXT_REQUIRED', 'Exact issued document context is missing');
+    const contextJson = canonicalJson(snapshot.frozenDocumentContext);
+    invariant(Buffer.byteLength(canonicalJson(frozen), 'utf8')
+      + Buffer.byteLength(contextJson, 'utf8') <= 8 * 1024 * 1024,
+    'TECH_PACK_DOCUMENT_CONTEXT_TOO_LARGE', 'Combined issued evidence exceeds 8 MiB');
+    invariant(sha256(contextJson) === basis.documentContextHash,
+      'TECH_PACK_DOCUMENT_CONTEXT_TAMPERED', 'Issued document context digest does not match');
+  }
   const {lineageHash, ...manifest} = basis;
   invariant(sha256(canonicalJson(manifest)) === lineageHash,
     'TECH_PACK_CANONICAL_LINEAGE_TAMPERED',

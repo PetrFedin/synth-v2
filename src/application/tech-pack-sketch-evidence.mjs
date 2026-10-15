@@ -4,7 +4,12 @@ import { canonicalJson } from '../core/fingerprints.mjs';
 const HASH = /^[a-f0-9]{64}$/;
 const ROLES = Object.freeze(['design_sketch', 'technical', 'tech_pack_thumbnail']);
 
-export function freezeIssuedTechPackSketchEvidence(rows, { pack, basis, issuedAt } = {}) {
+/**
+ * @param {Array<Record<string, any>>} rows
+ * @param {{pack?: Record<string, any>, basis?: Record<string, any>, issuedAt?: string}} [options]
+ */
+export function freezeIssuedTechPackSketchEvidence(rows, options = {}) {
+  const { pack, basis, issuedAt } = options;
   check(Array.isArray(rows) && rows.length <= 100, 'ROWS_INVALID',
     'Explicit bounded sketch rows from the issuing transaction are required');
   check(pack && text(pack.brandId) && text(pack.techPackCode)
@@ -58,6 +63,10 @@ export function freezeIssuedTechPackSketchEvidence(rows, { pack, basis, issuedAt
   })));
 }
 
+/**
+ * @param {Record<string, any>} value
+ * @param {{pack?: Record<string, any>, basis?: Record<string, any>, issuedAt?: string}} options
+ */
 export function validateFrozenTechPackSketchEvidence(value, options) {
   check(plain(value), 'SNAPSHOT_INVALID', 'Frozen sketch evidence object is required');
   const recalculated = freezeIssuedTechPackSketchEvidence(value.rows, options);

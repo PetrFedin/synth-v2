@@ -345,9 +345,24 @@ async function mutateTechnicalEvidence(pool,sources) {
     await client.query('UPDATE boms SET version=2,material_cost=12,total_cost=40,payload=$2::jsonb WHERE id=$1',
       [sources.bomId,JSON.stringify(bom)]);
 
-    const chart=(await client.query('SELECT payload FROM measurement_charts WHERE id=$1 FOR UPDATE',[sources.chartId])).rows[0].payload;
+    const chartRow=(await client.query(
+      `SELECT payload,brand_id,style_version_id,colorway_id,size_scale_version_id,
+              measurement_unit_entry_id,measurement_unit_entry_version,base_size_value_id,
+              published_at,version
+         FROM measurement_charts WHERE id=$1 FOR UPDATE`,[sources.chartId])).rows[0];
+    const chart=chartRow.payload;
+    await client.query(
+      `INSERT INTO measurement_chart_revisions
+         (chart_id,revision_version,sku,brand_id,sku_version,payload,published_at,archived_at,
+          style_version_id,colorway_id,size_scale_version_id,measurement_unit_entry_id,
+          measurement_unit_entry_version,base_size_value_id)
+       VALUES ($1,$2,NULL,$3,NULL,$4::jsonb,$5,now(),$6,$7,$8,$9,$10,$11)`,
+      [sources.chartId,chartRow.version,chartRow.brand_id,JSON.stringify(chart),
+        chartRow.published_at,chartRow.style_version_id,chartRow.colorway_id,
+        chartRow.size_scale_version_id,chartRow.measurement_unit_entry_id,
+        chartRow.measurement_unit_entry_version,chartRow.base_size_value_id]);
     chart.version=2; chart.points[0].measurements[0].value=118;
-    await client.query('UPDATE measurement_charts SET version=2,payload=$2::jsonb WHERE id=$1',
+    await client.query('UPDATE measurement_charts SET version=2,payload=$2::jsonb,updated_at=now() WHERE id=$1',
       [sources.chartId,JSON.stringify(chart)]);
     await client.query('UPDATE measurement_values SET value=118 WHERE chart_id=$1',[sources.chartId]);
 

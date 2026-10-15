@@ -36,6 +36,7 @@ export function createPostgresTechPackReader({ pool } = {}) {
       return withPostgresTransaction(pool, async (queryable) => {
         const result = await queryable.query(
           `SELECT document.payload,
+                  pack.issue_format,
                   pack.payload->'dependencySnapshot' AS dependency_snapshot
              FROM tech_pack_document_workspace AS document
              JOIN tech_packs AS pack
@@ -58,9 +59,10 @@ export function createPostgresTechPackReader({ pool } = {}) {
         // a missing/empty lineage hash is damaged evidence, not a legacy Pack.
         // The source-section projector alone does not admit factory printing.
         const basis = document?.dependency_snapshot;
-        if (basis && typeof basis === 'object'
+        const canonicalFormat = document?.issue_format === 'canonical-v1';
+        if (canonicalFormat || (basis && typeof basis === 'object'
           && (Object.hasOwn(basis, 'canonical') || Object.hasOwn(basis, 'frozenSources')
-            || Object.hasOwn(basis, 'frozenDocumentContext'))) {
+            || Object.hasOwn(basis, 'frozenDocumentContext')))) {
           verifyFrozenCanonicalTechPackSources(basis);
           invariant(false, 'TECH_PACK_CANONICAL_PRINT_NOT_ADMITTED',
             'Frozen Tech Pack sources are verified, but canonical factory print is not yet admitted');

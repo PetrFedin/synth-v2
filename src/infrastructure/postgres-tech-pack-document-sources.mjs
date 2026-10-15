@@ -47,9 +47,56 @@ export async function readTechPackDocumentSources(client, pack, product) {
      ORDER BY sequence, id LIMIT 1000 FOR SHARE`,
     [pack.techPackCode],
   );
+  const sketchResult = await client.query(
+    `SELECT id, brand_id, style_version_id, colorway_id, media_type, media_role,
+            uri, sort_order, content_hash, payload, created_at, created_by
+       FROM product_media
+      WHERE style_version_id=$1 AND brand_id=$2
+        AND (colorway_id IS NULL OR colorway_id=$3)
+        AND media_type='image'
+        AND media_role IN ('design_sketch','technical','tech_pack_thumbnail')
+      ORDER BY sort_order, id LIMIT 101 FOR SHARE`,
+    [product.styleVersionId, pack.brandId, product.colorwayId],
+  );
+  const mediaIds = sketchResult.rows.map(row => row.id);
+  let assetRows = [], rightsRows = [];
+  if (mediaIds.length) {
+    assetRows = (await client.query(
+      `SELECT media_id, content_hash, storage_key, storage_version, mime_type,
+              byte_size, retained_at, retained_by
+         FROM product_media_retained_assets
+        WHERE media_id = ANY($1::text[]) ORDER BY media_id FOR SHARE`, [mediaIds])).rows;
+    rightsRows = (await client.query(
+      `SELECT id, media_id, version, status, basis, evidence_ref, approved_at,
+              approved_by, valid_until
+         FROM product_media_publication_rights
+        WHERE media_id = ANY($1::text[])
+        ORDER BY media_id, version DESC, id DESC FOR SHARE`, [mediaIds])).rows;
+  }
+  const assetByMedia = new Map(assetRows.map(row => [row.media_id, {
+    mediaId: row.media_id, contentHash: row.content_hash, storageKey: row.storage_key,
+    storageVersion: row.storage_version, mimeType: row.mime_type,
+    byteSize: Number(row.byte_size), retainedAt: iso(row.retained_at), retainedBy: row.retained_by,
+  }]));
+  const rightsByMedia = new Map();
+  for (const row of rightsRows) if (!rightsByMedia.has(row.media_id)) rightsByMedia.set(row.media_id, {
+    id: row.id, mediaId: row.media_id, version: row.version, status: row.status,
+    basis: row.basis, evidenceRef: row.evidence_ref, approvedAt: iso(row.approved_at),
+    approvedBy: row.approved_by, validUntil: row.valid_until ? iso(row.valid_until) : null,
+  });
   return {
     product: productResult.rows[0]?.payload ?? null,
     supplier: supplierResult.rows[0]?.payload ?? null,
     operations: operationsResult.rows.map(row => row.payload),
+    sketches: sketchResult.rows.map(row => ({
+      id: row.id, brandId: row.brand_id, styleVersionId: row.style_version_id,
+      colorwayId: row.colorway_id, mediaType: row.media_type, mediaRole: row.media_role,
+      uri: row.uri, sortOrder: row.sort_order, contentHash: row.content_hash,
+      payload: row.payload, createdAt: iso(row.created_at), createdBy: row.created_by,
+      retainedAsset: assetByMedia.get(row.id) ?? null,
+      rights: rightsByMedia.get(row.id) ?? null,
+    })),
   };
 }
+
+function iso(value) { return value instanceof Date ? value.toISOString() : new Date(value).toISOString(); }

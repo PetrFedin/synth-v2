@@ -18,5 +18,6 @@ export function documentSourcesFixture(pack, sources) {
       nameEn: 'Original EN operation ' + sequence, equipment: 'Original machine', machineClass: 'manual',
       standardMinutes: sequence === 1 ? 1.25 : 2.35, notes: 'Original operation note',
       createdAt: '2026-10-13T00:00:00.000Z', createdBy: 'actor-1' })),
+    sketches: [],
   };
 }

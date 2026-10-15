@@ -89,6 +89,9 @@ test('canonical Tech Pack issues on real PostgreSQL and retains immutable issued
       {expectedVersion:pack.version});
     assert.equal(issued.status,'issued');
     assert.equal(issued.version,pack.version+1);
+    assert.equal(issued.issueFormat,'canonical-v1');
+    const persistedFormat=await pool.query('SELECT issue_format FROM tech_packs WHERE tech_pack_code=$1',[code]);
+    assert.equal(persistedFormat.rows[0].issue_format,'canonical-v1');
     assert.equal(issued.dependencySnapshot.canonical.productSkuId,sources.productSkuId);
     assert.equal(issued.dependencySnapshot.bomId,sources.bomId);
     assert.equal(issued.dependencySnapshot.measurementChartId,sources.chartId);

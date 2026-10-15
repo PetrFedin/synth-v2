@@ -43,7 +43,9 @@ test('issued header, exact product labels, supplier and sorted operations are de
   assert.equal(context.supplier.register.version, 3);
   assert.equal(context.operations.totalStandardMinutes, 3.6);
   assert.deepEqual(context.operations.rows.map(row => row.sequence), [1, 2]);
-  assert.equal(context.sketches.state, 'unverified');
+  assert.equal(context.sketches.state, 'missing');
+  assert.deepEqual(context.sketches.issues, []);
+  assert.equal(result.issueFormat, 'canonical-v1');
   assert.throws(() => { result.dependencySnapshot.frozenDocumentContext.header.title = 'changed'; }, TypeError);
   assert.throws(() => { context.operations.rows[0].nameRu = 'changed'; }, TypeError);
   assert.notEqual(result.dependencySnapshot.canonical.lineageHash, f.issued.dependencySnapshot.canonical.lineageHash);
@@ -74,6 +76,7 @@ test('legacy source-only evidence remains verifiable but cannot invent a documen
 
 for (const [name, mutate, suffix] of [
   ['absent operation read', f => delete f.documentSources.operations, 'OPERATIONS_REQUIRED'],
+  ['absent sketch read', f => delete f.documentSources.sketches, 'SKETCH_EVIDENCE_REQUIRED'],
   ['foreign operation', f => { f.documentSources.operations[0].brandId = 'other'; }, 'OPERATIONS_INVALID'],
   ['different pack operation', f => { f.documentSources.operations[0].techPackCode = 'OTHER'; }, 'OPERATIONS_INVALID'],
   ['duplicate operation ID', f => { f.documentSources.operations[0].id = f.documentSources.operations[1].id; }, 'OPERATIONS_INVALID'],
@@ -134,4 +137,39 @@ test('bound context cannot be rewritten and its digest is included in lineage', 
 test('combined source and context evidence stays within the existing 8 MiB bound', () => {
   const f = fixture(); f.issued.description = 'x'.repeat(8 * 1024 * 1024);
   assert.throws(() => bind(f), { code: 'TECH_PACK_DOCUMENT_CONTEXT_TOO_LARGE' });
+});
+
+
+test('retained sketch plus cleared rights becomes verified evidence', () => {
+  const f=fixture();
+  f.documentSources.sketches=[{
+    id:'media-1',brandId:f.issued.brandId,styleVersionId:f.sources.productSku.styleVersionId,
+    colorwayId:f.sources.productSku.colorwayId,mediaType:'image',mediaRole:'design_sketch',
+    uri:'s3://mutable-alias/front.png',sortOrder:0,contentHash:'c'.repeat(64),
+    payload:{viewLabel:'Front / Перед'},createdAt:'2026-10-13T01:00:00.000Z',createdBy:'designer-1',
+    retainedAsset:{mediaId:'media-1',contentHash:'c'.repeat(64),storageKey:'sha256/cc/front.png',
+      storageVersion:'v-1',mimeType:'image/png',byteSize:12345,
+      retainedAt:'2026-10-13T02:00:00.000Z',retainedBy:'asset-authority'},
+    rights:{id:'rights-1',mediaId:'media-1',version:1,status:'cleared',basis:'brand-owned',
+      evidenceRef:'contract://rights/1',approvedAt:'2026-10-13T03:00:00.000Z',
+      approvedBy:'rights-officer',validUntil:null},
+  }];
+  const context=readFrozenTechPackDocumentContext(bind(f));
+  assert.equal(context.sketches.state,'verified');
+  assert.equal(context.sketches.rows[0].retainedAsset.storageVersion,'v-1');
+  assert.equal(context.sketches.rows[0].rights.status,'cleared');
+});
+test('URI or content hash alone remains incomplete sketch evidence', () => {
+  const f=fixture();
+  f.documentSources.sketches=[{
+    id:'media-weak',brandId:f.issued.brandId,styleVersionId:f.sources.productSku.styleVersionId,
+    colorwayId:null,mediaType:'image',mediaRole:'technical',
+    uri:'https://cdn.example.invalid/technical.png',sortOrder:1,contentHash:'d'.repeat(64),
+    payload:{},createdAt:'2026-10-13T01:00:00.000Z',createdBy:'designer-1',
+    retainedAsset:null,rights:null,
+  }];
+  const context=readFrozenTechPackDocumentContext(bind(f));
+  assert.equal(context.sketches.state,'incomplete');
+  assert.deepEqual(context.sketches.rows[0].issues,
+    ['RETAINED_ASSET_MISSING','RIGHTS_DECISION_MISSING']);
 });

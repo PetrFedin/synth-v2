@@ -3,6 +3,7 @@ import { invariant } from '../core/errors.mjs';
 import { canonicalJson } from '../core/fingerprints.mjs';
 import { MACHINE_CLASSES, totalStandardMinutes } from '../modules/tech-pack-operations/public.mjs';
 import { verifyFrozenCanonicalTechPackSources } from './tech-pack-canonical-issue-snapshot.mjs';
+import { freezeIssuedTechPackSketchEvidence, validateFrozenTechPackSketchEvidence } from './tech-pack-sketch-evidence.mjs';
 
 const HEADER_FIELDS = ['id', 'techPackCode', 'brandId', 'sku', 'skuVersion', 'revision',
   'sourceTechPackCode', 'title', 'description', 'constructionNotes', 'qualityNotes',
@@ -27,8 +28,12 @@ export function bindIssuedTechPackDocumentContext(issued, sources, documentSourc
   check(!Object.hasOwn(snapshot, 'frozenDocumentContext')
     && !Object.hasOwn(snapshot.canonical, 'documentContextHash'),
   'ALREADY_BOUND', 'Issued document context cannot be rebound');
+  check(text(issued?.issuedBy) && timestamp(issued?.issuedAt), 'HEADER_INVALID',
+    'Complete issue actor and issue time are required before document evidence is frozen');
   check(Array.isArray(documentSources?.operations), 'OPERATIONS_REQUIRED',
     'The issuing transaction must explicitly read the operation sequence');
+  check(Array.isArray(documentSources?.sketches), 'SKETCH_EVIDENCE_REQUIRED',
+    'The issuing transaction must explicitly read sketch evidence, including an empty result');
   const rows = [...documentSources.operations];
   validateOperations(rows, issued);
   rows.sort((a, b) => a.sequence - b.sequence);
@@ -40,7 +45,9 @@ export function bindIssuedTechPackDocumentContext(issued, sources, documentSourc
       email: issued.supplierEmail, register: documentSources.supplier },
     operations: { source: 'tech_pack_operations', state: rows.length ? 'present' : 'missing',
       rows, totalStandardMinutes: rows.length ? totalStandardMinutes(rows) : null },
-    sketches: { state: 'unverified', reason: 'VERIFIED_SKETCH_CONTENT_REQUIRED' },
+    sketches: freezeIssuedTechPackSketchEvidence(documentSources?.sketches, {
+      pack: issued, basis: snapshot.canonical, issuedAt: issued.issuedAt,
+    }),
   };
   validateContext(context, snapshot.canonical);
   check(Buffer.byteLength(canonicalJson(snapshot.frozenSources), 'utf8')
@@ -48,7 +55,7 @@ export function bindIssuedTechPackDocumentContext(issued, sources, documentSourc
   'TOO_LARGE', 'Combined source and document evidence exceeds 8 MiB');
   const { lineageHash: oldHash, ...previousManifest } = snapshot.canonical;
   const manifest = { ...previousManifest, documentContextHash: hash(context) };
-  return freeze({ ...issued, dependencySnapshot: { ...snapshot,
+  return freeze({ ...issued, issueFormat: 'canonical-v1', dependencySnapshot: { ...snapshot,
     canonical: { ...manifest, lineageHash: hash(manifest) }, frozenDocumentContext: context } });
 }
 
@@ -108,9 +115,9 @@ function validateContext(context, basis) {
     && ops.totalStandardMinutes === (ops.rows.length ? totalStandardMinutes(ops.rows) : null)
     && ops.rows.every((row, index) => index === 0 || row.sequence > ops.rows[index - 1].sequence),
   'OPERATIONS_INVALID', 'Frozen operation sequence, state and total must agree');
-  check(context.sketches?.state === 'unverified'
-    && context.sketches.reason === 'VERIFIED_SKETCH_CONTENT_REQUIRED',
-  'SKETCH_STATE_INVALID', 'This context does not admit sketch bytes or publication rights');
+  validateFrozenTechPackSketchEvidence(context.sketches, {
+    pack: h, basis, issuedAt: h.issuedAt,
+  });
 }
 function validateOperations(rows, pack) {
   check(Array.isArray(rows) && rows.length <= 999, 'OPERATIONS_INVALID', 'Explicit bounded operation rows required');

@@ -33,7 +33,7 @@ function snapshot() {
 const legacy={techPackCode:'TP/LEGACY',materials:[{unitCost:999}],measurementPoints:[]};
 
 test('legacy document read contract stays unchanged without canonical evidence markers',async()=>{
-  const {reader,calls}=harness([{payload:legacy,dependency_snapshot:null}]);
+  const {reader,calls}=harness([{payload:legacy,issue_format:'legacy',dependency_snapshot:null}]);
   assert.deepEqual(await reader.getDocumentForActor('owner','TP/LEGACY'),legacy);
   assert.equal(calls[0].sql,'BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
   const read=calls.find(call=>call.sql.includes('SELECT document.payload'));
@@ -68,3 +68,10 @@ for(const [name,make,suffix] of cases) {
     assert.deepEqual(calls.slice(-2).map(call=>call.sql),['ROLLBACK','RELEASE']);
   });
 }
+
+test('durable canonical issue format refuses complete snapshot removal',async()=>{
+  const {reader,calls}=harness([{payload:legacy,issue_format:'canonical-v1',dependency_snapshot:null}]);
+  await assert.rejects(reader.getDocumentForActor('owner','TP/CANON'),
+    {code:'TECH_PACK_CANONICAL_FROZEN_EVIDENCE_REQUIRED'});
+  assert.deepEqual(calls.slice(-2).map(call=>call.sql),['ROLLBACK','RELEASE']);
+});

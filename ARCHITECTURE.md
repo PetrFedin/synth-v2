@@ -2431,3 +2431,8 @@ Local candidate evidence: Node 24.19.0 `npm run verify` exited 0 (2,471 passed, 
 ### 2026-10-15 — Canonical Tech Pack sketch evidence authority (candidate)
 
 Draft stack after PR #288. Canonical issue gains a durable format discriminator outside dependencySnapshot and separate retained-asset/publication-rights authorities for sketch media. URI-only media never qualifies as verified sketch evidence. Exact ProductMedia, retained content evidence and the latest rights decision are read inside the issuing SERIALIZABLE transaction and frozen into historical context. Public factory print remains HOLD pending complete frozen-document composition, current-rights policy, two-revision PostgreSQL proof, RU/EN PDF/browser acceptance and independent integration review.
+
+
+### 2026-10-15 — Frozen canonical Tech Pack document composer (candidate)
+
+A pure composer combines only issuance-frozen source sections and issuance-frozen document context. It has no live catalog, MDM, price, supplier, media, object-store or current-rights lookup. The output carries a deterministic document hash and explicit evidence blockers. `factoryEvidenceReady` is evidence completeness only; `publicPrintAdmitted` remains false. The internal authorised PostgreSQL reader selects only the stored Pack payload and durable issue format, then invokes the pure composer after membership filtering. No public HTTP route is admitted by this increment.

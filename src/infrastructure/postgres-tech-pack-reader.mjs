@@ -2,6 +2,7 @@ import { invariant } from '../core/errors.mjs';
 import { CAPABILITIES, rolesWithCapability } from '../modules/access-control/public.mjs';
 import { withPostgresTransaction } from './postgres-transaction.mjs';
 import { verifyFrozenCanonicalTechPackSources } from '../application/tech-pack-canonical-issue-snapshot.mjs';
+import { buildFrozenCanonicalTechPackDocument } from '../application/tech-pack-frozen-document.mjs';
 
 const SNAPSHOT_BEGIN = 'BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY';
 const READ_ROLES = rolesWithCapability(CAPABILITIES.TECH_PACK_READ);
@@ -26,6 +27,29 @@ export function createPostgresTechPackReader({ pool } = {}) {
           [techPackCode, actorId, READ_ROLES],
         );
         return result.rows[0]?.payload;
+      }, { begin: SNAPSHOT_BEGIN });
+    },
+
+    getCanonicalFrozenDocumentForActor(actorId, techPackCode) {
+      return withPostgresTransaction(pool, async (queryable) => {
+        const result=await queryable.query(
+          `SELECT pack.payload, pack.issue_format
+             FROM tech_packs AS pack
+            WHERE pack.tech_pack_code=$1
+              AND EXISTS (
+                SELECT 1 FROM memberships AS membership
+                 WHERE membership.user_id=$2
+                   AND membership.organisation_id=pack.brand_id
+                   AND membership.status='active'
+                   AND membership.role = ANY($3::text[])
+              )`,
+          [techPackCode,actorId,READ_ROLES],
+        );
+        const row=result.rows[0];
+        if(!row) return undefined;
+        invariant(row.issue_format === 'canonical-v1',
+          'TECH_PACK_CANONICAL_FORMAT_REQUIRED','Canonical Tech Pack not available');
+        return buildFrozenCanonicalTechPackDocument({...row.payload,issueFormat:row.issue_format});
       }, { begin: SNAPSHOT_BEGIN });
     },
 

@@ -2436,3 +2436,8 @@ Draft stack after PR #288. Canonical issue gains a durable format discriminator 
 ### 2026-10-15 — Frozen canonical Tech Pack document composer (candidate)
 
 A pure composer combines only issuance-frozen source sections and issuance-frozen document context. It has no live catalog, MDM, price, supplier, media, object-store or current-rights lookup. The output carries a deterministic document hash and explicit evidence blockers. `factoryEvidenceReady` is evidence completeness only; `publicPrintAdmitted` remains false. The internal authorised PostgreSQL reader selects only the stored Pack payload and durable issue format, then invokes the pure composer after membership filtering. No public HTTP route is admitted by this increment.
+
+
+### 2026-10-15 — Two-revision canonical Tech Pack source mutation acceptance (candidate)
+
+Real PostgreSQL acceptance mutates the authoritative BOM, canonical measurement chart and approved PPS after issuing R1, then issues R2 from the newer source versions. R1 must retain its original full canonical document hash through supersession and a fresh Node process; R2 must carry new source versions/hashes and a different document hash. This is historical reproducibility evidence, not public print admission.

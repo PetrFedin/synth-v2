@@ -3,6 +3,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { canonicalJson } from '../../src/core/fingerprints.mjs';
 import { readFrozenTechPackDocumentContext } from '../../src/application/tech-pack-issued-document-context.mjs';
+import { buildFrozenCanonicalTechPackDocument } from '../../src/application/tech-pack-frozen-document.mjs';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
@@ -108,6 +109,12 @@ test('canonical Tech Pack issues on real PostgreSQL and retains immutable issued
 
     const originalContext=readFrozenTechPackDocumentContext(issued);
     const originalJson=canonicalJson(originalContext);
+    const originalDocument=buildFrozenCanonicalTechPackDocument(issued);
+    const originalDocumentJson=canonicalJson(originalDocument);
+    assert.equal(originalDocument.publicPrintAdmitted,false);
+    assert.deepEqual(originalDocument.blockers,['SKETCH_EVIDENCE_MISSING']);
+    assert.equal(await documentFromFreshProcess(connectionString,owner,code),originalDocumentJson,
+      'fresh Node process reproduces the complete frozen document before source mutation');
     assert.equal(originalContext.operations.rows[0].id,originalOperation.id);
     assert.equal(originalContext.operations.totalStandardMinutes,3.25);
     assert.equal(originalContext.supplier.name,'Italian acceptance factory');
@@ -115,8 +122,21 @@ test('canonical Tech Pack issues on real PostgreSQL and retains immutable issued
     assert.equal(await contextFromFreshProcess(connectionString,owner,code),originalJson,
       'first fresh Node process reproduces issued context from persisted data');
 
-    // Exact canonical revision linkage is an isolated fixture, not a claim of
-    // public canonical revision admission. Issue and supersede use real commands.
+    // Change the authoritative technical sources after R1. R2 must freeze these
+    // newer source versions while R1 remains byte-canonical from its issued copy.
+    await mutateTechnicalEvidence(pool,sources);
+    const currentBom=await pool.query('SELECT version,payload FROM boms WHERE id=$1',[sources.bomId]);
+    const currentChart=await pool.query('SELECT version,payload FROM measurement_charts WHERE id=$1',[sources.chartId]);
+    const currentSample=await pool.query('SELECT version,payload FROM samples WHERE sample_code=$1',[sources.sampleCode]);
+    assert.equal(currentBom.rows[0].version,2);
+    assert.equal(currentChart.rows[0].version,2);
+    assert.equal(currentSample.rows[0].version,2);
+    assert.equal(currentBom.rows[0].payload.lines[0].materialName,'Revised shell');
+    assert.equal(currentChart.rows[0].payload.points[0].measurements[0].value,118);
+    assert.equal(currentSample.rows[0].payload.decision.notes,'Revised PPS acceptance');
+
+    // Exact canonical revision linkage remains an isolated fixture, not a claim
+    // of public canonical revision admission. Issue and supersede use real commands.
     const revision=await runtime.techPacks.createRevision(id('revision'),owner,code,{
       expectedVersion:issued.version,techPackCode:code+'-R2',
       title:'Second revision jacket',supplierName:'Revised factory contact',
@@ -138,9 +158,19 @@ test('canonical Tech Pack issues on real PostgreSQL and retains immutable issued
     assert.equal(revisedContext.operations.totalStandardMinutes,4.75);
     assert.notEqual(revised.dependencySnapshot.canonical.documentContextHash,
       issued.dependencySnapshot.canonical.documentContextHash);
-    assert.deepEqual(revised.dependencySnapshot.frozenSources,issued.dependencySnapshot.frozenSources);
+    assert.notDeepEqual(revised.dependencySnapshot.frozenSources,issued.dependencySnapshot.frozenSources);
+    assert.notEqual(revised.dependencySnapshot.canonical.frozenSourcesHash,
+      issued.dependencySnapshot.canonical.frozenSourcesHash);
+    assert.equal(revised.dependencySnapshot.bomVersion,2);
+    assert.equal(revised.dependencySnapshot.measurementChartVersion,2);
+    assert.equal(revised.dependencySnapshot.sampleVersion,2);
+    const revisedDocument=buildFrozenCanonicalTechPackDocument(revised);
+    assert.notEqual(revisedDocument.documentHash,originalDocument.documentHash,
+      'R2 document hash changes when issued source evidence changes');
     assert.equal(await contextFromFreshProcess(connectionString,owner,code),originalJson,
-      'second fresh Node process preserves revision one after revision two is issued');
+      'second fresh Node process preserves revision one context after revision two is issued');
+    assert.equal(await documentFromFreshProcess(connectionString,owner,code),originalDocumentJson,
+      'second fresh Node process preserves the complete R1 document after BOM/chart/PPS mutation and R2 issue');
 
     const foreignOwner=id('foreign-owner'),foreignBrand=id('foreign-brand');
     await runtime.auth.bootstrapUser({id:foreignOwner,email:'foreign-'+tag.toLowerCase()+'@acceptance.invalid',
@@ -162,6 +192,9 @@ test('canonical Tech Pack issues on real PostgreSQL and retains immutable issued
         verifyFrozenCanonicalTechPackSources(row.rows[0].payload.dependencySnapshot),
         frozen,'fresh PostgreSQL connection reproduces the immutable issued BOM/chart/PPS');
       assert.equal(canonicalJson(readFrozenTechPackDocumentContext(row.rows[0].payload)),originalJson);
+      assert.equal(canonicalJson(buildFrozenCanonicalTechPackDocument({
+        ...row.rows[0].payload,issueFormat:'canonical-v1',
+      })),originalDocumentJson);
       const documentReader=createPostgresTechPackReader({pool:fresh});
       assert.equal(await documentReader.getForActor(foreignOwner,code),undefined,
         'another active brand owner cannot read frozen source or document context');
@@ -245,11 +278,25 @@ async function seedTechnicalEvidence(pool,{id,brand,owner,catalog,pack}){
       logistics_cost:2,other_cost:1,total_cost:38,version:1,product_sku_id:productSkuId,
       payload:{id:bomId,sku:catalog.sku,brandId:brand,status:'published',version:1,
         currency:'EUR',materialCost:10,laborCost:20,overheadCost:5,logisticsCost:2,
-        otherCost:1,totalCost:38,lines:[{position:1,material:'shell',quantity:2}]}});
-    const chartPayload={id:chartId,sku:null,unit:'CM',
-      sizes:[{code:'M',label:'M',position:1}],
-      points:[{pointCode:'CHEST_CIRC',name:'Обхват груди',position:1,
-        measurements:[{sizeCode:'M',value:112,deltaFromPrevious:null}]}]};
+        otherCost:1,totalCost:38,lines:[{lineId:id('bom-line'),position:1,component:'Shell',
+          materialCode:'FAB-ORIGINAL',materialVersion:1,materialName:'Original shell',
+          materialType:'fabric',unit:'m',quantity:2,wastePercent:0,grossQuantity:2,
+          materialCurrency:'EUR',unitCostSnapshot:5,exchangeRate:1,lineCost:10,
+          placement:'Body',isMain:true}]}});
+    const pointEntry=id('point-chest');
+    const chartPayload={id:chartId,version:1,sku:null,brandId:brand,status:'published',
+      styleVersionId:sv,colorwayId:color,sizeScaleVersionId:scalev,
+      measurementUnitEntryId:entry,measurementUnitEntryVersion:1,
+      measurementUnit:{entryId:entry,version:1,dictionaryCode:'measurement.unit',
+        snapshot:{code:'CM',translations:{ru:'Сантиметр',en:'Centimeter'}}},
+      unit:'CM',baseSizeValueId:size,
+      sizes:[{sizeValueId:size,code:'M',labelRu:'M',labelEn:'M',position:1}],
+      points:[{pointEntryId:pointEntry,pointEntryVersion:1,
+        pointRef:{entryId:pointEntry,version:1,dictionaryCode:'measurement.point',
+          snapshot:{code:'CHEST_CIRC',translations:{ru:'Обхват груди',en:'Chest circumference'}}},
+        pointCode:'CHEST_CIRC',position:1,nameRu:'Обхват груди',nameEn:'Chest circumference',
+        description:'Issued chest measurement',toleranceMinus:0,tolerancePlus:0,
+        measurements:[{sizeValueId:size,sizeCode:'M',value:112}]}]};
     await insert('measurement_charts',{id:chartId,sku:null,brand_id:brand,
       sku_version:null,status:'published',unit:'CM',base_size_code:'M',version:1,
       payload:chartPayload,created_at:now,updated_at:now,published_at:now,
@@ -267,9 +314,9 @@ async function seedTechnicalEvidence(pool,{id,brand,owner,catalog,pack}){
       round:1,status:'approved',supplier_code:pack.supplierCode,
       due_at:'2028-01-01T00:00:00.000Z',version:1,source_sample_code:null,
       payload:{id:sampleId,sampleCode,sku:catalog.sku,brandId:brand,
-        skuVersion:catalog.version,sampleType:'pre-production',round:1,
-        status:'approved',version:1,sourceSampleCode:null,
-        receipt:{condition:'accepted'}},
+        skuVersion:catalog.version,supplierCode:pack.supplierCode,
+        sampleType:'pre-production',round:1,status:'approved',version:1,sourceSampleCode:null,
+        receipt:{condition:'accepted'},decision:{notes:'Original PPS acceptance'}},
       created_at:'2026-10-01T00:00:00.000Z',
       updated_at:'2026-10-13T00:00:00.000Z',
       requested_at:'2026-10-02T00:00:00.000Z',
@@ -287,6 +334,33 @@ async function seedTechnicalEvidence(pool,{id,brand,owner,catalog,pack}){
 }
 
 
+async function mutateTechnicalEvidence(pool,sources) {
+  const client=await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const bom=(await client.query('SELECT payload FROM boms WHERE id=$1 FOR UPDATE',[sources.bomId])).rows[0].payload;
+    bom.version=2; bom.materialCost=12; bom.totalCost=40;
+    bom.lines[0].materialName='Revised shell'; bom.lines[0].unitCostSnapshot=6; bom.lines[0].lineCost=12;
+    await client.query('UPDATE boms SET version=2,material_cost=12,total_cost=40,payload=$2::jsonb WHERE id=$1',
+      [sources.bomId,JSON.stringify(bom)]);
+
+    const chart=(await client.query('SELECT payload FROM measurement_charts WHERE id=$1 FOR UPDATE',[sources.chartId])).rows[0].payload;
+    chart.version=2; chart.points[0].measurements[0].value=118;
+    await client.query('UPDATE measurement_charts SET version=2,payload=$2::jsonb WHERE id=$1',
+      [sources.chartId,JSON.stringify(chart)]);
+    await client.query('UPDATE measurement_values SET value=118 WHERE chart_id=$1',[sources.chartId]);
+
+    const sample=(await client.query('SELECT payload FROM samples WHERE sample_code=$1 FOR UPDATE',[sources.sampleCode])).rows[0].payload;
+    sample.version=2; sample.decision={notes:'Revised PPS acceptance'};
+    await client.query('UPDATE samples SET version=2,payload=$2::jsonb,updated_at=now(),decision_at=now() WHERE sample_code=$1',
+      [sources.sampleCode,JSON.stringify(sample)]);
+    await client.query('COMMIT');
+  } catch(error) {
+    await client.query('ROLLBACK').catch(()=>{});
+    throw error;
+  } finally { client.release(); }
+}
+
 async function contextFromFreshProcess(connectionString, actorId, techPackCode) {
   // Fresh read process, not a production configuration or deployed HTTP restart.
   const code = `
@@ -303,6 +377,27 @@ async function contextFromFreshProcess(connectionString, actorId, techPackCode) 
   `;
   const {stdout}=await promisify(execFile)(process.execPath,['--input-type=module','-e',code],{
     cwd:fileURLToPath(new URL('../../',import.meta.url)),timeout:15000,maxBuffer:1024*1024,
+    env:{PATH:process.env.PATH,POSTGRES_TEST_URL:connectionString,
+      TECH_PACK_TEST_ACTOR:actorId,TECH_PACK_TEST_CODE:techPackCode},
+  });
+  return stdout;
+}
+
+
+async function documentFromFreshProcess(connectionString, actorId, techPackCode) {
+  const code = `
+    import pg from 'pg';
+    import {createPostgresTechPackReader} from './src/infrastructure/postgres-tech-pack-reader.mjs';
+    import {canonicalJson} from './src/core/fingerprints.mjs';
+    const pool=new pg.Pool({connectionString:process.env.POSTGRES_TEST_URL,max:1});
+    try {
+      const doc=await createPostgresTechPackReader({pool}).getCanonicalFrozenDocumentForActor(
+        process.env.TECH_PACK_TEST_ACTOR,process.env.TECH_PACK_TEST_CODE);
+      process.stdout.write(canonicalJson(doc));
+    } finally {await pool.end();}
+  `;
+  const {stdout}=await promisify(execFile)(process.execPath,['--input-type=module','-e',code],{
+    cwd:fileURLToPath(new URL('../../',import.meta.url)),timeout:15000,maxBuffer:2*1024*1024,
     env:{PATH:process.env.PATH,POSTGRES_TEST_URL:connectionString,
       TECH_PACK_TEST_ACTOR:actorId,TECH_PACK_TEST_CODE:techPackCode},
   });

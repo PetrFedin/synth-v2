@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import { createTechPack } from '../src/modules/tech-packs/public.mjs';
 import { createCanonicalTechPackIssueService } from '../src/application/tech-pack-canonical-issue-service.mjs';
 
+import { documentSourcesFixture } from './helpers/tech-pack-document-context-fixture.mjs';
+import { readFrozenTechPackDocumentContext } from '../src/application/tech-pack-issued-document-context.mjs';
+
 const NOW = '2026-10-13T12:00:00.000Z';
 const catalog = Object.freeze({sku:'SKU-01',brandId:'BRAND-1',status:'published',version:3});
 const initialPack = () => createTechPack({
@@ -33,7 +36,7 @@ const sourceFixture = () => ({
 function harness({ pack = initialPack(), sources = sourceFixture(), role = 'production',
   outboxFailure = false } = {}) {
   const state = {
-    pack, catalog, sources, role, commands:{}, events:[], active:null, timeline:[],
+    pack, catalog, sources, role, documentSources: documentSourcesFixture(pack, sources), commands:{}, events:[], active:null, timeline:[],
   };
   let ledgerReads = 0;
   const txStore = {
@@ -53,6 +56,10 @@ function harness({ pack = initialPack(), sources = sourceFixture(), role = 'prod
         getCanonicalIssueSources:async()=>{
           staged.timeline.push('LOCKED_SOURCES');
           return staged.sources;
+        },
+        getCanonicalDocumentSources:async()=>{
+          staged.timeline.push('LOCKED_DOCUMENT_SOURCES');
+          return staged.documentSources;
         },
         saveTechPack:async (value,expected)=>{
           assert.equal(value.version,expected+1);
@@ -96,15 +103,24 @@ test('internal canonical issue persists source evidence, exactly one event and r
   assert.equal(issued.dependencySnapshot.sampleCode,'PPS-1');
   assert.equal(issued.dependencySnapshot.canonical.productSkuId,'PRODUCT-1');
   assert.match(issued.dependencySnapshot.canonical.lineageHash,/^[a-f0-9]{64}$/);
-  assert.deepEqual(h.state.timeline,['LOCKED_SOURCES','SAVE','OUTBOX','COMMAND']);
+  assert.deepEqual(h.state.timeline,['LOCKED_SOURCES','LOCKED_DOCUMENT_SOURCES','SAVE','OUTBOX','COMMAND']);
   assert.equal(h.state.events.length,1);
   assert.equal(h.state.events[0].type,'tech-pack.issued');
   assert.equal(h.state.events[0].payload.canonicalLineageHash,
     issued.dependencySnapshot.canonical.lineageHash);
+  const context=readFrozenTechPackDocumentContext(issued);
+  assert.equal(context.header.issuedAt,NOW);
+  assert.equal(context.supplier.name,'Supplier One');
+  assert.equal(context.operations.totalStandardMinutes,3.6);
+  assert.deepEqual(context.operations.rows.map(row=>row.sequence),[1,2]);
+  assert.equal(h.state.events[0].payload.documentContextHash,
+    issued.dependencySnapshot.canonical.documentContextHash);
+  h.state.documentSources.product.styleVersion.titleRu='Changed after issue';
+  h.state.documentSources.operations=[];
   const replay=await issue(h);
   assert.deepEqual(replay,issued);
   assert.equal(h.state.events.length,1,'idempotent replay never duplicates events');
-  assert.equal(h.state.timeline.length,4,'replay does not reissue or re-resolve sources');
+  assert.equal(h.state.timeline.length,5,'replay does not reissue or re-resolve sources');
   await assert.rejects(issue(h,'different-command',1),
     {code:'TECH_PACK_CONCURRENCY_CONFLICT'});
   assert.equal(h.state.events.length,1);
@@ -163,4 +179,16 @@ test('canonical source snapshots cannot override incomplete factory document',as
   await assert.rejects(issue(h),{code:'TECH_PACK_QUALITY_NOTES_REQUIRED'});
   assert.equal(h.state.pack.status,'draft');
   assert.equal(h.state.events.length,0);
+});
+
+
+test('missing or cross-brand document evidence rolls back before any issue persistence',async()=>{
+  for(const mutate of [d=>{d.product=null},d=>{d.supplier.brandId='foreign'},
+    d=>{d.operations[0].brandId='foreign'},d=>{d.operations=null}]) {
+    const h=harness(); mutate(h.state.documentSources);
+    await assert.rejects(issue(h),error=>error.code.startsWith('TECH_PACK_DOCUMENT_CONTEXT_'));
+    assert.equal(h.state.pack.status,'draft');
+    assert.equal(h.state.events.length,0);
+    assert.equal(Object.keys(h.state.commands).length,0);
+  }
 });

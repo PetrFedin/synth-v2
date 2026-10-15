@@ -1730,10 +1730,25 @@ The document reader recognises either `canonical` or `frozenSources` property ev
 
 ---
 
+### Canonical Tech Pack issued document context - 2026-10-15 candidate
+
+The internal issuing service reads canonical display sources, same-brand supplier register metadata and the pack's operation rows on the SAME SERIALIZABLE client after pack authorisation and canonical source validation. Pack FOR UPDATE and source FOR SHARE locks remain in force. Product labels use exact StyleVersion/Colorway/SizeValue/SizeScaleVersion IDs, never a second Product Master in the compatibility catalog. The issued supplier contact is frozen separately from register ID/version/status; this does not introduce a new supplier-qualification policy.
+
+`dependencySnapshot.frozenDocumentContext` format 1 retains the issued header, actor, timestamp, revision and issued version, canonical RU/EN product display fields, supplier contact/reference, and sorted operation rows including equipment, machine class, measured time, notes and authorship. Existing `totalStandardMinutes` owns the summation. Empty operations are explicit `state: missing`, total null, NOT zero measured minutes. Foreign, duplicate, malformed or incomplete operations fail before issue/command/outbox persistence.
+
+`canonical.documentContextHash` binds the context to canonical lineage and the issuance outbox. Pack and command replay retain the exact context atomically. Combined source/context evidence is bounded to 8 MiB. Partial markers, digest changes or wrong issued-pack identity fail closed. Old source-only snapshots remain checksum-verifiable but cannot invent historical context. Later acknowledged/superseded/withdrawn lifecycle state does not rewrite the original issued header.
+
+The new context reader is internal and post-authorisation, not a public endpoint. Sketches remain explicitly unverified: URLs are not fetched or treated as retained bytes or rights grants. Full canonical factory printing remains NOT ADMITTED. The immutable issuance-format discriminator for total marker removal, complete document composer, public canonical revision linkage and RU/EN browser/PDF acceptance are separate gates.
+
+Evidence: focused unit/driver tests exercise immutability, checksums, SQL locking, rollback and replay. Extended isolated PostgreSQL acceptance issues two actual revisions with different header/contact/operations and rereads the first context in separate fresh Node processes. Canonical source rows and the exact revision link are SQL fixtures. This is NOT full BOM/chart/PPS revision rendering, public canonical revision admission, deployed HTTP restart or PDF byte equivalence. No migration, public route, dependency or production configuration changes. Exact-head CI, independent review and protected-main/post-merge qualification remain required.
+
+---
+
 ## 20. Change register
 
 | Date | PR / commit | Change | Master sections affected | Evidence/status |
 |---|---|---|---|---|
+| 2026-10-15 | Draft issued document context / Issue #282, stacked on #285 | Freeze issued header, canonical RU/EN product display, supplier and exact operations in the issuing transaction; bind context hash to lineage/command/outbox and test fresh-process history across two revisions. | 7, 10, 19.1, 20 | CANDIDATE; exact-head CI, full document, retained sketch bytes, public issue/revision, independent review remain required |
 | 2026-10-15 | Draft PR #285 source sections / Issue #282 | Add frozen BOM/measurement/PPS source-section projection with exact SizeValue matrix, issued RU/EN and MDM snapshots, deterministic digest and explicit print HOLD; reject damaged canonical markers instead of falling through to mutable legacy data. | 7, 10, 19.1, 20 | CANDIDATE; unit/driver-contract tests are not PostgreSQL/restart/PDF evidence; complete frozen document, exact-head full CI and independent review remain required |
 | 2026-10-15 | Draft stacked canonical Tech Pack source-freeze / Issue #282 | At SERIALIZABLE canonical issue, embed deep copied, SHA-256 verified exact BOM/chart/PPS source payloads and bounded source manifest; reject canonical `/document` instead of rejoining mutable legacy-SKU BOM/chart until frozen projector is admitted. Legacy document reader unchanged. | 7, 10, 20; Product Engineering / Tech Pack Issue | CANDIDATE; dependent on #280; exact-head CI/independent review, full frozen print projector, browser/PDF proof all pending |
 | 2026-10-13 | Draft integration branch for PR #273 + #278 | Canonical ProductSku/BOM/Measurement/PPS preflight accessible for slash-containing Tech Pack business codes through strict query alias without weakening safe URL decoding, role isolation, or source snapshot logic. | 7, 10, 20, 22; integration admission | CANDIDATE only: exact-head combined CI, independent review, browser UAT pending |

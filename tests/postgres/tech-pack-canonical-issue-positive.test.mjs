@@ -1,4 +1,8 @@
 import test from 'node:test';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { canonicalJson } from '../../src/core/fingerprints.mjs';
+import { readFrozenTechPackDocumentContext } from '../../src/application/tech-pack-issued-document-context.mjs';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
@@ -71,6 +75,11 @@ test('canonical Tech Pack issues on real PostgreSQL and retains immutable issued
       packingNotes:'Pack each garment under approved procedure',
     });
     const sources=await seedTechnicalEvidence(pool,{id,brand,owner,catalog,pack});
+    const originalOperation=await runtime.techPacks.addOperation(id('op-original'),owner,code,{
+      sequence:1,operationCode:'ASSEMBLE',nameRu:'Original RU assembly',nameEn:'Original EN assembly',
+      equipment:'Original equipment',machineClass:'manual',standardMinutes:3.25,
+      notes:'Original operation instructions',
+    });
     const issuer=createCanonicalTechPackIssueService({
       techPackStore:createPostgresTechPackStore({pool}),
       nextId:prefix=>prefix+'-'+randomUUID(),
@@ -94,18 +103,67 @@ test('canonical Tech Pack issues on real PostgreSQL and retains immutable issued
     assert.deepEqual(await issuer.issueCanonicalTechPack(commandId,owner,code,
       {expectedVersion:pack.version}),issued);
 
+    const originalContext=readFrozenTechPackDocumentContext(issued);
+    const originalJson=canonicalJson(originalContext);
+    assert.equal(originalContext.operations.rows[0].id,originalOperation.id);
+    assert.equal(originalContext.operations.totalStandardMinutes,3.25);
+    assert.equal(originalContext.supplier.name,'Italian acceptance factory');
+    assert.equal(originalContext.product.styleVersion.titleEn,'Technical jacket');
+    assert.equal(await contextFromFreshProcess(connectionString,owner,code),originalJson,
+      'first fresh Node process reproduces issued context from persisted data');
+
+    // Exact canonical revision linkage is an isolated fixture, not a claim of
+    // public canonical revision admission. Issue and supersede use real commands.
+    const revision=await runtime.techPacks.createRevision(id('revision'),owner,code,{
+      expectedVersion:issued.version,techPackCode:code+'-R2',
+      title:'Second revision jacket',supplierName:'Revised factory contact',
+      supplierEmail:'revised@acceptance.invalid',qualityNotes:'Revised inspection procedure',
+    });
+    await pool.query("UPDATE tech_packs SET product_sku_id=$1 WHERE tech_pack_code=$2 AND brand_id=$3 AND status='draft'",
+      [sources.productSkuId,revision.techPackCode,brand]);
+    await runtime.techPacks.addOperation(id('op-revised'),owner,revision.techPackCode,{
+      sequence:1,operationCode:'ASSEMBLE',nameRu:'Revised RU assembly',nameEn:'Revised EN assembly',
+      equipment:'Revised equipment',machineClass:'manual',standardMinutes:4.75,
+      notes:'Revised operation instructions',
+    });
+    const revised=await issuer.issueCanonicalTechPack(id('issue-r2'),owner,revision.techPackCode,
+      {expectedVersion:revision.version});
+    const revisedContext=readFrozenTechPackDocumentContext(revised);
+    assert.equal(revisedContext.header.revision,2);
+    assert.equal(revisedContext.header.title,'Second revision jacket');
+    assert.equal(revisedContext.supplier.name,'Revised factory contact');
+    assert.equal(revisedContext.operations.totalStandardMinutes,4.75);
+    assert.notEqual(revised.dependencySnapshot.canonical.documentContextHash,
+      issued.dependencySnapshot.canonical.documentContextHash);
+    assert.deepEqual(revised.dependencySnapshot.frozenSources,issued.dependencySnapshot.frozenSources);
+    assert.equal(await contextFromFreshProcess(connectionString,owner,code),originalJson,
+      'second fresh Node process preserves revision one after revision two is issued');
+
+    const foreignOwner=id('foreign-owner'),foreignBrand=id('foreign-brand');
+    await runtime.auth.bootstrapUser({id:foreignOwner,email:'foreign-'+tag.toLowerCase()+'@acceptance.invalid',
+      password:'OnlyIsolatedForeign-'+tag,displayName:'Other active owner'});
+    await runtime.platform.registerOrganisation(id('register-foreign'),'system',
+      createOrganisation({id:foreignBrand,type:'brand',name:'Other active brand'}));
+    await runtime.platform.grantMembership(id('grant-foreign'),'system',
+      createMembership({id:id('foreign-membership'),organisationId:foreignBrand,
+        organisationType:'brand',userId:foreignOwner,role:'owner',createdAt:'2026-10-13T00:00:00.000Z'}));
     const fresh=new pg.Pool({connectionString,max:2});
     try{
       const row=await fresh.query(
         'SELECT status,version,product_sku_id,payload FROM tech_packs WHERE tech_pack_code=$1',[code]);
       assert.equal(row.rowCount,1);
-      assert.equal(row.rows[0].status,'issued');
+      assert.equal(row.rows[0].status,'superseded');
       assert.equal(row.rows[0].product_sku_id,sources.productSkuId);
       assert.deepEqual(row.rows[0].payload.dependencySnapshot,issued.dependencySnapshot);
       assert.deepEqual(
         verifyFrozenCanonicalTechPackSources(row.rows[0].payload.dependencySnapshot),
         frozen,'fresh PostgreSQL connection reproduces the immutable issued BOM/chart/PPS');
+      assert.equal(canonicalJson(readFrozenTechPackDocumentContext(row.rows[0].payload)),originalJson);
       const documentReader=createPostgresTechPackReader({pool:fresh});
+      assert.equal(await documentReader.getForActor(foreignOwner,code),undefined,
+        'another active brand owner cannot read frozen source or document context');
+      assert.equal(await documentReader.getDocumentForActor(foreignOwner,code),undefined,
+        'another active brand owner cannot obtain an evidence error or document');
       assert.equal(await documentReader.getDocumentForActor(id('unauthorized'),code),undefined,
         'cross-brand actor must not infer the existence of a canonical document');
       await assert.rejects(documentReader.getDocumentForActor(owner,code),
@@ -119,6 +177,8 @@ test('canonical Tech Pack issues on real PostgreSQL and retains immutable issued
         "SELECT event FROM outbox_events WHERE aggregate_id=$1 AND event_type='tech-pack.issued'",
         [pack.id]);
       assert.equal(events.rowCount,1);
+      assert.equal(events.rows[0].event.payload.documentContextHash,
+        issued.dependencySnapshot.canonical.documentContextHash);
       assert.equal(events.rows[0].event.payload.canonicalLineageHash,
         issued.dependencySnapshot.canonical.lineageHash);
     }finally{await fresh.end();}
@@ -221,4 +281,27 @@ async function seedTechnicalEvidence(pool,{id,brand,owner,catalog,pack}){
   }catch(error){await client.query('ROLLBACK').catch(()=>{});throw error;}
   finally{client.release();}
   return {productSkuId,bomId,chartId,sampleCode};
+}
+
+
+async function contextFromFreshProcess(connectionString, actorId, techPackCode) {
+  // Fresh read process, not a production configuration or deployed HTTP restart.
+  const code = `
+    import pg from 'pg';
+    import {createPostgresTechPackReader} from './src/infrastructure/postgres-tech-pack-reader.mjs';
+    import {readFrozenTechPackDocumentContext} from './src/application/tech-pack-issued-document-context.mjs';
+    import {canonicalJson} from './src/core/fingerprints.mjs';
+    const pool=new pg.Pool({connectionString:process.env.POSTGRES_TEST_URL,max:1});
+    try {
+      const pack=await createPostgresTechPackReader({pool}).getForActor(
+        process.env.TECH_PACK_TEST_ACTOR,process.env.TECH_PACK_TEST_CODE);
+      process.stdout.write(canonicalJson(readFrozenTechPackDocumentContext(pack)));
+    } finally {await pool.end();}
+  `;
+  const {stdout}=await promisify(execFile)(process.execPath,['--input-type=module','-e',code],{
+    cwd:fileURLToPath(new URL('../../',import.meta.url)),timeout:15000,maxBuffer:1024*1024,
+    env:{PATH:process.env.PATH,POSTGRES_TEST_URL:connectionString,
+      TECH_PACK_TEST_ACTOR:actorId,TECH_PACK_TEST_CODE:techPackCode},
+  });
+  return stdout;
 }

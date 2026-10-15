@@ -59,7 +59,8 @@ export function createPostgresTechPackReader({ pool } = {}) {
         // The source-section projector alone does not admit factory printing.
         const basis = document?.dependency_snapshot;
         if (basis && typeof basis === 'object'
-          && (Object.hasOwn(basis, 'canonical') || Object.hasOwn(basis, 'frozenSources'))) {
+          && (Object.hasOwn(basis, 'canonical') || Object.hasOwn(basis, 'frozenSources')
+            || Object.hasOwn(basis, 'frozenDocumentContext'))) {
           verifyFrozenCanonicalTechPackSources(basis);
           invariant(false, 'TECH_PACK_CANONICAL_PRINT_NOT_ADMITTED',
             'Frozen Tech Pack sources are verified, but canonical factory print is not yet admitted');

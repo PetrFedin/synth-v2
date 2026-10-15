@@ -1,3 +1,4 @@
+import { readTechPackDocumentSources } from './postgres-tech-pack-document-sources.mjs';
 import { invariant } from '../core/errors.mjs';
 import { getRegisteredCommand, insertRegisteredCommand } from './postgres-command-registry.mjs';
 import { withPostgresTransaction } from './postgres-transaction.mjs';
@@ -54,6 +55,7 @@ function view(client) {
     },
     // All reads are made through the SAME issuing client. The caller must
     // already hold the Tech Pack FOR UPDATE lock and current membership.
+    getCanonicalDocumentSources: (pack, product) => readTechPackDocumentSources(client, pack, product),
     async getCanonicalIssueSources(pack) {
       const found = await client.query(
         'SELECT product_sku_id FROM tech_packs WHERE tech_pack_code=$1 AND brand_id=$2 AND sku=$3 FOR SHARE',

@@ -2446,3 +2446,18 @@ Real PostgreSQL acceptance mutates the authoritative BOM, canonical measurement 
 ### 2026-10-15 — Canonical Tech Pack current-rights render policy (candidate)
 
 Historical issue evidence and present-day publication permission are deliberately separate. The frozen document hash never changes when rights are later restricted or revoked. A current-rights admission policy re-reads only the latest publication-rights decisions for the exact frozen sketch media IDs after Tech Pack authorisation, compares them with the rights versions frozen at issue, and fails closed for missing, stale, restricted, expired or revoked decisions. This candidate is internal only; no public print route is admitted.
+
+
+## 2026-10-15 — Recent-work reconciliation integration candidate
+
+**Status: CANDIDATE / NOT YET RELEASED.**
+
+A cumulative integration head now combines the exact-green canonical Tech Pack stack through current-rights render admission with the separate Showroom buyer Look price/stock isolation and Recompute Human Review authority foundation.
+
+Migration order is reconciled explicitly: canonical Tech Pack evidence remains migration `181_tech_pack_issue_format_and_sketch_evidence.sql`; Human Review is admitted as new migration `182_recompute_human_review_authority.sql`. No applied migration is rewritten.
+
+Showroom buyer reads remain fail-closed: mutable brand wholesale price, MOQ and availability are redacted for invited buyers until an exact published matching BuyerCatalog line authorises the commercial values. Brand-manager behavior remains unchanged.
+
+Human Review remains append-only evidence authority over exact Recompute plan/step assignments and decisions. It does not create a second task ledger, generic downstream writer, public API or automatic Measurement/Material mutation.
+
+This integration candidate still does not switch public Tech Pack Issue to canonical issuance and does not admit canonical public PDF/rendering. Those remain the next P0 cutover gates.

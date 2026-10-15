@@ -72,37 +72,94 @@ export function createShowroomSelectionService({
       if (membership.status !== 'active') continue;
       const invitation = await tx.getShowroomInvitationByAccess(showroom.id, membership.organisationId);
       if (invitation?.status !== 'accepted') continue;
-      // Приглашение говорит «этот показ открыли вам», но торгуем ли мы до сих пор — решает связь.
-      // Найдено живьём: после отзыва связи магазин продолжал читать образы с оптовыми ценами.
       const relationship = await tx.getRelationshipByTrade(showroom.brandId, membership.organisationId);
-      if (relationship?.status === 'active') return membership.organisationId;
+      // Read access must observe the same trade, expiry and active-relationship
+      // rules as Selection creation. Checking status alone leaked Look details
+      // through accepted invitations after their expiry or from another trade.
+      try {
+        assertAcceptedShowroomAccess(invitation, {
+          showroomId: showroom.id, brandId: showroom.brandId,
+          shopId: membership.organisationId, now: clock(), relationship,
+        });
+        return membership.organisationId;
+      } catch {
+        // Another active membership may hold valid access. Do not disclose
+        // which invited trade was expired, revoked or mismatched.
+      }
     }
     invariant(false, 'SHOWROOM_ACCESS_DENIED', 'This showroom has not been shared with you', { showroomId: showroom.id });
   }
 
-  // Образ показывает покупателю то, что он закажет: цена, минимум и остаток берутся из ДЕЙСТВУЮЩЕЙ
-  // версии его каталога (цены на магазин, замороженная доступность), а не из каталога коллекции. Иначе
-  // образ называл 128 при остатке 900, а заказать можно было по 110 из 1000. Позиция образа, которой нет
-  // в каталоге покупателя, остаётся с каталожными фактами и помечена `priceSource: 'catalog'`.
+  // Для покупателя образ — презентация, а не второй источник коммерческой правды.
+  // Без опубликованной версии BuyerCatalog либо без этой модели в его каталоге
+  // стоимость, минимальный заказ и остаток не показываются. У владельца бренда
+  // остаются внутренние факты каталога коллекции для редактирования образа.
+  // A buyer's Showroom Look is editorial discovery, not a second authority
+  // for commercial prices. The SQL workspace embeds mutable brand catalog
+  // prices; always strip them before deciding whether the exact BuyerCatalog
+  // authorizes a price for this buyer and this showroom.
+  function hideBuyerCommercialFacts(product) {
+    return Object.freeze({
+      ...product,
+      currency: null,
+      wholesalePrice: null,
+      minimumOrderQuantity: null,
+      availableQuantity: null,
+      priceSource: 'unavailable',
+      buyerCatalogVersionId: null,
+      orderable: false,
+    });
+  }
+
   async function withBuyerCatalogFacts(looks, showroomId, buyerShopId) {
-    if (!buyerShopId || !trustedCommercialReader) return looks;
-    const buyerCatalog = await trustedCommercialReader.getBuyerCatalogForAccess(showroomId, buyerShopId);
-    if (!buyerCatalog || buyerCatalog.status !== 'published') return looks;
-    const lines = new Map((buyerCatalog.lines ?? []).map((line) => [line.sku, line]));
+    if (!buyerShopId) return looks; // brand owner retains brand data
+    const buyerCatalog = trustedCommercialReader
+      ? await trustedCommercialReader.getBuyerCatalogForAccess(showroomId, buyerShopId)
+      : null;
+    const validCatalog = buyerCatalog?.status === 'published'
+      && buyerCatalog.showroomId === showroomId
+      && buyerCatalog.shopId === buyerShopId;
+    // Two variants that share the visible legacy SKU cannot be resolved
+    // unambiguously from the Showroom Look projection. Never choose one price
+    // arbitrarily: exact ProductSku identity is required for that extension.
+    const bySku = new Map();
+    if (validCatalog) for (const line of buyerCatalog.lines ?? []) {
+      if (typeof line?.sku !== 'string') continue;
+      if (bySku.has(line.sku)) bySku.set(line.sku, null);
+      else bySku.set(line.sku, line);
+    }
     return looks.map((look) => Object.freeze({
       ...look,
       products: Object.freeze((look.products ?? []).map((product) => {
-        const line = lines.get(product.sku);
-        if (!line) return Object.freeze({ ...product, priceSource: 'catalog' });
+        const hidden = hideBuyerCommercialFacts(product);
+        // A cross-brand catalog response from any adapter fails closed.
+        if (!validCatalog || buyerCatalog.brandId !== look.brandId) return hidden;
+        const line = bySku.get(product.sku);
+        if (!line || !Number.isFinite(Number(line.unitPrice))
+          || Number(line.unitPrice) <= 0
+          || typeof line.currency !== 'string'
+          || !/^[A-Z]{3}$/.test(line.currency)) return hidden;
         const availability = line.availability;
+        const minimumOrderQuantity = line.minimumOrderQuantity;
+        const validMinimum = Number.isSafeInteger(minimumOrderQuantity)
+          && minimumOrderQuantity >= 1;
+        const orderable = validMinimum && (
+          (availability?.mode === 'available_to_sell'
+            && Number.isSafeInteger(availability.quantity)
+            && availability.quantity >= minimumOrderQuantity)
+          || availability?.mode === 'made_to_order'
+          || availability?.mode === 'preorder'
+        );
         return Object.freeze({
-          ...product,
+          ...hidden,
           currency: line.currency,
           wholesalePrice: line.unitPrice,
           minimumOrderQuantity: line.minimumOrderQuantity,
-          availableQuantity: availability?.mode === 'available_to_sell' ? availability.quantity : null,
+          availableQuantity: availability?.mode === 'available_to_sell'
+            ? availability.quantity : null,
           priceSource: 'buyer-catalog',
           buyerCatalogVersionId: buyerCatalog.id,
+          orderable,
         });
       })),
     }));

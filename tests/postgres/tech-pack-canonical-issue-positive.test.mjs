@@ -271,6 +271,7 @@ async function seedTechnicalEvidence(pool,{id,brand,owner,catalog,pack}){
   const color=id('color'),scale=id('scale'),scalev=id('scale-v1'),size=id('size');
   const bomId=id('bom'),chartId=id('chart'),sampleCode='PPS-'+id('sample');
   const dict=id('dictionary'),entry=id('measurement-unit');
+  const mediaId=id('design-sketch'), mediaHash='e'.repeat(64);
   const client=await pool.connect();
   const insert=(table,row)=>insertRow(client,table,row);
   try{
@@ -294,7 +295,6 @@ async function seedTechnicalEvidence(pool,{id,brand,owner,catalog,pack}){
     await insert('product_skus',{id:productSkuId,sku_code:catalog.sku,brand_id:brand,
       style_version_id:sv,colorway_id:color,size_value_id:size,payload:{},
       content_hash:hash,created_at:now,created_by:owner});
-    const mediaId=id('design-sketch'), mediaHash='e'.repeat(64);
     await insert('product_media',{
       id:mediaId,brand_id:brand,style_version_id:sv,colorway_id:color,
       media_type:'image',media_role:'design_sketch',

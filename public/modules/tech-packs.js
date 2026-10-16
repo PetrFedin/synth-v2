@@ -13,6 +13,37 @@
     sequenceBySku: {}, sequenceLoading: '',
   });
   const STATUSES = ['draft', 'issued', 'acknowledged', 'superseded', 'withdrawn'];
+  // Browser cache scope is not an authentication authority: API/SQL always recheck rights.
+  // Still, a document from an older membership or actor must not remain on screen.
+  let documentEpoch = 0;
+  let documentContext = null;
+  function invalidateDocument() {
+    documentEpoch += 1;
+    documentContext = null;
+    ui.document = null;
+    ui.documentLoading = false;
+  }
+  function techPackAuthority(value) {
+    const brandId = value?.brandId;
+    if (!brandId || !state.token || !state.user
+        || !caps.hasForOrganisation(state.workspace, brandId, caps.CAPABILITIES.TECH_PACK_READ)) return null;
+    const actorId = String(state.user.userId ?? state.user.id ?? state.user.email ?? '');
+    const memberships = (Array.isArray(state.workspace?.memberships) ? state.workspace.memberships : [])
+      .filter(member => member.organisationId === brandId && member.status === 'active'
+        && (!member.userId || !actorId || String(member.userId) === actorId)
+        && caps.hasForOrganisation({ memberships: [member] }, brandId, caps.CAPABILITIES.TECH_PACK_READ))
+      .map(member => [member.membershipId ?? member.id ?? '', member.userId ?? '',
+        member.role ?? '', member.version ?? '', member.updatedAt ?? ''])
+      .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+    return memberships.length ? JSON.stringify([brandId, actorId, memberships]) : null;
+  }
+  function documentContextIsCurrent(context) {
+    if (!context || documentContext !== context || documentEpoch !== context.epoch
+        || context.session !== (state.token ?? null) || state.view !== 'tech-packs') return false;
+    const value = selected();
+    return value?.techPackCode === context.techPackCode && value?.brandId === context.brandId
+      && techPackAuthority(value) === context.authority;
+  }
 
   function text(ru, en) { return typeof localText === 'function' ? localText(ru, en) : ru; }
   function h(tag, attrs = {}, children = []) {
@@ -44,7 +75,7 @@
   function catalog() { return Array.isArray(state.workspace?.catalogSkus) ? state.workspace.catalogSkus : []; }
   function manageableCatalog() { return catalog().filter((sku) => can(sku.brandId, caps.CAPABILITIES.TECH_PACK_MANAGE)); }
 
-  function reset() { ui.items = []; ui.loaded = false; ui.error = ''; ui.selectedCode = null; ui.generation += 1; global.SynthaTechPackCanonicalInspector?.invalidate(); }
+  function reset() { invalidateDocument(); ui.items = []; ui.loaded = false; ui.error = ''; ui.selectedCode = null; ui.generation += 1; global.SynthaTechPackCanonicalInspector?.invalidate(); }
   async function fetchAll(request = api) {
     const byCode = new Map();
     const seen = new Set();
@@ -86,13 +117,17 @@
   // See materials.js: retrying a failed load from render starves the event loop.
   function ensureLoaded() { if (!ui.loaded && !ui.loading && !ui.error) queueMicrotask(() => { void load({ reset: true }); }); }
   function upsert(value) {
+    invalidateDocument();
     global.SynthaTechPackCanonicalInspector?.invalidate(value.techPackCode);
     const map = new Map(ui.items.map((item) => [item.techPackCode, item]));
     map.set(value.techPackCode, value);
     ui.items = [...map.values()].sort((a, b) => String(a.techPackCode).localeCompare(String(b.techPackCode)));
     ui.selectedCode = value.techPackCode;
   }
-  function selected() { return ui.items.find((value) => value.techPackCode === ui.selectedCode) || ui.items[0] || null; }
+  function selected() {
+    const accessible = ui.items.filter(value => techPackAuthority(value) !== null);
+    return accessible.find(value => value.techPackCode === ui.selectedCode) || accessible[0] || null;
+  }
   async function command(value, path, body, method = 'POST') {
     if (ui.busyCode) return null;
     ui.busyCode = value?.techPackCode || 'new'; renderApp();
@@ -131,7 +166,7 @@
         h('td', {}, [badge(labelStatus(value.status), ready ? 'ok' : value.status === 'withdrawn' ? 'neutral' : 'medium')]), h('td', { text: value.supplierName || '—' }),
         h('td', {}, [ready ? badge(text('Допущен', 'Ready'), 'ok') : badge(text('Стоп', 'Blocked'), 'high')]), h('td', { text: date(value.updatedAt) }),
       ]);
-      const choose = () => { ui.selectedCode = value.techPackCode; renderApp(); };
+      const choose = () => { invalidateDocument(); ui.selectedCode = value.techPackCode; renderApp(); };
       row.addEventListener('click', choose); row.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); choose(); } });
       return row;
     });
@@ -149,16 +184,50 @@
       ? '/v2/tech-packs/by-code' + suffix + '?code=' + encodeURIComponent(code)
       : '/v2/tech-packs/' + encodeURIComponent(code) + suffix;
   }
-  async function openDocument(techPackCode) {
+  async function openDocument(value) {
+    const techPackCode = value?.techPackCode;
+    if (!techPackCode) return;
+    invalidateDocument();
+    const authority = techPackAuthority(value);
+    if (!authority || selected()?.techPackCode !== techPackCode) {
+      renderApp();
+      return;
+    }
+    const context = Object.freeze({
+      epoch: documentEpoch,
+      session: state.token ?? null,
+      techPackCode,
+      brandId: value.brandId,
+      authority,
+    });
+    documentContext = context;
+    const canonical = value.issueFormat === 'canonical-v1';
     ui.documentLoading = true;
     renderApp();
     try {
-      ui.document = await api(techPackPath(techPackCode, '/document'));
+      const payload = await api(techPackPath(techPackCode,
+        canonical ? '/canonical-document' : '/document'));
+      if (!documentContextIsCurrent(context)) return;
+      if (canonical && (payload?.admission?.admitted !== true
+          || !payload.document?.documentHash
+          || payload.admission.documentHash !== payload.document.documentHash)) {
+        throw new Error('TECH_PACK_CANONICAL_RENDER_NOT_ADMITTED');
+      }
+      ui.document = canonical
+        ? Object.freeze({ kind: 'canonical', techPackCode, envelope: payload })
+        : Object.freeze({ kind: 'legacy', techPackCode, document: payload });
     } catch (error) {
-      toast(error?.message || text('\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0441\u043e\u0431\u0440\u0430\u0442\u044c \u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442.', 'The document could not be built.'), 'error');
+      if (!documentContextIsCurrent(context)) return;
+      ui.document = null;
+      toast(error?.message || text(
+        'Документ сейчас недоступен. Проверьте выпуск и права на изображения.',
+        'The document is not currently available. Check issuance and image rights.'
+      ), 'error');
     } finally {
-      ui.documentLoading = false;
-      renderApp();
+      if (documentContext === context) {
+        ui.documentLoading = false;
+        if (state.view === 'tech-packs') renderApp();
+      }
     }
   }
   // Headings carry both languages at once, the way the packs a factory actually receives do —
@@ -306,6 +375,150 @@
     ) });
   }
 
+  function canonicalLocale(ru, en) {
+    return I18N.getLocale?.() === 'en' ? (en || ru || '—') : (ru || en || '—');
+  }
+  function canonicalMoney(value, currency) {
+    return value === null || value === undefined ? '—'
+      : I18N.formatMoney(value, currency || 'EUR',
+        { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function canonicalEvidenceRows(doc, admission) {
+    const evidence = doc.evidenceManifest || {};
+    return [
+      [text('Хэш документа', 'Document hash'), doc.documentHash],
+      [text('Хэш политики прав', 'Rights policy hash'), admission?.policyHash],
+      [text('Хэш происхождения', 'Lineage hash'), evidence.lineageHash],
+      [text('Хэш исходных данных', 'Frozen sources hash'), evidence.frozenSourcesHash],
+      [text('Хэш контекста выпуска', 'Issued context hash'), evidence.documentContextHash],
+      [text('Проверено', 'Evaluated'), admission?.evaluatedAt ? date(admission.evaluatedAt) : '—'],
+    ];
+  }
+  function renderCanonicalDocument(envelope) {
+    const doc = envelope?.document;
+    const admission = envelope?.admission;
+    if (!doc || admission?.admitted !== true || admission.documentHash !== doc.documentHash) {
+      return h('section', { className: 'tp-doc' }, [
+        h('div', { className: 'tech-pack-error' }, [
+          h('strong', { text: text('Канонический документ не допущен', 'Canonical document is not admitted') }),
+          h('span', { text: text(
+            'Документ не будет показан без совпадающего хэша и актуального допуска прав.',
+            'The document is not shown without a matching hash and current rights admission.'
+          ) }),
+          h('button', { type: 'button', className: 'secondary', text: text('Закрыть', 'Close'),
+            onclick: () => { invalidateDocument(); renderApp(); } }),
+        ]),
+      ]);
+    }
+    const header = doc.header || {};
+    const product = doc.product || {};
+    const supplier = doc.supplier || {};
+    const bom = doc.bom || {};
+    const measurement = doc.measurement || {};
+    const operations = doc.operations?.rows || [];
+    const sketches = doc.sketches?.rows || [];
+    const currentRights = new Map((admission.decisions || []).map((decision) => [decision.mediaId, decision]));
+    const sizeHeaders = (measurement.sizes || []).map((size) =>
+      canonicalLocale(size.labelRu, size.labelEn) || size.code);
+    return h('section', { className: 'tp-doc tp-doc-canonical' }, [
+      h('div', { className: 'tp-doc-toolbar' }, [
+        badge(text('Проверенный снимок', 'Verified snapshot'), 'ok'),
+        badge(text('Печать пока заблокирована', 'Print still gated'), 'medium'),
+        h('button', { type: 'button', className: 'secondary', text: text('Закрыть', 'Close'),
+          onclick: () => { invalidateDocument(); renderApp(); } }),
+      ]),
+      h('article', { className: 'tp-doc-page' }, [
+        h('header', { className: 'tp-doc-head' }, [
+          h('p', { className: 'tp-doc-kicker',
+            text: `${header.techPackCode || '—'} · ${text('редакция', 'revision')} ${header.revision || '—'}` }),
+          h('h1', { className: 'tp-doc-h1', text: header.title || header.sku || 'Tech Pack' }),
+          h('p', { className: 'tp-doc-sub', text: header.description || '' }),
+          h('p', { className: 'tp-doc-note', text: text(
+            'Показан неизменяемый снимок на момент выпуска. Актуальные права на изображения проверены при открытии.',
+            'This is the immutable issued snapshot. Current image publication rights were checked when opened.'
+          ) }),
+        ]),
+        documentSection('tp-canonical-overview', 'Изделие и выпуск', 'Product and issue',
+          documentTable(
+            [text('Поле', 'Field'), text('Значение', 'Value')],
+            [
+              ['SKU', header.sku],
+              [text('Название', 'Style'), canonicalLocale(product.styleVersion?.titleRu, product.styleVersion?.titleEn)],
+              [text('Цвет', 'Colour'), canonicalLocale(product.colorway?.nameRu, product.colorway?.nameEn)],
+              [text('Размер', 'Size'), canonicalLocale(product.sizeValue?.labelRu, product.sizeValue?.labelEn)],
+              [text('Поставщик', 'Supplier'), `${supplier.name || '—'} · ${supplier.supplierCode || '—'}`],
+              [text('Контакт', 'Contact'), supplier.email],
+              [text('Выпущен', 'Issued'), header.issuedAt ? date(header.issuedAt) : '—'],
+              [text('Кем выпущен', 'Issued by'), header.issuedBy],
+            ]
+          )),
+        documentSection('tp-canonical-evidence', 'Доказательства неизменности', 'Immutable evidence',
+          documentTable([text('Контроль', 'Control'), text('Значение', 'Value')],
+            canonicalEvidenceRows(doc, admission))),
+        documentSection('tp-canonical-sketches', 'Эскизы и права', 'Sketches and rights',
+          documentTable(
+            [text('Вид', 'View'), text('Роль', 'Role'), text('Хэш контента', 'Content hash'),
+              text('Права при выпуске', 'Rights at issue'), text('Права сейчас', 'Rights now')],
+            sketches.map((sketch) => {
+              const current = currentRights.get(sketch.id);
+              return [
+                sketch.payload?.viewLabel || sketch.id,
+                sketch.mediaRole,
+                sketch.contentHash,
+                sketch.rights ? `v${sketch.rights.version} · ${sketch.rights.status}` : '—',
+                current ? `v${current.currentRightsVersion} · ${current.currentStatus}` : '—',
+              ];
+            })
+          )),
+        documentSection('tp-canonical-materials', 'Спецификация материалов', 'Bill of materials',
+          h('div', {}, [
+            documentTable(
+              [text('Поз.', 'Pos.'), text('Компонент', 'Component'), text('Материал', 'Material'),
+                text('Кол-во', 'Qty'), text('Ед.', 'Unit'), text('Стоимость строки', 'Line cost')],
+              (bom.lines || []).map((line) => [
+                line.position, line.component, line.materialName || line.materialCode,
+                line.quantity, line.unit, canonicalMoney(line.lineCost, line.materialCurrency),
+              ])
+            ),
+            h('p', { className: 'tp-doc-total',
+              text: `${text('Итого BOM', 'BOM total')}: ${canonicalMoney(bom.totalCost, bom.currency)}` }),
+          ])),
+        documentSection('tp-canonical-measurements', 'Таблица мер', 'Measurement chart',
+          documentTable(
+            [text('Точка', 'Point'), '−', '+', ...sizeHeaders],
+            (measurement.points || []).map((point) => [
+              canonicalLocale(point.nameRu, point.nameEn) || point.pointCode,
+              point.toleranceMinus, point.tolerancePlus,
+              ...(point.cells || []).map((cell) => cell.value),
+            ])
+          )),
+        documentSection('tp-canonical-operations', 'Технологические операции', 'Operations',
+          h('div', {}, [
+            documentTable(
+              [text('№', 'No.'), text('Код', 'Code'), text('Операция', 'Operation'),
+                text('Оборудование', 'Equipment'), text('Мин', 'Minutes')],
+              operations.map((operation) => [
+                operation.sequence, operation.operationCode,
+                canonicalLocale(operation.nameRu, operation.nameEn),
+                operation.equipment, operation.standardMinutes,
+              ])
+            ),
+            h('p', { className: 'tp-doc-total',
+              text: `${text('Итого нормовремя', 'Total standard time')}: ${doc.operations?.totalStandardMinutes ?? '—'} ${text('мин', 'min')}` }),
+          ])),
+        documentSection('tp-canonical-notes', 'Производственные указания', 'Production instructions',
+          h('div', { className: 'tp-doc-notes' }, [
+            h('h3', { text: text('Конструкция', 'Construction') }),
+            h('p', { text: header.constructionNotes || '—' }),
+            h('h3', { text: text('Качество', 'Quality') }),
+            h('p', { text: header.qualityNotes || '—' }),
+            h('h3', { text: text('Упаковка', 'Packing') }),
+            h('p', { text: header.packingNotes || '—' }),
+          ])),
+      ]),
+    ]);
+  }
+
   function renderDocument(doc) {
     const en = I18N.getLocale?.() === 'en';
     const money = (value) => (value === null || value === undefined
@@ -321,7 +534,7 @@
     return h('section', { className: 'tp-doc' }, [
       h('div', { className: 'tp-doc-toolbar' }, [
         h('button', { type: 'button', className: 'primary', text: text('\u041f\u0435\u0447\u0430\u0442\u044c \u0438\u043b\u0438 \u0441\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u0438\u0435 \u0432 PDF', 'Print or save as PDF'), onclick: () => window.print() }),
-        h('button', { type: 'button', className: 'secondary', text: text('\u0417\u0430\u043a\u0440\u044b\u0442\u044c', 'Close'), onclick: () => { ui.document = null; renderApp(); } }),
+        h('button', { type: 'button', className: 'secondary', text: text('\u0417\u0430\u043a\u0440\u044b\u0442\u044c', 'Close'), onclick: () => { invalidateDocument(); renderApp(); } }),
       ]),
       h('article', { className: 'tp-doc-page' }, [
         h('header', { className: 'tp-doc-head' }, [
@@ -371,7 +584,7 @@
     buttons.unshift(h('button', {
       type: 'button', className: 'secondary', disabled: ui.documentLoading,
       text: ui.documentLoading ? text('\u0421\u0431\u043e\u0440\u043a\u0430\u2026', 'Building\u2026') : text('\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442', 'Document'),
-      onclick: () => { void openDocument(value.techPackCode); },
+      onclick: () => { void openDocument(value); },
     }));
     const snapshot = value.dependencySnapshot || {};
     return h('aside', { className: 'tech-pack-inspector' }, [
@@ -483,10 +696,15 @@
   }
 
   function renderTechPacks() {
+    // Check every redraw, including while awaiting HTTP. Losing a role or changing tenant
+    // must clear both pending and already displayed document data before building DOM.
+    if ((ui.document || ui.documentLoading) && !documentContextIsCurrent(documentContext))
+      invalidateDocument();
     ensureLoaded();
-    const summary = core.summarize(ui.items);
-    const items = core.filter(ui.items, { status: ui.status, ready: ui.readiness, search: ui.search });
-    return ui.document ? renderDocument(ui.document) : h('section', { className: 'tech-pack-page' }, [header(summary), ui.error ? null : filters(), ui.error ? h('div', { className: 'tech-pack-error' }, [h('strong', { text: text('Не удалось загрузить техпаки', 'Could not load Tech Packs') }), h('span', { text: ui.error }), h('button', { type: 'button', className: 'secondary', text: text('Повторить', 'Retry'), onclick: () => { void load({ reset: true }); } })]) : null, ui.error ? null : h('div', { className: 'tech-pack-layout' }, [registry(items), inspector(selected())])]);
+    const readable = ui.items.filter(value => techPackAuthority(value) !== null);
+    const summary = core.summarize(readable);
+    const items = core.filter(readable, { status: ui.status, ready: ui.readiness, search: ui.search });
+    return ui.document ? (ui.document.kind === 'canonical' ? renderCanonicalDocument(ui.document.envelope) : renderDocument(ui.document.document)) : h('section', { className: 'tech-pack-page' }, [header(summary), ui.error ? null : filters(), ui.error ? h('div', { className: 'tech-pack-error' }, [h('strong', { text: text('Не удалось загрузить техпаки', 'Could not load Tech Packs') }), h('span', { text: ui.error }), h('button', { type: 'button', className: 'secondary', text: text('Повторить', 'Retry'), onclick: () => { void load({ reset: true }); } })]) : null, ui.error ? null : h('div', { className: 'tech-pack-layout' }, [registry(items), inspector(selected())])]);
   }
 
   const previousRenderView = renderView;
@@ -507,5 +725,5 @@
   global.SynthaOmnidataV7Nav?.activate('Tech packs', 'tech-packs', 'Технические пакеты', 'Tech packs');
   global.SynthaTechPacksWorkspace.fetchAll = fetchAll;
   global.SynthaViewRefresh?.register('tech-packs', () => load({ reset: true }));
-  global.SynthaViewRefresh?.registerTarget('tech-packs', (route) => { ui.status = 'all'; ui.readiness = 'all'; ui.search = ''; ui.document = null; ui.selectedCode = route.entityId; });
+  global.SynthaViewRefresh?.registerTarget('tech-packs', (route) => { ui.status = 'all'; ui.readiness = 'all'; ui.search = ''; invalidateDocument(); ui.selectedCode = route.entityId; });
 })(window);

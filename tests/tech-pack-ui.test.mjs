@@ -96,3 +96,43 @@ test('the printed tech pack finally renders the sketches its own table of conten
   assert.match(styles, /viewLabel/);
   assert.match(styles, /payload: \{ viewLabel \}/);
 });
+
+
+test('canonical Tech Pack browser document uses rights-gated endpoint and never falls back to legacy rendering', async () => {
+  const workspace=await source('public/modules/tech-packs.js');
+  assert.match(workspace,/value\.issueFormat === 'canonical-v1'/);
+  assert.match(workspace,/canonical \? '\/canonical-document' : '\/document'/);
+  assert.match(workspace,/function documentContextIsCurrent\(context\)/);
+  assert.match(workspace,/techPackAuthority\(value\)/);
+  assert.match(workspace,/CAPABILITIES\.TECH_PACK_READ/);
+  assert.match(workspace,/kind: 'canonical'/);
+  assert.match(workspace,/function renderCanonicalDocument\(envelope\)/);
+  assert.match(workspace,/admission\?\.admitted !== true/);
+  assert.match(workspace,/admission\.documentHash !== doc\.documentHash/);
+  assert.match(workspace,/CURRENT_RIGHTS|currentRightsVersion|currentStatus/);
+  const start=workspace.indexOf('function renderCanonicalDocument(envelope)');
+  const end=workspace.indexOf('function renderDocument(doc)',start);
+  const canonicalRenderer=workspace.slice(start,end);
+  assert.doesNotMatch(canonicalRenderer,/window\.print\(/);
+  assert.match(canonicalRenderer,/Печать пока заблокирована/);
+  assert.match(canonicalRenderer,/Print still gated/);
+  assert.match(canonicalRenderer,/documentHash/);
+  assert.match(workspace,/policyHash/);
+  assert.match(workspace,/lineageHash/);
+});
+
+test('canonical Tech Pack browser evidence is bilingual and exposes issued immutable sections', async () => {
+  const workspace=await source('public/modules/tech-packs.js');
+  for(const fragment of [
+    'Изделие и выпуск','Product and issue',
+    'Доказательства неизменности','Immutable evidence',
+    'Эскизы и права','Sketches and rights',
+    'Спецификация материалов','Bill of materials',
+    'Таблица мер','Measurement chart',
+    'Технологические операции','Operations',
+    'Производственные указания','Production instructions',
+  ]) assert.ok(workspace.includes(fragment),fragment);
+  assert.match(workspace,/canonicalLocale\(product\.styleVersion\?\.titleRu, product\.styleVersion\?\.titleEn\)/);
+  assert.match(workspace,/canonicalLocale\(point\.nameRu, point\.nameEn\)/);
+  assert.match(workspace,/canonicalLocale\(operation\.nameRu, operation\.nameEn\)/);
+});

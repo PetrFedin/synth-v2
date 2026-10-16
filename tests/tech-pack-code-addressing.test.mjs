@@ -98,7 +98,8 @@ test('actual workspace switches to the query alias for slash-coded document and 
   const js=await readFile(new URL('../public/modules/tech-packs.js',import.meta.url),'utf8');
   assert.match(js,/function techPackPath\(code, suffix = ''\)/);
   assert.match(js,/code\.includes\('\/'\)/);
-  for(const tail of ['/document','/issue','/acknowledge','/revisions','/withdraw']){
+  assert.match(js,/canonical \? '\/canonical-document' : '\/document'/);
+  for(const tail of ['/issue','/acknowledge','/revisions','/withdraw']){
     assert.ok(js.includes("techPackPath(value.techPackCode, '"+tail+"')")||
       js.includes("techPackPath(techPackCode, '"+tail+"')"),tail);
   }

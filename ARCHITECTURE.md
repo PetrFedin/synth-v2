@@ -2501,3 +2501,32 @@ A new authenticated canonical-document read returns the deterministic frozen Tec
 Access is existence-concealed by the same active-membership/role SQL boundary. The current-rights query runs only after an authorised canonical Pack is found. Missing, stale, restricted, expired or revoked rights raise `TECH_PACK_CANONICAL_RENDER_NOT_ADMITTED` and the public endpoint does not return the document body.
 
 The existing legacy `/document` path remains intact for legacy history and continues to reject canonical live-join rendering. The new endpoint is JSON data admission only; it does not set `publicPrintAdmitted=true`, generate PDF or claim visual production acceptance.
+
+
+## 2026-10-15 — Canonical Tech Pack RU/EN browser document viewer (candidate)
+
+**Status: CANDIDATE / PDF HOLD.**
+
+The existing ODS Tech Pack workspace now selects document authority using the durable `issueFormat`. Legacy historical Packs retain the existing legacy document reader. A `canonical-v1` Pack can only open the rights-gated `/canonical-document` endpoint; the browser never falls back to the mutable legacy document path.
+
+Browser state is cleared before each document fetch. If current publication rights are revoked or the admission otherwise fails, no previously admitted canonical document remains visible.
+
+The canonical viewer presents RU/EN product/style/colour/size labels, issued supplier/header evidence, frozen sketch rights, BOM, measurement matrix, operation sequence, production notes, `documentHash`, canonical lineage/source/context hashes and current `policyHash`.
+
+The canonical viewer deliberately omits `window.print()` and displays an explicit print-gated badge. JSON/browser admission does not change `publicPrintAdmitted=false`. PDF generation and print admission remain a later independently qualified gate.
+
+
+## 2026-10-15 — Canonical Tech Pack browser-session isolation and interaction proof (candidate)
+
+**Status: DRAFT / PRINT AND PRODUCTION HOLD.** The Tech Pack ODS inspector's read-only Document action still calls the current-rights-gated canonical-document API for canonical-v1 packs and the historical document endpoint for legacy packs. There are no new mutation, permission or public print contracts.
+
+The viewer tracks one request epoch, workspace generation, active login session and exact selected Tech Pack code. Opening or closing a document, selecting a different row, refreshing registry data, applying a route target and updating a Pack invalidate earlier requests and clear document state. A delayed HTTP response or rejection cannot restore an earlier brand/Pack document, overwrite a newer response or surface an outdated access error. On every redraw, a document admitted in an earlier login session or for a different selected Pack is removed.
+
+DOM interaction tests exercise real click handlers, pending/success/denied states, route refresh, RU/EN display and slash-safe document addressing. The browser still shows issued frozen evidence and current-rights admission without offering canonical Print/PDF; publicPrintAdmitted remains false. Real-device visual qualification is not claimed.
+
+
+## 2026-10-16 — Tech Pack browser organisation/actor authority isolation (candidate)
+
+**Status: DRAFT / PUBLIC PRINT AND PRODUCTION HOLD.** The read-only canonical document viewer now binds its browser request/admission context to the authenticated token, actor identifier, exact Brand ID, Tech Pack code and versioned active read-capable membership snapshot from the existing UI capability matrix. A different workspace tenant, membership deactivation, role/version change or actor replacement invalidates both a pending API response and an already displayed document on redraw. The visible Tech Pack registry also filters cached rows by current Tech Pack READ membership, rather than exposing old tenant rows after a same-token organisation change. Same-authority workspace object refreshes do not spuriously invalidate the document.
+
+This is browser memory hygiene, NOT a security substitute: the authenticated PostgreSQL read must still apply membership, existence concealment and current media-publication rights at request time. Only admitted canonical JSON with a matching document hash is retained in UI state; malformed or denied responses cannot become a document. No rights to issue, export, print or PDF are added. UI interaction contract tests cover mid-flight tenant change, exact membership revocation, same-token actor switch, stable-scope refresh and contradictory admission, in addition to the previous race/locale/slash-code paths. Browser/device visual proof remains OPEN.

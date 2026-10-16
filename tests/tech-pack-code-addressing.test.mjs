@@ -5,10 +5,29 @@ import { createTechPackRoutes } from '../src/http/tech-pack-routes.mjs';
 import { matchWholesaleRoute } from '../src/http/routes.mjs';
 import { queryParameters } from '../src/http/transport-contract.mjs';
 import { wholesaleV2ExtendedOpenApi } from '../src/http/v2-openapi.mjs';
+import { completeCanonicalTechPackFixture } from './helpers/canonical-tech-pack-document-fixture.mjs';
 
 function fixture() {
   const calls=[];
-  const log=(operation,...args)=>{calls.push({operation,args});return {techPackCode:'TP/2026/001'};};
+  const canonical=completeCanonicalTechPackFixture();
+  const log=(operation,...args)=>{
+    calls.push({operation,args});
+    if(operation==='document')return {
+      techPackCode:'TP/2026/001',sku:canonical.sku,revision:1,
+      materials:[{lineId:'shell',component:'Shell',materialCode:'FAB-01',
+        quantity:2,unit:'m',grossQuantity:2.1,unitCost:728,internalMargin:0.8}],
+      sketches:[{mediaRole:'design_sketch',viewLabel:'Front',uri:'s3://SECRET/issued'}],
+      bomTotalCost:999,privateAccountingMarker:'COST_LEAK_MARKER',
+    };
+    if(operation==='operation')return {
+      id:'op-1',techPackCode:'TP/2026/001',brandId:canonical.brandId,
+      sequence:1,operationCode:'CUT',nameRu:'Раскрой',nameEn:'Cutting',
+      standardMinutes:10,internalCost:518,
+    };
+    // Real issued frozen snapshots exercise the API allowlist instead of
+    // passing an invalid mock with no SKU/brand and then relaxing production.
+    return canonical;
+  };
   const service={
     getForActor:(...args)=>log('get',...args),
     getDocumentForActor:(...args)=>log('document',...args),
@@ -19,7 +38,7 @@ function fixture() {
     createRevision:(...args)=>log('revision',...args),
     withdrawTechPack:(...args)=>log('withdraw',...args),
   };
-  return {calls,routes:createTechPackRoutes({techPacks:service})};
+  return {calls,canonical,routes:createTechPackRoutes({techPacks:service})};
 }
 function context(routes,method,relative,body={}) {
   const url=new URL(relative,'http://localhost');
@@ -29,14 +48,27 @@ function context(routes,method,relative,body={}) {
 }
 const CODE='TP/2026/001',uri=s=>'/v2/tech-packs/by-code'+s+'?code='+encodeURIComponent(CODE);
 test('all alias operations forward the exact slash-containing code to the owning domain',async()=>{
-  const {calls,routes}=fixture();
+  const {calls,routes,canonical}=fixture();
+  const responses=[];
   for(const [method,suffix,body] of [
     ['GET','',{}],['GET','/document',{}],['PATCH','',{expectedVersion:2}],
     ['POST','/operations',{sequence:1,operationCode:'CUT-01',nameRu:'Раскрой',nameEn:'Cutting',machineClass:'cutting',standardMinutes:10}],
     ['POST','/issue',{expectedVersion:2}],['POST','/acknowledge',{expectedVersion:3}],
     ['POST','/revisions',{expectedVersion:3,techPackCode:'TP/2026/002'}],
     ['POST','/withdraw',{expectedVersion:4,reason:'Production cancelled'}]
-  ]){const {route,ctx}=context(routes,method,uri(suffix),body);await route.execute(ctx);}
+  ]){const {route,ctx}=context(routes,method,uri(suffix),body);responses.push(await route.execute(ctx));}
+  // Every legacy/slash-addressed operation keeps its routing contract while
+  // the transport never serialises internal prices or frozen source payloads.
+  const serialized=JSON.stringify(responses);
+  for(const secret of ['COST_LEAK_MARKER','internalCost','internalMargin',
+    'unitCost','bomTotalCost','frozenSources','frozenDocumentContext','s3://SECRET']) {
+    assert.equal(serialized.includes(secret),false,secret);
+  }
+  assert.equal(responses[0].sku,canonical.sku);
+  assert.equal(responses[1].materials[0].quantity,2);
+  assert.equal(responses[3].operationCode,'CUT');
+  assert.equal(responses[4].dependencySnapshot.canonical.lineageHash,
+    canonical.dependencySnapshot.canonical.lineageHash);
   assert.deepEqual(calls.map(c=>c.operation),['get','document','update','operation','issue','ack','revision','withdraw']);
   for(const call of calls)assert.ok(call.args.includes(CODE),call.operation);
   assert.deepEqual(calls.find(c=>c.operation==='issue').args.slice(0,3),['cmd-123','brand-owner',CODE]);

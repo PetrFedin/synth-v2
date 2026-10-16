@@ -209,8 +209,9 @@
         canonical ? '/canonical-document' : '/document'));
       if (!documentContextIsCurrent(context)) return;
       if (canonical && (payload?.admission?.admitted !== true
-          || !payload.document?.documentHash
-          || payload.admission.documentHash !== payload.document.documentHash)) {
+          || !payload.technicalView?.sourceDocumentHash
+          || payload.admission.documentHash !== payload.technicalView.sourceDocumentHash
+          || payload.technicalView.rightsPolicyHash !== payload.admission.policyHash)) {
         throw new Error('TECH_PACK_CANONICAL_RENDER_NOT_ADMITTED');
       }
       ui.document = canonical
@@ -386,7 +387,7 @@
   function canonicalEvidenceRows(doc, admission) {
     const evidence = doc.evidenceManifest || {};
     return [
-      [text('Хэш документа', 'Document hash'), doc.documentHash],
+      [text('Хэш документа', 'Document hash'), doc.sourceDocumentHash],
       [text('Хэш политики прав', 'Rights policy hash'), admission?.policyHash],
       [text('Хэш происхождения', 'Lineage hash'), evidence.lineageHash],
       [text('Хэш исходных данных', 'Frozen sources hash'), evidence.frozenSourcesHash],
@@ -395,9 +396,10 @@
     ];
   }
   function renderCanonicalDocument(envelope) {
-    const doc = envelope?.document;
+    const doc = envelope?.technicalView;
     const admission = envelope?.admission;
-    if (!doc || admission?.admitted !== true || admission.documentHash !== doc.documentHash) {
+    if (!doc || admission?.admitted !== true || admission.documentHash !== doc.sourceDocumentHash
+      || doc.rightsPolicyHash !== admission.policyHash) {
       return h('section', { className: 'tp-doc' }, [
         h('div', { className: 'tech-pack-error' }, [
           h('strong', { text: text('Канонический документ не допущен', 'Canonical document is not admitted') }),
@@ -474,14 +476,16 @@
           h('div', {}, [
             documentTable(
               [text('Поз.', 'Pos.'), text('Компонент', 'Component'), text('Материал', 'Material'),
-                text('Кол-во', 'Qty'), text('Ед.', 'Unit'), text('Стоимость строки', 'Line cost')],
+                text('Кол-во', 'Qty'), text('Ед.', 'Unit'), text('Брутто', 'Gross')],
               (bom.lines || []).map((line) => [
                 line.position, line.component, line.materialName || line.materialCode,
-                line.quantity, line.unit, canonicalMoney(line.lineCost, line.materialCurrency),
+                line.quantity, line.unit, line.grossQuantity,
               ])
             ),
-            h('p', { className: 'tp-doc-total',
-              text: `${text('Итого BOM', 'BOM total')}: ${canonicalMoney(bom.totalCost, bom.currency)}` }),
+            h('p', { className: 'tp-doc-note', text: text(
+              'Финансовая себестоимость доступна только в коммерческом контуре.',
+              'Internal costing is available only in the commercial workspace.'
+            ) }),
           ])),
         documentSection('tp-canonical-measurements', 'Таблица мер', 'Measurement chart',
           documentTable(

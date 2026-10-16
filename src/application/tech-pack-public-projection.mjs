@@ -51,7 +51,25 @@ export function projectTechPackPublicSummary(pack) {
     }
     value.dependencySnapshot = snapshot;
   } else value.dependencySnapshot = null;
+  if (value.acknowledgement && typeof value.acknowledgement === 'object') {
+    value.acknowledgement = pick(value.acknowledgement, [
+      'supplierCode','acknowledgementReference','acknowledgedBy','notes',
+      'acknowledgedAt','issuedTechPackVersion',
+    ]);
+  }
   return freeze(JSON.parse(canonicalJson(value)));
+}
+
+/**
+ * Only the known manufacturing operation fields can cross the HTTP boundary.
+ * New domain attributes remain private unless explicitly reviewed here.
+ */
+export function projectTechPackPublicOperation(operation) {
+  return freeze(JSON.parse(canonicalJson(pick(operation, [
+    'id','techPackCode','brandId','sequence','operationCode',
+    'nameRu','nameEn','equipment','machineClass','standardMinutes',
+    'notes','createdAt','createdBy',
+  ]))));
 }
 
 /**
@@ -77,10 +95,10 @@ export function projectLegacyTechPackTechnicalView(doc) {
   value.operations = list(doc.operations).map(operation =>
     pick(operation, ['sequence','operationCode','nameRu','nameEn',
       'equipment','machineClass','standardMinutes','notes']));
-  // Historical sketch URI compatibility remains a separately acknowledged
-  // legacy media-rights risk. No new URL or public export rights are added.
+  // The legacy path has no matching current-rights admission. It may show
+  // sketch captions but must NOT disclose raw/public media aliases or bytes.
   value.sketches = list(doc.sketches).map(sketch =>
-    pick(sketch, ['uri','mediaRole','viewLabel']));
+    pick(sketch, ['mediaRole','viewLabel']));
   return freeze(JSON.parse(canonicalJson(value)));
 }
 

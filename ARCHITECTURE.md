@@ -2551,3 +2551,10 @@ Critically, this is NOT proof of external object-store origin (no trusted adapte
 ## 2026-10-16 — Tech Pack cost-disclosure audit, projection candidate (NOT WIRED)
 
 AUDIT: TECH_PACK_READ permits Production/Quality roles, while full canonical JSON, legacy documents and list/detail/mutation snapshots can disclose internal BOM costs. Introduced a pure fail-closed manufacturing-only allowlist projector and regression tests. Canonical source document SHA-256 and current-rights policy hash are checked before redacting; issued database evidence is unchanged. No public route or consumer has been migrated. NEXT: integrate projection at every read and mutation response boundary, update OpenAPI and RU/EN viewer, and run multi-role PostgreSQL HTTP no-leak tests. Public PDF/printing still HOLD. Main/production unchanged.
+
+
+## 2026-10-16 — Tech Pack manufacturing-only HTTP response integration (candidate)
+
+**Status: DRAFT / SECURITY UAT HOLD.** All Tech Pack HTTP route results now pass through a closed projection at the route boundary. Page, detail and command Tech Pack results strip frozenSources and frozenDocumentContext while retaining source IDs, issue lifecycle and lineage hashes. Operation commands retain only known manufacturing fields. Legacy document strips cost columns and unsafe media URI aliases. Canonical document verifies the complete original issued document hash and current-rights policy hash on the server, then emits a separate immutable technicalView with sourceDocumentHash and projectionHash, minus all internal costing, currency rates and retained-asset storage details. The raw document remains unchanged in PostgreSQL and command/outbox history. RU/EN document view is migrated to this explicit envelope. OpenAPI updated for technicalView and no longer declares cost-bearing historical snapshots in public TechPack.
+
+**Not yet release admitted:** Production/Quality and Brand Owner multi-tenant HTTP/real PostgreSQL role E2E must pass; verify legacy sketch/image rights behavior separately; a passing CI alone is not independent review. PDF/Print remains HOLD. Never provide sensitive evidence through another unprojected endpoint.

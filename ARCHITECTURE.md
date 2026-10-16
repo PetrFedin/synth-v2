@@ -2514,3 +2514,12 @@ Browser state is cleared before each document fetch. If current publication righ
 The canonical viewer presents RU/EN product/style/colour/size labels, issued supplier/header evidence, frozen sketch rights, BOM, measurement matrix, operation sequence, production notes, `documentHash`, canonical lineage/source/context hashes and current `policyHash`.
 
 The canonical viewer deliberately omits `window.print()` and displays an explicit print-gated badge. JSON/browser admission does not change `publicPrintAdmitted=false`. PDF generation and print admission remain a later independently qualified gate.
+
+
+## 2026-10-15 — Canonical Tech Pack browser-session isolation and interaction proof (candidate)
+
+**Status: DRAFT / PRINT AND PRODUCTION HOLD.** The Tech Pack ODS inspector's read-only Document action still calls the current-rights-gated canonical-document API for canonical-v1 packs and the historical document endpoint for legacy packs. There are no new mutation, permission or public print contracts.
+
+The viewer tracks one request epoch, workspace generation, active login session and exact selected Tech Pack code. Opening or closing a document, selecting a different row, refreshing registry data, applying a route target and updating a Pack invalidate earlier requests and clear document state. A delayed HTTP response or rejection cannot restore an earlier brand/Pack document, overwrite a newer response or surface an outdated access error. On every redraw, a document admitted in an earlier login session or for a different selected Pack is removed.
+
+DOM interaction tests exercise real click handlers, pending/success/denied states, route refresh, RU/EN display and slash-safe document addressing. The browser still shows issued frozen evidence and current-rights admission without offering canonical Print/PDF; publicPrintAdmitted remains false. Real-device visual qualification is not claimed.

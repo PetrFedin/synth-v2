@@ -13,6 +13,15 @@
     sequenceBySku: {}, sequenceLoading: '',
   });
   const STATUSES = ['draft', 'issued', 'acknowledged', 'superseded', 'withdrawn'];
+  // An admitted document belongs to one exact request, selected Pack, and login session.
+  let documentEpoch = 0;
+  let admittedSession = null;
+  function invalidateDocument() {
+    documentEpoch += 1;
+    admittedSession = null;
+    ui.document = null;
+    ui.documentLoading = false;
+  }
 
   function text(ru, en) { return typeof localText === 'function' ? localText(ru, en) : ru; }
   function h(tag, attrs = {}, children = []) {
@@ -44,7 +53,7 @@
   function catalog() { return Array.isArray(state.workspace?.catalogSkus) ? state.workspace.catalogSkus : []; }
   function manageableCatalog() { return catalog().filter((sku) => can(sku.brandId, caps.CAPABILITIES.TECH_PACK_MANAGE)); }
 
-  function reset() { ui.items = []; ui.loaded = false; ui.error = ''; ui.selectedCode = null; ui.generation += 1; global.SynthaTechPackCanonicalInspector?.invalidate(); }
+  function reset() { invalidateDocument(); ui.items = []; ui.loaded = false; ui.error = ''; ui.selectedCode = null; ui.generation += 1; global.SynthaTechPackCanonicalInspector?.invalidate(); }
   async function fetchAll(request = api) {
     const byCode = new Map();
     const seen = new Set();
@@ -86,6 +95,7 @@
   // See materials.js: retrying a failed load from render starves the event loop.
   function ensureLoaded() { if (!ui.loaded && !ui.loading && !ui.error) queueMicrotask(() => { void load({ reset: true }); }); }
   function upsert(value) {
+    invalidateDocument();
     global.SynthaTechPackCanonicalInspector?.invalidate(value.techPackCode);
     const map = new Map(ui.items.map((item) => [item.techPackCode, item]));
     map.set(value.techPackCode, value);
@@ -131,7 +141,7 @@
         h('td', {}, [badge(labelStatus(value.status), ready ? 'ok' : value.status === 'withdrawn' ? 'neutral' : 'medium')]), h('td', { text: value.supplierName || '—' }),
         h('td', {}, [ready ? badge(text('Допущен', 'Ready'), 'ok') : badge(text('Стоп', 'Blocked'), 'high')]), h('td', { text: date(value.updatedAt) }),
       ]);
-      const choose = () => { ui.selectedCode = value.techPackCode; renderApp(); };
+      const choose = () => { invalidateDocument(); ui.selectedCode = value.techPackCode; renderApp(); };
       row.addEventListener('click', choose); row.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); choose(); } });
       return row;
     });
@@ -151,26 +161,40 @@
   }
   async function openDocument(value) {
     const techPackCode = value?.techPackCode;
-    const canonical = value?.issueFormat === 'canonical-v1';
-    // Never leave an older admitted document visible while a fresh rights check is pending.
-    ui.document = null;
+    if (!techPackCode) return;
+    const canonical = value.issueFormat === 'canonical-v1';
+    invalidateDocument();
+    const requestEpoch = documentEpoch;
+    const generation = ui.generation;
+    const authSession = state.token ?? null;
+    const isCurrent = () => requestEpoch === documentEpoch
+      && generation === ui.generation
+      && authSession === (state.token ?? null)
+      && state.view === 'tech-packs'
+      && selected()?.techPackCode === techPackCode;
     ui.documentLoading = true;
     renderApp();
     try {
       const payload = await api(techPackPath(techPackCode,
         canonical ? '/canonical-document' : '/document'));
+      if (!isCurrent()) return;
+      admittedSession = authSession;
       ui.document = canonical
-        ? Object.freeze({ kind: 'canonical', envelope: payload })
-        : Object.freeze({ kind: 'legacy', document: payload });
+        ? Object.freeze({ kind: 'canonical', techPackCode, envelope: payload })
+        : Object.freeze({ kind: 'legacy', techPackCode, document: payload });
     } catch (error) {
+      if (!isCurrent()) return;
       ui.document = null;
+      admittedSession = null;
       toast(error?.message || text(
         'Документ сейчас недоступен. Проверьте выпуск и права на изображения.',
         'The document is not currently available. Check issuance and image rights.'
       ), 'error');
     } finally {
-      ui.documentLoading = false;
-      renderApp();
+      if (requestEpoch === documentEpoch) {
+        ui.documentLoading = false;
+        if (state.view === 'tech-packs') renderApp();
+      }
     }
   }
   // Headings carry both languages at once, the way the packs a factory actually receives do —
@@ -349,7 +373,7 @@
             'The document is not shown without a matching hash and current rights admission.'
           ) }),
           h('button', { type: 'button', className: 'secondary', text: text('Закрыть', 'Close'),
-            onclick: () => { ui.document = null; renderApp(); } }),
+            onclick: () => { invalidateDocument(); renderApp(); } }),
         ]),
       ]);
     }
@@ -368,7 +392,7 @@
         badge(text('Проверенный снимок', 'Verified snapshot'), 'ok'),
         badge(text('Печать пока заблокирована', 'Print still gated'), 'medium'),
         h('button', { type: 'button', className: 'secondary', text: text('Закрыть', 'Close'),
-          onclick: () => { ui.document = null; renderApp(); } }),
+          onclick: () => { invalidateDocument(); renderApp(); } }),
       ]),
       h('article', { className: 'tp-doc-page' }, [
         h('header', { className: 'tp-doc-head' }, [
@@ -477,7 +501,7 @@
     return h('section', { className: 'tp-doc' }, [
       h('div', { className: 'tp-doc-toolbar' }, [
         h('button', { type: 'button', className: 'primary', text: text('\u041f\u0435\u0447\u0430\u0442\u044c \u0438\u043b\u0438 \u0441\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u0438\u0435 \u0432 PDF', 'Print or save as PDF'), onclick: () => window.print() }),
-        h('button', { type: 'button', className: 'secondary', text: text('\u0417\u0430\u043a\u0440\u044b\u0442\u044c', 'Close'), onclick: () => { ui.document = null; renderApp(); } }),
+        h('button', { type: 'button', className: 'secondary', text: text('\u0417\u0430\u043a\u0440\u044b\u0442\u044c', 'Close'), onclick: () => { invalidateDocument(); renderApp(); } }),
       ]),
       h('article', { className: 'tp-doc-page' }, [
         h('header', { className: 'tp-doc-head' }, [
@@ -639,6 +663,9 @@
   }
 
   function renderTechPacks() {
+    // A new account or selected item cannot inherit a previously admitted document.
+    if (ui.document && (ui.document.techPackCode !== selected()?.techPackCode
+      || admittedSession !== (state.token ?? null))) invalidateDocument();
     ensureLoaded();
     const summary = core.summarize(ui.items);
     const items = core.filter(ui.items, { status: ui.status, ready: ui.readiness, search: ui.search });
@@ -663,5 +690,5 @@
   global.SynthaOmnidataV7Nav?.activate('Tech packs', 'tech-packs', 'Технические пакеты', 'Tech packs');
   global.SynthaTechPacksWorkspace.fetchAll = fetchAll;
   global.SynthaViewRefresh?.register('tech-packs', () => load({ reset: true }));
-  global.SynthaViewRefresh?.registerTarget('tech-packs', (route) => { ui.status = 'all'; ui.readiness = 'all'; ui.search = ''; ui.document = null; ui.selectedCode = route.entityId; });
+  global.SynthaViewRefresh?.registerTarget('tech-packs', (route) => { ui.status = 'all'; ui.readiness = 'all'; ui.search = ''; invalidateDocument(); ui.selectedCode = route.entityId; });
 })(window);

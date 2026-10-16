@@ -102,7 +102,8 @@ test('canonical Tech Pack browser document uses rights-gated endpoint and never 
   const workspace=await source('public/modules/tech-packs.js');
   assert.match(workspace,/value\?\.issueFormat === 'canonical-v1'/);
   assert.match(workspace,/canonical \? '\/canonical-document' : '\/document'/);
-  assert.match(workspace,/ui\.document = null;\n    ui\.documentLoading = true/);
+  assert.match(workspace,/const requestEpoch = documentEpoch/);
+  assert.match(workspace,/admittedSession !== \\(state\\.token \\?\\? null\\)/);
   assert.match(workspace,/kind: 'canonical'/);
   assert.match(workspace,/function renderCanonicalDocument\(envelope\)/);
   assert.match(workspace,/admission\?\.admitted !== true/);

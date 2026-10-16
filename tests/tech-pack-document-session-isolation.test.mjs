@@ -4,7 +4,8 @@ import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 
 const source = await readFile(new URL('../public/modules/tech-packs.js', import.meta.url), 'utf8');
-const pack = code => ({ techPackCode:code, sku:'SKU-'+code, title:code, brandId:'brand-1',
+const capabilitiesSource = await readFile(new URL('../public/modules/ui-capabilities.js', import.meta.url), 'utf8');
+const pack = (code, brandId='brand-1') => ({ techPackCode:code, sku:'SKU-'+code, title:code, brandId,
   issueFormat:'canonical-v1', revision:1, status:'issued', version:2 });
 const evidence = (code,hash) => ({
   admission:{admitted:true,documentHash:hash,decisions:[]},
@@ -35,15 +36,15 @@ const flush=()=>new Promise(resolve=>setImmediate(resolve));
 function setup(items,handler,locale='ru'){
   let refresh,routeTarget;
   const requests=[],errors=[];
-  const state={view:'tech-packs',token:'session-A',workspace:{catalogSkus:[]}};
+  const state={view:'tech-packs',token:'session-A',user:{userId:'actor-1'},
+    workspace:{catalogSkus:[],
+      memberships:[{membershipId:'member-1',organisationId:'brand-1',
+        userId:'actor-1',role:'owner',status:'active',version:1}],
+      organisations:[{id:'brand-1',type:'brand'}]}};
   const window={
     SynthaTechPackCore:{
       summarize:a=>({total:a.length,issued:0,ready:0,blocked:a.length}),
       filter:a=>a,isProductionReady:()=>false,allowedActions:()=>[],
-    },
-    SynthaUiCapabilities:{
-      CAPABILITIES:{TECH_PACK_MANAGE:'tech-pack.manage',TECH_PACK_ACKNOWLEDGE:'tech-pack.acknowledge'},
-      hasForOrganisation:()=>false,hasAny:()=>false,
     },
     SynthaTechPackCanonicalInspector:{invalidate(){},render:()=>new NodeMock('section')},
     SynthaOmnidataV7Nav:{activate(){}},
@@ -63,6 +64,7 @@ function setup(items,handler,locale='ru'){
     reportError:e=>errors.push(e),toast:m=>errors.push(m),
     statusLabel:v=>v,formatDate:v=>v,queueMicrotask,URLSearchParams,encodeURIComponent,Intl,Date,
   });
+  vm.runInContext(capabilitiesSource,context,{filename:'ui-capabilities.js'});
   vm.runInContext(source,context,{filename:'tech-packs.js'});
   const ui=window.SynthaTechPacksWorkspace;
   ui.loaded=true;ui.items=items;ui.selectedCode=items[0]?.techPackCode??null;
@@ -128,4 +130,62 @@ test('slash-coded canonical pack always uses the safe query-addressed endpoint',
   assert.deepEqual(h.requests,
     ['/v2/tech-packs/by-code/canonical-document?code=TP%2F2026%2F001']);
   assert.match(h.render().textContent,/SLASH-HASH/);
+});
+
+test('switching organisations with an unchanged token conceals old registry rows and rejects a late response',async()=>{
+  const pending=deferred();
+  const h=setup([pack('TP-A','brand-1'),pack('TP-B','brand-2')],
+    path=>path.includes('TP-A')?pending.promise:evidence('TP-B','BRAND-B-HASH'));
+  press(h.render(),btn('Документ'));
+  h.state.workspace={catalogSkus:[],
+    memberships:[{membershipId:'member-2',organisationId:'brand-2',userId:'actor-1',
+      role:'owner',status:'active',version:1}],
+    organisations:[{id:'brand-2',type:'brand'}]};
+  const switched=h.render();
+  assert.doesNotMatch(switched.textContent,/TP-A/);
+  assert.match(switched.textContent,/TP-B/);
+  assert.equal(h.ui.documentLoading,false);
+  pending.resolve(evidence('TP-A','OLD-BRAND-SECRET'));await flush();
+  assert.equal(h.ui.document,null);
+  assert.doesNotMatch(h.render().textContent,/OLD-BRAND-SECRET/);
+  press(h.render(),btn('Документ'));await flush();
+  assert.match(h.render().textContent,/BRAND-B-HASH/);
+});
+
+test('revoking the matching membership removes an admitted document, even without token rotation',async()=>{
+  const h=setup([pack('TP-A')],()=>evidence('TP-A','REVOKED-MEMBER-HASH'));
+  press(h.render(),btn('Документ'));await flush();
+  assert.match(h.render().textContent,/REVOKED-MEMBER-HASH/);
+  h.state.workspace.memberships[0]={...h.state.workspace.memberships[0],
+    role:'viewer',version:2};
+  assert.doesNotMatch(h.render().textContent,/REVOKED-MEMBER-HASH/);
+  assert.equal(h.ui.document,null);
+  assert.doesNotMatch(h.render().textContent,/TP-A/);
+});
+
+test('changing the logged-in actor with the same token invalidates already admitted evidence',async()=>{
+  const h=setup([pack('TP-A')],()=>evidence('TP-A','FIRST-ACTOR-HASH'));
+  press(h.render(),btn('Документ'));await flush();
+  assert.match(h.render().textContent,/FIRST-ACTOR-HASH/);
+  h.state.user={userId:'actor-2'};
+  assert.doesNotMatch(h.render().textContent,/FIRST-ACTOR-HASH/);
+  assert.equal(h.ui.document,null);
+});
+
+test('a refreshed workspace object with the same exact membership does not discard an admitted document',async()=>{
+  const h=setup([pack('TP-A')],()=>evidence('TP-A','STABLE-SCOPE-HASH'));
+  press(h.render(),btn('Документ'));await flush();
+  h.state.workspace=JSON.parse(JSON.stringify(h.state.workspace));
+  assert.match(h.render().textContent,/STABLE-SCOPE-HASH/);
+  assert.equal(h.ui.document?.envelope?.document?.documentHash,'STABLE-SCOPE-HASH');
+});
+
+test('invalid admission cannot persist canonical document data in browser state',async()=>{
+  const h=setup([pack('TP-A')],()=>({
+    document:evidence('TP-A','DATA-ONLY').document,
+    admission:{admitted:false,documentHash:'DATA-ONLY'},
+  }));
+  press(h.render(),btn('Документ'));await flush();
+  assert.equal(h.ui.document,null);
+  assert.ok(h.errors.some(x=>String(x).includes('TECH_PACK_CANONICAL_RENDER_NOT_ADMITTED')));
 });

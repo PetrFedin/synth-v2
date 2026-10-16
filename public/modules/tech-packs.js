@@ -13,14 +13,36 @@
     sequenceBySku: {}, sequenceLoading: '',
   });
   const STATUSES = ['draft', 'issued', 'acknowledged', 'superseded', 'withdrawn'];
-  // An admitted document belongs to one exact request, selected Pack, and login session.
+  // Browser cache scope is not an authentication authority: API/SQL always recheck rights.
+  // Still, a document from an older membership or actor must not remain on screen.
   let documentEpoch = 0;
-  let admittedSession = null;
+  let documentContext = null;
   function invalidateDocument() {
     documentEpoch += 1;
-    admittedSession = null;
+    documentContext = null;
     ui.document = null;
     ui.documentLoading = false;
+  }
+  function techPackAuthority(value) {
+    const brandId = value?.brandId;
+    if (!brandId || !state.token || !state.user
+        || !caps.hasForOrganisation(state.workspace, brandId, caps.CAPABILITIES.TECH_PACK_READ)) return null;
+    const actorId = String(state.user.userId ?? state.user.id ?? state.user.email ?? '');
+    const memberships = (Array.isArray(state.workspace?.memberships) ? state.workspace.memberships : [])
+      .filter(member => member.organisationId === brandId && member.status === 'active'
+        && (!member.userId || !actorId || String(member.userId) === actorId)
+        && caps.hasForOrganisation({ memberships: [member] }, brandId, caps.CAPABILITIES.TECH_PACK_READ))
+      .map(member => [member.membershipId ?? member.id ?? '', member.userId ?? '',
+        member.role ?? '', member.version ?? '', member.updatedAt ?? ''])
+      .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+    return memberships.length ? JSON.stringify([brandId, actorId, memberships]) : null;
+  }
+  function documentContextIsCurrent(context) {
+    if (!context || documentContext !== context || documentEpoch !== context.epoch
+        || context.session !== (state.token ?? null) || state.view !== 'tech-packs') return false;
+    const value = selected();
+    return value?.techPackCode === context.techPackCode && value?.brandId === context.brandId
+      && techPackAuthority(value) === context.authority;
   }
 
   function text(ru, en) { return typeof localText === 'function' ? localText(ru, en) : ru; }
@@ -102,7 +124,10 @@
     ui.items = [...map.values()].sort((a, b) => String(a.techPackCode).localeCompare(String(b.techPackCode)));
     ui.selectedCode = value.techPackCode;
   }
-  function selected() { return ui.items.find((value) => value.techPackCode === ui.selectedCode) || ui.items[0] || null; }
+  function selected() {
+    const accessible = ui.items.filter(value => techPackAuthority(value) !== null);
+    return accessible.find(value => value.techPackCode === ui.selectedCode) || accessible[0] || null;
+  }
   async function command(value, path, body, method = 'POST') {
     if (ui.busyCode) return null;
     ui.busyCode = value?.techPackCode || 'new'; renderApp();
@@ -162,36 +187,44 @@
   async function openDocument(value) {
     const techPackCode = value?.techPackCode;
     if (!techPackCode) return;
-    const canonical = value.issueFormat === 'canonical-v1';
     invalidateDocument();
-    const requestEpoch = documentEpoch;
-    const generation = ui.generation;
-    const authSession = state.token ?? null;
-    const isCurrent = () => requestEpoch === documentEpoch
-      && generation === ui.generation
-      && authSession === (state.token ?? null)
-      && state.view === 'tech-packs'
-      && selected()?.techPackCode === techPackCode;
+    const authority = techPackAuthority(value);
+    if (!authority || selected()?.techPackCode !== techPackCode) {
+      renderApp();
+      return;
+    }
+    const context = Object.freeze({
+      epoch: documentEpoch,
+      session: state.token ?? null,
+      techPackCode,
+      brandId: value.brandId,
+      authority,
+    });
+    documentContext = context;
+    const canonical = value.issueFormat === 'canonical-v1';
     ui.documentLoading = true;
     renderApp();
     try {
       const payload = await api(techPackPath(techPackCode,
         canonical ? '/canonical-document' : '/document'));
-      if (!isCurrent()) return;
-      admittedSession = authSession;
+      if (!documentContextIsCurrent(context)) return;
+      if (canonical && (payload?.admission?.admitted !== true
+          || !payload.document?.documentHash
+          || payload.admission.documentHash !== payload.document.documentHash)) {
+        throw new Error('TECH_PACK_CANONICAL_RENDER_NOT_ADMITTED');
+      }
       ui.document = canonical
         ? Object.freeze({ kind: 'canonical', techPackCode, envelope: payload })
         : Object.freeze({ kind: 'legacy', techPackCode, document: payload });
     } catch (error) {
-      if (!isCurrent()) return;
+      if (!documentContextIsCurrent(context)) return;
       ui.document = null;
-      admittedSession = null;
       toast(error?.message || text(
         'Документ сейчас недоступен. Проверьте выпуск и права на изображения.',
         'The document is not currently available. Check issuance and image rights.'
       ), 'error');
     } finally {
-      if (requestEpoch === documentEpoch) {
+      if (documentContext === context) {
         ui.documentLoading = false;
         if (state.view === 'tech-packs') renderApp();
       }
@@ -663,12 +696,14 @@
   }
 
   function renderTechPacks() {
-    // A new account or selected item cannot inherit a previously admitted document.
-    if (ui.document && (ui.document.techPackCode !== selected()?.techPackCode
-      || admittedSession !== (state.token ?? null))) invalidateDocument();
+    // Check every redraw, including while awaiting HTTP. Losing a role or changing tenant
+    // must clear both pending and already displayed document data before building DOM.
+    if ((ui.document || ui.documentLoading) && !documentContextIsCurrent(documentContext))
+      invalidateDocument();
     ensureLoaded();
-    const summary = core.summarize(ui.items);
-    const items = core.filter(ui.items, { status: ui.status, ready: ui.readiness, search: ui.search });
+    const readable = ui.items.filter(value => techPackAuthority(value) !== null);
+    const summary = core.summarize(readable);
+    const items = core.filter(readable, { status: ui.status, ready: ui.readiness, search: ui.search });
     return ui.document ? (ui.document.kind === 'canonical' ? renderCanonicalDocument(ui.document.envelope) : renderDocument(ui.document.document)) : h('section', { className: 'tech-pack-page' }, [header(summary), ui.error ? null : filters(), ui.error ? h('div', { className: 'tech-pack-error' }, [h('strong', { text: text('Не удалось загрузить техпаки', 'Could not load Tech Packs') }), h('span', { text: ui.error }), h('button', { type: 'button', className: 'secondary', text: text('Повторить', 'Retry'), onclick: () => { void load({ reset: true }); } })]) : null, ui.error ? null : h('div', { className: 'tech-pack-layout' }, [registry(items), inspector(selected())])]);
   }
 

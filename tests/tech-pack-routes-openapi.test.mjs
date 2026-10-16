@@ -1,21 +1,38 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createTechPackRoutes } from '../src/http/tech-pack-routes.mjs';
+import { completeCanonicalTechPackFixture } from './helpers/canonical-tech-pack-document-fixture.mjs';
+import { buildFrozenCanonicalTechPackDocument } from '../src/application/tech-pack-frozen-document.mjs';
+import { evaluateCanonicalTechPackRenderAdmission } from '../src/application/tech-pack-public-render-policy.mjs';
+
 import { matchWholesaleRoute } from '../src/http/routes.mjs';
 import { wholesaleV2ExtendedOpenApi } from '../src/http/v2-openapi.mjs';
 
+function documentHashFixture() {
+  return buildFrozenCanonicalTechPackDocument(completeCanonicalTechPackFixture()).documentHash;
+}
 function fixture() {
   const calls = [];
+  const issued=completeCanonicalTechPackFixture();
+  const document=buildFrozenCanonicalTechPackDocument(issued);
+  const admission=evaluateCanonicalTechPackRenderAdmission(document,[{
+    id:'current-2',mediaId:'media-1',version:2,status:'cleared',
+    basis:'brand-owned',evidenceRef:'contract://2',
+    approvedAt:'2026-10-15T10:00:00.000Z',approvedBy:'officer',validUntil:null,
+  }],'2026-10-15T12:00:00.000Z');
+  const pack=code=>({...issued,techPackCode:code});
   const techPacks = {
     pageForActor: async (...args) => { calls.push(['page', ...args]); return { items: [], nextCursor: null }; },
-    getForActor: async (...args) => { calls.push(['get', ...args]); return { techPackCode: args[1] }; },
-    getCanonicalRenderableDocumentForActor: async (...args) => { calls.push(['canonical-document', ...args]); return { document:{techPackCode:args[1]}, admission:{admitted:true} }; },
-    createTechPack: async (...args) => { calls.push(['create', ...args]); return args[2]; },
-    updateTechPack: async (...args) => { calls.push(['update', ...args]); return { techPackCode: args[2], ...args[3] }; },
-    issueTechPack: async (...args) => { calls.push(['issue', ...args]); return { techPackCode: args[2], status: 'issued' }; },
-    acknowledgeTechPack: async (...args) => { calls.push(['acknowledge', ...args]); return { techPackCode: args[2], status: 'acknowledged' }; },
-    createRevision: async (...args) => { calls.push(['revision', ...args]); return { techPackCode: args[3].techPackCode, status: 'draft' }; },
-    withdrawTechPack: async (...args) => { calls.push(['withdraw', ...args]); return { techPackCode: args[2], status: 'withdrawn' }; },
+    getForActor: async (...args) => { calls.push(['get', ...args]); return pack(args[1]); },
+    getCanonicalRenderableDocumentForActor: async (...args) => {
+      calls.push(['canonical-document', ...args]); return {document,admission};
+    },
+    createTechPack: async (...args) => { calls.push(['create', ...args]); return pack(args[2].techPackCode); },
+    updateTechPack: async (...args) => { calls.push(['update', ...args]); return pack(args[2]); },
+    issueTechPack: async (...args) => { calls.push(['issue', ...args]); return pack(args[2]); },
+    acknowledgeTechPack: async (...args) => { calls.push(['acknowledge', ...args]); return pack(args[2]); },
+    createRevision: async (...args) => { calls.push(['revision', ...args]); return pack(args[3].techPackCode); },
+    withdrawTechPack: async (...args) => { calls.push(['withdraw', ...args]); return pack(args[2]); },
   };
   return { calls, routes: createTechPackRoutes({ techPacks }) };
 }
@@ -63,8 +80,8 @@ test('authoritative OpenAPI 1.21 documents supplier acknowledgement and guarded 
   assert.equal(specification.components.schemas.TechPack.properties.issueFormat.enum[0],'canonical-v1');
   assert.ok(specification.components.schemas.TechPack.properties.productSkuId);
   assert.ok(specification.components.schemas.TechPackDependencySnapshot.properties.canonical);
-  assert.ok(specification.components.schemas.TechPackDependencySnapshot.properties.frozenSources);
-  assert.ok(specification.components.schemas.TechPackDependencySnapshot.properties.frozenDocumentContext);
+  assert.equal(Object.hasOwn(specification.components.schemas.TechPackDependencySnapshot.properties,'frozenSources'),false);
+  assert.equal(Object.hasOwn(specification.components.schemas.TechPackDependencySnapshot.properties,'frozenDocumentContext'),false);
   assert.equal(Object.isFrozen(specification), true);
 });
 
@@ -83,4 +100,8 @@ test('canonical document routes expose an admitted immutable document without re
     assert.ok(wholesaleV2ExtendedOpenApi.paths[path]);
   }
   assert.equal(wholesaleV2ExtendedOpenApi.components.schemas.TechPackCanonicalRenderAdmission.properties.admitted.enum[0],true);
+  const read=await byCode.execute({actorId:'owner-user',query:{code:'TP/STYLE/001'},body:{},params:[]});
+  assert.equal(read.technicalView.sourceDocumentHash,documentHashFixture());
+  assert.equal(Object.hasOwn(read,'document'),false);
+  assert.equal(JSON.stringify(read).includes('unitCostSnapshot'),false);
 });

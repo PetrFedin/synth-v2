@@ -4,7 +4,8 @@ import { bindIssuedTechPackDocumentContext } from '../../src/application/tech-pa
 const mdm=(entryId,dictionaryCode,code)=>({entryId,version:3,dictionaryCode,
   snapshot:{code,translations:{ru:'Frozen RU',en:'Frozen EN'}}});
 
-export function completeCanonicalTechPackFixture({operations=true,sketches='verified',rightsVersion=1}={}) {
+export function completeCanonicalTechPackFixture({operations=true,sketches='verified',rightsVersion=1,
+  sketchContentHash='e'.repeat(64),sketchByteSize=12000,sketchMimeType='image/png'}={}) {
   const pack={id:'pack-1',techPackCode:'TP/2026/001',sku:'JACKET-01',brandId:'brand-1',
     skuVersion:2,revision:1,sourceTechPackCode:null,status:'draft',version:1,
     title:'Issued technical jacket',description:'Historical issued description',
@@ -64,10 +65,10 @@ export function completeCanonicalTechPackFixture({operations=true,sketches='veri
     documentSources.sketches=[{
       id:'media-1',brandId:pack.brandId,styleVersionId:'style-v1',colorwayId:'color-1',
       mediaType:'image',mediaRole:'design_sketch',uri:'s3://alias/front.png',sortOrder:0,
-      contentHash:'e'.repeat(64),payload:{viewLabel:'Front / Перед'},
+      contentHash:sketchContentHash,payload:{viewLabel:'Front / Перед'},
       createdAt:'2026-10-13T01:00:00.000Z',createdBy:'designer-1',
-      retainedAsset:sketches === 'verified'?{mediaId:'media-1',contentHash:'e'.repeat(64),
-        storageKey:'sha256/ee/front.png',storageVersion:'v1',mimeType:'image/png',byteSize:12000,
+      retainedAsset:sketches === 'verified'?{mediaId:'media-1',contentHash:sketchContentHash,
+        storageKey:'sha256/'+sketchContentHash.slice(0,2)+'/front.png',storageVersion:'v1',mimeType:sketchMimeType,byteSize:sketchByteSize,
         retainedAt:'2026-10-13T02:00:00.000Z',retainedBy:'asset-authority'}:null,
       rights:sketches === 'verified'?{id:'rights-'+rightsVersion,mediaId:'media-1',version:rightsVersion,status:'cleared',
         basis:'brand-owned',evidenceRef:'contract://1',approvedAt:'2026-10-13T03:00:00.000Z',

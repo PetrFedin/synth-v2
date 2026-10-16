@@ -60,10 +60,27 @@ test('all alias operations forward the exact slash-containing code to the owning
   // Every legacy/slash-addressed operation keeps its routing contract while
   // the transport never serialises internal prices or frozen source payloads.
   const serialized=JSON.stringify(responses);
-  for(const secret of ['COST_LEAK_MARKER','internalCost','internalMargin',
-    'unitCost','bomTotalCost','frozenSources','frozenDocumentContext','s3://SECRET']) {
-    assert.equal(serialized.includes(secret),false,secret);
+  // Search exact JSON field identities. The allowed frozenSourcesHash is a
+  // lineage digest, NOT the forbidden cost-bearing frozenSources payload.
+  const foundKeys=new Set();
+  const visit=(value)=>{
+    if(!value||typeof value!=='object')return;
+    if(Array.isArray(value)){value.forEach(visit);return;}
+    for(const [key,nested] of Object.entries(value)){foundKeys.add(key);visit(nested);}
+  };
+  visit(responses);
+  for(const forbidden of ['frozenSources','frozenDocumentContext','unitCost',
+    'unitCostSnapshot','lineCost','bomTotalCost','internalCost','internalMargin',
+    'secretCost','exchangeRate','materialCost','laborCost','currencyRate',
+    'storageKey','storageVersion','uri']) {
+    assert.equal(foundKeys.has(forbidden),false,forbidden);
   }
+  // Protect literal secret values too, including unexpected field names.
+  assert.equal(serialized.includes('COST_LEAK_MARKER'),false);
+  assert.equal(serialized.includes('s3://SECRET'),false);
+  assert.equal(foundKeys.has('frozenSourcesHash'),true,
+    'immutable lineage hash remains visible without source payload');
+  assert.match(responses[4].dependencySnapshot.canonical.frozenSourcesHash,/^[a-f0-9]{64}$/);
   assert.equal(responses[0].sku,canonical.sku);
   assert.equal(responses[1].materials[0].quantity,2);
   assert.equal(responses[3].operationCode,'CUT');

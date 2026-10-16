@@ -100,7 +100,7 @@ test('the printed tech pack finally renders the sketches its own table of conten
 
 test('canonical Tech Pack browser document uses rights-gated endpoint and never falls back to legacy rendering', async () => {
   const workspace=await source('public/modules/tech-packs.js');
-  assert.match(workspace,/value\?\.issueFormat === 'canonical-v1'/);
+  assert.match(workspace,/value\.issueFormat === 'canonical-v1'/);
   assert.match(workspace,/canonical \? '\/canonical-document' : '\/document'/);
   assert.match(workspace,/const requestEpoch = documentEpoch/);
   assert.match(workspace,/admittedSession !== \\(state\\.token \\?\\? null\\)/);

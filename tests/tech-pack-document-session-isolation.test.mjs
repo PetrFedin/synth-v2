@@ -8,8 +8,9 @@ const capabilitiesSource = await readFile(new URL('../public/modules/ui-capabili
 const pack = (code, brandId='brand-1') => ({ techPackCode:code, sku:'SKU-'+code, title:code, brandId,
   issueFormat:'canonical-v1', revision:1, status:'issued', version:2 });
 const evidence = (code,hash) => ({
-  admission:{admitted:true,documentHash:hash,decisions:[]},
-  document:{documentHash:hash,header:{techPackCode:code,sku:'SKU-'+code,revision:1},
+  admission:{admitted:true,documentHash:hash,policyHash:'POLICY-HASH',decisions:[]},
+  technicalView:{sourceDocumentHash:hash,rightsPolicyHash:'POLICY-HASH',
+    header:{techPackCode:code,sku:'SKU-'+code,revision:1},
     product:{},supplier:{},bom:{lines:[]},measurement:{sizes:[],points:[]},
     operations:{rows:[],totalStandardMinutes:0},sketches:{rows:[]},evidenceManifest:{}},
 });
@@ -81,9 +82,9 @@ test('late previous-pack success cannot overwrite a newly selected admitted docu
   press(h.render(),node=>node.tagName==='TR'&&node.textContent.includes('TP-B'));
   press(h.render(),btn('Документ'));
   b.resolve(evidence('TP-B','HASH-B'));await flush();
-  assert.equal(h.ui.document.envelope.document.documentHash,'HASH-B');
+  assert.equal(h.ui.document.envelope.technicalView.sourceDocumentHash,'HASH-B');
   a.resolve(evidence('TP-A','HASH-A'));await flush();
-  assert.equal(h.ui.document.envelope.document.documentHash,'HASH-B');
+  assert.equal(h.ui.document.envelope.technicalView.sourceDocumentHash,'HASH-B');
   assert.doesNotMatch(h.render().textContent,/HASH-A/);
 });
 
@@ -177,13 +178,13 @@ test('a refreshed workspace object with the same exact membership does not disca
   press(h.render(),btn('Документ'));await flush();
   h.state.workspace=JSON.parse(JSON.stringify(h.state.workspace));
   assert.match(h.render().textContent,/STABLE-SCOPE-HASH/);
-  assert.equal(h.ui.document?.envelope?.document?.documentHash,'STABLE-SCOPE-HASH');
+  assert.equal(h.ui.document?.envelope?.technicalView?.sourceDocumentHash,'STABLE-SCOPE-HASH');
 });
 
 test('invalid admission cannot persist canonical document data in browser state',async()=>{
   const h=setup([pack('TP-A')],()=>({
-    document:evidence('TP-A','DATA-ONLY').document,
-    admission:{admitted:false,documentHash:'DATA-ONLY'},
+    technicalView:evidence('TP-A','DATA-ONLY').technicalView,
+    admission:{admitted:false,documentHash:'DATA-ONLY',policyHash:'POLICY-HASH'},
   }));
   press(h.render(),btn('Документ'));await flush();
   assert.equal(h.ui.document,null);

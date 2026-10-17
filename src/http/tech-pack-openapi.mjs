@@ -41,7 +41,7 @@ function schemas() {
         skuVersion: version(), bomId: { type: 'string', minLength: 1, maxLength: 160 },
         bomVersion: version(), measurementChartId: { type: 'string', minLength: 1, maxLength: 160 },
         measurementChartVersion: version(), sampleCode: { type: 'string', pattern: CODE }, sampleVersion: version(),
-        canonical: { type: 'object' }, frozenSources: { type: 'object' }, frozenDocumentContext: { type: 'object' },
+        canonical: { type: 'object' },
       } },
     TechPack: { type: 'object', additionalProperties: false, required: ['id','techPackCode','sku','brandId','skuVersion','revision','sourceTechPackCode','status','version','supplierCode','supplierName','supplierEmail','title','description','constructionNotes','qualityNotes','packingNotes','dependencySnapshot','issuedAt','issuedBy','acknowledgedAt','acknowledgement','withdrawnAt','withdrawalReason','createdAt','updatedAt'], properties: {
       id: { type: 'string', minLength: 1, maxLength: 160 }, techPackCode: { type: 'string', pattern: CODE }, sku: { type: 'string', pattern: SKU }, brandId: { type: 'string', minLength: 1, maxLength: 160 }, skuVersion: version(), revision: { type: 'integer', minimum: 1, maximum: 999 }, sourceTechPackCode: { oneOf: [{ type: 'string', pattern: CODE }, { type: 'null' }] }, status: { type: 'string', enum: STATUSES }, version: version(), issueFormat: { type: 'string', enum: ['canonical-v1'] }, productSkuId: nullable(160), ...editable,
@@ -83,7 +83,8 @@ function schemas() {
         },
       },
     },
-    TechPackDocument: { type: 'object' },
+    TechPackDocument: { type: 'object', description: 'Legacy technical document, commercial costs and media URIs redacted at HTTP boundary.' },
+    TechPackCanonicalTechnicalView: { type: 'object', description: 'Rights-admitted manufacturing view with sourceDocumentHash, projectionHash and no commercial BOM costs or media storage addresses.' },
     TechPackCanonicalRenderAdmission: { type: 'object', additionalProperties: false,
       required: ['schemaVersion','purpose','evaluatedAt','documentHash','admitted','blockers','decisions','policyHash'],
       properties: {
@@ -97,9 +98,9 @@ function schemas() {
         policyHash: { type: 'string', pattern: '^[a-f0-9]{64}$' },
       } },
     TechPackCanonicalDocumentEnvelope: { type: 'object', additionalProperties: false,
-      required: ['document','admission'],
+      required: ['technicalView','admission'],
       properties: {
-        document: { type: 'object' },
+        technicalView: { '$ref': '#/components/schemas/TechPackCanonicalTechnicalView' },
         admission: { '$ref': '#/components/schemas/TechPackCanonicalRenderAdmission' },
       } },
     TechPackOperationInput: { type: 'object', additionalProperties: false,
@@ -135,7 +136,7 @@ function paths() {
     '/tech-packs/by-code/document': { get: byCodeRead('getTechPackDocumentByCode', 'Tech pack document', '#/components/schemas/TechPackDocument') },
     '/tech-packs/by-code/canonical-document': { get: {
       operationId: 'getRenderableCanonicalTechPackDocumentByCode',
-      description: 'Returns an immutable canonical Tech Pack document only when current publication-rights admission succeeds in the same database snapshot. This is not PDF admission.',
+      description: 'Returns a manufacturing-only technical projection of the frozen canonical document after current-rights admission; financial amounts and image storage keys are excluded. This is not PDF admission.',
       security: [{ bearerAuth: [] }], parameters: [codeQuery],
       responses: {
         200: dataResponse('Renderable canonical Tech Pack document', '#/components/schemas/TechPackCanonicalDocumentEnvelope'),
@@ -163,7 +164,7 @@ function paths() {
     '/tech-packs/{techPackCode}': { get: { operationId: 'getTechPack', security: [{ bearerAuth: [] }], parameters: [codeParameter], responses: { 200: dataResponse('Tech pack', '#/components/schemas/TechPack'), 400: errorResponse, 401: errorResponse, 403: errorResponse, 404: errorResponse } }, patch: mutation('updateTechPack', '#/components/schemas/TechPackUpdate', 'Updated tech pack') },
     '/tech-packs/{techPackCode}/canonical-document': { get: {
       operationId: 'getRenderableCanonicalTechPackDocument',
-      description: 'Returns an immutable canonical Tech Pack document only when current publication-rights admission succeeds in the same database snapshot. This is not PDF admission.',
+      description: 'Returns a manufacturing-only technical projection of the frozen canonical document after current-rights admission; financial amounts and image storage keys are excluded. This is not PDF admission.',
       security: [{ bearerAuth: [] }], parameters: [codeParameter],
       responses: {
         200: dataResponse('Renderable canonical Tech Pack document', '#/components/schemas/TechPackCanonicalDocumentEnvelope'),

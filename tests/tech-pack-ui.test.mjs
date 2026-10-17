@@ -108,7 +108,7 @@ test('canonical Tech Pack browser document uses rights-gated endpoint and never 
   assert.match(workspace,/kind: 'canonical'/);
   assert.match(workspace,/function renderCanonicalDocument\(envelope\)/);
   assert.match(workspace,/admission\?\.admitted !== true/);
-  assert.match(workspace,/admission\.documentHash !== doc\.documentHash/);
+  assert.match(workspace,/admission\.documentHash !== doc\.sourceDocumentHash/);
   assert.match(workspace,/CURRENT_RIGHTS|currentRightsVersion|currentStatus/);
   const start=workspace.indexOf('function renderCanonicalDocument(envelope)');
   const end=workspace.indexOf('function renderDocument(doc)',start);
@@ -116,7 +116,7 @@ test('canonical Tech Pack browser document uses rights-gated endpoint and never 
   assert.doesNotMatch(canonicalRenderer,/window\.print\(/);
   assert.match(canonicalRenderer,/Печать пока заблокирована/);
   assert.match(canonicalRenderer,/Print still gated/);
-  assert.match(canonicalRenderer,/documentHash/);
+  assert.match(canonicalRenderer,/sourceDocumentHash/);
   assert.match(workspace,/policyHash/);
   assert.match(workspace,/lineageHash/);
 });

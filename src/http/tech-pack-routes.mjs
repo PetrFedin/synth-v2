@@ -1,4 +1,10 @@
 import { invariant } from '../core/errors.mjs';
+import {
+  projectTechPackPublicSummary,
+  projectTechPackPublicOperation,
+  projectLegacyTechPackTechnicalView,
+  projectCanonicalTechPackTechnicalView,
+} from '../application/tech-pack-public-projection.mjs';
 import { assertBodyContract, assertQueryContract, bodyContract } from './request-contract.mjs';
 
 const EDITABLE = ['supplierCode', 'supplierName', 'supplierEmail', 'title', 'description', 'constructionNotes', 'qualityNotes', 'packingNotes'];
@@ -14,7 +20,7 @@ const BY_CODE_FIELDS = ['code'];
 const OPERATION_BODY = bodyContract(['sequence', 'operationCode', 'nameRu', 'nameEn', 'equipment', 'machineClass', 'standardMinutes', 'notes']);
 
 export function createTechPackRoutes({ techPacks } = {}) {
-  const service = techPacks ?? unavailable();
+  const service = protectHttpResponses(techPacks ?? unavailable());
   return Object.freeze([
     read('GET', /^\/v2\/tech-packs$/, QUERY_FIELDS, ({ actorId, query }) => service.pageForActor(actorId, query)),
     // Query aliases preserve codes containing '/' without weakening path decoding.
@@ -70,4 +76,41 @@ function mutateByCode(method, pattern, contract, action) {
 function unavailable() {
   const fail = () => invariant(false, 'TECH_PACK_SERVICE_REQUIRED', 'Tech pack service is required');
   return Object.freeze({ pageForActor: fail, getForActor: fail, getDocumentForActor: fail, getCanonicalRenderableDocumentForActor: fail, canonicalPreflightForActor: fail, addOperation: fail, createTechPack: fail, updateTechPack: fail, issueTechPack: fail, acknowledgeTechPack: fail, createRevision: fail, withdrawTechPack: fail });
+}
+
+/**
+ * The HTTP boundary must never return persisted frozenSources, cost-bearing
+ * canonical/legacy documents or raw command results to TECH_PACK_READ users.
+ * Domain commands/outbox/idempotent replay keep their exact original values.
+ */
+function protectHttpResponses(service) {
+  const summary = name => async (...args) =>
+    projectTechPackPublicSummary(await service[name](...args));
+  return Object.freeze({
+    pageForActor: async (...args) => {
+      const value = await service.pageForActor(...args);
+      invariant(value && Array.isArray(value.items) && (value.nextCursor === null
+        || typeof value.nextCursor === 'string'),
+      'TECH_PACK_PUBLIC_PAGE_INVALID','Tech Pack page has an invalid shape');
+      return Object.freeze({
+        items: Object.freeze(value.items.map(projectTechPackPublicSummary)),
+        nextCursor: value.nextCursor,
+      });
+    },
+    getForActor: summary('getForActor'),
+    getDocumentForActor: async (...args) =>
+      projectLegacyTechPackTechnicalView(await service.getDocumentForActor(...args)),
+    getCanonicalRenderableDocumentForActor: async (...args) =>
+      projectCanonicalTechPackTechnicalView(
+        await service.getCanonicalRenderableDocumentForActor(...args)),
+    canonicalPreflightForActor: (...args) => service.canonicalPreflightForActor(...args),
+    createTechPack: summary('createTechPack'),
+    updateTechPack: summary('updateTechPack'),
+    issueTechPack: summary('issueTechPack'),
+    acknowledgeTechPack: summary('acknowledgeTechPack'),
+    createRevision: summary('createRevision'),
+    withdrawTechPack: summary('withdrawTechPack'),
+    addOperation: async (...args) =>
+      projectTechPackPublicOperation(await service.addOperation(...args)),
+  });
 }

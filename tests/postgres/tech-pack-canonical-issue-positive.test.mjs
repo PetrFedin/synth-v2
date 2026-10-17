@@ -97,7 +97,16 @@ test('canonical Tech Pack issues on real PostgreSQL and retains immutable issued
       return payload.data;
     }
     const commandId=id('issue');
-    const issued=await issueOverHttp(code,pack.version,commandId);
+    const issuedPublic=await issueOverHttp(code,pack.version,commandId);
+    assert.equal(Object.hasOwn(issuedPublic.dependencySnapshot,'frozenSources'),false);
+    assert.equal(Object.hasOwn(issuedPublic.dependencySnapshot,'frozenDocumentContext'),false);
+    const issueRow=await pool.query(
+      'SELECT payload,issue_format FROM tech_packs WHERE tech_pack_code=$1 AND brand_id=$2',
+      [code,brand]);
+    assert.equal(issueRow.rowCount,1);
+    const issued={...issueRow.rows[0].payload,issueFormat:issueRow.rows[0].issue_format};
+    assert.equal(issued.dependencySnapshot.canonical.lineageHash,
+      issuedPublic.dependencySnapshot.canonical.lineageHash);
     assert.equal(issued.status,'issued');
     assert.equal(issued.version,pack.version+1);
     assert.equal(issued.issueFormat,'canonical-v1');
@@ -115,7 +124,7 @@ test('canonical Tech Pack issues on real PostgreSQL and retains immutable issued
     assert.equal(frozen.sample.sampleCode,sources.sampleCode);
     assert.equal(frozen.bom.payload.lines[0].component,'Shell');
     assert.equal(frozen.bom.payload.lines[0].materialName,'Original shell');
-    assert.deepEqual(await issueOverHttp(code,pack.version,commandId),issued,
+    assert.deepEqual(await issueOverHttp(code,pack.version,commandId),issuedPublic,
       'authenticated public HTTP issue replays the canonical durable command');
 
     const originalContext=readFrozenTechPackDocumentContext(issued);
@@ -142,7 +151,10 @@ test('canonical Tech Pack issues on real PostgreSQL and retains immutable issued
     const canonicalHttp=await getCanonicalDocumentOverHttp();
     assert.equal(canonicalHttp.status,200);
     const canonicalHttpData=(await canonicalHttp.json()).data;
-    assert.equal(canonicalHttpData.document.documentHash,originalDocument.documentHash);
+    assert.equal(canonicalHttpData.technicalView.sourceDocumentHash,originalDocument.documentHash);
+    assert.equal(canonicalHttpData.technicalView.rightsPolicyHash,canonicalHttpData.admission.policyHash);
+    assert.equal(Object.hasOwn(canonicalHttpData,'document'),false);
+    assert.equal(Object.hasOwn(canonicalHttpData.technicalView.bom,'totalCost'),false);
     assert.equal(canonicalHttpData.admission.admitted,true);
     await insertRow(pool,'product_media_publication_rights',{
       id:id('rights-revoked'),media_id:sources.mediaId,version:2,status:'revoked',
@@ -203,7 +215,16 @@ test('canonical Tech Pack issues on real PostgreSQL and retains immutable issued
       equipment:'Revised equipment',machineClass:'manual',standardMinutes:4.75,
       notes:'Revised operation instructions',
     });
-    const revised=await issueOverHttp(revision.techPackCode,revision.version,id('issue-r2'));
+    const revisedPublic=await issueOverHttp(revision.techPackCode,revision.version,id('issue-r2'));
+    assert.equal(Object.hasOwn(revisedPublic.dependencySnapshot,'frozenSources'),false);
+    const revisionRow=await pool.query(
+      'SELECT payload,issue_format FROM tech_packs WHERE tech_pack_code=$1 AND brand_id=$2',
+      [revision.techPackCode,brand]);
+    assert.equal(revisionRow.rowCount,1);
+    const revised={...revisionRow.rows[0].payload,
+      issueFormat:revisionRow.rows[0].issue_format};
+    assert.equal(revised.dependencySnapshot.canonical.lineageHash,
+      revisedPublic.dependencySnapshot.canonical.lineageHash);
     const revisedContext=readFrozenTechPackDocumentContext(revised);
     assert.equal(revisedContext.header.revision,2);
     assert.equal(revisedContext.header.title,'Second revision jacket');

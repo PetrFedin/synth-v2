@@ -23,3 +23,27 @@ authorized staging app with disposable test accounts and a verified deployed
 source SHA. Do not capture real supplier finances or client information.
 CI success for the static preview must never imply that the authenticated
 PostgreSQL modules or Production/Quality role checks were exercised.
+
+## 2026-10-18: authenticated Syntha V2 application screenshots and short video
+
+An independent GitHub Actions workflow (.github/workflows/live-plm-screen-evidence.yml)
+provisions ephemeral PostgreSQL 17, bootstraps a disposable brand owner,
+and seeds a fashion season through existing domain services.
+It starts the real Node server from the checked-out Git SHA and logs in over
+the actual /v2/auth/login API before opening the recording browser.
+
+All demo passwords are random per run and masked. The seeding script prints
+private test credentials, so its logs are redirected locally and are NEVER
+included in public uploaded artifacts.
+
+scripts/capture-live-app.mjs records actual RU overview, catalog, showrooms,
+partners and real English toggle if present, plus mobile views, a 20-30s
+MP4 and raw WebM. The manifest records the source commit, timestamps,
+content and media SHA-256, client errors and explicitly non-production provenance.
+
+This is executable CI-staging UI, not the older Netlify PERSONAL LANDING,
+a customer deployment, or an audited production release. Review all
+images for privacy, clipping, loading errors and claimed functionality before
+publication. Capture runs are retained as GitHub Actions artifacts for 90
+days only. Permanent portfolio CDN archiving is a separate open task.
+Weekly schedule only activates after integration into default branch.

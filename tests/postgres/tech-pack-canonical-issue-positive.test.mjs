@@ -183,7 +183,7 @@ test('canonical Tech Pack issues on real PostgreSQL and retains immutable issued
       await runtime.auth.bootstrapUser({
         id:actor,email,password:'OnlyIsolatedRole-'+tag,displayName:'Role '+role,
       });
-      await runtime.platform.grantMembership(id('grant-'+role),'system',
+      await runtime.platform.grantMembership(id('grant-'+role),owner,
         createMembership({id:id('member-'+role),organisationId:brand,
           organisationType:'brand',userId:actor,role,
           createdAt:'2026-10-13T00:00:00.000Z'}));

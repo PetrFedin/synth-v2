@@ -1,0 +1,40 @@
+name: Syntha Live Preview Media Evidence
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '25 8 * * 1'
+  pull_request:
+    paths:
+      - '.github/workflows/live-preview-media-evidence.yml'
+      - 'scripts/capture-live-preview.mjs'
+      - 'docs/media-evidence/**'
+permissions:
+  contents: read
+jobs:
+  capture-public-preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      SYNTHA_CAPTURE_URL: https://syntha-v2-preview-petr.netlify.app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned browser capture dependency
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.56.1
+          npx playwright install --with-deps chromium
+          command -v ffmpeg
+          command -v ffprobe
+      - name: Capture real RU and EN desktop and mobile with short recording
+        run: node scripts/capture-live-preview.mjs
+      - name: Save screenshots, video, SHA256 manifest for portfolio review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntha-preview-media
+          path: artifacts/live-media/**
+          if-no-files-found: warn
+          retention-days: 90

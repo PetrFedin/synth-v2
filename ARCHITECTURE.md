@@ -2574,3 +2574,8 @@ Supporting review: `docs/reviews/2026-10-18-tech-pack-quality.md` records the bo
 ### 2026-10-18 — Role-fixture provisioning authority correction
 
 Exact-head PostgreSQL CI for `3456aa2` executed the previously unparseable test and refused role setup with `ACTIVE_MEMBERSHIP_REQUIRED`: a populated brand's additional memberships were incorrectly granted by `system`. The existing first Owner must grant these same-brand memberships through the canonical platform service; only the initial organisation/owner bootstrap uses the existing system provisioning path. Correct the test actor to `owner`. Do not bypass the service with SQL, expand system privileges or change application RBAC. The test's HTTP role/non-disclosure and revoked-rights assertions remain unchanged. Prior head's Verify, Product Commercialization and MDM checks passed, but its PostgreSQL gate failed and is not release evidence.
+
+
+## 2026-10-18 — Public live-preview visual evidence capture (draft, not PLM acceptance)
+
+New side-effect-free public-site browser capture script and scoped GitHub Actions job film the actual deployed Netlify Syntha preview in RU/EN desktop and mobile. Captures produce 6 PNGs, a 20–30 second WebM/MP4 and a SHA-256/URL/timestamp manifest, archived as per-run CI artifacts (90-day retention). The script fails closed on unavailable/blank pages, no frontend mocking or authentication. The preview Netlify deploy is from 2026-10-09 with no published source SHA, so captures cannot be presented as current PR #304 or authenticated PostgreSQL workflow proof. Weekly capture begins only after merging workflow into default branch; permanent portfolio CDN retention and staged live PLM captures are still OPEN.

@@ -41,7 +41,7 @@ async function recordShot(page,name,label){
     width:document.documentElement.scrollWidth,viewport:innerWidth,
     section:document.querySelector('.breadcrumb')?.textContent,
     nav:document.querySelectorAll('.nav-item').length,
-    visibleText:document.querySelector('main.main')?.innerText?.trim()??'',
+    visibleText:(document.querySelector('main.main')?.textContent ?? '').trim(),
   }));
   evidence.push({name,label,title:facts.title,language:facts.language,
     activeSection:facts.section,navCount:facts.nav,

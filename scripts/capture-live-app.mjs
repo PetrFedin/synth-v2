@@ -21,7 +21,7 @@ const auth=await fetch(url+'/v2/auth/login',{
 if(!auth.ok)throw new Error('Isolated demo login failed HTTP '+auth.status);
 const token=(await auth.json())?.data?.accessToken;
 if(!token)throw new Error('Authenticated demo session not established');
-const fileNames=[],evidence=[],pageErrors=[];
+const fileNames=[],evidence=[],pageErrors=[],layoutChecks=[];
 const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
 async function pageReady(page){
   const response=await page.goto(url,{waitUntil:'domcontentloaded',timeout:20000});
@@ -50,6 +50,37 @@ async function recordShot(page,name,label){
     overflowPixels:Math.max(0,facts.width-facts.viewport)});
   fileNames.push(name);
 }
+async function checkOverviewLayout(page,viewportKind){
+  const layout=await page.evaluate(() => {
+    const intersects=(a,b)=>Math.min(a.right,b.right)-Math.max(a.left,b.left)>1
+      && Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)>1;
+    const metrics=Array.from(document.querySelectorAll('.syntha-hub-metric')).map(node=>{
+      const label=node.querySelector('.syntha-hub-metric-label');
+      const value=node.querySelector('.syntha-hub-metric-value');
+      const labelRect=label?.getBoundingClientRect();
+      const valueRect=value?.getBoundingClientRect();
+      return {
+        labelText:label?.textContent?.trim()||'',
+        valueText:value?.textContent?.trim()||'',
+        textOverlaps:Boolean(labelRect&&valueRect&&intersects(labelRect,valueRect)),
+      };
+    });
+    const actions=document.querySelector('.topbar-actions');
+    const container=actions?.getBoundingClientRect();
+    const clipped=container?Array.from(actions.children).filter(child=>{
+      const rect=child.getBoundingClientRect();
+      return getComputedStyle(child).display!=='none' && rect.width>0
+        && (rect.left<container.left-2 || rect.right>container.right+2);
+    }).length:0;
+    return {metricCount:metrics.length,metrics,
+      clippedTopbarActionCount:clipped,topbarWidth:container?.width??null};
+  });
+  layoutChecks.push({viewportKind,...layout});
+  if(layout.metricCount!==3||layout.metrics.some(m=>!m.labelText||!m.valueText||m.textOverlaps))
+    throw new Error('Visible KPI label/value collision or empty overview summary: '+JSON.stringify(layout));
+  if(viewportKind==='mobile'&&layout.clippedTopbarActionCount>0)
+    throw new Error('Mobile topbar still clips visible actions: '+JSON.stringify(layout));
+}
 async function go(page,label,pause=1550){
   const nav=page.locator('aside.sidebar nav button.nav-item');
   const labels=(await nav.allTextContents()).map(value=>value.trim());
@@ -71,6 +102,7 @@ try{
   page.on('pageerror',error=>pageErrors.push(error.message));
   const start=Date.now();
   await pageReady(page);
+  await checkOverviewLayout(page,'desktop');
   await recordShot(page,'01-app-overview-ru.png','Authenticated overview');
   await go(page,'Планирование');
   await recordShot(page,'02-app-planning-ru.png','Real Planning module');
@@ -103,6 +135,7 @@ try{
   const mp=await mobile.newPage();
   mp.on('pageerror',error=>pageErrors.push(error.message));
   await pageReady(mp);
+  await checkOverviewLayout(mp,'mobile');
   await recordShot(mp,'08-app-overview-mobile.png','Real mobile overview');
   await go(mp,'Технические пакеты',900);
   await recordShot(mp,'09-app-tech-packs-mobile.png','Real mobile Tech Packs');
@@ -139,7 +172,8 @@ const manifest={
   url,sourceGitSha:commitSha,dbEnvironment:'ephemeral GitHub Actions CI database',
   actualProduction:false,testOnly:true,
   demoActorsOnly:true,credentialsCaptured:false,
-  durationSeconds:duration,screens:evidence,consoleErrors:pageErrors,files:hashes,
+  durationSeconds:duration,screens:evidence,layoutChecks,
+  consoleErrors:pageErrors,files:hashes,
 };
 await writeFile(join(folder,'manifest.json'),JSON.stringify(manifest,null,2)+'\n');
 console.log(JSON.stringify({status:'CAPTURED',folder,duration,

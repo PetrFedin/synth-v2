@@ -2579,3 +2579,23 @@ Exact-head PostgreSQL CI for `3456aa2` executed the previously unparseable test 
 ## 2026-10-18 — Public live-preview visual evidence capture (draft, not PLM acceptance)
 
 New side-effect-free public-site browser capture script and scoped GitHub Actions job film the actual deployed Netlify Syntha preview in RU/EN desktop and mobile. Captures produce 6 PNGs, a 20–30 second WebM/MP4 and a SHA-256/URL/timestamp manifest, archived as per-run CI artifacts (90-day retention). The script fails closed on unavailable/blank pages, no frontend mocking or authentication. The preview Netlify deploy is from 2026-10-09 with no published source SHA, so captures cannot be presented as current PR #304 or authenticated PostgreSQL workflow proof. Weekly capture begins only after merging workflow into default branch; permanent portfolio CDN retention and staged live PLM captures are still OPEN.
+
+## 2026-10-18 — Authenticated Syntha PLM real UI media evidence (candidate)
+
+CI-only staging capture sets up disposable PostgreSQL 17, bootstraps the brand
+owner via existing canonical service and runs the real idempotent fashion demo
+seed. The seed is executed with private stdout to avoid public credentials.
+Per-run random/masked account passwords and an isolated test database are used.
+Only after a successful real HTTP login does Chromium record the actual UI.
+The script clicks sidebar sections, documents RU and EN where available,
+collects mobile screenshots and a short MP4/WebM with exact SHA-256 and
+source Git SHA provenance. It does not access real clients, suppliers, or live
+production resources.
+
+Crucial source distinction: the existing Netlify preview published October 9
+is a PERSONAL PORTFOLIO LANDING, not the Syntha PLM application. The CI app
+captures represent actual executable UI against an ephemeral seeded test
+database and are NOT evidence of production readiness or current external
+deployment. Visual/device and access/privacy review, permanent CDN retention,
+and protected main-branch integration remain independent unfinished gates.
+Weekly CI schedule is inactive until merged to the default branch.

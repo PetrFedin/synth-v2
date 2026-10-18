@@ -1,0 +1,110 @@
+name: Syntha Isolated PLM Live Screens and Demo Video
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '25 9 * * 1'
+  pull_request:
+    paths:
+      - 'scripts/capture-live-app.mjs'
+      - '.github/workflows/live-plm-screen-evidence.yml'
+      - 'docs/media-evidence/**'
+permissions:
+  contents: read
+jobs:
+  capture-authenticated-plm:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CI: true
+      HOST: 127.0.0.1
+      PORT: '4100'
+      SYNTHA_V2_DATABASE_URL: postgresql://syntha:syntha_test@127.0.0.1:5432/syntha_v2_test
+      POSTGRES_TEST_URL: postgresql://syntha:syntha_test@127.0.0.1:5432/syntha_v2_test
+      SYNTHA_BOOTSTRAP_EMAIL: owner@syntha.local
+      SYNTHA_BOOTSTRAP_NAME: Syntha Demonstration Owner
+      SYNTHA_BOOTSTRAP_ORGANISATION: Syntha Film Studio Brand
+      SYNTHA_BOOTSTRAP_ORGANISATION_TYPE: brand
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: syntha
+          POSTGRES_PASSWORD: syntha_test
+          POSTGRES_DB: syntha_v2_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U syntha -d syntha_v2_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Generate masked per-run demo passwords
+        shell: bash
+        run: |
+          set -euo pipefail
+          owner_password="$(openssl rand -hex 24)"
+          echo "::add-mask::$owner_password"
+          printf 'SYNTHA_BOOTSTRAP_PASSWORD=%s\n' "$owner_password" >> "$GITHUB_ENV"
+          printf 'SYNTHA_DEMO_OWNER_PASSWORD=%s\n' "$owner_password" >> "$GITHUB_ENV"
+          for name in QUALITY INSPECTOR FINANCE VIEWER BUYER SUPPLIER; do
+            password="$(openssl rand -hex 24)"
+            echo "::add-mask::$password"
+            printf 'SYNTHA_DEMO_%s_PASSWORD=%s\n' "$name" "$password" >> "$GITHUB_ENV"
+          done
+      - name: Install app, Chromium and MP4 encoder
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.56.1
+          npx playwright install --with-deps chromium
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+      - name: Bootstrap isolated owner with domain service
+        run: |
+          npm run bootstrap:owner > bootstrap-private.log 2>&1 || {
+            echo "Isolated bootstrap failed; no credentials displayed"
+            exit 1
+          }
+      - name: Seed actual garment season with application services
+        timeout-minutes: 12
+        run: |
+          npm run seed:demo > seed-demo-private.log 2>&1 || {
+            echo "Demo seed failed; private credential log intentionally not uploaded"
+            exit 1
+          }
+      - name: Start the real PostgreSQL-backed Syntha runtime
+        run: |
+          node scripts/start.mjs > app-server.log 2>&1 &
+          echo $! > app-server.pid
+          for attempt in $(seq 1 75); do
+            if curl --silent --fail --max-time 2 http://127.0.0.1:4100/ready > /dev/null; then
+              echo "Isolated Syntha runtime ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Isolated runtime did not become ready"
+          tail -n 70 app-server.log
+          exit 1
+      - name: Record authenticated live app UI without filming login
+        run: node scripts/capture-live-app.mjs
+      - name: Preserve MP4, screen PNG, provenance and server diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntha-live-app-media
+          path: |
+            artifacts/app-ui-media/**
+            app-server.log
+          if-no-files-found: warn
+          retention-days: 90
+      - name: Stop isolated app
+        if: always()
+        run: |
+          if test -s app-server.pid; then kill $(cat app-server.pid) || true; fi

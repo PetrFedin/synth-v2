@@ -51,13 +51,15 @@ async function recordShot(page,name,label){
   fileNames.push(name);
 }
 async function go(page,label,pause=1550){
-  const nav=page.locator('aside.sidebar nav button.nav-item').filter({hasText:label});
-  if(await nav.count()!==1 || await nav.first().getAttribute('title')!==label)
-    throw new Error('Exact menu item is unavailable or ambiguous: '+label);
-  await nav.first().click();
+  const nav=page.locator('aside.sidebar nav button.nav-item');
+  const labels=(await nav.allTextContents()).map(value=>value.trim());
+  const index=labels.findIndex(value=>value===label);
+  if(index<0)throw new Error('Exact menu item not found: '+label+
+    '; visible navigation labels: '+labels.join(' | '));
+  await nav.nth(index).click();
   await page.waitForTimeout(pause);
-  const active=await page.locator('aside.sidebar nav button.nav-item.active').getAttribute('title');
-  if(active!==label)throw new Error('Menu navigation did not activate: '+label+'; actual '+active);
+  const active=(await page.locator('aside.sidebar nav button.nav-item.active').textContent())?.trim();
+  if(active!==label)throw new Error('Navigation mismatch: expected '+label+' got '+active);
 }
 try{
   const context=await browser.newContext({

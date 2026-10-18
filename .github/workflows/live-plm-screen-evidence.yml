@@ -71,6 +71,12 @@ jobs:
             echo "Isolated bootstrap failed; no credentials displayed"
             exit 1
           }
+      - name: Bootstrap governed fashion MDM references
+        run: |
+          npm run bootstrap:mdm-reference > mdm-reference-private.log 2>&1 || {
+            echo "Governed MDM reference bootstrap failed"
+            exit 1
+          }
       - name: Seed actual garment season with application services
         timeout-minutes: 12
         run: |

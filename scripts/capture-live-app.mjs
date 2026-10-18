@@ -50,11 +50,14 @@ async function recordShot(page,name,label){
     overflowPixels:Math.max(0,facts.width-facts.viewport)});
   fileNames.push(name);
 }
-async function go(page,index,pause=2500){
-  const nav=page.locator('aside.sidebar nav .nav-item');
-  if((await nav.count())<=index)throw new Error('Navigation entry absent: '+index);
-  await nav.nth(index).click();
+async function go(page,label,pause=1550){
+  const nav=page.locator('aside.sidebar nav button.nav-item').filter({hasText:label});
+  if(await nav.count()!==1 || await nav.first().getAttribute('title')!==label)
+    throw new Error('Exact menu item is unavailable or ambiguous: '+label);
+  await nav.first().click();
   await page.waitForTimeout(pause);
+  const active=await page.locator('aside.sidebar nav button.nav-item.active').getAttribute('title');
+  if(active!==label)throw new Error('Menu navigation did not activate: '+label+'; actual '+active);
 }
 try{
   const context=await browser.newContext({
@@ -67,20 +70,24 @@ try{
   const start=Date.now();
   await pageReady(page);
   await recordShot(page,'01-app-overview-ru.png','Authenticated overview');
-  await page.waitForTimeout(1700);
-  await go(page,1,2500);
-  await recordShot(page,'02-app-catalog-ru.png','Real catalog module');
-  await go(page,2,2300);
-  await recordShot(page,'03-app-showrooms-ru.png','Real showrooms module');
-  await go(page,3,2300);
-  await recordShot(page,'04-app-partners-ru.png','Real partners module');
-  await go(page,0,2300);
-  await recordShot(page,'05-app-overview-return.png','Back to workspace');
-  // Click the real language control, if it exists; no programmatic translation.
-  const lang=page.getByRole('button',{name:/^EN$/}).first();
-  if(await lang.count()){await lang.click();await page.waitForTimeout(1800);
-    await recordShot(page,'06-app-overview-en.png','Real EN language switch');}
-  await go(page,1,2200);
+  await go(page,'Планирование');
+  await recordShot(page,'02-app-planning-ru.png','Real Planning module');
+  await go(page,'Коллекции');
+  await recordShot(page,'03-app-collections-ru.png','Real Collections module');
+  await go(page,'Спецификации и себестоимость');
+  await recordShot(page,'04-app-bom-ru.png','Real BOM and costing module');
+  await go(page,'Таблицы измерений');
+  await recordShot(page,'05-app-measurements-ru.png','Real Measurement Chart module');
+  await go(page,'Технические пакеты');
+  await recordShot(page,'06-app-tech-packs-ru.png','Real Tech Packs module');
+  await go(page,'Рабочий стол',1600);
+  const lang=page.locator('.language-switcher button.language-option').filter({hasText:'EN'});
+  if(await lang.count()!==1)throw new Error('English language button missing from actual UI');
+  await lang.click();
+  await page.waitForTimeout(1200);
+  if(await page.locator('html').getAttribute('lang')!=='en')
+    throw new Error('RU/EN language switch did not update the actual application');
+  await recordShot(page,'07-app-overview-en.png','Real English workspace after language toggle');
   const elapsed=Date.now()-start;
   if(elapsed<26000)await page.waitForTimeout(26000-elapsed);
   await context.close();
@@ -94,9 +101,16 @@ try{
   const mp=await mobile.newPage();
   mp.on('pageerror',error=>pageErrors.push(error.message));
   await pageReady(mp);
-  await recordShot(mp,'07-app-overview-mobile.png','Real mobile overview');
-  await go(mp,1,650);
-  await recordShot(mp,'08-app-catalog-mobile.png','Real mobile catalog');
+  await recordShot(mp,'08-app-overview-mobile.png','Real mobile overview');
+  await go(mp,'Технические пакеты',900);
+  await recordShot(mp,'09-app-tech-packs-mobile.png','Real mobile Tech Packs');
+  const mobileEnglish=mp.locator('.language-switcher button.language-option').filter({hasText:'EN'});
+  if(await mobileEnglish.count()!==1)throw new Error('Mobile English language button missing');
+  await mobileEnglish.click();
+  await mp.waitForTimeout(450);
+  if(await mp.locator('html').getAttribute('lang')!=='en')
+    throw new Error('Mobile English switching failed');
+  await recordShot(mp,'10-app-tech-packs-mobile-en.png','Real mobile Tech Packs in English');
   await mobile.close();
 }finally{await browser.close();}
 execFileSync('ffmpeg',[
@@ -108,7 +122,7 @@ const duration=Number(execFileSync('ffprobe',[
   '-v','error','-show_entries','format=duration',
   '-of','default=noprint_wrappers=1:nokey=1',join(folder,'syntha-plm-live-26sec.mp4')
 ],{encoding:'utf8'}).trim());
-if(!Number.isFinite(duration)||duration<20||duration>34)
+if(!Number.isFinite(duration)||duration<20||duration>32)
   throw new Error('Authentic app clip duration exceeds acceptance window '+duration);
 fileNames.push('syntha-plm-live-26sec.mp4');
 const hashes=[];

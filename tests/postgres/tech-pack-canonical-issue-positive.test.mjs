@@ -217,7 +217,17 @@ test('canonical Tech Pack issues on real PostgreSQL and retains immutable issued
         assert.equal(body.technicalView.sourceDocumentHash,
           originalDocument.documentHash,role+' immutable source');
         assert.equal(body.admission.admitted,true);
-        assert.equal(body.technicalView.measurement.points[0].cells.length,2);
+        assert.deepEqual(
+          body.technicalView.measurement.points.map(point => ({
+            pointCode: point.pointCode,
+            values: point.cells.map(cell => [cell.sizeValueId,cell.value]),
+          })),
+          originalDocument.measurement.points.map(point => ({
+            pointCode: point.pointCode,
+            values: point.cells.map(cell => [cell.sizeValueId,cell.value]),
+          })),
+          role+' must receive the exact issued size/value matrix without fabricated size counts'
+        );
         assertManufacturingOnly(body);
       }
     }

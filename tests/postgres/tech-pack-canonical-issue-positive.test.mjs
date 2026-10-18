@@ -156,6 +156,114 @@ test('canonical Tech Pack issues on real PostgreSQL and retains immutable issued
     assert.equal(Object.hasOwn(canonicalHttpData,'document'),false);
     assert.equal(Object.hasOwn(canonicalHttpData.technicalView.bom,'totalCost'),false);
     assert.equal(canonicalHttpData.admission.admitted,true);
+    // Real HTTP + PostgreSQL role matrix. Both allowed and denied actors are
+    // authenticated, and no role receives internal cost or frozen SQL payloads.
+    const forbiddenKeys=new Set([
+      'frozenSources','frozenDocumentContext','unitCostSnapshot','lineCost',
+      'totalCost','materialCost','laborCost','overheadCost','logisticsCost',
+      'otherCost','exchangeRate','storageKey','storageVersion','retainedAsset',
+    ]);
+    function assertManufacturingOnly(value) {
+      const visit=item=>{
+        if(Array.isArray(item))return item.forEach(visit);
+        if(item && typeof item==='object')for(const [key,nested] of Object.entries(item)){
+          assert.equal(forbiddenKeys.has(key),false,'Forbidden cost/storage field: '+key);
+          visit(nested);
+        }
+      };
+      visit(value);
+    }
+    const roleReaders=[];
+    const personas=[
+      ['admin',true],['sales',true],['production',true],['quality',true],['finance',true],['viewer',false],
+    ];
+    for(const [role,mayRead] of personas){
+      const actor=id('persona-'+role);
+      const email='tp-role-'+role+'-'+tag.toLowerCase()+'@acceptance.invalid';
+      await runtime.auth.bootstrapUser({
+        id:actor,email,password:'OnlyIsolatedRole-'+tag,displayName:'Role '+role,
+      });
+      await runtime.platform.grantMembership(id('grant-'+role),owner,
+        createMembership({id:id('member-'+role),organisationId:brand,
+          organisationType:'brand',userId:actor,role,
+          createdAt:'2026-10-13T00:00:00.000Z'}));
+      const token=(await runtime.auth.login({
+        email,password:'OnlyIsolatedRole-'+tag,clientAddress:'127.0.0.1',
+      })).accessToken;
+      const read=async suffix=>runtime.fetchHandler(new Request(
+        'http://127.0.0.1'+suffix,{
+          headers:{authorization:'Bearer '+token},
+        }));
+      roleReaders.push({role,mayRead,read});
+      const detail=await read('/v2/tech-packs/by-code?code='+encodeURIComponent(code));
+      assert.equal(detail.status,mayRead?200:404,role+' detail access');
+      const list=await read('/v2/tech-packs?brandId='+encodeURIComponent(brand));
+      assert.equal(list.status,200,role+' list access');
+      const listData=(await list.json()).data;
+      assert.equal(listData.items.some(item=>item.techPackCode===code),mayRead,
+        role+' must see exactly its allowed brand document');
+      assertManufacturingOnly(listData);
+      if(mayRead){
+        const detailData=(await detail.json()).data;
+        assert.equal(detailData.dependencySnapshot.canonical.lineageHash,
+          issued.dependencySnapshot.canonical.lineageHash,role+' lineage');
+        assertManufacturingOnly(detailData);
+      }
+      const technical=await read(
+        '/v2/tech-packs/by-code/canonical-document?code='+encodeURIComponent(code));
+      assert.equal(technical.status,mayRead?200:404,role+' canonical document');
+      if(mayRead){
+        const body=(await technical.json()).data;
+        assert.equal(body.technicalView.sourceDocumentHash,
+          originalDocument.documentHash,role+' immutable source');
+        assert.equal(body.admission.admitted,true);
+        assert.deepEqual(
+          body.technicalView.measurement.points.map(point => ({
+            pointCode: point.pointCode,
+            values: point.cells.map(cell => [cell.sizeValueId,cell.value]),
+          })),
+          originalDocument.measurement.points.map(point => ({
+            pointCode: point.pointCode,
+            values: point.cells.map(cell => [cell.sizeValueId,cell.value]),
+          })),
+          role+' must receive the exact issued size/value matrix without fabricated size counts'
+        );
+        assertManufacturingOnly(body);
+      }
+    }
+    const foreignActor=id('persona-other-brand'),roleForeignBrand=id('role-foreign-brand');
+    const foreignEmail='tp-role-foreign-'+tag.toLowerCase()+'@acceptance.invalid';
+    await runtime.auth.bootstrapUser({
+      id:foreignActor,email:foreignEmail,password:'OnlyIsolatedForeignRole-'+tag,
+      displayName:'Other active brand owner',
+    });
+    await runtime.platform.registerOrganisation(id('register-role-foreign'),'system',
+      createOrganisation({id:roleForeignBrand,type:'brand',name:'Unrelated brand'}));
+    await runtime.platform.grantMembership(id('grant-role-foreign'),'system',
+      createMembership({id:id('member-role-foreign'),organisationId:roleForeignBrand,
+        organisationType:'brand',userId:foreignActor,role:'owner',
+        createdAt:'2026-10-13T00:00:00.000Z'}));
+    const foreignToken=(await runtime.auth.login({
+      email:foreignEmail,password:'OnlyIsolatedForeignRole-'+tag,
+      clientAddress:'127.0.0.1',
+    })).accessToken;
+    const foreignUrl='/v2/tech-packs/by-code/canonical-document?code='+encodeURIComponent(code);
+    const foreignResponse=await runtime.fetchHandler(new Request(
+      'http://127.0.0.1'+foreignUrl,{
+        headers:{authorization:'Bearer '+foreignToken},
+      }));
+    assert.equal(foreignResponse.status,404,'other organisation conceals existence');
+    const foreignError=await foreignResponse.json();
+    assertManufacturingOnly(foreignError);
+    assert.equal(JSON.stringify(foreignError).includes(originalDocument.documentHash),false);
+    assert.equal(JSON.stringify(foreignError).includes(sources.mediaId),false);
+    const foreignPage=await runtime.fetchHandler(new Request(
+      'http://127.0.0.1/v2/tech-packs?brandId='+encodeURIComponent(brand),{
+        headers:{authorization:'Bearer '+foreignToken},
+      }));
+    assert.equal(foreignPage.status,200);
+    assert.deepEqual((await foreignPage.json()).data.items,[],
+      'a different brand never receives the issued row');
     await insertRow(pool,'product_media_publication_rights',{
       id:id('rights-revoked'),media_id:sources.mediaId,version:2,status:'revoked',
       basis:'contract-revoked',evidence_ref:'rights://revoked/'+tag,
@@ -174,6 +282,14 @@ test('canonical Tech Pack issues on real PostgreSQL and retains immutable issued
     assert.equal(deniedHttpPayload.error.code,'TECH_PACK_CANONICAL_RENDER_NOT_ADMITTED');
     assert.ok(deniedHttpPayload.error.details.blockers.includes(
       sources.mediaId+':CURRENT_RIGHTS_REVOKED'));
+    for(const {role,mayRead,read} of roleReaders){
+      const response=await read('/v2/tech-packs/by-code/canonical-document?code='+encodeURIComponent(code));
+      assert.equal(response.status,mayRead?422:404,role+' must recheck current rights');
+      const body=await response.json();
+      assert.equal(Object.hasOwn(body,'data'),false,role+' denied response has no document');
+      assertManufacturingOnly(body);
+      if(mayRead)assert.equal(body.error.code,'TECH_PACK_CANONICAL_RENDER_NOT_ADMITTED');
+    }
     assert.equal(await documentFromFreshProcess(connectionString,owner,code),originalDocumentJson,
       'fresh Node process reproduces the complete frozen document before source mutation');
     assert.equal(originalContext.operations.rows[0].id,originalOperation.id);

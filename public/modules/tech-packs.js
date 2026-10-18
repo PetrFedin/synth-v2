@@ -452,6 +452,9 @@
               [text('Контакт', 'Contact'), supplier.email],
               [text('Выпущен', 'Issued'), header.issuedAt ? date(header.issuedAt) : '—'],
               [text('Кем выпущен', 'Issued by'), header.issuedBy],
+              [text('Утверждённый предсерийный образец', 'Approved pre-production sample'),
+                doc.preProductionSample?.sampleCode || '—'],
+              [text('Версия образца', 'Sample version'), doc.preProductionSample?.version ?? '—'],
             ]
           )),
         documentSection('tp-canonical-evidence', 'Доказательства неизменности', 'Immutable evidence',
@@ -488,23 +491,26 @@
             ) }),
           ])),
         documentSection('tp-canonical-measurements', 'Таблица мер', 'Measurement chart',
-          documentTable(
-            [text('Точка', 'Point'), '−', '+', ...sizeHeaders],
+          h('div', {}, [
+            h('p', { className: 'tp-doc-note', text: `${text('Единица измерения', 'Measurement unit')}: ${measurement.unit || '—'}` }),
+            documentTable(
+            [text('Точка', 'Point'), text('Допуск −', 'Tolerance −'), text('Допуск +', 'Tolerance +'), ...sizeHeaders],
             (measurement.points || []).map((point) => [
               canonicalLocale(point.nameRu, point.nameEn) || point.pointCode,
               point.toleranceMinus, point.tolerancePlus,
               ...(point.cells || []).map((cell) => cell.value),
             ])
-          )),
+          )])),
         documentSection('tp-canonical-operations', 'Технологические операции', 'Operations',
           h('div', {}, [
             documentTable(
               [text('№', 'No.'), text('Код', 'Code'), text('Операция', 'Operation'),
-                text('Оборудование', 'Equipment'), text('Мин', 'Minutes')],
+                text('Оборудование', 'Equipment'), text('Мин', 'Minutes'),
+                text('Указания', 'Instructions')],
               operations.map((operation) => [
                 operation.sequence, operation.operationCode,
                 canonicalLocale(operation.nameRu, operation.nameEn),
-                operation.equipment, operation.standardMinutes,
+                operation.equipment, operation.standardMinutes, operation.notes,
               ])
             ),
             h('p', { className: 'tp-doc-total',

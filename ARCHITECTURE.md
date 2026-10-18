@@ -2599,3 +2599,25 @@ database and are NOT evidence of production readiness or current external
 deployment. Visual/device and access/privacy review, permanent CDN retention,
 and protected main-branch integration remain independent unfinished gates.
 Weekly CI schedule is inactive until merged to the default branch.
+
+
+## 2026-10-18 — Evidence-driven Syntha overview/mobile visual repair (candidate)
+
+Physical screenshots of the real isolated PostgreSQL Syntha UI on 1280x720
+and 390x844 show: the three workspace KPI captions collided with their
+values at desktop size, and the narrow mobile header partially concealed
+right-side controls. A role-system CSS override now explicitly owns the
+three-row hero KPI layout, places each label/value/hint in a vertical stack,
+allows labels to wrap, and arranges mobile action controls into wrapping
+rows instead of a visually clipped horizontal strip. At <570px the KPI
+summary becomes an honest two-column / full-width-last adaptive grid.
+
+Acceptance is not a subjective screenshot claim: the actual authenticated
+CI browser capture now measures KPI label/value bounding rectangles and
+checks clipped action counts on mobile, failing its job if collisions
+persist. It also navigates to Planning, Collections, BOM, Measurements
+and Tech Packs by exact active menu text and proves a real RU/EN switch
+rather than relabeling the overview screen. All outputs are staged demo
+data and Git-SHA-attributed, no production changes or customer data.
+The visual repair remains DRAFT until capture CI and manual before/after
+screenshots pass; the earlier captured media are preserved for comparison.

@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 // Screenshot and film only genuinely served public Syntha UI, never mock frames.
-import { chromium } from 'playwright';
+// Playwright is installed only in the media-capture CI job. Keep the
+// production platform's typecheck/dependency graph independent of it.
+import { createRequire } from 'node:module';
+const { chromium } = createRequire(import.meta.url)('playwright');
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { mkdir, stat, readFile, rename, writeFile } from 'node:fs/promises';

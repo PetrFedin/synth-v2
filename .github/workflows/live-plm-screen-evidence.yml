@@ -75,7 +75,18 @@ jobs:
         timeout-minutes: 12
         run: |
           npm run seed:demo > seed-demo-private.log 2>&1 || {
-            echo "Demo seed failed; private credential log intentionally not uploaded"
+            echo "Demo seed failed. Showing only sanitized stack/error lines:"
+            node --input-type=commonjs - <<'NODE'
+          const fs = require('node:fs');
+          let output = fs.readFileSync('seed-demo-private.log','utf8').split(/\r?\n/)
+            .filter(line => /^(?:Error:|\s+at\s+|\s*code:|\s*DETAIL:|\s*Caused by:)/.test(line))
+            .slice(-16).join('\n');
+          for (const [name,value] of Object.entries(process.env)) {
+            if (/PASSWORD|TOKEN|SECRET|KEY/.test(name) && value && value.length > 8)
+              output = output.split(value).join('[REDACTED]');
+          }
+          console.log(output || 'No explicit stack line; see seed-demo source checks');
+          NODE
             exit 1
           }
       - name: Start the real PostgreSQL-backed Syntha runtime

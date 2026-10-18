@@ -24,6 +24,7 @@
     "test": "node --import ./tests/register-pg-test-loader.mjs --test --test-concurrency=1 tests/*.test.mjs",
     "test:postgres": "node --test --test-concurrency=1 tests/postgres/*.test.mjs",
     "validate:architecture": "node scripts/validate-architecture.mjs",
+    "validate:postgres-test-syntax": "node scripts/validate-postgres-test-syntax.mjs",
     "validate:postgres": "node scripts/validate-postgres-contract.mjs",
     "validate:isolation": "node scripts/validate-isolation.mjs",
     "validate:ui": "node scripts/validate-ui.mjs",
@@ -33,7 +34,7 @@
     "validate:mdm": "node scripts/validate-mdm.mjs",
     "validate:kpi-methodology": "node scripts/validate-fashion-kpi.mjs",
     "validate:types": "node scripts/validate-types.mjs",
-    "verify": "npm run validate:isolation && npm run validate:architecture && npm run validate:postgres && npm run validate:ui && npm run validate:design-system && npm run validate:ods-boundaries && npm run validate:i18n && npm run validate:mdm && npm run validate:kpi-methodology && npm run validate:types && npm test",
+    "verify": "npm run validate:postgres-test-syntax && npm run validate:isolation && npm run validate:architecture && npm run validate:postgres && npm run validate:ui && npm run validate:design-system && npm run validate:ods-boundaries && npm run validate:i18n && npm run validate:mdm && npm run validate:kpi-methodology && npm run validate:types && npm test",
     "verify:postgres": "npm run verify && npm run test:postgres && npm run smoke:runtime",
     "bootstrap:engineering-model": "node scripts/run-with-env.mjs scripts/bootstrap-engineering-model.mjs",
     "acceptance:product-engineering": "node scripts/run-with-env.mjs scripts/acceptance-product-engineering.mjs"

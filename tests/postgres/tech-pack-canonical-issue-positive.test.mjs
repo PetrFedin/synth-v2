@@ -173,8 +173,9 @@ test('canonical Tech Pack issues on real PostgreSQL and retains immutable issued
       };
       visit(value);
     }
+    const roleReaders=[];
     const personas=[
-      ['production',true],['quality',true],['finance',true],['viewer',false],
+      ['admin',true],['sales',true],['production',true],['quality',true],['finance',true],['viewer',false],
     ];
     for(const [role,mayRead] of personas){
       const actor=id('persona-'+role);
@@ -193,6 +194,7 @@ test('canonical Tech Pack issues on real PostgreSQL and retains immutable issued
         'http://127.0.0.1'+suffix,{
           headers:{authorization:'Bearer '+token},
         }));
+      roleReaders.push({role,mayRead,read});
       const detail=await read('/v2/tech-packs/by-code?code='+encodeURIComponent(code));
       assert.equal(detail.status,mayRead?200:404,role+' detail access');
       const list=await read('/v2/tech-packs?brandId='+encodeURIComponent(brand));
@@ -241,6 +243,10 @@ test('canonical Tech Pack issues on real PostgreSQL and retains immutable issued
         headers:{authorization:'Bearer '+foreignToken},
       }));
     assert.equal(foreignResponse.status,404,'other organisation conceals existence');
+    const foreignError=await foreignResponse.json();
+    assertManufacturingOnly(foreignError);
+    assert.equal(JSON.stringify(foreignError).includes(originalDocument.documentHash),false);
+    assert.equal(JSON.stringify(foreignError).includes(sources.mediaId),false);
     const foreignPage=await runtime.fetchHandler(new Request(
       'http://127.0.0.1/v2/tech-packs?brandId='+encodeURIComponent(brand),{
         headers:{authorization:'Bearer '+foreignToken},
@@ -266,6 +272,14 @@ test('canonical Tech Pack issues on real PostgreSQL and retains immutable issued
     assert.equal(deniedHttpPayload.error.code,'TECH_PACK_CANONICAL_RENDER_NOT_ADMITTED');
     assert.ok(deniedHttpPayload.error.details.blockers.includes(
       sources.mediaId+':CURRENT_RIGHTS_REVOKED'));
+    for(const {role,mayRead,read} of roleReaders){
+      const response=await read('/v2/tech-packs/by-code/canonical-document?code='+encodeURIComponent(code));
+      assert.equal(response.status,mayRead?422:404,role+' must recheck current rights');
+      const body=await response.json();
+      assert.equal(Object.hasOwn(body,'data'),false,role+' denied response has no document');
+      assertManufacturingOnly(body);
+      if(mayRead)assert.equal(body.error.code,'TECH_PACK_CANONICAL_RENDER_NOT_ADMITTED');
+    }
     assert.equal(await documentFromFreshProcess(connectionString,owner,code),originalDocumentJson,
       'fresh Node process reproduces the complete frozen document before source mutation');
     assert.equal(originalContext.operations.rows[0].id,originalOperation.id);

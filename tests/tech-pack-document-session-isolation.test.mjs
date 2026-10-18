@@ -190,3 +190,25 @@ test('invalid admission cannot persist canonical document data in browser state'
   assert.equal(h.ui.document,null);
   assert.ok(h.errors.some(x=>String(x).includes('TECH_PACK_CANONICAL_RENDER_NOT_ADMITTED')));
 });
+
+for(const locale of ['ru','en'])test(`canonical ${locale} viewer shows issued measurement units, sample and operation instructions`,async()=>{
+  const envelope=evidence('TP-A','TECHNICAL-HASH');
+  envelope.technicalView.measurement={unit:'CM',sizes:[{code:'M'}],points:[{
+    pointCode:'CHEST',nameRu:'Обхват груди',nameEn:'Chest',toleranceMinus:0.25,
+    tolerancePlus:0.5,cells:[{value:112.125}],
+  }]};
+  envelope.technicalView.preProductionSample={sampleCode:'PPS-EXACT-R3',version:3,status:'approved'};
+  envelope.technicalView.operations={totalStandardMinutes:3.25,rows:[{
+    sequence:1,operationCode:'ASSEMBLE',nameRu:'Сборка',nameEn:'Assembly',
+    standardMinutes:3.25,notes:'Use approved stitch 301',
+  }]};
+  const h=setup([pack('TP-A')],()=>envelope,locale);
+  press(h.render(),btn(locale==='ru'?'Документ':'Document'));await flush();
+  const rendered=h.render().textContent;
+  assert.ok(rendered.includes(locale==='ru'?'Единица измерения: CM':'Measurement unit: CM'));
+  assert.ok(rendered.includes(locale==='ru'?'Утверждённый предсерийный образец':'Approved pre-production sample'));
+  assert.ok(rendered.includes(locale==='ru'?'Версия образца':'Sample version'));
+  for(const value of ['PPS-EXACT-R3','112.125','0.25','0.5','Use approved stitch 301'])
+    assert.ok(rendered.includes(value),value);
+  assert.equal(h.requests.length,1,'manufacturing fields use the admitted issued envelope only');
+});

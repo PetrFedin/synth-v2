@@ -219,16 +219,16 @@ test('canonical Tech Pack issues on real PostgreSQL and retains immutable issued
         assertManufacturingOnly(body);
       }
     }
-    const foreignActor=id('persona-other-brand'),foreignBrand=id('role-foreign-brand');
+    const foreignActor=id('persona-other-brand'),roleForeignBrand=id('role-foreign-brand');
     const foreignEmail='tp-role-foreign-'+tag.toLowerCase()+'@acceptance.invalid';
     await runtime.auth.bootstrapUser({
       id:foreignActor,email:foreignEmail,password:'OnlyIsolatedForeignRole-'+tag,
       displayName:'Other active brand owner',
     });
     await runtime.platform.registerOrganisation(id('register-role-foreign'),'system',
-      createOrganisation({id:foreignBrand,type:'brand',name:'Unrelated brand'}));
+      createOrganisation({id:roleForeignBrand,type:'brand',name:'Unrelated brand'}));
     await runtime.platform.grantMembership(id('grant-role-foreign'),'system',
-      createMembership({id:id('member-role-foreign'),organisationId:foreignBrand,
+      createMembership({id:id('member-role-foreign'),organisationId:roleForeignBrand,
         organisationType:'brand',userId:foreignActor,role:'owner',
         createdAt:'2026-10-13T00:00:00.000Z'}));
     const foreignToken=(await runtime.auth.login({

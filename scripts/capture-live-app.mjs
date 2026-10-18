@@ -67,7 +67,7 @@ async function checkOverviewLayout(page,viewportKind){
     });
     const actions=document.querySelector('.topbar-actions');
     const container=actions?.getBoundingClientRect();
-    const clipped=container?Array.from(actions.children).filter(child=>{
+    const clipped=actions&&container?Array.from(actions.children).filter(child=>{
       const rect=child.getBoundingClientRect();
       return getComputedStyle(child).display!=='none' && rect.width>0
         && (rect.left<container.left-2 || rect.right>container.right+2);

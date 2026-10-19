@@ -36,8 +36,8 @@ All demo passwords are random per run and masked. The seeding script prints
 private test credentials, so its logs are redirected locally and are NEVER
 included in public uploaded artifacts.
 
-scripts/capture-live-app.mjs records actual RU overview, catalog, showrooms,
-partners and real English toggle if present, plus mobile views, a 20-30s
+scripts/capture-live-app.mjs records actual RU overview, Planning, Collections, BOM/costing,
+Measurements, Tech Packs and a mandatory real English toggle, plus mobile views, a 20-30s
 MP4 and raw WebM. The manifest records the source commit, timestamps,
 content and media SHA-256, client errors and explicitly non-production provenance.
 
@@ -47,3 +47,21 @@ images for privacy, clipping, loading errors and claimed functionality before
 publication. Capture runs are retained as GitHub Actions artifacts for 90
 days only. Permanent portfolio CDN archiving is a separate open task.
 Weekly schedule only activates after integration into default branch.
+
+## 2026-10-19 verified baseline and stricter acceptance
+
+PR #308 source 185c58607a4c36e76e8cb775caa2751a5fbfd8ef produced an actual
+26.72-second MP4 and 11 PNGs in run 39298650685. Zero browser page errors,
+zero horizontal overflow in the recorded screens; measured hero text and
+mobile header controls do not collide. Canonical document admission was
+BLOCKED (TECH_PACK_CANONICAL_PRINT_NOT_ADMITTED): the matching registry
+screenshot is NOT an issued-document demonstration. Keep public print HOLD.
+
+The capture now rejects page errors, missing/blank or unmeasured/overflowing
+screens, unproven RU/EN, duration outside 20–30 seconds, and contradictory
+document admission/screenshot claims. The manifest acceptance explicitly
+states manufacturingDocumentDemonstrated and productionReady=false.
+A successful visual capture can coexist with a correctly blocked document;
+that limitation must accompany presentation of the clip. Policy tests run
+before filming and in the normal unit suite. Scheduling remains inactive
+until default-branch integration; no recurring task is claimed as active.

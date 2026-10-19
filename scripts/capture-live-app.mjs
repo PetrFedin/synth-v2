@@ -2,6 +2,7 @@
 // Film an actual running Syntha V2 application, backed by an isolated seeded
 // PostgreSQL CI database. Authentication occurs over HTTP BEFORE recording.
 // Never record credentials, tokens, real customer data or simulated DOM frames.
+import { validateLiveAppEvidence } from './live-app-evidence-policy.mjs';
 import { createRequire } from 'node:module';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
@@ -237,7 +238,7 @@ const duration=Number(execFileSync('ffprobe',[
   '-v','error','-show_entries','format=duration',
   '-of','default=noprint_wrappers=1:nokey=1',join(folder,'syntha-plm-live-26sec.mp4')
 ],{encoding:'utf8'}).trim());
-if(!Number.isFinite(duration)||duration<20||duration>32)
+if(!Number.isFinite(duration)||duration<20||duration>30)
   throw new Error('Authentic app clip duration exceeds acceptance window '+duration);
 fileNames.push('syntha-plm-live-26sec.mp4');
 const hashes=[];
@@ -246,7 +247,10 @@ for(const name of fileNames){
   hashes.push({name,bytes:data.length,sha256:sha(data)});
 }
 const commitSha=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
+const acceptance=validateLiveAppEvidence({durationSeconds:duration,screens:evidence,
+  consoleErrors:pageErrors,canonicalDocumentAdmission:documentAdmission});
 const manifest={
+  acceptance,
   status:'isolated-live-plm-application-capture',capturedAt:date,
   source:'real Node.js server + ephemeral PostgreSQL 17 + seed-demo service-issued fixtures',
   url,sourceGitSha:commitSha,dbEnvironment:'ephemeral GitHub Actions CI database',

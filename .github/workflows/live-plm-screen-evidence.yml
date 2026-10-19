@@ -6,6 +6,8 @@ on:
   pull_request:
     paths:
       - 'scripts/capture-live-app.mjs'
+      - 'scripts/live-app-evidence-policy.mjs'
+      - 'tests/live-app-evidence-policy.test.mjs'
       - '.github/workflows/live-plm-screen-evidence.yml'
       - 'docs/media-evidence/**'
 permissions:
@@ -111,6 +113,8 @@ jobs:
           echo "Isolated runtime did not become ready"
           tail -n 70 app-server.log
           exit 1
+      - name: Verify media acceptance policy
+        run: node --test tests/live-app-evidence-policy.test.mjs
       - name: Record authenticated live app UI without filming login
         run: node scripts/capture-live-app.mjs
       - name: Preserve MP4, screen PNG, provenance and server diagnostics

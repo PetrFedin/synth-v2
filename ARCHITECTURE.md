@@ -2645,3 +2645,26 @@ pass manual publication review; mobile hub metric captions were given
 full-width rows to prevent visual truncation at 390px. Automated checks
 alone do not establish production readiness, rights to source images
 or investor acceptance.
+
+
+## 2026-10-19 — Fail-closed live media acceptance and truthful document claims
+
+Governed acceptance change only; no product API, data, permission, lifecycle or UI mutation.
+The PR #308 exact-head capture (185c58607a4c36e76e8cb775caa2751a5fbfd8ef,
+run 39298650685) succeeded with 26.72s, 11 PNGs and no page errors/overflow,
+but canonical printing returned TECH_PACK_CANONICAL_PRINT_NOT_ADMITTED.
+This corrects the preceding full-chain evidence description: an acknowledged
+registry identity is verified, while the issued document was NOT demonstrated.
+Public PDF/print and production remain HOLD. No bypass of admission is permitted.
+
+scripts/live-app-evidence-policy.mjs now rejects recordings outside 20–30s,
+any browser page errors, absent/blank screenshots, unknown/unmeasured/overflowing
+widths, missing real RU/EN screens, unknown admission and mismatched actual
+issued-document screenshot/admission. Up to 1px layout rounding is tolerated.
+The manifest exposes visualCaptureAccepted, manufacturingDocumentDemonstrated,
+productionReady=false and explicit limitations. A blocked canonical document
+may yield useful honest registry media but never a document-readiness claim.
+Dedicated negative tests cover duration boundaries, malformed evidence, private
+error non-disclosure and blocked/admitted contradictions. CI policy execution
+precedes filming; workflow triggers include the policy and tests. No change to
+current auth/tenant isolation, exact source identity, private fixtures or rights.

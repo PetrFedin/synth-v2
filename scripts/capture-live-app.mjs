@@ -143,6 +143,15 @@ try{
       .filter(member=>member.status==='active')
       .map(member=>({role:member.role,organisationId:member.organisationId})),
     actorId:state.user?.userId??state.user?.id??null,
+    userShapeKeys:Object.keys(state.user||{}),
+    packs:(window.SynthaTechPacksWorkspace?.items||[]).map(value=>({
+      brandId:value.brandId,
+      status:value.status,
+      capability:window.SynthaUiCapabilities.hasForOrganisation(
+        state.workspace,value.brandId,window.SynthaUiCapabilities.CAPABILITIES.TECH_PACK_READ
+      ),
+    })),
+    uiSelectedCode:window.SynthaTechPacksWorkspace?.selectedCode??null,
   }));
   if(!techPackProof.loaded||techPackProof.error ||
      !techPackProof.renderedRows.some(row=>verifiedPackCodes.some(code=>row.includes(code))))

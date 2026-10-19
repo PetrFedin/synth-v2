@@ -36,6 +36,7 @@ if(!authenticPacks.length)throw new Error(
 );
 const verifiedPackCodes=authenticPacks.map(pack=>pack.techPackCode);
 const fileNames=[],evidence=[],pageErrors=[],layoutChecks=[];
+let documentAdmission='not-checked';
 const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
 async function pageReady(page){
   const response=await page.goto(url,{waitUntil:'domcontentloaded',timeout:20000});
@@ -168,7 +169,7 @@ try{
     headers:{authorization:'Bearer '+token,accept:'application/json'},
   });
   const responseBody=await documentGet.json().catch(()=>({}));
-  let documentAdmission='admitted';
+  documentAdmission='admitted';
   if(documentGet.status===422 && responseBody.error?.code==='TECH_PACK_CANONICAL_PRINT_NOT_ADMITTED'){
     // Blocked canonical printing is a valid, security-enforcing product state.
     // Never stage a fake "issued document" screenshot or bypass admission.

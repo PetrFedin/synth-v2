@@ -2621,3 +2621,27 @@ rather than relabeling the overview screen. All outputs are staged demo
 data and Git-SHA-attributed, no production changes or customer data.
 The visual repair remains DRAFT until capture CI and manual before/after
 screenshots pass; the earlier captured media are preserved for comparison.
+
+
+## 2026-10-19 — Tech Pack full-chain live evidence and provenance gate (Draft PR #308)
+
+In an isolated, disposable PostgreSQL-17 staging capture, an acknowledged
+manufacturing Tech Pack must be retrievable through the authenticated
+Tech Pack list HTTP route. The exact identity must be present in the
+rendered user-visible Tech Pack registry after its asynchronous UI load
+has completed, and the real document button must open the technical
+document including the issued measurement section. A still-loading empty
+table, different SKU or fabricated front-end payload is not evidence.
+This E2E gate fails closed on an absent/mismatched API or DOM identity
+and preserves the previously obtained short video and screenshots.
+
+The GitHub Actions workflow now checks out the exact pull request HEAD
+rather than its synthetic merge commit, so the image and video manifest
+can be traced to one immutable repository SHA. Demo information is
+restricted to the isolated acceptance organisation; real commercial
+client or supplier data, passwords, API tokens and private logs are
+excluded. Remaining visual work: desktop and mobile screenshots must
+pass manual publication review; mobile hub metric captions were given
+full-width rows to prevent visual truncation at 390px. Automated checks
+alone do not establish production readiness, rights to source images
+or investor acceptance.

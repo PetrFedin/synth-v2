@@ -136,3 +136,10 @@ test('canonical Tech Pack browser evidence is bilingual and exposes issued immut
   assert.match(workspace,/canonicalLocale\(point\.nameRu, point\.nameEn\)/);
   assert.match(workspace,/canonicalLocale\(operation\.nameRu, operation\.nameEn\)/);
 });
+
+test('Tech Pack tenant-authority uses canonical auth/me actorId, not email fallback', async () => {
+  const workspace = await source('public/modules/tech-packs.js');
+  assert.match(workspace, /state\.user\.actorId\s*\?\?\s*state\.user\.userId/);
+  assert.doesNotMatch(workspace, /state\.user\.userId\s*\?\?\s*state\.user\.id\s*\?\?\s*state\.user\.email/);
+  assert.match(workspace, /member\.userId\) === actorId/);
+});

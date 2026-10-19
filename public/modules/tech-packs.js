@@ -27,7 +27,7 @@
     const brandId = value?.brandId;
     if (!brandId || !state.token || !state.user
         || !caps.hasForOrganisation(state.workspace, brandId, caps.CAPABILITIES.TECH_PACK_READ)) return null;
-    const actorId = String(state.user.userId ?? state.user.id ?? state.user.email ?? '');
+    const actorId = String(state.user.actorId ?? state.user.userId ?? state.user.id ?? '');
     const memberships = (Array.isArray(state.workspace?.memberships) ? state.workspace.memberships : [])
       .filter(member => member.organisationId === brandId && member.status === 'active'
         && (!member.userId || !actorId || String(member.userId) === actorId)

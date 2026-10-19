@@ -21,7 +21,22 @@ const auth=await fetch(url+'/v2/auth/login',{
 if(!auth.ok)throw new Error('Isolated demo login failed HTTP '+auth.status);
 const token=(await auth.json())?.data?.accessToken;
 if(!token)throw new Error('Authenticated demo session not established');
+// Independently prove the real application API sees the seeded manufacturing
+// document before filming its browser rendering. No SQL/UI fixture injection.
+const response = await fetch(url+'/v2/tech-packs?limit=200',{
+  headers:{authorization:'Bearer '+token,accept:'application/json'},
+});
+if(!response.ok)throw new Error('Authenticated Tech Pack list failed: HTTP '+response.status);
+const packPage = (await response.json())?.data;
+if(!Array.isArray(packPage?.items))throw new Error('Tech Pack list payload is invalid');
+const authenticPacks = packPage.items
+  .filter(pack=>pack.status==='acknowledged' && pack.dependencySnapshot);
+if(!authenticPacks.length)throw new Error(
+  'SEED_TECH_PACK_UNAVAILABLE_TO_OWNER: application API returned no acknowledged pack with frozen source references; total '+packPage.items.length
+);
+const verifiedPackCodes=authenticPacks.map(pack=>pack.techPackCode);
 const fileNames=[],evidence=[],pageErrors=[],layoutChecks=[];
+let documentAdmission='not-checked';
 const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
 async function pageReady(page){
   const response=await page.goto(url,{waitUntil:'domcontentloaded',timeout:20000});
@@ -112,9 +127,74 @@ try{
   await recordShot(page,'04-app-bom-ru.png','Real BOM and costing module');
   await go(page,'Таблицы измерений');
   await recordShot(page,'05-app-measurements-ru.png','Real Measurement Chart module');
-  await go(page,'Технические пакеты');
-  await recordShot(page,'06-app-tech-packs-ru.png','Real Tech Packs module');
-  await go(page,'Рабочий стол',1600);
+  await go(page,'Технические пакеты',850);
+  await page.waitForFunction(() => {
+    const ui=Reflect.get(window,'SynthaTechPacksWorkspace');
+    return Boolean(ui?.loaded || ui?.error);
+  },undefined,{timeout:15000});
+  const techPackProof=await page.evaluate(()=>({
+    loaded:Boolean(Reflect.get(window,'SynthaTechPacksWorkspace')?.loaded),
+    error:String(Reflect.get(window,'SynthaTechPacksWorkspace')?.error||''),
+    fetchedCount:Reflect.get(window,'SynthaTechPacksWorkspace')?.items?.length??0,
+    itemCodes:Reflect.get(window,'SynthaTechPacksWorkspace')?.items?.map(item=>item.techPackCode)??[],
+    renderedRows:[...document.querySelectorAll('.tech-pack-table tbody tr')]
+      .map(row=>row.textContent||''),
+    // Diagnostic only: do not put session, tokens or private tenant payload in media.
+    packs:(Reflect.get(window,'SynthaTechPacksWorkspace')?.items||[]).map(value=>({
+      brandId:value.brandId,
+      status:value.status,
+    })),
+    uiSelectedCode:Reflect.get(window,'SynthaTechPacksWorkspace')?.selectedCode??null,
+    context:(() => {
+      const context=eval('state');
+      const first=Reflect.get(window,'SynthaTechPacksWorkspace')?.items?.[0];
+      const matching=(context.workspace?.memberships||[])
+        .filter(m=>m.organisationId===first?.brandId)
+        .map(m=>({role:m.role,status:m.status,userId:m.userId,organisationId:m.organisationId}));
+      const caps=Reflect.get(window,'SynthaUiCapabilities');
+      return {userKeys:Object.keys(context.user||{}),
+        actorId:context.user?.id??context.user?.userId??context.user?.email??null,
+        matching,capability:caps.hasForOrganisation(context.workspace,first?.brandId,caps.CAPABILITIES.TECH_PACK_READ),
+        filters:{status:Reflect.get(window,'SynthaTechPacksWorkspace')?.status,
+          readiness:Reflect.get(window,'SynthaTechPacksWorkspace')?.readiness,
+          search:Reflect.get(window,'SynthaTechPacksWorkspace')?.search}};
+    })(),
+  }));
+  if(!techPackProof.loaded||techPackProof.error ||
+     !techPackProof.renderedRows.some(row=>verifiedPackCodes.some(code=>row.includes(code))))
+    throw new Error('TECH_PACK_UI_API_DIVERGENCE '+JSON.stringify(techPackProof));
+  await recordShot(page,'06-app-tech-packs-ru.png','Tech Pack list backed by real seeded API');
+  const selectedDocCode=authenticPacks[0].techPackCode;
+  const documentGet=await fetch(url+'/v2/tech-packs/'+encodeURIComponent(selectedDocCode)+'/document',{
+    headers:{authorization:'Bearer '+token,accept:'application/json'},
+  });
+  const responseBody=await documentGet.json().catch(()=>({}));
+  documentAdmission='admitted';
+  if(documentGet.status===422 && responseBody.error?.code==='TECH_PACK_CANONICAL_PRINT_NOT_ADMITTED'){
+    // Blocked canonical printing is a valid, security-enforcing product state.
+    // Never stage a fake "issued document" screenshot or bypass admission.
+    documentAdmission='blocked: TECH_PACK_CANONICAL_PRINT_NOT_ADMITTED';
+    await recordShot(page,'06b-app-tech-pack-print-admission-blocked-ru.png',
+      'Confirmed Tech Pack registry; canonical printing not yet admitted');
+  } else if(!documentGet.ok){
+    throw new Error('TECH_PACK_ISSUED_DOCUMENT_HTTP_FAILURE status='+documentGet.status+
+      ' code='+String(responseBody.error?.code||'unavailable'));
+  } else {
+    await page.locator('.tech-pack-inspector button').filter({hasText:'Документ'}).first().click();
+    try { await page.locator('.tp-doc').waitFor({timeout:12000}); }
+    catch(error){
+      const screen=await page.locator('.tech-pack-page').innerText().catch(()=>'?');
+      throw new Error('TECH_PACK_DOCUMENT_NOT_DISPLAYED view='+screen.slice(0,1500));
+    }
+    const issuedDocText=(await page.locator('.tp-doc').innerText()).trim();
+    if(!issuedDocText.includes(authenticPacks[0].techPackCode) ||
+       !issuedDocText.includes('Таблица мер'))
+      throw new Error('Frozen issued document is missing expected technical sections');
+    await recordShot(page,'06b-app-tech-pack-issued-document-ru.png',
+      'Actually admitted supplier technical document');
+    await page.locator('.tp-doc-toolbar button').filter({hasText:'Закрыть'}).click();
+  }
+  await go(page,'Рабочий стол',1050);
   const lang=page.locator('.language-switcher button.language-option').filter({hasText:'EN'});
   if(await lang.count()!==1)throw new Error('English language button missing from actual UI');
   await lang.click();
@@ -173,6 +253,8 @@ const manifest={
   actualProduction:false,testOnly:true,
   demoActorsOnly:true,credentialsCaptured:false,
   durationSeconds:duration,screens:evidence,layoutChecks,
+  verifiedManufacturingTechPackCodes:verifiedPackCodes,
+  canonicalDocumentAdmission:documentAdmission,
   consoleErrors:pageErrors,files:hashes,
 };
 await writeFile(join(folder,'manifest.json'),JSON.stringify(manifest,null,2)+'\n');

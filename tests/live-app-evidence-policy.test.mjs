@@ -6,13 +6,13 @@ const screen = (language, name = language + '.png') => ({
 });
 const valid = () => ({
   durationSeconds: 26.72, screens: [screen('ru'), screen('en')],
-  consoleErrors: [], canonicalDocumentAdmission: 'blocked: TECH_PACK_CANONICAL_PRINT_NOT_ADMITTED',
+  consoleErrors: [], canonicalDocumentAdmission: 'blocked: TECH_PACK_CANONICAL_RENDER_NOT_ADMITTED',
 });
 test('blocked print retains visual evidence without claiming a manufacturing document', () => {
   const result = validateLiveAppEvidence(valid());
   assert.equal(result.manufacturingDocumentDemonstrated, false);
   assert.equal(result.productionReady, false);
-  assert.ok(result.limitations.includes('CANONICAL_DOCUMENT_NOT_ADMITTED'));
+  assert.ok(result.limitations.includes('CANONICAL_READ_RIGHTS_BLOCKED'));
   assert.ok(Object.isFrozen(result.limitations));
 });
 test('admitted document requires its actual screenshot', () => {
@@ -54,4 +54,18 @@ test('both real locales and nonempty screen list are required', () => {
 });
 test('unknown document admission never becomes accepted media', () => {
   assert.throws(() => validateLiveAppEvidence({ ...valid(), canonicalDocumentAdmission: 'not-checked' }), /ADMISSION_UNVERIFIED/);
+});
+
+test('historical legacy read may be filmed but never counts as canonical manufacturing proof', () => {
+  const input = valid(); input.canonicalDocumentAdmission = 'legacy-admitted';
+  input.screens.push(screen('ru', '06b-app-tech-pack-legacy-document-ru.png'));
+  const result = validateLiveAppEvidence(input);
+  assert.equal(result.legacyDocumentDemonstrated, true);
+  assert.equal(result.manufacturingDocumentDemonstrated, false);
+  assert.ok(result.limitations.includes('LEGACY_ONLY_NO_CANONICAL_PROOF'));
+});
+test('canonical read-rights denial cannot be represented as an issued-document capture', () => {
+  const input = valid();
+  input.screens.push(screen('ru', '06b-app-tech-pack-issued-document-ru.png'));
+  assert.throws(() => validateLiveAppEvidence(input), /CLAIM_MISMATCH/);
 });

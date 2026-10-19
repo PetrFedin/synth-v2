@@ -128,30 +128,22 @@ try{
   await recordShot(page,'05-app-measurements-ru.png','Real Measurement Chart module');
   await go(page,'Технические пакеты',850);
   await page.waitForFunction(() => {
-    const ui=window.SynthaTechPacksWorkspace;
+    const ui=Reflect.get(window,'SynthaTechPacksWorkspace');
     return Boolean(ui?.loaded || ui?.error);
   },undefined,{timeout:15000});
   const techPackProof=await page.evaluate(()=>({
-    loaded:Boolean(window.SynthaTechPacksWorkspace?.loaded),
-    error:String(window.SynthaTechPacksWorkspace?.error||''),
-    fetchedCount:window.SynthaTechPacksWorkspace?.items?.length??0,
-    itemCodes:window.SynthaTechPacksWorkspace?.items?.map(item=>item.techPackCode)??[],
+    loaded:Boolean(Reflect.get(window,'SynthaTechPacksWorkspace')?.loaded),
+    error:String(Reflect.get(window,'SynthaTechPacksWorkspace')?.error||''),
+    fetchedCount:Reflect.get(window,'SynthaTechPacksWorkspace')?.items?.length??0,
+    itemCodes:Reflect.get(window,'SynthaTechPacksWorkspace')?.items?.map(item=>item.techPackCode)??[],
     renderedRows:[...document.querySelectorAll('.tech-pack-table tbody tr')]
       .map(row=>row.textContent||''),
     // Diagnostic only: do not put session, tokens or private tenant payload in media.
-    activeMemberships:(state.workspace?.memberships||[])
-      .filter(member=>member.status==='active')
-      .map(member=>({role:member.role,organisationId:member.organisationId})),
-    actorId:state.user?.userId??state.user?.id??null,
-    userShapeKeys:Object.keys(state.user||{}),
-    packs:(window.SynthaTechPacksWorkspace?.items||[]).map(value=>({
+    packs:(Reflect.get(window,'SynthaTechPacksWorkspace')?.items||[]).map(value=>({
       brandId:value.brandId,
       status:value.status,
-      capability:window.SynthaUiCapabilities.hasForOrganisation(
-        state.workspace,value.brandId,window.SynthaUiCapabilities.CAPABILITIES.TECH_PACK_READ
-      ),
     })),
-    uiSelectedCode:window.SynthaTechPacksWorkspace?.selectedCode??null,
+    uiSelectedCode:Reflect.get(window,'SynthaTechPacksWorkspace')?.selectedCode??null,
   }));
   if(!techPackProof.loaded||techPackProof.error ||
      !techPackProof.renderedRows.some(row=>verifiedPackCodes.some(code=>row.includes(code))))

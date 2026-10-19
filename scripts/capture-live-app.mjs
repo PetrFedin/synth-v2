@@ -167,23 +167,32 @@ try{
   const documentGet=await fetch(url+'/v2/tech-packs/'+encodeURIComponent(selectedDocCode)+'/document',{
     headers:{authorization:'Bearer '+token,accept:'application/json'},
   });
-  if(!documentGet.ok){
-    const body=await documentGet.json().catch(()=>({}));
+  const responseBody=await documentGet.json().catch(()=>({}));
+  let documentAdmission='admitted';
+  if(documentGet.status===422 && responseBody.error?.code==='TECH_PACK_CANONICAL_PRINT_NOT_ADMITTED'){
+    // Blocked canonical printing is a valid, security-enforcing product state.
+    // Never stage a fake "issued document" screenshot or bypass admission.
+    documentAdmission='blocked: TECH_PACK_CANONICAL_PRINT_NOT_ADMITTED';
+    await recordShot(page,'06b-app-tech-pack-print-admission-blocked-ru.png',
+      'Confirmed Tech Pack registry; canonical printing not yet admitted');
+  } else if(!documentGet.ok){
     throw new Error('TECH_PACK_ISSUED_DOCUMENT_HTTP_FAILURE status='+documentGet.status+
-      ' code='+String(body.error?.code||'unavailable'));
+      ' code='+String(responseBody.error?.code||'unavailable'));
+  } else {
+    await page.locator('.tech-pack-inspector button').filter({hasText:'Документ'}).first().click();
+    try { await page.locator('.tp-doc').waitFor({timeout:12000}); }
+    catch(error){
+      const screen=await page.locator('.tech-pack-page').innerText().catch(()=>'?');
+      throw new Error('TECH_PACK_DOCUMENT_NOT_DISPLAYED view='+screen.slice(0,1500));
+    }
+    const issuedDocText=(await page.locator('.tp-doc').innerText()).trim();
+    if(!issuedDocText.includes(authenticPacks[0].techPackCode) ||
+       !issuedDocText.includes('Таблица мер'))
+      throw new Error('Frozen issued document is missing expected technical sections');
+    await recordShot(page,'06b-app-tech-pack-issued-document-ru.png',
+      'Actually admitted supplier technical document');
+    await page.locator('.tp-doc-toolbar button').filter({hasText:'Закрыть'}).click();
   }
-  await page.locator('.tech-pack-inspector button').filter({hasText:'Документ'}).first().click();
-  try { await page.locator('.tp-doc').waitFor({timeout:12000}); }
-  catch(error){
-    const screen=await page.locator('.tech-pack-page').innerText().catch(()=>'?');
-    throw new Error('TECH_PACK_DOCUMENT_NOT_DISPLAYED view='+screen.slice(0,1500));
-  }
-  const issuedDocText=(await page.locator('.tp-doc').innerText()).trim();
-  if(!issuedDocText.includes(authenticPacks[0].techPackCode) ||
-     !issuedDocText.includes('Таблица мер'))
-    throw new Error('Frozen issued document is missing expected technical sections');
-  await recordShot(page,'06b-app-tech-pack-issued-document-ru.png','Real issued supplier Tech Pack technical document');
-  await page.locator('.tp-doc-toolbar button').filter({hasText:'Закрыть'}).click();
   await go(page,'Рабочий стол',1050);
   const lang=page.locator('.language-switcher button.language-option').filter({hasText:'EN'});
   if(await lang.count()!==1)throw new Error('English language button missing from actual UI');
@@ -244,6 +253,7 @@ const manifest={
   demoActorsOnly:true,credentialsCaptured:false,
   durationSeconds:duration,screens:evidence,layoutChecks,
   verifiedManufacturingTechPackCodes:verifiedPackCodes,
+  canonicalDocumentAdmission:documentAdmission,
   consoleErrors:pageErrors,files:hashes,
 };
 await writeFile(join(folder,'manifest.json'),JSON.stringify(manifest,null,2)+'\n');

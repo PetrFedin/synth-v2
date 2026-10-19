@@ -163,8 +163,21 @@ try{
      !techPackProof.renderedRows.some(row=>verifiedPackCodes.some(code=>row.includes(code))))
     throw new Error('TECH_PACK_UI_API_DIVERGENCE '+JSON.stringify(techPackProof));
   await recordShot(page,'06-app-tech-packs-ru.png','Tech Pack list backed by real seeded API');
+  const selectedDocCode=authenticPacks[0].techPackCode;
+  const documentGet=await fetch(url+'/v2/tech-packs/'+encodeURIComponent(selectedDocCode)+'/document',{
+    headers:{authorization:'Bearer '+token,accept:'application/json'},
+  });
+  if(!documentGet.ok){
+    const body=await documentGet.json().catch(()=>({}));
+    throw new Error('TECH_PACK_ISSUED_DOCUMENT_HTTP_FAILURE status='+documentGet.status+
+      ' code='+String(body.error?.code||'unavailable'));
+  }
   await page.locator('.tech-pack-inspector button').filter({hasText:'Документ'}).first().click();
-  await page.locator('.tp-doc').waitFor({timeout:12000});
+  try { await page.locator('.tp-doc').waitFor({timeout:12000}); }
+  catch(error){
+    const screen=await page.locator('.tech-pack-page').innerText().catch(()=>'?');
+    throw new Error('TECH_PACK_DOCUMENT_NOT_DISPLAYED view='+screen.slice(0,1500));
+  }
   const issuedDocText=(await page.locator('.tp-doc').innerText()).trim();
   if(!issuedDocText.includes(authenticPacks[0].techPackCode) ||
      !issuedDocText.includes('Таблица мер'))

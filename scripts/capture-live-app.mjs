@@ -144,6 +144,20 @@ try{
       status:value.status,
     })),
     uiSelectedCode:Reflect.get(window,'SynthaTechPacksWorkspace')?.selectedCode??null,
+    context:(() => {
+      const context=eval('state');
+      const first=Reflect.get(window,'SynthaTechPacksWorkspace')?.items?.[0];
+      const matching=(context.workspace?.memberships||[])
+        .filter(m=>m.organisationId===first?.brandId)
+        .map(m=>({role:m.role,status:m.status,userId:m.userId,organisationId:m.organisationId}));
+      const caps=Reflect.get(window,'SynthaUiCapabilities');
+      return {userKeys:Object.keys(context.user||{}),
+        actorId:context.user?.id??context.user?.userId??context.user?.email??null,
+        matching,capability:caps.hasForOrganisation(context.workspace,first?.brandId,caps.CAPABILITIES.TECH_PACK_READ),
+        filters:{status:Reflect.get(window,'SynthaTechPacksWorkspace')?.status,
+          readiness:Reflect.get(window,'SynthaTechPacksWorkspace')?.readiness,
+          search:Reflect.get(window,'SynthaTechPacksWorkspace')?.search}};
+    })(),
   }));
   if(!techPackProof.loaded||techPackProof.error ||
      !techPackProof.renderedRows.some(row=>verifiedPackCodes.some(code=>row.includes(code))))

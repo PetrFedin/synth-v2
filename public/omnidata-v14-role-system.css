@@ -1410,3 +1410,27 @@ body.omnidata-v14 .syntha-hub-hero .syntha-hub-metric-hint{
     border:0!important;
   }
 }
+
+/* 2026-10-18 CI capture: on 390px the 2-column last KPI truncated its
+   semantic label even though bounding rectangles were technically disjoint.
+   A narrow phone is a reading surface: show each label fully instead of
+   compressing descriptive content to a 145px-wide cell. */
+@media (max-width:570px) {
+  body.omnidata-v14 .syntha-hub-hero .syntha-hub-metrics {
+    grid-template-columns:minmax(0,1fr)!important;
+    grid-template-rows:repeat(3,minmax(80px,auto))!important;
+    padding:12px 14px!important;
+  }
+  body.omnidata-v14 .syntha-hub-hero .syntha-hub-metric,
+  body.omnidata-v14 .syntha-hub-hero .syntha-hub-metric:first-child,
+  body.omnidata-v14 .syntha-hub-hero .syntha-hub-metric:last-child {
+    grid-column:auto!important;
+    border:0!important;
+    border-bottom:1px solid var(--ods-color-border,#d9dee3)!important;
+    padding:11px 4px!important;
+    white-space:normal!important;
+  }
+  body.omnidata-v14 .syntha-hub-hero .syntha-hub-metric:last-child {
+    border-bottom:0!important;
+  }
+}

@@ -21,6 +21,20 @@ const auth=await fetch(url+'/v2/auth/login',{
 if(!auth.ok)throw new Error('Isolated demo login failed HTTP '+auth.status);
 const token=(await auth.json())?.data?.accessToken;
 if(!token)throw new Error('Authenticated demo session not established');
+// Independently prove the real application API sees the seeded manufacturing
+// document before filming its browser rendering. No SQL/UI fixture injection.
+const response = await fetch(url+'/v2/tech-packs?limit=200',{
+  headers:{authorization:'Bearer '+token,accept:'application/json'},
+});
+if(!response.ok)throw new Error('Authenticated Tech Pack list failed: HTTP '+response.status);
+const packPage = (await response.json())?.data;
+if(!Array.isArray(packPage?.items))throw new Error('Tech Pack list payload is invalid');
+const authenticPacks = packPage.items
+  .filter(pack=>pack.status==='acknowledged' && pack.dependencySnapshot);
+if(!authenticPacks.length)throw new Error(
+  'SEED_TECH_PACK_UNAVAILABLE_TO_OWNER: application API returned no acknowledged pack with frozen source references; total '+packPage.items.length
+);
+const verifiedPackCodes=authenticPacks.map(pack=>pack.techPackCode);
 const fileNames=[],evidence=[],pageErrors=[],layoutChecks=[];
 const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
 async function pageReady(page){
@@ -112,9 +126,37 @@ try{
   await recordShot(page,'04-app-bom-ru.png','Real BOM and costing module');
   await go(page,'Таблицы измерений');
   await recordShot(page,'05-app-measurements-ru.png','Real Measurement Chart module');
-  await go(page,'Технические пакеты');
-  await recordShot(page,'06-app-tech-packs-ru.png','Real Tech Packs module');
-  await go(page,'Рабочий стол',1600);
+  await go(page,'Технические пакеты',850);
+  await page.waitForFunction(() => {
+    const ui=window.SynthaTechPacksWorkspace;
+    return Boolean(ui?.loaded || ui?.error);
+  },undefined,{timeout:15000});
+  const techPackProof=await page.evaluate(()=>({
+    loaded:Boolean(window.SynthaTechPacksWorkspace?.loaded),
+    error:String(window.SynthaTechPacksWorkspace?.error||''),
+    fetchedCount:window.SynthaTechPacksWorkspace?.items?.length??0,
+    itemCodes:window.SynthaTechPacksWorkspace?.items?.map(item=>item.techPackCode)??[],
+    renderedRows:[...document.querySelectorAll('.tech-pack-table tbody tr')]
+      .map(row=>row.textContent||''),
+    // Diagnostic only: do not put session, tokens or private tenant payload in media.
+    activeMemberships:(state.workspace?.memberships||[])
+      .filter(member=>member.status==='active')
+      .map(member=>({role:member.role,organisationId:member.organisationId})),
+    actorId:state.user?.userId??state.user?.id??null,
+  }));
+  if(!techPackProof.loaded||techPackProof.error ||
+     !techPackProof.renderedRows.some(row=>verifiedPackCodes.some(code=>row.includes(code))))
+    throw new Error('TECH_PACK_UI_API_DIVERGENCE '+JSON.stringify(techPackProof));
+  await recordShot(page,'06-app-tech-packs-ru.png','Tech Pack list backed by real seeded API');
+  await page.locator('.tech-pack-inspector button').filter({hasText:'Документ'}).first().click();
+  await page.locator('.tp-doc').waitFor({timeout:12000});
+  const issuedDocText=(await page.locator('.tp-doc').innerText()).trim();
+  if(!issuedDocText.includes(authenticPacks[0].techPackCode) ||
+     !issuedDocText.includes('Таблица мер'))
+    throw new Error('Frozen issued document is missing expected technical sections');
+  await recordShot(page,'06b-app-tech-pack-issued-document-ru.png','Real issued supplier Tech Pack technical document');
+  await page.locator('.tp-doc-toolbar button').filter({hasText:'Закрыть'}).click();
+  await go(page,'Рабочий стол',1050);
   const lang=page.locator('.language-switcher button.language-option').filter({hasText:'EN'});
   if(await lang.count()!==1)throw new Error('English language button missing from actual UI');
   await lang.click();
@@ -173,6 +215,7 @@ const manifest={
   actualProduction:false,testOnly:true,
   demoActorsOnly:true,credentialsCaptured:false,
   durationSeconds:duration,screens:evidence,layoutChecks,
+  verifiedManufacturingTechPackCodes:verifiedPackCodes,
   consoleErrors:pageErrors,files:hashes,
 };
 await writeFile(join(folder,'manifest.json'),JSON.stringify(manifest,null,2)+'\n');

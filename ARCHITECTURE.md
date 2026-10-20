@@ -698,6 +698,19 @@ A confirmed P0 compatibility seam remains in `createShowroomSelectionService`: w
 
 Draft context must never silently change when mutable catalog/master records change. P0.5 acceptance must prove BuyerCatalogVersion → exact Color × Size Selection → submit → WholesaleOrder → bilateral confirmation → OrderCommitSnapshot without any live-catalog reconstruction.
 
+### 7.4.1 Live Selection trade authorization — P0 security candidate (2026-10-20)
+
+**Purpose/persona:** The buyer may preserve an immutable historical BuyerCatalog/Selection price snapshot but must not write or advance a Selection after their brand-shop trading relationship, accepted showroom invitation, or invitation expiry has been withdrawn. Historical data remain queryable under existing read permissions; this change does not modify frozen price/FX/supply/OrderCommit evidence.
+
+**Application boundary:** `createShowroomSelectionService` in `src/application/showroom-selection-service.mjs` now invokes a shared `assertCurrentSelectionTradeAccess(tx,current)` *inside the same command transaction and before applying any mutation*. The check takes trusted Selection `brandId`, `shopId`, `showroomId`, and persisted `accessGrantId`; it independently reads current `getRelationshipByTrade` and the persisted exact invitation (or `getShowroomInvitationByAccess` for unpinned legacy selections), then calls the already canonical `assertAcceptedShowroomAccess`. It never accepts client-supplied authority or revives an invitation through a cached historical snapshot.
+
+**Affected existing actions (no API/UI field changes):**
+`upsertSelectionLine`, `replaceSelectionMatrix`, `submitSelection`, `requestSelectionApproval`, `approveSelection`, and `rejectSelection`. `createSelection` already requires an active trade and accepted invitation and keeps that rule. The same `selection.write`/`selection.approve` capability checks, command idempotency, transaction/outbox, existing UI and HTTP handlers remain in force.
+
+**Fail-closed conditions:** no current relationship, revoked/inactive trade, revoked/expired/mismatched invitation or missing grant yield domain authorization/expiry errors before `saveSelection`, `saveCycle`, `insertCommand`, or `appendOutbox`. Because `execute()` authorizes before returning a previously stored idempotent command result, replay does not sidestep revoked access.
+
+**Acceptance:** `tests/selection-matrix-service.test.mjs` adds explicit revoke-relationship and revoke-invitation scenarios across mutations/approval, including replay and before/after selections/cycles/commands/outbox equality. Existing global `npm run verify`, PostgreSQL CI and role-isolation tests remain mandatory. This is a bounded P0 hardening slice; `PUB-005` legacy commercial fallback, price effective dates and full staged publication lifecycle remain OPEN, and this feature is not PROD-PROVEN solely from unit or GitHub checks.
+
 ### 7.5 WholesaleOrder — IMPLEMENTED
 Order lifecycle and bilateral confirmation are executable. Order creation consumes frozen submitted Selection lineage. Currency is derived/validated against the frozen selection lines rather than accepted as an independent mutable client fact.
 

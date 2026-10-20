@@ -132,12 +132,42 @@ export function createShowroomSelectionService({
     invariant(line.unitPrice === undefined && line.currency === undefined && line.catalogVersion === undefined, 'SELECTION_CLIENT_PRICE_FORBIDDEN', 'Selection price and currency are controlled by the published commercial basis');
   }
 
+  // The frozen catalog must match every stored identity, not only a content
+  // digest. This catches wrong-tenant/wrong-showroom reader results before a
+  // buyer can turn their immutable commercial snapshot into an order.
+  async function pinnedBuyerCatalogForSelection(current) {
+    invariant(current.buyerCatalogVersionId, 'SELECTION_MATRIX_BUYER_CATALOG_REQUIRED',
+      'Selection requires a pinned BuyerCatalogVersion');
+    invariant(trustedCommercialReader, 'COMMERCIAL_PUBLICATION_READER_REQUIRED',
+      'Commercial publication reader is required for a pinned selection');
+    const catalog = requireEntity(
+      await trustedCommercialReader.getBuyerCatalogVersion(current.buyerCatalogVersionId),
+      'BUYER_CATALOG_NOT_FOUND', { buyerCatalogVersionId: current.buyerCatalogVersionId },
+    );
+    const linked = [
+      ['id', 'buyerCatalogVersionId'],
+      ['brandId', 'brandId'],
+      ['shopId', 'shopId'],
+      ['showroomId', 'showroomId'],
+      ['collectionId', 'collectionId'],
+      ['accessGrantId', 'accessGrantId'],
+      ['publicationId', 'commercialPublicationId'],
+      ['priceListVersionId', 'priceListVersionId'],
+    ];
+    invariant(catalog.status === 'published'
+        && linked.every(([source, target]) => catalog[source] === current[target]),
+    'SELECTION_PINNED_BUYER_CATALOG_IDENTITY_MISMATCH',
+    'Pinned BuyerCatalogVersion identity/trade does not match this Selection');
+    invariant(catalog.contentHash === current.commercialBasisHash,
+      'SELECTION_COMMERCIAL_BASIS_CHANGED',
+      'Pinned buyer catalog does not match selection commercial basis');
+    return catalog;
+  }
+
   async function richBuyerCatalogForSelection(current) {
-    invariant(current.buyerCatalogVersionId, 'SELECTION_MATRIX_BUYER_CATALOG_REQUIRED', 'Selection matrix requires a pinned BuyerCatalogVersion');
-    invariant(trustedCommercialReader, 'COMMERCIAL_PUBLICATION_READER_REQUIRED', 'Commercial publication reader is required for a pinned selection');
-    const buyerCatalog = requireEntity(await trustedCommercialReader.getBuyerCatalogVersion(current.buyerCatalogVersionId), 'BUYER_CATALOG_NOT_FOUND', { buyerCatalogVersionId: current.buyerCatalogVersionId });
-    invariant(buyerCatalog.contentHash === current.commercialBasisHash, 'SELECTION_COMMERCIAL_BASIS_CHANGED', 'Pinned buyer catalog does not match selection commercial basis');
-    invariant(isRichBuyerCatalog(buyerCatalog), 'SELECTION_MATRIX_RICH_CATALOG_REQUIRED', 'Color and size matrix requires a rich BuyerCatalogVersion');
+    const buyerCatalog = await pinnedBuyerCatalogForSelection(current);
+    invariant(isRichBuyerCatalog(buyerCatalog), 'SELECTION_MATRIX_RICH_CATALOG_REQUIRED',
+      'Color and size matrix requires a rich BuyerCatalogVersion');
     return buyerCatalog;
   }
 
@@ -171,9 +201,7 @@ export function createShowroomSelectionService({
 
   async function trustedLineForUpsert(current, line) {
     if (current.buyerCatalogVersionId) {
-      invariant(trustedCommercialReader, 'COMMERCIAL_PUBLICATION_READER_REQUIRED', 'Commercial publication reader is required for a pinned selection');
-      const buyerCatalog = requireEntity(await trustedCommercialReader.getBuyerCatalogVersion(current.buyerCatalogVersionId), 'BUYER_CATALOG_NOT_FOUND', { buyerCatalogVersionId: current.buyerCatalogVersionId });
-      invariant(buyerCatalog.contentHash === current.commercialBasisHash, 'SELECTION_COMMERCIAL_BASIS_CHANGED', 'Pinned buyer catalog does not match selection commercial basis');
+      const buyerCatalog = await pinnedBuyerCatalogForSelection(current);
 
       if (isRichBuyerCatalog(buyerCatalog)) return richTrustedLine(buyerCatalog, line);
 

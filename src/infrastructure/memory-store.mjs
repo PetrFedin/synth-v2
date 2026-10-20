@@ -44,6 +44,7 @@ function transactionView(state) {
     getOrganisation: (id) => state.organisations.get(id),
     insertOrganisation: (organisation) => insertUnique(state.organisations, organisation.id, organisation, 'ORG_ALREADY_EXISTS'),
     getMembership: (organisationId, userId) => state.memberships.get(membershipKey(organisationId, userId)),
+    listMembershipsForActor: (actorId) => [...state.memberships.values()].filter((item) => item.userId === actorId),
     listMembershipsByOrganisation: (organisationId) => [...state.memberships.values()].filter((item) => item.organisationId === organisationId),
     listMembershipsForTrade: (brandId, shopId) => [...state.memberships.values()].filter((item) => item.organisationId === brandId || item.organisationId === shopId),
     insertMembership: (membership) => insertUnique(state.memberships, membershipKey(membership.organisationId, membership.userId), membership, 'MEMBERSHIP_ALREADY_EXISTS'),

@@ -108,6 +108,20 @@ export function createShowroomSelectionService({
     }));
   }
 
+  // A stored selection freezes commercial facts, not access rights. Every
+  // subsequent buyer mutation must re-evaluate the live trade and invitation.
+  // Unpinned legacy selections resolve their grant by showroom and shop.
+  async function assertCurrentSelectionTradeAccess(tx, current) {
+    const relationship = await tx.getRelationshipByTrade(current.brandId, current.shopId);
+    const invitation = current.accessGrantId
+      ? await tx.getShowroomInvitation(current.accessGrantId)
+      : await tx.getShowroomInvitationByAccess(current.showroomId, current.shopId);
+    assertAcceptedShowroomAccess(invitation, {
+      showroomId: current.showroomId, brandId: current.brandId,
+      shopId: current.shopId, now: clock(), relationship,
+    });
+  }
+
   async function assertOrganisationActor(tx, organisationId, actorId, capability) {
     const membership = await tx.getMembership(organisationId, actorId);
     assertCapability(membership, capability);
@@ -401,6 +415,7 @@ export function createShowroomSelectionService({
         async (tx) => {
           const current = requireEntity(await tx.getSelection(selectionId), 'SELECTION_NOT_FOUND', { selectionId });
           await assertOrganisationActor(tx, current.shopId, actorId, CAPABILITIES.SELECTION_WRITE);
+          await assertCurrentSelectionTradeAccess(tx, current);
           return current;
         },
         async (tx, current) => {
@@ -431,6 +446,7 @@ export function createShowroomSelectionService({
         async (tx) => {
           const current = requireEntity(await tx.getSelection(selectionId), 'SELECTION_NOT_FOUND', { selectionId });
           await assertOrganisationActor(tx, current.shopId, actorId, CAPABILITIES.SELECTION_WRITE);
+          await assertCurrentSelectionTradeAccess(tx, current);
           return current;
         },
         async (tx, current) => {
@@ -457,10 +473,7 @@ export function createShowroomSelectionService({
         async (tx) => {
           const current = requireEntity(await tx.getSelection(selectionId), 'SELECTION_NOT_FOUND', { selectionId });
           await assertOrganisationActor(tx, current.shopId, actorId, CAPABILITIES.SELECTION_WRITE);
-          if (current.accessGrantId) {
-            const invitation = requireEntity(await tx.getShowroomInvitation(current.accessGrantId), 'SHOWROOM_INVITATION_NOT_FOUND', { invitationId: current.accessGrantId });
-            assertAcceptedShowroomAccess(invitation, { showroomId: current.showroomId, brandId: current.brandId, shopId: current.shopId, now: clock(), relationship: await tx.getRelationshipByTrade(current.brandId, current.shopId) });
-          }
+          await assertCurrentSelectionTradeAccess(tx, current);
           return current;
         },
         async (tx, current) => {
@@ -494,6 +507,7 @@ export function createShowroomSelectionService({
         async (tx) => {
           const current = requireEntity(await tx.getSelection(selectionId), 'SELECTION_NOT_FOUND', { selectionId });
           await assertOrganisationActor(tx, current.shopId, actorId, CAPABILITIES.SELECTION_WRITE);
+          await assertCurrentSelectionTradeAccess(tx, current);
           return current;
         },
         async (tx, current) => {
@@ -517,10 +531,7 @@ export function createShowroomSelectionService({
         async (tx) => {
           const current = requireEntity(await tx.getSelection(selectionId), 'SELECTION_NOT_FOUND', { selectionId });
           await assertOrganisationActor(tx, current.shopId, actorId, CAPABILITIES.SELECTION_APPROVE);
-          if (current.accessGrantId) {
-            const invitation = requireEntity(await tx.getShowroomInvitation(current.accessGrantId), 'SHOWROOM_INVITATION_NOT_FOUND', { invitationId: current.accessGrantId });
-            assertAcceptedShowroomAccess(invitation, { showroomId: current.showroomId, brandId: current.brandId, shopId: current.shopId, now: clock(), relationship: await tx.getRelationshipByTrade(current.brandId, current.shopId) });
-          }
+          await assertCurrentSelectionTradeAccess(tx, current);
           return current;
         },
         async (tx, current) => {
@@ -545,6 +556,7 @@ export function createShowroomSelectionService({
         async (tx) => {
           const current = requireEntity(await tx.getSelection(selectionId), 'SELECTION_NOT_FOUND', { selectionId });
           await assertOrganisationActor(tx, current.shopId, actorId, CAPABILITIES.SELECTION_APPROVE);
+          await assertCurrentSelectionTradeAccess(tx, current);
           return current;
         },
         async (tx, current) => {

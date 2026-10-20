@@ -115,3 +115,11 @@ Canonical implementation plan:
 - [docs/SYNTH_V2_INTEGRATION_MASTER_PLAN_2026-10-01.md](./docs/SYNTH_V2_INTEGRATION_MASTER_PLAN_2026-10-01.md)
 
 This file is a **planned implementation source**, not evidence that all listed capabilities are already live. Future full-roadmap implementation should cite this filename explicitly and follow its phases, authority boundaries, dependencies and acceptance gates.
+
+### Digital Collection Studio — planned extension (2026-10-20)
+
+The [Digital Collection Studio plan](docs/digital-collection-studio/README.md) expands the master plan's existing 3D digital-sample wave into editable patterns, material/avatar qualification, cloth simulation, marker/consumption, pre-production economics, virtual drops, consented demand testing and evidence-backed launch decisions.
+
+Read its [source/component register](docs/digital-collection-studio/sources-and-components.md), [economics and demand contract](docs/digital-collection-studio/economics-and-demand.md), and [36-direction dependency backlog](docs/digital-collection-studio/direction-backlog.json).
+
+These are subordinate planning documents, not installed libraries or live application modules. Native Studio and an optional licensed CLO Bridge are separate routes. Concepts remain non-orderable until the appropriate canonical commercial and production gates are admitted; render approval is not fit validation, waitlists are not orders, and deposits are not completed sales. Existing P0 correctness and release prerequisites retain priority. Every implementation must update ARCHITECTURE.md and prove its own exact-SHA API/PostgreSQL/UI and negative acceptance.

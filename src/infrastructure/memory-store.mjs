@@ -32,7 +32,7 @@ export function createMemoryWholesaleStore() {
 function emptyState() {
   return {
     organisations: new Map(), memberships: new Map(), relationships: new Map(), showroomInvitations: new Map(), retailDoors: new Map(),
-    campaigns: new Map(), collections: new Map(), productPlaceholders: new Map(), productPlaceholderStyleLinks: new Map(), productResponsibilities: new Map(), collectionStyleVersions: new Map(), showrooms: new Map(), selections: new Map(), orders: new Map(),
+    campaigns: new Map(), collections: new Map(), productPlaceholders: new Map(), productPlaceholderStyleLinks: new Map(), productResponsibilities: new Map(), collectionStyleVersions: new Map(), showrooms: new Map(), showroomLooks: new Map(), selections: new Map(), orders: new Map(),
     orderCommitSnapshots: new Map(), orderAmendments: new Map(), cycles: new Map(), deals: new Map(), calendar: new Map(), commands: new Map(), outbox: new Map(),
   };
 }
@@ -117,6 +117,15 @@ function transactionView(state) {
     getShowroom: (id) => state.showrooms.get(id),
     insertShowroom: (showroom) => insertUnique(state.showrooms, showroom.id, showroom, 'SHOWROOM_ALREADY_EXISTS'),
     saveShowroom: (showroom, expectedVersion) => saveVersioned(state.showrooms, showroom, expectedVersion, 'SHOWROOM_CONCURRENCY_CONFLICT'),
+    // In-memory acceptance must support the same Look CRUD/reader contract as
+    // PostgreSQL, including deterministic presentation order and atomic writes.
+    getShowroomLook: (id) => state.showroomLooks.get(id),
+    listShowroomLooks: (showroomId) => [...state.showroomLooks.values()]
+      .filter((item) => item.showroomId === showroomId)
+      .sort((a, b) => a.position - b.position || a.id.localeCompare(b.id)),
+    insertShowroomLook: (look) => insertUnique(state.showroomLooks, look.id, look, 'SHOWROOM_LOOK_ALREADY_EXISTS'),
+    saveShowroomLook: (look, expectedVersion) => saveVersioned(state.showroomLooks, look, expectedVersion, 'SHOWROOM_LOOK_CONCURRENCY_CONFLICT'),
+    deleteShowroomLook: (id) => state.showroomLooks.delete(id),
     getSelection: (id) => state.selections.get(id),
     getSelectionByCycle: (cycleId) => [...state.selections.values()].find((item) => item.cycleId === cycleId),
     insertSelection: (selection) => insertUnique(state.selections, selection.id, selection, 'SELECTION_ALREADY_EXISTS'),
@@ -169,7 +178,7 @@ function freezeSnapshot(state) {
   return Object.freeze({
     organisations: [...state.organisations.values()], memberships: [...state.memberships.values()],
     relationships: [...state.relationships.values()], showroomInvitations: [...state.showroomInvitations.values()], retailDoors: [...state.retailDoors.values()],
-    campaigns: [...state.campaigns.values()], collections: [...state.collections.values()], collectionStyleVersions: [...state.collectionStyleVersions.values()], showrooms: [...state.showrooms.values()],
+    campaigns: [...state.campaigns.values()], collections: [...state.collections.values()], collectionStyleVersions: [...state.collectionStyleVersions.values()], showrooms: [...state.showrooms.values()], showroomLooks: [...state.showroomLooks.values()],
     selections: [...state.selections.values()], orders: [...state.orders.values()], orderCommitSnapshots: [...state.orderCommitSnapshots.values()], orderAmendments: [...state.orderAmendments.values()],
     cycles: [...state.cycles.values()], deals: [...state.deals.values()],
     calendar: [...state.calendar.values()], commands: [...state.commands.values()], outbox: [...state.outbox.values()],

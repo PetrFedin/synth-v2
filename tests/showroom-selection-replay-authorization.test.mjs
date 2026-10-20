@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createShowroomSelectionService } from '../src/application/showroom-selection-service.mjs';
 import { canonicalJson } from '../src/core/fingerprints.mjs';
 
-function upsertReplayFixture({ membership }) {
+function upsertReplayFixture({ membership, relationshipStatus = 'active' }) {
   const calls = [];
   const line = Object.freeze({ sku: 'SKU-1', quantity: 2 });
   const previousResult = Object.freeze({
@@ -11,6 +11,7 @@ function upsertReplayFixture({ membership }) {
     shopId: 'shop-1',
     brandId: 'brand-1',
     collectionId: 'collection-1',
+    showroomId: 'showroom-1',
     status: 'draft',
     version: 2,
     lines: Object.freeze([{ sku: 'SKU-1', quantity: 2 }]),
@@ -35,6 +36,21 @@ function upsertReplayFixture({ membership }) {
           calls.push(`membership:${organisationId}:${userId}`);
           return membership;
         },
+        async getRelationshipByTrade() {
+          calls.push('relationship');
+          return Object.freeze({
+            id: 'relationship-1', brandId: 'brand-1', shopId: 'shop-1',
+            status: relationshipStatus,
+          });
+        },
+        async getShowroomInvitationByAccess() {
+          calls.push('invitation');
+          return Object.freeze({
+            id: 'invitation-1', showroomId: 'showroom-1',
+            brandId: 'brand-1', shopId: 'shop-1',
+            status: 'accepted', expiresAt: '2027-01-01T00:00:00.000Z',
+          });
+        },
         saveSelection() { throw new Error('replay must not save selection'); },
         appendOutbox() { throw new Error('replay must not append outbox'); },
         insertCommand() { throw new Error('replay must not insert command'); },
@@ -50,6 +66,7 @@ test('revoked buyer cannot retrieve a stored selection result', async () => {
   let catalogReads = 0;
   const service = createShowroomSelectionService({
     store: fixture.store,
+    clock: () => '2026-08-02T00:00:00.000Z',
     catalogReader: { async getSku() { catalogReads += 1; return undefined; } },
   });
 
@@ -78,6 +95,7 @@ test('authorized selection replay skips mutable catalog validation', async () =>
   let catalogReads = 0;
   const service = createShowroomSelectionService({
     store: fixture.store,
+    clock: () => '2026-08-02T00:00:00.000Z',
     catalogReader: { async getSku() { catalogReads += 1; throw new Error('catalog must not be read on replay'); } },
   });
 
@@ -85,6 +103,31 @@ test('authorized selection replay skips mutable catalog validation', async () =>
 
   assert.equal(result, fixture.previousResult);
   assert.equal(catalogReads, 0);
+});
+
+test('revoked trading relationship invalidates an otherwise valid replay without catalog reads', async () => {
+  const fixture = upsertReplayFixture({
+    membership: Object.freeze({
+      organisationId: 'shop-1', userId: 'buyer-1', organisationType: 'shop',
+      status: 'active', role: 'buyer',
+    }),
+    relationshipStatus: 'revoked',
+  });
+  let catalogReads = 0;
+  const service = createShowroomSelectionService({
+    store: fixture.store,
+    clock: () => '2026-08-02T00:00:00.000Z',
+    catalogReader: { async getSku() { catalogReads += 1; throw new Error('No catalog read'); } },
+  });
+  await assert.rejects(
+    () => service.upsertSelectionLine('command-1', 'buyer-1', 'selection-1', fixture.line),
+    error => error?.code === 'ACTIVE_RELATIONSHIP_REQUIRED',
+  );
+  assert.equal(catalogReads, 0);
+  assert.deepEqual(fixture.calls, [
+    'command:command-1', 'selection:selection-1', 'membership:shop-1:buyer-1',
+    'relationship', 'invitation',
+  ]);
 });
 
 test('selection creation replay does not re-run the one-selection-per-cycle mutation guard', async () => {

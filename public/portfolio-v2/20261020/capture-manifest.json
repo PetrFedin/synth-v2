@@ -1,0 +1,36 @@
+{
+  "project": "syntha",
+  "source_sha": "9a90247da7c50f144e63834ba1a7e9d8c3c9b12e",
+  "source_action_artifact": 12138567601,
+  "source_kind": "isolated-demonstration",
+  "production_admitted": false,
+  "captured_date": "20261018",
+  "evidence_source": "GitHub Actions authenticated artifact; all individual file hashes cross-checked or computed against source receipt",
+  "files": [
+    {
+      "name": "01-app-overview-ru.png",
+      "sha256": "87f2d1f68482bfdc44daed5ab5db0eb40d0d13b0793548172efecc3e31d0e4ed",
+      "bytes": 160997
+    },
+    {
+      "name": "03-app-collections-ru.png",
+      "sha256": "42d34a4306421eb538f07701eebf542ee46836976fa7e68f14233f2f1c7463a4",
+      "bytes": 165933
+    },
+    {
+      "name": "04-app-bom-ru.png",
+      "sha256": "544d8a12e52361fef3b3a5f9c254a79b347ed4e88c44b3b06757cc75517a1fc2",
+      "bytes": 127251
+    },
+    {
+      "name": "06-app-tech-packs-ru.png",
+      "sha256": "64f84c469491e12b1103a229d6b29070ace5a3eb22e034c1140dea82446e896d",
+      "bytes": 95556
+    },
+    {
+      "name": "syntha-plm-live-26sec.mp4",
+      "sha256": "4fc583ee3ec0f54bd8481cce305177d47a4f0fcc2d7dd7f1d8cd264c8d58f210",
+      "bytes": 792330
+    }
+  ]
+}

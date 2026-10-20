@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createOrderBuilderService } from '../src/application/order-builder-service.mjs';
 import { canonicalJson } from '../src/core/fingerprints.mjs';
 
-function draftReplayFixture({ membership }) {
+function draftReplayFixture({ membership, relationshipStatus = 'active' }) {
   const calls = [];
   const terms = Object.freeze({ paymentTerms: 'NET30' });
   const previousResult = Object.freeze({
@@ -29,11 +29,22 @@ function draftReplayFixture({ membership }) {
         },
         async getSelection(id) {
           calls.push(`selection:${id}`);
-          return Object.freeze({ id, cycleId: 'cycle-1', collectionId: 'collection-1', shopId: 'shop-1' });
+          return Object.freeze({ id, cycleId: 'cycle-1', collectionId: 'collection-1', showroomId: 'showroom-1', brandId: 'brand-1', shopId: 'shop-1' });
         },
         async getMembership(organisationId, userId) {
           calls.push(`membership:${organisationId}:${userId}`);
           return membership;
+        },
+        async getRelationshipByTrade() {
+          calls.push('relationship');
+          return Object.freeze({ id: 'relationship-1', brandId: 'brand-1', shopId: 'shop-1', status: relationshipStatus });
+        },
+        async getShowroomInvitationByAccess() {
+          calls.push('invitation');
+          return Object.freeze({
+            id: 'invitation-1', showroomId: 'showroom-1', brandId: 'brand-1', shopId: 'shop-1',
+            status: 'accepted', expiresAt: '2027-01-15T00:00:00.000Z',
+          });
         },
         getCycle() { throw new Error('replay must not recheck mutable cycle stage'); },
         getCollection() { throw new Error('replay must not recheck collection'); },
@@ -50,7 +61,7 @@ function draftReplayFixture({ membership }) {
 
 test('revoked buyer cannot retrieve a stored order draft result', async () => {
   const fixture = draftReplayFixture({ membership: undefined });
-  const service = createOrderBuilderService({ store: fixture.store });
+  const service = createOrderBuilderService({ store: fixture.store, clock: () => '2026-08-02T00:00:00.000Z' });
 
   await assert.rejects(
     () => service.createOrderDraft('command-1', 'buyer-1', { selectionId: 'selection-1', terms: fixture.terms }),
@@ -73,7 +84,7 @@ test('authorized order draft replay skips mutable stage and uniqueness guards', 
       role: 'buyer',
     }),
   });
-  const service = createOrderBuilderService({ store: fixture.store });
+  const service = createOrderBuilderService({ store: fixture.store, clock: () => '2026-08-02T00:00:00.000Z' });
 
   const result = await service.createOrderDraft('command-1', 'buyer-1', {
     selectionId: 'selection-1',
@@ -85,6 +96,8 @@ test('authorized order draft replay skips mutable stage and uniqueness guards', 
     'command:command-1',
     'selection:selection-1',
     'membership:shop-1:buyer-1',
+    'relationship',
+    'invitation',
   ]);
 });
 
@@ -134,5 +147,23 @@ test('trade order replay requires a currently authorized trade membership', asyn
     'order:order-1',
     'cycle:cycle-1',
     'trade-memberships',
+  ]);
+});
+
+test('replayed order draft no longer authorizes a revoked counterparty trade', async () => {
+  const fixture = draftReplayFixture({
+    membership: Object.freeze({ organisationId: 'shop-1', userId: 'buyer-1', organisationType: 'shop', role: 'buyer', status: 'active' }),
+    relationshipStatus: 'revoked',
+  });
+  const service = createOrderBuilderService({
+    store: fixture.store, clock: () => '2026-08-02T00:00:00.000Z',
+  });
+  await assert.rejects(
+    () => service.createOrderDraft('command-1', 'buyer-1', { selectionId: 'selection-1', terms: fixture.terms }),
+    error => error?.code === 'ACTIVE_RELATIONSHIP_REQUIRED',
+  );
+  assert.deepEqual(fixture.calls, [
+    'command:command-1', 'selection:selection-1', 'membership:shop-1:buyer-1',
+    'relationship', 'invitation',
   ]);
 });

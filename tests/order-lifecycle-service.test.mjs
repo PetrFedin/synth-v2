@@ -11,6 +11,21 @@ async function fixture() {
     await tx.insertMembership(Object.freeze({ id: 'm-shop', organisationId: 'shop-1', organisationType: 'shop', userId: 'buyer-1', role: 'owner', status: 'active' }));
     await tx.insertMembership(Object.freeze({ id: 'm-brand', organisationId: 'brand-1', organisationType: 'brand', userId: 'sales-1', role: 'owner', status: 'active' }));
     await tx.insertCycle(Object.freeze({ id: 'cycle-1', brandId: 'brand-1', shopId: 'shop-1', stage: 'order-builder', version: 1 }));
+    // The domain Order stores exact Selection lineage; negotiate against its
+    // current accepted trade rather than using an orphan synthetic Order.
+    await tx.insertSelection(Object.freeze({
+      id: 'selection-1', cycleId: 'cycle-1', collectionId: 'collection-1',
+      showroomId: 'showroom-1', brandId: 'brand-1', shopId: 'shop-1',
+      accessGrantId: null, status: 'submitted', version: 1,
+    }));
+    await tx.insertRelationship(Object.freeze({
+      id: 'relationship-1', brandId: 'brand-1', shopId: 'shop-1',
+      status: 'active', version: 1,
+    }));
+    await tx.insertShowroomInvitation(Object.freeze({
+      id: 'invitation-1', showroomId: 'showroom-1', brandId: 'brand-1', shopId: 'shop-1',
+      status: 'accepted', expiresAt: '2027-01-01T00:00:00.000Z', version: 1,
+    }));
     await tx.insertOrder(Object.freeze({
       id: 'order-1', selectionId: 'selection-1', cycleId: 'cycle-1', brandId: 'brand-1', shopId: 'shop-1',
       currency: 'EUR', totalAmount: 160, lines: Object.freeze([Object.freeze({ sku: 'SKU-1', quantity: 2, unitPrice: 80 })]),

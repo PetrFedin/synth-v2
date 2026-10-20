@@ -54,6 +54,35 @@ test('atomic inventory failure rolls back Order, Cycle, command and reservation'
       [showroom.id, showroom.collectionId, showroom.brandId, showroom.status, showroom.version, JSON.stringify(showroom)],
     );
 
+    // The order is already approved in this fixture. Its current trade and
+    // exact accepted showroom grant must still be valid so we can exercise
+    // the intended PostgreSQL inventory reservation failure, not a prior
+    // security rejection unrelated to available-to-sell quantity.
+    const relationship = {
+      id: 'relationship-race', brandId: brand.id, shopId: shop.id,
+      status: 'active', version: 1,
+    };
+    await pool.query(
+      `INSERT INTO counterparty_relationships
+         (id, brand_id, shop_id, status, version, payload)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb)`,
+      [relationship.id, relationship.brandId, relationship.shopId,
+        relationship.status, relationship.version, JSON.stringify(relationship)],
+    );
+    const invitation = {
+      id: 'invitation-race', showroomId: showroom.id, relationshipId: relationship.id,
+      brandId: brand.id, shopId: shop.id, status: 'accepted',
+      expiresAt: '2027-01-15T00:00:00.000Z', version: 1,
+    };
+    await pool.query(
+      `INSERT INTO showroom_invitations
+         (id, showroom_id, relationship_id, brand_id, shop_id, status, expires_at, version, payload)
+       VALUES ($1, $2, $3, $4, $5, $6, $7::timestamptz, $8, $9::jsonb)`,
+      [invitation.id, invitation.showroomId, invitation.relationshipId,
+        invitation.brandId, invitation.shopId, invitation.status,
+        invitation.expiresAt, invitation.version, JSON.stringify(invitation)],
+    );
+
     const sku = {
       id: 'SKU-RACE', sku: 'SKU-RACE', collectionId: collection.id, brandId: brand.id, name: 'Race SKU',
       wholesalePrice: 25, currency: 'EUR', minimumOrderQuantity: 2, availableQuantity: 5, reservedQuantity: 2,

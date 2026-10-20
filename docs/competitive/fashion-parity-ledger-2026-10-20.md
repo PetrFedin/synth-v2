@@ -27,6 +27,11 @@ Authority: working comparison accompanying ARCHITECTURE.md, docs/backlog-not-yet
 | MoySklad (RU) | Marking/Chestny Znak, inventory, Ozon/Wildberries order/stock/price integrations | https://www.moysklad.ru/programmy-dlja-biznesa/programma-dlya-markirovki-tovarov/ ; https://support.moysklad.ru/hc/ru/%D0%BE%D0%BD%D0%BB%D0%B0%D0%B8%D0%BD%20%D1%82%D0%BE%D1%80%D0%B3%D0%BE%D0%B2%D0%BB%D1%8F/%D0%BC%D0%B0%D1%80%D0%BA%D0%B5%D1%82%D0%BF%D0%BB%D0%B5%D0%B8%D1%81%D1%8B/%D1%81%D1%80%D0%B0%D0%B2%D0%BD%D0%B5%D0%BD%D0%B8%D0%B5_%D0%B2%D0%BE%D0%B7%D0%BC%D0%BE%D0%B6%D0%BD%D0%BE%D1%81%D1%82%D0%B5%D0%B8_%D0%B8%D0%BD%D1%82%D0%B5%D0%B3%D1%80%D0%B0%D1%86%D0%B8%D0%B8_%D0%BC%D0%BE%D0%B5%D0%B3%D0%BE%D1%81%D0%BA%D0%BB%D0%B0%D0%B4%D0%B0_%D0%B4%D0%BB%D1%8F_%D0%BC%D0%B0%D1%80%D0%BA%D0%B5%D1%82%D0%BF%D0%BB%D0%B5%D0%B8%D1%81%D0%BE%D0%B2 |
 | Style3D | Digital fabric and physics-based garment creation, digital sampling, fashion collaboration, AI visual content | https://www.style3d.com/blog/digital-fashion-workflow-how-style3d-transforms-design-to-delivery-june-2026/ |
 | Coats Digital FastReactPlan | Multi-stage apparel capacity planning, sewing line and upstream operations scheduling, workload/capacity visualization | https://web.coatsdigital.com/frp-en ; https://www.coatsdigital.com/en/testimonial/esquire-knit-composite-ltd-fastreactplan/ |
+| RELEX Solutions | Demand forecasting/sensing, store/SKU replenishment, new-product analogue forecasting, merchandise/assortment planning, pricing and production schedules; manufacturer forecasting can use retailer POS rather than just wholesale sell-in | https://www.relexsolutions.com/solutions-overview/ ; https://www.relexsolutions.com/solutions/retail-connected-planning-for-manufacturers/ |
+| o9 Solutions Apparel, Footwear & Luxury | Merchandise Financial Planning, OTB, store clustering and localization, size/pack optimization, omnichannel allocation, new product planning and scenario analysis | https://o9solutions.com/industries/retail/apparel-footwear-luxury ; https://o9solutions.com/solutions/merchandise-planning/assortment-planning |
+| BlueCherry | PLM/BOM/costing connected with fashion ERP and MES real-time shop-floor execution and quality | https://bluecherry.com/en/solutions |
+| Julivi (RU) | Apparel pattern CAD, 2D/3D modeling, digitization, grading and marker-making/cutting workflow | https://julivi.ru/ |
+| САПР АССОЛЬ (RU) | Parametric pattern drafting, grading, auto-layout, 2D+3D pattern development and plotter-ready marker output | https://www.assol.org/ |
 
 The assessment is bounded to publicly described features as of the stated date. "Not listed" never proves a competitor does not have a capability. Independent sandbox access is required for functional parity claims.
 
@@ -53,6 +58,10 @@ The assessment is bounded to publicly described features as of the stated date. 
 | Retail doors / store allocation | CORE/PARTIAL | NuORDER, 1C, retail planners | Split per door, explicit delivery and volume constraints, cost impact |
 | Forecasting by demand type | GAP | Centric Planning | Wholesale booking vs POS/sell-through as separate target series |
 | Forecast backtesting and model registry | GAP | Retail planning providers | Time split, naive vs model, WAPE/MASE/bias, data cutoff |
+| Store-cluster size/pack optimization | GAP/PARTIAL | o9 retail planning | Size-curve allocations by store/cluster/channel with exact constraint, SKU and budget lineage; no projected volume claimed without retailer POS |
+| Consumer POS demand sensing vs wholesale bookings | GAP | RELEX manufacturer connected planning | Distinguish consumer sell-through, retailer inbound orders, returns and OOS; provide explicit forecast target and permitted POS data |
+| Real-time factory MES evidence | PARTIAL | BlueCherry MES | Machine/operator/task completion with qualified factory data, offline replay, deviations, immutable QA/QC and safety access |
+| Pattern engineering and maker integration | GAP/PARTIAL | Julivi, САПР АССОЛЬ | Versioned DXF/AAMA/ASTM pattern asset adapter with CAD ownership and marker/size grading, never invent geometry from Tech Pack screenshots |
 | Optimized budget (OTB) and assortment | GAP/PARTIAL | Centric Planning, PTC Flex Insights | OR-Tools proposals with explicit constraints, approver, scenario comparison |
 | Multi-factory line/capacity optimizer | GAP/PARTIAL | FastReactPlan | Line loading, SMV, equipment, personnel, fabric and sewing upstream bottlenecks |
 | Wholesale buyer behavior analytics | PARTIAL/GAP | JOOR | Buyer view, shortlist, response rates only from consented attributable event streams |
@@ -92,6 +101,9 @@ The assessment is bounded to publicly described features as of the stated date. 
 - StatsForecast univariate seasonal baselines for each clearly labeled target metric, with rolling origin holdout and missing/OOS data policy.
 - Chronos challenger only after reproducible naive/statistical benchmark; licence check extends to model weights.
 - OR-Tools (Apache-2.0 code) for OTB allocation and production resource constraints; recommendations remain uncommitted until approval.
+- Size Curve & Store Cluster Optimizer v1: validate local size distributions, store capacity, pack/MOQ, margin and OTB constraints, compare against naive equal allocation, and keep all proposals uncommitted.
+- Consumer Demand Source Contract: no wholesale bookings relabelled POS; distinguish SKU/store sell-through, stockout censoring, returns, promotions, and data ownership with per-feed freshness.
+- Garment CAD Bridge: optional ASTM/AAMA/DXF connector to Julivi/Assol/other CAD with explicit pattern/marker file provenance and version controls; do not assert format support without tested vendor exchange.
 - Buyer Intelligence on explicitly captured permitted event data (views, favorites, carts, responses) with accurate missingness.
 - Supplier capability, trust and capacity passports backed by evidence, no private cross-tenant data leakage.
 - EPCIS/DPP optional GS1-compatible event projections and C2PA optional media signatures, each with explicit claims scope, provenance and privacy policy.

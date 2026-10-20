@@ -60,7 +60,7 @@ async function fixture() {
   let cycle = await platform.startCycle('cycle-create', 'buyer-1', { brandId: 'brand-1', shopId: 'shop-1', campaignId: campaign.id, collectionId: collection.id });
   cycle = await platform.advanceCycle('cycle-collection', 'buyer-1', cycle.id, 'collection');
   cycle = await platform.advanceCycle('cycle-showroom', 'buyer-1', cycle.id, 'showroom');
-  return { store, platform, collaboration, showroomId: showroom.id, invitationId: invitation.id, cycle, door };
+  return { store, platform, partners, relationshipId: relationship.id, collaboration, showroomId: showroom.id, invitationId: invitation.id, cycle, door };
 }
 
 function richBuyerCatalog(context, overrides = {}) {
@@ -266,4 +266,37 @@ test('an internal reviewer can reject a selection back to draft with a reason, a
   const submitted = await context.collaboration.submitSelection('selection-resubmit', 'buyer-1', created.selection.id);
   assert.equal(submitted.selection.status, 'submitted');
   assert.equal(submitted.cycle.stage, 'order-builder');
+});
+
+test('Look audience requires the currently accepted, not-expired invited trade and keeps the brand view', async () => {
+  const context = await fixture();
+  const initial = await context.collaboration.listShowroomLooks('buyer-1', context.showroomId);
+  assert.deepEqual(initial.items, []);
+  // No buyer can keep reading after a brand has withdrawn its relationship.
+  await context.partners.revokeRelationship('look-relationship-revoke', 'sales-1', context.relationshipId);
+  await assert.rejects(
+    () => context.collaboration.listShowroomLooks('buyer-1', context.showroomId),
+    error => error?.code === 'SHOWROOM_ACCESS_DENIED',
+  );
+  const brand = await context.collaboration.listShowroomLooks('sales-1', context.showroomId);
+  assert.deepEqual(brand.items, []);
+});
+
+test('Look audience rejects revoked and expired showroom invitations', async () => {
+  const revoked = await fixture();
+  await revoked.partners.revokeShowroomInvitation('look-invitation-revoke', 'sales-1', revoked.invitationId);
+  await assert.rejects(
+    () => revoked.collaboration.listShowroomLooks('buyer-1', revoked.showroomId),
+    error => error?.code === 'SHOWROOM_ACCESS_DENIED',
+  );
+
+  const expired = await fixture();
+  const lateReader = createShowroomSelectionService({
+    store: expired.store,
+    clock: () => '2027-01-16T00:00:00.000Z',
+  });
+  await assert.rejects(
+    () => lateReader.listShowroomLooks('buyer-1', expired.showroomId),
+    error => error?.code === 'SHOWROOM_ACCESS_DENIED',
+  );
 });

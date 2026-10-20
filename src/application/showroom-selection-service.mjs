@@ -72,10 +72,19 @@ export function createShowroomSelectionService({
       if (membership.status !== 'active') continue;
       const invitation = await tx.getShowroomInvitationByAccess(showroom.id, membership.organisationId);
       if (invitation?.status !== 'accepted') continue;
-      // Приглашение говорит «этот показ открыли вам», но торгуем ли мы до сих пор — решает связь.
-      // Найдено живьём: после отзыва связи магазин продолжал читать образы с оптовыми ценами.
+      // An accepted invite does not bypass revocation, expiry or trade identity.
+      // The same canonical contract guards buyer-facing Looks and mutations.
       const relationship = await tx.getRelationshipByTrade(showroom.brandId, membership.organisationId);
-      if (relationship?.status === 'active') return membership.organisationId;
+      try {
+        assertAcceptedShowroomAccess(invitation, {
+          showroomId: showroom.id, brandId: showroom.brandId,
+          shopId: membership.organisationId, now: clock(), relationship,
+        });
+        return membership.organisationId;
+      } catch {
+        // Another membership may hold legitimate access to this showroom.
+        // Never expose which invited trade was expired, revoked or mismatched.
+      }
     }
     invariant(false, 'SHOWROOM_ACCESS_DENIED', 'This showroom has not been shared with you', { showroomId: showroom.id });
   }
@@ -108,6 +117,20 @@ export function createShowroomSelectionService({
     }));
   }
 
+  // A stored selection freezes commercial facts, not access rights. Every
+  // subsequent buyer mutation must re-evaluate the live trade and invitation.
+  // Unpinned legacy selections resolve their grant by showroom and shop.
+  async function assertCurrentSelectionTradeAccess(tx, current) {
+    const relationship = await tx.getRelationshipByTrade(current.brandId, current.shopId);
+    const invitation = current.accessGrantId
+      ? await tx.getShowroomInvitation(current.accessGrantId)
+      : await tx.getShowroomInvitationByAccess(current.showroomId, current.shopId);
+    assertAcceptedShowroomAccess(invitation, {
+      showroomId: current.showroomId, brandId: current.brandId,
+      shopId: current.shopId, now: clock(), relationship,
+    });
+  }
+
   async function assertOrganisationActor(tx, organisationId, actorId, capability) {
     const membership = await tx.getMembership(organisationId, actorId);
     assertCapability(membership, capability);
@@ -118,12 +141,42 @@ export function createShowroomSelectionService({
     invariant(line.unitPrice === undefined && line.currency === undefined && line.catalogVersion === undefined, 'SELECTION_CLIENT_PRICE_FORBIDDEN', 'Selection price and currency are controlled by the published commercial basis');
   }
 
+  // The frozen catalog must match every stored identity, not only a content
+  // digest. This catches wrong-tenant/wrong-showroom reader results before a
+  // buyer can turn their immutable commercial snapshot into an order.
+  async function pinnedBuyerCatalogForSelection(current) {
+    invariant(current.buyerCatalogVersionId, 'SELECTION_MATRIX_BUYER_CATALOG_REQUIRED',
+      'Selection requires a pinned BuyerCatalogVersion');
+    invariant(trustedCommercialReader, 'COMMERCIAL_PUBLICATION_READER_REQUIRED',
+      'Commercial publication reader is required for a pinned selection');
+    const catalog = requireEntity(
+      await trustedCommercialReader.getBuyerCatalogVersion(current.buyerCatalogVersionId),
+      'BUYER_CATALOG_NOT_FOUND', { buyerCatalogVersionId: current.buyerCatalogVersionId },
+    );
+    const linked = [
+      ['id', 'buyerCatalogVersionId'],
+      ['brandId', 'brandId'],
+      ['shopId', 'shopId'],
+      ['showroomId', 'showroomId'],
+      ['collectionId', 'collectionId'],
+      ['accessGrantId', 'accessGrantId'],
+      ['publicationId', 'commercialPublicationId'],
+      ['priceListVersionId', 'priceListVersionId'],
+    ];
+    invariant(catalog.status === 'published'
+        && linked.every(([source, target]) => catalog[source] === current[target]),
+    'SELECTION_PINNED_BUYER_CATALOG_IDENTITY_MISMATCH',
+    'Pinned BuyerCatalogVersion identity/trade does not match this Selection');
+    invariant(catalog.contentHash === current.commercialBasisHash,
+      'SELECTION_COMMERCIAL_BASIS_CHANGED',
+      'Pinned buyer catalog does not match selection commercial basis');
+    return catalog;
+  }
+
   async function richBuyerCatalogForSelection(current) {
-    invariant(current.buyerCatalogVersionId, 'SELECTION_MATRIX_BUYER_CATALOG_REQUIRED', 'Selection matrix requires a pinned BuyerCatalogVersion');
-    invariant(trustedCommercialReader, 'COMMERCIAL_PUBLICATION_READER_REQUIRED', 'Commercial publication reader is required for a pinned selection');
-    const buyerCatalog = requireEntity(await trustedCommercialReader.getBuyerCatalogVersion(current.buyerCatalogVersionId), 'BUYER_CATALOG_NOT_FOUND', { buyerCatalogVersionId: current.buyerCatalogVersionId });
-    invariant(buyerCatalog.contentHash === current.commercialBasisHash, 'SELECTION_COMMERCIAL_BASIS_CHANGED', 'Pinned buyer catalog does not match selection commercial basis');
-    invariant(isRichBuyerCatalog(buyerCatalog), 'SELECTION_MATRIX_RICH_CATALOG_REQUIRED', 'Color and size matrix requires a rich BuyerCatalogVersion');
+    const buyerCatalog = await pinnedBuyerCatalogForSelection(current);
+    invariant(isRichBuyerCatalog(buyerCatalog), 'SELECTION_MATRIX_RICH_CATALOG_REQUIRED',
+      'Color and size matrix requires a rich BuyerCatalogVersion');
     return buyerCatalog;
   }
 
@@ -157,9 +210,7 @@ export function createShowroomSelectionService({
 
   async function trustedLineForUpsert(current, line) {
     if (current.buyerCatalogVersionId) {
-      invariant(trustedCommercialReader, 'COMMERCIAL_PUBLICATION_READER_REQUIRED', 'Commercial publication reader is required for a pinned selection');
-      const buyerCatalog = requireEntity(await trustedCommercialReader.getBuyerCatalogVersion(current.buyerCatalogVersionId), 'BUYER_CATALOG_NOT_FOUND', { buyerCatalogVersionId: current.buyerCatalogVersionId });
-      invariant(buyerCatalog.contentHash === current.commercialBasisHash, 'SELECTION_COMMERCIAL_BASIS_CHANGED', 'Pinned buyer catalog does not match selection commercial basis');
+      const buyerCatalog = await pinnedBuyerCatalogForSelection(current);
 
       if (isRichBuyerCatalog(buyerCatalog)) return richTrustedLine(buyerCatalog, line);
 
@@ -401,6 +452,7 @@ export function createShowroomSelectionService({
         async (tx) => {
           const current = requireEntity(await tx.getSelection(selectionId), 'SELECTION_NOT_FOUND', { selectionId });
           await assertOrganisationActor(tx, current.shopId, actorId, CAPABILITIES.SELECTION_WRITE);
+          await assertCurrentSelectionTradeAccess(tx, current);
           return current;
         },
         async (tx, current) => {
@@ -431,6 +483,7 @@ export function createShowroomSelectionService({
         async (tx) => {
           const current = requireEntity(await tx.getSelection(selectionId), 'SELECTION_NOT_FOUND', { selectionId });
           await assertOrganisationActor(tx, current.shopId, actorId, CAPABILITIES.SELECTION_WRITE);
+          await assertCurrentSelectionTradeAccess(tx, current);
           return current;
         },
         async (tx, current) => {
@@ -457,10 +510,7 @@ export function createShowroomSelectionService({
         async (tx) => {
           const current = requireEntity(await tx.getSelection(selectionId), 'SELECTION_NOT_FOUND', { selectionId });
           await assertOrganisationActor(tx, current.shopId, actorId, CAPABILITIES.SELECTION_WRITE);
-          if (current.accessGrantId) {
-            const invitation = requireEntity(await tx.getShowroomInvitation(current.accessGrantId), 'SHOWROOM_INVITATION_NOT_FOUND', { invitationId: current.accessGrantId });
-            assertAcceptedShowroomAccess(invitation, { showroomId: current.showroomId, brandId: current.brandId, shopId: current.shopId, now: clock(), relationship: await tx.getRelationshipByTrade(current.brandId, current.shopId) });
-          }
+          await assertCurrentSelectionTradeAccess(tx, current);
           return current;
         },
         async (tx, current) => {
@@ -494,6 +544,7 @@ export function createShowroomSelectionService({
         async (tx) => {
           const current = requireEntity(await tx.getSelection(selectionId), 'SELECTION_NOT_FOUND', { selectionId });
           await assertOrganisationActor(tx, current.shopId, actorId, CAPABILITIES.SELECTION_WRITE);
+          await assertCurrentSelectionTradeAccess(tx, current);
           return current;
         },
         async (tx, current) => {
@@ -517,10 +568,7 @@ export function createShowroomSelectionService({
         async (tx) => {
           const current = requireEntity(await tx.getSelection(selectionId), 'SELECTION_NOT_FOUND', { selectionId });
           await assertOrganisationActor(tx, current.shopId, actorId, CAPABILITIES.SELECTION_APPROVE);
-          if (current.accessGrantId) {
-            const invitation = requireEntity(await tx.getShowroomInvitation(current.accessGrantId), 'SHOWROOM_INVITATION_NOT_FOUND', { invitationId: current.accessGrantId });
-            assertAcceptedShowroomAccess(invitation, { showroomId: current.showroomId, brandId: current.brandId, shopId: current.shopId, now: clock(), relationship: await tx.getRelationshipByTrade(current.brandId, current.shopId) });
-          }
+          await assertCurrentSelectionTradeAccess(tx, current);
           return current;
         },
         async (tx, current) => {
@@ -545,6 +593,7 @@ export function createShowroomSelectionService({
         async (tx) => {
           const current = requireEntity(await tx.getSelection(selectionId), 'SELECTION_NOT_FOUND', { selectionId });
           await assertOrganisationActor(tx, current.shopId, actorId, CAPABILITIES.SELECTION_APPROVE);
+          await assertCurrentSelectionTradeAccess(tx, current);
           return current;
         },
         async (tx, current) => {

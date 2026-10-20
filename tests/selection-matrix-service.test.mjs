@@ -50,15 +50,19 @@ async function fixture() {
   cycle = await platform.advanceCycle('matrix-cycle-showroom', 'buyer-1', cycle.id, 'showroom');
 
   const buyerCatalog = richBuyerCatalog({ collectionId: collection.id, showroomId: showroom.id, invitationId: invitation.id });
+  let catalogForPinnedRead = buyerCatalog;
   const rich = createShowroomSelectionService({
     ...base,
     catalogReader: Object.freeze({ getSku: async () => { throw new Error('rich matrix must not read the live flat catalog'); } }),
     commercialPublicationReader: Object.freeze({
       getBuyerCatalogForAccess: async () => buyerCatalog,
-      getBuyerCatalogVersion: async idValue => idValue === buyerCatalog.id ? buyerCatalog : undefined,
+      getBuyerCatalogVersion: async idValue => idValue === buyerCatalog.id ? catalogForPinnedRead : undefined,
     }),
   });
-  return { store, cycle, showroom, buyerCatalog, rich, door };
+  return {
+    store, cycle, showroom, buyerCatalog, rich, door, partners, relationship, invitation,
+    setCatalogForPinnedRead: value => { catalogForPinnedRead = value; },
+  };
 }
 
 function richBuyerCatalog({ collectionId, showroomId, invitationId }) {
@@ -128,4 +132,103 @@ test('rich buyer matrix replacement rejects client controlled price fields', asy
     async () => context.rich.replaceSelectionMatrix('matrix-price-invalid', 'buyer-1', created.selection.id, { lines: [{ sku: 'SKU-1', quantity: 3, unitPrice: 1 }] }),
     error => error?.code === 'SELECTION_CLIENT_PRICE_FORBIDDEN',
   );
+});
+
+test('revoked trade blocks all draft Selection mutations and does not append failed commands', async () => {
+  const context = await fixture();
+  const created = await context.rich.createSelection('trade-selection-create', 'buyer-1', {
+    cycleId: context.cycle.id, showroomId: context.showroom.id, retailDoorId: context.door.id,
+  });
+  const selectionId = created.selection.id;
+  const populated = await context.rich.upsertSelectionLine('trade-line-first', 'buyer-1', selectionId, {
+    sku: 'SKU-1', quantity: 3,
+  });
+  assert.equal(populated.lines[0].unitPrice, 95);
+
+  await context.partners.revokeRelationship('trade-revoke', 'sales-1', context.relationship.id);
+  const before = context.store.snapshot();
+  const operations = [
+    ['trade-upsert-denied', () => context.rich.upsertSelectionLine('trade-upsert-denied', 'buyer-1', selectionId, { sku: 'SKU-1', quantity: 4 })],
+    ['trade-matrix-denied', () => context.rich.replaceSelectionMatrix('trade-matrix-denied', 'buyer-1', selectionId, { lines: [{ sku: 'SKU-1', quantity: 4 }] })],
+    ['trade-submit-denied', () => context.rich.submitSelection('trade-submit-denied', 'buyer-1', selectionId)],
+    ['trade-approval-denied', () => context.rich.requestSelectionApproval('trade-approval-denied', 'buyer-1', selectionId)],
+  ];
+  for (const [id, run] of operations) {
+    await assert.rejects(run, error => error?.code === 'ACTIVE_RELATIONSHIP_REQUIRED', id);
+  }
+  const after = context.store.snapshot();
+  assert.deepEqual(after.selections, before.selections, 'no selection was mutated');
+  assert.deepEqual(after.cycles, before.cycles, 'the commercial cycle did not advance');
+  assert.deepEqual(after.commands, before.commands, 'no rejected command was recorded');
+  assert.deepEqual(after.outbox, before.outbox, 'no rejected outbox event was recorded');
+});
+
+test('revoked invitation blocks submitted-review approval and rejection, including command replay', async () => {
+  const context = await fixture();
+  const created = await context.rich.createSelection('inv-selection-create', 'buyer-1', {
+    cycleId: context.cycle.id, showroomId: context.showroom.id, retailDoorId: context.door.id,
+  });
+  const selectionId = created.selection.id;
+  await context.rich.upsertSelectionLine('inv-line-valid', 'buyer-1', selectionId, {
+    sku: 'SKU-1', quantity: 3,
+  });
+  const pending = await context.rich.requestSelectionApproval('inv-request-valid', 'buyer-1', selectionId);
+  assert.equal(pending.status, 'pending_approval');
+
+  await context.partners.revokeShowroomInvitation('inv-revoke', 'sales-1', context.invitation.id);
+  const before = context.store.snapshot();
+  const operations = [
+    () => context.rich.approveSelection('inv-approve-denied', 'buyer-1', selectionId),
+    () => context.rich.rejectSelection('inv-reject-denied', 'buyer-1', selectionId, { reason: 'No longer authorized' }),
+    () => context.rich.requestSelectionApproval('inv-request-valid', 'buyer-1', selectionId),
+  ];
+  for (const run of operations) {
+    await assert.rejects(run, error => error?.code === 'SHOWROOM_ACCESS_REQUIRED');
+  }
+  const after = context.store.snapshot();
+  assert.deepEqual(after.selections, before.selections);
+  assert.deepEqual(after.cycles, before.cycles);
+  assert.deepEqual(after.commands, before.commands);
+  assert.deepEqual(after.outbox, before.outbox);
+});
+
+test('pinned BuyerCatalog read rejects cross-trade and version identity substitution despite same content hash', async () => {
+  const context = await fixture();
+  const created = await context.rich.createSelection('identity-selection-create', 'buyer-1', {
+    cycleId: context.cycle.id, showroomId: context.showroom.id, retailDoorId: context.door.id,
+  });
+  const selected = created.selection;
+  const before = context.store.snapshot();
+  const changes = [
+    ['id', 'catalog-foreign'],
+    ['brandId', 'foreign-brand'],
+    ['shopId', 'foreign-shop'],
+    ['showroomId', 'foreign-showroom'],
+    ['collectionId', 'foreign-collection'],
+    ['accessGrantId', 'foreign-grant'],
+    ['publicationId', 'foreign-publication'],
+    ['priceListVersionId', 'foreign-price-list'],
+    ['status', 'draft'],
+  ];
+  for (const [i, [field, other]] of changes.entries()) {
+    context.setCatalogForPinnedRead(Object.freeze({ ...context.buyerCatalog, [field]: other }));
+    await assert.rejects(
+      () => context.rich.upsertSelectionLine('identity-upsert-denied-' + i, 'buyer-1', selected.id, {
+        sku: 'SKU-1', quantity: 3,
+      }),
+      error => error?.code === 'SELECTION_PINNED_BUYER_CATALOG_IDENTITY_MISMATCH',
+      'upsert must deny tampered ' + field,
+    );
+    await assert.rejects(
+      () => context.rich.replaceSelectionMatrix('identity-matrix-denied-' + i, 'buyer-1', selected.id, {
+        lines: [{ sku: 'SKU-1', quantity: 3 }],
+      }),
+      error => error?.code === 'SELECTION_PINNED_BUYER_CATALOG_IDENTITY_MISMATCH',
+      'matrix must deny tampered ' + field,
+    );
+  }
+  const after = context.store.snapshot();
+  assert.deepEqual(after.selections, before.selections);
+  assert.deepEqual(after.commands, before.commands);
+  assert.deepEqual(after.outbox, before.outbox);
 });

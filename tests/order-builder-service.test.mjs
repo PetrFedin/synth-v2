@@ -45,7 +45,7 @@ async function fixture() {
   const created = await collaboration.createSelection('selection-create', 'buyer-1', { cycleId: cycle.id, showroomId: showroom.id });
   const edited = await collaboration.upsertSelectionLine('selection-line', 'buyer-1', created.selection.id, { sku: 'SKU-1', quantity: 3 });
   const submitted = await collaboration.submitSelection('selection-submit', 'buyer-1', edited.id);
-  return { store, platform, orders, partners, relationshipId: relationship.id, options, selectionId: submitted.selection.id, cycleId: submitted.cycle.id };
+  return { store, platform, orders, partners, relationshipId: relationship.id, invitationId: invitation.id, options, selectionId: submitted.selection.id, cycleId: submitted.cycle.id };
 }
 
 const terms = { incoterm: 'DAP', paymentDays: 30, prepaymentPercent: 20, deliveryStart: '2027-03-01', deliveryEnd: '2027-03-31' };
@@ -218,4 +218,72 @@ test('J: attaching twice says the order is already attached instead of a mislead
     orders.attachOrderToCycle('order-attach-again', 'buyer-1', { orderId: order.id, expectedVersion: order.version }),
     (error) => error.code === 'ORDER_ALREADY_ATTACHED',
   );
+});
+
+
+test('P0: revoked relationship blocks new Order draft from an already submitted Selection without writes', async () => {
+  const ctx = await fixture();
+  await ctx.partners.revokeRelationship('negotiation-trade-revoke', 'sales-1', ctx.relationshipId);
+  const before = ctx.store.snapshot();
+  await assert.rejects(
+    () => ctx.orders.createOrderDraft('negotiation-draft-denied', 'buyer-1', { selectionId: ctx.selectionId, terms }),
+    error => error?.code === 'ACTIVE_RELATIONSHIP_REQUIRED',
+  );
+  const after = ctx.store.snapshot();
+  for (const key of ['orders','cycles','commands','outbox','orderCommitSnapshots']) {
+    assert.deepEqual(after[key], before[key], 'revoked trade cannot change ' + key);
+  }
+});
+
+test('P0: invitation revocation prevents editing and bilateral approval of a pre-commit Order', async () => {
+  const ctx = await fixture();
+  const order = await ctx.orders.createOrderDraft('negotiation-order-created', 'buyer-1', { selectionId: ctx.selectionId, terms });
+  await ctx.partners.revokeShowroomInvitation('negotiation-invite-revoke', 'sales-1', ctx.invitationId);
+  const before = ctx.store.snapshot();
+  const operations = [
+    () => ctx.orders.reviseTerms('negotiation-terms-denied', 'buyer-1', {
+      orderId: order.id, expectedVersion: order.version, terms: { ...terms, paymentDays: 45 },
+    }),
+    () => ctx.orders.acceptTerms('negotiation-shop-accept-denied', 'buyer-1', {
+      orderId: order.id, organisationId: 'shop-1', expectedVersion: order.version,
+    }),
+    () => ctx.orders.acceptTerms('negotiation-brand-accept-denied', 'sales-1', {
+      orderId: order.id, organisationId: 'brand-1', expectedVersion: order.version,
+    }),
+  ];
+  for (const run of operations) {
+    await assert.rejects(run, error => error?.code === 'SHOWROOM_ACCESS_REQUIRED');
+  }
+  const after = ctx.store.snapshot();
+  for (const key of ['orders','cycles','commands','outbox','orderCommitSnapshots']) {
+    assert.deepEqual(after[key], before[key], 'revoked invitation cannot change ' + key);
+  }
+});
+
+test('P0: legacy ready order cannot commit after trade revocation but can be safely cancelled', async () => {
+  const ctx = await fixture();
+  let order = await ctx.orders.createOrderDraft('negotiation-ready-order', 'buyer-1', { selectionId: ctx.selectionId, terms });
+  order = await ctx.orders.acceptTerms('negotiation-ready-shop', 'buyer-1', {
+    orderId: order.id, organisationId: 'shop-1', expectedVersion: order.version,
+  });
+  order = await ctx.orders.acceptTerms('negotiation-ready-brand', 'sales-1', {
+    orderId: order.id, organisationId: 'brand-1', expectedVersion: order.version,
+  });
+  assert.equal(order.status, 'ready');
+  await ctx.partners.revokeRelationship('negotiation-ready-revoke', 'sales-1', ctx.relationshipId);
+  const before = ctx.store.snapshot();
+  await assert.rejects(
+    () => ctx.orders.attachOrderToCycle('negotiation-commit-denied', 'buyer-1', {
+      orderId: order.id, expectedVersion: order.version,
+    }),
+    error => error?.code === 'ACTIVE_RELATIONSHIP_REQUIRED',
+  );
+  const after = ctx.store.snapshot();
+  for (const key of ['orders','cycles','commands','outbox','orderCommitSnapshots']) {
+    assert.deepEqual(after[key], before[key], 'failed commit cannot change ' + key);
+  }
+  const cancellation = await ctx.orders.cancelOrder('negotiation-revoked-cancel', 'buyer-1', {
+    orderId: order.id, reason: 'Relationship no longer valid', expectedVersion: order.version,
+  });
+  assert.equal(cancellation.order.status, 'cancelled', 'cleanup must remain available after relationship revocation');
 });

@@ -77,6 +77,33 @@ export function createOrderBuilderService({
     });
   }
 
+  // A submitted Selection freezes negotiated prices, not perpetual permission to
+  // negotiate. For existing Orders, re-load the same Selection and its exact grant;
+  // neither a revoked invite nor a similarly named SKU/catalog can substitute it.
+  async function assertCurrentOrderNegotiationGrant(tx, selection, order = null) {
+    invariant(selection?.id && selection.showroomId && selection.brandId && selection.shopId,
+      'ORDER_SELECTION_CONTEXT_INCOMPLETE',
+      'Order negotiation requires its persisted Selection showroom and trade');
+    if (order) {
+      invariant(
+        selection.id === order.selectionId
+          && selection.cycleId === order.cycleId
+          && selection.brandId === order.brandId
+          && selection.shopId === order.shopId
+          && (selection.accessGrantId ?? null) === (order.accessGrantId ?? null),
+        'ORDER_SELECTION_CONTEXT_MISMATCH',
+        'Order and persisted Selection trade or grant differ');
+    }
+    const relationship = await tx.getRelationshipByTrade(selection.brandId, selection.shopId);
+    const invitation = selection.accessGrantId
+      ? await tx.getShowroomInvitation(selection.accessGrantId)
+      : await tx.getShowroomInvitationByAccess(selection.showroomId, selection.shopId);
+    assertAcceptedShowroomAccess(invitation, {
+      showroomId: selection.showroomId, brandId: selection.brandId,
+      shopId: selection.shopId, now: clock(), relationship,
+    });
+  }
+
   // Закреплённый заказ несёт минимальную партию в снимке каталога байера: правка не вправе увести
   // строку ниже неё — иначе принятая правка обошла бы то, что проверялось при прикреплении.
   async function assertAmendedQuantityMeetsMoq(order, line, quantity) {
@@ -127,6 +154,7 @@ export function createOrderBuilderService({
         async (tx) => {
           const selection = requireEntity(await tx.getSelection(selectionId), 'SELECTION_NOT_FOUND', { selectionId });
           await assertOrganisationActor(tx, selection.shopId, actorId, CAPABILITIES.ORDER_WRITE);
+          await assertCurrentOrderNegotiationGrant(tx, selection);
           return selection;
         },
         async (tx, selection) => {
@@ -182,6 +210,8 @@ export function createOrderBuilderService({
           const current = requireEntity(await tx.getOrder(orderId), 'ORDER_NOT_FOUND', { orderId });
           const cycle = requireEntity(await tx.getCycle(current.cycleId), 'CYCLE_NOT_FOUND', { cycleId: current.cycleId });
           authorizeOrderMutation(await tx.listMembershipsForTrade(cycle.brandId, cycle.shopId), actorId, cycle);
+          const selection = requireEntity(await tx.getSelection(current.selectionId), 'SELECTION_NOT_FOUND', { selectionId: current.selectionId });
+          await assertCurrentOrderNegotiationGrant(tx, selection, current);
           return current;
         },
         async (tx, current) => {
@@ -208,6 +238,8 @@ export function createOrderBuilderService({
           const current = requireEntity(await tx.getOrder(orderId), 'ORDER_NOT_FOUND', { orderId });
           invariant(organisationId === current.brandId || organisationId === current.shopId, 'ORDER_PARTY_INVALID', 'Organisation is not an order party', { organisationId });
           await assertOrganisationActor(tx, organisationId, actorId, CAPABILITIES.ORDER_CONFIRM);
+          const selection = requireEntity(await tx.getSelection(current.selectionId), 'SELECTION_NOT_FOUND', { selectionId: current.selectionId });
+          await assertCurrentOrderNegotiationGrant(tx, selection, current);
           return current;
         },
         async (tx, current) => {
@@ -236,6 +268,7 @@ export function createOrderBuilderService({
           const cycle = requireEntity(await tx.getCycle(current.cycleId), 'CYCLE_NOT_FOUND', { cycleId: current.cycleId });
           authorizeOrderMutation(await tx.listMembershipsForTrade(cycle.brandId, cycle.shopId), actorId, cycle);
           const selection = requireEntity(await tx.getSelection(current.selectionId), 'SELECTION_NOT_FOUND', { selectionId: current.selectionId });
+          await assertCurrentOrderNegotiationGrant(tx, selection, current);
           // Окно показа и его закрытие гасят и заказ без закреплённого каталога: «Закрыть» у шоурума
           // обещает, что в нём больше ничего не фиксируется, а не только для коммерческих заказов.
           const commitShowroom = await tx.getShowroom(selection.showroomId);

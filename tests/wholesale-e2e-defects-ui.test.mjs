@@ -105,8 +105,8 @@ function looksFixture({ buyerCatalog }) {
       getShowroom: async () => showroom,
       getMembership: async (organisationId, actorId) => (organisationId === 'brand-1' && actorId === 'brand-user' ? { status: 'active' } : undefined),
       listMembershipsForActor: async (actorId) => (actorId === 'shop-user' ? [{ status: 'active', organisationId: 'shop-1' }] : []),
-      getShowroomInvitationByAccess: async () => ({ status: 'accepted' }),
-      getRelationshipByTrade: async () => ({ status: 'active' }),
+      getShowroomInvitationByAccess: async () => ({ id: 'invite-1', showroomId: 'showroom-1', brandId: 'brand-1', shopId: 'shop-1', status: 'accepted', expiresAt: '2027-01-15T00:00:00.000Z' }),
+      getRelationshipByTrade: async () => ({ id: 'relation-1', brandId: 'brand-1', shopId: 'shop-1', status: 'active' }),
       listShowroomLooks: async () => [catalogLook],
     })),
   };
@@ -115,7 +115,7 @@ function looksFixture({ buyerCatalog }) {
     getBuyerCatalogVersion: async () => undefined,
     getBuyerCatalogForAccess: async (showroomId, shopId) => { asked.push([showroomId, shopId]); return buyerCatalog; },
   };
-  return { service: createShowroomSelectionService({ store, commercialPublicationReader }), asked, catalogLook };
+  return { service: createShowroomSelectionService({ store, commercialPublicationReader, clock: () => '2026-08-02T00:00:00.000Z' }), asked, catalogLook };
 }
 
 const buyerCatalog = Object.freeze({

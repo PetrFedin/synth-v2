@@ -50,15 +50,19 @@ async function fixture() {
   cycle = await platform.advanceCycle('matrix-cycle-showroom', 'buyer-1', cycle.id, 'showroom');
 
   const buyerCatalog = richBuyerCatalog({ collectionId: collection.id, showroomId: showroom.id, invitationId: invitation.id });
+  let catalogForPinnedRead = buyerCatalog;
   const rich = createShowroomSelectionService({
     ...base,
     catalogReader: Object.freeze({ getSku: async () => { throw new Error('rich matrix must not read the live flat catalog'); } }),
     commercialPublicationReader: Object.freeze({
       getBuyerCatalogForAccess: async () => buyerCatalog,
-      getBuyerCatalogVersion: async idValue => idValue === buyerCatalog.id ? buyerCatalog : undefined,
+      getBuyerCatalogVersion: async idValue => idValue === buyerCatalog.id ? catalogForPinnedRead : undefined,
     }),
   });
-  return { store, cycle, showroom, buyerCatalog, rich, door, partners, relationship, invitation };
+  return {
+    store, cycle, showroom, buyerCatalog, rich, door, partners, relationship, invitation,
+    setCatalogForPinnedRead: value => { catalogForPinnedRead = value; },
+  };
 }
 
 function richBuyerCatalog({ collectionId, showroomId, invitationId }) {
@@ -184,6 +188,47 @@ test('revoked invitation blocks submitted-review approval and rejection, includi
   const after = context.store.snapshot();
   assert.deepEqual(after.selections, before.selections);
   assert.deepEqual(after.cycles, before.cycles);
+  assert.deepEqual(after.commands, before.commands);
+  assert.deepEqual(after.outbox, before.outbox);
+});
+
+test('pinned BuyerCatalog read rejects cross-trade and version identity substitution despite same content hash', async () => {
+  const context = await fixture();
+  const created = await context.rich.createSelection('identity-selection-create', 'buyer-1', {
+    cycleId: context.cycle.id, showroomId: context.showroom.id, retailDoorId: context.door.id,
+  });
+  const selected = created.selection;
+  const before = context.store.snapshot();
+  const changes = [
+    ['id', 'catalog-foreign'],
+    ['brandId', 'foreign-brand'],
+    ['shopId', 'foreign-shop'],
+    ['showroomId', 'foreign-showroom'],
+    ['collectionId', 'foreign-collection'],
+    ['accessGrantId', 'foreign-grant'],
+    ['publicationId', 'foreign-publication'],
+    ['priceListVersionId', 'foreign-price-list'],
+    ['status', 'draft'],
+  ];
+  for (const [i, [field, other]] of changes.entries()) {
+    context.setCatalogForPinnedRead(Object.freeze({ ...context.buyerCatalog, [field]: other }));
+    await assert.rejects(
+      () => context.rich.upsertSelectionLine('identity-upsert-denied-' + i, 'buyer-1', selected.id, {
+        sku: 'SKU-1', quantity: 3,
+      }),
+      error => error?.code === 'SELECTION_PINNED_BUYER_CATALOG_IDENTITY_MISMATCH',
+      'upsert must deny tampered ' + field,
+    );
+    await assert.rejects(
+      () => context.rich.replaceSelectionMatrix('identity-matrix-denied-' + i, 'buyer-1', selected.id, {
+        lines: [{ sku: 'SKU-1', quantity: 3 }],
+      }),
+      error => error?.code === 'SELECTION_PINNED_BUYER_CATALOG_IDENTITY_MISMATCH',
+      'matrix must deny tampered ' + field,
+    );
+  }
+  const after = context.store.snapshot();
+  assert.deepEqual(after.selections, before.selections);
   assert.deepEqual(after.commands, before.commands);
   assert.deepEqual(after.outbox, before.outbox);
 });

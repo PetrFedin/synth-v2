@@ -17,16 +17,21 @@ export function validateLiveAppEvidence({ durationSeconds, screens, consoleError
   if (!['ru', 'en'].every(language => screens.some(screen => screen.language === language)))
     throw new Error('MEDIA_BILINGUAL_EVIDENCE_MISSING');
   const admitted = canonicalDocumentAdmission === 'admitted';
-  if (!admitted && canonicalDocumentAdmission !== 'blocked: TECH_PACK_CANONICAL_PRINT_NOT_ADMITTED')
+  const historical = canonicalDocumentAdmission === 'legacy-admitted';
+  if (!admitted && !historical
+      && canonicalDocumentAdmission !== 'blocked: TECH_PACK_CANONICAL_RENDER_NOT_ADMITTED')
     throw new Error('MEDIA_DOCUMENT_ADMISSION_UNVERIFIED');
   const documentScreens = screens.filter(screen => screen.name === '06b-app-tech-pack-issued-document-ru.png');
-  if (admitted !== (documentScreens.length === 1))
+  const historicalScreens = screens.filter(screen => screen.name === '06b-app-tech-pack-legacy-document-ru.png');
+  if (admitted !== (documentScreens.length === 1)
+      || historical !== (historicalScreens.length === 1))
     throw new Error('MEDIA_DOCUMENT_CLAIM_MISMATCH');
   return Object.freeze({
     visualCaptureAccepted: true,
     manufacturingDocumentDemonstrated: admitted,
+    legacyDocumentDemonstrated: historical,
     productionReady: false,
     limitations: Object.freeze(admitted ? ['ISOLATED_DEMO_ONLY'] :
-      ['ISOLATED_DEMO_ONLY', 'CANONICAL_DOCUMENT_NOT_ADMITTED']),
+      ['ISOLATED_DEMO_ONLY', historical ? 'LEGACY_ONLY_NO_CANONICAL_PROOF' : 'CANONICAL_READ_RIGHTS_BLOCKED']),
   });
 }

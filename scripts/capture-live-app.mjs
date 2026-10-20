@@ -3,6 +3,7 @@
 // PostgreSQL CI database. Authentication occurs over HTTP BEFORE recording.
 // Never record credentials, tokens, real customer data or simulated DOM frames.
 import { validateLiveAppEvidence } from './live-app-evidence-policy.mjs';
+import { selectMediaTechPack, techPackDocumentRoute, classifyTechPackDocumentRead } from './live-app-tech-pack-document.mjs';
 import { createRequire } from 'node:module';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
@@ -32,7 +33,8 @@ const packPage = (await response.json())?.data;
 if(!Array.isArray(packPage?.items))throw new Error('Tech Pack list payload is invalid');
 const authenticPacks = packPage.items
   .filter(pack=>pack.status==='acknowledged' && pack.dependencySnapshot);
-if(!authenticPacks.length)throw new Error(
+const documentPack = selectMediaTechPack(packPage.items);
+if(!documentPack)throw new Error(
   'SEED_TECH_PACK_UNAVAILABLE_TO_OWNER: application API returned no acknowledged pack with frozen source references; total '+packPage.items.length
 );
 const verifiedPackCodes=authenticPacks.map(pack=>pack.techPackCode);
@@ -142,8 +144,7 @@ try{
       .map(row=>row.textContent||''),
     // Diagnostic only: do not put session, tokens or private tenant payload in media.
     packs:(Reflect.get(window,'SynthaTechPacksWorkspace')?.items||[]).map(value=>({
-      brandId:value.brandId,
-      status:value.status,
+      brandId:value.brandId, status:value.status, issueFormat:value.issueFormat,
     })),
     uiSelectedCode:Reflect.get(window,'SynthaTechPacksWorkspace')?.selectedCode??null,
     context:(() => {
@@ -165,34 +166,36 @@ try{
      !techPackProof.renderedRows.some(row=>verifiedPackCodes.some(code=>row.includes(code))))
     throw new Error('TECH_PACK_UI_API_DIVERGENCE '+JSON.stringify(techPackProof));
   await recordShot(page,'06-app-tech-packs-ru.png','Tech Pack list backed by real seeded API');
-  const selectedDocCode=authenticPacks[0].techPackCode;
-  const documentGet=await fetch(url+'/v2/tech-packs/'+encodeURIComponent(selectedDocCode)+'/document',{
+  const selectedDocCode=documentPack.techPackCode;
+  // The UI must select the exact API-acknowledged pack, not merely its first row.
+  const targetRow=page.locator('.tech-pack-table tbody tr').filter({hasText:selectedDocCode});
+  if(await targetRow.count()!==1)throw new Error('TECH_PACK_TARGET_ROW_MISSING');
+  await targetRow.click();
+  if(await page.locator('.tech-pack-inspector .eyebrow').first().innerText()!==selectedDocCode)
+    throw new Error('TECH_PACK_SELECTED_IDENTITY_MISMATCH');
+  const documentGet=await fetch(url+techPackDocumentRoute(documentPack),{
     headers:{authorization:'Bearer '+token,accept:'application/json'},
   });
   const responseBody=await documentGet.json().catch(()=>({}));
-  documentAdmission='admitted';
-  if(documentGet.status===422 && responseBody.error?.code==='TECH_PACK_CANONICAL_PRINT_NOT_ADMITTED'){
-    // Blocked canonical printing is a valid, security-enforcing product state.
-    // Never stage a fake "issued document" screenshot or bypass admission.
-    documentAdmission='blocked: TECH_PACK_CANONICAL_PRINT_NOT_ADMITTED';
-    await recordShot(page,'06b-app-tech-pack-print-admission-blocked-ru.png',
-      'Confirmed Tech Pack registry; canonical printing not yet admitted');
-  } else if(!documentGet.ok){
-    throw new Error('TECH_PACK_ISSUED_DOCUMENT_HTTP_FAILURE status='+documentGet.status+
-      ' code='+String(responseBody.error?.code||'unavailable'));
+  const outcome=classifyTechPackDocumentRead(documentPack,documentGet.status,responseBody.data??responseBody);
+  documentAdmission=outcome.admission;
+  if(!outcome.visible){
+    // Current rights may prohibit the technical READ. Never stage a fake page.
+    await recordShot(page,'06b-app-tech-pack-render-admission-blocked-ru.png',
+      'Canonical document current-rights admission denied');
   } else {
     await page.locator('.tech-pack-inspector button').filter({hasText:'Документ'}).first().click();
-    try { await page.locator('.tp-doc').waitFor({timeout:12000}); }
-    catch(error){
-      const screen=await page.locator('.tech-pack-page').innerText().catch(()=>'?');
-      throw new Error('TECH_PACK_DOCUMENT_NOT_DISPLAYED view='+screen.slice(0,1500));
-    }
+    await page.locator('.tp-doc').waitFor({timeout:12000});
     const issuedDocText=(await page.locator('.tp-doc').innerText()).trim();
-    if(!issuedDocText.includes(authenticPacks[0].techPackCode) ||
-       !issuedDocText.includes('Таблица мер'))
-      throw new Error('Frozen issued document is missing expected technical sections');
-    await recordShot(page,'06b-app-tech-pack-issued-document-ru.png',
-      'Actually admitted supplier technical document');
+    if(!issuedDocText.includes(selectedDocCode)
+      || !issuedDocText.includes('Таблица мер'))
+      throw new Error('Exact issued document identity/measurement UI mismatch');
+    const shot=outcome.kind==='canonical'
+      ? '06b-app-tech-pack-issued-document-ru.png'
+      : '06b-app-tech-pack-legacy-document-ru.png';
+    await recordShot(page,shot,
+      outcome.kind==='canonical' ? 'Rights-admitted canonical technical read, not PDF'
+        : 'Legacy historical document, not canonical proof');
     await page.locator('.tp-doc-toolbar button').filter({hasText:'Закрыть'}).click();
   }
   await go(page,'Рабочий стол',1050);
@@ -259,6 +262,8 @@ const manifest={
   durationSeconds:duration,screens:evidence,layoutChecks,
   verifiedManufacturingTechPackCodes:verifiedPackCodes,
   canonicalDocumentAdmission:documentAdmission,
+  selectedDocumentTechPackCode:documentPack.techPackCode,
+  selectedDocumentIssueFormat:documentPack.issueFormat ?? 'legacy',
   consoleErrors:pageErrors,files:hashes,
 };
 await writeFile(join(folder,'manifest.json'),JSON.stringify(manifest,null,2)+'\n');

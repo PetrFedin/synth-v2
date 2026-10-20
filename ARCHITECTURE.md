@@ -2668,3 +2668,33 @@ Dedicated negative tests cover duration boundaries, malformed evidence, private
 error non-disclosure and blocked/admitted contradictions. CI policy execution
 precedes filming; workflow triggers include the policy and tests. No change to
 current auth/tenant isolation, exact source identity, private fixtures or rights.
+
+
+## 2026-10-20 — Canonical Tech Pack media-proof route reconciliation
+
+Draft PR #310 is a bounded live-evidence correction stacked on #309. It adds
+`scripts/live-app-tech-pack-document.mjs` plus exact read-route/contract tests
+and updates the CI capture script, media policy, and workflow; it does not
+change product domain services, persisted evidence, permission grants or
+published print/export routes.
+
+The earlier capture incorrectly requested legacy `/document` for
+`issueFormat=canonical-v1`, interpreting the deliberate
+`TECH_PACK_CANONICAL_PRINT_NOT_ADMITTED` 422 as proof that technical
+READ was impossible. The real browser already uses `/canonical-document`,
+which is guarded by current media-publication rights and exposes only the
+cost-redacted manufacturing projection. Exact Tech Pack identity is now
+selected against the authenticated API list and its actual browser row, with
+slash-containing codes sent via `by-code` query routing.
+
+Media claims are separated:
+- canonical rights-admitted technical **read** with actual rendered document;
+- canonical rights-blocked read, with no claimed document screenshot;
+- legacy historical read, explicitly not promoted to canonical evidence.
+All retain `productionReady=false`; technical read does not grant factory
+print, downloadable PDF, or publication clearance.
+
+CI executes policy and contract tests before real isolated PostgreSQL
+Chromium recording. Exact-head Verify, PostgreSQL/full commerce and browser
+artifact review are still required. Existing Draft/main/production HOLD
+boundaries are unchanged. No new paid runtime is introduced.

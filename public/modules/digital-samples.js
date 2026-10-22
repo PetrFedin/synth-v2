@@ -271,13 +271,13 @@
 
     async function load(force=false) {
       if (model.loading && !force) return;
-      model.loading=true; model.error=null; status.textContent=tr('loading'); renderRegister();
+      model.loading=true; model.error=null; status.textContent=tr('loading'); status.className='ds-status'; renderRegister();
       try {
         const page=await api('/v2/product/style-versions/'+encodeURIComponent(product.styleVersionId)+'/digital-samples?limit=100');
         model.samples=page.items || []; model.sampleCursor=page.nextCursor;
         const existing=model.selected && model.samples.find(x=>x.seriesId===model.selected.seriesId);
         model.selected=existing || model.samples[0] || null;
-        status.textContent='';
+        status.textContent=''; status.className='ds-status';
         renderRegister();
         if (model.selected) await select(model.selected,false); else renderDetail();
       } catch(error) {
@@ -291,7 +291,7 @@
         try {
           const page=await api('/v2/digital-sample-versions/'+encodeURIComponent(sample.id)+'/scenarios?limit=100');
           model.scenarios=page.items || []; model.scenarioCursor=page.nextCursor;
-        } catch(error) { model.scenarios=[]; status.textContent=errorMessage(error); }
+        } catch(error) { model.scenarios=[]; status.textContent=errorMessage(error); status.className='ds-status error'; }
       }
       renderDetail();
     }
@@ -300,7 +300,7 @@
       try {
         const page=await api('/v2/digital-sample-series/'+encodeURIComponent(sample.seriesId)+'/versions?limit=100');
         model.history=page.items || []; renderDetail();
-      } catch(error) { status.textContent=errorMessage(error); }
+      } catch(error) { status.textContent=errorMessage(error); status.className='ds-status error'; }
     }
 
     function openEditor(titleText, fields, submit) {
@@ -332,7 +332,7 @@
         save.disabled=true; cancel.disabled=true; message.textContent='';
         try {
           const saved=await submit(value,pending.key);
-          pending=null; editor.replaceChildren(); status.textContent=tr('saved');
+          pending=null; editor.replaceChildren(); status.textContent=tr('saved'); status.className='ds-status';
           await load(true);
           const found=model.samples.find(x=>x.id===saved.id || x.seriesId===saved.seriesId);
           if(found) await select(found);

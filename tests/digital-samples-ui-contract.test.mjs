@@ -36,3 +36,15 @@ test('Digital Samples UI exposes only implemented sample and scenario actions', 
   assert.doesNotMatch(source, /simulate|cloth solver|approve production|checkout|pay now/i);
   assert.match(source, /declared_only|unverified|не проверен/i);
 });
+
+test('Digital Samples domain failures are localized by the shared RU error dictionary', async () => {
+  const source = await read('public/modules/error-messages.js');
+  for (const code of [
+    'DIGITAL_SAMPLE_CONCURRENCY_CONFLICT',
+    'DIGITAL_SAMPLE_LINEAGE_CONFLICT',
+    'DIGITAL_SAMPLE_INTEGRITY_CONFLICT',
+    'DIGITAL_SAMPLE_SCENARIO_RESULT_INVALID',
+    'DIGITAL_SAMPLE_MONEY_INVALID',
+    'DIGITAL_SAMPLE_QUANTITY_INVALID',
+  ]) assert.match(source, new RegExp(code + ':'));
+});

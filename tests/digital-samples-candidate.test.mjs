@@ -136,6 +136,15 @@ test('scenario is immutable planning evidence and does not claim demand or produ
   assert.equal(scenario.calculation.result.batchCashResult,'1350.0000');
 });
 
+test('digital sample service consumes the canonical capability dictionary', async () => {
+  const source=await readFile(new URL('../src/application/digital-sample-service.mjs',import.meta.url),'utf8');
+  assert.match(source,/CAPABILITIES\.PRODUCT_READ/);
+  assert.match(source,/CAPABILITIES\.PRODUCT_ENGINEERING_MANAGE/);
+  assert.match(source,/CAPABILITIES\.COST_MANAGE/);
+  assert.match(source,/CAPABILITIES\.MARGIN_READ/);
+  assert.doesNotMatch(source,/const READ = 'product\.read'/);
+});
+
 test('native routes and OpenAPI expose exactly the intended digital-sample surface',()=>{
   const routes=createDigitalSampleRoutes({digitalSamples:{}});
   assert.equal(routes.length,7);

@@ -2356,7 +2356,7 @@ The registry must be extended together with every future script tag. New module 
 
 **Lineage.** Every sample series is pinned to exact `brandId/styleId/styleVersionId/styleVersionContentHash`. Revisions are append-only and require the expected current head. Historical reads recompute and verify manifest hashes and re-check current brand membership/capability. A terminal Product Identity lifecycle state blocks new revisions but not historical reads.
 
-**Capabilities.** Sample read uses `product.read`; sample creation/revision uses `product-engineering.manage`. Planning economics intentionally uses separate financial authority: write requires `cost.manage`, read requires `margin.read`. No new identity provider or parallel role matrix is introduced.
+**Capabilities.** Sample read uses `product.read`; sample creation/revision uses `product-engineering.manage`. Planning economics intentionally uses separate financial authority: write requires `cost.manage`, read requires `margin.read`. The service imports these names from the canonical `CAPABILITIES` export rather than maintaining private string constants, so role/capability evolution stays centralized. No new identity provider or parallel role matrix is introduced.
 
 **Persistence and commands.** Migration `181_digital_sample_manifest_registry.sql` adds `digital_sample_series`, immutable `digital_sample_versions`, immutable `digital_sample_scenarios`, and `digital_sample_commands`. The shared `command_registry` gains the `digital-samples` scope without replacing prior scopes. Mutation result, outbox event and command result share one PostgreSQL transaction. Browser roles receive no direct table privileges.
 

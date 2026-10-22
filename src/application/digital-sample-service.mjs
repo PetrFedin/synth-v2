@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { invariant, requireEntity } from '../core/errors.mjs';
+import { CAPABILITIES } from '../modules/access-control/public.mjs';
 import {
   digitalSampleId, digitalSampleCommandId, digitalSampleHash, digitalSampleTimestamp,
   normalizeDigitalSampleInput, createDigitalSampleVersion, freezeDigitalSample,
@@ -7,8 +8,10 @@ import {
   normalizeScenarioInput, calculateDigitalSampleScenario,
 } from '../modules/digital-samples/public.mjs';
 
-const READ = 'product.read', MANAGE = 'product-engineering.manage';
-const SCENARIO_READ = 'margin.read', SCENARIO_WRITE = 'cost.manage';
+const READ = CAPABILITIES.PRODUCT_READ;
+const MANAGE = CAPABILITIES.PRODUCT_ENGINEERING_MANAGE;
+const SCENARIO_READ = CAPABILITIES.MARGIN_READ;
+const SCENARIO_WRITE = CAPABILITIES.COST_MANAGE;
 
 /** @param {any} [options] */
 export function createDigitalSampleService({ store, authorizeMembership,

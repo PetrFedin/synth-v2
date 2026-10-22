@@ -4,12 +4,12 @@ import { assertBodyContract, assertQueryContract, bodyContract } from './request
 import { decodePathParameter } from './transport-contract.mjs';
 
 const MANIFEST_REQUIRED = DIGITAL_SAMPLE_INPUT_FIELDS.filter(field => field !== 'note');
-const MANIFEST = required(bodyContract(DIGITAL_SAMPLE_INPUT_FIELDS), MANIFEST_REQUIRED);
+const MANIFEST = required(bodyContract([...DIGITAL_SAMPLE_INPUT_FIELDS]), MANIFEST_REQUIRED);
 const APPEND = required(
   bodyContract([...DIGITAL_SAMPLE_INPUT_FIELDS, 'expectedHeadId']),
   [...MANIFEST_REQUIRED, 'expectedHeadId'],
 );
-const SCENARIO = required(bodyContract(SCENARIO_FIELDS), SCENARIO_FIELDS);
+const SCENARIO = required(bodyContract([...SCENARIO_FIELDS]), SCENARIO_FIELDS);
 
 /** @param {any} [options] */
 export function createDigitalSampleRoutes({ digitalSamples } = {}) {

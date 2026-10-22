@@ -1546,7 +1546,7 @@ PostgreSQL AI Engineering Golden Path additionally proves one real Material `res
 
 #### Product Master Review → Impact → Apply UI — IMPLEMENTED/PARTIAL
 
-The Product Master Engineering tab mirrors the authority states rather than collapsing them into one action:
+The Product Master Engineering tab mirrors the authority states rather than collapsing them into one action. Its user-facing RU/EN label is **Инженерный анализ / Engineering review**; provider/model/AI provenance remains inspectable evidence, but the workspace is named for the user's engineering task rather than the implementation technology:
 
 - `pending`: Accept / Reject only; Accept is explicitly described as review, not canonical mutation;
 - `accepted + unapplied`: read-only Impact is available to Engineering readers; Apply is shown only when the proposal authority/action is in the canonical allowlist and the actor can manage Product Engineering;
@@ -2348,3 +2348,22 @@ The standalone HTTP application serves browser JavaScript and CSS from an explic
 `tests/browser-shell-asset-delivery.test.mjs` is a real loopback-HTTP admission test: start the actual standalone static handler, fetch the delivered HTML, request **every linked JS and CSS asset** with the actual querystring, reject non-200/empty/incorrect-content-type results and assert the workspace hub JS is served with `no-store`. This test is independent of PostgreSQL business mutations and prevents the entire family of invisible UI/404 regressions. It is not browser screenshot proof or domain workflow acceptance.
 
 The registry must be extended together with every future script tag. New module deployment is rejected by CI if its HTML link is not delivered. The final Omnidata Design System CSS contract remains unchanged.
+
+
+## Digital Sample Registry and Batch Economics — PARTIAL IMPLEMENTATION (2026-10-23)
+
+**Scope and truth boundary.** This slice implements a versioned registry for digital-sample metadata and manual batch-economics scenarios under the canonical Product Identity `StyleVersion`. It does **not** upload or validate 3D bytes, run cloth simulation, prove fit, create a production approval, observe demand, or write Actual Cost. `artifactVerification=declared_only`, `reviewStatus=not_reviewed`, `viewable=false`, and `productionReady=false` are enforced in the domain and database.
+
+**Lineage.** Every sample series is pinned to exact `brandId/styleId/styleVersionId/styleVersionContentHash`. Revisions are append-only and require the expected current head. Historical reads recompute and verify manifest hashes and re-check current brand membership/capability. A terminal Product Identity lifecycle state blocks new revisions but not historical reads.
+
+**Capabilities.** Sample read uses `product.read`; sample creation/revision uses `product-engineering.manage`. Planning economics intentionally uses separate financial authority: write requires `cost.manage`, read requires `margin.read`. The service imports these names from the canonical `CAPABILITIES` export rather than maintaining private string constants, so role/capability evolution stays centralized. No new identity provider or parallel role matrix is introduced.
+
+**Persistence and commands.** Migration `181_digital_sample_manifest_registry.sql` adds `digital_sample_series`, immutable `digital_sample_versions`, immutable `digital_sample_scenarios`, and `digital_sample_commands`. The shared `command_registry` gains the `digital-samples` scope without replacing prior scopes. Mutation result, outbox event and command result share one PostgreSQL transaction. Browser roles receive no direct table privileges.
+
+**HTTP contract.** Seven authenticated operations cover create/list sample series, append/list revisions, read one revision, and create/list scenarios. The routes reuse the platform-native `bodyContract`, `assertBodyContract`, `assertQueryContract` and `decodePathParameter` transport authorities rather than maintaining a parallel validator. The composed V2 OpenAPI contract is version `1.22.0`. Mutation transport retains the original idempotency key across ambiguous retries; domain conflicts are fail-closed.
+
+**Economics v1.** `digital-batch-scenario-v1` uses fixed-point four-decimal arithmetic. It keeps unit contribution, fixed-launch break-even, full-batch cash recovery, unsold inventory at production cost, MOQ and pack-multiple constraints separate. Inputs are explicit manual estimates in one currency; tax timing, FX, financing, returns, markdowns, payment schedules, BOM/quote provenance and observed demand are not yet modeled. The scenario is planning evidence, not Actual Cost and not a governed KPI observation.
+
+**UI direction.** Digital Samples is a Product Master inspector surface, not a second app shell. It must use the existing ODS tokens/components and RU/EN runtime. This slice must not add another `omnidata-vN.css` layer. File upload, 3D viewer, simulation and production-admission buttons remain absent until their handlers, evidence and rights gates exist.
+
+**Acceptance boundary.** Local candidate qualification passed 89 Node tests, including 5,000 generated economic cases. Native repository CI, migration replay on PostgreSQL 17, exact-SHA runtime smoke, full browser integration and deployed-SHA acceptance remain separate gates before merge/release.

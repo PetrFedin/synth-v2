@@ -30,6 +30,7 @@ import { createLegalEntityRoutes } from './legal-entity-routes.mjs';
 import { createComplianceDocumentRoutes } from './compliance-document-routes.mjs';
 import { createProductCertificationRoutes } from './product-certification-routes.mjs';
 import { createProductIdentityRoutes } from './product-identity-routes.mjs';
+import { createDigitalSampleRoutes } from './digital-sample-routes.mjs';
 import { createProductReadinessRoutes } from './product-readiness-routes.mjs';
 import { createProductEngineeringRoutes } from './product-engineering-routes.mjs';
 import { createProductionRequirementRoutes } from './production-requirement-routes.mjs';
@@ -52,6 +53,7 @@ export function createWholesaleRoutes(services = {}) {
     ...createCoreWholesaleRoutes(services),
     ...createOptionalCollectionStyleVersionRoutes(services.platform),
     ...createProductIdentityRoutes({ productIdentity: services.productIdentity }),
+    ...createDigitalSampleRoutes({ digitalSamples: services.digitalSamples }),
     ...createLegalEntityRoutes({ legalEntities: services.legalEntities }),
     ...createComplianceDocumentRoutes({ complianceDocuments: services.complianceDocuments }),
     ...createProductCertificationRoutes({ productCertifications: services.productCertifications }),

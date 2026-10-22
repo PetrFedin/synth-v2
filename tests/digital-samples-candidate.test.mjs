@@ -145,6 +145,13 @@ test('digital sample service consumes the canonical capability dictionary', asyn
   assert.doesNotMatch(source,/const READ = 'product\.read'/);
 });
 
+test('digital sample routes reuse native request and path contracts', async () => {
+  const source=await readFile(new URL('../src/http/digital-sample-routes.mjs',import.meta.url),'utf8');
+  for (const token of ['bodyContract','assertBodyContract','assertQueryContract','decodePathParameter']) {
+    assert.match(source,new RegExp(token));
+  }
+});
+
 test('native routes and OpenAPI expose exactly the intended digital-sample surface',()=>{
   const routes=createDigitalSampleRoutes({digitalSamples:{}});
   assert.equal(routes.length,7);

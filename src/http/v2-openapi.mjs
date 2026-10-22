@@ -1,3 +1,4 @@
+import { withDigitalSampleOpenApi } from './digital-sample-openapi.mjs';
 import { withApprovedDemandProductionOpenApi } from './approved-demand-production-openapi.mjs';
 import { withAwaitingActionOpenApi } from './awaiting-action-openapi.mjs';
 import { withOperationalCollaborationOpenApi } from './operational-collaboration-openapi.mjs';
@@ -41,7 +42,7 @@ import { withTechPackOpenApi } from './tech-pack-openapi.mjs';
 import { withTeamOpenApi } from './team-openapi.mjs';
 import { wholesaleV2OpenApi } from './openapi.mjs';
 
-const AUTHORITATIVE_V2_CONTRACT_VERSION = '1.21.0';
+const AUTHORITATIVE_V2_CONTRACT_VERSION = '1.22.0';
 
 const composed = withSupplierPortalOpenApi(withOperationSequenceOpenApi(
   withCuttingOpenApi(
@@ -111,7 +112,7 @@ const composed = withSupplierPortalOpenApi(withOperationSequenceOpenApi(
   ),
 ));
 
-const withSupplierPassport = withSupplierPassportOpenApi(composed);
+const withSupplierPassport = withDigitalSampleOpenApi(withSupplierPassportOpenApi(composed));
 export const wholesaleV2ExtendedOpenApi = preserveAuthoritativeContractVersion(
   withOperationalExceptionOpenApi(
     withOperationalCollaborationOpenApi(

@@ -1,3 +1,4 @@
+import { createPostgresDigitalSampleRuntime } from './postgres-digital-sample-runtime.mjs';
 import { createFinalQualityQueryService } from '../application/final-quality-query-service.mjs';
 import { createFinalQualityService } from '../application/final-quality-service.mjs';
 import { createOrderMarginBridgeService } from '../application/order-margin-bridge-service.mjs';
@@ -73,6 +74,8 @@ import { createPostgresSupplierRecoveryRuntime } from './postgres-supplier-recov
 
 export function createPostgresWholesaleRuntime(options = {}) {
   const base = createBaseRuntime(options);
+  const digitalSampleRuntime = createPostgresDigitalSampleRuntime(options);
+  const digitalSamples = digitalSampleRuntime.service;
 
   const orderMarginBridgeReader = createPostgresOrderMarginBridgeReader({ pool: options.pool });
   const orderEconomics = Object.freeze({
@@ -342,6 +345,7 @@ export function createPostgresWholesaleRuntime(options = {}) {
     complianceDocuments,
     productCertifications,
     productIdentity: base.productIdentity,
+    digitalSamples,
     productEngineering,
     productReadiness: base.productReadiness,
     commercialPublication: base.commercialPublication,
@@ -398,6 +402,8 @@ export function createPostgresWholesaleRuntime(options = {}) {
   return Object.freeze({
     ...base,
     productEngineering,
+    digitalSamples,
+    digitalSampleStore: digitalSampleRuntime.store,
     orderMarginBridgeReader,
     orderEconomics,
     productionRequirementStore,

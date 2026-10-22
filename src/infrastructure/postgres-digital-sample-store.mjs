@@ -3,6 +3,7 @@ import { canonicalJson } from '../core/fingerprints.mjs';
 import { getRegisteredCommand, insertRegisteredCommand } from './postgres-command-registry.mjs';
 import { withPostgresTransaction } from './postgres-transaction.mjs';
 
+/** @param {any} [options] */
 export function createPostgresDigitalSampleStore({ pool } = {}) {
   invariant(typeof pool?.connect === 'function', 'POSTGRES_POOL_REQUIRED', 'PostgreSQL pool required');
   return Object.freeze({

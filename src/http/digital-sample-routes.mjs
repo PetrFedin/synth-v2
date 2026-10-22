@@ -1,6 +1,7 @@
 import { invariant } from '../core/errors.mjs';
 import { DIGITAL_SAMPLE_INPUT_FIELDS, SCENARIO_FIELDS, digitalSampleId, normalizeDigitalSamplePage } from '../modules/digital-samples/public.mjs';
 
+/** @param {any} [options] */
 export function createDigitalSampleRoutes({ digitalSamples } = {}) {
   const unavailable = () => invariant(false, 'DIGITAL_SAMPLE_SERVICE_REQUIRED', 'Digital sample registry unavailable');
   const service = digitalSamples ?? new Proxy({}, { get: () => unavailable });

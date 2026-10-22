@@ -2,6 +2,7 @@ import { assertCapability } from '../modules/access-control/public.mjs';
 import { createDigitalSampleService } from '../application/digital-sample-service.mjs';
 import { createPostgresDigitalSampleStore } from '../infrastructure/postgres-digital-sample-store.mjs';
 
+/** @param {any} [options] */
 export function createPostgresDigitalSampleRuntime(options = {}) {
   const store = createPostgresDigitalSampleStore({ pool: options.pool });
   const service = createDigitalSampleService({

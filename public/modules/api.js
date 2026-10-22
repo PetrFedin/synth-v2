@@ -44,12 +44,18 @@ function humaniseServerError(code, message) {
   return SynthaErrorMessages.describe(code, message);
 }
 
-async function api(path, { method = 'GET', body, anonymous = false, signal } = {}) {
+async function api(path, { method = 'GET', body, anonymous = false, signal, idempotencyKey } = {}) {
   const headers = { accept: 'application/json', 'accept-language': I18N.localeTag() };
   if (!anonymous && state.token) headers.authorization = `Bearer ${state.token}`;
   if (body !== undefined) headers['content-type'] = 'application/json';
   const mutation = !['GET','HEAD'].includes(method) && path !== '/v2/auth/logout';
-  if (!anonymous && mutation) headers['idempotency-key'] = crypto.randomUUID();
+  if (!anonymous && mutation) {
+    if (idempotencyKey !== undefined && (typeof idempotencyKey !== 'string'
+      || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(idempotencyKey))) {
+      throw new TypeError('Invalid idempotency key');
+    }
+    headers['idempotency-key'] = idempotencyKey ?? crypto.randomUUID();
+  }
   const options = { method, headers, body: body === undefined ? undefined : JSON.stringify(body) };
 
   let lastError;

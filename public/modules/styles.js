@@ -1668,6 +1668,11 @@
           content: [chainActions(product)].filter(Boolean),
         },
         {
+          id: 'digital-samples',
+          label: text('Цифровые образцы', 'Digital samples'),
+          content: [window.SynthaDigitalSamples.panel(product)],
+        },
+        {
           label: text('Готовность', 'Readiness'),
           fields: [
             { label: text('Оценка готовности', 'Readiness'), value: product.readinessSnapshotId ? `${statusLabel(product.readinessStatus)} · ${item.readinessPercent}%` : text('Не оценён', 'Not assessed') },

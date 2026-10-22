@@ -1698,7 +1698,7 @@
         },
         {
           id: 'engineering',
-          label: text('AI-инжиниринг', 'AI Engineering'),
+          label: text('Инженерный анализ', 'Engineering review'),
           content: [window.SynthaProductEngineering.panel(item)],
         },
         {

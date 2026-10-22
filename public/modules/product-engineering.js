@@ -425,8 +425,8 @@
     wrap.append(el('h4', { rawText: text('Источники и provenance', 'Sources & provenance') }));
     if (!rows.length) {
       wrap.append(notice(text(
-        'Управляемых источников пока нет. AI-анализ не должен использовать непроверенные файлы или произвольные внешние URL.',
-        'No governed sources yet. AI analysis must not use unadmitted files or arbitrary external URLs.',
+        'Управляемых источников пока нет. Автоматизированный анализ не использует непроверенные файлы или произвольные внешние URL.',
+        'No governed sources yet. Automated analysis does not use unadmitted files or arbitrary external URLs.',
       )));
       return wrap;
     }
@@ -624,7 +624,7 @@
 
   function proposalsPanel(product, rows, manage) {
     const wrap = el('div', { className: 'stack' });
-    wrap.append(el('h4', { rawText: text('Предложения AI / правил', 'AI / rule proposals') }));
+    wrap.append(el('h4', { rawText: text('Автоматические предложения и правила', 'Automated and rule proposals') }));
     if (!rows.length) { wrap.append(notice(text('Предложений пока нет.', 'No proposals yet.'))); return wrap; }
     wrap.append(odMiniTable(
       [text('Контур', 'Authority'), text('Поле', 'Field'), text('Предложение', 'Proposal'), text('Уверенность', 'Confidence'), text('Статус', 'Status / action')],
@@ -735,13 +735,13 @@
 
   function panel(item) {
     const product = item.product;
-    if (!readAllowed(product)) return notice(text('Инженерный AI-контур недоступен для этой роли.', 'The AI engineering workspace is not available to this role.'));
+    if (!readAllowed(product)) return notice(text('Инженерный анализ недоступен для этой роли.', 'Engineering review is not available to this role.'));
     const holder = itemState(product.id);
     if (!holder.data && !holder.loading && !holder.error) queueMicrotask(() => { void load(product.id); });
-    if (holder.loading && !holder.data) return notice(text('Загрузка AI Engineering…', 'Loading AI Engineering…'));
+    if (holder.loading && !holder.data) return notice(text('Загрузка инженерного анализа…', 'Loading engineering review…'));
     if (holder.error) {
       const wrap = el('div', { className: 'stack' });
-      wrap.append(notice(holder.error?.message || text('AI Engineering недоступен.', 'AI Engineering is unavailable.')));
+      wrap.append(notice(holder.error?.message || text('Инженерный анализ недоступен.', 'Engineering review is unavailable.')));
       const retry = el('button', { className: 'button small', type: 'button', rawText: text('Повторить', 'Retry') });
       retry.addEventListener('click', () => { holder.error = null; void load(product.id, true); });
       wrap.append(retry);
@@ -751,8 +751,8 @@
     const manage = manageAllowed(product);
     const wrap = el('div', { className: 'stack od-engineering-workspace' });
     const guard = notice(text(
-      'AI здесь не является источником истины: он формирует evidence, proposal и conflict. Принятое предложение отдельно применяется через канонический контур.',
-      'AI is not an authority here: it produces evidence, proposals and conflicts. An accepted proposal is applied separately through its canonical authority.',
+      'Автоматизированный анализ не изменяет Product Master напрямую: он формирует evidence, proposal и conflict. Принятое предложение применяется отдельно через канонический контур.',
+      'Automated analysis does not mutate Product Master directly: it produces evidence, proposals and conflicts. An accepted proposal is applied separately through its canonical authority.',
     ));
     wrap.append(guard, summary(data));
     if (manage) {

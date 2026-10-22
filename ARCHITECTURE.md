@@ -1546,7 +1546,7 @@ PostgreSQL AI Engineering Golden Path additionally proves one real Material `res
 
 #### Product Master Review → Impact → Apply UI — IMPLEMENTED/PARTIAL
 
-The Product Master Engineering tab mirrors the authority states rather than collapsing them into one action:
+The Product Master Engineering tab mirrors the authority states rather than collapsing them into one action. Its user-facing RU/EN label is **Инженерный анализ / Engineering review**; provider/model/AI provenance remains inspectable evidence, but the workspace is named for the user's engineering task rather than the implementation technology:
 
 - `pending`: Accept / Reject only; Accept is explicitly described as review, not canonical mutation;
 - `accepted + unapplied`: read-only Impact is available to Engineering readers; Apply is shown only when the proposal authority/action is in the canonical allowlist and the actor can manage Product Engineering;
